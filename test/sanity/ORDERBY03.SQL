@@ -1,0 +1,3 @@
+CREATE TABLE BIG (A int,B string);
+
+SELECT A FROM BIG ORDER BY A;
