@@ -82,9 +82,37 @@ class MissingValueModule(name: String, id: Int, params: List[String])
     
   }
   
-  def load(backend: Backend): Unit = {
+  def load(backend: Backend): Unit = 
+  {
     
   }
+  
+  def analyze(v: PVar): CTAnalysis =
+  {
+    return new MissingValueAnalysis(v.variable, this);
+  }
+
+
+  def computeMLE(backend: Backend, v: PVar): Double = 
+  {
+    0.0
+  }
+  
+  def computeConfidence(backend: Backend, v: PVar, value: PrimitiveValue): Double =
+  {
+    0.0
+  }
+  
+  def computeBounds(backend: Backend, v: PVar): (Double,Double) =
+  {
+    (0.0, 0.0)
+  }
+  
+  def computeStdDev(backend: Backend, v: PVar): Double =
+  {
+    0.0
+  }
+  
   
   def varCount(): Int = params.length;
   def moduleType = "MISSING_VALUE"
@@ -102,4 +130,14 @@ class MissingValueModule(name: String, id: Int, params: List[String])
       case "DECIMAL" => DatabaseUtils.DOUBLE;
     }
   }
+}
+
+class MissingValueAnalysis(idx: Int, source: MissingValueModule) extends CTAnalysis {
+  def varType(backend: Backend): Type.T = Type.TFloat
+  def isCategorical(backend: Backend): Boolean = true
+  def computeMLE(backend: Backend, element: List[PrimitiveValue]): PrimitiveValue = new FloatPrimitive(0.0)
+  def computeEqConfidence(backend: Backend, element: List[PrimitiveValue], value: PrimitiveValue): Double = 0.0
+  def computeBounds(backend: Backend, element: List[PrimitiveValue]): (Double,Double) = (0.0,0.0)
+  def computeStdDev(backend: Backend, element: List[PrimitiveValue]): Double = 0.0
+  
 }

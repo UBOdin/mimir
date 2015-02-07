@@ -96,5 +96,8 @@ class IViewManager(backend: Backend, sqltora: SqlToRA) {
     }
   }
 
-  
+  def analyze(v: PVar): CTAnalysis =
+  {
+    views.get(v.iview).get.analyze(v)
+  }
 }

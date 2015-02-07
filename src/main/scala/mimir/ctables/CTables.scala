@@ -10,7 +10,7 @@ case class PVar(
   variable: Int,
   params: List[Expression]
 ) extends Expression {
-  override def toString() = "{{ "+iview+"_"+module+"_"+variable+" }}"
+  override def toString() = "{{ "+iview+"_"+module+"_"+variable+"["+params.mkString(", ")+"] }}"
   def exprType(bindings: Map[String, Type.T]):Type.T = Type.TFloat
   def children: List[Expression] = params
   def rebuild(x: List[Expression]) = PVar(iview, module, variable, x)
@@ -361,6 +361,8 @@ object CTables
   }
   
   def propagateRowIDs(oper: Operator): Operator = {
+    
+    
     println("CTables.propagateRowIDs is a placeholder")
     oper
   }

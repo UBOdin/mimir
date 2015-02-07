@@ -40,153 +40,155 @@ public interface CCJSqlParserConstants {
   /** RegularExpression Id. */
   int K_ANALYZE = 7;
   /** RegularExpression Id. */
-  int K_ASSUME = 8;
+  int K_EXPLAIN = 8;
   /** RegularExpression Id. */
-  int K_VIEW = 9;
+  int K_ASSUME = 9;
   /** RegularExpression Id. */
-  int K_IVIEW = 10;
+  int K_VIEW = 10;
   /** RegularExpression Id. */
-  int K_LET = 11;
+  int K_IVIEW = 11;
   /** RegularExpression Id. */
-  int K_BY = 12;
+  int K_LET = 12;
   /** RegularExpression Id. */
-  int K_DO = 13;
+  int K_BY = 13;
   /** RegularExpression Id. */
-  int K_IS = 14;
+  int K_DO = 14;
   /** RegularExpression Id. */
-  int K_IN = 15;
+  int K_IS = 15;
   /** RegularExpression Id. */
-  int K_OR = 16;
+  int K_IN = 16;
   /** RegularExpression Id. */
-  int K_ON = 17;
+  int K_OR = 17;
   /** RegularExpression Id. */
-  int K_ALL = 18;
+  int K_ON = 18;
   /** RegularExpression Id. */
-  int K_AND = 19;
+  int K_ALL = 19;
   /** RegularExpression Id. */
-  int K_ANY = 20;
+  int K_AND = 20;
   /** RegularExpression Id. */
-  int K_KEY = 21;
+  int K_ANY = 21;
   /** RegularExpression Id. */
-  int K_NOT = 22;
+  int K_KEY = 22;
   /** RegularExpression Id. */
-  int K_SET = 23;
+  int K_NOT = 23;
   /** RegularExpression Id. */
-  int K_ASC = 24;
+  int K_SET = 24;
   /** RegularExpression Id. */
-  int K_TOP = 25;
+  int K_ASC = 25;
   /** RegularExpression Id. */
-  int K_END = 26;
+  int K_TOP = 26;
   /** RegularExpression Id. */
-  int K_DESC = 27;
+  int K_END = 27;
   /** RegularExpression Id. */
-  int K_INTO = 28;
+  int K_DESC = 28;
   /** RegularExpression Id. */
-  int K_NULL = 29;
+  int K_INTO = 29;
   /** RegularExpression Id. */
-  int K_LIKE = 30;
+  int K_NULL = 30;
   /** RegularExpression Id. */
-  int K_DROP = 31;
+  int K_LIKE = 31;
   /** RegularExpression Id. */
-  int K_JOIN = 32;
+  int K_DROP = 32;
   /** RegularExpression Id. */
-  int K_LEFT = 33;
+  int K_JOIN = 33;
   /** RegularExpression Id. */
-  int K_FROM = 34;
+  int K_LEFT = 34;
   /** RegularExpression Id. */
-  int K_OPEN = 35;
+  int K_FROM = 35;
   /** RegularExpression Id. */
-  int K_CASE = 36;
+  int K_OPEN = 36;
   /** RegularExpression Id. */
-  int K_WHEN = 37;
+  int K_CASE = 37;
   /** RegularExpression Id. */
-  int K_THEN = 38;
+  int K_WHEN = 38;
   /** RegularExpression Id. */
-  int K_ELSE = 39;
+  int K_THEN = 39;
   /** RegularExpression Id. */
-  int K_SOME = 40;
+  int K_ELSE = 40;
   /** RegularExpression Id. */
-  int K_FULL = 41;
+  int K_SOME = 41;
   /** RegularExpression Id. */
-  int K_WITH = 42;
+  int K_FULL = 42;
   /** RegularExpression Id. */
-  int K_TABLE = 43;
+  int K_WITH = 43;
   /** RegularExpression Id. */
-  int K_WHERE = 44;
+  int K_TABLE = 44;
   /** RegularExpression Id. */
-  int K_USING = 45;
+  int K_WHERE = 45;
   /** RegularExpression Id. */
-  int K_UNION = 46;
+  int K_USING = 46;
   /** RegularExpression Id. */
-  int K_GROUP = 47;
+  int K_UNION = 47;
   /** RegularExpression Id. */
-  int K_BEGIN = 48;
+  int K_GROUP = 48;
   /** RegularExpression Id. */
-  int K_INDEX = 49;
+  int K_BEGIN = 49;
   /** RegularExpression Id. */
-  int K_INNER = 50;
+  int K_INDEX = 50;
   /** RegularExpression Id. */
-  int K_LIMIT = 51;
+  int K_INNER = 51;
   /** RegularExpression Id. */
-  int K_OUTER = 52;
+  int K_LIMIT = 52;
   /** RegularExpression Id. */
-  int K_ORDER = 53;
+  int K_OUTER = 53;
   /** RegularExpression Id. */
-  int K_RIGHT = 54;
+  int K_ORDER = 54;
   /** RegularExpression Id. */
-  int K_DELETE = 55;
+  int K_RIGHT = 55;
   /** RegularExpression Id. */
-  int K_CREATE = 56;
+  int K_DELETE = 56;
   /** RegularExpression Id. */
-  int K_SELECT = 57;
+  int K_CREATE = 57;
   /** RegularExpression Id. */
-  int K_OFFSET = 58;
+  int K_SELECT = 58;
   /** RegularExpression Id. */
-  int K_EXISTS = 59;
+  int K_OFFSET = 59;
   /** RegularExpression Id. */
-  int K_HAVING = 60;
+  int K_EXISTS = 60;
   /** RegularExpression Id. */
-  int K_INSERT = 61;
+  int K_HAVING = 61;
   /** RegularExpression Id. */
-  int K_UPDATE = 62;
+  int K_INSERT = 62;
   /** RegularExpression Id. */
-  int K_VALUES = 63;
+  int K_UPDATE = 63;
   /** RegularExpression Id. */
-  int K_ESCAPE = 64;
+  int K_VALUES = 64;
   /** RegularExpression Id. */
-  int K_PRIMARY = 65;
+  int K_ESCAPE = 65;
   /** RegularExpression Id. */
-  int K_NATURAL = 66;
+  int K_PRIMARY = 66;
   /** RegularExpression Id. */
-  int K_REPLACE = 67;
+  int K_NATURAL = 67;
   /** RegularExpression Id. */
-  int K_BETWEEN = 68;
+  int K_REPLACE = 68;
   /** RegularExpression Id. */
-  int K_TRUNCATE = 69;
+  int K_BETWEEN = 69;
   /** RegularExpression Id. */
-  int K_DISTINCT = 70;
+  int K_TRUNCATE = 70;
   /** RegularExpression Id. */
-  int K_INTERSECT = 71;
+  int K_DISTINCT = 71;
   /** RegularExpression Id. */
-  int S_DOUBLE = 72;
+  int K_INTERSECT = 72;
   /** RegularExpression Id. */
-  int S_INTEGER = 73;
+  int S_DOUBLE = 73;
   /** RegularExpression Id. */
-  int DIGIT = 74;
+  int S_INTEGER = 74;
   /** RegularExpression Id. */
-  int LINE_COMMENT = 75;
+  int DIGIT = 75;
   /** RegularExpression Id. */
-  int MULTI_LINE_COMMENT = 76;
+  int LINE_COMMENT = 76;
   /** RegularExpression Id. */
-  int S_IDENTIFIER = 77;
+  int MULTI_LINE_COMMENT = 77;
   /** RegularExpression Id. */
-  int LETTER = 78;
+  int S_IDENTIFIER = 78;
   /** RegularExpression Id. */
-  int SPECIAL_CHARS = 79;
+  int LETTER = 79;
   /** RegularExpression Id. */
-  int S_CHAR_LITERAL = 80;
+  int SPECIAL_CHARS = 80;
   /** RegularExpression Id. */
-  int S_QUOTED_IDENTIFIER = 81;
+  int S_CHAR_LITERAL = 81;
+  /** RegularExpression Id. */
+  int S_QUOTED_IDENTIFIER = 82;
 
   /** Lexical state. */
   int DEFAULT = 0;
@@ -201,6 +203,7 @@ public interface CCJSqlParserConstants {
     "\"AS\"",
     "\"UNCERTAIN\"",
     "\"ANALYZE\"",
+    "\"EXPLAIN\"",
     "\"ASSUME\"",
     "\"VIEW\"",
     "\"IVIEW\"",

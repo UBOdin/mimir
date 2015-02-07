@@ -1,23 +1,7 @@
 package mimir.ctables;
 
 import mimir.algebra._;
-
-class ColumnAnalysis(
-    sources: List[(Expression, Operator)]
-) {
-  def getType: Type.T = {
-    sources.map( _ match { case (x, o) => x.exprType(o.schema) } ).
-            fold(Type.TAny)( Arith.escalateCompat(_,_) )
-  }
-  
-  def bounds: (PrimitiveValue, PrimitiveValue) = {
-    println("WARNING: ColumnAnalysis.bounds IS ONLY A PLACEHOLDER FOR NOW");
-    (FloatPrimitive(0.0), FloatPrimitive(0.0))
-  }
-  
-  def exprs = sources.map( _._1 )
-}
-  
+import mimir.sql.Backend;
 
 object CTAnalysis {
   	
@@ -45,10 +29,7 @@ object CTAnalysis {
       case _ => oper
     }
   }
-  
-  def analyze(col: String, oper: Operator): ColumnAnalysis =
-    new ColumnAnalysis(expr(col, oper))
-  
+    
   def expr(col: String, oper: Operator): 
     List[(Expression, Operator)] =
   {
@@ -61,17 +42,13 @@ object CTAnalysis {
         List[(Expression,Operator)]((Var(col), oper))
     }
   }
-  	
-  	def condition(oper: Operator): ColumnAnalysis =
-  	{
-    if(oper.schema.get(CTables.conditionColumn).isEmpty){ 
-      new ColumnAnalysis(List[(Expression,Operator)](
-          (BoolPrimitive(true), oper)
-        ))
-    } else {
-      analyze(CTables.conditionColumn, oper)
-    }
-  }
-  	
+}
 
+abstract class CTAnalysis {
+  def varType(backend: Backend): Type.T
+  def isCategorical(backend: Backend): Boolean
+  def computeMLE(backend: Backend, element: List[PrimitiveValue]): PrimitiveValue
+  def computeEqConfidence(backend: Backend, element: List[PrimitiveValue], value: PrimitiveValue): Double
+  def computeBounds(backend: Backend, element: List[PrimitiveValue]): (Double,Double)
+  def computeStdDev(backend: Backend, element: List[PrimitiveValue]): Double
 }

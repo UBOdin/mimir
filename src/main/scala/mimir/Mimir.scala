@@ -13,6 +13,7 @@ import mimir.algebra._;
 import mimir.sql._;
 import mimir.util.TimeUtils;
 import mimir.parser._;
+import mimir.exec._;
 
 object Mimir {
   
@@ -47,7 +48,7 @@ object Mimir {
       
       if(conf.file.get == None || conf.file() == "-"){ 
         source = new InputStreamReader(System.in);
-        usePrompt = true;
+        usePrompt = !conf.quiet();
       } else {
         source = new FileReader(conf.file());
         usePrompt = false;
@@ -78,6 +79,8 @@ object Mimir {
           handleAnalyze(stmt.asInstanceOf[Analyze]);
         } else if(stmt.isInstanceOf[CreateIView]) {
           iviews.create(stmt.asInstanceOf[CreateIView]);
+        } else if(stmt.isInstanceOf[Explain]) {
+          handleExplain(stmt.asInstanceOf[Explain]);
         } else {
           backend.update(stmt.toString())
         }
@@ -91,31 +94,40 @@ object Mimir {
     } while(!done)
   }
   
-  def handleSelect(sel: Select): Unit = {
-    val raw = sqltora.convert(sel);
+  def handleExplain(explain: Explain): Unit = {
+    val raw = sqltora.convert(explain.getSelectBody());
     println("--- Raw Query ---");
     println(raw.toString());
     println("--- Percolated Query ---");
     println(CTables.percolate(raw).toString);
   }
   
+  def handleSelect(sel: Select): Unit = {
+    val raw = sqltora.convert(sel);
+    val converted = CTables.percolate(raw);
+    val results = Compiler.compile(iviews, backend, converted);
+    results.open();
+    Compiler.dump(results);
+    results.close();
+  }
+  
   def handleAnalyze(request: Analyze): Unit = {
     val raw = sqltora.convert(request.getSelectBody());
     val percolated = CTables.percolate(raw);
-    if(CTAnalysis.isProbabilistic(percolated)){
-      val analysis = CTAnalysis.analyze(
-        request.getColumn(), 
-        percolated
-      )
-      // Compute bounds, begin update/resolve loop
-      println("--- Query ---")
-      println(request.getSelectBody().toString);
-      println("--- Expressions ---")
-      println(analysis.exprs.map ( _.toString ).mkString("\n:: OR ::\n"))
-      println("Bounds: " + analysis.bounds);
-    } else {
-      println("The Result is Deterministic")
-    }
+    // if(CTAnalysis.isProbabilistic(percolated)){
+    //   val analysis = CTAnalysis.analyze(
+    //     request.getColumn(), 
+    //     percolated
+    //   )
+    //   // Compute bounds, begin update/resolve loop
+    //   println("--- Query ---")
+    //   println(request.getSelectBody().toString);
+    //   println("--- Expressions ---")
+    //   println(analysis.exprs.map ( _.toString ).mkString("\n:: OR ::\n"))
+    //   println("Bounds: " + analysis.bounds);
+    // } else {
+    //   println("The Result is Deterministic")
+    // }
   }
   
   def handleLoadTable(targetTable: String, sourceFile: String){
@@ -160,7 +172,7 @@ object Mimir {
     // System.out.println("Selecting from ..."+name);
     if(iviews == null){ None }
     else {
-      println(iviews.views.toString())
+      //println(iviews.views.toString())
       iviews.views.get(name.toUpperCase()) match {
         case None => None
         case Some(view) => println("Found: "+name); Some(view.get())
@@ -182,5 +194,6 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   val backend = opt[String]("db", descr = "Which backend database to use? ([sqlite],oracle)", 
                             default = Some("sqlite"))
   val initDB = toggle("init", default = Some(false))
+  val quiet  = toggle("quiet", default = Some(false))
   val file = trailArg[String](required = false)
 }

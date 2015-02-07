@@ -107,6 +107,7 @@ import net.sf.jsqlparser.statement.create.table.CreateTable;
 import mimir.sql.CreateView;
 import mimir.sql.CreateIView;
 import mimir.sql.Analyze;
+import mimir.sql.Explain;
 import net.sf.jsqlparser.statement.create.table.Index;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.drop.Drop;
@@ -156,6 +157,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
     <K_AS:"AS">
 |   <K_UNCERTAIN:"UNCERTAIN">
 |   <K_ANALYZE:"ANALYZE">
+|   <K_EXPLAIN:"EXPLAIN">
 |   <K_ASSUME:"ASSUME">
 |   <K_VIEW:"VIEW">
 |   <K_IVIEW:"IVIEW">
@@ -265,6 +267,8 @@ Statement Statement() :
     |
     stm= Analyze()
     |
+    stm= Explain()
+    |
     stm =  Update()
     |
     stm = Insert()
@@ -318,6 +322,20 @@ Update Update():
    		update.setTable(table);
 		return update;
    }
+}
+
+Explain Explain():
+  {
+    Explain explain=new Explain();
+    SelectBody selectBody = null;
+    String col = null;
+  }
+{
+  <K_EXPLAIN> selectBody = SelectBody()
+  { 
+    explain.setSelectBody(selectBody);
+    return explain;
+  }
 }
 
 Analyze Analyze():

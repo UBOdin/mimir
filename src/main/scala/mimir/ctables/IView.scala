@@ -18,6 +18,8 @@ abstract class IViewModule(iview: String, id: Int, params: List[String])
   def varCount(): Int
   def moduleType: String
 
+  def analyze(v: PVar): CTAnalysis
+  
   def moduleId = id;
   def moduleParams = params;
 
@@ -39,7 +41,7 @@ class IView(name: String, source: Operator, modules: List[IViewModule])
   {
     var curr = source;
     modules.map( (mod) => {
-      println("Building features for module " + name + "_" + mod.moduleId);
+      //println("Building features for module " + name + "_" + mod.moduleId);
       mod.build(backend, curr);
       curr = mod.wrap(curr);
     })
@@ -49,4 +51,8 @@ class IView(name: String, source: Operator, modules: List[IViewModule])
     modules.map( _.load(backend) );
   }
   def getModules() = modules;
+  
+  def analyze(v: PVar): CTAnalysis =
+    modules(v.module).analyze(v)
+
 } 

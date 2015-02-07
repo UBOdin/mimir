@@ -35,6 +35,7 @@ object Eval
               } else { None }
             }
           ).getOrElse(eval(caseElse, bindings))
+        case p: Proc => p.get()
         case IsNullExpression(c, n) => {
           val isNull: Boolean = 
             eval(c, bindings).

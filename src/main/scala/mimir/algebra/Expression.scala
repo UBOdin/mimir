@@ -117,6 +117,12 @@ case class Not(child: Expression)
   def rebuild(x: List[Expression]): Expression = Not(x(0))
 }
 
+abstract class Proc(args: List[Expression]) extends Expression
+{
+  def children = args
+  def get(): PrimitiveValue
+}
+
 object Arith extends Enumeration {
   type Op = Value
   val Add, Sub, Mult, Div, And, Or = Value

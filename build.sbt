@@ -38,3 +38,10 @@ scalacOptions in Test ++= Seq("-Yrangepos")
 resolvers ++= Seq("snapshots", "releases").map(Resolver.sonatypeRepo)
 
 fork := true
+
+lazy val jsParse = taskKey[Stream[String]]("Compile JSqlParser")
+
+jsParse := Process(
+  "java -cp ../../../../../lib/javacc.jar javacc JSqlParserCC.j",
+  Some(new File("src/main/java/mimir/parser"))
+).lines
