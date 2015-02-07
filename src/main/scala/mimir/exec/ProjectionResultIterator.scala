@@ -14,7 +14,7 @@ class ProjectionResultIterator(
   extends ResultIterator
 {
   val tuple: ArraySeq[PrimitiveValue] = 
-    new ArraySeq[PrimitiveValue](src.numCols);
+    new ArraySeq[PrimitiveValue](cols.length);
   
   val schema = cols.map( _ match { case (name, expr) => 
       ( name, 

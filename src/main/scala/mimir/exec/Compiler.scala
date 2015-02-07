@@ -12,6 +12,7 @@ object Compiler {
       oper match { 
         case Project(cols, src) =>
           val inputIterator = compile(ivmanager, backend, src);
+          // println("Compiled ["+inputIterator.schema+"]: \n"+src)
           new ProjectionResultIterator(
             inputIterator,
             cols.map( (x) => (x.column, x.input) ),
@@ -32,7 +33,7 @@ object Compiler {
   def dump(result: ResultIterator): Unit =
   {
     while(result.getNext()){
-      println(result.toList().mkString(", "))
+      println(result.toList().mkString(","))
     }
   }
 }

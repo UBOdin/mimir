@@ -15,6 +15,7 @@ abstract class Backend {
   def execute(oper: Operator): ResultSet = {
     val sel = new Select();
     sel.setSelectBody(new RAToSql(this).convert(oper))
+    // println("Executing: \n"+sel);
     execute(sel)
   }
   

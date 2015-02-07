@@ -18,20 +18,25 @@ class RAToSql(backend: Backend) {
   def convert(oper: Operator): SelectBody = 
   {
     oper match {
-      case Table(name, sch) => {
+      case Table(name, sch, metadata) => {
         val body = new PlainSelect();
         val table = new net.sf.jsqlparser.schema.Table(null, name)
         val baseSch = backend.getTableSchema(name);
         body.setFromItem(table)
         body.setSelectItems(
           // new java.util.ArrayList(
-            sch.keys.zip(baseSch.map( _._1 )).flatMap(_ match { 
-              // case (_, "ROWID") => List()
+            sch.keys.zip(baseSch.map( _._1 )).map(_ match { 
               case (external, internal) =>
                 val item = new SelectExpressionItem()
                 item.setAlias(external)
                 item.setExpression(new Column(table, internal))
-                List(item)
+                item
+            }).toList ++
+            metadata.keys.map( (key) => {
+              val item = new SelectExpressionItem()
+              item.setAlias(key)
+              item.setExpression(new Column(table, key))
+              item
             }).toList
           // )
         )

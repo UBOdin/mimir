@@ -78,8 +78,7 @@ object CTables
   def percolate(oper: Operator): Operator = {
     // println("Percolate: "+o)
     extractUnions(
-      oper
-      // expandProbabilisticCases(oper)
+      propagateRowIDs(oper)
     ).map( percolateOne(_) ).reduceLeft( Union(_,_) )
   }
   
@@ -360,10 +359,100 @@ object CTables
     }
   }
   
-  def propagateRowIDs(oper: Operator): Operator = {
-    
-    
-    println("CTables.propagateRowIDs is a placeholder")
-    oper
+  def requiresRowID(expr: Expression): Boolean = {
+    expr match {
+      case Var("ROWID") => true;
+      case _ => expr.children.exists( requiresRowID(_) )
+    }
+  }
+  
+  def propagateRowIDs(oper: Operator): Operator = 
+    propagateRowIDs(oper, false);
+  
+  def propagateRowIDs(oper: Operator, force: Boolean): Operator = 
+  {
+    // println("Propagate["+(if(force){"F"}else{"NF"})+"]:\n" + oper);
+    oper match {
+      case Project(args, child) =>
+        var newArgs = args;
+        if(force) {
+          newArgs = 
+            (new ProjectArg("ROWID", Var("ROWID"))) :: 
+              newArgs
+        }
+        Project(newArgs, 
+          propagateRowIDs(child, 
+            newArgs.exists((x)=>requiresRowID( x.input ))
+        ))
+        
+      case Select(cond, child) =>
+        Select(cond, propagateRowIDs(child,
+          force || requiresRowID(cond)))
+          
+      case Join(left, right) =>
+        if(force){
+          Project(
+            ProjectArg("ROWID",
+              Function("JOIN_ROWIDS", List[Expression](Var("LEFT_ROWID"), Var("RIGHT_ROWID")))) ::
+            (left.schema ++ right.schema).keys.map(
+              (x) => ProjectArg(x, Var(x)) 
+            ).toList,
+            Join(
+              Project(
+                ProjectArg("LEFT_ROWID", Var("ROWID")) ::
+                left.schema.keys.map(
+                  (x) => ProjectArg(x, Var(x)) 
+                ).toList,
+                propagateRowIDs(left, true)),
+              Project(
+                ProjectArg("RIGHT_ROWID", Var("ROWID")) ::
+                right.schema.keys.map(
+                  (x) => ProjectArg(x, Var(x)) 
+                ).toList,
+                propagateRowIDs(right, true))
+            )
+          )
+        } else {
+          Join(
+            propagateRowIDs(left, false),
+            propagateRowIDs(right, false)
+          )
+        }
+        
+        case Union(left, right) =>
+          if(force){
+            Union(
+              Project(
+                ProjectArg("ROWID", 
+                  Function("LEFT_UNION_ROWID",
+                    List[Expression](Var("ROWID")))) ::
+                left.schema.keys.map(
+                  (x) => ProjectArg(x, Var(x)) 
+                ).toList,
+                propagateRowIDs(left, true)),
+              Project(
+                ProjectArg("ROWID", 
+                  Function("RIGHT_UNION_ROWID",
+                    List[Expression](Var("ROWID")))) ::
+                right.schema.keys.map(
+                  (x) => ProjectArg(x, Var(x)) 
+                ).toList,
+                propagateRowIDs(right, true))
+            )
+          } else {
+            Union(
+              propagateRowIDs(left, false),
+              propagateRowIDs(right, false)
+            )
+          }
+        
+        case Table(name, sch, metadata) =>
+          if(force){
+            Table(name, sch, metadata ++ Map(("ROWID", Type.TInt)))
+          } else {
+            Table(name, sch, metadata)
+          }
+      
+    }
   }
 }

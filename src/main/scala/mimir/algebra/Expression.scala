@@ -308,23 +308,26 @@ case class Comparison(op: Cmp.Op, lhs: Expression,
   def children = List(lhs, rhs)
   def rebuild(c: List[Expression]) = Comparison(op, c(0), c(1))
 }
-// case class Function(op: String, params: List[Expression]) extends Expression {
-//   def toString() = {
-//     op match {
-//       // Need to special case COUNT DISTINCT
-//       case "COUNT" if params.size > 0 => 
-//             "COUNT(DISTINCT " + params.map( _.toString ).mkString(", ") + ")"
-//       case "COUNT" if params.size == 0 => 
-//             "COUNT(*)"
-//       case "EXTRACT" =>
-//         op + "(" + params(0).asInstanceOf[StringPrimitive].v + " FROM " + 
-//           params(1).toString + ")"
-//       case _ => op + "(" + params.map( _.toString ).mkString(", ") + ")"
-//     }
-//   }
-//   def children = params
-//   def rebuild(c: List[Expression]) = RAFunction(op, c)
-// }
+case class Function(op: String, params: List[Expression]) extends Expression {
+  def exprType(bindings: Map[String, Type.T]): T = {
+    bindings.get("__"+op+"()").get;
+  }
+  override def toString() = {
+    op match {
+      // Need to special case COUNT DISTINCT
+      case "COUNT" if params.size > 0 => 
+            "COUNT(DISTINCT " + params.map( _.toString ).mkString(", ") + ")"
+      case "COUNT" if params.size == 0 => 
+            "COUNT(*)"
+      case "EXTRACT" =>
+        op + "(" + params(0).asInstanceOf[StringPrimitive].v + " FROM " + 
+          params(1).toString + ")"
+      case _ => op + "(" + params.map( _.toString ).mkString(", ") + ")"
+    }
+  }
+  def children = params
+  def rebuild(c: List[Expression]) = Function(op, c)
+}
 case class WhenThenClause(when: Expression, 
                           then: Expression) 
 {

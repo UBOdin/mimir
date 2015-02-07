@@ -175,7 +175,9 @@ object Mimir {
       //println(iviews.views.toString())
       iviews.views.get(name.toUpperCase()) match {
         case None => None
-        case Some(view) => println("Found: "+name); Some(view.get())
+        case Some(view) => 
+          // println("Found: "+name); 
+          Some(view.get())
       }
     }
   }

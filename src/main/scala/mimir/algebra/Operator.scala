@@ -89,15 +89,20 @@ case class Union(left: Operator, right: Operator) extends Operator
 }
 
 case class Table(name: String, 
-                 sch: Map[String,Type.T]) 
+                 sch: Map[String,Type.T],
+                 metadata: Map[String,Type.T]) 
   extends Operator
 {
   def toString(prefix: String) = ( 
     prefix + "Table("+name+" => "+(
-      sch.keys.mkString(", ")
+      sch.keys.mkString(", ") + 
+      ( if(metadata.size > 0)
+             { " // "+metadata.keys.mkString(", ") } 
+        else { "" }
+      )
     )+")" 
   )
   def children: List[Operator] = List()
-  def rebuild(x: List[Operator]) = Table(name, sch)
-  def schema: Map[String,Type.T] = sch
+  def rebuild(x: List[Operator]) = Table(name, sch, metadata)
+  def schema: Map[String,Type.T] = sch++metadata
 }

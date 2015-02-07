@@ -218,7 +218,8 @@ class SqlToRA(backend: Backend,
             Table(name, 
               sch.map(
                 _ match { case (v, t) => (alias+"_"+v, t)}
-              ).toMap[String,Type.T]
+              ).toMap[String,Type.T],
+              Map[String,Type.T]()
             ), 
             newBindings, 
             alias
