@@ -9,7 +9,7 @@ import mimir.ctables._;
 import mimir.algebra._;
 import mimir.util._;
 import mimir.sql._;
-import mimir.Database;
+import mimir.{Database,Mimir};
 
 
 class IViewManager(db: Database) {
@@ -76,7 +76,9 @@ class IViewManager(db: Database) {
       "SELECT name, query FROM MIMIR_IVIEW"
     ).foreach( (viewMetadata) => {
       val name = viewMetadata(0).asString;
-      System.out.println("Loading IView: " + name);
+      if(!Mimir.conf.quiet()){
+        System.out.println("Loading IView: " + name);
+      }
       val originalSource = db.convert(new CCJSqlParser(new StringReader(viewMetadata(1).asString)).Select());
       var source = originalSource;
       var lenses = List[Lens]();

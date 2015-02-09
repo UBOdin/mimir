@@ -57,5 +57,9 @@ class ResultSetIterator(src: ResultSet) extends ResultIterator
   def close() = { 
     src.close();
   }
+  
+  def deterministicRow() = true;
+  def deterministicCol(v: Int) = true;
+  def missingRows() = false;
 
 }

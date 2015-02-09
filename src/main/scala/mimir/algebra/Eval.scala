@@ -53,6 +53,8 @@ object Eval
     }
   }
   
+  def inline(e: Expression): Expression = 
+    inline(e, Map[String, Expression]())
   def inline(e: Expression, bindings: Map[String, Expression]):
     Expression = 
   {

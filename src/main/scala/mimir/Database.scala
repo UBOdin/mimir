@@ -44,8 +44,23 @@ case class Database(backend: Backend)
 
   def dump(result: ResultIterator): Unit =
   {
+    println(result.schema.map( _._1 ).mkString(","))
+    println("------")
     while(result.getNext()){
-      println(result.toList().mkString(","))
+      println(
+        (0 until result.numCols).map( (i) => {
+          result(i)+(
+            if(!result.deterministicCol(i)){ "*" } else { "" }
+          )
+        }).mkString(",")+(
+          if(!result.deterministicRow){
+            " (This row may be invalid)"
+          } else { "" }
+        )
+      )
+    }
+    if(result.missingRows){
+      println("( There may be missing result rows )")
     }
   }
     

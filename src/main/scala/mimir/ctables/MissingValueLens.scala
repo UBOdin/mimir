@@ -16,7 +16,7 @@ import moa.streams.InstanceStream;
 
 import mimir.Analysis;
 import mimir.Analysis.Model;
-import mimir.Database;
+import mimir.{Database,Mimir};
 import mimir.ctables._;
 import mimir.algebra._;
 import mimir.util._;
@@ -63,7 +63,9 @@ class MissingValueLens(name: String, id: Int, params: List[String], source: Oper
       if(idx < 0){ 
         throw new SQLException("Invalid attribute: '"+v+"' in "+schema.toString());
       }
-      println("Building learner for '"+v+"'");
+      if(!Mimir.conf.quiet()){
+        println("Building learner for '"+v+"'");
+      }
       data = 
         InstanceQuery.retrieveInstances(this, results);
       data.setClassIndex(idx);

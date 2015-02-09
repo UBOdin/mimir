@@ -94,7 +94,7 @@ public static Model reTrain(Model model,ArrayList[] dataset,String tname,String 
 		}
 		else{trainInst.setValue(j, Double.valueOf(String.valueOf((dataset[i].get(j)))));}
 	}
-System.out.println(trainInst.toString());		
+// System.out.println(trainInst.toString());		
 		if(learner.correctlyClassifies(trainInst)){
 			numberSamplesCorrect++;
 		}		
@@ -382,7 +382,7 @@ static boolean InsertTuple(String sql){
 public static Classifier getLearner(String classfier){
 		Classifier learner=null;
 		try {Class c = Class.forName(classfier);
-		System.out.println(c.getName());
+		// System.out.println(c.getName());
 		learner=(Classifier) c.newInstance();
 		
 		} catch (Exception e) {

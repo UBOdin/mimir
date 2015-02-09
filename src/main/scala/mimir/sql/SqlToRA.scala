@@ -289,7 +289,10 @@ class SqlToRA(db: Database)
     }
     if(e.isInstanceOf[Column]){
       val c = e.asInstanceOf[Column]
-      val table = c.getTable.getName
+      val table = c.getTable.getName match {
+        case null => null
+        case x => x.toUpperCase
+      }
       val name = c.getColumnName.toUpperCase
       if(table == null){
         val binding = bindings.get(name);

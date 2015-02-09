@@ -5,6 +5,9 @@ import mimir.algebra._;
 
 abstract class ResultIterator {
   def apply(v: Int): PrimitiveValue;
+  def deterministicRow(): Boolean;
+  def deterministicCol(v: Int): Boolean;
+  def missingRows(): Boolean;
   def open()
   def getNext(): Boolean;
   def close();

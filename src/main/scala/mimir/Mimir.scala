@@ -51,13 +51,13 @@ object Mimir {
         usePrompt = false;
       }
       
-      println("Loading IViews...");
+      if(!conf.quiet()) { println("Loading IViews..."); }
       db.loadState();
-      println("done");
+      if(!conf.quiet()) { println("done"); }
       
       eventLoop(source);
     }
-    println("Done.  Exiting.");
+    if(!conf.quiet()) { println("Done.  Exiting."); }
   }
   
   def eventLoop(source: Reader): Unit = {

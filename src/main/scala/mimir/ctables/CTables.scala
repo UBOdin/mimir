@@ -184,18 +184,32 @@ object CTables
         }
       case s: Select => return s
       case Join(lhs, rhs) => {
+        
+        // println("Percolating Join: \n" + o)
+        
         val rename = (name:String, x:String) => 
                 ("__"+name+"_"+x)
-        val (lhsCols, lhsChild) = extractProject(lhs)
-        val (rhsCols, rhsChild) = extractProject(rhs)
+        val (lhsCols, lhsChild) = extractProject(percolate(lhs))
+        val (rhsCols, rhsChild) = extractProject(percolate(rhs))
+        
+        // println("Percolated LHS: "+lhsCols+"\n" + lhsChild)
+        // println("Percolated RHS: "+rhsCols+"\n" + rhsChild)
+        
         // Pulling projections up through a join may require
         // renaming columns under the join if the same column
         // name appears on both sides of the source
-        val conflicts = lhsChild.schema.keys.toSet & 
-                        rhsChild.schema.keys.toSet
+        val lhsColNames = lhsChild.schema.keys.toSet
+        val rhsColNames = rhsChild.schema.keys.toSet
+        
+        val conflicts = (
+          (lhsColNames & rhsColNames)
+          | (Set[String]("ROWID") & lhsColNames)
+          | (Set[String]("ROWID") & rhsColNames)
+        ) 
+          
         val newJoin = 
-          if(conflicts.isEmpty){
-            return Join(lhsChild, rhsChild)
+          if(conflicts.isEmpty) {
+            Join(lhsChild, rhsChild)
           } else {
             val fullMapping = (name:String, x:String) => {
               ( if(conflicts contains x){ rename(name, x) }
