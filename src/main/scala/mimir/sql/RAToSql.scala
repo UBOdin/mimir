@@ -12,8 +12,9 @@ import net.sf.jsqlparser.expression.operators.relational.{EqualsTo,NotEqualsTo,G
 import collection.JavaConversions._;
 
 import mimir.algebra._;
+import mimir.Database;
 
-class RAToSql(backend: Backend) {
+class RAToSql(db: Database) {
   
   def convert(oper: Operator): SelectBody = 
   {
@@ -21,7 +22,7 @@ class RAToSql(backend: Backend) {
       case Table(name, sch, metadata) => {
         val body = new PlainSelect();
         val table = new net.sf.jsqlparser.schema.Table(null, name)
-        val baseSch = backend.getTableSchema(name);
+        val baseSch = db.getTableSchema(name);
         body.setFromItem(table)
         body.setSelectItems(
           // new java.util.ArrayList(

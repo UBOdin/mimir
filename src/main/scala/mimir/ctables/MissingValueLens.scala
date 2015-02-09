@@ -16,21 +16,23 @@ import moa.streams.InstanceStream;
 
 import mimir.Analysis;
 import mimir.Analysis.Model;
-import mimir.sql.Backend;
+import mimir.Database;
 import mimir.ctables._;
 import mimir.algebra._;
 import mimir.util._;
+import mimir.exec._;
 
-class MissingValueModule(name: String, id: Int, params: List[String]) 
-  extends IViewModule(name, id, params) 
+class MissingValueLens(name: String, id: Int, params: List[String], source: Operator) 
+  extends Lens(name, id, params, source) 
   with InstanceQueryAdapter
 {
-
+  var allKeys: List[String] = null
   var models: List[Model] = null;
+  var data: Instances = null
 
-  def wrap(source: Operator): Operator = {
+  def view: Operator = {
     val keysToBeCleaned = params.map( _.toUpperCase )
-    val allKeys = source.schema.keys
+    allKeys = source.schema.keys.toList
     Project(
       allKeys.
         map( (k) => {
@@ -51,9 +53,9 @@ class MissingValueModule(name: String, id: Int, params: List[String])
       source
     )
   }
-  def build(backend: Backend, source: Operator): Unit = {
+  def build(db: Database): Unit = {
     val schema = source.schema.keys.map(_.toUpperCase).toList;
-    val results = backend.execute(source);
+    val results = db.backend.execute(db.convert(source));
     models = params.map( (v) => {
       val learner: Classifier = 
         Analysis.getLearner("moa.classifiers.bayes.NaiveBayes");
@@ -62,7 +64,7 @@ class MissingValueModule(name: String, id: Int, params: List[String])
         throw new SQLException("Invalid attribute: '"+v+"' in "+schema.toString());
       }
       println("Building learner for '"+v+"'");
-      val data = 
+      data = 
         InstanceQuery.retrieveInstances(this, results);
       data.setClassIndex(idx);
       learner.setModelContext(new InstancesHeader(data));
@@ -82,40 +84,18 @@ class MissingValueModule(name: String, id: Int, params: List[String])
     
   }
   
-  def load(backend: Backend): Unit = 
+  def load(db: Database): Unit = 
   {
     
   }
   
-  def analyze(v: PVar): CTAnalysis =
+  def analyze(db: Database, v: PVar): CTAnalysis =
   {
-    return new MissingValueAnalysis(v.variable, this);
-  }
-
-
-  def computeMLE(backend: Backend, v: PVar): Double = 
-  {
-    0.0
-  }
+    return new MissingValueAnalysis(db, v.variable, this);
+  }  
   
-  def computeConfidence(backend: Backend, v: PVar, value: PrimitiveValue): Double =
-  {
-    0.0
-  }
-  
-  def computeBounds(backend: Backend, v: PVar): (Double,Double) =
-  {
-    (0.0, 0.0)
-  }
-  
-  def computeStdDev(backend: Backend, v: PVar): Double =
-  {
-    0.0
-  }
-  
-  
-  def varCount(): Int = params.length;
-  def moduleType = "MISSING_VALUE"
+  def varCount: Int = params.length;
+  def lensType = "MISSING_VALUE"
   
   ////// Weka's InstanceQueryAdapter interface
   def attributeCaseFix(colName: String) = colName;
@@ -132,12 +112,49 @@ class MissingValueModule(name: String, id: Int, params: List[String])
   }
 }
 
-class MissingValueAnalysis(idx: Int, source: MissingValueModule) extends CTAnalysis {
-  def varType(backend: Backend): Type.T = Type.TFloat
-  def isCategorical(backend: Backend): Boolean = true
-  def computeMLE(backend: Backend, element: List[PrimitiveValue]): PrimitiveValue = new FloatPrimitive(0.0)
-  def computeEqConfidence(backend: Backend, element: List[PrimitiveValue], value: PrimitiveValue): Double = 0.0
-  def computeBounds(backend: Backend, element: List[PrimitiveValue]): (Double,Double) = (0.0,0.0)
-  def computeStdDev(backend: Backend, element: List[PrimitiveValue]): Double = 0.0
+class MissingValueAnalysis(db: Database, idx: Int, ctx: MissingValueLens) extends CTAnalysis(db) {
+  def varType: Type.T = Type.TInt
+  def isCategorical: Boolean = true
+  
+  def classify(rowid: PrimitiveValue) =
+  {
+    val rowValues = db.query(
+      CTables.percolate(
+        Select(
+          Comparison(Cmp.Eq, Var("ROWID"), rowid),
+          ctx.source
+        )
+      )
+    )
+    if(!rowValues.getNext()){
+      throw new SQLException("Invalid Source Data ROWID: '" +rowid+"'");
+    }
+    val row = new DenseInstance(ctx.allKeys.length);
+    (0 until ctx.allKeys.length).foreach( (col) => {
+      val v = rowValues(col)
+      if(!v.isInstanceOf[NullPrimitive]){
+        row.setValue(col, v.asDouble)
+      }
+    })
+    row.setDataset(ctx.data)
+    ctx.models(idx).classifier.getVotesForInstance(row)
+  }
+  
+  def computeMLE(element: List[PrimitiveValue]): PrimitiveValue = 
+  {
+    val classes = classify(element(0));
+    var maxClass = 0;
+    var maxLikelihood = classes(0);
+    (1 until classes.length).foreach( (i) => {
+      if(classes(i) > maxLikelihood){ 
+        maxLikelihood = classes(i);
+        maxClass = i
+      }
+    })
+    return new IntPrimitive(maxClass)
+  }
+  def computeEqConfidence(element: List[PrimitiveValue], value: PrimitiveValue): Double = 0.0
+  def computeBounds(element: List[PrimitiveValue]): (Double,Double) = (0.0,0.0)
+  def computeStdDev(element: List[PrimitiveValue]): Double = 0.0
   
 }

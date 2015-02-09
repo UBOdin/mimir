@@ -18,29 +18,26 @@ import mimir.exec._;
 object Mimir {
   
   var conf: MimirConfig = null;
-  var backend: Backend = null;
-  var iviews: IViewManager = null;
+  var db: Database = null;
   var usePrompt = true;
-  var sqltora: SqlToRA = null
   
   def main(args: Array[String]) {
     conf = new MimirConfig(args);
     
     
     // Set up the database connection(s)
-    backend = conf.backend() match {
+    val backend = conf.backend() match {
       case "oracle" => new JDBCBackend(connectOracle());
       case "sqlite" => new JDBCBackend(connectSqlite());
       case x => println("Unsupported backend: "+x); exit(-1);
     }
     
     // Check for one-off commands
-    sqltora = new SqlToRA(backend, defineView);
-    iviews = new IViewManager(backend, sqltora);
+    db = new Database(backend);
     
     if(conf.initDB()){
       println("Initializing Database...");
-      iviews.init();
+      db.initializeDBForMimir();
     } else if(conf.loadTable.get != None){
       handleLoadTable(conf.loadTable(), conf.loadTable()+".csv");
     } else {
@@ -55,7 +52,7 @@ object Mimir {
       }
       
       println("Loading IViews...");
-      iviews.load();
+      db.loadState();
       println("done");
       
       eventLoop(source);
@@ -78,11 +75,11 @@ object Mimir {
         } else if(stmt.isInstanceOf[Analyze]){
           handleAnalyze(stmt.asInstanceOf[Analyze]);
         } else if(stmt.isInstanceOf[CreateIView]) {
-          iviews.create(stmt.asInstanceOf[CreateIView]);
+          db.createIView(stmt.asInstanceOf[CreateIView]);
         } else if(stmt.isInstanceOf[Explain]) {
           handleExplain(stmt.asInstanceOf[Explain]);
         } else {
-          backend.update(stmt.toString())
+          db.update(stmt.toString())
         }
         
       } catch {
@@ -95,25 +92,24 @@ object Mimir {
   }
   
   def handleExplain(explain: Explain): Unit = {
-    val raw = sqltora.convert(explain.getSelectBody());
+    val raw = db.convert(explain.getSelectBody())._1;
     println("--- Raw Query ---");
     println(raw.toString());
-    println("--- Percolated Query ---");
-    println(CTables.percolate(raw).toString);
+    println("--- Optimized Query ---");
+    println(db.optimize(raw).toString);
   }
   
   def handleSelect(sel: Select): Unit = {
-    val raw = sqltora.convert(sel);
-    val converted = CTables.percolate(raw);
-    val results = Compiler.compile(iviews, backend, converted);
+    val raw = db.convert(sel);
+    val results = db.query(raw)
     results.open();
-    Compiler.dump(results);
+    db.dump(results);
     results.close();
   }
   
   def handleAnalyze(request: Analyze): Unit = {
-    val raw = sqltora.convert(request.getSelectBody());
-    val percolated = CTables.percolate(raw);
+    val raw = db.convert(request.getSelectBody())._1;
+    val percolated = db.optimize(raw);
     // if(CTAnalysis.isProbabilistic(percolated)){
     //   val analysis = CTAnalysis.analyze(
     //     request.getColumn(), 
@@ -132,7 +128,7 @@ object Mimir {
   
   def handleLoadTable(targetTable: String, sourceFile: String){
     println("Loading "+sourceFile);
-    val sch = backend.getTableSchema(targetTable);
+    val sch = db.getTableSchema(targetTable);
     val keys = sch.map( _._1 )
     val input = new BufferedReader(new FileReader(sourceFile));
     println(""+sch);
@@ -142,7 +138,7 @@ object Mimir {
       if(line == null){ done = true; }
       else {
         val data = line.split(",").padTo(keys.length, "");
-        backend.update(
+        db.update(
           "INSERT INTO "+targetTable+"("+keys.mkString(", ")+
           ") VALUES ("+
             data.map( _ match {
@@ -165,21 +161,6 @@ object Mimir {
   def connectOracle(): java.sql.Connection = 
   {
     Methods.getConn()
-  }
-  
-  def defineView(name: String): Option[(Operator)] =
-  {
-    // System.out.println("Selecting from ..."+name);
-    if(iviews == null){ None }
-    else {
-      //println(iviews.views.toString())
-      iviews.views.get(name.toUpperCase()) match {
-        case None => None
-        case Some(view) => 
-          // println("Found: "+name); 
-          Some(view.get())
-      }
-    }
   }
 }
 

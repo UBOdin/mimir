@@ -5,54 +5,25 @@ import mimir.sql.Backend;
 import mimir.ctables._;
 import mimir.algebra._;
 import mimir.util._;
+import mimir.Database;
 
-
-abstract class IViewModule(iview: String, id: Int, params: List[String])
-{
-  // Wrap the specified source operator as per the module's definition.
-  // The result should be the "cleaned" form of the operator, after all
-  // PVars have been constructed.
-  def wrap(source: Operator): Operator;
-  def build(backend: Backend, source: Operator): Unit;
-  def load(backend: Backend): Unit;
-  def varCount(): Int
-  def moduleType: String
-
-  def analyze(v: PVar): CTAnalysis
-  
-  def moduleId = id;
-  def moduleParams = params;
-
-  def globalVar(vid: Int) = PVar(iview, id, vid, List[Expression]())
-  def rowVar(vid: Int) = PVar(iview, id, vid, List[Expression](Var("ROWID")))
-  def groupVar(vid: Int, group: List[Expression]) = PVar(iview, id, vid, group)
-  def varName(vid: Int): String = { iview+"_"+id+"_"+vid }
-}
-
-class IView(name: String, source: Operator, modules: List[IViewModule]) 
+case class IView(name: String, source: Operator, lenses: List[Lens]) 
 {
   def get(): Operator = 
   {
-    var ret = source;
-    modules.map( (mod) => ret = mod.wrap(ret) );
-    return ret;
+    if(lenses.length < 1){ return source; }
+    else { return lenses(lenses.length-1).view }
   }
-  def build(backend: Backend): Unit =
+  def build(db: Database): Unit =
   {
-    var curr = source;
-    modules.map( (mod) => {
-      //println("Building features for module " + name + "_" + mod.moduleId);
-      mod.build(backend, curr);
-      curr = mod.wrap(curr);
-    })
+    lenses.map( _.build(db) )
   }
-  def load(backend: Backend): Unit =
+  def load(db: Database): Unit =
   {
-    modules.map( _.load(backend) );
+    lenses.foreach( _.load(db) );
   }
-  def getModules() = modules;
-  
-  def analyze(v: PVar): CTAnalysis =
-    modules(v.module).analyze(v)
+
+  def analyze(db: Database, v: PVar): CTAnalysis =
+    lenses(v.lens).analyze(db, v)
 
 } 

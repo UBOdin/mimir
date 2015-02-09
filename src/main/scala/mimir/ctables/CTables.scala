@@ -6,14 +6,14 @@ import mimir.util.ListUtils;
 
 case class PVar(
   iview: String, 
-  module: Int,
+  lens: Int,
   variable: Int,
   params: List[Expression]
 ) extends Expression {
-  override def toString() = "{{ "+iview+"_"+module+"_"+variable+"["+params.mkString(", ")+"] }}"
+  override def toString() = "{{ "+iview+"_"+lens+"_"+variable+"["+params.mkString(", ")+"] }}"
   def exprType(bindings: Map[String, Type.T]):Type.T = Type.TFloat
   def children: List[Expression] = params
-  def rebuild(x: List[Expression]) = PVar(iview, module, variable, x)
+  def rebuild(x: List[Expression]) = PVar(iview, lens, variable, x)
 }
 
 object CTables 

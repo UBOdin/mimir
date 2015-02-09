@@ -10,6 +10,11 @@ object Eval
     eval(e).asString
   def evalFloat(e: Expression) =
     eval(e).asDouble
+  def evalBool(e: Expression): Boolean =
+    eval(e) match {
+      case BoolPrimitive(v) => v
+      case v => throw new TypeException(TBool, v.exprType, "Cast")
+    }
   def eval(e: Expression): PrimitiveValue = 
     eval(e, Map[String, PrimitiveValue]());
   def eval(e: Expression, 

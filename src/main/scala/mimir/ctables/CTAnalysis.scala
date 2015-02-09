@@ -1,7 +1,7 @@
 package mimir.ctables;
 
 import mimir.algebra._;
-import mimir.sql.Backend;
+import mimir.Database;
 
 object CTAnalysis {
   	
@@ -44,11 +44,11 @@ object CTAnalysis {
   }
 }
 
-abstract class CTAnalysis {
-  def varType(backend: Backend): Type.T
-  def isCategorical(backend: Backend): Boolean
-  def computeMLE(backend: Backend, element: List[PrimitiveValue]): PrimitiveValue
-  def computeEqConfidence(backend: Backend, element: List[PrimitiveValue], value: PrimitiveValue): Double
-  def computeBounds(backend: Backend, element: List[PrimitiveValue]): (Double,Double)
-  def computeStdDev(backend: Backend, element: List[PrimitiveValue]): Double
+abstract class CTAnalysis(db: Database) {
+  def varType: Type.T
+  def isCategorical: Boolean
+  def computeMLE(element: List[PrimitiveValue]): PrimitiveValue
+  def computeEqConfidence(element: List[PrimitiveValue], value: PrimitiveValue): Double
+  def computeBounds(element: List[PrimitiveValue]): (Double,Double)
+  def computeStdDev(element: List[PrimitiveValue]): Double
 }

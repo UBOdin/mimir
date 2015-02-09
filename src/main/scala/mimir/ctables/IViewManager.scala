@@ -9,95 +9,99 @@ import mimir.ctables._;
 import mimir.algebra._;
 import mimir.util._;
 import mimir.sql._;
+import mimir.Database;
 
 
-class IViewManager(backend: Backend, sqltora: SqlToRA) {
+class IViewManager(db: Database) {
   var views = scala.collection.mutable.Map[String,IView]();
   
   def init(): Unit = 
   {
-    backend.update("CREATE TABLE MIMIR_IVIEW(name varchar(30), query text, PRIMARY KEY(name))");
-    backend.update("CREATE TABLE MIMIR_IVIEW_MODULE(iview varchar(30), m_id int, m_type varchar(30), parameters text, PRIMARY KEY(iview,m_id))");
-    backend.update("CREATE TABLE MIMIR_IVIEW_VAR(iview varchar(30), m_id int, v_id int, metadata text, PRIMARY KEY(iview,m_id,v_id))");
+    db.update("CREATE TABLE MIMIR_IVIEW(name varchar(30), query text, PRIMARY KEY(name))");
+    db.update("CREATE TABLE MIMIR_LENS(iview varchar(30), m_id int, m_type varchar(30), parameters text, PRIMARY KEY(iview,m_id))");
   }
   
-  def mkModule(moduleType: String, iview: String, id: Int, params: List[String]): IViewModule =
+  def mkLens(lensType: String, iview: String, id: Int, params: List[String], source: Operator): Lens =
   {
-    moduleType.toUpperCase() match { 
+    lensType.toUpperCase() match { 
       case "MISSING_VALUE" => 
-        new MissingValueModule(iview, id, params)
+        new MissingValueLens(iview, id, params, source)
     }
   }
   
   
   def create(iv: CreateIView): Unit = {
-    val (baseQuery, bindings) = sqltora.convert(iv.getSelectBody, null)
-    var source = 
+    val (baseQuery, bindings) = db.convert(iv.getSelectBody)
+    val originalSource = 
          Project(
-             bindings.map( _ match { case (external, internal) =>
-               ProjectArg(external, Var(internal))
-              }).toList,
-             baseQuery
-           )
+           bindings.map( _ match { case (external, internal) =>
+             ProjectArg(external, Var(internal))
+            }).toList,
+           baseQuery
+         )
+    var source: Operator = originalSource;
     val viewName = iv.getTable.getName.toUpperCase;
-    var moduleId = -1;
-    val view = new IView(viewName, source, 
+    var lensId = -1;
+    val view = new IView(viewName, originalSource, 
       iv.getModules().map( 
-        (module) => {
-          moduleId += 1;
+        (lensMetadata) => {
+          lensId += 1;
           val params = 
-            module.args.map( (arg:net.sf.jsqlparser.expression.Expression) => 
-              Eval.evalString(sqltora.convert(arg))
+            lensMetadata.args.map( (arg:net.sf.jsqlparser.expression.Expression) => 
+              Eval.evalString(db.convert(arg))
             ).toList
-          mkModule(module.name, viewName, moduleId, params);
+            
+          val lens = mkLens(lensMetadata.name, viewName, lensId, params, source);
+          source = lens.view
+          lens
         }).toList
       )
-    backend.update(
+    db.update(
         "INSERT INTO MIMIR_IVIEW(name, query) VALUES (?, ?)",
         List(viewName, iv.getSelectBody.toString())
     );
-    view.getModules().map( (mod) => {
-      backend.update(
-          "INSERT INTO MIMIR_IVIEW_MODULE(iview, m_id, m_type, parameters) VALUES (?, "+
-            mod.moduleId+", ?, ?)",
-          List(viewName, mod.moduleType, mod.moduleParams.mkString(","))
+    view.lenses.map( (lens) => {
+      db.update(
+          "INSERT INTO MIMIR_LENS(iview, m_id, m_type, parameters) VALUES (?, "+
+            lens.id+", ?, ?)",
+          List(viewName, lens.lensType, lens.serializeParams)
       );
     })
-    view.build(backend);
+    view.build(db);
     views.put(viewName, view);
   }
   
   def load(): Unit = {
-    val viewMetadata = backend.execute("SELECT name, query FROM MIMIR_IVIEW");
-    while(viewMetadata.isBeforeFirst()){ viewMetadata.next(); }
-    while(!viewMetadata.isAfterLast()){
-      val name = viewMetadata.getString(1);
+    db.query(
+      "SELECT name, query FROM MIMIR_IVIEW"
+    ).foreach( (viewMetadata) => {
+      val name = viewMetadata(0).asString;
       System.out.println("Loading IView: " + name);
-      val query = sqltora.convert(new CCJSqlParser(new StringReader(viewMetadata.getString(2))).Select());
-      val moduleMetadata = backend.execute(
-        "SELECT m_type, m_id, parameters FROM MIMIR_IVIEW_MODULE WHERE iview = ? ORDER BY m_id",
+      val originalSource = db.convert(new CCJSqlParser(new StringReader(viewMetadata(1).asString)).Select());
+      var source = originalSource;
+      var lenses = List[Lens]();
+      db.query(
+        "SELECT m_type, m_id, parameters FROM MIMIR_LENS WHERE iview = ? ORDER BY m_id",
         List(name)
-      )
-      var modules = List[IViewModule]();
-      while(moduleMetadata.isBeforeFirst()){ moduleMetadata.next(); }
-      while(!moduleMetadata.isAfterLast()){
-        modules = modules ++ List(mkModule(
-          moduleMetadata.getString(1),
+      ).foreach( (lensMetadata) => {
+        val lens = mkLens(
+          lensMetadata(0).asString,
           name, 
-          moduleMetadata.getInt(2),
-          moduleMetadata.getString(3).split(",").toList
-        ))
-        moduleMetadata.next();
-      }
-      viewMetadata.next();
-      val view = new IView(name, query, modules)
-      view.build(backend);
+          lensMetadata(1).asLong.toInt,
+          lensMetadata(2).asString.split(",").toList,
+          source
+        )
+        lenses = lenses ++ List(lens)
+        source = lens.view
+      })
+      val view = new IView(name, originalSource, lenses)
+      view.build(db);
       views.put(name, view);
-    }
+    })
   }
 
   def analyze(v: PVar): CTAnalysis =
   {
-    views.get(v.iview).get.analyze(v)
+    views.get(v.iview).get.analyze(db, v)
   }
 }

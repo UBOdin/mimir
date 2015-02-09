@@ -16,10 +16,9 @@ import mimir.Methods;
 import mimir.ctables._;
 import mimir.algebra._;
 import mimir.util._;
+import mimir.Database;
 
-class SqlToRA(backend: Backend, 
-              getView: String => Option[Operator]
-              ) 
+class SqlToRA(db: Database) 
 {
   def unhandled(feature : String) = {
     println("ERROR: Unhandled Feature: " + feature)
@@ -208,9 +207,9 @@ class SqlToRA(backend: Backend,
       else { alias = alias.toUpperCase }
       
       // Bind the table to a source: 
-      getView(name) match {
+      db.getView(name) match {
         case None =>
-          val sch = backend.getTableSchema(name);
+          val sch = db.getTableSchema(name);
           val newBindings = sch.map(
               (x) => (x._1, alias+"_"+x._1)
             ).toMap[String, String]

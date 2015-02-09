@@ -5,44 +5,61 @@ import scala.collection.mutable.ArraySeq
 import java.sql._;
 import mimir.algebra._;
 import mimir.ctables._;
-import mimir.sql.Backend;
+import mimir.Database;
 
 class ProjectionResultIterator(
-    src: ResultIterator, cols: List[(String, Expression)], 
-    ivmanager: IViewManager, backend: Backend
+    db: Database,
+    src: ResultIterator, 
+    cols: List[(String, Expression)]
   ) 
   extends ResultIterator
 {
-  val tuple: ArraySeq[PrimitiveValue] = 
-    new ArraySeq[PrimitiveValue](cols.length);
-  
-  val schema = cols.map( _ match { case (name, expr) => 
+
+  val schema = {
+    val srcSchema = src.schema.toMap[String,Type.T];
+    cols.map( _ match { case (name, expr) => 
       ( name, 
-        expr.exprType(src.schema.toMap[String,Type.T])
+        expr.exprType(srcSchema)
       )
-    }).toList
-  val exprs = cols.map( x => compile(x._2) )
+    }).filter( _._1 != "__MIMIR_CONDITION" ).
+    toList
+  }
+  val exprs = cols.
+    filter( _._1 != "__MIMIR_CONDITION" ).
+    map( x => compile(x._2) )
+  val cond = 
+    cols.find( _._1 == "__MIMIR_CONDITION" ).
+         map( x => compile(x._2) )
+  var condSatisfied: Boolean = true;
+  
+  val tuple: ArraySeq[PrimitiveValue] = 
+    new ArraySeq[PrimitiveValue](exprs.length);
   
   def apply(i: Int) = tuple(i)
-  def numCols = cols.length
+  def numCols = tuple.length
   
   def inputVar(i: Int) = src(i)
   
   def open(): Unit = 
-  {
     src.open();
-  }
+  def close(): Unit = 
+    src.close();
   def getNext(): Boolean = 
   {
-    if(!src.getNext()) { return false; }
-    (0 until tuple.length).foreach( (i) => {
-      tuple(i) = Eval.eval(exprs(i))
-    })
+    var searching = true;
+    while(searching){
+      if(!src.getNext()) { return false; }
+      if(cond match {
+        case None => true
+        case Some(c) => Eval.evalBool(c)
+      }) {
+        (0 until tuple.length).foreach( (i) => {
+          tuple(i) = Eval.eval(exprs(i))
+        })
+        searching = false;
+      }
+    }
     return true;
-  }
-  def close(): Unit = 
-  {
-    src.close();
   }
 
   def compile(expr: Expression): Expression =
@@ -60,10 +77,11 @@ class ProjectionResultIterator(
         new VarProjection(this, idx, t)
 
       case pvar: PVar =>
-        val analysis = ivmanager.analyze(pvar);
+        val analysis = db.analyze(pvar);
         compile(new AnalysisMLEProjection(
-          backend, analysis, pvar.params
-        ));
+            analysis, 
+            pvar.params
+          ));
       
       case _ => 
         expr.rebuild(
@@ -81,10 +99,10 @@ class VarProjection(src: ProjectionResultIterator, idx: Int, t: Type.T)
   def get() = src.inputVar(idx);
 }
 
-class AnalysisMLEProjection(backend: Backend, analysis: CTAnalysis, args: List[Expression])
+class AnalysisMLEProjection(analysis: CTAnalysis, args: List[Expression])
   extends Proc(args)
 {
-  def exprType(bindings: Map[String,Type.T]) = analysis.varType(backend);
-  def rebuild(x: List[Expression]) = new AnalysisMLEProjection(backend, analysis, x);
-  def get() = analysis.computeMLE(backend, args.map(Eval.eval(_)));
+  def exprType(bindings: Map[String,Type.T]) = analysis.varType;
+  def rebuild(x: List[Expression]) = new AnalysisMLEProjection(analysis, x);
+  def get() = analysis.computeMLE(args.map(Eval.eval(_)));
 }
