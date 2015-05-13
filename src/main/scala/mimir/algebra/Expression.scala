@@ -119,14 +119,28 @@ case class Not(child: Expression)
 
 abstract class Proc(args: List[Expression]) extends Expression
 {
+  def getArgs = args
   def children = args
-  def get(): PrimitiveValue
+  def get(v: List[PrimitiveValue]): PrimitiveValue
 }
 
 object Arith extends Enumeration {
   type Op = Value
   val Add, Sub, Mult, Div, And, Or = Value
   
+  def matchRegex = """\+|-|\*|/|\||&""".r
+  def fromString(a: String) = {
+    a match {
+      case "+" => Add
+      case "-" => Sub
+      case "*" => Mult
+      case "/" => Div
+      case "&" => And
+      case "|" => Or
+      case x => throw new Exception("Invalid operand '"+x+"'")
+    }
+  }
+
   def escalateNumeric(a: Type.T, b: Type.T): Type.T = {
     (a,b) match {
       case (_, TAny) => a

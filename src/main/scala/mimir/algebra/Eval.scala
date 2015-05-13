@@ -40,7 +40,7 @@ object Eval
               } else { None }
             }
           ).getOrElse(eval(caseElse, bindings))
-        case p: Proc => p.get()
+        case p:Proc => p.get(p.getArgs.map(eval(_, bindings)))
         case IsNullExpression(c, n) => {
           val isNull: Boolean = 
             eval(c, bindings).
@@ -52,6 +52,10 @@ object Eval
       
     }
   }
+
+  def simplify(e: Expression): Expression = 
+    if(getVars(e).isEmpty) { eval(e) } else { e }
+
   
   def inline(e: Expression): Expression = 
     inline(e, Map[String, Expression]())
@@ -60,7 +64,9 @@ object Eval
   {
     e match {
       case Var(v) => bindings.get(v).getOrElse(Var(v))
-      case _ => e.rebuild( e.children.map( inline(_, bindings) ) )
+      case _ => 
+        simplify( e.rebuild( e.children.map( inline(_, bindings) ) ) )
+
     }
   }
   
@@ -84,9 +90,7 @@ object Eval
           IntPrimitive(a.asLong * b.asLong)
         case (Arith.Mult, TFloat) => 
           FloatPrimitive(a.asDouble * b.asDouble)
-        case (Arith.Div, TInt) => 
-          IntPrimitive(a.asLong / b.asLong)
-        case (Arith.Div, TFloat) => 
+        case (Arith.Div, (TFloat|TInt)) => 
           FloatPrimitive(a.asDouble / b.asDouble)
         case (Arith.And, TBool) => 
           BoolPrimitive(
@@ -148,4 +152,10 @@ object Eval
       }
     }
   }
+
+  def getVars(e: Expression): Set[String] = 
+    e match { 
+      case Var(v) => Set(v)
+      case _ => e.children.map(getVars(_)).fold(Set[String]())( _ ++ _ )
+    }
 }

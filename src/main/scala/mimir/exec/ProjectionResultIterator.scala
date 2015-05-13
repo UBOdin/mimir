@@ -46,7 +46,7 @@ class ProjectionResultIterator(
    */
   val deterministicExprs = cols.
     filter( _._1 != "__MIMIR_CONDITION" ).
-    map( x => compile(CTAnalysis.compileDeterministic(x._2)) )
+    map( x => compile(CTAnalyzer.compileDeterministic(x._2)) )
 
   /**
    * Boolean expression that determines the presence
@@ -69,7 +69,7 @@ class ProjectionResultIterator(
    */
   val deterministicCond = 
     cols.find( _._1 == "__MIMIR_CONDITION" ).
-         map( x => compile(CTAnalysis.compileDeterministic(x._2)) )
+         map( x => compile(CTAnalyzer.compileDeterministic(x._2)) )
   
   val tuple: ArraySeq[PrimitiveValue] = 
     new ArraySeq[PrimitiveValue](exprs.length);
@@ -138,13 +138,6 @@ class ProjectionResultIterator(
         }
         val t = src.schema(idx)._2
         new VarProjection(this, idx, t)
-
-      case pvar: PVar =>
-        val analysis = db.analyze(pvar);
-        compile(new AnalysisMLEProjection(
-            analysis, 
-            pvar.params
-          ));
       
       case _ => 
         expr.rebuild(
@@ -159,5 +152,5 @@ class VarProjection(src: ProjectionResultIterator, idx: Int, t: Type.T)
 {
   def exprType(bindings: Map[String,Type.T]) = t;
   def rebuild(x: List[Expression]) = new VarProjection(src, idx, t)
-  def get() = src.inputVar(idx);
+  def get(v:List[PrimitiveValue]) = src.inputVar(idx);
 }

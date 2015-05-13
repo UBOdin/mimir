@@ -4,7 +4,7 @@ import java.sql._;
 
 import mimir.sql.{Backend,SqlToRA,RAToSql,CreateIView};
 import mimir.exec.{Compiler,ResultIterator,ResultSetIterator};
-import mimir.ctables.{IViewManager,CTAnalysis,PVar};
+import mimir.ctables.{IViewManager,VGTerm};
 import mimir.algebra._;
 
 case class Database(backend: Backend)
@@ -63,14 +63,6 @@ case class Database(backend: Backend)
       println("( There may be missing result rows )")
     }
   }
-    
-  
-  
-  def analyze(pvar: PVar): CTAnalysis =
-  {
-    iviews.analyze(pvar)
-  }
-  
   
   
   def convert(sel: net.sf.jsqlparser.statement.select.Select): Operator =

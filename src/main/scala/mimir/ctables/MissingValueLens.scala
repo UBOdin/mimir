@@ -15,20 +15,19 @@ import moa.streams.ArffFileStream;
 import moa.streams.InstanceStream;
 
 import mimir.Analysis;
-import mimir.Analysis.Model;
 import mimir.{Database,Mimir};
-import mimir.ctables._;
 import mimir.algebra._;
 import mimir.util._;
 import mimir.exec._;
 
-class MissingValueLens(name: String, id: Int, params: List[String], source: Operator) 
-  extends Lens(name, id, params, source) 
+class MissingValueLens(name: String, params: List[String], source: Operator) 
+  extends Lens(name, params, source) 
   with InstanceQueryAdapter
 {
   var allKeys: List[String] = null
-  var models: List[Model] = null;
+  var models: List[Analysis.Model] = null;
   var data: Instances = null
+  var model: Model = null
 
   def view: Operator = {
     val keysToBeCleaned = params.map( _.toUpperCase )
@@ -80,7 +79,7 @@ class MissingValueLens(name: String, id: Int, params: List[String], source: Oper
         }
         learner.trainOnInstance(dataPoint);
       })
-      new Model(learner, data, numSamples, numCorrect);
+      new Analysis.Model(learner, data, numSamples, numCorrect);
     })
     // Now save the models to the backend.
     
@@ -90,11 +89,6 @@ class MissingValueLens(name: String, id: Int, params: List[String], source: Oper
   {
     
   }
-  
-  def analyze(db: Database, v: PVar): CTAnalysis =
-  {
-    return new MissingValueAnalysis(db, v.variable, this);
-  }  
   
   def varCount: Int = params.length;
   def lensType = "MISSING_VALUE"
@@ -114,49 +108,49 @@ class MissingValueLens(name: String, id: Int, params: List[String], source: Oper
   }
 }
 
-class MissingValueAnalysis(db: Database, idx: Int, ctx: MissingValueLens) extends CTAnalysis(db) {
-  def varType: Type.T = Type.TInt
-  def isCategorical: Boolean = true
+// class MissingValueAnalysis(db: Database, idx: Int, ctx: MissingValueLens) extends CTAnalysis(db) {
+//   def varType: Type.T = Type.TInt
+//   def isCategorical: Boolean = true
   
-  def classify(rowid: PrimitiveValue) =
-  {
-    val rowValues = db.query(
-      CTables.percolate(
-        Select(
-          Comparison(Cmp.Eq, Var("ROWID"), rowid),
-          ctx.source
-        )
-      )
-    )
-    if(!rowValues.getNext()){
-      throw new SQLException("Invalid Source Data ROWID: '" +rowid+"'");
-    }
-    val row = new DenseInstance(ctx.allKeys.length);
-    (0 until ctx.allKeys.length).foreach( (col) => {
-      val v = rowValues(col)
-      if(!v.isInstanceOf[NullPrimitive]){
-        row.setValue(col, v.asDouble)
-      }
-    })
-    row.setDataset(ctx.data)
-    ctx.models(idx).classifier.getVotesForInstance(row)
-  }
+//   def classify(rowid: PrimitiveValue) =
+//   {
+//     val rowValues = db.query(
+//       CTPercolator.percolate(
+//         Select(
+//           Comparison(Cmp.Eq, Var("ROWID"), rowid),
+//           ctx.source
+//         )
+//       )
+//     )
+//     if(!rowValues.getNext()){
+//       throw new SQLException("Invalid Source Data ROWID: '" +rowid+"'");
+//     }
+//     val row = new DenseInstance(ctx.allKeys.length);
+//     (0 until ctx.allKeys.length).foreach( (col) => {
+//       val v = rowValues(col)
+//       if(!v.isInstanceOf[NullPrimitive]){
+//         row.setValue(col, v.asDouble)
+//       }
+//     })
+//     row.setDataset(ctx.data)
+//     ctx.models(idx).classifier.getVotesForInstance(row)
+//   }
   
-  def computeMLE(element: List[PrimitiveValue]): PrimitiveValue = 
-  {
-    val classes = classify(element(0));
-    var maxClass = 0;
-    var maxLikelihood = classes(0);
-    (1 until classes.length).foreach( (i) => {
-      if(classes(i) > maxLikelihood){ 
-        maxLikelihood = classes(i);
-        maxClass = i
-      }
-    })
-    return new IntPrimitive(maxClass)
-  }
-  def computeEqConfidence(element: List[PrimitiveValue], value: PrimitiveValue): Double = 0.0
-  def computeBounds(element: List[PrimitiveValue]): (Double,Double) = (0.0,0.0)
-  def computeStdDev(element: List[PrimitiveValue]): Double = 0.0
+//   def computeMLE(element: List[PrimitiveValue]): PrimitiveValue = 
+//   {
+//     val classes = classify(element(0));
+//     var maxClass = 0;
+//     var maxLikelihood = classes(0);
+//     (1 until classes.length).foreach( (i) => {
+//       if(classes(i) > maxLikelihood){ 
+//         maxLikelihood = classes(i);
+//         maxClass = i
+//       }
+//     })
+//     return new IntPrimitive(maxClass)
+//   }
+//   def computeEqConfidence(element: List[PrimitiveValue], value: PrimitiveValue): Double = 0.0
+//   def computeBounds(element: List[PrimitiveValue]): (Double,Double) = (0.0,0.0)
+//   def computeStdDev(element: List[PrimitiveValue]): Double = 0.0
   
-}
+// }

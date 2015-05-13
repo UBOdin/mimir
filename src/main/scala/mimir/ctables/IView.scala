@@ -23,7 +23,7 @@ case class IView(name: String, source: Operator, lenses: List[Lens])
     lenses.foreach( _.load(db) );
   }
 
-  def analyze(db: Database, v: PVar): CTAnalysis =
-    lenses(v.lens).analyze(db, v)
+//   def analyze(db: Database, v: PVar): CTAnalysis =
+//     lenses(v.lens).analyze(db, v)
 
 } 

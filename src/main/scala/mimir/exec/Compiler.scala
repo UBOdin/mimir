@@ -9,12 +9,12 @@ import mimir.Database;
 class Compiler(db: Database) {
   def optimize(oper: Operator): Operator =
   {
-    CTables.percolate(oper);
+    CTPercolator.percolate(oper);
   }
   
   def compile(oper: Operator): ResultIterator =
   {
-    if(CTAnalysis.isProbabilistic(oper)){
+    if(CTables.isProbabilistic(oper)){
       oper match { 
         case Project(cols, src) =>
           val inputIterator = compile(src);
