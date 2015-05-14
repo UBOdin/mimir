@@ -75,38 +75,6 @@
 	},
 	"buffers":
 	[
-		{
-			"file": "/Users/okennedy/Library/Application Support/Sublime Text 2/Packages/User/Default (OSX).sublime-keymap",
-			"settings":
-			{
-				"buffer_size": 117,
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "src/main/scala/mimir/exec/ProjectionResultIterator.scala",
-			"settings":
-			{
-				"buffer_size": 4627,
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "src/main/scala/mimir/algebra/Expression.scala",
-			"settings":
-			{
-				"buffer_size": 11011,
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "/Users/okennedy/Documents/CSE562-GradDatabases/Grader/engine/projects/cse562_2014sp_4.rb",
-			"settings":
-			{
-				"buffer_size": 3132,
-				"line_ending": "Unix"
-			}
-		}
 	],
 	"build_system": "Packages/User/SBT.sublime-build",
 	"command_palette":
@@ -132,8 +100,11 @@
 	},
 	"file_history":
 	[
-		"/Users/okennedy/Documents/Mimir/Src/src/main/scala/mimir/ctables/CTAnalysis.scala",
+		"/Users/okennedy/Documents/Mimir/Src/src/main/scala/mimir/exec/ProjectionResultIterator.scala",
+		"/Users/okennedy/Documents/Mimir/Src/src/main/scala/mimir/algebra/Expression.scala",
 		"/Users/okennedy/Documents/CSE562-GradDatabases/Grader/engine/projects/cse562_2014sp_4.rb",
+		"/Users/okennedy/Library/Application Support/Sublime Text 2/Packages/User/Default (OSX).sublime-keymap",
+		"/Users/okennedy/Documents/Mimir/Src/src/main/scala/mimir/ctables/CTAnalysis.scala",
 		"/Users/okennedy/Library/Application Support/Sublime Text 2/Packages/User/SBT.sublime-build",
 		"/Users/okennedy/Desktop/team2/src/edu/buffalo/cse562/index/IndexDefinition.java",
 		"/Users/okennedy/Documents/CSE562-GradDatabases/Grader/engine/Makefile",
@@ -191,125 +162,13 @@
 	"groups":
 	[
 		{
-			"selected": 0,
 			"sheets":
 			[
-				{
-					"buffer": 0,
-					"file": "/Users/okennedy/Library/Application Support/Sublime Text 2/Packages/User/Default (OSX).sublime-keymap",
-					"settings":
-					{
-						"buffer_size": 117,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								106,
-								106
-							]
-						],
-						"settings":
-						{
-							"syntax": "Packages/JavaScript/JSON.tmLanguage"
-						},
-						"translation.x": 0.0,
-						"translation.y": 0.0,
-						"zoom_level": 1.0
-					},
-					"type": "text"
-				}
 			]
 		},
 		{
-			"selected": 2,
 			"sheets":
 			[
-				{
-					"buffer": 1,
-					"file": "src/main/scala/mimir/exec/ProjectionResultIterator.scala",
-					"settings":
-					{
-						"buffer_size": 4627,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								3803,
-								3803
-							]
-						],
-						"settings":
-						{
-							"syntax": "Packages/Scala/Scala.tmLanguage",
-							"tab_size": 2,
-							"translate_tabs_to_spaces": true
-						},
-						"translation.x": 0.0,
-						"translation.y": 1789.0,
-						"zoom_level": 1.0
-					},
-					"type": "text"
-				},
-				{
-					"buffer": 2,
-					"file": "src/main/scala/mimir/algebra/Expression.scala",
-					"settings":
-					{
-						"buffer_size": 11011,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								3937,
-								3941
-							]
-						],
-						"settings":
-						{
-							"syntax": "Packages/Scala/Scala.tmLanguage",
-							"tab_size": 2,
-							"translate_tabs_to_spaces": true
-						},
-						"translation.x": 0.0,
-						"translation.y": 649.0,
-						"zoom_level": 1.0
-					},
-					"type": "text"
-				},
-				{
-					"buffer": 3,
-					"file": "/Users/okennedy/Documents/CSE562-GradDatabases/Grader/engine/projects/cse562_2014sp_4.rb",
-					"settings":
-					{
-						"buffer_size": 3132,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								0,
-								0
-							]
-						],
-						"settings":
-						{
-							"syntax": "Packages/Ruby/Ruby.tmLanguage",
-							"tab_size": 2,
-							"translate_tabs_to_spaces": true
-						},
-						"translation.x": 0.0,
-						"translation.y": 0.0,
-						"zoom_level": 1.0
-					},
-					"type": "text"
-				}
 			]
 		}
 	],
