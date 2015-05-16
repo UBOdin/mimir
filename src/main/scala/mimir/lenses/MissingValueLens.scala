@@ -113,8 +113,7 @@ class MissingValueLensBounds(model: MissingValueModel, args: List[Expression], l
   extends Proc(args)
 {
   def get(args: List[PrimitiveValue]): PrimitiveValue =  {
-    val modelBounds = model.boundsValues(args)
-    if(lowerBound){ modelBounds._1 } else { modelBounds._2 }
+    if(lowerBound){ model.lowerBound(args) } else { model.upperBound(args) }
   }
   
   def exprType(bindings: Map[String,Type.T]) = Type.TInt
@@ -175,18 +174,23 @@ class MissingValueModel(lens: MissingValueLens)
   ////// Model implementation
   def mostLikelyValue(args: List[PrimitiveValue]): PrimitiveValue =
     { IntPrimitive(classify(args(0)).minBy(_._1)._2); }
-  def boundsValues(args: List[PrimitiveValue]): (PrimitiveValue, PrimitiveValue) =
+  def lowerBound(args: List[PrimitiveValue]) =
     {  
       val classes = classify(args(0));
-      ( IntPrimitive(classes.minBy(_._1)._2),
-        IntPrimitive(classes.maxBy(_._1)._2)
-      )
+      IntPrimitive(classes.minBy(_._1)._2)
     }
-  def boundsExpressions(args: List[Expression    ]): (Expression, Expression) =
-    { 
-      ( new MissingValueLensBounds(this, args, true),
-        new MissingValueLensBounds(this, args, false)
-      )
+  def upperBound(args: List[PrimitiveValue]) =
+    {  
+      val classes = classify(args(0));
+      IntPrimitive(classes.maxBy(_._1)._2)
+    }
+  def lowerBoundExpr(args: List[Expression]) =
+    {  
+      new MissingValueLensBounds(this, args, true)
+    }
+  def upperBoundExpr(args: List[Expression]) =
+    {  
+      new MissingValueLensBounds(this, args, false)
     }
   def sample(seed: Long, args: List[PrimitiveValue]):  PrimitiveValue =
     {
