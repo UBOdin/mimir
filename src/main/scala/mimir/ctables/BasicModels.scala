@@ -44,3 +44,10 @@ object UniformDistribution extends SingleVarModel(Type.TFloat){
     FloatPrimitive(new Random(seed).nextDouble() * (high - low) + low)
   }
 }
+
+case class NoOpModel(vt: Type.T) extends SingleVarModel(vt) {
+  def mostLikelyValue(args: List[PrimitiveValue]) = args(0)
+  def boundsValues(args: List[PrimitiveValue]) = (args(0), args(0))
+  def boundsExpressions(args: List[Expression]) = (args(0), args(0))
+  def sample(seed: Long, args: List[PrimitiveValue]) = args(0)
+}

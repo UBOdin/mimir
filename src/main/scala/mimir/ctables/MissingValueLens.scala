@@ -22,18 +22,27 @@ import mimir.exec._;
 
 class MissingValueLens(name: String, params: List[String], source: Operator) 
   extends Lens(name, params, source) 
-  with InstanceQueryAdapter
 {
-  var allKeys: List[String] = null
-  var models: List[Analysis.Model] = null;
+  var orderedSourceSchema: List[(String,Type.T)] = null
+  val keysToBeCleaned = params.map( _.toUpperCase )
+  var models: List[SingleVarModel] = null;
   var data: Instances = null
   var model: Model = null
+  var db: Database = null
+
+  def sourceSchema() = {
+    if(orderedSourceSchema == null){
+      orderedSourceSchema = 
+        source.schema.toList.map( _ match { case (n,t) => (n.toUpperCase,t) } )
+    }
+    orderedSourceSchema
+  }
+
+  def allKeys() = { sourceSchema.map(_._1) }
 
   def view: Operator = {
-    val keysToBeCleaned = params.map( _.toUpperCase )
-    allKeys = source.schema.keys.toList
     Project(
-      allKeys.
+      allKeys().
         map( (k) => {
           val v = keysToBeCleaned.indexOf(k);
           if(v >= 0){
@@ -53,45 +62,27 @@ class MissingValueLens(name: String, params: List[String], source: Operator)
     )
   }
   def build(db: Database): Unit = {
+    this.db = db
     val schema = source.schema.keys.map(_.toUpperCase).toList;
     val results = db.backend.execute(db.convert(source));
-    models = params.map( (v) => {
-      val learner: Classifier = 
-        Analysis.getLearner("moa.classifiers.bayes.NaiveBayes");
-      val idx = schema.indexOf(v.toUpperCase) 
-      if(idx < 0){ 
-        throw new SQLException("Invalid attribute: '"+v+"' in "+schema.toString());
-      }
-      if(!Mimir.conf.quiet()){
-        println("Building learner for '"+v+"'");
-      }
-      data = 
-        InstanceQuery.retrieveInstances(this, results);
-      data.setClassIndex(idx);
-      learner.setModelContext(new InstancesHeader(data));
-      learner.prepareForUse();
-      var numCorrect: Int = 0;
-      var numSamples: Int = 0;
-      data.map( (dataPoint) => {
-        numSamples += 1;
-        if(learner.correctlyClassifies(dataPoint)){
-          numCorrect += 1;
-        }
-        learner.trainOnInstance(dataPoint);
-      })
-      new Analysis.Model(learner, data, numSamples, numCorrect);
-    })
-    // Now save the models to the backend.
-    
+    models =
+      sourceSchema.map(
+          _ match { case (n,t) => (keysToBeCleaned.indexOf(n), t) }
+        ).map( _ match { case (idx,t) => 
+          if(idx < 0){ 
+            new NoOpModel(t).asInstanceOf[SingleVarModel]
+          } else {
+            data = 
+              InstanceQuery.retrieveInstances(this, results);
+            new MissingValueModel(this, data).asInstanceOf[SingleVarModel]
+          }
+        })
+    model = new JointSingleVarModel(models);
   }
   
-  def load(db: Database): Unit = 
-  {
-    
-  }
-  
-  def varCount: Int = params.length;
-  def lensType = "MISSING_VALUE"
+  def save(db: Database): Unit = { /* Ignore for now */ }
+
+  def load(db: Database): Unit = { build(db); }
   
   ////// Weka's InstanceQueryAdapter interface
   def attributeCaseFix(colName: String) = colName;
@@ -108,33 +99,74 @@ class MissingValueLens(name: String, params: List[String], source: Operator)
   }
 }
 
+class MissingValueModel(lens: MissingValueLens)
+  extends SingleVarModel(Type.TInt) 
+  with InstanceQueryAdapter
+{
+  val learner: Classifier = 
+        Analysis.getLearner("moa.classifiers.bayes.NaiveBayes");
+  var numCorrect = 0;
+  var numSamples = 0;
+
+  def varType: Type.T = Type.TInt
+
+  def init(ctx: InstancesHeader) = {
+    learner.setModelContext(ctx);
+    learner.prepareForUse();
+  }
+
+  def buildClassifier()
+            data.setClassIndex(idx);
+            m.init(data);
+            new InstancesHeader(data));
+
+            data.foreach( m.learn(_) )
+
+  def learn(dataPoint: Instance) = {
+    numSamples += 1;
+    if(learner.correctlyClassifies(dataPoint)){
+      numCorrect += 1;
+    }
+    learner.trainOnInstance(dataPoint);
+  }
+
+  def classify(rowid: PrimitiveValue) =
+  {
+    val rowValues = lens.db.query(
+      CTPercolator.percolate(
+        Select(
+          Comparison(Cmp.Eq, Var("ROWID"), rowid),
+          lens.source
+        )
+      )
+    )
+    if(!rowValues.getNext()){
+      throw new SQLException("Invalid Source Data ROWID: '" +rowid+"'");
+    }
+    val row = new DenseInstance(ctx.allKeys.length);
+    (0 until lens.allKeys.length).foreach( (col) => {
+      val v = rowValues(col)
+      if(!v.isInstanceOf[NullPrimitive]){
+        row.setValue(col, v.asDouble)
+      }
+    })
+    row.setDataset(ctx.data)
+    learner.getVotesForInstance(row)
+  }
+
+  ////// Model implementation
+  def mostLikelyValue(args: List[PrimitiveValue]): PrimitiveValue =
+    { classify(args(0)); }
+  def boundsValues(args: List[PrimitiveValue]): (PrimitiveValue, PrimitiveValue)
+  def boundsExpressions(args: List[Expression    ]): (Expression, Expression)
+  def sample(seed: Long, args: List[PrimitiveValue]):  PrimitiveValue
+
+}
 // class MissingValueAnalysis(db: Database, idx: Int, ctx: MissingValueLens) extends CTAnalysis(db) {
 //   def varType: Type.T = Type.TInt
 //   def isCategorical: Boolean = true
   
-//   def classify(rowid: PrimitiveValue) =
-//   {
-//     val rowValues = db.query(
-//       CTPercolator.percolate(
-//         Select(
-//           Comparison(Cmp.Eq, Var("ROWID"), rowid),
-//           ctx.source
-//         )
-//       )
-//     )
-//     if(!rowValues.getNext()){
-//       throw new SQLException("Invalid Source Data ROWID: '" +rowid+"'");
-//     }
-//     val row = new DenseInstance(ctx.allKeys.length);
-//     (0 until ctx.allKeys.length).foreach( (col) => {
-//       val v = rowValues(col)
-//       if(!v.isInstanceOf[NullPrimitive]){
-//         row.setValue(col, v.asDouble)
-//       }
-//     })
-//     row.setDataset(ctx.data)
-//     ctx.models(idx).classifier.getVotesForInstance(row)
-//   }
+
   
 //   def computeMLE(element: List[PrimitiveValue]): PrimitiveValue = 
 //   {
