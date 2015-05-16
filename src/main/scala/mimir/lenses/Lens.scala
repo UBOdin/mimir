@@ -15,6 +15,7 @@ abstract case class Lens(modelName: String, params: List[String], source: Operat
   def view: Operator;
   def build(db: Database): Unit;
   def load(db: Database): Unit;
+  def save(db: Database): Unit;
   def model: Model;
 
   // def varCount: Int

@@ -18,13 +18,39 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 			case x => throw new Exception(x.toString)
 		}
 	
-	def exprBase : Parser[Expression] = parens | arith | leaf
+	def exprBase : Parser[Expression] = 
+		isNull
+
+
+	def isNull = 
+		( arith <~ "IS NULL" ^^ { case e => IsNullExpression(e, false); } 
+		  | arith 
+		)
+
+
 
 	def parens = "\\(" ~> exprBase <~ "\\)"
-	def arith  = leaf ~ arithSym ~ exprBase ^^ {
-		case lhs ~ op ~ rhs => Arithmetic(op, lhs, rhs)
-	}
-	def leaf = floatLeaf | intLeaf | stringLeaf | function | vgterm | varLeaf
+	def arith  = 
+		( leaf ~ arithSym ~ exprBase ^^ {
+			case lhs ~ op ~ rhs => Arithmetic(op, lhs, rhs)
+		  } 
+          | leaf
+        )
+
+	def caseStmt = 
+		"CASE"~>(whenThenSeq~("ELSE"~>exprBase))<~"END" ^^ {
+		   	case w ~ e => CaseExpression(w,e) 
+	    }
+	def whenThenSeq: Parser[List[WhenThenClause]] =
+		( whenThenClause ~ whenThenSeq ^^ { case a ~ b => a :: b } 
+		| whenThenClause ^^ { List(_) } 
+		)
+	def whenThenClause = 
+		"WHEN"~>(exprBase~("THEN"~>exprBase)) ^^ {
+			case w ~ t => WhenThenClause(w, t)
+		} 
+
+	def leaf = parens | floatLeaf | intLeaf | stringLeaf | caseStmt | function | vgterm | varLeaf
 
 	def intLeaf = cint ^^ { IntPrimitive(_) }
 	def floatLeaf = cflt ^^ { FloatPrimitive(_) }
