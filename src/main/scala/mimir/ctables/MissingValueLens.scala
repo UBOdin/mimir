@@ -2,6 +2,7 @@ package mimir.ctables;
 
 import java.sql._;
 import collection.JavaConversions._;
+import scala.util._;
 
 import weka.core.DenseInstance;
 import weka.core.Instance;
@@ -22,6 +23,7 @@ import mimir.exec._;
 
 class MissingValueLens(name: String, params: List[String], source: Operator) 
   extends Lens(name, params, source) 
+  with InstanceQueryAdapter
 {
   var orderedSourceSchema: List[(String,Type.T)] = null
   val keysToBeCleaned = params.map( _.toUpperCase )
@@ -72,18 +74,26 @@ class MissingValueLens(name: String, params: List[String], source: Operator)
           if(idx < 0){ 
             new NoOpModel(t).asInstanceOf[SingleVarModel]
           } else {
+            val m = new MissingValueModel(this);
             data = 
               InstanceQuery.retrieveInstances(this, results);
-            new MissingValueModel(this, data).asInstanceOf[SingleVarModel]
+            data.setClassIndex(idx);
+            m.init(data);
+
+            m.asInstanceOf[SingleVarModel];
           }
         })
     model = new JointSingleVarModel(models);
   }
   
+  def lensType = "MISSING_VALUE"
+
   def save(db: Database): Unit = { /* Ignore for now */ }
 
   def load(db: Database): Unit = { build(db); }
-  
+
+
+
   ////// Weka's InstanceQueryAdapter interface
   def attributeCaseFix(colName: String) = colName;
   def getDebug() = false;
@@ -99,28 +109,33 @@ class MissingValueLens(name: String, params: List[String], source: Operator)
   }
 }
 
+class MissingValueLensBounds(model: MissingValueModel, args: List[Expression], lowerBound: Boolean)
+  extends Proc(args)
+{
+  def get(args: List[PrimitiveValue]): PrimitiveValue =  {
+    val modelBounds = model.boundsValues(args)
+    if(lowerBound){ modelBounds._1 } else { modelBounds._2 }
+  }
+  
+  def exprType(bindings: Map[String,Type.T]) = Type.TInt
+  def rebuild(c: List[Expression]) = 
+    new MissingValueLensBounds(model, c, lowerBound);
+}
+
 class MissingValueModel(lens: MissingValueLens)
   extends SingleVarModel(Type.TInt) 
-  with InstanceQueryAdapter
 {
   val learner: Classifier = 
         Analysis.getLearner("moa.classifiers.bayes.NaiveBayes");
+  var data: Instances = null; 
   var numCorrect = 0;
   var numSamples = 0;
 
-  def varType: Type.T = Type.TInt
-
-  def init(ctx: InstancesHeader) = {
-    learner.setModelContext(ctx);
+  def init(data: Instances) = {
+    learner.setModelContext(new InstancesHeader(data));
     learner.prepareForUse();
+    data.foreach( learn(_) );
   }
-
-  def buildClassifier()
-            data.setClassIndex(idx);
-            m.init(data);
-            new InstancesHeader(data));
-
-            data.foreach( m.learn(_) )
 
   def learn(dataPoint: Instance) = {
     numSamples += 1;
@@ -130,7 +145,7 @@ class MissingValueModel(lens: MissingValueLens)
     learner.trainOnInstance(dataPoint);
   }
 
-  def classify(rowid: PrimitiveValue) =
+  def classify(rowid: PrimitiveValue): List[(Double, Int)] =
   {
     val rowValues = lens.db.query(
       CTPercolator.percolate(
@@ -143,23 +158,48 @@ class MissingValueModel(lens: MissingValueLens)
     if(!rowValues.getNext()){
       throw new SQLException("Invalid Source Data ROWID: '" +rowid+"'");
     }
-    val row = new DenseInstance(ctx.allKeys.length);
+    val row = new DenseInstance(lens.allKeys.length);
     (0 until lens.allKeys.length).foreach( (col) => {
       val v = rowValues(col)
       if(!v.isInstanceOf[NullPrimitive]){
         row.setValue(col, v.asDouble)
       }
     })
-    row.setDataset(ctx.data)
-    learner.getVotesForInstance(row)
+    row.setDataset(data)
+    learner.getVotesForInstance(row).
+      toList.
+      zipWithIndex.
+      filter( _._1 > 0 )
   }
 
   ////// Model implementation
   def mostLikelyValue(args: List[PrimitiveValue]): PrimitiveValue =
-    { classify(args(0)); }
-  def boundsValues(args: List[PrimitiveValue]): (PrimitiveValue, PrimitiveValue)
-  def boundsExpressions(args: List[Expression    ]): (Expression, Expression)
-  def sample(seed: Long, args: List[PrimitiveValue]):  PrimitiveValue
+    { IntPrimitive(classify(args(0)).minBy(_._1)._2); }
+  def boundsValues(args: List[PrimitiveValue]): (PrimitiveValue, PrimitiveValue) =
+    {  
+      val classes = classify(args(0));
+      ( IntPrimitive(classes.minBy(_._1)._2),
+        IntPrimitive(classes.maxBy(_._1)._2)
+      )
+    }
+  def boundsExpressions(args: List[Expression    ]): (Expression, Expression) =
+    { 
+      ( new MissingValueLensBounds(this, args, true),
+        new MissingValueLensBounds(this, args, false)
+      )
+    }
+  def sample(seed: Long, args: List[PrimitiveValue]):  PrimitiveValue =
+    {
+      val classes = classify(args(0));
+      val tot_cnt = classes.map(_._1).sum;
+      val pick = new Random(seed).nextInt() % tot_cnt
+      val cumulative_counts = 
+        classes.scanLeft(0.0)(
+            ( cumulative, cnt_class ) => cumulative + cnt_class._1 
+        )
+      val pick_idx: Int = cumulative_counts.indexWhere( pick < _ )
+      return IntPrimitive(classes(pick_idx)._2)
+    }
 
 }
 // class MissingValueAnalysis(db: Database, idx: Int, ctx: MissingValueLens) extends CTAnalysis(db) {
