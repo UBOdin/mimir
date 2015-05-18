@@ -100,6 +100,8 @@
 	},
 	"file_history":
 	[
+		"/Users/okennedy/Documents/Mimir/Src/src/main/scala/mimir/ctables/Lens.scala",
+		"/tmp/subl stdin PoPuax.txt",
 		"/Users/okennedy/Documents/Mimir/Src/src/main/scala/mimir/exec/ProjectionResultIterator.scala",
 		"/Users/okennedy/Documents/Mimir/Src/src/main/scala/mimir/algebra/Expression.scala",
 		"/Users/okennedy/Documents/CSE562-GradDatabases/Grader/engine/projects/cse562_2014sp_4.rb",
@@ -165,11 +167,6 @@
 			"sheets":
 			[
 			]
-		},
-		{
-			"sheets":
-			[
-			]
 		}
 	],
 	"incremental_find":
@@ -189,18 +186,11 @@
 				0,
 				1,
 				1
-			],
-			[
-				1,
-				0,
-				2,
-				1
 			]
 		],
 		"cols":
 		[
 			0.0,
-			0.5,
 			1.0
 		],
 		"rows":
