@@ -9,8 +9,10 @@ abstract class Model {
   def varTypes: List[Type.T]
 
   def mostLikelyValue   (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
-  def boundsValues      (idx: Int, args: List[PrimitiveValue]): (PrimitiveValue, PrimitiveValue)
-  def boundsExpressions (idx: Int, args: List[Expression    ]): (Expression, Expression)
+  def lowerBound        (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
+  def upperBound        (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
+  def lowerBoundExpr    (idx: Int, args: List[Expression    ]):  Expression
+  def upperBoundExpr    (idx: Int, args: List[Expression    ]):  Expression
   def sample(seed: Long, idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
 }
 

@@ -103,7 +103,7 @@ object CTAnalyzer {
       case Not(child) => compileForBounds(child) match { case (a,b) => (b,a) }
 
       case VGTerm((_,model),idx,args) => 
-        model.boundsExpressions(idx, args)
+        (model.lowerBoundExpr(idx, args), model.upperBoundExpr(idx, args))
 
       case Arithmetic(op, lhs, rhs) =>
         val (lhs_low, lhs_high) = compileForBounds(lhs);

@@ -20,16 +20,18 @@ object Mimir {
   var conf: MimirConfig = null;
   var db: Database = null;
   var usePrompt = true;
+  var dbName = "debug";
   
   def main(args: Array[String]) {
     conf = new MimirConfig(args);
     
-    
     // Set up the database connection(s)
     val backend = conf.backend() match {
       case "oracle" => new JDBCBackend(connectOracle());
-      case "sqlite" => new JDBCBackend(connectSqlite());
-      case x => println("Unsupported backend: "+x); exit(-1);
+      case "sqlite" => new JDBCBackend(connectSqlite(conf.dbname()));
+      case x => 
+
+      println("Unsupported backend: "+x); exit(-1);
     }
     
     // Check for one-off commands
@@ -51,17 +53,17 @@ object Mimir {
         usePrompt = false;
       }
       
-      if(!conf.quiet()) { println("Loading IViews..."); }
+      if(!conf.quiet()) { print("Initializing..."); }
       db.loadState();
-      if(!conf.quiet()) { println("done"); }
+      if(!conf.quiet()) { println("  done"); }
       
       eventLoop(source);
     }
-    if(!conf.quiet()) { println("Done.  Exiting."); }
+    if(!conf.quiet()) { println("\n\nDone.  Exiting."); }
   }
   
   def eventLoop(source: Reader): Unit = {
-    var parser = new CCJSqlParser(source);
+    var parser = new MimirJSqlParser(source);
     var done = false;
     do { 
       try {
@@ -74,8 +76,8 @@ object Mimir {
           handleSelect(stmt.asInstanceOf[Select]);
         } else if(stmt.isInstanceOf[Analyze]){
           handleAnalyze(stmt.asInstanceOf[Analyze]);
-        } else if(stmt.isInstanceOf[CreateIView]) {
-          db.createIView(stmt.asInstanceOf[CreateIView]);
+        } else if(stmt.isInstanceOf[CreateLens]) {
+          db.createLens(stmt.asInstanceOf[CreateLens]);
         } else if(stmt.isInstanceOf[Explain]) {
           handleExplain(stmt.asInstanceOf[Explain]);
         } else {
@@ -86,6 +88,7 @@ object Mimir {
         case e: Throwable => {
           e.printStackTrace()
           println("Command Ignored");
+          parser = new MimirJSqlParser(source);
         }
       }
     } while(!done)
@@ -152,10 +155,10 @@ object Mimir {
   }
 
   
-  def connectSqlite(): java.sql.Connection = 
+  def connectSqlite(filename: String): java.sql.Connection = 
   {
     Class.forName("org.sqlite.JDBC");
-    java.sql.DriverManager.getConnection("jdbc:sqlite:debug.db");
+    java.sql.DriverManager.getConnection("jdbc:sqlite:"+filename);
   }
   
   def connectOracle(): java.sql.Connection = 
@@ -174,8 +177,10 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
 //   val cleanSummary = toggle("summary-clean", default = Some(false))
 //   val sampleCount = opt[Int]("samples", noshort = true, default = None)
   val loadTable = opt[String]("loadTable", descr = "Don't do anything, just load a CSV file")
-  val backend = opt[String]("db", descr = "Which backend database to use? ([sqlite],oracle)", 
+  val backend = opt[String]("driver", descr = "Which backend database to use? ([sqlite],oracle)", 
                             default = Some("sqlite"))
+  val dbname = opt[String]("db", descr = "Connect to the database with the specified name",
+                            default = Some("debug.db"))
   val initDB = toggle("init", default = Some(false))
   val quiet  = toggle("quiet", default = Some(false))
   val file = trailArg[String](required = false)

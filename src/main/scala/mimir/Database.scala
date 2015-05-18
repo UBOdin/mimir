@@ -2,16 +2,16 @@ package mimir;
 
 import java.sql._;
 
-import mimir.sql.{Backend,SqlToRA,RAToSql,CreateIView};
+import mimir.sql.{Backend,SqlToRA,RAToSql,CreateLens};
 import mimir.exec.{Compiler,ResultIterator,ResultSetIterator};
-import mimir.ctables.{IViewManager,VGTerm};
+import mimir.ctables.{LensManager,VGTerm};
 import mimir.algebra._;
 
 case class Database(backend: Backend)
 {
   val sql = new SqlToRA(this)
   val ra = new RAToSql(this)
-  val iviews = new IViewManager(this)
+  val lenses = new LensManager(this)
   val compiler = new Compiler(this)  
   
   
@@ -24,10 +24,14 @@ case class Database(backend: Backend)
   def query(sql: net.sf.jsqlparser.statement.select.SelectBody): ResultIterator =
     new ResultSetIterator(backend.execute(sql))
   
-  def update(sql: String): Unit =
+  def update(sql: String): Unit = {
+    // println(sql);
     backend.update(sql);
-  def update(sql: String, args: List[String]): Unit =
+  }
+  def update(sql: String, args: List[String]): Unit = {
+    // println(sql);
     backend.update(sql, args);
+  }
 
   def optimize(oper: Operator): Operator =
   {
@@ -81,26 +85,25 @@ case class Database(backend: Backend)
   def getTableOperator(table: String, metadata: Map[String, Type.T]): Operator =
     backend.getTableOperator(table, metadata)
   
-  def createIView(viewDefn: CreateIView): Unit =
-    iviews.create(viewDefn)
+  def createLens(lensDefn: CreateLens): Unit =
+    lenses.create(lensDefn)
   
   def initializeDBForMimir(): Unit =
-    iviews.init();
+    lenses.init();
   
-  def loadState(): Unit =
-    iviews.load();
+  def loadState(): Unit = {}
   
   def getView(name: String): Option[(Operator)] =
   {
     // System.out.println("Selecting from ..."+name);
-    if(iviews == null){ None }
+    if(lenses == null){ None }
     else {
       //println(iviews.views.toString())
-      iviews.views.get(name.toUpperCase()) match {
+      lenses.load(name.toUpperCase()) match {
         case None => None
-        case Some(view) => 
+        case Some(lens) => 
           // println("Found: "+name); 
-          Some(view.get())
+          Some(lens.view)
       }
     }
   }

@@ -2,7 +2,7 @@ package mimir.ctables;
 
 import java.io.{StringReader,FileReader}
 
-import net.sf.jsqlparser.parser.{CCJSqlParser}
+import mimir.parser.{MimirJSqlParser}
 import org.specs2.mutable._
 
 import mimir._
