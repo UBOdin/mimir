@@ -41,6 +41,7 @@ object Eval
               } else { None }
             }
           ).getOrElse(eval(caseElse, bindings))
+        case Not(e) => BoolPrimitive(!evalBool(e))
         case p:Proc => p.get(p.getArgs.map(eval(_, bindings)))
         case IsNullExpression(c, n) => {
           val isNull: Boolean = 

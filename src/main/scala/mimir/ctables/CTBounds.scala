@@ -79,11 +79,11 @@ object CTBounds {
 		      		)
 	      		)
 	      		case Cmp.Neq => (
-		      		Arithmetic(Arith.Or,
-		      			Comparison(Cmp.Lte, lhs_low, rhs_high),
-		      			Comparison(Cmp.Lte, rhs_low, lhs_high)
+	      			Arithmetic(Arith.Or,
+	      				Comparison(Cmp.Lt, rhs_high, lhs_low),
+	      				Comparison(Cmp.Gt, rhs_low, lhs_high)
 		      		),
-		      		Arithmetic(Arith.Or,
+	      			Arithmetic(Arith.Or,
 		      			Arithmetic(Arith.Or,
 			      			Comparison(Cmp.Neq, lhs_low, lhs_high),
 			      			Comparison(Cmp.Neq, rhs_low, rhs_high)
@@ -93,23 +93,23 @@ object CTBounds {
 	      		)
 	      		case Cmp.Lt => (
 	      			Comparison(Cmp.Lt,  lhs_high, rhs_low),
+	      			Comparison(Cmp.Lt,  lhs_low,  rhs_high)
+	      		)
+	      		case Cmp.Lte => (
+	      			Comparison(Cmp.Lte, lhs_high, rhs_low),
 	      			Comparison(Cmp.Lte, lhs_low,  rhs_high)
 	      		)
-	      		// case Cmp.Lte => (
-	      		// 	Comparison(Cmp.Lte, lhs_low,  rhs_high),
-	      		// 	Comparison(Cmp.Gte, lhs_high, rhs_low)
-	      		// )
-	      		// case Cmp.Gt => (
-	      		// 	Comparison(Cmp.Lt,  rhs_low,  lhs_high),
-	      		// 	Comparison(Cmp.Gte, rhs_high, lhs_low)
-	      		// )
-	      		// case Cmp.Gte => (
-	      		// 	Comparison(Cmp.Lte, rhs_low,  lhs_high),
-	      		// 	Comparison(Cmp.Gte, rhs_high, lhs_low)
-	      		// )
+	      		case Cmp.Gt => (
+	      			Comparison(Cmp.Lt,  rhs_high, lhs_low),
+	      			Comparison(Cmp.Lt,  rhs_low,  lhs_high)
+	      		)
+	      		case Cmp.Gte => (
+	      			Comparison(Cmp.Lte, rhs_high, lhs_low),
+	      			Comparison(Cmp.Lte, rhs_low,  lhs_high)
+	      		)
 	      	}
-      	println("FALSE: "+true_if_always + " -> " + Eval.inline(true_if_always))
-      	println("TRUE: "+false_if_impossible + " -> " + Eval.inline(false_if_impossible))
+      	// println("FALSE: "+true_if_always + " -> " + Eval.inline(true_if_always))
+      	// println("TRUE: "+false_if_impossible + " -> " + Eval.inline(false_if_impossible))
  	    return (Eval.inline(true_if_always), Eval.inline(false_if_impossible))
 
     }
@@ -163,33 +163,31 @@ object CTBounds {
   		// Implement by stripping a WhenThenClause off the head of the
   		// list and processing it...
   		case WhenThenClause(w, t) :: rest => {
-  			val w_low, w_high = compile(w);
-  			if(w_high.equals(BoolPrimitive(false))){
+  			val (w_low, w_high) = compile(w);
+  			val (t_low, t_high) = compile(t);
+  			val (r_low, r_high) = compileWhenThenClauses(rest, eClause);
 
-  				// If the when clause is deterministically false, it 
-  				// can be safely ignored.
-  				return compileWhenThenClauses(rest, eClause)
-  			} else {
+  			val (rt_low, rt_high) = 
+  				combinePossibilities(List(
+  					(t_low, t_high), (r_low, r_high)
+  				))
 
-  				if(w_low.equals(BoolPrimitive(true))){
-  					
-  					// If the when clause is deterministically true, then
-  					// we don't need to recur -- the then-clause is 
-  					// sufficient
-  					return compile(t)
+  			val final_low = 
+  				CaseExpression(List(
+	  					WhenThenClause(Not(w_high), r_low),
+	  					WhenThenClause(w_low, t_low)
+	  				),
+  					rt_low
+  				)
+  			val final_high = 
+  				CaseExpression(List(
+	  					WhenThenClause(Not(w_high), r_high),
+	  					WhenThenClause(w_low, t_high)
+	  				),
+  					rt_high
+  				)
 
-  				} else {
-
-  					// Otherwise, combine the result of recurring down 
-  					// the rest of the when/then clauses and the current
-  					// bounds
-  					combinePossibilities(List(
-  						compile(t), 
-  						compileWhenThenClauses(rest, eClause)
-  					))
-  				}
-
-  			}
+  			return (Eval.inline(final_low), Eval.inline(final_high))
   		}
 
   		// If there are no when clauses, then this case statement

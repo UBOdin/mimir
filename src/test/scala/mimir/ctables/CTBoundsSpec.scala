@@ -104,14 +104,37 @@ object CTBoundsSpec extends Specification {
 
     "Handle Comparisons (lt)" in {
       bounds("{{test_0[1,11]}} < 7") must be equalTo (expr("false"), expr("true"))
-      // bounds("{{test_0[0,10]}} < 20") must be equalTo (expr("true"), expr("true"))
-      // bounds("{{test_0[0,10]}} < -10") must be equalTo (expr("false"), expr("false"))
+      bounds("{{test_0[0,10]}} < 20") must be equalTo (expr("true"), expr("true"))
+      bounds("{{test_0[0,10]}} < -10") must be equalTo (expr("false"), expr("false"))
+      bounds("{{test_0[7,10]}} < 7") must be equalTo (expr("false"), expr("false"))
+    }
+    "Handle Comparisons (lte)" in {
+      bounds("{{test_0[1,11]}} <= 7") must be equalTo (expr("false"), expr("true"))
+      bounds("{{test_0[0,10]}} <= 20") must be equalTo (expr("true"), expr("true"))
+      bounds("{{test_0[0,10]}} <= -10") must be equalTo (expr("false"), expr("false"))
+      bounds("{{test_0[9,10]}} <= 9") must be equalTo (expr("false"), expr("true"))
+    }
+
+    "Handle Comparisons (gt)" in {
+      bounds("{{test_0[1,11]}} > 7") must be equalTo (expr("false"), expr("true"))
+      bounds("{{test_0[0,10]}} > -20") must be equalTo (expr("true"), expr("true"))
+      bounds("{{test_0[0,10]}} > 20") must be equalTo (expr("false"), expr("false"))
+      bounds("{{test_0[0,7]}}  > 7") must be equalTo (expr("false"), expr("false"))
+    }
+    "Handle Comparisons (gte)" in {
+      bounds("{{test_0[1,11]}} >= 7") must be equalTo (expr("false"), expr("true"))
+      bounds("{{test_0[0,10]}} >= -20") must be equalTo (expr("true"), expr("true"))
+      bounds("{{test_0[0,10]}} >= 20") must be equalTo (expr("false"), expr("false"))
+      bounds("{{test_0[0,6]}}  >= 6") must be equalTo (expr("false"), expr("true"))
     }
 
     "Handle Case Statements with Non-Det Values" in {
       bounds(
-        "CASE WHEN A = 1 THEN {{ test_0[1,5] }} ELSE {{ test_1[4,10] }} END"
-      ) must be equalTo (expr("1"), expr("10"))
+        "CASE WHEN 1 = 1 THEN {{ test_0[1,5] }} ELSE {{ test_1[4,10] }} END"
+      ) must be equalTo (expr("1"), expr("5"))
+      bounds(
+        "CASE WHEN 2 = 1 THEN {{ test_0[1,5] }} ELSE {{ test_1[4,10] }} END"
+      ) must be equalTo (expr("4"), expr("10"))
     }
     "Handle Case Statements with Non-Det Conditions" in {
       bounds(
