@@ -24,17 +24,8 @@ object CTBoundsSpec extends Specification {
   def parser = new ExpressionParser((x: String) => boundsSpecModel)
   def expr = parser.expr _
 
-  def bounds = CTAnalyzer.compileForBounds _
+  def bounds = CTBounds.compile _
   def bounds(x: String): (Expression,Expression) = bounds(expr(x))
-
-  "The Expression Parser" should { 
-    "Parse Constants" in {
-      expr("1") must be equalTo IntPrimitive(1)
-      expr("1.0") must be equalTo FloatPrimitive(1.0)
-      expr("'yo'") must be equalTo StringPrimitive("yo")
-      expr("bob") must be equalTo Var("bob")
-    }
-  }
 
   "The Bounds Compiler" should {
 
@@ -95,6 +86,50 @@ object CTBoundsSpec extends Specification {
       bounds(
           "{{ test_0[1,10] }} / 2"
       ) must be equalTo (expr("0.5"), expr("5.0"))
+    }
+
+    "Handle Comparisons (eq)" in {
+      bounds("{{test_0[0,10]}} = 5") must be equalTo (expr("false"), expr("true"))
+      bounds("{{test_0[0,10]}} = -10") must be equalTo (expr("false"), expr("false"))
+      bounds("{{test_0[0,10]}} = 20") must be equalTo (expr("false"), expr("false"))
+      bounds("{{test_0[5,5]}} = 5") must be equalTo (expr("true"), expr("true"))
+    }
+
+    "Handle Comparisons (neq)" in {
+      bounds("{{test_0[0,10]}} != 8") must be equalTo (expr("false"), expr("true"))
+      bounds("{{test_0[0,10]}} != -18") must be equalTo (expr("true"), expr("true"))
+      bounds("{{test_0[0,10]}} != 28") must be equalTo (expr("true"), expr("true"))
+      bounds("{{test_0[8,8]}} != 8") must be equalTo (expr("false"), expr("false"))
+    }
+
+    "Handle Comparisons (lt)" in {
+      bounds("{{test_0[1,11]}} < 7") must be equalTo (expr("false"), expr("true"))
+      // bounds("{{test_0[0,10]}} < 20") must be equalTo (expr("true"), expr("true"))
+      // bounds("{{test_0[0,10]}} < -10") must be equalTo (expr("false"), expr("false"))
+    }
+
+    "Handle Case Statements with Non-Det Values" in {
+      bounds(
+        "CASE WHEN A = 1 THEN {{ test_0[1,5] }} ELSE {{ test_1[4,10] }} END"
+      ) must be equalTo (expr("1"), expr("10"))
+    }
+    "Handle Case Statements with Non-Det Conditions" in {
+      bounds(
+        "CASE WHEN {{ test_0[0,2] }} <= 1 THEN 10 ELSE 20 END"
+      ) must be equalTo (expr("10"), expr("20"))
+    }
+    "Handle Case Statements with Everything Being Non-Det" in {
+      bounds(
+        "CASE WHEN {{ test_0[0,2] }} <= 1 THEN {{ test_0[1,5] }} ELSE {{ test_1[4,10] }} END"
+      ) must be equalTo (expr("1"), expr("10"))
+    }
+    "Handle Case Statements with Det Conditions based on VGTerms" in {
+      bounds(
+        "CASE WHEN {{ test_0[0,2] }} <= 5 THEN 10 ELSE 20 END"
+      ) must be equalTo (expr("10"), expr("10"))
+      bounds(
+        "CASE WHEN {{ test_0[10,12] }} <= 5 THEN 10 ELSE 20 END"
+      ) must be equalTo (expr("20"), expr("20"))
     }
   }
 }

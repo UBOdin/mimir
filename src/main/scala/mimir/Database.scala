@@ -4,7 +4,7 @@ import java.sql._;
 
 import mimir.sql.{Backend,SqlToRA,RAToSql,CreateLens};
 import mimir.exec.{Compiler,ResultIterator,ResultSetIterator};
-import mimir.ctables.{LensManager,VGTerm};
+import mimir.ctables.{LensManager,VGTerm, CTPercolator};
 import mimir.algebra._;
 
 case class Database(backend: Backend)
@@ -35,15 +35,17 @@ case class Database(backend: Backend)
 
   def optimize(oper: Operator): Operator =
   {
-    compiler.optimize(oper)
+    CTPercolator.percolate(
+      compiler.optimize(oper)
+    )
   }
   def query(oper: Operator): ResultIterator = 
   {
-    compiler.compile(optimize(oper))
+    compiler.compile(oper)
   }
   def queryRaw(oper: Operator): ResultIterator =
   {
-    compiler.compile(oper);
+    compiler.buildIterator(oper);
   }
 
   def dump(result: ResultIterator): Unit =

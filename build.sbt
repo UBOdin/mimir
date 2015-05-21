@@ -12,7 +12,7 @@ libraryDependencies += "com.github.nscala-time" %% "nscala-time" % "1.2.0"
 
 libraryDependencies += "org.specs2" %% "specs2" % "2.3.12" % "test"
 
-libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.4"
+// libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.4"
 
 val parser = taskKey[Unit]("Builds the SQL Parser")
 

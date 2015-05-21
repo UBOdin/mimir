@@ -1,6 +1,7 @@
 package mimir.algebra;
 
 import mimir.algebra.Type._
+import mimir.ctables.CTables
 
 object Eval 
 {
@@ -54,7 +55,13 @@ object Eval
   }
 
   def simplify(e: Expression): Expression = 
-    if(getVars(e).isEmpty) { eval(e) } else { e }
+    if(getVars(e).isEmpty && 
+       !CTables.isProbabilistic(e)) 
+    { 
+      eval(e) 
+    } else { 
+      e 
+    }
 
   
   def inline(e: Expression): Expression = 
@@ -140,14 +147,24 @@ object Eval
               )
           }
         case Cmp.Lt => 
-          applyCmp(Cmp.Gt, b, a) match { 
-            case BoolPrimitive(x) => 
-              BoolPrimitive(!x)
+          Arith.escalateNumeric(a.exprType, b.exprType) match {
+            case TInt => BoolPrimitive(a.asLong < b.asLong)
+            case TFloat => BoolPrimitive(a.asDouble < b.asDouble)
+            case TDate => 
+              BoolPrimitive(
+                a.asInstanceOf[DatePrimitive].
+                 compare(b.asInstanceOf[DatePrimitive])>0
+              )
           }
         case Cmp.Lte => 
-          applyCmp(Cmp.Gte, b, a) match { 
-            case BoolPrimitive(x) => 
-              BoolPrimitive(!x)
+          Arith.escalateNumeric(a.exprType, b.exprType) match {
+            case TInt => BoolPrimitive(a.asLong <= b.asLong)
+            case TFloat => BoolPrimitive(a.asDouble <= b.asDouble)
+            case TDate => 
+              BoolPrimitive(
+                a.asInstanceOf[DatePrimitive].
+                 compare(b.asInstanceOf[DatePrimitive])>=0
+              )
           }
       }
     }

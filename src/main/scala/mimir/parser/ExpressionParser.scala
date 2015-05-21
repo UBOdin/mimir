@@ -19,17 +19,38 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 		}
 	
 	def exprBase : Parser[Expression] = 
-		isNull
+		boolExpr
 
+	def boolExpr : Parser[Expression] =
+		( isNull
+		| arith ~ cmpSym ~ arith ^^ { 
+				case lhs ~ op ~ rhs => Comparison(op, lhs, rhs)
+			}
+		| arith ~ "AND" ~ arith ^^ {
+				case lhs ~ _ ~ rhs => Arithmetic(Arith.And, lhs, rhs)
+			}
+		| arith ~ "OR" ~ arith ^^ {
+				case lhs ~ _ ~ rhs => Arithmetic(Arith.Or, lhs, rhs)
+			}
+		| "NOT" ~> arith ^^ { Not(_) }
+		| arith 
+		)
 
 	def isNull = 
-		( arith <~ "IS NULL" ^^ { case e => IsNullExpression(e, false); } 
-		  | arith 
+		arith <~ "IS NULL" ^^ { case e => IsNullExpression(e, false); } 
+
+	def cmpSym = 
+		(
+			"=" ^^ { _ => Cmp.Eq }
+		|	"<=" ^^ { _ => Cmp.Lte }
+		|	">=" ^^ { _ => Cmp.Gte }
+		|	"<" ^^ { _ => Cmp.Lt }
+		|	">" ^^ { _ => Cmp.Gt }
+		|	"!=" ^^ { _ => Cmp.Neq }
 		)
 
 
-
-	def parens = "\\(" ~> exprBase <~ "\\)"
+	def parens = "(" ~> exprBase <~ ")"
 	def arith  = 
 		( leaf ~ arithSym ~ exprBase ^^ {
 			case lhs ~ op ~ rhs => Arithmetic(op, lhs, rhs)
@@ -50,10 +71,15 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 			case w ~ t => WhenThenClause(w, t)
 		} 
 
-	def leaf = parens | floatLeaf | intLeaf | stringLeaf | caseStmt | function | vgterm | varLeaf
+	def leaf = parens | floatLeaf | intLeaf | boolLeaf | stringLeaf | caseStmt | function | vgterm | varLeaf
 
 	def intLeaf = cint ^^ { IntPrimitive(_) }
 	def floatLeaf = cflt ^^ { FloatPrimitive(_) }
+	def boolLeaf = (
+		  "true"  ^^ { _ => BoolPrimitive(true)  }
+		| "false" ^^ { _ => BoolPrimitive(false) }
+	)
+
 	def stringLeaf = "'(([^']|\\')*)'".r ^^ { 
 		(x:String) => 
 			StringPrimitive(x.substring(1,x.length-1)) 
@@ -80,4 +106,12 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 				   args.getOrElse(List()))
 		}
 	}
+
+	def exprType: Parser[Type.T] = 
+		( "int"    ^^ { _ => Type.TInt }
+		| "float"  ^^ { _ => Type.TFloat }
+		| "date"   ^^ { _ => Type.TDate }
+		| "string" ^^ { _ => Type.TString }
+		| "bool"   ^^ { _ => Type.TBool }
+	    )
 }

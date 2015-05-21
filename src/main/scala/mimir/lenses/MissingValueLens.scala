@@ -88,12 +88,6 @@ class MissingValueLens(name: String, params: List[String], source: Operator)
   
   def lensType = "MISSING_VALUE"
 
-  def save(db: Database): Unit = { /* Ignore for now */ }
-
-  def load(db: Database): Unit = { build(db); }
-
-
-
   ////// Weka's InstanceQueryAdapter interface
   def attributeCaseFix(colName: String) = colName;
   def getDebug() = false;

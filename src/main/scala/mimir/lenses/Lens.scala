@@ -28,9 +28,6 @@ abstract case class Lens(modelName: String, params: List[String], source: Operat
    * Return the lens' model.  This model must define a mapping for all VGTerms created
    * by `view`
    */
-  def build(db: Database): Unit;
-  def load(db: Database): Unit;
-  def save(db: Database): Unit;
   def model: Model;
 
   /**
@@ -43,7 +40,7 @@ abstract case class Lens(modelName: String, params: List[String], source: Operat
    * Serialize the lens' model and store it in `db`.  The `modelName` parameter may be
    * used as a unique identifier for the model.
    */
-  def save(db: Database): Unit;
+  def save(db: Database): Unit = {};
 
   /**
    * Initialize the lens' model by loading the serialized representation stored by 
