@@ -55,13 +55,57 @@ object Eval
     }
   }
 
-  def simplify(e: Expression): Expression = 
+  def simplify(e: Expression): Expression = {
     if(getVars(e).isEmpty && 
        !CTables.isProbabilistic(e)) 
     { 
       eval(e) 
-    } else { 
-      e 
+    } else e match { 
+      case CaseExpression(wtClauses, eClause) =>
+        simplifyCase(List(), wtClauses, eClause)
+      case _ => e
+    }
+  }
+
+  def simplifyCase(wtSimplified: List[WhenThenClause], 
+                   wtTodo: List[WhenThenClause], 
+                   eClause: Expression): Expression =
+    wtTodo match {
+      case WhenThenClause(w, t) :: wtRest =>
+        if(w.isInstanceOf[BoolPrimitive]){
+          if(w.asInstanceOf[BoolPrimitive].v){
+
+            // If the when condition is deterministically true, then
+            // we can turn the current then statement into an else
+            // branch and finish here.  For the sake of keeping all
+            // of the reconstruction code in one place, we recur into
+            // a terminal leaf.
+            simplifyCase(wtSimplified, List(), t)
+          } else {
+
+            // If the when condition is deterministically false, then
+            // we strip the current clause out of the todo list and
+            // recur as normal.
+            simplifyCase(wtSimplified, wtRest, eClause)
+          }
+        } else {
+
+          // If the when condition is neither deterministically true,
+          // nor false, we add it on the "finished" list and then recur
+          // as normal.
+          simplifyCase(wtSimplified ++ List(WhenThenClause(w,t)), 
+                       wtRest, eClause)
+        }
+
+      case _ => // empty list
+
+        // If none of the when clauses can possibly be triggered, we
+        // always fall through to the else clause.
+        if(wtSimplified.isEmpty){ eClause }
+        else {
+          //otherwise, we rebuild the case statement
+          CaseExpression(wtSimplified, eClause)
+        }
     }
 
   
