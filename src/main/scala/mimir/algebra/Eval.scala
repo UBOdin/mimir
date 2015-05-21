@@ -5,19 +5,40 @@ import mimir.ctables.CTables
 
 object Eval 
 {
+
+  /**
+   * Evaluate the specified expression and cast the result to an Long
+   */
   def evalInt(e: Expression) =
     eval(e).asLong
+  /**
+   * Evaluate the specified expression and cast the result to a String
+   */
   def evalString(e: Expression) =
     eval(e).asString
+  /**
+   * Evaluate the specified expression and cast the result to a Double
+   */
   def evalFloat(e: Expression) =
     eval(e).asDouble
+  /**
+   * Evaluate the specified expression and cast the result to a Boolean
+   */
   def evalBool(e: Expression): Boolean =
     eval(e) match {
       case BoolPrimitive(v) => v
       case v => throw new TypeException(TBool, v.exprType, "Cast")
     }
+  /**
+   * Evaluate the specified expression and return the primitive value
+   */
   def eval(e: Expression): PrimitiveValue = 
     eval(e, Map[String, PrimitiveValue]());
+
+  /**
+   * Evaluate the specified expression given a set of Var/Value bindings
+   * and return the primitive value of the result
+   */
   def eval(e: Expression, 
            bindings: Map[String, PrimitiveValue]
   ): PrimitiveValue = 
@@ -41,6 +62,7 @@ object Eval
               } else { None }
             }
           ).getOrElse(eval(caseElse, bindings))
+        case Not(NullPrimitive()) => NullPrimitive()
         case Not(e) => BoolPrimitive(!evalBool(e))
         case p:Proc => p.get(p.getArgs.map(eval(_, bindings)))
         case IsNullExpression(c, n) => {
@@ -55,6 +77,18 @@ object Eval
     }
   }
 
+  /**
+   * Apply one level of simplification to the passed expression.  Typically
+   * this method should not be used directly, but is invoked as part of
+   * either inline() method.
+   *
+   * If the expression is independent of VGTerms or variable references
+   * then the expression can be deterministically evaluated outright.
+   * In this case, simplify() returns the PrimitiveValue that the 
+   * expression evaluates to.  
+   *
+   * CASE statements are simplified further.  See simplifyCase()
+   */
   def simplify(e: Expression): Expression = {
     if(getVars(e).isEmpty && 
        !CTables.isProbabilistic(e)) 
@@ -67,6 +101,16 @@ object Eval
     }
   }
 
+  /**
+   * Recursive method that optimizes case statements.
+   *
+   * - WHEN clauses that are deterministically false are dropped from 
+   *   the case expression. 
+   * - WHEN clauses that are deterministically true become else clauses
+   *   and all following WHEN and ELSE clauses are dropped.
+   * - If the ELSE clause is the only remaining clause in the expression,
+   *   it replaces the entire CASE expression.
+   */
   def simplifyCase(wtSimplified: List[WhenThenClause], 
                    wtTodo: List[WhenThenClause], 
                    eClause: Expression): Expression =
@@ -108,9 +152,17 @@ object Eval
         }
     }
 
-  
+  /**
+   * Thoroughly inline an expression, recursively applying simplify()
+   * at levels, to all subtrees of the expression.
+   */
   def inline(e: Expression): Expression = 
     inline(e, Map[String, Expression]())
+  /**
+   * Apply a given variable binding to the specified expression, and then
+   * thoroughly inline it, recursively applying simplify() at all levels,
+   * to all subtrees of the expression
+   */
   def inline(e: Expression, bindings: Map[String, Expression]):
     Expression = 
   {
@@ -122,6 +174,9 @@ object Eval
     }
   }
   
+  /**
+   * Perform arithmetic on two primitive values.
+   */
   def applyArith(op: Arith.Op, 
             a: PrimitiveValue, b: PrimitiveValue
   ): PrimitiveValue = {
@@ -158,6 +213,9 @@ object Eval
     }
   }
 
+  /**
+   * Perform a comparison on two primitive values.
+   */
   def applyCmp(op: Cmp.Op, 
             a: PrimitiveValue, b: PrimitiveValue
   ): PrimitiveValue = {
@@ -215,6 +273,9 @@ object Eval
     }
   }
 
+  /**
+   * Compute the set of variables that appear in the specified expression.
+   */
   def getVars(e: Expression): Set[String] = 
     e match { 
       case Var(v) => Set(v)
