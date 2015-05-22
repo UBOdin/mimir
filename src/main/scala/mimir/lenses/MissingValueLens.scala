@@ -1,4 +1,4 @@
-package mimir.ctables;
+package mimir.lenses;
 
 import java.sql._;
 import collection.JavaConversions._;
@@ -15,18 +15,19 @@ import moa.core.InstancesHeader;
 import moa.streams.ArffFileStream;
 import moa.streams.InstanceStream;
 
-import mimir.Analysis;
+import mimir.Analysis; // Java code
+import mimir.ctables._;
 import mimir.{Database,Mimir};
 import mimir.algebra._;
 import mimir.util._;
 import mimir.exec._;
 
-class MissingValueLens(name: String, params: List[String], source: Operator) 
-  extends Lens(name, params, source) 
+class MissingValueLens(name: String, args: List[Expression], source: Operator) 
+  extends Lens(name, args, source) 
   with InstanceQueryAdapter
 {
   var orderedSourceSchema: List[(String,Type.T)] = null
-  val keysToBeCleaned = params.map( _.toUpperCase )
+  val keysToBeCleaned = args.map( Eval.evalString(_).toUpperCase )
   var models: List[SingleVarModel] = null;
   var data: Instances = null
   var model: Model = null

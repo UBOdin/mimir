@@ -4,7 +4,9 @@ import java.sql._;
 
 import mimir.sql.{Backend,SqlToRA,RAToSql,CreateLens};
 import mimir.exec.{Compiler,ResultIterator,ResultSetIterator};
-import mimir.ctables.{LensManager,VGTerm, CTPercolator};
+import mimir.ctables.{VGTerm,CTPercolator,Model};
+import mimir.lenses.{Lens,LensManager}
+import mimir.parser.{OperatorParser}
 import mimir.algebra._;
 
 case class Database(backend: Backend)
@@ -13,7 +15,7 @@ case class Database(backend: Backend)
   val ra = new RAToSql(this)
   val lenses = new LensManager(this)
   val compiler = new Compiler(this)  
-  
+  val operator = new OperatorParser(this.getLensModel, this.getTableSchema(_).toMap)
   
   def query(sql: String): ResultIterator = 
     new ResultSetIterator(backend.execute(sql))
@@ -79,13 +81,25 @@ case class Database(backend: Backend)
     sql.convert(expr)
   def convert(oper: Operator): net.sf.jsqlparser.statement.select.SelectBody =
     ra.convert(oper)
-  
+
+  def parseExpression(exprString: String): Expression =
+    operator.expr(exprString)
+  def parseExpressionList(exprListString: String): List[Expression] =
+    operator.exprList(exprListString)
+  def parseOperator(operString: String): Operator =
+    operator.operator(operString)
+
   def getTableSchema(name: String): List[(String,Type.T)] =
     backend.getTableSchema(name);  
   def getTableOperator(table: String): Operator =
     backend.getTableOperator(table)
   def getTableOperator(table: String, metadata: Map[String, Type.T]): Operator =
     backend.getTableOperator(table, metadata)
+
+  def getLens(lensName: String): Lens =
+    lenses.load(lensName).get
+  def getLensModel(lensName: String): Model = 
+    lenses.modelForLens(lensName)
   
   def createLens(lensDefn: CreateLens): Unit =
     lenses.create(lensDefn)

@@ -1,4 +1,4 @@
-package mimir.ctables;
+package mimir.lenses;
 
 import java.sql._;
 import java.io.StringReader;
@@ -16,18 +16,32 @@ class LensManager(db: Database) {
   var lensCache = scala.collection.mutable.Map[String,Lens]();
   
   def init(): Unit = { }
-  // {
-  //   db.update("CREATE TABLE MIMIR_IVIEW(name varchar(30), query text, PRIMARY KEY(name))");
-  //   db.update("CREATE TABLE MIMIR_LENS(iview varchar(30), m_id int, m_type varchar(30), parameters text, PRIMARY KEY(iview,m_id))");
-  // }
+  {
+    db.update("""
+      CREATE TABLE MIMIR_LENSES(
+        name varchar(30), 
+        query text, 
+        lens_type varchar(30),
+        parameters text,
+        PRIMARY KEY(name)
+      );""");
+  }
   
-  def mkLens(lensType: String, lensName: String, args: List[String], source: Operator): Lens =
+  def mkLens(lensType: String, lensName: String, args: List[Expression], source: Operator): Lens =
   {
     lensType.toUpperCase() match { 
       case "MISSING_VALUE" => 
         new MissingValueLens(lensName, args, source)
     }
   }
+
+  def lensTypeString(lens: Lens): String =
+  {
+    lens match { 
+      case _:MissingValueLens => "MISSING_VALUE"
+    }
+  }
+
   
   def create(lensDefn: CreateLens): Unit = { 
     val (baseQuery, bindings) = db.convert(lensDefn.getSelectBody)
@@ -44,7 +58,7 @@ class LensManager(db: Database) {
         lensDefn.getType(), 
         lensName, 
         lensDefn.getArgs.map( (arg:net.sf.jsqlparser.expression.Expression) => 
-            Eval.evalString(db.convert(arg))
+            db.convert(arg)
           ).toList,
         source
       );
@@ -53,41 +67,49 @@ class LensManager(db: Database) {
     save(lens);
   }
 
-  def save(lens: Lens): Unit = {}
+  def save(lens: Lens): Unit = {
+    db.update("""
+      INSERT INTO MIMIR_LENSES(name, query, lens_type, parameters) 
+      VALUES (?,?,?,?)
+    """, List(
+      lens.name, 
+      lens.source.toString,
+      lensTypeString(lens),
+      lens.args.map(_.toString).mkString(",")
+    ))
+    lens.save(db)
+  }
   
   def load(lensName: String): Option[Lens] = {
-    lensCache.get(lensName);
+    lensCache.get(lensName) match {
+      case Some(s) => Some(s)
+      case None => {
+        val lensMetaResult =
+          db.query("""
+            SELECT lens_type, parameters, query
+            FROM MIMIR_LENSES
+            WHERE name = ?
+          """, List(lensName)).allRows
+        if(lensMetaResult.length == 0) { return None; }
+        else if(lensMetaResult.length > 1){ 
+          throw new SQLException("Multiple definitions for Lens `"+lensName+"`")
+        } else {
+          val lensMeta = lensMetaResult(0)
+          val lens = 
+            mkLens(
+              lensMeta(0).asString, 
+              lensName, 
+              db.parseExpressionList(lensMeta(1).asString),
+              db.parseOperator(lensMeta(2).asString)
+            )
+          lens.load(db)
+          lensCache.put(lensName, lens)
+          return Some(lens)
+        }
+      }
+    }
   }
 
   def modelForLens(lensName: String): Model = 
-    lensCache.get(lensName).get.model
-  //   db.query(
-  //     "SELECT name, query FROM MIMIR_IVIEW"
-  //   ).foreach( (viewMetadata) => {
-  //     val name = viewMetadata(0).asString;
-  //     if(!Mimir.conf.quiet()){
-  //       System.out.println("Loading IView: " + name);
-  //     }
-  //     val originalSource = db.convert(new CCJSqlParser(new StringReader(viewMetadata(1).asString)).Select());
-  //     var source = originalSource;
-  //     var lenses = List[Lens]();
-  //     db.query(
-  //       "SELECT m_type, m_id, parameters FROM MIMIR_LENS WHERE iview = ? ORDER BY m_id",
-  //       List(name)
-  //     ).foreach( (lensMetadata) => {
-  //       val lens = mkLens(
-  //         lensMetadata(0).asString,
-  //         name, 
-  //         lensMetadata(1).asLong.toInt,
-  //         lensMetadata(2).asString.split(",").toList,
-  //         source
-  //       )
-  //       lenses = lenses ++ List(lens)
-  //       source = lens.view
-  //     })
-  //     val view = new IView(name, originalSource, lenses)
-  //     view.build(db);
-  //     views.put(name, view);
-  //   })
-  // }
+    load(lensName).get.model
 }

@@ -1,5 +1,7 @@
 package mimir.parser;
 
+import java.sql.SQLException;
+
 import scala.util.parsing.combinator.RegexParsers
 
 import mimir.algebra._
@@ -15,7 +17,12 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 	def expr(s: String): Expression = 
 		parseAll(exprBase, s) match {
 			case Success(ret, _) => ret
-			case x => throw new Exception(x.toString)
+			case x => throw new SQLException(x.toString)
+		}
+	def exprList(s: String): List[Expression] = 
+		parseAll(exprListBase, s) match {
+			case Success(ret, _) => ret
+			case x => throw new SQLException(x.toString)
 		}
 	
 	def exprBase : Parser[Expression] = 
@@ -88,17 +95,17 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 
 	def arithSym = Arith.matchRegex ^^ { Arith.fromString(_) }
 
-	def function: Parser[Expression] = id ~ ("(" ~> opt(exprList) <~ ")") ^^ { 
+	def function: Parser[Expression] = id ~ ("(" ~> opt(exprListBase) <~ ")") ^^ { 
 		case fname ~ args => 
 			Function(fname, args.getOrElse(List()))
 	}
 
-	def exprList: Parser[List[Expression]] =
-		exprBase ~ ", *".r ~ exprList ^^ { case hd ~ _ ~ tl => hd :: tl } |
-	    exprBase                      ^^ { List(_) }
+	def exprListBase: Parser[List[Expression]] =
+		exprBase ~ ", *".r ~ exprListBase ^^ { case hd ~ _ ~ tl => hd :: tl } |
+	    exprBase                          ^^ { List(_) }
 
 	def vgterm = ("\\{\\{ *".r ~> id ~ 
-					opt("[" ~> exprList <~ "]") <~ 
+					opt("[" ~> exprListBase <~ "]") <~ 
 					" *\\}\\}".r) ^^ {
 		case v ~ args => {
 			val fields = v.split("_")

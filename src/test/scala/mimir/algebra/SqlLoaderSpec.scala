@@ -36,6 +36,7 @@ object SqlLoaderSpec extends Specification with FileMatchers {
 		var d = new Database(new JDBCBackend(Mimir.connectSqlite(
 			if(tempDB == null){ "" } else { tempDB.toString() }
 		)));
+		d.initializeDBForMimir();
 		testData.foreach ( _ match { case ( tableName, tableData, tableCols ) => 
 			d.update("CREATE TABLE "+tableName+"("+tableCols.mkString(", ")+");")
 			val lines = new BufferedReader(new FileReader(tableData))

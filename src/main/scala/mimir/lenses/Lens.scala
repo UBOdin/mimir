@@ -1,4 +1,4 @@
-package mimir.ctables;
+package mimir.lenses;
 
 import java.sql._;
 import mimir.sql.Backend;
@@ -17,7 +17,7 @@ import mimir.Database;
  * 
  */
 
-abstract case class Lens(modelName: String, params: List[String], source: Operator)
+abstract case class Lens(name: String, args: List[Expression], source: Operator)
 {
   /** 
    * `view` emits an Operator that defines the Virtual C-Table for the lens
@@ -37,7 +37,7 @@ abstract case class Lens(modelName: String, params: List[String], source: Operat
   def build(db: Database): Unit;
 
   /**
-   * Serialize the lens' model and store it in `db`.  The `modelName` parameter may be
+   * Serialize the lens' model and store it in `db`.  The `name` parameter may be
    * used as a unique identifier for the model.
    */
   def save(db: Database): Unit = {};
@@ -49,9 +49,15 @@ abstract case class Lens(modelName: String, params: List[String], source: Operat
   def load(db: Database): Unit = build(db);
 
   // def globalVar(vid: Int) = PVar(iview, id, vid, List[Expression]())
-  def rowVar(vid: Int)   = VGTerm((modelName,model), vid, List[Expression](Var("ROWID")))
+  def rowVar(vid: Int)   = VGTerm((name,model), vid, List[Expression](Var("ROWID")))
   def rowVar(vid: Int, args: List[Expression]) 
-                         = VGTerm((modelName,model), vid, Var("ROWID") :: args)
+                         = VGTerm((name,model), vid, Var("ROWID") :: args)
   // def groupVar(vid: Int, group: List[Expression]) = PVar(iview, id, vid, group)
   // def varName(vid: Int): String = { iview+"_"+id+"_"+vid }
+
+  def stringArg(id: Int): String = Eval.evalString(args(id))
+  def longArg(id: Int): Long     = Eval.evalInt(args(id))
+  def doubleArg(id: Int): Double = Eval.evalFloat(args(id))
+
 }
+
