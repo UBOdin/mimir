@@ -15,12 +15,24 @@ import mimir.util.TimeUtils;
 import mimir.parser._;
 import mimir.exec._;
 
+
+/** 
+ * The primary interface to Mimir.  Responsible for:
+ * - Parsing and processing command line arguments.
+ * - Initializing internal state (Database())
+ * - Providing a command-line prompt (if appropriate)
+ * - Invoking MimirJSqlParser and dispatching the 
+ *   resulting statements to Database()
+ * 
+ * Database() handles all of the logical dispatching,
+ * Mimir provides a friendly command-line user 
+ * interface on top of Database()
+ */
 object Mimir {
   
   var conf: MimirConfig = null;
   var db: Database = null;
   var usePrompt = true;
-  var dbName = "debug";
   
   def main(args: Array[String]) {
     conf = new MimirConfig(args);
@@ -33,10 +45,9 @@ object Mimir {
 
       println("Unsupported backend: "+x); exit(-1);
     }
-    
-    // Check for one-off commands
     db = new Database(backend);
     
+    // Check for one-off commands
     if(conf.initDB()){
       println("Initializing Database...");
       db.initializeDBForMimir();
@@ -52,10 +63,6 @@ object Mimir {
         source = new FileReader(conf.file());
         usePrompt = false;
       }
-      
-      if(!conf.quiet()) { print("Initializing..."); }
-      db.loadState();
-      if(!conf.quiet()) { println("  done"); }
       
       eventLoop(source);
     }
@@ -74,8 +81,6 @@ object Mimir {
         if(stmt == null){ done = true; }
         else if(stmt.isInstanceOf[Select]){
           handleSelect(stmt.asInstanceOf[Select]);
-        } else if(stmt.isInstanceOf[Analyze]){
-          handleAnalyze(stmt.asInstanceOf[Analyze]);
         } else if(stmt.isInstanceOf[CreateLens]) {
           db.createLens(stmt.asInstanceOf[CreateLens]);
         } else if(stmt.isInstanceOf[Explain]) {
@@ -88,6 +93,10 @@ object Mimir {
         case e: Throwable => {
           e.printStackTrace()
           println("Command Ignored");
+
+          // The parser pops the input stream back onto the queue, so
+          // the next call to Statement() will throw the same exact 
+          // Exception.  To prevent this from happening, reset the parser:
           parser = new MimirJSqlParser(source);
         }
       }
@@ -108,25 +117,6 @@ object Mimir {
     results.open();
     db.dump(results);
     results.close();
-  }
-  
-  def handleAnalyze(request: Analyze): Unit = {
-    val raw = db.convert(request.getSelectBody())._1;
-    val percolated = db.optimize(raw);
-    // if(CTAnalysis.isProbabilistic(percolated)){
-    //   val analysis = CTAnalysis.analyze(
-    //     request.getColumn(), 
-    //     percolated
-    //   )
-    //   // Compute bounds, begin update/resolve loop
-    //   println("--- Query ---")
-    //   println(request.getSelectBody().toString);
-    //   println("--- Expressions ---")
-    //   println(analysis.exprs.map ( _.toString ).mkString("\n:: OR ::\n"))
-    //   println("Bounds: " + analysis.bounds);
-    // } else {
-    //   println("The Result is Deterministic")
-    // }
   }
   
   def handleLoadTable(targetTable: String, sourceFile: String){
@@ -165,6 +155,7 @@ object Mimir {
   {
     Methods.getConn()
   }
+
 }
 
 class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments) 

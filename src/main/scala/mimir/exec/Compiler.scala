@@ -8,19 +8,29 @@ import mimir.Database;
 
 class Compiler(db: Database) {
 
+  val standardOptimizations = 
+    List[Operator => Operator](
+        CTPercolator.percolate _, // Partition Det & Nondet query fragments
+        optimize _,               // Basic Optimizations
+        compileAnalysis _         // Transform BOUNDS(), CONF(), etc... into 
+                                  // actual expressions that SQL can understand
+      )
+
   /**
    * Perform a full end-end compilation pass.  Return an iterator over
    * the result set.  
    */
   def compile(oper: Operator): ResultIterator =
+    compile(oper, standardOptimizations)
+
+  /**
+   * Perform a full end-end compilation pass.  Return an iterator over
+   * the result set.  Use only the specified list of optimizations.
+   */
+  def compile(oper: Operator, opts: List[Operator => Operator]): 
+    ResultIterator =
   {
-    val optimizedOper = 
-      List[Operator => Operator](
-        CTPercolator.percolate _, // Partition Det & Nondet query fragments
-        optimize _,               // Basic Optimizations
-        compileAnalysis _         // Transform BOUNDS(), CONF(), etc... into 
-                                  // actual expressions that SQL can understand
-      ).foldLeft(oper)( (o, fn) => fn(o) )
+    val optimizedOper = opts.foldLeft(oper)( (o, fn) => fn(o) )
     // Finally build the iterator
     return buildIterator(optimizedOper);
   }

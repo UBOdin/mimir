@@ -24,7 +24,7 @@ class ProjectionResultIterator(
       ( name, 
         expr.exprType(srcSchema)
       )
-    }).filter( _._1 != "__MIMIR_CONDITION" ).
+    }).filter( _._1 != CTables.conditionColumn ).
     toList
   }
   /**
@@ -33,7 +33,7 @@ class ProjectionResultIterator(
    * column (but see cond, below).
    */
   val exprs = cols.
-    filter( _._1 != "__MIMIR_CONDITION" ).
+    filter( _._1 != CTables.conditionColumn ).
     map( x => compile(x._2) )
 
   /**
@@ -45,7 +45,7 @@ class ProjectionResultIterator(
    * corresponding column has an "asterisk".
    */
   val deterministicExprs = cols.
-    filter( _._1 != "__MIMIR_CONDITION" ).
+    filter( _._1 != CTables.conditionColumn ).
     map( x => compile(CTAnalyzer.compileDeterministic(x._2)) )
 
   /**
@@ -56,7 +56,7 @@ class ProjectionResultIterator(
    * not part of the result set and should be dropped.
    */
   val cond = 
-    cols.find( _._1 == "__MIMIR_CONDITION" ).
+    cols.find( _._1 == CTables.conditionColumn ).
          map( x => compile(x._2) )
 
   /**
@@ -68,7 +68,7 @@ class ProjectionResultIterator(
    * (i.e., the entire tuple has an asterisk)
    */
   val deterministicCond = 
-    cols.find( _._1 == "__MIMIR_CONDITION" ).
+    cols.find( _._1 == CTables.conditionColumn ).
          map( x => compile(CTAnalyzer.compileDeterministic(x._2)) )
   
   val tuple: ArraySeq[PrimitiveValue] = 
