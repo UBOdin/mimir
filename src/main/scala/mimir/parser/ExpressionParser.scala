@@ -114,11 +114,5 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 		}
 	}
 
-	def exprType: Parser[Type.T] = 
-		( "int"    ^^ { _ => Type.TInt }
-		| "float"  ^^ { _ => Type.TFloat }
-		| "date"   ^^ { _ => Type.TDate }
-		| "string" ^^ { _ => Type.TString }
-		| "bool"   ^^ { _ => Type.TBool }
-	    )
+	def exprType: Parser[Type.T] = id ^^ { Type.fromString(_) }
 }

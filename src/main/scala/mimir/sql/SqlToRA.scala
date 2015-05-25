@@ -315,11 +315,8 @@ class SqlToRA(db: Database)
             map( (o : Any) => convert(o.asInstanceOf[net.sf.jsqlparser.expression.Expression], bindings) ).
             toList
         }
-      // name match { 
-      //   case "VAR" => return CTables.makeVar(parameters.hd)
-      // }
-      // return SqlFunction(name, parameters)
-      unhandled("Expression[Function:"+name+"]")
+      return mimir.algebra.Function(name, parameters)
+      // unhandled("Expression[Function:"+name+"]")
     }
     if(e.isInstanceOf[net.sf.jsqlparser.expression.CaseExpression]){
       val c = e.asInstanceOf[net.sf.jsqlparser.expression.CaseExpression]

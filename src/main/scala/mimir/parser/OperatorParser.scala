@@ -41,10 +41,21 @@ class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => Ma
 	    }
 
 	def table =
-		(id ~ opt("(" ~> colList <~ ")")) ^^ {
-			case name ~ metadata =>
-				Table(name, schemaLookup(name), 
-					metadata.getOrElse(List[(String,Type.T)]()).toMap)
+		(id ~ opt("(" ~> (colList ~ opt("//" ~> colList) ) <~ ")")) ^^ {
+			case name ~ cols_and_metadata => {
+				cols_and_metadata match {
+					case None => 
+						Table(name, schemaLookup(name), Map[String,Type.T]())
+					case Some((cols ~ metadata)) => 
+						Table(name, 
+							schemaLookup(name).zip(cols).map {
+								case ((_,t),(v,Type.TAny)) => (v,t)
+								case ((_,_),(v,t)) => (v,t)
+							}.toMap,
+							metadata.getOrElse(List[(String,Type.T)]()).toMap
+						)
+				}
+			}		
 		}
 
 	def colList:Parser[List[(String,Type.T)]] =
@@ -54,7 +65,7 @@ class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => Ma
 
 	def col =
 		( (id <~ ":") ~ exprType ^^ { case name ~ t => (name, t) } 
-		| id ^^ { (_, Type.TInt) }
+		| id ^^ { (_, Type.TAny) }
 		)
 
 }

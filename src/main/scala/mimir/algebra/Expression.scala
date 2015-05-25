@@ -17,7 +17,26 @@ class RAException(msg: String) extends Exception(msg);
 
 object Type extends Enumeration {
   type T = Value
+
   val TInt, TFloat, TDate, TString, TBool, TAny = Value
+
+  def toString(t: T) = t match {
+    case TInt => "int"
+    case TFloat => "decimal"
+    case TDate => "date"
+    case TString => "string"
+    case TBool => "bool"
+    case TAny => throw new SQLException("Unable to produce string of type TAny");
+  }
+
+  def fromString(t: String) = t.toLowerCase match {
+    case "int"    => Type.TInt
+    case "float"  => Type.TFloat
+    case "decimal"  => Type.TFloat
+    case "date"   => Type.TDate
+    case "string" => Type.TString
+    case "bool"   => Type.TBool
+  }
 }
 
 import Type._

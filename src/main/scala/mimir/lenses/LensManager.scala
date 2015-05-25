@@ -15,7 +15,7 @@ import mimir.{Database,Mimir};
 class LensManager(db: Database) {
   var lensCache = scala.collection.mutable.Map[String,Lens]();
   
-  def init(): Unit = { }
+  def init(): Unit =
   {
     db.update("""
       CREATE TABLE MIMIR_LENSES(
