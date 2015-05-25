@@ -188,3 +188,64 @@ Project[A <= R_A, B <= CASE WHEN R_B IS NULL THEN {{ CLEAN_R_0_0[ROWID] }} ELSE 
 ```
 The explain output looks quite similar to before.  The selection operator comes up in the initial stack of operators, but otherwise the raw query is identical.  Note however, that it's gone in the optimized query.  This is because the selection predicate depends on an uncertain attribute (B).  Because of this, we evaluate the condition in-line in Mimir.  The projection tracks a special column called `__MIMIR_CONDITION` that identifies the expression we can use to decide whether a row is in the result set.
 
+
+# Development
+
+### Compiling the Code
+
+SBT has an interactive mode.  I suggest using this for development purposes.  Start by running `sbt` with no arguments.
+
+```
+Thor:Src okennedy$ sbt
+[info] Set current project to Mimir (in build file:/Users/okennedy/Documents/Mimir/Src/)
+> 
+```
+
+Useful SBT commands:
+* `compile`: Build all scala and java source files
+* `package`: As compile, but also build a jar file 
+* `run [args]`: Run mimir from within SBT's interactive mode (you can also use `./bin/mimir`)
+* `parser`: Run javacc to build java files for the mimir branch of JSqlParser.
+* `test`: Compile and run all unit tests
+* `testQuick`: Compile and run all unit tests affected by the most recent set of changes
+* `runTest [testName]`: Run a specific test case
+
+SBT also has an auto-run mode that watches the `src` directory for changes and auto-runs the relevant commands.  Invoke auto-run mode by prefixing the command to be executed with a tilde:
+```
+> ~package
+[success] Total time: 0 s, completed May 25, 2015 12:57:32 PM
+1. Waiting for source changes... (press enter to interrupt)
+[info] Compiling 1 Scala source to /Users/xthemage/Documents/Mimir/Source/target/scala-2.10/classes...
+[warn] there were 1 deprecation warning(s); re-run with -deprecation for details
+[warn] one warning found
+[info] Packaging /Users/xthemage/Documents/Mimir/Source/target/scala-2.10/mimir_2.10-0.1.jar ...
+[info] Done packaging.
+[success] Total time: 1 s, completed May 25, 2015 12:58:09 PM
+2. Waiting for source changes... (press enter to interrupt)
+```
+
+### Code Organization
+
+* `src/main/scala/mimir/Mimir.java` : The console UI for Mimir.  The View in the MVC model.
+* `src/main/scala/mimir/Database.java` : The central hub of Mimir.  The Controller in the MVC model.
+* `src/main/scala/mimir/algebra` : ASTs for Relational Algebra (Operator), and Primitive-Valued Expressions (Expression)
+* `src/main/scala/mimir/ctables` : An abstraction layer for representing, rewriting, and analyzing Virtual C-Tables (see also lenses).
+* `src/main/scala/mimir/lenses` : An implementation of the lens abstraction: A CTable + One or more Models.
+* `src/main/scala/mimir/exec` : Logic for compiling and evaluating queries
+* `src/main/scala/mimir/parser` : Logic for parsing text expressions
+* `src/main/scala/mimir/sql` : Connectors for interfacing between traditional SQL and Mimir RA
+* `src/main/scala/mimir/util` : Random utility classes.
+* `src/main/java/mimir` : Legacy and Connector code for machine learning tools and JSqlParser
+
+### Best Practices for Debugging
+
+Debugging involves probing different parts of the code to see how they react.  This is a great opportunity to create test cases that isolate parts of the code that you're having problems with.  As you're debugging code, use [Scala specifications](https://etorreborre.github.io/specs2/) (also see `src/test`) rather than `println()` to trace execution of code fragments.  
+
+1. Specifications force you to think through the expected behavior of the code in question, as you need to define a *correct* output.  
+2. After defining a specification, you have a regression test that will prevent similar bugs from arising in the future.
+
+Regardless of how you debug, *Before committing, make sure to run `sbt test`*
+
+
+
+
