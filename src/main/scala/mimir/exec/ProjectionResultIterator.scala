@@ -15,27 +15,61 @@ class ProjectionResultIterator(
   extends ResultIterator
 {
 
+  /**
+   * The output schema of this iterator
+   */
   val schema = {
     val srcSchema = src.schema.toMap[String,Type.T];
     cols.map( _ match { case (name, expr) => 
       ( name, 
         expr.exprType(srcSchema)
       )
-    }).filter( _._1 != "__MIMIR_CONDITION" ).
+    }).filter( _._1 != CTables.conditionColumn ).
     toList
   }
+  /**
+   * Maximal Likelihood Expected value expressions for 
+   * the projection's output.  Excludes the condition
+   * column (but see cond, below).
+   */
   val exprs = cols.
-    filter( _._1 != "__MIMIR_CONDITION" ).
+    filter( _._1 != CTables.conditionColumn ).
     map( x => compile(x._2) )
+
+  /**
+   * Boolean expressions that determine whether a given
+   * column is deterministic for a given row.  If 
+   * deterministicExprs(i) evaluates to true for the 
+   * current row, then schema(i) is deterministic.
+   * If this expression evaluates to false, then the
+   * corresponding column has an "asterisk".
+   */
   val deterministicExprs = cols.
-    filter( _._1 != "__MIMIR_CONDITION" ).
-    map( x => compileDeterministic(x._2) )
+    filter( _._1 != CTables.conditionColumn ).
+    map( x => compile(CTAnalyzer.compileDeterministic(x._2)) )
+
+  /**
+   * Boolean expression that determines the presence
+   * of the current row in the query output under a 
+   * maximal likelihood assumption.  If this expression
+   * evaluates to false, the row is <b>most likely</b>
+   * not part of the result set and should be dropped.
+   */
   val cond = 
-    cols.find( _._1 == "__MIMIR_CONDITION" ).
+    cols.find( _._1 == CTables.conditionColumn ).
          map( x => compile(x._2) )
+
+  /**
+   * Boolean expression that determines whether `cond`
+   * is deterministic for the current row.  If this
+   * expression evaluates to false, there is some chance
+   * that the maximal likelihood assumption is wrong
+   * about the presence of this tuple in the result set
+   * (i.e., the entire tuple has an asterisk)
+   */
   val deterministicCond = 
-    cols.find( _._1 == "__MIMIR_CONDITION" ).
-         map( x => compileDeterministic(x._2) )
+    cols.find( _._1 == CTables.conditionColumn ).
+         map( x => compile(CTAnalyzer.compileDeterministic(x._2)) )
   
   val tuple: ArraySeq[PrimitiveValue] = 
     new ArraySeq[PrimitiveValue](exprs.length);
@@ -81,7 +115,16 @@ class ProjectionResultIterator(
     }
     return true;
   }
-
+  /**
+   * Compile an expression for evaluation.  mimir.algebra.Eval
+   * can already handle most Expression objects, except for 
+   * Var and PVar.  We replace Var instances with VarProjection
+   * instances that are direct references to the columns being
+   * produced by `src` (and reference by index, rather than)
+   * by name.  We replace PVar instances with Expectations 
+   * constructed from the PVar's definition (obtained from 
+   * db.analyze()).
+   */
   def compile(expr: Expression): Expression =
   {
     expr match { 
@@ -95,88 +138,11 @@ class ProjectionResultIterator(
         }
         val t = src.schema(idx)._2
         new VarProjection(this, idx, t)
-
-      case pvar: PVar =>
-        val analysis = db.analyze(pvar);
-        compile(new AnalysisMLEProjection(
-            analysis, 
-            pvar.params
-          ));
       
       case _ => 
         expr.rebuild(
           expr.children.map(compile(_))
         )
-    }
-  }
-  
-  def compileDeterministic(expr: Expression): Expression =
-  {
-    if(!CTAnalysis.isProbabilistic(expr)){
-      return BoolPrimitive(true)
-    }
-    expr match { 
-      
-      case CaseExpression(caseClauses, elseClause) =>
-        CaseExpression(
-          caseClauses.map( (clause) =>
-            WhenThenClause(
-              Arith.makeAnd(
-                compileDeterministic(clause.when),
-                compile(clause.when)
-              ),
-              compileDeterministic(clause.then)
-            )
-          ),
-          compileDeterministic(elseClause)
-        )
-      
-      
-      case Arithmetic(Arith.And, l, r) =>
-        Arith.makeOr(
-          Arith.makeAnd(
-            compileDeterministic(l),
-            Not(compile(l))
-          ),
-          Arith.makeAnd(
-            compileDeterministic(r),
-            Not(compile(r))
-          )
-        )
-      
-      case Arithmetic(Arith.Or, l, r) =>
-        Arith.makeOr(
-          Arith.makeAnd(
-            compileDeterministic(l),
-            compile(l)
-          ),
-          Arith.makeAnd(
-            compileDeterministic(r),
-            compile(r)
-          )
-        )
-      
-      case pvar: PVar =>
-        BoolPrimitive(false)
-      
-      case Var(v) => {
-        val idx = 
-          src.schema.indexWhere( 
-            _._1.toUpperCase == v
-          )
-        if(idx < 0){
-          throw new SQLException("Invalid schema: "+v+" not in "+src.schema)
-        }
-        new VarIsDeterministic(this, idx)
-      }
-
-      case _ => expr.children.
-                  map( compileDeterministic(_) ).
-                  fold(
-                    BoolPrimitive(true)
-                  )( 
-                    Arith.makeAnd(_,_) 
-                  )
     }
   }
 }
@@ -186,21 +152,5 @@ class VarProjection(src: ProjectionResultIterator, idx: Int, t: Type.T)
 {
   def exprType(bindings: Map[String,Type.T]) = t;
   def rebuild(x: List[Expression]) = new VarProjection(src, idx, t)
-  def get() = src.inputVar(idx);
-}
-
-class VarIsDeterministic(src: ProjectionResultIterator, idx: Int)
-  extends Proc(List[Expression]())
-{
-  def exprType(bindings: Map[String,Type.T]) = Type.TBool;
-  def rebuild(x: List[Expression]) = new VarIsDeterministic(src, idx)
-  def get() = BoolPrimitive(src.inputDet(idx))
-}
-
-class AnalysisMLEProjection(analysis: CTAnalysis, args: List[Expression])
-  extends Proc(args)
-{
-  def exprType(bindings: Map[String,Type.T]) = analysis.varType;
-  def rebuild(x: List[Expression]) = new AnalysisMLEProjection(analysis, x);
-  def get() = analysis.computeMLE(args.map(Eval.eval(_)));
+  def get(v:List[PrimitiveValue]) = src.inputVar(idx);
 }

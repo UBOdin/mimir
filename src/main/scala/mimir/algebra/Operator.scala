@@ -24,9 +24,10 @@ case class ProjectArg(column: String, input: Expression)
 case class Project(columns: List[ProjectArg], source: Operator) extends Operator 
 {
   def toString(prefix: String) = (
-    prefix + "Project[" + 
+    prefix + "PROJECT[" + 
       columns.map( _.toString ).mkString(", ") +
-    "]\n" + source.toString(prefix + "  ")
+    "](\n" + source.toString(prefix + "  ") + 
+      "\n" + prefix + ")"
   );
   def children() = List(source);
   def rebuild(x: List[Operator]) = Project(columns, x(0));
@@ -49,7 +50,8 @@ case class Project(columns: List[ProjectArg], source: Operator) extends Operator
 case class Select(condition: Expression, source: Operator) extends Operator
 {
   def toString(prefix: String) = (
-    prefix + "Select[" + condition.toString + "]\n" + source.toString(prefix+"  ")
+    prefix + "SELECT[" + condition.toString + "](\n" + source.toString(prefix+"  ") + 
+                  "\n" + prefix + ")"
   );
   def children() = List(source);
   def rebuild(x: List[Operator]) = Select(condition, x(0));  
@@ -60,7 +62,8 @@ case class Join(left: Operator, right: Operator) extends Operator
 {
   def toString(prefix: String) = (
     // prefix + "Join of\n" + left.toString(prefix+"  ") + "\n" + prefix + "and\n" + right.toString(prefix+"  ")
-    prefix + "Join\n" + left.toString(prefix+"  ") + "\n" + right.toString(prefix+"  ")
+    prefix + "JOIN(\n" + left.toString(prefix+"  ") + ",\n" + right.toString(prefix+"  ") + 
+                  "\n" + prefix + ")"
   );
   def children() = List(left, right);
   def rebuild(x: List[Operator]) = Join(x(0), x(1))
@@ -71,7 +74,8 @@ case class Union(left: Operator, right: Operator) extends Operator
 {
   def toString(prefix: String) = (
     // prefix + "Union of\n" + left.toString(prefix+"  ") + prefix + "and\n" + right.toString(prefix+"  ")
-    prefix + "Union\n" + left.toString(prefix+"  ") + "\n" + right.toString(prefix+"  ")
+    prefix + "UNION(\n" + left.toString(prefix+"  ") + ",\n" + right.toString(prefix+"  ") + 
+                   "\n" + prefix + ")"
   );
   def children() = List(left, right);
   def rebuild(x: List[Operator]) = Union(x(0), x(1))
@@ -94,10 +98,10 @@ case class Table(name: String,
   extends Operator
 {
   def toString(prefix: String) = ( 
-    prefix + "Table("+name+" => "+(
-      sch.keys.mkString(", ") + 
+    prefix + name + "(" + (
+      sch.map( { case (v,t) => v+":"+Type.toString(t) } ).mkString(", ") + 
       ( if(metadata.size > 0)
-             { " // "+metadata.keys.mkString(", ") } 
+             { " // "+metadata.map( { case (v,t) => v+":"+Type.toString(t) } ).mkString(", ") } 
         else { "" }
       )
     )+")" 

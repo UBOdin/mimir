@@ -21,6 +21,7 @@ class JDBCBackend(conn: Connection) extends Backend
 {
   def execute(sel: String): ResultSet = 
   {
+    // println(sel)
     val stmt = conn.createStatement();
     val ret = stmt.executeQuery(sel)
     stmt.closeOnCompletion();

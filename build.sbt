@@ -12,6 +12,8 @@ libraryDependencies += "com.github.nscala-time" %% "nscala-time" % "1.2.0"
 
 libraryDependencies += "org.specs2" %% "specs2" % "2.3.12" % "test"
 
+// libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.4"
+
 val parser = taskKey[Unit]("Builds the SQL Parser")
 
 parser := {
@@ -32,6 +34,8 @@ parser := {
 
 scalacOptions in Test ++= Seq("-Yrangepos")
 
+parallelExecution in Test := false
+
 // Read here for optional dependencies:
 // http://etorreborre.github.io/specs2/guide/org.specs2.guide.Runners.html#Dependencies
 
@@ -39,9 +43,3 @@ resolvers ++= Seq("snapshots", "releases").map(Resolver.sonatypeRepo)
 
 fork := true
 
-lazy val jsParse = taskKey[Stream[String]]("Compile JSqlParser")
-
-jsParse := Process(
-  "java -cp ../../../../../lib/javacc.jar javacc JSqlParserCC.j",
-  Some(new File("src/main/java/mimir/parser"))
-).lines

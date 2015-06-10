@@ -17,9 +17,14 @@ abstract class ResultIterator {
     (0 until numCols).map( (i) => fn(this(i)) )
   def toList(): List[PrimitiveValue] =
     map( (x) => x ).toList
-  def foreach(fn: ResultIterator => Unit): Unit = {
+  def foreachRow(fn: ResultIterator => Unit): Unit = {
     open()
     while(getNext()){ fn(this) }
     close()
+  }
+  def allRows(): List[List[PrimitiveValue]] = { 
+    var ret = List[List[PrimitiveValue]]()
+    foreachRow( (x) => { ret = ret ++ List(toList()) } )
+    return ret;
   }
 }

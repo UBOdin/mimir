@@ -15,6 +15,19 @@ import mimir.util.TimeUtils;
 import mimir.parser._;
 import mimir.exec._;
 
+
+/** 
+ * The primary interface to Mimir.  Responsible for:
+ * - Parsing and processing command line arguments.
+ * - Initializing internal state (Database())
+ * - Providing a command-line prompt (if appropriate)
+ * - Invoking MimirJSqlParser and dispatching the 
+ *   resulting statements to Database()
+ * 
+ * Database() handles all of the logical dispatching,
+ * Mimir provides a friendly command-line user 
+ * interface on top of Database()
+ */
 object Mimir {
   
   var conf: MimirConfig = null;
@@ -24,17 +37,17 @@ object Mimir {
   def main(args: Array[String]) {
     conf = new MimirConfig(args);
     
-    
     // Set up the database connection(s)
     val backend = conf.backend() match {
       case "oracle" => new JDBCBackend(connectOracle());
-      case "sqlite" => new JDBCBackend(connectSqlite());
-      case x => println("Unsupported backend: "+x); exit(-1);
+      case "sqlite" => new JDBCBackend(connectSqlite(conf.dbname()));
+      case x => 
+
+      println("Unsupported backend: "+x); exit(-1);
     }
-    
-    // Check for one-off commands
     db = new Database(backend);
     
+    // Check for one-off commands
     if(conf.initDB()){
       println("Initializing Database...");
       db.initializeDBForMimir();
@@ -51,17 +64,13 @@ object Mimir {
         usePrompt = false;
       }
       
-      if(!conf.quiet()) { println("Loading IViews..."); }
-      db.loadState();
-      if(!conf.quiet()) { println("done"); }
-      
       eventLoop(source);
     }
-    if(!conf.quiet()) { println("Done.  Exiting."); }
+    if(!conf.quiet()) { println("\n\nDone.  Exiting."); }
   }
   
   def eventLoop(source: Reader): Unit = {
-    var parser = new CCJSqlParser(source);
+    var parser = new MimirJSqlParser(source);
     var done = false;
     do { 
       try {
@@ -72,10 +81,8 @@ object Mimir {
         if(stmt == null){ done = true; }
         else if(stmt.isInstanceOf[Select]){
           handleSelect(stmt.asInstanceOf[Select]);
-        } else if(stmt.isInstanceOf[Analyze]){
-          handleAnalyze(stmt.asInstanceOf[Analyze]);
-        } else if(stmt.isInstanceOf[CreateIView]) {
-          db.createIView(stmt.asInstanceOf[CreateIView]);
+        } else if(stmt.isInstanceOf[CreateLens]) {
+          db.createLens(stmt.asInstanceOf[CreateLens]);
         } else if(stmt.isInstanceOf[Explain]) {
           handleExplain(stmt.asInstanceOf[Explain]);
         } else {
@@ -86,6 +93,11 @@ object Mimir {
         case e: Throwable => {
           e.printStackTrace()
           println("Command Ignored");
+
+          // The parser pops the input stream back onto the queue, so
+          // the next call to Statement() will throw the same exact 
+          // Exception.  To prevent this from happening, reset the parser:
+          parser = new MimirJSqlParser(source);
         }
       }
     } while(!done)
@@ -93,7 +105,7 @@ object Mimir {
   
   def handleExplain(explain: Explain): Unit = {
     val raw = db.convert(explain.getSelectBody())._1;
-    println("--- Raw Query ---");
+    println("------ Raw Query ------");
     println(raw.toString());
     println("--- Optimized Query ---");
     println(db.optimize(raw).toString);
@@ -105,25 +117,6 @@ object Mimir {
     results.open();
     db.dump(results);
     results.close();
-  }
-  
-  def handleAnalyze(request: Analyze): Unit = {
-    val raw = db.convert(request.getSelectBody())._1;
-    val percolated = db.optimize(raw);
-    // if(CTAnalysis.isProbabilistic(percolated)){
-    //   val analysis = CTAnalysis.analyze(
-    //     request.getColumn(), 
-    //     percolated
-    //   )
-    //   // Compute bounds, begin update/resolve loop
-    //   println("--- Query ---")
-    //   println(request.getSelectBody().toString);
-    //   println("--- Expressions ---")
-    //   println(analysis.exprs.map ( _.toString ).mkString("\n:: OR ::\n"))
-    //   println("Bounds: " + analysis.bounds);
-    // } else {
-    //   println("The Result is Deterministic")
-    // }
   }
   
   def handleLoadTable(targetTable: String, sourceFile: String){
@@ -152,16 +145,17 @@ object Mimir {
   }
 
   
-  def connectSqlite(): java.sql.Connection = 
+  def connectSqlite(filename: String): java.sql.Connection = 
   {
     Class.forName("org.sqlite.JDBC");
-    java.sql.DriverManager.getConnection("jdbc:sqlite:debug.db");
+    java.sql.DriverManager.getConnection("jdbc:sqlite:"+filename);
   }
   
   def connectOracle(): java.sql.Connection = 
   {
     Methods.getConn()
   }
+
 }
 
 class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments) 
@@ -174,8 +168,10 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
 //   val cleanSummary = toggle("summary-clean", default = Some(false))
 //   val sampleCount = opt[Int]("samples", noshort = true, default = None)
   val loadTable = opt[String]("loadTable", descr = "Don't do anything, just load a CSV file")
-  val backend = opt[String]("db", descr = "Which backend database to use? ([sqlite],oracle)", 
+  val backend = opt[String]("driver", descr = "Which backend database to use? ([sqlite],oracle)", 
                             default = Some("sqlite"))
+  val dbname = opt[String]("db", descr = "Connect to the database with the specified name",
+                            default = Some("debug.db"))
   val initDB = toggle("init", default = Some(false))
   val quiet  = toggle("quiet", default = Some(false))
   val file = trailArg[String](required = false)
