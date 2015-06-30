@@ -18,7 +18,7 @@ class RAException(msg: String) extends Exception(msg);
 object Type extends Enumeration {
   type T = Value
 
-  val TInt, TFloat, TDate, TString, TBool, TAny = Value
+  val TInt, TFloat, TDate, TString, TBool, TRowId, TAny = Value
 
   def toString(t: T) = t match {
     case TInt => "int"
@@ -26,6 +26,7 @@ object Type extends Enumeration {
     case TDate => "date"
     case TString => "string"
     case TBool => "bool"
+    case TRowId => "rowid"
     case TAny => throw new SQLException("Unable to produce string of type TAny");
   }
 
@@ -36,6 +37,7 @@ object Type extends Enumeration {
     case "date"   => Type.TDate
     case "string" => Type.TString
     case "bool"   => Type.TBool
+    case "rowid" => Type.TRowId
   }
 }
 
@@ -69,6 +71,15 @@ case class IntPrimitive(v: Long)
   def asLong: Long = v;
   def asDouble: Double = v.toDouble;
   def asString: String = v.toString;
+  def payload: Object = v.asInstanceOf[Object];
+}
+case class RowIdPrimitive(v: String)
+  extends PrimitiveValue(TRowId)
+{
+  override def toString() = "'"+v.toString+"'"
+  def asLong: Long = throw new TypeException(TRowId, TInt, "Cast");
+  def asDouble: Double = throw new TypeException(TRowId, TFloat, "Cast");
+  def asString: String = v;
   def payload: Object = v.asInstanceOf[Object];
 }
 case class StringPrimitive(v: String) 
@@ -343,7 +354,10 @@ case class Comparison(op: Cmp.Op, lhs: Expression,
 }
 case class Function(op: String, params: List[Expression]) extends Expression {
   def exprType(bindings: Map[String, Type.T]): T = {
-    bindings.get("__"+op+"()").get;
+    op match {
+      case "JOIN_ROWIDS" => bindings.get(params(0).toString).get
+      case _ => bindings.get("__"+op+"()").get
+    }
   }
   override def toString() = {
     op match {

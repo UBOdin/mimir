@@ -3,6 +3,7 @@ package mimir.ctables
 import mimir.algebra._
 import mimir.algebra.Type._
 import mimir.Database
+import mimir.lenses.MissingValueLensBounds
 import mimir.util.ListUtils
 
 abstract class Model {
@@ -31,6 +32,11 @@ case class VGTerm(
 object CTables 
 {
   /**
+   * Default name for a confidence column
+   */
+  def confidenceColumn = "__MIMIR_CONFIDENCE"
+
+  /**
    * Default name for a condition column
    */
   def conditionColumn = "__MIMIR_CONDITION"
@@ -43,6 +49,8 @@ object CTables
   def isProbabilistic(expr: Expression): Boolean = 
   expr match {
     case VGTerm(_, _, _) => true;
+    case MissingValueLensBounds(_, _, _) => true
+    //case Function(_, _) => true
     case _ => expr.children.exists( isProbabilistic(_) )
   }
 

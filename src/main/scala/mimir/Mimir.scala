@@ -2,18 +2,15 @@ package mimir;
 
 import java.io._
 
+import mimir.algebra.Operator
+import mimir.lenses.Lens
+import mimir.parser._
+import mimir.sql._
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
-import net.sf.jsqlparser.statement.create.table.CreateTable
-import org.rogach.scallop._;
-import org.sqlite.JDBC;
+import org.rogach.scallop._
 
-import mimir.ctables._;
-import mimir.algebra._;
-import mimir.sql._;
-import mimir.util.TimeUtils;
-import mimir.parser._;
-import mimir.exec._;
+import scala.collection.mutable
 
 
 /** 
@@ -80,6 +77,7 @@ object Mimir {
         
         if(stmt == null){ done = true; }
         else if(stmt.isInstanceOf[Select]){
+          db.initCache(stmt.asInstanceOf[Select])
           handleSelect(stmt.asInstanceOf[Select]);
         } else if(stmt.isInstanceOf[CreateLens]) {
           db.createLens(stmt.asInstanceOf[CreateLens]);
@@ -104,11 +102,18 @@ object Mimir {
   }
   
   def handleExplain(explain: Explain): Unit = {
-    val raw = db.convert(explain.getSelectBody())._1;
-    println("------ Raw Query ------");
-    println(raw.toString());
-    println("--- Optimized Query ---");
-    println(db.optimize(raw).toString);
+    if (explain.getSelectBody() == null) {
+      val query = generateExplainQuery(explain)
+      val parser = new MimirJSqlParser(new ByteArrayInputStream(query.getBytes()))
+      val statement: Statement = parser.Statement()
+      handleSelect(statement.asInstanceOf[Select])
+    } else {
+      val raw = db.convert(explain.getSelectBody())._1;
+      println("------ Raw Query ------");
+      println(raw.toString());
+      println("--- Optimized Query ---");
+      println(db.optimize(raw).toString);
+    }
   }
   
   def handleSelect(sel: Select): Unit = {
@@ -144,6 +149,40 @@ object Mimir {
     }
   }
 
+  def generateExplainQuery(explain: Explain) : String = {
+    val col = explain.getColumn
+    val eType = explain.getType
+    val idStr = db.getUncertainIds(col) //Some("SANE_R:B:3")
+    idStr match {
+      case Some(i) => {
+        var tabList = mutable.MutableList[String]()
+        var rowIdList = mutable.MutableList[String]()
+        var colList = mutable.MutableList[String]()
+        val ids = i.split("\\|")
+        ids.foreach(a => {
+          val b = a.split(":")
+          tabList += b(0)
+          colList += b(1)
+          rowIdList += b(2)
+        })
+        var q = "SELECT " + eType + "(" + colList.head + ") FROM "
+        for (i <- rowIdList.indices) {
+          val tabName = db.savedTables(i)
+          val lens = db.lenses.lensCache.get(tabName.toUpperCase)
+            lens match {
+            case None =>
+            case Some(x) => {
+              val op: Operator = x.asInstanceOf[Lens].view
+              q += tabName + " WHERE ROWID = " +rowIdList(i) + ";"
+              return q
+            }
+          }
+        }
+        q
+      }
+      case None => throw new Exception("No argument by the name " + col + " exists")
+    }
+  }
   
   def connectSqlite(filename: String): java.sql.Connection = 
   {

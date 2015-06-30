@@ -199,7 +199,7 @@ object CTPercolator {
           if(conflicts contains CTables.conditionColumn){
             cols = cols ++ List(
               ( CTables.conditionColumn, 
-                Arithmetic(Arith.And, 
+                Arithmetic(Arith.And,
                   Var(rename("LHS", CTables.conditionColumn)),
                   Var(rename("RHS", CTables.conditionColumn))
               )))
@@ -340,7 +340,7 @@ object CTPercolator {
   }
   
   def propagateRowIDs(oper: Operator): Operator = 
-    propagateRowIDs(oper, false);
+    propagateRowIDs(oper, false)
   
   def propagateRowIDs(oper: Operator, force: Boolean): Operator = 
   {
@@ -421,7 +421,7 @@ object CTPercolator {
         
         case Table(name, sch, metadata) =>
           if(force){
-            Table(name, sch, metadata ++ Map(("ROWID", Type.TInt)))
+            Table(name, sch, metadata ++ Map(("ROWID", Type.TRowId)))
           } else {
             Table(name, sch, metadata)
           }

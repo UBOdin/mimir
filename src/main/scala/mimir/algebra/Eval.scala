@@ -72,6 +72,12 @@ object Eval
           if(n){ return BoolPrimitive(!isNull); }
           else { return BoolPrimitive(isNull); }
         }
+        case f @ Function(op, params) => {
+            f.op match {
+            case "JOIN_ROWIDS" =>
+              new RowIdPrimitive(eval(params(0)) + "|" + eval(params(1)))
+          }
+        }
       }
       
     }

@@ -271,10 +271,22 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     SelectBody selectBody = null;
     String col = null;
     jj_consume_token(K_EXPLAIN);
-    selectBody = SelectBody();
+    try {
+        selectBody = SelectBody();
+    } catch (Exception e){
+        Token token = getNextToken();
+        String type = token.image;
+        if(type == null || type.isEmpty())
+            throw e;
+        token = getNextToken();
+        String colName = token.image;
+        if(colName == null || colName.isEmpty())
+            throw e;
+        explain.setType(type);
+        explain.setColumn(colName);
+    }
     explain.setSelectBody(selectBody);
-    {if (true) return explain;}
-    throw new Error("Missing return statement in function");
+    return explain;
   }
 
   final public Analyze Analyze() throws ParseException {

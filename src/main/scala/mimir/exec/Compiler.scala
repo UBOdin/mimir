@@ -101,29 +101,33 @@ class Compiler(db: Database) {
   {
     oper match {
       case p @ Project(cols, src) => {
-          return Project(
-            cols.map( _ match { case ProjectArg(name,expr) => 
+          Project(
+            cols.flatMap { case ProjectArg(name, expr) =>
               expr match {
                 case Function("BOUNDS", subexp) => {
-                  if(subexp.length != 1){
+                  if (subexp.length != 1) {
                     throw new SQLException(
-                      "BOUNDS() expects 1 argument, got "+subexp.length);
+                      "BOUNDS() expects 1 argument, got " + subexp.length);
                   }
-                  val bounds = 
+                  val bounds =
                     CTBounds.compile(subexp(0))
                   List(
-                    ProjectArg(name+"_MIN", bounds._1), 
-                    ProjectArg(name+"_MAX", bounds._2)
+                    ProjectArg(name + "_MIN", bounds._1),
+                    ProjectArg(name + "_MAX", bounds._2)
                   )
                 }
 
-                // case Function("CONF", _) => {
-                //   CTAnalyzer.compileConfidence(p.get(CTables.confidenceColumn))
-                // }
+                case Function("CONF", exp) => {
+                  val confidence = CTAnalyzer.compileConfidence(p.get(CTables.confidenceColumn))
+                  List(
+                    ProjectArg("CONF_MIN", confidence),
+                    ProjectArg("CONF_MAX", confidence)
+                  )
+                }
 
                 case _ => List(ProjectArg(name, expr))
               }
-            }).flatten,
+            },
             src
           )
         }

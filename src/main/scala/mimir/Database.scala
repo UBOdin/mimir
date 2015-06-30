@@ -3,11 +3,14 @@ package mimir;
 import java.sql._;
 
 import mimir.sql.{Backend,SqlToRA,RAToSql,CreateLens};
-import mimir.exec.{Compiler,ResultIterator,ResultSetIterator};
+import mimir.exec.{ProjectionResultIterator, Compiler, ResultIterator, ResultSetIterator}
+;
 import mimir.ctables.{VGTerm,CTPercolator,Model};
 import mimir.lenses.{Lens,LensManager}
 import mimir.parser.{OperatorParser}
-import mimir.algebra._;
+import mimir.algebra._
+import net.sf.jsqlparser.statement.select.PlainSelect
+;
 
 
  /**
@@ -50,6 +53,8 @@ case class Database(backend: Backend)
   val lenses = new LensManager(this)
   val compiler = new Compiler(this)  
   val operator = new OperatorParser(this.getLensModel, this.getTableSchema(_).toMap)
+  val idToRow = scala.collection.mutable.Map[String, String]()
+  var savedTables = List[String]()
   
   /**
    * Evaluate the specified query on the backend directly and wrap the result in a
@@ -117,14 +122,28 @@ case class Database(backend: Backend)
    */
   def dump(result: ResultIterator): Unit =
   {
-    println(result.schema.map( _._1 ).mkString(","))
+    val res = result.schema.map( _._1 ) //diff List("ROWID")
+    println(res.mkString(","))
     println("------")
+    var rowNum = 0
     while(result.getNext()){
+      rowNum += 1
       println(
         (0 until result.numCols).map( (i) => {
           result(i)+(
-            if(!result.deterministicCol(i)){ "*" } else { "" }
-          )
+            if(!result.deterministicCol(i)){
+              val arg = "r" + rowNum + "a" + idToRow.size
+              //TODO check by column name from schema and table name
+              val rowIdStr = result.asInstanceOf[ProjectionResultIterator].tuple(0).asString
+              val col = result.schema(i)._1
+              val rowIds = rowIdStr.split("\\|")
+              var argVal = List[String]()
+              (0 until rowIds.size).foreach( i => {
+                argVal ::= savedTables(i) + ":" + col + ":" + rowIds(i)
+              })
+              idToRow += (arg -> argVal.mkString("|"))
+              "* (" + arg + ")"} else { ""
+            })
         }).mkString(",")+(
           if(!result.deterministicRow){
             " (This row may be invalid)"
@@ -230,6 +249,23 @@ case class Database(backend: Backend)
           // println("Found: "+name); 
           Some(lens.view)
       }
+    }
+  }
+
+  def getUncertainIds(key : String) : Option[String] = idToRow get key
+
+  def initCache(stmt : net.sf.jsqlparser.statement.select.Select) : Unit = {
+    idToRow.clear()
+    savedTables = List[String]()
+    //TODO handle joins and subqueries
+    val s = stmt.getSelectBody.asInstanceOf[PlainSelect]
+    savedTables ::= s.getFromItem.toString
+    val joins = s.getJoins
+    if(joins != null){
+      (0 until joins.size()).foreach( i => {
+        val j : net.sf.jsqlparser.statement.select.Join = joins.get(i)
+        savedTables ::= j.getRightItem.toString
+      })
     }
   }
 }

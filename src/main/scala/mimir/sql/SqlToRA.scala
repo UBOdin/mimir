@@ -172,8 +172,7 @@ class SqlToRA(db: Database)
       return (ret, 
         target.map(
           (x) => (x._1, x._2.column)
-        ).toMap
-      );
+        ).toMap);
     } else if(sb.isInstanceOf[net.sf.jsqlparser.statement.select.Union]) {
       return sb.asInstanceOf[net.sf.jsqlparser.statement.select.Union].
         getPlainSelects().
@@ -297,6 +296,8 @@ class SqlToRA(db: Database)
       if(table == null){
         val binding = bindings.get(name);
         if(binding.isEmpty){
+          if(name.equals("ROWID"))
+            return Var("ROWID")
           throw new SQLException("Unknown Variable: "+name+" in "+bindings.toString)
         }
         return Var(binding.get)

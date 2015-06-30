@@ -11,27 +11,42 @@ class ResultSetIterator(src: ResultSet) extends ResultIterator
   val meta = src.getMetaData();
   var extract: List[() => PrimitiveValue] = 
     (0 until meta.getColumnCount()).map( (i) => {
-      JDBCUtils.convertSqlType(meta.getColumnType(i+1)) match {
-        case TString => 
-          () => { 
-            new StringPrimitive(src.getString(i+1))
-          }
-        
-        case TFloat => 
-          () => { 
-            new FloatPrimitive(src.getDouble(i+1))
-          }
-        
-        case TInt => 
-          () => { 
-            new IntPrimitive(src.getLong(i+1))
-          }
-      }
+      if(meta.getColumnLabel(i+1).equals("ROWID"))
+        () => {
+          var s = src.getString(i+1)
+          //if(s.startsWith("'"))
+            //s = "'" + s + "'"
+          new RowIdPrimitive(s)
+        }
+      else
+        JDBCUtils.convertSqlType(meta.getColumnType(i+1)) match {
+          case TString =>
+            () => {
+              new StringPrimitive(src.getString(i+1))
+            }
+
+          case TFloat =>
+            () => {
+              new FloatPrimitive(src.getDouble(i+1))
+            }
+
+          case TInt =>
+            () => {
+              new IntPrimitive(src.getLong(i+1))
+            }
+
+          case TRowId =>
+            () => {
+              new RowIdPrimitive(src.getString(i+1))
+            }
+        }
     }).toList
   var schema: List[(String,Type.T)] = 
     (0 until meta.getColumnCount()).map( (i) => (
       meta.getColumnName(i+1),
-      JDBCUtils.convertSqlType(meta.getColumnType(i+1))
+      if(meta.getColumnName(i+1).toUpperCase.equals("ROWID"))
+        TRowId
+      else JDBCUtils.convertSqlType(meta.getColumnType(i+1))
     ) ).toList
   var isFirst = true;
   

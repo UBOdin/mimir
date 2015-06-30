@@ -9,10 +9,10 @@ object JDBCUtils {
     t match {
       case (java.sql.Types.FLOAT | 
             java.sql.Types.DOUBLE)   => Type.TFloat
-      case (java.sql.Types.INTEGER |
-            java.sql.Types.ROWID)    => Type.TInt
+      case (java.sql.Types.INTEGER)  => Type.TInt
       case (java.sql.Types.DATE)     => Type.TDate
       case (java.sql.Types.VARCHAR)  => Type.TString
+      case (java.sql.Types.ROWID)    => Type.TRowId
     }
   }
 }

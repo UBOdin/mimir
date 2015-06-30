@@ -1,6 +1,8 @@
 package mimir.lenses;
 
 import java.sql._;
+import moa.classifiers.core.driftdetection.ADWIN
+
 import collection.JavaConversions._;
 import scala.util._;
 
@@ -47,7 +49,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
     Project(
       allKeys().
         map( (k) => {
-          val v = keysToBeCleaned.indexOf(k);
+          val v = allKeys().indexOf(k);
           if(v >= 0){
             ProjectArg(k,
               CaseExpression(
@@ -78,7 +80,8 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
             val m = new MissingValueModel(this);
             data = 
               InstanceQuery.retrieveInstances(this, results);
-            data.setClassIndex(idx);
+            val classIndex = allKeys().indexOf(keysToBeCleaned.get(idx))
+            data.setClassIndex(classIndex);
             m.init(data);
 
             m.asInstanceOf[SingleVarModel];
@@ -104,11 +107,15 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
   }
 }
 
-class MissingValueLensBounds(model: MissingValueModel, args: List[Expression], lowerBound: Boolean)
+case class MissingValueLensBounds(model: MissingValueModel, args: List[Expression], lowerBound: Boolean)
   extends Proc(args)
 {
   def get(args: List[PrimitiveValue]): PrimitiveValue =  {
-    if(lowerBound){ model.lowerBound(args) } else { model.upperBound(args) }
+    if(lowerBound){
+      model.lowerBound(args)
+    } else {
+      model.upperBound(args)
+    }
   }
   
   def exprType(bindings: Map[String,Type.T]) = Type.TInt
@@ -128,6 +135,7 @@ class MissingValueModel(lens: MissingValueLens)
   def init(data: Instances) = {
     learner.setModelContext(new InstancesHeader(data));
     learner.prepareForUse();
+    this.data = data
     data.foreach( learn(_) );
   }
 
@@ -155,7 +163,7 @@ class MissingValueModel(lens: MissingValueLens)
     val row = new DenseInstance(lens.allKeys.length);
     (0 until lens.allKeys.length).foreach( (col) => {
       val v = rowValues(col)
-      if(!v.isInstanceOf[NullPrimitive]){
+      if(!v.isInstanceOf[NullPrimitive] && !v.isInstanceOf[RowIdPrimitive]){
         row.setValue(col, v.asDouble)
       }
     })
@@ -167,17 +175,19 @@ class MissingValueModel(lens: MissingValueLens)
   }
 
   ////// Model implementation
-  def mostLikelyValue(args: List[PrimitiveValue]): PrimitiveValue =
-    { IntPrimitive(classify(args(0)).minBy(_._1)._2); }
+  def mostLikelyValue(args: List[PrimitiveValue]): PrimitiveValue = {
+    IntPrimitive(classify(args(0)).minBy(_._1)._2);
+  }
+
   def lowerBound(args: List[PrimitiveValue]) =
     {  
       val classes = classify(args(0));
-      IntPrimitive(classes.minBy(_._1)._2)
+      IntPrimitive(classes.minBy(_._2)._2)
     }
   def upperBound(args: List[PrimitiveValue]) =
     {  
       val classes = classify(args(0));
-      IntPrimitive(classes.maxBy(_._1)._2)
+      IntPrimitive(classes.maxBy(_._2)._2)
     }
   def lowerBoundExpr(args: List[Expression]) =
     {  

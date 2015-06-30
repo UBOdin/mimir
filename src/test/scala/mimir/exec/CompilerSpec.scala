@@ -21,13 +21,13 @@ object CompilerSpec extends Specification {
     UniformDistribution
   ))
   val schema = Map[String,Map[String,Type.T]](
-    ("R", Map( 
-      ("R_A", Type.TInt), 
-      ("R_B", Type.TInt), 
+    ("R", Map(
+      ("R_A", Type.TInt),
+      ("R_B", Type.TInt),
       ("R_C", Type.TInt)
     )),
-    ("S", Map( 
-      ("S_C", Type.TInt), 
+    ("S", Map(
+      ("S_C", Type.TInt),
       ("S_D", Type.TFloat)
     ))
   )

@@ -123,6 +123,7 @@ class RAToSql(db: Database) {
     e match {
       case IntPrimitive(v) => new LongValue(""+v)
       case StringPrimitive(v) => new StringValue(v)
+      case r: RowIdPrimitive => new StringValue(r.toString())
       case FloatPrimitive(v) => new DoubleValue(""+v)
       case BoolPrimitive(true) => 
         bin(new EqualsTo(), IntPrimitive(1), IntPrimitive(1))
@@ -173,6 +174,17 @@ class RAToSql(db: Database) {
         isNull.setLeftExpression(convert(subexp))
         isNull.setNot(neg)
         isNull;
+      }
+      case mimir.algebra.Function(op, params) => {
+        val cmpOp = op match {
+          case "__LIST_MIN" => Cmp.Lte
+          case "__LIST_MAX" => Cmp.Gte
+          case "JOIN_ROWIDS" => return new StringValue(params(0) + "|" + params(1))
+        }
+        val cmp = new Comparison(cmpOp, params(0), params(1))
+        val wtClause = new WhenThenClause(cmp, params(0))
+        val caseExp = new CaseExpression(List(wtClause), params(1))
+        convert(caseExp)
       }
     }
   }

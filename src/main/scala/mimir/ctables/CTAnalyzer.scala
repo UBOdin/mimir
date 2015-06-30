@@ -3,6 +3,7 @@ package mimir.ctables
 import mimir.algebra._
 
 object CTAnalyzer {
+
   /**
    * Construct a boolean expression that evaluates whether the input 
    * expression is deterministic <b>for a given input row</b>.  
@@ -79,5 +80,9 @@ object CTAnalyzer {
                     Arith.makeAnd(_,_) 
                   )
     }
+  }
+
+  def compileConfidence(maybeExpression: Option[Expression]): Expression = {
+    new Function("", List[Expression]());
   }
 }

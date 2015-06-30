@@ -8,6 +8,7 @@ import net.sf.jsqlparser.statement.select.SelectBody;
 public class Explain implements Statement{
 	private SelectBody selectBody;
 	private String column;
+	private String type;
 
 	public SelectBody getSelectBody() {
 		return selectBody;
@@ -19,10 +20,24 @@ public class Explain implements Statement{
 
 	@Override
 	public void accept(StatementVisitor statementVisitor) {
-		// TODO Auto-generated method stub
 		Select sel = new Select();
 		sel.setSelectBody(selectBody);
 		statementVisitor.visit(sel);
 	}
-	
+
+	public String getColumn() {
+		return column;
+	}
+
+	public void setColumn(String column) {
+		this.column = column;
+	}
+
+	public String getType() {
+		return type;
+	}
+
+	public void setType(String type) {
+		this.type = type;
+	}
 }
