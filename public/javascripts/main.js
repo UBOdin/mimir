@@ -73,4 +73,17 @@ $( document ).ready(function() {
         position: 'bottom-left',
         minWidth: 250,
     });
+
+    Dropzone.options.myAwesomeDropzone = {
+      maxFilesize: 2, // MB
+      acceptedFiles: ".csv",
+      addRemoveLinks: true,
+      init: function() {
+        this.on("error", function() {
+            var span = $("span[data-dz-errormessage]");
+            span.html("Something went wrong! Possible reasons include (i) You are working with the wrong database? (ii) The schema for the table has not yet been loaded? (iii) The name of the csv file does not match the name of the table?");
+        });
+      }
+    };
+
 });

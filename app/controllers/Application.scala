@@ -1,10 +1,12 @@
 package controllers
 
-import java.io.{File, StringReader}
+import java.io.File
+import java.nio.file.Path
 
 import play.api._
 import play.api.mvc._
-import mimir.{WebAPI, Mimir, WebQueryResult}
+import mimir.{WebAPI, WebQueryResult}
+import play.api.Play.current
 
 class Application extends Controller {
 
@@ -40,7 +42,9 @@ class Application extends Controller {
   def loadTable() = Action(parse.multipartFormData) { request =>
     request.body.file("file").map { csvFile =>
       val name = csvFile.filename
-      val newFile = new File("/home/arindam/Documents/MimirWebApp/" + name)
+      val dir = play.Play.application().path().getAbsolutePath()
+
+      val newFile = new File(dir, name)
       csvFile.ref.moveTo(newFile)
       webAPI.configure(Array("--db", webAPI.dbName, "--loadTable", name.replace(".csv", "")))
       newFile.delete()

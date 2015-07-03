@@ -114,11 +114,9 @@ object Mimir {
   }
 
   def handleLoadTable(db: Database, targetTable: String, sourceFile: String){
-    println("Loading "+sourceFile);
     val sch = db.getTableSchema(targetTable);
     val keys = sch.map( _._1 )
     val input = new BufferedReader(new FileReader(sourceFile));
-    println(""+sch);
     var done = false;
     while(!done){
       val line = input.readLine()
