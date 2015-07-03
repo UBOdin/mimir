@@ -48,7 +48,10 @@ $( document ).ready(function() {
         }
     });
 
-    $("#result_table").colResizable({liveDrag:true});
+    $("#result_table").colResizable( {
+        liveDrag: true,
+        minWidth: 80
+    });
 
     $("#about_btn").on("click", function() {
         $("#about").toggle(100);
