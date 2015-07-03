@@ -1,0 +1,106 @@
+body {
+    margin:                     0px;
+}
+
+a:hover {
+    cursor:                     pointer;
+}
+
+.outer_container {
+    margin:                     0px;
+}
+
+.inner_container {
+    width:                      960px;
+    margin-left:                auto;
+    margin-right:               auto;
+    padding:                    20px 10px;
+}
+
+#query_div {
+    display:                    inline:block;
+    width:                      100%;
+}
+
+#query_textarea {
+    font-family:                Monospace;
+    padding:                    6px;
+    color:                      #555;
+    resize:                     vertical;
+    width:                      100%;
+    border-top-left-radius:     4px;
+    border-top-right-radius:    4px;
+    height:                     55px;
+}
+
+#query_btn {
+    width:                      100%;
+    height:                     40px;
+    border-top-left-radius:     0px;
+    border-top-right-radius:    0px;
+}
+
+.result {
+    margin-bottom:              20px;
+    overflow:                   auto;
+}
+
+.non_deterministic_row {
+    color:                      rgba(255, 51, 51, 1);
+    cursor:                     pointer;
+}
+
+.non_deterministic_cell {
+    color:                      rgba(255, 51, 51, 1);
+    font-weight:                bold;
+    cursor:                     pointer;
+}
+
+.notifications {
+    padding:                    10px 19px;
+}
+
+.italics {
+    font-style:                 italic;
+}
+
+td:hover {
+
+}
+
+.red {
+    color:                      rgba(255, 51, 51, 1);
+}
+
+#about {
+    text-align:                 justify;
+    font-size:                  16px;
+    line-height:                1.6;
+    padding:                    60px 120px;
+    display:                    none;
+    position:                   relative;
+}
+
+#drop_area {
+    display:                    none;
+    position:                   relative;
+}
+
+#dz-btn {
+    width:                      100%;
+}
+
+.close_btn {
+    position:                   absolute;
+    top:                        20px;
+    right:                      40px;
+}
+
+.close_x {
+    color:                      #777;
+    cursor:                     pointer;
+}
+
+.close_x:hover {
+    color:                      #999;
+}

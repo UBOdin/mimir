@@ -1,0 +1,107 @@
+@(query: String, db: String, result: mimir.WebQueryResult, webAPI: mimir.WebAPI)
+
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+    <title>Mimir</title>
+
+    <!-- Bootstrap -->
+    <link href="assets/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <link href="assets/stylesheets/main.css" rel="stylesheet">
+    <link href="assets/stylesheets/dropzone.css" rel="stylesheet">
+    <link href="assets/stylesheets/tooltipster.css" rel="stylesheet">
+    <link href="assets/stylesheets/tooltipster-light.css" rel="stylesheet">
+    <link href="assets/stylesheets/tooltipster-noir.css" rel="stylesheet">
+    <link href="assets/stylesheets/tooltipster-punk.css" rel="stylesheet">
+    <link href="assets/stylesheets/tooltipster-shadow.css" rel="stylesheet">
+    <link rel="icon" type="image/png" href="assets/images/database.png">
+    <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+    <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+    <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+    <![endif]-->
+</head>
+<body>
+<div class="outer_container">
+    <div class="inner_container">
+        <nav class="navbar navbar-default">
+            <div>
+                <div class="navbar-header">
+                    <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target=".navbar-collapse">
+                        <span class="sr-only">Toggle navigation</span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                    </button>
+                    <a class="navbar-brand" href="/">Mimir</a>
+                </div>
+                <div class="navbar-collapse collapse">
+                    <ul class="nav navbar-nav">
+                        <li><a id="about_btn">About</a></li>
+                        <li><a id="upload">Upload</a></li>
+                        <li class="dropdown">
+                            <a class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><span id="curr_db">@webAPI.dbName</span> <span class="caret"></span></a>
+                            <ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
+                                <li class="dropdown-header">Tables</li>
+                                @webAPI.getAllTables().map { x =>
+                                    <li><a class="table_link">@x</a></li>
+                                }
+                                <li role="separator" class="divider"></li>
+                                <li class="dropdown-header">Databases</li>
+                                @webAPI.getAllDBs().map { x =>
+                                    <li><a class="db_link">@x</a></li>
+                                }
+                                <li role="separator" class="divider"></li>
+                                <li><a id="create_database">Create Database</a></li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div><!--/.nav-collapse -->
+            </div>
+        </nav>
+        <div id="about" class="well">
+            <h1><a id="user-content-the-mimir-uncertainty-management-tool" class="anchor" href="#the-mimir-uncertainty-management-tool" aria-hidden="true"><span class="octicon octicon-link"></span></a>The Mimir Uncertainty Management Tool</h1>
+            <br>
+            <p>Mimir wraps around a traditional relational database system and allows users to explicitly track data quality through a construct called a Lens.  Lenses in Mimir are analogous to stages in an ETL pipeline -- responsible for performing data cleaning or analytics tasks.  However, unlike a traditional ETL pipeline, Lenses explicitly track conditions that could compromise data quality: Bulk data copies without considering data volatility, entity-resolution, missing values.  Lenses create the illusion that you're working with high quality data, allowing you to start analyzing the data right away.  Using the power of provenance, Mimir can tell you how reliable your query results are, and what you can do about it.</p>
+            <br>
+            <a href="https://github.com/okennedy/mimir">GitHub</a>
+            <div class="close_btn"><span class="close_x">&#10006;</span></div>
+        </div>
+        <div id="drop_area">
+            <form action="/loadtable" class="dropzone" id="myAwesomeDropzone">
+                <div class="dz-message"><h4>Drag and drop .csv files here to load them into the database</h4></div>
+            </form>
+            <div class="close_btn"><span class="close_x">&#10006;</span></div>
+        </div>
+        <div class="well" id="top_area">
+            <div id="query_div">
+                <form id="query_form" action="mimirDB" method="GET">
+                    <textarea id="query_textarea" name="query" placeholder="Enter query here..." spellcheck="false">@query</textarea>
+                    <input type="hidden" id="db_field" name="db" value="@db">
+                    <input type="submit" class="btn btn-primary" id="query_btn" value="Query">
+                </form>
+            </div>
+        </div>
+        <div class="result">
+            @if(result.selectResult) {
+                @tableGenerator(result.webIterator)
+            } else {
+                <pre>@result.resultString</pre>
+            }
+        </div>
+    </div>
+</div>
+<!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+<!-- Include all compiled plugins (below), or include individual files as needed -->
+<script src="assets/bootstrap/js/bootstrap.js"></script>
+<script src="assets/javascripts/colResizable.min.js"></script>
+<script src="assets/javascripts/dropzone.js"></script>
+<script src="assets/javascripts/jquery.tooltipster.min.js"></script>
+<script src="assets/javascripts/main.js"></script>
+</body>
+</html>

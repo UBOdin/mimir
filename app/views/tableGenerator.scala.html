@@ -1,0 +1,28 @@
+@(webIter: mimir.WebIterator)
+
+<div class="well notifications">
+    <h6 class="italics">Cells and rows in red are uncertain</h6>
+    @if(webIter.missingRows) {
+        <h6 class="italics red">There may be some rows missing from this result</h6>
+    }
+</div>
+<table class="table" id="result_table">
+    <thead>
+        <tr>
+            @webIter.header.map{ x => <th>@x</th> }
+        </tr>
+    </thead>
+    <tbody>
+        @for((l, c) <- webIter.data) {
+            @if(c) {
+                <tr class="deterministic_row">
+                    @l.map{x => @if(x.endsWith("*")) { <td class="non_deterministic_cell">@x.substring(0, x.length() - 1)</td> } else { <td>@x</td> }}
+                </tr>
+            } else {
+                <tr class="non_deterministic_row">
+                    @l.map{x => @if(x.endsWith("*")) { <td class="non_deterministic_cell">@x.substring(0, x.length() - 1)</td> } else { <td>@x</td> }}
+                </tr>
+            }
+        }
+    </tbody>
+</table>
