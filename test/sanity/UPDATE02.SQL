@@ -1,9 +1,0 @@
-CREATE TABLE IDXR(
-  A int, 
-  B int,
-  PRIMARY KEY (A)
-);
-
-UPDATE IDXR SET A = A + 100 WHERE B < 3;
-
-SELECT * FROM IDXR;
