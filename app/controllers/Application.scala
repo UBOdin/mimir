@@ -10,15 +10,20 @@ import play.api.Play.current
 
 class Application extends Controller {
 
-  val webAPI = new WebAPI()
-  webAPI.configure(new Array[String](0))
 
   def index = Action {
+    val webAPI = new WebAPI()
+    webAPI.configure(new Array[String](0))
+
     val result = new WebQueryResult(false, "Query results show up here...", null)
-    Ok(views.html.index("", webAPI.dbName, result, webAPI))
+    val ret = Ok(views.html.index("", webAPI.dbName, result, webAPI))
+    webAPI.close()
+    ret
+
   }
 
   def input(query: String, db: String) = Action {
+    val webAPI = new WebAPI()
     var result: WebQueryResult = null
     webAPI.configure(Array("--db", db))
 
@@ -29,17 +34,23 @@ class Application extends Controller {
       result = new WebQueryResult(false, "Working database changed to "+db, null)
     }
 
-    Ok(views.html.index(query, db, result, webAPI))
+    val ret = Ok(views.html.index(query, db, result, webAPI))
+    webAPI.close()
+    ret
   }
 
   def createDB(db: String) = Action {
+    val webAPI = new WebAPI()
     webAPI.configure(Array("--db", db, "--init"))
     val result = new WebQueryResult(false, "Database "+db+" successfully created.", null)
 
-    Ok(views.html.index("", db, result, webAPI))
+    val ret = Ok(views.html.index("", db, result, webAPI))
+    webAPI.close()
+    ret
   }
 
   def loadTable() = Action(parse.multipartFormData) { request =>
+    val webAPI = new WebAPI()
     request.body.file("file").map { csvFile =>
       val name = csvFile.filename
       val dir = play.Play.application().path().getAbsolutePath()
@@ -51,6 +62,8 @@ class Application extends Controller {
     }
 
     val result = new WebQueryResult(false, "CSV file loaded.", null)
-    Ok(views.html.index("", webAPI.dbName, result, webAPI))
+    val ret = Ok(views.html.index("", webAPI.dbName, result, webAPI))
+    webAPI.close()
+    ret
   }
 }

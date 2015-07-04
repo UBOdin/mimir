@@ -308,7 +308,7 @@ class CSVBackend(
           case Schema.Type.DATE => java.sql.Types.DATE
           case Schema.Type.STRING => java.sql.Types.CHAR
         }).toList
-    );
+    )
   }
 
   def update(op: String): Unit = 
@@ -328,5 +328,9 @@ class CSVBackend(
   def getAllTables() =
   {
     throw new SQLException("No support for all tables on CSV data");
+  }
+
+  def close() = {
+
   }
 }

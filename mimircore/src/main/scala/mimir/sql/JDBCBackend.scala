@@ -78,4 +78,8 @@ class JDBCBackend(conn: Connection) extends Backend
     val metadata = conn.getMetaData()
     metadata.getTables(null, null, "", null)
   }
+
+  def close(): Unit = {
+    conn.close()
+  }
 }

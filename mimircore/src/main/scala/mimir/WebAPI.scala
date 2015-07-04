@@ -118,6 +118,10 @@ class WebAPI {
     val curDir = new File(".")
     curDir.listFiles().filter( f => f.isFile && f.getName.endsWith(".db")).map(x => x.getName)
   }
+
+  def close(): Unit = {
+    db.backend.close()
+  }
 }
 
 

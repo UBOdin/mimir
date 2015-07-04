@@ -34,4 +34,5 @@ abstract class Backend {
   def update(stmt: String, args: List[String]): Unit
 
   def getAllTables(): ResultSet
+  def close(): Unit
 }
