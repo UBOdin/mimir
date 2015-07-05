@@ -51,6 +51,11 @@
                                     <li><a class="table_link">@x</a></li>
                                 }
                                 <li role="separator" class="divider"></li>
+                                <li class="dropdown-header">Lenses</li>
+                                @webAPI.getAllLenses().map { x =>
+                                <li><a class="table_link">@x</a></li>
+                                }
+                                <li role="separator" class="divider"></li>
                                 <li class="dropdown-header">Databases</li>
                                 @webAPI.getAllDBs().map { x =>
                                     <li><a class="db_link">@x</a></li>

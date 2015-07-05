@@ -104,14 +104,31 @@ class WebAPI {
 
     iter.open()
     while(iter.getNext()) {
-      tableNames.append(iter(2).asString match {
-        case "MIMIR_LENSES" => "Lenses"
-        case x => x
-      })
+      val name = iter(2).asString
+      if(!name.equalsIgnoreCase("MIMIR_LENSES")) tableNames.append(name)
     }
     iter.close()
 
     tableNames.toList
+  }
+
+  def getAllLenses(): List[String] = {
+    val res = db.backend.execute(
+      """
+        SELECT *
+        FROM MIMIR_LENSES
+      """)
+
+    val iter = new ResultSetIterator(res)
+    val lensNames = new ListBuffer[String]()
+
+    iter.open()
+    while(iter.getNext()) {
+      lensNames.append(iter(0).asString)
+    }
+    iter.close()
+
+    lensNames.toList
   }
 
   def getAllDBs(): Array[String] = {
