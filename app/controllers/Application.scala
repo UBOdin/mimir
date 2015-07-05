@@ -11,6 +11,7 @@ import play.api.Play.current
 class Application extends Controller {
 
 
+
   def index = Action {
     val webAPI = new WebAPI()
     webAPI.configure(new Array[String](0))
@@ -51,15 +52,18 @@ class Application extends Controller {
 
   def loadTable() = Action(parse.multipartFormData) { request =>
     val webAPI = new WebAPI()
+    val db = request.body.dataParts("db")(0)
+
     request.body.file("file").map { csvFile =>
       val name = csvFile.filename
       val dir = play.Play.application().path().getAbsolutePath()
 
       val newFile = new File(dir, name)
       csvFile.ref.moveTo(newFile)
-      webAPI.configure(Array("--db", webAPI.dbName, "--loadTable", name.replace(".csv", "")))
+      webAPI.configure(Array("--db", db, "--loadTable", name.replace(".csv", "")))
       newFile.delete()
     }
+
 
     val result = new WebQueryResult(false, "CSV file loaded.", null)
     val ret = Ok(views.html.index("", webAPI.dbName, result, webAPI))

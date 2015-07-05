@@ -74,6 +74,8 @@ $( document ).ready(function() {
         minWidth: 250,
     });
 
+    $("[name='db'").val($("#curr_db").html());
+
     Dropzone.options.myAwesomeDropzone = {
       maxFilesize: 2, // MB
       acceptedFiles: ".csv",
@@ -81,7 +83,7 @@ $( document ).ready(function() {
       init: function() {
         this.on("error", function() {
             var span = $("span[data-dz-errormessage]");
-            span.html("Something went wrong! Possible reasons include (i) You are working with the wrong database? (ii) The schema for the table has not yet been loaded? (iii) The name of the csv file does not match the name of the table?");
+            span.html("There is no table with this name in the current database!");
         });
       }
     };
