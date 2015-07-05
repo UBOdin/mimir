@@ -191,7 +191,7 @@ class MissingValueModel(lens: MissingValueLens)
     val classes = classify(args(0))
     val mean = classes.foldRight(0.0){(a, b) => b + (a._1 * a._2)}
     val variance = classes.foldRight(0.0){
-      (a, b) => b + (a._1 - mean) * (a._1 - mean) * a._2
+      (a, b) => b + (a._2 - mean) * (a._2 - mean) * a._1
     }
     FloatPrimitive(variance)
   }
