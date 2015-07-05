@@ -88,6 +88,7 @@ class Compiler(db: Database) {
    * aggregate-style methods for doing analysis:
    *   - BOUNDS(A): Hard upper- and lower-bounds for 'A'
    *   - CONF():    The confidence of the specified row.
+   *   - VAR(A): Variance of 'A'
    *
    * Each of these analysis functions can be expanded out into an equivalent
    * Expression (or multiple Expressions).  This function does a quick pass
@@ -102,28 +103,38 @@ class Compiler(db: Database) {
     oper match {
       case p @ Project(cols, src) => {
           return Project(
-            cols.map( _ match { case ProjectArg(name,expr) => 
-              expr match {
-                case Function("BOUNDS", subexp) => {
-                  if(subexp.length != 1){
-                    throw new SQLException(
-                      "BOUNDS() expects 1 argument, got "+subexp.length);
+            cols.flatMap(
+              _ match {
+                case ProjectArg(name, expr) =>
+                  expr match {
+                    case Function("BOUNDS", subexp) => {
+                      if (subexp.length != 1) {
+                        throw new SQLException(
+                          "BOUNDS() expects 1 argument, got " + subexp.length);
+                      }
+                      val bounds =
+                        CTBounds.compile(subexp(0))
+                      List(
+                        ProjectArg(name + "_MIN", bounds._1),
+                        ProjectArg(name + "_MAX", bounds._2)
+                      )
+                    }
+
+                    case Function("CONF", expr) => {
+                      val ex = CTAnalyzer.compileConfidence(expr(0))
+                      List(ProjectArg(name + "_CONF", ex))
+                    }
+
+                    case Function("VAR", subexp) => {
+                      if (subexp.length != 1)
+                        throw new SQLException("VAR() expects 1 argument, got " + subexp.length)
+                      val ex = CTAnalyzer.compileVariance(subexp(0))
+                      List(ProjectArg(name + "_VAR", ex))
+                    }
+
+                    case _ => List(ProjectArg(name, expr))
                   }
-                  val bounds = 
-                    CTBounds.compile(subexp(0))
-                  List(
-                    ProjectArg(name+"_MIN", bounds._1), 
-                    ProjectArg(name+"_MAX", bounds._2)
-                  )
-                }
-
-                // case Function("CONF", _) => {
-                //   CTAnalyzer.compileConfidence(p.get(CTables.confidenceColumn))
-                // }
-
-                case _ => List(ProjectArg(name, expr))
-              }
-            }).flatten,
+            }),
             src
           )
         }

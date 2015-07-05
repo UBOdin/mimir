@@ -28,7 +28,6 @@ public class Analyze implements Statement{
 
 	@Override
 	public void accept(StatementVisitor statementVisitor) {
-		// TODO Auto-generated method stub
 		Select sel = new Select();
 		sel.setSelectBody(selectBody);
 		statementVisitor.visit(sel);

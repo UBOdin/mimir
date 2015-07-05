@@ -340,7 +340,7 @@ object CTPercolator {
   }
   
   def propagateRowIDs(oper: Operator): Operator = 
-    propagateRowIDs(oper, false);
+    propagateRowIDs(oper, false)
 
   def propagateRowIDs(oper: Operator, force: Boolean): Operator = 
   {

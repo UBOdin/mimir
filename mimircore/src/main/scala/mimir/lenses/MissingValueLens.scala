@@ -117,6 +117,13 @@ case class MissingValueLensBounds(model: MissingValueModel, args: List[Expressio
     new MissingValueLensBounds(model, c, lowerBound);
 }
 
+case class MissingValueVariance(model: MissingValueModel, args: List[Expression])
+  extends Proc(args) {
+  def get(args: List[PrimitiveValue]): PrimitiveValue = model.variance(args)
+  def exprType(bindings: Map[String,Type.T]) = Type.TInt
+  def rebuild(c: List[Expression]) = new MissingValueVariance(model, c)
+}
+
 class MissingValueModel(lens: MissingValueLens)
   extends SingleVarModel(Type.TInt) 
 {
@@ -169,28 +176,35 @@ class MissingValueModel(lens: MissingValueLens)
   }
 
   ////// Model implementation
-  def mostLikelyValue(args: List[PrimitiveValue]): PrimitiveValue =
-    { IntPrimitive(classify(args(0)).maxBy(_._1)._2); }
-  def lowerBound(args: List[PrimitiveValue]) =
-    {  
+  def mostLikelyValue(args: List[PrimitiveValue]): PrimitiveValue = {
+    IntPrimitive(classify(args(0)).maxBy(_._1)._2);
+  }
+  def lowerBound(args: List[PrimitiveValue]) = {
       val classes = classify(args(0));
       IntPrimitive(classes.minBy(_._2)._2)
-    }
-  def upperBound(args: List[PrimitiveValue]) =
-    {  
+  }
+  def upperBound(args: List[PrimitiveValue]) = {
       val classes = classify(args(0));
       IntPrimitive(classes.maxBy(_._2)._2)
+  }
+  def variance(args: List[PrimitiveValue]) = {
+    val classes = classify(args(0))
+    val mean = classes.foldRight(0.0){(a, b) => b + (a._1 * a._2)}
+    val variance = classes.foldRight(0.0){
+      (a, b) => b + (a._1 - mean) * (a._1 - mean) * a._2
     }
-  def lowerBoundExpr(args: List[Expression]) =
-    {  
+    FloatPrimitive(variance)
+  }
+  def lowerBoundExpr(args: List[Expression]) = {
       new MissingValueLensBounds(this, args, true)
-    }
-  def upperBoundExpr(args: List[Expression]) =
-    {  
+  }
+  def upperBoundExpr(args: List[Expression]) = {
       new MissingValueLensBounds(this, args, false)
-    }
-  def sample(seed: Long, args: List[PrimitiveValue]):  PrimitiveValue =
-    {
+  }
+  def varianceExpr(args: List[Expression]) = {
+    new MissingValueVariance(this, args)
+  }
+  def sample(seed: Long, args: List[PrimitiveValue]):  PrimitiveValue = {
       val classes = classify(args(0));
       val tot_cnt = classes.map(_._1).sum;
       val pick = new Random(seed).nextInt() % tot_cnt
@@ -200,7 +214,7 @@ class MissingValueModel(lens: MissingValueLens)
         )
       val pick_idx: Int = cumulative_counts.indexWhere( pick < _ )
       return IntPrimitive(classes(pick_idx)._2)
-    }
+  }
 
 }
 // class MissingValueAnalysis(db: Database, idx: Int, ctx: MissingValueLens) extends CTAnalysis(db) {

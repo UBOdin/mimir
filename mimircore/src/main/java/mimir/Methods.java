@@ -47,7 +47,6 @@ public class Methods {
          conn = ods.getConnection();
 		} catch (Exception e) {
   		  System.err.println("Connection failed to : "+url);
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		return conn;

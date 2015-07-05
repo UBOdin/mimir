@@ -134,7 +134,6 @@ public static Model getTrained(Classifier learner, String sql, int classIndex){
 			numberSamples++;
 		}	
 	} catch (Exception e) {
-		// TODO Auto-generated catch block
 		e.printStackTrace();
 	}
 	return new Model(learner,data,numberSamples,numberSamplesCorrect);
@@ -160,7 +159,6 @@ public static Connection getConn(){
          conn = ods.getConnection();
 		} catch (Exception e) {
   		  System.err.println("Connection failed to : "+url);
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		return conn;	
@@ -189,7 +187,6 @@ static String getColumnRange(String tablename,String colname){
 		        conn.close();
 		        conn = null;
 		    	} catch (Exception e) {
-					// TODO Auto-generated catch block
 					System.out.println("getColumnRange");
 					e.printStackTrace();
 				}
@@ -225,7 +222,6 @@ static HashMap<String,String> getTableInfoFromDB(String tablename,String colname
 	        conn.close();
 	        conn = null;
 	    	} catch (SQLException e) {
-				// TODO Auto-generated catch block
 				System.out.println("getTableInfoFromDB");
 				e.printStackTrace();
 			}
@@ -297,7 +293,6 @@ public static String getFile(Map<String,String> schema,String query,String table
 		        writer.flush();
 			
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}		
 		return tableName+".arff";	
@@ -331,7 +326,6 @@ public static String getFile(Map<String,String> schema,String[] data,String tabl
 		        writer.flush();
 			
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
@@ -352,7 +346,6 @@ public static void writerInsetionStatement(String tname,String fname){
 	}
 	
 	} catch (Exception e) {
-		// TODO Auto-generated catch block
 		e.printStackTrace();
 	}
 }
@@ -372,7 +365,6 @@ static boolean InsertTuple(String sql){
 	        conn.close();
 	        conn = null;
 	    	} catch (Exception e) {
-				// TODO Auto-generated catch block
 				System.out.println("InsertTuple error: "+sql);
 				e.printStackTrace();
 			}
@@ -386,7 +378,6 @@ public static Classifier getLearner(String classfier){
 		learner=(Classifier) c.newInstance();
 		
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		return learner;

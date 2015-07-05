@@ -3,6 +3,7 @@ package mimir.ctables
 import mimir.algebra._
 
 object CTAnalyzer {
+
   /**
    * Construct a boolean expression that evaluates whether the input 
    * expression is deterministic <b>for a given input row</b>.  
@@ -78,6 +79,62 @@ object CTAnalyzer {
                   )( 
                     Arith.makeAnd(_,_) 
                   )
+    }
+  }
+
+  //TODO check this
+  def compileVariance(exp: Expression): Expression = {
+    /*if(!CTables.isProbabilistic(exp))
+      exp
+    else*/
+      exp match {
+        case Not(child) => compileVariance(child)
+
+        case VGTerm((_,model),idx,args) => model.varianceExpr(idx, args)
+
+        case CaseExpression(wtClauses, eClause) => {
+          var wt = List[WhenThenClause]();
+          for(i <- wtClauses.indices){
+            val wclause = compileVariance(wtClauses(i).when)
+            val tclause = wtClauses(i).then match {
+              case Var(_) => IntPrimitive(0)
+              case _ => compileVariance(wtClauses(i).then)
+            }
+            wt ::= WhenThenClause(wclause, tclause)
+          }
+          val e = eClause match {
+            case Var(_) => IntPrimitive(0)
+            case _ => compileVariance(eClause)
+          }
+          CaseExpression(wt, e)
+        }
+
+        case Var(a) => Var(a)
+
+        case IsNullExpression(child, neg) => IsNullExpression(compileVariance(child), neg)
+      }
+  }
+
+  def compileConfidence(exp: Expression): Expression = {
+    exp match {
+      case Not(child) => compileConfidence(child)
+
+      case VGTerm((_,model),idx,args) => model.varianceExpr(idx, args)
+
+      case CaseExpression(wtClauses, eClause) => {
+        var wt = List[WhenThenClause]();
+        for(i <- wtClauses.indices){
+          val wclause = compileConfidence(wtClauses(i).when)
+          val tclause = compileConfidence(wtClauses(i).then)
+          wt ::= WhenThenClause(wclause, tclause)
+        }
+        val e = compileConfidence(eClause)
+        CaseExpression(wt, e)
+      }
+
+      case Var(a) => Var(a)
+
+      case IsNullExpression(child, neg) => IsNullExpression(compileVariance(child), neg)
     }
   }
 }

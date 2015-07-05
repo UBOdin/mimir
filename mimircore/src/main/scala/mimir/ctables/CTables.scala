@@ -3,7 +3,7 @@ package mimir.ctables
 import mimir.algebra._
 import mimir.algebra.Type._
 import mimir.Database
-import mimir.lenses.MissingValueLensBounds
+import mimir.lenses.{MissingValueVariance, MissingValueLensBounds}
 import mimir.util.ListUtils
 
 abstract class Model {
@@ -12,8 +12,10 @@ abstract class Model {
   def mostLikelyValue   (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
   def lowerBound        (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
   def upperBound        (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
+  def variance          (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
   def lowerBoundExpr    (idx: Int, args: List[Expression    ]):  Expression
   def upperBoundExpr    (idx: Int, args: List[Expression    ]):  Expression
+  def varianceExpr      (idx: Int, args: List[Expression    ]):  Expression
   def sample(seed: Long, idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
 }
 
@@ -31,10 +33,14 @@ case class VGTerm(
 
 object CTables 
 {
+
+
   /**
    * Default name for a condition column
    */
   def conditionColumn = "__MIMIR_CONDITION"
+
+  def confidenceColumn= "__MIMIR_CONFIDENCE"
 
   /**
    * Could the provided Expression be probabilistic?
@@ -45,6 +51,7 @@ object CTables
   expr match {
     case VGTerm(_, _, _) => true
     case Function(_, _) => true
+    case MissingValueVariance(_, _) => true
     case _ => expr.children.exists( isProbabilistic(_) )
   }
 
@@ -85,4 +92,5 @@ object CTables
         }
     }
   }
+
 }

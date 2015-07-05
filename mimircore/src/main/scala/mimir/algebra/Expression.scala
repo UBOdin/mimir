@@ -18,7 +18,7 @@ class RAException(msg: String) extends Exception(msg);
 object Type extends Enumeration {
   type T = Value
 
-  val TInt, TFloat, TDate, TString, TBool, TAny = Value
+  val TInt, TFloat, TDate, TString, TBool, TRowId, TAny = Value
 
   def toString(t: T) = t match {
     case TInt => "int"
@@ -26,6 +26,7 @@ object Type extends Enumeration {
     case TDate => "date"
     case TString => "string"
     case TBool => "bool"
+    case TRowId => "rowid"
     case TAny => throw new SQLException("Unable to produce string of type TAny");
   }
 
@@ -36,6 +37,7 @@ object Type extends Enumeration {
     case "date"   => Type.TDate
     case "string" => Type.TString
     case "bool"   => Type.TBool
+    case "rowid"  => Type.TRowId
   }
 }
 
@@ -73,6 +75,15 @@ case class IntPrimitive(v: Long)
 }
 case class StringPrimitive(v: String) 
   extends PrimitiveValue(TString)
+{
+  override def toString() = "'"+v.toString+"'"
+  def asLong: Long = java.lang.Long.parseLong(v)
+  def asDouble: Double = java.lang.Double.parseDouble(v)
+  def asString: String = v;
+  def payload: Object = v.asInstanceOf[Object];
+}
+case class RowIdPrimitive(v: String)
+  extends PrimitiveValue(TRowId)
 {
   override def toString() = "'"+v.toString+"'"
   def asLong: Long = java.lang.Long.parseLong(v)

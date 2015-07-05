@@ -137,7 +137,7 @@ object Eval
           } else {
 
             // If the when condition is deterministically false, then
-            // we strip the current clause out of the todo list and
+            // we strip the current clause out of the to-do list and
             // recur as normal.
             simplifyCase(wtSimplified, wtRest, eClause)
           }
