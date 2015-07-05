@@ -1,3 +1,0 @@
-CREATE TABLE R (A int, B int);
-
-SELECT COUNT(*) FROM R;
