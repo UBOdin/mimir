@@ -1,6 +1,8 @@
 package mimir.lenses;
 
 import java.sql._;
+import weka.classifiers.trees.J48
+
 import collection.JavaConversions._;
 import scala.util._;
 
@@ -77,11 +79,10 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
             new NoOpModel(t).asInstanceOf[SingleVarModel]
           } else {
             val m = new MissingValueModel(this);
-            data = 
-              InstanceQuery.retrieveInstances(this, results);
-            data.setClassIndex(idx);
+            data = InstanceQuery.retrieveInstances(this, results);
+            val classIndex = allKeys().indexOf(keysToBeCleaned.get(idx))
+            data.setClassIndex(classIndex);
             m.init(data);
-
             m.asInstanceOf[SingleVarModel];
           }
         })
@@ -188,12 +189,7 @@ class MissingValueModel(lens: MissingValueLens)
       IntPrimitive(classes.maxBy(_._2)._2)
   }
   def variance(args: List[PrimitiveValue]) = {
-    val classes = classify(args(0))
-    val mean = classes.foldRight(0.0){(a, b) => b + (a._1 * a._2)}
-    val variance = classes.foldRight(0.0){
-      (a, b) => b + (a._2 - mean) * (a._2 - mean) * a._1
-    }
-    FloatPrimitive(variance)
+    FloatPrimitive(data.variance(data.classIndex()))
   }
   def lowerBoundExpr(args: List[Expression]) = {
       new MissingValueLensBounds(this, args, true)
