@@ -45,8 +45,19 @@ a:hover {
     overflow:                   auto;
 }
 
+#result_table th {
+    text-align:                 center;
+    text-decoration:            underline;
+}
+
+#result_table td {
+    text-align:                 center;
+}
+
 .non_deterministic_row {
-    color:                      rgba(255, 51, 51, 1);
+    border-top:                 rgba(255, 51, 51, 1) 2px dashed;
+    border-bottom:              rgba(255, 51, 51, 1) 2px dashed;
+    background:                 rgba(230, 230, 230, 1);
     cursor:                     pointer;
 }
 
