@@ -69,8 +69,8 @@ $( document ).ready(function() {
         animation: 'fade',
         delay: 200,
         content: $('<h5>Bounds</h5><h6>Minimum 1 Maximum 4<h6>'),
-        theme: 'tooltipster-shadow',
-        position: 'bottom',
+        theme: 'tooltipster-punk',
+        position: 'bottom-left',
         minWidth: 250,
     });
 
