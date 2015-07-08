@@ -1,28 +1,17 @@
 package mimir.lenses;
 
-import java.sql._;
-import weka.classifiers.trees.J48
+import java.sql._
 
-import collection.JavaConversions._;
+import mimir.{Analysis, Database}
+import mimir.algebra._
+import mimir.ctables._
+import moa.classifiers.Classifier
+import moa.core.InstancesHeader
+import weka.core.{DenseInstance, Instance, Instances}
+import weka.experiment.{DatabaseUtils, InstanceQuery, InstanceQueryAdapter}
+
+import scala.collection.JavaConversions._
 import scala.util._;
-
-import weka.core.DenseInstance;
-import weka.core.Instance;
-import weka.core.Instances;
-import weka.experiment.DatabaseUtils;
-import weka.experiment.InstanceQuery;
-import weka.experiment.InstanceQueryAdapter;
-import moa.classifiers.Classifier;
-import moa.core.InstancesHeader;
-import moa.streams.ArffFileStream;
-import moa.streams.InstanceStream;
-
-import mimir.Analysis; // Java code
-import mimir.ctables._;
-import mimir.{Database,Mimir};
-import mimir.algebra._;
-import mimir.util._;
-import mimir.exec._;
 
 class MissingValueLens(name: String, args: List[Expression], source: Operator) 
   extends Lens(name, args, source) 
@@ -63,7 +52,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
           } else {
              ProjectArg(k, Var(k))
           }
-        }).toList,
+        }),
       source
     )
   }
@@ -80,7 +69,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
           } else {
             val m = new MissingValueModel(this);
             data = InstanceQuery.retrieveInstances(this, results);
-            val classIndex = allKeys().indexOf(keysToBeCleaned.get(idx))
+            val classIndex = idx//allKeys().indexOf(keysToBeCleaned.get(idx))
             data.setClassIndex(classIndex);
             m.init(data);
             m.asInstanceOf[SingleVarModel];
@@ -106,23 +95,24 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
   }
 }
 
-case class MissingValueLensBounds(model: MissingValueModel, args: List[Expression], lowerBound: Boolean)
-  extends Proc(args)
-{
-  def get(args: List[PrimitiveValue]): PrimitiveValue =  {
-    if(lowerBound){ model.lowerBound(args) } else { model.upperBound(args) }
-  }
-  
-  def exprType(bindings: Map[String,Type.T]) = Type.TInt
-  def rebuild(c: List[Expression]) = 
-    new MissingValueLensBounds(model, c, lowerBound);
+object MissingValueAnalysisType extends Enumeration {
+  type MV = Value
+  val MOST_LIKELY, LOWER_BOUND, UPPER_BOUND, VARIANCE, CONFIDENCE = Value
 }
 
-case class MissingValueVariance(model: MissingValueModel, args: List[Expression])
+case class MissingValueAnalysis(model: MissingValueModel, args: List[Expression], analysisType: MissingValueAnalysisType.MV)
   extends Proc(args) {
-  def get(args: List[PrimitiveValue]): PrimitiveValue = model.variance(args)
+  def get(args: List[PrimitiveValue]): PrimitiveValue = {
+    analysisType match {
+      case MissingValueAnalysisType.VARIANCE => model.variance(args)
+      case MissingValueAnalysisType.CONFIDENCE => model.confidenceInterval(args)
+      case MissingValueAnalysisType.LOWER_BOUND => model.lowerBound(args)
+      case MissingValueAnalysisType.UPPER_BOUND => model.upperBound(args)
+      case MissingValueAnalysisType.MOST_LIKELY => model.mostLikelyValue(args)
+    }
+  }
   def exprType(bindings: Map[String,Type.T]) = Type.TInt
-  def rebuild(c: List[Expression]) = new MissingValueVariance(model, c)
+  def rebuild(c: List[Expression]) = new MissingValueAnalysis(model, c, analysisType)
 }
 
 class MissingValueModel(lens: MissingValueLens)
@@ -189,29 +179,59 @@ class MissingValueModel(lens: MissingValueLens)
       IntPrimitive(classes.maxBy(_._2)._2)
   }
   def variance(args: List[PrimitiveValue]) = {
-    FloatPrimitive(data.variance(data.classIndex()))
+    val classes = classify(args(0))
+    val totSum = classes.foldRight(0.0){(a, b) => b + a._1}
+    val mean = classes.foldRight(0.0){(a, b) => b + (a._1 * a._2 / totSum)}
+    val variance = classes.foldRight(0.0){
+      (a, b) => b + ((a._2) - mean) * ((a._2) - mean) * a._1/totSum
+    } / classes.size
+    FloatPrimitive(variance)
+  }
+  def confidenceInterval(args: List[PrimitiveValue]) = {
+    var samples = List[Double]()
+    var seed = 1
+    var sum = 0.0
+    var variance = 0.0
+    for( i <- 0 until 100) {
+      val sample = this.sample(seed, args).asDouble
+      sum += sample
+      samples ::= sample
+      seed += 1
+    }
+    val mean = sum/samples.size
+    for(i <- samples.indices){
+      variance += (samples(i) - mean) * (samples(i) - mean)
+    }
+    val conf = Math.sqrt(variance/samples.size-1) * 1.96
+    //TODO check this for 95% confidence level
+    FloatPrimitive(conf)
+  }
+  def mostLikelyExpr(args: List[Expression]) = {
+    new MissingValueAnalysis(this, args, MissingValueAnalysisType.MOST_LIKELY)
   }
   def lowerBoundExpr(args: List[Expression]) = {
-      new MissingValueLensBounds(this, args, true)
+      new MissingValueAnalysis(this, args, MissingValueAnalysisType.LOWER_BOUND)
   }
   def upperBoundExpr(args: List[Expression]) = {
-      new MissingValueLensBounds(this, args, false)
+    new MissingValueAnalysis(this, args, MissingValueAnalysisType.UPPER_BOUND)
   }
   def varianceExpr(args: List[Expression]) = {
-    new MissingValueVariance(this, args)
+    new MissingValueAnalysis(this, args, MissingValueAnalysisType.VARIANCE)
+  }
+  def confidenceExpr(args: List[Expression]) = {
+    new MissingValueAnalysis(this, args, MissingValueAnalysisType.CONFIDENCE)
   }
   def sample(seed: Long, args: List[PrimitiveValue]):  PrimitiveValue = {
-      val classes = classify(args(0));
-      val tot_cnt = classes.map(_._1).sum;
-      val pick = new Random(seed).nextInt() % tot_cnt
+      val classes = classify(args(0))
+      val tot_cnt = classes.map(_._1).sum
+      val pick = new Random(seed).nextInt(100) % tot_cnt
       val cumulative_counts = 
         classes.scanLeft(0.0)(
             ( cumulative, cnt_class ) => cumulative + cnt_class._1 
         )
-      val pick_idx: Int = cumulative_counts.indexWhere( pick < _ )
-      return IntPrimitive(classes(pick_idx)._2)
+      val pick_idx: Int = cumulative_counts.indexWhere( pick < _ ) - 1
+      IntPrimitive(classes(pick_idx)._2)
   }
-
 }
 // class MissingValueAnalysis(db: Database, idx: Int, ctx: MissingValueLens) extends CTAnalysis(db) {
 //   def varType: Type.T = Type.TInt

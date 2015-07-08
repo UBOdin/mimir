@@ -115,26 +115,30 @@ object CTAnalyzer {
       }
   }
 
-  def compileConfidence(exp: Expression): Expression = {
+  def compileConfidence(exp: Expression): (Expression, Expression) = {
     exp match {
       case Not(child) => compileConfidence(child)
 
-      case VGTerm((_,model),idx,args) => model.varianceExpr(idx, args)
+      case VGTerm((str,model),idx,args) =>
+        (Arithmetic(Arith.Sub, model.mostLikelyExpr(idx, args), model.confidenceExpr(idx, args)),
+          Arithmetic(Arith.Add, model.mostLikelyExpr(idx, args), model.confidenceExpr(idx, args)))
 
       case CaseExpression(wtClauses, eClause) => {
-        var wt = List[WhenThenClause]();
+        var wtmin = List[WhenThenClause]()
+        var wtmax = List[WhenThenClause]()
         for(i <- wtClauses.indices){
           val wclause = compileConfidence(wtClauses(i).when)
           val tclause = compileConfidence(wtClauses(i).then)
-          wt ::= WhenThenClause(wclause, tclause)
+          wtmin ::= WhenThenClause(wclause._1, tclause._1)
+          wtmax ::= WhenThenClause(wclause._2, tclause._2)
         }
         val e = compileConfidence(eClause)
-        CaseExpression(wt, e)
+        (CaseExpression(wtmin, e._1), CaseExpression(wtmax, e._2))
       }
 
-      case Var(a) => Var(a)
+      case Var(a) => (Var(a), Var(a))
 
-      case IsNullExpression(child, neg) => IsNullExpression(compileVariance(child), neg)
+      case nullExp @ IsNullExpression(child, neg) => (nullExp, nullExp)
     }
   }
 }

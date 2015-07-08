@@ -13,18 +13,24 @@ abstract class SingleVarModel(vt: Type.T) extends Model {
   def lowerBound(args: List[PrimitiveValue]): PrimitiveValue
   def upperBound(args: List[PrimitiveValue]): PrimitiveValue
   def variance(args: List[PrimitiveValue]): PrimitiveValue
+  def confidenceInterval(args: List[PrimitiveValue]): PrimitiveValue
+  def mostLikelyExpr(args: List[Expression]): Expression
   def lowerBoundExpr(args: List[Expression]): Expression
   def upperBoundExpr(args: List[Expression]): Expression
   def varianceExpr(args: List[Expression]): Expression
+  def confidenceExpr(args: List[Expression]): Expression
   def sample(seed: Long, args: List[PrimitiveValue]):  PrimitiveValue
 
   def mostLikelyValue(x:Int, args: List[PrimitiveValue]) = mostLikelyValue(args);
   def lowerBound(x: Int, args: List[PrimitiveValue]) = lowerBound(args)
   def upperBound(x: Int, args: List[PrimitiveValue]) = upperBound(args)
   def variance(x: Int, args: List[PrimitiveValue]) = variance(args)
+  def confidenceInterval(x: Int, args: List[PrimitiveValue]) = confidenceInterval(args)
+  def mostLikelyExpr(idx: Int, args: List[Expression]) = mostLikelyExpr(args)
   def lowerBoundExpr(x: Int, args: List[Expression]) = lowerBoundExpr(args)
   def upperBoundExpr(x: Int, args: List[Expression]) = upperBoundExpr(args)
   def varianceExpr(x: Int, args: List[Expression]) = varianceExpr(args)
+  def confidenceExpr(x: Int, args: List[Expression]) = confidenceExpr(args)
   def sample(seed: Long, x: Int, args: List[PrimitiveValue]) = sample(seed,args);
 }
 
@@ -39,14 +45,20 @@ case class JointSingleVarModel(vars: List[SingleVarModel]) extends Model {
     vars(idx).upperBound(args);
   def variance (idx: Int, args: List[PrimitiveValue]) =
     vars(idx).variance(args)
+  def confidenceInterval (idx: Int, args: List[PrimitiveValue]) =
+    vars(idx).confidenceInterval(args)
+  def mostLikelyExpr (idx: Int, args: List[Expression]) =
+    vars(idx).mostLikelyExpr(args)
   def lowerBoundExpr (idx: Int, args: List[Expression]) = 
-    vars(idx).lowerBoundExpr(args);
+    vars(idx).lowerBoundExpr(args)
   def upperBoundExpr (idx: Int, args: List[Expression]) = 
-    vars(idx).upperBoundExpr(args);
+    vars(idx).upperBoundExpr(args)
   def varianceExpr (idx: Int, args: List[Expression]) =
-    vars(idx).varianceExpr(args);
+    vars(idx).varianceExpr(args)
+  def confidenceExpr (idx: Int, args: List[Expression]) =
+    vars(idx).confidenceExpr(args)
   def sample(seed: Long, idx: Int, args: List[PrimitiveValue]) = 
-    vars(idx).sample(seed, args);
+    vars(idx).sample(seed, args)
 }
 
 object UniformDistribution extends SingleVarModel(Type.TFloat){
@@ -54,15 +66,19 @@ object UniformDistribution extends SingleVarModel(Type.TFloat){
     FloatPrimitive((args(0).asDouble + args(1).asDouble) / 2.0)
   def lowerBound(args: List[PrimitiveValue]) = args(0)
   def upperBound(args: List[PrimitiveValue]) = args(1)
-  def variance(args: List[PrimitiveValue]) ={
+  def variance(args: List[PrimitiveValue]) = {
     val b = upperBound(args).asDouble
     val a = lowerBound(args).asDouble
     FloatPrimitive(((b - a)*(b - a))/12.0)
   }
+  def confidenceInterval(args: List[PrimitiveValue]) = {
+    FloatPrimitive(0.0)
+  }
+  def mostLikelyExpr(args: List[Expression]) = args(0)
   def lowerBoundExpr(args: List[Expression]) = args(0)
   def upperBoundExpr(args: List[Expression]) = args(1)
-  //TODO check this
   def varianceExpr(args: List[Expression]) = args(0)
+  def confidenceExpr(args: List[Expression]) = args(0)
   def sample(seed: Long, args: List[PrimitiveValue]) = {
     val low  = args(0).asDouble
     val high = args(1).asDouble
@@ -75,8 +91,11 @@ case class NoOpModel(vt: Type.T) extends SingleVarModel(vt) {
   def lowerBound(args: List[PrimitiveValue]) = args(0)
   def upperBound(args: List[PrimitiveValue]) = args(0)
   def variance(args: List[PrimitiveValue]) = args(0)
+  def confidenceInterval(args: List[PrimitiveValue]) = args(0)
+  def mostLikelyExpr(args: List[Expression]) = args(0)
   def lowerBoundExpr(args: List[Expression]) = args(0)
   def upperBoundExpr(args: List[Expression]) = args(0)
   def varianceExpr(args: List[Expression]) = args(0)
+  def confidenceExpr(args: List[Expression]) = args(0)
   def sample(seed: Long, args: List[PrimitiveValue]) = args(0)
 }
