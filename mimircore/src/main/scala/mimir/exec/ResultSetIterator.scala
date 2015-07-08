@@ -25,7 +25,7 @@ class ResultSetIterator(src: ResultSet) extends ResultIterator
         case TInt => 
           () => {
             if(meta.getColumnName(i+1).equalsIgnoreCase("ROWID"))
-              new StringPrimitive(src.getString(i+1))
+              new RowIdPrimitive(src.getString(i+1))
             else
               new IntPrimitive(src.getLong(i+1))
           }

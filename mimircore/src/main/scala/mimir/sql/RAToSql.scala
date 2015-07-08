@@ -1,18 +1,15 @@
 package mimir.sql;
 
-import java.sql._;
-
-import net.sf.jsqlparser.statement.select.{SelectBody,PlainSelect,SelectExpressionItem,AllColumns,AllTableColumns,FromItem, SubJoin, SubSelect}
-import net.sf.jsqlparser.schema.Column;
-import net.sf.jsqlparser.expression.{DateValue, LongValue, DoubleValue, StringValue, Parenthesis, NullValue, BinaryExpression, Function, WhenClause}
+import mimir.Database
+import mimir.algebra._
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
-import net.sf.jsqlparser.expression.operators.relational.{EqualsTo,NotEqualsTo,GreaterThan,GreaterThanEquals,MinorThan,MinorThanEquals,ExpressionList}
+import net.sf.jsqlparser.expression.operators.relational.{EqualsTo, ExpressionList, GreaterThan, GreaterThanEquals, MinorThan, MinorThanEquals, NotEqualsTo}
+import net.sf.jsqlparser.expression.{BinaryExpression, DoubleValue, Function, LongValue, NullValue, Parenthesis, StringValue, WhenClause}
+import net.sf.jsqlparser.schema.Column
+import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, SelectBody, SelectExpressionItem, SubSelect}
 
-import collection.JavaConversions._;
-
-import mimir.algebra._;
-import mimir.Database;
+import scala.collection.JavaConversions._;
 
 class RAToSql(db: Database) {
   
@@ -124,6 +121,7 @@ class RAToSql(db: Database) {
       case IntPrimitive(v) => new LongValue(""+v)
       case StringPrimitive(v) => new StringValue("\'"+v+"\'")
       case FloatPrimitive(v) => new DoubleValue(""+v)
+      case RowIdPrimitive(v) => new StringValue("\'"+v+"\'")
       case BoolPrimitive(true) => 
         bin(new EqualsTo(), IntPrimitive(1), IntPrimitive(1))
       case BoolPrimitive(false) => 

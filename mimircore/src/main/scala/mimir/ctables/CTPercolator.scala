@@ -421,7 +421,7 @@ object CTPercolator {
         
         case Table(name, sch, metadata) =>
           if(force){
-            Table(name, sch, metadata ++ Map(("ROWID", Type.TString)))
+            Table(name, sch, metadata ++ Map(("ROWID", Type.TRowId)))
           } else {
             Table(name, sch, metadata)
           }

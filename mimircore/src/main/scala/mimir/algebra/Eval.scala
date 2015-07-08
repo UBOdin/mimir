@@ -76,7 +76,7 @@ object Eval
         }
         case Function(op, params) => {
           op match {
-            case "JOIN_ROWIDS" => new StringPrimitive(params.map(x => eval(x)).mkString("."))
+            case "JOIN_ROWIDS" => new RowIdPrimitive(params.map(x => eval(x)).mkString("."))
             case "__LIST_MIN" => new IntPrimitive(params.map(x => eval(x).asLong).min) // TODO Generalized Comparator
             case "__LIST_MAX" => new IntPrimitive(params.map(x => eval(x).asLong).max) // TODO Generalized Comparator
           }

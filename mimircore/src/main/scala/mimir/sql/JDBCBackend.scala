@@ -12,8 +12,8 @@ object JDBCUtils {
       case (java.sql.Types.INTEGER)  => Type.TInt
       case (java.sql.Types.DATE)     => Type.TDate
       case (java.sql.Types.VARCHAR |
-            java.sql.Types.ROWID |
             java.sql.Types.NULL)     => Type.TString
+      case (java.sql.Types.ROWID)    => Type.TRowId
     }
   }
 }

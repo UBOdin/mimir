@@ -194,6 +194,7 @@ object Arith extends Enumeration {
       case (TInt, TFloat) => TFloat
       case (TFloat, (TInt | TFloat)) => TFloat
       case (TString, TString) => TString
+      case (TRowId, TString) => TString
       case (TBool, TBool) => TBool
       case _ => 
         throw new TypeException(a, b, "Compat")
@@ -355,7 +356,7 @@ case class Comparison(op: Cmp.Op, lhs: Expression,
 case class Function(op: String, params: List[Expression]) extends Expression {
   def exprType(bindings: Map[String, Type.T]): T = {
     op match {
-      case "JOIN_ROWIDS" => bindings.get(params(0).toString).get
+      case "JOIN_ROWIDS" => TRowId
       case _ => bindings.get("__"+op+"()").get
     }
   }

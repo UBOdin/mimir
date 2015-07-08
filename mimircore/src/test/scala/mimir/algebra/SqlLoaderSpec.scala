@@ -86,7 +86,7 @@ object SqlLoaderSpec extends Specification with FileMatchers {
 		 				), Table("R", Map(("R_A", Type.TInt), 
 		 								  ("R_B", Type.TInt), 
 		 								  ("R_C", Type.TInt)), 
-		 							  Map( ("ROWID", Type.TString)
+		 							  Map( ("ROWID", Type.TRowId)
 		 				)))
 
 		 	;
