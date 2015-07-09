@@ -2,6 +2,27 @@ body {
     margin:                     0px;
 }
 
+ul {
+    list-style-position:        outside;
+    padding-left:               0px;
+    list-style:                 none;
+}
+
+.repair {
+    margin-bottom:              3px;
+}
+
+.repair:before {
+    position:               relative;
+    display:                inline-block;
+    font-family:            'Glyphicons Halflings';
+    font-size:              8px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    padding:                0 4px;
+    content:                "\e136";
+}
+
 a:hover {
     cursor:                     pointer;
 }
@@ -118,4 +139,20 @@ td:hover {
 
 .close_x:hover {
     color:                      #999;
+}
+
+.tooltip_table {
+    margin-bottom:              0px;
+    font-size:                  12px;
+}
+
+.tooltip_table>tbody>tr>td, .tooltip_table>tbody>tr>th,
+.tooltip_table>tfoot>tr>td, .tooltip_table>tfoot>tr>th,
+.tooltip_table>thead>tr>td, .tooltip_table>thead>tr>th {
+
+    border:                     none;
+}
+
+.number {
+    color:                      green;
 }

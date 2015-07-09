@@ -66,14 +66,21 @@ $( document ).ready(function() {
         $(this).parent().hide(100);
     });
 
-    $(".non_deterministic_cell").tooltipster({
-        animation: 'fade',
-        delay: 10,
-        content: $('<h5>Bounds</h5><h6>Minimum 1 Maximum 4<h6>'),
-        theme: 'tooltipster-shadow',
-        position: 'bottom',
-        minWidth: 250,
-        trigger: 'click',
+
+
+    $(".non_deterministic_cell").one("click", function(e) {
+        $(this).tooltipster({
+            animation: 'fade',
+            delay: 10,
+            content: $(generateTooltipValues($(this))),
+            theme: 'tooltipster-shadow',
+            position: 'bottom',
+            minWidth: 350,
+            maxWidth: 350,
+            trigger: 'click',
+        });
+
+        $(this).click();
     });
 
     $("[name='db'").val($("#curr_db").html());
@@ -91,3 +98,45 @@ $( document ).ready(function() {
     };
 
 });
+
+function generateTooltipValues(element) {
+
+    var value = element.html();
+    var bounds = [value, value];
+    var variance = value;
+    var conf_int = value;
+    var causes = ['Table R has missing value for attribute \'B\'', 'Another cause'];
+
+    var tooltip_template = '<table class="table tooltip_table">'+
+                                      '<tbody>'+
+                                          '<tr>'+
+                                              '<th scope="row">Bounds</th>'+
+                                              '<td class="number">'+ bounds[0] +' - '+ bounds[1] +'</td>'+
+                                          '</tr>'+
+                                          '<tr>'+
+                                              '<th scope="row">Variance</th>'+
+                                              '<td class="number">'+ variance +'</td>'+
+                                          '</tr>'+
+                                          '<tr>'+
+                                              '<th scope="row">Confidence Interval</th>'+
+                                              '<td class="number">'+ conf_int +'</td>'+
+                                          '</tr>'+
+                                          '<tr>'+
+                                              '<th scope="row">Causes</th>'+
+                                              '<td><ul>'+ listify(causes) +'</ul></td>'+
+                                          '</tr>'+
+                                      '</tbody>'+
+                                  '</table>';
+
+    return tooltip_template;
+}
+
+function listify(causes) {
+    var i;
+    var result = '';
+    for(i = 0; i<causes.length; i++) {
+        result += '<li class="repair">'+ causes[i] +'</li>'
+    }
+
+    return result;
+}
