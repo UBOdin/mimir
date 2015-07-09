@@ -67,6 +67,10 @@ a:hover {
     cursor:                     pointer;
 }
 
+.non_deterministic_cell:hover {
+    background-color:           #eee;
+}
+
 .notifications {
     padding:                    10px 19px;
 }

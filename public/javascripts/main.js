@@ -67,11 +67,12 @@ $( document ).ready(function() {
 
     $(".non_deterministic_cell").tooltipster({
         animation: 'fade',
-        delay: 200,
+        delay: 10,
         content: $('<h5>Bounds</h5><h6>Minimum 1 Maximum 4<h6>'),
-        theme: 'tooltipster-punk',
-        position: 'bottom-left',
+        theme: 'tooltipster-shadow',
+        position: 'bottom',
         minWidth: 250,
+        trigger: 'click',
     });
 
     $("[name='db'").val($("#curr_db").html());

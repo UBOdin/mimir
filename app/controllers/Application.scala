@@ -1,12 +1,9 @@
 package controllers
 
 import java.io.File
-import java.nio.file.Path
 
-import play.api._
+import mimir.{WebAPI, WebResult, WebStringResult}
 import play.api.mvc._
-import mimir.{WebAPI, WebQueryResult}
-import play.api.Play.current
 
 class Application extends Controller {
 
@@ -16,38 +13,32 @@ class Application extends Controller {
     val webAPI = new WebAPI()
     webAPI.configure(new Array[String](0))
 
-    val result = new WebQueryResult(false, "Query results show up here...", null)
-    val ret = Ok(views.html.index("", webAPI.dbName, result, webAPI))
-    webAPI.close()
-    ret
+    val result: WebResult = new WebStringResult("Query results show up here...")
 
+    generateResponse(webAPI, "", result)
   }
 
   def input(query: String, db: String) = Action {
     val webAPI = new WebAPI()
-    var result: WebQueryResult = null
+    var result: WebResult = null
     webAPI.configure(Array("--db", db))
 
     if(!query.equals("")) {
       result = webAPI.handleStatement(query)
     }
     else {
-      result = new WebQueryResult(false, "Working database changed to "+db, null)
+      result = new WebStringResult("Working database changed to "+db)
     }
 
-    val ret = Ok(views.html.index(query, db, result, webAPI))
-    webAPI.close()
-    ret
+    generateResponse(webAPI, query, result)
   }
 
   def createDB(db: String) = Action {
     val webAPI = new WebAPI()
     webAPI.configure(Array("--db", db, "--init"))
-    val result = new WebQueryResult(false, "Database "+db+" successfully created.", null)
+    val result: WebResult = new WebStringResult("Database "+db+" successfully created.")
 
-    val ret = Ok(views.html.index("", db, result, webAPI))
-    webAPI.close()
-    ret
+    generateResponse(webAPI, "", result)
   }
 
   def loadTable() = Action(parse.multipartFormData) { request =>
@@ -64,10 +55,14 @@ class Application extends Controller {
       newFile.delete()
     }
 
+    val result: WebResult = new WebStringResult("CSV file loaded.")
 
-    val result = new WebQueryResult(false, "CSV file loaded.", null)
-    val ret = Ok(views.html.index("", webAPI.dbName, result, webAPI))
+    generateResponse(webAPI, "", result)
+  }
+
+  private def generateResponse(webAPI: WebAPI, query: String, result: WebResult): Result = {
+    val response: Result = Ok(views.html.index(webAPI, query, result))
     webAPI.close()
-    ret
+    return response
   }
 }

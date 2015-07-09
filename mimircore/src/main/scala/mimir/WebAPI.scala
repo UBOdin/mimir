@@ -44,9 +44,9 @@ class WebAPI {
     }
   }
 
-  def handleStatement(query: String): WebQueryResult = {
+  def handleStatement(query: String): WebResult = {
     if(db == null) {
-      new WebQueryResult(false, "Database is not configured properly", null)
+      new WebStringResult("Database is not configured properly")
     }
 
     val source = new StringReader(query)
@@ -58,18 +58,18 @@ class WebAPI {
         handleSelect(stmt.asInstanceOf[Select])
       } else if(stmt.isInstanceOf[CreateLens]) {
         db.createLens(stmt.asInstanceOf[CreateLens])
-        new WebQueryResult(false, "Lens created successfully.", null)
+        new WebStringResult("Lens created successfully.")
       } else if(stmt.isInstanceOf[Explain]) {
         handleExplain(stmt.asInstanceOf[Explain])
       } else {
         db.update(stmt.toString())
-        new WebQueryResult(false, "Database updated.", null)
+        new WebStringResult("Database updated.")
       }
 
     } catch {
       case e: Throwable => {
         e.printStackTrace()
-        new WebQueryResult(false, "Command Ignored\n\n"+e.getMessage, null)
+        new WebStringResult("Command Ignored\n\n"+e.getMessage)
       }
     }
 
@@ -83,10 +83,10 @@ class WebAPI {
     val wIter = db.webDump(results)
     results.close()
 
-    new WebQueryResult(true, null, wIter)
+    new WebQueryResult(wIter)
   }
 
-  private def handleExplain(explain: Explain): WebQueryResult = {
+  private def handleExplain(explain: Explain): WebStringResult = {
     val raw = db.convert(explain.getSelectBody())._1;
 
     val res = "------ Raw Query ------\n"+
@@ -94,7 +94,7 @@ class WebAPI {
       "--- Optimized Query ---\n"+
       db.optimize(raw).toString
 
-    new WebQueryResult(false, res, null)
+    new WebStringResult(res)
   }
 
   def getAllTables(): List[String] = {
@@ -141,18 +141,6 @@ class WebAPI {
   }
 }
 
-
-
-class WebQueryResult(sResult: Boolean,
-                  rString: String,
-                  wIterator: WebIterator) {
-
-  val selectResult = sResult
-  val resultString = rString
-  val webIterator = wIterator
-
-}
-
 class WebIterator(h: List[String],
                   d: List[(List[String], Boolean)],
                   mR: Boolean) {
@@ -161,4 +149,16 @@ class WebIterator(h: List[String],
   val data = d
   val missingRows = mR
 
+}
+
+abstract class WebResult {
+
+}
+
+case class WebStringResult(string: String) extends WebResult {
+  val result = string
+}
+
+case class WebQueryResult(webIterator: WebIterator) extends WebResult {
+  val result = webIterator
 }

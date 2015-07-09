@@ -1,4 +1,6 @@
-@(query: String, db: String, result: mimir.WebQueryResult, webAPI: mimir.WebAPI)
+@(webAPI: mimir.WebAPI, query: String, result: mimir.WebResult)
+
+@import mimir.{WebQueryResult, WebStringResult}
 
 <html lang="en">
 <head>
@@ -87,16 +89,15 @@
             <div id="query_div">
                 <form id="query_form" action="mimirDB" method="GET">
                     <textarea id="query_textarea" name="query" placeholder="Enter query here..." spellcheck="false">@query</textarea>
-                    <input type="hidden" id="db_field" name="db" value="@db">
+                    <input type="hidden" id="db_field" name="db" value="@webAPI.dbName">
                     <input type="submit" class="btn btn-primary" id="query_btn" value="Query">
                 </form>
             </div>
         </div>
         <div class="result">
-            @if(result.selectResult) {
-                @tableGenerator(result.webIterator)
-            } else {
-                <pre>@result.resultString</pre>
+            @result match {
+                case WebQueryResult(iter) => { @tableGenerator(iter) }
+                case WebStringResult(string) => { <pre>@string</pre> }
             }
         </div>
     </div>
