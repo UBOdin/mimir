@@ -44,7 +44,8 @@ $( document ).ready(function() {
             alert("A database with the name "+db+" already exists");
         }
         else {
-            window.location.href = "/createDB?db="+db;
+            $("#create_db_field").val(db);
+            $("#create_db_form").submit();
         }
     });
 

@@ -18,7 +18,11 @@ class Application extends Controller {
     generateResponse(webAPI, "", result)
   }
 
-  def input(query: String, db: String) = Action {
+  def query = Action { request =>
+    val form = request.body.asFormUrlEncoded
+    val query = form.get("query")(0)
+    val db = form.get("db")(0)
+
     val webAPI = new WebAPI()
     var result: WebResult = null
     webAPI.configure(Array("--db", db))
@@ -33,7 +37,10 @@ class Application extends Controller {
     generateResponse(webAPI, query, result)
   }
 
-  def createDB(db: String) = Action {
+  def createDB = Action { request =>
+    val form = request.body.asFormUrlEncoded
+    val db = form.get("new_db")(0)
+
     val webAPI = new WebAPI()
     webAPI.configure(Array("--db", db, "--init"))
     val result: WebResult = new WebStringResult("Database "+db+" successfully created.")
@@ -41,7 +48,7 @@ class Application extends Controller {
     generateResponse(webAPI, "", result)
   }
 
-  def loadTable() = Action(parse.multipartFormData) { request =>
+  def loadTable = Action(parse.multipartFormData) { request =>
     val webAPI = new WebAPI()
     val db = request.body.dataParts("db")(0)
 

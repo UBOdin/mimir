@@ -79,7 +79,7 @@
             <div class="close_btn"><span class="close_x">&#10006;</span></div>
         </div>
         <div id="drop_area">
-            <form action="/loadtable" class="dropzone" id="myAwesomeDropzone">
+            <form action="loadTable" class="dropzone" id="myAwesomeDropzone">
                 <div class="dz-message"><h4>Drag and drop .csv files here to load them into the database</h4></div>
                 <input type="hidden" name="db" value=""/>
             </form>
@@ -87,7 +87,7 @@
         </div>
         <div class="well" id="top_area">
             <div id="query_div">
-                <form id="query_form" action="mimirDB" method="GET">
+                <form id="query_form" action="queryDB" method="POST">
                     <textarea id="query_textarea" name="query" placeholder="Enter query here..." spellcheck="false">@query</textarea>
                     <input type="hidden" id="db_field" name="db" value="@webAPI.dbName">
                     <input type="submit" class="btn btn-primary" id="query_btn" value="Query">
@@ -100,6 +100,9 @@
                 case WebStringResult(string) => { <pre>@string</pre> }
             }
         </div>
+        <form id="create_db_form" class="hidden" action="createDB" method="POST">
+            <input type="hidden" id="create_db_field" name="new_db" value="">
+        </form>
     </div>
 </div>
 <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->

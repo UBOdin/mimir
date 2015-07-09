@@ -69,6 +69,8 @@ class WebAPI {
     } catch {
       case e: Throwable => {
         e.printStackTrace()
+        println("\n\n=================================\n\n")
+
         new WebStringResult("Command Ignored\n\n"+e.getMessage)
       }
     }
