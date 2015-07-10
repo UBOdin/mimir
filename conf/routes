@@ -6,6 +6,8 @@
 GET     /                           controllers.Application.index
 POST    /createDB                   controllers.Application.createDB
 POST    /queryDB                    controllers.Application.query
+GET     /queryDB                    controllers.Application.queryGet(query, db)
+GET     /queryjson                  controllers.Application.queryJson(query, db)
 POST    /loadTable                  controllers.Application.loadTable
 
 # Map static resources from the /public folder to the /assets URL path

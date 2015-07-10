@@ -2,12 +2,26 @@ package controllers
 
 import java.io.File
 
-import mimir.{WebAPI, WebResult, WebStringResult}
+import mimir.{WebAPI, WebResult, WebQueryResult, WebStringResult}
 import play.api.mvc._
+import play.api.libs.json._
 
 class Application extends Controller {
 
+  implicit val WebStringResultWrites = new Writes[WebStringResult] {
+    def writes(webStringResult: WebStringResult) = Json.obj(
+      "result" -> webStringResult.result
+    )
+  }
 
+  implicit val WebQueryResultWrites = new Writes[WebQueryResult] {
+    def writes(webQueryResult: WebQueryResult) = Json.obj(
+      "headers" -> webQueryResult.webIterator.header,
+      "data" -> webQueryResult.webIterator.data.map(x => x._1),
+      "rowValidity" -> webQueryResult.webIterator.data.map(x => x._2),
+      "missingRows" -> webQueryResult.webIterator.missingRows
+    )
+  }
 
   def index = Action {
     val webAPI = new WebAPI()
@@ -35,6 +49,36 @@ class Application extends Controller {
     }
 
     generateResponse(webAPI, query, result)
+  }
+
+  def queryGet(query: String, db: String) = Action {
+
+    val webAPI = new WebAPI()
+    var result: WebResult = null
+    webAPI.configure(Array("--db", db))
+
+    if(!query.equals("")) {
+      result = webAPI.handleStatement(query)
+    }
+    else {
+      result = new WebStringResult("Working database changed to "+db)
+    }
+
+    generateResponse(webAPI, query, result)
+  }
+
+  def queryJson(query: String, db: String) = Action {
+
+    val webAPI = new WebAPI()
+    var result: WebResult = null
+    webAPI.configure(Array("--db", db))
+
+    result = webAPI.handleStatement(query)
+
+    result match {
+      case x: WebStringResult => Ok(Json.toJson(x.asInstanceOf[WebStringResult]))
+      case x: WebQueryResult  => Ok(Json.toJson(x.asInstanceOf[WebQueryResult]))
+    }
   }
 
   def createDB = Action { request =>

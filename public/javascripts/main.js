@@ -72,7 +72,61 @@ $( document ).ready(function() {
         $(this).tooltipster({
             animation: 'fade',
             delay: 10,
-            content: $(generateTooltipValues($(this))),
+            contentAsHTML: 'true',
+            functionInit: function(origin, content) {
+
+            		var col = origin.parents('table').find('th').eq(origin.prevAll().length).text();
+                    var row = origin.parent().parent().children().index(origin.parent()) + 1;
+                    row = "'"+row+"'";
+
+                    var value = 10;
+                    var bounds = [];
+                    var variance = value;
+                    var conf_int = value;
+                    var causes = ['Table R has missing value for attribute \'B\'', 'Another cause'];
+
+                    if (content == null) {
+
+                        $.ajax({
+                            type: 'GET',
+                            url: 'queryjson?query=SELECT BOUNDS('+col+'), VAR('+col+'), CONF('+col+') FROM SANE_R WHERE ROWID = '+row+';&db=debug.db',
+                            success: function(res) {
+                                bounds[0] = res.data[0][0];
+                                bounds[1] = res.data[0][1];
+                                variance = res.data[0][2];
+                                conf_int = res.data[0][3];
+
+                                var tooltip_template = '<table class="table tooltip_table">'+
+                                                          '<tbody>'+
+                                                              '<tr>'+
+                                                                  '<th scope="row">Bounds</th>'+
+                                                                  '<td class="number">'+ bounds[0] +' - '+ bounds[1] +'</td>'+
+                                                              '</tr>'+
+                                                              '<tr>'+
+                                                                  '<th scope="row">Variance</th>'+
+                                                                  '<td class="number">'+ variance +'</td>'+
+                                                              '</tr>'+
+                                                              '<tr>'+
+                                                                  '<th scope="row">Confidence Interval</th>'+
+                                                                  '<td class="number">'+ conf_int +'</td>'+
+                                                              '</tr>'+
+                                                              '<tr>'+
+                                                                  '<th scope="row">Causes</th>'+
+                                                                  '<td><ul>'+ listify(causes) +'</ul></td>'+
+                                                              '</tr>'+
+                                                          '</tbody>'+
+                                                      '</table>';
+                                origin.tooltipster('content', tooltip_template);
+                            }
+                        });
+
+                        // this returned string will overwrite the content of the tooltip for the time being
+                        return 'Loading...';
+                    }
+                    else {
+                        // return nothing : the initialization continues normally with its content unchanged.
+                    }
+                },
             theme: 'tooltipster-shadow',
             position: 'bottom',
             minWidth: 350,
@@ -98,38 +152,6 @@ $( document ).ready(function() {
     };
 
 });
-
-function generateTooltipValues(element) {
-
-    var value = element.html();
-    var bounds = [value, value];
-    var variance = value;
-    var conf_int = value;
-    var causes = ['Table R has missing value for attribute \'B\'', 'Another cause'];
-
-    var tooltip_template = '<table class="table tooltip_table">'+
-                                      '<tbody>'+
-                                          '<tr>'+
-                                              '<th scope="row">Bounds</th>'+
-                                              '<td class="number">'+ bounds[0] +' - '+ bounds[1] +'</td>'+
-                                          '</tr>'+
-                                          '<tr>'+
-                                              '<th scope="row">Variance</th>'+
-                                              '<td class="number">'+ variance +'</td>'+
-                                          '</tr>'+
-                                          '<tr>'+
-                                              '<th scope="row">Confidence Interval</th>'+
-                                              '<td class="number">'+ conf_int +'</td>'+
-                                          '</tr>'+
-                                          '<tr>'+
-                                              '<th scope="row">Causes</th>'+
-                                              '<td><ul>'+ listify(causes) +'</ul></td>'+
-                                          '</tr>'+
-                                      '</tbody>'+
-                                  '</table>';
-
-    return tooltip_template;
-}
 
 function listify(causes) {
     var i;

@@ -9,6 +9,7 @@ import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
 
 import scala.collection.mutable.ListBuffer
+import scala.util.parsing.json.JSONObject
 
 /**
  * Created by arindam on 6/29/15.
@@ -154,13 +155,23 @@ class WebIterator(h: List[String],
 }
 
 abstract class WebResult {
-
+  def toJson(): JSONObject
 }
 
 case class WebStringResult(string: String) extends WebResult {
   val result = string
+
+  def toJson() = {
+    new JSONObject(Map("result" -> result))
+  }
 }
 
 case class WebQueryResult(webIterator: WebIterator) extends WebResult {
   val result = webIterator
+
+  def toJson() = {
+    new JSONObject(Map("header" -> webIterator.header,
+                        "data" -> webIterator.data,
+                        "missingRows" -> webIterator.missingRows))
+  }
 }
