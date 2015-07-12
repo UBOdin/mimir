@@ -156,3 +156,7 @@ td:hover {
 .number {
     color:                      green;
 }
+
+.rowid_col {
+    display:                    none;
+}

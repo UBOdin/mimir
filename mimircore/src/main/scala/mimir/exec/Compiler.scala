@@ -2,11 +2,11 @@ package mimir.exec
 
 ;
 
-import java.sql._;
-import mimir.sql._;
-import mimir.algebra._;
+import java.sql._
+
+import mimir.Database
+import mimir.algebra._
 import mimir.ctables._;
-import mimir.Database;
 
 class Compiler(db: Database) {
 

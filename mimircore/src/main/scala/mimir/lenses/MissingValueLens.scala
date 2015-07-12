@@ -69,7 +69,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
           } else {
             val m = new MissingValueModel(this);
             data = InstanceQuery.retrieveInstances(this, results);
-            val classIndex = idx//allKeys().indexOf(keysToBeCleaned.get(idx))
+            val classIndex = allKeys().indexOf(keysToBeCleaned.get(idx))
             data.setClassIndex(classIndex);
             m.init(data);
             m.asInstanceOf[SingleVarModel];
@@ -202,7 +202,7 @@ class MissingValueModel(lens: MissingValueLens)
     for(i <- samples.indices){
       variance += (samples(i) - mean) * (samples(i) - mean)
     }
-    val conf = Math.sqrt(variance/samples.size-1) * 1.96
+    val conf = Math.sqrt(variance/samples.size) * 1.96
     //TODO check this for 95% confidence level
     FloatPrimitive(conf)
   }

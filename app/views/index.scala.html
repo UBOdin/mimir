@@ -87,7 +87,7 @@
         </div>
         <div class="well" id="top_area">
             <div id="query_div">
-                <form id="query_form" action="queryDB" method="GET">
+                <form id="query_form" action="queryDB" method="POST">
                     <textarea id="query_textarea" name="query" placeholder="Enter query here..." spellcheck="false">@query</textarea>
                     <input type="hidden" id="db_field" name="db" value="@webAPI.dbName">
                     <input type="submit" class="btn btn-primary" id="query_btn" value="Query">

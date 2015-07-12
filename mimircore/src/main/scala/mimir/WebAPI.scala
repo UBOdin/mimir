@@ -2,6 +2,7 @@ package mimir
 
 import java.io.{File, StringReader}
 
+import mimir.ctables.CTPercolator
 import mimir.exec.ResultSetIterator
 import mimir.parser.MimirJSqlParser
 import mimir.sql.{CreateLens, Explain, JDBCBackend}
@@ -80,7 +81,7 @@ class WebAPI {
 
   private def handleSelect(sel: Select): WebQueryResult = {
     val raw = db.convert(sel)
-    val results = db.query(raw)
+    val results = db.query(CTPercolator.propagateRowIDs(raw, true))
 
     results.open()
     val wIter = db.webDump(results)

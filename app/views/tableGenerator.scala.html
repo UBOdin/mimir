@@ -9,18 +9,21 @@
 <table class="table" id="result_table">
     <thead>
         <tr>
-            @webIter.header.map{ x => <th>@x</th> }
+            <th class="rowid_col">@webIter.header.head</th>
+            @webIter.header.tail.map{ x => <th>@x</th> }
         </tr>
     </thead>
     <tbody>
         @for((l, c) <- webIter.data) {
             @if(c) {
                 <tr class="deterministic_row">
-                    @l.map{x => @if(x.endsWith("*")) { <td class="non_deterministic_cell">@x.substring(0, x.length() - 1)</td> } else { <td>@x</td> }}
+                    <td class="rowid_col">@l.head</td>
+                    @l.tail.map{x => @if(x.endsWith("*")) { <td class="non_deterministic_cell">@x.substring(0, x.length() - 1)</td> } else { <td>@x</td> }}
                 </tr>
             } else {
                 <tr class="non_deterministic_row">
-                    @l.map{x => @if(x.endsWith("*")) { <td class="non_deterministic_cell">@x.substring(0, x.length() - 1)</td> } else { <td>@x</td> }}
+                    <td class="rowid_col">@l.head</td>
+                    @l.tail.map{x => @if(x.endsWith("*")) { <td class="non_deterministic_cell">@x.substring(0, x.length() - 1)</td> } else { <td>@x</td> }}
                 </tr>
             }
         }

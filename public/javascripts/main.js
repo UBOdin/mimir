@@ -76,25 +76,26 @@ $( document ).ready(function() {
             functionInit: function(origin, content) {
 
             		var col = origin.parents('table').find('th').eq(origin.prevAll().length).text();
-                    var row = origin.parent().parent().children().index(origin.parent()) + 1;
-                    row = "'"+row+"'";
+                    var row = origin.parent().children(".rowid_col").html();
+                    var query = $("#query_textarea").val();
+                    var table = extractTable(query);
 
-                    var value = 10;
                     var bounds = [];
-                    var variance = value;
-                    var conf_int = value;
+                    var variance;
+                    var conf_int = [];
                     var causes = ['Table R has missing value for attribute \'B\'', 'Another cause'];
 
                     if (content == null) {
 
                         $.ajax({
                             type: 'GET',
-                            url: 'queryjson?query=SELECT BOUNDS('+col+'), VAR('+col+'), CONF('+col+') FROM SANE_R WHERE ROWID = '+row+';&db=debug.db',
+                            url: 'queryjson?query=SELECT BOUNDS('+col+'), VAR('+col+'), CONF('+col+') FROM '+table+' WHERE ROWID = '+row+';&db=debug.db',
                             success: function(res) {
-                                bounds[0] = res.data[0][0];
-                                bounds[1] = res.data[0][1];
-                                variance = res.data[0][2];
-                                conf_int = res.data[0][3];
+                                bounds[0] = res.data[0][1];
+                                bounds[1] = res.data[0][2];
+                                variance = res.data[0][3];
+                                conf_int[0] = res.data[0][4];
+                                conf_int[1] = res.data[0][5];
 
                                 var tooltip_template = '<table class="table tooltip_table">'+
                                                           '<tbody>'+
@@ -108,7 +109,7 @@ $( document ).ready(function() {
                                                               '</tr>'+
                                                               '<tr>'+
                                                                   '<th scope="row">Confidence Interval</th>'+
-                                                                  '<td class="number">'+ conf_int +'</td>'+
+                                                                  '<td class="number">'+ conf_int[0] + ' - '+ conf_int[1] +'</td>'+
                                                               '</tr>'+
                                                               '<tr>'+
                                                                   '<th scope="row">Causes</th>'+
@@ -161,4 +162,8 @@ function listify(causes) {
     }
 
     return result;
+}
+
+function extractTable(query) {
+    return query.match(/FROM[\s]+(\w+)(\s*,\s*\w+)*/i)[0].substring(4).trim();
 }
