@@ -77,7 +77,7 @@ $( document ).ready(function() {
 
             		var col = origin.parents('table').find('th').eq(origin.prevAll().length).text();
                     var row = origin.parent().children(".rowid_col").html();
-                    var query = $("#query_textarea").val();
+                    var query = $("#query_textarea").val().replace(";","");
                     var table = extractTable(query);
 
                     var bounds = [];
@@ -89,7 +89,7 @@ $( document ).ready(function() {
 
                         $.ajax({
                             type: 'GET',
-                            url: 'queryjson?query=SELECT BOUNDS('+col+'), VAR('+col+'), CONF('+col+') FROM '+table+' WHERE ROWID = '+row+';&db=debug.db',
+                            url: 'queryjson?query=SELECT BOUNDS('+col+'), VAR('+col+'), CONF('+col+') FROM ('+query+') AS TEMP WHERE ROWID = '+row+';&db=debug.db',
                             success: function(res) {
                                 bounds[0] = res.data[0][1];
                                 bounds[1] = res.data[0][2];
