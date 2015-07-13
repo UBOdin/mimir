@@ -51,7 +51,7 @@ $( document ).ready(function() {
 
     $("#result_table").colResizable( {
         liveDrag: true,
-        minWidth: 80
+        minWidth: 20
     });
 
     $("#about_btn").on("click", function() {
@@ -67,10 +67,9 @@ $( document ).ready(function() {
     });
 
 
-
     $(".non_deterministic_cell").one("click", function(e) {
         $(this).tooltipster({
-            animation: 'fade',
+            animation: 'grow',
             delay: 10,
             contentAsHTML: 'true',
             functionInit: function(origin, content) {
@@ -78,7 +77,6 @@ $( document ).ready(function() {
             		var col = origin.parents('table').find('th').eq(origin.prevAll().length).text();
                     var row = origin.parent().children(".rowid_col").html();
                     var query = $("#query_textarea").val().replace(";","");
-                    var table = extractTable(query);
 
                     var bounds = [];
                     var variance;
@@ -138,7 +136,21 @@ $( document ).ready(function() {
         $(this).click();
     });
 
-    $("[name='db'").val($("#curr_db").html());
+    $(".non_deterministic_row").one("click", function(e) {
+            $(this).tooltipster({
+                animation: 'grow',
+                delay: 10,
+                content: '<h5>Confidence</h5>',
+                contentAsHTML: 'true',
+                theme: 'tooltipster-shadow',
+                position: 'top-right',
+                minWidth: 200,
+                maxWidth: 350,
+                trigger: 'click',
+            });
+
+            $(this).click();
+        });
 
     Dropzone.options.myAwesomeDropzone = {
       maxFilesize: 2, // MB
@@ -162,8 +174,4 @@ function listify(causes) {
     }
 
     return result;
-}
-
-function extractTable(query) {
-    return query.match(/FROM[\s]+(\w+)(\s*,\s*\w+)*/i)[0].substring(4).trim();
 }

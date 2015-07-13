@@ -76,10 +76,13 @@ a:hover {
 }
 
 .non_deterministic_row {
-    border-top:                 rgba(255, 51, 51, 1) 2px dashed;
-    border-bottom:              rgba(255, 51, 51, 1) 2px dashed;
     background:                 rgba(230, 230, 230, 1);
     cursor:                     pointer;
+
+}
+
+.non_deterministic_row:hover {
+    background-color:           #ddd;
 }
 
 .non_deterministic_cell {
@@ -159,4 +162,19 @@ td:hover {
 
 .rowid_col {
     display:                    none;
+}
+
+.row_selector {
+    width:                      10px;
+    background-color:           #999;
+    border:                     0px!important;
+    cursor:                     pointer;
+}
+
+.deterministic_row>.row_selector {
+    background-color:           #449d44;
+}
+
+.non_deterministic_row>.row_selector {
+    background-color:           #c9302c;
 }
