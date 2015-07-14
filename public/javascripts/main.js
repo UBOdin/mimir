@@ -140,7 +140,7 @@ $( document ).ready(function() {
             $(this).tooltipster({
                 animation: 'grow',
                 delay: 10,
-                content: '<h5>Confidence</h5>',
+                content: '<b>Confidence</b>',
                 contentAsHTML: 'true',
                 theme: 'tooltipster-shadow',
                 position: 'top-right',

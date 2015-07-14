@@ -13,14 +13,14 @@ ul {
 }
 
 .repair:before {
-    position:               relative;
-    display:                inline-block;
-    font-family:            'Glyphicons Halflings';
-    font-size:              8px;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    padding:                0 4px;
-    content:                "\e136";
+    position:                   relative;
+    display:                    inline-block;
+    font-family:                'Glyphicons Halflings';
+    font-size:                  8px;
+    -webkit-font-smoothing:     antialiased;
+    -moz-osx-font-smoothing:    grayscale;
+    padding:                    0 4px;
+    content:                    "\e136";
 }
 
 a:hover {
@@ -76,23 +76,23 @@ a:hover {
 }
 
 .non_deterministic_row {
-    background:                 rgba(230, 230, 230, 1);
+    background:                 #ddd;
     cursor:                     pointer;
 
 }
 
 .non_deterministic_row:hover {
-    background-color:           #ddd;
+    background-color:           #eee;
 }
 
 .non_deterministic_cell {
-    color:                      rgba(255, 51, 51, 1);
+    color:                      #EE2C2C;
     font-weight:                bold;
     cursor:                     pointer;
 }
 
 .non_deterministic_cell:hover {
-    background-color:           #eee;
+    color:                      #CD2626;
 }
 
 .notifications {
@@ -176,5 +176,5 @@ td:hover {
 }
 
 .non_deterministic_row>.row_selector {
-    background-color:           #c9302c;
+    background-color:           #EE2C2C;
 }
