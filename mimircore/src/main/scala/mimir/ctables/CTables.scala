@@ -11,11 +11,13 @@ abstract class Model {
   def upperBound        (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
   def variance          (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
   def confidenceInterval(idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
+  def sampleGenerator   (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
   def mostLikelyExpr    (idx: Int, args: List[Expression    ]):  Expression
   def lowerBoundExpr    (idx: Int, args: List[Expression    ]):  Expression
   def upperBoundExpr    (idx: Int, args: List[Expression    ]):  Expression
   def varianceExpr      (idx: Int, args: List[Expression    ]):  Expression
   def confidenceExpr    (idx: Int, args: List[Expression    ]):  Expression
+  def sampleGenExpr     (idx: Int, args: List[Expression    ]):  Expression
   def sample(seed: Long, idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
 }
 

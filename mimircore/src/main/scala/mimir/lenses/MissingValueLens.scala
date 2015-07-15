@@ -69,7 +69,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
           } else {
             val m = new MissingValueModel(this);
             data = InstanceQuery.retrieveInstances(this, results);
-            val classIndex = allKeys().indexOf(keysToBeCleaned.get(idx))
+            val classIndex = idx//allKeys().indexOf(keysToBeCleaned.get(idx))
             data.setClassIndex(classIndex);
             m.init(data);
             m.asInstanceOf[SingleVarModel];
@@ -81,11 +81,11 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
   def lensType = "MISSING_VALUE"
 
   ////// Weka's InstanceQueryAdapter interface
-  def attributeCaseFix(colName: String) = colName;
-  def getDebug() = false;
-  def getSparseData() = false;
+  def attributeCaseFix(colName: String) = colName
+  def getDebug = false
+  def getSparseData = false
   def translateDBColumnType(t: String) = {
-    t.toUpperCase() match { 
+    t.toUpperCase match {
       case "STRING" => DatabaseUtils.STRING;
       case "VARCHAR" => DatabaseUtils.STRING;
       case "TEXT" => DatabaseUtils.TEXT;
@@ -97,7 +97,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
 
 object MissingValueAnalysisType extends Enumeration {
   type MV = Value
-  val MOST_LIKELY, LOWER_BOUND, UPPER_BOUND, VARIANCE, CONFIDENCE = Value
+  val MOST_LIKELY, LOWER_BOUND, UPPER_BOUND, VARIANCE, CONFIDENCE, SAMPLE = Value
 }
 
 case class MissingValueAnalysis(model: MissingValueModel, args: List[Expression], analysisType: MissingValueAnalysisType.MV)
@@ -109,6 +109,7 @@ case class MissingValueAnalysis(model: MissingValueModel, args: List[Expression]
       case MissingValueAnalysisType.LOWER_BOUND => model.lowerBound(args)
       case MissingValueAnalysisType.UPPER_BOUND => model.upperBound(args)
       case MissingValueAnalysisType.MOST_LIKELY => model.mostLikelyValue(args)
+      case MissingValueAnalysisType.SAMPLE => model.sampleGenerator(args)
     }
   }
   def exprType(bindings: Map[String,Type.T]) = Type.TInt
@@ -188,39 +189,48 @@ class MissingValueModel(lens: MissingValueLens)
     FloatPrimitive(variance)
   }
   def confidenceInterval(args: List[PrimitiveValue]) = {
-    var samples = List[Double]()
+    val samples = collection.mutable.Map[Double, Int]()
     var seed = 1
     var sum = 0.0
     var variance = 0.0
-    for( i <- 0 until 100) {
+    val sampleCount = 100
+    for( i <- 0 until sampleCount) {
       val sample = this.sample(seed, args).asDouble
       sum += sample
-      samples ::= sample
+      if(samples.contains(sample))
+        samples(sample) = samples(sample) + 1
+      else
+        samples += (sample -> 1)
       seed += 1
     }
-    val mean = sum/samples.size
-    for(i <- samples.indices){
-      variance += (samples(i) - mean) * (samples(i) - mean)
+    val mean = sum/sampleCount
+    for(i <- samples.keys){
+      variance += (i - mean) * (i - mean) * samples(i)
     }
-    val conf = Math.sqrt(variance/samples.size) * 1.96
+    val conf = Math.sqrt(variance/(sampleCount-1)) * 1.96
     //TODO check this for 95% confidence level
     FloatPrimitive(conf)
   }
-  def mostLikelyExpr(args: List[Expression]) = {
+  def sampleGenerator(args: List[PrimitiveValue]) = {
+    val seed = {
+      if (args.length == 1)
+        java.lang.System.currentTimeMillis()
+      else args.last.asLong
+    }
+    sample(seed, args)
+  }
+  def mostLikelyExpr(args: List[Expression]) =
     new MissingValueAnalysis(this, args, MissingValueAnalysisType.MOST_LIKELY)
-  }
-  def lowerBoundExpr(args: List[Expression]) = {
+  def lowerBoundExpr(args: List[Expression]) =
       new MissingValueAnalysis(this, args, MissingValueAnalysisType.LOWER_BOUND)
-  }
-  def upperBoundExpr(args: List[Expression]) = {
+  def upperBoundExpr(args: List[Expression]) =
     new MissingValueAnalysis(this, args, MissingValueAnalysisType.UPPER_BOUND)
-  }
-  def varianceExpr(args: List[Expression]) = {
+  def varianceExpr(args: List[Expression]) =
     new MissingValueAnalysis(this, args, MissingValueAnalysisType.VARIANCE)
-  }
-  def confidenceExpr(args: List[Expression]) = {
+  def confidenceExpr(args: List[Expression]) =
     new MissingValueAnalysis(this, args, MissingValueAnalysisType.CONFIDENCE)
-  }
+  def sampleGenExpr(args: List[Expression]) =
+    new MissingValueAnalysis(this, args, MissingValueAnalysisType.SAMPLE)
   def sample(seed: Long, args: List[PrimitiveValue]):  PrimitiveValue = {
       val classes = classify(args(0))
       val tot_cnt = classes.map(_._1).sum
@@ -233,27 +243,3 @@ class MissingValueModel(lens: MissingValueLens)
       IntPrimitive(classes(pick_idx)._2)
   }
 }
-// class MissingValueAnalysis(db: Database, idx: Int, ctx: MissingValueLens) extends CTAnalysis(db) {
-//   def varType: Type.T = Type.TInt
-//   def isCategorical: Boolean = true
-  
-
-  
-//   def computeMLE(element: List[PrimitiveValue]): PrimitiveValue = 
-//   {
-//     val classes = classify(element(0));
-//     var maxClass = 0;
-//     var maxLikelihood = classes(0);
-//     (1 until classes.length).foreach( (i) => {
-//       if(classes(i) > maxLikelihood){ 
-//         maxLikelihood = classes(i);
-//         maxClass = i
-//       }
-//     })
-//     return new IntPrimitive(maxClass)
-//   }
-//   def computeEqConfidence(element: List[PrimitiveValue], value: PrimitiveValue): Double = 0.0
-//   def computeBounds(element: List[PrimitiveValue]): (Double,Double) = (0.0,0.0)
-//   def computeStdDev(element: List[PrimitiveValue]): Double = 0.0
-  
-// }

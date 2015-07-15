@@ -82,7 +82,6 @@ object CTAnalyzer {
     }
   }
 
-  //TODO check this
   def compileVariance(exp: Expression): Expression = {
     /*if(!CTables.isProbabilistic(exp))
       exp
@@ -95,12 +94,11 @@ object CTAnalyzer {
         case CaseExpression(wtClauses, eClause) => {
           var wt = List[WhenThenClause]();
           for(i <- wtClauses.indices){
-            val wclause = compileVariance(wtClauses(i).when)
             val tclause = wtClauses(i).then match {
               case Var(_) => IntPrimitive(0)
               case _ => compileVariance(wtClauses(i).then)
             }
-            wt ::= WhenThenClause(wclause, tclause)
+            wt ::= WhenThenClause(wtClauses(i).when, tclause)
           }
           val e = eClause match {
             case Var(_) => IntPrimitive(0)
@@ -117,7 +115,7 @@ object CTAnalyzer {
 
   def compileConfidence(exp: Expression): (Expression, Expression) = {
     exp match {
-      case Not(child) => compileConfidence(child)
+      case Not(child) => compileConfidence(child) match { case (a,b) => (b,a) }
 
       case VGTerm((str,model),idx,args) =>
         (Arithmetic(Arith.Sub, model.mostLikelyExpr(idx, args), model.confidenceExpr(idx, args)),
@@ -139,6 +137,27 @@ object CTAnalyzer {
       case Var(a) => (Var(a), Var(a))
 
       case nullExp @ IsNullExpression(child, neg) => (nullExp, nullExp)
+    }
+  }
+
+  def compileRowConfidence(exp: Expression): Expression = {
+    exp match {
+        case Not(child) => compileVariance(child)
+
+        case VGTerm((_,model),idx,args) => model.sampleGenExpr(idx, args)
+
+        case CaseExpression(wtClauses, eClause) => {
+          var wt = List[WhenThenClause]()
+          for(i <- wtClauses.indices){
+            val tclause = compileRowConfidence(wtClauses(i).then)
+            wt ::= WhenThenClause(wtClauses(i).when, tclause)
+          }
+          CaseExpression(wt, compileRowConfidence(eClause))
+        }
+
+        case Var(a) => Var(a)
+
+        case IsNullExpression(child, neg) => IsNullExpression(compileVariance(child), neg)
     }
   }
 }

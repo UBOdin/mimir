@@ -88,6 +88,7 @@ class Compiler(db: Database) {
    * - BOUNDS(A): Hard upper- and lower-bounds for 'A'
    * - CONF(A): The confidence interval for 'A'
    * - VAR(A): Variance of 'A'
+   * - SAMPLE(A): Produces a sample from one possible world of evaluating 'A'
    *
    * Each of these analysis functions can be expanded out into an equivalent
    * Expression (or multiple Expressions).  This function does a quick pass
@@ -127,6 +128,18 @@ class Compiler(db: Database) {
                     throw new SQLException("VAR() expects 1 argument, got " + subexp.length)
                   val ex = CTAnalyzer.compileVariance(subexp(0))
                   List(ProjectArg(name + "_VAR", ex))
+                }
+
+                case Function("SAMPLE", subexp) => {
+                  if (subexp.length != 1)
+                    throw new SQLException("SAMPLE() expects 1 argument, got " + subexp.length)
+                  val ex = CTAnalyzer.compileRowConfidence(subexp(0))
+                  List(ProjectArg(name + "_SAMPLE", ex))
+                }
+
+                case Function("CONFIDENCE", subexp) => {
+
+                  List(ProjectArg(name, expr))
                 }
 
                 case _ => List(ProjectArg(name, expr))
