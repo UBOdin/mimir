@@ -210,7 +210,7 @@ class MissingValueModel(lens: MissingValueLens)
     }
     val seed = {
       if (args.length == 1)
-        java.lang.System.currentTimeMillis()
+        java.lang.System.nanoTime()
       else args.last.asLong
     } + hash
     sample(seed, args)
