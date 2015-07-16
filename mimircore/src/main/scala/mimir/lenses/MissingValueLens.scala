@@ -98,14 +98,13 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
 
 object MissingValueAnalysisType extends Enumeration {
   type MV = Value
-  val MOST_LIKELY, LOWER_BOUND, UPPER_BOUND, VARIANCE, CONFIDENCE, SAMPLE = Value
+  val MOST_LIKELY, LOWER_BOUND, UPPER_BOUND, CONFIDENCE, SAMPLE = Value
 }
 
 case class MissingValueAnalysis(model: MissingValueModel, args: List[Expression], analysisType: MissingValueAnalysisType.MV)
   extends Proc(args) {
   def get(args: List[PrimitiveValue]): PrimitiveValue = {
     analysisType match {
-      case MissingValueAnalysisType.VARIANCE => model.variance(args)
       case MissingValueAnalysisType.CONFIDENCE => model.confidenceInterval(args)
       case MissingValueAnalysisType.LOWER_BOUND => model.lowerBound(args)
       case MissingValueAnalysisType.UPPER_BOUND => model.upperBound(args)
@@ -180,15 +179,6 @@ class MissingValueModel(lens: MissingValueLens)
       val classes = classify(args(0));
       IntPrimitive(classes.maxBy(_._2)._2)
   }
-  def variance(args: List[PrimitiveValue]) = {
-    val classes = classify(args(0))
-    val totSum = classes.foldRight(0.0){(a, b) => b + a._1}
-    val mean = classes.foldRight(0.0){(a, b) => b + (a._1 * a._2 / totSum)}
-    val variance = classes.foldRight(0.0){
-      (a, b) => b + ((a._2) - mean) * ((a._2) - mean) * a._1/totSum
-    } / classes.size
-    FloatPrimitive(variance)
-  }
   def confidenceInterval(args: List[PrimitiveValue]) = {
     val samples = collection.mutable.Map[Double, Int]()
     var seed = 1
@@ -231,8 +221,6 @@ class MissingValueModel(lens: MissingValueLens)
       new MissingValueAnalysis(this, args, MissingValueAnalysisType.LOWER_BOUND)
   def upperBoundExpr(args: List[Expression]) =
     new MissingValueAnalysis(this, args, MissingValueAnalysisType.UPPER_BOUND)
-  def varianceExpr(args: List[Expression]) =
-    new MissingValueAnalysis(this, args, MissingValueAnalysisType.VARIANCE)
   def confidenceExpr(args: List[Expression]) =
     new MissingValueAnalysis(this, args, MissingValueAnalysisType.CONFIDENCE)
   def sampleGenExpr(args: List[Expression]) =

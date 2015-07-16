@@ -376,6 +376,7 @@ case class Function(op: String, params: List[Expression]) extends Expression {
     op match {
       case "JOIN_ROWIDS" => TRowId
       case CTables.ROW_PROBABILITY => TString
+      case CTables.VARIANCE => TFloat
       case _ => bindings.get("__"+op+"()").get
     }
   }

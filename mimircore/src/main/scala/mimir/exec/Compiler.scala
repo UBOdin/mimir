@@ -86,9 +86,10 @@ class Compiler(db: Database) {
    * uncertainty in query results.  The UI works by providing top-level
    * aggregate-style methods for doing analysis:
    * - BOUNDS(A): Hard upper- and lower-bounds for 'A'
-   * - CONF(A): The confidence interval for 'A'
+   * - CONFIDENCE(A, PERCENTILE): The confidence interval for 'A'
    * - VAR(A): Variance of 'A'
-   * - SAMPLE(A): Produces a sample from one possible world of evaluating 'A'
+   * - SAMPLE(A, SEED): Produces a sample from one possible world of evaluating 'A'
+   * - PROB(): Gives the probability of a row being in the result set
    *
    * Each of these analysis functions can be expanded out into an equivalent
    * Expression (or multiple Expressions).  This function does a quick pass
@@ -116,18 +117,23 @@ class Compiler(db: Database) {
                 }
 
                 case Function("CONF", subexp) => {
-                  if (subexp.length != 1)
-                    throw new SQLException("CONF() expects 1 argument, got " + subexp.length)
-                  val ex = CTAnalyzer.compileConfidence(subexp(0))
+                  if (subexp.isEmpty)
+                    throw new SQLException("CONFIDENCE() expects 1 argument, got " + subexp.length)
+                  val percentile = {
+                    if(subexp.length == 1)
+                      FloatPrimitive(50)
+                    else subexp(1)
+                  }
+                  val ex = CTAnalyzer.compileConfidence(subexp(0), percentile)
                   List(ProjectArg(name + "_CONF_MIN", ex._1),
                     ProjectArg(name + "_CONF_MAX", ex._2))
                 }
 
-                case Function("VAR", subexp) => {
+                case Function(CTables.VARIANCE, subexp) => {
                   if (subexp.length != 1)
                     throw new SQLException("VAR() expects 1 argument, got " + subexp.length)
-                  val ex = CTAnalyzer.compileVariance(subexp(0))
-                  List(ProjectArg(name + "_VAR", ex))
+                  val ex = CTAnalyzer.compileSample(subexp(0), VarSeedPrimitive(0))
+                  List(ProjectArg(name + "_VAR", Function(CTables.VARIANCE, List(ex))))
                 }
 
                 case Function("SAMPLE", subexp) => {

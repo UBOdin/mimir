@@ -6,6 +6,8 @@ import mimir.ctables.CTables
 object Eval 
 {
 
+  val SAMPLE_COUNT = 100
+
   /**
    * Evaluate the specified expression and cast the result to an Long
    */
@@ -81,13 +83,33 @@ object Eval
             case "__LIST_MAX" => new IntPrimitive(params.map(x => eval(x).asLong).max) // TODO Generalized Comparator
             case CTables.ROW_PROBABILITY => {
               var count = 0
-              for(i <- 0 until 100) {
+              for(i <- 0 until SAMPLE_COUNT) {
                 VarSeed.increment()
                 if(Eval.evalBool(params(0)))
                   count += 1
               }
               VarSeed.setSeed(0)
-              StringPrimitive(count + "%")
+              StringPrimitive(count*100/SAMPLE_COUNT + "%")
+            }
+            case CTables.VARIANCE => {
+              var sum  = 0.0
+              var variance = 0.0
+              val samples = collection.mutable.Map[Double, Int]()
+              for( i <- 0 until SAMPLE_COUNT) {
+                VarSeed.increment()
+                val sample = Eval.eval(params(0)).asDouble
+                sum += sample
+                if(samples.contains(sample))
+                  samples(sample) = samples(sample) + 1
+                else
+                  samples += (sample -> 1)
+              }
+              VarSeed.setSeed(0)
+              val mean = sum/SAMPLE_COUNT
+              for(i <- samples.keys){
+                variance += (i - mean) * (i - mean) * samples(i)
+              }
+              FloatPrimitive(variance/SAMPLE_COUNT)
             }
           }
         }

@@ -82,37 +82,9 @@ object CTAnalyzer {
     }
   }
 
-  def compileVariance(exp: Expression): Expression = {
-      exp match {
-        case Not(child) => compileVariance(child)
-
-        case VGTerm((_,model),idx,args) => model.varianceExpr(idx, args)
-
-        case CaseExpression(wtClauses, eClause) => {
-          var wt = List[WhenThenClause]();
-          for(i <- wtClauses.indices){
-            val tclause = wtClauses(i).then match {
-              case Var(_) => IntPrimitive(0)
-              case _ => compileVariance(wtClauses(i).then)
-            }
-            wt ::= WhenThenClause(wtClauses(i).when, tclause)
-          }
-          val e = eClause match {
-            case Var(_) => IntPrimitive(0)
-            case _ => compileVariance(eClause)
-          }
-          CaseExpression(wt, e)
-        }
-
-        case Var(a) => Var(a)
-
-        case IsNullExpression(child, neg) => IsNullExpression(compileVariance(child), neg)
-      }
-  }
-
-  def compileConfidence(exp: Expression): (Expression, Expression) = {
+  def compileConfidence(exp: Expression, percentile: Expression): (Expression, Expression) = {
     exp match {
-      case Not(child) => compileConfidence(child) match { case (a,b) => (b,a) }
+      case Not(child) => compileConfidence(child, percentile) match { case (a,b) => (b,a) }
 
       case VGTerm((str,model),idx,args) =>
         (Arithmetic(Arith.Sub, model.mostLikelyExpr(idx, args), model.confidenceExpr(idx, args)),
@@ -122,12 +94,12 @@ object CTAnalyzer {
         var wtmin = List[WhenThenClause]()
         var wtmax = List[WhenThenClause]()
         for(i <- wtClauses.indices){
-          val wclause = compileConfidence(wtClauses(i).when)
-          val tclause = compileConfidence(wtClauses(i).then)
+          val wclause = compileConfidence(wtClauses(i).when, percentile)
+          val tclause = compileConfidence(wtClauses(i).then, percentile)
           wtmin ::= WhenThenClause(wclause._1, tclause._1)
           wtmax ::= WhenThenClause(wclause._2, tclause._2)
         }
-        val e = compileConfidence(eClause)
+        val e = compileConfidence(eClause, percentile)
         (CaseExpression(wtmin, e._1), CaseExpression(wtmax, e._2))
       }
 
