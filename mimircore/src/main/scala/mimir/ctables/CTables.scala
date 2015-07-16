@@ -36,6 +36,9 @@ case class VGTerm(
 object CTables 
 {
 
+  // Name for row probability calculating function
+  val ROW_PROBABILITY = "PROB"
+
   /**
    * Default name for a condition column
    */

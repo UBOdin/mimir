@@ -2,16 +2,17 @@ package mimir.lenses;
 
 import java.sql._
 
-import mimir.{Analysis, Database}
 import mimir.algebra._
 import mimir.ctables._
+import mimir.{Analysis, Database}
 import moa.classifiers.Classifier
 import moa.core.InstancesHeader
 import weka.core.{DenseInstance, Instance, Instances}
 import weka.experiment.{DatabaseUtils, InstanceQuery, InstanceQueryAdapter}
 
 import scala.collection.JavaConversions._
-import scala.util._;
+import scala.util._
+;
 
 class MissingValueLens(name: String, args: List[Expression], source: Operator) 
   extends Lens(name, args, source) 
@@ -212,11 +213,16 @@ class MissingValueModel(lens: MissingValueLens)
     FloatPrimitive(conf)
   }
   def sampleGenerator(args: List[PrimitiveValue]) = {
+    var hash = 7
+    val key = lens.keysToBeCleaned(0)
+    for(i <- key.indices){
+      hash = hash * 31 + key.charAt(i)
+    }
     val seed = {
       if (args.length == 1)
         java.lang.System.currentTimeMillis()
       else args.last.asLong
-    }
+    } + hash
     sample(seed, args)
   }
   def mostLikelyExpr(args: List[Expression]) =

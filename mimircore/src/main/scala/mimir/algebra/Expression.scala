@@ -1,5 +1,7 @@
 package mimir.algebra;
 
+import mimir.ctables.CTables
+
 import scala.reflect.runtime.universe._
 
 import java.sql._;
@@ -135,6 +137,22 @@ case class NullPrimitive()
   def asDouble: Double = throw new TypeException(TAny, TFloat, "Cast Null");
   def asString: String = throw new TypeException(TAny, TString, "Cast Null");
   def payload: Object = null
+}
+case class VarSeedPrimitive(v: Long)
+  extends PrimitiveValue(TInt)
+{
+  VarSeed.setSeed(v)
+  override def toString = VarSeed.getSeed.toString
+  def asLong: Long = VarSeed.getSeed
+  def asDouble: Double = VarSeed.getSeed.toDouble
+  def asString: String = VarSeed.getSeed.toString
+  def payload: Object = VarSeed.getSeed.asInstanceOf[Object]
+}
+object VarSeed {
+  var seed: Long = 1
+  def increment(): Unit = seed += 1
+  def setSeed(v: Long) = seed = v
+  def getSeed: Long = seed
 }
 
 case class Not(child: Expression) 
@@ -357,6 +375,7 @@ case class Function(op: String, params: List[Expression]) extends Expression {
   def exprType(bindings: Map[String, Type.T]): T = {
     op match {
       case "JOIN_ROWIDS" => TRowId
+      case CTables.ROW_PROBABILITY => TString
       case _ => bindings.get("__"+op+"()").get
     }
   }

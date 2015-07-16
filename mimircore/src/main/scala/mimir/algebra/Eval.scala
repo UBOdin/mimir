@@ -79,6 +79,16 @@ object Eval
             case "JOIN_ROWIDS" => new RowIdPrimitive(params.map(x => eval(x)).mkString("."))
             case "__LIST_MIN" => new IntPrimitive(params.map(x => eval(x).asLong).min) // TODO Generalized Comparator
             case "__LIST_MAX" => new IntPrimitive(params.map(x => eval(x).asLong).max) // TODO Generalized Comparator
+            case CTables.ROW_PROBABILITY => {
+              var count = 0
+              for(i <- 0 until 100) {
+                VarSeed.increment()
+                if(Eval.evalBool(params(0)))
+                  count += 1
+              }
+              VarSeed.setSeed(0)
+              StringPrimitive(count + "%")
+            }
           }
         }
       }

@@ -83,9 +83,6 @@ object CTAnalyzer {
   }
 
   def compileVariance(exp: Expression): Expression = {
-    /*if(!CTables.isProbabilistic(exp))
-      exp
-    else*/
       exp match {
         case Not(child) => compileVariance(child)
 
@@ -137,27 +134,40 @@ object CTAnalyzer {
       case Var(a) => (Var(a), Var(a))
 
       case nullExp @ IsNullExpression(child, neg) => (nullExp, nullExp)
+
+      case p: PrimitiveValue => (p, p)
     }
   }
 
-  def compileRowConfidence(exp: Expression): Expression = {
+  def compileSample(exp: Expression, seedExp: Expression = null): Expression = {
     exp match {
-        case Not(child) => compileVariance(child)
+        case Not(child) => Not(compileSample(child, seedExp))
 
-        case VGTerm((_,model),idx,args) => model.sampleGenExpr(idx, args)
+        case VGTerm((_,model),idx,args) => {
+          if(seedExp == null)
+            model.sampleGenExpr(idx, args)
+          else model.sampleGenExpr(idx, args ++ List(seedExp))
+        }
 
         case CaseExpression(wtClauses, eClause) => {
           var wt = List[WhenThenClause]()
           for(i <- wtClauses.indices){
-            val tclause = compileRowConfidence(wtClauses(i).then)
-            wt ::= WhenThenClause(wtClauses(i).when, tclause)
+            val wclause = compileSample(wtClauses(i).when,seedExp)
+            val tclause = compileSample(wtClauses(i).then, seedExp)
+            wt ::= WhenThenClause(wclause, tclause)
           }
-          CaseExpression(wt, compileRowConfidence(eClause))
+          CaseExpression(wt, compileSample(eClause, seedExp))
         }
+
+        case Arithmetic(o, l, r) => Arithmetic(o, compileSample(l, seedExp), compileSample(r, seedExp))
+
+        case Comparison(o, l, r) => Comparison(o, compileSample(l, seedExp), compileSample(r, seedExp))
 
         case Var(a) => Var(a)
 
-        case IsNullExpression(child, neg) => IsNullExpression(compileVariance(child), neg)
+        case IsNullExpression(child, neg) => IsNullExpression(compileSample(child, seedExp), neg)
+
+        case p: PrimitiveValue => p
     }
   }
 }

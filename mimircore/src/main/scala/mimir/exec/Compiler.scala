@@ -32,7 +32,7 @@ class Compiler(db: Database) {
   ResultIterator = {
     val optimizedOper = opts.foldLeft(oper)((o, fn) => fn(o))
     // Finally build the iterator
-    return buildIterator(optimizedOper);
+    return buildIterator(optimizedOper)
   }
 
   /**
@@ -131,15 +131,25 @@ class Compiler(db: Database) {
                 }
 
                 case Function("SAMPLE", subexp) => {
-                  if (subexp.length != 1)
-                    throw new SQLException("SAMPLE() expects 1 argument, got " + subexp.length)
-                  val ex = CTAnalyzer.compileRowConfidence(subexp(0))
+                  if (subexp.isEmpty)
+                    throw new SQLException("SAMPLE() expects at least 1 argument " +
+                      "(expression, seed[optional]), got " + subexp.length)
+                  val ex = {
+                    if(subexp.length == 1) CTAnalyzer.compileSample(subexp(0))
+                    else CTAnalyzer.compileSample(subexp(0), subexp(1))
+                  }
                   List(ProjectArg(name + "_SAMPLE", ex))
                 }
 
-                case Function("CONFIDENCE", subexp) => {
-
-                  List(ProjectArg(name, expr))
+                case Function(CTables.ROW_PROBABILITY, subexp) => {
+                  val exp = p.get(CTables.conditionColumn)
+                  exp match {
+                    case None => List(ProjectArg(name + "_" + CTables.ROW_PROBABILITY, StringPrimitive("100%")))
+                    case Some(cond) => {
+                      val func = Function(CTables.ROW_PROBABILITY, List(CTAnalyzer.compileSample(cond, VarSeedPrimitive(0))))
+                      List(ProjectArg(name + "_" + CTables.ROW_PROBABILITY, func))
+                    }
+                  }
                 }
 
                 case _ => List(ProjectArg(name, expr))

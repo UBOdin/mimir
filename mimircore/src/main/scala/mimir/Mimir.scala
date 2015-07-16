@@ -2,6 +2,7 @@ package mimir;
 
 import java.io._
 
+import mimir.ctables.CTPercolator
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
 import org.rogach.scallop._;
@@ -107,7 +108,7 @@ object Mimir {
 
   def handleSelect(sel: Select): Unit = {
     val raw = db.convert(sel);
-    val results = db.query(raw)
+    val results = db.query(CTPercolator.propagateRowIDs(raw, true))
     results.open();
     db.dump(results);
     results.close();
