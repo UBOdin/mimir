@@ -140,6 +140,8 @@ object CTAnalyzer {
         case IsNullExpression(child, neg) => IsNullExpression(compileSample(child, seedExp), neg)
 
         case p: PrimitiveValue => p
+
+        case f: Function => f
     }
   }
 }

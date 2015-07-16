@@ -85,6 +85,8 @@ $( document ).ready(function() {
                     var conf_int = [];
                     var causes = [];
 
+                    var fault = false;
+
                     var data_params_query = 'queryjson?query=SELECT BOUNDS('+col
                                             +'), VAR('+col+'), CONF('+col+') FROM ('+query
                                             +') AS TEMP WHERE ROWID = '+row+';&db='+db;
@@ -95,29 +97,43 @@ $( document ).ready(function() {
 
                         $.when(
                             $.get(data_params_query, function (res) {
-                                bounds[0] = res.data[0][1];
-                                bounds[1] = res.data[0][2];
-                                variance = res.data[0][3];
-                                conf_int[0] = res.data[0][4];
-                                conf_int[1] = res.data[0][5];
+                                if(res.hasOwnProperty('result') && res.result.startsWith("Command Ignored")) {
+                                    fault = true;
+                                }
+                                else {
+                                    bounds[0] = res.data[0][1];
+                                    bounds[1] = res.data[0][2];
+                                    variance = res.data[0][3];
+                                    conf_int[0] = res.data[0][4];
+                                    conf_int[1] = res.data[0][5];
+                                }
                             }),
                             $.get(vgterms_query, function (res) {
-                                causes = extractCauses(res.result, col_index);
+                                if(res.hasOwnProperty('result') && res.result.startsWith("Command Ignored")) {
+                                    fault = true;
+                                }
+                                else {
+                                    causes = extractCauses(res.result, col_index);
+                                }
                             })
                         ).then( function() {
-                            var tooltip_template = '<table class="table tooltip_table">'+
+                            if(fault) {
+                                origin.tooltipster('content', 'Something went wrong!');
+                            }
+                            else {
+                                var tooltip_template = '<table class="table tooltip_table">'+
                                                       '<tbody>'+
                                                           '<tr>'+
                                                               '<th scope="row">Bounds</th>'+
-                                                              '<td class="number">'+ bounds[0] +' - '+ bounds[1] +'</td>'+
+                                                              '<td class="number">'+ parseFloat(bounds[0]).toFixed(2) +' - '+ parseFloat(bounds[1]).toFixed(2) +'</td>'+
                                                           '</tr>'+
                                                           '<tr>'+
                                                               '<th scope="row">Variance</th>'+
-                                                              '<td class="number">'+ variance +'</td>'+
+                                                              '<td class="number">'+ parseFloat(variance).toFixed(2) +'</td>'+
                                                           '</tr>'+
                                                           '<tr>'+
                                                               '<th scope="row">Confidence Interval</th>'+
-                                                              '<td class="number">'+ conf_int[0] + ' - '+ conf_int[1] +'</td>'+
+                                                              '<td class="number">'+ parseFloat(conf_int[0]).toFixed(2) + ' - '+ parseFloat(conf_int[1]).toFixed(2) +'</td>'+
                                                           '</tr>'+
                                                           '<tr>'+
                                                               '<th scope="row">VG Terms</th>'+
@@ -125,7 +141,8 @@ $( document ).ready(function() {
                                                           '</tr>'+
                                                       '</tbody>'+
                                                   '</table>';
-                            origin.tooltipster('content', tooltip_template);
+                                origin.tooltipster('content', tooltip_template);
+                            }
                         });
 
                         // this returned string will overwrite the content of the tooltip for the time being
@@ -151,25 +168,47 @@ $( document ).ready(function() {
             delay: 10,
             functionInit: function(origin, content) {
 
+                var row = origin.children(".rowid_col").html();
                 var query = $("#query_textarea").val().replace(";","");
                 var db = $("#db_field").val();
 
+                var prob;
                 var causes = [];
 
+                var fault = false;
+
+                var prob_query = 'queryjson?query=SELECT PROB() FROM ('+query+') AS TEMP WHERE ROWID = '+row+';&db='+db;
                 var vgterms_query = 'queryjson?query=EXPLAIN '+query+';&db='+db;
 
                 if (content == null) {
                     $.when(
+                        $.get(prob_query, function (res) {
+                            if(res.hasOwnProperty('result') && res.result.startsWith("Command Ignored")) {
+                                fault = true;
+                            }
+                            else {
+                                prob = res.data[0][1];
+                            }
+                        }),
                         $.get(vgterms_query, function (res) {
-                            causes = extractCauses(res.result, -1);
-                            // -1 will indicate __MIMIR_CONDITION
+                            if(res.hasOwnProperty('result') && res.result.startsWith("Command Ignored")) {
+                                fault = true;
+                            }
+                            else {
+                                causes = extractCauses(res.result, -1);
+                                // -1 will indicate __MIMIR_CONDITION
+                            }
                         })
                     ).then( function() {
-                        var tooltip_template = '<table class="table tooltip_table">'+
+                        if(fault) {
+                            origin.tooltipster('content', 'Something went wrong!');
+                        }
+                        else {
+                            var tooltip_template = '<table class="table tooltip_table">'+
                                                   '<tbody>'+
                                                       '<tr>'+
                                                           '<th scope="row">Confidence</th>'+
-                                                          '<td>Confidence graph/values go here</td>'+
+                                                          '<td>'+prob+'</td>'+
                                                       '</tr>'+
                                                       '<tr>'+
                                                           '<th scope="row">VG Terms</th>'+
@@ -177,7 +216,8 @@ $( document ).ready(function() {
                                                       '</tr>'+
                                                   '</tbody>'+
                                               '</table>';
-                        origin.tooltipster('content', tooltip_template);
+                            origin.tooltipster('content', tooltip_template);
+                        }
                     });
 
                     // this returned string will overwrite the content of the tooltip for the time being
