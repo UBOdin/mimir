@@ -320,7 +320,7 @@ class CSVBackend(
     throw new SQLException("No support for updates on CSV data");
   }
   
-  def getTableSchema(table: String): List[(String, Type.T)] = 
+  def getTableSchema(table: String): Option[List[(String, Type.T)]] =
   {
     throw new SQLException("No support for schemas on CSV data");
   }

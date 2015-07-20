@@ -115,26 +115,35 @@ object Mimir {
   }
 
   def handleLoadTable(db: Database, targetTable: String, sourceFile: String){
-    val sch = db.getTableSchema(targetTable)
-    val keys = sch.map( _._1 )
-    val input = new BufferedReader(new FileReader(sourceFile));
-    var done = false;
-    while(!done){
-      val line = input.readLine()
-      if(line == null){ done = true; }
-      else {
-        val data = line.split(",").padTo(keys.length, "");
-        db.update(
-          "INSERT INTO "+targetTable+"("+keys.mkString(", ")+
-            ") VALUES ("+
-            data.map( _ match {
-              case "" => null;
-              case x => x
-            }).mkString(", ")+
-            ")"
-        )
+    db.getTableSchema(targetTable) match {
+      case Some(sch) => {
+        val keys = sch.map( _._1 )
+        val input = new BufferedReader(new FileReader(sourceFile));
+        var done = false;
+        while(!done){
+          val line = input.readLine()
+          if(line == null){ done = true; }
+          else {
+            val data = line.split(",").padTo(keys.length, "");
+            db.update(
+              "INSERT INTO "+targetTable+"("+keys.mkString(", ")+
+                ") VALUES ("+
+                data.map( _ match {
+                  case "" => null;
+                  case x => x
+                }).mkString(", ")+
+                ")"
+            )
+          }
+        }
+      }
+
+      case None => {
+        println("Table does not exist, upload failed!");
       }
     }
+
+
   }
 
 

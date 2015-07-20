@@ -1,5 +1,7 @@
 package mimir;
 
+import java.sql.SQLException
+
 import mimir.algebra._
 import mimir.ctables.Model
 import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
@@ -50,7 +52,11 @@ case class Database(backend: Backend)
   val ra = new RAToSql(this)
   val lenses = new LensManager(this)
   val compiler = new Compiler(this)  
-  val operator = new OperatorParser(this.getLensModel, this.getTableSchema(_).toMap)
+  val operator = new OperatorParser(this.getLensModel,
+    this.getTableSchema(_) match {
+      case Some(x) => x.toMap
+      case None => throw new SQLException("Table does not exist in db!")
+    })
   
   /**
    * Evaluate the specified query on the backend directly and wrap the result in a
@@ -206,7 +212,7 @@ case class Database(backend: Backend)
   /**
    * Look up the schema for the table with the provided name.
    */
-  def getTableSchema(name: String): List[(String,Type.T)] =
+  def getTableSchema(name: String): Option[List[(String,Type.T)]] =
     backend.getTableSchema(name);  
   /**
    * Build a Table operator for the table with the provided name.
