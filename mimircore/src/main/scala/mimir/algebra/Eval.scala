@@ -26,8 +26,8 @@ object Eval
   /**
    * Evaluate the specified expression and cast the result to a Boolean
    */
-  def evalBool(e: Expression): Boolean =
-    eval(e) match {
+  def evalBool(e: Expression, bindings: Map[String, PrimitiveValue] = Map[String, PrimitiveValue]()): Boolean =
+    eval(e, bindings) match {
       case BoolPrimitive(v) => v
       case v => throw new TypeException(TBool, v.exprType, "Cast")
     }
@@ -82,40 +82,60 @@ object Eval
             case "__LIST_MIN" => new IntPrimitive(params.map(x => eval(x).asLong).min) // TODO Generalized Comparator
             case "__LIST_MAX" => new IntPrimitive(params.map(x => eval(x).asLong).max) // TODO Generalized Comparator
             case CTables.ROW_PROBABILITY => {
-              var count = 0
+              var count = 0.0
               for(i <- 0 until SAMPLE_COUNT) {
-                VarSeed.increment()
-                if(Eval.evalBool(params(0)))
+                val bindings = Map[String, IntPrimitive]("__SEED" -> IntPrimitive(i+1))
+                if(Eval.evalBool(params(0), bindings))
                   count += 1
               }
-              VarSeed.setSeed(0)
-              StringPrimitive(count*100/SAMPLE_COUNT + "%")
+              FloatPrimitive(count/SAMPLE_COUNT)
             }
             case CTables.VARIANCE => {
-              var sum  = 0.0
               var variance = 0.0
-              val samples = collection.mutable.Map[Double, Int]()
-              for( i <- 0 until SAMPLE_COUNT) {
-                VarSeed.increment()
-                val sample = Eval.eval(params(0)).asDouble
-                sum += sample
-                if(samples.contains(sample))
-                  samples(sample) = samples(sample) + 1
-                else
-                  samples += (sample -> 1)
-              }
-              VarSeed.setSeed(0)
+              val (sum, samples) = sampleExpression(params(0))
               val mean = sum/SAMPLE_COUNT
               for(i <- samples.keys){
                 variance += (i - mean) * (i - mean) * samples(i)
               }
               FloatPrimitive(variance/SAMPLE_COUNT)
             }
+            case CTables.CONFIDENCE => {
+              var variance = 0.0
+              val (_, samples) = sampleExpression(params(0))
+              val percentile = params(1).asInstanceOf[PrimitiveValue].asDouble
+              val keys = samples.keys.toList.sorted
+              var count = 0
+              var i = -1
+              while(count < percentile){
+                i += 1
+                count += samples(keys(i))
+              }
+              val med = keys(i)
+              for(i <- samples.keys){
+                variance += (i - med) * (i - med) * samples(i)
+              }
+              val conf = Math.sqrt(variance/SAMPLE_COUNT) * 1.96
+              StringPrimitive((med - conf) + " - " + (med + conf))
+            }
           }
         }
       }
-      
     }
+  }
+
+  def sampleExpression(exp: Expression): (Double, collection.mutable.Map[Double, Int]) = {
+    var sum  = 0.0
+    val samples = collection.mutable.Map[Double, Int]()
+    for( i <- 0 until SAMPLE_COUNT) {
+      val bindings = Map[String, IntPrimitive]("__SEED" -> IntPrimitive(i+1))
+      val sample = Eval.eval(exp, bindings).asDouble
+      sum += sample
+      if(samples.contains(sample))
+        samples(sample) = samples(sample) + 1
+      else
+        samples += (sample -> 1)
+    }
+    (sum, samples)
   }
 
   /**

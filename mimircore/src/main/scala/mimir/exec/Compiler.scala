@@ -116,23 +116,23 @@ class Compiler(db: Database) {
                   )
                 }
 
-                case Function("CONF", subexp) => {
+                case Function(CTables.CONFIDENCE, subexp) => {
                   if (subexp.isEmpty)
-                    throw new SQLException("CONFIDENCE() expects 1 argument, got " + subexp.length)
+                    throw new SQLException(CTables.CONFIDENCE + "() expects at 2 arguments" +
+                      "(expression, percentile), got " + subexp.length)
                   val percentile = {
                     if(subexp.length == 1)
                       FloatPrimitive(50)
                     else subexp(1)
                   }
-                  val ex = CTAnalyzer.compileConfidence(subexp(0), percentile)
-                  List(ProjectArg(name + "_CONF_MIN", ex._1),
-                    ProjectArg(name + "_CONF_MAX", ex._2))
+                  val ex = CTAnalyzer.compileSample(subexp(0), Var(CTables.SEED_EXP))
+                  List(ProjectArg(name + "_CONF", Function(CTables.CONFIDENCE, List(ex, percentile))))
                 }
 
                 case Function(CTables.VARIANCE, subexp) => {
                   if (subexp.length != 1)
-                    throw new SQLException("VAR() expects 1 argument, got " + subexp.length)
-                  val ex = CTAnalyzer.compileSample(subexp(0), VarSeedPrimitive(0))
+                    throw new SQLException(CTables.VARIANCE + "() expects 1 argument, got " + subexp.length)
+                  val ex = CTAnalyzer.compileSample(subexp(0), Var(CTables.SEED_EXP))
                   List(ProjectArg(name + "_VAR", Function(CTables.VARIANCE, List(ex))))
                 }
 
@@ -150,9 +150,9 @@ class Compiler(db: Database) {
                 case Function(CTables.ROW_PROBABILITY, subexp) => {
                   val exp = p.get(CTables.conditionColumn)
                   exp match {
-                    case None => List(ProjectArg(name + "_" + CTables.ROW_PROBABILITY, StringPrimitive("100%")))
+                    case None => List(ProjectArg(name + "_" + CTables.ROW_PROBABILITY, FloatPrimitive(1)))
                     case Some(cond) => {
-                      val func = Function(CTables.ROW_PROBABILITY, List(CTAnalyzer.compileSample(cond, VarSeedPrimitive(0))))
+                      val func = Function(CTables.ROW_PROBABILITY, List(CTAnalyzer.compileSample(cond, Var(CTables.SEED_EXP))))
                       List(ProjectArg(name + "_" + CTables.ROW_PROBABILITY, func))
                     }
                   }

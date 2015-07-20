@@ -9,12 +9,10 @@ abstract class Model {
   def mostLikelyValue   (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
   def lowerBound        (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
   def upperBound        (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
-  def confidenceInterval(idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
   def sampleGenerator   (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
   def mostLikelyExpr    (idx: Int, args: List[Expression    ]):  Expression
   def lowerBoundExpr    (idx: Int, args: List[Expression    ]):  Expression
   def upperBoundExpr    (idx: Int, args: List[Expression    ]):  Expression
-  def confidenceExpr    (idx: Int, args: List[Expression    ]):  Expression
   def sampleGenExpr     (idx: Int, args: List[Expression    ]):  Expression
   def sample(seed: Long, idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
 }
@@ -34,9 +32,12 @@ case class VGTerm(
 object CTables 
 {
 
-  // Function names for calculating row probability and variance
+  // Function names for calculating row probability, variance and confidence
   val ROW_PROBABILITY = "PROB"
   val VARIANCE = "VAR"
+  val CONFIDENCE = "CONFIDENCE"
+
+  val SEED_EXP = "__SEED"
 
   /**
    * Default name for a condition column

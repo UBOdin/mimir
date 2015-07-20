@@ -88,7 +88,7 @@ $( document ).ready(function() {
                     var fault = false;
 
                     var data_params_query = 'queryjson?query=SELECT BOUNDS('+col
-                                            +'), VAR('+col+'), CONF('+col+') FROM ('+query
+                                            +'), VAR('+col+'), CONFIDENCE('+col+') FROM ('+query
                                             +') AS TEMP WHERE ROWID = '+row+';&db='+db;
 
                     var vgterms_query = 'queryjson?query=EXPLAIN '+query+';&db='+db;
@@ -104,8 +104,10 @@ $( document ).ready(function() {
                                     bounds[0] = res.data[0][1];
                                     bounds[1] = res.data[0][2];
                                     variance = res.data[0][3];
-                                    conf_int[0] = res.data[0][4];
-                                    conf_int[1] = res.data[0][5];
+                                    var confStr = res.data[0][4];
+                                    var confVal = confStr.split(" - ");
+                                    conf_int[0] = confVal[0].substring(1);
+                                    conf_int[1] = confVal[1].substring(0, confVal[1].length-1);
                                 }
                             }),
                             $.get(vgterms_query, function (res) {

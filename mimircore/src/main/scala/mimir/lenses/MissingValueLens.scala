@@ -98,14 +98,13 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
 
 object MissingValueAnalysisType extends Enumeration {
   type MV = Value
-  val MOST_LIKELY, LOWER_BOUND, UPPER_BOUND, CONFIDENCE, SAMPLE = Value
+  val MOST_LIKELY, LOWER_BOUND, UPPER_BOUND, SAMPLE = Value
 }
 
 case class MissingValueAnalysis(model: MissingValueModel, args: List[Expression], analysisType: MissingValueAnalysisType.MV)
   extends Proc(args) {
   def get(args: List[PrimitiveValue]): PrimitiveValue = {
     analysisType match {
-      case MissingValueAnalysisType.CONFIDENCE => model.confidenceInterval(args)
       case MissingValueAnalysisType.LOWER_BOUND => model.lowerBound(args)
       case MissingValueAnalysisType.UPPER_BOUND => model.upperBound(args)
       case MissingValueAnalysisType.MOST_LIKELY => model.mostLikelyValue(args)
@@ -179,29 +178,6 @@ class MissingValueModel(lens: MissingValueLens)
       val classes = classify(args(0));
       IntPrimitive(classes.maxBy(_._2)._2)
   }
-  def confidenceInterval(args: List[PrimitiveValue]) = {
-    val samples = collection.mutable.Map[Double, Int]()
-    var seed = 1
-    var sum = 0.0
-    var variance = 0.0
-    val sampleCount = 100
-    for( i <- 0 until sampleCount) {
-      val sample = this.sample(seed, args).asDouble
-      sum += sample
-      if(samples.contains(sample))
-        samples(sample) = samples(sample) + 1
-      else
-        samples += (sample -> 1)
-      seed += 1
-    }
-    val mean = sum/sampleCount
-    for(i <- samples.keys){
-      variance += (i - mean) * (i - mean) * samples(i)
-    }
-    val conf = Math.sqrt(variance/(sampleCount-1)) * 1.96
-    //TODO check this for 95% confidence level
-    FloatPrimitive(conf)
-  }
   def sampleGenerator(args: List[PrimitiveValue]) = {
     var hash = 7
     val key = lens.keysToBeCleaned(0)
@@ -221,8 +197,6 @@ class MissingValueModel(lens: MissingValueLens)
       new MissingValueAnalysis(this, args, MissingValueAnalysisType.LOWER_BOUND)
   def upperBoundExpr(args: List[Expression]) =
     new MissingValueAnalysis(this, args, MissingValueAnalysisType.UPPER_BOUND)
-  def confidenceExpr(args: List[Expression]) =
-    new MissingValueAnalysis(this, args, MissingValueAnalysisType.CONFIDENCE)
   def sampleGenExpr(args: List[Expression]) =
     new MissingValueAnalysis(this, args, MissingValueAnalysisType.SAMPLE)
   def sample(seed: Long, args: List[PrimitiveValue]):  PrimitiveValue = {

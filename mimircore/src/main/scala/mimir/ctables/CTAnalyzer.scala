@@ -82,35 +82,6 @@ object CTAnalyzer {
     }
   }
 
-  def compileConfidence(exp: Expression, percentile: Expression): (Expression, Expression) = {
-    exp match {
-      case Not(child) => compileConfidence(child, percentile) match { case (a,b) => (b,a) }
-
-      case VGTerm((str,model),idx,args) =>
-        (Arithmetic(Arith.Sub, model.mostLikelyExpr(idx, args), model.confidenceExpr(idx, args)),
-          Arithmetic(Arith.Add, model.mostLikelyExpr(idx, args), model.confidenceExpr(idx, args)))
-
-      case CaseExpression(wtClauses, eClause) => {
-        var wtmin = List[WhenThenClause]()
-        var wtmax = List[WhenThenClause]()
-        for(i <- wtClauses.indices){
-          val wclause = compileConfidence(wtClauses(i).when, percentile)
-          val tclause = compileConfidence(wtClauses(i).then, percentile)
-          wtmin ::= WhenThenClause(wclause._1, tclause._1)
-          wtmax ::= WhenThenClause(wclause._2, tclause._2)
-        }
-        val e = compileConfidence(eClause, percentile)
-        (CaseExpression(wtmin, e._1), CaseExpression(wtmax, e._2))
-      }
-
-      case Var(a) => (Var(a), Var(a))
-
-      case nullExp @ IsNullExpression(child, neg) => (nullExp, nullExp)
-
-      case p: PrimitiveValue => (p, p)
-    }
-  }
-
   def compileSample(exp: Expression, seedExp: Expression = null): Expression = {
     exp match {
         case Not(child) => Not(compileSample(child, seedExp))
@@ -141,7 +112,7 @@ object CTAnalyzer {
 
         case p: PrimitiveValue => p
 
-        case f: Function => f
+        case Function(op, params) => Function(op, params.map( a => compileSample(a, seedExp)))
     }
   }
 }

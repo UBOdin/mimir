@@ -127,17 +127,22 @@ class ProjectionResultIterator(
    */
   def compile(expr: Expression): Expression =
   {
-    expr match { 
-      case Var(v) => 
-        val idx = 
-          src.schema.indexWhere( 
-            _._1.toUpperCase == v
-          )
-        if(idx < 0){
-          throw new SQLException("Invalid schema: "+v+" not in "+src.schema)
+    expr match {
+      case Var(v) =>
+        v match {
+          case CTables.SEED_EXP => Var(v)
+          case _ => {
+            val idx =
+              src.schema.indexWhere(
+                _._1.toUpperCase == v
+              )
+            if(idx < 0){
+              throw new SQLException("Invalid schema: "+v+" not in "+src.schema)
+            }
+            val t = src.schema(idx)._2
+            new VarProjection(this, idx, t)
+          }
         }
-        val t = src.schema(idx)._2
-        new VarProjection(this, idx, t)
       
       case _ => 
         expr.rebuild(
