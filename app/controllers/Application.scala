@@ -101,7 +101,7 @@ class Application extends Controller {
       val dir = play.Play.application().path().getAbsolutePath()
 
       val newFile = new File(dir, name)
-      csvFile.ref.moveTo(newFile)
+      csvFile.ref.moveTo(newFile, true)
       webAPI.configure(Array("--db", db, "--loadTable", name.replace(".csv", "")))
       newFile.delete()
     }
@@ -109,6 +109,15 @@ class Application extends Controller {
     val result: WebResult = new WebStringResult("CSV file loaded.")
 
     generateResponse(webAPI, "", result)
+  }
+
+  def allTables(db: String) = Action {
+    val webAPI = new WebAPI()
+    webAPI.configure(Array("--db", db))
+
+    val result = webAPI.getAllDBs()
+
+    Ok(Json.toJson(result))
   }
 
   private def generateResponse(webAPI: WebAPI, query: String, result: WebResult): Result = {

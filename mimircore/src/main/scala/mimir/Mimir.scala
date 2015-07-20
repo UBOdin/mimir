@@ -3,12 +3,11 @@ package mimir;
 import java.io._
 
 import mimir.ctables.CTPercolator
+import mimir.parser._
+import mimir.sql._
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
 import org.rogach.scallop._;
-
-import mimir.sql._;
-import mimir.parser._;
 
 
 /**
@@ -47,7 +46,7 @@ object Mimir {
       println("Initializing Database...");
       db.initializeDBForMimir();
     } else if(conf.loadTable.get != None){
-      handleLoadTable(db, conf.loadTable(), conf.loadTable()+".csv");
+      db.handleLoadTable(conf.loadTable(), conf.loadTable()+".csv");
     } else {
       var source: Reader = null;
 
@@ -113,39 +112,6 @@ object Mimir {
     db.dump(results);
     results.close();
   }
-
-  def handleLoadTable(db: Database, targetTable: String, sourceFile: String){
-    db.getTableSchema(targetTable) match {
-      case Some(sch) => {
-        val keys = sch.map( _._1 )
-        val input = new BufferedReader(new FileReader(sourceFile));
-        var done = false;
-        while(!done){
-          val line = input.readLine()
-          if(line == null){ done = true; }
-          else {
-            val data = line.split(",").padTo(keys.length, "");
-            db.update(
-              "INSERT INTO "+targetTable+"("+keys.mkString(", ")+
-                ") VALUES ("+
-                data.map( _ match {
-                  case "" => null;
-                  case x => x
-                }).mkString(", ")+
-                ")"
-            )
-          }
-        }
-      }
-
-      case None => {
-        println("Table does not exist, upload failed!");
-      }
-    }
-
-
-  }
-
 
   def connectSqlite(filename: String): java.sql.Connection =
   {

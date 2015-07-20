@@ -3,6 +3,8 @@ package mimir.sql;
 import java.sql._
 
 import mimir.algebra.Type
+
+import scala.collection.mutable.ListBuffer
 ;
 
 object JDBCUtils {
@@ -61,8 +63,8 @@ class JDBCBackend(conn: Connection) extends Backend
   
   def getTableSchema(table: String): Option[List[(String, Type.T)]] =
   {
-    val tables = this.getAllTables()
-    if(!tables.contains(table)) return None
+    val tables = this.getAllTables().map{(x) => x.toUpperCase}
+    if(!tables.contains(table.toUpperCase)) return None
 
     val cols = conn.getMetaData()
       .getColumns(null, null, table, "%")
@@ -84,14 +86,14 @@ class JDBCBackend(conn: Connection) extends Backend
     val metadata = conn.getMetaData()
     val tables = metadata.getTables(null, null, "", null)
 
-    val tableNames = List[String]()
+    val tableNames = new ListBuffer[String]()
 
     while(tables.next()) {
-      val name = tables.getString(2)
-      if(!name.equalsIgnoreCase("MIMIR_LENSES")) tableNames ++ name
+      tableNames.append(tables.getString("TABLE_NAME"))
     }
+
     tables.close()
-    tableNames
+    tableNames.toList
   }
 
   def close(): Unit = {

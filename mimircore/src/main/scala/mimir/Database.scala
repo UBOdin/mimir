@@ -1,5 +1,6 @@
 package mimir;
 
+import java.io.{FileReader, BufferedReader}
 import java.sql.SQLException
 
 import mimir.algebra._
@@ -264,6 +265,68 @@ case class Database(backend: Backend)
         case Some(lens) => 
           // println("Found: "+name); 
           Some(lens.view)
+      }
+    }
+  }
+
+  /**
+   * Load CSV file into database
+   */
+  def handleLoadTable(targetTable: String, sourceFile: String){
+    val input = new BufferedReader(new FileReader(sourceFile))
+    val firstLine = input.readLine()
+
+    getTableSchema(targetTable) match {
+      case Some(sch) => {
+        val keys = sch.map( _._1 )
+        if(headerDetected(firstLine)) {
+          populateTable(input, targetTable, keys) // Ignore header since table already exists
+        }
+        else {
+          populateTable(new BufferedReader(new FileReader(sourceFile)), // Reset to top
+            targetTable, keys)
+        }
+      }
+      case None => {
+        if(headerDetected(firstLine)) {
+          update("CREATE TABLE "+targetTable+"("+
+            firstLine.split(",").mkString(" varchar, ")+
+            " varchar)")
+
+          handleLoadTable(targetTable, sourceFile)
+        }
+        else {
+          throw new SQLException("No header supplied for creating new table")
+        }
+      }
+    }
+  }
+
+  private def headerDetected(line: String): Boolean = {
+    if(line == null) return false;
+
+    // TODO Detection logic
+
+    return true; // Placeholder, assume every CSV file has a header
+  }
+
+  private def populateTable(src: BufferedReader, targetTable: String, keys: List[String]) = {
+    var done = false
+
+    while(!done){
+      val line = src.readLine()
+      if(line == null){ done = true; }
+      else {
+        val data = line.split(",").padTo(keys.length, "");
+        update(
+          "INSERT INTO "+targetTable+"("+keys.mkString(", ")+
+            ") VALUES ("+
+            data.map( _ match {
+              case "" => null;
+              case x => x
+            }).mkString(", ")+
+            ")"
+        )
       }
     }
   }

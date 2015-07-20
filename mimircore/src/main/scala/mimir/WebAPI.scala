@@ -28,6 +28,10 @@ class WebAPI {
 
     // Set up the database connection(s)
     dbName = conf.dbname()
+    if(dbName.length <= 0) {
+      throw new Exception("DB name must be configured!")
+    }
+
     val backend = conf.backend() match {
       case "oracle" => new JDBCBackend(Mimir.connectOracle())
       case "sqlite" => new JDBCBackend(Mimir.connectSqlite(dbName))
@@ -42,7 +46,7 @@ class WebAPI {
     if(conf.initDB()){
       db.initializeDBForMimir()
     } else if(conf.loadTable.get != None){
-      Mimir.handleLoadTable(db, conf.loadTable(), conf.loadTable()+".csv")
+      db.handleLoadTable(conf.loadTable(), conf.loadTable()+".csv")
     }
   }
 

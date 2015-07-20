@@ -45,14 +45,14 @@
                         <li class="dropdown">
                             <a class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><span id="curr_db">@webAPI.dbName</span> <span class="caret"></span></a>
                             <ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
-                                <li class="dropdown-header">Tables</li>
+                                <li class="dropdown-header" id="tables_header">Tables</li>
                                 @webAPI.getAllTables().map { x =>
-                                    <li><a class="table_link">@x</a></li>
+                                    <li><a class="table_link ">@x</a></li>
                                 }
                                 <li role="separator" class="divider"></li>
                                 <li class="dropdown-header">Lenses</li>
                                 @webAPI.getAllLenses().map { x =>
-                                <li><a class="table_link">@x</a></li>
+                                <li><a class="lens_link">@x</a></li>
                                 }
                                 <li role="separator" class="divider"></li>
                                 <li class="dropdown-header">Databases</li>
@@ -78,7 +78,7 @@
         <div id="drop_area">
             <form action="loadTable" class="dropzone" id="myAwesomeDropzone">
                 <div class="dz-message"><h4>Drag and drop .csv files here to load them into the database</h4></div>
-                <input type="hidden" name="db" value=""/>
+                <input type="hidden" name="db" value="@webAPI.dbName"/>
             </form>
             <div class="close_btn"><span class="close_x">&#10006;</span></div>
         </div>
