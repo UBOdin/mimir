@@ -2,7 +2,10 @@ package mimir.sql;
 
 import java.sql._
 
-import mimir.algebra.Type;
+import mimir.algebra.Type
+
+import scala.collection.mutable.ListBuffer
+;
 
 object JDBCUtils {
   def convertSqlType(t: Int): Type.T = { 
@@ -58,11 +61,16 @@ class JDBCBackend(conn: Connection) extends Backend
     stmt.close();
   }
   
-  def getTableSchema(table: String): List[(String, Type.T)] = 
+  def getTableSchema(table: String): Option[List[(String, Type.T)]] =
   {
-    val cols = 
-      conn.getMetaData().getColumns(null, null, table, "%");
-    var ret = List[(String, Type.T)]();
+    val tables = this.getAllTables().map{(x) => x.toUpperCase}
+    if(!tables.contains(table.toUpperCase)) return None
+
+    val cols = conn.getMetaData()
+      .getColumns(null, null, table, "%")
+
+    var ret = List[(String, Type.T)]()
+
     while(cols.isBeforeFirst()){ cols.next(); }
     while(!cols.isAfterLast()){
       ret = ret ++ List((
@@ -71,12 +79,21 @@ class JDBCBackend(conn: Connection) extends Backend
         ))
       cols.next();
     }
-    return ret;
+    return Some(ret);
   }
 
-  def getAllTables(): ResultSet = {
+  def getAllTables(): List[String] = {
     val metadata = conn.getMetaData()
-    metadata.getTables(null, null, "", null)
+    val tables = metadata.getTables(null, null, "", null)
+
+    val tableNames = new ListBuffer[String]()
+
+    while(tables.next()) {
+      tableNames.append(tables.getString("TABLE_NAME"))
+    }
+
+    tables.close()
+    tableNames.toList
   }
 
   def close(): Unit = {

@@ -17,7 +17,7 @@ abstract class Backend {
     return execute(sel);
   }
   
-  def getTableSchema(table: String): List[(String, Type.T)];
+  def getTableSchema(table: String): Option[List[(String, Type.T)]]
   def getTableOperator(table: String): Operator =
     getTableOperator(table, Map[String,Type.T]())
   def getTableOperator(table: String, metadata: Map[String, Type.T]): 
@@ -25,7 +25,10 @@ abstract class Backend {
   {
     Table(
       table, 
-      getTableSchema(table).toMap,
+      getTableSchema(table) match {
+        case Some(x) => x.toMap
+        case None => throw new SQLException("Table does not exist in db!")
+      },
       metadata
     )
   }
@@ -33,6 +36,6 @@ abstract class Backend {
   def update(stmt: String): Unit
   def update(stmt: String, args: List[String]): Unit
 
-  def getAllTables(): ResultSet
+  def getAllTables(): List[String]
   def close(): Unit
 }

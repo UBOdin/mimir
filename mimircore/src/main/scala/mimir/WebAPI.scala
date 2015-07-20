@@ -28,6 +28,10 @@ class WebAPI {
 
     // Set up the database connection(s)
     dbName = conf.dbname()
+    if(dbName.length <= 0) {
+      throw new Exception("DB name must be configured!")
+    }
+
     val backend = conf.backend() match {
       case "oracle" => new JDBCBackend(Mimir.connectOracle())
       case "sqlite" => new JDBCBackend(Mimir.connectSqlite(dbName))
@@ -42,7 +46,7 @@ class WebAPI {
     if(conf.initDB()){
       db.initializeDBForMimir()
     } else if(conf.loadTable.get != None){
-      Mimir.handleLoadTable(db, conf.loadTable(), conf.loadTable()+".csv")
+      db.handleLoadTable(conf.loadTable(), conf.loadTable()+".csv")
     }
   }
 
@@ -102,18 +106,7 @@ class WebAPI {
   }
 
   def getAllTables(): List[String] = {
-    val res = db.backend.getAllTables()
-    val iter = new ResultSetIterator(res)
-    val tableNames = new ListBuffer[String]()
-
-    iter.open()
-    while(iter.getNext()) {
-      val name = iter(2).asString
-      if(!name.equalsIgnoreCase("MIMIR_LENSES")) tableNames.append(name)
-    }
-    iter.close()
-
-    tableNames.toList
+    db.backend.getAllTables()
   }
 
   def getAllLenses(): List[String] = {

@@ -4,12 +4,8 @@ if (window.console) {
 
 $( document ).ready(function() {
 
-    $(".table_link").on("click", function() {
+    $(".table_link, .lens_link").on("click", function() {
         var table = $(this).html();
-        if(table === "Lenses") {
-            table = "MIMIR_LENSES";
-        }
-
         var query = "SELECT * FROM "+table+";";
 
         $("#query_textarea").val(query);
@@ -241,10 +237,34 @@ $( document ).ready(function() {
     });
 
     Dropzone.options.myAwesomeDropzone = {
-      maxFilesize: 2, // MB
+      maxFilesize: 100000, // MB
       acceptedFiles: ".csv",
       addRemoveLinks: true,
       init: function() {
+        this.on('success', function () {
+            var acceptedFiles = [];
+            this.getAcceptedFiles().forEach(function (element, index, array) {
+                acceptedFiles.push(element.name.replace(/\.csv/i, ""));
+            });
+            var listedFiles = [];
+            $(".table_link").each( function() {
+                listedFiles.push( $(this).html() );
+            });
+            acceptedFiles.forEach(function (element, index, array) {
+                var i;
+                var found = false;
+                for(i= 0; i<listedFiles.length; i++) {
+                    if(element.toUpperCase() === listedFiles[i].toUpperCase()) {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if(!found) {
+                    $("#tables_header").after('<li><a class="table_link ">'+element+'</a></li>');
+                }
+            });
+        });
         this.on("error", function() {
             var span = $("span[data-dz-errormessage]");
             span.html("There is no table with this name in the current database!");

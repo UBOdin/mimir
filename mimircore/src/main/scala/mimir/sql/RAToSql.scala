@@ -19,11 +19,11 @@ class RAToSql(db: Database) {
       case Table(name, sch, metadata) => {
         val body = new PlainSelect();
         val table = new net.sf.jsqlparser.schema.Table(null, name)
-        val baseSch = db.getTableSchema(name);
+        val baseSch = db.getTableSchema(name).get
         body.setFromItem(table)
         body.setSelectItems(
           // new java.util.ArrayList(
-            sch.keys.zip(baseSch.map( _._1 )).map(_ match { 
+            sch.keys.zip(baseSch.map( _._1 )).map(_ match {
               case (external, internal) =>
                 val item = new SelectExpressionItem()
                 item.setAlias(external)
