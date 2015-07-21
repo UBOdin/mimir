@@ -1,17 +1,6 @@
 $( document ).ready(function() {
 
     /*
-    This is for Safari's lack of support for startsWith,
-    which is essential for error handling
-    Thanks to StackOverflow for this simple code fragment
-    */
-    if (typeof String.prototype.startsWith != 'function') {
-      String.prototype.startsWith = function (str){
-        return this.slice(0, str.length) == str;
-      };
-    }
-
-    /*
     Basic interactive animations
     */
     $("#about_btn").on("click", function() {
@@ -170,6 +159,7 @@ $( document ).ready(function() {
                 var causes = [];
 
                 var fault = false;
+                var errormessage = "";
 
                 var data_params_query = 'queryjson?query=SELECT BOUNDS('+col
                                         +'), VAR('+col+'), CONFIDENCE('+col+') FROM ('+query
@@ -182,8 +172,9 @@ $( document ).ready(function() {
 
                     $.when(
                         $.get(data_params_query, function (res) {
-                            if(res.hasOwnProperty('result') && res.result.startsWith("Command Ignored")) {
+                            if(res.hasOwnProperty('error')) {
                                 fault = true;
+                                errormessage += res.error+'<br/>';
                             }
                             else {
                                 bounds[0] = res.data[0][1];
@@ -196,8 +187,9 @@ $( document ).ready(function() {
                             }
                         }),
                         $.get(vgterms_query, function (res) {
-                            if(res.hasOwnProperty('result') && res.result.startsWith("Command Ignored")) {
+                            if(res.hasOwnProperty('error')) {
                                 fault = true;
+                                errormessage += res.error+'<br/>';
                             }
                             else {
                                 causes = res;
@@ -205,7 +197,7 @@ $( document ).ready(function() {
                         })
                     ).then( function() {
                         if(fault) {
-                            origin.tooltipster('content', 'Something went wrong!');
+                            origin.tooltipster('content', 'Something went wrong!<br/><br/>'+errormessage);
                         }
                         else {
                             var tooltip_template = '<table class="table tooltip_table">'+
@@ -267,6 +259,7 @@ $( document ).ready(function() {
                 var causes = [];
 
                 var fault = false;
+                var errormessage = "";
 
                 var prob_query = 'queryjson?query=SELECT PROB() FROM ('+query+') AS TEMP WHERE ROWID = '+row+';&db='+db;
                 var vgterms_query = 'vgterms?query='+query+';&ind='+-1+'&db='+db;
@@ -274,16 +267,18 @@ $( document ).ready(function() {
                 if (content == null) {
                     $.when(
                         $.get(prob_query, function (res) {
-                            if(res.hasOwnProperty('result') && res.result.startsWith("Command Ignored")) {
+                            if(res.hasOwnProperty('error')) {
                                 fault = true;
+                                errormessage += res.error+'<br/>';
                             }
                             else {
                                 prob = res.data[0][1];
                             }
                         }),
                         $.get(vgterms_query, function (res) {
-                            if(res.hasOwnProperty('result') && res.result.startsWith("Command Ignored")) {
+                            if(res.hasOwnProperty('error')) {
                                 fault = true;
+                                errormessage += res.error+'<br/>';
                             }
                             else {
                                 causes = res;
@@ -291,7 +286,7 @@ $( document ).ready(function() {
                         })
                     ).then( function() {
                         if(fault) {
-                            origin.tooltipster('content', 'Something went wrong!');
+                            origin.tooltipster('content', 'Something went wrong!<br/><br/>'+errormessage);
                         }
                         else {
                             var tooltip_template = '<table class="table tooltip_table">'+

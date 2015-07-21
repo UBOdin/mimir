@@ -1,6 +1,6 @@
 @(webAPI: mimir.WebAPI, query: String, result: mimir.WebResult)
 
-@import mimir.{WebQueryResult, WebStringResult}
+@import mimir.{WebQueryResult, WebStringResult, WebErrorResult}
 
 <html lang="en">
 <head>
@@ -95,6 +95,7 @@
             @result match {
                 case WebQueryResult(iter) => { @tableGenerator(iter) }
                 case WebStringResult(string) => { <pre>@string</pre> }
+                case WebErrorResult(string) => { <pre class="error">Command Ignored.<br/><br/>@string</pre> }
             }
         </div>
         <form id="create_db_form" class="hidden" action="createDB" method="POST">

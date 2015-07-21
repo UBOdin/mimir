@@ -2,7 +2,7 @@ package controllers
 
 import java.io.File
 
-import mimir.{WebAPI, WebResult, WebQueryResult, WebStringResult}
+import mimir._
 import play.api.mvc._
 import play.api.libs.json._
 
@@ -20,6 +20,12 @@ class Application extends Controller {
       "data" -> webQueryResult.webIterator.data.map(x => x._1),
       "rowValidity" -> webQueryResult.webIterator.data.map(x => x._2),
       "missingRows" -> webQueryResult.webIterator.missingRows
+    )
+  }
+
+  implicit val WebErrorResultWrites = new Writes[WebErrorResult] {
+    def writes(webErrorResult: WebErrorResult) = Json.obj(
+      "error" -> webErrorResult.result
     )
   }
 
@@ -78,6 +84,7 @@ class Application extends Controller {
     result match {
       case x: WebStringResult => Ok(Json.toJson(x.asInstanceOf[WebStringResult]))
       case x: WebQueryResult  => Ok(Json.toJson(x.asInstanceOf[WebQueryResult]))
+      case x: WebErrorResult  => Ok(Json.toJson(x.asInstanceOf[WebErrorResult]))
     }
   }
 

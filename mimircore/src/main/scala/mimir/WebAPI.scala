@@ -76,9 +76,7 @@ class WebAPI {
     } catch {
       case e: Throwable => {
         e.printStackTrace()
-        println("\n\n=================================\n\n")
-
-        new WebStringResult("Command Ignored\n\n"+e.getMessage)
+        new WebErrorResult(e.getMessage)
       }
     }
 
@@ -150,9 +148,7 @@ class WebAPI {
       } catch {
         case e: Throwable => {
           e.printStackTrace()
-          println("\n\n=================================\n\n")
-
-          new WebStringResult("Command Ignored\n\n"+e.getMessage)
+          new WebErrorResult(e.getMessage)
         }
       }
 
@@ -200,8 +196,16 @@ case class WebQueryResult(webIterator: WebIterator) extends WebResult {
   val result = webIterator
 
   def toJson() = {
-    new JSONObject(Map("header" -> webIterator.header,
-                        "data" -> webIterator.data,
-                        "missingRows" -> webIterator.missingRows))
+    new JSONObject(Map("header" -> result.header,
+                        "data" -> result.data,
+                        "missingRows" -> result.missingRows))
+  }
+}
+
+case class WebErrorResult(string: String) extends WebResult {
+  val result = string
+
+  def toJson() = {
+    new JSONObject(Map("error" -> result))
   }
 }
