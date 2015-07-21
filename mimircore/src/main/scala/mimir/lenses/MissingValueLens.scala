@@ -123,6 +123,8 @@ class MissingValueModel(lens: MissingValueLens)
   var data: Instances = null; 
   var numCorrect = 0;
   var numSamples = 0;
+  def reason(): String =
+    "Missing values for attribute(s) "+lens.keysToBeCleaned.mkString(", ")
 
   def init(d: Instances) = {
     data = d

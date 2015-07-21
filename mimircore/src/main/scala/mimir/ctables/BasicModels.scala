@@ -1,9 +1,8 @@
 package mimir.ctables
 
-import scala.util._
-
-import mimir.Database
 import mimir.algebra._
+
+import scala.util._
 
 abstract class SingleVarModel(vt: Type.T) extends Model {
   def varType = vt
@@ -18,6 +17,7 @@ abstract class SingleVarModel(vt: Type.T) extends Model {
   def upperBoundExpr(args: List[Expression]): Expression
   def sampleGenExpr(args: List[Expression]): Expression
   def sample(seed: Long, args: List[PrimitiveValue]): PrimitiveValue
+  def reason(): String
 
   def mostLikelyValue(x:Int, args: List[PrimitiveValue]) = mostLikelyValue(args)
   def lowerBound(x: Int, args: List[PrimitiveValue]) = lowerBound(args)
@@ -28,6 +28,8 @@ abstract class SingleVarModel(vt: Type.T) extends Model {
   def upperBoundExpr(x: Int, args: List[Expression]) = upperBoundExpr(args)
   def sampleGenExpr(x: Int, args: List[Expression]) = sampleGenExpr(args)
   def sample(seed: Long, x: Int, args: List[PrimitiveValue]) = sample(seed, args)
+  def reason(x: Int): String = reason()
+
 }
 
 case class JointSingleVarModel(vars: List[SingleVarModel]) extends Model {
@@ -51,6 +53,9 @@ case class JointSingleVarModel(vars: List[SingleVarModel]) extends Model {
     vars(idx).sampleGenExpr(args)
   def sample(seed: Long, idx: Int, args: List[PrimitiveValue]) = 
     vars(idx).sample(seed, args)
+
+  override def reason(idx: Int): String =
+    vars(idx).reason
 }
 
 object UniformDistribution extends SingleVarModel(Type.TFloat){
@@ -68,6 +73,8 @@ object UniformDistribution extends SingleVarModel(Type.TFloat){
     val high = args(1).asDouble
     FloatPrimitive(new Random(seed).nextDouble() * (high - low) + low)
   }
+
+  override def reason(): String = "Unknown"   // TODO
 }
 
 case class NoOpModel(vt: Type.T) extends SingleVarModel(vt) {
@@ -80,4 +87,6 @@ case class NoOpModel(vt: Type.T) extends SingleVarModel(vt) {
   def upperBoundExpr(args: List[Expression]) = args(0)
   def sampleGenExpr(args: List[Expression]) = args(0)
   def sample(seed: Long, args: List[PrimitiveValue]) = args(0)
+
+  override def reason(): String = "None"
 }

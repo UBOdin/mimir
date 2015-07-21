@@ -148,7 +148,7 @@ class WebAPI {
       } catch {
         case e: Throwable => {
           e.printStackTrace()
-          new WebErrorResult(e.getMessage)
+          return List()
         }
       }
 
@@ -162,7 +162,7 @@ class WebAPI {
     val i = if(ind == -1) projection.columns.length - 1 else ind
 
     val arg = projection.columns(i).input
-    return db.getVGTerms(arg).map((x) => x.toString())
+    db.getVGTerms(arg).map((x) => x.reason())
   }
 
   def close(): Unit = {
