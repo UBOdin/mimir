@@ -206,7 +206,7 @@ $( document ).ready(function() {
                                                   '<tbody>'+
                                                       '<tr>'+
                                                           '<th scope="row">Confidence</th>'+
-                                                          '<td>'+prob+'</td>'+
+                                                          '<td class="number">'+prob+'</td>'+
                                                       '</tr>'+
                                                       '<tr>'+
                                                           '<th scope="row">VG Terms</th>'+
