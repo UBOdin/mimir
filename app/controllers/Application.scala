@@ -35,7 +35,9 @@ class Application extends Controller {
 
     val result: WebResult = new WebStringResult("Query results show up here...")
 
-    generateResponse(webAPI, "", result)
+    val response: Result = Ok(views.html.index(webAPI, "", result))
+    webAPI.close()
+    response
   }
 
   def query = Action { request =>
@@ -54,7 +56,9 @@ class Application extends Controller {
       result = new WebStringResult("Working database changed to "+db)
     }
 
-    generateResponse(webAPI, query, result)
+    val response: Result = Ok(views.html.index(webAPI, query, result))
+    webAPI.close()
+    response
   }
 
   def queryGet(query: String, db: String) = Action {
@@ -70,7 +74,9 @@ class Application extends Controller {
       result = new WebStringResult("Working database changed to "+db)
     }
 
-    generateResponse(webAPI, query, result)
+    val response: Result = Ok(views.html.index(webAPI, query, result))
+    webAPI.close()
+    response
   }
 
   def queryJson(query: String, db: String) = Action {
@@ -81,11 +87,14 @@ class Application extends Controller {
 
     result = webAPI.handleStatement(query)
 
-    result match {
+    val response = result match {
       case x: WebStringResult => Ok(Json.toJson(x.asInstanceOf[WebStringResult]))
       case x: WebQueryResult  => Ok(Json.toJson(x.asInstanceOf[WebQueryResult]))
       case x: WebErrorResult  => Ok(Json.toJson(x.asInstanceOf[WebErrorResult]))
     }
+
+    webAPI.close()
+    response
   }
 
   def createDB = Action { request =>
@@ -96,7 +105,9 @@ class Application extends Controller {
     webAPI.configure(Array("--db", db, "--init"))
     val result: WebResult = new WebStringResult("Database "+db+" successfully created.")
 
-    generateResponse(webAPI, "", result)
+    val response: Result = Ok(views.html.index(webAPI, "", result))
+    webAPI.close()
+    response
   }
 
   def loadTable = Action(parse.multipartFormData) { request =>
@@ -115,7 +126,9 @@ class Application extends Controller {
 
     val result: WebResult = new WebStringResult("CSV file loaded.")
 
-    generateResponse(webAPI, "", result)
+    val response: Result = Ok(views.html.index(webAPI, "", result))
+    webAPI.close()
+    response
   }
 
   def allTables(db: String) = Action {
@@ -124,7 +137,9 @@ class Application extends Controller {
 
     val result = webAPI.getAllDBs()
 
-    Ok(Json.toJson(result))
+    val response = Ok(Json.toJson(result))
+    webAPI.close()
+    response
   }
 
   def getVGTerms(query: String, ind: String, db: String) = Action {
@@ -134,12 +149,8 @@ class Application extends Controller {
     val i = Integer.parseInt(ind)
     val result = webAPI.getVGTerms(query, i)
 
-    Ok(Json.toJson(result))
-  }
-
-  private def generateResponse(webAPI: WebAPI, query: String, result: WebResult): Result = {
-    val response: Result = Ok(views.html.index(webAPI, query, result))
+    val response = Ok(Json.toJson(result))
     webAPI.close()
-    return response
+    response
   }
 }
