@@ -1,8 +1,13 @@
-if (window.console) {
-    console.log("Welcome to your Play application's JavaScript!");
-}
-
 $( document ).ready(function() {
+
+    // This is for Safari's lack of support for startsWith,
+    // which is essential for error handling
+    // Thanks to StackOverflow for this simple code fragment
+    if (typeof String.prototype.startsWith != 'function') {
+      String.prototype.startsWith = function (str){
+        return this.slice(0, str.length) == str;
+      };
+    }
 
     $(".table_link, .lens_link").on("click", function() {
         var table = $(this).html();
