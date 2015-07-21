@@ -65,7 +65,7 @@ object Eval
             }
           ).getOrElse(eval(caseElse, bindings))
         case Not(NullPrimitive()) => NullPrimitive()
-        case Not(e) => BoolPrimitive(!evalBool(e))
+        case Not(e) => BoolPrimitive(!evalBool(e, bindings))
         case p:Proc => {
           p.get(p.getArgs.map(eval(_, bindings)))
         }
