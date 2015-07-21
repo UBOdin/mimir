@@ -1,14 +1,34 @@
 $( document ).ready(function() {
 
-    // This is for Safari's lack of support for startsWith,
-    // which is essential for error handling
-    // Thanks to StackOverflow for this simple code fragment
+    /*
+    This is for Safari's lack of support for startsWith,
+    which is essential for error handling
+    Thanks to StackOverflow for this simple code fragment
+    */
     if (typeof String.prototype.startsWith != 'function') {
       String.prototype.startsWith = function (str){
         return this.slice(0, str.length) == str;
       };
     }
 
+    /*
+    Basic interactive animations
+    */
+    $("#about_btn").on("click", function() {
+        $("#about").toggle(100);
+    });
+
+    $("#upload").on("click", function() {
+        $("#drop_area").toggle(100);
+    });
+
+    $(".close_btn").on("click", function() {
+        $(this).parent().hide(100);
+    });
+
+    /*
+    Generate query for showing tables and lenses
+    */
     $(".table_link, .lens_link").on("click", function() {
         var table = $(this).html();
         var query = "SELECT * FROM "+table+";";
@@ -17,6 +37,9 @@ $( document ).ready(function() {
         $("#query_btn").trigger("click");
     });
 
+    /*
+    Change the working database
+    */
     $(".db_link").on("click", function() {
         var db = $(this).html();
         var curr = $("#curr_db").html().trim();
@@ -28,10 +51,14 @@ $( document ).ready(function() {
         }
     });
 
+    /*
+    Create a new database
+    */
     $("#create_database").on("click", function() {
         var db = prompt("Please enter a name for the new database", "awesomedb");
         var existing_dbs = new Array();
 
+        // Check for valid name
         if(!db.match(/^\w+$/))
             alert("That is not a valid name, please try again");
 
@@ -50,126 +77,186 @@ $( document ).ready(function() {
         }
     });
 
+
+    /*
+    Plugin Configurations
+    */
+
+    /*
+    ColResizable
+    http://www.bacubacu.com/colresizable/
+
+    Resizable columns, automatic adjustment
+    for equally spaced columns
+    */
     $("#result_table").colResizable( {
         liveDrag: true,
-        minWidth: 20
+        minWidth: 10
     });
 
-    $("#about_btn").on("click", function() {
-        $("#about").toggle(100);
-    });
+    /*
+    Dropzone
+    http://www.dropzonejs.com
 
-    $("#upload").on("click", function() {
-        $("#drop_area").toggle(100);
-    });
+    Enables csv upload
+    */
+    Dropzone.options.myAwesomeDropzone = {
+      maxFilesize: 100000, // MB
+      acceptedFiles: ".csv",
+      addRemoveLinks: true,
+      init: function() {
+        this.on('success', function () {
+            var acceptedFiles = [];
+            this.getAcceptedFiles().forEach(function (element, index, array) {
+                acceptedFiles.push(element.name.replace(/\.csv/i, ""));
+            });
+            var listedFiles = [];
+            $(".table_link").each( function() {
+                listedFiles.push( $(this).html() );
+            });
+            acceptedFiles.forEach(function (element, index, array) {
+                var i;
+                var found = false;
+                for(i= 0; i<listedFiles.length; i++) {
+                    if(element.toUpperCase() === listedFiles[i].toUpperCase()) {
+                        found = true;
+                        break;
+                    }
+                }
 
-    $(".close_btn").on("click", function() {
-        $(this).parent().hide(100);
-    });
+                if(!found) {
+                    $("#tables_header").after('<li><a class="table_link ">'+element+'</a></li>');
+                }
+            });
+        });
+        this.on("error", function() {
+            var span = $("span[data-dz-errormessage]");
+            span.html("There is no table with this name in the current database!");
+        });
+      }
+    };
 
+    /*
+    Tooltipster
+    http://iamceege.github.io/tooltipster/
 
+    For tooltips
+    */
+
+    // Cell level uncertainty
     $(".non_deterministic_cell").one("click", function(e) {
         $(this).tooltipster({
             animation: 'grow',
-            delay: 10,
             contentAsHTML: 'true',
-            functionInit: function(origin, content) {
-
-                    var col_index = origin.prevAll().length;
-            		var col = origin.parents('table').find('th').eq(col_index).text();
-                    var row = origin.parent().children(".rowid_col").html();
-                    var query = $("#query_textarea").val().replace(";","");
-                    var db = $("#db_field").val();
-
-                    var bounds = [];
-                    var variance;
-                    var conf_int = [];
-                    var causes = [];
-
-                    var fault = false;
-
-                    var data_params_query = 'queryjson?query=SELECT BOUNDS('+col
-                                            +'), VAR('+col+'), CONFIDENCE('+col+') FROM ('+query
-                                            +') AS TEMP WHERE ROWID = '+row+';&db='+db;
-
-                    var vgterms_query = 'vgterms?query='+query+';&ind='+ (col_index-1)   // because of ROW_ID
-                                            +'&db='+db;
-
-                    if (content == null) {
-
-                        $.when(
-                            $.get(data_params_query, function (res) {
-                                if(res.hasOwnProperty('result') && res.result.startsWith("Command Ignored")) {
-                                    fault = true;
-                                }
-                                else {
-                                    bounds[0] = res.data[0][1];
-                                    bounds[1] = res.data[0][2];
-                                    variance = res.data[0][3];
-                                    var confStr = res.data[0][4];
-                                    var confVal = confStr.split(" - ");
-                                    conf_int[0] = confVal[0].substring(1);
-                                    conf_int[1] = confVal[1].substring(0, confVal[1].length-1);
-                                }
-                            }),
-                            $.get(vgterms_query, function (res) {
-                                if(res.hasOwnProperty('result') && res.result.startsWith("Command Ignored")) {
-                                    fault = true;
-                                }
-                                else {
-                                    causes = res;
-                                }
-                            })
-                        ).then( function() {
-                            if(fault) {
-                                origin.tooltipster('content', 'Something went wrong!');
-                            }
-                            else {
-                                var tooltip_template = '<table class="table tooltip_table">'+
-                                                      '<tbody>'+
-                                                          '<tr>'+
-                                                              '<th scope="row">Bounds</th>'+
-                                                              '<td class="number">'+ parseFloat(bounds[0]).toFixed(2) +' - '+ parseFloat(bounds[1]).toFixed(2) +'</td>'+
-                                                          '</tr>'+
-                                                          '<tr>'+
-                                                              '<th scope="row">Variance</th>'+
-                                                              '<td class="number">'+ parseFloat(variance).toFixed(2) +'</td>'+
-                                                          '</tr>'+
-                                                          '<tr>'+
-                                                              '<th scope="row">Confidence Interval</th>'+
-                                                              '<td class="number">'+ parseFloat(conf_int[0]).toFixed(2) + ' - '+ parseFloat(conf_int[1]).toFixed(2) +'</td>'+
-                                                          '</tr>'+
-                                                          '<tr>'+
-                                                              '<th scope="row">VG Terms</th>'+
-                                                              '<td><ul>'+ listify(causes) +'</ul></td>'+
-                                                          '</tr>'+
-                                                      '</tbody>'+
-                                                  '</table>';
-                                origin.tooltipster('content', tooltip_template);
-                            }
-                        });
-
-                        // this returned string will overwrite the content of the tooltip for the time being
-                        return '<b>Loading...</b>';
-                    }
-                    else {
-                        // return nothing : the initialization continues normally with its content unchanged.
-                    }
-                },
-            theme: 'tooltipster-shadow',
-            position: 'bottom',
+            delay: 10,
             minWidth: 350,
             maxWidth: 350,
+            position: 'bottom',
+            theme: 'tooltipster-shadow',
             trigger: 'click',
+            functionInit: function(origin, content) {
+
+                // Get content through ajax queries
+
+                var col_index = origin.prevAll().length;
+                var col = origin.parents('table').find('th').eq(col_index).text();
+                var row = origin.parent().children(".rowid_col").html();
+                var query = $("#query_textarea").val().replace(";","");
+                var db = $("#db_field").val();
+
+                var bounds = [];
+                var variance;
+                var conf_int = [];
+                var causes = [];
+
+                var fault = false;
+
+                var data_params_query = 'queryjson?query=SELECT BOUNDS('+col
+                                        +'), VAR('+col+'), CONFIDENCE('+col+') FROM ('+query
+                                        +') AS TEMP WHERE ROWID = '+row+';&db='+db;
+
+                var vgterms_query = 'vgterms?query='+query+';&ind='+ (col_index-1)   // because of ROW_ID
+                                        +'&db='+db;
+
+                if (content == null) {
+
+                    $.when(
+                        $.get(data_params_query, function (res) {
+                            if(res.hasOwnProperty('result') && res.result.startsWith("Command Ignored")) {
+                                fault = true;
+                            }
+                            else {
+                                bounds[0] = res.data[0][1];
+                                bounds[1] = res.data[0][2];
+                                variance = res.data[0][3];
+                                var confStr = res.data[0][4];
+                                var confVal = confStr.split(" - ");
+                                conf_int[0] = confVal[0].substring(1);
+                                conf_int[1] = confVal[1].substring(0, confVal[1].length-1);
+                            }
+                        }),
+                        $.get(vgterms_query, function (res) {
+                            if(res.hasOwnProperty('result') && res.result.startsWith("Command Ignored")) {
+                                fault = true;
+                            }
+                            else {
+                                causes = res;
+                            }
+                        })
+                    ).then( function() {
+                        if(fault) {
+                            origin.tooltipster('content', 'Something went wrong!');
+                        }
+                        else {
+                            var tooltip_template = '<table class="table tooltip_table">'+
+                                                  '<tbody>'+
+                                                      '<tr>'+
+                                                          '<th scope="row">Bounds</th>'+
+                                                          '<td class="number">'+ parseFloat(bounds[0]).toFixed(2) +' - '+ parseFloat(bounds[1]).toFixed(2) +'</td>'+
+                                                      '</tr>'+
+                                                      '<tr>'+
+                                                          '<th scope="row">Variance</th>'+
+                                                          '<td class="number">'+ parseFloat(variance).toFixed(2) +'</td>'+
+                                                      '</tr>'+
+                                                      '<tr>'+
+                                                          '<th scope="row">Confidence Interval</th>'+
+                                                          '<td class="number">'+ parseFloat(conf_int[0]).toFixed(2) + ' - '+ parseFloat(conf_int[1]).toFixed(2) +'</td>'+
+                                                      '</tr>'+
+                                                      '<tr>'+
+                                                          '<th scope="row">VG Terms</th>'+
+                                                          '<td><ul>'+ listify(causes) +'</ul></td>'+
+                                                      '</tr>'+
+                                                  '</tbody>'+
+                                              '</table>';
+                            origin.tooltipster('content', tooltip_template);
+                        }
+                    });
+
+                    // this returned string will overwrite the content of the tooltip for the time being
+                    return '<b>Loading...</b>';
+                }
+                else {
+                    // return nothing : the initialization continues normally with its content unchanged.
+                }
+            },
         });
 
+        // User click only attached the listener, now trigger click
+        // to actually display the tooltip
         $(this).click();
     });
 
+    // Row level uncertainty
     $(".non_deterministic_row").one("click", function(e) {
         $(this).tooltipster({
             animation: 'grow',
+            contentAsHTML: 'true',
             delay: 10,
+            minWidth: 350,
+            maxWidth: 350,
+            position: 'top-right',
+            theme: 'tooltipster-shadow',
+            trigger: 'click',
             functionInit: function(origin, content) {
 
                 var row = origin.children(".rowid_col").html();
@@ -230,55 +317,17 @@ $( document ).ready(function() {
                     // return nothing : the initialization continues normally with its content unchanged.
                 }
             },
-            contentAsHTML: 'true',
-            theme: 'tooltipster-shadow',
-            position: 'top-right',
-            minWidth: 350,
-            maxWidth: 350,
-            trigger: 'click',
         });
 
         $(this).click();
     });
 
-    Dropzone.options.myAwesomeDropzone = {
-      maxFilesize: 100000, // MB
-      acceptedFiles: ".csv",
-      addRemoveLinks: true,
-      init: function() {
-        this.on('success', function () {
-            var acceptedFiles = [];
-            this.getAcceptedFiles().forEach(function (element, index, array) {
-                acceptedFiles.push(element.name.replace(/\.csv/i, ""));
-            });
-            var listedFiles = [];
-            $(".table_link").each( function() {
-                listedFiles.push( $(this).html() );
-            });
-            acceptedFiles.forEach(function (element, index, array) {
-                var i;
-                var found = false;
-                for(i= 0; i<listedFiles.length; i++) {
-                    if(element.toUpperCase() === listedFiles[i].toUpperCase()) {
-                        found = true;
-                        break;
-                    }
-                }
-
-                if(!found) {
-                    $("#tables_header").after('<li><a class="table_link ">'+element+'</a></li>');
-                }
-            });
-        });
-        this.on("error", function() {
-            var span = $("span[data-dz-errormessage]");
-            span.html("There is no table with this name in the current database!");
-        });
-      }
-    };
-
 });
 
+
+/*
+Utility functions
+*/
 function listify(causes) {
     var i;
     var result = '';
