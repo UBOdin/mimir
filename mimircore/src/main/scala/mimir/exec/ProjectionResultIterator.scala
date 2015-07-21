@@ -85,8 +85,10 @@ class ProjectionResultIterator(
       case Some(c) => Eval.evalBool(c)
       case None => true
     }
-  def deterministicCol(i: Int): Boolean =
-    Eval.evalBool(deterministicExprs(i))
+  def deterministicCol(i: Int): Boolean = {
+    val bindings = Map[String, PrimitiveValue](CTables.SEED_EXP -> IntPrimitive(1))
+    Eval.evalBool(deterministicExprs(i), bindings)
+  }
   
   def inputVar(i: Int) = src(i)
   def inputDet(i: Int) = src.deterministicCol(i)

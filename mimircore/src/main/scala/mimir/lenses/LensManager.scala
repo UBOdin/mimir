@@ -32,6 +32,8 @@ class LensManager(db: Database) {
     lensType.toUpperCase() match { 
       case "MISSING_VALUE" => 
         new MissingValueLens(lensName, args, source)
+      case "SCHEMA_MATCHING" =>
+        new SchemaMatchingLens(lensName, args, source)
     }
   }
 

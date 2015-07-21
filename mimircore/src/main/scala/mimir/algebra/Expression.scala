@@ -1,12 +1,8 @@
 package mimir.algebra;
 
+import java.sql._
+
 import mimir.ctables.CTables
-
-import scala.reflect.runtime.universe._
-
-import java.sql._;
-
-import mimir.util._;
 
 class TypeException(found: Type.T, expected: Type.T, 
                     context:String) 
@@ -43,7 +39,7 @@ object Type extends Enumeration {
   }
 }
 
-import Type._
+import mimir.algebra.Type._
 
 abstract class Expression { 
   def exprType(bindings: Map[String,Type.T]): Type.T
