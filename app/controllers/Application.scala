@@ -120,6 +120,16 @@ class Application extends Controller {
     Ok(Json.toJson(result))
   }
 
+  def getVGTerms(query: String, ind: String, db: String) = Action {
+    val webAPI = new WebAPI()
+    webAPI.configure(Array("--db", db))
+
+    val i = Integer.parseInt(ind)
+    val result = webAPI.getVGTerms(query, i)
+
+    Ok(Json.toJson(result))
+  }
+
   private def generateResponse(webAPI: WebAPI, query: String, result: WebResult): Result = {
     val response: Result = Ok(views.html.index(webAPI, query, result))
     webAPI.close()

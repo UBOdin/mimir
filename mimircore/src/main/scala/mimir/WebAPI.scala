@@ -2,6 +2,7 @@ package mimir
 
 import java.io.{File, StringReader}
 
+import mimir.algebra.{Project, Operator}
 import mimir.ctables.CTPercolator
 import mimir.exec.ResultSetIterator
 import mimir.parser.MimirJSqlParser
@@ -131,6 +132,41 @@ class WebAPI {
   def getAllDBs(): Array[String] = {
     val curDir = new File(".")
     curDir.listFiles().filter( f => f.isFile && f.getName.endsWith(".db")).map(x => x.getName)
+  }
+
+  def getVGTerms(query: String, ind: Int): List[String] = {
+    val source = new StringReader(query)
+    val parser = new MimirJSqlParser(source)
+
+    val raw =
+      try {
+        val stmt: Statement = parser.Statement();
+        if(stmt.isInstanceOf[Select]){
+          db.convert(stmt.asInstanceOf[Select])
+        } else {
+          throw new Exception("getVGTerms got statement that is not SELECT")
+        }
+
+      } catch {
+        case e: Throwable => {
+          e.printStackTrace()
+          println("\n\n=================================\n\n")
+
+          new WebStringResult("Command Ignored\n\n"+e.getMessage)
+        }
+      }
+
+    val optimized = db.optimize(raw.asInstanceOf[Operator])
+    if(!optimized.isInstanceOf[Project]) {
+      println("Optimized query is not a projection, VGTerm search failed")
+      return List()
+    }
+
+    val projection = optimized.asInstanceOf[Project]
+    val i = if(ind == -1) projection.columns.length - 1 else ind
+
+    val arg = projection.columns(i).input
+    return db.getVGTerms(arg).map((x) => x.toString())
   }
 
   def close(): Unit = {

@@ -1,7 +1,7 @@
 package mimir.algebra;
 
 import mimir.algebra.Type._
-import mimir.ctables.CTables
+import mimir.ctables.{VGTerm, CTables}
 
 object Eval 
 {
@@ -342,4 +342,32 @@ object Eval
       case Var(v) => Set(v)
       case _ => e.children.map(getVars(_)).fold(Set[String]())( _ ++ _ )
     }
+
+  def getVGTerms(e: Expression): List[VGTerm] = {
+    getVGTerms(e, List())
+  }
+
+  def getVGTerms(e: Expression, l: List[VGTerm]): List[VGTerm] = {
+    if(e.isInstanceOf[PrimitiveValue]){
+      l
+    } else {
+      e match {
+        case Arithmetic(_, lhs, rhs) =>
+          l ++ getVGTerms(lhs) ++ getVGTerms(rhs)
+        case Comparison(_, lhs, rhs) =>
+          l ++ getVGTerms(lhs) ++ getVGTerms(rhs)
+        case CaseExpression(caseWhens, caseElse) =>
+          l ++
+          caseWhens.foldLeft(List[VGTerm]())((list: List[VGTerm], wtClause: WhenThenClause) =>
+            getVGTerms(wtClause.when) ++ getVGTerms(wtClause.then)) ++
+          getVGTerms(caseElse)
+        case Not(e) => l ++ getVGTerms(e)
+        case vg: VGTerm => l ++ List(vg)
+        case IsNullExpression(c, n) => {
+          l ++ getVGTerms(c)
+        }
+        case _ => l
+      }
+    }
+  }
 }

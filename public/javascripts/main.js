@@ -87,7 +87,8 @@ $( document ).ready(function() {
                                             +'), VAR('+col+'), CONFIDENCE('+col+') FROM ('+query
                                             +') AS TEMP WHERE ROWID = '+row+';&db='+db;
 
-                    var vgterms_query = 'queryjson?query=EXPLAIN '+query+';&db='+db;
+                    var vgterms_query = 'vgterms?query='+query+';&ind='+ (col_index-1)   // because of ROW_ID
+                                            +'&db='+db;
 
                     if (content == null) {
 
@@ -111,7 +112,7 @@ $( document ).ready(function() {
                                     fault = true;
                                 }
                                 else {
-                                    causes = extractCauses(res.result, col_index);
+                                    causes = res;
                                 }
                             })
                         ).then( function() {
@@ -176,7 +177,7 @@ $( document ).ready(function() {
                 var fault = false;
 
                 var prob_query = 'queryjson?query=SELECT PROB() FROM ('+query+') AS TEMP WHERE ROWID = '+row+';&db='+db;
-                var vgterms_query = 'queryjson?query=EXPLAIN '+query+';&db='+db;
+                var vgterms_query = 'vgterms?query='+query+';&ind='+-1+'&db='+db;
 
                 if (content == null) {
                     $.when(
@@ -193,8 +194,7 @@ $( document ).ready(function() {
                                 fault = true;
                             }
                             else {
-                                causes = extractCauses(res.result, -1);
-                                // -1 will indicate __MIMIR_CONDITION
+                                causes = res;
                             }
                         })
                     ).then( function() {
@@ -228,7 +228,7 @@ $( document ).ready(function() {
             contentAsHTML: 'true',
             theme: 'tooltipster-shadow',
             position: 'top-right',
-            minWidth: 200,
+            minWidth: 350,
             maxWidth: 350,
             trigger: 'click',
         });
@@ -282,62 +282,4 @@ function listify(causes) {
     }
 
     return result;
-}
-
-function extractCauses(queryExplanation, col_index) {
-
-    var optimizedQuery = queryExplanation.split(/--- Optimized Query ---/i)[1];
-
-    var pos = 0;
-    var project = /PROJECT/i.exec(optimizedQuery);
-    if(project) {
-        pos = project.index + "PROJECT".length;
-    }
-
-    var projectArgs = getArguments(optimizedQuery, pos, "[", "]");
-
-    if(col_index == -1) {
-        return findVGTerms(projectArgs[projectArgs.length-1][1]);
-    } else {
-        return findVGTerms(projectArgs[col_index-1][1]);
-    }
-}
-
-function getArguments(str, pos, opening, closing) {
-
-    var braces = 0;
-    var i = pos;
-
-    do {
-        if(str.charAt(i) === opening) braces++;
-        else if(str.charAt(i) === closing) braces--;
-        i++;
-    } while(braces > 0 && i < str.length);
-
-    if(braces != 0) {
-        throw new Error('Mis-formed arguments');
-    }
-
-    var argsString = str.substring(pos+1, i-1);
-    var args = argsString.split(",");
-    var argsMap = new Array(args.length);
-
-    args.forEach(function (currentValue, index, array) {
-        var arg = currentValue.split("<=");
-        argsMap[index] = [arg[0].trim(), arg[1].trim()];
-    });
-
-    return argsMap;
-}
-
-function findVGTerms(str) {
-    var re = /{{([^}]*)}}/img;
-    var causes = [];
-    var match;
-
-    while(match = re.exec(str)) {
-        causes.push(match[1]);
-    }
-
-    return causes;
 }

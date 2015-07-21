@@ -4,7 +4,7 @@ import java.io.{FileReader, BufferedReader}
 import java.sql.SQLException
 
 import mimir.algebra._
-import mimir.ctables.Model
+import mimir.ctables.{VGTerm, Model}
 import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
 import mimir.lenses.{Lens, LensManager}
 import mimir.parser.OperatorParser
@@ -329,5 +329,16 @@ case class Database(backend: Backend)
         )
       }
     }
+  }
+
+  /**
+   * Find all VGTerms in an expression
+   */
+  def getVGTerms(expression: Expression): List[VGTerm] = {
+    return Eval.getVGTerms(expression)
+  }
+
+  def getVGTerms(expression: Expression, list: List[VGTerm]): List[VGTerm] = {
+    return Eval.getVGTerms(expression, list)
   }
 }
