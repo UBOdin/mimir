@@ -43,9 +43,9 @@ class SqlToRA(db: Database)
     if(sb.isInstanceOf[PlainSelect]){
       val ps = sb.asInstanceOf[PlainSelect]
       
-      var bindings = scala.collection.mutable.Map[String, String]()
-      var reverseBindings = scala.collection.mutable.Map[String, String]()
-      var sources = scala.collection.mutable.Map[String, List[String]]()
+      val bindings = scala.collection.mutable.Map[String, String]()
+      val reverseBindings = scala.collection.mutable.Map[String, String]()
+      val sources = scala.collection.mutable.Map[String, List[String]]()
       
       var (ret, currBindings, sourceAlias) = convert(ps.getFromItem)
       sources.put(sourceAlias, currBindings.values.toList);

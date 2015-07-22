@@ -1,15 +1,13 @@
 package mimir.lenses;
 
-import java.sql._;
-import java.io.StringReader;
-import collection.JavaConversions._;
+import java.sql._
 
-import mimir.parser._;
-import mimir.ctables._;
-import mimir.algebra._;
-import mimir.util._;
-import mimir.sql._;
-import mimir.{Database,Mimir};
+import mimir.Database
+import mimir.algebra._
+import mimir.ctables._
+import mimir.sql._
+
+import scala.collection.JavaConversions._
 
 
 class LensManager(db: Database) {
@@ -34,6 +32,8 @@ class LensManager(db: Database) {
         new MissingValueLens(lensName, args, source)
       case "SCHEMA_MATCHING" =>
         new SchemaMatchingLens(lensName, args, source)
+      case "TYPE_INFERENCE" =>
+        new TypeInferenceLens(lensName, args, source)
     }
   }
 

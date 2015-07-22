@@ -18,7 +18,7 @@ $( document ).ready(function() {
     /*
     Generate query for showing tables and lenses
     */
-    $(".table_link, .lens_link").on("click", function() {
+    $(document).on("click", ".table_link, .lens_link", function() {
         var table = $(this).html();
         var query = "SELECT * FROM "+table+";";
 
