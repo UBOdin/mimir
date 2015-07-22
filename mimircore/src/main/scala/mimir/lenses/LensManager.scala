@@ -40,7 +40,9 @@ class LensManager(db: Database) {
   def lensTypeString(lens: Lens): String =
   {
     lens match { 
-      case _:MissingValueLens => "MISSING_VALUE"
+      case _: MissingValueLens => "MISSING_VALUE"
+      case _: SchemaMatchingLens => "SCHEMA_MATCHING"
+      case _: TypeInferenceLens => "TYPE_INFERENCE"
     }
   }
 

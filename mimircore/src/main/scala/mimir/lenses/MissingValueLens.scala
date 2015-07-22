@@ -1,4 +1,4 @@
-package mimir.lenses;
+package mimir.lenses
 
 import java.sql._
 
@@ -59,8 +59,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
   }
   def build(db: Database): Unit = {
     this.db = db
-    val schema = source.schema.keys.map(_.toUpperCase).toList;
-    val results = db.backend.execute(db.convert(source));
+    val results = db.backend.execute(db.convert(source))
     models =
       sourceSchema.map(
           _ match { case (n,t) => (keysToBeCleaned.indexOf(n), t) }
@@ -68,15 +67,15 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
           if(idx < 0){ 
             new NoOpModel(t).asInstanceOf[SingleVarModel]
           } else {
-            val m = new MissingValueModel(this);
-            data = InstanceQuery.retrieveInstances(this, results);
+            val m = new MissingValueModel(this)
+            data = InstanceQuery.retrieveInstances(this, results)
             val classIndex = idx//allKeys().indexOf(keysToBeCleaned.get(idx))
-            data.setClassIndex(classIndex);
-            m.init(data);
-            m.asInstanceOf[SingleVarModel];
+            data.setClassIndex(classIndex)
+            m.init(data)
+            m.asInstanceOf[SingleVarModel]
           }
         })
-    model = new JointSingleVarModel(models);
+    model = new JointSingleVarModel(models)
   }
   
   def lensType = "MISSING_VALUE"
