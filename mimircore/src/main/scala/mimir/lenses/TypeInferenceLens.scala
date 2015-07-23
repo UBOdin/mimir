@@ -83,8 +83,11 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
       totalVotes += 1
     }
     def infer(): Type.T = {
+      if(totalVotes == 0)
+        return Type.TString
+
       val max = votes.maxBy(_._2)
-      if((max._2 / totalVotes) > 0.50) {
+      if((max._2.toFloat / totalVotes) > 0.50) {
         max._1
       } else {
         Type.TString
@@ -138,26 +141,29 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
   }
 
   def cast(v: String, t: T): PrimitiveValue = {
-    t match {
-      case Type.TBool =>
-        new BoolPrimitive(v.toBoolean)
+    try {
+      t match {
+        case Type.TBool =>
+          new BoolPrimitive(v.toBoolean)
 
-      case Type.TDate => {
-        val (y, m, d) = parseDate(v)
-        new DatePrimitive(y, m, d)
+        case Type.TDate => {
+          val (y, m, d) = parseDate(v)
+          new DatePrimitive(y, m, d)
+        }
+
+        case Type.TFloat =>
+          new FloatPrimitive(v.toDouble)
+
+        case Type.TInt =>
+          new IntPrimitive(v.toInt)
+
+        case _ =>
+          new StringPrimitive(v)
       }
-
-      case Type.TFloat =>
-        new FloatPrimitive(v.toDouble)
-
-      case Type.TInt =>
-        new IntPrimitive(v.toInt)
-
-      case _ =>
-        new StringPrimitive(v)
+    } catch {
+      case _: Exception => new NullPrimitive
+        // TODO More can be done for coercion here
     }
-
-    // TODO Coercion
   }
 
   def parseDate(date: String): (Int, Int, Int) = {
