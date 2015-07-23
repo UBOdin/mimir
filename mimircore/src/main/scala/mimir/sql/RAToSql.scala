@@ -23,14 +23,14 @@ class RAToSql(db: Database) {
         body.setFromItem(table)
         body.setSelectItems(
           // new java.util.ArrayList(
-            sch.keys.zip(baseSch.map( _._1 )).map(_ match {
+            sch.map(_._1).zip(baseSch.map( _._1 )).map(_ match {
               case (external, internal) =>
                 val item = new SelectExpressionItem()
                 item.setAlias(external)
                 item.setExpression(new Column(table, internal))
                 item
             }).toList ++
-            metadata.keys.map( (key) => {
+            metadata.map(_._1).map( (key) => {
               val item = new SelectExpressionItem()
               item.setAlias(key)
               item.setExpression(new Column(table, key))
@@ -55,7 +55,7 @@ class RAToSql(db: Database) {
       }
       case Select(_,_) | Join(_,_) => {
         convert(Project(
-          oper.schema.keys.map( (x) => ProjectArg(x, Var(x))).toList, oper
+          oper.schema.map(_._1).map( (x) => ProjectArg(x, Var(x))).toList, oper
         ))
       }
       case Project(args, src) =>
@@ -103,7 +103,7 @@ class RAToSql(db: Database) {
       case _ => 
         val subSelect = new SubSelect()
         subSelect.setSelectBody(convert(oper))
-        subSelect.setAlias("SUBQ_"+oper.schema.keys.head)
+        subSelect.setAlias("SUBQ_"+oper.schema.map(_._1).head)
         (BoolPrimitive(true), List[FromItem](subSelect))
     }
   }

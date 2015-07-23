@@ -1,11 +1,9 @@
 package mimir.parser;
 
-import scala.util.parsing.combinator.RegexParsers
-
 import mimir.algebra._
 import mimir.ctables._
 
-class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => Map[String,Type.T])) 
+class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => List[(String,Type.T)]))
 	extends ExpressionParser(modelLookup) 
 {
 
@@ -45,14 +43,14 @@ class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => Ma
 			case name ~ cols_and_metadata => {
 				cols_and_metadata match {
 					case None => 
-						Table(name, schemaLookup(name), Map[String,Type.T]())
+						Table(name, schemaLookup(name), List[(String,Type.T)]())
 					case Some((cols ~ metadata)) => 
 						Table(name, 
 							schemaLookup(name).zip(cols).map {
 								case ((_,t),(v,Type.TAny)) => (v,t)
 								case ((_,_),(v,t)) => (v,t)
-							}.toMap,
-							metadata.getOrElse(List[(String,Type.T)]()).toMap
+							},
+							metadata.getOrElse(List[(String,Type.T)]())
 						)
 				}
 			}		

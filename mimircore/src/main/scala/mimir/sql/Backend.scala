@@ -19,14 +19,14 @@ abstract class Backend {
   
   def getTableSchema(table: String): Option[List[(String, Type.T)]]
   def getTableOperator(table: String): Operator =
-    getTableOperator(table, Map[String,Type.T]())
-  def getTableOperator(table: String, metadata: Map[String, Type.T]): 
+    getTableOperator(table, List[(String,Type.T)]())
+  def getTableOperator(table: String, metadata: List[(String, Type.T)]):
     Operator =
   {
     Table(
       table, 
       getTableSchema(table) match {
-        case Some(x) => x.toMap
+        case Some(x) => x
         case None => throw new SQLException("Table does not exist in db!")
       },
       metadata

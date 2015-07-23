@@ -195,7 +195,7 @@ class SqlToRA(db: Database)
       return (ret, bindings, fi.asInstanceOf[SubSelect].getAlias.toUpperCase)
     }
     if(fi.isInstanceOf[net.sf.jsqlparser.schema.Table]){
-      var name =
+      val name =
         fi.asInstanceOf[net.sf.jsqlparser.schema.Table].
           getName.toUpperCase
       var alias =
@@ -215,14 +215,14 @@ class SqlToRA(db: Database)
             Table(name, 
               sch.map(
                 _ match { case (v, t) => (alias+"_"+v, t)}
-              ).toMap[String,Type.T],
-              Map[String,Type.T]()
+              ),
+              List[(String,Type.T)]()
             ), 
             newBindings, 
             alias
           )
         case Some(view) =>
-          val sch = view.schema.keys
+          val sch = view.schema.map(_._1)
           val newBindings = sch.map(
             (x) => (x, alias+"_"+x)
           ).toMap[String,String]
@@ -230,7 +230,7 @@ class SqlToRA(db: Database)
             Project(
               sch.map( (x) => 
                 ProjectArg(alias+"_"+x, Var(x))
-              ).toList,
+              ),
               view
             ), 
             newBindings,

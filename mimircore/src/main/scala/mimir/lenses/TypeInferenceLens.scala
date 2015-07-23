@@ -66,20 +66,25 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
                                     Type.TBool -> 0)
     private var totalVotes = 0
     def detectAndVoteType(v: String): Unit = {
-      if(v.matches("(\\+|-)?([0-9]+)"))
-        votes(Type.TInt) += 1
-      if(v.matches("(\\+|-)?([0-9]*(\\.[0-9]+))"))
-        votes(Type.TFloat) += 1
-      if(v.matches("[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}"))
-        votes(Type.TDate) += 1
-      if(v.matches("(?i:true|false)"))
-        votes(Type.TBool) += 1
+      if(v != null) {
+        if(v.matches("(\\+|-)?([0-9]+)"))
+          votes(Type.TInt) += 1
+        if(v.matches("(\\+|-)?([0-9]*(\\.[0-9]+))"))
+          votes(Type.TFloat) += 1
+        if(v.matches("[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}"))
+          votes(Type.TDate) += 1
+        if(v.matches("(?i:true|false)"))
+          votes(Type.TBool) += 1
+      }
+      else {
+        votes.foreach{ case (t, v) => votes(t) += 1 }
+      }
 
       totalVotes += 1
     }
     def infer(): Type.T = {
       val max = votes.maxBy(_._2)
-      if((max._2 / totalVotes) > 0.95) {
+      if((max._2 / totalVotes) > 0.50) {
         max._1
       } else {
         Type.TString

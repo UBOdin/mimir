@@ -46,12 +46,12 @@ object CTPercolator {
               rest
             )
           case _ => (
-              e.schema.keys.map( (x) => (x, Var(x)) ).toList,
+              e.schema.map(_._1).map( (x) => (x, Var(x)) ).toList,
               e
             )
         }
     val addConstraintCol = (e: Operator) => {
-      if(e.schema.keys.toSet contains CTables.conditionColumn) {
+      if(e.schema.map(_._1).toSet contains CTables.conditionColumn) {
         List(ProjectArg(CTables.conditionColumn, Var(CTables.conditionColumn)))
       } else {
         List[ProjectArg]()
@@ -142,8 +142,8 @@ object CTPercolator {
         // Pulling projections up through a join may require
         // renaming columns under the join if the same column
         // name appears on both sides of the source
-        val lhsColNames = lhsChild.schema.keys.toSet
-        val rhsColNames = rhsChild.schema.keys.toSet
+        val lhsColNames = lhsChild.schema.map(_._1).toSet
+        val rhsColNames = rhsChild.schema.map(_._1).toSet
         
         val conflicts = (
           (lhsColNames & rhsColNames)
@@ -166,7 +166,7 @@ object CTPercolator {
             // name.
             val rewrite = (name:String, child:Operator) => {
               Project(
-                child.schema.keys.
+                child.schema.map(_._1).
                   map( fullMapping(name, _) ).
                   map( (x) => ProjectArg(x._1, x._2)).toList,
                 child
@@ -367,19 +367,19 @@ object CTPercolator {
           Project(
             ProjectArg("ROWID",
               Function("JOIN_ROWIDS", List[Expression](Var("LEFT_ROWID"), Var("RIGHT_ROWID")))) ::
-            (left.schema ++ right.schema).keys.map(
+            (left.schema ++ right.schema).map(_._1).map(
               (x) => ProjectArg(x, Var(x)) 
             ).toList,
             Join(
               Project(
                 ProjectArg("LEFT_ROWID", Var("ROWID")) ::
-                left.schema.keys.map(
+                left.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toList,
                 propagateRowIDs(left, true)),
               Project(
                 ProjectArg("RIGHT_ROWID", Var("ROWID")) ::
-                right.schema.keys.map(
+                right.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toList,
                 propagateRowIDs(right, true))
@@ -399,7 +399,7 @@ object CTPercolator {
                 ProjectArg("ROWID", 
                   Function("LEFT_UNION_ROWID",
                     List[Expression](Var("ROWID")))) ::
-                left.schema.keys.map(
+                left.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toList,
                 propagateRowIDs(left, true)),
@@ -407,7 +407,7 @@ object CTPercolator {
                 ProjectArg("ROWID", 
                   Function("RIGHT_UNION_ROWID",
                     List[Expression](Var("ROWID")))) ::
-                right.schema.keys.map(
+                right.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toList,
                 propagateRowIDs(right, true))

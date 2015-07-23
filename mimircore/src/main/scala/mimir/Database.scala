@@ -55,7 +55,7 @@ case class Database(backend: Backend)
   val compiler = new Compiler(this)  
   val operator = new OperatorParser(this.getLensModel,
     this.getTableSchema(_) match {
-      case Some(x) => x.toMap
+      case Some(x) => x
       case None => throw new SQLException("Table does not exist in db!")
     })
   
@@ -224,7 +224,7 @@ case class Database(backend: Backend)
    * Build a Table operator for the table with the provided name, requesting the
    * specified metadata.
    */
-  def getTableOperator(table: String, metadata: Map[String, Type.T]): Operator =
+  def getTableOperator(table: String, metadata: List[(String, Type.T)]): Operator =
     backend.getTableOperator(table, metadata)
   
   /**
