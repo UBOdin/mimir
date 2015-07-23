@@ -19,13 +19,12 @@ class ProjectionResultIterator(
    * The output schema of this iterator
    */
   val schema = {
-    val srcSchema = src.schema.toMap[String,Type.T];
+    val srcSchema = src.schema.toMap[String,Type.T]
     cols.map( _ match { case (name, expr) => 
       ( name, 
         expr.exprType(srcSchema)
       )
-    }).filter( _._1 != CTables.conditionColumn ).
-    toList
+    }).filter( _._1 != CTables.conditionColumn )
   }
   /**
    * Maximal Likelihood Expected value expressions for 

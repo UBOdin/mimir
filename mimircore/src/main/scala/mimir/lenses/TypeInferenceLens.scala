@@ -1,6 +1,6 @@
 package mimir.lenses
 
-import java.sql.{SQLException, ResultSet}
+import java.sql.{ResultSet, SQLException}
 
 import mimir.Database
 import mimir.algebra.Type.T
@@ -56,8 +56,63 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
 
 class TypeInferenceModel(lens: TypeInferenceLens) extends Model
 {
+  var inferredTypeMap = List[(String, Type.T)]()
+
+  class TypeInferrer {
+    private val votes =
+      scala.collection.mutable.Map(Type.TInt -> 0,
+                                    Type.TFloat -> 0,
+                                    Type.TDate -> 0,
+                                    Type.TBool -> 0)
+    private var totalVotes = 0
+    def detectAndVoteType(v: String): Unit = {
+      if(v.matches("(\\+|-)?([0-9]+)"))
+        votes(Type.TInt) += 1
+      if(v.matches("(\\+|-)?([0-9]*(\\.[0-9]+))"))
+        votes(Type.TFloat) += 1
+      if(v.matches("[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}"))
+        votes(Type.TDate) += 1
+      if(v.matches("(?i:true|false)"))
+        votes(Type.TBool) += 1
+
+      totalVotes += 1
+    }
+    def infer(): Type.T = {
+      val max = votes.maxBy(_._2)
+      if((max._2 / totalVotes) > 0.95) {
+        max._1
+      } else {
+        Type.TString
+      }
+    }
+  }
+
+
   def init(data: ResultSet): Unit = {
-    // TODO Generate a mapping for new types and store in varTypes
+    inferredTypeMap = learn(lens.sourceSchema(), data)
+  }
+
+  def learn(sch: List[(String, T)],
+                 data: ResultSet): List[(String, T)] = {
+
+    /**
+     * Count votes for each type
+     */
+    val inferrers =
+      sch.map{ case(k, t) => (k, new TypeInferrer)}
+
+    while(data.next()) {
+      sch.indices.foreach( (i) => 
+        inferrers(i)._2.detectAndVoteType(data.getString(i+1))
+      )
+    }
+
+    data.close()
+
+    /**
+     * Now infer types
+     */
+    inferrers.map{ case(k, inferrer) => (k, inferrer.infer()) }
   }
 
   def getValue(idx: Int, rowid: PrimitiveValue): PrimitiveValue =
@@ -77,11 +132,37 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
     rowValues(idx+1)
   }
 
+  def cast(v: String, t: T): PrimitiveValue = {
+    t match {
+      case Type.TBool =>
+        new BoolPrimitive(v.toBoolean)
+
+      case Type.TDate => {
+        val (y, m, d) = parseDate(v)
+        new DatePrimitive(y, m, d)
+      }
+
+      case Type.TFloat =>
+        new FloatPrimitive(v.toDouble)
+
+      case Type.TInt =>
+        new IntPrimitive(v.toInt)
+
+      case _ =>
+        new StringPrimitive(v)
+    }
+
+    // TODO Coercion
+  }
+
+  def parseDate(date: String): (Int, Int, Int) = {
+    val split = date.split("-")
+    (split(0).toInt, split(1).toInt, split(2).toInt)
+  }
+
   // Model Implementation
   override def varTypes: List[T] = {
-    val types = new Array[T](lens.allKeys().length)
-    types.map(_ => Type.TInt)
-    types.toList
+    inferredTypeMap.map(_._2)
   }
 
   override def sample(seed: Long, idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
@@ -95,7 +176,7 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
   override def mostLikelyValue(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
     getValue(idx, args(0)) match {
       case v: NullPrimitive => v
-      case v => new IntPrimitive(v.asLong)
+      case v => cast(v.asString, varTypes(idx))
     }
   }
 
@@ -135,6 +216,6 @@ extends Proc(args) {
     model.mostLikelyValue(idx, args)
   }
   def exprType(bindings: Map[String,Type.T]) = model.varTypes(idx)
-  def rebuild(c: List[Expression]) = new TypeInferenceAnalysis(model, idx, args)
+  def rebuild(c: List[Expression]) = new TypeInferenceAnalysis(model, idx, c)
 
 }

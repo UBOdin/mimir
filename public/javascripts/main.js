@@ -155,7 +155,7 @@ $( document ).ready(function() {
 
                 var bounds = [];
                 var variance;
-                var conf_int = [];
+                var conf_int = "";
                 var causes = [];
 
                 var fault = false;
@@ -177,13 +177,10 @@ $( document ).ready(function() {
                                 errormessage += res.error+'<br/>';
                             }
                             else {
-                                bounds[0] = res.data[0][1];
-                                bounds[1] = res.data[0][2];
-                                variance = res.data[0][3];
-                                var confStr = res.data[0][4];
-                                var confVal = confStr.split(" - ");
-                                conf_int[0] = confVal[0].substring(1);
-                                conf_int[1] = confVal[1].substring(0, confVal[1].length-1);
+                                bounds[0] = res.data[0][1] == "NULL" ? "NULL" : parseFloat(res.data[0][1]).toFixed(2);
+                                bounds[1] = res.data[0][2] == "NULL" ? "NULL" : parseFloat(res.data[0][2]).toFixed(2);
+                                variance  = res.data[0][3] == "NULL" ? "NULL" : parseFloat(res.data[0][3]).toFixed(2);
+                                conf_int  = res.data[0][4] == "NULL" ? "NULL" : res.data[0][4].replace(/\'/g, '');
                             }
                         }),
                         $.get(vgterms_query, function (res) {
@@ -204,19 +201,19 @@ $( document ).ready(function() {
                                                   '<tbody>'+
                                                       '<tr>'+
                                                           '<th scope="row">Bounds</th>'+
-                                                          '<td class="number">'+ parseFloat(bounds[0]).toFixed(2) +' - '+ parseFloat(bounds[1]).toFixed(2) +'</td>'+
+                                                          '<td class="number">'+bounds[0]+' | '+bounds[1]+'</td>'+
                                                       '</tr>'+
                                                       '<tr>'+
                                                           '<th scope="row">Variance</th>'+
-                                                          '<td class="number">'+ parseFloat(variance).toFixed(2) +'</td>'+
+                                                          '<td class="number">'+variance+'</td>'+
                                                       '</tr>'+
                                                       '<tr>'+
                                                           '<th scope="row">Confidence Interval</th>'+
-                                                          '<td class="number">'+ parseFloat(conf_int[0]).toFixed(2) + ' - '+ parseFloat(conf_int[1]).toFixed(2) +'</td>'+
+                                                          '<td class="number">'+conf_int+'</td>'+
                                                       '</tr>'+
                                                       '<tr>'+
                                                           '<th scope="row">VG Terms</th>'+
-                                                          '<td><ul>'+ listify(causes) +'</ul></td>'+
+                                                          '<td><ul>'+listify(causes)+'</ul></td>'+
                                                       '</tr>'+
                                                   '</tbody>'+
                                               '</table>';

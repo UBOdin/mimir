@@ -1,7 +1,6 @@
 package mimir.ctables
 
 import mimir.algebra._
-import mimir.lenses.MissingValueAnalysis
 
 abstract class Model {
   def varTypes: List[Type.T]
@@ -55,7 +54,7 @@ object CTables
   expr match {
     case VGTerm(_, _, _) => true
     case Function(_, _) => true
-    case MissingValueAnalysis(_, _, _) => true
+    case _: Proc => true
     case _ => expr.children.exists( isProbabilistic(_) )
   }
 

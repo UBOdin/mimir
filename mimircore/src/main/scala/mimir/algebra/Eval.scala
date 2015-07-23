@@ -92,30 +92,38 @@ object Eval
             }
             case CTables.VARIANCE => {
               var variance = 0.0
-              val (sum, samples) = sampleExpression(params(0))
-              val mean = sum/SAMPLE_COUNT
-              for(i <- samples.keys){
-                variance += (i - mean) * (i - mean) * samples(i)
+              try {
+                val (sum, samples) = sampleExpression(params(0))
+                val mean = sum/SAMPLE_COUNT
+                for(i <- samples.keys){
+                  variance += (i - mean) * (i - mean) * samples(i)
+                }
+                FloatPrimitive(variance/SAMPLE_COUNT)
+              } catch {
+                case e: TypeException => new NullPrimitive()
               }
-              FloatPrimitive(variance/SAMPLE_COUNT)
             }
             case CTables.CONFIDENCE => {
               var variance = 0.0
-              val (_, samples) = sampleExpression(params(0))
-              val percentile = params(1).asInstanceOf[PrimitiveValue].asDouble
-              val keys = samples.keys.toList.sorted
-              var count = 0
-              var i = -1
-              while(count < percentile){
-                i += 1
-                count += samples(keys(i))
+              try {
+                val (_, samples) = sampleExpression(params(0))
+                val percentile = params(1).asInstanceOf[PrimitiveValue].asDouble
+                val keys = samples.keys.toList.sorted
+                var count = 0
+                var i = -1
+                while(count < percentile){
+                  i += 1
+                  count += samples(keys(i))
+                }
+                val med = keys(i)
+                for(i <- samples.keys){
+                  variance += (i - med) * (i - med) * samples(i)
+                }
+                val conf = Math.sqrt(variance/SAMPLE_COUNT) * 1.96
+                StringPrimitive((med - conf).formatted("%.2f") + " | " + (med + conf).formatted("%.2f"))
+              } catch {
+                case e: TypeException => new NullPrimitive()
               }
-              val med = keys(i)
-              for(i <- samples.keys){
-                variance += (i - med) * (i - med) * samples(i)
-              }
-              val conf = Math.sqrt(variance/SAMPLE_COUNT) * 1.96
-              StringPrimitive((med - conf) + " - " + (med + conf))
             }
           }
         }

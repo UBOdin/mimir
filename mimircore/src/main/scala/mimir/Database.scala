@@ -278,13 +278,12 @@ case class Database(backend: Backend)
 
     getTableSchema(targetTable) match {
       case Some(sch) => {
-        val keys = sch.map( _._1 )
         if(headerDetected(firstLine)) {
-          populateTable(input, targetTable, keys) // Ignore header since table already exists
+          populateTable(input, targetTable, sch) // Ignore header since table already exists
         }
         else {
           populateTable(new BufferedReader(new FileReader(sourceFile)), // Reset to top
-            targetTable, keys)
+            targetTable, sch)
         }
       }
       case None => {
@@ -310,23 +309,28 @@ case class Database(backend: Backend)
     return true; // Placeholder, assume every CSV file has a header
   }
 
-  private def populateTable(src: BufferedReader, targetTable: String, keys: List[String]) = {
+  private def populateTable(src: BufferedReader,
+                            targetTable: String,
+                            sch: List[(String, Type.T)]) = {
     var done = false
 
     while(!done){
       val line = src.readLine()
       if(line == null){ done = true; }
       else {
-        val data = line.split(",").padTo(keys.length, "");
-        update(
-          "INSERT INTO "+targetTable+"("+keys.mkString(", ")+
-            ") VALUES ("+
-            data.map( _ match {
-              case "" => null;
-              case x => x
-            }).mkString(", ")+
-            ")"
-        )
+        val keys = sch.map(_._1).mkString(", ")
+        val datas = line.split(",").padTo(sch.size, "")
+        val data = (0 until datas.length).map( (i) =>
+          datas(i) match {
+            case "" => null
+            case x => sch(i)._2 match {
+              case Type.TDate | Type.TString => "\'"+x+"\'"
+              case _ => x
+            }
+          }
+        ).mkString(", ")
+
+        update("INSERT INTO "+targetTable+"("+keys+") VALUES ("+data+")")
       }
     }
   }

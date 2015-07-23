@@ -158,6 +158,7 @@ td:hover {
 
 .number {
     color:                      green;
+    font-family:                Monospace;
 }
 
 .rowid_col {
