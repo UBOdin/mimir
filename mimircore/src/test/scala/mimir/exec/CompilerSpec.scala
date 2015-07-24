@@ -34,7 +34,7 @@ object CompilerSpec extends Specification {
 
   def parser = new OperatorParser(
     (x: String) => baseModel,
-    schema.get(_).get
+    schema.get(_).get.toList
   )
   def expr = parser.expr _
   def oper:(String => Operator) = parser.operator _

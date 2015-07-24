@@ -85,9 +85,9 @@ object SqlLoaderSpec extends Specification with FileMatchers {
 		 					 ProjectArg("C", Var("R_C"))
 		 				), Table("R", Map(("R_A", Type.TInt), 
 		 								  ("R_B", Type.TInt), 
-		 								  ("R_C", Type.TInt)), 
-		 							  Map( ("ROWID", Type.TRowId)
-		 				)))
+		 								  ("R_C", Type.TInt)).toList,
+		 							  Map(("ROWID", Type.TRowId)).toList
+				))
 
 		 	;
 			db.query(query("SELECT * FROM SaneR")).allRows must be equalTo List(

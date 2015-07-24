@@ -18,10 +18,10 @@ object ParserSpecs extends Specification {
       ("C", Type.TInt)
     ))
   )
-  def parser = new OperatorParser((x: String) => null, schema.get(_).get)
+  def parser = new OperatorParser((x: String) => null, schema.get(_).get.toList)
   def expr = parser.expr _
   def oper = parser.operator _
-  def sch(x: String) = Table(x, schema.get(x).get, Map())
+  def sch(x: String) = Table(x, schema.get(x).get.toList, List())
 
   "The Expression Parser" should { 
     "Parse Constants" in {
