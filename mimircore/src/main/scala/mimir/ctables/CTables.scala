@@ -54,7 +54,6 @@ object CTables
   def isProbabilistic(expr: Expression): Boolean = 
   expr match {
     case VGTerm(_, _, _) => true
-    case Function(_, _) => true
     case MissingValueAnalysis(_, _, _) => true
     case TypeInferenceAnalysis(_, _, _) => true
     case _ => expr.children.exists( isProbabilistic(_) )

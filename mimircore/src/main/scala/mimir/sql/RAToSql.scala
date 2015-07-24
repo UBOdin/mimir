@@ -1,5 +1,7 @@
 package mimir.sql;
 
+import java.sql.SQLException
+
 import mimir.Database
 import mimir.algebra._
 import net.sf.jsqlparser.expression.operators.arithmetic._
@@ -115,8 +117,7 @@ class RAToSql(db: Database) {
     b
   }
   
-  def convert(e: Expression): net.sf.jsqlparser.expression.Expression =
-  {
+  def convert(e: Expression): net.sf.jsqlparser.expression.Expression = {
     e match {
       case IntPrimitive(v) => new LongValue(""+v)
       case StringPrimitive(v) => new StringValue("\'"+v+"\'")
@@ -171,6 +172,11 @@ class RAToSql(db: Database) {
         isNull.setLeftExpression(convert(subexp))
         isNull.setNot(neg)
         isNull;
+      }
+      case mimir.algebra.Function(name, subexp) => {
+        if(subexp.length > 1)
+          throw new SQLException("Function " + name + " SQL conversion error")
+        convert(subexp(0))
       }
     }
   }
