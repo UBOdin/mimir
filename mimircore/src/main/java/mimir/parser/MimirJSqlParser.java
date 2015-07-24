@@ -337,21 +337,22 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     case 107:
     case 108:
     case 109:
-      e = SimpleExpression();
-                                     args.add(e);
+        e = SimpleExpression();
+        args.add(e);
       label_2:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 85:
-          ;
-          break;
-        default:
-          jj_la1[6] = jj_gen;
-          break label_2;
+            case 85:
+                jj_consume_token(85);
+                break;
+            case 78:
+                e = SimpleExpression();
+                args.add(e);
+                break;
+            default:
+                jj_la1[6] = jj_gen;
+                break label_2;
         }
-        jj_consume_token(85);
-        e = SimpleExpression();
-                                           args.add(e);
       }
       break;
     default:

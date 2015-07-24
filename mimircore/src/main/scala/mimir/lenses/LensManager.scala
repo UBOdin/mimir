@@ -61,8 +61,12 @@ class LensManager(db: Database) {
     val lens = mkLens(
         lensDefn.getType(), 
         lensName, 
-        lensDefn.getArgs.map( (arg:net.sf.jsqlparser.expression.Expression) => 
-            db.convert(arg)
+        lensDefn.getArgs.map( (arg:net.sf.jsqlparser.expression.Expression) =>
+          //TODO refactor this
+            if(lensDefn.getType.equals("SCHEMA_MATCHING"))
+              Var(arg.toString)
+            else
+              db.convert(arg)
           ).toList,
         source
       );
