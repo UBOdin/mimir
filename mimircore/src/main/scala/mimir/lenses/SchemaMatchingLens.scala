@@ -92,8 +92,8 @@ class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
     var res = 0
     if (dp.contains((i, j))) res = dp((i, j))
     else if (i < 0 && j < 0) res = 0
-    else if (i < 0) res = j
-    else if (j < 0) res = i
+    else if (i < 0) res = j + 1
+    else if (j < 0) res = i + 1
     else {
       val d = if (s1(i) == s2(j)) 0 else 1
       val l = List(editDistance(s1, s2, i - 1, j - 1, dp) + d, editDistance(s1, s2, i - 1, j, dp) + 1,
