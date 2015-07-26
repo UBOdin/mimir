@@ -46,18 +46,17 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
    * `view` emits an Operator that defines the Virtual C-Table for the lens
    */
   override def view: Operator = {
-    // TODO change for idx
     Project(
-      targetSchema.keys.toList.map(a => ProjectArg(
-        a,
+      targetSchema.keys.toList.zipWithIndex.map{case (key, idx) => ProjectArg(
+        key,
         CaseExpression(
-          sourceSchema.filter(_._2 == targetSchema(a)).keys.toList.map(b => WhenThenClause(
-            Comparison(Cmp.Eq, model.mostLikelyExpr(0, List(StringPrimitive(a), StringPrimitive(b))), BoolPrimitive(true)),
+          sourceSchema.filter(_._2 == targetSchema(key)).keys.toList.map(b => WhenThenClause(
+            Comparison(Cmp.Eq, model.mostLikelyExpr(idx, List(StringPrimitive(key), StringPrimitive(b))), BoolPrimitive(true)),
             Var(b))
           ),
           NullPrimitive()
         )
-      )),
+      )},
       source
     )
   }
@@ -86,37 +85,35 @@ case class SchemaAnalysis(model: SchemaMatchingModel, idx: Int, args: List[Expre
 class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
 
   var schema: Map[String, Type.T] = null
-  val colMapping = collection.mutable.Map[String, String]()
+  val colMapping = collection.mutable.Map[String, List[(String, Float)]]()
 
   def editDistance(s1: String, s2: String, i: Int, j: Int, dp: collection.mutable.Map[(Int, Int), Int]): Int = {
-    var res = 0
-    if (dp.contains((i, j))) res = dp((i, j))
-    else if (i < 0 && j < 0) res = 0
-    else if (i < 0) res = j + 1
-    else if (j < 0) res = i + 1
+    if(dp.contains((i, j))) dp((i, j))
+    else if(i < 0 && j < 0) 0
+    else if(i < 0) j + 1
+    else if(j < 0) i + 1
     else {
-      val d = if (s1(i) == s2(j)) 0 else 1
-      val l = List(editDistance(s1, s2, i - 1, j - 1, dp) + d, editDistance(s1, s2, i - 1, j, dp) + 1,
-        editDistance(s1, s2, i, j - 1, dp) + 1)
-      res = l.min
-    }
-    if (!dp.contains((i, j)))
+      val d = if(s1(i) == s2(j)) 0 else 1
+      val l = List(editDistance(s1, s2, i-1, j-1, dp) + d, editDistance(s1, s2, i-1, j, dp) + 1,
+        editDistance(s1, s2, i, j-1, dp) + 1)
+      val res = l.min
       dp += ((i, j) -> res)
-    res
+      res
+    }
   }
 
   def learn(targetSchema: Map[String, Type.T], sourceSchema: Map[String, Type.T]) = {
     for(i <- targetSchema.keys.toList){
-      var dist = List[(String, Int)]()
+      var dist = List[(String, Float)]()
       for(j <- sourceSchema.filter(_._2 == targetSchema(i)).keys.toList){
         dist ::= (j, editDistance(i, j, i.length - 1, j.length - 1, collection.mutable.Map[(Int, Int), Int]()))
       }
-      colMapping += (i -> dist.minBy(_._2)._1)
+      colMapping += (i -> dist)
     }
     schema = targetSchema
   }
 
-  override def varTypes: List[T] = schema.map(_._2).toList
+  override def varTypes: List[T] = schema.values.toList
 
   override def sample(seed: Long, idx: Int, args: List[PrimitiveValue]): PrimitiveValue = mostLikelyValue(idx, args)
 
@@ -125,7 +122,7 @@ class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
   override def mostLikelyValue(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
     val targetCol = args(0).asString
     val sourceCol = args(1).asString
-    if(colMapping(targetCol).equals(sourceCol))
+    if(colMapping(targetCol).minBy(_._2)._1.equals(sourceCol))
       BoolPrimitive(true)
     else BoolPrimitive(false)
   }
