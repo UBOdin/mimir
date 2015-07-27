@@ -6,6 +6,7 @@ import mimir.Database
 import mimir.algebra.Type.T
 import mimir.algebra._
 import mimir.ctables.Model
+import org.apache.lucene.search.spell.{NGramDistance, LevensteinDistance, JaroWinklerDistance, StringDistance}
 
 import scala.tools.nsc.util.ShowPickled
 
@@ -16,7 +17,6 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
   extends Lens(name, args, source) {
 
   var targetSchema: Map[String, Type.T] = null
-  //var cols: Map[String, Type.T] = null
   var sourceSchema: Map[String, Type.T] = source.schema.toMap
   var db: Database = null
   var model: Model = null
@@ -26,16 +26,13 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
       throw new SQLException("Incorrect parameters for " + lensType + " Lens")
     if (targetSchema == null) {
       targetSchema = Map[String, Type.T]()
-      //cols = Map[String, Type.T]()
       var i = 0
       while (i < args.length) {
-        //val qualified = name + "_" + args(i).toString.toUpperCase
         val col = args(i).toString.toUpperCase
         i += 1
         val t = Type.fromString(args(i).toString)
         i += 1
         targetSchema += (col -> t)
-        //cols += (col -> t)
       }
     }
   }
@@ -47,7 +44,7 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
    */
   override def view: Operator = {
     Project(
-      targetSchema.keys.toList.zipWithIndex.map{case (key, idx) => ProjectArg(
+      targetSchema.keys.toList.zipWithIndex.map { case (key, idx) => ProjectArg(
         key,
         CaseExpression(
           sourceSchema.filter(_._2 == targetSchema(key)).keys.toList.map(b => WhenThenClause(
@@ -55,8 +52,8 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
             Var(b))
           ),
           NullPrimitive()
-        )
-      )},
+        ))
+      },
       source
     )
   }
@@ -85,30 +82,29 @@ case class SchemaAnalysis(model: SchemaMatchingModel, idx: Int, args: List[Expre
 class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
 
   var schema: Map[String, Type.T] = null
-  val colMapping = collection.mutable.Map[String, List[(String, Float)]]()
+  var colMapping: Map[String, Map[String, Double]] = null
 
-  def editDistance(s1: String, s2: String, i: Int, j: Int, dp: collection.mutable.Map[(Int, Int), Int]): Int = {
-    if(dp.contains((i, j))) dp((i, j))
-    else if(i < 0 && j < 0) 0
-    else if(i < 0) j + 1
-    else if(j < 0) i + 1
-    else {
-      val d = if(s1(i) == s2(j)) 0 else 1
-      val l = List(editDistance(s1, s2, i-1, j-1, dp) + d, editDistance(s1, s2, i-1, j, dp) + 1,
-        editDistance(s1, s2, i, j-1, dp) + 1)
-      val res = l.min
-      dp += ((i, j) -> res)
-      res
+  def getSchemaMatching(criteria: String, targetColumn: String, sourceColumns: List[String]): Map[String, Double] = {
+    val matcher: StringDistance = criteria match {
+      case "JaroWinklerDistance" => new JaroWinklerDistance()
+      case "LevensteinDistance" => new LevensteinDistance()
+      case "NGramDistance" => new NGramDistance()
+      case _ => null
     }
+    var total = 0.0
+    // calculate distance
+    val sorted = sourceColumns.map(a => {
+      val dist = matcher.getDistance(targetColumn, a)
+      total += dist
+      (a, dist)
+    }).sortBy(_._2).toMap
+    // normalize
+    sorted.map { case (k, v) => (k, v / total) }
   }
 
   def learn(targetSchema: Map[String, Type.T], sourceSchema: Map[String, Type.T]) = {
-    for(i <- targetSchema.keys.toList){
-      var dist = List[(String, Float)]()
-      for(j <- sourceSchema.filter(_._2 == targetSchema(i)).keys.toList){
-        dist ::= (j, editDistance(i, j, i.length - 1, j.length - 1, collection.mutable.Map[(Int, Int), Int]()))
-      }
-      colMapping += (i -> dist)
+    colMapping = targetSchema.map { case (k, v) =>
+      (k, getSchemaMatching("NGramDistance", k, sourceSchema.filter(_._2 == v).keys.toList))
     }
     schema = targetSchema
   }
@@ -122,7 +118,7 @@ class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
   override def mostLikelyValue(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
     val targetCol = args(0).asString
     val sourceCol = args(1).asString
-    if(colMapping(targetCol).minBy(_._2)._1.equals(sourceCol))
+    if (colMapping(targetCol).maxBy(_._2)._1.equals(sourceCol))
       BoolPrimitive(true)
     else BoolPrimitive(false)
   }
