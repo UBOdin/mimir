@@ -289,7 +289,7 @@ case class Database(backend: Backend)
       case None => {
         if(headerDetected(firstLine)) {
           update("CREATE TABLE "+targetTable+"("+
-            firstLine.split(",").mkString(" varchar, ")+
+            firstLine.split(",").map((x) => "\'"+x+"\'").mkString(" varchar, ")+
             " varchar)")
 
           handleLoadTable(targetTable, sourceFile)
@@ -311,27 +311,25 @@ case class Database(backend: Backend)
 
   private def populateTable(src: BufferedReader,
                             targetTable: String,
-                            sch: List[(String, Type.T)]) = {
-    var done = false
+                            sch: List[(String, Type.T)]): Unit = {
+    val keys = sch.map(_._1).map((x) => "\'"+x+"\'").mkString(", ")
 
-    while(!done){
+    while(true){
       val line = src.readLine()
-      if(line == null){ done = true; }
-      else {
-        val keys = sch.map(_._1).mkString(", ")
-        val datas = line.split(",").padTo(sch.size, "")
-        val data = (0 until datas.length).map( (i) =>
-          datas(i) match {
-            case "" => null
-            case x => sch(i)._2 match {
-              case Type.TDate | Type.TString => "\'"+x+"\'"
-              case _ => x
-            }
-          }
-        ).mkString(", ")
+      if(line == null) return
 
-        update("INSERT INTO "+targetTable+"("+keys+") VALUES ("+data+")")
-      }
+      val dataLine = line.split(",").padTo(sch.size, "")
+      val data = (0 until dataLine.length).map( (i) =>
+        dataLine(i) match {
+          case "" => null
+          case x => sch(i)._2 match {
+            case Type.TDate | Type.TString => "\'"+x+"\'"
+            case _ => x
+          }
+        }
+      ).mkString(", ")
+
+      update("INSERT INTO "+targetTable+"("+keys+") VALUES ("+data+")")
     }
   }
 

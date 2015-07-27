@@ -31,13 +31,13 @@ class RAToSql(db: Database) {
                 item.setAlias(external)
                 item.setExpression(new Column(table, internal))
                 item
-            }).toList ++
+            }) ++
             metadata.map(_._1).map( (key) => {
               val item = new SelectExpressionItem()
               item.setAlias(key)
               item.setExpression(new Column(table, key))
               item
-            }).toList
+            })
           // )
         )
         return body
