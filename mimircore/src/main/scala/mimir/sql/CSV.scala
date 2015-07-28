@@ -315,6 +315,10 @@ class CSVBackend(
   {
     throw new SQLException("No support for updates on CSV data");
   }
+  def update(upd: List[String]): Unit =
+  {
+    throw new SQLException("No support for updates on CSV data");
+  }
   def update(op: String, args: List[String]): Unit = 
   {
     throw new SQLException("No support for updates on CSV data");

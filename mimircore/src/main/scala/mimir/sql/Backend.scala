@@ -34,6 +34,7 @@ abstract class Backend {
   }
   
   def update(stmt: String): Unit
+  def update(stmt: List[String]): Unit
   def update(stmt: String, args: List[String]): Unit
 
   def getAllTables(): List[String]

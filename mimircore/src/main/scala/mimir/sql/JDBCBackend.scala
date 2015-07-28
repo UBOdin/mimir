@@ -44,9 +44,17 @@ class JDBCBackend(conn: Connection) extends Backend
   
   def update(upd: String): Unit =
   {
-    val stmt = conn.createStatement();
+    val stmt = conn.createStatement()
     stmt.executeUpdate(upd)
-    stmt.close();
+    stmt.close()
+  }
+
+  def update(upd: List[String]): Unit =
+  {
+    val stmt = conn.createStatement()
+    upd.indices.foreach(i => stmt.addBatch(upd(i)))
+    stmt.executeBatch()
+    stmt.close()
   }
 
   def update(upd: String, args: List[String]): Unit =

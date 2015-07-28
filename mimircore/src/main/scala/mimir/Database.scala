@@ -93,6 +93,14 @@ case class Database(backend: Backend)
     // println(sql);
     backend.update(sql);
   }
+
+  /**
+   * Evaluate a list of SQL statements in batch mode. This is useful for speeding up
+   * data insertion during CSV uploads
+   */
+  def update(sql: List[String]): Unit = {
+    backend.update(sql)
+  }
   /**
    * Evaluate the specified SQL DDL expression on the backend directly.  JDBC 
    * parameters (`?`) are replaced according to the provided argument list.
@@ -313,6 +321,7 @@ case class Database(backend: Backend)
                             targetTable: String,
                             sch: List[(String, Type.T)]): Unit = {
     val keys = sch.map(_._1).map((x) => "\'"+x+"\'").mkString(", ")
+    val stmts = new ListBuffer[String]()
 
     while(true){
       val line = src.readLine()
@@ -329,8 +338,10 @@ case class Database(backend: Backend)
         }
       ).mkString(", ")
 
-      update("INSERT INTO "+targetTable+"("+keys+") VALUES ("+data+")")
+      stmts.append("INSERT INTO "+targetTable+"("+keys+") VALUES ("+data+")")
     }
+
+    update(stmts.toList)
   }
 
   /**
