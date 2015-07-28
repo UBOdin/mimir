@@ -325,7 +325,7 @@ case class Database(backend: Backend)
 
     while(true){
       val line = src.readLine()
-      if(line == null) return
+      if(line == null) { if(stmts.size > 0) update(stmts.toList); return }
 
       val dataLine = line.split(",").padTo(sch.size, "")
       val data = (0 until dataLine.length).map( (i) =>
@@ -340,8 +340,6 @@ case class Database(backend: Backend)
 
       stmts.append("INSERT INTO "+targetTable+"("+keys+") VALUES ("+data+")")
     }
-
-    update(stmts.toList)
   }
 
   /**
