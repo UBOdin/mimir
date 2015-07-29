@@ -327,7 +327,7 @@ case class Database(backend: Backend)
       val line = src.readLine()
       if(line == null) { if(stmts.size > 0) update(stmts.toList); return }
 
-      val dataLine = line.split(",").padTo(sch.size, "")
+      val dataLine = line.trim.split(",").padTo(sch.size, "")
       val data = (0 until dataLine.length).map( (i) =>
         dataLine(i) match {
           case "" => null
