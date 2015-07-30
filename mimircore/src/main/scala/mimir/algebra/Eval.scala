@@ -96,9 +96,9 @@ object Eval
                 }
               }).max) // TODO Generalized Comparator
             case "__LEFT_UNION_ROWID" =>
-              new RowIdPrimitive(params(0)+".left")
+              new RowIdPrimitive(eval(params(0)).asString+".left")
             case "__RIGHT_UNION_ROWID" =>
-              new RowIdPrimitive(params(0)+".right")
+              new RowIdPrimitive(eval(params(0)).asString+".right")
             case CTables.ROW_PROBABILITY => {
               var count = 0.0
               for(i <- 0 until SAMPLE_COUNT) {

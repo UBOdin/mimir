@@ -177,6 +177,7 @@ $( document ).ready(function() {
                                 errormessage += res.error+'<br/>';
                             }
                             else {
+                                console.log(res);
                                 bounds[0] = res.data[0][1] == "NULL" ? "NULL" : parseFloat(res.data[0][1]).toFixed(2);
                                 bounds[1] = res.data[0][2] == "NULL" ? "NULL" : parseFloat(res.data[0][2]).toFixed(2);
                                 variance  = res.data[0][3] == "NULL" ? "NULL" : parseFloat(res.data[0][3]).toFixed(2);
