@@ -177,6 +177,7 @@ object Arith extends Enumeration {
       case (TFloat, TInt) => TFloat
       case (TInt, TFloat) => TFloat
       case (TFloat, TFloat) => TFloat
+      case (TBool, TBool) => TBool
       case ((TInt | TFloat), _) => 
         throw new TypeException(b, TFloat, "Numeric")
       case _ => 

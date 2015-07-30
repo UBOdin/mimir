@@ -137,5 +137,9 @@ class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
 
   override def lowerBound(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = mostLikelyValue(idx, args)
 
-  override def reason(idx: Int): String = "Mapping columns " + colMapping.mkString(", ")
+  override def reason(idx: Int): String = {
+    println(schema.keys.toList(idx))
+    println(colMapping(schema.keys.toList(idx)))
+    "Probability of column match: " + colMapping(schema.keys.toList(idx)).maxBy(_._2)._2
+  }
 }

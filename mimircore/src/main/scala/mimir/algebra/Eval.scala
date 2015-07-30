@@ -335,6 +335,15 @@ object Eval
                 a.asInstanceOf[DatePrimitive].
                  compare(b.asInstanceOf[DatePrimitive])<=0
               )
+            case TBool => BoolPrimitive(a match {
+              case BoolPrimitive(true) => true
+              case BoolPrimitive(false) => {
+                b match {
+                  case BoolPrimitive(true) => false
+                  case _ => true
+                }
+              }
+            })
           }
         case Cmp.Lt => 
           Arith.escalateNumeric(a.exprType, b.exprType) match {
