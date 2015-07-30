@@ -311,9 +311,7 @@ case class Database(backend: Backend)
 
   private def headerDetected(line: String): Boolean = {
     if(line == null) return false;
-
     // TODO Detection logic
-
     return true; // Placeholder, assume every CSV file has a header
   }
 

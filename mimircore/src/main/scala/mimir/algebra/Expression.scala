@@ -356,8 +356,8 @@ case class Function(op: String, params: List[Expression]) extends Expression {
     op match {
       case "JOIN_ROWIDS" => TRowId
       case CTables.ROW_PROBABILITY => TString
-      case CTables.VARIANCE => TFloat
-      case CTables.CONFIDENCE => TFloat
+      case CTables.VARIANCE | CTables.CONFIDENCE => TFloat
+      case "__LIST_MIN" | "__LIST_MAX" => TFloat
       case _ => bindings.get("__"+op+"()").get
     }
   }

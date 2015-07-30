@@ -162,7 +162,7 @@ class WebAPI {
     val i = if(ind == -1) projection.columns.length - 1 else ind
 
     val arg = projection.columns(i).input
-    db.getVGTerms(arg).map((x) => x.reason())
+    db.getVGTerms(arg).map((x) => x.reason()).distinct
   }
 
   def close(): Unit = {

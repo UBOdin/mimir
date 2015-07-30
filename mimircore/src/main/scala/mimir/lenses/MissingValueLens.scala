@@ -1,14 +1,16 @@
 package mimir.lenses
 
 import java.sql._
+import java.util
 
 import mimir.algebra._
 import mimir.ctables._
+import mimir.exec.ResultIterator
 import mimir.{Analysis, Database}
 import moa.classifiers.Classifier
 import moa.core.InstancesHeader
-import weka.core.{DenseInstance, Instance, Instances}
-import weka.experiment.{DatabaseUtils, InstanceQuery, InstanceQueryAdapter}
+import weka.core.{Attribute, DenseInstance, Instance, Instances}
+import weka.experiment.{DatabaseUtils, InstanceQueryAdapter}
 
 import scala.collection.JavaConversions._
 import scala.util._
@@ -20,15 +22,14 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
 {
   var orderedSourceSchema: List[(String,Type.T)] = null
   val keysToBeCleaned = args.map( Eval.evalString(_).toUpperCase )
-  var models: List[SingleVarModel] = null;
-  var data: Instances = null
+  var models: List[SingleVarModel] = null
   var model: Model = null
   var db: Database = null
 
   def sourceSchema() = {
     if(orderedSourceSchema == null){
       orderedSourceSchema = 
-        source.schema.toList.map( _ match { case (n,t) => (n.toUpperCase,t) } )
+        source.schema.map( _ match { case (n,t) => (n.toUpperCase,t) } )
     }
     orderedSourceSchema
   }
@@ -59,7 +60,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
   }
   def build(db: Database): Unit = {
     this.db = db
-    val results = db.backend.execute(db.convert(source))
+    val iterator = db.query(source)
     models =
       sourceSchema.map(
           _ match { case (n,t) => (keysToBeCleaned.indexOf(n), t) }
@@ -68,10 +69,8 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
             new NoOpModel(t).asInstanceOf[SingleVarModel]
           } else {
             val m = new MissingValueModel(this)
-            data = InstanceQuery.retrieveInstances(this, results)
             val classIndex = idx//allKeys().indexOf(keysToBeCleaned.get(idx))
-            data.setClassIndex(classIndex)
-            m.init(data)
+            m.init(iterator, classIndex)
             m.asInstanceOf[SingleVarModel]
           }
         })
@@ -125,11 +124,39 @@ class MissingValueModel(lens: MissingValueLens)
   def reason(): String =
     "Missing values for attribute(s) "+lens.keysToBeCleaned.mkString(", ")
 
-  def init(d: Instances) = {
-    data = d
-    learner.setModelContext(new InstancesHeader(data));
-    learner.prepareForUse();
-    data.foreach( learn(_) );
+  def init(iterator: ResultIterator, classIndex: Int) = {
+    val attInfo = new util.ArrayList[Attribute]()
+    iterator.schema.foreach{ case (n, t) =>
+      t match {
+        case Type.TInt | Type.TFloat => attInfo.add(new Attribute(n))
+        case _ => attInfo.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
+      }
+    }
+    val rawData = iterator.allRows()
+    data = new Instances("Dataset", attInfo, rawData.length)
+
+    rawData.indices.foreach( (i) => {
+      val instance = new DenseInstance(rawData.head.length)
+      instance.setDataset(data)
+      rawData(i).indices.foreach((j) => {
+        iterator.schema(j)._2 match {
+          case Type.TInt | Type.TFloat => {
+            try {
+              instance.setValue(j, rawData(i)(j).asDouble)
+            } catch {
+              case e: TypeException =>
+            }
+          }
+          case _ => instance.setValue(j, rawData(i)(j).asString)
+        }
+      })
+      data.add(instance)
+    })
+    data.setClassIndex(classIndex)
+
+    learner.setModelContext(new InstancesHeader(data))
+    learner.prepareForUse()
+    data.foreach( learn(_) )
   }
 
   def learn(dataPoint: Instance) = {
@@ -153,14 +180,19 @@ class MissingValueModel(lens: MissingValueLens)
     if(!rowValues.getNext()){
       throw new SQLException("Invalid Source Data ROWID: '" +rowid+"'");
     }
-    val row = new DenseInstance(lens.allKeys.length);
+    val row = new DenseInstance(lens.allKeys.length)
+    row.setDataset(data)
     (0 until lens.allKeys.length).foreach( (col) => {
-      val v = rowValues(col)
+      val v = rowValues(col+1)
       if(!v.isInstanceOf[NullPrimitive]){
-        row.setValue(col, v.asDouble)
+        if(v.isInstanceOf[IntPrimitive] || v.isInstanceOf[FloatPrimitive]) {
+          row.setValue(col, v.asDouble)
+        }
+        else {
+          row.setValue(col, v.asString)
+        }
       }
     })
-    row.setDataset(data)
     learner.getVotesForInstance(row).
       toList.
       zipWithIndex.
