@@ -21,7 +21,7 @@ object CTPercolator {
     // println("Percolate: "+o)
     OperatorUtils.extractUnions(
       propagateRowIDs(oper)
-    ).map( percolateOne(_) ).reduceLeft( Union(_,_) )
+    ).map( percolateOne(_) ).reduceLeft( Union(true,_,_) )
   }
   
   /*
@@ -325,7 +325,7 @@ object CTPercolator {
             ret = Project(args, ret)
           }
           ret
-        }).reduce[Operator]( Union(_, _) )
+        }).reduce[Operator]( Union(true, _, _) )
   
       case _ =>
         oper.rebuild(oper.children.map( expandProbabilisticCases(_) ))
@@ -392,12 +392,12 @@ object CTPercolator {
           )
         }
         
-        case Union(left, right) =>
+        case Union(true, left, right) =>
           if(force){
-            Union(
+            Union(true, 
               Project(
                 ProjectArg("ROWID", 
-                  Function("LEFT_UNION_ROWID",
+                  Function("__LEFT_UNION_ROWID",
                     List[Expression](Var("ROWID")))) ::
                 left.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
@@ -405,7 +405,7 @@ object CTPercolator {
                 propagateRowIDs(left, true)),
               Project(
                 ProjectArg("ROWID", 
-                  Function("RIGHT_UNION_ROWID",
+                  Function("__RIGHT_UNION_ROWID",
                     List[Expression](Var("ROWID")))) ::
                 right.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
@@ -413,7 +413,7 @@ object CTPercolator {
                 propagateRowIDs(right, true))
             )
           } else {
-            Union(
+            Union(true, 
               propagateRowIDs(left, false),
               propagateRowIDs(right, false)
             )
