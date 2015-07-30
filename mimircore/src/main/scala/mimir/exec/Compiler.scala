@@ -71,6 +71,12 @@ class Compiler(db: Database) {
             cols.map((x) => (x.column, x.input))
           );
 
+        case Union(true, lhs, rhs) =>
+          new BagUnionResultIterator(
+            buildIterator(lhs),
+            buildIterator(rhs)
+          );
+
         case _ =>
           throw new SQLException("Called buildIterator without calling percolate\n" + oper);
       }
@@ -164,6 +170,9 @@ class Compiler(db: Database) {
           src
         )
       }
+
+      case u@Union(true, lhs, rhs) =>
+        Union(true, compileAnalysis(lhs), compileAnalysis(rhs))
 
       case _ =>
         if (CTables.isProbabilistic(oper)) {
