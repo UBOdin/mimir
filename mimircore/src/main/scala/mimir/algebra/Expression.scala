@@ -194,6 +194,8 @@ object Arith extends Enumeration {
       case (TFloat, (TInt | TFloat)) => TFloat
       case (TString, TString) => TString
       case (TRowId, TString) => TString
+      case (TString, TRowId) => TString
+      case (TRowId, TRowId) => TRowId
       case (TBool, TBool) => TBool
       case _ => 
         throw new TypeException(a, b, "Compat")

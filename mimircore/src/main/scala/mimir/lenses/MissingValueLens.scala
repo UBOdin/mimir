@@ -147,7 +147,11 @@ class MissingValueModel(lens: MissingValueLens)
               case e: TypeException =>
             }
           }
-          case _ => instance.setValue(j, rawData(i)(j).asString)
+          case _ => 
+            val field = rawData(i)(j);
+            if(!field.isInstanceOf[NullPrimitive]){
+              instance.setValue(j, rawData(i)(j).asString)
+            }
         }
       })
       data.add(instance)
