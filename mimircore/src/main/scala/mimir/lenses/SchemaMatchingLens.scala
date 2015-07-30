@@ -5,7 +5,7 @@ import java.sql.SQLException
 import mimir.Database
 import mimir.algebra.Type.T
 import mimir.algebra._
-import mimir.ctables.Model
+import mimir.ctables.{VGTerm, Model}
 import org.apache.lucene.search.spell.{NGramDistance, LevensteinDistance, JaroWinklerDistance, StringDistance}
 
 import scala.tools.nsc.util.ShowPickled
@@ -48,7 +48,9 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
         key,
         CaseExpression(
           sourceSchema.filter(_._2 == targetSchema(key)).keys.toList.map(b => WhenThenClause(
-            Comparison(Cmp.Eq, model.mostLikelyExpr(idx, List(StringPrimitive(key), StringPrimitive(b))), BoolPrimitive(true)),
+            Comparison(Cmp.Eq,
+              VGTerm((name, model), idx, List(StringPrimitive(key), StringPrimitive(b))),
+              BoolPrimitive(true)),
             Var(b))
           ),
           NullPrimitive()
@@ -109,7 +111,7 @@ class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
     schema = targetSchema
   }
 
-  override def varTypes: List[T] = schema.values.toList
+  override def varTypes: List[T] = List.fill(schema.size)(Type.TBool)
 
   override def sample(seed: Long, idx: Int, args: List[PrimitiveValue]): PrimitiveValue = mostLikelyValue(idx, args)
 
