@@ -56,6 +56,7 @@ object CTables
     case VGTerm(_, _, _) => true
     case MissingValueAnalysis(_, _, _) => true
     case TypeInferenceAnalysis(_, _, _) => true
+    case Function(_, _) => true
     case _ => expr.children.exists( isProbabilistic(_) )
   }
 
