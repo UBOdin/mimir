@@ -177,6 +177,7 @@ object Arith extends Enumeration {
       case (TFloat, TInt) => TFloat
       case (TInt, TFloat) => TFloat
       case (TFloat, TFloat) => TFloat
+      case (TBool, TBool) => TBool
       case ((TInt | TFloat), _) => 
         throw new TypeException(b, TFloat, "Numeric")
       case _ => 
@@ -358,7 +359,12 @@ case class Function(op: String, params: List[Expression]) extends Expression {
       case CTables.ROW_PROBABILITY => TString
       case CTables.VARIANCE | CTables.CONFIDENCE => TFloat
       case "__LIST_MIN" | "__LIST_MAX" => TFloat
-      case _ => bindings.get("__"+op+"()").get
+      case "__LEFT_UNION_ROWID" | "__RIGHT_UNION_ROWID" => TRowId
+      case _ => 
+        bindings.get("__"+op+"()") match {
+          case Some(binding) => binding
+          case None => throw new SQLException("Unknown Function: "+op)
+        }
     }
   }
   override def toString() = {

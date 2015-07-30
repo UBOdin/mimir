@@ -95,6 +95,10 @@ object Eval
                   case e:TypeException => 0.0
                 }
               }).max) // TODO Generalized Comparator
+            case "__LEFT_UNION_ROWID" =>
+              new RowIdPrimitive(params(0)+".left")
+            case "__RIGHT_UNION_ROWID" =>
+              new RowIdPrimitive(params(0)+".right")
             case CTables.ROW_PROBABILITY => {
               var count = 0.0
               for(i <- 0 until SAMPLE_COUNT) {
@@ -331,6 +335,15 @@ object Eval
                 a.asInstanceOf[DatePrimitive].
                  compare(b.asInstanceOf[DatePrimitive])<=0
               )
+            case TBool => BoolPrimitive(a match {
+              case BoolPrimitive(true) => true
+              case BoolPrimitive(false) => {
+                b match {
+                  case BoolPrimitive(true) => false
+                  case _ => true
+                }
+              }
+            })
           }
         case Cmp.Lt => 
           Arith.escalateNumeric(a.exprType, b.exprType) match {

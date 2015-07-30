@@ -25,7 +25,7 @@ class JDBCBackend(conn: Connection) extends Backend
 {
   def execute(sel: String): ResultSet = 
   {
-    // println(sel)
+    //println(sel)
     val stmt = conn.createStatement();
     val ret = stmt.executeQuery(sel)
     stmt.closeOnCompletion();
@@ -33,6 +33,7 @@ class JDBCBackend(conn: Connection) extends Backend
   }
   def execute(sel: String, args: List[String]): ResultSet = 
   {
+    //println(""+sel+" <- "+args)
     val stmt = conn.prepareStatement(sel);
     var i: Int = 0;
     args.map( (a) => {

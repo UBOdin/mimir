@@ -22,7 +22,7 @@ object OperatorUtils {
     oper match {
       case p @ Project(_, src) => 
         List[(Expression,Operator)]((p.bindings.get(col).get, src))
-      case Union(lhs, rhs) =>
+      case Union(true, lhs, rhs) =>
         columnExprForOperator(col, lhs) ++ 
         	columnExprForOperator(col, rhs)
       case _ => 
@@ -38,7 +38,7 @@ object OperatorUtils {
   {
     // println("Extract: " + o)
     o match {
-      case Union(lhs, rhs) => 
+      case Union(true, lhs, rhs) => 
         extractUnions(lhs) ++ extractUnions(rhs)
       case Project(args, c) =>
         extractUnions(c).map ( Project(args, _) )
@@ -52,6 +52,7 @@ object OperatorUtils {
               Join(lhsTerm, _)
             )
         )
+      case Union(false, _, _) => List[Operator](o)
     }
   }
 

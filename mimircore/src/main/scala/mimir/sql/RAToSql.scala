@@ -42,13 +42,15 @@ class RAToSql(db: Database) {
         )
         return body
       }
-      case Union(lhs, rhs) => {
+      case Union(isAll, lhs, rhs) => {
         val union = new net.sf.jsqlparser.statement.select.Union()
         val unionList: (SelectBody => List[PlainSelect]) = _ match {
           case s: PlainSelect => List(s)
           case u: net.sf.jsqlparser.statement.select.Union =>
             u.getPlainSelects().toList
         }
+        union.setAll(isAll);
+        union.setDistinct(!isAll);
         union.setPlainSelects(
           unionList(convert(lhs)) ++ 
           unionList(convert(rhs))

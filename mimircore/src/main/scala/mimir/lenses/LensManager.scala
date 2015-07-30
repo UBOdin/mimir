@@ -27,7 +27,7 @@ class LensManager(db: Database) {
   
   def mkLens(lensType: String, lensName: String, args: List[Expression], source: Operator): Lens =
   {
-    lensType.toUpperCase() match { 
+    lensType.toUpperCase match {
       case "MISSING_VALUE" => 
         new MissingValueLens(lensName, args, source)
       case "SCHEMA_MATCHING" =>
@@ -63,7 +63,7 @@ class LensManager(db: Database) {
         lensName, 
         lensDefn.getArgs.map( (arg:net.sf.jsqlparser.expression.Expression) =>
           //TODO refactor this
-            if(lensDefn.getType.equals("SCHEMA_MATCHING"))
+            if(lensDefn.getType.equalsIgnoreCase("SCHEMA_MATCHING"))
               Var(arg.toString)
             else
               db.convert(arg)

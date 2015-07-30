@@ -2,7 +2,7 @@ package mimir
 
 import java.io.{File, StringReader}
 
-import mimir.algebra.{Project, Operator}
+import mimir.algebra.{Project, Operator, OperatorUtils}
 import mimir.ctables.CTPercolator
 import mimir.exec.ResultSetIterator
 import mimir.parser.MimirJSqlParser
@@ -153,16 +153,31 @@ class WebAPI {
       }
 
     val optimized = db.optimize(raw.asInstanceOf[Operator])
-    if(!optimized.isInstanceOf[Project]) {
-      println("Optimized query is not a projection, VGTerm search failed")
-      return List()
-    }
 
-    val projection = optimized.asInstanceOf[Project]
-    val i = if(ind == -1) projection.columns.length - 1 else ind
+    /* Really, this should be data-aware.  The query should
+       get the VG terms specifically affecting the specific
+       row in question.  See #32 */
+    val sch = optimized.schema
+    val col_defn = if(ind == -1) sch(sch.length - 1) else sch(ind)
 
-    val arg = projection.columns(i).input
-    db.getVGTerms(arg).map((x) => x.reason()).distinct
+    val ret =
+    OperatorUtils.columnExprForOperator(col_defn._1, optimized).
+      // columnExprForOperator returns (expr,oper) pairs.  We care
+      // about the expression
+      map( _._1 ).
+      // Get the VG terms that might be affecting it.  THIS SHOULD
+      // BE DATA-DEPENDENT.  
+      map( db.getVGTerms(_) ).
+      // List of lists -> Just a list
+      flatten.
+      // Pull the reasons
+      map( _.reason() ).
+      // Discard duplicate reasons
+      distinct
+
+      println(ret)
+    ret;
+
   }
 
   def close(): Unit = {
