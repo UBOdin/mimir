@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ME=$(dirname $0)/..
-LIBS=$ME/config:$ME/target/scala-2.10/mimir_2.10-0.1.jar:$(exec ls $ME/lib/*.jar | xargs echo | tr ' ' ':')
+LIBS=$ME/config:$ME/mimircore/target/scala-2.10/mimir_2.10-0.1.jar:$(exec ls $ME/mimircore/lib/*.jar | xargs echo | tr ' ' ':')
 
 CMD="java -cp $LIBS mimir.Mimir $*"
 #echo $CMD
