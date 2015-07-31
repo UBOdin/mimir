@@ -232,7 +232,7 @@ object CompilerSpec extends Specification {
       percolate(
         """SELECT[C = S_C](
             JOIN(
-              PROJECT[A <= R_A, C <= R_C, N <= {{ test_0[ROWID, R_A] }}](R(ROWID)),
+              PROJECT[A <= R_A, C <= R_C, N <= {{ test_0[ROWID, R_A] }}](R(R_A:int, R_B:int, R_C:int // ROWID:rowid)),
               S
             )
           )
@@ -243,7 +243,7 @@ object CompilerSpec extends Specification {
             SELECT[R_C = S_C](
               JOIN(
                 PROJECT[R_A <= R_A, R_B <= R_B, R_C <= R_C, 
-                        __LHS_ROWID <= ROWID](R(ROWID)), 
+                        __LHS_ROWID <= ROWID](R(R_A:int, R_B:int, R_C:int // ROWID:rowid)), 
                 PROJECT[S_C <= S_C, S_D <= S_D](S)
               )
             )

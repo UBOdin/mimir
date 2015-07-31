@@ -421,7 +421,7 @@ object CTPercolator {
           }
         
         case Table(name, sch, metadata) =>
-          if(force){
+          if(force && !metadata.exists( _._1 == "ROWID" )){
             Table(name, sch, metadata ++ Map(("ROWID", Type.TRowId)))
           } else {
             Table(name, sch, metadata)
