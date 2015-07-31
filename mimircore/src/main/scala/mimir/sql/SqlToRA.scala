@@ -209,7 +209,10 @@ class SqlToRA(db: Database)
       // Bind the table to a source: 
       db.getView(name) match {
         case None =>
-          val sch = db.getTableSchema(name).get
+          val sch = db.getTableSchema(name) match {
+            case Some(sch) => sch
+            case None => throw new SQLException("Unknown table or view: "+name);
+          }
           val newBindings = sch.map(
               (x) => (x._1, alias+"_"+x._1)
             ).toMap[String, String]

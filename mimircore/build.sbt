@@ -18,7 +18,7 @@ libraryDependencies += "org.specs2" %% "specs2" % "2.3.12" % "test"
 
 // libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.4"
 
-val parser = taskKey[Unit]("Builds the SQL Parser")
+lazy val parser = taskKey[Unit]("Builds the SQL Parser")
 
 parser := {
   val logger = streams.value.log
@@ -27,9 +27,9 @@ parser := {
     case n => sys.error(s"Could not clean up after old SQL Parser: $n")
   }
   Process(List(
-    "java -cp lib/javacc.jar javacc",
-    "-OUTPUT_DIRECTORY=src/main/java/mimir/parser",
-    "src/main/java/mimir/parser/JSqlParserCC.jj"
+    "java -cp mimircore/lib/javacc.jar javacc",
+    "-OUTPUT_DIRECTORY=mimircore/src/main/java/mimir/parser",
+    "mimircore/src/main/java/mimir/parser/JSqlParserCC.jj"
   ).mkString(" ")) ! logger match {
     case 0 => // Success
     case n => sys.error(s"Could not build SQL Parser: $n")

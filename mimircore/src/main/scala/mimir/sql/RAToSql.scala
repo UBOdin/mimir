@@ -122,9 +122,9 @@ class RAToSql(db: Database) {
   def convert(e: Expression): net.sf.jsqlparser.expression.Expression = {
     e match {
       case IntPrimitive(v) => new LongValue(""+v)
-      case StringPrimitive(v) => new StringValue("\'"+v+"\'")
+      case StringPrimitive(v) => new StringValue(v)
       case FloatPrimitive(v) => new DoubleValue(""+v)
-      case RowIdPrimitive(v) => new StringValue("\'"+v+"\'")
+      case RowIdPrimitive(v) => new StringValue(v)
       case BoolPrimitive(true) => 
         bin(new EqualsTo(), IntPrimitive(1), IntPrimitive(1))
       case BoolPrimitive(false) => 

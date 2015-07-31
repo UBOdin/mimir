@@ -175,6 +175,7 @@ case class Database(backend: Backend)
           result(i) + (if (!result.deterministicCol(i)) {"*"} else {""})
         }).toList
 
+      println("RESULTS: "+list)
       data.append((list, result.deterministicRow()))
     }
 

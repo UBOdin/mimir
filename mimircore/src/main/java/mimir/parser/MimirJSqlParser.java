@@ -271,22 +271,10 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     SelectBody selectBody = null;
     String col = null;
     jj_consume_token(K_EXPLAIN);
-    try {
-        selectBody = SelectBody();
-    } catch (Exception e){
-        Token token = getNextToken();
-        String type = token.image;
-        if(type == null || type.isEmpty())
-            throw e;
-        token = getNextToken();
-        String colName = token.image;
-        if(colName == null || colName.isEmpty())
-            throw e;
-        explain.setType(type);
-        explain.setColumn(colName);
-    }
+    selectBody = SelectBody();
     explain.setSelectBody(selectBody);
-    return explain;
+    {if (true) return explain;}
+    throw new Error("Missing return statement in function");
   }
 
   final public Analyze Analyze() throws ParseException {
@@ -337,22 +325,21 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     case 107:
     case 108:
     case 109:
-        e = SimpleExpression();
-        args.add(e);
+      e = SimpleExpression();
+                                     args.add(e);
       label_2:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-            case 85:
-                jj_consume_token(85);
-                break;
-            case 78:
-                e = SimpleExpression();
-                args.add(e);
-                break;
-            default:
-                jj_la1[6] = jj_gen;
-                break label_2;
+        case 85:
+          ;
+          break;
+        default:
+          jj_la1[6] = jj_gen;
+          break label_2;
         }
+        jj_consume_token(85);
+        e = SimpleExpression();
+                                           args.add(e);
       }
       break;
     default:
@@ -2048,7 +2035,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     case K_ESCAPE:
       jj_consume_token(K_ESCAPE);
       token = jj_consume_token(S_CHAR_LITERAL);
-                                         result.setEscape((new StringValue(token.image)).getValue());
+                                         result.setEscape((StringValue.parseEscaped(token.image)).getValue());
       break;
     default:
       jj_la1[99] = jj_gen;
@@ -2583,7 +2570,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
         case S_CHAR_LITERAL:
           token = jj_consume_token(S_CHAR_LITERAL);
-                                   retval = new StringValue(token.image);
+                                   retval = StringValue.parseEscaped(token.image);
           break;
         case 86:
         case 101:

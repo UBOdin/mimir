@@ -84,6 +84,7 @@ class WebAPI {
 
   private def handleSelect(sel: Select): WebQueryResult = {
     val raw = db.convert(sel)
+    println("RAW QUERY: "+raw)
     val results = db.query(CTPercolator.propagateRowIDs(raw, true))
 
     results.open()
@@ -153,6 +154,7 @@ class WebAPI {
       }
 
     val optimized = db.optimize(raw.asInstanceOf[Operator])
+    println(optimized)
 
     /* Really, this should be data-aware.  The query should
        get the VG terms specifically affecting the specific

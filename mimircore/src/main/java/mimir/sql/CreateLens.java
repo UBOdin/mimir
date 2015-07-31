@@ -62,5 +62,22 @@ public class CreateLens implements Statement {
 	{
 		return args;
 	}
+	public String toString()
+	{
+		StringBuilder sb = new StringBuilder("CREATE LENS "+name+" AS "+body.toString()+" USING "+type+"(");
+		String sep = "";
+		for(Expression arg : args){
+			sb.append(sep + args);
+			sep = ", ";
+		}
+		sb.append(")");
+		return sb.toString();
+	}
+
+	public boolean equals(Object o)
+	{
+		if(!(o instanceof CreateLens)){ return false; }
+		return toString().equals(o.toString());
+	}
 
 }
