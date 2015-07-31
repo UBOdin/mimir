@@ -22,6 +22,7 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
   var model: Model = null
 
   def init() = {
+    println("args: "+args+"; "+ args.length)
     if (args.length % 2 != 0)
       throw new SQLException("Incorrect parameters for " + lensType + " Lens")
     if (targetSchema == null) {
@@ -140,7 +141,7 @@ class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
   override def reason(idx: Int): String = {
     val target = schema.keys.toList(idx)
     val source = colMapping(target).maxBy(_._2)
-    "I assumed that " + source._1 + " maps to " + target + " (Probability: "+ source._2+")"
+    "I assumed that " + source._1 + " maps to " + target + " ("+ (source._2 * 100).toInt +"% likely)"
   }
 
 }

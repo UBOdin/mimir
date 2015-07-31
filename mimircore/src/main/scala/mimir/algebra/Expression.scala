@@ -36,6 +36,7 @@ object Type extends Enumeration {
     case "string" => Type.TString
     case "bool"   => Type.TBool
     case "rowid"  => Type.TRowId
+    case _ =>  throw new SQLException("Invalid Type '" + t + "'");
   }
 }
 

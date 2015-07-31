@@ -20,9 +20,11 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 			case x => throw new SQLException(x.toString)
 		}
 	def exprList(s: String): List[Expression] = 
-		parseAll(exprListBase, s) match {
-			case Success(ret, _) => ret
-			case x => throw new SQLException(x.toString)
+		if(s == "") { List[Expression]() } else {
+			parseAll(exprListBase, s) match {
+				case Success(ret, _) => ret
+				case x => throw new SQLException(x.toString)
+			}
 		}
 	
 	def exprBase : Parser[Expression] = 
