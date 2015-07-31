@@ -140,7 +140,7 @@ class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
   override def reason(idx: Int): String = {
     val target = schema.keys.toList(idx)
     val source = colMapping(target).maxBy(_._2)
-    source._1 + " mapped to " + target + ", Probability: "+ source._2
+    "I assumed that " + source._1 + " maps to " + target + " (Probability: "+ source._2+")"
   }
 
 }
