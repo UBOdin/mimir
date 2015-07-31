@@ -1,10 +1,13 @@
 package mimir.ctables;
 
 import java.io.{StringReader,BufferedReader,FileReader,File}
+import scala.collection.JavaConversions._
 
 import mimir.parser.{MimirJSqlParser}
 import org.specs2.mutable._
 import org.specs2.matcher.FileMatchers
+
+import net.sf.jsqlparser.statement.select.{PlainSelect}
 
 import mimir._
 import mimir.parser._
@@ -99,6 +102,23 @@ object SqlLoaderSpec extends Specification with FileMatchers {
 				List(IntPrimitive(2),IntPrimitive(2),IntPrimitive(1)),
 				List(IntPrimitive(4),IntPrimitive(2),IntPrimitive(4))
 			)
+		}
+
+		"Create Lenses with no or multiple arguments" in {
+			stmt("CREATE LENS test1 AS SELECT * FROM R WITH MISSING_VALUE('A','B')") must be equalTo new CreateLens("test1", 
+					stmt("SELECT * FROM R").asInstanceOf[net.sf.jsqlparser.statement.select.Select].getSelectBody(),
+					"MISSING_VALUE",
+					List[net.sf.jsqlparser.expression.Expression](
+						new net.sf.jsqlparser.expression.StringValue("A"), 
+						new net.sf.jsqlparser.expression.StringValue("B")
+					)
+				)
+			stmt("CREATE LENS test2 AS SELECT * FROM R WITH TYPE_INFERENCE()") must be equalTo new CreateLens("test2", 
+					stmt("SELECT * FROM R").asInstanceOf[net.sf.jsqlparser.statement.select.Select].getSelectBody(),
+					"TYPE_INFERENCE",
+					List[net.sf.jsqlparser.expression.Expression]()
+				)
+
 		}
 
 	}
