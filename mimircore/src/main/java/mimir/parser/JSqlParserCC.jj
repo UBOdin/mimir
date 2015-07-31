@@ -373,8 +373,8 @@ CreateLens CreateLens():
     <K_AS> body = SelectBody()
     <K_WITH> lensType = RelObjectName()
 	  "(" [ 
-	    e = SimpleExpression() { args.add(e); }
-	    ( "," e = SimpleExpression() { args.add(e); } ) *
+	    e = Expression() { args.add(e); }
+	    ( "," e = Expression() { args.add(e); } ) *
 	  ] ")"
   { 
   	return new CreateLens(lensName, body, lensType, args);

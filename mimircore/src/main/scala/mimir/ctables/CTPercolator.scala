@@ -150,6 +150,7 @@ object CTPercolator {
           | (Set[String]("ROWID") & lhsColNames)
           | (Set[String]("ROWID") & rhsColNames)
         ) 
+        // println("CONFLICTS: "+conflicts+"in: "+lhsColNames+", "+rhsColNames+"; for \n"+afterDescent);
           
         val newJoin = 
           if(conflicts.isEmpty) {
