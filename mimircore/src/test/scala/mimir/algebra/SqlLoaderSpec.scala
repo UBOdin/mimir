@@ -23,16 +23,16 @@ object SqlLoaderSpec extends Specification with FileMatchers {
 
 	val tempDB:File = null
 	val testData = List[ (String, File, List[String]) ](
-			(	"R", new File("test/r_test/r.csv"), 
+			(	"R", new File("../test/r_test/r.csv"), 
 				List("A int", "B int", "C int")
 			)
 		)
 
-	val db = {
+	val db:Database = {
 		if(tempDB != null){
 			if(tempDB.exists()){ tempDB.delete(); }
+			tempDB.deleteOnExit();
 		}
-		// tempDB.deleteOnExit();
 		var d = new Database(new JDBCBackend(Mimir.connectSqlite(
 			if(tempDB == null){ "" } else { tempDB.toString() }
 		)));
@@ -81,7 +81,7 @@ object SqlLoaderSpec extends Specification with FileMatchers {
 		 	) must be equalTo 
 		 		Project(List(ProjectArg("A", Var("R_A")), 
 		 					 ProjectArg("B", expr(
-		 					 	"CASE WHEN R_B IS NULL THEN {{ SANER_0[ROWID] }} ELSE R_B END")),
+		 					 	"CASE WHEN R_B IS NULL THEN {{ SANER_1[ROWID] }} ELSE R_B END")),
 		 					 ProjectArg("C", Var("R_C"))
 		 				), Table("R", Map(("R_A", Type.TInt), 
 		 								  ("R_B", Type.TInt), 
@@ -93,7 +93,7 @@ object SqlLoaderSpec extends Specification with FileMatchers {
 			db.query(query("SELECT * FROM SaneR")).allRows must be equalTo List(
 				List(IntPrimitive(1),IntPrimitive(2),IntPrimitive(3)),
 				List(IntPrimitive(1),IntPrimitive(3),IntPrimitive(1)),
-				List(IntPrimitive(2),IntPrimitive(3),IntPrimitive(1)),
+				List(IntPrimitive(2),IntPrimitive(2),IntPrimitive(1)),
 				List(IntPrimitive(1),IntPrimitive(2),NullPrimitive()),
 				List(IntPrimitive(1),IntPrimitive(4),IntPrimitive(2)),
 				List(IntPrimitive(2),IntPrimitive(2),IntPrimitive(1)),
