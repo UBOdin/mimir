@@ -298,7 +298,7 @@ case class Database(backend: Backend)
       case None => {
         if(headerDetected(firstLine)) {
           update("CREATE TABLE "+targetTable+"("+
-            firstLine.split(",").map((x) => "\'"+x+"\'").mkString(" varchar, ")+
+            firstLine.split(",").map((x) => "\'"+x.trim.replace(" ", "")+"\'" ).mkString(" varchar, ")+
             " varchar)")
 
           handleLoadTable(targetTable, sourceFile)
