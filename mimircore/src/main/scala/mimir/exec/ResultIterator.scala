@@ -1,6 +1,5 @@
 package mimir.exec;
 
-import java.sql;
 import mimir.algebra._;
 
 abstract class ResultIterator {
@@ -27,4 +26,5 @@ abstract class ResultIterator {
     foreachRow( (x) => { ret = ret ++ List(toList()) } )
     return ret;
   }
+  def reason(ind: Int): List[String] = List()
 }

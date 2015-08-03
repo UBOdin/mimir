@@ -165,7 +165,7 @@ $( document ).ready(function() {
                                         +'), VAR('+col+'), CONFIDENCE('+col+') FROM ('+query
                                         +') AS TEMP WHERE ROWID = '+row+';&db='+db;
 
-                var vgterms_query = 'vgterms?query='+query+';&ind='+ (col_index-1)   // because of ROW_ID
+                var vgterms_query = 'vgterms?query='+query+';&row='+row+'&ind='+ col_index
                                         +'&db='+db;
 
                 if (content == null) {
@@ -218,8 +218,10 @@ $( document ).ready(function() {
                                                       '</tr>'+
                                                       '<tr>'+
                                                       '<tr>'+
-                                                         '<th class="ttOption approve">Approve</th>'+
-                                                         '<th class="ttOption fix">Fix</th>'+
+                                                         '<td colspan=2>'+
+                                                         '<a class="ttOption approve">  Approve   </a>'+
+                                                         '<a class="ttOption fix">  Fix</a>'+
+                                                         '</td>'+
                                                       '</tr>'+
                                                       '</tr>'+
                                                   '</tbody>'+
@@ -266,7 +268,7 @@ $( document ).ready(function() {
                 var errormessage = "";
 
                 var prob_query = 'queryjson?query=SELECT PROB() FROM ('+query+') AS TEMP WHERE ROWID = '+row+';&db='+db;
-                var vgterms_query = 'vgterms?query='+query+';&ind='+-1+'&db='+db;
+                var vgterms_query = 'vgterms?query='+query+';&row='+row+'&ind='+-1+'&db='+db;
 
                 if (content == null) {
                     $.when(
@@ -304,8 +306,10 @@ $( document ).ready(function() {
                                                           '<td><ul>'+ listify(causes) +'</ul></td>'+
                                                       '</tr>'+
                                                       '<tr>'+
-                                                         '<th class="ttOption approve">Approve</th>'+
-                                                         '<th class="ttOption fix">Fix</th>'+
+                                                         '<td colspan=2>'+
+                                                         '<a class="ttOption approve">  Approve  </a>'+
+                                                         '<a class="ttOption fix">  Fix</a>'+
+                                                         '</td>'+
                                                       '</tr>'+
                                                   '</tbody>'+
                                               '</table>';

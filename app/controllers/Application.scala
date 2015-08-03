@@ -142,12 +142,12 @@ class Application extends Controller {
     response
   }
 
-  def getVGTerms(query: String, ind: String, db: String) = Action {
+  def getVGTerms(query: String, row: String, ind: String, db: String) = Action {
     val webAPI = new WebAPI()
     webAPI.configure(Array("--db", db))
 
     val i = Integer.parseInt(ind)
-    val result = webAPI.getVGTerms(query, i)
+    val result = webAPI.getVGTerms(query, row, i)
 
     val response = Ok(Json.toJson(result))
     webAPI.close()

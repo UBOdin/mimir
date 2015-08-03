@@ -122,7 +122,7 @@ class MissingValueModel(lens: MissingValueLens)
   var numCorrect = 0;
   var numSamples = 0;
   def reason(): String =
-    "Missing values for attribute(s) "+lens.keysToBeCleaned.mkString(", ")
+    "This is a best guess estimate for this attribute"
 
   def init(iterator: ResultIterator, classIndex: Int) = {
     val attInfo = new util.ArrayList[Attribute]()

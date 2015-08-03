@@ -35,7 +35,7 @@ object Eval
    * Evaluate the specified expression and return the primitive value
    */
   def eval(e: Expression): PrimitiveValue = 
-    eval(e, Map[String, PrimitiveValue]());
+    eval(e, Map[String, PrimitiveValue]())
 
   /**
    * Evaluate the specified expression given a set of Var/Value bindings
@@ -56,7 +56,7 @@ object Eval
           applyCmp(op, eval(lhs, bindings), eval(rhs, bindings))
         case CaseExpression(caseWhens, caseElse) =>
           caseWhens.foldLeft(None: Option[PrimitiveValue])( (a, b) =>
-            if(a != None){ a }
+            if(a.isDefined){ a }
             else {
               if(eval(b.when, bindings).
                     asInstanceOf[BoolPrimitive].v){
@@ -65,7 +65,7 @@ object Eval
             }
           ).getOrElse(eval(caseElse, bindings))
         case Not(NullPrimitive()) => NullPrimitive()
-        case Not(e) => BoolPrimitive(!evalBool(e, bindings))
+        case Not(c) => BoolPrimitive(!evalBool(c, bindings))
         case p:Proc => {
           p.get(p.getArgs.map(eval(_, bindings)))
         }
@@ -379,30 +379,48 @@ object Eval
     }
 
   def getVGTerms(e: Expression): List[VGTerm] = {
-    getVGTerms(e, List())
+    getVGTerms(e, Map(), List())
   }
 
-  def getVGTerms(e: Expression, l: List[VGTerm]): List[VGTerm] = {
+  def getVGTerms(e: Expression,
+                 bindings: Map[String, PrimitiveValue],
+                 l: List[VGTerm]): List[VGTerm] = {
     if(e.isInstanceOf[PrimitiveValue]){
-      l
+      return l
     } else {
-      e match {
-        case Arithmetic(_, lhs, rhs) =>
-          l ++ getVGTerms(lhs) ++ getVGTerms(rhs)
-        case Comparison(_, lhs, rhs) =>
-          l ++ getVGTerms(lhs) ++ getVGTerms(rhs)
-        case CaseExpression(caseWhens, caseElse) =>
-          l ++
-          caseWhens.foldLeft(List[VGTerm]())((list: List[VGTerm], wtClause: WhenThenClause) =>
-            getVGTerms(wtClause.when) ++ getVGTerms(wtClause.then)) ++
-          getVGTerms(caseElse)
-        case Not(e) => l ++ getVGTerms(e)
-        case vg: VGTerm => l ++ List(vg)
-        case IsNullExpression(c, n) => {
-          l ++ getVGTerms(c)
+      l ++ (
+        e match {
+          case Var(v) => getVGTerms(bindings.get(v).get, bindings, l)
+          case Arithmetic(op, lhs, rhs) =>
+            getVGTerms(
+              applyArith(op, eval(lhs, bindings), eval(rhs, bindings)),
+              bindings, l
+            )
+          case Comparison(op, lhs, rhs) =>
+            getVGTerms(
+              applyCmp(op, eval(lhs, bindings), eval(rhs, bindings)),
+              bindings, l
+            )
+          case v: VGTerm => v :: l
+          case CaseExpression(caseWhens, caseElse) =>
+            caseWhens.foldLeft(None: Option[List[VGTerm]])((a, b) =>
+              if (a.isDefined) {
+                a
+              }
+              else {
+                if (eval(b.when, bindings).asInstanceOf[BoolPrimitive].v) {
+                  Some(getVGTerms(b.when, bindings, l) ++ getVGTerms(b.then, bindings, l))
+                } else {
+                  None
+                }
+              }
+            ).getOrElse(getVGTerms(caseElse, bindings, l))
+
+          case Not(c) => getVGTerms(c, bindings, l)
+          case IsNullExpression(c, n) => getVGTerms(c, bindings, l)
+          case _ => List()
         }
-        case _ => l
-      }
+      )
     }
   }
 }

@@ -1,8 +1,9 @@
 package mimir
 
 import java.io.{File, StringReader}
+import java.sql.SQLException
 
-import mimir.algebra.{Operator, OperatorUtils}
+import mimir.algebra._
 import mimir.ctables.CTPercolator
 import mimir.exec.ResultSetIterator
 import mimir.parser.MimirJSqlParser
@@ -137,7 +138,7 @@ class WebAPI {
     curDir.listFiles().filter( f => f.isFile && f.getName.endsWith(".db")).map(x => x.getName)
   }
 
-  def getVGTerms(query: String, ind: Int): List[String] = {
+  def getVGTerms(query: String, row: String, ind: Int): List[String] = {
     val source = new StringReader(query)
     val parser = new MimirJSqlParser(source)
 
@@ -157,33 +158,41 @@ class WebAPI {
         }
       }
 
-    val optimized = db.optimize(raw.asInstanceOf[Operator])
-    println(optimized)
+    val iterator = db.query(
+      CTPercolator.percolate(
+        mimir.algebra.Select(
+          Comparison(Cmp.Eq, Var("ROWID"), new RowIdPrimitive(row.substring(1, row.length - 1))),
+          db.optimize(raw)
+        )
+      )
+    )
+
+    if(!iterator.getNext()){
+      throw new SQLException("Invalid Source Data ROWID: '" +row+"'");
+    }
+    iterator.reason(ind)
 
     /* Really, this should be data-aware.  The query should
        get the VG terms specifically affecting the specific
        row in question.  See #32 */
-    val sch = optimized.schema
-    val col_defn = if(ind == -1) sch(sch.length - 1) else sch(ind)
-
-    val ret =
-    OperatorUtils.columnExprForOperator(col_defn._1, optimized).
-      // columnExprForOperator returns (expr,oper) pairs.  We care
-      // about the expression
-      map( _._1 ).
-      // Get the VG terms that might be affecting it.  THIS SHOULD
-      // BE DATA-DEPENDENT.  
-      map( db.getVGTerms(_) ).
-      // List of lists -> Just a list
-      flatten.
-      // Pull the reasons
-      map( _.reason() ).
-      // Discard duplicate reasons
-      distinct
-
-      println(ret)
-    ret;
-
+//    val sch = optimized.schema
+//    val col_defn = if(ind == -1) sch(sch.length - 1) else sch(ind)
+//
+//    val ret =
+//    OperatorUtils.columnExprForOperator(col_defn._1, optimized).
+//      // columnExprForOperator returns (expr,oper) pairs.  We care
+//      // about the expression
+//      map( _._1 ).
+//      // Get the VG terms that might be affecting it.  THIS SHOULD
+//      // BE DATA-DEPENDENT.
+//      map( db.getVGTerms(_) ).
+//      // List of lists -> Just a list
+//      flatten.
+//      // Pull the reasons
+//      map( _.reason() ).
+//      // Discard duplicate reasons
+//      distinct
+//    ret
   }
 
   def close(): Unit = {

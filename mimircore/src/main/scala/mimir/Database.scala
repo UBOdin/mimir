@@ -345,10 +345,13 @@ case class Database(backend: Backend)
    * Find all VGTerms in an expression
    */
   def getVGTerms(expression: Expression): List[VGTerm] = {
-    return Eval.getVGTerms(expression)
+    Eval.getVGTerms(expression)
   }
 
-  def getVGTerms(expression: Expression, list: List[VGTerm]): List[VGTerm] = {
-    return Eval.getVGTerms(expression, list)
+  def getVGTerms(expression: Expression,
+                 bindings: Map[String, PrimitiveValue],
+                 list: List[VGTerm]): List[VGTerm] = {
+
+    Eval.getVGTerms(expression, bindings, list)
   }
 }

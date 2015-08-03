@@ -151,6 +151,12 @@ class ProjectionResultIterator(
         )
     }
   }
+
+  override def reason(ind: Int): List[String] = {
+    val expr: Expression = if(ind == -1) cond.get else exprs(ind)
+    val evaluated = Eval.inline(expr)
+    db.getVGTerms(evaluated).map((vgterm) => vgterm.reason()).distinct
+  }
 }
 
 class VarProjection(src: ProjectionResultIterator, idx: Int, t: Type.T)
