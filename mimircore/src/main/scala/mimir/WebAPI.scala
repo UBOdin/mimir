@@ -2,7 +2,7 @@ package mimir
 
 import java.io.{File, StringReader}
 
-import mimir.algebra.{Project, Operator, OperatorUtils}
+import mimir.algebra.{Operator, OperatorUtils}
 import mimir.ctables.CTPercolator
 import mimir.exec.ResultSetIterator
 import mimir.parser.MimirJSqlParser
@@ -22,20 +22,24 @@ class WebAPI {
   var conf: MimirConfig = null
   var db: Database = null
   var dbName: String = null
+  var dbPath: String = null
+  val dbDir = "databases"
 
   /* Initialize the configuration and database */
   def configure(args: Array[String]): Unit = {
     conf = new MimirConfig(args)
 
     // Set up the database connection(s)
-    dbName = conf.dbname()
+    dbName = conf.dbname().toLowerCase
     if(dbName.length <= 0) {
       throw new Exception("DB name must be configured!")
     }
 
+    dbPath = java.nio.file.Paths.get(dbDir, dbName).toString
+
     val backend = conf.backend() match {
       case "oracle" => new JDBCBackend(Mimir.connectOracle())
-      case "sqlite" => new JDBCBackend(Mimir.connectSqlite(dbName))
+      case "sqlite" => new JDBCBackend(Mimir.connectSqlite(dbPath))
       case x => {
         println("Unsupported backend: "+x)
         sys.exit(-1)
@@ -129,7 +133,7 @@ class WebAPI {
   }
 
   def getAllDBs(): Array[String] = {
-    val curDir = new File(".")
+    val curDir = new File("./databases")
     curDir.listFiles().filter( f => f.isFile && f.getName.endsWith(".db")).map(x => x.getName)
   }
 
