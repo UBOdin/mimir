@@ -213,8 +213,14 @@ $( document ).ready(function() {
                                                           '<td class="number">'+conf_int+'</td>'+
                                                       '</tr>'+
                                                       '<tr>'+
-                                                          '<th scope="row">VG Terms</th>'+
+                                                          '<th scope="row">Reasons</th>'+
                                                           '<td><ul>'+listify(causes)+'</ul></td>'+
+                                                      '</tr>'+
+                                                      '<tr>'+
+                                                      '<tr>'+
+                                                         '<th class="ttOption approve">Approve</th>'+
+                                                         '<th class="ttOption fix">Fix</th>'+
+                                                      '</tr>'+
                                                       '</tr>'+
                                                   '</tbody>'+
                                               '</table>';
@@ -294,8 +300,12 @@ $( document ).ready(function() {
                                                           '<td class="number">'+prob+'</td>'+
                                                       '</tr>'+
                                                       '<tr>'+
-                                                          '<th scope="row">VG Terms</th>'+
+                                                          '<th scope="row">Reasons</th>'+
                                                           '<td><ul>'+ listify(causes) +'</ul></td>'+
+                                                      '</tr>'+
+                                                      '<tr>'+
+                                                         '<th class="ttOption approve">Approve</th>'+
+                                                         '<th class="ttOption fix">Fix</th>'+
                                                       '</tr>'+
                                                   '</tbody>'+
                                               '</table>';
@@ -325,7 +335,7 @@ function listify(causes) {
     var i;
     var result = '';
     for(i = 0; i<causes.length; i++) {
-        result += '<li class="repair">'+ causes[i] +'</li>'
+        result += '<li class="paperclip">'+ causes[i] +'</li>'
     }
 
     return result;

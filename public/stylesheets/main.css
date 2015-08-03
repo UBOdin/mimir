@@ -8,11 +8,37 @@ ul {
     list-style:                 none;
 }
 
-.repair {
+.ttOption {
+    margin-bottom:              3px;
+    text-align:                 center;
+    font-size:                  1.2em;
+}
+
+.approve:before {
+    position:                   relative;
+    display:                    inline-block;
+    font-family:                'Glyphicons Halflings';
+    -webkit-font-smoothing:     antialiased;
+    -moz-osx-font-smoothing:    grayscale;
+    padding:                    0 4px;
+    content:                    "\e013";
+}
+
+.fix:before {
+    position:                   relative;
+    display:                    inline-block;
+    font-family:                'Glyphicons Halflings';
+    -webkit-font-smoothing:     antialiased;
+    -moz-osx-font-smoothing:    grayscale;
+    padding:                    0 8px;
+    content:                    "\e136";
+}
+
+.paperclip {
     margin-bottom:              3px;
 }
 
-.repair:before {
+.paperclip:before {
     position:                   relative;
     display:                    inline-block;
     font-family:                'Glyphicons Halflings';
@@ -20,7 +46,7 @@ ul {
     -webkit-font-smoothing:     antialiased;
     -moz-osx-font-smoothing:    grayscale;
     padding:                    0 4px;
-    content:                    "\e136";
+    content:                    "\e250";
 }
 
 a:hover {
