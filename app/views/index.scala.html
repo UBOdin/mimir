@@ -1,4 +1,4 @@
-@(webAPI: mimir.WebAPI, query: String, result: mimir.WebResult)
+@(webAPI: mimir.WebAPI, query: String, result: mimir.WebResult, lastQuery: String)
 
 @import mimir.{WebQueryResult, WebStringResult, WebErrorResult}
 
@@ -89,11 +89,36 @@
                     <input type="hidden" id="db_field" name="db" value="@webAPI.dbName">
                     <input type="submit" class="btn btn-primary" id="query_btn" value="Query">
                 </form>
+                <input type="hidden" id="last_query_field" name="last_query" value="@lastQuery">
             </div>
         </div>
         <div class="result">
             @result match {
-                case WebQueryResult(iter) => { @tableGenerator(iter) }
+                case WebQueryResult(iter) => {
+                    <div class="leftCol">
+                        <div class="panel panel-default">
+                            <div class="panel-heading">
+                                <h3 class="panel-title">Notifications</h3>
+                            </div>
+                            <div class="panel-body">
+                                <p>Pink represents data uncertainty</p>
+                                @if(iter.missingRows) {
+                                    <p class="red">There may be some rows missing from this result</p>
+                                }
+                            </div>
+                        </div>
+                        <h3>&nbsp;&nbsp;Lenses</h3>
+                        <button id="type_inference_btn" class="lens_btn">Type Inference</button>
+                        <br><br>
+                        <button id="missing_value_btn" class="lens_btn">Missing Value</button>
+                        <br><br>
+                        <button id="schema_matching_btn" class="lens_btn">Schema Matching</button>
+                        <br><br>
+                    </div>
+                    <div class="rightCol">
+                         @tableGenerator(iter)
+                    </div>
+                }
                 case WebStringResult(string) => { <pre>@string</pre> }
                 case WebErrorResult(string) => { <pre class="error">Command Ignored.<br/><br/>@string</pre> }
             }
@@ -101,6 +126,29 @@
         <form id="create_db_form" class="hidden" action="createDB" method="POST">
             <input type="hidden" id="create_db_field" name="new_db" value="">
         </form>
+        <div id="ti_lens_div" class="lens_create_div">
+            <h3>Type Inference Lens</h3>
+            <p class="lens_desc">Create a lens to infer the types of a newly imported table, which all default to String</p>
+            <hr>
+            <input type="text" class="form-control" id="ti_lens_name" placeholder="Lens name">
+            <br>
+            <label for="ti_lens_param">Conformity ratio</label>
+            <input type="range" id="ti_lens_param" min="0" max="1" value="0.5" step="0.1">
+            <br>
+            <button id="ti_lens_create_btn" class="lens_btn">Create</button>
+        </div>
+        <div id="mv_lens_div" class="lens_create_div">
+            <h3>Missing Value Lens</h3>
+            <p class="lens_desc">Create a lens to calculate best estimate guesses for missing values for an attribute</p>
+            <hr>
+            <input type="text" class="form-control" id="mv_lens_name" placeholder="Lens name">
+            <br>
+            <label for="ti_lens_param">Attributes</label>
+            <select id="mv_lens_param" class="form-control" multiple></select>
+            <br>
+            <button id="mv_lens_create_btn" class="lens_btn">Create</button>
+        </div>
+        <div id="black-box"></div>
     </div>
 </div>
 <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->

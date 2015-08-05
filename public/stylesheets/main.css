@@ -112,13 +112,13 @@ a:hover {
 }
 
 .non_deterministic_cell {
-    color:                      #EE2C2C;
+    color:                      #c42f3e;
     font-weight:                bold;
     cursor:                     pointer;
 }
 
 .non_deterministic_cell:hover {
-    color:                      #CD2626;
+    color:                      #ea4858;
 }
 
 .notifications {
@@ -134,7 +134,7 @@ td:hover {
 }
 
 .red {
-    color:                      rgba(255, 51, 51, 1);
+    color:                      #ea4858;
 }
 
 #about {
@@ -203,5 +203,87 @@ td:hover {
 }
 
 .non_deterministic_row>.row_selector {
-    background-color:           #EE2C2C;
+    background-color:           #ea4858;
+}
+
+.leftCol {
+    width:                      25%;
+    float:                      left;
+    padding-right:              10px;
+}
+
+.rightCol {
+    width:                      75%;
+    float:                      left;
+    border-left:                solid 2px;
+    margin-bottom:              -20px;
+    overflow:                   hidden;
+}
+
+.lens_btn {
+    width:                      100%;
+    height:                     50px;
+    border:                     none;
+    border-radius:              3px;
+    background-color:           #ea4858;
+    box-shadow:                 0 3px 0 0 #c42f3e;
+    -moz-box-shadow:            0 3px 0 0 #c42f3e;
+    -webkit-box-shadow:         0 3px 0 0 #c42f3e;
+    color:                      #fff;
+    font-size:                  1.2em;
+    font-weight:                bold;
+}
+
+.lens_btn:hover {
+    background-color:           #c42f3e;
+}
+
+button:focus {
+    outline:                    0;
+}
+
+.lens_create_div {
+    position:                   absolute;
+    top:                        50%;
+    left:                       50%;
+    margin-top:                 -250px;
+    margin-left:                -300px;
+    width:                      600px;
+    height:                     500px;
+    background-color:           #fff;
+    border:                     1px solid #ddd;
+    border-radius:              5px;
+    padding:                    2% 10%;
+    box-shadow:                 1px 1px 1px 0 #222;
+    -moz-box-shadow:            1px 1px 1px 0 #222;
+    -webkit-box-shadow:         1px 1px 1px 0 #222;
+    z-index:                    999;
+    display:                    none;
+}
+
+#black-box {
+    position:                   absolute;
+    top:                        0px;
+    left:                       0px;
+    width:                      100%;
+    height:                     101%;
+    background:                 rgba(0, 0, 0, 0.8);
+    z-index:                    0;
+    display:                    none;
+}
+
+textarea:focus {
+    outline:                    0;
+}
+
+input:focus {
+    outline:                    0;
+}
+
+.lens_desc {
+    line-height:                1.3em;
+}
+
+select:focus {
+    outline:                    0;
 }

@@ -1,8 +1,6 @@
 package mimir.exec;
 
-import java.sql._;
 import mimir.algebra._;
-import mimir.algebra.Type._;
 
 class BagUnionResultIterator(lhs: ResultIterator, rhs: ResultIterator) extends ResultIterator
 {
@@ -33,4 +31,8 @@ class BagUnionResultIterator(lhs: ResultIterator, rhs: ResultIterator) extends R
     currIter().numCols;
   def schema: List[(String,Type.T)] =
     currIter().schema;
+
+  override def reason(ind: Int): List[String] = {
+    currIter().reason(ind)
+  }
 }

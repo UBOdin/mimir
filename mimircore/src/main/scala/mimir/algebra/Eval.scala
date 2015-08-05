@@ -154,7 +154,12 @@ object Eval
     val samples = collection.mutable.Map[Double, Int]()
     for( i <- 0 until SAMPLE_COUNT) {
       val bindings = Map[String, IntPrimitive]("__SEED" -> IntPrimitive(i+1))
-      val sample = Eval.eval(exp, bindings).asDouble
+      val sample =
+        try {
+          Eval.eval(exp, bindings).asDouble
+        } catch {
+          case e: Exception => 0.0
+        }
       sum += sample
       if(samples.contains(sample))
         samples(sample) = samples(sample) + 1
@@ -391,16 +396,10 @@ object Eval
       l ++ (
         e match {
           case Var(v) => getVGTerms(bindings.get(v).get, bindings, l)
-          case Arithmetic(op, lhs, rhs) =>
-            getVGTerms(
-              applyArith(op, eval(lhs, bindings), eval(rhs, bindings)),
-              bindings, l
-            )
-          case Comparison(op, lhs, rhs) =>
-            getVGTerms(
-              applyCmp(op, eval(lhs, bindings), eval(rhs, bindings)),
-              bindings, l
-            )
+          case Arithmetic(_, lhs, rhs) =>
+            getVGTerms(lhs, bindings, l) ++ getVGTerms(rhs, bindings, l)
+          case Comparison(_, lhs, rhs) =>
+            getVGTerms(lhs, bindings, l) ++ getVGTerms(rhs, bindings, l)
           case v: VGTerm => v :: l
           case CaseExpression(caseWhens, caseElse) =>
             caseWhens.foldLeft(None: Option[List[VGTerm]])((a, b) =>

@@ -122,7 +122,7 @@ class MissingValueModel(lens: MissingValueLens)
   var numCorrect = 0;
   var numSamples = 0;
   def reason(): String =
-    "This is a best guess estimate for this attribute"
+    "I made a best guess estimate for this data element, which was originally NULL"
 
   def init(iterator: ResultIterator, classIndex: Int) = {
     val attInfo = new util.ArrayList[Attribute]()

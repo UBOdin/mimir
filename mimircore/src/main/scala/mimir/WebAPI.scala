@@ -56,7 +56,7 @@ class WebAPI {
     }
   }
 
-  def handleStatement(query: String): WebResult = {
+  def handleStatement(query: String): (WebResult, String) = {
     if(db == null) {
       new WebStringResult("Database is not configured properly")
     }
@@ -64,27 +64,38 @@ class WebAPI {
     val source = new StringReader(query)
     val parser = new MimirJSqlParser(source)
 
-    try {
-      val stmt: Statement = parser.Statement();
-      if(stmt.isInstanceOf[Select]){
-        handleSelect(stmt.asInstanceOf[Select])
-      } else if(stmt.isInstanceOf[CreateLens]) {
-        db.createLens(stmt.asInstanceOf[CreateLens])
-        new WebStringResult("Lens created successfully.")
-      } else if(stmt.isInstanceOf[Explain]) {
-        handleExplain(stmt.asInstanceOf[Explain])
-      } else {
-        db.update(stmt.toString())
-        new WebStringResult("Database updated.")
-      }
+    var res: WebResult = null
+    var lastStatement = ""
+    var done = false
 
-    } catch {
-      case e: Throwable => {
-        e.printStackTrace()
-        new WebErrorResult(e.getMessage)
+    while(!done) {
+      try {
+        val stmt: Statement = parser.Statement()
+
+        if(stmt == null) done = true
+        else {
+          lastStatement = stmt.toString
+          res = stmt match {
+            case s: Select => handleSelect(s.asInstanceOf[Select])
+            case s: CreateLens =>
+              db.createLens(s.asInstanceOf[CreateLens])
+              new WebStringResult("Lens created successfully.")
+
+            case s: Explain => handleExplain(s.asInstanceOf[Explain])
+            case s =>
+              db.update(s.toString())
+              new WebStringResult("Database updated.")
+          }
+        }
+      } catch {
+        case e: Throwable => {
+          e.printStackTrace()
+          res = new WebErrorResult(e.getMessage)
+        }
       }
     }
 
+    (res, lastStatement)
   }
 
   private def handleSelect(sel: Select): WebQueryResult = {
