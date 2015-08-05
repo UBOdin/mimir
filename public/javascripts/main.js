@@ -398,7 +398,7 @@ $( document ).ready(function() {
             $(this).hide();
         });
     });
-    drawGraph();
+    Mimir.visualization.drawGraph();
 });
 
 

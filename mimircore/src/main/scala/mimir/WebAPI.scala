@@ -215,14 +215,19 @@ class WebAPI {
   def convertToTree(op: Operator): OperatorNode = {
     op match {
       case Project(cols, source) => {
-        val projArg = cols.find { case ProjectArg(col, exp) => CTables.isProbabilistic(exp) }.get
-        var name = projArg.toString
-        val i = name.indexOf("{{")
-        val j = name.indexOf("}}")
-        name = name.substring(i+3, j)
-        new OperatorNode(name, List(convertToTree(source)))
+        val projArg = cols.find { case ProjectArg(col, exp) => CTables.isProbabilistic(exp) }
+        if(projArg.isEmpty)
+          convertToTree(source)
+        else {
+          var name = projArg.get.toString
+          val i = name.indexOf("{{")
+          val j = name.indexOf("}}")
+          name = name.substring(i+3, j)
+          new OperatorNode(name, List(convertToTree(source)))
+        }
       }
       case Join(lhs, rhs) => new OperatorNode("Join", List(convertToTree(lhs), convertToTree(rhs)))
+      case Union(isAll, lhs, rhs) => new OperatorNode("Union" + (if(isAll) "_ALL" else "_DISTINCT"), List(convertToTree(lhs), convertToTree(rhs)))
       case Table(name, schema, metadata) => new OperatorNode(name, List[OperatorNode]())
       case o: Operator => convertToTree(o.children(0))
     }
