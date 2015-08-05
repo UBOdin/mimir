@@ -2,6 +2,7 @@ function node() {
     this.children = [];
     this.name = "";
     this.position = {};
+    this.args = [];
 }
 
 node.prototype.links = function() {
@@ -57,7 +58,8 @@ Mimir.visualization = {
         node.position = {
             x: xVal,
             y: yVal,
-            name: node.name
+            name: node.name,
+            args: node.args
         };
         if (node.children.length == 0)
             return node;
@@ -74,6 +76,7 @@ Mimir.visualization = {
     createTree: function(flow) {
         var root = new node();
         root.name = flow.name;
+        root.args = flow.args;
         var rootChild = [];
         for (var i = 0; i < flow.children.length; i++) {
             rootChild.push(Mimir.visualization.createTree(flow.children[i]));
@@ -113,7 +116,10 @@ Mimir.visualization = {
 
         uinodes.append("text")
             .text(function(d, i) {
-                return d.name;
+                var params = "";
+                if(d.args.length > 0)
+                    params = "(" + d.args.join() + ")";
+                return d.name + params;
             })
             .attr("x", function(d, i) {
                 return d.x;
@@ -123,7 +129,7 @@ Mimir.visualization = {
             })
             .attr("font-family", "Bree Serif")
             .attr("fill", "black")
-            .attr("font-size", "1em");
+            .attr("font-size", "0.7em");
 
         vis.selectAll(".line")
             .data(links)

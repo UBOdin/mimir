@@ -227,25 +227,28 @@ class WebAPI {
           var name = projArg.get.toString
           val i = name.indexOf("{{")
           val j = name.indexOf("}}")
+          val lens_type = "LENSTYPE"
           name = name.substring(i+3, j)
-          new OperatorNode(name, List(convertToTree(source)))
+          new OperatorNode(name, List(convertToTree(source)), List(lens_type))
         }
       }
-      case Join(lhs, rhs) => new OperatorNode("Join", List(convertToTree(lhs), convertToTree(rhs)))
-      case Union(isAll, lhs, rhs) => new OperatorNode("Union" + (if(isAll) "_ALL" else "_DISTINCT"), List(convertToTree(lhs), convertToTree(rhs)))
-      case Table(name, schema, metadata) => new OperatorNode(name, List[OperatorNode]())
+      case Join(lhs, rhs) => new OperatorNode("Join", List(convertToTree(lhs), convertToTree(rhs)), List())
+      case Union(isAll, lhs, rhs) => new OperatorNode("Union" + (if(isAll) "_ALL" else "_DISTINCT"), List(convertToTree(lhs), convertToTree(rhs)), List())
+      case Table(name, schema, metadata) => new OperatorNode(name, List[OperatorNode](), List())
       case o: Operator => convertToTree(o.children(0))
     }
   }
 }
 
-class OperatorNode(nodeName: String, c: List[OperatorNode]) {
+class OperatorNode(nodeName: String, c: List[OperatorNode], params: List[String]) {
   val name = nodeName
   val children = c
+  val args = params
 
   def toJson(): JSONObject =
     new JSONObject(Map("name" -> name,
-                       "children" -> JSONArray(children.map(a => a.toJson()))))
+                       "children" -> JSONArray(children.map(a => a.toJson())),
+                       "args" -> JSONArray(args)))
 }
 
 class WebIterator(h: List[String],
