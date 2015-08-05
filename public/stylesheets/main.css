@@ -112,13 +112,13 @@ a:hover {
 }
 
 .non_deterministic_cell {
-    color:                      #EE2C2C;
+    color:                      #551A8B;
     font-weight:                bold;
     cursor:                     pointer;
 }
 
 .non_deterministic_cell:hover {
-    color:                      #CD2626;
+    color:                      #912CEE;
 }
 
 .notifications {
@@ -134,7 +134,7 @@ td:hover {
 }
 
 .red {
-    color:                      rgba(255, 51, 51, 1);
+    color:                      #551A8B;
 }
 
 #about {
@@ -203,5 +203,5 @@ td:hover {
 }
 
 .non_deterministic_row>.row_selector {
-    background-color:           #EE2C2C;
+    background-color:           #551A8B;
 }

@@ -90,7 +90,7 @@ class WebAPI {
       } catch {
         case e: Throwable => {
           e.printStackTrace()
-          new WebErrorResult(e.getMessage)
+          res = new WebErrorResult(e.getMessage)
         }
       }
     }
