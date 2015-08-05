@@ -5,10 +5,8 @@ import java.sql.SQLException
 import mimir.Database
 import mimir.algebra.Type.T
 import mimir.algebra._
-import mimir.ctables.{VGTerm, Model}
-import org.apache.lucene.search.spell.{NGramDistance, LevensteinDistance, JaroWinklerDistance, StringDistance}
-
-import scala.tools.nsc.util.ShowPickled
+import mimir.ctables.{Model, VGTerm}
+import org.apache.lucene.search.spell.{JaroWinklerDistance, LevensteinDistance, NGramDistance, StringDistance}
 
 /**
  * Created by vinayak on 7/20/15.
@@ -37,6 +35,8 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
       }
     }
   }
+
+  def schema(): List[(String, Type.T)] = targetSchema.toList
 
   def lensType = "SCHEMA_MATCHING"
 

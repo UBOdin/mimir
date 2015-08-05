@@ -1,11 +1,8 @@
 package mimir.lenses;
 
-import java.sql._;
-import mimir.sql.Backend;
+import mimir.Database
+import mimir.algebra._
 import mimir.ctables._;
-import mimir.algebra._;
-import mimir.util._;
-import mimir.Database;
 
 /**
  * A Lens defines a Virtual PC-Table.  A lens consists of two components:
@@ -59,5 +56,6 @@ abstract case class Lens(name: String, args: List[Expression], source: Operator)
   def longArg(id: Int): Long     = Eval.evalInt(args(id))
   def doubleArg(id: Int): Double = Eval.evalFloat(args(id))
 
+  def schema(): List[(String, Type.T)]
 }
 

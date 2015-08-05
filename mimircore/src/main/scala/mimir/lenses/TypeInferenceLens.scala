@@ -22,6 +22,8 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
     orderedSourceSchema
   }
 
+  def schema(): List[(String, Type.T)] = sourceSchema()
+
   def allKeys() = { sourceSchema.map(_._1) }
 
   def lensType = "TYPE_INFERENCE"
@@ -230,19 +232,8 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
     }
 
       "I assumed that the type of " + inferredTypeMap(idx)._1 +
-      " is " + prettyTypeString(inferredTypeMap(idx)._2) +
+      " is " + Type.toString(inferredTypeMap(idx)._2) +
       " with " + percentage.toString + "% of the data conforming to the expected type"
-  }
-
-  private def prettyTypeString(t: Type.T): String = {
-    t match {
-      case Type.TBool => "Boolean"
-      case Type.TDate => "Date"
-      case Type.TFloat => "Double"
-      case Type.TInt => "Integer"
-      case Type.TString => "String"
-      case _ => "Unknown"
-    }
   }
 
 

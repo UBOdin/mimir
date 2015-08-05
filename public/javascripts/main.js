@@ -348,7 +348,7 @@ $( document ).ready(function() {
             var createlens = "CREATE LENS "+name+" AS "+subquery+" WITH TYPE_INFERENCE("+ratio+");"
 
             var select = "SELECT * FROM "+name+";"
-            var query = createlens+select;
+            var query = createlens+"\n"+select;
 
             $("#query_textarea").val(query);
             $("#query_btn").trigger("click");
@@ -387,7 +387,7 @@ $( document ).ready(function() {
             var createlens = "CREATE LENS "+name+" AS "+subquery+" WITH MISSING_VALUE("+param+");"
 
             var select = "SELECT * FROM "+name+";"
-            var query = createlens+select;
+            var query = createlens+"\n"+select;
 
             $("#query_textarea").val(query);
             $("#query_btn").trigger("click");
@@ -395,6 +395,42 @@ $( document ).ready(function() {
 
         $("#black-box").click( function() {
             $("#mv_lens_div").hide();
+            $(this).hide();
+        });
+    });
+
+    $("#schema_matching_btn").click( function() {
+        $("#black-box").show();
+        $("#sm_lens_div").show();
+
+        var dropdown = $("#sm_lens_param");
+        if(dropdown.children("option").length <= 0) {
+            alert("There are no other tables or lenses to match to!");
+            return;
+        }
+
+        $("#sm_lens_create_btn").click( function() {
+            var name = $("#sm_lens_name").val();
+            if(name === "") {
+                alert("Please enter a name for the lens");
+                return;
+            }
+
+            var param = $("#sm_lens_param").val();
+            param = param.split("[")[1].replace("]", "");
+
+            var subquery = $("#last_query_field").val();
+            var createlens = "CREATE LENS "+name+" AS "+subquery+" WITH SCHEMA_MATCHING("+param+");"
+
+            var select = "SELECT * FROM "+name+";"
+            var query = createlens+"\n"+select;
+
+            $("#query_textarea").val(query);
+            $("#query_btn").trigger("click");
+        });
+
+        $("#black-box").click( function() {
+            $("#sm_lens_div").hide();
             $(this).hide();
         });
     });

@@ -125,6 +125,11 @@ class WebAPI {
     db.backend.getAllTables()
   }
 
+  def getAllSchemas(): Map[String, List[(String, Type.T)]] = {
+    getAllTables().map{ (x) => (x, db.getTableSchema(x).get) }.toMap ++
+    getAllLenses().map{ (x) => (x, db.getLens(x).schema()) }.toMap
+  }
+
   def getAllLenses(): List[String] = {
     val res = db.backend.execute(
       """
@@ -145,7 +150,7 @@ class WebAPI {
   }
 
   def getAllDBs(): Array[String] = {
-    val curDir = new File("./databases")
+    val curDir = new File(".", "databases")
     curDir.listFiles().filter( f => f.isFile && f.getName.endsWith(".db")).map(x => x.getName)
   }
 

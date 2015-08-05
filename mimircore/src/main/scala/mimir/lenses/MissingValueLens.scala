@@ -34,6 +34,8 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
     orderedSourceSchema
   }
 
+  def schema(): List[(String, Type.T)] = sourceSchema()
+
   def allKeys() = { sourceSchema.map(_._1) }
 
   def view: Operator = {

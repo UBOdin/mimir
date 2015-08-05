@@ -1,6 +1,7 @@
 @(webAPI: mimir.WebAPI, query: String, result: mimir.WebResult, lastQuery: String)
 
 @import mimir.{WebQueryResult, WebStringResult, WebErrorResult}
+@import mimir.algebra.Type
 
 <html lang="en">
 <head>
@@ -143,10 +144,25 @@
             <hr>
             <input type="text" class="form-control" id="mv_lens_name" placeholder="Lens name">
             <br>
-            <label for="ti_lens_param">Attributes</label>
+            <label for="mv_lens_param">Attributes</label>
             <select id="mv_lens_param" class="form-control" multiple></select>
             <br>
             <button id="mv_lens_create_btn" class="lens_btn">Create</button>
+        </div>
+        <div id="sm_lens_div" class="lens_create_div">
+            <h3>Schema Matching Lens</h3>
+            <p class="lens_desc">Create a lens to match the schema for one table to another table, to enable unions</p>
+            <hr>
+            <input type="text" class="form-control" id="sm_lens_name" placeholder="Lens name">
+            <br>
+            <label for="sm_lens_param">Schema to match to</label>
+            <select id="sm_lens_param" class="form-control">
+                @webAPI.getAllSchemas().map{ case (name, schema) =>
+                    <option>@(name + schema.map( (x) => x._1+" "+Type.toString(x._2)).mkString(" [", ", ", "] "))</option>
+                }
+            </select>
+            <br>
+            <button id="sm_lens_create_btn" class="lens_btn">Create</button>
         </div>
         <div id="black-box"></div>
     </div>
