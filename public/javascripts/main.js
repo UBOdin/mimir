@@ -435,6 +435,7 @@ $( document ).ready(function() {
         });
     });
 
+    Mimir.visualization.drawGraph();
 });
 
 

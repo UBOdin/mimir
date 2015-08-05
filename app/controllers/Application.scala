@@ -19,7 +19,8 @@ class Application extends Controller {
       "headers" -> webQueryResult.webIterator.header,
       "data" -> webQueryResult.webIterator.data.map(x => x._1),
       "rowValidity" -> webQueryResult.webIterator.data.map(x => x._2),
-      "missingRows" -> webQueryResult.webIterator.missingRows
+      "missingRows" -> webQueryResult.webIterator.missingRows,
+      "qyeryFlow" -> webQueryResult.webIterator.queryFlow.toJson().toString()
     )
   }
 
