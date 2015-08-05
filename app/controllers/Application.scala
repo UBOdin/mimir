@@ -35,7 +35,7 @@ class Application extends Controller {
 
     val result: WebResult = new WebStringResult("Query results show up here...")
 
-    val response: Result = Ok(views.html.index(webAPI, "", result))
+    val response: Result = Ok(views.html.index(webAPI, "", result, ""))
     webAPI.close()
     response
   }
@@ -47,16 +47,19 @@ class Application extends Controller {
 
     val webAPI = new WebAPI()
     var result: WebResult = null
+    var lastQuery: String = ""
     webAPI.configure(Array("--db", db))
 
     if(!query.equals("")) {
-      result = webAPI.handleStatement(query)
+      val ret = webAPI.handleStatement(query)
+      result = ret._1
+      lastQuery = ret._2
     }
     else {
       result = new WebStringResult("Working database changed to "+db)
     }
 
-    val response: Result = Ok(views.html.index(webAPI, query, result))
+    val response: Result = Ok(views.html.index(webAPI, query, result, lastQuery))
     webAPI.close()
     response
   }
@@ -65,16 +68,20 @@ class Application extends Controller {
 
     val webAPI = new WebAPI()
     var result: WebResult = null
+    var lastQuery: String = ""
+
     webAPI.configure(Array("--db", db))
 
     if(!query.equals("")) {
-      result = webAPI.handleStatement(query)
+      val ret = webAPI.handleStatement(query)
+      result = ret._1
+      lastQuery = ret._2
     }
     else {
       result = new WebStringResult("Working database changed to "+db)
     }
 
-    val response: Result = Ok(views.html.index(webAPI, query, result))
+    val response: Result = Ok(views.html.index(webAPI, query, result, lastQuery))
     webAPI.close()
     response
   }
@@ -85,7 +92,8 @@ class Application extends Controller {
     var result: WebResult = null
     webAPI.configure(Array("--db", db))
 
-    result = webAPI.handleStatement(query)
+    val ret = webAPI.handleStatement(query)
+    result = ret._1
 
     val response = result match {
       case x: WebStringResult => Ok(Json.toJson(x.asInstanceOf[WebStringResult]))
@@ -105,7 +113,7 @@ class Application extends Controller {
     webAPI.configure(Array("--db", db, "--init"))
     val result: WebResult = new WebStringResult("Database "+db+" successfully created.")
 
-    val response: Result = Ok(views.html.index(webAPI, "", result))
+    val response: Result = Ok(views.html.index(webAPI, "", result, ""))
     webAPI.close()
     response
   }
@@ -126,7 +134,7 @@ class Application extends Controller {
 
     val result: WebResult = new WebStringResult("CSV file loaded.")
 
-    val response: Result = Ok(views.html.index(webAPI, "", result))
+    val response: Result = Ok(views.html.index(webAPI, "", result, ""))
     webAPI.close()
     response
   }

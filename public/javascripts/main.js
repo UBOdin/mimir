@@ -150,7 +150,7 @@ $( document ).ready(function() {
                 var col_index = origin.prevAll().length;
                 var col = origin.parents('table').find('th').eq(col_index).text();
                 var row = origin.parent().children(".rowid_col").html();
-                var query = $("#query_textarea").val().replace(";","");
+                var query = $("#last_query_field").val().replace(";","");
                 var db = $("#db_field").val();
 
                 var bounds = [];
@@ -258,7 +258,7 @@ $( document ).ready(function() {
             functionInit: function(origin, content) {
 
                 var row = origin.children(".rowid_col").html();
-                var query = $("#query_textarea").val().replace(";","");
+                var query = $("#last_query_field").val().replace(";","");
                 var db = $("#db_field").val();
 
                 var prob;

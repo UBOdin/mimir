@@ -1,4 +1,4 @@
-@(webAPI: mimir.WebAPI, query: String, result: mimir.WebResult)
+@(webAPI: mimir.WebAPI, query: String, result: mimir.WebResult, lastQuery: String)
 
 @import mimir.{WebQueryResult, WebStringResult, WebErrorResult}
 
@@ -89,6 +89,7 @@
                     <input type="hidden" id="db_field" name="db" value="@webAPI.dbName">
                     <input type="submit" class="btn btn-primary" id="query_btn" value="Query">
                 </form>
+                <input type="hidden" id="last_query_field" name="last_query" value="@lastQuery">
             </div>
         </div>
         <div class="result">

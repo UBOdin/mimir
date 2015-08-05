@@ -56,7 +56,8 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
 
 class TypeInferenceModel(lens: TypeInferenceLens) extends Model
 {
-  var inferredTypeMap = List[(String, Type.T)]()
+  var inferredTypeMap = List[(String, Type.T, Double)]()
+  var threshold: Double = lens.args.head.asInstanceOf[FloatPrimitive].asDouble
 
   class TypeInferrer {
     private val votes =
@@ -82,15 +83,16 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
 
       totalVotes += 1
     }
-    def infer(): Type.T = {
+    def infer(): (Type.T, Double) = {
       if(totalVotes == 0)
-        return Type.TString
+        return (Type.TString, 0)
 
       val max = votes.maxBy(_._2)
-      if((max._2.toFloat / totalVotes) > 0.50) {
-        max._1
+      val ratio: Double = (max._2.toFloat / totalVotes)
+      if(ratio >= threshold) {
+        (max._1, ratio)
       } else {
-        Type.TString
+        (Type.TString, 0)
       }
     }
   }
@@ -101,17 +103,17 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
   }
 
   def learn(sch: List[(String, T)],
-                 data: ResultSet): List[(String, T)] = {
+                 data: ResultSet): List[(String, T, Double)] = {
 
     /**
      * Count votes for each type
      */
-    val inferrers =
+    val inferClasses =
       sch.map{ case(k, t) => (k, new TypeInferrer)}
 
     while(data.next()) {
-      sch.indices.foreach( (i) => 
-        inferrers(i)._2.detectAndVoteType(data.getString(i+1))
+      sch.indices.foreach( (i) =>
+        inferClasses(i)._2.detectAndVoteType(data.getString(i+1))
       )
     }
 
@@ -120,7 +122,11 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
     /**
      * Now infer types
      */
-    inferrers.map{ case(k, inferrer) => (k, inferrer.infer()) }
+    inferClasses.map{
+      case(k, inferClass) =>
+        val inferred = inferClass.infer()
+        (k, inferred._1, inferred._2)
+    }
   }
 
   def getValue(idx: Int, rowid: PrimitiveValue): PrimitiveValue =
@@ -215,7 +221,31 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
     mostLikelyValue(idx, args)
   }
 
-  override def reason(idx: Int): String = "Types were inferred"
+  override def reason(idx: Int): String = {
+    val percentage = (inferredTypeMap(idx)._3 * 100).round
+
+    if(percentage == 0) {
+      return "I assumed that the type of " + inferredTypeMap(idx)._1 +
+        " is string"
+    }
+
+      "I assumed that the type of " + inferredTypeMap(idx)._1 +
+      " is " + prettyTypeString(inferredTypeMap(idx)._2) +
+      " with " + percentage.toString + "% of the data conforming to the expected type"
+  }
+
+  private def prettyTypeString(t: Type.T): String = {
+    t match {
+      case Type.TBool => "Boolean"
+      case Type.TDate => "Date"
+      case Type.TFloat => "Double"
+      case Type.TInt => "Integer"
+      case Type.TString => "String"
+      case _ => "Unknown"
+    }
+  }
+
+
 }
 
 case class TypeInferenceAnalysis(model: TypeInferenceModel,
