@@ -4,7 +4,7 @@ import java.io.{File, StringReader}
 import java.sql.SQLException
 
 import mimir.algebra._
-import mimir.ctables.CTPercolator
+import mimir.ctables.{CTables, CTPercolator}
 import mimir.exec.ResultSetIterator
 import mimir.parser.MimirJSqlParser
 import mimir.sql.{CreateLens, Explain, JDBCBackend}
@@ -12,7 +12,7 @@ import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
 
 import scala.collection.mutable.ListBuffer
-import scala.util.parsing.json.JSONObject
+import scala.util.parsing.json.{JSONArray, JSONObject}
 
 /**
  * Created by arindam on 6/29/15.
@@ -90,10 +90,12 @@ class WebAPI {
   private def handleSelect(sel: Select): WebQueryResult = {
     val raw = db.convert(sel)
     println("RAW QUERY: "+raw)
+    val op = db.optimize(raw)
     val results = db.query(CTPercolator.propagateRowIDs(raw, true))
 
     results.open()
     val wIter = db.webDump(results)
+    wIter.queryFlow = convertToTree(op)
     results.close()
 
     new WebQueryResult(wIter)
@@ -101,11 +103,11 @@ class WebAPI {
 
   private def handleExplain(explain: Explain): WebStringResult = {
     val raw = db.convert(explain.getSelectBody())._1;
-
+    val op = db.optimize(raw)
     val res = "------ Raw Query ------\n"+
       raw.toString()+"\n"+
       "--- Optimized Query ---\n"+
-      db.optimize(raw).toString
+      op.toString
 
     new WebStringResult(res)
   }
@@ -198,6 +200,31 @@ class WebAPI {
   def close(): Unit = {
     db.backend.close()
   }
+
+  def convertToTree(op: Operator): OperatorNode = {
+    op match {
+      case Project(cols, source) => {
+        val projArg = cols.find { case ProjectArg(col, exp) => CTables.isProbabilistic(exp) }.get
+        var name = projArg.toString
+        val i = name.indexOf("{{")
+        val j = name.indexOf("}}")
+        name = name.substring(i+3, j)
+        new OperatorNode(name, List(convertToTree(source)))
+      }
+      case Join(lhs, rhs) => new OperatorNode("Join", List(convertToTree(lhs), convertToTree(rhs)))
+      case Table(name, schema, metadata) => new OperatorNode(name, List[OperatorNode]())
+      case o: Operator => convertToTree(o.children(0))
+    }
+  }
+}
+
+class OperatorNode(nodeName: String, c: List[OperatorNode]) {
+  val name = nodeName
+  val children = c
+
+  def toJson(): JSONObject =
+    new JSONObject(Map("name" -> name,
+                       "children" -> JSONArray(children.map(a => a.toJson()))))
 }
 
 class WebIterator(h: List[String],
@@ -207,6 +234,7 @@ class WebIterator(h: List[String],
   val header = h
   val data = d
   val missingRows = mR
+  var queryFlow: OperatorNode = null
 
 }
 
@@ -228,7 +256,8 @@ case class WebQueryResult(webIterator: WebIterator) extends WebResult {
   def toJson() = {
     new JSONObject(Map("header" -> result.header,
                         "data" -> result.data,
-                        "missingRows" -> result.missingRows))
+                        "missingRows" -> result.missingRows,
+                        "queryFlow" -> result.queryFlow.toJson()))
   }
 }
 

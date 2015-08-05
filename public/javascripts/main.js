@@ -328,7 +328,7 @@ $( document ).ready(function() {
 
         $(this).click();
     });
-
+    drawGraph();
 });
 
 
