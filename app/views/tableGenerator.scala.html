@@ -1,11 +1,5 @@
 @(webIter: mimir.WebIterator)
 
-<div class="well notifications">
-    <h6 class="italics">Purple represents data uncertainty</h6>
-    @if(webIter.missingRows) {
-        <h6 class="italics red">There may be some rows missing from this result</h6>
-    }
-</div>
 <table class="table" id="result_table">
     <thead>
         <tr>
