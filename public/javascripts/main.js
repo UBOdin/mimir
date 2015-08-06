@@ -138,6 +138,7 @@ $( document ).ready(function() {
             animation: 'grow',
             contentAsHTML: 'true',
             delay: 10,
+            interactive: true,
             minWidth: 350,
             maxWidth: 350,
             position: 'bottom',
@@ -216,14 +217,6 @@ $( document ).ready(function() {
                                                           '<th scope="row">Reasons</th>'+
                                                           '<td><ul>'+listify(causes)+'</ul></td>'+
                                                       '</tr>'+
-                                                      '<tr>'+
-                                                      '<tr>'+
-                                                         '<td colspan=2>'+
-                                                         '<a class="ttOption approve">  Approve   </a>'+
-                                                         '<a class="ttOption fix">  Fix</a>'+
-                                                         '</td>'+
-                                                      '</tr>'+
-                                                      '</tr>'+
                                                   '</tbody>'+
                                               '</table>';
                             origin.tooltipster('content', tooltip_template);
@@ -250,6 +243,7 @@ $( document ).ready(function() {
             animation: 'grow',
             contentAsHTML: 'true',
             delay: 10,
+            interactive: true,
             minWidth: 350,
             maxWidth: 350,
             position: 'top-right',
@@ -304,12 +298,6 @@ $( document ).ready(function() {
                                                       '<tr>'+
                                                           '<th scope="row">Reasons</th>'+
                                                           '<td><ul>'+ listify(causes) +'</ul></td>'+
-                                                      '</tr>'+
-                                                      '<tr>'+
-                                                         '<td colspan=2>'+
-                                                         '<a class="ttOption approve">  Approve  </a>'+
-                                                         '<a class="ttOption fix">  Fix</a>'+
-                                                         '</td>'+
                                                       '</tr>'+
                                                   '</tbody>'+
                                               '</table>';
@@ -446,7 +434,10 @@ function listify(causes) {
     var i;
     var result = '';
     for(i = 0; i<causes.length; i++) {
-        result += '<li class="paperclip">'+ causes[i] +'</li>'
+        result += '<li class="paperclip">'+ causes[i] +
+                        ' |<a href="#" class="ttOption approve">Approve</a>'+
+                        '<a href="#" class="ttOption fix">Fix</a>'+
+                  '</li>'
     }
 
     return result;

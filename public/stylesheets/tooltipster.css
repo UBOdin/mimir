@@ -4,6 +4,7 @@
 	border: 2px solid #000;
 	background: #4c4c4c;
 	color: #fff;
+	z-index: 100000;
 }
 
 /* Use this next selector to style things like font-size and line-height: */
