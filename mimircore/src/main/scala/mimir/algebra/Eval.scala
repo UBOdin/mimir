@@ -84,7 +84,7 @@ object Eval
                 try {
                   eval(x).asDouble
                 } catch {
-                  case e:TypeException => 0.0
+                  case e:Throwable => 0.0
                 }
               }).min) // TODO Generalized Comparator
             case "__LIST_MAX" =>
@@ -92,7 +92,7 @@ object Eval
                 try {
                   eval(x).asDouble
                 } catch {
-                  case e:TypeException => 0.0
+                  case e:Throwable => 0.0
                 }
               }).max) // TODO Generalized Comparator
             case "__LEFT_UNION_ROWID" =>
@@ -400,7 +400,7 @@ object Eval
             getVGTerms(lhs, bindings, l) ++ getVGTerms(rhs, bindings, l)
           case Comparison(_, lhs, rhs) =>
             getVGTerms(lhs, bindings, l) ++ getVGTerms(rhs, bindings, l)
-          case v: VGTerm => v :: l
+          case v: VGTerm => (v :: l) ++ v.args.flatMap(arg => getVGTerms(arg, bindings, l))
           case CaseExpression(caseWhens, caseElse) =>
             caseWhens.foldLeft(None: Option[List[VGTerm]])((a, b) =>
               if (a.isDefined) {

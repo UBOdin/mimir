@@ -27,23 +27,18 @@ object CTAnalyzer {
     expr match { 
       
       case CaseExpression(caseClauses, elseClause) =>
+        val ret =
         CaseExpression(
           caseClauses.map( (clause) =>
-            WhenThenClause({
-              val cond = Arith.makeAnd(
-                compileDeterministic(clause.when),
-                clause.when
-              )
-              cond match {
-                case primitive: BoolPrimitive if !primitive.asString.equals("TRUE") => return BoolPrimitive(false)
-                case _ => cond
-              }
-            },
+            WhenThenClause(
+              clause.when,
               compileDeterministic(clause.then)
             )
           ),
           compileDeterministic(elseClause)
         )
+
+        ret
       
       
       case Arithmetic(Arith.And, l, r) =>

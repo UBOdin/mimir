@@ -28,6 +28,8 @@ object Type extends Enumeration {
     case TAny => throw new SQLException("Unable to produce string of type TAny");
   }
 
+  def toStringPrimitive(t: T) = StringPrimitive(toString(t))
+
   def fromString(t: String) = t.toLowerCase match {
     case "int"    => Type.TInt
     case "float"  => Type.TFloat
@@ -38,6 +40,8 @@ object Type extends Enumeration {
     case "rowid"  => Type.TRowId
     case _ =>  throw new SQLException("Invalid Type '" + t + "'");
   }
+
+  def fromStringPrimitive(t: StringPrimitive) = fromString(t.asString)
 }
 
 import mimir.algebra.Type._

@@ -11,13 +11,15 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
   extends Lens(name, args, source) {
 
   var orderedSourceSchema: List[(String,Type.T)] = null
-  var model: Model = null
+  var inferenceModel: Model = null
   var db: Database = null
+  
+  val model = new TypeCastModel(this)
 
   def sourceSchema() = {
     if(orderedSourceSchema == null){
       orderedSourceSchema =
-        source.schema.toList.map( _ match { case (n,t) => (n.toUpperCase,t) } )
+        source.schema.map( _ match { case (n,t) => (n.toUpperCase,t) } )
     }
     orderedSourceSchema
   }
@@ -35,11 +37,29 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
     Project(
       allKeys().
         zipWithIndex.
-          map{ case (k, i) => {
-            ProjectArg(k, rowVar(i))
-          }
-        },
-        source
+          map{ case (k, i) =>
+            val castVGTerm =
+              VGTerm((name, model),
+                i,
+                List(Var("ROWID"), VGTerm((name, inferenceModel), i, List()))
+              )
+            ProjectArg(
+              k,
+              CaseExpression(
+                List(
+                  WhenThenClause(
+                    IsNullExpression(
+                      castVGTerm,
+                      true
+                    ),
+                    castVGTerm
+                  )
+                ),
+                Var(k)
+              )
+            )
+          },
+      source
     )
   }
 
@@ -51,8 +71,8 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
     this.db = db
     val results = db.backend.execute(db.convert(source))
 
-    model = new TypeInferenceModel(this)
-    model.asInstanceOf[TypeInferenceModel].init(results)
+    inferenceModel = new TypeInferenceModel(this)
+    inferenceModel.asInstanceOf[TypeInferenceModel].init(results)
   }
 }
 
@@ -90,7 +110,7 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
         return (Type.TString, 0)
 
       val max = votes.maxBy(_._2)
-      val ratio: Double = (max._2.toFloat / totalVotes)
+      val ratio: Double = max._2.toFloat / totalVotes
       if(ratio >= threshold) {
         (max._1, ratio)
       } else {
@@ -131,57 +151,9 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
     }
   }
 
-  def getValue(idx: Int, rowid: PrimitiveValue): PrimitiveValue =
-  {
-    val rowValues = lens.db.query(
-      CTPercolator.percolate(
-        Select(
-          Comparison(Cmp.Eq, Var("ROWID"), rowid),
-          lens.source
-        )
-      )
-    )
-    if(!rowValues.getNext()){
-      throw new SQLException("Invalid Source Data ROWID: '" +rowid+"'")
-    }
-
-    rowValues(idx+1)
-  }
-
-  def cast(v: String, t: T): PrimitiveValue = {
-    try {
-      t match {
-        case Type.TBool =>
-          new BoolPrimitive(v.toBoolean)
-
-        case Type.TDate => {
-          val (y, m, d) = parseDate(v)
-          new DatePrimitive(y, m, d)
-        }
-
-        case Type.TFloat =>
-          new FloatPrimitive(v.toDouble)
-
-        case Type.TInt =>
-          new IntPrimitive(v.toInt)
-
-        case _ =>
-          new StringPrimitive(v)
-      }
-    } catch {
-      case _: Exception => new NullPrimitive
-        // TODO More can be done for coercion here
-    }
-  }
-
-  def parseDate(date: String): (Int, Int, Int) = {
-    val split = date.split("-")
-    (split(0).toInt, split(1).toInt, split(2).toInt)
-  }
-
   // Model Implementation
   override def varTypes: List[T] = {
-    inferredTypeMap.map(_._2)
+    List.fill(lens.schema().length)(Type.TString)
   }
 
   override def sample(seed: Long, idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
@@ -193,10 +165,7 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
   }
 
   override def mostLikelyValue(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
-    getValue(idx, args(0)) match {
-      case v: NullPrimitive => v
-      case v => cast(v.asString, varTypes(idx))
-    }
+    new StringPrimitive(Type.toString(inferredTypeMap(idx)._2))
   }
 
   override def upperBoundExpr(idx: Int, args: List[Expression]): Expression = {
@@ -235,8 +204,6 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
       " is " + Type.toString(inferredTypeMap(idx)._2) +
       " with " + percentage.toString + "% of the data conforming to the expected type"
   }
-
-
 }
 
 case class TypeInferenceAnalysis(model: TypeInferenceModel,
@@ -249,5 +216,106 @@ extends Proc(args) {
   }
   def exprType(bindings: Map[String,Type.T]) = model.varTypes(idx)
   def rebuild(c: List[Expression]) = new TypeInferenceAnalysis(model, idx, c)
+
+}
+
+class TypeCastModel(lens: TypeInferenceLens) extends Model {
+
+  def cast(v: String, t: T): PrimitiveValue = {
+    try {
+      t match {
+        case Type.TBool =>
+          new BoolPrimitive(v.toBoolean)
+
+        case Type.TDate => {
+          val (y, m, d) = parseDate(v)
+          new DatePrimitive(y, m, d)
+        }
+
+        case Type.TFloat =>
+          new FloatPrimitive(v.toDouble)
+
+        case Type.TInt =>
+          new IntPrimitive(v.toInt)
+
+        case _ =>
+          new StringPrimitive(v)
+      }
+    } catch {
+      case _: Exception => new NullPrimitive
+      // TODO More can be done for coercion here
+    }
+  }
+
+  def parseDate(date: String): (Int, Int, Int) = {
+    val split = date.split("-")
+    (split(0).toInt, split(1).toInt, split(2).toInt)
+  }
+
+  def getValue(idx: Int, rowid: PrimitiveValue): PrimitiveValue =
+  {
+    val rowValues = lens.db.query(
+      CTPercolator.percolate(
+        Select(
+          Comparison(Cmp.Eq, Var("ROWID"), rowid),
+          lens.source
+        )
+      )
+    )
+    if(!rowValues.getNext()){
+      throw new SQLException("Invalid Source Data ROWID: '" +rowid+"'")
+    }
+
+    rowValues(idx+1)
+  }
+
+  override def varTypes: List[T] =
+    lens.inferenceModel.asInstanceOf[TypeInferenceModel].inferredTypeMap.unzip3._2
+
+  override def sample(seed: Long, idx: Int, args: List[PrimitiveValue]): PrimitiveValue = mostLikelyValue(idx, args)
+
+  override def sampleGenerator(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = mostLikelyValue(idx, args)
+
+  override def mostLikelyValue(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
+    cast(
+      getValue(idx, args.head).asString,
+      Type.fromStringPrimitive(
+        args(1).asInstanceOf[StringPrimitive]
+      )
+    )
+  }
+
+  override def upperBoundExpr(idx: Int, args: List[Expression]): Expression =
+    new TypeCastAnalysis(this, idx, args)
+
+  override def upperBound(idx: Int, args: List[PrimitiveValue]): PrimitiveValue =
+    mostLikelyValue(idx, args)
+
+  override def sampleGenExpr(idx: Int, args: List[Expression]): Expression =
+    new TypeCastAnalysis(this, idx, args)
+
+  override def mostLikelyExpr(idx: Int, args: List[Expression]): Expression =
+    new TypeCastAnalysis(this, idx, args)
+
+  override def lowerBoundExpr(idx: Int, args: List[Expression]): Expression =
+    new TypeCastAnalysis(this, idx, args)
+
+  override def lowerBound(idx: Int, args: List[PrimitiveValue]): PrimitiveValue =
+    mostLikelyValue(idx, args)
+
+  override def reason(idx: Int): String =
+    "I cast the value from string to " + Type.toString(varTypes(idx))
+}
+
+case class TypeCastAnalysis(model: TypeCastModel,
+                                 idx: Int,
+                                 args: List[Expression])
+  extends Proc(args) {
+
+  def get(args: List[PrimitiveValue]): PrimitiveValue = {
+    model.mostLikelyValue(idx, args)
+  }
+  def exprType(bindings: Map[String,Type.T]) = model.varTypes(idx)
+  def rebuild(c: List[Expression]) = new TypeCastAnalysis(model, idx, c)
 
 }
