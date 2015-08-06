@@ -55,7 +55,7 @@ abstract case class Lens(name: String, args: List[Expression], source: Operator)
   def stringArg(id: Int): String = Eval.evalString(args(id))
   def longArg(id: Int): Long     = Eval.evalInt(args(id))
   def doubleArg(id: Int): Double = Eval.evalFloat(args(id))
-
+  def lensType: String
   def schema(): List[(String, Type.T)]
 }
 

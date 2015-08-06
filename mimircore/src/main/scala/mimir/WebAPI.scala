@@ -4,7 +4,7 @@ import java.io.{File, StringReader}
 import java.sql.SQLException
 
 import mimir.algebra._
-import mimir.ctables.{CTables, CTPercolator}
+import mimir.ctables.{CTPercolator, CTables, VGTerm}
 import mimir.exec.ResultSetIterator
 import mimir.parser.MimirJSqlParser
 import mimir.sql.{CreateLens, Explain, JDBCBackend}
@@ -217,19 +217,47 @@ class WebAPI {
     db.backend.close()
   }
 
+  def extractVGTerms(exp: Expression): List[String] = {
+    exp match {
+      case Not(child) => extractVGTerms(child)
+      case VGTerm((name, model), idx, args) => List(name)
+      case CaseExpression(wtClauses, eClause) => {
+        var wt = List[String]()
+        for (i <- wtClauses.indices) {
+          val wclause = extractVGTerms(wtClauses(i).when)
+          val tclause = extractVGTerms(wtClauses(i).then)
+          wt = wt ++ wclause ++ tclause
+        }
+        wt ++ extractVGTerms(eClause)
+      }
+      case Arithmetic(o, l, r) => extractVGTerms(l) ++ extractVGTerms(r)
+      case Comparison(o, l, r) => extractVGTerms(l) ++ extractVGTerms(r)
+      case Var(a) => List()
+      case IsNullExpression(child, neg) => extractVGTerms(child)
+      case p: PrimitiveValue => List()
+      case Function(op, params) => List(op)
+      case p: Proc => List()
+      case _ => List()
+    }
+  }
+
   def convertToTree(op: Operator): OperatorNode = {
     op match {
       case Project(cols, source) => {
-        val projArg = cols.find { case ProjectArg(col, exp) => CTables.isProbabilistic(exp) }
+        val projArg = cols.filter { case ProjectArg(col, exp) => CTables.isProbabilistic(exp) }
         if(projArg.isEmpty)
           convertToTree(source)
         else {
-          var name = projArg.get.toString
-          val i = name.indexOf("{{")
-          val j = name.indexOf("}}")
-          val lens_type = "LENSTYPE"
-          name = name.substring(i+3, j)
-          new OperatorNode(name, List(convertToTree(source)), List(lens_type))
+          var params = List[String]()
+          projArg.foreach{ case ProjectArg(col, exp) => params = params ++ extractVGTerms(exp) }
+          val p = params.toSet.filter(a => db.lenses.lensCache.contains(a)).map(b => (b, db.lenses.lensCache.get(b).get.lensType))
+          println(p)
+          if(p.isEmpty)
+            convertToTree(source)
+          else {
+            val (name, lensType) = p.head
+            new OperatorNode(name, List(convertToTree(source)), List(lensType))
+          }
         }
       }
       case Join(lhs, rhs) => new OperatorNode("Join", List(convertToTree(lhs), convertToTree(rhs)), List())
