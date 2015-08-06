@@ -38,24 +38,12 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
       allKeys().
         zipWithIndex.
           map{ case (k, i) =>
-            val castVGTerm =
-              VGTerm((name, model),
-                i,
-                List(Var("ROWID"), VGTerm((name, inferenceModel), i, List()))
-              )
             ProjectArg(
               k,
-              CaseExpression(
-                List(
-                  WhenThenClause(
-                    IsNullExpression(
-                      castVGTerm,
-                      true
-                    ),
-                    castVGTerm
-                  )
-                ),
-                Var(k)
+              VGTerm(
+                (name, model),
+                i,
+                List(Var("ROWID"), VGTerm((name, inferenceModel), i, List()))
               )
             )
           },
@@ -192,7 +180,7 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
     mostLikelyValue(idx, args)
   }
 
-  override def reason(idx: Int): String = {
+  override def reason(idx: Int, args: List[Expression]): String = {
     val percentage = (inferredTypeMap(idx)._3 * 100).round
 
     if(percentage == 0) {
@@ -303,8 +291,10 @@ class TypeCastModel(lens: TypeInferenceLens) extends Model {
   override def lowerBound(idx: Int, args: List[PrimitiveValue]): PrimitiveValue =
     mostLikelyValue(idx, args)
 
-  override def reason(idx: Int): String =
-    "I cast the value from string to " + Type.toString(varTypes(idx))
+  override def reason(idx: Int, args: List[Expression]): String =
+    "I cast the value " +
+      getValue(idx, Eval.eval(args.head)) +
+      " with type string to type " + Type.toString(varTypes(idx))
 }
 
 case class TypeCastAnalysis(model: TypeCastModel,

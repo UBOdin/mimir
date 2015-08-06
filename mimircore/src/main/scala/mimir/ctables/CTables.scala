@@ -15,7 +15,7 @@ abstract class Model {
   def upperBoundExpr    (idx: Int, args: List[Expression    ]):  Expression
   def sampleGenExpr     (idx: Int, args: List[Expression    ]):  Expression
   def sample            (seed: Long, idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
-  def reason            (idx: Int): String
+  def reason            (idx: Int, args: List[Expression]): String
 }
 
 case class VGTerm(
@@ -28,7 +28,7 @@ case class VGTerm(
   override def children: List[Expression] = args
   override def rebuild(x: List[Expression]) = VGTerm(model, idx, x)
   def get(v: List[PrimitiveValue]): PrimitiveValue = model._2.mostLikelyValue(idx, v)
-  def reason(): String = model._2.reason(idx)
+  def reason(): String = model._2.reason(idx, args)
 }
 
 object CTables 

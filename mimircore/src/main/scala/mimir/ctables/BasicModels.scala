@@ -17,7 +17,7 @@ abstract class SingleVarModel(vt: Type.T) extends Model {
   def upperBoundExpr(args: List[Expression]): Expression
   def sampleGenExpr(args: List[Expression]): Expression
   def sample(seed: Long, args: List[PrimitiveValue]): PrimitiveValue
-  def reason(): String
+  def reason(args: List[Expression]): String
 
   def mostLikelyValue(x:Int, args: List[PrimitiveValue]) = mostLikelyValue(args)
   def lowerBound(x: Int, args: List[PrimitiveValue]) = lowerBound(args)
@@ -28,7 +28,7 @@ abstract class SingleVarModel(vt: Type.T) extends Model {
   def upperBoundExpr(x: Int, args: List[Expression]) = upperBoundExpr(args)
   def sampleGenExpr(x: Int, args: List[Expression]) = sampleGenExpr(args)
   def sample(seed: Long, x: Int, args: List[PrimitiveValue]) = sample(seed, args)
-  def reason(x: Int): String = reason()
+  def reason(x: Int, args: List[Expression]): String = reason(args)
 
 }
 
@@ -54,8 +54,8 @@ case class JointSingleVarModel(vars: List[SingleVarModel]) extends Model {
   def sample(seed: Long, idx: Int, args: List[PrimitiveValue]) = 
     vars(idx).sample(seed, args)
 
-  override def reason(idx: Int): String =
-    vars(idx).reason
+  override def reason(idx: Int, args: List[Expression]): String =
+    vars(idx).reason(idx, args)
 }
 
 object UniformDistribution extends SingleVarModel(Type.TFloat){
@@ -74,7 +74,7 @@ object UniformDistribution extends SingleVarModel(Type.TFloat){
     FloatPrimitive(new Random(seed).nextDouble() * (high - low) + low)
   }
 
-  override def reason(): String = "Unknown"   // TODO
+  override def reason(args: List[Expression]): String = "Unknown"   // TODO
 }
 
 case class NoOpModel(vt: Type.T) extends SingleVarModel(vt) {
@@ -88,5 +88,5 @@ case class NoOpModel(vt: Type.T) extends SingleVarModel(vt) {
   def sampleGenExpr(args: List[Expression]) = args(0)
   def sample(seed: Long, args: List[PrimitiveValue]) = args(0)
 
-  override def reason(): String = "None"
+  override def reason(args: List[Expression]): String = "None"
 }

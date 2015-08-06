@@ -123,7 +123,7 @@ class MissingValueModel(lens: MissingValueLens)
   var data: Instances = null; 
   var numCorrect = 0;
   var numSamples = 0;
-  def reason(): String =
+  def reason(args: List[Expression]): String =
     "I made a best guess estimate for this data element, which was originally NULL"
 
   def init(iterator: ResultIterator, classIndex: Int) = {
