@@ -27,7 +27,6 @@ object CTAnalyzer {
     expr match { 
       
       case CaseExpression(caseClauses, elseClause) =>
-        val ret =
         CaseExpression(
           caseClauses.map( (clause) =>
             WhenThenClause(
@@ -38,9 +37,6 @@ object CTAnalyzer {
           compileDeterministic(elseClause)
         )
 
-        ret
-      
-      
       case Arithmetic(Arith.And, l, r) =>
         Arith.makeOr(
           Arith.makeAnd(
