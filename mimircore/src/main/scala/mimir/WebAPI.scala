@@ -106,7 +106,14 @@ class WebAPI {
 
     results.open()
     val wIter = db.webDump(results)
-    wIter.queryFlow = convertToTree(op)
+    try{
+      wIter.queryFlow = convertToTree(raw)
+    } catch {
+      case e: Throwable => {
+        e.printStackTrace()
+        wIter.queryFlow = new OperatorNode("", List(), List())
+      }
+    }
     results.close()
 
     new WebQueryResult(wIter)
@@ -232,11 +239,8 @@ class WebAPI {
       }
       case Arithmetic(o, l, r) => extractVGTerms(l) ++ extractVGTerms(r)
       case Comparison(o, l, r) => extractVGTerms(l) ++ extractVGTerms(r)
-      case Var(a) => List()
       case IsNullExpression(child, neg) => extractVGTerms(child)
-      case p: PrimitiveValue => List()
       case Function(op, params) => List(op)
-      case p: Proc => List()
       case _ => List()
     }
   }

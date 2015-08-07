@@ -127,7 +127,7 @@ Mimir.visualization = {
             .attr("y", function(d, i) {
                 return d.y - 10;
             })
-            .attr("font-family", "Bree Serif")
+            .attr("font-family", "Helvetica Neue,Helvetica,Arial,sans-serif")
             .attr("fill", "black")
             .attr("font-size", "0.7em");
 
@@ -155,7 +155,7 @@ Mimir.visualization = {
         if (flow == undefined)
             return;
         var root = new node();
-        root.name = "Result";
+        root.name = "RESULT";
         root.children = [Mimir.visualization.createTree($.parseJSON(flow))];
         Mimir.visualization.graph(root);
     }
