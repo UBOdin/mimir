@@ -323,29 +323,29 @@ $( document ).ready(function() {
         $("#black-box").show();
         $("#ti_lens_div").show();
 
-        $("#ti_lens_create_btn").click( function() {
-            var name = $("#ti_lens_name").val();
-            if(name === "") {
-                alert("Please enter a name for the lens");
-                return;
-            }
-
-            var ratio = $("#ti_lens_param").val();
-
-            var subquery = $("#last_query_field").val();
-            var createlens = "CREATE LENS "+name+" AS "+subquery+" WITH TYPE_INFERENCE("+ratio+");"
-
-            var select = "SELECT * FROM "+name+";"
-            var query = createlens+"\n"+select;
-
-            $("#query_textarea").val(query);
-            $("#query_btn").trigger("click");
-        });
-
         $("#black-box").click( function() {
             $("#ti_lens_div").hide();
             $(this).hide();
         });
+    });
+
+    $("#ti_lens_create_btn").click( function() {
+        var name = $("#ti_lens_name").val();
+        if(name === "") {
+            alert("Please enter a name for the lens");
+            return;
+        }
+
+        var ratio = $("#ti_lens_param").val();
+
+        var subquery = $("#last_query_field").val();
+        var createlens = "CREATE LENS "+name+" AS "+subquery+" WITH TYPE_INFERENCE("+ratio+");"
+
+        var select = "SELECT * FROM "+name+";"
+        var query = createlens+"\n"+select;
+
+        $("#query_textarea").val(query);
+        $("#query_btn").trigger("click");
     });
 
     $("#missing_value_btn").click( function() {
@@ -359,68 +359,62 @@ $( document ).ready(function() {
             });
         }
 
-        $("#mv_lens_create_btn").click( function() {
-            var name = $("#mv_lens_name").val();
-            if(name === "") {
-                alert("Please enter a name for the lens");
-                return;
-            }
-
-            var param = $("#mv_lens_param").val();
-            param = param.map( function (val) {
-                return "'"+val+"'";
-            });
-
-            var subquery = $("#last_query_field").val();
-            var createlens = "CREATE LENS "+name+" AS "+subquery+" WITH MISSING_VALUE("+param+");"
-
-            var select = "SELECT * FROM "+name+";"
-            var query = createlens+"\n"+select;
-
-            $("#query_textarea").val(query);
-            $("#query_btn").trigger("click");
-        });
-
         $("#black-box").click( function() {
             $("#mv_lens_div").hide();
             $(this).hide();
         });
     });
 
-    $("#schema_matching_btn").click( function() {
-        $("#black-box").show();
-        $("#sm_lens_div").show();
-
-        var dropdown = $("#sm_lens_param");
-        if(dropdown.children("option").length <= 0) {
-            alert("There are no other tables or lenses to match to!");
+    $("#mv_lens_create_btn").click( function() {
+        var name = $("#mv_lens_name").val();
+        if(name === "") {
+            alert("Please enter a name for the lens");
             return;
         }
 
-        $("#sm_lens_create_btn").click( function() {
-            var name = $("#sm_lens_name").val();
-            if(name === "") {
-                alert("Please enter a name for the lens");
-                return;
-            }
-
-            var param = $("#sm_lens_param").val();
-            param = param.split("[")[1].replace("]", "");
-
-            var subquery = $("#last_query_field").val();
-            var createlens = "CREATE LENS "+name+" AS "+subquery+" WITH SCHEMA_MATCHING("+param+");"
-
-            var select = "SELECT * FROM "+name+";"
-            var query = createlens+"\n"+select;
-
-            $("#query_textarea").val(query);
-            $("#query_btn").trigger("click");
+        var param = $("#mv_lens_param").val();
+        param = param.map( function (val) {
+            return "'"+val+"'";
         });
+
+        var subquery = $("#last_query_field").val();
+        var createlens = "CREATE LENS "+name+" AS "+subquery+" WITH MISSING_VALUE("+param+");"
+
+        var select = "SELECT * FROM "+name+";"
+        var query = createlens+"\n"+select;
+
+        $("#query_textarea").val(query);
+        $("#query_btn").trigger("click");
+    });
+
+    $("#schema_matching_btn").click( function() {
+        $("#black-box").show();
+        $("#sm_lens_div").show();
 
         $("#black-box").click( function() {
             $("#sm_lens_div").hide();
             $(this).hide();
         });
+    });
+
+    $("#sm_lens_create_btn").click( function() {
+        var name = $("#sm_lens_name").val();
+        if(name === "") {
+            alert("Please enter a name for the lens");
+            return;
+        }
+
+        var param = $("#sm_lens_param").val();
+        param = param.split("[")[1].replace("]", "");
+
+        var subquery = $("#last_query_field").val();
+        var createlens = "CREATE LENS "+name+" AS "+subquery+" WITH SCHEMA_MATCHING("+param+");"
+
+        var select = "SELECT * FROM "+name+";"
+        var query = createlens+"\n"+select;
+
+        $("#query_textarea").val(query);
+        $("#query_btn").trigger("click");
     });
 
     Mimir.visualization.drawGraph();
