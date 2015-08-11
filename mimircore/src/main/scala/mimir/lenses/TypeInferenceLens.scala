@@ -41,9 +41,9 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
             ProjectArg(
               k,
               VGTerm(
-                (name, model),
+                (name+"CAST", model),
                 i,
-                List(Var("ROWID"), VGTerm((name, inferenceModel), i, List()))
+                List(Var("ROWID"), VGTerm((name+"INFER", inferenceModel), i, List()))
               )
             )
           },
