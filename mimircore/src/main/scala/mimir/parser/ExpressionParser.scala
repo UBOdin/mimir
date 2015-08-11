@@ -106,8 +106,11 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 		exprBase ~ ", *".r ~ exprListBase ^^ { case hd ~ _ ~ tl => hd :: tl } |
 	    exprBase                          ^^ { List(_) }
 
+	def exprList: Parser[List[Expression]] =
+		opt(exprListBase) ^^ { _.getOrElse(List()) }
+
 	def vgterm = ("\\{\\{ *".r ~> id ~ 
-					opt("[" ~> exprListBase <~ "]") <~ 
+					opt("[" ~> exprList <~ "]") <~ 
 					" *\\}\\}".r) ^^ {
 		case v ~ args => {
 			val fields = v.split("_")
