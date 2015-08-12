@@ -41,9 +41,9 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
             ProjectArg(
               k,
               VGTerm(
-                (name+"CAST", model),
+                (name, model),
                 i,
-                List(Var("ROWID"), VGTerm((name+"INFER", inferenceModel), i, List()))
+                List(Var("ROWID"), VGTerm((name, inferenceModel), i, List()))
               )
             )
           },
@@ -260,24 +260,42 @@ class TypeCastModel(lens: TypeInferenceLens) extends Model {
   override def varTypes: List[T] =
     lens.inferenceModel.asInstanceOf[TypeInferenceModel].inferredTypeMap.unzip3._2
 
-  override def sample(seed: Long, idx: Int, args: List[PrimitiveValue]): PrimitiveValue = mostLikelyValue(idx, args)
+  override def sample(seed: Long, idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
+    if(args.length == 0)
+      lens.inferenceModel.mostLikelyValue(idx, args)
+    else
+      mostLikelyValue(idx, args)
+  }
 
-  override def sampleGenerator(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = mostLikelyValue(idx, args)
+  override def sampleGenerator(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
+    if(args.length == 0)
+      lens.inferenceModel.mostLikelyValue(idx, args)
+    else
+      mostLikelyValue(idx, args)
+  }
 
   override def mostLikelyValue(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
-    cast(
-      getValue(idx, args.head).asString,
-      Type.fromStringPrimitive(
-        args(1).asInstanceOf[StringPrimitive]
+    if(args.isEmpty)
+      lens.inferenceModel.mostLikelyValue(idx, args)
+    else {
+      cast(
+        getValue(idx, args.head).asString,
+        Type.fromStringPrimitive(
+          args(1).asInstanceOf[StringPrimitive]
+        )
       )
-    )
+    }
   }
 
   override def upperBoundExpr(idx: Int, args: List[Expression]): Expression =
     new TypeCastAnalysis(this, idx, args)
 
-  override def upperBound(idx: Int, args: List[PrimitiveValue]): PrimitiveValue =
-    mostLikelyValue(idx, args)
+  override def upperBound(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
+    if(args.length == 0)
+      lens.inferenceModel.mostLikelyValue(idx, args)
+    else
+      mostLikelyValue(idx, args)
+  }
 
   override def sampleGenExpr(idx: Int, args: List[Expression]): Expression =
     new TypeCastAnalysis(this, idx, args)
@@ -288,23 +306,33 @@ class TypeCastModel(lens: TypeInferenceLens) extends Model {
   override def lowerBoundExpr(idx: Int, args: List[Expression]): Expression =
     new TypeCastAnalysis(this, idx, args)
 
-  override def lowerBound(idx: Int, args: List[PrimitiveValue]): PrimitiveValue =
-    mostLikelyValue(idx, args)
+  override def lowerBound(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
+    if(args.length == 0)
+      lens.inferenceModel.mostLikelyValue(idx, args)
+    else
+      mostLikelyValue(idx, args)
+  }
 
   override def reason(idx: Int, args: List[Expression]): String = {
-    val mlv = mostLikelyValue(idx, args.map((x) => Eval.eval(x)))
 
-    if(mlv.isInstanceOf[NullPrimitive])
-      "I could not find an appropriate " +
-        Type.toString(varTypes(idx)) +
-        " value for " +
-        getValue(idx, Eval.eval(args.head)) +
-        ", so I replaced it with NULL"
-    else
-      "I cast the value " +
-        getValue(idx, Eval.eval(args.head)) +
-        " with type string to "+
-        mlv + " with type " + Type.toString(varTypes(idx))
+    if(args.isEmpty) {
+      lens.inferenceModel.reason(idx, args)
+    }
+    else {
+      val mlv = mostLikelyValue(idx, args.map((x) => Eval.eval(x)))
+
+      if (mlv.isInstanceOf[NullPrimitive])
+        "I could not find an appropriate " +
+          Type.toString(varTypes(idx)) +
+          " value for " +
+          getValue(idx, Eval.eval(args.head)) +
+          ", so I replaced it with NULL"
+      else
+        "I cast the value " +
+          getValue(idx, Eval.eval(args.head)) +
+          " with type string to " +
+          mlv + " with type " + Type.toString(varTypes(idx))
+    }
   }
 }
 
