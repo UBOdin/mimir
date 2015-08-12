@@ -42,7 +42,7 @@ node.prototype.height = function() {
         return 1;
     if (this.children.length == 1)
         return this.children[0].height() + 1;
-    else return Math.max(this.children[0].height(), this.children[1].height()) + 1;
+    return Math.max(this.children[0].height(), this.children[1].height()) + 1;
 }
 
 var Mimir = {};
@@ -50,7 +50,7 @@ Mimir.visualization = {
     XDIFF: 100,
     YDIFF: 80,
     WIDTH: 700,
-    HEIGHT: 300,
+    HEIGHT: 200,
 
     propagatePositions: function(node, xVal, yVal, div) {
         var xdiff = Mimir.visualization.XDIFF;
@@ -88,7 +88,7 @@ Mimir.visualization = {
     graph: function(node) {
         Mimir.visualization.XDIFF = Mimir.visualization.WIDTH/(node.height() + 1);
         var width = Mimir.visualization.WIDTH, height = Mimir.visualization.HEIGHT;
-        var radius = 5;
+        var radius = 5, fontSize = "0.7em", zoomFontSize = "1em";
         node = Mimir.visualization.propagatePositions(node, width - Mimir.visualization.XDIFF, height / 2, 1);
         var nodes = node.getAllPositions();
         var links = node.links();
@@ -102,7 +102,33 @@ Mimir.visualization = {
         var uinodes = vis.selectAll("circle.node")
             .data(nodes)
             .enter().append("g")
-            .attr("class", "node");
+            .attr("class", "node")
+            .on("mouseover", function(d, i) {
+                d3.select(this).selectAll("circle")
+                    .transition()
+                    .duration(250)
+                    .attr("r", radius + 3)
+                    .attr("fill", "orange");
+
+                d3.select(this).select("text")
+                    .transition()
+                    .duration(250)
+                    .attr("fill", "brown")
+                    .attr("font-size", zoomFontSize);
+            })
+            .on("mouseout", function(d, i) {
+                d3.select(this).selectAll("circle")
+                    .transition()
+                    .duration(250)
+                    .attr("r", radius)
+                    .attr("fill", "black");
+
+                d3.select(this).select("text")
+                    .transition()
+                    .duration(250)
+                    .attr("fill", "black")
+                    .attr("font-size", fontSize);
+            });
 
         uinodes.append("svg:circle")
             .attr("cx", function(d) {
@@ -129,7 +155,7 @@ Mimir.visualization = {
             })
             .attr("font-family", "Helvetica Neue,Helvetica,Arial,sans-serif")
             .attr("fill", "black")
-            .attr("font-size", "0.7em");
+            .attr("font-size", fontSize);
 
         vis.selectAll(".line")
             .data(links)
