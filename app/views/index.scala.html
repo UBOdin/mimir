@@ -96,25 +96,21 @@
         <div class="result">
             @result match {
                 case WebQueryResult(iter) => {
-                    <div class="leftCol">
-                        <div class="panel panel-default">
-                            <div class="panel-heading">
-                                <h3 class="panel-title">Notifications</h3>
-                            </div>
-                            <div class="panel-body">
-                                <p>Red represents data uncertainty</p>
-                                @if(iter.missingRows) {
-                                    <p class="red">There may be some rows missing from this result</p>
-                                }
-                            </div>
+                    <div class="panel panel-default">
+                        <div class="panel-heading">
+                            <h3 class="panel-title">Notifications</h3>
                         </div>
-                        <h3>&nbsp;&nbsp;Lenses</h3>
-                        <button id="type_inference_btn" class="lens_btn">Type Inference</button>
-                        <br><br>
-                        <button id="missing_value_btn" class="lens_btn">Missing Value</button>
-                        <br><br>
-                        <button id="schema_matching_btn" class="lens_btn">Schema Matching</button>
-                        <br><br>
+                        <div class="panel-body">
+                            <p>Red represents data uncertainty</p>
+                            @if(iter.missingRows) {
+                            <p class="red">There may be some rows missing from this result</p>
+                            }
+                        </div>
+                    </div>
+                    <div class="leftCol">
+                        <button id="type_inference_btn" class="lens_btn">Type Inference Lens</button>
+                        <button id="missing_value_btn" class="lens_btn">Missing Value Lens</button>
+                        <button id="schema_matching_btn" class="lens_btn">Schema Matching Lens</button>
                     </div>
                     <div class="rightCol">
                          @tableGenerator(iter)

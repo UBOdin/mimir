@@ -208,13 +208,12 @@ td:hover {
 }
 
 .leftCol {
-    width:                      25%;
+    width:                      20%;
     float:                      left;
-    padding-right:              10px;
 }
 
 .rightCol {
-    width:                      75%;
+    width:                      80%;
     float:                      left;
     border-left:                solid 2px;
     margin-bottom:              -20px;
@@ -225,14 +224,8 @@ td:hover {
     width:                      100%;
     height:                     50px;
     border:                     none;
-    border-radius:              3px;
     background-color:           #ea4858;
-    box-shadow:                 0 3px 0 0 #c42f3e;
-    -moz-box-shadow:            0 3px 0 0 #c42f3e;
-    -webkit-box-shadow:         0 3px 0 0 #c42f3e;
     color:                      #fff;
-    font-size:                  1.2em;
-    font-weight:                bold;
 }
 
 .lens_btn:hover {
@@ -262,7 +255,7 @@ button:focus {
 }
 
 #black-box {
-    position:                   absolute;
+    position:                   fixed;
     top:                        0px;
     left:                       0px;
     width:                      100%;
