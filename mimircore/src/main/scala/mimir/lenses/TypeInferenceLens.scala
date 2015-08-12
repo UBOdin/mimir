@@ -41,9 +41,9 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
             ProjectArg(
               k,
               VGTerm(
-                (name, model),
+                (name+"CAST", model),
                 i,
-                List(Var("ROWID"), VGTerm((name, inferenceModel), i, List()))
+                List(Var("ROWID"), VGTerm((name+"INFER", inferenceModel), i, List()))
               )
             )
           },
@@ -291,10 +291,21 @@ class TypeCastModel(lens: TypeInferenceLens) extends Model {
   override def lowerBound(idx: Int, args: List[PrimitiveValue]): PrimitiveValue =
     mostLikelyValue(idx, args)
 
-  override def reason(idx: Int, args: List[Expression]): String =
-    "I cast the value " +
-      getValue(idx, Eval.eval(args.head)) +
-      " with type string to type " + Type.toString(varTypes(idx))
+  override def reason(idx: Int, args: List[Expression]): String = {
+    val mlv = mostLikelyValue(idx, args.map((x) => Eval.eval(x)))
+
+    if(mlv.isInstanceOf[NullPrimitive])
+      "I could not find an appropriate " +
+        Type.toString(varTypes(idx)) +
+        " value for " +
+        getValue(idx, Eval.eval(args.head)) +
+        ", so I replaced it with NULL"
+    else
+      "I cast the value " +
+        getValue(idx, Eval.eval(args.head)) +
+        " with type string to "+
+        mlv + " with type " + Type.toString(varTypes(idx))
+  }
 }
 
 case class TypeCastAnalysis(model: TypeCastModel,

@@ -134,7 +134,20 @@
             <input type="text" class="form-control" id="ti_lens_name" placeholder="Lens name">
             <br>
             <label for="ti_lens_param">Conformity ratio</label>
-            <input type="range" id="ti_lens_param" min="0" max="1" value="0.5" step="0.1">
+            <p>The ratio of values that must conform to a particular type in order for me to definitively conclude that is the type for the entire column</p>
+            <br>
+            <table style="width:100%; font-size:0.8em; color: #777">
+                <tr>
+                    <td colspan="2">
+                        <input type="range" id="ti_lens_param" min="0" max="1" value="0.5" step="0.1">
+                    </td>
+                </tr>
+                <tr>
+                    <td>0</td>
+                    <td style="text-align:right">1</td>
+                </tr>
+            </table>
+            <br>
             <br>
             <button id="ti_lens_create_btn" class="lens_btn">Create</button>
         </div>
@@ -156,11 +169,14 @@
             <input type="text" class="form-control" id="sm_lens_name" placeholder="Lens name">
             <br>
             <label for="sm_lens_param">Schema to match to</label>
-            <select id="sm_lens_param" class="form-control">
+            <br>
+            <input type="text" class="form-control" id="sm_lens_param" list="schemas">
+            <datalist id="schemas">
                 @webAPI.getAllSchemas().map{ case (name, schema) =>
                     <option>@(name + schema.map( (x) => x._1+" "+Type.toString(x._2)).mkString(" [", ", ", "] "))</option>
                 }
-            </select>
+            </datalist>
+            <br>
             <br>
             <button id="sm_lens_create_btn" class="lens_btn">Create</button>
         </div>

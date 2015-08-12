@@ -9,6 +9,7 @@ import mimir._
 import mimir.parser._
 import mimir.algebra._
 import mimir.sql._
+import mimir.ctables._
 
 object ParserSpecs extends Specification {
   val schema = Map[String,Map[String,Type.T]](
@@ -39,6 +40,27 @@ object ParserSpecs extends Specification {
           Comparison(Cmp.Eq, Var("A"), Var("B")),
           Comparison(Cmp.Eq, Var("B"), Var("C"))
         )
+    }
+    "Handle VGTerms without parameters" in {
+      expr("{{ TR1INFER_0[] }}") must be equalTo
+        VGTerm( ("TR1INFER", null), 0, List())
+    }
+    "Handle fields nested in VGTerms" in {
+      expr("{{ TEST_0[ 1 ] }}") must be equalTo 
+        VGTerm( ("TEST", null), 0, List(IntPrimitive(1)))
+    }
+    "Handle recursively nested VGTerms" in {
+      expr("{{ TEST_0[ {{ TEST_1 }} ] }}") must be equalTo
+        VGTerm( ("TEST", null), 0, List(
+          VGTerm( ("TEST", null), 1, List())
+        ))
+    }
+    "Handle recursively nested VGTerms mixed with others" in {
+      expr("{{ TR1CAST_0[ROWID, {{ TR1INFER_0[] }}] }}") must be equalTo
+        VGTerm( ("TR1CAST", null), 0, List(
+          Var("ROWID"),
+          VGTerm( ("TR1INFER", null), 0, List())
+        ))
     }
   }
 
