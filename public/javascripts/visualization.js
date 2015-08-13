@@ -144,8 +144,8 @@ Mimir.visualization = {
             .text(function(d, i) {
                 var params = "";
                 if(d.args.length > 0)
-                    params = "(" + d.args.join() + ")";
-                return d.name + params;
+                    return params = d.args.join();
+                return d.name;
             })
             .attr("x", function(d, i) {
                 return d.x;
