@@ -1,11 +1,12 @@
 package mimir.lenses
 
-import java.sql.{ResultSet, SQLException}
+import java.sql.SQLException
 
 import mimir.Database
 import mimir.algebra.Type.T
 import mimir.algebra._
 import mimir.ctables._
+import mimir.exec.ResultIterator
 
 class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
   extends Lens(name, args, source) {
@@ -57,7 +58,7 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
    */
   override def build(db: Database): Unit = {
     this.db = db
-    val results = db.backend.execute(db.convert(source))
+    val results = db.query(source)
 
     inferenceModel = new TypeInferenceModel(this)
     inferenceModel.asInstanceOf[TypeInferenceModel].init(results)
@@ -108,12 +109,12 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
   }
 
 
-  def init(data: ResultSet): Unit = {
-    inferredTypeMap = learn(lens.sourceSchema(), data)
+  def init(data: ResultIterator): Unit = {
+    inferredTypeMap = learn(lens.sourceSchema(), data.allRows())
   }
 
   def learn(sch: List[(String, T)],
-                 data: ResultSet): List[(String, T, Double)] = {
+                 data: List[List[PrimitiveValue]]): List[(String, T, Double)] = {
 
     /**
      * Count votes for each type
@@ -121,13 +122,17 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
     val inferClasses =
       sch.map{ case(k, t) => (k, new TypeInferrer)}
 
-    while(data.next()) {
+    data.foreach( (row) =>
       sch.indices.foreach( (i) =>
-        inferClasses(i)._2.detectAndVoteType(data.getString(i+1))
+        inferClasses(i)._2.detectAndVoteType(
+          try{
+            row(i).asString
+          } catch {
+            case e:TypeException => ""
+          }
+        )
       )
-    }
-
-    data.close()
+    )
 
     /**
      * Now infer types
@@ -279,7 +284,11 @@ class TypeCastModel(lens: TypeInferenceLens) extends Model {
       lens.inferenceModel.mostLikelyValue(idx, args)
     else {
       cast(
-        getValue(idx, args.head).asString,
+        try {
+          getValue(idx, args.head).asString
+        } catch {
+          case e: TypeException => return new NullPrimitive
+        },
         Type.fromStringPrimitive(
           args(1).asInstanceOf[StringPrimitive]
         )
