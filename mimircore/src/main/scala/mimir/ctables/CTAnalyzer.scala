@@ -31,7 +31,7 @@ object CTAnalyzer {
           caseClauses.map( (clause) =>
             WhenThenClause(
               clause.when,
-              compileDeterministic(clause.then)
+              Arith.makeAnd(compileDeterministic(clause.then), compileDeterministic(clause.when))
             )
           ),
           compileDeterministic(elseClause)
