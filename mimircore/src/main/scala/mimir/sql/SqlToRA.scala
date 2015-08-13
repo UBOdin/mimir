@@ -88,7 +88,7 @@ class SqlToRA(db: Database)
             val baseX = reverseBindings.get(x).get
             ( baseX, 
               ProjectArg(
-                if(tableAlias != null){ tableAlias+"_"+baseX }
+                if(tableAlias != null){ tableAlias.toUpperCase+"_"+baseX }
                   else { baseX },
                 Var(x)
               ) 
