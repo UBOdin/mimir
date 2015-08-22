@@ -10,6 +10,8 @@ import mimir.parser.MimirJSqlParser
 import mimir.sql.{CreateLens, Explain, JDBCBackend}
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
+import net.sf.jsqlparser.statement.update.Update
+import net.sf.jsqlparser.util.deparser.{SelectDeParser, ExpressionDeParser, UpdateDeParser}
 
 import scala.collection.mutable.ListBuffer
 import scala.util.parsing.json.{JSONArray, JSONObject}
@@ -82,8 +84,11 @@ class WebAPI {
               new WebStringResult("Lens created successfully.")
 
             case s: Explain => handleExplain(s.asInstanceOf[Explain])
-            case s =>
-              db.update(s.toString())
+            case s: Update =>
+              val buffer = new StringBuffer()
+              val updDeParser = new UpdateDeParser(new ExpressionDeParser(new SelectDeParser(), buffer), buffer)
+              updDeParser.deParse(s)
+              db.update(updDeParser.getBuffer.toString)
               new WebStringResult("Database updated.")
           }
         }

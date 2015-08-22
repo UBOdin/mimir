@@ -25,7 +25,8 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
     orderedSourceSchema
   }
 
-  def schema(): List[(String, Type.T)] = sourceSchema()
+  def schema(): List[(String, Type.T)] =
+    inferenceModel.asInstanceOf[TypeInferenceModel].inferredTypeMap.map( x => (x._1, x._2))
 
   def allKeys() = { sourceSchema.map(_._1) }
 
