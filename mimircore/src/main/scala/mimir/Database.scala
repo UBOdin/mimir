@@ -54,10 +54,11 @@ case class Database(backend: Backend)
   val lenses = new LensManager(this)
   val compiler = new Compiler(this)  
   val operator = new OperatorParser(this.getLensModel,
-    this.getTableSchema(_) match {
-      case Some(x) => x
-      case None => throw new SQLException("Table does not exist in db!")
-    })
+    (x) => 
+      this.getTableSchema(x) match {
+        case Some(x) => x
+        case None => throw new SQLException("Table "+x+" does not exist in db!")
+      })
   
   /**
    * Evaluate the specified query on the backend directly and wrap the result in a
