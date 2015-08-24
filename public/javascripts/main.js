@@ -425,14 +425,41 @@ $( document ).ready(function() {
 Utility functions
 */
 function listify(causes) {
-    var i;
-    var result = '';
-    for(i = 0; i<causes.length; i++) {
-        result += '<li class="paperclip">'+ causes[i] +
-                        ' |<a href="#" class="ttOption approve">Approve</a>'+
-                        '<a href="#" class="ttOption fix">Fix</a>'+
-                  '</li>'
-    }
+    var result = $("<div>");
+    $.each(causes, function(i, v){
+        var approve = $("<a>", {href: "#", class: "ttOption approve", text: "Approve"});
+        var fix = $("<a>", {href: "#", class: "ttOption fix", text: "Fix"});
+        var tag = $("<li>", {class: "paperclip", text: causes[i].reason + " |"})
+                    .attr("onmouseover", "highlightFlowNode(this)")
+                    .attr("onmouseout", "reverthighlight(this)");
+        var lensType = $("<input>").attr("type", "hidden").val(causes[i].lensType);
+        tag.append(approve).append(fix).append(lensType);
+        result.append(tag);
+    });
+    return result.html();
+}
 
-    return result;
+function highlightFlowNode(reason){
+    var text = $(reason).find("input").val();
+    var nodeDivs = getFlowNodes(text);
+    $(nodeDivs).find("circle").attr("fill", "orange").attr("r", Mimir.visualization.RADIUS + 3);
+    $(nodeDivs).find("text").attr("fill", "brown").attr("font-size", Mimir.visualization.ZOOMFONTSIZE);
+}
+
+function reverthighlight(reason){
+    var text = $(reason).find("input").val();
+    var nodeDivs = getFlowNodes(text);
+    $(nodeDivs).find("circle").attr("fill", "black").attr("r", Mimir.visualization.RADIUS);
+    $(nodeDivs).find("text").attr("fill", "black").attr("font-size", Mimir.visualization.FONTSIZE);
+}
+
+function getFlowNodes(label){
+    var nodes = $(".node");
+    var selectedNodes = [];
+    $.each(nodes, function(i, v){
+        var text = v.children[1].textContent;
+        if(text == label)
+            selectedNodes.push(v);
+    });
+    return selectedNodes;
 }

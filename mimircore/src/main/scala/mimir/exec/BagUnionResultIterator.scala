@@ -32,7 +32,7 @@ class BagUnionResultIterator(lhs: ResultIterator, rhs: ResultIterator) extends R
   def schema: List[(String,Type.T)] =
     currIter().schema;
 
-  override def reason(ind: Int): List[String] = {
+  override def reason(ind: Int): List[(String, String)] = {
     currIter().reason(ind)
   }
 }

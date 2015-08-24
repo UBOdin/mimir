@@ -17,7 +17,7 @@ abstract class SingleVarModel(vt: Type.T) extends Model {
   def upperBoundExpr(args: List[Expression]): Expression
   def sampleGenExpr(args: List[Expression]): Expression
   def sample(seed: Long, args: List[PrimitiveValue]): PrimitiveValue
-  def reason(args: List[Expression]): String
+  def reason(args: List[Expression]): (String, String)
 
   def mostLikelyValue(x:Int, args: List[PrimitiveValue]) = mostLikelyValue(args)
   def lowerBound(x: Int, args: List[PrimitiveValue]) = lowerBound(args)
@@ -28,7 +28,7 @@ abstract class SingleVarModel(vt: Type.T) extends Model {
   def upperBoundExpr(x: Int, args: List[Expression]) = upperBoundExpr(args)
   def sampleGenExpr(x: Int, args: List[Expression]) = sampleGenExpr(args)
   def sample(seed: Long, x: Int, args: List[PrimitiveValue]) = sample(seed, args)
-  def reason(x: Int, args: List[Expression]): String = reason(args)
+  def reason(x: Int, args: List[Expression]): (String, String) = reason(args)
 
 }
 
@@ -54,7 +54,7 @@ case class JointSingleVarModel(vars: List[SingleVarModel]) extends Model {
   def sample(seed: Long, idx: Int, args: List[PrimitiveValue]) = 
     vars(idx).sample(seed, args)
 
-  override def reason(idx: Int, args: List[Expression]): String =
+  override def reason(idx: Int, args: List[Expression]): (String, String) =
     vars(idx).reason(idx, args)
 }
 
@@ -74,7 +74,7 @@ object UniformDistribution extends SingleVarModel(Type.TFloat){
     FloatPrimitive(new Random(seed).nextDouble() * (high - low) + low)
   }
 
-  override def reason(args: List[Expression]): String = "Unknown"   // TODO
+  override def reason(args: List[Expression]): (String, String) = ("Unknown", "Unknown")   // TODO
 }
 
 case class NoOpModel(vt: Type.T) extends SingleVarModel(vt) {
@@ -88,5 +88,5 @@ case class NoOpModel(vt: Type.T) extends SingleVarModel(vt) {
   def sampleGenExpr(args: List[Expression]) = args(0)
   def sample(seed: Long, args: List[PrimitiveValue]) = args(0)
 
-  override def reason(args: List[Expression]): String = "None"
+  override def reason(args: List[Expression]): (String, String) = ("None", "None")
 }

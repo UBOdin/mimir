@@ -26,5 +26,5 @@ abstract class ResultIterator {
     foreachRow( (x) => { ret = ret ++ List(toList()) } )
     return ret;
   }
-  def reason(ind: Int): List[String] = List()
+  def reason(ind: Int): List[(String, String)] = List()
 }

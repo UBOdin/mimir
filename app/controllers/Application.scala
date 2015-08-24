@@ -30,6 +30,10 @@ class Application extends Controller {
     )
   }
 
+  implicit val ReasonWrites = new Writes[(String, String)] {
+    def writes(tup: (String, String)) = Json.obj("reason" -> tup._1, "lensType" -> tup._2)
+  }
+
   def index = Action {
     val webAPI = new WebAPI()
     webAPI.configure(new Array[String](0))

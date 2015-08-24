@@ -51,6 +51,9 @@ Mimir.visualization = {
     YDIFF: 80,
     WIDTH: 700,
     HEIGHT: 200,
+    RADIUS: 5,
+    FONTSIZE: "0.7em",
+    ZOOMFONTSIZE: "1em",
 
     propagatePositions: function(node, xVal, yVal, div) {
         var xdiff = Mimir.visualization.XDIFF;
@@ -87,8 +90,10 @@ Mimir.visualization = {
 
     graph: function(node) {
         Mimir.visualization.XDIFF = Mimir.visualization.WIDTH/(node.height() + 1);
-        var width = Mimir.visualization.WIDTH, height = Mimir.visualization.HEIGHT;
-        var radius = 5, fontSize = "0.7em", zoomFontSize = "1em";
+        var width = Mimir.visualization.WIDTH, height = Mimir.visualization.HEIGHT,
+        radius = Mimir.visualization.RADIUS, fontSize = Mimir.visualization.FONTSIZE,
+        zoomFontSize = Mimir.visualization.ZOOMFONTSIZE;
+
         node = Mimir.visualization.propagatePositions(node, width - Mimir.visualization.XDIFF, height / 2, 1);
         var nodes = node.getAllPositions();
         var links = node.links();

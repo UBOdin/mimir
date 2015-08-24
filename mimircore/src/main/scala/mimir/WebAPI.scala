@@ -163,7 +163,7 @@ class WebAPI {
     curDir.listFiles().filter( f => f.isFile && f.getName.endsWith(".db")).map(x => x.getName)
   }
 
-  def getVGTerms(query: String, row: String, ind: Int): List[String] = {
+  def getVGTerms(query: String, row: String, ind: Int): List[(String, String)] = {
     val source = new StringReader(query)
     val parser = new MimirJSqlParser(source)
 
