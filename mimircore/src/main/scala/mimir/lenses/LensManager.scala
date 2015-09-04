@@ -10,6 +10,8 @@ import mimir.sql._
 import scala.collection.JavaConversions._
 
 
+class LensException(msg: String, trigger: Throwable) extends Exception(msg, trigger);
+
 class LensManager(db: Database) {
   var lensCache = scala.collection.mutable.Map[String,Lens]();
   
@@ -110,7 +112,11 @@ class LensManager(db: Database) {
               db.parseExpressionList(lensMeta(1).asString),
               db.parseOperator(lensMeta(2).asString)
             )
-          lens.load(db)
+          try {
+            lens.load(db)
+          } catch {
+            case e: Throwable => throw new LensException("Error in Lens: \n"+lens.toString, e);
+          }
           lensCache.put(lensName, lens)
           return Some(lens)
         }

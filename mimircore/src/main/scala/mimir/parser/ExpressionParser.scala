@@ -87,6 +87,8 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 	def boolLeaf = (
 		  "true"  ^^ { _ => BoolPrimitive(true)  }
 		| "false" ^^ { _ => BoolPrimitive(false) }
+		| "TRUE"  ^^ { _ => BoolPrimitive(true)  }
+		| "FALSE" ^^ { _ => BoolPrimitive(false) }
 	)
 
 	def stringLeaf = "'(([^']|\\')*)'".r ^^ { 
