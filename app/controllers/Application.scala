@@ -3,11 +3,35 @@ package controllers
 import java.io.File
 
 import mimir._
+import mimir.web.{WebResult, WebErrorResult, WebQueryResult, WebStringResult}
 import play.api.mvc._
 import play.api.libs.json._
 
+/*
+ * This is the entry-point to the Web Interface.
+ * This class is part of the template provided by the play framework.
+ *
+ * Each Action, part of the Play API is a function that maps
+ * a Request to a Result. Every URL that can be handled by the
+ * application is defined in the routes.conf file. Each url
+ * has an Action associated with it, which defines what the
+ * server should do when the client asks for that URL
+ *
+ * GET requests pass in args that can be directly extracted
+ * from the Action method signatures. POST requests need parsers.
+ * For example, if the POST request had form fields attached to
+ * it, we use a form body parser
+ *
+ * Read more about Actions at
+ * https://www.playframework.com/documentation/2.0/ScalaActions
+ */
+
 class Application extends Controller {
 
+  /*
+   * The Writes interface allows us to convert
+   * Scala objects to a JSON representation
+   */
   implicit val WebStringResultWrites = new Writes[WebStringResult] {
     def writes(webStringResult: WebStringResult) = Json.obj(
       "result" -> webStringResult.result
@@ -34,6 +58,11 @@ class Application extends Controller {
     def writes(tup: (String, String)) = Json.obj("reason" -> tup._1, "lensType" -> tup._2)
   }
 
+
+
+  /*
+   * Actions
+   */
   def index = Action {
     val webAPI = new WebAPI()
     webAPI.configure(new Array[String](0))
@@ -148,7 +177,7 @@ class Application extends Controller {
     val webAPI = new WebAPI()
     webAPI.configure(Array("--db", db))
 
-    val result = webAPI.getAllDBs()
+    val result = webAPI.getAllDBs
 
     val response = Ok(Json.toJson(result))
     webAPI.close()

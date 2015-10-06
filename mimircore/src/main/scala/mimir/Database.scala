@@ -1,17 +1,17 @@
-package mimir;
+package mimir
 
-import java.io.{FileReader, BufferedReader}
 import java.sql.SQLException
 
 import mimir.algebra._
-import mimir.ctables.{VGTerm, Model}
+import mimir.ctables.{Model, VGTerm}
 import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
 import mimir.lenses.{Lens, LensManager}
 import mimir.parser.OperatorParser
 import mimir.sql.{Backend, CreateLens, RAToSql, SqlToRA}
+import mimir.util.LoadCSV
+import mimir.web.WebIterator
 
 import scala.collection.mutable.ListBuffer
-;
 
 
  /**
@@ -91,8 +91,7 @@ case class Database(backend: Backend)
    * specific optimizations or updates are applied.
    */
   def update(sql: String): Unit = {
-    // println(sql);
-    backend.update(sql);
+    backend.update(sql)
   }
 
   /**
@@ -108,8 +107,7 @@ case class Database(backend: Backend)
    * No Mimir-specific optimizations or updates are applied.
    */
   def update(sql: String, args: List[String]): Unit = {
-    // println(sql);
-    backend.update(sql, args);
+    backend.update(sql, args)
   }
 
   /** 
@@ -134,38 +132,30 @@ case class Database(backend: Backend)
    */
   def dump(result: ResultIterator): Unit =
   {
-    val colWidth = 12
-    val fmtSpecifier = "%"+colWidth+"s"
-    val verticalSep = "+"+("-"*(colWidth+1)+"+")*(result.numCols-1)+("-"*(colWidth+1))+"+"
-
-    println(verticalSep)
-    println("|"+result.schema.map( _._1 ).map(x => fmtSpecifier.format(x)).mkString(" |")+" |")
-    println(verticalSep)
-
+    println(result.schema.map( _._1 ).mkString(","))
+    println("------")
     while(result.getNext()){
-      println("|"+
+      println(
         (0 until result.numCols).map( (i) => {
-          ("%"+colWidth+"s").format(
-            result(i)+(
-              if(!result.deterministicCol(i)){ "*" } else { "" }
-              )
+          result(i)+(
+            if(!result.deterministicCol(i)){ "*" } else { "" }
+            )
+        }).mkString(",")+(
+          if(!result.deterministicRow){
+            " (This row may be invalid)"
+          } else { "" }
           )
-        }).mkString(" |")+(
-        if(!result.deterministicRow){
-          " (This row may be invalid)"
-        } else { "" }
-        )+" |"
       )
     }
-
-    println(verticalSep)
-
-    if(result.missingRows){
+    if(result.missingRows()){
       println("( There may be missing result rows )")
     }
   }
 
-  def webDump(result: ResultIterator): WebIterator =
+  /**
+   * Construct a WebIterator from a ResultIterator
+   */
+  def generateWebIterator(result: ResultIterator): WebIterator =
   {
     val headers: List[String] = result.schema.map(_._1)
     val data: ListBuffer[(List[String], Boolean)] = new ListBuffer()
@@ -224,7 +214,7 @@ case class Database(backend: Backend)
    * Look up the schema for the table with the provided name.
    */
   def getTableSchema(name: String): Option[List[(String,Type.T)]] =
-    backend.getTableSchema(name);  
+    backend.getTableSchema(name)
   /**
    * Build a Table operator for the table with the provided name.
    */
@@ -247,7 +237,7 @@ case class Database(backend: Backend)
    * Prepare a database for use with Mimir.
    */
   def initializeDBForMimir(): Unit = {
-    lenses.init();
+    lenses.init()
   }
 
   /**
@@ -270,7 +260,7 @@ case class Database(backend: Backend)
     if(lenses == null){ None }
     else {
       //println(iviews.views.toString())
-      lenses.load(name.toUpperCase()) match {
+      lenses.load(name.toUpperCase) match {
         case None => None
         case Some(lens) => 
           // println("Found: "+name); 
@@ -280,66 +270,22 @@ case class Database(backend: Backend)
   }
 
   /**
-   * Load CSV file into database
+   * Load a CSV file into the database
+   *
+   * The CSV file can either have a header or not
+   *  - If the file has a header, the first line will be skipped
+   *    during the insert process
+   *
+   *  - If the file does not have a header, the table must exist
+   *    in the database, created through a CREATE TABLE statement
+   *    Otherwise, a SQLException will be thrown
+   *
+   * Right now, the detection logic for whether a CSV file has a
+   * header or not is unimplemented. So its assumed every CSV file
+   * supplies an appropriate header.
    */
   def handleLoadTable(targetTable: String, sourceFile: String){
-    val input = new BufferedReader(new FileReader(sourceFile))
-    val firstLine = input.readLine()
-
-    getTableSchema(targetTable) match {
-      case Some(sch) => {
-        if(headerDetected(firstLine)) {
-          populateTable(input, targetTable, sch) // Ignore header since table already exists
-        }
-        else {
-          populateTable(new BufferedReader(new FileReader(sourceFile)), // Reset to top
-            targetTable, sch)
-        }
-      }
-      case None => {
-        if(headerDetected(firstLine)) {
-          update("CREATE TABLE "+targetTable+"("+
-            firstLine.split(",").map((x) => "\'"+x.trim.replace(" ", "")+"\'" ).mkString(" varchar, ")+
-            " varchar)")
-
-          handleLoadTable(targetTable, sourceFile)
-        }
-        else {
-          throw new SQLException("No header supplied for creating new table")
-        }
-      }
-    }
-  }
-
-  private def headerDetected(line: String): Boolean = {
-    if(line == null) return false;
-    // TODO Detection logic
-    return true; // Placeholder, assume every CSV file has a header
-  }
-
-  private def populateTable(src: BufferedReader,
-                            targetTable: String,
-                            sch: List[(String, Type.T)]): Unit = {
-    val keys = sch.map(_._1).map((x) => "\'"+x+"\'").mkString(", ")
-    val stmts = new ListBuffer[String]()
-
-    while(true){
-      val line = src.readLine()
-      if(line == null) { if(stmts.size > 0) update(stmts.toList); return }
-
-      val dataLine = line.trim.split(",").padTo(sch.size, "")
-      val data = (0 until dataLine.length).map( (i) =>
-        dataLine(i) match {
-          case "" => null
-          case x => sch(i)._2 match {
-            case Type.TDate | Type.TString => "\'"+x+"\'"
-            case _ => x
-          }
-        }
-      ).mkString(", ")
-
-      stmts.append("INSERT INTO "+targetTable+"("+keys+") VALUES ("+data+")")
-    }
+    LoadCSV.handleLoadTable(this, targetTable, sourceFile)
   }
 
   /**
@@ -349,6 +295,9 @@ case class Database(backend: Backend)
     Eval.getVGTerms(expression)
   }
 
+  /**
+   * Find all VGTerms in an expression
+   */
   def getVGTerms(expression: Expression,
                  bindings: Map[String, PrimitiveValue],
                  list: List[VGTerm]): List[VGTerm] = {

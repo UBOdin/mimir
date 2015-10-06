@@ -1,6 +1,6 @@
-@(webAPI: mimir.WebAPI, query: String, result: mimir.WebResult, lastQuery: String)
+@(webAPI: mimir.WebAPI, query: String, result: mimir.web.WebResult, lastQuery: String)
 
-@import mimir.{WebQueryResult, WebStringResult, WebErrorResult}
+@import mimir.web.{WebQueryResult, WebStringResult, WebErrorResult}
 @import mimir.algebra.Type
 
 <html lang="en">
@@ -47,17 +47,17 @@
                             <a class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><span id="curr_db">@webAPI.dbName</span> <span class="caret"></span></a>
                             <ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
                                 <li class="dropdown-header" id="tables_header">Tables</li>
-                                @webAPI.getAllTables().map { x =>
+                                @webAPI.getAllTables.map { x =>
                                     <li><a class="table_link ">@x</a></li>
                                 }
                                 <li role="separator" class="divider"></li>
                                 <li class="dropdown-header">Lenses</li>
-                                @webAPI.getAllLenses().map { x =>
+                                @webAPI.getAllLenses.map { x =>
                                 <li><a class="lens_link">@x</a></li>
                                 }
                                 <li role="separator" class="divider"></li>
                                 <li class="dropdown-header">Databases</li>
-                                @webAPI.getAllDBs().map { x =>
+                                @webAPI.getAllDBs.map { x =>
                                     <li><a class="db_link">@x</a></li>
                                 }
                                 <li role="separator" class="divider"></li>
@@ -171,7 +171,7 @@
             <br>
             <input type="text" class="form-control" id="sm_lens_param" list="schemas">
             <datalist id="schemas">
-                @webAPI.getAllSchemas().map{ case (name, schema) =>
+                @webAPI.getAllSchemas.map{ case (name, schema) =>
                     <option>@(name + schema.map( (x) => x._1+" "+Type.toString(x._2)).mkString(" [", ", ", "] "))</option>
                 }
             </datalist>

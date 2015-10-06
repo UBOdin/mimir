@@ -8,17 +8,13 @@ import mimir.ctables.{CTPercolator, CTables, VGTerm}
 import mimir.exec.ResultSetIterator
 import mimir.parser.MimirJSqlParser
 import mimir.sql.{CreateLens, Explain, JDBCBackend}
+import mimir.web._
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
 import net.sf.jsqlparser.statement.update.Update
 import net.sf.jsqlparser.util.deparser.{SelectDeParser, ExpressionDeParser, UpdateDeParser}
 
 import scala.collection.mutable.ListBuffer
-import scala.util.parsing.json.{JSONArray, JSONObject}
-
-/**
- * Created by arindam on 6/29/15.
- */
 
 class WebAPI {
 
@@ -32,7 +28,7 @@ class WebAPI {
   def configure(args: Array[String]): Unit = {
     conf = new MimirConfig(args)
 
-    // Set up the database connection(s)
+    /* Set up the database connection(s) */
     dbName = conf.dbname().toLowerCase
     if(dbName.length <= 0) {
       throw new Exception("DB name must be configured!")
@@ -41,12 +37,11 @@ class WebAPI {
     dbPath = java.nio.file.Paths.get(dbDir, dbName).toString
 
     val backend = conf.backend() match {
-      case "oracle" => new JDBCBackend(Mimir.connectOracle())
+      case "oracle" => new JDBCBackend(Mimir.connectOracle(dbPath))
       case "sqlite" => new JDBCBackend(Mimir.connectSqlite(dbPath))
-      case x => {
+      case x =>
         println("Unsupported backend: "+x)
         sys.exit(-1)
-      }
     }
 
     db = new Database(backend)
@@ -111,7 +106,7 @@ class WebAPI {
     val results = db.query(CTPercolator.propagateRowIDs(raw, true))
 
     results.open()
-    val wIter = db.webDump(results)
+    val wIter: WebIterator = db.generateWebIterator(results)
     try{
       wIter.queryFlow = convertToTree(raw)
     } catch {
@@ -136,16 +131,16 @@ class WebAPI {
     new WebStringResult(res)
   }
 
-  def getAllTables(): List[String] = {
+  def getAllTables: List[String] = {
     db.backend.getAllTables()
   }
 
-  def getAllSchemas(): Map[String, List[(String, Type.T)]] = {
-    getAllTables().map{ (x) => (x, db.getTableSchema(x).get) }.toMap ++
-    getAllLenses().map{ (x) => (x, db.getLens(x).schema()) }.toMap
+  def getAllSchemas: Map[String, List[(String, Type.T)]] = {
+    getAllTables.map{ (x) => (x, db.getTableSchema(x).get) }.toMap ++
+    getAllLenses.map{ (x) => (x, db.getLens(x).schema()) }.toMap
   }
 
-  def getAllLenses(): List[String] = {
+  def getAllLenses: List[String] = {
     val res = db.backend.execute(
       """
         SELECT *
@@ -164,7 +159,7 @@ class WebAPI {
     lensNames.toList
   }
 
-  def getAllDBs(): Array[String] = {
+  def getAllDBs: Array[String] = {
     val curDir = new File(".", "databases")
     curDir.listFiles().filter( f => f.isFile && f.getName.endsWith(".db")).map(x => x.getName)
   }
@@ -202,32 +197,6 @@ class WebAPI {
       throw new SQLException("Invalid Source Data ROWID: '" +row+"'");
     }
     iterator.reason(ind)
-
-    /* Really, this should be data-aware.  The query should
-       get the VG terms specifically affecting the specific
-       row in question.  See #32 */
-//    val sch = optimized.schema
-//    val col_defn = if(ind == -1) sch(sch.length - 1) else sch(ind)
-//
-//    val ret =
-//    OperatorUtils.columnExprForOperator(col_defn._1, optimized).
-//      // columnExprForOperator returns (expr,oper) pairs.  We care
-//      // about the expression
-//      map( _._1 ).
-//      // Get the VG terms that might be affecting it.  THIS SHOULD
-//      // BE DATA-DEPENDENT.
-//      map( db.getVGTerms(_) ).
-//      // List of lists -> Just a list
-//      flatten.
-//      // Pull the reasons
-//      map( _.reason() ).
-//      // Discard duplicate reasons
-//      distinct
-//    ret
-  }
-
-  def close(): Unit = {
-    db.backend.close()
   }
 
   def extractVGTerms(exp: Expression): List[String] = {
@@ -276,57 +245,8 @@ class WebAPI {
       case o: Operator => convertToTree(o.children(0))
     }
   }
-}
 
-class OperatorNode(nodeName: String, c: List[OperatorNode], params: List[String]) {
-  val name = nodeName
-  val children = c
-  val args = params
-
-  def toJson(): JSONObject =
-    new JSONObject(Map("name" -> name,
-                       "children" -> JSONArray(children.map(a => a.toJson())),
-                       "args" -> JSONArray(args)))
-}
-
-class WebIterator(h: List[String],
-                  d: List[(List[String], Boolean)],
-                  mR: Boolean) {
-
-  val header = h
-  val data = d
-  val missingRows = mR
-  var queryFlow: OperatorNode = null
-
-}
-
-abstract class WebResult {
-  def toJson(): JSONObject
-}
-
-case class WebStringResult(string: String) extends WebResult {
-  val result = string
-
-  def toJson() = {
-    new JSONObject(Map("result" -> result))
-  }
-}
-
-case class WebQueryResult(webIterator: WebIterator) extends WebResult {
-  val result = webIterator
-
-  def toJson() = {
-    new JSONObject(Map("header" -> result.header,
-                        "data" -> result.data,
-                        "missingRows" -> result.missingRows,
-                        "queryFlow" -> result.queryFlow.toJson()))
-  }
-}
-
-case class WebErrorResult(string: String) extends WebResult {
-  val result = string
-
-  def toJson() = {
-    new JSONObject(Map("error" -> result))
+  def close(): Unit = {
+    db.backend.close()
   }
 }

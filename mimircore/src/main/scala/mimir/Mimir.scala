@@ -33,7 +33,7 @@ object Mimir {
 
     // Set up the database connection(s)
     val backend = conf.backend() match {
-      case "oracle" => new JDBCBackend(connectOracle());
+      case "oracle" => new JDBCBackend(connectOracle(conf.dbname()));
       case "sqlite" => new JDBCBackend(connectSqlite(conf.dbname()));
       case x =>
 
@@ -108,9 +108,9 @@ object Mimir {
   def handleSelect(sel: Select): Unit = {
     val raw = db.convert(sel);
     val results = db.query(CTPercolator.propagateRowIDs(raw, true))
-    results.open();
-    db.dump(results);
-    results.close();
+    results.open()
+    db.dump(results)
+    results.close()
   }
 
   def connectSqlite(filename: String): java.sql.Connection =
@@ -119,7 +119,7 @@ object Mimir {
     java.sql.DriverManager.getConnection("jdbc:sqlite:"+filename);
   }
 
-  def connectOracle(): java.sql.Connection =
+  def connectOracle(filename: String): java.sql.Connection =
   {
     Methods.getConn()
   }

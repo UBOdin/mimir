@@ -136,8 +136,8 @@ object CTPercolator {
         val (lhsCols, lhsChild) = extractProject(percolate(lhs))
         val (rhsCols, rhsChild) = extractProject(percolate(rhs))
         
-        // println("Percolated LHS: "+lhsCols+"\n" + lhsChild)
-        // println("Percolated RHS: "+rhsCols+"\n" + rhsChild)
+         println("Percolated LHS: "+lhsCols+"\n" + lhsChild)
+         println("Percolated RHS: "+rhsCols+"\n" + rhsChild)
         
         // Pulling projections up through a join may require
         // renaming columns under the join if the same column
@@ -150,7 +150,7 @@ object CTPercolator {
           | (Set[String]("ROWID") & lhsColNames)
           | (Set[String]("ROWID") & rhsColNames)
         ) 
-        // println("CONFLICTS: "+conflicts+"in: "+lhsColNames+", "+rhsColNames+"; for \n"+afterDescent);
+        println("CONFLICTS: "+conflicts+"in: "+lhsColNames+", "+rhsColNames+"; for \n"+afterDescent);
           
         val newJoin = 
           if(conflicts.isEmpty) {
