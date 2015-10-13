@@ -1,4 +1,4 @@
-package mimir.algebra;;
+package mimir.algebra;
 
 
 abstract class Operator 
@@ -13,6 +13,7 @@ abstract class Operator
 case class ProjectArg(column: String, input: Expression) 
 {
   override def toString = (column.toString + " <= " + input.toString)
+  def getColumnName() = column
 }
 
 case class Project(columns: List[ProjectArg], source: Operator) extends Operator 

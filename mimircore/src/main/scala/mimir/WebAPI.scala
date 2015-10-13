@@ -226,6 +226,32 @@ class WebAPI {
 //    ret
   }
 
+  def nameForQuery(query: String): WebResult =
+  {
+    val source = new StringReader(query)
+    val parser = new MimirJSqlParser(source)
+
+    val rawQuery =
+      try {
+        val stmt: Statement = parser.Statement();
+        if(stmt.isInstanceOf[Select]){
+          db.convert(stmt.asInstanceOf[Select])
+        } else {
+          throw new Exception("nameForQuery got statement that is not SELECT")
+        }
+
+      } catch {
+        case e: Throwable => {
+          e.printStackTrace()
+          return new WebErrorResult("ERROR: "+e.getMessage())
+        }
+      }
+    
+    val name = QueryNamer.nameQuery(db.optimize(rawQuery))
+
+    return new WebStringResult(name);
+  }
+
   def close(): Unit = {
     db.backend.close()
   }

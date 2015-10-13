@@ -110,6 +110,23 @@ class Application extends Controller {
     response
   }
 
+  def nameForQuery(query: String, db: String) = Action {
+
+    val webAPI = new WebAPI()
+    webAPI.configure(Array("--db", db))
+
+    val result = webAPI.nameForQuery(query)
+
+    val response = result match {
+      case x: WebStringResult => Ok(Json.toJson(x.asInstanceOf[WebStringResult]))
+      case x: WebQueryResult  => Ok(Json.toJson(x.asInstanceOf[WebQueryResult]))
+      case x: WebErrorResult  => Ok(Json.toJson(x.asInstanceOf[WebErrorResult]))
+    }
+
+    webAPI.close()
+    response
+  }
+
   def createDB = Action { request =>
     val form = request.body.asFormUrlEncoded
     val db = form.get("new_db")(0)
