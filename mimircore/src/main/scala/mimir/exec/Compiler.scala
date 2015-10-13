@@ -32,7 +32,7 @@ class Compiler(db: Database) {
   ResultIterator = {
     val optimizedOper = opts.foldLeft(oper)((o, fn) => fn(o))
     // Finally build the iterator
-    return buildIterator(optimizedOper)
+    buildIterator(optimizedOper)
   }
 
   /**

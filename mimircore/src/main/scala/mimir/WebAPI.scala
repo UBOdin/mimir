@@ -12,7 +12,7 @@ import mimir.web._
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
 import net.sf.jsqlparser.statement.update.Update
-import net.sf.jsqlparser.util.deparser.{SelectDeParser, ExpressionDeParser, UpdateDeParser}
+import net.sf.jsqlparser.util.deparser.{ExpressionDeParser, SelectDeParser, UpdateDeParser}
 
 import scala.collection.mutable.ListBuffer
 
@@ -103,6 +103,7 @@ class WebAPI {
     val raw = db.convert(sel)
     println("RAW QUERY: "+raw)
     val op = db.optimize(raw)
+    println("OPTIMIZED QUERY: "+op)
     val results = db.query(CTPercolator.propagateRowIDs(raw, true))
 
     results.open()

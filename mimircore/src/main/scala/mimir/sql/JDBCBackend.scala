@@ -12,6 +12,7 @@ object JDBCUtils {
     t match {
       case (java.sql.Types.FLOAT |
             java.sql.Types.DECIMAL |
+            java.sql.Types.REAL |
             java.sql.Types.DOUBLE)   => Type.TFloat
       case (java.sql.Types.INTEGER)  => Type.TInt
       case (java.sql.Types.DATE)     => Type.TDate

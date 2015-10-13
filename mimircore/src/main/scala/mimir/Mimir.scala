@@ -98,15 +98,15 @@ object Mimir {
   }
 
   def handleExplain(explain: Explain): Unit = {
-    val raw = db.convert(explain.getSelectBody())._1;
-    println("------ Raw Query ------");
-    println(raw.toString());
-    println("--- Optimized Query ---");
-    println(db.optimize(raw).toString);
+    val raw = db.convert(explain.getSelectBody())._1
+    println("------ Raw Query ------")
+    println(raw)
+    println("--- Optimized Query ---")
+    println(db.optimize(raw))
   }
 
   def handleSelect(sel: Select): Unit = {
-    val raw = db.convert(sel);
+    val raw = db.convert(sel)
     val results = db.query(CTPercolator.propagateRowIDs(raw, true))
     results.open()
     db.dump(results)

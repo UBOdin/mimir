@@ -101,6 +101,7 @@
                             <h3 class="panel-title">Notifications</h3>
                         </div>
                         <div class="panel-body">
+                            <p>@iter.data.size row(s) returned in @iter.executionTimeMS ms, showing top 100</p>
                             <p>Red represents data uncertainty</p>
                             @if(iter.missingRows) {
                             <p class="red">There may be some rows missing from this result</p>
@@ -114,7 +115,7 @@
                         <button id="schema_matching_btn" class="lens_btn">SCHEMA MATCHING LENS</button>
                     </div>
                     <div class="rightCol">
-                         @tableGenerator(iter)
+                         @tableGenerator(iter, 100)
                     </div>
                     <div class="clear"></div>
                     <div class="horbar"></div>

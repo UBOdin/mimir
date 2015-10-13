@@ -157,6 +157,8 @@ case class Database(backend: Backend)
    */
   def generateWebIterator(result: ResultIterator): WebIterator =
   {
+    val startTime = System.nanoTime()
+
     val headers: List[String] = result.schema.map(_._1)
     val data: ListBuffer[(List[String], Boolean)] = new ListBuffer()
 
@@ -166,11 +168,12 @@ case class Database(backend: Backend)
           result(i) + (if (!result.deterministicCol(i)) {"*"} else {""})
         }).toList
 
-      println("RESULTS: "+list)
+//      println("RESULTS: "+list)
       data.append((list, result.deterministicRow()))
     }
 
-    new WebIterator(headers, data.toList, result.missingRows())
+    val executionTime = (System.nanoTime() - startTime) / (1 * 1000 * 1000)
+    new WebIterator(headers, data.toList, result.missingRows(), executionTime)
   }
 
   /**

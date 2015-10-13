@@ -21,11 +21,13 @@ package mimir.web
 
 class WebIterator(h: List[String],
                   d: List[(List[String], Boolean)],
-                  mR: Boolean) {
+                  mR: Boolean,
+                  eT: Double) {
 
   val header = h
   val data = d
   val missingRows = mR
+  var executionTimeMS: Double = eT
   var queryFlow: OperatorNode = null
 
 }

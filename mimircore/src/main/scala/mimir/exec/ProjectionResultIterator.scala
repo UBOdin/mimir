@@ -14,7 +14,8 @@ class ProjectionResultIterator(
   ) 
   extends ResultIterator
 {
-
+  /* TODO Refactor this properly if required */
+  val srchook = src
   /**
    * The output schema of this iterator
    */
@@ -145,7 +146,7 @@ class ProjectionResultIterator(
           }
         }
       
-      case _ => 
+      case _ =>
         expr.rebuild(
           expr.children.map(compile(_))
         )
@@ -164,5 +165,7 @@ class VarProjection(src: ProjectionResultIterator, idx: Int, t: Type.T)
 {
   def exprType(bindings: Map[String,Type.T]) = t;
   def rebuild(x: List[Expression]) = new VarProjection(src, idx, t)
-  def get(v:List[PrimitiveValue]) = src.inputVar(idx);
+  def get(v:List[PrimitiveValue]) = src.inputVar(idx)
+
+  override def toString = src.srchook.schema(idx)._1
 }

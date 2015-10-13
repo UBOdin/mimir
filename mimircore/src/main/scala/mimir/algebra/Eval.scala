@@ -29,6 +29,10 @@ object Eval
   def evalBool(e: Expression, bindings: Map[String, PrimitiveValue] = Map[String, PrimitiveValue]()): Boolean =
     eval(e, bindings) match {
       case BoolPrimitive(v) => v
+
+      /* TODO Need to check if this is allowed? */
+      case v: NullPrimitive => false
+
       case v => throw new TypeException(TBool, v.exprType, "Cast")
     }
   /**
