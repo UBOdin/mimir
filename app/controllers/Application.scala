@@ -178,25 +178,27 @@ class Application extends Controller {
    * Load CSV data handler
    */
   def loadTable = Action(parse.multipartFormData) { request =>
-    try {
-      webAPI.openBackendConnection()
+    webAPI.synchronized(
+      try {
+        webAPI.openBackendConnection()
 
-      request.body.file("file").map { csvFile =>
-        val name = csvFile.filename
-        val dir = play.Play.application().path().getAbsolutePath
+        request.body.file("file").map { csvFile =>
+          val name = csvFile.filename
+          val dir = play.Play.application().path().getAbsolutePath
 
-        val newFile = new File(dir, name)
-        csvFile.ref.moveTo(newFile, true)
-        webAPI.handleLoadTable(name)
-        newFile.delete()
+          val newFile = new File(dir, name)
+          csvFile.ref.moveTo(newFile, true)
+          webAPI.handleLoadTable(name)
+          newFile.delete()
+        }
+
+        val result: WebResult = new WebStringResult("CSV file loaded.")
+        Ok(views.html.index(webAPI, "", result, ""))
       }
-
-      val result: WebResult = new WebStringResult("CSV file loaded.")
-      Ok(views.html.index(webAPI, "", result, ""))
-    }
-    finally {
-      webAPI.closeBackendConnection()
-    }
+      finally {
+        webAPI.closeBackendConnection()
+      }
+    )
   }
 
 
