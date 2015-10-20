@@ -342,6 +342,10 @@ class SqlToRA(db: Database)
       )
     }
     if(e.isInstanceOf[NullValue]) { return NullPrimitive() }
+    if(e.isInstanceOf[net.sf.jsqlparser.expression.operators.relational.IsNullExpression]) {
+      val isNullExpression = e.asInstanceOf[net.sf.jsqlparser.expression.operators.relational.IsNullExpression]
+      return mimir.algebra.IsNullExpression(convert(isNullExpression.getLeftExpression), isNullExpression.isNot)
+    }
     unhandled("Expression[Unknown]: " + e)
   }
 }
