@@ -32,14 +32,8 @@ object Mimir {
     conf = new MimirConfig(args);
 
     // Set up the database connection(s)
-    val backend = conf.backend() match {
-      case "oracle" => new JDBCBackend(connectOracle(conf.dbname()));
-      case "sqlite" => new JDBCBackend(connectSqlite(conf.dbname()));
-      case x =>
-
-        println("Unsupported backend: "+x); exit(-1);
-    }
-    db = new Database(backend);
+    db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
+    db.backend.open()
 
     // Check for one-off commands
     if(conf.initDB()){
@@ -60,6 +54,8 @@ object Mimir {
 
       eventLoop(source)
     }
+
+    db.backend.close()
     if(!conf.quiet()) { println("\n\nDone.  Exiting."); }
   }
 
@@ -113,16 +109,16 @@ object Mimir {
     results.close()
   }
 
-  def connectSqlite(filename: String): java.sql.Connection =
-  {
-    Class.forName("org.sqlite.JDBC");
-    java.sql.DriverManager.getConnection("jdbc:sqlite:"+filename);
-  }
-
-  def connectOracle(filename: String): java.sql.Connection =
-  {
-    Methods.getConn()
-  }
+//  def connectSqlite(filename: String): java.sql.Connection =
+//  {
+//    Class.forName("org.sqlite.JDBC");
+//    java.sql.DriverManager.getConnection("jdbc:sqlite:"+filename);
+//  }
+//
+//  def connectOracle(filename: String): java.sql.Connection =
+//  {
+//    Methods.getConn()
+//  }
 
 }
 

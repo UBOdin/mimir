@@ -10,47 +10,30 @@ import mimir.parser.MimirJSqlParser
 import mimir.sql.{CreateLens, Explain, JDBCBackend}
 import mimir.web._
 import net.sf.jsqlparser.statement.Statement
+import net.sf.jsqlparser.statement.insert.Insert
 import net.sf.jsqlparser.statement.select.Select
 import net.sf.jsqlparser.statement.update.Update
-import net.sf.jsqlparser.util.deparser.{ExpressionDeParser, SelectDeParser, UpdateDeParser}
+import net.sf.jsqlparser.util.deparser.{InsertDeParser, ExpressionDeParser, SelectDeParser, UpdateDeParser}
 
 import scala.collection.mutable.ListBuffer
 
-class WebAPI {
+class WebAPI(dbName: String = "debug.db", backend: String = "sqlite") {
 
-  var conf: MimirConfig = null
-  var db: Database = null
-  var dbName: String = null
-  var dbPath: String = null
-  val dbDir = "databases"
 
-  /* Initialize the configuration and database */
-  def configure(args: Array[String]): Unit = {
-    conf = new MimirConfig(args)
+  val db = new Database(new JDBCBackend(backend, dbName))
 
-    /* Set up the database connection(s) */
-    dbName = conf.dbname().toLowerCase
-    if(dbName.length <= 0) {
-      throw new Exception("DB name must be configured!")
-    }
+  def openBackendConnection(): Unit = {
+    db.backend.open()
+  }
 
-    dbPath = java.nio.file.Paths.get(dbDir, dbName).toString
+  def getCurrentDB = dbName
 
-    val backend = conf.backend() match {
-      case "oracle" => new JDBCBackend(Mimir.connectOracle(dbPath))
-      case "sqlite" => new JDBCBackend(Mimir.connectSqlite(dbPath))
-      case x =>
-        println("Unsupported backend: "+x)
-        sys.exit(-1)
-    }
+  def initializeDBForMimir() = {
+    db.initializeDBForMimir()
+  }
 
-    db = new Database(backend)
-
-    if(conf.initDB()){
-      db.initializeDBForMimir()
-    } else if(conf.loadTable.get != None){
-      db.handleLoadTable(conf.loadTable(), conf.loadTable()+".csv")
-    }
+  def handleLoadTable(filename: String) = {
+    db.handleLoadTable(filename.replace(".csv", ""), filename)
   }
 
   def handleStatement(query: String): (WebResult, String) = {
@@ -79,6 +62,12 @@ class WebAPI {
               new WebStringResult("Lens created successfully.")
 
             case s: Explain => handleExplain(s.asInstanceOf[Explain])
+            case s: Insert =>
+              val buffer = new StringBuffer()
+              val insDeParser = new InsertDeParser(new ExpressionDeParser(new SelectDeParser(), buffer), new SelectDeParser(), buffer)
+              insDeParser.deParse(s)
+              db.update(insDeParser.getBuffer.toString)
+              new WebStringResult("Database updated.")
             case s: Update =>
               val buffer = new StringBuffer()
               val updDeParser = new UpdateDeParser(new ExpressionDeParser(new SelectDeParser(), buffer), buffer)
@@ -100,11 +89,14 @@ class WebAPI {
   }
 
   private def handleSelect(sel: Select): WebQueryResult = {
+    val start = System.nanoTime()
     val raw = db.convert(sel)
-    println("RAW QUERY: "+raw)
-    val op = db.optimize(raw)
-    println("OPTIMIZED QUERY: "+op)
+    val rawT = System.nanoTime()
     val results = db.query(CTPercolator.propagateRowIDs(raw, true))
+    val resultsT = System.nanoTime()
+
+    println("Convert time: "+((start-rawT)/(1000*1000))+"ms")
+    println("Compile time: "+((rawT-resultsT)/(1000*1000))+"ms")
 
     results.open()
     val wIter: WebIterator = db.generateWebIterator(results)
@@ -231,7 +223,6 @@ class WebAPI {
           var params = List[String]()
           projArg.foreach{ case ProjectArg(col, exp) => params = params ++ extractVGTerms(exp) }
           val p = params.toSet.filter(a => db.lenses.lensCache.contains(a)).map(b => (b, db.lenses.lensCache.get(b).get.lensType))
-          println(p)
           if(p.isEmpty)
             convertToTree(source)
           else {
@@ -247,7 +238,7 @@ class WebAPI {
     }
   }
 
-  def close(): Unit = {
+  def closeBackendConnection(): Unit = {
     db.backend.close()
   }
 }

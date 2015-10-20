@@ -9,13 +9,16 @@ import mimir.Database;
 
 class ProjectionResultIterator(
     db: Database,
-    src: ResultIterator, 
+    val src: ResultIterator,
     cols: List[(String, Expression)]
   ) 
   extends ResultIterator
 {
-  /* TODO Refactor this properly if required */
-  val srchook = src
+  /**
+   * Instrumentation
+   */
+  var counter = 0
+
   /**
    * The output schema of this iterator
    */
@@ -95,27 +98,28 @@ class ProjectionResultIterator(
   
   
   def open(): Unit = 
-    src.open();
+    src.open()
   def close(): Unit = 
-    src.close();
+    src.close()
   def getNext(): Boolean = 
   {
-    var searching = true;
+    var searching = true
     while(searching){
-      if(!src.getNext()) { return false; }
+      if(!src.getNext()) { println("Total scanned: "+counter); return false; }
       if(cond match {
         case None => true
         case Some(c) => Eval.evalBool(c)
       }) {
-        (0 until tuple.length).foreach( (i) => {
+        tuple.indices.foreach( (i) => {
           tuple(i) = Eval.eval(exprs(i))
         })
-        searching = false;
+        searching = false
       } else {
         haveMissingRows = haveMissingRows || !deterministicRow
       }
+      counter = counter + 1
     }
-    return true;
+    true
   }
   /**
    * Compile an expression for evaluation.  mimir.algebra.Eval
@@ -167,5 +171,5 @@ class VarProjection(src: ProjectionResultIterator, idx: Int, t: Type.T)
   def rebuild(x: List[Expression]) = new VarProjection(src, idx, t)
   def get(v:List[PrimitiveValue]) = src.inputVar(idx)
 
-  override def toString = src.srchook.schema(idx)._1
+  override def toString = src.src.schema(idx)._1
 }

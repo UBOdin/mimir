@@ -6,7 +6,7 @@ import random
 import sys
 import argparse
 
-mimirhome = os.path.dirname(os.path.dirname(os.getcwd()))
+mimirhome = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", ".."))
 
 lensesinit = """
 		CREATE TABLE MIMIR_LENSES(
@@ -97,7 +97,6 @@ def main():
 	parser.add_argument('-s', '--seed', default=7, type=int, help="Seed value for random number generator")
 
 	args = parser.parse_args()
-	
 	createDB(args.db, args.size, args.noise, args.seed)
 	
 

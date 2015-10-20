@@ -284,6 +284,9 @@ class CSVBackend(
     translator: edu.buffalo.cse562.sql.SqlToRA,
     compiler: PlanCompiler
 ) extends Backend {
+  def open() = {
+
+  }
   def execute(sel: String): ResultSet = 
   {
     execute(new CCJSqlParser(new StringReader(sel)).Select());

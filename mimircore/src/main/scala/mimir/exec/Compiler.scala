@@ -13,6 +13,7 @@ class Compiler(db: Database) {
   val standardOptimizations =
     List[Operator => Operator](
       CTPercolator.percolate _, // Partition Det & Nondet query fragments
+//      CTPercolator.partitionConstraints _, // Partition constraint col according to data
       optimize _,               // Basic Optimizations
       compileAnalysis _         // Transform BOUNDS(), CONF(), etc... into actual expressions that SQL can understand
     )
@@ -76,6 +77,9 @@ class Compiler(db: Database) {
             buildIterator(lhs),
             buildIterator(rhs)
           );
+
+        case Union(false, _, _) =>
+          throw new UnsupportedOperationException("UNION DISTINCT unimplemented")
 
         case _ =>
           throw new SQLException("Called buildIterator without calling percolate\n" + oper);
@@ -171,8 +175,8 @@ class Compiler(db: Database) {
         )
       }
 
-      case u@Union(true, lhs, rhs) =>
-        Union(true, compileAnalysis(lhs), compileAnalysis(rhs))
+      case u@Union(bool, lhs, rhs) =>
+        Union(bool, compileAnalysis(lhs), compileAnalysis(rhs))
 
       case _ =>
         if (CTables.isProbabilistic(oper)) {

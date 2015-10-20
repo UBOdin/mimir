@@ -2,6 +2,7 @@ package mimir.sql;
 
 import java.sql._
 
+import mimir.Methods
 import mimir.algebra.Type
 
 import scala.collection.mutable.ListBuffer
@@ -23,30 +24,73 @@ object JDBCUtils {
   }
 }
 
-class JDBCBackend(conn: Connection) extends Backend
+class JDBCBackend(backend: String, filename: String) extends Backend
 {
+  var conn: Connection = null
+
+  def open() = {
+
+    if(conn != null) {
+      close()
+    }
+
+    conn = backend match {
+      case "sqlite" =>
+        Class.forName("org.sqlite.JDBC")
+        val path = java.nio.file.Paths.get("databases", filename).toString
+        java.sql.DriverManager.getConnection("jdbc:sqlite:"+path)
+
+      case "oracle" =>
+        Methods.getConn()
+
+      case x =>
+        println("Unsupported backend! Exiting..."); System.exit(-1); null
+    }
+
+  }
+
+
+
+  def close(): Unit = {
+    if(conn != null) {
+      conn.close()
+      conn = null
+    }
+  }
+
+
+
   def execute(sel: String): ResultSet = 
   {
     //println(sel)
-    val stmt = conn.createStatement();
+    if(conn == null) {
+      throw new SQLException("Trying to use unopened connection!")
+    }
+    val stmt = conn.createStatement()
     val ret = stmt.executeQuery(sel)
-    stmt.closeOnCompletion();
-    return ret;
+    stmt.closeOnCompletion()
+    ret
   }
   def execute(sel: String, args: List[String]): ResultSet = 
   {
     //println(""+sel+" <- "+args)
-    val stmt = conn.prepareStatement(sel);
-    var i: Int = 0;
+    if(conn == null) {
+      throw new SQLException("Trying to use unopened connection!")
+    }
+    val stmt = conn.prepareStatement(sel)
+    var i: Int = 0
     args.map( (a) => {
-      i += 1;
-      stmt.setString(i, a);
+      i += 1
+      stmt.setString(i, a)
     })
     stmt.executeQuery()
   }
   
   def update(upd: String): Unit =
   {
+    if(conn == null) {
+      throw new SQLException("Trying to use unopened connection!")
+    }
     val stmt = conn.createStatement()
     stmt.executeUpdate(upd)
     stmt.close()
@@ -54,6 +98,9 @@ class JDBCBackend(conn: Connection) extends Backend
 
   def update(upd: List[String]): Unit =
   {
+    if(conn == null) {
+      throw new SQLException("Trying to use unopened connection!")
+    }
     val stmt = conn.createStatement()
     upd.indices.foreach(i => stmt.addBatch(upd(i)))
     stmt.executeBatch()
@@ -62,18 +109,24 @@ class JDBCBackend(conn: Connection) extends Backend
 
   def update(upd: String, args: List[String]): Unit =
   {
+    if(conn == null) {
+      throw new SQLException("Trying to use unopened connection!")
+    }
     val stmt = conn.prepareStatement(upd);
-    var i: Int = 0;
+    var i: Int = 0
     args.map( (a) => {
-      i += 1;
-      stmt.setString(i, a);
+      i += 1
+      stmt.setString(i, a)
     })
     stmt.execute()
-    stmt.close();
+    stmt.close()
   }
   
   def getTableSchema(table: String): Option[List[(String, Type.T)]] =
   {
+    if(conn == null) {
+      throw new SQLException("Trying to use unopened connection!")
+    }
     val tables = this.getAllTables().map{(x) => x.toUpperCase}
     if(!tables.contains(table.toUpperCase)) return None
 
@@ -90,10 +143,13 @@ class JDBCBackend(conn: Connection) extends Backend
         ))
       cols.next();
     }
-    return Some(ret);
+    Some(ret);
   }
 
   def getAllTables(): List[String] = {
+    if(conn == null) {
+      throw new SQLException("Trying to use unopened connection!")
+    }
     val metadata = conn.getMetaData()
     val tables = metadata.getTables(null, null, "", null)
 
@@ -105,9 +161,5 @@ class JDBCBackend(conn: Connection) extends Backend
 
     tables.close()
     tableNames.toList
-  }
-
-  def close(): Unit = {
-    conn.close()
   }
 }

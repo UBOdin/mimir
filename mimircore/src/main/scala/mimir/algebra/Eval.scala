@@ -395,7 +395,7 @@ object Eval
                  bindings: Map[String, PrimitiveValue],
                  l: List[VGTerm]): List[VGTerm] = {
     if(e.isInstanceOf[PrimitiveValue]){
-      return l
+      l
     } else {
       l ++ (
         e match {
