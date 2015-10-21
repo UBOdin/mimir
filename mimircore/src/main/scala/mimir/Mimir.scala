@@ -32,7 +32,7 @@ object Mimir {
     conf = new MimirConfig(args);
 
     // Set up the database connection(s)
-    db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
+    db = new Database(conf.dbname(), new JDBCBackend(conf.backend(), conf.dbname()))
     db.backend.open()
 
     // Check for one-off commands

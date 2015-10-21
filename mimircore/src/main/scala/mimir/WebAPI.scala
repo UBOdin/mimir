@@ -20,7 +20,7 @@ import scala.collection.mutable.ListBuffer
 class WebAPI(dbName: String = "debug.db", backend: String = "sqlite") {
 
 
-  val db = new Database(new JDBCBackend(backend, dbName))
+  val db = new Database(dbName, new JDBCBackend(backend, dbName))
 
   def openBackendConnection(): Unit = {
     db.backend.open()
@@ -128,11 +128,6 @@ class WebAPI(dbName: String = "debug.db", backend: String = "sqlite") {
     db.backend.getAllTables()
   }
 
-  def getAllSchemas: Map[String, List[(String, Type.T)]] = {
-    getAllTables.map{ (x) => (x, db.getTableSchema(x).get) }.toMap ++
-    getAllLenses.map{ (x) => (x, db.getLens(x).schema()) }.toMap
-  }
-
   def getAllLenses: List[String] = {
     val res = db.backend.execute(
       """
@@ -150,6 +145,11 @@ class WebAPI(dbName: String = "debug.db", backend: String = "sqlite") {
     iter.close()
 
     lensNames.toList
+  }
+
+  def getAllSchemas: Map[String, List[(String, Type.T)]] = {
+    getAllTables.map{ (x) => (x, db.getTableSchema(x).get) }.toMap ++
+      getAllLenses.map{ (x) => (x, db.getLens(x).schema()) }.toMap
   }
 
   def getAllDBs: Array[String] = {

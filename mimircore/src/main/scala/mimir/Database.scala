@@ -47,7 +47,7 @@ import scala.collection.mutable.ListBuffer
   *    mimir.lenses._, and mimir.exec._ that prepares non-deterministic queries to be evaluated
   *    on the backend database.  
   */
-case class Database(backend: Backend)
+case class Database(name: String, backend: Backend)
 {
   val sql = new SqlToRA(this)
   val ra = new RAToSql(this)
@@ -59,6 +59,8 @@ case class Database(backend: Backend)
         case Some(x) => x
         case None => throw new SQLException("Table "+x+" does not exist in db!")
       })
+
+  def getName = name
   
   /**
    * Evaluate the specified query on the backend directly and wrap the result in a
