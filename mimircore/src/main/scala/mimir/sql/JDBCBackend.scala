@@ -27,35 +27,48 @@ object JDBCUtils {
 class JDBCBackend(backend: String, filename: String) extends Backend
 {
   var conn: Connection = null
+  var openConnections = 0
+
+
 
   def open() = {
+    this.synchronized({
+      assert(openConnections >= 0)
+      if (openConnections == 0) {
+        conn = backend match {
+          case "sqlite" =>
+            Class.forName("org.sqlite.JDBC")
+            val path = java.nio.file.Paths.get("databases", filename).toString
+            java.sql.DriverManager.getConnection("jdbc:sqlite:" + path)
 
-    if(conn != null) {
-      close()
-    }
+          case "oracle" =>
+            Methods.getConn()
 
-    conn = backend match {
-      case "sqlite" =>
-        Class.forName("org.sqlite.JDBC")
-        val path = java.nio.file.Paths.get("databases", filename).toString
-        java.sql.DriverManager.getConnection("jdbc:sqlite:"+path)
+          case x =>
+            println("Unsupported backend! Exiting..."); System.exit(-1); null
+        }
+      }
 
-      case "oracle" =>
-        Methods.getConn()
-
-      case x =>
-        println("Unsupported backend! Exiting..."); System.exit(-1); null
-    }
-
+      assert(conn != null)
+      openConnections = openConnections + 1
+    })
   }
 
 
 
   def close(): Unit = {
-    if(conn != null) {
-      conn.close()
-      conn = null
-    }
+    this.synchronized({
+      if (openConnections > 0) {
+        openConnections = openConnections - 1
+        if (openConnections == 0) {
+          conn.close()
+          conn = null
+        }
+      }
+
+      assert(openConnections >= 0)
+      if (openConnections == 0) assert(conn == null)
+    })
   }
 
 

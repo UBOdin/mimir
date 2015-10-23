@@ -156,7 +156,7 @@ class Application extends Controller {
       webAPI = new WebAPI(dbName = db)
     }
 
-    webAPI.synchronized(
+//    webAPI.synchronized(
       try {
         webAPI.openBackendConnection()
         val (result, _) = webAPI.handleStatement(query)
@@ -170,7 +170,7 @@ class Application extends Controller {
       finally {
         webAPI.closeBackendConnection()
       }
-    )
+//    )
   }
 
 
@@ -178,7 +178,7 @@ class Application extends Controller {
    * Load CSV data handler
    */
   def loadTable = Action(parse.multipartFormData) { request =>
-    webAPI.synchronized(
+//    webAPI.synchronized(
       try {
         webAPI.openBackendConnection()
 
@@ -198,7 +198,7 @@ class Application extends Controller {
       finally {
         webAPI.closeBackendConnection()
       }
-    )
+//    )
   }
 
 
@@ -232,7 +232,7 @@ class Application extends Controller {
 
     val i = Integer.parseInt(ind)
 
-    webAPI.synchronized(
+//    webAPI.synchronized(
       try {
         webAPI.openBackendConnection()
         val result = webAPI.getVGTerms(query, row, i)
@@ -240,6 +240,7 @@ class Application extends Controller {
       }
       finally {
         webAPI.closeBackendConnection()
-    })
+      }
+//    )
   }
 }

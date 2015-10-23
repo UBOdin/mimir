@@ -21,4 +21,6 @@ Mimir.sublime-workspace
 
 #IDE
 .idea/
-mimircore/debug.db
+serialized/*.db/
+
+databases/noisy.db
