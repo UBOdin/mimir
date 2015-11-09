@@ -36,9 +36,9 @@ object SqlLoaderSpec extends Specification with FileMatchers {
 			if(tempDB.exists()){ tempDB.delete(); }
 			tempDB.deleteOnExit();
 		}
-		var d = new Database(new JDBCBackend(Mimir.connectSqlite(
-			if(tempDB == null){ "" } else { tempDB.toString() }
-		)));
+		val d = new Database("testdb", new JDBCBackend("sqlite",
+			if(tempDB == null){ "" } else { tempDB.toString }
+		))
 		d.initializeDBForMimir();
 		testData.foreach ( _ match { case ( tableName, tableData, tableCols ) => 
 			d.update("CREATE TABLE "+tableName+"("+tableCols.mkString(", ")+");")
