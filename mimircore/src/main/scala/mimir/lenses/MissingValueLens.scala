@@ -75,7 +75,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
         if (idx < 0) {
           new NoOpModel(t).asInstanceOf[SingleVarModel]
         } else {
-          val m = new MissingValueModel(this)
+          val m = new MissingValueModel(this, name+"_"+x._2)
           val classIndex = allKeys().indexOf(keysToBeCleaned.get(idx))
           if(loading) {
             val path = java.nio.file.Paths.get(
@@ -85,7 +85,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
             val classifier = weka.core.SerializationHelper.read(path).asInstanceOf[Classifier]
             m.init(classifier, classIndex)
           } else {
-            m.init(db.query(source), classIndex)
+            m.init(source, classIndex)
           }
           m.asInstanceOf[SingleVarModel]
         }
@@ -158,7 +158,7 @@ case class MissingValueAnalysis(model: MissingValueModel, args: List[Expression]
   }
 
   def exprType(bindings: Map[String, Type.T]) = {
-    val att = model.data.attribute(model.cIndex)
+    val att = model.getLearner.getModelContext().attribute(model.cIndex)
     if (att.isString)
       Type.TString
     else if (att.isNumeric)
@@ -170,7 +170,7 @@ case class MissingValueAnalysis(model: MissingValueModel, args: List[Expression]
   def rebuild(c: List[Expression]) = new MissingValueAnalysis(model, c, analysisType)
 }
 
-class MissingValueModel(lens: MissingValueLens)
+class MissingValueModel(lens: MissingValueLens, name: String)
   extends SingleVarModel(Type.TInt) {
   var learner: Classifier =
     Analysis.getLearner("moa.classifiers.bayes.NaiveBayes");
@@ -187,8 +187,9 @@ class MissingValueModel(lens: MissingValueLens)
     learner = classifier
   }
 
-  def init(iterator: ResultIterator, classIndex: Int) = {
+  def init(source: Operator, classIndex: Int) = {
     cIndex = classIndex
+    val iterator = lens.db.query(source)
     val attributes = getAttributesFromIterator(iterator)
     data = new Instances("TrainData", attributes, 100)
 
@@ -218,7 +219,31 @@ class MissingValueModel(lens: MissingValueLens)
     learner.prepareForUse()
     data.foreach(learn(_))
 
-    iterator.close()
+    lens.db.update(
+      "CREATE TABLE IF NOT EXISTS __"+name+"""_BACKEND (
+        | EXP_LIST varchar(100) PRIMARY KEY,
+        | DATA varchar(100),
+        | TYPE char(10),
+        | ACCEPTED char(1)
+        | );
+        | DELETE FROM __""".stripMargin+name+"_BACKEND;"
+    )
+
+    val rowidIterator = lens.db.query(CTPercolator.propagateRowIDs(source, true))
+
+    rowidIterator.open()
+    while(rowidIterator.getNext()) {
+      if(rowidIterator(classIndex+1).exprType(Map()) == Type.TAny) {
+        val explist = List(rowidIterator(0))
+        val data = computeMostLikelyValue(explist)
+        val typ = data.exprType(Map()).toString
+        val accepted = "N"
+        val tuple = List(explist.map(x => x.asString).mkString("|"), data.asString, typ, accepted)
+        lens.db.update(
+          "INSERT INTO __"+name+"_BACKEND VALUES (?, ?, ?, ?);", tuple
+        )
+      }
+    }
   }
 
   def learn(dataPoint: Instance) = {
@@ -276,6 +301,18 @@ class MissingValueModel(lens: MissingValueLens)
     attributes
   }
 
+  private def computeMostLikelyValue(args: List[PrimitiveValue]): PrimitiveValue = {
+    val att = learner.getModelContext.attribute(cIndex)
+    val classes = classify(args(0))
+    val res = if (classes.isEmpty) att.numValues() - 1 else classes.maxBy(_._1)._2
+    if (att.isString)
+      StringPrimitive(att.value(res))
+    else if (att.isNumeric)
+      IntPrimitive(res)
+    else
+      throw new SQLException("Unknown type")
+  }
+
   ////// Model implementation
   def mostLikelyValue(args: List[PrimitiveValue]): PrimitiveValue = {
     val att = learner.getModelContext.attribute(cIndex)
@@ -287,6 +324,16 @@ class MissingValueModel(lens: MissingValueLens)
       IntPrimitive(res)
     else
       throw new SQLException("Unknown type")
+
+//    val res = lens.db.query(
+//      "SELECT DATA, TYPE FROM __"+name+"_BACKEND WHERE EXP_LIST = "+args.map(x => x.asString).mkString("|")+";"
+//    )
+//    if(!res.getNext()) throw new SQLException("Value not found for "+name+". Explist: "+args.mkString("|"))
+//    res(1).asString match {
+//      case "TInt" => IntPrimitive(res(0).asLong)
+//      case "TFloat" => FloatPrimitive(res(0).asDouble)
+//      case _ => res(0)
+//    }
   }
 
   def lowerBound(args: List[PrimitiveValue]) = {

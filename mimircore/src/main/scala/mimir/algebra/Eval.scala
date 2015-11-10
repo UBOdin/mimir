@@ -88,7 +88,7 @@ object Eval
                 try {
                   eval(x).asDouble
                 } catch {
-                  case e:Throwable => 0.0
+                  case e:Throwable => Double.MaxValue
                 }
               }).min) // TODO Generalized Comparator
             case "__LIST_MAX" =>
@@ -96,7 +96,7 @@ object Eval
                 try {
                   eval(x).asDouble
                 } catch {
-                  case e:Throwable => 0.0
+                  case e:Throwable => Double.MinValue
                 }
               }).max) // TODO Generalized Comparator
             case "__LEFT_UNION_ROWID" =>
