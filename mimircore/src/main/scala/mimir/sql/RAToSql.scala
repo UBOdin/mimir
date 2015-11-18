@@ -196,13 +196,8 @@ class RAToSql(db: Database) {
       }
       case mimir.algebra.Function(name, subexp) => {
         if(name.equals("JOIN_ROWIDS")) {
-          val f1 = new Concat()
-          f1.setLeftExpression(convert(subexp(0), sources))
-          f1.setRightExpression(new StringValue("."))
-          val f2 = new Concat()
-          f2.setLeftExpression(f1)
-          f2.setRightExpression(convert(subexp(1), sources))
-          return f2
+          if(subexp.size != 2) throw new SQLException("JOIN_ROWIDS should get exactly two arguments")
+          concat(convert(subexp(0), sources), convert(subexp(1), sources), ".")
         }
         if(subexp.length > 1)
           throw new SQLException("Function " + name + " SQL conversion error")
@@ -212,7 +207,7 @@ class RAToSql(db: Database) {
         val query = "SELECT DATA FROM "+
           model.backingStore(idx)+
           " WHERE EXP_LIST = "+
-          args.map(convert(_, sources)).reduceLeft(concat(_, _))+
+          args.map(convert(_, sources)).reduceLeft(concat(_, _, "|"))+
           ";"
 
         val parser = new MimirJSqlParser(new StringReader(query))
@@ -223,11 +218,15 @@ class RAToSql(db: Database) {
 
 
   private def concat(lhs: net.sf.jsqlparser.expression.Expression,
-                     rhs: net.sf.jsqlparser.expression.Expression): net.sf.jsqlparser.expression.Expression = {
-    val concatExpr = new Concat()
-    concatExpr.setLeftExpression(lhs)
-    concatExpr.setRightExpression(rhs)
-    concatExpr
+                     rhs: net.sf.jsqlparser.expression.Expression,
+                     sep: String): net.sf.jsqlparser.expression.Expression = {
+    val e1 = new Concat()
+    e1.setLeftExpression(lhs)
+    e1.setRightExpression(new StringValue(sep))
+    val e2 = new Concat()
+    e2.setLeftExpression(e1)
+    e2.setRightExpression(rhs)
+    e2
   }
   
 }
