@@ -198,6 +198,8 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
       " is " + Type.toString(inferredTypeMap(idx)._2) +
       " with " + percentage.toString + "% of the data conforming to the expected type", "TYPE_INFERENCE")
   }
+
+  override def backingStore(idx: Int): String = ???
 }
 
 case class TypeInferenceAnalysis(model: TypeInferenceModel,
@@ -344,6 +346,8 @@ class TypeCastModel(lens: TypeInferenceLens) extends Model {
           mlv + " with type " + Type.toString(varTypes(idx)), "TYPE_INFERENCE")
     }
   }
+
+  override def backingStore(idx: Int): String = ???
 }
 
 case class TypeCastAnalysis(model: TypeCastModel,

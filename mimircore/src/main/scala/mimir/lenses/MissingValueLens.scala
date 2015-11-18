@@ -178,6 +178,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
   var numCorrect = 0;
   var numSamples = 0;
   var cIndex = 0;
+  def backingStore() = "__"+name+"_BACKEND"
 
   def reason(args: List[Expression]): (String, String) =
     ("I made a best guess estimate for this data element, which was originally NULL", "MISSING_VALUE")
@@ -220,13 +221,13 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     data.foreach(learn(_))
 
     lens.db.update(
-      "CREATE TABLE IF NOT EXISTS __"+name+"""_BACKEND (
+      "CREATE TABLE IF NOT EXISTS "+backingStore()+""" (
         | EXP_LIST varchar(100) PRIMARY KEY,
         | DATA varchar(100),
         | TYPE char(10),
         | ACCEPTED char(1)
         | );
-        | DELETE FROM __""".stripMargin+name+"_BACKEND;"
+        | DELETE FROM """.stripMargin+backingStore()+";"
     )
 
     val rowidIterator = lens.db.query(CTPercolator.propagateRowIDs(source, true))
@@ -240,7 +241,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
         val accepted = "N"
         val tuple = List(explist.map(x => x.asString).mkString("|"), data.asString, typ, accepted)
         lens.db.update(
-          "INSERT INTO __"+name+"_BACKEND VALUES (?, ?, ?, ?);", tuple
+          "INSERT INTO "+backingStore()+" VALUES (?, ?, ?, ?);", tuple
         )
       }
     }
