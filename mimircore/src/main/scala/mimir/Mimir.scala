@@ -32,14 +32,8 @@ object Mimir {
     conf = new MimirConfig(args);
 
     // Set up the database connection(s)
-    val backend = conf.backend() match {
-      case "oracle" => new JDBCBackend(connectOracle());
-      case "sqlite" => new JDBCBackend(connectSqlite(conf.dbname()));
-      case x =>
-
-        println("Unsupported backend: "+x); exit(-1);
-    }
-    db = new Database(backend);
+    db = new Database(conf.dbname(), new JDBCBackend(conf.backend(), conf.dbname()))
+    db.backend.open()
 
     // Check for one-off commands
     if(conf.initDB()){
@@ -60,6 +54,8 @@ object Mimir {
 
       eventLoop(source)
     }
+
+    db.backend.close()
     if(!conf.quiet()) { println("\n\nDone.  Exiting."); }
   }
 
@@ -98,31 +94,31 @@ object Mimir {
   }
 
   def handleExplain(explain: Explain): Unit = {
-    val raw = db.convert(explain.getSelectBody())._1;
-    println("------ Raw Query ------");
-    println(raw.toString());
-    println("--- Optimized Query ---");
-    println(db.optimize(raw).toString);
+    val raw = db.convert(explain.getSelectBody())._1
+    println("------ Raw Query ------")
+    println(raw)
+    println("--- Optimized Query ---")
+    println(db.optimize(raw))
   }
 
   def handleSelect(sel: Select): Unit = {
-    val raw = db.convert(sel);
+    val raw = db.convert(sel)
     val results = db.query(CTPercolator.propagateRowIDs(raw, true))
-    results.open();
-    db.dump(results);
-    results.close();
+    results.open()
+    db.dump(results)
+    results.close()
   }
 
-  def connectSqlite(filename: String): java.sql.Connection =
-  {
-    Class.forName("org.sqlite.JDBC");
-    java.sql.DriverManager.getConnection("jdbc:sqlite:"+filename);
-  }
-
-  def connectOracle(): java.sql.Connection =
-  {
-    Methods.getConn()
-  }
+//  def connectSqlite(filename: String): java.sql.Connection =
+//  {
+//    Class.forName("org.sqlite.JDBC");
+//    java.sql.DriverManager.getConnection("jdbc:sqlite:"+filename);
+//  }
+//
+//  def connectOracle(filename: String): java.sql.Connection =
+//  {
+//    Methods.getConn()
+//  }
 
 }
 

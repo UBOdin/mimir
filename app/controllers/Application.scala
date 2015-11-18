@@ -3,11 +3,35 @@ package controllers
 import java.io.File
 
 import mimir._
+import mimir.web.{WebResult, WebErrorResult, WebQueryResult, WebStringResult}
 import play.api.mvc._
 import play.api.libs.json._
 
+/*
+ * This is the entry-point to the Web Interface.
+ * This class is part of the template provided by the play framework.
+ *
+ * Each Action, part of the Play API is a function that maps
+ * a Request to a Result. Every URL that can be handled by the
+ * application is defined in the routes.conf file. Each url
+ * has an Action associated with it, which defines what the
+ * server should do when the client asks for that URL
+ *
+ * GET requests pass in args that can be directly extracted
+ * from the Action method signatures. POST requests need parsers.
+ * For example, if the POST request had form fields attached to
+ * it, we use a form body parser
+ *
+ * Read more about Actions at
+ * https://www.playframework.com/documentation/2.0/ScalaActions
+ */
+
 class Application extends Controller {
 
+  /*
+   * The Writes interface allows us to convert
+   * Scala objects to a JSON representation
+   */
   implicit val WebStringResultWrites = new Writes[WebStringResult] {
     def writes(webStringResult: WebStringResult) = Json.obj(
       "result" -> webStringResult.result
@@ -34,80 +58,97 @@ class Application extends Controller {
     def writes(tup: (String, String)) = Json.obj("reason" -> tup._1, "lensType" -> tup._2)
   }
 
+
+  var webAPI = new WebAPI()
+
+
+  /*
+   * Actions
+   */
   def index = Action {
-    val webAPI = new WebAPI()
-    webAPI.configure(new Array[String](0))
-
-    val result: WebResult = new WebStringResult("Query results show up here...")
-
-    val response: Result = Ok(views.html.index(webAPI, "", result, ""))
-    webAPI.close()
-    response
+    try {
+      webAPI.openBackendConnection()
+      val result: WebResult = new WebStringResult("Query results show up here...")
+      Ok(views.html.index(webAPI, "", result, ""))
+    }
+    finally {
+      webAPI.closeBackendConnection()
+    }
   }
 
-  def query = Action { request =>
+
+  /**
+   * Database selection handlers
+   */
+  def changeDB = Action { request =>
+
     val form = request.body.asFormUrlEncoded
-    val query = form.get("query")(0)
-    val db = form.get("db")(0)
+    val db = form.get("db").head
 
-    val webAPI = new WebAPI()
-    var result: WebResult = null
-    var lastQuery: String = ""
-    webAPI.configure(Array("--db", db))
-
-    if(!query.equals("")) {
-      val ret = webAPI.handleStatement(query)
-      result = ret._1
-      lastQuery = ret._2
-    }
-    else {
-      result = new WebStringResult("Working database changed to "+db)
+    if(!webAPI.getCurrentDB.equalsIgnoreCase(db)) {
+      webAPI = new WebAPI(dbName = db)
     }
 
-    val response: Result = Ok(views.html.index(webAPI, query, result, lastQuery))
-    webAPI.close()
-    response
+    try {
+      webAPI.openBackendConnection()
+      Ok(views.html.index(webAPI, "",
+        new WebStringResult("Working database changed to "+db), ""))
+    }
+    finally {
+      webAPI.closeBackendConnection()
+    }
+
+  }
+
+  def createDB = Action { request =>
+
+    val form = request.body.asFormUrlEncoded
+    val db = form.get("db").head
+
+    webAPI = new WebAPI(dbName = db)
+
+    try {
+      webAPI.openBackendConnection()
+      webAPI.initializeDBForMimir()
+      val result: WebResult = new WebStringResult("Database "+db+" successfully created.")
+
+      Ok(views.html.index(webAPI, "", result, ""))
+    }
+    finally {
+      webAPI.closeBackendConnection()
+    }
+  }
+
+
+  /**
+   * Query handlers
+   */
+  def query = Action { request =>
+    try {
+      webAPI.openBackendConnection()
+      val form = request.body.asFormUrlEncoded
+      val query = form.get("query")(0)
+      val (result, lastQuery) = webAPI.handleStatement(query)
+      Ok(views.html.index(webAPI, query, result, lastQuery))
+    }
+    finally {
+      webAPI.closeBackendConnection()
+    }
   }
 
   def queryGet(query: String, db: String) = Action {
-
-    val webAPI = new WebAPI()
-    var result: WebResult = null
-    var lastQuery: String = ""
-
-    webAPI.configure(Array("--db", db))
-
-    if(!query.equals("")) {
-      val ret = webAPI.handleStatement(query)
-      result = ret._1
-      lastQuery = ret._2
-    }
-    else {
-      result = new WebStringResult("Working database changed to "+db)
+    if(!db.equalsIgnoreCase(webAPI.getCurrentDB)) {
+      webAPI = new WebAPI(dbName = db)
     }
 
-    val response: Result = Ok(views.html.index(webAPI, query, result, lastQuery))
-    webAPI.close()
-    response
-  }
-
-  def queryJson(query: String, db: String) = Action {
-
-    val webAPI = new WebAPI()
-    var result: WebResult = null
-    webAPI.configure(Array("--db", db))
-
-    val ret = webAPI.handleStatement(query)
-    result = ret._1
-
-    val response = result match {
-      case x: WebStringResult => Ok(Json.toJson(x.asInstanceOf[WebStringResult]))
-      case x: WebQueryResult  => Ok(Json.toJson(x.asInstanceOf[WebQueryResult]))
-      case x: WebErrorResult  => Ok(Json.toJson(x.asInstanceOf[WebErrorResult]))
+    try {
+      webAPI.openBackendConnection()
+      val (result, lastQuery) = webAPI.handleStatement(query)
+      Ok(views.html.index(webAPI, query, result, lastQuery))
     }
-
-    webAPI.close()
-    response
+    finally {
+      webAPI.closeBackendConnection()
+    }
   }
 
   def nameForQuery(query: String, db: String) = Action {
@@ -135,52 +176,96 @@ class Application extends Controller {
     webAPI.configure(Array("--db", db, "--init"))
     val result: WebResult = new WebStringResult("Database "+db+" successfully created.")
 
-    val response: Result = Ok(views.html.index(webAPI, "", result, ""))
-    webAPI.close()
-    response
-  }
-
-  def loadTable = Action(parse.multipartFormData) { request =>
-    val webAPI = new WebAPI()
-    val db = request.body.dataParts("db")(0)
-
-    request.body.file("file").map { csvFile =>
-      val name = csvFile.filename
-      val dir = play.Play.application().path().getAbsolutePath()
-
-      val newFile = new File(dir, name)
-      csvFile.ref.moveTo(newFile, true)
-      webAPI.configure(Array("--db", db, "--loadTable", name.replace(".csv", "")))
-      newFile.delete()
+  def queryJson(query: String, db: String) = Action {
+    if(!db.equalsIgnoreCase(webAPI.getCurrentDB)) {
+      webAPI = new WebAPI(dbName = db)
     }
 
-    val result: WebResult = new WebStringResult("CSV file loaded.")
+//    webAPI.synchronized(
+      try {
+        webAPI.openBackendConnection()
+        val (result, _) = webAPI.handleStatement(query)
 
-    val response: Result = Ok(views.html.index(webAPI, "", result, ""))
-    webAPI.close()
-    response
+        result match {
+          case x: WebStringResult => Ok(Json.toJson(x.asInstanceOf[WebStringResult]))
+          case x: WebQueryResult  => Ok(Json.toJson(x.asInstanceOf[WebQueryResult]))
+          case x: WebErrorResult  => Ok(Json.toJson(x.asInstanceOf[WebErrorResult]))
+        }
+      }
+      finally {
+        webAPI.closeBackendConnection()
+      }
+//    )
   }
 
+
+  /**
+   * Load CSV data handler
+   */
+  def loadTable = Action(parse.multipartFormData) { request =>
+//    webAPI.synchronized(
+      try {
+        webAPI.openBackendConnection()
+
+        request.body.file("file").map { csvFile =>
+          val name = csvFile.filename
+          val dir = play.Play.application().path().getAbsolutePath
+
+          val newFile = new File(dir, name)
+          csvFile.ref.moveTo(newFile, true)
+          webAPI.handleLoadTable(name)
+          newFile.delete()
+        }
+
+        val result: WebResult = new WebStringResult("CSV file loaded.")
+        Ok(views.html.index(webAPI, "", result, ""))
+      }
+      finally {
+        webAPI.closeBackendConnection()
+      }
+//    )
+  }
+
+
+  /**
+   * Return a list of all tables
+   */
   def allTables(db: String) = Action {
-    val webAPI = new WebAPI()
-    webAPI.configure(Array("--db", db))
+    if(!db.equalsIgnoreCase(webAPI.getCurrentDB)) {
+      webAPI = new WebAPI(dbName = db)
+    }
 
-    val result = webAPI.getAllDBs()
-
-    val response = Ok(Json.toJson(result))
-    webAPI.close()
-    response
+    try {
+      webAPI.openBackendConnection()
+      val result = webAPI.getAllDBs
+      Ok(Json.toJson(result))
+    }
+    finally {
+      webAPI.closeBackendConnection()
+    }
   }
 
+
+  /**
+   * Return a list of all VGTerms present in a particular
+   * cell of a query's result
+   */
   def getVGTerms(query: String, row: String, ind: String, db: String) = Action {
-    val webAPI = new WebAPI()
-    webAPI.configure(Array("--db", db))
+    if(!db.equalsIgnoreCase(webAPI.getCurrentDB)) {
+      webAPI = new WebAPI(dbName = db)
+    }
 
     val i = Integer.parseInt(ind)
-    val result = webAPI.getVGTerms(query, row, i)
 
-    val response = Ok(Json.toJson(result))
-    webAPI.close()
-    response
+//    webAPI.synchronized(
+      try {
+        webAPI.openBackendConnection()
+        val result = webAPI.getVGTerms(query, row, i)
+        Ok(Json.toJson(result))
+      }
+      finally {
+        webAPI.closeBackendConnection()
+      }
+//    )
   }
 }

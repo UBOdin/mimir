@@ -8,54 +8,32 @@ import mimir.ctables.{CTPercolator, CTables, VGTerm}
 import mimir.exec.ResultSetIterator
 import mimir.parser.MimirJSqlParser
 import mimir.sql.{CreateLens, Explain, JDBCBackend}
+import mimir.web._
 import net.sf.jsqlparser.statement.Statement
+import net.sf.jsqlparser.statement.insert.Insert
 import net.sf.jsqlparser.statement.select.Select
 import net.sf.jsqlparser.statement.update.Update
-import net.sf.jsqlparser.util.deparser.{SelectDeParser, ExpressionDeParser, UpdateDeParser}
+import net.sf.jsqlparser.util.deparser.{InsertDeParser, ExpressionDeParser, SelectDeParser, UpdateDeParser}
 
 import scala.collection.mutable.ListBuffer
-import scala.util.parsing.json.{JSONArray, JSONObject}
 
-/**
- * Created by arindam on 6/29/15.
- */
+class WebAPI(dbName: String = "debug.db", backend: String = "sqlite") {
 
-class WebAPI {
 
-  var conf: MimirConfig = null
-  var db: Database = null
-  var dbName: String = null
-  var dbPath: String = null
-  val dbDir = "databases"
+  val db = new Database(dbName, new JDBCBackend(backend, dbName))
 
-  /* Initialize the configuration and database */
-  def configure(args: Array[String]): Unit = {
-    conf = new MimirConfig(args)
+  def openBackendConnection(): Unit = {
+    db.backend.open()
+  }
 
-    // Set up the database connection(s)
-    dbName = conf.dbname().toLowerCase
-    if(dbName.length <= 0) {
-      throw new Exception("DB name must be configured!")
-    }
+  def getCurrentDB = dbName
 
-    dbPath = java.nio.file.Paths.get(dbDir, dbName).toString
+  def initializeDBForMimir() = {
+    db.initializeDBForMimir()
+  }
 
-    val backend = conf.backend() match {
-      case "oracle" => new JDBCBackend(Mimir.connectOracle())
-      case "sqlite" => new JDBCBackend(Mimir.connectSqlite(dbPath))
-      case x => {
-        println("Unsupported backend: "+x)
-        sys.exit(-1)
-      }
-    }
-
-    db = new Database(backend)
-
-    if(conf.initDB()){
-      db.initializeDBForMimir()
-    } else if(conf.loadTable.get != None){
-      db.handleLoadTable(conf.loadTable(), conf.loadTable()+".csv")
-    }
+  def handleLoadTable(filename: String) = {
+    db.handleLoadTable(filename.replace(".csv", ""), filename)
   }
 
   def handleStatement(query: String): (WebResult, String) = {
@@ -84,6 +62,12 @@ class WebAPI {
               new WebStringResult("Lens created successfully.")
 
             case s: Explain => handleExplain(s.asInstanceOf[Explain])
+            case s: Insert =>
+              val buffer = new StringBuffer()
+              val insDeParser = new InsertDeParser(new ExpressionDeParser(new SelectDeParser(), buffer), new SelectDeParser(), buffer)
+              insDeParser.deParse(s)
+              db.update(insDeParser.getBuffer.toString)
+              new WebStringResult("Database updated.")
             case s: Update =>
               val buffer = new StringBuffer()
               val updDeParser = new UpdateDeParser(new ExpressionDeParser(new SelectDeParser(), buffer), buffer)
@@ -105,13 +89,17 @@ class WebAPI {
   }
 
   private def handleSelect(sel: Select): WebQueryResult = {
+    val start = System.nanoTime()
     val raw = db.convert(sel)
-    println("RAW QUERY: "+raw)
-    val op = db.optimize(raw)
+    val rawT = System.nanoTime()
     val results = db.query(CTPercolator.propagateRowIDs(raw, true))
+    val resultsT = System.nanoTime()
+
+    println("Convert time: "+((start-rawT)/(1000*1000))+"ms")
+    println("Compile time: "+((rawT-resultsT)/(1000*1000))+"ms")
 
     results.open()
-    val wIter = db.webDump(results)
+    val wIter: WebIterator = db.generateWebIterator(results)
     try{
       wIter.queryFlow = convertToTree(raw)
     } catch {
@@ -136,16 +124,11 @@ class WebAPI {
     new WebStringResult(res)
   }
 
-  def getAllTables(): List[String] = {
+  def getAllTables: List[String] = {
     db.backend.getAllTables()
   }
 
-  def getAllSchemas(): Map[String, List[(String, Type.T)]] = {
-    getAllTables().map{ (x) => (x, db.getTableSchema(x).get) }.toMap ++
-    getAllLenses().map{ (x) => (x, db.getLens(x).schema()) }.toMap
-  }
-
-  def getAllLenses(): List[String] = {
+  def getAllLenses: List[String] = {
     val res = db.backend.execute(
       """
         SELECT *
@@ -164,7 +147,12 @@ class WebAPI {
     lensNames.toList
   }
 
-  def getAllDBs(): Array[String] = {
+  def getAllSchemas: Map[String, List[(String, Type.T)]] = {
+    getAllTables.map{ (x) => (x, db.getTableSchema(x).get) }.toMap ++
+      getAllLenses.map{ (x) => (x, db.getLens(x).schema()) }.toMap
+  }
+
+  def getAllDBs: Array[String] = {
     val curDir = new File(".", "databases")
     curDir.listFiles().filter( f => f.isFile && f.getName.endsWith(".db")).map(x => x.getName)
   }
@@ -287,7 +275,6 @@ class WebAPI {
           var params = List[String]()
           projArg.foreach{ case ProjectArg(col, exp) => params = params ++ extractVGTerms(exp) }
           val p = params.toSet.filter(a => db.lenses.lensCache.contains(a)).map(b => (b, db.lenses.lensCache.get(b).get.lensType))
-          println(p)
           if(p.isEmpty)
             convertToTree(source)
           else {
@@ -302,57 +289,8 @@ class WebAPI {
       case o: Operator => convertToTree(o.children(0))
     }
   }
-}
 
-class OperatorNode(nodeName: String, c: List[OperatorNode], params: List[String]) {
-  val name = nodeName
-  val children = c
-  val args = params
-
-  def toJson(): JSONObject =
-    new JSONObject(Map("name" -> name,
-                       "children" -> JSONArray(children.map(a => a.toJson())),
-                       "args" -> JSONArray(args)))
-}
-
-class WebIterator(h: List[String],
-                  d: List[(List[String], Boolean)],
-                  mR: Boolean) {
-
-  val header = h
-  val data = d
-  val missingRows = mR
-  var queryFlow: OperatorNode = null
-
-}
-
-abstract class WebResult {
-  def toJson(): JSONObject
-}
-
-case class WebStringResult(string: String) extends WebResult {
-  val result = string
-
-  def toJson() = {
-    new JSONObject(Map("result" -> result))
-  }
-}
-
-case class WebQueryResult(webIterator: WebIterator) extends WebResult {
-  val result = webIterator
-
-  def toJson() = {
-    new JSONObject(Map("header" -> result.header,
-                        "data" -> result.data,
-                        "missingRows" -> result.missingRows,
-                        "queryFlow" -> result.queryFlow.toJson()))
-  }
-}
-
-case class WebErrorResult(string: String) extends WebResult {
-  val result = string
-
-  def toJson() = {
-    new JSONObject(Map("error" -> result))
+  def closeBackendConnection(): Unit = {
+    db.backend.close()
   }
 }

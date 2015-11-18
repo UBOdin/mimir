@@ -30,14 +30,8 @@ $( document ).ready(function() {
     Change the working database
     */
     $(".db_link").on("click", function() {
-        var db = $(this).html();
-        var curr = $("#curr_db").html().trim();
-
-        if(db.valueOf() !== curr.valueOf()) {
-            $("#db_field").val(db);
-            $("#query_textarea").val("");
-            $("#query_btn").trigger("click");
-        }
+        $("#change_db_field").val($(this).html());
+        $("#change_db_form").submit();
     });
 
     /*

@@ -1,6 +1,6 @@
-@(webAPI: mimir.WebAPI, query: String, result: mimir.WebResult, lastQuery: String)
+@(webAPI: mimir.WebAPI, query: String, result: mimir.web.WebResult, lastQuery: String)
 
-@import mimir.{WebQueryResult, WebStringResult, WebErrorResult}
+@import mimir.web.{WebQueryResult, WebStringResult, WebErrorResult}
 @import mimir.algebra.Type
 
 <html lang="en">
@@ -44,20 +44,20 @@
                         <li><a id="about_btn">About</a></li>
                         <li><a id="upload">Upload</a></li>
                         <li class="dropdown">
-                            <a class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><span id="curr_db">@webAPI.dbName</span> <span class="caret"></span></a>
+                            <a class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><span id="curr_db">@webAPI.getCurrentDB</span> <span class="caret"></span></a>
                             <ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
                                 <li class="dropdown-header" id="tables_header">Tables</li>
-                                @webAPI.getAllTables().map { x =>
+                                @webAPI.getAllTables.map { x =>
                                     <li><a class="table_link ">@x</a></li>
                                 }
                                 <li role="separator" class="divider"></li>
                                 <li class="dropdown-header">Lenses</li>
-                                @webAPI.getAllLenses().map { x =>
+                                @webAPI.getAllLenses.map { x =>
                                 <li><a class="lens_link">@x</a></li>
                                 }
                                 <li role="separator" class="divider"></li>
                                 <li class="dropdown-header">Databases</li>
-                                @webAPI.getAllDBs().map { x =>
+                                @webAPI.getAllDBs.map { x =>
                                     <li><a class="db_link">@x</a></li>
                                 }
                                 <li role="separator" class="divider"></li>
@@ -79,7 +79,6 @@
         <div id="drop_area">
             <form action="loadTable" class="dropzone" id="myAwesomeDropzone">
                 <div class="dz-message"><h4>Drag and drop .csv files here to load them into the database</h4></div>
-                <input type="hidden" name="db" value="@webAPI.dbName"/>
             </form>
             <div class="close_btn"><span class="close_x">&#10006;</span></div>
         </div>
@@ -87,10 +86,10 @@
             <div id="query_div">
                 <form id="query_form" action="queryDB" method="POST">
                     <textarea id="query_textarea" name="query" placeholder="Enter query here..." spellcheck="false">@query</textarea>
-                    <input type="hidden" id="db_field" name="db" value="@webAPI.dbName">
                     <input type="submit" class="btn btn-primary" id="query_btn" value="Query">
                 </form>
                 <input type="hidden" id="last_query_field" name="last_query" value="@lastQuery">
+                <input type="hidden" id="db_field" name="db" value="@webAPI.getCurrentDB">
             </div>
         </div>
         <div class="result">
@@ -101,6 +100,7 @@
                             <h3 class="panel-title">Notifications</h3>
                         </div>
                         <div class="panel-body">
+                            <p>@iter.data.size row(s) returned in @iter.executionTimeMS ms, showing top 100</p>
                             <p>Red represents data uncertainty</p>
                             @if(iter.missingRows) {
                             <p class="red">There may be some rows missing from this result</p>
@@ -114,7 +114,7 @@
                         <button id="schema_matching_btn" class="lens_btn">SCHEMA MATCHING LENS</button>
                     </div>
                     <div class="rightCol">
-                         @tableGenerator(iter)
+                         @tableGenerator(iter, 100)
                     </div>
                     <div class="clear"></div>
                     <div class="horbar"></div>
@@ -123,8 +123,11 @@
                 case WebErrorResult(string) => { <pre class="error">Command Ignored.<br/><br/>@string</pre> }
             }
         </div>
+        <form id="change_db_form" class="hidden" action="changeDB" method="POST">
+            <input type="hidden" id="change_db_field" name="db" value="">
+        </form>
         <form id="create_db_form" class="hidden" action="createDB" method="POST">
-            <input type="hidden" id="create_db_field" name="new_db" value="">
+            <input type="hidden" id="create_db_field" name="db" value="">
         </form>
         <div id="ti_lens_div" class="lens_create_div">
             <h3>Type Inference Lens</h3>
@@ -171,7 +174,7 @@
             <br>
             <input type="text" class="form-control" id="sm_lens_param" list="schemas">
             <datalist id="schemas">
-                @webAPI.getAllSchemas().map{ case (name, schema) =>
+                @webAPI.getAllSchemas.map{ case (name, schema) =>
                     <option>@(name + schema.map( (x) => x._1+" "+Type.toString(x._2)).mkString(" [", ", ", "] "))</option>
                 }
             </datalist>

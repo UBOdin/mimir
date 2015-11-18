@@ -4,6 +4,7 @@ import java.sql._
 
 import mimir.Database
 import mimir.algebra._
+import mimir.ctables.CTPercolator
 import mimir.util._
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
@@ -342,6 +343,30 @@ class SqlToRA(db: Database)
       )
     }
     if(e.isInstanceOf[NullValue]) { return NullPrimitive() }
-    unhandled("Expression[Unknown]: " + e)
+    if(e.isInstanceOf[net.sf.jsqlparser.expression.operators.relational.IsNullExpression]) {
+      val isNullExpression = e.asInstanceOf[net.sf.jsqlparser.expression.operators.relational.IsNullExpression]
+      return mimir.algebra.IsNullExpression(
+        convert(isNullExpression.getLeftExpression, bindings),
+        isNullExpression.isNot
+      )
+    }
+    if(e.isInstanceOf[net.sf.jsqlparser.statement.select.SubSelect]) {
+      val result = db.query(
+        CTPercolator.propagateRowIDs(convert(e.asInstanceOf[SubSelect].getSelectBody), true)
+      ).allRows
+
+
+      /**
+       * The results should consist of just one row with two values, the first
+       * of which should be the rowid
+       */
+      if(result.size != 1 || result.head.size != 2)
+        throw new SQLException(
+          "Inappropriate number of values returned by a subquery used as an expression"+result
+        )
+
+      return result.head(1)
+    }
+    unhandled("Expression["+e.getClass+"]: " + e)
   }
 }

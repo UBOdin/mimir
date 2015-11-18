@@ -1,5 +1,7 @@
 package mimir.ctables
 
+import java.sql.SQLException
+
 import mimir.algebra._
 import mimir.util._
 
@@ -136,8 +138,8 @@ object CTPercolator {
         val (lhsCols, lhsChild) = extractProject(percolate(lhs))
         val (rhsCols, rhsChild) = extractProject(percolate(rhs))
         
-        // println("Percolated LHS: "+lhsCols+"\n" + lhsChild)
-        // println("Percolated RHS: "+rhsCols+"\n" + rhsChild)
+//         println("Percolated LHS: "+lhsCols+"\n" + lhsChild)
+//         println("Percolated RHS: "+rhsCols+"\n" + rhsChild)
         
         // Pulling projections up through a join may require
         // renaming columns under the join if the same column
@@ -150,7 +152,7 @@ object CTPercolator {
           | (Set[String]("ROWID") & lhsColNames)
           | (Set[String]("ROWID") & rhsColNames)
         ) 
-        // println("CONFLICTS: "+conflicts+"in: "+lhsColNames+", "+rhsColNames+"; for \n"+afterDescent);
+//        println("CONFLICTS: "+conflicts+"in: "+lhsColNames+", "+rhsColNames+"; for \n"+afterDescent);
           
         val newJoin = 
           if(conflicts.isEmpty) {
@@ -427,6 +429,139 @@ object CTPercolator {
             Table(name, sch, metadata)
           }
       
+    }
+  }
+
+
+
+
+  private def extractMissingValueVarPVar(expr: Expression): (Option[Var], Option[VGTerm]) = {
+    expr match {
+      case CaseExpression(List(WhenThenClause(IsNullExpression(var1: Var, false), vg: VGTerm)), var2: Var) =>
+        if(var1 == var2) (Some(var1), Some(vg)) else (None, None)
+
+      case va: Var => (Some(va), None)
+
+      case _ => (None, None)
+    }
+  }
+
+  private def extractMissingValueMCClause(expr: Expression):
+    ( (Option[Var], Option[VGTerm]), (Option[Var], Option[VGTerm]) ) = {
+
+    expr match {
+      case Comparison(_, lhs, rhs) =>
+        (extractMissingValueVarPVar(lhs), extractMissingValueVarPVar(rhs))
+
+    }
+  }
+
+  def splitArith(expr: Expression): List[Expression] = {
+    expr match {
+      case Arithmetic(op, lhs, rhs) => splitArith(lhs) ++ splitArith(rhs)
+      case x => List(x)
+    }
+  }
+
+  val removeConstraintColumn = (oper: Operator) => {
+    oper match {
+      case Project(cols, src) =>
+        Project(cols.filterNot((p) => p.column.equalsIgnoreCase(CTables.conditionColumn)), src)
+      case _ =>
+        oper
+    }
+  }
+
+  def partition(oper: Project): Operator = {
+    val cond = oper.columns.find(p => p.column.equalsIgnoreCase(CTables.conditionColumn)).head.input
+    var detOp: Operator = null
+    var nondetOp: Operator = null
+
+    val (nondetExpr, detExpr) =
+      splitArith(cond).partition { (p) =>
+        val (lhs, rhs) = extractMissingValueMCClause(p)
+        (lhs._1.isDefined && lhs._2.isDefined) || (rhs._1.isDefined && rhs._2.isDefined)
+      }
+
+    if(nondetExpr.nonEmpty)
+      nondetOp = nondetExpr.map { (e) =>
+        val (lhs, rhs) = extractMissingValueMCClause(e)
+        (lhs._1, lhs._2, rhs._1, rhs._2) match {
+          case (None, None, None, None) => throw new SQLException("Invalid values in partition")
+
+          case (Some(_), Some(_), None, None) => oper
+
+          case (None, None, Some(_), Some(_)) => oper
+
+          case (Some(va1), Some(vg1), Some(va2), None) =>
+            Union(
+              true,
+              removeConstraintColumn(oper).rebuild( List(Select(Comparison(Cmp.Eq, va1, va2), oper.children().head)) ),
+              oper.rebuild( List(Select(IsNullExpression(va1), oper.children().head)) )
+            )
+
+          case (Some(va1), None, Some(va2), Some(vg2)) =>
+            Union(
+              true,
+              removeConstraintColumn(oper).rebuild( List(Select(Comparison(Cmp.Eq, va1, va2), oper.children().head)) ),
+              oper.rebuild( List(Select(IsNullExpression(va2), oper.children().head)) )
+            )
+
+          case (Some(va1), Some(vg1), Some(va2), Some(vg2)) =>
+            Union(
+              true,
+              removeConstraintColumn(oper).rebuild( List(Select(Comparison(Cmp.Eq, va1, va2), oper.children().head))),
+              oper.rebuild(
+                List(
+                  Select(
+                    Arithmetic(
+                      Arith.Or,
+                      IsNullExpression(va1),
+                      IsNullExpression(va2)
+                    ), oper.children().head
+                  )
+                )
+              )
+            )
+        }
+      }.reduce(Union(false, _, _))
+
+    if(detExpr.nonEmpty)
+      detOp = Project(
+        oper.columns.filterNot( (p) => p.column.equalsIgnoreCase(CTables.conditionColumn))
+          ++ List(ProjectArg(CTables.conditionColumn, detExpr.reduce(Arith.makeAnd(_, _)))),
+        oper.source
+      )
+
+    (detOp, nondetOp) match {
+      case (null, null) => throw new SQLException("Both partitions null")
+
+      case (null, y) => y
+
+      case (x, null) => x
+
+      case (x, y) => Union(true, x, y)
+    }
+  }
+
+  /**
+   * Break up the conditions in the constraint column
+   * into deterministic and non-deterministic fragments
+   * ACCORDING to the data
+   */
+  def partitionConstraints(oper: Operator): Operator = {
+    oper match {
+      case Project(cols, src) =>
+        cols.find(p => p.column.equalsIgnoreCase(CTables.conditionColumn)) match {
+          case Some(arg) =>
+            partition(oper.asInstanceOf[Project])
+
+          case None =>
+            oper
+        }
+
+      case _ =>
+        oper
     }
   }
 }

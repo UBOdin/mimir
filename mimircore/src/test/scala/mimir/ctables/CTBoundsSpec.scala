@@ -20,7 +20,7 @@ object CTBoundsSpec extends Specification {
     UniformDistribution
   ))
 
-  def db = Database(null);
+  def db = Database("testdb", null);
   def parser = new ExpressionParser((x: String) => boundsSpecModel)
   def expr = parser.expr _
 

@@ -6,6 +6,8 @@ import mimir.algebra._
 import net.sf.jsqlparser.statement.select.{Select, SelectBody};
 
 abstract class Backend {
+  def open(): Unit
+
   def execute(sel: String): ResultSet
   def execute(sel: String, args: List[String]): ResultSet
   def execute(sel: Select): ResultSet = {
@@ -38,5 +40,7 @@ abstract class Backend {
   def update(stmt: String, args: List[String]): Unit
 
   def getAllTables(): List[String]
-  def close(): Unit
+
+  def close()
+
 }

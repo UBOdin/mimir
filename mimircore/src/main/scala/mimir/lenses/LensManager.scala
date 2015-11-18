@@ -1,5 +1,7 @@
 package mimir.lenses;
 
+import java.io.File
+import java.nio.file.Path
 import java.sql._
 
 import mimir.Database
@@ -13,9 +15,11 @@ import scala.collection.JavaConversions._
 class LensException(msg: String, trigger: Throwable) extends Exception(msg, trigger);
 
 class LensManager(db: Database) {
-  var lensCache = scala.collection.mutable.Map[String,Lens]();
-  
-  def init(): Unit =
+  var lensCache = scala.collection.mutable.Map[String,Lens]()
+
+  def serializationFolderPath: Path = java.nio.file.Paths.get("serialized", "__"+db.getName)
+
+    def init(): Unit =
   {
     db.update("""
       CREATE TABLE MIMIR_LENSES(
@@ -24,7 +28,17 @@ class LensManager(db: Database) {
         lens_type varchar(30),
         parameters text,
         PRIMARY KEY(name)
-      );""");
+      );""")
+
+    val serializationFolder = new File(serializationFolderPath.toString)
+    if(!serializationFolder.exists()) {
+      try{
+        serializationFolder.mkdir()
+      } catch {
+        case se: SecurityException =>
+          println("Could not create serialization folder, lenses will not be saved\n"+se.getMessage)
+      }
+    }
   }
   
   def mkLens(lensType: String, lensName: String, args: List[Expression], source: Operator): Lens =

@@ -4,11 +4,20 @@
 
 # Home page
 GET     /                           controllers.Application.index
+
+# Database changes
+POST    /changeDB                   controllers.Application.changeDB
 POST    /createDB                   controllers.Application.createDB
+
+# Query handlers
 POST    /queryDB                    controllers.Application.query
 GET     /queryDB                    controllers.Application.queryGet(query, db)
 GET     /queryjson                  controllers.Application.queryJson(query, db)
+
+# Load CSV
 POST    /loadTable                  controllers.Application.loadTable
+
+# Services
 GET     /alltables                  controllers.Application.allTables(db)
 GET     /vgterms                    controllers.Application.getVGTerms(query, row, ind, db)
 GET     /queryName                  controllers.Application.nameForQuery(query, db)
