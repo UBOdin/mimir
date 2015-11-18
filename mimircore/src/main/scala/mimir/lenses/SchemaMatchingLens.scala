@@ -144,4 +144,5 @@ class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
     ("I assumed that " + source._1 + " maps to " + target + " ("+ (source._2 * 100).toInt +"% likely)", "SCHEMA_MATCHING")
   }
 
+  override def backingStore(idx: Int): String = ???
 }

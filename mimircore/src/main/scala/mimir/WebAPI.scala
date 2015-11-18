@@ -95,8 +95,8 @@ class WebAPI(dbName: String = "debug.db", backend: String = "sqlite") {
     val results = db.query(CTPercolator.propagateRowIDs(raw, true))
     val resultsT = System.nanoTime()
 
-    println("Convert time: "+((start-rawT)/(1000*1000))+"ms")
-    println("Compile time: "+((rawT-resultsT)/(1000*1000))+"ms")
+    println("Convert time: "+((rawT-start)/(1000*1000))+"ms")
+    println("Compile time: "+((resultsT-rawT)/(1000*1000))+"ms")
 
     results.open()
     val wIter: WebIterator = db.generateWebIterator(results)

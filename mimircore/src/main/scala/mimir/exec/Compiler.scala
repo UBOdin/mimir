@@ -3,16 +3,20 @@ package mimir.exec
 ;
 
 import java.sql._
+import java.util
 
 import mimir.Database
+import mimir.algebra.Union
 import mimir.algebra._
-import mimir.ctables._;
+import mimir.ctables._
+import net.sf.jsqlparser.statement.select._
+;
 
 class Compiler(db: Database) {
 
   val standardOptimizations =
     List[Operator => Operator](
-      CTPercolator.percolate _, // Partition Det & Nondet query fragments
+      CTPercolator.percolateNoJoin _, // Partition Det & Nondet query fragments
 //      CTPercolator.partitionConstraints _, // Partition constraint col according to data
       optimize _,               // Basic Optimizations
       compileAnalysis _         // Transform BOUNDS(), CONF(), etc... into actual expressions that SQL can understand
@@ -72,13 +76,13 @@ class Compiler(db: Database) {
             cols.map((x) => (x.column, x.input))
           );
 
-        case Union(true, lhs, rhs) =>
+        case mimir.algebra.Union(true, lhs, rhs) =>
           new BagUnionResultIterator(
             buildIterator(lhs),
             buildIterator(rhs)
           );
 
-        case Union(false, _, _) =>
+        case mimir.algebra.Union(false, _, _) =>
           throw new UnsupportedOperationException("UNION DISTINCT unimplemented")
 
         case _ =>
@@ -87,7 +91,7 @@ class Compiler(db: Database) {
 
 
     } else {
-      db.query(db.convert(oper));
+      db.query(db.convert(oper))
     }
   }
 
@@ -175,8 +179,8 @@ class Compiler(db: Database) {
         )
       }
 
-      case u@Union(bool, lhs, rhs) =>
-        Union(bool, compileAnalysis(lhs), compileAnalysis(rhs))
+      case u@mimir.algebra.Union(bool, lhs, rhs) =>
+        mimir.algebra.Union(bool, compileAnalysis(lhs), compileAnalysis(rhs))
 
       case _ =>
         if (CTables.isProbabilistic(oper)) {
