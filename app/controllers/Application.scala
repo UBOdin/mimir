@@ -153,8 +153,9 @@ class Application extends Controller {
 
   def nameForQuery(query: String, db: String) = Action {
 
-    val webAPI = new WebAPI()
-    webAPI.configure(Array("--db", db))
+    if(!db.equalsIgnoreCase(webAPI.getCurrentDB)) {
+      webAPI = new WebAPI(dbName = db)
+    }
 
     val result = webAPI.nameForQuery(query)
 
@@ -167,14 +168,6 @@ class Application extends Controller {
     webAPI.close()
     response
   }
-
-  def createDB = Action { request =>
-    val form = request.body.asFormUrlEncoded
-    val db = form.get("new_db")(0)
-
-    val webAPI = new WebAPI()
-    webAPI.configure(Array("--db", db, "--init"))
-    val result: WebResult = new WebStringResult("Database "+db+" successfully created.")
 
   def queryJson(query: String, db: String) = Action {
     if(!db.equalsIgnoreCase(webAPI.getCurrentDB)) {
