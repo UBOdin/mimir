@@ -98,4 +98,12 @@ object CTables
     }
   }
 
+  def getVGTerms(e: Expression): List[VGTerm] =
+  {
+    e match {
+      case v : VGTerm => v :: e.children.flatMap( getVGTerms(_) )
+      case _ => e.children.flatMap( getVGTerms(_) )
+    }
+  }
+
 }
