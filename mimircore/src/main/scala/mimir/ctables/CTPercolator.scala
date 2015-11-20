@@ -564,4 +564,175 @@ object CTPercolator {
         oper
     }
   }
+
+  val mimirOriginColumnName = "MIMIR_ORIGIN"
+  /**
+   * Rewrite the input operator into a two-component split:
+   *   - A CTProvenance object describing the uncertainty provenance of all 
+   *     attributes in the schema of the output
+   *   - An operator rewritten to track inputs that are relevant to the CTProvenance object
+   */
+  def percolateProvenance(oper: Operator): (Operator, CTProvenance) = {
+    oper match {
+      case Project(columns, src) => {
+        val (srcRewrite, srcProvenance) = percolateProvenance(src)
+
+        // We have three considerations in rewriting provenance.
+        //  - `srcProvenance`'s column expressions need to be updated to correspond
+        //    to the expressions in `columns`
+        //  - `columns` may need to be extended with attributes required by the 
+        //    provenance computation.
+        //  - This process may introduce naming conflicts, so both `columns` and 
+        //    `srcProvenance` need to be updated accordingly.
+
+        // New names for each input column
+        var renamedColumns: mutable.Map[String, Expression] = null;
+        // Names of existing columns -- do not re-use for new columns
+        var reservedNames = columns.map( _.getColumnName() ).asSet;
+        // Columns that need to get added
+        var addedColumns = List[ProjectArg]();
+
+        // Start by figuring out which columns already exist in the output
+        // and what their names are.
+        columns.foreach( case ProjectArg(colName, expr) =>
+          expr match {
+            case Var(varName) => renamedColumns.put(varName, Var(colName)) 
+          }
+        )
+
+        // Preserve the mimir origin metadata
+        if(!(reservedNames contains mimirOriginColumnName)){
+          renamedColumns.put(mimirOriginColumnName, Var(mimirOriginColumnName))
+          addedColumns = 
+            ProjectArg(mimirOriginColumnName, Var(mimirOriginColumnName)) ::
+              addedColumns
+        }
+
+        // Utility Function to ensure that all dependent columns in `e` are 
+        // retained.  
+        // Optimization question: We don't actually need to keep *all* of the
+        // columns.  Which do we really want to keep?
+        //  Possibility 1: Nothing
+        //     - We can enumerate which VGTerms *could* affect the result
+        //  Possibility 2: Control flow vars
+        //     - We can enumerate which VGTerms *do* affect the result
+        //     - We can determine whether the output is deterministic
+        //  Possibility 3: Everything
+        //     - We can do everything in P2
+        //     - We can also compute all stddev/etc... values
+        // 
+        // We can potentially optimize possibility 3 a bit.  For example,
+        // let's say we have A*B+VGTerm(C).  Rather than tracking all
+        // values, we could force tracking of <X:A*B, C:C>
+        //
+        // For now, let's do this the simple, dumb way.
+        val rebuildExpressionForNewSchema = (e:Expression) => {
+
+          // Start by creating mappings for all of the variables in the 
+          // expression.
+
+          ExpressionUtils.getColumns(e).foreach( (varName: String) => {
+            // If we already have a new name for the expression, great!
+            if(!renamedColumns.hasKey(varName)){
+              // if not...
+              // find a new name that doesn't conflict with an existing
+              // name.
+              if(reservedNames contains varName){
+                // append _1, _2, _3, ... until we find one that
+                // doesn't conflict.
+                var i = 1;
+                while(reservedNames contains (varName+"_"+i)){ i++; }
+                renamedColumns.put(varName, Var(varName+"_"+i))
+                reservedNames.add(varName+"_"+i)
+                addedColumns = ProjectArg(varName+"_"+i, Var(varName)) :: addedColumns
+              } else {
+                // Trivial case: varName already doesn't conflict
+                renamedColumns.put(varName, Var(varName))
+                reservedNames.add(varName)
+                addedColumns = ProjectArg(varName, Var(varName)) :: addedColumns
+              }
+
+            }
+          })
+          
+          // As of right now, all variables in the provenance are represented 
+          // in renamedColumns.  Return the expression with the mappings inlined.
+          Eval.inline(e, renamedColumns)
+        }
+
+        val outputProvenance =
+          srcProvenance.map( case (inputColProvenance, inputCondProvenance) =>
+            {
+              val colProvenance =
+                columns.flatMap( case ProjectArg(col, expr) => 
+
+                  // Define the provenance of 'col' in the project argument output
+                  val outputColProvenance = Eval.inline(expr, inputColProvenance)
+
+                  // Trivial possibility: outputColProvenance is deterministic.
+                  if(!CTables.isProbabilistic(outputColProvenance)){
+                    // If so, great, we don't care about the provenance of this
+                    // attribute.  Dump it.
+                    List[(String, Expression)]()
+                  } else {
+
+                    // Ok.  The `col` is nondeterministic.  We need some provenance.
+                    // Apply the utility function to remap the schema
+                    val newSchOutputColProvenance =
+                      rebuildExpressionForNewSchema(outputColProvenance)
+
+                    // And wrap the provenance in a list for the flatMap.
+                    List( (col, newSchOutputColProvenance) )
+
+                  }
+                ).asMap
+              // We don't really interact with the output condition provenance, 
+              // but we do need to remap its schema.  Use the utility function!
+              val condProvenance = 
+                rebuildExpressionForNewSchema(srcProvenance);
+
+              // ... and return the pair
+              (colProvenance, condProvenance)
+            }
+          )
+        
+        // The final return value extends the projection with the
+        // newly required columns, and uses the newly constructed output 
+        // provenance
+        ( 
+          Project(columns ++ addedColumns, srcRewrite), 
+          outputProvenance
+        )
+
+      }
+      case Select(condition, src) => {
+        val (srcRewrite, srcProvenance) = percolateProvenance(src)
+        val (extracted, remaining) = CTables.extractProbabilisticClauses(condition)
+
+        val outputProvenance =
+          srcProvenance.map( case (inputColProvenance, inputCondProvenance) => {
+            (
+              inputColProvenance, 
+              Arith.makeAnd(inputCondProvenance, extracted)
+            )
+          })
+
+        remaining match {
+          // If the entire condition is non-deterministic, drop the select 
+          // operator.
+          case BoolPrimitive(true) => (srcRewrite, outputProvenance)
+          case _ => (Select(remaining, srcRewrite), outputProvenance)
+        }
+      }
+      case Join(left, right) => {
+
+      }
+      case Union(isAll, left, right) => {
+
+      }
+      case Table(name, sch, metadata) => {
+
+      }
+    }
+  }
 }

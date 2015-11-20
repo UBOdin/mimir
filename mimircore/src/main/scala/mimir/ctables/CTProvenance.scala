@@ -52,4 +52,5 @@ class CTProvenance(
 		provenance.mapValues( _._2 )
 	}
 
+	def map = CTProvenance(provenance.mapValues(_))
 }
