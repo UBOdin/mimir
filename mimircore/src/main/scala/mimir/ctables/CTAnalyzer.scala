@@ -67,6 +67,10 @@ object CTAnalyzer {
       case Var(v) => 
         BoolPrimitive(true)
       
+      // Special case used by CTPercolator.  Under some conditions
+      // we actually want to use a more complex in-lined computation
+      // to decide whether an expression is non-deterministic.
+      case NonDeterministicOrigin(o) => o
 
       case _ => expr.children.
                   map( compileDeterministic(_) ).
