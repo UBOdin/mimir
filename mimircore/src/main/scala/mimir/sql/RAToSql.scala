@@ -2,8 +2,12 @@ package mimir.sql;
 
 import java.io.StringReader
 import java.sql.SQLException
+import java.util
 
 import mimir.Database
+import mimir.algebra.Join
+import mimir.algebra.Select
+import mimir.algebra.Union
 import mimir.algebra._
 import mimir.ctables.VGTerm
 import mimir.parser.MimirJSqlParser
@@ -11,8 +15,9 @@ import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
 import net.sf.jsqlparser.expression.operators.relational.{EqualsTo, ExpressionList, GreaterThan, GreaterThanEquals, MinorThan, MinorThanEquals, NotEqualsTo}
 import net.sf.jsqlparser.expression.{BinaryExpression, DoubleValue, Function, LongValue, NullValue, Parenthesis, StringValue, WhenClause}
+import net.sf.jsqlparser.{expression, schema}
 import net.sf.jsqlparser.schema.Column
-import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, SelectBody, SelectExpressionItem, SubSelect}
+import net.sf.jsqlparser.statement.select.{SelectBody, PlainSelect, SubSelect, SelectExpressionItem, FromItem, SelectItem}
 
 import scala.collection.JavaConversions._;
 
@@ -197,21 +202,66 @@ class RAToSql(db: Database) {
       case mimir.algebra.Function(name, subexp) => {
         if(name.equals("JOIN_ROWIDS")) {
           if(subexp.size != 2) throw new SQLException("JOIN_ROWIDS should get exactly two arguments")
-          concat(convert(subexp(0), sources), convert(subexp(1), sources), ".")
+          return concat(convert(subexp(0), sources), convert(subexp(1), sources), ".")
         }
         if(subexp.length > 1)
           throw new SQLException("Function " + name + " SQL conversion error")
         convert(subexp(0), sources)
       }
       case VGTerm((_, model), idx, args) => {
-        val query = "SELECT DATA FROM "+
-          model.backingStore(idx)+
-          " WHERE EXP_LIST = "+
-          args.map(convert(_, sources)).reduceLeft(concat(_, _, "|"))+
-          ";"
+        /*
+         Very cumbersome code, workaround to JSqlParser's deficiency in
+         not recognizing the cast function. If it can be fixed the code should be -
 
-        val parser = new MimirJSqlParser(new StringReader(query))
-        parser.SubSelect()
+         <code>
+            val query = "SELECT CAST(DATA AS TYPE) FROM "+
+              model.backingStore(idx)+
+              " WHERE EXP_LIST = "+
+              args.map(convert(_, sources)).reduceLeft(concat(_, _, "|"))+
+              ";"
+
+            val parser = new MimirJSqlParser(new StringReader(query))
+            parser.SubSelect()
+         </code>
+
+         */
+
+        val plainSelect = new PlainSelect()
+
+        /* FROM */
+        val backingStore = new schema.Table(null, model.backingStore(idx))
+        plainSelect.setFromItem(backingStore)
+
+        /* WHERE */
+        val expr = new EqualsTo()
+        expr.setLeftExpression(new Column(backingStore, "EXP_LIST"))
+        expr.setRightExpression(args.map(convert(_, sources)).reduceLeft(concat(_, _, "|")))
+        plainSelect.setWhere(expr)
+
+        /* PROJECT */
+        val selItem = new SelectExpressionItem()
+        val castFunction = new Function()
+        castFunction.setName("CAST")
+        val explist = new ExpressionList()
+        val list = new util.ArrayList[expression.Expression]()
+        val column = new Column()
+
+        /* This is particularly terrible */
+        column.setTable(backingStore)
+        column.setColumnName("DATA AS TYPE")
+        list.add(column)
+
+        explist.setExpressions(list)
+        castFunction.setParameters(explist)
+        selItem.setExpression(castFunction)
+        val selItemList = new util.ArrayList[SelectItem]()
+        selItemList.add(selItem)
+        plainSelect.setSelectItems(selItemList)
+
+
+        val subSelect = new SubSelect()
+        subSelect.setSelectBody(plainSelect)
+        subSelect
       }
     }
   }
