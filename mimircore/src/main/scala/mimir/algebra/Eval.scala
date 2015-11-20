@@ -189,7 +189,12 @@ object Eval
     if(getVars(e).isEmpty && 
        !CTables.isProbabilistic(e)) 
     { 
-      eval(e) 
+      try {
+        eval(e) 
+      } catch {
+        case _:MatchError => 
+          e.rebuild(e.children.map(simplify(_)))
+      }
     } else e match { 
       case CaseExpression(wtClauses, eClause) =>
         simplifyCase(List(), wtClauses, eClause)

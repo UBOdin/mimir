@@ -20,10 +20,13 @@ object CTAnalyzer {
    * child subexpressions are deterministic
    */
   def compileDeterministic(expr: Expression): Expression =
+    compileDeterministic(expr, Map[String,Expression]())
+
+
+  def compileDeterministic(expr: Expression, 
+                           varMap: Map[String,Expression]): Expression =
   {
-    if(!CTables.isProbabilistic(expr)){
-      return BoolPrimitive(true)
-    }
+    val recur = (x:Expression) => compileDeterministic(x, varMap)
     expr match { 
       
       case CaseExpression(caseClauses, elseClause) =>
@@ -31,20 +34,20 @@ object CTAnalyzer {
           caseClauses.map( (clause) =>
             WhenThenClause(
               clause.when,
-              Arith.makeAnd(compileDeterministic(clause.then), compileDeterministic(clause.when))
+              Arith.makeAnd(recur(clause.then), recur(clause.when))
             )
           ),
-          compileDeterministic(elseClause)
+          recur(elseClause)
         )
 
       case Arithmetic(Arith.And, l, r) =>
         Arith.makeOr(
           Arith.makeAnd(
-            compileDeterministic(l),
+            recur(l),
             Not(l)
           ),
           Arith.makeAnd(
-            compileDeterministic(r),
+            recur(r),
             Not(r)
           )
         )
@@ -52,24 +55,23 @@ object CTAnalyzer {
       case Arithmetic(Arith.Or, l, r) =>
         Arith.makeOr(
           Arith.makeAnd(
-            compileDeterministic(l),
+            recur(l),
             l
           ),
           Arith.makeAnd(
-            compileDeterministic(r),
+            recur(r),
             r
           )
         )
-      
+
       case _: VGTerm =>
         BoolPrimitive(false)
       
       case Var(v) => 
-        BoolPrimitive(true)
+        varMap.get(v).getOrElse(BoolPrimitive(true))
       
-
       case _ => expr.children.
-                  map( compileDeterministic(_) ).
+                  map( recur(_) ).
                   fold(
                     BoolPrimitive(true)
                   )( 
