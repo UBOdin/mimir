@@ -145,7 +145,7 @@ object CTPercolateLite extends Specification {
         expr("true")
       ))
     }
-    "Handle Deterministic Join" in {
+    "Handle Non-Deterministic Join" in {
       percolite("""
         JOIN(
           PROJECT[A <= {{X_1[ROWID,A]}}](R(A,B)), 
