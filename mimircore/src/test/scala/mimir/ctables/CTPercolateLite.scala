@@ -1,158 +1,171 @@
-// package mimir.ctables;
+package mimir.ctables;
 
-// import java.io.{StringReader,FileReader}
+import java.io.{StringReader,FileReader}
 
-// import mimir.parser.{MimirJSqlParser}
-// import org.specs2.mutable._
+import mimir.parser.{MimirJSqlParser}
+import org.specs2.mutable._
 
-// import mimir._
-// import mimir.parser._
-// import mimir.algebra._
-// import mimir.sql._
+import mimir._
+import mimir.parser._
+import mimir.algebra._
+import mimir.sql._
 
-// object CTBoundsSpec extends Specification {
+object CTPercolateLite extends Specification {
   
-//   val boundsSpecModel = JointSingleVarModel(List(
-//     UniformDistribution,
-//     UniformDistribution,
-//     UniformDistribution,
-//     UniformDistribution,
-//     UniformDistribution
-//   ))
+  val boundsSpecModel = JointSingleVarModel(List(
+    UniformDistribution,
+    UniformDistribution,
+    UniformDistribution,
+    UniformDistribution,
+    UniformDistribution
+  ))
+  val schema = Map[String,List[(String,Type.T)]](
+    ("R", List( 
+      ("A", Type.TInt), 
+      ("B", Type.TInt)
+    )),
+    ("S", List( 
+      ("C", Type.TInt), 
+      ("D", Type.TInt)
+    ))
+  )
 
-//   def db = Database("testdb", null);
-//   def parser = new ExpressionParser((x: String) => boundsSpecModel)
-//   def expr = parser.expr _
+  def db = Database("testdb", null);
+  def parser = new OperatorParser((x: String) => boundsSpecModel, schema(_))
+  def expr = parser.expr _
+  def oper = parser.operator _
 
-//   def bounds = CTBounds.compile _
-//   def bounds(x: String): (Expression,Expression) = bounds(expr(x))
+  def percolite(x:String) = 
+    CTPercolator.percolateLite(
+      CTPercolator.propagateRowIDs(oper(x)))
 
-//   "The Percolator (Lite)" should {
+  "The Percolator (Lite)" should {
 
-//     "Compile Constants" in {
-//       bounds("X") must be equalTo (expr("X"), expr("X"))
-//     }
+    "Handle Base Relations" in {
+      percolite("R(A, B)") must be equalTo ((
+        oper("R(A, B)"),
+        Map( 
+          ("A", expr("true")),
+          ("B", expr("true"))
+        ),
+        expr("true")
+      ))
+      percolite("R(A, B // ROWID:String)") must be equalTo ((
+        oper("R(A, B // ROWID:String)"),
+        Map( 
+          ("A", expr("true")),
+          ("B", expr("true"))
+        ),
+        expr("true")
+      ))
+    }
 
-//     "Compile Basic Arithmetic" in {
-//       bounds("X+Y") must be equalTo (expr("X+Y"), expr("X+Y"))
-//       bounds("X-Y") must be equalTo (expr("X-Y"), expr("X-Y"))
-//       bounds("X*Y") must be equalTo (expr("X*Y"), expr("X*Y"))
-//       bounds("X/Y") must be equalTo (expr("X/Y"), expr("X/Y"))
-//       bounds("X&Y") must be equalTo (expr("X&Y"), expr("X&Y"))
-//       bounds("X|Y") must be equalTo (expr("X|Y"), expr("X|Y"))
-//     }
+    "Handle Deterministic Projection" in {
+      percolite("PROJECT[A <= A](R(A, B))") must be equalTo ((
+        oper("PROJECT[A <= A](R(A, B))"),
+        Map( 
+          ("A", expr("true"))
+        ),
+        expr("true")
+      ))
+    }
 
-//     "Compile Const Bounds" in {
-//       bounds("{{ test_0[1,10] }}") must be equalTo (expr("1"), expr("10"))
-//     }
+    "Handle Data-Independent Non-Deterministic Projection" in {
+      percolite("PROJECT[A <= A, B <= {{X_1[ROWID]}}](R(A, B))") must be equalTo ((
+        oper("PROJECT[A <= A, B <= {{X_1[ROWID]}}](R(A, B // ROWID:rowid))"),
+        Map( 
+          ("A", expr("true")),
+          ("B", expr("false"))
+        ),
+        expr("true")
+      ))
+    }
+    "Handle Data-Dependent Non-Deterministic Projection" in {
+      percolite("""
+        PROJECT[A <= A, 
+                B <= CASE WHEN B IS NULL THEN {{X_1[ROWID]}} ELSE B END
+               ](R(A, B))""") must be equalTo ((
+        oper("""
+          PROJECT[A <= A, 
+                  B <= CASE WHEN B IS NULL THEN {{X_1[ROWID]}} ELSE B END, 
+                  MIMIR_COL_DET_B <= 
+                       CASE WHEN B IS NULL THEN FALSE ELSE TRUE END
+                ](R(A, B // ROWID:rowid))"""),
+        Map( 
+          ("A", expr("true")),
+          ("B", expr("MIMIR_COL_DET_B"))
+        ),
+        expr("true")
+      ))
+    }
+    "Handle Data-Independent Non-Deterministic Inline Selection" in {
+      percolite("SELECT[{{X_1[ROWID]}} = 3](R(A, B))") must be equalTo ((
+        oper("SELECT[{{X_1[ROWID]}} = 3](R(A, B // ROWID:rowid))"),
+        Map( 
+          ("A", expr("true")),
+          ("B", expr("true"))
+        ),
+        expr("false")
+      ))
+    }
+    "Handle Data-Dependent Non-Deterministic Projection" in {
+      percolite("""
+        SELECT[B = 3](
+          PROJECT[A <= A, 
+                  B <= CASE WHEN B IS NULL THEN {{X_1[ROWID]}} ELSE B END
+                 ](R(A, B)))""") must be equalTo ((
+        oper("""
+        PROJECT[A <= A, B <= B, MIMIR_COL_DET_B <= MIMIR_COL_DET_B, MIMIR_ROW_DET <= MIMIR_COL_DET_B](
+          SELECT[B = 3](
+            PROJECT[A <= A, 
+                    B <= CASE WHEN B IS NULL THEN {{X_1[ROWID]}} ELSE B END, 
+                    MIMIR_COL_DET_B <= 
+                         CASE WHEN B IS NULL THEN FALSE ELSE TRUE END
+                  ](R(A, B // ROWID:rowid))))"""),
+        Map( 
+          ("A", expr("true")),
+          ("B", expr("MIMIR_COL_DET_B"))
+        ),
+        expr("MIMIR_ROW_DET")
+      ))
+    }
+    "Handle Deterministic Join" in {
+      percolite("""
+        JOIN(R(A,B), S(C,D))
+      """) must be equalTo ((
+        oper("""
+          JOIN(R(A,B), S(C,D))          
+        """),
+        Map( 
+          ("A", expr("true")),
+          ("B", expr("true")),
+          ("C", expr("true")),
+          ("D", expr("true"))
+        ),
+        expr("true")
+      ))
+    }
+    "Handle Deterministic Join" in {
+      percolite("""
+        JOIN(
+          PROJECT[A <= {{X_1[ROWID,A]}}](R(A,B)), 
+          S(C,D)
+        )
+      """) must be equalTo ((
+        oper("""
+          JOIN(
+            PROJECT[A <= {{X_1[ROWID,A]}}](R(A,B//ROWID:rowid)), 
+            S(C,D)
+          )
+        """),
+        Map( 
+          ("A", expr("false")),
+          ("C", expr("true")),
+          ("D", expr("true"))
+        ),
+        expr("true")
+      ))
+    }
 
-//     "Compile Trivial Arithmetic Bounds" in {
-//       bounds(
-//           "{{ test_0[1,10] }} + {{ test_1[-5,20] }}"
-//       ) must be equalTo (expr("-4"), expr("30"))
-//       bounds(
-//           "{{ test_0[1,10] }} - {{ test_1[-5,20] }}"
-//       ) must be equalTo (expr("-19"), expr("15"))
-//     }
-
-//     "Handle Simple Multiplication" in {
-//       bounds(
-//           "1 * {{ test_0[1,10] }}"
-//       ) must be equalTo (expr("1"), expr("10"))
-//       bounds(
-//           "{{ test_0[1,10] }} * 1"
-//       ) must be equalTo (expr("1"), expr("10"))
-//       bounds(
-//           "{{ test_0[1,10] }} * {{ test_1[2,10] }}"
-//       ) must be equalTo (expr("2"), expr("100"))
-//     }
-
-//     "Handle Expression Multiplication" in {
-//       bounds(
-//           "1 * {{ test_0[1,A] }}"
-//       ) must be equalTo (expr("__LIST_MIN(1, 1*A)"), expr("__LIST_MAX(1, 1*A)"))
-//       bounds(
-//           "{{ test_0[1,A] }} * 1"
-//       ) must be equalTo (expr("__LIST_MIN(1, A*1)"), expr("__LIST_MAX(1, A*1)"))
-//       bounds(
-//           "{{ test_0[1,A] }} * {{ test_1[B,10] }}"
-//       ) must be equalTo (expr("__LIST_MIN(10, 1*B, A*B, A*10)"), expr("__LIST_MAX(10, 1*B, A*B, A*10)"))
-//     }
-
-//     "Handle Simple Division" in {
-//       bounds(
-//           "1 / {{ test_0[1,10] }}"
-//       ) must be equalTo (expr("0.1"), expr("1.0"))
-//       bounds(
-//           "{{ test_0[1,10] }} / 2"
-//       ) must be equalTo (expr("0.5"), expr("5.0"))
-//     }
-
-//     "Handle Comparisons (eq)" in {
-//       bounds("{{test_0[0,10]}} = 5") must be equalTo (expr("false"), expr("true"))
-//       bounds("{{test_0[0,10]}} = -10") must be equalTo (expr("false"), expr("false"))
-//       bounds("{{test_0[0,10]}} = 20") must be equalTo (expr("false"), expr("false"))
-//       bounds("{{test_0[5,5]}} = 5") must be equalTo (expr("true"), expr("true"))
-//     }
-
-//     "Handle Comparisons (neq)" in {
-//       bounds("{{test_0[0,10]}} != 8") must be equalTo (expr("false"), expr("true"))
-//       bounds("{{test_0[0,10]}} != -18") must be equalTo (expr("true"), expr("true"))
-//       bounds("{{test_0[0,10]}} != 28") must be equalTo (expr("true"), expr("true"))
-//       bounds("{{test_0[8,8]}} != 8") must be equalTo (expr("false"), expr("false"))
-//     }
-
-//     "Handle Comparisons (lt)" in {
-//       bounds("{{test_0[1,11]}} < 7") must be equalTo (expr("false"), expr("true"))
-//       bounds("{{test_0[0,10]}} < 20") must be equalTo (expr("true"), expr("true"))
-//       bounds("{{test_0[0,10]}} < -10") must be equalTo (expr("false"), expr("false"))
-//       bounds("{{test_0[7,10]}} < 7") must be equalTo (expr("false"), expr("false"))
-//     }
-//     "Handle Comparisons (lte)" in {
-//       bounds("{{test_0[1,11]}} <= 7") must be equalTo (expr("false"), expr("true"))
-//       bounds("{{test_0[0,10]}} <= 20") must be equalTo (expr("true"), expr("true"))
-//       bounds("{{test_0[0,10]}} <= -10") must be equalTo (expr("false"), expr("false"))
-//       bounds("{{test_0[9,10]}} <= 9") must be equalTo (expr("false"), expr("true"))
-//     }
-
-//     "Handle Comparisons (gt)" in {
-//       bounds("{{test_0[1,11]}} > 7") must be equalTo (expr("false"), expr("true"))
-//       bounds("{{test_0[0,10]}} > -20") must be equalTo (expr("true"), expr("true"))
-//       bounds("{{test_0[0,10]}} > 20") must be equalTo (expr("false"), expr("false"))
-//       bounds("{{test_0[0,7]}}  > 7") must be equalTo (expr("false"), expr("false"))
-//     }
-//     "Handle Comparisons (gte)" in {
-//       bounds("{{test_0[1,11]}} >= 7") must be equalTo (expr("false"), expr("true"))
-//       bounds("{{test_0[0,10]}} >= -20") must be equalTo (expr("true"), expr("true"))
-//       bounds("{{test_0[0,10]}} >= 20") must be equalTo (expr("false"), expr("false"))
-//       bounds("{{test_0[0,6]}}  >= 6") must be equalTo (expr("false"), expr("true"))
-//     }
-
-//     "Handle Case Statements with Non-Det Values" in {
-//       bounds(
-//         "CASE WHEN 1 = 1 THEN {{ test_0[1,5] }} ELSE {{ test_1[4,10] }} END"
-//       ) must be equalTo (expr("1"), expr("5"))
-//       bounds(
-//         "CASE WHEN 2 = 1 THEN {{ test_0[1,5] }} ELSE {{ test_1[4,10] }} END"
-//       ) must be equalTo (expr("4"), expr("10"))
-//     }
-//     "Handle Case Statements with Non-Det Conditions" in {
-//       bounds(
-//         "CASE WHEN {{ test_0[0,2] }} <= 1 THEN 10 ELSE 20 END"
-//       ) must be equalTo (expr("10"), expr("20"))
-//     }
-//     "Handle Case Statements with Everything Being Non-Det" in {
-//       bounds(
-//         "CASE WHEN {{ test_0[0,2] }} <= 1 THEN {{ test_0[1,5] }} ELSE {{ test_1[4,10] }} END"
-//       ) must be equalTo (expr("1"), expr("10"))
-//     }
-//     "Handle Case Statements with Det Conditions based on VGTerms" in {
-//       bounds(
-//         "CASE WHEN {{ test_0[0,2] }} <= 5 THEN 10 ELSE 20 END"
-//       ) must be equalTo (expr("10"), expr("10"))
-//       bounds(
-//         "CASE WHEN {{ test_0[10,12] }} <= 5 THEN 10 ELSE 20 END"
-//       ) must be equalTo (expr("20"), expr("20"))
-//     }
-//   }
-// }
+  }
+}

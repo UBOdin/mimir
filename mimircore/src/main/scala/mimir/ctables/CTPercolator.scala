@@ -591,21 +591,11 @@ object CTPercolator {
       case Project(columns, src) => {
         val (rewrittenSrc, colDeterminism, rowDeterminism) = percolateLite(src);
 
-        // We can use CTAnalyzer.compileDeterministic to construct an expression
-        // that evaluates whether the given expression is non-deterministic.  
-        // However, we need to 'trick it' into using the right value.
-        // 
-        // The NonDeterministicOrigin expression type allows us to define an 
-        // expression to be directly inlined into the deterministic clause.
-        val sourceMappings = colDeterminism.mapValues( NonDeterministicOrigin(_) )
-
         // Compute the determinism of each column.
         val newColDeterminismBase = 
           columns.map( _ match { case ProjectArg(col, expr) => {
             val isDeterministic = 
-              CTAnalyzer.compileDeterministic(
-                Eval.inline(expr, sourceMappings)
-              );
+              CTAnalyzer.compileDeterministic(expr, colDeterminism)
             
             (col, isDeterministic)
           }})
@@ -621,7 +611,7 @@ object CTPercolator {
           ).map( 
             // Then just translate to a list of ProjectArgs
             _ match { case (col, isDeterministic) => 
-              ProjectArg(col, isDeterministic) 
+              ProjectArg(mimirColDeterministicColumnPrefix+col, isDeterministic) 
             }
          )
 
@@ -647,20 +637,13 @@ object CTPercolator {
       case Select(cond, src) => {
         val (rewrittenSrc, colDeterminism, rowDeterminism) = percolateLite(src);
 
-        // As above, we need to inline computed input determinisms
-        // into `cond` so that we can use CTAnalyzer on it correctly.
-        val sourceMappings = colDeterminism.mapValues( NonDeterministicOrigin(_) )
-
         // Compute the determinism of the selection predicate
         val condDeterminism = 
-          CTAnalyzer.compileDeterministic(
-            Eval.inline(cond, sourceMappings)
-          )
+          CTAnalyzer.compileDeterministic(cond, colDeterminism)
 
         // Combine the determinism with the computed determinism from the child...
         val newRowDeterminism = 
-          Arith.makeOr(condDeterminism, rowDeterminism)
-
+          Arith.makeAnd(condDeterminism, rowDeterminism)
         if( ExpressionUtils.getColumns(newRowDeterminism).isEmpty
             || condDeterminism.equals(BoolPrimitive(true))
           ){
@@ -763,10 +746,10 @@ object CTPercolator {
           Arith.makeAnd(rowDetLeft, rowDetRight)
         )
       }
-      case _:Table => {
+      case Table(name, cols, metadata) => {
         return (oper, 
           // All columns are deterministic
-          oper.schema.map(_._1).map((_, BoolPrimitive(true)) ).toMap,
+          cols.map(_._1).map((_, BoolPrimitive(true)) ).toMap,
           // All rows are deterministic
           BoolPrimitive(true)
         )
@@ -951,15 +934,4 @@ object CTPercolator {
   //     }
   //   }
   // }
-}
-
-/**
- * Utility class for use with CTAnalyzer's compileDeterministic
- * method.  Allows non-deterministic origin computations to be 
- * in-lined.
- */
-case class NonDeterministicOrigin(origin: Expression) extends Expression {
-  def exprType(bindings: Map[String,Type.T]) = Type.TBool
-  def children = List(origin)
-  def rebuild(c: List[Expression]) = NonDeterministicOrigin(c(0))
 }
