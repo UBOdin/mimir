@@ -24,7 +24,7 @@ object SqlLoaderSpec extends Specification with FileMatchers {
 	def parser = new ExpressionParser(db.lenses.modelForLens)
 	def expr = parser.expr _
 
-	val tempDB:File = null
+	val tempDB:String = "tempDB"
 	val testData = List[ (String, File, List[String]) ](
 			(	"R", new File("../test/r_test/r.csv"), 
 				List("A int", "B int", "C int")
@@ -33,13 +33,20 @@ object SqlLoaderSpec extends Specification with FileMatchers {
 
 	val db:Database = {
 		if(tempDB != null){
-			if(tempDB.exists()){ tempDB.delete(); }
-			tempDB.deleteOnExit();
+			val dbFile = new File(new File("databases"), tempDB)
+			if(dbFile.exists()){ dbFile.delete(); }
+			dbFile.deleteOnExit();
 		}
 		val d = new Database("testdb", new JDBCBackend("sqlite",
-			if(tempDB == null){ "" } else { tempDB.toString }
+			if(tempDB == null){ "testdb" } else { tempDB.toString }
 		))
-		d.initializeDBForMimir();
+	    try {
+		    d.backend.open();
+			d.initializeDBForMimir();
+		} catch {
+			case e:Exception => e.printStackTrace()
+
+		}
 		testData.foreach ( _ match { case ( tableName, tableData, tableCols ) => 
 			d.update("CREATE TABLE "+tableName+"("+tableCols.mkString(", ")+");")
 			val lines = new BufferedReader(new FileReader(tableData))
@@ -96,7 +103,7 @@ object SqlLoaderSpec extends Specification with FileMatchers {
 			db.query(query("SELECT * FROM SaneR")).allRows must be equalTo List(
 				List(IntPrimitive(1),IntPrimitive(2),IntPrimitive(3)),
 				List(IntPrimitive(1),IntPrimitive(3),IntPrimitive(1)),
-				List(IntPrimitive(2),IntPrimitive(2),IntPrimitive(1)),
+				List(IntPrimitive(2),IntPrimitive(3),IntPrimitive(1)),
 				List(IntPrimitive(1),IntPrimitive(2),NullPrimitive()),
 				List(IntPrimitive(1),IntPrimitive(4),IntPrimitive(2)),
 				List(IntPrimitive(2),IntPrimitive(2),IntPrimitive(1)),
