@@ -164,6 +164,7 @@ case class Database(name: String, backend: Backend)
     val headers: List[String] = result.schema.map(_._1)
     val data: ListBuffer[(List[String], Boolean)] = new ListBuffer()
 
+    var i = 0
     while(result.getNext()){
       val list =
         (0 until result.numCols).map( (i) => {
@@ -171,7 +172,8 @@ case class Database(name: String, backend: Backend)
         }).toList
 
 //      println("RESULTS: "+list)
-      data.append((list, result.deterministicRow()))
+      if(i < 100) data.append((list, result.deterministicRow()))
+      i = i + 1
     }
 
     val executionTime = (System.nanoTime() - startTime) / (1 * 1000 * 1000)
