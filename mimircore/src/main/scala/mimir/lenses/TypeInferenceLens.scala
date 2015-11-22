@@ -14,7 +14,7 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
   var orderedSourceSchema: List[(String,Type.T)] = null
   var inferenceModel: Model = null
   var db: Database = null
-  
+
   val model = new TypeCastModel(this)
 
   def sourceSchema() = {
@@ -45,7 +45,7 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
               VGTerm(
                 (name, model),
                 i,
-                List(Var("ROWID"), VGTerm((name, inferenceModel), i, List()))
+                List(Var("ROWID"), Var(k), VGTerm((name, inferenceModel), i, List()))
               )
             )
           },
@@ -293,7 +293,7 @@ class TypeCastModel(lens: TypeInferenceLens) extends Model {
           case e: TypeException => return new NullPrimitive
         },
         Type.fromStringPrimitive(
-          args(1).asInstanceOf[StringPrimitive]
+          args(2).asInstanceOf[StringPrimitive]
         )
       )
     }

@@ -367,6 +367,7 @@ case class Function(op: String, params: List[Expression]) extends Expression {
       case CTables.VARIANCE | CTables.CONFIDENCE => TFloat
       case "__LIST_MIN" | "__LIST_MAX" => TFloat
       case "__LEFT_UNION_ROWID" | "__RIGHT_UNION_ROWID" => TRowId
+      case "CAST" => Type.fromString(params(1).asInstanceOf[StringPrimitive].v)
       case _ => 
         bindings.get("__"+op+"()") match {
           case Some(binding) => binding
@@ -384,6 +385,10 @@ case class Function(op: String, params: List[Expression]) extends Expression {
       case "EXTRACT" =>
         op + "(" + params(0).asInstanceOf[StringPrimitive].v + " FROM " + 
           params(1).toString + ")"
+
+      case "CAST" => "CAST "+params(0)+
+        " AS "+params(1).asInstanceOf[StringPrimitive].v
+
       case _ => op + "(" + params.map( _.toString ).mkString(", ") + ")"
     }
   }

@@ -8,9 +8,6 @@ import mimir.algebra._
 import mimir.ctables.{Model, VGTerm}
 import org.apache.lucene.search.spell.{JaroWinklerDistance, LevensteinDistance, NGramDistance, StringDistance}
 
-/**
- * Created by vinayak on 7/20/15.
- */
 class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
   extends Lens(name, args, source) {
 
@@ -20,9 +17,10 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
   var model: Model = null
 
   def init() = {
-    println("args: "+args+"; "+ args.length)
+
     if (args.length % 2 != 0)
       throw new SQLException("Incorrect parameters for " + lensType + " Lens")
+
     if (targetSchema == null) {
       targetSchema = Map[String, Type.T]()
       var i = 0
@@ -144,5 +142,5 @@ class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
     ("I assumed that " + source._1 + " maps to " + target + " ("+ (source._2 * 100).toInt +"% likely)", "SCHEMA_MATCHING")
   }
 
-  override def backingStore(idx: Int): String = ???
+  override def backingStore(idx: Int): String = "__"+lens.name+"_BACKEND"
 }

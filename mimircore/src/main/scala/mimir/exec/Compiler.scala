@@ -9,6 +9,7 @@ import mimir.Database
 import mimir.algebra.Union
 import mimir.algebra._
 import mimir.ctables._
+import mimir.lenses.TypeCastModel
 import net.sf.jsqlparser.statement.select._
 ;
 
@@ -43,7 +44,25 @@ class Compiler(db: Database) {
   /**
    * Apply any local optimization rewrites.  Currently a placeholder.
    */
-  def optimize(oper: Operator): Operator = oper
+  def optimize(oper: Operator): Operator = oper match {
+    /*
+     Rewrite TypeInference VGTerms to SQL equivalent cast expression
+     */
+    case Project(cols, src) =>
+      Project(
+        cols.zipWithIndex.map{(coli) =>
+          coli._1.input match {
+            case VGTerm((_, model: TypeCastModel), idx, args) =>
+              ProjectArg(coli._1.column, Function("CAST", List(args(1), args(2))))
+            case _ =>
+              coli._1
+          }
+        },
+        src
+     )
+
+    case _ => oper
+  }
 
   /**
    * Build an iterator out of the specified operator.  If the operator
