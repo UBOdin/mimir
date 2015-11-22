@@ -10,12 +10,13 @@ import mimir.algebra.Select
 import mimir.algebra.Union
 import mimir.algebra._
 import mimir.ctables.VGTerm
+import mimir.lenses.{TypeInferenceModel, SchemaMatchingModel, MissingValueModel}
 import mimir.parser.MimirJSqlParser
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
 import net.sf.jsqlparser.expression.operators.relational.{EqualsTo, ExpressionList, GreaterThan, GreaterThanEquals, MinorThan, MinorThanEquals, NotEqualsTo}
 import net.sf.jsqlparser.expression.{BinaryExpression, DoubleValue, Function, LongValue, NullValue, Parenthesis, StringValue, WhenClause}
-import net.sf.jsqlparser.{expression, schema}
+import net.sf.jsqlparser.{schema, expression}
 import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.statement.select.{SelectBody, PlainSelect, SubSelect, SelectExpressionItem, FromItem, SelectItem}
 
@@ -177,7 +178,8 @@ class RAToSql(db: Database) {
             si => si.asInstanceOf[SelectExpressionItem].getAlias.equalsIgnoreCase(n)
           )
         )
-        if(src.isEmpty) throw new SQLException("Could not find appropriate source")
+        if(src.isEmpty)
+          throw new SQLException("Could not find appropriate source")
         new Column(new net.sf.jsqlparser.schema.Table(null, null), src.head.getAlias+"."+n)
       }
       case CaseExpression(whenClauses, elseClause) => {
@@ -204,11 +206,45 @@ class RAToSql(db: Database) {
           if(subexp.size != 2) throw new SQLException("JOIN_ROWIDS should get exactly two arguments")
           return concat(convert(subexp(0), sources), convert(subexp(1), sources), ".")
         }
+
+        if(name.equals("CAST")) {
+          val castFunction = new Function()
+          castFunction.setName("CAST")
+          val explist = new ExpressionList()
+          val list = new util.ArrayList[expression.Expression]()
+          val alias =
+            sources.head.asInstanceOf[SubSelect].getSelectBody.asInstanceOf[PlainSelect]
+              .getSelectItems.find(si =>
+              si.asInstanceOf[SelectExpressionItem].getAlias.equalsIgnoreCase(subexp(0).asInstanceOf[Var].name)).
+              get.asInstanceOf[SelectExpressionItem].getAlias
+
+          val column = new Column()
+          column.setTable(new schema.Table(null, sources.head.getAlias))
+
+          val typeString = subexp(1).asInstanceOf[StringPrimitive].v match {
+            case "string" => "varchar"
+            case x => x
+          }
+
+          column.setColumnName(
+            alias
+              +" AS "
+              +typeString
+          )
+
+          list.add(column)
+
+          explist.setExpressions(list)
+          castFunction.setParameters(explist)
+          return castFunction
+        }
+
         if(subexp.length > 1)
           throw new SQLException("Function " + name + " SQL conversion error")
+
         convert(subexp(0), sources)
       }
-      case VGTerm((_, model), idx, args) => {
+      case VGTerm((_, model: MissingValueModel), idx, args) => {
         /*
          Very cumbersome code, workaround to JSqlParser's deficiency in
          not recognizing the cast function. If it can be fixed the code should be -
@@ -263,6 +299,11 @@ class RAToSql(db: Database) {
         subSelect.setSelectBody(plainSelect)
         subSelect
       }
+      case VGTerm((_, model: TypeInferenceModel), idx, args) =>
+        ???
+
+      case VGTerm((_, model: SchemaMatchingModel), idx, args) =>
+        ???
     }
   }
 

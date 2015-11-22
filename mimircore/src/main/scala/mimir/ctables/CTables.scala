@@ -58,6 +58,7 @@ object CTables
     case MissingValueAnalysis(_, _, _) => true
     case TypeInferenceAnalysis(_, _, _) => true
     case Function("JOIN_ROWIDS", _) => expr.children.exists( isProbabilistic(_) )
+    case Function("CAST", _) => expr.children.exists( isProbabilistic(_) )
     case Function(_, _) => true
     case _ => expr.children.exists( isProbabilistic(_) )
   }
