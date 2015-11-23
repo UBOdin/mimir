@@ -17,7 +17,7 @@ import net.sf.jsqlparser.util.deparser.{InsertDeParser, ExpressionDeParser, Sele
 
 import scala.collection.mutable.ListBuffer
 
-class WebAPI(dbName: String = "debug.db", backend: String = "sqlite") {
+class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
 
 
   val db = new Database(dbName, new JDBCBackend(backend, dbName))

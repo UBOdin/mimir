@@ -177,7 +177,7 @@ case class Database(name: String, backend: Backend)
     }
 
     val executionTime = (System.nanoTime() - startTime) / (1 * 1000 * 1000)
-    new WebIterator(headers, data.toList, result.missingRows(), executionTime)
+    new WebIterator(headers, data.toList, i, result.missingRows(), executionTime)
   }
 
   /**
