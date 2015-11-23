@@ -740,9 +740,10 @@ object CTPercolator {
         val (rewrittenLeft, colDetLeft, rowDetLeft) = percolateLite(left);
         val (rewrittenRight, colDetRight, rowDetRight) = percolateLite(right);
 
-        // Under normal conditions, we shouldn't have any overlap between
-        // these two columns except for the row determinism column.  We
-        // add a projection to handle renaming if necessary.
+        // if left and right have no schema overlap, then the only
+        // possible overlap in rewrittenLeft and rewrittenRight is
+        // the row determinism column.  Start by detecting whether
+        // this column is present in both inputs:
         val (schemaLeft,detColumnLeft) = 
           rewrittenLeft.schema.map(_._1).
             partition( _ != mimirRowDeterministicColumnName )
@@ -750,11 +751,27 @@ object CTPercolator {
           rewrittenRight.schema.map(_._1).
             partition( _ != mimirRowDeterministicColumnName )
 
+        // If either left or right side lacks a determinism column,
+        // we're safe.  Fast-path return a simple join.
+        if(detColumnLeft.isEmpty || detColumnRight.isEmpty){
+          return (
+            Join(rewrittenLeft, rewrittenRight),
+            colDetLeft ++ colDetRight,
+            Arith.makeAnd(rowDetLeft, rowDetRight)
+          )          
+        }
+
+        // if both left and right have a row determinism column,
+        // then we need to rewrite them to prevent a namespace
+        // collision.
+
+        // Generate a schema mapping that leaves normal columns
+        // intact.
         val schemaMappingLeft = 
           schemaLeft.map( (x) => ProjectArg(x, Var(x))) ++ 
           (detColumnLeft.map( 
             (_) => ProjectArg(
-                mimirRowDeterministicColumnName+"_left",
+                mimirRowDeterministicColumnName+"_LEFT",
                 Var(mimirRowDeterministicColumnName)
               ))
           )
@@ -762,17 +779,20 @@ object CTPercolator {
           schemaRight.map( (x) => ProjectArg(x, Var(x))) ++ 
           (detColumnRight.map( 
             (_) => ProjectArg(
-                mimirRowDeterministicColumnName+"_right",
+                mimirRowDeterministicColumnName+"_RIGHT",
                 Var(mimirRowDeterministicColumnName)
               ))
           )
+
+        // Map the variables in the determinism columns...
         val mappedRowDetLeft = Eval.inline(rowDetLeft, 
             Map((mimirRowDeterministicColumnName, 
-                 Var(mimirRowDeterministicColumnName+"_left"))))
+                 Var(mimirRowDeterministicColumnName+"_LEFT"))))
         val mappedRowDetRight = Eval.inline(rowDetRight, 
             Map((mimirRowDeterministicColumnName, 
-                 Var(mimirRowDeterministicColumnName+"_right"))))
+                 Var(mimirRowDeterministicColumnName+"_RIGHT"))))
 
+        // And return it.
         return (
           Join(
             Project(schemaMappingLeft, rewrittenLeft), 

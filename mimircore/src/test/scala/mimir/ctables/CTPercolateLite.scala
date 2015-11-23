@@ -145,7 +145,7 @@ object CTPercolateLite extends Specification {
         expr("true")
       ))
     }
-    "Handle Non-Deterministic Join" in {
+    "Handle Non-Deterministic Joins" in {
       percolite("""
         JOIN(
           PROJECT[A <= {{X_1[ROWID,A]}}](R(A,B)), 
@@ -164,6 +164,32 @@ object CTPercolateLite extends Specification {
           ("D", expr("true"))
         ),
         expr("true")
+      ))
+    }
+    "Handle Non-Deterministic Joins With Row Non-Determinism" in {
+      percolite("""
+        JOIN(
+          SELECT[B < CASE WHEN A < 3 THEN {{X_1[A]}} ELSE 3 END](R(A,B)), 
+          SELECT[C < CASE WHEN D > 5 THEN {{X_2[D]}} ELSE 5 END](S(C,D))
+        )
+      """) must be equalTo ((
+        oper("""
+          JOIN(
+            PROJECT[A <= A, B <= B, MIMIR_ROW_DET_LEFT <= MIMIR_ROW_DET](
+              PROJECT[A <= A, B <= B, MIMIR_ROW_DET <= CASE WHEN A < 3 THEN FALSE ELSE TRUE END](
+                SELECT[B < CASE WHEN A < 3 THEN {{X_1[A]}} ELSE 3 END](R(A,B)))), 
+            PROJECT[C <= C, D <= D, MIMIR_ROW_DET_RIGHT <= MIMIR_ROW_DET](
+              PROJECT[C <= C, D <= D, MIMIR_ROW_DET <= CASE WHEN D > 5 THEN FALSE ELSE TRUE END](
+                SELECT[C < CASE WHEN D > 5 THEN {{X_2[D]}} ELSE 5 END](S(C,D))))
+          )
+        """),
+        Map( 
+          ("A", expr("true")),
+          ("B", expr("true")),
+          ("C", expr("true")),
+          ("D", expr("true"))
+        ),
+        expr("MIMIR_ROW_DET_LEFT AND MIMIR_ROW_DET_RIGHT")
       ))
     }
 
