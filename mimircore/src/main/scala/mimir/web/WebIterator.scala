@@ -19,15 +19,11 @@ package mimir.web
  *              rows missing
  */
 
-class WebIterator(h: List[String],
-                  d: List[(List[String], Boolean)],
-                  mR: Boolean,
-                  eT: Double) {
-
-  val header = h
-  val data = d
-  val missingRows = mR
-  var executionTimeMS: Double = eT
+class WebIterator(val header: List[String],
+                  val data: List[(List[String], Boolean)],
+                  val count: Long,
+                  val missingRows: Boolean,
+                  val executionTime: Double) {
   var queryFlow: OperatorNode = null
 
 }

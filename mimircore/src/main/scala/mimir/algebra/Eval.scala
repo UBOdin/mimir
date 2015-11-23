@@ -83,6 +83,9 @@ object Eval
         case Function(op, params) => {
           op match {
             case "JOIN_ROWIDS" => new RowIdPrimitive(params.map(x => eval(x).asString).mkString("."))
+            case "DATE" =>
+              val date = params.head.asInstanceOf[StringPrimitive].v.split("-").map(x => x.toInt)
+              new DatePrimitive(date(0), date(1), date(2))
             case "__LIST_MIN" =>
               new FloatPrimitive(params.map(x => {
                 try {
