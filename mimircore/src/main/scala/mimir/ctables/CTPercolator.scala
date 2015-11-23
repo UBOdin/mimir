@@ -740,10 +740,46 @@ object CTPercolator {
         val (rewrittenLeft, colDetLeft, rowDetLeft) = percolateLite(left);
         val (rewrittenRight, colDetRight, rowDetRight) = percolateLite(right);
 
+        // Under normal conditions, we shouldn't have any overlap between
+        // these two columns except for the row determinism column.  We
+        // add a projection to handle renaming if necessary.
+        val (schemaLeft,detColumnLeft) = 
+          rewrittenLeft.schema.map(_._1).
+            partition( _ != mimirRowDeterministicColumnName )
+        val (schemaRight,detColumnRight) = 
+          rewrittenRight.schema.map(_._1).
+            partition( _ != mimirRowDeterministicColumnName )
+
+        val schemaMappingLeft = 
+          schemaLeft.map( (x) => ProjectArg(x, Var(x))) ++ 
+          (detColumnLeft.map( 
+            (_) => ProjectArg(
+                mimirRowDeterministicColumnName+"_left",
+                Var(mimirRowDeterministicColumnName)
+              ))
+          )
+        val schemaMappingRight = 
+          schemaRight.map( (x) => ProjectArg(x, Var(x))) ++ 
+          (detColumnRight.map( 
+            (_) => ProjectArg(
+                mimirRowDeterministicColumnName+"_right",
+                Var(mimirRowDeterministicColumnName)
+              ))
+          )
+        val mappedRowDetLeft = Eval.inline(rowDetLeft, 
+            Map((mimirRowDeterministicColumnName, 
+                 Var(mimirRowDeterministicColumnName+"_left"))))
+        val mappedRowDetRight = Eval.inline(rowDetRight, 
+            Map((mimirRowDeterministicColumnName, 
+                 Var(mimirRowDeterministicColumnName+"_right"))))
+
         return (
-          Join(rewrittenLeft, rewrittenRight),
+          Join(
+            Project(schemaMappingLeft, rewrittenLeft), 
+            Project(schemaMappingRight, rewrittenRight)
+          ),
           colDetLeft ++ colDetRight,
-          Arith.makeAnd(rowDetLeft, rowDetRight)
+          Arith.makeAnd(mappedRowDetLeft, mappedRowDetRight)
         )
       }
       case Table(name, cols, metadata) => {
