@@ -37,6 +37,7 @@ class Compiler(db: Database) {
   def compile(oper: Operator, opts: List[Operator => Operator]):
   ResultIterator = {
     val optimizedOper = opts.foldLeft(oper)((o, fn) => fn(o))
+    val liteOper = CTPercolator.percolateLite(oper)
     // Finally build the iterator
     buildIterator(optimizedOper)
   }

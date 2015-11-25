@@ -7,6 +7,7 @@ import mimir.algebra.Type.T
 import mimir.algebra._
 import mimir.ctables._
 import mimir.exec.ResultIterator
+import mimir.util.TypeUtils
 
 class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
   extends Lens(name, args, source) {
@@ -159,7 +160,7 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
   }
 
   override def mostLikelyValue(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
-    new StringPrimitive(Type.toString(inferredTypeMap(idx)._2))
+    new StringPrimitive(TypeUtils.convert(inferredTypeMap(idx)._2))
   }
 
   override def upperBoundExpr(idx: Int, args: List[Expression]): Expression = {
@@ -292,8 +293,8 @@ class TypeCastModel(lens: TypeInferenceLens) extends Model {
         } catch {
           case e: TypeException => return new NullPrimitive
         },
-        Type.fromStringPrimitive(
-          args(2).asInstanceOf[StringPrimitive]
+        TypeUtils.convert(
+          args(2).asInstanceOf[StringPrimitive].v
         )
       )
     }

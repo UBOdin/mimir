@@ -8,8 +8,9 @@ import mimir.algebra.Join
 import mimir.algebra.Select
 import mimir.algebra.Union
 import mimir.algebra._
-import mimir.ctables.VGTerm
+import mimir.ctables.{JointSingleVarModel, VGTerm}
 import mimir.lenses.{TypeInferenceModel, SchemaMatchingModel, MissingValueModel}
+import mimir.util.TypeUtils
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
 import net.sf.jsqlparser.expression.operators.relational._
@@ -215,16 +216,13 @@ class RAToSql(db: Database) {
           val alias =
             sources.head.asInstanceOf[SubSelect].getSelectBody.asInstanceOf[PlainSelect]
               .getSelectItems.find(si =>
-              si.asInstanceOf[SelectExpressionItem].getAlias.equalsIgnoreCase(subexp(0).asInstanceOf[Var].name)).
-              get.asInstanceOf[SelectExpressionItem].getAlias
+                si.asInstanceOf[SelectExpressionItem].getAlias.equalsIgnoreCase(subexp(0).asInstanceOf[Var].name)
+              ).get.asInstanceOf[SelectExpressionItem].getAlias
 
           val column = new Column()
           column.setTable(new schema.Table(null, sources.head.getAlias))
 
-          val typeString = subexp(1).asInstanceOf[StringPrimitive].v match {
-            case "string" => "varchar"
-            case x => x
-          }
+          val typeString = subexp(1).asInstanceOf[StringPrimitive].v
 
           column.setColumnName(
             alias
@@ -244,66 +242,46 @@ class RAToSql(db: Database) {
 
         convert(subexp(0), sources)
       }
-      case VGTerm((_, model: MissingValueModel), idx, args) => {
-        /*
-         Very cumbersome code, workaround to JSqlParser's deficiency in
-         not recognizing the cast function. If it can be fixed the code should be -
+      case VGTerm((_, model), idx, args) => {
 
-         <code>
-            val query = "SELECT CAST(DATA AS TYPE) FROM "+
-              model.backingStore(idx)+
-              " WHERE EXP_LIST = "+
-              args.map(convert(_, sources)).reduceLeft(concat(_, _, "|"))+
-              ";"
+        val caseStmt = CaseExpression(
+          TypeUtils.Types.map((x) =>
+            WhenThenClause(
+              Comparison(
+                Cmp.Eq,
+                Var("TYPE"),
+                StringPrimitive(x)
+              ),
+              mimir.algebra.Function(
+                "CAST",
+                List(Var("DATA"), StringPrimitive(x))
+              )
+            )
+          ),
+          Var("DATA")
+        )
 
-            val parser = new MimirJSqlParser(new StringReader(query))
-            parser.SubSelect()
-         </code>
+        val table = Table(model.backingStore(idx),
+          List(
+            ("EXP_LIST", Type.TString),
+            ("DATA", Type.TString),
+            ("TYPE", Type.TString),
+            ("ACCEPTED", Type.TString)
+          ),
+          List()
+        )
 
-         */
-
-        val plainSelect = new PlainSelect()
-
-        /* FROM */
-        val backingStore = new schema.Table(null, model.backingStore(idx))
-        plainSelect.setFromItem(backingStore)
-
-        /* WHERE */
-        val expr = new EqualsTo()
-        expr.setLeftExpression(new Column(backingStore, "EXP_LIST"))
-        expr.setRightExpression(args.map(convert(_, sources)).reduceLeft(concat(_, _, "|")))
-        plainSelect.setWhere(expr)
-
-        /* PROJECT */
-        val selItem = new SelectExpressionItem()
-        val castFunction = new Function()
-        castFunction.setName("CAST")
-        val explist = new ExpressionList()
-        val list = new util.ArrayList[expression.Expression]()
-        val column = new Column()
-
-        /* This is particularly terrible */
-        column.setTable(backingStore)
-        column.setColumnName("DATA AS TYPE")
-        list.add(column)
-
-        explist.setExpressions(list)
-        castFunction.setParameters(explist)
-        selItem.setExpression(castFunction)
-        val selItemList = new util.ArrayList[SelectItem]()
-        selItemList.add(selItem)
-        plainSelect.setSelectItems(selItemList)
-
+        val project = Project(
+          List(
+            ProjectArg("DATA", caseStmt)
+          ),
+          table
+        )
 
         val subSelect = new SubSelect()
-        subSelect.setSelectBody(plainSelect)
+        subSelect.setSelectBody(convert(project))
         subSelect
       }
-      case VGTerm((_, model: TypeInferenceModel), idx, args) =>
-        ???
-
-      case VGTerm((_, model: SchemaMatchingModel), idx, args) =>
-        ???
     }
   }
 

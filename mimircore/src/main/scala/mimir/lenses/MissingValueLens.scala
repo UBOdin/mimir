@@ -1,11 +1,13 @@
 package mimir.lenses
 
+import java.io.File
 import java.sql._
 import java.util
 
 import mimir.algebra._
 import mimir.ctables._
 import mimir.exec.ResultIterator
+import mimir.util.TypeUtils
 import mimir.{Analysis, Database}
 import moa.classifiers.Classifier
 import moa.core.InstancesHeader
@@ -102,6 +104,8 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
             db.lenses.serializationFolderPath.toString,
             name+"_"+i
           ).toString
+          val file = new File(path)
+          file.getParentFile.mkdirs()
           weka.core.SerializationHelper.write(path, classifier)
 
         case _ =>
@@ -237,7 +241,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
       if(rowidIterator(classIndex+1).exprType(Map()) == Type.TAny) {
         val explist = List(rowidIterator(0))
         val data = computeMostLikelyValue(explist)
-        val typ = data.exprType(Map()).toString
+        val typ = TypeUtils.convert(data.exprType(Map()))
         val accepted = "N"
         val tuple = List(explist.map(x => x.asString).mkString("|"), data.asString, typ, accepted)
         lens.db.update(
