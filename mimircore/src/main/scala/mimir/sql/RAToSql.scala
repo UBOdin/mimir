@@ -5,6 +5,7 @@ import java.sql.SQLException
 import java.util
 
 import mimir.Database
+import mimir.algebra.IsNullExpression
 import mimir.algebra.Join
 import mimir.algebra.Select
 import mimir.algebra.Union
@@ -14,7 +15,7 @@ import mimir.lenses.{TypeInferenceModel, SchemaMatchingModel, MissingValueModel}
 import mimir.parser.MimirJSqlParser
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
-import net.sf.jsqlparser.expression.operators.relational.{EqualsTo, ExpressionList, GreaterThan, GreaterThanEquals, MinorThan, MinorThanEquals, NotEqualsTo}
+import net.sf.jsqlparser.expression.operators.relational._
 import net.sf.jsqlparser.expression.{BinaryExpression, DoubleValue, Function, LongValue, NullValue, Parenthesis, StringValue, WhenClause}
 import net.sf.jsqlparser.{schema, expression}
 import net.sf.jsqlparser.schema.Column
@@ -151,7 +152,7 @@ class RAToSql(db: Database) {
         val f = new Function();
         f.setName("DATE")
         f.setParameters(new ExpressionList(
-          List[net.sf.jsqlparser.expression.Expression](new StringValue(""+y+"-"+m+"-"+d))
+          List[net.sf.jsqlparser.expression.Expression](new StringValue(""+y+"-%02d".format(m)+"-%02d".format(d)))
         ))
         f
       }
@@ -166,6 +167,8 @@ class RAToSql(db: Database) {
       case Comparison(Cmp.Gte, l, r) => bin(new GreaterThanEquals(), l, r, sources)
       case Comparison(Cmp.Lt, l, r)  => bin(new MinorThan(), l, r, sources)
       case Comparison(Cmp.Lte, l, r) => bin(new MinorThanEquals(), l, r, sources)
+      case Comparison(Cmp.Like, l, r) => bin(new LikeExpression(), l, r, sources)
+      case Comparison(Cmp.NotLike, l, r) => val expr = bin(new LikeExpression(), l, r, sources).asInstanceOf[LikeExpression]; expr.setNot(true); expr
       case Arithmetic(Arith.Add, l, r)  => bin(new Addition(), l, r, sources)
       case Arithmetic(Arith.Sub, l, r)  => bin(new Subtraction(), l, r, sources)
       case Arithmetic(Arith.Mult, l, r) => bin(new Multiplication(), l, r, sources)
@@ -195,7 +198,7 @@ class RAToSql(db: Database) {
         caseExpr.setElseExpression(convert(elseClause, sources))
         caseExpr
       }
-      case IsNullExpression(subexp, neg) => {
+      case mimir.algebra.IsNullExpression(subexp, neg) => {
         val isNull = new net.sf.jsqlparser.expression.operators.relational.IsNullExpression()
         isNull.setLeftExpression(convert(subexp, sources))
         isNull.setNot(neg)
