@@ -1,18 +1,15 @@
 package mimir.sql;
 
-import java.io.StringReader
 import java.sql.SQLException
 import java.util
 
 import mimir.Database
-import mimir.algebra.IsNullExpression
 import mimir.algebra.Join
 import mimir.algebra.Select
 import mimir.algebra.Union
 import mimir.algebra._
 import mimir.ctables.VGTerm
 import mimir.lenses.{TypeInferenceModel, SchemaMatchingModel, MissingValueModel}
-import mimir.parser.MimirJSqlParser
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
 import net.sf.jsqlparser.expression.operators.relational._
@@ -21,7 +18,7 @@ import net.sf.jsqlparser.{schema, expression}
 import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.statement.select.{SelectBody, PlainSelect, SubSelect, SelectExpressionItem, FromItem, SelectItem}
 
-import scala.collection.JavaConversions._;
+import scala.collection.JavaConversions._
 
 class RAToSql(db: Database) {
   
