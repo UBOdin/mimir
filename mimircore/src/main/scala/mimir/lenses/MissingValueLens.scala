@@ -273,12 +273,12 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     if (!rowValues.getNext()) {
       throw new SQLException("Invalid Source Data ROWID: '" + rowid + "'");
     }
-    val row = new DenseInstance(lens.allKeys.length)
+    val row = new DenseInstance(rowValues.numCols)
     val attributes = getAttributesFromIterator(rowValues)
     data = new Instances("TestData", attributes, 1)
     row.setDataset(data)
-    (0 until lens.allKeys.length).foreach((col) => {
-      val v = rowValues(col + 1)
+    (0 until rowValues.numCols).foreach((col) => {
+      val v = rowValues(col)
       if (!v.isInstanceOf[NullPrimitive]) {
         if (v.isInstanceOf[IntPrimitive] || v.isInstanceOf[FloatPrimitive]) {
           row.setValue(col, v.asDouble)
@@ -297,8 +297,9 @@ class MissingValueModel(lens: MissingValueLens, name: String)
   private def getAttributesFromIterator(iterator: ResultIterator): util.ArrayList[Attribute] = {
     val attributes = new util.ArrayList[Attribute]()
     iterator.schema.foreach { case (n, t) =>
-      t match {
-        case Type.TInt | Type.TFloat => attributes.add(new Attribute(n))
+      (n, t) match {
+        case ("ROWID", _) => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
+        case (_, Type.TInt | Type.TFloat) => attributes.add(new Attribute(n))
         case _ => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
       }
     }

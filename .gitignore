@@ -24,3 +24,5 @@ Mimir.sublime-workspace
 serialized/*.db/
 
 databases/noisy.db
+databases/tpch*.db
+tpch-dbgen
