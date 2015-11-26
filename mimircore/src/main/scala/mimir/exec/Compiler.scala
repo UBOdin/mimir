@@ -25,7 +25,7 @@ class Compiler(db: Database) {
 
   /**
    * Perform a full end-end compilation pass.  Return an iterator over
-   * the result set.  
+   * the result set.
    */
   def compile(oper: Operator): ResultIterator =
     compile(oper, standardOptimizations)
@@ -37,7 +37,6 @@ class Compiler(db: Database) {
   def compile(oper: Operator, opts: List[Operator => Operator]):
   ResultIterator = {
     val optimizedOper = opts.foldLeft(oper)((o, fn) => fn(o))
-    val liteOper = CTPercolator.percolateLite(oper)
     // Finally build the iterator
     buildIterator(optimizedOper)
   }

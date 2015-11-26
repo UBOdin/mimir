@@ -17,14 +17,12 @@ databasesfolder = "databases"
 
 
 nullable = { 													\
-	"PART": 		["NAME"], 									\
 	"SUPPLIER": 	["NATIONKEY"], 								\
-	"PARTSUPP": 	["PARTKEY", "SUPPKEY", "SUPPLYCOST"], 		\
-	"CUSTOMER": 	["NATIONKEY", "MKTSEGMENT"], 				\
-	"LINEITEM": 	["ORDERKEY", "PARTKEY", "SUPPKEY", "RETURNFLAG", "LINESTATUS", "QUANTITY", "EXTENDEDPRICE", "DISCOUNT", "TAX", "SHIPDATE"], \
-	"ORDERS": 		["CUSTKEY", "ORDERDATE", "SHIPPRIORITY"], 	\
-	"NATION": 		["REGIONKEY", "NAME"], 						\
-	"REGION": 		["NAME"] 									\
+	"PARTSUPP": 	["PARTKEY", "SUPPKEY"], 					\
+	"CUSTOMER": 	["NATIONKEY"], 								\
+	"LINEITEM": 	["ORDERKEY", "PARTKEY", "SUPPKEY"], 		\
+	"ORDERS": 		["CUSTKEY"], 								\
+	"NATION": 		["REGIONKEY"], 								\
 	}
 
 

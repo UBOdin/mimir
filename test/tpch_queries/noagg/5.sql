@@ -1,5 +1,5 @@
 SELECT n.name, l.extendedprice * (1 - l.discount) AS revenue 
-FROM   customer c, orders o, lineitem l, supplier s, nation n, region r
+FROM   xcustomer c, xorders o, xlineitem l, xsupplier s, xnation n, region r
 WHERE  c.custkey = o.custkey
   AND  l.orderkey = o.orderkey 
   AND  l.suppkey = s.suppkey

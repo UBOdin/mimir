@@ -6,5 +6,5 @@ SELECT returnflag, linestatus,
   quantity AS avg_qty,
   extendedprice AS avg_price,
   discount AS avg_disc
-FROM lineitem
+FROM XLINEITEM
 WHERE shipdate <= DATE('1997-09-01');
