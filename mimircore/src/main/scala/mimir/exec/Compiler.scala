@@ -17,9 +17,9 @@ class Compiler(db: Database) {
 
   val standardOptimizations =
     List[Operator => Operator](
-      CTPercolator.percolateNoJoin _, // Partition Det & Nondet query fragments
+      CTPercolator.percolate _, // Partition Det & Nondet query fragments
 //      CTPercolator.partitionConstraints _, // Partition constraint col according to data
-      optimize _,               // Basic Optimizations
+//      optimize _,               // Basic Optimizations
       compileAnalysis _         // Transform BOUNDS(), CONF(), etc... into actual expressions that SQL can understand
     )
 
