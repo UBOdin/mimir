@@ -156,6 +156,7 @@ def oracleload(db, noise):
 	# TODO
 
 
+
 def buildmimir():
 
 	print("\n\nBuilding mimir...")
@@ -168,6 +169,7 @@ def buildmimir():
 
 	os.chdir("..")
 
+	
 
 def executesql(db):
 
