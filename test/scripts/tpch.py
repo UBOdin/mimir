@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import os
+import shutil
 import subprocess
 import sys
 import glob
@@ -13,6 +14,7 @@ scripts = os.path.dirname(os.path.realpath(__file__))
 mimirhome = os.path.abspath(os.path.join(scripts, "..", ".."))
 schemafile = os.path.join(mimirhome, "test", "tpch_queries", "tpch_schema.sql")
 databasesfolder = "databases"
+FNULL = open(os.devnull, 'w')
 
 
 
@@ -27,25 +29,24 @@ nullable = { 													\
 
 
 def preparedbgen():
-	if not os.path.exists("tpch-dbgen"):
-		print("tpch-dbgen not found, cloning from https://github.com/Legacy25/tpch-dbgen")
-		try:
-			subprocess.check_call(["git", "clone", "https://github.com/Legacy25/tpch-dbgen"])
-		except subprocess.CalledProcessError:
-			print("Failed to clone, exiting...")
-			sys.exit(0)
 
-		os.chdir("tpch-dbgen")
-		print("Making")
-		try:
-			subprocess.check_call(["make"])
-		except subprocess.CalledProcessError:
-			print("Failed to make, exiting...")
-			sys.exit(0)
-		print("Make successful")
-		os.chdir("..")
-	else:
-		print("tpch-dbgen ready")
+	shutil.rmtree('tpch-dbgen')
+	print("Getting the tpch-dbgen repo...")
+	try:
+		subprocess.check_call(["git", "clone", "https://github.com/Legacy25/tpch-dbgen"])
+	except subprocess.CalledProcessError:
+		print("Failed to clone, exiting...")
+		sys.exit(0)
+
+	os.chdir("tpch-dbgen")
+	print("Making")
+	try:
+		subprocess.check_call(["make"], stderr=FNULL)
+	except subprocess.CalledProcessError:
+		print("Failed to make, exiting...")
+		sys.exit(0)
+	print("Make successful")
+	os.chdir("..")
 
 def generatetables(scale):
 	preparedbgen()
@@ -106,7 +107,7 @@ def sqliteload(db, noise):
 			print("Import failed, exiting...")
 			sys.exit(0)
 
-	files = glob.glob(os.path.join("tpch-dbggen", "*.stripped"))
+	files = glob.glob(os.path.join("tpch-dbgen", "*.stripped"))
 	for f in files:
 		os.remove(f)
 
@@ -121,6 +122,10 @@ def sqliteload(db, noise):
 				PRIMARY KEY(name)
 			)
 		"""
+
+	serializedfolder = os.path.join("serialized", "__"+db)
+	if(os.path.exists(serializedfolder)):
+		shutil.rmtree(serializedfolder)
 
 	# Create database connection
 	conn = sqlite3.connect(dbpath)
@@ -146,25 +151,51 @@ def sqliteload(db, noise):
 
 
 
-
 def oracleload(db, noise):
 	print("Oracle load")
 	# TODO
 
 
+def buildmimir():
+
+	print("\n\nBuilding mimir...")
+	os.chdir("mimircore")
+	try:
+		subprocess.check_call(["sbt", "package"])
+	except subprocess.CalledProcessError:
+		print("Sbt package failed, exiting...")
+		sys.exit(0)
+
+	os.chdir("..")
+
+
+def executesql(db):
+
+	print("\n\n\nReady to execute...\n")
+
+	try:
+		print("\n---------CREATE LENS (this will take some time)---------\n")
+		subprocess.check_call(["./bin/mimir", "--db", db, "test/tpch_queries/tpch_lenses.sql"])
+
+	except subprocess.CalledProcessError:
+		print("Error encountered, exiting...")
+		sys.exit(0)
+
+
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description= """
-		Generate a tpch database with given size
+		Generate a tpch database for a given scale factor that is ready to run experiments
 		"""
 		)
 
-	parser.add_argument('--db', default="tpchbig.db", help="Name of the database file. Will be automatically created in the databases/ directory and overwrite any existing file")
-	parser.add_argument('-s', '--scale', default=1, type=float, help="Scale factor for dbgen")
+	parser.add_argument('--db', default="tpchsmall.db", help="Name of the database file. Will be automatically created in the databases/ directory and overwrite any existing file")
+	parser.add_argument('-s', '--scale', default=0.1, type=float, help="Scale factor for dbgen")
 	parser.add_argument('-n', '--noise', default=0.1, type=float, help="Ratio of null values")
 	parser.add_argument('-b', '--backend', default="sqlite", help="Backend (sqlite / oracle)")
 
 	args = parser.parse_args()
 	os.chdir(mimirhome)
+
 	generatetables(args.scale)
 
 	if args.backend.lower() == "sqlite":
@@ -174,5 +205,8 @@ if __name__ == "__main__":
 	else:
 		print("Unrecognized backend {0}, exiting...".format(args.backend))
 		sys.exit(0)
+
+	buildmimir()
+	executesql(args.db)
 
 

@@ -198,7 +198,8 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     val attributes = getAttributesFromIterator(iterator)
     data = new Instances("TrainData", attributes, 100)
 
-    while(iterator.getNext()) {
+    var numInstances = 0
+    while(iterator.getNext() && numInstances < 10000) {
       val instance = new DenseInstance(iterator.numCols)
       instance.setDataset(data)
       for(j <- 0 until iterator.numCols                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       ) {
@@ -217,6 +218,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
         }
       }
       data.add(instance)
+      numInstances = numInstances + 1
     }
     data.setClassIndex(classIndex)
 
