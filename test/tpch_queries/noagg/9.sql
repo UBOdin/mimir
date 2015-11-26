@@ -2,7 +2,7 @@ SELECT n.name AS nation,
      o.orderdate AS o_year,
      ((l.extendedprice * (1 - l.discount)) - (ps.supplycost * l.quantity))
         AS amount
-FROM   part p, supplier s, lineitem l, partsupp ps, orders o, nation n
+FROM   part p, xsupplier s, xlineitem l, xpartsupp ps, xorders o, xnation n
 WHERE  s.suppkey = l.suppkey
 AND  ps.suppkey = l.suppkey 
 AND  ps.partkey = l.partkey
