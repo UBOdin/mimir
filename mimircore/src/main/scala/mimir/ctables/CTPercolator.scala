@@ -584,7 +584,7 @@ object CTPercolator {
 
   private def extractMissingValueVar(expr: Expression): Var = {
     expr match {
-      case CaseExpression(List(WhenThenClause(IsNullExpression(v1: Var, false), vg: VGTerm)), v2: Var) =>
+      case CaseExpression(List(WhenThenClause(IsNullExpression(v1: Var), vg: VGTerm)), v2: Var) =>
         if(v1 == v2) v1 else throw new SQLException("Unexpected clause to extractMisingValueVar")
 
       case _ => throw new SQLException("Unexpected clause to extractMisingValueVar")
@@ -593,7 +593,7 @@ object CTPercolator {
 
   private def isMissingValueExpression(expr: Expression): Boolean = {
     expr match {
-      case CaseExpression(List(WhenThenClause(IsNullExpression(var1: Var, false), vg: VGTerm)), var2: Var) =>
+      case CaseExpression(List(WhenThenClause(IsNullExpression(var1: Var), vg: VGTerm)), var2: Var) =>
         var1 == var2
       case _ => false
     }
@@ -640,13 +640,13 @@ object CTPercolator {
           if (isMissingValueExpression(lhs)) {
             val lhsVar = extractMissingValueVar(lhs)
             lhsExpr = lhsVar
-            detExpr ++= List(IsNullExpression(lhsVar, true))
+            detExpr ++= List(Not(IsNullExpression(lhsVar)))
             nonDeterExpr ++= List(IsNullExpression(lhsVar))
           }
           if (isMissingValueExpression(rhs)) {
             val rhsVar = extractMissingValueVar(rhs)
             rhsExpr = rhsVar
-            detExpr ++= List(IsNullExpression(rhsVar, true))
+            detExpr ++= List(Not(IsNullExpression(rhsVar)))
             nonDeterExpr ++= List(IsNullExpression(rhsVar))
           }
 

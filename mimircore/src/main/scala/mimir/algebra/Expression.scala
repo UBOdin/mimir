@@ -246,6 +246,8 @@ object Arith extends Enumeration {
       case (_, BoolPrimitive(false)) => BoolPrimitive(false)
       case _ => Arithmetic(And, a, b)
     }
+  def makeAnd(el: List[Expression]): Expression = 
+    el.foldLeft[Expression](BoolPrimitive(true))(makeAnd(_,_))
   def makeOr(a: Expression, b: Expression): Expression = 
   (a, b) match {
     case (BoolPrimitive(false), _) => b
@@ -254,6 +256,8 @@ object Arith extends Enumeration {
     case (_, BoolPrimitive(true)) => BoolPrimitive(true)
     case _ => Arithmetic(Or, a, b)
   }
+  def makeOr(el: List[Expression]): Expression = 
+    el.foldLeft[Expression](BoolPrimitive(false))(makeOr(_,_))
   def makeNot(e: Expression): Expression =
   {
     e match {
@@ -264,10 +268,26 @@ object Arith extends Enumeration {
         Arithmetic(And, makeNot(a), makeNot(b))
       case Comparison(c, a, b) =>
         Comparison(Cmp.negate(c), a, b)
-      case IsNullExpression(a, n) =>
-        IsNullExpression(a, !n)
+      case IsNullExpression(a) =>
+        IsNullExpression(a)
       case Not(a) => a
       case _ => Not(e)
+    }
+  }
+  def getConjuncts(e: Expression): List[Expression] = {
+    e match {
+      case BoolPrimitive(true) => List[Expression]()
+      case Arithmetic(And, a, b) => 
+        getConjuncts(a) ++ getConjuncts(b)
+      case _ => List(e)
+    }
+  }
+  def getDisjuncts(e: Expression): List[Expression] = {
+    e match {
+      case BoolPrimitive(false) => List[Expression]()
+      case Arithmetic(Or, a, b) => 
+        getConjuncts(a) ++ getConjuncts(b)
+      case _ => List(e)
     }
   }
 }
@@ -436,12 +456,12 @@ case class CaseExpression(
 	CaseExpression(w, currC(0))
   }
 }
-case class IsNullExpression(child: Expression, neg: Boolean = false) extends Expression { 
+case class IsNullExpression(child: Expression) extends Expression { 
   def exprType(bindings: Map[String, Type.T]): T = {
     child.exprType(bindings);
     TBool
   }
-  override def toString() = {child.toString+" IS"+(if(neg){" NOT"}else{""})+" NULL"}
+  override def toString() = {child.toString+" IS NULL"}
   def children = List(child)
-  def rebuild(c: List[Expression]) = IsNullExpression(c(0), neg)
+  def rebuild(c: List[Expression]) = IsNullExpression(c(0))
 }

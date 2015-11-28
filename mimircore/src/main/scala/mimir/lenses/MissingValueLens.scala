@@ -51,7 +51,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
           ProjectArg(k,
             CaseExpression(
               List(WhenThenClause(
-                mimir.algebra.IsNullExpression(Var(k), false),
+                mimir.algebra.IsNullExpression(Var(k)),
                 rowVar(u)
               )),
               Var(k)

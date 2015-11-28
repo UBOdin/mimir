@@ -73,12 +73,11 @@ object Eval
         case p:Proc => {
           p.get(p.getArgs.map(eval(_, bindings)))
         }
-        case IsNullExpression(c, n) => {
+        case IsNullExpression(c) => {
           val isNull: Boolean = 
             eval(c, bindings).
             isInstanceOf[NullPrimitive];
-          if(n){ return BoolPrimitive(!isNull); }
-          else { return BoolPrimitive(isNull); }
+          return BoolPrimitive(isNull);
         }
         case Function(op, params) => {
           op match {
@@ -428,7 +427,7 @@ object Eval
             ).getOrElse(getVGTerms(caseElse, bindings, l))
 
           case Not(c) => getVGTerms(c, bindings, l)
-          case IsNullExpression(c, n) => getVGTerms(c, bindings, l)
+          case IsNullExpression(c) => getVGTerms(c, bindings, l)
           case _ => List()
         }
       )

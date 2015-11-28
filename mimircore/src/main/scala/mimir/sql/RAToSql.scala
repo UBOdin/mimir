@@ -154,11 +154,6 @@ class RAToSql(db: Database) {
         ))
         f
       }
-      case Not(subexp) => {
-        val parens = new Parenthesis(convert(subexp, sources))
-        parens.setNot();
-        parens
-      }
       case Comparison(Cmp.Eq, l, r)  => bin(new EqualsTo(), l, r, sources)
       case Comparison(Cmp.Neq, l, r) => bin(new NotEqualsTo(), l, r, sources)
       case Comparison(Cmp.Gt, l, r)  => bin(new GreaterThan(), l, r, sources)
@@ -196,11 +191,21 @@ class RAToSql(db: Database) {
         caseExpr.setElseExpression(convert(elseClause, sources))
         caseExpr
       }
-      case mimir.algebra.IsNullExpression(subexp, neg) => {
+      case mimir.algebra.Not(mimir.algebra.IsNullExpression(subexp)) => {
         val isNull = new net.sf.jsqlparser.expression.operators.relational.IsNullExpression()
         isNull.setLeftExpression(convert(subexp, sources))
-        isNull.setNot(neg)
+        isNull.setNot(true)
         isNull
+      }
+      case mimir.algebra.IsNullExpression(subexp) => {
+        val isNull = new net.sf.jsqlparser.expression.operators.relational.IsNullExpression()
+        isNull.setLeftExpression(convert(subexp, sources))
+        isNull
+      }
+      case Not(subexp) => {
+        val parens = new Parenthesis(convert(subexp, sources))
+        parens.setNot();
+        parens
       }
       case mimir.algebra.Function(name, subexp) => {
         if(name.equals("JOIN_ROWIDS")) {

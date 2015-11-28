@@ -103,7 +103,7 @@ object SqlLoaderSpec extends Specification with FileMatchers {
 			db.query(query("SELECT * FROM SaneR")).allRows must be equalTo List(
 				List(IntPrimitive(1),IntPrimitive(2),IntPrimitive(3)),
 				List(IntPrimitive(1),IntPrimitive(3),IntPrimitive(1)),
-				List(IntPrimitive(2),IntPrimitive(3),IntPrimitive(1)),
+				List(IntPrimitive(2),IntPrimitive(2),IntPrimitive(1)),
 				List(IntPrimitive(1),IntPrimitive(2),NullPrimitive()),
 				List(IntPrimitive(1),IntPrimitive(4),IntPrimitive(2)),
 				List(IntPrimitive(2),IntPrimitive(2),IntPrimitive(1)),

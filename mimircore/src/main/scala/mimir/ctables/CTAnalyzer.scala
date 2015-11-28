@@ -106,7 +106,7 @@ object CTAnalyzer {
 
         case Var(a) => Var(a)
 
-        case IsNullExpression(child, neg) => IsNullExpression(compileSample(child, seedExp), neg)
+        case IsNullExpression(child) => IsNullExpression(compileSample(child, seedExp))
 
         case p: PrimitiveValue => p
 

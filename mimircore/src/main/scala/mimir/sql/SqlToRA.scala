@@ -345,10 +345,14 @@ class SqlToRA(db: Database)
     if(e.isInstanceOf[NullValue]) { return NullPrimitive() }
     if(e.isInstanceOf[net.sf.jsqlparser.expression.operators.relational.IsNullExpression]) {
       val isNullExpression = e.asInstanceOf[net.sf.jsqlparser.expression.operators.relational.IsNullExpression]
-      return mimir.algebra.IsNullExpression(
-        convert(isNullExpression.getLeftExpression, bindings),
-        isNullExpression.isNot
+      val ret = mimir.algebra.IsNullExpression(
+        convert(isNullExpression.getLeftExpression, bindings)
       )
+      if(isNullExpression.isNot){
+        return mimir.algebra.Not(ret)
+      } else {
+        return ret
+      }
     }
     if(e.isInstanceOf[net.sf.jsqlparser.statement.select.SubSelect]) {
       val result = db.query(

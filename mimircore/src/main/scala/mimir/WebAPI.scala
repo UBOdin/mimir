@@ -259,7 +259,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
       }
       case Arithmetic(o, l, r) => extractVGTerms(l) ++ extractVGTerms(r)
       case Comparison(o, l, r) => extractVGTerms(l) ++ extractVGTerms(r)
-      case IsNullExpression(child, neg) => extractVGTerms(child)
+      case IsNullExpression(child) => extractVGTerms(child)
       case Function(op, params) => List(op)
       case _ => List()
     }
