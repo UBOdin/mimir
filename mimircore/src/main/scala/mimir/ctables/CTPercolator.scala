@@ -582,24 +582,20 @@ object CTPercolator {
 
 
 
-  private def extractMissingValueVarPVar(expr: Expression): (Option[Var], Option[VGTerm]) = {
+  private def extractMissingValueVar(expr: Expression): Var = {
     expr match {
-      case CaseExpression(List(WhenThenClause(IsNullExpression(var1: Var, false), vg: VGTerm)), var2: Var) =>
-        if(var1 == var2) (Some(var1), Some(vg)) else (None, None)
+      case CaseExpression(List(WhenThenClause(IsNullExpression(v1: Var, false), vg: VGTerm)), v2: Var) =>
+        if(v1 == v2) v1 else throw new SQLException("Unexpected clause to extractMisingValueVar")
 
-      case va: Var => (Some(va), None)
-
-      case _ => (None, None)
+      case _ => throw new SQLException("Unexpected clause to extractMisingValueVar")
     }
   }
 
-  private def extractMissingValueMCClause(expr: Expression):
-    ( (Option[Var], Option[VGTerm]), (Option[Var], Option[VGTerm]) ) = {
-
+  private def isMissingValueExpression(expr: Expression): Boolean = {
     expr match {
-      case Comparison(_, lhs, rhs) =>
-        (extractMissingValueVarPVar(lhs), extractMissingValueVarPVar(rhs))
-
+      case CaseExpression(List(WhenThenClause(IsNullExpression(var1: Var, false), vg: VGTerm)), var2: Var) =>
+        var1 == var2
+      case _ => false
     }
   }
 
@@ -621,67 +617,58 @@ object CTPercolator {
 
   def partition(oper: Project): Operator = {
     val cond = oper.columns.find(p => p.column.equalsIgnoreCase(CTables.conditionColumn)).head.input
-    var detOp: Operator = null
-    var nondetOp: Operator = null
+    var otherClausesOp: Operator = null
+    var missingValueClausesOp: Operator = null
+    var detExpr: List[Expression] = List()
+    var nonDeterExpr: List[Expression] = List()
 
-    val (nondetExpr, detExpr) =
+
+    val (missingValueClauses, otherClauses) =
       splitArith(cond).partition { (p) =>
-        val (lhs, rhs) = extractMissingValueMCClause(p)
-        (lhs._1.isDefined && lhs._2.isDefined) || (rhs._1.isDefined && rhs._2.isDefined)
+        p match {
+          case Comparison(_, lhs, rhs) => isMissingValueExpression(lhs) || isMissingValueExpression(rhs)
+          case _ => false
+        }
       }
 
-    if(nondetExpr.nonEmpty)
-      nondetOp = nondetExpr.map { (e) =>
-        val (lhs, rhs) = extractMissingValueMCClause(e)
-        (lhs._1, lhs._2, rhs._1, rhs._2) match {
-          case (None, None, None, None) => throw new SQLException("Invalid values in partition")
+    missingValueClauses.foreach{ (e) =>
+      e match {
+        case Comparison(op, lhs, rhs) =>
+          var lhsExpr = lhs
+          var rhsExpr = rhs
 
-          case (Some(_), Some(_), None, None) => oper
+          if (isMissingValueExpression(lhs)) {
+            val lhsVar = extractMissingValueVar(lhs)
+            lhsExpr = lhsVar
+            detExpr ++= List(IsNullExpression(lhsVar, true))
+            nonDeterExpr ++= List(IsNullExpression(lhsVar))
+          }
+          if (isMissingValueExpression(rhs)) {
+            val rhsVar = extractMissingValueVar(rhs)
+            rhsExpr = rhsVar
+            detExpr ++= List(IsNullExpression(rhsVar, true))
+            nonDeterExpr ++= List(IsNullExpression(rhsVar))
+          }
 
-          case (None, None, Some(_), Some(_)) => oper
+          detExpr ++= List(Comparison(op, lhsExpr, rhsExpr))
 
-          case (Some(va1), Some(vg1), Some(va2), None) =>
-            Union(
-              true,
-              removeConstraintColumn(oper).rebuild( List(Select(Comparison(Cmp.Eq, va1, va2), oper.children().head)) ),
-              oper.rebuild( List(Select(IsNullExpression(va1), oper.children().head)) )
-            )
+        case _ => throw new SQLException("Missing Value Clauses must be Comparison expressions")
+      }
+    }
 
-          case (Some(va1), None, Some(va2), Some(vg2)) =>
-            Union(
-              true,
-              removeConstraintColumn(oper).rebuild( List(Select(Comparison(Cmp.Eq, va1, va2), oper.children().head)) ),
-              oper.rebuild( List(Select(IsNullExpression(va2), oper.children().head)) )
-            )
+    missingValueClausesOp = Union(true,
+      removeConstraintColumn(oper).rebuild(List(Select(detExpr.distinct.reduce(Arith.makeAnd(_, _)), oper.children().head))),
+      oper.rebuild(List(Select(nonDeterExpr.distinct.reduce(Arith.makeOr(_, _)), oper.children().head)))
+    )
 
-          case (Some(va1), Some(vg1), Some(va2), Some(vg2)) =>
-            Union(
-              true,
-              removeConstraintColumn(oper).rebuild( List(Select(Comparison(Cmp.Eq, va1, va2), oper.children().head))),
-              oper.rebuild(
-                List(
-                  Select(
-                    Arithmetic(
-                      Arith.Or,
-                      IsNullExpression(va1),
-                      IsNullExpression(va2)
-                    ), oper.children().head
-                  )
-                )
-              )
-            )
-          case _ => throw new SQLException("Unhandled case in CTPercolator.partition")
-        }
-      }.reduce(Union(false, _, _))
-
-    if(detExpr.nonEmpty)
-      detOp = Project(
+    if(otherClauses.nonEmpty)
+      otherClausesOp = Project(
         oper.columns.filterNot( (p) => p.column.equalsIgnoreCase(CTables.conditionColumn))
-          ++ List(ProjectArg(CTables.conditionColumn, detExpr.reduce(Arith.makeAnd(_, _)))),
+          ++ List(ProjectArg(CTables.conditionColumn, otherClauses.reduce(Arith.makeAnd(_, _)))),
         oper.source
       )
 
-    (detOp, nondetOp) match {
+    (otherClausesOp, missingValueClausesOp) match {
       case (null, null) => throw new SQLException("Both partitions null")
 
       case (null, y) => y
