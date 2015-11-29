@@ -1,5 +1,7 @@
 package mimir.algebra;
 
+import java.sql._
+
 object OperatorUtils {
     
   /** 
@@ -53,6 +55,15 @@ object OperatorUtils {
             )
         )
       case Union(false, _, _) => List[Operator](o)
+    }
+  }
+
+  def makeUnion(terms: List[Operator]): Operator = 
+  {
+    terms match {
+      case List() => throw new SQLException("Union of Empty List")
+      case List(head) => head
+      case head :: rest => Union(true, head, makeUnion(rest))
     }
   }
 

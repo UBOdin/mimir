@@ -268,8 +268,6 @@ object Arith extends Enumeration {
         Arithmetic(And, makeNot(a), makeNot(b))
       case Comparison(c, a, b) =>
         Comparison(Cmp.negate(c), a, b)
-      case IsNullExpression(a) =>
-        IsNullExpression(a)
       case Not(a) => a
       case _ => Not(e)
     }

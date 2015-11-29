@@ -25,6 +25,7 @@ object ExpressionOptimizerSpec extends Specification {
     }
     "Simplify Redundant Falsehoods" in {
       conditionals("(A = 2) AND (A = 3)") must be equalTo expr("FALSE")
+      conditionals("(A = 2) AND (A != 2)") must be equalTo expr("FALSE")
     }
     "Simplify If Statements" in {
       conditionals("(A = 2) AND (CASE WHEN A = 2 THEN 5 ELSE 6 END)") must be equalTo expr("(A = 2) AND 5")
