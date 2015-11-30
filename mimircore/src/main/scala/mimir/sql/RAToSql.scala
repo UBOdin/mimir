@@ -249,42 +249,41 @@ class RAToSql(db: Database) {
       }
       case VGTerm((_, model), idx, args) => {
 
-        val caseStmt = CaseExpression(
-          TypeUtils.Types.map((x) =>
-            WhenThenClause(
-              Comparison(
-                Cmp.Eq,
-                Var("TYPE"),
-                StringPrimitive(x)
-              ),
-              mimir.algebra.Function(
-                "CAST",
-                List(Var("DATA"), StringPrimitive(x))
-              )
-            )
-          ),
-          Var("DATA")
-        )
+        val plainSelect = new PlainSelect()
 
-        val table = Table(model.backingStore(idx),
-          List(
-            ("EXP_LIST", Type.TString),
-            ("DATA", Type.TString),
-            ("TYPE", Type.TString),
-            ("ACCEPTED", Type.TString)
-          ),
-          List()
-        )
+        /* FROM */
+        val backingStore = new schema.Table(null, model.backingStore(idx))
+        plainSelect.setFromItem(backingStore)
 
-        val project = Project(
-          List(
-            ProjectArg("DATA", caseStmt)
-          ),
-          table
-        )
+        /* WHERE */
+        val expr = new EqualsTo()
+        expr.setLeftExpression(new Column(backingStore, "EXP_LIST"))
+        expr.setRightExpression(args.map(convert(_, sources)).reduceLeft(concat(_, _, "|")))
+        plainSelect.setWhere(expr)
+
+        /* PROJECT */
+        val selItem = new SelectExpressionItem()
+        val castFunction = new Function()
+        castFunction.setName("CAST")
+        val explist = new ExpressionList()
+        val list = new util.ArrayList[expression.Expression]()
+        val column = new Column()
+
+        /* This is particularly terrible */
+        column.setTable(backingStore)
+        column.setColumnName("DATA AS TYPE")
+        list.add(column)
+
+        explist.setExpressions(list)
+        castFunction.setParameters(explist)
+        selItem.setExpression(castFunction)
+        val selItemList = new util.ArrayList[SelectItem]()
+        selItemList.add(selItem)
+        plainSelect.setSelectItems(selItemList)
+
 
         val subSelect = new SubSelect()
-        subSelect.setSelectBody(convert(project))
+        subSelect.setSelectBody(plainSelect)
         subSelect
       }
     }
