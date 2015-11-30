@@ -188,7 +188,8 @@ object Eval
    * CASE statements are simplified further.  See simplifyCase()
    */
   def simplify(e: Expression): Expression = {
-    if(getVars(e).isEmpty && 
+    // println("Simplify: "+e)
+    if(ExpressionUtils.getColumns(e).isEmpty && 
        !CTables.isProbabilistic(e)) 
     { 
       try {
@@ -200,7 +201,7 @@ object Eval
     } else e match { 
       case CaseExpression(wtClauses, eClause) =>
         simplifyCase(List(), wtClauses, eClause)
-      case _ => e
+      case _ => e.rebuild(e.children.map(simplify(_)))
     }
   }
 
@@ -384,15 +385,6 @@ object Eval
       }
     }
   }
-
-  /**
-   * Compute the set of variables that appear in the specified expression.
-   */
-  def getVars(e: Expression): Set[String] = 
-    e match { 
-      case Var(v) => Set(v)
-      case _ => e.children.map(getVars(_)).fold(Set[String]())( _ ++ _ )
-    }
 
   def getVGTerms(e: Expression): List[VGTerm] = {
     getVGTerms(e, Map(), List())

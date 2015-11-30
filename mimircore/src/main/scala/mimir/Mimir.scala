@@ -6,6 +6,7 @@ import java.sql.SQLException
 import mimir.ctables.CTPercolator
 import mimir.parser._
 import mimir.sql._
+import mimir.algebra.{Project,ProjectArg,Var}
 import mimir.exec.CompileMode
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
@@ -118,7 +119,10 @@ object Mimir {
 
   def handleSelect(sel: Select): Unit = {
     val raw = db.convert(sel)
-    val results = db.query(CTPercolator.propagateRowIDs(raw, true))
+    val rawPlusRowID = Project(ProjectArg("MIMIR_PROVENANCE", Var("ROWID")) ::
+                               raw.schema.map( (x) => ProjectArg(x._1, Var(x._1))),
+                               raw)
+    val results = db.query(rawPlusRowID)
     results.open()
     db.dump(results)
     results.close()

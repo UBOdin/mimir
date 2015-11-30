@@ -87,7 +87,7 @@ object CTPartition {
 		f match { 
 			case proj : Project =>
 				if(CTables.isProbabilistic(proj.source)){
-					throw new SQLException("Partitioning a non-normalized project expression")
+					throw new SQLException("Partitioning a non-normalized project expression:"+f)
 				}
 				proj.get(CTables.conditionColumn) match {
 					case Some(phi) => {

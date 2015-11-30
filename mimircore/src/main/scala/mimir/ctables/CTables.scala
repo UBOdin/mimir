@@ -60,7 +60,6 @@ object CTables
     case Function("JOIN_ROWIDS", _) => expr.children.exists( isProbabilistic(_) )
     case Function("CAST", _) => expr.children.exists( isProbabilistic(_) )
     case Function("DATE", _) => false
-    case Function(_, _) => true
     case _ => expr.children.exists( isProbabilistic(_) )
   }
 

@@ -63,7 +63,7 @@ object OperatorUtils {
     terms match {
       case List() => throw new SQLException("Union of Empty List")
       case List(head) => head
-      case head :: rest => Union(true, head, makeUnion(rest))
+      case head :: rest => Union(false, head, makeUnion(rest))
     }
   }
 
