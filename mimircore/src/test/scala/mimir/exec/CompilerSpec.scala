@@ -210,19 +210,19 @@ object CompilerSpec extends Specification {
         """
       ) must be equalTo oper(
         """PROJECT[
-              A1 <= __LHS_R_A, 
-              B1 <= __LHS_R_B, 
+              A1 <= R_A_1, 
+              B1 <= R_B_1, 
               N <= {{test_0}},
-              A2 <= __RHS_R_A, 
-              B2 <= __RHS_R_B, 
+              A2 <= R_A_2, 
+              B2 <= R_B_2, 
               M <= {{test_1}}
           ](
-            SELECT[__LHS_R_A = __RHS_R_A](
+            SELECT[R_A_1 = R_A_2](
               JOIN(
-                PROJECT[__LHS_R_A <= R_A, __LHS_R_B <= R_B, 
-                        __LHS_R_C <= R_C, __LHS_ROWID <= ROWID](R(R_A:int, R_B:int, R_C:int // ROWID:rowid)),
-                PROJECT[__RHS_R_A <= R_A, __RHS_R_B <= R_B, 
-                        __RHS_R_C <= R_C, __RHS_ROWID <= ROWID](R(R_A:int, R_B:int, R_C:int // ROWID:rowid))
+                PROJECT[R_A_1 <= R_A, R_B_1 <= R_B, 
+                        R_C_1 <= R_C, ROWID_1 <= ROWID](R(R_A:int, R_B:int, R_C:int // ROWID:rowid)),
+                PROJECT[R_A_2 <= R_A, R_B_2 <= R_B, 
+                        R_C_2 <= R_C, ROWID_2 <= ROWID](R(R_A:int, R_B:int, R_C:int // ROWID:rowid))
               )
             )
           )"""
@@ -238,12 +238,12 @@ object CompilerSpec extends Specification {
           )
         """
       ) must be equalTo oper(
-        """PROJECT[A <= R_A, C <= R_C, N <= {{ test_0[__LHS_ROWID, R_A] }}, 
+        """PROJECT[A <= R_A, C <= R_C, N <= {{ test_0[ROWID_1, R_A] }}, 
                    S_C <= S_C, S_D <= S_D](
             SELECT[R_C = S_C](
               JOIN(
                 PROJECT[R_A <= R_A, R_B <= R_B, R_C <= R_C, 
-                        __LHS_ROWID <= ROWID](R(R_A:int, R_B:int, R_C:int // ROWID:rowid)), 
+                        ROWID_1 <= ROWID](R(R_A:int, R_B:int, R_C:int // ROWID:rowid)), 
                 PROJECT[S_C <= S_C, S_D <= S_D](S)
               )
             )
