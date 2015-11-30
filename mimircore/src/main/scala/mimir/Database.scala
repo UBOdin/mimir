@@ -4,7 +4,7 @@ import java.sql.SQLException
 
 import mimir.algebra._
 import mimir.ctables.{Model, VGTerm}
-import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
+import mimir.exec.{Compiler, CompileMode, ResultIterator, ResultSetIterator}
 import mimir.lenses.{Lens, LensManager}
 import mimir.parser.OperatorParser
 import mimir.sql.{Backend, CreateLens, RAToSql, SqlToRA}
@@ -59,6 +59,7 @@ case class Database(name: String, backend: Backend)
         case Some(x) => x
         case None => throw new SQLException("Table "+x+" does not exist in db!")
       })
+  var compileMode = CompileMode.Hybrid
 
   def getName = name
   

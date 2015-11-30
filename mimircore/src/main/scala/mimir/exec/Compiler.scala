@@ -16,16 +16,34 @@ import net.sf.jsqlparser.statement.select._
 
 class Compiler(db: Database) {
 
-  val standardOptimizations =
-    List[Operator => Operator](
-     CTPercolator.percolate _, // Partition Det & Nondet query fragments
+  val modeOptimizations = Map[CompileMode.Mode, (List[Operator => Operator])](
+    (CompileMode.Classic, List[Operator => Operator](
+      CTPercolator.percolate _
+    )),
+    (CompileMode.Partition, List[Operator => Operator](
+      CTPercolator.percolate _,
+      CTPartition.partition _
+    )),
+    (CompileMode.Inline, List[Operator => Operator](
+      CTPercolator.percolate _, // Partition Det & Nondet query fragments
+      PushdownSelections.optimize _
+    )),
+    (CompileMode.Hybrid, List[Operator => Operator](
+      CTPercolator.percolate _,
       CTPartition.partition _,
-      // CTPercolator.percolateNoJoin _, // Partition Det & Nondet query fragments
-//      CTPercolator.partitionConstraints _, // Partition constraint col according to data
-      PushdownSelections.optimize _,
-      inlineDataIndependentVars _,
-      compileAnalysis _         // Transform BOUNDS(), CONF(), etc... into actual expressions that SQL can understand
-    )
+      PushdownSelections.optimize _
+    ))
+  )
+
+  val standardPostOptimizations = List[Operator => Operator](
+    inlineDataIndependentVars _,
+    compileAnalysis _         // Transform BOUNDS(), CONF(), etc... into actual expressions that SQL can understand
+  )
+
+  def standardOptimizations: List[Operator => Operator] = {
+    modeOptimizations(db.compileMode) ++ 
+      standardPostOptimizations
+  }
 
   /**
    * Perform a full end-end compilation pass.  Return an iterator over
@@ -225,4 +243,9 @@ class Compiler(db: Database) {
         }
     }
   }
+}
+
+object CompileMode extends Enumeration {
+  type Mode = Value
+  val Classic, Partition, Inline, Hybrid = Value
 }

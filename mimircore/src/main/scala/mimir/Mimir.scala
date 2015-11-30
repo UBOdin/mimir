@@ -1,10 +1,12 @@
 package mimir;
 
 import java.io._
+import java.sql.SQLException
 
 import mimir.ctables.CTPercolator
 import mimir.parser._
 import mimir.sql._
+import mimir.exec.CompileMode
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
 import org.rogach.scallop._;
@@ -51,6 +53,15 @@ object Mimir {
         source = new FileReader(conf.file());
         usePrompt = false;
       }
+
+      db.compileMode = 
+        conf.nonDetStrategy().toLowerCase match {
+          case "classic" => CompileMode.Classic
+          case "partition" => CompileMode.Partition
+          case "inline" => CompileMode.Inline
+          case "hybrid" => CompileMode.Hybrid
+          case x => throw new SQLException("Invalid Non-Determinism Strategy: '"+x+"'")
+        }
 
       eventLoop(source)
     }
@@ -140,6 +151,7 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
     default = Some("sqlite"))
   val dbname = opt[String]("db", descr = "Connect to the database with the specified name",
     default = Some("tpch.db"))
+  val nonDetStrategy = opt[String]("ndStrat", descr = "Non-Determinism Strategy (classic,partition,inline,[hybrid])", default = Some("hybrid"))
   val initDB = toggle("init", default = Some(false))
   val quiet  = toggle("quiet", default = Some(false))
   val file = trailArg[String](required = false)
