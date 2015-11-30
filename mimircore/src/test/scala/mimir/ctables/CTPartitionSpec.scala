@@ -1,0 +1,110 @@
+package mimir.ctables;
+
+import java.io.{StringReader,FileReader}
+
+import mimir.parser.{MimirJSqlParser}
+import org.specs2.mutable._
+
+import mimir._
+import mimir.parser._
+import mimir.algebra._
+import mimir.sql._
+import mimir.util._
+
+object CTPartitionSpec extends Specification {
+  
+  val boundsSpecModel = JointSingleVarModel(List(
+    UniformDistribution,
+    UniformDistribution,
+    UniformDistribution,
+    UniformDistribution,
+    UniformDistribution
+  ))
+  val schema = Map[String,List[(String,Type.T)]](
+    ("R", List( 
+      ("A", Type.TInt), 
+      ("B", Type.TInt)
+    )),
+    ("S", List( 
+      ("C", Type.TInt), 
+      ("D", Type.TInt)
+    ))
+  )
+
+  def db = Database("testdb", null);
+  def parser = new OperatorParser((x: String) => boundsSpecModel, schema(_))
+  def expr = parser.expr _
+  def oper = parser.operator _
+
+  def partition(x:Operator) = CTPartition.partition(x)
+  def partition(x:String) = CTPartition.partition(oper(x))
+  def extract(x:Expression) = CTPartition.allCandidateConditions(x)
+  def extract(x:String) = CTPartition.allCandidateConditions(expr(x))
+
+  "The Partitioner" should {
+
+    "Handle Base Relations" in {
+      partition("R(A, B)") must be equalTo oper("R(A, B)")
+
+      partition("R(A, B // ROWID:String)") must be equalTo 
+        oper("R(A, B // ROWID:String)")
+    }
+
+    "Handle Deterministic Projection" in {
+      partition("PROJECT[A <= A](R(A, B))") must be equalTo 
+        oper("PROJECT[A <= A](R(A, B))")
+    }
+
+    "Handle Simple Non-Determinstic Projection" in {
+      partition("""
+        PROJECT[A <= A, __MIMIR_CONDITION <= {{Q_1[B, ROWID]}}](R(A, B))
+      """) must be equalTo oper("""
+        PROJECT[A <= A, __MIMIR_CONDITION <= {{Q_1[B, ROWID]}}](R(A, B))
+      """)
+    }
+
+    "Extract A Single Condition Correctly" in {
+      CTPartition.extractCondition(BoolPrimitive(true), List(
+          WhenThenClause(expr("A IS NULL"), expr("{{Q_1[A, ROWID]}}"))
+        ), false) must be equalTo (List(
+          expr("A IS NULL"), expr("A IS NOT NULL")
+        ), true, true)
+    }
+
+    "Extract Conditions Correctly" in {
+      extract(
+        CaseExpression(List(WhenThenClause(expr("A IS NULL"), expr("{{Q_1[ROWID]}}"))), expr("A"))
+      ) must be equalTo(
+        List(expr("A IS NULL"), expr("A IS NOT NULL"))
+      )
+    }
+
+    "Handle Conditional Non-Determinstic Projection" in {
+      partition(
+        Project(List(
+            ProjectArg("A", expr("A")),
+            ProjectArg(CTables.conditionColumn, 
+              Comparison(Cmp.Gt,
+                CaseExpression(List(
+                  WhenThenClause(expr("A IS NULL"), expr("{{Q_1[ROWID]}}"))
+                ), expr("A")),
+                expr("4")
+              )
+            )
+          ),
+          oper("R(A,B)")
+        )
+      ) must be equalTo (
+        Union(true,
+          Project(List(
+              ProjectArg("A", expr("A")),
+              ProjectArg(CTables.conditionColumn, expr("{{Q_1[ROWID]}} > 4"))
+            ),
+            oper("SELECT[A IS NULL](R(A,B))")
+          ),
+          oper("PROJECT[A <= A](SELECT[(A IS NOT NULL) AND (A > 4)](R(A,B)))")
+        )
+      )
+    }
+  }
+}

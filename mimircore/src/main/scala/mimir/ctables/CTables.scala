@@ -16,6 +16,7 @@ abstract class Model {
   def sampleGenExpr     (idx: Int, args: List[Expression    ]):  Expression
   def sample            (seed: Long, idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
   def reason            (idx: Int, args: List[Expression]): (String, String)
+  def backingStore      (idx: Int): String
 }
 
 case class VGTerm(
@@ -56,7 +57,9 @@ object CTables
     case VGTerm(_, _, _) => true
     case MissingValueAnalysis(_, _, _) => true
     case TypeInferenceAnalysis(_, _, _) => true
-    case Function(_, _) => true
+    case Function("JOIN_ROWIDS", _) => expr.children.exists( isProbabilistic(_) )
+    case Function("CAST", _) => expr.children.exists( isProbabilistic(_) )
+    case Function("DATE", _) => false
     case _ => expr.children.exists( isProbabilistic(_) )
   }
 

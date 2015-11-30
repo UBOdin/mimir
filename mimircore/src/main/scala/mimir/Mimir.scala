@@ -1,10 +1,13 @@
 package mimir;
 
 import java.io._
+import java.sql.SQLException
 
 import mimir.ctables.CTPercolator
 import mimir.parser._
 import mimir.sql._
+import mimir.algebra.{Project,ProjectArg,Var}
+import mimir.exec.CompileMode
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
 import org.rogach.scallop._;
@@ -52,6 +55,15 @@ object Mimir {
         usePrompt = false;
       }
 
+      db.compileMode = 
+        conf.nonDetStrategy().toLowerCase match {
+          case "classic" => CompileMode.Classic
+          case "partition" => CompileMode.Partition
+          case "inline" => CompileMode.Inline
+          case "hybrid" => CompileMode.Hybrid
+          case x => throw new SQLException("Invalid Non-Determinism Strategy: '"+x+"'")
+        }
+
       eventLoop(source)
     }
 
@@ -95,15 +107,22 @@ object Mimir {
 
   def handleExplain(explain: Explain): Unit = {
     val raw = db.convert(explain.getSelectBody())._1
+    val optimized = db.optimize(raw)
+    val sql = db.convert(optimized)
     println("------ Raw Query ------")
     println(raw)
     println("--- Optimized Query ---")
-    println(db.optimize(raw))
+    println(optimized)
+    // println("--- SQL Query ---")
+    // println(sql)
   }
 
   def handleSelect(sel: Select): Unit = {
     val raw = db.convert(sel)
-    val results = db.query(CTPercolator.propagateRowIDs(raw, true))
+    val rawPlusRowID = Project(ProjectArg("MIMIR_PROVENANCE", Var("ROWID")) ::
+                               raw.schema.map( (x) => ProjectArg(x._1, Var(x._1))),
+                               raw)
+    val results = db.query(rawPlusRowID)
     results.open()
     db.dump(results)
     results.close()
@@ -135,7 +154,8 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   val backend = opt[String]("driver", descr = "Which backend database to use? ([sqlite],oracle)",
     default = Some("sqlite"))
   val dbname = opt[String]("db", descr = "Connect to the database with the specified name",
-    default = Some("debug.db"))
+    default = Some("tpch.db"))
+  val nonDetStrategy = opt[String]("ndStrat", descr = "Non-Determinism Strategy (classic,partition,inline,[hybrid])", default = Some("hybrid"))
   val initDB = toggle("init", default = Some(false))
   val quiet  = toggle("quiet", default = Some(false))
   val file = trailArg[String](required = false)

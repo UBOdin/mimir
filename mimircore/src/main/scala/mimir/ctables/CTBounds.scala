@@ -112,7 +112,7 @@ object CTBounds {
       	// println("TRUE: "+false_if_impossible + " -> " + Eval.inline(false_if_impossible))
  	    return (Eval.inline(true_if_always), Eval.inline(false_if_impossible))
 
-      case IsNullExpression(_, _) => (new BoolPrimitive(false), new BoolPrimitive(true))
+      case IsNullExpression(_) => (new BoolPrimitive(false), new BoolPrimitive(true))
     }
   }
 

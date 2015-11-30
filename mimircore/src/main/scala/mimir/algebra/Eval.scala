@@ -73,22 +73,24 @@ object Eval
         case p:Proc => {
           p.get(p.getArgs.map(eval(_, bindings)))
         }
-        case IsNullExpression(c, n) => {
+        case IsNullExpression(c) => {
           val isNull: Boolean = 
             eval(c, bindings).
             isInstanceOf[NullPrimitive];
-          if(n){ return BoolPrimitive(!isNull); }
-          else { return BoolPrimitive(isNull); }
+          return BoolPrimitive(isNull);
         }
         case Function(op, params) => {
           op match {
             case "JOIN_ROWIDS" => new RowIdPrimitive(params.map(x => eval(x).asString).mkString("."))
+            case "DATE" =>
+              val date = params.head.asInstanceOf[StringPrimitive].v.split("-").map(x => x.toInt)
+              new DatePrimitive(date(0), date(1), date(2))
             case "__LIST_MIN" =>
               new FloatPrimitive(params.map(x => {
                 try {
                   eval(x).asDouble
                 } catch {
-                  case e:Throwable => 0.0
+                  case e:Throwable => Double.MaxValue
                 }
               }).min) // TODO Generalized Comparator
             case "__LIST_MAX" =>
@@ -96,7 +98,7 @@ object Eval
                 try {
                   eval(x).asDouble
                 } catch {
-                  case e:Throwable => 0.0
+                  case e:Throwable => Double.MinValue
                 }
               }).max) // TODO Generalized Comparator
             case "__LEFT_UNION_ROWID" =>
@@ -186,7 +188,8 @@ object Eval
    * CASE statements are simplified further.  See simplifyCase()
    */
   def simplify(e: Expression): Expression = {
-    if(getVars(e).isEmpty && 
+    // println("Simplify: "+e)
+    if(ExpressionUtils.getColumns(e).isEmpty && 
        !CTables.isProbabilistic(e)) 
     { 
       try {
@@ -198,7 +201,7 @@ object Eval
     } else e match { 
       case CaseExpression(wtClauses, eClause) =>
         simplifyCase(List(), wtClauses, eClause)
-      case _ => e
+      case _ => e.rebuild(e.children.map(simplify(_)))
     }
   }
 
@@ -383,15 +386,6 @@ object Eval
     }
   }
 
-  /**
-   * Compute the set of variables that appear in the specified expression.
-   */
-  def getVars(e: Expression): Set[String] = 
-    e match { 
-      case Var(v) => Set(v)
-      case _ => e.children.map(getVars(_)).fold(Set[String]())( _ ++ _ )
-    }
-
   def getVGTerms(e: Expression): List[VGTerm] = {
     getVGTerms(e, Map(), List())
   }
@@ -425,7 +419,7 @@ object Eval
             ).getOrElse(getVGTerms(caseElse, bindings, l))
 
           case Not(c) => getVGTerms(c, bindings, l)
-          case IsNullExpression(c, n) => getVGTerms(c, bindings, l)
+          case IsNullExpression(c) => getVGTerms(c, bindings, l)
           case _ => List()
         }
       )

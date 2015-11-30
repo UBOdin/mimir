@@ -46,7 +46,9 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 		)
 
 	def isNull = 
-		arith <~ "IS NULL" ^^ { case e => IsNullExpression(e, false); } 
+		( arith <~ "IS NULL" ^^ { case e => IsNullExpression(e); } 
+		| arith <~ "IS NOT NULL" ^^ { case e => Not(IsNullExpression(e)); } 
+		)
 
 	def cmpSym = 
 		(

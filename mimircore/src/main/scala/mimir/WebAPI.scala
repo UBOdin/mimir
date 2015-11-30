@@ -17,7 +17,7 @@ import net.sf.jsqlparser.util.deparser.{InsertDeParser, ExpressionDeParser, Sele
 
 import scala.collection.mutable.ListBuffer
 
-class WebAPI(dbName: String = "debug.db", backend: String = "sqlite") {
+class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
 
 
   val db = new Database(dbName, new JDBCBackend(backend, dbName))
@@ -95,8 +95,8 @@ class WebAPI(dbName: String = "debug.db", backend: String = "sqlite") {
     val results = db.query(CTPercolator.propagateRowIDs(raw, true))
     val resultsT = System.nanoTime()
 
-    println("Convert time: "+((start-rawT)/(1000*1000))+"ms")
-    println("Compile time: "+((rawT-resultsT)/(1000*1000))+"ms")
+    println("Convert time: "+((rawT-start)/(1000*1000))+"ms")
+    println("Compile time: "+((resultsT-rawT)/(1000*1000))+"ms")
 
     results.open()
     val wIter: WebIterator = db.generateWebIterator(results)
@@ -259,7 +259,7 @@ class WebAPI(dbName: String = "debug.db", backend: String = "sqlite") {
       }
       case Arithmetic(o, l, r) => extractVGTerms(l) ++ extractVGTerms(r)
       case Comparison(o, l, r) => extractVGTerms(l) ++ extractVGTerms(r)
-      case IsNullExpression(child, neg) => extractVGTerms(child)
+      case IsNullExpression(child) => extractVGTerms(child)
       case Function(op, params) => List(op)
       case _ => List()
     }

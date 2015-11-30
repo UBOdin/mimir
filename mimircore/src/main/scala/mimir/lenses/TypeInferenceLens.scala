@@ -7,6 +7,7 @@ import mimir.algebra.Type.T
 import mimir.algebra._
 import mimir.ctables._
 import mimir.exec.ResultIterator
+import mimir.util.TypeUtils
 
 class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
   extends Lens(name, args, source) {
@@ -14,7 +15,7 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
   var orderedSourceSchema: List[(String,Type.T)] = null
   var inferenceModel: Model = null
   var db: Database = null
-  
+
   val model = new TypeCastModel(this)
 
   def sourceSchema() = {
@@ -45,7 +46,7 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
               VGTerm(
                 (name, model),
                 i,
-                List(Var("ROWID"), VGTerm((name, inferenceModel), i, List()))
+                List(Var("ROWID"), Var(k), VGTerm((name, inferenceModel), i, List()))
               )
             )
           },
@@ -159,7 +160,7 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
   }
 
   override def mostLikelyValue(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
-    new StringPrimitive(Type.toString(inferredTypeMap(idx)._2))
+    new StringPrimitive(TypeUtils.convert(inferredTypeMap(idx)._2))
   }
 
   override def upperBoundExpr(idx: Int, args: List[Expression]): Expression = {
@@ -198,6 +199,8 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
       " is " + Type.toString(inferredTypeMap(idx)._2) +
       " with " + percentage.toString + "% of the data conforming to the expected type", "TYPE_INFERENCE")
   }
+
+  override def backingStore(idx: Int): String = ???
 }
 
 case class TypeInferenceAnalysis(model: TypeInferenceModel,
@@ -290,8 +293,8 @@ class TypeCastModel(lens: TypeInferenceLens) extends Model {
         } catch {
           case e: TypeException => return new NullPrimitive
         },
-        Type.fromStringPrimitive(
-          args(1).asInstanceOf[StringPrimitive]
+        TypeUtils.convert(
+          args(2).asInstanceOf[StringPrimitive].v
         )
       )
     }
@@ -344,6 +347,8 @@ class TypeCastModel(lens: TypeInferenceLens) extends Model {
           mlv + " with type " + Type.toString(varTypes(idx)), "TYPE_INFERENCE")
     }
   }
+
+  override def backingStore(idx: Int): String = ???
 }
 
 case class TypeCastAnalysis(model: TypeCastModel,

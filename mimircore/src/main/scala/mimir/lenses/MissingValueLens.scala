@@ -1,11 +1,13 @@
 package mimir.lenses
 
+import java.io.File
 import java.sql._
 import java.util
 
 import mimir.algebra._
 import mimir.ctables._
 import mimir.exec.ResultIterator
+import mimir.util.TypeUtils
 import mimir.{Analysis, Database}
 import moa.classifiers.Classifier
 import moa.core.InstancesHeader
@@ -49,7 +51,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
           ProjectArg(k,
             CaseExpression(
               List(WhenThenClause(
-                mimir.algebra.IsNullExpression(Var(k), false),
+                mimir.algebra.IsNullExpression(Var(k)),
                 rowVar(u)
               )),
               Var(k)
@@ -75,7 +77,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
         if (idx < 0) {
           new NoOpModel(t).asInstanceOf[SingleVarModel]
         } else {
-          val m = new MissingValueModel(this)
+          val m = new MissingValueModel(this, name+"_"+x._2)
           val classIndex = allKeys().indexOf(keysToBeCleaned.get(idx))
           if(loading) {
             val path = java.nio.file.Paths.get(
@@ -85,7 +87,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
             val classifier = weka.core.SerializationHelper.read(path).asInstanceOf[Classifier]
             m.init(classifier, classIndex)
           } else {
-            m.init(db.query(source), classIndex)
+            m.init(source, classIndex)
           }
           m.asInstanceOf[SingleVarModel]
         }
@@ -102,6 +104,8 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
             db.lenses.serializationFolderPath.toString,
             name+"_"+i
           ).toString
+          val file = new File(path)
+          file.getParentFile.mkdirs()
           weka.core.SerializationHelper.write(path, classifier)
 
         case _ =>
@@ -158,7 +162,7 @@ case class MissingValueAnalysis(model: MissingValueModel, args: List[Expression]
   }
 
   def exprType(bindings: Map[String, Type.T]) = {
-    val att = model.data.attribute(model.cIndex)
+    val att = model.getLearner.getModelContext().attribute(model.cIndex)
     if (att.isString)
       Type.TString
     else if (att.isNumeric)
@@ -170,7 +174,7 @@ case class MissingValueAnalysis(model: MissingValueModel, args: List[Expression]
   def rebuild(c: List[Expression]) = new MissingValueAnalysis(model, c, analysisType)
 }
 
-class MissingValueModel(lens: MissingValueLens)
+class MissingValueModel(lens: MissingValueLens, name: String)
   extends SingleVarModel(Type.TInt) {
   var learner: Classifier =
     Analysis.getLearner("moa.classifiers.bayes.NaiveBayes");
@@ -178,6 +182,7 @@ class MissingValueModel(lens: MissingValueLens)
   var numCorrect = 0;
   var numSamples = 0;
   var cIndex = 0;
+  def backingStore() = "__"+name+"_BACKEND"
 
   def reason(args: List[Expression]): (String, String) =
     ("I made a best guess estimate for this data element, which was originally NULL", "MISSING_VALUE")
@@ -187,12 +192,14 @@ class MissingValueModel(lens: MissingValueLens)
     learner = classifier
   }
 
-  def init(iterator: ResultIterator, classIndex: Int) = {
+  def init(source: Operator, classIndex: Int) = {
     cIndex = classIndex
+    val iterator = lens.db.query(source)
     val attributes = getAttributesFromIterator(iterator)
     data = new Instances("TrainData", attributes, 100)
 
-    while(iterator.getNext()) {
+    var numInstances = 0
+    while(iterator.getNext() && numInstances < 10000) {
       val instance = new DenseInstance(iterator.numCols)
       instance.setDataset(data)
       for(j <- 0 until iterator.numCols                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       ) {
@@ -211,6 +218,7 @@ class MissingValueModel(lens: MissingValueLens)
         }
       }
       data.add(instance)
+      numInstances = numInstances + 1
     }
     data.setClassIndex(classIndex)
 
@@ -218,7 +226,31 @@ class MissingValueModel(lens: MissingValueLens)
     learner.prepareForUse()
     data.foreach(learn(_))
 
-    iterator.close()
+    lens.db.update(
+      "CREATE TABLE IF NOT EXISTS "+backingStore()+""" (
+        | EXP_LIST varchar(100) PRIMARY KEY,
+        | DATA varchar(100),
+        | TYPE char(10),
+        | ACCEPTED char(1)
+        | );
+        | DELETE FROM """.stripMargin+backingStore()+";"
+    )
+
+    val rowidIterator = lens.db.query(CTPercolator.propagateRowIDs(source, true))
+
+    rowidIterator.open()
+    while(rowidIterator.getNext()) {
+      if(rowidIterator(classIndex+1).exprType(Map()) == Type.TAny) {
+        val explist = List(rowidIterator(0))
+        val data = computeMostLikelyValue(explist)
+        val typ = TypeUtils.convert(data.exprType(Map()))
+        val accepted = "N"
+        val tuple = List(explist.map(x => x.asString).mkString("|"), data.asString, typ, accepted)
+        lens.db.update(
+          "INSERT INTO "+backingStore()+" VALUES (?, ?, ?, ?);", tuple
+        )
+      }
+    }
   }
 
   def learn(dataPoint: Instance) = {
@@ -243,12 +275,12 @@ class MissingValueModel(lens: MissingValueLens)
     if (!rowValues.getNext()) {
       throw new SQLException("Invalid Source Data ROWID: '" + rowid + "'");
     }
-    val row = new DenseInstance(lens.allKeys.length)
+    val row = new DenseInstance(rowValues.numCols)
     val attributes = getAttributesFromIterator(rowValues)
     data = new Instances("TestData", attributes, 1)
     row.setDataset(data)
-    (0 until lens.allKeys.length).foreach((col) => {
-      val v = rowValues(col + 1)
+    (0 until rowValues.numCols).foreach((col) => {
+      val v = rowValues(col)
       if (!v.isInstanceOf[NullPrimitive]) {
         if (v.isInstanceOf[IntPrimitive] || v.isInstanceOf[FloatPrimitive]) {
           row.setValue(col, v.asDouble)
@@ -267,13 +299,26 @@ class MissingValueModel(lens: MissingValueLens)
   private def getAttributesFromIterator(iterator: ResultIterator): util.ArrayList[Attribute] = {
     val attributes = new util.ArrayList[Attribute]()
     iterator.schema.foreach { case (n, t) =>
-      t match {
-        case Type.TInt | Type.TFloat => attributes.add(new Attribute(n))
+      (n, t) match {
+        case ("ROWID", _) => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
+        case (_, Type.TInt | Type.TFloat) => attributes.add(new Attribute(n))
         case _ => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
       }
     }
 
     attributes
+  }
+
+  private def computeMostLikelyValue(args: List[PrimitiveValue]): PrimitiveValue = {
+    val att = learner.getModelContext.attribute(cIndex)
+    val classes = classify(args(0))
+    val res = if (classes.isEmpty) att.numValues() - 1 else classes.maxBy(_._1)._2
+    if (att.isString)
+      StringPrimitive(att.value(res))
+    else if (att.isNumeric)
+      IntPrimitive(res)
+    else
+      throw new SQLException("Unknown type")
   }
 
   ////// Model implementation
@@ -287,6 +332,16 @@ class MissingValueModel(lens: MissingValueLens)
       IntPrimitive(res)
     else
       throw new SQLException("Unknown type")
+
+//    val res = lens.db.query(
+//      "SELECT DATA, TYPE FROM __"+name+"_BACKEND WHERE EXP_LIST = "+args.map(x => x.asString).mkString("|")+";"
+//    )
+//    if(!res.getNext()) throw new SQLException("Value not found for "+name+". Explist: "+args.mkString("|"))
+//    res(1).asString match {
+//      case "TInt" => IntPrimitive(res(0).asLong)
+//      case "TFloat" => FloatPrimitive(res(0).asDouble)
+//      case _ => res(0)
+//    }
   }
 
   def lowerBound(args: List[PrimitiveValue]) = {

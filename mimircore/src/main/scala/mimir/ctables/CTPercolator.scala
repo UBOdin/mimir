@@ -4,7 +4,7 @@ import java.sql.SQLException
 
 import mimir.algebra._
 import mimir.util._
-
+import mimir.optimizer._
 
 object CTPercolator {
 
@@ -22,9 +22,13 @@ object CTPercolator {
    */
   def percolate(oper: Operator): Operator = {
     // println("Percolate: "+o)
-    OperatorUtils.extractUnions(
-      propagateRowIDs(oper)
-    ).map( percolateOne(_) ).reduceLeft( Union(true,_,_) )
+    InlineProjections.optimize(
+      OperatorUtils.extractUnions(
+      // InlineProjections.optimize(
+          propagateRowIDs(oper)
+        // )
+      ).map( percolateOne(_) ).reduceLeft( Union(true,_,_) )
+    )
   }
   
   /*
@@ -37,13 +41,13 @@ object CTPercolator {
    * uncertainty-creating projections to allow 
    * the uncertain attributes to percolate up.
    */
-  def percolateOne(o: Operator): Operator = 
+  def percolateOne(o: Operator): Operator =
   {
     // println("percolateOne: "+o)
     val extractProject:
         Operator => ( List[(String,Expression)], Operator ) =
       (e: Operator) =>
-        e match { 
+        e match {
           case Project(cols, rest) => (
               cols.map( (x) => (x.column, x.input) ),
               rest
@@ -61,24 +65,24 @@ object CTPercolator {
         // List(ProjectArg(CTables.conditionColumn, BoolPrimitive(true)))
       }
     }
-    val afterDescent = 
-      o.rebuild( 
-        o.children.map( percolateOne(_) ) 
+    val afterDescent =
+      o.rebuild(
+        o.children.map( percolateOne(_) )
         // post-condition: Only the immediate child
         // of o is uncertainty-generating.
-      ) 
+      )
     // println("---\nbefore\n"+o+"\nafter\n"+afterDescent+"\n")
     afterDescent match {
       case t: Table => t
-      case Project(cols, p2 @ Project(_, source)) => 
+      case Project(cols, p2 @ Project(_, source)) =>
         val bindings = p2.bindings
         // println("---\nrebuilding\n"+o)
         // println("mapping with bindings " + bindings.toString)
         val ret = Project(
-          (cols ++ addConstraintCol(p2)).map( 
-            (x) => ProjectArg( 
-              x.column, 
-              Eval.inline(x.input, bindings) 
+          (cols ++ addConstraintCol(p2)).map(
+            (x) => ProjectArg(
+              x.column,
+              Eval.inline(x.input, bindings)
           )),
           source
         )
@@ -86,42 +90,42 @@ object CTPercolator {
         return ret
       case Project(cols, source) =>
         return Project(cols ++ addConstraintCol(source), source)
-      case s @ Select(cond1, Select(cond2, source)) => 
+      case s @ Select(cond1, Select(cond2, source)) =>
         return Select(Arithmetic(Arith.And,cond1,cond2), source)
       case s @ Select(cond, p @ Project(cols, source)) =>
-        // Percolate the projection up through the 
+        // Percolate the projection up through the
         // selection
         if(!CTables.isProbabilistic(p)){
-          return Project(cols, 
+          return Project(cols,
             percolateOne(Select(Eval.inline(cond, p.bindings),source))
           )
         } else {
           val newCond = Eval.inline(cond, p.bindings)
           CTables.extractProbabilisticClauses(newCond) match {
-            case (BoolPrimitive(true), BoolPrimitive(true)) => 
+            case (BoolPrimitive(true), BoolPrimitive(true)) =>
               // Select clause is irrelevant
               return p
-            case (BoolPrimitive(true), c:Expression) => 
+            case (BoolPrimitive(true), c:Expression) =>
               // Select clause is deterministic
               return Project(cols, Select(c, source))
-            case (u, c) => 
-              // Select clause is at least partly 
+            case (u, c) =>
+              // Select clause is at least partly
               // nondeterministic
-              val newSelect = 
+              val newSelect =
                 if(c == BoolPrimitive(true)){ source }
                 else { percolateOne(Select(c, source)) }
-              val inputCondition = 
+              val inputCondition =
                 cols.find( _.column == CTables.conditionColumn )
               if(inputCondition.isEmpty){
                 return Project(cols ++ List(
                           ProjectArg(CTables.conditionColumn, u)
-                        ), 
+                        ),
                         newSelect
                 )
               } else {
                 return Project(cols.map(
                     (x) => if(x.column == CTables.conditionColumn){
-                      ProjectArg(CTables.conditionColumn, 
+                      ProjectArg(CTables.conditionColumn,
                         Arith.makeAnd(x.input, u)
                       )
                     } else { x }
@@ -131,81 +135,94 @@ object CTPercolator {
         }
       case s: Select => return s
       case Join(lhs, rhs) => {
-        
+
         // println("Percolating Join: \n" + o)
-        
-        val rename = (name:String, x:String) => 
-                ("__"+name+"_"+x)
+        val makeName = (name:String, x:Integer) =>
+          (name+"_"+x)
         val (lhsCols, lhsChild) = extractProject(percolate(lhs))
         val (rhsCols, rhsChild) = extractProject(percolate(rhs))
-        
+
 //         println("Percolated LHS: "+lhsCols+"\n" + lhsChild)
 //         println("Percolated RHS: "+rhsCols+"\n" + rhsChild)
-        
+
         // Pulling projections up through a join may require
         // renaming columns under the join if the same column
         // name appears on both sides of the source
         val lhsColNames = lhsChild.schema.map(_._1).toSet
         val rhsColNames = rhsChild.schema.map(_._1).toSet
-        
+
         val conflicts = (
           (lhsColNames & rhsColNames)
           | (Set[String]("ROWID") & lhsColNames)
           | (Set[String]("ROWID") & rhsColNames)
-        ) 
+        )
+        var allNames = lhsColNames ++ rhsColNames
+
+        val nameMap = conflicts.map( (col) => {
+          var lhsSuffix = 1
+          while(allNames.contains(makeName(col, lhsSuffix))){ lhsSuffix += 1; }
+          var rhsSuffix = lhsSuffix + 1
+          while(allNames.contains(makeName(col, rhsSuffix))){ rhsSuffix += 1; }
+          (col, (lhsSuffix, rhsSuffix))
+        }).toMap
+        val renameLHS = (name:String) =>
+          makeName(name, nameMap(name)._1)
+        val renameRHS = (name:String) =>
+          makeName(name, nameMap(name)._2)
+
 //        println("CONFLICTS: "+conflicts+"in: "+lhsColNames+", "+rhsColNames+"; for \n"+afterDescent);
-          
-        val newJoin = 
+
+        val newJoin =
           if(conflicts.isEmpty) {
             Join(lhsChild, rhsChild)
           } else {
-            val fullMapping = (name:String, x:String) => {
-              ( if(conflicts contains x){ rename(name, x) }
-                else { x }, 
-                Var(x)
+            val fullMapping = (name:String, rename:String => String) => {
+              ( if(conflicts contains name){ rename(name) }
+                else { name },
+                Var(name)
               )
             }
             // Create a projection that remaps the names of
             // all the variables to the appropriate unqiue
             // name.
-            val rewrite = (name:String, child:Operator) => {
+            val rewrite = (child:Operator, rename:String => String) => {
               Project(
                 child.schema.map(_._1).
-                  map( fullMapping(name, _) ).
+                  map( fullMapping(_, rename) ).
                   map( (x) => ProjectArg(x._1, x._2)).toList,
                 child
               )
             }
             Join(
-              rewrite("LHS", lhsChild),
-              rewrite("RHS", rhsChild)
+              rewrite(lhsChild, renameLHS),
+              rewrite(rhsChild, renameRHS)
             )
           }
-        val remap = (name: String, 
-                     cols: List[(String,Expression)]) => 
+        val remap = (cols: List[(String,Expression)], 
+                     rename:String => String) =>
         {
           val mapping =
-            conflicts.map( 
-              (x) => (x, Var(rename(name, x))) 
+            conflicts.map(
+              (x) => (x, Var(rename(x)))
             ).toMap[String, Expression]
           cols.filter( _._1 != CTables.conditionColumn ).
             map( _ match { case (name, expr) =>
               (name, Eval.inline(expr, mapping))
             })
         }
-        var cols = remap("LHS", lhsCols) ++
-                   remap("RHS", rhsCols)
-        val lhsHasCondition = 
+        var cols = remap(lhsCols, renameLHS) ++
+                   remap(rhsCols, renameRHS)
+        val lhsHasCondition =
           lhsCols.exists( _._1 == CTables.conditionColumn)
-        val rhsHasCondition = 
+        val rhsHasCondition =
           rhsCols.exists( _._1 == CTables.conditionColumn)
         if(lhsHasCondition || rhsHasCondition) {
           if(conflicts contains CTables.conditionColumn){
             cols = cols ++ List(
-              ( CTables.conditionColumn, 
-                Arithmetic(Arith.And, 
-                  Var(rename("LHS", CTables.conditionColumn)),
-                  Var(rename("RHS", CTables.conditionColumn))
+              ( CTables.conditionColumn,
+                Arithmetic(Arith.And,
+                  Var(renameLHS(CTables.conditionColumn)),
+                  Var(renameRHS(CTables.conditionColumn))
               )))
           } else {
             cols = cols ++ List(
@@ -217,14 +234,14 @@ object CTPercolator {
         val ret = {
           if(cols.exists(
               _ match {
-                case (colName, Var(varName)) => 
+                case (colName, Var(varName)) =>
                         (colName != varName)
                 case _ => true
-              }) 
+              })
             )
           {
             Project( cols.map(
-              _ match { case (name, colExpr) => 
+              _ match { case (name, colExpr) =>
                 ProjectArg(name, colExpr)
               }),
               newJoin
@@ -237,6 +254,152 @@ object CTPercolator {
       }
     }
   }
+
+  // def percolateNoJoin(oper: Operator): Operator = {
+  //   OperatorUtils.extractUnions(
+  //     propagateRowIDs(oper)
+  //   ).map( percolateOneNoJoin(_) ).reduceLeft( Union(true,_,_) )
+  // }
+
+  // def percolateOneNoJoin(o: Operator): Operator =
+  // {
+  //   // println("percolateOne: "+o)
+  //   val extractProject:
+  //   Operator => ( List[(String,Expression)], Operator ) =
+  //     (e: Operator) =>
+  //       e match {
+  //         case Project(cols, rest) => (
+  //           cols.map( (x) => (x.column, x.input) ),
+  //           rest
+  //           )
+  //         case _ => (
+  //           e.schema.map(_._1).map( (x) => (x, Var(x)) ).toList,
+  //           e
+  //           )
+  //       }
+  //   val afterDescent =
+  //     o.rebuild(
+  //       o.children.map( percolateOneNoJoin(_) )
+  //       // post-condition: Only the immediate child
+  //       // of o is uncertainty-generating.
+  //     )
+  //   // println("---\nbefore\n"+o+"\nafter\n"+afterDescent+"\n")
+  //   afterDescent match {
+  //     case t: Table => t
+  //     case Project(cols, p2 @ Project(_, source)) =>
+  //       val bindings = p2.bindings
+  //       // println("---\nrebuilding\n"+o)
+  //       // println("mapping with bindings " + bindings.toString)
+  //       val ret = Project(
+  //         (cols).map(
+  //           (x) => ProjectArg(
+  //             x.column,
+  //             Eval.inline(x.input, bindings)
+  //           )),
+  //         source
+  //       )
+  //       // println("---\nrebuilt\n"+ret)
+  //       ret
+  //     case Project(cols, source) =>
+  //       Project(cols, source)
+  //     case s @ Select(cond1, Select(cond2, source)) =>
+  //       Select(Arithmetic(Arith.And,cond1,cond2), source)
+  //     case s @ Select(cond, p @ Project(cols, source)) =>
+  //       // Percolate the projection up through the
+  //       // selection
+  //       Project(cols,
+  //           percolateOneNoJoin(Select(Eval.inline(cond, p.bindings),source))
+  //         )
+
+  //     case s: Select => s
+  //     case Join(lhs, rhs) => {
+
+  //       // println("Percolating Join: \n" + o)
+
+  //       val rename = (name:String, x:String) =>
+  //         ("__"+name+"_"+x)
+  //       val (lhsCols, lhsChild) = extractProject(percolateNoJoin(lhs))
+  //       val (rhsCols, rhsChild) = extractProject(percolateNoJoin(rhs))
+
+  //       //         println("Percolated LHS: "+lhsCols+"\n" + lhsChild)
+  //       //         println("Percolated RHS: "+rhsCols+"\n" + rhsChild)
+
+  //       // Pulling projections up through a join may require
+  //       // renaming columns under the join if the same column
+  //       // name appears on both sides of the source
+  //       val lhsColNames = lhsChild.schema.map(_._1).toSet
+  //       val rhsColNames = rhsChild.schema.map(_._1).toSet
+
+  //       val conflicts = (
+  //         (lhsColNames & rhsColNames)
+  //           | (Set[String]("ROWID") & lhsColNames)
+  //           | (Set[String]("ROWID") & rhsColNames)
+  //         )
+  //       //        println("CONFLICTS: "+conflicts+"in: "+lhsColNames+", "+rhsColNames+"; for \n"+afterDescent);
+
+  //       val newJoin =
+  //         if(conflicts.isEmpty) {
+  //           Join(lhsChild, rhsChild)
+  //         } else {
+  //           val fullMapping = (name:String, x:String) => {
+  //             ( if(conflicts contains x){ rename(name, x) }
+  //             else { x },
+  //               Var(x)
+  //               )
+  //           }
+  //           // Create a projection that remaps the names of
+  //           // all the variables to the appropriate unqiue
+  //           // name.
+  //           val rewrite = (name:String, child:Operator) => {
+  //             Project(
+  //               child.schema.map(_._1).
+  //                 map( fullMapping(name, _) ).
+  //                 map( (x) => ProjectArg(x._1, x._2)).toList,
+  //               child
+  //             )
+  //           }
+  //           Join(
+  //             rewrite("LHS", lhsChild),
+  //             rewrite("RHS", rhsChild)
+  //           )
+  //         }
+  //       val remap = (name: String,
+  //                    cols: List[(String,Expression)]) =>
+  //       {
+  //         val mapping =
+  //           conflicts.map(
+  //             (x) => (x, Var(rename(name, x)))
+  //           ).toMap[String, Expression]
+  //         cols.map( _ match { case (name, expr) =>
+  //             (name, Eval.inline(expr, mapping))
+  //           })
+  //       }
+  //       var cols = remap("LHS", lhsCols) ++
+  //         remap("RHS", rhsCols)
+  //       // println(cols.toString);
+  //       val ret = {
+  //         if(cols.exists(
+  //           _ match {
+  //             case (colName, Var(varName)) =>
+  //               (colName != varName)
+  //             case _ => true
+  //           })
+  //         )
+  //         {
+  //           Project( cols.map(
+  //             _ match { case (name, colExpr) =>
+  //               ProjectArg(name, colExpr)
+  //             }),
+  //             newJoin
+  //           )
+  //         } else {
+  //           newJoin
+  //         }
+  //       }
+  //       return ret
+  //     }
+  //   }
+  // }
 
   def expandProbabilisticCases(expr: Expression): 
     List[(Expression, Expression)] = 
@@ -350,9 +513,9 @@ object CTPercolator {
   {
     // println("Propagate["+(if(force){"F"}else{"NF"})+"]:\n" + oper);
     oper match {
-      case Project(args, child) =>
+      case p @ Project(args, child) =>
         var newArgs = args;
-        if(force) {
+        if(force && p.get("ROWID").isEmpty) {
           newArgs = 
             (new ProjectArg("ROWID", Var("ROWID"))) :: 
               newArgs
@@ -436,24 +599,20 @@ object CTPercolator {
 
 
 
-  private def extractMissingValueVarPVar(expr: Expression): (Option[Var], Option[VGTerm]) = {
+  private def extractMissingValueVar(expr: Expression): Var = {
     expr match {
-      case CaseExpression(List(WhenThenClause(IsNullExpression(var1: Var, false), vg: VGTerm)), var2: Var) =>
-        if(var1 == var2) (Some(var1), Some(vg)) else (None, None)
+      case CaseExpression(List(WhenThenClause(IsNullExpression(v1: Var), vg: VGTerm)), v2: Var) =>
+        if(v1 == v2) v1 else throw new SQLException("Unexpected clause to extractMisingValueVar")
 
-      case va: Var => (Some(va), None)
-
-      case _ => (None, None)
+      case _ => throw new SQLException("Unexpected clause to extractMisingValueVar")
     }
   }
 
-  private def extractMissingValueMCClause(expr: Expression):
-    ( (Option[Var], Option[VGTerm]), (Option[Var], Option[VGTerm]) ) = {
-
+  private def isMissingValueExpression(expr: Expression): Boolean = {
     expr match {
-      case Comparison(_, lhs, rhs) =>
-        (extractMissingValueVarPVar(lhs), extractMissingValueVarPVar(rhs))
-
+      case CaseExpression(List(WhenThenClause(IsNullExpression(var1: Var), vg: VGTerm)), var2: Var) =>
+        var1 == var2
+      case _ => false
     }
   }
 
@@ -475,67 +634,58 @@ object CTPercolator {
 
   def partition(oper: Project): Operator = {
     val cond = oper.columns.find(p => p.column.equalsIgnoreCase(CTables.conditionColumn)).head.input
-    var detOp: Operator = null
-    var nondetOp: Operator = null
+    var otherClausesOp: Operator = null
+    var missingValueClausesOp: Operator = null
+    var detExpr: List[Expression] = List()
+    var nonDeterExpr: List[Expression] = List()
 
-    val (nondetExpr, detExpr) =
+
+    val (missingValueClauses, otherClauses) =
       splitArith(cond).partition { (p) =>
-        val (lhs, rhs) = extractMissingValueMCClause(p)
-        (lhs._1.isDefined && lhs._2.isDefined) || (rhs._1.isDefined && rhs._2.isDefined)
+        p match {
+          case Comparison(_, lhs, rhs) => isMissingValueExpression(lhs) || isMissingValueExpression(rhs)
+          case _ => false
+        }
       }
 
-    if(nondetExpr.nonEmpty)
-      nondetOp = nondetExpr.map { (e) =>
-        val (lhs, rhs) = extractMissingValueMCClause(e)
-        (lhs._1, lhs._2, rhs._1, rhs._2) match {
-          case (None, None, None, None) => throw new SQLException("Invalid values in partition")
+    missingValueClauses.foreach{ (e) =>
+      e match {
+        case Comparison(op, lhs, rhs) =>
+          var lhsExpr = lhs
+          var rhsExpr = rhs
 
-          case (Some(_), Some(_), None, None) => oper
+          if (isMissingValueExpression(lhs)) {
+            val lhsVar = extractMissingValueVar(lhs)
+            lhsExpr = lhsVar
+            detExpr ++= List(Not(IsNullExpression(lhsVar)))
+            nonDeterExpr ++= List(IsNullExpression(lhsVar))
+          }
+          if (isMissingValueExpression(rhs)) {
+            val rhsVar = extractMissingValueVar(rhs)
+            rhsExpr = rhsVar
+            detExpr ++= List(Not(IsNullExpression(rhsVar)))
+            nonDeterExpr ++= List(IsNullExpression(rhsVar))
+          }
 
-          case (None, None, Some(_), Some(_)) => oper
+          detExpr ++= List(Comparison(op, lhsExpr, rhsExpr))
 
-          case (Some(va1), Some(vg1), Some(va2), None) =>
-            Union(
-              true,
-              removeConstraintColumn(oper).rebuild( List(Select(Comparison(Cmp.Eq, va1, va2), oper.children().head)) ),
-              oper.rebuild( List(Select(IsNullExpression(va1), oper.children().head)) )
-            )
+        case _ => throw new SQLException("Missing Value Clauses must be Comparison expressions")
+      }
+    }
 
-          case (Some(va1), None, Some(va2), Some(vg2)) =>
-            Union(
-              true,
-              removeConstraintColumn(oper).rebuild( List(Select(Comparison(Cmp.Eq, va1, va2), oper.children().head)) ),
-              oper.rebuild( List(Select(IsNullExpression(va2), oper.children().head)) )
-            )
+    missingValueClausesOp = Union(true,
+      removeConstraintColumn(oper).rebuild(List(Select(detExpr.distinct.reduce(Arith.makeAnd(_, _)), oper.children().head))),
+      oper.rebuild(List(Select(nonDeterExpr.distinct.reduce(Arith.makeOr(_, _)), oper.children().head)))
+    )
 
-          case (Some(va1), Some(vg1), Some(va2), Some(vg2)) =>
-            Union(
-              true,
-              removeConstraintColumn(oper).rebuild( List(Select(Comparison(Cmp.Eq, va1, va2), oper.children().head))),
-              oper.rebuild(
-                List(
-                  Select(
-                    Arithmetic(
-                      Arith.Or,
-                      IsNullExpression(va1),
-                      IsNullExpression(va2)
-                    ), oper.children().head
-                  )
-                )
-              )
-            )
-          case _ => throw new SQLException("Unhandled case in CTPercolator.partition")
-        }
-      }.reduce(Union(false, _, _))
-
-    if(detExpr.nonEmpty)
-      detOp = Project(
+    if(otherClauses.nonEmpty)
+      otherClausesOp = Project(
         oper.columns.filterNot( (p) => p.column.equalsIgnoreCase(CTables.conditionColumn))
-          ++ List(ProjectArg(CTables.conditionColumn, detExpr.reduce(Arith.makeAnd(_, _)))),
+          ++ List(ProjectArg(CTables.conditionColumn, otherClauses.reduce(Arith.makeAnd(_, _)))),
         oper.source
       )
 
-    (detOp, nondetOp) match {
+    (otherClausesOp, missingValueClausesOp) match {
       case (null, null) => throw new SQLException("Both partitions null")
 
       case (null, y) => y

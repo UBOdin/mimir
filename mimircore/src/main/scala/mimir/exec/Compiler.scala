@@ -3,24 +3,51 @@ package mimir.exec
 ;
 
 import java.sql._
+import java.util
 
 import mimir.Database
+import mimir.algebra.Union
 import mimir.algebra._
-import mimir.ctables._;
+import mimir.ctables._
+import mimir.optimizer._
+import mimir.lenses.TypeCastModel
+import net.sf.jsqlparser.statement.select._
+;
 
 class Compiler(db: Database) {
 
-  val standardOptimizations =
-    List[Operator => Operator](
+  val modeOptimizations = Map[CompileMode.Mode, (List[Operator => Operator])](
+    (CompileMode.Classic, List[Operator => Operator](
+      CTPercolator.percolate _
+    )),
+    (CompileMode.Partition, List[Operator => Operator](
+      CTPercolator.percolate _,
+      CTPartition.partition _
+    )),
+    (CompileMode.Inline, List[Operator => Operator](
       CTPercolator.percolate _, // Partition Det & Nondet query fragments
-//      CTPercolator.partitionConstraints _, // Partition constraint col according to data
-      optimize _,               // Basic Optimizations
-      compileAnalysis _         // Transform BOUNDS(), CONF(), etc... into actual expressions that SQL can understand
-    )
+      PushdownSelections.optimize _
+    )),
+    (CompileMode.Hybrid, List[Operator => Operator](
+      CTPercolator.percolate _,
+      CTPartition.partition _,
+      PushdownSelections.optimize _
+    ))
+  )
+
+  val standardPostOptimizations = List[Operator => Operator](
+    inlineDataIndependentVars _,
+    compileAnalysis _         // Transform BOUNDS(), CONF(), etc... into actual expressions that SQL can understand
+  )
+
+  def standardOptimizations: List[Operator => Operator] = {
+    modeOptimizations(db.compileMode) ++ 
+      standardPostOptimizations
+  }
 
   /**
    * Perform a full end-end compilation pass.  Return an iterator over
-   * the result set.  
+   * the result set.
    */
   def compile(oper: Operator): ResultIterator =
     compile(oper, standardOptimizations)
@@ -31,15 +58,44 @@ class Compiler(db: Database) {
    */
   def compile(oper: Operator, opts: List[Operator => Operator]):
   ResultIterator = {
-    val optimizedOper = opts.foldLeft(oper)((o, fn) => fn(o))
+    val optimizedOper = optimize(oper, opts)
     // Finally build the iterator
     buildIterator(optimizedOper)
   }
 
   /**
-   * Apply any local optimization rewrites.  Currently a placeholder.
+   * Optimize the query
    */
-  def optimize(oper: Operator): Operator = oper
+  def optimize(oper: Operator): Operator = 
+    optimize(oper, standardOptimizations)
+
+  /**
+   * Optimize the query
+   */
+  def optimize(oper: Operator, opts: List[Operator => Operator]): Operator =
+    opts.foldLeft(oper)((o, fn) => fn(o))
+
+
+  def inlineDataIndependentVars(oper: Operator): Operator =
+  oper match {
+    /*
+     Rewrite TypeInference VGTerms to SQL equivalent cast expression
+     */
+    case Project(cols, src) =>
+      Project(
+        cols.zipWithIndex.map{(coli) =>
+          coli._1.input match {
+            case VGTerm((_, model: TypeCastModel), idx, args) =>
+              ProjectArg(coli._1.column, Function("CAST", List(args(1), args(2))))
+            case _ =>
+              coli._1
+          }
+        },
+        src
+     )
+
+    case _ => oper
+  }
 
   /**
    * Build an iterator out of the specified operator.  If the operator
@@ -72,22 +128,23 @@ class Compiler(db: Database) {
             cols.map((x) => (x.column, x.input))
           );
 
-        case Union(true, lhs, rhs) =>
+        case mimir.algebra.Union(true, lhs, rhs) =>
           new BagUnionResultIterator(
             buildIterator(lhs),
             buildIterator(rhs)
           );
 
-        case Union(false, _, _) =>
+        case mimir.algebra.Union(false, _, _) =>
           throw new UnsupportedOperationException("UNION DISTINCT unimplemented")
 
         case _ =>
-          throw new SQLException("Called buildIterator without calling percolate\n" + oper);
+          db.query(db.convert(oper))
+          // throw new SQLException("Called buildIterator without calling percolate\n" + oper);
       }
 
 
     } else {
-      db.query(db.convert(oper));
+      db.query(db.convert(oper))
     }
   }
 
@@ -175,8 +232,8 @@ class Compiler(db: Database) {
         )
       }
 
-      case u@Union(bool, lhs, rhs) =>
-        Union(bool, compileAnalysis(lhs), compileAnalysis(rhs))
+      case u@mimir.algebra.Union(bool, lhs, rhs) =>
+        mimir.algebra.Union(bool, compileAnalysis(lhs), compileAnalysis(rhs))
 
       case _ =>
         if (CTables.isProbabilistic(oper)) {
@@ -186,4 +243,9 @@ class Compiler(db: Database) {
         }
     }
   }
+}
+
+object CompileMode extends Enumeration {
+  type Mode = Value
+  val Classic, Partition, Inline, Hybrid = Value
 }

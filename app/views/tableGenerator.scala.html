@@ -1,4 +1,4 @@
-@(webIter: mimir.web.WebIterator, limit: Int)
+@(webIter: mimir.web.WebIterator)
 
 <div id="visual">
     <div id="graph"></div>
@@ -13,7 +13,7 @@
         </tr>
     </thead>
     <tbody>
-        @for((l, c) <- webIter.data.slice(0, limit)) {
+        @for((l, c) <- webIter.data) {
             @if(c) {
                 <tr class="deterministic_row">
                     <td class="rowid_col">@l.head</td>
