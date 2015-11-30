@@ -117,7 +117,7 @@ case class Database(name: String, backend: Backend)
    */
   def optimize(oper: Operator): Operator =
   {
-    compiler.standardOptimizations.foldLeft(oper)( (o, fn) => fn(o) )
+    compiler.optimize(oper)
   }
 
   /**

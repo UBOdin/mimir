@@ -101,8 +101,8 @@ object Mimir {
     println(raw)
     println("--- Optimized Query ---")
     println(optimized)
-    println("--- SQL Query ---")
-    println(sql)
+    // println("--- SQL Query ---")
+    // println(sql)
   }
 
   def handleSelect(sel: Select): Unit = {

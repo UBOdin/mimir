@@ -133,9 +133,8 @@ object CTPercolator {
       case Join(lhs, rhs) => {
 
         // println("Percolating Join: \n" + o)
-
-        val rename = (name:String, x:String) =>
-                ("__"+name+"_"+x)
+        val makeName = (name:String, x:Integer) =>
+          (name+"_"+x)
         val (lhsCols, lhsChild) = extractProject(percolate(lhs))
         val (rhsCols, rhsChild) = extractProject(percolate(rhs))
 
@@ -153,48 +152,62 @@ object CTPercolator {
           | (Set[String]("ROWID") & lhsColNames)
           | (Set[String]("ROWID") & rhsColNames)
         )
+        val allNames = lhsColNames ++ rhsColNames
+
+        val nameMap = conflicts.map( (col) => {
+          var lhsSuffix = 1
+          while(allNames.contains(makeName(col, lhsSuffix))){ lhsSuffix += 1; }
+          var rhsSuffix = lhsSuffix + 1
+          while(allNames.contains(makeName(col, lhsSuffix))){ rhsSuffix += 1; }
+          (col, (lhsSuffix, rhsSuffix))
+        }).toMap
+        val renameLHS = (name:String) =>
+          makeName(name, nameMap(name)._1)
+        val renameRHS = (name:String) =>
+          makeName(name, nameMap(name)._2)
+
 //        println("CONFLICTS: "+conflicts+"in: "+lhsColNames+", "+rhsColNames+"; for \n"+afterDescent);
 
         val newJoin =
           if(conflicts.isEmpty) {
             Join(lhsChild, rhsChild)
           } else {
-            val fullMapping = (name:String, x:String) => {
-              ( if(conflicts contains x){ rename(name, x) }
-                else { x },
-                Var(x)
+            val fullMapping = (name:String, rename:String => String) => {
+              ( if(conflicts contains name){ rename(name) }
+                else { name },
+                Var(name)
               )
             }
             // Create a projection that remaps the names of
             // all the variables to the appropriate unqiue
             // name.
-            val rewrite = (name:String, child:Operator) => {
+            val rewrite = (child:Operator, rename:String => String) => {
               Project(
                 child.schema.map(_._1).
-                  map( fullMapping(name, _) ).
+                  map( fullMapping(_, rename) ).
                   map( (x) => ProjectArg(x._1, x._2)).toList,
                 child
               )
             }
             Join(
-              rewrite("LHS", lhsChild),
-              rewrite("RHS", rhsChild)
+              rewrite(lhsChild, renameLHS),
+              rewrite(rhsChild, renameRHS)
             )
           }
-        val remap = (name: String,
-                     cols: List[(String,Expression)]) =>
+        val remap = (cols: List[(String,Expression)], 
+                     rename:String => String) =>
         {
           val mapping =
             conflicts.map(
-              (x) => (x, Var(rename(name, x)))
+              (x) => (x, Var(rename(x)))
             ).toMap[String, Expression]
           cols.filter( _._1 != CTables.conditionColumn ).
             map( _ match { case (name, expr) =>
               (name, Eval.inline(expr, mapping))
             })
         }
-        var cols = remap("LHS", lhsCols) ++
-                   remap("RHS", rhsCols)
+        var cols = remap(lhsCols, renameLHS) ++
+                   remap(rhsCols, renameRHS)
         val lhsHasCondition =
           lhsCols.exists( _._1 == CTables.conditionColumn)
         val rhsHasCondition =
@@ -204,8 +217,8 @@ object CTPercolator {
             cols = cols ++ List(
               ( CTables.conditionColumn,
                 Arithmetic(Arith.And,
-                  Var(rename("LHS", CTables.conditionColumn)),
-                  Var(rename("RHS", CTables.conditionColumn))
+                  Var(renameLHS(CTables.conditionColumn)),
+                  Var(renameRHS(CTables.conditionColumn))
               )))
           } else {
             cols = cols ++ List(

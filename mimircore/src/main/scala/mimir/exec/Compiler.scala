@@ -9,6 +9,7 @@ import mimir.Database
 import mimir.algebra.Union
 import mimir.algebra._
 import mimir.ctables._
+import mimir.optimizer._
 import mimir.lenses.TypeCastModel
 import net.sf.jsqlparser.statement.select._
 ;
@@ -17,12 +18,12 @@ class Compiler(db: Database) {
 
   val standardOptimizations =
     List[Operator => Operator](
-//      CTPercolator.percolate _, // Partition Det & Nondet query fragments
-//      optimize _,               // Basic Optimizations
+     CTPercolator.percolate _, // Partition Det & Nondet query fragments
       CTPartition.partition _,
-      CTPercolator.percolateNoJoin _, // Partition Det & Nondet query fragments
+      // CTPercolator.percolateNoJoin _, // Partition Det & Nondet query fragments
 //      CTPercolator.partitionConstraints _, // Partition constraint col according to data
-      optimize _,               // Basic Optimizations
+      PushdownSelections.optimize _,
+      inlineDataIndependentVars _,
       compileAnalysis _         // Transform BOUNDS(), CONF(), etc... into actual expressions that SQL can understand
     )
 
@@ -39,15 +40,26 @@ class Compiler(db: Database) {
    */
   def compile(oper: Operator, opts: List[Operator => Operator]):
   ResultIterator = {
-    val optimizedOper = opts.foldLeft(oper)((o, fn) => fn(o))
+    val optimizedOper = optimize(oper, opts)
     // Finally build the iterator
     buildIterator(optimizedOper)
   }
 
   /**
-   * Apply any local optimization rewrites.  Currently a placeholder.
+   * Optimize the query
    */
-  def optimize(oper: Operator): Operator = oper match {
+  def optimize(oper: Operator): Operator = 
+    optimize(oper, standardOptimizations)
+
+  /**
+   * Optimize the query
+   */
+  def optimize(oper: Operator, opts: List[Operator => Operator]): Operator =
+    opts.foldLeft(oper)((o, fn) => fn(o))
+
+
+  def inlineDataIndependentVars(oper: Operator): Operator =
+  oper match {
     /*
      Rewrite TypeInference VGTerms to SQL equivalent cast expression
      */
