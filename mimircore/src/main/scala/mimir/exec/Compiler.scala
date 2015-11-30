@@ -120,7 +120,8 @@ class Compiler(db: Database) {
           throw new UnsupportedOperationException("UNION DISTINCT unimplemented")
 
         case _ =>
-          throw new SQLException("Called buildIterator without calling percolate\n" + oper);
+          db.query(db.convert(oper))
+          // throw new SQLException("Called buildIterator without calling percolate\n" + oper);
       }
 
 
