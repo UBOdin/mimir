@@ -24,11 +24,11 @@ class LensManager(db: Database) {
     db.update("""
       CREATE TABLE MIMIR_LENSES(
         name varchar(30), 
-        query text, 
+        query varchar(4000),
         lens_type varchar(30),
-        parameters text,
+        parameters varchar(4000),
         PRIMARY KEY(name)
-      );""")
+      )""")
 
     val serializationFolder = new File(serializationFolderPath.toString)
     if(!serializationFolder.exists()) {

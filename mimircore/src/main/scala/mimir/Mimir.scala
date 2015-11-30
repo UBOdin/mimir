@@ -119,7 +119,7 @@ object Mimir {
 
   def handleSelect(sel: Select): Unit = {
     val raw = db.convert(sel)
-    val rawPlusRowID = Project(ProjectArg("MIMIR_PROVENANCE", Var("ROWID")) ::
+    val rawPlusRowID = Project(ProjectArg("MIMIR_PROVENANCE", Var("ROWID_MIMIR")) ::
                                raw.schema.map( (x) => ProjectArg(x._1, Var(x._1))),
                                raw)
     val results = db.query(rawPlusRowID)

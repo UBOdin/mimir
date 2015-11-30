@@ -14,11 +14,14 @@ object JDBCUtils {
       case (java.sql.Types.FLOAT |
             java.sql.Types.DECIMAL |
             java.sql.Types.REAL |
-            java.sql.Types.DOUBLE)   => Type.TFloat
+            java.sql.Types.DOUBLE |
+            java.sql.Types.NUMERIC)   => Type.TFloat
       case (java.sql.Types.INTEGER)  => Type.TInt
-      case (java.sql.Types.DATE)     => Type.TDate
+      case (java.sql.Types.DATE |
+            java.sql.Types.TIMESTAMP)     => Type.TDate
       case (java.sql.Types.VARCHAR |
-            java.sql.Types.NULL)     => Type.TString
+            java.sql.Types.NULL |
+            java.sql.Types.CHAR)     => Type.TString
       case (java.sql.Types.ROWID)    => Type.TRowId
     }
   }
@@ -29,6 +32,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
   var conn: Connection = null
   var openConnections = 0
 
+  def driver() = backend
 
 
   def open() = {
@@ -143,8 +147,10 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     val tables = this.getAllTables().map{(x) => x.toUpperCase}
     if(!tables.contains(table.toUpperCase)) return None
 
-    val cols = conn.getMetaData()
-      .getColumns(null, null, table, "%")
+    val cols = backend match {
+      case "sqlite" => conn.getMetaData().getColumns(null, null, table, "%")
+      case "oracle" => conn.getMetaData().getColumns(null, "ARINDAMN", table, "%")  // TODO Generalize
+    }
 
     var ret = List[(String, Type.T)]()
 
@@ -154,17 +160,22 @@ class JDBCBackend(backend: String, filename: String) extends Backend
           cols.getString("COLUMN_NAME").toUpperCase, 
           JDBCUtils.convertSqlType(cols.getInt("DATA_TYPE"))
         ))
-      cols.next();
+      cols.next()
     }
-    Some(ret);
+    cols.close()
+    Some(ret)
   }
 
   def getAllTables(): List[String] = {
     if(conn == null) {
       throw new SQLException("Trying to use unopened connection!")
     }
+
     val metadata = conn.getMetaData()
-    val tables = metadata.getTables(null, null, "", null)
+    val tables = backend match {
+      case "sqlite" => metadata.getTables(null, null, "%", null)
+      case "oracle" => metadata.getTables(null, "ARINDAMN", "%", null) // TODO Generalize
+    }
 
     val tableNames = new ListBuffer[String]()
 

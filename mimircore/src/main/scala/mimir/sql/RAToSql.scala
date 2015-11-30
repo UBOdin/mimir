@@ -43,7 +43,12 @@ class RAToSql(db: Database) {
             metadata.map(_._1).map( (key) => {
               val item = new SelectExpressionItem()
               item.setAlias(key)
-              item.setExpression(new Column(table, key))
+              key match {
+                case "ROWID_MIMIR" =>
+                  item.setExpression(new Column(table, "ROWID"))
+                case _ =>
+                  item.setExpression(new Column(table, key))
+              }
               item
             })
           // )
@@ -242,6 +247,14 @@ class RAToSql(db: Database) {
           return castFunction
         }
 
+        if(name.equals("TO_DATE")) {
+          val toDate = new Function()
+          toDate.setName("TO_DATE")
+          val explist = new ExpressionList(new util.ArrayList[expression.Expression](subexp.map(convert(_))))
+          toDate.setParameters(explist)
+          return toDate
+        }
+
         if(subexp.length > 1)
           throw new SQLException("Function " + name + " SQL conversion error")
 
@@ -271,7 +284,7 @@ class RAToSql(db: Database) {
 
         /* This is particularly terrible */
         column.setTable(backingStore)
-        column.setColumnName("DATA AS TYPE")
+        column.setColumnName("DATA AS INTEGER")
         list.add(column)
 
         explist.setExpressions(list)

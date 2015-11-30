@@ -153,8 +153,8 @@ object CTPercolator {
 
         val conflicts = (
           (lhsColNames & rhsColNames)
-          | (Set[String]("ROWID") & lhsColNames)
-          | (Set[String]("ROWID") & rhsColNames)
+          | (Set[String]("ROWID_MIMIR") & lhsColNames)
+          | (Set[String]("ROWID_MIMIR") & rhsColNames)
         )
         var allNames = lhsColNames ++ rhsColNames
 
@@ -332,8 +332,8 @@ object CTPercolator {
 
   //       val conflicts = (
   //         (lhsColNames & rhsColNames)
-  //           | (Set[String]("ROWID") & lhsColNames)
-  //           | (Set[String]("ROWID") & rhsColNames)
+  //           | (Set[String]("ROWID_MIMIR") & lhsColNames)
+  //           | (Set[String]("ROWID_MIMIR") & rhsColNames)
   //         )
   //       //        println("CONFLICTS: "+conflicts+"in: "+lhsColNames+", "+rhsColNames+"; for \n"+afterDescent);
 
@@ -501,7 +501,7 @@ object CTPercolator {
   
   def requiresRowID(expr: Expression): Boolean = {
     expr match {
-      case Var("ROWID") => true;
+      case Var("ROWID_MIMIR") => true;
       case _ => expr.children.exists( requiresRowID(_) )
     }
   }
@@ -515,9 +515,9 @@ object CTPercolator {
     oper match {
       case p @ Project(args, child) =>
         var newArgs = args;
-        if(force && p.get("ROWID").isEmpty) {
+        if(force && p.get("ROWID_MIMIR").isEmpty) {
           newArgs = 
-            (new ProjectArg("ROWID", Var("ROWID"))) :: 
+            (new ProjectArg("ROWID_MIMIR", Var("ROWID_MIMIR"))) ::
               newArgs
         }
         Project(newArgs, 
@@ -532,20 +532,20 @@ object CTPercolator {
       case Join(left, right) =>
         if(force){
           Project(
-            ProjectArg("ROWID",
+            ProjectArg("ROWID_MIMIR",
               Function("JOIN_ROWIDS", List[Expression](Var("LEFT_ROWID"), Var("RIGHT_ROWID")))) ::
             (left.schema ++ right.schema).map(_._1).map(
               (x) => ProjectArg(x, Var(x)) 
             ).toList,
             Join(
               Project(
-                ProjectArg("LEFT_ROWID", Var("ROWID")) ::
+                ProjectArg("LEFT_ROWID", Var("ROWID_MIMIR")) ::
                 left.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toList,
                 propagateRowIDs(left, true)),
               Project(
-                ProjectArg("RIGHT_ROWID", Var("ROWID")) ::
+                ProjectArg("RIGHT_ROWID", Var("ROWID_MIMIR")) ::
                 right.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toList,
@@ -563,17 +563,17 @@ object CTPercolator {
           if(force){
             Union(true, 
               Project(
-                ProjectArg("ROWID", 
+                ProjectArg("ROWID_MIMIR",
                   Function("__LEFT_UNION_ROWID",
-                    List[Expression](Var("ROWID")))) ::
+                    List[Expression](Var("ROWID_MIMIR")))) ::
                 left.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toList,
                 propagateRowIDs(left, true)),
               Project(
-                ProjectArg("ROWID", 
+                ProjectArg("ROWID_MIMIR",
                   Function("__RIGHT_UNION_ROWID",
-                    List[Expression](Var("ROWID")))) ::
+                    List[Expression](Var("ROWID_MIMIR")))) ::
                 right.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toList,
@@ -587,8 +587,8 @@ object CTPercolator {
           }
         
         case Table(name, sch, metadata) =>
-          if(force && !metadata.exists( _._1 == "ROWID" )){
-            Table(name, sch, metadata ++ Map(("ROWID", Type.TRowId)))
+          if(force && !metadata.exists( _._1 == "ROWID_MIMIR" )){
+            Table(name, sch, metadata ++ Map(("ROWID_MIMIR", Type.TRowId)))
           } else {
             Table(name, sch, metadata)
           }

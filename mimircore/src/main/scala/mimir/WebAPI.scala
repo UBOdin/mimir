@@ -180,7 +180,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
     val iterator = db.query(
       CTPercolator.percolate(
         mimir.algebra.Select(
-          Comparison(Cmp.Eq, Var("ROWID"), new RowIdPrimitive(row.substring(1, row.length - 1))),
+          Comparison(Cmp.Eq, Var("ROWID_MIMIR"), new RowIdPrimitive(row.substring(1, row.length - 1))),
           db.optimize(raw)
         )
       )

@@ -182,7 +182,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
   var numCorrect = 0;
   var numSamples = 0;
   var cIndex = 0;
-  def backingStore() = "__"+name+"_BACKEND"
+  def backingStore() = name+"_BACKEND"
 
   def reason(args: List[Expression]): (String, String) =
     ("I made a best guess estimate for this data element, which was originally NULL", "MISSING_VALUE")
@@ -199,6 +199,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     data = new Instances("TrainData", attributes, 100)
 
     var numInstances = 0
+    iterator.open()
     while(iterator.getNext() && numInstances < 10000) {
       val instance = new DenseInstance(iterator.numCols)
       instance.setDataset(data)
@@ -220,21 +221,27 @@ class MissingValueModel(lens: MissingValueLens, name: String)
       data.add(instance)
       numInstances = numInstances + 1
     }
+    iterator.close()
     data.setClassIndex(classIndex)
 
     learner.setModelContext(new InstancesHeader(data))
     learner.prepareForUse()
     data.foreach(learn(_))
 
-    lens.db.update(
-      "CREATE TABLE IF NOT EXISTS "+backingStore()+""" (
-        | EXP_LIST varchar(100) PRIMARY KEY,
-        | DATA varchar(100),
-        | TYPE char(10),
-        | ACCEPTED char(1)
-        | );
-        | DELETE FROM """.stripMargin+backingStore()+";"
-    )
+    if(lens.db.getTableSchema(backingStore()).isEmpty) {
+      lens.db.update(
+        "CREATE TABLE "+backingStore()+""" (
+                                         | EXP_LIST varchar(100),
+                                         | DATA varchar(100),
+                                         | TYPE char(10),
+                                         | ACCEPTED char(1),
+                                         | PRIMARY KEY (EXP_LIST)
+                                         | )""".stripMargin
+      )
+    }
+    else {
+      lens.db.update( "DELETE FROM "+backingStore() )
+    }
 
     val rowidIterator = lens.db.query(CTPercolator.propagateRowIDs(source, true))
 
@@ -247,10 +254,11 @@ class MissingValueModel(lens: MissingValueLens, name: String)
         val accepted = "N"
         val tuple = List(explist.map(x => x.asString).mkString("|"), data.asString, typ, accepted)
         lens.db.update(
-          "INSERT INTO "+backingStore()+" VALUES (?, ?, ?, ?);", tuple
+          "INSERT INTO "+backingStore()+" VALUES (?, ?, ?, ?)", tuple
         )
       }
     }
+    rowidIterator.close()
   }
 
   def learn(dataPoint: Instance) = {
@@ -267,11 +275,12 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     val rowValues = lens.db.query(
       CTPercolator.percolate(
         Select(
-          Comparison(Cmp.Eq, Var("ROWID"), rowid),
+          Comparison(Cmp.Eq, Var("ROWID_MIMIR"), rowid),
           lens.source
         )
       )
     )
+    rowValues.open()
     if (!rowValues.getNext()) {
       throw new SQLException("Invalid Source Data ROWID: '" + rowid + "'");
     }
@@ -290,6 +299,8 @@ class MissingValueModel(lens: MissingValueLens, name: String)
         }
       }
     })
+
+    rowValues.close()
     learner.getVotesForInstance(row).
       toList.
       zipWithIndex.
@@ -300,7 +311,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     val attributes = new util.ArrayList[Attribute]()
     iterator.schema.foreach { case (n, t) =>
       (n, t) match {
-        case ("ROWID", _) => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
+        case ("ROWID_MIMIR", _) => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
         case (_, Type.TInt | Type.TFloat) => attributes.add(new Attribute(n))
         case _ => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
       }
