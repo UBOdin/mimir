@@ -21,20 +21,20 @@ create table LineItem(
 create table Orders(
 	orderKey INTEGER PRIMARY KEY, custKey INTEGER, orderStatus, totalPrice REAL, orderDate, orderPriority, clerk, shipPriority, comment);
 
--- create index PartPKI on Part(partkey);
--- create index SupplierPK on Supplier(suppkey);
--- create index PartSuppPKI on PartSupp(partkey, suppkey);
--- create index CustomerPKI on Customer(custkey);
--- create index NationPKI on Nation(nationkey);
--- create index RegionPKI on Region(regionkey);
--- create index LineItemPKI on LineItem(orderkey, lineNumber);
--- create index OrdersPKI on Orders(orderkey);
+create index PartPKI on Part(partkey);
+create index SupplierPK on Supplier(suppkey);
+create index PartSuppPKI on PartSupp(partkey, suppkey);
+create index CustomerPKI on Customer(custkey);
+create index NationPKI on Nation(nationkey);
+create index RegionPKI on Region(regionkey);
+create index LineItemPKI on LineItem(orderkey, lineNumber);
+create index OrdersPKI on Orders(orderkey);
 
--- create index SupplierNations on Supplier(nationkey);
--- create index CustomerNations on Customer(nationkey);
--- create index LineItemParts on LineItem(partkey);
--- create index LineItemSuppliers on LineItem(suppkey);
--- create index OrderCustomers on Orders(custKey);
--- create index PartSuppSupp on PartSupp(suppkey);
+create index SupplierNations on Supplier(nationkey);
+create index CustomerNations on Customer(nationkey);
+create index LineItemParts on LineItem(partkey);
+create index LineItemSuppliers on LineItem(suppkey);
+create index OrderCustomers on Orders(custKey);
+create index PartSuppSupp on PartSupp(suppkey);
 
 -- create index OrderDate on Orders(orderDate);
