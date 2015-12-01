@@ -39,8 +39,13 @@ class ResultSetIterator(src: ResultSet) extends ResultIterator
           () => {
             if(meta.getColumnType(i+1) == java.sql.Types.TIMESTAMP) {
               val calendar = Calendar.getInstance()
-              calendar.setTime(src.getDate(i+1))
-              new DatePrimitive(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DATE))
+              try{
+                calendar.setTime(src.getDate(i+1))
+                new DatePrimitive(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DATE))
+              } catch {
+                case e: NullPointerException =>
+                  new NullPrimitive
+              }
             }
             else {
               throw new UnsupportedOperationException()
