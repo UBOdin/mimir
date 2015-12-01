@@ -5,6 +5,7 @@ import java.sql._
 import mimir.Methods
 import mimir.algebra.Type
 
+import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 ;
 
@@ -34,6 +35,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
 
   def driver() = backend
 
+  val tableSchemas: scala.collection.mutable.Map[String, List[(String, Type.T)]] = mutable.Map()
 
   def open() = {
     this.synchronized({
@@ -144,26 +146,34 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     if(conn == null) {
       throw new SQLException("Trying to use unopened connection!")
     }
-    val tables = this.getAllTables().map{(x) => x.toUpperCase}
-    if(!tables.contains(table.toUpperCase)) return None
 
-    val cols = backend match {
-      case "sqlite" => conn.getMetaData().getColumns(null, null, table, "%")
-      case "oracle" => conn.getMetaData().getColumns(null, "ARINDAMN", table, "%")  // TODO Generalize
+    tableSchemas.get(table) match {
+      case x: Some[_] => x
+      case None =>
+        val tables = this.getAllTables().map{(x) => x.toUpperCase}
+        if(!tables.contains(table.toUpperCase)) return None
+
+        val cols = backend match {
+          case "sqlite" => conn.getMetaData().getColumns(null, null, table, "%")
+          case "oracle" => conn.getMetaData().getColumns(null, "ARINDAMN", table, "%")  // TODO Generalize
+        }
+
+        var ret = List[(String, Type.T)]()
+
+        while(cols.isBeforeFirst()){ cols.next(); }
+        while(!cols.isAfterLast()){
+          ret = ret ++ List((
+            cols.getString("COLUMN_NAME").toUpperCase,
+            JDBCUtils.convertSqlType(cols.getInt("DATA_TYPE"))
+            ))
+          cols.next()
+        }
+        cols.close()
+
+        tableSchemas += table -> ret
+        Some(ret)
+
     }
-
-    var ret = List[(String, Type.T)]()
-
-    while(cols.isBeforeFirst()){ cols.next(); }
-    while(!cols.isAfterLast()){
-      ret = ret ++ List((
-          cols.getString("COLUMN_NAME").toUpperCase, 
-          JDBCUtils.convertSqlType(cols.getInt("DATA_TYPE"))
-        ))
-      cols.next()
-    }
-    cols.close()
-    Some(ret)
   }
 
   def getAllTables(): List[String] = {
