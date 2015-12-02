@@ -46,7 +46,7 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
               VGTerm(
                 (name, model),
                 i,
-                List(Var("ROWID"), Var(k), VGTerm((name, inferenceModel), i, List()))
+                List(Var("ROWID_MIMIR"), Var(k), VGTerm((name, inferenceModel), i, List()))
               )
             )
           },
@@ -254,7 +254,7 @@ class TypeCastModel(lens: TypeInferenceLens) extends Model {
     val rowValues = lens.db.query(
       CTPercolator.percolate(
         Select(
-          Comparison(Cmp.Eq, Var("ROWID"), rowid),
+          Comparison(Cmp.Eq, Var("ROWID_MIMIR"), rowid),
           lens.source
         )
       )

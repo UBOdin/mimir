@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+<comment>jdbc</comment>
+<entry key="user">arindamn</entry>
+<entry key="url">jdbc:oracle:thin:arindamn/yu1aj7daWm4Et8@norn.cse.buffalo.edu:1521:norn</entry>
+<entry key="password">yu1aj7daWm4Et8</entry>
+</properties>

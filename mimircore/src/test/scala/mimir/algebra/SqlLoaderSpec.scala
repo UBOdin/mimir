@@ -96,7 +96,7 @@ object SqlLoaderSpec extends Specification with FileMatchers {
 		 				), Table("R", Map(("R_A", Type.TInt), 
 		 								  ("R_B", Type.TInt), 
 		 								  ("R_C", Type.TInt)).toList,
-		 							  Map(("ROWID", Type.TRowId)).toList
+		 							  Map(("ROWID_MIMIR", Type.TRowId)).toList
 				))
 
 		 	;

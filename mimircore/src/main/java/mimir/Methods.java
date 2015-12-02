@@ -35,7 +35,7 @@ public class Methods {
 			ods = new OracleDataSource();
         // Set the user name, password, driver type and network protocol    
         Properties props = new Properties();
-        FileInputStream fis = new FileInputStream("config/jdbc.property");
+        FileInputStream fis = new FileInputStream("mimircore/config/jdbc.property");
         //loading properites from properties file
         props.loadFromXML(fis);
         //reading proeprty
