@@ -11,14 +11,17 @@ object PushdownSelections {
 	{
 		o match {
 			case Project(cols, src) =>
+				// println("Cols: "+cols.map(_.getColumnName))
 				val (conditionCol, rest) =
 					cols.partition(_.getColumnName == CTables.conditionColumn)
 				if(conditionCol.isEmpty) {
+					// println("NOT CONVERTING")
 					// If there's no condition column, just recur
 					return Project(cols, optimize(src))
 				} else {
+					// println("CONVERTING")
 					// If there is a condition column, convert it to a selection
-					return Project(cols, optimize(Select(conditionCol.head.input, src)))
+					return Project(rest, optimize(Select(conditionCol.head.input, src)))
 				}
 			case Select(cond1, Select(cond2, src)) =>
 				optimize(Select(Arith.makeAnd(cond1, cond2), src))
