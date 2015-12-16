@@ -26,17 +26,19 @@ class Compiler(db: Database) {
     )),
     (CompileMode.Inline, List[Operator => Operator](
       CTPercolator.percolate _, // Partition Det & Nondet query fragments
-      PushdownSelections.optimize _
+      PushdownSelections.optimize _,
+      InlineVGTerms.optimize _
     )),
     (CompileMode.Hybrid, List[Operator => Operator](
       CTPercolator.percolate _,
       CTPartition.partition _,
-      PushdownSelections.optimize _
+      PushdownSelections.optimize _,
+      InlineVGTerms.optimize _
     ))
   )
 
   val standardPostOptimizations = List[Operator => Operator](
-    inlineDataIndependentVars _,
+    InlineProjections.optimize _,
     compileAnalysis _         // Transform BOUNDS(), CONF(), etc... into actual expressions that SQL can understand
   )
 
@@ -74,28 +76,6 @@ class Compiler(db: Database) {
    */
   def optimize(oper: Operator, opts: List[Operator => Operator]): Operator =
     opts.foldLeft(oper)((o, fn) => fn(o))
-
-
-  def inlineDataIndependentVars(oper: Operator): Operator =
-  oper match {
-    /*
-     Rewrite TypeInference VGTerms to SQL equivalent cast expression
-     */
-    case Project(cols, src) =>
-      Project(
-        cols.zipWithIndex.map{(coli) =>
-          coli._1.input match {
-            case VGTerm((_, model: TypeCastModel), idx, args) =>
-              ProjectArg(coli._1.column, Function("CAST", List(args(1), args(2))))
-            case _ =>
-              coli._1
-          }
-        },
-        src
-     )
-
-    case _ => oper
-  }
 
   /**
    * Build an iterator out of the specified operator.  If the operator

@@ -91,7 +91,7 @@ object SqlLoaderSpec extends Specification with FileMatchers {
 		 	) must be equalTo 
 		 		Project(List(ProjectArg("A", Var("R_A")), 
 		 					 ProjectArg("B", expr(
-		 					 	"CASE WHEN R_B IS NULL THEN {{ SANER_1[ROWID] }} ELSE R_B END")),
+		 					 	"CASE WHEN R_B IS NULL THEN {{ SANER_1[ROWID_MIMIR] }} ELSE R_B END")),
 		 					 ProjectArg("C", Var("R_C"))
 		 				), Table("R", Map(("R_A", Type.TInt), 
 		 								  ("R_B", Type.TInt), 

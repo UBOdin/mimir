@@ -16,7 +16,7 @@ class RAException(msg: String) extends Exception(msg);
 object Type extends Enumeration {
   type T = Value
 
-  val TInt, TFloat, TDate, TString, TBool, TRowId, TAny = Value
+  val TInt, TFloat, TDate, TString, TBool, TRowId, TType, TAny = Value
 
   def toString(t: T) = t match {
     case TInt => "int"
@@ -25,6 +25,7 @@ object Type extends Enumeration {
     case TString => "string"
     case TBool => "bool"
     case TRowId => "rowid"
+    case TType => "type"
     case TAny => throw new SQLException("Unable to produce string of type TAny");
   }
 
@@ -33,11 +34,15 @@ object Type extends Enumeration {
   def fromString(t: String) = t.toLowerCase match {
     case "int"    => Type.TInt
     case "float"  => Type.TFloat
-    case "decimal"  => Type.TFloat
+    case "decimal"=> Type.TFloat
+    case "real"   => Type.TFloat
     case "date"   => Type.TDate
+    case "varchar"=> Type.TString
+    case "char"   => Type.TString
     case "string" => Type.TString
     case "bool"   => Type.TBool
     case "rowid"  => Type.TRowId
+    case "type"   => Type.TType
     case _ =>  throw new SQLException("Invalid Type '" + t + "'");
   }
 
@@ -80,6 +85,15 @@ case class StringPrimitive(v: String)
   extends PrimitiveValue(TString)
 {
   override def toString() = "'"+v.toString+"'"
+  def asLong: Long = java.lang.Long.parseLong(v)
+  def asDouble: Double = java.lang.Double.parseDouble(v)
+  def asString: String = v;
+  def payload: Object = v.asInstanceOf[Object];
+}
+case class KeywordPrimitive(v: String, t: Type.T)
+  extends PrimitiveValue(t)
+{
+  override def toString() = v
   def asLong: Long = java.lang.Long.parseLong(v)
   def asDouble: Double = java.lang.Double.parseDouble(v)
   def asString: String = v;
@@ -385,7 +399,11 @@ case class Function(op: String, params: List[Expression]) extends Expression {
       case CTables.VARIANCE | CTables.CONFIDENCE => TFloat
       case "__LIST_MIN" | "__LIST_MAX" => TFloat
       case "__LEFT_UNION_ROWID" | "__RIGHT_UNION_ROWID" => TRowId
-      case "CAST" => Type.fromString(params(1).asInstanceOf[StringPrimitive].v)
+      case "CAST" => 
+        params(1) match { 
+          case KeywordPrimitive(x, TType) => Type.fromString(x)
+          case _ => TAny
+        }
       case _ => 
         bindings.get("__"+op+"()") match {
           case Some(binding) => binding
@@ -400,12 +418,6 @@ case class Function(op: String, params: List[Expression]) extends Expression {
             "COUNT(DISTINCT " + params.map( _.toString ).mkString(", ") + ")"
       case "COUNT" if params.size == 0 => 
             "COUNT(*)"
-      case "EXTRACT" =>
-        op + "(" + params(0).asInstanceOf[StringPrimitive].v + " FROM " + 
-          params(1).toString + ")"
-
-      case "CAST" => "CAST "+params(0)+
-        " AS "+params(1).asInstanceOf[StringPrimitive].v
 
       case _ => op + "(" + params.map( _.toString ).mkString(", ") + ")"
     }

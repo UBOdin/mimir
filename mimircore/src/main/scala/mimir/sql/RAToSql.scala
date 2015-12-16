@@ -232,7 +232,7 @@ class RAToSql(db: Database) {
           val column = new Column()
           column.setTable(new schema.Table(null, sources.head.getAlias))
 
-          val typeString = subexp(1).asInstanceOf[StringPrimitive].v
+          val typeString = subexp(1).toString
 
           column.setColumnName(
             alias

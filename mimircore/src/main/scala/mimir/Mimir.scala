@@ -108,7 +108,7 @@ object Mimir {
   def handleExplain(explain: Explain): Unit = {
     val raw = db.convert(explain.getSelectBody())._1
     val optimized = db.optimize(raw)
-    val sql = db.convert(optimized)
+    // val sql = db.convert(optimized)
     println("------ Raw Query ------")
     println(raw)
     println("--- Optimized Query ---")

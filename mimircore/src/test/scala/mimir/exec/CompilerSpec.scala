@@ -94,17 +94,17 @@ object CompilerSpec extends Specification {
     }
     "work on nondeterministic P queries" in {
       percolate(
-        "PROJECT[A <= R_A, B <= R_B, D <= {{ test_0 }}](R)"
+        "PROJECT[A <= R_A, B <= R_B, D <= {{ test_0[A, B] }}](R)"
       ) must be equalTo
-        oper("PROJECT[A <= R_A, B <= R_B, D <= {{ test_0 }}](R)")
+        oper("PROJECT[A <= R_A, B <= R_B, D <= {{ test_0[A, B] }}](R)")
     }
     "work on nondeterministic SP queries" in {
       percolate(
-        """PROJECT[A <= R_A, B <= R_B, D <= {{ test_0 }}](
+        """PROJECT[A <= R_A, B <= R_B, D <= {{ test_0[A, B] }}](
             SELECT[R_A = R_B](R)
         )"""
       ) must be equalTo oper(
-        """PROJECT[A <= R_A, B <= R_B, D <= {{ test_0 }}](
+        """PROJECT[A <= R_A, B <= R_B, D <= {{ test_0[A, B] }}](
             SELECT[R_A = R_B](R)
         )""")
     }
@@ -112,11 +112,11 @@ object CompilerSpec extends Specification {
       percolate(
         """PROJECT[A <= A, E <= D](
             SELECT[A = B](
-              PROJECT[A <= R_A, B <= R_B, D <= {{ test_0 }}](R)
+              PROJECT[A <= R_A, B <= R_B, D <= {{ test_0[R_A, R_B] }}](R)
             )
           )"""
       ) must be equalTo oper(
-        """PROJECT[A <= R_A, E <= {{ test_0 }}](
+        """PROJECT[A <= R_A, E <= {{ test_0[R_A, R_B] }}](
             SELECT[R_A = R_B](R)
           )"""
       )
@@ -125,24 +125,24 @@ object CompilerSpec extends Specification {
       percolate(
         """PROJECT[A <= A, E <= D](
             SELECT[A = D](
-              PROJECT[A <= R_A, B <= R_B, D <= {{ test_0 }}](R)
+              PROJECT[A <= R_A, B <= R_B, D <= {{ test_0[R_A, R_B] }}](R)
             )
           )"""
       ) must be equalTo oper(
-        """PROJECT[A <= R_A, E <= {{ test_0 }}, 
-                   __MIMIR_CONDITION <= R_A = {{ test_0 }}](R)"""
+        """PROJECT[A <= R_A, E <= {{ test_0[R_A,R_B] }}, 
+                   __MIMIR_CONDITION <= R_A = {{ test_0[R_A, R_B] }}](R)"""
       )
     }
     "handle selections that are both deterministic and nondeterministic" in {
       percolate(
         """PROJECT[A <= A, E <= D](
             SELECT[(A = D) & (A = B)](
-              PROJECT[A <= R_A, B <= R_B, D <= {{ test_0 }}](R)
+              PROJECT[A <= R_A, B <= R_B, D <= {{ test_0[R_A, R_B] }}](R)
             )
           )"""
       ) must be equalTo oper(
-        """PROJECT[A <= R_A, E <= {{ test_0 }}, 
-                   __MIMIR_CONDITION <= R_A = {{ test_0 }}](
+        """PROJECT[A <= R_A, E <= {{ test_0[R_A, R_B] }}, 
+                   __MIMIR_CONDITION <= R_A = {{ test_0[R_A, R_B] }}](
             SELECT[R_A = R_B](R)
         )"""
       )
@@ -151,13 +151,13 @@ object CompilerSpec extends Specification {
       percolate(
         """SELECT[C = S_C](
               JOIN(
-                PROJECT[A <= R_A, C <= R_C, N <= {{ test_0 }}](R),
+                PROJECT[A <= R_A, C <= R_C, N <= {{ test_0[A, B] }}](R),
                 S
               )
             )
         """
       ) must be equalTo oper(
-        """PROJECT[A <= R_A, C <= R_C, N <= {{test_0}}, 
+        """PROJECT[A <= R_A, C <= R_C, N <= {{test_0[A, B]}}, 
                    S_C <= S_C, S_D <= S_D](
             SELECT[R_C = S_C](JOIN(R, S))
         )"""
@@ -168,12 +168,12 @@ object CompilerSpec extends Specification {
         """SELECT[R_C = C](
             JOIN(
               R, 
-              PROJECT[C <= S_C, D <= S_D, N <= {{ test_0 }}](S)
+              PROJECT[C <= S_C, D <= S_D, N <= {{ test_0[A, B] }}](S)
             )
           )
         """
       ) must be equalTo oper(
-        """PROJECT[R_A <= R_A, R_B <= R_B, R_C <= R_C, C <= S_C, D <= S_D, N <= {{test_0}}](
+        """PROJECT[R_A <= R_A, R_B <= R_B, R_C <= R_C, C <= S_C, D <= S_D, N <= {{test_0[A, B]}}](
             SELECT[R_C = S_C](JOIN(R, S))
         )"""
       )
@@ -182,8 +182,8 @@ object CompilerSpec extends Specification {
       percolate(
         """SELECT[R_C = S_C](
             JOIN(
-              PROJECT[A <= R_A, R_C <= R_C, N <= {{ test_0 }}](R), 
-              PROJECT[S_C <= S_C, D <= S_D, M <= {{ test_1 }}](S)
+              PROJECT[A <= R_A, R_C <= R_C, N <= {{ test_0[A, B] }}](R), 
+              PROJECT[S_C <= S_C, D <= S_D, M <= {{ test_1 [B, C]}}](S)
             )
           )
         """
@@ -191,10 +191,10 @@ object CompilerSpec extends Specification {
         """PROJECT[
               A <= R_A, 
               R_C <= R_C, 
-              N <= {{test_0}},
+              N <= {{test_0[A, B]}},
               S_C <= S_C, 
               D <= S_D, 
-              M <= {{test_1}}
+              M <= {{test_1[B, C]}}
             ](
               SELECT[R_C = S_C](JOIN(R, S))
             )"""
@@ -204,8 +204,8 @@ object CompilerSpec extends Specification {
       percolate(
         """SELECT[A1 = A2](
             JOIN(
-              PROJECT[A1 <= R_A, B1 <= R_B, N <= {{ test_0 }}](R(R_A:int, R_B:int, R_C:int // ROWID:rowid)), 
-              PROJECT[A2 <= R_A, B2 <= R_B, M <= {{ test_1 }}](R(R_A:int, R_B:int, R_C:int // ROWID:rowid))
+              PROJECT[A1 <= R_A, B1 <= R_B, N <= {{ test_0[R_A, R_B] }}](R(R_A:int, R_B:int, R_C:int // ROWID:rowid)), 
+              PROJECT[A2 <= R_A, B2 <= R_B, M <= {{ test_1[R_A, R_B] }}](R(R_A:int, R_B:int, R_C:int // ROWID:rowid))
             )
           )
         """
@@ -213,10 +213,10 @@ object CompilerSpec extends Specification {
         """PROJECT[
               A1 <= R_A_1, 
               B1 <= R_B_1, 
-              N <= {{test_0}},
+              N <= {{test_0[R_A_1, R_B_1]}},
               A2 <= R_A_2, 
               B2 <= R_B_2, 
-              M <= {{test_1}}
+              M <= {{test_1[R_A_2, R_B_2]}}
           ](
             SELECT[R_A_1 = R_A_2](
               JOIN(
@@ -233,18 +233,18 @@ object CompilerSpec extends Specification {
       percolate(
         """SELECT[C = S_C](
             JOIN(
-              PROJECT[A <= R_A, C <= R_C, N <= {{ test_0[ROWID, R_A] }}](R(R_A:int, R_B:int, R_C:int // ROWID:rowid)),
+              PROJECT[A <= R_A, C <= R_C, N <= {{ test_0[ROWID_MIMIR, R_A] }}](R(R_A:int, R_B:int, R_C:int // ROWID_MIMIR:rowid)),
               S
             )
           )
         """
       ) must be equalTo oper(
-        """PROJECT[A <= R_A, C <= R_C, N <= {{ test_0[ROWID_1, R_A] }}, 
+        """PROJECT[A <= R_A, C <= R_C, N <= {{ test_0[ROWID_MIMIR_1, R_A] }}, 
                    S_C <= S_C, S_D <= S_D](
             SELECT[R_C = S_C](
               JOIN(
                 PROJECT[R_A <= R_A, R_B <= R_B, R_C <= R_C, 
-                        ROWID_1 <= ROWID](R(R_A:int, R_B:int, R_C:int // ROWID:rowid)), 
+                        ROWID_MIMIR_1 <= ROWID_MIMIR](R(R_A:int, R_B:int, R_C:int // ROWID_MIMIR:rowid)), 
                 S
               )
             )
@@ -254,7 +254,7 @@ object CompilerSpec extends Specification {
     "properly propagate rowids" in {
       InlineProjections.optimize(CTPercolator.propagateRowIDs(oper(
         """
-        PROJECT[ROWID <= ROWID](
+        PROJECT[ROWID <= ROWID_MIMIR](
           JOIN(
             R(A_A:int, A_B:int, A_C:int),
             R(B_A:int, B_B:int, B_C:int)
@@ -265,11 +265,11 @@ object CompilerSpec extends Specification {
         """
           PROJECT[ROWID <= JOIN_ROWIDS(LEFT_ROWID, RIGHT_ROWID)](
             JOIN(
-              PROJECT[LEFT_ROWID <= ROWID, A_A <= A_A, A_B <= A_B, A_C <= A_C](
-                R(A_A:int, A_B:int, A_C:int // ROWID:rowid)
+              PROJECT[LEFT_ROWID <= ROWID_MIMIR, A_A <= A_A, A_B <= A_B, A_C <= A_C](
+                R(A_A:int, A_B:int, A_C:int // ROWID_MIMIR:rowid)
               ),
-              PROJECT[RIGHT_ROWID <= ROWID, B_A <= B_A, B_B <= B_B, B_C <= B_C](
-                R(B_A:int, B_B:int, B_C:int // ROWID:rowid)
+              PROJECT[RIGHT_ROWID <= ROWID_MIMIR, B_A <= B_A, B_B <= B_B, B_C <= B_C](
+                R(B_A:int, B_B:int, B_C:int // ROWID_MIMIR:rowid)
               )
             )
           )
@@ -279,7 +279,7 @@ object CompilerSpec extends Specification {
     "properly process join rowids" in {
       CTPercolator.percolate(oper(
         """
-        PROJECT[X <= ROWID](
+        PROJECT[X <= ROWID_MIMIR](
           JOIN(
             R(A_A:int, A_B:int, A_C:int),
             R(B_A:int, B_B:int, B_C:int)
@@ -288,13 +288,13 @@ object CompilerSpec extends Specification {
         """
       )) must be equalTo oper(
         """
-          PROJECT[X <= JOIN_ROWIDS(ROWID_1, ROWID_2)](
+          PROJECT[X <= JOIN_ROWIDS(ROWID_MIMIR_1, ROWID_MIMIR_2)](
             JOIN(
-              PROJECT[A_A <= A_A, A_B <= A_B, A_C <= A_C, ROWID_1 <= ROWID](
-                R(A_A:int, A_B:int, A_C:int // ROWID:rowid)
+              PROJECT[A_A <= A_A, A_B <= A_B, A_C <= A_C, ROWID_MIMIR_1 <= ROWID_MIMIR](
+                R(A_A:int, A_B:int, A_C:int // ROWID_MIMIR:rowid)
               ),
-              PROJECT[B_A <= B_A, B_B <= B_B, B_C <= B_C, ROWID_2 <= ROWID](
-                R(B_A:int, B_B:int, B_C:int // ROWID:rowid)
+              PROJECT[B_A <= B_A, B_B <= B_B, B_C <= B_C, ROWID_MIMIR_2 <= ROWID_MIMIR](
+                R(B_A:int, B_B:int, B_C:int // ROWID_MIMIR:rowid)
               )
             )
           )
@@ -303,7 +303,7 @@ object CompilerSpec extends Specification {
     }
     "Properly process 3-way joins" in {
       CTPercolator.percolate(oper("""
-        PROJECT[X <= ROWID](
+        PROJECT[X <= ROWID_MIMIR](
           JOIN(
             JOIN(
               R(A_A:int, A_B:int, A_C:int),
@@ -313,16 +313,16 @@ object CompilerSpec extends Specification {
           )
         )
       """)) must be equalTo oper("""
-        PROJECT[X <= JOIN_ROWIDS(JOIN_ROWIDS(ROWID_1, ROWID_2), ROWID_4)](
+        PROJECT[X <= JOIN_ROWIDS(JOIN_ROWIDS(ROWID_MIMIR_1, ROWID_MIMIR_2), ROWID_MIMIR_4)](
           JOIN(
             JOIN(
-              PROJECT[A_A <= A_A, A_B <= A_B, A_C <= A_C, ROWID_1 <= ROWID](
-                R(A_A:int, A_B:int, A_C:int // ROWID:rowid)),
-              PROJECT[B_A <= B_A, B_B <= B_B, B_C <= B_C, ROWID_2 <= ROWID](
-                R(B_A:int, B_B:int, B_C:int // ROWID:rowid))
+              PROJECT[A_A <= A_A, A_B <= A_B, A_C <= A_C, ROWID_MIMIR_1 <= ROWID_MIMIR](
+                R(A_A:int, A_B:int, A_C:int // ROWID_MIMIR:rowid)),
+              PROJECT[B_A <= B_A, B_B <= B_B, B_C <= B_C, ROWID_MIMIR_2 <= ROWID_MIMIR](
+                R(B_A:int, B_B:int, B_C:int // ROWID_MIMIR:rowid))
             ),
-            PROJECT[C_A <= C_A, C_B <= C_B, C_C <= C_C, ROWID_4 <= ROWID](
-              R(C_A:int, C_B:int, C_C:int // ROWID:rowid))
+            PROJECT[C_A <= C_A, C_B <= C_B, C_C <= C_C, ROWID_MIMIR_4 <= ROWID_MIMIR](
+              R(C_A:int, C_B:int, C_C:int // ROWID_MIMIR:rowid))
           )
         )
       """)
@@ -330,7 +330,7 @@ object CompilerSpec extends Specification {
     }
     "Properly process 4-way joins" in {
       CTPercolator.percolate(oper("""
-        PROJECT[X <= ROWID](
+        PROJECT[X <= ROWID_MIMIR](
           JOIN(
             JOIN(
               JOIN(
@@ -343,20 +343,20 @@ object CompilerSpec extends Specification {
           )
         )
       """)) must be equalTo oper("""
-        PROJECT[X <= JOIN_ROWIDS(JOIN_ROWIDS(JOIN_ROWIDS(ROWID_1, ROWID_2), ROWID_4), ROWID_5)](
+        PROJECT[X <= JOIN_ROWIDS(JOIN_ROWIDS(JOIN_ROWIDS(ROWID_MIMIR_1, ROWID_MIMIR_2), ROWID_MIMIR_4), ROWID_MIMIR_5)](
           JOIN(
             JOIN(
               JOIN(
-                PROJECT[A_A <= A_A, A_B <= A_B, A_C <= A_C, ROWID_1 <= ROWID](
-                  R(A_A:int, A_B:int, A_C:int // ROWID:rowid)),
-                PROJECT[B_A <= B_A, B_B <= B_B, B_C <= B_C, ROWID_2 <= ROWID](
-                  R(B_A:int, B_B:int, B_C:int // ROWID:rowid))
+                PROJECT[A_A <= A_A, A_B <= A_B, A_C <= A_C, ROWID_MIMIR_1 <= ROWID_MIMIR](
+                  R(A_A:int, A_B:int, A_C:int // ROWID_MIMIR:rowid)),
+                PROJECT[B_A <= B_A, B_B <= B_B, B_C <= B_C, ROWID_MIMIR_2 <= ROWID_MIMIR](
+                  R(B_A:int, B_B:int, B_C:int // ROWID_MIMIR:rowid))
               ),
-              PROJECT[C_A <= C_A, C_B <= C_B, C_C <= C_C, ROWID_4 <= ROWID](
-                R(C_A:int, C_B:int, C_C:int // ROWID:rowid))
+              PROJECT[C_A <= C_A, C_B <= C_B, C_C <= C_C, ROWID_MIMIR_4 <= ROWID_MIMIR](
+                R(C_A:int, C_B:int, C_C:int // ROWID_MIMIR:rowid))
             ),
-            PROJECT[D_A <= D_A, D_B <= D_B, D_C <= D_C, ROWID_5 <= ROWID](
-              R(D_A:int, D_B:int, D_C:int // ROWID:rowid))
+            PROJECT[D_A <= D_A, D_B <= D_B, D_C <= D_C, ROWID_MIMIR_5 <= ROWID_MIMIR](
+              R(D_A:int, D_B:int, D_C:int // ROWID_MIMIR:rowid))
           )
         )
       """)
@@ -396,17 +396,17 @@ object CompilerSpec extends Specification {
 
     "Inline Join ROWIDs correctly" in {
       InlineProjections.optimize(CTPercolator.propagateRowIDs(oper("""
-        PROJECT[Q <= ROWID](
+        PROJECT[Q <= ROWID_MIMIR](
           JOIN(R, S)
         )
       """))) must be equalTo oper("""
         PROJECT[Q <= JOIN_ROWIDS(LEFT_ROWID, RIGHT_ROWID)](
           JOIN(
-            PROJECT[LEFT_ROWID <= ROWID, R_A <= R_A, R_B <= R_B, R_C <= R_C](
-              R(R_A:int, R_B:int, R_C:int // ROWID:rowid)
+            PROJECT[LEFT_ROWID <= ROWID_MIMIR, R_A <= R_A, R_B <= R_B, R_C <= R_C](
+              R(R_A:int, R_B:int, R_C:int // ROWID_MIMIR:rowid)
             ),
-            PROJECT[RIGHT_ROWID <= ROWID, S_C <= S_C, S_D <= S_D](
-              S(S_C:int, S_D:decimal // ROWID:rowid)
+            PROJECT[RIGHT_ROWID <= ROWID_MIMIR, S_C <= S_C, S_D <= S_D](
+              S(S_C:int, S_D:decimal // ROWID_MIMIR:rowid)
             )
           )
         )
