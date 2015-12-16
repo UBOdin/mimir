@@ -1,5 +1,7 @@
 package mimir.algebra;
 
+import java.sql._;
+
 import mimir.algebra.Type._
 import mimir.ctables.{VGTerm, CTables}
 
@@ -85,6 +87,15 @@ object Eval
             case "DATE" =>
               val date = params.head.asInstanceOf[StringPrimitive].v.split("-").map(x => x.toInt)
               new DatePrimitive(date(0), date(1), date(2))
+            case "CAST" => {
+              Eval.eval(params(1), bindings).toString.toLowerCase match {
+                case "int" => IntPrimitive(Eval.eval(params(0), bindings).asLong)
+                case "real" => FloatPrimitive(Eval.eval(params(0), bindings).asDouble)
+                case "varchar" => StringPrimitive(Eval.eval(params(0), bindings).asString)
+                case x => throw new SQLException("Unknown cast type: '"+x+"'")
+              }
+            }
+
             case "__LIST_MIN" =>
               new FloatPrimitive(params.map(x => {
                 try {
@@ -149,6 +160,7 @@ object Eval
                 case e: TypeException => new NullPrimitive()
               }
             }
+            case fn => throw new SQLException("Unknown Function: "+fn)
           }
         }
       }
@@ -219,7 +231,8 @@ object Eval
                    wtTodo: List[WhenThenClause], 
                    eClause: Expression): Expression =
     wtTodo match {
-      case WhenThenClause(w, t) :: wtRest =>
+      case WhenThenClause(wBase, t) :: wtRest =>
+        val w = simplify(wBase)
         if(w.isInstanceOf[BoolPrimitive]){
           if(w.asInstanceOf[BoolPrimitive].v){
 

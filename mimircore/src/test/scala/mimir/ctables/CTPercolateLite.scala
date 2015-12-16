@@ -50,8 +50,8 @@ object CTPercolateLite extends Specification {
         ),
         expr("true")
       ))
-      percolite("R(A, B // ROWID:String)") must be equalTo ((
-        oper("R(A, B // ROWID:String)"),
+      percolite("R(A, B // ROWID:rowid)") must be equalTo ((
+        oper("R(A, B // ROWID:rowid)"),
         Map( 
           ("A", expr("true")),
           ("B", expr("true"))

@@ -4,7 +4,7 @@ import java.sql.SQLException
 
 import mimir.algebra._
 import mimir.ctables.{Model, VGTerm}
-import mimir.exec.{Compiler, CompileMode, ResultIterator, ResultSetIterator}
+import mimir.exec.{Compiler, NonDeterminism, ResultIterator, ResultSetIterator}
 import mimir.lenses.{Lens, LensManager}
 import mimir.parser.OperatorParser
 import mimir.sql.{Backend, CreateLens, RAToSql, SqlToRA}
@@ -59,7 +59,7 @@ case class Database(name: String, backend: Backend)
         case Some(x) => x
         case None => throw new SQLException("Table "+x+" does not exist in db!")
       })
-  var compileMode = CompileMode.Hybrid
+  var nonDeterminismStrategy = NonDeterminism.Hybrid
 
   def getName = name
   
@@ -128,6 +128,15 @@ case class Database(name: String, backend: Backend)
   def query(oper: Operator): ResultIterator = 
   {
     compiler.compile(oper)
+  }
+
+  /**
+   * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
+   * and rewrites the query to properly account for Virtual Tables.
+   */
+  def queryLineage(oper: Operator): ResultIterator = 
+  {
+    compiler.compile(oper, NonDeterminism.Classic)
   }
 
   /**
@@ -311,5 +320,15 @@ case class Database(name: String, backend: Backend)
                  list: List[VGTerm]): List[VGTerm] = {
 
     Eval.getVGTerms(expression, bindings, list)
+  }
+
+  def getBackendSQL(o: Operator): List[net.sf.jsqlparser.statement.select.SelectBody] =
+  {
+    o match {
+      case Project(_, src) => getBackendSQL(src)
+      case Union(_, lhs,rhs) => getBackendSQL(lhs)++getBackendSQL(rhs);
+      case _ => List(convert(o))
+
+    }
   }
 }

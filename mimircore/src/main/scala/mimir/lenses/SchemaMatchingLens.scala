@@ -53,8 +53,8 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
    * `view` emits an Operator that defines the Virtual C-Table for the lens
    */
   override def view: Operator = {
-    println("SourceSchema: "+sourceSchema)
-    println("SourceSchema: "+targetSchema)
+    // println("SourceSchema: "+sourceSchema)
+    // println("SourceSchema: "+targetSchema)
     Project(
       targetSchema.keys.toList.zipWithIndex.map { case (key, idx) => ProjectArg(
         key,
