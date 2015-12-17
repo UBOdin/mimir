@@ -95,7 +95,7 @@ object CTPartitionSpec extends Specification {
           oper("R(A,B)")
         )
       ) must be equalTo (
-        Union(true,
+        Union(
           Project(List(
               ProjectArg("A", expr("A")),
               ProjectArg(CTables.conditionColumn, expr("{{Q_1[ROWID]}} > 4"))
