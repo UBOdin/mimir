@@ -27,7 +27,7 @@ object CTPercolator {
       // InlineProjections.optimize(
           propagateRowIDs(oper)
         // )
-      ).map( percolateOne(_) ).reduceLeft( Union(true,_,_) )
+      ).map( percolateOne(_) ).reduceLeft( Union(_,_) )
     )
   }
   
@@ -492,7 +492,7 @@ object CTPercolator {
             ret = Project(args, ret)
           }
           ret
-        }).reduce[Operator]( Union(true, _, _) )
+        }).reduce[Operator]( Union( _, _) )
   
       case _ =>
         oper.rebuild(oper.children.map( expandProbabilisticCases(_) ))
@@ -559,9 +559,9 @@ object CTPercolator {
           )
         }
         
-        case Union(true, left, right) =>
+        case Union(left, right) =>
           if(force){
-            Union(true, 
+            Union( 
               Project(
                 ProjectArg("ROWID_MIMIR",
                   Function("__LEFT_UNION_ROWID",
@@ -580,7 +580,7 @@ object CTPercolator {
                 propagateRowIDs(right, true))
             )
           } else {
-            Union(true, 
+            Union( 
               propagateRowIDs(left, false),
               propagateRowIDs(right, false)
             )
@@ -673,7 +673,7 @@ object CTPercolator {
       }
     }
 
-    missingValueClausesOp = Union(true,
+    missingValueClausesOp = Union(
       removeConstraintColumn(oper).rebuild(List(Select(detExpr.distinct.reduce(Arith.makeAnd(_, _)), oper.children().head))),
       oper.rebuild(List(Select(nonDeterExpr.distinct.reduce(Arith.makeOr(_, _)), oper.children().head)))
     )
@@ -692,7 +692,7 @@ object CTPercolator {
 
       case (x, null) => x
 
-      case (x, y) => Union(true, x, y)
+      case (x, y) => Union(x, y)
     }
   }
 
@@ -824,7 +824,7 @@ object CTPercolator {
           return (newOperator, colDeterminism, Var(mimirRowDeterministicColumnName))
         }
       }
-      case Union(isAll, left, right) => 
+      case Union(left, right) => 
       {
         val (rewrittenLeft, colDetLeft, rowDetLeft) = percolateLite(left);
         val (rewrittenRight, colDetRight, rowDetRight) = percolateLite(right);
@@ -877,7 +877,7 @@ object CTPercolator {
           ).toList
 
         val newOperator = 
-          Union(isAll,
+          Union(
               Project(projectArgsBase ++ projectArgsLeft, rewrittenLeft),
               Project(projectArgsBase ++ projectArgsRight, rewrittenRight)
             )

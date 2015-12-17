@@ -113,14 +113,11 @@ class Compiler(db: Database) {
             cols.map((x) => (x.column, x.input))
           );
 
-        case mimir.algebra.Union(true, lhs, rhs) =>
+        case mimir.algebra.Union(lhs, rhs) =>
           new BagUnionResultIterator(
             buildIterator(lhs),
             buildIterator(rhs)
           );
-
-        case mimir.algebra.Union(false, _, _) =>
-          throw new UnsupportedOperationException("UNION DISTINCT unimplemented")
 
         case _ => buildInlinedIterator(oper)
       }
@@ -232,8 +229,8 @@ class Compiler(db: Database) {
         )
       }
 
-      case u@mimir.algebra.Union(bool, lhs, rhs) =>
-        mimir.algebra.Union(bool, compileAnalysis(lhs), compileAnalysis(rhs))
+      case u@mimir.algebra.Union(lhs, rhs) =>
+        mimir.algebra.Union(compileAnalysis(lhs), compileAnalysis(rhs))
 
       case _ =>
         if (CTables.isProbabilistic(oper)) {

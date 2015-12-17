@@ -326,7 +326,7 @@ case class Database(name: String, backend: Backend)
   {
     o match {
       case Project(_, src) => getBackendSQL(src)
-      case Union(_, lhs,rhs) => getBackendSQL(lhs)++getBackendSQL(rhs);
+      case Union(lhs,rhs) => getBackendSQL(lhs)++getBackendSQL(rhs);
       case _ => List(convert(o))
 
     }

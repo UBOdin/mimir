@@ -64,16 +64,16 @@ case class Join(left: Operator, right: Operator) extends Operator
   def schema: List[(String,Type.T)] = left.schema ++ right.schema
 }
 
-case class Union(isAll: Boolean, left: Operator, right: Operator) extends Operator
+case class Union(left: Operator, right: Operator) extends Operator
 {
   def toString(prefix: String) =
-    prefix + "UNION(" + (if(isAll) { "ALL" } else { "DISTINCT" }) +
-        ",\n" + left.toString(prefix+"  ") + 
-        ",\n" + right.toString(prefix+"  ") +
-        "\n" + prefix + ")";
+    prefix + "UNION(" +
+        left.toString(prefix+"  ") + ",\n" + 
+        right.toString(prefix+"  ") + "\n" + 
+    prefix + ")";
 
   def children() = List(left, right)
-  def rebuild(x: List[Operator]) = Union(isAll, x(0), x(1))
+  def rebuild(x: List[Operator]) = Union(x(0), x(1))
   def schema: List[(String,Type.T)] = {
     val lsch = left.schema.map(_._1)
     val rsch = right.schema.map(_._1)

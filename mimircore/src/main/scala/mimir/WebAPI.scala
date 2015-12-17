@@ -282,7 +282,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
         }
       }
       case Join(lhs, rhs) => new OperatorNode("Join", List(convertToTree(lhs), convertToTree(rhs)), List())
-      case Union(isAll, lhs, rhs) => new OperatorNode("Union" + (if(isAll) "(ALL)" else "(DISTINCT)"), List(convertToTree(lhs), convertToTree(rhs)), List())
+      case Union(lhs, rhs) => new OperatorNode("Union", List(convertToTree(lhs), convertToTree(rhs)), List())
       case Table(name, schema, metadata) => new OperatorNode(name, List[OperatorNode](), List())
       case o: Operator => convertToTree(o.children(0))
     }
