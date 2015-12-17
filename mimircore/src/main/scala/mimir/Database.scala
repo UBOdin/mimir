@@ -3,7 +3,7 @@ package mimir
 import java.sql.SQLException
 
 import mimir.algebra._
-import mimir.ctables.{Model, VGTerm}
+import mimir.ctables.{Model, VGTerm, CTPercolator}
 import mimir.exec.{Compiler, NonDeterminism, ResultIterator, ResultSetIterator}
 import mimir.lenses.{Lens, LensManager}
 import mimir.parser.OperatorParser
@@ -287,7 +287,7 @@ case class Database(name: String, backend: Backend)
         case None => None
         case Some(lens) => 
           // println("Found: "+name); 
-          Some(lens.view)
+          Some(CTPercolator.propagateRowIDs(lens.view))
       }
     }
   }

@@ -153,8 +153,8 @@ object CTPercolator {
 
         val conflicts = (
           (lhsColNames & rhsColNames)
-          | (Set[String]("ROWID_MIMIR") & lhsColNames)
-          | (Set[String]("ROWID_MIMIR") & rhsColNames)
+          | (Set[String](ROWID_KEY) & lhsColNames)
+          | (Set[String](ROWID_KEY) & rhsColNames)
         )
         var allNames = lhsColNames ++ rhsColNames
 
@@ -255,152 +255,6 @@ object CTPercolator {
     }
   }
 
-  // def percolateNoJoin(oper: Operator): Operator = {
-  //   OperatorUtils.extractUnions(
-  //     propagateRowIDs(oper)
-  //   ).map( percolateOneNoJoin(_) ).reduceLeft( Union(true,_,_) )
-  // }
-
-  // def percolateOneNoJoin(o: Operator): Operator =
-  // {
-  //   // println("percolateOne: "+o)
-  //   val extractProject:
-  //   Operator => ( List[(String,Expression)], Operator ) =
-  //     (e: Operator) =>
-  //       e match {
-  //         case Project(cols, rest) => (
-  //           cols.map( (x) => (x.column, x.input) ),
-  //           rest
-  //           )
-  //         case _ => (
-  //           e.schema.map(_._1).map( (x) => (x, Var(x)) ).toList,
-  //           e
-  //           )
-  //       }
-  //   val afterDescent =
-  //     o.rebuild(
-  //       o.children.map( percolateOneNoJoin(_) )
-  //       // post-condition: Only the immediate child
-  //       // of o is uncertainty-generating.
-  //     )
-  //   // println("---\nbefore\n"+o+"\nafter\n"+afterDescent+"\n")
-  //   afterDescent match {
-  //     case t: Table => t
-  //     case Project(cols, p2 @ Project(_, source)) =>
-  //       val bindings = p2.bindings
-  //       // println("---\nrebuilding\n"+o)
-  //       // println("mapping with bindings " + bindings.toString)
-  //       val ret = Project(
-  //         (cols).map(
-  //           (x) => ProjectArg(
-  //             x.column,
-  //             Eval.inline(x.input, bindings)
-  //           )),
-  //         source
-  //       )
-  //       // println("---\nrebuilt\n"+ret)
-  //       ret
-  //     case Project(cols, source) =>
-  //       Project(cols, source)
-  //     case s @ Select(cond1, Select(cond2, source)) =>
-  //       Select(Arithmetic(Arith.And,cond1,cond2), source)
-  //     case s @ Select(cond, p @ Project(cols, source)) =>
-  //       // Percolate the projection up through the
-  //       // selection
-  //       Project(cols,
-  //           percolateOneNoJoin(Select(Eval.inline(cond, p.bindings),source))
-  //         )
-
-  //     case s: Select => s
-  //     case Join(lhs, rhs) => {
-
-  //       // println("Percolating Join: \n" + o)
-
-  //       val rename = (name:String, x:String) =>
-  //         ("__"+name+"_"+x)
-  //       val (lhsCols, lhsChild) = extractProject(percolateNoJoin(lhs))
-  //       val (rhsCols, rhsChild) = extractProject(percolateNoJoin(rhs))
-
-  //       //         println("Percolated LHS: "+lhsCols+"\n" + lhsChild)
-  //       //         println("Percolated RHS: "+rhsCols+"\n" + rhsChild)
-
-  //       // Pulling projections up through a join may require
-  //       // renaming columns under the join if the same column
-  //       // name appears on both sides of the source
-  //       val lhsColNames = lhsChild.schema.map(_._1).toSet
-  //       val rhsColNames = rhsChild.schema.map(_._1).toSet
-
-  //       val conflicts = (
-  //         (lhsColNames & rhsColNames)
-  //           | (Set[String]("ROWID_MIMIR") & lhsColNames)
-  //           | (Set[String]("ROWID_MIMIR") & rhsColNames)
-  //         )
-  //       //        println("CONFLICTS: "+conflicts+"in: "+lhsColNames+", "+rhsColNames+"; for \n"+afterDescent);
-
-  //       val newJoin =
-  //         if(conflicts.isEmpty) {
-  //           Join(lhsChild, rhsChild)
-  //         } else {
-  //           val fullMapping = (name:String, x:String) => {
-  //             ( if(conflicts contains x){ rename(name, x) }
-  //             else { x },
-  //               Var(x)
-  //               )
-  //           }
-  //           // Create a projection that remaps the names of
-  //           // all the variables to the appropriate unqiue
-  //           // name.
-  //           val rewrite = (name:String, child:Operator) => {
-  //             Project(
-  //               child.schema.map(_._1).
-  //                 map( fullMapping(name, _) ).
-  //                 map( (x) => ProjectArg(x._1, x._2)).toList,
-  //               child
-  //             )
-  //           }
-  //           Join(
-  //             rewrite("LHS", lhsChild),
-  //             rewrite("RHS", rhsChild)
-  //           )
-  //         }
-  //       val remap = (name: String,
-  //                    cols: List[(String,Expression)]) =>
-  //       {
-  //         val mapping =
-  //           conflicts.map(
-  //             (x) => (x, Var(rename(name, x)))
-  //           ).toMap[String, Expression]
-  //         cols.map( _ match { case (name, expr) =>
-  //             (name, Eval.inline(expr, mapping))
-  //           })
-  //       }
-  //       var cols = remap("LHS", lhsCols) ++
-  //         remap("RHS", rhsCols)
-  //       // println(cols.toString);
-  //       val ret = {
-  //         if(cols.exists(
-  //           _ match {
-  //             case (colName, Var(varName)) =>
-  //               (colName != varName)
-  //             case _ => true
-  //           })
-  //         )
-  //         {
-  //           Project( cols.map(
-  //             _ match { case (name, colExpr) =>
-  //               ProjectArg(name, colExpr)
-  //             }),
-  //             newJoin
-  //           )
-  //         } else {
-  //           newJoin
-  //         }
-  //       }
-  //       return ret
-  //     }
-  //   }
-  // }
-
   def expandProbabilisticCases(expr: Expression): 
     List[(Expression, Expression)] = 
   {
@@ -498,11 +352,25 @@ object CTPercolator {
         oper.rebuild(oper.children.map( expandProbabilisticCases(_) ))
     }
   }
+
+  val ROWID_KEY = "ROWID_MIMIR"
   
-  def requiresRowID(expr: Expression): Boolean = {
+  def requiresRowID(expr: Expression): Boolean = 
+  {
     expr match {
-      case Var("ROWID_MIMIR") => true;
+      case Var(ROWID_KEY) => true;
       case _ => expr.children.exists( requiresRowID(_) )
+    }
+  }
+
+  def hasRowID(oper: Operator): Boolean = 
+  {
+    oper match {
+      case Project(cols, _) => cols.contains( (_:ProjectArg).getColumnName().equals(ROWID_KEY))
+      case Select(_, src) => hasRowID(src)
+      case Table(_,_,meta) => meta.contains( (_:(String,Type.T))._1.equals(ROWID_KEY))
+      case Union(_,_) => false
+      case Join(_,_) => false
     }
   }
   
@@ -512,12 +380,13 @@ object CTPercolator {
   def propagateRowIDs(oper: Operator, force: Boolean): Operator = 
   {
     // println("Propagate["+(if(force){"F"}else{"NF"})+"]:\n" + oper);
+    if(hasRowID(oper)){ return oper; }
     oper match {
       case p @ Project(args, child) =>
         var newArgs = args;
-        if(force && p.get("ROWID_MIMIR").isEmpty) {
+        if(force && p.get(ROWID_KEY).isEmpty) {
           newArgs = 
-            (new ProjectArg("ROWID_MIMIR", Var("ROWID_MIMIR"))) ::
+            (new ProjectArg(ROWID_KEY, Var(ROWID_KEY))) ::
               newArgs
         }
         Project(newArgs, 
@@ -532,20 +401,20 @@ object CTPercolator {
       case Join(left, right) =>
         if(force){
           Project(
-            ProjectArg("ROWID_MIMIR",
+            ProjectArg(ROWID_KEY,
               Function("JOIN_ROWIDS", List[Expression](Var("LEFT_ROWID"), Var("RIGHT_ROWID")))) ::
             (left.schema ++ right.schema).map(_._1).map(
               (x) => ProjectArg(x, Var(x)) 
             ).toList,
             Join(
               Project(
-                ProjectArg("LEFT_ROWID", Var("ROWID_MIMIR")) ::
+                ProjectArg("LEFT_ROWID", Var(ROWID_KEY)) ::
                 left.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toList,
                 propagateRowIDs(left, true)),
               Project(
-                ProjectArg("RIGHT_ROWID", Var("ROWID_MIMIR")) ::
+                ProjectArg("RIGHT_ROWID", Var(ROWID_KEY)) ::
                 right.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toList,
@@ -563,17 +432,17 @@ object CTPercolator {
           if(force){
             Union( 
               Project(
-                ProjectArg("ROWID_MIMIR",
+                ProjectArg(ROWID_KEY,
                   Function("__LEFT_UNION_ROWID",
-                    List[Expression](Var("ROWID_MIMIR")))) ::
+                    List[Expression](Var(ROWID_KEY)))) ::
                 left.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toList,
                 propagateRowIDs(left, true)),
               Project(
-                ProjectArg("ROWID_MIMIR",
+                ProjectArg(ROWID_KEY,
                   Function("__RIGHT_UNION_ROWID",
-                    List[Expression](Var("ROWID_MIMIR")))) ::
+                    List[Expression](Var(ROWID_KEY)))) ::
                 right.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toList,
@@ -587,8 +456,8 @@ object CTPercolator {
           }
         
         case Table(name, sch, metadata) =>
-          if(force && !metadata.exists( _._1 == "ROWID_MIMIR" )){
-            Table(name, sch, metadata ++ Map(("ROWID_MIMIR", Type.TRowId)))
+          if(force && !metadata.exists( _._1 == ROWID_KEY )){
+            Table(name, sch, metadata ++ Map((ROWID_KEY, Type.TRowId)))
           } else {
             Table(name, sch, metadata)
           }

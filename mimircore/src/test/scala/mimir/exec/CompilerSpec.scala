@@ -59,12 +59,12 @@ object CompilerSpec extends Specification {
     "work on deterministic SPJ queries" in {
       percolate(
         """PROJECT[A <= R_A, D <= S_D](
-            SELECT[R_B = S_B](
+            SELECT[R_B = S_C](
               JOIN(R, S)
           ))"""
       ) must be equalTo oper(
         """PROJECT[A <= R_A, D <= S_D](
-            SELECT[R_B = S_B](
+            SELECT[R_B = S_C](
               JOIN(R, S)
           ))"""
       )
