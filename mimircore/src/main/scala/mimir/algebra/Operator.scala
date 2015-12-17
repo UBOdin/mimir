@@ -7,7 +7,8 @@ abstract class Operator
   def children: List[Operator];
   def rebuild(c: List[Operator]): Operator;
   override def toString() = this.toString("");
-  def schema: List[(String,Type.T)];
+  def schema: List[(String, Type.T)] = 
+    Typechecker.schemaOf(this)
 }
 
 case class ProjectArg(column: String, input: Expression) 
@@ -30,16 +31,6 @@ case class Project(columns: List[ProjectArg], source: Operator) extends Operator
     columns.find( (_.column == v) ).map ( _.input )
   def bindings: Map[String, Expression] =
     columns.map( (x) => (x.column, x.input) ).toMap
-
-  def schema: List[(String,Type.T)] = {
-    val sch = source.schema.toMap
-    // println(this.toString(""))
-    // println(sch.toString)
-    columns.map( (x) => (x.column, 
-                         x.input.exprType(sch)) 
-               )
-               
-  }
 }
 
 case class Select(condition: Expression, source: Operator) extends Operator
@@ -50,7 +41,6 @@ case class Select(condition: Expression, source: Operator) extends Operator
 
   def children() = List(source)
   def rebuild(x: List[Operator]) = new Select(condition, x(0))
-  def schema: List[(String,Type.T)] = source.schema
 }
 
 case class Join(left: Operator, right: Operator) extends Operator
@@ -61,7 +51,6 @@ case class Join(left: Operator, right: Operator) extends Operator
                   "\n" + prefix + ")"
   def children() = List(left, right);
   def rebuild(x: List[Operator]) = Join(x(0), x(1))
-  def schema: List[(String,Type.T)] = left.schema ++ right.schema
 }
 
 case class Union(left: Operator, right: Operator) extends Operator
@@ -74,17 +63,6 @@ case class Union(left: Operator, right: Operator) extends Operator
 
   def children() = List(left, right)
   def rebuild(x: List[Operator]) = Union(x(0), x(1))
-  def schema: List[(String,Type.T)] = {
-    val lsch = left.schema.map(_._1)
-    val rsch = right.schema.map(_._1)
-    if(lsch != rsch){
-      throw new Exception("Schema Mismatch: ("+lsch+") vs ("+rsch+") in\n"+toString())
-    } else {
-      lsch.indices.map( (i) =>
-        (lsch(i), Arith.escalateCompat(left.schema(i)._2, right.schema(i)._2))
-      ).toList
-    }
-  }
 }
 
 case class Table(name: String, 
@@ -102,5 +80,4 @@ case class Table(name: String,
     )+")" 
   def children: List[Operator] = List()
   def rebuild(x: List[Operator]) = Table(name, sch, metadata)
-  def schema: List[(String,Type.T)] = sch++metadata
 }

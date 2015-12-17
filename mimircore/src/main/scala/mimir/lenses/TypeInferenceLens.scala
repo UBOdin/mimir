@@ -210,7 +210,7 @@ extends Proc(args) {
   def get(args: List[PrimitiveValue]): PrimitiveValue = {
     model.mostLikelyValue(idx, args)
   }
-  def exprType(bindings: Map[String,Type.T]) = model.varTypes(idx)
+  def getType(bindings: List[Type.T]) = model.varTypes(idx)
   def rebuild(c: List[Expression]) = new TypeInferenceAnalysis(model, idx, c)
 
 }
@@ -358,7 +358,7 @@ case class TypeCastAnalysis(model: TypeCastModel,
   def get(args: List[PrimitiveValue]): PrimitiveValue = {
     model.mostLikelyValue(idx, args)
   }
-  def exprType(bindings: Map[String,Type.T]) = model.varTypes(idx)
+  def getType(bindings: List[Type.T]) = model.varTypes(idx)
   def rebuild(c: List[Expression]) = new TypeCastAnalysis(model, idx, c)
 
 }

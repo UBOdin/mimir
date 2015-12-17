@@ -92,7 +92,7 @@ case class SchemaAnalysis(model: SchemaMatchingModel, idx: Int, args: List[Expre
 
   override def rebuild(c: List[Expression]): Expression = SchemaAnalysis(model, idx, c)
 
-  override def exprType(bindings: Map[String, T]): T = Type.TBool
+  override def getType(bindings: List[T]): T = Type.TBool
 }
 
 class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {

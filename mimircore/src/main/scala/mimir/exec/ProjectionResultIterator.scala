@@ -27,7 +27,7 @@ class ProjectionResultIterator(
     val srcSchema = src.schema.toMap[String,Type.T]
     cols.map( _ match { case (name, expr) => 
       ( name, 
-        expr.exprType(srcSchema)
+        Typechecker.typeOf(expr, srcSchema)
       )
     }).filter( _._1 != CTables.conditionColumn )
   }

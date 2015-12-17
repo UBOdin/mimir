@@ -10,7 +10,7 @@ import mimir.Database;
 class VarProjection(src: ResultIterator, idx: Int, t: Type.T)
   extends Proc(List[Expression]())
 {
-  def exprType(bindings: Map[String,Type.T]) = t;
+  def getType(bindings: List[Type.T]) = t;
   def rebuild(x: List[Expression]) = new VarProjection(src, idx, t)
   def get(v:List[PrimitiveValue]) = src(idx)
 

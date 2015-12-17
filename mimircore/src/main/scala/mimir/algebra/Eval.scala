@@ -35,7 +35,7 @@ object Eval
       /* TODO Need to check if this is allowed? */
       case v: NullPrimitive => false
 
-      case v => throw new TypeException(TBool, v.exprType, "Cast")
+      case v => throw new TypeException(TBool, v.getType, "Cast")
     }
   /**
    * Evaluate the specified expression and return the primitive value
@@ -301,7 +301,7 @@ object Eval
        b.isInstanceOf[NullPrimitive]){
       NullPrimitive()
     } else {
-      (op, Arith.computeType(op, a.exprType, b.exprType)) match { 
+      (op, Typechecker.escalate(a.getType, b.getType)) match { 
         case (Arith.Add, TInt) => 
           IntPrimitive(a.asLong + b.asLong)
         case (Arith.Add, TFloat) => 
@@ -340,14 +340,13 @@ object Eval
        b.isInstanceOf[NullPrimitive]){
       NullPrimitive()
     } else {
-      Cmp.computeType(op, a.exprType, b.exprType)
       op match { 
         case Cmp.Eq => 
           BoolPrimitive(a.payload.equals(b.payload))
         case Cmp.Neq => 
           BoolPrimitive(!a.payload.equals(b.payload))
         case Cmp.Gt => 
-          Arith.escalateNumeric(a.exprType, b.exprType) match {
+          Typechecker.escalate(a.getType, b.getType) match {
             case TInt => BoolPrimitive(a.asLong > b.asLong)
             case TFloat => BoolPrimitive(a.asDouble > b.asDouble)
             case TDate => 
@@ -357,7 +356,7 @@ object Eval
               )
           }
         case Cmp.Gte => 
-          Arith.escalateNumeric(a.exprType, b.exprType) match {
+          Typechecker.escalate(a.getType, b.getType) match {
             case TInt => BoolPrimitive(a.asLong >= b.asLong)
             case TFloat => BoolPrimitive(a.asDouble >= b.asDouble)
             case TDate => 
@@ -376,7 +375,7 @@ object Eval
             })
           }
         case Cmp.Lt => 
-          Arith.escalateNumeric(a.exprType, b.exprType) match {
+          Typechecker.escalate(a.getType, b.getType) match {
             case TInt => BoolPrimitive(a.asLong < b.asLong)
             case TFloat => BoolPrimitive(a.asDouble < b.asDouble)
             case TDate => 
@@ -386,7 +385,7 @@ object Eval
               )
           }
         case Cmp.Lte => 
-          Arith.escalateNumeric(a.exprType, b.exprType) match {
+          Typechecker.escalate(a.getType, b.getType) match {
             case TInt => BoolPrimitive(a.asLong <= b.asLong)
             case TFloat => BoolPrimitive(a.asDouble <= b.asDouble)
             case TDate => 
