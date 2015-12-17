@@ -212,6 +212,12 @@ case class Database(name: String, backend: Backend)
     ra.convert(oper)
 
   /**
+   * Validate that the specified operator is valid
+   */
+  def check(oper: Operator): Unit =
+    Typechecker.schemaOf(oper);
+
+  /**
    * Parse the provided string as a Mimir Expression AST
    */
   def parseExpression(exprString: String): Expression =
