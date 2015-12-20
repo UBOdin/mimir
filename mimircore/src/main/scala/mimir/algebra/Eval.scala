@@ -1,5 +1,7 @@
 package mimir.algebra;
 
+import java.sql._;
+
 import mimir.algebra.Type._
 import mimir.ctables.{VGTerm, CTables}
 
@@ -33,7 +35,7 @@ object Eval
       /* TODO Need to check if this is allowed? */
       case v: NullPrimitive => false
 
-      case v => throw new TypeException(TBool, v.exprType, "Cast")
+      case v => throw new TypeException(TBool, v.getType, "Cast")
     }
   /**
    * Evaluate the specified expression and return the primitive value
@@ -85,6 +87,15 @@ object Eval
             case "DATE" =>
               val date = params.head.asInstanceOf[StringPrimitive].v.split("-").map(x => x.toInt)
               new DatePrimitive(date(0), date(1), date(2))
+            case "CAST" => {
+              Eval.eval(params(1), bindings).toString.toLowerCase match {
+                case "int" => IntPrimitive(Eval.eval(params(0), bindings).asLong)
+                case "real" => FloatPrimitive(Eval.eval(params(0), bindings).asDouble)
+                case "varchar" => StringPrimitive(Eval.eval(params(0), bindings).asString)
+                case x => throw new SQLException("Unknown cast type: '"+x+"'")
+              }
+            }
+
             case "__LIST_MIN" =>
               new FloatPrimitive(params.map(x => {
                 try {
@@ -149,6 +160,7 @@ object Eval
                 case e: TypeException => new NullPrimitive()
               }
             }
+            case fn => throw new SQLException("Unknown Function: "+fn)
           }
         }
       }
@@ -219,7 +231,8 @@ object Eval
                    wtTodo: List[WhenThenClause], 
                    eClause: Expression): Expression =
     wtTodo match {
-      case WhenThenClause(w, t) :: wtRest =>
+      case WhenThenClause(wBase, t) :: wtRest =>
+        val w = simplify(wBase)
         if(w.isInstanceOf[BoolPrimitive]){
           if(w.asInstanceOf[BoolPrimitive].v){
 
@@ -288,7 +301,7 @@ object Eval
        b.isInstanceOf[NullPrimitive]){
       NullPrimitive()
     } else {
-      (op, Arith.computeType(op, a.exprType, b.exprType)) match { 
+      (op, Typechecker.escalate(a.getType, b.getType)) match { 
         case (Arith.Add, TInt) => 
           IntPrimitive(a.asLong + b.asLong)
         case (Arith.Add, TFloat) => 
@@ -327,14 +340,13 @@ object Eval
        b.isInstanceOf[NullPrimitive]){
       NullPrimitive()
     } else {
-      Cmp.computeType(op, a.exprType, b.exprType)
       op match { 
         case Cmp.Eq => 
           BoolPrimitive(a.payload.equals(b.payload))
         case Cmp.Neq => 
           BoolPrimitive(!a.payload.equals(b.payload))
         case Cmp.Gt => 
-          Arith.escalateNumeric(a.exprType, b.exprType) match {
+          Typechecker.escalate(a.getType, b.getType) match {
             case TInt => BoolPrimitive(a.asLong > b.asLong)
             case TFloat => BoolPrimitive(a.asDouble > b.asDouble)
             case TDate => 
@@ -344,7 +356,7 @@ object Eval
               )
           }
         case Cmp.Gte => 
-          Arith.escalateNumeric(a.exprType, b.exprType) match {
+          Typechecker.escalate(a.getType, b.getType) match {
             case TInt => BoolPrimitive(a.asLong >= b.asLong)
             case TFloat => BoolPrimitive(a.asDouble >= b.asDouble)
             case TDate => 
@@ -363,7 +375,7 @@ object Eval
             })
           }
         case Cmp.Lt => 
-          Arith.escalateNumeric(a.exprType, b.exprType) match {
+          Typechecker.escalate(a.getType, b.getType) match {
             case TInt => BoolPrimitive(a.asLong < b.asLong)
             case TFloat => BoolPrimitive(a.asDouble < b.asDouble)
             case TDate => 
@@ -373,7 +385,7 @@ object Eval
               )
           }
         case Cmp.Lte => 
-          Arith.escalateNumeric(a.exprType, b.exprType) match {
+          Typechecker.escalate(a.getType, b.getType) match {
             case TInt => BoolPrimitive(a.asLong <= b.asLong)
             case TFloat => BoolPrimitive(a.asDouble <= b.asDouble)
             case TDate => 

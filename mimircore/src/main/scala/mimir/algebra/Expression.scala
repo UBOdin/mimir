@@ -16,7 +16,7 @@ class RAException(msg: String) extends Exception(msg);
 object Type extends Enumeration {
   type T = Value
 
-  val TInt, TFloat, TDate, TString, TBool, TRowId, TAny = Value
+  val TInt, TFloat, TDate, TString, TBool, TRowId, TType, TAny = Value
 
   def toString(t: T) = t match {
     case TInt => "int"
@@ -25,6 +25,7 @@ object Type extends Enumeration {
     case TString => "string"
     case TBool => "bool"
     case TRowId => "rowid"
+    case TType => "type"
     case TAny => throw new SQLException("Unable to produce string of type TAny");
   }
 
@@ -33,11 +34,15 @@ object Type extends Enumeration {
   def fromString(t: String) = t.toLowerCase match {
     case "int"    => Type.TInt
     case "float"  => Type.TFloat
-    case "decimal"  => Type.TFloat
+    case "decimal"=> Type.TFloat
+    case "real"   => Type.TFloat
     case "date"   => Type.TDate
+    case "varchar"=> Type.TString
+    case "char"   => Type.TString
     case "string" => Type.TString
     case "bool"   => Type.TBool
     case "rowid"  => Type.TRowId
+    case "type"   => Type.TType
     case _ =>  throw new SQLException("Invalid Type '" + t + "'");
   }
 
@@ -47,8 +52,6 @@ object Type extends Enumeration {
 import mimir.algebra.Type._
 
 abstract class Expression { 
-  def exprType(bindings: Map[String,Type.T]): Type.T
-  def exprType: Type.T = exprType(Map[String,Type.T]())
   def children: List[Expression] 
   def rebuild(c: List[Expression]): Expression
 }
@@ -61,7 +64,7 @@ abstract class LeafExpression extends Expression {
 abstract class PrimitiveValue(t: Type.T) 
   extends LeafExpression 
 {
-  def exprType(x: Map[String,Type.T]) = t
+  def getType = t
   def asLong: Long;
   def asDouble: Double;
   def asString: String;
@@ -80,6 +83,15 @@ case class StringPrimitive(v: String)
   extends PrimitiveValue(TString)
 {
   override def toString() = "'"+v.toString+"'"
+  def asLong: Long = java.lang.Long.parseLong(v)
+  def asDouble: Double = java.lang.Double.parseDouble(v)
+  def asString: String = v;
+  def payload: Object = v.asInstanceOf[Object];
+}
+case class KeywordPrimitive(v: String, t: Type.T)
+  extends PrimitiveValue(t)
+{
+  override def toString() = v
   def asLong: Long = java.lang.Long.parseLong(v)
   def asDouble: Double = java.lang.Double.parseDouble(v)
   def asString: String = v;
@@ -143,15 +155,13 @@ case class NullPrimitive()
 case class Not(child: Expression) 
   extends Expression 
 {
-  def exprType(bindings: Map[String,Type.T]): Type.T = {
-    Arith.escalateCompat(TBool, child.exprType(bindings))
-  }
   def children: List[Expression] = List[Expression](child)
   def rebuild(x: List[Expression]): Expression = Not(x(0))
 }
 
 abstract class Proc(args: List[Expression]) extends Expression
 {
+  def getType(argTypes: List[Type.T]): Type.T
   def getArgs = args
   def children = args
   def get(v: List[PrimitiveValue]): PrimitiveValue
@@ -171,53 +181,6 @@ object Arith extends Enumeration {
       case "&" => And
       case "|" => Or
       case x => throw new Exception("Invalid operand '"+x+"'")
-    }
-  }
-
-  def escalateNumeric(a: Type.T, b: Type.T): Type.T = {
-    (a,b) match {
-      case (_, TAny) => a
-      case (TAny, _) => b
-      case (TInt, TInt) => TInt
-      case (TFloat, TInt) => TFloat
-      case (TInt, TFloat) => TFloat
-      case (TFloat, TFloat) => TFloat
-      case (TBool, TBool) => TBool
-      case ((TInt | TFloat), _) => 
-        throw new TypeException(b, TFloat, "Numeric")
-      case _ => 
-        throw new TypeException(a, TFloat, "Numeric")
-    }
-  }
-  
-  def escalateCompat(a: Type.T, b: Type.T): Type.T = {
-    (a, b) match {
-      case (TAny, _) => b
-      case (_, TAny) => a
-      case (TInt, TInt) => TInt
-      case (TInt, TFloat) => TFloat
-      case (TFloat, (TInt | TFloat)) => TFloat
-      case (TString, TString) => TString
-      case (TRowId, TString) => TString
-      case (TString, TRowId) => TString
-      case (TRowId, TRowId) => TRowId
-      case (TBool, TBool) => TBool
-      case _ => 
-        throw new TypeException(a, b, "Compat")
-    }
-  }
-
-  def computeType(v: Op, a: Type.T, b: Type.T): Type.T = {
-    v match { 
-      case (Add | Sub | Mult | Div) => escalateNumeric(a, b)
-      case (And | Or) => 
-        if(a != TBool) { 
-          throw new TypeException(a, TBool, "BoolOp")
-        } else if(b != TBool) {
-          throw new TypeException(b, TBool, "BoolOp")
-        } else {
-          TBool
-        }
     }
   }
   def opString(v: Op): String = {
@@ -294,23 +257,6 @@ object Cmp extends Enumeration {
   type Op = Value
   val Eq, Neq, Gt, Lt, Gte, Lte, Like, NotLike = Value
   
-  def computeType(v: Op, a: Type.T, b: Type.T): Type.T = {
-    v match {
-      case (Eq | Neq) => 
-        Arith.escalateCompat(a, b); return TBool
-      case (Gt | Gte | Lt | Lte) => 
-        Arith.escalateNumeric(a, b); return TBool
-      case (Like | NotLike) => 
-        if(a != TString) { 
-          throw new TypeException(a, TBool, "Like")
-        } else if(b != TString) {
-          throw new TypeException(b, TBool, "Like")
-        } else {
-          TBool
-        }
-    }
-  }
-  
   def negate(v: Op): Op = {
     v match {
       case Eq => Neq
@@ -337,13 +283,6 @@ object Cmp extends Enumeration {
 }
 
 case class Var(name: String) extends LeafExpression {
-  def exprType(bindings: Map[String,Type.T]): T = {
-    val t = bindings.get(name)
-    if(t.isEmpty){
-      throw new RAException("Missing Variable '" + name + "' in "+bindings.toString)
-    }
-    t.get
-  }
   override def toString = name;
 }
 
@@ -351,12 +290,6 @@ case class Arithmetic(op: Arith.Op, lhs: Expression,
                       rhs: Expression) 
 	extends Expression 
 {
-  def exprType(bindings: Map[String,Type.T]): T = {
-    Arith.computeType(op, 
-      lhs.exprType(bindings), 
-      rhs.exprType(bindings)
-    )
-  }
   override def toString() = 
 	" (" + lhs.toString + Arith.opString(op) + rhs.toString + ") "
   def children = List(lhs, rhs)
@@ -366,33 +299,12 @@ case class Comparison(op: Cmp.Op, lhs: Expression,
                       rhs: Expression) 
 	extends Expression 
 {
-  def exprType(bindings: Map[String,Type.T]): T = {
-    Cmp.computeType(op, 
-      lhs.exprType(bindings), 
-      rhs.exprType(bindings)
-    )
-  }
   override def toString() = 
 	" (" + lhs.toString + Cmp.opString(op) + rhs.toString + ") "
   def children = List(lhs, rhs)
   def rebuild(c: List[Expression]) = Comparison(op, c(0), c(1))
 }
 case class Function(op: String, params: List[Expression]) extends Expression {
-  def exprType(bindings: Map[String, Type.T]): T = {
-    op match {
-      case "JOIN_ROWIDS" => TRowId
-      case CTables.ROW_PROBABILITY => TString
-      case CTables.VARIANCE | CTables.CONFIDENCE => TFloat
-      case "__LIST_MIN" | "__LIST_MAX" => TFloat
-      case "__LEFT_UNION_ROWID" | "__RIGHT_UNION_ROWID" => TRowId
-      case "CAST" => Type.fromString(params(1).asInstanceOf[StringPrimitive].v)
-      case _ => 
-        bindings.get("__"+op+"()") match {
-          case Some(binding) => binding
-          case None => throw new SQLException("Unknown Function: "+op)
-        }
-    }
-  }
   override def toString() = {
     op match {
       // Need to special case COUNT DISTINCT
@@ -400,12 +312,6 @@ case class Function(op: String, params: List[Expression]) extends Expression {
             "COUNT(DISTINCT " + params.map( _.toString ).mkString(", ") + ")"
       case "COUNT" if params.size == 0 => 
             "COUNT(*)"
-      case "EXTRACT" =>
-        op + "(" + params(0).asInstanceOf[StringPrimitive].v + " FROM " + 
-          params(1).toString + ")"
-
-      case "CAST" => "CAST "+params(0)+
-        " AS "+params(1).asInstanceOf[StringPrimitive].v
 
       case _ => op + "(" + params.map( _.toString ).mkString(", ") + ")"
     }
@@ -416,12 +322,6 @@ case class Function(op: String, params: List[Expression]) extends Expression {
 case class WhenThenClause(when: Expression, 
                           then: Expression) 
 {
-  def exprType(bindings: Map[String,Type.T]): T = {
-    if(when.exprType(bindings) != TBool){
-      throw new TypeException(when.exprType, TBool, "WHEN")
-    }
-    return then.exprType(bindings)
-  }
   override def toString() = "WHEN " + when.toString + " THEN " + then.toString
 }
 case class CaseExpression(
@@ -429,11 +329,6 @@ case class CaseExpression(
   elseClause: Expression
 ) extends Expression 
 {
-  def exprType(bindings: Map[String,Type.T]): T = {
-    whenClauses.
-      map ( _.exprType(bindings) ).
-      fold(TAny)( Arith.escalateCompat(_,_) )
-  }
   override def toString() = 
 	"CASE "+whenClauses.map( _.toString ).mkString(" ")+
 	" ELSE "+elseClause.toString+" END"
@@ -455,10 +350,6 @@ case class CaseExpression(
   }
 }
 case class IsNullExpression(child: Expression) extends Expression { 
-  def exprType(bindings: Map[String, Type.T]): T = {
-    child.exprType(bindings);
-    TBool
-  }
   override def toString() = {child.toString+" IS NULL"}
   def children = List(child)
   def rebuild(c: List[Expression]) = IsNullExpression(c(0))

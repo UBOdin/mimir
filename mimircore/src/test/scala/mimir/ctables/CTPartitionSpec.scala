@@ -46,8 +46,8 @@ object CTPartitionSpec extends Specification {
     "Handle Base Relations" in {
       partition("R(A, B)") must be equalTo oper("R(A, B)")
 
-      partition("R(A, B // ROWID:String)") must be equalTo 
-        oper("R(A, B // ROWID:String)")
+      partition("R(A, B // ROWID:rowid)") must be equalTo 
+        oper("R(A, B // ROWID:rowid)")
     }
 
     "Handle Deterministic Projection" in {
@@ -95,7 +95,7 @@ object CTPartitionSpec extends Specification {
           oper("R(A,B)")
         )
       ) must be equalTo (
-        Union(true,
+        Union(
           Project(List(
               ProjectArg("A", expr("A")),
               ProjectArg(CTables.conditionColumn, expr("{{Q_1[ROWID]}} > 4"))

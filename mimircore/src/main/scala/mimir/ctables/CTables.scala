@@ -25,10 +25,14 @@ case class VGTerm(
   args: List[Expression]
 ) extends Proc(args) {
   override def toString() = "{{ "+model._1+"_"+idx+"["+args.mkString(", ")+"] }}"
-  override def exprType(bindings: Map[String, Type.T]):Type.T = model._2.varTypes(idx)
+  override def getType(bindings: List[Type.T]):Type.T = model._2.varTypes(idx)
   override def children: List[Expression] = args
   override def rebuild(x: List[Expression]) = VGTerm(model, idx, x)
-  def get(v: List[PrimitiveValue]): PrimitiveValue = model._2.mostLikelyValue(idx, v)
+  def get(v: List[PrimitiveValue]): PrimitiveValue = 
+  {
+    // println("VGTerm: Get")
+    model._2.mostLikelyValue(idx, v)
+  }
   def reason(): (String, String) = model._2.reason(idx, args)
 }
 

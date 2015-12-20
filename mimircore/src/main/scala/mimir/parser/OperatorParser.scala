@@ -39,10 +39,7 @@ class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => Li
 	    }
 
 	def rel_union =
-		"UNION(" ~> ((rel_union_all | rel_union_distinct) <~ ",") ~ (operatorBase <~ ",") ~ operatorBase <~ ")" ^^ { case isAll ~ lhs ~ rhs => { Union(true, lhs, rhs) } }
-
-	def rel_union_all       = "ALL"      ^^ { _ => true }
-	def rel_union_distinct  = "DISTINCT" ^^ { _ => false }
+		"UNION(" ~> (operatorBase <~ ",") ~ operatorBase <~ ")" ^^ { case lhs ~ rhs => { Union(lhs, rhs) } }
 
 	def table =
 		(id ~ opt("(" ~> (colList ~ opt("//" ~> colList) ) <~ ")")) ^^ {

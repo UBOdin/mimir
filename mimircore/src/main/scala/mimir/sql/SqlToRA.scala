@@ -176,10 +176,13 @@ class SqlToRA(db: Database)
     } else if(sb.isInstanceOf[net.sf.jsqlparser.statement.select.Union]) {
       val union = sb.asInstanceOf[net.sf.jsqlparser.statement.select.Union];
       val isAll = (union.isAll() || !union.isDistinct());
+      if(!isAll){
+        throw new SQLException("Set Unions not supported yet");
+      }
       return union.
         getPlainSelects().
         map( convert(_, tableAlias) ).
-        reduce( (a,b) => (Union(isAll,a._1,b._1), a._2) )
+        reduce( (a,b) => (Union(a._1,b._1), a._2) )
     } else {
       unhandled("SelectBody[Unknown]")
     }

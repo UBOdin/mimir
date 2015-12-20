@@ -29,8 +29,8 @@ object PushdownSelections {
 			case Select(cond, (p @ Project(cols, src))) =>
 				optimize(Project(cols, Select(Eval.inline(cond, p.bindings), src)))
 
-			case Select(cond, Union(isAll, lhs, rhs)) =>
-				Union(isAll, optimize(Select(cond, lhs)), optimize(Select(cond, rhs)))
+			case Select(cond, Union(lhs, rhs)) =>
+				Union(optimize(Select(cond, lhs)), optimize(Select(cond, rhs)))
 
 			case Select(_, (_:Table)) => o
 

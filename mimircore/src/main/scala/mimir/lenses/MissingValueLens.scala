@@ -161,7 +161,7 @@ case class MissingValueAnalysis(model: MissingValueModel, args: List[Expression]
     }
   }
 
-  def exprType(bindings: Map[String, Type.T]) = {
+  def getType(bindings: List[Type.T]) = {
     val att = model.getLearner.getModelContext().attribute(model.cIndex)
     if (att.isString)
       Type.TString
@@ -247,10 +247,10 @@ class MissingValueModel(lens: MissingValueLens, name: String)
 
     rowidIterator.open()
     while(rowidIterator.getNext()) {
-      if(rowidIterator(classIndex+1).exprType(Map()) == Type.TAny) {
+      if(Typechecker.typeOf(rowidIterator(classIndex+1)) == Type.TAny) {
         val explist = List(rowidIterator(0))
         val data = computeMostLikelyValue(explist)
-        val typ = TypeUtils.convert(data.exprType(Map()))
+        val typ = TypeUtils.convert(data.getType)
         val accepted = "N"
         val tuple = List(explist.map(x => x.asString).mkString("|"), data.asString, typ, accepted)
         lens.db.update(

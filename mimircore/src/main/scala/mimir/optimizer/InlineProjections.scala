@@ -27,6 +27,15 @@ object InlineProjections {
 					src
 				))
 
+			case Project(cols, src) => 
+				// println("Inline : " + o)
+				Project(
+					cols.map( (arg:ProjectArg) =>
+						ProjectArg(arg.column, Eval.inline(arg.input))
+					),
+					optimize(src)
+				)
+
 			case _ => o.rebuild(o.children.map(optimize(_)))
 
 		}

@@ -43,10 +43,9 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
           map{ case (k, i) =>
             ProjectArg(
               k,
-              VGTerm(
-                (name, model),
-                i,
-                List(Var("ROWID_MIMIR"), Var(k), VGTerm((name, inferenceModel), i, List()))
+              Function(
+                "CAST",
+                List(Var(k), VGTerm((name, inferenceModel), i, List()))
               )
             )
           },
@@ -160,7 +159,7 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
   }
 
   override def mostLikelyValue(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
-    new StringPrimitive(TypeUtils.convert(inferredTypeMap(idx)._2))
+    new KeywordPrimitive(TypeUtils.convert(inferredTypeMap(idx)._2), Type.TType)
   }
 
   override def upperBoundExpr(idx: Int, args: List[Expression]): Expression = {
@@ -211,7 +210,7 @@ extends Proc(args) {
   def get(args: List[PrimitiveValue]): PrimitiveValue = {
     model.mostLikelyValue(idx, args)
   }
-  def exprType(bindings: Map[String,Type.T]) = model.varTypes(idx)
+  def getType(bindings: List[Type.T]) = model.varTypes(idx)
   def rebuild(c: List[Expression]) = new TypeInferenceAnalysis(model, idx, c)
 
 }
@@ -359,7 +358,7 @@ case class TypeCastAnalysis(model: TypeCastModel,
   def get(args: List[PrimitiveValue]): PrimitiveValue = {
     model.mostLikelyValue(idx, args)
   }
-  def exprType(bindings: Map[String,Type.T]) = model.varTypes(idx)
+  def getType(bindings: List[Type.T]) = model.varTypes(idx)
   def rebuild(c: List[Expression]) = new TypeCastAnalysis(model, idx, c)
 
 }

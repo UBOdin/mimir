@@ -82,7 +82,9 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 			case w ~ t => WhenThenClause(w, t)
 		} 
 
-	def leaf = parens | floatLeaf | intLeaf | boolLeaf | stringLeaf | caseStmt | function | vgterm | varLeaf
+	def leaf = 
+		parens | floatLeaf | intLeaf | boolLeaf | stringLeaf | typeLeaf | 
+		caseStmt | function | vgterm | varLeaf
 
 	def intLeaf = cint ^^ { IntPrimitive(_) }
 	def floatLeaf = cflt ^^ { FloatPrimitive(_) }
@@ -101,7 +103,7 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 
 	def arithSym = Arith.matchRegex ^^ { Arith.fromString(_) }
 
-	def function: Parser[Expression] = id ~ ("(" ~> opt(exprListBase) <~ ")") ^^ { 
+	def function: Parser[Expression] = id ~ ("(" ~> opt(exprList) <~ ")") ^^ { 
 		case fname ~ args => 
 			Function(fname, args.getOrElse(List()))
 	}
@@ -111,7 +113,11 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 	    exprBase                          ^^ { List(_) }
 
 	def exprList: Parser[List[Expression]] =
-		opt(exprListBase) ^^ { _.getOrElse(List()) }
+		  (opt(exprListBase) ^^ { _.getOrElse(List()) }) |
+		  (exprBase ~ "AS" ~ typeLeaf ^^ { 
+			case target ~ _ ~ verb => List(target, verb)
+			})
+
 
 	def vgterm = ("\\{\\{ *".r ~> id ~ 
 					opt("[" ~> exprList <~ "]") <~ 
@@ -123,5 +129,10 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 		}
 	}
 
-	def exprType: Parser[Type.T] = id ^^ { Type.fromString(_) }
+	def exprType: Parser[Type.T] = (
+		"int" | "decimal" | "date" | "string" | "rowid" | "type"
+	) ^^ { Type.fromString(_) }
+
+	def typeLeaf: Parser[Expression] = 
+		exprType ^^ { (t) => KeywordPrimitive(Type.toString(t), Type.TType) }
 }

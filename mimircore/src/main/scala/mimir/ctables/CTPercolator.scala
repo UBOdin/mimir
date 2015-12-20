@@ -27,7 +27,7 @@ object CTPercolator {
       // InlineProjections.optimize(
           propagateRowIDs(oper)
         // )
-      ).map( percolateOne(_) ).reduceLeft( Union(true,_,_) )
+      ).map( percolateOne(_) ).reduceLeft( Union(_,_) )
     )
   }
   
@@ -153,8 +153,8 @@ object CTPercolator {
 
         val conflicts = (
           (lhsColNames & rhsColNames)
-          | (Set[String]("ROWID_MIMIR") & lhsColNames)
-          | (Set[String]("ROWID_MIMIR") & rhsColNames)
+          | (Set[String](ROWID_KEY) & lhsColNames)
+          | (Set[String](ROWID_KEY) & rhsColNames)
         )
         var allNames = lhsColNames ++ rhsColNames
 
@@ -255,152 +255,6 @@ object CTPercolator {
     }
   }
 
-  // def percolateNoJoin(oper: Operator): Operator = {
-  //   OperatorUtils.extractUnions(
-  //     propagateRowIDs(oper)
-  //   ).map( percolateOneNoJoin(_) ).reduceLeft( Union(true,_,_) )
-  // }
-
-  // def percolateOneNoJoin(o: Operator): Operator =
-  // {
-  //   // println("percolateOne: "+o)
-  //   val extractProject:
-  //   Operator => ( List[(String,Expression)], Operator ) =
-  //     (e: Operator) =>
-  //       e match {
-  //         case Project(cols, rest) => (
-  //           cols.map( (x) => (x.column, x.input) ),
-  //           rest
-  //           )
-  //         case _ => (
-  //           e.schema.map(_._1).map( (x) => (x, Var(x)) ).toList,
-  //           e
-  //           )
-  //       }
-  //   val afterDescent =
-  //     o.rebuild(
-  //       o.children.map( percolateOneNoJoin(_) )
-  //       // post-condition: Only the immediate child
-  //       // of o is uncertainty-generating.
-  //     )
-  //   // println("---\nbefore\n"+o+"\nafter\n"+afterDescent+"\n")
-  //   afterDescent match {
-  //     case t: Table => t
-  //     case Project(cols, p2 @ Project(_, source)) =>
-  //       val bindings = p2.bindings
-  //       // println("---\nrebuilding\n"+o)
-  //       // println("mapping with bindings " + bindings.toString)
-  //       val ret = Project(
-  //         (cols).map(
-  //           (x) => ProjectArg(
-  //             x.column,
-  //             Eval.inline(x.input, bindings)
-  //           )),
-  //         source
-  //       )
-  //       // println("---\nrebuilt\n"+ret)
-  //       ret
-  //     case Project(cols, source) =>
-  //       Project(cols, source)
-  //     case s @ Select(cond1, Select(cond2, source)) =>
-  //       Select(Arithmetic(Arith.And,cond1,cond2), source)
-  //     case s @ Select(cond, p @ Project(cols, source)) =>
-  //       // Percolate the projection up through the
-  //       // selection
-  //       Project(cols,
-  //           percolateOneNoJoin(Select(Eval.inline(cond, p.bindings),source))
-  //         )
-
-  //     case s: Select => s
-  //     case Join(lhs, rhs) => {
-
-  //       // println("Percolating Join: \n" + o)
-
-  //       val rename = (name:String, x:String) =>
-  //         ("__"+name+"_"+x)
-  //       val (lhsCols, lhsChild) = extractProject(percolateNoJoin(lhs))
-  //       val (rhsCols, rhsChild) = extractProject(percolateNoJoin(rhs))
-
-  //       //         println("Percolated LHS: "+lhsCols+"\n" + lhsChild)
-  //       //         println("Percolated RHS: "+rhsCols+"\n" + rhsChild)
-
-  //       // Pulling projections up through a join may require
-  //       // renaming columns under the join if the same column
-  //       // name appears on both sides of the source
-  //       val lhsColNames = lhsChild.schema.map(_._1).toSet
-  //       val rhsColNames = rhsChild.schema.map(_._1).toSet
-
-  //       val conflicts = (
-  //         (lhsColNames & rhsColNames)
-  //           | (Set[String]("ROWID_MIMIR") & lhsColNames)
-  //           | (Set[String]("ROWID_MIMIR") & rhsColNames)
-  //         )
-  //       //        println("CONFLICTS: "+conflicts+"in: "+lhsColNames+", "+rhsColNames+"; for \n"+afterDescent);
-
-  //       val newJoin =
-  //         if(conflicts.isEmpty) {
-  //           Join(lhsChild, rhsChild)
-  //         } else {
-  //           val fullMapping = (name:String, x:String) => {
-  //             ( if(conflicts contains x){ rename(name, x) }
-  //             else { x },
-  //               Var(x)
-  //               )
-  //           }
-  //           // Create a projection that remaps the names of
-  //           // all the variables to the appropriate unqiue
-  //           // name.
-  //           val rewrite = (name:String, child:Operator) => {
-  //             Project(
-  //               child.schema.map(_._1).
-  //                 map( fullMapping(name, _) ).
-  //                 map( (x) => ProjectArg(x._1, x._2)).toList,
-  //               child
-  //             )
-  //           }
-  //           Join(
-  //             rewrite("LHS", lhsChild),
-  //             rewrite("RHS", rhsChild)
-  //           )
-  //         }
-  //       val remap = (name: String,
-  //                    cols: List[(String,Expression)]) =>
-  //       {
-  //         val mapping =
-  //           conflicts.map(
-  //             (x) => (x, Var(rename(name, x)))
-  //           ).toMap[String, Expression]
-  //         cols.map( _ match { case (name, expr) =>
-  //             (name, Eval.inline(expr, mapping))
-  //           })
-  //       }
-  //       var cols = remap("LHS", lhsCols) ++
-  //         remap("RHS", rhsCols)
-  //       // println(cols.toString);
-  //       val ret = {
-  //         if(cols.exists(
-  //           _ match {
-  //             case (colName, Var(varName)) =>
-  //               (colName != varName)
-  //             case _ => true
-  //           })
-  //         )
-  //         {
-  //           Project( cols.map(
-  //             _ match { case (name, colExpr) =>
-  //               ProjectArg(name, colExpr)
-  //             }),
-  //             newJoin
-  //           )
-  //         } else {
-  //           newJoin
-  //         }
-  //       }
-  //       return ret
-  //     }
-  //   }
-  // }
-
   def expandProbabilisticCases(expr: Expression): 
     List[(Expression, Expression)] = 
   {
@@ -492,17 +346,31 @@ object CTPercolator {
             ret = Project(args, ret)
           }
           ret
-        }).reduce[Operator]( Union(true, _, _) )
+        }).reduce[Operator]( Union( _, _) )
   
       case _ =>
         oper.rebuild(oper.children.map( expandProbabilisticCases(_) ))
     }
   }
+
+  val ROWID_KEY = "ROWID_MIMIR"
   
-  def requiresRowID(expr: Expression): Boolean = {
+  def requiresRowID(expr: Expression): Boolean = 
+  {
     expr match {
-      case Var("ROWID_MIMIR") => true;
+      case Var(ROWID_KEY) => true;
       case _ => expr.children.exists( requiresRowID(_) )
+    }
+  }
+
+  def hasRowID(oper: Operator): Boolean = 
+  {
+    oper match {
+      case Project(cols, _) => cols.contains( (_:ProjectArg).getColumnName().equals(ROWID_KEY))
+      case Select(_, src) => hasRowID(src)
+      case Table(_,_,meta) => meta.contains( (_:(String,Type.T))._1.equals(ROWID_KEY))
+      case Union(_,_) => false
+      case Join(_,_) => false
     }
   }
   
@@ -512,12 +380,13 @@ object CTPercolator {
   def propagateRowIDs(oper: Operator, force: Boolean): Operator = 
   {
     // println("Propagate["+(if(force){"F"}else{"NF"})+"]:\n" + oper);
+    if(hasRowID(oper)){ return oper; }
     oper match {
       case p @ Project(args, child) =>
         var newArgs = args;
-        if(force && p.get("ROWID_MIMIR").isEmpty) {
+        if(force && p.get(ROWID_KEY).isEmpty) {
           newArgs = 
-            (new ProjectArg("ROWID_MIMIR", Var("ROWID_MIMIR"))) ::
+            (new ProjectArg(ROWID_KEY, Var(ROWID_KEY))) ::
               newArgs
         }
         Project(newArgs, 
@@ -532,20 +401,20 @@ object CTPercolator {
       case Join(left, right) =>
         if(force){
           Project(
-            ProjectArg("ROWID_MIMIR",
+            ProjectArg(ROWID_KEY,
               Function("JOIN_ROWIDS", List[Expression](Var("LEFT_ROWID"), Var("RIGHT_ROWID")))) ::
             (left.schema ++ right.schema).map(_._1).map(
               (x) => ProjectArg(x, Var(x)) 
             ).toList,
             Join(
               Project(
-                ProjectArg("LEFT_ROWID", Var("ROWID_MIMIR")) ::
+                ProjectArg("LEFT_ROWID", Var(ROWID_KEY)) ::
                 left.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toList,
                 propagateRowIDs(left, true)),
               Project(
-                ProjectArg("RIGHT_ROWID", Var("ROWID_MIMIR")) ::
+                ProjectArg("RIGHT_ROWID", Var(ROWID_KEY)) ::
                 right.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toList,
@@ -559,36 +428,36 @@ object CTPercolator {
           )
         }
         
-        case Union(true, left, right) =>
+        case Union(left, right) =>
           if(force){
-            Union(true, 
+            Union( 
               Project(
-                ProjectArg("ROWID_MIMIR",
+                ProjectArg(ROWID_KEY,
                   Function("__LEFT_UNION_ROWID",
-                    List[Expression](Var("ROWID_MIMIR")))) ::
+                    List[Expression](Var(ROWID_KEY)))) ::
                 left.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toList,
                 propagateRowIDs(left, true)),
               Project(
-                ProjectArg("ROWID_MIMIR",
+                ProjectArg(ROWID_KEY,
                   Function("__RIGHT_UNION_ROWID",
-                    List[Expression](Var("ROWID_MIMIR")))) ::
+                    List[Expression](Var(ROWID_KEY)))) ::
                 right.schema.map(_._1).map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toList,
                 propagateRowIDs(right, true))
             )
           } else {
-            Union(true, 
+            Union( 
               propagateRowIDs(left, false),
               propagateRowIDs(right, false)
             )
           }
         
         case Table(name, sch, metadata) =>
-          if(force && !metadata.exists( _._1 == "ROWID_MIMIR" )){
-            Table(name, sch, metadata ++ Map(("ROWID_MIMIR", Type.TRowId)))
+          if(force && !metadata.exists( _._1 == ROWID_KEY )){
+            Table(name, sch, metadata ++ Map((ROWID_KEY, Type.TRowId)))
           } else {
             Table(name, sch, metadata)
           }
@@ -673,7 +542,7 @@ object CTPercolator {
       }
     }
 
-    missingValueClausesOp = Union(true,
+    missingValueClausesOp = Union(
       removeConstraintColumn(oper).rebuild(List(Select(detExpr.distinct.reduce(Arith.makeAnd(_, _)), oper.children().head))),
       oper.rebuild(List(Select(nonDeterExpr.distinct.reduce(Arith.makeOr(_, _)), oper.children().head)))
     )
@@ -692,7 +561,7 @@ object CTPercolator {
 
       case (x, null) => x
 
-      case (x, y) => Union(true, x, y)
+      case (x, y) => Union(x, y)
     }
   }
 
@@ -824,7 +693,7 @@ object CTPercolator {
           return (newOperator, colDeterminism, Var(mimirRowDeterministicColumnName))
         }
       }
-      case Union(isAll, left, right) => 
+      case Union(left, right) => 
       {
         val (rewrittenLeft, colDetLeft, rowDetLeft) = percolateLite(left);
         val (rewrittenRight, colDetRight, rowDetRight) = percolateLite(right);
@@ -877,7 +746,7 @@ object CTPercolator {
           ).toList
 
         val newOperator = 
-          Union(isAll,
+          Union(
               Project(projectArgsBase ++ projectArgsLeft, rewrittenLeft),
               Project(projectArgsBase ++ projectArgsRight, rewrittenRight)
             )
@@ -962,182 +831,4 @@ object CTPercolator {
       }
     }
   }
-
-  // val mimirOriginColumnName = "MIMIR_ORIGIN"
-  // /**
-  //  * Rewrite the input operator into a two-component split:
-  //  *   - A CTProvenance object describing the uncertainty provenance of all 
-  //  *     attributes in the schema of the output
-  //  *   - An operator rewritten to track inputs that are relevant to the CTProvenance object
-  //  */
-  // def percolateProvenance(oper: Operator): (Operator, CTProvenance) = 
-  // {
-  //   oper match {
-  //     case Project(columns, src) => {
-  //       val (srcRewrite, srcProvenance) = percolateProvenance(src)
-
-  //       // We have three considerations in rewriting provenance.
-  //       //  - `srcProvenance`'s column expressions need to be updated to correspond
-  //       //    to the expressions in `columns`
-  //       //  - `columns` may need to be extended with attributes required by the 
-  //       //    provenance computation.
-  //       //  - This process may introduce naming conflicts, so both `columns` and 
-  //       //    `srcProvenance` need to be updated accordingly.
-
-  //       // New names for each input column
-  //       var renamedColumns: mutable.Map[String, Expression] = null;
-  //       // Names of existing columns -- do not re-use for new columns
-  //       var reservedNames = columns.map( _.getColumnName() ).asSet;
-  //       // Columns that need to get added
-  //       var addedColumns = List[ProjectArg]();
-
-  //       // Start by figuring out which columns already exist in the output
-  //       // and what their names are.
-  //       columns.foreach( _ match { 
-  //         case ProjectArg(colName, expr) =>
-  //           expr match {
-  //             case Var(varName) => renamedColumns.put(varName, Var(colName)) 
-  //           }
-  //         }
-  //       )
-
-  //       // Preserve the mimir origin metadata
-  //       if(!(reservedNames contains mimirOriginColumnName)){
-  //         renamedColumns.put(mimirOriginColumnName, Var(mimirOriginColumnName))
-  //         addedColumns = 
-  //           ProjectArg(mimirOriginColumnName, Var(mimirOriginColumnName)) ::
-  //             addedColumns
-  //       }
-
-  //       // Utility Function to ensure that all dependent columns in `e` are 
-  //       // retained.  
-  //       // Optimization question: We don't actually need to keep *all* of the
-  //       // columns.  Which do we really want to keep?
-  //       //  Possibility 1: Nothing
-  //       //     - We can enumerate which VGTerms *could* affect the result
-  //       //  Possibility 2: Control flow vars
-  //       //     - We can enumerate which VGTerms *do* affect the result
-  //       //     - We can determine whether the output is deterministic
-  //       //  Possibility 3: Everything
-  //       //     - We can do everything in P2
-  //       //     - We can also compute all stddev/etc... values
-  //       // 
-  //       // We can potentially optimize possibility 3 a bit.  For example,
-  //       // let's say we have A*B+VGTerm(C).  Rather than tracking all
-  //       // values, we could force tracking of <X:A*B, C:C>
-  //       //
-  //       // For now, let's do this the simple, dumb way.
-  //       val rebuildExpressionForNewSchema = (e:Expression) => {
-
-  //         // Start by creating mappings for all of the variables in the 
-  //         // expression.
-
-  //         ExpressionUtils.getColumns(e).foreach( (varName: String) => {
-  //           // If we already have a new name for the expression, great!
-  //           if(!renamedColumns.hasKey(varName)){
-  //             // if not...
-  //             // find a new name that doesn't conflict with an existing
-  //             // name.
-  //             if(reservedNames contains varName){
-  //               // append _1, _2, _3, ... until we find one that
-  //               // doesn't conflict.
-  //               var i = 1;
-  //               while(reservedNames contains (varName+"_"+i)){ i++; }
-  //               renamedColumns.put(varName, Var(varName+"_"+i))
-  //               reservedNames.add(varName+"_"+i)
-  //               addedColumns = ProjectArg(varName+"_"+i, Var(varName)) :: addedColumns
-  //             } else {
-  //               // Trivial case: varName already doesn't conflict
-  //               renamedColumns.put(varName, Var(varName))
-  //               reservedNames.add(varName)
-  //               addedColumns = ProjectArg(varName, Var(varName)) :: addedColumns
-  //             }
-
-  //           }
-  //         })
-          
-  //         // As of right now, all variables in the provenance are represented 
-  //         // in renamedColumns.  Return the expression with the mappings inlined.
-  //         Eval.inline(e, renamedColumns)
-  //       }
-
-  //       val outputProvenance =
-  //         srcProvenance.map( _ match { 
-  //           case (inputColProvenance, inputCondProvenance) =>
-  //             {
-  //               val colProvenance =
-  //                 columns.flatMap( _ match { case ProjectArg(col, expr) => 
-
-  //                   // Define the provenance of 'col' in the project argument output
-  //                   val outputColProvenance = Eval.inline(expr, inputColProvenance)
-
-  //                   // Trivial possibility: outputColProvenance is deterministic.
-  //                   if(!CTables.isProbabilistic(outputColProvenance)){
-  //                     // If so, great, we don't care about the provenance of this
-  //                     // attribute.  Dump it.
-  //                     List[(String, Expression)]()
-  //                   } else {
-
-  //                     // Ok.  The `col` is nondeterministic.  We need some provenance.
-  //                     // Apply the utility function to remap the schema
-  //                     val newSchOutputColProvenance =
-  //                       rebuildExpressionForNewSchema(outputColProvenance)
-
-  //                     // And wrap the provenance in a list for the flatMap.
-  //                     List( (col, newSchOutputColProvenance) )
-
-  //                   }
-  //                 }).asMap
-  //               // We don't really interact with the output condition provenance, 
-  //               // but we do need to remap its schema.  Use the utility function!
-  //               val condProvenance = 
-  //                 rebuildExpressionForNewSchema(srcProvenance);
-
-  //               // ... and return the pair
-  //               (colProvenance, condProvenance)
-  //             }
-  //           }
-  //         )
-        
-  //       // The final return value extends the projection with the
-  //       // newly required columns, and uses the newly constructed output 
-  //       // provenance
-  //       ( 
-  //         Project(columns ++ addedColumns, srcRewrite), 
-  //         outputProvenance
-  //       )
-
-  //     }
-  //     case Select(condition, src) => {
-  //       val (srcRewrite, srcProvenance) = percolateProvenance(src)
-  //       val (extracted, remaining) = CTables.extractProbabilisticClauses(condition)
-
-  //       val outputProvenance =
-  //         srcProvenance.map( _ match { 
-  //           case (inputColProvenance, inputCondProvenance) => {
-  //             (
-  //               inputColProvenance, 
-  //               Arith.makeAnd(inputCondProvenance, extracted)
-  //             )
-  //           }
-  //         })
-
-  //       remaining match {
-  //         // If the entire condition is non-deterministic, drop the select 
-  //         // operator.
-  //         case BoolPrimitive(true) => (srcRewrite, outputProvenance)
-  //         case _ => (Select(remaining, srcRewrite), outputProvenance)
-  //       }
-  //     }
-  //     case Join(left, right) => {
-
-  //     }
-  //     case Union(isAll, left, right) => {
-
-  //     }
-  //     case Table(name, sch, metadata) => {
-
-  //     }
-  //   }
-  // }
 }

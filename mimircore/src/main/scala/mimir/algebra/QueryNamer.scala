@@ -23,7 +23,7 @@ object QueryNamer
 				} else {
 					nameQuery(lhs)+"_"+nameQuery(rhs)
 				}
-			case Union(_, lhs, rhs) =>
+			case Union(lhs, rhs) =>
 				if(hasJoinOrUnion(lhs) || hasJoinOrUnion(rhs)) {
 					(getRelationNames(lhs)++getRelationNames(rhs)).mkString("_plus_")
 				} else {
@@ -46,7 +46,7 @@ object QueryNamer
 	{
 		q match { 
 			case Join(_,_) => true
-			case Union(_,_,_) => true
+			case Union(_,_) => true
 			case _ => q.children.map( hasJoinOrUnion(_) ).foldLeft(false)( _ || _ )
 		}
 	}

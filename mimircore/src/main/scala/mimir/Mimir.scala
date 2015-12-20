@@ -7,7 +7,7 @@ import mimir.ctables.CTPercolator
 import mimir.parser._
 import mimir.sql._
 import mimir.algebra.{Project,ProjectArg,Var}
-import mimir.exec.CompileMode
+import mimir.exec.NonDeterminism
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
 import org.rogach.scallop._;
@@ -55,12 +55,12 @@ object Mimir {
         usePrompt = false;
       }
 
-      db.compileMode = 
+      db.nonDeterminismStrategy = 
         conf.nonDetStrategy().toLowerCase match {
-          case "classic" => CompileMode.Classic
-          case "partition" => CompileMode.Partition
-          case "inline" => CompileMode.Inline
-          case "hybrid" => CompileMode.Hybrid
+          case "classic"   => NonDeterminism.Classic
+          case "partition" => NonDeterminism.Partition
+          case "inline"    => NonDeterminism.Inline
+          case "hybrid"    => NonDeterminism.Hybrid
           case x => throw new SQLException("Invalid Non-Determinism Strategy: '"+x+"'")
         }
 
@@ -107,18 +107,20 @@ object Mimir {
 
   def handleExplain(explain: Explain): Unit = {
     val raw = db.convert(explain.getSelectBody())._1
-    val optimized = db.optimize(raw)
-    val sql = db.convert(optimized)
     println("------ Raw Query ------")
     println(raw)
+    db.check(raw)
+    val optimized = db.optimize(raw)
     println("--- Optimized Query ---")
     println(optimized)
-    // println("--- SQL Query ---")
-    // println(sql)
+    db.check(optimized)
+    println("--- Backend Quer(ies) ---")
+    db.getBackendSQL(optimized).map( println(_) );
   }
 
   def handleSelect(sel: Select): Unit = {
     val raw = db.convert(sel)
+    db.check(raw)
     val rawPlusRowID = Project(ProjectArg("MIMIR_PROVENANCE", Var("ROWID_MIMIR")) ::
                                raw.schema.map( (x) => ProjectArg(x._1, Var(x._1))),
                                raw)

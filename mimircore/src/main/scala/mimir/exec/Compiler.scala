@@ -16,19 +16,19 @@ import net.sf.jsqlparser.statement.select._
 
 class Compiler(db: Database) {
 
-  val modeOptimizations = Map[CompileMode.Mode, (List[Operator => Operator])](
-    (CompileMode.Classic, List[Operator => Operator](
+  val ndBuildOpts = Map[NonDeterminism.Strat, (List[Operator => Operator])](
+    (NonDeterminism.Classic, List[Operator => Operator](
       CTPercolator.percolate _
     )),
-    (CompileMode.Partition, List[Operator => Operator](
+    (NonDeterminism.Partition, List[Operator => Operator](
       CTPercolator.percolate _,
       CTPartition.partition _
     )),
-    (CompileMode.Inline, List[Operator => Operator](
+    (NonDeterminism.Inline, List[Operator => Operator](
       CTPercolator.percolate _, // Partition Det & Nondet query fragments
       PushdownSelections.optimize _
     )),
-    (CompileMode.Hybrid, List[Operator => Operator](
+    (NonDeterminism.Hybrid, List[Operator => Operator](
       CTPercolator.percolate _,
       CTPartition.partition _,
       PushdownSelections.optimize _
@@ -36,12 +36,12 @@ class Compiler(db: Database) {
   )
 
   val standardPostOptimizations = List[Operator => Operator](
-    inlineDataIndependentVars _,
+    InlineProjections.optimize _,
     compileAnalysis _         // Transform BOUNDS(), CONF(), etc... into actual expressions that SQL can understand
   )
 
   def standardOptimizations: List[Operator => Operator] = {
-    modeOptimizations(db.compileMode) ++ 
+    ndBuildOpts(db.nonDeterminismStrategy) ++ 
       standardPostOptimizations
   }
 
@@ -51,6 +51,13 @@ class Compiler(db: Database) {
    */
   def compile(oper: Operator): ResultIterator =
     compile(oper, standardOptimizations)
+
+  /**
+   * Perform a full end-end compilation pass.  Return an iterator over
+   * the result set.  Use the specified non-determinism strategy
+   */
+  def compile(oper: Operator, ndStrat: NonDeterminism.Strat): ResultIterator =
+    compile(oper, ndBuildOpts(ndStrat)++standardPostOptimizations)
 
   /**
    * Perform a full end-end compilation pass.  Return an iterator over
@@ -74,28 +81,6 @@ class Compiler(db: Database) {
    */
   def optimize(oper: Operator, opts: List[Operator => Operator]): Operator =
     opts.foldLeft(oper)((o, fn) => fn(o))
-
-
-  def inlineDataIndependentVars(oper: Operator): Operator =
-  oper match {
-    /*
-     Rewrite TypeInference VGTerms to SQL equivalent cast expression
-     */
-    case Project(cols, src) =>
-      Project(
-        cols.zipWithIndex.map{(coli) =>
-          coli._1.input match {
-            case VGTerm((_, model: TypeCastModel), idx, args) =>
-              ProjectArg(coli._1.column, Function("CAST", List(args(1), args(2))))
-            case _ =>
-              coli._1
-          }
-        },
-        src
-     )
-
-    case _ => oper
-  }
 
   /**
    * Build an iterator out of the specified operator.  If the operator
@@ -128,24 +113,36 @@ class Compiler(db: Database) {
             cols.map((x) => (x.column, x.input))
           );
 
-        case mimir.algebra.Union(true, lhs, rhs) =>
+        case mimir.algebra.Union(lhs, rhs) =>
           new BagUnionResultIterator(
             buildIterator(lhs),
             buildIterator(rhs)
           );
 
-        case mimir.algebra.Union(false, _, _) =>
-          throw new UnsupportedOperationException("UNION DISTINCT unimplemented")
-
-        case _ =>
-          db.query(db.convert(oper))
-          // throw new SQLException("Called buildIterator without calling percolate\n" + oper);
+        case _ => buildInlinedIterator(oper)
       }
 
 
     } else {
       db.query(db.convert(oper))
     }
+  }
+
+  def buildInlinedIterator(oper: Operator): ResultIterator =
+  {
+    val (operatorWithDeterminism, columnDetExprs, rowDetExpr) =
+      CTPercolator.percolateLite(oper)
+    val inlinedOperator =
+      InlineVGTerms.optimize(operatorWithDeterminism)
+    val schema = oper.schema;
+
+    new NDInlineResultIterator(
+      db.query(db.convert(inlinedOperator)), 
+      schema,
+      schema.map(_._1).map(columnDetExprs(_)), 
+      rowDetExpr
+    )
+
   }
 
   /**
@@ -232,8 +229,8 @@ class Compiler(db: Database) {
         )
       }
 
-      case u@mimir.algebra.Union(bool, lhs, rhs) =>
-        mimir.algebra.Union(bool, compileAnalysis(lhs), compileAnalysis(rhs))
+      case u@mimir.algebra.Union(lhs, rhs) =>
+        mimir.algebra.Union(compileAnalysis(lhs), compileAnalysis(rhs))
 
       case _ =>
         if (CTables.isProbabilistic(oper)) {
@@ -245,7 +242,7 @@ class Compiler(db: Database) {
   }
 }
 
-object CompileMode extends Enumeration {
-  type Mode = Value
+object NonDeterminism extends Enumeration {
+  type Strat = Value
   val Classic, Partition, Inline, Hybrid = Value
 }

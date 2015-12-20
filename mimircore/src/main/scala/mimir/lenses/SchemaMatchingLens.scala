@@ -38,15 +38,30 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
 
   def lensType = "SCHEMA_MATCHING"
 
+  def isTypeCompatible(a: T, b: T): Boolean = 
+  {
+    (a,b) match {
+      case ((Type.TInt|Type.TFloat),  (Type.TInt|Type.TFloat)) => true
+      case (Type.TAny, _) => true
+      case (_, Type.TAny) => true
+      case _ => a == b
+    }
+
+  }
+
   /**
    * `view` emits an Operator that defines the Virtual C-Table for the lens
    */
   override def view: Operator = {
+    // println("SourceSchema: "+sourceSchema)
+    // println("SourceSchema: "+targetSchema)
     Project(
       targetSchema.keys.toList.zipWithIndex.map { case (key, idx) => ProjectArg(
         key,
         CaseExpression(
-          sourceSchema.filter(_._2 == targetSchema(key)).keys.toList.map(b => WhenThenClause(
+          sourceSchema.filter(
+            (src) => isTypeCompatible(src._2, targetSchema(key))
+          ).keys.toList.map(b => WhenThenClause(
             Comparison(Cmp.Eq,
               VGTerm((name, model), idx, List(StringPrimitive(key), StringPrimitive(b))),
               BoolPrimitive(true)),
@@ -77,7 +92,7 @@ case class SchemaAnalysis(model: SchemaMatchingModel, idx: Int, args: List[Expre
 
   override def rebuild(c: List[Expression]): Expression = SchemaAnalysis(model, idx, c)
 
-  override def exprType(bindings: Map[String, T]): T = Type.TBool
+  override def getType(bindings: List[T]): T = Type.TBool
 }
 
 class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
@@ -105,7 +120,7 @@ class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
 
   def learn(targetSchema: Map[String, Type.T], sourceSchema: Map[String, Type.T]) = {
     colMapping = targetSchema.map { case (k, v) =>
-      (k, getSchemaMatching("NGramDistance", k, sourceSchema.filter(_._2 == v).keys.toList))
+      (k, getSchemaMatching("NGramDistance", k, sourceSchema.filter( (src) => lens.isTypeCompatible(src._2, v)).keys.toList))
     }
     schema = targetSchema
   }

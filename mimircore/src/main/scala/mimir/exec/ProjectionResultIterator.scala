@@ -5,6 +5,7 @@ import scala.collection.mutable.ArraySeq
 import java.sql._;
 import mimir.algebra._;
 import mimir.ctables._;
+import mimir.optimizer.InlineVGTerms;
 import mimir.Database;
 
 class ProjectionResultIterator(
@@ -26,7 +27,7 @@ class ProjectionResultIterator(
     val srcSchema = src.schema.toMap[String,Type.T]
     cols.map( _ match { case (name, expr) => 
       ( name, 
-        expr.exprType(srcSchema)
+        Typechecker.typeOf(expr, srcSchema)
       )
     }).filter( _._1 != CTables.conditionColumn )
   }
@@ -37,7 +38,10 @@ class ProjectionResultIterator(
    */
   val exprs = cols.
     filter( _._1 != CTables.conditionColumn ).
-    map( x => compile(x._2) )
+    map( x => VarProjection.compile(src, InlineVGTerms.optimize(x._2)) )
+  val exprsLineage = cols.
+    filter( _._1 != CTables.conditionColumn ).
+    map( x => VarProjection.compile(src, x._2) )
 
   /**
    * Boolean expressions that determine whether a given
@@ -49,7 +53,7 @@ class ProjectionResultIterator(
    */
   val deterministicExprs = cols.
     filter( _._1 != CTables.conditionColumn ).
-    map( x => compile(CTAnalyzer.compileDeterministic(x._2)) )
+    map( x => VarProjection.compile(src, CTAnalyzer.compileDeterministic(x._2)) )
 
   /**
    * Boolean expression that determines the presence
@@ -60,7 +64,10 @@ class ProjectionResultIterator(
    */
   val cond = 
     cols.find( _._1 == CTables.conditionColumn ).
-         map( x => compile(x._2) )
+         map( x => VarProjection.compile(src, InlineVGTerms.optimize(x._2)) )
+  val condLineage = 
+    cols.find( _._1 == CTables.conditionColumn ).
+         map( x => VarProjection.compile(src, x._2) )
 
   /**
    * Boolean expression that determines whether `cond`
@@ -72,7 +79,7 @@ class ProjectionResultIterator(
    */
   val deterministicCond = 
     cols.find( _._1 == CTables.conditionColumn ).
-         map( x => compile(CTAnalyzer.compileDeterministic(x._2)) )
+         map( x => VarProjection.compile(src, CTAnalyzer.compileDeterministic(x._2)) )
   
   val tuple: ArraySeq[PrimitiveValue] = 
     new ArraySeq[PrimitiveValue](exprs.length);
@@ -121,55 +128,10 @@ class ProjectionResultIterator(
     }
     true
   }
-  /**
-   * Compile an expression for evaluation.  mimir.algebra.Eval
-   * can already handle most Expression objects, except for 
-   * Var and PVar.  We replace Var instances with VarProjection
-   * instances that are direct references to the columns being
-   * produced by `src` (and reference by index, rather than)
-   * by name.  We replace PVar instances with Expectations 
-   * constructed from the PVar's definition (obtained from 
-   * db.analyze()).
-   */
-  def compile(expr: Expression): Expression =
-  {
-    expr match {
-      case Var(v) =>
-        v match {
-          case CTables.SEED_EXP => Var(v)
-          case _ => {
-            val idx =
-              src.schema.indexWhere(
-                _._1.toUpperCase == v
-              )
-            if(idx < 0){
-              throw new SQLException("Invalid schema: "+v+" not in "+src.schema)
-            }
-            val t = src.schema(idx)._2
-            new VarProjection(this, idx, t)
-          }
-        }
-      
-      case _ =>
-        expr.rebuild(
-          expr.children.map(compile(_))
-        )
-    }
-  }
 
   override def reason(ind: Int): List[(String, String)] = {
-    val expr: Expression = if(ind == -1) cond.get else exprs(ind)
+    val expr: Expression = if(ind == -1) condLineage.get else exprsLineage(ind)
     val evaluated = Eval.inline(expr)
     db.getVGTerms(evaluated).map((vgterm) => vgterm.reason()).distinct
   }
-}
-
-class VarProjection(src: ProjectionResultIterator, idx: Int, t: Type.T)
-  extends Proc(List[Expression]())
-{
-  def exprType(bindings: Map[String,Type.T]) = t;
-  def rebuild(x: List[Expression]) = new VarProjection(src, idx, t)
-  def get(v:List[PrimitiveValue]) = src.inputVar(idx)
-
-  override def toString = src.src.schema(idx)._1
 }
