@@ -36,7 +36,7 @@ object FunctionRegistry {
     registerFunction("__LIST_MAX", { (x: List[Type.T]) => 
     		Typechecker.assertNumeric(Typechecker.escalate(x)) 
     	})
-    registerFunction("CASE", (_) => TAny)
+    registerFunction("CAST", (_) => TAny)
 	}
 
 	def registerFunction(fname: String, typechecker: List[Type.T] => Type.T): Unit =

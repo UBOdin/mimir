@@ -152,21 +152,20 @@ class Application extends Controller {
   }
 
   def nameForQuery(query: String, db: String) = Action {
+    try {
+      webAPI.openBackendConnection()
+      
+      val result = webAPI.nameForQuery(query)
 
-    if(!db.equalsIgnoreCase(webAPI.getCurrentDB)) {
-      webAPI = new WebAPI(dbName = db)
+      result match {
+        case x: WebStringResult => Ok(Json.toJson(x.asInstanceOf[WebStringResult]))
+        case x: WebQueryResult  => Ok(Json.toJson(x.asInstanceOf[WebQueryResult]))
+        case x: WebErrorResult  => Ok(Json.toJson(x.asInstanceOf[WebErrorResult]))
+      }
     }
-
-    val result = webAPI.nameForQuery(query)
-
-    val response = result match {
-      case x: WebStringResult => Ok(Json.toJson(x.asInstanceOf[WebStringResult]))
-      case x: WebQueryResult  => Ok(Json.toJson(x.asInstanceOf[WebQueryResult]))
-      case x: WebErrorResult  => Ok(Json.toJson(x.asInstanceOf[WebErrorResult]))
+    finally {
+      webAPI.closeBackendConnection()
     }
-
-    webAPI.close()
-    response
   }
 
   def queryJson(query: String, db: String) = Action {

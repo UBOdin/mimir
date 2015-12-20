@@ -312,15 +312,35 @@ $( document ).ready(function() {
     });
 
 
+    function get_query_name(on_ready) 
+    {
+        var query = $("#last_query_field").val().replace(";.*","");
+        var db = $("#db_field").val();
+        var name_query = 'queryName?query='+query+';&db='+db;
+
+        $.get(name_query, function (res) {
+            console.log(res);
+            if(res.hasOwnProperty('error')) {
+                fault = true;
+                errormessage += res.error+'<br/>';
+            } else {
+                on_ready(res["result"])
+            }
+        })        
+    }
+
     /* Lens create buttons */
     $("#type_inference_btn").click( function() {
-        $("#black-box").show();
-        $("#ti_lens_div").show();
-
-        $("#black-box").click( function() {
-            $("#ti_lens_div").hide();
-            $(this).hide();
-        });
+        get_query_name(function(name) {
+            $("#ti_lens_name").val(name+"TYPED");
+            $("#black-box").show();
+            $("#ti_lens_div").show();
+    
+            $("#black-box").click( function() {
+                $("#ti_lens_div").hide();
+                $(this).hide();
+            });
+        })
     });
 
     $("#ti_lens_create_btn").click( function() {
@@ -343,20 +363,23 @@ $( document ).ready(function() {
     });
 
     $("#missing_value_btn").click( function() {
-        $("#black-box").show();
-        $("#mv_lens_div").show();
+        get_query_name(function(name) {
+            $("#mv_lens_name").val(name+"INTERPOLATED");
+            $("#black-box").show();
+            $("#mv_lens_div").show();
 
-        var dropdown = $("#mv_lens_param");
-        if(dropdown.children("option").length <= 0) {
-            $("#result_table").children("thead").children().children().not(".rowid_col, .row_selector").each( function () {
-                dropdown.append($("<option />").val($(this).html()).text($(this).html()));
+            var dropdown = $("#mv_lens_param");
+            if(dropdown.children("option").length <= 0) {
+                $("#result_table").children("thead").children().children().not(".rowid_col, .row_selector").each( function () {
+                    dropdown.append($("<option />").val($(this).html()).text($(this).html()));
+                });
+            }
+
+            $("#black-box").click( function() {
+                $("#mv_lens_div").hide();
+                $(this).hide();
             });
-        }
-
-        $("#black-box").click( function() {
-            $("#mv_lens_div").hide();
-            $(this).hide();
-        });
+        })
     });
 
     $("#mv_lens_create_btn").click( function() {
@@ -382,13 +405,16 @@ $( document ).ready(function() {
     });
 
     $("#schema_matching_btn").click( function() {
-        $("#black-box").show();
-        $("#sm_lens_div").show();
+        get_query_name(function(name) {
+            $("#sm_lens_name").val(name+"MATCHED");
+            $("#black-box").show();
+            $("#sm_lens_div").show();
 
-        $("#black-box").click( function() {
-            $("#sm_lens_div").hide();
-            $(this).hide();
-        });
+            $("#black-box").click( function() {
+                $("#sm_lens_div").hide();
+                $(this).hide();
+            });
+        })
     });
 
     $("#sm_lens_create_btn").click( function() {

@@ -26,7 +26,7 @@ object Type extends Enumeration {
     case TBool => "bool"
     case TRowId => "rowid"
     case TType => "type"
-    case TAny => throw new SQLException("Unable to produce string of type TAny");
+    case TAny => "any"//throw new SQLException("Unable to produce string of type TAny");
   }
 
   def toStringPrimitive(t: T) = StringPrimitive(toString(t))

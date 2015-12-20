@@ -95,6 +95,15 @@
         <div class="result">
             @result match {
                 case WebQueryResult(iter) => {
+                    <div class="leftCol">
+                        <button id="type_inference_btn" class="lens_btn">TYPE INFERENCE LENS</button>
+                        <button id="missing_value_btn" class="lens_btn">MISSING VALUE LENS</button>
+                        <button id="schema_matching_btn" class="lens_btn">SCHEMA MATCHING LENS</button>
+                    </div>
+                    <div class="rightCol">
+                         @tableGenerator(iter)
+                    </div>
+                    <div class="clear"></div>
                     <div class="panel panel-default">
                         <div class="panel-heading">
                             <h3 class="panel-title">Notifications</h3>
@@ -107,17 +116,6 @@
                             }
                         </div>
                     </div>
-                    <div class="horbar"></div>
-                    <div class="leftCol">
-                        <button id="type_inference_btn" class="lens_btn">TYPE INFERENCE LENS</button>
-                        <button id="missing_value_btn" class="lens_btn">MISSING VALUE LENS</button>
-                        <button id="schema_matching_btn" class="lens_btn">SCHEMA MATCHING LENS</button>
-                    </div>
-                    <div class="rightCol">
-                         @tableGenerator(iter)
-                    </div>
-                    <div class="clear"></div>
-                    <div class="horbar"></div>
                 }
                 case WebStringResult(string) => { <pre>@string</pre> }
                 case WebErrorResult(string) => { <pre class="error">Command Ignored.<br/><br/>@string</pre> }

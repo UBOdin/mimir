@@ -1,9 +1,5 @@
 @(webIter: mimir.web.WebIterator)
 
-<div id="visual">
-    <div id="graph"></div>
-    <input id="flow" type="hidden" value="@webIter.queryFlow.toJson()">
-</div>
 <table class="table" id="result_table">
     <thead>
         <tr>
@@ -30,3 +26,8 @@
         }
     </tbody>
 </table>
+<div class="horbar"></div>
+<div id="visual">
+    <div id="graph"></div>
+    <input id="flow" type="hidden" value="@webIter.queryFlow.toJson()">
+</div>
