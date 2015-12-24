@@ -151,26 +151,47 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				) r
 				WHERE rating > 4;
 			""").allRows.flatten
-			result must have size(7)
+			result must have size(4)
 			result must contain(eachOf( 
 				str("P123"), str("P125"), str("P325"), str("P34234")
 			))
 		}
 
-		// "Query a Join of a Union of Lenses" >> {
-		// 	val result = query("""
-		// 		SELECT name FROM (
-		// 			SELECT * FROM RATINGS1FINAL 
-		// 				UNION ALL 
-		// 			SELECT * FROM RATINGS2FINAL
-		// 		) r, Product p
-		// 		WHERE r.pid = p.id;
-		// 	""").allRows.flatten
-		// 	result must have size(7)
-		// 	result must contain(eachOf( 
-		// 		f(4.5), f(4.0), f(6.4), i(4),
-		// 		f(121.0), f(5.0), f(4.0)
-		// 	))
-		// }
+		"Query a Join of a Union of Lenses" >> {
+			val result1 = query("""
+				SELECT name FROM (
+					SELECT * FROM RATINGS1FINAL 
+						UNION ALL 
+					SELECT * FROM RATINGS2FINAL
+				) r, Product p
+				WHERE r.pid = p.id;
+				WHERE rating > 4;
+			""").allRows.flatten
+			result1 must have size(6)
+			result1 must contain(eachOf( 
+				str("Apple 6s, White"),
+				str("Sony to inches"),
+				str("Apple 5s, Black"),
+				str("Samsung Note2"),
+				str("Dell, Intel 4 core"),
+				str("HP, AMD 2 core")
+			))
+
+			val result2 = query("""
+				SELECT name FROM (
+					SELECT * FROM RATINGS1FINAL 
+						UNION ALL 
+					SELECT * FROM RATINGS2FINAL
+				) r, Product p
+				WHERE r.pid = p.id
+				  AND rating > 4;
+			""").allRows.flatten
+			result2 must have size(3)
+			result2 must contain(eachOf( 
+				str("Apple 6s, White"),
+				str("Samsung Note2"),
+				str("Dell, Intel 4 core")
+			))
+		}
 	}
 }

@@ -141,7 +141,7 @@ class Compiler(db: Database) {
     val inlinedOperator =
       InlineVGTerms.optimize(operatorWithDeterminism)
     // println("Inlined: "+inlinedOperator)
-    val schema = oper.schema;
+    val schema = oper.schema.filter(_._1 != CTPercolator.ROWID_KEY);
 
     new NDInlineResultIterator(
       db.query(db.convert(inlinedOperator)), 

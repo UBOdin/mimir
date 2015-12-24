@@ -8,6 +8,8 @@ import mimir.optimizer._
 
 object CTPercolator {
 
+  val ROWID_KEY = "ROWID_MIMIR"
+
   /**
    * Transform an operator tree into a union of
    * union-free, percolated subtrees.
@@ -350,8 +352,6 @@ object CTPercolator {
         oper.rebuild(oper.children.map( expandProbabilisticCases(_) ))
     }
   }
-
-  val ROWID_KEY = "ROWID_MIMIR"
   
   def requiresRowID(expr: Expression): Boolean = 
   {
