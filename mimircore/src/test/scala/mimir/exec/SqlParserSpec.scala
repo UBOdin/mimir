@@ -1,4 +1,4 @@
-package mimir.ctables;
+package mimir.exec;
 
 import java.io.{StringReader,BufferedReader,FileReader,File}
 import scala.collection.JavaConversions._
@@ -14,7 +14,7 @@ import mimir.parser._
 import mimir.algebra._
 import mimir.sql._
 
-object SqlLoaderSpec extends Specification with FileMatchers {
+object SqlParserSpec extends Specification with FileMatchers {
 
 	def stmt(s: String) = {
 		new MimirJSqlParser(new StringReader(s)).Statement()
