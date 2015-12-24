@@ -206,20 +206,22 @@ object Eval
    */
   def simplify(e: Expression): Expression = {
     // println("Simplify: "+e)
-    if(ExpressionUtils.getColumns(e).isEmpty && 
-       !CTables.isProbabilistic(e)) 
-    { 
-      try {
-        eval(e) 
-      } catch {
-        case _:MatchError => 
-          e.rebuild(e.children.map(simplify(_)))
+    ExpressionOptimizer.optimize(
+      if(ExpressionUtils.getColumns(e).isEmpty && 
+         !CTables.isProbabilistic(e)) 
+      { 
+        try {
+          eval(e) 
+        } catch {
+          case _:MatchError => 
+            e.rebuild(e.children.map(simplify(_)))
+        }
+      } else e match { 
+        case CaseExpression(wtClauses, eClause) =>
+          simplifyCase(List(), wtClauses, eClause)
+        case _ => e.rebuild(e.children.map(simplify(_)))
       }
-    } else e match { 
-      case CaseExpression(wtClauses, eClause) =>
-        simplifyCase(List(), wtClauses, eClause)
-      case _ => e.rebuild(e.children.map(simplify(_)))
-    }
+    )
   }
 
   /**

@@ -131,10 +131,16 @@ class Compiler(db: Database) {
 
   def buildInlinedIterator(oper: Operator): ResultIterator =
   {
+    // println("BASE: "+oper)
+    val operWithRowIDs = 
+      CTPercolator.propagateRowIDs(oper, true)
+    // println("ROWIDs: "+operWithRowIDs)
     val (operatorWithDeterminism, columnDetExprs, rowDetExpr) =
-      CTPercolator.percolateLite(oper)
+      CTPercolator.percolateLite(operWithRowIDs)
+    // println("Determinism: "+operatorWithDeterminism)
     val inlinedOperator =
       InlineVGTerms.optimize(operatorWithDeterminism)
+    // println("Inlined: "+inlinedOperator)
     val schema = oper.schema;
 
     new NDInlineResultIterator(

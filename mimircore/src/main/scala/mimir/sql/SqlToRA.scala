@@ -194,6 +194,9 @@ class SqlToRA(db: Database)
       unhandled("FromItem[SubJoin]")
     }
     if(fi.isInstanceOf[SubSelect]){
+      if(fi.asInstanceOf[SubSelect].getAlias == null){
+        throw new SQLException("Invalid Sub-Select (Needs Alias): "+fi);
+      }
       val (ret, bindings) = convert(
         fi.asInstanceOf[SubSelect].getSelectBody,
         fi.asInstanceOf[SubSelect].getAlias

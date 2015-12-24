@@ -115,6 +115,8 @@ object CTPartition {
 					case None =>
 						return f;
 				}
+			case Union(lhs, rhs) =>
+				Union(partition(lhs), partition(rhs))
 
 			case _ => 
 				throw new SQLException("Partitioning a non-normalized expression")

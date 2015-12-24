@@ -94,7 +94,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			query("SELECT * FROM RATINGS2TYPED;").allRows must have size(3)
 		}
 
-		"Create and Query DCR Lenses" >> {
+		"Create and Query Domain Constraint Repair Lenses" >> {
 			lens("""
 				CREATE LENS RATINGS1FINAL 
 				  AS SELECT * FROM RATINGS1TYPED 
@@ -104,5 +104,73 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			result must have size(4)
 			result must contain(eachOf( f(4.5), f(4.0), f(6.4), i(4) ) )
 		}
+
+		"Create and Query Schema Matching Lenses" >> {
+			lens("""
+				CREATE LENS RATINGS2FINAL 
+				  AS SELECT * FROM RATINGS2TYPED 
+				  WITH SCHEMA_MATCHING(PID string, RATING float, REVIEW_CT float)
+			""")
+			val result = query("SELECT RATING FROM RATINGS2FINAL").allRows.flatten
+			result must have size(3)
+			result must contain(eachOf( f(121.0), f(5.0), f(4.0) ) )
+		}
+
+		"Query a Union of lenses" >> {
+			val result1 = query("""
+				SELECT PID FROM RATINGS1FINAL 
+					UNION ALL 
+				SELECT PID FROM RATINGS2FINAL
+			""").allRows.flatten
+			result1 must have size(7)
+			result1 must contain(eachOf( 
+				str("P123"), str("P124"), str("P125"), str("P325"), str("P2345"), 
+				str("P34234"), str("P34235")
+			))
+
+			val result2 = query("""
+				SELECT PID FROM (
+					SELECT * FROM RATINGS1FINAL 
+						UNION ALL 
+					SELECT * FROM RATINGS2FINAL
+				) allratings
+			""").allRows.flatten
+			result2 must have size(7)
+			result2 must contain(eachOf( 
+				str("P123"), str("P124"), str("P125"), str("P325"), str("P2345"), 
+				str("P34234"), str("P34235")
+			))
+		}
+
+		"Query a Filtered Union of lenses" >> {
+			val result = query("""
+				SELECT pid FROM (
+					SELECT * FROM RATINGS1FINAL 
+						UNION ALL 
+					SELECT * FROM RATINGS2FINAL
+				) r
+				WHERE rating > 4;
+			""").allRows.flatten
+			result must have size(7)
+			result must contain(eachOf( 
+				str("P123"), str("P125"), str("P325"), str("P34234")
+			))
+		}
+
+		// "Query a Join of a Union of Lenses" >> {
+		// 	val result = query("""
+		// 		SELECT name FROM (
+		// 			SELECT * FROM RATINGS1FINAL 
+		// 				UNION ALL 
+		// 			SELECT * FROM RATINGS2FINAL
+		// 		) r, Product p
+		// 		WHERE r.pid = p.id;
+		// 	""").allRows.flatten
+		// 	result must have size(7)
+		// 	result must contain(eachOf( 
+		// 		f(4.5), f(4.0), f(6.4), i(4),
+		// 		f(121.0), f(5.0), f(4.0)
+		// 	))
+		// }
 	}
 }

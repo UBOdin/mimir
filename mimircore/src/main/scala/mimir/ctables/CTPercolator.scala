@@ -24,9 +24,7 @@ object CTPercolator {
     // println("Percolate: "+o)
     InlineProjections.optimize(
       OperatorUtils.extractUnions(
-      // InlineProjections.optimize(
-          propagateRowIDs(oper)
-        // )
+        propagateRowIDs(oper)
       ).map( percolateOne(_) ).reduceLeft( Union(_,_) )
     )
   }

@@ -54,6 +54,8 @@ import mimir.algebra.Type._
 abstract class Expression { 
   def children: List[Expression] 
   def rebuild(c: List[Expression]): Expression
+  def recur(f: Expression => Expression) =
+    rebuild(children.map(f))
 }
 
 abstract class LeafExpression extends Expression {
