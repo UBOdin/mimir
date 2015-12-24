@@ -43,7 +43,7 @@ object Mimir {
       println("Initializing Database...");
       db.initializeDBForMimir();
     } else if(conf.loadTable.get != None){
-      db.handleLoadTable(conf.loadTable(), conf.loadTable()+".csv");
+      db.loadTable(conf.loadTable(), conf.loadTable()+".csv");
     } else {
       var source: Reader = null;
 

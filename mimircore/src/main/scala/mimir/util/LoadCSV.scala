@@ -1,6 +1,6 @@
 package mimir.util
 
-import java.io.{FileReader, BufferedReader}
+import java.io.{File, FileReader, BufferedReader}
 import java.sql.SQLException
 
 import mimir.Database
@@ -10,7 +10,7 @@ import scala.collection.mutable.ListBuffer
 
 object LoadCSV {
 
-  def handleLoadTable(db: Database, targetTable: String, sourceFile: String){
+  def handleLoadTable(db: Database, targetTable: String, sourceFile: File){
     val input = new BufferedReader(new FileReader(sourceFile))
     val firstLine = input.readLine()
 

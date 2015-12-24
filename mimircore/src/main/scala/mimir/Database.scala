@@ -1,5 +1,6 @@
 package mimir
 
+import java.io.File
 import java.sql.SQLException
 
 import mimir.algebra._
@@ -307,8 +308,17 @@ case class Database(name: String, backend: Backend)
    * header or not is unimplemented. So its assumed every CSV file
    * supplies an appropriate header.
    */
-  def handleLoadTable(targetTable: String, sourceFile: String){
+  def loadTable(targetTable: String, sourceFile: File){
     LoadCSV.handleLoadTable(this, targetTable, sourceFile)
+  }
+  def loadTable(targetTable: String, sourceFile: String){
+    loadTable(targetTable, new File(sourceFile))
+  }
+  def loadTable(sourceFile: String){
+    loadTable(new File(sourceFile))
+  }
+  def loadTable(sourceFile: File){
+    loadTable(sourceFile.getName().split("\\.")(0), sourceFile)
   }
 
   /**

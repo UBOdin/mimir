@@ -33,7 +33,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
   }
 
   def handleLoadTable(filename: String) = {
-    db.handleLoadTable(filename.replace(".csv", ""), filename)
+    db.loadTable(filename.replace(".csv", ""), filename)
   }
 
   def handleStatement(query: String): (WebResult, String) = {
