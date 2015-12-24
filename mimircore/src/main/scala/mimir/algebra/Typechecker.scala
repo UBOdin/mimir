@@ -37,6 +37,14 @@ class ExpressionChecker(scope: Map[String,Type.T] = Map()) {
 				assert(rhs, TString, "LIKE")
 				TBool
 			case Var(name) => scope(name)
+			case Function("CAST", fargs) =>
+				// Special case CAST
+				Eval.inline(fargs(1)) match {
+					case KeywordPrimitive(t, TType) => Type.fromString(t)
+					case p:PrimitiveValue => 
+						throw new SQLException("Invalid CAST to '"+p+"' of type: "+typeOf(p))
+					case _ => TAny
+				}
 			case Function(fname, fargs) =>
 				FunctionRegistry.typecheck(fname, fargs.map(typeOf(_)))
 			case CaseExpression(whenClauses, elseClause) => 

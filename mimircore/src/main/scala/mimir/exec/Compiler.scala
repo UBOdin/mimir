@@ -63,9 +63,10 @@ class Compiler(db: Database) {
    * Perform a full end-end compilation pass.  Return an iterator over
    * the result set.  Use only the specified list of optimizations.
    */
-  def compile(oper: Operator, opts: List[Operator => Operator]):
-  ResultIterator = {
+  def compile(oper: Operator, opts: List[Operator => Operator]): ResultIterator = 
+  {
     val optimizedOper = optimize(oper, opts)
+    // println(optimizedOper)
     // Finally build the iterator
     buildIterator(optimizedOper)
   }

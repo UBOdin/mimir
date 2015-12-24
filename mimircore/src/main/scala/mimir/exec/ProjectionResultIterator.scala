@@ -19,29 +19,36 @@ class ProjectionResultIterator(
    * Instrumentation
    */
   var counter = 0
+  /**
+   * Maximal Likelihood Expected value expressions for 
+   * the projection's output.  Excludes the condition
+   * column (but see cond, below).
+   */
+  val (exprsLabels, exprs, exprsLineage) = cols.
+    filter( _._1 != CTables.conditionColumn ).
+    map( x => 
+      (
+      // The label
+        x._1, 
+      // The Optimized Expression
+        VarProjection.compile(src, InlineVGTerms.optimize(x._2)),
+      // The Lineage Expression
+        VarProjection.compile(src, x._2)
+      )
+    ).unzip3
 
   /**
    * The output schema of this iterator
    */
   val schema = {
     val srcSchema = src.schema.toMap[String,Type.T]
-    cols.map( _ match { case (name, expr) => 
+    exprsLabels.zip(exprs).map( _ match { case (name, expr) => 
+      // println("SCHEMA OF : " + expr)
       ( name, 
         Typechecker.typeOf(expr, srcSchema)
       )
-    }).filter( _._1 != CTables.conditionColumn )
+    })
   }
-  /**
-   * Maximal Likelihood Expected value expressions for 
-   * the projection's output.  Excludes the condition
-   * column (but see cond, below).
-   */
-  val exprs = cols.
-    filter( _._1 != CTables.conditionColumn ).
-    map( x => VarProjection.compile(src, InlineVGTerms.optimize(x._2)) )
-  val exprsLineage = cols.
-    filter( _._1 != CTables.conditionColumn ).
-    map( x => VarProjection.compile(src, x._2) )
 
   /**
    * Boolean expressions that determine whether a given
@@ -112,7 +119,10 @@ class ProjectionResultIterator(
   {
     var searching = true
     while(searching){
-      if(!src.getNext()) { println("Total scanned: "+counter); return false; }
+      if(!src.getNext()) { 
+        // println("Total scanned: "+counter); 
+        return false; 
+      }
       if(cond match {
         case None => true
         case Some(c) => Eval.evalBool(c)

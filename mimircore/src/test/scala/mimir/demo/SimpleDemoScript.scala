@@ -8,6 +8,7 @@ import org.specs2.matcher.FileMatchers
 import mimir._;
 import mimir.sql._;
 import mimir.parser._;
+import mimir.algebra._;
 import net.sf.jsqlparser.statement.{Statement}
 
 
@@ -36,6 +37,9 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		db.update(s.toString())
 	def parser = new ExpressionParser(db.lenses.modelForLens)
 	def expr = parser.expr _
+	def i = IntPrimitive(_:Long).asInstanceOf[PrimitiveValue]
+	def f = FloatPrimitive(_:Double).asInstanceOf[PrimitiveValue]
+	def str = StringPrimitive(_:String).asInstanceOf[PrimitiveValue]
 
 	val tempDBName = "tempDBDemoScript"
 	val productDataFile = new File("../test/data/Product.sql");
@@ -67,14 +71,38 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			db.loadTable(reviewDataFiles(0))
 			db.loadTable(reviewDataFiles(1))
 			query("SELECT * FROM RATINGS1;").allRows must have size(4)
+			query("SELECT RATING FROM RATINGS1;").allRows.flatten must contain( str("4.5"), str("4.0"), str("6.4") )
 			query("SELECT * FROM RATINGS2;").allRows must have size(3)
+
 		}
 
-		"Create Type Inference Lenses" >> {
-			lens("CREATE LENS RATINGS1TYPED AS SELECT * FROM RATINGS1 WITH TYPE_INFERENCE(0.5)")
-			lens("CREATE LENS RATINGS2TYPED AS SELECT * FROM RATINGS2 WITH TYPE_INFERENCE(0.5)")
+		"Create and Query Type Inference Lenses" >> {
+			lens("""
+				CREATE LENS RATINGS1TYPED 
+				  AS SELECT * FROM RATINGS1 
+				  WITH TYPE_INFERENCE(0.5)
+			""")
+			lens("""
+				CREATE LENS RATINGS2TYPED 
+				  AS SELECT * FROM RATINGS2
+				  WITH TYPE_INFERENCE(0.5)
+			""")
 			query("SELECT * FROM RATINGS1TYPED;").allRows must have size(4)
+			query("SELECT RATING FROM RATINGS1TYPED;").allRows.flatten must contain( 
+				f(4.5), f(4.0), f(6.4) 
+			)
 			query("SELECT * FROM RATINGS2TYPED;").allRows must have size(3)
+		}
+
+		"Create and Query DCR Lenses" >> {
+			lens("""
+				CREATE LENS RATINGS1FINAL 
+				  AS SELECT * FROM RATINGS1TYPED 
+				  WITH MISSING_VALUE('RATING')
+			""")
+			val result = query("SELECT RATING FROM RATINGS1FINAL").allRows.flatten
+			result must have size(4)
+			result must contain(eachOf( f(4.5), f(4.0), f(6.4), i(4) ) )
 		}
 	}
 }

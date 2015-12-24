@@ -194,6 +194,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
 
   def init(source: Operator, classIndex: Int) = {
     cIndex = classIndex
+    // println("SOURCE: "+source)
     val iterator = lens.db.query(source)
     val attributes = getAttributesFromIterator(iterator)
     data = new Instances("TrainData", attributes, 100)
@@ -201,6 +202,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     var numInstances = 0
     iterator.open()
     while(iterator.getNext() && numInstances < 10000) {
+      // println("ROW: "+iterator.currentRow())
       val instance = new DenseInstance(iterator.numCols)
       instance.setDataset(data)
       for(j <- 0 until iterator.numCols                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       ) {

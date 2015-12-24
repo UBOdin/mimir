@@ -14,7 +14,7 @@ abstract class ResultIterator {
   def schema: List[(String,Type.T)];
   def map[X](fn: (PrimitiveValue) => X) =
     (0 until numCols).map( (i) => fn(this(i)) )
-  def toList(): List[PrimitiveValue] =
+  def currentRow(): List[PrimitiveValue] =
     map( (x) => x ).toList
   def foreachRow(fn: ResultIterator => Unit): Unit = {
     open()
@@ -23,7 +23,7 @@ abstract class ResultIterator {
   }
   def allRows(): List[List[PrimitiveValue]] = { 
     var ret = List[List[PrimitiveValue]]()
-    foreachRow( (x) => { ret = ret ++ List(toList()) } )
+    foreachRow( (x) => { ret = ret ++ List(currentRow()) } )
     return ret;
   }
   def reason(ind: Int): List[(String, String)] = List()
