@@ -53,16 +53,26 @@ object CTBounds {
               )
             return combinePossibilities(options);
         }
+
       case Conditional(condition, thenClause, elseClause) =>
+        val condition_bounds = compile(condition)
         val (then_low, then_high) = compile(thenClause)
         val (else_low, else_high) = compile(elseClause)
-        if(CTables.isProbabilistic(condition)) { return (
-          Eval.inline(Function("__LIST_MIN", List(then_low, else_low))),
-          Eval.inline(Function("__LIST_MAX", List(then_high, else_high)))
-        ) } else { return (
-          Eval.inline(Conditional(condition, then_low,  else_low)),
-          Eval.inline(Conditional(condition, then_high, else_high))
-        ) }
+
+        compile(condition) match {
+          case (BoolPrimitive(true), BoolPrimitive(true)) =>
+            return (then_low, then_high)
+          case (BoolPrimitive(false), BoolPrimitive(false)) =>
+            return (else_low, else_high)
+          case _ => 
+            if(CTables.isProbabilistic(condition)) { return (
+              Eval.inline(Function("__LIST_MIN", List(then_low, else_low))),
+              Eval.inline(Function("__LIST_MAX", List(then_high, else_high)))
+            ) } else { return (
+              Eval.inline(Conditional(condition, then_low,  else_low)),
+              Eval.inline(Conditional(condition, then_high, else_high))
+            ) }
+        }
 
       case Comparison(op, lhs, rhs) =>
 

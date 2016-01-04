@@ -149,10 +149,10 @@ object CTBoundsSpec extends Specification {
     "Handle Case Statements with Det Conditions based on VGTerms" in {
       bounds(
         "IF {{ test_0[0,2] }} <= 5 THEN 10 ELSE 20 END"
-      ) must be equalTo (expr("10.0"), expr("20.0"))
+      ) must be equalTo (expr("10"), expr("10"))
       bounds(
         "IF {{ test_0[10,12] }} <= 5 THEN 10 ELSE 20 END"
-      ) must be equalTo (expr("10.0"), expr("20.0"))
+      ) must be equalTo (expr("20"), expr("20"))
     }
   }
 }
