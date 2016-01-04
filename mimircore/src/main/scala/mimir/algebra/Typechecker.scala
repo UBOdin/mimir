@@ -6,7 +6,7 @@ import Type._;
 import Arith.{Add, Sub, Mult, Div, And, Or}
 import Cmp.{Gt, Lt, Lte, Gte, Eq, Neq, Like, NotLike}
 
-class ExpressionChecker(scope: Map[String,Type.T] = Map()) {
+class ExpressionChecker(scope: (String => Type.T) = Map().apply _) {
 
 	def assert(e: Expression, t: Type.T, msg: String = "Typechecker"): Unit = {
 		val eType = typeOf(e);
@@ -63,9 +63,14 @@ class ExpressionChecker(scope: Map[String,Type.T] = Map()) {
 
 object Typechecker {
 
+	val simpleChecker = new ExpressionChecker();
+	val weakChecker = new ExpressionChecker((_) => Type.TAny)
+
 	def typeOf(e: Expression): Type.T =
-		{ (new ExpressionChecker()).typeOf(e) }
-	def typeOf(e: Expression, scope: Map[String,Type.T]): Type.T =
+		{ simpleChecker.typeOf(e) }
+	def weakTypeOf(e: Expression): Type.T =
+		{ weakChecker.typeOf(e) }
+	def typeOf(e: Expression, scope: (String => Type.T)): Type.T =
 		{ (new ExpressionChecker(scope)).typeOf(e) }
 
 	def schemaOf(o: Operator): List[(String, Type.T)] =

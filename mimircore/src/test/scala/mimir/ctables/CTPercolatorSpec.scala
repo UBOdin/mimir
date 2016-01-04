@@ -40,6 +40,8 @@ object CTPercolatorSpec extends Specification {
   )
   def expr = parser.expr _
   def oper:(String => Operator) = parser.operator _
+  def project(cols: List[(String,String)], src: Operator): Operator =
+    Project(cols.map( { case (name,e) => ProjectArg(name, expr(e))}), src) 
   def percolate(s: String) = CTPercolator.percolate(oper(s))
   def analyze(s: String) = new Compiler(null).compileAnalysis(oper(s))
 
@@ -282,90 +284,112 @@ object CTPercolatorSpec extends Specification {
       )    
     }
     "properly process join rowids" in {
-      CTPercolator.percolate(oper(
-        """
-        PROJECT[X <= ROWID_MIMIR](
-          JOIN(
-            R(A_A:int, A_B:int, A_C:int),
-            R(B_A:int, B_B:int, B_C:int)
+      CTPercolator.percolate(
+        project(List(("X", "ROWID_MIMIR")),
+          Join(
+            oper("R(A_A:int, A_B:int, A_C:int)"),
+            oper("R(B_A:int, B_B:int, B_C:int)")
           )
         )
-        """
-      )) must be equalTo oper(
-        """
-          PROJECT[X <= JOIN_ROWIDS(ROWID_MIMIR_1, ROWID_MIMIR_2)](
-            JOIN(
-              PROJECT[A_A <= A_A, A_B <= A_B, A_C <= A_C, ROWID_MIMIR_1 <= ROWID_MIMIR](
-                R(A_A:int, A_B:int, A_C:int // ROWID_MIMIR:rowid)
+      ) must be equalTo 
+        project(
+          List(
+            ("X", "JOIN_ROWIDS(ROWID_MIMIR_1, ROWID_MIMIR_2)")
+          ),
+          Join(
+            project(
+              List(
+                ("A_A", "A_A"),("A_B", "A_B"),("A_C", "A_C"),
+                ("ROWID_MIMIR_1", "ROWID_MIMIR")
               ),
-              PROJECT[B_A <= B_A, B_B <= B_B, B_C <= B_C, ROWID_MIMIR_2 <= ROWID_MIMIR](
-                R(B_A:int, B_B:int, B_C:int // ROWID_MIMIR:rowid)
-              )
+              oper("R(A_A:int, A_B:int, A_C:int // ROWID_MIMIR:rowid)")
+            ),
+            project(
+              List(
+                ("B_A", "B_A"),("B_B", "B_B"),("B_C", "B_C"),
+                ("ROWID_MIMIR_2", "ROWID_MIMIR")
+              ),
+              oper("R(B_A:int, B_B:int, B_C:int // ROWID_MIMIR:rowid)")
             )
-          )
-        """
-      )    
+          ) 
+        )   
     }
-    "Properly process 3-way joins" in {
-      CTPercolator.percolate(oper("""
-        PROJECT[X <= ROWID_MIMIR](
-          JOIN(
-            JOIN(
-              R(A_A:int, A_B:int, A_C:int),
-              R(B_A:int, B_B:int, B_C:int)
-            ),
-            R(C_A:int, C_B:int, C_C:int)
-          )
-        )
-      """)) must be equalTo oper("""
-        PROJECT[X <= JOIN_ROWIDS(JOIN_ROWIDS(ROWID_MIMIR_1, ROWID_MIMIR_2), ROWID_MIMIR_4)](
-          JOIN(
-            JOIN(
-              PROJECT[A_A <= A_A, A_B <= A_B, A_C <= A_C, ROWID_MIMIR_1 <= ROWID_MIMIR](
-                R(A_A:int, A_B:int, A_C:int // ROWID_MIMIR:rowid)),
-              PROJECT[B_A <= B_A, B_B <= B_B, B_C <= B_C, ROWID_MIMIR_2 <= ROWID_MIMIR](
-                R(B_A:int, B_B:int, B_C:int // ROWID_MIMIR:rowid))
-            ),
-            PROJECT[C_A <= C_A, C_B <= C_B, C_C <= C_C, ROWID_MIMIR_4 <= ROWID_MIMIR](
-              R(C_A:int, C_B:int, C_C:int // ROWID_MIMIR:rowid))
-          )
-        )
-      """)
 
-    }
-    "Properly process 4-way joins" in {
-      CTPercolator.percolate(oper("""
-        PROJECT[X <= ROWID_MIMIR](
-          JOIN(
-            JOIN(
-              JOIN(
-                R(A_A:int, A_B:int, A_C:int),
-                R(B_A:int, B_B:int, B_C:int)
-              ),
-              R(C_A:int, C_B:int, C_C:int)
+    "Properly process 3-way joins" in {
+      CTPercolator.percolate(
+        project(List(("X", "ROWID_MIMIR")),
+          Join(
+            Join(
+              oper("R(A_A:int, A_B:int, A_C:int)"),
+              oper("R(B_A:int, B_B:int, B_C:int)")
             ),
-            R(D_A:int, D_B:int, D_C:int)
+            oper("R(C_A:int, C_B:int, C_C:int)")
           )
         )
-      """)) must be equalTo oper("""
-        PROJECT[X <= JOIN_ROWIDS(JOIN_ROWIDS(JOIN_ROWIDS(ROWID_MIMIR_1, ROWID_MIMIR_2), ROWID_MIMIR_4), ROWID_MIMIR_5)](
-          JOIN(
-            JOIN(
-              JOIN(
+      ) must be equalTo 
+        project(
+          List(("X", "JOIN_ROWIDS(JOIN_ROWIDS(ROWID_MIMIR_1, ROWID_MIMIR_2), ROWID_MIMIR_4)")),
+          Join(
+            Join(
+              oper("""
                 PROJECT[A_A <= A_A, A_B <= A_B, A_C <= A_C, ROWID_MIMIR_1 <= ROWID_MIMIR](
-                  R(A_A:int, A_B:int, A_C:int // ROWID_MIMIR:rowid)),
+                  R(A_A:int, A_B:int, A_C:int // ROWID_MIMIR:rowid))
+              """),
+              oper("""
                 PROJECT[B_A <= B_A, B_B <= B_B, B_C <= B_C, ROWID_MIMIR_2 <= ROWID_MIMIR](
                   R(B_A:int, B_B:int, B_C:int // ROWID_MIMIR:rowid))
-              ),
+              """)
+            ),
+            oper("""
               PROJECT[C_A <= C_A, C_B <= C_B, C_C <= C_C, ROWID_MIMIR_4 <= ROWID_MIMIR](
                 R(C_A:int, C_B:int, C_C:int // ROWID_MIMIR:rowid))
-            ),
-            PROJECT[D_A <= D_A, D_B <= D_B, D_C <= D_C, ROWID_MIMIR_5 <= ROWID_MIMIR](
-              R(D_A:int, D_B:int, D_C:int // ROWID_MIMIR:rowid))
+            """)
           )
         )
-      """)
+      }
 
+    "Properly process 4-way joins" in {
+      CTPercolator.percolate(
+        project(List(("X", "ROWID_MIMIR")),
+          Join(
+            Join(
+              Join(
+                oper("R(A_A:int, A_B:int, A_C:int)"),
+                oper("R(B_A:int, B_B:int, B_C:int)")
+              ),
+              oper("R(C_A:int, C_B:int, C_C:int)")
+            ),
+            oper("R(D_A:int, D_B:int, D_C:int)")
+          )
+        )
+      ) must be equalTo 
+        project(
+          List(
+            ("X", "JOIN_ROWIDS(JOIN_ROWIDS(JOIN_ROWIDS(ROWID_MIMIR_1, ROWID_MIMIR_2), ROWID_MIMIR_4), ROWID_MIMIR_5)")
+          ),
+          Join(
+            Join(
+              Join(
+                oper("""
+                  PROJECT[A_A <= A_A, A_B <= A_B, A_C <= A_C, ROWID_MIMIR_1 <= ROWID_MIMIR](
+                    R(A_A:int, A_B:int, A_C:int // ROWID_MIMIR:rowid))
+                """),
+                oper("""
+                  PROJECT[B_A <= B_A, B_B <= B_B, B_C <= B_C, ROWID_MIMIR_2 <= ROWID_MIMIR](
+                    R(B_A:int, B_B:int, B_C:int // ROWID_MIMIR:rowid))
+                """)
+              ),
+              oper("""
+                PROJECT[C_A <= C_A, C_B <= C_B, C_C <= C_C, ROWID_MIMIR_4 <= ROWID_MIMIR](
+                  R(C_A:int, C_B:int, C_C:int // ROWID_MIMIR:rowid))
+              """)
+            ),
+            oper("""
+              PROJECT[D_A <= D_A, D_B <= D_B, D_C <= D_C, ROWID_MIMIR_5 <= ROWID_MIMIR](
+                R(D_A:int, D_B:int, D_C:int // ROWID_MIMIR:rowid))
+            """)
+          )
+        )
     }
   }
 

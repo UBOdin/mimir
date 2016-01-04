@@ -58,7 +58,7 @@ object CTPartition {
 	def createPartition(phi: Expression, partition: Expression): Option[(Expression, Expression)] =
 	{
 		val partitionCondition = 
-			ExpressionOptimizer.propagateConditions(
+			PropagateConditions.apply(
 				Arith.makeAnd(partition, phi)
 			)
 		partitionCondition match {
