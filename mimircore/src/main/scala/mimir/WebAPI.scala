@@ -243,24 +243,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
   }
 
   def extractVGTerms(exp: Expression): List[String] = {
-    exp match {
-      case Not(child) => extractVGTerms(child)
-      case VGTerm((name, model), idx, args) => List(name)
-      case CaseExpression(wtClauses, eClause) => {
-        var wt = List[String]()
-        for (i <- wtClauses.indices) {
-          val wclause = extractVGTerms(wtClauses(i).when)
-          val tclause = extractVGTerms(wtClauses(i).then)
-          wt = wt ++ wclause ++ tclause
-        }
-        wt ++ extractVGTerms(eClause)
-      }
-      case Arithmetic(o, l, r) => extractVGTerms(l) ++ extractVGTerms(r)
-      case Comparison(o, l, r) => extractVGTerms(l) ++ extractVGTerms(r)
-      case IsNullExpression(child) => extractVGTerms(child)
-      case Function(op, params) => List(op)
-      case _ => List()
-    }
+    CTables.getVGTerms(exp).map( { case VGTerm((name, _), _, _) => name } )
   }
 
   def convertToTree(op: Operator): OperatorNode = {

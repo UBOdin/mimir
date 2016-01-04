@@ -53,9 +53,16 @@ object CTBounds {
               )
             return combinePossibilities(options);
         }
-      case CaseExpression(wtClauses, eClause) =>
-
-      	return compileWhenThenClauses(wtClauses, eClause)
+      case Conditional(condition, thenClause, elseClause) =>
+        val (then_low, then_high) = compile(thenClause)
+        val (else_low, else_high) = compile(elseClause)
+        if(CTables.isProbabilistic(condition)) { return (
+          Eval.inline(Function("__LIST_MIN", List(then_low, else_low))),
+          Eval.inline(Function("__LIST_MAX", List(then_high, else_high)))
+        ) } else { return (
+          Eval.inline(Conditional(condition, then_low,  else_low)),
+          Eval.inline(Conditional(condition, then_high, else_high))
+        ) }
 
       case Comparison(op, lhs, rhs) =>
 
@@ -153,49 +160,6 @@ object CTBounds {
       else { options_high(0) }
     )
 
-  }
-
-
-  def compileWhenThenClauses(wtClauses: List[WhenThenClause], eClause: Expression): 
-  	(Expression, Expression) =
-  {
-  	wtClauses match {
-
-  		// Implement by stripping a WhenThenClause off the head of the
-  		// list and processing it...
-  		case WhenThenClause(w, t) :: rest => {
-  			val (w_low, w_high) = compile(w);
-  			val (t_low, t_high) = compile(t);
-  			val (r_low, r_high) = compileWhenThenClauses(rest, eClause);
-
-  			val (rt_low, rt_high) = 
-  				combinePossibilities(List(
-  					(t_low, t_high), (r_low, r_high)
-  				))
-
-  			val final_low = 
-  				CaseExpression(List(
-	  					WhenThenClause(Not(w_high), r_low),
-	  					WhenThenClause(w_low, t_low)
-	  				),
-  					rt_low
-  				)
-  			val final_high = 
-  				CaseExpression(List(
-	  					WhenThenClause(Not(w_high), r_high),
-	  					WhenThenClause(w_low, t_high)
-	  				),
-  					rt_high
-  				)
-
-  			return (Eval.inline(final_low), Eval.inline(final_high))
-  		}
-
-  		// If there are no when clauses, then this case statement
-  		// just resolves to the else clause.
-  		case _ => return compile(eClause)
-
-  	}
   }
 
 }

@@ -130,29 +130,29 @@ object CTBoundsSpec extends Specification {
 
     "Handle Case Statements with Non-Det Values" in {
       bounds(
-        "CASE WHEN 1 = 1 THEN {{ test_0[1,5] }} ELSE {{ test_1[4,10] }} END"
+        "IF 1 = 1 THEN {{ test_0[1,5] }} ELSE {{ test_1[4,10] }} END"
       ) must be equalTo (expr("1"), expr("5"))
       bounds(
-        "CASE WHEN 2 = 1 THEN {{ test_0[1,5] }} ELSE {{ test_1[4,10] }} END"
+        "IF 2 = 1 THEN {{ test_0[1,5] }} ELSE {{ test_1[4,10] }} END"
       ) must be equalTo (expr("4"), expr("10"))
     }
     "Handle Case Statements with Non-Det Conditions" in {
       bounds(
-        "CASE WHEN {{ test_0[0,2] }} <= 1 THEN 10 ELSE 20 END"
-      ) must be equalTo (expr("10"), expr("20"))
+        "IF {{ test_0[0,2] }} <= 1 THEN 10 ELSE 20 END"
+      ) must be equalTo (expr("10.0"), expr("20.0"))
     }
     "Handle Case Statements with Everything Being Non-Det" in {
       bounds(
-        "CASE WHEN {{ test_0[0,2] }} <= 1 THEN {{ test_0[1,5] }} ELSE {{ test_1[4,10] }} END"
-      ) must be equalTo (expr("1"), expr("10"))
+        "IF {{ test_0[0,2] }} <= 1 THEN {{ test_0[1,5] }} ELSE {{ test_1[4,10] }} END"
+      ) must be equalTo (expr("1.0"), expr("10.0"))
     }
     "Handle Case Statements with Det Conditions based on VGTerms" in {
       bounds(
-        "CASE WHEN {{ test_0[0,2] }} <= 5 THEN 10 ELSE 20 END"
-      ) must be equalTo (expr("10"), expr("10"))
+        "IF {{ test_0[0,2] }} <= 5 THEN 10 ELSE 20 END"
+      ) must be equalTo (expr("10.0"), expr("20.0"))
       bounds(
-        "CASE WHEN {{ test_0[10,12] }} <= 5 THEN 10 ELSE 20 END"
-      ) must be equalTo (expr("20"), expr("20"))
+        "IF {{ test_0[10,12] }} <= 5 THEN 10 ELSE 20 END"
+      ) must be equalTo (expr("10.0"), expr("20.0"))
     }
   }
 }

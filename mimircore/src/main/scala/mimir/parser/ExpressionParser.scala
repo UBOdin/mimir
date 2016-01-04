@@ -69,22 +69,15 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
           | leaf
         )
 
-	def caseStmt = 
-		"CASE"~>(whenThenSeq~("ELSE"~>exprBase))<~"END" ^^ {
-		   	case w ~ e => CaseExpression(w,e) 
-	    }
-	def whenThenSeq: Parser[List[WhenThenClause]] =
-		( whenThenClause ~ whenThenSeq ^^ { case a ~ b => a :: b } 
-		| whenThenClause ^^ { List(_) } 
-		)
-	def whenThenClause = 
-		"WHEN"~>(exprBase~("THEN"~>exprBase)) ^^ {
-			case w ~ t => WhenThenClause(w, t)
-		} 
+	def ifStmt = 
+	 	"IF"~> exprBase ~ "THEN" ~ exprBase ~ "ELSE"~ exprBase <~"END" ^^ {
+			case (condition ~ _ ~ thenClause ~ _ ~ elseClause) => 
+				Conditional(condition, thenClause, elseClause)
+		}
 
 	def leaf = 
 		parens | floatLeaf | intLeaf | boolLeaf | stringLeaf | typeLeaf | 
-		caseStmt | function | vgterm | varLeaf
+		ifStmt | function | vgterm | varLeaf
 
 	def intLeaf = cint ^^ { IntPrimitive(_) }
 	def floatLeaf = cflt ^^ { FloatPrimitive(_) }

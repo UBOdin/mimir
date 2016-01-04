@@ -14,30 +14,49 @@ object ExpressionOptimizer {
 			case Comparison(Cmp.Neq,a,b) => return applyAssertion(!truth, Comparison(Cmp.Eq,a,b), target)
 			case _ => ()
 		}
-		val isSimpler = (e: Expression) => (
-			(!CTables.isProbabilistic(e)) && 
-			ExpressionUtils.getColumns(e).isEmpty
-		  )
 		if(truth) {
 			// Some fast-path cases
 			assertion match {
-				case Comparison(Cmp.Eq, Var(c), e) if isSimpler(e) =>
+				case Comparison(Cmp.Eq, Var(c), e) =>
 					return Eval.inline(target, Map((c, e)))
-				case Comparison(Cmp.Eq, e, Var(c)) if isSimpler(e) =>
+				case Comparison(Cmp.Eq, e, Var(c)) =>
 					return Eval.inline(target, Map((c, e)))
 				case IsNullExpression(Var(c)) =>
 					return Eval.inline(target, Map((c, NullPrimitive())))
 				case _ => ()
 			}
 		}
+		hardInline(truth, assertion, target);
+	}
+
+	def hardInline(truth: Boolean, assertion: Expression, target: Expression): Expression =
+	{
 		if(target.equals(assertion)) {
 			return BoolPrimitive(truth)
 		} else {
 			return target.rebuild(
 						target.children.map( 
-							applyAssertion(truth, assertion, _) 
+							hardInline(truth, assertion, _) 
 						)
 					)
+		}
+	}
+
+	def isUsefulAssertion(e: Expression): Boolean =
+	{
+		val isSimpler = (e: Expression) => (
+			(!CTables.isProbabilistic(e)) && 
+			ExpressionUtils.getColumns(e).isEmpty
+		  )
+		e match {
+			case Comparison(Cmp.Eq, Var(c), e) => isSimpler(e)
+			case Comparison(Cmp.Eq, e, Var(c)) => isSimpler(e)
+			case Comparison(Cmp.Neq, a, b) => 
+				isUsefulAssertion(Comparison(Cmp.Eq, a, b))
+			case IsNullExpression(_) => true
+			case Not(IsNullExpression(_)) => true
+			case Not(Not(e1)) => isUsefulAssertion(e1)
+			case _ => false
 		}
 	}
 
@@ -48,53 +67,20 @@ object ExpressionOptimizer {
 	{
 		l match {
 			case head :: rest =>
+				val applyInliner: (Boolean, Expression, Expression) => Expression = 
+					if(isUsefulAssertion(head)){ applyAssertion _ } 
+					else                       { hardInline _ }
 				val newRest = 
-					rest.map( applyAssertion(head, _) ).
+					rest.map( applyInliner(true, head, _) ).
 						 map( Eval.inline(_) )
 				head :: propagateConditions(newRest)
 			case List() => List()
 		}
 	}
 
-	def mergeCaseClauses(e: Expression): Expression =
-	{
-		e match {
-			// CASE WHEN X THEN A WHEN Y THEN A ... => 
-			// CASE WHEN X OR Y THEN A ...
-			case CaseExpression(
-				WhenThenClause(w1,t1) :: 
-				WhenThenClause(w2,t2) :: rest, 
-				elseClause) if t1 == t2 =>
-					mergeCaseClauses(
-						CaseExpression(
-							WhenThenClause(Arith.makeOr(w1,w2),t1) :: rest, 
-							elseClause
-						)
-					)
-
-			// CASE WHEN X THEN A ELSE A END => A
-			case CaseExpression(
-				List(WhenThenClause(w, t)), e) if t == e => t
-
-			// CASE ... 
-			case CaseExpression(head :: rest, elseClause) =>
-				mergeCaseClauses(CaseExpression(rest, elseClause)) match {
-					case CaseExpression(newRest, newElseClause) =>
-						CaseExpression(head :: newRest, newElseClause)
-					case newElseClause => CaseExpression(List(head), newElseClause)
-				}
-
-			case CaseExpression(List(), elseClause) => elseClause
-
-			case _ => e.recur(mergeCaseClauses)
-		}
-	}
-
-
 	def optimize(e:Expression): Expression = 
 		List[Expression => Expression](
-			propagateConditions(_), 
-			mergeCaseClauses(_)
+			propagateConditions(_)
 		).foldLeft(e)( (ex,f) => f(ex) )
 
 }

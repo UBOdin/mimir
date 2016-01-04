@@ -321,23 +321,6 @@ case class Database(name: String, backend: Backend)
     loadTable(sourceFile.getName().split("\\.")(0), sourceFile)
   }
 
-  /**
-   * Find all VGTerms in an expression
-   */
-  def getVGTerms(expression: Expression): List[VGTerm] = {
-    Eval.getVGTerms(expression)
-  }
-
-  /**
-   * Find all VGTerms in an expression
-   */
-  def getVGTerms(expression: Expression,
-                 bindings: Map[String, PrimitiveValue],
-                 list: List[VGTerm]): List[VGTerm] = {
-
-    Eval.getVGTerms(expression, bindings, list)
-  }
-
   def getBackendSQL(o: Operator): List[net.sf.jsqlparser.statement.select.SelectBody] =
   {
     o match {

@@ -8,34 +8,6 @@ import mimir.util._
 
 object CTPartition {
 
-	def extractCondition(precondition: Expression, wList: List[WhenThenClause], 
-											 elseIsProbabilistic: Boolean): 
-			(List[Expression], Boolean, Boolean) = 
-	{
-		// println("Precondition: " + precondition)
-		wList match {
-			case WhenThenClause(cond, effect) :: rest => 
-				if(CTables.isProbabilistic(cond)) {
-					(List(precondition), false, true)
-				} else {
-					val currentConditionCase =
-						Arith.makeAnd(precondition, cond)
-					val altCondition = 
-						Arith.makeAnd(precondition, Arith.makeNot(cond))
-					val (remainingConditionCases, hasDet, hasProb) =
-						extractCondition(altCondition, rest, elseIsProbabilistic)
-					( 
-						currentConditionCase :: remainingConditionCases, 
-						hasDet || !CTables.isProbabilistic(effect),
-						hasProb || CTables.isProbabilistic(effect)
-					)
-				}
-			case List() =>
-				(List(precondition), !elseIsProbabilistic, elseIsProbabilistic)
-		}
-	}
-
-
 	def enumerateAllPartitions(clauses: List[List[Expression]]): List[Expression] = 
 	{
 		// TimeUtils.mark("Enumerate: "+clauses)
@@ -56,10 +28,24 @@ object CTPartition {
 		}
 		enumerateAllPartitions(
 			(e match {
-				case CaseExpression(whenClauses, elseClause) =>
-					val (cases, hasDet, hasProb) = 
-						extractCondition(BoolPrimitive(true), whenClauses, CTables.isProbabilistic(elseClause))
-					if(hasDet && hasProb){ Some(cases) } else { None }
+				case Conditional(condition, thenClause, elseClause) =>
+					if(
+						// If the condition column is probabilistic, then it
+						// can't be used to differentiate between deterministic
+						// and non-deterministic columns.
+						CTables.isProbabilistic(condition)
+						// Alternatively, if the then and else clauses are both
+						// deterministic or both non-deterministic, then the 
+						// condition can't be used to distinguish between the two
+						  || (CTables.isProbabilistic(thenClause) ==
+							  CTables.isProbabilistic(elseClause))
+					) { 
+						// So see what we can get from the children and move on
+						None
+					} else {
+						// Otherwise, the condition is useful!
+						Some(List(condition, Not(condition)))
+					}
 
 				case _ => None
 			}) match {

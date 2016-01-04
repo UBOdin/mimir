@@ -338,9 +338,9 @@ class SqlToRA(db: Database)
           val switch = convert(c.getSwitchExpression(), bindings)
           (x) => Comparison(Cmp.Eq, switch, x)
         }
-      return CaseExpression(
+      return ExpressionUtils.makeCaseExpression(
         c.getWhenClauses().map ( (w: WhenClause) => {
-          WhenThenClause(
+          (
             inlineSwitch(convert(w.getWhenExpression(), bindings)),
             convert(w.getThenExpression(), bindings)
           )

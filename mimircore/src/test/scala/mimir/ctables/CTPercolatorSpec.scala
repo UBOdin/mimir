@@ -464,13 +464,13 @@ object CTPercolatorSpec extends Specification {
     "Handle Data-Dependent Non-Deterministic Projection" in {
       percolite("""
         PROJECT[A <= A, 
-                B <= CASE WHEN B IS NULL THEN {{X_1[ROWID_MIMIR]}} ELSE B END
+                B <= IF B IS NULL THEN {{X_1[ROWID_MIMIR]}} ELSE B END
                ](R(A, B))""") must be equalTo ((
         oper("""
           PROJECT[A <= A, 
-                  B <= CASE WHEN B IS NULL THEN {{X_1[ROWID_MIMIR]}} ELSE B END, 
+                  B <= IF B IS NULL THEN {{X_1[ROWID_MIMIR]}} ELSE B END, 
                   MIMIR_COL_DET_B <= 
-                       CASE WHEN B IS NULL THEN FALSE ELSE TRUE END
+                       IF B IS NULL THEN FALSE ELSE TRUE END
                 ](R(A, B // ROWID_MIMIR:rowid))"""),
         Map( 
           ("A", expr("true")),
@@ -493,15 +493,15 @@ object CTPercolatorSpec extends Specification {
       percolite("""
         SELECT[B = 3](
           PROJECT[A <= A, 
-                  B <= CASE WHEN B IS NULL THEN {{X_1[ROWID_MIMIR]}} ELSE B END
+                  B <= IF B IS NULL THEN {{X_1[ROWID_MIMIR]}} ELSE B END
                  ](R(A, B)))""") must be equalTo ((
         oper("""
         PROJECT[A <= A, B <= B, MIMIR_COL_DET_B <= MIMIR_COL_DET_B, MIMIR_ROW_DET <= MIMIR_COL_DET_B](
           SELECT[B = 3](
             PROJECT[A <= A, 
-                    B <= CASE WHEN B IS NULL THEN {{X_1[ROWID_MIMIR]}} ELSE B END, 
+                    B <= IF B IS NULL THEN {{X_1[ROWID_MIMIR]}} ELSE B END, 
                     MIMIR_COL_DET_B <= 
-                         CASE WHEN B IS NULL THEN FALSE ELSE TRUE END
+                         IF B IS NULL THEN FALSE ELSE TRUE END
                   ](R(A, B // ROWID_MIMIR:rowid))))"""),
         Map( 
           ("A", expr("true")),
@@ -550,18 +550,18 @@ object CTPercolatorSpec extends Specification {
     "Handle Non-Deterministic Joins With Row Non-Determinism" in {
       percolite("""
         JOIN(
-          SELECT[B < CASE WHEN A < 3 THEN {{X_1[A]}} ELSE 3 END](R(A,B)), 
-          SELECT[C < CASE WHEN D > 5 THEN {{X_2[D]}} ELSE 5 END](S(C,D))
+          SELECT[B < IF A < 3 THEN {{X_1[A]}} ELSE 3 END](R(A,B)), 
+          SELECT[C < IF D > 5 THEN {{X_2[D]}} ELSE 5 END](S(C,D))
         )
       """) must be equalTo ((
         oper("""
           JOIN(
             PROJECT[A <= A, B <= B, MIMIR_ROW_DET_LEFT <= MIMIR_ROW_DET](
-              PROJECT[A <= A, B <= B, MIMIR_ROW_DET <= CASE WHEN A < 3 THEN FALSE ELSE TRUE END](
-                SELECT[B < CASE WHEN A < 3 THEN {{X_1[A]}} ELSE 3 END](R(A,B)))), 
+              PROJECT[A <= A, B <= B, MIMIR_ROW_DET <= IF A < 3 THEN FALSE ELSE TRUE END](
+                SELECT[B < IF A < 3 THEN {{X_1[A]}} ELSE 3 END](R(A,B)))), 
             PROJECT[C <= C, D <= D, MIMIR_ROW_DET_RIGHT <= MIMIR_ROW_DET](
-              PROJECT[C <= C, D <= D, MIMIR_ROW_DET <= CASE WHEN D > 5 THEN FALSE ELSE TRUE END](
-                SELECT[C < CASE WHEN D > 5 THEN {{X_2[D]}} ELSE 5 END](S(C,D))))
+              PROJECT[C <= C, D <= D, MIMIR_ROW_DET <= IF D > 5 THEN FALSE ELSE TRUE END](
+                SELECT[C < IF D > 5 THEN {{X_2[D]}} ELSE 5 END](S(C,D))))
           )
         """),
         Map( 

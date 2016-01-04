@@ -29,15 +29,10 @@ object CTAnalyzer {
     val recur = (x:Expression) => compileDeterministic(x, varMap)
     expr match { 
       
-      case CaseExpression(caseClauses, elseClause) =>
-        CaseExpression(
-          caseClauses.map( (clause) =>
-            WhenThenClause(
-              clause.when,
-              Arith.makeAnd(recur(clause.then), recur(clause.when))
-            )
-          ),
-          recur(elseClause)
+      case Conditional(condition, thenClause, elseClause) =>
+        Arith.makeAnd(
+          recur(condition), 
+          Conditional(condition, recur(thenClause), recur(elseClause))
         )
 
       case Arithmetic(Arith.And, l, r) =>
@@ -82,7 +77,6 @@ object CTAnalyzer {
 
   def compileSample(exp: Expression, seedExp: Expression = null): Expression = {
     exp match {
-        case Not(child) => Not(compileSample(child, seedExp))
 
         case VGTerm((_,model),idx,args) => {
           if(seedExp == null)
@@ -90,27 +84,7 @@ object CTAnalyzer {
           else model.sampleGenExpr(idx, args ++ List(seedExp))
         }
 
-        case CaseExpression(wtClauses, eClause) => {
-          var wt = List[WhenThenClause]()
-          for(i <- wtClauses.indices){
-            val wclause = compileSample(wtClauses(i).when,seedExp)
-            val tclause = compileSample(wtClauses(i).then, seedExp)
-            wt ::= WhenThenClause(wclause, tclause)
-          }
-          CaseExpression(wt, compileSample(eClause, seedExp))
-        }
-
-        case Arithmetic(o, l, r) => Arithmetic(o, compileSample(l, seedExp), compileSample(r, seedExp))
-
-        case Comparison(o, l, r) => Comparison(o, compileSample(l, seedExp), compileSample(r, seedExp))
-
-        case Var(a) => Var(a)
-
-        case IsNullExpression(child) => IsNullExpression(compileSample(child, seedExp))
-
-        case p: PrimitiveValue => p
-
-        case Function(op, params) => Function(op, params.map( a => compileSample(a, seedExp)))
+        case _ => exp.rebuild(exp.children.map(compileSample(_, seedExp)))
     }
   }
 }

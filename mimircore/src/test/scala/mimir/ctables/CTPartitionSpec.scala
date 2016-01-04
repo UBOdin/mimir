@@ -63,17 +63,9 @@ object CTPartitionSpec extends Specification {
       """)
     }
 
-    "Extract A Single Condition Correctly" in {
-      CTPartition.extractCondition(BoolPrimitive(true), List(
-          WhenThenClause(expr("A IS NULL"), expr("{{Q_1[A, ROWID]}}"))
-        ), false) must be equalTo (List(
-          expr("A IS NULL"), expr("A IS NOT NULL")
-        ), true, true)
-    }
-
     "Extract Conditions Correctly" in {
       extract(
-        CaseExpression(List(WhenThenClause(expr("A IS NULL"), expr("{{Q_1[ROWID]}}"))), expr("A"))
+        Conditional(expr("A IS NULL"), expr("{{Q_1[ROWID]}}"), expr("A"))
       ) must be equalTo(
         List(expr("A IS NULL"), expr("A IS NOT NULL"))
       )
@@ -85,9 +77,7 @@ object CTPartitionSpec extends Specification {
             ProjectArg("A", expr("A")),
             ProjectArg(CTables.conditionColumn, 
               Comparison(Cmp.Gt,
-                CaseExpression(List(
-                  WhenThenClause(expr("A IS NULL"), expr("{{Q_1[ROWID]}}"))
-                ), expr("A")),
+                Conditional(expr("A IS NULL"), expr("{{Q_1[ROWID]}}"), expr("A")),
                 expr("4")
               )
             )

@@ -183,13 +183,14 @@ class RAToSql(db: Database) {
           throw new SQLException("Could not find appropriate source")
         new Column(new net.sf.jsqlparser.schema.Table(null, null), src.head.getAlias+"."+n)
       }
-      case CaseExpression(whenClauses, elseClause) => {
+      case Conditional(_, _, _) => {
+        val (whenClauses, elseClause) = ExpressionUtils.foldConditionalsToCase(e)
         val caseExpr = new net.sf.jsqlparser.expression.CaseExpression()
         caseExpr.setWhenClauses(new java.util.ArrayList(
           whenClauses.map( (clause) => {
             val whenThen = new WhenClause()
-            whenThen.setWhenExpression(convert(clause.when, sources))
-            whenThen.setThenExpression(convert(clause.then, sources))
+            whenThen.setWhenExpression(convert(clause._1, sources))
+            whenThen.setThenExpression(convert(clause._2, sources))
             whenThen
           })
         ))

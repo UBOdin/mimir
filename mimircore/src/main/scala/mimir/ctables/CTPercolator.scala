@@ -254,104 +254,6 @@ object CTPercolator {
       }
     }
   }
-
-  def expandProbabilisticCases(expr: Expression): 
-    List[(Expression, Expression)] = 
-  {
-    expr match { 
-      case CaseExpression(whenClauses, elseClause) =>
-        val whenTerms = // List[condition, result]
-          whenClauses.flatMap( (clause) => 
-            expandProbabilisticCases(clause.when).flatMap( _ match {
-              case (wCondition, wClause) =>
-                expandProbabilisticCases(clause.then).map( _ match {
-                  case (tCondition, tClause) =>
-                    ( Arith.makeAnd(wCondition,
-                        Arith.makeAnd(wClause,tCondition)), 
-                      tClause
-                    )
-                })
-            })
-          ).toList
-        val whenSatisfiedIf =
-          whenTerms.map( _._1 ).reduce(Arith.makeOr(_,_))
-        val elseTriggeredIf = Arith.makeNot(whenSatisfiedIf)
-  
-        whenTerms ++ 
-        expandProbabilisticCases(elseClause).map( _ match {
-          case (eCondition, eClause) =>
-            ( Arith.makeAnd(eCondition, elseTriggeredIf),
-              eClause
-            )
-        })
-  
-      case _ => 
-        if(CTables.isProbabilistic(expr)){
-          ListUtils.powerList[(Expression,Expression)](
-            expr.children.map(expandProbabilisticCases(_))
-          ).map( (conditionAndChildren) =>
-            ( conditionAndChildren.
-                map(_._1).foldLeft(
-                  BoolPrimitive(true): Expression
-                )( 
-                  Arith.makeAnd(_,_) 
-                ),
-              expr.rebuild(conditionAndChildren.map(_._2))
-            )
-          )
-        } else { List((BoolPrimitive(true), expr)) }
-    }
-  }
-
-  /**
-   * Consider the expression: $\pi_{case when A = 1 then B else c}(R)$
-   * 
-   * It may be beneficial to rewrite the CASE into a union two expressions, as
-   * the latter gives the database optimizer a little more leeway in terms of
-   * optimization, and also allows us to more efficiently compute deterministic
-   * and non-deterministic fragments.  
-   * $|pi_{B}(\sigma_{A=1}(R)) \cup \pi_{C}(\sigma_{A\neq 1}(R))$
-   * 
-   * This function applies this rewrite using extractProbabilisticCases for
-   * Expression objects, defined above.
-   * 
-   * At present, this optimization is not being used.
-   */
-  def expandProbabilisticCases(oper: Operator): Operator = {
-    // println("Expand: " + oper)
-    oper match {
-      case Project(args, child) =>
-        ListUtils.powerList[(Expression,ProjectArg)](
-          args.map( (arg:ProjectArg) =>
-            if(!CTables.isProbabilistic(arg.input)){
-              // println("Skipping '"+arg+"', not probabilistic")
-              List((BoolPrimitive(true), arg))
-            } else {
-              expandProbabilisticCases(arg.input).
-                map( _ match {
-                  case (cond, expr) =>
-                    (cond, ProjectArg(arg.column, expr))
-                })
-            }
-          )
-        ).map( (condsAndArgs) => {
-          val conds = condsAndArgs.map(_._1).
-                        reduce(Arith.makeAnd)
-          val args = condsAndArgs.map(_._2)
-          var ret = expandProbabilisticCases(child)
-          if(conds != BoolPrimitive(true)){
-            ret = Select(conds, ret)
-          }
-          if(args.exists( (arg) => arg.input != Var(arg.column) )){
-            ret = Project(args, ret)
-          }
-          ret
-        }).reduce[Operator]( Union( _, _) )
-  
-      case _ =>
-        oper.rebuild(oper.children.map( expandProbabilisticCases(_) ))
-    }
-  }
   
   def requiresRowID(expr: Expression): Boolean = 
   {
@@ -468,7 +370,7 @@ object CTPercolator {
 
   private def extractMissingValueVar(expr: Expression): Var = {
     expr match {
-      case CaseExpression(List(WhenThenClause(IsNullExpression(v1: Var), vg: VGTerm)), v2: Var) =>
+      case Conditional(IsNullExpression(v1: Var), vg: VGTerm, v2: Var) =>
         if(v1 == v2) v1 else throw new SQLException("Unexpected clause to extractMisingValueVar")
 
       case _ => throw new SQLException("Unexpected clause to extractMisingValueVar")
@@ -477,7 +379,7 @@ object CTPercolator {
 
   private def isMissingValueExpression(expr: Expression): Boolean = {
     expr match {
-      case CaseExpression(List(WhenThenClause(IsNullExpression(var1: Var), vg: VGTerm)), var2: Var) =>
+      case Conditional(IsNullExpression(var1: Var), vg: VGTerm, var2: Var) =>
         var1 == var2
       case _ => false
     }

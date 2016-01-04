@@ -58,10 +58,10 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
     Project(
       targetSchema.keys.toList.zipWithIndex.map { case (key, idx) => ProjectArg(
         key,
-        CaseExpression(
+        ExpressionUtils.makeCaseExpression(
           sourceSchema.filter(
             (src) => isTypeCompatible(src._2, targetSchema(key))
-          ).keys.toList.map(b => WhenThenClause(
+          ).keys.toList.map(b => (
             Comparison(Cmp.Eq,
               VGTerm((name, model), idx, List(StringPrimitive(key), StringPrimitive(b))),
               BoolPrimitive(true)),

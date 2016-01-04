@@ -142,6 +142,6 @@ class ProjectionResultIterator(
   override def reason(ind: Int): List[(String, String)] = {
     val expr: Expression = if(ind == -1) condLineage.get else exprsLineage(ind)
     val evaluated = Eval.inline(expr)
-    db.getVGTerms(evaluated).map((vgterm) => vgterm.reason()).distinct
+    CTables.getVGTerms(evaluated).map((vgterm) => vgterm.reason()).distinct
   }
 }

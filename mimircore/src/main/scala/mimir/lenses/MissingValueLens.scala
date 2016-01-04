@@ -49,11 +49,9 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
         if (v >= 0) {
           val u = allKeys().indexOf(k)
           ProjectArg(k,
-            CaseExpression(
-              List(WhenThenClause(
-                mimir.algebra.IsNullExpression(Var(k)),
-                rowVar(u)
-              )),
+            Conditional(
+              mimir.algebra.IsNullExpression(Var(k)),
+              rowVar(u),
               Var(k)
             ))
         } else {

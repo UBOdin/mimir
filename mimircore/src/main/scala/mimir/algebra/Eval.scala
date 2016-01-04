@@ -60,16 +60,9 @@ object Eval
           applyArith(op, eval(lhs, bindings), eval(rhs, bindings))
         case Comparison(op, lhs, rhs) =>
           applyCmp(op, eval(lhs, bindings), eval(rhs, bindings))
-        case CaseExpression(caseWhens, caseElse) =>
-          caseWhens.foldLeft(None: Option[PrimitiveValue])( (a, b) =>
-            if(a.isDefined){ a }
-            else {
-              if(eval(b.when, bindings).
-                    asInstanceOf[BoolPrimitive].v){
-                Some(eval(b.then, bindings));
-              } else { None }
-            }
-          ).getOrElse(eval(caseElse, bindings))
+        case Conditional(condition, thenClause, elseClause) =>
+          if(evalBool(condition, bindings)) { eval(thenClause, bindings) }
+          else                              { eval(elseClause, bindings) }
         case Not(NullPrimitive()) => NullPrimitive()
         case Not(c) => BoolPrimitive(!evalBool(c, bindings))
         case p:Proc => {
@@ -217,64 +210,19 @@ object Eval
             e.rebuild(e.children.map(simplify(_)))
         }
       } else e match { 
-        case CaseExpression(wtClauses, eClause) =>
-          simplifyCase(List(), wtClauses, eClause)
+        case Conditional(condition, thenClause, elseClause) =>
+          val conditionValue = simplify(condition)
+          if(conditionValue.isInstanceOf[BoolPrimitive]){
+            if(conditionValue.asInstanceOf[BoolPrimitive].v){
+              simplify(thenClause)
+            } else {
+              simplify(elseClause)
+            }
+          } else { e.rebuild(e.children.map(simplify(_))) }
         case _ => e.rebuild(e.children.map(simplify(_)))
       }
     )
   }
-
-  /**
-   * Recursive method that optimizes case statements.
-   *
-   * - WHEN clauses that are deterministically false are dropped from 
-   *   the case expression. 
-   * - WHEN clauses that are deterministically true become else clauses
-   *   and all following WHEN and ELSE clauses are dropped.
-   * - If the ELSE clause is the only remaining clause in the expression,
-   *   it replaces the entire CASE expression.
-   */
-  def simplifyCase(wtSimplified: List[WhenThenClause], 
-                   wtTodo: List[WhenThenClause], 
-                   eClause: Expression): Expression =
-    wtTodo match {
-      case WhenThenClause(wBase, t) :: wtRest =>
-        val w = simplify(wBase)
-        if(w.isInstanceOf[BoolPrimitive]){
-          if(w.asInstanceOf[BoolPrimitive].v){
-
-            // If the when condition is deterministically true, then
-            // we can turn the current then statement into an else
-            // branch and finish here.  For the sake of keeping all
-            // of the reconstruction code in one place, we recur into
-            // a terminal leaf.
-            simplifyCase(wtSimplified, List(), t)
-          } else {
-
-            // If the when condition is deterministically false, then
-            // we strip the current clause out of the to-do list and
-            // recur as normal.
-            simplifyCase(wtSimplified, wtRest, eClause)
-          }
-        } else {
-
-          // If the when condition is neither deterministically true,
-          // nor false, we add it on the "finished" list and then recur
-          // as normal.
-          simplifyCase(wtSimplified ++ List(WhenThenClause(w,t)), 
-                       wtRest, eClause)
-        }
-
-      case _ => // empty list
-
-        // If none of the when clauses can possibly be triggered, we
-        // always fall through to the else clause.
-        if(wtSimplified.isEmpty){ eClause }
-        else {
-          //otherwise, we rebuild the case statement
-          CaseExpression(wtSimplified, eClause)
-        }
-    }
 
   /**
    * Thoroughly inline an expression, recursively applying simplify()
@@ -402,46 +350,6 @@ object Eval
               )
           }
       }
-    }
-  }
-
-  def getVGTerms(e: Expression): List[VGTerm] = {
-    getVGTerms(e, Map(), List())
-  }
-
-  def getVGTerms(e: Expression,
-                 bindings: Map[String, PrimitiveValue],
-                 l: List[VGTerm]): List[VGTerm] = {
-    if(e.isInstanceOf[PrimitiveValue]){
-      l
-    } else {
-      l ++ (
-        e match {
-          case Var(v) => getVGTerms(bindings.get(v).get, bindings, l)
-          case Arithmetic(_, lhs, rhs) =>
-            getVGTerms(lhs, bindings, l) ++ getVGTerms(rhs, bindings, l)
-          case Comparison(_, lhs, rhs) =>
-            getVGTerms(lhs, bindings, l) ++ getVGTerms(rhs, bindings, l)
-          case v: VGTerm => (v :: l) ++ v.args.flatMap(arg => getVGTerms(arg, bindings, l))
-          case CaseExpression(caseWhens, caseElse) =>
-            caseWhens.foldLeft(None: Option[List[VGTerm]])((a, b) =>
-              if (a.isDefined) {
-                a
-              }
-              else {
-                if (eval(b.when, bindings).asInstanceOf[BoolPrimitive].v) {
-                  Some(getVGTerms(b.when, bindings, l) ++ getVGTerms(b.then, bindings, l))
-                } else {
-                  None
-                }
-              }
-            ).getOrElse(getVGTerms(caseElse, bindings, l))
-
-          case Not(c) => getVGTerms(c, bindings, l)
-          case IsNullExpression(c) => getVGTerms(c, bindings, l)
-          case _ => List()
-        }
-      )
     }
   }
 }

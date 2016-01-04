@@ -321,34 +321,15 @@ case class Function(op: String, params: List[Expression]) extends Expression {
   def children = params
   def rebuild(c: List[Expression]) = Function(op, c)
 }
-case class WhenThenClause(when: Expression, 
-                          then: Expression) 
-{
-  override def toString() = "WHEN " + when.toString + " THEN " + then.toString
-}
-case class CaseExpression(
-  whenClauses: List[WhenThenClause], 
-  elseClause: Expression
-) extends Expression 
+case class Conditional(condition: Expression, thenClause: Expression,
+                       elseClause: Expression) extends Expression 
 {
   override def toString() = 
-	"CASE "+whenClauses.map( _.toString ).mkString(" ")+
-	" ELSE "+elseClause.toString+" END"
-  def children = 
-	whenClauses.map( (w) => List(w.when, w.then) ).flatten ++ List(elseClause)
+  	"IF "+condition.toString+" THEN "+thenClause.toString+
+    " ELSE "+elseClause.toString+" END"
+  def children = List(condition, thenClause, elseClause)
   def rebuild(c: List[Expression]) = {
-  	var currC = c
-  	val w =
-  	  whenClauses.map ( _ => {
-  		currC match { 
-  		  case w :: t :: rest =>
-      		currC = rest 
-      		WhenThenClause(w, t)
-  		  case _ => 
-    			throw new SQLException("Invalid Rebuild of a Case: "+c)
-  		}
-	  })
-	CaseExpression(w, currC(0))
+    Conditional(c(0), c(1), c(2))
   }
 }
 case class IsNullExpression(child: Expression) extends Expression { 

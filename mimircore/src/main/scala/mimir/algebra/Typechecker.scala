@@ -47,13 +47,10 @@ class ExpressionChecker(scope: Map[String,Type.T] = Map()) {
 				}
 			case Function(fname, fargs) =>
 				FunctionRegistry.typecheck(fname, fargs.map(typeOf(_)))
-			case CaseExpression(whenClauses, elseClause) => 
+			case Conditional(condition, thenClause, elseClause) => 
+				assert(condition, TBool, "WHEN")
 				Typechecker.escalate(
-					typeOf(elseClause) :: whenClauses.map( {
-							case WhenThenClause(when, then) => 
-								assert(when, TBool, "WHEN")
-								typeOf(then)
-						})
+					List(typeOf(thenClause), typeOf(elseClause))
 				)
 			case IsNullExpression(child) =>
 				typeOf(child);
