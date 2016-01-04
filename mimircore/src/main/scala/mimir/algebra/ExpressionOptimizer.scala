@@ -1,5 +1,7 @@
 package mimir.algebra;
 
+import mimir.ctables._;
+
 object ExpressionOptimizer {
 
 	def applyAssertion(assertion: Expression, target: Expression): Expression =
@@ -12,12 +14,16 @@ object ExpressionOptimizer {
 			case Comparison(Cmp.Neq,a,b) => return applyAssertion(!truth, Comparison(Cmp.Eq,a,b), target)
 			case _ => ()
 		}
+		val isSimpler = (e: Expression) => (
+			(!CTables.isProbabilistic(e)) && 
+			ExpressionUtils.getColumns(e).isEmpty
+		  )
 		if(truth) {
 			// Some fast-path cases
 			assertion match {
-				case Comparison(Cmp.Eq, Var(c), e) =>
+				case Comparison(Cmp.Eq, Var(c), e) if isSimpler(e) =>
 					return Eval.inline(target, Map((c, e)))
-				case Comparison(Cmp.Eq, e, Var(c)) =>
+				case Comparison(Cmp.Eq, e, Var(c)) if isSimpler(e) =>
 					return Eval.inline(target, Map((c, e)))
 				case IsNullExpression(Var(c)) =>
 					return Eval.inline(target, Map((c, NullPrimitive())))
