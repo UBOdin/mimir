@@ -7,40 +7,45 @@ import mimir.sql.JDBCUtils;
 import mimir.algebra._;
 import mimir.algebra.Type._;
 
-class ResultSetIterator(src: ResultSet) extends ResultIterator
+class ResultSetIterator(src: ResultSet, visibleColumns: List[Int], provenanceTokenColumns: List[Int]) extends ResultIterator
 {
   
   val meta = src.getMetaData();
   var extract: List[() => PrimitiveValue] = 
-    (0 until meta.getColumnCount()).map( (i) => {
-      JDBCUtils.convertSqlType(meta.getColumnType(i+1)) match {
+    visibleColumns.map( { case (col) => {
+      // A few columns have to be special cased to hard-coded types
+      // since their actual type varies by back-end
+      val t = 
+        meta.getColumnName(col+1) match {
+          case mimir.ctables.CTPercolator.ROWID_KEY => TRowId
+          case _ => JDBCUtils.convertSqlType(meta.getColumnType(col+1))
+        }
+
+      t match {
         case TString => 
           () => { 
-            new StringPrimitive(src.getString(i+1))
+            new StringPrimitive(src.getString(col+1))
           }
         
         case TFloat => 
           () => { 
-            new FloatPrimitive(src.getDouble(i+1))
+            new FloatPrimitive(src.getDouble(col+1))
           }
         
         case TInt => 
           () => {
-            if(meta.getColumnName(i+1).equalsIgnoreCase("ROWID_MIMIR"))
-              new RowIdPrimitive(src.getString(i+1))
-            else
-              new IntPrimitive(src.getLong(i+1))
+            new IntPrimitive(src.getLong(col+1))
           }
         case TRowId =>
           () => {
-            new RowIdPrimitive(src.getString(i+1))
+            new RowIdPrimitive(src.getString(col+1))
           }
         case TDate =>
           () => {
-            if(meta.getColumnType(i+1) == java.sql.Types.TIMESTAMP) {
+            if(meta.getColumnType(col+1) == java.sql.Types.TIMESTAMP) {
               val calendar = Calendar.getInstance()
               try{
-                calendar.setTime(src.getDate(i+1))
+                calendar.setTime(src.getDate(col+1))
                 new DatePrimitive(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DATE))
               } catch {
                 case e: NullPointerException =>
@@ -52,9 +57,9 @@ class ResultSetIterator(src: ResultSet) extends ResultIterator
             }
           }
       }
-    }).toList
+    }}).toList
   var schema: List[(String,Type.T)] = 
-    (0 until meta.getColumnCount()).map( (i) => (
+    visibleColumns.map( (i) => (
       meta.getColumnName(i+1),
       JDBCUtils.convertSqlType(meta.getColumnType(i+1))
     ) ).toList
@@ -89,5 +94,10 @@ class ResultSetIterator(src: ResultSet) extends ResultIterator
   def deterministicRow() = true;
   def deterministicCol(v: Int) = true;
   def missingRows() = false;
-
+  def provenanceToken() = 
+    RowIdPrimitive(
+      provenanceTokenColumns.map( 
+        (col) => src.getString(col+1) 
+      ).mkString(",")
+    )
 }

@@ -144,4 +144,6 @@ class ProjectionResultIterator(
     val evaluated = Eval.inline(expr)
     CTables.getVGTerms(evaluated).map((vgterm) => vgterm.reason()).distinct
   }
+
+  def provenanceToken() = src.provenanceToken();
 }

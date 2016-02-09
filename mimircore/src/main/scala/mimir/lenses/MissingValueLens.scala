@@ -243,12 +243,12 @@ class MissingValueModel(lens: MissingValueLens, name: String)
       lens.db.update( "DELETE FROM "+backingStore() )
     }
 
-    val rowidIterator = lens.db.query(CTPercolator.propagateRowIDs(source, true))
+    val rowidIterator = lens.db.query(source)
 
     rowidIterator.open()
     while(rowidIterator.getNext()) {
       if(Typechecker.typeOf(rowidIterator(classIndex+1)) == Type.TAny) {
-        val explist = List(rowidIterator(0))
+        val explist = List(rowidIterator.provenanceToken())
         val data = computeMostLikelyValue(explist)
         val typ = TypeUtils.convert(data.getType)
         val accepted = "N"
@@ -271,11 +271,12 @@ class MissingValueModel(lens: MissingValueLens, name: String)
 
   def getLearner = learner
 
-  def classify(rowid: PrimitiveValue): List[(Double, Int)] = {
+  def classify(rowid: RowIdPrimitive): List[(Double, Int)] = {
+    // println("Classify: "+rowid)
     val rowValues = lens.db.query(
       CTPercolator.percolate(
         Select(
-          Comparison(Cmp.Eq, Var("ROWID_MIMIR"), rowid),
+          Comparison(Cmp.Eq, Var(CTPercolator.ROWID_KEY), rowid),
           lens.source
         )
       )
@@ -322,7 +323,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
 
   private def computeMostLikelyValue(args: List[PrimitiveValue]): PrimitiveValue = {
     val att = learner.getModelContext.attribute(cIndex)
-    val classes = classify(args(0))
+    val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val res = if (classes.isEmpty) att.numValues() - 1 else classes.maxBy(_._1)._2
     if (att.isString)
       StringPrimitive(att.value(res))
@@ -335,7 +336,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
   ////// Model implementation
   def mostLikelyValue(args: List[PrimitiveValue]): PrimitiveValue = {
     val att = learner.getModelContext.attribute(cIndex)
-    val classes = classify(args(0))
+    val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val res = if (classes.isEmpty) att.numValues() - 1 else classes.maxBy(_._1)._2
     if (att.isString)
       StringPrimitive(att.value(res))
@@ -357,7 +358,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
 
   def lowerBound(args: List[PrimitiveValue]) = {
     val att = learner.getModelContext.attribute(cIndex)
-    val classes = classify(args(0))
+    val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val res = if (classes.isEmpty) att.numValues() - 1 else classes.minBy(_._2)._2
     if (att.isString)
       StringPrimitive(att.value(res))
@@ -369,7 +370,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
 
   def upperBound(args: List[PrimitiveValue]) = {
     val att = learner.getModelContext.attribute(cIndex)
-    val classes = classify(args(0))
+    val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val res = if (classes.isEmpty) att.numValues() - 1 else classes.maxBy(_._2)._2
     if (att.isString)
       StringPrimitive(att.value(res))
@@ -406,7 +407,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     new MissingValueAnalysis(this, args, MissingValueAnalysisType.SAMPLE)
 
   def sample(seed: Long, args: List[PrimitiveValue]): PrimitiveValue = {
-    val classes = classify(args(0))
+    val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val tot_cnt = classes.map(_._1).sum
     val pick = new Random(seed).nextInt(100) % tot_cnt
     val cumulative_counts =

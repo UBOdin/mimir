@@ -326,7 +326,11 @@ class SqlToRA(db: Database)
             map( (o : Any) => convert(o.asInstanceOf[net.sf.jsqlparser.expression.Expression], bindings) ).
             toList
         }
-      return mimir.algebra.Function(name, parameters)
+      name match {
+        case "ROWID" => CTPercolator.ROWID_KEY
+        case _ => return mimir.algebra.Function(name, parameters)
+      }
+      
       // unhandled("Expression[Function:"+name+"]")
     }
     if(e.isInstanceOf[net.sf.jsqlparser.expression.CaseExpression]){

@@ -107,7 +107,7 @@ class Compiler(db: Database) {
       oper match {
         case Project(cols, src) =>
           val inputIterator = buildIterator(src);
-          // println("Compiled ["+inputIterator.schema+"]: \n"+src)
+          println("Compiled ["+inputIterator.schema+"]: \n"+oper)
           new ProjectionResultIterator(
             db,
             inputIterator,
@@ -125,7 +125,23 @@ class Compiler(db: Database) {
 
 
     } else {
-      db.query(db.convert(oper))
+      val operWithProvenance = CTPercolator.propagateRowIDs(oper, true);
+      val results = db.backend.execute(
+        db.convert(operWithProvenance)
+      )
+      val schema = operWithProvenance.schema.
+                      map( _._1 ).
+                      zipWithIndex.
+                      toMap
+
+      if(!schema.contains(CTPercolator.ROWID_KEY)){
+        throw new SQLException("ERROR: No "+CTPercolator.ROWID_KEY+" in "+schema+"\n"+operWithProvenance);
+      }
+      new ResultSetIterator(
+        results, 
+        oper.schema.map( _._1 ).map( schema(_) ),
+        List(schema(CTPercolator.ROWID_KEY))
+      )
     }
   }
 
@@ -147,7 +163,8 @@ class Compiler(db: Database) {
       db.query(db.convert(inlinedOperator)), 
       schema,
       schema.map(_._1).map(columnDetExprs(_)), 
-      rowDetExpr
+      rowDetExpr,
+      Var(CTPercolator.ROWID_KEY)
     )
 
   }

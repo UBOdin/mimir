@@ -158,7 +158,7 @@ $( document ).ready(function() {
 
                 var data_params_query = 'queryjson?query=SELECT BOUNDS('+col
                                         +'), VAR('+col+'), CONFIDENCE('+col+') FROM ('+query
-                                        +') AS TEMP WHERE ROWID = '+row+';&db='+db;
+                                        +') AS TEMP WHERE ROWID() = '+row+';&db='+db;
 
                 var vgterms_query = 'vgterms?query='+query+';&row='+row+'&ind='+ col_index
                                         +'&db='+db;
@@ -255,7 +255,7 @@ $( document ).ready(function() {
                 var fault = false;
                 var errormessage = "";
 
-                var prob_query = 'queryjson?query=SELECT PROB() FROM ('+query+') AS TEMP WHERE ROWID = '+row+';&db='+db;
+                var prob_query = 'queryjson?query=SELECT PROB() FROM ('+query+') AS TEMP WHERE ROWID() = '+row+';&db='+db;
                 var vgterms_query = 'vgterms?query='+query+';&row='+row+'&ind='+-1+'&db='+db;
 
                 if (content == null) {

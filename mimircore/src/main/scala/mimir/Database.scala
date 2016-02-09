@@ -2,6 +2,7 @@ package mimir
 
 import java.io.File
 import java.sql.SQLException
+import java.sql.ResultSet
 
 import mimir.algebra._
 import mimir.ctables.{Model, VGTerm, CTPercolator}
@@ -69,27 +70,36 @@ case class Database(name: String, backend: Backend)
    * ResultSetIterator.  No Mimir-specific optimizations or rewrites are applied.
    */
   def query(sql: String): ResultIterator = 
-    new ResultSetIterator(backend.execute(sql))
+    deterministicIterator(backend.execute(sql))
   /**
    * Evaluate the specified query on the backend directly and wrap the result in a
    * ResultSetIterator.  JDBC parameters (`?`) are replaced according to the provided
    * argument list.  No Mimir-specific optimizations or rewrites are applied.
    */
   def query(sql: String, args: List[String]): ResultIterator = 
-    new ResultSetIterator(backend.execute(sql, args))
+    deterministicIterator(backend.execute(sql, args))
   /**
    * Evaluate the specified query on the backend directly.  No Mimir-specific 
    * optimizations or rewrites are applied.
    */
   def query(sql: net.sf.jsqlparser.statement.select.Select): ResultIterator = 
-    new ResultSetIterator(backend.execute(sql))
+    deterministicIterator(backend.execute(sql))
   /**
    * Evaluate the specified query on the backend directly.  No Mimir-specific 
    * optimizations or rewrites are applied.
    */
   def query(sql: net.sf.jsqlparser.statement.select.SelectBody): ResultIterator =
-    new ResultSetIterator(backend.execute(sql))
+    deterministicIterator(backend.execute(sql))
   
+  def deterministicIterator(results: ResultSet): ResultIterator =
+  {
+    new ResultSetIterator(
+      results, 
+      (0 until results.getMetaData().getColumnCount()).toList,
+      List[Int]()
+    )
+  }
+
   /**
    * Evaluate the specified SQL DDL expression on the backend directly.  No Mimir-
    * specific optimizations or updates are applied.
@@ -172,15 +182,17 @@ case class Database(name: String, backend: Backend)
   {
     val startTime = System.nanoTime()
 
-    val headers: List[String] = result.schema.map(_._1)
+    val headers: List[String] = "MIMIR_ROWID" :: result.schema.map(_._1).toList
     val data: ListBuffer[(List[String], Boolean)] = new ListBuffer()
 
     var i = 0
     while(result.getNext()){
       val list =
-        (0 until result.numCols).map( (i) => {
-          result(i) + (if (!result.deterministicCol(i)) {"*"} else {""})
-        }).toList
+        result.provenanceToken().toString :: (
+          (0 until result.numCols).map( (i) => {
+            result(i).toString + (if (!result.deterministicCol(i)) {"*"} else {""})
+          }).toList
+        )
 
 //      println("RESULTS: "+list)
       if(i < 100) data.append((list, result.deterministicRow()))
