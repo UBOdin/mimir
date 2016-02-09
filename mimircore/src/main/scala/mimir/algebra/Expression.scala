@@ -268,6 +268,8 @@ object Cmp extends Enumeration {
       case Gte => Lt
       case Lt => Gte
       case Lte => Gt
+      case Like => NotLike
+      case NotLike => Like
     }
   }
   

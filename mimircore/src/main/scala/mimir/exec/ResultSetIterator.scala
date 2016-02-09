@@ -24,44 +24,43 @@ class ResultSetIterator(src: ResultSet, visibleSchema: Map[String,Type.T], visib
         )
       )
     }).toList
-  val extract: List[() => PrimitiveValue] = 
+  val extract: List[() => PrimitiveValue] =
     schema.map(_._2).zipWithIndex.map( {
       case (t, colIdx) =>
         val col = visibleColumns(colIdx)
         t match {
-          case TString => 
-            () => { 
+          case TString =>
+            () => {
               new StringPrimitive(src.getString(col+1))
             }
-          
-          case TFloat => 
-            () => { 
-              new FloatPrimitive(src.getDouble(col+1))
+
+          case TFloat =>
+            () => {
+              new FloatPrimitive(src.getDouble(col + 1))
             }
-          
+
           case TInt => 
             () => {
-              new IntPrimitive(src.getLong(col+1))
+              new IntPrimitive(src.getLong(col + 1))
             }
+
           case TRowId =>
             () => {
-              new RowIdPrimitive(src.getString(col+1))
+              new RowIdPrimitive(src.getString(col + 1))
             }
+
           case TDate =>
             () => {
-              if(meta.getColumnType(col+1) == java.sql.Types.TIMESTAMP) {
-                val calendar = Calendar.getInstance()
-                try{
-                  calendar.setTime(src.getDate(col+1))
-                  new DatePrimitive(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DATE))
-                } catch {
-                  case e: NullPointerException =>
-                    new NullPrimitive
-                }
+              val calendar = Calendar.getInstance()
+              try {
+                calendar.setTime(src.getDate(col + 1))
+              } catch {
+                case e: SQLException =>
+                  calendar.setTime(Date.valueOf(src.getString(col + 1)))
+                case e: NullPointerException =>
+                  new NullPrimitive
               }
-              else {
-                throw new UnsupportedOperationException()
-              }
+              new DatePrimitive(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DATE))
             }
 
           case TAny =>

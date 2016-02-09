@@ -30,7 +30,8 @@ nullable = { 													\
 
 def preparedbgen():
 
-	shutil.rmtree('tpch-dbgen')
+	if os.path.exists('tpch-dbgen'):
+		shutil.rmtree('tpch-dbgen')
 	print("Getting the tpch-dbgen repo...")
 	try:
 		subprocess.check_call(["git", "clone", "https://github.com/Legacy25/tpch-dbgen"])
