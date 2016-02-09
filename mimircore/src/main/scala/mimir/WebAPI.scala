@@ -178,10 +178,10 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
 
     val rowQuery = 
       mimir.algebra.Select(
-        Comparison(Cmp.Eq, Var("ROWID_MIMIR"), new RowIdPrimitive(row.substring(1, row.length - 1))),
+        Comparison(Cmp.Eq, Var("ROWID_MIMIR"), new RowIdPrimitive(row)),
         raw
       )
-    println("QUERY: "+rowQuery);
+    // println("QUERY: "+rowQuery);
 
     val iterator = db.queryLineage(rowQuery);
 

@@ -95,6 +95,7 @@ case class Database(name: String, backend: Backend)
   {
     new ResultSetIterator(
       results, 
+      Map[String, Type.T](),
       (0 until results.getMetaData().getColumnCount()).toList,
       List[Int]()
     )
@@ -182,19 +183,21 @@ case class Database(name: String, backend: Backend)
   {
     val startTime = System.nanoTime()
 
+    // println("SCHEMA: "+result.schema)
     val headers: List[String] = "MIMIR_ROWID" :: result.schema.map(_._1).toList
     val data: ListBuffer[(List[String], Boolean)] = new ListBuffer()
 
     var i = 0
     while(result.getNext()){
       val list =
-        result.provenanceToken().toString :: (
-          (0 until result.numCols).map( (i) => {
-            result(i).toString + (if (!result.deterministicCol(i)) {"*"} else {""})
-          }).toList
+        (
+          result.provenanceToken().payload.toString ::
+            result.schema.zipWithIndex.map( _._2).map( (i) => {
+              result(i).toString + (if (!result.deterministicCol(i)) {"*"} else {""})
+            }).toList
         )
 
-//      println("RESULTS: "+list)
+     // println("RESULTS: "+list)
       if(i < 100) data.append((list, result.deterministicRow()))
       i = i + 1
     }

@@ -315,8 +315,8 @@ class SqlToRA(db: Database)
         return Var(table + "_" + name);
       }
     }
-    if(e.isInstanceOf[Function]){
-      val f = e.asInstanceOf[Function]
+    if(e.isInstanceOf[net.sf.jsqlparser.expression.Function]){
+      val f = e.asInstanceOf[net.sf.jsqlparser.expression.Function]
       val name = f.getName.toUpperCase
       val parameters : List[Expression] = 
         if(f.getParameters == null) { List[Expression]() }
@@ -326,9 +326,11 @@ class SqlToRA(db: Database)
             map( (o : Any) => convert(o.asInstanceOf[net.sf.jsqlparser.expression.Expression], bindings) ).
             toList
         }
-      name match {
-        case "ROWID" => CTPercolator.ROWID_KEY
-        case _ => return mimir.algebra.Function(name, parameters)
+      return (name, parameters) match {
+        case ("ROWID", List()) => Var(CTPercolator.ROWID_KEY)
+        case ("ROWID", List(x: RowIdPrimitive)) => x
+        case ("ROWID", List(x: PrimitiveValue)) => RowIdPrimitive(x.payload.toString)
+        case _ => mimir.algebra.Function(name, parameters)
       }
       
       // unhandled("Expression[Function:"+name+"]")

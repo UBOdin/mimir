@@ -35,5 +35,8 @@ class BagUnionResultIterator(lhs: ResultIterator, rhs: ResultIterator) extends R
   override def reason(ind: Int): List[(String, String)] = {
     currIter().reason(ind)
   }
-  def provenanceToken() = currIter().provenanceToken()+(if(inLHS){ ".left" } else { ".right" });
+  def provenanceToken() = new RowIdPrimitive(
+    currIter().provenanceToken().payload.toString
+    +(if(inLHS){ ".left" } else { ".right" })
+  );
 }

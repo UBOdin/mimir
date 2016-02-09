@@ -393,26 +393,6 @@ object CTPercolatorSpec extends Specification {
     }
   }
 
-  "The Analysis Compiler" should {
-
-    "Compile bounds analyses correctly for deterministic queries" in {
-      // Remember, test_0 is a uniform distribution
-      analyze("""
-        PROJECT[A <= BOUNDS(R_A)](R)
-      """) must be equalTo oper("""
-        PROJECT[A_MIN <= R_A, A_MAX <= R_A](R)
-      """)
-    }
-    "Compile bounds analyses correctly for non-deterministic queries" in {
-      // Remember, test_0 is a uniform distribution
-      analyze("""
-        PROJECT[A <= BOUNDS({{ test_0[R_A, R_B] }})](R)
-      """) must be equalTo oper("""
-        PROJECT[A_MIN <= R_A, A_MAX <= R_B](R)
-      """)
-    }
-  }
-
   "The Optimizer Should" should {
     "Inline functions correctly" in {
       InlineProjections.optimize(oper("""

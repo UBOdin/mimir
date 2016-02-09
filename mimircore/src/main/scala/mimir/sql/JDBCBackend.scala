@@ -82,27 +82,37 @@ class JDBCBackend(backend: String, filename: String) extends Backend
   def execute(sel: String): ResultSet = 
   {
     //println(sel)
-    if(conn == null) {
-      throw new SQLException("Trying to use unopened connection!")
+    try {
+      if(conn == null) {
+        throw new SQLException("Trying to use unopened connection!")
+      }
+      val stmt = conn.createStatement()
+      val ret = stmt.executeQuery(sel)
+      stmt.closeOnCompletion()
+      ret
+    } catch { 
+      case e: SQLException => println(e.toString+"during\n"+sel)
+        throw new SQLException("Error", e)
     }
-    val stmt = conn.createStatement()
-    val ret = stmt.executeQuery(sel)
-    stmt.closeOnCompletion()
-    ret
   }
   def execute(sel: String, args: List[String]): ResultSet = 
   {
     //println(""+sel+" <- "+args)
-    if(conn == null) {
-      throw new SQLException("Trying to use unopened connection!")
+    try {
+      if(conn == null) {
+        throw new SQLException("Trying to use unopened connection!")
+      }
+      val stmt = conn.prepareStatement(sel)
+      var i: Int = 0
+      args.map( (a) => {
+        i += 1
+        stmt.setString(i, a)
+      })
+      stmt.executeQuery()
+    } catch { 
+      case e: SQLException => println(e.toString+"during\n"+sel+" <- "+args)
+        throw new SQLException("Error", e)
     }
-    val stmt = conn.prepareStatement(sel)
-    var i: Int = 0
-    args.map( (a) => {
-      i += 1
-      stmt.setString(i, a)
-    })
-    stmt.executeQuery()
   }
   
   def update(upd: String): Unit =

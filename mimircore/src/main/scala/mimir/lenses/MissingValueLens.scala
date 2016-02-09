@@ -173,7 +173,7 @@ case class MissingValueAnalysis(model: MissingValueModel, args: List[Expression]
 }
 
 class MissingValueModel(lens: MissingValueLens, name: String)
-  extends SingleVarModel(Type.TInt) {
+  extends SingleVarModel(Type.TAny) {
   var learner: Classifier =
     Analysis.getLearner("moa.classifiers.bayes.NaiveBayes");
   var data: Instances = null;

@@ -1,6 +1,7 @@
-package mimir.algebra;
+package mimir.optimizer;
 
 import mimir.ctables._;
+import mimir.algebra._;
 
 abstract class ExpressionOptimizerRule {
 	def apply(e: Expression): Expression
@@ -26,8 +27,15 @@ object ExpressionOptimizer {
 		PropagateConditions
 	)
 
-	def optimize(e:Expression, opts: List[ExpressionOptimizerRule]): Expression = 
-		opts.foldLeft(e)( (currE, f) => f(currE) )
+	def optimize(e:Expression, opts: List[ExpressionOptimizerRule]): Expression = {
+		try {
+			opts.foldLeft(e)( (currE, f) => f(currE) )
+		} catch { 
+			case TypeException(t1,t2,msg) => 
+				throw TypeException(t1, t2, msg+" in "+e);
+		}
+
+	}
 
 	def optimize(e: Expression): Expression =
 		optimize(e, standardOptimizatins)
