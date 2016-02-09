@@ -36,6 +36,12 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		db.check(query);
 		db.query(query)
 	}
+	def explainRow(s: String, t: String) = {
+		val query = db.convert(
+			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
+		)
+		db.explainRow(query, RowIdPrimitive(t))
+	}
 	def lens(s: String) =
 		db.createLens(stmt(s).asInstanceOf[mimir.sql.CreateLens])
 	def update(s: Statement) = 
@@ -119,6 +125,13 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			val result = query("SELECT RATING FROM RATINGS2FINAL").allRows.flatten
 			result must have size(3)
 			result must contain(eachOf( f(121.0), f(5.0), f(4.0) ) )
+		}
+
+		"Obtain Explanations for Simple Queries" >> {
+			val expl = explainRow("""
+					SELECT * FROM RATINGS2FINAL WHERE RATING > 3
+				""", "1")
+			expl.toString must be equalTo("")		
 		}
 
 		"Query a Union of lenses" >> {

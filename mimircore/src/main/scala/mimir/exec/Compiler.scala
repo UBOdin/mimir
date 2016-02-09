@@ -36,8 +36,7 @@ class Compiler(db: Database) {
   )
 
   val standardPostOptimizations = List[Operator => Operator](
-    InlineProjections.optimize _,
-    compileAnalysis _         // Transform BOUNDS(), CONF(), etc... into actual expressions that SQL can understand
+    InlineProjections.optimize _
   )
 
   def standardOptimizations: List[Operator => Operator] = {
@@ -76,6 +75,12 @@ class Compiler(db: Database) {
    */
   def optimize(oper: Operator): Operator = 
     optimize(oper, standardOptimizations)
+
+  /**
+   * Optimize the query
+   */
+  def optimize(oper: Operator, ndStrat: NonDeterminism.Strat): Operator = 
+    optimize(oper, ndBuildOpts(ndStrat)++standardPostOptimizations)
 
   /**
    * Optimize the query
@@ -122,29 +127,32 @@ class Compiler(db: Database) {
 
         case _ => buildInlinedIterator(oper)
       }
-
-
     } else {
-      val operWithProvenance = CTPercolator.propagateRowIDs(oper, true);
-      val results = db.backend.execute(
-        db.convert(operWithProvenance)
-      )
-      val schemaList = operWithProvenance.schema
-      val schema = schemaList.
-                      map( _._1 ).
-                      zipWithIndex.
-                      toMap
-
-      if(!schema.contains(CTPercolator.ROWID_KEY)){
-        throw new SQLException("ERROR: No "+CTPercolator.ROWID_KEY+" in "+schema+"\n"+operWithProvenance);
-      }
-      new ResultSetIterator(
-        results, 
-        schemaList.toMap,
-        oper.schema.map( _._1 ).map( schema(_) ),
-        List(schema(CTPercolator.ROWID_KEY))
-      )
+      buildDeterministicIterator(oper)
     }
+  }
+
+  def buildDeterministicIterator(oper: Operator): ResultIterator =
+  {
+    val operWithProvenance = CTPercolator.propagateRowIDs(oper, true);
+    val results = db.backend.execute(
+      db.convert(operWithProvenance)
+    )
+    val schemaList = operWithProvenance.schema
+    val schema = schemaList.
+                    map( _._1 ).
+                    zipWithIndex.
+                    toMap
+
+    if(!schema.contains(CTPercolator.ROWID_KEY)){
+      throw new SQLException("ERROR: No "+CTPercolator.ROWID_KEY+" in "+schema+"\n"+operWithProvenance);
+    }
+    new ResultSetIterator(
+      results, 
+      schemaList.toMap,
+      oper.schema.map( _._1 ).map( schema(_) ),
+      List(schema(CTPercolator.ROWID_KEY))
+    )
   }
 
   def buildInlinedIterator(oper: Operator): ResultIterator =

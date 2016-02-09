@@ -1,0 +1,168 @@
+package mimir.ctables;
+
+import java.util.Random;
+
+import mimir._;
+import mimir.algebra._;
+import mimir.exec._;
+import mimir.util._;
+
+case class InvalidProvenance(msg: String, token: RowIdPrimitive) 
+	extends Exception("Invalid Provenance Token ["+msg+"]: "+token);
+
+case class RowExplanation (
+	probability: Double, 
+	reasons: List[(String, String)], 
+	token: RowIdPrimitive
+) {
+	override def toString(): String = {
+		List( 
+			("Probability", probability.toString),
+			("Reasons", reasons.map("\n    "+_._1).mkString("")),
+			("Token", token.toString)
+		).map((x) => x._1+": "+x._2).mkString("\n")
+	}
+	def toJSON(): String = {
+		JSONBuilder.dict(List(
+			("probability", probability.toString),
+			("reasons", 
+				JSONBuilder.list(reasons.map( 
+					(r) => JSONBuilder.dict(List(
+						("english", r._1),
+						("source", r._2)
+					))
+				))),
+			("token", JSONBuilder.prim(token))
+		))
+	}
+
+}
+
+class CTExplainer(db: Database) {
+
+	val NUM_SAMPLES = 1000
+	val rnd = new Random();
+	
+	def explainRow(oper: Operator, token: RowIdPrimitive): RowExplanation =
+	{
+		val (tuple, expressions) = provenanceQuery(oper, token)
+		val (provenance, probability) = 
+			expressions.get(CTables.conditionColumn) match {
+				case None => (BoolPrimitive(true), 1.0)
+				case Some(cond) => {
+					(	cond, 
+						sampleExpression[(Int,Int)](cond, tuple, NUM_SAMPLES, (0,0), 
+							(cnt: (Int,Int), present: PrimitiveValue) => 
+								present match {
+									case NullPrimitive() => (cnt._1, cnt._2)
+									case BoolPrimitive(t) => 
+										( cnt._1 + (if(t){ 1 } else { 0 }),
+										  cnt._2 + 1
+										 )
+								}
+						) match { 
+							case (_, 0) => -1.0
+							case (hits, total) => hits.toDouble / total.toDouble
+						}
+					)
+				}
+			}
+
+		println("tuple: "+tuple)
+		println("condition"+provenance)
+		println("probability: "+probability)
+
+		RowExplanation(
+			probability,
+			getReasons(provenance, tuple),
+			token
+		)
+	}
+
+	def sampleExpression[A](
+		expr: Expression, bindings: Map[String,PrimitiveValue], count: Int, 
+		init: A, accum: ((A, PrimitiveValue) => A)
+	): A = 
+	{
+		val sampleExpr = CTAnalyzer.compileSample(expr, Var(CTables.SEED_EXP))
+        (0 until count).
+        	map( (i) => 
+        		try {
+	        		Eval.eval(
+	        			sampleExpr, 
+		        		bindings ++ Map("__SEED" -> IntPrimitive(rnd.nextInt()))
+		        	)
+		        } catch {
+		        	case TypeException(_,_,_) => NullPrimitive()
+		        }
+        	).
+	        foldLeft(init)(accum)
+
+	}
+
+
+	def getReasons(expr: Expression, tuple: Map[String,PrimitiveValue]): 
+		List[(String, String)] =
+	{
+		val inlined = Eval.inline(expr, tuple);
+		CTables.getVGTerms(expr).map( _.reason() ).distinct;
+	}
+
+	def provenanceQuery(oper: Operator, token: RowIdPrimitive): 
+		(Map[String,PrimitiveValue], Map[String, Expression]) =
+	{
+		val optQuery = db.compiler.optimize(
+			CTPercolator.propagateRowIDs(oper, true),
+			NonDeterminism.Classic
+		)
+		val (expressions, sourceQuery, newToken) = 
+			delveToProjection(optQuery, token)
+		val iterator = db.compiler.buildDeterministicIterator(
+			Select(
+				Comparison(Cmp.Eq, Var(CTPercolator.ROWID_KEY), newToken),
+				sourceQuery
+			)
+		)
+
+		iterator.open()
+		if(!iterator.getNext()){ throw InvalidProvenance("INVALID TOKEN", token); }
+		val tuple = iterator.currentTuple()
+		if(iterator.getNext()){ throw InvalidProvenance("PLURAL TOKEN", token); }
+		iterator.close();
+
+		(  tuple, expressions  )
+	}
+
+	def delveToProjection(oper: Operator, token: RowIdPrimitive):
+		(Map[String, Expression], Operator, RowIdPrimitive) =
+	{
+		oper match {
+			case Union(lhs, rhs) =>
+				val (newToken, isLHS) = stripUnionProvenance(token);
+				delveToProjection(if(isLHS){ lhs } else { rhs }, newToken);
+			case Project(targets, source) => 
+				return (
+					targets.map ( { case ProjectArg(n,e) => (n,e) } ).toMap,
+					source, 
+					token
+				)
+			case _ =>
+				throw InvalidProvenance("PERCOLATE", token)
+		}
+	}
+
+	def stripUnionProvenance(token: RowIdPrimitive): 
+		(RowIdPrimitive, Boolean) =
+	{
+		val payload = token.payload.toString;
+		if(payload.endsWith(".left")){
+			return (RowIdPrimitive(payload.substring(0, payload.length() - 5)), true)
+		}
+		else if(payload.endsWith(".right")){
+			return (RowIdPrimitive(payload.substring(0, payload.length() - 5)), false)
+		}
+		else {
+			throw InvalidProvenance("UNION", token)
+		}
+	}
+}

@@ -78,6 +78,9 @@ abstract class ResultIterator {
   def currentRow(): List[PrimitiveValue] =
     map( (x) => x ).toList
 
+  def currentTuple(): Map[String, PrimitiveValue] =
+    schema.map(_._1).zip(currentRow).toMap
+
   /**
    * Shorthand foreach operator
    */
