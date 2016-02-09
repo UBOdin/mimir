@@ -17,6 +17,8 @@ import net.sf.jsqlparser.util.deparser.{InsertDeParser, ExpressionDeParser, Sele
 
 import scala.collection.mutable.ListBuffer
 
+/* Web-facing API */
+
 class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
 
 

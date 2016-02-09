@@ -26,11 +26,13 @@ class ExpressionChecker(scope: (String => Type.T) = Map().apply _) {
 				assert(lhs, TBool, "BoolOp");
 				assert(rhs, TBool, "BoolOp");
 				TBool
-			case Comparison((Eq | Neq), lhs, rhs) => 
+			case Comparison((Eq | Neq), lhs, rhs) =>
 				Typechecker.escalate(typeOf(lhs), typeOf(rhs), "Comparison", e);
 				TBool
 			case Comparison((Gt | Gte | Lt | Lte), lhs, rhs) =>
-				Typechecker.assertNumeric(Typechecker.escalate(typeOf(lhs), typeOf(rhs), "Comparison"));
+				if(typeOf(lhs) != TDate && typeOf(rhs) != TDate) {
+					Typechecker.assertNumeric(Typechecker.escalate(typeOf(lhs), typeOf(rhs), "Comparison"))
+				}
 				TBool
 			case Comparison((Like | NotLike), lhs, rhs) =>
 				assert(lhs, TString, "LIKE")

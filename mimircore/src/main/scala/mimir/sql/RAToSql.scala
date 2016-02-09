@@ -152,12 +152,25 @@ class RAToSql(db: Database) {
         bin(new NotEqualsTo(), IntPrimitive(1), IntPrimitive(1))
       case NullPrimitive() => new NullValue()
       case DatePrimitive(y,m,d) => {
-        val f = new Function();
-        f.setName("DATE")
-        f.setParameters(new ExpressionList(
-          List[net.sf.jsqlparser.expression.Expression](new StringValue(""+y+"-%02d".format(m)+"-%02d".format(d)))
-        ))
-        f
+        val f = new Function()
+        if(db.backend.isInstanceOf[JDBCBackend]
+          && db.backend.asInstanceOf[JDBCBackend].driver().equalsIgnoreCase("oracle")
+        ) {
+          f.setName("TO_DATE")
+          f.setParameters(new ExpressionList(
+            List[net.sf.jsqlparser.expression.Expression](
+              new StringValue(""+y+"-%02d".format(m)+"-%02d".format(d)),
+              new StringValue("YYYY-MM-DD")
+            )
+          ))
+          f
+        } else {
+          f.setName("DATE")
+          f.setParameters(new ExpressionList(
+            List[net.sf.jsqlparser.expression.Expression](new StringValue(""+y+"-%02d".format(m)+"-%02d".format(d)))
+          ))
+          f
+        }
       }
       case Comparison(Cmp.Eq, l, r)  => bin(new EqualsTo(), l, r, sources)
       case Comparison(Cmp.Neq, l, r) => bin(new NotEqualsTo(), l, r, sources)
