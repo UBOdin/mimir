@@ -107,7 +107,7 @@ class Compiler(db: Database) {
       oper match {
         case Project(cols, src) =>
           val inputIterator = buildIterator(src);
-          // println("Compiled ["+inputIterator.schema+"]: \n"+src)
+          // println("Compiled ["+inputIterator.schema+"]: \n"+oper)
           new ProjectionResultIterator(
             db,
             inputIterator,
@@ -125,7 +125,25 @@ class Compiler(db: Database) {
 
 
     } else {
-      db.query(db.convert(oper))
+      val operWithProvenance = CTPercolator.propagateRowIDs(oper, true);
+      val results = db.backend.execute(
+        db.convert(operWithProvenance)
+      )
+      val schemaList = operWithProvenance.schema
+      val schema = schemaList.
+                      map( _._1 ).
+                      zipWithIndex.
+                      toMap
+
+      if(!schema.contains(CTPercolator.ROWID_KEY)){
+        throw new SQLException("ERROR: No "+CTPercolator.ROWID_KEY+" in "+schema+"\n"+operWithProvenance);
+      }
+      new ResultSetIterator(
+        results, 
+        schemaList.toMap,
+        oper.schema.map( _._1 ).map( schema(_) ),
+        List(schema(CTPercolator.ROWID_KEY))
+      )
     }
   }
 
@@ -147,7 +165,8 @@ class Compiler(db: Database) {
       db.query(db.convert(inlinedOperator)), 
       schema,
       schema.map(_._1).map(columnDetExprs(_)), 
-      rowDetExpr
+      rowDetExpr,
+      Var(CTPercolator.ROWID_KEY)
     )
 
   }
@@ -176,57 +195,83 @@ class Compiler(db: Database) {
         Project(
           cols.flatMap {
             case ProjectArg(name, expr) =>
+
+              // This is a gnarly hack that needs to be completely rewritten.  Excising for now
               expr match {
                 case Function("BOUNDS", subexp) => {
-                  if (subexp.length != 1)
-                    throw new SQLException("BOUNDS() expects 1 argument, got " + subexp.length)
-                  val bounds = CTBounds.compile(subexp(0))
                   List(
-                    ProjectArg(name + "_MIN", bounds._1),
-                    ProjectArg(name + "_MAX", bounds._2)
+                    ProjectArg(name + "_MIN", NullPrimitive()),
+                    ProjectArg(name + "_MAX", NullPrimitive())
                   )
+                  // if (subexp.length != 1)
+                  //   throw new SQLException("BOUNDS() expects 1 argument, got " + subexp.length)
+                  // try {
+                  //   val bounds = CTBounds.compile(subexp(0))
+                  //   List(
+                  //     ProjectArg(name + "_MIN", bounds._1),
+                  //     ProjectArg(name + "_MAX", bounds._2)
+                  //   )
+                  // } catch {
+                  //   case BoundsUnsupportedException(_,_) =>
+                  //     List(
+                  //       ProjectArg(name + "_MIN", StringPrimitive("Unknown")),
+                  //       ProjectArg(name + "_MAX", StringPrimitive("Unknown"))
+                  //     )
+                  // }
                 }
 
                 case Function(CTables.CONFIDENCE, subexp) => {
-                  if (subexp.isEmpty)
-                    throw new SQLException(CTables.CONFIDENCE + "() expects at 2 arguments" +
-                      "(expression, percentile), got " + subexp.length)
-                  val percentile = {
-                    if(subexp.length == 1)
-                      FloatPrimitive(50)
-                    else subexp(1)
-                  }
-                  val ex = CTAnalyzer.compileSample(subexp(0), Var(CTables.SEED_EXP))
-                  List(ProjectArg(name + "_CONF", Function(CTables.CONFIDENCE, List(ex, percentile))))
+                  List(
+                    ProjectArg(name + "_CONF", NullPrimitive())
+                  )
+                  // if (subexp.isEmpty)
+                  //   throw new SQLException(CTables.CONFIDENCE + "() expects at 2 arguments" +
+                  //     "(expression, percentile), got " + subexp.length)
+                  // val percentile = {
+                  //   if(subexp.length == 1)
+                  //     FloatPrimitive(50)
+                  //   else subexp(1)
+                  // }
+                  // val ex = CTAnalyzer.compileSample(subexp(0), Var(CTables.SEED_EXP))
+                  // List(ProjectArg(name + "_CONF", Function(CTables.CONFIDENCE, List(ex, percentile))))
                 }
 
                 case Function(CTables.VARIANCE, subexp) => {
-                  if (subexp.length != 1)
-                    throw new SQLException(CTables.VARIANCE + "() expects 1 argument, got " + subexp.length)
-                  val ex = CTAnalyzer.compileSample(subexp(0), Var(CTables.SEED_EXP))
-                  List(ProjectArg(name + "_VAR", Function(CTables.VARIANCE, List(ex))))
+                  List(
+                    ProjectArg(name + "_VAR", NullPrimitive())
+                  )
+                  // if (subexp.length != 1)
+                  //   throw new SQLException(CTables.VARIANCE + "() expects 1 argument, got " + subexp.length)
+                  // val ex = CTAnalyzer.compileSample(subexp(0), Var(CTables.SEED_EXP))
+                  // List(ProjectArg(name + "_VAR", Function(CTables.VARIANCE, List(ex))))
                 }
 
                 case Function("SAMPLE", subexp) => {
-                  if (subexp.isEmpty)
-                    throw new SQLException("SAMPLE() expects at least 1 argument " +
-                      "(expression, seed[optional]), got " + subexp.length)
-                  val ex = {
-                    if(subexp.length == 1) CTAnalyzer.compileSample(subexp(0))
-                    else CTAnalyzer.compileSample(subexp(0), subexp(1))
-                  }
-                  List(ProjectArg(name + "_SAMPLE", ex))
+                  List(
+                    ProjectArg(name + "_SAMPLE", NullPrimitive())
+                  )
+                  // if (subexp.isEmpty)
+                  //   throw new SQLException("SAMPLE() expects at least 1 argument " +
+                  //     "(expression, seed[optional]), got " + subexp.length)
+                  // val ex = {
+                  //   if(subexp.length == 1) CTAnalyzer.compileSample(subexp(0))
+                  //   else CTAnalyzer.compileSample(subexp(0), subexp(1))
+                  // }
+                  // List(ProjectArg(name + "_SAMPLE", ex))
                 }
 
                 case Function(CTables.ROW_PROBABILITY, subexp) => {
-                  val exp = p.get(CTables.conditionColumn)
-                  exp match {
-                    case None => List(ProjectArg(name + "_" + CTables.ROW_PROBABILITY, FloatPrimitive(1)))
-                    case Some(cond) => {
-                      val func = Function(CTables.ROW_PROBABILITY, List(CTAnalyzer.compileSample(cond, Var(CTables.SEED_EXP))))
-                      List(ProjectArg(name + "_" + CTables.ROW_PROBABILITY, func))
-                    }
-                  }
+                  List(
+                    ProjectArg(name + CTables.ROW_PROBABILITY, NullPrimitive())
+                  )
+                  // val exp = p.get(CTables.conditionColumn)
+                  // exp match {
+                  //   case None => List(ProjectArg(name + "_" + CTables.ROW_PROBABILITY, FloatPrimitive(1)))
+                  //   case Some(cond) => {
+                  //     val func = Function(CTables.ROW_PROBABILITY, List(CTAnalyzer.compileSample(cond, Var(CTables.SEED_EXP))))
+                  //     List(ProjectArg(name + "_" + CTables.ROW_PROBABILITY, func))
+                  //   }
+                  // }
                 }
 
                 case _ => List(ProjectArg(name, expr))

@@ -21,22 +21,26 @@ object FunctionRegistry {
 			})
 		registerFunction("__LEFT_UNION_ROWID", _ match { 
 				case TRowId :: List() => TRowId
-				case _ => throw new TypeException(TAny, TRowId, "UNION_ROWID")
+				case TAny :: List() => TRowId
+				case x :: _ => throw new TypeException(x, TRowId, "__LEFT_UNION_ROWID")
+				case _ => throw new TypeException(null, TRowId, "__LEFT_UNION_ROWID")
 			})
 		registerFunction("__RIGHT_UNION_ROWID", _ match { 
 				case TRowId :: List() => TRowId
-				case _ => throw new TypeException(TAny, TRowId, "UNION_ROWID")
+				case TAny :: List() => TRowId
+				case x :: _ => throw new TypeException(x, TRowId, "__RIGHT_UNION_ROWID")
+				case _ => throw new TypeException(null, TRowId, "__RIGHT_UNION_ROWID")
 			})
 		registerFunction(CTables.ROW_PROBABILITY, (_) => TString)
 		registerFunction(CTables.VARIANCE, (_) => TFloat)
 		registerFunction(CTables.CONFIDENCE, (_) => TFloat)
-    registerFunction("__LIST_MIN", { (x: List[Type.T]) => 
-    		Typechecker.assertNumeric(Typechecker.escalate(x)) 
-    	})
-    registerFunction("__LIST_MAX", { (x: List[Type.T]) => 
-    		Typechecker.assertNumeric(Typechecker.escalate(x)) 
-    	})
-    registerFunction("CAST", (_) => TAny)
+	    registerFunction("__LIST_MIN", { (x: List[Type.T]) => 
+	    		Typechecker.assertNumeric(Typechecker.escalate(x)) 
+	    	})
+	    registerFunction("__LIST_MAX", { (x: List[Type.T]) => 
+	    		Typechecker.assertNumeric(Typechecker.escalate(x)) 
+	    	})
+	    registerFunction("CAST", (_) => TAny)
 	}
 
 	def registerFunction(fname: String, typechecker: List[Type.T] => Type.T): Unit =

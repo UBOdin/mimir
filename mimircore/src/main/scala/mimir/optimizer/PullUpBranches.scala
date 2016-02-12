@@ -1,6 +1,7 @@
-package mimir.algebra;
+package mimir.optimizer;
 
 import mimir.ctables._;
+import mimir.algebra._;
 
 object PullUpBranches extends TopDownExpressionOptimizerRule {
 

@@ -7,7 +7,8 @@ import mimir.algebra._;
 class NDInlineResultIterator(src: ResultIterator, 
                              querySchema: List[(String, Type.T)],
                              colDeterminism: List[Expression], 
-                             rowDeterminism: Expression) 
+                             rowDeterminism: Expression,
+                             provenance: Expression) 
   extends ResultIterator
 {
   val schemaMap = {
@@ -36,4 +37,5 @@ class NDInlineResultIterator(src: ResultIterator,
   override def reason(v: Int): List[(String, String)] = {
     throw new SQLException("Must call reason on a query compiled in classical mode")
   }
+  def provenanceToken() = Eval.eval(provenance).asInstanceOf[RowIdPrimitive];
 }

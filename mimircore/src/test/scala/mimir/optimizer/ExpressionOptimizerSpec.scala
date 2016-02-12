@@ -1,4 +1,4 @@
-package mimir.algebra;
+package mimir.optimizer;
 
 import java.io.{StringReader,FileReader}
 

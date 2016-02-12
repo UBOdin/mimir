@@ -1,4 +1,6 @@
-package mimir.algebra;
+package mimir.optimizer;
+
+import mimir.algebra._;
 
 object FlattenBooleanConditionals extends TopDownExpressionOptimizerRule {
 

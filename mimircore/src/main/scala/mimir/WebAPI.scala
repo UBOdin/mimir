@@ -92,7 +92,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
     val start = System.nanoTime()
     val raw = db.convert(sel)
     val rawT = System.nanoTime()
-    val results = db.query(CTPercolator.propagateRowIDs(raw, true))
+    val results = db.query(raw)
     val resultsT = System.nanoTime()
 
     println("Convert time: "+((rawT-start)/(1000*1000))+"ms")
@@ -129,13 +129,12 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
   }
 
   def getAllLenses: List[String] = {
-    val res = db.backend.execute(
+    val iter = db.query(
       """
         SELECT *
         FROM MIMIR_LENSES
       """)
 
-    val iter = new ResultSetIterator(res)
     val lensNames = new ListBuffer[String]()
 
     iter.open()
@@ -177,12 +176,14 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
         }
       }
 
-    val iterator = db.queryLineage(
+    val rowQuery = 
       mimir.algebra.Select(
-        Comparison(Cmp.Eq, Var("ROWID_MIMIR"), new RowIdPrimitive(row.substring(1, row.length - 1))),
+        Comparison(Cmp.Eq, Var("ROWID_MIMIR"), new RowIdPrimitive(row)),
         raw
       )
-    )
+    // println("QUERY: "+rowQuery);
+
+    val iterator = db.queryLineage(rowQuery);
 
     if(!iterator.getNext()){
       throw new SQLException("Invalid Source Data ROWID: '" +row+"'");

@@ -4,6 +4,7 @@ import java.sql._;
 
 import mimir.algebra.Type._
 import mimir.ctables.{VGTerm, CTables}
+import mimir.optimizer.ExpressionOptimizer
 
 object Eval 
 {
@@ -83,10 +84,10 @@ object Eval
             case "CAST" => {
               val strVal = Eval.eval(params(1), bindings).toString.toLowerCase
               try {
-                strVal match {
-                  case "int" => IntPrimitive(Eval.eval(params(0), bindings).asLong)
-                  case "real" => FloatPrimitive(Eval.eval(params(0), bindings).asDouble)
-                  case "varchar" => StringPrimitive(Eval.eval(params(0), bindings).asString)
+                Type.fromString(strVal) match {
+                  case TInt => IntPrimitive(Eval.eval(params(0), bindings).asLong)
+                  case TFloat => FloatPrimitive(Eval.eval(params(0), bindings).asDouble)
+                  case TString => StringPrimitive(Eval.eval(params(0), bindings).asString)
                   case x => throw new SQLException("Unknown cast type: '"+x+"'")
                 }
               } catch {
