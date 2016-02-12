@@ -577,6 +577,26 @@ object CTPercolatorSpec extends Specification {
         expr("MIMIR_ROW_DET_LEFT AND MIMIR_ROW_DET_RIGHT")
       ))
     }
+    "Percolate projections over non-deterministic rows" >> {
+      percolite("""
+        PROJECT[A <= A, B <= B](
+          SELECT[IF A < 5 THEN {{X_1[A]}} ELSE A END > 5](R(A,B))
+        )
+      """) must be equalTo ((
+        oper("""
+          PROJECT[A <= A, B <= B, MIMIR_ROW_DET <= MIMIR_ROW_DET](
+            PROJECT[A <= A, B <= B, MIMIR_ROW_DET <= IF A < 5 THEN FALSE ELSE TRUE END](
+              SELECT[IF A < 5 THEN {{X_1[A]}} ELSE A END > 5](R(A,B))
+            )
+          )
+        """),
+        Map(
+          ("A", expr("true")),
+          ("B", expr("true"))
+        ),
+        expr("MIMIR_ROW_DET")
+      ))
+    }
 
   }
 }
