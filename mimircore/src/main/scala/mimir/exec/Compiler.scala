@@ -36,6 +36,7 @@ class Compiler(db: Database) {
   )
 
   val standardPostOptimizations = List[Operator => Operator](
+    compileAnalysis _,
     InlineProjections.optimize _
   )
 
