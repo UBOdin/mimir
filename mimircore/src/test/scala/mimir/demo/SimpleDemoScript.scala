@@ -131,7 +131,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			val expl = explainRow("""
 					SELECT * FROM RATINGS2FINAL WHERE RATING > 3
 				""", "1")
-			expl.toString must be equalTo("")		
+			expl.toString must contain("I assumed that NUM_RATINGS maps to RATING")		
 		}
 
 		"Query a Union of lenses" >> {

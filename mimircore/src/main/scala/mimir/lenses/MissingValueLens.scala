@@ -251,9 +251,13 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     data.foreach(learn(_))
 
     /* Finally populate the backing-store for each null value */
-    val rowidIterator = lens.db.query(
-      Select(IsNullExpression(Var(iterator.schema(classIndex)._1)), CTPercolator.propagateRowIDs(source, true))
-    )
+    val rowidQuery = 
+      CTPercolator.propagateRowIDs(
+        Select(IsNullExpression(Var(iterator.schema(classIndex)._1)), source), 
+        true
+      )
+
+    val rowidIterator = lens.db.query(rowidQuery)
 
     var nulls = 0
     rowidIterator.open()

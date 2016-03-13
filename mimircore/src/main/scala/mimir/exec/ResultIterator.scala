@@ -61,6 +61,7 @@ abstract class ResultIterator {
    * Return the schema of the given expression
    */
   def schema: List[(String,Type.T)];
+  
   /**
    * Return the number of columns (i.e., iterator.schema().size())
    */
