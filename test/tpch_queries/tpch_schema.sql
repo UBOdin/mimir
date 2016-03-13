@@ -16,7 +16,7 @@ create table Region(
 	regionkey INTEGER PRIMARY KEY, name, comment);
 
 create table LineItem(
-	orderKey INTEGER, partKey INTEGER, suppKey INTEGER, lineNumber INTEGER, quantity INTEGER, extendedPrice REAL, discount REAL, tax REAL, returnFlag, lineStatus, shipDate, commitDate, receiptDate, shipInstruct, shipMode, comment);
+	orderKey INTEGER, partKey INTEGER, suppKey INTEGER, lineNumber INTEGER, quantity INTEGER, extendedPrice REAL, discount REAL, tax REAL, returnFlag, lineStatus, shipDate DATE, commitDate DATE, receiptDate DATE, shipInstruct, shipMode, comment);
 
 create table Orders(
 	orderKey INTEGER PRIMARY KEY, custKey INTEGER, orderStatus, totalPrice REAL, orderDate, orderPriority, clerk, shipPriority, comment);

@@ -94,7 +94,7 @@ class SqlToRA(db: Database)
                 Var(x)
               ) 
             )
-          }).filter( _._1 != "ROWID_MIMIR" )
+          }).filter( _._1 != CTPercolator.ROWID_KEY )
       }
       
       val target: List[(String, ProjectArg)] = 

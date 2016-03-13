@@ -1,6 +1,7 @@
 package mimir;
 
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -35,7 +36,12 @@ public class Methods {
 			ods = new OracleDataSource();
         // Set the user name, password, driver type and network protocol    
         Properties props = new Properties();
-        FileInputStream fis = new FileInputStream("mimircore/config/jdbc.property");
+        FileInputStream fis = null;
+		try {
+			fis = new FileInputStream("mimircore/config/jdbc.property");
+		} catch (FileNotFoundException e) {
+			fis = new FileInputStream("config/jdbc.property");
+		}
         //loading properites from properties file
         props.loadFromXML(fis);
         //reading proeprty

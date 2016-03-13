@@ -546,12 +546,23 @@ object CTPercolator {
             }
           )
 
+        val (newRowDeterminism, rowDeterminismCols) = 
+          if(ExpressionUtils.getColumns(rowDeterminism).isEmpty){
+            (rowDeterminism, List())
+          } else {
+            (Var(mimirRowDeterministicColumnName), 
+              List(ProjectArg(
+                mimirRowDeterministicColumnName, 
+                rowDeterminism
+            )))
+          }
+
         val retProject = Project(
-            columns ++ computedDeterminismCols,
+            columns ++ computedDeterminismCols ++ rowDeterminismCols,
             rewrittenSrc
           )
 
-        return (retProject, newColDeterminism.toMap, rowDeterminism)
+        return (retProject, newColDeterminism.toMap, newRowDeterminism)
       }
       case Select(cond, src) => {
         val (rewrittenSrc, colDeterminism, rowDeterminism) = percolateLite(src);
