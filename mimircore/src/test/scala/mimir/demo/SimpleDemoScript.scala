@@ -42,6 +42,12 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		)
 		db.explainRow(query, RowIdPrimitive(t))
 	}
+	def explainAttribute(s: String, a:String, t: String) = {
+		val query = db.convert(
+			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
+		)
+		db.explainAttribute(query, a, RowIdPrimitive(t))
+	}
 	def lens(s: String) =
 		db.createLens(stmt(s).asInstanceOf[mimir.sql.CreateLens])
 	def update(s: Statement) = 
@@ -132,6 +138,14 @@ object SimpleDemoScript extends Specification with FileMatchers {
 					SELECT * FROM RATINGS2FINAL WHERE RATING > 3
 				""", "1")
 			expl.toString must contain("I assumed that NUM_RATINGS maps to RATING")		
+		}
+
+		"Explain Missing Values Correctly" >> {
+			val expl = explainColumn("""
+					SELECT * FROM RATINGS1FINAL
+				""", "RATING", "2")
+			expl.toString must contain("I made a best guess estimate for this data element, which was originally NULL")		
+
 		}
 
 		"Query a Union of lenses" >> {

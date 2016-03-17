@@ -10,11 +10,16 @@ import mimir.util._;
 case class InvalidProvenance(msg: String, token: RowIdPrimitive) 
 	extends Exception("Invalid Provenance Token ["+msg+"]: "+token);
 
+// case class Explanation(
+// 	reasons: List[(String, String)], 
+// 	token: RowIdPrimitive
+// )
+
 case class RowExplanation (
 	probability: Double, 
 	reasons: List[(String, String)], 
 	token: RowIdPrimitive
-) {
+) {//extends Explanation(reasons, token) {
 	override def toString(): String = {
 		List( 
 			("Probability", probability.toString),
@@ -35,8 +40,14 @@ case class RowExplanation (
 			("token", JSONBuilder.prim(token))
 		))
 	}
-
 }
+
+// case class ColumnExplanation (
+// 	bounds: [(PrimitiveValue,PrimitiveValue)],
+
+// ) {
+
+// }
 
 class CTExplainer(db: Database) {
 
@@ -68,9 +79,9 @@ class CTExplainer(db: Database) {
 				}
 			}
 
-		println("tuple: "+tuple)
-		println("condition"+provenance)
-		println("probability: "+probability)
+		// println("tuple: "+tuple)
+		// println("condition"+provenance)
+		// println("probability: "+probability)
 
 		RowExplanation(
 			probability,
