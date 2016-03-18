@@ -12,11 +12,11 @@ object JSONBuilder {
 
 	def dict(content: List[(String,String)]): String =
 		"{"+content.map( (x) => 
-			"'"+x._1.toLowerCase()+"':"+x._2
+			"\""+x._1.toLowerCase()+"\":"+x._2
 		).mkString(",")+"}"
 
 	def string(content: String): String = {
-		"'"+content.replace("\\", "\\\\").replace("'", "\\'")+"'"
+		"\""+content.replace("\\", "\\\\").replace("\"", "\\\"")+"\""
 	}
 
 	def prim(content: PrimitiveValue) = {

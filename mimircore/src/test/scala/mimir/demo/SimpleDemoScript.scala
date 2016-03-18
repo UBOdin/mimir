@@ -112,6 +112,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			query("SELECT RATING FROM RATINGS1TYPED;").allRows.flatten must contain( 
 				f(4.5), f(4.0), f(6.4) 
 			)
+			query("SELECT * FROM RATINGS1TYPED WHERE RATING > 4;").allRows must have size(2)
 			query("SELECT * FROM RATINGS2TYPED;").allRows must have size(3)
 			Typechecker.schemaOf(
 				InlineVGTerms.optimize(select("SELECT * FROM RATINGS2TYPED;"))

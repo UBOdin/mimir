@@ -237,6 +237,21 @@ class Application extends Controller {
     }
   }
 
+  def getExplainObject(query: String, row: String, ind: String, db: String) = Action {
+    if(!db.equalsIgnoreCase(webAPI.getCurrentDB)) {
+      webAPI = new WebAPI(dbName = db)
+    }
+
+    try {
+      webAPI.openBackendConnection()
+      val result = webAPI.getExplainObject(query, row, Integer.parseInt(ind))
+      Ok(result)
+    }
+    finally {
+      webAPI.closeBackendConnection()
+    }
+
+  }
 
   /**
    * Return a list of all VGTerms present in a particular

@@ -20,7 +20,7 @@ abstract class Explanation(
 	override def toString(): String = {
 		(fields ++ List( 
 			("Reasons", reasons.map("\n    "+_._1).mkString("")),
-			("Token", JSONBuilder.prim(token))
+			("Token", JSONBuilder.string(token.v))
 		)).map((x) => x._1+": "+x._2).mkString("\n")
 	}
 
@@ -29,11 +29,11 @@ abstract class Explanation(
 			("reasons", 
 				JSONBuilder.list(reasons.map( 
 					(r) => JSONBuilder.dict(List(
-						("english", r._1),
-						("source", r._2)
+						("english", JSONBuilder.string(r._1)),
+						("source", JSONBuilder.string(r._2))
 					))
 				))),
-			("token", JSONBuilder.prim(token))
+			("token", JSONBuilder.string(token.v))
 		))
 	}
 }
@@ -55,7 +55,7 @@ class CellExplanation(
 	column: String
 ) extends Explanation(reasons, token) {
 	def fields = List[(String,PrimitiveValue)](
-		("examples", StringPrimitive(JSONBuilder.list(examples.map ( _.toString )))),
+		("examples", StringPrimitive(examples.map( _.toString ).mkString(", "))),
 		("column", StringPrimitive(column))
 	)
 }
