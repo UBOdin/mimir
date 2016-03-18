@@ -6,30 +6,26 @@ import mimir._;
 import mimir.algebra._;
 import mimir.exec._;
 import mimir.util._;
+import mimir.optimizer._;
 
 case class InvalidProvenance(msg: String, token: RowIdPrimitive) 
 	extends Exception("Invalid Provenance Token ["+msg+"]: "+token);
 
-// case class Explanation(
-// 	reasons: List[(String, String)], 
-// 	token: RowIdPrimitive
-// )
-
-case class RowExplanation (
-	probability: Double, 
+abstract class Explanation(
 	reasons: List[(String, String)], 
 	token: RowIdPrimitive
-) {//extends Explanation(reasons, token) {
+) {
+	def fields: List[(String, PrimitiveValue)]
+
 	override def toString(): String = {
-		List( 
-			("Probability", probability.toString),
+		(fields ++ List( 
 			("Reasons", reasons.map("\n    "+_._1).mkString("")),
-			("Token", token.toString)
-		).map((x) => x._1+": "+x._2).mkString("\n")
+			("Token", JSONBuilder.prim(token))
+		)).map((x) => x._1+": "+x._2).mkString("\n")
 	}
+
 	def toJSON(): String = {
-		JSONBuilder.dict(List(
-			("probability", probability.toString),
+		JSONBuilder.dict(fields.map( { case (k, v) => (k, JSONBuilder.prim(v)) } ) ++ List(
 			("reasons", 
 				JSONBuilder.list(reasons.map( 
 					(r) => JSONBuilder.dict(List(
@@ -42,16 +38,60 @@ case class RowExplanation (
 	}
 }
 
-// case class ColumnExplanation (
-// 	bounds: [(PrimitiveValue,PrimitiveValue)],
+case class RowExplanation (
+	probability: Double, 
+	reasons: List[(String, String)], 
+	token: RowIdPrimitive
+) extends Explanation(reasons, token) {
+	def fields = List(
+		("probability", FloatPrimitive(probability))
+	)
+}
 
-// ) {
+class CellExplanation(
+	examples: List[PrimitiveValue],
+	reasons: List[(String, String)], 
+	token: RowIdPrimitive,
+	column: String
+) extends Explanation(reasons, token) {
+	def fields = List[(String,PrimitiveValue)](
+		("examples", StringPrimitive(JSONBuilder.list(examples.map ( _.toString )))),
+		("column", StringPrimitive(column))
+	)
+}
 
-// }
+case class GenericCellExplanation (
+	examples: List[PrimitiveValue],
+	reasons: List[(String, String)], 
+	token: RowIdPrimitive,
+	column: String
+) extends CellExplanation(examples, reasons, token, column) {
+}
+
+case class NumericCellExplanation (
+	bounds: Option[(PrimitiveValue, PrimitiveValue)],
+	mean: PrimitiveValue,
+	sttdev: PrimitiveValue,
+	examples: List[PrimitiveValue],
+	reasons: List[(String, String)], 
+	token: RowIdPrimitive,
+	column: String
+) extends CellExplanation(examples, reasons, token, column) {
+	override def fields = 
+		(bounds match {
+			case None => List[(String, PrimitiveValue)]()
+			case Some((low, high)) => List(("bounds", StringPrimitive(low.toString+":"+high.toString)));
+		}) ++ List(
+			("mean", mean),
+			("sttdev", sttdev)
+		) ++ super.fields
+}
+
 
 class CTExplainer(db: Database) {
 
 	val NUM_SAMPLES = 1000
+	val NUM_EXAMPLES = 3
 	val rnd = new Random();
 	
 	def explainRow(oper: Operator, token: RowIdPrimitive): RowExplanation =
@@ -85,9 +125,60 @@ class CTExplainer(db: Database) {
 
 		RowExplanation(
 			probability,
-			getReasons(provenance, tuple),
+			getFocusedReasons(provenance, tuple),
 			token
 		)
+	}
+
+	def explainCell(oper: Operator, token: RowIdPrimitive, column: String): CellExplanation =
+	{
+		val (tuple, allExpressions) = provenanceQuery(oper, token)
+		val expr = allExpressions.get(column).get
+		val colType = Typechecker.typeOf(expr, tuple.mapValues( _.getType ))
+
+		val examples = 
+			sampleExpression[List[PrimitiveValue]](
+				expr, tuple, NUM_EXAMPLES, 
+				List[PrimitiveValue](), 
+				(_++List(_)) 
+			)
+
+		colType match {
+			case (Type.TInt | Type.TFloat) => 
+				val (avg, stddev) = getStats(expr, tuple, NUM_SAMPLES)
+
+				NumericCellExplanation(
+					getBounds(expr, tuple),
+					avg, 
+					stddev, 
+					examples,
+					getFocusedReasons(expr, tuple),
+					token, 
+					column
+				)
+
+			case _ => 
+				GenericCellExplanation(
+					examples,
+					getFocusedReasons(expr, tuple),
+					token,
+					column
+				)
+		}
+	}
+
+	def getBounds(expr: Expression, tuple: Map[String,PrimitiveValue]): 
+		Option[(PrimitiveValue,PrimitiveValue)] =
+	{
+		try {
+			val (lbound, ubound) = CTBounds.compile(expr);
+			Some( (
+				Eval.eval(lbound, tuple),
+				Eval.eval(ubound, tuple)
+			))
+		} catch {
+			case BoundsUnsupportedException(_, _) => None
+		}
 	}
 
 	def sampleExpression[A](
@@ -111,12 +202,70 @@ class CTExplainer(db: Database) {
 
 	}
 
+	def getStats(expr: Expression, tuple: Map[String,PrimitiveValue], count: Integer): 
+		(PrimitiveValue, PrimitiveValue) =
+	{
+		val (tot, totSq) =
+			sampleExpression[(PrimitiveValue, PrimitiveValue)](
+				expr, tuple, count,
+				(IntPrimitive(0), IntPrimitive(0)),
+				{ case ((tot, totSq), v) => 
+					(
+						Eval.applyArith(Arith.Add, tot, v),
+						Eval.applyArith(Arith.Add, totSq,
+							Eval.applyArith(Arith.Mult, v, v))
+					)
+				}
+			)
+		val avg = Eval.applyArith(Arith.Div, tot, FloatPrimitive(count.toDouble))
+		val stddev =
+			Eval.eval(
+				Function("ABS", List(
+					Arithmetic(Arith.Sub, 
+						Arithmetic(Arith.Div, totSq, FloatPrimitive(count.toDouble)),
+						Arithmetic(Arith.Mult, avg, avg)
+					)
+				))
+			)
 
-	def getReasons(expr: Expression, tuple: Map[String,PrimitiveValue]): 
+		(avg, stddev)
+	}
+
+
+	def getFocusedReasons(expr: Expression, tuple: Map[String,PrimitiveValue]): 
 		List[(String, String)] =
 	{
-		val inlined = Eval.inline(expr, tuple);
-		CTables.getVGTerms(expr).map( _.reason() ).distinct;
+		getFocusedReasons( Eval.inline(expr, tuple) );
+	}
+
+	def getFocusedReasons(expr: Expression):
+		List[(String, String)] =
+	{
+		// println(expr.toString)
+		expr match {
+			case v: VGTerm => List(v.reason)
+
+			case Conditional(c, t, e) =>
+				getFocusedReasons(c) ++ (
+					if(Eval.evalBool(InlineVGTerms.inline(c))){
+						getFocusedReasons(t)
+					} else {
+						getFocusedReasons(e)
+					}
+				);
+
+			case Arithmetic(op @ (Arith.And | Arith.Or), a, b) =>
+				getFocusedReasons(a) ++ (
+					(op, Eval.evalBool(InlineVGTerms.inline(a))) match {
+						case (Arith.And, true) => getFocusedReasons(b)
+						case (Arith.Or, false) => getFocusedReasons(b)
+						case _ => List()
+					}
+				)
+
+			case _ => 
+				expr.children.flatMap( getFocusedReasons(_) )
+		}
 	}
 
 	def provenanceQuery(oper: Operator, token: RowIdPrimitive): 

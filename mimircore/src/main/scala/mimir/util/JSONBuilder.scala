@@ -15,10 +15,13 @@ object JSONBuilder {
 			"'"+x._1.toLowerCase()+"':"+x._2
 		).mkString(",")+"}"
 
+	def string(content: String): String = {
+		"'"+content.replace("\\", "\\\\").replace("'", "\\'")+"'"
+	}
+
 	def prim(content: PrimitiveValue) = {
 		content match {
-			case StringPrimitive(s) => 
-				"'"+s.replace("\\", "\\\\").replace("'", "\\'")+"'"
+			case StringPrimitive(s) => string(s)
 			case _ => content.toString()
 		}
 	}

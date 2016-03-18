@@ -5,7 +5,7 @@ import java.sql.SQLException
 import java.sql.ResultSet
 
 import mimir.algebra._
-import mimir.ctables.{Model, VGTerm, CTPercolator, CTExplainer, RowExplanation}
+import mimir.ctables.{Model, VGTerm, CTPercolator, CTExplainer, RowExplanation, CellExplanation}
 import mimir.exec.{Compiler, NonDeterminism, ResultIterator, ResultSetIterator}
 import mimir.lenses.{Lens, LensManager}
 import mimir.parser.OperatorParser
@@ -212,6 +212,12 @@ case class Database(name: String, backend: Backend)
    */
   def explainRow(query: Operator, token: RowIdPrimitive): RowExplanation =
     explainer.explainRow(query, token)
+
+  /**
+   * Generate an explanation object for a column
+   */
+  def explainCell(query: Operator, token: RowIdPrimitive, column: String): CellExplanation =
+    explainer.explainCell(query, token, column)
 
   /**
    * Translate the specified JSqlParser SELECT statement to Mimir's RA AST.

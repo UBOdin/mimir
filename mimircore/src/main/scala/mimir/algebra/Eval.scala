@@ -79,7 +79,12 @@ object Eval
           return BoolPrimitive(isNull);
         }
         case Function(op, params) => {
-          op match {
+          op.toUpperCase match {
+            case "ABSOLUTE" => eval(params(0), bindings) match {
+              case IntPrimitive(i) => if(i < 0){ IntPrimitive(-i) } else { IntPrimitive(i) }
+              case FloatPrimitive(f) => if(f < 0){ FloatPrimitive(-f) } else { FloatPrimitive(f) }
+              case x => throw new SQLException("Non-numeric parameter to absolute: '"+x+"'")
+            }
             case "JOIN_ROWIDS" => new RowIdPrimitive(params.map(x => eval(x).asString).mkString("."))
             case "DATE" | "TO_DATE" =>
               val date = params.head.asInstanceOf[StringPrimitive].v.split("-").map(x => x.toInt)
