@@ -7,57 +7,65 @@ import mimir.sql.JDBCUtils;
 import mimir.algebra._;
 import mimir.algebra.Type._;
 
-class ResultSetIterator(src: ResultSet) extends ResultIterator
+class ResultSetIterator(src: ResultSet, visibleSchema: Map[String,Type.T], visibleColumns: List[Int], provenanceTokenColumns: List[Int]) extends ResultIterator
 {
   
   val meta = src.getMetaData();
-  var extract: List[() => PrimitiveValue] = 
-    (0 until meta.getColumnCount()).map( (i) => {
-      JDBCUtils.convertSqlType(meta.getColumnType(i+1)) match {
-        case TString => 
-          () => { 
-            new StringPrimitive(src.getString(i+1))
+  val schema: List[(String,Type.T)] = 
+    visibleColumns.map( (i) => {
+      val colName = meta.getColumnName(i+1).toUpperCase();
+      (
+        colName,
+        visibleSchema.getOrElse(colName, 
+          colName match {
+            case mimir.ctables.CTPercolator.ROWID_KEY => TRowId
+            case _ => JDBCUtils.convertSqlType(meta.getColumnType(i+1))
           }
-        
-        case TFloat => 
-          () => { 
-            new FloatPrimitive(src.getDouble(i+1))
-          }
-        
-        case TInt => 
-          () => {
-            if(meta.getColumnName(i+1).equalsIgnoreCase("ROWID_MIMIR"))
-              new RowIdPrimitive(src.getString(i+1))
-            else
-              new IntPrimitive(src.getLong(i+1))
-          }
-        case TRowId =>
-          () => {
-            new RowIdPrimitive(src.getString(i+1))
-          }
-        case TDate =>
-          () => {
-            if(meta.getColumnType(i+1) == java.sql.Types.TIMESTAMP) {
+        )
+      )
+    }).toList
+  val extract: List[() => PrimitiveValue] =
+    schema.map(_._2).zipWithIndex.map( {
+      case (t, colIdx) =>
+        val col = visibleColumns(colIdx)
+        t match {
+          case TString =>
+            () => {
+              new StringPrimitive(src.getString(col+1))
+            }
+
+          case TFloat =>
+            () => {
+              new FloatPrimitive(src.getDouble(col + 1))
+            }
+
+          case TInt => 
+            () => {
+              new IntPrimitive(src.getLong(col + 1))
+            }
+
+          case TRowId =>
+            () => {
+              new RowIdPrimitive(src.getString(col + 1))
+            }
+
+          case TDate =>
+            () => {
               val calendar = Calendar.getInstance()
-              try{
-                calendar.setTime(src.getDate(i+1))
-                new DatePrimitive(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DATE))
+              try {
+                calendar.setTime(src.getDate(col + 1))
               } catch {
+                case e: SQLException =>
+                  calendar.setTime(Date.valueOf(src.getString(col + 1)))
                 case e: NullPointerException =>
                   new NullPrimitive
               }
+              new DatePrimitive(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DATE))
             }
-            else {
-              throw new UnsupportedOperationException()
-            }
-          }
-      }
-    }).toList
-  var schema: List[(String,Type.T)] = 
-    (0 until meta.getColumnCount()).map( (i) => (
-      meta.getColumnName(i+1),
-      JDBCUtils.convertSqlType(meta.getColumnType(i+1))
-    ) ).toList
+
+          case TAny =>
+            () => { NullPrimitive() }
+    }}).toList
   var isFirst = true;
   var empty = false;
   
@@ -66,7 +74,7 @@ class ResultSetIterator(src: ResultSet) extends ResultIterator
     if(src.wasNull()){ return new NullPrimitive(); }
     else { return ret; }
   }
-  def numCols: Int = extract.length
+  def numCols: Int = schema.length
   
   def open() = {
     if(!src.isBeforeFirst) empty = true
@@ -89,5 +97,10 @@ class ResultSetIterator(src: ResultSet) extends ResultIterator
   def deterministicRow() = true;
   def deterministicCol(v: Int) = true;
   def missingRows() = false;
-
+  def provenanceToken() = 
+    RowIdPrimitive(
+      provenanceTokenColumns.map( 
+        (col) => src.getString(col+1) 
+      ).mkString(",")
+    )
 }

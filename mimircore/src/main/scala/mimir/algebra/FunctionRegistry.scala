@@ -1,5 +1,7 @@
 package mimir.algebra;
 
+import java.sql.SQLException
+
 import mimir.algebra.Type._;
 import mimir.ctables._;
 
@@ -21,11 +23,15 @@ object FunctionRegistry {
 			})
 		registerFunction("__LEFT_UNION_ROWID", _ match { 
 				case TRowId :: List() => TRowId
-				case _ => throw new TypeException(TAny, TRowId, "UNION_ROWID")
+				case TAny :: List() => TRowId
+				case x :: _ => throw new TypeException(x, TRowId, "__LEFT_UNION_ROWID")
+				case _ => throw new TypeException(null, TRowId, "__LEFT_UNION_ROWID")
 			})
 		registerFunction("__RIGHT_UNION_ROWID", _ match { 
 				case TRowId :: List() => TRowId
-				case _ => throw new TypeException(TAny, TRowId, "UNION_ROWID")
+				case TAny :: List() => TRowId
+				case x :: _ => throw new TypeException(x, TRowId, "__RIGHT_UNION_ROWID")
+				case _ => throw new TypeException(null, TRowId, "__RIGHT_UNION_ROWID")
 			})
 		registerFunction(CTables.ROW_PROBABILITY, (_) => TString)
 		registerFunction(CTables.VARIANCE, (_) => TFloat)
@@ -37,6 +43,14 @@ object FunctionRegistry {
     		Typechecker.assertNumeric(Typechecker.escalate(x)) 
     	})
     registerFunction("CAST", (_) => TAny)
+		registerFunction("DATE", _ match {
+			case TString :: List() => TDate
+			case _ => throw new SQLException("Invalid parameters to DATE()")
+		})
+		registerFunction("TO_DATE", _ match {
+			case TString :: TString :: List() => TDate
+			case _ => throw new SQLException("Invalid parameters to DATE()")
+		})
 	}
 
 	def registerFunction(fname: String, typechecker: List[Type.T] => Type.T): Unit =

@@ -21,8 +21,16 @@ Mimir.sublime-workspace
 
 #IDE
 .idea/
+
+# JDBC Config File
+mimircore/config/jdbc.property
+
+# Serialized models
 serialized/*.db/
 
+# Large databases
 databases/noisy.db
 databases/tpch*.db
+
+# DBGen
 tpch-dbgen

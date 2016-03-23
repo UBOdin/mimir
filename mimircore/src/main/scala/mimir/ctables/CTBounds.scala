@@ -2,6 +2,8 @@ package mimir.ctables;
 
 import mimir.algebra._
 
+case class BoundsUnsupportedException(msg: String, context: Expression) extends Exception("Bounds error ["+msg+"] : \n"+context);
+
 object CTBounds {
   /** 
    * Returns two expressions for computing the lower and upper bounds 
@@ -127,9 +129,11 @@ object CTBounds {
 	      	}
       	// println("FALSE: "+true_if_always + " -> " + Eval.inline(true_if_always))
       	// println("TRUE: "+false_if_impossible + " -> " + Eval.inline(false_if_impossible))
- 	    return (Eval.inline(true_if_always), Eval.inline(false_if_impossible))
+   	    return (Eval.inline(true_if_always), Eval.inline(false_if_impossible))
 
       case IsNullExpression(_) => (new BoolPrimitive(false), new BoolPrimitive(true))
+
+      case _ => throw new BoundsUnsupportedException("Unsupported", expr);
     }
   }
 

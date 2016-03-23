@@ -4,6 +4,7 @@ import java.sql._;
 
 import mimir.algebra.Type._
 import mimir.ctables.{VGTerm, CTables}
+import mimir.optimizer.ExpressionOptimizer
 
 object Eval 
 {
@@ -77,16 +78,16 @@ object Eval
         case Function(op, params) => {
           op match {
             case "JOIN_ROWIDS" => new RowIdPrimitive(params.map(x => eval(x).asString).mkString("."))
-            case "DATE" =>
+            case "DATE" | "TO_DATE" =>
               val date = params.head.asInstanceOf[StringPrimitive].v.split("-").map(x => x.toInt)
               new DatePrimitive(date(0), date(1), date(2))
             case "CAST" => {
               val strVal = Eval.eval(params(1), bindings).toString.toLowerCase
               try {
-                strVal match {
-                  case "int" => IntPrimitive(Eval.eval(params(0), bindings).asLong)
-                  case "real" => FloatPrimitive(Eval.eval(params(0), bindings).asDouble)
-                  case "varchar" => StringPrimitive(Eval.eval(params(0), bindings).asString)
+                Type.fromString(strVal) match {
+                  case TInt => IntPrimitive(Eval.eval(params(0), bindings).asLong)
+                  case TFloat => FloatPrimitive(Eval.eval(params(0), bindings).asDouble)
+                  case TString => StringPrimitive(Eval.eval(params(0), bindings).asString)
                   case x => throw new SQLException("Unknown cast type: '"+x+"'")
                 }
               } catch {

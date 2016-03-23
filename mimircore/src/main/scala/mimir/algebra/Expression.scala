@@ -4,7 +4,7 @@ import java.sql._
 
 import mimir.ctables.CTables
 
-class TypeException(found: Type.T, expected: Type.T, 
+case class TypeException(found: Type.T, expected: Type.T, 
                     context:String) 
   extends Exception(
     "Type Mismatch ["+context+
@@ -32,17 +32,18 @@ object Type extends Enumeration {
   def toStringPrimitive(t: T) = StringPrimitive(toString(t))
 
   def fromString(t: String) = t.toLowerCase match {
-    case "int"    => Type.TInt
-    case "float"  => Type.TFloat
-    case "decimal"=> Type.TFloat
-    case "real"   => Type.TFloat
-    case "date"   => Type.TDate
-    case "varchar"=> Type.TString
-    case "char"   => Type.TString
-    case "string" => Type.TString
-    case "bool"   => Type.TBool
-    case "rowid"  => Type.TRowId
-    case "type"   => Type.TType
+    case "int"     => Type.TInt
+    case "integer" => Type.TInt
+    case "float"   => Type.TFloat
+    case "decimal" => Type.TFloat
+    case "real"    => Type.TFloat
+    case "date"    => Type.TDate
+    case "varchar" => Type.TString
+    case "char"    => Type.TString
+    case "string"  => Type.TString
+    case "bool"    => Type.TBool
+    case "rowid"   => Type.TRowId
+    case "type"    => Type.TType
     case _ =>  throw new SQLException("Invalid Type '" + t + "'");
   }
 
@@ -267,6 +268,8 @@ object Cmp extends Enumeration {
       case Gte => Lt
       case Lt => Gte
       case Lte => Gt
+      case Like => NotLike
+      case NotLike => Like
     }
   }
   

@@ -173,13 +173,15 @@ case class MissingValueAnalysis(model: MissingValueModel, args: List[Expression]
 }
 
 class MissingValueModel(lens: MissingValueLens, name: String)
-  extends SingleVarModel(Type.TInt) {
+  extends SingleVarModel(Type.TAny) {
   var learner: Classifier =
-    Analysis.getLearner("moa.classifiers.bayes.NaiveBayes");
-  var data: Instances = null;
-  var numCorrect = 0;
-  var numSamples = 0;
-  var cIndex = 0;
+    Analysis.getLearner("moa.classifiers.bayes.NaiveBayes")
+  var data: Instances = null
+  var numCorrect = 0
+  var numSamples = 0
+  var cIndex = 0
+  private val TRAINING_LIMIT = 100
+
   def backingStore() = name+"_BACKEND"
 
   def reason(args: List[Expression]): (String, String) =
@@ -191,6 +193,24 @@ class MissingValueModel(lens: MissingValueLens, name: String)
   }
 
   def init(source: Operator, classIndex: Int) = {
+
+    /* Create the backing-store table, if it exists, delete everything from it and re-use */
+    if(lens.db.getTableSchema(backingStore()).isEmpty) {
+      lens.db.update(
+        "CREATE TABLE "+backingStore()+""" (
+                                         | EXP_LIST varchar(100),
+                                         | DATA varchar(100),
+                                         | TYPE char(10),
+                                         | ACCEPTED char(1),
+                                         | PRIMARY KEY (EXP_LIST)
+                                         | )""".stripMargin
+      )
+    }
+    else {
+      lens.db.update( "DELETE FROM "+backingStore() )
+    }
+
+    /* Learn the model */
     cIndex = classIndex
     // println("SOURCE: "+source)
     val iterator = lens.db.query(source)
@@ -199,7 +219,9 @@ class MissingValueModel(lens: MissingValueLens, name: String)
 
     var numInstances = 0
     iterator.open()
-    while(iterator.getNext() && numInstances < 10000) {
+
+    /* The second check poses a limit on the learning data and reduce time spent building the lens */
+    while(iterator.getNext() && numInstances < TRAINING_LIMIT) {
       // println("ROW: "+iterator.currentRow())
       val instance = new DenseInstance(iterator.numCols)
       instance.setDataset(data)
@@ -228,34 +250,27 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     learner.prepareForUse()
     data.foreach(learn(_))
 
-    if(lens.db.getTableSchema(backingStore()).isEmpty) {
-      lens.db.update(
-        "CREATE TABLE "+backingStore()+""" (
-                                         | EXP_LIST varchar(100),
-                                         | DATA varchar(100),
-                                         | TYPE char(10),
-                                         | ACCEPTED char(1),
-                                         | PRIMARY KEY (EXP_LIST)
-                                         | )""".stripMargin
-      )
-    }
-    else {
-      lens.db.update( "DELETE FROM "+backingStore() )
-    }
+    /* Finally populate the backing-store for each null value */
+    val rowidIterator = lens.db.query(
+      Select(IsNullExpression(Var(iterator.schema(classIndex)._1)), CTPercolator.propagateRowIDs(source, true))
+    )
 
-    val rowidIterator = lens.db.query(CTPercolator.propagateRowIDs(source, true))
-
+    var nulls = 0
     rowidIterator.open()
     while(rowidIterator.getNext()) {
       if(Typechecker.typeOf(rowidIterator(classIndex+1)) == Type.TAny) {
-        val explist = List(rowidIterator(0))
+        val explist = List(rowidIterator(
+          rowidIterator.schema.zipWithIndex.filter(_._1._1.equalsIgnoreCase(CTPercolator.ROWID_KEY)).head._2
+        ))
         val data = computeMostLikelyValue(explist)
         val typ = TypeUtils.convert(data.getType)
-        val accepted = "N"
+        val accepted = "N" // TODO Factor out the yes/no literal
         val tuple = List(explist.map(x => x.asString).mkString("|"), data.asString, typ, accepted)
         lens.db.update(
           "INSERT INTO "+backingStore()+" VALUES (?, ?, ?, ?)", tuple
         )
+        nulls = nulls + 1
+        println("Progress: Null no. "+nulls)
       }
     }
     rowidIterator.close()
@@ -271,11 +286,12 @@ class MissingValueModel(lens: MissingValueLens, name: String)
 
   def getLearner = learner
 
-  def classify(rowid: PrimitiveValue): List[(Double, Int)] = {
+  def classify(rowid: RowIdPrimitive): List[(Double, Int)] = {
+    // println("Classify: "+rowid)
     val rowValues = lens.db.query(
       CTPercolator.percolate(
         Select(
-          Comparison(Cmp.Eq, Var("ROWID_MIMIR"), rowid),
+          Comparison(Cmp.Eq, Var(CTPercolator.ROWID_KEY), rowid),
           lens.source
         )
       )
@@ -322,7 +338,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
 
   private def computeMostLikelyValue(args: List[PrimitiveValue]): PrimitiveValue = {
     val att = learner.getModelContext.attribute(cIndex)
-    val classes = classify(args(0))
+    val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val res = if (classes.isEmpty) att.numValues() - 1 else classes.maxBy(_._1)._2
     if (att.isString)
       StringPrimitive(att.value(res))
@@ -335,7 +351,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
   ////// Model implementation
   def mostLikelyValue(args: List[PrimitiveValue]): PrimitiveValue = {
     val att = learner.getModelContext.attribute(cIndex)
-    val classes = classify(args(0))
+    val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val res = if (classes.isEmpty) att.numValues() - 1 else classes.maxBy(_._1)._2
     if (att.isString)
       StringPrimitive(att.value(res))
@@ -357,7 +373,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
 
   def lowerBound(args: List[PrimitiveValue]) = {
     val att = learner.getModelContext.attribute(cIndex)
-    val classes = classify(args(0))
+    val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val res = if (classes.isEmpty) att.numValues() - 1 else classes.minBy(_._2)._2
     if (att.isString)
       StringPrimitive(att.value(res))
@@ -369,7 +385,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
 
   def upperBound(args: List[PrimitiveValue]) = {
     val att = learner.getModelContext.attribute(cIndex)
-    val classes = classify(args(0))
+    val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val res = if (classes.isEmpty) att.numValues() - 1 else classes.maxBy(_._2)._2
     if (att.isString)
       StringPrimitive(att.value(res))
@@ -406,7 +422,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     new MissingValueAnalysis(this, args, MissingValueAnalysisType.SAMPLE)
 
   def sample(seed: Long, args: List[PrimitiveValue]): PrimitiveValue = {
-    val classes = classify(args(0))
+    val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val tot_cnt = classes.map(_._1).sum
     val pick = new Random(seed).nextInt(100) % tot_cnt
     val cumulative_counts =

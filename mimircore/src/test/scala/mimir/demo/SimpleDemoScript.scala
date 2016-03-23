@@ -29,8 +29,13 @@ object SimpleDemoScript extends Specification with FileMatchers {
 	def stmt(s: String) = {
 		new MimirJSqlParser(new StringReader(s)).Statement()
 	}
-	def query(s: String) = 
-		db.query(db.convert(stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]))
+	def query(s: String) = {
+		val query = db.convert(
+			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
+		)
+		db.check(query);
+		db.query(query)
+	}
 	def lens(s: String) =
 		db.createLens(stmt(s).asInstanceOf[mimir.sql.CreateLens])
 	def update(s: Statement) = 

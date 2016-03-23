@@ -393,26 +393,6 @@ object CTPercolatorSpec extends Specification {
     }
   }
 
-  "The Analysis Compiler" should {
-
-    "Compile bounds analyses correctly for deterministic queries" in {
-      // Remember, test_0 is a uniform distribution
-      analyze("""
-        PROJECT[A <= BOUNDS(R_A)](R)
-      """) must be equalTo oper("""
-        PROJECT[A_MIN <= R_A, A_MAX <= R_A](R)
-      """)
-    }
-    "Compile bounds analyses correctly for non-deterministic queries" in {
-      // Remember, test_0 is a uniform distribution
-      analyze("""
-        PROJECT[A <= BOUNDS({{ test_0[R_A, R_B] }})](R)
-      """) must be equalTo oper("""
-        PROJECT[A_MIN <= R_A, A_MAX <= R_B](R)
-      """)
-    }
-  }
-
   "The Optimizer Should" should {
     "Inline functions correctly" in {
       InlineProjections.optimize(oper("""
@@ -595,6 +575,26 @@ object CTPercolatorSpec extends Specification {
           ("D", expr("true"))
         ),
         expr("MIMIR_ROW_DET_LEFT AND MIMIR_ROW_DET_RIGHT")
+      ))
+    }
+    "Percolate projections over non-deterministic rows" >> {
+      percolite("""
+        PROJECT[A <= A, B <= B](
+          SELECT[IF A < 5 THEN {{X_1[A]}} ELSE A END > 5](R(A,B))
+        )
+      """) must be equalTo ((
+        oper("""
+          PROJECT[A <= A, B <= B, MIMIR_ROW_DET <= MIMIR_ROW_DET](
+            PROJECT[A <= A, B <= B, MIMIR_ROW_DET <= IF A < 5 THEN FALSE ELSE TRUE END](
+              SELECT[IF A < 5 THEN {{X_1[A]}} ELSE A END > 5](R(A,B))
+            )
+          )
+        """),
+        Map(
+          ("A", expr("true")),
+          ("B", expr("true"))
+        ),
+        expr("MIMIR_ROW_DET")
       ))
     }
 
