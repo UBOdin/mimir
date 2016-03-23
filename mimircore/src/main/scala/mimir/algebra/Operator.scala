@@ -33,14 +33,15 @@ case class Project(columns: List[ProjectArg], source: Operator) extends Operator
     columns.map( (x) => (x.column, x.input) ).toMap
 }
 
-case class Aggregate(column: String, source: Operator) extends Operator
+case class Aggregate(function: String, column: String, groupings: List[String], source: Operator) extends Operator
 {
   def toString(prefix: String) =
-    prefix + "AGGREGATE[" + column +
+    prefix + "AGGREGATE[" + function + "(" + column +
+      ")](\nGroup By [" + groupings.map( _.toString ).mkString(", ") +
       "](\n" + source.toString(prefix + " ") + "\n" + prefix + ")"
 
   def children() = List(source)
-  def rebuild(x: List[Operator]) = new Aggregate(column, x(0))
+  def rebuild(x: List[Operator]) = new Aggregate(function, column, groupings, x(0))
 }
 
 case class Select(condition: Expression, source: Operator) extends Operator
