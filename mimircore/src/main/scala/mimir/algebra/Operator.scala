@@ -36,7 +36,7 @@ case class Project(columns: List[ProjectArg], source: Operator) extends Operator
 case class Aggregate(function: String, column: List[Expression], groupings: List[Expression], source: Operator) extends Operator
 {
   def toString(prefix: String) =
-    prefix + "AGGREGATE[" + function.toString() + "(" + column.map( _.toString).mkString(", ") +
+    prefix + "AGGREGATE[" + function + "(" + column.map( _.toString).mkString(", ") +
       ")](\nGroup By [" + groupings.map( _.toString ).mkString(", ") +
       "](\n" + source.toString(prefix + " ") + "\n" + prefix + ")"
 
