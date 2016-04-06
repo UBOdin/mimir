@@ -33,7 +33,7 @@ case class Project(columns: List[ProjectArg], source: Operator) extends Operator
     columns.map( (x) => (x.column, x.input) ).toMap
 }
 
-case class Aggregate(function: String, column: String, groupings: List[String], source: Operator) extends Operator
+case class Aggregate(function: String, column: List[Expression], groupings: List[Expression], source: Operator) extends Operator
 {
   def toString(prefix: String) =
     prefix + "AGGREGATE[" + function + "(" + column +

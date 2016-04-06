@@ -101,6 +101,36 @@ class SqlToRA(db: Database)
         ps.getSelectItems().map( (si) => {
           if(si.isInstanceOf[SelectExpressionItem]) {
             val se = si.asInstanceOf[SelectExpressionItem]
+
+            /* Here starts the new code 3.30.16 */
+            /* Get the expression */
+            val isAgg = se.getExpression();
+            /* Check if the expression is a function */
+            if (isAgg.isInstanceOf[net.sf.jsqlparser.expression.Function]) {
+              /*if it's a function, check if it is an aggregate*/
+              val f = isAgg.asInstanceOf[net.sf.jsqlparser.expression.Function]
+              val name = f.getName.toUpperCase
+              if (name == "SUM" || name == "COUNT" || name == "MAX" || name == "MIN" || name == "AVG") {
+                /* if it is an aggregate, get parameters */
+                  val parameters : List[Expression] =
+                  if(f.getParameters == null) { List[Expression]() }
+                  else {
+                    f.getParameters.getExpressions.toList.map(convert(_))}
+
+
+                  /* Retrieve GroupBy Columns */
+                  val gb_cols : List[Expression] =
+                    if(ps.getGroupByColumnReferences == null) { List[Expression]()}
+                    else {
+                      ps.getGroupByColumnReferences.toList.map(convert(_)) }
+
+                    /* process this node of the Ra tree */
+                    ret = Aggregate(name, parameters, gb_cols, ret);
+
+                    }
+
+              }
+
             val originalAlias = SqlUtils.getAlias(se);
             var alias = originalAlias;
             if(alias == null){
@@ -115,9 +145,9 @@ class SqlToRA(db: Database)
             needProject = true;
             List( (
               originalAlias,
-              ProjectArg( 
-                    alias, 
-                    convert(se.getExpression(), bindings.toMap) 
+              ProjectArg(
+                    alias,
+                    convert(se.getExpression(), bindings.toMap)
               ) )
             )
           } else if(si.isInstanceOf[AllColumns]) {
@@ -143,8 +173,8 @@ class SqlToRA(db: Database)
       if(ps.getGroupByColumnReferences != null) {
         unhandled("GROUP BY")
   //       optionalClauses ++= List(
-  //         GroupByClause(ps.getGroupByColumnReferences.map( 
-  //           (gb: Expression) => convert(gb) 
+  //         GroupByClause(ps.getGroupByColumnReferences.map(
+  //           (gb: Expression) => convert(gb)
   //         ).toList)
   //       )
       }
