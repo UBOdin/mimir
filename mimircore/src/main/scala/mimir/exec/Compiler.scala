@@ -36,8 +36,8 @@ class Compiler(db: Database) {
   )
 
   val standardPostOptimizations = List[Operator => Operator](
-    InlineProjections.optimize _,
-    compileAnalysis _         // Transform BOUNDS(), CONF(), etc... into actual expressions that SQL can understand
+    compileAnalysis _,
+    InlineProjections.optimize _
   )
 
   def standardOptimizations: List[Operator => Operator] = {
@@ -80,6 +80,12 @@ class Compiler(db: Database) {
   /**
    * Optimize the query
    */
+  def optimize(oper: Operator, ndStrat: NonDeterminism.Strat): Operator = 
+    optimize(oper, ndBuildOpts(ndStrat)++standardPostOptimizations)
+
+  /**
+   * Optimize the query
+   */
   def optimize(oper: Operator, opts: List[Operator => Operator]): Operator =
     opts.foldLeft(oper)((o, fn) => fn(o))
 
@@ -107,7 +113,7 @@ class Compiler(db: Database) {
       oper match {
         case Project(cols, src) =>
           val inputIterator = buildIterator(src);
-          // println("Compiled ["+inputIterator.schema+"]: \n"+oper)
+          // println("Compiled ["+inputIterator.schema+"]: \n"+inputIterator)
           new ProjectionResultIterator(
             db,
             inputIterator,
@@ -122,29 +128,34 @@ class Compiler(db: Database) {
 
         case _ => buildInlinedIterator(oper)
       }
-
-
     } else {
-      val operWithProvenance = CTPercolator.propagateRowIDs(oper, true);
-      val results = db.backend.execute(
-        db.convert(operWithProvenance)
-      )
-      val schemaList = operWithProvenance.schema
-      val schema = schemaList.
-                      map( _._1 ).
-                      zipWithIndex.
-                      toMap
-
-      if(!schema.contains(CTPercolator.ROWID_KEY)){
-        throw new SQLException("ERROR: No "+CTPercolator.ROWID_KEY+" in "+schema+"\n"+operWithProvenance);
-      }
-      new ResultSetIterator(
-        results, 
-        schemaList.toMap,
-        oper.schema.map( _._1 ).map( schema(_) ),
-        List(schema(CTPercolator.ROWID_KEY))
-      )
+      buildDeterministicIterator(oper)
     }
+  }
+
+  def buildDeterministicIterator(oper: Operator): ResultIterator =
+  {
+    val operWithProvenance = CTPercolator.propagateRowIDs(oper, true);
+    val results = db.backend.execute(
+      db.convert(operWithProvenance)
+    )
+
+    // println("Final query: "+db.convert(operWithProvenance))
+    val schemaList = operWithProvenance.schema
+    val schema = schemaList.
+                    map( _._1 ).
+                    zipWithIndex.
+                    toMap
+
+    if(!schema.contains(CTPercolator.ROWID_KEY)){
+      throw new SQLException("ERROR: No "+CTPercolator.ROWID_KEY+" in "+schema+"\n"+operWithProvenance);
+    }
+    new ResultSetIterator(
+      results, 
+      schemaList.toMap,
+      oper.schema.map( _._1 ).map( schema(_) ),
+      List(schema(CTPercolator.ROWID_KEY))
+    )
   }
 
   def buildInlinedIterator(oper: Operator): ResultIterator =
@@ -160,6 +171,9 @@ class Compiler(db: Database) {
       InlineVGTerms.optimize(operatorWithDeterminism)
     // println("Inlined: "+inlinedOperator)
     val schema = oper.schema.filter(_._1 != CTPercolator.ROWID_KEY);
+
+    // println("Foo: "+db.convert(inlinedOperator));
+    // println("Bar: "+schema.map(_._1).map(columnDetExprs(_)));
 
     new NDInlineResultIterator(
       db.query(db.convert(inlinedOperator)), 

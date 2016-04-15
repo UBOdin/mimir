@@ -5,7 +5,7 @@ import java.sql.SQLException
 import java.sql.ResultSet
 
 import mimir.algebra._
-import mimir.ctables.{Model, VGTerm, CTPercolator}
+import mimir.ctables.{Model, VGTerm, CTPercolator, CTExplainer, RowExplanation, CellExplanation}
 import mimir.exec.{Compiler, NonDeterminism, ResultIterator, ResultSetIterator}
 import mimir.lenses.{Lens, LensManager}
 import mimir.parser.OperatorParser
@@ -54,7 +54,8 @@ case class Database(name: String, backend: Backend)
   val sql = new SqlToRA(this)
   val ra = new RAToSql(this)
   val lenses = new LensManager(this)
-  val compiler = new Compiler(this)  
+  val compiler = new Compiler(this)
+  val explainer = new CTExplainer(this)
   val operator = new OperatorParser(this.getLensModel,
     (x) => 
       this.getTableSchema(x) match {
@@ -93,11 +94,23 @@ case class Database(name: String, backend: Backend)
   
   def deterministicIterator(results: ResultSet): ResultIterator =
   {
+    val metadata = results.getMetaData();
+    var rowidCol = List[Int]()
+    val columns = 
+      (1 until metadata.getColumnCount()+1).
+      map ( x => 
+        metadata.getColumnName(x) match { 
+              case CTPercolator.ROWID_KEY => rowidCol = (x-1) :: rowidCol; List[Int]()
+              case _ => List(x-1)  
+        }).
+      flatten.
+      toList
+
     new ResultSetIterator(
       results, 
       Map[String, Type.T](),
-      (0 until results.getMetaData().getColumnCount()).toList,
-      List[Int]()
+      columns,
+      rowidCol.reverse
     )
   }
 
@@ -205,6 +218,18 @@ case class Database(name: String, backend: Backend)
     val executionTime = (System.nanoTime() - startTime) / (1 * 1000 * 1000)
     new WebIterator(headers, data.toList, i, result.missingRows(), executionTime)
   }
+
+  /**
+   * Generate an explanation object for a row
+   */
+  def explainRow(query: Operator, token: RowIdPrimitive): RowExplanation =
+    explainer.explainRow(query, token)
+
+  /**
+   * Generate an explanation object for a column
+   */
+  def explainCell(query: Operator, token: RowIdPrimitive, column: String): CellExplanation =
+    explainer.explainCell(query, token, column)
 
   /**
    * Translate the specified JSqlParser SELECT statement to Mimir's RA AST.

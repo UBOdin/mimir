@@ -56,7 +56,10 @@ object Eval
       return e.asInstanceOf[PrimitiveValue]
     } else {
       e match {
-        case Var(v) => bindings.get(v).get
+        case Var(v) => bindings.get(v) match {
+          case None => throw new SQLException("Variable Out Of Scope: "+v+" (in "+bindings+")");
+          case Some(s) => s
+        }
         case Arithmetic(op, lhs, rhs) =>
           applyArith(op, eval(lhs, bindings), eval(rhs, bindings))
         case Comparison(op, lhs, rhs) =>
@@ -76,7 +79,12 @@ object Eval
           return BoolPrimitive(isNull);
         }
         case Function(op, params) => {
-          op match {
+          op.toUpperCase match {
+            case "ABSOLUTE" => eval(params(0), bindings) match {
+              case IntPrimitive(i) => if(i < 0){ IntPrimitive(-i) } else { IntPrimitive(i) }
+              case FloatPrimitive(f) => if(f < 0){ FloatPrimitive(-f) } else { FloatPrimitive(f) }
+              case x => throw new SQLException("Non-numeric parameter to absolute: '"+x+"'")
+            }
             case "JOIN_ROWIDS" => new RowIdPrimitive(params.map(x => eval(x).asString).mkString("."))
             case "DATE" | "TO_DATE" =>
               val date = params.head.asInstanceOf[StringPrimitive].v.split("-").map(x => x.toInt)
@@ -115,15 +123,6 @@ object Eval
               new RowIdPrimitive(eval(params(0)).asString+".left")
             case "__RIGHT_UNION_ROWID" =>
               new RowIdPrimitive(eval(params(0)).asString+".right")
-            case CTables.ROW_PROBABILITY => {
-              var count = 0.0
-              for(i <- 0 until SAMPLE_COUNT) {
-                val bindings = Map[String, IntPrimitive]("__SEED" -> IntPrimitive(i+1))
-                if(Eval.evalBool(params(0), bindings))
-                  count += 1
-              }
-              FloatPrimitive(count/SAMPLE_COUNT)
-            }
             case CTables.VARIANCE => {
               var variance = 0.0
               try {
@@ -302,7 +301,7 @@ object Eval
         case Cmp.Neq => 
           BoolPrimitive(!a.payload.equals(b.payload))
         case Cmp.Gt => 
-          Typechecker.escalate(a.getType, b.getType) match {
+          Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
             case TInt => BoolPrimitive(a.asLong > b.asLong)
             case TFloat => BoolPrimitive(a.asDouble > b.asDouble)
             case TDate => 
@@ -312,7 +311,7 @@ object Eval
               )
           }
         case Cmp.Gte => 
-          Typechecker.escalate(a.getType, b.getType) match {
+          Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
             case TInt => BoolPrimitive(a.asLong >= b.asLong)
             case TFloat => BoolPrimitive(a.asDouble >= b.asDouble)
             case TDate => 
@@ -331,7 +330,7 @@ object Eval
             })
           }
         case Cmp.Lt => 
-          Typechecker.escalate(a.getType, b.getType) match {
+          Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
             case TInt => BoolPrimitive(a.asLong < b.asLong)
             case TFloat => BoolPrimitive(a.asDouble < b.asDouble)
             case TDate => 
@@ -341,7 +340,7 @@ object Eval
               )
           }
         case Cmp.Lte => 
-          Typechecker.escalate(a.getType, b.getType) match {
+          Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
             case TInt => BoolPrimitive(a.asLong <= b.asLong)
             case TFloat => BoolPrimitive(a.asDouble <= b.asDouble)
             case TDate => 

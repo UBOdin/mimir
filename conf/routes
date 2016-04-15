@@ -20,6 +20,7 @@ POST    /loadTable                  controllers.Application.loadTable
 # Services
 GET     /alltables                  controllers.Application.allTables(db)
 GET     /vgterms                    controllers.Application.getVGTerms(query, row, ind, db)
+GET     /explain                    controllers.Application.getExplainObject(query, row, ind, db)
 GET     /queryName                  controllers.Application.nameForQuery(query, db)
 
 # Map static resources from the /public folder to the /assets URL path

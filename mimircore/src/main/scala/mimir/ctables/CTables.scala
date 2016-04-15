@@ -111,7 +111,6 @@ object CTables
   def getVGTerms(e: Expression, bindings: Map[String, PrimitiveValue]): List[VGTerm] =
   {
     e match {
-      case Var(varName) => getVGTerms(bindings(varName))
       case v : VGTerm => v :: e.children.flatMap( getVGTerms(_) )
       case _ => e.children.flatMap( getVGTerms(_) )
     }

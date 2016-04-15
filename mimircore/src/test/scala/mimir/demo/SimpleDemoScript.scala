@@ -9,6 +9,7 @@ import mimir._;
 import mimir.sql._;
 import mimir.parser._;
 import mimir.algebra._;
+import mimir.optimizer._;
 import net.sf.jsqlparser.statement.{Statement}
 
 
@@ -29,12 +30,27 @@ object SimpleDemoScript extends Specification with FileMatchers {
 	def stmt(s: String) = {
 		new MimirJSqlParser(new StringReader(s)).Statement()
 	}
+	def select(s: String) = {
+		db.convert(
+			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
+		)
+	}
 	def query(s: String) = {
+		val query = select(s)
+		db.check(query);
+		db.query(query)
+	}
+	def explainRow(s: String, t: String) = {
 		val query = db.convert(
 			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
 		)
-		db.check(query);
-		db.query(query)
+		db.explainRow(query, RowIdPrimitive(t))
+	}
+	def explainCell(s: String, t: String, a:String) = {
+		val query = db.convert(
+			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
+		)
+		db.explainCell(query, RowIdPrimitive(t), a)
 	}
 	def lens(s: String) =
 		db.createLens(stmt(s).asInstanceOf[mimir.sql.CreateLens])
@@ -96,7 +112,11 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			query("SELECT RATING FROM RATINGS1TYPED;").allRows.flatten must contain( 
 				f(4.5), f(4.0), f(6.4) 
 			)
+			query("SELECT * FROM RATINGS1TYPED WHERE RATING > 4;").allRows must have size(2)
 			query("SELECT * FROM RATINGS2TYPED;").allRows must have size(3)
+			Typechecker.schemaOf(
+				InlineVGTerms.optimize(select("SELECT * FROM RATINGS2TYPED;"))
+			).map(_._2) must be equalTo List(Type.TString, Type.TFloat, Type.TFloat)
 		}
 
 		"Create and Query Domain Constraint Repair Lenses" >> {
@@ -105,9 +125,11 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				  AS SELECT * FROM RATINGS1TYPED 
 				  WITH MISSING_VALUE('RATING')
 			""")
-			val result = query("SELECT RATING FROM RATINGS1FINAL").allRows.flatten
-			result must have size(4)
-			result must contain(eachOf( f(4.5), f(4.0), f(6.4), i(4) ) )
+			val result1 = query("SELECT RATING FROM RATINGS1FINAL").allRows.flatten
+			result1 must have size(4)
+			result1 must contain(eachOf( f(4.5), f(4.0), f(6.4), i(4) ) )
+			val result2 = query("SELECT RATING FROM RATINGS1FINAL WHERE RATING < 5").allRows.flatten
+			result2 must have size(3)
 		}
 
 		"Create and Query Schema Matching Lenses" >> {
@@ -116,9 +138,29 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				  AS SELECT * FROM RATINGS2TYPED 
 				  WITH SCHEMA_MATCHING(PID string, RATING float, REVIEW_CT float)
 			""")
-			val result = query("SELECT RATING FROM RATINGS2FINAL").allRows.flatten
-			result must have size(3)
-			result must contain(eachOf( f(121.0), f(5.0), f(4.0) ) )
+			val result1 = query("SELECT RATING FROM RATINGS2FINAL").allRows.flatten
+			result1 must have size(3)
+			result1 must contain(eachOf( f(121.0), f(5.0), f(4.0) ) )
+		}
+
+		"Obtain Column Explanations for Simple Queries" >> {
+			val expl = explainRow("""
+					SELECT * FROM RATINGS2FINAL WHERE RATING > 3
+				""", "1")
+			expl.toString must contain("I assumed that NUM_RATINGS maps to RATING")		
+		}
+
+		"Obtain Cell Explanations for Simple Queries" >> {
+			val expl1 = explainCell("""
+					SELECT * FROM RATINGS1FINAL
+				""", "2", "RATING")
+			expl1.toString must contain("I made a best guess estimate for this data element, which was originally NULL")		
+		}
+		"Guard Data-Dependent Explanations for Simple Queries" >> {
+			val expl2 = explainCell("""
+					SELECT * FROM RATINGS1FINAL
+				""", "1", "RATING")
+			expl2.toString must not contain("I made a best guess estimate for this data element, which was originally NULL")		
 		}
 
 		"Query a Union of lenses" >> {
