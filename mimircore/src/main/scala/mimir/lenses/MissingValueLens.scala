@@ -291,7 +291,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
   def getLearner = learner
 
   def classify(rowid: RowIdPrimitive): List[(Double, Int)] = {
-    // println("Classify: "+rowid)
+    //println("Classify: "+rowid)
     val rowValues = lens.db.query(
       CTPercolator.percolate(
         Select(

@@ -128,6 +128,7 @@ class ProjectionResultIterator(
         case Some(c) => Eval.evalBool(c)
       }) {
         tuple.indices.foreach( (i) => {
+          // println("EVAL: "+exprs(i))
           tuple(i) = Eval.eval(exprs(i))
         })
         searching = false

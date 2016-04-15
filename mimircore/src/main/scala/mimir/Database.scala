@@ -94,11 +94,23 @@ case class Database(name: String, backend: Backend)
   
   def deterministicIterator(results: ResultSet): ResultIterator =
   {
+    val metadata = results.getMetaData();
+    var rowidCol = List[Int]()
+    val columns = 
+      (1 until metadata.getColumnCount()+1).
+      map ( x => 
+        metadata.getColumnName(x) match { 
+              case CTPercolator.ROWID_KEY => rowidCol = (x-1) :: rowidCol; List[Int]()
+              case _ => List(x-1)  
+        }).
+      flatten.
+      toList
+
     new ResultSetIterator(
       results, 
       Map[String, Type.T](),
-      (0 until results.getMetaData().getColumnCount()).toList,
-      List[Int]()
+      columns,
+      rowidCol.reverse
     )
   }
 

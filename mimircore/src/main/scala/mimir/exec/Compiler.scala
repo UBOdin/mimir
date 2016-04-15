@@ -113,7 +113,7 @@ class Compiler(db: Database) {
       oper match {
         case Project(cols, src) =>
           val inputIterator = buildIterator(src);
-          // println("Compiled ["+inputIterator.schema+"]: \n"+oper)
+          // println("Compiled ["+inputIterator.schema+"]: \n"+inputIterator)
           new ProjectionResultIterator(
             db,
             inputIterator,
@@ -139,6 +139,8 @@ class Compiler(db: Database) {
     val results = db.backend.execute(
       db.convert(operWithProvenance)
     )
+
+    // println("Final query: "+db.convert(operWithProvenance))
     val schemaList = operWithProvenance.schema
     val schema = schemaList.
                     map( _._1 ).
@@ -169,6 +171,9 @@ class Compiler(db: Database) {
       InlineVGTerms.optimize(operatorWithDeterminism)
     // println("Inlined: "+inlinedOperator)
     val schema = oper.schema.filter(_._1 != CTPercolator.ROWID_KEY);
+
+    // println("Foo: "+db.convert(inlinedOperator));
+    // println("Bar: "+schema.map(_._1).map(columnDetExprs(_)));
 
     new NDInlineResultIterator(
       db.query(db.convert(inlinedOperator)), 

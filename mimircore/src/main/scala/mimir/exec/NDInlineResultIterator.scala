@@ -38,5 +38,9 @@ class NDInlineResultIterator(src: ResultIterator,
   override def reason(v: Int): List[(String, String)] = {
     throw new SQLException("Must call reason on a query compiled in classical mode")
   }
-  def provenanceToken() = Eval.eval(compiledProvenance).asInstanceOf[RowIdPrimitive];
+  def provenanceToken() = {
+    // println("Provenance: "+compiledProvenance)
+    // println("Evaled: "+Eval.eval(compiledProvenance))
+    Eval.eval(compiledProvenance).asInstanceOf[RowIdPrimitive];
+  }
 }

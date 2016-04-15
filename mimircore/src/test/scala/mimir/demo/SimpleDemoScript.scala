@@ -125,9 +125,11 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				  AS SELECT * FROM RATINGS1TYPED 
 				  WITH MISSING_VALUE('RATING')
 			""")
-			val result = query("SELECT RATING FROM RATINGS1FINAL").allRows.flatten
-			result must have size(4)
-			result must contain(eachOf( f(4.5), f(4.0), f(6.4), i(4) ) )
+			val result1 = query("SELECT RATING FROM RATINGS1FINAL").allRows.flatten
+			result1 must have size(4)
+			result1 must contain(eachOf( f(4.5), f(4.0), f(6.4), i(4) ) )
+			val result2 = query("SELECT RATING FROM RATINGS1FINAL WHERE RATING < 5").allRows.flatten
+			result2 must have size(3)
 		}
 
 		"Create and Query Schema Matching Lenses" >> {
@@ -136,9 +138,9 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				  AS SELECT * FROM RATINGS2TYPED 
 				  WITH SCHEMA_MATCHING(PID string, RATING float, REVIEW_CT float)
 			""")
-			val result = query("SELECT RATING FROM RATINGS2FINAL").allRows.flatten
-			result must have size(3)
-			result must contain(eachOf( f(121.0), f(5.0), f(4.0) ) )
+			val result1 = query("SELECT RATING FROM RATINGS2FINAL").allRows.flatten
+			result1 must have size(3)
+			result1 must contain(eachOf( f(121.0), f(5.0), f(4.0) ) )
 		}
 
 		"Obtain Column Explanations for Simple Queries" >> {
