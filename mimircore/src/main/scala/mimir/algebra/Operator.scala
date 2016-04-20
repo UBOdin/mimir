@@ -11,7 +11,7 @@ abstract class Operator
     Typechecker.schemaOf(this)
 }
 
-case class ProjectArg(column: String, input: Expression) 
+case class ProjectArg(column: String, input: Expression)            //column is the SQL arg, input is the RA expression
 {
   override def toString = (column.toString + " <= " + input.toString)
   def getColumnName() = column

@@ -115,7 +115,7 @@ class SqlToRA(db: Database)
                   val parameters : List[Expression] =
                   if(f.getParameters == null) { List[Expression]() }
                   else {
-                    f.getParameters.getExpressions.toList.map(convert(_))}
+                    f.getParameters.getExpressions.toList.map(convert(_, bindings.toMap))}
 
 
                   /* Retrieve GroupBy Columns */
