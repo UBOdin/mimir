@@ -10,6 +10,8 @@ import mimir.sql._;
 import mimir.parser._;
 import mimir.algebra._;
 import mimir.optimizer._;
+import mimir.ctables._;
+import mimir.exec._;
 import net.sf.jsqlparser.statement.{Statement}
 
 
@@ -239,6 +241,49 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				str("Samsung Note2"),
 				str("Dell, Intel 4 core")
 			))
+		}
+
+		"Missing Value Best Guess Debugging" >> {
+			val q3 = select("""
+				SELECT * FROM RATINGS1FINAL r, Product p
+				WHERE r.pid = p.id;
+			""")
+			val q3compiled = db.compiler.compile(q3)
+			q3compiled.open()
+			q3compiled must beAnInstanceOf[ProjectionResultIterator]
+
+			val q3provquery = q3compiled.asInstanceOf[ProjectionResultIterator].src 
+			q3provquery must beAnInstanceOf[NDInlineResultIterator]
+			val rowidIdx1 = q3provquery.schema.indexWhere(_._1.equals("ROWID_MIMIR_1"))
+			q3provquery.schema(rowidIdx1)._2 must be equalTo Type.TRowId
+
+			val q3dbquery = q3provquery.asInstanceOf[NDInlineResultIterator].src
+			q3dbquery must beAnInstanceOf[ResultSetIterator]
+			val rowidIdx2 = q3dbquery.schema.indexWhere(_._1.equals("ROWID_MIMIR_1"))
+			q3dbquery.asInstanceOf[ResultSetIterator].visibleSchema must contain ( ("ROWID_MIMIR_1", Type.TRowId) )
+
+
+
+			q3dbquery.schema(rowidIdx2)._2 must be equalTo Type.TRowId
+			q3dbquery(rowidIdx2) must beAnInstanceOf[RowIdPrimitive]
+			q3provquery(rowidIdx1) must beAnInstanceOf[RowIdPrimitive]
+
+			val result3 = query("""
+				SELECT * FROM RATINGS1FINAL r, Product p
+				WHERE r.pid = p.id;
+			""").allRows
+			result3 must have size(3)
+
+
+			val result4 = query("""
+				SELECT * FROM (
+					SELECT * FROM RATINGS1FINAL 
+						UNION ALL 
+					SELECT * FROM RATINGS2FINAL
+				) r, Product p
+				WHERE r.pid = p.id;
+			""").allRows
+			result4 must have size(6)
 		}
 	}
 }

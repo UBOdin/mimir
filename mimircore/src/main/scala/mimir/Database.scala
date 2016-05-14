@@ -85,14 +85,23 @@ case class Database(name: String, backend: Backend)
    */
   def query(sql: net.sf.jsqlparser.statement.select.Select): ResultIterator = 
     deterministicIterator(backend.execute(sql))
+
+  def query(sql: net.sf.jsqlparser.statement.select.Select, schema: Map[String, Type.T]): ResultIterator = 
+    deterministicIterator(backend.execute(sql), schema)
   /**
    * Evaluate the specified query on the backend directly.  No Mimir-specific 
    * optimizations or rewrites are applied.
    */
+  def query(sql: net.sf.jsqlparser.statement.select.SelectBody, schema: Map[String, Type.T]): ResultIterator =
+    deterministicIterator(backend.execute(sql), schema)
+  
   def query(sql: net.sf.jsqlparser.statement.select.SelectBody): ResultIterator =
     deterministicIterator(backend.execute(sql))
-  
+
   def deterministicIterator(results: ResultSet): ResultIterator =
+    deterministicIterator(results, Map[String, Type.T]())
+
+  def deterministicIterator(results: ResultSet, schema: Map[String, Type.T]): ResultIterator =
   {
     val metadata = results.getMetaData();
     var rowidCol = List[Int]()
@@ -108,7 +117,7 @@ case class Database(name: String, backend: Backend)
 
     new ResultSetIterator(
       results, 
-      Map[String, Type.T](),
+      schema,
       columns,
       rowidCol.reverse
     )

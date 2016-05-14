@@ -136,6 +136,7 @@ class Compiler(db: Database) {
   def buildDeterministicIterator(oper: Operator): ResultIterator =
   {
     val operWithProvenance = CTPercolator.propagateRowIDs(oper, true);
+    // println("ITER:"+db.convert(operWithProvenance))
     val results = db.backend.execute(
       db.convert(operWithProvenance)
     )
@@ -150,6 +151,7 @@ class Compiler(db: Database) {
     if(!schema.contains(CTPercolator.ROWID_KEY)){
       throw new SQLException("ERROR: No "+CTPercolator.ROWID_KEY+" in "+schema+"\n"+operWithProvenance);
     }
+    // println("DETSCH: "+schema)
     new ResultSetIterator(
       results, 
       schemaList.toMap,
@@ -176,7 +178,7 @@ class Compiler(db: Database) {
     // println("Bar: "+schema.map(_._1).map(columnDetExprs(_)));
 
     new NDInlineResultIterator(
-      db.query(db.convert(inlinedOperator)), 
+      db.query(db.convert(inlinedOperator), schema.toMap), 
       schema,
       schema.map(_._1).map(columnDetExprs(_)), 
       rowDetExpr,

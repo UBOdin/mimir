@@ -4,7 +4,7 @@ import java.sql._;
 
 import mimir.algebra._;
 
-class NDInlineResultIterator(src: ResultIterator, 
+class NDInlineResultIterator(val src: ResultIterator, 
                              querySchema: List[(String, Type.T)],
                              colDeterminism: List[Expression], 
                              rowDeterminism: Expression,

@@ -56,7 +56,7 @@ case class Join(left: Operator, right: Operator) extends Operator
 case class Union(left: Operator, right: Operator) extends Operator
 {
   def toString(prefix: String) =
-    prefix + "UNION(" +
+    prefix + "UNION(\n" +
         left.toString(prefix+"  ") + ",\n" + 
         right.toString(prefix+"  ") + "\n" + 
     prefix + ")";
