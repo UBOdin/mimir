@@ -244,29 +244,39 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		}
 
 		"Missing Value Best Guess Debugging" >> {
+			// Regression check for issue #81
 			val q3 = select("""
 				SELECT * FROM RATINGS1FINAL r, Product p
 				WHERE r.pid = p.id;
 			""")
 			val q3compiled = db.compiler.compile(q3)
 			q3compiled.open()
+
+			// Preliminaries: This isn't required for correctness, but the test case depends on it.
 			q3compiled must beAnInstanceOf[ProjectionResultIterator]
 
 			val q3provquery = q3compiled.asInstanceOf[ProjectionResultIterator].src 
+			// Again, we don't strictly need the type of the inlined result iterator to be this, but the test case needs to be able to inspect the insides
 			q3provquery must beAnInstanceOf[NDInlineResultIterator]
 			val rowidIdx1 = q3provquery.schema.indexWhere(_._1.equals("ROWID_MIMIR_1"))
-			q3provquery.schema(rowidIdx1)._2 must be equalTo Type.TRowId
 
+			//Mimir synthesizes a rowID column for the missing value lens.  That column had better pretend to be an integer
+			q3provquery.schema(rowidIdx1)._2 must be equalTo Type.TRowId
+			//That column had better be an integer too.
+			q3provquery(rowidIdx1) must beAnInstanceOf[RowIdPrimitive]
+
+			//Test another level down the heirarchy too
 			val q3dbquery = q3provquery.asInstanceOf[NDInlineResultIterator].src
 			q3dbquery must beAnInstanceOf[ResultSetIterator]
 			val rowidIdx2 = q3dbquery.schema.indexWhere(_._1.equals("ROWID_MIMIR_1"))
+
+			// Again, the internal schema must explicitly state that the column is a rowid
 			q3dbquery.asInstanceOf[ResultSetIterator].visibleSchema must contain ( ("ROWID_MIMIR_1", Type.TRowId) )
-
-
-
+			// The external schema too!
 			q3dbquery.schema(rowidIdx2)._2 must be equalTo Type.TRowId
+			// And the returned object had better conform
 			q3dbquery(rowidIdx2) must beAnInstanceOf[RowIdPrimitive]
-			q3provquery(rowidIdx1) must beAnInstanceOf[RowIdPrimitive]
+
 
 			val result3 = query("""
 				SELECT * FROM RATINGS1FINAL r, Product p
