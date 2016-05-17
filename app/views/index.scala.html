@@ -48,7 +48,9 @@
                             <ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
                                 <li class="dropdown-header" id="tables_header">Tables</li>
                                 @webAPI.getAllTables.map { x =>
-                                    <li><a class="table_link ">@x</a></li>
+                                    @if(!x.equals("MIMIR_LENSES") && !x.endsWith("_BACKEND")) {
+                                        <li><a class="table_link ">@x</a></li>
+                                    }
                                 }
                                 <li role="separator" class="divider"></li>
                                 <li class="dropdown-header">Lenses</li>
