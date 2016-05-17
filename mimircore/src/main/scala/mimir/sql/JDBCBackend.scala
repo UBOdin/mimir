@@ -194,15 +194,13 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     val metadata = conn.getMetaData()
     val tables = backend match {
       case "sqlite" => metadata.getTables(null, null, "%", null)
-      case "oracle" => throw new UnsupportedOperationException("getAllTables for Oracle backend undefined!")
+      case "oracle" => metadata.getTables(null, "ARINDAMN", "%", null) // TODO Generalize
     }
 
     val tableNames = new ListBuffer[String]()
 
     while(tables.next()) {
-      val tableName = tables.getString("TABLE_NAME")
-      if(!tableName.equals("MIMIR_LENSES") && !tableName.endsWith("_BACKEND"))
-        tableNames.append(tableName)
+      tableNames.append(tables.getString("TABLE_NAME"))
     }
 
     tables.close()
