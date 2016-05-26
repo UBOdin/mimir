@@ -86,13 +86,6 @@ object Typechecker {
 							(col, chk.typeOf(in))
 					})
 
-				/* This section of code is still in development
-			case Aggregate(args, groupBy, source) =>
-				val chk = new ExpressionChecker(schemaOf(source).toMap);
-				//still figuring out what to do here
-				columns.map(_, chk.typeOf(_))//error here: Cannot resolve reference map with such signature
-*/
-				/* END development section */
 
 			case Select(cond, src) =>
 				val srcSchema = schemaOf(src);
