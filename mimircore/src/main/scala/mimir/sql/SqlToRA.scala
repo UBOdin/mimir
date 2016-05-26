@@ -15,7 +15,9 @@ import net.sf.jsqlparser.statement.create.table._
 import net.sf.jsqlparser.statement.select.{AllColumns, AllTableColumns, FromItem, PlainSelect, SelectBody, SelectExpressionItem, SubJoin, SubSelect}
 import org.joda.time.LocalDate
 
-import scala.collection.JavaConversions._;
+import scala.collection.JavaConversions._
+import scala.collection.mutable
+;
 
 class SqlToRA(db: Database) 
 {
@@ -109,23 +111,35 @@ class SqlToRA(db: Database)
             if (isAgg.isInstanceOf[net.sf.jsqlparser.expression.Function]) {
               /*if it's a function, check if it is an aggregate*/
               val f = isAgg.asInstanceOf[net.sf.jsqlparser.expression.Function]
+              /* operator */
               val name = f.getName.toUpperCase
               if (name == "SUM" || name == "COUNT" || name == "MAX" || name == "MIN" || name == "AVG") {
                 /* if it is an aggregate, get parameters */
-                  val parameters : List[Expression] =
-                  if(f.getParameters == null) { List[Expression]() }
+                /* columns */
+                  val parameters : List[ProjectArg] =
+                  if(f.getParameters == null) { List[ProjectArg]() }
                   else {
-                    f.getParameters.getExpressions.toList.map(convert(_, bindings.toMap))}
+                    f.getParameters.getExpressions.toList.map(x => ProjectArg(x.toString, convert(x, bindings.toMap)))
+                    //val list = f.getParameters.getExpressions.toList.map(convert(_, bindings.toMap))
+                    //val cols = f.getParameters.getExpressions.toList.map(x => x.toString)
+                    //List(cols.zip(list).foreach(x=>ProjectArg(x._1, x._2)))
 
+                  }
+
+                  val colAlias : List[String] =
+                    if(f.getParameters == null) { List[String]() }
+                    else {
+                      f.getParameters.getExpressions.map(x => SqlUtils.getAlias(x)).toList
+                    }
 
                   /* Retrieve GroupBy Columns */
-                  val gb_cols : List[Expression] =
-                    if(ps.getGroupByColumnReferences == null) { List[Expression]()}
+                  val gb_cols : List[ProjectArg] =
+                    if(ps.getGroupByColumnReferences == null) { List[ProjectArg]()}
                     else {
-                      ps.getGroupByColumnReferences.toList.map(convert(_)) }
+                      ps.getGroupByColumnReferences.toList.map(x => ProjectArg(x.toString, convert(x, bindings.toMap))) }
 
                     /* process this node of the Ra tree */
-                    ret = Aggregate(name, parameters, gb_cols, ret);
+                    ret = Aggregate(AggregateArg(name, parameters, colAlias), gb_cols, ret);
 
                     }
 
