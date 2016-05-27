@@ -4,11 +4,12 @@ import java.io.{File, StringReader}
 import java.sql.SQLException
 
 import mimir.algebra._
-import mimir.ctables.{CTPercolator, CTables, VGTerm}
+import mimir.ctables.{CTPercolator, CTables, VGTerm, Explanation}
 import mimir.exec.ResultSetIterator
 import mimir.parser.MimirJSqlParser
 import mimir.sql.{CreateLens, Explain, JDBCBackend}
 import mimir.web._
+import mimir.util.JSONBuilder
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.insert.Insert
 import net.sf.jsqlparser.statement.select.Select
@@ -158,6 +159,37 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
     curDir.listFiles().filter( f => f.isFile && f.getName.endsWith(".db")).map(x => x.getName)
   }
 
+  def getExplainObject(query: String, row: String, idx: Int): String = 
+  {
+    val parser: MimirJSqlParser = new MimirJSqlParser(new StringReader(query));
+    val oper = 
+      try {
+        val stmt: Statement = parser.Statement();
+        if(stmt.isInstanceOf[Select]){
+          db.convert(stmt.asInstanceOf[Select])
+        } else {
+          throw new Exception("getVGTerms got statement that is not SELECT")
+        }
+
+      } catch {
+        case e: Throwable => {
+          e.printStackTrace()
+          return JSONBuilder.dict(List(("error", JSONBuilder.string(e.getMessage))))
+        }
+      }
+
+    val explanation: Explanation =
+      if(idx < 0){
+        db.explainRow(oper, RowIdPrimitive(row))
+      } else {
+        val schema = Typechecker.schemaOf(oper)
+        db.explainCell(oper, RowIdPrimitive(row), schema(idx)._1)
+      }
+
+    return explanation.toJSON
+
+  }
+
   def getVGTerms(query: String, row: String, ind: Int): List[(String, String)] = {
     val source = new StringReader(query)
     val parser = new MimirJSqlParser(source)
@@ -191,28 +223,6 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
       throw new SQLException("Invalid Source Data ROWID: '" +row+"'");
     }
     iterator.reason(ind)
-
-    /* Really, this should be data-aware.  The query should
-       get the VG terms specifically affecting the specific
-       row in question.  See #32 */
-//    val sch = optimized.schema
-//    val col_defn = if(ind == -1) sch(sch.length - 1) else sch(ind)
-//
-//    val ret =
-//    OperatorUtils.columnExprForOperator(col_defn._1, optimized).
-//      // columnExprForOperator returns (expr,oper) pairs.  We care
-//      // about the expression
-//      map( _._1 ).
-//      // Get the VG terms that might be affecting it.  THIS SHOULD
-//      // BE DATA-DEPENDENT.
-//      map( db.getVGTerms(_) ).
-//      // List of lists -> Just a list
-//      flatten.
-//      // Pull the reasons
-//      map( _.reason() ).
-//      // Discard duplicate reasons
-//      distinct
-//    ret
   }
 
   def nameForQuery(query: String): WebResult =

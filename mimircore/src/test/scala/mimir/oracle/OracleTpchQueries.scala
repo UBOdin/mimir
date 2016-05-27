@@ -24,22 +24,23 @@ object OracleTpchQueries extends Specification {
   val db = new Database(dbName, new JDBCBackend(backend, dbName))
   db.nonDeterminismStrategy = NonDeterminism.Hybrid
 
-  "Mimir" should  {
-    "Run tpch query 5 on Oracle" >> {
+  if(new File("config/jdbc.property").exists()){
+    "Mimir" should  {
+      "Run tpch query 5 on Oracle" >> {
 
-      db.backend.open()
-      val parser = new MimirJSqlParser(new FileReader(new File(queryFolder, q5)))
-      val sel = parser.Statement().asInstanceOf[Select]
-      val raw = db.convert(sel)
-      db.check(raw)
-      val rawPlusRowID = Project(ProjectArg("MIMIR_PROVENANCE", Var("ROWID_MIMIR")) ::
-        raw.schema.map( (x) => ProjectArg(x._1, Var(x._1))),
-        raw)
-      val firstRow = db.query(rawPlusRowID).currentRow()
+        db.backend.open()
+        val parser = new MimirJSqlParser(new FileReader(new File(queryFolder, q5)))
+        val sel = parser.Statement().asInstanceOf[Select]
+        val raw = db.convert(sel)
+        db.check(raw)
+        val rawPlusRowID = Project(ProjectArg("MIMIR_PROVENANCE", Var("ROWID_MIMIR")) ::
+          raw.schema.map( (x) => ProjectArg(x._1, Var(x._1))),
+          raw)
+        val firstRow = db.query(rawPlusRowID).currentRow()
 
-      db.backend.close()
-      firstRow.size must beGreaterThan(0)
+        db.backend.close()
+        firstRow.size must beGreaterThan(0)
+      }
     }
   }
-
 }

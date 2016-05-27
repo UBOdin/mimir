@@ -75,6 +75,11 @@ object Typechecker {
 		{ weakChecker.typeOf(e) }
 	def typeOf(e: Expression, scope: (String => Type.T)): Type.T =
 		{ (new ExpressionChecker(scope)).typeOf(e) }
+	def typeOf(e: Expression, o: Operator): Type.T =
+	{ 
+		val scope = schemaOf(o).toMap;
+		(new ExpressionChecker(scope(_))).typeOf(e) 
+	}
 
 	def schemaOf(o: Operator): List[(String, Type.T)] =
 	{ 

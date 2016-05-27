@@ -6,13 +6,14 @@ import mimir.Database
 import mimir.algebra.Type.T
 import mimir.algebra._
 import mimir.ctables.{Model, VGTerm}
+import mimir.optimizer.{InlineVGTerms}
 import org.apache.lucene.search.spell.{JaroWinklerDistance, LevensteinDistance, NGramDistance, StringDistance}
 
 class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
   extends Lens(name, args, source) {
 
   var targetSchema: Map[String, Type.T] = null
-  var sourceSchema: Map[String, Type.T] = source.schema.toMap
+  var sourceSchema: Map[String, Type.T] = Typechecker.schemaOf(InlineVGTerms.optimize(source)).toMap
   var db: Database = null
   var model: Model = null
 

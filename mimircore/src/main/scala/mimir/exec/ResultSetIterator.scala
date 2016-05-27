@@ -7,12 +7,17 @@ import mimir.sql.JDBCUtils;
 import mimir.algebra._;
 import mimir.algebra.Type._;
 
-class ResultSetIterator(src: ResultSet, visibleSchema: Map[String,Type.T], visibleColumns: List[Int], provenanceTokenColumns: List[Int]) extends ResultIterator
+class ResultSetIterator(
+  val src: ResultSet, 
+  val visibleSchema: Map[String,Type.T], 
+  visibleColumns: List[Int], 
+  provenanceTokenColumns: List[Int]
+) extends ResultIterator
 {
-  
   val meta = src.getMetaData();
   val schema: List[(String,Type.T)] = 
     visibleColumns.map( (i) => {
+      // println("Visible: "+visibleSchema)
       val colName = meta.getColumnName(i+1).toUpperCase();
       (
         colName,
