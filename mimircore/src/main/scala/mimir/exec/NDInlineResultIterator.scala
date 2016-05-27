@@ -4,7 +4,7 @@ import java.sql._;
 
 import mimir.algebra._;
 
-class NDInlineResultIterator(src: ResultIterator, 
+class NDInlineResultIterator(val src: ResultIterator, 
                              querySchema: List[(String, Type.T)],
                              colDeterminism: List[Expression], 
                              rowDeterminism: Expression,
@@ -17,6 +17,7 @@ class NDInlineResultIterator(src: ResultIterator,
   }
   val compiledColDeterminism = colDeterminism.map(VarProjection.compile(src, _))
   val compiledRowDeterminism = VarProjection.compile(src, rowDeterminism)
+  val compiledProvenance = VarProjection.compile(src, provenance)
 
   def apply(v: Int): PrimitiveValue = src(schemaMap(v))
 
@@ -37,5 +38,9 @@ class NDInlineResultIterator(src: ResultIterator,
   override def reason(v: Int): List[(String, String)] = {
     throw new SQLException("Must call reason on a query compiled in classical mode")
   }
-  def provenanceToken() = Eval.eval(provenance).asInstanceOf[RowIdPrimitive];
+  def provenanceToken() = {
+    // println("Provenance: "+compiledProvenance)
+    // println("Evaled: "+Eval.eval(compiledProvenance))
+    Eval.eval(compiledProvenance).asInstanceOf[RowIdPrimitive];
+  }
 }

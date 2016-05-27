@@ -142,50 +142,49 @@ $( document ).ready(function() {
 
                 // Get content through ajax queries
 
-                var col_index = origin.prevAll().length;
+                var col_index = origin.prevAll().length - 1;
                 var col = origin.parents('table').find('th').eq(col_index).text();
                 var row = origin.parent().children(".rowid_col").html();
                 var query = $("#last_query_field").val().replace(";","");
                 var db = $("#db_field").val();
 
-                var bounds = [];
-                var variance;
-                var conf_int = "";
+                var bounds = null;
+                var variance = null;
+                var mean = null;
+                var examples = null;
                 var causes = [];
 
                 var fault = false;
                 var errormessage = "";
 
-                var data_params_query = 'queryjson?query=SELECT BOUNDS('+col
-                                        +'), VAR('+col+'), CONFIDENCE('+col+') FROM ('+query
-                                        +') AS TEMP WHERE ROWID() = ROWID(\''+row+'\');&db='+db;
-
-                var vgterms_query = 'vgterms?query='+query+';&row='+row+'&ind='+ col_index
+                var explain_query = 'explain?query='+query+';&row='+row+'&ind='+ col_index
                                         +'&db='+db;
 
                 if (content == null) {
 
                     $.when(
-                        $.get(data_params_query, function (res) {
+                        $.get(explain_query, function (res) {
+                            console.log(res);
+                            res = JSON.parse(res)
                             if(res.hasOwnProperty('error')) {
                                 fault = true;
                                 errormessage += res.error+'<br/>';
                             }
                             else {
-                                console.log(res);
-                                bounds[0] = res.data[0][1] == "NULL" ? "NULL" : parseFloat(res.data[0][1]).toFixed(2);
-                                bounds[1] = res.data[0][2] == "NULL" ? "NULL" : parseFloat(res.data[0][2]).toFixed(2);
-                                variance  = res.data[0][3] == "NULL" ? "NULL" : parseFloat(res.data[0][3]).toFixed(2);
-                                conf_int  = res.data[0][4] == "NULL" ? "NULL" : res.data[0][4].replace(/\'/g, '');
-                            }
-                        }),
-                        $.get(vgterms_query, function (res) {
-                            if(res.hasOwnProperty('error')) {
-                                fault = true;
-                                errormessage += res.error+'<br/>';
-                            }
-                            else {
-                                causes = res;
+                                if(res.hasOwnProperty('bounds')){
+                                    bounds = res['bounds']
+                                }
+                                if(res.hasOwnProperty('mean')){
+                                    mean = res['mean']
+                                }
+                                if(res.hasOwnProperty('variance')){
+                                    variance = res['variance']
+                                }
+                                if(res.hasOwnProperty('examples')){
+                                    console.log("Examples");
+                                    examples = res['examples']
+                                }
+                                causes = res['reasons']
                             }
                         })
                     ).then( function() {
@@ -196,18 +195,30 @@ $( document ).ready(function() {
                             var tooltip_template = '<table class="table tooltip_table">'+
                                                   '<tbody>'+
                                                       '<tr>'+
+                                                          '<th scope="row">Examples</th>'+
+                                                          '<td>'+examples+'</td>'+
+                                                      '</tr>'
+
+                            if(bounds){
+                              tooltip_template +=     '<tr>'+
                                                           '<th scope="row">Bounds</th>'+
-                                                          '<td class="number">'+bounds[0]+' | '+bounds[1]+'</td>'+
-                                                      '</tr>'+
-                                                      '<tr>'+
+                                                          '<td class="number">'+bounds+'</td>'+
+                                                      '</tr>'
+                            }
+                            if(mean){
+                              tooltip_template +=     '<tr>'+
+                                                          '<th scope="row">Mean</th>'+
+                                                          '<td class="number">'+mean+'</td>'+
+                                                      '</tr>'
+                            }
+                            if(variance){
+                              tooltip_template +=     '<tr>'+
                                                           '<th scope="row">Variance</th>'+
                                                           '<td class="number">'+variance+'</td>'+
-                                                      '</tr>'+
-                                                      '<tr>'+
-                                                          '<th scope="row">Confidence Interval</th>'+
-                                                          '<td class="number">'+conf_int+'</td>'+
-                                                      '</tr>'+
-                                                      '<tr>'+
+                                                      '</tr>'
+                            }
+                                                      
+                            tooltip_template +=       '<tr>'+
                                                           '<th scope="row">Reasons</th>'+
                                                           '<td><ul>'+listify(causes)+'</ul></td>'+
                                                       '</tr>'+
@@ -255,27 +266,19 @@ $( document ).ready(function() {
                 var fault = false;
                 var errormessage = "";
 
-                var prob_query = 'queryjson?query=SELECT PROB() FROM ('+query+') AS TEMP WHERE ROWID() = ROWID(\''+row+'\');&db='+db;
-                var vgterms_query = 'vgterms?query='+query+';&row='+row+'&ind='+-1+'&db='+db;
+                var explain_query = 'explain?query='+query+';&row='+row
+                                        +'&db='+db;
 
                 if (content == null) {
                     $.when(
-                        $.get(prob_query, function (res) {
+                        $.get(explain_query, function (res) {
                             if(res.hasOwnProperty('error')) {
                                 fault = true;
                                 errormessage += res.error+'<br/>';
                             }
                             else {
-                                prob = res.data[0][1];
-                            }
-                        }),
-                        $.get(vgterms_query, function (res) {
-                            if(res.hasOwnProperty('error')) {
-                                fault = true;
-                                errormessage += res.error+'<br/>';
-                            }
-                            else {
-                                causes = res;
+                                causes = res["reasons"];
+                                prob = res["probability"];
                             }
                         })
                     ).then( function() {
@@ -449,10 +452,10 @@ function listify(causes) {
     $.each(causes, function(i, v){
         var approve = $("<a>", {href: "#", class: "ttOption approve", text: "Approve"});
         var fix = $("<a>", {href: "#", class: "ttOption fix", text: "Fix"});
-        var tag = $("<li>", {class: "paperclip", text: causes[i].reason + " |"})
+        var tag = $("<li>", {class: "paperclip", text: causes[i]['english'] + " |"})
                     .attr("onmouseover", "highlightFlowNode(this)")
                     .attr("onmouseout", "reverthighlight(this)");
-        var lensType = $("<input>").attr("type", "hidden").val(causes[i].lensType);
+        var lensType = $("<input>").attr("type", "hidden").val(causes[i]['source']);
         tag.append(approve).append(fix).append(lensType);
         result.append(tag);
     });

@@ -17,6 +17,14 @@ class VarProjection(src: ResultIterator, idx: Int, t: Type.T)
   override def toString = src.schema(idx)._1
 }
 
+class ProvenanceProjection(src: ResultIterator)
+  extends Proc(List[Expression]())
+{
+  def getType(bindings: List[Type.T]) = Type.TRowId;
+  def rebuild(x: List[Expression]) = new ProvenanceProjection(src)
+  def get(v:List[PrimitiveValue]): PrimitiveValue = src.provenanceToken
+}
+
 object VarProjection
 {
   /**
@@ -34,6 +42,7 @@ object VarProjection
     expr match {
       case Var(v) =>
         v match {
+          case CTPercolator.ROWID_KEY => new ProvenanceProjection(src)
           case _ => {
             val idx =
               src.schema.indexWhere(
