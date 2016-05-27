@@ -6,6 +6,7 @@ import mimir.Database
 import mimir.algebra._
 import mimir.ctables.CTPercolator
 import mimir.util._
+import net.sf.jsqlparser.expression
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
 import net.sf.jsqlparser.expression.operators.relational._
@@ -57,6 +58,7 @@ class SqlToRA(db: Database)
         currBindings.map( _ match { case (x,y) => (y,x) } )
       )
 
+      /* Check for join operator */
       var joinCond = null;
       
       if(ps.getJoins() != null) { 
@@ -77,6 +79,7 @@ class SqlToRA(db: Database)
         );
       }
 
+      /* Check for selection operator */
       if(ps.getWhere != null) {
         ret = Select(convert(ps.getWhere, bindings.toMap), ret)
       }
@@ -98,15 +101,19 @@ class SqlToRA(db: Database)
             )
           }).filter( _._1 != CTPercolator.ROWID_KEY )
       }
-      
+
+      /* Check for aggregate operator */
+
+      /* Check for projection operator */
       val target: List[(String, ProjectArg)] = 
         ps.getSelectItems().map( (si) => {
           if(si.isInstanceOf[SelectExpressionItem]) {
             val se = si.asInstanceOf[SelectExpressionItem]
+            var isAggFunc = false
 
             /* Here starts the new code 3.30.16 */
             /* Get the expression */
-            val isAgg = se.getExpression();
+            val isAgg: expression.Expression = se.getExpression();
             /* Check if the expression is a function */
             if (isAgg.isInstanceOf[net.sf.jsqlparser.expression.Function]) {
               /*if it's a function, check if it is an aggregate*/
@@ -114,12 +121,14 @@ class SqlToRA(db: Database)
               /* operator */
               val name = f.getName.toUpperCase
               if (name == "SUM" || name == "COUNT" || name == "MAX" || name == "MIN" || name == "AVG") {
+                /* set flag */
+                isAggFunc = true
                 /* if it is an aggregate, get parameters */
                 /* columns */
                   val parameters : List[ProjectArg] =
                   if(f.getParameters == null) { List[ProjectArg]() }
                   else {
-                    f.getParameters.getExpressions.toList.map(x => ProjectArg(x.toString, convert(x, bindings.toMap)))
+                    f.getParameters.getExpressions.toList.map(x => ProjectArg(x.toString.toUpperCase, convert(x, bindings.toMap)))
                     //val list = f.getParameters.getExpressions.toList.map(convert(_, bindings.toMap))
                     //val cols = f.getParameters.getExpressions.toList.map(x => x.toString)
                     //List(cols.zip(list).foreach(x=>ProjectArg(x._1, x._2)))
@@ -129,7 +138,7 @@ class SqlToRA(db: Database)
                   val colAlias : List[String] =
                     if(f.getParameters == null) { List[String]() }
                     else {
-                      f.getParameters.getExpressions.map(x => SqlUtils.getAlias(x)).toList
+                      f.getParameters.getExpressions.map(x => SqlUtils.getAlias(x).toUpperCase).toList
                     }
 
                   /* Retrieve GroupBy Columns */
@@ -144,26 +153,34 @@ class SqlToRA(db: Database)
                     }
 
               }
-
-            val originalAlias = SqlUtils.getAlias(se);
-            var alias = originalAlias;
-            if(alias == null){
-              exprId += 1
-              alias = "EXPR_"+exprId
-            } else {
-              alias = alias.toUpperCase
-            }
-            if(tableAlias != null){
-              alias = tableAlias + "_" + alias;
-            }
-            needProject = true;
-            List( (
-              originalAlias,
-              ProjectArg(
+            /* If this is not an aggregate select expression */
+            if(!isAggFunc)
+              {
+                val originalAlias: String = SqlUtils.getAlias(se);
+                var alias: String = originalAlias;
+                if(alias == null){
+                  exprId += 1
+                  alias = "EXPR_"+exprId
+                } else {
+                  alias = alias.toUpperCase
+                }
+                if(tableAlias != null){
+                  alias = tableAlias + "_" + alias;
+                }
+                needProject = true;
+                List( (
+                  originalAlias,
+                  ProjectArg(
                     alias,
                     convert(se.getExpression(), bindings.toMap)
-              ) )
-            )
+                  ) )
+                )
+              }
+            else
+              {
+                List[(String, ProjectArg)]()
+              }
+
           } else if(si.isInstanceOf[AllColumns]) {
             includeAll = true;
             sources.keys.map( defaultTargetsForTable(_) ).flatten.toList

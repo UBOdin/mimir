@@ -42,7 +42,7 @@ case class Project(columns: List[ProjectArg], source: Operator) extends Operator
 */
 case class AggregateArg(operator: String, columns: List[ProjectArg], alias: List[String])
 {
-  override def toString = (operator.toString + " " + columns.map(_.toString).mkString(", ") + " " + alias.map(_.toString).mkString(", "))
+  override def toString = (operator.toString + "(" + columns.map(_.toString).mkString(", ") + ")" + ", " + alias.map(_.toString).mkString(", "))
   def getOperatorName() = operator
   def getColumnNames() = columns.toString
 }
@@ -51,8 +51,8 @@ case class AggregateArg(operator: String, columns: List[ProjectArg], alias: List
 case class Aggregate(args: /*List[*/AggregateArg/*]*/, groupby: List[ProjectArg], source: Operator) extends Operator
 {
   def toString(prefix: String) =
-    prefix + "AGGREGATE[" + args.toString/*.map(_.toString).mkString(", ")*/ + "](\nGroup By [" + groupby.map( _.toString ).mkString(", ") +
-      "]\n(" + source.toString(prefix + " ") + "\n" + prefix + ")"
+    prefix + "AGGREGATE[" + args.toString/*.map(_.toString).mkString(", ")*/ + "]\n\t(Group By [" + groupby.map( _.toString ).mkString(", ") +
+      "])\n\t\t(" + source.toString(prefix + " ") + prefix + ")"
 
   def children() = List(source)
   def rebuild(x: List[Operator]) = new Aggregate(args, groupby, x(0))

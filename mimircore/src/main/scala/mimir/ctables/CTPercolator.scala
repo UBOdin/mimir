@@ -134,6 +134,9 @@ object CTPercolator {
           }
         }
       case s: Select => return s
+        /* Added */
+      case a: Aggregate => return a
+        /* END: Added */
       case Join(lhs, rhs) => {
 
         // println("Percolating Join: \n" + o)
@@ -268,6 +271,9 @@ object CTPercolator {
     oper match {
       case Project(cols, _) => cols.contains( (_:ProjectArg).getColumnName().equals(ROWID_KEY))
       case Select(_, src) => hasRowID(src)
+        /*Added*/
+      case Aggregate(_, _, src) => hasRowID(src)
+        /*END: Added */
       case Table(_,_,meta) => meta.contains( (_:(String,Type.T))._1.equals(ROWID_KEY))
       case Union(_,_) => false
       case Join(_,_) => false
@@ -297,6 +303,11 @@ object CTPercolator {
       case Select(cond, child) =>
         Select(cond, propagateRowIDs(child,
           force || requiresRowID(cond)))
+      /*Added*/
+      case Aggregate(args, groupBy, child) =>
+        Aggregate(args, groupBy, child)
+        /*END: Added*/
+
           
       case Join(left, right) =>
         if(force){
