@@ -34,43 +34,33 @@ case class Project(columns: List[ProjectArg], source: Operator) extends Operator
 }
 
 /* AggregateArg is a wrapper for the args argument in Aggregate case class where:
-      operator is the Aggregate Operator,
+      function is the Aggregate function,
       column is the SQL table column,
       alias is the alias used for the column,
       getOperatorName returns the operator name,
       getColumnName returns the column name
 */
-case class AggregateArg(operator: String, columns: List[ProjectArg], alias: List[String])
+
+/* to fix list: first, we need to get the correct aliases; second, we need to make Aggregate have a list of AggregateArgs;
+third, we need to test and then branch in SqlToRa.scala (flat or agg select)
+ */
+case class AggregateArg(function: String, columns: List[ProjectArg], alias: String)
 {
-  override def toString = (operator.toString + "(" + columns.map(_.toString).mkString(", ") + ")" + ", " + alias.map(_.toString).mkString(", "))
-  def getOperatorName() = operator
+  override def toString = (function.toString + "(" + columns.map(_.toString).mkString(", ") + ")" + ", " + alias)
+  def getFunctionName() = function
   def getColumnNames() = columns.toString
 }
 
-/* Aggregate Operator refashioned 5/23/16 */
-case class Aggregate(args: /*List[*/AggregateArg/*]*/, groupby: List[ProjectArg], source: Operator) extends Operator
+/* Aggregate Operator refashioned 5/23/16, 5/31/16 */
+case class Aggregate(args: List[AggregateArg], groupby: List[ProjectArg], source: Operator) extends Operator
 {
   def toString(prefix: String) =
-    prefix + "AGGREGATE[" + args.toString/*.map(_.toString).mkString(", ")*/ + "]\n\t(Group By [" + groupby.map( _.toString ).mkString(", ") +
+    prefix + "AGGREGATE[" + args.map(_.toString).mkString("; ") + "]\n\t(Group By [" + groupby.map( _.toString ).mkString(", ") +
       "])\n\t\t(" + source.toString(prefix + " ") + prefix + ")"
 
   def children() = List(source)
   def rebuild(x: List[Operator]) = new Aggregate(args, groupby, x(0))
-  /*next step is to update sqltora with aggregate operator changes */
-  /*now TypeChecker */
 }
-
-
-/*case class Aggregate(function: String, column: List[Expression], groupings: List[Expression], source: Operator) extends Operator
-{
-  def toString(prefix: String) =
-    prefix + "AGGREGATE[" + function + "(" + column.map( _.toString).mkString(", ") +
-      ")](\nGroup By [" + groupings.map( _.toString ).mkString(", ") +
-      "](\n" + source.toString(prefix + " ") + "\n" + prefix + ")"
-
-  def children() = List(source)
-  def rebuild(x: List[Operator]) = new Aggregate(function, column, groupings, x(0))
-}*/
 
 case class Select(condition: Expression, source: Operator) extends Operator
 {

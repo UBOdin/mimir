@@ -28,6 +28,12 @@ object SqlParserSpec extends Specification with FileMatchers {
 	val testData = List[ (String, File, List[String]) ](
 			(	"R", new File("../test/r_test/r.csv"), 
 				List("A int", "B int", "C int")
+			),
+			("S", new File("../test/r_test/s.csv"),
+				List("B int", "D int")
+			),
+			("T", new File("../test/r_test/t.csv"),
+				List("D int", "E int")
 			)
 		)
 
@@ -80,6 +86,70 @@ object SqlParserSpec extends Specification with FileMatchers {
 				List(IntPrimitive(2)),
 				List(IntPrimitive(4))
 			)
+		}
+		/* Don't forget to change query method to convert */
+		"Parse trivial aggregate queries" in {
+			db.optimize(query("SELECT SUM(A) FROM R"))must be equalTo
+				Aggregate(List(AggregateArg("SUM", List(ProjectArg("A", Var("R_A"))), "EXPR_1")),
+					List(), Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList,
+						List()
+					))
+
+			db.optimize(query("SELECT AVG(A) FROM R"))must be equalTo
+				Aggregate(List(AggregateArg("AVG", List(ProjectArg("A", Var("R_A"))), "EXPR_1")),
+					List(), Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()))
+
+			db.optimize(query("SELECT MAX(A) FROM R"))must be equalTo
+				Aggregate(List(AggregateArg("MAX", List(ProjectArg("A", Var("R_A"))), "EXPR_1")),
+					List(), Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()))
+
+			db.optimize(query("SELECT MIN(A) FROM R"))must be equalTo
+				Aggregate(List(AggregateArg("MIN", List(ProjectArg("A", Var("R_A"))), "EXPR_1")),
+					List(), Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()))
+
+			db.optimize(query("SELECT COUNT(*) FROM R"))must be equalTo
+				Aggregate(List(AggregateArg("COUNT", List(), "EXPR_1")),
+					List(), Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()))
+
+			db.optimize(query("SELECT COUNT(*) FROM R, S"))must be equalTo
+				Aggregate(List(AggregateArg("COUNT", List(), "EXPR_1")),
+					List(), Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
+						Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List())))
+
+			db.optimize(query("SELECT COUNT(*) FROM R, S WHERE R.B = S.B"))must be equalTo
+				Aggregate(List(AggregateArg("COUNT", List(), "EXPR_1")),
+					List(), Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")), Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
+						Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List()))))
+
+			db.optimize(query("SELECT SUM(A) FROM R, S WHERE R.B = S.B"))must be equalTo
+				Aggregate(List(AggregateArg("SUM", List(ProjectArg("A", Var("R_A"))), "EXPR_1")),
+					List(), Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")), Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
+						Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List()))))
+
+			db.optimize(query("SELECT SUM(A), AVG(D) FROM R, S WHERE R.B = S.B"))must be equalTo
+				Aggregate(List(AggregateArg("SUM", List(ProjectArg("A", Var("R_A"))), "EXPR_1"),
+					AggregateArg("AVG", List(ProjectArg("D", Var("S_D"))), "EXPR_2")),
+					List(), Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")), Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
+						Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List()))))
+
+			db.optimize(query("SELECT SUM(A + B), AVG(D + B) FROM R, S WHERE R.B = S.B"))must be equalTo
+				Aggregate(List(AggregateArg("SUM", List(ProjectArg("A + B", Arithmetic(Arith.Add, Var("R_A"), Var("S_B")))), "EXPR_1"),
+					AggregateArg("AVG", List(ProjectArg("D + B", Arithmetic(Arith.Add, Var("S_D"), Var("S_B")))), "EXPR_2")),
+					List(), Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")), Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
+						Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List()))))
+
+			db.optimize(query("SELECT SUM(A * D) FROM R, S WHERE R.B = S.B"))must be equalTo
+				Aggregate(List(AggregateArg("SUM", List(ProjectArg("A * D", Arithmetic(Arith.Mult, Var("R_A"), Var("S_D")))), "EXPR_1")),
+					List(), Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")), Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
+						Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List()))))
+
+			db.optimize(query("SELECT SUM(A * E) FROM R, S, T WHERE (R.B = S.B) AND (S.D = T.D)"))must be equalTo
+				Aggregate(List(AggregateArg("SUM", List(ProjectArg("A * E", Arithmetic(Arith.Mult, Var("R_A"), Var("T_E")))), "EXPR_1")),
+					List(), Select(Comparison(Cmp.Eq, Var("S_D"), Var("T_D")),
+										Join(Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
+											Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
+											Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List()))),
+											Table("T", Map(("T_D", Type.TInt), ("T_E", Type.TInt)).toList, List()))))
 		}
 
 		"Create and query lenses" in {

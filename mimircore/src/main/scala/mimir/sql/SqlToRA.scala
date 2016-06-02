@@ -85,6 +85,7 @@ class SqlToRA(db: Database)
       }
 
       var exprId = 0;
+      var aggexprID = 0           //for un-aliased aggregate queries
       var includeAll = false;
       var needProject = (tableAlias != null);
       
@@ -102,100 +103,117 @@ class SqlToRA(db: Database)
           }).filter( _._1 != CTPercolator.ROWID_KEY )
       }
 
-      /* Check for aggregate operator */
 
-      /* Check for projection operator */
-      val target: List[(String, ProjectArg)] = 
-        ps.getSelectItems().map( (si) => {
-          if(si.isInstanceOf[SelectExpressionItem]) {
-            val se = si.asInstanceOf[SelectExpressionItem]
-            var isAggFunc = false
+      /* Check if this is an Aggregate Select or Flat Select */
 
-            /* Here starts the new code 3.30.16 */
-            /* Get the expression */
-            val isAgg: expression.Expression = se.getExpression();
-            /* Check if the expression is a function */
-            if (isAgg.isInstanceOf[net.sf.jsqlparser.expression.Function]) {
-              /*if it's a function, check if it is an aggregate*/
-              val f = isAgg.asInstanceOf[net.sf.jsqlparser.expression.Function]
-              /* operator */
-              val name = f.getName.toUpperCase
-              if (name == "SUM" || name == "COUNT" || name == "MAX" || name == "MIN" || name == "AVG") {
-                /* set flag */
-                isAggFunc = true
-                /* if it is an aggregate, get parameters */
-                /* columns */
-                  val parameters : List[ProjectArg] =
-                  if(f.getParameters == null) { List[ProjectArg]() }
-                  else {
-                    f.getParameters.getExpressions.toList.map(x => ProjectArg(x.toString.toUpperCase, convert(x, bindings.toMap)))
-                    //val list = f.getParameters.getExpressions.toList.map(convert(_, bindings.toMap))
-                    //val cols = f.getParameters.getExpressions.toList.map(x => x.toString)
-                    //List(cols.zip(list).foreach(x=>ProjectArg(x._1, x._2)))
+        /*List of aggregate function names */
+      val aggFuncNames = List("SUM", "AVG", "MAX", "MIN", "COUNT")
 
-                  }
+        /* List of expressions from plain select */
+      val selectItems: List[net.sf.jsqlparser.expression.Expression] = ps.getSelectItems().
+          filter(x => x.isInstanceOf[SelectExpressionItem]).
+          map(x => (x.asInstanceOf[SelectExpressionItem].getExpression())).toList
 
-                  val colAlias : List[String] =
-                    if(f.getParameters == null) { List[String]() }
-                    else {
-                      f.getParameters.getExpressions.map(x => SqlUtils.getAlias(x).toUpperCase).toList
-                    }
+      /* Save the aggregate functions to a list aggFunctions */
+      val aggFunctions: List[net.sf.jsqlparser.expression.Expression] = selectItems.filter(x => x.isInstanceOf[net.sf.jsqlparser.expression.Function]
+        && aggFuncNames.contains(x.asInstanceOf[net.sf.jsqlparser.expression.Function].getName.toUpperCase))
 
-                  /* Retrieve GroupBy Columns */
-                  val gb_cols : List[ProjectArg] =
-                    if(ps.getGroupByColumnReferences == null) { List[ProjectArg]()}
-                    else {
-                      ps.getGroupByColumnReferences.toList.map(x => ProjectArg(x.toString, convert(x, bindings.toMap))) }
+      /* Lists variables for flat select and aggregate select respectively */
+      var target = List[(String, ProjectArg)]()
+      var aggTarget = List[AggregateArg]()
 
-                    /* process this node of the Ra tree */
-                    ret = Aggregate(AggregateArg(name, parameters, colAlias), gb_cols, ret);
-
-                    }
-
+      /* Choose the correct processing path */
+      if(!aggFunctions.isEmpty) {
+        /* Aggregate Select Path */ //Note to self: use .length method to compare selectItems and aggSelect for
+                                    //error handling, e.g., compare extra expressions with GROUP BY parameters
+        aggTarget = aggFunctions.map( (f) => {
+          /* Get the parameters */
+          /* columns */
+          val func = f.asInstanceOf[net.sf.jsqlparser.expression.Function]
+          var parameters = List[ProjectArg]()
+          parameters =
+            if(func.getParameters == null) { List[ProjectArg]() }
+            else if(func.isAllColumns()) {
+              /* All columns selector (*) is only used with Count Aggregate */
+              if(func.getName.toUpperCase != "COUNT") {
+                throw new SQLException("Syntax error in query expression: " + func.getName.toUpperCase + "(*)");
               }
-            /* If this is not an aggregate select expression */
-            if(!isAggFunc)
-              {
-                val originalAlias: String = SqlUtils.getAlias(se);
-                var alias: String = originalAlias;
-                if(alias == null){
-                  exprId += 1
-                  alias = "EXPR_"+exprId
-                } else {
-                  alias = alias.toUpperCase
-                }
-                if(tableAlias != null){
-                  alias = tableAlias + "_" + alias;
-                }
-                needProject = true;
-                List( (
-                  originalAlias,
-                  ProjectArg(
-                    alias,
-                    convert(se.getExpression(), bindings.toMap)
-                  ) )
-                )
-              }
-            else
-              {
-                List[(String, ProjectArg)]()
+              else {
+                List[ProjectArg]()
               }
 
-          } else if(si.isInstanceOf[AllColumns]) {
-            includeAll = true;
-            sources.keys.map( defaultTargetsForTable(_) ).flatten.toList
-          } else if(si.isInstanceOf[AllTableColumns]) {
-            needProject = true;
-            defaultTargetsForTable( 
-              si.asInstanceOf[AllTableColumns].getTable.getName.toUpperCase
-            )
-          } else {
-            unhandled("SelectItem[Unknown]")
+            }
+            else {
+              func.getParameters.getExpressions.toList.map(x => ProjectArg(x.toString.toUpperCase, convert(x, bindings.toMap)))
+            }
+
+          /* Get column alias */
+          val colAlias: String = SqlUtils.getAlias(f)
+
+          var alias = colAlias
+          if(colAlias == null){
+            aggexprID += 1
+            alias = "EXPR_" + aggexprID
           }
+
+          List(AggregateArg(func.getName.toUpperCase, parameters, alias))
         }).flatten.toList
-      
-      // if(needProject){
+
+        /* Retrieve GroupBy Columns */
+        val gb_cols : List[ProjectArg] =
+          if(ps.getGroupByColumnReferences == null) { List[ProjectArg]()}
+          else {
+            ps.getGroupByColumnReferences.toList.map(x => ProjectArg(x.toString, convert(x, bindings.toMap))) }
+
+        /* Process Aggregate Select */
+        ret = Aggregate(aggTarget, gb_cols, ret);
+      }
+      else {
+        /* (Flat Select) Projection Processing */
+        target =
+          ps.getSelectItems().map( (si) => {
+            if(si.isInstanceOf[SelectExpressionItem]) {
+              val se = si.asInstanceOf[SelectExpressionItem]
+
+              val originalAlias: String = SqlUtils.getAlias(se);
+              var alias: String = originalAlias;
+              if(alias == null){
+                exprId += 1
+                alias = "EXPR_"+exprId
+              } else {
+                alias = alias.toUpperCase
+              }
+              if(tableAlias != null){
+                alias = tableAlias + "_" + alias;
+              }
+              needProject = true;
+              List( (
+                originalAlias,
+                ProjectArg(
+                  alias,
+                  convert(se.getExpression(), bindings.toMap)
+                ) )
+              )
+
+
+
+            } else if(si.isInstanceOf[AllColumns]) {
+              includeAll = true;
+              sources.keys.map( defaultTargetsForTable(_) ).flatten.toList
+            } else if(si.isInstanceOf[AllTableColumns]) {
+              needProject = true;
+              defaultTargetsForTable(
+                si.asInstanceOf[AllTableColumns].getTable.getName.toUpperCase
+              )
+            } else {
+              unhandled("SelectItem[Unknown]")
+            }
+          }).flatten.toList
+
+        // if(needProject){
         ret = Project(target.map( _._2 ), ret);
+      }
+
       // }
 
   //     
@@ -249,7 +267,8 @@ class SqlToRA(db: Database)
     }
     return null;
   }
-  // 
+
+
   def convert(fi : FromItem) : (Operator, Map[String, String], String) = {
     if(fi.isInstanceOf[SubJoin]){
       unhandled("FromItem[SubJoin]")
