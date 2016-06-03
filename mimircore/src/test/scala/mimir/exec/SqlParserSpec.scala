@@ -19,7 +19,8 @@ object SqlParserSpec extends Specification with FileMatchers {
 	def stmt(s: String) = {
 		new MimirJSqlParser(new StringReader(s)).Statement()
 	}
-	def query(s: String) = 
+	/* method name changed from query to convert 6/3/16 */
+	def convert(s: String) =
 		db.convert(stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select])
 	def parser = new ExpressionParser(db.lenses.modelForLens)
 	def expr = parser.expr _
@@ -87,63 +88,63 @@ object SqlParserSpec extends Specification with FileMatchers {
 				List(IntPrimitive(4))
 			)
 		}
-		/* Don't forget to change query method to convert */
+
 		"Parse trivial aggregate queries" in {
-			db.optimize(query("SELECT SUM(A) FROM R"))must be equalTo
+			db.optimize(convert("SELECT SUM(A) FROM R"))must be equalTo
 				Aggregate(List(AggregateArg("SUM", List(ProjectArg("A", Var("R_A"))), "EXPR_1")),
 					List(), Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList,
 						List()
 					))
 
-			db.optimize(query("SELECT AVG(A) FROM R"))must be equalTo
+			db.optimize(convert("SELECT AVG(A) FROM R"))must be equalTo
 				Aggregate(List(AggregateArg("AVG", List(ProjectArg("A", Var("R_A"))), "EXPR_1")),
 					List(), Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()))
 
-			db.optimize(query("SELECT MAX(A) FROM R"))must be equalTo
+			db.optimize(convert("SELECT MAX(A) FROM R"))must be equalTo
 				Aggregate(List(AggregateArg("MAX", List(ProjectArg("A", Var("R_A"))), "EXPR_1")),
 					List(), Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()))
 
-			db.optimize(query("SELECT MIN(A) FROM R"))must be equalTo
+			db.optimize(convert("SELECT MIN(A) FROM R"))must be equalTo
 				Aggregate(List(AggregateArg("MIN", List(ProjectArg("A", Var("R_A"))), "EXPR_1")),
 					List(), Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()))
 
-			db.optimize(query("SELECT COUNT(*) FROM R"))must be equalTo
+			db.optimize(convert("SELECT COUNT(*) FROM R"))must be equalTo
 				Aggregate(List(AggregateArg("COUNT", List(), "EXPR_1")),
 					List(), Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()))
 
-			db.optimize(query("SELECT COUNT(*) FROM R, S"))must be equalTo
+			db.optimize(convert("SELECT COUNT(*) FROM R, S"))must be equalTo
 				Aggregate(List(AggregateArg("COUNT", List(), "EXPR_1")),
 					List(), Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
 						Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List())))
 
-			db.optimize(query("SELECT COUNT(*) FROM R, S WHERE R.B = S.B"))must be equalTo
+			db.optimize(convert("SELECT COUNT(*) FROM R, S WHERE R.B = S.B"))must be equalTo
 				Aggregate(List(AggregateArg("COUNT", List(), "EXPR_1")),
 					List(), Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")), Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
 						Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List()))))
 
-			db.optimize(query("SELECT SUM(A) FROM R, S WHERE R.B = S.B"))must be equalTo
+			db.optimize(convert("SELECT SUM(A) FROM R, S WHERE R.B = S.B"))must be equalTo
 				Aggregate(List(AggregateArg("SUM", List(ProjectArg("A", Var("R_A"))), "EXPR_1")),
 					List(), Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")), Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
 						Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List()))))
 
-			db.optimize(query("SELECT SUM(A), AVG(D) FROM R, S WHERE R.B = S.B"))must be equalTo
+			db.optimize(convert("SELECT SUM(A), AVG(D) FROM R, S WHERE R.B = S.B"))must be equalTo
 				Aggregate(List(AggregateArg("SUM", List(ProjectArg("A", Var("R_A"))), "EXPR_1"),
 					AggregateArg("AVG", List(ProjectArg("D", Var("S_D"))), "EXPR_2")),
 					List(), Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")), Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
 						Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List()))))
 
-			db.optimize(query("SELECT SUM(A + B), AVG(D + B) FROM R, S WHERE R.B = S.B"))must be equalTo
+			db.optimize(convert("SELECT SUM(A + B), AVG(D + B) FROM R, S WHERE R.B = S.B"))must be equalTo
 				Aggregate(List(AggregateArg("SUM", List(ProjectArg("A + B", Arithmetic(Arith.Add, Var("R_A"), Var("S_B")))), "EXPR_1"),
 					AggregateArg("AVG", List(ProjectArg("D + B", Arithmetic(Arith.Add, Var("S_D"), Var("S_B")))), "EXPR_2")),
 					List(), Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")), Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
 						Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List()))))
 
-			db.optimize(query("SELECT SUM(A * D) FROM R, S WHERE R.B = S.B"))must be equalTo
+			db.optimize(convert("SELECT SUM(A * D) FROM R, S WHERE R.B = S.B"))must be equalTo
 				Aggregate(List(AggregateArg("SUM", List(ProjectArg("A * D", Arithmetic(Arith.Mult, Var("R_A"), Var("S_D")))), "EXPR_1")),
 					List(), Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")), Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
 						Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List()))))
 
-			db.optimize(query("SELECT SUM(A * E) FROM R, S, T WHERE (R.B = S.B) AND (S.D = T.D)"))must be equalTo
+			db.optimize(convert("SELECT SUM(A * E) FROM R, S, T WHERE (R.B = S.B) AND (S.D = T.D)"))must be equalTo
 				Aggregate(List(AggregateArg("SUM", List(ProjectArg("A * E", Arithmetic(Arith.Mult, Var("R_A"), Var("T_E")))), "EXPR_1")),
 					List(), Select(Comparison(Cmp.Eq, Var("S_D"), Var("T_D")),
 										Join(Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
@@ -157,7 +158,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 		 		"CREATE LENS SaneR AS SELECT * FROM R WITH MISSING_VALUE('B')"
 		 	).asInstanceOf[CreateLens]);
 		 	db.optimize(
-		 		query("SELECT * FROM SaneR")
+		 		convert("SELECT * FROM SaneR")
 		 	) must be equalTo 
 		 		Project(List(ProjectArg("A", Var("R_A")), 
 		 					 ProjectArg("B", expr(
@@ -170,7 +171,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 				))
 
 		 	;
-			db.query(query("SELECT * FROM SaneR")).allRows must be equalTo List(
+			db.query(convert("SELECT * FROM SaneR")).allRows must be equalTo List(
 				List(IntPrimitive(1),IntPrimitive(2),IntPrimitive(3)),
 				List(IntPrimitive(1),IntPrimitive(3),IntPrimitive(1)),
 				List(IntPrimitive(2),IntPrimitive(2),IntPrimitive(1)),
