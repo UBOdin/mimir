@@ -130,21 +130,21 @@ class SqlToRA(db: Database)
           /* Get the parameters */
           /* columns */
           val func = f.asInstanceOf[net.sf.jsqlparser.expression.Function]
-          var parameters = List[ProjectArg]()
+          var parameters = List[Expression]()
           parameters =
-            if(func.getParameters == null) { List[ProjectArg]() }
+            if(func.getParameters == null) { List[Expression]() }
             else if(func.isAllColumns()) {
               /* All columns selector (*) is only used with Count Aggregate */
               if(func.getName.toUpperCase != "COUNT") {
                 throw new SQLException("Syntax error in query expression: " + func.getName.toUpperCase + "(*)");
               }
               else {
-                List[ProjectArg]()
+                List[Expression]()
               }
 
             }
             else {
-              func.getParameters.getExpressions.toList.map(x => ProjectArg(x.toString.toUpperCase, convert(x, bindings.toMap)))
+              func.getParameters.getExpressions.toList.map(x => convert(x, bindings.toMap))
             }
 
           /* Get column alias */
@@ -160,10 +160,10 @@ class SqlToRA(db: Database)
         }).flatten.toList
 
         /* Retrieve GroupBy Columns */
-        val gb_cols : List[ProjectArg] =
-          if(ps.getGroupByColumnReferences == null) { List[ProjectArg]()}
+        val gb_cols : List[Expression] =
+          if(ps.getGroupByColumnReferences == null) { List[Expression]()}
           else {
-            ps.getGroupByColumnReferences.toList.map(x => ProjectArg(x.toString, convert(x, bindings.toMap))) }
+            ps.getGroupByColumnReferences.toList.map(x => convert(x, bindings.toMap)) }
 
         /* Process Aggregate Select */
         ret = Aggregate(aggTarget, gb_cols, ret);

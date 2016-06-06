@@ -44,7 +44,7 @@ case class Project(columns: List[ProjectArg], source: Operator) extends Operator
 /* to fix list: first, we need to get the correct aliases; second, we need to make Aggregate have a list of AggregateArgs;
 third, we need to test and then branch in SqlToRa.scala (flat or agg select)
  */
-case class AggregateArg(function: String, columns: List[ProjectArg], alias: String)
+case class AggregateArg(function: String, columns: List[Expression], alias: String)
 {
   override def toString = (function.toString + "(" + columns.map(_.toString).mkString(", ") + ")" + ", " + alias)
   def getFunctionName() = function
@@ -52,7 +52,7 @@ case class AggregateArg(function: String, columns: List[ProjectArg], alias: Stri
 }
 
 /* Aggregate Operator refashioned 5/23/16, 5/31/16 */
-case class Aggregate(args: List[AggregateArg], groupby: List[ProjectArg], source: Operator) extends Operator
+case class Aggregate(args: List[AggregateArg], groupby: List[Expression], source: Operator) extends Operator
 {
   def toString(prefix: String) =
     prefix + "AGGREGATE[" + args.map(_.toString).mkString("; ") + "]\n\t(Group By [" + groupby.map( _.toString ).mkString(", ") +
