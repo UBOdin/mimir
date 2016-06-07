@@ -114,6 +114,11 @@ class SqlToRA(db: Database)
           filter(x => x.isInstanceOf[SelectExpressionItem]).
           map(x => (x.asInstanceOf[SelectExpressionItem].getExpression())).toList
 
+
+        /*List of non-aggregate expressions that are part of the aggregate query */
+      val flatSelect: List[net.sf.jsqlparser.expression.Expression] =
+        selectItems.filter(x => !x.isInstanceOf[net.sf.jsqlparser.expression.Function])
+
       /* Save the aggregate functions to a list aggFunctions */
       val aggFunctions: List[net.sf.jsqlparser.expression.Expression] = selectItems.filter(x => x.isInstanceOf[net.sf.jsqlparser.expression.Function]
         && aggFuncNames.contains(x.asInstanceOf[net.sf.jsqlparser.expression.Function].getName.toUpperCase))
@@ -167,66 +172,75 @@ class SqlToRA(db: Database)
 
         /* Process Aggregate Select */
         ret = Aggregate(aggTarget, gb_cols, ret);
-      }
-      else {
-        /* (Flat Select) Projection Processing */
-        target =
-          ps.getSelectItems().map( (si) => {
-            if(si.isInstanceOf[SelectExpressionItem]) {
-              val se = si.asInstanceOf[SelectExpressionItem]
 
-              val originalAlias: String = SqlUtils.getAlias(se);
-              var alias: String = originalAlias;
-              if(alias == null){
-                exprId += 1
-                alias = "EXPR_"+exprId
+        /* Project Group By columns */
+        if(!flatSelect.isEmpty)
+          {
+            val gb = flatSelect.toList.map(x => ProjectArg(x.toString(), convert(x, bindings.toMap)))
+            ret = Project(gb, ret)
+          }
+
+      }
+      else
+        {
+          /* (Flat Select) Projection Processing */
+          target =
+            ps.getSelectItems.map( (si) => {
+              if(si.isInstanceOf[SelectExpressionItem]) {
+                val se = si.asInstanceOf[SelectExpressionItem]
+
+                val originalAlias: String = SqlUtils.getAlias(se);
+                var alias: String = originalAlias;
+                if(alias == null){
+                  exprId += 1
+                  alias = "EXPR_"+exprId
+                } else {
+                  alias = alias.toUpperCase
+                }
+                if(tableAlias != null){
+                  alias = tableAlias + "_" + alias;
+                }
+                needProject = true;
+                List( (
+                  originalAlias,
+                  ProjectArg(
+                    alias,
+                    convert(se.getExpression(), bindings.toMap)
+                  ) )
+                )
+
+
+
+              } else if(si.isInstanceOf[AllColumns]) {
+                includeAll = true;
+                sources.keys.map( defaultTargetsForTable(_) ).flatten.toList
+              } else if(si.isInstanceOf[AllTableColumns]) {
+                needProject = true;
+                defaultTargetsForTable(
+                  si.asInstanceOf[AllTableColumns].getTable.getName.toUpperCase
+                )
               } else {
-                alias = alias.toUpperCase
+                unhandled("SelectItem[Unknown]")
               }
-              if(tableAlias != null){
-                alias = tableAlias + "_" + alias;
-              }
-              needProject = true;
-              List( (
-                originalAlias,
-                ProjectArg(
-                  alias,
-                  convert(se.getExpression(), bindings.toMap)
-                ) )
-              )
+            }).flatten.toList
 
-
-
-            } else if(si.isInstanceOf[AllColumns]) {
-              includeAll = true;
-              sources.keys.map( defaultTargetsForTable(_) ).flatten.toList
-            } else if(si.isInstanceOf[AllTableColumns]) {
-              needProject = true;
-              defaultTargetsForTable(
-                si.asInstanceOf[AllTableColumns].getTable.getName.toUpperCase
-              )
-            } else {
-              unhandled("SelectItem[Unknown]")
-            }
-          }).flatten.toList
-
-        // if(needProject){
-        ret = Project(target.map( _._2 ), ret);
-      }
+          // if(needProject){
+          ret = Project(target.map( _._2 ), ret);
+        }
 
       // }
 
   //     
   //     var optionalClauses = List[OptionalSelectClause]();
   //     
-      if(ps.getGroupByColumnReferences != null) {
-        unhandled("GROUP BY")
+      //if(ps.getGroupByColumnReferences != null) {
+        //unhandled("GROUP BY")
   //       optionalClauses ++= List(
   //         GroupByClause(ps.getGroupByColumnReferences.map(
   //           (gb: Expression) => convert(gb)
   //         ).toList)
   //       )
-      }
+     // }
       if(ps.getOrderByElements != null) {
         unhandled("ORDER BY")
   //       optionalClauses ++= List( 
