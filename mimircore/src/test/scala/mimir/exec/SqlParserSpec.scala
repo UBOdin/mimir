@@ -197,6 +197,13 @@ object SqlParserSpec extends Specification with FileMatchers {
 
 			db.optimize(convert("SELECT A, B, SUM(B) FROM R GROUP BY C"))must
 				throwA[SQLException]("Illegal Group By Query: 'A' is not a Group By argument.")
+/*
+			db.optimize(convert("SELECT A + B, SUM(B) FROM R GROUP BY A + B"))must be equalTo
+				Project(List(ProjectArg("EXPR_1", Arithmetic(Arith.Add, Var("R_A"), Var("R_B"))), ProjectArg("EXPR_2", Var("EXPR_2"))),
+					Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "EXPR_2")), List(Arithmetic(Arith.Add, Var("R_A"), Var("R_B"))),
+						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						)))
+						*/
 
 			db.optimize(convert("SELECT A AS BOB, SUM(B) AS ALICE FROM R GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("BOB", Var("R_A")), ProjectArg("ALICE", Var("ALICE"))),

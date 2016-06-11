@@ -120,6 +120,17 @@ class SqlToRA(db: Database)
           map( x => List( (x.asInstanceOf[SelectExpressionItem].getExpression(),
             SqlUtils.getAlias(x.asInstanceOf[SelectExpressionItem])) )).flatten.toMap
 
+      val isAggSelect = ps.getSelectItems().exists(x => x.isInstanceOf[SelectExpressionItem] &&
+        x.asInstanceOf[SelectExpressionItem].getExpression().isInstanceOf[net.sf.jsqlparser.expression.Function] &&
+        aggFuncNames.contains(x.asInstanceOf[SelectExpressionItem].getExpression().asInstanceOf[net.sf.jsqlparser.expression.Function].
+        getName.toUpperCase))
+
+      /* Boolean to check for non aggregate expressions in Aggregate Select */
+      val hasFlatSelect = ps.getSelectItems().exists(x => x.isInstanceOf[SelectExpressionItem] &&
+        (!x.asInstanceOf[SelectExpressionItem].getExpression().isInstanceOf[net.sf.jsqlparser.expression.Function] ||
+          !aggFuncNames.contains(x.asInstanceOf[SelectExpressionItem].getExpression().
+          asInstanceOf[net.sf.jsqlparser.expression.Function].getName().toUpperCase)))
+
       /* Map of function expression (keys) and corresponding aliases (values) */
       val functions: Map[net.sf.jsqlparser.expression.Expression, String] = ps.getSelectItems().
         filter(x => x.isInstanceOf[SelectExpressionItem] &&
@@ -149,38 +160,43 @@ class SqlToRA(db: Database)
       var aggTarget = List[AggregateArg]()
 
       /* Choose the correct processing path */
-      if(!functions.isEmpty) {
+      if(isAggSelect) {//!functions.isEmpty) {
         /* Aggregate Select Path */ //Note to self: use .length method to compare selectItems and aggSelect for
                                     //error handling, e.g., compare extra expressions with GROUP BY parameters
-        aggTarget = functions.keys.map( (f) => {
+        aggTarget = projectOrder.keys.map( (f) => {
           /* Get the parameters */
           /* columns */
-          val func = f.asInstanceOf[net.sf.jsqlparser.expression.Function]
-          var parameters = List[Expression]()
-          parameters =
-            if(func.getParameters == null) {
-              if(func.isAllColumns()){
-                if(func.getName.toUpperCase != "COUNT") {
-                  throw new SQLException("Syntax error in query expression: " + func.getName.toUpperCase + "(*)");
+          if(f.isInstanceOf[net.sf.jsqlparser.expression.Function]) {
+            val func = f.asInstanceOf[net.sf.jsqlparser.expression.Function]
+            var parameters = List[Expression]()
+            parameters =
+              if (func.getParameters == null) {
+                if (func.isAllColumns()) {
+                  if (func.getName.toUpperCase != "COUNT") {
+                    throw new SQLException("Syntax error in query expression: " + func.getName.toUpperCase + "(*)");
+                  }
                 }
+                List[Expression]()
               }
-              List[Expression]()
-            }
-            else {
-              func.getParameters.getExpressions.toList.map(x => convert(x, bindings.toMap))
+              else {
+                func.getParameters.getExpressions.toList.map(x => convert(x, bindings.toMap))
+              }
+
+            /* Get column alias */
+            val colAlias: String = projectOrder(f) //SqlUtils.getAlias(f)
+
+            var alias = colAlias
+            if (colAlias == null) {
+              aggexprID += 1
+              alias = "EXPR_" + aggexprID
+              funcAliases.update(f, alias)
             }
 
-          /* Get column alias */
-          val colAlias: String = funcAliases(f)//SqlUtils.getAlias(f)
-
-          var alias = colAlias
-          if(colAlias == null){
-            aggexprID += 1
-            alias = "EXPR_" + aggexprID
-            funcAliases.update(f, alias)
+            List(AggregateArg(func.getName.toUpperCase, parameters, alias))
           }
-
-          List(AggregateArg(func.getName.toUpperCase, parameters, alias))
+          else {
+              List()
+          }
         }).flatten.toList
 
         /* Retrieve GroupBy Columns */
@@ -193,14 +209,15 @@ class SqlToRA(db: Database)
         ret = Aggregate(aggTarget, gb_cols, ret);
 
 
-        if(projectOrder.size > funcAliases.size)//!flatSelect.isEmpty)
+        if(hasFlatSelect)//.size > funcAliases.size)//!flatSelect.isEmpty)
           {
             /* Check for legal Group By query */
             /* If flatSelect Item is a column, get the alias and see if it exists in groupby list */
-            projectOrder.keys.foreach(x => if(x.isInstanceOf[Column]){
-              val col = x.asInstanceOf[Column]
-              if(!ps.getGroupByColumnReferences.contains(col)){
-                throw new SQLException("Illegal Group By Query: '" + col.getColumnName().toUpperCase + "' is not a Group By argument.")
+            projectOrder.keys.foreach(x => if(!x.isInstanceOf[net.sf.jsqlparser.expression.Function] ||
+              !aggFuncNames.contains(x.asInstanceOf[net.sf.jsqlparser.expression.Function].getName().toUpperCase)){
+              ///val col = x.asInstanceOf[Column]
+              if(!ps.getGroupByColumnReferences.contains(x)){
+                throw new SQLException("Illegal Group By Query: '" + x.toString.toUpperCase + "' is not a Group By argument.")
               }
             })
             /* Concatenate group by ProjectArgs to projArgs */
