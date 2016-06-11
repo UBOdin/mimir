@@ -14,7 +14,7 @@ case class TypeException(found: Type.T, expected: Type.T,
 class RAException(msg: String) extends Exception(msg);
 
 object Type extends Enumeration {
-  type T = Value
+  type T = Value//where does Value come from?
 
   val TInt, TFloat, TDate, TString, TBool, TRowId, TType, TAny = Value
 

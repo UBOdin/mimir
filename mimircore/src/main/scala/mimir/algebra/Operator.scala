@@ -49,6 +49,7 @@ case class AggregateArg(function: String, columns: List[Expression], alias: Stri
   override def toString = (function.toString + "(" + columns.map(_.toString).mkString(", ") + ")" + ", " + alias)
   def getFunctionName() = function
   def getColumnNames() = columns.toString
+  def getAlias() = alias.toString
 }
 
 /* Aggregate Operator refashioned 5/23/16, 5/31/16 */
@@ -60,6 +61,7 @@ case class Aggregate(args: List[AggregateArg], groupby: List[Expression], source
 
   def children() = List(source)
   def rebuild(x: List[Operator]) = new Aggregate(args, groupby, x(0))
+  //def getAliases() = args.map(x => x.getAlias())
 }
 
 case class Select(condition: Expression, source: Operator) extends Operator

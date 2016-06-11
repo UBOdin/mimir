@@ -7,8 +7,9 @@ import Arith.{Add, Sub, Mult, Div, And, Or}
 import Cmp.{Gt, Lt, Lte, Gte, Eq, Neq, Like, NotLike}
 import net.sf.jsqlparser.expression.Expression
 
+/* what's going on with scope and Map().apply? */
 class ExpressionChecker(scope: (String => Type.T) = Map().apply _) {
-
+	/* Assert that the expressions claimed type is its type */
 	def assert(e: Expression, t: Type.T, msg: String = "Typechecker"): Unit = {
 		val eType = typeOf(e);
 		if(Typechecker.escalate(eType,t) != t){
@@ -82,15 +83,17 @@ object Typechecker {
 	}
 
 	def schemaOf(o: Operator): List[(String, Type.T)] =
-	{ 
+	{ /* Flag to detect a group by query */
+		var isGroupBy = false
+
 		o match {
 			case Project(cols, src) =>
+				isGroupBy = true
 				val chk = new ExpressionChecker(schemaOf(src).toMap);
 				cols.map( { 
 						case ProjectArg(col, in) =>
 							(col, chk.typeOf(in))
 					})
-
 
 			case Select(cond, src) =>
 				val srcSchema = schemaOf(src);
@@ -98,7 +101,13 @@ object Typechecker {
 				srcSchema
 
 			case Aggregate(args, groupBy, source) =>
+				/* Get child operator schema */
 				val srcSchema = schemaOf(source)
+				val chk = new ExpressionChecker(srcSchema.toMap)
+				args.map( {
+					case AggregateArg(function, columns, alias) =>
+						()
+				})
 				srcSchema
 
 
