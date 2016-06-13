@@ -19,6 +19,7 @@ abstract class SingleVarModel(vt: Type.T) extends Model {
   def sample(seed: Long, args: List[PrimitiveValue]): PrimitiveValue
   def reason(args: List[Expression]): (String, String)
   def backingStore(): String
+  def createBackingStore(): Unit
 
   def mostLikelyValue(x:Int, args: List[PrimitiveValue]) = mostLikelyValue(args)
   def lowerBound(x: Int, args: List[PrimitiveValue]) = lowerBound(args)
@@ -31,6 +32,7 @@ abstract class SingleVarModel(vt: Type.T) extends Model {
   def sample(seed: Long, x: Int, args: List[PrimitiveValue]) = sample(seed, args)
   def reason(x: Int, args: List[Expression]): (String, String) = reason(args)
   def backingStore(x: Int): String = backingStore()
+  def createBackingStore(x: Int) = createBackingStore()
 
 
 }
@@ -61,6 +63,9 @@ case class JointSingleVarModel(vars: List[SingleVarModel]) extends Model {
     vars(idx).reason(idx, args)
 
   override def backingStore(idx: Int): String = vars(idx).backingStore()
+
+  override def createBackingStore(idx: Int): Unit = vars(idx).createBackingStore()
+  override def createBackingStore(): Unit = vars.foreach(x => x.createBackingStore())
 }
 
 object UniformDistribution extends SingleVarModel(Type.TFloat){
@@ -81,6 +86,7 @@ object UniformDistribution extends SingleVarModel(Type.TFloat){
 
   override def reason(args: List[Expression]): (String, String) = ("Unknown", "Unknown")   // TODO
   override def backingStore(): String = ???
+  override def createBackingStore(): Unit = ???
 }
 
 case class NoOpModel(vt: Type.T) extends SingleVarModel(vt) {
@@ -95,6 +101,6 @@ case class NoOpModel(vt: Type.T) extends SingleVarModel(vt) {
   def sample(seed: Long, args: List[PrimitiveValue]) = args(0)
 
   override def reason(args: List[Expression]): (String, String) = ("None", "None")
-
   override def backingStore(): String = ???
+  override def createBackingStore(): Unit = {}
 }

@@ -290,20 +290,10 @@ class RAToSql(db: Database) {
 
         /* PROJECT */
         val selItem = new SelectExpressionItem()
-        val castFunction = new Function()
-        castFunction.setName("CAST")
-        val explist = new ExpressionList()
-        val list = new util.ArrayList[expression.Expression]()
         val column = new Column()
-
-        /* This is particularly terrible */
         column.setTable(backingStore)
-        column.setColumnName("DATA AS INTEGER")
-        list.add(column)
-
-        explist.setExpressions(list)
-        castFunction.setParameters(explist)
-        selItem.setExpression(castFunction)
+        column.setColumnName("DATA")
+        selItem.setExpression(column)
         val selItemList = new util.ArrayList[SelectItem]()
         selItemList.add(selItem)
         plainSelect.setSelectItems(selItemList)

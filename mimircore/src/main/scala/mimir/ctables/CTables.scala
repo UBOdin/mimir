@@ -17,6 +17,8 @@ abstract class Model {
   def sample            (seed: Long, idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
   def reason            (idx: Int, args: List[Expression]): (String, String)
   def backingStore      (idx: Int): String
+  def createBackingStore(idx: Int): Unit
+  def createBackingStore(): Unit
 }
 
 case class VGTerm(

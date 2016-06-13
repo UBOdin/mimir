@@ -156,7 +156,7 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   val backend = opt[String]("driver", descr = "Which backend database to use? ([sqlite],oracle)",
     default = Some("sqlite"))
   val dbname = opt[String]("db", descr = "Connect to the database with the specified name",
-    default = Some("tpch.db"))
+    default = Some("debug.db"))
   val nonDetStrategy = opt[String]("ndStrat", descr = "Non-Determinism Strategy (classic,partition,inline,[hybrid])", default = Some("hybrid"))
   val initDB = toggle("init", default = Some(false))
   val quiet  = toggle("quiet", default = Some(false))

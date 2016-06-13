@@ -64,6 +64,8 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
     inferenceModel = new TypeInferenceModel(this)
     inferenceModel.asInstanceOf[TypeInferenceModel].init(results)
   }
+
+  override def createBackingStore: Unit = {}
 }
 
 class TypeInferenceModel(lens: TypeInferenceLens) extends Model
@@ -200,6 +202,10 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
   }
 
   override def backingStore(idx: Int): String = ???
+
+  override def createBackingStore(idx: Int): Unit = ???
+
+  override def createBackingStore(): Unit = {}
 }
 
 case class TypeInferenceAnalysis(model: TypeInferenceModel,
@@ -348,6 +354,10 @@ class TypeCastModel(lens: TypeInferenceLens) extends Model {
   }
 
   override def backingStore(idx: Int): String = ???
+
+  override def createBackingStore(idx: Int): Unit = {}
+
+  override def createBackingStore(): Unit = {}
 }
 
 case class TypeCastAnalysis(model: TypeCastModel,

@@ -85,6 +85,8 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
     model = new SchemaMatchingModel(this)
     model.asInstanceOf[SchemaMatchingModel].learn(targetSchema, sourceSchema)
   }
+
+  override def createBackingStore: Unit = {}
 }
 
 case class SchemaAnalysis(model: SchemaMatchingModel, idx: Int, args: List[Expression])
@@ -159,4 +161,8 @@ class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
   }
 
   override def backingStore(idx: Int): String = "__"+lens.name+"_BACKEND"
+
+  override def createBackingStore(idx: Int): Unit = {}
+
+  override def createBackingStore(): Unit = {}
 }

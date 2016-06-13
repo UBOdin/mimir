@@ -123,14 +123,17 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
     }
   }
 
+  override def createBackingStore: Unit = {
+    model.createBackingStore()
+  }
+
   def lensType = "MISSING_VALUE"
 
   ////// Weka's InstanceQueryAdapter interface
   def attributeCaseFix(colName: String) = colName
 
   def getDebug = false
-
-                                                                                                                                                                                                                                                def getSparseData = false
+                                                                                                                                                                                                                                               def getSparseData = false
 
   def translateDBColumnType(t: String) = {
     t.toUpperCase match {
@@ -179,7 +182,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
   var data: Instances = null
   var numCorrect = 0
   var numSamples = 0
-  var cIndex = 0
+  var cIndex = -1
   private val TRAINING_LIMIT = 100
 
   def backingStore() = name+"_BACKEND"
@@ -194,22 +197,6 @@ class MissingValueModel(lens: MissingValueLens, name: String)
 
   def init(source: Operator, classIndex: Int) = {
 
-    /* Create the backing-store table, if it exists, delete everything from it and re-use */
-    if(lens.db.getTableSchema(backingStore()).isEmpty) {
-      lens.db.update(
-        "CREATE TABLE "+backingStore()+""" (
-                                         | EXP_LIST varchar(100),
-                                         | DATA varchar(100),
-                                         | TYPE char(10),
-                                         | ACCEPTED char(1),
-                                         | PRIMARY KEY (EXP_LIST)
-                                         | )""".stripMargin
-      )
-    }
-    else {
-      lens.db.update( "DELETE FROM "+backingStore() )
-    }
-
     /* Learn the model */
     cIndex = classIndex
     // println("SOURCE: "+source)
@@ -220,7 +207,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     var numInstances = 0
     iterator.open()
 
-    /* The second check poses a limit on the learning data and reduce time spent building the lens */
+    /* The second check poses a limit on the learning data and reduces time spent building the lens */
     while(iterator.getNext() && numInstances < TRAINING_LIMIT) {
       // println("ROW: "+iterator.currentRow())
       val instance = new DenseInstance(iterator.numCols)
@@ -249,35 +236,6 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     learner.setModelContext(new InstancesHeader(data))
     learner.prepareForUse()
     data.foreach(learn(_))
-
-    /* Finally populate the backing-store for each null value */
-    val rowidQuery = 
-      CTPercolator.propagateRowIDs(
-        Select(IsNullExpression(Var(iterator.schema(classIndex)._1)), source), 
-        true
-      )
-
-    val rowidIterator = lens.db.query(rowidQuery)
-
-    var nulls = 0
-    rowidIterator.open()
-    while(rowidIterator.getNext()) {
-      if(Typechecker.typeOf(rowidIterator(classIndex+1)) == Type.TAny) {
-        val explist = List(rowidIterator(
-          rowidIterator.schema.zipWithIndex.filter(_._1._1.equalsIgnoreCase(CTPercolator.ROWID_KEY)).head._2
-        ))
-        val data = computeMostLikelyValue(explist)
-        val typ = TypeUtils.convert(data.getType)
-        val accepted = "N" // TODO Factor out the yes/no literal
-        val tuple = List(explist.map(x => x.asString).mkString("|"), data.asString, typ, accepted)
-        lens.db.update(
-          "INSERT INTO "+backingStore()+" VALUES (?, ?, ?, ?)", tuple
-        )
-        nulls = nulls + 1
-        println("Progress: Null no. "+nulls)
-      }
-    }
-    rowidIterator.close()
   }
 
   def learn(dataPoint: Instance) = {
@@ -325,6 +283,63 @@ class MissingValueModel(lens: MissingValueLens, name: String)
       toList.
       zipWithIndex.
       filter(_._1 > 0)
+  }
+
+  override def createBackingStore(): Unit = {
+    /* Create and populate the backing-store */
+
+    // rowidQuery filters the original query for only rows with null values in the column of interest
+    val rowidQuery =
+      CTPercolator.propagateRowIDs(
+        Select(IsNullExpression(Var(lens.schema()(cIndex)._1)), lens.source),
+        true
+      )
+
+    val rowidIterator = lens.db.query(rowidQuery)
+
+    var nulls = 0
+    var backingStoreCreated = false
+
+    rowidIterator.open()
+    while(rowidIterator.getNext()) {
+      if(Typechecker.typeOf(rowidIterator(cIndex+1)) == Type.TAny) {
+        val explist = List(rowidIterator(
+          rowidIterator.schema.zipWithIndex.filter(_._1._1.equalsIgnoreCase(CTPercolator.ROWID_KEY)).head._2
+        ))
+        val data = computeMostLikelyValue(explist)
+        if(!backingStoreCreated) {
+          lens.db.getTableSchema(backingStore()) match {
+            case Some(List(("EXP_LIST", Type.TString), ("DATA", _))) =>
+              lens.db.update( "DELETE FROM "+backingStore() )
+            case Some(_) =>
+              lens.db.update( "DROP TABLE "+backingStore() )
+              lens.db.update(
+                "CREATE TABLE " + backingStore() + " (" +
+                  "EXP_LIST varchar(100), " +
+                  "DATA "+TypeUtils.convert(data.getType)+", " +
+                  "PRIMARY KEY (EXP_LIST)" +
+                  ")"
+              )
+            case None =>
+              lens.db.update(
+                "CREATE TABLE " + backingStore() + " (" +
+                  "EXP_LIST varchar(100), " +
+                  "DATA "+TypeUtils.convert(data.getType)+", " +
+                  "PRIMARY KEY (EXP_LIST)" +
+                  ")"
+              )
+          }
+          backingStoreCreated = true
+        }
+        val tuple = List(explist.map(x => x.asString).mkString("|"), data.asString)
+        lens.db.update(
+          "INSERT INTO "+backingStore()+" VALUES (?, ?)", tuple
+        )
+        nulls = nulls + 1
+        println("Progress: Null no. "+nulls)
+      }
+    }
+    rowidIterator.close()
   }
 
   private def getAttributesFromIterator(iterator: ResultIterator): util.ArrayList[Attribute] = {
