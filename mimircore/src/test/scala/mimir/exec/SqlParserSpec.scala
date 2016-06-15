@@ -197,13 +197,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 
 			db.optimize(convert("SELECT A, B, SUM(B) FROM R GROUP BY C"))must
 				throwA[SQLException]("Illegal Group By Query: 'A' is not a Group By argument.")
-/*
-			db.optimize(convert("SELECT A + B, SUM(B) FROM R GROUP BY A + B"))must be equalTo
-				Project(List(ProjectArg("EXPR_1", Arithmetic(Arith.Add, Var("R_A"), Var("R_B"))), ProjectArg("EXPR_2", Var("EXPR_2"))),
-					Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "EXPR_2")), List(Arithmetic(Arith.Add, Var("R_A"), Var("R_B"))),
-						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
-						)))
-						*/
+			/* Variant Test Cases */
 
 			db.optimize(convert("SELECT A AS BOB, SUM(B) AS ALICE FROM R GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("BOB", Var("R_A")), ProjectArg("ALICE", Var("ALICE"))),
@@ -211,8 +205,34 @@ object SqlParserSpec extends Specification with FileMatchers {
 						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
 						)))
 
+			db.optimize(convert("SELECT A, SUM(B) AS ALICE FROM R GROUP BY A"))must be equalTo
+				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("ALICE", Var("ALICE"))),
+					Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "ALICE")), List(Var("R_A")),
+						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						)))
+
+			db.optimize(convert("SELECT SUM(B) AS ALICE FROM R GROUP BY A"))must be equalTo
+				Project(List(ProjectArg("ALICE", Var("ALICE"))),
+					Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "ALICE")), List(Var("R_A")),
+						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						)))
+
+			db.optimize(convert("SELECT A AS BOB, SUM(B) AS ALICE FROM R GROUP BY A, C"))must be equalTo
+				Project(List(ProjectArg("BOB", Var("R_A")), ProjectArg("ALICE", Var("ALICE"))),
+					Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "ALICE")), List(Var("R_A"), Var("R_C")),
+						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						)))
+
+	/*		db.optimize(convert("SELECT * FROM (SELECT A AS BOB, SUM(B) AS ALICE FROM R GROUP BY A)subq WHERE ALICE > 5"))must be equalTo
+				Project(List(ProjectArg("BOB", Var("SUBQ_BOB")), ProjectArg("ALICE", Var("SUBQ_ALICE"))),
+					Select(Comparison(Cmp.Gt, Var("R_B"), Var("S_B")),
+						Project(List(ProjectArg("SUBQ_BOB", Var("R_A")), ProjectArg("SUBQ_ALICE", Var("R_B"))),
+							Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "ALICE")), List(Var("R_A")),
+								Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List())
+								))))*/
 
 
+			/* END: Variant Test Cases */
 			db.optimize(convert("SELECT A, AVG(B) FROM R GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("AVG", List(Var("R_B")), "EXPR_1")), List(Var("R_A")),

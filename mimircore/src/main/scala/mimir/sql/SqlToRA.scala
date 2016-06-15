@@ -109,16 +109,11 @@ class SqlToRA(db: Database)
         /*List of aggregate function names */
       val aggFuncNames = List("SUM", "AVG", "MAX", "MIN", "COUNT")
 
-        /* List of expressions from plain select *///I think that I can get rid of this and just obtain projectOrder
-      //val selectItems: List[net.sf.jsqlparser.expression.Expression] = ps.getSelectItems().
-       //   filter(x => x.isInstanceOf[SelectExpressionItem]).
-       //   map(x => (x.asInstanceOf[SelectExpressionItem].getExpression())).toList
-
       /* Map to reassemble projection order */
-      val projectOrder: Map[net.sf.jsqlparser.expression.Expression, String] = ps.getSelectItems().
+      val projectOrder: mutable.Buffer[(net.sf.jsqlparser.expression.Expression, String)] = ps.getSelectItems().
         filter(x => x.isInstanceOf[SelectExpressionItem]).
-          map( x => List( (x.asInstanceOf[SelectExpressionItem].getExpression(),
-            SqlUtils.getAlias(x.asInstanceOf[SelectExpressionItem])) )).flatten.toMap
+          map( x => mutable.Buffer( (x.asInstanceOf[SelectExpressionItem].getExpression(),
+            SqlUtils.getAlias(x.asInstanceOf[SelectExpressionItem])) )).flatten
 
       val isAggSelect = ps.getSelectItems().exists(x => x.isInstanceOf[SelectExpressionItem] &&
         x.asInstanceOf[SelectExpressionItem].getExpression().isInstanceOf[net.sf.jsqlparser.expression.Function] &&
@@ -139,35 +134,23 @@ class SqlToRA(db: Database)
           asInstanceOf[net.sf.jsqlparser.expression.Function].getName.toUpperCase)).
             map(x => List( (x.asInstanceOf[SelectExpressionItem].getExpression(),
               x.asInstanceOf[SelectExpressionItem].getAlias()) )).flatten.toMap
+
       /* To be able to make changes when an alias is null--did not find a more clean way to convert to mutable Map */
       val funcAliases = collection.mutable.Map(functions.toSeq: _*)
-     // val sItems = ps.getSelectItems().filter(x => x.isInstanceOf[SelectExpressionItem]).map(x => x.asInstanceOf[SelectExpressionItem])
-     // val alias = sItems.map(x => x.getAlias())
 
-
-
-        /*List of non-aggregate expressions that are part of the aggregate query *///I think I can use projectOrder and get rid
-      //of this
-     // val flatSelect: List[net.sf.jsqlparser.expression.Expression] =
-      //  selectItems.filter(x => !x.isInstanceOf[net.sf.jsqlparser.expression.Function])
-
-      /* Save the aggregate functions to a list aggFunctions *///I think I can replace this with funcAliases
-      //val aggFunctions: List[net.sf.jsqlparser.expression.Expression] = selectItems.filter(x => x.isInstanceOf[net.sf.jsqlparser.expression.Function]
-      //  && aggFuncNames.contains(x.asInstanceOf[net.sf.jsqlparser.expression.Function].getName.toUpperCase))
 
       /* Lists variables for flat select and aggregate select respectively */
       var target = List[(String, ProjectArg)]()
       var aggTarget = List[AggregateArg]()
+      var projArgs = List[(String, ProjectArg)]()
 
       /* Choose the correct processing path */
-      if(isAggSelect) {//!functions.isEmpty) {
-        /* Aggregate Select Path */ //Note to self: use .length method to compare selectItems and aggSelect for
-                                    //error handling, e.g., compare extra expressions with GROUP BY parameters
-        aggTarget = projectOrder.keys.map( (f) => {
+      if(isAggSelect) {
+        /* Aggregate Select Path */
+        aggTarget = projectOrder.map( (f) => {
           /* Get the parameters */
-          /* columns */
-          if(f.isInstanceOf[net.sf.jsqlparser.expression.Function]) {
-            val func = f.asInstanceOf[net.sf.jsqlparser.expression.Function]
+          if(f._1.isInstanceOf[net.sf.jsqlparser.expression.Function]) {
+            val func = f._1.asInstanceOf[net.sf.jsqlparser.expression.Function]
             var parameters = List[Expression]()
             parameters =
               if (func.getParameters == null) {
@@ -183,16 +166,25 @@ class SqlToRA(db: Database)
               }
 
             /* Get column alias */
-            val colAlias: String = projectOrder(f) //SqlUtils.getAlias(f)
+           // var colAlias: String = projectOrder(f)
 
-            var alias = colAlias
-            if (colAlias == null) {
+            var alias: String = f._2
+            if ( alias == null) {
               aggexprID += 1
               alias = "EXPR_" + aggexprID
-              funcAliases.update(f, alias)
+              funcAliases(f._1) = alias
+              //f._2 = alias
+            }
+            else {
+              alias = alias.toUpperCase
+              funcAliases(f._1) = alias
             }
 
-            List(AggregateArg(func.getName.toUpperCase, parameters, alias))
+            if(tableAlias != null){
+              alias = tableAlias + "_" + alias;
+            }
+
+            List( (AggregateArg(func.getName.toUpperCase, parameters, alias)) )
           }
           else {
               List()
@@ -209,31 +201,32 @@ class SqlToRA(db: Database)
         ret = Aggregate(aggTarget, gb_cols, ret);
 
 
-        if(hasFlatSelect)//.size > funcAliases.size)//!flatSelect.isEmpty)
+        if(hasFlatSelect)
           {
             /* Check for legal Group By query */
             /* If flatSelect Item is a column, get the alias and see if it exists in groupby list */
-            projectOrder.keys.foreach(x => if(!x.isInstanceOf[net.sf.jsqlparser.expression.Function] ||
-              !aggFuncNames.contains(x.asInstanceOf[net.sf.jsqlparser.expression.Function].getName().toUpperCase)){
-              ///val col = x.asInstanceOf[Column]
-              if(!ps.getGroupByColumnReferences.contains(x)){
-                throw new SQLException("Illegal Group By Query: '" + x.toString.toUpperCase + "' is not a Group By argument.")
+            projectOrder.foreach(x => if(!x._1.isInstanceOf[net.sf.jsqlparser.expression.Function] ||
+              !aggFuncNames.contains(x._1.asInstanceOf[net.sf.jsqlparser.expression.Function].getName().toUpperCase)){
+
+              if(!ps.getGroupByColumnReferences.contains(x._1)){
+                throw new SQLException("Illegal Group By Query: '" + x._2.toString.toUpperCase + "' is not a Group By argument.")
               }
             })
-            /* Concatenate group by ProjectArgs to projArgs */
-            //projArgs = projArgs ++ flatSelect.toList.map(x => ProjectArg(x.toString(), convert(x, bindings.toMap)))
-            //projArgs = selectItems.toList.map(x => )
+
           }
 
         /* Create ProjectArgs for Project Operator */
-        //var projArgs = aggTarget.map(x => ProjectArg(x.getAlias(), Var(x.getAlias())))
-
-        val projArgs = projectOrder.keys.map(x =>
-          if(funcAliases.contains(x)) {
-            List( (ProjectArg(funcAliases(x), Var(funcAliases(x)))) )
+        projArgs = projectOrder.map(x =>
+          if(funcAliases.contains(x._1)) {
+            val aggAlias: String = funcAliases(x._1)//x._2
+            var alias: String = aggAlias
+            if(tableAlias != null){
+              alias = tableAlias + "_" + alias;
+            }
+            List( (aggAlias, ProjectArg(alias, Var(alias))) )
           }
           else {
-            val colAlias: String = projectOrder(x)
+            var colAlias: String = x._2
 
             var alias: String = colAlias
             if(alias == null) {
@@ -241,11 +234,15 @@ class SqlToRA(db: Database)
               alias = "EXPR_" + exprId
             } else {
               alias = alias.toUpperCase
+              colAlias = colAlias.toUpperCase
             }
-            List( (ProjectArg(alias, convert(x, bindings.toMap))) )
+            if(tableAlias != null){
+              alias = tableAlias + "_" + alias;
+            }
+            List( (colAlias, ProjectArg(alias, convert(x._1, bindings.toMap))) )
           }).flatten.toList
         /* Process Projection Operator */
-        ret = Project(projArgs, ret)
+        ret = Project(projArgs.map(_._2), ret)
 
       }
       else
@@ -256,7 +253,7 @@ class SqlToRA(db: Database)
               if(si.isInstanceOf[SelectExpressionItem]) {
                 val se = si.asInstanceOf[SelectExpressionItem]
 
-                val originalAlias: String = SqlUtils.getAlias(se);
+                val originalAlias: String = SqlUtils.getAlias(se).toUpperCase;
                 var alias: String = originalAlias;
                 if(alias == null){
                   exprId += 1
@@ -327,12 +324,16 @@ class SqlToRA(db: Database)
       
       if(ps.getHaving != null)  { unhandled("HAVING") }
       if(ps.getLimit != null)   { unhandled("LIMIT") }
-      
-      return (ret, 
+
+
+      target = target ++ projArgs
+      return (ret,
         target.map(
           (x) => (x._1, x._2.column)
         ).toMap
-      );
+        );
+
+
     } else if(sb.isInstanceOf[net.sf.jsqlparser.statement.select.Union]) {
       val union = sb.asInstanceOf[net.sf.jsqlparser.statement.select.Union];
       val isAll = (union.isAll() || !union.isDistinct());
@@ -360,7 +361,7 @@ class SqlToRA(db: Database)
       }
       val (ret, bindings) = convert(
         fi.asInstanceOf[SubSelect].getSelectBody,
-        fi.asInstanceOf[SubSelect].getAlias
+        fi.asInstanceOf[SubSelect].getAlias.toUpperCase
       );
       return (ret, bindings, fi.asInstanceOf[SubSelect].getAlias.toUpperCase)
     }
