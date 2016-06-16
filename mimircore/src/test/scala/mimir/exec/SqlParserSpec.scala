@@ -223,13 +223,13 @@ object SqlParserSpec extends Specification with FileMatchers {
 						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
 						)))
 
-	/*		db.optimize(convert("SELECT * FROM (SELECT A AS BOB, SUM(B) AS ALICE FROM R GROUP BY A)subq WHERE ALICE > 5"))must be equalTo
-				Project(List(ProjectArg("BOB", Var("SUBQ_BOB")), ProjectArg("ALICE", Var("SUBQ_ALICE"))),
-					Select(Comparison(Cmp.Gt, Var("R_B"), Var("S_B")),
-						Project(List(ProjectArg("SUBQ_BOB", Var("R_A")), ProjectArg("SUBQ_ALICE", Var("R_B"))),
-							Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "ALICE")), List(Var("R_A")),
-								Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List())
-								))))*/
+			(convert("SELECT * FROM (SELECT A AS BOB, SUM(B) AS ALICE FROM R GROUP BY A)subq WHERE ALICE > 5")) must be equalTo
+					Project(List(ProjectArg("BOB", Var("SUBQ_BOB")), ProjectArg("ALICE", Var("SUBQ_ALICE"))),
+						Select(Comparison(Cmp.Gt, Var("SUBQ_ALICE"), IntPrimitive(5)),
+							Project(List(ProjectArg("SUBQ_BOB", Var("R_A")), ProjectArg("SUBQ_ALICE", Var("SUBQ_ALICE"))),
+								Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "SUBQ_ALICE")), List(Var("R_A")),
+									Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List())
+									))))
 
 
 			/* END: Variant Test Cases */
