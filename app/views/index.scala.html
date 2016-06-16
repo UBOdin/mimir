@@ -26,39 +26,26 @@
     <![endif]-->
 </head>
 <body>
-<div class="outer_container">
+<div class="container">
     <div class="container">
         <nav class="navbar navbar-default">
             <div>
-                <div class="navbar-header">
+                <div class="navbar-header" style="background-color: #fff;">
                     <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target=".navbar-collapse">
                         <span class="sr-only">Toggle navigation</span>
                         <span class="icon-bar"></span>
                         <span class="icon-bar"></span>
                         <span class="icon-bar"></span>
                     </button>
-                    <a class="navbar-brand" href="/">Mimir</a>
+                    <a class="navbar-brand" href="/"><img type="image/png" src="assets/images/mimir.png" style="max-width:120px;"/></a>
                 </div>
                 <div class="navbar-collapse collapse">
                     <ul class="nav navbar-nav">
                         <li><a id="about_btn">About</a></li>
                         <li><a id="upload">Upload</a></li>
                         <li class="dropdown">
-                            <a class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><span id="curr_db">@webAPI.getCurrentDB</span> <span class="caret"></span></a>
+                            <a class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><span id="curr_db">Databases</span> <span class="caret"></span></a>
                             <ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
-                                <li class="dropdown-header" id="tables_header">Tables</li>
-                                @webAPI.getAllTables.map { x =>
-                                    @if(!x.equals("MIMIR_LENSES") && !x.endsWith("_BACKEND")) {
-                                        <li><a class="table_link ">@x</a></li>
-                                    }
-                                }
-                                <li role="separator" class="divider"></li>
-                                <li class="dropdown-header">Lenses</li>
-                                @webAPI.getAllLenses.map { x =>
-                                <li><a class="lens_link">@x</a></li>
-                                }
-                                <li role="separator" class="divider"></li>
-                                <li class="dropdown-header">Databases</li>
                                 @webAPI.getAllDBs.map { x =>
                                     <li><a class="db_link">@x</a></li>
                                 }
@@ -98,26 +85,50 @@
             @result match {
                 case WebQueryResult(iter) => {
                     <div class="leftCol">
-                        <button id="type_inference_btn" class="lens_btn">TYPE INFERENCE LENS</button>
-                        <button id="missing_value_btn" class="lens_btn">MISSING VALUE LENS</button>
-                        <button id="schema_matching_btn" class="lens_btn">SCHEMA MATCHING LENS</button>
-                    </div>
-                    <div class="rightCol">
-                         @tableGenerator(iter)
-                    </div>
-                    <div class="clear"></div>
-                    <div class="panel panel-default">
+                        <div class="dropdown">
+                            <button class="btn btn-primary dropdown-toggle" style="width:100%; text-align:left;" type="button" data-toggle="dropdown">Create Lens
+                            <span class="caret"></span></button>
+                            <ul class="dropdown-menu">
+                                <li><button id="type_inference_btn" class="lens_btn">Type Inference</button></li>
+                                <li><button id="missing_value_btn" class="lens_btn">Missing Value</button></li>
+                                <li><button id="schema_matching_btn" class="lens_btn" style="margin-bottom:2px;">Schema Matching</button></li>
+                            </ul>
+                        </div>
+                        <div class="tablebutton">
+                        <div class="dropdown"><button class="btn btn-primary dropdown-toggle" style="width:100%; text-align:left;" type="button" data-toggle="dropdown">Tables
+                            <span class="caret"></span></button>
+                            <ul class="dropdown-menu">
+                                @webAPI.getAllTables.map { x =>
+                                    @if(!x.equals("MIMIR_LENSES") && !x.endsWith("_BACKEND")) {
+                                        <li><a class="table_link ">@x</a></li>
+                                    }
+                                }
+                                <li role="separator" class="divider"></li>
+                                @webAPI.getAllLenses.map { x =>
+                                <li><a class="lens_link">@x</a></li>
+                                }
+                            </ul>
+                        </div>
+                        </div>
+                        <div class="panel panel-default" style="width:;">
                         <div class="panel-heading">
                             <h3 class="panel-title">Notifications</h3>
                         </div>
                         <div class="panel-body">
-                            <p>@iter.count row(s) returned in @iter.executionTime ms, showing top 100</p>
-                            <p>Red represents data uncertainty</p>
+                            <li><p>@iter.count row(s) returned in @iter.executionTime ms, showing top 100</p></li>
+                            <li><p><span style="color:red">Red</span> represents data uncertainty</p></li>
                             @if(iter.missingRows) {
-                            <p class="red">There may be some rows missing from this result</p>
+                            <li><p class="red">There may be some rows missing from this result</p></li>
                             }
                         </div>
+                        </div>
                     </div>
+
+                    <div class="rightCol">
+                         @tableGenerator(iter)
+                    </div>
+                    <div class="clear"></div>
+                    
                 }
                 case WebStringResult(string) => { <pre>@string</pre> }
                 case WebErrorResult(string) => { <pre class="error">Command Ignored.<br/><br/>@string</pre> }
