@@ -224,7 +224,7 @@ td:hover {
     float:                      left;
     padding-left:               10px;
     padding-right:              10px;
-    border-left:                2px solid black;
+    border-left:                2px solid #29363e;
 }
 
 .lens_btn {
@@ -329,6 +329,6 @@ select:focus {
 }
 
 .horbar {
-    background:                 black;
+    background:                 #29363e;
     height:                     2px;
 }

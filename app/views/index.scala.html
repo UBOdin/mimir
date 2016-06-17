@@ -78,7 +78,9 @@
                     <input type="submit" class="btn btn-primary" id="query_btn" value="Query">
                 </form>
                 <input type="hidden" id="last_query_field" name="last_query" value="@lastQuery">
+                
                 <input type="hidden" id="db_field" name="db" value="@webAPI.getCurrentDB">
+
             </div>
         </div>
         <div class="result">
@@ -89,7 +91,7 @@
                             <button class="btn btn-primary dropdown-toggle" style="width:100%; text-align:left;" type="button" data-toggle="dropdown">Create Lens
                             <span class="caret"></span></button>
                             <ul class="dropdown-menu">
-                                <li><button id="type_inference_btn" class="lens_btn">Type Inference</button></li>
+                                 <li><button id="type_inference_btn" class="lens_btn">Type Inference</button></li>
                                 <li><button id="missing_value_btn" class="lens_btn">Missing Value</button></li>
                                 <li><button id="schema_matching_btn" class="lens_btn" style="margin-bottom:2px;">Schema Matching</button></li>
                             </ul>
@@ -130,7 +132,27 @@
                     <div class="clear"></div>
                     
                 }
-                case WebStringResult(string) => { <pre>@string</pre> }
+                case WebStringResult(string) => { 
+                    <pre>@string</pre>
+                    <div class="dropdown"><button class="btn btn-primary dropdown-toggle" type="button" data-toggle="dropdown">Tables
+                    <span class="caret"></span></button>
+                        <ul class="dropdown-menu">
+                            @webAPI.getAllTables.map { x =>
+                                @if(!x.equals("MIMIR_LENSES") && !x.endsWith("_BACKEND")) {
+                                    <li><a class="table_link ">@x</a></li>
+                                }
+                            }
+                            <li role="separator" class="divider"></li>
+                            @webAPI.getAllLenses.map { x =>
+                            <li><a class="lens_link">@x</a></li>
+                            }
+                        </ul>
+                    </div>
+                    <div class="clear"></div> 
+                    <div class="clear"></div>
+                    <div class="clear"></div>
+                    <div class="clear"></div>
+                }
                 case WebErrorResult(string) => { <pre class="error">Command Ignored.<br/><br/>@string</pre> }
             }
         </div>
