@@ -23,6 +23,9 @@ import scala.collection.mutable.ListBuffer
 
 class SqlToRA(db: Database) 
 {
+  /*List of aggregate function names */
+  val aggFuncNames = List("SUM", "AVG", "MAX", "MIN", "COUNT")
+
   def unhandled(feature : String) = {
     println("ERROR: Unhandled Feature: " + feature)
     throw new SQLException("Unhandled Feature: "+feature)
@@ -35,7 +38,17 @@ class SqlToRA(db: Database)
       case "CHAR" => Type.TString
     }
   }
-  
+/* Tests for unsupported aggregate query of the form "Select 1 + SUM(B) from R".
+* Returns false if such a query form is detected */
+  def isLegalAggQuery(expr: mimir.algebra.Expression): Boolean = {
+    expr match {
+      case Arithmetic(_, _, _) => expr.children.forall(x => isLegalAggQuery(x))
+      case Var(_) => true
+      case mimir.algebra.Function(op, _) => if(aggFuncNames.contains(op)){ false } else { true }
+      case _ => true
+    }
+  }
+
   def convert(s : net.sf.jsqlparser.statement.select.Select) : Operator = convert(s, null)._1
   def convert(s : net.sf.jsqlparser.statement.select.Select, alias: String) : (Operator, Map[String, String]) = {
     convert(s.getSelectBody(), alias)
@@ -107,8 +120,7 @@ class SqlToRA(db: Database)
 
       /* Check if this is an Aggregate Select or Flat Select */
 
-        /*List of aggregate function names */
-      val aggFuncNames = List("SUM", "AVG", "MAX", "MIN", "COUNT")
+
 
       /* Map to reassemble projection order
       val projectOrder: mutable.Buffer[(net.sf.jsqlparser.expression.Expression, String)] = ps.getSelectItems().
@@ -149,10 +161,7 @@ class SqlToRA(db: Database)
       if(isAggSelect){
         target =
           ps.getSelectItems.map( (si) => {
-            /* If the item is a SelectExpressionItem AND
-                it is a function AND
-                  it is an aggregate function
-             */
+            /* If the item is a SelectExpressionItem */
             if(si.isInstanceOf[SelectExpressionItem]) {
               /*&&
               si.asInstanceOf[SelectExpressionItem].getExpression().isInstanceOf[net.sf.jsqlparser.expression.Function] &&
@@ -194,8 +203,19 @@ class SqlToRA(db: Database)
                 List((originalAlias, ProjectArg(alias, Var(alias))))
               }
               /* Otherwise process the non-agg select expression item */
-              else if (si.isInstanceOf[SelectExpressionItem]) {
+              else {
                 val se = si.asInstanceOf[SelectExpressionItem]
+
+                /* Sanity check for illegal agg query in the form 'select 1 + sum(a)...' */
+                val expr = convert(se.getExpression, bindings.toMap)
+
+                val legal: Boolean = expr match {
+                  case Arithmetic(_, _, _) => isLegalAggQuery(expr) //function defined at line 43
+                  case _ => true
+                }
+                if(!legal){ throw new SQLException(
+                  "Illegal Aggregate query in the from of SELECT INT + AGG_FUNCTION.")}
+
 
                 val originalAlias: String = SqlUtils.getAlias(se).toUpperCase;
                 var alias: String = originalAlias;
@@ -221,19 +241,17 @@ class SqlToRA(db: Database)
                   ))
                 )
 
-              } else if (si.isInstanceOf[AllColumns]) {
-                includeAll = true;
-                sources.keys.map(defaultTargetsForTable(_)).flatten.toList
-              } else if (si.isInstanceOf[AllTableColumns]) {
-                needProject = true;
-                defaultTargetsForTable(
-                  si.asInstanceOf[AllTableColumns].getTable.getName.toUpperCase
-                )
-              } else {
-                unhandled("SelectItem[Unknown]")
               }
             }
             else{
+              if (si.isInstanceOf[AllColumns]) {
+                throw new SQLException("Illegal use of 'All Columns' [*] in Aggregate Query.")
+              } else if (si.isInstanceOf[AllTableColumns]) {
+                throw new SQLException("Illegal use of 'All Table Columns' [" +
+                  si.asInstanceOf[AllTableColumns].getTable.getName + ".*] in Aggregate Query.")
+              } else {
+                unhandled("SelectItem[Unknown]")
+              }
               List()
             }
           }).flatten.toList
@@ -354,6 +372,18 @@ class SqlToRA(db: Database)
             ps.getSelectItems.map( (si) => {
               if(si.isInstanceOf[SelectExpressionItem]) {
                 val se = si.asInstanceOf[SelectExpressionItem]
+
+                /* Sanity check for unsupported agg query in the form 'select 1 + sum(a)...' */
+                val expr = convert(se.getExpression, bindings.toMap)
+
+                val legal: Boolean = expr match {
+                  case Arithmetic(_, _, _) => isLegalAggQuery(expr)
+                  case _ => true
+                }
+                if(!legal){ throw new SQLException(
+                  "Illegal Aggregate query in the from of SELECT INT + AGG_FUNCTION.")}
+
+                /* END: Sanity Check */
 
                 val originalAlias: String = SqlUtils.getAlias(se).toUpperCase;
                 var alias: String = originalAlias;

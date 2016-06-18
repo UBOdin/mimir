@@ -189,6 +189,8 @@ object SqlParserSpec extends Specification with FileMatchers {
 					Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "EXPR_1")), List(Var("R_A")),
 						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
 					)))
+
+/* Illegal Group By Queries */
 			db.optimize(convert("SELECT A, SUM(B) FROM R GROUP BY C"))must
 				throwA[SQLException]("Illegal Group By Query: 'A' is not a Group By argument.")
 
@@ -197,8 +199,36 @@ object SqlParserSpec extends Specification with FileMatchers {
 
 			db.optimize(convert("SELECT A, B, SUM(B) FROM R GROUP BY C"))must
 				throwA[SQLException]("Illegal Group By Query: 'A' is not a Group By argument.")
-			/* Variant Test Cases */
 
+			db.optimize(convert("SELECT A, SUM(B), * FROM R GROUP BY C"))must throwA[SQLException]
+				throwA("Illegal Group By Query: 'A' is not a Group By argument.")
+
+/* Illegal All Columns/All Table Columns queries */
+			db.optimize(convert("SELECT SUM(B), * FROM R GROUP BY C"))must throwA[SQLException]
+				throwA("Illegal use of 'All Columns' [*] in Aggregate Query.")
+
+			db.optimize(convert("SELECT *, SUM(B) FROM R GROUP BY C"))must throwA[SQLException]
+				throwA("Illegal use of 'All Columns' [*] in Aggregate Query.")
+
+			db.optimize(convert("SELECT *, SUM(B) AS GEORGIE FROM R GROUP BY C"))must throwA[SQLException]
+				throwA("Illegal use of 'All Columns' [*] in Aggregate Query.")
+
+			db.optimize(convert("SELECT R.*, SUM(B) FROM R GROUP BY C"))must throwA[SQLException]
+				throwA("Illegal use of 'All Table Columns' [R.*] in Aggregate Query.")
+
+			db.optimize(convert("SELECT R.*, SUM(B) AS CHRISTIAN FROM R GROUP BY C"))must throwA[SQLException]
+				throwA("Illegal use of 'All Table Columns' [R.*] in Aggregate Query.")
+
+			db.optimize(convert("SELECT SUM(B), R.* FROM R GROUP BY C"))must throwA[SQLException]
+				throwA("Illegal use of 'All Table Columns' [R.*] in Aggregate Query.")
+
+			db.optimize(convert("SELECT SUM(B) AS FRAN, R.* FROM R GROUP BY C"))must throwA[SQLException]
+				throwA("Illegal use of 'All Table Columns' [R.*] in Aggregate Query.")
+
+			db.optimize(convert("SELECT 1 + SUM(B) AS FRAN, R.* FROM R GROUP BY C"))must throwA[SQLException]
+				throwA("Illegal Aggregate query in the from of SELECT INT + AGG_FUNCTION.")
+
+/* Variant Test Cases */
 			db.optimize(convert("SELECT A AS BOB, SUM(B) AS ALICE FROM R GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("BOB", Var("R_A")), ProjectArg("ALICE", Var("ALICE"))),
 					Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "ALICE")), List(Var("R_A")),
@@ -214,6 +244,12 @@ object SqlParserSpec extends Specification with FileMatchers {
 			db.optimize(convert("SELECT SUM(B) AS ALICE FROM R GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("ALICE", Var("ALICE"))),
 					Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "ALICE")), List(Var("R_A")),
+						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						)))
+
+			db.optimize(convert("SELECT SUM(B), A AS ALICE FROM R GROUP BY A"))must be equalTo
+				Project(List(ProjectArg("EXPR_1", Var("EXPR_1")), ProjectArg("ALICE", Var("R_A"))),
+					Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "EXPR_1")), List(Var("R_A")),
 						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
 						)))
 

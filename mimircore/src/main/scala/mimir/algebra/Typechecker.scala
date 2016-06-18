@@ -83,12 +83,9 @@ object Typechecker {
 	}
 
 	def schemaOf(o: Operator): List[(String, Type.T)] =
-	{ /* Flag to detect a group by query */
-		var isGroupBy = false
-
+	{
 		o match {
 			case Project(cols, src) =>
-				isGroupBy = true
 				val chk = new ExpressionChecker(schemaOf(src).toMap);
 				cols.map( { 
 						case ProjectArg(col, in) =>
@@ -104,12 +101,23 @@ object Typechecker {
 				/* Get child operator schema */
 				val srcSchema = schemaOf(source)
 				val chk = new ExpressionChecker(srcSchema.toMap)
-				args.map( {
-					case AggregateArg(function, columns, alias) =>
-						()
-				})
-				srcSchema
 
+				/* Get Group By Args and verify type */
+				val groupBySchema: List[(String, Type.T)] = groupBy.map(x => (x.toString, chk.typeOf(x)) )
+
+				/* Get function name, check for AVG *//* Get function parameters, verify type */
+				val aggSchema: List[(String, Type.T)] = args.map(x => if(x.function == "AVG"){ (x.alias, TFloat) }
+					else{ val typ = Typechecker.escalate(x.columns.map(x => chk.typeOf(x)))
+								if(typ != TFloat || typ != TInt){
+									throw new SQLException("Aggregate function parameters must be numeric.")
+								}
+								else{
+									(x.alias, typ)
+								}})
+
+				/* Send schema to parent operator */
+				val sch = groupBySchema ++ aggSchema
+				sch
 
 			case Join(lhs, rhs) =>
 				val lSchema = schemaOf(lhs);
