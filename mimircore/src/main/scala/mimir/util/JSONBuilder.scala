@@ -19,6 +19,10 @@ object JSONBuilder {
 		"\""+content.replace("\\", "\\\\").replace("\"", "\\\"")+"\""
 	}
 
+	def int(content: Int): String = {
+		content.toString();
+	}
+
 	def prim(content: PrimitiveValue) = {
 		content match {
 			case StringPrimitive(s) => string(s)

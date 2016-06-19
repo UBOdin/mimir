@@ -187,8 +187,8 @@ class MissingValueModel(lens: MissingValueLens, name: String)
 
   def backingStore() = name+"_BACKEND"
 
-  def reason(args: List[Expression]): (String, String) =
-    ("I made a best guess estimate for this data element, which was originally NULL", "MISSING_VALUE")
+  def reason(args: List[Expression]): String=
+    "I made a best guess estimate for this data element, which was originally NULL"
 
   def init(classifier: Classifier, classIndex: Int) = {
     cIndex = classIndex

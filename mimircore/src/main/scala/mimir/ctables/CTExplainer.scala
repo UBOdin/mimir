@@ -12,35 +12,32 @@ case class InvalidProvenance(msg: String, token: RowIdPrimitive)
 	extends Exception("Invalid Provenance Token ["+msg+"]: "+token);
 
 abstract class Explanation(
-	reasons: List[(String, String)], 
+	reasons: List[Reason], 
 	token: RowIdPrimitive
 ) {
 	def fields: List[(String, PrimitiveValue)]
 
 	override def toString(): String = {
 		(fields ++ List( 
-			("Reasons", reasons.map("\n    "+_._1).mkString("")),
+			("Reasons", reasons.map("\n    "+_.toString).mkString("")),
 			("Token", JSONBuilder.string(token.v))
 		)).map((x) => x._1+": "+x._2).mkString("\n")
 	}
 
 	def toJSON(): String = {
-		JSONBuilder.dict(fields.map( { case (k, v) => (k, JSONBuilder.prim(v)) } ) ++ List(
-			("reasons", 
-				JSONBuilder.list(reasons.map( 
-					(r) => JSONBuilder.dict(List(
-						("english", JSONBuilder.string(r._1)),
-						("source", JSONBuilder.string(r._2))
-					))
-				))),
-			("token", JSONBuilder.string(token.v))
+		JSONBuilder.dict(
+			fields.map( { case (k, v) => (k, JSONBuilder.prim(v)) } ) ++ 
+			List(
+				("reasons", 
+					JSONBuilder.list(reasons.map( _.toJSON ) )),
+				("token", JSONBuilder.string(token.v))
 		))
 	}
 }
 
 case class RowExplanation (
 	probability: Double, 
-	reasons: List[(String, String)], 
+	reasons: List[Reason], 
 	token: RowIdPrimitive
 ) extends Explanation(reasons, token) {
 	def fields = List(
@@ -50,7 +47,7 @@ case class RowExplanation (
 
 class CellExplanation(
 	examples: List[PrimitiveValue],
-	reasons: List[(String, String)], 
+	reasons: List[Reason], 
 	token: RowIdPrimitive,
 	column: String
 ) extends Explanation(reasons, token) {
@@ -62,7 +59,7 @@ class CellExplanation(
 
 case class GenericCellExplanation (
 	examples: List[PrimitiveValue],
-	reasons: List[(String, String)], 
+	reasons: List[Reason], 
 	token: RowIdPrimitive,
 	column: String
 ) extends CellExplanation(examples, reasons, token, column) {
@@ -73,7 +70,7 @@ case class NumericCellExplanation (
 	mean: PrimitiveValue,
 	sttdev: PrimitiveValue,
 	examples: List[PrimitiveValue],
-	reasons: List[(String, String)], 
+	reasons: List[Reason], 
 	token: RowIdPrimitive,
 	column: String
 ) extends CellExplanation(examples, reasons, token, column) {
@@ -233,13 +230,13 @@ class CTExplainer(db: Database) {
 
 
 	def getFocusedReasons(expr: Expression, tuple: Map[String,PrimitiveValue]): 
-		List[(String, String)] =
+		List[Reason] =
 	{
 		getFocusedReasons( Eval.inline(expr, tuple) );
 	}
 
 	def getFocusedReasons(expr: Expression):
-		List[(String, String)] =
+		List[Reason] =
 	{
 		// println(expr.toString)
 		expr match {

@@ -4,7 +4,7 @@ import java.io.{File, StringReader}
 import java.sql.SQLException
 
 import mimir.algebra._
-import mimir.ctables.{CTPercolator, CTables, VGTerm, Explanation}
+import mimir.ctables.{CTPercolator, CTables, VGTerm, Explanation, Reason}
 import mimir.exec.ResultSetIterator
 import mimir.parser.MimirJSqlParser
 import mimir.sql.{CreateLens, Explain, JDBCBackend}
@@ -190,7 +190,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
 
   }
 
-  def getVGTerms(query: String, row: String, ind: Int): List[(String, String)] = {
+  def getVGTerms(query: String, row: String, ind: Int): List[Reason] = {
     val source = new StringReader(query)
     val parser = new MimirJSqlParser(source)
 

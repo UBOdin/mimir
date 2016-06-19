@@ -3,6 +3,7 @@ package mimir.exec;
 import java.sql._;
 
 import mimir.algebra._;
+import mimir.ctables.Reason;
 
 class NDInlineResultIterator(val src: ResultIterator, 
                              querySchema: List[(String, Type.T)],
@@ -35,7 +36,7 @@ class NDInlineResultIterator(val src: ResultIterator,
   def numCols: Int       = { querySchema.length }
   def schema: List[(String,Type.T)] = querySchema
 
-  override def reason(v: Int): List[(String, String)] = {
+  override def reason(v: Int): List[Reason] = {
     throw new SQLException("Must call reason on a query compiled in classical mode")
   }
   def provenanceToken() = {
