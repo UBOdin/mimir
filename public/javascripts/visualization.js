@@ -49,7 +49,7 @@ var Mimir = {};
 Mimir.visualization = {
     XDIFF: 100,
     YDIFF: 80,
-    WIDTH: 700,
+    WIDTH: 600,
     HEIGHT: 200,
     RADIUS: 5,
     FONTSIZE: "0.7em",
