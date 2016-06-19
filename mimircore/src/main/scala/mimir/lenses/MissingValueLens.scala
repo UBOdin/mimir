@@ -442,6 +442,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
 
   def sample(seed: Long, args: List[PrimitiveValue]): PrimitiveValue = {
     val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
+    if(classes.length < 1){ return NullPrimitive(); }
     val tot_cnt = classes.map(_._1).sum
     val pick = new Random(seed).nextInt(100) % tot_cnt
     val cumulative_counts =
