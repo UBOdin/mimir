@@ -94,7 +94,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			db.loadTable(reviewDataFiles(0))
 			db.loadTable(reviewDataFiles(1))
 			query("SELECT * FROM RATINGS1;").allRows must have size(4)
-			query("SELECT RATING FROM RATINGS1;").allRows.flatten must contain( str("4.5"), str("4.0"), str("6.4") )
+			query("SELECT RATING FROM RATINGS1;").allRows.flatten must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
 			query("SELECT * FROM RATINGS2;").allRows must have size(3)
 
 		}
@@ -112,8 +112,9 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			""")
 			query("SELECT * FROM RATINGS1TYPED;").allRows must have size(4)
 			query("SELECT RATING FROM RATINGS1TYPED;").allRows.flatten must contain( 
-				f(4.5), f(4.0), f(6.4) 
+				f(4.5), f(4.0), f(6.4), NullPrimitive()
 			)
+			query("SELECT * FROM RATINGS1TYPED WHERE RATING IS NULL").allRows must have size(1)
 			query("SELECT * FROM RATINGS1TYPED WHERE RATING > 4;").allRows must have size(2)
 			query("SELECT * FROM RATINGS2TYPED;").allRows must have size(3)
 			Typechecker.schemaOf(
