@@ -9,7 +9,7 @@ import mimir.util._
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
 import net.sf.jsqlparser.expression.operators.relational._
-import net.sf.jsqlparser.expression.{BinaryExpression, DateValue, DoubleValue, Function, LongValue, NullValue, Parenthesis, StringValue, WhenClause}
+import net.sf.jsqlparser.expression.{BinaryExpression, DateValue, DoubleValue, Function, LongValue, NullValue, InverseExpression, StringValue, WhenClause}
 import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.statement.create.table._
 import net.sf.jsqlparser.statement.select.{AllColumns, AllTableColumns, FromItem, PlainSelect, SelectBody, SelectExpressionItem, SubJoin, SubSelect}
@@ -270,8 +270,8 @@ class SqlToRA(db: Database)
     if(e.isInstanceOf[StringValue]){
       return StringPrimitive(e.asInstanceOf[StringValue].getValue())
     }
-    if(e.isInstanceOf[Parenthesis]){
-      return convert(e.asInstanceOf[Parenthesis].getExpression, bindings)
+    if(e.isInstanceOf[InverseExpression]){
+      return Not(convert(e.asInstanceOf[InverseExpression].getExpression, bindings))
     }
     if(e.isInstanceOf[BinaryExpression]){
       val lhs = convert(e.asInstanceOf[BinaryExpression].getLeftExpression(), bindings)

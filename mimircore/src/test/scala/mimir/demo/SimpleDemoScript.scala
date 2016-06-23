@@ -73,6 +73,9 @@ object SimpleDemoScript extends Specification with FileMatchers {
 
 	val db = new Database(tempDBName, new JDBCBackend("sqlite", tempDBName));
 
+	// The demo spec uses cumulative tests --- Each stage depends on the stages that
+	// precede it.  The 'sequential' keyword below is necessary to prevent Specs2 from 
+	// automatically parallelizing testing.
 	sequential
 
 	"The Basic Demo" should {
