@@ -9,7 +9,7 @@ import mimir.algebra.Select
 import mimir.algebra.Union
 import mimir.algebra._
 import mimir.ctables.{JointSingleVarModel, VGTerm, CTPercolator}
-import mimir.optimizer.{InlineProjections}
+import mimir.optimizer.{InlineProjections, PushdownSelections}
 import mimir.lenses.{TypeInferenceModel, SchemaMatchingModel, MissingValueModel}
 import mimir.util.TypeUtils
 import net.sf.jsqlparser.expression.operators.arithmetic._
@@ -61,7 +61,9 @@ class RAToSql(db: Database) {
 
     // standardizeTables adds a new layer of projections that we may be
     // able to optimize away.
-    val optimized = InlineProjections.optimize(standardized)
+    val optimized = 
+      InlineProjections.optimize(
+        PushdownSelections.optimize(standardized))
 
     // println("OPTIMIZED: "+optimized)
 
