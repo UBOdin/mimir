@@ -102,6 +102,23 @@ object SimpleDemoScript extends Specification with FileMatchers {
 
 		}
 
+		"Create and Query Type Inference Lens from sane_r" >> {
+			lens("""
+				CREATE LENS sane_r_test
+				  AS SELECT * FROM sane_r
+				  WITH TYPE_INFERENCE(.5)
+					 					 			""")
+			lens("""
+				CREATE LENS sane_r_test1
+				  AS SELECT * FROM sane_r_test
+				  WITH MISSING_VALUE('C')
+					 					 					 			""")
+			val result1 = query("SELECT * FROM sane_r_test").allRows.flatten
+			result1 must have size(28)
+			val result2 = query("SELECT * FROM sane_r_test1").allRows.flatten
+			result2 must have size(28)
+		}
+
 		"Create and Query Type Inference Lenses" >> {
 			lens("""
 				CREATE LENS RATINGS1TYPED 
@@ -114,9 +131,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				  WITH TYPE_INFERENCE(0.5)
 			""")
 			query("SELECT * FROM RATINGS1TYPED;").allRows must have size(4)
-			query("SELECT RATING FROM RATINGS1TYPED;").allRows.flatten must contain( 
-				f(4.5), f(4.0), f(6.4), NullPrimitive()
-			)
+			query("SELECT RATING FROM RATINGS1TYPED;").allRows.flatten must contain(eachOf(f(4.5), f(4.0), f(6.4), NullPrimitive()))
 			query("SELECT * FROM RATINGS1TYPED WHERE RATING IS NULL").allRows must have size(1)
 			query("SELECT * FROM RATINGS1TYPED WHERE RATING > 4;").allRows must have size(2)
 			query("SELECT * FROM RATINGS2TYPED;").allRows must have size(3)
