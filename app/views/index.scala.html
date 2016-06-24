@@ -75,7 +75,23 @@
             <div id="query_div">
                 <form id="query_form" action="queryDB" method="POST">
                     <textarea id="query_textarea" name="query" placeholder="Enter query here..." spellcheck="false">@query</textarea>
-                    <input type="submit" class="btn btn-primary" id="query_btn" value="Query">
+                    <div class="row">
+                        <input type="submit" class="btn btn-primary" id="query_btn" value="Query">
+                        <div class="dropdown" id="table_btn"><button class="btn btn-primary dropdown-toggle" style="text-align:left;" type="button" data-toggle="dropdown">Select Table
+                            <span class="caret"></span></button>
+                            <ul class="dropdown-menu">
+                                @webAPI.getAllTables.map { x =>
+                                    @if(!x.equals("MIMIR_LENSES") && !x.endsWith("_BACKEND")) {
+                                        <li><a class="table_link ">@x</a></li>
+                                    }
+                                }
+                                <li role="separator" class="divider"></li>
+                                @webAPI.getAllLenses.map { x =>
+                                <li><a class="lens_link">@x</a></li>
+                                }
+                            </ul>
+                        </div>
+                    </div>
                 </form>
                 <input type="hidden" id="last_query_field" name="last_query" value="@lastQuery">
                 
@@ -95,22 +111,6 @@
                                 <li><button id="missing_value_btn" class="lens_btn">Missing Value</button></li>
                                 <li><button id="schema_matching_btn" class="lens_btn" style="margin-bottom:2px;">Schema Matching</button></li>
                             </ul>
-                        </div>
-                        <div class="tablebutton">
-                        <div class="dropdown"><button class="btn btn-primary dropdown-toggle" style="width:100%; text-align:left;" type="button" data-toggle="dropdown">Tables
-                            <span class="caret"></span></button>
-                            <ul class="dropdown-menu">
-                                @webAPI.getAllTables.map { x =>
-                                    @if(!x.equals("MIMIR_LENSES") && !x.endsWith("_BACKEND")) {
-                                        <li><a class="table_link ">@x</a></li>
-                                    }
-                                }
-                                <li role="separator" class="divider"></li>
-                                @webAPI.getAllLenses.map { x =>
-                                <li><a class="lens_link">@x</a></li>
-                                }
-                            </ul>
-                        </div>
                         </div>
                         <div class="panel panel-default" style="width:;">
                         <div class="panel-heading">
@@ -133,21 +133,7 @@
                     
                 }
                 case WebStringResult(string) => { 
-                    <pre>@string</pre>
-                    <div class="dropdown"><button class="btn btn-primary dropdown-toggle" type="button" data-toggle="dropdown">Tables
-                    <span class="caret"></span></button>
-                        <ul class="dropdown-menu">
-                            @webAPI.getAllTables.map { x =>
-                                @if(!x.equals("MIMIR_LENSES") && !x.endsWith("_BACKEND")) {
-                                    <li><a class="table_link ">@x</a></li>
-                                }
-                            }
-                            <li role="separator" class="divider"></li>
-                            @webAPI.getAllLenses.map { x =>
-                            <li><a class="lens_link">@x</a></li>
-                            }
-                        </ul>
-                    </div>
+                    <pre style="font-family:Helvetica;">@string</pre>
                     <div class="clear"></div> 
                     <div class="clear"></div>
                     <div class="clear"></div>

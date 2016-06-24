@@ -70,6 +70,10 @@ a:hover {
     width:                      100%;
 }
 
+#query_div .dropdown-menu {
+    left:-103;
+}
+
 #query_textarea {
     font-family:                Monospace;
     padding:                    6px;
@@ -88,6 +92,14 @@ form {
     width:                      100px;
     height:                     40px;
     margin-top:                 20px;
+    margin-left:                15px;
+    float: left;
+}
+
+#table_btn {
+    float:                      right;
+    margin-top:                 20px;
+    margin-right:                15px;
 }
 
 .result {
@@ -224,7 +236,6 @@ td:hover {
     float:                      left;
     padding-left:               10px;
     padding-right:              10px;
-    border-left:                2px solid #29363e;
 }
 
 .lens_btn {
@@ -329,6 +340,6 @@ select:focus {
 }
 
 .horbar {
-    background:                 #29363e;
+    background:                 #dddddd;
     height:                     2px;
 }
