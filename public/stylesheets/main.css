@@ -99,7 +99,7 @@ form {
 #table_btn {
     float:                      right;
     margin-top:                 20px;
-    margin-right:                15px;
+    margin-right:               15px;
 }
 
 .result {
@@ -109,11 +109,13 @@ form {
 
 #result_table th {
     text-align:                 center;
-    text-decoration:            underline;
+    text-decoration:            ;
+    border-left:                solid 2px #ccc;
 }
 
 #result_table td {
     text-align:                 center;
+    border-left:                solid 2px #ccc;
 }
 
 .non_deterministic_row {
