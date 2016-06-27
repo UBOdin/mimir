@@ -17,8 +17,9 @@ abstract class SingleVarModel(vt: Type.T) extends Model {
   def upperBoundExpr(args: List[Expression]): Expression
   def sampleGenExpr(args: List[Expression]): Expression
   def sample(seed: Long, args: List[PrimitiveValue]): PrimitiveValue
-  def reason(args: List[Expression]): (String, String)
+  def reason(args: List[Expression]): String
   def backingStore(): String
+  def createBackingStore(): Unit
 
   def mostLikelyValue(x:Int, args: List[PrimitiveValue]) = mostLikelyValue(args)
   def lowerBound(x: Int, args: List[PrimitiveValue]) = lowerBound(args)
@@ -29,8 +30,9 @@ abstract class SingleVarModel(vt: Type.T) extends Model {
   def upperBoundExpr(x: Int, args: List[Expression]) = upperBoundExpr(args)
   def sampleGenExpr(x: Int, args: List[Expression]) = sampleGenExpr(args)
   def sample(seed: Long, x: Int, args: List[PrimitiveValue]) = sample(seed, args)
-  def reason(x: Int, args: List[Expression]): (String, String) = reason(args)
+  def reason(x: Int, args: List[Expression]): String = reason(args)
   def backingStore(x: Int): String = backingStore()
+  def createBackingStore(x: Int) = createBackingStore()
 
 
 }
@@ -57,10 +59,13 @@ case class JointSingleVarModel(vars: List[SingleVarModel]) extends Model {
   def sample(seed: Long, idx: Int, args: List[PrimitiveValue]) = 
     vars(idx).sample(seed, args)
 
-  override def reason(idx: Int, args: List[Expression]): (String, String) =
+  override def reason(idx: Int, args: List[Expression]): String =
     vars(idx).reason(idx, args)
 
   override def backingStore(idx: Int): String = vars(idx).backingStore()
+
+  override def createBackingStore(idx: Int): Unit = vars(idx).createBackingStore()
+  override def createBackingStore(): Unit = vars.foreach(x => x.createBackingStore())
 }
 
 object UniformDistribution extends SingleVarModel(Type.TFloat){
@@ -79,8 +84,9 @@ object UniformDistribution extends SingleVarModel(Type.TFloat){
     FloatPrimitive(new Random(seed).nextDouble() * (high - low) + low)
   }
 
-  override def reason(args: List[Expression]): (String, String) = ("Unknown", "Unknown")   // TODO
+  override def reason(args: List[Expression]): String = "Unknown"   // TODO
   override def backingStore(): String = ???
+  override def createBackingStore(): Unit = ???
 }
 
 case class NoOpModel(vt: Type.T) extends SingleVarModel(vt) {
@@ -94,7 +100,7 @@ case class NoOpModel(vt: Type.T) extends SingleVarModel(vt) {
   def sampleGenExpr(args: List[Expression]) = args(0)
   def sample(seed: Long, args: List[PrimitiveValue]) = args(0)
 
-  override def reason(args: List[Expression]): (String, String) = ("None", "None")
-
+  override def reason(args: List[Expression]): String = "None"
   override def backingStore(): String = ???
+  override def createBackingStore(): Unit = {}
 }

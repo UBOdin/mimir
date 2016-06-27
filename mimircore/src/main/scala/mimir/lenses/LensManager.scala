@@ -87,6 +87,7 @@ class LensManager(db: Database) {
         source
       );
     lens.build(db);
+    lens.createBackingStore
     lensCache.put(lensName, lens);
     save(lens);
   }

@@ -54,6 +54,7 @@ public abstract class ExpressionScan implements ExpressionVisitor, ItemsListVisi
   public void visit(Column tableColumn) { }
   public void visit(Concat a) { visit((BinaryExpression)a); }
   public void visit(DateValue dateValue) { }
+  public void visit(BooleanValue boolValue) { }
   public void visit(Division a) { visit((BinaryExpression)a); }
   public void visit(DoubleValue doubleValue) { }
   public void visit(EqualsTo a) { visit((BinaryExpression)a); }
@@ -79,7 +80,6 @@ public abstract class ExpressionScan implements ExpressionVisitor, ItemsListVisi
   public void visit(NotEqualsTo a) { visit((BinaryExpression)a); }
   public void visit(NullValue nullValue) {}
   public void visit(OrExpression a) { visit((BinaryExpression)a); }
-  public void visit(Parenthesis parenthesis) { recur(parenthesis.getExpression()); }
   public void visit(StringValue stringValue) { }
   public void visit(SubSelect subSelect) 
     { if(warnOnSubSelect) {System.err.println("WARNING: NOT RECURRING INTO Sub Select"); } }

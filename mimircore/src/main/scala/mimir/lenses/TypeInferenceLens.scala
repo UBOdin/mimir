@@ -64,6 +64,8 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
     inferenceModel = new TypeInferenceModel(this)
     inferenceModel.asInstanceOf[TypeInferenceModel].init(results)
   }
+
+  override def createBackingStore: Unit = {}
 }
 
 class TypeInferenceModel(lens: TypeInferenceLens) extends Model
@@ -186,20 +188,24 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
     mostLikelyValue(idx, args)
   }
 
-  override def reason(idx: Int, args: List[Expression]): (String, String) = {
+  override def reason(idx: Int, args: List[Expression]): (String) = {
     val percentage = (inferredTypeMap(idx)._3 * 100).round
 
     if(percentage == 0) {
-      return ("I assumed that the type of " + inferredTypeMap(idx)._1 +
-        " is string", "TYPE_INFERENCE")
+      "I assumed that the type of " + inferredTypeMap(idx)._1 +
+        " is string"
+    } else {
+      "I assumed that the type of " + inferredTypeMap(idx)._1 +
+        " is " + Type.toString(inferredTypeMap(idx)._2) +
+        " with " + percentage.toString + "% of the data conforming to the expected type"
     }
-
-    ("I assumed that the type of " + inferredTypeMap(idx)._1 +
-      " is " + Type.toString(inferredTypeMap(idx)._2) +
-      " with " + percentage.toString + "% of the data conforming to the expected type", "TYPE_INFERENCE")
   }
 
   override def backingStore(idx: Int): String = ???
+
+  override def createBackingStore(idx: Int): Unit = ???
+
+  override def createBackingStore(): Unit = {}
 }
 
 case class TypeInferenceAnalysis(model: TypeInferenceModel,
@@ -325,7 +331,7 @@ class TypeCastModel(lens: TypeInferenceLens) extends Model {
       mostLikelyValue(idx, args)
   }
 
-  override def reason(idx: Int, args: List[Expression]): (String, String) = {
+  override def reason(idx: Int, args: List[Expression]): (String) = {
 
     if(args.isEmpty) {
       lens.inferenceModel.reason(idx, args)
@@ -334,20 +340,24 @@ class TypeCastModel(lens: TypeInferenceLens) extends Model {
       val mlv = mostLikelyValue(idx, args.map((x) => Eval.eval(x)))
 
       if (mlv.isInstanceOf[NullPrimitive])
-        ("I could not find an appropriate " +
+        "I could not find an appropriate " +
           Type.toString(varTypes(idx)) +
           " value for " +
           getValue(idx, Eval.eval(args.head)) +
-          ", so I replaced it with NULL", "TYPE_INFERENCE")
+          ", so I replaced it with NULL"
       else
-        ("I cast the value " +
+        "I cast the value " +
           getValue(idx, Eval.eval(args.head)) +
           " with type string to " +
-          mlv + " with type " + Type.toString(varTypes(idx)), "TYPE_INFERENCE")
+          mlv + " with type " + Type.toString(varTypes(idx))  
     }
   }
 
   override def backingStore(idx: Int): String = ???
+
+  override def createBackingStore(idx: Int): Unit = {}
+
+  override def createBackingStore(): Unit = {}
 }
 
 case class TypeCastAnalysis(model: TypeCastModel,

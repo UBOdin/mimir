@@ -1,6 +1,7 @@
 package mimir.exec;
 
 import mimir.algebra._;
+import mimir.ctables.Reason;
 
 /**
  * An abstract interface for result iterators.  The level of 
@@ -103,7 +104,7 @@ abstract class ResultIterator {
   /**
    * A list of explanations for the indicated column
    */
-  def reason(ind: Int): List[(String, String)] = List()
+  def reason(ind: Int): List[Reason] = List()
 
   /**
    * A unique identifier for every output that can be unwrapped to generate per-row provenance

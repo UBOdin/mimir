@@ -45,6 +45,8 @@ abstract case class Lens(name: String, args: List[Expression], source: Operator)
    */
   def load(db: Database): Unit = build(db);
 
+  def createBackingStore: Unit
+
   // def globalVar(vid: Int) = PVar(iview, id, vid, List[Expression]())
   def rowVar(vid: Int)   = VGTerm((name,model), vid, List[Expression](Var("ROWID_MIMIR")))
   def rowVar(vid: Int, args: List[Expression]) 

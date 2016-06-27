@@ -76,16 +76,18 @@ a:hover {
     color:                      #555;
     resize:                     vertical;
     width:                      100%;
-    border-top-left-radius:     4px;
-    border-top-right-radius:    4px;
+    border-radius:              4px;
     height:                     55px;
 }
 
+form {
+    margin-bottom:              0em;
+}
+
 #query_btn {
-    width:                      100%;
+    width:                      100px;
     height:                     40px;
-    border-top-left-radius:     0px;
-    border-top-right-radius:    0px;
+    margin-top:                 20px;
 }
 
 .result {
@@ -210,28 +212,66 @@ td:hover {
 .leftCol {
     width:                      20%;
     float:                      left;
+    padding-right:              10px;
+}
+
+.tablebutton {
+    margin-top:                 10px;
 }
 
 .rightCol {
     width:                      80%;
     float:                      left;
-    border-left:                2px solid black;
+    padding-left:               10px;
+    padding-right:              10px;
+    border-left:                2px solid #29363e;
 }
 
 .lens_btn {
+    margin-bottom:              10px;
+    border-radius:              4px;
     width:                      100%;
     height:                     50px;
     border:                     none;
-    background-color:           #444;
+    background-color:           #378599;
     color:                      #fff;
-    font-family:                Monospace;
+    font-family:                Helvetica;
     font-size:                  0.8em;
+    text-align:                 center;
+}
+
+.leftCol .dropdown-menu .lens_btn {
+    display:                    block;
+    padding:                    3px 20px;
+    clear:                      both;
+    font-weight:                400;
+    line-height:                1.42857143;
+    color:                      #333;
+    white-space:                nowrap;
+    margin-bottom:              3px;
+    border-radius:              0px;
+    width:                      100%;
+    height:                     27px;
+    border:                     none;
+    background-color:           #fff;
+    color:                      #000;
+    font-family:                Helvetica;
+    font-size:                  1.0em;
     text-align:                 left;
-    padding-left:               20px;
 }
 
 .lens_btn:hover {
-    background-color:           #1b9bff;
+    background-color:           #29363e;
+    color:                      #fff;
+}
+.leftCol .lens_btn:hover {
+    background-color:           #29363e;
+    color:                      #fff;
+}
+
+.leftCol .dropdown-menu .lens_btn:hover {
+    background-color:           #f2f2f2;
+    color:                      #333;
 }
 
 button:focus {
@@ -285,9 +325,10 @@ select:focus {
 
 .clear {
     clear:                      both;
+    height:100px;
 }
 
 .horbar {
-    background:                 black;
+    background:                 #29363e;
     height:                     2px;
 }

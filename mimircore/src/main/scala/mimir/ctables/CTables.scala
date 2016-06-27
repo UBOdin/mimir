@@ -2,6 +2,7 @@ package mimir.ctables
 
 import mimir.algebra._
 import mimir.lenses.{TypeInferenceAnalysis, MissingValueAnalysis}
+import mimir.util.JSONBuilder
 
 abstract class Model {
   def varTypes: List[Type.T]
@@ -15,8 +16,28 @@ abstract class Model {
   def upperBoundExpr    (idx: Int, args: List[Expression    ]):  Expression
   def sampleGenExpr     (idx: Int, args: List[Expression    ]):  Expression
   def sample            (seed: Long, idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
-  def reason            (idx: Int, args: List[Expression]): (String, String)
+  def reason            (idx: Int, args: List[Expression]): (String)
   def backingStore      (idx: Int): String
+  def createBackingStore(idx: Int): Unit
+  def createBackingStore(): Unit
+}
+
+case class Reason(
+  val reason: String,
+  val model: String,
+  val idx: Int,
+  val args: List[Expression]
+){
+  override def toString: String = 
+    reason+" ("+model+"_"+idx+"["+args.mkString(", ")+"])"
+
+  def toJSON: String =
+    JSONBuilder.dict(Map(
+      "english" -> JSONBuilder.string(reason),
+      "source"  -> JSONBuilder.string(model),
+      "varid"   -> JSONBuilder.int(idx),
+      "args"    -> JSONBuilder.list( args.map( x => JSONBuilder.string(x.toString) ) )
+    ))
 }
 
 case class VGTerm(
@@ -33,7 +54,13 @@ case class VGTerm(
     // println("VGTerm: Get")
     model._2.mostLikelyValue(idx, v)
   }
-  def reason(): (String, String) = model._2.reason(idx, args)
+  def reason(): Reason = 
+    Reason(
+      model._2.reason(idx, args),
+      model._1,
+      idx,
+      args
+    )
 }
 
 object CTables 

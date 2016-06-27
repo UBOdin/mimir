@@ -1,6 +1,7 @@
 package mimir.exec;
 
 import mimir.algebra._;
+import mimir.ctables.Reason;
 
 class BagUnionResultIterator(lhs: ResultIterator, rhs: ResultIterator) extends ResultIterator
 {
@@ -32,7 +33,7 @@ class BagUnionResultIterator(lhs: ResultIterator, rhs: ResultIterator) extends R
   def schema: List[(String,Type.T)] =
     currIter().schema;
 
-  override def reason(ind: Int): List[(String, String)] = {
+  override def reason(ind: Int): List[Reason] = {
     currIter().reason(ind)
   }
   def provenanceToken() = new RowIdPrimitive(
