@@ -108,7 +108,7 @@ object Typechecker {
 				/* Get function name, check for AVG *//* Get function parameters, verify type */
 				val aggSchema: List[(String, Type.T)] = args.map(x => if(x.function == "AVG"){ (x.alias, TFloat) }
 					else{ val typ = Typechecker.escalate(x.columns.map(x => chk.typeOf(x)))
-								if(typ != TFloat || typ != TInt){
+								if(typ != TFloat && typ != TInt){
 									throw new SQLException("Aggregate function parameters must be numeric.")
 								}
 								else{
@@ -116,7 +116,8 @@ object Typechecker {
 								}})
 
 				/* Send schema to parent operator */
-				val sch = groupBySchema ++ aggSchema
+				val sch = groupBySchema ++ aggSchema ++ srcSchema
+				println(sch)
 				sch
 
 			case Join(lhs, rhs) =>

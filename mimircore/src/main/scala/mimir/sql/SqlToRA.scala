@@ -385,13 +385,14 @@ class SqlToRA(db: Database)
 
                 /* END: Sanity Check */
 
-                val originalAlias: String = SqlUtils.getAlias(se).toUpperCase;
+                val originalAlias: String = SqlUtils.getAlias(se);
                 var alias: String = originalAlias;
                 if(alias == null){
                   exprId += 1
                   alias = "EXPR_"+exprId
                 } else {
                   alias = alias.toUpperCase
+                  originalAlias.toUpperCase
                 }
                 if(tableAlias != null){
                   alias = tableAlias + "_" + alias;

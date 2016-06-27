@@ -286,6 +286,7 @@ object CTPercolator {
   def propagateRowIDs(oper: Operator, force: Boolean): Operator = 
   {
     // println("Propagate["+(if(force){"F"}else{"NF"})+"]:\n" + oper);
+    //looking if output column has the name ROWID_MIMIR
     if(hasRowID(oper)){ return oper; }
     oper match {
       case p @ Project(args, child) =>
@@ -303,10 +304,11 @@ object CTPercolator {
       case Select(cond, child) =>
         Select(cond, propagateRowIDs(child,
           force || requiresRowID(cond)))
-      /*Added*/
+
+
       case Aggregate(args, groupBy, child) =>
-        Aggregate(args, groupBy, child)
-        /*END: Added*/
+        Aggregate(args, groupBy, propagateRowIDs(child, force || args.forall(x=> x.columns.forall(requiresRowID(_)))))
+
 
           
       case Join(left, right) =>
