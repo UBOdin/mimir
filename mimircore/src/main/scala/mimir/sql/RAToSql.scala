@@ -36,7 +36,7 @@ class RAToSql(db: Database) {
           { case (tgt, real)  => ProjectArg(tgt, Var(real)) }
         )
         val metadata = tgtMetadata.map({
-          case ("ROWID_MIMIR", _) => 
+          case ("ROWID_MIMIR" | "ROWID", _) => 
             (
               ("ROWID", Type.TRowId), 
               ProjectArg(CTPercolator.ROWID_KEY, Var("ROWID"))
@@ -161,6 +161,11 @@ class RAToSql(db: Database) {
         (subselect.getAlias(), subselect.getSelectBody() match {
           case plainselect: PlainSelect => 
             plainselect.getSelectItems().map({
+              case sei:SelectExpressionItem =>
+                sei.getAlias().toString
+            }).toList
+          case union: net.sf.jsqlparser.statement.select.Union =>
+            union.getPlainSelects().get(0).getSelectItems().map({
               case sei:SelectExpressionItem =>
                 sei.getAlias().toString
             }).toList

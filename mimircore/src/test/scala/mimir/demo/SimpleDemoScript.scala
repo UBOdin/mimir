@@ -226,6 +226,24 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		}
 
 		"Query a Join of a Union of Lenses" >> {
+			val result0 = query("""
+				SELECT p.name, r.rating FROM (
+					SELECT * FROM RATINGS1FINAL 
+						UNION ALL 
+					SELECT * FROM RATINGS2FINAL
+				) r, Product p
+				WHERE r.pid = p.id;
+			""").allRows.flatten
+			result0 must have size(12)
+			result0 must contain(eachOf( 
+				str("Apple 6s, White"),
+				str("Sony to inches"),
+				str("Apple 5s, Black"),
+				str("Samsung Note2"),
+				str("Dell, Intel 4 core"),
+				str("HP, AMD 2 core")
+			))
+
 			val result1 = query("""
 				SELECT name FROM (
 					SELECT * FROM RATINGS1FINAL 
