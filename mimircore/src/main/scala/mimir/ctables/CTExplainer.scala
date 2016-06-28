@@ -12,8 +12,8 @@ case class InvalidProvenance(msg: String, token: RowIdPrimitive)
 	extends Exception("Invalid Provenance Token ["+msg+"]: "+token);
 
 abstract class Explanation(
-	reasons: List[Reason], 
-	token: RowIdPrimitive
+	val reasons: List[Reason], 
+	val token: RowIdPrimitive
 ) {
 	def fields: List[(String, PrimitiveValue)]
 
@@ -36,9 +36,9 @@ abstract class Explanation(
 }
 
 case class RowExplanation (
-	probability: Double, 
-	reasons: List[Reason], 
-	token: RowIdPrimitive
+	val probability: Double, 
+	override val reasons: List[Reason], 
+	override val token: RowIdPrimitive
 ) extends Explanation(reasons, token) {
 	def fields = List(
 		("probability", FloatPrimitive(probability))
@@ -46,10 +46,10 @@ case class RowExplanation (
 }
 
 class CellExplanation(
-	examples: List[PrimitiveValue],
-	reasons: List[Reason], 
-	token: RowIdPrimitive,
-	column: String
+	val examples: List[PrimitiveValue],
+	override val reasons: List[Reason], 
+	override val token: RowIdPrimitive,
+	val column: String
 ) extends Explanation(reasons, token) {
 	def fields = List[(String,PrimitiveValue)](
 		("examples", StringPrimitive(examples.map( _.toString ).mkString(", "))),
@@ -58,21 +58,21 @@ class CellExplanation(
 }
 
 case class GenericCellExplanation (
-	examples: List[PrimitiveValue],
-	reasons: List[Reason], 
-	token: RowIdPrimitive,
-	column: String
+	override val examples: List[PrimitiveValue],
+	override val reasons: List[Reason], 
+	override val token: RowIdPrimitive,
+	override val column: String
 ) extends CellExplanation(examples, reasons, token, column) {
 }
 
 case class NumericCellExplanation (
-	bounds: Option[(PrimitiveValue, PrimitiveValue)],
-	mean: PrimitiveValue,
-	sttdev: PrimitiveValue,
-	examples: List[PrimitiveValue],
-	reasons: List[Reason], 
-	token: RowIdPrimitive,
-	column: String
+	val bounds: Option[(PrimitiveValue, PrimitiveValue)],
+	val mean: PrimitiveValue,
+	val sttdev: PrimitiveValue,
+	override val examples: List[PrimitiveValue],
+	override val reasons: List[Reason], 
+	override val token: RowIdPrimitive,
+	override val column: String
 ) extends CellExplanation(examples, reasons, token, column) {
 	override def fields = 
 		(bounds match {
@@ -272,11 +272,12 @@ class CTExplainer(db: Database) {
 			CTPercolator.propagateRowIDs(oper, true),
 			NonDeterminism.Classic
 		)
-		val (expressions, sourceQuery, newToken) = 
+		val (expressions, sourceQuery, _) = 
 			delveToProjection(optQuery, token)
 		val iterator = db.compiler.buildDeterministicIterator(
 			Select(
-				Comparison(Cmp.Eq, Var(CTPercolator.ROWID_KEY), newToken),
+				Comparison(Cmp.Eq, 
+					expressions.find( _._1.equals(CTPercolator.ROWID_KEY) ).get._2, token),
 				sourceQuery
 			)
 		)
@@ -284,7 +285,6 @@ class CTExplainer(db: Database) {
 		iterator.open()
 		if(!iterator.getNext()){ throw InvalidProvenance("INVALID TOKEN", token); }
 		val tuple = iterator.currentTuple()
-		if(iterator.getNext()){ throw InvalidProvenance("PLURAL TOKEN", token); }
 		iterator.close();
 
 		(  tuple, expressions  )

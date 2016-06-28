@@ -244,6 +244,18 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				str("HP, AMD 2 core")
 			))
 
+			val explain0 = explainCell("""
+				SELECT p.name, r.rating FROM Product p, (
+					SELECT * FROM RATINGS1FINAL 
+						UNION ALL 
+					SELECT * FROM RATINGS2FINAL
+				) r
+				""", "3.1.right", "RATING")
+			explain0.reasons.map(_.model) must contain(eachOf(
+				"RATINGS2FINAL",
+				"RATINGS2TYPED"
+			))
+
 			val result1 = query("""
 				SELECT name FROM (
 					SELECT * FROM RATINGS1FINAL 
@@ -278,6 +290,8 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				str("Samsung Note2"),
 				str("Dell, Intel 4 core")
 			))
+
+			
 		}
 
 		"Missing Value Best Guess Debugging" >> {
