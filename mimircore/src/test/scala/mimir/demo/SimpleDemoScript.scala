@@ -65,10 +65,11 @@ object SimpleDemoScript extends Specification with FileMatchers {
 	def str = StringPrimitive(_:String).asInstanceOf[PrimitiveValue]
 
 	val tempDBName = "tempDBDemoScript"
-	val productDataFile = new File("../test/data/Product.sql");
+	val productDataFile = new File("test/data/Product.sql");
 	val reviewDataFiles = List(
-			new File("../test/data/ratings1.csv"),
-			new File("../test/data/ratings2.csv")
+			new File("test/data/ratings1.csv"),
+			new File("test/data/ratings2.csv"),
+			new File("test/data/ratings3.csv")
 		)
 
 	val db = new Database(tempDBName, new JDBCBackend("sqlite", tempDBName));
@@ -96,28 +97,29 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		"Load CSV Files" >> {
 			db.loadTable(reviewDataFiles(0))
 			db.loadTable(reviewDataFiles(1))
+			db.loadTable(reviewDataFiles(2))
 			query("SELECT * FROM RATINGS1;").allRows must have size(4)
 			query("SELECT RATING FROM RATINGS1;").allRows.flatten must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
 			query("SELECT * FROM RATINGS2;").allRows must have size(3)
 
 		}
 
-		"Create and Query Type Inference Lens from sane_r" >> {
-			lens("""
-				CREATE LENS sane_r_test
-				  AS SELECT * FROM sane_r
+    "Create and Query Type Inference Lens with NULL values" >> {
+      lens("""
+				CREATE LENS null_test
+				  AS SELECT * FROM RATINGS3
 				  WITH TYPE_INFERENCE(.5)
-					 					 			""")
-			lens("""
-				CREATE LENS sane_r_test1
-				  AS SELECT * FROM sane_r_test
+           					 					 					 					 			""")
+      lens("""
+				CREATE LENS null_test1
+				  AS SELECT * FROM RATINGS3
 				  WITH MISSING_VALUE('C')
-					 					 					 			""")
-			val result1 = query("SELECT * FROM sane_r_test").allRows.flatten
-			result1 must have size(28)
-			val result2 = query("SELECT * FROM sane_r_test1").allRows.flatten
-			result2 must have size(28)
-		}
+           					 					 					 					 					 			""")
+      query("SELECT * FROM null_test WHERE EVALUATION IS NULL;").allRows.flatten must contain(str("P34235"), NullPrimitive(), f(4.0))
+      query("SELECT * FROM null_test;").allRows.flatten must have size(9)
+      query("SELECT * FROM null_test1;").allRows.flatten must have size(9)
+    }
+
 
 		"Create and Query Type Inference Lenses" >> {
 			lens("""
