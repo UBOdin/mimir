@@ -35,8 +35,8 @@ case class Project(columns: List[ProjectArg], source: Operator) extends Operator
 
 /* AggregateArg is a wrapper for the args argument in Aggregate case class where:
       function is the Aggregate function,
-      column is the SQL table column,
-      alias is the alias used for the column,
+      column is/are the SQL table column(s) parameters,
+      alias is the alias used for the aggregate column output,
       getOperatorName returns the operator name,
       getColumnName returns the column name
 */
@@ -48,7 +48,7 @@ case class AggregateArg(function: String, columns: List[Expression], alias: Stri
 {
   override def toString = (function.toString + "(" + columns.map(_.toString).mkString(", ") + ")" + ", " + alias)
   def getFunctionName() = function
-  def getColumnNames() = columns.toString
+  def getColumnNames() = columns.map(x => x.toString).mkString(", ")
   def getAlias() = alias.toString
 }
 

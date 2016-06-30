@@ -12,10 +12,12 @@ import mimir.ctables.{JointSingleVarModel, VGTerm, CTPercolator}
 import mimir.optimizer.{InlineProjections, PushdownSelections}
 import mimir.lenses.{TypeInferenceModel, SchemaMatchingModel, MissingValueModel}
 import mimir.util.TypeUtils
+
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
 import net.sf.jsqlparser.expression.operators.relational._
 import net.sf.jsqlparser.expression.{BinaryExpression, DoubleValue, Function, LongValue, NullValue, InverseExpression, StringValue, WhenClause}
+import net.sf.jsqlparser.statement.select
 import net.sf.jsqlparser.{schema, expression}
 import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.statement.select.{SelectBody, PlainSelect, SubSelect, SelectExpressionItem, FromItem, SelectItem}
@@ -123,6 +125,51 @@ class RAToSql(db: Database) {
           oper.schema.map(_._1).map( (x) => ProjectArg(x, Var(x))).toList, oper
         ))
       }
+      case Aggregate(args, gbcols, child) =>
+        val (childCond, childFroms) = extractSelectsAndJoins(child)
+        val subBody = new PlainSelect()
+        subBody.setFromItem(childFroms.head)
+        subBody.setJoins(new util.ArrayList(
+          childFroms.tail.map( (s) => {
+            val join = new net.sf.jsqlparser.statement.select.Join()
+            join.setRightItem(s)
+            join.setSimple(true)
+            join
+          })
+        ))
+
+        subBody.setSelectItems(
+          new java.util.ArrayList(
+            args.map( (arg) => {
+              val item = new SelectExpressionItem()
+              item.setAlias(arg.alias)
+              val func = new Function()
+              func.setName(arg.function)
+              func.setParameters(new ExpressionList(new java.util.ArrayList(
+                arg.columns.map(convert(_, getSchemas(childFroms))))))
+
+              item.setExpression(func)
+              item
+            })
+          )
+        )
+        subBody.setGroupByColumnReferences(new java.util.ArrayList(
+          gbcols.map(convert(_, getSchemas(childFroms)).asInstanceOf[net.sf.jsqlparser.schema.Column])))
+          /*val col = convert(_, getSchemas(childFroms))
+          col match {
+            case column: net.sf.jsqlparser.schema.Column =>
+              val column = col.asInstanceOf[net.sf.jsqlparser.schema.Column]
+              val arg = new Column(column.getTable, column.getColumnName)
+              arg
+            case _ =>  throw new SQLException("Group By Reference is not a column.")
+          }
+          )))
+*/
+            /*new Column(new net.sf.jsqlparser.schema.Table(
+            null, getSchemas(childFroms).head._1), _)))))//convert(_, getSchemas(childFroms)))*/
+        //))
+        subBody
+
       case Project(args, src) =>
         val body = new PlainSelect()
         val (cond, sources) = extractSelectsAndJoins(src)
@@ -173,7 +220,7 @@ class RAToSql(db: Database) {
   def makeSubSelect(oper: Operator): FromItem =
   {
     val subSelect = new SubSelect()
-    subSelect.setSelectBody(doConvert(oper))
+    subSelect.setSelectBody(doConvert(oper))//doConvert returns a plain select
     subSelect.setAlias("SUBQ_"+oper.schema.map(_._1).head)
     subSelect
   }
@@ -182,11 +229,15 @@ class RAToSql(db: Database) {
     (Expression, List[FromItem]) =
   {
     oper match {
+      case Aggregate(args, gbcols, child) =>
+        val sub = makeSubSelect(oper)
+        val (childCond, childFroms) = extractSelectsAndJoins(child)
+        ( childCond, childFroms ++ List(sub) )
       case Select(cond, child) =>
         val (childCond, childFroms) = extractSelectsAndJoins(child)
         ( Arith.makeAnd(cond, childCond), childFroms )
       case Join(lhs, rhs) =>
-        val (lhsCond, lhsFroms) = extractSelectsAndJoins(lhs)
+        val (lhsCond, lhsFroms) = extractSelectsAndJoins(lhs)//lhsFroms is a subselect
         val (rhsCond, rhsFroms) = extractSelectsAndJoins(rhs)
         ( Arith.makeAnd(lhsCond, rhsCond), 
           lhsFroms ++ rhsFroms

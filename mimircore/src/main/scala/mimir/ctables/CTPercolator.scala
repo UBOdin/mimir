@@ -307,6 +307,7 @@ object CTPercolator {
 
 
       case Aggregate(args, groupBy, child) =>
+        //val newargs = (new AggregateArg(ROWID_KEY, List(Var(ROWID_KEY)), ROWID_KEY)) :: args
         Aggregate(args, groupBy, propagateRowIDs(child, force || args.forall(x=> x.columns.forall(requiresRowID(_)))))
 
 
