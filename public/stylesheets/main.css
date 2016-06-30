@@ -223,10 +223,11 @@ td:hover {
     background-color:           #ea4858;
 }
 
+.col-xs-2{min-width: 140px;max-width:310px;}
+
 .leftCol {
-    width:                      20%;
-    float:                      left;
-    padding-right:              10px;
+    padding-left:               10px;
+    position:                   fixed;
 }
 
 .tablebutton {
@@ -234,8 +235,7 @@ td:hover {
 }
 
 .rightCol {
-    width:                      80%;
-    float:                      left;
+    float: right;
     padding-left:               10px;
     padding-right:              10px;
 }
