@@ -5,6 +5,7 @@ package mimir.exec
 import java.sql._
 import java.util
 
+import mimir.sql.IsNullChecker
 import mimir.Database
 import mimir.algebra.Union
 import mimir.algebra._

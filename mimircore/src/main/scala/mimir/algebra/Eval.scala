@@ -99,6 +99,7 @@ object Eval
                   case x => throw new SQLException("Unknown cast type: '"+x+"'")
                 }
               } catch {
+                case _:TypeException=> NullPrimitive();
                 case _:NumberFormatException => NullPrimitive();
               }
             }

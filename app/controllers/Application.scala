@@ -268,7 +268,7 @@ class Application extends Controller {
       try {
         webAPI.openBackendConnection()
         val result = webAPI.getVGTerms(query, row, i)
-        Ok(Json.toJson(result))
+        Ok(Json.toJson(result.map(_.toJSON)))
       }
       finally {
         webAPI.closeBackendConnection()

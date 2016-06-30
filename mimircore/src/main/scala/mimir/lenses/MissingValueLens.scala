@@ -187,8 +187,8 @@ class MissingValueModel(lens: MissingValueLens, name: String)
 
   def backingStore() = name+"_BACKEND"
 
-  def reason(args: List[Expression]): (String, String) =
-    ("I made a best guess estimate for this data element, which was originally NULL", "MISSING_VALUE")
+  def reason(args: List[Expression]): String=
+    "I made a best guess estimate for this data element, which was originally NULL"
 
   def init(classifier: Classifier, classIndex: Int) = {
     cIndex = classIndex
@@ -298,39 +298,41 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     val rowidIterator = lens.db.query(rowidQuery)
 
     var nulls = 0
-    var backingStoreCreated = false
+    val columnDataType = TypeUtils.convert(lens.schema()(cIndex)._2);
+
+    // println("Initializing table");
+    lens.db.getTableSchema(backingStore()) match {
+      case Some(List(("EXP_LIST", Type.TString), ("DATA", _))) =>
+        lens.db.update( "DELETE FROM "+backingStore() )
+      case Some(_) =>
+        lens.db.update( "DROP TABLE "+backingStore() )
+        lens.db.update(
+          "CREATE TABLE " + backingStore() + " (" +
+            "EXP_LIST varchar(100), " +
+            "DATA "+columnDataType+", " +
+            "PRIMARY KEY (EXP_LIST)" +
+            ")"
+        )
+      case None =>
+        lens.db.update(
+          "CREATE TABLE " + backingStore() + " (" +
+            "EXP_LIST varchar(100), " +
+            "DATA "+columnDataType+", " +
+            "PRIMARY KEY (EXP_LIST)" +
+            ")"
+        )
+    }
+
 
     rowidIterator.open()
+    // println("Preparing to create MV backing store");
     while(rowidIterator.getNext()) {
+      // println("Row of data");
       if(Typechecker.typeOf(rowidIterator(cIndex+1)) == Type.TAny) {
         val explist = List(rowidIterator(
           rowidIterator.schema.zipWithIndex.filter(_._1._1.equalsIgnoreCase(CTPercolator.ROWID_KEY)).head._2
         ))
         val data = computeMostLikelyValue(explist)
-        if(!backingStoreCreated) {
-          lens.db.getTableSchema(backingStore()) match {
-            case Some(List(("EXP_LIST", Type.TString), ("DATA", _))) =>
-              lens.db.update( "DELETE FROM "+backingStore() )
-            case Some(_) =>
-              lens.db.update( "DROP TABLE "+backingStore() )
-              lens.db.update(
-                "CREATE TABLE " + backingStore() + " (" +
-                  "EXP_LIST varchar(100), " +
-                  "DATA "+TypeUtils.convert(data.getType)+", " +
-                  "PRIMARY KEY (EXP_LIST)" +
-                  ")"
-              )
-            case None =>
-              lens.db.update(
-                "CREATE TABLE " + backingStore() + " (" +
-                  "EXP_LIST varchar(100), " +
-                  "DATA "+TypeUtils.convert(data.getType)+", " +
-                  "PRIMARY KEY (EXP_LIST)" +
-                  ")"
-              )
-          }
-          backingStoreCreated = true
-        }
         val tuple = List(explist.map(x => x.asString).mkString("|"), data.asString)
         lens.db.update(
           "INSERT INTO "+backingStore()+" VALUES (?, ?)", tuple
@@ -339,6 +341,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
         println("Progress: Null no. "+nulls)
       }
     }
+    // println("Done");
     rowidIterator.close()
   }
 
@@ -442,6 +445,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
 
   def sample(seed: Long, args: List[PrimitiveValue]): PrimitiveValue = {
     val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
+    if(classes.length < 1){ return NullPrimitive(); }
     val tot_cnt = classes.map(_._1).sum
     val pick = new Random(seed).nextInt(100) % tot_cnt
     val cumulative_counts =

@@ -68,7 +68,6 @@ import net.sf.jsqlparser.expression.DateValue;
 import net.sf.jsqlparser.expression.TimeValue;
 import net.sf.jsqlparser.expression.TimestampValue;
 import net.sf.jsqlparser.expression.NullValue;
-import net.sf.jsqlparser.expression.Parenthesis;
 import net.sf.jsqlparser.expression.StringValue;
 import net.sf.jsqlparser.expression.CaseExpression;
 import net.sf.jsqlparser.expression.WhenClause;
@@ -374,7 +373,10 @@ CreateLens CreateLens():
     <K_WITH> lensType = RelObjectName()
 	  "(" [ 
 	    e = SimpleExpression() { args.add(e); }
-	    ( "," e = SimpleExpression() { args.add(e); } ) *
+      [e = SimpleExpression() { args.add(e); }]
+	    ( "," e = SimpleExpression() { args.add(e); } 
+           [e = SimpleExpression() { args.add(e); }]
+      ) *
 	  ] ")"
   { 
   	return new CreateLens(lensName, body, lensType, args);
@@ -1033,8 +1035,7 @@ Expression Expression():
 	LOOKAHEAD(OrExpression())
 		retval=OrExpression() 
 		|
-		"(" retval=Expression() ")" {retval = new Parenthesis(retval); }
-		
+		"(" retval=Expression() ")" 
 	)
 	
     { return retval; }
@@ -1075,7 +1076,12 @@ Expression AndExpression() :
 	    left=Condition()
 	    |
 	    [ <K_NOT> { not = true; } ]
-	    "(" left=OrExpression() ")" {left = new Parenthesis(left); if (not) { ((Parenthesis)left).setNot(); not = false; } }
+	    "(" left=OrExpression() ")" {
+        if (not) { 
+          left = new InverseExpression(left);
+          not = false;
+        }
+      }
 	)
 	{ result = left; }
 	
@@ -1087,7 +1093,12 @@ Expression AndExpression() :
 		    right=Condition()
 		    |
 		    [ <K_NOT> { not = true; } ]
-		    "(" right=OrExpression() ")" {right = new Parenthesis(right); if (not) { ((Parenthesis)right).setNot(); not = false; } }
+		    "(" right=OrExpression() ")" {
+          if (not) { 
+            right = new InverseExpression(right);
+            not = false;
+          }
+        }
 		)
 		{
 			result = new AndExpression(left, right);
@@ -1136,8 +1147,9 @@ Expression RegularCondition():
 		BinaryExpression regCond = (BinaryExpression) result;
 		regCond.setLeftExpression(leftExpression);
 		regCond.setRightExpression(rightExpression);
-		if (not)
-			regCond.setNot();
+		if (not) {
+      result = new InverseExpression(result);
+    }
 	}		
 	
 	{ return result; }
@@ -1319,8 +1331,7 @@ Expression SimpleExpression():
 		LOOKAHEAD(BitwiseAndOr())
 		retval=BitwiseAndOr() 
 		|
-		"(" retval=BitwiseAndOr() ")" {retval = new Parenthesis(retval); }
-  
+		"(" retval=BitwiseAndOr() ")" 
   )
 
    {
@@ -1416,7 +1427,7 @@ Expression MultiplicativeExpression():
 	LOOKAHEAD(BitwiseXor())
 	    leftExpression=BitwiseXor()
 	    |
-	    "(" leftExpression=AdditiveExpression() ")" {leftExpression = new Parenthesis(leftExpression); }
+	    "(" leftExpression=AdditiveExpression() ")" 
 	)
       { result = leftExpression; }
     (
@@ -1427,7 +1438,7 @@ Expression MultiplicativeExpression():
 				LOOKAHEAD(BitwiseXor())
     						rightExpression=BitwiseXor()
 						    |
-						    "(" rightExpression=AdditiveExpression() ")" {rightExpression = new Parenthesis(rightExpression); }
+						    "(" rightExpression=AdditiveExpression() ")"
 				)
     						
 		{
@@ -1489,7 +1500,7 @@ Expression PrimaryExpression():
 
 	| LOOKAHEAD(2) 	[ "+" | "-" { isInverse = true; }] retval=Column() 
 
-	| LOOKAHEAD(2) [ "+" | "-" { isInverse = true; }]  "(" retval=PrimaryExpression() ")" {retval = new Parenthesis(retval); }
+	| LOOKAHEAD(2) [ "+" | "-" { isInverse = true; }]  "(" retval=PrimaryExpression() ")" 
 
 	| token=<S_CHAR_LITERAL> { retval = StringValue.parseEscaped(token.image); }
 

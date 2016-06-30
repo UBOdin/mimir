@@ -9,7 +9,7 @@ import mimir.util._
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
 import net.sf.jsqlparser.expression.operators.relational._
-import net.sf.jsqlparser.expression.{BinaryExpression, DateValue, DoubleValue, Function, LongValue, NullValue, Parenthesis, StringValue, WhenClause}
+import net.sf.jsqlparser.expression.{BinaryExpression, DateValue, DoubleValue, Function, LongValue, NullValue, InverseExpression, StringValue, WhenClause}
 import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.statement.create.table._
 import net.sf.jsqlparser.statement.select.{AllColumns, AllTableColumns, FromItem, PlainSelect, SelectBody, SelectExpressionItem, SubJoin, SubSelect}
@@ -201,6 +201,12 @@ class SqlToRA(db: Database)
         fi.asInstanceOf[SubSelect].getSelectBody,
         fi.asInstanceOf[SubSelect].getAlias
       );
+
+      // Used by the isNull check
+      if(IsNullChecker.lookingForFrom()){
+        IsNullChecker.setFrom("("+(fi.asInstanceOf[SubSelect].getSelectBody).toString() + ") as " + fi.asInstanceOf[SubSelect].getAlias);
+      }
+
       return (ret, bindings, fi.asInstanceOf[SubSelect].getAlias.toUpperCase)
     }
     if(fi.isInstanceOf[net.sf.jsqlparser.schema.Table]){
@@ -212,7 +218,13 @@ class SqlToRA(db: Database)
           getAlias
       if(alias == null){ alias = name }
       else { alias = alias.toUpperCase }
-      
+
+
+      // Used by the isNull check
+      if(IsNullChecker.lookingForFrom()){
+        IsNullChecker.setFrom(name);
+      }
+
       // Bind the table to a source: 
       db.getView(name) match {
         case None =>
@@ -270,8 +282,8 @@ class SqlToRA(db: Database)
     if(e.isInstanceOf[StringValue]){
       return StringPrimitive(e.asInstanceOf[StringValue].getValue())
     }
-    if(e.isInstanceOf[Parenthesis]){
-      return convert(e.asInstanceOf[Parenthesis].getExpression, bindings)
+    if(e.isInstanceOf[InverseExpression]){
+      return Not(convert(e.asInstanceOf[InverseExpression].getExpression, bindings))
     }
     if(e.isInstanceOf[BinaryExpression]){
       val lhs = convert(e.asInstanceOf[BinaryExpression].getLeftExpression(), bindings)
@@ -356,6 +368,12 @@ class SqlToRA(db: Database)
     }
     if(e.isInstanceOf[NullValue]) { return NullPrimitive() }
     if(e.isInstanceOf[net.sf.jsqlparser.expression.operators.relational.IsNullExpression]) {
+
+      // IS NULL check
+      IsNullChecker.setIsNull(true); // need to set for check later
+      IsNullChecker.setIsNullExpression(e.asInstanceOf[net.sf.jsqlparser.expression.operators.relational.IsNullExpression]) // set the null expression for later
+      IsNullChecker.setLookingForFrom(false);
+
       val isNullExpression = e.asInstanceOf[net.sf.jsqlparser.expression.operators.relational.IsNullExpression]
       val ret = mimir.algebra.IsNullExpression(
         convert(isNullExpression.getLeftExpression, bindings)
