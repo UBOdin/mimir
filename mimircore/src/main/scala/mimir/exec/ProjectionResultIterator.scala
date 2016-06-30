@@ -140,7 +140,7 @@ class ProjectionResultIterator(
     true
   }
 
-  override def reason(ind: Int): List[(String, String)] = {
+  override def reason(ind: Int): List[Reason] = {
     val expr: Expression = if(ind == -1) condLineage.get else exprsLineage(ind)
     val evaluated = Eval.inline(expr)
     CTables.getVGTerms(evaluated).map((vgterm) => vgterm.reason()).distinct

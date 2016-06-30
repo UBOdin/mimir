@@ -66,4 +66,46 @@ object OperatorUtils {
     }
   }
 
+  def projectAwayColumn(column: String, oper: Operator): Operator =
+  {
+    Project(
+      oper.schema.
+        map(_._1).
+        filter( !_.equalsIgnoreCase(column) ).
+        map( x => ProjectArg(x, Var(x)) ),
+      oper
+    )
+  }
+
+  def projectInColumn(column: String, value: Expression, oper: Operator): Operator =
+  {
+    Project(
+      (oper.schema.
+              map(_._1)
+              map( (x:String) => ProjectArg(x, Var(x)) ))++
+        List(ProjectArg(column, value)),
+      oper
+    )
+  }
+
+  def replaceColumn(column: String, replacement: Expression, oper: Operator) =
+  {
+    Project(
+      oper.schema.
+        map(_._1).
+        map(x => if(x.equalsIgnoreCase(column)){ ProjectArg(x, replacement) } else { ProjectArg(x, Var(x)) } ),
+      oper
+    );
+  }
+
+  def renameColumn(column: String, replacement: String, oper: Operator) =
+  {
+    Project(
+      oper.schema.
+        map(_._1).
+        map(x => if(x.equalsIgnoreCase(column)){ ProjectArg(replacement, Var(column)) } else { ProjectArg(x, Var(x)) } ),
+      oper
+    );
+  }
+
 }

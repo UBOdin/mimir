@@ -154,10 +154,10 @@ class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
 
   override def lowerBound(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = mostLikelyValue(idx, args)
 
-  override def reason(idx: Int, args: List[Expression]): (String, String) = {
+  override def reason(idx: Int, args: List[Expression]): String = {
     val target = schema.keys.toList(idx)
     val source = colMapping(target).maxBy(_._2)
-    ("I assumed that " + source._1 + " maps to " + target + " ("+ (source._2 * 100).toInt +"% likely)", "SCHEMA_MATCHING")
+    ("I assumed that " + source._1 + " maps to " + target + " ("+ (source._2 * 100).toInt +"% likely)")
   }
 
   override def backingStore(idx: Int): String = "__"+lens.name+"_BACKEND"

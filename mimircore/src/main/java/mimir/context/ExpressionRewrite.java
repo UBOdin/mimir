@@ -42,7 +42,6 @@ public abstract class ExpressionRewrite implements ExpressionVisitor {
   public void visit(BinaryExpression be) {
     try {
       BinaryExpression ret = be.getClass().newInstance();
-      if(be.isNot()) { ret.setNot(); }
       ret.setLeftExpression(internalRewrite(be.getLeftExpression()));
       ret.setRightExpression(internalRewrite(be.getRightExpression()));
       ret(ret);
@@ -87,6 +86,7 @@ public abstract class ExpressionRewrite implements ExpressionVisitor {
   public void visit(Column tableColumn) { ret(tableColumn); }
   public void visit(Concat a) { visit((BinaryExpression)a); }
   public void visit(DateValue dateValue) { ret(dateValue); }
+  public void visit(BooleanValue boolValue) { ret(boolValue); }
   public void visit(Division a) { visit((BinaryExpression)a); }
   public void visit(DoubleValue doubleValue) { ret(doubleValue); }
   public void visit(EqualsTo a) { visit((BinaryExpression)a); }
@@ -134,11 +134,6 @@ public abstract class ExpressionRewrite implements ExpressionVisitor {
   public void visit(OrExpression a)
     { ret(new OrExpression(internalRewrite(a.getLeftExpression()), 
       internalRewrite(a.getRightExpression()))); }
-  public void visit(Parenthesis parenthesis) { 
-    Parenthesis ret = new Parenthesis(internalRewrite(parenthesis.getExpression()));
-    if(parenthesis.isNot()){ ret.setNot(); }
-    ret(ret);
-  }
   public void visit(StringValue stringValue) { ret(stringValue); }
   public void visit(SubSelect subSelect) { ret(subSelect); }
   public void visit(Subtraction a) { visit((BinaryExpression)a); }

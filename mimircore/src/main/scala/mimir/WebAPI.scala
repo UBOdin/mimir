@@ -4,7 +4,7 @@ import java.io.{File, StringReader}
 import java.sql.SQLException
 
 import mimir.algebra._
-import mimir.ctables.{CTPercolator, CTables, VGTerm, Explanation}
+import mimir.ctables.{CTPercolator, CTables, VGTerm, Explanation, Reason}
 import mimir.exec.ResultSetIterator
 import mimir.parser.MimirJSqlParser
 import mimir.sql.{CreateLens, Explain, JDBCBackend}
@@ -108,7 +108,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
     } catch {
       case e: Throwable => {
         e.printStackTrace()
-        wIter.queryFlow = new OperatorNode("", List(), List())
+        wIter.queryFlow = new OperatorNode("", List(), None)
       }
     }
     results.close()
@@ -190,7 +190,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
 
   }
 
-  def getVGTerms(query: String, row: String, ind: Int): List[(String, String)] = {
+  def getVGTerms(query: String, row: String, ind: Int): List[Reason] = {
     val source = new StringReader(query)
     val parser = new MimirJSqlParser(source)
 
@@ -266,21 +266,19 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
         if(projArg.isEmpty)
           convertToTree(source)
         else {
-          var params = List[String]()
-          projArg.foreach{ case ProjectArg(col, exp) => params = params ++ extractVGTerms(exp) }
-          val p = params.toSet.filter(a => db.lenses.lensCache.contains(a)).map(b => (b, db.lenses.lensCache.get(b).get.lensType))
-          if(p.isEmpty)
+          var params = 
+            projArg.flatMap( projectArg => extractVGTerms(projectArg.input) ) 
+          if(params.isEmpty) {
             convertToTree(source)
-          else {
-            val (name, lensType) = p.head
-            new OperatorNode(name, List(convertToTree(source)), List(lensType))
+          } else {
+            new OperatorNode(params.head, List(convertToTree(source)), Some(params.head))
           }
         }
       }
-      case Join(lhs, rhs) => new OperatorNode("Join", List(convertToTree(lhs), convertToTree(rhs)), List())
-      case Union(lhs, rhs) => new OperatorNode("Union", List(convertToTree(lhs), convertToTree(rhs)), List())
-      case Table(name, schema, metadata) => new OperatorNode(name, List[OperatorNode](), List())
-      case o: Operator => convertToTree(o.children(0))
+      case Join(lhs, rhs) => new OperatorNode("Join", List(convertToTree(lhs), convertToTree(rhs)), None)
+      case Union(lhs, rhs) => new OperatorNode("Union", List(convertToTree(lhs), convertToTree(rhs)), None)
+      case Table(name, schema, metadata) => new OperatorNode(name, List[OperatorNode](), None)
+      case o: Operator => new OperatorNode(o.getClass.toString, o.children.map(convertToTree(_)), None)
     }
   }
 

@@ -5,11 +5,11 @@ import java.sql.SQLException
 import java.sql.ResultSet
 
 import mimir.algebra._
-import mimir.ctables.{Model, VGTerm, CTPercolator, CTExplainer, RowExplanation, CellExplanation}
+import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, Model, RowExplanation, VGTerm}
 import mimir.exec.{Compiler, NonDeterminism, ResultIterator, ResultSetIterator}
 import mimir.lenses.{Lens, LensManager}
 import mimir.parser.OperatorParser
-import mimir.sql.{Backend, CreateLens, RAToSql, SqlToRA}
+import mimir.sql._
 import mimir.util.LoadCSV
 import mimir.web.WebIterator
 
@@ -196,6 +196,28 @@ case class Database(name: String, backend: Backend)
     if(result.missingRows()){
       println("( There may be missing result rows )")
     }
+
+    isNullCheck()
+
+  }
+
+  def isNullCheck(): Unit ={
+    if(IsNullChecker.getIsNull()){ // is NULL is in there so check
+
+      if(IsNullChecker.getDB() == null){
+        IsNullChecker.setDB(this)
+      }
+
+      if(IsNullChecker.isNullCheck()){
+
+      }
+      else{
+        println("IS NULL HAS PROBLEMS")
+        IsNullChecker.problemRows();
+      }
+
+    }
+    IsNullChecker.reset()
   }
 
   /**

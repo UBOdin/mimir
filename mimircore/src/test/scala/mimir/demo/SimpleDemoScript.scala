@@ -65,14 +65,18 @@ object SimpleDemoScript extends Specification with FileMatchers {
 	def str = StringPrimitive(_:String).asInstanceOf[PrimitiveValue]
 
 	val tempDBName = "tempDBDemoScript"
-	val productDataFile = new File("../test/data/Product.sql");
+	val productDataFile = new File("test/data/Product.sql");
 	val reviewDataFiles = List(
-			new File("../test/data/ratings1.csv"),
-			new File("../test/data/ratings2.csv")
+			new File("test/data/ratings1.csv"),
+			new File("test/data/ratings2.csv"),
+			new File("test/data/ratings3.csv")
 		)
 
 	val db = new Database(tempDBName, new JDBCBackend("sqlite", tempDBName));
 
+	// The demo spec uses cumulative tests --- Each stage depends on the stages that
+	// precede it.  The 'sequential' keyword below is necessary to prevent Specs2 from 
+	// automatically parallelizing testing.
 	sequential
 
 	"The Basic Demo" should {
@@ -93,11 +97,29 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		"Load CSV Files" >> {
 			db.loadTable(reviewDataFiles(0))
 			db.loadTable(reviewDataFiles(1))
+			db.loadTable(reviewDataFiles(2))
 			query("SELECT * FROM RATINGS1;").allRows must have size(4)
-			query("SELECT RATING FROM RATINGS1;").allRows.flatten must contain( str("4.5"), str("4.0"), str("6.4") )
+			query("SELECT RATING FROM RATINGS1;").allRows.flatten must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
 			query("SELECT * FROM RATINGS2;").allRows must have size(3)
 
 		}
+
+    "Create and Query Type Inference Lens with NULL values" >> {
+      lens("""
+				CREATE LENS null_test
+				  AS SELECT * FROM RATINGS3
+				  WITH TYPE_INFERENCE(.5)
+           					 					 					 					 			""")
+      lens("""
+				CREATE LENS null_test1
+				  AS SELECT * FROM RATINGS3
+				  WITH MISSING_VALUE('C')
+           					 					 					 					 					 			""")
+      query("SELECT * FROM null_test WHERE EVALUATION IS NULL;").allRows.flatten must contain(str("P34235"), NullPrimitive(), f(4.0))
+      query("SELECT * FROM null_test;").allRows.flatten must have size(9)
+      query("SELECT * FROM null_test1;").allRows.flatten must have size(9)
+    }
+
 
 		"Create and Query Type Inference Lenses" >> {
 			lens("""
@@ -111,9 +133,8 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				  WITH TYPE_INFERENCE(0.5)
 			""")
 			query("SELECT * FROM RATINGS1TYPED;").allRows must have size(4)
-			query("SELECT RATING FROM RATINGS1TYPED;").allRows.flatten must contain( 
-				f(4.5), f(4.0), f(6.4) 
-			)
+			query("SELECT RATING FROM RATINGS1TYPED;").allRows.flatten must contain(eachOf(f(4.5), f(4.0), f(6.4), NullPrimitive()))
+			query("SELECT * FROM RATINGS1TYPED WHERE RATING IS NULL").allRows must have size(1)
 			query("SELECT * FROM RATINGS1TYPED WHERE RATING > 4;").allRows must have size(2)
 			query("SELECT * FROM RATINGS2TYPED;").allRows must have size(3)
 			Typechecker.schemaOf(
@@ -207,6 +228,36 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		}
 
 		"Query a Join of a Union of Lenses" >> {
+			val result0 = query("""
+				SELECT p.name, r.rating FROM (
+					SELECT * FROM RATINGS1FINAL 
+						UNION ALL 
+					SELECT * FROM RATINGS2FINAL
+				) r, Product p
+				WHERE r.pid = p.id;
+			""").allRows.flatten
+			result0 must have size(12)
+			result0 must contain(eachOf( 
+				str("Apple 6s, White"),
+				str("Sony to inches"),
+				str("Apple 5s, Black"),
+				str("Samsung Note2"),
+				str("Dell, Intel 4 core"),
+				str("HP, AMD 2 core")
+			))
+
+			val explain0 = explainCell("""
+				SELECT p.name, r.rating FROM Product p, (
+					SELECT * FROM RATINGS1FINAL 
+						UNION ALL 
+					SELECT * FROM RATINGS2FINAL
+				) r
+				""", "3.1.right", "RATING")
+			explain0.reasons.map(_.model) must contain(eachOf(
+				"RATINGS2FINAL",
+				"RATINGS2TYPED"
+			))
+
 			val result1 = query("""
 				SELECT name FROM (
 					SELECT * FROM RATINGS1FINAL 
@@ -241,6 +292,8 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				str("Samsung Note2"),
 				str("Dell, Intel 4 core")
 			))
+
+			
 		}
 
 		"Missing Value Best Guess Debugging" >> {

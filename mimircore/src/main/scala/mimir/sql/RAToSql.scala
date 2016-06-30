@@ -8,13 +8,14 @@ import mimir.algebra.Join
 import mimir.algebra.Select
 import mimir.algebra.Union
 import mimir.algebra._
-import mimir.ctables.{JointSingleVarModel, VGTerm}
+import mimir.ctables.{JointSingleVarModel, VGTerm, CTPercolator}
+import mimir.optimizer.{InlineProjections, PushdownSelections}
 import mimir.lenses.{TypeInferenceModel, SchemaMatchingModel, MissingValueModel}
 import mimir.util.TypeUtils
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
 import net.sf.jsqlparser.expression.operators.relational._
-import net.sf.jsqlparser.expression.{BinaryExpression, DoubleValue, Function, LongValue, NullValue, Parenthesis, StringValue, WhenClause}
+import net.sf.jsqlparser.expression.{BinaryExpression, DoubleValue, Function, LongValue, NullValue, InverseExpression, StringValue, WhenClause}
 import net.sf.jsqlparser.{schema, expression}
 import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.statement.select.{SelectBody, PlainSelect, SubSelect, SelectExpressionItem, FromItem, SelectItem}
@@ -23,7 +24,54 @@ import scala.collection.JavaConversions._
 
 class RAToSql(db: Database) {
   
+  def standardizeTables(oper: Operator): Operator = 
+  {
+    oper match {
+      case Table(name, tgtSch, tgtMetadata) => {
+        val realSch = db.getTableSchema(name) match {
+          case Some(realSch) => realSch
+          case None => throw new SQLException("Unknown Table '"+name+"'");
+        }
+        val schMap = tgtSch.map(_._1).zip(realSch.map(_._1)).map ( 
+          { case (tgt, real)  => ProjectArg(tgt, Var(real)) }
+        )
+        val metadata = tgtMetadata.map({
+          case ("ROWID_MIMIR" | "ROWID", _) => 
+            (
+              ("ROWID", Type.TRowId), 
+              ProjectArg(CTPercolator.ROWID_KEY, Var("ROWID"))
+            )
+          case (tgt, _) => throw new SQLException("Unknown Table Metadata Key '"+tgt+"'")
+        })
+        Project(
+          schMap ++ metadata.map(_._2),
+          Table(name, realSch, metadata.map(_._1))
+        )
+      }
+      case _ => oper.rebuild(oper.children.map(standardizeTables(_)))
+    }
+  }
   def convert(oper: Operator): SelectBody = 
+  {
+    // The actual recursive conversion is factored out into a separate fn
+    // so that we can do a little preprocessing.
+    // println("CONVERT: "+oper)
+    // Start by rewriting table schemas to make it easier to inline them.
+    val standardized = standardizeTables(oper)
+
+    // standardizeTables adds a new layer of projections that we may be
+    // able to optimize away.
+    val optimized = 
+      InlineProjections.optimize(
+        PushdownSelections.optimize(standardized))
+
+    // println("OPTIMIZED: "+optimized)
+
+    // and then actually do the conversion
+    doConvert(optimized)
+  }
+
+  def doConvert(oper: Operator): SelectBody = 
   {
     oper match {
       case Table(name, sch, metadata) => {
@@ -65,13 +113,13 @@ class RAToSql(db: Database) {
         union.setAll(true);
         union.setDistinct(false);
         union.setPlainSelects(
-          unionList(convert(lhs)) ++ 
-          unionList(convert(rhs))
+          unionList(doConvert(lhs)) ++ 
+          unionList(doConvert(rhs))
         )
         union
       }
       case Select(_,_) | Join(_,_) => {
-        convert(Project(
+        doConvert(Project(
           oper.schema.map(_._1).map( (x) => ProjectArg(x, Var(x))).toList, oper
         ))
       }
@@ -88,20 +136,51 @@ class RAToSql(db: Database) {
           })
         ))
         if(cond != BoolPrimitive(true)){
-          body.setWhere(convert(cond, sources))
+          // println("---- SCHEMAS OF:"+sources);
+          // println("---- ARE: "+getSchemas(sources))
+          body.setWhere(convert(cond, getSchemas(sources)))
         }
         body.setSelectItems(
           new java.util.ArrayList(
             args.map( (arg) => {
               val item = new SelectExpressionItem()
               item.setAlias(arg.column)
-              item.setExpression(convert(arg.input, sources))
+              item.setExpression(convert(arg.input, getSchemas(sources)))
               item
             })
           )
         )
         body
     }
+  }
+
+  def getSchemas(sources: List[FromItem]): List[(String, List[String])] =
+  {
+    sources.map( {
+      case subselect: SubSelect =>
+        (subselect.getAlias(), subselect.getSelectBody() match {
+          case plainselect: PlainSelect => 
+            plainselect.getSelectItems().map({
+              case sei:SelectExpressionItem =>
+                sei.getAlias().toString
+            }).toList
+          case union: net.sf.jsqlparser.statement.select.Union =>
+            union.getPlainSelects().get(0).getSelectItems().map({
+              case sei:SelectExpressionItem =>
+                sei.getAlias().toString
+            }).toList
+        }) 
+      case table: net.sf.jsqlparser.schema.Table =>
+        (table.getAlias(), db.getTableSchema(table.getName()).get.map(_._1).toList++List("ROWID"))
+    })
+  }
+
+  def makeSubSelect(oper: Operator): FromItem =
+  {
+    val subSelect = new SubSelect()
+    subSelect.setSelectBody(doConvert(oper))
+    subSelect.setAlias("SUBQ_"+oper.schema.map(_._1).head)
+    subSelect
   }
   
   def extractSelectsAndJoins(oper: Operator): 
@@ -117,11 +196,36 @@ class RAToSql(db: Database) {
         ( Arith.makeAnd(lhsCond, rhsCond), 
           lhsFroms ++ rhsFroms
         )
-      case _ => 
-        val subSelect = new SubSelect()
-        subSelect.setSelectBody(convert(oper))
-        subSelect.setAlias("SUBQ_"+oper.schema.map(_._1).head)
-        (BoolPrimitive(true), List[FromItem](subSelect))
+      case Table(name, tgtSch, metadata) =>
+        val realSch = db.getTableSchema(name) match {
+          case Some(realSch) => realSch
+          case None => throw new SQLException("Unknown Table '"+name+"'");
+        }
+        // Since Mimir's RA tree structure has no real notion of aliasing,
+        // it's only really safe to inline tables directly into a query
+        // when tgtSch == realSch.  Eventually, we should add some sort of
+        // rewrite that tacks on aliasing metadata... but for now let's see
+        // how much milage we can get out of this simple check.
+        if(realSch.map(_._1).             // Take names from the real schema
+            zip(tgtSch.map(_._1)).        // Align with names from the target schema
+            forall( { case (real,tgt) => real.equalsIgnoreCase(tgt) } )
+                                          // Ensure that both are equivalent.
+          && metadata.map(_._1).          // And make sure only standardized metadata are preserved
+                forall({
+                  case "ROWID" => true
+                  case _ => false
+                })
+        ){
+          // If they are equivalent, then...
+          val ret = new net.sf.jsqlparser.schema.Table(name);
+          ret.setAlias(name);
+          (BoolPrimitive(true), List[FromItem](ret))
+        } else {
+          // If they're not equivalent, revert to old behavior
+          (BoolPrimitive(true), List(makeSubSelect(oper)))
+        }
+
+      case _ => (BoolPrimitive(true), List(makeSubSelect(oper)))
     }
   }
 
@@ -129,7 +233,7 @@ class RAToSql(db: Database) {
     bin(b, l, r, List())
   }
 
-  def bin(b: BinaryExpression, l: Expression, r: Expression, sources: List[FromItem]): BinaryExpression =
+  def bin(b: BinaryExpression, l: Expression, r: Expression, sources: List[(String,List[String])]): BinaryExpression =
   {
     b.setLeftExpression(convert(l, sources))
     b.setRightExpression(convert(r, sources))
@@ -140,7 +244,7 @@ class RAToSql(db: Database) {
     convert(e, List())
   }
 
-  def convert(e: Expression, sources: List[FromItem]): net.sf.jsqlparser.expression.Expression = {
+  def convert(e: Expression, sources: List[(String,List[String])]): net.sf.jsqlparser.expression.Expression = {
     e match {
       case IntPrimitive(v) => new LongValue(""+v)
       case StringPrimitive(v) => new StringValue(v)
@@ -187,14 +291,12 @@ class RAToSql(db: Database) {
       case Arithmetic(Arith.And, l, r)  => new AndExpression(convert(l, sources), convert(r, sources))
       case Arithmetic(Arith.Or, l, r)   => new OrExpression(convert(l, sources), convert(r, sources))
       case Var(n) => {
-        val src = sources.find(
-          (fi) => fi.asInstanceOf[SubSelect].getSelectBody.asInstanceOf[PlainSelect].getSelectItems.exists(
-            si => si.asInstanceOf[SelectExpressionItem].getAlias.equalsIgnoreCase(n)
-          )
-        )
+        val src = sources.find( {
+          case (_, vars) => vars.exists( _.equalsIgnoreCase(n) )
+        })
         if(src.isEmpty)
-          throw new SQLException("Could not find appropriate source")
-        new Column(new net.sf.jsqlparser.schema.Table(null, null), src.head.getAlias+"."+n)
+          throw new SQLException("Could not find appropriate source for '"+n+"' in "+sources.map(_._1))
+        new Column(new net.sf.jsqlparser.schema.Table(null, src.head._1), n)
       }
       case Conditional(_, _, _) => {
         val (whenClauses, elseClause) = ExpressionUtils.foldConditionalsToCase(e)
@@ -222,57 +324,28 @@ class RAToSql(db: Database) {
         isNull
       }
       case Not(subexp) => {
-        val parens = new Parenthesis(convert(subexp, sources))
-        parens.setNot();
-        parens
+        new InverseExpression(convert(subexp, sources))
       }
-      case mimir.algebra.Function(name, subexp) => {
-        if(name.equals("JOIN_ROWIDS")) {
-          if(subexp.size != 2) throw new SQLException("JOIN_ROWIDS should get exactly two arguments")
-          return concat(convert(subexp(0), sources), convert(subexp(1), sources), ".")
-        }
-
-        if(name.equals("CAST")) {
-          val castFunction = new Function()
-          castFunction.setName("CAST")
-          val explist = new ExpressionList()
-          val list = new util.ArrayList[expression.Expression]()
-          val alias =
-            sources.head.asInstanceOf[SubSelect].getSelectBody.asInstanceOf[PlainSelect]
-              .getSelectItems.find(si =>
-                si.asInstanceOf[SelectExpressionItem].getAlias.equalsIgnoreCase(subexp(0).asInstanceOf[Var].name)
-              ).get.asInstanceOf[SelectExpressionItem].getAlias
-
-          val column = new Column()
-          column.setTable(new schema.Table(null, sources.head.getAlias))
-
-          val typeString = subexp(1).toString
-
-          column.setColumnName(
-            alias
-              +" AS "
-              +typeString
-          )
-
-          list.add(column)
-
-          explist.setExpressions(list)
-          castFunction.setParameters(explist)
-          return castFunction
-        }
-
-        if(name.equals("TO_DATE")) {
-          val toDate = new Function()
-          toDate.setName("TO_DATE")
-          val explist = new ExpressionList(new util.ArrayList[expression.Expression](subexp.map(convert(_))))
-          toDate.setParameters(explist)
-          return toDate
-        }
-
-        if(subexp.length > 1)
-          throw new SQLException("Function " + name + " SQL conversion error")
-
-        convert(subexp(0), sources)
+      case mimir.algebra.Function("JOIN_ROWIDS", lhs :: rhs :: Nil) => {
+          concat(convert(lhs, sources), convert(rhs, sources), ".")
+      }
+      case mimir.algebra.Function("__LEFT_UNION_ROWID", body :: Nil) => {
+          concat(convert(body, sources), new StringValue("left"), ".")
+      }
+      case mimir.algebra.Function("__RIGHT_UNION_ROWID", body :: Nil) => {
+          concat(convert(body, sources), new StringValue("right"), ".")
+      }
+      case mimir.algebra.Function("CAST", body_arg :: body_type :: Nil) => {
+        return new CastOperation(convert(body_arg, sources), body_type.toString);
+      }
+      case mimir.algebra.Function(fname, fargs) => {
+          val func = new Function()
+          func.setName(fname)
+          val explist = 
+            new ExpressionList(
+              new util.ArrayList[expression.Expression](fargs.map(convert(_))))
+          func.setParameters(explist)
+          return func
       }
       case VGTerm((_, model), idx, args) => {
 
