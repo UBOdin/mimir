@@ -163,6 +163,10 @@ td:hover {
     position:                   relative;
 }
 
+#about h1{ 
+    text-align:                 left;
+}
+
 #drop_area {
     display:                    none;
     position:                   relative;
@@ -223,10 +227,9 @@ td:hover {
     background-color:           #ea4858;
 }
 
-.col-xs-2{min-width: 140px;max-width:310px;}
+.col-xs-2{min-width: 180px;max-width:310px;}
 
 .leftCol {
-    padding-left:               10px;
     position:                   fixed;
 }
 
@@ -237,7 +240,7 @@ td:hover {
 .rightCol {
     float: right;
     padding-left:               10px;
-    padding-right:              10px;
+    padding-right:              15px;
 }
 
 .lens_btn {

@@ -96,7 +96,6 @@
                     </div>
                 </form>
                 <input type="hidden" id="last_query_field" name="last_query" value="@lastQuery">
-                
                 <input type="hidden" id="db_field" name="db" value="@webAPI.getCurrentDB">
 
             </div>
@@ -114,12 +113,13 @@
                                 <li><button id="schema_matching_btn" class="lens_btn" style="margin-bottom:2px;">Schema Matching</button></li>
                             </ul>
                         </div>
+                        
                         <div class="panel panel-default">
                             <div class="panel-heading">
                                 <h3 class="panel-title">Notifications</h3>
                             </div>
                             <div class="panel-body">
-                                <p>Active Database: "active.db"</p>
+                                <p><b>Active Database:</b> @webAPI.getCurrentDB</p>
                                 <li><p>@iter.count row(s) returned in @iter.executionTime ms, showing top 100</p></li>
                                 <li><p><span style="color:red">Red</span> represents data uncertainty</p></li>
                                 @if(iter.missingRows) {
@@ -144,7 +144,7 @@
                     <div class="clear"></div>
                 </div>
                 }
-                case WebErrorResult(string) => { <pre class="error">Command Ignored.<br/><br/>@string</pre> }
+                case WebErrorResult(string) => { <div class="col-xs-12 col-md-12"><pre class="error">Command Ignored.<br/><br/>@string</pre></div> }
             }
         </div>
         <form id="change_db_form" class="hidden" action="changeDB" method="POST">
