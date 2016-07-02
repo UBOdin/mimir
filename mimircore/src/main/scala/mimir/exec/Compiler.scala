@@ -137,6 +137,10 @@ class Compiler(db: Database) {
   {
     val operWithProvenance = CTPercolator.propagateRowIDs(oper, true);
     // println("ITER:"+db.convert(operWithProvenance))
+   // operWithProvenance.children match {
+     // case List(Aggregate(args, gb, src)) =>
+
+   // }
     val results = db.backend.execute(
       db.convert(operWithProvenance)
     )
@@ -147,17 +151,27 @@ class Compiler(db: Database) {
                     map( _._1 ).
                     zipWithIndex.
                     toMap
-
-    if(!schema.contains(CTPercolator.ROWID_KEY)){
-      throw new SQLException("ERROR: No "+CTPercolator.ROWID_KEY+" in "+schema+"\n"+operWithProvenance);
+    oper.children match {
+      case List(Aggregate(args, gb, src)) =>
+        new ResultSetIterator(
+          results,
+          schemaList.toMap,
+          oper.schema.map( _._1 ).map( schema(_) ), List() )
+      case _ => if(!schema.contains(CTPercolator.ROWID_KEY)){
+        throw new SQLException("ERROR: No "+CTPercolator.ROWID_KEY+" in "+schema+"\n"+operWithProvenance);
+      }
+      else {
+        new ResultSetIterator(
+          results,
+          schemaList.toMap,
+          oper.schema.map( _._1 ).map( schema(_) ),
+          List(schema(CTPercolator.ROWID_KEY))
+        )
+      }
     }
+
     // println("DETSCH: "+schema)
-    new ResultSetIterator(
-      results, 
-      schemaList.toMap,
-      oper.schema.map( _._1 ).map( schema(_) ),
-      List(schema(CTPercolator.ROWID_KEY))
-    )
+
   }
 
   def buildInlinedIterator(oper: Operator): ResultIterator =

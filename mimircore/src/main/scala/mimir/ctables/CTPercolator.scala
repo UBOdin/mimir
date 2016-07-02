@@ -290,6 +290,32 @@ object CTPercolator {
     if(hasRowID(oper)){ return oper; }
     oper match {
       case p @ Project(args, child) =>
+        child match {
+          case Aggregate(aggArgs, gb, child) =>
+            if(gb.length >= 0) {
+              val newArgs = args.map(x => x match {
+                case ProjectArg(out, in) =>
+                  out match {
+                    case "MIMIR_PROVENANCE" => List[ProjectArg]()
+                    case _ => List(x)
+
+                  }
+              }).flatten
+                  /*if(!out.equalsIgnoreCase("MIMIR_PROVENANCE")){
+                    x//new ProjectArg(CTPercolator.ROWID_KEY, Var(CTPercolator.ROWID_KEY))
+                  }
+                  else {
+                    List()//x
+                  }
+              }).flatten.toList*/
+              //return Project(new ProjectArg("MIMIR_PROVENANCE", Function("CAST", List(gb.head, KeywordPrimitive("string", Type.TString)))) :: newArgs,
+              //  Aggregate(aggArgs, gb, propagateRowIDs(child, force || aggArgs.forall(x=> x.columns.forall(requiresRowID(_))))))
+              return Project(new ProjectArg("MIMIR_PROVENANCE", RowIdPrimitive("1")) :: newArgs,
+                Aggregate(aggArgs, gb, propagateRowIDs(child, force || aggArgs.forall(x=> x.columns.forall(requiresRowID(_))))))
+            }
+          case _ =>
+
+        }
         var newArgs = args;
         if(force && p.get(ROWID_KEY).isEmpty) {
           newArgs = 

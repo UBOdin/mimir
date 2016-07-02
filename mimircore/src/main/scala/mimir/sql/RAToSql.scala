@@ -150,24 +150,19 @@ class RAToSql(db: Database) {
 
               item.setExpression(func)
               item
+            }) ++
+            gbcols.map( (col) => {
+              val item = new SelectExpressionItem()
+              val column =  convert(col, getSchemas(childFroms))
+              item.setAlias(column.asInstanceOf[Column].getColumnName())
+              item.setExpression(column)
+              item
             })
           )
         )
         subBody.setGroupByColumnReferences(new java.util.ArrayList(
           gbcols.map(convert(_, getSchemas(childFroms)).asInstanceOf[net.sf.jsqlparser.schema.Column])))
-          /*val col = convert(_, getSchemas(childFroms))
-          col match {
-            case column: net.sf.jsqlparser.schema.Column =>
-              val column = col.asInstanceOf[net.sf.jsqlparser.schema.Column]
-              val arg = new Column(column.getTable, column.getColumnName)
-              arg
-            case _ =>  throw new SQLException("Group By Reference is not a column.")
-          }
-          )))
-*/
-            /*new Column(new net.sf.jsqlparser.schema.Table(
-            null, getSchemas(childFroms).head._1), _)))))//convert(_, getSchemas(childFroms)))*/
-        //))
+
         subBody
 
       case Project(args, src) =>
@@ -203,8 +198,17 @@ class RAToSql(db: Database) {
 
   def getSchemas(sources: List[FromItem]): List[(String, List[String])] =
   {
+    var sch = List[(String, List[String])]()
     sources.map( {
       case subselect: SubSelect =>
+        if(subselect.getSelectBody.isInstanceOf[PlainSelect]){
+          subselect.getSelectBody.asInstanceOf[PlainSelect].getFromItem() match {
+            case sub: SubSelect =>
+              sch = getSchemas(List(sub))
+
+            case _ =>
+          }
+        }
         (subselect.getAlias(), subselect.getSelectBody() match {
           case plainselect: PlainSelect => 
             plainselect.getSelectItems().map({
@@ -214,7 +218,7 @@ class RAToSql(db: Database) {
         }) 
       case table: net.sf.jsqlparser.schema.Table =>
         (table.getAlias(), db.getTableSchema(table.getName()).get.map(_._1).toList++List("ROWID"))
-    })
+    }) ++ sch
   }
 
   def makeSubSelect(oper: Operator): FromItem =
@@ -229,10 +233,6 @@ class RAToSql(db: Database) {
     (Expression, List[FromItem]) =
   {
     oper match {
-      case Aggregate(args, gbcols, child) =>
-        val sub = makeSubSelect(oper)
-        val (childCond, childFroms) = extractSelectsAndJoins(child)
-        ( childCond, childFroms ++ List(sub) )
       case Select(cond, child) =>
         val (childCond, childFroms) = extractSelectsAndJoins(child)
         ( Arith.makeAnd(cond, childCond), childFroms )
