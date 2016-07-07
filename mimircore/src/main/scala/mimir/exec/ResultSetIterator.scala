@@ -69,7 +69,16 @@ class ResultSetIterator(
             }
 
           case TAny =>
-            () => { NullPrimitive() }
+            () => {
+//select b, sum(a) from r where b >2 group by
+              if(src.getString(col+1).length == 0){
+                new NullPrimitive()
+              }
+              else{
+                new StringPrimitive(src.getString(col+1))
+              }
+
+            }//NullPrimitive() }
     }}).toList
   var isFirst = true;
   var empty = false;

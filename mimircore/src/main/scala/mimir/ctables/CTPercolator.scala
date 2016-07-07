@@ -308,10 +308,10 @@ object CTPercolator {
                     List()//x
                   }
               }).flatten.toList*/
-              //return Project(new ProjectArg("MIMIR_PROVENANCE", Function("CAST", List(gb.head, KeywordPrimitive("string", Type.TString)))) :: newArgs,
-              //  Aggregate(aggArgs, gb, propagateRowIDs(child, force || aggArgs.forall(x=> x.columns.forall(requiresRowID(_))))))
-              return Project(new ProjectArg("MIMIR_PROVENANCE", RowIdPrimitive("1")) :: newArgs,
+              return Project(new ProjectArg("MIMIR_PROVENANCE", Function("CAST", List(gb.head, KeywordPrimitive("String", Type.TString)))) :: newArgs,
                 Aggregate(aggArgs, gb, propagateRowIDs(child, force || aggArgs.forall(x=> x.columns.forall(requiresRowID(_))))))
+              //return Project(new ProjectArg("MIMIR_PROVENANCE", RowIdPrimitive("1")) :: newArgs,
+             //   Aggregate(aggArgs, gb, propagateRowIDs(child, force || aggArgs.forall(x=> x.columns.forall(requiresRowID(_))))))
             }
           case _ =>
 

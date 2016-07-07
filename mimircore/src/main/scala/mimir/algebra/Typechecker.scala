@@ -44,7 +44,7 @@ class ExpressionChecker(scope: (String => Type.T) = Map().apply _) {
 			case Function("CAST", fargs) =>
 				// Special case CAST
 				Eval.inline(fargs(1)) match {
-					case KeywordPrimitive(t, TType) => Type.fromString(t)
+					case KeywordPrimitive(t, s) => Type.fromString(t)
 					case p:PrimitiveValue => 
 						throw new SQLException("Invalid CAST to '"+p+"' of type: "+typeOf(p))
 					case _ => TAny
