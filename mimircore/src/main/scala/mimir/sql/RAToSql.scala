@@ -38,7 +38,7 @@ class RAToSql(db: Database) {
           { case (tgt, real)  => ProjectArg(tgt, Var(real)) }
         )
         val metadata = tgtMetadata.map({
-          case ("ROWID_MIMIR", _) => 
+          case ("ROWID_MIMIR" | "ROWID", _) => 
             (
               ("ROWID", Type.TRowId), 
               ProjectArg(CTPercolator.ROWID_KEY, Var("ROWID"))
@@ -215,6 +215,11 @@ class RAToSql(db: Database) {
               case sei:SelectExpressionItem =>
                 sei.getAlias().toString
             }).toList
+          case union: net.sf.jsqlparser.statement.select.Union =>
+            union.getPlainSelects().get(0).getSelectItems().map({
+              case sei:SelectExpressionItem =>
+                sei.getAlias().toString
+            }).toList
         }) 
       case table: net.sf.jsqlparser.schema.Table =>
         (table.getAlias(), db.getTableSchema(table.getName()).get.map(_._1).toList++List("ROWID"))
@@ -372,28 +377,26 @@ class RAToSql(db: Database) {
       case Not(subexp) => {
         new InverseExpression(convert(subexp, sources))
       }
-      case mimir.algebra.Function(name, subexp) => {
-        if(name.equals("JOIN_ROWIDS")) {
-          if(subexp.size != 2) throw new SQLException("JOIN_ROWIDS should get exactly two arguments")
-          return concat(convert(subexp(0), sources), convert(subexp(1), sources), ".")
-        }
-
-        if(name.equals("CAST")) {
-          return new CastOperation(convert(subexp(0), sources), subexp(1).toString);
-        }
-
-        if(name.equals("TO_DATE")) {
-          val toDate = new Function()
-          toDate.setName("TO_DATE")
-          val explist = new ExpressionList(new util.ArrayList[expression.Expression](subexp.map(convert(_))))
-          toDate.setParameters(explist)
-          return toDate
-        }
-
-        if(subexp.length > 1)
-          throw new SQLException("Function " + name + " SQL conversion error")
-
-        convert(subexp(0), sources)
+      case mimir.algebra.Function("JOIN_ROWIDS", lhs :: rhs :: Nil) => {
+          concat(convert(lhs, sources), convert(rhs, sources), ".")
+      }
+      case mimir.algebra.Function("__LEFT_UNION_ROWID", body :: Nil) => {
+          concat(convert(body, sources), new StringValue("left"), ".")
+      }
+      case mimir.algebra.Function("__RIGHT_UNION_ROWID", body :: Nil) => {
+          concat(convert(body, sources), new StringValue("right"), ".")
+      }
+      case mimir.algebra.Function("CAST", body_arg :: body_type :: Nil) => {
+        return new CastOperation(convert(body_arg, sources), body_type.toString);
+      }
+      case mimir.algebra.Function(fname, fargs) => {
+          val func = new Function()
+          func.setName(fname)
+          val explist = 
+            new ExpressionList(
+              new util.ArrayList[expression.Expression](fargs.map(convert(_))))
+          func.setParameters(explist)
+          return func
       }
       case VGTerm((_, model), idx, args) => {
 
