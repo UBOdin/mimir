@@ -241,6 +241,7 @@ td:hover {
     float: right;
     padding-left:               10px;
     padding-right:              15px;
+    /*min-width:                  447px;*/
 }
 
 .lens_btn {

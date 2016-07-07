@@ -1,5 +1,4 @@
 @(webAPI: mimir.WebAPI, query: String, result: mimir.web.WebResult, lastQuery: String)
-
 @import mimir.web.{WebQueryResult, WebStringResult, WebErrorResult}
 @import mimir.algebra.Type
 
@@ -26,6 +25,7 @@
     <![endif]-->
 </head>
 <body>
+
 <div class="container">
     <div class="container">
         <nav class="navbar navbar-default">
@@ -44,11 +44,22 @@
                         <li><a id="about_btn">About</a></li>
                         <li><a id="upload">Upload</a></li>
                         <li class="dropdown">
-                            <a class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><span id="curr_db">Databases</span> <span class="caret"></span></a>
+                        <a class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><span id="curr_db">Databases</span><span class="caret"></span></a>
                             <ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
                                 @webAPI.getAllDBs.map { x =>
                                     <li><a class="db_link">@x</a></li>
                                 }
+
+
+                                <li role="separator" class="divider"></li>
+                                <li class="dropdown-header" id="tables_header">Tables</li>
+                                @webAPI.getAllTables.map { x =>
+                                    @if(!x.equals("MIMIR_LENSES") && !x.endsWith("_BACKEND")) {
+                                        <li><a class="table_link ">@x</a></li>
+                                    }
+                                }
+
+
                                 <li role="separator" class="divider"></li>
                                 <li><a id="create_database">Create Database</a></li>
                             </ul>
@@ -57,6 +68,7 @@
                 </div><!--/.nav-collapse -->
             </div>
         </nav>
+
         <div id="about" class="well">
             <h1><a id="user-content-the-mimir-uncertainty-management-tool" class="anchor" href="#the-mimir-uncertainty-management-tool" aria-hidden="true"><span class="octicon octicon-link"></span></a>The Mimir Uncertainty Management Tool</h1>
             <br>
@@ -65,41 +77,45 @@
             <a href="https://github.com/okennedy/mimir">GitHub</a>
             <div class="close_btn"><span class="close_x">&#10006;</span></div>
         </div>
+
         <div id="drop_area">
             <form action="loadTable" class="dropzone" id="myAwesomeDropzone">
                 <div class="dz-message"><h4>Drag and drop .csv files here to load them into the database</h4></div>
             </form>
             <div class="close_btn"><span class="close_x">&#10006;</span></div>
         </div>
+
         <div class="well" id="top_area">
             <div id="query_div">
                 <form id="query_form" action="queryDB" method="POST">
                     <textarea id="query_textarea" name="query" placeholder="Enter query here..." spellcheck="false">@query</textarea>
                     <div class="row">
                         <input type="submit" class="btn btn-primary" id="query_btn" value="Query">
-                    
-                            <div class="dropdown" id="table_btn"><button class="btn btn-primary dropdown-toggle" style="text-align:left;" type="button" data-toggle="dropdown">Select Table
-                                <span class="caret"></span></button>
-                                <ul class="dropdown-menu">
-                                    @webAPI.getAllTables.map { x =>
-                                        @if(!x.equals("MIMIR_LENSES") && !x.endsWith("_BACKEND")) {
-                                            <li><a class="table_link ">@x</a></li>
-                                        }
+
+                        <div class="dropdown" id="table_btn"><button class="btn btn-primary dropdown-toggle" aria-haspopup="true" aria-expanded="false" style="text-align:left;" type="button" data-toggle="dropdown">Select Table
+                            <span class="caret"></span></button>
+                            <ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
+                            <li class="dropdown-header">Tables</li>
+                                @webAPI.getAllTables.map { x =>
+                                    @if(!x.equals("MIMIR_LENSES") && !x.endsWith("_BACKEND")) {
+                                        <li><a class="table_link ">@x</a></li>
                                     }
-                                    <li role="separator" class="divider"></li>
-                                    @webAPI.getAllLenses.map { x =>
-                                    <li><a class="lens_link">@x</a></li>
-                                    }
-                                </ul>
-                            </div>
-                        
+                                }
+                                <li role="separator" class="divider"></li>
+                                <li class="dropdown-header">Applied Lenses</li>
+                                @webAPI.getAllLenses.map { x =>
+                                <li><a class="lens_link">@x</a></li>
+                                }
+                            </ul>
+                        </div>
+
                     </div>
                 </form>
                 <input type="hidden" id="last_query_field" name="last_query" value="@lastQuery">
                 <input type="hidden" id="db_field" name="db" value="@webAPI.getCurrentDB">
-
             </div>
         </div>
+
         <div class="result row">
             @result match {
                 case WebQueryResult(iter) => {
@@ -119,7 +135,7 @@
                                 <h3 class="panel-title">Notifications</h3>
                             </div>
                             <div class="panel-body">
-                                <p><b>Active Database:</b> @webAPI.getCurrentDB</p>
+                                <p><b>Active Database:</b><br>@webAPI.getCurrentDB</p><hr>
                                 <li><p>@iter.count row(s) returned in @iter.executionTime ms, showing top 100</p></li>
                                 <li><p><span style="color:red">Red</span> represents data uncertainty</p></li>
                                 @if(iter.missingRows) {
@@ -132,8 +148,8 @@
                     <div class="rightCol col-md-9 col-xs-9">
                          @tableGenerator(iter)
                     </div>
+
                     <div class="clear"></div>
-                    
                 }
                 case WebStringResult(string) => { 
                 <div class="col-xs-12 col-md-12">
@@ -144,15 +160,17 @@
                     <div class="clear"></div>
                 </div>
                 }
-                case WebErrorResult(string) => { <div class="col-xs-12 col-md-12"><pre class="error">Command Ignored.<br/><br/>@string</pre></div> }
+                case WebErrorResult(string) => { <div class="col-xs-12 col-md-12"><pre class="error" style="font-family:Helvetica;">Command Ignored.<br/><br/>@string</pre></div> }
             }
         </div>
+
         <form id="change_db_form" class="hidden" action="changeDB" method="POST">
             <input type="hidden" id="change_db_field" name="db" value="">
         </form>
         <form id="create_db_form" class="hidden" action="createDB" method="POST">
             <input type="hidden" id="create_db_field" name="db" value="">
         </form>
+
         <div id="ti_lens_div" class="lens_create_div">
             <h3>Type Inference Lens</h3>
             <p class="lens_desc">Create a lens to infer the types of a newly imported table, which all default to String</p>
@@ -177,6 +195,7 @@
             <br>
             <button id="ti_lens_create_btn" class="lens_btn">CREATE</button>
         </div>
+
         <div id="mv_lens_div" class="lens_create_div">
             <h3>Missing Value Lens</h3>
             <p class="lens_desc">Create a lens to calculate best estimate guesses for missing values for an attribute</p>
@@ -188,6 +207,7 @@
             <br>
             <button id="mv_lens_create_btn" class="lens_btn">CREATE</button>
         </div>
+
         <div id="sm_lens_div" class="lens_create_div">
             <h3>Schema Matching Lens</h3>
             <p class="lens_desc">Create a lens to match the schema for one table to another table, to enable unions</p>
@@ -208,6 +228,7 @@
         </div>
     </div>
 </div>
+
 <div id="black-box"></div>
 <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
