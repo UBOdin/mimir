@@ -5,7 +5,6 @@ import java.sql._;
 import Type._;
 import Arith.{Add, Sub, Mult, Div, And, Or}
 import Cmp.{Gt, Lt, Lte, Gte, Eq, Neq, Like, NotLike}
-import net.sf.jsqlparser.expression.Expression
 
 /* what's going on with scope and Map().apply? */
 class ExpressionChecker(scope: (String => Type.T) = Map().apply _) {
@@ -44,7 +43,7 @@ class ExpressionChecker(scope: (String => Type.T) = Map().apply _) {
 			case Function("CAST", fargs) =>
 				// Special case CAST
 				Eval.inline(fargs(1)) match {
-					case KeywordPrimitive(t, TType) => Type.fromString(t)
+					case TypePrimitive(t) => t
 					case p:PrimitiveValue => 
 						throw new SQLException("Invalid CAST to '"+p+"' of type: "+typeOf(p))
 					case _ => TAny
