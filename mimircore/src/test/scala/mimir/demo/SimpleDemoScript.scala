@@ -65,11 +65,11 @@ object SimpleDemoScript extends Specification with FileMatchers {
 	def str = StringPrimitive(_:String).asInstanceOf[PrimitiveValue]
 
 	val tempDBName = "tempDBDemoScript"
-	val productDataFile = new File("test/data/Product.sql");
+	val productDataFile = new File("../test/data/Product.sql");
 	val reviewDataFiles = List(
-			new File("test/data/ratings1.csv"),
-			new File("test/data/ratings2.csv"),
-			new File("test/data/ratings3.csv")
+			new File("../test/data/ratings1.csv"),
+			new File("../test/data/ratings2.csv"),
+			new File("../test/data/ratings3.csv")
 		)
 
 	val db = new Database(tempDBName, new JDBCBackend("sqlite", tempDBName));
