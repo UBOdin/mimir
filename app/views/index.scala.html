@@ -50,7 +50,7 @@
                                     <li><a class="db_link">@x</a></li>
                                 }
 
-
+                                <!-- Used in nav_bar for testing purposes 
                                 <li role="separator" class="divider"></li>
                                 <li class="dropdown-header" id="tables_header">Tables</li>
                                 @webAPI.getAllTables.map { x =>
@@ -58,7 +58,7 @@
                                         <li><a class="table_link ">@x</a></li>
                                     }
                                 }
-
+                                Used in nav_bar for testing purposes -->
 
                                 <li role="separator" class="divider"></li>
                                 <li><a id="create_database">Create Database</a></li>
@@ -92,10 +92,11 @@
                     <div class="row">
                         <input type="submit" class="btn btn-primary" id="query_btn" value="Query">
 
+                    <!-- Actual button in form -->
                         <div class="dropdown" id="table_btn"><button class="btn btn-primary dropdown-toggle" aria-haspopup="true" aria-expanded="false" style="text-align:left;" type="button" data-toggle="dropdown">Select Table
                             <span class="caret"></span></button>
-                            <ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
-                            <li class="dropdown-header">Tables</li>
+                            <ul class="dropdown-menu" id="select_table" aria-labelledby="dropdownMenu1">
+                                <li class="dropdown-header" >Tables</li>
                                 @webAPI.getAllTables.map { x =>
                                     @if(!x.equals("MIMIR_LENSES") && !x.endsWith("_BACKEND")) {
                                         <li><a class="table_link ">@x</a></li>
@@ -108,6 +109,8 @@
                                 }
                             </ul>
                         </div>
+                    <!-- Actual button in form -->
+
 
                     </div>
                 </form>
