@@ -70,6 +70,10 @@ a:hover {
     width:                      100%;
 }
 
+#query_div .dropdown-menu {
+    left:-103;
+}
+
 #query_textarea {
     font-family:                Monospace;
     padding:                    6px;
@@ -77,7 +81,7 @@ a:hover {
     resize:                     vertical;
     width:                      100%;
     border-radius:              4px;
-    height:                     55px;
+    height:                     80px;
 }
 
 form {
@@ -88,6 +92,14 @@ form {
     width:                      100px;
     height:                     40px;
     margin-top:                 20px;
+    margin-left:                15px;
+    float: left;
+}
+
+#table_btn {
+    float:                      right;
+    margin-top:                 20px;
+    margin-right:               15px;
 }
 
 .result {
@@ -97,11 +109,13 @@ form {
 
 #result_table th {
     text-align:                 center;
-    text-decoration:            underline;
+    text-decoration:            ;
+    border-left:                solid 2px #ccc;
 }
 
 #result_table td {
     text-align:                 center;
+    border-left:                solid 2px #ccc;
 }
 
 .non_deterministic_row {
@@ -147,6 +161,10 @@ td:hover {
     padding:                    60px 120px;
     display:                    none;
     position:                   relative;
+}
+
+#about h1{ 
+    text-align:                 left;
 }
 
 #drop_area {
@@ -209,10 +227,10 @@ td:hover {
     background-color:           #ea4858;
 }
 
+.col-xs-2{min-width: 180px;max-width:310px;}
+
 .leftCol {
-    width:                      20%;
-    float:                      left;
-    padding-right:              10px;
+    position:                   fixed;
 }
 
 .tablebutton {
@@ -220,11 +238,10 @@ td:hover {
 }
 
 .rightCol {
-    width:                      80%;
-    float:                      left;
+    float: right;
     padding-left:               10px;
-    padding-right:              10px;
-    border-left:                2px solid #29363e;
+    padding-right:              15px;
+    /*min-width:                  447px;*/
 }
 
 .lens_btn {
@@ -329,6 +346,6 @@ select:focus {
 }
 
 .horbar {
-    background:                 #29363e;
+    background:                 #dddddd;
     height:                     2px;
 }

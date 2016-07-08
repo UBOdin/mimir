@@ -382,6 +382,7 @@ case class Database(name: String, backend: Backend)
   def loadTable(targetTable: String, sourceFile: File){
     LoadCSV.handleLoadTable(this, targetTable, sourceFile)
   }
+  
   def loadTable(targetTable: String, sourceFile: String){
     loadTable(targetTable, new File(sourceFile))
   }
