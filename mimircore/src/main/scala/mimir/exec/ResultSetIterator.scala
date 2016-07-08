@@ -70,15 +70,14 @@ class ResultSetIterator(
 
           case TAny =>
             () => {
-//select b, sum(a) from r where b >2 group by
-              if(src.getString(col+1).length == 0){
+              /*if(src.getString(col+1).length == 0){
                 new NullPrimitive()
               }
               else{
                 new StringPrimitive(src.getString(col+1))
               }
 
-            }//NullPrimitive() }
+            }*/NullPrimitive() }
     }}).toList
   var isFirst = true;
   var empty = false;

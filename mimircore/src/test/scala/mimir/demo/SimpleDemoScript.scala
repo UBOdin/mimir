@@ -65,11 +65,11 @@ object SimpleDemoScript extends Specification with FileMatchers {
 	def str = StringPrimitive(_:String).asInstanceOf[PrimitiveValue]
 
 	val tempDBName = "tempDBDemoScript"
-	val productDataFile = new File("test/data/Product.sql");
+	val productDataFile = new File("../test/data/Product.sql");
 	val reviewDataFiles = List(
-			new File("test/data/ratings1.csv"),
-			new File("test/data/ratings2.csv"),
-			new File("test/data/ratings3.csv")
+			new File("../test/data/ratings1.csv"),
+			new File("../test/data/ratings2.csv"),
+			new File("../test/data/ratings3.csv")
 		)
 
 	val db = new Database(tempDBName, new JDBCBackend("sqlite", tempDBName));
@@ -102,6 +102,10 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			query("SELECT RATING FROM RATINGS1;").allRows.flatten must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
 			query("SELECT * FROM RATINGS2;").allRows must have size(3)
 
+		}
+
+		"Compute Aggregate Queries" >> {
+			query("SELECT EVALUATION, SUM(NUM_RATINGS) FROM RATINGS2 WHERE EVALUATION > 3.0 GROUP BY EVALUATION;")
 		}
 
     "Create and Query Type Inference Lens with NULL values" >> {
