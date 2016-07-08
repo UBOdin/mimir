@@ -291,28 +291,43 @@ object CTPercolator {
     oper match {
       case p @ Project(args, child) =>
         child match {
-          case Aggregate(aggArgs, gb, child) =>
-            if(gb.length >= 0) {
-              val newArgs = args.map(x => x match {
-                case ProjectArg(out, in) =>
-                  out match {
-                    case "MIMIR_PROVENANCE" => List[ProjectArg]()
-                    case _ => List(x)
 
-                  }
-              }).flatten
-                  /*if(!out.equalsIgnoreCase("MIMIR_PROVENANCE")){
-                    x//new ProjectArg(CTPercolator.ROWID_KEY, Var(CTPercolator.ROWID_KEY))
-                  }
-                  else {
-                    List()//x
-                  }
-              }).flatten.toList*/
-              return Project(new ProjectArg("MIMIR_PROVENANCE", Function("CAST", List(gb.head, KeywordPrimitive("String", Type.TString)))) :: newArgs,
-                Aggregate(aggArgs, gb, propagateRowIDs(child, force || aggArgs.forall(x=> x.columns.forall(requiresRowID(_))))))
-              //return Project(new ProjectArg("MIMIR_PROVENANCE", RowIdPrimitive("1")) :: newArgs,
-             //   Aggregate(aggArgs, gb, propagateRowIDs(child, force || aggArgs.forall(x=> x.columns.forall(requiresRowID(_))))))
+            /*
+            If the child is an Aggregate, the RowIds will not follow the flat selection format.
+            Therefore, we need to get rid of the original ROWID_MIMIR, and generate rowids
+            for the following three aggregate cases:
+              1) No group by, which means, the rowid will be '1'
+              2) One group by column, which means we only need to use the CAST function
+              3) Multiple group by columns, where we use the JOIN_ROWIDS function
+            For, the latter two cases, the rowid is the unique gb value(s).
+             */
+          case Aggregate(aggArgs, gb, child) =>
+
+            val newArgs = args.map(x => x match {
+              case ProjectArg(out, in) =>
+                out match {
+                  case "MIMIR_PROVENANCE" => List[ProjectArg]()
+                  case _ => List(x)
+
+                }
+            }).flatten
+
+            if(gb.length == 0) {
+              return Project(new ProjectArg("MIMIR_PROVENANCE", RowIdPrimitive("1")) :: newArgs,
+                 Aggregate(aggArgs, gb, propagateRowIDs(child, force || aggArgs.forall(x=> x.columns.forall(requiresRowID(_))))))
             }
+            else if(gb.length == 1){
+              return Project(new ProjectArg("MIMIR_PROVENANCE", Function("CAST", List(gb.head, TypePrimitive(Type.TRowId)))) :: newArgs,
+                Aggregate(aggArgs, gb, propagateRowIDs(child, force || aggArgs.forall(x=> x.columns.forall(requiresRowID(_))))))
+              }
+            else {
+              return Project(new ProjectArg("MIMIR_PROVENANCE", gb.map(x =>
+                Function("CAST", List(x, TypePrimitive(Type.TRowId)))).reduceLeft((x,y) =>
+                Function("JOIN_ROWIDS", List[Expression](x, y)) )) :: newArgs,
+                Aggregate(aggArgs, gb, propagateRowIDs(child, force || aggArgs.forall(x=> x.columns.forall(requiresRowID(_))))))
+            }
+
+
           case _ =>
 
         }
