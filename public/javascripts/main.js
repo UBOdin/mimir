@@ -420,6 +420,30 @@ $( document ).ready(function() {
         })
     });
 
+     $(".add_data_btn").click( function() {
+        get_query_name(function(name) {
+            $("#sm_lens_name").val(name+"MATCHED");
+            $("#black-box").show();
+            $("#sm_lens_div").show();
+
+            $("#black-box").click( function() {
+                $("#sm_lens_div").hide();
+                $(this).hide();
+            });
+        })
+    });
+
+     /*
+    Generate query for using a Schema Lens on a table automatically
+    */
+    $(document).on("click", ".add_data_btn", function() {
+        var table = $(this).html();
+        var query = "CREATE LENS "+table+";";
+
+        $("#query_textarea").val(query);
+        $("#query_btn").trigger("click");
+    });
+
     $("#sm_lens_create_btn").click( function() {
         var name = $("#sm_lens_name").val();
         if(name === "") {

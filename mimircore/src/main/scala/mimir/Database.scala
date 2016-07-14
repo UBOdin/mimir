@@ -1,6 +1,7 @@
 package mimir
 
 import java.io.File
+import java.io.StringReader
 import java.sql.SQLException
 import java.sql.ResultSet
 
@@ -12,6 +13,10 @@ import mimir.parser.OperatorParser
 import mimir.sql._
 import mimir.util.LoadCSV
 import mimir.web.WebIterator
+import mimir.parser.MimirJSqlParser
+
+import net.sf.jsqlparser.statement.Statement
+
 
 import scala.collection.mutable.ListBuffer
 
@@ -379,8 +384,14 @@ case class Database(name: String, backend: Backend)
    * header or not is unimplemented. So its assumed every CSV file
    * supplies an appropriate header.
    */
+
   def loadTable(targetTable: String, sourceFile: File){
-    LoadCSV.handleLoadTable(this, targetTable, sourceFile)
+    LoadCSV.handleLoadTable(this, targetTable+"RAW", sourceFile)
+    val targetRaw = targetTable + "RAW"
+    val oper = getTableOperator(targetRaw)
+    val l = List(new FloatPrimitive(.5))
+
+    lenses.create(oper, targetTable, l,"TYPE_INFERENCE")
   }
   
   def loadTable(targetTable: String, sourceFile: String){

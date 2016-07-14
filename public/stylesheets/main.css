@@ -247,6 +247,7 @@ td:hover {
     float: right;
     padding-left:               10px;
     padding-right:              15px;
+    z-index: 50;
     /*min-width:                  447px;*/
 }
 

@@ -96,7 +96,7 @@
                         <div class="dropdown" id="table_btn"><button class="btn btn-primary dropdown-toggle" aria-haspopup="true" aria-expanded="false" style="text-align:left;" type="button" data-toggle="dropdown">Select Table
                             <span class="caret"></span></button>
                             <ul class="dropdown-menu" id="select_table" aria-labelledby="dropdownMenu1">
-                                <li class="dropdown-header" >Tables</li>
+                                <li class="dropdown-header" >Raw Data Tables</li>
                                 @webAPI.getAllTables.map { x =>
                                     @if(!x.equals("MIMIR_LENSES") && !x.endsWith("_BACKEND")) {
                                         <li><a class="table_link ">@x</a></li>
@@ -123,13 +123,30 @@
             @result match {
                 case WebQueryResult(iter) => {
                     <div class="leftCol col-md-2 col-xs-2">
-                        <div class="dropdown">
+                        <div class="dropdown" style="margin-bottom:10px;">
                             <button class="btn btn-primary dropdown-toggle" style="width:100%;text-align:left;" type="button" data-toggle="dropdown">Create Lens
                             <span class="caret"></span></button>
                             <ul class="dropdown-menu">
                                 <li><button id="type_inference_btn" class="lens_btn">Type Inference</button></li>
                                 <li><button id="missing_value_btn" class="lens_btn">Missing Value</button></li>
                                 <li><button id="schema_matching_btn" class="lens_btn" style="margin-bottom:2px;">Schema Matching</button></li>
+                            </ul>
+                        </div>
+                        <div class="dropdown">
+                            <button class="btn btn-primary dropdown-toggle" style="width:100%;text-align:left;" type="button" data-toggle="dropdown">Add Data
+                            <span class="caret"></span></button>
+                            <ul class="dropdown-menu">
+                                <li class="dropdown-header" >Raw Data Tables</li>
+                                @webAPI.getAllTables.map { x =>
+                                    @if(!x.equals("MIMIR_LENSES") && !x.endsWith("_BACKEND")) {
+                                        <li><button class="lens_btn add_data_btn">@x</button></li>
+                                    }
+                                }
+                                <li role="separator" class="divider"></li>
+                                <li class="dropdown-header">Applied Lenses</li>
+                                @webAPI.getAllLenses.map { x =>
+                                <li><a class="lens_link">@x</a></li>
+                                }
                             </ul>
                         </div>
                         
