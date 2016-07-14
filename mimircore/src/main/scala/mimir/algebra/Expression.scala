@@ -287,6 +287,10 @@ object Cmp extends Enumeration {
   }
 }
 
+case class RowIdVar() extends LeafExpression
+{
+  override def toString = "<<ROWID>>";
+}
 case class Var(name: String) extends LeafExpression {
   override def toString = name;
 }

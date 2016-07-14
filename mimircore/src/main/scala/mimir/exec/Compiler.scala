@@ -11,40 +11,15 @@ import mimir.algebra.Union
 import mimir.algebra._
 import mimir.ctables._
 import mimir.optimizer._
+import mimir.provenance._
 import mimir.lenses.TypeCastModel
 import net.sf.jsqlparser.statement.select._
-;
 
 class Compiler(db: Database) {
 
-  val ndBuildOpts = Map[NonDeterminism.Strat, (List[Operator => Operator])](
-    (NonDeterminism.Classic, List[Operator => Operator](
-      CTPercolator.percolate _
-    )),
-    (NonDeterminism.Partition, List[Operator => Operator](
-      CTPercolator.percolate _,
-      CTPartition.partition _
-    )),
-    (NonDeterminism.Inline, List[Operator => Operator](
-      CTPercolator.percolate _, // Partition Det & Nondet query fragments
-      PushdownSelections.optimize _
-    )),
-    (NonDeterminism.Hybrid, List[Operator => Operator](
-      CTPercolator.percolate _,
-      CTPartition.partition _,
-      PushdownSelections.optimize _
-    ))
-  )
-
-  val standardPostOptimizations = List[Operator => Operator](
-    compileAnalysis _,
+  def standardOptimizations: List[Operator => Operator] = List(
     InlineProjections.optimize _
   )
-
-  def standardOptimizations: List[Operator => Operator] = {
-    ndBuildOpts(db.nonDeterminismStrategy) ++ 
-      standardPostOptimizations
-  }
 
   /**
    * Perform a full end-end compilation pass.  Return an iterator over
@@ -55,21 +30,64 @@ class Compiler(db: Database) {
 
   /**
    * Perform a full end-end compilation pass.  Return an iterator over
-   * the result set.  Use the specified non-determinism strategy
-   */
-  def compile(oper: Operator, ndStrat: NonDeterminism.Strat): ResultIterator =
-    compile(oper, ndBuildOpts(ndStrat)++standardPostOptimizations)
-
-  /**
-   * Perform a full end-end compilation pass.  Return an iterator over
    * the result set.  Use only the specified list of optimizations.
    */
   def compile(oper: Operator, opts: List[Operator => Operator]): ResultIterator = 
   {
-    val optimizedOper = optimize(oper, opts)
-    // println(optimizedOper)
-    // Finally build the iterator
-    buildIterator(optimizedOper)
+    val outputSchema = oper.schema;
+
+    // The names that the provenance compilation step assigns will
+    // be different depending on the structure of the query.  As a 
+    // result it is **critical** that this be the first step in 
+    // compilation.  
+    val (provenanceAwareOper, provenanceCols) =
+      Provenance.compile(oper)
+
+    // Tag rows/columns with provenance metadata
+    val (taggedOper, colDeterminism, rowDeterminism) =
+      CTPercolator.percolateLite(oper)
+
+    // The deterministic result set iterator should strip off the 
+    // provenance columns.  Figure out which columns need to be
+    // kept.  Note that the order here actually matters.
+    val tagPlusOutputSchemaNames = 
+      outputSchema.map(_._1).toList ++
+        colDeterminism.toList.flatMap( x => ExpressionUtils.getColumns(x._2)) ++ 
+        ExpressionUtils.getColumns(rowDeterminism)
+
+    // Clean things up a little... make the query prettier.
+    val optimizedOper = 
+      optimize(taggedOper, opts)
+
+    // We'll need it a few times, so cache the final operator's schema
+    val finalSchema = 
+      optimizedOper.schema
+
+    // We'll need to line the attributes in the output up with
+    // the order in which the user expects to see them.  Build
+    // a lookup table with name + position in the query being execed.
+    val finalSchemaOrderLookup = 
+      finalSchema.map(_._1).zipWithIndex.toMap
+
+    // Generate the SQL
+    val sql = 
+      db.convert(optimizedOper)
+
+    // Deploy to the backend
+    val results = 
+      db.backend.execute(sql)
+
+    // And wrap the results.
+    new NonDetIterator(
+      new ResultSetIterator(results, 
+        finalSchema.toMap,
+        tagPlusOutputSchemaNames.map(finalSchemaOrderLookup(_)), 
+        provenanceCols.map(finalSchemaOrderLookup(_))
+      ),
+      outputSchema,
+      outputSchema.map(_._1).map(colDeterminism(_)), 
+      rowDeterminism
+    )
   }
 
   /**
@@ -81,112 +99,8 @@ class Compiler(db: Database) {
   /**
    * Optimize the query
    */
-  def optimize(oper: Operator, ndStrat: NonDeterminism.Strat): Operator = 
-    optimize(oper, ndBuildOpts(ndStrat)++standardPostOptimizations)
-
-  /**
-   * Optimize the query
-   */
   def optimize(oper: Operator, opts: List[Operator => Operator]): Operator =
     opts.foldLeft(oper)((o, fn) => fn(o))
-
-  /**
-   * Build an iterator out of the specified operator.  If the operator
-   * is probabilistic, we'll strip the Project() operator off the top
-   * (which, given a pass with CTPercolator.percolate(), will contain
-   * all of the nondeterminism in the query), and build a 
-   * ProjectionResultIterator over it.  Deterministic queries are 
-   * translated back into SQL and evaluated directly over the host 
-   * database.
-   *
-   * Preconditions: 
-   * - If the operator is probabilistic, it must have already been
-   * passed through CTPercolator.percolate().
-   * - If the operator contains analysis terms, it must have already
-   * been passed through compileAnalysis().
-   *
-   * Basically... there's relatively little reason that you'd want to
-   * call this method directly.  If you don't know what you're doing, 
-   * use compile() instead.
-   */
-  def buildIterator(oper: Operator): ResultIterator = {
-    if (CTables.isProbabilistic(oper)) {
-      oper match {
-        case Project(cols, src) =>
-          val inputIterator = buildIterator(src);
-          // println("Compiled ["+inputIterator.schema+"]: \n"+inputIterator)
-          new ProjectionResultIterator(
-            db,
-            inputIterator,
-            cols.map((x) => (x.column, x.input))
-          );
-
-        case mimir.algebra.Union(lhs, rhs) =>
-          new BagUnionResultIterator(
-            buildIterator(lhs),
-            buildIterator(rhs)
-          );
-
-        case _ => buildInlinedIterator(oper)
-      }
-    } else {
-      buildDeterministicIterator(oper)
-    }
-  }
-
-  def buildDeterministicIterator(oper: Operator): ResultIterator =
-  {
-    val operWithProvenance = CTPercolator.propagateRowIDs(oper, true);
-    // println("ITER:"+db.convert(operWithProvenance))
-    val results = db.backend.execute(
-      db.convert(operWithProvenance)
-    )
-
-    // println("Final query: "+db.convert(operWithProvenance))
-    val schemaList = operWithProvenance.schema
-    val schema = schemaList.
-                    map( _._1 ).
-                    zipWithIndex.
-                    toMap
-
-    if(!schema.contains(CTPercolator.ROWID_KEY)){
-      throw new SQLException("ERROR: No "+CTPercolator.ROWID_KEY+" in "+schema+"\n"+operWithProvenance);
-    }
-    // println("DETSCH: "+schema)
-    new ResultSetIterator(
-      results, 
-      schemaList.toMap,
-      oper.schema.map( _._1 ).map( schema(_) ),
-      List(schema(CTPercolator.ROWID_KEY))
-    )
-  }
-
-  def buildInlinedIterator(oper: Operator): ResultIterator =
-  {
-    // println("BASE: "+oper)
-    val operWithRowIDs = 
-      CTPercolator.propagateRowIDs(oper, true)
-    // println("ROWIDs: "+operWithRowIDs)
-    val (operatorWithDeterminism, columnDetExprs, rowDetExpr) =
-      CTPercolator.percolateLite(operWithRowIDs)
-    // println("Determinism: "+operatorWithDeterminism)
-    val inlinedOperator =
-      InlineVGTerms.optimize(operatorWithDeterminism)
-    // println("Inlined: "+inlinedOperator)
-    val schema = oper.schema.filter(_._1 != CTPercolator.ROWID_KEY);
-
-    // println("Foo: "+db.convert(inlinedOperator));
-    // println("Bar: "+schema.map(_._1).map(columnDetExprs(_)));
-
-    new NDInlineResultIterator(
-      db.query(db.convert(inlinedOperator), schema.toMap), 
-      schema,
-      schema.map(_._1).map(columnDetExprs(_)), 
-      rowDetExpr,
-      Var(CTPercolator.ROWID_KEY)
-    )
-
-  }
 
   /**
    * This method implements the current ghetto-ish UI for analyzing 
@@ -309,9 +223,4 @@ class Compiler(db: Database) {
         }
     }
   }
-}
-
-object NonDeterminism extends Enumeration {
-  type Strat = Value
-  val Classic, Partition, Inline, Hybrid = Value
 }

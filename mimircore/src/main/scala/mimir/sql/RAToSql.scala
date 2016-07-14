@@ -35,14 +35,7 @@ class RAToSql(db: Database) {
         val schMap = tgtSch.map(_._1).zip(realSch.map(_._1)).map ( 
           { case (tgt, real)  => ProjectArg(tgt, Var(real)) }
         )
-        val metadata = tgtMetadata.map({
-          case ("ROWID_MIMIR" | "ROWID", _) => 
-            (
-              ("ROWID", Type.TRowId), 
-              ProjectArg(CTPercolator.ROWID_KEY, Var("ROWID"))
-            )
-          case (tgt, _) => throw new SQLException("Unknown Table Metadata Key '"+tgt+"'")
-        })
+        val metadata = tgtMetadata.map( { case (out, in, t) => ((out, NullPrimitive(), t), ProjectArg(out, in)) } )
         Project(
           schMap ++ metadata.map(_._2),
           Table(name, realSch, metadata.map(_._1))
@@ -88,15 +81,10 @@ class RAToSql(db: Database) {
                 item.setExpression(new Column(table, internal))
                 item
             }) ++
-            metadata.map(_._1).map( (key) => {
+            metadata.map( (element) => {
               val item = new SelectExpressionItem()
-              item.setAlias(key)
-              key match {
-                case "ROWID_MIMIR" =>
-                  item.setExpression(new Column(table, "ROWID"))
-                case _ =>
-                  item.setExpression(new Column(table, key))
-              }
+              item.setAlias(element._1)
+              item.setExpression(convert(element._2))
               item
             })
           // )
@@ -144,8 +132,8 @@ class RAToSql(db: Database) {
           new java.util.ArrayList(
             args.map( (arg) => {
               val item = new SelectExpressionItem()
-              item.setAlias(arg.column)
-              item.setExpression(convert(arg.input, getSchemas(sources)))
+              item.setAlias(arg.name)
+              item.setExpression(convert(arg.expression, getSchemas(sources)))
               item
             })
           )

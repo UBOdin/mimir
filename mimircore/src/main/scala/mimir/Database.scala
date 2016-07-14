@@ -6,7 +6,7 @@ import java.sql.ResultSet
 
 import mimir.algebra._
 import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, Model, RowExplanation, VGTerm}
-import mimir.exec.{Compiler, NonDeterminism, ResultIterator, ResultSetIterator}
+import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
 import mimir.lenses.{Lens, LensManager}
 import mimir.parser.OperatorParser
 import mimir.sql._
@@ -62,7 +62,6 @@ case class Database(name: String, backend: Backend)
         case Some(x) => x
         case None => throw new SQLException("Table "+x+" does not exist in db!")
       })
-  var nonDeterminismStrategy = NonDeterminism.Hybrid
 
   def getName = name
   
@@ -162,15 +161,6 @@ case class Database(name: String, backend: Backend)
   def query(oper: Operator): ResultIterator = 
   {
     compiler.compile(oper)
-  }
-
-  /**
-   * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
-   * and rewrites the query to properly account for Virtual Tables.
-   */
-  def queryLineage(oper: Operator): ResultIterator = 
-  {
-    compiler.compile(oper, NonDeterminism.Classic)
   }
 
   /**
@@ -319,7 +309,7 @@ case class Database(name: String, backend: Backend)
    * Build a Table operator for the table with the provided name, requesting the
    * specified metadata.
    */
-  def getTableOperator(table: String, metadata: List[(String, Type.T)]): Operator =
+  def getTableOperator(table: String, metadata: List[(String, Expression, Type.T)]): Operator =
     backend.getTableOperator(table, metadata)
   
   /**
@@ -359,7 +349,7 @@ case class Database(name: String, backend: Backend)
         case None => None
         case Some(lens) => 
           // println("Found: "+name); 
-          Some(CTPercolator.propagateRowIDs(lens.view))
+          Some(lens.view)
       }
     }
   }

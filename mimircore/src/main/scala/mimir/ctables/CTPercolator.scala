@@ -26,7 +26,7 @@ object CTPercolator {
     // println("Percolate: "+o)
     InlineProjections.optimize(
       OperatorUtils.extractUnions(
-        propagateRowIDs(oper)
+        oper
       ).map( percolateOne(_) ).reduceLeft( Union(_,_) )
     )
   }
@@ -49,7 +49,7 @@ object CTPercolator {
       (e: Operator) =>
         e match {
           case Project(cols, rest) => (
-              cols.map( (x) => (x.column, x.input) ),
+              cols.map( (x) => (x.name, x.expression) ),
               rest
             )
           case _ => (
@@ -81,8 +81,8 @@ object CTPercolator {
         val ret = Project(
           (cols ++ addConstraintCol(p2)).map(
             (x) => ProjectArg(
-              x.column,
-              Eval.inline(x.input, bindings)
+              x.name,
+              Eval.inline(x.expression, bindings)
           )),
           source
         )
@@ -115,7 +115,7 @@ object CTPercolator {
                 if(c == BoolPrimitive(true)){ source }
                 else { percolateOne(Select(c, source)) }
               val inputCondition =
-                cols.find( _.column == CTables.conditionColumn )
+                cols.find( _.name == CTables.conditionColumn )
               if(inputCondition.isEmpty){
                 return Project(cols ++ List(
                           ProjectArg(CTables.conditionColumn, u)
@@ -124,9 +124,9 @@ object CTPercolator {
                 )
               } else {
                 return Project(cols.map(
-                    (x) => if(x.column == CTables.conditionColumn){
+                    (x) => if(x.name == CTables.conditionColumn){
                       ProjectArg(CTables.conditionColumn,
-                        Arith.makeAnd(x.input, u)
+                        Arith.makeAnd(x.expression, u)
                       )
                     } else { x }
                 ), newSelect)
@@ -254,119 +254,6 @@ object CTPercolator {
       }
     }
   }
-  
-  def requiresRowID(expr: Expression): Boolean = 
-  {
-    expr match {
-      case Var(ROWID_KEY) => true;
-      case _ => expr.children.exists( requiresRowID(_) )
-    }
-  }
-
-  def hasRowID(oper: Operator): Boolean = 
-  {
-    oper match {
-      case Project(cols, _) => cols.contains( (_:ProjectArg).getColumnName().equals(ROWID_KEY))
-      case Select(_, src) => hasRowID(src)
-      case Table(_,_,meta) => meta.contains( (_:(String,Type.T))._1.equals(ROWID_KEY))
-      case Union(_,_) => false
-      case Join(_,_) => false
-    }
-  }
-  
-  def propagateRowIDs(oper: Operator): Operator = 
-    propagateRowIDs(oper, false)
-
-  def propagateRowIDs(oper: Operator, force: Boolean): Operator = 
-  {
-    // println("Propagate["+(if(force){"F"}else{"NF"})+"]:\n" + oper);
-    if(hasRowID(oper)){ return oper; }
-    oper match {
-      case p @ Project(args, child) =>
-        var newArgs = args;
-        if(force && p.get(ROWID_KEY).isEmpty) {
-          newArgs = 
-            (new ProjectArg(ROWID_KEY, Var(ROWID_KEY))) ::
-              newArgs
-        }
-        Project(newArgs, 
-          propagateRowIDs(child, 
-            newArgs.exists((x)=>requiresRowID( x.input ))
-        ))
-        
-      case Select(cond, child) =>
-        Select(cond, propagateRowIDs(child,
-          force || requiresRowID(cond)))
-          
-      case Join(left, right) =>
-        if(force){
-          Project(
-            ProjectArg(ROWID_KEY,
-              Function("JOIN_ROWIDS", List[Expression](Var("LEFT_ROWID"), Var("RIGHT_ROWID")))) ::
-            (left.schema ++ right.schema).map(_._1).map(
-              (x) => ProjectArg(x, Var(x)) 
-            ).toList,
-            Join(
-              Project(
-                ProjectArg("LEFT_ROWID", Var(ROWID_KEY)) ::
-                left.schema.map(_._1).map(
-                  (x) => ProjectArg(x, Var(x)) 
-                ).toList,
-                propagateRowIDs(left, true)),
-              Project(
-                ProjectArg("RIGHT_ROWID", Var(ROWID_KEY)) ::
-                right.schema.map(_._1).map(
-                  (x) => ProjectArg(x, Var(x)) 
-                ).toList,
-                propagateRowIDs(right, true))
-            )
-          )
-        } else {
-          Join(
-            propagateRowIDs(left, false),
-            propagateRowIDs(right, false)
-          )
-        }
-        
-        case Union(left, right) =>
-          if(force){
-            Union( 
-              Project(
-                ProjectArg(ROWID_KEY,
-                  Function("__LEFT_UNION_ROWID",
-                    List[Expression](Var(ROWID_KEY)))) ::
-                left.schema.map(_._1).map(
-                  (x) => ProjectArg(x, Var(x)) 
-                ).toList,
-                propagateRowIDs(left, true)),
-              Project(
-                ProjectArg(ROWID_KEY,
-                  Function("__RIGHT_UNION_ROWID",
-                    List[Expression](Var(ROWID_KEY)))) ::
-                right.schema.map(_._1).map(
-                  (x) => ProjectArg(x, Var(x)) 
-                ).toList,
-                propagateRowIDs(right, true))
-            )
-          } else {
-            Union( 
-              propagateRowIDs(left, false),
-              propagateRowIDs(right, false)
-            )
-          }
-        
-        case Table(name, sch, metadata) =>
-          if(force && !metadata.exists( _._1 == ROWID_KEY )){
-            Table(name, sch, metadata ++ Map((ROWID_KEY, Type.TRowId)))
-          } else {
-            Table(name, sch, metadata)
-          }
-      
-    }
-  }
-
-
-
 
   private def extractMissingValueVar(expr: Expression): Var = {
     expr match {
@@ -395,14 +282,14 @@ object CTPercolator {
   val removeConstraintColumn = (oper: Operator) => {
     oper match {
       case Project(cols, src) =>
-        Project(cols.filterNot((p) => p.column.equalsIgnoreCase(CTables.conditionColumn)), src)
+        Project(cols.filterNot((p) => p.name.equalsIgnoreCase(CTables.conditionColumn)), src)
       case _ =>
         oper
     }
   }
 
   def partition(oper: Project): Operator = {
-    val cond = oper.columns.find(p => p.column.equalsIgnoreCase(CTables.conditionColumn)).head.input
+    val cond = oper.columns.find(p => p.name.equalsIgnoreCase(CTables.conditionColumn)).head.expression
     var otherClausesOp: Operator = null
     var missingValueClausesOp: Operator = null
     var detExpr: List[Expression] = List()
@@ -449,7 +336,7 @@ object CTPercolator {
 
     if(otherClauses.nonEmpty)
       otherClausesOp = Project(
-        oper.columns.filterNot( (p) => p.column.equalsIgnoreCase(CTables.conditionColumn))
+        oper.columns.filterNot( (p) => p.name.equalsIgnoreCase(CTables.conditionColumn))
           ++ List(ProjectArg(CTables.conditionColumn, otherClauses.reduce(Arith.makeAnd(_, _)))),
         oper.source
       )
@@ -473,7 +360,7 @@ object CTPercolator {
   def partitionConstraints(oper: Operator): Operator = {
     oper match {
       case Project(cols, src) =>
-        cols.find(p => p.column.equalsIgnoreCase(CTables.conditionColumn)) match {
+        cols.find(p => p.name.equalsIgnoreCase(CTables.conditionColumn)) match {
           case Some(arg) =>
             partition(oper.asInstanceOf[Project])
 

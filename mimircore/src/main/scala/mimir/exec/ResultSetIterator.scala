@@ -1,11 +1,11 @@
 package mimir.exec;
 
-import java.sql._
-import java.util.{GregorianCalendar, Calendar}
-;
+import java.sql._;
+import java.util.{GregorianCalendar, Calendar};
 import mimir.sql.JDBCUtils;
 import mimir.algebra._;
 import mimir.algebra.Type._;
+import mimir.provenance._;
 
 class ResultSetIterator(
   val src: ResultSet, 
@@ -103,9 +103,9 @@ class ResultSetIterator(
   def deterministicCol(v: Int) = true;
   def missingRows() = false;
   def provenanceToken() = 
-    RowIdPrimitive(
+    Eval.eval(Provenance.rowIdVal(
       provenanceTokenColumns.map( 
-        (col) => src.getString(col+1) 
-      ).mkString(",")
-    )
+        (col) => RowIdPrimitive(src.getString(col+1))
+      )
+    )).asInstanceOf[RowIdPrimitive]
 }

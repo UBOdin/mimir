@@ -21,8 +21,8 @@ abstract class Backend {
   
   def getTableSchema(table: String): Option[List[(String, Type.T)]]
   def getTableOperator(table: String): Operator =
-    getTableOperator(table, List[(String,Type.T)]())
-  def getTableOperator(table: String, metadata: List[(String, Type.T)]):
+    getTableOperator(table, List[(String,Expression,Type.T)]())
+  def getTableOperator(table: String, metadata: List[(String, Expression, Type.T)]):
     Operator =
   {
     Table(

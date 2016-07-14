@@ -190,41 +190,6 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
 
   }
 
-  def getVGTerms(query: String, row: String, ind: Int): List[Reason] = {
-    val source = new StringReader(query)
-    val parser = new MimirJSqlParser(source)
-
-    val raw =
-      try {
-        val stmt: Statement = parser.Statement();
-        if(stmt.isInstanceOf[Select]){
-          db.convert(stmt.asInstanceOf[Select])
-        } else {
-          throw new Exception("getVGTerms got statement that is not SELECT")
-        }
-
-      } catch {
-        case e: Throwable => {
-          e.printStackTrace()
-          return List()
-        }
-      }
-
-    val rowQuery = 
-      mimir.algebra.Select(
-        Comparison(Cmp.Eq, Var("ROWID_MIMIR"), new RowIdPrimitive(row)),
-        raw
-      )
-    // println("QUERY: "+rowQuery);
-
-    val iterator = db.queryLineage(rowQuery);
-
-    if(!iterator.getNext()){
-      throw new SQLException("Invalid Source Data ROWID: '" +row+"'");
-    }
-    iterator.reason(ind)
-  }
-
   def nameForQuery(query: String): WebResult =
   {
     val source = new StringReader(query)
@@ -267,7 +232,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
           convertToTree(source)
         else {
           var params = 
-            projArg.flatMap( projectArg => extractVGTerms(projectArg.input) ) 
+            projArg.flatMap( projectArg => extractVGTerms(projectArg.expression) ) 
           if(params.isEmpty) {
             convertToTree(source)
           } else {

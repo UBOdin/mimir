@@ -104,7 +104,7 @@ object CTables
   {
     (oper match {
       case Project(cols, _) => 
-        cols.exists( (x: ProjectArg) => isProbabilistic(x.input) )
+        cols.exists( (x: ProjectArg) => isProbabilistic(x.expression) )
       case Select(expr, _) => 
         isProbabilistic(expr)
       case _ => false;

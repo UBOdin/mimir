@@ -35,7 +35,7 @@ object InlineVGTerms {
 
 			case Project(cols, src) => 
 				Project(
-					cols.map( (col:ProjectArg) => ProjectArg(col.column, optimize(col.input)) ),
+					cols.map( (col:ProjectArg) => ProjectArg(col.name, optimize(col.expression)) ),
 					optimize(src)
 				)
 

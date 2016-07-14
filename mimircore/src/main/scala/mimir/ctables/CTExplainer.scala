@@ -4,6 +4,7 @@ import java.util.Random;
 
 import mimir._;
 import mimir.algebra._;
+import mimir.provenance._;
 import mimir.exec._;
 import mimir.util._;
 import mimir.optimizer._;
@@ -268,26 +269,25 @@ class CTExplainer(db: Database) {
 	def provenanceQuery(oper: Operator, token: RowIdPrimitive): 
 		(Map[String,PrimitiveValue], Map[String, Expression]) =
 	{
-		val optQuery = db.compiler.optimize(
-			CTPercolator.propagateRowIDs(oper, true),
-			NonDeterminism.Classic
-		)
+		val (provQuery, rowidCols) = Provenance.compile(oper)
+		val optQuery = db.compiler.optimize(provQuery)
 		val (expressions, sourceQuery, _) = 
 			delveToProjection(optQuery, token)
-		val iterator = db.compiler.buildDeterministicIterator(
-			Select(
-				Comparison(Cmp.Eq, 
-					expressions.find( _._1.equals(CTPercolator.ROWID_KEY) ).get._2, token),
-				sourceQuery
+		val rowidExpression = 
+			Eval.inline(
+				Provenance.rowIdVar(rowidCols),
+				expressions.toMap
 			)
-		)
 
-		iterator.open()
-		if(!iterator.getNext()){ throw InvalidProvenance("INVALID TOKEN", token); }
-		val tuple = iterator.currentTuple()
-		iterator.close();
+		throw new Exception("UNINPLEMENTED")
+		val iterator = null
 
-		(  tuple, expressions  )
+		// iterator.open()
+		// if(!iterator.getNext()){ throw InvalidProvenance("INVALID TOKEN", token); }
+		// val tuple = iterator.currentTuple()
+		// iterator.close();
+
+		null//(  tuple, expressions  )
 	}
 
 	def delveToProjection(oper: Operator, token: RowIdPrimitive):

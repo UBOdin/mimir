@@ -42,18 +42,18 @@ class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => Li
 		"UNION(" ~> (operatorBase <~ ",") ~ operatorBase <~ ")" ^^ { case lhs ~ rhs => { Union(lhs, rhs) } }
 
 	def table =
-		(id ~ opt("(" ~> (colList ~ opt("//" ~> colList) ) <~ ")")) ^^ {
+		(id ~ opt("(" ~> (colList ~ opt("//" ~> metadataList) ) <~ ")")) ^^ {
 			case name ~ cols_and_metadata => {
 				cols_and_metadata match {
 					case None => 
-						Table(name, schemaLookup(name), List[(String,Type.T)]())
+						Table(name, schemaLookup(name), List[(String,Expression,Type.T)]())
 					case Some((cols ~ metadata)) => 
 						Table(name, 
 							schemaLookup(name).zip(cols).map {
 								case ((_,t),(v,Type.TAny)) => (v,t)
 								case ((_,_),(v,t)) => (v,t)
 							},
-							metadata.getOrElse(List[(String,Type.T)]())
+							metadata.getOrElse(List[(String,Expression,Type.T)]())
 						)
 				}
 			}		
@@ -67,6 +67,16 @@ class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => Li
 	def col =
 		( (id <~ ":") ~ exprType ^^ { case name ~ t => (name, t) } 
 		| id ^^ { (_, Type.TAny) }
+		)
+
+	def metadataList:Parser[List[(String,Expression,Type.T)]] =
+		( (metadata <~ ",") ~ metadataList ^^ { case hd ~ tl => hd :: tl }
+		| metadata ^^ { List(_) }
+		)
+
+	def metadata =
+		( (((id <~ ":") ~ exprType) <~ "<-") ~ exprBase ^^ { case name ~ t ~ e => (name, e, t) } 
+		| id ^^ { x => (x, Var(x), Type.TAny) }
 		)
 
 }

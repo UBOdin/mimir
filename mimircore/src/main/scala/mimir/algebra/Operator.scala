@@ -11,10 +11,9 @@ abstract class Operator
     Typechecker.schemaOf(this)
 }
 
-case class ProjectArg(column: String, input: Expression) 
+case class ProjectArg(name: String, expression: Expression) 
 {
-  override def toString = (column.toString + " <= " + input.toString)
-  def getColumnName() = column
+  override def toString = (name.toString + " <= " + expression.toString)
 }
 
 case class Project(columns: List[ProjectArg], source: Operator) extends Operator 
@@ -28,9 +27,9 @@ case class Project(columns: List[ProjectArg], source: Operator) extends Operator
   def children() = List(source);
   def rebuild(x: List[Operator]) = Project(columns, x.head)
   def get(v: String): Option[Expression] = 
-    columns.find( (_.column == v) ).map ( _.input )
+    columns.find( (_.name == v) ).map ( _.expression )
   def bindings: Map[String, Expression] =
-    columns.map( (x) => (x.column, x.input) ).toMap
+    columns.map( (x) => (x.name, x.expression) ).toMap
 }
 
 case class Select(condition: Expression, source: Operator) extends Operator
@@ -67,17 +66,18 @@ case class Union(left: Operator, right: Operator) extends Operator
 
 case class Table(name: String, 
                  sch: List[(String,Type.T)],
-                 metadata: List[(String,Type.T)])
+                 metadata: List[(String,Expression,Type.T)])
   extends Operator
 {
   def toString(prefix: String) =
     prefix + name + "(" + (
       sch.map( { case (v,t) => v+":"+Type.toString(t) } ).mkString(", ") + 
       ( if(metadata.size > 0)
-             { " // "+metadata.map( { case (v,t) => v+":"+Type.toString(t) } ).mkString(", ") } 
+             { " // "+metadata.map( { case (v,e,t) => v+":"+Type.toString(t)+" <- "+e } ).mkString(", ") } 
         else { "" }
       )
     )+")" 
   def children: List[Operator] = List()
   def rebuild(x: List[Operator]) = Table(name, sch, metadata)
+  def metadata_schema = metadata.map( x => (x._1, x._3) )
 }

@@ -290,10 +290,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
 
     // rowidQuery filters the original query for only rows with null values in the column of interest
     val rowidQuery =
-      CTPercolator.propagateRowIDs(
-        Select(IsNullExpression(Var(lens.schema()(cIndex)._1)), lens.source),
-        true
-      )
+      Select(IsNullExpression(Var(lens.schema()(cIndex)._1)), lens.source)
 
     val rowidIterator = lens.db.query(rowidQuery)
 

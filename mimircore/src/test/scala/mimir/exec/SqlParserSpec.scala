@@ -96,7 +96,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 		 				), Table("R", Map(("R_A", Type.TInt), 
 		 								  ("R_B", Type.TInt), 
 		 								  ("R_C", Type.TInt)).toList,
-		 							  Map(("ROWID_MIMIR", Type.TRowId)).toList
+		 							  List(("ROWID_MIMIR", Var("ROWID"), Type.TRowId))
 				))
 
 		 	;

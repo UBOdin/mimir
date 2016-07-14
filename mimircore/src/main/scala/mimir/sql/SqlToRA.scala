@@ -170,7 +170,7 @@ class SqlToRA(db: Database)
       
       return (ret, 
         target.map(
-          (x) => (x._1, x._2.column)
+          (x) => (x._1, x._2.name)
         ).toMap
       );
     } else if(sb.isInstanceOf[net.sf.jsqlparser.statement.select.Union]) {
@@ -240,7 +240,7 @@ class SqlToRA(db: Database)
               sch.map(
                 _ match { case (v, t) => (alias+"_"+v, t)}
               ),
-              List[(String,Type.T)]()
+              List[(String,Expression,Type.T)]()
             ), 
             newBindings, 
             alias
@@ -319,7 +319,7 @@ class SqlToRA(db: Database)
       if(table == null){
         val binding = bindings.get(name);
         if(binding.isEmpty){
-          if(name.equalsIgnoreCase("ROWID_MIMIR")) return Var("ROWID_MIMIR")
+          if(name.equalsIgnoreCase("ROWID_MIMIR")) return RowIdVar()
           else throw new SQLException("Unknown Variable: "+name+" in "+bindings.toString)
         }
         return Var(binding.get)
@@ -339,7 +339,7 @@ class SqlToRA(db: Database)
             toList
         }
       return (name, parameters) match {
-        case ("ROWID", List()) => Var(CTPercolator.ROWID_KEY)
+        case ("ROWID", List()) => RowIdVar()
         case ("ROWID", List(x: RowIdPrimitive)) => x
         case ("ROWID", List(x: PrimitiveValue)) => RowIdPrimitive(x.payload.toString)
         case _ => mimir.algebra.Function(name, parameters)
@@ -383,23 +383,6 @@ class SqlToRA(db: Database)
       } else {
         return ret
       }
-    }
-    if(e.isInstanceOf[net.sf.jsqlparser.statement.select.SubSelect]) {
-      val result = db.query(
-        CTPercolator.propagateRowIDs(convert(e.asInstanceOf[SubSelect].getSelectBody), true)
-      ).allRows
-
-
-      /**
-       * The results should consist of just one row with two values, the first
-       * of which should be the rowid
-       */
-      if(result.size != 1 || result.head.size != 2)
-        throw new SQLException(
-          "Inappropriate number of values returned by a subquery used as an expression"+result
-        )
-
-      return result.head(1)
     }
     unhandled("Expression["+e.getClass+"]: " + e)
   }

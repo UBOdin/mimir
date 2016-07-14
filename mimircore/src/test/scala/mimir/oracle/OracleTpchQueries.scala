@@ -4,7 +4,6 @@ import java.io.{File, FileReader}
 
 import mimir.Database
 import mimir.algebra.{Var, ProjectArg, Project}
-import mimir.exec.NonDeterminism
 import mimir.parser.MimirJSqlParser
 import mimir.sql.JDBCBackend
 import org.specs2.mutable.Specification
@@ -22,7 +21,6 @@ object OracleTpchQueries extends Specification {
   val dbName = "osmall.db"
   val backend = "oracle"
   val db = new Database(dbName, new JDBCBackend(backend, dbName))
-  db.nonDeterminismStrategy = NonDeterminism.Hybrid
 
   if(new File("config/jdbc.property").exists()){
     "Mimir" should  {

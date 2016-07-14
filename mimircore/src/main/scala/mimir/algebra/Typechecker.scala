@@ -114,7 +114,7 @@ object Typechecker {
 				}
 				lSchema
 
-			case Table(_, sch, meta) => (sch ++ meta)
+			case Table(_, sch, meta) => (sch ++ meta.map( x => (x._1, x._3) ))
 
 		}
 	}

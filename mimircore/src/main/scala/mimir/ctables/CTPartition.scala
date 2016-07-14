@@ -79,7 +79,7 @@ object CTPartition {
 				proj.get(CTables.conditionColumn) match {
 					case Some(phi) => {
 						val nonConditions = 
-							proj.columns.filter( !_.getColumnName.equals(CTables.conditionColumn) )
+							proj.columns.filter( !_.name.equals(CTables.conditionColumn) )
 						val partitions = allCandidateConditions(phi);
 						// println("Conditions: " + conditionCases)
 						val partitionQueries = 

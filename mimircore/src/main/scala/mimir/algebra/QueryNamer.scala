@@ -8,10 +8,10 @@ object QueryNamer
 			case Table(name, _, _) => name
 			case Project(cols, src) => 
 				cols.length match {
-					case 1 => cols(0).getColumnName+"_from_"+nameQuery(src)
+					case 1 => cols(0).name+"_from_"+nameQuery(src)
 					case 2 => 
-						cols(0).getColumnName+"_and_"+
-						cols(1).getColumnName+"_from_"+
+						cols(0).name+"_and_"+
+						cols(1).name+"_from_"+
 						nameQuery(src)
 					case _ => nameQuery(src)
 				}
