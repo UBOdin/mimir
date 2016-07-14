@@ -94,7 +94,7 @@ class SqlToRA(db: Database)
                 Var(x)
               ) 
             )
-          }).filter( _._1 != CTPercolator.ROWID_KEY )
+          })
       }
       
       val target: List[(String, ProjectArg)] = 
@@ -319,7 +319,7 @@ class SqlToRA(db: Database)
       if(table == null){
         val binding = bindings.get(name);
         if(binding.isEmpty){
-          if(name.equalsIgnoreCase("ROWID_MIMIR")) return RowIdVar()
+          if(name.equalsIgnoreCase("ROWID")) return RowIdVar()
           else throw new SQLException("Unknown Variable: "+name+" in "+bindings.toString)
         }
         return Var(binding.get)

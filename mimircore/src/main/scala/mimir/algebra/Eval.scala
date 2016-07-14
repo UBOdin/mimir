@@ -85,7 +85,7 @@ object Eval
               case FloatPrimitive(f) => if(f < 0){ FloatPrimitive(-f) } else { FloatPrimitive(f) }
               case x => throw new SQLException("Non-numeric parameter to absolute: '"+x+"'")
             }
-            case "JOIN_ROWIDS" => new RowIdPrimitive(params.map(x => eval(x).asString).mkString("."))
+            case "MIMIR_MAKE_ROWID" => new RowIdPrimitive(params.map(x => eval(x).asString).mkString("|"))
             case "DATE" | "TO_DATE" =>
               val date = params.head.asInstanceOf[StringPrimitive].v.split("-").map(x => x.toInt)
               new DatePrimitive(date(0), date(1), date(2))
@@ -120,10 +120,6 @@ object Eval
                   case e:Throwable => Double.MinValue
                 }
               }).max) // TODO Generalized Comparator
-            case "__LEFT_UNION_ROWID" =>
-              new RowIdPrimitive(eval(params(0)).asString+".left")
-            case "__RIGHT_UNION_ROWID" =>
-              new RowIdPrimitive(eval(params(0)).asString+".right")
             case CTables.VARIANCE => {
               var variance = 0.0
               try {

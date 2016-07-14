@@ -42,7 +42,6 @@ object VarProjection
     expr match {
       case Var(v) =>
         v match {
-          case CTPercolator.ROWID_KEY => new ProvenanceProjection(src)
           case _ => {
             val idx =
               src.schema.indexWhere(

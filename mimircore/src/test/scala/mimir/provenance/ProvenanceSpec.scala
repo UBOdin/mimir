@@ -41,22 +41,63 @@ object ProvenanceSpec extends Specification {
 
   def prov(x: String) = Provenance.compile(oper(x))
 
-  def checkProv(x: String, expectedColCount:Integer) = {
-    val (provOper:Operator, provCols:List[String]) = prov("R(A, B)")
-    provCols must not be empty
-    if(expectedColCount > 0){
+  def checkProv(expectedColCount: Integer, oper:String) = {
+    val (provOper:Operator, provCols:List[String]) = prov(oper);
+    val provSchema = provOper.schema.toMap
+    val initial = (if(expectedColCount > 0) {
       provCols must have size expectedColCount
-    }
-    val provSchema = provOper.schema
+    } else {
+      provCols must not be empty 
+    })
     provCols.map( col => 
-      provSchema must contain (col, Type.TRowId)
-    )
+      provSchema must havePair(col -> Type.TRowId)
+    ).fold(initial)( _ and _ )
   }
 
   "The Provenance Compiler" should {
 
     "Work with one relation" >> {
-      checkProv("R(A, B)", 1)
+      checkProv(1, "R(A, B, C)")
+      checkProv(1, "S(C, D)")
+    }
+
+    "Work with projection" >> {
+      checkProv(1, """
+        PROJECT[A<=A](R(A, B, C))
+      """)
+      checkProv(1, """
+        PROJECT[A<=A, Z<=C](R(A, B, C))
+      """)
+    }
+
+    "Work with selection" >> {
+      checkProv(1, """
+        SELECT[A > B](R(A, B, C))
+      """)
+    }
+
+    "Work with joins" >> {
+      checkProv(2, """
+        JOIN(R(A, B, C), S(D, E))
+      """)
+      checkProv(2, """
+        JOIN(PROJECT[A <= A](R(A, B, C)), SELECT[D>E](S(D, E)))
+      """)
+    }
+
+    "Work with unions" >> {
+      checkProv(2, """
+        UNION(PROJECT[D <= A, E <= B](R(A, B, C)), S(D, E))
+      """)
+      checkProv(3, """
+        JOIN(R(A, B, C), UNION(PROJECT[D <= A, E <= B](R(A, B, C)), S(D, E)))
+      """)
+    }
+
+    "Work with misaligned unions" >> {
+      checkProv(3, """
+        UNION(PROJECT[D <= A, E <= E](JOIN(R(A, B, C), S(D, E))), S(D, E))
+      """)
     }
 
   }

@@ -57,6 +57,7 @@ class ExpressionChecker(scope: (String => Type.T) = Map().apply _) {
 			case IsNullExpression(child) =>
 				typeOf(child);
 				TBool
+			case RowIdVar() => TRowId
 
     }
   }

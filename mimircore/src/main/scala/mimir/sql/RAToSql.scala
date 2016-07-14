@@ -8,7 +8,7 @@ import mimir.algebra.Join
 import mimir.algebra.Select
 import mimir.algebra.Union
 import mimir.algebra._
-import mimir.ctables.{JointSingleVarModel, VGTerm, CTPercolator}
+import mimir.ctables.{JointSingleVarModel, VGTerm}
 import mimir.optimizer.{InlineProjections, PushdownSelections}
 import mimir.lenses.{TypeInferenceModel, SchemaMatchingModel, MissingValueModel}
 import mimir.util.TypeUtils
@@ -35,7 +35,9 @@ class RAToSql(db: Database) {
         val schMap = tgtSch.map(_._1).zip(realSch.map(_._1)).map ( 
           { case (tgt, real)  => ProjectArg(tgt, Var(real)) }
         )
-        val metadata = tgtMetadata.map( { case (out, in, t) => ((out, NullPrimitive(), t), ProjectArg(out, in)) } )
+        val metadata = tgtMetadata.map( { 
+          case (out, Var(in), t) => ((in, Var(in), t), ProjectArg(out, Var(in))) 
+        })
         Project(
           schMap ++ metadata.map(_._2),
           Table(name, realSch, metadata.map(_._1))
@@ -84,7 +86,7 @@ class RAToSql(db: Database) {
             metadata.map( (element) => {
               val item = new SelectExpressionItem()
               item.setAlias(element._1)
-              item.setExpression(convert(element._2))
+              item.setExpression(convert(element._2, List( (name, List("ROWID")))))
               item
             })
           // )
@@ -283,7 +285,7 @@ class RAToSql(db: Database) {
           case (_, vars) => vars.exists( _.equalsIgnoreCase(n) )
         })
         if(src.isEmpty)
-          throw new SQLException("Could not find appropriate source for '"+n+"' in "+sources.map(_._1))
+          throw new SQLException("Could not find appropriate source for '"+n+"' in "+sources)
         new Column(new net.sf.jsqlparser.schema.Table(null, src.head._1), n)
       }
       case Conditional(_, _, _) => {
@@ -314,14 +316,11 @@ class RAToSql(db: Database) {
       case Not(subexp) => {
         new InverseExpression(convert(subexp, sources))
       }
-      case mimir.algebra.Function("JOIN_ROWIDS", lhs :: rhs :: Nil) => {
-          concat(convert(lhs, sources), convert(rhs, sources), ".")
+      case mimir.algebra.Function("MIMIR_MAKE_ROWID", Nil) => {
+          throw new SQLException("MIMIR_MAKE_ROWID with no arguments")
       }
-      case mimir.algebra.Function("__LEFT_UNION_ROWID", body :: Nil) => {
-          concat(convert(body, sources), new StringValue("left"), ".")
-      }
-      case mimir.algebra.Function("__RIGHT_UNION_ROWID", body :: Nil) => {
-          concat(convert(body, sources), new StringValue("right"), ".")
+      case mimir.algebra.Function("MIMIR_MAKE_ROWID", head :: rest) => {
+          rest.map(convert(_, sources)).foldLeft(convert(head, sources))(concat(_,_,"||"))
       }
       case mimir.algebra.Function("CAST", body_arg :: body_type :: Nil) => {
         return new CastOperation(convert(body_arg, sources), body_type.toString);
@@ -331,7 +330,7 @@ class RAToSql(db: Database) {
           func.setName(fname)
           val explist = 
             new ExpressionList(
-              new util.ArrayList[expression.Expression](fargs.map(convert(_))))
+              new util.ArrayList[expression.Expression](fargs.map(convert(_, sources))))
           func.setParameters(explist)
           return func
       }

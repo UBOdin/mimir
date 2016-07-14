@@ -78,7 +78,7 @@ object Mimir {
         } else if(stmt.isInstanceOf[Explain]) {
           handleExplain(stmt.asInstanceOf[Explain]);
         } else {
-          db.update(stmt.toString())
+          db.backend.update(stmt.toString())
         }
 
       } catch {

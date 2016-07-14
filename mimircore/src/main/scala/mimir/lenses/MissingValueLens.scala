@@ -251,12 +251,10 @@ class MissingValueModel(lens: MissingValueLens, name: String)
   def classify(rowid: RowIdPrimitive): List[(Double, Int)] = {
     //println("Classify: "+rowid)
     val rowValues = lens.db.query(
-      CTPercolator.percolate(
         Select(
-          Comparison(Cmp.Eq, Var(CTPercolator.ROWID_KEY), rowid),
+          Comparison(Cmp.Eq, RowIdVar(), rowid),
           lens.source
         )
-      )
     )
     rowValues.open()
     if (!rowValues.getNext()) {
@@ -300,10 +298,10 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     // println("Initializing table");
     lens.db.getTableSchema(backingStore()) match {
       case Some(List(("EXP_LIST", Type.TString), ("DATA", _))) =>
-        lens.db.update( "DELETE FROM "+backingStore() )
+        lens.db.backend.update( "DELETE FROM "+backingStore() )
       case Some(_) =>
-        lens.db.update( "DROP TABLE "+backingStore() )
-        lens.db.update(
+        lens.db.backend.update( "DROP TABLE "+backingStore() )
+        lens.db.backend.update(
           "CREATE TABLE " + backingStore() + " (" +
             "EXP_LIST varchar(100), " +
             "DATA "+columnDataType+", " +
@@ -311,7 +309,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
             ")"
         )
       case None =>
-        lens.db.update(
+        lens.db.backend.update(
           "CREATE TABLE " + backingStore() + " (" +
             "EXP_LIST varchar(100), " +
             "DATA "+columnDataType+", " +
@@ -326,12 +324,10 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     while(rowidIterator.getNext()) {
       // println("Row of data");
       if(Typechecker.typeOf(rowidIterator(cIndex+1)) == Type.TAny) {
-        val explist = List(rowidIterator(
-          rowidIterator.schema.zipWithIndex.filter(_._1._1.equalsIgnoreCase(CTPercolator.ROWID_KEY)).head._2
-        ))
-        val data = computeMostLikelyValue(explist)
-        val tuple = List(explist.map(x => x.asString).mkString("|"), data.asString)
-        lens.db.update(
+        val rowId = rowidIterator.provenanceToken
+        val data = computeMostLikelyValue(List(rowId))
+        val tuple = List(rowId.toString, data.asString)
+        lens.db.backend.update(
           "INSERT INTO "+backingStore()+" VALUES (?, ?)", tuple
         )
         nulls = nulls + 1
@@ -346,7 +342,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     val attributes = new util.ArrayList[Attribute]()
     iterator.schema.foreach { case (n, t) =>
       (n, t) match {
-        case ("ROWID_MIMIR", _) => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
+        case (_, Type.TRowId) => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
         case (_, Type.TInt | Type.TFloat) => attributes.add(new Attribute(n))
         case _ => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
       }

@@ -34,6 +34,10 @@ class Compiler(db: Database) {
    */
   def compile(oper: Operator, opts: List[Operator => Operator]): ResultIterator = 
   {
+    // We'll need the pristine pre-manipulation schema down the line
+    // As a side effect, this also forces the typechecker to run, 
+    // acting as a sanity check on the query before we do any serious
+    // work.
     val outputSchema = oper.schema;
 
     // The names that the provenance compilation step assigns will
@@ -45,7 +49,7 @@ class Compiler(db: Database) {
 
     // Tag rows/columns with provenance metadata
     val (taggedOper, colDeterminism, rowDeterminism) =
-      CTPercolator.percolateLite(oper)
+      CTPercolator.percolateLite(provenanceAwareOper)
 
     // The deterministic result set iterator should strip off the 
     // provenance columns.  Figure out which columns need to be
@@ -59,9 +63,20 @@ class Compiler(db: Database) {
     val optimizedOper = 
       optimize(taggedOper, opts)
 
-    // We'll need it a few times, so cache the final operator's schema
+    val mostlyDeterministicOper =
+      InlineVGTerms.optimize(optimizedOper)
+
+    // Since this operator gets used a few times below, we rename it in
+    // case we need to add more stages.  Scalac should be smart enough
+    // to optimize the double-ref away.
+    val finalOper =
+      mostlyDeterministicOper
+
+    // We'll need it a few times, so cache the final operator's schema.
+    // This also forces the typechecker to run, so we get a final sanity
+    // check on the output of the rewrite rules.
     val finalSchema = 
-      optimizedOper.schema
+      finalOper.schema
 
     // We'll need to line the attributes in the output up with
     // the order in which the user expects to see them.  Build
@@ -71,7 +86,7 @@ class Compiler(db: Database) {
 
     // Generate the SQL
     val sql = 
-      db.convert(optimizedOper)
+      db.convert(finalOper)
 
     // Deploy to the backend
     val results = 

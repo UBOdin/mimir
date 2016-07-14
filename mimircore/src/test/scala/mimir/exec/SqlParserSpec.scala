@@ -48,11 +48,11 @@ object SqlParserSpec extends Specification with FileMatchers {
 
 		}
 		testData.foreach ( _ match { case ( tableName, tableData, tableCols ) => 
-			d.update("CREATE TABLE "+tableName+"("+tableCols.mkString(", ")+");")
+			d.backend.update("CREATE TABLE "+tableName+"("+tableCols.mkString(", ")+");")
 			val lines = new BufferedReader(new FileReader(tableData))
 			var line: String = lines.readLine()
 			while(line != null){
-				d.update("INSERT INTO "+tableName+" VALUES (" + line + ");")
+				d.backend.update("INSERT INTO "+tableName+" VALUES (" + line + ");")
 				line = lines.readLine()
 			}
 		})
@@ -61,7 +61,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 
 	"The Sql Parser" should {
 		"Handle trivial queries" in {
-			db.query("SELECT * FROM R;").allRows must be equalTo List( 
+			db.backend.resultRows("SELECT * FROM R;") must be equalTo List( 
 				List(IntPrimitive(1),IntPrimitive(2),IntPrimitive(3)),
 				List(IntPrimitive(1),IntPrimitive(3),IntPrimitive(1)),
 				List(IntPrimitive(2),NullPrimitive(),IntPrimitive(1)),
@@ -71,7 +71,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 				List(IntPrimitive(4),IntPrimitive(2),IntPrimitive(4))
 			)
 
-			db.query("SELECT A FROM R;").allRows must be equalTo List(
+			db.backend.resultRows("SELECT A FROM R;") must be equalTo List(
 				List(IntPrimitive(1)),
 				List(IntPrimitive(1)),
 				List(IntPrimitive(2)),

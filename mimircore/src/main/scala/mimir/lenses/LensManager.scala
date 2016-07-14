@@ -8,6 +8,7 @@ import mimir.Database
 import mimir.algebra._
 import mimir.ctables._
 import mimir.sql._
+import mimir.util.JDBCUtils
 
 import scala.collection.JavaConversions._
 
@@ -21,7 +22,7 @@ class LensManager(db: Database) {
 
     def init(): Unit =
   {
-    db.update("""
+    db.backend.update("""
       CREATE TABLE MIMIR_LENSES(
         name varchar(30), 
         query varchar(4000),
@@ -93,7 +94,7 @@ class LensManager(db: Database) {
   }
 
   def save(lens: Lens): Unit = {
-    db.update("""
+    db.backend.update("""
       INSERT INTO MIMIR_LENSES(name, query, lens_type, parameters) 
       VALUES (?,?,?,?)
     """, List(
@@ -109,12 +110,13 @@ class LensManager(db: Database) {
     lensCache.get(lensName) match {
       case Some(s) => Some(s)
       case None => {
-        val lensMetaResult =
-          db.query("""
+        val lensMetaResultSet =
+          db.backend.execute("""
             SELECT lens_type, parameters, query
             FROM MIMIR_LENSES
             WHERE name = ?
-          """, List(lensName)).allRows
+          """, List(lensName))
+        val lensMetaResult = JDBCUtils.extractAllRows(lensMetaResultSet)
         if(lensMetaResult.length == 0) { return None; }
         else if(lensMetaResult.length > 1){ 
           throw new SQLException("Multiple definitions for Lens `"+lensName+"`")

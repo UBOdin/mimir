@@ -85,7 +85,7 @@ object Provenance {
             Project(lhsProjectArgs, newLhs),
             Project(rhsProjectArgs, newRhs)
           ),
-          newRowids
+          newRowids ++ List(rowidColnameBase+"_branch")
         )
       }
 

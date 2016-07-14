@@ -39,7 +39,6 @@ object SimpleDemoScript extends Specification with FileMatchers {
 	}
 	def query(s: String) = {
 		val query = select(s)
-		db.check(query);
 		db.query(query)
 	}
 	def explainRow(s: String, t: String) = {
@@ -57,7 +56,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 	def lens(s: String) =
 		db.createLens(stmt(s).asInstanceOf[mimir.sql.CreateLens])
 	def update(s: Statement) = 
-		db.update(s.toString())
+		db.backend.update(s.toString())
 	def parser = new ExpressionParser(db.lenses.modelForLens)
 	def expr = parser.expr _
 	def i = IntPrimitive(_:Long).asInstanceOf[PrimitiveValue]
@@ -91,7 +90,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 
 		"Run the Load Product Data Script" >> {
 			stmts(productDataFile).map( update(_) )
-			db.query("SELECT * FROM PRODUCT;").allRows must have size(6)
+			db.backend.resultRows("SELECT * FROM PRODUCT;") must have size(6)
 		}
 
 		"Load CSV Files" >> {
@@ -311,14 +310,11 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			//Test another level down the heirarchy too
 			val q3dbquery = q3compiled.asInstanceOf[NonDetIterator].src
 			q3dbquery must beAnInstanceOf[ResultSetIterator]
-			val rowidIdx2 = q3dbquery.schema.indexWhere(_._1.equals("ROWID_MIMIR_1"))
 
 			// Again, the internal schema must explicitly state that the column is a rowid
-			q3dbquery.asInstanceOf[ResultSetIterator].visibleSchema must contain ( ("ROWID_MIMIR_1", Type.TRowId) )
-			// The external schema too!
-			q3dbquery.schema(rowidIdx2)._2 must be equalTo Type.TRowId
+			q3dbquery.asInstanceOf[ResultSetIterator].visibleSchema must havePair ( "MIMIR_ROWID_0" -> Type.TRowId )
 			// And the returned object had better conform
-			q3dbquery(rowidIdx2) must beAnInstanceOf[RowIdPrimitive]
+			q3dbquery.provenanceToken must beAnInstanceOf[RowIdPrimitive]
 
 
 			val result3 = query("""

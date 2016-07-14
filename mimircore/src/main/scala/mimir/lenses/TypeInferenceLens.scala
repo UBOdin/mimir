@@ -257,12 +257,10 @@ class TypeCastModel(lens: TypeInferenceLens) extends Model {
   def getValue(idx: Int, rowid: PrimitiveValue): PrimitiveValue =
   {
     val rowValues = lens.db.query(
-      CTPercolator.percolate(
         Select(
-          Comparison(Cmp.Eq, Var("ROWID_MIMIR"), rowid),
+          Comparison(Cmp.Eq, RowIdVar(), rowid),
           lens.source
         )
-      )
     )
     if(!rowValues.getNext()){
       throw new SQLException("Invalid Source Data ROWID: '" +rowid+"'")

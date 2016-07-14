@@ -69,13 +69,13 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
               val buffer = new StringBuffer()
               val insDeParser = new InsertDeParser(new ExpressionDeParser(new SelectDeParser(), buffer), new SelectDeParser(), buffer)
               insDeParser.deParse(s)
-              db.update(insDeParser.getBuffer.toString)
+              db.backend.update(insDeParser.getBuffer.toString)
               new WebStringResult("Database updated.")
             case s: Update =>
               val buffer = new StringBuffer()
               val updDeParser = new UpdateDeParser(new ExpressionDeParser(new SelectDeParser(), buffer), buffer)
               updDeParser.deParse(s)
-              db.update(updDeParser.getBuffer.toString)
+              db.backend.update(updDeParser.getBuffer.toString)
               new WebStringResult("Database updated.")
           }
         }
@@ -132,21 +132,12 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
   }
 
   def getAllLenses: List[String] = {
-    val iter = db.query(
+    db.backend.resultRows(
       """
-        SELECT *
+        SELECT NAME
         FROM MIMIR_LENSES
-      """)
-
-    val lensNames = new ListBuffer[String]()
-
-    iter.open()
-    while(iter.getNext()) {
-      lensNames.append(iter(0).asString)
-    }
-    iter.close()
-
-    lensNames.toList
+      """).
+    map(_(0).toString)
   }
 
   def getAllSchemas: Map[String, List[(String, Type.T)]] = {
