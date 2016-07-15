@@ -25,32 +25,35 @@ object JDBCUtils {
 
   def convertField(t: Type.T, results: ResultSet, field: Integer): PrimitiveValue =
   {
-    t match {
-      case Type.TAny => 
-        convertField(
-            convertSqlType(results.getMetaData().getColumnType(field)),
-            results, field
-          )
-      case Type.TFloat =>
-        FloatPrimitive(results.getDouble(field))
-      case Type.TInt =>
-        IntPrimitive(results.getLong(field))
-      case Type.TString =>
-        StringPrimitive(results.getString(field))
-      case Type.TRowId =>
-        RowIdPrimitive(results.getString(field))
-      case Type.TDate => 
-        val calendar = Calendar.getInstance()
-        try {
-          calendar.setTime(results.getDate(field))
-        } catch {
-          case e: SQLException =>
-            calendar.setTime(Date.valueOf(results.getString(field)))
-          case e: NullPointerException =>
-            new NullPrimitive
-        }
-        DatePrimitive(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DATE))
-    }
+    val ret =
+      t match {
+        case Type.TAny => 
+          convertField(
+              convertSqlType(results.getMetaData().getColumnType(field)),
+              results, field
+            )
+        case Type.TFloat =>
+          FloatPrimitive(results.getDouble(field))
+        case Type.TInt =>
+          IntPrimitive(results.getLong(field))
+        case Type.TString =>
+          StringPrimitive(results.getString(field))
+        case Type.TRowId =>
+          RowIdPrimitive(results.getString(field))
+        case Type.TDate => 
+          val calendar = Calendar.getInstance()
+          try {
+            calendar.setTime(results.getDate(field))
+          } catch {
+            case e: SQLException =>
+              calendar.setTime(Date.valueOf(results.getString(field)))
+            case e: NullPointerException =>
+              new NullPrimitive
+          }
+          DatePrimitive(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DATE))
+      }
+    if(results.wasNull()) { NullPrimitive() }
+    else { ret }
   }
 
   def extractAllRows(results: ResultSet): List[List[PrimitiveValue]] =

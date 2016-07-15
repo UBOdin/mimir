@@ -63,6 +63,9 @@ class Compiler(db: Database) {
     val optimizedOper = 
       optimize(taggedOper, opts)
 
+    // Remove any VG Terms for which static best-guesses are possible
+    // In other words, best guesses that don't depend on which row we're
+    // looking at (like the Type Inference or Schema Matching lenses)
     val mostlyDeterministicOper =
       InlineVGTerms.optimize(optimizedOper)
 

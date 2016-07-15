@@ -53,7 +53,11 @@ class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => Li
 								case ((_,t),(v,Type.TAny)) => (v,t)
 								case ((_,_),(v,t)) => (v,t)
 							},
-							metadata.getOrElse(List[(String,Expression,Type.T)]())
+							metadata.getOrElse(List[(String,Expression,Type.T)]()).
+											 map({
+											 	case (name, RowIdVar(), t) => (name, Var("ROWID"), t)
+											 	case (name, source, t) => (name, source, t)
+											 })
 						)
 				}
 			}		

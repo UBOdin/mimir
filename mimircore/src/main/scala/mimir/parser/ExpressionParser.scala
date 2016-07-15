@@ -93,7 +93,8 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 			StringPrimitive(x.substring(1,x.length-1)) 
 	}
 	def varLeaf = 
-		id ^^ { Var(_) }
+		id ^^ { case "ROWID" => RowIdVar()
+		        case x => Var(x) }
 
 	def arithSym = Arith.matchRegex ^^ { Arith.fromString(_) }
 

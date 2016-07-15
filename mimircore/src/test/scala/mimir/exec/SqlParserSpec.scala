@@ -59,6 +59,8 @@ object SqlParserSpec extends Specification with FileMatchers {
 		d
 	}
 
+	sequential
+
 	"The Sql Parser" should {
 		"Handle trivial queries" in {
 			db.backend.resultRows("SELECT * FROM R;") must be equalTo List( 
@@ -91,19 +93,20 @@ object SqlParserSpec extends Specification with FileMatchers {
 		 	) must be equalTo 
 		 		Project(List(ProjectArg("A", Var("R_A")), 
 		 					 ProjectArg("B", expr(
-		 					 	"IF R_B IS NULL THEN {{ SANER_1[ROWID_MIMIR] }} ELSE R_B END")),
+		 					 	"IF R_B IS NULL THEN {{ SANER_1[ROWID] }} ELSE R_B END")),
 		 					 ProjectArg("C", Var("R_C"))
 		 				), Table("R", Map(("R_A", Type.TInt), 
 		 								  ("R_B", Type.TInt), 
 		 								  ("R_C", Type.TInt)).toList,
-		 							  List(("ROWID_MIMIR", Var("ROWID"), Type.TRowId))
+		 							  List()
 				))
-
-		 	;
+		 	db.backend.resultRows("SELECT EXP_LIST, DATA FROM SANER_1_BACKEND") must be equalTo List(
+		 		List(StringPrimitive("3"), IntPrimitive(3))
+		 	)
 			db.query(query("SELECT * FROM SaneR")).allRows must be equalTo List(
 				List(IntPrimitive(1),IntPrimitive(2),IntPrimitive(3)),
 				List(IntPrimitive(1),IntPrimitive(3),IntPrimitive(1)),
-				List(IntPrimitive(2),IntPrimitive(2),IntPrimitive(1)),
+				List(IntPrimitive(2),IntPrimitive(3),IntPrimitive(1)),
 				List(IntPrimitive(1),IntPrimitive(2),NullPrimitive()),
 				List(IntPrimitive(1),IntPrimitive(4),IntPrimitive(2)),
 				List(IntPrimitive(2),IntPrimitive(2),IntPrimitive(1)),

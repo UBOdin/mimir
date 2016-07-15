@@ -46,8 +46,8 @@ object CTPartitionSpec extends Specification {
     "Handle Base Relations" in {
       partition("R(A, B)") must be equalTo oper("R(A, B)")
 
-      partition("R(A, B // ROWID:rowid)") must be equalTo 
-        oper("R(A, B // ROWID:rowid)")
+      partition("R(A, B // ROWID:rowid <- ROWID)") must be equalTo 
+        oper("R(A, B // ROWID:rowid <- ROWID)")
     }
 
     "Handle Deterministic Projection" in {

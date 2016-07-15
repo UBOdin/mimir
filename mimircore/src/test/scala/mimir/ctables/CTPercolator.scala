@@ -46,22 +46,13 @@ object CTPercolatorSpec extends Specification {
   def analyze(s: String) = new Compiler(null).compileAnalysis(oper(s))
 
   def percolite(x:String) = 
-    CTPercolator.percolateLite(
-      Provenance.compile(oper(x))._1)
+    CTPercolator.percolateLite(oper(x))
 
   "The Percolator (Lite)" should {
 
     "Handle Base Relations" in {
       percolite("R(A, B)") must be equalTo ((
-        oper("R(A, B // MIMIR_ROWID:rowid <- ROWID)"),
-        Map( 
-          ("A", expr("true")),
-          ("B", expr("true"))
-        ),
-        expr("true")
-      ))
-      percolite("R(A, B // ROWID:rowid)") must be equalTo ((
-        oper("R(A, B // ROWID:rowid)"),
+        oper("R(A, B)"),
         Map( 
           ("A", expr("true")),
           ("B", expr("true"))
@@ -81,8 +72,8 @@ object CTPercolatorSpec extends Specification {
     }
 
     "Handle Data-Independent Non-Deterministic Projection" in {
-      percolite("PROJECT[A <= A, B <= {{X_1[ROWID_MIMIR]}}](R(A, B))") must be equalTo ((
-        oper("PROJECT[A <= A, B <= {{X_1[ROWID_MIMIR]}}](R(A, B // ROWID_MIMIR:rowid))"),
+      percolite("PROJECT[A <= A, B <= {{X_1[ROWID]}}](R(A, B))") must be equalTo ((
+        oper("PROJECT[A <= A, B <= {{X_1[ROWID]}}](R(A, B))"),
         Map( 
           ("A", expr("true")),
           ("B", expr("false"))
@@ -93,14 +84,14 @@ object CTPercolatorSpec extends Specification {
     "Handle Data-Dependent Non-Deterministic Projection" in {
       percolite("""
         PROJECT[A <= A, 
-                B <= IF B IS NULL THEN {{X_1[ROWID_MIMIR]}} ELSE B END
+                B <= IF B IS NULL THEN {{X_1[ROWID]}} ELSE B END
                ](R(A, B))""") must be equalTo ((
         oper("""
           PROJECT[A <= A, 
-                  B <= IF B IS NULL THEN {{X_1[ROWID_MIMIR]}} ELSE B END, 
+                  B <= IF B IS NULL THEN {{X_1[ROWID]}} ELSE B END, 
                   MIMIR_COL_DET_B <= 
                        IF B IS NULL THEN FALSE ELSE TRUE END
-                ](R(A, B // ROWID_MIMIR:rowid))"""),
+                ](R(A, B))"""),
         Map( 
           ("A", expr("true")),
           ("B", expr("MIMIR_COL_DET_B"))
@@ -109,8 +100,8 @@ object CTPercolatorSpec extends Specification {
       ))
     }
     "Handle Data-Independent Non-Deterministic Inline Selection" in {
-      percolite("SELECT[{{X_1[ROWID_MIMIR]}} = 3](R(A, B))") must be equalTo ((
-        oper("SELECT[{{X_1[ROWID_MIMIR]}} = 3](R(A, B // ROWID_MIMIR:rowid))"),
+      percolite("SELECT[{{X_1[ROWID]}} = 3](R(A, B))") must be equalTo ((
+        oper("SELECT[{{X_1[ROWID]}} = 3](R(A, B))"),
         Map( 
           ("A", expr("true")),
           ("B", expr("true"))
@@ -122,16 +113,16 @@ object CTPercolatorSpec extends Specification {
       percolite("""
         SELECT[B = 3](
           PROJECT[A <= A, 
-                  B <= IF B IS NULL THEN {{X_1[ROWID_MIMIR]}} ELSE B END
+                  B <= IF B IS NULL THEN {{X_1[ROWID]}} ELSE B END
                  ](R(A, B)))""") must be equalTo ((
         oper("""
         PROJECT[A <= A, B <= B, MIMIR_COL_DET_B <= MIMIR_COL_DET_B, MIMIR_ROW_DET <= MIMIR_COL_DET_B](
           SELECT[B = 3](
             PROJECT[A <= A, 
-                    B <= IF B IS NULL THEN {{X_1[ROWID_MIMIR]}} ELSE B END, 
+                    B <= IF B IS NULL THEN {{X_1[ROWID]}} ELSE B END, 
                     MIMIR_COL_DET_B <= 
                          IF B IS NULL THEN FALSE ELSE TRUE END
-                  ](R(A, B // ROWID_MIMIR:rowid))))"""),
+                  ](R(A, B))))"""),
         Map( 
           ("A", expr("true")),
           ("B", expr("MIMIR_COL_DET_B"))
@@ -158,13 +149,13 @@ object CTPercolatorSpec extends Specification {
     "Handle Non-Deterministic Joins" in {
       percolite("""
         JOIN(
-          PROJECT[A <= {{X_1[ROWID_MIMIR,A]}}](R(A,B)), 
+          PROJECT[A <= {{X_1[ROWID,A]}}](R(A,B)), 
           S(C,D)
         )
       """) must be equalTo ((
         oper("""
           JOIN(
-            PROJECT[A <= {{X_1[ROWID_MIMIR,A]}}](R(A,B//ROWID_MIMIR:rowid)), 
+            PROJECT[A <= {{X_1[ROWID,A]}}](R(A,B)), 
             S(C,D)
           )
         """),

@@ -286,12 +286,6 @@ class MissingValueModel(lens: MissingValueLens, name: String)
   override def createBackingStore(): Unit = {
     /* Create and populate the backing-store */
 
-    // rowidQuery filters the original query for only rows with null values in the column of interest
-    val rowidQuery =
-      Select(IsNullExpression(Var(lens.schema()(cIndex)._1)), lens.source)
-
-    val rowidIterator = lens.db.query(rowidQuery)
-
     var nulls = 0
     val columnDataType = TypeUtils.convert(lens.schema()(cIndex)._2);
 
@@ -318,21 +312,25 @@ class MissingValueModel(lens: MissingValueLens, name: String)
         )
     }
 
-
+    // rowidQuery filters the original query for only rows with null values in the column of interest
+    val rowidQuery =
+      Select(IsNullExpression(Var(lens.schema()(cIndex)._1)), lens.source)
+    // println("ROWID_QUERY: "+rowidQuery)
+    val rowidIterator = lens.db.query(rowidQuery)
     rowidIterator.open()
     // println("Preparing to create MV backing store");
     while(rowidIterator.getNext()) {
-      // println("Row of data");
-      if(Typechecker.typeOf(rowidIterator(cIndex+1)) == Type.TAny) {
+      // println("Row of data: "+rowidIterator.provenanceToken);
+      // if(Typechecker.typeOf(rowidIterator(cIndex+1)) == Type.TAny) {
         val rowId = rowidIterator.provenanceToken
         val data = computeMostLikelyValue(List(rowId))
-        val tuple = List(rowId.toString, data.asString)
+        val tuple = List(rowId.asString, data.asString)
         lens.db.backend.update(
           "INSERT INTO "+backingStore()+" VALUES (?, ?)", tuple
         )
         nulls = nulls + 1
         println("Progress: Null no. "+nulls)
-      }
+      // }
     }
     // println("Done");
     rowidIterator.close()
