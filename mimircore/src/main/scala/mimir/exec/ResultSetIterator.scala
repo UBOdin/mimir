@@ -63,9 +63,11 @@ class ResultSetIterator(
   def deterministicCol(v: Int) = true;
   def missingRows() = false;
   def provenanceToken() = 
-    Eval.eval(Provenance.rowIdVal(
+    Provenance.joinRowIds(
       provenanceTokenColumns.map( 
-        (col) => RowIdPrimitive(src.getString(col+1))
+        (col) => {
+          RowIdPrimitive(src.getString(col+1))
+        }
       )
-    )).asInstanceOf[RowIdPrimitive]
+    )
 }

@@ -74,7 +74,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
       ret
     } catch { 
       case e: SQLException => println(e.toString+"during\n"+sel)
-        throw new SQLException("Error", e)
+        throw new SQLException("Error in "+sel, e)
     }
   }
   def execute(sel: String, args: List[String]): ResultSet = 

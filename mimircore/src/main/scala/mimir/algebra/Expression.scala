@@ -160,6 +160,7 @@ case class Not(child: Expression)
 {
   def children: List[Expression] = List[Expression](child)
   def rebuild(x: List[Expression]): Expression = Not(x(0))
+  override def toString = ("NOT(" + child.toString + ")")
 }
 
 abstract class Proc(args: List[Expression]) extends Expression

@@ -108,4 +108,13 @@ object OperatorUtils {
     );
   }
 
+
+  def applyFilter(condition: List[Expression], oper: Operator): Operator =
+    applyFilter(condition.fold(BoolPrimitive(true))(Arith.makeAnd(_,_)), oper)
+
+  def applyFilter(condition: Expression, oper: Operator): Operator =
+    condition match {
+      case BoolPrimitive(true) => oper
+      case _ => Select(condition, oper)
+    }
 }

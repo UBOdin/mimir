@@ -1,10 +1,14 @@
 package mimir.algebra;
 
 import java.sql._;
+import java.util.NoSuchElementException;
 
 import Type._;
 import Arith.{Add, Sub, Mult, Div, And, Or}
 import Cmp.{Gt, Lt, Lte, Gte, Eq, Neq, Like, NotLike}
+
+class MissingVariable(varName: String, e: Throwable) extends 
+	Exception(varName, e)
 
 class ExpressionChecker(scope: (String => Type.T) = Map().apply _) {
 
@@ -38,7 +42,12 @@ class ExpressionChecker(scope: (String => Type.T) = Map().apply _) {
 				assert(lhs, TString, "LIKE")
 				assert(rhs, TString, "LIKE")
 				TBool
-			case Var(name) => scope(name)
+			case Var(name) => 
+				try { 
+					scope(name)
+				} catch {
+					case x:NoSuchElementException => throw new MissingVariable(name, x)
+				}
 			case Function("CAST", fargs) =>
 				// Special case CAST
 				Eval.inline(fargs(1)) match {

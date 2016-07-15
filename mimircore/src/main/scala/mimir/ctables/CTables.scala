@@ -110,6 +110,9 @@ object CTables
       case _ => false;
     }) || oper.children.exists( isProbabilistic(_) )
   }
+
+  def isDeterministic(expr:Expression): Boolean = !isProbabilistic(expr)
+  def isDeterministic(oper:Operator): Boolean = !isProbabilistic(oper)
   
   def extractProbabilisticClauses(e: Expression): 
     (Expression, Expression) =

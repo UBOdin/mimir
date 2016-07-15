@@ -59,7 +59,12 @@ object JDBCUtils {
     val schema = 
       (1 until (meta.getColumnCount() + 1)).map(
         colId => convertSqlType(meta.getColumnType(colId))
-      )
+      ).toList
+    extractAllRows(results, schema)    
+  }
+
+  def extractAllRows(results: ResultSet, schema: List[Type.T]): List[List[PrimitiveValue]] =
+  {
     var ret = List[List[PrimitiveValue]]()
     // results.first();
     while(results.isBeforeFirst()){ results.next(); }

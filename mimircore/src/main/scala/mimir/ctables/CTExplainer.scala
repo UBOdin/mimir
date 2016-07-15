@@ -94,29 +94,24 @@ class CTExplainer(db: Database) {
 	
 	def explainRow(oper: Operator, token: RowIdPrimitive): RowExplanation =
 	{
-		val (tuple, expressions) = provenanceQuery(oper, token)
-		val (provenance, probability) = 
-			expressions.get(CTables.conditionColumn) match {
-				case None => (BoolPrimitive(true), 1.0)
-				case Some(cond) => {
-					(	cond, 
-						sampleExpression[(Int,Int)](cond, tuple, NUM_SAMPLES, (0,0), 
-							(cnt: (Int,Int), present: PrimitiveValue) => 
-								present match {
-									case NullPrimitive() => (cnt._1, cnt._2)
-									case BoolPrimitive(t) => 
-										( cnt._1 + (if(t){ 1 } else { 0 }),
-										  cnt._2 + 1
-										 )
-								}
-						) match { 
-							case (_, 0) => -1.0
-							case (hits, total) => hits.toDouble / total.toDouble
+		val (tuple, _, provenance) = getProvenance(oper, token)
+		val probability = 
+			if(CTables.isDeterministic(provenance)){ 1.0 }
+			else { 
+				sampleExpression[(Int,Int)](provenance, tuple, NUM_SAMPLES, (0,0), 
+					(cnt: (Int,Int), present: PrimitiveValue) => 
+						present match {
+							case NullPrimitive() => (cnt._1, cnt._2)
+							case BoolPrimitive(t) => 
+								( cnt._1 + (if(t){ 1 } else { 0 }),
+								  cnt._2 + 1
+								 )
 						}
-					)
+				) match { 
+					case (_, 0) => -1.0
+					case (hits, total) => hits.toDouble / total.toDouble
 				}
 			}
-
 		// println("tuple: "+tuple)
 		// println("condition"+provenance)
 		// println("probability: "+probability)
@@ -130,7 +125,7 @@ class CTExplainer(db: Database) {
 
 	def explainCell(oper: Operator, token: RowIdPrimitive, column: String): CellExplanation =
 	{
-		val (tuple, allExpressions) = provenanceQuery(oper, token)
+		val (tuple, allExpressions, _) = getProvenance(oper, token)
 		val expr = allExpressions.get(column).get
 		val colType = Typechecker.typeOf(expr, tuple.mapValues( _.getType ))
 
@@ -233,13 +228,14 @@ class CTExplainer(db: Database) {
 	def getFocusedReasons(expr: Expression, tuple: Map[String,PrimitiveValue]): 
 		List[Reason] =
 	{
-		getFocusedReasons( Eval.inline(expr, tuple) );
+		// println("PREREASONS: "+expr.toString)
+		getFocusedReasons( Eval.inlineWithoutSimplifying(expr, tuple) );
 	}
 
 	def getFocusedReasons(expr: Expression):
 		List[Reason] =
 	{
-		// println(expr.toString)
+		// println("REASONS: " + expr.toString)
 		expr match {
 			case v: VGTerm => List(v.reason)
 
@@ -266,28 +262,44 @@ class CTExplainer(db: Database) {
 		}
 	}
 
-	def provenanceQuery(oper: Operator, token: RowIdPrimitive): 
-		(Map[String,PrimitiveValue], Map[String, Expression]) =
+	def getProvenance(oper: Operator, token: RowIdPrimitive): 
+		(Map[String,PrimitiveValue], Map[String, Expression], Expression) =
 	{
+		// Annotate the query to produce a provenance trace
 		val (provQuery, rowidCols) = Provenance.compile(oper)
-		val optQuery = db.compiler.optimize(provQuery)
-		val (expressions, sourceQuery, _) = 
-			delveToProjection(optQuery, token)
-		val rowidExpression = 
-			Eval.inline(
-				Provenance.rowIdVar(rowidCols),
-				expressions.toMap
-			)
 
-		throw new Exception("UNINPLEMENTED")
-		val iterator = null
+		// Use the token to rewrite the query to look up the single tuple we want
+		val singletonQuery = Provenance.filterForToken(provQuery, token, rowidCols)
 
-		// iterator.open()
-		// if(!iterator.getNext()){ throw InvalidProvenance("INVALID TOKEN", token); }
-		// val tuple = iterator.currentTuple()
-		// iterator.close();
+		// Flatten the query out into a set of expressions and a row condition
+		val (tracedQuery, columnExprs, rowCondition) = Tracer.trace(singletonQuery)
 
-		null//(  tuple, expressions  )
+		// println("\n\nTRACE:"+tracedQuery)
+		// println("ROW: "+rowCondition)
+
+		val inlinedQuery = InlineVGTerms.optimize(tracedQuery)
+
+		// println("INLINE:"+inlinedQuery)
+
+		val optQuery = db.compiler.optimize(inlinedQuery)
+
+		val finalSchema = optQuery.schema
+
+		val sqlQuery = db.convert(optQuery)
+
+		// println("SQL: "+sqlQuery)
+
+		val results = db.backend.execute(sqlQuery)
+
+		val baseData = JDBCUtils.extractAllRows(results, finalSchema.map(_._2))
+
+		if(baseData.size != 1){
+			throw new InvalidProvenance(""+baseData.size+" rows for token", token)
+		}	
+
+		val tuple = finalSchema.map(_._1).zip(baseData(0)).toMap
+
+		(tuple, columnExprs, rowCondition)
 	}
 
 	def delveToProjection(oper: Operator, token: RowIdPrimitive):

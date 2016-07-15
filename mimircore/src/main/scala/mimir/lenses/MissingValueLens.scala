@@ -258,7 +258,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
     )
     rowValues.open()
     if (!rowValues.getNext()) {
-      throw new SQLException("Invalid Source Data ROWID: '" + rowid + "'");
+      throw new SQLException("Invalid Source Data ROWID: " + rowid);
     }
     val row = new DenseInstance(rowValues.numCols)
     val attributes = getAttributesFromIterator(rowValues)

@@ -165,7 +165,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			result1 must contain(eachOf( f(121.0), f(5.0), f(4.0) ) )
 		}
 
-		"Obtain Column Explanations for Simple Queries" >> {
+		"Obtain Row Explanations for Simple Queries" >> {
 			val expl = explainRow("""
 					SELECT * FROM RATINGS2FINAL WHERE RATING > 3
 				""", "1")
@@ -245,13 +245,35 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				str("HP, AMD 2 core")
 			))
 
-			val explain0 = explainCell("""
-				SELECT p.name, r.rating FROM Product p, (
+			val result0tokenTest = query("""
+				SELECT p.name, r.rating FROM (
 					SELECT * FROM RATINGS1FINAL 
 						UNION ALL 
 					SELECT * FROM RATINGS2FINAL
-				) r
-				""", "3.1.right", "RATING")
+				) r, Product p
+				WHERE r.pid = p.id;
+			""")
+			var result0tokens = List[RowIdPrimitive]()
+			result0tokenTest.open()
+			while(result0tokenTest.getNext()){ 
+				result0tokens = result0tokenTest.provenanceToken :: result0tokens
+			}
+			result0tokens.map(_.asString) must contain(allOf(
+				"3|right|6", 
+				"2|right|5", 
+				"2|left|4",
+				"1|right|3", 
+				"3|left|2", 
+				"1|left|1"
+			))
+
+			val explain0 = explainCell("""
+				SELECT p.name, r.rating FROM (
+					SELECT * FROM RATINGS1FINAL 
+						UNION ALL 
+					SELECT * FROM RATINGS2FINAL
+				) r, Product p
+				""", "1|right|3", "RATING")
 			explain0.reasons.map(_.model) must contain(eachOf(
 				"RATINGS2FINAL",
 				"RATINGS2TYPED"

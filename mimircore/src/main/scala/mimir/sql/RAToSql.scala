@@ -320,7 +320,7 @@ class RAToSql(db: Database) {
           throw new SQLException("MIMIR_MAKE_ROWID with no arguments")
       }
       case mimir.algebra.Function("MIMIR_MAKE_ROWID", head :: rest) => {
-          rest.map(convert(_, sources)).foldLeft(convert(head, sources))(concat(_,_,"||"))
+          rest.map(convert(_, sources)).foldLeft(convert(head, sources))(concat(_,_,"|"))
       }
       case mimir.algebra.Function("CAST", body_arg :: body_type :: Nil) => {
         return new CastOperation(convert(body_arg, sources), body_type.toString);
