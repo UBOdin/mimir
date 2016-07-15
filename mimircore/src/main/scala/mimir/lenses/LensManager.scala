@@ -66,25 +66,31 @@ class LensManager(db: Database) {
   
   def create(lensDefn: CreateLens): Unit = { 
     val (baseQuery, bindings) = db.convert(lensDefn.getSelectBody)
-    val originalSource = 
+    val source = 
          Project(
            bindings.map( _ match { case (external, internal) =>
              ProjectArg(external, Var(internal))
             }).toList,
            baseQuery
          )
-    val source: Operator = originalSource;
-    val lensName = lensDefn.getName.toUpperCase;
+    create(
+      source, 
+      lensDefn.getName, 
+      lensDefn.getArgs.map( (arg:net.sf.jsqlparser.expression.Expression) =>
+        //TODO refactor this
+          if(lensDefn.getType.equalsIgnoreCase("SCHEMA_MATCHING"))
+            Var(arg.toString)
+          else
+            db.convert(arg)
+        ).toList,
+      lensDefn.getType()
+      )
+  }
+  def create(source: Operator, lensName: String, args: List[Expression], lensType: String): Unit = {
     val lens = mkLens(
-        lensDefn.getType(), 
-        lensName, 
-        lensDefn.getArgs.map( (arg:net.sf.jsqlparser.expression.Expression) =>
-          //TODO refactor this
-            if(lensDefn.getType.equalsIgnoreCase("SCHEMA_MATCHING"))
-              Var(arg.toString)
-            else
-              db.convert(arg)
-          ).toList,
+        lensType.toUpperCase, 
+        lensName.toUpperCase, 
+        args,
         source
       );
     lens.build(db);
