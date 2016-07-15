@@ -433,16 +433,6 @@ $( document ).ready(function() {
         })
     });
 
-     /*
-    Generate query for using a Schema Lens on a table automatically
-    */
-    $(document).on("click", ".add_data_btn", function() {
-        var table = $(this).html();
-        var query = "CREATE LENS "+table+";";
-
-        $("#query_textarea").val(query);
-        $("#query_btn").trigger("click");
-    });
 
     $("#sm_lens_create_btn").click( function() {
         var name = $("#sm_lens_name").val();
