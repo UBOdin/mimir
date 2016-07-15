@@ -104,7 +104,12 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		}
 
 		"Compute Aggregate Queries" >> {
-			query("SELECT EVALUATION, SUM(NUM_RATINGS) FROM RATINGS2 WHERE EVALUATION > 3.0 GROUP BY EVALUATION;")
+			query("""
+				SELECT EVALUATION, SUM(NUM_RATINGS) 
+				FROM RATINGS2 
+				WHERE EVALUATION > 3.0 
+				GROUP BY EVALUATION;
+			""").allRows must have size(2)
 		}
 
     "Create and Query Type Inference Lens with NULL values" >> {
@@ -118,9 +123,11 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				  AS SELECT * FROM RATINGS3
 				  WITH MISSING_VALUE('C')
            					 					 					 					 					 			""")
-      query("SELECT * FROM null_test WHERE EVALUATION IS NULL;").allRows.flatten must contain(str("P34235"), NullPrimitive(), f(4.0))
-      query("SELECT * FROM null_test;").allRows.flatten must have size(9)
-      query("SELECT * FROM null_test1;").allRows.flatten must have size(9)
+      val results0 = query("SELECT * FROM null_test;").allRows
+      println(results0)
+      results0 must have size(3)
+      results0(2) must contain(str("P34235"), NullPrimitive(), f(4.0))
+      query("SELECT * FROM null_test1;").allRows must have size(3)
     }
 
 

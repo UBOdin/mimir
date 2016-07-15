@@ -43,7 +43,6 @@ object CTPercolatorSpec extends Specification {
   def oper:(String => Operator) = parser.operator _
   def project(cols: List[(String,String)], src: Operator): Operator =
     Project(cols.map( { case (name,e) => ProjectArg(name, expr(e))}), src) 
-  def analyze(s: String) = new Compiler(null).compileAnalysis(oper(s))
 
   def percolite(x:String) = 
     CTPercolator.percolateLite(oper(x))

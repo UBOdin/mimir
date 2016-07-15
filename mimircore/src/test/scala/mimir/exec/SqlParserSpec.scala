@@ -40,31 +40,35 @@ object SqlParserSpec extends Specification with FileMatchers {
 		)
 
 	val db:Database = {
-		if(tempDB != null){
-			val dbFile = new File(new File("databases"), tempDB)
-			if(dbFile.exists()){ dbFile.delete(); }
-			dbFile.deleteOnExit();
-		}
-		val d = new Database("testdb", new JDBCBackend("sqlite",
-			if(tempDB == null){ "testdb" } else { tempDB.toString }
-		))
-	    try {
-		    d.backend.open();
-			d.initializeDBForMimir();
-		} catch {
-			case e:Exception => e.printStackTrace()
-
-		}
-		testData.foreach ( _ match { case ( tableName, tableData, tableCols ) => 
-			d.backend.update("CREATE TABLE "+tableName+"("+tableCols.mkString(", ")+");")
-			val lines = new BufferedReader(new FileReader(tableData))
-			var line: String = lines.readLine()
-			while(line != null){
-				d.backend.update("INSERT INTO "+tableName+" VALUES (" + line + ");")
-				line = lines.readLine()
+		try {
+			if(tempDB != null){
+				val dbFile = new File(new File("databases"), tempDB)
+				if(dbFile.exists()){ dbFile.delete(); }
+				dbFile.deleteOnExit();
 			}
-		})
-		d
+			val d = new Database("testdb", new JDBCBackend("sqlite",
+				if(tempDB == null){ "testdb" } else { tempDB.toString }
+			))
+		    try {
+			    d.backend.open();
+				d.initializeDBForMimir();
+			} catch {
+				case e:Exception => e.printStackTrace()
+
+			}
+			testData.foreach ( _ match { case ( tableName, tableData, tableCols ) => 
+				d.backend.update("CREATE TABLE "+tableName+"("+tableCols.mkString(", ")+");")
+				val lines = new BufferedReader(new FileReader(tableData))
+				var line: String = lines.readLine()
+				while(line != null){
+					d.backend.update("INSERT INTO "+tableName+" VALUES (" + line + ");")
+					line = lines.readLine()
+				}
+			})
+			d
+		} catch {
+			case e : Throwable => System.err.println(e.getMessage()); throw e;
+		}
 	}
 
 	sequential

@@ -20,9 +20,9 @@ object Type extends Enumeration {
 
   def toString(t: T) = t match {
     case TInt => "int"
-    case TFloat => "decimal"
+    case TFloat => "real"
     case TDate => "date"
-    case TString => "string"
+    case TString => "varchar"
     case TBool => "bool"
     case TRowId => "rowid"
     case TType => "type"

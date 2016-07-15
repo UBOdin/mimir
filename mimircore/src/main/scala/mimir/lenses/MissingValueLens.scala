@@ -329,7 +329,7 @@ class MissingValueModel(lens: MissingValueLens, name: String)
           "INSERT INTO "+backingStore()+" VALUES (?, ?)", tuple
         )
         nulls = nulls + 1
-        println("Progress: Null no. "+nulls)
+        // println("Progress: Null no. "+nulls)
       // }
     }
     // println("Done");

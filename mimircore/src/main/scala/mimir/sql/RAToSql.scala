@@ -373,8 +373,11 @@ class RAToSql(db: Database) {
       case mimir.algebra.Function("MIMIR_MAKE_ROWID", head :: rest) => {
           rest.map(convert(_, sources)).foldLeft(convert(head, sources))(concat(_,_,"|"))
       }
-      case mimir.algebra.Function("CAST", body_arg :: body_type :: Nil) => {
-        return new CastOperation(convert(body_arg, sources), body_type.toString);
+      case mimir.algebra.Function("CAST", body_arg :: TypePrimitive(t) :: Nil) => {
+        return new CastOperation(convert(body_arg, sources), Type.toString(t));
+      }
+      case mimir.algebra.Function("CAST", _) => {
+        throw new SQLException("Invalid Cast: "+e)
       }
       case mimir.algebra.Function(fname, fargs) => {
           val func = new Function()
