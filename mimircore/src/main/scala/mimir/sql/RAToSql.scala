@@ -12,10 +12,12 @@ import mimir.ctables.{JointSingleVarModel, VGTerm}
 import mimir.optimizer.{InlineProjections, PushdownSelections}
 import mimir.lenses.{TypeInferenceModel, SchemaMatchingModel, MissingValueModel}
 import mimir.util.TypeUtils
+
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
 import net.sf.jsqlparser.expression.operators.relational._
 import net.sf.jsqlparser.expression.{BinaryExpression, DoubleValue, Function, LongValue, NullValue, InverseExpression, StringValue, WhenClause}
+import net.sf.jsqlparser.statement.select
 import net.sf.jsqlparser.{schema, expression}
 import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.statement.select.{SelectBody, PlainSelect, SubSelect, SelectExpressionItem, FromItem, SelectItem}
@@ -113,6 +115,46 @@ class RAToSql(db: Database) {
           oper.schema.map(_._1).map( (x) => ProjectArg(x, Var(x))).toList, oper
         ))
       }
+      case Aggregate(args, gbcols, child) =>
+        val (childCond, childFroms) = extractSelectsAndJoins(child)
+        val subBody = new PlainSelect()
+        subBody.setFromItem(childFroms.head)
+        subBody.setJoins(new util.ArrayList(
+          childFroms.tail.map( (s) => {
+            val join = new net.sf.jsqlparser.statement.select.Join()
+            join.setRightItem(s)
+            join.setSimple(true)
+            join
+          })
+        ))
+
+        subBody.setSelectItems(
+          new java.util.ArrayList(
+            args.map( (arg) => {
+              val item = new SelectExpressionItem()
+              item.setAlias(arg.alias)
+              val func = new Function()
+              func.setName(arg.function)
+              func.setParameters(new ExpressionList(new java.util.ArrayList(
+                arg.columns.map(convert(_, getSchemas(childFroms))))))
+
+              item.setExpression(func)
+              item
+            }) ++
+            gbcols.map( (col) => {
+              val item = new SelectExpressionItem()
+              val column =  convert(col, getSchemas(childFroms))
+              item.setAlias(column.asInstanceOf[Column].getColumnName())
+              item.setExpression(column)
+              item
+            })
+          )
+        )
+        subBody.setGroupByColumnReferences(new java.util.ArrayList(
+          gbcols.map(convert(_, getSchemas(childFroms)).asInstanceOf[net.sf.jsqlparser.schema.Column])))
+
+        subBody
+
       case Project(args, src) =>
         val body = new PlainSelect()
         val (cond, sources) = extractSelectsAndJoins(src)
@@ -146,8 +188,17 @@ class RAToSql(db: Database) {
 
   def getSchemas(sources: List[FromItem]): List[(String, List[String])] =
   {
+    var sch = List[(String, List[String])]()
     sources.map( {
       case subselect: SubSelect =>
+        if(subselect.getSelectBody.isInstanceOf[PlainSelect]){
+          subselect.getSelectBody.asInstanceOf[PlainSelect].getFromItem() match {
+            case sub: SubSelect =>
+              sch = getSchemas(List(sub))
+
+            case _ =>
+          }
+        }
         (subselect.getAlias(), subselect.getSelectBody() match {
           case plainselect: PlainSelect => 
             plainselect.getSelectItems().map({
@@ -162,13 +213,13 @@ class RAToSql(db: Database) {
         }) 
       case table: net.sf.jsqlparser.schema.Table =>
         (table.getAlias(), db.getTableSchema(table.getName()).get.map(_._1).toList++List("ROWID"))
-    })
+    }) ++ sch
   }
 
   def makeSubSelect(oper: Operator): FromItem =
   {
     val subSelect = new SubSelect()
-    subSelect.setSelectBody(doConvert(oper))
+    subSelect.setSelectBody(doConvert(oper))//doConvert returns a plain select
     subSelect.setAlias("SUBQ_"+oper.schema.map(_._1).head)
     subSelect
   }
@@ -181,7 +232,7 @@ class RAToSql(db: Database) {
         val (childCond, childFroms) = extractSelectsAndJoins(child)
         ( Arith.makeAnd(cond, childCond), childFroms )
       case Join(lhs, rhs) =>
-        val (lhsCond, lhsFroms) = extractSelectsAndJoins(lhs)
+        val (lhsCond, lhsFroms) = extractSelectsAndJoins(lhs)//lhsFroms is a subselect
         val (rhsCond, rhsFroms) = extractSelectsAndJoins(rhs)
         ( Arith.makeAnd(lhsCond, rhsCond), 
           lhsFroms ++ rhsFroms

@@ -14,7 +14,7 @@ case class TypeException(found: Type.T, expected: Type.T,
 class RAException(msg: String) extends Exception(msg);
 
 object Type extends Enumeration {
-  type T = Value
+  type T = Value//where does Value come from?
 
   val TInt, TFloat, TDate, TString, TBool, TRowId, TType, TAny = Value
 
@@ -91,14 +91,14 @@ case class StringPrimitive(v: String)
   def asString: String = v;
   def payload: Object = v.asInstanceOf[Object];
 }
-case class KeywordPrimitive(v: String, t: Type.T)
-  extends PrimitiveValue(t)
+case class TypePrimitive(t: Type.T)
+  extends PrimitiveValue(Type.TType)
 {
-  override def toString() = v
-  def asLong: Long = java.lang.Long.parseLong(v)
-  def asDouble: Double = java.lang.Double.parseDouble(v)
-  def asString: String = v;
-  def payload: Object = v.asInstanceOf[Object];
+  override def toString() = t.toString
+  def asLong: Long = throw new TypeException(TType, TInt, "Cast")
+  def asDouble: Double = throw new TypeException(TType, TFloat, "Cast")
+  def asString: String = t.toString;
+  def payload: Object = t.asInstanceOf[Object];
 }
 case class RowIdPrimitive(v: String)
   extends PrimitiveValue(TRowId)
@@ -122,8 +122,8 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
   extends PrimitiveValue(TDate)
 {
   override def toString() = "DATE '"+y+"-"+m+"-"+d+"'"
-  def asLong: Long = throw new TypeException(TString, TInt, "Cast");
-  def asDouble: Double = throw new TypeException(TString, TFloat, "Cast");
+  def asLong: Long = throw new TypeException(TDate, TInt, "Cast");
+  def asDouble: Double = throw new TypeException(TDate, TFloat, "Cast");
   def asString: String = toString;
   def payload: Object = (y, m, d).asInstanceOf[Object];
   def compare(c: DatePrimitive): Integer = {

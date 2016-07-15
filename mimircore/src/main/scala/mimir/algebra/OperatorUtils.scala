@@ -46,6 +46,8 @@ object OperatorUtils {
         extractUnions(c).map ( Project(args, _) )
       case Select(expr, c) =>
         extractUnions(c).map ( Select(expr, _) )
+      case Aggregate(args, groupBy, child) =>
+        extractUnions(child).map(Aggregate(args, groupBy, _))
       case t : Table => List[Operator](t)
       case Join(lhs, rhs) =>
         extractUnions(lhs).flatMap (

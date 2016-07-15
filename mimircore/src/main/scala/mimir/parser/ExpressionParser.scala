@@ -130,5 +130,5 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 	) ^^ { Type.fromString(_) }
 
 	def typeLeaf: Parser[Expression] = 
-		exprType ^^ { (t) => KeywordPrimitive(Type.toString(t), Type.TType) }
+		exprType ^^ { (t) => TypePrimitive(t) }
 }

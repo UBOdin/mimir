@@ -161,7 +161,7 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
   }
 
   override def mostLikelyValue(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
-    new KeywordPrimitive(TypeUtils.convert(inferredTypeMap(idx)._2), Type.TType)
+    TypePrimitive(inferredTypeMap(idx)._2)
   }
 
   override def upperBoundExpr(idx: Int, args: List[Expression]): Expression = {

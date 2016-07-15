@@ -32,6 +32,37 @@ case class Project(columns: List[ProjectArg], source: Operator) extends Operator
     columns.map( (x) => (x.name, x.expression) ).toMap
 }
 
+/* AggregateArg is a wrapper for the args argument in Aggregate case class where:
+      function is the Aggregate function,
+      column is/are the SQL table column(s) parameters,
+      alias is the alias used for the aggregate column output,
+      getOperatorName returns the operator name,
+      getColumnName returns the column name
+*/
+
+/* to fix list: first, we need to get the correct aliases; second, we need to make Aggregate have a list of AggregateArgs;
+third, we need to test and then branch in SqlToRa.scala (flat or agg select)
+ */
+case class AggregateArg(function: String, columns: List[Expression], alias: String)
+{
+  override def toString = (function.toString + "(" + columns.map(_.toString).mkString(", ") + ")" + ", " + alias)
+  def getFunctionName() = function
+  def getColumnNames() = columns.map(x => x.toString).mkString(", ")
+  def getAlias() = alias.toString
+}
+
+/* Aggregate Operator refashioned 5/23/16, 5/31/16 */
+case class Aggregate(args: List[AggregateArg], groupby: List[Expression], source: Operator) extends Operator
+{
+  def toString(prefix: String) =
+    prefix + "AGGREGATE[" + args.map(_.toString).mkString("; ") + "]\n\t(Group By [" + groupby.map( _.toString ).mkString(", ") +
+      "])\n\t\t(" + source.toString(prefix + " ") + prefix + ")"
+
+  def children() = List(source)
+  def rebuild(x: List[Operator]) = new Aggregate(args, groupby, x(0))
+  //def getAliases() = args.map(x => x.getAlias())
+}
+
 case class Select(condition: Expression, source: Operator) extends Operator
 {
   def toString(prefix: String) =

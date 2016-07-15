@@ -103,6 +103,10 @@ object SimpleDemoScript extends Specification with FileMatchers {
 
 		}
 
+		"Compute Aggregate Queries" >> {
+			query("SELECT EVALUATION, SUM(NUM_RATINGS) FROM RATINGS2 WHERE EVALUATION > 3.0 GROUP BY EVALUATION;")
+		}
+
     "Create and Query Type Inference Lens with NULL values" >> {
       lens("""
 				CREATE LENS null_test

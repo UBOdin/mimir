@@ -10,8 +10,9 @@ import Cmp.{Gt, Lt, Lte, Gte, Eq, Neq, Like, NotLike}
 class MissingVariable(varName: String, e: Throwable) extends 
 	Exception(varName, e)
 
+/* what's going on with scope and Map().apply? */
 class ExpressionChecker(scope: (String => Type.T) = Map().apply _) {
-
+	/* Assert that the expressions claimed type is its type */
 	def assert(e: Expression, t: Type.T, msg: String = "Typechecker"): Unit = {
 		val eType = typeOf(e);
 		if(Typechecker.escalate(eType,t) != t){
@@ -51,7 +52,7 @@ class ExpressionChecker(scope: (String => Type.T) = Map().apply _) {
 			case Function("CAST", fargs) =>
 				// Special case CAST
 				Eval.inline(fargs(1)) match {
-					case KeywordPrimitive(t, TType) => Type.fromString(t)
+					case TypePrimitive(t) => t
 					case p:PrimitiveValue => 
 						throw new SQLException("Invalid CAST to '"+p+"' of type: "+typeOf(p))
 					case _ => TAny
@@ -91,7 +92,7 @@ object Typechecker {
 	}
 
 	def schemaOf(o: Operator): List[(String, Type.T)] =
-	{ 
+	{
 		o match {
 			case Project(cols, src) =>
 				val chk = new ExpressionChecker(schemaOf(src).toMap);
@@ -104,6 +105,30 @@ object Typechecker {
 				val srcSchema = schemaOf(src);
 				(new ExpressionChecker(srcSchema.toMap)).assert(cond, TBool, "SELECT")
 				srcSchema
+
+			case Aggregate(args, groupBy, source) =>
+				/* Get child operator schema */
+				val srcSchema = schemaOf(source)
+				val chk = new ExpressionChecker(srcSchema.toMap)
+
+				/* Get Group By Args and verify type */
+				val groupBySchema: List[(String, Type.T)] = groupBy.map(x => (x.toString, chk.typeOf(x)) )
+
+				/* Get function name, check for AVG *//* Get function parameters, verify type */
+				val aggSchema: List[(String, Type.T)] = args.map(x => if(x.function == "AVG"){ (x.alias, TFloat) }
+					else if(x.function == "COUNT") { (x.alias, TInt)}
+					else{ val typ = Typechecker.escalate(x.columns.map(x => chk.typeOf(x)))
+								if(typ != TFloat && typ != TInt){
+									throw new SQLException("Aggregate function parameters must be numeric.")
+								}
+								else{
+									(x.alias, typ)
+								}})
+
+				/* Send schema to parent operator */
+				val sch = groupBySchema ++ aggSchema ++ srcSchema
+				//println(sch)
+				sch
 
 			case Join(lhs, rhs) =>
 				val lSchema = schemaOf(lhs);

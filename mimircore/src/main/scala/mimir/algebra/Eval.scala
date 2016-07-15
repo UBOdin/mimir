@@ -91,12 +91,11 @@ object Eval
               val date = params.head.asInstanceOf[StringPrimitive].v.split("-").map(x => x.toInt)
               new DatePrimitive(date(0), date(1), date(2))
             case "CAST" => {
-              val strVal = Eval.eval(params(1), bindings).toString.toLowerCase
               try {
-                Type.fromString(strVal) match {
-                  case TInt => IntPrimitive(Eval.eval(params(0), bindings).asLong)
-                  case TFloat => FloatPrimitive(Eval.eval(params(0), bindings).asDouble)
-                  case TString => StringPrimitive(Eval.eval(params(0), bindings).asString)
+                Eval.eval(params(1), bindings) match {
+                  case TypePrimitive(TInt) => IntPrimitive(Eval.eval(params(0), bindings).asLong)
+                  case TypePrimitive(TFloat) => FloatPrimitive(Eval.eval(params(0), bindings).asDouble)
+                  case TypePrimitive(TString) => StringPrimitive(Eval.eval(params(0), bindings).asString)
                   case x => throw new SQLException("Unknown cast type: '"+x+"'")
                 }
               } catch {

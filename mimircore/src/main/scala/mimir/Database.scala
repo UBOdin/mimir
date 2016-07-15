@@ -92,9 +92,19 @@ case class Database(name: String, backend: Backend)
     while(result.getNext()){
       println(
         (0 until result.numCols).map( (i) => {
-          result(i)+(
-            if(!result.deterministicCol(i)){ "*" } else { "" }
-            )
+          if( i == 0 ){
+            result(i) match {
+              case NullPrimitive() => "'NULL'"
+              case _ => result(i)
+            }
+
+          }
+          else{
+            result(i)+(
+              if(!result.deterministicCol(i)){ "*" } else { "" }
+              )
+          }
+
         }).mkString(",")+(
           if(!result.deterministicRow){
             " (This row may be invalid)"
