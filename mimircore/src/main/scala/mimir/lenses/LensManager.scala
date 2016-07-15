@@ -128,7 +128,6 @@ class LensManager(db: Database) {
           throw new SQLException("Multiple definitions for Lens `"+lensName+"`")
         } else {
           val lensMeta = lensMetaResult(0)
-          println("LENS_EXPRESSION: "+lensMeta(2))
           val lens = 
             mkLens(
               lensMeta(0).asString, 
