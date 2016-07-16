@@ -151,18 +151,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			).map(_._2) must be equalTo List(Type.TString, Type.TFloat, Type.TFloat)
 		}
 
-		"Create and Query Simple Domain Constraint Repair Lenses" >> {
-			lens("""
-				CREATE LENS PRODUCT_REPAIRED 
-				  AS SELECT * FROM PRODUCT
-				  WITH MISSING_VALUE('BRAND')
-			""")
-			val result1 = query("SELECT * FROM PRODUCT_REPAIRED")
-			val result1DetRows = result1.mapRows( r => (r(0).asString, r.deterministicCol(2)) )
-			result1DetRows must contain(eachOf( ("P123", false), ("P125", true) ))
-		}
-
-		"Create and Query Composed Domain Constraint Repair Lenses" >> {
+		"Create and Query Domain Constraint Repair Lenses" >> {
 			lens("""
 				CREATE LENS RATINGS1FINAL 
 				  AS SELECT * FROM RATINGS1TYPED 
@@ -173,6 +162,21 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			result1 must contain(eachOf( f(4.5), f(4.0), f(6.4), i(4) ) )
 			val result2 = query("SELECT RATING FROM RATINGS1FINAL WHERE RATING < 5").allRows.flatten
 			result2 must have size(3)
+		}
+
+		"Show Determinism Correctly" >> {
+			lens("""
+				CREATE LENS PRODUCT_REPAIRED 
+				  AS SELECT * FROM PRODUCT
+				  WITH MISSING_VALUE('BRAND')
+			""")
+			val result1 = query("SELECT ID, BRAND FROM PRODUCT_REPAIRED")
+			val result1Determinism = result1.mapRows( r => (r(0).asString, r.deterministicCol(1)) )
+			result1Determinism must contain(eachOf( ("P123", false), ("P125", true), ("P34235", true) ))
+
+			val result2 = query("SELECT ID, BRAND FROM PRODUCT_REPAIRED WHERE BRAND='HP'")
+			val result2Determinism = result2.mapRows( r => (r(0).asString, r.deterministicCol(1), r.deterministicRow) )
+			result2Determinism must contain(eachOf( ("P123", false, false), ("P34235", true, true) ))
 		}
 
 		"Create and Query Schema Matching Lenses" >> {
