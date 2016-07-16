@@ -69,16 +69,10 @@ abstract class ResultIterator {
   def numCols: Int;
 
   /**
-   * Apply a transformation to all columns (e.g., stringify)
-   */
-  def map[X](fn: (PrimitiveValue) => X) =
-    (0 until numCols).map( (i) => fn(this(i)) )
-
-  /**
    * Return the current row as a list
    */
   def currentRow(): List[PrimitiveValue] =
-    map( (x) => x ).toList
+    (0 until numCols).map( this(_) ).toList
 
   def currentTuple(): Map[String, PrimitiveValue] =
     schema.map(_._1).zip(currentRow).toMap
@@ -93,13 +87,20 @@ abstract class ResultIterator {
   }
 
   /**
+   * Shorthand map operator over the rows.
+   */
+  def mapRows[X](fn: ResultIterator => X): List[X] =
+  {
+    var ret = List[X]()
+    foreachRow( (x) => { ret = fn(this) :: ret } )
+    ret.reverse;
+  }
+
+  /**
    * A list of lists containing all rows
    */
-  def allRows(): List[List[PrimitiveValue]] = { 
-    var ret = List[List[PrimitiveValue]]()
-    foreachRow( (x) => { ret = ret ++ List(currentRow()) } )
-    return ret;
-  }
+  def allRows(): List[List[PrimitiveValue]] = 
+    mapRows(_.currentRow())
 
   /**
    * A list of explanations for the indicated column

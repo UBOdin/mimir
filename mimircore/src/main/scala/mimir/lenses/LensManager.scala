@@ -124,7 +124,6 @@ class LensManager(db: Database) {
             WHERE name = ?
           """, List(lensName))
         if(lensMetaResult.length == 0) { 
-          System.err.println("Warning: Can't fulfil request for lens: "+lensName+" in "+getAllLensNames())
           return None; 
         } else if(lensMetaResult.length > 1){ 
           throw new SQLException("Multiple definitions for Lens `"+lensName+"`")

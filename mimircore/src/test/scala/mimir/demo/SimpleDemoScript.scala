@@ -98,7 +98,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			db.loadTable(reviewDataFiles(1))
 			db.loadTable(reviewDataFiles(2))
 			query("SELECT * FROM RATINGS1;").allRows must have size(4)
-			query("SELECT RATING FROM RATINGS1;").allRows.flatten must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
+			query("SELECT RATING FROM RATINGS1RAW;").allRows.flatten must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
 			query("SELECT * FROM RATINGS2;").allRows must have size(3)
 
 		}
@@ -124,7 +124,6 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				  WITH MISSING_VALUE('C')
            					 					 					 					 					 			""")
       val results0 = query("SELECT * FROM null_test;").allRows
-      println(results0)
       results0 must have size(3)
       results0(2) must contain(str("P34235"), NullPrimitive(), f(4.0))
       query("SELECT * FROM null_test1;").allRows must have size(3)
@@ -134,12 +133,12 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		"Create and Query Type Inference Lenses" >> {
 			lens("""
 				CREATE LENS RATINGS1TYPED 
-				  AS SELECT * FROM RATINGS1 
+				  AS SELECT * FROM RATINGS1RAW 
 				  WITH TYPE_INFERENCE(0.5)
 			""")
 			lens("""
 				CREATE LENS RATINGS2TYPED 
-				  AS SELECT * FROM RATINGS2
+				  AS SELECT * FROM RATINGS2RAW
 				  WITH TYPE_INFERENCE(0.5)
 			""")
 			query("SELECT * FROM RATINGS1TYPED;").allRows must have size(4)
@@ -152,7 +151,18 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			).map(_._2) must be equalTo List(Type.TString, Type.TFloat, Type.TFloat)
 		}
 
-		"Create and Query Domain Constraint Repair Lenses" >> {
+		"Create and Query Simple Domain Constraint Repair Lenses" >> {
+			lens("""
+				CREATE LENS PRODUCT_REPAIRED 
+				  AS SELECT * FROM PRODUCT
+				  WITH MISSING_VALUE('BRAND')
+			""")
+			val result1 = query("SELECT * FROM PRODUCT_REPAIRED")
+			val det = result1.mapRows( r => (r(0).asString, r.deterministicCol(2)) )
+			det must contain(eachOf( ("P123", false), ("P125", true) ))
+		}
+
+		"Create and Query Composed Domain Constraint Repair Lenses" >> {
 			lens("""
 				CREATE LENS RATINGS1FINAL 
 				  AS SELECT * FROM RATINGS1TYPED 
