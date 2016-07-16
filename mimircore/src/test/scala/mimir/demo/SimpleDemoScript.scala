@@ -158,8 +158,8 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				  WITH MISSING_VALUE('BRAND')
 			""")
 			val result1 = query("SELECT * FROM PRODUCT_REPAIRED")
-			val det = result1.mapRows( r => (r(0).asString, r.deterministicCol(2)) )
-			det must contain(eachOf( ("P123", false), ("P125", true) ))
+			val result1DetRows = result1.mapRows( r => (r(0).asString, r.deterministicCol(2)) )
+			result1DetRows must contain(eachOf( ("P123", false), ("P125", true) ))
 		}
 
 		"Create and Query Composed Domain Constraint Repair Lenses" >> {

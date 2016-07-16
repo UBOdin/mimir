@@ -14,7 +14,7 @@ class VarProjection(src: ResultIterator, idx: Int, t: Type.T)
   def rebuild(x: List[Expression]) = new VarProjection(src, idx, t)
   def get(v:List[PrimitiveValue]) = src(idx)
 
-  override def toString = src.schema(idx)._1
+  override def toString = src.schema(idx)._1+":"+idx
 }
 
 class ProvenanceProjection(src: ResultIterator)
