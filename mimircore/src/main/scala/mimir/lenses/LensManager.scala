@@ -113,18 +113,20 @@ class LensManager(db: Database) {
   }
   
   def load(lensName: String): Option[Lens] = {
+    // println("GETTING: "+lensName)
     lensCache.get(lensName) match {
       case Some(s) => Some(s)
       case None => {
-        val lensMetaResultSet =
-          db.backend.execute("""
+        val lensMetaResult =
+          db.backend.resultRows("""
             SELECT lens_type, parameters, query
             FROM MIMIR_LENSES
             WHERE name = ?
           """, List(lensName))
-        val lensMetaResult = JDBCUtils.extractAllRows(lensMetaResultSet)
-        if(lensMetaResult.length == 0) { return None; }
-        else if(lensMetaResult.length > 1){ 
+        if(lensMetaResult.length == 0) { 
+          System.err.println("Warning: Can't fulfil request for lens: "+lensName+" in "+getAllLensNames())
+          return None; 
+        } else if(lensMetaResult.length > 1){ 
           throw new SQLException("Multiple definitions for Lens `"+lensName+"`")
         } else {
           val lensMeta = lensMetaResult(0)
@@ -145,6 +147,15 @@ class LensManager(db: Database) {
         }
       }
     }
+  }
+
+  def getAllLensNames(): List[String] = {
+    db.backend.resultRows(
+      """
+        SELECT NAME
+        FROM MIMIR_LENSES
+      """).
+    map(_(0).asString.toUpperCase)
   }
 
   def modelForLens(lensName: String): Model = 
