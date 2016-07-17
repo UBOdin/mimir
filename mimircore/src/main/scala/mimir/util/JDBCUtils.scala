@@ -40,6 +40,8 @@ object JDBCUtils {
           StringPrimitive(results.getString(field))
         case Type.TRowId =>
           RowIdPrimitive(results.getString(field))
+        case Type.TBool =>
+          BoolPrimitive(results.getInt(field) != 0)
         case Type.TDate => 
           val calendar = Calendar.getInstance()
           try {

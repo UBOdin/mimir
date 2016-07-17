@@ -63,11 +63,11 @@ object CTAnalyzer {
         Arith.makeOr(
           Arith.makeAnd(
             recur(l),
-            Not(l)
+            Arith.makeNot(l)
           ),
           Arith.makeAnd(
             recur(r),
-            Not(r)
+            Arith.makeNot(r)
           )
         )
       

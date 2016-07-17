@@ -9,27 +9,26 @@ import mimir.provenance._;
 class ResultSetIterator(
   val src: ResultSet, 
   val visibleSchema: Map[String,Type.T], 
-  visibleColumns: List[Int], 
-  provenanceTokenColumns: List[Int]
+  val visibleColumns: List[Int], 
+  val provenanceTokenColumns: List[Int]
 ) extends ResultIterator
 {
   val meta = src.getMetaData();
-  val schema: List[(String,Type.T)] = 
+  val (schema: List[(String,Type.T)], 
+       extract: List[() => PrimitiveValue]
+      ) = 
     visibleColumns.map( (i) => {
       // println("Visible: "+visibleSchema)
       val colName = meta.getColumnName(i+1).toUpperCase();
-      (
-        colName,
+      val colType = 
         visibleSchema.getOrElse(colName, 
           JDBCUtils.convertSqlType(meta.getColumnType(i+1))
         )
+      (
+        (colName, colType),
+        () => JDBCUtils.convertField(colType, src, i+1)
       )
-    }).toList
-  val extract: List[() => PrimitiveValue] =
-    schema.map(_._2).zipWithIndex.map( t => {
-      () => JDBCUtils.convertField(t._1, src, t._2+1)
-
-    })
+    }).toList.unzip
       
   var isFirst = true;
   var empty = false;

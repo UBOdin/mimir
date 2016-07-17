@@ -127,22 +127,9 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
     new WebStringResult(res)
   }
 
-  def getAllTables: List[String] = {
-    db.backend.getAllTables()
-  }
-
-  def getAllLenses: List[String] = {
-    db.backend.resultRows(
-      """
-        SELECT NAME
-        FROM MIMIR_LENSES
-      """).
-    map(_(0).toString)
-  }
-
   def getAllSchemas: Map[String, List[(String, Type.T)]] = {
-    getAllTables.map{ (x) => (x, db.getTableSchema(x).get) }.toMap ++
-      getAllLenses.map{ (x) => (x, db.getLens(x).schema()) }.toMap
+    db.backend.getAllTables().map{ (x) => (x, db.getTableSchema(x).get) }.toMap ++
+      db.lenses.getAllLensNames().map{ (x) => (x, db.getLens(x).schema()) }.toMap
   }
 
   def getAllDBs: Array[String] = {
@@ -211,10 +198,6 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
     db.backend.close()
   }
 
-  def extractVGTerms(exp: Expression): List[String] = {
-    CTables.getVGTerms(exp).map( { case VGTerm((name, _), _, _) => name } )
-  }
-
   def convertToTree(op: Operator): OperatorNode = {
     op match {
       case Project(cols, source) => {
@@ -223,7 +206,8 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
           convertToTree(source)
         else {
           var params = 
-            projArg.flatMap( projectArg => extractVGTerms(projectArg.expression) ) 
+            projArg.flatMap( projectArg => CTables.getVGTerms(projectArg.expression) ).
+                    map(_.model._1) 
           if(params.isEmpty) {
             convertToTree(source)
           } else {

@@ -96,6 +96,13 @@ object Provenance {
           List(rowidColnameBase)
         )
 
+      case Aggregate(args, groupBy, child) =>
+        //val newargs = (new AggregateArg(ROWID_KEY, List(Var(ROWID_KEY)), ROWID_KEY)) :: args
+        ( 
+          Aggregate(args, groupBy, compile(child)._1),
+          groupBy.map(_.asInstanceOf[Var].name)
+        )
+
     }
   }
 
