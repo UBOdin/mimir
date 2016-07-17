@@ -3,23 +3,33 @@ package mimir.ctables
 import mimir.algebra._
 import mimir.lenses.{TypeInferenceAnalysis, MissingValueAnalysis}
 import mimir.util.JSONBuilder
+import scala.util._
 
 abstract class Model {
   def varTypes: List[Type.T]
 
-  def mostLikelyValue   (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
-  def lowerBound        (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
-  def upperBound        (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
-  def sampleGenerator   (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
-  def mostLikelyExpr    (idx: Int, args: List[Expression    ]):  Expression
-  def lowerBoundExpr    (idx: Int, args: List[Expression    ]):  Expression
-  def upperBoundExpr    (idx: Int, args: List[Expression    ]):  Expression
-  def sampleGenExpr     (idx: Int, args: List[Expression    ]):  Expression
-  def sample            (seed: Long, idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
-  def reason            (idx: Int, args: List[Expression]): (String)
-  def backingStore      (idx: Int): String
-  def createBackingStore(idx: Int): Unit
-  def createBackingStore(): Unit
+  /**
+   * Generate a best guess for a variable represented by this model.
+   * @param idx         The index of the variable family to generate a best guess for
+   * @param args        The skolem identifier for the specific variable to generate a best guess for
+   * @return            A primitive value representing the best guess value.
+   */
+  def bestGuess      (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
+  /**
+   * Generate a sample from the distribution of a variable represented by this model.
+   * @param idx         The index of the variable family to generate a sample for
+   * @param randomness  A java.util.Random to use when generating the sample (pre-seeded)
+   * @param args        The skolem identifier for the specific variable to generate a sample for
+   * @return            A primitive value representing the generated sample
+   */
+  def sample         (idx: Int, randomness: Random, args: List[PrimitiveValue]):  PrimitiveValue
+  /**
+   * Generate a human-readable explanation for the uncertainty captured by this model.
+   * @param idx   The index of the variable family to explain
+   * @param args  The skolem identifier for the specific variable to explain
+   * @return      A string reason explaining the uncertainty in this model
+   */
+  def reason         (idx: Int, args: List[Expression]): (String)
 }
 
 case class Reason(
@@ -52,7 +62,7 @@ case class VGTerm(
   def get(v: List[PrimitiveValue]): PrimitiveValue = 
   {
     // println("VGTerm: Get")
-    model._2.mostLikelyValue(idx, v)
+    model._2.bestGuess(idx, v)
   }
   def reason(): Reason = 
     Reason(

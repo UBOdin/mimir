@@ -90,7 +90,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
           m.asInstanceOf[SingleVarModel]
         }
       })
-    model = new JointSingleVarModel(models)
+    model = new IndependentVarsModel(models)
   }
 
   override def save(db: Database): Unit = {
@@ -146,37 +146,8 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
   }
 }
 
-object MissingValueAnalysisType extends Enumeration {
-  type MV = Value
-  val MOST_LIKELY, LOWER_BOUND, UPPER_BOUND, SAMPLE = Value
-}
-
-case class MissingValueAnalysis(model: MissingValueModel, args: List[Expression], analysisType: MissingValueAnalysisType.MV)
-  extends Proc(args) {
-  def get(args: List[PrimitiveValue]): PrimitiveValue = {
-    analysisType match {
-      case MissingValueAnalysisType.LOWER_BOUND => model.lowerBound(args)
-      case MissingValueAnalysisType.UPPER_BOUND => model.upperBound(args)
-      case MissingValueAnalysisType.MOST_LIKELY => model.mostLikelyValue(args)
-      case MissingValueAnalysisType.SAMPLE => model.sampleGenerator(args)
-    }
-  }
-
-  def getType(bindings: List[Type.T]) = {
-    val att = model.getLearner.getModelContext().attribute(model.cIndex)
-    if (att.isString)
-      Type.TString
-    else if (att.isNumeric)
-      Type.TFloat
-    else
-      throw new SQLException("Unknown type")
-  }
-
-  def rebuild(c: List[Expression]) = new MissingValueAnalysis(model, c, analysisType)
-}
-
-class MissingValueModel(lens: MissingValueLens, name: String)
-  extends SingleVarModel(Type.TAny) {
+class MissingValueModel(lens: MissingValueLens, name: String, type: Type.T)
+  extends SingleVarModel(type) {
   var learner: Classifier =
     Analysis.getLearner("moa.classifiers.bayes.NaiveBayes")
   var data: Instances = null

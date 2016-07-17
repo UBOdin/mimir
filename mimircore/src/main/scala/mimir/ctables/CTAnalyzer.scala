@@ -1,6 +1,30 @@
 package mimir.ctables
 
 import mimir.algebra._
+import scala.util._
+import java.sql.SQLException
+
+case class VGTermSampler(model: Model, idx: Int, args: List[Expression], seed: Expression) 
+  extends Proc(  (seed :: args)  )
+{
+  def getType(argTypes: List[Type.T]): Type.T =
+    model.varTypes(idx)
+  def get(v: List[PrimitiveValue]): PrimitiveValue = {
+    v match {
+      case seed :: argValues => model.sample(idx, new Random(seed.asLong), argValues)
+      case _ => throw new SQLException("Internal error.  Expecting seed.")
+    }
+  }
+  def rebuild(v: List[Expression]) = 
+  {
+    v match { 
+      case seed :: argValues => VGTermSampler(model, idx, argValues, seed)
+      case _ => throw new SQLException("Internal error.  Expecting seed.")
+    }
+  }
+
+}
+
 
 object CTAnalyzer {
 
@@ -75,16 +99,11 @@ object CTAnalyzer {
     }
   }
 
-  def compileSample(exp: Expression, seedExp: Expression = null): Expression = {
-    exp match {
-
-        case VGTerm((_,model),idx,args) => {
-          if(seedExp == null)
-            model.sampleGenExpr(idx, args)
-          else model.sampleGenExpr(idx, args ++ List(seedExp))
-        }
-
-        case _ => exp.rebuild(exp.children.map(compileSample(_, seedExp)))
+  def compileSample(expr: Expression, seed: Expression): Expression =
+  {
+    expr match {
+      case VGTerm((_,model), idx, args) => VGTermSampler(model, idx, args, seed)
+      case _ => expr.rebuild(expr.children.map(compileSample(_, seed)))
     }
   }
 }

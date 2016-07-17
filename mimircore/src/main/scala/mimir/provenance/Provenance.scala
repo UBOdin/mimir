@@ -10,6 +10,7 @@ class ProvenanceError(e:String) extends Exception(e) {}
 
 object Provenance {
 
+  def mergeRowIdFunction = "MIMIR_MAKE_ROWID"
   def rowidColnameBase = "MIMIR_ROWID"
 
   def compile(oper: Operator): (Operator, List[String]) = {
@@ -99,7 +100,7 @@ object Provenance {
   }
 
   def rowIdVal(rowids: List[Expression]): Expression =
-    Function("MIMIR_MAKE_ROWID", rowids)    
+    Function(mergeRowIdFunction, rowids)    
 
   def rowIdVar(rowids: List[String]): Expression = 
     rowIdVal(rowids.map(Var(_)))

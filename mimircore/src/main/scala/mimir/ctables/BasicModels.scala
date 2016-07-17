@@ -4,103 +4,64 @@ import mimir.algebra._
 
 import scala.util._
 
-abstract class SingleVarModel(vt: Type.T) extends Model {
-  def varType = vt
-  def varTypes = List(vt)
+abstract class SingleVarModel(var varType: Type.T) extends Model {
+  def varTypes = List(varType)
 
-  def mostLikelyValue(args: List[PrimitiveValue]): PrimitiveValue
-  def lowerBound(args: List[PrimitiveValue]): PrimitiveValue
-  def upperBound(args: List[PrimitiveValue]): PrimitiveValue
-  def sampleGenerator(args: List[PrimitiveValue]): PrimitiveValue
-  def mostLikelyExpr(args: List[Expression]): Expression
-  def lowerBoundExpr(args: List[Expression]): Expression
-  def upperBoundExpr(args: List[Expression]): Expression
-  def sampleGenExpr(args: List[Expression]): Expression
-  def sample(seed: Long, args: List[PrimitiveValue]): PrimitiveValue
+  def bestGuess(args: List[PrimitiveValue]): PrimitiveValue
+  def sample(randomness: Random, args: List[PrimitiveValue]): PrimitiveValue
   def reason(args: List[Expression]): String
-  def backingStore(): String
-  def createBackingStore(): Unit
 
-  def mostLikelyValue(x:Int, args: List[PrimitiveValue]) = mostLikelyValue(args)
-  def lowerBound(x: Int, args: List[PrimitiveValue]) = lowerBound(args)
-  def upperBound(x: Int, args: List[PrimitiveValue]) = upperBound(args)
-  def sampleGenerator(x: Int, args: List[PrimitiveValue]) = sampleGenerator(args)
-  def mostLikelyExpr(idx: Int, args: List[Expression]) = mostLikelyExpr(args)
-  def lowerBoundExpr(x: Int, args: List[Expression]) = lowerBoundExpr(args)
-  def upperBoundExpr(x: Int, args: List[Expression]) = upperBoundExpr(args)
-  def sampleGenExpr(x: Int, args: List[Expression]) = sampleGenExpr(args)
-  def sample(seed: Long, x: Int, args: List[PrimitiveValue]) = sample(seed, args)
-  def reason(x: Int, args: List[Expression]): String = reason(args)
-  def backingStore(x: Int): String = backingStore()
-  def createBackingStore(x: Int) = createBackingStore()
-
-
+  def bestGuess(x:Int, args: List[PrimitiveValue]): PrimitiveValue =
+    bestGuess(args)
+  def sample(x:Int, randomness: Random, args: List[PrimitiveValue]): PrimitiveValue =
+    sample(randomness, args)
+  def reason(x:Int, args: List[Expression]): String =
+    reason(args)
 }
 
-case class JointSingleVarModel(vars: List[SingleVarModel]) extends Model {
+case class IndependentVarsModel(vars: List[SingleVarModel]) extends Model {
   def varTypes = vars.map( _.varType )
 
-  def mostLikelyValue  (idx: Int, args: List[PrimitiveValue]) = 
-    vars(idx).mostLikelyValue(args);
-  def lowerBound     (idx: Int, args: List[PrimitiveValue]) = 
-    vars(idx).lowerBound(args);
-  def upperBound     (idx: Int, args: List[PrimitiveValue]) = 
-    vars(idx).upperBound(args);
-  def sampleGenerator (idx: Int, args: List[PrimitiveValue]) =
-    vars(idx).sampleGenerator(args)
-  def mostLikelyExpr (idx: Int, args: List[Expression]) =
-    vars(idx).mostLikelyExpr(args)
-  def lowerBoundExpr (idx: Int, args: List[Expression]) = 
-    vars(idx).lowerBoundExpr(args)
-  def upperBoundExpr (idx: Int, args: List[Expression]) = 
-    vars(idx).upperBoundExpr(args)
-  def sampleGenExpr (idx: Int, args: List[Expression]) =
-    vars(idx).sampleGenExpr(args)
-  def sample(seed: Long, idx: Int, args: List[PrimitiveValue]) = 
-    vars(idx).sample(seed, args)
-
-  override def reason(idx: Int, args: List[Expression]): String =
+  def bestGuess(idx: Int, args: List[PrimitiveValue]) = 
+    vars(idx).bestGuess(args);
+  def sample(idx: Int, randomness: Random, args: List[PrimitiveValue]) =
+    vars(idx).sample(randomness, args)
+  def reason(idx: Int, args: List[Expression]): String =
     vars(idx).reason(idx, args)
-
-  override def backingStore(idx: Int): String = vars(idx).backingStore()
-
-  override def createBackingStore(idx: Int): Unit = vars(idx).createBackingStore()
-  override def createBackingStore(): Unit = vars.foreach(x => x.createBackingStore())
 }
 
 object UniformDistribution extends SingleVarModel(Type.TFloat){
-  def mostLikelyValue(args: List[PrimitiveValue]) = 
+  def bestGuess(args: List[PrimitiveValue]) = 
     FloatPrimitive((args(0).asDouble + args(1).asDouble) / 2.0)
-  def lowerBound(args: List[PrimitiveValue]) = args(0)
-  def upperBound(args: List[PrimitiveValue]) = args(1)
-  def sampleGenerator(args: List[PrimitiveValue]) = sample(args.last.asLong, args)
-  def mostLikelyExpr(args: List[Expression]) = args(0)
-  def lowerBoundExpr(args: List[Expression]) = args(0)
-  def upperBoundExpr(args: List[Expression]) = args(1)
-  def sampleGenExpr(args: List[Expression]) = args(0)
-  def sample(seed: Long, args: List[PrimitiveValue]) = {
-    val low  = args(0).asDouble
+  def sample(randomness: Random, args: List[PrimitiveValue]) = {
+    val low = args(0).asDouble
     val high = args(1).asDouble
-    FloatPrimitive(new Random(seed).nextDouble() * (high - low) + low)
+    FloatPrimitive(
+      (randomness.nextDouble() * (high - low)) + high
+    )
   }
+  def bestGuessExpr(args: List[Expression]) = 
+    Arithmetic(Arith.Div,
+      Arithmetic(Arith.Add, args(0), args(1)),
+      FloatPrimitive(2.0)
+    )
+  def sampleExpr(randomness: Expression, args: List[Expression]) = 
+    Arithmetic(Arith.Add,
+      Arithmetic(Arith.Mult,
+        randomness,
+        Arithmetic(Arith.Sub, args(1), args(0))
+      ),
+      args(0)
+    )
 
-  override def reason(args: List[Expression]): String = "Unknown"   // TODO
-  override def backingStore(): String = ???
-  override def createBackingStore(): Unit = ???
+
+  def reason(args: List[Expression]): String = 
+    "I put in a random value between "+args(0)+" and "+args(1)
 }
 
 case class NoOpModel(vt: Type.T) extends SingleVarModel(vt) {
-  def mostLikelyValue(args: List[PrimitiveValue]) = args(0)
-  def lowerBound(args: List[PrimitiveValue]) = args(0)
-  def upperBound(args: List[PrimitiveValue]) = args(0)
-  def sampleGenerator(args: List[PrimitiveValue]) = sample(args.last.asLong, args)
-  def mostLikelyExpr(args: List[Expression]) = args(0)
-  def lowerBoundExpr(args: List[Expression]) = args(0)
-  def upperBoundExpr(args: List[Expression]) = args(0)
-  def sampleGenExpr(args: List[Expression]) = args(0)
-  def sample(seed: Long, args: List[PrimitiveValue]) = args(0)
-
-  override def reason(args: List[Expression]): String = "None"
-  override def backingStore(): String = ???
-  override def createBackingStore(): Unit = {}
+  def bestGuess(args: List[PrimitiveValue]) = args(0)
+  def sample(randomness: Random, args: List[PrimitiveValue]) = args(0)
+  def reason(args: List[Expression]): String = 
+    "I was asked to tag this value for some reason"
 }
