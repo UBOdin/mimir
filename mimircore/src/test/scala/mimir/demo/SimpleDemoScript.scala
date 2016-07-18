@@ -65,6 +65,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 
 	val tempDBName = "tempDBDemoScript"
 	val productDataFile = new File("../test/data/Product.sql");
+	val inventoryDataFile = new File("../test/data/Product_Inventory.sql")
 	val reviewDataFiles = List(
 			new File("../test/data/ratings1.csv"),
 			new File("../test/data/ratings2.csv"),
@@ -91,6 +92,9 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		"Run the Load Product Data Script" >> {
 			stmts(productDataFile).map( update(_) )
 			db.backend.resultRows("SELECT * FROM PRODUCT;") must have size(6)
+
+			stmts(inventoryDataFile).map( update(_) )
+			db.backend.resultRows("SELECT * FROM PRODUCT_INVENTORY;") must have size(6)
 		}
 
 		"Load CSV Files" >> {
@@ -142,12 +146,12 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		}
 
 		"Compute Aggregate Queries" >> {
-			query("""
-				SELECT EVALUATION, SUM(NUM_RATINGS)
-				FROM RATINGS2TYPED
-				WHERE EVALUATION > 3.0
-				GROUP BY EVALUATION;
-															""").allRows must have size(2)
+			val q1 = query("""
+				SELECT COMPANY, SUM(QUANTITY)
+				FROM PRODUCT_INVENTORY
+				GROUP BY COMPANY;
+															""").allRows.flatten
+			q1 must have size(6)
 		}
 
 		"Create and Query Domain Constraint Repair Lenses" >> {
