@@ -118,7 +118,7 @@ object Typechecker {
 				val aggSchema: List[(String, Type.T)] = args.map(x => if(x.function == "AVG"){ (x.alias, TFloat) }
 					else if(x.function == "COUNT") { (x.alias, TInt)}
 					else{ val typ = Typechecker.escalate(x.columns.map(x => chk.typeOf(x)))
-								if(typ != TFloat && typ != TInt){
+								if(typ != TFloat && typ != TInt && typ !=TAny){
 									throw new SQLException("Aggregate function parameters must be numeric.")
 								}
 								else{

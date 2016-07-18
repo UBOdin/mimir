@@ -103,15 +103,6 @@ object SimpleDemoScript extends Specification with FileMatchers {
 
 		}
 
-		"Compute Aggregate Queries" >> {
-			query("""
-				SELECT EVALUATION, SUM(NUM_RATINGS) 
-				FROM RATINGS2 
-				WHERE EVALUATION > 3.0 
-				GROUP BY EVALUATION;
-			""").allRows must have size(2)
-		}
-
     "Create and Query Type Inference Lens with NULL values" >> {
       lens("""
 				CREATE LENS null_test
@@ -128,7 +119,6 @@ object SimpleDemoScript extends Specification with FileMatchers {
       results0(2) must contain(str("P34235"), NullPrimitive(), f(4.0))
       query("SELECT * FROM null_test1;").allRows must have size(3)
     }
-
 
 		"Create and Query Type Inference Lenses" >> {
 			lens("""
@@ -149,6 +139,15 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			Typechecker.schemaOf(
 				InlineVGTerms.optimize(select("SELECT * FROM RATINGS2TYPED;"))
 			).map(_._2) must be equalTo List(Type.TString, Type.TFloat, Type.TFloat)
+		}
+
+		"Compute Aggregate Queries" >> {
+			query("""
+				SELECT EVALUATION, SUM(NUM_RATINGS)
+				FROM RATINGS2TYPED
+				WHERE EVALUATION > 3.0
+				GROUP BY EVALUATION;
+															""").allRows must have size(2)
 		}
 
 		"Create and Query Domain Constraint Repair Lenses" >> {
