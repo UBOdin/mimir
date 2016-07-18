@@ -341,6 +341,11 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			
 		}
 
+		"Query MIMIR_LENSES" >> {
+			val q1 = query("""SELECT * FROM MIMIR_LENSES;""").allRows.flatten
+			q1 must have size(40)
+		}
+
 		"Missing Value Best Guess Debugging" >> {
 			// Regression check for issue #81
 			val q3 = select("""
