@@ -192,12 +192,12 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			val q7 = query("""
 				SELECT COUNT(COMPANY)
 				FROM PRODUCT_INVENTORY
-				WHERE COMPANY = 'APPLE';
+				WHERE COMPANY = 'Apple';
 										 										 										 															""").allRows.flatten
 			q7 must have size(1)
 			q7 must contain( i(2) )
 
-			/*val q8 = query("""
+			val q8 = query("""
 				SELECT P.COMPANY, P.QUANTITY, P.PRICE
 				FROM (SELECT COMPANY, MAX(PRICE) AS COST
 					FROM PRODUCT_INVENTORY
@@ -205,7 +205,23 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				WHERE subq.COMPANY = P.COMPANY AND subq.COST = P.PRICE;
 										 										 										 										 															""").allRows.flatten
 			q8 must have size(9)
-			q8 must contain( str("Apple"), i(5), f(13.00), str("HP"), i(37), f(102.74), str("Sony"), i(14), f(38.74) )*/
+			q8 must contain( str("Apple"), i(5), f(13.00), str("HP"), i(37), f(102.74), str("Sony"), i(14), f(38.74) )
+
+			val q9 = query("""
+				SELECT P.COMPANY, P.PRICE
+				FROM (SELECT AVG(PRICE) AS A FROM PRODUCT_INVENTORY)subq, PRODUCT_INVENTORY P
+				WHERE PRICE > subq.A;
+										 										 										 										 										 															""").allRows.flatten
+			q9 must have size(4)
+			q9 must contain( str("HP"), f(65.00), str("HP"), f(102.74) )
+
+			val q10 = query("""
+				SELECT MIN(subq2.B)
+				FROM (SELECT P.PRICE AS B FROM (SELECT AVG(QUANTITY) AS A FROM PRODUCT_INVENTORY)subq, PRODUCT_INVENTORY P
+				WHERE P.QUANTITY > subq.A)subq2;
+																										""").allRows.flatten
+			q10 must have size(1)
+			q10 must contain( f(65.00) )
 		}
 
 		"Create and Query Domain Constraint Repair Lenses" >> {
