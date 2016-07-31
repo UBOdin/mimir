@@ -54,30 +54,30 @@ object CTAnalyzer {
     expr match { 
       
       case Conditional(condition, thenClause, elseClause) =>
-        Arith.makeAnd(
+        ExpressionUtils.makeAnd(
           recur(condition), 
           Conditional(condition, recur(thenClause), recur(elseClause))
         )
 
       case Arithmetic(Arith.And, l, r) =>
-        Arith.makeOr(
-          Arith.makeAnd(
+        ExpressionUtils.makeOr(
+          ExpressionUtils.makeAnd(
             recur(l),
-            Arith.makeNot(l)
+            ExpressionUtils.makeNot(l)
           ),
-          Arith.makeAnd(
+          ExpressionUtils.makeAnd(
             recur(r),
-            Arith.makeNot(r)
+            ExpressionUtils.makeNot(r)
           )
         )
       
       case Arithmetic(Arith.Or, l, r) =>
-        Arith.makeOr(
-          Arith.makeAnd(
+        ExpressionUtils.makeOr(
+          ExpressionUtils.makeAnd(
             recur(l),
             l
           ),
-          Arith.makeAnd(
+          ExpressionUtils.makeAnd(
             recur(r),
             r
           )
@@ -94,7 +94,7 @@ object CTAnalyzer {
                   fold(
                     BoolPrimitive(true)
                   )( 
-                    Arith.makeAnd(_,_) 
+                    ExpressionUtils.makeAnd(_,_) 
                   )
     }
   }

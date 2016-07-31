@@ -12,7 +12,6 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.optimizer._
 import mimir.provenance._
-import mimir.lenses.TypeCastModel
 import net.sf.jsqlparser.statement.select._
 
 class Compiler(db: Database) {
@@ -69,6 +68,12 @@ class Compiler(db: Database) {
     // looking at (like the Type Inference or Schema Matching lenses)
     val mostlyDeterministicOper =
       InlineVGTerms.optimize(optimizedOper)
+
+    // Deal with the remaining VG-Terms.  The best way to do this would
+    // be a database-specific "BestGuess" UDF.  Unfortunately, this doesn't
+    // exist at the moment, so we fall back to the Guess Cache
+    val fullyDeterministicOper =
+      db.bestGuessCache.rewriteToUseCache(mostlyDeterministicOper)
 
     // Since this operator gets used a few times below, we rename it in
     // case we need to add more stages.  Scalac should be smart enough

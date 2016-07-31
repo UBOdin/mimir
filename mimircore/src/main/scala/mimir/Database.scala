@@ -8,7 +8,7 @@ import java.sql.ResultSet
 import mimir.algebra._
 import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, Model, RowExplanation, VGTerm}
 import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
-import mimir.lenses.{Lens, LensManager}
+import mimir.lenses.{Lens, LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
 import mimir.sql._
 import mimir.util.LoadCSV
@@ -61,6 +61,7 @@ case class Database(name: String, backend: Backend)
   val lenses = new LensManager(this)
   val compiler = new Compiler(this)
   val explainer = new CTExplainer(this)
+  val bestGuessCache = new BestGuessCache(this)
   val operator = new OperatorParser(this.getLensModel,
     (x) => 
       this.getTableSchema(x) match {

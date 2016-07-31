@@ -94,7 +94,7 @@ class LensManager(db: Database) {
         source
       );
     lens.build(db);
-    lens.createBackingStore
+    db.bestGuessCache.buildCache(lens);
     lensCache.put(lensName, lens);
     save(lens);
   }

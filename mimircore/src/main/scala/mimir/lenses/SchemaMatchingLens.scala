@@ -1,6 +1,7 @@
 package mimir.lenses
 
 import java.sql.SQLException
+import scala.util._
 
 import mimir.Database
 import mimir.algebra.Type.T
@@ -79,25 +80,13 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
    * Initialize the lens' model by building it from scratch.  Typically this involves
    * using `db` to evaluate `source`
    */
-  override def build(db: Database): Unit = {
+  def build(db: Database): Unit = {
     init()
     this.db = db
     model = new SchemaMatchingModel(this)
     model.asInstanceOf[SchemaMatchingModel].learn(targetSchema, sourceSchema)
   }
-
-  override def createBackingStore: Unit = {}
 }
-
-case class SchemaAnalysis(model: SchemaMatchingModel, idx: Int, args: List[Expression])
-  extends Proc(args) {
-  override def get(v: List[PrimitiveValue]): PrimitiveValue = model.mostLikelyValue(idx, v)
-
-  override def rebuild(c: List[Expression]): Expression = SchemaAnalysis(model, idx, c)
-
-  override def getType(bindings: List[T]): T = Type.TBool
-}
-
 class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
 
   var schema: Map[String, Type.T] = null
@@ -128,13 +117,12 @@ class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
     schema = targetSchema
   }
 
-  override def varTypes: List[T] = List.fill(schema.size)(Type.TBool)
+  def varTypes: List[T] = List.fill(schema.size)(Type.TBool)
 
-  override def sample(seed: Long, idx: Int, args: List[PrimitiveValue]): PrimitiveValue = mostLikelyValue(idx, args)
+  def sample(idx: Int, randomness: Random, args: List[PrimitiveValue]): PrimitiveValue = 
+    bestGuess(idx, args)
 
-  override def sampleGenerator(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = sample(0, idx, args)
-
-  override def mostLikelyValue(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
+  def bestGuess(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
     val targetCol = args(0).asString
     val sourceCol = args(1).asString
     if (colMapping(targetCol).maxBy(_._2)._1.equals(sourceCol))
@@ -142,27 +130,9 @@ class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
     else BoolPrimitive(false)
   }
 
-  override def upperBoundExpr(idx: Int, args: List[Expression]): Expression = SchemaAnalysis(this, idx, args)
-
-  override def upperBound(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = mostLikelyValue(idx, args)
-
-  override def sampleGenExpr(idx: Int, args: List[Expression]): Expression = SchemaAnalysis(this, idx, args)
-
-  override def mostLikelyExpr(idx: Int, args: List[Expression]): Expression = SchemaAnalysis(this, idx, args)
-
-  override def lowerBoundExpr(idx: Int, args: List[Expression]): Expression = SchemaAnalysis(this, idx, args)
-
-  override def lowerBound(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = mostLikelyValue(idx, args)
-
-  override def reason(idx: Int, args: List[Expression]): String = {
+  def reason(idx: Int, args: List[Expression]): String = {
     val target = schema.keys.toList(idx)
     val source = colMapping(target).maxBy(_._2)
     ("I assumed that " + source._1 + " maps to " + target + " ("+ (source._2 * 100).toInt +"% likely)")
   }
-
-  override def backingStore(idx: Int): String = "__"+lens.name+"_BACKEND"
-
-  override def createBackingStore(idx: Int): Unit = {}
-
-  override def createBackingStore(): Unit = {}
 }

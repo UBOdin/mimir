@@ -16,7 +16,7 @@ object CTPartition {
 			case List() => List(BoolPrimitive(true))
 			case head :: rest => 
 				head.flatMap ( (possibility) => 
-					enumerateAllPartitions(rest).map( Arith.makeAnd(possibility, _) )
+					enumerateAllPartitions(rest).map( ExpressionUtils.makeAnd(possibility, _) )
 				)
 		}
 	}
@@ -60,7 +60,7 @@ object CTPartition {
 	{
 		val partitionCondition = 
 			PropagateConditions.apply(
-				Arith.makeAnd(partition, phi)
+				ExpressionUtils.makeAnd(partition, phi)
 			)
 		partitionCondition match {
 			case BoolPrimitive(false) => None

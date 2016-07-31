@@ -112,7 +112,7 @@ object OperatorUtils {
 
 
   def applyFilter(condition: List[Expression], oper: Operator): Operator =
-    applyFilter(condition.fold(BoolPrimitive(true))(Arith.makeAnd(_,_)), oper)
+    applyFilter(condition.fold(BoolPrimitive(true))(ExpressionUtils.makeAnd(_,_)), oper)
 
   def applyFilter(condition: Expression, oper: Operator): Operator =
     condition match {

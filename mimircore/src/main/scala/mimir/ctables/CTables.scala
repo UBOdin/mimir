@@ -1,7 +1,6 @@
 package mimir.ctables
 
 import mimir.algebra._
-import mimir.lenses.{TypeInferenceAnalysis, MissingValueAnalysis}
 import mimir.util.JSONBuilder
 import scala.util._
 
@@ -96,11 +95,6 @@ object CTables
   def isProbabilistic(expr: Expression): Boolean = 
   expr match {
     case VGTerm(_, _, _) => true
-    case MissingValueAnalysis(_, _, _) => true
-    case TypeInferenceAnalysis(_, _, _) => true
-    case Function("JOIN_ROWIDS", _) => expr.children.exists( isProbabilistic(_) )
-    case Function("CAST", _) => expr.children.exists( isProbabilistic(_) )
-    case Function("DATE", _) => false
     case _ => expr.children.exists( isProbabilistic(_) )
   }
 
@@ -133,8 +127,8 @@ object CTables
           extractProbabilisticClauses(lhs)
         val (rhsExtracted, rhsRemaining) = 
           extractProbabilisticClauses(rhs)
-        ( Arith.makeAnd(lhsExtracted, rhsExtracted),
-          Arith.makeAnd(lhsRemaining, rhsRemaining)
+        ( ExpressionUtils.makeAnd(lhsExtracted, rhsExtracted),
+          ExpressionUtils.makeAnd(lhsRemaining, rhsRemaining)
         )
       case _ => 
         if(isProbabilistic(e)){
@@ -155,5 +149,7 @@ object CTables
       case _ => e.children.flatMap( getVGTerms(_) )
     }
   }
-
+  def getVGTerms(oper: Operator): List[VGTerm] = 
+    oper.expressions.flatMap(getVGTerms(_)) ++ 
+      oper.children.flatMap(getVGTerms(_))
 }
