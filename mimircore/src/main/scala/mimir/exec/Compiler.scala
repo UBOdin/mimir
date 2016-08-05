@@ -1,9 +1,8 @@
 package mimir.exec
 
-;
 
 import java.sql._
-import java.util
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir.sql.IsNullChecker
 import mimir.Database
@@ -14,7 +13,7 @@ import mimir.optimizer._
 import mimir.provenance._
 import net.sf.jsqlparser.statement.select._
 
-class Compiler(db: Database) {
+class Compiler(db: Database) extends LazyLogging {
 
   def standardOptimizations: List[Operator => Operator] = List(
     InlineProjections.optimize _,
@@ -59,9 +58,12 @@ class Compiler(db: Database) {
         colDeterminism.toList.flatMap( x => ExpressionUtils.getColumns(x._2)) ++ 
         ExpressionUtils.getColumns(rowDeterminism)
 
-    // Clean things up a little... make the query prettier.
+    // Clean things up a little... make the query prettier, tighter, and 
+    // faster
     val optimizedOper = 
       optimize(taggedOper, opts)
+
+    logger.debug(s"OPTIMIZED: $optimizedOper")
 
     // Remove any VG Terms for which static best-guesses are possible
     // In other words, best guesses that don't depend on which row we're
@@ -75,11 +77,14 @@ class Compiler(db: Database) {
     val fullyDeterministicOper =
       db.bestGuessCache.rewriteToUseCache(mostlyDeterministicOper)
 
-    // Since this operator gets used a few times below, we rename it in
-    // case we need to add more stages.  Scalac should be smart enough
-    // to optimize the double-ref away.
+    // Since this operator gets used a few times below, we rename it.  That 
+    // way if we add more stages, we only need to change the assignment in 
+    // one place.  Scalac should be smart enough to optimize the double-
+    // reference away.
     val finalOper =
-      mostlyDeterministicOper
+      fullyDeterministicOper
+
+    logger.debug(s"FINAL: $finalOper")
 
     // We'll need it a few times, so cache the final operator's schema.
     // This also forces the typechecker to run, so we get a final sanity
@@ -95,7 +100,7 @@ class Compiler(db: Database) {
 
     // Generate the SQL
     val sql = 
-      db.convert(finalOper)
+      db.ra.convert(finalOper)
 
     // Deploy to the backend
     val results = 

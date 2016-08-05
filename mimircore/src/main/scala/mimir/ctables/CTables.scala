@@ -5,7 +5,12 @@ import mimir.util.JSONBuilder
 import scala.util._
 
 abstract class Model {
-  def varTypes: List[Type.T]
+  /**
+   * Infer the type of the model from the types of the inputs
+   * @param argTypes    The types of the arguments the the VGTerm
+   * @return            The type of the value returned by this model
+   */
+  def varType        (idx: Int, argTypes:List[Type.T]): Type.T
 
   /**
    * Generate a best guess for a variable represented by this model.
@@ -55,7 +60,7 @@ case class VGTerm(
   args: List[Expression]
 ) extends Proc(args) {
   override def toString() = "{{ "+model._1+"_"+idx+"["+args.mkString(", ")+"] }}"
-  override def getType(bindings: List[Type.T]):Type.T = model._2.varTypes(idx)
+  override def getType(bindings: List[Type.T]):Type.T = model._2.varType(idx, bindings)
   override def children: List[Expression] = args
   override def rebuild(x: List[Expression]) = VGTerm(model, idx, x)
   def get(v: List[PrimitiveValue]): PrimitiveValue = 

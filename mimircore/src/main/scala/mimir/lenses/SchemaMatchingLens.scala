@@ -117,7 +117,7 @@ class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
     schema = targetSchema
   }
 
-  def varTypes: List[T] = List.fill(schema.size)(Type.TBool)
+  def varType(idx: Int, argTypes: List[Type.T]) = Type.TBool
 
   def sample(idx: Int, randomness: Random, args: List[PrimitiveValue]): PrimitiveValue = 
     bestGuess(idx, args)

@@ -21,7 +21,7 @@ object RaToSqlSpec extends Specification  {
   def parser = new OperatorParser((x: String) => null, schema.get(_).get)
   def expr = parser.expr _
   def oper = parser.operator _
-  def convert(x: String) = db.convert(oper(x)).toString
+  def convert(x: String) = db.ra.convert(oper(x)).toString
 
   "The RA to SQL converter" should {
 

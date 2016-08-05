@@ -99,6 +99,7 @@ object Eval
             case "ABSOLUTE" => eval(params(0), bindings) match {
               case IntPrimitive(i) => if(i < 0){ IntPrimitive(-i) } else { IntPrimitive(i) }
               case FloatPrimitive(f) => if(f < 0){ FloatPrimitive(-f) } else { FloatPrimitive(f) }
+              case NullPrimitive() => NullPrimitive()
               case x => throw new SQLException("Non-numeric parameter to absolute: '"+x+"'")
             }
             case "MIMIR_MAKE_ROWID" => Provenance.joinRowIds(params.map(x => eval(x, bindings)))

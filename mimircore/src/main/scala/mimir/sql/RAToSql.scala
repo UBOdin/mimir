@@ -208,7 +208,7 @@ class RAToSql(db: Database) {
   {
     val rhsJoin = new net.sf.jsqlparser.statement.select.Join();
     rhsJoin.setRightItem(rhs)
-    rhsJoin.setSimple(true)
+    // rhsJoin.setSimple(true)
     val ret = new SubJoin()
     ret.setLeft(lhs)
     ret.setJoin(rhsJoin)

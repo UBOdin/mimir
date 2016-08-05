@@ -1,12 +1,15 @@
 package mimir.lenses;
 
 import java.sql.SQLException
+import com.typesafe.scalalogging.slf4j.LazyLogging
+
 import mimir._
 import mimir.algebra._;
 import mimir.ctables._;
 import mimir.provenance._;
+import mimir.optimizer._;
 
-class BestGuessCache(db: Database) {
+class BestGuessCache(db: Database) extends LazyLogging {
 
   val dataColumn = "MIMIR_DATA"
   def keyColumn(idx: Int) = "MIMIR_KEY_"+idx
@@ -19,6 +22,19 @@ class BestGuessCache(db: Database) {
     lensName + "_CACHE_" + varIdx
   def cacheTableForTerm(term: VGTerm): String =
     cacheTableForLens(term.model._1, term.idx)
+  def cacheTableDefinition(model: String, varIdx: Int, termId: Int): Table = {
+    val tableName = cacheTableForLens(model, varIdx)
+    val sch = db.getTableSchema(tableName).get;
+    
+    val keyCols = (0 to (sch.length - 2)).map( joinKeyColumn(_, termId) ).toList
+    val dataCols = List(joinDataColumn(termId))
+
+    Table(
+      tableName,
+      (keyCols++dataCols).zip(sch.map(_._2)),
+      List()
+    )
+  }
 
   private def swapVGTerms(expr: Expression, termMap: List[(VGTerm, Int)]): Expression =
     expr match {
@@ -31,9 +47,11 @@ class BestGuessCache(db: Database) {
       case _ => expr.recur(swapVGTerms(_, termMap))
   }
 
+
   private def buildOuterJoins(expressions: List[Expression], src: Operator): 
     (List[Expression], Operator) =
   {
+    assert(CTables.isDeterministic(src))
     val vgTerms = expressions.
       flatMap( CTables.getVGTerms(_) ).
       toSet.toList.
@@ -42,29 +60,40 @@ class BestGuessCache(db: Database) {
     val newSrc = 
       vgTerms.foldLeft(src)({
         case (oldSrc, (v @ VGTerm((model,_),idx,args), termId)) =>
-          val argColumns = 
-            args.
-              zipWithIndex.
-              map( arg => (joinKeyColumn(arg._2, termId), typechecker.typeOf(arg._1)) )
-          val dataColumns = 
-            List( (joinDataColumn(termId), typechecker.typeOf(v)) )
-          LeftOuterJoin(oldSrc, 
-            Table(cacheTableForLens(model, idx), argColumns++dataColumns, List()),
+          LeftOuterJoin(oldSrc,
+            cacheTableDefinition(model, idx, termId),
             ExpressionUtils.makeAnd(
               args.zipWithIndex.map(
-                arg =>
-                  Comparison(Cmp.Eq, Var(joinKeyColumn(arg._2, termId)), arg._1)
+                arg => {
+                  val keyBase = Var(joinKeyColumn(arg._2, termId))
+                  val key = 
+                    typechecker.typeOf(arg._1) match {
+                      case Type.TRowId => 
+                        // We materialize rowids as Strings in the backing store.  As
+                        // a result, we need to convince the typechecker that we're
+                        // being sane here.
+                        Function("CAST", List[Expression](keyBase, TypePrimitive(Type.TRowId)))
+                      case _  =>
+                        keyBase
+                    }
+                  Comparison(Cmp.Eq, key, swapVGTerms(arg._1, vgTerms))
+                }
               )
             )
           )
       })
-    (
-      expressions.map(swapVGTerms(_, vgTerms)),
-      newSrc
-    )
+    val newExprs = 
+      expressions.map( swapVGTerms(_, vgTerms) )
+
+    logger.debug(s"REBUILT: Project[$newExprs](\n$newSrc\n)")
+    assert(CTables.isDeterministic(newSrc))
+    newExprs.foreach( e => assert(CTables.isDeterministic(e)) )
+
+    ( newExprs, newSrc )
   }
 
-  def rewriteToUseCache(oper: Operator): Operator = 
+  def rewriteToUseCache(oper: Operator): Operator = {
+    logger.trace(s"Rewriting: $oper")
     oper match {
       case x if x.expressions.flatMap(CTables.getVGTerms(_)).isEmpty =>
         x.recur(rewriteToUseCache(_))
@@ -73,7 +102,7 @@ class BestGuessCache(db: Database) {
         val (newCols, newSrc) = 
           buildOuterJoins(
             cols.map(_.expression), 
-            src.recur(rewriteToUseCache)
+            rewriteToUseCache(src)
           )
         Project(
           cols.map(_.name).
@@ -87,17 +116,20 @@ class BestGuessCache(db: Database) {
         val (newCond, newSrc) = 
           buildOuterJoins(
             List(cond), 
-            src.recur(rewriteToUseCache)
+            rewriteToUseCache(src)
           )
         Project(
           src.schema.map(_._1).map( x => ProjectArg(x, Var(x))),
           Select(newCond.head, newSrc)
         )
       }
+
     }
+  }
 
   def buildCache(lens: Lens) =
     recurCacheBuildThroughLensView(lens.view, lens.name)
+
   private def recurCacheBuildThroughLensView(view: Operator, lensName: String): Unit =
   {
     // Start with all the expressions in the current RA node
@@ -126,29 +158,35 @@ class BestGuessCache(db: Database) {
     buildCache(term.model._1, term.model._2, term.idx, term.args, input)
   def buildCache(lensName: String, model: Model, varIdx: Int, args: List[Expression], input: Operator): Unit = {
     val cacheTable = cacheTableForLens(lensName, varIdx)
-    val typechecker = new ExpressionChecker(Typechecker.schemaOf(input).toMap)
+    // We inline VG terms as a temporary hack to deal with the fact that 
+    // the TypeInference lens completely messes with the typechecker.
+    val typechecker = new ExpressionChecker(Typechecker.schemaOf(InlineVGTerms.optimize(input)).toMap)
 
     if(db.getTableSchema(cacheTable) != None) {
       dropCacheTable(cacheTable)
     }
 
-    createCacheTable(cacheTable, model.varTypes(varIdx), args.map( typechecker.typeOf(_) ))
+    val argTypes = args.map( typechecker.typeOf(_) )
+    createCacheTable(cacheTable, model.varType(varIdx, argTypes), argTypes)
 
     db.query(input).foreachRow(row => {
       val compiledArgs = args.map(Provenance.plugInToken(_, row.provenanceToken()))
       val tuple = row.currentTuple()
       val dataArgs = compiledArgs.map(Eval.eval(_, tuple))
       val guess = model.bestGuess(varIdx, dataArgs)
-      db.backend.update(
-          "INSERT INTO "+cacheTable+"("+dataColumn+","+
+      val updateQuery = 
+          "INSERT INTO "+cacheTable+"("+dataColumn+
             dataArgs.zipWithIndex.
               map( arg => (","+keyColumn(arg._2)) ).
               mkString("")+
           ") VALUES (?"+
             dataArgs.map(_ => ",?").mkString("")+
-          ")",
-          guess.asString :: dataArgs.map(_.asString)
-        )
+          ")"
+      // println("BUILD: "+updateQuery)
+      db.backend.update(
+        updateQuery, 
+        guess.asString :: dataArgs.map(_.asString)
+      )
     })
   }
 
@@ -163,10 +201,13 @@ class BestGuessCache(db: Database) {
       cacheTypes.zipWithIndex.map( 
         typeIndex => (keyColumn(typeIndex._2), typeIndex._1)
       )
+
+    logger.debug(s"CREATING $cacheTable[$cacheTypes] -> $dataType")
+
     val dataCols = List( (dataColumn, dataType) )
     val tableDirectives = 
       (keyCols ++ dataCols).map( 
-        col => col._1+" "+Type.toString(col._2) 
+        col => { col._1+" "+Type.toString(col._2) }
       ) ++ List(
         "PRIMARY KEY ("+keyCols.map(_._1).mkString(", ")+")"
       )

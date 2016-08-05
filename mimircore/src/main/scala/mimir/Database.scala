@@ -188,27 +188,6 @@ case class Database(name: String, backend: Backend)
     explainer.explainCell(query, token, column)
 
   /**
-   * Translate the specified JSqlParser SELECT statement to Mimir's RA AST.
-   */
-  def convert(sel: net.sf.jsqlparser.statement.select.Select): Operator =
-    sql.convert(sel)
-  /**
-   * Translate the specified JSqlParser SELECT body to Mimir's RA AST.
-   */
-  def convert(sel: net.sf.jsqlparser.statement.select.SelectBody): (Operator,Map[String, String]) =
-    sql.convert(sel, null)
-  /**
-   * Translate the specified JSqlParser expression to Mimir's Expression AST.
-   */
-  def convert(expr: net.sf.jsqlparser.expression.Expression): Expression =
-    sql.convert(expr)
-  /**
-   * Translate the specified Mimir RA AST back to a JSqlParser statement.
-   */
-  def convert(oper: Operator): net.sf.jsqlparser.statement.select.SelectBody =
-    ra.convert(oper)
-
-  /**
    * Validate that the specified operator is valid
    */
   def check(oper: Operator): Unit =
@@ -322,15 +301,5 @@ case class Database(name: String, backend: Backend)
   }
   def loadTable(sourceFile: File){
     loadTable(sourceFile.getName().split("\\.")(0), sourceFile)
-  }
-
-  def getBackendSQL(o: Operator): List[net.sf.jsqlparser.statement.select.SelectBody] =
-  {
-    o match {
-      case Project(_, src) => getBackendSQL(src)
-      case Union(lhs,rhs) => getBackendSQL(lhs)++getBackendSQL(rhs);
-      case _ => List(convert(o))
-
-    }
   }
 }

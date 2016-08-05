@@ -145,9 +145,7 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
   }
 
   // Model Implementation
-  override def varTypes: List[T] = {
-    List.fill(lens.schema().length)(Type.TString)
-  }
+  override def varType(idx: Int, argTypes: List[Type.T]): T = Type.TType
 
   def sample(idx: Int, randomness: Random, args: List[PrimitiveValue]): PrimitiveValue = {
     bestGuess(idx, args)

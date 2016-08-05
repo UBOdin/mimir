@@ -8,7 +8,7 @@ case class VGTermSampler(model: Model, idx: Int, args: List[Expression], seed: E
   extends Proc(  (seed :: args)  )
 {
   def getType(argTypes: List[Type.T]): Type.T =
-    model.varTypes(idx)
+    model.varType(idx, argTypes)
   def get(v: List[PrimitiveValue]): PrimitiveValue = {
     v match {
       case seed :: argValues => model.sample(idx, new Random(seed.asLong), argValues)

@@ -13,6 +13,7 @@ import moa.classifiers.Classifier
 import moa.core.InstancesHeader
 import weka.core.{Attribute, DenseInstance, Instance, Instances}
 import weka.experiment.{DatabaseUtils, InstanceQueryAdapter}
+import mimir.optimizer.InlineVGTerms
 
 import scala.collection.JavaConversions._
 import scala.util._
@@ -69,7 +70,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
   def build(db: Database, loading: Boolean): Unit = {
     this.db = db
     models =
-      sourceSchema.map(
+      InlineVGTerms.optimize(source).schema.map(
         _ match { case (n, t) => (keysToBeCleaned.indexOf(n), t) }
       ).zipWithIndex.map( (x) => x._1 match { case (idx, t) =>
         if (idx < 0) {
@@ -142,8 +143,8 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
   }
 }
 
-class MissingValueModel(lens: MissingValueLens, name: String, varType: Type.T)
-  extends SingleVarModel(varType) {
+class MissingValueModel(lens: MissingValueLens, name: String, val varType: Type.T)
+  extends SingleVarModel() {
   var learner: Classifier =
     Analysis.getLearner("moa.classifiers.bayes.NaiveBayes")
   var data: Instances = null
@@ -274,6 +275,8 @@ class MissingValueModel(lens: MissingValueLens, name: String, varType: Type.T)
   }
 
   ////// Model implementation
+  def varType(argTypes: List[Type.T]): Type.T = varType
+
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = {
     val att = learner.getModelContext.attribute(cIndex)
     val classes = classify(args(0).asInstanceOf[RowIdPrimitive])

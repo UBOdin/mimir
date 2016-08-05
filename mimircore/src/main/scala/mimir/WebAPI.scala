@@ -93,7 +93,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
 
   private def handleSelect(sel: Select): WebQueryResult = {
     val start = System.nanoTime()
-    val raw = db.convert(sel)
+    val raw = db.sql.convert(sel)
     val rawT = System.nanoTime()
     val results = db.query(raw)
     val resultsT = System.nanoTime()
@@ -117,7 +117,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
   }
 
   private def handleExplain(explain: Explain): WebStringResult = {
-    val raw = db.convert(explain.getSelectBody())._1;
+    val raw = db.sql.convert(explain.getSelectBody());
     val op = db.optimize(raw)
     val res = "------ Raw Query ------\n"+
       raw.toString()+"\n"+
@@ -144,7 +144,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
       try {
         val stmt: Statement = parser.Statement();
         if(stmt.isInstanceOf[Select]){
-          db.convert(stmt.asInstanceOf[Select])
+          db.sql.convert(stmt.asInstanceOf[Select])
         } else {
           throw new Exception("getVGTerms got statement that is not SELECT")
         }
@@ -177,7 +177,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
       try {
         val stmt: Statement = parser.Statement();
         if(stmt.isInstanceOf[Select]){
-          db.convert(stmt.asInstanceOf[Select])
+          db.sql.convert(stmt.asInstanceOf[Select])
         } else {
           throw new Exception("nameForQuery got statement that is not SELECT")
         }

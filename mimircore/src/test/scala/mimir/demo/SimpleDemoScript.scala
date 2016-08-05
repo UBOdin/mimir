@@ -1,6 +1,7 @@
 package mimir.demo;
 
 import java.io.{StringReader,BufferedReader,FileReader,File}
+
 import scala.collection.JavaConversions._
 import org.specs2.mutable._
 import org.specs2.matcher.FileMatchers
@@ -12,6 +13,7 @@ import mimir.algebra._;
 import mimir.optimizer._;
 import mimir.ctables._;
 import mimir.exec._;
+import mimir.util._;
 import net.sf.jsqlparser.statement.{Statement}
 
 
@@ -33,7 +35,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		new MimirJSqlParser(new StringReader(s)).Statement()
 	}
 	def select(s: String) = {
-		db.convert(
+		db.sql.convert(
 			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
 		)
 	}
@@ -42,13 +44,13 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		db.query(query)
 	}
 	def explainRow(s: String, t: String) = {
-		val query = db.convert(
+		val query = db.sql.convert(
 			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
 		)
 		db.explainRow(query, RowIdPrimitive(t))
 	}
 	def explainCell(s: String, t: String, a:String) = {
-		val query = db.convert(
+		val query = db.sql.convert(
 			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
 		)
 		db.explainCell(query, RowIdPrimitive(t), a)
@@ -103,6 +105,11 @@ object SimpleDemoScript extends Specification with FileMatchers {
 
 		}
 
+		"Use Sane Types in Lenses" >> {
+			var oper = select("SELECT * FROM RATINGS2")
+			Typechecker.typeOf(Var("NUM_RATINGS"), oper) must be oneOf(Type.TInt, Type.TFloat, Type.TAny)
+		}
+
 		"Compute Aggregate Queries" >> {
 			query("""
 				SELECT EVALUATION, SUM(NUM_RATINGS) 
@@ -152,16 +159,25 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		}
 
 		"Create and Query Domain Constraint Repair Lenses" >> {
+			// LoggerUtils.debug("mimir.lenses.BestGuessCache", () => {
 			lens("""
 				CREATE LENS RATINGS1FINAL 
 				  AS SELECT * FROM RATINGS1TYPED 
 				  WITH MISSING_VALUE('RATING')
 			""")
+			// })
 			val result1 = query("SELECT RATING FROM RATINGS1FINAL").allRows.flatten
 			result1 must have size(4)
 			result1 must contain(eachOf( f(4.5), f(4.0), f(6.4), i(4) ) )
 			val result2 = query("SELECT RATING FROM RATINGS1FINAL WHERE RATING < 5").allRows.flatten
 			result2 must have size(3)
+		}
+
+		"Create Backing Stores Correctly" >> {
+			val result = db.backend.resultRows("SELECT "+db.bestGuessCache.dataColumn+" FROM "+db.bestGuessCache.cacheTableForLens("RATINGS1FINAL", 1))
+			result.map( _(0).getType ).toSet must be equalTo Set(Type.TFloat)
+			db.getTableSchema(db.bestGuessCache.cacheTableForLens("RATINGS1FINAL", 1)).get must contain(eachOf( (db.bestGuessCache.dataColumn, Type.TFloat) ))
+
 		}
 
 		"Show Determinism Correctly" >> {
@@ -210,7 +226,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			expl2.toString must not contain("I made a best guess estimate for this data element, which was originally NULL")		
 		}
 
-		"Query a Union of lenses" >> {
+		"Query a Union of Lenses (projection first)" >> {
 			val result1 = query("""
 				SELECT PID FROM RATINGS1FINAL 
 					UNION ALL 
@@ -221,14 +237,21 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				str("P123"), str("P124"), str("P125"), str("P325"), str("P2345"), 
 				str("P34234"), str("P34235")
 			))
+		}
 
-			val result2 = query("""
-				SELECT PID FROM (
-					SELECT * FROM RATINGS1FINAL 
-						UNION ALL 
-					SELECT * FROM RATINGS2FINAL
-				) allratings
-			""").allRows.flatten
+		"Query a Union of Lenses (projection last)" >> {
+			val result2 = 
+			// LoggerUtils.debug("mimir.lenses.BestGuessCache", () => {
+			// LoggerUtils.debug("mimir.algebra.ExpressionChecker", () => {
+				query("""
+					SELECT PID FROM (
+						SELECT * FROM RATINGS1FINAL 
+							UNION ALL 
+						SELECT * FROM RATINGS2FINAL
+					) allratings
+				""").allRows.flatten
+			// })
+			// })
 			result2 must have size(7)
 			result2 must contain(eachOf( 
 				str("P123"), str("P124"), str("P125"), str("P325"), str("P2345"), 

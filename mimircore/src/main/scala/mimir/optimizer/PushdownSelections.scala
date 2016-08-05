@@ -7,6 +7,13 @@ import mimir.ctables._;
 
 object PushdownSelections {
 
+	def wrap(selectCond: Expression, child: Operator): Operator = {
+		selectCond match {
+			case BoolPrimitive(true) => child
+			case _ => Select(selectCond, child)
+		}
+	}
+
 	def optimize(o: Operator): Operator = 
 	{
 		o match {
@@ -71,17 +78,33 @@ object PushdownSelections {
 				val rhsCond = ExpressionUtils.makeAnd(rhsClauses ++ genericClauses)
 				val outerCond = ExpressionUtils.makeAnd(rhsRest)
 
-				val wrap = (selectCond: Expression, child: Operator) => {
-					selectCond match {
-						case BoolPrimitive(true) => child
-						case _ => Select(selectCond, child)
-					}
-				}
-
 				wrap(outerCond, Join(
 					optimize(wrap(lhsCond, lhs)),
 					optimize(wrap(rhsCond, rhs))
 				))
+			}
+
+			case Select(cond, LeftOuterJoin(lhs, rhs, outerJoinCond)) => {
+				val clauses: List[Expression] = ExpressionUtils.getConjuncts(cond)
+				val rhsSchema = rhs.schema.map(_._1).toSet
+
+				// Left-hand-side clauses are the ones where there's no overlap
+				// with variables from the right-hand-side
+				val (lhsClauses: List[Expression], lhsRest: List[Expression]) =
+					clauses.partition(
+						(x: Expression) => (ExpressionUtils.getColumns(x) & rhsSchema).isEmpty
+					)
+
+				val lhsCond = ExpressionUtils.makeAnd(lhsClauses)
+				val outerCond = ExpressionUtils.makeAnd(lhsRest)
+
+				wrap(outerCond, 
+					LeftOuterJoin(
+						wrap(lhsCond, lhs), 
+						rhs, 
+						outerJoinCond
+					)
+				)
 			}
 				
 

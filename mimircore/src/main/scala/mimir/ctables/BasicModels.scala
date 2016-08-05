@@ -4,13 +4,15 @@ import mimir.algebra._
 
 import scala.util._
 
-abstract class SingleVarModel(var varType: Type.T) extends Model {
-  def varTypes = List(varType)
+abstract class SingleVarModel() extends Model {
 
+  def varType(argTypes: List[Type.T]): Type.T
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue
   def sample(randomness: Random, args: List[PrimitiveValue]): PrimitiveValue
   def reason(args: List[Expression]): String
 
+  def varType(x: Int, argTypes: List[Type.T]): Type.T = 
+    varType(argTypes)
   def bestGuess(x:Int, args: List[PrimitiveValue]): PrimitiveValue =
     bestGuess(args)
   def sample(x:Int, randomness: Random, args: List[PrimitiveValue]): PrimitiveValue =
@@ -20,8 +22,9 @@ abstract class SingleVarModel(var varType: Type.T) extends Model {
 }
 
 case class IndependentVarsModel(vars: List[SingleVarModel]) extends Model {
-  def varTypes = vars.map( _.varType )
 
+  def varType(idx: Int, argTypes: List[Type.T]) = 
+    vars(idx).varType(argTypes)
   def bestGuess(idx: Int, args: List[PrimitiveValue]) = 
     vars(idx).bestGuess(args);
   def sample(idx: Int, randomness: Random, args: List[PrimitiveValue]) =
@@ -30,7 +33,8 @@ case class IndependentVarsModel(vars: List[SingleVarModel]) extends Model {
     vars(idx).reason(idx, args)
 }
 
-object UniformDistribution extends SingleVarModel(Type.TFloat){
+object UniformDistribution extends SingleVarModel(){
+  def varType(argTypes: List[Type.T]) = Type.TFloat
   def bestGuess(args: List[PrimitiveValue]) = 
     FloatPrimitive((args(0).asDouble + args(1).asDouble) / 2.0)
   def sample(randomness: Random, args: List[PrimitiveValue]) = {
@@ -59,7 +63,8 @@ object UniformDistribution extends SingleVarModel(Type.TFloat){
     "I put in a random value between "+args(0)+" and "+args(1)
 }
 
-case class NoOpModel(vt: Type.T) extends SingleVarModel(vt) {
+case class NoOpModel(vt: Type.T) extends SingleVarModel() {
+  def varType(argTypes: List[Type.T]) = vt
   def bestGuess(args: List[PrimitiveValue]) = args(0)
   def sample(randomness: Random, args: List[PrimitiveValue]) = args(0)
   def reason(args: List[Expression]): String = 

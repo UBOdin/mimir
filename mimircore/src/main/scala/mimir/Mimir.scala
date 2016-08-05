@@ -96,7 +96,7 @@ object Mimir {
   }
 
   def handleExplain(explain: Explain): Unit = {
-    val raw = db.convert(explain.getSelectBody())._1
+    val raw = db.sql.convert(explain.getSelectBody())
     println("------ Raw Query ------")
     println(raw)
     db.check(raw)
@@ -104,17 +104,11 @@ object Mimir {
     println("--- Optimized Query ---")
     println(optimized)
     db.check(optimized)
-    println("--- Backend Quer(ies) ---")
-    db.getBackendSQL(optimized).map( println(_) );
   }
 
   def handleSelect(sel: Select): Unit = {
-    val raw = db.convert(sel)
-    db.check(raw)
-    val rawPlusRowID = Project(ProjectArg("MIMIR_PROVENANCE", Var("ROWID_MIMIR")) ::
-                               raw.schema.map( (x) => ProjectArg(x._1, Var(x._1))),
-                               raw)
-    val results = db.query(rawPlusRowID)
+    val raw = db.sql.convert(sel)
+    val results = db.query(raw)
     results.open()
     db.dump(results)
     results.close()

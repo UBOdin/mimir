@@ -194,7 +194,7 @@ class CTExplainer(db: Database) {
 		val avg = Eval.applyArith(Arith.Div, tot, FloatPrimitive(count.toDouble))
 		val stddev =
 			Eval.eval(
-				Function("ABS", List(
+				Function("ABSOLUTE", List(
 					Arithmetic(Arith.Sub, 
 						Arithmetic(Arith.Div, totSq, FloatPrimitive(count.toDouble)),
 						Arithmetic(Arith.Mult, avg, avg)
@@ -266,7 +266,7 @@ class CTExplainer(db: Database) {
 
 		val finalSchema = optQuery.schema
 
-		val sqlQuery = db.convert(optQuery)
+		val sqlQuery = db.ra.convert(optQuery)
 
 		// println("SQL: "+sqlQuery)
 
