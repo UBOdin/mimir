@@ -7,6 +7,13 @@ import mimir.ctables._;
 
 object PushdownSelections {
 
+	def wrap(selectCond: Expression, child: Operator): Operator = {
+		selectCond match {
+			case BoolPrimitive(true) => child
+			case _ => Select(selectCond, child)
+		}
+	}
+
 	def optimize(o: Operator): Operator = 
 	{
 		o match {
@@ -24,7 +31,7 @@ object PushdownSelections {
 					return Project(rest, optimize(Select(conditionCol.head.expression, src)))
 				}
 			case Select(cond1, Select(cond2, src)) =>
-				optimize(Select(Arith.makeAnd(cond1, cond2), src))
+				optimize(Select(ExpressionUtils.makeAnd(cond1, cond2), src))
 
 			case Select(cond, (p @ Project(cols, src))) =>
 				optimize(Project(cols, Select(Eval.inline(cond, p.bindings), src)))
@@ -35,7 +42,7 @@ object PushdownSelections {
 			case Select(_, (_:Table)) => o
 
 			case Select(cond, Join(lhs, rhs)) => {
-				val clauses: List[Expression] = Arith.getConjuncts(cond)
+				val clauses: List[Expression] = ExpressionUtils.getConjuncts(cond)
 				val lhsSchema = lhs.schema.map(_._1).toSet
 				val rhsSchema = rhs.schema.map(_._1).toSet
 				val dualSchema = lhsSchema ++ rhsSchema
@@ -67,21 +74,37 @@ object PushdownSelections {
 						(x: Expression) => (ExpressionUtils.getColumns(x) & lhsSchema).isEmpty
 					)
 
-				val lhsCond = Arith.makeAnd(lhsClauses ++ genericClauses)
-				val rhsCond = Arith.makeAnd(rhsClauses ++ genericClauses)
-				val outerCond = Arith.makeAnd(rhsRest)
-
-				val wrap = (selectCond: Expression, child: Operator) => {
-					selectCond match {
-						case BoolPrimitive(true) => child
-						case _ => Select(selectCond, child)
-					}
-				}
+				val lhsCond = ExpressionUtils.makeAnd(lhsClauses ++ genericClauses)
+				val rhsCond = ExpressionUtils.makeAnd(rhsClauses ++ genericClauses)
+				val outerCond = ExpressionUtils.makeAnd(rhsRest)
 
 				wrap(outerCond, Join(
 					optimize(wrap(lhsCond, lhs)),
 					optimize(wrap(rhsCond, rhs))
 				))
+			}
+
+			case Select(cond, LeftOuterJoin(lhs, rhs, outerJoinCond)) => {
+				val clauses: List[Expression] = ExpressionUtils.getConjuncts(cond)
+				val rhsSchema = rhs.schema.map(_._1).toSet
+
+				// Left-hand-side clauses are the ones where there's no overlap
+				// with variables from the right-hand-side
+				val (lhsClauses: List[Expression], lhsRest: List[Expression]) =
+					clauses.partition(
+						(x: Expression) => (ExpressionUtils.getColumns(x) & rhsSchema).isEmpty
+					)
+
+				val lhsCond = ExpressionUtils.makeAnd(lhsClauses)
+				val outerCond = ExpressionUtils.makeAnd(lhsRest)
+
+				wrap(outerCond, 
+					LeftOuterJoin(
+						wrap(lhsCond, lhs), 
+						rhs, 
+						outerJoinCond
+					)
+				)
 			}
 				
 

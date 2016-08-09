@@ -65,7 +65,7 @@ class LensManager(db: Database) {
 
   
   def create(lensDefn: CreateLens): Unit = { 
-    val (baseQuery, bindings) = db.convert(lensDefn.getSelectBody)
+    val (baseQuery, bindings) = db.sql.convert(lensDefn.getSelectBody, null)
     val source = 
          Project(
            bindings.map( _ match { case (external, internal) =>
@@ -81,7 +81,7 @@ class LensManager(db: Database) {
           if(lensDefn.getType.equalsIgnoreCase("SCHEMA_MATCHING"))
             Var(arg.toString)
           else
-            db.convert(arg)
+            db.sql.convert(arg)
         ).toList,
       lensDefn.getType()
       )
@@ -94,7 +94,7 @@ class LensManager(db: Database) {
         source
       );
     lens.build(db);
-    lens.createBackingStore
+    db.bestGuessCache.buildCache(lens);
     lensCache.put(lensName, lens);
     save(lens);
   }

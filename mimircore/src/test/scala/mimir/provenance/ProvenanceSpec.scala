@@ -13,7 +13,7 @@ import mimir.provenance._
 
 object ProvenanceSpec extends Specification {
 
-  val baseModel = JointSingleVarModel(List(
+  val baseModel = IndependentVarsModel(List(
     UniformDistribution,
     UniformDistribution,
     UniformDistribution,

@@ -7,6 +7,21 @@ import mimir.provenance.Provenance
 import mimir.ctables.{VGTerm, CTables}
 import mimir.optimizer.ExpressionOptimizer
 
+/**
+ * A placeholder for use in extending Eval;  A proc is an expression that 
+ * can be evaluated, but is not itself part of mimir's grammar.
+ * 
+ * The proc defines the method of evaluation.
+ */
+abstract class Proc(args: List[Expression]) extends Expression
+{
+  def getType(argTypes: List[Type.T]): Type.T
+  def getArgs = args
+  def children = args
+  def get(v: List[PrimitiveValue]): PrimitiveValue
+}
+
+
 object Eval 
 {
 
@@ -84,6 +99,7 @@ object Eval
             case "ABSOLUTE" => eval(params(0), bindings) match {
               case IntPrimitive(i) => if(i < 0){ IntPrimitive(-i) } else { IntPrimitive(i) }
               case FloatPrimitive(f) => if(f < 0){ FloatPrimitive(-f) } else { FloatPrimitive(f) }
+              case NullPrimitive() => NullPrimitive()
               case x => throw new SQLException("Non-numeric parameter to absolute: '"+x+"'")
             }
             case "MIMIR_MAKE_ROWID" => Provenance.joinRowIds(params.map(x => eval(x, bindings)))
@@ -217,9 +233,9 @@ object Eval
             }
           } else { e.rebuild(e.children.map(simplify(_))) }
         case Arithmetic(Arith.And, lhs, rhs) => 
-          Arith.makeAnd(simplify(lhs), simplify(rhs))
+          ExpressionUtils.makeAnd(simplify(lhs), simplify(rhs))
         case Arithmetic(Arith.Or, lhs, rhs) => 
-          Arith.makeOr(simplify(lhs), simplify(rhs))
+          ExpressionUtils.makeOr(simplify(lhs), simplify(rhs))
         case _ => e.rebuild(e.children.map(simplify(_)))
       }
     )

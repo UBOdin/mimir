@@ -83,14 +83,14 @@ object CTPercolator {
     }
 
     missingValueClausesOp = Union(
-      removeConstraintColumn(oper).rebuild(List(Select(detExpr.distinct.reduce(Arith.makeAnd(_, _)), oper.children().head))),
-      oper.rebuild(List(Select(nonDeterExpr.distinct.reduce(Arith.makeOr(_, _)), oper.children().head)))
+      removeConstraintColumn(oper).rebuild(List(Select(detExpr.distinct.reduce(ExpressionUtils.makeAnd(_, _)), oper.children().head))),
+      oper.rebuild(List(Select(nonDeterExpr.distinct.reduce(ExpressionUtils.makeOr(_, _)), oper.children().head)))
     )
 
     if(otherClauses.nonEmpty)
       otherClausesOp = Project(
         oper.columns.filterNot( (p) => p.name.equalsIgnoreCase(CTables.conditionColumn))
-          ++ List(ProjectArg(CTables.conditionColumn, otherClauses.reduce(Arith.makeAnd(_, _)))),
+          ++ List(ProjectArg(CTables.conditionColumn, otherClauses.reduce(ExpressionUtils.makeAnd(_, _)))),
         oper.source
       )
 
@@ -217,7 +217,7 @@ object CTPercolator {
 
         // Combine the determinism with the computed determinism from the child...
         val newRowDeterminism = 
-          Arith.makeAnd(condDeterminism, rowDeterminism)
+          ExpressionUtils.makeAnd(condDeterminism, rowDeterminism)
         if( ExpressionUtils.getColumns(newRowDeterminism).isEmpty
             || condDeterminism.equals(BoolPrimitive(true))
           ){
@@ -331,7 +331,7 @@ object CTPercolator {
           return (
             Join(rewrittenLeft, rewrittenRight),
             colDetLeft ++ colDetRight,
-            Arith.makeAnd(rowDetLeft, rowDetRight)
+            ExpressionUtils.makeAnd(rowDetLeft, rowDetRight)
           )          
         }
 
@@ -373,7 +373,7 @@ object CTPercolator {
             Project(schemaMappingRight, rewrittenRight)
           ),
           colDetLeft ++ colDetRight,
-          Arith.makeAnd(mappedRowDetLeft, mappedRowDetRight)
+          ExpressionUtils.makeAnd(mappedRowDetLeft, mappedRowDetRight)
         )
       }
       case Table(name, cols, metadata) => {

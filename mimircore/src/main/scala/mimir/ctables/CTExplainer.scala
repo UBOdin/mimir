@@ -67,7 +67,6 @@ case class GenericCellExplanation (
 }
 
 case class NumericCellExplanation (
-	val bounds: Option[(PrimitiveValue, PrimitiveValue)],
 	val mean: PrimitiveValue,
 	val sttdev: PrimitiveValue,
 	override val examples: List[PrimitiveValue],
@@ -76,10 +75,7 @@ case class NumericCellExplanation (
 	override val column: String
 ) extends CellExplanation(examples, reasons, token, column) {
 	override def fields = 
-		(bounds match {
-			case None => List[(String, PrimitiveValue)]()
-			case Some((low, high)) => List(("bounds", StringPrimitive(low.toString+":"+high.toString)));
-		}) ++ List(
+		List(
 			("mean", mean),
 			("sttdev", sttdev)
 		) ++ super.fields
@@ -141,7 +137,6 @@ class CTExplainer(db: Database) {
 				val (avg, stddev) = getStats(expr, tuple, NUM_SAMPLES)
 
 				NumericCellExplanation(
-					getBounds(expr, tuple),
 					avg, 
 					stddev, 
 					examples,
@@ -157,20 +152,6 @@ class CTExplainer(db: Database) {
 					token,
 					column
 				)
-		}
-	}
-
-	def getBounds(expr: Expression, tuple: Map[String,PrimitiveValue]): 
-		Option[(PrimitiveValue,PrimitiveValue)] =
-	{
-		try {
-			val (lbound, ubound) = CTBounds.compile(expr);
-			Some( (
-				Eval.eval(lbound, tuple),
-				Eval.eval(ubound, tuple)
-			))
-		} catch {
-			case BoundsUnsupportedException(_, _) => None
 		}
 	}
 
@@ -213,7 +194,7 @@ class CTExplainer(db: Database) {
 		val avg = Eval.applyArith(Arith.Div, tot, FloatPrimitive(count.toDouble))
 		val stddev =
 			Eval.eval(
-				Function("ABS", List(
+				Function("ABSOLUTE", List(
 					Arithmetic(Arith.Sub, 
 						Arithmetic(Arith.Div, totSq, FloatPrimitive(count.toDouble)),
 						Arithmetic(Arith.Mult, avg, avg)
@@ -285,7 +266,7 @@ class CTExplainer(db: Database) {
 
 		val finalSchema = optQuery.schema
 
-		val sqlQuery = db.convert(optQuery)
+		val sqlQuery = db.ra.convert(optQuery)
 
 		// println("SQL: "+sqlQuery)
 

@@ -14,7 +14,7 @@ import mimir.ctables._;
  * 
  */
 
-abstract case class Lens(name: String, args: List[Expression], source: Operator)
+abstract class Lens(val name: String, val args: List[Expression], val source: Operator)
 {
   /** 
    * `view` emits an Operator that defines the Virtual C-Table for the lens
@@ -44,8 +44,6 @@ abstract case class Lens(name: String, args: List[Expression], source: Operator)
    * `save`.
    */
   def load(db: Database): Unit = build(db);
-
-  def createBackingStore: Unit
 
   // def globalVar(vid: Int) = PVar(iview, id, vid, List[Expression]())
   def rowVar(vid: Int)   = VGTerm((name,model), vid, List[Expression](RowIdVar()))

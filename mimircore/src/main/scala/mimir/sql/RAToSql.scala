@@ -4,23 +4,18 @@ import java.sql.SQLException
 import java.util
 
 import mimir.Database
-import mimir.algebra.Join
-import mimir.algebra.Select
-import mimir.algebra.Union
 import mimir.algebra._
-import mimir.ctables.{JointSingleVarModel, VGTerm}
+import mimir.provenance._
 import mimir.optimizer.{InlineProjections, PushdownSelections}
-import mimir.lenses.{TypeInferenceModel, SchemaMatchingModel, MissingValueModel}
 import mimir.util.TypeUtils
 
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
 import net.sf.jsqlparser.expression.operators.relational._
 import net.sf.jsqlparser.expression.{BinaryExpression, DoubleValue, Function, LongValue, NullValue, InverseExpression, StringValue, WhenClause}
-import net.sf.jsqlparser.statement.select
 import net.sf.jsqlparser.{schema, expression}
 import net.sf.jsqlparser.schema.Column
-import net.sf.jsqlparser.statement.select.{SelectBody, PlainSelect, SubSelect, SelectExpressionItem, FromItem, SelectItem}
+import net.sf.jsqlparser.statement.select.{SelectBody, PlainSelect, SubSelect, SelectExpressionItem, FromItem, SelectItem, SubJoin}
 
 import scala.collection.JavaConversions._
 
@@ -118,15 +113,7 @@ class RAToSql(db: Database) {
       case Aggregate(args, gbcols, child) =>
         val (childCond, childFroms) = extractSelectsAndJoins(child)
         val subBody = new PlainSelect()
-        subBody.setFromItem(childFroms.head)
-        subBody.setJoins(new util.ArrayList(
-          childFroms.tail.map( (s) => {
-            val join = new net.sf.jsqlparser.statement.select.Join()
-            join.setRightItem(s)
-            join.setSimple(true)
-            join
-          })
-        ))
+        subBody.setFromItem(childFroms)
 
         subBody.setSelectItems(
           new java.util.ArrayList(
@@ -157,49 +144,34 @@ class RAToSql(db: Database) {
 
       case Project(args, src) =>
         val body = new PlainSelect()
-        val (cond, sources) = extractSelectsAndJoins(src)
-        body.setFromItem(sources.head)
-        body.setJoins(new java.util.ArrayList(
-          sources.tail.map( (s) => {
-            val join = new net.sf.jsqlparser.statement.select.Join()
-            join.setRightItem(s)
-            join.setSimple(true)
-            join
-          })
-        ))
+        val (cond, source) = extractSelectsAndJoins(src)
+        val schemas = getSchemas(source)
+        body.setFromItem(source)
         if(cond != BoolPrimitive(true)){
-          // println("---- SCHEMAS OF:"+sources);
-          // println("---- ARE: "+getSchemas(sources))
-          body.setWhere(convert(cond, getSchemas(sources)))
+          // println("---- SCHEMAS OF:"+source);
+          // println("---- ARE: "+schemas)
+          body.setWhere(convert(cond, schemas))
         }
         body.setSelectItems(
           new java.util.ArrayList(
             args.map( (arg) => {
               val item = new SelectExpressionItem()
               item.setAlias(arg.name)
-              item.setExpression(convert(arg.expression, getSchemas(sources)))
+              item.setExpression(convert(arg.expression, schemas))
               item
             })
           )
         )
         body
+
     }
   }
 
-  def getSchemas(sources: List[FromItem]): List[(String, List[String])] =
+  def getSchemas(source: FromItem): List[(String, List[String])] =
   {
-    var sch = List[(String, List[String])]()
-    sources.map( {
+    source match {
       case subselect: SubSelect =>
-        if(subselect.getSelectBody.isInstanceOf[PlainSelect]){
-          subselect.getSelectBody.asInstanceOf[PlainSelect].getFromItem() match {
-            case sub: SubSelect =>
-              sch = getSchemas(List(sub))
-
-            case _ =>
-          }
-        }
-        (subselect.getAlias(), subselect.getSelectBody() match {
+        List((subselect.getAlias(), subselect.getSelectBody() match {
           case plainselect: PlainSelect => 
             plainselect.getSelectItems().map({
               case sei:SelectExpressionItem =>
@@ -210,10 +182,18 @@ class RAToSql(db: Database) {
               case sei:SelectExpressionItem =>
                 sei.getAlias().toString
             }).toList
-        }) 
+        }))
       case table: net.sf.jsqlparser.schema.Table =>
-        (table.getAlias(), db.getTableSchema(table.getName()).get.map(_._1).toList++List("ROWID"))
-    }) ++ sch
+        List(
+          ( table.getAlias(), 
+            db.getTableSchema(table.getName()).
+              get.map(_._1).toList++List("ROWID")
+          )
+        )
+      case join: SubJoin =>
+        getSchemas(join.getLeft()) ++
+          getSchemas(join.getJoin().getRightItem())
+    }
   }
 
   def makeSubSelect(oper: Operator): FromItem =
@@ -223,20 +203,52 @@ class RAToSql(db: Database) {
     subSelect.setAlias("SUBQ_"+oper.schema.map(_._1).head)
     subSelect
   }
+
+  def makeJoin(lhs: FromItem, rhs: FromItem): SubJoin =
+  {
+    val rhsJoin = new net.sf.jsqlparser.statement.select.Join();
+    rhsJoin.setRightItem(rhs)
+    // rhsJoin.setSimple(true)
+    val ret = new SubJoin()
+    ret.setLeft(lhs)
+    ret.setJoin(rhsJoin)
+    return ret
+  }
   
   def extractSelectsAndJoins(oper: Operator): 
-    (Expression, List[FromItem]) =
+    (Expression, FromItem) =
   {
     oper match {
-      case Select(cond, child) =>
-        val (childCond, childFroms) = extractSelectsAndJoins(child)
-        ( Arith.makeAnd(cond, childCond), childFroms )
-      case Join(lhs, rhs) =>
-        val (lhsCond, lhsFroms) = extractSelectsAndJoins(lhs)//lhsFroms is a subselect
-        val (rhsCond, rhsFroms) = extractSelectsAndJoins(rhs)
-        ( Arith.makeAnd(lhsCond, rhsCond), 
-          lhsFroms ++ rhsFroms
+      case Select(cond, source) =>
+        val (childCond, from) = 
+          extractSelectsAndJoins(source)
+        (
+          ExpressionUtils.makeAnd(cond, childCond),
+          from
         )
+
+      case Join(lhs, rhs) =>
+        val (lhsCond, lhsFrom) = extractSelectsAndJoins(lhs)
+        val (rhsCond, rhsFrom) = extractSelectsAndJoins(rhs)
+        (
+          ExpressionUtils.makeAnd(lhsCond, rhsCond),
+          makeJoin(lhsFrom, rhsFrom)
+        )
+
+      case LeftOuterJoin(lhs, rhs, cond) => 
+        val (lhsCond, lhsFrom) = extractSelectsAndJoins(lhs)
+        val rhsFrom = makeSubSelect(rhs)
+        val joinItem = makeJoin(lhsFrom, rhsFrom)
+        joinItem.getJoin().setSimple(false)
+        joinItem.getJoin().setOuter(true)
+        joinItem.getJoin().setLeft(true)
+        joinItem.getJoin().setOnExpression(convert(cond, getSchemas(lhsFrom)++getSchemas(rhsFrom)))
+
+        (
+          lhsCond,
+          joinItem
+        )
+
       case Table(name, tgtSch, metadata) =>
         val realSch = db.getTableSchema(name) match {
           case Some(realSch) => realSch
@@ -260,13 +272,13 @@ class RAToSql(db: Database) {
           // If they are equivalent, then...
           val ret = new net.sf.jsqlparser.schema.Table(name);
           ret.setAlias(name);
-          (BoolPrimitive(true), List[FromItem](ret))
+          (BoolPrimitive(true), ret)
         } else {
           // If they're not equivalent, revert to old behavior
-          (BoolPrimitive(true), List(makeSubSelect(oper)))
+          (BoolPrimitive(true), makeSubSelect(oper))
         }
 
-      case _ => (BoolPrimitive(true), List(makeSubSelect(oper)))
+      case _ => (BoolPrimitive(true), makeSubSelect(oper))
     }
   }
 
@@ -367,10 +379,10 @@ class RAToSql(db: Database) {
       case Not(subexp) => {
         new InverseExpression(convert(subexp, sources))
       }
-      case mimir.algebra.Function("MIMIR_MAKE_ROWID", Nil) => {
+      case mimir.algebra.Function(Provenance.mergeRowIdFunction, Nil) => {
           throw new SQLException("MIMIR_MAKE_ROWID with no arguments")
       }
-      case mimir.algebra.Function("MIMIR_MAKE_ROWID", head :: rest) => {
+      case mimir.algebra.Function(Provenance.mergeRowIdFunction, head :: rest) => {
           rest.map(convert(_, sources)).foldLeft(convert(head, sources))(concat(_,_,"|"))
       }
       case mimir.algebra.Function("CAST", body_arg :: TypePrimitive(t) :: Nil) => {
@@ -388,35 +400,8 @@ class RAToSql(db: Database) {
           func.setParameters(explist)
           return func
       }
-      case VGTerm((_, model), idx, args) => {
-
-        val plainSelect = new PlainSelect()
-
-        /* FROM */
-        val backingStore = new schema.Table(null, model.backingStore(idx))
-        plainSelect.setFromItem(backingStore)
-
-        /* WHERE */
-        val expr = new EqualsTo()
-        expr.setLeftExpression(new Column(backingStore, "EXP_LIST"))
-        expr.setRightExpression(args.map(convert(_, sources)).reduceLeft(concat(_, _, "|")))
-        plainSelect.setWhere(expr)
-
-        /* PROJECT */
-        val selItem = new SelectExpressionItem()
-        val column = new Column()
-        column.setTable(backingStore)
-        column.setColumnName("DATA")
-        selItem.setExpression(column)
-        val selItemList = new util.ArrayList[SelectItem]()
-        selItemList.add(selItem)
-        plainSelect.setSelectItems(selItemList)
-
-
-        val subSelect = new SubSelect()
-        subSelect.setSelectBody(plainSelect)
-        subSelect
-      }
+      case _ =>
+        throw new SQLException("Compiler Error: I don't know how to translate "+e+" into SQL")
     }
   }
 

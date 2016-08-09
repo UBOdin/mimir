@@ -10,7 +10,8 @@ class ProvenanceError(e:String) extends Exception(e) {}
 
 object Provenance {
 
-  def rowidColnameBase = "MIMIR_ROWID"
+  val mergeRowIdFunction = "MIMIR_MAKE_ROWID"
+  val rowidColnameBase = "MIMIR_ROWID"
 
   def compile(oper: Operator): (Operator, List[String]) = {
     val makeRowIDProjectArgs = 
@@ -28,7 +29,7 @@ object Provenance {
         val (newSrc, rowids) = compile(src)
         val newArgs = 
           args.map( arg => 
-            ProjectArg(arg.name, inline(arg.expression, rowids))
+            ProjectArg(arg.name, expandVars(arg.expression, rowids))
           )
         val (newRowids, rowIDProjections) = makeRowIDProjectArgs(rowids, 0, 0)
         (
@@ -40,7 +41,7 @@ object Provenance {
       case Select(cond, src) => {
         val (newSrc, rowids) = compile(src)
         ( 
-          Select(inline(cond, rowids), newSrc), 
+          Select(expandVars(cond, rowids), newSrc), 
           rowids
         )
       }
@@ -106,15 +107,22 @@ object Provenance {
   }
 
   def rowIdVal(rowids: List[Expression]): Expression =
-    Function("MIMIR_MAKE_ROWID", rowids)    
+    Function(mergeRowIdFunction, rowids)    
 
   def rowIdVar(rowids: List[String]): Expression = 
     rowIdVal(rowids.map(Var(_)))
 
-  def inline(expr: Expression, rowids: List[String]): Expression = {
+  def expandVars(expr: Expression, rowids: List[String]): Expression = {
     expr match {
       case RowIdVar() => rowIdVar(rowids)
-      case _ => expr.rebuild(expr.children.map(inline(_,rowids)))
+      case _ => expr.rebuild(expr.children.map(expandVars(_,rowids)))
+    }
+  }
+
+  def plugInToken(expr: Expression, rowid: RowIdPrimitive): Expression = {
+    expr match {
+      case RowIdVar() => rowid
+      case _ => expr.rebuild(expr.children.map(plugInToken(_,rowid)))
     }
   }
 

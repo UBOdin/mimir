@@ -20,9 +20,8 @@ object SqlParserSpec extends Specification with FileMatchers {
 	def stmt(s: String) = {
 		new MimirJSqlParser(new StringReader(s)).Statement()
 	}
-	/* method name changed from query to convert 6/3/16 */
 	def convert(s: String) =
-		db.convert(stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select])
+		db.sql.convert(stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select])
 	def parser = new ExpressionParser(db.lenses.modelForLens)
 	def expr = parser.expr _
 
@@ -423,9 +422,14 @@ object SqlParserSpec extends Specification with FileMatchers {
 		 								  ("R_C", Type.TInt)).toList,
 		 							  List()
 				))
-		 	db.backend.resultRows("SELECT EXP_LIST, DATA FROM SANER_1_BACKEND") must be equalTo List(
-		 		List(StringPrimitive("3"), IntPrimitive(3))
-		 	)
+			val guessCacheData = 
+			 	db.backend.resultRows("SELECT "+
+			 		db.bestGuessCache.keyColumn(0)+","+
+			 		db.bestGuessCache.dataColumn+" FROM "+
+			 		db.bestGuessCache.cacheTableForLens("SANER", 1)
+			 	)
+			guessCacheData must contain( ===(List[PrimitiveValue](IntPrimitive(3), IntPrimitive(3))) )
+		 	
 			db.query(convert("SELECT * FROM SaneR")).allRows must be equalTo List(
 				List(IntPrimitive(1),IntPrimitive(2),IntPrimitive(3)),
 				List(IntPrimitive(1),IntPrimitive(3),IntPrimitive(1)),

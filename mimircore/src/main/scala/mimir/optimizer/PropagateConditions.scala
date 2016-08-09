@@ -65,7 +65,7 @@ object PropagateConditions extends ExpressionOptimizerRule {
 	}
 
 	def apply(e: Expression): Expression = 
-		Arith.makeAnd(propagateConditions(Arith.getConjuncts(e)))
+		ExpressionUtils.makeAnd(propagateConditions(ExpressionUtils.getConjuncts(e)))
 
 	def propagateConditions(l: List[Expression]): List[Expression] = 
 	{

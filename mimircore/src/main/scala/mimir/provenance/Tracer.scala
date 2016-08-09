@@ -22,7 +22,7 @@ object Tracer {
         (
           Select(Eval.inline(cond, retExprs), retOper),
           retExprs,
-          Arith.makeAnd(retCondition, cond)
+          ExpressionUtils.makeAnd(retCondition, cond)
         )
       }
 
@@ -38,7 +38,7 @@ object Tracer {
           (
             Join(lhsRetOper, rhsRetOper),
             lhsRetExprs ++ rhsRetExprs,
-            Arith.makeAnd(lhsRetCondition, rhsRetCondition)
+            ExpressionUtils.makeAnd(lhsRetCondition, rhsRetCondition)
           )
         } else {
           val lhsSafeSchema = lhsSchema -- overlappingSchema
@@ -72,7 +72,7 @@ object Tracer {
                 )
               )
             ),
-            Arith.makeAnd(
+            ExpressionUtils.makeAnd(
               Eval.inlineWithoutSimplifying(lhsRetCondition, lhsReplacements),
               Eval.inlineWithoutSimplifying(rhsRetCondition, rhsReplacements)
             )

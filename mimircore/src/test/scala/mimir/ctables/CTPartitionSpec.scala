@@ -13,7 +13,7 @@ import mimir.util._
 
 object CTPartitionSpec extends Specification {
   
-  val boundsSpecModel = JointSingleVarModel(List(
+  val boundsSpecModel = IndependentVarsModel(List(
     UniformDistribution,
     UniformDistribution,
     UniformDistribution,

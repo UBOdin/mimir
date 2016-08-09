@@ -13,6 +13,7 @@ import moa.classifiers.Classifier
 import moa.core.InstancesHeader
 import weka.core.{Attribute, DenseInstance, Instance, Instances}
 import weka.experiment.{DatabaseUtils, InstanceQueryAdapter}
+import mimir.optimizer.InlineVGTerms
 
 import scala.collection.JavaConversions._
 import scala.util._
@@ -69,13 +70,13 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
   def build(db: Database, loading: Boolean): Unit = {
     this.db = db
     models =
-      sourceSchema.map(
+      InlineVGTerms.optimize(source).schema.map(
         _ match { case (n, t) => (keysToBeCleaned.indexOf(n), t) }
       ).zipWithIndex.map( (x) => x._1 match { case (idx, t) =>
         if (idx < 0) {
           new NoOpModel(t).asInstanceOf[SingleVarModel]
         } else {
-          val m = new MissingValueModel(this, name+"_"+x._2)
+          val m = new MissingValueModel(this, name+"_"+x._2, t)
           val classIndex = allKeys().indexOf(keysToBeCleaned.get(idx))
           if(loading) {
             val path = java.nio.file.Paths.get(
@@ -90,7 +91,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
           m.asInstanceOf[SingleVarModel]
         }
       })
-    model = new JointSingleVarModel(models)
+    model = new IndependentVarsModel(models)
   }
 
   override def save(db: Database): Unit = {
@@ -123,10 +124,6 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
     }
   }
 
-  override def createBackingStore: Unit = {
-    model.createBackingStore()
-  }
-
   def lensType = "MISSING_VALUE"
 
   ////// Weka's InstanceQueryAdapter interface
@@ -146,37 +143,8 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
   }
 }
 
-object MissingValueAnalysisType extends Enumeration {
-  type MV = Value
-  val MOST_LIKELY, LOWER_BOUND, UPPER_BOUND, SAMPLE = Value
-}
-
-case class MissingValueAnalysis(model: MissingValueModel, args: List[Expression], analysisType: MissingValueAnalysisType.MV)
-  extends Proc(args) {
-  def get(args: List[PrimitiveValue]): PrimitiveValue = {
-    analysisType match {
-      case MissingValueAnalysisType.LOWER_BOUND => model.lowerBound(args)
-      case MissingValueAnalysisType.UPPER_BOUND => model.upperBound(args)
-      case MissingValueAnalysisType.MOST_LIKELY => model.mostLikelyValue(args)
-      case MissingValueAnalysisType.SAMPLE => model.sampleGenerator(args)
-    }
-  }
-
-  def getType(bindings: List[Type.T]) = {
-    val att = model.getLearner.getModelContext().attribute(model.cIndex)
-    if (att.isString)
-      Type.TString
-    else if (att.isNumeric)
-      Type.TFloat
-    else
-      throw new SQLException("Unknown type")
-  }
-
-  def rebuild(c: List[Expression]) = new MissingValueAnalysis(model, c, analysisType)
-}
-
-class MissingValueModel(lens: MissingValueLens, name: String)
-  extends SingleVarModel(Type.TAny) {
+class MissingValueModel(lens: MissingValueLens, name: String, val varType: Type.T)
+  extends SingleVarModel() {
   var learner: Classifier =
     Analysis.getLearner("moa.classifiers.bayes.NaiveBayes")
   var data: Instances = null
@@ -184,8 +152,6 @@ class MissingValueModel(lens: MissingValueLens, name: String)
   var numSamples = 0
   var cIndex = -1
   private val TRAINING_LIMIT = 100
-
-  def backingStore() = name+"_BACKEND"
 
   def reason(args: List[Expression]): String=
     "I made a best guess estimate for this data element, which was originally NULL"
@@ -283,59 +249,6 @@ class MissingValueModel(lens: MissingValueLens, name: String)
       filter(_._1 > 0)
   }
 
-  override def createBackingStore(): Unit = {
-    /* Create and populate the backing-store */
-
-    var nulls = 0
-    val columnDataType = TypeUtils.convert(lens.schema()(cIndex)._2);
-
-    // println("Initializing table");
-    lens.db.getTableSchema(backingStore()) match {
-      case Some(List(("EXP_LIST", Type.TString), ("DATA", _))) =>
-        lens.db.backend.update( "DELETE FROM "+backingStore() )
-      case Some(_) =>
-        lens.db.backend.update( "DROP TABLE "+backingStore() )
-        lens.db.backend.update(
-          "CREATE TABLE " + backingStore() + " (" +
-            "EXP_LIST varchar(100), " +
-            "DATA "+columnDataType+", " +
-            "PRIMARY KEY (EXP_LIST)" +
-            ")"
-        )
-      case None =>
-        lens.db.backend.update(
-          "CREATE TABLE " + backingStore() + " (" +
-            "EXP_LIST varchar(100), " +
-            "DATA "+columnDataType+", " +
-            "PRIMARY KEY (EXP_LIST)" +
-            ")"
-        )
-    }
-
-    // rowidQuery filters the original query for only rows with null values in the column of interest
-    val rowidQuery =
-      Select(IsNullExpression(Var(lens.schema()(cIndex)._1)), lens.source)
-    // println("ROWID_QUERY: "+rowidQuery)
-    val rowidIterator = lens.db.query(rowidQuery)
-    rowidIterator.open()
-    // println("Preparing to create MV backing store");
-    while(rowidIterator.getNext()) {
-      // println("Row of data: "+rowidIterator.provenanceToken);
-      // if(Typechecker.typeOf(rowidIterator(cIndex+1)) == Type.TAny) {
-        val rowId = rowidIterator.provenanceToken
-        val data = computeMostLikelyValue(List(rowId))
-        val tuple = List(rowId.asString, data.asString)
-        lens.db.backend.update(
-          "INSERT INTO "+backingStore()+" VALUES (?, ?)", tuple
-        )
-        nulls = nulls + 1
-        // println("Progress: Null no. "+nulls)
-      // }
-    }
-    // println("Done");
-    rowidIterator.close()
-  }
-
   private def getAttributesFromIterator(iterator: ResultIterator): util.ArrayList[Attribute] = {
     val attributes = new util.ArrayList[Attribute]()
     iterator.schema.foreach { case (n, t) =>
@@ -362,7 +275,9 @@ class MissingValueModel(lens: MissingValueLens, name: String)
   }
 
   ////// Model implementation
-  def mostLikelyValue(args: List[PrimitiveValue]): PrimitiveValue = {
+  def varType(argTypes: List[Type.T]): Type.T = varType
+
+  def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = {
     val att = learner.getModelContext.attribute(cIndex)
     val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val res = if (classes.isEmpty) att.numValues() - 1 else classes.maxBy(_._1)._2
@@ -408,37 +323,11 @@ class MissingValueModel(lens: MissingValueLens, name: String)
       throw new SQLException("Unknown attribute")
   }
 
-  def sampleGenerator(args: List[PrimitiveValue]) = {
-    var hash = 7
-    val key = lens.keysToBeCleaned(0)
-    for (i <- key.indices) {
-      hash = hash * 31 + key.charAt(i)
-    }
-    val seed = {
-      if (args.length == 1)
-        java.lang.System.nanoTime()
-      else args.last.asLong
-    } + hash
-    sample(seed, args)
-  }
-
-  def mostLikelyExpr(args: List[Expression]) =
-    new MissingValueAnalysis(this, args, MissingValueAnalysisType.MOST_LIKELY)
-
-  def lowerBoundExpr(args: List[Expression]) =
-    new MissingValueAnalysis(this, args, MissingValueAnalysisType.LOWER_BOUND)
-
-  def upperBoundExpr(args: List[Expression]) =
-    new MissingValueAnalysis(this, args, MissingValueAnalysisType.UPPER_BOUND)
-
-  def sampleGenExpr(args: List[Expression]) =
-    new MissingValueAnalysis(this, args, MissingValueAnalysisType.SAMPLE)
-
-  def sample(seed: Long, args: List[PrimitiveValue]): PrimitiveValue = {
+  def sample(randomness: Random, args: List[PrimitiveValue]): PrimitiveValue = {
     val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     if(classes.length < 1){ return NullPrimitive(); }
     val tot_cnt = classes.map(_._1).sum
-    val pick = new Random(seed).nextInt(100) % tot_cnt
+    val pick = randomness.nextInt(100) % tot_cnt
     val cumulative_counts =
       classes.scanLeft(0.0)(
         (cumulative, cnt_class) => cumulative + cnt_class._1
