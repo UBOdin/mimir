@@ -1,25 +1,39 @@
 package mimir.ctables
 
 import mimir.algebra._
-import mimir.lenses.{TypeInferenceAnalysis, MissingValueAnalysis}
 import mimir.util.JSONBuilder
+import scala.util._
 
 abstract class Model {
-  def varTypes: List[Type.T]
+  /**
+   * Infer the type of the model from the types of the inputs
+   * @param argTypes    The types of the arguments the the VGTerm
+   * @return            The type of the value returned by this model
+   */
+  def varType        (idx: Int, argTypes:List[Type.T]): Type.T
 
-  def mostLikelyValue   (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
-  def lowerBound        (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
-  def upperBound        (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
-  def sampleGenerator   (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
-  def mostLikelyExpr    (idx: Int, args: List[Expression    ]):  Expression
-  def lowerBoundExpr    (idx: Int, args: List[Expression    ]):  Expression
-  def upperBoundExpr    (idx: Int, args: List[Expression    ]):  Expression
-  def sampleGenExpr     (idx: Int, args: List[Expression    ]):  Expression
-  def sample            (seed: Long, idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
-  def reason            (idx: Int, args: List[Expression]): (String)
-  def backingStore      (idx: Int): String
-  def createBackingStore(idx: Int): Unit
-  def createBackingStore(): Unit
+  /**
+   * Generate a best guess for a variable represented by this model.
+   * @param idx         The index of the variable family to generate a best guess for
+   * @param args        The skolem identifier for the specific variable to generate a best guess for
+   * @return            A primitive value representing the best guess value.
+   */
+  def bestGuess      (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
+  /**
+   * Generate a sample from the distribution of a variable represented by this model.
+   * @param idx         The index of the variable family to generate a sample for
+   * @param randomness  A java.util.Random to use when generating the sample (pre-seeded)
+   * @param args        The skolem identifier for the specific variable to generate a sample for
+   * @return            A primitive value representing the generated sample
+   */
+  def sample         (idx: Int, randomness: Random, args: List[PrimitiveValue]):  PrimitiveValue
+  /**
+   * Generate a human-readable explanation for the uncertainty captured by this model.
+   * @param idx   The index of the variable family to explain
+   * @param args  The skolem identifier for the specific variable to explain
+   * @return      A string reason explaining the uncertainty in this model
+   */
+  def reason         (idx: Int, args: List[Expression]): (String)
 }
 
 case class Reason(
@@ -46,13 +60,13 @@ case class VGTerm(
   args: List[Expression]
 ) extends Proc(args) {
   override def toString() = "{{ "+model._1+"_"+idx+"["+args.mkString(", ")+"] }}"
-  override def getType(bindings: List[Type.T]):Type.T = model._2.varTypes(idx)
+  override def getType(bindings: List[Type.T]):Type.T = model._2.varType(idx, bindings)
   override def children: List[Expression] = args
   override def rebuild(x: List[Expression]) = VGTerm(model, idx, x)
   def get(v: List[PrimitiveValue]): PrimitiveValue = 
   {
     // println("VGTerm: Get")
-    model._2.mostLikelyValue(idx, v)
+    model._2.bestGuess(idx, v)
   }
   def reason(): Reason = 
     Reason(
@@ -86,11 +100,6 @@ object CTables
   def isProbabilistic(expr: Expression): Boolean = 
   expr match {
     case VGTerm(_, _, _) => true
-    case MissingValueAnalysis(_, _, _) => true
-    case TypeInferenceAnalysis(_, _, _) => true
-    case Function("JOIN_ROWIDS", _) => expr.children.exists( isProbabilistic(_) )
-    case Function("CAST", _) => expr.children.exists( isProbabilistic(_) )
-    case Function("DATE", _) => false
     case _ => expr.children.exists( isProbabilistic(_) )
   }
 
@@ -104,12 +113,15 @@ object CTables
   {
     (oper match {
       case Project(cols, _) => 
-        cols.exists( (x: ProjectArg) => isProbabilistic(x.input) )
+        cols.exists( (x: ProjectArg) => isProbabilistic(x.expression) )
       case Select(expr, _) => 
         isProbabilistic(expr)
       case _ => false;
     }) || oper.children.exists( isProbabilistic(_) )
   }
+
+  def isDeterministic(expr:Expression): Boolean = !isProbabilistic(expr)
+  def isDeterministic(oper:Operator): Boolean = !isProbabilistic(oper)
   
   def extractProbabilisticClauses(e: Expression): 
     (Expression, Expression) =
@@ -120,8 +132,8 @@ object CTables
           extractProbabilisticClauses(lhs)
         val (rhsExtracted, rhsRemaining) = 
           extractProbabilisticClauses(rhs)
-        ( Arith.makeAnd(lhsExtracted, rhsExtracted),
-          Arith.makeAnd(lhsRemaining, rhsRemaining)
+        ( ExpressionUtils.makeAnd(lhsExtracted, rhsExtracted),
+          ExpressionUtils.makeAnd(lhsRemaining, rhsRemaining)
         )
       case _ => 
         if(isProbabilistic(e)){
@@ -142,5 +154,7 @@ object CTables
       case _ => e.children.flatMap( getVGTerms(_) )
     }
   }
-
+  def getVGTerms(oper: Operator): List[VGTerm] = 
+    oper.expressions.flatMap(getVGTerms(_)) ++ 
+      oper.children.flatMap(getVGTerms(_))
 }

@@ -41,7 +41,7 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 		| arith ~ "OR" ~ arith ^^ {
 				case lhs ~ _ ~ rhs => Arithmetic(Arith.Or, lhs, rhs)
 			}
-		| "NOT" ~> arith ^^ { Not(_) }
+		| "NOT(" ~> arith <~ ")" ^^ { Not(_) }
 		| arith 
 		)
 
@@ -92,11 +92,14 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 		(x:String) => 
 			StringPrimitive(x.substring(1,x.length-1)) 
 	}
-	def varLeaf = id ^^ { Var(_) }
+	def varLeaf = 
+		id ^^ { case "ROWID" => RowIdVar()
+		        case x => Var(x) }
 
 	def arithSym = Arith.matchRegex ^^ { Arith.fromString(_) }
 
 	def function: Parser[Expression] = id ~ ("(" ~> opt(exprList) <~ ")") ^^ { 
+		case "NOT" ~ Some(List(arg)) => Not(arg)
 		case fname ~ args => 
 			Function(fname, args.getOrElse(List()))
 	}
@@ -123,9 +126,9 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 	}
 
 	def exprType: Parser[Type.T] = (
-		"int" | "decimal" | "date" | "string" | "rowid" | "type"
+		"int" | "decimal" | "date" | "string" | "rowid" | "type" | "float" | "real" | "varchar"
 	) ^^ { Type.fromString(_) }
 
 	def typeLeaf: Parser[Expression] = 
-		exprType ^^ { (t) => KeywordPrimitive(Type.toString(t), Type.TType) }
+		exprType ^^ { (t) => TypePrimitive(t) }
 }

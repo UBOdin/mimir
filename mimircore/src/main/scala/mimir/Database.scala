@@ -1,17 +1,22 @@
 package mimir
 
 import java.io.File
+import java.io.StringReader
 import java.sql.SQLException
 import java.sql.ResultSet
 
 import mimir.algebra._
 import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, Model, RowExplanation, VGTerm}
-import mimir.exec.{Compiler, NonDeterminism, ResultIterator, ResultSetIterator}
-import mimir.lenses.{Lens, LensManager}
+import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
+import mimir.lenses.{Lens, LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
 import mimir.sql._
 import mimir.util.LoadCSV
 import mimir.web.WebIterator
+import mimir.parser.MimirJSqlParser
+
+import net.sf.jsqlparser.statement.Statement
+
 
 import scala.collection.mutable.ListBuffer
 
@@ -56,96 +61,15 @@ case class Database(name: String, backend: Backend)
   val lenses = new LensManager(this)
   val compiler = new Compiler(this)
   val explainer = new CTExplainer(this)
+  val bestGuessCache = new BestGuessCache(this)
   val operator = new OperatorParser(this.getLensModel,
     (x) => 
       this.getTableSchema(x) match {
         case Some(x) => x
         case None => throw new SQLException("Table "+x+" does not exist in db!")
       })
-  var nonDeterminismStrategy = NonDeterminism.Hybrid
 
   def getName = name
-  
-  /**
-   * Evaluate the specified query on the backend directly and wrap the result in a
-   * ResultSetIterator.  No Mimir-specific optimizations or rewrites are applied.
-   */
-  def query(sql: String): ResultIterator = 
-    deterministicIterator(backend.execute(sql))
-  /**
-   * Evaluate the specified query on the backend directly and wrap the result in a
-   * ResultSetIterator.  JDBC parameters (`?`) are replaced according to the provided
-   * argument list.  No Mimir-specific optimizations or rewrites are applied.
-   */
-  def query(sql: String, args: List[String]): ResultIterator = 
-    deterministicIterator(backend.execute(sql, args))
-  /**
-   * Evaluate the specified query on the backend directly.  No Mimir-specific 
-   * optimizations or rewrites are applied.
-   */
-  def query(sql: net.sf.jsqlparser.statement.select.Select): ResultIterator = 
-    deterministicIterator(backend.execute(sql))
-
-  def query(sql: net.sf.jsqlparser.statement.select.Select, schema: Map[String, Type.T]): ResultIterator = 
-    deterministicIterator(backend.execute(sql), schema)
-  /**
-   * Evaluate the specified query on the backend directly.  No Mimir-specific 
-   * optimizations or rewrites are applied.
-   */
-  def query(sql: net.sf.jsqlparser.statement.select.SelectBody, schema: Map[String, Type.T]): ResultIterator =
-    deterministicIterator(backend.execute(sql), schema)
-  
-  def query(sql: net.sf.jsqlparser.statement.select.SelectBody): ResultIterator =
-    deterministicIterator(backend.execute(sql))
-
-  def deterministicIterator(results: ResultSet): ResultIterator =
-    deterministicIterator(results, Map[String, Type.T]())
-
-  def deterministicIterator(results: ResultSet, schema: Map[String, Type.T]): ResultIterator =
-  {
-    val metadata = results.getMetaData();
-    var rowidCol = List[Int]()
-    val columns = 
-      (1 until metadata.getColumnCount()+1).
-      map ( x => 
-        metadata.getColumnName(x) match { 
-              case CTPercolator.ROWID_KEY => rowidCol = (x-1) :: rowidCol; List[Int]()
-              case _ => List(x-1)  
-        }).
-      flatten.
-      toList
-
-    new ResultSetIterator(
-      results, 
-      schema,
-      columns,
-      rowidCol.reverse
-    )
-  }
-
-  /**
-   * Evaluate the specified SQL DDL expression on the backend directly.  No Mimir-
-   * specific optimizations or updates are applied.
-   */
-  def update(sql: String): Unit = {
-    backend.update(sql)
-  }
-
-  /**
-   * Evaluate a list of SQL statements in batch mode. This is useful for speeding up
-   * data insertion during CSV uploads
-   */
-  def update(sql: List[String]): Unit = {
-    backend.update(sql)
-  }
-  /**
-   * Evaluate the specified SQL DDL expression on the backend directly.  JDBC 
-   * parameters (`?`) are replaced according to the provided argument list.
-   * No Mimir-specific optimizations or updates are applied.
-   */
-  def update(sql: String, args: List[String]): Unit = {
-    backend.update(sql, args)
-  }
 
   /** 
    * Apply the standard set of Mimir compiler optimizations -- Used mostly for EXPLAIN.
@@ -165,15 +89,6 @@ case class Database(name: String, backend: Backend)
   }
 
   /**
-   * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
-   * and rewrites the query to properly account for Virtual Tables.
-   */
-  def queryLineage(oper: Operator): ResultIterator = 
-  {
-    compiler.compile(oper, NonDeterminism.Classic)
-  }
-
-  /**
    * Flush the provided ResultIterator to the console.
    */
   def dump(result: ResultIterator): Unit =
@@ -183,9 +98,19 @@ case class Database(name: String, backend: Backend)
     while(result.getNext()){
       println(
         (0 until result.numCols).map( (i) => {
-          result(i)+(
-            if(!result.deterministicCol(i)){ "*" } else { "" }
-            )
+          if( i == 0 ){
+            result(i) match {
+              case NullPrimitive() => "'NULL'"
+              case _ => result(i)
+            }
+
+          }
+          else{
+            result(i)+(
+              if(!result.deterministicCol(i)){ "*" } else { "" }
+              )
+          }
+
         }).mkString(",")+(
           if(!result.deterministicRow){
             " (This row may be invalid)"
@@ -263,27 +188,6 @@ case class Database(name: String, backend: Backend)
     explainer.explainCell(query, token, column)
 
   /**
-   * Translate the specified JSqlParser SELECT statement to Mimir's RA AST.
-   */
-  def convert(sel: net.sf.jsqlparser.statement.select.Select): Operator =
-    sql.convert(sel)
-  /**
-   * Translate the specified JSqlParser SELECT body to Mimir's RA AST.
-   */
-  def convert(sel: net.sf.jsqlparser.statement.select.SelectBody): (Operator,Map[String, String]) =
-    sql.convert(sel, null)
-  /**
-   * Translate the specified JSqlParser expression to Mimir's Expression AST.
-   */
-  def convert(expr: net.sf.jsqlparser.expression.Expression): Expression =
-    sql.convert(expr)
-  /**
-   * Translate the specified Mimir RA AST back to a JSqlParser statement.
-   */
-  def convert(oper: Operator): net.sf.jsqlparser.statement.select.SelectBody =
-    ra.convert(oper)
-
-  /**
    * Validate that the specified operator is valid
    */
   def check(oper: Operator): Unit =
@@ -319,7 +223,7 @@ case class Database(name: String, backend: Backend)
    * Build a Table operator for the table with the provided name, requesting the
    * specified metadata.
    */
-  def getTableOperator(table: String, metadata: List[(String, Type.T)]): Operator =
+  def getTableOperator(table: String, metadata: List[(String, Expression, Type.T)]): Operator =
     backend.getTableOperator(table, metadata)
   
   /**
@@ -359,7 +263,7 @@ case class Database(name: String, backend: Backend)
         case None => None
         case Some(lens) => 
           // println("Found: "+name); 
-          Some(CTPercolator.propagateRowIDs(lens.view))
+          Some(lens.view)
       }
     }
   }
@@ -379,8 +283,14 @@ case class Database(name: String, backend: Backend)
    * header or not is unimplemented. So its assumed every CSV file
    * supplies an appropriate header.
    */
+
   def loadTable(targetTable: String, sourceFile: File){
-    LoadCSV.handleLoadTable(this, targetTable, sourceFile)
+    LoadCSV.handleLoadTable(this, targetTable+"RAW", sourceFile)
+    val targetRaw = targetTable + "RAW"
+    val oper = getTableOperator(targetRaw)
+    val l = List(new FloatPrimitive(.5))
+
+    lenses.create(oper, targetTable, l,"TYPE_INFERENCE")
   }
   
   def loadTable(targetTable: String, sourceFile: String){
@@ -391,15 +301,5 @@ case class Database(name: String, backend: Backend)
   }
   def loadTable(sourceFile: File){
     loadTable(sourceFile.getName().split("\\.")(0), sourceFile)
-  }
-
-  def getBackendSQL(o: Operator): List[net.sf.jsqlparser.statement.select.SelectBody] =
-  {
-    o match {
-      case Project(_, src) => getBackendSQL(src)
-      case Union(lhs,rhs) => getBackendSQL(lhs)++getBackendSQL(rhs);
-      case _ => List(convert(o))
-
-    }
   }
 }

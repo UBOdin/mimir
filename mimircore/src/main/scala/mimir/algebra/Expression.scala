@@ -13,16 +13,28 @@ case class TypeException(found: Type.T, expected: Type.T,
   );
 class RAException(msg: String) extends Exception(msg);
 
+/**
+ * An enum class defining the type of primitive-valued expressions
+ * (e.g., integers, floats, strings, etc...)
+ */
 object Type extends Enumeration {
+  /**
+   * The base type of the enum.  Type.T is an instance of Type
+   */
   type T = Value
-
+  /**
+   * The enum values themselves
+   */
   val TInt, TFloat, TDate, TString, TBool, TRowId, TType, TAny = Value
 
+  /**
+   * Convert a type to a SQL-friendly name
+   */
   def toString(t: T) = t match {
     case TInt => "int"
-    case TFloat => "decimal"
+    case TFloat => "real"
     case TDate => "date"
-    case TString => "string"
+    case TString => "varchar"
     case TBool => "bool"
     case TRowId => "rowid"
     case TType => "type"
@@ -31,6 +43,9 @@ object Type extends Enumeration {
 
   def toStringPrimitive(t: T) = StringPrimitive(toString(t))
 
+  /**
+   * Convert a type from a SQL-friendly name
+   */
   def fromString(t: String) = t.toLowerCase match {
     case "int"     => Type.TInt
     case "integer" => Type.TInt
@@ -52,27 +67,87 @@ object Type extends Enumeration {
 
 import mimir.algebra.Type._
 
+/**
+ * Base type for expression trees.  Represents a single node in the tree.
+ */
 abstract class Expression { 
+  /**
+   * Return all of the children of the current tree node
+   */
   def children: List[Expression] 
+  /**
+   * Return a new instance of the same object, but with the 
+   * children replaced with the provided list.  The list must
+   * be of the same size returned by children.  This is mostly
+   * to facilitate recur, below
+   */
   def rebuild(c: List[Expression]): Expression
+  /**
+   * Perform a recursive rewrite.  
+   * The following pattern is pretty common throughout Mimir:
+   * def replaceFooWithBar(e:Expression): Expression =
+   *   e match {
+   *     case Foo(a, b, c, ...) => Bar(a, b, c, ...)
+   *     case _ => e.recur(replaceFooWithBar(_))
+   *   }
+   * Note how specific rewrites are applied to specific patterns
+   * in the tree, and recur is used to ignore/descend through 
+   * every other class of object
+   */
   def recur(f: Expression => Expression) =
     rebuild(children.map(f))
 }
 
+/**
+ * Slightly more specific base type for nodes without children
+ * Like Expression, but handles children/rebuild for free
+ */
 abstract class LeafExpression extends Expression {
   def children = List[Expression]();
   def rebuild(c: List[Expression]):Expression = { return this }
 }
 
+/////////////// Primitive Values ///////////////
+
+/**
+ * Slightly more specific base type for constant terms.  PrimitiveValue
+ * also acts as a boxing type for constants in Mimir.
+ */
 abstract class PrimitiveValue(t: Type.T) 
   extends LeafExpression 
 {
   def getType = t
+  /**
+   * Convert the current object into a long or throw a TypeException if 
+   * not possible
+   */
   def asLong: Long;
+  /**
+   * Convert the current object into a double or throw a TypeException if 
+   * not possible
+   */
   def asDouble: Double;
+  /**
+   * Convert the current object into a string or throw a TypeException if 
+   * not possible.  Note the difference between this and toString.
+   * asString returns the content, while toString returns a representation
+   * of the primitive value itself.
+   * An overt example of this is:
+   *   val temp = StringPrimitive('foo')
+   *   println(temp.asString)  // Returns "foo"
+   *   println(temp.toString)  // Returns "'foo'"
+   * Note the extra quotes.  If you ever see a problem involving strings
+   * with ''too many nested quotes'', your problem is probably with asString
+   */
   def asString: String;
+  /**
+   * return the contents of the variable as just an object.
+   */
   def payload: Object;
 }
+/**
+ * Boxed representation of a long integer
+ */
 case class IntPrimitive(v: Long) 
   extends PrimitiveValue(TInt) 
 {
@@ -82,6 +157,9 @@ case class IntPrimitive(v: Long)
   def asString: String = v.toString;
   def payload: Object = v.asInstanceOf[Object];
 }
+/**
+ * Boxed representation of a string
+ */
 case class StringPrimitive(v: String) 
   extends PrimitiveValue(TString)
 {
@@ -91,15 +169,21 @@ case class StringPrimitive(v: String)
   def asString: String = v;
   def payload: Object = v.asInstanceOf[Object];
 }
-case class KeywordPrimitive(v: String, t: Type.T)
-  extends PrimitiveValue(t)
+/**
+ * Boxed representation of a type object
+ */
+case class TypePrimitive(t: Type.T)
+  extends PrimitiveValue(Type.TType)
 {
-  override def toString() = v
-  def asLong: Long = java.lang.Long.parseLong(v)
-  def asDouble: Double = java.lang.Double.parseDouble(v)
-  def asString: String = v;
-  def payload: Object = v.asInstanceOf[Object];
+  override def toString() = t.toString
+  def asLong: Long = throw new TypeException(TType, TInt, "Cast")
+  def asDouble: Double = throw new TypeException(TType, TFloat, "Cast")
+  def asString: String = t.toString;
+  def payload: Object = t.asInstanceOf[Object];
 }
+/**
+ * Boxed representation of a row identifier/provenance token
+ */
 case class RowIdPrimitive(v: String)
   extends PrimitiveValue(TRowId)
 {
@@ -109,6 +193,9 @@ case class RowIdPrimitive(v: String)
   def asString: String = v;
   def payload: Object = v.asInstanceOf[Object];
 }
+/**
+ * Boxed representation of a double-precision floating point number
+ */
 case class FloatPrimitive(v: Double) 
   extends PrimitiveValue(TFloat)
 {
@@ -118,12 +205,15 @@ case class FloatPrimitive(v: Double)
   def asString: String = v.toString;
   def payload: Object = v.asInstanceOf[Object];
 }
+/**
+ * Boxed representation of a date
+ */
 case class DatePrimitive(y: Int, m: Int, d: Int) 
   extends PrimitiveValue(TDate)
 {
   override def toString() = "DATE '"+y+"-"+m+"-"+d+"'"
-  def asLong: Long = throw new TypeException(TString, TInt, "Cast");
-  def asDouble: Double = throw new TypeException(TString, TFloat, "Cast");
+  def asLong: Long = throw new TypeException(TDate, TInt, "Cast");
+  def asDouble: Double = throw new TypeException(TDate, TFloat, "Cast");
   def asString: String = toString;
   def payload: Object = (y, m, d).asInstanceOf[Object];
   def compare(c: DatePrimitive): Integer = {
@@ -136,6 +226,9 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
     else { 0 }
   }
 }
+/**
+ * Boxed representation of a boolean
+ */
 case class BoolPrimitive(v: Boolean)
   extends PrimitiveValue(TBool)
 {
@@ -145,6 +238,9 @@ case class BoolPrimitive(v: Boolean)
   def asString: String = toString;
   def payload: Object = v.asInstanceOf[Object];
 }
+/**
+ * Boxed representation of NULL
+ */
 case class NullPrimitive()
   extends PrimitiveValue(TAny)
 {
@@ -155,26 +251,36 @@ case class NullPrimitive()
   def payload: Object = null
 }
 
+/////////////// Computations ///////////////
+
+/**
+ * Boolean Negation
+ */
 case class Not(child: Expression) 
   extends Expression 
 {
   def children: List[Expression] = List[Expression](child)
   def rebuild(x: List[Expression]): Expression = Not(x(0))
+  override def toString = ("NOT(" + child.toString + ")")
 }
 
-abstract class Proc(args: List[Expression]) extends Expression
-{
-  def getType(argTypes: List[Type.T]): Type.T
-  def getArgs = args
-  def children = args
-  def get(v: List[PrimitiveValue]): PrimitiveValue
-}
-
+/**
+ * Utility class supporting binary arithmetic operations
+ * 
+ * Arith.Op is an Enumeration type for binary arithmetic operations
+ */
 object Arith extends Enumeration {
   type Op = Value
   val Add, Sub, Mult, Div, And, Or = Value
   
+  /**
+   * Regular expresion to match any and all binary operations
+   */
   def matchRegex = """\+|-|\*|/|\||&""".r
+
+  /**
+   * Convert from the operator's string encoding to its Arith.Op rep
+   */
   def fromString(a: String) = {
     a match {
       case "+" => Add
@@ -186,6 +292,9 @@ object Arith extends Enumeration {
       case x => throw new Exception("Invalid operand '"+x+"'")
     }
   }
+  /**
+   * Convert from the operator's Arith.Op representation to a string
+   */
   def opString(v: Op): String = {
     v match {
       case Add => "+"
@@ -196,66 +305,26 @@ object Arith extends Enumeration {
       case Or => " OR "
     }
   }
+  /**
+   * Is this binary operation a boolean operator (AND/OR)
+   */
   def isBool(v: Op): Boolean = {
     v match {
       case And | Or => true
       case _ => false
     }
   }
+
+  /**
+   * Is this binary operation a numeric operator (+, -, *, /)
+   */
   def isNumeric(v: Op): Boolean = !isBool(v)
 
-  def makeAnd(a: Expression, b: Expression): Expression = 
-    (a, b) match {
-      case (BoolPrimitive(true), _) => b
-      case (_, BoolPrimitive(true)) => a
-      case (BoolPrimitive(false), _) => BoolPrimitive(false)
-      case (_, BoolPrimitive(false)) => BoolPrimitive(false)
-      case _ => Arithmetic(And, a, b)
-    }
-  def makeAnd(el: List[Expression]): Expression = 
-    el.foldLeft[Expression](BoolPrimitive(true))(makeAnd(_,_))
-  def makeOr(a: Expression, b: Expression): Expression = 
-  (a, b) match {
-    case (BoolPrimitive(false), _) => b
-    case (_, BoolPrimitive(false)) => a
-    case (BoolPrimitive(true), _) => BoolPrimitive(true)
-    case (_, BoolPrimitive(true)) => BoolPrimitive(true)
-    case _ => Arithmetic(Or, a, b)
-  }
-  def makeOr(el: List[Expression]): Expression = 
-    el.foldLeft[Expression](BoolPrimitive(false))(makeOr(_,_))
-  def makeNot(e: Expression): Expression =
-  {
-    e match {
-      case BoolPrimitive(b) => BoolPrimitive(!b)
-      case Arithmetic(And, a, b) =>
-        Arithmetic(Or, makeNot(a), makeNot(b))
-      case Arithmetic(Or, a, b) =>
-        Arithmetic(And, makeNot(a), makeNot(b))
-      case Comparison(c, a, b) =>
-        Comparison(Cmp.negate(c), a, b)
-      case Not(a) => a
-      case _ => Not(e)
-    }
-  }
-  def getConjuncts(e: Expression): List[Expression] = {
-    e match {
-      case BoolPrimitive(true) => List[Expression]()
-      case Arithmetic(And, a, b) => 
-        getConjuncts(a) ++ getConjuncts(b)
-      case _ => List(e)
-    }
-  }
-  def getDisjuncts(e: Expression): List[Expression] = {
-    e match {
-      case BoolPrimitive(false) => List[Expression]()
-      case Arithmetic(Or, a, b) => 
-        getConjuncts(a) ++ getConjuncts(b)
-      case _ => List(e)
-    }
-  }
 }
 
+/**
+ * Enumerator for comparison types
+ */
 object Cmp extends Enumeration {
   type Op = Value
   val Eq, Neq, Gt, Lt, Gte, Lte, Like, NotLike = Value
@@ -287,10 +356,12 @@ object Cmp extends Enumeration {
   }
 }
 
-case class Var(name: String) extends LeafExpression {
-  override def toString = name;
-}
-
+/**
+ * Non-relational binary operations.  This includes integer and boolean
+ * arithmetic.
+ * 
+ * See the Arith enum above for a full list of available operations.
+ */
 case class Arithmetic(op: Arith.Op, lhs: Expression, 
                       rhs: Expression) 
 	extends Expression 
@@ -300,6 +371,11 @@ case class Arithmetic(op: Arith.Op, lhs: Expression,
   def children = List(lhs, rhs)
   def rebuild(c: List[Expression]) = Arithmetic(op, c(0), c(1))
 }
+
+/**
+ * Relational binary operations.  This includes equality/inequality,
+ * ordering operators, and simple string comparators (e.g., SQL's LIKE)
+ */
 case class Comparison(op: Cmp.Op, lhs: Expression, 
                       rhs: Expression) 
 	extends Expression 
@@ -309,10 +385,23 @@ case class Comparison(op: Cmp.Op, lhs: Expression,
   def children = List(lhs, rhs)
   def rebuild(c: List[Expression]) = Comparison(op, c(0), c(1))
 }
+
+/**
+ * Invocation of a System- or User-Defined Function.  
+ * 
+ * For Mimir to be completely happy, functions need to be defined
+ * with mimir.algebra.FunctionRegistry and have an entry in 
+ * mimir.algebra.Eval.  
+ *
+ * TODO: Move inline function definition from Eval to 
+ *       FunctionRegistry
+ */
 case class Function(op: String, params: List[Expression]) extends Expression {
   override def toString() = {
     op match {
       // Need to special case COUNT DISTINCT
+      // OK: Is this actually needed?  This should be part of the Aggregate operator, 
+      //     and not Function.
       case "COUNT" if params.size > 0 => 
             "COUNT(DISTINCT " + params.map( _.toString ).mkString(", ") + ")"
       case "COUNT" if params.size == 0 => 
@@ -324,6 +413,40 @@ case class Function(op: String, params: List[Expression]) extends Expression {
   def children = params
   def rebuild(c: List[Expression]) = Function(op, c)
 }
+
+/**
+ * Representation of a column reference (a SQL variable).  Names are all that's
+ * needed.  Typechecker expects Operators to be self-contained, but not 
+ * Expressions.
+ */
+case class Var(name: String) extends LeafExpression {
+  override def toString = name;
+}
+
+/**
+ * Representation of a Provenance Token / Row Identifier.  RowId has a special
+ * place in the expression syntax, because unlike classical SQL implicit ROWID
+ * attributes, Mimir's ROWID attributes don't need to reference a specific
+ * table.  If a ROWID appears in an operator that reads from multiple tables,
+ * Mimir will synthesize a new, unique ROWID from the ROWIDs of its constituents.
+ * 
+ * see mimir.provenance.Provenance for more details.
+ */
+case class RowIdVar() extends LeafExpression
+{
+  override def toString = "ROWID";
+}
+
+/**
+ * Representation of an If-Then-Else block.  Note that this differs from
+ * SQL's use of CASE blocks.  If-Then-Else is substantially easier to work
+ * with for recursive analyses.  
+ *
+ * For conversion between If-Then-Else and CASE semantics, see the methods
+ *  - makeCaseExpression
+ *  - foldConditionalsToCase
+ * in mimir.algebra.ExpressionUtils.
+ */
 case class Conditional(condition: Expression, thenClause: Expression,
                        elseClause: Expression) extends Expression 
 {
@@ -335,6 +458,10 @@ case class Conditional(condition: Expression, thenClause: Expression,
     Conditional(c(0), c(1), c(2))
   }
 }
+
+/**
+ * Representation of a unary IS NULL
+ */
 case class IsNullExpression(child: Expression) extends Expression { 
   override def toString() = {child.toString+" IS NULL"}
   def children = List(child)

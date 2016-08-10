@@ -8,6 +8,7 @@ import mimir.Database
 import mimir.algebra._
 import mimir.ctables._
 import mimir.sql._
+import mimir.util.JDBCUtils
 
 import scala.collection.JavaConversions._
 
@@ -21,7 +22,7 @@ class LensManager(db: Database) {
 
     def init(): Unit =
   {
-    db.update("""
+    db.backend.update("""
       CREATE TABLE MIMIR_LENSES(
         name varchar(30), 
         query varchar(4000),
@@ -64,7 +65,7 @@ class LensManager(db: Database) {
 
   
   def create(lensDefn: CreateLens): Unit = { 
-    val (baseQuery, bindings) = db.convert(lensDefn.getSelectBody)
+    val (baseQuery, bindings) = db.sql.convert(lensDefn.getSelectBody, null)
     val source = 
          Project(
            bindings.map( _ match { case (external, internal) =>
@@ -80,7 +81,7 @@ class LensManager(db: Database) {
           if(lensDefn.getType.equalsIgnoreCase("SCHEMA_MATCHING"))
             Var(arg.toString)
           else
-            db.convert(arg)
+            db.sql.convert(arg)
         ).toList,
       lensDefn.getType()
       )
@@ -93,13 +94,13 @@ class LensManager(db: Database) {
         source
       );
     lens.build(db);
-    lens.createBackingStore
+    db.bestGuessCache.buildCache(lens);
     lensCache.put(lensName, lens);
     save(lens);
   }
 
   def save(lens: Lens): Unit = {
-    db.update("""
+    db.backend.update("""
       INSERT INTO MIMIR_LENSES(name, query, lens_type, parameters) 
       VALUES (?,?,?,?)
     """, List(
@@ -112,17 +113,19 @@ class LensManager(db: Database) {
   }
   
   def load(lensName: String): Option[Lens] = {
+    // println("GETTING: "+lensName)
     lensCache.get(lensName) match {
       case Some(s) => Some(s)
       case None => {
         val lensMetaResult =
-          db.query("""
+          db.backend.resultRows("""
             SELECT lens_type, parameters, query
             FROM MIMIR_LENSES
             WHERE name = ?
-          """, List(lensName)).allRows
-        if(lensMetaResult.length == 0) { return None; }
-        else if(lensMetaResult.length > 1){ 
+          """, List(lensName))
+        if(lensMetaResult.length == 0) { 
+          return None; 
+        } else if(lensMetaResult.length > 1){ 
           throw new SQLException("Multiple definitions for Lens `"+lensName+"`")
         } else {
           val lensMeta = lensMetaResult(0)
@@ -143,6 +146,15 @@ class LensManager(db: Database) {
         }
       }
     }
+  }
+
+  def getAllLensNames(): List[String] = {
+    db.backend.resultRows(
+      """
+        SELECT NAME
+        FROM MIMIR_LENSES
+      """).
+    map(_(0).asString.toUpperCase)
   }
 
   def modelForLens(lensName: String): Model = 

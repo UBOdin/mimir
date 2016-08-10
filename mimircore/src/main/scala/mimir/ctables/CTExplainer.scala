@@ -4,6 +4,7 @@ import java.util.Random;
 
 import mimir._;
 import mimir.algebra._;
+import mimir.provenance._;
 import mimir.exec._;
 import mimir.util._;
 import mimir.optimizer._;
@@ -66,7 +67,6 @@ case class GenericCellExplanation (
 }
 
 case class NumericCellExplanation (
-	val bounds: Option[(PrimitiveValue, PrimitiveValue)],
 	val mean: PrimitiveValue,
 	val sttdev: PrimitiveValue,
 	override val examples: List[PrimitiveValue],
@@ -75,10 +75,7 @@ case class NumericCellExplanation (
 	override val column: String
 ) extends CellExplanation(examples, reasons, token, column) {
 	override def fields = 
-		(bounds match {
-			case None => List[(String, PrimitiveValue)]()
-			case Some((low, high)) => List(("bounds", StringPrimitive(low.toString+":"+high.toString)));
-		}) ++ List(
+		List(
 			("mean", mean),
 			("sttdev", sttdev)
 		) ++ super.fields
@@ -93,29 +90,24 @@ class CTExplainer(db: Database) {
 	
 	def explainRow(oper: Operator, token: RowIdPrimitive): RowExplanation =
 	{
-		val (tuple, expressions) = provenanceQuery(oper, token)
-		val (provenance, probability) = 
-			expressions.get(CTables.conditionColumn) match {
-				case None => (BoolPrimitive(true), 1.0)
-				case Some(cond) => {
-					(	cond, 
-						sampleExpression[(Int,Int)](cond, tuple, NUM_SAMPLES, (0,0), 
-							(cnt: (Int,Int), present: PrimitiveValue) => 
-								present match {
-									case NullPrimitive() => (cnt._1, cnt._2)
-									case BoolPrimitive(t) => 
-										( cnt._1 + (if(t){ 1 } else { 0 }),
-										  cnt._2 + 1
-										 )
-								}
-						) match { 
-							case (_, 0) => -1.0
-							case (hits, total) => hits.toDouble / total.toDouble
+		val (tuple, _, provenance) = getProvenance(oper, token)
+		val probability = 
+			if(CTables.isDeterministic(provenance)){ 1.0 }
+			else { 
+				sampleExpression[(Int,Int)](provenance, tuple, NUM_SAMPLES, (0,0), 
+					(cnt: (Int,Int), present: PrimitiveValue) => 
+						present match {
+							case NullPrimitive() => (cnt._1, cnt._2)
+							case BoolPrimitive(t) => 
+								( cnt._1 + (if(t){ 1 } else { 0 }),
+								  cnt._2 + 1
+								 )
 						}
-					)
+				) match { 
+					case (_, 0) => -1.0
+					case (hits, total) => hits.toDouble / total.toDouble
 				}
 			}
-
 		// println("tuple: "+tuple)
 		// println("condition"+provenance)
 		// println("probability: "+probability)
@@ -129,7 +121,7 @@ class CTExplainer(db: Database) {
 
 	def explainCell(oper: Operator, token: RowIdPrimitive, column: String): CellExplanation =
 	{
-		val (tuple, allExpressions) = provenanceQuery(oper, token)
+		val (tuple, allExpressions, _) = getProvenance(oper, token)
 		val expr = allExpressions.get(column).get
 		val colType = Typechecker.typeOf(expr, tuple.mapValues( _.getType ))
 
@@ -145,7 +137,6 @@ class CTExplainer(db: Database) {
 				val (avg, stddev) = getStats(expr, tuple, NUM_SAMPLES)
 
 				NumericCellExplanation(
-					getBounds(expr, tuple),
 					avg, 
 					stddev, 
 					examples,
@@ -161,20 +152,6 @@ class CTExplainer(db: Database) {
 					token,
 					column
 				)
-		}
-	}
-
-	def getBounds(expr: Expression, tuple: Map[String,PrimitiveValue]): 
-		Option[(PrimitiveValue,PrimitiveValue)] =
-	{
-		try {
-			val (lbound, ubound) = CTBounds.compile(expr);
-			Some( (
-				Eval.eval(lbound, tuple),
-				Eval.eval(ubound, tuple)
-			))
-		} catch {
-			case BoundsUnsupportedException(_, _) => None
 		}
 	}
 
@@ -217,7 +194,7 @@ class CTExplainer(db: Database) {
 		val avg = Eval.applyArith(Arith.Div, tot, FloatPrimitive(count.toDouble))
 		val stddev =
 			Eval.eval(
-				Function("ABS", List(
+				Function("ABSOLUTE", List(
 					Arithmetic(Arith.Sub, 
 						Arithmetic(Arith.Div, totSq, FloatPrimitive(count.toDouble)),
 						Arithmetic(Arith.Mult, avg, avg)
@@ -232,13 +209,14 @@ class CTExplainer(db: Database) {
 	def getFocusedReasons(expr: Expression, tuple: Map[String,PrimitiveValue]): 
 		List[Reason] =
 	{
-		getFocusedReasons( Eval.inline(expr, tuple) );
+		// println("PREREASONS: "+expr.toString)
+		getFocusedReasons( Eval.inlineWithoutSimplifying(expr, tuple) );
 	}
 
 	def getFocusedReasons(expr: Expression):
 		List[Reason] =
 	{
-		// println(expr.toString)
+		// println("REASONS: " + expr.toString)
 		expr match {
 			case v: VGTerm => List(v.reason)
 
@@ -265,29 +243,44 @@ class CTExplainer(db: Database) {
 		}
 	}
 
-	def provenanceQuery(oper: Operator, token: RowIdPrimitive): 
-		(Map[String,PrimitiveValue], Map[String, Expression]) =
+	def getProvenance(oper: Operator, token: RowIdPrimitive): 
+		(Map[String,PrimitiveValue], Map[String, Expression], Expression) =
 	{
-		val optQuery = db.compiler.optimize(
-			CTPercolator.propagateRowIDs(oper, true),
-			NonDeterminism.Classic
-		)
-		val (expressions, sourceQuery, _) = 
-			delveToProjection(optQuery, token)
-		val iterator = db.compiler.buildDeterministicIterator(
-			Select(
-				Comparison(Cmp.Eq, 
-					expressions.find( _._1.equals(CTPercolator.ROWID_KEY) ).get._2, token),
-				sourceQuery
-			)
-		)
+		// Annotate the query to produce a provenance trace
+		val (provQuery, rowidCols) = Provenance.compile(oper)
 
-		iterator.open()
-		if(!iterator.getNext()){ throw InvalidProvenance("INVALID TOKEN", token); }
-		val tuple = iterator.currentTuple()
-		iterator.close();
+		// Use the token to rewrite the query to look up the single tuple we want
+		val singletonQuery = Provenance.filterForToken(provQuery, token, rowidCols)
 
-		(  tuple, expressions  )
+		// Flatten the query out into a set of expressions and a row condition
+		val (tracedQuery, columnExprs, rowCondition) = Tracer.trace(singletonQuery)
+
+		// println("\n\nTRACE:"+tracedQuery)
+		// println("ROW: "+rowCondition)
+
+		val inlinedQuery = InlineVGTerms.optimize(tracedQuery)
+
+		// println("INLINE:"+inlinedQuery)
+
+		val optQuery = db.compiler.optimize(inlinedQuery)
+
+		val finalSchema = optQuery.schema
+
+		val sqlQuery = db.ra.convert(optQuery)
+
+		// println("SQL: "+sqlQuery)
+
+		val results = db.backend.execute(sqlQuery)
+
+		val baseData = JDBCUtils.extractAllRows(results, finalSchema.map(_._2))
+
+		if(baseData.size != 1){
+			throw new InvalidProvenance(""+baseData.size+" rows for token", token)
+		}	
+
+		val tuple = finalSchema.map(_._1).zip(baseData(0)).toMap
+
+		(tuple, columnExprs, rowCondition)
 	}
 
 	def delveToProjection(oper: Operator, token: RowIdPrimitive):

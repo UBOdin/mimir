@@ -53,7 +53,7 @@
                                 <!-- Used in nav_bar for testing purposes 
                                 <li role="separator" class="divider"></li>
                                 <li class="dropdown-header" id="tables_header">Tables</li>
-                                @webAPI.getAllTables.map { x =>
+                                @webAPI.db.backend.getAllTables().map { x =>
                                     @if(!x.equals("MIMIR_LENSES") && !x.endsWith("_BACKEND")) {
                                         <li><a class="table_link ">@x</a></li>
                                     }
@@ -74,7 +74,7 @@
             <br>
             <p>Mimir wraps around a traditional relational database system and allows users to explicitly track data quality through a construct called a Lens.  Lenses in Mimir are analogous to stages in an ETL pipeline -- responsible for performing data cleaning or analytics tasks.  However, unlike a traditional ETL pipeline, Lenses explicitly track conditions that could compromise data quality: Bulk data copies without considering data volatility, entity-resolution, missing values.  Lenses create the illusion that you're working with high quality data, allowing you to start analyzing the data right away.  Using the power of provenance, Mimir can tell you how reliable your query results are, and what you can do about it.</p>
             <br>
-            <a href="https://github.com/okennedy/mimir">GitHub</a>
+            <a href="https://github.com/UBOdin/mimir" target="_new" class="circlebutt"><img src="assets/images/icon_git.png"/></a>
             <div class="close_btn"><span class="close_x">&#10006;</span></div>
         </div>
 
@@ -96,15 +96,15 @@
                         <div class="dropdown" id="table_btn"><button class="btn btn-primary dropdown-toggle" aria-haspopup="true" aria-expanded="false" style="text-align:left;" type="button" data-toggle="dropdown">Select Table
                             <span class="caret"></span></button>
                             <ul class="dropdown-menu" id="select_table" aria-labelledby="dropdownMenu1">
-                                <li class="dropdown-header" >Tables</li>
-                                @webAPI.getAllTables.map { x =>
+                                <li class="dropdown-header" >Raw Data Tables</li>
+                                @webAPI.db.backend.getAllTables().map { x =>
                                     @if(!x.equals("MIMIR_LENSES") && !x.endsWith("_BACKEND")) {
                                         <li><a class="table_link ">@x</a></li>
                                     }
                                 }
                                 <li role="separator" class="divider"></li>
                                 <li class="dropdown-header">Applied Lenses</li>
-                                @webAPI.getAllLenses.map { x =>
+                                @webAPI.db.lenses.getAllLensNames().map { x =>
                                 <li><a class="lens_link">@x</a></li>
                                 }
                             </ul>
@@ -123,13 +123,30 @@
             @result match {
                 case WebQueryResult(iter) => {
                     <div class="leftCol col-md-2 col-xs-2">
-                        <div class="dropdown">
+                        <div class="dropdown" style="margin-bottom:10px;">
                             <button class="btn btn-primary dropdown-toggle" style="width:100%;text-align:left;" type="button" data-toggle="dropdown">Create Lens
                             <span class="caret"></span></button>
                             <ul class="dropdown-menu">
                                 <li><button id="type_inference_btn" class="lens_btn">Type Inference</button></li>
                                 <li><button id="missing_value_btn" class="lens_btn">Missing Value</button></li>
                                 <li><button id="schema_matching_btn" class="lens_btn" style="margin-bottom:2px;">Schema Matching</button></li>
+                            </ul>
+                        </div>
+                        <div class="dropdown">
+                            <button class="btn btn-primary dropdown-toggle" style="width:100%;text-align:left;" type="button" data-toggle="dropdown">Add Data
+                            <span class="caret"></span></button>
+                            <ul class="dropdown-menu">
+                                <li class="dropdown-header" >Raw Data Tables</li>
+                                @webAPI.db.backend.getAllTables().map { x =>
+                                    @if(!x.equals("MIMIR_LENSES") && !x.endsWith("_BACKEND")) {
+                                        <li><button class="lens_btn add_data_btn">@x</button></li>
+                                    }
+                                }
+                                <li role="separator" class="divider"></li>
+                                <li class="dropdown-header">Applied Lenses</li>
+                                @webAPI.db.lenses.getAllLensNames().map { x =>
+                                <li><a class="lens_link">@x</a></li>
+                                }
                             </ul>
                         </div>
                         

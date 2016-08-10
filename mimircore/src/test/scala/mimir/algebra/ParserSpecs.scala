@@ -58,7 +58,7 @@ object ParserSpecs extends Specification {
     "Handle recursively nested VGTerms mixed with others" in {
       expr("{{ TR1CAST_0[ROWID, {{ TR1INFER_0[] }}] }}") must be equalTo
         VGTerm( ("TR1CAST", null), 0, List(
-          Var("ROWID"),
+          RowIdVar(),
           VGTerm( ("TR1INFER", null), 0, List())
         ))
     }

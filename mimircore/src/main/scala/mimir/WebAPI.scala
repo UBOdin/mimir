@@ -69,13 +69,13 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
               val buffer = new StringBuffer()
               val insDeParser = new InsertDeParser(new ExpressionDeParser(new SelectDeParser(), buffer), new SelectDeParser(), buffer)
               insDeParser.deParse(s)
-              db.update(insDeParser.getBuffer.toString)
+              db.backend.update(insDeParser.getBuffer.toString)
               new WebStringResult("Database updated.")
             case s: Update =>
               val buffer = new StringBuffer()
               val updDeParser = new UpdateDeParser(new ExpressionDeParser(new SelectDeParser(), buffer), buffer)
               updDeParser.deParse(s)
-              db.update(updDeParser.getBuffer.toString)
+              db.backend.update(updDeParser.getBuffer.toString)
               new WebStringResult("Database updated.")
           }
         }
@@ -93,7 +93,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
 
   private def handleSelect(sel: Select): WebQueryResult = {
     val start = System.nanoTime()
-    val raw = db.convert(sel)
+    val raw = db.sql.convert(sel)
     val rawT = System.nanoTime()
     val results = db.query(raw)
     val resultsT = System.nanoTime()
@@ -117,7 +117,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
   }
 
   private def handleExplain(explain: Explain): WebStringResult = {
-    val raw = db.convert(explain.getSelectBody())._1;
+    val raw = db.sql.convert(explain.getSelectBody());
     val op = db.optimize(raw)
     val res = "------ Raw Query ------\n"+
       raw.toString()+"\n"+
@@ -127,31 +127,9 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
     new WebStringResult(res)
   }
 
-  def getAllTables: List[String] = {
-    db.backend.getAllTables()
-  }
-
-  def getAllLenses: List[String] = {
-    val iter = db.query(
-      """
-        SELECT *
-        FROM MIMIR_LENSES
-      """)
-
-    val lensNames = new ListBuffer[String]()
-
-    iter.open()
-    while(iter.getNext()) {
-      lensNames.append(iter(0).asString)
-    }
-    iter.close()
-
-    lensNames.toList
-  }
-
   def getAllSchemas: Map[String, List[(String, Type.T)]] = {
-    getAllTables.map{ (x) => (x, db.getTableSchema(x).get) }.toMap ++
-      getAllLenses.map{ (x) => (x, db.getLens(x).schema()) }.toMap
+    db.backend.getAllTables().map{ (x) => (x, db.getTableSchema(x).get) }.toMap ++
+      db.lenses.getAllLensNames().map{ (x) => (x, db.getLens(x).schema()) }.toMap
   }
 
   def getAllDBs: Array[String] = {
@@ -166,7 +144,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
       try {
         val stmt: Statement = parser.Statement();
         if(stmt.isInstanceOf[Select]){
-          db.convert(stmt.asInstanceOf[Select])
+          db.sql.convert(stmt.asInstanceOf[Select])
         } else {
           throw new Exception("getVGTerms got statement that is not SELECT")
         }
@@ -190,41 +168,6 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
 
   }
 
-  def getVGTerms(query: String, row: String, ind: Int): List[Reason] = {
-    val source = new StringReader(query)
-    val parser = new MimirJSqlParser(source)
-
-    val raw =
-      try {
-        val stmt: Statement = parser.Statement();
-        if(stmt.isInstanceOf[Select]){
-          db.convert(stmt.asInstanceOf[Select])
-        } else {
-          throw new Exception("getVGTerms got statement that is not SELECT")
-        }
-
-      } catch {
-        case e: Throwable => {
-          e.printStackTrace()
-          return List()
-        }
-      }
-
-    val rowQuery = 
-      mimir.algebra.Select(
-        Comparison(Cmp.Eq, Var("ROWID_MIMIR"), new RowIdPrimitive(row)),
-        raw
-      )
-    // println("QUERY: "+rowQuery);
-
-    val iterator = db.queryLineage(rowQuery);
-
-    if(!iterator.getNext()){
-      throw new SQLException("Invalid Source Data ROWID: '" +row+"'");
-    }
-    iterator.reason(ind)
-  }
-
   def nameForQuery(query: String): WebResult =
   {
     val source = new StringReader(query)
@@ -234,7 +177,7 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
       try {
         val stmt: Statement = parser.Statement();
         if(stmt.isInstanceOf[Select]){
-          db.convert(stmt.asInstanceOf[Select])
+          db.sql.convert(stmt.asInstanceOf[Select])
         } else {
           throw new Exception("nameForQuery got statement that is not SELECT")
         }
@@ -255,10 +198,6 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
     db.backend.close()
   }
 
-  def extractVGTerms(exp: Expression): List[String] = {
-    CTables.getVGTerms(exp).map( { case VGTerm((name, _), _, _) => name } )
-  }
-
   def convertToTree(op: Operator): OperatorNode = {
     op match {
       case Project(cols, source) => {
@@ -267,7 +206,8 @@ class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
           convertToTree(source)
         else {
           var params = 
-            projArg.flatMap( projectArg => extractVGTerms(projectArg.input) ) 
+            projArg.flatMap( projectArg => CTables.getVGTerms(projectArg.expression) ).
+                    map(_.model._1) 
           if(params.isEmpty) {
             convertToTree(source)
           } else {

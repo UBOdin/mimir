@@ -1,6 +1,7 @@
 package mimir.demo;
 
 import java.io.{StringReader,BufferedReader,FileReader,File}
+
 import scala.collection.JavaConversions._
 import org.specs2.mutable._
 import org.specs2.matcher.FileMatchers
@@ -12,6 +13,7 @@ import mimir.algebra._;
 import mimir.optimizer._;
 import mimir.ctables._;
 import mimir.exec._;
+import mimir.util._;
 import net.sf.jsqlparser.statement.{Statement}
 
 
@@ -33,23 +35,22 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		new MimirJSqlParser(new StringReader(s)).Statement()
 	}
 	def select(s: String) = {
-		db.convert(
+		db.sql.convert(
 			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
 		)
 	}
 	def query(s: String) = {
 		val query = select(s)
-		db.check(query);
 		db.query(query)
 	}
 	def explainRow(s: String, t: String) = {
-		val query = db.convert(
+		val query = db.sql.convert(
 			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
 		)
 		db.explainRow(query, RowIdPrimitive(t))
 	}
 	def explainCell(s: String, t: String, a:String) = {
-		val query = db.convert(
+		val query = db.sql.convert(
 			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
 		)
 		db.explainCell(query, RowIdPrimitive(t), a)
@@ -57,7 +58,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 	def lens(s: String) =
 		db.createLens(stmt(s).asInstanceOf[mimir.sql.CreateLens])
 	def update(s: Statement) = 
-		db.update(s.toString())
+		db.backend.update(s.toString())
 	def parser = new ExpressionParser(db.lenses.modelForLens)
 	def expr = parser.expr _
 	def i = IntPrimitive(_:Long).asInstanceOf[PrimitiveValue]
@@ -91,7 +92,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 
 		"Run the Load Product Data Script" >> {
 			stmts(productDataFile).map( update(_) )
-			db.query("SELECT * FROM PRODUCT;").allRows must have size(6)
+			db.backend.resultRows("SELECT * FROM PRODUCT;") must have size(6)
 		}
 
 		"Load CSV Files" >> {
@@ -99,9 +100,23 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			db.loadTable(reviewDataFiles(1))
 			db.loadTable(reviewDataFiles(2))
 			query("SELECT * FROM RATINGS1;").allRows must have size(4)
-			query("SELECT RATING FROM RATINGS1;").allRows.flatten must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
+			query("SELECT RATING FROM RATINGS1RAW;").allRows.flatten must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
 			query("SELECT * FROM RATINGS2;").allRows must have size(3)
 
+		}
+
+		"Use Sane Types in Lenses" >> {
+			var oper = select("SELECT * FROM RATINGS2")
+			Typechecker.typeOf(Var("NUM_RATINGS"), oper) must be oneOf(Type.TInt, Type.TFloat, Type.TAny)
+		}
+
+		"Compute Aggregate Queries" >> {
+			query("""
+				SELECT EVALUATION, SUM(NUM_RATINGS) 
+				FROM RATINGS2 
+				WHERE EVALUATION > 3.0 
+				GROUP BY EVALUATION;
+			""").allRows must have size(2)
 		}
 
     "Create and Query Type Inference Lens with NULL values" >> {
@@ -115,21 +130,22 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				  AS SELECT * FROM RATINGS3
 				  WITH MISSING_VALUE('C')
            					 					 					 					 					 			""")
-      query("SELECT * FROM null_test WHERE EVALUATION IS NULL;").allRows.flatten must contain(str("P34235"), NullPrimitive(), f(4.0))
-      query("SELECT * FROM null_test;").allRows.flatten must have size(9)
-      query("SELECT * FROM null_test1;").allRows.flatten must have size(9)
+      val results0 = query("SELECT * FROM null_test;").allRows
+      results0 must have size(3)
+      results0(2) must contain(str("P34235"), NullPrimitive(), f(4.0))
+      query("SELECT * FROM null_test1;").allRows must have size(3)
     }
 
 
 		"Create and Query Type Inference Lenses" >> {
 			lens("""
 				CREATE LENS RATINGS1TYPED 
-				  AS SELECT * FROM RATINGS1 
+				  AS SELECT * FROM RATINGS1RAW 
 				  WITH TYPE_INFERENCE(0.5)
 			""")
 			lens("""
 				CREATE LENS RATINGS2TYPED 
-				  AS SELECT * FROM RATINGS2
+				  AS SELECT * FROM RATINGS2RAW
 				  WITH TYPE_INFERENCE(0.5)
 			""")
 			query("SELECT * FROM RATINGS1TYPED;").allRows must have size(4)
@@ -143,16 +159,40 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		}
 
 		"Create and Query Domain Constraint Repair Lenses" >> {
+			// LoggerUtils.debug("mimir.lenses.BestGuessCache", () => {
 			lens("""
 				CREATE LENS RATINGS1FINAL 
 				  AS SELECT * FROM RATINGS1TYPED 
 				  WITH MISSING_VALUE('RATING')
 			""")
+			// })
 			val result1 = query("SELECT RATING FROM RATINGS1FINAL").allRows.flatten
 			result1 must have size(4)
 			result1 must contain(eachOf( f(4.5), f(4.0), f(6.4), i(4) ) )
 			val result2 = query("SELECT RATING FROM RATINGS1FINAL WHERE RATING < 5").allRows.flatten
 			result2 must have size(3)
+		}
+
+		"Create Backing Stores Correctly" >> {
+			val result = db.backend.resultRows("SELECT "+db.bestGuessCache.dataColumn+" FROM "+db.bestGuessCache.cacheTableForLens("RATINGS1FINAL", 1))
+			result.map( _(0).getType ).toSet must be equalTo Set(Type.TFloat)
+			db.getTableSchema(db.bestGuessCache.cacheTableForLens("RATINGS1FINAL", 1)).get must contain(eachOf( (db.bestGuessCache.dataColumn, Type.TFloat) ))
+
+		}
+
+		"Show Determinism Correctly" >> {
+			lens("""
+				CREATE LENS PRODUCT_REPAIRED 
+				  AS SELECT * FROM PRODUCT
+				  WITH MISSING_VALUE('BRAND')
+			""")
+			val result1 = query("SELECT ID, BRAND FROM PRODUCT_REPAIRED")
+			val result1Determinism = result1.mapRows( r => (r(0).asString, r.deterministicCol(1)) )
+			result1Determinism must contain(eachOf( ("P123", false), ("P125", true), ("P34235", true) ))
+
+			val result2 = query("SELECT ID, BRAND FROM PRODUCT_REPAIRED WHERE BRAND='HP'")
+			val result2Determinism = result2.mapRows( r => (r(0).asString, r.deterministicCol(1), r.deterministicRow) )
+			result2Determinism must contain(eachOf( ("P123", false, false), ("P34235", true, true) ))
 		}
 
 		"Create and Query Schema Matching Lenses" >> {
@@ -166,7 +206,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			result1 must contain(eachOf( f(121.0), f(5.0), f(4.0) ) )
 		}
 
-		"Obtain Column Explanations for Simple Queries" >> {
+		"Obtain Row Explanations for Simple Queries" >> {
 			val expl = explainRow("""
 					SELECT * FROM RATINGS2FINAL WHERE RATING > 3
 				""", "1")
@@ -186,7 +226,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			expl2.toString must not contain("I made a best guess estimate for this data element, which was originally NULL")		
 		}
 
-		"Query a Union of lenses" >> {
+		"Query a Union of Lenses (projection first)" >> {
 			val result1 = query("""
 				SELECT PID FROM RATINGS1FINAL 
 					UNION ALL 
@@ -197,14 +237,21 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				str("P123"), str("P124"), str("P125"), str("P325"), str("P2345"), 
 				str("P34234"), str("P34235")
 			))
+		}
 
-			val result2 = query("""
-				SELECT PID FROM (
-					SELECT * FROM RATINGS1FINAL 
-						UNION ALL 
-					SELECT * FROM RATINGS2FINAL
-				) allratings
-			""").allRows.flatten
+		"Query a Union of Lenses (projection last)" >> {
+			val result2 = 
+			// LoggerUtils.debug("mimir.lenses.BestGuessCache", () => {
+			// LoggerUtils.debug("mimir.algebra.ExpressionChecker", () => {
+				query("""
+					SELECT PID FROM (
+						SELECT * FROM RATINGS1FINAL 
+							UNION ALL 
+						SELECT * FROM RATINGS2FINAL
+					) allratings
+				""").allRows.flatten
+			// })
+			// })
 			result2 must have size(7)
 			result2 must contain(eachOf( 
 				str("P123"), str("P124"), str("P125"), str("P325"), str("P2345"), 
@@ -246,13 +293,35 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				str("HP, AMD 2 core")
 			))
 
-			val explain0 = explainCell("""
-				SELECT p.name, r.rating FROM Product p, (
+			val result0tokenTest = query("""
+				SELECT p.name, r.rating FROM (
 					SELECT * FROM RATINGS1FINAL 
 						UNION ALL 
 					SELECT * FROM RATINGS2FINAL
-				) r
-				""", "3.1.right", "RATING")
+				) r, Product p
+				WHERE r.pid = p.id;
+			""")
+			var result0tokens = List[RowIdPrimitive]()
+			result0tokenTest.open()
+			while(result0tokenTest.getNext()){ 
+				result0tokens = result0tokenTest.provenanceToken :: result0tokens
+			}
+			result0tokens.map(_.asString) must contain(allOf(
+				"3|right|6", 
+				"2|right|5", 
+				"2|left|4",
+				"1|right|3", 
+				"3|left|2", 
+				"1|left|1"
+			))
+
+			val explain0 = explainCell("""
+				SELECT p.name, r.rating FROM (
+					SELECT * FROM RATINGS1FINAL 
+						UNION ALL 
+					SELECT * FROM RATINGS2FINAL
+				) r, Product p
+				""", "1|right|3", "RATING")
 			explain0.reasons.map(_.model) must contain(eachOf(
 				"RATINGS2FINAL",
 				"RATINGS2TYPED"
@@ -306,29 +375,16 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			q3compiled.open()
 
 			// Preliminaries: This isn't required for correctness, but the test case depends on it.
-			q3compiled must beAnInstanceOf[ProjectionResultIterator]
-
-			val q3provquery = q3compiled.asInstanceOf[ProjectionResultIterator].src 
-			// Again, we don't strictly need the type of the inlined result iterator to be this, but the test case needs to be able to inspect the insides
-			q3provquery must beAnInstanceOf[NDInlineResultIterator]
-			val rowidIdx1 = q3provquery.schema.indexWhere(_._1.equals("ROWID_MIMIR_1"))
-
-			//Mimir synthesizes a rowID column for the missing value lens.  That column had better pretend to be an integer
-			q3provquery.schema(rowidIdx1)._2 must be equalTo Type.TRowId
-			//That column had better be an integer too.
-			q3provquery(rowidIdx1) must beAnInstanceOf[RowIdPrimitive]
+			q3compiled must beAnInstanceOf[NonDetIterator]
 
 			//Test another level down the heirarchy too
-			val q3dbquery = q3provquery.asInstanceOf[NDInlineResultIterator].src
+			val q3dbquery = q3compiled.asInstanceOf[NonDetIterator].src
 			q3dbquery must beAnInstanceOf[ResultSetIterator]
-			val rowidIdx2 = q3dbquery.schema.indexWhere(_._1.equals("ROWID_MIMIR_1"))
 
 			// Again, the internal schema must explicitly state that the column is a rowid
-			q3dbquery.asInstanceOf[ResultSetIterator].visibleSchema must contain ( ("ROWID_MIMIR_1", Type.TRowId) )
-			// The external schema too!
-			q3dbquery.schema(rowidIdx2)._2 must be equalTo Type.TRowId
+			q3dbquery.asInstanceOf[ResultSetIterator].visibleSchema must havePair ( "MIMIR_ROWID_0" -> Type.TRowId )
 			// And the returned object had better conform
-			q3dbquery(rowidIdx2) must beAnInstanceOf[RowIdPrimitive]
+			q3dbquery.provenanceToken must beAnInstanceOf[RowIdPrimitive]
 
 
 			val result3 = query("""

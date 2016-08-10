@@ -31,7 +31,7 @@ object LoadCSV {
 
       case None =>
         if(headerDetected(firstLine)) {
-          db.update("CREATE TABLE "+targetTable+"("+
+          db.backend.update("CREATE TABLE "+targetTable+"("+
             firstLine.split(",").map((x) => "\'"+x.trim.replace(" ", "")+"\'" ).mkString(" varchar, ")+
             " varchar)")
 
@@ -65,7 +65,7 @@ object LoadCSV {
 
     while(true){
       val line = src.readLine()
-      if(line == null) { if(statements.nonEmpty) db.update(statements.toList); return }
+      if(line == null) { if(statements.nonEmpty) db.backend.update(statements.toList); return }
 
       val dataLine = line.trim.split(",").padTo(sch.size, "")
       val data = dataLine.indices.map( (i) =>

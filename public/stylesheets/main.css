@@ -11,6 +11,8 @@ ul {
     list-style:                 none;
 }
 
+a:hover{transition: all 0.1s ease-in-out;}
+
 .ttOption {
     font-size:                  0.9em;
 }
@@ -93,7 +95,11 @@ form {
     height:                     40px;
     margin-top:                 20px;
     margin-left:                15px;
-    float: left;
+    float:                      left;
+}
+
+#query_btn:hover {
+    transition:                 all 0.2s ease-in-out; 
 }
 
 #table_btn {
@@ -241,6 +247,7 @@ td:hover {
     float: right;
     padding-left:               10px;
     padding-right:              15px;
+    z-index: 50;
     /*min-width:                  447px;*/
 }
 
@@ -263,7 +270,6 @@ td:hover {
     clear:                      both;
     font-weight:                400;
     line-height:                1.42857143;
-    color:                      #333;
     white-space:                nowrap;
     margin-bottom:              3px;
     border-radius:              0px;
@@ -287,12 +293,15 @@ td:hover {
 }
 
 .leftCol .dropdown-menu .lens_btn:hover {
-    background-color:           #f2f2f2;
-    color:                      #333;
+    background-color:           #204d74;
+    color:                      #fff;
 }
 
 button:focus {
     outline:                    0;
+}
+button:hover {
+    transition: all 0.1s ease-in-out; 
 }
 
 .lens_create_div {
@@ -313,6 +322,14 @@ button:focus {
     display:                    none;
 }
 
+.circlebutt {
+    background-color: #38a;
+    display: inline-block;
+    border-radius: 100px;
+}
+.circlebutt img {height: 37px; width: 37px;}
+.circlebutt:hover {background-color: #334; transition: all 0.2s ease-in-out; }
+
 #black-box {
     position:                   fixed;
     top:                        0px;
@@ -323,6 +340,7 @@ button:focus {
     z-index:                    0;
     display:                    none;
 }
+
 
 textarea:focus {
     outline:                    0;

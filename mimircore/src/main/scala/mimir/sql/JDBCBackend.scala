@@ -4,29 +4,11 @@ import java.sql._
 
 import mimir.Methods
 import mimir.algebra.Type
+import mimir.util.JDBCUtils
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 ;
-
-object JDBCUtils {
-  def convertSqlType(t: Int): Type.T = { 
-    t match {
-      case (java.sql.Types.FLOAT |
-            java.sql.Types.DECIMAL |
-            java.sql.Types.REAL |
-            java.sql.Types.DOUBLE |
-            java.sql.Types.NUMERIC)   => Type.TFloat
-      case (java.sql.Types.INTEGER)  => Type.TInt
-      case (java.sql.Types.DATE |
-            java.sql.Types.TIMESTAMP)     => Type.TDate
-      case (java.sql.Types.VARCHAR |
-            java.sql.Types.NULL |
-            java.sql.Types.CHAR)     => Type.TString
-      case (java.sql.Types.ROWID)    => Type.TRowId
-    }
-  }
-}
 
 class JDBCBackend(backend: String, filename: String) extends Backend
 {
@@ -92,7 +74,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
       ret
     } catch { 
       case e: SQLException => println(e.toString+"during\n"+sel)
-        throw new SQLException("Error", e)
+        throw new SQLException("Error in "+sel, e)
     }
   }
   def execute(sel: String, args: List[String]): ResultSet = 

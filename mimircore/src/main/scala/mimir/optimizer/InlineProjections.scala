@@ -14,7 +14,7 @@ object InlineProjections {
 			case Project(cols, src) if (cols.forall( _ match {
 				case ProjectArg(colName, Var(varName)) => colName.equals(varName)
 				case _ => false
-			}) && (src.schema.map(_._1).toSet &~ cols.map(_.column).toSet).isEmpty)
+			}) && (src.schema.map(_._1).toSet &~ cols.map(_.name).toSet).isEmpty)
 
 			 => optimize(src)
 
@@ -22,7 +22,7 @@ object InlineProjections {
 				val bindings = p.bindings;
 				optimize(Project(
 					cols.map( (arg:ProjectArg) =>
-						ProjectArg(arg.column, Eval.inline(arg.input, bindings))
+						ProjectArg(arg.name, Eval.inline(arg.expression, bindings))
 					),
 					src
 				))
@@ -31,7 +31,7 @@ object InlineProjections {
 				// println("Inline : " + o)
 				Project(
 					cols.map( (arg:ProjectArg) =>
-						ProjectArg(arg.column, Eval.inline(arg.input))
+						ProjectArg(arg.name, Eval.inline(arg.expression))
 					),
 					optimize(src)
 				)
