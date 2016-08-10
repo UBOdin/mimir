@@ -205,6 +205,7 @@ case class FloatPrimitive(v: Double)
   def asString: String = v.toString;
   def payload: Object = v.asInstanceOf[Object];
 }
+
 /**
  * Boxed representation of a date
  */

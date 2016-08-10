@@ -27,7 +27,10 @@ class JDBCBackend(backend: String, filename: String) extends Backend
           case "sqlite" =>
             Class.forName("org.sqlite.JDBC")
             val path = java.nio.file.Paths.get("databases", filename).toString
-            java.sql.DriverManager.getConnection("jdbc:sqlite:" + path)
+            var c = java.sql.DriverManager.getConnection("jdbc:sqlite:" + path)
+            val r = new mimir.algebra.RegisterFunctions
+            r.RegisterFunctions(c)
+            c
 
           case "oracle" =>
             Methods.getConn()

@@ -33,6 +33,9 @@ object FunctionRegistry {
     		Typechecker.assertNumeric(Typechecker.escalate(x)) 
     	})
     registerFunction("CAST", (_) => TAny)
+		registerFunction("MIMIRCAST", (_) => TAny)
+		registerFunction("OTHERTEST", (_) => TInt)
+		registerFunction("AGGTEST", (_) => TInt)
 		registerFunction("DATE", _ match {
 			case TString :: List() => TDate
 			case _ => throw new SQLException("Invalid parameters to DATE()")

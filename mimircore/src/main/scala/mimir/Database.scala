@@ -122,7 +122,7 @@ case class Database(name: String, backend: Backend)
       println("( There may be missing result rows )")
     }
 
-    isNullCheck()
+//    isNullCheck()
 
   }
 
