@@ -31,4 +31,6 @@ class NullBackend(schema: Map[String, List[(String,Type.T)]]) extends Backend {
 
   def close() = {}
 
+  def specializeQuery(q: Operator) = q
+
 }

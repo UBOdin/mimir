@@ -8,7 +8,13 @@ object LoggerUtils {
   def trace[A](loggerName: String, body: () => A): A =
     enhance(loggerName, Level.TRACE, body)
 
+  def trace[A](loggerName: List[String], body: () => A): A =
+    enhance(loggerName, Level.TRACE, body)
+
   def debug[A](loggerName: String, body: () => A): A =
+    enhance(loggerName, Level.DEBUG, body)
+
+  def debug[A](loggerName: List[String], body: () => A): A =
     enhance(loggerName, Level.DEBUG, body)
 
   def enhance[A](loggerName: String, level: Level, body: () => A): A =
@@ -21,6 +27,13 @@ object LoggerUtils {
     ret
   }
 
+  def enhance[A](loggerName: List[String], level: Level, body: () => A): A =
+  {
+    loggerName match {
+      case Nil => body()
+      case hd :: rest => enhance(rest, level, () => enhance(hd, level, body))
+    }
+  }
 
 
 }

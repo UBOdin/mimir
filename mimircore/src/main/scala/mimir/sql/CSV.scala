@@ -340,4 +340,6 @@ class CSVBackend(
   def close() = {
 
   }
+
+  def specializeQuery(q: mimir.algebra.Operator) = q
 }
