@@ -24,7 +24,8 @@ object ExpressionOptimizer {
 	val standardOptimizatins = List[ExpressionOptimizerRule](
 		PullUpBranches,
 		FlattenBooleanConditionals,
-		PropagateConditions
+		PropagateConditions,
+		RemoveRedundantCasts
 	)
 
 	def optimize(e:Expression, opts: List[ExpressionOptimizerRule]): Expression = {

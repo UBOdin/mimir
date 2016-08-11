@@ -3,8 +3,9 @@ package mimir.sql;
 import java.sql._
 
 import mimir.Methods
-import mimir.algebra.Type
+import mimir.algebra.{Type,Operator}
 import mimir.util.JDBCUtils
+import mimir.sql.sqlite._
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
@@ -28,8 +29,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
             Class.forName("org.sqlite.JDBC")
             val path = java.nio.file.Paths.get("databases", filename).toString
             var c = java.sql.DriverManager.getConnection("jdbc:sqlite:" + path)
-            val r = new mimir.algebra.RegisterFunctions
-            r.RegisterFunctions(c)
+            SQLiteCompat.registerFunctions(c)
             c
 
           case "oracle" =>
@@ -191,4 +191,13 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     tables.close()
     tableNames.toList
   }
+
+  def specializeQuery(q: Operator): Operator = {
+    backend match {
+      case "sqlite" => SpecializeForSQLite(q)
+      case "oracle" => q
+    }
+  }
+
+  
 }

@@ -110,51 +110,33 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			Typechecker.typeOf(Var("NUM_RATINGS"), oper) must be oneOf(Type.TInt, Type.TFloat, Type.TAny)
 		}
 
-		"Compute Aggregate Queries" >> {
-			query("""
-				SELECT EVALUATION, SUM(NUM_RATINGS) 
-				FROM RATINGS2 
-				WHERE EVALUATION > 3.0 
-				GROUP BY EVALUATION;
-			""").allRows must have size(2)
-		}
-
     "Create and Query Type Inference Lens with NULL values" >> {
       lens("""
 				CREATE LENS null_test
 				  AS SELECT * FROM RATINGS3
-				  WITH TYPE_INFERENCE(.5)
-           					 					 					 					 			""")
-      lens("""
-				CREATE LENS null_test1
-				  AS SELECT * FROM RATINGS3
 				  WITH MISSING_VALUE('C')
-           					 					 					 					 					 			""")
-      val results0 = query("SELECT * FROM null_test;").allRows
+ 			""")
+      val results0 = 
+				LoggerUtils.debug(List(
+					// "mimir.exec.Compiler", 
+					// "mimir.sql.sqlite.MimirCast$"
+				), () => {
+	      	query("SELECT * FROM RATINGS3;").allRows
+		    })
       results0 must have size(3)
       results0(2) must contain(str("P34235"), NullPrimitive(), f(4.0))
-      query("SELECT * FROM null_test1;").allRows must have size(3)
+      query("SELECT * FROM null_test;").allRows must have size(3)
     }
 
 
 		"Create and Query Type Inference Lenses" >> {
-			lens("""
-				CREATE LENS RATINGS1TYPED 
-				  AS SELECT * FROM RATINGS1RAW 
-				  WITH TYPE_INFERENCE(0.5)
-			""")
-			lens("""
-				CREATE LENS RATINGS2TYPED 
-				  AS SELECT * FROM RATINGS2RAW
-				  WITH TYPE_INFERENCE(0.5)
-			""")
-			query("SELECT * FROM RATINGS1TYPED;").allRows must have size(4)
-			query("SELECT RATING FROM RATINGS1TYPED;").allRows.flatten must contain(eachOf(f(4.5), f(4.0), f(6.4), NullPrimitive()))
-			query("SELECT * FROM RATINGS1TYPED WHERE RATING IS NULL").allRows must have size(1)
-			query("SELECT * FROM RATINGS1TYPED WHERE RATING > 4;").allRows must have size(2)
-			query("SELECT * FROM RATINGS2TYPED;").allRows must have size(3)
+			query("SELECT * FROM RATINGS1;").allRows must have size(4)
+			query("SELECT RATING FROM RATINGS1;").allRows.flatten must contain(eachOf(f(4.5), f(4.0), f(6.4), NullPrimitive()))
+			query("SELECT * FROM RATINGS1 WHERE RATING IS NULL").allRows must have size(1)
+			query("SELECT * FROM RATINGS1 WHERE RATING > 4;").allRows must have size(2)
+			query("SELECT * FROM RATINGS2;").allRows must have size(3)
 			Typechecker.schemaOf(
-				InlineVGTerms.optimize(select("SELECT * FROM RATINGS2TYPED;"))
+				InlineVGTerms.optimize(select("SELECT * FROM RATINGS2;"))
 			).map(_._2) must be equalTo List(Type.TString, Type.TFloat, Type.TFloat)
 		}
 
@@ -162,15 +144,24 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			// LoggerUtils.debug("mimir.lenses.BestGuessCache", () => {
 			lens("""
 				CREATE LENS RATINGS1FINAL 
-				  AS SELECT * FROM RATINGS1TYPED 
+				  AS SELECT * FROM RATINGS1 
 				  WITH MISSING_VALUE('RATING')
 			""")
 			// })
-			val result1 = query("SELECT RATING FROM RATINGS1FINAL").allRows.flatten
+			val result1guesses =
+				db.backend.resultRows("SELECT MIMIR_KEY_0, MIMIR_DATA FROM RATINGS1FINAL_CACHE_1")
+			result1guesses.map( x => (x(0), x(1))) must contain((IntPrimitive(3), FloatPrimitive(6.4)))
+
+			val result1 = 
+				LoggerUtils.debug(List(
+						// "mimir.exec.Compiler"
+					),() => query("SELECT RATING FROM RATINGS1FINAL").allRows.flatten
+				)
+
 			result1 must have size(4)
-			result1 must contain(eachOf( f(4.5), f(4.0), f(6.4), i(4) ) )
+			result1 must contain(eachOf( f(4.5), f(4.0), f(6.4), f(6.4) ) )
 			val result2 = query("SELECT RATING FROM RATINGS1FINAL WHERE RATING < 5").allRows.flatten
-			result2 must have size(3)
+			result2 must have size(2)
 		}
 
 		"Create Backing Stores Correctly" >> {
@@ -198,7 +189,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 		"Create and Query Schema Matching Lenses" >> {
 			lens("""
 				CREATE LENS RATINGS2FINAL 
-				  AS SELECT * FROM RATINGS2TYPED 
+				  AS SELECT * FROM RATINGS2 
 				  WITH SCHEMA_MATCHING(PID string, RATING float, REVIEW_CT float)
 			""")
 			val result1 = query("SELECT RATING FROM RATINGS2FINAL").allRows.flatten
@@ -268,9 +259,9 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				) r
 				WHERE rating > 4;
 			""").allRows.flatten
-			result must have size(4)
+			result must have size(5)
 			result must contain(eachOf( 
-				str("P123"), str("P125"), str("P325"), str("P34234")
+				str("P123"), str("P2345"), str("P125"), str("P325"), str("P34234")
 			))
 		}
 
@@ -324,7 +315,7 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				""", "1|right|3", "RATING")
 			explain0.reasons.map(_.model) must contain(eachOf(
 				"RATINGS2FINAL",
-				"RATINGS2TYPED"
+				"RATINGS2"
 			))
 
 			val result1 = query("""
@@ -355,11 +346,12 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				WHERE r.pid = p.id
 				  AND rating > 4;
 			""").allRows.flatten
-			result2 must have size(3)
+			result2 must have size(4)
 			result2 must contain(eachOf( 
 				str("Apple 6s, White"),
 				str("Samsung Note2"),
-				str("Dell, Intel 4 core")
+				str("Dell, Intel 4 core"),
+				str("Sony to inches")
 			))
 
 			

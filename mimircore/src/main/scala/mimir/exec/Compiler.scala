@@ -77,20 +77,19 @@ class Compiler(db: Database) extends LazyLogging {
     val fullyDeterministicOper =
       db.bestGuessCache.rewriteToUseCache(mostlyDeterministicOper)
 
-    // Since this operator gets used a few times below, we rename it.  That 
-    // way if we add more stages, we only need to change the assignment in 
-    // one place.  Scalac should be smart enough to optimize the double-
-    // reference away.
-    val finalOper =
-      fullyDeterministicOper
-
-    logger.debug(s"FINAL: $finalOper")
-
     // We'll need it a few times, so cache the final operator's schema.
     // This also forces the typechecker to run, so we get a final sanity
     // check on the output of the rewrite rules.
     val finalSchema = 
-      finalOper.schema
+      fullyDeterministicOper.schema
+
+    // The final stage is to apply any database-specific rewrites to adapt
+    // the query to the quirks of each specific target database.  Each
+    // backend defines a specializeQuery method that handles this
+    val finalOper =
+      db.backend.specializeQuery(fullyDeterministicOper)
+
+    logger.debug(s"FINAL: $finalOper")
 
     // We'll need to line the attributes in the output up with
     // the order in which the user expects to see them.  Build
@@ -101,6 +100,8 @@ class Compiler(db: Database) extends LazyLogging {
     // Generate the SQL
     val sql = 
       db.ra.convert(finalOper)
+
+    logger.debug(s"SQL: $sql")
 
     // Deploy to the backend
     val results = 
