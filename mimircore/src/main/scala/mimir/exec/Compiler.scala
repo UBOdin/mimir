@@ -71,11 +71,9 @@ class Compiler(db: Database) extends LazyLogging {
     val mostlyDeterministicOper =
       InlineVGTerms.optimize(optimizedOper)
 
-    // Deal with the remaining VG-Terms.  The best way to do this would
-    // be a database-specific "BestGuess" UDF.  Unfortunately, this doesn't
-    // exist at the moment, so we fall back to the Guess Cache
+    // Replace VG-Terms with their "Best Guess values"
     val fullyDeterministicOper =
-      db.bestGuessCache.rewriteToUseCache(mostlyDeterministicOper)
+      bestGuessQuery(optimizedOper)
 
     // We'll need it a few times, so cache the final operator's schema.
     // This also forces the typechecker to run, so we get a final sanity
@@ -118,6 +116,28 @@ class Compiler(db: Database) extends LazyLogging {
       outputSchema.map(_._1).map(colDeterminism(_)), 
       rowDeterminism
     )
+  }
+
+  /**
+   * Remove all VGTerms in the query and replace them with the 
+   * equivalent best guess values
+   */
+  def bestGuessQuery(oper: Operator): Operator =
+  {
+    // Remove any VG Terms for which static best-guesses are possible
+    // In other words, best guesses that don't depend on which row we're
+    // looking at (like the Type Inference or Schema Matching lenses)
+    val mostlyDeterministicOper =
+      InlineVGTerms.optimize(oper)
+
+    // Deal with the remaining VG-Terms.  The best way to do this would
+    // be a database-specific "BestGuess" UDF.  Unfortunately, this doesn't
+    // exist at the moment, so we fall back to the Guess Cache
+    val fullyDeterministicOper =
+      db.bestGuessCache.rewriteToUseCache(mostlyDeterministicOper)
+
+    // And return
+    fullyDeterministicOper
   }
 
   /**
