@@ -15,7 +15,9 @@
   <logger name="play" level="INFO" />
   <logger name="application" level="DEBUG" />
 
-  <root level="ERROR">
+  <logger name="mimir.ctables.CTExplainer" level="TRACE"/>
+
+  <root level="INFO">
     <appender-ref ref="STDOUT" />
   </root>
 

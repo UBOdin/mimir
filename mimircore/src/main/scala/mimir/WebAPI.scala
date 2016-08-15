@@ -20,7 +20,7 @@ import scala.collection.mutable.ListBuffer
 
 /* Web-facing API */
 
-class WebAPI(dbName: String = "tpch.db", backend: String = "sqlite") {
+class WebAPI(dbName: String = "test.db", backend: String = "sqlite") {
 
 
   val db = new Database(dbName, new JDBCBackend(backend, dbName))

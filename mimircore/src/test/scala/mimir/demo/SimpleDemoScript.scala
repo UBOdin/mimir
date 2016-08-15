@@ -210,6 +210,12 @@ object SimpleDemoScript extends Specification with FileMatchers {
 				""", "2", "RATING")
 			expl1.toString must contain("I made a best guess estimate for this data element, which was originally NULL")		
 		}
+		"Obtain Cell Explanations for Queries with WHERE clauses" >> {
+			val expl1 = explainCell("""
+					SELECT * FROM RATINGS1FINAL WHERE RATING > 0
+				""", "2", "RATING")
+			expl1.toString must contain("I made a best guess estimate for this data element, which was originally NULL")		
+		}
 		"Guard Data-Dependent Explanations for Simple Queries" >> {
 			val expl2 = explainCell("""
 					SELECT * FROM RATINGS1FINAL

@@ -1,6 +1,7 @@
 package mimir.ctables;
 
 import java.util.Random;
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir._;
 import mimir.algebra._;
@@ -82,7 +83,7 @@ case class NumericCellExplanation (
 }
 
 
-class CTExplainer(db: Database) {
+class CTExplainer(db: Database) extends LazyLogging {
 
 	val NUM_SAMPLES = 1000
 	val NUM_EXAMPLES = 3
@@ -108,9 +109,7 @@ class CTExplainer(db: Database) {
 					case (hits, total) => hits.toDouble / total.toDouble
 				}
 			}
-		// println("tuple: "+tuple)
-		// println("condition"+provenance)
-		// println("probability: "+probability)
+		logger.debug(s"tuple: $tuple\ncondition: $provenance\nprobability: $probability")
 
 		RowExplanation(
 			probability,
@@ -247,20 +246,19 @@ class CTExplainer(db: Database) {
 		(Map[String,PrimitiveValue], Map[String, Expression], Expression) =
 	{
 		// Annotate the query to produce a provenance trace
-		val (provQuery, rowidCols) = Provenance.compile(oper)
+		val (provQuery, rowIdCols) = Provenance.compile(oper)
 
-		// Use the token to rewrite the query to look up the single tuple we want
-		val singletonQuery = Provenance.filterForToken(provQuery, token, rowidCols)
+		// Generate a split token
+		val rowIdTokenMap = Provenance.rowIdMap(token, rowIdCols)
 
 		// Flatten the query out into a set of expressions and a row condition
-		val (tracedQuery, columnExprs, rowCondition) = Tracer.trace(singletonQuery)
+		val (tracedQuery, columnExprs, rowCondition) = Tracer.trace(provQuery, rowIdTokenMap)
 
-		// println("\n\nTRACE:"+tracedQuery)
-		// println("ROW: "+rowCondition)
+		logger.debug(s"TRACE: $tracedQuery\nROW: $rowCondition")
 
 		val inlinedQuery = db.compiler.bestGuessQuery(tracedQuery)
 
-		// println("INLINE:"+inlinedQuery)
+		logger.debug(s"INLINE: $inlinedQuery")
 
 		val optQuery = db.compiler.optimize(inlinedQuery)
 
@@ -268,13 +266,15 @@ class CTExplainer(db: Database) {
 
 		val sqlQuery = db.ra.convert(optQuery)
 
-		// println("SQL: "+sqlQuery)
+		logger.debug(s"SQL: $sqlQuery")
 
 		val results = db.backend.execute(sqlQuery)
 
 		val baseData = JDBCUtils.extractAllRows(results, finalSchema.map(_._2))
 
 		if(baseData.size != 1){
+			val resultRowString = baseData.map( _.mkString(", ") ).mkString("\n")
+			logger.debug(s"Results: $resultRowString")
 			throw new InvalidProvenance(""+baseData.size+" rows for token", token)
 		}	
 
