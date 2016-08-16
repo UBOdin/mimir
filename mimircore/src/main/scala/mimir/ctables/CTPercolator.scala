@@ -205,7 +205,7 @@ object CTPercolator {
         return (retProject, newColDeterminism.toMap, newRowDeterminism)
       }
         /*
-        case Aggregate is a shim to allow test cases for deterministic aggregate queries
+        case Aggregate is currently a shim (with a guard) to allow test cases for deterministic aggregate queries
          */
       case Aggregate(args, gb, src) if CTables.isDeterministic(src) => (Aggregate(args, gb, src), Map(), BoolPrimitive(true))
       case Select(cond, src) => {

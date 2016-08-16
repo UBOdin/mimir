@@ -105,8 +105,8 @@ case class AggregateArg(function: String, columns: List[Expression], alias: Stri
 case class Aggregate(args: List[AggregateArg], groupby: List[Expression], source: Operator) extends Operator
 {
   def toString(prefix: String) =
-    prefix + "AGGREGATE[" + args.map(_.toString).mkString("; ") + "]\n\t(Group By [" + groupby.map( _.toString ).mkString(", ") +
-      "])\n\t\t(" + source.toString(prefix + " ") + prefix + ")"
+    prefix + "AGGREGATE[ [" + args.map(_.toString).mkString("; ") + "], Group By [" + groupby.map( _.toString ).mkString(", ") +
+      "] ](\n" + source.toString(prefix + " ") + "\n" + prefix + ")"
 
   def children() = List(source)
   def rebuild(x: List[Operator]) = new Aggregate(args, groupby, x(0))

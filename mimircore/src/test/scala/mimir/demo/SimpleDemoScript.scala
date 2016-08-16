@@ -17,6 +17,7 @@ import net.sf.jsqlparser.statement.{Statement}
 
 
 object SimpleDemoScript extends Specification with FileMatchers {
+	//Return a list of all db/sql statements
 	def stmts(f: File): List[Statement] = {
 		val p = new MimirJSqlParser(new FileReader(f))
 		var ret = List[Statement]();
