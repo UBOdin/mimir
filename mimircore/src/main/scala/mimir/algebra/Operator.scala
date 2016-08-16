@@ -52,6 +52,21 @@ abstract class Operator
    * Return all expression objects that appear in this node
    */
   def expressions: List[Expression]
+
+  /** 
+   * Replace all of the expressions in this operator.  Like 
+   * rebuild, this method expects expressions to arrive in
+   * the same order as they're returned by the expressions 
+   * method
+   */
+  def rebuildExpressions(x: List[Expression]): Operator
+
+  /**
+   * Apply a method to recursively rewrite all of the Expressions
+   * in this object.
+   */
+  def recurExpressions(op: Expression => Expression): Operator =
+    rebuildExpressions(expressions.map( op(_) ))
 }
 
 /**
@@ -80,6 +95,10 @@ case class Project(columns: List[ProjectArg], source: Operator) extends Operator
   def bindings: Map[String, Expression] =
     columns.map( (x) => (x.name, x.expression) ).toMap
   def expressions = columns.map(_.expression)
+  def rebuildExpressions(x: List[Expression]) = Project(
+    columns.zip(x).map({ case (ProjectArg(name,_),expr) => ProjectArg(name, expr)}),
+    source
+  )
 }
 
 /* AggregateArg is a wrapper for the args argument in Aggregate case class where:
@@ -112,6 +131,21 @@ case class Aggregate(args: List[AggregateArg], groupby: List[Expression], source
   def rebuild(x: List[Operator]) = new Aggregate(args, groupby, x(0))
   //def getAliases() = args.map(x => x.getAlias())
   def expressions = groupby ++ args.flatMap(_.columns)
+  def rebuildExpressions(x: List[Expression]) = {
+    val newGroupBy = 
+      groupby.zipWithIndex.map( _._2 ).map( x(_) )
+    val newArgs =
+      args.foldLeft((List[AggregateArg](), groupby.length))({ 
+        case ((arglist, baseIdx),AggregateArg(fn, cols, alias)) => 
+          (
+            arglist ++ List(
+              AggregateArg(fn, cols.zipWithIndex.map(_._2+baseIdx).map( x(_) ), alias)
+            ),
+            baseIdx + cols.length
+          )
+      })._1
+    Aggregate(newArgs, newGroupBy, source)
+  }
 }
 
 /**
@@ -126,6 +160,7 @@ case class Select(condition: Expression, source: Operator) extends Operator
   def children() = List(source)
   def rebuild(x: List[Operator]) = new Select(condition, x(0))
   def expressions = List(condition)
+  def rebuildExpressions(x: List[Expression]) = Select(x(0), source)
 }
 
 /**
@@ -140,6 +175,7 @@ case class Join(left: Operator, right: Operator) extends Operator
   def children() = List(left, right);
   def rebuild(x: List[Operator]) = Join(x(0), x(1))
   def expressions = List()
+  def rebuildExpressions(x: List[Expression]) = this
 }
 
 /**
@@ -156,6 +192,7 @@ case class Union(left: Operator, right: Operator) extends Operator
   def children() = List(left, right)
   def rebuild(x: List[Operator]) = Union(x(0), x(1))
   def expressions = List()
+  def rebuildExpressions(x: List[Expression]) = this
 }
 
 /**
@@ -194,6 +231,7 @@ case class Table(name: String,
   def rebuild(x: List[Operator]) = Table(name, sch, metadata)
   def metadata_schema = metadata.map( x => (x._1, x._3) )
   def expressions = List()
+  def rebuildExpressions(x: List[Expression]) = this
 }
 
 /**
@@ -215,4 +253,5 @@ case class LeftOuterJoin(left: Operator,
   def rebuild(c: List[Operator]): Operator =
     LeftOuterJoin(c(0), c(1), condition)
   def expressions: List[Expression] = List(condition)
+  def rebuildExpressions(x: List[Expression]) = LeftOuterJoin(left, right, x(0))
 }

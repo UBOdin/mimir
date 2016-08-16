@@ -23,6 +23,16 @@ object JDBCUtils {
     }
   }
 
+  def convertMimirType(t: Type.T): Int = {
+    t match {
+      case Type.TInt    => java.sql.Types.INTEGER
+      case Type.TFloat  => java.sql.Types.DOUBLE
+      case Type.TDate   => java.sql.Types.DATE
+      case Type.TString => java.sql.Types.VARCHAR
+      case Type.TRowId  => java.sql.Types.ROWID
+    }
+  }
+
   def convertField(t: Type.T, results: ResultSet, field: Integer): PrimitiveValue =
   {
     val ret =

@@ -171,7 +171,7 @@ object Eval
                 case e: TypeException => new NullPrimitive()
               }
             }
-            case fn => throw new SQLException("Unknown Function: "+fn)
+//            case fn => throw new SQLException("Unknown Function: "+fn)
           }
         }
       }

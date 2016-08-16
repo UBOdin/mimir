@@ -71,26 +71,23 @@ class Compiler(db: Database) extends LazyLogging {
     val mostlyDeterministicOper =
       InlineVGTerms.optimize(optimizedOper)
 
-    // Deal with the remaining VG-Terms.  The best way to do this would
-    // be a database-specific "BestGuess" UDF.  Unfortunately, this doesn't
-    // exist at the moment, so we fall back to the Guess Cache
+    // Replace VG-Terms with their "Best Guess values"
     val fullyDeterministicOper =
-      db.bestGuessCache.rewriteToUseCache(mostlyDeterministicOper)
-
-    // Since this operator gets used a few times below, we rename it.  That 
-    // way if we add more stages, we only need to change the assignment in 
-    // one place.  Scalac should be smart enough to optimize the double-
-    // reference away.
-    val finalOper =
-      fullyDeterministicOper
-
-    logger.debug(s"FINAL: $finalOper")
+      bestGuessQuery(optimizedOper)
 
     // We'll need it a few times, so cache the final operator's schema.
     // This also forces the typechecker to run, so we get a final sanity
     // check on the output of the rewrite rules.
     val finalSchema = 
-      finalOper.schema
+      fullyDeterministicOper.schema
+
+    // The final stage is to apply any database-specific rewrites to adapt
+    // the query to the quirks of each specific target database.  Each
+    // backend defines a specializeQuery method that handles this
+    val finalOper =
+      db.backend.specializeQuery(fullyDeterministicOper)
+
+    logger.debug(s"FINAL: $finalOper")
 
     // We'll need to line the attributes in the output up with
     // the order in which the user expects to see them.  Build
@@ -101,6 +98,8 @@ class Compiler(db: Database) extends LazyLogging {
     // Generate the SQL
     val sql = 
       db.ra.convert(finalOper)
+
+    logger.debug(s"SQL: $sql")
 
     // Deploy to the backend
     val results = 
@@ -117,6 +116,28 @@ class Compiler(db: Database) extends LazyLogging {
       outputSchema.map(_._1).map(colDeterminism(_)), 
       rowDeterminism
     )
+  }
+
+  /**
+   * Remove all VGTerms in the query and replace them with the 
+   * equivalent best guess values
+   */
+  def bestGuessQuery(oper: Operator): Operator =
+  {
+    // Remove any VG Terms for which static best-guesses are possible
+    // In other words, best guesses that don't depend on which row we're
+    // looking at (like the Type Inference or Schema Matching lenses)
+    val mostlyDeterministicOper =
+      InlineVGTerms.optimize(oper)
+
+    // Deal with the remaining VG-Terms.  The best way to do this would
+    // be a database-specific "BestGuess" UDF.  Unfortunately, this doesn't
+    // exist at the moment, so we fall back to the Guess Cache
+    val fullyDeterministicOper =
+      db.bestGuessCache.rewriteToUseCache(mostlyDeterministicOper)
+
+    // And return
+    fullyDeterministicOper
   }
 
   /**

@@ -258,7 +258,7 @@ class CTExplainer(db: Database) {
 		// println("\n\nTRACE:"+tracedQuery)
 		// println("ROW: "+rowCondition)
 
-		val inlinedQuery = InlineVGTerms.optimize(tracedQuery)
+		val inlinedQuery = db.compiler.bestGuessQuery(tracedQuery)
 
 		// println("INLINE:"+inlinedQuery)
 

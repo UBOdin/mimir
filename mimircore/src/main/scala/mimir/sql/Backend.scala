@@ -52,4 +52,6 @@ abstract class Backend {
 
   def close()
 
+  def specializeQuery(q: Operator): Operator
+
 }
