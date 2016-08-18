@@ -3,6 +3,7 @@ package mimir.sql;
 import java.sql._
 
 import mimir.algebra._
+import mimir.util.JDBCUtils
 import net.sf.jsqlparser.statement.select.{Select, SelectBody};
 
 abstract class Backend {
@@ -18,11 +19,19 @@ abstract class Backend {
     sel.setSelectBody(selB);
     return execute(sel);
   }
+  def resultRows(sel: String) = 
+    JDBCUtils.extractAllRows(execute(sel))
+  def resultRows(sel: String, args: List[String]) =
+    JDBCUtils.extractAllRows(execute(sel, args))
+  def resultRows(sel: Select) =
+    JDBCUtils.extractAllRows(execute(sel))
+  def resultRows(sel: SelectBody) =
+    JDBCUtils.extractAllRows(execute(sel))
   
   def getTableSchema(table: String): Option[List[(String, Type.T)]]
   def getTableOperator(table: String): Operator =
-    getTableOperator(table, List[(String,Type.T)]())
-  def getTableOperator(table: String, metadata: List[(String, Type.T)]):
+    getTableOperator(table, List[(String,Expression,Type.T)]())
+  def getTableOperator(table: String, metadata: List[(String, Expression, Type.T)]):
     Operator =
   {
     Table(
@@ -42,5 +51,7 @@ abstract class Backend {
   def getAllTables(): List[String]
 
   def close()
+
+  def specializeQuery(q: Operator): Operator
 
 }

@@ -252,27 +252,4 @@ class Application extends Controller {
     }
 
   }
-
-  /**
-   * Return a list of all VGTerms present in a particular
-   * cell of a query's result
-   */
-  def getVGTerms(query: String, row: String, ind: String, db: String) = Action {
-    if(!db.equalsIgnoreCase(webAPI.getCurrentDB)) {
-      webAPI = new WebAPI(dbName = db)
-    }
-
-    val i = Integer.parseInt(ind)
-
-//    webAPI.synchronized(
-      try {
-        webAPI.openBackendConnection()
-        val result = webAPI.getVGTerms(query, row, i)
-        Ok(Json.toJson(result.map(_.toJSON)))
-      }
-      finally {
-        webAPI.closeBackendConnection()
-      }
-//    )
-  }
 }

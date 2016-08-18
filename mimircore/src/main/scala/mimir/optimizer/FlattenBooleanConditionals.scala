@@ -9,9 +9,9 @@ object FlattenBooleanConditionals extends TopDownExpressionOptimizerRule {
 		e match {
 			case Conditional(condition, thenClause, elseClause) 
 				if Typechecker.weakTypeOf(e) == Type.TBool => 
-					Arith.makeOr(
-						Arith.makeAnd(condition, thenClause),
-						Arith.makeAnd(Not(condition), elseClause)
+					ExpressionUtils.makeOr(
+						ExpressionUtils.makeAnd(condition, thenClause),
+						ExpressionUtils.makeAnd(Not(condition), elseClause)
 					)
 			case _ => e
 		}

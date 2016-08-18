@@ -1,76 +1,35 @@
 package mimir.exec;
 
-import java.sql._
-import java.util.{GregorianCalendar, Calendar}
-;
-import mimir.sql.JDBCUtils;
+import java.sql._;
+import mimir.util.JDBCUtils;
 import mimir.algebra._;
 import mimir.algebra.Type._;
+import mimir.provenance._;
 
 class ResultSetIterator(
   val src: ResultSet, 
   val visibleSchema: Map[String,Type.T], 
-  visibleColumns: List[Int], 
-  provenanceTokenColumns: List[Int]
+  val visibleColumns: List[Int], 
+  val provenanceTokenColumns: List[Int]
 ) extends ResultIterator
 {
   val meta = src.getMetaData();
-  val schema: List[(String,Type.T)] = 
+  val (schema: List[(String,Type.T)], 
+       extract: List[() => PrimitiveValue]
+      ) = 
     visibleColumns.map( (i) => {
       // println("Visible: "+visibleSchema)
       val colName = meta.getColumnName(i+1).toUpperCase();
-      (
-        colName,
+      val colType = 
         visibleSchema.getOrElse(colName, 
-          colName match {
-            case mimir.ctables.CTPercolator.ROWID_KEY => TRowId
-            case _ => JDBCUtils.convertSqlType(meta.getColumnType(i+1))
-          }
+          JDBCUtils.convertSqlType(meta.getColumnType(i+1))
         )
+      (
+        (colName, colType),
+        () => JDBCUtils.convertField(colType, src, i+1)
       )
-    }).toList
-  val extract: List[() => PrimitiveValue] =
-    schema.map(_._2).zipWithIndex.map( {
-      case (t, colIdx) =>
-        val col = visibleColumns(colIdx)
-        t match {
-          case TString =>
-            () => {
-              new StringPrimitive(src.getString(col+1))
-            }
-
-          case TFloat =>
-            () => {
-              new FloatPrimitive(src.getDouble(col + 1))
-            }
-
-          case TInt => 
-            () => {
-              new IntPrimitive(src.getLong(col + 1))
-            }
-
-          case TRowId =>
-            () => {
-              new RowIdPrimitive(src.getString(col + 1))
-            }
-
-          case TDate =>
-            () => {
-              val calendar = Calendar.getInstance()
-              try {
-                calendar.setTime(src.getDate(col + 1))
-              } catch {
-                case e: SQLException =>
-                  calendar.setTime(Date.valueOf(src.getString(col + 1)))
-                case e: NullPointerException =>
-                  new NullPrimitive
-              }
-              new DatePrimitive(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DATE))
-            }
-
-          case TAny =>
-            () => { NullPrimitive() }
-    }}).toList
+    }).toList.unzip
+      
   var isFirst = true;
   var empty = false;
   
@@ -103,9 +62,11 @@ class ResultSetIterator(
   def deterministicCol(v: Int) = true;
   def missingRows() = false;
   def provenanceToken() = 
-    RowIdPrimitive(
+    Provenance.joinRowIds(
       provenanceTokenColumns.map( 
-        (col) => src.getString(col+1) 
-      ).mkString(",")
+        (col) => {
+          RowIdPrimitive(src.getString(col+1))
+        }
+      )
     )
 }

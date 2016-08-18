@@ -46,6 +46,8 @@ object OperatorUtils {
         extractUnions(c).map ( Project(args, _) )
       case Select(expr, c) =>
         extractUnions(c).map ( Select(expr, _) )
+      case Aggregate(args, groupBy, child) =>
+        extractUnions(child).map(Aggregate(args, groupBy, _))
       case t : Table => List[Operator](t)
       case Join(lhs, rhs) =>
         extractUnions(lhs).flatMap (
@@ -108,4 +110,13 @@ object OperatorUtils {
     );
   }
 
+
+  def applyFilter(condition: List[Expression], oper: Operator): Operator =
+    applyFilter(condition.fold(BoolPrimitive(true))(ExpressionUtils.makeAnd(_,_)), oper)
+
+  def applyFilter(condition: Expression, oper: Operator): Operator =
+    condition match {
+      case BoolPrimitive(true) => oper
+      case _ => Select(condition, oper)
+    }
 }

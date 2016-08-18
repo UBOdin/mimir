@@ -47,7 +47,7 @@ package mimir.sql
     def i = IntPrimitive(_:Long).asInstanceOf[PrimitiveValue]
 
     def isNullCheck():Boolean = {
-      numberProblemRows = ((db.query(isNullCheckStencil())(0)).toString).toInt;
+      numberProblemRows = ((db.backend.resultRows(isNullCheckStencil())(0)(0)).toString).toInt;
       numberProblemRows == 0;
     }
 
@@ -57,7 +57,7 @@ package mimir.sql
     }
 
     def problemRows():Unit = {
-      val temp = db.query(problemRowsStencil()).allRows()
+      val temp = db.backend.resultRows(problemRowsStencil())
       for(i <- 0 to temp.size -1) {
         println("ROW: " + temp(i))
       }

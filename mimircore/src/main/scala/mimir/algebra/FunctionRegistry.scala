@@ -17,21 +17,11 @@ object FunctionRegistry {
 		scala.collection.mutable.Map.empty;
 
 	{
-		registerFunction("JOIN_ROWIDS", _ match { 
-				case TRowId :: TRowId :: List() => TRowId
-				case _ => throw new TypeException(TAny, TRowId, "JOIN_ROWIDS")
-			})
-		registerFunction("__LEFT_UNION_ROWID", _ match { 
-				case TRowId :: List() => TRowId
-				case TAny :: List() => TRowId
-				case x :: _ => throw new TypeException(x, TRowId, "__LEFT_UNION_ROWID")
-				case _ => throw new TypeException(null, TRowId, "__LEFT_UNION_ROWID")
-			})
-		registerFunction("__RIGHT_UNION_ROWID", _ match { 
-				case TRowId :: List() => TRowId
-				case TAny :: List() => TRowId
-				case x :: _ => throw new TypeException(x, TRowId, "__RIGHT_UNION_ROWID")
-				case _ => throw new TypeException(null, TRowId, "__RIGHT_UNION_ROWID")
+		registerFunction("MIMIR_MAKE_ROWID", args => {
+				if(!args.forall( t => (t == TRowId) || (t == TAny) )){ 
+					throw new TypeException(TAny, TRowId, "MIMIR_MAKE_ROWID")
+				}
+				TRowId
 			})
 		registerFunction(CTables.ROW_PROBABILITY, (_) => TString)
 		registerFunction(CTables.VARIANCE, (_) => TFloat)
@@ -43,6 +33,9 @@ object FunctionRegistry {
     		Typechecker.assertNumeric(Typechecker.escalate(x)) 
     	})
     registerFunction("CAST", (_) => TAny)
+		registerFunction("MIMIRCAST", (_) => TAny)
+		registerFunction("OTHERTEST", (_) => TInt)
+		registerFunction("AGGTEST", (_) => TInt)
 		registerFunction("DATE", _ match {
 			case TString :: List() => TDate
 			case _ => throw new SQLException("Invalid parameters to DATE()")

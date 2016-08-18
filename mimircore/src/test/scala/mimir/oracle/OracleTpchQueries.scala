@@ -4,7 +4,6 @@ import java.io.{File, FileReader}
 
 import mimir.Database
 import mimir.algebra.{Var, ProjectArg, Project}
-import mimir.exec.NonDeterminism
 import mimir.parser.MimirJSqlParser
 import mimir.sql.JDBCBackend
 import org.specs2.mutable.Specification
@@ -22,7 +21,6 @@ object OracleTpchQueries extends Specification {
   val dbName = "osmall.db"
   val backend = "oracle"
   val db = new Database(dbName, new JDBCBackend(backend, dbName))
-  db.nonDeterminismStrategy = NonDeterminism.Hybrid
 
   if(new File("config/jdbc.property").exists()){
     "Mimir" should  {
@@ -31,7 +29,7 @@ object OracleTpchQueries extends Specification {
         db.backend.open()
         val parser = new MimirJSqlParser(new FileReader(new File(queryFolder, q5)))
         val sel = parser.Statement().asInstanceOf[Select]
-        val raw = db.convert(sel)
+        val raw = db.sql.convert(sel)
         db.check(raw)
         val rawPlusRowID = Project(ProjectArg("MIMIR_PROVENANCE", Var("ROWID_MIMIR")) ::
           raw.schema.map( (x) => ProjectArg(x._1, Var(x._1))),

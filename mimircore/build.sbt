@@ -14,7 +14,12 @@ libraryDependencies += "org.rogach" %% "scallop" % "0.9.5"
 
 libraryDependencies += "com.github.nscala-time" %% "nscala-time" % "1.2.0"
 
-libraryDependencies += "org.specs2" %% "specs2" % "2.3.12" % "test"
+libraryDependencies += "org.specs2" %% "specs2-core" % "3.8.4" % "test"
+libraryDependencies += "org.specs2" %% "specs2-matcher-extra" % "3.8.4" % "test"
+libraryDependencies += "org.specs2" %% "specs2-junit" % "3.8.4" % "test"
+
+libraryDependencies += "ch.qos.logback" %  "logback-classic" % "1.1.7"
+libraryDependencies += "com.typesafe.scala-logging" %% "scala-logging-slf4j" % "2.1.2"
 
 // libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.4"
 

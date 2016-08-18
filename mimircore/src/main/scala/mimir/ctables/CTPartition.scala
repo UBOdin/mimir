@@ -16,7 +16,7 @@ object CTPartition {
 			case List() => List(BoolPrimitive(true))
 			case head :: rest => 
 				head.flatMap ( (possibility) => 
-					enumerateAllPartitions(rest).map( Arith.makeAnd(possibility, _) )
+					enumerateAllPartitions(rest).map( ExpressionUtils.makeAnd(possibility, _) )
 				)
 		}
 	}
@@ -60,7 +60,7 @@ object CTPartition {
 	{
 		val partitionCondition = 
 			PropagateConditions.apply(
-				Arith.makeAnd(partition, phi)
+				ExpressionUtils.makeAnd(partition, phi)
 			)
 		partitionCondition match {
 			case BoolPrimitive(false) => None
@@ -79,7 +79,7 @@ object CTPartition {
 				proj.get(CTables.conditionColumn) match {
 					case Some(phi) => {
 						val nonConditions = 
-							proj.columns.filter( !_.getColumnName.equals(CTables.conditionColumn) )
+							proj.columns.filter( !_.name.equals(CTables.conditionColumn) )
 						val partitions = allCandidateConditions(phi);
 						// println("Conditions: " + conditionCases)
 						val partitionQueries = 

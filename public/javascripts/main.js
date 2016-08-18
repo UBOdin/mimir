@@ -420,6 +420,20 @@ $( document ).ready(function() {
         })
     });
 
+     $(".add_data_btn").click( function() {
+        get_query_name(function(name) {
+            $("#sm_lens_name").val(name+"MATCHED");
+            $("#black-box").show();
+            $("#sm_lens_div").show();
+
+            $("#black-box").click( function() {
+                $("#sm_lens_div").hide();
+                $(this).hide();
+            });
+        })
+    });
+
+
     $("#sm_lens_create_btn").click( function() {
         var name = $("#sm_lens_name").val();
         if(name === "") {

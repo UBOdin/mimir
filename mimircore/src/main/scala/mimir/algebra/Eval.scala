@@ -3,8 +3,24 @@ package mimir.algebra;
 import java.sql._;
 
 import mimir.algebra.Type._
+import mimir.provenance.Provenance
 import mimir.ctables.{VGTerm, CTables}
 import mimir.optimizer.ExpressionOptimizer
+
+/**
+ * A placeholder for use in extending Eval;  A proc is an expression that 
+ * can be evaluated, but is not itself part of mimir's grammar.
+ * 
+ * The proc defines the method of evaluation.
+ */
+abstract class Proc(args: List[Expression]) extends Expression
+{
+  def getType(argTypes: List[Type.T]): Type.T
+  def getArgs = args
+  def children = args
+  def get(v: List[PrimitiveValue]): PrimitiveValue
+}
+
 
 object Eval 
 {
@@ -83,19 +99,19 @@ object Eval
             case "ABSOLUTE" => eval(params(0), bindings) match {
               case IntPrimitive(i) => if(i < 0){ IntPrimitive(-i) } else { IntPrimitive(i) }
               case FloatPrimitive(f) => if(f < 0){ FloatPrimitive(-f) } else { FloatPrimitive(f) }
+              case NullPrimitive() => NullPrimitive()
               case x => throw new SQLException("Non-numeric parameter to absolute: '"+x+"'")
             }
-            case "JOIN_ROWIDS" => new RowIdPrimitive(params.map(x => eval(x).asString).mkString("."))
+            case "MIMIR_MAKE_ROWID" => Provenance.joinRowIds(params.map(x => eval(x, bindings)))
             case "DATE" | "TO_DATE" =>
               val date = params.head.asInstanceOf[StringPrimitive].v.split("-").map(x => x.toInt)
               new DatePrimitive(date(0), date(1), date(2))
             case "CAST" => {
-              val strVal = Eval.eval(params(1), bindings).toString.toLowerCase
               try {
-                Type.fromString(strVal) match {
-                  case TInt => IntPrimitive(Eval.eval(params(0), bindings).asLong)
-                  case TFloat => FloatPrimitive(Eval.eval(params(0), bindings).asDouble)
-                  case TString => StringPrimitive(Eval.eval(params(0), bindings).asString)
+                Eval.eval(params(1), bindings) match {
+                  case TypePrimitive(TInt) => IntPrimitive(Eval.eval(params(0), bindings).asLong)
+                  case TypePrimitive(TFloat) => FloatPrimitive(Eval.eval(params(0), bindings).asDouble)
+                  case TypePrimitive(TString) => StringPrimitive(Eval.eval(params(0), bindings).asString)
                   case x => throw new SQLException("Unknown cast type: '"+x+"'")
                 }
               } catch {
@@ -120,10 +136,6 @@ object Eval
                   case e:Throwable => Double.MinValue
                 }
               }).max) // TODO Generalized Comparator
-            case "__LEFT_UNION_ROWID" =>
-              new RowIdPrimitive(eval(params(0)).asString+".left")
-            case "__RIGHT_UNION_ROWID" =>
-              new RowIdPrimitive(eval(params(0)).asString+".right")
             case CTables.VARIANCE => {
               var variance = 0.0
               try {
@@ -159,7 +171,7 @@ object Eval
                 case e: TypeException => new NullPrimitive()
               }
             }
-            case fn => throw new SQLException("Unknown Function: "+fn)
+//            case fn => throw new SQLException("Unknown Function: "+fn)
           }
         }
       }
@@ -220,6 +232,10 @@ object Eval
               simplify(elseClause)
             }
           } else { e.rebuild(e.children.map(simplify(_))) }
+        case Arithmetic(Arith.And, lhs, rhs) => 
+          ExpressionUtils.makeAnd(simplify(lhs), simplify(rhs))
+        case Arithmetic(Arith.Or, lhs, rhs) => 
+          ExpressionUtils.makeOr(simplify(lhs), simplify(rhs))
         case _ => e.rebuild(e.children.map(simplify(_)))
       }
     )
@@ -246,6 +262,16 @@ object Eval
 
     }
   }
+
+  def inlineWithoutSimplifying(e: Expression, bindings: Map[String,Expression]):
+    Expression =
+  {
+    e match {
+      case Var(v) => bindings.get(v).getOrElse(Var(v))
+      case _ => 
+        e.rebuild( e.children.map( inlineWithoutSimplifying(_, bindings) ) ) 
+    }
+  }
   
   /**
    * Perform arithmetic on two primitive values.
@@ -255,7 +281,15 @@ object Eval
   ): PrimitiveValue = {
     if(a.isInstanceOf[NullPrimitive] || 
        b.isInstanceOf[NullPrimitive]){
-      NullPrimitive()
+      (op, a, b) match {
+        case (Arith.And, NullPrimitive(), BoolPrimitive(false)) 
+           | (Arith.And, BoolPrimitive(false), NullPrimitive()) => 
+          BoolPrimitive(false)
+        case (Arith.Or, NullPrimitive(), BoolPrimitive(true)) 
+           | (Arith.Or, BoolPrimitive(true), NullPrimitive()) => 
+          BoolPrimitive(true)
+        case _ => NullPrimitive()
+      }
     } else {
       (op, Typechecker.escalate(a.getType, b.getType)) match { 
         case (Arith.Add, TInt) => 
