@@ -6,6 +6,11 @@ import scala.util._
 
 abstract class Model {
   /**
+   * The number of variables defined by the model
+   */
+  val numVars: Int
+
+  /**
    * Infer the type of the model from the types of the inputs
    * @param argTypes    The types of the arguments the the VGTerm
    * @return            The type of the value returned by this model

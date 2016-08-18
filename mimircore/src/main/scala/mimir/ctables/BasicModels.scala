@@ -6,6 +6,7 @@ import scala.util._
 
 abstract class SingleVarModel() extends Model {
 
+  val numVars = 1
   def varType(argTypes: List[Type.T]): Type.T
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue
   def sample(randomness: Random, args: List[PrimitiveValue]): PrimitiveValue
@@ -23,6 +24,7 @@ abstract class SingleVarModel() extends Model {
 
 case class IndependentVarsModel(vars: List[SingleVarModel]) extends Model {
 
+  val numVars = 1
   def varType(idx: Int, argTypes: List[Type.T]) = 
     vars(idx).varType(argTypes)
   def bestGuess(idx: Int, args: List[PrimitiveValue]) = 
@@ -31,6 +33,35 @@ case class IndependentVarsModel(vars: List[SingleVarModel]) extends Model {
     vars(idx).sample(randomness, args)
   def reason(idx: Int, args: List[Expression]): String =
     vars(idx).reason(idx, args)
+}
+
+case class MergedModels(models: List[Model]) extends Model
+{
+  val varOffsetByModel = List(0)++models.map(_.numVars).scan(0)(_+_)
+  val modelByVarIdx = 
+    models.
+    zipWithIndex.
+    flatMap({ case (model, idx) => 
+      0.to(model.numVars).map( _ => idx )
+    })
+  
+  val numVars = models.map( _.numVars ).sum
+  def varType(idx: Int, argTypes:List[Type.T]): Type.T = {
+    val modelIdx = modelByVarIdx(idx)
+    models(modelIdx).varType(idx-varOffsetByModel(modelIdx), argTypes)
+  }
+  def bestGuess(idx: Int, args: List[PrimitiveValue]):  PrimitiveValue = {
+    val modelIdx = modelByVarIdx(idx)
+    models(modelIdx).bestGuess(idx-varOffsetByModel(modelIdx), args)
+  }
+  def sample(idx: Int, randomness: Random, args: List[PrimitiveValue]):  PrimitiveValue = {
+    val modelIdx = modelByVarIdx(idx)
+    models(modelIdx).sample(idx-varOffsetByModel(modelIdx), randomness, args)
+  }
+  def reason(idx: Int, args: List[Expression]): String = {
+    val modelIdx = modelByVarIdx(idx)
+    models(modelIdx).reason(idx-varOffsetByModel(modelIdx), args)
+  }
 }
 
 object UniformDistribution extends SingleVarModel(){
@@ -62,6 +93,7 @@ object UniformDistribution extends SingleVarModel(){
   def reason(args: List[Expression]): String = 
     "I put in a random value between "+args(0)+" and "+args(1)
 }
+
 
 case class NoOpModel(vt: Type.T) extends SingleVarModel() {
   def varType(argTypes: List[Type.T]) = vt

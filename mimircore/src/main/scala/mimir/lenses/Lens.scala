@@ -45,13 +45,6 @@ abstract class Lens(val name: String, val args: List[Expression], val source: Op
    */
   def load(db: Database): Unit = build(db);
 
-  // def globalVar(vid: Int) = PVar(iview, id, vid, List[Expression]())
-  def rowVar(vid: Int)   = VGTerm((name,model), vid, List[Expression](RowIdVar()))
-  def rowVar(vid: Int, args: List[Expression]) 
-                         = VGTerm((name,model), vid, RowIdVar() :: args)
-  // def groupVar(vid: Int, group: List[Expression]) = PVar(iview, id, vid, group)
-  // def varName(vid: Int): String = { iview+"_"+id+"_"+vid }
-
   def stringArg(id: Int): String = Eval.evalString(args(id))
   def longArg(id: Int): Long     = Eval.evalInt(args(id))
   def doubleArg(id: Int): Double = Eval.evalFloat(args(id))

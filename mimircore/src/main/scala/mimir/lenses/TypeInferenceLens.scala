@@ -67,6 +67,7 @@ class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
 
 class TypeInferenceModel(lens: TypeInferenceLens) extends Model
 {
+  val numVars = lens.sourceSchema.length
   var inferredTypeMap = List[(String, Type.T, Double)]()
   var threshold: Double = lens.args.head.asInstanceOf[FloatPrimitive].asDouble
 

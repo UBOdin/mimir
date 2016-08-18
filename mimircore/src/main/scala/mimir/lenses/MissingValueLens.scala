@@ -52,7 +52,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
           ProjectArg(k,
             Conditional(
               mimir.algebra.IsNullExpression(Var(k)),
-              rowVar(u),
+              VGTerm((name,model), u, List[Expression](RowIdVar())),
               Var(k)
             ))
         } else {

@@ -89,6 +89,7 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
 }
 class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
 
+  val numVars = lens.args.length/2
   var schema: Map[String, Type.T] = null
   var colMapping: Map[String, Map[String, Double]] = null
 
