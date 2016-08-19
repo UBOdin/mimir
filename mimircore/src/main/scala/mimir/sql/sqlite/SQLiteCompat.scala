@@ -16,6 +16,7 @@ object SQLiteCompat {
     org.sqlite.Function.create(conn,"MIMIRCAST", MimirCast)
     org.sqlite.Function.create(conn,"OTHERTEST", OtherTest)
     org.sqlite.Function.create(conn,"AGGTEST", AggTest)
+    org.sqlite.Function.create(conn, "BOOLAND", BoolAnd)
   }
 }
 
@@ -59,6 +60,19 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
         case _:NumberFormatException => result()
       }
     }
+}
+
+object BoolAnd extends org.sqlite.Function.Aggregate {
+  var isDet = 1
+
+  @Override
+  def xStep(): Unit = {
+    isDet = isDet & value_int(0)
+  }
+
+  def xFinal(): Unit = {
+    result(isDet)
+  }
 }
 
 object OtherTest extends org.sqlite.Function {

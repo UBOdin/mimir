@@ -5,6 +5,7 @@ import java.sql.SQLException
 import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
+import mimir.sql.sqlite.BoolAnd
 
 object CTPercolator {
 
@@ -181,6 +182,7 @@ object CTPercolator {
               if(ExpressionUtils.getColumns(isDeterministic).isEmpty) {
                 (col, isDeterministic)
               } else {
+                //add entry to map nd col to its determinism decision maker
                 (col, Var(mimirColDeterministicColumnPrefix+col))
               }
             }
@@ -197,6 +199,7 @@ object CTPercolator {
             )))
           }
 
+        //add the determinism metadata into the operator
         val retProject = Project(
             columns ++ computedDeterminismCols ++ rowDeterminismCols,
             rewrittenSrc
@@ -207,7 +210,49 @@ object CTPercolator {
         /*
         case Aggregate is currently a shim (with a guard) to allow test cases for deterministic aggregate queries
          */
-      case Aggregate(args, gb, src) if CTables.isDeterministic(src) => (Aggregate(args, gb, src), Map(), BoolPrimitive(true))
+      //case Aggregate(args, gb, src) if CTables.isDeterministic(src) => (Aggregate(args, gb, src), Map(), BoolPrimitive(true))
+        //colDeterminism needs to contain the determinism decision making column
+      case Aggregate(args, gb, src) => {
+        val (rewrittenSrc, colDeterminism, rowDeterminism) = percolateLite(src)
+
+        //Compute the determinism of each parameter in the Aggregate
+        val newColDeterminismBase: List[(Expression, Expression, String)] = args.map({ case AggregateArg(func, params, alias) =>
+          params.map( x => {
+            val isDeterministic = CTAnalyzer.compileDeterministic(x, colDeterminism)
+            //isDeterministic(foo)
+            (x, isDeterministic, alias)
+          })
+        }).flatten
+
+        //Create metadata columns
+        val computedDeterminismCols =
+          newColDeterminismBase.filterNot(
+            _ match { case (expr, isDeterministic, alias) => {
+              ExpressionUtils.getColumns(isDeterministic).isEmpty
+            }}
+          ).map(_ match { case (expr, isDeterministic, alias)=>
+          AggregateArg("BoolAnd", List(CTAnalyzer.compileDeterministic(expr, colDeterminism)), mimirColDeterministicColumnPrefix + alias) })
+
+        // Rewrite these expressions so that the computed expressions use the
+        // computed version from the source data.
+        val newColDeterminism =
+        newColDeterminismBase.map( _ match { case (expr, isDeterministic, alias) =>
+          if(ExpressionUtils.getColumns(isDeterministic).isEmpty) {
+            (alias, isDeterministic)
+          } else {
+            (alias, Var(mimirColDeterministicColumnPrefix + alias))
+          }
+        })
+
+        val retAggregate = Aggregate(
+          args ++ computedDeterminismCols, gb,
+          rewrittenSrc
+        )
+
+        return (retAggregate, newColDeterminism.toMap, rowDeterminism)
+      }
+
+
       case Select(cond, src) => {
         val (rewrittenSrc, colDeterminism, rowDeterminism) = percolateLite(src);
 

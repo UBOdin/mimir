@@ -36,6 +36,7 @@ object FunctionRegistry {
 		registerFunction("MIMIRCAST", (_) => TAny)
 		registerFunction("OTHERTEST", (_) => TInt)
 		registerFunction("AGGTEST", (_) => TInt)
+    registerFunction("BOOLAND", (_) => TBool)
 		registerFunction("DATE", _ match {
 			case TString :: List() => TDate
 			case _ => throw new SQLException("Invalid parameters to DATE()")
