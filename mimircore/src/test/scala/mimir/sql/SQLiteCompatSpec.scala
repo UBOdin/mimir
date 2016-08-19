@@ -62,6 +62,7 @@ object SQLiteCompatSpec extends Specification with FileMatchers {
     db.backend.update(s.toString())
   def parser = new ExpressionParser(db.lenses.modelForLens)
   def expr = parser.expr _
+  def b = BoolPrimitive(_:Boolean).asInstanceOf[PrimitiveValue]
   def i = IntPrimitive(_:Long).asInstanceOf[PrimitiveValue]
   def f = FloatPrimitive(_:Double).asInstanceOf[PrimitiveValue]
   def str = StringPrimitive(_:String).asInstanceOf[PrimitiveValue]
@@ -105,6 +106,7 @@ object SQLiteCompatSpec extends Specification with FileMatchers {
       db.loadTable(reviewDataFiles(0))
       db.loadTable(reviewDataFiles(1))
       db.loadTable(reviewDataFiles(2))
+      db.loadTable(reviewDataFiles(3))
       query("SELECT * FROM RATINGS1;").allRows must have size(4)
       query("SELECT RATING FROM RATINGS1RAW;").allRows.flatten must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
       query("SELECT * FROM RATINGS2;").allRows must have size(3)
@@ -144,6 +146,27 @@ object SQLiteCompatSpec extends Specification with FileMatchers {
       Typechecker.schemaOf(
         InlineVGTerms.optimize(select("SELECT * FROM RATINGS2;"))
       ).map(_._2) must be equalTo List(Type.TString, Type.TFloat, Type.TFloat)
+
+      query("SELECT * FROM BOOLAND;").allRows must have size(4)
+      query("SELECT ALL_T FROM BOOLAND;").allRows.flatten must contain(eachOf(i(1)))
+      query("SELECT MIX FROM BOOLAND WHERE MIX > 0;").allRows.flatten must have size(3)
+    }
+
+    "Query Type Inference Lenses using SQLiteCompat functions" >> {
+      val q1 = query("SELECT BOOLAND(ALL_T) FROM BOOLAND;")
+        val q1a = q1.allRows.flatten
+        q1a must contain(exactly(b(true)))
+        q1a must have size(1)
+
+      val q2 = query("SELECT BOOLAND(ALL_F) FROM BOOLAND;")
+        val q2a = q2.allRows.flatten
+        q2a must contain(exactly(b(false)))
+        q2a must have size(1)
+
+      val q3 = query("SELECT BOOLAND(MIX) FROM BOOLAND;")
+        val q3a = q3.allRows.flatten
+        q3a must contain(exactly(b(false)))
+        q3a must have size(1)
     }
 
 
