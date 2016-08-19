@@ -185,7 +185,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
       // println("BUILD: "+updateQuery)
       db.backend.update(
         updateQuery, 
-        guess.asString :: dataArgs.map(_.asString)
+        guess :: dataArgs
       )
     })
   }

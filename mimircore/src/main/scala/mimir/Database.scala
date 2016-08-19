@@ -33,23 +33,23 @@ import scala.collection.mutable.ListBuffer
   * accessor method to Database instead.
   *
   * === Parsing ===
-  * - mimir.sql.SqlToRA (sql)
+  * * mimir.sql.SqlToRA (sql)
   *    Responsible for translating JSqlParser AST elements into corresponding AST elements from
   *    mimir.algebra._  
-  * - mimir.sql.RAToSql (ra)
+  * * mimir.sql.RAToSql (ra)
   *    Responsible for translating mimir.algebra._ AST elements back to JSqlParser's AST.  This is
   *    typically only required for compatibility with JDBC.
-  * - mimir.parser.OperatorParser (operator)
+  * * mimir.parser.OperatorParser (operator)
   *    Responsible for directly constructing mimir.algebra.{Operator,Expression} ASTs from string
   *    representations.  Allows these ASTs to be serialized through toString()
   *
   * === Logic ===
-  * - mimir.sql.Backend (backend)
+  * * mimir.sql.Backend (backend)
   *    Pluggable wrapper for database backends over which Mimir will actually run.  Basically,
   *    a simplified form of JDBC.  See mimir.sql._ for examples.
-  * - mimir.lenses.LensManager (lenses)
+  * * mimir.lenses.LensManager (lenses)
   *    Responsible for creating, serializing, and deserializing lenses and virtual views.
-  * - mimir.exec.Compiler
+  * * mimir.exec.Compiler
   *    Responsible for query execution.  Acts as a wrapper around the logic in mimir.ctables._, 
   *    mimir.lenses._, and mimir.exec._ that prepares non-deterministic queries to be evaluated
   *    on the backend database.  

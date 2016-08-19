@@ -1,5 +1,6 @@
 package mimir.algebra
 
+import java.io._
 import java.util
 
 import mimir.exec.ResultIterator
@@ -23,16 +24,19 @@ import java.awt.Stroke
 
 import edu.uci.ics.jung.visualization.renderers.Renderer.VertexLabel.Position
 
-
-
-
-class FuncDep {
+@SerialVersionUID(100L)
+class FuncDep 
+  extends Serializable
+{
 
   val threshhold:Double = 0.99
 
   var table:ArrayList[ArrayList[PrimitiveValue]] = null
   var countTable:ArrayList[TreeMap[String,Integer]] = null
   var densityTable:ArrayList[Integer] = null
+
+  // Outputs
+  var graphPairs:TreeMap[String,UndirectedSparseMultigraph[Integer,String]] = null
 
   /* inserts the input into table and fills the count table, table is the same as a generic sql table, and countTable is a count of each unique value for each column of the table */
 
@@ -260,7 +264,7 @@ class FuncDep {
 
 //    var phase2Graph: DirectedSparseMultigraph[Integer, String] = new DirectedSparseMultigraph[Integer, String]();
 
-    var graphPairs:TreeMap[String,UndirectedSparseMultigraph[Integer,String]] = new TreeMap[String,UndirectedSparseMultigraph[Integer,String]]()
+    graphPairs = new TreeMap[String,UndirectedSparseMultigraph[Integer,String]]()
 
     if(parentList.size() > 1){ // need at least 2 to compare, this compares the entities to each other and the values of their children
       for(i <- 0 until parentList.size()){
@@ -453,4 +457,50 @@ class FuncDep {
     frame.setVisible(true);
   }
 
+  def serialize(): Array[Byte] = 
+  {
+    val byteBucket = new ByteArrayOutputStream()
+    val out = new ObjectOutputStream(byteBucket);
+    out.writeObject(this)
+    byteBucket.toByteArray
+  }
+
+  def serializeTo(db: mimir.Database, name: String): Unit =
+  {
+    FuncDep.initBackstore(db)
+    db.backend.update(
+      "INSERT OR REPLACE INTO "+FuncDep.BACKSTORE_TABLE_NAME+"(name, data) VALUES (?,?)", 
+      List(StringPrimitive(name), BlobPrimitive(serialize()))
+    )
+  }
+}
+
+
+object FuncDep {
+
+  val BACKSTORE_TABLE_NAME = "MIMIR_FUNCDEP_BLOBS"
+
+  def initBackstore(db: mimir.Database)
+  {
+    if(db.getTableSchema(FuncDep.BACKSTORE_TABLE_NAME) == None){
+      db.backend.update(
+        "CREATE TABLE "+FuncDep.BACKSTORE_TABLE_NAME+"(name varchar(40), data blob, PRIMARY KEY(name))"
+      )
+    }
+  }
+  def deserialize(data: Array[Byte]): FuncDep = 
+  {
+    val in = new ObjectInputStream(new ByteArrayInputStream(data))
+    val obj = in.readObject()
+    obj.asInstanceOf[FuncDep]
+  }
+  def deserialize(db: mimir.Database, name: String): FuncDep =
+  {
+    val blob = 
+      db.backend.singletonQuery(
+        "SELECT data FROM "+BACKSTORE_TABLE_NAME+" WHERE name=?", 
+        List(StringPrimitive(name))
+      ).asInstanceOf[BlobPrimitive]
+    deserialize(blob.v)
+  }
 }

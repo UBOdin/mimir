@@ -10,7 +10,7 @@ abstract class Backend {
   def open(): Unit
 
   def execute(sel: String): ResultSet
-  def execute(sel: String, args: List[String]): ResultSet
+  def execute(sel: String, args: List[PrimitiveValue]): ResultSet
   def execute(sel: Select): ResultSet = {
     execute(sel.toString());
   }
@@ -21,13 +21,22 @@ abstract class Backend {
   }
   def resultRows(sel: String) = 
     JDBCUtils.extractAllRows(execute(sel))
-  def resultRows(sel: String, args: List[String]) =
+  def resultRows(sel: String, args: List[PrimitiveValue]) =
     JDBCUtils.extractAllRows(execute(sel, args))
   def resultRows(sel: Select) =
     JDBCUtils.extractAllRows(execute(sel))
   def resultRows(sel: SelectBody) =
     JDBCUtils.extractAllRows(execute(sel))
-  
+
+  def singletonQuery(sel: String) = 
+    JDBCUtils.extractSingleton(execute(sel))
+  def singletonQuery(sel: String, args: List[PrimitiveValue]) =
+    JDBCUtils.extractSingleton(execute(sel, args))
+  def singletonQuery(sel: Select) =
+    JDBCUtils.extractSingleton(execute(sel))
+  def singletonQuery(sel: SelectBody) =
+    JDBCUtils.extractSingleton(execute(sel))
+
   def getTableSchema(table: String): Option[List[(String, Type.T)]]
   def getTableOperator(table: String): Operator =
     getTableOperator(table, List[(String,Expression,Type.T)]())
@@ -46,7 +55,7 @@ abstract class Backend {
   
   def update(stmt: String): Unit
   def update(stmt: List[String]): Unit
-  def update(stmt: String, args: List[String]): Unit
+  def update(stmt: String, args: List[PrimitiveValue]): Unit
 
   def getAllTables(): List[String]
 

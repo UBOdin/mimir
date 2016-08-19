@@ -20,6 +20,7 @@ object JDBCUtils {
             java.sql.Types.NULL |
             java.sql.Types.CHAR)     => Type.TString
       case (java.sql.Types.ROWID)    => Type.TRowId
+      case (java.sql.Types.BLOB)     => Type.TBlob
     }
   }
 
@@ -30,6 +31,7 @@ object JDBCUtils {
       case Type.TDate   => java.sql.Types.DATE
       case Type.TString => java.sql.Types.VARCHAR
       case Type.TRowId  => java.sql.Types.ROWID
+      case Type.TBlob   => java.sql.Types.BLOB
     }
   }
 
@@ -63,6 +65,8 @@ object JDBCUtils {
               new NullPrimitive
           }
           DatePrimitive(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DATE))
+        case Type.TBlob => 
+          BlobPrimitive(results.getBytes(field))
       }
     if(results.wasNull()) { NullPrimitive() }
     else { ret }
@@ -92,6 +96,28 @@ object JDBCUtils {
       results.next()
     }
     ret.reverse
+  }
+
+  def extractSingleton(results: ResultSet): PrimitiveValue =
+  {
+    val meta = results.getMetaData()
+    if(meta.getColumnCount() != 1){
+      throw new SQLException("Expecting Single Column Result")
+    }
+    extractSingleton(results, convertSqlType(meta.getColumnType(1)))
+  }
+  def extractSingleton(results: ResultSet, t: Type.T): PrimitiveValue =
+  {
+    if(results.getMetaData().getColumnCount() != 1){
+      throw new SQLException("Expecting Single Column Result")
+    }
+    while(results.isBeforeFirst()){ results.next(); }
+    val ret = convertField(t, results, 1)
+    results.next();
+    if(!results.isAfterLast()){ 
+      throw new SQLException("Expecting Single Row Result")
+    }
+    ret
   }
 
 }

@@ -39,6 +39,7 @@ import mimir.optimizer.{InlineVGTerms}
 class ShredderLens(
   // Name of the lens
   name: String, 
+  discala: FuncDep,
   // Column names of `source` belonging to the primary entity
   val primaryEntity:List[String], 
   // For each secondary entity, a pair of the entity's name + columns of `source` belonging to the 
@@ -99,29 +100,69 @@ class ShredderLens(
    */
   def build(db: Database): Unit = {
     this.db = db
-    entityParticipationModel.train();
-    attributeMappingModel.train();
   }
+
+  def secondaryEntityName(idx: Int) = secondaryEntities(idx)._1
 }
 
+/**
+ * Model for secondary entity participation in a shredded relation.
+ * 
+ * A shredded entity model defines one boolean-valued variable for each 
+ * secondary entity.  A value of true in a possible world means that 
+ * the entity participates in the shredded view in that possible world, 
+ * while a value of false means that the entity does not.
+ */
 class ShredderEntityModel(lens: ShredderLens) extends Model {
 
   val numVars = lens.secondaryEntities.length
-  def train(): Unit = ???
-  def bestGuess(idx: Int,args: List[PrimitiveValue]): PrimitiveValue = ???
-  def reason(idx: Int,args: List[Expression]): String = ???
-  def sample(idx: Int,randomness: scala.util.Random,args: List[PrimitiveValue]): PrimitiveValue = ???
-  def varType(idx: Int,argTypes: List[Type.T]): Type.T = ???
+  /**
+   * Return true if the secondary entity 'idx' (range from 0-(N-1) inclusive)
+   * belongs in the shredded view in the best-guess world.
+   */
+  def bestGuess(idx: Int, args:List[PrimitiveValue]): PrimitiveValue = 
+  {
+    
 
+    // XXXXXXXX IMPLEMENT THIS XXXXXXXX
+    BoolPrimitive(true)
+  }
+  /**
+   * Return true if the secondary entity 'idx' (range from 0-(N-1) inclusive)
+   * belongs in the shredded view in the best-guess world.
+   */
+  def sample(idx: Int,randomness: scala.util.Random,args: List[PrimitiveValue]): PrimitiveValue = ???
+  def reason(idx: Int,args: List[Expression]): String = 
+  {
+    "I assumed that the entity: "+(lens.secondaryEntityName(idx))+" belonged to the view "+lens.name
+  }
+  def varType(idx: Int,argTypes: List[Type.T]): Type.T = Type.TBool
 }
+
+/**
+ * Model for pairwise attribute comparisons in a shredded relation
+ *
+ * A shredded attribute model defines a single boolean-valued variable
+ * with two skolem arguments: (target,source).  Target is a StringPrimitive
+ * containing an attribute name in the target (primary) relation.  Source 
+ * is the same, but for the source (secondary) relation.  The variable
+ * is true if source should be mapped to target in the current possible
+ * world.
+ */
 class ShredderAttributeModel(lens: ShredderLens) extends Model {
 
   val numVars = 1
-  def train(): Unit = ???
-  def bestGuess(idx: Int,args: List[PrimitiveValue]): PrimitiveValue = ???
-  def reason(idx: Int,args: List[Expression]): String = ???
+  def bestGuess(idx: Int,args: List[PrimitiveValue]): PrimitiveValue = 
+  {
+    // XXXXXXXX IMPLEMENT THIS XXXXXXXX
+    BoolPrimitive(true)
+  }
+  def reason(idx: Int,args: List[Expression]): String = 
+  {
+    "I assumed that the attribute "+lens.name+"."+Eval.evalString(args(0))+
+    " could be populated with data from "+Eval.evalString(args(1))
+  }
   def sample(idx: Int,randomness: scala.util.Random,args: List[PrimitiveValue]): PrimitiveValue = ???
-  def varType(idx: Int,argTypes: List[Type.T]): Type.T = ???
-
+  def varType(idx: Int,argTypes: List[Type.T]): Type.T = Type.TBool
 
 }
