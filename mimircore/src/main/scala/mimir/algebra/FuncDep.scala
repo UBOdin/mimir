@@ -416,6 +416,53 @@ class FuncDep
 
   }
 
+  def getPairs(entity:Integer): ArrayList[String] ={ // Returns an arrayList with all of the pairs that that entity is part of, entiity is a single entity
+    var pairs:ArrayList[String] = new ArrayList[String]()
+    entityPairList.foreach( rawPair => {
+      if(rawPair._1 == entity || rawPair._2 == entity){
+        pairs.add(rawPair._1+","+rawPair._2)
+      }
+    }
+    )
+    pairs
+  }
+
+  // entity is the root entity you're looking for
+  def best(pair:String,entity:Integer): ArrayList[((Integer,Integer),Float)] ={ // takes in an entiity pair as it's input
+
+    // the return value, (integer,integer) is the pair, the left will be part of the entity
+    // passed in and the right will be the corresponding attribute number from the other entiity
+    // from the pair, float is the strength for that attribute pair in that entiity pair
+
+    var list:ArrayList[((Integer,Integer),Float)] = new ArrayList[((Integer,Integer),Float)]()
+
+    var attributeList:ArrayList[Integer] = parentTable.get(entity) // the attributelist
+    var lookupMatrix:TreeMap[Integer,TreeMap[Integer,Float]] = entityPairMatrix.get(pair)
+    for(i <- 0 until attributeList.size()){ // loop through all the specific entities attributes
+      var highestStrength:Float = (0.0).toFloat
+      var bestAttributeMatch = -1
+      var attribute:Integer = attributeList.get(i)
+      var strengthList:TreeMap[Integer,Float] = lookupMatrix.get(attribute)
+      var keyIter:util.Iterator[Integer] = strengthList.keySet().iterator()
+
+      while(keyIter.hasNext){
+        val correspondingAttribute:Integer = keyIter.next()
+        val str:Float = strengthList.get(correspondingAttribute)
+        if(str > highestStrength){
+          highestStrength = str
+          bestAttributeMatch = correspondingAttribute
+        }
+      }
+      if(highestStrength >= (0.0).toFloat && bestAttributeMatch != -1){ //sanity check
+        list.add(((attribute,bestAttributeMatch),highestStrength))
+      }
+      else{
+        println("Something went wrong in best funcDep I think")
+      }
+    }
+    list
+  }
+
   def entityPairMatrixResult():Unit = {
     entityPairList.foreach( rawPair => {
       val entityPair:String = rawPair._1+","+rawPair._2
