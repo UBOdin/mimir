@@ -1,5 +1,6 @@
 package mimir.algebra
 
+import java.io._
 import java.util
 
 import mimir.exec.ResultIterator
@@ -23,10 +24,10 @@ import java.awt.Stroke
 
 import edu.uci.ics.jung.visualization.renderers.Renderer.VertexLabel.Position
 
-
-
-
-class FuncDep {
+@SerialVersionUID(100L)
+class FuncDep 
+  extends Serializable
+{
 
   val threshhold:Double = 0.99
 
@@ -38,6 +39,9 @@ class FuncDep {
   var entityPairMatrix:TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]] = null // outer string is entity pair so column#,column#: to a treemap that is essentially a look-up matrix for columns that contain column to column strengths
   var entityPairList:ArrayList[String] = null
 
+  // Outputs
+  var graphPairs:TreeMap[String,UndirectedSparseMultigraph[Integer,String]] = null
+
   /* inserts the input into table and fills the count table, table is the same as a generic sql table, and countTable is a count of each unique value for each column of the table */
 
   def buildAbadi(schema: List[(String, T)],data: ResultIterator): Unit = {
@@ -47,8 +51,8 @@ class FuncDep {
     sch = schema
     countTable = new ArrayList[TreeMap[String,Integer]]() // contains the rows
     densityTable = new ArrayList[Integer]()
-//    println(sch(58)._1)
-//    println(sch(81)._1)
+//    println(sch(56)._1)
+
     sch.map{ case(k, t) => {
       table.add(new util.ArrayList[PrimitiveValue]())
       countTable.add(new TreeMap[String,Integer])
@@ -81,7 +85,7 @@ class FuncDep {
 
     var nodeTable: ArrayList[Integer] = new ArrayList[Integer]() // contains a list of all the nodes
     var edgeTable: ArrayList[String] = new ArrayList[String]() // contains the node numbers for the dependency graph, the names are numbers from the schema 0 to sch.length are the possibilities
-    parentTable = new TreeMap[Integer, ArrayList[Integer]]()
+    var parentTable: TreeMap[Integer, ArrayList[Integer]] = new TreeMap[Integer, ArrayList[Integer]]()
     var maxTable: ArrayList[String] = new ArrayList[String]() // contains the max values for each column, used for phase1 formula
     val flattenParentTable:Boolean = true
 
@@ -189,6 +193,8 @@ class FuncDep {
       }
     }
 
+//    println("TABLE SIZE: "+ table.get(0).size())
+
     println(g.toString)
 
 //    showGraph(g)
@@ -264,7 +270,9 @@ class FuncDep {
       }
     }
 
-    var graphPairs:TreeMap[String,UndirectedSparseMultigraph[Integer,String]] = new TreeMap[String,UndirectedSparseMultigraph[Integer,String]]()
+//    var phase2Graph: DirectedSparseMultigraph[Integer, String] = new DirectedSparseMultigraph[Integer, String]();
+
+    graphPairs = new TreeMap[String,UndirectedSparseMultigraph[Integer,String]]()
 
     if(parentList.size() > 1){ // need at least 2 to compare, this compares the entities to each other and the values of their children
       for(i <- 0 until parentList.size()){
@@ -316,7 +324,7 @@ class FuncDep {
             if((numberOfJoins.toFloat/table.get(0).size().toFloat) >= (.01).toFloat) { // do this is reduce any poor results
               // this will add the children matrix to the entityPairMatrix with the key being the string of the entity pairs
               for (t <- 0 until childrenMatrix.size()) { // This will be the left EntAttributes
-                var rightAtt:TreeMap[Integer,Float] = new TreeMap[Integer,Float]()
+              var rightAtt:TreeMap[Integer,Float] = new TreeMap[Integer,Float]()
                 for (g <- 0 until childrenMatrix.get(t).size()) { // This will be the right EntAttributes
                   rightAtt.put(rightEntity.get(g),childrenMatrix.get(t).get(g).toFloat/numberOfJoins.toFloat)
                 }
@@ -368,19 +376,19 @@ class FuncDep {
                 }
               }
               else{
-                  for (g <- 0 until childrenMatrix.get(t).size()) {
-                    if (childrenMatrix.get(t).get(g).toFloat/numberOfJoins.toFloat >= (threshhold.toFloat * threshhold.toFloat)) {
-                      // then childrenMatrix at t is a pairing
-                      if (!(phase2Graph.containsVertex(leftEntity.get(t)))) {
-                        phase2Graph.addVertex(leftEntity.get(t))
-                      }
-                      if (!(phase2Graph.containsVertex(rightEntity.get(g)))) {
-                        phase2Graph.addVertex(rightEntity.get(g))
-                      }
-                      phase2Graph.addEdge(leftEntity.get(t) + " And " + rightEntity.get(g), leftEntity.get(t), rightEntity.get(g))
-//                      println("STR: "+childrenMatrix.get(t).get(g).toFloat/numberOfJoins.toFloat + " > " + (threshhold.toFloat * threshhold.toFloat))
+                for (g <- 0 until childrenMatrix.get(t).size()) {
+                  if (childrenMatrix.get(t).get(g).toFloat/numberOfJoins.toFloat >= (threshhold.toFloat * threshhold.toFloat)) {
+                    // then childrenMatrix at t is a pairing
+                    if (!(phase2Graph.containsVertex(leftEntity.get(t)))) {
+                      phase2Graph.addVertex(leftEntity.get(t))
                     }
+                    if (!(phase2Graph.containsVertex(rightEntity.get(g)))) {
+                      phase2Graph.addVertex(rightEntity.get(g))
+                    }
+                    phase2Graph.addEdge(leftEntity.get(t) + " And " + rightEntity.get(g), leftEntity.get(t), rightEntity.get(g))
+                    //                      println("STR: "+childrenMatrix.get(t).get(g).toFloat/numberOfJoins.toFloat + " > " + (threshhold.toFloat * threshhold.toFloat))
                   }
+                }
               }
             }
 
@@ -392,11 +400,11 @@ class FuncDep {
         }
       }
     }
-//    matchEnt(graphPairs)
+    //    matchEnt(graphPairs)
     entityPairMatrixResult()
   }
 
-  def matchEnt(graphPairs:TreeMap[String,UndirectedSparseMultigraph[Integer,String]]): Unit ={
+  def matchEnt(graphPairs:TreeMap[String,UndirectedSparseMultigraph[Integer,String]],parentTable: TreeMap[Integer, ArrayList[Integer]]): Unit ={
 
     var pairIter = graphPairs.keySet().iterator()
     while(pairIter.hasNext){
@@ -413,10 +421,10 @@ class FuncDep {
       val entityPair:String = entityPairList.get(i)
       val attributeMatrix:TreeMap[Integer,TreeMap[Integer,Float]]= entityPairMatrix.get(entityPair)
       println("ENTITY PAIR: "+ entityPair)
-/*      for(j <- 0 until parentTable.get(entityPair.split(",")(0).toInt).size()){
-        val leftEntityAtt:Int = parentTable.get(entityPair.split(",")(0).toInt).get(j)
-        println("")
-      } */
+      /*      for(j <- 0 until parentTable.get(entityPair.split(",")(0).toInt).size()){
+              val leftEntityAtt:Int = parentTable.get(entityPair.split(",")(0).toInt).get(j)
+              println("")
+            } */
       val outerIter = attributeMatrix.keySet().iterator()
       while(outerIter.hasNext){
         val outerVal:Integer = outerIter.next()
@@ -428,6 +436,7 @@ class FuncDep {
       }
     }
   }
+
 
   var longestPathDepth:Int = 0
   var longestPathVar:ArrayList[Integer] = null
@@ -493,13 +502,13 @@ class FuncDep {
         edgeStroke;
       }
     };
-/*
+
     vv.getRenderContext().setVertexFillPaintTransformer(vertexPaint);
     vv.getRenderContext().setEdgeStrokeTransformer(edgeStrokeTransformer);
     vv.getRenderContext().setVertexLabelTransformer(new ToStringLabeller());
     vv.getRenderContext().setEdgeLabelTransformer(new ToStringLabeller());
     vv.getRenderer().getVertexLabelRenderer().setPosition(Position.CNTR);
-*/
+
 
     //Sets the viewing area size
     var frame: JFrame = new JFrame("Simple Graph View");
@@ -509,4 +518,50 @@ class FuncDep {
     frame.setVisible(true);
   }
 
+  def serialize(): Array[Byte] = 
+  {
+    val byteBucket = new ByteArrayOutputStream()
+    val out = new ObjectOutputStream(byteBucket);
+    out.writeObject(this)
+    byteBucket.toByteArray
+  }
+
+  def serializeTo(db: mimir.Database, name: String): Unit =
+  {
+    FuncDep.initBackstore(db)
+    db.backend.update(
+      "INSERT OR REPLACE INTO "+FuncDep.BACKSTORE_TABLE_NAME+"(name, data) VALUES (?,?)", 
+      List(StringPrimitive(name), BlobPrimitive(serialize()))
+    )
+  }
+}
+
+
+object FuncDep {
+
+  val BACKSTORE_TABLE_NAME = "MIMIR_FUNCDEP_BLOBS"
+
+  def initBackstore(db: mimir.Database)
+  {
+    if(db.getTableSchema(FuncDep.BACKSTORE_TABLE_NAME) == None){
+      db.backend.update(
+        "CREATE TABLE "+FuncDep.BACKSTORE_TABLE_NAME+"(name varchar(40), data blob, PRIMARY KEY(name))"
+      )
+    }
+  }
+  def deserialize(data: Array[Byte]): FuncDep = 
+  {
+    val in = new ObjectInputStream(new ByteArrayInputStream(data))
+    val obj = in.readObject()
+    obj.asInstanceOf[FuncDep]
+  }
+  def deserialize(db: mimir.Database, name: String): FuncDep =
+  {
+    val blob = 
+      db.backend.singletonQuery(
+        "SELECT data FROM "+BACKSTORE_TABLE_NAME+" WHERE name=?", 
+        List(StringPrimitive(name))
+      ).asInstanceOf[BlobPrimitive]
+    deserialize(blob.v)
+  }
 }

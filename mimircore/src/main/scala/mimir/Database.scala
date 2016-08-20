@@ -98,7 +98,7 @@ case class Database(name: String, backend: Backend)
 
     val f = new mimir.algebra.FuncDep
     getTableSchema("JSONOUTPUTMINI") match{
-      case Some(sch) => f.initialStep(sch,result)
+      case Some(sch) => f.buildAbadi(sch,result)
       case None => println("Table Not Found")
     }
 
