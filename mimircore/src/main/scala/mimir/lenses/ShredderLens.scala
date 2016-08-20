@@ -222,7 +222,6 @@ class ShredderAttributeModel(lens: ShredderLens) extends SingleVarModel {
      */
     val sourceAttribute = sourceEntity._2(args(2).asLong.toInt-1)
 
-    throw new Exception("WILL: IMPLEMENT THIS")
     // XXXXXXXX IMPLEMENT THIS XXXXXXXX
     BoolPrimitive(
       ???  
