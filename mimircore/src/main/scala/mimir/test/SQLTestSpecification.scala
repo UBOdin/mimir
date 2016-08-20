@@ -10,20 +10,29 @@ import mimir.parser._
 import mimir.sql._
 import mimir.algebra._
 
-abstract class SQLTestSpecification(val tempDBName:String, jdbcBackendMode:String = "sqlite")
+abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,String] = Map())
   extends Specification
 {
+
+  def dbFile = new File(new File("databases"), tempDBName)
+  val jdbcBackendMode:String = config.getOrElse("jdbc", "sqlite")
+  val shouldResetDB = config.getOrElse("reset", "YES") match { case "NO" => false; case "YES" => true}
+  val oldDBExists = dbFile.exists();
+
   val db = {
     val tmpDB = new Database(tempDBName, new JDBCBackend(jdbcBackendMode, tempDBName));
-    if(dbFile.exists()){ dbFile.delete(); }
-    dbFile.deleteOnExit();
+    if(shouldResetDB){
+      if(dbFile.exists()){ dbFile.delete(); }
+      dbFile.deleteOnExit();
+    }
     tmpDB.backend.open();
-    tmpDB.initializeDBForMimir();
+    if(shouldResetDB || !oldDBExists){
+      tmpDB.initializeDBForMimir();
+    }
     tmpDB
   }
 
 
-  def dbFile = new File(new File("databases"), tempDBName)
 
 
   def stmts(f: File): List[Statement] = {

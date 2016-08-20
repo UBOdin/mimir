@@ -37,17 +37,15 @@ class FuncDep
   var sch:List[(String, T)] = null
   var parentTable: TreeMap[Integer, ArrayList[Integer]] = null
   var entityPairMatrix:TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]] = null // outer string is entity pair so column#,column#: to a treemap that is essentially a look-up matrix for columns that contain column to column strengths
-  var entityPairList:ArrayList[String] = null
 
   // Outputs
-  var graphPairs:TreeMap[String,UndirectedSparseMultigraph[Integer,String]] = null
+  var entityPairList:List[(Integer,Integer)] = Nil
 
   /* inserts the input into table and fills the count table, table is the same as a generic sql table, and countTable is a count of each unique value for each column of the table */
 
   def buildAbadi(schema: List[(String, T)],data: ResultIterator): Unit = {
     table = new ArrayList[ArrayList[PrimitiveValue]]() // contains every row from resultIter aka data
     entityPairMatrix = new TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]]()
-    entityPairList = new ArrayList[String]()
     sch = schema
     countTable = new ArrayList[TreeMap[String,Integer]]() // contains the rows
     densityTable = new ArrayList[Integer]()
@@ -85,9 +83,10 @@ class FuncDep
 
     var nodeTable: ArrayList[Integer] = new ArrayList[Integer]() // contains a list of all the nodes
     var edgeTable: ArrayList[String] = new ArrayList[String]() // contains the node numbers for the dependency graph, the names are numbers from the schema 0 to sch.length are the possibilities
-    var parentTable: TreeMap[Integer, ArrayList[Integer]] = new TreeMap[Integer, ArrayList[Integer]]()
     var maxTable: ArrayList[String] = new ArrayList[String]() // contains the max values for each column, used for phase1 formula
     val flattenParentTable:Boolean = true
+
+    parentTable = new TreeMap[Integer, ArrayList[Integer]]()
 
     for (i <- 0 until countTable.size()) {
       var maxKey = ""
@@ -272,7 +271,7 @@ class FuncDep
 
 //    var phase2Graph: DirectedSparseMultigraph[Integer, String] = new DirectedSparseMultigraph[Integer, String]();
 
-    graphPairs = new TreeMap[String,UndirectedSparseMultigraph[Integer,String]]()
+    val graphPairs = new TreeMap[String,UndirectedSparseMultigraph[Integer,String]]()
 
     if(parentList.size() > 1){ // need at least 2 to compare, this compares the entities to each other and the values of their children
       for(i <- 0 until parentList.size()){
@@ -394,12 +393,13 @@ class FuncDep
 
             if(phase2Graph.getVertexCount > 1){
               graphPairs.put(parentList.get(i)+","+parentList.get(j),phase2Graph)
-              entityPairList.add(parentList.get(i)+","+parentList.get(j))
+              entityPairList = (parentList.get(i), parentList.get(j)) :: entityPairList
             }
           }
         }
       }
     }
+
     //    matchEnt(graphPairs)
     entityPairMatrixResult()
   }
@@ -417,8 +417,8 @@ class FuncDep
   }
 
   def entityPairMatrixResult():Unit = {
-    for(i <- 0 until entityPairList.size()){
-      val entityPair:String = entityPairList.get(i)
+    entityPairList.foreach( rawPair => {
+      val entityPair:String = rawPair._1+","+rawPair._2
       val attributeMatrix:TreeMap[Integer,TreeMap[Integer,Float]]= entityPairMatrix.get(entityPair)
       println("ENTITY PAIR: "+ entityPair)
       /*      for(j <- 0 until parentTable.get(entityPair.split(",")(0).toInt).size()){
@@ -434,7 +434,7 @@ class FuncDep
           println("FOUND THESE VALUES: " + outerVal + " , " + innerVal + " WITH STR: " + attributeMatrix.get(outerVal).get(innerVal))
         }
       }
-    }
+    })
   }
 
 

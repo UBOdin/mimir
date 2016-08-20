@@ -2,6 +2,7 @@ package mimir.lenses
 
 import java.sql.SQLException
 import scala.util._
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir.Database
 import mimir.algebra.Type.T
@@ -51,6 +52,7 @@ class ShredderLens(
     List[Expression](),
     source
   ) 
+  with LazyLogging
 {
   val inSchema = source.schema
   val attributeMappingModel = new ShredderAttributeModel(this)
@@ -89,8 +91,8 @@ class ShredderLens(
     columnIdsInEntity(entity).map( inSchema(_) )  
   def keyForMatchingEntity(idx:Int) = {
     val primaryIdx = primaryEntity._1
-    if(idx < primaryIdx){ StringPrimitive(idx+","+primaryIdx) }
-    else                { StringPrimitive(primaryIdx+","+idx) }
+    if(idx < primaryIdx){ (idx+","+primaryIdx) }
+    else                { (primaryIdx+","+idx) }
   }
 
   /**
@@ -124,12 +126,14 @@ class ShredderLens(
                 // All key attributes match deterministically.  There are no
                 // non-deterministic mappings; Instead, the default plugs in
                 // a mapping for the key.
-                case (0,_) => false // No non-deterministic mappings.  The key column
+                case (0,_) => false // No non-deterministic mappings with the key column
+                case (_,0) => false // No non-deterministic mappings with he key column
 
                 // Non-key attributes can match iff they share a type
                 case (targetPosition, sourcePosition) =>
-                  typeForAttributeId( primaryEntity._2(targetPosition) ) ==
-                    typeForAttributeId( secondaryEntity._2(sourcePosition) )
+                  logger.trace(s"Comparing Types of $targetPosition, $sourcePosition")
+                  typeForAttributeId( primaryEntity._2(targetPosition-1) ) ==
+                    typeForAttributeId( secondaryEntity._2(sourcePosition-1) )
               },
               // Default value
               { 
