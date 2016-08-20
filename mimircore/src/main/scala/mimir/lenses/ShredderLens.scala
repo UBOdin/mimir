@@ -55,6 +55,14 @@ class ShredderLens(
   val inSchema = source.schema
   val attributeMappingModel = new ShredderAttributeModel(this)
   val entityParticipationModel = new ShredderEntityModel(this)
+  val matchMatrix:List[List[List[Float]]] = 
+    secondaryEntities.map( secondaryEntity => {
+      val matchMatrix =
+        discala.entityPairMatrix.get(keyForMatchingEntity(secondaryEntity._1))
+      primaryEntity._2.map( targetIdx => 
+        secondaryEntity._2.map( srcIdx => matchMatrix.get(targetIdx).get(srcIdx) )
+      )
+    })
 
   val model = IndependentVarsModel(List(attributeMappingModel, entityParticipationModel))
   val ATTRIBUTE_MAPPING_VAR = 0
@@ -199,32 +207,30 @@ class ShredderAttributeModel(lens: ShredderLens) extends SingleVarModel {
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = 
   {
     /**
-     * The Int,List[Int] spec for the entity who's attributes are being matched
+     * The position in the secondaryEntity list of the source entity under consideration
      */
-    val sourceEntity = lens.secondaryEntities(args(0).asLong.toInt)
-    /**
-     * The base-data schema position of the entity being matched
-     */
-    val sourceEntityParent = sourceEntity._1
-    /**
-     * The "x,y" key for the match pair
-     */
-    val entityMatchingKey = lens.keyForMatchingEntity(sourceEntityParent)
+    val sourceEntityPosition = args(0).asLong.toInt
 
     // The key attribute is at index 0, so the following attribute values 
     // are offset by 1 when we get them
     /**
-     * The base-data schema position of the child attribute being targetted
+     * The position in the primaryEntity's attribute list of the current target attribute
      */
-    val targetAttribute = lens.primaryEntity._2(args(1).asLong.toInt-1)
+    val targetAttributePosition = args(1).asLong.toInt-1
     /**
-     * The base-data schema position of the child attribute being matched to targetAttribute
+     * The position in the current SecondaryEntity's attribute list of the current source attribute
      */
-    val sourceAttribute = sourceEntity._2(args(2).asLong.toInt-1)
+    val sourceAttributePosition = args(2).asLong.toInt-1
 
-    // XXXXXXXX IMPLEMENT THIS XXXXXXXX
+    val matchCandidates = 
+      lens.matchMatrix(sourceEntityPosition)(targetAttributePosition)
+    val bestScore = 
+      matchCandidates.max
+    val sourceScore =
+      matchCandidates(sourceAttributePosition)
+
     BoolPrimitive(
-      ???  
+      sourceScore == bestScore
       // In the context of entityMatchingKey, 
       // is targetAttribute == sourceAttribute in the best guess possible world?
     )
@@ -243,8 +249,7 @@ class ShredderAttributeModel(lens: ShredderLens) extends SingleVarModel {
   }
   def sample(randomness: scala.util.Random,args: List[PrimitiveValue]): PrimitiveValue =
   {
-    throw new Exception("UNIMPLEMENTED")    
-
+    ???
   }
   def varType(argTypes: List[Type.T]): Type.T = Type.TBool
 
