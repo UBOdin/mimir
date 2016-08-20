@@ -49,10 +49,12 @@ object LensFragments {
               if(validate(targetIdx,sourceIdx)){
                 Some(
                   ( 
-                    VGTerm((name, model), idx, extraVGTermArgs ++ List(
-                      IntPrimitive(targetIdx),
+                    Comparison(Cmp.Eq,
+                      VGTerm((name, model), idx, extraVGTermArgs ++ List(
+                        IntPrimitive(targetIdx)
+                      )),
                       IntPrimitive(sourceIdx)
-                    )),
+                    ),
                     Var(sourceName)
                   )
                 )

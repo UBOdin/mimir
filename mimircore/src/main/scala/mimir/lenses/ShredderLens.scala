@@ -3,6 +3,7 @@ package mimir.lenses
 import java.sql.SQLException
 import scala.util._
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import scala.collection.JavaConversions._
 
 import mimir.Database
 import mimir.algebra.Type.T
@@ -39,7 +40,7 @@ import mimir.optimizer.{InlineVGTerms}
 class ShredderLens(
   // Name of the lens
   name: String, 
-  discala: FuncDep,
+  val discala: FuncDep,
   // Column names of `source` belonging to the primary entity
   val primaryEntity:(Int, List[Int]), 
   // For each secondary entity, a pair of the entity's name + columns of `source` belonging to the 
@@ -184,7 +185,35 @@ class ShredderEntityModel(lens: ShredderLens) extends SingleVarModel {
    */
   def sample(randomness: scala.util.Random,args: List[PrimitiveValue]): PrimitiveValue = {
     val secondaryEntity = args(0).asLong.toInt
-    ???
+    val entityMatrix = 
+      lens.discala.
+        entityPairMatrix.
+        get(lens.keyForMatchingEntity(secondaryEntity))
+    val primaryAttributeMatchChances = 
+      lens.primaryEntity._2.map( primaryAttribute => {
+        val secondaryAttributeCandidates =
+          entityMatrix.get(primaryAttribute).toList
+
+        val secondaryAttributeCandidateChances =
+          secondaryAttributeCandidates.map(_._2)
+
+        // The probability of a match for this one attribute is
+        // the probability that *some* secondary attribute matches
+        // it (even if it's a repeat).  
+        val attributeMatchChance = 
+          1.0f - secondaryAttributeCandidateChances.map( 1 - _).fold(1.0f)( _ * _ )
+
+        attributeMatchChance
+      })
+
+    // The probability for a match for the entity is the probability of
+    // all of the matches together.
+    val positiveMatchProbability = 
+      primaryAttributeMatchChances.fold(1.0f)(_*_)
+
+    return BoolPrimitive(
+      randomness.nextFloat() < positiveMatchProbability
+    )
   }
   def reason(args: List[Expression]): String = 
   {
@@ -221,22 +250,12 @@ class ShredderAttributeModel(lens: ShredderLens) extends SingleVarModel {
      * The position in the primaryEntity's attribute list of the current target attribute
      */
     val targetAttributePosition = args(1).asLong.toInt-1
-    /**
-     * The position in the current SecondaryEntity's attribute list of the current source attribute
-     */
-    val sourceAttributePosition = args(2).asLong.toInt-1
 
     val matchCandidates = 
-      lens.matchMatrix(sourceEntityPosition)(targetAttributePosition)
-    val bestScore = 
-      matchCandidates.max
-    val sourceScore =
-      matchCandidates(sourceAttributePosition)
+      lens.matchMatrix(sourceEntityPosition)(targetAttributePosition).zipWithIndex
 
-    BoolPrimitive(
-      sourceScore == bestScore
-      // In the context of entityMatchingKey, 
-      // is targetAttribute == sourceAttribute in the best guess possible world?
+    IntPrimitive(
+      matchCandidates.sortBy( -_._1 ).toList(0)._2+1
     )
   }
   def reason(args: List[Expression]): String = 
@@ -253,8 +272,28 @@ class ShredderAttributeModel(lens: ShredderLens) extends SingleVarModel {
   }
   def sample(randomness: scala.util.Random,args: List[PrimitiveValue]): PrimitiveValue =
   {
-    ???
+    val sourceEntity = lens.secondaryEntities(Eval.evalInt(args(0)).toInt)
+    val targetAttribute = lens.primaryEntity._2(Eval.evalInt(args(1)).toInt-1)
+
+    var totWeight:Float = 0.0f
+    val pairings = 
+      lens.discala.best(lens.keyForMatchingEntity(sourceEntity._1), sourceEntity._1).
+        filter( _._1._1 == targetAttribute ).
+        map({ case ((_, sourceAttribute), weight) =>
+          val currWeight:Float = totWeight
+          totWeight += weight
+          (sourceAttribute, currWeight)
+        })
+
+    var target:Float = randomness.nextFloat() * totWeight
+    var sourceAttribute = 
+      pairings.find( _._1 >= target )
+
+    sourceAttribute match {
+      case Some((attr, _)) => IntPrimitive(attr.toLong)
+      case None => NullPrimitive()
+    }
   }
-  def varType(argTypes: List[Type.T]): Type.T = Type.TBool
+  def varType(argTypes: List[Type.T]): Type.T = Type.TInt
 
 }
