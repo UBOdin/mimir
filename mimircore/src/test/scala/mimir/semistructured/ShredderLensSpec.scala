@@ -23,6 +23,7 @@ object ShredderLensSpec
     // "../test/data/Bestbuy_raw_noquote.csv"
   )
   val extractorName = "TEST_EXTRACTOR"
+  var testLens:ShredderLens = null
 
   sequential
 
@@ -56,7 +57,7 @@ object ShredderLensSpec
 
     "contain enough information to create a lens" >> {
       val entities = discala.entityPairList.flatMap( x => List(x._1, x._2) ).toSet.toList
-      println(entities.toString)
+      // println(entities.toString)
       entities must not beEmpty
 
       val primaryEntity = entities(new Random().nextInt(entities.size))
@@ -70,7 +71,7 @@ object ShredderLensSpec
       val entityObject = (e:Integer) => (e.toInt, discala.parentTable.get(e).toList.map(_.toInt))
 
       val input = db.getTableOperator(testTable)
-      val lens = new ShredderLens(
+      testLens = new ShredderLens(
         "TEST_LENS",
         discala,
         entityObject(primaryEntity),
@@ -78,16 +79,19 @@ object ShredderLensSpec
         input
       )
 
-      println(lens.view)
+      // println(testLens.view)
       val inputSchema = input.schema
       val targetSchema = 
         (primaryEntity :: discala.parentTable.get(primaryEntity).toList).map(
           inputSchema(_)
         )
-      lens.schema must be equalTo(targetSchema)
-
+      testLens.schema must be equalTo(targetSchema)
     }
 
+    "be queriable" >> {
+      val results = db.query(testLens.view).allRows
+      results must not beEmpty
+    }
   }
 
 }

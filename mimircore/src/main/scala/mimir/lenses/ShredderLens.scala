@@ -68,7 +68,7 @@ class ShredderLens(
 
   val model = IndependentVarsModel(List(attributeMappingModel, entityParticipationModel))
   val ATTRIBUTE_MAPPING_VAR = 0
-  val ENTITY_PARTICIPATION_VAR = 0
+  val ENTITY_PARTICIPATION_VAR = 1
   var db:Database = null
 
   def queryForEntity(entity:(Int, List[Int])): Operator =
@@ -175,7 +175,7 @@ class ShredderEntityModel(lens: ShredderLens) extends SingleVarModel {
    */
   def bestGuess(args:List[PrimitiveValue]): PrimitiveValue = 
   {
-    val secondaryEntity = lens.secondaryEntities(args(0).asLong.toInt)
+    val secondaryEntity = args(0).asLong.toInt
     BoolPrimitive(true)
   }
   /**
@@ -183,14 +183,14 @@ class ShredderEntityModel(lens: ShredderLens) extends SingleVarModel {
    * belongs in the shredded view in the best-guess world.
    */
   def sample(randomness: scala.util.Random,args: List[PrimitiveValue]): PrimitiveValue = {
-    val secondaryEntity = lens.secondaryEntities(args(0).asLong.toInt)
+    val secondaryEntity = args(0).asLong.toInt
     ???
   }
   def reason(args: List[Expression]): String = 
   {
-    val secondaryEntity = lens.secondaryEntities(Eval.evalInt(args(0)).toInt)
+    val secondaryEntityParent = Eval.evalInt(args(0)).toInt
     "I assumed that the entity: "+
-      lens.nameForAttributeId(secondaryEntity._1)+
+      lens.nameForAttributeId(secondaryEntityParent)+
       " matched with the entity "+
       lens.nameForAttributeId(lens.primaryEntity._1)
   }
