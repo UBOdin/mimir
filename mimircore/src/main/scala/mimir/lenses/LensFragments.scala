@@ -32,32 +32,41 @@ object LensFragments {
    * false, the matcher will default to the expression in `defaultMatch`.
    */
   def schemaMatch(
-    name: String, model: Model, idx: Int, 
+    name: String, model: Model, idx: Int,
+    extraVGTermArgs:List[PrimitiveValue], 
     source: Operator, 
     target: List[String], 
-    valid:((String,String) => Boolean), 
-    defaultMatch: Expression): Operator =
+    validate:((Int,Int) => Boolean), 
+    defaultMatch:(Int => Expression)): Operator =
   {
     val sourceSchema = source.schema.map(_._1);
     Project(
-      target.map( targetCol => ProjectArg(
-        targetCol,
-        ExpressionUtils.makeCaseExpression(
-          sourceSchema.
-            filter(valid(targetCol,_)).
-            toList.
-            map( sourceCol =>
-              (
-                VGTerm((name, model), idx, List(
-                  StringPrimitive(targetCol), 
-                  StringPrimitive(sourceCol))
-                ), 
-                Var(sourceCol)
-              )
-            ),
-          defaultMatch
+      target.zipWithIndex.map({ case (targetName, targetIdx) =>
+
+        val sourceCandidates = 
+          sourceSchema.zipWithIndex.
+            flatMap({ case (sourceName, sourceIdx) => 
+              if(validate(targetIdx,sourceIdx)){
+                Some(
+                  ( 
+                    VGTerm((name, model), idx, extraVGTermArgs ++ List(
+                      IntPrimitive(targetIdx),
+                      IntPrimitive(sourceIdx)
+                    )),
+                    Var(sourceName)
+                  )
+                )
+              } else { None }
+            })
+
+        ProjectArg(targetName, 
+          ExpressionUtils.makeCaseExpression(
+            sourceCandidates, 
+            defaultMatch(targetIdx)
+          )
         )
-      )),
+
+      }),
       source
     )
   }

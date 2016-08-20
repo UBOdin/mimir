@@ -9,7 +9,6 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.optimizer.{InlineVGTerms}
 
-
 /**
  * This lens is intended for use with the DiScala JSON extractor.  It wraps a (very) wide table for which
  * various projections identify different entities.
@@ -41,54 +40,97 @@ class ShredderLens(
   name: String, 
   discala: FuncDep,
   // Column names of `source` belonging to the primary entity
-  val primaryEntity:List[String], 
+  val primaryEntity:(Int, List[Int]), 
   // For each secondary entity, a pair of the entity's name + columns of `source` belonging to the 
   // secondary entities.
-  val secondaryEntities:List[(String,List[String])], 
+  val secondaryEntities:List[(Int,List[Int])], 
   // The origin of all of the data.
   source: Operator
 ) extends Lens(
     name, 
-    List[Expression](StringPrimitive(primaryEntity.mkString(",")))++
-      secondaryEntities.map({ case (entityName,attrs) => 
-        StringPrimitive(entityName+":"+attrs.mkString(",")) 
-      }), 
+    List[Expression](),
     source
   ) 
 {
+  val inSchema = source.schema
   val attributeMappingModel = new ShredderAttributeModel(this)
   val entityParticipationModel = new ShredderEntityModel(this)
 
-  val model = MergedModels(List(attributeMappingModel, entityParticipationModel))
+  val model = IndependentVarsModel(List(attributeMappingModel, entityParticipationModel))
+  val ATTRIBUTE_MAPPING_VAR = 0
+  val ENTITY_PARTICIPATION_VAR = 0
   var db:Database = null
 
-  def schema(): List[(String, Type.T)] = {
-    val inSchema = source.schema.toMap;
-    primaryEntity.map( col => (col, inSchema(col)) )
-  }
+  def queryForEntity(entity:(Int, List[Int])): Operator =
+    OperatorUtils.projectDownToColumns(
+      schemaOfEntity(entity).map(_._1),
+      source
+    )
+
+  def schema(): List[(String, Type.T)] = 
+    schemaOfEntity(primaryEntity)
+  
   def lensType = "SHREDDER"
+
+  def nameForAttributeId(idx:Int) = inSchema(idx)._1
+  def typeForAttributeId(idx:Int) = inSchema(idx)._2
+
+  def columnIdsInEntity(entity:(Int, List[Int])): List[Int] = 
+    (entity._1 :: entity._2)
+  def schemaOfEntity(entity:(Int, List[Int])): List[(String, Type.T)] =
+    columnIdsInEntity(entity).map( inSchema(_) )  
+  def keyForMatchingEntity(idx:Int) = {
+    val primaryIdx = primaryEntity._1
+    if(idx < primaryIdx){ StringPrimitive(idx+","+primaryIdx) }
+    else                { StringPrimitive(primaryIdx+","+idx) }
+  }
 
   /**
    * `view` emits an Operator that defines the Virtual C-Table for the lens
    */
   override def view: Operator = {
-    val primarySource = OperatorUtils.projectDownToColumns(primaryEntity, source)
+    val primarySource = queryForEntity(primaryEntity)
     val secondarySources = 
       secondaryEntities.zipWithIndex.
-        map({ case ((entityName, attrs), entityIdx) =>
-          // SchemaMatch based on attributeMappingModel
-          LensFragments.schemaMatch(
-            name, model, 0,
-            // Include entities based on entityParticipationModel
+        map({ case (secondaryEntity, secondaryEntityPosition) => 
+          val baseEntityQuery = queryForEntity(secondaryEntity)
+
+          val includeOnlyIfEntityMatch = 
             Select(
-              VGTerm((name, model), entityIdx+1, List()),
-              // And actually extract the base entity itself.
-              OperatorUtils.projectDownToColumns(attrs, source)
-            ),
-            primaryEntity,
-            ((_,_) => true),
-            NullPrimitive()
-          )
+              VGTerm((name, model), 
+                ENTITY_PARTICIPATION_VAR, 
+                List(IntPrimitive(secondaryEntity._1))
+              ),
+              baseEntityQuery
+            )
+
+          val schemasAligned =
+            LensFragments.schemaMatch(
+              name, model, ATTRIBUTE_MAPPING_VAR,
+              List(IntPrimitive(secondaryEntityPosition)),
+              includeOnlyIfEntityMatch,
+              schema().map(_._1),
+              {
+              // Validation Step: Returns true for 'possible' mapping
+
+                // All key attributes match deterministically.  There are no
+                // non-deterministic mappings; Instead, the default plugs in
+                // a mapping for the key.
+                case (0,_) => false // No non-deterministic mappings.  The key column
+
+                // Non-key attributes can match iff they share a type
+                case (targetPosition, sourcePosition) =>
+                  typeForAttributeId( primaryEntity._2(targetPosition) ) ==
+                    typeForAttributeId( secondaryEntity._2(sourcePosition) )
+              },
+              // Default value
+              { 
+                case 0 => Var(nameForAttributeId(secondaryEntity._1))
+                case _ => NullPrimitive()
+              }
+            )
+
+          schemasAligned
         })
     // And last step... union all of the secondary sources with the primary
     secondarySources.foldLeft(primarySource)(Union(_,_))
@@ -113,30 +155,34 @@ class ShredderLens(
  * the entity participates in the shredded view in that possible world, 
  * while a value of false means that the entity does not.
  */
-class ShredderEntityModel(lens: ShredderLens) extends Model {
+class ShredderEntityModel(lens: ShredderLens) extends SingleVarModel {
 
-  val numVars = lens.secondaryEntities.length
   /**
    * Return true if the secondary entity 'idx' (range from 0-(N-1) inclusive)
    * belongs in the shredded view in the best-guess world.
    */
-  def bestGuess(idx: Int, args:List[PrimitiveValue]): PrimitiveValue = 
+  def bestGuess(args:List[PrimitiveValue]): PrimitiveValue = 
   {
-    
-
-    // XXXXXXXX IMPLEMENT THIS XXXXXXXX
+    val secondaryEntity = lens.secondaryEntities(args(0).asLong.toInt)
     BoolPrimitive(true)
   }
   /**
    * Return true if the secondary entity 'idx' (range from 0-(N-1) inclusive)
    * belongs in the shredded view in the best-guess world.
    */
-  def sample(idx: Int,randomness: scala.util.Random,args: List[PrimitiveValue]): PrimitiveValue = ???
-  def reason(idx: Int,args: List[Expression]): String = 
-  {
-    "I assumed that the entity: "+(lens.secondaryEntityName(idx))+" belonged to the view "+lens.name
+  def sample(randomness: scala.util.Random,args: List[PrimitiveValue]): PrimitiveValue = {
+    val secondaryEntity = lens.secondaryEntities(args(0).asLong.toInt)
+    ???
   }
-  def varType(idx: Int,argTypes: List[Type.T]): Type.T = Type.TBool
+  def reason(args: List[Expression]): String = 
+  {
+    val secondaryEntity = lens.secondaryEntities(Eval.evalInt(args(0)).toInt)
+    "I assumed that the entity: "+
+      lens.nameForAttributeId(secondaryEntity._1)+
+      " matched with the entity "+
+      lens.nameForAttributeId(lens.primaryEntity._1)
+  }
+  def varType(argTypes: List[Type.T]): Type.T = Type.TBool
 }
 
 /**
@@ -149,20 +195,58 @@ class ShredderEntityModel(lens: ShredderLens) extends Model {
  * is true if source should be mapped to target in the current possible
  * world.
  */
-class ShredderAttributeModel(lens: ShredderLens) extends Model {
+class ShredderAttributeModel(lens: ShredderLens) extends SingleVarModel {
+  def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = 
+  {
+    /**
+     * The Int,List[Int] spec for the entity who's attributes are being matched
+     */
+    val sourceEntity = lens.secondaryEntities(args(0).asLong.toInt)
+    /**
+     * The base-data schema position of the entity being matched
+     */
+    val sourceEntityParent = sourceEntity._1
+    /**
+     * The "x,y" key for the match pair
+     */
+    val entityMatchingKey = lens.keyForMatchingEntity(sourceEntityParent)
 
-  val numVars = 1
-  def bestGuess(idx: Int,args: List[PrimitiveValue]): PrimitiveValue = 
-  {
+    // The key attribute is at index 0, so the following attribute values 
+    // are offset by 1 when we get them
+    /**
+     * The base-data schema position of the child attribute being targetted
+     */
+    val targetAttribute = lens.primaryEntity._2(args(1).asLong.toInt-1)
+    /**
+     * The base-data schema position of the child attribute being matched to targetAttribute
+     */
+    val sourceAttribute = sourceEntity._2(args(2).asLong.toInt-1)
+
+    throw new Exception("WILL: IMPLEMENT THIS")
     // XXXXXXXX IMPLEMENT THIS XXXXXXXX
-    BoolPrimitive(true)
+    BoolPrimitive(
+      ???  
+      // In the context of entityMatchingKey, 
+      // is targetAttribute == sourceAttribute in the best guess possible world?
+    )
   }
-  def reason(idx: Int,args: List[Expression]): String = 
+  def reason(args: List[Expression]): String = 
   {
-    "I assumed that the attribute "+lens.name+"."+Eval.evalString(args(0))+
-    " could be populated with data from "+Eval.evalString(args(1))
+    val sourceEntity = lens.secondaryEntities(Eval.evalInt(args(0)).toInt)
+    val targetAttribute = lens.primaryEntity._2(Eval.evalInt(args(1)).toInt-1)
+    val sourceAttribute = sourceEntity._2(Eval.evalInt(args(2)).toInt-1)
+
+    "I assumed that the attribute "+lens.name+"."+
+      lens.nameForAttributeId(targetAttribute)+
+    " could be populated with data from "+
+      lens.nameForAttributeId(sourceEntity._1)+"."+
+      lens.nameForAttributeId(sourceAttribute)
   }
-  def sample(idx: Int,randomness: scala.util.Random,args: List[PrimitiveValue]): PrimitiveValue = ???
-  def varType(idx: Int,argTypes: List[Type.T]): Type.T = Type.TBool
+  def sample(randomness: scala.util.Random,args: List[PrimitiveValue]): PrimitiveValue =
+  {
+    throw new Exception("UNIMPLEMENTED")    
+
+  }
+  def varType(argTypes: List[Type.T]): Type.T = Type.TBool
 
 }

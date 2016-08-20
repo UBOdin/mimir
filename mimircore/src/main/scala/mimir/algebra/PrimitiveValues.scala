@@ -9,6 +9,7 @@ import mimir.algebra.Type._
  * Slightly more specific base type for constant terms.  PrimitiveValue
  * also acts as a boxing type for constants in Mimir.
  */
+@SerialVersionUID(100L)
 abstract class PrimitiveValue(t: Type.T) 
   extends LeafExpression 
   with Serializable
@@ -45,6 +46,7 @@ abstract class PrimitiveValue(t: Type.T)
 /**
  * Boxed representation of a long integer
  */
+@SerialVersionUID(100L)
 case class IntPrimitive(v: Long) 
   extends PrimitiveValue(TInt) 
 {
@@ -57,6 +59,7 @@ case class IntPrimitive(v: Long)
 /**
  * Boxed representation of a string
  */
+@SerialVersionUID(100L)
 case class StringPrimitive(v: String) 
   extends PrimitiveValue(TString)
 {
@@ -69,6 +72,7 @@ case class StringPrimitive(v: String)
 /**
  * Boxed representation of a type object
  */
+@SerialVersionUID(100L)
 case class TypePrimitive(t: Type.T)
   extends PrimitiveValue(Type.TType)
 {
@@ -81,6 +85,7 @@ case class TypePrimitive(t: Type.T)
 /**
  * Boxed representation of a row identifier/provenance token
  */
+@SerialVersionUID(100L)
 case class RowIdPrimitive(v: String)
   extends PrimitiveValue(TRowId)
 {
@@ -93,6 +98,7 @@ case class RowIdPrimitive(v: String)
 /**
  * Boxed representation of a double-precision floating point number
  */
+@SerialVersionUID(100L)
 case class FloatPrimitive(v: Double) 
   extends PrimitiveValue(TFloat)
 {
@@ -106,6 +112,7 @@ case class FloatPrimitive(v: Double)
 /**
  * Boxed representation of a date
  */
+@SerialVersionUID(100L)
 case class DatePrimitive(y: Int, m: Int, d: Int) 
   extends PrimitiveValue(TDate)
 {
@@ -127,6 +134,7 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
 /**
  * Boxed representation of a boolean
  */
+@SerialVersionUID(100L)
 case class BoolPrimitive(v: Boolean)
   extends PrimitiveValue(TBool)
 {
@@ -139,6 +147,7 @@ case class BoolPrimitive(v: Boolean)
 /**
  * Boxed representation of NULL
  */
+@SerialVersionUID(100L)
 case class NullPrimitive()
   extends PrimitiveValue(TAny)
 {
@@ -151,6 +160,7 @@ case class NullPrimitive()
 /**
  * Boxed representation of a lage blob of data
  */
+@SerialVersionUID(100L)
 case class BlobPrimitive(v: Array[Byte])
   extends PrimitiveValue(TBlob)
 {
