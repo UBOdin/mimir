@@ -91,7 +91,7 @@ class FuncDep
   }
 
   def phaseOne() {
-    startTime = System.nanoTime()
+    startTime = System.currentTimeMillis()
     var nodeTable: ArrayList[Integer] = new ArrayList[Integer]() // contains a list of all the nodes
     var edgeTable: ArrayList[String] = new ArrayList[String]() // contains the node numbers for the dependency graph, the names are numbers from the schema 0 to sch.length are the possibilities
     var maxTable: ArrayList[String] = new ArrayList[String]() // contains the max values for each column, used for phase1 formula
@@ -411,9 +411,9 @@ class FuncDep
       }
     }
 
-    endTime = System.nanoTime()
-    println("PHASE1 and PHASE2 TOOK: "+((endTime - startTime)/1000000) + " MILLISECONDS")
-    writer.println("PHASE1 and PHASE2 TOOK: "+((endTime - startTime)/1000000) + " MILLISECONDS")
+    endTime = System.currentTimeMillis()
+    println("PHASE1 and PHASE2 TOOK: "+(endTime - startTime) + " MILLISECONDS")
+    writer.println("PHASE1 and PHASE2 TOOK: "+(endTime - startTime) + " MILLISECONDS")
     writer.close()
 
     //    matchEnt(graphPairs)
