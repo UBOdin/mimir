@@ -37,13 +37,15 @@ class FuncDep
   var sch:List[(String, T)] = null
   var parentTable: TreeMap[Integer, ArrayList[Integer]] = null
   var entityPairMatrix:TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]] = null // outer string is entity pair so column#,column#: to a treemap that is essentially a look-up matrix for columns that contain column to column strengths
-
+  var startTime:Long = 0
+  var endTime:Long = 0
   // Outputs
   var entityPairList:List[(Integer,Integer)] = Nil
 
   /* inserts the input into table and fills the count table, table is the same as a generic sql table, and countTable is a count of each unique value for each column of the table */
 
   def buildAbadi(schema: List[(String, T)],data: ResultIterator): Unit = {
+
     table = new ArrayList[ArrayList[PrimitiveValue]]() // contains every row from resultIter aka data
     entityPairMatrix = new TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]]()
     sch = schema
@@ -80,7 +82,7 @@ class FuncDep
   }
 
   def phaseOne() {
-
+    startTime = System.nanoTime()
     var nodeTable: ArrayList[Integer] = new ArrayList[Integer]() // contains a list of all the nodes
     var edgeTable: ArrayList[String] = new ArrayList[String]() // contains the node numbers for the dependency graph, the names are numbers from the schema 0 to sch.length are the possibilities
     var maxTable: ArrayList[String] = new ArrayList[String]() // contains the max values for each column, used for phase1 formula
@@ -194,7 +196,7 @@ class FuncDep
 
 //    println("TABLE SIZE: "+ table.get(0).size())
 
-    println(g.toString)
+//    println(g.toString)
 
 //    showGraph(g)
 
@@ -400,8 +402,11 @@ class FuncDep
       }
     }
 
+    endTime = System.nanoTime()
+    println("PHASE1 and PHASE2 TOOK: "+((endTime - startTime)/1000000) + " MILLISECONDS")
+
     //    matchEnt(graphPairs)
-    entityPairMatrixResult()
+//    entityPairMatrixResult()
   }
 
   def matchEnt(graphPairs:TreeMap[String,UndirectedSparseMultigraph[Integer,String]],parentTable: TreeMap[Integer, ArrayList[Integer]]): Unit ={

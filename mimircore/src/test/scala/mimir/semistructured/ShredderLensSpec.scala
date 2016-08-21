@@ -29,26 +29,29 @@ object ShredderLensSpec
 
   "The DiScala Extractor" should {
 
-    // "be initializable" >> {
-    //   LoadCSV.handleLoadTable(db, testTable, testData)
-    //   val schema = db.getTableSchema(testTable).get
-    //   discala = new FuncDep()
-    //   discala.buildAbadi(schema, db.query(db.getTableOperator(testTable)))
-    //   discala.entityPairMatrix must not beNull
-    // }
+     "be initializable" >> {
+       LoadCSV.handleLoadTable(db, testTable, testData)
+       val schema = db.getTableSchema(testTable).get
+       discala = new FuncDep()
+       discala.buildAbadi(schema, db.query(db.getTableOperator(testTable)))
+       discala.entityPairMatrix must not beNull
+     }
 
-    // "be serializable" >> {
-    //   discala.serializeTo(db, extractorName) 
-    //   discala.entityPairMatrix must not beNull
+     "be serializable" >> {
+       var startSerialize:Long = System.nanoTime();
+       discala.serializeTo(db, extractorName)
+       discala.entityPairMatrix must not beNull
+       var endSerialize:Long = System.nanoTime();
+       println("Serialize TOOK: "+((endSerialize - startSerialize)/1000000) + " MILLISECONDS")
 
-    //   val blob1 = 
-    //     db.backend.singletonQuery(
-    //       "SELECT data FROM "+FuncDep.BACKSTORE_TABLE_NAME+" WHERE name='"+extractorName+"'"
-    //     )
-    //   Runtime.getRuntime().exec(Array("cp", "databases/shredderLensTestDB", "shreddb"))
-    //   blob1 must beAnInstanceOf[BlobPrimitive]
-    //   blob1.asInstanceOf[BlobPrimitive].v.length must be greaterThan(0)
-    // }
+       val blob1 =
+         db.backend.singletonQuery(
+           "SELECT data FROM "+FuncDep.BACKSTORE_TABLE_NAME+" WHERE name='"+extractorName+"'"
+         )
+       Runtime.getRuntime().exec(Array("cp", "databases/shredderLensTestDB", "shreddb"))
+       blob1 must beAnInstanceOf[BlobPrimitive]
+       blob1.asInstanceOf[BlobPrimitive].v.length must be greaterThan(0)
+     }
 
     "be deserializable" >> {
       discala = FuncDep.deserialize(db, extractorName)
@@ -90,7 +93,12 @@ object ShredderLensSpec
 
     "be queriable" >> {
       val results = db.query(testLens.view).allRows
+      var startQuery:Long = System.nanoTime();
+      db.query(testLens.view)
+      var endQuery:Long = System.nanoTime();
+      println("TOOK: "+((endQuery - startQuery)/1000000) + " MILLISECONDS")
       results must not beEmpty
+      println(results)
     }
   }
 
