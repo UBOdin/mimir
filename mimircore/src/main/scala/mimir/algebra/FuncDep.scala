@@ -41,10 +41,19 @@ class FuncDep
   var endTime:Long = 0
   // Outputs
   var entityPairList:List[(Integer,Integer)] = Nil
+  var writer:PrintWriter  = null;
+
 
   /* inserts the input into table and fills the count table, table is the same as a generic sql table, and countTable is a count of each unique value for each column of the table */
 
   def buildAbadi(schema: List[(String, T)],data: ResultIterator): Unit = {
+
+    try {
+      writer = new PrintWriter("Results1.txt", "UTF-8");
+    }
+    catch {
+      case _ => val doNothing = null
+    }
 
     table = new ArrayList[ArrayList[PrimitiveValue]]() // contains every row from resultIter aka data
     entityPairMatrix = new TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]]()
@@ -404,6 +413,8 @@ class FuncDep
 
     endTime = System.nanoTime()
     println("PHASE1 and PHASE2 TOOK: "+((endTime - startTime)/1000000) + " MILLISECONDS")
+    writer.println("PHASE1 and PHASE2 TOOK: "+((endTime - startTime)/1000000) + " MILLISECONDS")
+    writer.close()
 
     //    matchEnt(graphPairs)
 //    entityPairMatrixResult()

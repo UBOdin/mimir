@@ -1,16 +1,17 @@
 package mimir.semistructured
 
-import java.io._;
-import java.util.Random;
-import scala.collection.JavaConversions._
+import java.io._
+import java.util.Random
 
-import mimir._;
-import mimir.sql._;
-import mimir.algebra._;
-import mimir.ctables._;
-import mimir.test._;
-import mimir.util._;
-import mimir.lenses._;
+import scala.collection.JavaConversions._
+import mimir._
+import mimir.sql._
+import mimir.algebra._
+import mimir.ctables._
+import mimir.exec.ResultIterator
+import mimir.test._
+import mimir.util._
+import mimir.lenses._
 
 object ShredderLensSpec
   extends SQLTestSpecification("shredderLensTestDB", Map("reset" -> "NO"))
@@ -24,6 +25,13 @@ object ShredderLensSpec
   )
   val extractorName = "TEST_EXTRACTOR"
   var testLens:ShredderLens = null
+  var writer:PrintWriter  = null;
+  try {
+    writer = new PrintWriter("Results.txt", "UTF-8");
+  }
+  catch {
+    case _ => val doNothing = null
+  }
 
   sequential
 
@@ -40,9 +48,10 @@ object ShredderLensSpec
      "be serializable" >> {
        var startSerialize:Long = System.nanoTime();
        discala.serializeTo(db, extractorName)
-       discala.entityPairMatrix must not beNull
        var endSerialize:Long = System.nanoTime();
        println("Serialize TOOK: "+((endSerialize - startSerialize)/1000000) + " MILLISECONDS")
+       writer.println("Serialize TOOK: "+((endSerialize - startSerialize)/1000000) + " MILLISECONDS")
+       discala.entityPairMatrix must not beNull
 
        val blob1 =
          db.backend.singletonQuery(
@@ -92,13 +101,17 @@ object ShredderLensSpec
     }
 
     "be queriable" >> {
-      val results = db.query(testLens.view).allRows
+      val results:List[List[PrimitiveValue]] = db.query(testLens.view).allRows
       var startQuery:Long = System.nanoTime();
       db.query(testLens.view)
       var endQuery:Long = System.nanoTime();
-      println("TOOK: "+((endQuery - startQuery)/1000000) + " MILLISECONDS")
+      println("Query TOOK: "+((endQuery - startQuery)/1000000) + " MILLISECONDS")
+      writer.println("Query TOOK: "+((endQuery - startQuery)/1000000) + " MILLISECONDS")
+      println(testLens.schema())
+      println(testLens.schemaOfEntity())
+
+      writer.close()
       results must not beEmpty
-      println(results)
     }
   }
 
