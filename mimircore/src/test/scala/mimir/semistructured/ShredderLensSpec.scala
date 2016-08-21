@@ -26,8 +26,15 @@ object ShredderLensSpec
   val extractorName = "TEST_EXTRACTOR"
   var testLens:ShredderLens = null
   var writer:PrintWriter  = null;
+  var writer1:PrintWriter  = null;
   try {
     writer = new PrintWriter("Results.txt", "UTF-8");
+  }
+  catch {
+    case _ => val doNothing = null
+  }
+  try {
+    writer1 = new PrintWriter("OUT.csv", "UTF-8");
   }
   catch {
     case _ => val doNothing = null
@@ -102,13 +109,33 @@ object ShredderLensSpec
 
     "be queriable" >> {
       val results:List[List[PrimitiveValue]] = db.query(testLens.view).allRows
+      val results1:List[List[PrimitiveValue]] = db.query(testLens.view).allRows
       var startQuery:Long = System.nanoTime();
       db.query(testLens.view)
       var endQuery:Long = System.nanoTime();
       println("Query TOOK: "+((endQuery - startQuery)/1000000) + " MILLISECONDS")
       writer.println("Query TOOK: "+((endQuery - startQuery)/1000000) + " MILLISECONDS")
-      println(testLens.schema())
-      println(testLens.schemaOfEntity())
+
+      val s:List[(String,Type.T)] = testLens.schema()
+      var sc:String = ""
+      s.foreach((tup)=>{
+        sc = sc+ "'"+tup._1+"',"
+      })
+      writer1.print(sc.substring(0,sc.size))
+      results1.foreach((row)=>{
+        var rw:String = ""
+        row.foreach((v)=>{
+          writer1.print("'"+v.toString + "',")
+        })
+        writer1.println(rw.substring(0,rw.size-1))
+      })
+      writer1.close()
+      LoadCSV.handleLoadTable(db, "LENSOUTPUT", new File("OUT.csv"))
+      var startQ:Long = System.nanoTime();
+      db.backend.execute("SELECT * FROM LENSOUTPUT")
+      var endQ:Long = System.nanoTime();
+      println("Output Query TOOK: "+((endQ - startQ)/1000000) + " MILLISECONDS")
+      writer.println("Output Query TOOK: "+((endQ - startQ)/1000000) + " MILLISECONDS")
 
       writer.close()
       results must not beEmpty
