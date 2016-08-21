@@ -57,7 +57,6 @@ object ShredderLensSpec
        discala.serializeTo(db, extractorName)
        var endSerialize:Long = System.nanoTime();
        println("Serialize TOOK: "+((endSerialize - startSerialize)/1000000) + " MILLISECONDS")
-       writer.println("Serialize TOOK: "+((endSerialize - startSerialize)/1000000) + " MILLISECONDS")
        discala.entityPairMatrix must not beNull
 
        val blob1 =
@@ -121,7 +120,7 @@ object ShredderLensSpec
       s.foreach((tup)=>{
         sc = sc+ "'"+tup._1+"',"
       })
-      writer1.print(sc.substring(0,sc.size))
+      writer1.println(sc.substring(0,sc.size))
       results1.foreach((row)=>{
         var rw:String = ""
         row.foreach((v)=>{
