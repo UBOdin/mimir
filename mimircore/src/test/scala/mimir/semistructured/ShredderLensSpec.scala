@@ -114,22 +114,24 @@ object ShredderLensSpec
       var endQuery:Long = System.nanoTime();
       println("Query TOOK: "+((endQuery - startQuery)/1000000) + " MILLISECONDS")
       writer.println("Query TOOK: "+((endQuery - startQuery)/1000000) + " MILLISECONDS")
+      db.selectInto("LENSOUTPUT", testLens.view)
 
-      val s:List[(String,Type.T)] = testLens.schema()
-      var sc:String = ""
-      s.foreach((tup)=>{
-        sc = sc+ "'"+tup._1+"',"
-      })
-      writer1.println(sc.substring(0,sc.size))
-      results1.foreach((row)=>{
-        var rw:String = ""
-        row.foreach((v)=>{
-          writer1.print("'"+v.toString + "',")
-        })
-        writer1.println(rw.substring(0,rw.size-1))
-      })
-      writer1.close()
-      LoadCSV.handleLoadTable(db, "LENSOUTPUT", new File("OUT.csv"))
+      
+      // val s:List[(String,Type.T)] = testLens.schema()
+      // var sc:String = ""
+      // s.foreach((tup)=>{
+      //   sc = sc+ "'"+tup._1+"',"
+      // })
+      // writer1.println(sc.substring(0,sc.size))
+      // results1.foreach((row)=>{
+      //   var rw:String = ""
+      //   row.foreach((v)=>{
+      //     writer1.print("'"+v.toString + "',")
+      //   })
+      //   writer1.println(rw.substring(0,rw.size-1))
+      // })
+      // writer1.close()
+      // LoadCSV.handleLoadTable(db, "LENSOUTPUT", new File("OUT.csv"))
       var startQ:Long = System.nanoTime();
       db.backend.execute("SELECT * FROM LENSOUTPUT")
       var endQ:Long = System.nanoTime();
