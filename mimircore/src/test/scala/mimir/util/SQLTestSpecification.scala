@@ -10,36 +10,53 @@ import mimir.parser._
 import mimir.sql._
 import mimir.algebra._
 
+object DBTestInstances
+{
+  private var databases = scala.collection.mutable.Map[String, Database]()
+
+  def get(tempDBName: String, config: Map[String,String]): Database =
+  {
+    this.synchronized { 
+      databases.get(tempDBName) match { 
+        case Some(db) => db
+        case None => {
+          val dbFile = new File(new File("databases"), tempDBName+".db")
+          val jdbcBackendMode:String = config.getOrElse("jdbc", "sqlite")
+          val shouldResetDB = config.getOrElse("reset", "YES") match { 
+            case "NO" => false; case "YES" => true
+          }
+          val oldDBExists = dbFile.exists();
+          val tmpDB = new Database(tempDBName, new JDBCBackend(jdbcBackendMode, tempDBName+".db"));
+          if(shouldResetDB){
+            if(dbFile.exists()){ dbFile.delete(); }
+          }
+          config.get("initial_db") match {
+            case None => ()
+            case Some(path) => Runtime.getRuntime().exec(s"cp $path $dbFile")
+          }
+          if(shouldResetDB){    
+            dbFile.deleteOnExit();
+          }
+          tmpDB.backend.open();
+          if(shouldResetDB || !oldDBExists || !config.contains("initial_db")){
+            tmpDB.initializeDBForMimir();
+          }
+          databases.put(tempDBName, tmpDB)
+          tmpDB
+        }
+      }
+    }
+  }
+}
+
+
 abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,String] = Map())
   extends Specification
 {
 
   def dbFile = new File(new File("databases"), tempDBName+".db")
-  val jdbcBackendMode:String = config.getOrElse("jdbc", "sqlite")
-  val shouldResetDB = config.getOrElse("reset", "YES") match { case "NO" => false; case "YES" => true}
-  val oldDBExists = dbFile.exists();
 
-  val db = {
-    val tmpDB = new Database(tempDBName, new JDBCBackend(jdbcBackendMode, tempDBName+".db"));
-    if(shouldResetDB){
-      if(dbFile.exists()){ dbFile.delete(); }
-    }
-    config.get("initial_db") match {
-      case None => ()
-      case Some(path) => Runtime.getRuntime().exec(s"cp $path $dbFile")
-    }
-    if(shouldResetDB){    
-      dbFile.deleteOnExit();
-    }
-    tmpDB.backend.open();
-    if(shouldResetDB || !oldDBExists || !config.contains("initial_db")){
-      tmpDB.initializeDBForMimir();
-    }
-    tmpDB
-  }
-
-
-
+  def db = DBTestInstances.get(tempDBName, config)
 
   def stmts(f: File): List[Statement] = {
     val p = new MimirJSqlParser(new FileReader(f))

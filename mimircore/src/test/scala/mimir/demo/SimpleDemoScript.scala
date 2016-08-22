@@ -36,6 +36,7 @@ object SimpleDemoScript
 
 	"The Basic Demo" should {
 		"Be able to open the database" >> {
+			db // force the DB to be loaded
 			dbFile must beAFile
 		}
 
