@@ -17,55 +17,16 @@ import mimir.util._;
 import net.sf.jsqlparser.statement.{Statement}
 
 
-object SimpleDemoScript extends Specification with FileMatchers {
-	def stmts(f: File): List[Statement] = {
-		val p = new MimirJSqlParser(new FileReader(f))
-		var ret = List[Statement]();
-		var s: Statement = null;
+object SimpleDemoScript 
+	extends SQLTestSpecification("tempDBDemoScript")
+	with FileMatchers 
+{
 
-		do{
-			s = p.Statement()
-			if(s != null) {
-				ret = s :: ret;
-			}
-		} while(s != null)
-		ret.reverse
-	}
-	def stmt(s: String) = {
-		new MimirJSqlParser(new StringReader(s)).Statement()
-	}
-	def select(s: String) = {
-		db.sql.convert(
-			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-		)
-	}
-	def query(s: String) = {
-		val query = select(s)
-		db.query(query)
-	}
-	def explainRow(s: String, t: String) = {
-		val query = db.sql.convert(
-			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-		)
-		db.explainRow(query, RowIdPrimitive(t))
-	}
-	def explainCell(s: String, t: String, a:String) = {
-		val query = db.sql.convert(
-			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-		)
-		db.explainCell(query, RowIdPrimitive(t), a)
-	}
-	def lens(s: String) =
-		db.createLens(stmt(s).asInstanceOf[mimir.sql.CreateLens])
-	def update(s: Statement) = 
-		db.backend.update(s.toString())
-	def parser = new ExpressionParser(db.lenses.modelForLens)
-	def expr = parser.expr _
-	def i = IntPrimitive(_:Long).asInstanceOf[PrimitiveValue]
-	def f = FloatPrimitive(_:Double).asInstanceOf[PrimitiveValue]
-	def str = StringPrimitive(_:String).asInstanceOf[PrimitiveValue]
+	// The demo spec uses cumulative tests --- Each stage depends on the stages that
+	// precede it.  The 'sequential' keyword below is necessary to prevent Specs2 from 
+	// automatically parallelizing testing.
+	sequential
 
-	val tempDBName = "tempDBDemoScript"
 	val productDataFile = new File("../test/data/Product.sql");
 	val reviewDataFiles = List(
 			new File("../test/data/ratings1.csv"),
@@ -73,20 +34,8 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			new File("../test/data/ratings3.csv")
 		)
 
-	val db = new Database(tempDBName, new JDBCBackend("sqlite", tempDBName));
-
-	// The demo spec uses cumulative tests --- Each stage depends on the stages that
-	// precede it.  The 'sequential' keyword below is necessary to prevent Specs2 from 
-	// automatically parallelizing testing.
-	sequential
-
 	"The Basic Demo" should {
 		"Be able to open the database" >> {
-			val dbFile = new File(new File("databases"), tempDBName)
-			if(dbFile.exists()){ dbFile.delete(); }
-			dbFile.deleteOnExit();
-		    db.backend.open();
-			db.initializeDBForMimir();
 			dbFile must beAFile
 		}
 
