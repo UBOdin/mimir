@@ -10,18 +10,19 @@ scalacOptions ++= Seq(
   "-feature"
 )
 
-libraryDependencies += "org.rogach" %% "scallop" % "0.9.5"
-
-libraryDependencies += "com.github.nscala-time" %% "nscala-time" % "1.2.0"
-
-libraryDependencies += "org.specs2" %% "specs2-core" % "3.8.4" % "test"
-libraryDependencies += "org.specs2" %% "specs2-matcher-extra" % "3.8.4" % "test"
-libraryDependencies += "org.specs2" %% "specs2-junit" % "3.8.4" % "test"
-
-libraryDependencies += "ch.qos.logback" %  "logback-classic" % "1.1.7"
-libraryDependencies += "com.typesafe.scala-logging" %% "scala-logging-slf4j" % "2.1.2"
-
-// libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.4"
+libraryDependencies ++= Seq(
+  "org.rogach"                 %%   "scallop"               % "0.9.5",
+  "com.github.nscala-time"     %%   "nscala-time"           % "1.2.0",
+  "ch.qos.logback"             %    "logback-classic"       % "1.1.7",
+  "com.typesafe.scala-logging" %%   "scala-logging-slf4j"   % "2.1.2",
+  "org.specs2"                 %%   "specs2-core"           % "3.8.4" % "test",
+  "org.specs2"                 %%   "specs2-matcher-extra"  % "3.8.4" % "test",
+  "org.specs2"                 %%   "specs2-junit"          % "3.8.4" % "test",
+  "nz.ac.waikato.cms.weka"     %    "weka-stable"           % "3.8.0",
+  "nz.ac.waikato.cms.moa"      %    "moa"                   % "2014.11",
+  "org.apache.lucene"          %    "lucene-spellchecker"   % "3.6.2",
+  "org.xerial"                 %    "sqlite-jdbc"           % "3.8.11.2"
+)
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")
 
@@ -32,9 +33,9 @@ parser := {
     case n => sys.error(s"Could not clean up after old SQL Parser: $n")
   }
   Process(List(
-    "java -cp mimircore/lib/javacc.jar javacc",
-    "-OUTPUT_DIRECTORY=mimircore/src/main/java/mimir/parser",
-    "mimircore/src/main/java/mimir/parser/JSqlParserCC.jj"
+    "java -cp lib/javacc.jar javacc",
+    "-OUTPUT_DIRECTORY=src/main/java/mimir/parser",
+    "src/main/java/mimir/parser/JSqlParserCC.jj"
   ).mkString(" ")) ! logger match {
     case 0 => // Success
     case n => sys.error(s"Could not build SQL Parser: $n")
@@ -44,9 +45,6 @@ parser := {
 scalacOptions in Test ++= Seq("-Yrangepos")
 
 parallelExecution in Test := false
-
-// Read here for optional dependencies:
-// http://etorreborre.github.io/specs2/guide/org.specs2.guide.Runners.html#Dependencies
 
 resolvers ++= Seq("snapshots", "releases").map(Resolver.sonatypeRepo)
 
