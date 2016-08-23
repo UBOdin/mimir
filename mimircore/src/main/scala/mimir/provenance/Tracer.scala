@@ -1,13 +1,28 @@
 package mimir.provenance
 
+import java.sql.SQLException
 import mimir.algebra._
+
+class TracerInvalidPath() extends Exception {}
 
 object Tracer {
 
-  def trace(oper: Operator): (Operator, Map[String,Expression], Expression) =
+  def trace(oper: Operator, targetRowId: Map[String, RowIdPrimitive]): 
+      (Operator, Map[String,Expression], Expression) =
+  {
     oper match {
-      case Project(args, src) => {
-        val (retOper, retExprs, retCondition) = trace(src)
+      case p @ Project(args, src) => {
+        val srcTargetRowIds = 
+          targetRowId.flatMap({ case (rowIdColKey, rowIdColValue) => 
+            p.get(rowIdColKey) match {
+              case Some(Var(newColName)) => Some((newColName, rowIdColValue))
+              case Some(rowid:RowIdPrimitive) => 
+                if(rowid.equals(rowIdColValue)) { None }
+                else { throw new TracerInvalidPath() }
+              case _ => throw new SQLException("BUG: Expecting traced expression to have a rowId column that it doesn't have")
+            }
+          })
+        val (retOper, retExprs, retCondition) = trace(src, srcTargetRowIds)
         (
           retOper,
           args.map( arg => 
@@ -18,17 +33,21 @@ object Tracer {
       }
 
       case Select(cond, src) => {
-        val (retOper, retExprs, retCondition) = trace(src)
+        val (retOper, retExprs, retCondition) = trace(src, targetRowId)
         (
-          Select(Eval.inline(cond, retExprs), retOper),
+          retOper,
           retExprs,
           ExpressionUtils.makeAnd(retCondition, cond)
         )
       }
 
       case Join(lhs, rhs) => {
-        val (lhsRetOper, lhsRetExprs, lhsRetCondition) = trace(lhs)
-        val (rhsRetOper, rhsRetExprs, rhsRetCondition) = trace(rhs)
+        val lhsBaseSchema = lhs.schema.map(_._1).toSet
+        val (lhsTargetRowId, rhsTargetRowId) = 
+          targetRowId.partition( x => lhsBaseSchema.contains(x._1) )
+
+        val (lhsRetOper, lhsRetExprs, lhsRetCondition) = trace(lhs, lhsTargetRowId)
+        val (rhsRetOper, rhsRetExprs, rhsRetCondition) = trace(rhs, rhsTargetRowId)
 
         val lhsSchema = lhsRetOper.schema.map(_._1).toSet
         val rhsSchema = rhsRetOper.schema.map(_._1).toSet
@@ -80,17 +99,29 @@ object Tracer {
         }
       }
 
-      case Union(_,_) =>
-        throw new ProvenanceError("Tracing an operator that has not yet been filtered for a specific token")
+      case Union(lhs,rhs) =>
+        try { 
+          trace(lhs, targetRowId)
+        } catch {
+          case _:TracerInvalidPath => 
+            trace(rhs, targetRowId)
+        }
 
       case Table(name, schema, meta) =>
+        val targetFilter = 
+          ExpressionUtils.makeAnd(
+            targetRowId.toList.map({ case (rowIdColKey, rowIdColValue) => 
+              Comparison(Cmp.Eq, Var(rowIdColKey), rowIdColValue)
+            })
+          )
+
         (
-          oper, 
+          Select(targetFilter, oper), 
           (schema.map(_._1)++meta.map(_._1)).map(
             col => (col, Var(col))
           ).toMap,
           BoolPrimitive(true)
         )
     }
-
+  }
 }

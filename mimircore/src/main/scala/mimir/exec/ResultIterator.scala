@@ -97,7 +97,9 @@ abstract class ResultIterator {
   }
 
   /**
-   * A list of lists containing all rows
+   * A list of lists containing all rows remaining in the iterator.
+   * Note that this operation exhausts the iterator: Calling this twice
+   * will not work.
    */
   def allRows(): List[List[PrimitiveValue]] = 
     mapRows(_.currentRow())

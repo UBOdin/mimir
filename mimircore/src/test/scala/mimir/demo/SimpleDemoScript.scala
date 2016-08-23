@@ -1,6 +1,7 @@
 package mimir.demo;
 
 import java.io.{StringReader,BufferedReader,FileReader,File}
+
 import scala.collection.JavaConversions._
 import org.specs2.mutable._
 import org.specs2.matcher.FileMatchers
@@ -16,56 +17,16 @@ import mimir.util._;
 import net.sf.jsqlparser.statement.{Statement}
 
 
-object SimpleDemoScript extends Specification with FileMatchers {
-	//Return a list of all db/sql statements
-	def stmts(f: File): List[Statement] = {
-		val p = new MimirJSqlParser(new FileReader(f))
-		var ret = List[Statement]();
-		var s: Statement = null;
+object SimpleDemoScript
+	extends SQLTestSpecification("tempDBDemoScript")
+	with FileMatchers
+{
 
-		do{
-			s = p.Statement()
-			if(s != null) {
-				ret = s :: ret;
-			}
-		} while(s != null)
-		ret.reverse
-	}
-	def stmt(s: String) = {
-		new MimirJSqlParser(new StringReader(s)).Statement()
-	}
-	def select(s: String) = {
-		db.sql.convert(
-			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-		)
-	}
-	def query(s: String) = {
-		val query = select(s)
-		db.query(query)
-	}
-	def explainRow(s: String, t: String) = {
-		val query = db.sql.convert(
-			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-		)
-		db.explainRow(query, RowIdPrimitive(t))
-	}
-	def explainCell(s: String, t: String, a:String) = {
-		val query = db.sql.convert(
-			stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-		)
-		db.explainCell(query, RowIdPrimitive(t), a)
-	}
-	def lens(s: String) =
-		db.createLens(stmt(s).asInstanceOf[mimir.sql.CreateLens])
-	def update(s: Statement) = 
-		db.backend.update(s.toString())
-	def parser = new ExpressionParser(db.lenses.modelForLens)
-	def expr = parser.expr _
-	def i = IntPrimitive(_:Long).asInstanceOf[PrimitiveValue]
-	def f = FloatPrimitive(_:Double).asInstanceOf[PrimitiveValue]
-	def str = StringPrimitive(_:String).asInstanceOf[PrimitiveValue]
+	// The demo spec uses cumulative tests --- Each stage depends on the stages that
+	// precede it.  The 'sequential' keyword below is necessary to prevent Specs2 from
+	// automatically parallelizing testing.
+	sequential
 
-	val tempDBName = "tempDBDemoScript"
 	val productDataFile = new File("../test/data/Product.sql");
 	val inventoryDataFile = new File("../test/data/Product_Inventory.sql")
 	val reviewDataFiles = List(
@@ -74,20 +35,8 @@ object SimpleDemoScript extends Specification with FileMatchers {
 			new File("../test/data/ratings3.csv")
 		)
 
-	val db = new Database(tempDBName, new JDBCBackend("sqlite", tempDBName));
-
-	// The demo spec uses cumulative tests --- Each stage depends on the stages that
-	// precede it.  The 'sequential' keyword below is necessary to prevent Specs2 from 
-	// automatically parallelizing testing.
-	sequential
-
 	"The Basic Demo" should {
 		"Be able to open the database" >> {
-			val dbFile = new File(new File("databases"), tempDBName)
-			if(dbFile.exists()){ dbFile.delete(); }
-			dbFile.deleteOnExit();
-		    db.backend.open();
-			db.initializeDBForMimir();
 			dbFile must beAFile
 		}
 
@@ -292,6 +241,12 @@ object SimpleDemoScript extends Specification with FileMatchers {
 					SELECT * FROM RATINGS1FINAL
 				""", "2", "RATING")
 			expl1.toString must contain("I made a best guess estimate for this data element, which was originally NULL")		
+		}
+		"Obtain Cell Explanations for Queries with WHERE clauses" >> {
+			val expl1 = explainCell("""
+					SELECT * FROM RATINGS1FINAL WHERE RATING > 0
+				""", "2", "RATING")
+			expl1.toString must contain("I made a best guess estimate for this data element, which was originally NULL")
 		}
 		"Guard Data-Dependent Explanations for Simple Queries" >> {
 			val expl2 = explainCell("""
