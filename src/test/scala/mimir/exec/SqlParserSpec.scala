@@ -27,13 +27,13 @@ object SqlParserSpec extends Specification with FileMatchers {
 
 	val tempDB:String = "tempDB"
 	val testData = List[ (String, File, List[String]) ](
-			(	"R", new File("../test/r_test/r.csv"), 
+			(	"R", new File("test/r_test/r.csv"), 
 				List("A int", "B int", "C int")
 			),
-			("S", new File("../test/r_test/s.csv"),
+			("S", new File("test/r_test/s.csv"),
 				List("B int", "D int")
 			),
-			("T", new File("../test/r_test/t.csv"),
+			("T", new File("test/r_test/t.csv"),
 				List("D int", "E int")
 			)
 		)

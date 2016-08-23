@@ -27,11 +27,11 @@ object SimpleDemoScript
 	// automatically parallelizing testing.
 	sequential
 
-	val productDataFile = new File("../test/data/Product.sql");
+	val productDataFile = new File("test/data/Product.sql");
 	val reviewDataFiles = List(
-			new File("../test/data/ratings1.csv"),
-			new File("../test/data/ratings2.csv"),
-			new File("../test/data/ratings3.csv")
+			new File("test/data/ratings1.csv"),
+			new File("test/data/ratings2.csv"),
+			new File("test/data/ratings3.csv")
 		)
 
 	"The Basic Demo" should {
