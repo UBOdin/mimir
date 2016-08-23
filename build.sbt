@@ -6,7 +6,11 @@ scalaVersion := "2.10.5"
 
 lazy val mimircore = project
 
-lazy val mimirwebapp = project.in(file(".")).enablePlugins(play.PlayScala).aggregate(mimircore).dependsOn(mimircore)
+lazy val mimirwebapp = 
+  project.in(file(".")).
+    enablePlugins(play.PlayScala).
+    aggregate(mimircore).
+    dependsOn(mimircore)
 
 libraryDependencies ++= Seq(
   jdbc,
