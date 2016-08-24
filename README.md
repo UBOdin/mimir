@@ -12,7 +12,7 @@ We don't have an official release yet.  For now, check out the repository and us
 ```
 $> git clone https://github.com/UBOdin/mimir-ui.git
 ...
-$> cd mimir; sbt run
+$> cd mimir-ui; sbt run
 ...
 ```
 
