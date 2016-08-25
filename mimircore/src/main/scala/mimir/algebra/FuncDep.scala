@@ -1,6 +1,5 @@
 package mimir.algebra
 
-import java.io._
 import java.util
 
 import mimir.exec.ResultIterator
@@ -24,33 +23,36 @@ import java.awt.Stroke
 
 import edu.uci.ics.jung.visualization.renderers.Renderer.VertexLabel.Position
 
-@SerialVersionUID(100L)
-class FuncDep 
-  extends Serializable
-{
+
+
+
+class FuncDep {
 
   val threshhold:Double = 0.99
 
   var table:ArrayList[ArrayList[PrimitiveValue]] = null
   var countTable:ArrayList[TreeMap[String,Integer]] = null
   var densityTable:ArrayList[Integer] = null
-
-  // Outputs
-  var graphPairs:TreeMap[String,UndirectedSparseMultigraph[Integer,String]] = null
+  var sch:List[(String, T)] = null
+  var parentTable: TreeMap[Integer, ArrayList[Integer]] = null
+  var entityPairMatrix:TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]] = null // outer string is entity pair so column#,column#: to a treemap that is essentially a look-up matrix for columns that contain column to column strengths
+  var entityPairList:ArrayList[String] = null
 
   /* inserts the input into table and fills the count table, table is the same as a generic sql table, and countTable is a count of each unique value for each column of the table */
 
-  def initialStep(sch: List[(String, T)],data: ResultIterator): Unit = {
+  def buildAbadi(schema: List[(String, T)],data: ResultIterator): Unit = {
     table = new ArrayList[ArrayList[PrimitiveValue]]() // contains every row from resultIter aka data
+    entityPairMatrix = new TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]]()
+    entityPairList = new ArrayList[String]()
+    sch = schema
     countTable = new ArrayList[TreeMap[String,Integer]]() // contains the rows
     densityTable = new ArrayList[Integer]()
-//    println(sch(56)._1)
-
+//    println(sch(58)._1)
+//    println(sch(81)._1)
     sch.map{ case(k, t) => {
       table.add(new util.ArrayList[PrimitiveValue]())
       countTable.add(new TreeMap[String,Integer])
       densityTable.add(0)
-      println(k)
     }
     }
 
@@ -72,15 +74,16 @@ class FuncDep
       })
     }
 
-    phaseOne(sch,data)
+    phaseOne()
   }
 
-  def phaseOne(sch: List[(String, T)],data: ResultIterator) {
+  def phaseOne() {
 
     var nodeTable: ArrayList[Integer] = new ArrayList[Integer]() // contains a list of all the nodes
     var edgeTable: ArrayList[String] = new ArrayList[String]() // contains the node numbers for the dependency graph, the names are numbers from the schema 0 to sch.length are the possibilities
-    var parentTable: TreeMap[Integer, ArrayList[Integer]] = new TreeMap[Integer, ArrayList[Integer]]()
+    parentTable = new TreeMap[Integer, ArrayList[Integer]]()
     var maxTable: ArrayList[String] = new ArrayList[String]() // contains the max values for each column, used for phase1 formula
+    val flattenParentTable:Boolean = true
 
     for (i <- 0 until countTable.size()) {
       var maxKey = ""
@@ -137,11 +140,11 @@ class FuncDep
           if (tempMap.size() != 0) {
             val strength: Double = (countTable.get(j).size().toFloat - secondCount.toFloat) / (tempMap.size().toFloat - secondCount.toFloat) // using first formula from paper right now
             if (strength >= threshhold && leftDensity >= rightDensity && secondCount > 9 && countTable.get(j).size() != table.get(j).size() && countTable.get(k).size() != table.get(k).size()) { // phase one constraints
-                println("SECONDCOUNT IS: " + secondCount)
+/*                println("SECONDCOUNT IS: " + secondCount)
                 println("MAX VALUE IS: "+ maxTable.get(k))
                 println("Functional Dependancy between: " + leftColumnName + " and " + rightColumnName + " STR: " + strength)
                 println("Str EQUALS: " + countTable.get(j).size + " / " + tempMap.size())
-                edgeTable.add(j.toString + "," + k.toString) // list of
+*/                edgeTable.add(j.toString + "," + k.toString) // list of
                 if (!nodeTable.contains(j)) {
                   nodeTable.add(j)
                 }
@@ -186,8 +189,6 @@ class FuncDep
       }
     }
 
-//    println("TABLE SIZE: "+ table.get(0).size())
-
     println(g.toString)
 
 //    showGraph(g)
@@ -212,45 +213,46 @@ class FuncDep
       }
     }
 
+    if(flattenParentTable) {
 
-    var parentKeys:ArrayList[Integer] = new ArrayList[Integer]()
-    var parentKeyIter = parentTable.keySet().iterator()
-    while(parentKeyIter.hasNext){
-      parentKeys.add(parentKeyIter.next())
-    }
+      var parentKeys: ArrayList[Integer] = new ArrayList[Integer]()
+      var parentKeyIter = parentTable.keySet().iterator()
+      while (parentKeyIter.hasNext) {
+        parentKeys.add(parentKeyIter.next())
+      }
 
-    var removeParents:ArrayList[Integer] = new ArrayList[Integer]()
+      var removeParents: ArrayList[Integer] = new ArrayList[Integer]()
 
-      for(outerLoc <- 0 until parentKeys.size()) {
-        var outerParent:Integer = parentKeys.get(outerLoc) // should be an interger that is the parent
-        if (outerParent != -1){
-        var outerList: ArrayList[Integer] = parentTable.get(outerParent)
-        for (innerLoc <- 0 until parentKeys.size()) {
-          var innerParent: Integer = parentKeys.get(innerLoc)
-          if(innerParent != -1) {
-            val innerList: ArrayList[Integer] = parentTable.get(innerParent)
-            if (outerList.contains(innerParent)) {
-              var newList:ArrayList[Integer] = new ArrayList[Integer]()
-              newList.addAll(outerList)
-              newList.addAll(innerList)
-              parentTable.put(outerParent, newList)
-              removeParents.add(innerParent)
+      for (outerLoc <- 0 until parentKeys.size()) {
+        var outerParent: Integer = parentKeys.get(outerLoc) // should be an interger that is the parent
+        if (outerParent != -1) {
+          var outerList: ArrayList[Integer] = parentTable.get(outerParent)
+          for (innerLoc <- 0 until parentKeys.size()) {
+            var innerParent: Integer = parentKeys.get(innerLoc)
+            if (innerParent != -1) {
+              val innerList: ArrayList[Integer] = parentTable.get(innerParent)
+              if (outerList.contains(innerParent)) {
+                var newList: ArrayList[Integer] = new ArrayList[Integer]()
+                newList.addAll(outerList)
+                newList.addAll(innerList)
+                parentTable.put(outerParent, newList)
+                removeParents.add(innerParent)
+              }
             }
           }
         }
-        }
       }
 
-    for(loc <- 0 until removeParents.size()){
-      parentTable.remove(removeParents.get(loc))
+      for (loc <- 0 until removeParents.size()) {
+        parentTable.remove(removeParents.get(loc))
+      }
     }
 
-
-    phaseTwo(parentTable)
+    phaseTwo()
 
   }
 
-  def phaseTwo(parentTable: TreeMap[Integer, ArrayList[Integer]]){
+  def phaseTwo(){
     // PHASE 2
 
     var parentList:ArrayList[Integer] = new ArrayList[Integer]() // List of all possible entities, excludes root
@@ -262,9 +264,7 @@ class FuncDep
       }
     }
 
-//    var phase2Graph: DirectedSparseMultigraph[Integer, String] = new DirectedSparseMultigraph[Integer, String]();
-
-    graphPairs = new TreeMap[String,UndirectedSparseMultigraph[Integer,String]]()
+    var graphPairs:TreeMap[String,UndirectedSparseMultigraph[Integer,String]] = new TreeMap[String,UndirectedSparseMultigraph[Integer,String]]()
 
     if(parentList.size() > 1){ // need at least 2 to compare, this compares the entities to each other and the values of their children
       for(i <- 0 until parentList.size()){
@@ -272,11 +272,11 @@ class FuncDep
           if(i != j){
 
             var phase2Graph:UndirectedSparseMultigraph[Integer,String] = new UndirectedSparseMultigraph[Integer,String]()
-            var leftEntity:ArrayList[Integer] = parentTable.get(parentList.get(i))
+            var leftEntity:ArrayList[Integer] = parentTable.get(parentList.get(i)) // these are the atttributes of the left parent
             var rightEntity:ArrayList[Integer] = parentTable.get(parentList.get(j)) // these two sets should be disjoint
-            var leftEntityColumn:ArrayList[PrimitiveValue] = table.get(parentList.get(i))
+            var leftEntityColumn:ArrayList[PrimitiveValue] = table.get(parentList.get(i)) // The column of values of the parent
             var rightEntityColumn:ArrayList[PrimitiveValue] = table.get(parentList.get(j))
-            var childrenMatrix:ArrayList[ArrayList[Integer]] = new ArrayList[ArrayList[Integer]]()
+            var childrenMatrix:ArrayList[ArrayList[Integer]] = new ArrayList[ArrayList[Integer]]() // this is a matrix that contains the values
             var numberOfJoins:Int = 0
 
             for(t <- 0 until parentTable.get(parentList.get(i)).size()){
@@ -286,8 +286,9 @@ class FuncDep
               }
               childrenMatrix.add(tempL) // initalize an arraylist with value 0 for each possible entry
             }
-            for(location <- 0 until leftEntityColumn.size()){ // will iterate through every row of table
-              if(leftEntityColumn.get(location).toString.toUpperCase() != "NULL" && rightEntityColumn.get(location).toString.toUpperCase() != "NULL") {
+            for(location <- 0 until leftEntityColumn.size()) {
+              // will iterate through every row of table
+              if (leftEntityColumn.get(location).toString.toUpperCase() != "NULL" && rightEntityColumn.get(location).toString.toUpperCase() != "NULL") {
                 if ((leftEntityColumn.get(location).toString).equals(rightEntityColumn.get(location).toString)) {
                   // same thing as join on the
                   // now need to look at the values of their children and update the matrix
@@ -308,13 +309,42 @@ class FuncDep
                   numberOfJoins += 1
                 }
               }
+            }
 
-              val bestColumn = true
+            var tempEntPairMatrix:TreeMap[Integer,TreeMap[Integer,Float]] = new TreeMap[Integer,TreeMap[Integer,Float]]() // you can look up the strength for both left and right entity attribute pairs
+
+            if((numberOfJoins.toFloat/table.get(0).size().toFloat) >= (.01).toFloat) { // do this is reduce any poor results
+              // this will add the children matrix to the entityPairMatrix with the key being the string of the entity pairs
+              for (t <- 0 until childrenMatrix.size()) { // This will be the left EntAttributes
+                var rightAtt:TreeMap[Integer,Float] = new TreeMap[Integer,Float]()
+                for (g <- 0 until childrenMatrix.get(t).size()) { // This will be the right EntAttributes
+                  rightAtt.put(rightEntity.get(g),childrenMatrix.get(t).get(g).toFloat/numberOfJoins.toFloat)
+                }
+                tempEntPairMatrix.put(leftEntity.get(t),rightAtt)
+              }
+            }
+
+            if((numberOfJoins.toFloat/table.get(0).size().toFloat) >= (.01).toFloat) { // do this is reduce any poor results
+              // this will add the children matrix to the entityPairMatrix with the key being the string of the entity pairs
+              for (t <- 0 until rightEntity.size()) { // This will be the left EntAttributes
+              var leftAtt:TreeMap[Integer,Float] = new TreeMap[Integer,Float]()
+                for (g <- 0 until leftEntity.size()) { // This will be the right EntAttributes
+                  leftAtt.put(leftEntity.get(g),childrenMatrix.get(g).get(t).toFloat/numberOfJoins.toFloat)
+                }
+                tempEntPairMatrix.put(rightEntity.get(t),leftAtt)
+              }
+            }
+
+            if(tempEntPairMatrix.size() >= 1 && tempEntPairMatrix != null) {
+              entityPairMatrix.put(parentList.get(i) + "," + parentList.get(j), tempEntPairMatrix)
+            }
+
+            val bestColumn = true
 
             for(t <- 0 until childrenMatrix.size()) {
               if (bestColumn) {
                 var highestValue: Double = 0.0
-                var highestPlace: Int = -1;
+                var highestPlace: Int = -1
                 for (g <- 0 until childrenMatrix.get(t).size()) {
                   if (numberOfJoins > 0) {
                     // now check for
@@ -353,19 +383,20 @@ class FuncDep
                   }
               }
             }
-            }
 
             if(phase2Graph.getVertexCount > 1){
               graphPairs.put(parentList.get(i)+","+parentList.get(j),phase2Graph)
+              entityPairList.add(parentList.get(i)+","+parentList.get(j))
             }
           }
         }
       }
     }
-    matchEnt(graphPairs,parentTable)
+//    matchEnt(graphPairs)
+    entityPairMatrixResult()
   }
 
-  def matchEnt(graphPairs:TreeMap[String,UndirectedSparseMultigraph[Integer,String]],parentTable: TreeMap[Integer, ArrayList[Integer]]): Unit ={
+  def matchEnt(graphPairs:TreeMap[String,UndirectedSparseMultigraph[Integer,String]]): Unit ={
 
     var pairIter = graphPairs.keySet().iterator()
     while(pairIter.hasNext){
@@ -375,6 +406,27 @@ class FuncDep
       showGraph(pair)
     }
 
+  }
+
+  def entityPairMatrixResult():Unit = {
+    for(i <- 0 until entityPairList.size()){
+      val entityPair:String = entityPairList.get(i)
+      val attributeMatrix:TreeMap[Integer,TreeMap[Integer,Float]]= entityPairMatrix.get(entityPair)
+      println("ENTITY PAIR: "+ entityPair)
+/*      for(j <- 0 until parentTable.get(entityPair.split(",")(0).toInt).size()){
+        val leftEntityAtt:Int = parentTable.get(entityPair.split(",")(0).toInt).get(j)
+        println("")
+      } */
+      val outerIter = attributeMatrix.keySet().iterator()
+      while(outerIter.hasNext){
+        val outerVal:Integer = outerIter.next()
+        val innerIter = attributeMatrix.get(outerVal).keySet().iterator()
+        while(innerIter.hasNext){
+          val innerVal:Integer = innerIter.next()
+          println("FOUND THESE VALUES: " + outerVal + " , " + innerVal + " WITH STR: " + attributeMatrix.get(outerVal).get(innerVal))
+        }
+      }
+    }
   }
 
   var longestPathDepth:Int = 0
@@ -441,13 +493,13 @@ class FuncDep
         edgeStroke;
       }
     };
-
+/*
     vv.getRenderContext().setVertexFillPaintTransformer(vertexPaint);
     vv.getRenderContext().setEdgeStrokeTransformer(edgeStrokeTransformer);
     vv.getRenderContext().setVertexLabelTransformer(new ToStringLabeller());
     vv.getRenderContext().setEdgeLabelTransformer(new ToStringLabeller());
     vv.getRenderer().getVertexLabelRenderer().setPosition(Position.CNTR);
-
+*/
 
     //Sets the viewing area size
     var frame: JFrame = new JFrame("Simple Graph View");
@@ -457,50 +509,4 @@ class FuncDep
     frame.setVisible(true);
   }
 
-  def serialize(): Array[Byte] = 
-  {
-    val byteBucket = new ByteArrayOutputStream()
-    val out = new ObjectOutputStream(byteBucket);
-    out.writeObject(this)
-    byteBucket.toByteArray
-  }
-
-  def serializeTo(db: mimir.Database, name: String): Unit =
-  {
-    FuncDep.initBackstore(db)
-    db.backend.update(
-      "INSERT OR REPLACE INTO "+FuncDep.BACKSTORE_TABLE_NAME+"(name, data) VALUES (?,?)", 
-      List(StringPrimitive(name), BlobPrimitive(serialize()))
-    )
-  }
-}
-
-
-object FuncDep {
-
-  val BACKSTORE_TABLE_NAME = "MIMIR_FUNCDEP_BLOBS"
-
-  def initBackstore(db: mimir.Database)
-  {
-    if(db.getTableSchema(FuncDep.BACKSTORE_TABLE_NAME) == None){
-      db.backend.update(
-        "CREATE TABLE "+FuncDep.BACKSTORE_TABLE_NAME+"(name varchar(40), data blob, PRIMARY KEY(name))"
-      )
-    }
-  }
-  def deserialize(data: Array[Byte]): FuncDep = 
-  {
-    val in = new ObjectInputStream(new ByteArrayInputStream(data))
-    val obj = in.readObject()
-    obj.asInstanceOf[FuncDep]
-  }
-  def deserialize(db: mimir.Database, name: String): FuncDep =
-  {
-    val blob = 
-      db.backend.singletonQuery(
-        "SELECT data FROM "+BACKSTORE_TABLE_NAME+" WHERE name=?", 
-        List(StringPrimitive(name))
-      ).asInstanceOf[BlobPrimitive]
-    deserialize(blob.v)
-  }
 }
