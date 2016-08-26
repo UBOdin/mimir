@@ -89,6 +89,31 @@ case class Database(name: String, backend: Backend)
   }
 
   /**
+   * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
+   * optimizations and rewrites the query to properly account for Virtual Tables.
+   */
+  def query(stmt: net.sf.jsqlparser.statement.select.Select): ResultIterator = 
+  {
+    query(sql.convert(stmt))
+  }
+
+  /**
+   * Parse raw SQL data
+   */
+  def parse(queryString: String): List[Statement] =
+  {
+    val parser = new MimirJSqlParser(new StringReader(queryString))
+
+    var stmt:Statement = parser.Statement()
+    var ret = List[Statement]()
+
+    while( stmt != null ) { ret = stmt :: ret ; stmt = parser.Statement() }
+
+    ret.reverse
+  }
+
+
+  /**
    * Flush the provided ResultIterator to the console.
    */
   def dump(result: ResultIterator): Unit =
