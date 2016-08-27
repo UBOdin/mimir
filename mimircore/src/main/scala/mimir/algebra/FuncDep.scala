@@ -23,6 +23,7 @@ import java.awt.Paint
 import java.awt.Stroke
 
 import edu.uci.ics.jung.visualization.renderers.Renderer.VertexLabel.Position
+import scala.collection.JavaConverters._
 
 @SerialVersionUID(100L)
 class FuncDep 
@@ -47,13 +48,6 @@ class FuncDep
   /* inserts the input into table and fills the count table, table is the same as a generic sql table, and countTable is a count of each unique value for each column of the table */
 
   def buildAbadi(schema: List[(String, T)],data: ResultIterator): Unit = {
-
-    //try {
-    //  writer = new PrintWriter("Results1.txt", "UTF-8");
-    //}
-    //catch {
-    //  case _ => val doNothing = null
-    //}
 
     table = new ArrayList[ArrayList[PrimitiveValue]]() // contains every row from resultIter aka data
     entityPairMatrix = new TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]]()
@@ -91,6 +85,8 @@ class FuncDep
   }
 
   def phaseOne() {
+    var startQ:Long = System.nanoTime();
+
     startTime = System.currentTimeMillis()
     var nodeTable: ArrayList[Integer] = new ArrayList[Integer]() // contains a list of all the nodes
     var edgeTable: ArrayList[String] = new ArrayList[String]() // contains the node numbers for the dependency graph, the names are numbers from the schema 0 to sch.length are the possibilities
@@ -99,37 +95,37 @@ class FuncDep
 
     parentTable = new TreeMap[Integer, ArrayList[Integer]]()
 
-    for (i <- 0 until countTable.size()) {
+    // Finds the maxKey for each column
+    countTable.asScala.map((tree)=>{
       var maxKey = ""
       var maxValue = 0
-      var keyIt = countTable.get(i).keySet().iterator()
+      var keyIt = tree.keySet().iterator()
       while (keyIt.hasNext) {
-        var va:String = keyIt.next()
-        if(!va.toUpperCase().equals("NULL")) {
-          if (maxValue < countTable.get(i).get(va)) {
-            maxKey = va
-            maxValue = countTable.get(i).get(va)
+        var value:String = keyIt.next()
+        if(!value.toUpperCase().equals("NULL")) {
+          if (maxValue < tree.get(value)) {
+            maxKey = value
+            maxValue = tree.get(value)
           }
         }
       }
       maxTable.add(maxKey)
-    }
+    })
 
-    // now compare every column to every other column
+    var outerLocation = 0
 
-    for (j <- 0 until table.size()) {
-      // leftMap would be the column of a1 from the paper
-      val leftType = sch(j)._2
-      val leftMap = table.get(j)
-      val leftColumnName = sch(j)._1
-      val leftDensity = densityTable.get(j).toFloat / table.get(j).size()
-      for (k <- 0 until table.size()) {
-        // rightMap would be the column of a2 from the paper
-        if (j != k) {
-          val rightType = sch(k)._2
-          val rightMap = table.get(k)
-          val rightColumnName = sch(k)._1
-          val rightDensity = densityTable.get(k).toFloat / table.get(k).size()
+    table.asScala.par.map((locationJ)=>{
+      val leftType = sch(outerLocation)._2
+      val leftMap = locationJ
+      val leftColumnName = sch(outerLocation)._1
+      val leftDensity = densityTable.get(outerLocation).toFloat / locationJ.size()
+      var innerLocation = 0
+      table.asScala.par.map((locationK)=>{
+        if (outerLocation != innerLocation){
+          val rightType = sch(innerLocation)._2
+          val rightMap = locationK
+          val rightColumnName = sch(innerLocation)._1
+          val rightDensity = densityTable.get(innerLocation).toFloat / locationK.size()
           var tempMap: HashMap[String, Integer] = new HashMap[String, Integer]() // the size of this will be the unique number of a1,a2 pairs
 
           val leftIter = leftMap.iterator()
@@ -140,36 +136,38 @@ class FuncDep
           while (leftIter.hasNext && rightIter.hasNext) {
             val leftVal: PrimitiveValue = leftIter.next()
             val rightVal: PrimitiveValue = rightIter.next()
-              val value: String = leftVal.toString() + ",M," + rightVal.toString() // doing this because I'm weird and will be taken out later when optimized
-              if (tempMap.containsKey(value)) {
-                tempMap.replace(value, tempMap.get(value), tempMap.get(value) + 1)
+            val value: String = leftVal.toString() + ",M," + rightVal.toString() // doing this because I'm weird and will be taken out later when optimized
+            if (tempMap.containsKey(value)) {
+              tempMap.replace(value, tempMap.get(value), tempMap.get(value) + 1)
+            }
+            else {
+              tempMap.put(value, 1)
+              if (rightVal.toString().equals(maxTable.get(innerLocation))) {
+                secondCount += 1
               }
-              else {
-                tempMap.put(value, 1)
-                if (rightVal.toString().equals(maxTable.get(k))) {
-                  secondCount += 1
-                }
-              }
+            }
           }
           if (tempMap.size() != 0) {
-            val strength: Double = (countTable.get(j).size().toFloat - secondCount.toFloat) / (tempMap.size().toFloat - secondCount.toFloat) // using first formula from paper right now
-            if (strength >= threshhold && leftDensity >= rightDensity && secondCount > 9 && countTable.get(j).size() != table.get(j).size() && countTable.get(k).size() != table.get(k).size()) { // phase one constraints
-/*                println("SECONDCOUNT IS: " + secondCount)
-                println("MAX VALUE IS: "+ maxTable.get(k))
-                println("Functional Dependancy between: " + leftColumnName + " and " + rightColumnName + " STR: " + strength)
-                println("Str EQUALS: " + countTable.get(j).size + " / " + tempMap.size())
-*/                edgeTable.add(j.toString + "," + k.toString) // list of
-                if (!nodeTable.contains(j)) {
-                  nodeTable.add(j)
-                }
-                if (!nodeTable.contains(k)) {
-                  nodeTable.add(k)
-                }
+            val strength: Double = (countTable.get(outerLocation).size().toFloat - secondCount.toFloat) / (tempMap.size().toFloat - secondCount.toFloat) // using first formula from paper right now
+            if (strength >= threshhold && leftDensity >= rightDensity && secondCount > 9 && countTable.get(outerLocation).size() != table.get(outerLocation).size() && countTable.get(innerLocation).size() != table.get(innerLocation).size()) { // phase one constraints
+              /*                println("SECONDCOUNT IS: " + secondCount)
+                              println("MAX VALUE IS: "+ maxTable.get(k))
+                              println("Functional Dependancy between: " + leftColumnName + " and " + rightColumnName + " STR: " + strength)
+                              println("Str EQUALS: " + countTable.get(j).size + " / " + tempMap.size())
+              */                edgeTable.add(outerLocation.toString + "," + innerLocation.toString)
+              if (!nodeTable.contains(outerLocation)) {
+                nodeTable.add(outerLocation)
+              }
+              if (!nodeTable.contains(innerLocation)) {
+                nodeTable.add(innerLocation)
+              }
             }
           }
         }
-      }
-    }
+        innerLocation += 1
+      })
+      outerLocation += 1
+    })
 
     var g: DirectedSparseMultigraph[Integer, String] = new DirectedSparseMultigraph[Integer, String]();
 
@@ -203,11 +201,6 @@ class FuncDep
       }
     }
 
-//    println("TABLE SIZE: "+ table.get(0).size())
-
-//    println(g.toString)
-
-//    showGraph(g)
 
     if (!nodeTable.isEmpty()) {
       // will create a map, the keyset is the parents and the arraylist of each key is the grouping 'new tables', any ones with -1 as longest path are parentless
@@ -263,6 +256,9 @@ class FuncDep
         parentTable.remove(removeParents.get(loc))
       }
     }
+
+    var endQ:Long = System.nanoTime();
+    println("PhaseOne TOOK: "+((endQ - startQ)/1000000) + " MILLISECONDS")
 
     phaseTwo()
 
