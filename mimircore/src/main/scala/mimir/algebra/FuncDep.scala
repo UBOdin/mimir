@@ -112,21 +112,27 @@ class FuncDep
       maxTable.add(maxKey)
     })
 
-    var outerLocation = 0
+    for(c <- 0 until table.size()){
+      table.get(c).add(new IntPrimitive(c))
+    }
 
     table.asScala.par.map((locationJ)=>{
+
+      var outerLocation:Int = locationJ.get(locationJ.size()-1).asString.toInt
       val leftType = sch(outerLocation)._2
-      val leftMap = locationJ
+      val leftMap = new ArrayList[PrimitiveValue](locationJ)
       val leftColumnName = sch(outerLocation)._1
       val leftDensity = densityTable.get(outerLocation).toFloat / locationJ.size()
-      var innerLocation = 0
-      table.asScala.par.map((locationK)=>{
+      leftMap.remove(leftMap.size()-1)
+      table.asScala.map((locationK)=>{
+        var innerLocation = locationK.get(locationK.size()-1).asString.toInt
         if (outerLocation != innerLocation){
           val rightType = sch(innerLocation)._2
-          val rightMap = locationK
+          val rightMap = new ArrayList[PrimitiveValue](locationK)
           val rightColumnName = sch(innerLocation)._1
           val rightDensity = densityTable.get(innerLocation).toFloat / locationK.size()
           var tempMap: HashMap[String, Integer] = new HashMap[String, Integer]() // the size of this will be the unique number of a1,a2 pairs
+          rightMap.remove(rightMap.size()-1)
 
           val leftIter = leftMap.iterator()
           val rightIter = rightMap.iterator()
@@ -164,10 +170,12 @@ class FuncDep
             }
           }
         }
-        innerLocation += 1
       })
-      outerLocation += 1
     })
+
+    for(c <- 0 until table.size()){
+      table.get(c).remove(table.get(c).size() - 1)
+    }
 
     var g: DirectedSparseMultigraph[Integer, String] = new DirectedSparseMultigraph[Integer, String]();
 
@@ -497,9 +505,6 @@ class FuncDep
   }
 
 
-  var longestPathDepth:Int = 0
-  var longestPathVar:ArrayList[Integer] = null
-
   def parentOfLongestPath(g:DirectedSparseMultigraph[Integer,String], v:Int): Int = {
     if(g.getPredecessors(v) == null){
       println("GRAPH DOES NOT CONTAIN THIS NODE")
@@ -508,35 +513,39 @@ class FuncDep
       return -1 // must be the root
     }
     else{
-      longestPathDepth = 0
-      longestPathVar = new ArrayList[Integer]()
-      longestPath(g,g.getPredecessors(v),0,new ArrayList[Integer]())
-/*      var locationForTest = longestPathVar.size()-1
-      if(locationForTest > -1){
-        return longestPathVar.get(locationForTest)
-      }
-  */    return longestPathVar.get(0)
+      val longestPathVar:ArrayList[Integer] = longestPath(g,g.getPredecessors(v),new ArrayList[Integer]())
+      return longestPathVar.get(0)
     }
   }
 
 
-  def longestPath(g:DirectedSparseMultigraph[Integer,String],predList:util.Collection[Integer],depth:Int,currentPath:ArrayList[Integer]): Unit = {
+  def longestPath(g:DirectedSparseMultigraph[Integer,String],predList:util.Collection[Integer],currentPath:ArrayList[Integer]): ArrayList[Integer] = {
+    var longestPathV:ArrayList[Integer] = null
     if(predList.size() == 1){ // because of root
-      if(depth > longestPathDepth){
-        longestPathVar = currentPath
-      }
+        return currentPath
     }
     else{
       var listIter = predList.iterator()
       while(listIter.hasNext) {
         var temp = listIter.next()
-        if(temp != -1){
+        if(temp != -1 && !currentPath.contains(temp)){
           var ret1:ArrayList[Integer] = currentPath
-        ret1.add(temp)
-        longestPath(g, g.getPredecessors(temp), depth + 1, ret1)
+          ret1.add(temp)
+          var returnPathV = longestPath(g, g.getPredecessors(temp), ret1)
+          if(returnPathV != null){
+            if(longestPathV != null){
+              if (returnPathV.size >= longestPathV.size) {
+                longestPathV = new ArrayList(returnPathV)
+              }
+            }
+            else{
+              longestPathV = new ArrayList(returnPathV)
+            }
+          }
         }
       }
     }
+    return longestPathV
   }
 
   def showGraph(g:Graph[Integer,String]): Unit ={
