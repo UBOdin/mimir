@@ -1,9 +1,6 @@
 name := "Mimir-Core"
-
 version := "0.1-SNAPSHOT"
-
 organization := "info.mimirdb"
-
 scalaVersion := "2.10.5"
 
 dependencyOverrides += "org.scala-lang" % "scala-library" % scalaVersion.value
@@ -11,6 +8,8 @@ dependencyOverrides += "org.scala-lang" % "scala-library" % scalaVersion.value
 scalacOptions ++= Seq(
   "-feature"
 )
+
+resolvers += "MimirDB" at "http://maven.mimirdb.info/"
 
 libraryDependencies ++= Seq(
   "org.rogach"                 %%   "scallop"               % "0.9.5",
