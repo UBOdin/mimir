@@ -38,7 +38,7 @@ object DBTestInstances
             dbFile.deleteOnExit();
           }
           tmpDB.backend.open();
-          if(shouldResetDB || !oldDBExists || !config.contains("initial_db")){
+          if(shouldResetDB && !oldDBExists && !config.contains("initial_db")){
             tmpDB.initializeDBForMimir();
           }
           databases.put(tempDBName, tmpDB)
