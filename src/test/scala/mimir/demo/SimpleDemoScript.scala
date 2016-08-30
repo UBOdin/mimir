@@ -13,7 +13,6 @@ import mimir.algebra._;
 import mimir.optimizer._;
 import mimir.ctables._;
 import mimir.exec._;
-import mimir.test._;
 import mimir.util._;
 import net.sf.jsqlparser.statement.{Statement}
 

@@ -9,18 +9,18 @@ import mimir.sql._
 import mimir.algebra._
 import mimir.ctables._
 import mimir.exec.ResultIterator
-import mimir.test._
 import mimir.util._
 import mimir.lenses._
 
 object ShredderLensSpec
-  extends SQLTestSpecification("shredderLensTestDB", Map("reset" -> "NO"))
+  extends SQLTestSpecification("shredderLensTest.db", Map("reset" -> "NO"))
 {
+  sequential
 
   val testTable = "JSONDATA"
   var discala:FuncDep = null
   val testData = new File(
-    "../test/data/JSONOUTPUTWIDE.csv"
+    "test/data/JSONOUTPUTWIDE.csv"
     // "../test/data/Bestbuy_raw_noquote.csv"
   )
   val extractorName = "TEST_EXTRACTOR"
@@ -31,16 +31,14 @@ object ShredderLensSpec
     writer = new PrintWriter("Results.txt", "UTF-8");
   }
   catch {
-    case _ => val doNothing = null
+    case _:Throwable => ()
   }
   try {
     writer1 = new PrintWriter("OUT.csv", "UTF-8");
   }
   catch {
-    case _ => val doNothing = null
+    case _:Throwable => ()
   }
-
-  sequential
 
   "The DiScala Extractor" should {
 

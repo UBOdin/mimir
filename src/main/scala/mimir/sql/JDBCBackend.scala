@@ -137,7 +137,8 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         case p:StringPrimitive   => stmt.setString(i, p.v)
         case p:IntPrimitive      => stmt.setLong(i, p.v)
         case p:FloatPrimitive    => stmt.setDouble(i, p.v)
-        case b:BlobPrimitive     => stmt.setBytes(i, b.v)
+        case p:BlobPrimitive     => stmt.setBytes(i, p.v)
+        case p:RowIdPrimitive    => stmt.setString(i, p.v)
         case _:NullPrimitive     => stmt.setNull(i, Types.VARCHAR)
       }
     })
