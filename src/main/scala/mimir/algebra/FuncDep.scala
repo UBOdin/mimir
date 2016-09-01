@@ -3,7 +3,7 @@ package mimir.algebra
 import java.io._
 import java.util
 
-import mimir.exec.ResultIterator
+import mimir.exec.{ResultIterator, ResultSetIterator}
 import mimir.algebra.Type.T
 import java.util.TreeMap
 import java.util.ArrayList
@@ -21,8 +21,11 @@ import java.awt.Color
 import java.awt.Dimension
 import java.awt.Paint
 import java.awt.Stroke
+import java.sql.ResultSet
+import mimir.util.JDBCUtils
 
 import edu.uci.ics.jung.visualization.renderers.Renderer.VertexLabel.Position
+
 import scala.collection.JavaConverters._
 
 @SerialVersionUID(100L)
@@ -42,7 +45,6 @@ class FuncDep
   var endTime:Long = 0
   // Outputs
   var entityPairList:List[(Integer,Integer)] = Nil
-  //var writer:PrintWriter  = null;
 
 
   /* inserts the input into table and fills the count table, table is the same as a generic sql table, and countTable is a count of each unique value for each column of the table */
@@ -80,6 +82,47 @@ class FuncDep
         }
       })
     }
+
+    phaseOne()
+  }
+
+  def buildAbadi(schema: List[(String, T)],data: ResultSet): Unit = {
+
+    table = new ArrayList[ArrayList[PrimitiveValue]]() // contains every row from resultIter aka data
+    entityPairMatrix = new TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]]()
+    sch = schema
+    countTable = new ArrayList[TreeMap[String,Integer]]() // contains the rows
+    densityTable = new ArrayList[Integer]()
+
+    sch.map{ case(k, t) => {
+      table.add(new util.ArrayList[PrimitiveValue]())
+      countTable.add(new TreeMap[String,Integer])
+      densityTable.add(0)
+    }
+    }
+
+    var d:List[List[PrimitiveValue]] = mimir.util.JDBCUtils.extractAllRows(data)
+
+    d.map((row)=>{
+        var loc = 0
+        row.map((pv) => {
+          table.get(loc).add(pv)
+
+          if(!pv.toString.toUpperCase().equals("NULL")){
+            var temp = densityTable.get(loc)
+            temp+=1
+            densityTable.set(loc,temp)
+          }
+          if(countTable.get(loc).containsKey(pv.toString)){
+            countTable.get(loc).replace(pv.toString,countTable.get(loc).get(pv.toString),countTable.get(loc).get(pv.toString)+1)
+          }
+          else{
+            countTable.get(loc).put(pv.toString,1)
+          }
+
+          loc += 1
+        })
+    })
 
     phaseOne()
   }

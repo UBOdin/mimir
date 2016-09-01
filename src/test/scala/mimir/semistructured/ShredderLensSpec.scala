@@ -17,7 +17,7 @@ object ShredderLensSpec
 {
   sequential
 
-  val testTable = "JSONDATA"
+  val testTable = "JSONOUTPUTWIDE"
   var discala:FuncDep = null
   val testData = new File(
     "test/data/JSONOUTPUTWIDE.csv"
@@ -25,46 +25,37 @@ object ShredderLensSpec
   )
   val extractorName = "TEST_EXTRACTOR"
   var testLens:ShredderLens = null
-  var writer:PrintWriter  = null;
-  var writer1:PrintWriter  = null;
-  try {
-    writer = new PrintWriter("Results.txt", "UTF-8");
-  }
-  catch {
-    case _:Throwable => ()
-  }
-  try {
-    writer1 = new PrintWriter("OUT.csv", "UTF-8");
-  }
-  catch {
-    case _:Throwable => ()
-  }
+  val backend = new JDBCBackend("sqlite","jsonoutputwide.db")
+  backend.open()
+  var database = new Database("jsonoutputwide.db",backend)
+
 
   "The DiScala Extractor" should {
 
-     //"be initializable" >> {
-     //  LoadCSV.handleLoadTable(db, testTable, testData)
-     //  val schema = db.getTableSchema(testTable).get
-     //  discala = new FuncDep()
-     //  discala.buildAbadi(schema, db.query(db.getTableOperator(testTable)))
-     //  discala.entityPairMatrix must not beNull
-     //}
-	 //
-     //"be serializable" >> {
-     //  var startSerialize:Long = System.nanoTime();
-     //  discala.serializeTo(db, extractorName)
-     //  var endSerialize:Long = System.nanoTime();
-     //  println("Serialize TOOK: "+((endSerialize - startSerialize)/1000000) + " MILLISECONDS")
-     //  discala.entityPairMatrix must not beNull
-	 //
-     //  val blob1 =
-     //    db.backend.singletonQuery(
-     //      "SELECT data FROM "+FuncDep.BACKSTORE_TABLE_NAME+" WHERE name='"+extractorName+"'"
-     //    )
-     //  Runtime.getRuntime().exec(Array("cp", "databases/shredderLensTestDB", "shreddb"))
-     //  blob1 must beAnInstanceOf[BlobPrimitive]
-     //  blob1.asInstanceOf[BlobPrimitive].v.length must be greaterThan(0)
-     //}
+     "be initializable" >> {
+//       LoadCSV.handleLoadTable(db, testTable, testData)
+//       println("DATA LOADED")
+       val schema = database.getTableSchema(testTable).get
+       discala = new FuncDep()
+       discala.buildAbadi(schema, database.backend.execute("select * from jsonoutputwide;"))
+       discala.entityPairMatrix must not beNull
+     }
+
+     "be serializable" >> {
+       var startSerialize:Long = System.nanoTime();
+       discala.serializeTo(db, extractorName)
+       var endSerialize:Long = System.nanoTime();
+       println("Serialize TOOK: "+((endSerialize - startSerialize)/1000000) + " MILLISECONDS")
+       discala.entityPairMatrix must not beNull
+
+       val blob1 =
+         db.backend.singletonQuery(
+           "SELECT data FROM "+FuncDep.BACKSTORE_TABLE_NAME+" WHERE name='"+extractorName+"'"
+         )
+       Runtime.getRuntime().exec(Array("cp", "databases/shredderLensTestDB", "shreddb"))
+       blob1 must beAnInstanceOf[BlobPrimitive]
+       blob1.asInstanceOf[BlobPrimitive].v.length must be greaterThan(0)
+     }
 	 
     "be deserializable" >> {
       discala = FuncDep.deserialize(db, extractorName)
@@ -109,7 +100,6 @@ object ShredderLensSpec
       db.query(testLens.view).foreachRow( _ => {} )
       var endQuery:Long = System.nanoTime();
       println("Query TOOK: "+((endQuery - startQuery)/1000000) + " MILLISECONDS")
-      writer.println("Query TOOK: "+((endQuery - startQuery)/1000000) + " MILLISECONDS")
       db.selectInto("LENSOUTPUT", testLens.view)
 	
       
@@ -132,9 +122,6 @@ object ShredderLensSpec
       db.backend.execute("SELECT * FROM LENSOUTPUT")
       var endQ:Long = System.nanoTime();
       println("Output Query TOOK: "+((endQ - startQ)/1000000) + " MILLISECONDS")
-      writer.println("Output Query TOOK: "+((endQ - startQ)/1000000) + " MILLISECONDS")
-	
-      writer.close()
       true
     }
     
