@@ -1,7 +1,7 @@
 package mimir.semistructured
 
 import java.io._
-import java.util.Random
+import java.util.{Random, Scanner}
 
 import scala.collection.JavaConversions._
 import mimir._
@@ -29,18 +29,41 @@ object ShredderLensSpec
   backend.open()
   var database = new Database("jsonoutputwide.db",backend)
 
+  var jtocsv:JsonToCSV = new JsonToCSV()
+
 
   "The DiScala Extractor" should {
+
+    "convert json to csv" >> {
+      jtocsv.convertToCsv(new File("test/data/jsonsample.txt"),"jsonsampletocsv.csv","UTF-8",1000,100)
+      try{
+        var x = new Scanner(new File("jsonsampletocsv.csv"),"UTF-8")
+        true
+      }
+      catch{
+        case e:FileNotFoundException => false
+//        case e:_ => {println("Error creating jsonFile"); false}
+      }
+    }
+
+    "load the csv into the database" >> {
+      LoadCSV.handleLoadTable(db,"JSONSAMPLE",new File("jsonsampletocsv.csv"))
+      var result = db.backend.execute("Select * from JSONSAMPLE;")
+//      result must not beEmpty
+      true
+    }
 
      "be initializable" >> {
 //       LoadCSV.handleLoadTable(db, testTable, testData)
 //       println("DATA LOADED")
-       val schema = database.getTableSchema(testTable).get
+       val schema = db.getTableSchema(testTable).get
+//       val schema = db.getTableSchema(testTable).get
+//       val schema = db.getTableSchema(testTable).get // for loading already existing table from a database
        discala = new FuncDep()
-       discala.buildAbadi(schema, database.backend.execute("select * from jsonoutputwide;"))
+       discala.buildAbadi(schema, db.backend.execute("select * from JSONOUTPUTWIDE;"))
        discala.entityPairMatrix must not beNull
      }
-
+/*
      "be serializable" >> {
        var startSerialize:Long = System.nanoTime();
        discala.serializeTo(db, extractorName)
@@ -94,7 +117,7 @@ object ShredderLensSpec
         )
       testLens.schema must be equalTo(targetSchema)
     }
-	
+*/
     "be queriable" >> {
       var startQuery:Long = System.nanoTime();
       db.query(testLens.view).foreachRow( _ => {} )

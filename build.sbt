@@ -31,7 +31,8 @@ libraryDependencies ++= Seq(
   "net.sf.jung"                   %   "jung-algorithms"       % "2.0",
   "net.sf.jung"                   %   "jung-visualization"    % "2.0",
   "org.apache.servicemix.bundles" %   "org.apache.servicemix.bundles.collections-generic" % "4.01_1",
-  "info.mimirdb"                  %   "jsqlparser"            % "1.0.0"
+  "info.mimirdb"                  %   "jsqlparser"            % "1.0.0",
+  "com.github.wnameless" % "json-flattener" % "0.2.2"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")
