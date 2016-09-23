@@ -31,7 +31,8 @@ object SimpleDemoScript
 	val reviewDataFiles = List(
 			new File("test/data/ratings1.csv"),
 			new File("test/data/ratings2.csv"),
-			new File("test/data/ratings3.csv")
+			new File("test/data/ratings3.csv"),
+			new File("test/data/userTypes.csv")
 		)
 
 	"The Basic Demo" should {
@@ -49,6 +50,7 @@ object SimpleDemoScript
 			db.loadTable(reviewDataFiles(0))
 			db.loadTable(reviewDataFiles(1))
 			db.loadTable(reviewDataFiles(2))
+			db.loadTable(reviewDataFiles(3))
 			query("SELECT * FROM RATINGS1;").allRows must have size(4)
 			query("SELECT RATING FROM RATINGS1RAW;").allRows.flatten must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
 			query("SELECT * FROM RATINGS2;").allRows must have size(3)
@@ -80,6 +82,7 @@ object SimpleDemoScript
 
 
 		"Create and Query Type Inference Lenses" >> {
+			query("SELECT * FROM USERTYPES;").allRows must have size(3)
 			query("SELECT * FROM RATINGS1;").allRows must have size(4)
 			query("SELECT RATING FROM RATINGS1;").allRows.flatten must contain(eachOf(f(4.5), f(4.0), f(6.4), NullPrimitive()))
 			query("SELECT * FROM RATINGS1 WHERE RATING IS NULL").allRows must have size(1)

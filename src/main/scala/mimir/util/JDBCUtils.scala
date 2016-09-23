@@ -30,6 +30,7 @@ object JDBCUtils {
       case Type.TDate   => java.sql.Types.DATE
       case Type.TString => java.sql.Types.VARCHAR
       case Type.TRowId  => java.sql.Types.ROWID
+      case Type.TUser   => java.sql.Types.VARCHAR
     }
   }
 
@@ -42,6 +43,8 @@ object JDBCUtils {
               convertSqlType(results.getMetaData().getColumnType(field)),
               results, field
             )
+        case Type.TUser =>
+          StringPrimitive(results.getString(field))
         case Type.TFloat =>
           FloatPrimitive(results.getDouble(field))
         case Type.TInt =>

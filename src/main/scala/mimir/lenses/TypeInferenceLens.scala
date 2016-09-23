@@ -75,23 +75,15 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
       scala.collection.mutable.Map(Type.TInt -> 0,
                                     Type.TFloat -> 0,
                                     Type.TDate -> 0,
-                                    Type.TBool -> 0)
+                                    Type.TBool -> 0,
+                                    Type.TUser -> 0)
+
+    var allTypes = new TypeInferenceTypes()
+
     private var totalVotes = 0
     def detectAndVoteType(v: String): Unit = {
-      if(v != null) {
-        if(v.matches("(\\+|-)?([0-9]+)"))
-          votes(Type.TInt) += 1
-        if(v.matches("(\\+|-)?([0-9]*(\\.[0-9]+))"))
-          votes(Type.TFloat) += 1
-        if(v.matches("[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}"))
-          votes(Type.TDate) += 1
-        if(v.matches("(?i:true|false)"))
-          votes(Type.TBool) += 1
-      }
-      else {
-        votes.foreach{ case (t, v) => votes(t) += 1 }
-      }
 
+      allTypes.baseTypes(v,votes)
       totalVotes += 1
     }
     def infer(): (Type.T, Double) = {
@@ -140,6 +132,7 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
     inferClasses.map{
       case(k, inferClass) =>
         val inferred = inferClass.infer()
+        println(inferred._1.toString)
         (k, inferred._1, inferred._2)
     }
   }
@@ -165,4 +158,25 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
         " with " + percentage.toString + "% of the data conforming to the expected type"
     }
   }
+}
+
+class TypeInferenceTypes(){
+    def baseTypes(v:String,votes:scala.collection.mutable.Map[Type.Value,Int]): Unit ={
+      if(v != null) {
+        if(v.matches("(\\+|-)?([0-9]+)"))
+          votes(Type.TInt) += 1
+        if(v.matches("(\\+|-)?([0-9]*(\\.[0-9]+))"))
+          votes(Type.TFloat) += 1
+        if(v.matches("[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}"))
+          votes(Type.TDate) += 1
+        if(v.matches("(?i:true|false)"))
+          votes(Type.TBool) += 1
+        if(v.matches("USER"))
+          votes(Type.TUser) += 1
+      }
+      else {
+        votes.foreach{ case (t, v) => votes(t) += 1 }
+      }
+    }
+
 }

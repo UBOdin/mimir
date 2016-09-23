@@ -25,7 +25,7 @@ object Type extends Enumeration {
   /**
    * The enum values themselves
    */
-  val TInt, TFloat, TDate, TString, TBool, TRowId, TType, TAny = Value
+  val TInt, TFloat, TDate, TString, TBool, TRowId, TType, TAny, TUser = Value
 
   /**
    * Convert a type to a SQL-friendly name
@@ -38,6 +38,7 @@ object Type extends Enumeration {
     case TBool => "bool"
     case TRowId => "rowid"
     case TType => "type"
+    case TUser => "User Defined"
     case TAny => "any"//throw new SQLException("Unable to produce string of type TAny");
   }
 
