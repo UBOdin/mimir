@@ -38,7 +38,7 @@ object Type extends Enumeration {
     case TBool => "bool"
     case TRowId => "rowid"
     case TType => "type"
-    case TUser => "User Defined"
+//    case TUser => "User Defined"
     case TAny => "any"//throw new SQLException("Unable to produce string of type TAny");
   }
 
@@ -158,6 +158,17 @@ case class IntPrimitive(v: Long)
   def asString: String = v.toString;
   def payload: Object = v.asInstanceOf[Object];
 }
+
+case class UserPrimitive(v: String)
+  extends PrimitiveValue(TUser)
+{
+  override def toString() = v.toString
+  def asLong: Long = v.toLong;
+  def asDouble: Double = v.toDouble;
+  def asString: String = v;
+  def payload: Object = v.asInstanceOf[Object];
+}
+
 /**
  * Boxed representation of a string
  */

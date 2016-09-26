@@ -10,6 +10,24 @@ import mimir.ctables._
 import mimir.exec.ResultIterator
 import mimir.util.TypeUtils
 
+/*
+ Current places that need to be changed to extend a value to the Type Inference Lens
+
+ - In type inference (this class)
+    - Need to add regex to TypeInferenceTypes
+    - Need to add new type to Votes list in TypeInferer
+
+ - mimir.algebra.Expression
+    - Need to add the Type to the enum list in Type
+    - (Optional) can create Primitive types to define how their behavior works with the sqlite backend
+
+ - mimir.utils.JDBCUtils
+    - In convert field you need to add the type here to define the behavior when the value is returned from the backend
+
+ - mimir.sql.sqlite.SQLiteCompat
+     - Here is where you need to add the functionality, so if you want something special to happen when that type is detected
+*/
+
 class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
   extends Lens(name, args, source) {
 
