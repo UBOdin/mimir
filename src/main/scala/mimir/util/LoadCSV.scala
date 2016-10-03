@@ -4,9 +4,11 @@ import java.io.{BufferedReader, File, FileReader}
 import java.sql.SQLException
 import java.util
 
+import com.google.common.base.Joiner
 import mimir.Database
 import mimir.algebra.Type
-
+import org.apache.commons.csv.{CSVRecord, CSVParser, CSVFormat}
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
 
@@ -19,12 +21,12 @@ object LoadCSV {
     var maxNumberOfColumns = 0
 
     val input = new BufferedReader(new FileReader(sourceFile))
-    val firstLine = input.readLine()
 
     db.getTableSchema(targetTable) match {
 
       case Some(sch) =>
-        if(headerDetected(firstLine)) {
+        if(true) {
+          input.readLine()
           populateTable(db, input, targetTable, sch) // Ignore header since table already exists
         }
         else {
@@ -37,6 +39,8 @@ object LoadCSV {
         }
 
       case None =>
+        val firstLine = input.readLine()
+
         if(largeData) { // if the data is large we may need to sacrafice error checking for speed
           if (headerDetected(firstLine)) {
             db.backend.update("CREATE TABLE " + targetTable + "(" +
@@ -155,11 +159,40 @@ object LoadCSV {
     val keys = sch.map(_._1).map((x) => {numberOfColumns+= 1; "\'"+x+"\'"}).mkString(", ")
     val statements = new ListBuffer[String]()
 
+    val parser: CSVParser = new CSVParser(src, CSVFormat.DEFAULT.withAllowMissingColumnNames().withSkipHeaderRecord())
+
+    for (row: CSVRecord <- parser.asScala) {
+        if (!row.isConsistent) {
+          // do something here
+        }
+
+      var columnCount = 0
+
+      val listOfValues: List[String] = row.iterator().asScala.toList
+      val data = listOfValues.map((i) => {
+        columnCount = columnCount + 1
+
+        i match {
+          case "" => null
+          case x => sch(columnCount-1)._2 match {
+            case Type.TDate | Type.TString => "\'" + x.replaceAll("'", "''") + "\'"
+            case _ => x
+          }
+        }
+      })
+
+      val dataString = data.mkString(", ")
+
+      statements.append("INSERT INTO "+targetTable+"("+keys+") VALUES ("+dataString+")")
+
+    }
+
+/*
     while(true){
+
       val line = src.readLine()
       if(line == null) { if(statements.nonEmpty) db.backend.update(statements.toList); return }
 
-      val dataLine = line.trim.replaceAll("\'","").split(",").padTo(sch.size, "")
       var data = dataLine.indices.map( (i) =>{
         location += 1
         dataLine(i) match {
@@ -181,5 +214,6 @@ object LoadCSV {
       statements.append("INSERT INTO "+targetTable+"("+keys+") VALUES ("+data+")")
 //      db.backend.update("INSERT INTO "+targetTable+"("+keys+") VALUES ("+data+")")
     }
+*/
   }
 }
