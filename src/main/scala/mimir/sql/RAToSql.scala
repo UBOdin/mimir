@@ -386,7 +386,7 @@ class RAToSql(db: Database) {
           rest.map(convert(_, sources)).foldLeft(convert(head, sources))(concat(_,_,"|"))
       }
       case mimir.algebra.Function("CAST", body_arg :: TypePrimitive(t) :: Nil) => {
-        return new CastOperation(convert(body_arg, sources), Type.toString(t));
+        return new CastOperation(convert(body_arg, sources), TString().toString(t));
       }
       case mimir.algebra.Function("CAST", _) => {
         throw new SQLException("Invalid Cast: "+e)

@@ -1,7 +1,7 @@
 package mimir.sql.sqlite
 
 import mimir.algebra._
-import mimir.algebra.Type._
+
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 object SQLiteCompat {
@@ -19,6 +19,7 @@ object SQLiteCompat {
   }
 }
 
+
 object MimirCast extends org.sqlite.Function with LazyLogging {
 
 
@@ -27,12 +28,12 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
       if (args != 2) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR MIMIRCAST, EXPECTED 2 IN FORM OF MIMIRCAST(COLUMN,TYPE)") }
       try {
 //        println("Input: " + value_text(0) + " : " + value_text(1))
-        val t = Type(value_int(1))
+        val t = TString().toSQLiteType(value_int(1))
 //        println("TYPE CASTED: "+t)
         val v = value_text(0)
         logger.debug(s"Casting $v as $t")
         t match {
-          case TInt =>
+          case TInt() =>
             value_type(0) match {
               case SQLiteCompat.INTEGER => result(value_int(0))
               case SQLiteCompat.FLOAT   => result(value_double(0).toInt)
@@ -40,7 +41,7 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
                  | SQLiteCompat.BLOB    => result(java.lang.Long.parseLong(value_text(0)))
               case SQLiteCompat.NULL    => result()
             }
-          case TFloat => 
+          case TFloat() =>
             value_type(0) match {
               case SQLiteCompat.INTEGER => result(value_int(0).toDouble)
               case SQLiteCompat.FLOAT   => result(value_double(0))
@@ -48,11 +49,11 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
                  | SQLiteCompat.BLOB    => result(java.lang.Double.parseDouble(value_text(0)))
               case SQLiteCompat.NULL    => result()
             }
-          case TString | TRowId | TDate =>
+          case TString() | TRowId() | TDate() =>
             result(value_text(0))
 
-          case TUser =>
-            result(value_text(0)+"_USERMADE")
+          case TUser(name) =>
+            result(value_text(0)+"_"+name)
 
           case _ =>
             result("I assume that you put something other than a number in, this functions works like, MIMIRCAST(column,type), the types are int values, 1 is int, 2 is double, 3 is string, and 5 is null, so MIMIRCAST(COL,1) is casting column 1 to int")

@@ -18,7 +18,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
 
   def driver() = backend
 
-  val tableSchemas: scala.collection.mutable.Map[String, List[(String, Type.T)]] = mutable.Map()
+  val tableSchemas: scala.collection.mutable.Map[String, List[(String, Type)]] = mutable.Map()
 
   def open() = {
     this.synchronized({
@@ -136,7 +136,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     stmt.close()
   }
   
-  def getTableSchema(table: String): Option[List[(String, Type.T)]] =
+  def getTableSchema(table: String): Option[List[(String, Type)]] =
   {
     if(conn == null) {
       throw new SQLException("Trying to use unopened connection!")
@@ -153,7 +153,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
           case "oracle" => conn.getMetaData().getColumns(null, "ARINDAMN", table, "%")  // TODO Generalize
         }
 
-        var ret = List[(String, Type.T)]()
+        var ret = List[(String, Type)]()
 
         while(cols.isBeforeFirst()){ cols.next(); }
         while(!cols.isAfterLast()){

@@ -22,7 +22,7 @@ import scala.util._
 class MissingValueLens(name: String, args: List[Expression], source: Operator)
   extends Lens(name, args, source)
   with InstanceQueryAdapter {
-  var orderedSourceSchema: List[(String, Type.T)] = null
+  var orderedSourceSchema: List[(String, Type)] = null
   val keysToBeCleaned = args.map(Eval.evalString(_).toUpperCase)
   var models: List[SingleVarModel] = null
   var model: Model = null
@@ -36,7 +36,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
     orderedSourceSchema
   }
 
-  def schema(): List[(String, Type.T)] = sourceSchema()
+  def schema(): List[(String, Type)] = sourceSchema()
 
   def allKeys() = {
     sourceSchema.map(_._1)
@@ -143,7 +143,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
   }
 }
 
-class MissingValueModel(lens: MissingValueLens, name: String, val varType: Type.T)
+class MissingValueModel(lens: MissingValueLens, name: String, val varType: Type)
   extends SingleVarModel() {
   var learner: Classifier =
     Analysis.getLearner("moa.classifiers.bayes.NaiveBayes")
@@ -180,7 +180,7 @@ class MissingValueModel(lens: MissingValueLens, name: String, val varType: Type.
       instance.setDataset(data)
       for(j <- 0 until iterator.numCols                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       ) {
         iterator.schema(j)._2 match {
-          case Type.TInt | Type.TFloat =>
+          case TInt() | TFloat() =>
             try {
               instance.setValue(j, iterator(j).asDouble)
             } catch {
@@ -253,8 +253,8 @@ class MissingValueModel(lens: MissingValueLens, name: String, val varType: Type.
     val attributes = new util.ArrayList[Attribute]()
     iterator.schema.foreach { case (n, t) =>
       (n, t) match {
-        case (_, Type.TRowId) => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
-        case (_, Type.TInt | Type.TFloat) => attributes.add(new Attribute(n))
+        case (_, TRowId()) => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
+        case (_, TInt() | TFloat()) => attributes.add(new Attribute(n))
         case _ => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
       }
     }
@@ -275,7 +275,7 @@ class MissingValueModel(lens: MissingValueLens, name: String, val varType: Type.
   }
 
   ////// Model implementation
-  def varType(argTypes: List[Type.T]): Type.T = varType
+  def varType(argTypes: List[Type]): Type = varType
 
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = {
     val att = learner.getModelContext.attribute(cIndex)
@@ -293,8 +293,8 @@ class MissingValueModel(lens: MissingValueLens, name: String, val varType: Type.
 //    )
 //    if(!res.getNext()) throw new SQLException("Value not found for "+name+". Explist: "+args.mkString("|"))
 //    res(1).asString match {
-//      case "TInt" => IntPrimitive(res(0).asLong)
-//      case "TFloat" => FloatPrimitive(res(0).asDouble)
+//      case "TInt()" => IntPrimitive(res(0).asLong)
+//      case "TFloat()" => FloatPrimitive(res(0).asDouble)
 //      case _ => res(0)
 //    }
   }

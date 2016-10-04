@@ -10,10 +10,10 @@ import mimir.sql._
 
 object RaToSqlSpec extends Specification  {
 
-  val schema = Map[String,List[(String,Type.T)]](
+  val schema = Map[String,List[(String,Type)]](
     ("R", List( 
-      ("A", Type.TInt), 
-      ("B", Type.TInt)
+      ("A", TInt()),
+      ("B", TInt())
     ))
   )
   val db = new Database("TestDB", new NullBackend(schema))

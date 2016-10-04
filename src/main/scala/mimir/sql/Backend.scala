@@ -28,10 +28,10 @@ abstract class Backend {
   def resultRows(sel: SelectBody) =
     JDBCUtils.extractAllRows(execute(sel))
   
-  def getTableSchema(table: String): Option[List[(String, Type.T)]]
+  def getTableSchema(table: String): Option[List[(String, Type)]]
   def getTableOperator(table: String): Operator =
-    getTableOperator(table, List[(String,Expression,Type.T)]())
-  def getTableOperator(table: String, metadata: List[(String, Expression, Type.T)]):
+    getTableOperator(table, List[(String,Expression,Type)]())
+  def getTableOperator(table: String, metadata: List[(String, Expression, Type)]):
     Operator =
   {
     Table(
