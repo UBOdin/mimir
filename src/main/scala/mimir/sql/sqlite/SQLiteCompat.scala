@@ -52,7 +52,7 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
           case TString() | TRowId() | TDate() =>
             result(value_text(0))
 
-          case TUser(name) =>
+          case TUser(name,regex,sqlType) =>
             result(value_text(0)+"_"+name)
 
           case _ =>

@@ -66,8 +66,38 @@ object JDBCUtils {
               new NullPrimitive
           }
           DatePrimitive(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DATE))
-        case TUser(name) =>
-            StringPrimitive(results.getString(field))
+        case TUser(name,regex,sqlType) =>
+          sqlType match {
+            case TAny() =>
+              convertField(
+                convertSqlType(results.getMetaData().getColumnType(field)),
+                results, field
+              )
+            case TFloat() =>
+              FloatPrimitive(results.getDouble(field))
+            case TInt() =>
+              IntPrimitive(results.getLong(field))
+            case TString() =>
+              StringPrimitive(results.getString(field))
+            case TRowId() =>
+              RowIdPrimitive(results.getString(field))
+            case TBool() =>
+              BoolPrimitive(results.getInt(field) != 0)
+            case TDate() =>
+              val calendar = Calendar.getInstance()
+              try {
+                calendar.setTime(results.getDate(field))
+              } catch {
+                case e: SQLException =>
+                  calendar.setTime(Date.valueOf(results.getString(field)))
+                case e: NullPointerException =>
+                  new NullPrimitive
+              }
+              DatePrimitive(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DATE))
+            case _ =>
+              throw new Exception("In JDBCUtils expected one of the generic types but instead got: " + sqlType.toString)
+          }
+
       }
     if(results.wasNull()) { NullPrimitive() }
     else { ret }

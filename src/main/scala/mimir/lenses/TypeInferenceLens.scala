@@ -101,7 +101,7 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
     votes.put(TBool(),0)
 
     TypeList.typeList.foreach((tuple) => {
-      votes.put(TUser(tuple._1), 0)
+      votes.put(TUser(tuple._1,tuple._2,tuple._3), 0)
     })
 
     private var totalVotes = 0
@@ -198,7 +198,7 @@ class TypeInferenceTypes(){
 
         TypeList.typeList.foreach((tuple)=>{
           if(v.matches(tuple._2))
-            votes(TUser(tuple._1)) += 1
+            votes(TUser(tuple._1,tuple._2,tuple._3)) += 1
         })
 
       }
@@ -209,16 +209,39 @@ class TypeInferenceTypes(){
 
 }
 
-object TypeList{
-  var typeList = ListBuffer[(String,String)]()
 
-  typeList += Tuple2("TUser","USER")
-  typeList += Tuple2("TWeight","KG*")
+/*
+Adding new UserTypes to mimir (TUser Types)
+- All new types must be added the TypeList in object TypeList to effect the system
+- Parameterized types are now supported. The current parameter is Tuple(name:String, regex:String, sqlType:Type), remember to update Tuple# to the right number in object TypeList
+  - name:String is the name of the new type, must be unique
+  - regex:String is the regular expression that this new type should match on, if the column is of this type will be determined by the threshold, consider the basic types when making this
+  - sqlType:Type this is the underlying type of the new type, example TFloat, TDouble... This is for potential speed up later and to better capture the output
+
+Extending the UserType
+- This is if you want to add new functionality to TUser, such as adding a new parameter
+These are the files that need to change to extend the TUser
+  - mimir.lenses.TypeInference:
+    - In class TypeInferenceTypes add the new parameters to TUser
+    - In class TypeInferer add the new parameters to TUser
+  - mimir.utils.JDBCUtils:
+    - changes here are made in the function convert, in the case class TUser. This only needs
+  - mimir.algebra.Expression:
+    - change TUser parameters to match the new desired parameters
+    - change sealed trait Type so that all the instances of TUser match the new parameters
+  - mimir.sql.sqlite.SQLiteCompat:
+    - update TUser type parameters
+
+
+ */
+object TypeList{
+  val typeList = ListBuffer[(String,String,Type)]()
+
+  typeList += Tuple3("TUser","USER",TString())
+  typeList += Tuple3("TWeight","KG*",TString())
 
 }
 
-//case object TUser extends Type
-//case object TWeight extends Type
 
 //CREATE LENS nt9 AS SELECT * FROM test WITH Type_Inference(.9);
 
