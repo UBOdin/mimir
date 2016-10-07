@@ -82,7 +82,15 @@ object SimpleDemoScript
 
 
 		"Create and Query Type Inference Lenses" >> {
-			query("SELECT * FROM USERTYPES;").allRows must have size(3)
+			println("Creating TI LENS")
+			lens("""
+				CREATE LENS new_types
+				  AS SELECT * FROM USERTYPES
+				  WITH Type_Inference(.9)
+					 			""")
+			println("Querying TI LENS")
+			query("SELECT * FROM new_types;").allRows must have size(4)
+			println("Done Querying TI LENS")
 			query("SELECT * FROM RATINGS1;").allRows must have size(4)
 			query("SELECT RATING FROM RATINGS1;").allRows.flatten must contain(eachOf(f(4.5), f(4.0), f(6.4), NullPrimitive()))
 			query("SELECT * FROM RATINGS1 WHERE RATING IS NULL").allRows must have size(1)

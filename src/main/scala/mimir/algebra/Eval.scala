@@ -112,7 +112,8 @@ object Eval
                   case TypePrimitive(TInt) => IntPrimitive(Eval.eval(params(0), bindings).asLong)
                   case TypePrimitive(TFloat) => FloatPrimitive(Eval.eval(params(0), bindings).asDouble)
                   case TypePrimitive(TString) => StringPrimitive(Eval.eval(params(0), bindings).asString)
-                  case x => throw new SQLException("Unknown cast type: '"+x+"'")
+                  case TypePrimitive(TUser) => {println("HERE!!"); UserPrimitive(Eval.eval(params(0), bindings).asString)}
+                  case x => println(params(1)); throw new SQLException("Unknown cast type: '"+x+"'")
                 }
               } catch {
                 case _:TypeException=> NullPrimitive();
