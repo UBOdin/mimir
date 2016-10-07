@@ -53,7 +53,18 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
             result(value_text(0))
 
           case TUser(name,regex,sqlType) =>
-            result(value_text(0)+"_"+name)
+            sqlType match {
+              case TString() | TRowId() | TDate() =>
+                result(value_text(0)+"_"+name)
+              case TInt() =>
+                result(value_int(0))
+              case TFloat() =>
+                result(value_double(0))
+              case TAny() =>
+                result()
+              case _ =>
+                throw new Exception("In SQLiteCompat expected natural type but got: " + sqlType.toString())
+            }
 
           case _ =>
             result("I assume that you put something other than a number in, this functions works like, MIMIRCAST(column,type), the types are int values, 1 is int, 2 is double, 3 is string, and 5 is null, so MIMIRCAST(COL,1) is casting column 1 to int")

@@ -177,6 +177,8 @@ object Typechecker {
 		escalate(a, b, msg + ":" + e)
 	def escalate(a: Type, b: Type, msg: String): Type = {
 		(a,b) match {
+			case (TUser(name,regex,sqlType),_) => escalate(sqlType,b,msg)
+			case (_,TUser(name,regex,sqlType)) => escalate(a,sqlType,msg)
 			case (TAny(),_) => b
 			case (_,TAny()) => a
 			case (TInt(), TInt()) => TInt()

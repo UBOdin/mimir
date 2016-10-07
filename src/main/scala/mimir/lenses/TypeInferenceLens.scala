@@ -187,8 +187,8 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
 class TypeInferenceTypes(){
     def baseTypes(v:String,votes:scala.collection.mutable.Map[Type,Int]): Unit ={
       if(v != null) {
-        if(v.matches("(\\+|-)?([0-9]+)"))
-          votes(TInt()) += 1
+//        if(v.matches("(\\+|-)?([0-9]+)"))
+//          votes(TInt()) += 1
         if(v.matches("(\\+|-)?([0-9]*(\\.[0-9]+))"))
           votes(TFloat()) += 1
         if(v.matches("[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}"))
@@ -239,6 +239,7 @@ object TypeList{
 
   typeList += Tuple3("TUser","USER",TString())
   typeList += Tuple3("TWeight","KG*",TString())
+  typeList += Tuple3("TestInt","(\\+|-)?([0-9]+)",TInt())
 
 }
 
