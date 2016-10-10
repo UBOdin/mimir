@@ -3,8 +3,9 @@ package mimir.algebra;
 import java.sql._
 
 import mimir.ctables.CTables
+import mimir.lenses.TypeList
 
-case class TypeException(found: Type.T, expected: Type.T, 
+case class TypeException(found: Type, expected: Type,
                     context:String) 
   extends Exception(
     "Type Mismatch ["+context+
@@ -17,6 +18,112 @@ class RAException(msg: String) extends Exception(msg);
  * An enum class defining the type of primitive-valued expressions
  * (e.g., integers, floats, strings, etc...)
  */
+
+sealed trait Type{
+  def toString(t:Type) = t match {
+    case TInt() => "int"
+    case TFloat() => "real"
+    case TDate() => "date"
+    case TString() => "varchar"
+    case TBool() => "bool"
+    case TRowId() => "rowid"
+    case TType() => "type"
+    case TAny() => "any"
+    case TUser(name,regex,sqlType) => name
+  }
+  def fromString(t: String) = t.toLowerCase match {
+    case "int"     => TInt()
+    case "integer" => TInt()
+    case "float"   => TFloat()
+    case "decimal" => TFloat()
+    case "real"    => TFloat()
+    case "date"    => TDate()
+    case "varchar" => TString()
+    case "char"    => TString()
+    case "string"  => TString()
+    case "bool"    => TBool()
+    case "rowid"   => TRowId()
+    case "type"    => TType()
+    case _ =>  throw new SQLException("Invalid Type '" + t + "'");
+  }
+  override def toString(): String = {
+    toString(this)
+  }
+  def toSQLiteType(i:Int) = i match {
+    case 0 => TInt()
+    case 1 => TFloat()
+    case 2 => TDate()
+    case 3 => TString()
+    case 4 => TBool()
+    case 5 => TRowId()
+    case 6 => TType()
+    case 7 => TAny()
+    case _ => {
+      val num = i - 8 // 8 because this is the number of native types, if more are added then this number needs to increase
+      if(num < 0){
+        throw new Exception("This number is not part of the type: num == " + num.toString())
+      }
+      var location = 0
+      var t:Type = null
+      TypeList.typeList.foreach((tuple) => {
+        if(location == num){
+          t = TUser(tuple._1,tuple._2,tuple._3)
+        }
+        location += 1
+      })
+      if(t == null){
+        throw new Exception("This number is not part of the type: num == " + num.toString())
+      }
+      t
+    }
+  }
+  def id(t:Type) = t match {
+    case TInt() => 0
+    case TFloat() => 1
+    case TDate() => 2
+    case TString() => 3
+    case TBool() => 4
+    case TRowId() => 5
+    case TType() => 6
+    case TAny() => 7
+    case TUser(name,regex,sqlType)  => {
+      var location = -1
+      var temp = 0
+      TypeList.typeList.foreach((tuple) => {
+        if(tuple._1.equals(name)){
+          location = temp + 8 // 8 because of other types, if more native types are added then you need to increase this number
+        }
+        temp += 1
+      })
+      if(location == -1){
+        throw new Exception("This number is not part of the type")
+      }
+      location
+    }
+  }
+}
+
+case class TInt() extends Type
+case class TFloat() extends Type
+case class TDate() extends Type
+case class TString() extends Type
+case class TBool() extends Type
+case class TRowId() extends Type
+case class TType() extends Type
+case class TAny() extends Type
+case class TUser(name:String,regex:String,sqlType:Type) extends Type{
+  def getName():String = {
+    name
+  }
+  def getRegex():String = {
+    regex
+  }
+  def getSqlType():Type = {
+    sqlType
+  }
+}
+
+/*
 object Type extends Enumeration {
   /**
    * The base type of the enum.  Type.T is an instance of Type
@@ -25,21 +132,22 @@ object Type extends Enumeration {
   /**
    * The enum values themselves
    */
-  val TInt, TFloat, TDate, TString, TBool, TRowId, TType, TAny, TUser = Value
+
+  val TInt(), TFloat(), TDate(), TString(), TBool(), TRowId(), TType(), TAny() = Value
 
   /**
    * Convert a type to a SQL-friendly name
    */
   def toString(t: T) = t match {
-    case TInt => "int"
-    case TFloat => "real"
-    case TDate => "date"
-    case TString => "varchar"
-    case TBool => "bool"
-    case TRowId => "rowid"
-    case TType => "type"
+    case TInt() => "int"
+    case TFloat() => "real"
+    case TDate() => "date"
+    case TString() => "varchar"
+    case TBool() => "bool"
+    case TRowId() => "rowid"
+    case TType() => "type"
 //    case TUser => "User Defined"
-    case TAny => "any"//throw new SQLException("Unable to produce string of type TAny");
+    case TAny() => "any"//throw new SQLException("Unable to produce string of type TAny()");
   }
 
   def toStringPrimitive(t: T) = StringPrimitive(toString(t))
@@ -48,25 +156,24 @@ object Type extends Enumeration {
    * Convert a type from a SQL-friendly name
    */
   def fromString(t: String) = t.toLowerCase match {
-    case "int"     => Type.TInt
-    case "integer" => Type.TInt
-    case "float"   => Type.TFloat
-    case "decimal" => Type.TFloat
-    case "real"    => Type.TFloat
-    case "date"    => Type.TDate
-    case "varchar" => Type.TString
-    case "char"    => Type.TString
-    case "string"  => Type.TString
-    case "bool"    => Type.TBool
-    case "rowid"   => Type.TRowId
-    case "type"    => Type.TType
+    case "int"     => Type.TInt()
+    case "integer" => Type.TInt()
+    case "float"   => Type.TFloat()
+    case "decimal" => Type.TFloat()
+    case "real"    => Type.TFloat()
+    case "date"    => Type.TDate()
+    case "varchar" => Type.TString()
+    case "char"    => Type.TString()
+    case "string"  => Type.TString()
+    case "bool"    => Type.TBool()
+    case "rowid"   => Type.TRowId()
+    case "type"    => Type.TType()
     case _ =>  throw new SQLException("Invalid Type '" + t + "'");
   }
 
   def fromStringPrimitive(t: StringPrimitive) = fromString(t.asString)
 }
-
-import mimir.algebra.Type._
+*/
 
 /**
  * Base type for expression trees.  Represents a single node in the tree.
@@ -114,7 +221,7 @@ abstract class LeafExpression extends Expression {
  * Slightly more specific base type for constant terms.  PrimitiveValue
  * also acts as a boxing type for constants in Mimir.
  */
-abstract class PrimitiveValue(t: Type.T) 
+abstract class PrimitiveValue(t: Type)
   extends LeafExpression 
 {
   def getType = t
@@ -150,7 +257,7 @@ abstract class PrimitiveValue(t: Type.T)
  * Boxed representation of a long integer
  */
 case class IntPrimitive(v: Long) 
-  extends PrimitiveValue(TInt) 
+  extends PrimitiveValue(TInt())
 {
   override def toString() = v.toString
   def asLong: Long = v;
@@ -158,7 +265,7 @@ case class IntPrimitive(v: Long)
   def asString: String = v.toString;
   def payload: Object = v.asInstanceOf[Object];
 }
-
+/*
 case class UserPrimitive(v: String)
   extends PrimitiveValue(TUser)
 {
@@ -168,12 +275,12 @@ case class UserPrimitive(v: String)
   def asString: String = v;
   def payload: Object = v.asInstanceOf[Object];
 }
-
+*/
 /**
  * Boxed representation of a string
  */
 case class StringPrimitive(v: String) 
-  extends PrimitiveValue(TString)
+  extends PrimitiveValue(TString())
 {
   override def toString() = "'"+v.toString+"'"
   def asLong: Long = java.lang.Long.parseLong(v)
@@ -184,12 +291,12 @@ case class StringPrimitive(v: String)
 /**
  * Boxed representation of a type object
  */
-case class TypePrimitive(t: Type.T)
-  extends PrimitiveValue(Type.TType)
+case class TypePrimitive(t: Type)
+  extends PrimitiveValue(TType())
 {
   override def toString() = t.toString
-  def asLong: Long = throw new TypeException(TType, TInt, "Cast")
-  def asDouble: Double = throw new TypeException(TType, TFloat, "Cast")
+  def asLong: Long = throw new TypeException(TType(), TInt(), "Cast")
+  def asDouble: Double = throw new TypeException(TType(), TFloat(), "Cast")
   def asString: String = t.toString;
   def payload: Object = t.asInstanceOf[Object];
 }
@@ -197,7 +304,7 @@ case class TypePrimitive(t: Type.T)
  * Boxed representation of a row identifier/provenance token
  */
 case class RowIdPrimitive(v: String)
-  extends PrimitiveValue(TRowId)
+  extends PrimitiveValue(TRowId())
 {
   override def toString() = "'"+v.toString+"'"
   def asLong: Long = java.lang.Long.parseLong(v)
@@ -209,10 +316,10 @@ case class RowIdPrimitive(v: String)
  * Boxed representation of a double-precision floating point number
  */
 case class FloatPrimitive(v: Double) 
-  extends PrimitiveValue(TFloat)
+  extends PrimitiveValue(TFloat())
 {
   override def toString() = v.toString
-  def asLong: Long = throw new TypeException(TFloat, TInt, "Cast");
+  def asLong: Long = throw new TypeException(TFloat(), TInt(), "Cast");
   def asDouble: Double = v
   def asString: String = v.toString;
   def payload: Object = v.asInstanceOf[Object];
@@ -222,11 +329,11 @@ case class FloatPrimitive(v: Double)
  * Boxed representation of a date
  */
 case class DatePrimitive(y: Int, m: Int, d: Int) 
-  extends PrimitiveValue(TDate)
+  extends PrimitiveValue(TDate())
 {
   override def toString() = "DATE '"+y+"-"+m+"-"+d+"'"
-  def asLong: Long = throw new TypeException(TDate, TInt, "Cast");
-  def asDouble: Double = throw new TypeException(TDate, TFloat, "Cast");
+  def asLong: Long = throw new TypeException(TDate(), TInt(), "Cast");
+  def asDouble: Double = throw new TypeException(TDate(), TFloat(), "Cast");
   def asString: String = toString;
   def payload: Object = (y, m, d).asInstanceOf[Object];
   def compare(c: DatePrimitive): Integer = {
@@ -243,11 +350,11 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
  * Boxed representation of a boolean
  */
 case class BoolPrimitive(v: Boolean)
-  extends PrimitiveValue(TBool)
+  extends PrimitiveValue(TBool())
 {
   override def toString() = if(v) {"TRUE"} else {"FALSE"}
-  def asLong: Long = throw new TypeException(TBool, TInt, "Cast");
-  def asDouble: Double = throw new TypeException(TBool, TFloat, "Cast");
+  def asLong: Long = throw new TypeException(TBool(), TInt(), "Cast");
+  def asDouble: Double = throw new TypeException(TBool(), TFloat(), "Cast");
   def asString: String = toString;
   def payload: Object = v.asInstanceOf[Object];
 }
@@ -255,12 +362,12 @@ case class BoolPrimitive(v: Boolean)
  * Boxed representation of NULL
  */
 case class NullPrimitive()
-  extends PrimitiveValue(TAny)
+  extends PrimitiveValue(TAny())
 {
   override def toString() = "NULL"
-  def asLong: Long = throw new TypeException(TAny, TInt, "Cast Null");
-  def asDouble: Double = throw new TypeException(TAny, TFloat, "Cast Null");
-  def asString: String = throw new TypeException(TAny, TString, "Cast Null");
+  def asLong: Long = throw new TypeException(TAny(), TInt(), "Cast Null");
+  def asDouble: Double = throw new TypeException(TAny(), TFloat(), "Cast Null");
+  def asString: String = throw new TypeException(TAny(), TString(), "Cast Null");
   def payload: Object = null
 }
 

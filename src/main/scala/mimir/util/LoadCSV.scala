@@ -9,6 +9,8 @@ import mimir.Database
 import mimir.algebra.Type
 import org.apache.commons.csv.{CSVRecord, CSVParser, CSVFormat}
 import scala.collection.JavaConverters._
+import mimir.algebra._
+
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
 
@@ -152,7 +154,7 @@ object LoadCSV {
   private def populateTable(db: Database,
                             src: BufferedReader,
                             targetTable: String,
-                            sch: List[(String, Type.T)]): Unit = {
+                            sch: List[(String, Type)]): Unit = {
 
     var location = 0
     var numberOfColumns = 0
@@ -198,7 +200,7 @@ object LoadCSV {
         dataLine(i) match {
           case "" => null
           case x => sch(i)._2 match {
-            case Type.TDate | Type.TString => "\'"+x+"\'"
+            case TDate() | TString() => "\'"+x+"\'"
             case _ => x
           }
         }
@@ -211,8 +213,8 @@ object LoadCSV {
       }
       location = 0
 
-      statements.append("INSERT INTO "+targetTable+"("+keys+") VALUES ("+data+")")
-//      db.backend.update("INSERT INTO "+targetTable+"("+keys+") VALUES ("+data+")")
+//      statements.append("INSERT INTO "+targetTable+"("+keys+") VALUES ("+data+")")
+      db.backend.update("INSERT INTO "+targetTable+"("+keys+") VALUES ("+data+")")
     }
 */
   }

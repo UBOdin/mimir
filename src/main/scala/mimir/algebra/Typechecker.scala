@@ -4,7 +4,6 @@ import java.sql._;
 import java.util.NoSuchElementException;
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-import Type._;
 import Arith.{Add, Sub, Mult, Div, And, Or}
 import Cmp.{Gt, Lt, Lte, Gte, Eq, Neq, Like, NotLike}
 
@@ -12,38 +11,38 @@ class MissingVariable(varName: String, e: Throwable) extends
 	Exception(varName, e)
 
 /* what's going on with scope and Map().apply? */
-class ExpressionChecker(scope: (String => Type.T) = Map().apply _) extends LazyLogging {
+class ExpressionChecker(scope: (String => Type) = Map().apply _) extends LazyLogging {
 	/* Assert that the expressions claimed type is its type */
-	def assert(e: Expression, t: Type.T, msg: String = "Typechecker"): Unit = {
+	def assert(e: Expression, t: Type, msg: String = "Typechecker"): Unit = {
 		val eType = typeOf(e);
 		if(Typechecker.escalate(eType,t) != t){
 			throw new TypeException(eType, t, msg)
 		}
 	}
 
-	def typeOf(e: Expression): Type.T = {
+	def typeOf(e: Expression): Type = {
 		e match {
 			case p: PrimitiveValue => p.getType;
-			case Not(child) => assert(child, TBool, "NOT"); TBool
+			case Not(child) => assert(child, TBool(), "NOT"); TBool()
 			case p: Proc => p.getType(p.children.map(typeOf(_)))
 			case Arithmetic((Add | Sub | Mult | Div), lhs, rhs) =>
 				Typechecker.assertNumeric(Typechecker.escalate(typeOf(lhs), typeOf(rhs)));
 			case Arithmetic((And | Or), lhs, rhs) =>
-				assert(lhs, TBool, "BoolOp");
-				assert(rhs, TBool, "BoolOp");
-				TBool
+				assert(lhs, TBool(), "BoolOp");
+				assert(rhs, TBool(), "BoolOp");
+				TBool()
 			case Comparison((Eq | Neq), lhs, rhs) =>
 				Typechecker.escalate(typeOf(lhs), typeOf(rhs), "Comparison", e);
-				TBool
+				TBool()
 			case Comparison((Gt | Gte | Lt | Lte), lhs, rhs) =>
-				if(typeOf(lhs) != TDate && typeOf(rhs) != TDate) {
+				if(typeOf(lhs) != TDate() && typeOf(rhs) != TDate()) {
 					Typechecker.assertNumeric(Typechecker.escalate(typeOf(lhs), typeOf(rhs), "Comparison"))
 				}
-				TBool
+				TBool()
 			case Comparison((Like | NotLike), lhs, rhs) =>
-				assert(lhs, TString, "LIKE")
-				assert(rhs, TString, "LIKE")
-				TBool
+				assert(lhs, TString(), "LIKE")
+				assert(rhs, TString(), "LIKE")
+				TBool()
 			case Var(name) => 
 				try { 
 					val t = scope(name)
@@ -58,12 +57,12 @@ class ExpressionChecker(scope: (String => Type.T) = Map().apply _) extends LazyL
 					case TypePrimitive(t) => t
 					case p:PrimitiveValue => 
 						throw new SQLException("Invalid CAST to '"+p+"' of type: "+typeOf(p))
-					case _ => TAny
+					case _ => TAny()
 				}
 			case Function(fname, fargs) =>
 				FunctionRegistry.typecheck(fname, fargs.map(typeOf(_)))
 			case Conditional(condition, thenClause, elseClause) => 
-				assert(condition, TBool, "WHEN")
+				assert(condition, TBool(), "WHEN")
 				Typechecker.escalate(
 					typeOf(thenClause), 
 					typeOf(elseClause),
@@ -71,8 +70,8 @@ class ExpressionChecker(scope: (String => Type.T) = Map().apply _) extends LazyL
 				)
 			case IsNullExpression(child) =>
 				typeOf(child);
-				TBool
-			case RowIdVar() => TRowId
+				TBool()
+			case RowIdVar() => TRowId()
 
     }
   }
@@ -82,15 +81,15 @@ class ExpressionChecker(scope: (String => Type.T) = Map().apply _) extends LazyL
 object Typechecker {
 
 	val simpleChecker = new ExpressionChecker();
-	val weakChecker = new ExpressionChecker((_) => Type.TAny)
+	val weakChecker = new ExpressionChecker((_) => TAny())
 
-	def typeOf(e: Expression): Type.T =
+	def typeOf(e: Expression): Type =
 		{ simpleChecker.typeOf(e) }
-	def weakTypeOf(e: Expression): Type.T =
+	def weakTypeOf(e: Expression): Type =
 		{ weakChecker.typeOf(e) }
-	def typeOf(e: Expression, scope: (String => Type.T)): Type.T =
+	def typeOf(e: Expression, scope: (String => Type)): Type =
 		{ (new ExpressionChecker(scope)).typeOf(e) }
-	def typeOf(e: Expression, o: Operator): Type.T =
+	def typeOf(e: Expression, o: Operator): Type =
 	{ 
 		typecheckerFor(o).typeOf(e)
 	}
@@ -100,7 +99,7 @@ object Typechecker {
 		new ExpressionChecker(scope(_))	
 	}
 
-	def schemaOf(o: Operator): List[(String, Type.T)] =
+	def schemaOf(o: Operator): List[(String, Type)] =
 	{
 		o match {
 			case Project(cols, src) =>
@@ -112,7 +111,7 @@ object Typechecker {
 
 			case Select(cond, src) =>
 				val srcSchema = schemaOf(src);
-				(new ExpressionChecker(srcSchema.toMap)).assert(cond, TBool, "SELECT")
+				(new ExpressionChecker(srcSchema.toMap)).assert(cond, TBool(), "SELECT")
 				srcSchema
 
 			case Aggregate(args, groupBy, source) =>
@@ -121,11 +120,11 @@ object Typechecker {
 				val chk = new ExpressionChecker(srcSchema.toMap)
 
 				/* Get Group By Args and verify type */
-				val groupBySchema: List[(String, Type.T)] = groupBy.map(x => (x.toString, chk.typeOf(x)) )
+				val groupBySchema: List[(String, Type)] = groupBy.map(x => (x.toString, chk.typeOf(x)) )
 
 				/* Get function name, check for AVG *//* Get function parameters, verify type */
-				val aggSchema: List[(String, Type.T)] = args.map(x => if(x.function == "AVG"){ (x.alias, TFloat) }
-					else if(x.function == "COUNT") { (x.alias, TInt)}
+				val aggSchema: List[(String, Type)] = args.map(x => if(x.function == "AVG"){ (x.alias, TFloat()) }
+					else if(x.function == "COUNT") { (x.alias, TInt())}
 					else{ val typ = Typechecker.escalate(x.columns.map(x => chk.typeOf(x)))
 						assertNumeric(typ)
 						(x.alias, typ)
@@ -164,24 +163,26 @@ object Typechecker {
 		}
 	}
 
-	def assertNumeric(t: Type.T): Type.T =
+	def assertNumeric(t: Type): Type =
 	{
-		if(escalate(t, TFloat) != TFloat){
-			throw new TypeException(t, TFloat, "Numeric")
+		if(escalate(t, TFloat()) != TFloat()){
+			throw new TypeException(t, TFloat(), "Numeric")
 		}
 		t;
 	}
 
-	def escalate(a: Type.T, b: Type.T): Type.T = 
+	def escalate(a: Type, b: Type): Type =
 		escalate(a, b, "Escalation")
-	def escalate(a: Type.T, b: Type.T, msg: String, e: Expression): Type.T = 
+	def escalate(a: Type, b: Type, msg: String, e: Expression): Type =
 		escalate(a, b, msg + ":" + e)
-	def escalate(a: Type.T, b: Type.T, msg: String): Type.T = {
+	def escalate(a: Type, b: Type, msg: String): Type = {
 		(a,b) match {
-			case (TAny,_) => b
-			case (_,TAny) => a
-			case (TInt, TInt) => TInt
-			case ((TInt|TFloat), (TInt|TFloat)) => TFloat
+			case (TUser(name,regex,sqlType),_) => escalate(sqlType,b,msg)
+			case (_,TUser(name,regex,sqlType)) => escalate(a,sqlType,msg)
+			case (TAny(),_) => b
+			case (_,TAny()) => a
+			case (TInt(), TInt()) => TInt()
+			case ((TInt()|TFloat()), (TInt()|TFloat())) => TFloat()
 			case _ => 
 				if(a == b) { a } else {
 					throw new TypeException(a, b, msg);
@@ -189,14 +190,14 @@ object Typechecker {
 		}
 	}
 
-	def escalate(l: List[Type.T]): Type.T = 
+	def escalate(l: List[Type]): Type =
 		escalate(l, "Escalation")
-	def escalate(l: List[Type.T], msg: String): Type.T = 
+	def escalate(l: List[Type], msg: String): Type =
 	{
-		l.fold(TAny)(escalate(_,_,msg))
+		l.fold(TAny())(escalate(_,_,msg))
 	}
-	def escalate(l: List[Type.T], msg: String, e: Expression): Type.T = 
+	def escalate(l: List[Type], msg: String, e: Expression): Type =
 	{
-		l.fold(TAny)(escalate(_,_,msg,e))
+		l.fold(TAny())(escalate(_,_,msg,e))
 	}
 }

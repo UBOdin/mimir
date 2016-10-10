@@ -45,7 +45,7 @@ abstract class Operator
   /**
    * Convenience method to invoke the Typechecker
    */
-  def schema: List[(String, Type.T)] = 
+  def schema: List[(String, Type)] =
     Typechecker.schemaOf(this)
 
   /**
@@ -210,20 +210,20 @@ case class Union(left: Operator, right: Operator) extends Operator
  *   input:  An expression to extract the implicit attribute
  *   type:   The type of the implicit attribute.
  * For example: 
- *   ("MIMIR_ROWID", Var("ROWID"), Type.TRowId)
+ *   ("MIMIR_ROWID", Var("ROWID"), Type.TRowId())
  * will extract SQL's implicit ROWID attribute into the new column "MIMIR_ROWID" 
  * with the rowid type.
  */
 case class Table(name: String, 
-                 sch: List[(String,Type.T)],
-                 metadata: List[(String,Expression,Type.T)])
+                 sch: List[(String,Type)],
+                 metadata: List[(String,Expression,Type)])
   extends Operator
 {
   def toString(prefix: String) =
     prefix + name + "(" + (
-      sch.map( { case (v,t) => v+":"+Type.toString(t) } ).mkString(", ") + 
+      sch.map( { case (v,t) => v+":"+TString().toString(t) } ).mkString(", ") +
       ( if(metadata.size > 0)
-             { " // "+metadata.map( { case (v,e,t) => v+":"+Type.toString(t)+" <- "+e } ).mkString(", ") } 
+             { " // "+metadata.map( { case (v,e,t) => v+":"+TString().toString(t)+" <- "+e } ).mkString(", ") }
         else { "" }
       )
     )+")" 

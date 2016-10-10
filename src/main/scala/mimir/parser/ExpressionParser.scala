@@ -125,9 +125,9 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 		}
 	}
 
-	def exprType: Parser[Type.T] = (
+	def exprType: Parser[Type] = (
 		"int" | "decimal" | "date" | "string" | "rowid" | "type" | "float" | "real" | "varchar"
-	) ^^ { Type.fromString(_) }
+	) ^^ { TString().fromString(_) }
 
 	def typeLeaf: Parser[Expression] = 
 		exprType ^^ { (t) => TypePrimitive(t) }

@@ -23,15 +23,15 @@ object CTPercolatorSpec extends Specification {
     UniformDistribution,
     UniformDistribution
   ))
-  val schema = Map[String,Map[String,Type.T]](
+  val schema = Map[String,Map[String,Type]](
     ("R", Map( 
-      ("R_A", Type.TInt), 
-      ("R_B", Type.TInt), 
-      ("R_C", Type.TInt)
+      ("R_A", TInt()),
+      ("R_B", TInt()),
+      ("R_C", TInt())
     )),
     ("S", Map( 
-      ("S_C", Type.TInt), 
-      ("S_D", Type.TFloat)
+      ("S_C", TInt()),
+      ("S_D", TFloat())
     ))
   )
 

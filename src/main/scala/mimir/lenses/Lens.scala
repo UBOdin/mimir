@@ -56,6 +56,6 @@ abstract class Lens(val name: String, val args: List[Expression], val source: Op
   def longArg(id: Int): Long     = Eval.evalInt(args(id))
   def doubleArg(id: Int): Double = Eval.evalFloat(args(id))
   def lensType: String
-  def schema(): List[(String, Type.T)]
+  def schema(): List[(String, Type)]
 }
 

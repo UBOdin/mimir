@@ -6,7 +6,7 @@ import mimir.algebra._;
 import mimir.ctables.Reason;
 
 class NonDetIterator(val src: ResultIterator, 
-                     val schema: List[(String, Type.T)],
+                     val schema: List[(String, Type)],
                      colDeterminism: List[Expression], 
                      rowDeterminism: Expression) 
   extends ResultIterator

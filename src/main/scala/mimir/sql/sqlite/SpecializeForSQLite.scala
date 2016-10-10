@@ -12,8 +12,8 @@ object SpecializeForSQLite {
   {
     e match {
       case Function("CAST", List(target, TypePrimitive(t))) => 
-        {//println("TYPE ID: "+t.id)
-          Function("MIMIRCAST", List(apply(target), IntPrimitive(t.id)))}
+        {//println("TYPE ID: "+t.id(t))
+          Function("MIMIRCAST", List(apply(target), IntPrimitive(t.id(t))))}
       case Function("CAST", _) =>
         throw new SQLException("Invalid CAST: "+e)
       case _ => e.recur(apply(_: Expression))
@@ -31,11 +31,11 @@ object SpecializeForSQLite {
       case table @ Table(tableName, columns, metadata) => {
 
         val args:List[ProjectArg] = columns.map((arg) => {
-          println("Arg: " + arg._1 + " : " + arg._2)
+//          println("Arg: " + arg._1 + " : " + arg._2)
           ProjectArg(arg._1,
               Function("MIMIRCAST",List( //Cast the field to ...
                 Var(arg._1),
-                IntPrimitive( arg._2.id )
+                IntPrimitive( TString().id(arg._2) )
               ))
           )
         }) ++ metadata.map( x => ProjectArg(x._1, Var(x._1)) )

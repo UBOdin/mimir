@@ -30,7 +30,7 @@ class BagUnionResultIterator(lhs: ResultIterator, rhs: ResultIterator) extends R
     { lhs.close(); rhs.close(); }
   def numCols: Int =
     currIter().numCols;
-  def schema: List[(String,Type.T)] =
+  def schema: List[(String,Type)] =
     currIter().schema;
 
   override def reason(ind: Int): List[Reason] = {

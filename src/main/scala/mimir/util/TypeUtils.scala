@@ -1,6 +1,7 @@
 package mimir.util
 
-import mimir.algebra.Type
+import mimir.algebra._
+
 
 object TypeUtils {
 
@@ -14,27 +15,27 @@ object TypeUtils {
 
   val Types = List(INT, FLOAT, BOOL, STRING, DATE)
 
-  def convert(t: Type.T): String = {
+  def convert(t: Type): String = {
     t match {
-      case Type.TInt => INT
-      case Type.TFloat => FLOAT
-      case Type.TBool => BOOL
-      case Type.TString => STRING
-      case Type.TDate => DATE
-      case Type.TRowId => ROWID
-      case Type.TAny => ANY
+      case TInt() => INT
+      case TFloat() => FLOAT
+      case TBool() => BOOL
+      case TString() => STRING
+      case TDate() => DATE
+      case TRowId() => ROWID
+      case TAny() => ANY
     }
   }
 
-  def convert(s: String): Type.T = {
+  def convert(s: String): Type = {
     s match {
-      case INT => Type.TInt
-      case FLOAT => Type.TFloat
-      case BOOL => Type.TBool
-      case STRING => Type.TString
-      case DATE => Type.TDate
-      case ROWID => Type.TRowId
-      case ANY => Type.TAny
+      case INT => TInt()
+      case FLOAT => TFloat()
+      case BOOL => TBool()
+      case STRING => TString()
+      case DATE => TDate()
+      case ROWID => TRowId()
+      case ANY => TAny()
     }
   }
 

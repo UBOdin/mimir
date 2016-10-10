@@ -4,7 +4,6 @@ import java.sql.SQLException
 import scala.util._
 
 import mimir.Database
-import mimir.algebra.Type.T
 import mimir.algebra._
 import mimir.ctables.{Model, VGTerm}
 import mimir.optimizer.{InlineVGTerms}
@@ -13,8 +12,8 @@ import org.apache.lucene.search.spell.{JaroWinklerDistance, LevensteinDistance, 
 class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
   extends Lens(name, args, source) {
 
-  var targetSchema: Map[String, Type.T] = null
-  var sourceSchema: Map[String, Type.T] = Typechecker.schemaOf(InlineVGTerms.optimize(source)).toMap
+  var targetSchema: Map[String, Type] = null
+  var sourceSchema: Map[String, Type] = Typechecker.schemaOf(InlineVGTerms.optimize(source)).toMap
   var db: Database = null
   var model: Model = null
 
@@ -24,28 +23,28 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
       throw new SQLException("Incorrect parameters for " + lensType + " Lens")
 
     if (targetSchema == null) {
-      targetSchema = Map[String, Type.T]()
+      targetSchema = Map[String, Type]()
       var i = 0
       while (i < args.length) {
         val col = args(i).toString.toUpperCase
         i += 1
-        val t = Type.fromString(args(i).toString)
+        val t = TString().fromString(args(i).toString)
         i += 1
         targetSchema += (col -> t)
       }
     }
   }
 
-  def schema(): List[(String, Type.T)] = targetSchema.toList
+  def schema(): List[(String, Type)] = targetSchema.toList
 
   def lensType = "SCHEMA_MATCHING"
 
-  def isTypeCompatible(a: T, b: T): Boolean = 
+  def isTypeCompatible(a: Type, b: Type): Boolean =
   {
     (a,b) match {
-      case ((Type.TInt|Type.TFloat),  (Type.TInt|Type.TFloat)) => true
-      case (Type.TAny, _) => true
-      case (_, Type.TAny) => true
+      case ((TInt()|TFloat()),  (TInt()|TFloat())) => true
+      case (TAny(), _) => true
+      case (_, TAny()) => true
       case _ => a == b
     }
 
@@ -89,7 +88,7 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
 }
 class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
 
-  var schema: Map[String, Type.T] = null
+  var schema: Map[String, Type] = null
   var colMapping: Map[String, Map[String, Double]] = null
 
   def getSchemaMatching(criteria: String, targetColumn: String, sourceColumns: List[String]): Map[String, Double] = {
@@ -110,14 +109,14 @@ class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
     sorted.map { case (k, v) => (k, v / total) }
   }
 
-  def learn(targetSchema: Map[String, Type.T], sourceSchema: Map[String, Type.T]) = {
+  def learn(targetSchema: Map[String, Type], sourceSchema: Map[String, Type]) = {
     colMapping = targetSchema.map { case (k, v) =>
       (k, getSchemaMatching("NGramDistance", k, sourceSchema.filter( (src) => lens.isTypeCompatible(src._2, v)).keys.toList))
     }
     schema = targetSchema
   }
 
-  def varType(idx: Int, argTypes: List[Type.T]) = Type.TBool
+  def varType(idx: Int, argTypes: List[Type]) = TBool()
 
   def sample(idx: Int, randomness: Random, args: List[PrimitiveValue]): PrimitiveValue = 
     bestGuess(idx, args)

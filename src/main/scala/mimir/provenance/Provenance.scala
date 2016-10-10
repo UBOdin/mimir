@@ -92,7 +92,7 @@ object Provenance {
 
       case Table(name, schema, meta) =>
         (
-          Table(name, schema, meta ++ List((rowidColnameBase, Var("ROWID"), Type.TRowId))),
+          Table(name, schema, meta ++ List((rowidColnameBase, Var("ROWID"), TRowId()))),
           List(rowidColnameBase)
         )
 

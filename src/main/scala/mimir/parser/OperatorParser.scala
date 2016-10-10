@@ -3,7 +3,7 @@ package mimir.parser;
 import mimir.algebra._
 import mimir.ctables._
 
-class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => List[(String,Type.T)]))
+class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => List[(String,Type)]))
 	extends ExpressionParser(modelLookup) 
 {
 
@@ -46,14 +46,14 @@ class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => Li
 			case name ~ cols_and_metadata => {
 				cols_and_metadata match {
 					case None => 
-						Table(name, schemaLookup(name), List[(String,Expression,Type.T)]())
+						Table(name, schemaLookup(name), List[(String,Expression,Type)]())
 					case Some((cols ~ metadata)) => 
 						Table(name, 
 							schemaLookup(name).zip(cols).map {
-								case ((_,t),(v,Type.TAny)) => (v,t)
+								case ((_,t),(v,TAny())) => (v,t)
 								case ((_,_),(v,t)) => (v,t)
 							},
-							metadata.getOrElse(List[(String,Expression,Type.T)]()).
+							metadata.getOrElse(List[(String,Expression,Type)]()).
 											 map({
 											 	case (name, RowIdVar(), t) => (name, Var("ROWID"), t)
 											 	case (name, source, t) => (name, source, t)
@@ -63,24 +63,24 @@ class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => Li
 			}		
 		}
 
-	def colList:Parser[List[(String,Type.T)]] =
+	def colList:Parser[List[(String,Type)]] =
 		( (col <~ ",") ~ colList ^^ { case hd ~ tl => hd :: tl }
 		| col ^^ { List(_) }
 		)
 
 	def col =
 		( (id <~ ":") ~ exprType ^^ { case name ~ t => (name, t) } 
-		| id ^^ { (_, Type.TAny) }
+		| id ^^ { (_, TAny()) }
 		)
 
-	def metadataList:Parser[List[(String,Expression,Type.T)]] =
+	def metadataList:Parser[List[(String,Expression,Type)]] =
 		( (metadata <~ ",") ~ metadataList ^^ { case hd ~ tl => hd :: tl }
 		| metadata ^^ { List(_) }
 		)
 
 	def metadata =
 		( (((id <~ ":") ~ exprType) <~ "<-") ~ exprBase ^^ { case name ~ t ~ e => (name, e, t) } 
-		| id ^^ { x => (x, Var(x), Type.TAny) }
+		| id ^^ { x => (x, Var(x), TAny()) }
 		)
 
 }
