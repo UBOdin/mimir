@@ -31,7 +31,7 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
         val t = TString().toSQLiteType(value_int(1))
 //        println("TYPE CASTED: "+t)
         val v = value_text(0)
-        logger.debug(s"Casting $v as $t")
+        logger.trace(s"Casting $v as $t")
         t match {
           case TInt() =>
             value_type(0) match {
