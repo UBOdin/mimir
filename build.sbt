@@ -28,7 +28,8 @@ libraryDependencies ++= Seq(
   "org.apache.lucene"          %    "lucene-spellchecker"   % "3.6.2",
   "org.xerial"                 %    "sqlite-jdbc"           % "3.8.11.2",
   "info.mimirdb"               %    "jsqlparser"            % "1.0.0",
-  "org.apache.commons" % "commons-csv" % "1.4"
+  "org.apache.commons" % "commons-csv" % "1.4",
+"commons-io" % "commons-io" % "2.5"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")

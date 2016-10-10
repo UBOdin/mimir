@@ -1,16 +1,19 @@
 package mimir.util
 
-import java.io.{BufferedReader, File, FileReader}
+import java.io._
+import java.nio.charset.StandardCharsets
 import java.sql.SQLException
 import java.util
 
 import mimir.Database
 import mimir.algebra.Type
 import org.apache.commons.csv.{CSVRecord, CSVParser, CSVFormat}
+import org.apache.commons.io.IOUtils
+import org.apache.commons.io.input.ReaderInputStream
 import scala.collection.JavaConverters._
 import mimir.algebra._
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.util.control.Breaks._
 
 object LoadCSV {
@@ -21,26 +24,33 @@ object LoadCSV {
     var numberOfHeaderColumns = 0
     var maxNumberOfColumns = 0
 
-    val input = new BufferedReader(new FileReader(sourceFile))
+    var input = new BufferedReader(new FileReader(sourceFile))
+
+    val cleanedInputStream: BufferedReader = makeColumnNamesUnique(input)
+    val parser = new CSVParser(cleanedInputStream , CSVFormat.DEFAULT.withAllowMissingColumnNames().withHeader())
+
+
+    // reset back to the top
+    input = new BufferedReader(new FileReader(sourceFile))
 
     db.getTableSchema(targetTable) match {
 
       case Some(sch) =>
         if(true) {
-          input.readLine()
-          populateTable(db, input, targetTable, sch) // Ignore header since table already exists
+//          input.readLine()
+          populateTable(db, parser, targetTable, sch) // Ignore header since table already exists
         }
         else {
           populateTable(
             db,
-            new BufferedReader(new FileReader(sourceFile)), // Reset to top
+            parser, // Reset to top
             targetTable,
             sch
           )
         }
 
       case None =>
-        val firstLine = input.readLine()
+        val firstLine = "" //input.readLine()
 
         if(largeData) { // if the data is large we may need to sacrafice error checking for speed
           if (headerDetected(firstLine)) {
@@ -57,43 +67,51 @@ object LoadCSV {
         else { // first time around get the max number of columns and make sure it matches up to the number of columns in the schema
           if(headerDetected(firstLine)){
 
-            numberOfHeaderColumns = firstLine.split(",").length
+//            numberOfHeaderColumns = firstLine.split(",").length
 
-            var flag = true
+            var maxNumberOfColumns = 0
+            val parser: CSVParser = new CSVParser(makeColumnNamesUnique(input), CSVFormat.DEFAULT.withAllowMissingColumnNames().withHeader())
 
-            while(flag) {
-              val line: String = input.readLine()
-              if(line == null) {
-                flag = false
-              }
-              else{
-                if(line.split(",").length > maxNumberOfColumns){ // needs to be smarter but for right now use this
-                  maxNumberOfColumns = line.split(",").length
-                }
-              }
+            for (row: CSVRecord <- parser.asScala) {
+              maxNumberOfColumns = Math.max(0, row.size())
             }
 
 
-            val delta = (maxNumberOfColumns - numberOfHeaderColumns)
+//            val delta = maxNumberOfColumns - numberOfHeaderColumns
+            val delta = 0
             var args:String = ""
-            var colList:java.util.ArrayList[String] = new java.util.ArrayList[String]()
+            val colList: util.ArrayList[String] = new util.ArrayList[String]()
             var counter = 0
 
-            firstLine.split(",").map((x) => {
-              var col = x.trim.replaceAll(" ", "").replaceAll("&","").replaceAll("\\(","").replaceAll("\\)","").replaceAll("\'","").replaceAll("\\.","").replaceAll("/","")
-              if(col.toUpperCase().equals("DATE")){
-                col = "date1"
-              }
-              if(col.toUpperCase().equals("MONTH")){
-                col = "month1"
-              }
-              while(colList.contains(col)){
-                col = col + counter
-                counter += 1
-              }
-              colList.add(col)
-              args += col + " varchar, "
-            })
+            val columnHeaderMap = parser.getHeaderMap.asScala
+            var columnHeadersInOrder = new Array[String](columnHeaderMap.size)
+            for ((columnHeader, index) <- columnHeaderMap) {
+              columnHeadersInOrder(index) = columnHeader + " varchar"
+            }
+
+            args += columnHeadersInOrder.mkString(", ")
+
+//            for (col <- columnHeadersInOrder) {
+//
+//            }
+//
+//
+//            firstLine.split(",").map((x) => {
+//              var col = x.trim.replaceAll(" ", "").replaceAll("&","").replaceAll("\\(","").replaceAll("\\)","").replaceAll("\'","").replaceAll("\\.","").replaceAll("/","")
+//              if(col.toUpperCase().equals("DATE")){
+//                col = "date1"
+//              }
+//              if(col.toUpperCase().equals("MONTH")){
+//                col = "month1"
+//              }
+//              while(colList.contains(col)){
+//                col = col + counter
+//                counter += 1
+//              }
+//              colList.add(col)
+//              args += col + " varchar, "
+//            }
+//            )
 
             createTableStatement += args
 
@@ -137,6 +155,38 @@ object LoadCSV {
     }
   }
 
+
+  private def makeColumnNamesUnique(src: BufferedReader): BufferedReader = {
+    val headerLine: String = src.readLine()
+
+    val originalHeaders: Array[String] = headerLine.split(',')
+    var modifiedHeaders = new Array[String](0)
+
+    for (originalHeader <- originalHeaders) {
+      val cleanedOriginalHeader = originalHeader.replaceAll(" ", "").replaceAll("&","").replaceAll("\\(","").replaceAll("\\)","").replaceAll("\'","").replaceAll("\\.","").replaceAll("/","").replaceAll("\\%","").replaceAll("\\-","")
+
+      var desiredHeader = cleanedOriginalHeader
+      var attemptCount = 0
+
+      while(modifiedHeaders.contains(desiredHeader)) {
+        attemptCount = attemptCount + 1
+        desiredHeader = cleanedOriginalHeader + "_" + attemptCount
+      }
+
+      modifiedHeaders = modifiedHeaders :+ desiredHeader
+    }
+
+    val modifiedHeaderLine = modifiedHeaders.mkString(",")
+
+
+    val headerLineInputStream: InputStream = IOUtils.toInputStream(modifiedHeaderLine + '\n', StandardCharsets.UTF_8)
+    val restOfFileInputStream: ReaderInputStream = new ReaderInputStream(src, StandardCharsets.UTF_8)
+
+    // java is gross...
+    return new BufferedReader(new InputStreamReader(new SequenceInputStream(headerLineInputStream, restOfFileInputStream)))
+
+  }
+
   /**
    * A placeholder method for an unimplemented feature
    *
@@ -151,7 +201,7 @@ object LoadCSV {
   }
 
   private def populateTable(db: Database,
-                            src: BufferedReader,
+                            parser: CSVParser,
                             targetTable: String,
                             sch: List[(String, Type)]): Unit = {
 
@@ -160,38 +210,38 @@ object LoadCSV {
     val keys = sch.map(_._1).map((x) => {numberOfColumns+= 1; "\'"+x+"\'"}).mkString(", ")
     val statements = new ListBuffer[String]()
 
-    val parser: CSVParser = new CSVParser(src, CSVFormat.DEFAULT.withAllowMissingColumnNames().withSkipHeaderRecord())
 
     for (row: CSVRecord <- parser.asScala) {
-        if (!row.isConsistent) {
-          // TODO do something here
-        }
+        if (row.isConsistent) {
 
-      var columnCount = 0
 
-      val listOfValues: List[String] = row.iterator().asScala.toList
-      var data = listOfValues.map((i) => {
-        columnCount = columnCount + 1
+          var columnCount = 0
 
-        i match {
-          case "" => null
-          case x => sch(columnCount-1)._2 match {
-            case TDate() | TString() => "\'" + x.replaceAll("'", "''") + "\'"
-            case _ => x
+          val listOfValues: List[String] = row.iterator().asScala.toList
+          var data = listOfValues.map((i) => {
+            columnCount = columnCount + 1
+
+            i match {
+              case "" => null
+              case x => sch(columnCount - 1)._2 match {
+                case TDate() | TString() => "\'" + x.replaceAll("'", "''") + "\'"
+                case _ => x
+              }
+            }
+          })
+
+          data = data.padTo(numberOfColumns, null)
+          if (data.length != numberOfColumns) {
+            // TODO do something
+            var foo = 0;
           }
+
+          val dataString = data.mkString(", ")
+
+//          statements.append("INSERT INTO " + targetTable + "(" + keys + ") VALUES (" + dataString + ")")
+
+          db.backend.update("INSERT INTO " + targetTable + "(" + keys + ") VALUES (" + dataString + ")")
         }
-      })
-
-      data = data.padTo(numberOfColumns, null)
-      if(data.length != numberOfColumns) {
-        // TODO do something
-        var foo = 0;
-      }
-
-      val dataString = data.mkString(", ")
-
-      statements.append("INSERT INTO "+targetTable+"("+keys+") VALUES ("+dataString+")")
-
     }
 
 /*
