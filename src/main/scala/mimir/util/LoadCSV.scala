@@ -4,7 +4,6 @@ import java.io.{BufferedReader, File, FileReader}
 import java.sql.SQLException
 import java.util
 
-import com.google.common.base.Joiner
 import mimir.Database
 import mimir.algebra.Type
 import org.apache.commons.csv.{CSVRecord, CSVParser, CSVFormat}
@@ -165,23 +164,29 @@ object LoadCSV {
 
     for (row: CSVRecord <- parser.asScala) {
         if (!row.isConsistent) {
-          // do something here
+          // TODO do something here
         }
 
       var columnCount = 0
 
       val listOfValues: List[String] = row.iterator().asScala.toList
-      val data = listOfValues.map((i) => {
+      var data = listOfValues.map((i) => {
         columnCount = columnCount + 1
 
         i match {
           case "" => null
           case x => sch(columnCount-1)._2 match {
-            case Type.TDate | Type.TString => "\'" + x.replaceAll("'", "''") + "\'"
+            case TDate() | TString() => "\'" + x.replaceAll("'", "''") + "\'"
             case _ => x
           }
         }
       })
+
+      data = data.padTo(numberOfColumns, null)
+      if(data.length != numberOfColumns) {
+        // TODO do something
+        var foo = 0;
+      }
 
       val dataString = data.mkString(", ")
 
