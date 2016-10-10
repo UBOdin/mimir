@@ -212,12 +212,15 @@ object LoadCSV {
 
 
     for (row: CSVRecord <- parser.asScala) {
-        if (row.isConsistent) {
-
-
+        {
           var columnCount = 0
 
-          val listOfValues: List[String] = row.iterator().asScala.toList
+          var listOfValues: List[String] = row.iterator().asScala.toList
+
+          listOfValues = listOfValues.take(numberOfColumns)
+          listOfValues = listOfValues.padTo(numberOfColumns, null)
+
+
           var data = listOfValues.map((i) => {
             columnCount = columnCount + 1
 
