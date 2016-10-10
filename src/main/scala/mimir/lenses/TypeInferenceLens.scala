@@ -240,6 +240,8 @@ object TypeList{
   typeList += Tuple3("TUser","USER",TString())
   typeList += Tuple3("TWeight","KG*",TString())
   typeList += Tuple3("TestInt","(\\+|-)?([0-9]+)",TInt())
+  typeList += Tuple3("FireCompany","^[a-zA-Z]\\d{3}$",TString())
+  typeList += Tuple3("ZipCode","^\\d{5}(?:[-\\s]\\d{4})?$",TInt())
 
 }
 
