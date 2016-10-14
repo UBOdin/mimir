@@ -1,12 +1,10 @@
 package mimir.lenses
 
-import java.sql.SQLException
 import scala.util._
 import mimir.Database
 import mimir.algebra._
 import mimir.ctables._
 import mimir.exec.ResultIterator
-import mimir.util.TypeUtils
 
 import scala.collection.mutable.ListBuffer
 
@@ -94,14 +92,14 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
 
     var allTypes = new TypeInferenceTypes()
 
-    private val votes = scala.collection.mutable.Map[Type,Int]()
+    private val votes = scala.collection.mutable.Map[Type,Int]() // Type, NumberVotes, Priority level
     votes.put(TInt(),0)
     votes.put(TFloat(),0)
     votes.put(TDate(),0)
     votes.put(TBool(),0)
 
     TypeList.typeList.foreach((tuple) => {
-      votes.put(TUser(tuple._1,tuple._2,tuple._3), 0)
+      votes.put(TUser(tuple._1,tuple._2,tuple._3,tuple._4), 0)
     })
 
     private var totalVotes = 0
@@ -114,13 +112,36 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
       if(totalVotes == 0)
         return (TString(), 0)
 
-      val max = votes.maxBy(_._2)
-      val ratio: Double = max._2.toFloat / totalVotes
-      if(ratio >= threshold) {
-        (max._1, ratio)
-      } else {
-        (TString(), 0)
+      val possibleMatches:scala.collection.mutable.Map[Type,Double] = scala.collection.mutable.Map[Type,Double]()
+      votes.foreach((tuple) => {
+        val ratio: Double = tuple._2.toFloat / totalVotes
+        if(ratio >= threshold) {
+          possibleMatches.put(tuple._1,ratio)
+        }
+      })
+      var currentBestType: Type = TString()
+      var currentBestRatio: Double = 0.0
+
+      if(possibleMatches.size > 0) {
+        possibleMatches.foreach((tuple) => {
+          tuple._1 match {
+            case TUser(name, regex, sqlType, priorityLevel) =>
+              currentBestRatio = tuple._2
+              currentBestType = tuple._1
+            case _ =>
+              currentBestType match {
+                case TUser(name,regex,sqlType,priorityLevel) =>
+
+                case _ =>
+                  if (tuple._2 > currentBestRatio) {
+                  currentBestType = tuple._1
+                  currentBestRatio = tuple._2
+                }
+              }
+          }
+        })
       }
+      (currentBestType, currentBestRatio)
     }
   }
 
@@ -187,8 +208,8 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
 class TypeInferenceTypes(){
     def baseTypes(v:String,votes:scala.collection.mutable.Map[Type,Int]): Unit ={
       if(v != null) {
-//        if(v.matches("(\\+|-)?([0-9]+)"))
-//          votes(TInt()) += 1
+        if(v.matches("(\\+|-)?([0-9]+)"))
+          votes(TInt()) += 1
         if(v.matches("(\\+|-)?([0-9]*(\\.[0-9]+))"))
           votes(TFloat()) += 1
         if(v.matches("[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}"))
@@ -198,7 +219,7 @@ class TypeInferenceTypes(){
 
         TypeList.typeList.foreach((tuple)=>{
           if(v.matches(tuple._2))
-            votes(TUser(tuple._1,tuple._2,tuple._3)) += 1
+            votes(TUser(tuple._1,tuple._2,tuple._3,tuple._4)) += 1
         })
 
       }
@@ -235,16 +256,16 @@ These are the files that need to change to extend the TUser
 
  */
 object TypeList{
-  val typeList = ListBuffer[(String,String,Type)]()
+  val typeList = ListBuffer[(String,String,Type, Int)]()
 
-  typeList += Tuple3("TUser","USER",TString())
-  typeList += Tuple3("TWeight","KG*",TString())
-  typeList += Tuple3("TestInt","(\\+|-)?([0-9]+)",TInt())
-  typeList += Tuple3("FireCompany","^[a-zA-Z]\\d{3}$",TString())
-  typeList += Tuple3("ZipCode","^\\d{5}(?:[-\\s]\\d{4})?$",TInt())
+  typeList += Tuple4("TUser","USER",TString(),1)
+  typeList += Tuple4("TWeight","KG*",TString(),1)
+  typeList += Tuple4("FireCompany","^[a-zA-Z]\\d{3}$",TString(),1)
+  typeList += Tuple4("ZipCode","^\\d{5}(?:[-\\s]\\d{4})?$",TInt(),1)
 
 }
 
 
-//CREATE LENS nt9 AS SELECT * FROM test WITH Type_Inference(.9);
+// CREATE LENS nt9 AS SELECT * FROM test WITH Type_Inference(.9);
+// CREATE LENS nt3 AS SELECT firecomp, zipcode FROM cityraw WITH Type_Inference(.9);
 

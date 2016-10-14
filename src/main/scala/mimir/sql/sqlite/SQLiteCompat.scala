@@ -52,18 +52,36 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
           case TString() | TRowId() | TDate() =>
             result(value_text(0))
 
-          case TUser(name,regex,sqlType) =>
-            sqlType match {
-              case TString() | TRowId() | TDate() =>
-                result(value_text(0)+"_"+name)
-              case TInt() =>
-                result(value_int(0))
-              case TFloat() =>
-                result(value_double(0))
-              case TAny() =>
-                result()
-              case _ =>
-                throw new Exception("In SQLiteCompat expected natural type but got: " + sqlType.toString())
+          case TUser(name,regex,sqlType,priorityLevel) =>
+            val v:String = value_text(0)
+            if(v != null) {
+              sqlType match {
+                case TRowId() =>
+                  result(value_text(0))
+                case TString() | TDate() =>
+                    if (v.matches(regex)) {
+                      result(value_text(0) + "_" + name)
+                    }
+                    else {
+                      result()
+                    }
+                case TInt() =>
+                    if (value_text(0).matches(regex)) {
+                      result(value_int(0) + 10000)
+                    }
+                    else {
+                      result()
+                    }
+                case TFloat() =>
+                  result(value_double(0))
+                case TAny() =>
+                  result()
+                case _ =>
+                  throw new Exception("In SQLiteCompat expected natural type but got: " + sqlType.toString())
+              }
+            }
+            else{
+              result()
             }
 
           case _ =>
