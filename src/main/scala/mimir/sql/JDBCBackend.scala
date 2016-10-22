@@ -3,7 +3,7 @@ package mimir.sql;
 import java.sql._
 
 import mimir.Methods
-import mimir.algebra.{Type,Operator}
+import mimir.algebra._
 import mimir.util.JDBCUtils
 import mimir.sql.sqlite._
 
@@ -80,7 +80,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         throw new SQLException("Error in "+sel, e)
     }
   }
-  def execute(sel: String, args: List[String]): ResultSet = 
+  def execute(sel: String, args: List[PrimitiveValue]): ResultSet = 
   {
     //println(""+sel+" <- "+args)
     try {
@@ -88,11 +88,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         throw new SQLException("Trying to use unopened connection!")
       }
       val stmt = conn.prepareStatement(sel)
-      var i: Int = 0
-      args.map( (a) => {
-        i += 1
-        stmt.setString(i, a)
-      })
+      setArgs(stmt, args)
       stmt.executeQuery()
     } catch { 
       case e: SQLException => println(e.toString+"during\n"+sel+" <- "+args)
@@ -121,17 +117,13 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     stmt.close()
   }
 
-  def update(upd: String, args: List[String]): Unit =
+  def update(upd: String, args: List[PrimitiveValue]): Unit =
   {
     if(conn == null) {
       throw new SQLException("Trying to use unopened connection!")
     }
     val stmt = conn.prepareStatement(upd);
-    var i: Int = 0
-    args.map( (a) => {
-      i += 1
-      stmt.setString(i, a)
-    })
+    setArgs(stmt, args)
     stmt.execute()
     stmt.close()
   }
@@ -197,6 +189,19 @@ class JDBCBackend(backend: String, filename: String) extends Backend
       case "sqlite" => SpecializeForSQLite(q)
       case "oracle" => q
     }
+  }
+
+  def setArgs(stmt: PreparedStatement, args: List[PrimitiveValue]): Unit =
+  {
+    args.zipWithIndex.foreach(a => {
+      val i = a._2+1
+      a._1 match {
+        case p:StringPrimitive   => stmt.setString(i, p.v)
+        case p:IntPrimitive      => stmt.setLong(i, p.v)
+        case p:FloatPrimitive    => stmt.setDouble(i, p.v)
+        case _:NullPrimitive     => stmt.setNull(i, Types.VARCHAR)
+      }
+    })
   }
 
   

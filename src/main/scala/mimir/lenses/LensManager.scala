@@ -104,10 +104,10 @@ class LensManager(db: Database) {
       INSERT INTO MIMIR_LENSES(name, query, lens_type, parameters) 
       VALUES (?,?,?,?)
     """, List(
-      lens.name, 
-      lens.source.toString,
-      lensTypeString(lens),
-      lens.args.map(_.toString).mkString(",")
+      StringPrimitive(lens.name), 
+      StringPrimitive(lens.source.toString),
+      StringPrimitive(lensTypeString(lens)),
+      StringPrimitive(lens.args.map(_.toString).mkString(","))
     ))
     lens.save(db)
   }
@@ -122,7 +122,7 @@ class LensManager(db: Database) {
             SELECT lens_type, parameters, query
             FROM MIMIR_LENSES
             WHERE name = ?
-          """, List(lensName))
+          """, List(StringPrimitive(lensName)))
         if(lensMetaResult.length == 0) { 
           return None; 
         } else if(lensMetaResult.length > 1){ 

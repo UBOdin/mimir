@@ -11,7 +11,7 @@ class NullBackend(schema: Map[String, List[(String,Type.T)]]) extends Backend {
   def execute(sel: String): ResultSet = {
     throw new SQLException("Null backend doesn't support query execution")
   }
-  def execute(sel: String, args: List[String]): ResultSet = {
+  def execute(sel: String, args: List[PrimitiveValue]): ResultSet = {
     throw new SQLException("Null backend doesn't support query execution")
   }
 
@@ -23,7 +23,7 @@ class NullBackend(schema: Map[String, List[(String,Type.T)]]) extends Backend {
   def update(stmt: List[String]): Unit = {
     throw new SQLException("Null backend doesn't support query execution")
   }
-  def update(stmt: String, args: List[String]): Unit = {
+  def update(stmt: String, args: List[PrimitiveValue]): Unit = {
     throw new SQLException("Null backend doesn't support query execution")
   }
 
