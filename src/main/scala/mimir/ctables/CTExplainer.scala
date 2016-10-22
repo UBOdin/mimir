@@ -215,7 +215,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 	def getFocusedReasons(expr: Expression):
 		List[Reason] =
 	{
-		logger.debug(s"GETTING REASONS: $expr")
+		logger.trace(s"GETTING REASONS: $expr")
 		expr match {
 			case v: VGTerm => List(v.reason)
 
