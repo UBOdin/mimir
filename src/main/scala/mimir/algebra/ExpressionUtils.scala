@@ -87,6 +87,17 @@ object ExpressionUtils {
 			case _ => (List[(Expression, Expression)](), e)
 		}
 	}
+  /**
+   * Create a sum from an arbitrary list
+   */
+  def makeSum(el: List[Expression]): Expression =
+  {
+    el match { 
+      case Nil => IntPrimitive(0)
+      case List(x) => x
+      case head :: rest => Arithmetic(Arith.Add, head, makeSum(rest))
+    }
+  }
 
   /**
    * Optimizing AND constructor that dynamically folds in 
