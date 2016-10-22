@@ -52,6 +52,7 @@ class ExpressionChecker(scope: (String => Type.T) = Map().apply _) extends LazyL
 				} catch {
 					case x:NoSuchElementException => throw new MissingVariable(name, x)
 				}
+			case JDBCVar(t) => t
 			case Function("CAST", fargs) =>
 				// Special case CAST
 				Eval.inline(fargs(1)) match {

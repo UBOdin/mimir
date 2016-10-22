@@ -453,6 +453,14 @@ case class RowIdVar() extends LeafExpression
 }
 
 /**
+ * Representation of a JDBC Variable.
+ */
+case class JDBCVar(t: Type.T) extends LeafExpression
+{
+  override def toString = "?";
+}
+
+/**
  * Representation of an If-Then-Else block.  Note that this differs from
  * SQL's use of CASE blocks.  If-Then-Else is substantially easier to work
  * with for recursive analyses.  
