@@ -26,7 +26,7 @@ libraryDependencies ++= Seq(
     exclude("nz.ac.waikato.cms.weka", "weka-dev").
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
   "org.apache.lucene"          %    "lucene-spellchecker"   % "3.6.2",
-  "org.xerial"                 %    "sqlite-jdbc"           % "3.8.11.2",
+  "org.xerial"                 %    "sqlite-jdbc"           % "3.14.2.1",
   "info.mimirdb"               %    "jsqlparser"            % "1.0.0"
 )
 
