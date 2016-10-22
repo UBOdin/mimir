@@ -1,5 +1,5 @@
 name := "Mimir-Core"
-version := "0.2"
+version := "0.2-SNAPSHOT"
 organization := "info.mimirdb"
 scalaVersion := "2.10.5"
 
