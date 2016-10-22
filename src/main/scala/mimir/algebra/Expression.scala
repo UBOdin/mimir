@@ -4,13 +4,19 @@ import java.sql._
 
 import mimir.ctables.CTables
 
-case class TypeException(found: Type.T, expected: Type.T, 
-                    context:String) 
-  extends Exception(
-    "Type Mismatch ["+context+
-    "]: found "+found.toString+
-    ", but expected "+expected.toString
+ case class TypeException(found: Type.T, expected: Type.T, 
+                    detail:String, context:Option[Expression] = None) 
+   extends Exception(
+    "Type Mismatch ["+detail+
+     "]: found "+found.toString+
+    ", but expected "+expected.toString+(
+      context match {
+        case None => ""
+        case Some(expr) => " "+expr.toString
+      }
+    )
   );
+
 class RAException(msg: String) extends Exception(msg);
 
 /**

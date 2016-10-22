@@ -168,7 +168,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 		        		bindings ++ Map("__SEED" -> IntPrimitive(rnd.nextInt()))
 		        	)
 		        } catch {
-		        	case TypeException(_,_,_) => NullPrimitive()
+		        	case _:TypeException => NullPrimitive()
 		        }
         	).
 	        foldLeft(init)(accum)
