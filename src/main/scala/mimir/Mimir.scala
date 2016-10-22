@@ -6,10 +6,11 @@ import java.sql.SQLException
 import mimir.ctables.CTPercolator
 import mimir.parser._
 import mimir.sql._
+import mimir.util.{TimeUtils,ExperimentalOptions}
 import mimir.algebra.{Project,ProjectArg,Var}
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
-import org.rogach.scallop._;
+import org.rogach.scallop._
 
 
 /**
@@ -33,6 +34,9 @@ object Mimir {
   def main(args: Array[String]) {
     conf = new MimirConfig(args);
 
+    // Prepare experiments
+    ExperimentalOptions.enable(conf.experimental())
+
     // Set up the database connection(s)
     db = new Database(conf.dbname(), new JDBCBackend(conf.backend(), conf.dbname()))
     db.backend.open()
@@ -43,8 +47,16 @@ object Mimir {
       db.initializeDBForMimir();
     } else if(conf.loadTable.get != None){
       db.loadTable(conf.loadTable(), conf.loadTable()+".csv");
+    } else if(conf.rebuildBestGuess.get != None){
+        val lens = db.lenses.load(conf.rebuildBestGuess().toUpperCase).get
+        db.bestGuessCache.buildCache(lens);
     } else {
       var source: Reader = null;
+
+      conf.precache.foreach( (opt) => opt.split(",").foreach( (table) => { 
+        println(s"Precaching... $table")
+        db.lenses.load(table.toUpperCase)
+      }))
 
       if(conf.file.get == None || conf.file() == "-"){
         source = new InputStreamReader(System.in);
@@ -104,26 +116,24 @@ object Mimir {
     println("--- Optimized Query ---")
     println(optimized)
     db.check(optimized)
+    println("--- SQL ---")
+    try {
+      println(db.ra.convert(optimized).toString)
+    } catch {
+      case e:Throwable =>
+        println("Unavailable: "+e.getMessage())
+    }
   }
 
   def handleSelect(sel: Select): Unit = {
-    val raw = db.sql.convert(sel)
-    val results = db.query(raw)
-    results.open()
-    db.dump(results)
-    results.close()
+    TimeUtils.monitor("QUERY", _ => {
+      val raw = db.sql.convert(sel)
+      val results = db.query(raw)
+      results.open()
+      db.dump(results)
+      results.close()
+    })
   }
-
-//  def connectSqlite(filename: String): java.sql.Connection =
-//  {
-//    Class.forName("org.sqlite.JDBC");
-//    java.sql.DriverManager.getConnection("jdbc:sqlite:"+filename);
-//  }
-//
-//  def connectOracle(filename: String): java.sql.Connection =
-//  {
-//    Methods.getConn()
-//  }
 
 }
 
@@ -137,11 +147,14 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   //   val cleanSummary = toggle("summary-clean", default = Some(false))
   //   val sampleCount = opt[Int]("samples", noshort = true, default = None)
   val loadTable = opt[String]("loadTable", descr = "Don't do anything, just load a CSV file")
-  val backend = opt[String]("driver", descr = "Which backend database to use? ([sqlite],oracle)",
-    default = Some("sqlite"))
   val dbname = opt[String]("db", descr = "Connect to the database with the specified name",
     default = Some("debug.db"))
+  val backend = opt[String]("driver", descr = "Which backend database to use? ([sqlite],oracle)",
+    default = Some("sqlite"))
+  val precache = opt[String]("precache", descr = "Precache one or more lenses")
+  val rebuildBestGuess = opt[String]("rebuild-bestguess")  
   val initDB = toggle("init", default = Some(false))
   val quiet  = toggle("quiet", default = Some(false))
   val file = trailArg[String](required = false)
+  val experimental = opt[List[String]]("X", default = Some(List[String]()))
 }

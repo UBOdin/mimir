@@ -10,9 +10,9 @@ import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, Model, RowExpl
 import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
 import mimir.lenses.{Lens, LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
-import mimir.sql._
+import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens}
 import mimir.optimizer.{InlineVGTerms, ResolveViews}
-import mimir.util.LoadCSV
+import mimir.util.{LoadCSV,ExperimentalOptions}
 import mimir.web.WebIterator
 import mimir.parser.MimirJSqlParser
 
@@ -127,56 +127,42 @@ case class Database(name: String, backend: Backend)
    */
   def dump(result: ResultIterator): Unit =
   {
-    println(result.schema.map( _._1 ).mkString(","))
-    println("------")
-    while(result.getNext()){
-      println(
-        (0 until result.numCols).map( (i) => {
-          if( i == 0 ){
-            result(i) match {
-              case NullPrimitive() => "'NULL'"
-              case _ => result(i)
+    ExperimentalOptions.ifEnabled("SILENT-TEST", () => {
+      var x = 0
+      while(result.getNext()){ x += 1; if(x % 10000 == 0) {println(s"$x rows")} }
+      val missingRows = result.missingRows()
+      println(s"Total $x rows; Missing: $missingRows")
+    }, () => {
+      println(result.schema.map( _._1 ).mkString(","))
+      println("------")
+      while(result.getNext()){
+        println(
+          (0 until result.numCols).map( (i) => {
+            if( i == 0 ){
+              result(i) match {
+                case NullPrimitive() => "'NULL'"
+                case _ => result(i)
+              }
+
+            }
+            else{
+              result(i)+(
+                if(!result.deterministicCol(i)){ "*" } else { "" }
+                )
             }
 
-          }
-          else{
-            result(i)+(
-              if(!result.deterministicCol(i)){ "*" } else { "" }
-              )
-          }
-
-        }).mkString(",")+(
-          if(!result.deterministicRow){
-            " (This row may be invalid)"
-          } else { "" }
-          )
-      )
-    }
-    if(result.missingRows()){
-      println("( There may be missing result rows )")
-    }
-
-//    isNullCheck()
-
-  }
-
-  def isNullCheck(): Unit ={
-    if(IsNullChecker.getIsNull()){ // is NULL is in there so check
-
-      if(IsNullChecker.getDB() == null){
-        IsNullChecker.setDB(this)
+          }).mkString(",")+(
+            if(!result.deterministicRow){
+              " (This row may be invalid)"
+            } else { "" }
+            )
+        )
       }
-
-      if(IsNullChecker.isNullCheck()){
-
+      if(result.missingRows()){
+        println("( There may be missing result rows )")
       }
-      else{
-        println("IS NULL HAS PROBLEMS")
-        IsNullChecker.problemRows();
-      }
+    })
 
-    }
-    IsNullChecker.reset()
   }
 
   /**
