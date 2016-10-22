@@ -274,13 +274,13 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 		val baseData = JDBCUtils.extractAllRows(results, finalSchema.map(_._2))
 
-		if(baseData.size != 1){
+		if(!baseData.hasNext){
 			val resultRowString = baseData.map( _.mkString(", ") ).mkString("\n")
 			logger.debug(s"Results: $resultRowString")
 			throw new InvalidProvenance(""+baseData.size+" rows for token", token)
 		}	
 
-		val tuple = finalSchema.map(_._1).zip(baseData(0)).toMap
+		val tuple = finalSchema.map(_._1).zip(baseData.next).toMap
 
 		(tuple, columnExprs, rowCondition)
 	}

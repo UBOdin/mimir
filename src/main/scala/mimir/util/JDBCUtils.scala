@@ -55,20 +55,37 @@ object JDBCUtils {
         case Type.TDate => 
           val calendar = Calendar.getInstance()
           try {
-            calendar.setTime(results.getDate(field))
+            convertDate(results.getDate(field))
           } catch {
             case e: SQLException =>
-              calendar.setTime(Date.valueOf(results.getString(field)))
+              convertDate(Date.valueOf(results.getString(field)))
             case e: NullPointerException =>
               new NullPrimitive
           }
-          DatePrimitive(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DATE))
       }
     if(results.wasNull()) { NullPrimitive() }
     else { ret }
   }
 
-  def extractAllRows(results: ResultSet): List[List[PrimitiveValue]] =
+  def convertDate(c: Calendar): DatePrimitive =
+    DatePrimitive(c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DATE))
+  def convertDate(d: Date): DatePrimitive =
+  {
+    val cal = Calendar.getInstance();
+    cal.setTime(d)
+    convertDate(cal)
+  }
+  def convertDate(s: String): PrimitiveValue =
+  {
+    try {
+      val fields = s.split("-").map( Integer.parseInt(_) )
+      DatePrimitive(fields(0), fields(1), fields(2))
+    } catch {
+      case n: NumberFormatException => NullPrimitive()
+    }
+  }
+
+  def extractAllRows(results: ResultSet): Iterator[List[PrimitiveValue]] =
   {
     val meta = results.getMetaData()
     val schema = 
@@ -78,20 +95,26 @@ object JDBCUtils {
     extractAllRows(results, schema)    
   }
 
-  def extractAllRows(results: ResultSet, schema: List[Type.T]): List[List[PrimitiveValue]] =
+  def extractAllRows(results: ResultSet, schema: List[Type.T]): Iterator[List[PrimitiveValue]] =
   {
-    var ret = List[List[PrimitiveValue]]()
-    // results.first();
-    while(results.isBeforeFirst()){ results.next(); }
-    while(!results.isAfterLast()){
-      ret = 
-        schema.
-          zipWithIndex.
-          map( t => convertField(t._1, results, t._2+1) ).
-          toList :: ret
-      results.next()
-    }
-    ret.reverse
+    new JDBCResultSetIterable(results, schema)
   }
 
+}
+
+
+class JDBCResultSetIterable(results: ResultSet, schema: List[Type.T]) extends Iterator[List[PrimitiveValue]]
+{
+  def next(): List[PrimitiveValue] = 
+  {
+    while(results.isBeforeFirst()){ results.next(); }
+    val ret = schema.
+          zipWithIndex.
+          map( t => JDBCUtils.convertField(t._1, results, t._2+1) ).
+          toList
+    results.next();
+    return ret;
+  }
+
+  def hasNext(): Boolean = { return !results.isAfterLast() }
 }

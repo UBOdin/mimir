@@ -140,25 +140,31 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         val tables = this.getAllTables().map{(x) => x.toUpperCase}
         if(!tables.contains(table.toUpperCase)) return None
 
-        val cols = backend match {
-          case "sqlite" => conn.getMetaData().getColumns(null, null, table, "%")
-          case "oracle" => conn.getMetaData().getColumns(null, "ARINDAMN", table, "%")  // TODO Generalize
+        val cols: Option[List[(String, Type.T)]] = backend match {
+          case "sqlite" | "sqlite-inline" | "sqlite-bundles" => {
+            // SQLite doesn't recognize anything more than the simplest possible types.
+            // Type information is persisted but not interpreted, so conn.getMetaData() 
+            // is useless for getting schema information.  Instead, we need to use a
+            // SQLite-specific PRAGMA operation.
+            SQLiteCompat.getTableSchema(conn, table)
+          }
+          case "oracle" => 
+            val columnRet = conn.getMetaData().getColumns(null, "ARINDAMN", table, "%")  // TODO Generalize
+            var ret = List[(String, Type.T)]()
+            while(columnRet.isBeforeFirst()){ columnRet.next(); }
+            while(!columnRet.isAfterLast()){
+              ret = ret ++ List((
+                columnRet.getString("COLUMN_NAME").toUpperCase,
+                JDBCUtils.convertSqlType(columnRet.getInt("DATA_TYPE"))
+                ))
+              columnRet.next()
+            }
+            columnRet.close()
+            Some(ret)
         }
-
-        var ret = List[(String, Type.T)]()
-
-        while(cols.isBeforeFirst()){ cols.next(); }
-        while(!cols.isAfterLast()){
-          ret = ret ++ List((
-            cols.getString("COLUMN_NAME").toUpperCase,
-            JDBCUtils.convertSqlType(cols.getInt("DATA_TYPE"))
-            ))
-          cols.next()
-        }
-        cols.close()
-
-        tableSchemas += table -> ret
-        Some(ret)
+        
+        cols match { case None => (); case Some(s) => tableSchemas += table -> s }
+        cols
 
     }
   }

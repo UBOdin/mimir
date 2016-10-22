@@ -19,13 +19,13 @@ abstract class Backend {
     sel.setSelectBody(selB);
     return execute(sel);
   }
-  def resultRows(sel: String) = 
+  def resultRows(sel: String):Iterator[List[PrimitiveValue]] = 
     JDBCUtils.extractAllRows(execute(sel))
-  def resultRows(sel: String, args: List[PrimitiveValue]) =
+  def resultRows(sel: String, args: List[PrimitiveValue]):Iterator[List[PrimitiveValue]] =
     JDBCUtils.extractAllRows(execute(sel, args))
-  def resultRows(sel: Select) =
+  def resultRows(sel: Select):Iterator[List[PrimitiveValue]] =
     JDBCUtils.extractAllRows(execute(sel))
-  def resultRows(sel: SelectBody) =
+  def resultRows(sel: SelectBody):Iterator[List[PrimitiveValue]] =
     JDBCUtils.extractAllRows(execute(sel))
   
   def getTableSchema(table: String): Option[List[(String, Type.T)]]
