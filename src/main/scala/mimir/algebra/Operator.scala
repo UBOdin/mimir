@@ -67,6 +67,21 @@ abstract class Operator
    */
   def recurExpressions(op: Expression => Expression): Operator =
     rebuildExpressions(expressions.map( op(_) ))
+
+  /**
+   * Apply a method to recursively rewrite all of the Expressions
+   * in this object, with types available
+   */
+  def recurExpressions(op: (Expression, ExpressionChecker) => Expression): Operator =
+  {
+    val checker = 
+      children match {
+        case Nil         => new ExpressionChecker()
+        case List(child) => Typechecker.typecheckerFor(child)
+        case _           => new ExpressionChecker()
+    }
+    recurExpressions(op(_, checker))
+  }
 }
 
 /**
