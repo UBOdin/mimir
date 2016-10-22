@@ -12,7 +12,7 @@ object InlineVGTerms {
 
 		e match {
 			case v @ VGTerm(model, idx, args) => 
-				val simplifiedArgs = args.map(optimize(_));
+				val simplifiedArgs = args.map(apply(_));
 
 				if(simplifiedArgs.forall(_.isInstanceOf[PrimitiveValue])){
 					v.get(simplifiedArgs.map(_.asInstanceOf[PrimitiveValue]))
@@ -24,25 +24,25 @@ object InlineVGTerms {
 		}
 	}
 
-	def optimize(e: Expression): Expression =
+	def apply(e: Expression): Expression =
 	{
 		Eval.simplify(inline(e))
 	}
 
-	def optimize(o: Operator): Operator = 
+	def apply(o: Operator): Operator = 
 	{
 		o match {
 
 			case Project(cols, src) => 
 				Project(
-					cols.map( (col:ProjectArg) => ProjectArg(col.name, optimize(col.expression)) ),
-					optimize(src)
+					cols.map( (col:ProjectArg) => ProjectArg(col.name, apply(col.expression)) ),
+					apply(src)
 				)
 
 			case Select(cond, src) =>
-				Select(optimize(cond), optimize(src))
+				Select(apply(cond), apply(src))
 
-			case _ => o.rebuild(o.children.map(optimize(_)))
+			case _ => o.rebuild(o.children.map(apply(_)))
 
 		}
 	}

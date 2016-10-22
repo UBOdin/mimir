@@ -43,7 +43,7 @@ case class Reason(
   val args: List[Expression]
 ){
   override def toString: String = 
-    reason+" ("+model+"_"+idx+"["+args.mkString(", ")+"])"
+    reason+" ("+model+";"+idx+"["+args.mkString(", ")+"])"
 
   def toJSON: String =
     JSONBuilder.dict(Map(
@@ -59,7 +59,7 @@ case class VGTerm(
   idx: Int,
   args: List[Expression]
 ) extends Proc(args) {
-  override def toString() = "{{ "+model._1+"_"+idx+"["+args.mkString(", ")+"] }}"
+  override def toString() = "{{ "+model._1+";"+idx+"["+args.mkString(", ")+"] }}"
   override def getType(bindings: List[Type.T]):Type.T = model._2.varType(idx, bindings)
   override def children: List[Expression] = args
   override def rebuild(x: List[Expression]) = VGTerm(model, idx, x)

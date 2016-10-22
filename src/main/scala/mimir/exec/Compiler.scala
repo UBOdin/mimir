@@ -31,8 +31,11 @@ class Compiler(db: Database) extends LazyLogging {
    * Perform a full end-end compilation pass.  Return an iterator over
    * the result set.  Use only the specified list of optimizations.
    */
-  def compile(oper: Operator, opts: List[Operator => Operator]): ResultIterator = 
+  def compile(rawOper: Operator, opts: List[Operator => Operator]): ResultIterator = 
   {
+    // Recursively expand all view tables using mimir.optimizer.ResolveViews
+    var oper = ResolveViews(db, rawOper)
+
     // We'll need the pristine pre-manipulation schema down the line
     // As a side effect, this also forces the typechecker to run, 
     // acting as a sanity check on the query before we do any serious
@@ -43,12 +46,16 @@ class Compiler(db: Database) extends LazyLogging {
     // be different depending on the structure of the query.  As a 
     // result it is **critical** that this be the first step in 
     // compilation.  
-    val (provenanceAwareOper, provenanceCols) =
-      Provenance.compile(oper)
+    val provenance = Provenance.compile(oper)
+    oper               = provenance._1
+    val provenanceCols = provenance._2
+
 
     // Tag rows/columns with provenance metadata
-    val (taggedOper, colDeterminism, rowDeterminism) =
-      CTPercolator.percolateLite(provenanceAwareOper)
+    val tagging = CTPercolator.percolateLite(oper)
+    oper               = tagging._1
+    val colDeterminism = tagging._2
+    val rowDeterminism = tagging._3
 
     // The deterministic result set iterator should strip off the 
     // provenance columns.  Figure out which columns need to be
@@ -60,34 +67,24 @@ class Compiler(db: Database) extends LazyLogging {
 
     // Clean things up a little... make the query prettier, tighter, and 
     // faster
-    val optimizedOper = 
-      optimize(taggedOper, opts)
+    oper = optimize(oper, opts)
 
-    logger.debug(s"OPTIMIZED: $optimizedOper")
-
-    // Remove any VG Terms for which static best-guesses are possible
-    // In other words, best guesses that don't depend on which row we're
-    // looking at (like the Type Inference or Schema Matching lenses)
-    val mostlyDeterministicOper =
-      InlineVGTerms.optimize(optimizedOper)
+    logger.debug(s"OPTIMIZED: $oper")
 
     // Replace VG-Terms with their "Best Guess values"
-    val fullyDeterministicOper =
-      bestGuessQuery(optimizedOper)
+    oper = bestGuessQuery(oper)
 
     // We'll need it a few times, so cache the final operator's schema.
     // This also forces the typechecker to run, so we get a final sanity
     // check on the output of the rewrite rules.
-    val finalSchema = 
-      fullyDeterministicOper.schema
+    val finalSchema = oper.schema
 
     // The final stage is to apply any database-specific rewrites to adapt
     // the query to the quirks of each specific target database.  Each
     // backend defines a specializeQuery method that handles this
-    val finalOper =
-      db.backend.specializeQuery(fullyDeterministicOper)
+    oper = db.backend.specializeQuery(oper)
 
-    logger.debug(s"FINAL: $finalOper")
+    logger.debug(s"FINAL: $oper")
 
     // We'll need to line the attributes in the output up with
     // the order in which the user expects to see them.  Build
@@ -96,8 +93,7 @@ class Compiler(db: Database) extends LazyLogging {
       finalSchema.map(_._1).zipWithIndex.toMap
 
     // Generate the SQL
-    val sql = 
-      db.ra.convert(finalOper)
+    val sql = db.ra.convert(oper)
 
     logger.debug(s"SQL: $sql")
 
@@ -128,7 +124,7 @@ class Compiler(db: Database) extends LazyLogging {
     // In other words, best guesses that don't depend on which row we're
     // looking at (like the Type Inference or Schema Matching lenses)
     val mostlyDeterministicOper =
-      InlineVGTerms.optimize(oper)
+      InlineVGTerms(oper)
 
     // Deal with the remaining VG-Terms.  The best way to do this would
     // be a database-specific "BestGuess" UDF.  Unfortunately, this doesn't

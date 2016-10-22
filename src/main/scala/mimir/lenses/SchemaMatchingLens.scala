@@ -14,7 +14,7 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
   extends Lens(name, args, source) {
 
   var targetSchema: Map[String, Type.T] = null
-  var sourceSchema: Map[String, Type.T] = Typechecker.schemaOf(InlineVGTerms.optimize(source)).toMap
+  var sourceSchema: Map[String, Type.T] = null
   var db: Database = null
   var model: Model = null
 
@@ -83,6 +83,7 @@ class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
   def build(db: Database): Unit = {
     init()
     this.db = db
+    sourceSchema = db.bestGuessSchema(source).toMap
     model = new SchemaMatchingModel(this)
     model.asInstanceOf[SchemaMatchingModel].learn(targetSchema, sourceSchema)
   }

@@ -56,7 +56,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
       flatMap( CTables.getVGTerms(_) ).
       toSet.toList.
       zipWithIndex
-    val typechecker = new ExpressionChecker(Typechecker.schemaOf(src).toMap)
+    val typechecker = new ExpressionChecker(db.bestGuessSchema(src).toMap)
     val newSrc = 
       vgTerms.foldLeft(src)({
         case (oldSrc, (v @ VGTerm((model,_),idx,args), termId)) =>
@@ -160,7 +160,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
     val cacheTable = cacheTableForLens(lensName, varIdx)
     // We inline VG terms as a temporary hack to deal with the fact that 
     // the TypeInference lens completely messes with the typechecker.
-    val typechecker = new ExpressionChecker(Typechecker.schemaOf(InlineVGTerms.optimize(input)).toMap)
+    val typechecker = new ExpressionChecker(db.bestGuessSchema(input).toMap)
 
     if(db.getTableSchema(cacheTable) != None) {
       dropCacheTable(cacheTable)

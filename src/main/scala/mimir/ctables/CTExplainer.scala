@@ -215,7 +215,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 	def getFocusedReasons(expr: Expression):
 		List[Reason] =
 	{
-		// println("REASONS: " + expr.toString)
+		logger.debug(s"GETTING REASONS: $expr")
 		expr match {
 			case v: VGTerm => List(v.reason)
 
@@ -242,9 +242,11 @@ class CTExplainer(db: Database) extends LazyLogging {
 		}
 	}
 
-	def getProvenance(oper: Operator, token: RowIdPrimitive): 
+	def getProvenance(rawOper: Operator, token: RowIdPrimitive): 
 		(Map[String,PrimitiveValue], Map[String, Expression], Expression) =
 	{
+		val oper = ResolveViews(db, rawOper)
+
 		// Annotate the query to produce a provenance trace
 		val (provQuery, rowIdCols) = Provenance.compile(oper)
 

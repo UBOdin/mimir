@@ -1,5 +1,5 @@
 name := "Mimir-Core"
-version := "0.1-SNAPSHOT"
+version := "0.1"
 organization := "info.mimirdb"
 scalaVersion := "2.10.5"
 
@@ -67,7 +67,7 @@ assemblyJarName in assembly := "Mimir.jar"
 mainClass in assembly := Some("mimir.Mimir")
 
 ////// Publishing Metadata //////
-// use sbt publish make-pom to generate 
+// use `sbt publish make-pom` to generate 
 // a publishable jar artifact and its POM metadata
 
 publishMavenStyle := true
@@ -85,3 +85,8 @@ pomExtra := (
     <url>git@github.com:ubodin/mimir.git</url>
     <connection>scm:git:git@github.com:ubodin/mimir.git</connection>
   </scm>)
+
+/////// Publishing Options ////////
+// use `sbt publish` to update the package in 
+// your own local ivy cache
+publishTo := Some(Resolver.file("file",  new File(Path.userHome.absolutePath+"/.m2/repository")))

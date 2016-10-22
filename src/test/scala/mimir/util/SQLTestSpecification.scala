@@ -99,8 +99,9 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     db.createLens(stmt(s).asInstanceOf[mimir.sql.CreateLens])
   def update(s: Statement) = 
     db.backend.update(s.toString())
-  def parser = new ExpressionParser(db.lenses.modelForLens)
+  def parser = new OperatorParser(db.lenses.modelForLens, db.getTableSchema(_).get)
   def expr = parser.expr _
+  def oper = parser.operator _
   def i = IntPrimitive(_:Long).asInstanceOf[PrimitiveValue]
   def f = FloatPrimitive(_:Double).asInstanceOf[PrimitiveValue]
   def str = StringPrimitive(_:String).asInstanceOf[PrimitiveValue]

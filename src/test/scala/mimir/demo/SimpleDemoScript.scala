@@ -52,8 +52,9 @@ object SimpleDemoScript
 			query("SELECT * FROM RATINGS1;").allRows must have size(4)
 			query("SELECT RATING FROM RATINGS1RAW;").allRows.flatten must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
 			query("SELECT * FROM RATINGS2;").allRows must have size(3)
-
 		}
+
+
 
 		"Use Sane Types in Lenses" >> {
 			var oper = select("SELECT * FROM RATINGS2")
@@ -66,6 +67,18 @@ object SimpleDemoScript
 				  AS SELECT * FROM RATINGS3
 				  WITH MISSING_VALUE('C')
  			""")
+
+      val null_test_query =
+	      db.backend.resultRows("SELECT query FROM MIMIR_LENSES WHERE NAME='NULL_TEST'")(0)(0)
+
+	    val cols = List("PID", "EVALUATION", "NUM_RATINGS")
+	    oper(null_test_query.asString) must be equalTo
+	    	Project(cols.map( x => ProjectArg(x, Var(x))),
+	    		Project(cols.map( x => ProjectArg(x, Var("RATINGS3_"+x))),
+	    			Table("RATINGS3", cols.map(x => ("RATINGS3_"+x, Type.TAny)), List())
+    			)
+    		)
+
       val results0 = 
 				LoggerUtils.debug(List(
 					// "mimir.exec.Compiler", 
@@ -85,9 +98,8 @@ object SimpleDemoScript
 			query("SELECT * FROM RATINGS1 WHERE RATING IS NULL").allRows must have size(1)
 			query("SELECT * FROM RATINGS1 WHERE RATING > 4;").allRows must have size(2)
 			query("SELECT * FROM RATINGS2;").allRows must have size(3)
-			Typechecker.schemaOf(
-				InlineVGTerms.optimize(select("SELECT * FROM RATINGS2;"))
-			).map(_._2) must be equalTo List(Type.TString, Type.TFloat, Type.TFloat)
+			db.bestGuessSchema(select("SELECT * FROM RATINGS2;")).
+				map(_._2) must be equalTo List(Type.TString, Type.TFloat, Type.TFloat)
 		}
 
 		"Create and Query Domain Constraint Repair Lenses" >> {
@@ -148,9 +160,15 @@ object SimpleDemoScript
 		}
 
 		"Obtain Row Explanations for Simple Queries" >> {
-			val expl = explainRow("""
-					SELECT * FROM RATINGS2FINAL WHERE RATING > 3
-				""", "1")
+			val expl = 
+				LoggerUtils.debug(List(
+						// "mimir.ctables.CTExplainer"
+					), () => {
+						explainRow("""
+								SELECT * FROM RATINGS2FINAL WHERE RATING > 3
+							""", "1")
+					})
+
 			expl.toString must contain("I assumed that NUM_RATINGS maps to RATING")		
 		}
 

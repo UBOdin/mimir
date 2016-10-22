@@ -11,6 +11,7 @@ import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
 import mimir.lenses.{Lens, LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
 import mimir.sql._
+import mimir.optimizer.{InlineVGTerms, ResolveViews}
 import mimir.util.LoadCSV
 import mimir.web.WebIterator
 import mimir.parser.MimirJSqlParser
@@ -95,6 +96,14 @@ case class Database(name: String, backend: Backend)
   def query(stmt: net.sf.jsqlparser.statement.select.Select): ResultIterator = 
   {
     query(sql.convert(stmt))
+  }
+
+  /**
+   * Make an educated guess about what the query's schema should be
+   */
+  def bestGuessSchema(oper: Operator): List[(String, Type.T)] =
+  {
+    InlineVGTerms(ResolveViews(this, oper)).schema
   }
 
   /**
@@ -238,18 +247,29 @@ case class Database(name: String, backend: Backend)
    * Look up the schema for the table with the provided name.
    */
   def getTableSchema(name: String): Option[List[(String,Type.T)]] =
-    backend.getTableSchema(name)
+    backend.getTableSchema(name).
+      orElse(getView(name).map(_.schema))
   /**
    * Build a Table operator for the table with the provided name.
    */
   def getTableOperator(table: String): Operator =
-    backend.getTableOperator(table)
+    getTableOperator(table, Nil)
+
   /**
    * Build a Table operator for the table with the provided name, requesting the
    * specified metadata.
    */
   def getTableOperator(table: String, metadata: List[(String, Expression, Type.T)]): Operator =
-    backend.getTableOperator(table, metadata)
+  {
+    Table(
+      table, 
+      getTableSchema(table) match {
+        case Some(x) => x
+        case None => throw new SQLException("Table does not exist in db!")
+      },
+      metadata
+    )  
+  }
   
   /**
    * Evaluate a CREATE LENS statement.

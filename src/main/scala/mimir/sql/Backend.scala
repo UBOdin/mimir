@@ -29,20 +29,7 @@ abstract class Backend {
     JDBCUtils.extractAllRows(execute(sel))
   
   def getTableSchema(table: String): Option[List[(String, Type.T)]]
-  def getTableOperator(table: String): Operator =
-    getTableOperator(table, List[(String,Expression,Type.T)]())
-  def getTableOperator(table: String, metadata: List[(String, Expression, Type.T)]):
-    Operator =
-  {
-    Table(
-      table, 
-      getTableSchema(table) match {
-        case Some(x) => x
-        case None => throw new SQLException("Table does not exist in db!")
-      },
-      metadata
-    )
-  }
+
   
   def update(stmt: String): Unit
   def update(stmt: List[String]): Unit

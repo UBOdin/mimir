@@ -59,6 +59,14 @@ object Type extends Enumeration {
     case "bool"    => Type.TBool
     case "rowid"   => Type.TRowId
     case "type"    => Type.TType
+    case "tint"    => Type.TInt
+    case "tfloat"  => Type.TFloat
+    case "tdate"   => Type.TDate
+    case "tstring" => Type.TString
+    case "tbool"   => Type.TBool
+    case "trowid"  => Type.TRowId
+    case "ttype"   => Type.TType
+    case "any"     => Type.TAny
     case _ =>  throw new SQLException("Invalid Type '" + t + "'");
   }
 

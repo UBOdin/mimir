@@ -70,7 +70,7 @@ class MissingValueLens(name: String, args: List[Expression], source: Operator)
   def build(db: Database, loading: Boolean): Unit = {
     this.db = db
     models =
-      InlineVGTerms.optimize(source).schema.map(
+      db.bestGuessSchema(source).map(
         _ match { case (n, t) => (keysToBeCleaned.indexOf(n), t) }
       ).zipWithIndex.map( (x) => x._1 match { case (idx, t) =>
         if (idx < 0) {

@@ -413,13 +413,12 @@ object SqlParserSpec extends Specification with FileMatchers {
 		 	db.optimize(
 		 		convert("SELECT * FROM SaneR")
 		 	) must be equalTo 
-		 		Project(List(ProjectArg("A", Var("R_A")), 
-		 					 ProjectArg("B", expr(
-		 					 	"IF R_B IS NULL THEN {{ SANER_1[ROWID] }} ELSE R_B END")),
-		 					 ProjectArg("C", Var("R_C"))
-		 				), Table("R", Map(("R_A", Type.TInt), 
-		 								  ("R_B", Type.TInt), 
-		 								  ("R_C", Type.TInt)).toList,
+		 		Project(List(ProjectArg("A", Var("SANER_A")), 
+		 					 ProjectArg("B", Var("SANER_B")),
+		 					 ProjectArg("C", Var("SANER_C"))
+		 				), Table("SANER", Map(("SANER_A", Type.TInt), 
+		 								  ("SANER_B", Type.TInt), 
+		 								  ("SANER_C", Type.TInt)).toList,
 		 							  List()
 				))
 			val guessCacheData = 
