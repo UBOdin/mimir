@@ -10,6 +10,7 @@ import mimir.util.{TimeUtils,ExperimentalOptions}
 import mimir.algebra.{Project,ProjectArg,Var}
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
+import net.sf.jsqlparser.statement.drop.Drop
 import org.rogach.scallop._
 
 
@@ -82,15 +83,13 @@ object Mimir {
 
         val stmt: Statement = parser.Statement();
 
-        if(stmt == null){ done = true; }
-        else if(stmt.isInstanceOf[Select]){
-          handleSelect(stmt.asInstanceOf[Select]);
-        } else if(stmt.isInstanceOf[CreateLens]) {
-          db.createLens(stmt.asInstanceOf[CreateLens]);
-        } else if(stmt.isInstanceOf[Explain]) {
-          handleExplain(stmt.asInstanceOf[Explain]);
-        } else {
-          db.backend.update(stmt.toString())
+        stmt match {
+          case null             => done = true
+          case sel:  Select     => handleSelect(sel)
+          case crel: CreateLens => db.createLens(crel)
+          case expl: Explain    => handleExplain(expl)
+          case drop: Drop       => handleDrop(drop)
+          case _                => db.backend.update(stmt.toString())
         }
 
       } catch {
@@ -133,6 +132,23 @@ object Mimir {
       db.dump(results)
       results.close()
     })
+  }
+
+  def handleDrop(drop: Drop): Unit = {
+    drop.getType().toUpperCase match {
+      case "TABLE" | "INDEX" => 
+        db.backend.update(drop.toString());
+
+      case "VIEW" =>
+        throw new SQLException("Views not supported yet")
+
+      case "LENS" =>
+        db.lenses.drop(drop.getName())
+
+      case _ =>
+        throw new SQLException("Invalid drop type '"+drop.getType()+"'")
+
+    }
   }
 
 }

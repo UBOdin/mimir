@@ -161,4 +161,16 @@ class LensManager(db: Database) {
 
   def modelForLens(lensName: String): Model = 
     load(lensName).get.model
+
+  def drop(lensName: String): Unit =
+  {
+    lensCache.remove(lensName);
+    db.backend.update(
+      """
+        DELETE FROM MIMIR_LENSES 
+        WHERE NAME = ?
+      """,
+      List( StringPrimitive(lensName) )
+    )
+  }
 }
