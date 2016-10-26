@@ -42,7 +42,34 @@ object ProjectRedundantColumns {
       }
 
       case Union(lhs, rhs) => {
-        Union(apply(lhs, dependencies), apply(rhs, dependencies))
+        // Naively, we could just push down the dependencies, but
+        // in some cases we'll get back a superset of the desired 
+        // schema, which would result in an invalid union
+        // For example Union(Table(...), Project[...](Table(...)))
+        //
+        // We could introduce spurious projections around tables if
+        // ABSOLUTELY needed... but let's instead see if it's really
+        // critical
+
+        val newLhs = apply(lhs, dependencies)
+        val newRhs = apply(rhs, dependencies)
+        val newLhsSchema = lhs.schema.map(_._1).toSet
+        val newRhsSchema = rhs.schema.map(_._1).toSet
+
+        if(   (!(dependencies -- newLhsSchema).isEmpty)
+            ||(!(dependencies -- newRhsSchema).isEmpty))
+        {
+          if(!(newLhsSchema).equals(newRhsSchema)){
+            Union(
+              projectIfNeeded(newLhs, dependencies),
+              projectIfNeeded(newRhs, dependencies)
+            )
+          } else {
+            Union(newLhs,newRhs)
+          }
+        } else {
+          Union(newLhs,newRhs)
+        }
       }
 
       case Join(lhs, rhs) => {
