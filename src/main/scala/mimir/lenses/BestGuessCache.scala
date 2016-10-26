@@ -164,8 +164,8 @@ class BestGuessCache(db: Database) extends LazyLogging {
     buildCache(term.model._1, term.model._2, term.idx, term.args, input)
   def buildCache(lensName: String, model: Model, varIdx: Int, args: List[Expression], input: Operator): Unit = {
     val cacheTable = cacheTableForLens(lensName, varIdx)
-    // We inline VG terms as a temporary hack to deal with the fact that 
-    // the TypeInference lens completely messes with the typechecker.
+
+    // Use the best guess schema for the typechecker... we want just one instance
     val typechecker = new ExpressionChecker(db.bestGuessSchema(input).toMap)
 
     if(db.getTableSchema(cacheTable) != None) {
@@ -175,19 +175,23 @@ class BestGuessCache(db: Database) extends LazyLogging {
     val argTypes = args.map( typechecker.typeOf(_) )
     createCacheTable(cacheTable, model.varType(varIdx, argTypes), argTypes)
 
+    logger.debug(s"Building cache for $lensName-$varIdx[$args] with\n$input")
+
+    val updateQuery = 
+        "INSERT INTO "+cacheTable+"("+dataColumn+
+          args.zipWithIndex.
+            map( arg => (","+keyColumn(arg._2)) ).
+            mkString("")+
+        ") VALUES (?"+
+          args.map(_ => ",?").mkString("")+
+        ")"
+
     db.query(input).foreachRow(row => {
       val compiledArgs = args.map(Provenance.plugInToken(_, row.provenanceToken()))
       val tuple = row.currentTuple()
       val dataArgs = compiledArgs.map(Eval.eval(_, tuple))
       val guess = model.bestGuess(varIdx, dataArgs)
-      val updateQuery = 
-          "INSERT INTO "+cacheTable+"("+dataColumn+
-            dataArgs.zipWithIndex.
-              map( arg => (","+keyColumn(arg._2)) ).
-              mkString("")+
-          ") VALUES (?"+
-            dataArgs.map(_ => ",?").mkString("")+
-          ")"
+      logger.trace(s"Registering $dataArgs -> $guess")
       // println("BUILD: "+updateQuery)
       db.backend.update(
         updateQuery, 

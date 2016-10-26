@@ -103,16 +103,21 @@ object SimpleDemoScript
 		}
 
 		"Create and Query Domain Constraint Repair Lenses" >> {
-			// LoggerUtils.debug("mimir.lenses.BestGuessCache", () => {
+			LoggerUtils.trace(List(
+				// "mimir.lenses.BestGuessCache", 
+				// "mimir.exec.Compiler"
+			), () => {
 			lens("""
 				CREATE LENS RATINGS1FINAL 
 				  AS SELECT * FROM RATINGS1 
 				  WITH MISSING_VALUE('RATING')
 			""")
-			// })
+			})
+			val nullRow = query("SELECT ROWID FROM RATINGS1 WHERE RATING IS NULL").
+											allRows()(0)(0).asLong
 			val result1guesses =
 				db.backend.resultRows("SELECT MIMIR_KEY_0, MIMIR_DATA FROM RATINGS1FINAL_CACHE_1")
-			result1guesses.map( x => (x(0), x(1))) must contain((IntPrimitive(3), FloatPrimitive(6.4)))
+			result1guesses.map( x => (x(0), x(1))) must contain((IntPrimitive(nullRow), FloatPrimitive(6.4)))
 
 			val result1 = 
 				LoggerUtils.debug(List(
