@@ -84,6 +84,12 @@ object JDBCUtils {
       case n: NumberFormatException => NullPrimitive()
     }
   }
+  def convertDate(d: DatePrimitive): Date =
+  {
+    val cal = Calendar.getInstance()
+    cal.set(d.y, d.m, d.d);
+    new Date(cal.getTime().getTime());
+  }
 
   def extractAllRows(results: ResultSet): Iterator[List[PrimitiveValue]] =
   {

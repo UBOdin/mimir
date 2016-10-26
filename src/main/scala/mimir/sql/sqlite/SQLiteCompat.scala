@@ -25,9 +25,9 @@ object SQLiteCompat {
     val ret = stmt.executeQuery(s"PRAGMA table_info('$table')")
     stmt.closeOnCompletion()
     val result = JDBCUtils.extractAllRows(ret).map( (x) => { 
-      val name = x(1).asString.toUpperCase
-      val rawType = x(2).asString
-      val baseType = rawType.split("\\(")(0)
+      val name = x(1).asString.toUpperCase.trim
+      val rawType = x(2).asString.trim
+      val baseType = rawType.split("\\(")(0).trim
       val inferredType = Type.fromString(baseType)
       
       // println(s"$name -> $rawType -> $baseType -> $inferredType"); 

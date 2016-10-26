@@ -69,7 +69,7 @@ object SimpleDemoScript
  			""")
 
       val null_test_query =
-	      db.backend.resultRows("SELECT query FROM MIMIR_LENSES WHERE NAME='NULL_TEST'")(0)(0)
+	      db.backend.resultRows("SELECT query FROM MIMIR_LENSES WHERE NAME='NULL_TEST'").next()(0)
 
 	    val cols = List("PID", "EVALUATION", "NUM_RATINGS")
 	    oper(null_test_query.asString) must be equalTo
@@ -84,7 +84,7 @@ object SimpleDemoScript
 					// "mimir.exec.Compiler", 
 					// "mimir.sql.sqlite.MimirCast$"
 				), () => {
-	      	query("SELECT * FROM RATINGS3;").allRows
+	      	query("SELECT * FROM RATINGS3;").allRows.toList
 		    })
       results0 must have size(3)
       results0(2) must contain(str("P34235"), NullPrimitive(), f(4.0))

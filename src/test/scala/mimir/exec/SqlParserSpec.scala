@@ -74,7 +74,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 
 	"The Sql Parser" should {
 		"Handle trivial queries" in {
-			db.backend.resultRows("SELECT * FROM R;") must be equalTo List( 
+			db.backend.resultRows("SELECT * FROM R;").toList must be equalTo List( 
 				List(IntPrimitive(1),IntPrimitive(2),IntPrimitive(3)),
 				List(IntPrimitive(1),IntPrimitive(3),IntPrimitive(1)),
 				List(IntPrimitive(2),NullPrimitive(),IntPrimitive(1)),
@@ -84,7 +84,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 				List(IntPrimitive(4),IntPrimitive(2),IntPrimitive(4))
 			)
 
-			db.backend.resultRows("SELECT A FROM R;") must be equalTo List(
+			db.backend.resultRows("SELECT A FROM R;").toList must be equalTo List(
 				List(IntPrimitive(1)),
 				List(IntPrimitive(1)),
 				List(IntPrimitive(2)),

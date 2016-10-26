@@ -73,10 +73,7 @@ object ProjectRedundantColumns {
         projectIfNeeded(aggregate, dependencies)
       }
 
-      case table: Table => 
-      {
-        projectIfNeeded(table, dependencies)
-      }
+      case table: Table => table
     }
 
   }

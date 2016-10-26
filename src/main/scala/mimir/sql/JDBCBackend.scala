@@ -206,6 +206,8 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         case p:IntPrimitive      => stmt.setLong(i, p.v)
         case p:FloatPrimitive    => stmt.setDouble(i, p.v)
         case _:NullPrimitive     => stmt.setNull(i, Types.VARCHAR)
+        case d:DatePrimitive     => stmt.setDate(i, JDBCUtils.convertDate(d))
+        case r:RowIdPrimitive    => stmt.setString(i,r.v)
       }
     })
   }
