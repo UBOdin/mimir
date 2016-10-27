@@ -29,13 +29,7 @@ object ExpressionOptimizer {
 	)
 
 	def optimize(e:Expression, opts: List[ExpressionOptimizerRule]): Expression = {
-		try {
-			opts.foldLeft(e)( (currE, f) => f(currE) )
-		} catch { 
-			case TypeException(t1,t2,msg) => 
-				throw TypeException(t1, t2, msg+" in "+e);
-		}
-
+		opts.foldLeft(e)( (currE, f) => f(currE) )
 	}
 
 	def optimize(e: Expression): Expression =

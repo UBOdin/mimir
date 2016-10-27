@@ -2,6 +2,7 @@ package mimir.sql.sqlite
 
 import mimir.algebra._
 import mimir.algebra.Type._
+import mimir.util.JDBCUtils
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 object SQLiteCompat {
@@ -16,6 +17,25 @@ object SQLiteCompat {
     org.sqlite.Function.create(conn,"MIMIRCAST", MimirCast)
     org.sqlite.Function.create(conn,"OTHERTEST", OtherTest)
     org.sqlite.Function.create(conn,"AGGTEST", AggTest)
+  }
+  
+  def getTableSchema(conn:java.sql.Connection, table: String): Option[List[(String, Type.T)]] =
+  {
+    val stmt = conn.createStatement()
+    val ret = stmt.executeQuery(s"PRAGMA table_info('$table')")
+    stmt.closeOnCompletion()
+    val result = JDBCUtils.extractAllRows(ret).map( (x) => { 
+      val name = x(1).asString.toUpperCase.trim
+      val rawType = x(2).asString.trim
+      val baseType = rawType.split("\\(")(0).trim
+      val inferredType = Type.fromString(baseType)
+      
+      // println(s"$name -> $rawType -> $baseType -> $inferredType"); 
+
+      (name, inferredType)
+    })
+
+    if(result.hasNext){ Some(result.toList) } else { None }
   }
 }
 

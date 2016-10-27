@@ -69,7 +69,7 @@ object SimpleDemoScript
  			""")
 
       val null_test_query =
-	      db.backend.resultRows("SELECT query FROM MIMIR_LENSES WHERE NAME='NULL_TEST'")(0)(0)
+	      db.backend.resultRows("SELECT query FROM MIMIR_LENSES WHERE NAME='NULL_TEST'").next()(0)
 
 	    val cols = List("PID", "EVALUATION", "NUM_RATINGS")
 	    oper(null_test_query.asString) must be equalTo
@@ -84,7 +84,7 @@ object SimpleDemoScript
 					// "mimir.exec.Compiler", 
 					// "mimir.sql.sqlite.MimirCast$"
 				), () => {
-	      	query("SELECT * FROM RATINGS3;").allRows
+	      	query("SELECT * FROM RATINGS3;").allRows.toList
 		    })
       results0 must have size(3)
       results0(2) must contain(str("P34235"), NullPrimitive(), f(4.0))
@@ -103,16 +103,21 @@ object SimpleDemoScript
 		}
 
 		"Create and Query Domain Constraint Repair Lenses" >> {
-			// LoggerUtils.debug("mimir.lenses.BestGuessCache", () => {
+			LoggerUtils.trace(List(
+				// "mimir.lenses.BestGuessCache", 
+				// "mimir.exec.Compiler"
+			), () => {
 			lens("""
 				CREATE LENS RATINGS1FINAL 
 				  AS SELECT * FROM RATINGS1 
 				  WITH MISSING_VALUE('RATING')
 			""")
-			// })
+			})
+			val nullRow = query("SELECT ROWID FROM RATINGS1 WHERE RATING IS NULL").
+											allRows()(0)(0).asLong
 			val result1guesses =
 				db.backend.resultRows("SELECT MIMIR_KEY_0, MIMIR_DATA FROM RATINGS1FINAL_CACHE_1")
-			result1guesses.map( x => (x(0), x(1))) must contain((IntPrimitive(3), FloatPrimitive(6.4)))
+			result1guesses.map( x => (x(0), x(1))) must contain((IntPrimitive(nullRow), FloatPrimitive(6.4)))
 
 			val result1 = 
 				LoggerUtils.debug(List(

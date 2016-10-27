@@ -3,41 +3,39 @@ package mimir.exec;
 import mimir.algebra._;
 import mimir.ctables.Reason;
 
-class BagUnionResultIterator(lhs: ResultIterator, rhs: ResultIterator) extends ResultIterator
+class BagUnionResultIterator(elems: List[ResultIterator]) extends ResultIterator
 {
-  var inLHS = true;
-
-  def currIter() = if(inLHS){ lhs } else { rhs }
+  var curr = elems
 
   def apply(v: Int): PrimitiveValue = 
-    currIter().apply(v);
+    curr.head.apply(v);
   def deterministicRow(): Boolean =
-    currIter().deterministicRow();
+    curr.head.deterministicRow();
   def deterministicCol(v: Int): Boolean =
-    currIter().deterministicCol(v);
+    curr.head.deterministicCol(v);
   def missingRows(): Boolean =
-    (lhs.missingRows() || rhs.missingRows());
+    elems.exists(_.missingRows())
   def open() =
-    { lhs.open(); rhs.open(); }
+    { elems.foreach(_.open()) }
   def getNext(): Boolean = {
-    if(inLHS) { 
-      if(lhs.getNext()) { return true; }
-      inLHS = false;
+    if(curr == Nil){ return false }
+    while(!curr.head.getNext()){ 
+      curr = curr.tail
+      if(curr == Nil){ return false }
     }
-    return rhs.getNext();
+    return true;
   }
   def close() =
-    { lhs.close(); rhs.close(); }
+    { elems.foreach(_.close()) }
   def numCols: Int =
-    currIter().numCols;
+    curr.head.numCols;
   def schema: List[(String,Type.T)] =
-    currIter().schema;
+    curr.head.schema;
 
   override def reason(ind: Int): List[Reason] = {
-    currIter().reason(ind)
+    curr.head.reason(ind)
   }
   def provenanceToken() = new RowIdPrimitive(
-    currIter().provenanceToken().payload.toString
-    +(if(inLHS){ ".left" } else { ".right" })
+    curr.head.provenanceToken().payload.toString
   );
 }

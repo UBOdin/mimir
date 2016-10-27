@@ -95,84 +95,10 @@ object Eval
           return BoolPrimitive(isNull);
         }
         case Function(op, params) => {
-          op.toUpperCase match {
-            case "ABSOLUTE" => eval(params(0), bindings) match {
-              case IntPrimitive(i) => if(i < 0){ IntPrimitive(-i) } else { IntPrimitive(i) }
-              case FloatPrimitive(f) => if(f < 0){ FloatPrimitive(-f) } else { FloatPrimitive(f) }
-              case NullPrimitive() => NullPrimitive()
-              case x => throw new SQLException("Non-numeric parameter to absolute: '"+x+"'")
-            }
-            case "MIMIR_MAKE_ROWID" => Provenance.joinRowIds(params.map(x => eval(x, bindings)))
-            case "DATE" | "TO_DATE" =>
-              val date = params.head.asInstanceOf[StringPrimitive].v.split("-").map(x => x.toInt)
-              new DatePrimitive(date(0), date(1), date(2))
-            case "CAST" => {
-              try {
-                Eval.eval(params(1), bindings) match {
-                  case TypePrimitive(TInt) => IntPrimitive(Eval.eval(params(0), bindings).asLong)
-                  case TypePrimitive(TFloat) => FloatPrimitive(Eval.eval(params(0), bindings).asDouble)
-                  case TypePrimitive(TString) => StringPrimitive(Eval.eval(params(0), bindings).asString)
-                  case x => throw new SQLException("Unknown cast type: '"+x+"'")
-                }
-              } catch {
-                case _:TypeException=> NullPrimitive();
-                case _:NumberFormatException => NullPrimitive();
-              }
-            }
-
-            case "__LIST_MIN" =>
-              new FloatPrimitive(params.map(x => {
-                try {
-                  eval(x).asDouble
-                } catch {
-                  case e:Throwable => Double.MaxValue
-                }
-              }).min) // TODO Generalized Comparator
-            case "__LIST_MAX" =>
-              new FloatPrimitive(params.map(x => {
-                try {
-                  eval(x).asDouble
-                } catch {
-                  case e:Throwable => Double.MinValue
-                }
-              }).max) // TODO Generalized Comparator
-            case CTables.VARIANCE => {
-              var variance = 0.0
-              try {
-                val (sum, samples) = sampleExpression(params(0))
-                val mean = sum/SAMPLE_COUNT
-                for(i <- samples.keys){
-                  variance += (i - mean) * (i - mean) * samples(i)
-                }
-                FloatPrimitive(variance/SAMPLE_COUNT)
-              } catch {
-                case e: TypeException => new NullPrimitive()
-              }
-            }
-            case CTables.CONFIDENCE => {
-              var variance = 0.0
-              try {
-                val (_, samples) = sampleExpression(params(0))
-                val percentile = params(1).asInstanceOf[PrimitiveValue].asDouble
-                val keys = samples.keys.toList.sorted
-                var count = 0
-                var i = -1
-                while(count < percentile){
-                  i += 1
-                  count += samples(keys(i))
-                }
-                val med = keys(i)
-                for(i <- samples.keys){
-                  variance += (i - med) * (i - med) * samples(i)
-                }
-                val conf = Math.sqrt(variance/SAMPLE_COUNT) * 1.96
-                StringPrimitive((med - conf).formatted("%.2f") + " | " + (med + conf).formatted("%.2f"))
-              } catch {
-                case e: TypeException => new NullPrimitive()
-              }
-            }
-//            case fn => throw new SQLException("Unknown Function: "+fn)
-          }
+          FunctionRegistry.eval(
+            op.toUpperCase, 
+            params.map(eval(_, bindings))
+          )
         }
       }
     }

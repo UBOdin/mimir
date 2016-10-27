@@ -119,4 +119,41 @@ object OperatorUtils {
       case BoolPrimitive(true) => oper
       case _ => Select(condition, oper)
     }
+
+  def projectColumns(cols: List[String], oper: Operator) =
+  {
+    Project(
+      cols.map( (col) => ProjectArg(col, Var(col)) ),
+      oper
+    )
+  }
+
+  def joinMergingColumns(cols: List[(String, (Expression,Expression) => Expression)], lhs: Operator, rhs: Operator) =
+  {
+    val allCols = lhs.schema.map(_._1).toSet ++ rhs.schema.map(_._1).toSet
+    val affectedCols = cols.map(_._1).toSet
+    val wrappedLHS = 
+      Project(
+        lhs.schema.map(_._1).map( x => 
+          ProjectArg(if(affectedCols.contains(x)) { "__MIMIR_LJ_"+x } else { x }, 
+                     Var(x))),
+        lhs
+      )
+    val wrappedRHS = 
+      Project(
+        rhs.schema.map(_._1).map( x => 
+          ProjectArg(if(affectedCols.contains(x)) { "__MIMIR_RJ_"+x } else { x }, 
+                     Var(x))),
+        rhs
+      )
+    Project(
+      ((allCols -- affectedCols).map( (x) => ProjectArg(x, Var(x)) )).toList ++
+      cols.map({
+        case (name, op) =>
+          ProjectArg(name, op(Var("__MIMIR_LJ_"+name), Var("__MIMIR_RJ_"+name)))
+
+        }),
+      Join(wrappedLHS, wrappedRHS)
+    )
+  }
 }

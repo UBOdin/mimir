@@ -15,7 +15,7 @@ import edu.buffalo.cse562.optimizer.Optimizer
 import edu.buffalo.cse562.eval.{PlanCompiler,Operator}
 import edu.buffalo.cse562.data.Datum
 
-import mimir.algebra.Type;
+import mimir.algebra.{Type,PrimitiveValue};
 
 class CSVMetaData(nameIDs: java.util.Map[String, Int], sch: List[Int]) extends ResultSetMetaData
 {
@@ -291,7 +291,7 @@ class CSVBackend(
   {
     execute(new CCJSqlParser(new StringReader(sel)).Select());
   }
-  def execute(sel: String, args: List[String]): ResultSet = 
+  def execute(sel: String, args: List[PrimitiveValue]): ResultSet = 
   {
     throw new SQLException("No support for prepared queries");
   }
@@ -322,7 +322,7 @@ class CSVBackend(
   {
     throw new SQLException("No support for updates on CSV data");
   }
-  def update(op: String, args: List[String]): Unit = 
+  def update(op: String, args: List[PrimitiveValue]): Unit = 
   {
     throw new SQLException("No support for updates on CSV data");
   }

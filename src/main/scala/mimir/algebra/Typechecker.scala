@@ -16,8 +16,8 @@ class ExpressionChecker(scope: (String => Type.T) = Map().apply _) extends LazyL
 	/* Assert that the expressions claimed type is its type */
 	def assert(e: Expression, t: Type.T, msg: String = "Typechecker"): Unit = {
 		val eType = typeOf(e);
-		if(Typechecker.escalate(eType,t) != t){
-			throw new TypeException(eType, t, msg)
+		if(Typechecker.escalate(eType, t, msg, e) != t){
+			throw new TypeException(eType, t, msg, Some(e))
 		}
 	}
 
@@ -26,8 +26,8 @@ class ExpressionChecker(scope: (String => Type.T) = Map().apply _) extends LazyL
 			case p: PrimitiveValue => p.getType;
 			case Not(child) => assert(child, TBool, "NOT"); TBool
 			case p: Proc => p.getType(p.children.map(typeOf(_)))
-			case Arithmetic((Add | Sub | Mult | Div), lhs, rhs) =>
-				Typechecker.assertNumeric(Typechecker.escalate(typeOf(lhs), typeOf(rhs)));
+			case Arithmetic(op @ (Add | Sub | Mult | Div), lhs, rhs) =>
+				Typechecker.assertNumeric(Typechecker.escalate(typeOf(lhs), typeOf(rhs), op.toString, e), e);
 			case Arithmetic((And | Or), lhs, rhs) =>
 				assert(lhs, TBool, "BoolOp");
 				assert(rhs, TBool, "BoolOp");
@@ -37,7 +37,7 @@ class ExpressionChecker(scope: (String => Type.T) = Map().apply _) extends LazyL
 				TBool
 			case Comparison((Gt | Gte | Lt | Lte), lhs, rhs) =>
 				if(typeOf(lhs) != TDate && typeOf(rhs) != TDate) {
-					Typechecker.assertNumeric(Typechecker.escalate(typeOf(lhs), typeOf(rhs), "Comparison"))
+					Typechecker.assertNumeric(Typechecker.escalate(typeOf(lhs), typeOf(rhs), "Comparison", e), e)
 				}
 				TBool
 			case Comparison((Like | NotLike), lhs, rhs) =>
@@ -52,6 +52,7 @@ class ExpressionChecker(scope: (String => Type.T) = Map().apply _) extends LazyL
 				} catch {
 					case x:NoSuchElementException => throw new MissingVariable(name, x)
 				}
+			case JDBCVar(t) => t
 			case Function("CAST", fargs) =>
 				// Special case CAST
 				Eval.inline(fargs(1)) match {
@@ -124,13 +125,18 @@ object Typechecker {
 				val groupBySchema: List[(String, Type.T)] = groupBy.map(x => (x.toString, chk.typeOf(x)) )
 
 				/* Get function name, check for AVG *//* Get function parameters, verify type */
-				val aggSchema: List[(String, Type.T)] = args.map(x => if(x.function == "AVG"){ (x.alias, TFloat) }
-					else if(x.function == "COUNT") { (x.alias, TInt)}
-					else{ val typ = Typechecker.escalate(x.columns.map(x => chk.typeOf(x)))
-						assertNumeric(typ)
-						(x.alias, typ)
-					}
-				)
+				val aggSchema: List[(String, Type.T)] = args.map(x => 
+					x.function match {
+						case "AVG" => (x.alias, TFloat)
+						case "COUNT" => (x.alias, TInt)
+						case "SUM" | "MAX" | "MIN" => {
+							(x.alias, assertNumeric(chk.typeOf(x.columns(0)), x.columns(0)))
+						}
+						case "JSON_GROUP_ARRAY" => {
+							(x.alias, TString)
+						}
+						case fn => throw new SQLException("Unknown Aggregate Function: '"+fn+"'")
+ 					})
 
 				/* Send schema to parent operator */
 				val sch = groupBySchema ++ aggSchema ++ srcSchema
@@ -164,19 +170,22 @@ object Typechecker {
 		}
 	}
 
-	def assertNumeric(t: Type.T): Type.T =
-	{
-		if(escalate(t, TFloat) != TFloat){
-			throw new TypeException(t, TFloat, "Numeric")
-		}
-		t;
-	}
+	def assertNumeric(t: Type.T, e: Expression): Type.T =
+ 	{
+		if(escalate(t, TFloat, "Numeric") != TFloat){
+			throw new TypeException(t, TFloat, "Numeric", Some(e))
+ 		}
+ 		t;
+ 	}
 
 	def escalate(a: Type.T, b: Type.T): Type.T = 
 		escalate(a, b, "Escalation")
 	def escalate(a: Type.T, b: Type.T, msg: String, e: Expression): Type.T = 
-		escalate(a, b, msg + ":" + e)
-	def escalate(a: Type.T, b: Type.T, msg: String): Type.T = {
+		escalate(a, b, msg, Some(e))
+	def escalate(a: Type.T, b: Type.T, msg: String): Type.T = 
+		escalate(a, b, msg, None)
+	def escalate(a: Type.T, b: Type.T, msg: String, e: Option[Expression]): Type.T = 
+	{
 		(a,b) match {
 			case (TAny,_) => b
 			case (_,TAny) => a
@@ -184,7 +193,7 @@ object Typechecker {
 			case ((TInt|TFloat), (TInt|TFloat)) => TFloat
 			case _ => 
 				if(a == b) { a } else {
-					throw new TypeException(a, b, msg);
+					throw new TypeException(a, b, msg, e);
 				}
 		}
 	}

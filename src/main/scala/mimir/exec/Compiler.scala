@@ -16,6 +16,7 @@ import net.sf.jsqlparser.statement.select._
 class Compiler(db: Database) extends LazyLogging {
 
   def standardOptimizations: List[Operator => Operator] = List(
+    ProjectRedundantColumns(_),
     InlineProjections.optimize _,
     PushdownSelections.optimize _
   )

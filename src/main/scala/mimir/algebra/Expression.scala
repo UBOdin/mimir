@@ -4,13 +4,19 @@ import java.sql._
 
 import mimir.ctables.CTables
 
-case class TypeException(found: Type.T, expected: Type.T, 
-                    context:String) 
-  extends Exception(
-    "Type Mismatch ["+context+
-    "]: found "+found.toString+
-    ", but expected "+expected.toString
+ case class TypeException(found: Type.T, expected: Type.T, 
+                    detail:String, context:Option[Expression] = None) 
+   extends Exception(
+    "Type Mismatch ["+detail+
+     "]: found "+found.toString+
+    ", but expected "+expected.toString+(
+      context match {
+        case None => ""
+        case Some(expr) => " "+expr.toString
+      }
+    )
   );
+
 class RAException(msg: String) extends Exception(msg);
 
 /**
@@ -223,7 +229,7 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
   override def toString() = "DATE '"+y+"-"+m+"-"+d+"'"
   def asLong: Long = throw new TypeException(TDate, TInt, "Cast");
   def asDouble: Double = throw new TypeException(TDate, TFloat, "Cast");
-  def asString: String = toString;
+  def asString: String = (y+"-"+m+"-"+d);
   def payload: Object = (y, m, d).asInstanceOf[Object];
   def compare(c: DatePrimitive): Integer = {
     if(c.y < y){ -1 }
@@ -444,6 +450,14 @@ case class Var(name: String) extends LeafExpression {
 case class RowIdVar() extends LeafExpression
 {
   override def toString = "ROWID";
+}
+
+/**
+ * Representation of a JDBC Variable.
+ */
+case class JDBCVar(t: Type.T) extends LeafExpression
+{
+  override def toString = "?";
 }
 
 /**

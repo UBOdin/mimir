@@ -54,7 +54,8 @@ object QueryNamer
 	{
 		q match {
 			case Table(tn, _, _) => List(tn)
-			q.children.map( getRelationNames(_) ).foldLeft(List[String]())( _ ++ _ )
+			case _ => q.children.map( getRelationNames(_) ).
+														foldLeft(List[String]())( _ ++ _ )
 		}
 	}
 

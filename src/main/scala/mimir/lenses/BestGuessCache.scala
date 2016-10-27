@@ -134,22 +134,28 @@ class BestGuessCache(db: Database) extends LazyLogging {
   {
     // Start with all the expressions in the current RA node
     view.expressions.
-      // Find all of the VG terms in each expression
-      flatMap(CTables.getVGTerms(_)).
+      // Pick out all of the VG terms, along with the conditions under which they 
+      // contaminate the result
+      flatMap(CTAnalyzer.compileCausality(_)).
+      map( (x) => { logger.trace(s"Causality: $x"); x }).
       // Pick out those belonging to the current lens
-      filter( _.model._1.equals(lensName) ).
+      filter({ case (_, VGTerm((termName:String, _), _, _)) => termName.equals(lensName) }).
+      map( (x) => { logger.trace(s"After Model Name: $x"); x }).
       // We only need caches for data-dependent terms
-      filter( _.args.exists(ExpressionUtils.isDataDependent(_)) ).
-      // Extract the relevant attributes
-      map( (x:VGTerm) => (x.model._2, x.idx, x.args) ).
-      // Eliminate duplicates (in case the same VGTerm appears multiple times)
-      toSet.
-      // And build caches for each var
-      foreach( (x:(Model, Int, List[Expression])) => {
+      filter( _._2.args.exists(ExpressionUtils.isDataDependent(_)) ).
+      map( (x) => { logger.trace(s"Surviving: $x"); x }).
+      // Extract the relevant features of the VGTerm
+      map({ case (cond, term) => ((term.model._2, term.idx, term.args), cond) }).
+      // Gather the conditions for each term
+      groupBy( _._1 ).
+      // The VGTerm applies if any of the gathered conditions are true
+      map({ case (term, groups) => (term, ExpressionUtils.makeOr(groups.map(_._2))) }).
+      // And build a cache for those terms where appropriate
+      foreach({ case ((model, idx, args), cond) =>
         if(view.children.length != 1){ 
           throw new SQLException("Assertion Failed: Expecting operator with expressions to have only one child")
         }
-        buildCache(lensName, x._1, x._2, x._3, view.children.head)
+        buildCache(lensName, model, idx, args, Select(cond, view.children.head))
       })
     // Finally recur to the child nodes
     view.children.foreach( recurCacheBuildThroughLensView(_, lensName) )
@@ -158,8 +164,8 @@ class BestGuessCache(db: Database) extends LazyLogging {
     buildCache(term.model._1, term.model._2, term.idx, term.args, input)
   def buildCache(lensName: String, model: Model, varIdx: Int, args: List[Expression], input: Operator): Unit = {
     val cacheTable = cacheTableForLens(lensName, varIdx)
-    // We inline VG terms as a temporary hack to deal with the fact that 
-    // the TypeInference lens completely messes with the typechecker.
+
+    // Use the best guess schema for the typechecker... we want just one instance
     val typechecker = new ExpressionChecker(db.bestGuessSchema(input).toMap)
 
     if(db.getTableSchema(cacheTable) != None) {
@@ -169,23 +175,27 @@ class BestGuessCache(db: Database) extends LazyLogging {
     val argTypes = args.map( typechecker.typeOf(_) )
     createCacheTable(cacheTable, model.varType(varIdx, argTypes), argTypes)
 
+    logger.debug(s"Building cache for $lensName-$varIdx[$args] with\n$input")
+
+    val updateQuery = 
+        "INSERT INTO "+cacheTable+"("+dataColumn+
+          args.zipWithIndex.
+            map( arg => (","+keyColumn(arg._2)) ).
+            mkString("")+
+        ") VALUES (?"+
+          args.map(_ => ",?").mkString("")+
+        ")"
+
     db.query(input).foreachRow(row => {
       val compiledArgs = args.map(Provenance.plugInToken(_, row.provenanceToken()))
       val tuple = row.currentTuple()
       val dataArgs = compiledArgs.map(Eval.eval(_, tuple))
       val guess = model.bestGuess(varIdx, dataArgs)
-      val updateQuery = 
-          "INSERT INTO "+cacheTable+"("+dataColumn+
-            dataArgs.zipWithIndex.
-              map( arg => (","+keyColumn(arg._2)) ).
-              mkString("")+
-          ") VALUES (?"+
-            dataArgs.map(_ => ",?").mkString("")+
-          ")"
+      logger.trace(s"Registering $dataArgs -> $guess")
       // println("BUILD: "+updateQuery)
       db.backend.update(
         updateQuery, 
-        guess.asString :: dataArgs.map(_.asString)
+        guess :: dataArgs
       )
     })
   }

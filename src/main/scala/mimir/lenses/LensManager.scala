@@ -104,10 +104,10 @@ class LensManager(db: Database) {
       INSERT INTO MIMIR_LENSES(name, query, lens_type, parameters) 
       VALUES (?,?,?,?)
     """, List(
-      lens.name, 
-      lens.source.toString,
-      lensTypeString(lens),
-      lens.args.map(_.toString).mkString(",")
+      StringPrimitive(lens.name), 
+      StringPrimitive(lens.source.toString),
+      StringPrimitive(lensTypeString(lens)),
+      StringPrimitive(lens.args.map(_.toString).mkString(","))
     ))
     lens.save(db)
   }
@@ -117,18 +117,20 @@ class LensManager(db: Database) {
     lensCache.get(lensName) match {
       case Some(s) => Some(s)
       case None => {
-        val lensMetaResult =
+        val lensMetaResult:Iterator[List[PrimitiveValue]] =
           db.backend.resultRows("""
             SELECT lens_type, parameters, query
             FROM MIMIR_LENSES
             WHERE name = ?
-          """, List(lensName))
-        if(lensMetaResult.length == 0) { 
+          """, List(StringPrimitive(lensName)))
+
+        if(!lensMetaResult.hasNext){
           return None; 
-        } else if(lensMetaResult.length > 1){ 
-          throw new SQLException("Multiple definitions for Lens `"+lensName+"`")
         } else {
-          val lensMeta = lensMetaResult(0)
+          val lensMeta = lensMetaResult.next
+          if(lensMetaResult.hasNext){ 
+            throw new SQLException("Multiple definitions for Lens `"+lensName+"`")
+          }
           val lens = 
             mkLens(
               lensMeta(0).asString, 
@@ -154,9 +156,21 @@ class LensManager(db: Database) {
         SELECT NAME
         FROM MIMIR_LENSES
       """).
-    map(_(0).asString.toUpperCase)
+    map(_(0).asString.toUpperCase).toList
   }
 
   def modelForLens(lensName: String): Model = 
     load(lensName).get.model
+
+  def drop(lensName: String): Unit =
+  {
+    lensCache.remove(lensName);
+    db.backend.update(
+      """
+        DELETE FROM MIMIR_LENSES 
+        WHERE NAME = ?
+      """,
+      List( StringPrimitive(lensName) )
+    )
+  }
 }

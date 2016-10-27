@@ -12,7 +12,7 @@ import mimir.util.TypeUtils
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
 import net.sf.jsqlparser.expression.operators.relational._
-import net.sf.jsqlparser.expression.{BinaryExpression, DoubleValue, Function, LongValue, NullValue, InverseExpression, StringValue, WhenClause}
+import net.sf.jsqlparser.expression.{BinaryExpression, DoubleValue, Function, LongValue, NullValue, InverseExpression, StringValue, WhenClause, JdbcParameter}
 import net.sf.jsqlparser.{schema, expression}
 import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.statement.select.{SelectBody, PlainSelect, SubSelect, SelectExpressionItem, FromItem, SelectItem, SubJoin}
@@ -351,6 +351,7 @@ class RAToSql(db: Database) {
           throw new SQLException("Could not find appropriate source for '"+n+"' in "+sources)
         new Column(new net.sf.jsqlparser.schema.Table(null, src.head._1), n)
       }
+      case JDBCVar(t) => new JdbcParameter()
       case Conditional(_, _, _) => {
         val (whenClauses, elseClause) = ExpressionUtils.foldConditionalsToCase(e)
         val caseExpr = new net.sf.jsqlparser.expression.CaseExpression()
