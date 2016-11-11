@@ -62,6 +62,7 @@ object Type extends Enumeration {
     case "varchar" => Type.TString
     case "char"    => Type.TString
     case "string"  => Type.TString
+    case "text"    => Type.TString
     case "bool"    => Type.TBool
     case "rowid"   => Type.TRowId
     case "type"    => Type.TType
