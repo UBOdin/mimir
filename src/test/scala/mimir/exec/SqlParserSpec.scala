@@ -41,7 +41,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 	val db:Database = {
 		try {
 			if(tempDB != null){
-				val dbFile = new File(new File("databases"), tempDB)
+				val dbFile = new File(tempDB)
 				if(dbFile.exists()){ dbFile.delete(); }
 				dbFile.deleteOnExit();
 			}

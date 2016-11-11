@@ -27,7 +27,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         conn = backend match {
           case "sqlite" =>
             Class.forName("org.sqlite.JDBC")
-            val path = java.nio.file.Paths.get("databases", filename).toString
+            val path = java.nio.file.Paths.get(filename).toString
             var c = java.sql.DriverManager.getConnection("jdbc:sqlite:" + path)
             SQLiteCompat.registerFunctions(c)
             c
