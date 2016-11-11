@@ -20,7 +20,7 @@ object DBTestInstances
       databases.get(tempDBName) match { 
         case Some(db) => db
         case None => {
-          val dbFile = new File(new File("databases"), tempDBName+".db")
+          val dbFile = new File (tempDBName+".db")
           val jdbcBackendMode:String = config.getOrElse("jdbc", "sqlite")
           val shouldResetDB = config.getOrElse("reset", "YES") match { 
             case "NO" => false; case "YES" => true
@@ -54,7 +54,7 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   extends Specification
 {
 
-  def dbFile = new File(new File("databases"), tempDBName+".db")
+  def dbFile = new File(tempDBName+".db")
 
   def db = DBTestInstances.get(tempDBName, config)
 
