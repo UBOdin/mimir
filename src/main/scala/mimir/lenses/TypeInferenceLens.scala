@@ -99,7 +99,7 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
     votes.put(TBool(),0)
 
     TypeList.typeList.foreach((tuple) => {
-      votes.put(TUser(tuple._1,tuple._2,tuple._3,tuple._4), 0)
+      votes.put(TUser(tuple._1,tuple._2,tuple._3), 0)
     })
 
     private var totalVotes = 0
@@ -125,12 +125,12 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
       if(possibleMatches.size > 0) {
         possibleMatches.foreach((tuple) => {
           tuple._1 match {
-            case TUser(name, regex, sqlType, priorityLevel) =>
+            case TUser(name, regex, sqlType) =>
               currentBestRatio = tuple._2
               currentBestType = tuple._1
             case _ =>
               currentBestType match {
-                case TUser(name,regex,sqlType,priorityLevel) =>
+                case TUser(name,regex,sqlType) =>
 
                 case _ =>
                   if (tuple._2 > currentBestRatio) {
@@ -141,6 +141,7 @@ class TypeInferenceModel(lens: TypeInferenceLens) extends Model
           }
         })
       }
+      println("Type: " + currentBestType.toString())
       (currentBestType, currentBestRatio)
     }
   }
@@ -219,7 +220,7 @@ class TypeInferenceTypes(){
 
         TypeList.typeList.foreach((tuple)=>{
           if(v.matches(tuple._2))
-            votes(TUser(tuple._1,tuple._2,tuple._3,tuple._4)) += 1
+            votes(TUser(tuple._1,tuple._2,tuple._3)) += 1
         })
 
       }
@@ -254,18 +255,26 @@ These are the files that need to change to extend the TUser
     - update TUser type parameters
 
 
+
  */
 object TypeList{
-  val typeList = ListBuffer[(String,String,Type, Int)]()
+  val typeList = ListBuffer[(String,String,Type)]()
 
-  typeList += Tuple4("TUser","USER",TString(),1)
-  typeList += Tuple4("TWeight","KG*",TString(),1)
-  typeList += Tuple4("FireCompany","^[a-zA-Z]\\d{3}$",TString(),1)
-  typeList += Tuple4("ZipCode","^\\d{5}(?:[-\\s]\\d{4})?$",TInt(),1)
+  typeList += Tuple3("TUser","USER",TString())
+  typeList += Tuple3("TWeight","KG*",TString())
+  typeList += Tuple3("FireCompany","^[a-zA-Z]\\d{3}$",TString())
+  typeList += Tuple3("ZipCode","^\\d{5}(?:[-\\s]\\d{4})?$",TInt())
+  typeList += Tuple3("Container","[A-Z]{4}[0-9]{7}",TString())
+  typeList += Tuple3("CarrierCode","[A-Z]{4}",TString())
+  typeList += Tuple3("MMSI","MID\\d{6}|0MID\\d{5}|00MID\\{4}",TString())
+  typeList += Tuple3("BillOfLanding","[A-Z]{8}[0-9]{8}",TString())
 
 }
 
 
 // CREATE LENS nt9 AS SELECT * FROM test WITH Type_Inference(.9);
-// CREATE LENS nt3 AS SELECT firecomp, zipcode FROM cityraw WITH Type_Inference(.9);
+// CREATE LENS nt1 AS SELECT firecomp, zipcode FROM cityraw WITH Type_Inference(.8);
+// CREATE LENS mv1 AS SELECT * FROM nt1 WITH MISSING_VALUE('FIRECOMP','ZIPCODE');
 
+// CREATE LENS t1 AS SELECT * FROM unevenraw WITH Type_Inference(.8);
+// CREATE LENS mv1 AS SELECT * FROM t1 WITH MISSING_VALUE(*);

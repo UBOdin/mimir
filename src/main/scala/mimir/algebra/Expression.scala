@@ -29,7 +29,7 @@ sealed trait Type{
     case TRowId() => "rowid"
     case TType() => "type"
     case TAny() => "any"
-    case TUser(name,regex,sqlType,priorityLevel) => name
+    case TUser(name,regex,sqlType) => name
   }
   def fromString(t: String) = t.toLowerCase match {
     case "int"     => TInt()
@@ -67,7 +67,7 @@ sealed trait Type{
       var t:Type = null
       TypeList.typeList.foreach((tuple) => {
         if(location == num){
-          t = TUser(tuple._1,tuple._2,tuple._3,tuple._4)
+          t = TUser(tuple._1,tuple._2,tuple._3)
         }
         location += 1
       })
@@ -86,7 +86,7 @@ sealed trait Type{
     case TRowId() => 5
     case TType() => 6
     case TAny() => 7
-    case TUser(name,regex,sqlType,priorityLevel)  => {
+    case TUser(name,regex,sqlType)  => {
       var location = -1
       var temp = 0
       TypeList.typeList.foreach((tuple) => {
@@ -111,7 +111,7 @@ case class TBool() extends Type
 case class TRowId() extends Type
 case class TType() extends Type
 case class TAny() extends Type
-case class TUser(name:String,regex:String,sqlType:Type,priorityLevel:Int) extends Type{
+case class TUser(name:String,regex:String,sqlType:Type) extends Type{
   def getName():String = {
     name
   }
@@ -120,9 +120,6 @@ case class TUser(name:String,regex:String,sqlType:Type,priorityLevel:Int) extend
   }
   def getSqlType():Type = {
     sqlType
-  }
-  def getPriorityLevel():Int = {
-    priorityLevel
   }
 }
 

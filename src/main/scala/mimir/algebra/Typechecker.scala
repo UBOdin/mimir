@@ -185,7 +185,8 @@ object Typechecker {
 			case ((TInt()|TFloat()), (TInt()|TFloat())) => TFloat()
 			case _ => 
 				if(a == b) { a } else {
-					throw new TypeException(a, b, msg);
+					a
+					//throw new TypeException(a, b, msg);
 				}
 		}
 	}

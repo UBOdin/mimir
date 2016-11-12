@@ -52,7 +52,7 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
           case TString() | TRowId() | TDate() =>
             result(value_text(0))
 
-          case TUser(name,regex,sqlType,priorityLevel) =>
+          case TUser(name,regex,sqlType) =>
             val v:String = value_text(0)
             if(v != null) {
               sqlType match {
@@ -60,14 +60,14 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
                   result(value_text(0))
                 case TString() | TDate() =>
                     if (v.matches(regex)) {
-                      result(value_text(0) + "_" + name)
+                      result(value_text(0))
                     }
                     else {
                       result()
                     }
                 case TInt() =>
                     if (value_text(0).matches(regex)) {
-                      result(value_int(0) + 10000)
+                      result(value_int(0))
                     }
                     else {
                       result()
