@@ -69,7 +69,7 @@ class JsonToCSV() {
           break
         }
         var nextLine:String = x.nextLine()
-        if(nextLine.length() > 1){
+        if(nextLine.length() > 5){
           val keySet:Set[String] = JsonFlattener.flattenAsMap(nextLine).keySet()
           keySet.asScala.map((key:String) => {
             if(!maxSchema.contains(key)){
@@ -124,7 +124,7 @@ class JsonToCSV() {
           break
         }
         var nextLine:String = x.nextLine()
-        if(nextLine.length() > 1){
+        if(nextLine.length() > 5){
           var flatJson:Map[String, Object]  = JsonFlattener.flattenAsMap(nextLine)
           if(flatJson != null){
             var schemaIter:java.util.Iterator[String]  = maxSchema.iterator()
@@ -140,7 +140,7 @@ class JsonToCSV() {
                 if(flatJson.containsKey(nextKey)){
                   var value:Object = flatJson.get(nextKey)
                   if(value != null){
-                    row += (value.toString()).replaceAll("'", "_singleQuote_").replaceAll(",", "_comma_") + ","
+                    row += (value.toString()).replaceAll("'", "_SQ_").replaceAll(",", "_C_") + ","
                   }
                   else{
                     row += ","
@@ -184,12 +184,13 @@ class JsonToCSV() {
       System.out.println("scanner is null")
     }
     var rowCount:Int = 0
-    while (x.hasNextLine()) {
-      if (rowCount > rowLimit) {
-        break
+    var flag = true
+    while (x.hasNextLine() && flag == true) {
+      if (rowCount >= rowLimit) {
+        flag = false
       }
       var nextLine:String = x.nextLine()
-      if (nextLine.length() > 1) {
+      if (nextLine.length() > 5) {
         var keySet:Set[String]  = JsonFlattener.flattenAsMap(nextLine).keySet()
         keySet.asScala.map((key:String) => {
           //				key = key.replaceAll("\\.", "_dot_");
@@ -228,23 +229,25 @@ class JsonToCSV() {
     var schemaHeader:String = ""
     maxSchema.asScala.map((sch:String) => {
       if (columnCounter > columnLimit) {
-        break
-      }
-      var s = sch
-      s = s.replaceAll("\\.", "_dot_")
-      s = s.replaceAll(",", "_com_")
-      s = s.replaceAll("\\[", "|")
-      s = s.replaceAll("\\]", "|")
 
-      if (checkSchema.contains(sch)) {
-        s += "1"
-        schemaHeader += s + ","
       }
-      else {
-        schemaHeader += s + ","
+      else{
+        var s = sch
+        s = s.replaceAll("\\.", "_dot_")
+        s = s.replaceAll(",", "_com_")
+        s = s.replaceAll("\\[", "|")
+        s = s.replaceAll("\\]", "|")
+
+        if (checkSchema.contains(sch)) {
+          s += "1"
+          schemaHeader += s + ","
+        }
+        else {
+          schemaHeader += s + ","
+        }
+        checkSchema.add(s)
+        columnCounter += 1
       }
-      checkSchema.add(s)
-      columnCounter +=1
     })
 
     columnCounter = 0
@@ -253,20 +256,24 @@ class JsonToCSV() {
 
     rowCount = 0;
 
-    while (x.hasNextLine()) {
-      if (rowCount > rowLimit) {
-        break
+    flag = true
+
+    while (x.hasNextLine() && flag == true) {
+      if (rowCount >= rowLimit) {
+        flag = false
       }
       var nextLine:String = x.nextLine()
-      if (nextLine.length() > 1) {
+      if (nextLine.length() > 5) {
         var flatJson:Map[String, Object] = JsonFlattener.flattenAsMap(nextLine)
         if (flatJson != null) {
           var schemaIter: java.util.Iterator[String] = maxSchema.iterator()
           var row:String = ""
 
-          while (schemaIter.hasNext()) {
-            if (columnCounter > columnLimit) {
-              break
+          var innerflag = true
+
+          while (schemaIter.hasNext() && innerflag == true) {
+            if (columnCounter >= columnLimit) {
+              innerflag = false
             }
             columnCounter += 1
             var nextKey:String  = schemaIter.next()

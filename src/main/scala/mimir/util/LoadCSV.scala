@@ -61,11 +61,22 @@ object LoadCSV {
                             targetTable: String,
                             sch: List[(String, Type.T)]): Unit = {
     val keys = sch.map(_._1).map((x) => "\'"+x+"\'").mkString(", ")
-    val statements = new ListBuffer[String]()
+    var statements = new ListBuffer[String]()
+    var count = 0
+    var count2 = 1
 
     while(true){
       val line = src.readLine()
       if(line == null) { if(statements.nonEmpty) db.backend.update(statements.toList); return }
+      if(count == 1000){
+        if(statements.nonEmpty){
+          db.backend.update(statements.toList)
+        }
+        count = 0
+        println(count2*1000)
+        count2+=1
+        statements = new ListBuffer[String]()
+      }
 
       val dataLine = line.trim.split(",").padTo(sch.size, "")
       val data = dataLine.indices.map( (i) =>
@@ -79,6 +90,7 @@ object LoadCSV {
       ).mkString(", ")
 
       statements.append("INSERT INTO "+targetTable+"("+keys+") VALUES ("+data+")")
+      count+=1
     }
   }
 }

@@ -17,7 +17,7 @@ object ShredderLensSpec
 {
   sequential
 
-  val testTable = "JSONOUTPUTWIDE"
+  val testTable = "twitterSmallRAW"
   var discala:FuncDep = null
   val testData = new File(
     "test/data/JSONOUTPUTWIDE.csv"
@@ -25,15 +25,15 @@ object ShredderLensSpec
   )
   val extractorName = "TEST_EXTRACTOR"
   var testLens:ShredderLens = null
-  val backend = new JDBCBackend("sqlite","jsonoutputwide.db")
+  val backend = new JDBCBackend("sqlite","debug.db")
   backend.open()
-  var database = new Database("jsonoutputwide.db",backend)
+  val database = new Database("debug.db",backend)
 
-  var jtocsv:JsonToCSV = new JsonToCSV()
+//  var jtocsv:JsonToCSV = new JsonToCSV()
 
 
   "The DiScala Extractor" should {
-
+/*
     "convert json to csv" >> {
       jtocsv.convertToCsv(new File("test/data/jsonsample.txt"),"jsonsampletocsv.csv","UTF-8",1000,100)
       try{
@@ -52,15 +52,15 @@ object ShredderLensSpec
 //      result must not beEmpty
       true
     }
-
+*/
      "be initializable" >> {
 //       LoadCSV.handleLoadTable(db, testTable, testData)
 //       println("DATA LOADED")
-       val schema = db.getTableSchema(testTable).get
+       val schema = database.getTableSchema(testTable).get
 //       val schema = db.getTableSchema(testTable).get
 //       val schema = db.getTableSchema(testTable).get // for loading already existing table from a database
        discala = new FuncDep()
-       discala.buildAbadi(schema, db.backend.execute("select * from JSONOUTPUTWIDE;"))
+       discala.buildAbadi(schema, database.backend.execute("select * from twitterSmallRaw;"))
        discala.entityPairMatrix must not beNull
      }
 /*
@@ -84,7 +84,7 @@ object ShredderLensSpec
       discala = FuncDep.deserialize(db, extractorName)
       discala.entityPairMatrix must not beNull
     }
-	
+*/
     "contain enough information to create a lens" >> {
       val entities = discala.entityPairList.flatMap( x => List(x._1, x._2) ).toSet.toList
       // println(entities.toString)
@@ -100,7 +100,7 @@ object ShredderLensSpec
 	
       val entityObject = (e:Integer) => (e.toInt, discala.parentTable.get(e).toList.map(_.toInt))
 	
-      val input = db.getTableOperator(testTable)
+      val input = database.getTableOperator(testTable)
       testLens = new ShredderLens(
         "TEST_LENS",
         discala,
@@ -117,13 +117,13 @@ object ShredderLensSpec
         )
       testLens.schema must be equalTo(targetSchema)
     }
-*/
+
     "be queriable" >> {
       var startQuery:Long = System.nanoTime();
-      db.query(testLens.view).foreachRow( _ => {} )
+      database.query(testLens.view).foreachRow( _ => {} )
       var endQuery:Long = System.nanoTime();
       println("Query TOOK: "+((endQuery - startQuery)/1000000) + " MILLISECONDS")
-      db.selectInto("LENSOUTPUT", testLens.view)
+      database.selectInto("LENSOUTPUT", testLens.view)
 	
       
       // val s:List[(String,Type.T)] = testLens.schema()
@@ -142,16 +142,16 @@ object ShredderLensSpec
       // writer1.close()
       // LoadCSV.handleLoadTable(db, "LENSOUTPUT", new File("OUT.csv"))
       var startQ:Long = System.nanoTime();
-      db.backend.execute("SELECT * FROM LENSOUTPUT")
+      database.backend.execute("SELECT * FROM LENSOUTPUT")
       var endQ:Long = System.nanoTime();
       println("Output Query TOOK: "+((endQ - startQ)/1000000) + " MILLISECONDS")
       true
     }
     
     "queries" >> {
-      val table = db.getTableOperator("LENSOUTPUT")
+      val table = database.getTableOperator("LENSOUTPUT")
       var startQ:Long = System.nanoTime();
-      db.query(table).foreachRow( _ => {} )
+      database.query(table).foreachRow( _ => {} )
       var endQ:Long = System.nanoTime();
       println("MAT Query TOOK: "+((endQ - startQ)/1000000) + " MILLISECONDS")
       true
