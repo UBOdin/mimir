@@ -62,6 +62,8 @@ object JDBCUtils {
             case e: NullPointerException =>
               new NullPrimitive
           }
+        case Type.TBlob => 
+          BlobPrimitive(results.getBlob(field))
       }
     if(results.wasNull()) { NullPrimitive() }
     else { ret }
