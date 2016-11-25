@@ -86,10 +86,8 @@ object Mimir {
         stmt match {
           case null             => done = true
           case sel:  Select     => handleSelect(sel)
-          case crel: CreateLens => db.createLens(crel)
           case expl: Explain    => handleExplain(expl)
-          case drop: Drop       => handleDrop(drop)
-          case _                => db.backend.update(stmt.toString())
+          case _                => db.update(stmt)
         }
 
       } catch {
@@ -132,23 +130,6 @@ object Mimir {
       db.dump(results)
       results.close()
     })
-  }
-
-  def handleDrop(drop: Drop): Unit = {
-    drop.getType().toUpperCase match {
-      case "TABLE" | "INDEX" => 
-        db.backend.update(drop.toString());
-
-      case "VIEW" =>
-        throw new SQLException("Views not supported yet")
-
-      case "LENS" =>
-        db.lenses.drop(drop.getName())
-
-      case _ =>
-        throw new SQLException("Invalid drop type '"+drop.getType()+"'")
-
-    }
   }
 
 }

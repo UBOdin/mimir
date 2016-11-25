@@ -10,13 +10,16 @@ import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, Model, RowExpl
 import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
 import mimir.lenses.{Lens, LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
-import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens}
+import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens,CreateView,Explain}
 import mimir.optimizer.{InlineVGTerms, ResolveViews}
 import mimir.util.{LoadCSV,ExperimentalOptions}
 import mimir.web.WebIterator
 import mimir.parser.MimirJSqlParser
 
 import net.sf.jsqlparser.statement.Statement
+import net.sf.jsqlparser.statement.select.Select
+import net.sf.jsqlparser.statement.create.table.CreateTable
+import net.sf.jsqlparser.statement.drop.Drop
 
 
 import scala.collection.mutable.ListBuffer
@@ -273,12 +276,39 @@ case class Database(name: String, backend: Backend)
       metadata
     )  
   }
-  
+
   /**
-   * Evaluate a CREATE LENS statement.
+   * Evaluate a statement that does not produce results.
+   *
+   * Generally these are routed directly to the back-end, but there
+   * are a few operations that Mimir needs to handle directly.
    */
-  def createLens(lensDefn: CreateLens): Unit =
-    lenses.create(lensDefn)
+  def update(stmt: Statement)
+  {
+    stmt match {
+      case sel:  Select     => throw new SQLException("Can't evaluate SELECT as an update")
+      case expl: Explain    => throw new SQLException("Can't evaluate EXPLAIN as an update")
+      case lens: CreateLens => lenses.create(lens)
+      case view: CreateView => views.createView(view.getTable().getName(), 
+                                                sql.convert(view.getSelectBody()))
+      case drop: Drop     => {
+          drop.getType().toUpperCase match {
+            case "TABLE" | "INDEX" => 
+              backend.update(drop.toString());
+
+            case "VIEW" =>
+              views.dropView(drop.getName());
+
+            case "LENS" =>
+              lenses.drop(drop.getName())
+
+            case _ =>
+              throw new SQLException("Invalid drop type '"+drop.getType()+"'")
+          }
+      }
+      case _                => backend.update(stmt.toString())
+    }
+  }
   
   /**
    * Prepare a database for use with Mimir.

@@ -407,7 +407,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 
 
 		"Create and query lenses" in {
-		 	db.createLens(stmt(
+		 	db.update(stmt(
 		 		"CREATE LENS SaneR AS SELECT * FROM R WITH MISSING_VALUE('B')"
 		 	).asInstanceOf[CreateLens]);
 		 	db.optimize(

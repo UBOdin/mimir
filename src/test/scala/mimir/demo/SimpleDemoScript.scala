@@ -62,7 +62,7 @@ object SimpleDemoScript
 		}
 
     "Create and Query Type Inference Lens with NULL values" >> {
-      lens("""
+      update("""
 				CREATE LENS null_test
 				  AS SELECT * FROM RATINGS3
 				  WITH MISSING_VALUE('C')
@@ -107,7 +107,7 @@ object SimpleDemoScript
 				// "mimir.lenses.BestGuessCache", 
 				// "mimir.exec.Compiler"
 			), () => {
-			lens("""
+			update("""
 				CREATE LENS RATINGS1FINAL 
 				  AS SELECT * FROM RATINGS1 
 				  WITH MISSING_VALUE('RATING')
@@ -139,7 +139,7 @@ object SimpleDemoScript
 		}
 
 		"Show Determinism Correctly" >> {
-			lens("""
+			update("""
 				CREATE LENS PRODUCT_REPAIRED 
 				  AS SELECT * FROM PRODUCT
 				  WITH MISSING_VALUE('BRAND')
@@ -154,7 +154,7 @@ object SimpleDemoScript
 		}
 
 		"Create and Query Schema Matching Lenses" >> {
-			lens("""
+			update("""
 				CREATE LENS RATINGS2FINAL 
 				  AS SELECT * FROM RATINGS2 
 				  WITH SCHEMA_MATCHING(PID string, RATING float, REVIEW_CT float)

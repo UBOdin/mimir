@@ -35,6 +35,13 @@ class ViewManager(db:Database) {
       )) 
   }
 
+  def dropView(name: String): Unit =
+  {
+    db.backend.update(s"DELETE FROM $viewTable WHERE name=?", 
+      List(StringPrimitive(name))
+    )
+  }
+
   def getView(name: String): Option[Operator] =
   {
     val results = 
