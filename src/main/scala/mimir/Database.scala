@@ -48,26 +48,32 @@ import scala.collection.mutable.ListBuffer
   * - mimir.sql.Backend (backend)
   *    Pluggable wrapper for database backends over which Mimir will actually run.  Basically,
   *    a simplified form of JDBC.  See mimir.sql._ for examples.
+  * - mimir.views.ViewManager (views)
+  *    Responsible for creating, serializing, and deserializing virtual Mimir-level views.
   * - mimir.lenses.LensManager (lenses)
   *    Responsible for creating, serializing, and deserializing lenses and virtual views.
   * - mimir.exec.Compiler
   *    Responsible for query execution.  Acts as a wrapper around the logic in mimir.ctables._, 
   *    mimir.lenses._, and mimir.exec._ that prepares non-deterministic queries to be evaluated
   *    on the backend database.  
+  * - mimir.explainer.CTExplainer (explainer)
+  *    Responsible for creating explanation objects.
   */
 case class Database(name: String, backend: Backend)
 {
-  val sql = new SqlToRA(this)
-  val ra = new RAToSql(this)
-  val lenses = new LensManager(this)
-  val compiler = new Compiler(this)
-  val explainer = new CTExplainer(this)
-  val bestGuessCache = new BestGuessCache(this)
-  val operator = new OperatorParser(this.getLensModel,
+  val sql             = new mimir.sql.SqlToRA(this)
+  val ra              = new mimir.sql.RAToSql(this)
+  val lenses          = new mimir.lenses.LensManager(this)
+  val views           = new mimir.views.ViewManager(this)
+  val compiler        = new mimir.exec.Compiler(this)
+  val explainer       = new mimir.ctables.CTExplainer(this)
+  val bestGuessCache  = new mimir.lenses.BestGuessCache(this)
+  val querySerializer = new mimir.algebra.Serialization(this)
+  val operator        = new mimir.parser.OperatorParser(this.getLensModel,
     (x) => 
       this.getTableSchema(x) match {
         case Some(x) => x
-        case None => throw new SQLException("Table "+x+" does not exist in db!")
+        case None => throw new RAException("Table "+x+" does not exist in db!")
       })
 
   def getName = name
@@ -230,6 +236,17 @@ case class Database(name: String, backend: Backend)
     operator.operator(operString)
 
   /**
+   * Get all availale table names 
+   */
+  def getAllTables(): Set[String] =
+  {
+    (
+      backend.getAllTables() ++ 
+      lenses.getAllLensNames()
+    ).toSet[String];
+  }
+
+  /**
    * Look up the schema for the table with the provided name.
    */
   def getTableSchema(name: String): Option[List[(String,Type.T)]] =
@@ -268,6 +285,7 @@ case class Database(name: String, backend: Backend)
    */
   def initializeDBForMimir(): Unit = {
     lenses.init()
+    views.init()
   }
 
   /**
@@ -286,17 +304,7 @@ case class Database(name: String, backend: Backend)
    */
   def getView(name: String): Option[(Operator)] =
   {
-    // System.out.println("Selecting from ..."+name);
-    if(lenses == null){ None }
-    else {
-      //println(iviews.views.toString())
-      lenses.load(name.toUpperCase) match {
-        case None => None
-        case Some(lens) => 
-          // println("Found: "+name); 
-          Some(lens.view)
-      }
-    }
+    views.getView(name).orElse( lenses.load(name.toUpperCase).map(_.view) )
   }
 
   /**

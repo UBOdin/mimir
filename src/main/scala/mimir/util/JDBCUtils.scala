@@ -62,8 +62,10 @@ object JDBCUtils {
             case e: NullPointerException =>
               new NullPrimitive
           }
-        case Type.TBlob => 
-          BlobPrimitive(results.getBlob(field))
+        case Type.TBlob => {
+          val blob = results.getBlob(field)
+          BlobPrimitive(blob.getBytes(0, blob.length().toInt))
+        }
       }
     if(results.wasNull()) { NullPrimitive() }
     else { ret }

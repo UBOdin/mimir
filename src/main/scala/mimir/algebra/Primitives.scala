@@ -1,5 +1,7 @@
 package mimir.algebra;
 
+import mimir.algebra.Type._;
+
 /////////////// Primitive Values ///////////////
 
 /**
@@ -147,7 +149,7 @@ case class NullPrimitive()
 /**
  * Boxed representation of a blobject
  */
-case class BlobPrimitive(data: java.sql.Blob)
+case class BlobPrimitive(data: Array[Byte])
   extends PrimitiveValue(TBlob)
 {
   override def toString() = { throw new RAException("Can't stringify Blob"); }

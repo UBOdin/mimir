@@ -99,6 +99,8 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     db.createLens(stmt(s).asInstanceOf[mimir.sql.CreateLens])
   def update(s: Statement) = 
     db.backend.update(s.toString())
+  def update(s: String) = 
+    db.backend.update(s)
   def parser = new OperatorParser(db.lenses.modelForLens, db.getTableSchema(_).get)
   def expr = parser.expr _
   def oper = parser.operator _

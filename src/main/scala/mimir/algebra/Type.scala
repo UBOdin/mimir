@@ -71,7 +71,7 @@ object Type extends Enumeration {
     case "ttype"   => Type.TType
     case "tblob"   => Type.TType
     case "any"     => Type.TAny
-    case _ =>  throw new SQLException("Invalid Type '" + t + "'");
+    case _ =>  throw new RAException("Invalid Type '" + t + "'");
   }
 
   def fromStringPrimitive(t: StringPrimitive) = fromString(t.asString)

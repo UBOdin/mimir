@@ -1,6 +1,7 @@
 package mimir.algebra;
 
 import java.io._;
+import mimir.Database;
 import mimir.ctables.VGTerm;
 
 /**
@@ -15,20 +16,23 @@ import mimir.ctables.VGTerm;
 
 class Serialization(db: Database) {
   
-  def serialize(oper: Operator): Array[Byte] =
+  val base64in = java.util.Base64.getDecoder()
+  val base64out = java.util.Base64.getEncoder()
+
+  def serialize(oper: Operator): String =
   {
     val bytes = new ByteArrayOutputStream();
     val objects = new ObjectOutputStream(bytes);
     objects.writeObject(sanitize(oper))
-    bytes.toByteArray()
+    base64out.encodeToString(bytes.toByteArray())
   }
 
-  def serialize(expr: Expression): Array[Byte] =
+  def serialize(expr: Expression): String =
   {
     val bytes = new ByteArrayOutputStream();
     val objects = new ObjectOutputStream(bytes);
     objects.writeObject(sanitize(expr))
-    bytes.toByteArray()
+    base64out.encodeToString(bytes.toByteArray())
   }
 
   def sanitize(oper: Operator): Operator =
@@ -61,23 +65,23 @@ class Serialization(db: Database) {
     }
   }
 
-  def deserializeQuery(in:Array[Byte]): Operator =
+  def deserializeQuery(in:String): Operator =
   {
-    val objects = new ObjectInputStream(ByteArrayInputStream(in))
+    val objects = new ObjectInputStream(new ByteArrayInputStream(base64in.decode(in)))
     val query = objects.readObject().asInstanceOf[Operator];
     return desanitize(query);
   }
 
-  def deserializeExpression(in:Array[Byte]): Expression =
+  def deserializeExpression(in:String): Expression =
   {
-    val objects = new ObjectInputStream(ByteArrayInputStream(in))
+    val objects = new ObjectInputStream(new ByteArrayInputStream(base64in.decode(in)))
     val expression = objects.readObject().asInstanceOf[Expression];
     return desanitize(expression);
   }
 }
 
-case class SerializableVGTerm(model: String, idx: Index, args: List[Expression]) extends Expression {
-  def toString() = "{{ "+model+";"+idx+"["+args.mkString(", ")+"] }}"
+case class SerializableVGTerm(model: String, idx: Integer, args: List[Expression]) extends Expression {
+  override def toString() = "{{ "+model+";"+idx+"["+args.mkString(", ")+"] }}"
   def children: List[Expression] = args
   def rebuild(x: List[Expression]) = SerializableVGTerm(model, idx, x)
 }

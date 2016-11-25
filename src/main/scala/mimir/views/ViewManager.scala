@@ -1,7 +1,7 @@
 package mimir.views;
 
 import mimir._;
-import mimir.algebra.{Operator, Serialization, RAException}
+import mimir.algebra._;
 
 class ViewManager(db:Database) {
   
@@ -12,7 +12,7 @@ class ViewManager(db:Database) {
     db.backend.update(s"""
       CREATE TABLE $viewTable(
         name varchar(30), 
-        query blob,
+        query text,
         PRIMARY KEY(name)
       )""")
   }
@@ -21,8 +21,8 @@ class ViewManager(db:Database) {
   {
     db.backend.update(s"INSERT INTO $viewTable(name, query) VALUES (?,?)", 
       List(
-        StringPrimitive(lens.name.toUpperCase), 
-        BlobPrimitive(lens.source.toString)
+        StringPrimitive(name), 
+        StringPrimitive(db.querySerializer.serialize(query))
       ))
   }
 
@@ -30,8 +30,8 @@ class ViewManager(db:Database) {
   {
     db.backend.update(s"UPDATE $viewTable SET query=? WHERE name=?", 
       List(
-        BlobPrimitive(Serialization.serialize(query)),
-        StringPrimitive(lens.name)
+        StringPrimitive(db.querySerializer.serialize(query)),
+        StringPrimitive(name)
       )) 
   }
 
@@ -41,12 +41,21 @@ class ViewManager(db:Database) {
       db.backend.resultRows(s"SELECT query FROM $viewTable WHERE name = ?", 
         List(StringPrimitive(name.toUpperCase))
       )
-    encoded.flatten.headOption().map( Serialize.deserializeQuery(_) )
+    results.take(1).flatten.toList.headOption.map( 
+      { 
+        case StringPrimitive(s) => 
+          db.querySerializer.deserializeQuery(s)
+      }
+    )
   }
 
   def listViews(): List[String] =
   {
-    db.backend.resultRows(s"SELECT name FROM $viewTable").flatten
+    db.backend.
+      resultRows(s"SELECT name FROM $viewTable").
+      flatten.
+      map( _.asString ).
+      toList
   }
 
 }

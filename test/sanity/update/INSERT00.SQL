@@ -1,0 +1,7 @@
+CREATE TABLE IDXR(
+  A int, 
+  B int,
+  PRIMARY KEY (A)
+);
+
+SELECT * FROM IDXR;
