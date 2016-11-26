@@ -14,6 +14,7 @@ import moa.core.InstancesHeader
 import weka.core.{Attribute, DenseInstance, Instance, Instances}
 import weka.experiment.{DatabaseUtils, InstanceQueryAdapter}
 import mimir.optimizer.InlineVGTerms
+import mimir.models._
 
 import scala.collection.JavaConversions._
 import scala.util._

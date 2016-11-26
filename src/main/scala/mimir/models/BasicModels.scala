@@ -1,4 +1,4 @@
-package mimir.ctables
+package mimir.models
 
 import mimir.algebra._
 

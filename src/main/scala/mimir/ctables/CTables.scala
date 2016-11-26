@@ -1,58 +1,8 @@
 package mimir.ctables
 
 import mimir.algebra._
-import mimir.util.JSONBuilder
+import mimir.models._
 import scala.util._
-
-abstract class Model {
-  /**
-   * Infer the type of the model from the types of the inputs
-   * @param argTypes    The types of the arguments the the VGTerm
-   * @return            The type of the value returned by this model
-   */
-  def varType        (idx: Int, argTypes:List[Type.T]): Type.T
-
-  /**
-   * Generate a best guess for a variable represented by this model.
-   * @param idx         The index of the variable family to generate a best guess for
-   * @param args        The skolem identifier for the specific variable to generate a best guess for
-   * @return            A primitive value representing the best guess value.
-   */
-  def bestGuess      (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
-  /**
-   * Generate a sample from the distribution of a variable represented by this model.
-   * @param idx         The index of the variable family to generate a sample for
-   * @param randomness  A java.util.Random to use when generating the sample (pre-seeded)
-   * @param args        The skolem identifier for the specific variable to generate a sample for
-   * @return            A primitive value representing the generated sample
-   */
-  def sample         (idx: Int, randomness: Random, args: List[PrimitiveValue]):  PrimitiveValue
-  /**
-   * Generate a human-readable explanation for the uncertainty captured by this model.
-   * @param idx   The index of the variable family to explain
-   * @param args  The skolem identifier for the specific variable to explain
-   * @return      A string reason explaining the uncertainty in this model
-   */
-  def reason         (idx: Int, args: List[Expression]): (String)
-}
-
-case class Reason(
-  val reason: String,
-  val model: String,
-  val idx: Int,
-  val args: List[Expression]
-){
-  override def toString: String = 
-    reason+" ("+model+";"+idx+"["+args.mkString(", ")+"])"
-
-  def toJSON: String =
-    JSONBuilder.dict(Map(
-      "english" -> JSONBuilder.string(reason),
-      "source"  -> JSONBuilder.string(model),
-      "varid"   -> JSONBuilder.int(idx),
-      "args"    -> JSONBuilder.list( args.map( x => JSONBuilder.string(x.toString) ) )
-    ))
-}
 
 case class VGTerm(
   model: (String,Model), 

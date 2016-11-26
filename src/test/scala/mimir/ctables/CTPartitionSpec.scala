@@ -10,6 +10,7 @@ import mimir.parser._
 import mimir.algebra._
 import mimir.sql._
 import mimir.util._
+import mimir.models._
 
 object CTPartitionSpec extends Specification {
   

@@ -6,8 +6,9 @@ import scala.util._
 import mimir.Database
 import mimir.algebra.Type.T
 import mimir.algebra._
-import mimir.ctables.{Model, VGTerm}
+import mimir.ctables.VGTerm
 import mimir.optimizer.{InlineVGTerms}
+import mimir.models._
 import org.apache.lucene.search.spell.{JaroWinklerDistance, LevensteinDistance, NGramDistance, StringDistance}
 
 class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)

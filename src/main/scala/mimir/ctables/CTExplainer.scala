@@ -3,12 +3,13 @@ package mimir.ctables;
 import java.util.Random;
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-import mimir._;
-import mimir.algebra._;
-import mimir.provenance._;
-import mimir.exec._;
-import mimir.util._;
-import mimir.optimizer._;
+import mimir._
+import mimir.algebra._
+import mimir.provenance._
+import mimir.exec._
+import mimir.util._
+import mimir.optimizer._
+import mimir.models._
 
 case class InvalidProvenance(msg: String, token: RowIdPrimitive) 
 	extends Exception("Invalid Provenance Token ["+msg+"]: "+token);

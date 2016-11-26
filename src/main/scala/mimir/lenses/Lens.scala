@@ -2,7 +2,8 @@ package mimir.lenses;
 
 import mimir.Database
 import mimir.algebra._
-import mimir.ctables._;
+import mimir.ctables._
+import mimir.models._
 
 /**
  * A Lens defines a Virtual PC-Table.  A lens consists of two components:

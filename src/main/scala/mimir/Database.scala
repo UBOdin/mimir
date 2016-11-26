@@ -6,7 +6,8 @@ import java.sql.SQLException
 import java.sql.ResultSet
 
 import mimir.algebra._
-import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, Model, RowExplanation, VGTerm}
+import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, RowExplanation, VGTerm}
+import mimir.models.Model
 import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
 import mimir.lenses.{Lens, LensManager, BestGuessCache}
 import mimir.parser.OperatorParser

@@ -4,10 +4,11 @@ import java.sql.SQLException
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir._
-import mimir.algebra._;
-import mimir.ctables._;
-import mimir.provenance._;
-import mimir.optimizer._;
+import mimir.algebra._
+import mimir.ctables._
+import mimir.provenance._
+import mimir.optimizer._
+import mimir.models._
 
 class BestGuessCache(db: Database) extends LazyLogging {
 

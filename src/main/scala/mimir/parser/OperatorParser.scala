@@ -2,6 +2,7 @@ package mimir.parser;
 
 import mimir.algebra._
 import mimir.ctables._
+import mimir.models._
 
 class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => List[(String,Type.T)]))
 	extends ExpressionParser(modelLookup) 

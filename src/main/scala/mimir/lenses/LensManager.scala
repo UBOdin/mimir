@@ -8,6 +8,7 @@ import mimir.Database
 import mimir.algebra._
 import mimir.ctables._
 import mimir.sql._
+import mimir.models._
 import mimir.util.JDBCUtils
 
 import scala.collection.JavaConversions._

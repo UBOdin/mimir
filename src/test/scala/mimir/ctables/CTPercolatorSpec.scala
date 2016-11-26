@@ -13,6 +13,7 @@ import mimir.sql._
 import mimir.optimizer._
 import mimir.exec._
 import mimir.provenance._
+import mimir.models._
 
 object CTPercolatorSpec extends Specification {
   

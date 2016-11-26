@@ -9,6 +9,7 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.exec.ResultIterator
 import mimir.util.TypeUtils
+import mimir.models._
 
 class TypeInferenceLens(name: String, args: List[Expression], source: Operator)
   extends Lens(name, args, source) {

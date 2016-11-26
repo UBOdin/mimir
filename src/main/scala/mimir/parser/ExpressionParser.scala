@@ -6,6 +6,7 @@ import scala.util.parsing.combinator.RegexParsers
 
 import mimir.algebra._
 import mimir.ctables._
+import mimir.models._
 
 class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 	override type Elem = Char
