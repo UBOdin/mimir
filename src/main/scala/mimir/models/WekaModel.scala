@@ -1,7 +1,7 @@
 package mimir.models
 
 import java.io.File
-import java.sql._
+import java.sql.SQLException
 import java.util
 
 import mimir.algebra._
@@ -21,10 +21,10 @@ import scala.util._
 
 object WekaModel
 {
-  def train(db: Database, cols: List[String], target:Operator): Map[String,(Model,Int)] = 
+  def train(db: Database, name: String, cols: List[String], target:Operator): Map[String,(Model,Int)] = 
   {
     cols.map( (col) => {
-      val model = new SimpleWekaModel(col, target)
+      val model = new SimpleWekaModel(s"$name:$col", col, target)
       model.train(db)
       col -> (model, 0)
     }).toMap
@@ -42,10 +42,29 @@ object WekaModel
 
     attributes
   }
+
+  def decode(db: Database, data: Array[Byte]): Model =
+  {
+    val in = new java.io.ObjectInputStream(
+        new java.io.ByteArrayInputStream(data)
+      )
+    val name = in.readObject().asInstanceOf[String]
+    val colName = in.readObject().asInstanceOf[String]
+    val target = 
+      db.querySerializer.desanitize(in.readObject().asInstanceOf[Operator])
+    val ret = new SimpleWekaModel(name, colName, target)
+    ret.numSamples = in.readInt()
+    ret.numCorrect = in.readInt()
+    ret.learner = weka.core.SerializationHelper.
+                    read(in).
+                    asInstanceOf[Classifier]
+    ret.db = db
+    return ret;
+  }
 }
 
-class SimpleWekaModel(colName: String, target: Operator)
-  extends SingleVarModel
+class SimpleWekaModel(name: String, colName: String, target: Operator)
+  extends SingleVarModel(name)
 {
   private val TRAINING_LIMIT = 1000
   var numSamples = 0
@@ -202,5 +221,18 @@ class SimpleWekaModel(colName: String, target: Operator)
 
   }
 
+  override def serialize: (Array[Byte], String) =
+  {
+    val bytes = new java.io.ByteArrayOutputStream()
+    val objects = new java.io.ObjectOutputStream(bytes)
+    objects.writeObject(name)
+    objects.writeObject(colName)
+    objects.writeObject(db.querySerializer.sanitize(target))
+    objects.writeInt(numSamples)
+    objects.writeInt(numCorrect)
+    objects.writeObject(learner)
+    weka.core.SerializationHelper.write(objects,learner)
 
+    (bytes.toByteArray, "WEKA")
+  }
 }

@@ -4,7 +4,7 @@ import mimir.algebra._
 
 import scala.util._
 
-abstract class SingleVarModel() extends Model {
+abstract class SingleVarModel(name: String) extends Model(name) {
 
   def varType(argTypes: List[Type.T]): Type.T
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue
@@ -21,7 +21,7 @@ abstract class SingleVarModel() extends Model {
     reason(args)
 }
 
-case class IndependentVarsModel(vars: List[SingleVarModel]) extends Model {
+case class IndependentVarsModel(override val name: String, vars: List[SingleVarModel]) extends Model(name) {
 
   def varType(idx: Int, argTypes: List[Type.T]) = 
     vars(idx).varType(argTypes)
@@ -33,7 +33,7 @@ case class IndependentVarsModel(vars: List[SingleVarModel]) extends Model {
     vars(idx).reason(idx, args)
 }
 
-object UniformDistribution extends SingleVarModel(){
+object UniformDistribution extends SingleVarModel("UNIFORM") with Serializable {
   def varType(argTypes: List[Type.T]) = Type.TFloat
   def bestGuess(args: List[PrimitiveValue]) = 
     FloatPrimitive((args(0).asDouble + args(1).asDouble) / 2.0)
@@ -63,7 +63,7 @@ object UniformDistribution extends SingleVarModel(){
     "I put in a random value between "+args(0)+" and "+args(1)
 }
 
-case class NoOpModel(vt: Type.T) extends SingleVarModel() {
+case class NoOpModel(vt: Type.T) extends SingleVarModel("NO-OP-"+vt) with Serializable {
   def varType(argTypes: List[Type.T]) = vt
   def bestGuess(args: List[PrimitiveValue]) = args(0)
   def sample(randomness: Random, args: List[PrimitiveValue]) = args(0)

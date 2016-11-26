@@ -45,7 +45,7 @@ import mimir.algebra._
  * conventions in terms of their types, how they use arguments, and how
  * they are constructed.
  */
-abstract class Model {
+abstract class Model(val name: String) {
   /**
    * Infer the type of the model from the types of the inputs
    * @param argTypes    The types of the arguments the the VGTerm
@@ -75,4 +75,19 @@ abstract class Model {
    * @return      A string reason explaining the uncertainty in this model
    */
   def reason         (idx: Int, args: List[Expression]): (String)
+
+  /**
+   * Encode the model for persistence to disk/the database
+   * @return      A 2-tuple including the serialized encoding, and the name of 
+   *              a deserializer to use when decoding the encoding.
+   */
+  def serialize(): (Array[Byte], String) =
+  {
+    val out = new java.io.ByteArrayOutputStream()
+    val objects = new java.io.ObjectOutputStream(out)
+    objects.writeObject(this)
+
+    return (out.toByteArray, "JAVA")
+  }
+
 }

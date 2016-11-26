@@ -26,6 +26,7 @@ object EditDistanceMatchModel
 
   def train(
     db: Database, 
+    name: String,
     source: Either[Operator,List[(String,Type.T)]], 
     target: Either[Operator,List[(String,Type.T)]]
   ): Option[Map[String,(Model,Int)]] = 
@@ -40,6 +41,7 @@ object EditDistanceMatchModel
     Some(
       targetSch.map({ case (targetCol,targetType) =>
         targetCol -> (new EditDistanceMatchModel(
+          s"$name:$targetCol",
           defaultMetric,
           (targetCol, targetType),
           sourceSch.
@@ -64,10 +66,11 @@ object EditDistanceMatchModel
 }
 
 class EditDistanceMatchModel(
+  name: String,
   metric: StringDistance, 
   target: (String, Type.T), 
   sourceCandidates: List[String]
-) extends SingleVarModel
+) extends SingleVarModel(name) with Serializable
 {
   var colMapping:List[(String,Double)] = {
     var total = 0.0

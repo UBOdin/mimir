@@ -48,14 +48,18 @@ import scala.collection.mutable.ListBuffer
   *    Responsible for directly constructing mimir.algebra.{Operator,Expression} ASTs from string
   *    representations.  Allows these ASTs to be serialized through toString()
   *
+  * === Persistence ===
+  * - mimir.views.ViewManager (views)
+  *    Responsible for creating, serializing, and deserializing virtual Mimir-level views.
+  * - mimir.views.ModelManager (models)
+  *    Responsible for creating, serializing, and deserializing models.
+  * - mimir.lenses.LensManager (lenses)
+  *    Responsible for creating and managing lenses
+  * 
   * === Logic ===
   * - mimir.sql.Backend (backend)
   *    Pluggable wrapper for database backends over which Mimir will actually run.  Basically,
   *    a simplified form of JDBC.  See mimir.sql._ for examples.
-  * - mimir.views.ViewManager (views)
-  *    Responsible for creating, serializing, and deserializing virtual Mimir-level views.
-  * - mimir.lenses.LensManager (lenses)
-  *    Responsible for creating, serializing, and deserializing lenses and virtual views.
   * - mimir.exec.Compiler
   *    Responsible for query execution.  Acts as a wrapper around the logic in mimir.ctables._, 
   *    mimir.lenses._, and mimir.exec._ that prepares non-deterministic queries to be evaluated
@@ -63,24 +67,28 @@ import scala.collection.mutable.ListBuffer
   * - mimir.explainer.CTExplainer (explainer)
   *    Responsible for creating explanation objects.
   */
-case class Database(name: String, backend: Backend)
+case class Database(backend: Backend)
 {
-  val sql             = new mimir.sql.SqlToRA(this)
-  val ra              = new mimir.sql.RAToSql(this)
+  //// Persistence
   val lenses          = new mimir.lenses.LensManager(this)
+  val models          = new mimir.models.ModelManager(this)
   val views           = new mimir.views.ViewManager(this)
-  val compiler        = new mimir.exec.Compiler(this)
-  val explainer       = new mimir.ctables.CTExplainer(this)
   val bestGuessCache  = new mimir.lenses.BestGuessCache(this)
   val querySerializer = new mimir.algebra.Serialization(this)
+
+  //// Logic
+  val compiler        = new mimir.exec.Compiler(this)
+  val explainer       = new mimir.ctables.CTExplainer(this)
+
+  //// Parsing
+  val sql             = new mimir.sql.SqlToRA(this)
+  val ra              = new mimir.sql.RAToSql(this)
   val operator        = new mimir.parser.OperatorParser(this.getLensModel,
     (x) => 
       this.getTableSchema(x) match {
         case Some(x) => x
         case None => throw new RAException("Table "+x+" does not exist in db!")
       })
-
-  def getName = name
 
   /** 
    * Apply the standard set of Mimir compiler optimizations -- Used mostly for EXPLAIN.
@@ -315,7 +323,7 @@ case class Database(name: String, backend: Backend)
    * Prepare a database for use with Mimir.
    */
   def initializeDBForMimir(): Unit = {
-    lenses.init()
+    models.init()
     views.init()
   }
 

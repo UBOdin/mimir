@@ -11,7 +11,7 @@ class ViewManager(db:Database) {
   {
     db.backend.update(s"""
       CREATE TABLE $viewTable(
-        name varchar(30), 
+        name varchar(100), 
         query text,
         PRIMARY KEY(name)
       )""")

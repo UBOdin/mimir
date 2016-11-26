@@ -22,6 +22,7 @@ object ModelRegistry
    * 
    * Inputs:
    *    Database        -> The database to train on
+   *    String          -> The name prefix for the model
    *    List[String]    -> A list of column names to impute on
    *    Operator        -> The relation to impute on
    * Outputs:
@@ -41,7 +42,7 @@ object ModelRegistry
    * operator: Select[ROWID = $rowid]($oper)
    */
   type ImputationConstructor = 
-    ((Database, List[String], Operator) => Map[String, (Model,Int)])
+    ((Database, String, List[String], Operator) => Map[String, (Model,Int)])
 
   /**
    * Factory method type for SchemaMatch model constructors
@@ -59,6 +60,7 @@ object ModelRegistry
    */
   type SchemaMatchConstructor =
     ((Database, 
+      String, 
       Either[Operator,List[(String,Type.T)]],
       Either[Operator,List[(String,Type.T)]]) => 
         Option[Map[String,(Model,Int)]])
