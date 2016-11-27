@@ -30,21 +30,43 @@ object ExpressionUtils {
 	}
 
 	/**
-	 * SQL CASE expresions are of the form:
+	 * SQL CASE expresions in form 1:
 	 *   CASE WHEN A THEN X WHEN B THEN Y ELSE Z END
-	 * And this gets represented as:
+	 * This gets represented as:
 	 *   ( [(A, X), (B, Y)], Z )
 	 * This utility method converts a case expression into
 	 * the equivalent chain of Mimir's If-Then-Else clauses:
 	 * if(A){ X } else { if(B){ Y } else { Z } }
 	 */
-	def makeCaseExpression(whenThenClauses: List[(Expression, Expression)], 
-						   elseClause: Expression): Expression =
+	def makeCaseExpression(
+    whenThenClauses: List[(Expression, Expression)], 
+		elseClause: Expression
+  ): Expression =
 	{
 		whenThenClauses.foldRight(elseClause)( (wt, e) => 
 			Conditional(wt._1, wt._2, e)
 		)
 	}
+
+  /**
+   * SQL CASE expresions in form 2:
+   *   CASE Q WHEN A THEN X WHEN B THEN Y ELSE Z END
+   * This gets represented as:
+   *   ( Q, [(A, X), (B, Y)], Z )
+   * This utility method converts a case expression into
+   * the equivalent chain of Mimir's If-Then-Else clauses:
+   * if(Q=A){ X } else { if(Q=B){ Y } else { Z } }
+   */
+  def makeCaseExpression(
+    testClause: Expression,
+    whenThenClauses: List[(Expression, Expression)], 
+    elseClause: Expression
+  ): Expression =
+  {
+    whenThenClauses.foldRight(elseClause)( (wt, e) => 
+      Conditional(Comparison(Cmp.Eq, testClause, wt._1), wt._2, e)
+    )
+  }
 
   /** 
    * Inverse of makeCaseExpression.  For rewrite simplicity, Mimir 

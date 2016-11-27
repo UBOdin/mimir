@@ -121,7 +121,7 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 					" *\\}\\}".r) ^^ {
 		case v ~ args => {
 			val fields = v.split("_")
-			VGTerm((fields(0),modelLookup(fields(0))), fields(1).toInt,
+			VGTerm(modelLookup(fields(0)), fields(1).toInt,
 				   args.getOrElse(List()))
 		}
 	}

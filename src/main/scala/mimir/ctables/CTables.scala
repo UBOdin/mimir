@@ -5,23 +5,23 @@ import mimir.models._
 import scala.util._
 
 case class VGTerm(
-  model: (String,Model), 
+  model: Model, 
   idx: Int,
   args: List[Expression]
 ) extends Proc(args) {
-  override def toString() = "{{ "+model._1+";"+idx+"["+args.mkString(", ")+"] }}"
-  override def getType(bindings: List[Type.T]):Type.T = model._2.varType(idx, bindings)
+  override def toString() = "{{ "+model.name+";"+idx+"["+args.mkString(", ")+"] }}"
+  override def getType(bindings: List[Type.T]):Type.T = model.varType(idx, bindings)
   override def children: List[Expression] = args
   override def rebuild(x: List[Expression]) = VGTerm(model, idx, x)
   def get(v: List[PrimitiveValue]): PrimitiveValue = 
   {
     // println("VGTerm: Get")
-    model._2.bestGuess(idx, v)
+    model.bestGuess(idx, v)
   }
   def reason(): Reason = 
     Reason(
-      model._2.reason(idx, args),
-      model._1,
+      model.reason(idx, args),
+      model.name,
       idx,
       args
     )

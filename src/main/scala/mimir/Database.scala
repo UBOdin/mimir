@@ -9,7 +9,7 @@ import mimir.algebra._
 import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, RowExplanation, VGTerm}
 import mimir.models.Model
 import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
-import mimir.lenses.{Lens, LensManager, BestGuessCache}
+import mimir.lenses.{LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
 import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens,CreateView,Explain}
 import mimir.optimizer.{InlineVGTerms, ResolveViews}
@@ -22,6 +22,7 @@ import net.sf.jsqlparser.statement.select.Select
 import net.sf.jsqlparser.statement.create.table.CreateTable
 import net.sf.jsqlparser.statement.drop.Drop
 
+import scala.collection.JavaConversions._
 
 import scala.collection.mutable.ListBuffer
 
@@ -83,7 +84,7 @@ case class Database(backend: Backend)
   //// Parsing
   val sql             = new mimir.sql.SqlToRA(this)
   val ra              = new mimir.sql.RAToSql(this)
-  val operator        = new mimir.parser.OperatorParser(this.getLensModel,
+  val operator        = new mimir.parser.OperatorParser(models.getModel _,
     (x) => 
       this.getTableSchema(x) match {
         case Some(x) => x
@@ -254,7 +255,7 @@ case class Database(backend: Backend)
   {
     (
       backend.getAllTables() ++ 
-      lenses.getAllLensNames()
+      views.listViews()
     ).toSet[String];
   }
 
@@ -297,7 +298,14 @@ case class Database(backend: Backend)
     stmt match {
       case sel:  Select     => throw new SQLException("Can't evaluate SELECT as an update")
       case expl: Explain    => throw new SQLException("Can't evaluate EXPLAIN as an update")
-      case lens: CreateLens => lenses.create(lens)
+      case lens: CreateLens => {
+        val t = lens.getType().toUpperCase()
+        val name = lens.getName()
+        val query = sql.convert(lens.getSelectBody())
+        val args = lens.getArgs().map(sql.convert(_)).toList
+
+        lenses.createLens(t, name, query, args)
+      }
       case view: CreateView => views.createView(view.getTable().getName(), 
                                                 sql.convert(view.getSelectBody()))
       case drop: Drop     => {
@@ -309,7 +317,7 @@ case class Database(backend: Backend)
               views.dropView(drop.getName());
 
             case "LENS" =>
-              lenses.drop(drop.getName())
+              lenses.dropLens(drop.getName())
 
             case _ =>
               throw new SQLException("Invalid drop type '"+drop.getType()+"'")
@@ -328,23 +336,11 @@ case class Database(backend: Backend)
   }
 
   /**
-   * Retrieve the Lens with the specified name.
-   */
-  def getLens(lensName: String): Lens =
-    lenses.load(lensName).get
-  /**
-   * Retrieve the Model for the Lens with the specified name.
-   */
-  def getLensModel(lensName: String): Model = 
-    lenses.modelForLens(lensName)  
-  /**
    * Retrieve the query corresponding to the Lens or Virtual View with the specified
    * name (or None if no such lens exists)
    */
   def getView(name: String): Option[(Operator)] =
-  {
-    views.getView(name).orElse( lenses.load(name.toUpperCase).map(_.view) )
-  }
+    views.getView(name)
 
   /**
    * Load a CSV file into the database
@@ -363,12 +359,12 @@ case class Database(backend: Backend)
    */
 
   def loadTable(targetTable: String, sourceFile: File){
-    LoadCSV.handleLoadTable(this, targetTable+"RAW", sourceFile)
-    val targetRaw = targetTable + "RAW"
+    val targetRaw = targetTable.toUpperCase + "RAW"
+    LoadCSV.handleLoadTable(this, targetRaw, sourceFile)
     val oper = getTableOperator(targetRaw)
     val l = List(new FloatPrimitive(.5))
 
-    lenses.create(oper, targetTable, l,"TYPE_INFERENCE")
+    lenses.createLens("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)
   }
   
   def loadTable(targetTable: String, sourceFile: String){

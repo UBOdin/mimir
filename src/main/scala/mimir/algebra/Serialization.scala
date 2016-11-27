@@ -43,8 +43,8 @@ class Serialization(db: Database) {
   def sanitize(expr: Expression): Expression =
   {
     expr match {
-      case VGTerm((model, _), idx, args) => 
-        SerializableVGTerm(model, idx, args.map(sanitize(_)))
+      case VGTerm(model, idx, args) => 
+        SerializableVGTerm(model.name, idx, args.map(sanitize(_)))
       case _ => 
         expr.recur(sanitize(_))
     }
@@ -59,7 +59,7 @@ class Serialization(db: Database) {
   {
     expr match {
       case SerializableVGTerm(model, idx, args) => 
-        VGTerm((model, db.lenses.modelForLens(model)), idx, args.map(desanitize(_)))
+        VGTerm(db.models.getModel(model), idx, args.map(desanitize(_)))
       case _ => 
         expr.recur(desanitize(_))
     }

@@ -169,7 +169,7 @@ object CTAnalyzer {
   def compileSample(expr: Expression, seed: Expression): Expression =
   {
     expr match {
-      case VGTerm((_,model), idx, args) => VGTermSampler(model, idx, args, seed)
+      case VGTerm(model, idx, args) => VGTermSampler(model, idx, args, seed)
       case _ => expr.rebuild(expr.children.map(compileSample(_, seed)))
     }
   }

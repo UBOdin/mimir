@@ -9,8 +9,13 @@ import mimir.algebra._
  *
  * The main function of the ModelManager is to provide a persistent
  * (Name -> Model) mapping.  Associations are created through
- * `registerModel`, removed with `dropModel`, and accessed with
- * `getModel`
+ * `persistModel`, removed with `dropModel`, and accessed with
+ * `getModel`.  The name of the model is given by Model's name field
+ *
+ * The secondary function is garbage collection.  The manager also 
+ * tracks a second set of 'owner' entities.  Owners can be used to
+ * cascade deletes on the owner entity to the models, and allows
+ * for reference counting with multiple owners.
  */
 class ModelManager(db:Database) {
   
@@ -20,6 +25,7 @@ class ModelManager(db:Database) {
   )
   val cache = scala.collection.mutable.Map[String,Model]()
   val modelTable = "MIMIR_MODELS"
+  val ownerTable = "MIMIR_MODEL_OWNERS"
   val base64in = java.util.Base64.getDecoder()
   val base64out = java.util.Base64.getEncoder()
 
@@ -36,12 +42,18 @@ class ModelManager(db:Database) {
         PRIMARY KEY (name)
       )
     """)
+    db.backend.update(s"""
+      CREATE TABLE $ownerTable(
+        model varchar(100), 
+        owner varchar(100)
+      )
+    """)
   }
 
   /**
    * Declare (and cache) a new Name -> Model association
    */
-  def registerModel(name:String, model:Model): Unit =
+  def persistModel(model:Model): Unit =
   {
     val (serialized,decoder) = model.serialize
 
@@ -49,11 +61,11 @@ class ModelManager(db:Database) {
       INSERT INTO $modelTable(name, encoded, decoder)
              VALUES (?, ?, ?)
     """, List(
-      StringPrimitive(name),
+      StringPrimitive(model.name),
       StringPrimitive(base64out.encodeToString(serialized)),
       StringPrimitive(decoder.toUpperCase)
     ))
-    cache.put(name, model)
+    cache.put(model.name, model)
   }
 
   /**
@@ -67,36 +79,133 @@ class ModelManager(db:Database) {
     cache.remove(name)
   }
 
+  /**
+   * Retrieve a model by its name
+   */
   def getModel(name:String): Model =
   {
-    val resultRows =
-      db.backend.resultRows(s"""
-        SELECT decoder, encoded FROM $modelTable WHERE name = ?
-      """,List(StringPrimitive(name)));
-
-    if(!resultRows.hasNext){
-      throw new RAException("Undefined Model '"+name+"'")
-    }
-    val (decoder:String, encoded:String) = 
-      resultRows.next match {
-        case List(decoder, encoded) => (decoder.asString, encoded.asString)
-        case _ => 
-          throw new SQLException("Error on backend: Expecting only 2 fields in result")
-      }
-    if(resultRows.hasNext){
-      throw new SQLException("Error on backend: Multiple rows for the same model name")
-    }
-
-    val decoderImpl:(Array[Byte] => Model) = 
-      decoders.get(decoder) match {
-        case None => throw new RAException("Unknown Model Decoder '"+decoder+"'")
-        case Some(impl) => impl(db, _)
-      }
-
-    return decoderImpl( base64in.decode(encoded) )
+    prefetch(name)
+    return cache(name)
   }
 
-  def decodeSerializable(ignored: Database, data: Array[Byte]): Model =
+  /**
+   * Declare (and cache) a new Name -> Model association, and 
+   * assign the model to an owner entity.
+   */
+  def persistModel(model:Model, owner:String): Unit =
+  {
+    persistModel(model);
+    associateOwner(model.name, owner);
+  }
+
+  /**
+   * Assign a model to an owner entity
+   */
+  def associateOwner(model:String, owner:String): Unit =
+  {
+    db.backend.update(s"""
+      INSERT INTO $ownerTable(model, owner) VALUES (?,?)
+    """, List(
+      StringPrimitive(model),
+      StringPrimitive(owner)
+    ))
+  }
+
+  /**
+   * Disassociate a model from an owner entity and cascade the delete
+   * to the model if this is the last owner
+   */
+  def disassociateOwner(model:String, owner:String): Unit =
+  {
+    db.backend.update(s"""
+      DELETE FROM $ownerTable WHERE model = ? AND owner = ?
+    """, List(
+      StringPrimitive(model),
+      StringPrimitive(owner)
+    ))
+    garbageCollectIfNeeded(model)
+  }
+
+  /**
+   * Drop an owner cascade the delete to any models owned by the
+   * owner entity
+   */
+  def dropOwner(owner:String): Unit =
+  {
+    val models = 
+      db.backend.resultRows(s"""
+        SELECT model FROM $ownerTable WHERE owner = ?
+      """).flatten.toList
+    db.backend.update(s"""
+      DELETE FROM $ownerTable WHERE owner = ?
+    """, List(
+      StringPrimitive(owner)
+    ))
+    models.map(_.asString).foreach(garbageCollectIfNeeded(_))
+  }
+
+  /**
+   * Prefetch a given model
+   */
+  def prefetch(model: String): Unit =
+  {
+    prefetchWithRows(
+      db.backend.resultRows(s"""
+        SELECT decoder, encoded FROM $modelTable WHERE name = ?
+      """, List(
+        StringPrimitive(model)
+      ))
+    )
+  }
+
+  /**
+   * Prefetch models for a given owner
+   */
+  def prefetchForOwner(owner:String): Unit =
+  {
+    prefetchWithRows(
+      db.backend.resultRows(s"""
+        SELECT m.decoder, m.encoded 
+        FROM $modelTable m, $ownerTable o
+        WHERE m.name = o.name 
+          AND o.owner = ?
+      """, List(
+        StringPrimitive(owner)
+      ))
+    )
+  }
+
+  private def prefetchWithRows(rows:Iterator[List[PrimitiveValue]]): Unit =
+  {
+    rows.foreach({
+      case List(decoder, encoded) => {
+        val decoderImpl:(Array[Byte] => Model) = 
+          decoders.get(decoder.asString) match {
+            case None => throw new RAException("Unknown Model Decoder '"+decoder+"'")
+            case Some(impl) => impl(db, _)
+          }
+
+        val model = decoderImpl( base64in.decode(encoded.asString) )
+        cache.put(model.name, model)
+      }
+
+      case _ => 
+        throw new SQLException("Error on backend: Expecting only 2 fields in result")
+    })
+  }
+
+  private def garbageCollectIfNeeded(model: String): Unit =
+  {
+    val otherOwners = 
+      db.backend.resultRows(s"""
+        SELECT FROM $ownerTable WHERE model = ?
+      """, List(
+        StringPrimitive(model)
+      ))
+    if(!otherOwners.hasNext){ dropModel(model) }
+  }
+
+  private def decodeSerializable(ignored: Database, data: Array[Byte]): Model =
   {
     val objects = new java.io.ObjectInputStream(
         new java.io.ByteArrayInputStream(data)
