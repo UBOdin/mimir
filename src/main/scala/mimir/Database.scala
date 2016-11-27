@@ -333,6 +333,7 @@ case class Database(backend: Backend)
   def initializeDBForMimir(): Unit = {
     models.init()
     views.init()
+    lenses.init()
   }
 
   /**

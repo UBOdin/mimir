@@ -27,7 +27,15 @@ object ModelRegistry
    *    Operator        -> The relation to impute on
    * Outputs:
    *    Map[...]        -> A map from column name to a Model/Idx pair 
-   *                       defining the variable to be used.
+   *                       defining a way to repair the attribute
+   *
+   * Note that although we request models for a set of columns in a
+   * single pass, the constructor is not required to respond with a
+   * model for all, or even any of the columns it's given.  
+   *   - If the model in question is not applicable to the query, it 
+   *     should return an empty map.
+   *   - If the model in question is not applicable to one or more 
+   *     columns, these columns need not be in the result map.
    * 
    * Imputation models are expected to take a single variable, 
    * identifying the ROWID of the specified row.  In other words, 
@@ -50,8 +58,23 @@ object ModelRegistry
    * A SchemaMatch model takes two relations or schemas and maps
    * the left-hand side's schema into the right-hand side's.
    *
-   * That is, construct(db,A,B) should produce a model that dictates
-   * how to safely perform the query (map(A) UNION B)
+   * Inputs:
+   *    Database           -> The database to train on
+   *    String             -> The name prefix for the model
+   *    Operator | Schema  -> The source query or schema (to map from)
+   *    Operator | Schema  -> The target query or schema (to map to)
+   *
+   * Outputs:
+   *    Map[...]           -> A map from a target column name to a 
+   *                          Model/Idx pair defining a way to map the 
+   *                          specified target.
+   *
+   * Note that the constructor is not required to respond with a model
+   * for all, or even any of the columns in the target schema
+   *   - If the model in question is not applicable to the query, it 
+   *     should return an empty map.
+   *   - If the model in question is not applicable to one or more 
+   *     columns, these columns need not be in the result map.
    * 
    * SchemaMatch models take no variables.  Each Model/Index pair
    * dictates how one target column is to be matched.  The return value
@@ -63,7 +86,7 @@ object ModelRegistry
       String, 
       Either[Operator,List[(String,Type.T)]],
       Either[Operator,List[(String,Type.T)]]) => 
-        Option[Map[String,(Model,Int)]])
+        Map[String,(Model,Int)])
 
   /////////////////// PREDEFINED CONSTRUCTORS ///////////////////
 

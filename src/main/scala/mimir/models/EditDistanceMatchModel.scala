@@ -29,7 +29,7 @@ object EditDistanceMatchModel
     name: String,
     source: Either[Operator,List[(String,Type.T)]], 
     target: Either[Operator,List[(String,Type.T)]]
-  ): Option[Map[String,(Model,Int)]] = 
+  ): Map[String,(Model,Int)] = 
   {
     val sourceSch = source match {
         case Left(oper) => oper.schema
@@ -38,18 +38,16 @@ object EditDistanceMatchModel
         case Left(oper) => oper.schema
         case Right(sch) => sch }
 
-    Some(
-      targetSch.map({ case (targetCol,targetType) =>
-        targetCol -> (new EditDistanceMatchModel(
-          s"$name:$targetCol",
-          defaultMetric,
-          (targetCol, targetType),
-          sourceSch.
-            filter((x) => isTypeCompatible(targetType, x._2)).
-            map( _._1 )
-        ), 0)
-      }).toMap
-    )
+    targetSch.map({ case (targetCol,targetType) =>
+      targetCol -> (new EditDistanceMatchModel(
+        s"$name:$targetCol",
+        defaultMetric,
+        (targetCol, targetType),
+        sourceSch.
+          filter((x) => isTypeCompatible(targetType, x._2)).
+          map( _._1 )
+      ), 0)
+    }).toMap
   }
 
 
@@ -72,8 +70,8 @@ class EditDistanceMatchModel(
   sourceCandidates: List[String]
 ) extends SingleVarModel(name) with Serializable
 {
+  var total = 0.0
   var colMapping:List[(String,Double)] = {
-    var total = 0.0
     var cumSum = 0.0
     // calculate distance
 
@@ -83,7 +81,7 @@ class EditDistanceMatchModel(
       (sourceColumn, dist)
     }).
     sortBy(_._2).
-    map({ case (k, v) => (k, v / total) })
+    map({ case (k, v) => (k, total - v) })
   } 
   def varType(argTypes: List[Type.T]) = Type.TString
 
@@ -101,7 +99,9 @@ class EditDistanceMatchModel(
   }
 
   def reason(args: List[Expression]): String = {
-    ("I assumed that " + colMapping.head._1 + " maps to " + target._1 + 
-      " ("+ (colMapping.head._2 * 100).toInt +"% likely)")
+    val sourceName = colMapping.head._1
+    val targetName = target._1
+    val editDistance = (total - colMapping.head._2)
+    s"I assumed that $sourceName maps to $targetName (Edit distance: $editDistance / $total)"
   }
 }

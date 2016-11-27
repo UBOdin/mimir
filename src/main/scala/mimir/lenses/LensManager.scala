@@ -13,12 +13,14 @@ class LensManager(db: Database) {
 
   val lensTypes = Map[String,((Database,String,Operator,List[Expression]) => 
                               (Operator,List[Model]))](
-    "MISSING_VALUE" -> MissingValueLens.create _
+    "MISSING_VALUE"  -> MissingValueLens.create _,
+    "SCHEMA_MATCH"   -> SchemaMatchingLens.create _,
+    "TYPE_INFERENCE" -> TypeInferenceLens.create _
   )
 
   def init(): Unit =
   {
-
+    // no-op for now.
   }
 
   def createLens(
@@ -34,12 +36,18 @@ class LensManager(db: Database) {
         case None => throw new SQLException("Invalid Lens Type '"+t+"'")
       }
 
-    constructor(db, name, query, args)
+    val (view, models) = constructor(db, name, query, args)
+    db.views.createView(name, view)
+    models.foreach( model => 
+      db.models.persistModel(model, s"LENS:$name")
+    )
   }
 
   def dropLens(name: String): Unit =
   {
-
+    db.views.dropView(name)
+    db.models.dropOwner(s"LENS:$name")
   }
 
 }
+

@@ -208,4 +208,19 @@ object ExpressionUtils {
       case _ => List(e)
     }
   }
+
+  /**
+   * Cast an expression, but only if neceessary
+   */
+  def makeCast(e: Expression, targetT: Type.T, schema: Map[String,Type.T]): 
+    Expression =
+  {
+    val sourceT = Typechecker.typeOf(e, schema)
+    if(sourceT != targetT){
+      Function("CAST", List(e, TypePrimitive(targetT)))
+    } else {
+      e
+    }
+
+  }
 }

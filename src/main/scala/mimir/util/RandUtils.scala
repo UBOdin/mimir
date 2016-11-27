@@ -11,4 +11,8 @@ object RandUtils {
     fields.find( (x) => { pick = pick - x._2; pick < 0 }).get._1
   }
 
+  def pickFromList[A](rnd: Random, fields: List[A]): A =
+  {
+    fields(rnd.nextInt(fields.length))
+  }
 }
