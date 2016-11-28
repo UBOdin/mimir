@@ -20,7 +20,7 @@ object OracleTpchQueries extends Specification {
 
   val dbName = "osmall.db"
   val backend = "oracle"
-  val db = new Database(dbName, new JDBCBackend(backend, dbName))
+  val db = new Database(new JDBCBackend(backend, dbName))
 
   if(new File("config/jdbc.property").exists()){
     "Mimir" should  {

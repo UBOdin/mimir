@@ -14,7 +14,7 @@ import mimir.models._
 
 object CTPartitionSpec extends Specification {
   
-  val boundsSpecModel = IndependentVarsModel(List(
+  val boundsSpecModel = IndependentVarsModel("TEST", List(
     UniformDistribution,
     UniformDistribution,
     UniformDistribution,
@@ -32,7 +32,7 @@ object CTPartitionSpec extends Specification {
     ))
   )
 
-  def db = Database("testdb", null);
+  def db = Database(null);
   def parser = new OperatorParser((x: String) => boundsSpecModel, schema(_))
   def expr = parser.expr _
   def oper = parser.operator _

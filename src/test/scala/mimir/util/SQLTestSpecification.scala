@@ -26,7 +26,7 @@ object DBTestInstances
             case "NO" => false; case "YES" => true
           }
           val oldDBExists = dbFile.exists();
-          val tmpDB = new Database(tempDBName, new JDBCBackend(jdbcBackendMode, tempDBName+".db"));
+          val tmpDB = new Database(new JDBCBackend(jdbcBackendMode, tempDBName+".db"));
           if(shouldResetDB){
             if(dbFile.exists()){ dbFile.delete(); }
           }
@@ -49,7 +49,11 @@ object DBTestInstances
   }
 }
 
-
+/**
+ * Generic superclass for a test.
+ * 
+ * TODO: Turn this into a trait or set of traits
+ */
 abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,String] = Map())
   extends Specification
 {
@@ -99,7 +103,9 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     db.update(s)
   def update(s: String) = 
     db.update(stmt(s))
-  def parser = new OperatorParser(db.lenses.modelForLens, db.getTableSchema(_).get)
+  def loadCSV(table: String, file: File) =
+    LoadCSV.handleLoadTable(db, table, file)
+  def parser = new OperatorParser(db.models.getModel, db.getTableSchema(_).get)
   def expr = parser.expr _
   def oper = parser.operator _
   def i = IntPrimitive(_:Long).asInstanceOf[PrimitiveValue]

@@ -22,7 +22,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 	}
 	def convert(s: String) =
 		db.sql.convert(stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select])
-	def parser = new ExpressionParser(db.lenses.modelForLens)
+	def parser = new ExpressionParser(db.models.getModel)
 	def expr = parser.expr _
 
 	val tempDB:String = "tempDB"
@@ -45,7 +45,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 				if(dbFile.exists()){ dbFile.delete(); }
 				dbFile.deleteOnExit();
 			}
-			val d = new Database("testdb", new JDBCBackend("sqlite",
+			val d = new Database(new JDBCBackend("sqlite",
 				if(tempDB == null){ "testdb" } else { tempDB.toString }
 			))
 		    try {
@@ -425,7 +425,8 @@ object SqlParserSpec extends Specification with FileMatchers {
 			 	db.backend.resultRows("SELECT "+
 			 		db.bestGuessCache.keyColumn(0)+","+
 			 		db.bestGuessCache.dataColumn+" FROM "+
-			 		db.bestGuessCache.cacheTableForLens("SANER", 1)
+			 		db.bestGuessCache.cacheTableForModel(
+			 			db.models.getModel("SANER:WEKA:B"), 1)
 			 	)
 			guessCacheData must contain( ===(List[PrimitiveValue](IntPrimitive(3), IntPrimitive(3))) )
 		 	

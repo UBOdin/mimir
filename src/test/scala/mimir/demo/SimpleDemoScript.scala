@@ -132,9 +132,13 @@ object SimpleDemoScript
 		}
 
 		"Create Backing Stores Correctly" >> {
-			val result = db.backend.resultRows("SELECT "+db.bestGuessCache.dataColumn+" FROM "+db.bestGuessCache.cacheTableForLens("RATINGS1FINAL", 1))
+			val model = db.models.getModel("RATINGS1FINAL:WEKA:RATING")
+			val result = db.backend.resultRows(
+				"SELECT "+db.bestGuessCache.dataColumn+
+				" FROM "+db.bestGuessCache.cacheTableForModel(model, 1)
+			)
 			result.map( _(0).getType ).toSet must be equalTo Set(Type.TFloat)
-			db.getTableSchema(db.bestGuessCache.cacheTableForLens("RATINGS1FINAL", 1)).get must contain(eachOf( (db.bestGuessCache.dataColumn, Type.TFloat) ))
+			db.getTableSchema(db.bestGuessCache.cacheTableForModel(model, 1)).get must contain(eachOf( (db.bestGuessCache.dataColumn, Type.TFloat) ))
 
 		}
 

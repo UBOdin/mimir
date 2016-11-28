@@ -17,7 +17,7 @@ import mimir.models._
 
 object CTPercolatorSpec extends Specification {
   
-  val baseModel = IndependentVarsModel(List(
+  val baseModel = IndependentVarsModel("TEST", List(
     UniformDistribution,
     UniformDistribution,
     UniformDistribution,

@@ -63,10 +63,9 @@ object UniformDistribution extends SingleVarModel("UNIFORM") with Serializable {
     "I put in a random value between "+args(0)+" and "+args(1)
 }
 
-case class NoOpModel(vt: Type.T) extends SingleVarModel("NO-OP-"+vt) with Serializable {
+case class NoOpModel(override val name: String, vt: Type.T, reasonText:String) extends SingleVarModel(name) with Serializable {
   def varType(argTypes: List[Type.T]) = vt
   def bestGuess(args: List[PrimitiveValue]) = args(0)
   def sample(randomness: Random, args: List[PrimitiveValue]) = args(0)
-  def reason(args: List[Expression]): String = 
-    "I was asked to tag this value for some reason"
+  def reason(args: List[Expression]): String = reasonText
 }

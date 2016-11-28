@@ -16,7 +16,7 @@ object RaToSqlSpec extends Specification  {
       ("B", Type.TInt)
     ))
   )
-  val db = new Database("TestDB", new NullBackend(schema))
+  val db = new Database(new NullBackend(schema))
 
   def parser = new OperatorParser((x: String) => null, schema.get(_).get)
   def expr = parser.expr _
