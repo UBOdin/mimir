@@ -12,6 +12,7 @@
   <logger name="mimir.lenses.BestGuessCache" level="INFO"/>
   <logger name="mimir.sql.sqlite.MimirCast$" level="INFO"/>
   <logger name="mimir.ctables.CTExplainer" level="INFO"/>
+  <logger name="mimir.util.LoadCSV$" level="INFO"/>
  
   <root level="TRACE">
     <appender-ref ref="STDOUT" />

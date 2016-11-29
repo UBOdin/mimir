@@ -19,6 +19,7 @@ abstract class Backend {
     sel.setSelectBody(selB);
     return execute(sel);
   }
+
   def resultRows(sel: String):Iterator[List[PrimitiveValue]] = 
     JDBCUtils.extractAllRows(execute(sel))
   def resultRows(sel: String, args: List[PrimitiveValue]):Iterator[List[PrimitiveValue]] =
@@ -27,6 +28,15 @@ abstract class Backend {
     JDBCUtils.extractAllRows(execute(sel))
   def resultRows(sel: SelectBody):Iterator[List[PrimitiveValue]] =
     JDBCUtils.extractAllRows(execute(sel))
+
+  def resultValue(sel:String):PrimitiveValue =
+    resultRows(sel).next.head
+  def resultValue(sel:String, args: List[PrimitiveValue]):PrimitiveValue =
+    resultRows(sel, args).next.head
+  def resultValue(sel:Select):PrimitiveValue =
+    resultRows(sel).next.head
+  def resultValue(sel:SelectBody):PrimitiveValue =
+    resultRows(sel).next.head
   
   def getTableSchema(table: String): Option[List[(String, Type.T)]]
 

@@ -1,5 +1,7 @@
 package mimir.util
 
+import com.typesafe.scalalogging.slf4j.LazyLogging
+
 import java.io.{File, FileReader, BufferedReader}
 import java.sql.SQLException
 
@@ -8,7 +10,7 @@ import mimir.algebra.Type
 
 import scala.collection.mutable.ListBuffer
 
-object LoadCSV {
+object LoadCSV extends LazyLogging {
 
   def handleLoadTable(db: Database, targetTable: String, sourceFile: File){
     val input = new BufferedReader(new FileReader(sourceFile))
@@ -60,25 +62,46 @@ object LoadCSV {
                             src: BufferedReader,
                             targetTable: String,
                             sch: List[(String, Type.T)]): Unit = {
-    val keys = sch.map(_._1).map((x) => "\'"+x+"\'").mkString(", ")
+    val keys = 
+      sch.
+        map(_._1).
+        // map((x) => "\'"+x+"\'").
+        mkString(", ")
+
     val statements = new ListBuffer[String]()
 
-    while(true){
-      val line = src.readLine()
-      if(line == null) { if(statements.nonEmpty) db.backend.update(statements.toList); return }
+    val doInsert = () => {
+      if(statements.nonEmpty) {
+        val cmd = 
+          s"INSERT INTO $targetTable($keys) VALUES "+statements.mkString(",")
+        try {
+          logger.trace(s"INSERT: $cmd")
+          db.backend.update(cmd)
+        } catch {
+          case (e: SQLException) => 
+            throw new SQLException("Bulk Load Error: "+cmd, e)
+        }
+      }
+      statements.clear()
+    }   
+
+    var line = src.readLine()
+
+    while(line != null){
+      if(statements.size >= 1){ doInsert() }
 
       val dataLine = line.trim.split(",").padTo(sch.size, "")
-      val data = dataLine.indices.map( (i) =>
-        dataLine(i) match {
-          case "" => null
-          case x => sch(i)._2 match {
-            case Type.TDate | Type.TString => "\'"+x+"\'"
-            case _ => x
-          }
-        }
-      ).mkString(", ")
+      val data = dataLine.zip(sch).map({ 
+          case ("", _) => null
+          case (x, (_, (Type.TDate | Type.TString))) => "\'"+x+"\'"
+          case (x, (_, Type.TInt))   if x.matches("^[+-]?[0-9]+$") => x
+          case (x, (_, Type.TFloat)) if x.matches("^[+-]?[0-9]+([.][0-9]+)?(e[+-]?[0-9]+)?$") => x
+          case (x, (c,t)) => logger.warn(s"Don't know how to deal with $c ($t): $x, using null instead"); null
+      }).mkString(", ")
 
-      statements.append("INSERT INTO "+targetTable+"("+keys+") VALUES ("+data+")")
+      statements.append(s"($data)")
+      line = src.readLine()
     }
+    doInsert()
   }
 }

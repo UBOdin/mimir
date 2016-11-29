@@ -112,7 +112,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
       throw new SQLException("Trying to use unopened connection!")
     }
     val stmt = conn.createStatement()
-    upd.indices.foreach(i => stmt.addBatch(upd(i)))
+    upd.foreach( u => stmt.addBatch(u) )
     stmt.executeBatch()
     stmt.close()
   }
