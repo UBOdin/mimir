@@ -7,7 +7,7 @@ import java.util
 import mimir.algebra._
 import mimir.ctables._
 import mimir.exec.ResultIterator
-import mimir.util.{TypeUtils,RandUtils}
+import mimir.util.RandUtils
 import mimir.{Analysis, Database}
 import moa.classifiers.Classifier
 import moa.core.InstancesHeader

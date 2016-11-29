@@ -10,12 +10,17 @@ object WekaModelSpec extends SQLTestSpecification("WekaTest")
 
   var models = Map[String,(Model,Int)]()
 
-  def predict(col:String, row:String): String = {
+  def predict(col:String, row:String): PrimitiveValue = {
     val (model, idx) = models(col)
-    model.bestGuess(idx, List(RowIdPrimitive(row))).asString
+    model.bestGuess(idx, List(RowIdPrimitive(row)))
   }
-  def trueValue(col:String, row:String): String =
-    db.backend.resultValue(s"SELECT $col FROM CPUSPEED WHERE ROWID=$row").asString
+  def trueValue(col:String, row:String): PrimitiveValue = {
+    val t = db.getTableSchema("CPUSPEED").get.find(_._1.equals(col)).get._2
+    JDBCUtils.extractAllRows(
+      db.backend.execute(s"SELECT $col FROM CPUSPEED WHERE ROWID=$row"),
+      List(t)
+    ).next.head
+  }
 
 
   "Intializing" should {
@@ -57,14 +62,16 @@ object WekaModelSpec extends SQLTestSpecification("WekaTest")
     "Not choke when training multiple columns" >> {
       models = models ++ WekaModel.train(db, "CPUSPEEDREPAIR", List(
         "CORES",
-        "EM64T"
+        "TECHINMICRONS"
       ), db.getTableOperator("CPUSPEED"))
-      models.keys must contain("CORES", "EM64T")
+      models.keys must contain("CORES", "TECHINMICRONS")
     }
 
     "Make reasonable predictions" >> {
 
       predict("BUSSPEEDINMHZ", "3") must be equalTo trueValue("BUSSPEEDINMHZ", "3")
+      predict("TECHINMICRONS", "22") must be equalTo trueValue("TECHINMICRONS", "22")
+      predict("CORES", "20") must be equalTo trueValue("CORES", "20")
 
     }
 

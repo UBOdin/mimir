@@ -34,6 +34,7 @@ class Compiler(db: Database) extends LazyLogging {
    */
   def compile(rawOper: Operator, opts: List[Operator => Operator]): ResultIterator = 
   {
+    logger.debug("HELLO!")
     // Recursively expand all view tables using mimir.optimizer.ResolveViews
     var oper = ResolveViews(db, rawOper)
 
@@ -92,6 +93,8 @@ class Compiler(db: Database) extends LazyLogging {
     // a lookup table with name + position in the query being execed.
     val finalSchemaOrderLookup = 
       finalSchema.map(_._1).zipWithIndex.toMap
+
+    logger.debug(s"SCHEMA: $finalSchema")
 
     // Generate the SQL
     val sql = db.ra.convert(oper)

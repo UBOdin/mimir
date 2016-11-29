@@ -7,7 +7,6 @@ import mimir.Database
 import mimir.algebra._
 import mimir.provenance._
 import mimir.optimizer.{InlineProjections, PushdownSelections}
-import mimir.util.TypeUtils
 
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._

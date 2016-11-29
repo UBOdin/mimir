@@ -8,7 +8,6 @@ import mimir.algebra.Type.T
 import mimir.algebra._
 import mimir.ctables._
 import mimir.exec.ResultIterator
-import mimir.util.TypeUtils
 import mimir.models._
 
 object TypeInferenceLens

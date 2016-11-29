@@ -79,15 +79,6 @@ object JDBCUtils {
     cal.setTime(d)
     convertDate(cal)
   }
-  def convertDate(s: String): PrimitiveValue =
-  {
-    try {
-      val fields = s.split("-").map( Integer.parseInt(_) )
-      DatePrimitive(fields(0), fields(1), fields(2))
-    } catch {
-      case n: NumberFormatException => NullPrimitive()
-    }
-  }
   def convertDate(d: DatePrimitive): Date =
   {
     val cal = Calendar.getInstance()

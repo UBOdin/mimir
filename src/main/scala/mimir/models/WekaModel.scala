@@ -7,7 +7,7 @@ import java.util
 import mimir.algebra._
 import mimir.ctables._
 import mimir.exec.ResultIterator
-import mimir.util.{TypeUtils,RandUtils}
+import mimir.util.{RandUtils,TextUtils}
 import mimir.{Analysis, Database}
 import moa.classifiers.Classifier
 import moa.core.InstancesHeader
@@ -28,19 +28,6 @@ object WekaModel
       model.train(db)
       col -> (model, 0)
     }).toMap
-  }
-
-  def getAttributesFromIterator(iterator: ResultIterator): util.ArrayList[Attribute] = {
-    val attributes = new util.ArrayList[Attribute]()
-    iterator.schema.foreach { case (n, t) =>
-      (n, t) match {
-        case (_, Type.TRowId) => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
-        case (_, Type.TInt | Type.TFloat) => attributes.add(new Attribute(n))
-        case _ => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
-      }
-    }
-
-    attributes
   }
 
   def decode(db: Database, data: Array[Byte]): Model =
@@ -70,6 +57,7 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
   var numSamples = 0
   var numCorrect = 0
   val colIdx = target.schema.map(_._1).indexOf(colName)
+  val colType = target.schema(colIdx)._2
   var learner: Classifier = null
   var db: Database = null
 
@@ -78,7 +66,7 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
     this.db = db
     learner = Analysis.getLearner("moa.classifiers.bayes.NaiveBayes")
     val iterator = db.query(target)
-    val attributes = WekaModel.getAttributesFromIterator(iterator)
+    val attributes = getAttributesFromIterator(iterator)
     var data = new Instances("TrainData", attributes, 100)
 
     var numInstances = 0
@@ -91,7 +79,7 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
       instance.setDataset(data)
       for(j <- 0 until iterator.numCols                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       ) {
         iterator.schema(j)._2 match {
-          case Type.TInt | Type.TFloat =>
+          case (Type.TInt | Type.TFloat) if (j != colIdx) =>
             try {
               instance.setValue(j, iterator(j).asDouble)
             } catch {
@@ -125,10 +113,10 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
 
   private def getAttributesFromIterator(iterator: ResultIterator): util.ArrayList[Attribute] = {
     val attributes = new util.ArrayList[Attribute]()
-    iterator.schema.foreach { case (n, t) =>
-      (n, t) match {
-        case (_, Type.TRowId) => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
-        case (_, Type.TInt | Type.TFloat) => attributes.add(new Attribute(n))
+    iterator.schema.zipWithIndex.foreach { case ((n, t), i) =>
+      t match {
+        case Type.TRowId => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
+        case (Type.TInt | Type.TFloat) if (i != colIdx) => attributes.add(new Attribute(n))
         case _ => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
       }
     }
@@ -173,12 +161,8 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
   private def classToPrimitive(classIdx: Int): PrimitiveValue = 
   {
     val att = learner.getModelContext.attribute(colIdx)
-    if (att.isString)
-      StringPrimitive(att.value(classIdx))
-    else if (att.isNumeric)
-      IntPrimitive(classIdx)
-    else
-      throw new SQLException("Unknown type")
+    val str = att.value(classIdx)
+    TextUtils.parsePrimitive(colType, str)
   }
 
   def varType(argTypes: List[Type.T]): Type.T = 
