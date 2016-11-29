@@ -34,7 +34,6 @@ class Compiler(db: Database) extends LazyLogging {
    */
   def compile(rawOper: Operator, opts: List[Operator => Operator]): ResultIterator = 
   {
-    logger.debug("HELLO!")
     // Recursively expand all view tables using mimir.optimizer.ResolveViews
     var oper = ResolveViews(db, rawOper)
 
