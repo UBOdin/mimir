@@ -123,8 +123,11 @@ object ShredderLensSpec
       database.query(testLens.view).foreachRow( _ => {} )
       var endQuery:Long = System.nanoTime();
       println("Query TOOK: "+((endQuery - startQuery)/1000000) + " MILLISECONDS")
+
+      var startInsert:Long = System.nanoTime();
       database.selectInto("LENSOUTPUT", testLens.view)
-	
+      var endInsert:Long = System.nanoTime();
+      println("Query TOOK: "+((endInsert - startInsert)/1000000) + " MILLISECONDS")
       
       // val s:List[(String,Type.T)] = testLens.schema()
       // var sc:String = ""
@@ -142,7 +145,7 @@ object ShredderLensSpec
       // writer1.close()
       // LoadCSV.handleLoadTable(db, "LENSOUTPUT", new File("OUT.csv"))
       var startQ:Long = System.nanoTime();
-      database.backend.execute("SELECT * FROM LENSOUTPUT")
+      val q = database.backend.execute("SELECT * FROM LENSOUTPUT;")
       var endQ:Long = System.nanoTime();
       println("Output Query TOOK: "+((endQ - startQ)/1000000) + " MILLISECONDS")
       true
