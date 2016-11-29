@@ -15,7 +15,7 @@ import org.apache.lucene.search.spell.{
 object EditDistanceMatchModel
 {
   /**
-   * The choice of distance metric, from apache lucene.
+   * The choice of distance metric, from Apache Lucene.
    *
    * Options include:
    *  - JaroWinklerDistance()
@@ -70,18 +70,23 @@ class EditDistanceMatchModel(
   sourceCandidates: List[String]
 ) extends SingleVarModel(name) with Serializable
 {
-  var total = 0.0
+  /** 
+   * A mapping for this column.  Lucene Discance metrics use a [0-1] range as:
+   *    0 == Strings Are Maximally Different
+   *    1 == Strings Are Identical
+   * 
+   * In other words, distance is a bit of a misnomer.  It's more of a score, which
+   * in turn allows us to use it as-is.
+   */
   var colMapping:List[(String,Double)] = {
     var cumSum = 0.0
     // calculate distance
 
     sourceCandidates.map( sourceColumn => {
       val dist = metric.getDistance(sourceColumn, target._1)
-      total += dist
       (sourceColumn, dist)
     }).
-    sortBy(_._2).
-    map({ case (k, v) => (k, total - v) })
+    map({ case (k, v) => (k, v.toDouble) })
   } 
   def varType(argTypes: List[Type.T]) = Type.TString
 
@@ -94,14 +99,14 @@ class EditDistanceMatchModel(
 
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = {
     StringPrimitive(  
-      colMapping.head._1
+      colMapping.maxBy(_._2)._1
     )
   }
 
   def reason(args: List[Expression]): String = {
     val sourceName = colMapping.head._1
     val targetName = target._1
-    val editDistance = (total - colMapping.head._2)
-    s"I assumed that $sourceName maps to $targetName (Edit distance: $editDistance / $total)"
+    val editDistance = (colMapping.head._2) * 100
+    s"I assumed that $sourceName maps to $targetName (Match: $editDistance%)"
   }
 }
