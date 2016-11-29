@@ -34,7 +34,7 @@ object LoadCSV extends LazyLogging {
       case None =>
         if(headerDetected(firstLine)) {
           db.backend.update("CREATE TABLE "+targetTable+"("+
-            firstLine.split(",").map((x) => "\'"+x.trim.replace(" ", "")+"\'" ).mkString(" varchar, ")+
+            firstLine.split(",").map((x) => x.trim.replace("^([0-9])","X\1").replaceAll("[^a-zA-Z0-9]+", "_").toUpperCase ).mkString(" varchar, ")+
             " varchar)")
 
           handleLoadTable(db, targetTable, sourceFile)
