@@ -17,6 +17,14 @@ object TypeInferenceModel
     ("(?i:true|false)",                Type.TBool)
   )
 
+  val priority = Map(
+    Type.TInt    -> 10,
+    Type.TBool   -> 10,
+    Type.TDate   -> 10,
+    Type.TFloat  -> 5,
+    Type.TString -> 0
+  )
+
   def detectType(v: String): List[Type.T] = {
     typeTests.flatMap({ case (test, t) =>
       if(v.matches(test)){ Some(t) }
@@ -52,8 +60,11 @@ class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
     candidates.foreach( t => { votes(t) = votes.getOrElse(t, 0.0) + 1.0 } )
   }
 
-  private def voteList = 
+  private final def voteList = 
     (Type.TString, defaultFrac * totalVotes) :: votes.toList
+
+  private final def rankFn(x:(Type.T, Double)) =
+    (x._2, TypeInferenceModel.priority(x._1) )
 
   def varType(argTypes: List[Type.T]) = Type.TType
   def sample(randomness: Random, args: List[PrimitiveValue]): PrimitiveValue = 
@@ -63,18 +74,16 @@ class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
 
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = 
   {
-    val maxVotes = voteList.max(_._2)
-    val typesWithMaxVotes = voteList.filter( _._2 >= maxVotes )
+    val guess = voteList.maxBy( rankFn _ )._1
     logger.debug(s"Votes: $voteList -> $guess")
     TypePrimitive(guess)
   }
 
   def reason(args: List[Expression]): String = {
-    val (guess, guessVotes) = voteList.maxBy(_._2)
+    val (guess, guessVotes) = voteList.maxBy( rankFn _ )
     val defaultPct = (defaultFrac * 100).toInt
     val guessPct = ((guessVotes / totalVotes)*100).toInt
     val typeStr = Type.toString(guess)
-
     val reason =
       guess match {
         case Type.TString =>
