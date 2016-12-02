@@ -21,7 +21,7 @@ object SerializationSpec extends SQLTestSpecification("SerializationTest") {
   def reset() =
   {
     db.getAllTables().
-      filter( _ != "MIMIR_LENSES" ).
+      filter( !_.startsWith("MIMIR_") ).
       foreach( (x) => db.backend.update(s"DROP TABLE $x;") );
   }
 

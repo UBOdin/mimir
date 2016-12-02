@@ -12,17 +12,19 @@ import scala.collection.mutable.ListBuffer
 
 object LoadCSV extends LazyLogging {
 
-  def handleLoadTable(db: Database, targetTable: String, sourceFile: File){
+  def handleLoadTable(db: Database, targetTable: String, sourceFile: File): Unit =
+    handleLoadTable(db, targetTable, sourceFile, x => true)
+
+  def handleLoadTable(db: Database, targetTable: String, sourceFile: File, detectHeader: String => Boolean){
     val input = new BufferedReader(new FileReader(sourceFile))
     val firstLine = input.readLine()
 
     db.getTableSchema(targetTable) match {
 
       case Some(sch) =>
-        if(headerDetected(firstLine)) {
+        if(detectHeader(firstLine)) {
           populateTable(db, input, targetTable, sch) // Ignore header since table already exists
-        }
-        else {
+        } else {
           populateTable(
             db,
             new BufferedReader(new FileReader(sourceFile)), // Reset to top
@@ -32,10 +34,35 @@ object LoadCSV extends LazyLogging {
         }
 
       case None =>
-        if(headerDetected(firstLine)) {
+        if(detectHeader(firstLine)) {
+          val columnNames = 
+            firstLine.
+              split(",").
+              map( sanitizeColumnName _ )
+
+          val dupColumns = 
+            columnNames.
+              groupBy( x => x ).
+              filter( _._2.length > 1 ).
+              map(_._1).
+              toSet
+
+          val uniqueColumnNames =
+            if(dupColumns.isEmpty){ columnNames }
+            else {
+              var idx = scala.collection.mutable.Map[String,Int]()
+              idx ++= dupColumns.map( (_, 0) ).toMap
+
+              columnNames.map( x =>
+                if(idx contains x){ idx(x) += 1; x+"_"+idx(x) }
+                else { x }
+              )
+            }
+
           db.backend.update("CREATE TABLE "+targetTable+"("+
-            firstLine.split(",").map((x) => x.trim.replace("^([0-9])","X\1").replaceAll("[^a-zA-Z0-9]+", "_").toUpperCase ).mkString(" varchar, ")+
-            " varchar)")
+              uniqueColumnNames.map(_+" varchar").
+              mkString(", ") +
+            ")")
 
           handleLoadTable(db, targetTable, sourceFile)
         }
@@ -45,17 +72,13 @@ object LoadCSV extends LazyLogging {
     }
   }
 
-  /**
-   * A placeholder method for an unimplemented feature
-   *
-   * During CSV load, a file may have a header, or not
-   */
-  private def headerDetected(line: String): Boolean = {
-    if(line == null) return false
-
-    // TODO Detection logic
-
-    true // For now, assume every CSV file has a header
+  def sanitizeColumnName(name: String): String =
+  {
+    name.
+      replace("^([0-9])","X\1").        // Prefix leading digits with an 'X'
+      replaceAll("[^a-zA-Z0-9]+", "_"). // Replace sequences of non-alphanumeric characters with underscores
+      replaceAll("_+$", "").            // Strip trailing underscores
+      toUpperCase                       // Capitalize
   }
 
   private def populateTable(db: Database,
@@ -92,7 +115,7 @@ object LoadCSV extends LazyLogging {
 
       val dataLine = line.trim.split(",").padTo(sch.size, "")
       val data = dataLine.zip(sch).map({ 
-          case ("", _) => null
+          case ("", _) => "null"
           case (x, (_, (Type.TDate | Type.TString))) => "\'"+x+"\'"
           case (x, (_, Type.TInt))   if x.matches("^[+-]?[0-9]+$") => x
           case (x, (_, Type.TFloat)) if x.matches("^[+-]?[0-9]+([.][0-9]+)?(e[+-]?[0-9]+)?$") => x
@@ -100,6 +123,7 @@ object LoadCSV extends LazyLogging {
       }).mkString(", ")
 
       statements.append(s"($data)")
+      logger.debug(s"INSERT: $data")
       line = src.readLine()
     }
     doInsert()

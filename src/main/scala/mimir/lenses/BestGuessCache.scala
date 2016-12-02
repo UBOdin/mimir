@@ -20,7 +20,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
 
 
   def cacheTableForModel(model: Model, varIdx: Int): String =
-    model.name + "_CACHE_" + varIdx
+    model.name.replaceAll(":","_") + "_CACHE_" + varIdx
   def cacheTableForTerm(term: VGTerm): String =
     cacheTableForModel(term.model, term.idx)
   def cacheTableDefinition(model: Model, varIdx: Int, termId: Int): Table = {

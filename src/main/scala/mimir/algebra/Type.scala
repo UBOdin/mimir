@@ -17,7 +17,7 @@ case class TypeException(found: Type.T, expected: Type.T,
  * An enum class defining the type of primitive-valued expressions
  * (e.g., integers, floats, strings, etc...)
  */
-object Type extends Enumeration {
+object Type extends Enumeration with Serializable {
   /**
    * The base type of the enum.  Type.T is an instance of Type
    */

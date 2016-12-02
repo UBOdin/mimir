@@ -7,6 +7,7 @@ import scala.collection.JavaConversions._
 import mimir.parser.{MimirJSqlParser}
 import org.specs2.mutable._
 import org.specs2.matcher.FileMatchers
+import com.typesafe.scalalogging.slf4j.Logger
 
 import net.sf.jsqlparser.statement.select.{PlainSelect}
 
@@ -14,6 +15,7 @@ import mimir._
 import mimir.parser._
 import mimir.algebra._
 import mimir.sql._
+import mimir.util._
 
 object SqlParserSpec extends Specification with FileMatchers {
 
@@ -57,12 +59,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 			}
 			testData.foreach ( _ match { case ( tableName, tableData, tableCols ) => 
 				d.backend.update("CREATE TABLE "+tableName+"("+tableCols.mkString(", ")+");")
-				val lines = new BufferedReader(new FileReader(tableData))
-				var line: String = lines.readLine()
-				while(line != null){
-					d.backend.update("INSERT INTO "+tableName+" VALUES (" + line + ");")
-					line = lines.readLine()
-				}
+				LoadCSV.handleLoadTable(d, tableName, tableData, x => false)
 			})
 			d
 		} catch {
@@ -410,6 +407,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 		 	db.update(stmt(
 		 		"CREATE LENS SaneR AS SELECT * FROM R WITH MISSING_VALUE('B')"
 		 	).asInstanceOf[CreateLens]);
+		 	db.getAllTables() must contain("SANER")
 		 	db.optimize(
 		 		convert("SELECT * FROM SaneR")
 		 	) must be equalTo 
@@ -426,7 +424,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 			 		db.bestGuessCache.keyColumn(0)+","+
 			 		db.bestGuessCache.dataColumn+" FROM "+
 			 		db.bestGuessCache.cacheTableForModel(
-			 			db.models.getModel("SANER:WEKA:B"), 1)
+			 			db.models.getModel("SANER:WEKA:B"), 0)
 			 	)
 			guessCacheData must contain( ===(List[PrimitiveValue](IntPrimitive(3), IntPrimitive(3))) )
 		 	

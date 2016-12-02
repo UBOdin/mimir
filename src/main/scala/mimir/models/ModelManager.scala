@@ -3,6 +3,7 @@ package mimir.models;
 import java.sql.SQLException
 import mimir.Database
 import mimir.algebra._
+import mimir.util._
 
 /**
  * The ModelManager handles model persistence.  
@@ -16,18 +17,17 @@ import mimir.algebra._
  * tracks a second set of 'owner' entities.  Owners can be used to
  * cascade deletes on the owner entity to the models, and allows
  * for reference counting with multiple owners.
+ *
+ * See below in this file for some traits used to decode things.
  */
 class ModelManager(db:Database) {
   
   val decoders = Map[String,((Database, Array[Byte]) => Model)](
-    "WEKA"          -> WekaModel.decode _,
     "JAVA"          -> decodeSerializable _
   )
   val cache = scala.collection.mutable.Map[String,Model]()
   val modelTable = "MIMIR_MODELS"
   val ownerTable = "MIMIR_MODEL_OWNERS"
-  val base64in = java.util.Base64.getDecoder()
-  val base64out = java.util.Base64.getEncoder()
 
   /**
    * Prepare the backend database for use with the ModelManager
@@ -62,7 +62,7 @@ class ModelManager(db:Database) {
              VALUES (?, ?, ?)
     """, List(
       StringPrimitive(model.name),
-      StringPrimitive(base64out.encodeToString(serialized)),
+      StringPrimitive(SerializationUtils.b64encode(serialized)),
       StringPrimitive(decoder.toUpperCase)
     ))
     cache.put(model.name, model)
@@ -84,7 +84,7 @@ class ModelManager(db:Database) {
    */
   def getModel(name:String): Model =
   {
-    prefetch(name)
+    if(!cache.contains(name)){ prefetch(name) }
     return cache(name)
   }
 
@@ -185,7 +185,7 @@ class ModelManager(db:Database) {
             case Some(impl) => impl(db, _)
           }
 
-        val model = decoderImpl( base64in.decode(encoded.asString) )
+        val model = decoderImpl( SerializationUtils.b64decode(encoded.asString) )
         cache.put(model.name, model)
       }
 
@@ -205,11 +205,16 @@ class ModelManager(db:Database) {
     if(!otherOwners.hasNext){ dropModel(model) }
   }
 
-  private def decodeSerializable(ignored: Database, data: Array[Byte]): Model =
+  private def decodeSerializable(db: Database, data: Array[Byte]): Model =
   {
-    val objects = new java.io.ObjectInputStream(
-        new java.io.ByteArrayInputStream(data)
-      )
-    objects.readObject().asInstanceOf[Model]
+    val ret = SerializationUtils.deserialize[Model](data)
+    if(ret.isInstanceOf[NeedsReconnectToDatabase]){
+      ret.asInstanceOf[NeedsReconnectToDatabase].reconnectToDatabase(db)
+    }
+    return ret
   }
+}
+
+trait NeedsReconnectToDatabase {
+  def reconnectToDatabase(db: Database)
 }

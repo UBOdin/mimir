@@ -1,13 +1,16 @@
 package mimir.models
 
+import java.io._
+
 import org.specs2.mutable._
 import mimir.algebra._
 import mimir.algebra.Type._
+import mimir.util._
 
-object TypeInferenceModelSpec extends Specification
+object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
 {
 
-  def train(elems: List[String]): Model = 
+  def train(elems: List[String]): TypeInferenceModel = 
   {
     val model = new TypeInferenceModel("TEST_MODEL", "TEST_COLUMN", 0.5)
     elems.foreach( model.learn(_) )
@@ -15,11 +18,13 @@ object TypeInferenceModelSpec extends Specification
   }
 
   def guess(elems: List[String]): Type.T =
+    guess(train(elems))
+
+  def guess(model: Model): Type.T =
   {
-    train(elems).
-      bestGuess(0, List[PrimitiveValue]()) match {
-        case TypePrimitive(t) => t
-      }
+    model.bestGuess(0, List[PrimitiveValue]()) match {
+      case TypePrimitive(t) => t
+    }
   }
 
 
@@ -38,6 +43,13 @@ object TypeInferenceModelSpec extends Specification
     "Recognize Strings" >> {
       guess(List("Alice", "Bob", "Carol", "Dave")) must be equalTo(TString)
       guess(List("Alice", "Bob", "Carol", "1", "2.0")) must be equalTo(TString)
+    }
+
+    "Recognize CPU Cores" >> {
+      loadCSV("CPUSPEED", new File("test/data/CPUSpeed.csv"))
+      val model = new TypeInferenceModel("CPUSPEED:CORES", "CORES", 0.5)
+      model.train(db, table("CPUSPEED"))
+      guess(model) must be equalTo(TInt)
     }
 
   }

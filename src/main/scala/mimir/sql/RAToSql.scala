@@ -53,8 +53,7 @@ class RAToSql(db: Database) {
     // standardizeTables adds a new layer of projections that we may be
     // able to optimize away.
     val optimized = 
-      InlineProjections.optimize(
-        PushdownSelections.optimize(standardized))
+      InlineProjections(PushdownSelections(standardized))
 
     // println("OPTIMIZED: "+optimized)
 

@@ -30,17 +30,26 @@ class LensManager(db: Database) {
     args: List[Expression]
   ): Unit =
   {
+    val saneName = name.toUpperCase
     val constructor =
-      lensTypes.get(t) match {
+      lensTypes.get(t.toUpperCase) match {
         case Some(impl) => impl
-        case None => throw new SQLException("Invalid Lens Type '"+t+"'")
+        case None => throw new SQLException("Invalid Lens Type '"+t.toUpperCase+"'")
       }
 
-    val (view, models) = constructor(db, name, query, args)
-    db.views.createView(name, view)
+    // Construct the appropriate lens
+    val (view, models) = constructor(db, saneName, query, args)
+
+    // Create a lens query
+    db.views.createView(saneName, view)
+
+    // Persist the associated models
     models.foreach( model => 
-      db.models.persistModel(model, s"LENS:$name")
+      db.models.persistModel(model, s"LENS:$saneName")
     )
+
+    // Populate the best-guess cache
+    db.bestGuessCache.buildCache(view)
   }
 
   def dropLens(name: String): Unit =

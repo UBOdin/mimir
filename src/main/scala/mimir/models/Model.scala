@@ -2,6 +2,7 @@ package mimir.models;
 
 import scala.util.Random
 import mimir.algebra._
+import mimir.util._
 
 /**
  * Root class for Model objects.
@@ -45,7 +46,7 @@ import mimir.algebra._
  * conventions in terms of their types, how they use arguments, and how
  * they are constructed.
  */
-abstract class Model(val name: String) {
+abstract class Model(val name: String) extends Serializable {
   /**
    * Infer the type of the model from the types of the inputs
    * @param argTypes    The types of the arguments the the VGTerm
@@ -82,12 +83,6 @@ abstract class Model(val name: String) {
    *              a deserializer to use when decoding the encoding.
    */
   def serialize(): (Array[Byte], String) =
-  {
-    val out = new java.io.ByteArrayOutputStream()
-    val objects = new java.io.ObjectOutputStream(out)
-    objects.writeObject(this)
-
-    return (out.toByteArray, "JAVA")
-  }
+    (SerializationUtils.serialize(this), "JAVA")
 
 }

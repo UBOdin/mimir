@@ -2,8 +2,9 @@ package mimir.views;
 
 import mimir._;
 import mimir.algebra._;
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
-class ViewManager(db:Database) {
+class ViewManager(db:Database) extends LazyLogging {
   
   val viewTable = "MIMIR_VIEWS"
 
@@ -19,6 +20,7 @@ class ViewManager(db:Database) {
 
   def createView(name: String, query: Operator): Unit =
   {
+    logger.debug(s"CREATE VIEW $name AS $query")
     db.backend.update(s"INSERT INTO $viewTable(name, query) VALUES (?,?)", 
       List(
         StringPrimitive(name), 

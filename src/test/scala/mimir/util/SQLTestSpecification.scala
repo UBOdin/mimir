@@ -87,6 +87,8 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     val query = select(s)
     db.query(query)
   }
+  def table(t: String) =
+    db.getTableOperator(t)
   def explainRow(s: String, t: String) = {
     val query = db.sql.convert(
       stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]

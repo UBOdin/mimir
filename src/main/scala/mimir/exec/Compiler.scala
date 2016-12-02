@@ -17,8 +17,8 @@ class Compiler(db: Database) extends LazyLogging {
 
   def standardOptimizations: List[Operator => Operator] = List(
     ProjectRedundantColumns(_),
-    InlineProjections.optimize _,
-    PushdownSelections.optimize _
+    InlineProjections(_),
+    PushdownSelections(_)
   )
 
   /**

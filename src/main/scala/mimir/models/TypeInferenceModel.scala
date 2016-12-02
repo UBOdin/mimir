@@ -1,7 +1,7 @@
 package mimir.models
 
 import scala.util.Random
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.slf4j.Logger
 
 import mimir.Database
 import mimir.algebra._
@@ -9,6 +9,7 @@ import mimir.util._
 
 object TypeInferenceModel
 {
+  val logger = Logger(org.slf4j.LoggerFactory.getLogger("mimir.models.TypeInferenceModel"))
 
   val typeTests = List(
     ("(\\+|-)?([0-9]+)",               Type.TInt),
@@ -34,7 +35,7 @@ object TypeInferenceModel
 }
 
 class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
-  extends SingleVarModel(name) with LazyLogging
+  extends SingleVarModel(name)
 {
   var totalVotes = 0.0
   val votes = scala.collection.mutable.Map[Type.T, Double]()
@@ -47,8 +48,13 @@ class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
         query
       )
     ).
-    mapRows(_(0).asString).
-    filter( _ != null ).
+    mapRows(_(0)).
+    filter({ 
+      case null            => false
+      case NullPrimitive() => false
+      case _               => true
+    }).
+    map(_.asString).
     foreach( learn(_) )
   }
 
@@ -56,7 +62,7 @@ class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
   {
     totalVotes += 1.0
     val candidates = TypeInferenceModel.detectType(v)
-    logger.debug(s"Guesses for '$v': $candidates")
+    TypeInferenceModel.logger.debug(s"Guesses for '$v': $candidates")
     candidates.foreach( t => { votes(t) = votes.getOrElse(t, 0.0) + 1.0 } )
   }
 
@@ -75,7 +81,7 @@ class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = 
   {
     val guess = voteList.maxBy( rankFn _ )._1
-    logger.debug(s"Votes: $voteList -> $guess")
+    TypeInferenceModel.logger.debug(s"Votes: $voteList -> $guess")
     TypePrimitive(guess)
   }
 

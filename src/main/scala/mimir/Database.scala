@@ -360,7 +360,7 @@ case class Database(backend: Backend)
    */
 
   def loadTable(targetTable: String, sourceFile: File){
-    val targetRaw = targetTable.toUpperCase + "RAW"
+    val targetRaw = targetTable.toUpperCase + "_RAW"
     LoadCSV.handleLoadTable(this, targetRaw, sourceFile)
     val oper = getTableOperator(targetRaw)
     val l = List(new FloatPrimitive(.5))
