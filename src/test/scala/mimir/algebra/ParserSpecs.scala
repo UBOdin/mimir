@@ -19,7 +19,7 @@ object ParserSpecs extends Specification {
       ("C", TInt())
     ))
   )
-  def model(x:String) = mimir.models.NoOpModel(x, Type.TInt, "TEST")
+  def model(x:String) = mimir.models.NoOpModel(x, TInt(), "TEST")
   def parser = new OperatorParser((x: String) => model(x), schema.get(_).get.toList)
   def expr = parser.expr _
   def oper = parser.operator _

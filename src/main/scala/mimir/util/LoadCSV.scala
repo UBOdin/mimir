@@ -21,139 +21,71 @@ import scala.util.control.Breaks._
 
 object LoadCSV extends LazyLogging {
 
+  def SAMPLE_SIZE = 10000
+
   def handleLoadTable(db: Database, targetTable: String, sourceFile: File): Unit =
-    handleLoadTable(db, targetTable, sourceFile, x => true)
+    handleLoadTable(db, targetTable, sourceFile, true)
 
-  def handleLoadTable(db: Database, targetTable: String, sourceFile: File, detectHeader: String => Boolean){
+  def handleLoadTable(db: Database, targetTable: String, sourceFile: File, assumeHeader: Boolean){
+    val largeData = false
     val input = new BufferedReader(new FileReader(sourceFile))
-    val firstLine = input.readLine()
-    var largeData = false
-    var createTableStatement = "CREATE TABLE " + targetTable + "("
-    var numberOfHeaderColumns = 0
-    var maxNumberOfColumns = 0
+    var config = CSVFormat.DEFAULT.withAllowMissingColumnNames()
 
-    var input = new BufferedReader(new FileReader(sourceFile))
+    if(assumeHeader){ config = config.withHeader() }
 
-    val cleanedInputStream: BufferedReader = makeColumnNamesUnique(input)
-    val parser = new CSVParser(cleanedInputStream , CSVFormat.DEFAULT.withAllowMissingColumnNames().withHeader())
+    val parser = new CSVParser(input, config)
 
+    val targetSchema = 
+      db.getTableSchema(targetTable) match {
+        case Some(sch) => sch
+        case None => {
 
-    // reset back to the top
-    input = new BufferedReader(new FileReader(sourceFile))
+          val idxToCol = 
+            parser.getHeaderMap.
+              entrySet.asScala.
+              map( x => (x.getValue -> x.getKey) ).
+              toMap
 
-    db.getTableSchema(targetTable) match {
+          val columnCount = 
+            parser.asScala.
+              take(SAMPLE_SIZE).
+              map( _.size ).
+              max
 
-      case Some(sch) =>
-        if(detectHeader(firstLine)) {
-          populateTable(db, input, targetTable, sch) // Ignore header since table already exists
-        } else {
-          populateTable(db, parser, targetTable, sch) // Ignore header since table already exists
+          val columnNames =
+            makeColumnNamesUnique(
+              (0 until columnCount).
+                map( idx => idxToCol.getOrElse(idx, s"COLUMN_$idx") ).
+                map( sanitizeColumnName _ )
+            )
+
+          val columnsDDL = columnNames.map(_+" varchar").mkString(", ")
+
+          val createTableStatement = s"""
+            CREATE TABLE $targetTable($columnsDDL)
+          """
+          logger.debug(s"INIT: $createTableStatement")
+          db.backend.update(createTableStatement)
+
+          columnNames.map( (_, TString()) )
         }
+      }
 
-      case None =>
-        val firstLine = ""
-        if(largeData) { // if the data is large we may need to sacrafice error checking for speed
-          if(detectHeader(firstLine)) {
-            db.backend.update("CREATE TABLE "+targetTable+"("+
-                makeColumnNamesUnique(input).map(_+" varchar").
-                mkString(", ") +
-              ")")
-            handleLoadTable(db, targetTable, sourceFile)
-          } else {
-            throw new SQLException("No header supplied for creating new table")
-          }
-        } else { // first time around get the max number of columns and make sure it matches up to the number of columns in the schema
-          if(headerDetected(firstLine)){
+    // Sanity check the size of each row
+    parser.asScala.take(SAMPLE_SIZE).
+      filter( x => (x.size > targetSchema.size) ).
+      map( _.getRecordNumber ) match {
+        case Nil          => // All's well! 
+        case a::Nil       => logger.warn(s"Too many fields on line $a of $sourceFile")
+        case a::b::Nil    => logger.warn(s"Too many fields on lines $a and $b of $sourceFile")
+        case a::b::c::Nil => logger.warn(s"Too many fields on lines $a, $b, and $c of $sourceFile")
+        case a::b::rest   => logger.warn(s"Too many fields on lines $a, $b, and "+(rest.size)+s" more of $sourceFile")
+      }
 
-//            numberOfHeaderColumns = firstLine.split(",").length
-
-            var maxNumberOfColumns = 0
-            val parser: CSVParser = new CSVParser(makeColumnNamesUnique(input), CSVFormat.DEFAULT.withAllowMissingColumnNames().withHeader())
-
-            for (row: CSVRecord <- parser.asScala) {
-              maxNumberOfColumns = Math.max(0, row.size())
-            }
-
-
-//            val delta = maxNumberOfColumns - numberOfHeaderColumns
-            val delta = 0
-            var args:String = ""
-            val colList: util.ArrayList[String] = new util.ArrayList[String]()
-            var counter = 0
-
-            val columnHeaderMap = parser.getHeaderMap.asScala
-            var columnHeadersInOrder = new Array[String](columnHeaderMap.size)
-            for ((columnHeader, index) <- columnHeaderMap) {
-              columnHeadersInOrder(index) = columnHeader + " varchar"
-            }
-
-            args += columnHeadersInOrder.mkString(", ")
-
-//            for (col <- columnHeadersInOrder) {
-//
-//            }
-//
-//
-//            firstLine.split(",").map((x) => {
-//              var col = x.trim.replaceAll(" ", "").replaceAll("&","").replaceAll("\\(","").replaceAll("\\)","").replaceAll("\'","").replaceAll("\\.","").replaceAll("/","")
-//              if(col.toUpperCase().equals("DATE")){
-//                col = "date1"
-//              }
-//              if(col.toUpperCase().equals("MONTH")){
-//                col = "month1"
-//              }
-//              while(colList.contains(col)){
-//                col = col + counter
-//                counter += 1
-//              }
-//              colList.add(col)
-//              args += col + " varchar, "
-//            }
-//            )
-
-            createTableStatement += args
-
-            if(delta > 1) {
-              for (i <- 0 until delta-1) {
-                createTableStatement += "col" + i + " varchar, "
-              }
-              createTableStatement += "col" + (delta-1) + " varchar)"
-            }
-            else if(delta == 1){
-              createTableStatement += " col" + " varchar)"
-            }
-            else{
-              createTableStatement = createTableStatement.substring(0,createTableStatement.size-2)
-              createTableStatement += ")"
-            }
-            db.backend.update(createTableStatement)
-            handleLoadTable(db, targetTable, sourceFile)
-
-          }
-          else{ // no header so make one
-            println("Should not be here right now")
-            while(true) {
-              val line: String = input.readLine()
-              if(line == null) {
-                break
-              }
-              if(line.split(",").length > maxNumberOfColumns){ // needs to be smarter but for right now use this
-                maxNumberOfColumns = line.split(",").length
-              }
-            }
-
-            for(x <- 0 until maxNumberOfColumns - 1){
-              createTableStatement += "col" + x + " varchar, "
-            }
-            createTableStatement += "col" + (maxNumberOfColumns - 1) + " varchar)"
-            db.backend.update(createTableStatement)
-            handleLoadTable(db, targetTable, sourceFile)
-          }
-        }
-    }
+    populateTable(db, parser, targetTable, targetSchema)
   }
 
-  private def sanitizeColumnName(name: String): String =
+  def sanitizeColumnName(name: String): String =
   {
     name.
       replace("^([0-9])","X\1").        // Prefix leading digits with an 'X'
@@ -162,35 +94,28 @@ object LoadCSV extends LazyLogging {
       toUpperCase                       // Capitalize
   }
 
-  private def makeColumnNamesUnique(src: BufferedReader): BufferedReader = {
-    val headerLine: String = src.readLine()
+  def makeColumnNamesUnique(columnNames: Iterable[String]): List[String] = {
+    val dupColumns = 
+      columnNames.
+        toList.
+        groupBy( x => x ).
+        filter( _._2.length > 1 ).
+        map(_._1).
+        toSet
 
-    val originalHeaders: Array[String] = headerLine.split(',')
-    var modifiedHeaders = new Array[String](0)
+    val uniqueColumnNames =
+      if(dupColumns.isEmpty){ columnNames }
+      else {
+        var idx = scala.collection.mutable.Map[String,Int]()
+        idx ++= dupColumns.map( (_, 0) ).toMap
 
-    for (originalHeader <- originalHeaders) {
-      val cleanedOriginalHeader = sanitizeColumnName(originalHeader)
-
-      var desiredHeader = cleanedOriginalHeader
-      var attemptCount = 0
-
-      while(modifiedHeaders.contains(desiredHeader)) {
-        attemptCount = attemptCount + 1
-        desiredHeader = cleanedOriginalHeader + "_" + attemptCount
+        columnNames.map( x =>
+          if(idx contains x){ idx(x) += 1; x+"_"+idx(x) }
+          else { x }
+        )
       }
 
-      modifiedHeaders = modifiedHeaders :+ desiredHeader
-    }
-
-    val modifiedHeaderLine = modifiedHeaders.mkString(",")
-
-
-    val headerLineInputStream: InputStream = IOUtils.toInputStream(modifiedHeaderLine + '\n', StandardCharsets.UTF_8)
-    val restOfFileInputStream: ReaderInputStream = new ReaderInputStream(src, StandardCharsets.UTF_8)
-
-    // java is gross...
-    return new BufferedReader(new InputStreamReader(new SequenceInputStream(headerLineInputStream, restOfFileInputStream)))
-
+    return uniqueColumnNames.toList
   }
 
   private def populateTable(db: Database,
@@ -215,13 +140,13 @@ object LoadCSV extends LazyLogging {
 
           val data = listOfValues.zip(sch).map({ 
               case ("", _) => "null"
-              case (x, (_, (Type.TDate | Type.TString))) => "\'"+x.replaceAll("\\","\\\\").replaceAll("'","\\'")+"\'"
-              case (x, (_, Type.TInt))   if x.matches("^[+-]?[0-9]+$") => x
-              case (x, (_, Type.TFloat)) if x.matches("^[+-]?[0-9]+([.][0-9]+)?(e[+-]?[0-9]+)?$") => x
+              case (x, (_, (TDate() | TString()))) => "\'"+x.replaceAll("\\","\\\\").replaceAll("'","\\'")+"\'"
+              case (x, (_, TInt()))   if x.matches("^[+-]?[0-9]+$") => x
+              case (x, (_, TFloat())) if x.matches("^[+-]?[0-9]+([.][0-9]+)?(e[+-]?[0-9]+)?$") => x
               case (x, (c,t)) => logger.warn(s"Don't know how to deal with $c ($t): $x, using null instead"); null
           }).mkString(", ")
 
-          val cmd = "INSERT INTO " + targetTable + "(" + keys + ") VALUES (" + data.mkString(", ") + ")")
+          val cmd = "INSERT INTO " + targetTable + "(" + keys + ") VALUES (" + data.mkString(", ") + ")"
           logger.debug(s"INSERT: $cmd")
           db.backend.update(cmd)
         }

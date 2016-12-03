@@ -4,20 +4,22 @@ import mimir.algebra._
 
 object TextUtils {
   
-  def parsePrimitive(t: Type.T, s: String): PrimitiveValue = 
+  def parsePrimitive(t: Type, s: String): PrimitiveValue = 
   {
     t match {
-      case Type.TInt    => IntPrimitive(java.lang.Long.parseLong(s))
-      case Type.TFloat  => FloatPrimitive(java.lang.Double.parseDouble(s))
-      case Type.TDate   => parseDate(s)
-      case Type.TString => StringPrimitive(s)
-      case Type.TBool   => 
+      case TInt()    => IntPrimitive(java.lang.Long.parseLong(s))
+      case TFloat()  => FloatPrimitive(java.lang.Double.parseDouble(s))
+      case TDate()   => parseDate(s)
+      case TString() => StringPrimitive(s)
+      case TBool()   => 
         s.toUpperCase match {
           case "YES" | "TRUE"  | "1" => BoolPrimitive(true)
           case "NO"  | "FALSE" | "0" => BoolPrimitive(false)
         }
-      case Type.TRowId  => RowIdPrimitive(s)
-      case Type.TType   => TypePrimitive(Type.fromString(s))
+      case TRowId()  => RowIdPrimitive(s)
+      case TType()   => TypePrimitive(Type.fromString(s))
+      case TAny()    => throw new RAException("Can't cast string to TAny")
+      case TUser(_,_,ut) => parsePrimitive(ut, s)
     }
   }
 

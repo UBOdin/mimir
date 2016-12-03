@@ -213,7 +213,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
     val dataCols = List( (dataColumn, dataType) )
     val tableDirectives = 
       (keyCols ++ dataCols).map( 
-        col => { col._1+" "+TString().toString(col._2) }
+        col => { col._1+" "+col._2 }
       ) ++ List(
         "PRIMARY KEY ("+keyCols.map(_._1).mkString(", ")+")"
       )

@@ -20,7 +20,7 @@ object TypeInferenceLens extends LazyLogging
   {
     val (repairs, models) = 
       query.schema.map({
-        case (col, (Type.TString | Type.TAny)) => {
+        case (col, (TString() | TAny())) => {
           val model =
             new TypeInferenceModel(
               s"$name:$col",

@@ -18,7 +18,7 @@ object SQLiteCompat {
     org.sqlite.Function.create(conn,"AGGTEST", AggTest)
   }
   
-  def getTableSchema(conn:java.sql.Connection, table: String): Option[List[(String, Type.T)]] =
+  def getTableSchema(conn:java.sql.Connection, table: String): Option[List[(String, Type)]] =
   {
     val stmt = conn.createStatement()
     val ret = stmt.executeQuery(s"PRAGMA table_info('$table')")
@@ -47,7 +47,7 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
       if (args != 2) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR MIMIRCAST, EXPECTED 2 IN FORM OF MIMIRCAST(COLUMN,TYPE)") }
       try {
 //        println("Input: " + value_text(0) + " : " + value_text(1))
-        val t = TString().toSQLiteType(value_int(1))
+        val t = Type.toSQLiteType(value_int(1))
 //        println("TYPE CASTED: "+t)
         val v = value_text(0)
         logger.trace(s"Casting $v as $t")

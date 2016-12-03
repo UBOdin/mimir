@@ -85,7 +85,7 @@ object SimpleDemoScript
 
 		"Create and Query Type Inference Lenses" >> {
 //			println("Creating TI LENS")
-			lens("""
+			update("""
 				CREATE LENS new_types
 				  AS SELECT * FROM USERTYPES
 				  WITH Type_Inference(.9)
@@ -99,7 +99,7 @@ object SimpleDemoScript
 			query("SELECT * FROM RATINGS1 WHERE RATING > 4;").allRows must have size(2)
 			query("SELECT * FROM RATINGS2;").allRows must have size(3)
 			db.bestGuessSchema(select("SELECT * FROM RATINGS2;")).
-				map(_._2) must be equalTo List(Type.TString, Type.TFloat, Type.TFloat)
+				map(_._2) must be equalTo List(TString(), TFloat(), TFloat())
 		}
 
 		"Create and Query Domain Constraint Repair Lenses" >> {

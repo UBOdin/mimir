@@ -140,7 +140,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         val tables = this.getAllTables().map{(x) => x.toUpperCase}
         if(!tables.contains(table.toUpperCase)) return None
 
-        val cols: Option[List[(String, Type.T)]] = backend match {
+        val cols: Option[List[(String, Type)]] = backend match {
           case "sqlite" | "sqlite-inline" | "sqlite-bundles" => {
             // SQLite doesn't recognize anything more than the simplest possible types.
             // Type information is persisted but not interpreted, so conn.getMetaData() 
@@ -150,7 +150,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
           }
           case "oracle" => 
             val columnRet = conn.getMetaData().getColumns(null, "ARINDAMN", table, "%")  // TODO Generalize
-            var ret = List[(String, Type.T)]()
+            var ret = List[(String, Type)]()
             while(columnRet.isBeforeFirst()){ columnRet.next(); }
             while(!columnRet.isAfterLast()){
               ret = ret ++ List((

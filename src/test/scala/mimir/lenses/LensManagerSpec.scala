@@ -40,10 +40,10 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       coresModel.reason(0, List()) must contain("was of type int")
 
       val coresGuess1 = coresModel.bestGuess(0, List())
-      coresGuess1 must be equalTo(TypePrimitive(Type.TInt))
+      coresGuess1 must be equalTo(TypePrimitive(TInt()))
 
       val coresGuess2 = InlineVGTerms(VGTerm(coresModel, 0, List()))
-      coresGuess2 must be equalTo(TypePrimitive(Type.TInt))
+      coresGuess2 must be equalTo(TypePrimitive(TInt()))
 
 
     }
@@ -52,16 +52,16 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
 
       val baseTypes = db.bestGuessSchema(db.getTableOperator("CPUSPEED_RAW")).toMap
       baseTypes.keys must contain(eachOf("CORES", "FAMILY", "TECH_MICRON"))
-      baseTypes must contain("CORES" -> Type.TString)
-      baseTypes must contain("FAMILY" -> Type.TString)
-      baseTypes must contain("TECH_MICRON" -> Type.TString)
+      baseTypes must contain("CORES" -> TString())
+      baseTypes must contain("FAMILY" -> TString())
+      baseTypes must contain("TECH_MICRON" -> TString())
 
 
       val lensTypes = db.bestGuessSchema(db.getTableOperator("CPUSPEED")).toMap
       lensTypes.keys must contain(eachOf("CORES", "FAMILY", "TECH_MICRON"))
-      lensTypes must contain("CORES" -> Type.TInt)
-      lensTypes must contain("FAMILY" -> Type.TString)
-      lensTypes must contain("TECH_MICRON" -> Type.TFloat)
+      lensTypes must contain("CORES" -> TInt())
+      lensTypes must contain("FAMILY" -> TString())
+      lensTypes must contain("TECH_MICRON" -> TFloat())
 
     }
 

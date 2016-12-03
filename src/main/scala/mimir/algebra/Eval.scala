@@ -233,20 +233,22 @@ object Eval
     (op, Typechecker.escalate(
       a.getType, b.getType, "Evaluate Arithmetic", Arithmetic(op, a, b)
     )) match { 
-      case (Arith.Add, TInt) => 
+      case (Arith.Add, TInt()) => 
         IntPrimitive(a.asLong + b.asLong)
-      case (Arith.Add, TFloat) => 
+      case (Arith.Add, TFloat()) => 
         FloatPrimitive(a.asDouble + b.asDouble)
-      case (Arith.Sub, TInt) => 
+      case (Arith.Sub, TInt()) => 
         IntPrimitive(a.asLong - b.asLong)
-      case (Arith.Sub, TFloat) => 
+      case (Arith.Sub, TFloat()) => 
         FloatPrimitive(a.asDouble - b.asDouble)
-      case (Arith.Mult, TInt) => 
+      case (Arith.Mult, TInt()) => 
         IntPrimitive(a.asLong * b.asLong)
-      case (Arith.Mult, TFloat) => 
+      case (Arith.Mult, TFloat()) => 
         FloatPrimitive(a.asDouble * b.asDouble)
-      case (Arith.Div, (TFloat|TInt)) => 
+      case (Arith.Div, (TFloat()|TInt())) => 
         FloatPrimitive(a.asDouble / b.asDouble)
+      case (_, _) => 
+        throw new RAException(s"Invalid Arithmetic $a $op $b")
     }
   }
 
@@ -274,6 +276,7 @@ object Eval
                 a.asInstanceOf[DatePrimitive].
                  compare(b.asInstanceOf[DatePrimitive])<0
               )
+            case _ => throw new RAException("Invalid Comparison $a $op $b")
           }
         case Cmp.Gte => 
           Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
@@ -293,6 +296,7 @@ object Eval
                 }
               }
             })
+            case _ => throw new RAException("Invalid Comparison $a $op $b")
           }
         case Cmp.Lt => 
           Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
@@ -303,6 +307,7 @@ object Eval
                 a.asInstanceOf[DatePrimitive].
                  compare(b.asInstanceOf[DatePrimitive])>0
               )
+            case _ => throw new RAException("Invalid Comparison $a $op $b")
           }
         case Cmp.Lte => 
           Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
@@ -313,6 +318,7 @@ object Eval
                 a.asInstanceOf[DatePrimitive].
                  compare(b.asInstanceOf[DatePrimitive])>=0
               )
+            case _ => throw new RAException("Invalid Comparison $a $op $b")
           }
       }
     }

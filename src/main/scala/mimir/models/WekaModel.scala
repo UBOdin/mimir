@@ -91,7 +91,7 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
       instance.setDataset(data)
       for(j <- 0 until iterator.numCols                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       ) {
         iterator.schema(j)._2 match {
-          case (Type.TInt | Type.TFloat) if (j != colIdx) =>
+          case (TInt() | TFloat()) if (j != colIdx) =>
             try {
               instance.setValue(j, iterator(j).asDouble)
             } catch {
@@ -126,12 +126,12 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
     learner.trainOnInstance(dataPoint);
   }
 
-  private def schemaToWeka(sch: List[(String,Type.T)]): util.ArrayList[Attribute] = {
+  private def schemaToWeka(sch: List[(String,Type)]): util.ArrayList[Attribute] = {
     val attributes = new util.ArrayList[Attribute]()
     sch.zipWithIndex.foreach { case ((n, t), i) =>
       t match {
-        case Type.TRowId => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
-        case (Type.TInt | Type.TFloat) if (i != colIdx) => attributes.add(new Attribute(n))
+        case TRowId() => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
+        case (TInt() | TFloat()) if (i != colIdx) => attributes.add(new Attribute(n))
         case _ => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
       }
     }
@@ -180,10 +180,10 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
     TextUtils.parsePrimitive(guessInputType, str)
   }
 
-  def guessInputType: Type.T =
+  def guessInputType: Type =
     db.bestGuessSchema(target)(colIdx)._2
 
-  def varType(argTypes: List[Type.T]): Type.T = guessInputType
+  def varType(argTypes: List[Type]): Type = guessInputType
   
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue =
   {

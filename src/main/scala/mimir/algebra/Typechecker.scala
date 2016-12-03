@@ -124,15 +124,15 @@ object Typechecker {
 				val groupBySchema: List[(String, Type)] = groupBy.map(x => (x.toString, chk.typeOf(x)) )
 
 				/* Get function name, check for AVG *//* Get function parameters, verify type */
-				val aggSchema: List[(String, Type.T)] = args.map(x => 
+				val aggSchema: List[(String, Type)] = args.map(x => 
 					x.function match {
-						case "AVG" => (x.alias, TFloat)
-						case "COUNT" => (x.alias, TInt)
+						case "AVG" => (x.alias, TFloat())
+						case "COUNT" => (x.alias, TInt())
 						case "SUM" | "MAX" | "MIN" => {
 							(x.alias, assertNumeric(chk.typeOf(x.columns(0)), x.columns(0)))
 						}
 						case "JSON_GROUP_ARRAY" => {
-							(x.alias, TString)
+							(x.alias, TString())
 						}
 						case fn => throw new SQLException("Unknown Aggregate Function: '"+fn+"'")
  					})
@@ -169,21 +169,21 @@ object Typechecker {
 		}
 	}
 
-	def assertNumeric(t: Type.T, e: Expression): Type.T =
+	def assertNumeric(t: Type, e: Expression): Type =
  	{
-		if(escalate(t, TFloat, "Numeric") != TFloat){
-			throw new TypeException(t, TFloat, "Numeric", Some(e))
+		if(escalate(t, TFloat(), "Numeric") != TFloat()){
+			throw new TypeException(t, TFloat(), "Numeric", Some(e))
  		}
  		t;
  	}
 
 	def escalate(a: Type, b: Type): Type =
 		escalate(a, b, "Escalation")
-	def escalate(a: Type.T, b: Type.T, msg: String, e: Expression): Type.T = 
+	def escalate(a: Type, b: Type, msg: String, e: Expression): Type = 
 		escalate(a, b, msg, Some(e))
-	def escalate(a: Type.T, b: Type.T, msg: String): Type.T = 
+	def escalate(a: Type, b: Type, msg: String): Type = 
 		escalate(a, b, msg, None)
-	def escalate(a: Type.T, b: Type.T, msg: String, e: Option[Expression]): Type.T = 
+	def escalate(a: Type, b: Type, msg: String, e: Option[Expression]): Type = 
 	{
 		(a,b) match {
 			case (TUser(name,regex,sqlType),_) => escalate(sqlType,b,msg)

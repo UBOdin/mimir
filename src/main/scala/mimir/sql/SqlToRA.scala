@@ -532,7 +532,7 @@ class SqlToRA(db: Database)
           sch.map(
             _ match { case (v, t) => (alias+"_"+v, t)}
           ),
-          List[(String,Expression,Type.T)]()
+          List[(String,Expression,Type)]()
         ), 
         newBindings, 
         alias

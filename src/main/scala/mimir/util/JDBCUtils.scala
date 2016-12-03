@@ -27,12 +27,15 @@ object JDBCUtils {
 
   def convertMimirType(t: Type): Int = {
     t match {
-      case TInt()    => java.sql.Types.INTEGER
-      case TFloat()  => java.sql.Types.DOUBLE
-      case TDate()   => java.sql.Types.DATE
-      case TString() => java.sql.Types.VARCHAR
-      case TRowId()  => java.sql.Types.ROWID
-//      case Type.TUser   => java.sql.Types.VARCHAR
+      case TInt()       => java.sql.Types.INTEGER
+      case TFloat()     => java.sql.Types.DOUBLE
+      case TDate()      => java.sql.Types.DATE
+      case TString()    => java.sql.Types.VARCHAR
+      case TRowId()     => java.sql.Types.ROWID
+      case TAny()       => java.sql.Types.VARCHAR
+      case TBool()      => java.sql.Types.INTEGER
+      case TType()      => java.sql.Types.VARCHAR
+      case TUser(_,_,t) => convertMimirType(t)
     }
   }
 
@@ -55,6 +58,10 @@ object JDBCUtils {
           RowIdPrimitive(results.getString(field))
         case TBool() =>
           BoolPrimitive(results.getInt(field) != 0)
+        case TType() => 
+          TypePrimitive(Type.fromString(
+            results.getString(field)
+          ))
         case TDate() =>
           val calendar = Calendar.getInstance()
           try {
@@ -65,41 +72,7 @@ object JDBCUtils {
             case e: NullPointerException =>
               new NullPrimitive
           }
-        case Type.TBlob => {
-          val blob = results.getBlob(field)
-          BlobPrimitive(blob.getBytes(0, blob.length().toInt))
-        }
-        case TUser(name,regex,sqlType) =>
-          sqlType match {
-            case TAny() =>
-              convertField(
-                convertSqlType(results.getMetaData().getColumnType(field)),
-                results, field
-              )
-            case TFloat() =>
-              FloatPrimitive(results.getDouble(field))
-            case TInt() =>
-              IntPrimitive(results.getLong(field))
-            case TString() =>
-              StringPrimitive(results.getString(field))
-            case TRowId() =>
-              RowIdPrimitive(results.getString(field))
-            case TBool() =>
-              BoolPrimitive(results.getInt(field) != 0)
-            case TDate() =>
-              val calendar = Calendar.getInstance()
-              try {
-                calendar.setTime(results.getDate(field))
-              } catch {
-                case e: SQLException =>
-                  calendar.setTime(Date.valueOf(results.getString(field)))
-                case e: NullPointerException =>
-                  new NullPrimitive
-              }
-              DatePrimitive(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DATE))
-            case _ =>
-              throw new Exception("In JDBCUtils expected one of the generic types but instead got: " + sqlType.toString)
-          }
+        case TUser(_,_,sqlType) => convertField(sqlType, results, field)
       }
     if(results.wasNull()) { NullPrimitive() }
     else { ret }
@@ -130,7 +103,7 @@ object JDBCUtils {
     extractAllRows(results, schema)    
   }
 
-  def extractAllRows(results: ResultSet, schema: List[Type.T]): Iterator[List[PrimitiveValue]] =
+  def extractAllRows(results: ResultSet, schema: List[Type]): Iterator[List[PrimitiveValue]] =
   {
     new JDBCResultSetIterable(results, schema)
   }
@@ -138,7 +111,7 @@ object JDBCUtils {
 }
 
 
-class JDBCResultSetIterable(results: ResultSet, schema: List[Type.T]) extends Iterator[List[PrimitiveValue]]
+class JDBCResultSetIterable(results: ResultSet, schema: List[Type]) extends Iterator[List[PrimitiveValue]]
 {
   def next(): List[PrimitiveValue] = 
   {

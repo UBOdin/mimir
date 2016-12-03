@@ -59,7 +59,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 			}
 			testData.foreach ( _ match { case ( tableName, tableData, tableCols ) => 
 				d.backend.update("CREATE TABLE "+tableName+"("+tableCols.mkString(", ")+");")
-				LoadCSV.handleLoadTable(d, tableName, tableData, x => false)
+				LoadCSV.handleLoadTable(d, tableName, tableData, false)
 			})
 			d
 		} catch {
@@ -414,9 +414,9 @@ object SqlParserSpec extends Specification with FileMatchers {
 		 		Project(List(ProjectArg("A", Var("SANER_A")), 
 		 					 ProjectArg("B", Var("SANER_B")),
 		 					 ProjectArg("C", Var("SANER_C"))
-		 				), Table("SANER", Map(("SANER_A", Type.TInt), 
-		 								  ("SANER_B", Type.TInt), 
-		 								  ("SANER_C", Type.TInt)).toList,
+		 				), Table("SANER", Map(("SANER_A", TInt()), 
+		 								  ("SANER_B", TInt()), 
+		 								  ("SANER_C", TInt())).toList,
 		 							  List()
 				))
 			val guessCacheData = 

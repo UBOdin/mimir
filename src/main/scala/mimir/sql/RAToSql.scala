@@ -33,6 +33,7 @@ class RAToSql(db: Database) {
         )
         val metadata = tgtMetadata.map( { 
           case (out, Var(in), t) => ((in, Var(in), t), ProjectArg(out, Var(in))) 
+          case (o, i, t) => throw new SQLException("Unsupported Metadata: $o <- $i:$t")
         })
         Project(
           schMap ++ metadata.map(_._2),
@@ -385,7 +386,7 @@ class RAToSql(db: Database) {
           rest.map(convert(_, sources)).foldLeft(convert(head, sources))(concat(_,_,"|"))
       }
       case mimir.algebra.Function("CAST", body_arg :: TypePrimitive(t) :: Nil) => {
-        return new CastOperation(convert(body_arg, sources), TString().toString(t));
+        return new CastOperation(convert(body_arg, sources), t.toString);
       }
       case mimir.algebra.Function("CAST", _) => {
         throw new SQLException("Invalid Cast: "+e)

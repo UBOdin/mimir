@@ -236,9 +236,9 @@ case class Table(name: String,
 {
   def toString(prefix: String) =
     prefix + name + "(" + (
-      sch.map( { case (v,t) => v+":"+TString().toString(t) } ).mkString(", ") +
+      sch.map( { case (v,t) => v+":"+t } ).mkString(", ") +
       ( if(metadata.size > 0)
-             { " // "+metadata.map( { case (v,e,t) => v+":"+TString().toString(t)+" <- "+e } ).mkString(", ") }
+             { " // "+metadata.map( { case (v,e,t) => v+":"+t+" <- "+e } ).mkString(", ") }
         else { "" }
       )
     )+")" 

@@ -13,7 +13,7 @@ object SpecializeForSQLite {
     e match {
       case Function("CAST", List(target, TypePrimitive(t))) => 
         {//println("TYPE ID: "+t.id(t))
-          Function("MIMIRCAST", List(apply(target), IntPrimitive(t.id(t))))}
+          Function("MIMIRCAST", List(apply(target), IntPrimitive(Type.id(t))))}
       case Function("CAST", _) =>
         throw new SQLException("Invalid CAST: "+e)
       case _ => e.recur(apply(_: Expression))
