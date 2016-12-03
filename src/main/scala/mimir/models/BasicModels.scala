@@ -9,7 +9,7 @@ abstract class SingleVarModel(name: String) extends Model(name) {
   def varType(argTypes: List[Type.T]): Type.T
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue
   def sample(randomness: Random, args: List[PrimitiveValue]): PrimitiveValue
-  def reason(args: List[Expression]): String
+  def reason(args: List[PrimitiveValue]): String
 
   def varType(x: Int, argTypes: List[Type.T]): Type.T = 
     varType(argTypes)
@@ -17,7 +17,7 @@ abstract class SingleVarModel(name: String) extends Model(name) {
     bestGuess(args)
   def sample(x:Int, randomness: Random, args: List[PrimitiveValue]): PrimitiveValue =
     sample(randomness, args)
-  def reason(x:Int, args: List[Expression]): String =
+  def reason(x:Int, args: List[PrimitiveValue]): String =
     reason(args)
 }
 
@@ -29,7 +29,7 @@ case class IndependentVarsModel(override val name: String, vars: List[SingleVarM
     vars(idx).bestGuess(args);
   def sample(idx: Int, randomness: Random, args: List[PrimitiveValue]) =
     vars(idx).sample(randomness, args)
-  def reason(idx: Int, args: List[Expression]): String =
+  def reason(idx: Int, args: List[PrimitiveValue]): String =
     vars(idx).reason(idx, args)
 }
 
@@ -59,7 +59,7 @@ object UniformDistribution extends SingleVarModel("UNIFORM") with Serializable {
     )
 
 
-  def reason(args: List[Expression]): String = 
+  def reason(args: List[PrimitiveValue]): String = 
     "I put in a random value between "+args(0)+" and "+args(1)
 }
 
@@ -67,5 +67,5 @@ case class NoOpModel(override val name: String, vt: Type.T, reasonText:String) e
   def varType(argTypes: List[Type.T]) = vt
   def bestGuess(args: List[PrimitiveValue]) = args(0)
   def sample(randomness: Random, args: List[PrimitiveValue]) = args(0)
-  def reason(args: List[Expression]): String = reasonText
+  def reason(args: List[PrimitiveValue]): String = reasonText
 }

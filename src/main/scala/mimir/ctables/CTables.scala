@@ -18,12 +18,12 @@ case class VGTerm(
     // println("VGTerm: Get")
     model.bestGuess(idx, v)
   }
-  def reason(): Reason = 
+  def reason(v: List[PrimitiveValue]): Reason = 
     Reason(
-      model.reason(idx, args),
+      model.reason(idx, v),
       model.name,
       idx,
-      args
+      v
     )
 }
 

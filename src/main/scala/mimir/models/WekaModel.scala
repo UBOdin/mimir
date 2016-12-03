@@ -42,7 +42,6 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
   var numSamples = 0
   var numCorrect = 0
   val colIdx:Int = target.schema.map(_._1).indexOf(colName)
-  val colType:Type.T = target.schema(colIdx)._2
 
   /**
    * The actual Weka model itself.  @SimpleWekaModel is just a wrapper around a 
@@ -178,10 +177,13 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
   {
     val att = learner.getModelContext.attribute(colIdx)
     val str = att.value(classIdx)
-    TextUtils.parsePrimitive(colType, str)
+    TextUtils.parsePrimitive(guessInputType, str)
   }
 
-  def varType(argTypes: List[Type.T]): Type.T = colType
+  def guessInputType: Type.T =
+    db.bestGuessSchema(target)(colIdx)._2
+
+  def varType(argTypes: List[Type.T]): Type.T = guessInputType
   
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue =
   {
@@ -202,7 +204,7 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
               }
     classToPrimitive(res)
   }
-  def reason(args: List[Expression]): String = 
+  def reason(args: List[PrimitiveValue]): String = 
   {
     val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val total:Double = classes.map(_._1).fold(0.0)(_+_)

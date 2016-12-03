@@ -13,9 +13,9 @@ class LensManager(db: Database) {
 
   val lensTypes = Map[String,((Database,String,Operator,List[Expression]) => 
                               (Operator,List[Model]))](
-    "MISSING_VALUE"  -> MissingValueLens.create _,
-    "SCHEMA_MATCH"   -> SchemaMatchingLens.create _,
-    "TYPE_INFERENCE" -> TypeInferenceLens.create _
+    "MISSING_VALUE"     -> MissingValueLens.create _,
+    "SCHEMA_MATCHING"   -> SchemaMatchingLens.create _,
+    "TYPE_INFERENCE"    -> TypeInferenceLens.create _
   )
 
   def init(): Unit =

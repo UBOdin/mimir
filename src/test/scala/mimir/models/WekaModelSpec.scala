@@ -22,10 +22,9 @@ object WekaModelSpec extends SQLTestSpecification("WekaTest")
     ).next.head
   }
 
+  "The Weka Model" should {
 
-  "Intializing" should {
-
-    "Load CPU Speed Data" >> {
+    "Be trainable" >> {
       update("""
         CREATE TABLE CPUSPEED(
           PROCESSORID string,
@@ -45,14 +44,6 @@ object WekaModelSpec extends SQLTestSpecification("WekaTest")
         )
       """)
       loadCSV("CPUSPEED", new File("test/data/CPUSpeed.csv"))
-      true
-    }
-
-  }
-
-  "The Weka Model" should {
-
-    "Be trainable" >> {
       models = models ++ WekaModel.train(db, "CPUSPEEDREPAIR", List(
         "BUSSPEEDINMHZ"
       ), db.getTableOperator("CPUSPEED"))
@@ -74,6 +65,23 @@ object WekaModelSpec extends SQLTestSpecification("WekaTest")
       predict("CORES", "20") must be equalTo trueValue("CORES", "20")
 
     }
+  }
 
+  "When combined with a TI Lens, the Weka Model" should {
+    "Be trainable" >> {
+      db.loadTable("RATINGS1", new File("test/data/ratings1.csv"))
+      val (model, idx) = WekaModel.train(db,
+        "RATINGS1REPAIRED", 
+        List("RATING"), 
+        db.getTableOperator("RATINGS1")
+      )("RATING")
+      val nullRow = query("SELECT ROWID FROM RATINGS1 WHERE RATING IS NULL").
+                      allRows()(0)(0)
+
+      model.bestGuess(idx, List(nullRow)) must beAnInstanceOf[FloatPrimitive]
+
+
+    }
+ 
   }
 }

@@ -20,14 +20,15 @@ object SchemaMatchingLens {
   ): (Operator, List[Model]) =
   {
     var targetSchema =
-      args.grouped(2).map({
-        case List(varName, typeName) =>
+      args.
+        map(field => {
+          val split = Eval.evalString(field).split(" +")
+          val varName  = split(0).toUpperCase
+          val typeName = split(1)
           (
             varName.toString.toUpperCase -> 
               Type.fromString(typeName.toString)
           )
-        case _ => 
-          throw new SQLException("Failure in List.grouped")
         }).
         toList
 
@@ -81,21 +82,14 @@ object SchemaMatchingLens {
         }).
         unzip
 
-    val targetSchemaLookup = targetSchema.toMap
-    val sourceSchemaLookup = query.schema.toMap
     val sourceColumns = query.schema.map(_._1)
 
     val projectArgs = 
       schemaChoice.
         map({ case (targetCol, sourceChoiceModel) => {
-          val targetType = targetSchemaLookup(targetCol)
           val sourceChoices = 
             sourceColumns.map( attr => 
-              ( StringPrimitive(attr), 
-                ExpressionUtils.makeCast(
-                  Var(attr), targetType, sourceSchemaLookup
-                )
-              )
+              ( StringPrimitive(attr), Var(attr) )
             )
           ProjectArg(targetCol,
             ExpressionUtils.makeCaseExpression(

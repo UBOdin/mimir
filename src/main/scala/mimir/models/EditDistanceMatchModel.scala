@@ -1,6 +1,7 @@
 package mimir.models
 
 import scala.util._
+import com.typesafe.scalalogging.slf4j.Logger
 import mimir.Database
 import mimir.algebra.Type.T
 import mimir.algebra._
@@ -14,15 +15,20 @@ import org.apache.lucene.search.spell.{
 
 object EditDistanceMatchModel
 {
+  val logger = Logger(org.slf4j.LoggerFactory.getLogger("mimir.models.EditDistanceMatchModel"))
+
   /**
-   * The choice of distance metric, from Apache Lucene.
-   *
-   * Options include:
-   *  - JaroWinklerDistance()
-   *  - LevensteinDistance()
-   *  - NGramDistance()
+   * Available choices of distance metric, from Apache Lucene.
    */
-  val defaultMetric: StringDistance = new NGramDistance()
+  val metrics = Map[String,StringDistance](
+    "NGRAM"       -> new NGramDistance(),
+    "LEVENSTEIN"  -> new LevensteinDistance(),
+    "JAROWINKLER" -> new JaroWinklerDistance()
+  )
+  /**
+   * Default choice of the distance metric
+   */
+  val defaultMetric = "NGRAM"
 
   def train(
     db: Database, 
@@ -32,10 +38,10 @@ object EditDistanceMatchModel
   ): Map[String,(Model,Int)] = 
   {
     val sourceSch = source match {
-        case Left(oper) => oper.schema
+        case Left(oper) => db.bestGuessSchema(oper)
         case Right(sch) => sch }
     val targetSch = target match {
-        case Left(oper) => oper.schema
+        case Left(oper) => db.bestGuessSchema(oper)
         case Right(sch) => sch }
 
     targetSch.map({ case (targetCol,targetType) =>
@@ -63,9 +69,10 @@ object EditDistanceMatchModel
   }
 }
 
+@SerialVersionUID(1000L)
 class EditDistanceMatchModel(
   name: String,
-  metric: StringDistance, 
+  metricName: String,
   target: (String, Type.T), 
   sourceCandidates: List[String]
 ) extends SingleVarModel(name) with Serializable
@@ -78,12 +85,14 @@ class EditDistanceMatchModel(
    * In other words, distance is a bit of a misnomer.  It's more of a score, which
    * in turn allows us to use it as-is.
    */
-  var colMapping:List[(String,Double)] = {
+  var colMapping:List[(String,Double)] = 
+  {
+    val metric = EditDistanceMatchModel.metrics(metricName)
     var cumSum = 0.0
     // calculate distance
-
     sourceCandidates.map( sourceColumn => {
       val dist = metric.getDistance(sourceColumn, target._1)
+      EditDistanceMatchModel.logger.debug(s"Building mapping for $sourceColumn -> $target:  $dist")
       (sourceColumn, dist)
     }).
     map({ case (k, v) => (k, v.toDouble) })
@@ -98,15 +107,15 @@ class EditDistanceMatchModel(
   }
 
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = {
-    StringPrimitive(  
-      colMapping.maxBy(_._2)._1
-    )
+    val guess = colMapping.maxBy(_._2)._1
+    EditDistanceMatchModel.logger.trace(s"Guesssing ($name) $target <- $guess")
+    StringPrimitive(guess)
   }
 
-  def reason(args: List[Expression]): String = {
-    val sourceName = colMapping.head._1
+  def reason(args: List[PrimitiveValue]): String = {
+    val sourceName = colMapping.maxBy(_._2)._1
     val targetName = target._1
-    val editDistance = (colMapping.head._2) * 100
-    s"I assumed that $sourceName maps to $targetName (Match: $editDistance%)"
+    val editDistance = ((colMapping.head._2) * 100).toInt
+    s"I assumed that $sourceName maps to $targetName (Match: $editDistance% using $metricName Distance)"
   }
 }

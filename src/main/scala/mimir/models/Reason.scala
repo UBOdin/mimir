@@ -7,7 +7,7 @@ case class Reason(
   val reason: String,
   val model: String,
   val idx: Int,
-  val args: List[Expression]
+  val args: List[PrimitiveValue]
 ){
   override def toString: String = 
     reason+" ("+model+";"+idx+"["+args.mkString(", ")+"])"

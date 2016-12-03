@@ -75,7 +75,7 @@ abstract class Model(val name: String) extends Serializable {
    * @param args  The skolem identifier for the specific variable to explain
    * @return      A string reason explaining the uncertainty in this model
    */
-  def reason         (idx: Int, args: List[Expression]): (String)
+  def reason         (idx: Int, args: List[PrimitiveValue]): (String)
 
   /**
    * Encode the model for persistence to disk/the database

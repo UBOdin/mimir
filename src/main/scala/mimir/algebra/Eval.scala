@@ -76,6 +76,31 @@ object Eval
           case None => throw new SQLException("Variable Out Of Scope: "+v+" (in "+bindings+")");
           case Some(s) => s
         }
+
+        // Special case And/Or arithmetic to enable shortcutting
+        case Arithmetic(Arith.And, lhs, rhs) =>
+          eval(lhs, bindings) match {
+            case BoolPrimitive(false) => BoolPrimitive(false)
+            case BoolPrimitive(true) => eval(rhs, bindings)
+            case NullPrimitive() => 
+              eval(rhs, bindings) match {
+                case BoolPrimitive(false) => BoolPrimitive(false)
+                case _ => NullPrimitive()
+              }
+          }
+
+        // Special case And/Or arithmetic to enable shortcutting
+        case Arithmetic(Arith.Or, lhs, rhs) =>
+          eval(lhs, bindings) match {
+            case BoolPrimitive(true) => BoolPrimitive(true)
+            case BoolPrimitive(false) => eval(rhs, bindings)
+            case NullPrimitive() => 
+              eval(rhs, bindings) match {
+                case BoolPrimitive(true) => BoolPrimitive(true)
+                case _ => NullPrimitive()
+              }
+          }
+
         case Arithmetic(op, lhs, rhs) =>
           applyArith(op, eval(lhs, bindings), eval(rhs, bindings))
         case Comparison(op, lhs, rhs) =>
@@ -205,44 +230,23 @@ object Eval
   def applyArith(op: Arith.Op, 
             a: PrimitiveValue, b: PrimitiveValue
   ): PrimitiveValue = {
-    if(a.isInstanceOf[NullPrimitive] || 
-       b.isInstanceOf[NullPrimitive]){
-      (op, a, b) match {
-        case (Arith.And, NullPrimitive(), BoolPrimitive(false)) 
-           | (Arith.And, BoolPrimitive(false), NullPrimitive()) => 
-          BoolPrimitive(false)
-        case (Arith.Or, NullPrimitive(), BoolPrimitive(true)) 
-           | (Arith.Or, BoolPrimitive(true), NullPrimitive()) => 
-          BoolPrimitive(true)
-        case _ => NullPrimitive()
-      }
-    } else {
-      (op, Typechecker.escalate(a.getType, b.getType)) match { 
-        case (Arith.Add, TInt) => 
-          IntPrimitive(a.asLong + b.asLong)
-        case (Arith.Add, TFloat) => 
-          FloatPrimitive(a.asDouble + b.asDouble)
-        case (Arith.Sub, TInt) => 
-          IntPrimitive(a.asLong - b.asLong)
-        case (Arith.Sub, TFloat) => 
-          FloatPrimitive(a.asDouble - b.asDouble)
-        case (Arith.Mult, TInt) => 
-          IntPrimitive(a.asLong * b.asLong)
-        case (Arith.Mult, TFloat) => 
-          FloatPrimitive(a.asDouble * b.asDouble)
-        case (Arith.Div, (TFloat|TInt)) => 
-          FloatPrimitive(a.asDouble / b.asDouble)
-        case (Arith.And, TBool) => 
-          BoolPrimitive(
-            a.asInstanceOf[BoolPrimitive].v &&
-            b.asInstanceOf[BoolPrimitive].v
-          )
-        case (Arith.Or, TBool) => 
-          BoolPrimitive(
-            a.asInstanceOf[BoolPrimitive].v ||
-            b.asInstanceOf[BoolPrimitive].v
-          )
-      }
+    (op, Typechecker.escalate(
+      a.getType, b.getType, "Evaluate Arithmetic", Arithmetic(op, a, b)
+    )) match { 
+      case (Arith.Add, TInt) => 
+        IntPrimitive(a.asLong + b.asLong)
+      case (Arith.Add, TFloat) => 
+        FloatPrimitive(a.asDouble + b.asDouble)
+      case (Arith.Sub, TInt) => 
+        IntPrimitive(a.asLong - b.asLong)
+      case (Arith.Sub, TFloat) => 
+        FloatPrimitive(a.asDouble - b.asDouble)
+      case (Arith.Mult, TInt) => 
+        IntPrimitive(a.asLong * b.asLong)
+      case (Arith.Mult, TFloat) => 
+        FloatPrimitive(a.asDouble * b.asDouble)
+      case (Arith.Div, (TFloat|TInt)) => 
+        FloatPrimitive(a.asDouble / b.asDouble)
     }
   }
 

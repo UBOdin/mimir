@@ -34,6 +34,7 @@ object TypeInferenceModel
   }
 }
 
+@SerialVersionUID(1000L)
 class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
   extends SingleVarModel(name)
 {
@@ -85,7 +86,7 @@ class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
     TypePrimitive(guess)
   }
 
-  def reason(args: List[Expression]): String = {
+  def reason(args: List[PrimitiveValue]): String = {
     val (guess, guessVotes) = voteList.maxBy( rankFn _ )
     val defaultPct = (defaultFrac * 100).toInt
     val guessPct = ((guessVotes / totalVotes)*100).toInt

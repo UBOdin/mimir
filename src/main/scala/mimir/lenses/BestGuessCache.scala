@@ -171,7 +171,6 @@ class BestGuessCache(db: Database) extends LazyLogging {
     createCacheTable(cacheTable, model.varType(varIdx, argTypes), argTypes)
 
     val modelName = model.name
-    logger.debug(s"Building cache for $modelName-$varIdx[$args] with\n$input")
 
     val updateQuery = 
         "INSERT INTO "+cacheTable+"("+dataColumn+
@@ -181,6 +180,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
         ") VALUES (?"+
           args.map(_ => ",?").mkString("")+
         ")"
+    logger.debug(s"Building cache for $modelName-$varIdx[$args] with\n$input\n$updateQuery")
 
     db.query(input).foreachRow(row => {
       val compiledArgs = args.map(Provenance.plugInToken(_, row.provenanceToken()))

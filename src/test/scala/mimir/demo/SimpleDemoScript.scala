@@ -50,7 +50,7 @@ object SimpleDemoScript
 			db.loadTable(reviewDataFiles(1))
 			db.loadTable(reviewDataFiles(2))
 			query("SELECT * FROM RATINGS1;").allRows must have size(4)
-			query("SELECT RATING FROM RATINGS1RAW;").allRows.flatten must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
+			query("SELECT RATING FROM RATINGS1_RAW;").allRows.flatten must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
 			query("SELECT * FROM RATINGS2;").allRows must have size(3)
 		}
 
@@ -65,19 +65,9 @@ object SimpleDemoScript
       update("""
 				CREATE LENS null_test
 				  AS SELECT * FROM RATINGS3
-				  WITH MISSING_VALUE('C')
+				  WITH MISSING_VALUE('EVALUATION')
  			""")
-
-      val null_test_query =
-	      db.backend.resultRows("SELECT query FROM MIMIR_LENSES WHERE NAME='NULL_TEST'").next()(0)
-
-	    val cols = List("PID", "EVALUATION", "NUM_RATINGS")
-	    oper(null_test_query.asString) must be equalTo
-	    	Project(cols.map( x => ProjectArg(x, Var(x))),
-	    		Project(cols.map( x => ProjectArg(x, Var("RATINGS3_"+x))),
-	    			Table("RATINGS3", cols.map(x => ("RATINGS3_"+x, Type.TAny)), List())
-    			)
-    		)
+      query("SELECT * FROM null_test;").allRows must have size(3)
 
       val results0 = 
 				LoggerUtils.debug(List(
@@ -88,7 +78,6 @@ object SimpleDemoScript
 		    })
       results0 must have size(3)
       results0(2) must contain(str("P34235"), NullPrimitive(), f(4.0))
-      query("SELECT * FROM null_test;").allRows must have size(3)
     }
 
 
@@ -104,7 +93,7 @@ object SimpleDemoScript
 
 		"Create and Query Domain Constraint Repair Lenses" >> {
 			LoggerUtils.trace(List(
-				// "mimir.lenses.BestGuessCache", 
+				 // "mimir.lenses.BestGuessCache"
 				// "mimir.exec.Compiler"
 			), () => {
 			update("""
@@ -115,9 +104,12 @@ object SimpleDemoScript
 			})
 			val nullRow = query("SELECT ROWID FROM RATINGS1 WHERE RATING IS NULL").
 											allRows()(0)(0).asLong
+
 			val result1guesses =
-				db.backend.resultRows("SELECT MIMIR_KEY_0, MIMIR_DATA FROM RATINGS1FINAL_CACHE_1")
-			result1guesses.map( x => (x(0), x(1))) must contain((IntPrimitive(nullRow), FloatPrimitive(6.4)))
+				db.backend.resultRows("SELECT MIMIR_KEY_0, MIMIR_DATA FROM "+
+						db.bestGuessCache.cacheTableForModel(db.models.getModel("RATINGS1FINAL:WEKA:RATING"), 0))
+
+			result1guesses.map( x => (x(0), x(1))).toList must contain((IntPrimitive(nullRow), FloatPrimitive(4.5)))
 
 			val result1 = 
 				LoggerUtils.debug(List(
@@ -126,19 +118,19 @@ object SimpleDemoScript
 				)
 
 			result1 must have size(4)
-			result1 must contain(eachOf( f(4.5), f(4.0), f(6.4), f(6.4) ) )
+			result1 must contain(eachOf( f(4.5), f(4.0), f(4.5), f(6.4) ) )
 			val result2 = query("SELECT RATING FROM RATINGS1FINAL WHERE RATING < 5").allRows.flatten
-			result2 must have size(2)
+			result2 must have size(3)
 		}
 
 		"Create Backing Stores Correctly" >> {
 			val model = db.models.getModel("RATINGS1FINAL:WEKA:RATING")
 			val result = db.backend.resultRows(
 				"SELECT "+db.bestGuessCache.dataColumn+
-				" FROM "+db.bestGuessCache.cacheTableForModel(model, 1)
+				" FROM "+db.bestGuessCache.cacheTableForModel(model, 0)
 			)
 			result.map( _(0).getType ).toSet must be equalTo Set(Type.TFloat)
-			db.getTableSchema(db.bestGuessCache.cacheTableForModel(model, 1)).get must contain(eachOf( (db.bestGuessCache.dataColumn, Type.TFloat) ))
+			db.getTableSchema(db.bestGuessCache.cacheTableForModel(model, 0)).get must contain(eachOf( (db.bestGuessCache.dataColumn, Type.TFloat) ))
 
 		}
 
@@ -154,14 +146,14 @@ object SimpleDemoScript
 
 			val result2 = query("SELECT ID, BRAND FROM PRODUCT_REPAIRED WHERE BRAND='HP'")
 			val result2Determinism = result2.mapRows( r => (r(0).asString, r.deterministicCol(1), r.deterministicRow) )
-			result2Determinism must contain(eachOf( ("P123", false, false), ("P34235", true, true) ))
+			result2Determinism must contain(eachOf( ("P34235", true, true) ))
 		}
 
 		"Create and Query Schema Matching Lenses" >> {
 			update("""
 				CREATE LENS RATINGS2FINAL 
 				  AS SELECT * FROM RATINGS2 
-				  WITH SCHEMA_MATCHING(PID string, RATING float, REVIEW_CT float)
+				  WITH SCHEMA_MATCHING('PID string', 'RATING float', 'REVIEW_CT float')
 			""")
 			val result1 = query("SELECT RATING FROM RATINGS2FINAL").allRows.flatten
 			result1 must have size(3)
@@ -170,7 +162,7 @@ object SimpleDemoScript
 
 		"Obtain Row Explanations for Simple Queries" >> {
 			val expl = 
-				LoggerUtils.debug(List(
+				LoggerUtils.trace(List(
 						// "mimir.ctables.CTExplainer"
 					), () => {
 						explainRow("""
@@ -185,19 +177,19 @@ object SimpleDemoScript
 			val expl1 = explainCell("""
 					SELECT * FROM RATINGS1FINAL
 				""", "2", "RATING")
-			expl1.toString must contain("I made a best guess estimate for this data element, which was originally NULL")		
+			expl1.toString must contain("I used a classifier to guess that RATING=")		
 		}
 		"Obtain Cell Explanations for Queries with WHERE clauses" >> {
 			val expl1 = explainCell("""
 					SELECT * FROM RATINGS1FINAL WHERE RATING > 0
 				""", "2", "RATING")
-			expl1.toString must contain("I made a best guess estimate for this data element, which was originally NULL")		
+			expl1.toString must contain("I used a classifier to guess that RATING=")		
 		}
 		"Guard Data-Dependent Explanations for Simple Queries" >> {
 			val expl2 = explainCell("""
 					SELECT * FROM RATINGS1FINAL
 				""", "1", "RATING")
-			expl2.toString must not contain("I made a best guess estimate for this data element, which was originally NULL")		
+			expl2.toString must not contain("I used a classifier to guess that RATING=")		
 		}
 
 		"Query a Union of Lenses (projection first)" >> {
@@ -289,14 +281,19 @@ object SimpleDemoScript
 				"1|left|1"
 			))
 
-			val explain0 = explainCell("""
-				SELECT p.name, r.rating FROM (
-					SELECT * FROM RATINGS1FINAL 
-						UNION ALL 
-					SELECT * FROM RATINGS2FINAL
-				) r, Product p
-				""", "1|right|3", "RATING")
-			explain0.reasons.map(_.model) must contain(eachOf(
+			val explain0 = 
+				LoggerUtils.trace(List(
+					// "mimir.ctables.CTExplainer"
+				), () => 
+					explainCell("""
+						SELECT p.name, r.rating FROM (
+							SELECT * FROM RATINGS1FINAL 
+								UNION ALL 
+							SELECT * FROM RATINGS2FINAL
+						) r, Product p
+						""", "1|right|3", "RATING")
+				)
+			explain0.reasons.map(_.model.replaceAll(":.*", "")) must contain(eachOf(
 				"RATINGS2FINAL",
 				"RATINGS2"
 			))
