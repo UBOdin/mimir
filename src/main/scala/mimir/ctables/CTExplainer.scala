@@ -135,7 +135,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 			)
 
 		colType match {
-			case (Type.TInt | Type.TFloat) => 
+			case (TInt() | TFloat()) =>
 				val (avg, stddev) = getStats(expr, tuple, NUM_SAMPLES)
 
 				NumericCellExplanation(

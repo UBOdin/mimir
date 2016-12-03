@@ -8,7 +8,7 @@ import java.sql.SQLException
 case class VGTermSampler(model: Model, idx: Int, args: List[Expression], seed: Expression) 
   extends Proc(  (seed :: args)  )
 {
-  def getType(argTypes: List[Type.T]): Type.T =
+  def getType(argTypes: List[Type]): Type =
     model.varType(idx, argTypes)
   def get(v: List[PrimitiveValue]): PrimitiveValue = {
     v match {

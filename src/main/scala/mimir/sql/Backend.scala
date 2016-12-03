@@ -38,8 +38,7 @@ abstract class Backend {
   def resultValue(sel:SelectBody):PrimitiveValue =
     resultRows(sel).next.head
   
-  def getTableSchema(table: String): Option[List[(String, Type.T)]]
-
+  def getTableSchema(table: String): Option[List[(String, Type)]]
   
   def update(stmt: String): Unit
   def update(stmt: List[String]): Unit

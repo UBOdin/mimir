@@ -262,9 +262,10 @@ case class Database(backend: Backend)
   /**
    * Look up the schema for the table with the provided name.
    */
-  def getTableSchema(name: String): Option[List[(String,Type.T)]] =
-    backend.getTableSchema(name).
-      orElse(getView(name).map(_.schema))
+  def getTableSchema(name: String): Option[List[(String,Type)]] =
+    getView(name).
+      orElse(backend.getTableSchema(name).map(_.schema))
+
   /**
    * Build a Table operator for the table with the provided name.
    */
@@ -275,7 +276,7 @@ case class Database(backend: Backend)
    * Build a Table operator for the table with the provided name, requesting the
    * specified metadata.
    */
-  def getTableOperator(table: String, metadata: List[(String, Expression, Type.T)]): Operator =
+  def getTableOperator(table: String, metadata: List[(String, Expression, Type)]): Operator =
   {
     Table(
       table, 

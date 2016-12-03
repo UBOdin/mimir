@@ -2,7 +2,7 @@ package mimir.algebra;
 
 import java.sql._;
 
-import mimir.algebra.Type._
+import mimir.algebra._
 import mimir.provenance.Provenance
 import mimir.ctables.{VGTerm, CTables}
 import mimir.optimizer.ExpressionOptimizer
@@ -15,7 +15,7 @@ import mimir.optimizer.ExpressionOptimizer
  */
 abstract class Proc(args: List[Expression]) extends Expression
 {
-  def getType(argTypes: List[Type.T]): Type.T
+  def getType(argTypes: List[Type]): Type
   def getArgs = args
   def children = args
   def get(v: List[PrimitiveValue]): PrimitiveValue
@@ -52,7 +52,7 @@ object Eval
       /* TODO Need to check if this is allowed? */
       case v: NullPrimitive => false
 
-      case v => throw new TypeException(TBool, v.getType, "Cast")
+      case v => throw new TypeException(TBool(), v.getType, "Cast")
     }
   /**
    * Evaluate the specified expression and return the primitive value
@@ -267,9 +267,9 @@ object Eval
           BoolPrimitive(!a.payload.equals(b.payload))
         case Cmp.Gt => 
           Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
-            case TInt => BoolPrimitive(a.asLong > b.asLong)
-            case TFloat => BoolPrimitive(a.asDouble > b.asDouble)
-            case TDate => 
+            case TInt() => BoolPrimitive(a.asLong > b.asLong)
+            case TFloat() => BoolPrimitive(a.asDouble > b.asDouble)
+            case TDate() =>
               BoolPrimitive(
                 a.asInstanceOf[DatePrimitive].
                  compare(b.asInstanceOf[DatePrimitive])<0
@@ -277,14 +277,14 @@ object Eval
           }
         case Cmp.Gte => 
           Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
-            case TInt => BoolPrimitive(a.asLong >= b.asLong)
-            case TFloat => BoolPrimitive(a.asDouble >= b.asDouble)
-            case TDate => 
+            case TInt() => BoolPrimitive(a.asLong >= b.asLong)
+            case TFloat() => BoolPrimitive(a.asDouble >= b.asDouble)
+            case TDate() =>
               BoolPrimitive(
                 a.asInstanceOf[DatePrimitive].
                  compare(b.asInstanceOf[DatePrimitive])<=0
               )
-            case TBool => BoolPrimitive(a match {
+            case TBool() => BoolPrimitive(a match {
               case BoolPrimitive(true) => true
               case BoolPrimitive(false) => {
                 b match {
@@ -296,9 +296,9 @@ object Eval
           }
         case Cmp.Lt => 
           Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
-            case TInt => BoolPrimitive(a.asLong < b.asLong)
-            case TFloat => BoolPrimitive(a.asDouble < b.asDouble)
-            case TDate => 
+            case TInt() => BoolPrimitive(a.asLong < b.asLong)
+            case TFloat() => BoolPrimitive(a.asDouble < b.asDouble)
+            case TDate() =>
               BoolPrimitive(
                 a.asInstanceOf[DatePrimitive].
                  compare(b.asInstanceOf[DatePrimitive])>0
@@ -306,9 +306,9 @@ object Eval
           }
         case Cmp.Lte => 
           Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
-            case TInt => BoolPrimitive(a.asLong <= b.asLong)
-            case TFloat => BoolPrimitive(a.asDouble <= b.asDouble)
-            case TDate => 
+            case TInt() => BoolPrimitive(a.asLong <= b.asLong)
+            case TFloat() => BoolPrimitive(a.asDouble <= b.asDouble)
+            case TDate() =>
               BoolPrimitive(
                 a.asInstanceOf[DatePrimitive].
                  compare(b.asInstanceOf[DatePrimitive])>=0
