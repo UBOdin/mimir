@@ -51,7 +51,7 @@ object ProvenanceSpec extends Specification {
       provCols must not be empty 
     })
     provCols.map( col => 
-      provSchema must havePair(col -> TRowId)
+      provSchema must havePair(col -> TRowId())
     ).fold(initial)( _ and _ )
   }
 

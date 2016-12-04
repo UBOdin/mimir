@@ -10,7 +10,7 @@ import mimir.algebra.Type._;
  * also acts as a boxing type for constants in Mimir.
  */
 abstract class PrimitiveValue(t: Type)
-  extends LeafExpression 
+  extends LeafExpression with Serializable
 {
   def getType = t
   /**
