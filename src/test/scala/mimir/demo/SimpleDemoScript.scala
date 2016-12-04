@@ -6,14 +6,15 @@ import scala.collection.JavaConversions._
 import org.specs2.mutable._
 import org.specs2.matcher.FileMatchers
 
-import mimir._;
-import mimir.sql._;
-import mimir.parser._;
-import mimir.algebra._;
-import mimir.optimizer._;
-import mimir.ctables._;
-import mimir.exec._;
-import mimir.util._;
+import mimir._
+import mimir.sql._
+import mimir.parser._
+import mimir.algebra._
+import mimir.optimizer._
+import mimir.ctables._
+import mimir.exec._
+import mimir.util._
+import mimir.test._
 import net.sf.jsqlparser.statement.{Statement}
 
 

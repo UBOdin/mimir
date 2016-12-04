@@ -3,7 +3,7 @@ package mimir.util
 import mimir.algebra._
 
 object TextUtils {
-  
+
   def parsePrimitive(t: Type, s: String): PrimitiveValue = 
   {
     t match {

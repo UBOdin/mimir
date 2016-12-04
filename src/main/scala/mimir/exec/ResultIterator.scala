@@ -18,6 +18,9 @@ import mimir.models.Reason;
  *   // etc...
  * }
  * iterator.close()
+ * 
+ * TODO: 
+ *  Make this a TraversableOnce
  */
 
 abstract class ResultIterator {

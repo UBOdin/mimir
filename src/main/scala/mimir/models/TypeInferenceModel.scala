@@ -12,13 +12,6 @@ object TypeInferenceModel
 {
   val logger = Logger(org.slf4j.LoggerFactory.getLogger("mimir.models.TypeInferenceModel"))
 
-  val typeTests = List(
-    ("(\\+|-)?([0-9]+)",               TInt()),
-    ("(\\+|-)?([0-9]*(\\.[0-9]+)?)",   TFloat()),
-    ("[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}", TDate()),
-    ("(?i:true|false)",                TBool())
-  )
-
   def priority: Type => Int =
   {
     case TUser(_,_,_) => 20
@@ -32,8 +25,8 @@ object TypeInferenceModel
     case TAny()       => -10
   }
 
-  def detectType(v: String): List[Type] = {
-    typeTests.flatMap({ case (test, t) =>
+  def detectType(v: String): Iterable[Type] = {
+    Type.tests.flatMap({ case (t, test) =>
       if(v.matches(test)){ Some(t) }
       else { None }
     })++TypeRegistry.typeList.flatMap((userTypeDef)=>{

@@ -105,6 +105,13 @@ object Type {
       location
     }
   }
+
+  val tests = Map[Type,String](
+    TInt()   -> "(\\+|-)?([0-9]+)",               
+    TFloat() -> "(\\+|-)?([0-9]*(\\.[0-9]+)?)",   
+    TDate()  -> "[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}", 
+    TBool()  -> "(?i:true|false)"
+  )
 }
 
 case class TInt() extends Type

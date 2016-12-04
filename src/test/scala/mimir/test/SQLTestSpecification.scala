@@ -1,4 +1,4 @@
-package mimir.util
+package mimir.test
 
 import java.io._
 
@@ -9,6 +9,8 @@ import mimir._
 import mimir.parser._
 import mimir.sql._
 import mimir.algebra._
+import mimir.util._
+import mimir.exec._
 
 object DBTestInstances
 {
@@ -83,10 +85,16 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
       stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
     )
   }
-  def query(s: String) = {
+  def query(s: String): ResultIterator = {
     val query = select(s)
     db.query(query)
   }
+  def queryOneColumn(s: String): List[PrimitiveValue] = 
+    query(s).mapRows(_(0))
+  def querySingleton(s: String): PrimitiveValue =
+    queryOneColumn(s).head
+  def queryOneRow(s: String): List[PrimitiveValue] =
+    query(s).mapRows( _.currentRow ).head
   def table(t: String) =
     db.getTableOperator(t)
   def explainRow(s: String, t: String) = {

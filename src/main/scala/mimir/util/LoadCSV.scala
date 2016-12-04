@@ -34,28 +34,30 @@ object LoadCSV extends LazyLogging {
     if(assumeHeader){ config = config.withHeader() }
 
     val parser = new CSVParser(input, config)
+    val samples = parser.asScala.take(SAMPLE_SIZE)
 
     val targetSchema = 
       db.getTableSchema(targetTable) match {
         case Some(sch) => sch
         case None => {
 
-          val idxToCol = 
-            parser.getHeaderMap.
-              entrySet.asScala.
-              map( x => (x.getValue -> x.getKey) ).
-              toMap
+          val idxToCol: Map[Int, String] = 
+            if(parser.getHeaderMap != null) { 
+              parser.getHeaderMap.
+                entrySet.asScala.
+                map( (x:java.util.Map.Entry[String,Integer]) => (x.getValue.toInt, x.getKey) ).
+                toMap
+            } else { Map() }
+
+          logger.debug(s"HEADER_MAP: $idxToCol")
 
           val columnCount = 
-            parser.asScala.
-              take(SAMPLE_SIZE).
-              map( _.size ).
-              max
+            samples.map( _.size ).max
 
           val columnNames =
             makeColumnNamesUnique(
               (0 until columnCount).
-                map( idx => idxToCol.getOrElse(idx, s"COLUMN_$idx") ).
+                map( (idx:Int) => { idxToCol.getOrElse(idx, s"COLUMN_$idx") } ).
                 map( sanitizeColumnName _ )
             )
 
@@ -72,7 +74,7 @@ object LoadCSV extends LazyLogging {
       }
 
     // Sanity check the size of each row
-    parser.asScala.take(SAMPLE_SIZE).
+    samples.
       filter( x => (x.size > targetSchema.size) ).
       map( _.getRecordNumber ) match {
         case Nil          => // All's well! 
@@ -82,16 +84,17 @@ object LoadCSV extends LazyLogging {
         case a::b::rest   => logger.warn(s"Too many fields on lines $a, $b, and "+(rest.size)+s" more of $sourceFile")
       }
 
-    populateTable(db, parser, targetTable, targetSchema)
+    populateTable(db, samples++parser.asScala, targetTable, sourceFile, targetSchema)
   }
 
   def sanitizeColumnName(name: String): String =
   {
+    logger.trace(s"SANITIZE: $name")
     name.
-      replace("^([0-9])","X\1").        // Prefix leading digits with an 'X'
-      replaceAll("[^a-zA-Z0-9]+", "_"). // Replace sequences of non-alphanumeric characters with underscores
-      replaceAll("_+$", "").            // Strip trailing underscores
-      toUpperCase                       // Capitalize
+      replaceAll("^([0-9])","COLUMN_\1").  // Prefix leading digits with a 'COL_'
+      replaceAll("[^a-zA-Z0-9]+", "_").    // Replace sequences of non-alphanumeric characters with underscores
+      replaceAll("_+$", "").               // Strip trailing underscores
+      toUpperCase                          // Capitalize
   }
 
   def makeColumnNamesUnique(columnNames: Iterable[String]): List[String] = {
@@ -119,8 +122,9 @@ object LoadCSV extends LazyLogging {
   }
 
   private def populateTable(db: Database,
-                            parser: CSVParser,
+                            rows: TraversableOnce[CSVRecord],
                             targetTable: String,
+                            sourceFile: File,
                             sch: List[(String, Type)]): Unit = {
 
     var location = 0
@@ -129,26 +133,33 @@ object LoadCSV extends LazyLogging {
     val statements = new ListBuffer[String]()
 
 
-    for (row: CSVRecord <- parser.asScala) {
+    for (row: CSVRecord <- rows) {
         {
-          var columnCount = 0
+          var listOfValues = row.iterator().asScala.toList
+          val lineNum = row.getRecordNumber()
 
-          var listOfValues: List[String] = row.iterator().asScala.toList
+          val data = listOfValues.
+            take(numberOfColumns).
+            padTo(numberOfColumns, "").
+            map( _.trim ).
+            zip(sch).
+            map({ case (value, (col, t)) =>
+              if(value == null || value.equals("")) { NullPrimitive() }
+              else {
+                if(Type.tests.contains(t) 
+                    && !value.matches(Type.tests(t)))
+                {
+                  logger.warn(s"fileName:$lineNum: $col ($t) on is unparseable '$value', using null instead");
+                  NullPrimitive()
+                } else {
+                  TextUtils.parsePrimitive(t, value)
+                }
+              }
+            })
 
-          listOfValues = listOfValues.take(numberOfColumns)
-          listOfValues = listOfValues.padTo(numberOfColumns, null)
-
-          val data = listOfValues.zip(sch).map({ 
-              case ("", _) => "null"
-              case (x, (_, (TDate() | TString()))) => "\'"+x.replaceAll("\\","\\\\").replaceAll("'","\\'")+"\'"
-              case (x, (_, TInt()))   if x.matches("^[+-]?[0-9]+$") => x
-              case (x, (_, TFloat())) if x.matches("^[+-]?[0-9]+([.][0-9]+)?(e[+-]?[0-9]+)?$") => x
-              case (x, (c,t)) => logger.warn(s"Don't know how to deal with $c ($t): $x, using null instead"); null
-          }).mkString(", ")
-
-          val cmd = "INSERT INTO " + targetTable + "(" + keys + ") VALUES (" + data.mkString(", ") + ")"
-          logger.debug(s"INSERT: $cmd")
-          db.backend.update(cmd)
+          val cmd = "INSERT INTO " + targetTable + "(" + keys + ") VALUES (" + data.map(x=>"?").mkString(",") + ")"
+          logger.trace(s"INSERT: $cmd \n <- $data")
+          db.backend.update(cmd, data)
         }
     }
 

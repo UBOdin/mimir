@@ -5,6 +5,7 @@ import mimir.algebra._
 import mimir.util._
 import mimir.ctables.{VGTerm}
 import mimir.optimizer.{ResolveViews,InlineVGTerms,InlineProjections}
+import mimir.test._
 
 object LensManagerSpec extends SQLTestSpecification("LensTests") {
 

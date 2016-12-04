@@ -5,6 +5,12 @@ import ch.qos.logback.classic.{Level,Logger};
 
 object LoggerUtils {
 
+  val TRACE = Level.TRACE
+  val DEBUG = Level.DEBUG
+  val INFO  = Level.INFO
+  val WARN  = Level.WARN
+  val ERROR = Level.ERROR
+
   def trace[A](loggerName: String, body: () => A): A =
     enhance(loggerName, Level.TRACE, body)
 

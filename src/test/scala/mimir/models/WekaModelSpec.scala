@@ -3,6 +3,7 @@ package mimir.models
 import java.io._
 import mimir.algebra._
 import mimir.util._
+import mimir.test._
 
 object WekaModelSpec extends SQLTestSpecification("WekaTest")
 {

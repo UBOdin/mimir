@@ -5,6 +5,7 @@ import java.io._
 import org.specs2.mutable._
 import mimir.algebra._
 import mimir.util._
+import mimir.test._
 
 object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
 {
@@ -47,8 +48,10 @@ object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
     "Recognize CPU Cores" >> {
       loadCSV("CPUSPEED", new File("test/data/CPUSpeed.csv"))
       val model = new TypeInferenceModel("CPUSPEED:CORES", "CORES", 0.5)
-      model.train(db, table("CPUSPEED"))
-      guess(model) must be equalTo(TInt())
+      LoggerUtils.debug(List("mimir.models.TypeInferenceModel"), () => {
+        model.train(db, table("CPUSPEED"))
+        guess(model) must be equalTo(TInt())
+      })
     }
 
   }
