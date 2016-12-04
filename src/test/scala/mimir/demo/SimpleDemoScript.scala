@@ -133,6 +133,9 @@ object SimpleDemoScript
 			result1 must contain(eachOf( f(4.5), f(4.0), f(4.5), f(6.4) ) )
 			val result2 = query("SELECT RATING FROM RATINGS1FINAL WHERE RATING < 5").allRows.flatten
 			result2 must have size(3)
+
+			queryOneColumn("SELECT PID FROM RATINGS1") must not contain(NullPrimitive())
+			queryOneColumn("SELECT PID FROM RATINGS1FINAL") must not contain(NullPrimitive())
 		}
 		"Show Determinism Correctly" >> {
 			update("""

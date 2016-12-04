@@ -154,7 +154,7 @@ object TypeRegistry {
   typeList ++= List(
     ("TUser",         "USER",                            TString()),
     ("TWeight",       "KG*",                             TString()),
-    ("FireCompany",   "^[a-zA-Z]\\d{3}$",                TString()),
+    // ("FireCompany",   "^[a-zA-Z]\\d{3}$",                TString()),
     ("ZipCode",       "^\\d{5}(?:[-\\s]\\d{4})?$",       TInt()),
     ("Container",     "[A-Z]{4}[0-9]{7}",                TString()),
     ("CarrierCode",   "[A-Z]{4}",                        TString()),
