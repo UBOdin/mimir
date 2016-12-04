@@ -209,4 +209,10 @@ object Typechecker {
 	{
 		l.fold(TAny())(escalate(_,_,msg,e))
 	}
+
+	def baseType(a: Type): Type = 
+    a match { 
+      case TUser(_,_,t) => baseType(t)
+      case _ => a
+    }
 }

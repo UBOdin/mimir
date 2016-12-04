@@ -55,14 +55,15 @@ object EditDistanceMatchModel
     }).toMap
   }
 
-
   def isTypeCompatible(a: Type, b: Type): Boolean = 
   {
-    (a,b) match {
+    val aBase = Typechecker.baseType(a)
+    val bBase = Typechecker.baseType(b)
+    (aBase, bBase) match {
       case ((TInt()|TFloat()),  (TInt()|TFloat())) => true
       case (TAny(), _) => true
       case (_, TAny()) => true
-      case _ => a == b
+      case _ => aBase == bBase
     }
 
   }
