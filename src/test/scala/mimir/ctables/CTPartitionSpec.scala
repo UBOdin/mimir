@@ -21,14 +21,14 @@ object CTPartitionSpec extends Specification {
     UniformDistribution,
     UniformDistribution
   ))
-  val schema = Map[String,List[(String,Type.T)]](
+  val schema = Map[String,List[(String,Type)]](
     ("R", List( 
-      ("A", Type.TInt), 
-      ("B", Type.TInt)
+      ("A", TInt()),
+      ("B", TInt())
     )),
     ("S", List( 
-      ("C", Type.TInt), 
-      ("D", Type.TInt)
+      ("C", TInt()),
+      ("D", TInt())
     ))
   )
 

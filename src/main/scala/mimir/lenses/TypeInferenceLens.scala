@@ -1,11 +1,9 @@
 package mimir.lenses
 
-import java.sql.SQLException
 import scala.util._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir.Database
-import mimir.algebra.Type.T
 import mimir.algebra._
 import mimir.ctables._
 import mimir.exec.ResultIterator
@@ -22,7 +20,7 @@ object TypeInferenceLens extends LazyLogging
   {
     val (repairs, models) = 
       query.schema.map({
-        case (col, (Type.TString | Type.TAny)) => {
+        case (col, (TString() | TAny())) => {
           val model =
             new TypeInferenceModel(
               s"$name:$col",

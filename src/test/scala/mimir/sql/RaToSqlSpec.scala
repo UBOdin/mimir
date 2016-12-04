@@ -2,26 +2,22 @@ package mimir.sql;
 
 import mimir.parser.{MimirJSqlParser}
 import org.specs2.mutable._
+import org.specs2.specification._
 
 import mimir._
 import mimir.parser._
 import mimir.algebra._
 import mimir.sql._
+import mimir.test._
 
-object RaToSqlSpec extends Specification  {
+object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
 
-  val schema = Map[String,List[(String,Type.T)]](
-    ("R", List( 
-      ("A", Type.TInt), 
-      ("B", Type.TInt)
-    ))
-  )
-  val db = new Database(new NullBackend(schema))
-
-  def parser = new OperatorParser((x: String) => null, schema.get(_).get)
-  def expr = parser.expr _
-  def oper = parser.operator _
   def convert(x: String) = db.ra.convert(oper(x)).toString
+
+  def beforeAll =
+  {
+    update("CREATE TABLE R(A int, B int)")
+  }
 
   "The RA to SQL converter" should {
 

@@ -52,7 +52,7 @@ abstract class Model(val name: String) extends Serializable {
    * @param argTypes    The types of the arguments the the VGTerm
    * @return            The type of the value returned by this model
    */
-  def varType        (idx: Int, argTypes:List[Type.T]): Type.T
+  def varType        (idx: Int, argTypes:List[Type]): Type
 
   /**
    * Generate a best guess for a variable represented by this model.

@@ -6,12 +6,12 @@ import scala.util._
 
 abstract class SingleVarModel(name: String) extends Model(name) {
 
-  def varType(argTypes: List[Type.T]): Type.T
+  def varType(argTypes: List[Type]): Type
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue
   def sample(randomness: Random, args: List[PrimitiveValue]): PrimitiveValue
   def reason(args: List[PrimitiveValue]): String
 
-  def varType(x: Int, argTypes: List[Type.T]): Type.T = 
+  def varType(x: Int, argTypes: List[Type]): Type =
     varType(argTypes)
   def bestGuess(x:Int, args: List[PrimitiveValue]): PrimitiveValue =
     bestGuess(args)
@@ -23,7 +23,7 @@ abstract class SingleVarModel(name: String) extends Model(name) {
 
 case class IndependentVarsModel(override val name: String, vars: List[SingleVarModel]) extends Model(name) {
 
-  def varType(idx: Int, argTypes: List[Type.T]) = 
+  def varType(idx: Int, argTypes: List[Type]) =
     vars(idx).varType(argTypes)
   def bestGuess(idx: Int, args: List[PrimitiveValue]) = 
     vars(idx).bestGuess(args);
@@ -34,7 +34,7 @@ case class IndependentVarsModel(override val name: String, vars: List[SingleVarM
 }
 
 object UniformDistribution extends SingleVarModel("UNIFORM") with Serializable {
-  def varType(argTypes: List[Type.T]) = Type.TFloat
+  def varType(argTypes: List[Type]) = TFloat()
   def bestGuess(args: List[PrimitiveValue]) = 
     FloatPrimitive((args(0).asDouble + args(1).asDouble) / 2.0)
   def sample(randomness: Random, args: List[PrimitiveValue]) = {
@@ -63,8 +63,8 @@ object UniformDistribution extends SingleVarModel("UNIFORM") with Serializable {
     "I put in a random value between "+args(0)+" and "+args(1)
 }
 
-case class NoOpModel(override val name: String, vt: Type.T, reasonText:String) extends SingleVarModel(name) with Serializable {
-  def varType(argTypes: List[Type.T]) = vt
+case class NoOpModel(override val name: String, vt: Type, reasonText:String) extends SingleVarModel(name) with Serializable {
+  def varType(argTypes: List[Type]) = vt
   def bestGuess(args: List[PrimitiveValue]) = args(0)
   def sample(randomness: Random, args: List[PrimitiveValue]) = args(0)
   def reason(args: List[PrimitiveValue]): String = reasonText

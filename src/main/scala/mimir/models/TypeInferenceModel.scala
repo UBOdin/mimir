@@ -7,30 +7,34 @@ import mimir.Database
 import mimir.algebra._
 import mimir.util._
 
+
 object TypeInferenceModel
 {
   val logger = Logger(org.slf4j.LoggerFactory.getLogger("mimir.models.TypeInferenceModel"))
 
-  val typeTests = List(
-    ("(\\+|-)?([0-9]+)",               Type.TInt),
-    ("(\\+|-)?([0-9]*(\\.[0-9]+)?)",   Type.TFloat),
-    ("[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}", Type.TDate),
-    ("(?i:true|false)",                Type.TBool)
-  )
+  def priority: Type => Int =
+  {
+    case TUser(_,_,_) => 20
+    case TInt()       => 10
+    case TBool()      => 10
+    case TDate()      => 10
+    case TType()      => 10
+    case TFloat()     => 5
+    case TString()    => 0
+    case TRowId()     => -5
+    case TAny()       => -10
+  }
 
-  val priority = Map(
-    Type.TInt    -> 10,
-    Type.TBool   -> 10,
-    Type.TDate   -> 10,
-    Type.TFloat  -> 5,
-    Type.TString -> 0
-  )
-
-  def detectType(v: String): List[Type.T] = {
-    typeTests.flatMap({ case (test, t) =>
+  def detectType(v: String): Iterable[Type] = {
+    Type.tests.flatMap({ case (t, test) =>
       if(v.matches(test)){ Some(t) }
       else { None }
+    })++TypeRegistry.typeList.flatMap((userTypeDef)=>{
+      if(v.matches(userTypeDef._2)) {
+        Some(TUser(userTypeDef._1, userTypeDef._2, userTypeDef._3))
+      } else { None }
     })
+
   }
 }
 
@@ -39,7 +43,7 @@ class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
   extends SingleVarModel(name)
 {
   var totalVotes = 0.0
-  val votes = scala.collection.mutable.Map[Type.T, Double]()
+  val votes = scala.collection.mutable.Map[Type, Double]()
 
   def train(db: Database, query: Operator)
   {
@@ -68,12 +72,12 @@ class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
   }
 
   private final def voteList = 
-    (Type.TString, defaultFrac * totalVotes) :: votes.toList
+    (TString(), defaultFrac * totalVotes) :: votes.toList
 
-  private final def rankFn(x:(Type.T, Double)) =
+  private final def rankFn(x:(Type, Double)) =
     (x._2, TypeInferenceModel.priority(x._1) )
 
-  def varType(argTypes: List[Type.T]) = Type.TType
+  def varType(argTypes: List[Type]) = TType()
   def sample(randomness: Random, args: List[PrimitiveValue]): PrimitiveValue = 
     TypePrimitive(
       RandUtils.pickFromWeightedList(randomness, voteList)
@@ -93,7 +97,7 @@ class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
     val typeStr = Type.toString(guess)
     val reason =
       guess match {
-        case Type.TString =>
+        case TString() =>
           s"not more than $defaultPct% of the data fit anything else"
         case _ => 
           s"around $guessPct% of the data matched"

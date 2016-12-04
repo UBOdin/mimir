@@ -212,7 +212,7 @@ object ExpressionUtils {
   /**
    * Cast an expression, but only if neceessary
    */
-  def makeCast(e: Expression, targetT: Type.T, schema: Map[String,Type.T]): 
+  def makeCast(e: Expression, targetT: Type, schema: Map[String,Type]): 
     Expression =
   {
     val sourceT = Typechecker.typeOf(e, schema)

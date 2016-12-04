@@ -2,6 +2,7 @@ package mimir.views;
 
 import mimir.algebra._
 import mimir.util._
+import mimir.test._
 
 object ViewsSpec extends SQLTestSpecification("ViewsTest")
 {

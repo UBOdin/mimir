@@ -69,11 +69,11 @@ class BestGuessCache(db: Database) extends LazyLogging {
                   val keyBase = Var(joinKeyColumn(arg._2, termId))
                   val key = 
                     typechecker.typeOf(arg._1) match {
-                      case Type.TRowId => 
+                      case TRowId() =>
                         // We materialize rowids as Strings in the backing store.  As
                         // a result, we need to convince the typechecker that we're
                         // being sane here.
-                        Function("CAST", List[Expression](keyBase, TypePrimitive(Type.TRowId)))
+                        Function("CAST", List[Expression](keyBase, TypePrimitive(TRowId())))
                       case _  =>
                         keyBase
                     }
@@ -202,7 +202,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
   private def dropCacheTable(cacheTable: String) =
     db.backend.update( "DROP TABLE "+cacheTable )
 
-  private def createCacheTable(cacheTable: String, dataType: Type.T, cacheTypes: List[Type.T]) = {
+  private def createCacheTable(cacheTable: String, dataType: Type, cacheTypes: List[Type]) = {
     val keyCols =
       cacheTypes.zipWithIndex.map( 
         typeIndex => (keyColumn(typeIndex._2), typeIndex._1)
@@ -213,7 +213,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
     val dataCols = List( (dataColumn, dataType) )
     val tableDirectives = 
       (keyCols ++ dataCols).map( 
-        col => { col._1+" "+Type.toString(col._2) }
+        col => { col._1+" "+col._2 }
       ) ++ List(
         "PRIMARY KEY ("+keyCols.map(_._1).mkString(", ")+")"
       )

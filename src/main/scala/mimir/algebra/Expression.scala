@@ -2,8 +2,6 @@ package mimir.algebra;
 
 class RAException(msg: String) extends Exception(msg);
 
-import mimir.algebra.Type._
-
 /**
  * Base type for expression trees.  Represents a single node in the tree.
  */
@@ -43,7 +41,6 @@ abstract class LeafExpression extends Expression {
   def children = List[Expression]();
   def rebuild(c: List[Expression]):Expression = { return this }
 }
-
 
 /////////////// Computations ///////////////
 
@@ -234,7 +231,7 @@ case class RowIdVar() extends LeafExpression
 /**
  * Representation of a JDBC Variable.
  */
-case class JDBCVar(t: Type.T) extends LeafExpression
+case class JDBCVar(t: Type) extends LeafExpression
 {
   override def toString = "?";
 }

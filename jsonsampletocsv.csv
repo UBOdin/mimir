@@ -1,0 +1,4 @@
+index,index_start_at,integer,float,name,surname,fullname,email,bool,
+1,56,40,14.7048,Gary,Conner,Vanessa Nguyen,jerome@saunders.tm,true,
+2,57,44,11.214,Neal,Davies,Leo Green,annette@hernandez.bw,false,
+3,58,26,14.0792,Christopher,Brantley,Peter Schultz,troy@mcneill.bt,true,

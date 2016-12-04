@@ -3,129 +3,165 @@ package mimir.util
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import java.io.{File, FileReader, BufferedReader}
+import java.io._
+import java.nio.charset.StandardCharsets
 import java.sql.SQLException
+import java.util
 
 import mimir.Database
 import mimir.algebra.Type
+import org.apache.commons.csv.{CSVRecord, CSVParser, CSVFormat}
+import org.apache.commons.io.IOUtils
+import org.apache.commons.io.input.ReaderInputStream
+import scala.collection.JavaConverters._
+import mimir.algebra._
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.util.control.Breaks._
 
 object LoadCSV extends LazyLogging {
 
+  def SAMPLE_SIZE = 10000
+
   def handleLoadTable(db: Database, targetTable: String, sourceFile: File): Unit =
-    handleLoadTable(db, targetTable, sourceFile, x => true)
+    handleLoadTable(db, targetTable, sourceFile, true)
 
-  def handleLoadTable(db: Database, targetTable: String, sourceFile: File, detectHeader: String => Boolean){
+  def handleLoadTable(db: Database, targetTable: String, sourceFile: File, assumeHeader: Boolean){
+    val largeData = false
     val input = new BufferedReader(new FileReader(sourceFile))
-    val firstLine = input.readLine()
+    var config = CSVFormat.DEFAULT.withAllowMissingColumnNames()
 
-    db.getTableSchema(targetTable) match {
+    if(assumeHeader){ config = config.withHeader() }
 
-      case Some(sch) =>
-        if(detectHeader(firstLine)) {
-          populateTable(db, input, targetTable, sch) // Ignore header since table already exists
-        } else {
-          populateTable(
-            db,
-            new BufferedReader(new FileReader(sourceFile)), // Reset to top
-            targetTable,
-            sch
-          )
+    val parser = new CSVParser(input, config)
+    val samples = parser.asScala.take(SAMPLE_SIZE)
+
+    val targetSchema = 
+      db.getTableSchema(targetTable) match {
+        case Some(sch) => sch
+        case None => {
+
+          val idxToCol: Map[Int, String] = 
+            if(parser.getHeaderMap != null) { 
+              parser.getHeaderMap.
+                entrySet.asScala.
+                map( (x:java.util.Map.Entry[String,Integer]) => (x.getValue.toInt, x.getKey) ).
+                toMap
+            } else { Map() }
+
+          logger.debug(s"HEADER_MAP: $idxToCol")
+
+          val columnCount = 
+            samples.map( _.size ).max
+
+          val columnNames =
+            makeColumnNamesUnique(
+              (0 until columnCount).
+                map( (idx:Int) => { idxToCol.getOrElse(idx, s"COLUMN_$idx") } ).
+                map( sanitizeColumnName _ )
+            )
+
+          val columnsDDL = columnNames.map(_+" varchar").mkString(", ")
+
+          val createTableStatement = s"""
+            CREATE TABLE $targetTable($columnsDDL)
+          """
+          logger.debug(s"INIT: $createTableStatement")
+          db.backend.update(createTableStatement)
+
+          columnNames.map( (_, TString()) )
         }
+      }
 
-      case None =>
-        if(detectHeader(firstLine)) {
-          val columnNames = 
-            firstLine.
-              split(",").
-              map( sanitizeColumnName _ )
+    // Sanity check the size of each row
+    samples.
+      filter( x => (x.size > targetSchema.size) ).
+      map( _.getRecordNumber ) match {
+        case Nil          => // All's well! 
+        case a::Nil       => logger.warn(s"Too many fields on line $a of $sourceFile")
+        case a::b::Nil    => logger.warn(s"Too many fields on lines $a and $b of $sourceFile")
+        case a::b::c::Nil => logger.warn(s"Too many fields on lines $a, $b, and $c of $sourceFile")
+        case a::b::rest   => logger.warn(s"Too many fields on lines $a, $b, and "+(rest.size)+s" more of $sourceFile")
+      }
 
-          val dupColumns = 
-            columnNames.
-              groupBy( x => x ).
-              filter( _._2.length > 1 ).
-              map(_._1).
-              toSet
-
-          val uniqueColumnNames =
-            if(dupColumns.isEmpty){ columnNames }
-            else {
-              var idx = scala.collection.mutable.Map[String,Int]()
-              idx ++= dupColumns.map( (_, 0) ).toMap
-
-              columnNames.map( x =>
-                if(idx contains x){ idx(x) += 1; x+"_"+idx(x) }
-                else { x }
-              )
-            }
-
-          db.backend.update("CREATE TABLE "+targetTable+"("+
-              uniqueColumnNames.map(_+" varchar").
-              mkString(", ") +
-            ")")
-
-          handleLoadTable(db, targetTable, sourceFile)
-        }
-        else {
-          throw new SQLException("No header supplied for creating new table")
-        }
-    }
+    populateTable(db, samples++parser.asScala, targetTable, sourceFile, targetSchema)
   }
 
   def sanitizeColumnName(name: String): String =
   {
+    logger.trace(s"SANITIZE: $name")
     name.
-      replace("^([0-9])","X\1").        // Prefix leading digits with an 'X'
-      replaceAll("[^a-zA-Z0-9]+", "_"). // Replace sequences of non-alphanumeric characters with underscores
-      replaceAll("_+$", "").            // Strip trailing underscores
-      toUpperCase                       // Capitalize
+      replaceAll("^([0-9])","COLUMN_\1").  // Prefix leading digits with a 'COL_'
+      replaceAll("[^a-zA-Z0-9]+", "_").    // Replace sequences of non-alphanumeric characters with underscores
+      replaceAll("_+$", "").               // Strip trailing underscores
+      toUpperCase                          // Capitalize
+  }
+
+  def makeColumnNamesUnique(columnNames: Iterable[String]): List[String] = {
+    val dupColumns = 
+      columnNames.
+        toList.
+        groupBy( x => x ).
+        filter( _._2.length > 1 ).
+        map(_._1).
+        toSet
+
+    val uniqueColumnNames =
+      if(dupColumns.isEmpty){ columnNames }
+      else {
+        var idx = scala.collection.mutable.Map[String,Int]()
+        idx ++= dupColumns.map( (_, 0) ).toMap
+
+        columnNames.map( x =>
+          if(idx contains x){ idx(x) += 1; x+"_"+idx(x) }
+          else { x }
+        )
+      }
+
+    return uniqueColumnNames.toList
   }
 
   private def populateTable(db: Database,
-                            src: BufferedReader,
+                            rows: TraversableOnce[CSVRecord],
                             targetTable: String,
-                            sch: List[(String, Type.T)]): Unit = {
-    val keys = 
-      sch.
-        map(_._1).
-        // map((x) => "\'"+x+"\'").
-        mkString(", ")
+                            sourceFile: File,
+                            sch: List[(String, Type)]): Unit = {
 
+    var location = 0
+    var numberOfColumns = 0
+    val keys = sch.map(_._1).map((x) => {numberOfColumns+= 1; "\'"+x+"\'"}).mkString(", ")
     val statements = new ListBuffer[String]()
 
-    val doInsert = () => {
-      if(statements.nonEmpty) {
-        val cmd = 
-          s"INSERT INTO $targetTable($keys) VALUES "+statements.mkString(",")
-        try {
-          logger.trace(s"INSERT: $cmd")
-          db.backend.update(cmd)
-        } catch {
-          case (e: SQLException) => 
-            throw new SQLException("Bulk Load Error: "+cmd, e)
+
+    for (row: CSVRecord <- rows) {
+        {
+          var listOfValues = row.iterator().asScala.toList
+          val lineNum = row.getRecordNumber()
+
+          val data = listOfValues.
+            take(numberOfColumns).
+            padTo(numberOfColumns, "").
+            map( _.trim ).
+            zip(sch).
+            map({ case (value, (col, t)) =>
+              if(value == null || value.equals("")) { NullPrimitive() }
+              else {
+                if(Type.tests.contains(t) 
+                    && !value.matches(Type.tests(t)))
+                {
+                  logger.warn(s"fileName:$lineNum: $col ($t) on is unparseable '$value', using null instead");
+                  NullPrimitive()
+                } else {
+                  TextUtils.parsePrimitive(t, value)
+                }
+              }
+            })
+
+          val cmd = "INSERT INTO " + targetTable + "(" + keys + ") VALUES (" + data.map(x=>"?").mkString(",") + ")"
+          logger.trace(s"INSERT: $cmd \n <- $data")
+          db.backend.update(cmd, data)
         }
-      }
-      statements.clear()
-    }   
-
-    var line = src.readLine()
-
-    while(line != null){
-      if(statements.size >= 1){ doInsert() }
-
-      val dataLine = line.trim.split(",").padTo(sch.size, "")
-      val data = dataLine.zip(sch).map({ 
-          case ("", _) => "null"
-          case (x, (_, (Type.TDate | Type.TString))) => "\'"+x+"\'"
-          case (x, (_, Type.TInt))   if x.matches("^[+-]?[0-9]+$") => x
-          case (x, (_, Type.TFloat)) if x.matches("^[+-]?[0-9]+([.][0-9]+)?(e[+-]?[0-9]+)?$") => x
-          case (x, (c,t)) => logger.warn(s"Don't know how to deal with $c ($t): $x, using null instead"); null
-      }).mkString(", ")
-
-      statements.append(s"($data)")
-      logger.debug(s"INSERT: $data")
-      line = src.readLine()
     }
-    doInsert()
+
   }
 }

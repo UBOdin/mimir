@@ -5,6 +5,7 @@ import java.io._
 import org.specs2.mutable._
 
 import mimir.util._
+import mimir.test._
 
 object SqlFilesOnly extends FileFilter {
 

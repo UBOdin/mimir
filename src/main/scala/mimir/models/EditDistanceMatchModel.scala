@@ -3,7 +3,6 @@ package mimir.models
 import scala.util._
 import com.typesafe.scalalogging.slf4j.Logger
 import mimir.Database
-import mimir.algebra.Type.T
 import mimir.algebra._
 import mimir.ctables.VGTerm
 import mimir.optimizer.{InlineVGTerms}
@@ -33,8 +32,8 @@ object EditDistanceMatchModel
   def train(
     db: Database, 
     name: String,
-    source: Either[Operator,List[(String,Type.T)]], 
-    target: Either[Operator,List[(String,Type.T)]]
+    source: Either[Operator,List[(String,Type)]], 
+    target: Either[Operator,List[(String,Type)]]
   ): Map[String,(Model,Int)] = 
   {
     val sourceSch = source match {
@@ -56,14 +55,15 @@ object EditDistanceMatchModel
     }).toMap
   }
 
-
-  def isTypeCompatible(a: T, b: T): Boolean = 
+  def isTypeCompatible(a: Type, b: Type): Boolean = 
   {
-    (a,b) match {
-      case ((Type.TInt|Type.TFloat),  (Type.TInt|Type.TFloat)) => true
-      case (Type.TAny, _) => true
-      case (_, Type.TAny) => true
-      case _ => a == b
+    val aBase = Typechecker.baseType(a)
+    val bBase = Typechecker.baseType(b)
+    (aBase, bBase) match {
+      case ((TInt()|TFloat()),  (TInt()|TFloat())) => true
+      case (TAny(), _) => true
+      case (_, TAny()) => true
+      case _ => aBase == bBase
     }
 
   }
@@ -73,7 +73,7 @@ object EditDistanceMatchModel
 class EditDistanceMatchModel(
   name: String,
   metricName: String,
-  target: (String, Type.T), 
+  target: (String, Type), 
   sourceCandidates: List[String]
 ) extends SingleVarModel(name) with Serializable
 {
@@ -97,7 +97,7 @@ class EditDistanceMatchModel(
     }).
     map({ case (k, v) => (k, v.toDouble) })
   } 
-  def varType(argTypes: List[Type.T]) = Type.TString
+  def varType(argTypes: List[Type]) = TString()
 
   def sample(randomness: Random, args: List[PrimitiveValue]): PrimitiveValue = 
   {
