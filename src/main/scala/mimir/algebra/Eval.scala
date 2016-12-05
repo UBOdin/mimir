@@ -2,7 +2,7 @@ package mimir.algebra;
 
 import java.sql._;
 
-import mimir.algebra.Type._
+import mimir.algebra._
 import mimir.provenance.Provenance
 import mimir.ctables.{VGTerm, CTables}
 import mimir.optimizer.ExpressionOptimizer
@@ -15,7 +15,7 @@ import mimir.optimizer.ExpressionOptimizer
  */
 abstract class Proc(args: List[Expression]) extends Expression
 {
-  def getType(argTypes: List[Type.T]): Type.T
+  def getType(argTypes: List[Type]): Type
   def getArgs = args
   def children = args
   def get(v: List[PrimitiveValue]): PrimitiveValue
@@ -52,7 +52,7 @@ object Eval
       /* TODO Need to check if this is allowed? */
       case v: NullPrimitive => false
 
-      case v => throw new TypeException(TBool, v.getType, "Cast")
+      case v => throw new TypeException(TBool(), v.getType, "Cast")
     }
   /**
    * Evaluate the specified expression and return the primitive value
@@ -76,6 +76,31 @@ object Eval
           case None => throw new SQLException("Variable Out Of Scope: "+v+" (in "+bindings+")");
           case Some(s) => s
         }
+
+        // Special case And/Or arithmetic to enable shortcutting
+        case Arithmetic(Arith.And, lhs, rhs) =>
+          eval(lhs, bindings) match {
+            case BoolPrimitive(false) => BoolPrimitive(false)
+            case BoolPrimitive(true) => eval(rhs, bindings)
+            case NullPrimitive() => 
+              eval(rhs, bindings) match {
+                case BoolPrimitive(false) => BoolPrimitive(false)
+                case _ => NullPrimitive()
+              }
+          }
+
+        // Special case And/Or arithmetic to enable shortcutting
+        case Arithmetic(Arith.Or, lhs, rhs) =>
+          eval(lhs, bindings) match {
+            case BoolPrimitive(true) => BoolPrimitive(true)
+            case BoolPrimitive(false) => eval(rhs, bindings)
+            case NullPrimitive() => 
+              eval(rhs, bindings) match {
+                case BoolPrimitive(true) => BoolPrimitive(true)
+                case _ => NullPrimitive()
+              }
+          }
+
         case Arithmetic(op, lhs, rhs) =>
           applyArith(op, eval(lhs, bindings), eval(rhs, bindings))
         case Comparison(op, lhs, rhs) =>
@@ -205,44 +230,25 @@ object Eval
   def applyArith(op: Arith.Op, 
             a: PrimitiveValue, b: PrimitiveValue
   ): PrimitiveValue = {
-    if(a.isInstanceOf[NullPrimitive] || 
-       b.isInstanceOf[NullPrimitive]){
-      (op, a, b) match {
-        case (Arith.And, NullPrimitive(), BoolPrimitive(false)) 
-           | (Arith.And, BoolPrimitive(false), NullPrimitive()) => 
-          BoolPrimitive(false)
-        case (Arith.Or, NullPrimitive(), BoolPrimitive(true)) 
-           | (Arith.Or, BoolPrimitive(true), NullPrimitive()) => 
-          BoolPrimitive(true)
-        case _ => NullPrimitive()
-      }
-    } else {
-      (op, Typechecker.escalate(a.getType, b.getType)) match { 
-        case (Arith.Add, TInt) => 
-          IntPrimitive(a.asLong + b.asLong)
-        case (Arith.Add, TFloat) => 
-          FloatPrimitive(a.asDouble + b.asDouble)
-        case (Arith.Sub, TInt) => 
-          IntPrimitive(a.asLong - b.asLong)
-        case (Arith.Sub, TFloat) => 
-          FloatPrimitive(a.asDouble - b.asDouble)
-        case (Arith.Mult, TInt) => 
-          IntPrimitive(a.asLong * b.asLong)
-        case (Arith.Mult, TFloat) => 
-          FloatPrimitive(a.asDouble * b.asDouble)
-        case (Arith.Div, (TFloat|TInt)) => 
-          FloatPrimitive(a.asDouble / b.asDouble)
-        case (Arith.And, TBool) => 
-          BoolPrimitive(
-            a.asInstanceOf[BoolPrimitive].v &&
-            b.asInstanceOf[BoolPrimitive].v
-          )
-        case (Arith.Or, TBool) => 
-          BoolPrimitive(
-            a.asInstanceOf[BoolPrimitive].v ||
-            b.asInstanceOf[BoolPrimitive].v
-          )
-      }
+    (op, Typechecker.escalate(
+      a.getType, b.getType, "Evaluate Arithmetic", Arithmetic(op, a, b)
+    )) match { 
+      case (Arith.Add, TInt()) => 
+        IntPrimitive(a.asLong + b.asLong)
+      case (Arith.Add, TFloat()) => 
+        FloatPrimitive(a.asDouble + b.asDouble)
+      case (Arith.Sub, TInt()) => 
+        IntPrimitive(a.asLong - b.asLong)
+      case (Arith.Sub, TFloat()) => 
+        FloatPrimitive(a.asDouble - b.asDouble)
+      case (Arith.Mult, TInt()) => 
+        IntPrimitive(a.asLong * b.asLong)
+      case (Arith.Mult, TFloat()) => 
+        FloatPrimitive(a.asDouble * b.asDouble)
+      case (Arith.Div, (TFloat()|TInt())) => 
+        FloatPrimitive(a.asDouble / b.asDouble)
+      case (_, _) => 
+        throw new RAException(s"Invalid Arithmetic $a $op $b")
     }
   }
 
@@ -263,24 +269,25 @@ object Eval
           BoolPrimitive(!a.payload.equals(b.payload))
         case Cmp.Gt => 
           Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
-            case TInt => BoolPrimitive(a.asLong > b.asLong)
-            case TFloat => BoolPrimitive(a.asDouble > b.asDouble)
-            case TDate => 
+            case TInt() => BoolPrimitive(a.asLong > b.asLong)
+            case TFloat() => BoolPrimitive(a.asDouble > b.asDouble)
+            case TDate() =>
               BoolPrimitive(
                 a.asInstanceOf[DatePrimitive].
                  compare(b.asInstanceOf[DatePrimitive])<0
               )
+            case _ => throw new RAException("Invalid Comparison $a $op $b")
           }
         case Cmp.Gte => 
           Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
-            case TInt => BoolPrimitive(a.asLong >= b.asLong)
-            case TFloat => BoolPrimitive(a.asDouble >= b.asDouble)
-            case TDate => 
+            case TInt() => BoolPrimitive(a.asLong >= b.asLong)
+            case TFloat() => BoolPrimitive(a.asDouble >= b.asDouble)
+            case TDate() =>
               BoolPrimitive(
                 a.asInstanceOf[DatePrimitive].
                  compare(b.asInstanceOf[DatePrimitive])<=0
               )
-            case TBool => BoolPrimitive(a match {
+            case TBool() => BoolPrimitive(a match {
               case BoolPrimitive(true) => true
               case BoolPrimitive(false) => {
                 b match {
@@ -289,26 +296,29 @@ object Eval
                 }
               }
             })
+            case _ => throw new RAException("Invalid Comparison $a $op $b")
           }
         case Cmp.Lt => 
           Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
-            case TInt => BoolPrimitive(a.asLong < b.asLong)
-            case TFloat => BoolPrimitive(a.asDouble < b.asDouble)
-            case TDate => 
+            case TInt() => BoolPrimitive(a.asLong < b.asLong)
+            case TFloat() => BoolPrimitive(a.asDouble < b.asDouble)
+            case TDate() =>
               BoolPrimitive(
                 a.asInstanceOf[DatePrimitive].
                  compare(b.asInstanceOf[DatePrimitive])>0
               )
+            case _ => throw new RAException("Invalid Comparison $a $op $b")
           }
         case Cmp.Lte => 
           Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
-            case TInt => BoolPrimitive(a.asLong <= b.asLong)
-            case TFloat => BoolPrimitive(a.asDouble <= b.asDouble)
-            case TDate => 
+            case TInt() => BoolPrimitive(a.asLong <= b.asLong)
+            case TFloat() => BoolPrimitive(a.asDouble <= b.asDouble)
+            case TDate() =>
               BoolPrimitive(
                 a.asInstanceOf[DatePrimitive].
                  compare(b.asInstanceOf[DatePrimitive])>=0
               )
+            case _ => throw new RAException("Invalid Comparison $a $op $b")
           }
       }
     }

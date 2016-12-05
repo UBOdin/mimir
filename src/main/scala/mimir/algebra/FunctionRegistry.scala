@@ -3,16 +3,15 @@ package mimir.algebra;
 import java.sql.SQLException
 
 import mimir.provenance._
-import mimir.algebra.Type._
 import mimir.ctables._
 
 case class RegisteredFunction(
 	fname: String, 
 	evaluator: List[PrimitiveValue] => PrimitiveValue, 
-	typechecker: List[Type.T] => Type.T
+	typechecker: List[Type] => Type
 ) {
 	def getName = fname;
-	def typecheck(args: List[Type.T]) = typechecker(args)
+	def typecheck(args: List[Type]) = typechecker(args)
 	def eval(args: List[PrimitiveValue]) = evaluator(args)
 }
 
@@ -24,11 +23,11 @@ object FunctionRegistry {
 	{
 		registerFunction("MIMIR_MAKE_ROWID", 
       Provenance.joinRowIds(_: List[PrimitiveValue]),
-			((args: List[Type.T]) => 
-				if(!args.forall( t => (t == TRowId) || (t == TAny) )) { 
-					throw new TypeException(TAny, TRowId, "MIMIR_MAKE_ROWID")
+			((args: List[Type]) => 
+				if(!args.forall( t => (t == TRowId()) || (t == TAny()) )) { 
+					throw new TypeException(TAny(), TRowId(), "MIMIR_MAKE_ROWID")
 				} else {
-					TRowId
+					TRowId()
 				}
 			)
 		)
@@ -40,7 +39,7 @@ object FunctionRegistry {
           catch { case e:TypeException => Double.MaxValue }
         ).min)
       },
-    	{ (x: List[Type.T]) => 
+    	{ (x: List[Type]) => 
     		Typechecker.assertNumeric(Typechecker.escalate(x), Function("__LIST_MIN", List())) 
     	}
     )
@@ -52,7 +51,7 @@ object FunctionRegistry {
           catch { case e:TypeException => Double.MinValue }
         ).max)
       },
-      { (x: List[Type.T]) => 
+      { (x: List[Type]) => 
     		Typechecker.assertNumeric(Typechecker.escalate(x), Function("__LIST_MAX", List())) 
     	}
     )
@@ -61,9 +60,9 @@ object FunctionRegistry {
       (params: List[PrimitiveValue]) => {
         try {
           params match {
-            case x :: TypePrimitive(TInt)    :: Nil => IntPrimitive(x.asLong)
-            case x :: TypePrimitive(TFloat)  :: Nil => FloatPrimitive(x.asDouble)
-            case x :: TypePrimitive(TString) :: Nil => StringPrimitive(x.asString)
+            case x :: TypePrimitive(TInt())    :: Nil => IntPrimitive(x.asLong)
+            case x :: TypePrimitive(TFloat())  :: Nil => FloatPrimitive(x.asDouble)
+            case x :: TypePrimitive(TString()) :: Nil => StringPrimitive(x.asString)
             case _ :: t :: Nil => throw new SQLException("Unknown cast type: '"+t+"'")
             case _ => throw new SQLException("Invalid cast: "+params)
           }
@@ -72,7 +71,7 @@ object FunctionRegistry {
           case _:NumberFormatException => NullPrimitive();
         }
       },
-      (_) => TAny
+      (_) => TAny()
     )
 
 		registerFunctionSet(List("DATE", "TO_DATE"), 
@@ -81,7 +80,7 @@ object FunctionRegistry {
 		     new DatePrimitive(date(0), date(1), date(2))
 		   },
 		  _ match {
-		    case TString :: Nil => TDate
+		    case TString() :: Nil => TDate()
 		    case _ => throw new SQLException("Invalid parameters to DATE()")
 		  }
 		)
@@ -93,30 +92,30 @@ object FunctionRegistry {
 		      case List(NullPrimitive())   => NullPrimitive()
 		      case x => throw new SQLException("Non-numeric parameter to absolute: '"+x+"'")
 		    },
-				(x: List[Type.T]) => Typechecker.assertNumeric(x(0), Function("ABSOLUTE", List()))
+				(x: List[Type]) => Typechecker.assertNumeric(x(0), Function("ABSOLUTE", List()))
 			)
 
-    registerFunction("BITWISE_AND", (x) => IntPrimitive(x(0).asLong & x(1).asLong), (_) => Type.TInt)
+    registerFunction("BITWISE_AND", (x) => IntPrimitive(x(0).asLong & x(1).asLong), (_) => TInt())
 
-    registerFunction("JSON_EXTRACT",(_) => ???, (_) => Type.TAny)
-    registerFunction("JSON_ARRAY_LENGTH",(_) => ???, (_) => Type.TInt)
+    registerFunction("JSON_EXTRACT",(_) => ???, (_) => TAny())
+    registerFunction("JSON_ARRAY_LENGTH",(_) => ???, (_) => TInt())
 	}
 
 	def registerFunctionSet(
 		fnames: List[String], 
 		eval:List[PrimitiveValue] => PrimitiveValue, 
-		typechecker: List[Type.T] => Type.T
+		typechecker: List[Type] => Type
 	): Unit =
 		fnames.map(registerFunction(_, eval, typechecker))
 
 	def registerFunction(
 		fname: String, 
 		eval: List[PrimitiveValue] => PrimitiveValue, 
-		typechecker: List[Type.T] => Type.T
+		typechecker: List[Type] => Type
 	): Unit =
 		functionPrototypes.put(fname, RegisteredFunction(fname, eval, typechecker))
 
-	def typecheck(fname: String, args: List[Type.T]): Type.T = 
+	def typecheck(fname: String, args: List[Type]): Type = 
 		functionPrototypes(fname).typecheck(args)
 
 	def eval(fname: String, args: List[PrimitiveValue]): PrimitiveValue =

@@ -2,12 +2,13 @@ package mimir.ctables
 
 import mimir.algebra._
 import scala.util._
+import mimir.models._
 import java.sql.SQLException
 
 case class VGTermSampler(model: Model, idx: Int, args: List[Expression], seed: Expression) 
   extends Proc(  (seed :: args)  )
 {
-  def getType(argTypes: List[Type.T]): Type.T =
+  def getType(argTypes: List[Type]): Type =
     model.varType(idx, argTypes)
   def get(v: List[PrimitiveValue]): PrimitiveValue = {
     v match {
@@ -168,7 +169,7 @@ object CTAnalyzer {
   def compileSample(expr: Expression, seed: Expression): Expression =
   {
     expr match {
-      case VGTerm((_,model), idx, args) => VGTermSampler(model, idx, args, seed)
+      case VGTerm(model, idx, args) => VGTermSampler(model, idx, args, seed)
       case _ => expr.rebuild(expr.children.map(compileSample(_, seed)))
     }
   }

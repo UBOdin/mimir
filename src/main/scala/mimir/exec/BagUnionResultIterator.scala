@@ -1,7 +1,7 @@
 package mimir.exec;
 
 import mimir.algebra._;
-import mimir.ctables.Reason;
+import mimir.models.Reason;
 
 class BagUnionResultIterator(elems: List[ResultIterator]) extends ResultIterator
 {
@@ -29,7 +29,7 @@ class BagUnionResultIterator(elems: List[ResultIterator]) extends ResultIterator
     { elems.foreach(_.close()) }
   def numCols: Int =
     curr.head.numCols;
-  def schema: List[(String,Type.T)] =
+  def schema: List[(String,Type)] =
     curr.head.schema;
 
   override def reason(ind: Int): List[Reason] = {

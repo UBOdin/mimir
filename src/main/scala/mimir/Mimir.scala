@@ -39,7 +39,7 @@ object Mimir {
     ExperimentalOptions.enable(conf.experimental())
 
     // Set up the database connection(s)
-    db = new Database(conf.dbname(), new JDBCBackend(conf.backend(), conf.dbname()))
+    db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
     db.backend.open()
 
     // Check for one-off commands
@@ -49,14 +49,16 @@ object Mimir {
     } else if(conf.loadTable.get != None){
       db.loadTable(conf.loadTable(), conf.loadTable()+".csv");
     } else if(conf.rebuildBestGuess.get != None){
-        val lens = db.lenses.load(conf.rebuildBestGuess().toUpperCase).get
-        db.bestGuessCache.buildCache(lens);
+        db.bestGuessCache.buildCache(
+          db.views.getView(
+            conf.rebuildBestGuess().toUpperCase
+          ).get);
     } else {
       var source: Reader = null;
 
       conf.precache.foreach( (opt) => opt.split(",").foreach( (table) => { 
         println(s"Precaching... $table")
-        db.lenses.load(table.toUpperCase)
+        db.models.prefetchForOwner(table.toUpperCase)
       }))
 
       if(conf.file.get == None || conf.file() == "-"){
@@ -86,10 +88,8 @@ object Mimir {
         stmt match {
           case null             => done = true
           case sel:  Select     => handleSelect(sel)
-          case crel: CreateLens => db.createLens(crel)
           case expl: Explain    => handleExplain(expl)
-          case drop: Drop       => handleDrop(drop)
-          case _                => db.backend.update(stmt.toString())
+          case _                => db.update(stmt)
         }
 
       } catch {
@@ -132,23 +132,6 @@ object Mimir {
       db.dump(results)
       results.close()
     })
-  }
-
-  def handleDrop(drop: Drop): Unit = {
-    drop.getType().toUpperCase match {
-      case "TABLE" | "INDEX" => 
-        db.backend.update(drop.toString());
-
-      case "VIEW" =>
-        throw new SQLException("Views not supported yet")
-
-      case "LENS" =>
-        db.lenses.drop(drop.getName())
-
-      case _ =>
-        throw new SQLException("Invalid drop type '"+drop.getType()+"'")
-
-    }
   }
 
 }

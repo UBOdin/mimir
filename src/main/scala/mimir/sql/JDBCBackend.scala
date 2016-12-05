@@ -18,7 +18,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
 
   def driver() = backend
 
-  val tableSchemas: scala.collection.mutable.Map[String, List[(String, Type.T)]] = mutable.Map()
+  val tableSchemas: scala.collection.mutable.Map[String, List[(String, Type)]] = mutable.Map()
 
   def open() = {
     this.synchronized({
@@ -112,7 +112,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
       throw new SQLException("Trying to use unopened connection!")
     }
     val stmt = conn.createStatement()
-    upd.indices.foreach(i => stmt.addBatch(upd(i)))
+    upd.foreach( u => stmt.addBatch(u) )
     stmt.executeBatch()
     stmt.close()
   }
@@ -128,7 +128,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     stmt.close()
   }
   
-  def getTableSchema(table: String): Option[List[(String, Type.T)]] =
+  def getTableSchema(table: String): Option[List[(String, Type)]] =
   {
     if(conn == null) {
       throw new SQLException("Trying to use unopened connection!")
@@ -140,7 +140,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         val tables = this.getAllTables().map{(x) => x.toUpperCase}
         if(!tables.contains(table.toUpperCase)) return None
 
-        val cols: Option[List[(String, Type.T)]] = backend match {
+        val cols: Option[List[(String, Type)]] = backend match {
           case "sqlite" | "sqlite-inline" | "sqlite-bundles" => {
             // SQLite doesn't recognize anything more than the simplest possible types.
             // Type information is persisted but not interpreted, so conn.getMetaData() 
@@ -150,7 +150,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
           }
           case "oracle" => 
             val columnRet = conn.getMetaData().getColumns(null, "ARINDAMN", table, "%")  // TODO Generalize
-            var ret = List[(String, Type.T)]()
+            var ret = List[(String, Type)]()
             while(columnRet.isBeforeFirst()){ columnRet.next(); }
             while(!columnRet.isAfterLast()){
               ret = ret ++ List((
@@ -165,7 +165,6 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         
         cols match { case None => (); case Some(s) => tableSchemas += table -> s }
         cols
-
     }
   }
 

@@ -7,10 +7,10 @@ import mimir.algebra._;
 import mimir.ctables._;
 import mimir.Database;
 
-class VarProjection(src: ResultIterator, idx: Int, t: Type.T)
+class VarProjection(src: ResultIterator, idx: Int, t: Type)
   extends Proc(List[Expression]())
 {
-  def getType(bindings: List[Type.T]) = t;
+  def getType(bindings: List[Type]) = t;
   def rebuild(x: List[Expression]) = new VarProjection(src, idx, t)
   def get(v:List[PrimitiveValue]) = src(idx)
 
@@ -20,7 +20,7 @@ class VarProjection(src: ResultIterator, idx: Int, t: Type.T)
 class ProvenanceProjection(src: ResultIterator)
   extends Proc(List[Expression]())
 {
-  def getType(bindings: List[Type.T]) = Type.TRowId;
+  def getType(bindings: List[Type]) = TRowId();
   def rebuild(x: List[Expression]) = new ProvenanceProjection(src)
   def get(v:List[PrimitiveValue]): PrimitiveValue = src.provenanceToken
 }

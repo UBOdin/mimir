@@ -6,18 +6,23 @@ import java.sql.SQLException
 import java.sql.ResultSet
 
 import mimir.algebra._
-import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, Model, RowExplanation, VGTerm}
+import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, RowExplanation, VGTerm}
+import mimir.models.Model
 import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
-import mimir.lenses.{Lens, LensManager, BestGuessCache}
+import mimir.lenses.{LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
-import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens}
+import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens,CreateView,Explain}
 import mimir.optimizer.{InlineVGTerms, ResolveViews}
 import mimir.util.{LoadCSV,ExperimentalOptions}
 import mimir.web.WebIterator
 import mimir.parser.MimirJSqlParser
 
 import net.sf.jsqlparser.statement.Statement
+import net.sf.jsqlparser.statement.select.Select
+import net.sf.jsqlparser.statement.create.table.CreateTable
+import net.sf.jsqlparser.statement.drop.Drop
 
+import scala.collection.JavaConversions._
 
 import scala.collection.mutable.ListBuffer
 
@@ -44,33 +49,47 @@ import scala.collection.mutable.ListBuffer
   *    Responsible for directly constructing mimir.algebra.{Operator,Expression} ASTs from string
   *    representations.  Allows these ASTs to be serialized through toString()
   *
+  * === Persistence ===
+  * - mimir.views.ViewManager (views)
+  *    Responsible for creating, serializing, and deserializing virtual Mimir-level views.
+  * - mimir.views.ModelManager (models)
+  *    Responsible for creating, serializing, and deserializing models.
+  * - mimir.lenses.LensManager (lenses)
+  *    Responsible for creating and managing lenses
+  * 
   * === Logic ===
   * - mimir.sql.Backend (backend)
   *    Pluggable wrapper for database backends over which Mimir will actually run.  Basically,
   *    a simplified form of JDBC.  See mimir.sql._ for examples.
-  * - mimir.lenses.LensManager (lenses)
-  *    Responsible for creating, serializing, and deserializing lenses and virtual views.
   * - mimir.exec.Compiler
   *    Responsible for query execution.  Acts as a wrapper around the logic in mimir.ctables._, 
   *    mimir.lenses._, and mimir.exec._ that prepares non-deterministic queries to be evaluated
   *    on the backend database.  
+  * - mimir.explainer.CTExplainer (explainer)
+  *    Responsible for creating explanation objects.
   */
-case class Database(name: String, backend: Backend)
+case class Database(backend: Backend)
 {
-  val sql = new SqlToRA(this)
-  val ra = new RAToSql(this)
-  val lenses = new LensManager(this)
-  val compiler = new Compiler(this)
-  val explainer = new CTExplainer(this)
-  val bestGuessCache = new BestGuessCache(this)
-  val operator = new OperatorParser(this.getLensModel,
+  //// Persistence
+  val lenses          = new mimir.lenses.LensManager(this)
+  val models          = new mimir.models.ModelManager(this)
+  val views           = new mimir.views.ViewManager(this)
+  val bestGuessCache  = new mimir.lenses.BestGuessCache(this)
+  val querySerializer = new mimir.algebra.Serialization(this)
+
+  //// Logic
+  val compiler        = new mimir.exec.Compiler(this)
+  val explainer       = new mimir.ctables.CTExplainer(this)
+
+  //// Parsing
+  val sql             = new mimir.sql.SqlToRA(this)
+  val ra              = new mimir.sql.RAToSql(this)
+  val operator        = new mimir.parser.OperatorParser(models.getModel _,
     (x) => 
       this.getTableSchema(x) match {
         case Some(x) => x
-        case None => throw new SQLException("Table "+x+" does not exist in db!")
+        case None => throw new RAException("Table "+x+" does not exist in db!")
       })
-
-  def getName = name
 
   /** 
    * Apply the standard set of Mimir compiler optimizations -- Used mostly for EXPLAIN.
@@ -101,7 +120,7 @@ case class Database(name: String, backend: Backend)
   /**
    * Make an educated guess about what the query's schema should be
    */
-  def bestGuessSchema(oper: Operator): List[(String, Type.T)] =
+  def bestGuessSchema(oper: Operator): List[(String, Type)] =
   {
     InlineVGTerms(ResolveViews(this, oper)).schema
   }
@@ -230,11 +249,23 @@ case class Database(name: String, backend: Backend)
     operator.operator(operString)
 
   /**
+   * Get all availale table names 
+   */
+  def getAllTables(): Set[String] =
+  {
+    (
+      backend.getAllTables() ++ 
+      views.listViews()
+    ).toSet[String];
+  }
+
+  /**
    * Look up the schema for the table with the provided name.
    */
-  def getTableSchema(name: String): Option[List[(String,Type.T)]] =
-    backend.getTableSchema(name).
-      orElse(getView(name).map(_.schema))
+  def getTableSchema(name: String): Option[List[(String,Type)]] =
+    getView(name).map(_.schema).
+      orElse(backend.getTableSchema(name))
+
   /**
    * Build a Table operator for the table with the provided name.
    */
@@ -245,7 +276,7 @@ case class Database(name: String, backend: Backend)
    * Build a Table operator for the table with the provided name, requesting the
    * specified metadata.
    */
-  def getTableOperator(table: String, metadata: List[(String, Expression, Type.T)]): Operator =
+  def getTableOperator(table: String, metadata: List[(String, Expression, Type)]): Operator =
   {
     Table(
       table, 
@@ -256,48 +287,62 @@ case class Database(name: String, backend: Backend)
       metadata
     )  
   }
-  
+
   /**
-   * Evaluate a CREATE LENS statement.
+   * Evaluate a statement that does not produce results.
+   *
+   * Generally these are routed directly to the back-end, but there
+   * are a few operations that Mimir needs to handle directly.
    */
-  def createLens(lensDefn: CreateLens): Unit =
-    lenses.create(lensDefn)
+  def update(stmt: Statement)
+  {
+    stmt match {
+      case sel:  Select     => throw new SQLException("Can't evaluate SELECT as an update")
+      case expl: Explain    => throw new SQLException("Can't evaluate EXPLAIN as an update")
+      case lens: CreateLens => {
+        val t = lens.getType().toUpperCase()
+        val name = lens.getName()
+        val query = sql.convert(lens.getSelectBody())
+        val args = lens.getArgs().map(sql.convert(_)).toList
+
+        lenses.createLens(t, name, query, args)
+      }
+      case view: CreateView => views.createView(view.getTable().getName(), 
+                                                sql.convert(view.getSelectBody()))
+      case drop: Drop     => {
+          drop.getType().toUpperCase match {
+            case "TABLE" | "INDEX" => 
+              backend.update(drop.toString());
+
+            case "VIEW" =>
+              views.dropView(drop.getName());
+
+            case "LENS" =>
+              lenses.dropLens(drop.getName())
+
+            case _ =>
+              throw new SQLException("Invalid drop type '"+drop.getType()+"'")
+          }
+      }
+      case _                => backend.update(stmt.toString())
+    }
+  }
   
   /**
    * Prepare a database for use with Mimir.
    */
   def initializeDBForMimir(): Unit = {
+    models.init()
+    views.init()
     lenses.init()
   }
 
-  /**
-   * Retrieve the Lens with the specified name.
-   */
-  def getLens(lensName: String): Lens =
-    lenses.load(lensName).get
-  /**
-   * Retrieve the Model for the Lens with the specified name.
-   */
-  def getLensModel(lensName: String): Model = 
-    lenses.modelForLens(lensName)  
   /**
    * Retrieve the query corresponding to the Lens or Virtual View with the specified
    * name (or None if no such lens exists)
    */
   def getView(name: String): Option[(Operator)] =
-  {
-    // System.out.println("Selecting from ..."+name);
-    if(lenses == null){ None }
-    else {
-      //println(iviews.views.toString())
-      lenses.load(name.toUpperCase) match {
-        case None => None
-        case Some(lens) => 
-          // println("Found: "+name); 
-          Some(lens.view)
-      }
-    }
-  }
+    views.getView(name)
 
   /**
    * Load a CSV file into the database
@@ -316,12 +361,12 @@ case class Database(name: String, backend: Backend)
    */
 
   def loadTable(targetTable: String, sourceFile: File){
-    LoadCSV.handleLoadTable(this, targetTable+"RAW", sourceFile)
-    val targetRaw = targetTable + "RAW"
+    val targetRaw = targetTable.toUpperCase + "_RAW"
+    LoadCSV.handleLoadTable(this, targetRaw, sourceFile)
     val oper = getTableOperator(targetRaw)
     val l = List(new FloatPrimitive(.5))
 
-    lenses.create(oper, targetTable, l,"TYPE_INFERENCE")
+    lenses.createLens("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)
   }
   
   def loadTable(targetTable: String, sourceFile: String){

@@ -6,6 +6,7 @@ import scala.util.parsing.combinator.RegexParsers
 
 import mimir.algebra._
 import mimir.ctables._
+import mimir.models._
 
 class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 	override type Elem = Char
@@ -120,12 +121,12 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 					" *\\}\\}".r) ^^ {
 		case v ~ args => {
 			val fields = v.split("_")
-			VGTerm((fields(0),modelLookup(fields(0))), fields(1).toInt,
+			VGTerm(modelLookup(fields(0)), fields(1).toInt,
 				   args.getOrElse(List()))
 		}
 	}
 
-	def exprType: Parser[Type.T] = (
+	def exprType: Parser[Type] = (
 		"int" | "decimal" | "date" | "string" | "rowid" | "type" | "float" | "real" | "varchar" | "any"
 	) ^^ { Type.fromString(_) }
 

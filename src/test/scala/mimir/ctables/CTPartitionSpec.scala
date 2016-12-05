@@ -10,28 +10,29 @@ import mimir.parser._
 import mimir.algebra._
 import mimir.sql._
 import mimir.util._
+import mimir.models._
 
 object CTPartitionSpec extends Specification {
   
-  val boundsSpecModel = IndependentVarsModel(List(
+  val boundsSpecModel = IndependentVarsModel("TEST", List(
     UniformDistribution,
     UniformDistribution,
     UniformDistribution,
     UniformDistribution,
     UniformDistribution
   ))
-  val schema = Map[String,List[(String,Type.T)]](
+  val schema = Map[String,List[(String,Type)]](
     ("R", List( 
-      ("A", Type.TInt), 
-      ("B", Type.TInt)
+      ("A", TInt()),
+      ("B", TInt())
     )),
     ("S", List( 
-      ("C", Type.TInt), 
-      ("D", Type.TInt)
+      ("C", TInt()),
+      ("D", TInt())
     ))
   )
 
-  def db = Database("testdb", null);
+  def db = Database(null);
   def parser = new OperatorParser((x: String) => boundsSpecModel, schema(_))
   def expr = parser.expr _
   def oper = parser.operator _
