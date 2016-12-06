@@ -10,7 +10,7 @@ case class VGTerm(
   args: List[Expression]
 ) extends Proc(args) {
   override def toString() = "{{ "+model.name+";"+idx+"["+args.mkString(", ")+"] }}"
-  override def getType(bindings: List[Type.T]):Type.T = model.varType(idx, bindings)
+  override def getType(bindings: List[Type]):Type = model.varType(idx, bindings)
   override def children: List[Expression] = args
   override def rebuild(x: List[Expression]) = VGTerm(model, idx, x)
   def get(v: List[PrimitiveValue]): PrimitiveValue = 
@@ -18,12 +18,12 @@ case class VGTerm(
     // println("VGTerm: Get")
     model.bestGuess(idx, v)
   }
-  def reason(): Reason = 
+  def reason(v: List[PrimitiveValue]): Reason = 
     Reason(
-      model.reason(idx, args),
+      model.reason(idx, v),
       model.name,
       idx,
-      args
+      v
     )
 }
 

@@ -11,18 +11,19 @@ import mimir.util._
  * This meta model always ignores VG arguments and picks the first model
  * in the list.
  */
+@SerialVersionUID(1000L)
 class DefaultMetaModel(name: String, context: String, models: List[String]) 
   extends SingleVarModel(name) 
   with DataIndependentSingleVarFeedback 
   with Serializable
 {
-  def varType(argTypes:List[Type.T]) = Type.TString
+  def varType(argTypes:List[Type]) = TString()
 
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue =
     choice.getOrElse(StringPrimitive(models.head))
   def sample(randomness: Random, args: List[PrimitiveValue]): PrimitiveValue =
     StringPrimitive(RandUtils.pickFromList(randomness, models))
-  def reason(args: List[Expression]): String =
+  def reason(args: List[PrimitiveValue]): String =
   {
     choice match {
       case None => {

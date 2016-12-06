@@ -1,8 +1,8 @@
 package mimir.models
 
 import scala.util._
+import com.typesafe.scalalogging.slf4j.Logger
 import mimir.Database
-import mimir.algebra.Type.T
 import mimir.algebra._
 import mimir.ctables.VGTerm
 import mimir.optimizer.{InlineVGTerms}
@@ -14,28 +14,33 @@ import org.apache.lucene.search.spell.{
 
 object EditDistanceMatchModel
 {
+  val logger = Logger(org.slf4j.LoggerFactory.getLogger("mimir.models.EditDistanceMatchModel"))
+
   /**
-   * The choice of distance metric, from apache lucene.
-   *
-   * Options include:
-   *  - JaroWinklerDistance()
-   *  - LevensteinDistance()
-   *  - NGramDistance()
+   * Available choices of distance metric, from Apache Lucene.
    */
-  val defaultMetric: StringDistance = new NGramDistance()
+  val metrics = Map[String,StringDistance](
+    "NGRAM"       -> new NGramDistance(),
+    "LEVENSTEIN"  -> new LevensteinDistance(),
+    "JAROWINKLER" -> new JaroWinklerDistance()
+  )
+  /**
+   * Default choice of the distance metric
+   */
+  val defaultMetric = "NGRAM"
 
   def train(
     db: Database, 
     name: String,
-    source: Either[Operator,List[(String,Type.T)]], 
-    target: Either[Operator,List[(String,Type.T)]]
+    source: Either[Operator,List[(String,Type)]], 
+    target: Either[Operator,List[(String,Type)]]
   ): Map[String,(Model,Int)] = 
   {
     val sourceSch = source match {
-        case Left(oper) => oper.schema
+        case Left(oper) => db.bestGuessSchema(oper)
         case Right(sch) => sch }
     val targetSch = target match {
-        case Left(oper) => oper.schema
+        case Left(oper) => db.bestGuessSchema(oper)
         case Right(sch) => sch }
 
     targetSch.map({ case (targetCol,targetType) =>
@@ -50,55 +55,57 @@ object EditDistanceMatchModel
     }).toMap
   }
 
-
-  def isTypeCompatible(a: T, b: T): Boolean = 
+  def isTypeCompatible(a: Type, b: Type): Boolean = 
   {
-    (a,b) match {
-      case ((Type.TInt|Type.TFloat),  (Type.TInt|Type.TFloat)) => true
-      case (Type.TAny, _) => true
-      case (_, Type.TAny) => true
-      case _ => a == b
+    val aBase = Typechecker.baseType(a)
+    val bBase = Typechecker.baseType(b)
+    (aBase, bBase) match {
+      case ((TInt()|TFloat()),  (TInt()|TFloat())) => true
+      case (TAny(), _) => true
+      case (_, TAny()) => true
+      case _ => aBase == bBase
     }
 
   }
 }
 
+@SerialVersionUID(1000L)
 class EditDistanceMatchModel(
   name: String,
-  metric: StringDistance, 
-  target: (String, Type.T), 
+  metricName: String,
+  target: (String, Type), 
   sourceCandidates: List[String]
 ) 
   extends SingleVarModel(name) 
   with DataIndependentSingleVarFeedback
   with Serializable
 {
-  var total = 0.0
-  var colMapping:List[(String,Double)] = {
+  /** 
+   * A mapping for this column.  Lucene Discance metrics use a [0-1] range as:
+   *    0 == Strings Are Maximally Different
+   *    1 == Strings Are Identical
+   * 
+   * In other words, distance is a bit of a misnomer.  It's more of a score, which
+   * in turn allows us to use it as-is.
+   */
+  var colMapping:List[(String,Double)] = 
+  {
+    val metric = EditDistanceMatchModel.metrics(metricName)
     var cumSum = 0.0
     // calculate distance
-
     sourceCandidates.map( sourceColumn => {
       val dist = metric.getDistance(sourceColumn, target._1)
-      total += dist
+      EditDistanceMatchModel.logger.debug(s"Building mapping for $sourceColumn -> $target:  $dist")
       (sourceColumn, dist)
     }).
-    sortBy(_._2).
-    map({ case (k, v) => (k, total - v) })
+    map({ case (k, v) => (k, v.toDouble) })
   } 
-  def varType(argTypes: List[Type.T]) = Type.TString
+  def varType(argTypes: List[Type]) = TString()
 
   def sample(randomness: Random, args: List[PrimitiveValue]): PrimitiveValue = 
   {
     StringPrimitive(
       RandUtils.pickFromWeightedList(randomness, colMapping)
-    )
-  }
-
-  def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = 
-  {
-    StringPrimitive(  
-      colMapping.head._1
     )
   }
 
@@ -108,10 +115,10 @@ class EditDistanceMatchModel(
   def reason(args: List[Expression]): String = {
     choice match {
       case None => {
-        val sourceName = colMapping.head._1
+        val sourceName = colMapping.maxBy(_._2)._1
         val targetName = target._1
-        val editDistance = (total - colMapping.head._2)
-        s"I assumed that $sourceName maps to $targetName (Edit distance: $editDistance / $total)"
+        val editDistance = ((colMapping.head._2) * 100).toInt
+        s"I assumed that $sourceName maps to $targetName (Match: $editDistance% using $metricName Distance)"
       }
       case Some(choicePrim) => {
         val targetName = target._1
@@ -119,5 +126,10 @@ class EditDistanceMatchModel(
         s"You told me that $choiceStr maps to $targetName"
       }
     }
+
+  def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = {
+    val guess = colMapping.maxBy(_._2)._1
+    EditDistanceMatchModel.logger.trace(s"Guesssing ($name) $target <- $guess")
+    StringPrimitive(guess)
   }
 }

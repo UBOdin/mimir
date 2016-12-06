@@ -7,6 +7,7 @@ import scala.collection.JavaConversions._
 import mimir.parser.{MimirJSqlParser}
 import org.specs2.mutable._
 import org.specs2.matcher.FileMatchers
+import com.typesafe.scalalogging.slf4j.Logger
 
 import net.sf.jsqlparser.statement.select.{PlainSelect}
 
@@ -14,6 +15,7 @@ import mimir._
 import mimir.parser._
 import mimir.algebra._
 import mimir.sql._
+import mimir.util._
 
 object SqlParserSpec extends Specification with FileMatchers {
 
@@ -57,12 +59,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 			}
 			testData.foreach ( _ match { case ( tableName, tableData, tableCols ) => 
 				d.backend.update("CREATE TABLE "+tableName+"("+tableCols.mkString(", ")+");")
-				val lines = new BufferedReader(new FileReader(tableData))
-				var line: String = lines.readLine()
-				while(line != null){
-					d.backend.update("INSERT INTO "+tableName+" VALUES (" + line + ");")
-					line = lines.readLine()
-				}
+				LoadCSV.handleLoadTable(d, tableName, tableData, false)
 			})
 			d
 		} catch {
@@ -99,13 +96,13 @@ object SqlParserSpec extends Specification with FileMatchers {
 			db.optimize(convert("SELECT SUM(A) FROM R"))must be equalTo
 				Project(List(ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("SUM", List(Var("R_A")), "EXPR_1")), List(),
-						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()
 					)))
 
 			db.optimize(convert("SELECT SUM(A) AS TIM FROM R"))must be equalTo
 				Project(List(ProjectArg("TIM", Var("TIM"))),
 					Aggregate(List(AggregateArg("SUM", List(Var("R_A")), "TIM")), List(),
-						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()
 						)))
 			/* Couldn't find away to avoid the \s*.*\s* which was being added to the front and back of the test case exception string */
 			db.optimize(convert("SELECT SUM(*) AS TIM FROM R"))must throwA[SQLException]
@@ -117,73 +114,73 @@ object SqlParserSpec extends Specification with FileMatchers {
 			db.optimize(convert("SELECT AVG(A) FROM R"))must be equalTo
 				Project(List(ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("AVG", List(Var("R_A")), "EXPR_1")),List(),
-						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List())))
+						Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List())))
 
 			db.optimize(convert("SELECT MAX(A) FROM R"))must be equalTo
 				Project(List(ProjectArg("EXPR_1", Var("EXPR_1"))),
-					Aggregate(List(AggregateArg("MAX", List(Var("R_A")), "EXPR_1")),	List(), Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List())))
+					Aggregate(List(AggregateArg("MAX", List(Var("R_A")), "EXPR_1")),	List(), Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List())))
 
 			db.optimize(convert("SELECT MIN(A) FROM R"))must be equalTo
 				Project(List(ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("MIN", List(Var("R_A")), "EXPR_1")),	List(),
-						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List())))
+						Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List())))
 
 			db.optimize(convert("SELECT COUNT(*) FROM R"))must be equalTo
 				Project(List(ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("COUNT", List(), "EXPR_1")),	List(),
-						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List())))
+						Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List())))
 
 			db.optimize(convert("SELECT COUNT(*) FROM R, S"))must be equalTo
 				Project(List(ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("COUNT", List(), "EXPR_1")), List(),
-						Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-							Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List()))))
+						Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+							Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List()))))
 
 			db.optimize(convert("SELECT COUNT(*) FROM R, S WHERE R.B = S.B"))must be equalTo
 				Project(List(ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("COUNT", List(), "EXPR_1")), List(),
 						Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
-							Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-								Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List())))))
+							Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+								Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List())))))
 
 			db.optimize(convert("SELECT SUM(A) FROM R, S WHERE R.B = S.B"))must be equalTo
 				Project(List(ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("SUM", List(Var("R_A")), "EXPR_1")), List(),
 				 		Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
-				 			Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-								Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List())))))
+				 			Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+								Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List())))))
 
 			db.optimize(convert("SELECT SUM(A), AVG(D) FROM R, S WHERE R.B = S.B"))must be equalTo
 				Project(List(ProjectArg("EXPR_1", Var("EXPR_1")), ProjectArg("EXPR_2", Var("EXPR_2"))),
 					Aggregate(List(AggregateArg("SUM", List(Var("R_A")), "EXPR_1"),
 					AggregateArg("AVG", List(Var("S_D")), "EXPR_2")),	List(),
 						Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
-							Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-								Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List())))))
+							Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+								Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List())))))
 
 			db.optimize(convert("SELECT SUM(A + B), AVG(D + B) FROM R, S WHERE R.B = S.B"))must be equalTo
 				Project(List(ProjectArg("EXPR_1", Var("EXPR_1")), ProjectArg("EXPR_2", Var("EXPR_2"))),
 					Aggregate(List(AggregateArg("SUM", List(Arithmetic(Arith.Add, Var("R_A"), Var("S_B"))), "EXPR_1"),
 						AggregateArg("AVG", List(Arithmetic(Arith.Add, Var("S_D"), Var("S_B"))), "EXPR_2")),	List(),
 							Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
-								Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-									Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List())))))
+								Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+									Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List())))))
 
 			db.optimize(convert("SELECT SUM(A * D) FROM R, S WHERE R.B = S.B"))must be equalTo
 				Project(List(ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("SUM", List(Arithmetic(Arith.Mult, Var("R_A"), Var("S_D"))), "EXPR_1")),	List(),
 						Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
-							Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-								Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List())))))
+							Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+								Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List())))))
 
 			db.optimize(convert("SELECT SUM(A * E) FROM R, S, T WHERE (R.B = S.B) AND (S.D = T.D)"))must be equalTo
 				Project(List(ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("SUM", List(Arithmetic(Arith.Mult, Var("R_A"), Var("T_E"))), "EXPR_1")), List(),
 						Select(Comparison(Cmp.Eq, Var("S_D"), Var("T_D")),
 							Join(Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
-								Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-									Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List()))),
-										Table("T", Map(("T_D", Type.TInt), ("T_E", Type.TInt)).toList, List())))))
+								Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+									Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List()))),
+										Table("T", Map(("T_D", TInt()), ("T_E", TInt())).toList, List())))))
 
 		}
 
@@ -192,7 +189,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 			db.optimize(convert("SELECT A, SUM(B) FROM R GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "EXPR_1")), List(Var("R_A")),
-						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()
 					)))
 
 /* Illegal Group By Queries */
@@ -237,31 +234,31 @@ object SqlParserSpec extends Specification with FileMatchers {
 			db.optimize(convert("SELECT A AS BOB, SUM(B) AS ALICE FROM R GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("BOB", Var("R_A")), ProjectArg("ALICE", Var("ALICE"))),
 					Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "ALICE")), List(Var("R_A")),
-						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()
 						)))
 
 			db.optimize(convert("SELECT A, SUM(B) AS ALICE FROM R GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("ALICE", Var("ALICE"))),
 					Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "ALICE")), List(Var("R_A")),
-						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()
 						)))
 
 			db.optimize(convert("SELECT SUM(B) AS ALICE FROM R GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("ALICE", Var("ALICE"))),
 					Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "ALICE")), List(Var("R_A")),
-						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()
 						)))
 
 			db.optimize(convert("SELECT SUM(B), A AS ALICE FROM R GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("EXPR_1", Var("EXPR_1")), ProjectArg("ALICE", Var("R_A"))),
 					Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "EXPR_1")), List(Var("R_A")),
-						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()
 						)))
 
 			db.optimize(convert("SELECT A AS BOB, SUM(B) AS ALICE FROM R GROUP BY A, C"))must be equalTo
 				Project(List(ProjectArg("BOB", Var("R_A")), ProjectArg("ALICE", Var("ALICE"))),
 					Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "ALICE")), List(Var("R_A"), Var("R_C")),
-						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()
 						)))
 
 			(convert("SELECT * FROM (SELECT A AS BOB, SUM(B) AS ALICE FROM R GROUP BY A)subq WHERE ALICE > 5")) must be equalTo
@@ -269,7 +266,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 						Select(Comparison(Cmp.Gt, Var("SUBQ_ALICE"), IntPrimitive(5)),
 							Project(List(ProjectArg("SUBQ_BOB", Var("R_A")), ProjectArg("SUBQ_ALICE", Var("SUBQ_ALICE"))),
 								Aggregate(List(AggregateArg("SUM", List(Var("R_B")), "SUBQ_ALICE")), List(Var("R_A")),
-									Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List())
+									Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List())
 									))))
 
 
@@ -277,120 +274,120 @@ object SqlParserSpec extends Specification with FileMatchers {
 			db.optimize(convert("SELECT A, AVG(B) FROM R GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("AVG", List(Var("R_B")), "EXPR_1")), List(Var("R_A")),
-						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()
 					)))
 
 			db.optimize(convert("SELECT A, MIN(B) FROM R GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("MIN", List(Var("R_B")), "EXPR_1")), List(Var("R_A")),
-						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()
 					)))
 
 			db.optimize(convert("SELECT A, MAX(B) FROM R GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("MAX", List(Var("R_B")), "EXPR_1")), List(Var("R_A")),
-						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()
 					)))
 
 			db.optimize(convert("SELECT A, COUNT(*) FROM R GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("COUNT", List(), "EXPR_1")), List(Var("R_A")),
-						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()
 					)))
 
 			db.optimize(convert("SELECT A, B, COUNT(*) FROM R GROUP BY A,B"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("B", Var("R_B")), ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("COUNT", List(), "EXPR_1")), List(Var("R_A"), Var("R_B")),
-						Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()
+						Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()
 					)))
 
 			db.optimize(convert("SELECT A, COUNT(*) FROM R, S GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("COUNT", List(), "EXPR_1")), List(Var("R_A")),
-						Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-							Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List()))))
+						Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+							Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List()))))
 
 			db.optimize(convert("SELECT A, R.B, COUNT(*) FROM R, S GROUP BY A, R.B"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("B", Var("R_B")), ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("COUNT", List(), "EXPR_1")), List(Var("R_A"), Var("R_B")),
-						Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-							Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List()))))
+						Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+							Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List()))))
 
 			db.optimize(convert("SELECT A, R.B, C, COUNT(*) FROM R, S GROUP BY A, R.B, C"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("B", Var("R_B")), ProjectArg("C", Var("R_C")),
 				ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("COUNT", List(), "EXPR_1")), List(Var("R_A"), Var("R_B"), Var("R_C")),
-						Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-							Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List()))))
+						Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+							Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List()))))
 
 			db.optimize(convert("SELECT A, COUNT(*) FROM R, S WHERE R.B = S.B GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("COUNT", List(), "EXPR_1")), List(Var("R_A")),
 						Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
-							Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-								Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List())))))
+							Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+								Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List())))))
 
 			db.optimize(convert("SELECT A, R.B, COUNT(*) FROM R, S WHERE R.B = S.B GROUP BY A, R.B"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("B", Var("R_B")), ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("COUNT", List(), "EXPR_1")), List(Var("R_A"), Var("R_B")),
 						Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
-							Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-								Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List())))))
+							Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+								Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List())))))
 
 			db.optimize(convert("SELECT A, R.B, C, COUNT(*) FROM R, S WHERE R.B = S.B GROUP BY A, R.B, C"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("B", Var("R_B")), ProjectArg("C", Var("R_C")),
 				ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("COUNT", List(), "EXPR_1")), List(Var("R_A"), Var("R_B"), Var("R_C")),
 						Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
-							Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-								Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List())))))
+							Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+								Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List())))))
 
 			db.optimize(convert("SELECT A, SUM(C) FROM R, S WHERE R.B = S.B GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("SUM", List(Var("R_C")), "EXPR_1")), List(Var("R_A")),
 						Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
-							Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-								Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List())))))
+							Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+								Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List())))))
 
 
 			db.optimize(convert("SELECT A, R.B, SUM(C) FROM R, S WHERE R.B = S.B GROUP BY A, R.B"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("B", Var("R_B")), ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("SUM", List(Var("R_C")), "EXPR_1")), List(Var("R_A"), Var("R_B")),
 						Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
-							Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-								Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List())))))
+							Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+								Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List())))))
 
 			db.optimize(convert("SELECT R.B, SUM(A * C) FROM R, S WHERE R.B = S.B GROUP BY A, R.B, C"))must be equalTo
 				Project(List(ProjectArg("B", Var("R_B")), ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("SUM", List(Arithmetic(Arith.Mult, Var("R_A"), Var("R_C"))), "EXPR_1")),
 					List(Var("R_A"), Var("R_B"), Var("R_C")),
 						Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
-							Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-								Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List())))))
+							Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+								Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List())))))
 
 			db.optimize(convert("SELECT R.B, SUM(A), AVG(C) FROM R, S WHERE R.B = S.B GROUP BY R.B"))must be equalTo
 				Project(List(ProjectArg("B", Var("R_B")), ProjectArg("EXPR_1", Var("EXPR_1")), ProjectArg("EXPR_2", Var("EXPR_2"))),
 					Aggregate(List(AggregateArg("SUM", List(Var("R_A")), "EXPR_1"), AggregateArg("AVG", List(Var("R_C")), "EXPR_2")),
 					List(Var("R_B")),
 						Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
-							Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-								Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List())))))
+							Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+								Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List())))))
 
 			db.optimize(convert("SELECT A, SUM(A+B), AVG(C+B) FROM R, S WHERE R.B = S.B GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("EXPR_1", Var("EXPR_1")), ProjectArg("EXPR_2", Var("EXPR_2"))),
 					Aggregate(List(AggregateArg("SUM", List(Arithmetic(Arith.Add, Var("R_A"), Var("S_B"))), "EXPR_1"),
 					AggregateArg("AVG", List(Arithmetic(Arith.Add, Var("R_C"), Var("S_B"))), "EXPR_2")), List(Var("R_A")),
 						Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
-							Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-								Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List())))))
+							Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+								Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List())))))
 
 			db.optimize(convert("SELECT R.B, SUM(A*C) FROM R, S WHERE R.B = S.B GROUP BY R.B"))must be equalTo
 				Project(List(ProjectArg("B", Var("R_B")), ProjectArg("EXPR_1", Var("EXPR_1"))),
 					Aggregate(List(AggregateArg("SUM", List(Arithmetic(Arith.Mult, Var("R_A"), Var("R_C"))), "EXPR_1")),
 						List(Var("R_B")),
 						Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
-							Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-								Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List())))))
+							Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+								Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List())))))
 
 			db.optimize(convert("SELECT A, SUM(D) FROM R, S, T WHERE (R.B = S.B) AND (S.D = T.D) GROUP BY A"))must be equalTo
 				Project(List(ProjectArg("A", Var("R_A")), ProjectArg("EXPR_1", Var("EXPR_1"))),
@@ -398,9 +395,9 @@ object SqlParserSpec extends Specification with FileMatchers {
 					List(Var("R_A")),
 						Select(Comparison(Cmp.Eq, Var("S_D"), Var("T_D")),
 							Join(Select(Comparison(Cmp.Eq, Var("R_B"), Var("S_B")),
-								Join(Table("R", Map(("R_A", Type.TInt), ("R_B", Type.TInt), ("R_C", Type.TInt)).toList, List()),
-									Table("S", Map(("S_B", Type.TInt), ("S_D", Type.TInt)).toList, List()))),
-									Table("T", Map(("T_D", Type.TInt), ("T_E", Type.TInt)).toList, List())))))
+								Join(Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List()),
+									Table("S", Map(("S_B", TInt()), ("S_D", TInt())).toList, List()))),
+									Table("T", Map(("T_D", TInt()), ("T_E", TInt())).toList, List())))))
 
 
 		}
@@ -410,15 +407,16 @@ object SqlParserSpec extends Specification with FileMatchers {
 		 	db.update(stmt(
 		 		"CREATE LENS SaneR AS SELECT * FROM R WITH MISSING_VALUE('B')"
 		 	).asInstanceOf[CreateLens]);
+		 	db.getAllTables() must contain("SANER")
 		 	db.optimize(
 		 		convert("SELECT * FROM SaneR")
 		 	) must be equalTo 
 		 		Project(List(ProjectArg("A", Var("SANER_A")), 
 		 					 ProjectArg("B", Var("SANER_B")),
 		 					 ProjectArg("C", Var("SANER_C"))
-		 				), Table("SANER", Map(("SANER_A", Type.TInt), 
-		 								  ("SANER_B", Type.TInt), 
-		 								  ("SANER_C", Type.TInt)).toList,
+		 				), Table("SANER", Map(("SANER_A", TInt()), 
+		 								  ("SANER_B", TInt()), 
+		 								  ("SANER_C", TInt())).toList,
 		 							  List()
 				))
 			val guessCacheData = 
@@ -426,7 +424,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 			 		db.bestGuessCache.keyColumn(0)+","+
 			 		db.bestGuessCache.dataColumn+" FROM "+
 			 		db.bestGuessCache.cacheTableForModel(
-			 			db.models.getModel("SANER:WEKA:B"), 1)
+			 			db.models.getModel("SANER:WEKA:B"), 0)
 			 	)
 			guessCacheData must contain( ===(List[PrimitiveValue](IntPrimitive(3), IntPrimitive(3))) )
 		 	

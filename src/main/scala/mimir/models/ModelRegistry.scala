@@ -84,8 +84,8 @@ object ModelRegistry
   type SchemaMatchConstructor =
     ((Database, 
       String, 
-      Either[Operator,List[(String,Type.T)]],
-      Either[Operator,List[(String,Type.T)]]) => 
+      Either[Operator,List[(String,Type)]],
+      Either[Operator,List[(String,Type)]]) => 
         Map[String,(Model,Int)])
 
   /////////////////// PREDEFINED CONSTRUCTORS ///////////////////

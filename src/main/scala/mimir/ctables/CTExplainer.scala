@@ -87,7 +87,7 @@ case class NumericCellExplanation (
 class CTExplainer(db: Database) extends LazyLogging {
 
 	val NUM_SAMPLES = 1000
-	val NUM_EXAMPLES = 3
+	val NUM_EXAMPLES = 5
 	val rnd = new Random();
 	
 	def explainRow(oper: Operator, token: RowIdPrimitive): RowExplanation =
@@ -121,7 +121,9 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 	def explainCell(oper: Operator, token: RowIdPrimitive, column: String): CellExplanation =
 	{
+		logger.debug(s"ExplainCell INPUT: $oper")
 		val (tuple, allExpressions, _) = getProvenance(oper, token)
+		logger.debug(s"ExplainCell Provenance: $allExpressions")
 		val expr = allExpressions.get(column).get
 		val colType = Typechecker.typeOf(expr, tuple.mapValues( _.getType ))
 
@@ -133,13 +135,13 @@ class CTExplainer(db: Database) extends LazyLogging {
 			)
 
 		colType match {
-			case (Type.TInt | Type.TFloat) => 
+			case (TInt() | TFloat()) =>
 				val (avg, stddev) = getStats(expr, tuple, NUM_SAMPLES)
 
 				NumericCellExplanation(
 					avg, 
 					stddev, 
-					examples,
+					examples.toSet.toList,
 					getFocusedReasons(expr, tuple),
 					token, 
 					column
@@ -147,7 +149,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 			case _ => 
 				GenericCellExplanation(
-					examples,
+					examples.toSet.toList,
 					getFocusedReasons(expr, tuple),
 					token,
 					column
@@ -169,6 +171,8 @@ class CTExplainer(db: Database) extends LazyLogging {
 		        		bindings ++ Map("__SEED" -> IntPrimitive(rnd.nextInt()))
 		        	)
 		        } catch {
+		        	// Cases like the type inference lens might lead to the expression
+		        	// being impossible to evaluate.  Treat these as Nulls
 		        	case _:TypeException => NullPrimitive()
 		        }
         	).
@@ -176,70 +180,72 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 	}
 
-	def getStats(expr: Expression, tuple: Map[String,PrimitiveValue], count: Integer): 
+	def getStats(expr: Expression, tuple: Map[String,PrimitiveValue], desiredCount: Integer): 
 		(PrimitiveValue, PrimitiveValue) =
 	{
-		val (tot, totSq) =
-			sampleExpression[(PrimitiveValue, PrimitiveValue)](
-				expr, tuple, count,
-				(IntPrimitive(0), IntPrimitive(0)),
-				{ case ((tot, totSq), v) => 
-					(
-						Eval.applyArith(Arith.Add, tot, v),
-						Eval.applyArith(Arith.Add, totSq,
-							Eval.applyArith(Arith.Mult, v, v))
-					)
+		val (tot, totSq, realCount) =
+			sampleExpression[(PrimitiveValue, PrimitiveValue, Int)](
+				expr, tuple, desiredCount,
+				(IntPrimitive(0), IntPrimitive(0), 0),
+				{ case ((tot, totSq, ct), v) => 
+					try {
+						(
+							Eval.applyArith(Arith.Add, tot, v),
+							Eval.applyArith(Arith.Add, totSq,
+								Eval.applyArith(Arith.Mult, v, v)),
+							ct + 1
+						)
+	        } catch {
+	        	// Cases like the type inference lens might lead to the expression
+	        	// being non-numeric.  Simply skip these values.
+	        	case _:TypeException => (tot, totSq, ct)
+	        }
 				}
 			)
-		val avg = Eval.applyArith(Arith.Div, tot, FloatPrimitive(count.toDouble))
-		val stddev =
-			Eval.eval(
-				Function("ABSOLUTE", List(
-					Arithmetic(Arith.Sub, 
-						Arithmetic(Arith.Div, totSq, FloatPrimitive(count.toDouble)),
-						Arithmetic(Arith.Mult, avg, avg)
-					)
-				))
-			)
-
-		(avg, stddev)
+		if(realCount > 0){
+			val avg = Eval.applyArith(Arith.Div, tot, FloatPrimitive(realCount.toDouble))
+			val stddev =
+				Eval.eval(
+					Function("ABSOLUTE", List(
+						Arithmetic(Arith.Sub, 
+							Arithmetic(Arith.Div, totSq, FloatPrimitive(realCount.toDouble)),
+							Arithmetic(Arith.Mult, avg, avg)
+						)
+					))
+				)
+			(avg, stddev)
+		} else {
+			(StringPrimitive("n/a"), StringPrimitive("n/a"))
+		}
 	}
 
-
-	def getFocusedReasons(expr: Expression, tuple: Map[String,PrimitiveValue]): 
-		List[Reason] =
-	{
-		// println("PREREASONS: "+expr.toString)
-		getFocusedReasons( Eval.inlineWithoutSimplifying(expr, tuple) );
-	}
-
-	def getFocusedReasons(expr: Expression):
+	def getFocusedReasons(expr: Expression, tuple: Map[String,PrimitiveValue]):
 		List[Reason] =
 	{
 		logger.trace(s"GETTING REASONS: $expr")
 		expr match {
-			case v: VGTerm => List(v.reason)
+			case v: VGTerm => List(v.reason(v.args.map(Eval.eval(_,tuple))))
 
 			case Conditional(c, t, e) =>
-				getFocusedReasons(c) ++ (
-					if(Eval.evalBool(InlineVGTerms.inline(c))){
-						getFocusedReasons(t)
+				getFocusedReasons(c, tuple) ++ (
+					if(Eval.evalBool(c, tuple)){
+						getFocusedReasons(t, tuple)
 					} else {
-						getFocusedReasons(e)
+						getFocusedReasons(e, tuple)
 					}
 				);
 
 			case Arithmetic(op @ (Arith.And | Arith.Or), a, b) =>
-				getFocusedReasons(a) ++ (
-					(op, Eval.evalBool(InlineVGTerms.inline(a))) match {
-						case (Arith.And, true) => getFocusedReasons(b)
-						case (Arith.Or, false) => getFocusedReasons(b)
+				getFocusedReasons(a, tuple) ++ (
+					(op, Eval.evalBool(InlineVGTerms.inline(a), tuple)) match {
+						case (Arith.And, true) => getFocusedReasons(b, tuple)
+						case (Arith.Or, false) => getFocusedReasons(b, tuple)
 						case _ => List()
 					}
 				)
 
 			case _ => 
-				expr.children.flatMap( getFocusedReasons(_) )
+				expr.children.flatMap( getFocusedReasons(_, tuple) )
 		}
 	}
 
@@ -247,6 +253,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 		(Map[String,PrimitiveValue], Map[String, Expression], Expression) =
 	{
 		val oper = ResolveViews(db, rawOper)
+		logger.debug(s"RESOLVED: $oper")
 
 		// Annotate the query to produce a provenance trace
 		val (provQuery, rowIdCols) = Provenance.compile(oper)
@@ -257,7 +264,9 @@ class CTExplainer(db: Database) extends LazyLogging {
 		// Flatten the query out into a set of expressions and a row condition
 		val (tracedQuery, columnExprs, rowCondition) = Tracer.trace(provQuery, rowIdTokenMap)
 
-		logger.debug(s"TRACE: $tracedQuery\nROW: $rowCondition")
+		logger.debug(s"TRACE: $tracedQuery")
+		logger.debug(s"EXPRS: $columnExprs")
+		logger.debug(s"ROW: $rowCondition")
 
 		val inlinedQuery = db.compiler.bestGuessQuery(tracedQuery)
 

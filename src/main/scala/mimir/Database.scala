@@ -120,7 +120,7 @@ case class Database(backend: Backend)
   /**
    * Make an educated guess about what the query's schema should be
    */
-  def bestGuessSchema(oper: Operator): List[(String, Type.T)] =
+  def bestGuessSchema(oper: Operator): List[(String, Type)] =
   {
     InlineVGTerms(ResolveViews(this, oper)).schema
   }
@@ -262,9 +262,10 @@ case class Database(backend: Backend)
   /**
    * Look up the schema for the table with the provided name.
    */
-  def getTableSchema(name: String): Option[List[(String,Type.T)]] =
-    backend.getTableSchema(name).
-      orElse(getView(name).map(_.schema))
+  def getTableSchema(name: String): Option[List[(String,Type)]] =
+    getView(name).map(_.schema).
+      orElse(backend.getTableSchema(name))
+
   /**
    * Build a Table operator for the table with the provided name.
    */
@@ -275,7 +276,7 @@ case class Database(backend: Backend)
    * Build a Table operator for the table with the provided name, requesting the
    * specified metadata.
    */
-  def getTableOperator(table: String, metadata: List[(String, Expression, Type.T)]): Operator =
+  def getTableOperator(table: String, metadata: List[(String, Expression, Type)]): Operator =
   {
     Table(
       table, 
@@ -360,7 +361,7 @@ case class Database(backend: Backend)
    */
 
   def loadTable(targetTable: String, sourceFile: File){
-    val targetRaw = targetTable.toUpperCase + "RAW"
+    val targetRaw = targetTable.toUpperCase + "_RAW"
     LoadCSV.handleLoadTable(this, targetRaw, sourceFile)
     val oper = getTableOperator(targetRaw)
     val l = List(new FloatPrimitive(.5))

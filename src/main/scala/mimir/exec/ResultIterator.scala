@@ -18,6 +18,9 @@ import mimir.models.Reason;
  *   // etc...
  * }
  * iterator.close()
+ * 
+ * TODO: 
+ *  Make this a TraversableOnce
  */
 
 abstract class ResultIterator {
@@ -61,7 +64,7 @@ abstract class ResultIterator {
   /**
    * Return the schema of the given expression
    */
-  def schema: List[(String,Type.T)];
+  def schema: List[(String,Type)];
   
   /**
    * Return the number of columns (i.e., iterator.schema().size())

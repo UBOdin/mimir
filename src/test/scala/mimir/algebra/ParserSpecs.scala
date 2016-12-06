@@ -12,14 +12,14 @@ import mimir.sql._
 import mimir.ctables._
 
 object ParserSpecs extends Specification {
-  val schema = Map[String,Map[String,Type.T]](
+  val schema = Map[String,Map[String,Type]](
     ("R", Map( 
-      ("A", Type.TInt), 
-      ("B", Type.TInt), 
-      ("C", Type.TInt)
+      ("A", TInt()),
+      ("B", TInt()),
+      ("C", TInt())
     ))
   )
-  def model(x:String) = mimir.models.NoOpModel(x, Type.TInt, "TEST")
+  def model(x:String) = mimir.models.NoOpModel(x, TInt(), "TEST")
   def parser = new OperatorParser((x: String) => model(x), schema.get(_).get.toList)
   def expr = parser.expr _
   def oper = parser.operator _

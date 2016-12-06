@@ -3,11 +3,12 @@ package mimir.models
 import java.io.File
 import java.sql.SQLException
 import java.util
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir.algebra._
 import mimir.ctables._
 import mimir.exec.ResultIterator
-import mimir.util.{TypeUtils,RandUtils}
+import mimir.util.{RandUtils,TextUtils}
 import mimir.{Analysis, Database}
 import moa.classifiers.Classifier
 import moa.core.InstancesHeader
@@ -48,41 +49,61 @@ object WekaModel
     ret.db = db
     return ret;
   }
-
-  def getAttributesFromSchema(schema: Iterable[(String,Type)]): util.ArrayList[Attribute] = {
-    val attributes = new util.ArrayList[Attribute]()
-    schema.foreach { case (n, t) =>
-      (n, t) match {
-        case (_, Type.TRowId) => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
-        case (_, Type.TInt | Type.TFloat) => attributes.add(new Attribute(n))
-        case _ => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
-      }
-    }
-
-    attributes
-  }
-
 }
 
+@SerialVersionUID(1000L)
 class SimpleWekaModel(name: String, colName: String, target: Operator)
-  extends SingleVarModel(name)
+  extends SingleVarModel(name) 
+  with NeedsReconnectToDatabase 
+  with LazyLogging
 {
   private val TRAINING_LIMIT = 1000
   var numSamples = 0
   var numCorrect = 0
-  val colIdx = target.schema.map(_._1).indexOf(colName)
-  var learner: Classifier = null
+  val colIdx:Int = target.schema.map(_._1).indexOf(colName)
+
+  /**
+   * The actual Weka model itself.  @SimpleWekaModel is just a wrapper around a 
+   * Weka @Classifier object.  Due to silliness in Weka, @Classifier itself is not
+   * serializable, so we mark it transient and use a simple serialization hack.
+   * See serializedLearner below.
+   */
+  @transient var learner: Classifier = null
+  /**
+   * Due to silliness in Weka, @Classifier itself is not serializable, and we need
+   * to use Weka's internal @SerializationHelper object to do the actual serialization
+   * 
+   * The fix is to interpose on the serialization/deserialization process.  First, 
+   * when the model is serialized in serialize(), we serialize Classifier into this
+   * byte array.  Second, when the @NeedsReconnectToDatabase trait fires --- that is,
+   * when the model is re-linked to the database, we take the opportunity to deserialize
+   * this field.  
+   * 
+   * To save space, serializedLearner is kept null, except when the object is being
+   * serialized.
+   */
+  var serializedLearner: Array[Byte] = null
+  /**
+   * The database is marked transient.  We use the @NeedsReconnectToDatabase trait to
+   * ask the deserializer to re-link us.
+   */
+  @transient var db: Database = null
+
   var db: Database = null
   val hardcoded = scala.collection.mutable.Map[String,PrimitiveValue]()
   @transient val dataModel = 
     new Instances(name, WekaModel.getAttributesFromSchema(target.schema), TRAINING_LIMIT)
 
+  /**
+   * When the model is created, learn associations from the existing data.
+   */
   def train(db:Database)
   {
     this.db = db
     learner = Analysis.getLearner("moa.classifiers.bayes.NaiveBayes")
     val iterator = db.query(target)
-    val attributes = WekaModel.getAttributesFromIterator(iterator)
+    val attributes = schemaToWeka(target.schema)
+    var data = new Instances("TrainData", attributes, 100)
 
     var numInstances = 0
     iterator.open()
@@ -116,12 +137,27 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
   def isAcknowledged(args: List[PrimitiveValue]): Boolean =
     ???
 
+  /**
+   * Improve the model with one single data point
+   */
   def learn(dataPoint: Instance) = {
     numSamples += 1;
     if (learner.correctlyClassifies(dataPoint)) {
       numCorrect += 1;
     }
     learner.trainOnInstance(dataPoint);
+  }
+
+  private def schemaToWeka(sch: List[(String,Type)]): util.ArrayList[Attribute] = {
+    val attributes = new util.ArrayList[Attribute]()
+    sch.zipWithIndex.foreach { case ((n, t), i) =>
+      t match {
+        case TRowId() => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
+        case (TInt() | TFloat()) if (i != colIdx) => attributes.add(new Attribute(n))
+        case _ => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
+      }
+    }
+    attributes
   }
 
   private def classify(rowid: RowIdPrimitive): List[(Double, Int)] = {
@@ -160,23 +196,15 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
   private def classToPrimitive(classIdx: Int): PrimitiveValue = 
   {
     val att = learner.getModelContext.attribute(colIdx)
-    if (att.isString)
-      StringPrimitive(att.value(classIdx))
-    else if (att.isNumeric)
-      IntPrimitive(classIdx)
-    else
-      throw new SQLException("Unknown type")
+    val str = att.value(classIdx)
+    TextUtils.parsePrimitive(guessInputType, str)
   }
 
-  def varType(argTypes: List[Type.T]): Type.T = 
-  {
-    val att = learner.getModelContext.attribute(colIdx)
-    if(att.isString){ Type.TString }
-    else if(att.isNumeric){ Type.TInt }
-    else { 
-      throw new SQLException("Unknown type")
-    }
-  }
+  def guessInputType: Type =
+    db.bestGuessSchema(target)(colIdx)._2
+
+  def varType(argTypes: List[Type]): Type = guessInputType
+  
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue =
   {
     val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
@@ -196,7 +224,7 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
               }
     classToPrimitive(res)
   }
-  def reason(args: List[Expression]): String = 
+  def reason(args: List[PrimitiveValue]): String = 
   {
     val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val total:Double = classes.map(_._1).fold(0.0)(_+_)
@@ -208,19 +236,28 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
 
   }
 
+  /**
+   * Re-populate transient fields after being woken up from serialization
+   */
+  def reconnectToDatabase(db: Database): Unit = {
+    this.db = db
+    val bytes = new java.io.ByteArrayInputStream(serializedLearner)
+    learner = weka.core.SerializationHelper.read(bytes).asInstanceOf[Classifier]
+    serializedLearner = null
+  }
+
+  /**
+   * Interpose on the serialization pipeline to safely serialize the
+   * Weka classifier (which doesn't play nicely with ObjOutputStream)
+   */
   override def serialize: (Array[Byte], String) =
   {
     val bytes = new java.io.ByteArrayOutputStream()
-    val objects = new java.io.ObjectOutputStream(bytes)
-    objects.writeObject(name)
-    objects.writeObject(colName)
-    objects.writeObject(db.querySerializer.sanitize(target))
-    objects.writeInt(numSamples)
-    objects.writeInt(numCorrect)
-    objects.writeObject(learner)
-    weka.core.SerializationHelper.write(objects,learner)
-
-    (bytes.toByteArray, "WEKA")
+    weka.core.SerializationHelper.write(bytes,learner)
+    serializedLearner = bytes.toByteArray()
+    val ret = super.serialize()
+    serializedLearner = null
+    return ret
   }
 
   private def makeInstance(row: ResultIterator): Instance =

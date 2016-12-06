@@ -2,6 +2,7 @@ package mimir.models;
 
 import scala.util.Random
 import mimir.algebra._
+import mimir.util._
 
 case class ModelException(error:String) extends RAException(error)
 
@@ -47,13 +48,13 @@ case class ModelException(error:String) extends RAException(error)
  * conventions in terms of their types, how they use arguments, and how
  * they are constructed.
  */
-abstract class Model(val name: String) {
+abstract class Model(val name: String) extends Serializable {
   /**
    * Infer the type of the model from the types of the inputs
    * @param argTypes    The types of the arguments the the VGTerm
    * @return            The type of the value returned by this model
    */
-  def varType        (idx: Int, argTypes:List[Type.T]): Type.T
+  def varType        (idx: Int, argTypes:List[Type]): Type
 
   /**
    * Generate a best guess for a variable represented by this model.
@@ -76,7 +77,7 @@ abstract class Model(val name: String) {
    * @param args  The skolem identifier for the specific variable to explain
    * @return      A string reason explaining the uncertainty in this model
    */
-  def reason         (idx: Int, args: List[Expression]): String
+  def reason         (idx: Int, args: List[PrimitiveValue]): (String)
   /**
    * Record feedback given as the "correct" value for a variable represented by this model
    * @param idx   The index of the variable family to record feedback for
@@ -98,12 +99,6 @@ abstract class Model(val name: String) {
    *              a deserializer to use when decoding the encoding.
    */
   def serialize(): (Array[Byte], String) =
-  {
-    val out = new java.io.ByteArrayOutputStream()
-    val objects = new java.io.ObjectOutputStream(out)
-    objects.writeObject(this)
-
-    return (out.toByteArray, "JAVA")
-  }
+    (SerializationUtils.serialize(this), "JAVA")
 
 }

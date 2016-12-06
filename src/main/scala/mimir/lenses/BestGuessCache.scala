@@ -20,7 +20,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
 
 
   def cacheTableForModel(model: Model, varIdx: Int): String =
-    model.name + "_CACHE_" + varIdx
+    model.name.replaceAll(":","_") + "_CACHE_" + varIdx
   def cacheTableForTerm(term: VGTerm): String =
     cacheTableForModel(term.model, term.idx)
   def cacheTableDefinition(model: Model, varIdx: Int, termId: Int): Table = {
@@ -69,11 +69,11 @@ class BestGuessCache(db: Database) extends LazyLogging {
                   val keyBase = Var(joinKeyColumn(arg._2, termId))
                   val key = 
                     typechecker.typeOf(arg._1) match {
-                      case Type.TRowId => 
+                      case TRowId() =>
                         // We materialize rowids as Strings in the backing store.  As
                         // a result, we need to convince the typechecker that we're
                         // being sane here.
-                        Function("CAST", List[Expression](keyBase, TypePrimitive(Type.TRowId)))
+                        Function("CAST", List[Expression](keyBase, TypePrimitive(TRowId())))
                       case _  =>
                         keyBase
                     }
@@ -171,7 +171,6 @@ class BestGuessCache(db: Database) extends LazyLogging {
     createCacheTable(cacheTable, model.varType(varIdx, argTypes), argTypes)
 
     val modelName = model.name
-    logger.debug(s"Building cache for $modelName-$varIdx[$args] with\n$input")
 
     val updateQuery = 
         "INSERT INTO "+cacheTable+"("+dataColumn+
@@ -181,6 +180,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
         ") VALUES (?"+
           args.map(_ => ",?").mkString("")+
         ")"
+    logger.debug(s"Building cache for $modelName-$varIdx[$args] with\n$input\n$updateQuery")
 
     db.query(input).foreachRow(row => {
       val compiledArgs = args.map(Provenance.plugInToken(_, row.provenanceToken()))
@@ -202,7 +202,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
   private def dropCacheTable(cacheTable: String) =
     db.backend.update( "DROP TABLE "+cacheTable )
 
-  private def createCacheTable(cacheTable: String, dataType: Type.T, cacheTypes: List[Type.T]) = {
+  private def createCacheTable(cacheTable: String, dataType: Type, cacheTypes: List[Type]) = {
     val keyCols =
       cacheTypes.zipWithIndex.map( 
         typeIndex => (keyColumn(typeIndex._2), typeIndex._1)
@@ -213,7 +213,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
     val dataCols = List( (dataColumn, dataType) )
     val tableDirectives = 
       (keyCols ++ dataCols).map( 
-        col => { col._1+" "+Type.toString(col._2) }
+        col => { col._1+" "+col._2 }
       ) ++ List(
         "PRIMARY KEY ("+keyCols.map(_._1).mkString(", ")+")"
       )

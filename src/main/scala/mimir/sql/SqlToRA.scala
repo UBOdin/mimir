@@ -31,11 +31,11 @@ class SqlToRA(db: Database)
     throw new SQLException("Unhandled Feature: "+feature)
   }
   
-  def convert(t : ColDataType): Type.T = {
+  def convert(t : ColDataType): Type = {
     t.getDataType.toUpperCase match { 
-      case "INT" => Type.TInt
-      case "NUMBER" => Type.TInt
-      case "CHAR" => Type.TString
+      case "INT" => TInt()
+      case "NUMBER" => TInt()
+      case "CHAR" => TString()
     }
   }
 /* Tests for unsupported aggregate query of the form "Select 1 + SUM(B) from R".
@@ -532,7 +532,7 @@ class SqlToRA(db: Database)
           sch.map(
             _ match { case (v, t) => (alias+"_"+v, t)}
           ),
-          List[(String,Expression,Type.T)]()
+          List[(String,Expression,Type)]()
         ), 
         newBindings, 
         alias

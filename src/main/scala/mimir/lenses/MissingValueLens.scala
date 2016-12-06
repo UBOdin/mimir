@@ -7,7 +7,7 @@ import java.util
 import mimir.algebra._
 import mimir.ctables._
 import mimir.exec.ResultIterator
-import mimir.util.{TypeUtils,RandUtils}
+import mimir.util.RandUtils
 import mimir.{Analysis, Database}
 import moa.classifiers.Classifier
 import moa.core.InstancesHeader
@@ -28,7 +28,16 @@ object MissingValueLens {
     args:List[Expression]
   ): (Operator, List[Model]) =
   {
-    val targetColumns = args.map(Eval.evalString(_).toUpperCase).toSet.toList
+    val targetColumns:List[String] = args.map(Eval.evalString(_).toUpperCase).toSet.toList
+    val schema:Set[String] = query.schema.map(_._1).toSet
+    val missingColumns = targetColumns.toSet -- schema
+
+    if(!missingColumns.isEmpty){
+      throw new SQLException(
+        "Invalid missing value lens: ["+missingColumns.mkString(", ")+
+        "] not part of ["+schema.mkString(", ")+"]"
+      )
+    }
 
     val (
       candidateModels: Map[String,List[(Model,Int,String)]],
