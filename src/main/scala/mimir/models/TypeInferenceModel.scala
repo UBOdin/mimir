@@ -26,6 +26,7 @@ object TypeInferenceModel
 
 class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
   extends SingleVarModel(name)
+  with DataIndependentSingleVarFeedback
 {
   var totalVotes = 0.0
   val votes = scala.collection.mutable.Map[Type.T, Double]()
@@ -59,25 +60,35 @@ class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
     )
 
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = 
-  {
     TypePrimitive(voteList.maxBy(_._2)._1)
-  }
+
+  def validateChoice(v: PrimitiveValue): Boolean =
+    v.isInstanceOf[TypePrimitive]
 
   def reason(args: List[Expression]): String = {
-    val (guess, guessVotes) = voteList.maxBy(_._2)
-    val defaultPct = (defaultFrac * 100).toInt
-    val guessPct = ((guessVotes / totalVotes)*100).toInt
-    val typeStr = Type.toString(guess)
+    choice match {
+      case None => {
+        val (guess, guessVotes) = voteList.maxBy(_._2)
+        val defaultPct = (defaultFrac * 100).toInt
+        val guessPct = ((guessVotes / totalVotes)*100).toInt
+        val typeStr = Type.toString(guess)
 
-    val reason =
-      guess match {
-        case Type.TString =>
-          s"not more than $defaultPct% of the data fit anything else"
-        case _ => 
-          s"around $guessPct% of the data matched"
+        val reason =
+          guess match {
+            case Type.TString =>
+              s"not more than $defaultPct% of the data fit anything else"
+            case _ => 
+              s"around $guessPct% of the data matched"
+          }
+
+        s"I guessed that $column was of type $typeStr because $reason"
       }
-
-    s"I guessed that $column was of type $typeStr because $reason"
+      case Some(TypePrimitive(t)) =>
+        val typeStr = Type.toString(t)
+        s"You told me that $column was of type $typeStr"
+      case Some(c) =>
+        throw new ModelException(s"Invalid choice $c for $name")
+    }
   }
 
 }

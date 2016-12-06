@@ -10,6 +10,8 @@ abstract class SingleVarModel(name: String) extends Model(name) {
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue
   def sample(randomness: Random, args: List[PrimitiveValue]): PrimitiveValue
   def reason(args: List[Expression]): String
+  def feedback(args: List[PrimitiveValue], v: PrimitiveValue): Unit
+  def isAcknowledged (args: List[PrimitiveValue]): Boolean
 
   def varType(x: Int, argTypes: List[Type.T]): Type.T = 
     varType(argTypes)
@@ -19,6 +21,10 @@ abstract class SingleVarModel(name: String) extends Model(name) {
     sample(randomness, args)
   def reason(x:Int, args: List[Expression]): String =
     reason(args)
+  def feedback(x:Int, args: List[PrimitiveValue], v: PrimitiveValue): Unit = 
+    feedback(args, v)
+  def isAcknowledged (idx: Int, args: List[PrimitiveValue]): Boolean =
+    isAcknowledged(args)
 }
 
 case class IndependentVarsModel(override val name: String, vars: List[SingleVarModel]) extends Model(name) {
@@ -31,6 +37,10 @@ case class IndependentVarsModel(override val name: String, vars: List[SingleVarM
     vars(idx).sample(randomness, args)
   def reason(idx: Int, args: List[Expression]): String =
     vars(idx).reason(idx, args)
+  def feedback(idx: Int, args: List[PrimitiveValue], v: PrimitiveValue): Unit =
+    vars(idx).feedback(args, v)
+  def isAcknowledged (idx: Int, args: List[PrimitiveValue]): Boolean =
+    vars(idx).isAcknowledged(args)
 }
 
 object UniformDistribution extends SingleVarModel("UNIFORM") with Serializable {
@@ -61,11 +71,21 @@ object UniformDistribution extends SingleVarModel("UNIFORM") with Serializable {
 
   def reason(args: List[Expression]): String = 
     "I put in a random value between "+args(0)+" and "+args(1)
+
+  def feedback(args: List[PrimitiveValue], v: PrimitiveValue): Unit =
+    throw ModelException("Unsupported: Feedback on UniformDistribution")
+
+  def isAcknowledged (args: List[PrimitiveValue]): Boolean =
+    false
 }
 
 case class NoOpModel(override val name: String, vt: Type.T, reasonText:String) extends SingleVarModel(name) with Serializable {
+  var acked = false
+
   def varType(argTypes: List[Type.T]) = vt
   def bestGuess(args: List[PrimitiveValue]) = args(0)
   def sample(randomness: Random, args: List[PrimitiveValue]) = args(0)
   def reason(args: List[Expression]): String = reasonText
+  def feedback(args: List[PrimitiveValue], v: PrimitiveValue): Unit = { acked = true }
+  def isAcknowledged (args: List[PrimitiveValue]): Boolean = acked
 }

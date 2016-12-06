@@ -68,7 +68,10 @@ class EditDistanceMatchModel(
   metric: StringDistance, 
   target: (String, Type.T), 
   sourceCandidates: List[String]
-) extends SingleVarModel(name) with Serializable
+) 
+  extends SingleVarModel(name) 
+  with DataIndependentSingleVarFeedback
+  with Serializable
 {
   var total = 0.0
   var colMapping:List[(String,Double)] = {
@@ -92,16 +95,29 @@ class EditDistanceMatchModel(
     )
   }
 
-  def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = {
+  def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = 
+  {
     StringPrimitive(  
       colMapping.head._1
     )
   }
 
+  def validateChoice(v: PrimitiveValue): Boolean =
+    sourceCandidates.contains(v.asString)
+
   def reason(args: List[Expression]): String = {
-    val sourceName = colMapping.head._1
-    val targetName = target._1
-    val editDistance = (total - colMapping.head._2)
-    s"I assumed that $sourceName maps to $targetName (Edit distance: $editDistance / $total)"
+    choice match {
+      case None => {
+        val sourceName = colMapping.head._1
+        val targetName = target._1
+        val editDistance = (total - colMapping.head._2)
+        s"I assumed that $sourceName maps to $targetName (Edit distance: $editDistance / $total)"
+      }
+      case Some(choicePrim) => {
+        val targetName = target._1
+        val choiceStr = choicePrim.asString
+        s"You told me that $choiceStr maps to $targetName"
+      }
+    }
   }
 }

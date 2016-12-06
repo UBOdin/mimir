@@ -12,19 +12,27 @@ import mimir.util._
  * in the list.
  */
 class DefaultMetaModel(name: String, context: String, models: List[String]) 
-  extends SingleVarModel(name) with Serializable
+  extends SingleVarModel(name) 
+  with DataIndependentSingleVarFeedback 
+  with Serializable
 {
-
   def varType(argTypes:List[Type.T]) = Type.TString
 
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue =
-    StringPrimitive(models.head)
+    choice.getOrElse(StringPrimitive(models.head))
   def sample(randomness: Random, args: List[PrimitiveValue]): PrimitiveValue =
     StringPrimitive(RandUtils.pickFromList(randomness, models))
   def reason(args: List[Expression]): String =
   {
-    val bestChoice = models.head
-    val modelString = models.mkString(", ")
-    s"I defaulted to guessing with '$bestChoice' (out of $modelString) for $context"
+    choice match {
+      case None => {
+        val bestChoice = models.head
+        val modelString = models.mkString(", ")
+        s"I defaulted to guessing with '$bestChoice' (out of $modelString) for $context"
+      }
+      case Some(choiceStr) => 
+        s"You told me to use the $choiceStr model for $context"
+    }
   }
+  def validateChoice(v: PrimitiveValue) = models.contains(v.asString)
 }

@@ -3,6 +3,8 @@ package mimir.models;
 import scala.util.Random
 import mimir.algebra._
 
+case class ModelException(error:String) extends RAException(error)
+
 /**
  * Root class for Model objects.
  *
@@ -74,7 +76,21 @@ abstract class Model(val name: String) {
    * @param args  The skolem identifier for the specific variable to explain
    * @return      A string reason explaining the uncertainty in this model
    */
-  def reason         (idx: Int, args: List[Expression]): (String)
+  def reason         (idx: Int, args: List[Expression]): String
+  /**
+   * Record feedback given as the "correct" value for a variable represented by this model
+   * @param idx   The index of the variable family to record feedback for
+   * @param args  The skolem identifier for the specific variable to record feedback for
+   * @param v     The correct value for the parameter
+   */
+  def feedback       (idx: Int, args: List[PrimitiveValue], v: PrimitiveValue): Unit
+  /**
+   * Determine whether a variable represented by this model has been acknowledged or not
+   * @param idx   The index of the variable family to check acknowledgement of
+   * @param args  The skolem identifier for the specific variable to check acknowledgement of
+   * @return      True if the variable has been acknowledged
+   */
+  def isAcknowledged (idx: Int, args: List[PrimitiveValue]): Boolean
 
   /**
    * Encode the model for persistence to disk/the database
