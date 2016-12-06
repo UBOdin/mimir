@@ -30,25 +30,6 @@ object WekaModel
       col -> (model, 0)
     }).toMap
   }
-
-  def decode(db: Database, data: Array[Byte]): Model =
-  {
-    val in = new java.io.ObjectInputStream(
-        new java.io.ByteArrayInputStream(data)
-      )
-    val name = in.readObject().asInstanceOf[String]
-    val colName = in.readObject().asInstanceOf[String]
-    val target = 
-      db.querySerializer.desanitize(in.readObject().asInstanceOf[Operator])
-    val ret = new SimpleWekaModel(name, colName, target)
-    ret.numSamples = in.readInt()
-    ret.numCorrect = in.readInt()
-    ret.learner = weka.core.SerializationHelper.
-                    read(in).
-                    asInstanceOf[Classifier]
-    ret.db = db
-    return ret;
-  }
 }
 
 @SerialVersionUID(1000L)
@@ -89,11 +70,6 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
    */
   @transient var db: Database = null
 
-  var db: Database = null
-  val hardcoded = scala.collection.mutable.Map[String,PrimitiveValue]()
-  @transient val dataModel = 
-    new Instances(name, WekaModel.getAttributesFromSchema(target.schema), TRAINING_LIMIT)
-
   /**
    * When the model is created, learn associations from the existing data.
    */
@@ -111,7 +87,24 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
     /* The second check poses a limit on the learning data and reduces time spent building the lens */
     while(iterator.getNext() && numInstances < TRAINING_LIMIT) {
       // println("ROW: "+iterator.currentRow())
-      data.add(makeInstance(iterator))
+      val instance = new DenseInstance(iterator.numCols)
+      instance.setDataset(data)
+      for(j <- 0 until iterator.numCols                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       ) {
+        iterator.schema(j)._2 match {
+          case (TInt() | TFloat()) if (j != colIdx) =>
+            try {
+              instance.setValue(j, iterator(j).asDouble)
+            } catch {
+              case e: Throwable =>
+
+            }
+          case _ =>
+            val field = iterator(j)
+            if (!field.isInstanceOf[NullPrimitive])
+              instance.setValue(j, iterator(j).asString)
+        }
+      }
+      data.add(instance)
       numInstances = numInstances + 1
     }
     iterator.close()
@@ -122,18 +115,10 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
     data.foreach(learn(_))
   }
 
-  def feedback(args: List[PrimitiveValue], v: PrimitiveValue): Unit =
-  {
-    val instance = new Instance(dataModel.numAttributes)
-    instance.setDataset(dataModel)
 
-    db.query(Select(
-      Comparison(Cmp.Eq, RowIdVar(), v),
-      target
-    )).
-      mapRows( makeInstance(_) ).
-      foreach( learn(_) )
-  }
+  def feedback(args: List[PrimitiveValue], v: PrimitiveValue): Unit =
+    ???
+
   def isAcknowledged(args: List[PrimitiveValue]): Boolean =
     ???
 
@@ -173,7 +158,9 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
       throw new SQLException("Invalid Source Data ROWID: " + rowid);
     }
     val row = new DenseInstance(rowValues.numCols)
-    row.setDataset(dataModel)
+    val attributes = schemaToWeka(target.schema)
+    val data = new Instances("TestData", attributes, 1)
+    row.setDataset(data)
     (0 until rowValues.numCols).foreach((col) => {
       val v = rowValues(col)
       if (!v.isInstanceOf[NullPrimitive]) {
@@ -258,27 +245,5 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
     val ret = super.serialize()
     serializedLearner = null
     return ret
-  }
-
-  private def makeInstance(row: ResultIterator): Instance =
-  {
-    val instance = new DenseInstance(iterator.numCols)
-    instance.setDataset(dataModel)
-    for(j <- 0 until iterator.numCols                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       ) {
-      iterator.schema(j)._2 match {
-        case Type.TInt | Type.TFloat =>
-          try {
-            instance.setValue(j, iterator(j).asDouble)
-          } catch {
-            case e: Throwable =>
-
-          }
-        case _ =>
-          val field = iterator(j)
-          if (!field.isInstanceOf[NullPrimitive])
-            instance.setValue(j, iterator(j).asString)
-      }
-    }
-    return instance
   }
 }

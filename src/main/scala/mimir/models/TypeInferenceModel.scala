@@ -109,6 +109,7 @@ class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
             case _ => 
               s"around $guessPct% of the data matched"
           }
+        s"I guessed that $column was of type $typeStr because $reason"
       }
       case Some(TypePrimitive(t)) =>
         val typeStr = Type.toString(t)

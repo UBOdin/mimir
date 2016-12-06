@@ -79,7 +79,13 @@ object UniformDistribution extends SingleVarModel("UNIFORM") with Serializable {
     false
 }
 
-case class NoOpModel(override val name: String, vt: Type, reasonText:String) extends SingleVarModel(name) with Serializable {
+case class NoOpModel(override val name: String, vt: Type, reasonText:String) 
+  extends SingleVarModel(name) 
+  with Serializable 
+{
+
+  var acked = false
+
   def varType(argTypes: List[Type]) = vt
   def bestGuess(args: List[PrimitiveValue]) = args(0)
   def sample(randomness: Random, args: List[PrimitiveValue]) = args(0)

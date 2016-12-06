@@ -112,7 +112,7 @@ class EditDistanceMatchModel(
   def validateChoice(v: PrimitiveValue): Boolean =
     sourceCandidates.contains(v.asString)
 
-  def reason(args: List[Expression]): String = {
+  def reason(args: List[PrimitiveValue]): String = {
     choice match {
       case None => {
         val sourceName = colMapping.maxBy(_._2)._1
@@ -126,8 +126,10 @@ class EditDistanceMatchModel(
         s"You told me that $choiceStr maps to $targetName"
       }
     }
+  }
 
-  def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = {
+  def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = 
+  {
     val guess = colMapping.maxBy(_._2)._1
     EditDistanceMatchModel.logger.trace(s"Guesssing ($name) $target <- $guess")
     StringPrimitive(guess)
