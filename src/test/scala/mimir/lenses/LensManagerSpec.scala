@@ -38,7 +38,7 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
         Function("CAST", List(Var("CORES"), VGTerm(coresModel, 0, List())))
       ))
 
-      coresModel.reason(0, List()) must contain("was of type int")
+      coresModel.reason(0, List()) must contain("was of type INT")
 
       val coresGuess1 = coresModel.bestGuess(0, List())
       coresGuess1 must be equalTo(TypePrimitive(TInt()))

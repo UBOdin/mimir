@@ -52,10 +52,14 @@ object Type {
     case "bool"    => TBool()
     case "rowid"   => TRowId()
     case "type"    => TType()
-    case _ =>  
+    case x         => {
+      TypeRegistry.typeList.get(x) match {
+        case Some((regex, baseType)) => TUser(x, regex, baseType)
+        case None => throw new RAException("Invalid Type '" + t + "'");
+      }
+    }
 
 
-    throw new RAException("Invalid Type '" + t + "'");
   }
   def toSQLiteType(i:Int) = i match {
     case 0 => TInt()
@@ -67,23 +71,10 @@ object Type {
     case 6 => TType()
     case 7 => TAny()
     case _ => {
-      val num = i - 8 // 8 because this is the number of native types, if more are added then this number needs to increase
-
-      if(num < 0){
-        throw new Exception("This number is not part of the type: num == " + num.toString())
-      }
-      var location = 0
-      var t:Type = null
-      TypeRegistry.typeList.foreach((tuple) => {
-        if(location == num){
-          t = TUser(tuple._1,tuple._2,tuple._3)
-        }
-        location += 1
-      })
-      if(t == null){
-        throw new Exception("This number is not part of the type: num == " + num.toString())
-      }
-      t
+      // 8 because this is the number of native types, if more are added then this number needs to increase
+      val name = TypeRegistry.idxType(i-8)
+      val record = TypeRegistry.typeList(name)
+      TUser(name,record._1,record._2)
     }
   }
   def id(t:Type) = t match {
@@ -95,7 +86,9 @@ object Type {
     case TRowId() => 5
     case TType() => 6
     case TAny() => 7
-    case TUser(name,regex,sqlType)  => TypeRegistry.typeIdx(name)+8
+    case TUser(name,regex,sqlType)  => 
+      // 8 because this is the number of native types, if more are added then this number needs to increase
+      TypeRegistry.typeIdx(name.toLowerCase)+8
   }
 
   val tests = Map[Type,String](
@@ -142,15 +135,15 @@ These are the files that need to change to extend the TUser
  */
 object TypeRegistry {
   val typeList = Map[String,(String,Type)](
-    "TUser"         -> ("USER",                            TString()),
-    "TWeight"       -> ("KG*",                             TString()),
-    "ProductID"     -> ("P\\d+",                           TString()),
-    "FireCompany"   -> ("^[a-zA-Z]\\d{3}$",                TString()),
-    "ZipCode"       -> ("^\\d{5}(?:[-\\s]\\d{4})?$",       TInt()),
-    "Container"     -> ("[A-Z]{4}[0-9]{7}",                TString()),
-    "CarrierCode"   -> ("[A-Z]{4}",                        TString()),
-    "MMSI"          -> ("MID\\d{6}|0MID\\d{5}|00MID\\{4}", TString()),
-    "BillOfLanding" -> ("[A-Z]{8}[0-9]{8}",                TString())
+    "tuser"         -> ("USER",                            TString()),
+    "tweight"       -> ("KG*",                             TString()),
+    "productid"     -> ("P\\d+",                           TString()),
+    "firecompany"   -> ("^[a-zA-Z]\\d{3}$",                TString()),
+    "zipcode"       -> ("^\\d{5}(?:[-\\s]\\d{4})?$",       TInt()),
+    "container"     -> ("[A-Z]{4}[0-9]{7}",                TString()),
+    "carriercode"   -> ("[A-Z]{4}",                        TString()),
+    "mmsi"          -> ("MID\\d{6}|0MID\\d{5}|00MID\\{4}", TString()),
+    "billoflanding" -> ("[A-Z]{8}[0-9]{8}",                TString())
   )
   val idxType = typeList.keys.toIndexedSeq
   val typeIdx = idxType.zipWithIndex.toMap

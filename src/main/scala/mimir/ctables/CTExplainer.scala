@@ -79,7 +79,7 @@ case class NumericCellExplanation (
 	override def fields = 
 		List(
 			("mean", mean),
-			("sttdev", sttdev)
+			("stddev", sttdev)
 		) ++ super.fields
 }
 
@@ -87,7 +87,8 @@ case class NumericCellExplanation (
 class CTExplainer(db: Database) extends LazyLogging {
 
 	val NUM_SAMPLES = 1000
-	val NUM_EXAMPLES = 5
+	val NUM_EXAMPLE_TRIALS = 20
+	val NUM_FINAL_EXAMPLES = 3
 	val rnd = new Random();
 	
 	def explainRow(oper: Operator, token: RowIdPrimitive): RowExplanation =
@@ -114,7 +115,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 		RowExplanation(
 			probability,
-			getFocusedReasons(provenance, tuple),
+			getFocusedReasons(provenance, tuple).values.toList,
 			token
 		)
 	}
@@ -125,14 +126,14 @@ class CTExplainer(db: Database) extends LazyLogging {
 		val (tuple, allExpressions, _) = getProvenance(oper, token)
 		logger.debug(s"ExplainCell Provenance: $allExpressions")
 		val expr = allExpressions.get(column).get
-		val colType = Typechecker.typeOf(expr, tuple.mapValues( _.getType ))
+		val colType = Typechecker.typeOf(InlineVGTerms(expr), tuple.mapValues( _.getType ))
 
 		val examples = 
 			sampleExpression[List[PrimitiveValue]](
-				expr, tuple, NUM_EXAMPLES, 
+				expr, tuple, NUM_EXAMPLE_TRIALS, 
 				List[PrimitiveValue](), 
 				(_++List(_)) 
-			)
+			).toSet.take(NUM_FINAL_EXAMPLES)
 
 		colType match {
 			case (TInt() | TFloat()) =>
@@ -142,7 +143,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 					avg, 
 					stddev, 
 					examples.toSet.toList,
-					getFocusedReasons(expr, tuple),
+					getFocusedReasons(expr, tuple).values.toList,
 					token, 
 					column
 				)
@@ -150,7 +151,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 			case _ => 
 				GenericCellExplanation(
 					examples.toSet.toList,
-					getFocusedReasons(expr, tuple),
+					getFocusedReasons(expr, tuple).values.toList,
 					token,
 					column
 				)
@@ -168,7 +169,7 @@ class CTExplainer(db: Database) extends LazyLogging {
         		try {
 	        		Eval.eval(
 	        			sampleExpr, 
-		        		bindings ++ Map("__SEED" -> IntPrimitive(rnd.nextInt()))
+		        		bindings ++ Map(CTables.SEED_EXP -> IntPrimitive(rnd.nextInt()))
 		        	)
 		        } catch {
 		        	// Cases like the type inference lens might lead to the expression
@@ -220,32 +221,34 @@ class CTExplainer(db: Database) extends LazyLogging {
 	}
 
 	def getFocusedReasons(expr: Expression, tuple: Map[String,PrimitiveValue]):
-		List[Reason] =
+		Map[String,Reason] =
 	{
 		logger.trace(s"GETTING REASONS: $expr")
 		expr match {
-			case v: VGTerm => List(v.reason(v.args.map(Eval.eval(_,tuple))))
+			case v: VGTerm => Map(v.model.name -> v.reason(v.args.map(Eval.eval(_,tuple))))
 
 			case Conditional(c, t, e) =>
-				getFocusedReasons(c, tuple) ++ (
+				(
 					if(Eval.evalBool(c, tuple)){
 						getFocusedReasons(t, tuple)
 					} else {
 						getFocusedReasons(e, tuple)
 					}
-				);
+				) ++ getFocusedReasons(c, tuple);
 
 			case Arithmetic(op @ (Arith.And | Arith.Or), a, b) =>
-				getFocusedReasons(a, tuple) ++ (
+				(
 					(op, Eval.evalBool(InlineVGTerms.inline(a), tuple)) match {
 						case (Arith.And, true) => getFocusedReasons(b, tuple)
 						case (Arith.Or, false) => getFocusedReasons(b, tuple)
-						case _ => List()
+						case _ => Map()
 					}
-				)
+				) ++ getFocusedReasons(a, tuple)
 
 			case _ => 
-				expr.children.flatMap( getFocusedReasons(_, tuple) )
+				expr.children.
+					map( getFocusedReasons(_, tuple) ).
+					foldLeft(Map[String,Reason]())(_++_)
 		}
 	}
 
