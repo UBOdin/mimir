@@ -42,11 +42,10 @@ object Mimir {
     db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
     db.backend.open()
 
+    db.initializeDBForMimir();
+
     // Check for one-off commands
-    if(conf.initDB()){
-      println("Initializing Database...");
-      db.initializeDBForMimir();
-    } else if(conf.loadTable.get != None){
+    if(conf.loadTable.get != None){
       db.loadTable(conf.loadTable(), conf.loadTable()+".csv");
     } else if(conf.rebuildBestGuess.get != None){
         db.bestGuessCache.buildCache(
@@ -152,7 +151,6 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
     default = Some("sqlite"))
   val precache = opt[String]("precache", descr = "Precache one or more lenses")
   val rebuildBestGuess = opt[String]("rebuild-bestguess")  
-  val initDB = toggle("init", default = Some(false))
   val quiet  = toggle("quiet", default = Some(false))
   val file = trailArg[String](required = false)
   val experimental = opt[List[String]]("X", default = Some(List[String]()))
