@@ -16,7 +16,7 @@ object QueryVisualizer {
         else {
           var params = 
             projArg.flatMap( projectArg => CTables.getVGTerms(projectArg.expression) ).
-                    map(_.model.name) 
+                    map(_.model.name.replaceAll(":.*", "")) 
           if(params.isEmpty) {
             convertToTree(source)
           } else {

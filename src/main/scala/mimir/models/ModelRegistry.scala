@@ -47,7 +47,7 @@ object ModelRegistry
    * model with the manager.
    *
    * The original row may be constructed from the provided relation
-   * operator: Select[ROWID = $rowid]($oper)
+   * operator: Select[ROWID = rowid](oper)
    */
   type ImputationConstructor = 
     ((Database, String, List[String], Operator) => Map[String, (Model,Int)])

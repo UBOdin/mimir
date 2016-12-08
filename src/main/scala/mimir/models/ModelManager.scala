@@ -34,20 +34,24 @@ class ModelManager(db:Database) {
    */
   def init(): Unit =
   {
-    db.backend.update(s"""
-      CREATE TABLE $modelTable(
-        name varchar(100), 
-        encoded text,
-        decoder varchar(30),
-        PRIMARY KEY (name)
-      )
-    """)
-    db.backend.update(s"""
-      CREATE TABLE $ownerTable(
-        model varchar(100), 
-        owner varchar(100)
-      )
-    """)
+    if(db.backend.getTableSchema(modelTable).isEmpty){
+      db.backend.update(s"""
+        CREATE TABLE $modelTable(
+          name varchar(100), 
+          encoded text,
+          decoder varchar(30),
+          PRIMARY KEY (name)
+        )
+      """)
+    }
+    if(db.backend.getTableSchema(ownerTable).isEmpty){
+      db.backend.update(s"""
+        CREATE TABLE $ownerTable(
+          model varchar(100), 
+          owner varchar(100)
+        )
+      """)
+    }
   }
 
   /**
