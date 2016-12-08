@@ -12,7 +12,11 @@ case class VGTermSampler(model: Model, idx: Int, args: List[Expression], seed: E
     model.varType(idx, argTypes)
   def get(v: List[PrimitiveValue]): PrimitiveValue = {
     v match {
-      case seed :: argValues => model.sample(idx, new Random(seed.asLong), argValues)
+      case seed :: argValues => {
+        // Todo: Get a proper multi-key hashing scheme in here.
+        val seedForThisVar = ((seed.asLong * argValues.hashCode) + 13) * model.name.hashCode
+        model.sample(idx, new Random(seedForThisVar), argValues)
+      }
       case _ => throw new SQLException("Internal error.  Expecting seed.")
     }
   }

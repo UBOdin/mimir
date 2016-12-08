@@ -4,6 +4,7 @@ import java.sql.SQLException
 
 import mimir.provenance._
 import mimir.ctables._
+import mimir.util._
 
 case class RegisteredFunction(
 	fname: String, 
@@ -58,27 +59,17 @@ object FunctionRegistry {
 
     registerFunctionSet(List("CAST", "MIMIRCAST"), 
       (params: List[PrimitiveValue]) => {
-        try {
-          params match {
-            case x :: TypePrimitive(TInt())    :: Nil => IntPrimitive(x.asLong)
-            case x :: TypePrimitive(TFloat())  :: Nil => FloatPrimitive(x.asDouble)
-            case x :: TypePrimitive(TString()) :: Nil => StringPrimitive(x.asString)
-            case _ :: t :: Nil => throw new SQLException("Unknown cast type: '"+t+"'")
-            case _ => throw new SQLException("Invalid cast: "+params)
-          }
-        } catch {
-          case _:TypeException=> NullPrimitive();
-          case _:NumberFormatException => NullPrimitive();
+        params match {
+          case x :: TypePrimitive(t)    :: Nil => Cast(t, x)
+          case _ => throw new SQLException("Invalid cast: "+params)
         }
       },
       (_) => TAny()
     )
 
 		registerFunctionSet(List("DATE", "TO_DATE"), 
-		  (params: List[PrimitiveValue]) => {
-		     val date = params.head.asInstanceOf[StringPrimitive].v.split("-").map(x => x.toInt)
-		     new DatePrimitive(date(0), date(1), date(2))
-		   },
+		  (params: List[PrimitiveValue]) => 
+          { TextUtils.parseDate(params.head.asString) },
 		  _ match {
 		    case TString() :: Nil => TDate()
 		    case _ => throw new SQLException("Invalid parameters to DATE()")

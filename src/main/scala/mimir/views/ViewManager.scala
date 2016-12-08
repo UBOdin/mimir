@@ -10,12 +10,14 @@ class ViewManager(db:Database) extends LazyLogging {
 
   def init(): Unit = 
   {
-    db.backend.update(s"""
-      CREATE TABLE $viewTable(
-        name varchar(100), 
-        query text,
-        PRIMARY KEY(name)
-      )""")
+    if(db.backend.getTableSchema(viewTable).isEmpty){
+      db.backend.update(s"""
+        CREATE TABLE $viewTable(
+          name varchar(100), 
+          query text,
+          PRIMARY KEY(name)
+        )""")
+    }
   }
 
   def createView(name: String, query: Operator): Unit =

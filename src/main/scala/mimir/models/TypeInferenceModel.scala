@@ -29,11 +29,12 @@ object TypeInferenceModel
     Type.tests.flatMap({ case (t, test) =>
       if(v.matches(test)){ Some(t) }
       else { None }
-    })++TypeRegistry.typeList.flatMap((userTypeDef)=>{
-      if(v.matches(userTypeDef._2)) {
-        Some(TUser(userTypeDef._1, userTypeDef._2, userTypeDef._3))
+    })++
+    TypeRegistry.typeList.flatMap({ case (name, (regexp, baseT)) => {
+      if(v.matches(regexp)) {
+        Some(TUser(name, regexp, baseT))
       } else { None }
-    })
+    }})
 
   }
 }
@@ -41,6 +42,7 @@ object TypeInferenceModel
 @SerialVersionUID(1000L)
 class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
   extends SingleVarModel(name)
+  with DataIndependentSingleVarFeedback
 {
   var totalVotes = 0.0
   val votes = scala.collection.mutable.Map[Type, Double]()
@@ -90,20 +92,34 @@ class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
     TypePrimitive(guess)
   }
 
-  def reason(args: List[PrimitiveValue]): String = {
-    val (guess, guessVotes) = voteList.maxBy( rankFn _ )
-    val defaultPct = (defaultFrac * 100).toInt
-    val guessPct = ((guessVotes / totalVotes)*100).toInt
-    val typeStr = Type.toString(guess)
-    val reason =
-      guess match {
-        case TString() =>
-          s"not more than $defaultPct% of the data fit anything else"
-        case _ => 
-          s"around $guessPct% of the data matched"
-      }
+  def validateChoice(v: PrimitiveValue): Boolean =
+    v.isInstanceOf[TypePrimitive]
 
-    s"I guessed that $column was of type $typeStr because $reason"
+
+  def reason(args: List[PrimitiveValue]): String = {
+    choice match {
+      case None => {
+        val (guess, guessVotes) = voteList.maxBy( rankFn _ )
+        val defaultPct = (defaultFrac * 100).toInt
+        val guessPct = ((guessVotes / totalVotes)*100).toInt
+        val typeStr = Type.toString(guess).toUpperCase
+        val reason =
+          guess match {
+            case TString() =>
+              s"not more than $defaultPct% of the data fit anything else"
+            case _ if (guessPct >= 100) =>
+              "all of the data fit"
+            case _ => 
+              s"around $guessPct% of the data fit"
+          }
+        s"I guessed that $column was of type $typeStr because $reason"
+      }
+      case Some(TypePrimitive(t)) =>
+        val typeStr = Type.toString(t).toUpperCase
+        s"You told me that $column was of type $typeStr"
+      case Some(c) =>
+        throw new ModelException(s"Invalid choice $c for $name")
+    }
   }
 
 }

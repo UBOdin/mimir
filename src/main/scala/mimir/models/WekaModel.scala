@@ -115,6 +115,13 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
     data.foreach(learn(_))
   }
 
+
+  def feedback(args: List[PrimitiveValue], v: PrimitiveValue): Unit =
+    ???
+
+  def isAcknowledged(args: List[PrimitiveValue]): Boolean =
+    ???
+
   /**
    * Improve the model with one single data point
    */

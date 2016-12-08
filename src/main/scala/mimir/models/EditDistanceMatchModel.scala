@@ -75,7 +75,10 @@ class EditDistanceMatchModel(
   metricName: String,
   target: (String, Type), 
   sourceCandidates: List[String]
-) extends SingleVarModel(name) with Serializable
+) 
+  extends SingleVarModel(name) 
+  with DataIndependentSingleVarFeedback
+  with Serializable
 {
   /** 
    * A mapping for this column.  Lucene Discance metrics use a [0-1] range as:
@@ -106,16 +109,29 @@ class EditDistanceMatchModel(
     )
   }
 
-  def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = {
+  def validateChoice(v: PrimitiveValue): Boolean =
+    sourceCandidates.contains(v.asString)
+
+  def reason(args: List[PrimitiveValue]): String = {
+    choice match {
+      case None => {
+        val sourceName = colMapping.maxBy(_._2)._1
+        val targetName = target._1
+        val editDistance = ((colMapping.head._2) * 100).toInt
+        s"I assumed that $sourceName maps to $targetName (Match: $editDistance% using $metricName Distance)"
+      }
+      case Some(choicePrim) => {
+        val targetName = target._1
+        val choiceStr = choicePrim.asString
+        s"You told me that $choiceStr maps to $targetName"
+      }
+    }
+  }
+
+  def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = 
+  {
     val guess = colMapping.maxBy(_._2)._1
     EditDistanceMatchModel.logger.trace(s"Guesssing ($name) $target <- $guess")
     StringPrimitive(guess)
-  }
-
-  def reason(args: List[PrimitiveValue]): String = {
-    val sourceName = colMapping.maxBy(_._2)._1
-    val targetName = target._1
-    val editDistance = ((colMapping.head._2) * 100).toInt
-    s"I assumed that $sourceName maps to $targetName (Match: $editDistance% using $metricName Distance)"
   }
 }
