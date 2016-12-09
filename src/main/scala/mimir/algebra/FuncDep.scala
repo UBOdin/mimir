@@ -37,8 +37,8 @@ class FuncDep
 
   var table:ArrayList[ArrayList[PrimitiveValue]] = null
   var countTable:ArrayList[TreeMap[String,Integer]] = null
-  var densityTable:ArrayList[Integer] = null
-  var sch:List[(String, T)] = null
+  var densityTable:ArrayList[Integer] = null // gives the density for column, that is percentage of non-null values
+  var sch:List[(String, T)] = null // the schema, is a lookup for the type and
   var parentTable: TreeMap[Integer, ArrayList[Integer]] = null
   var entityPairMatrix:TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]] = null // outer string is entity pair so column#,column#: to a treemap that is essentially a look-up matrix for columns that contain column to column strengths
   var startTime:Long = 0
@@ -51,7 +51,7 @@ class FuncDep
 
   def buildAbadi(schema: List[(String, T)],data: ResultIterator): Unit = {
 
-    table = new ArrayList[ArrayList[PrimitiveValue]]() // contains every row from resultIter aka data
+    table = new ArrayList[ArrayList[PrimitiveValue]]() // contains every row from resultIter, is the data from the input query
     entityPairMatrix = new TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]]()
     sch = schema
     countTable = new ArrayList[TreeMap[String,Integer]]() // contains the rows
@@ -134,7 +134,7 @@ class FuncDep
     var nodeTable: ArrayList[Integer] = new ArrayList[Integer]() // contains a list of all the nodes
     var edgeTable: ArrayList[String] = new ArrayList[String]() // contains the node numbers for the dependency graph, the names are numbers from the schema 0 to sch.length are the possibilities
     var maxTable: ArrayList[String] = new ArrayList[String]() // contains the max values for each column, used for phase1 formula
-    val flattenParentTable:Boolean = true
+    val flattenParentTable:Boolean = false // used if wanting to flatten the parent table so it uses the child of root
 
     parentTable = new TreeMap[Integer, ArrayList[Integer]]()
 
@@ -199,6 +199,7 @@ class FuncDep
           if (tempMap.size() != 0) {
             val strength: Double = (countTable.get(outerLocation).size().toFloat - secondCount.toFloat) / (tempMap.size().toFloat - secondCount.toFloat) // using first formula from paper right now
             if (strength >= threshhold && leftDensity >= rightDensity && secondCount > 9 && countTable.get(outerLocation).size() != table.get(outerLocation).size() && countTable.get(innerLocation).size() != table.get(innerLocation).size()) { // phase one constraints
+            //if (strength >= threshhold  && countTable.get(outerLocation).size() != table.get(outerLocation).size() && countTable.get(innerLocation).size() != table.get(innerLocation).size()) { // phase one constraints
               /*                println("SECONDCOUNT IS: " + secondCount)
                               println("MAX VALUE IS: "+ maxTable.get(k))
                               println("Functional Dependancy between: " + leftColumnName + " and " + rightColumnName + " STR: " + strength)
@@ -219,6 +220,8 @@ class FuncDep
     for(c <- 0 until table.size()){
       table.get(c).remove(table.get(c).size() - 1)
     }
+
+    println("NodeTable Size: " + nodeTable.size())
 
     var g: DirectedSparseMultigraph[Integer, String] = new DirectedSparseMultigraph[Integer, String]();
 
@@ -308,6 +311,24 @@ class FuncDep
       }
     }
 
+    println("ParentTable Size: " + parentTable.size())
+
+    var keySet:util.Set[Integer] = parentTable.keySet()
+    keySet.asScala.map((y) => {
+      if(y != -1){
+        println(sch(y))
+        println("Number of children: " + parentTable.get(y).size())
+      }
+      else{
+        println("Roots children: ")
+        var keyS = parentTable.get(y).asScala
+        keyS.map((l) => {
+          println(sch(l))
+          println("Root Child: " + l)
+        })
+      }
+    })
+
     var endQ:Long = System.nanoTime();
     println("PhaseOne TOOK: "+((endQ - startQ)/1000000) + " MILLISECONDS")
 
@@ -326,6 +347,7 @@ class FuncDep
         parentList.add(parentVal)
       }
     }
+    println("Number of parents: "+parentList.size())
 
 //    var phase2Graph: DirectedSparseMultigraph[Integer, String] = new DirectedSparseMultigraph[Integer, String]();
 

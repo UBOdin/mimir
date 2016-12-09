@@ -33,7 +33,7 @@ object Mimir {
   def main(args: Array[String]) {
 
     val test = new mimir.util.JsonToCSV
-//    test.singleFile(new File("dump-30.txt"),"twitterSmall.csv","UTF-8",100,100000)
+//    test.singleFile(new File("dump-30.txt"),"twitterSmallMediumClean.csv","UTF-8",200,100000)
     conf = new MimirConfig(args);
 
     // Set up the database connection(s)

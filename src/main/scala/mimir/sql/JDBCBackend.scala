@@ -202,7 +202,8 @@ class JDBCBackend(backend: String, filename: String) extends Backend
 
   def specializeQuery(q: Operator): Operator = {
     backend match {
-      case "sqlite" => SpecializeForSQLite(q)
+//      case "sqlite" => SpecializeForSQLite(q) // for when 'where is null' is a query
+      case "sqlite" => q
       case "oracle" => q
     }
   }

@@ -17,7 +17,7 @@ object ShredderLensSpec
 {
   sequential
 
-  val testTable = "twitterSmallRAW"
+  val testTable = "twitterSmallMediumCleanRAW"
   var discala:FuncDep = null
   val testData = new File(
     "test/data/JSONOUTPUTWIDE.csv"
@@ -25,9 +25,9 @@ object ShredderLensSpec
   )
   val extractorName = "TEST_EXTRACTOR"
   var testLens:ShredderLens = null
-  val backend = new JDBCBackend("sqlite","debug.db")
+  val backend = new JDBCBackend("sqlite","debugNarrow.db")
   backend.open()
-  val database = new Database("debug.db",backend)
+  val database = new Database("debugNarrow.db",backend)
 
 //  var jtocsv:JsonToCSV = new JsonToCSV()
 
@@ -60,7 +60,7 @@ object ShredderLensSpec
 //       val schema = db.getTableSchema(testTable).get
 //       val schema = db.getTableSchema(testTable).get // for loading already existing table from a database
        discala = new FuncDep()
-       discala.buildAbadi(schema, database.backend.execute("select * from twitterSmallRaw;"))
+       discala.buildAbadi(schema, database.backend.execute("select * from twitterSmallMediumCleanRaw;"))
        discala.entityPairMatrix must not beNull
      }
 /*
@@ -86,17 +86,21 @@ object ShredderLensSpec
     }
 */
     "contain enough information to create a lens" >> {
-      val entities = discala.entityPairList.flatMap( x => List(x._1, x._2) ).toSet.toList
-      // println(entities.toString)
+      val entities:List[Integer] = discala.entityPairList.flatMap( x => List(x._1, x._2) ).toSet.toList
+      println("From Entities")
+      entities.map((i) => {
+        println("Entities: " + i)
+      })
       entities must not beEmpty
 	
-      val primaryEntity = entities(0)
-      val possibleSecondaries = 
+      val primaryEntity:Integer = entities(0)
+      val possibleSecondaries:List[Integer] =
         discala.entityPairList.flatMap({ case (a, b) => 
           if(a == primaryEntity){ Some(b) }
           else if(b == primaryEntity){ Some(a) }
           else { None }
         })
+
 	
       val entityObject = (e:Integer) => (e.toInt, discala.parentTable.get(e).toList.map(_.toInt))
 	
@@ -157,6 +161,7 @@ object ShredderLensSpec
       database.query(table).foreachRow( _ => {} )
       var endQ:Long = System.nanoTime();
       println("MAT Query TOOK: "+((endQ - startQ)/1000000) + " MILLISECONDS")
+//      database.backend.execute("drop table if exists LENSOUTPUT;")
       true
     }
   }

@@ -1,18 +1,16 @@
 package mimir.util
 
-import java.io.File
-import java.io.FileNotFoundException
-import java.io.PrintWriter
-import java.io.UnsupportedEncodingException
+import java.io._
 import java.util.ArrayList
 import java.util.Iterator
 import java.util.Map
 import java.util.Scanner
 import java.util.Set
-import scala.util.control.Breaks._
 
+import scala.util.control.Breaks._
 import scala.collection.JavaConverters._
 import com.github.wnameless.json.flattener._
+import org.apache.commons.lang3.StringEscapeUtils
 
 /*
 @param inputFile The input file name/path
@@ -36,6 +34,7 @@ class JsonToCSV() {
     multipleFiles(inputFile,outputFileName,fileEncodingType,columnLimit,rowLimit);
   }
 */
+/*
   def multipleFiles(inputFile:File,outputFileName:String,fileEncoding:String,columnLimit:Int,rowLimit:Int): Unit = {
     var writer:PrintWriter  = null
     try {
@@ -166,60 +165,81 @@ class JsonToCSV() {
     System.out.println("Finished Converting to CSV")
 
   }
-
+*/
   def singleFile(inputFile:File,outputFileName:String,fileEncoding:String,columnLimit:Int,rowLimit:Int):Unit = {
 
     var maxSchema:ArrayList [String] = new ArrayList[String]()
     var checkSchema:ArrayList [String] = new ArrayList[String]()
     var columnCounter:Int = 0
 
-    var x:Scanner = null
+    var x:BufferedReader = null
     try {
-      x = new Scanner(inputFile, fileEncoding)
+      x = new BufferedReader(new FileReader(inputFile))
     }
     catch{
       case e:Exception => println("Error opening file")
     }
     if (x == null) {
-      System.out.println("scanner is null")
+      System.out.println("Error opening file, it may be empty")
     }
+
     var rowCount:Int = 0
     var flag = true
-    while (x.hasNextLine() && flag == true) {
+    var prevLine:String = ""
+    var buffer:Set[String] = null
+    var nextLine = ""
+
+    while ((nextLine = x.readLine())!= null && flag == true) {
       if (rowCount >= rowLimit) {
         flag = false
       }
-      var nextLine:String = x.nextLine()
-      if (nextLine.length() > 5) {
-        var keySet:Set[String]  = JsonFlattener.flattenAsMap(nextLine).keySet()
-        keySet.asScala.map((key:String) => {
-          //				key = key.replaceAll("\\.", "_dot_");
-          if (!maxSchema.contains(key)) {
-            maxSchema.add(key)
-          }
-        })
-        rowCount += 1
+      if(nextLine.length > 1) {
+        prevLine += nextLine
       }
-
+      else{
+        if(prevLine.substring(0,3).equals("{\"c")) {
+          var clean = prevLine.replace("\\\\", "")
+          clean = prevLine.replace("\\\"", "")
+          clean = clean.replace("\\n", "")
+          clean = clean.replace("\\r", "")
+          clean = clean.replace("\n", "")
+          clean = clean.replace("\r", "")
+          try {
+            var keySet: Set[String] = JsonFlattener.flattenAsMap(clean).keySet()
+              if(keySet.asScala.contains("created_at")) {
+                  keySet.asScala.map((key: String) => {
+                    if (!maxSchema.contains(key)) {
+                      maxSchema.add(key)
+                    }
+                  })
+                  rowCount += 1
+              }
+          }
+          catch {
+            case e: Exception => // do nothing there was an error
+          }
+        }
+        prevLine = ""
+      }
     }
-
-    x.close()
 
     System.out.println("Maximal Schema Generated")
 
+    x.close()
+
     try {
-      x = new Scanner(inputFile, fileEncoding)
+      x = new BufferedReader(new FileReader(inputFile))
     }
-    catch{
-      case e:Exception => println("Error opening file")
-    }
-    if (x == null) {
-      System.out.println("scanner is null")
+   catch{
+     case e:Exception => println("Error opening file")
+   }
+   if (x == null) {
+     System.out.println("Error opening file, it may be empty")
     }
 
-    var writer:PrintWriter = null
+    var writer:BufferedWriter = null
     try {
-      writer = new PrintWriter(outputFileName, fileEncoding)
+      writer = new BufferedWriter(new FileWriter(outputFileName))
     }
     catch{
       case e: FileNotFoundException => e.printStackTrace()
@@ -235,8 +255,11 @@ class JsonToCSV() {
         var s = sch
         s = s.replaceAll("\\.", "_dot_")
         s = s.replaceAll(",", "_com_")
-        s = s.replaceAll("\\[", "|")
-        s = s.replaceAll("\\]", "|")
+        s = s.replaceAll("\\[", "_lsb_")
+        s = s.replaceAll("\\]", "_rsb_")
+        s = s.replace("|","_p_")
+        s = s.replace(" ","")
+
 
         if (checkSchema.contains(sch)) {
           s += "1"
@@ -252,53 +275,70 @@ class JsonToCSV() {
 
     columnCounter = 0
 
-    writer.println(schemaHeader)
+    writer.write(schemaHeader+"\n")
 
-    rowCount = 0;
+    rowCount = 0
 
     flag = true
+    prevLine = ""
+    buffer = null
 
-    while (x.hasNextLine() && flag == true) {
+    while ((nextLine = x.readLine()) != null && flag == true) {
       if (rowCount >= rowLimit) {
         flag = false
       }
-      var nextLine:String = x.nextLine()
-      if (nextLine.length() > 5) {
-        var flatJson:Map[String, Object] = JsonFlattener.flattenAsMap(nextLine)
-        if (flatJson != null) {
-          var schemaIter: java.util.Iterator[String] = maxSchema.iterator()
-          var row:String = ""
-
-          var innerflag = true
-
-          while (schemaIter.hasNext() && innerflag == true) {
-            if (columnCounter >= columnLimit) {
-              innerflag = false
-            }
-            columnCounter += 1
-            var nextKey:String  = schemaIter.next()
-            if (nextKey != null) {
-              //						nextKey = nextKey.replaceAll("\\.", "_dot_");
-              if (flatJson.containsKey(nextKey)) {
-                var value:Object = flatJson.get(nextKey)
-                if (value != null) {
-                  row += (value.toString()).replaceAll("'", "_singleQuote_").replaceAll(",", "_comma_") + ","
-                }
-                else {
-                  row += ","
-                }
-              }
-              else {
-                row += ","
-              }
-            }
-          }
-          writer.println(row)
-        }
-        columnCounter = 0
-        rowCount += 1
+      if(nextLine.length > 1) {
+        prevLine += nextLine
       }
+      else{
+        if(prevLine.substring(0,3).equals("{\"c")){
+          var clean = prevLine.replace("\\\\", "")
+          clean = prevLine.replace("\\\"", "")
+          clean = clean.replace("\\n", "")
+          clean = clean.replace("\\r", "")
+          clean = clean.replace("\n", "")
+          clean = clean.replace("\r", "")
+          try {
+            var flatJson: Map[String, Object] = JsonFlattener.flattenAsMap(clean)
+            if (flatJson != null && flatJson.asScala.contains("created_at")) {
+              var schemaIter: java.util.Iterator[String] = maxSchema.iterator()
+              var row: String = ""
 
+              var innerflag = true
+
+              while (schemaIter.hasNext() && innerflag == true) {
+                if (columnCounter >= columnLimit) {
+                  innerflag = false
+                }
+                columnCounter += 1
+                var nextKey: String = schemaIter.next()
+                if (nextKey != null) {
+                  //						nextKey = nextKey.replaceAll("\\.", "_dot_");
+                  if (flatJson.containsKey(nextKey)) {
+                    var value: Object = flatJson.get(nextKey)
+                    if (value != null) {
+                      row += (StringEscapeUtils.unescapeJava(value.toString().replace("\\n","").replace("\n","").replace("\\r","").replace("\r",""))).replaceAll("'", "_SQ_").replaceAll(",", "_C_") + ","
+                    }
+                    else {
+                      row += ","
+                    }
+                  }
+                  else {
+                    row += ","
+                  }
+                }
+              }
+              writer.write(row+"\n")
+              rowCount += 1
+            }
+            columnCounter = 0
+          }
+          catch{
+            case e: Exception => // do nothing there was an error
+          }
+        }
+        prevLine = ""
+      }
     }
 
     x.close()
