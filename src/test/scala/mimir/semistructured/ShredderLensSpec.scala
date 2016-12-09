@@ -131,7 +131,7 @@ object ShredderLensSpec
       var startInsert:Long = System.nanoTime();
       database.selectInto("LENSOUTPUT", testLens.view)
       var endInsert:Long = System.nanoTime();
-      println("Query TOOK: "+((endInsert - startInsert)/1000000) + " MILLISECONDS")
+      println("Insert TOOK: "+((endInsert - startInsert)/1000000) + " MILLISECONDS")
       
       // val s:List[(String,Type.T)] = testLens.schema()
       // var sc:String = ""
