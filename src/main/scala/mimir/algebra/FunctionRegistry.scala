@@ -78,13 +78,20 @@ object FunctionRegistry {
 
 		registerFunction("ABSOLUTE", 
 			{
-		      case List(IntPrimitive(i))   => if(i < 0){ IntPrimitive(-i) } else { IntPrimitive(i) }
-		      case List(FloatPrimitive(f)) => if(f < 0){ FloatPrimitive(-f) } else { FloatPrimitive(f) }
-		      case List(NullPrimitive())   => NullPrimitive()
-		      case x => throw new SQLException("Non-numeric parameter to absolute: '"+x+"'")
-		    },
-				(x: List[Type]) => Typechecker.assertNumeric(x(0), Function("ABSOLUTE", List()))
-			)
+	      case List(IntPrimitive(i))   => if(i < 0){ IntPrimitive(-i) } else { IntPrimitive(i) }
+	      case List(FloatPrimitive(f)) => if(f < 0){ FloatPrimitive(-f) } else { FloatPrimitive(f) }
+	      case List(NullPrimitive())   => NullPrimitive()
+	      case x => throw new SQLException("Non-numeric parameter to absolute: '"+x+"'")
+	    },
+			(x: List[Type]) => Typechecker.assertNumeric(x(0), Function("ABSOLUTE", List()))
+		)
+
+    registerFunction("SQRT",
+      {
+        case List(n:NumericPrimitive) => FloatPrimitive(Math.sqrt(n.asDouble))
+      },
+      (x: List[Type]) => Typechecker.assertNumeric(x(0), Function("ABSOLUTE", List()))
+    )
 
     registerFunction("BITWISE_AND", (x) => IntPrimitive(x(0).asLong & x(1).asLong), (_) => TInt())
 

@@ -130,8 +130,12 @@ class EditDistanceMatchModel(
 
   def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = 
   {
-    val guess = colMapping.maxBy(_._2)._1
-    EditDistanceMatchModel.logger.trace(s"Guesssing ($name) $target <- $guess")
-    StringPrimitive(guess)
+    if(colMapping.isEmpty){
+      NullPrimitive()
+    } else {
+      val guess = colMapping.maxBy(_._2)._1
+      EditDistanceMatchModel.logger.trace(s"Guesssing ($name) $target <- $guess")
+      StringPrimitive(guess)
+    }
   }
 }

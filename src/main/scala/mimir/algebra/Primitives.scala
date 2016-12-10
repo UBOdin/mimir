@@ -41,11 +41,14 @@ abstract class PrimitiveValue(t: Type)
    */
   def payload: Object;
 }
+
+abstract class NumericPrimitive(t: Type) extends PrimitiveValue(t)
+
 /**
  * Boxed representation of a long integer
  */
 case class IntPrimitive(v: Long) 
-  extends PrimitiveValue(TInt())
+  extends NumericPrimitive(TInt())
 {
   override def toString() = v.toString
   def asLong: Long = v;
@@ -104,7 +107,7 @@ case class RowIdPrimitive(v: String)
  * Boxed representation of a double-precision floating point number
  */
 case class FloatPrimitive(v: Double) 
-  extends PrimitiveValue(TFloat())
+  extends NumericPrimitive(TFloat())
 {
   override def toString() = v.toString
   def asLong: Long = throw new TypeException(TFloat(), TInt(), "Cast");
