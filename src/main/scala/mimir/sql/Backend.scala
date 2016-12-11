@@ -10,7 +10,7 @@ abstract class Backend {
   def open(): Unit
 
   def execute(sel: String): ResultSet
-  def execute(sel: String, args: List[PrimitiveValue]): ResultSet
+  def execute(sel: String, args: Seq[PrimitiveValue]): ResultSet
   def execute(sel: Select): ResultSet = {
     execute(sel.toString());
   }
@@ -20,31 +20,31 @@ abstract class Backend {
     return execute(sel);
   }
 
-  def resultRows(sel: String):Iterator[List[PrimitiveValue]] = 
+  def resultRows(sel: String):Iterator[Seq[PrimitiveValue]] = 
     JDBCUtils.extractAllRows(execute(sel))
-  def resultRows(sel: String, args: List[PrimitiveValue]):Iterator[List[PrimitiveValue]] =
+  def resultRows(sel: String, args: Seq[PrimitiveValue]):Iterator[Seq[PrimitiveValue]] =
     JDBCUtils.extractAllRows(execute(sel, args))
-  def resultRows(sel: Select):Iterator[List[PrimitiveValue]] =
+  def resultRows(sel: Select):Iterator[Seq[PrimitiveValue]] =
     JDBCUtils.extractAllRows(execute(sel))
-  def resultRows(sel: SelectBody):Iterator[List[PrimitiveValue]] =
+  def resultRows(sel: SelectBody):Iterator[Seq[PrimitiveValue]] =
     JDBCUtils.extractAllRows(execute(sel))
 
   def resultValue(sel:String):PrimitiveValue =
     resultRows(sel).next.head
-  def resultValue(sel:String, args: List[PrimitiveValue]):PrimitiveValue =
+  def resultValue(sel:String, args: Seq[PrimitiveValue]):PrimitiveValue =
     resultRows(sel, args).next.head
   def resultValue(sel:Select):PrimitiveValue =
     resultRows(sel).next.head
   def resultValue(sel:SelectBody):PrimitiveValue =
     resultRows(sel).next.head
   
-  def getTableSchema(table: String): Option[List[(String, Type)]]
+  def getTableSchema(table: String): Option[Seq[(String, Type)]]
   
   def update(stmt: String): Unit
-  def update(stmt: List[String]): Unit
-  def update(stmt: String, args: List[PrimitiveValue]): Unit
+  def update(stmt: TraversableOnce[String]): Unit
+  def update(stmt: String, args: Seq[PrimitiveValue]): Unit
 
-  def getAllTables(): List[String]
+  def getAllTables(): Seq[String]
 
   def close()
 

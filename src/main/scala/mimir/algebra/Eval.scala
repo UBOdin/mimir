@@ -13,12 +13,12 @@ import mimir.optimizer.ExpressionOptimizer
  * 
  * The proc defines the method of evaluation.
  */
-abstract class Proc(args: List[Expression]) extends Expression
+abstract class Proc(args: Seq[Expression]) extends Expression
 {
-  def getType(argTypes: List[Type]): Type
+  def getType(argTypes: Seq[Type]): Type
   def getArgs = args
   def children = args
-  def get(v: List[PrimitiveValue]): PrimitiveValue
+  def get(v: Seq[PrimitiveValue]): PrimitiveValue
 }
 
 

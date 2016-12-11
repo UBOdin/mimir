@@ -22,7 +22,7 @@ import scala.util._
 
 object WekaModel
 {
-  def train(db: Database, name: String, cols: List[String], target:Operator): Map[String,(Model,Int)] = 
+  def train(db: Database, name: String, cols: Seq[String], target:Operator): Map[String,(Model,Int)] = 
   {
     cols.map( (col) => {
       val model = new SimpleWekaModel(s"$name:$col", col, target)
@@ -116,10 +116,10 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
   }
 
 
-  def feedback(args: List[PrimitiveValue], v: PrimitiveValue): Unit =
+  def feedback(args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
     ???
 
-  def isAcknowledged(args: List[PrimitiveValue]): Boolean =
+  def isAcknowledged(args: Seq[PrimitiveValue]): Boolean =
     ???
 
   /**
@@ -133,7 +133,7 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
     learner.trainOnInstance(dataPoint);
   }
 
-  private def schemaToWeka(sch: List[(String,Type)]): util.ArrayList[Attribute] = {
+  private def schemaToWeka(sch: Seq[(String,Type)]): util.ArrayList[Attribute] = {
     val attributes = new util.ArrayList[Attribute]()
     sch.zipWithIndex.foreach { case ((n, t), i) =>
       t match {
@@ -145,7 +145,7 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
     attributes
   }
 
-  private def classify(rowid: RowIdPrimitive): List[(Double, Int)] = {
+  private def classify(rowid: RowIdPrimitive): Seq[(Double, Int)] = {
     //println("Classify: "+rowid)
     val rowValues = db.query(
         Select(
@@ -190,16 +190,16 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
   def guessInputType: Type =
     db.bestGuessSchema(target)(colIdx)._2
 
-  def varType(argTypes: List[Type]): Type = guessInputType
+  def varType(argTypes: Seq[Type]): Type = guessInputType
   
-  def bestGuess(args: List[PrimitiveValue]): PrimitiveValue =
+  def bestGuess(args: Seq[PrimitiveValue]): PrimitiveValue =
   {
     val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val res = if (classes.isEmpty) { 0 } 
               else { classes.maxBy(_._1)._2 }
     classToPrimitive(res)
   }
-  def sample(randomness: Random, args: List[PrimitiveValue]): PrimitiveValue = 
+  def sample(randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue = 
   {
     val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val res = if (classes.isEmpty) { 0 }
@@ -211,7 +211,7 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
               }
     classToPrimitive(res)
   }
-  def reason(args: List[PrimitiveValue]): String = 
+  def reason(args: Seq[PrimitiveValue]): String = 
   {
     val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val total:Double = classes.map(_._1).fold(0.0)(_+_)

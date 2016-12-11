@@ -59,7 +59,7 @@ object ExpressionUtils {
    */
   def makeCaseExpression(
     testClause: Expression,
-    whenThenClauses: List[(Expression, Expression)], 
+    whenThenClauses: TraversableOnce[(Expression, Expression)], 
     elseClause: Expression
   ): Expression =
   {
@@ -82,7 +82,7 @@ object ExpressionUtils {
    *   END
    */
 	def foldConditionalsToCase(e: Expression): 
-		(List[(Expression, Expression)], Expression) =
+		(Seq[(Expression, Expression)], Expression) =
 	{
 		foldConditionalsToCase(e, BoolPrimitive(true))
 	}
@@ -91,7 +91,7 @@ object ExpressionUtils {
 	 * Utility method supporting foldConditionalsToCase
 	 */
 	private def foldConditionalsToCase(e: Expression, prefix: Expression): 
-		(List[(Expression, Expression)], Expression) =
+		(Seq[(Expression, Expression)], Expression) =
 	{
 		e match { 
 			case Conditional(condition, thenClause, elseClause) =>
@@ -102,7 +102,7 @@ object ExpressionUtils {
 				val (elseWhenThens, elseElse) = 
 					foldConditionalsToCase(elseClause, condition)
 				(	
-					thenWhenThens ++ List((thenCondition, thenElse)) ++ elseWhenThens, 
+					thenWhenThens ++ Some((thenCondition, thenElse)) ++ elseWhenThens, 
 					elseElse
 				)
 			}
@@ -112,12 +112,22 @@ object ExpressionUtils {
   /**
    * Create a sum from an arbitrary list
    */
-  def makeSum(el: List[Expression]): Expression =
+  def makeSum(el: TraversableOnce[Expression]): Expression =
   {
-    el match { 
-      case Nil => IntPrimitive(0)
-      case List(x) => x
-      case head :: rest => Arithmetic(Arith.Add, head, makeSum(rest))
+    el.fold(IntPrimitive(0))(makeSum(_, _))
+  }
+
+  /**
+   * Create a sum from two values, ignoring zeroes
+   */
+  def makeSum(a:Expression, b:Expression): Expression =
+  {
+    (a, b) match {
+      case (IntPrimitive(0), _)     => b
+      case (FloatPrimitive(0.0), _) => b
+      case (_, IntPrimitive(0))     => a
+      case (_, FloatPrimitive(0.0)) => a
+      case _ => Arithmetic(Arith.Add, a, b)
     }
   }
 
@@ -139,8 +149,8 @@ object ExpressionUtils {
    * Boolean constants.  For example:
    *   makeAnd(true, X) returns X
    */
-  def makeAnd(el: List[Expression]): Expression = 
-    el.foldLeft[Expression](BoolPrimitive(true))(makeAnd(_,_))
+  def makeAnd(el: TraversableOnce[Expression]): Expression = 
+    el.fold[Expression](BoolPrimitive(true))(makeAnd(_,_))
   /**
    * Optimizing OR constructor that dynamically folds in 
    * Boolean constants.  For example:
@@ -159,8 +169,8 @@ object ExpressionUtils {
    * Boolean constants.  For example:
    *   makeOr(true, X) returns true
    */
-  def makeOr(el: List[Expression]): Expression = 
-    el.foldLeft[Expression](BoolPrimitive(false))(makeOr(_,_))
+  def makeOr(el: TraversableOnce[Expression]): Expression = 
+    el.fold[Expression](BoolPrimitive(false))(makeOr(_,_))
   /**
    * Optimizing NOT constructor that dynamically folds in 
    * Boolean constants, ANDs and ORs using demorgan's laws,
@@ -187,7 +197,7 @@ object ExpressionUtils {
    * For example:
    *   AND(A, AND(AND(B, C), D) becomes [A, B, C, D]
    */
-  def getConjuncts(e: Expression): List[Expression] = {
+  def getConjuncts(e: Expression): Seq[Expression] = {
     e match {
       case BoolPrimitive(true) => List[Expression]()
       case Arithmetic(Arith.And, a, b) => 
@@ -200,7 +210,7 @@ object ExpressionUtils {
    * For example:
    *   OR(A, OR(OR(B, C), D) becomes [A, B, C, D]
    */
-  def getDisjuncts(e: Expression): List[Expression] = {
+  def getDisjuncts(e: Expression): Seq[Expression] = {
     e match {
       case BoolPrimitive(false) => List[Expression]()
       case Arithmetic(Arith.Or, a, b) => 

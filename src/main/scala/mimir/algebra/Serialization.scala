@@ -80,8 +80,8 @@ class Serialization(db: Database) {
   }
 }
 
-case class SerializableVGTerm(model: String, idx: Integer, args: List[Expression]) extends Expression {
+case class SerializableVGTerm(model: String, idx: Integer, args: Seq[Expression]) extends Expression {
   override def toString() = "{{ "+model+";"+idx+"["+args.mkString(", ")+"] }}"
-  def children: List[Expression] = args
-  def rebuild(x: List[Expression]) = SerializableVGTerm(model, idx, x)
+  def children: Seq[Expression] = args
+  def rebuild(x: Seq[Expression]) = SerializableVGTerm(model, idx, x)
 }

@@ -31,8 +31,9 @@ object OracleTpchQueries extends Specification {
         val sel = parser.Statement().asInstanceOf[Select]
         val raw = db.sql.convert(sel)
         db.check(raw)
-        val rawPlusRowID = Project(ProjectArg("MIMIR_PROVENANCE", Var("ROWID_MIMIR")) ::
-          raw.schema.map( (x) => ProjectArg(x._1, Var(x._1))),
+        val rawPlusRowID = Project(
+          List(ProjectArg("MIMIR_PROVENANCE", Var("ROWID_MIMIR"))) ++
+            raw.schema.map( (x) => ProjectArg(x._1, Var(x._1))),
           raw)
         val firstRow = db.query(rawPlusRowID).currentRow()
 

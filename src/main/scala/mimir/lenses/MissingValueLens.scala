@@ -25,8 +25,8 @@ object MissingValueLens {
     db: Database, 
     name: String, 
     query: Operator, 
-    args:List[Expression]
-  ): (Operator, List[Model]) =
+    args:Seq[Expression]
+  ): (Operator, Seq[Model]) =
   {
     val targetColumns:List[String] = args.map(Eval.evalString(_).toUpperCase).toSet.toList
     val schema:Set[String] = query.schema.map(_._1).toSet

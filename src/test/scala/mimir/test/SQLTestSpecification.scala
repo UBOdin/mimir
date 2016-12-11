@@ -89,11 +89,11 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     val query = select(s)
     db.query(query)
   }
-  def queryOneColumn(s: String): List[PrimitiveValue] = 
+  def queryOneColumn(s: String): Iterable[PrimitiveValue] = 
     query(s).mapRows(_(0))
   def querySingleton(s: String): PrimitiveValue =
     queryOneColumn(s).head
-  def queryOneRow(s: String): List[PrimitiveValue] =
+  def queryOneRow(s: String): Iterable[PrimitiveValue] =
     query(s).mapRows( _.currentRow ).head
   def table(t: String) =
     db.getTableOperator(t)

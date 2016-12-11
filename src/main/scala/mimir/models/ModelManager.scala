@@ -179,7 +179,7 @@ class ModelManager(db:Database) {
     )
   }
 
-  private def prefetchWithRows(rows:Iterator[List[PrimitiveValue]]): Unit =
+  private def prefetchWithRows(rows:Iterator[Seq[PrimitiveValue]]): Unit =
   {
     rows.foreach({
       case List(decoder, encoded) => {

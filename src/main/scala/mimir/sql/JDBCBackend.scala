@@ -18,7 +18,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
 
   def driver() = backend
 
-  val tableSchemas: scala.collection.mutable.Map[String, List[(String, Type)]] = mutable.Map()
+  val tableSchemas: scala.collection.mutable.Map[String, Seq[(String, Type)]] = mutable.Map()
 
   def open() = {
     this.synchronized({
@@ -80,7 +80,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         throw new SQLException("Error in "+sel, e)
     }
   }
-  def execute(sel: String, args: List[PrimitiveValue]): ResultSet = 
+  def execute(sel: String, args: Seq[PrimitiveValue]): ResultSet = 
   {
     //println(""+sel+" <- "+args)
     try {
@@ -106,7 +106,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     stmt.close()
   }
 
-  def update(upd: List[String]): Unit =
+  def update(upd: TraversableOnce[String]): Unit =
   {
     if(conn == null) {
       throw new SQLException("Trying to use unopened connection!")
@@ -117,7 +117,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     stmt.close()
   }
 
-  def update(upd: String, args: List[PrimitiveValue]): Unit =
+  def update(upd: String, args: Seq[PrimitiveValue]): Unit =
   {
     if(conn == null) {
       throw new SQLException("Trying to use unopened connection!")
@@ -128,7 +128,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     stmt.close()
   }
   
-  def getTableSchema(table: String): Option[List[(String, Type)]] =
+  def getTableSchema(table: String): Option[Seq[(String, Type)]] =
   {
     if(conn == null) {
       throw new SQLException("Trying to use unopened connection!")
@@ -168,7 +168,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     }
   }
 
-  def getAllTables(): List[String] = {
+  def getAllTables(): Seq[String] = {
     if(conn == null) {
       throw new SQLException("Trying to use unopened connection!")
     }
@@ -196,7 +196,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     }
   }
 
-  def setArgs(stmt: PreparedStatement, args: List[PrimitiveValue]): Unit =
+  def setArgs(stmt: PreparedStatement, args: Seq[PrimitiveValue]): Unit =
   {
     args.zipWithIndex.foreach(a => {
       val i = a._2+1

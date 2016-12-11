@@ -11,8 +11,8 @@ import mimir.util.JDBCUtils
 
 class LensManager(db: Database) {
 
-  val lensTypes = Map[String,((Database,String,Operator,List[Expression]) => 
-                              (Operator,List[Model]))](
+  val lensTypes = Map[String,((Database,String,Operator,Seq[Expression]) => 
+                              (Operator,TraversableOnce[Model]))](
     "MISSING_VALUE"     -> MissingValueLens.create _,
     "SCHEMA_MATCHING"   -> SchemaMatchingLens.create _,
     "TYPE_INFERENCE"    -> TypeInferenceLens.create _
@@ -44,9 +44,9 @@ class LensManager(db: Database) {
     db.views.createView(saneName, view)
 
     // Persist the associated models
-    models.foreach( model => 
+    for(model <- models){
       db.models.persistModel(model, s"LENS:$saneName")
-    )
+    }
 
     // Populate the best-guess cache
     db.bestGuessCache.buildCache(view)

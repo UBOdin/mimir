@@ -79,13 +79,13 @@ class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
   private final def rankFn(x:(Type, Double)) =
     (x._2, TypeInferenceModel.priority(x._1) )
 
-  def varType(argTypes: List[Type]) = TType()
-  def sample(randomness: Random, args: List[PrimitiveValue]): PrimitiveValue = 
+  def varType(argTypes: Seq[Type]) = TType()
+  def sample(randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue = 
     TypePrimitive(
       RandUtils.pickFromWeightedList(randomness, voteList)
     )
 
-  def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = 
+  def bestGuess(args: Seq[PrimitiveValue]): PrimitiveValue = 
   {
     val guess = voteList.maxBy( rankFn _ )._1
     TypeInferenceModel.logger.debug(s"Votes: $voteList -> $guess")
@@ -96,7 +96,7 @@ class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
     v.isInstanceOf[TypePrimitive]
 
 
-  def reason(args: List[PrimitiveValue]): String = {
+  def reason(args: Seq[PrimitiveValue]): String = {
     choice match {
       case None => {
         val (guess, guessVotes) = voteList.maxBy( rankFn _ )

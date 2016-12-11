@@ -16,8 +16,8 @@ object SchemaMatchingLens {
     db: Database, 
     name: String, 
     query: Operator, 
-    args:List[Expression]
-  ): (Operator, List[Model]) =
+    args:Seq[Expression]
+  ): (Operator, Seq[Model]) =
   {
     var targetSchema =
       args.

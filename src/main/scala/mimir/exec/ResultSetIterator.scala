@@ -8,13 +8,13 @@ import mimir.provenance._;
 class ResultSetIterator(
   val src: ResultSet, 
   val visibleSchema: Map[String,Type],
-  val visibleColumns: List[Int], 
-  val provenanceTokenColumns: List[Int]
+  val visibleColumns: Seq[Int], 
+  val provenanceTokenColumns: Seq[Int]
 ) extends ResultIterator
 {
   val meta = src.getMetaData();
-  val (schema: List[(String,Type)],
-       extract: List[() => PrimitiveValue]
+  val (schema: Seq[(String,Type)],
+       extract: Seq[() => PrimitiveValue]
       ) = 
     visibleColumns.map( (i) => {
       // println("Visible: "+visibleSchema)

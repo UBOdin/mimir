@@ -32,26 +32,27 @@ object EditDistanceMatchModel
   def train(
     db: Database, 
     name: String,
-    source: Either[Operator,List[(String,Type)]], 
-    target: Either[Operator,List[(String,Type)]]
+    source: Either[Operator,Seq[(String,Type)]], 
+    target: Either[Operator,Seq[(String,Type)]]
   ): Map[String,(Model,Int)] = 
   {
-    val sourceSch = source match {
+    val sourceSch: Seq[(String,Type)] = source match {
         case Left(oper) => db.bestGuessSchema(oper)
         case Right(sch) => sch }
-    val targetSch = target match {
+    val targetSch: Seq[(String,Type)] = target match {
         case Left(oper) => db.bestGuessSchema(oper)
         case Right(sch) => sch }
 
     targetSch.map({ case (targetCol,targetType) =>
-      targetCol -> (new EditDistanceMatchModel(
-        s"$name:$targetCol",
-        defaultMetric,
-        (targetCol, targetType),
-        sourceSch.
-          filter((x) => isTypeCompatible(targetType, x._2)).
-          map( _._1 )
-      ), 0)
+      ( targetCol,
+        (new EditDistanceMatchModel(
+          s"$name:$targetCol",
+          defaultMetric,
+          (targetCol, targetType),
+          sourceSch.
+            filter((x) => isTypeCompatible(targetType, x._2)).
+            map( _._1 )
+        ), 0))
     }).toMap
   }
 
@@ -74,7 +75,7 @@ class EditDistanceMatchModel(
   name: String,
   metricName: String,
   target: (String, Type), 
-  sourceCandidates: List[String]
+  sourceCandidates: Seq[String]
 ) 
   extends SingleVarModel(name) 
   with DataIndependentSingleVarFeedback
@@ -88,7 +89,7 @@ class EditDistanceMatchModel(
    * In other words, distance is a bit of a misnomer.  It's more of a score, which
    * in turn allows us to use it as-is.
    */
-  var colMapping:List[(String,Double)] = 
+  var colMapping:IndexedSeq[(String,Double)] = 
   {
     val metric = EditDistanceMatchModel.metrics(metricName)
     var cumSum = 0.0
@@ -98,11 +99,12 @@ class EditDistanceMatchModel(
       EditDistanceMatchModel.logger.debug(s"Building mapping for $sourceColumn -> $target:  $dist")
       (sourceColumn, dist)
     }).
-    map({ case (k, v) => (k, v.toDouble) })
+    map({ case (k, v) => (k, v.toDouble) }).
+    toIndexedSeq
   } 
-  def varType(argTypes: List[Type]) = TString()
+  def varType(argTypes: Seq[Type]) = TString()
 
-  def sample(randomness: Random, args: List[PrimitiveValue]): PrimitiveValue = 
+  def sample(randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue = 
   {
     StringPrimitive(
       RandUtils.pickFromWeightedList(randomness, colMapping)
@@ -112,7 +114,7 @@ class EditDistanceMatchModel(
   def validateChoice(v: PrimitiveValue): Boolean =
     sourceCandidates.contains(v.asString)
 
-  def reason(args: List[PrimitiveValue]): String = {
+  def reason(args: Seq[PrimitiveValue]): String = {
     choice match {
       case None => {
         val sourceName = colMapping.maxBy(_._2)._1
@@ -128,7 +130,7 @@ class EditDistanceMatchModel(
     }
   }
 
-  def bestGuess(args: List[PrimitiveValue]): PrimitiveValue = 
+  def bestGuess(args: Seq[PrimitiveValue]): PrimitiveValue = 
   {
     if(colMapping.isEmpty){
       NullPrimitive()

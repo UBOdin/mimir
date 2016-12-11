@@ -5,27 +5,23 @@ import scala.util._
 import mimir.models._
 import java.sql.SQLException
 
-case class VGTermSampler(model: Model, idx: Int, args: List[Expression], seed: Expression) 
-  extends Proc(  (seed :: args)  )
+case class VGTermSampler(model: Model, idx: Int, args: Seq[Expression], seed: Expression) 
+  extends Proc(  (seed :: args.toList)  )
 {
-  def getType(argTypes: List[Type]): Type =
+  def getType(argTypes: Seq[Type]): Type =
     model.varType(idx, argTypes)
-  def get(v: List[PrimitiveValue]): PrimitiveValue = {
-    v match {
-      case seed :: argValues => {
-        // Todo: Get a proper multi-key hashing scheme in here.
-        val seedForThisVar = ((seed.asLong * argValues.hashCode) + 13) * model.name.hashCode
-        model.sample(idx, new Random(seedForThisVar), argValues)
-      }
-      case _ => throw new SQLException("Internal error.  Expecting seed.")
-    }
-  }
-  def rebuild(v: List[Expression]) = 
+  def get(v: Seq[PrimitiveValue]): PrimitiveValue = 
   {
-    v match { 
-      case seed :: argValues => VGTermSampler(model, idx, argValues, seed)
-      case _ => throw new SQLException("Internal error.  Expecting seed.")
-    }
+    if(v.size < 1){ throw new SQLException("Internal error.  Expecting seed.") }
+    val seed = v.head
+    val argValues = v.tail    
+    val seedForThisVar = ((seed.asLong * argValues.hashCode) + 13) * model.name.hashCode
+    model.sample(idx, new Random(seedForThisVar), argValues)
+  }
+  def rebuild(v: Seq[Expression]) = 
+  {
+    if(v.size < 1){ throw new SQLException("Internal error.  Expecting seed.") }
+    VGTermSampler(model, idx, v.tail, v.head)
   }
 
 }
@@ -109,10 +105,10 @@ object CTAnalyzer {
    * under which each of those terms affect the result.  Similar to compileDeterministic,
    * but on a term-by-term basis.
    */
-  def compileCausality(expr: Expression): List[(Expression, VGTerm)] =
+  def compileCausality(expr: Expression): Seq[(Expression, VGTerm)] =
     compileCausality(expr, BoolPrimitive(true))
 
-  private def compileCausality(expr: Expression, inputCondition: Expression): List[(Expression, VGTerm)] = 
+  private def compileCausality(expr: Expression, inputCondition: Expression): Seq[(Expression, VGTerm)] = 
   {
     expr match { 
       case Conditional(condition, thenClause, elseClause) => {

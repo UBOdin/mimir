@@ -115,7 +115,7 @@ object SimpleDemoScript
 			""")
 			})
 			val nullRow = query("SELECT ROWID FROM RATINGS1 WHERE RATING IS NULL").
-											allRows()(0)(0).asLong
+											allRows.head(0).asLong
 
 			val result1guesses =
 				db.backend.resultRows("SELECT MIMIR_KEY_0, MIMIR_DATA FROM "+

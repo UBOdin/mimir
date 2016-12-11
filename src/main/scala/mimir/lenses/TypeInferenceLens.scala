@@ -15,8 +15,8 @@ object TypeInferenceLens extends LazyLogging
     db:Database, 
     name:String, 
     query:Operator, 
-    args:List[Expression]
-  ): (Operator, List[Model]) =
+    args:Seq[Expression]
+  ): (Operator, Seq[Model]) =
   {
     val (repairs, models) = 
       query.schema.map({

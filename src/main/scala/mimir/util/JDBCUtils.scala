@@ -93,7 +93,7 @@ object JDBCUtils {
     new Date(cal.getTime().getTime());
   }
 
-  def extractAllRows(results: ResultSet): Iterator[List[PrimitiveValue]] =
+  def extractAllRows(results: ResultSet): Iterator[Seq[PrimitiveValue]] =
   {
     val meta = results.getMetaData()
     val schema = 
@@ -103,7 +103,7 @@ object JDBCUtils {
     extractAllRows(results, schema)    
   }
 
-  def extractAllRows(results: ResultSet, schema: List[Type]): Iterator[List[PrimitiveValue]] =
+  def extractAllRows(results: ResultSet, schema: Seq[Type]): Iterator[Seq[PrimitiveValue]] =
   {
     new JDBCResultSetIterable(results, schema)
   }
@@ -111,7 +111,7 @@ object JDBCUtils {
 }
 
 
-class JDBCResultSetIterable(results: ResultSet, schema: List[Type]) extends Iterator[List[PrimitiveValue]]
+class JDBCResultSetIterable(results: ResultSet, schema: Seq[Type]) extends Iterator[Seq[PrimitiveValue]]
 {
   def next(): List[PrimitiveValue] = 
   {

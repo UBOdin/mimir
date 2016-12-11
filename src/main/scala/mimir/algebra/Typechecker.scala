@@ -100,7 +100,7 @@ object Typechecker {
 		new ExpressionChecker(scope(_))	
 	}
 
-	def schemaOf(o: Operator): List[(String, Type)] =
+	def schemaOf(o: Operator): Seq[(String, Type)] =
 	{
 		o match {
 			case Project(cols, src) =>
@@ -121,10 +121,10 @@ object Typechecker {
 				val chk = new ExpressionChecker(srcSchema.toMap)
 
 				/* Get Group By Args and verify type */
-				val groupBySchema: List[(String, Type)] = groupBy.map(x => (x.toString, chk.typeOf(x)) )
+				val groupBySchema: Seq[(String, Type)] = groupBy.map(x => (x.toString, chk.typeOf(x)) )
 
 				/* Get function name, check for AVG *//* Get function parameters, verify type */
-				val aggSchema: List[(String, Type)] = args.map(x => 
+				val aggSchema: Seq[(String, Type)] = args.map(x => 
 					x.function match {
 						case "AVG" => (x.alias, TFloat())
 						case "COUNT" => (x.alias, TInt())
@@ -199,13 +199,13 @@ object Typechecker {
 		}
 	}
 
-	def escalate(l: List[Type]): Type =
+	def escalate(l: TraversableOnce[Type]): Type =
 		escalate(l, "Escalation")
-	def escalate(l: List[Type], msg: String): Type =
+	def escalate(l: TraversableOnce[Type], msg: String): Type =
 	{
 		l.fold(TAny())(escalate(_,_,msg))
 	}
-	def escalate(l: List[Type], msg: String, e: Expression): Type =
+	def escalate(l: TraversableOnce[Type], msg: String, e: Expression): Type =
 	{
 		l.fold(TAny())(escalate(_,_,msg,e))
 	}

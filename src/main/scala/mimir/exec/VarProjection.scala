@@ -8,21 +8,21 @@ import mimir.ctables._;
 import mimir.Database;
 
 class VarProjection(src: ResultIterator, idx: Int, t: Type)
-  extends Proc(List[Expression]())
+  extends Proc(Seq[Expression]())
 {
-  def getType(bindings: List[Type]) = t;
-  def rebuild(x: List[Expression]) = new VarProjection(src, idx, t)
-  def get(v:List[PrimitiveValue]) = src(idx)
+  def getType(bindings: Seq[Type]) = t;
+  def rebuild(x: Seq[Expression]) = new VarProjection(src, idx, t)
+  def get(v:Seq[PrimitiveValue]) = src(idx)
 
   override def toString = src.schema(idx)._1+":"+idx
 }
 
 class ProvenanceProjection(src: ResultIterator)
-  extends Proc(List[Expression]())
+  extends Proc(Seq[Expression]())
 {
-  def getType(bindings: List[Type]) = TRowId();
-  def rebuild(x: List[Expression]) = new ProvenanceProjection(src)
-  def get(v:List[PrimitiveValue]): PrimitiveValue = src.provenanceToken
+  def getType(bindings: Seq[Type]) = TRowId();
+  def rebuild(x: Seq[Expression]) = new ProvenanceProjection(src)
+  def get(v:Seq[PrimitiveValue]): PrimitiveValue = src.provenanceToken
 }
 
 object VarProjection

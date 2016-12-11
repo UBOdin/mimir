@@ -426,7 +426,7 @@ object SqlParserSpec extends Specification with FileMatchers {
 			 		db.bestGuessCache.cacheTableForModel(
 			 			db.models.getModel("SANER:WEKA:B"), 0)
 			 	)
-			guessCacheData must contain( ===(List[PrimitiveValue](IntPrimitive(3), IntPrimitive(3))) )
+			guessCacheData must contain( ===(Seq[PrimitiveValue](IntPrimitive(3), IntPrimitive(3))) )
 		 	
 			db.query(convert("SELECT * FROM SaneR")).allRows must be equalTo List(
 				List(IntPrimitive(1),IntPrimitive(2),IntPrimitive(3)),

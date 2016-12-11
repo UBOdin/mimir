@@ -76,9 +76,7 @@ object WekaModelSpec extends SQLTestSpecification("WekaTest")
         List("RATING"), 
         db.getTableOperator("RATINGS1")
       )("RATING")
-      val nullRow = query("SELECT ROWID FROM RATINGS1 WHERE RATING IS NULL").
-                      allRows()(0)(0)
-
+      val nullRow = querySingleton("SELECT ROWID FROM RATINGS1 WHERE RATING IS NULL")
       model.bestGuess(idx, List(nullRow)) must beAnInstanceOf[FloatPrimitive]
 
 
