@@ -30,21 +30,43 @@ object ExpressionUtils {
 	}
 
 	/**
-	 * SQL CASE expresions are of the form:
+	 * SQL CASE expresions in form 1:
 	 *   CASE WHEN A THEN X WHEN B THEN Y ELSE Z END
-	 * And this gets represented as:
+	 * This gets represented as:
 	 *   ( [(A, X), (B, Y)], Z )
 	 * This utility method converts a case expression into
 	 * the equivalent chain of Mimir's If-Then-Else clauses:
 	 * if(A){ X } else { if(B){ Y } else { Z } }
 	 */
-	def makeCaseExpression(whenThenClauses: List[(Expression, Expression)], 
-						   elseClause: Expression): Expression =
+	def makeCaseExpression(
+    whenThenClauses: List[(Expression, Expression)], 
+		elseClause: Expression
+  ): Expression =
 	{
 		whenThenClauses.foldRight(elseClause)( (wt, e) => 
 			Conditional(wt._1, wt._2, e)
 		)
 	}
+
+  /**
+   * SQL CASE expresions in form 2:
+   *   CASE Q WHEN A THEN X WHEN B THEN Y ELSE Z END
+   * This gets represented as:
+   *   ( Q, [(A, X), (B, Y)], Z )
+   * This utility method converts a case expression into
+   * the equivalent chain of Mimir's If-Then-Else clauses:
+   * if(Q=A){ X } else { if(Q=B){ Y } else { Z } }
+   */
+  def makeCaseExpression(
+    testClause: Expression,
+    whenThenClauses: TraversableOnce[(Expression, Expression)], 
+    elseClause: Expression
+  ): Expression =
+  {
+    whenThenClauses.foldRight(elseClause)( (wt, e) => 
+      Conditional(Comparison(Cmp.Eq, testClause, wt._1), wt._2, e)
+    )
+  }
 
   /** 
    * Inverse of makeCaseExpression.  For rewrite simplicity, Mimir 
@@ -60,7 +82,7 @@ object ExpressionUtils {
    *   END
    */
 	def foldConditionalsToCase(e: Expression): 
-		(List[(Expression, Expression)], Expression) =
+		(Seq[(Expression, Expression)], Expression) =
 	{
 		foldConditionalsToCase(e, BoolPrimitive(true))
 	}
@@ -69,7 +91,7 @@ object ExpressionUtils {
 	 * Utility method supporting foldConditionalsToCase
 	 */
 	private def foldConditionalsToCase(e: Expression, prefix: Expression): 
-		(List[(Expression, Expression)], Expression) =
+		(Seq[(Expression, Expression)], Expression) =
 	{
 		e match { 
 			case Conditional(condition, thenClause, elseClause) =>
@@ -80,13 +102,34 @@ object ExpressionUtils {
 				val (elseWhenThens, elseElse) = 
 					foldConditionalsToCase(elseClause, condition)
 				(	
-					thenWhenThens ++ List((thenCondition, thenElse)) ++ elseWhenThens, 
+					thenWhenThens ++ Some((thenCondition, thenElse)) ++ elseWhenThens, 
 					elseElse
 				)
 			}
 			case _ => (List[(Expression, Expression)](), e)
 		}
 	}
+  /**
+   * Create a sum from an arbitrary list
+   */
+  def makeSum(el: TraversableOnce[Expression]): Expression =
+  {
+    el.fold(IntPrimitive(0))(makeSum(_, _))
+  }
+
+  /**
+   * Create a sum from two values, ignoring zeroes
+   */
+  def makeSum(a:Expression, b:Expression): Expression =
+  {
+    (a, b) match {
+      case (IntPrimitive(0), _)     => b
+      case (FloatPrimitive(0.0), _) => b
+      case (_, IntPrimitive(0))     => a
+      case (_, FloatPrimitive(0.0)) => a
+      case _ => Arithmetic(Arith.Add, a, b)
+    }
+  }
 
   /**
    * Optimizing AND constructor that dynamically folds in 
@@ -106,8 +149,8 @@ object ExpressionUtils {
    * Boolean constants.  For example:
    *   makeAnd(true, X) returns X
    */
-  def makeAnd(el: List[Expression]): Expression = 
-    el.foldLeft[Expression](BoolPrimitive(true))(makeAnd(_,_))
+  def makeAnd(el: TraversableOnce[Expression]): Expression = 
+    el.fold[Expression](BoolPrimitive(true))(makeAnd(_,_))
   /**
    * Optimizing OR constructor that dynamically folds in 
    * Boolean constants.  For example:
@@ -126,8 +169,8 @@ object ExpressionUtils {
    * Boolean constants.  For example:
    *   makeOr(true, X) returns true
    */
-  def makeOr(el: List[Expression]): Expression = 
-    el.foldLeft[Expression](BoolPrimitive(false))(makeOr(_,_))
+  def makeOr(el: TraversableOnce[Expression]): Expression = 
+    el.fold[Expression](BoolPrimitive(false))(makeOr(_,_))
   /**
    * Optimizing NOT constructor that dynamically folds in 
    * Boolean constants, ANDs and ORs using demorgan's laws,
@@ -154,7 +197,7 @@ object ExpressionUtils {
    * For example:
    *   AND(A, AND(AND(B, C), D) becomes [A, B, C, D]
    */
-  def getConjuncts(e: Expression): List[Expression] = {
+  def getConjuncts(e: Expression): Seq[Expression] = {
     e match {
       case BoolPrimitive(true) => List[Expression]()
       case Arithmetic(Arith.And, a, b) => 
@@ -167,12 +210,27 @@ object ExpressionUtils {
    * For example:
    *   OR(A, OR(OR(B, C), D) becomes [A, B, C, D]
    */
-  def getDisjuncts(e: Expression): List[Expression] = {
+  def getDisjuncts(e: Expression): Seq[Expression] = {
     e match {
       case BoolPrimitive(false) => List[Expression]()
       case Arithmetic(Arith.Or, a, b) => 
         getConjuncts(a) ++ getConjuncts(b)
       case _ => List(e)
     }
+  }
+
+  /**
+   * Cast an expression, but only if neceessary
+   */
+  def makeCast(e: Expression, targetT: Type, schema: Map[String,Type]): 
+    Expression =
+  {
+    val sourceT = Typechecker.typeOf(e, schema)
+    if(sourceT != targetT){
+      Function("CAST", List(e, TypePrimitive(targetT)))
+    } else {
+      e
+    }
+
   }
 }

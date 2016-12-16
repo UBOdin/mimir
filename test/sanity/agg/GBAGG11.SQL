@@ -1,0 +1,4 @@
+CREATE TABLE R (A int, B int);
+CREATE TABLE S (B int, C int);
+
+SELECT R.B, SUM(A*C) FROM R, S WHERE R.B = S.B GROUP BY R.B;

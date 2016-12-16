@@ -9,7 +9,7 @@ import mimir.optimizer.PropagateConditions;
 
 object CTPartition {
 
-	def enumerateAllPartitions(clauses: List[List[Expression]]): List[Expression] = 
+	def enumerateAllPartitions(clauses: Seq[Seq[Expression]]): Seq[Expression] = 
 	{
 		// TimeUtils.mark("Enumerate: "+clauses)
 		clauses match {
@@ -21,7 +21,7 @@ object CTPartition {
 		}
 	}
 
-	def allCandidateConditions(e: Expression): List[Expression] =
+	def allCandidateConditions(e: Expression): Seq[Expression] =
 	{
 		// TimeUtils.mark("Conditions: "+e)
 		if(!CTables.isProbabilistic(e)){
@@ -45,12 +45,12 @@ object CTPartition {
 						None
 					} else {
 						// Otherwise, the condition is useful!
-						Some(List(condition, Not(condition)))
+						Some[Seq[Expression]](List(condition, Not(condition)))
 					}
 
 				case _ => None
 			}) match {
-				case Some(conditions) => conditions :: e.children.map(allCandidateConditions(_))
+				case Some(conditions) => conditions :: e.children.map(allCandidateConditions(_)).toList
 				case None => e.children.map(allCandidateConditions(_))
 			}
 		)
@@ -82,7 +82,7 @@ object CTPartition {
 							proj.columns.filter( !_.name.equals(CTables.conditionColumn) )
 						val partitions = allCandidateConditions(phi);
 						// println("Conditions: " + conditionCases)
-						val partitionQueries = 
+						val partitionQueries: Seq[Operator] = 
 							partitions.flatMap( createPartition(phi, _) ).
 		          	map( { case (nondet: Expression, det: Expression) => {
 		          		val outerCondition = 

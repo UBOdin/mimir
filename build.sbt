@@ -1,5 +1,5 @@
 name := "Mimir-Core"
-version := "0.1-SNAPSHOT"
+version := "0.2-SNAPSHOT"
 organization := "info.mimirdb"
 scalaVersion := "2.10.5"
 
@@ -19,15 +19,17 @@ libraryDependencies ++= Seq(
   "org.specs2"                 %%   "specs2-core"           % "3.8.4" % "test",
   "org.specs2"                 %%   "specs2-matcher-extra"  % "3.8.4" % "test",
   "org.specs2"                 %%   "specs2-junit"          % "3.8.4" % "test",
-  ("nz.ac.waikato.cms.weka"     %    "weka-stable"           % "3.8.0").
+  ("nz.ac.waikato.cms.weka"    %    "weka-stable"           % "3.8.0").
     exclude("nz.ac.waikato.cms.weka", "weka-dev").
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
-  ("nz.ac.waikato.cms.moa"      %    "moa"                   % "2014.11").
+  ("nz.ac.waikato.cms.moa"     %    "moa"                   % "2014.11").
     exclude("nz.ac.waikato.cms.weka", "weka-dev").
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
   "org.apache.lucene"          %    "lucene-spellchecker"   % "3.6.2",
-  "org.xerial"                 %    "sqlite-jdbc"           % "3.8.11.2",
-  "info.mimirdb"               %    "jsqlparser"            % "1.0.0"
+  "org.xerial"                 %    "sqlite-jdbc"           % "3.14.2.1",
+  "info.mimirdb"               %    "jsqlparser"            % "1.0.0",
+  "org.apache.commons"         %    "commons-csv"           % "1.4", 
+  "commons-io"                 %    "commons-io"            % "2.5"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")
@@ -67,7 +69,7 @@ assemblyJarName in assembly := "Mimir.jar"
 mainClass in assembly := Some("mimir.Mimir")
 
 ////// Publishing Metadata //////
-// use sbt publish make-pom to generate 
+// use `sbt publish make-pom` to generate 
 // a publishable jar artifact and its POM metadata
 
 publishMavenStyle := true
@@ -85,3 +87,8 @@ pomExtra := (
     <url>git@github.com:ubodin/mimir.git</url>
     <connection>scm:git:git@github.com:ubodin/mimir.git</connection>
   </scm>)
+
+/////// Publishing Options ////////
+// use `sbt publish` to update the package in 
+// your own local ivy cache
+publishTo := Some(Resolver.file("file",  new File(Path.userHome.absolutePath+"/.m2/repository")))

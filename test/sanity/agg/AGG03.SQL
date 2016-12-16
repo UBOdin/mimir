@@ -1,0 +1,3 @@
+CREATE TABLE R (A int, B int);
+
+SELECT MIN(A) FROM R;

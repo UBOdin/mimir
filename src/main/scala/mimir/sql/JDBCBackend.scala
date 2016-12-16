@@ -3,7 +3,7 @@ package mimir.sql;
 import java.sql._
 
 import mimir.Methods
-import mimir.algebra.{Type,Operator}
+import mimir.algebra._
 import mimir.util.JDBCUtils
 import mimir.sql.sqlite._
 
@@ -18,7 +18,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
 
   def driver() = backend
 
-  val tableSchemas: scala.collection.mutable.Map[String, List[(String, Type.T)]] = mutable.Map()
+  val tableSchemas: scala.collection.mutable.Map[String, Seq[(String, Type)]] = mutable.Map()
 
   def open() = {
     this.synchronized({
@@ -27,7 +27,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         conn = backend match {
           case "sqlite" =>
             Class.forName("org.sqlite.JDBC")
-            val path = java.nio.file.Paths.get("databases", filename).toString
+            val path = java.nio.file.Paths.get(filename).toString
             var c = java.sql.DriverManager.getConnection("jdbc:sqlite:" + path)
             SQLiteCompat.registerFunctions(c)
             c
@@ -80,7 +80,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         throw new SQLException("Error in "+sel, e)
     }
   }
-  def execute(sel: String, args: List[String]): ResultSet = 
+  def execute(sel: String, args: Seq[PrimitiveValue]): ResultSet = 
   {
     //println(""+sel+" <- "+args)
     try {
@@ -88,11 +88,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         throw new SQLException("Trying to use unopened connection!")
       }
       val stmt = conn.prepareStatement(sel)
-      var i: Int = 0
-      args.map( (a) => {
-        i += 1
-        stmt.setString(i, a)
-      })
+      setArgs(stmt, args)
       stmt.executeQuery()
     } catch { 
       case e: SQLException => println(e.toString+"during\n"+sel+" <- "+args)
@@ -110,33 +106,29 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     stmt.close()
   }
 
-  def update(upd: List[String]): Unit =
+  def update(upd: TraversableOnce[String]): Unit =
   {
     if(conn == null) {
       throw new SQLException("Trying to use unopened connection!")
     }
     val stmt = conn.createStatement()
-    upd.indices.foreach(i => stmt.addBatch(upd(i)))
+    upd.foreach( u => stmt.addBatch(u) )
     stmt.executeBatch()
     stmt.close()
   }
 
-  def update(upd: String, args: List[String]): Unit =
+  def update(upd: String, args: Seq[PrimitiveValue]): Unit =
   {
     if(conn == null) {
       throw new SQLException("Trying to use unopened connection!")
     }
     val stmt = conn.prepareStatement(upd);
-    var i: Int = 0
-    args.map( (a) => {
-      i += 1
-      stmt.setString(i, a)
-    })
+    setArgs(stmt, args)
     stmt.execute()
     stmt.close()
   }
   
-  def getTableSchema(table: String): Option[List[(String, Type.T)]] =
+  def getTableSchema(table: String): Option[Seq[(String, Type)]] =
   {
     if(conn == null) {
       throw new SQLException("Trying to use unopened connection!")
@@ -148,30 +140,35 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         val tables = this.getAllTables().map{(x) => x.toUpperCase}
         if(!tables.contains(table.toUpperCase)) return None
 
-        val cols = backend match {
-          case "sqlite" => conn.getMetaData().getColumns(null, null, table, "%")
-          case "oracle" => conn.getMetaData().getColumns(null, "ARINDAMN", table, "%")  // TODO Generalize
+        val cols: Option[List[(String, Type)]] = backend match {
+          case "sqlite" | "sqlite-inline" | "sqlite-bundles" => {
+            // SQLite doesn't recognize anything more than the simplest possible types.
+            // Type information is persisted but not interpreted, so conn.getMetaData() 
+            // is useless for getting schema information.  Instead, we need to use a
+            // SQLite-specific PRAGMA operation.
+            SQLiteCompat.getTableSchema(conn, table)
+          }
+          case "oracle" => 
+            val columnRet = conn.getMetaData().getColumns(null, "ARINDAMN", table, "%")  // TODO Generalize
+            var ret = List[(String, Type)]()
+            while(columnRet.isBeforeFirst()){ columnRet.next(); }
+            while(!columnRet.isAfterLast()){
+              ret = ret ++ List((
+                columnRet.getString("COLUMN_NAME").toUpperCase,
+                JDBCUtils.convertSqlType(columnRet.getInt("DATA_TYPE"))
+                ))
+              columnRet.next()
+            }
+            columnRet.close()
+            Some(ret)
         }
-
-        var ret = List[(String, Type.T)]()
-
-        while(cols.isBeforeFirst()){ cols.next(); }
-        while(!cols.isAfterLast()){
-          ret = ret ++ List((
-            cols.getString("COLUMN_NAME").toUpperCase,
-            JDBCUtils.convertSqlType(cols.getInt("DATA_TYPE"))
-            ))
-          cols.next()
-        }
-        cols.close()
-
-        tableSchemas += table -> ret
-        Some(ret)
-
+        
+        cols match { case None => (); case Some(s) => tableSchemas += table -> s }
+        cols
     }
   }
 
-  def getAllTables(): List[String] = {
+  def getAllTables(): Seq[String] = {
     if(conn == null) {
       throw new SQLException("Trying to use unopened connection!")
     }
@@ -197,6 +194,21 @@ class JDBCBackend(backend: String, filename: String) extends Backend
       case "sqlite" => SpecializeForSQLite(q)
       case "oracle" => q
     }
+  }
+
+  def setArgs(stmt: PreparedStatement, args: Seq[PrimitiveValue]): Unit =
+  {
+    args.zipWithIndex.foreach(a => {
+      val i = a._2+1
+      a._1 match {
+        case p:StringPrimitive   => stmt.setString(i, p.v)
+        case p:IntPrimitive      => stmt.setLong(i, p.v)
+        case p:FloatPrimitive    => stmt.setDouble(i, p.v)
+        case _:NullPrimitive     => stmt.setNull(i, Types.VARCHAR)
+        case d:DatePrimitive     => stmt.setDate(i, JDBCUtils.convertDate(d))
+        case r:RowIdPrimitive    => stmt.setString(i,r.v)
+      }
+    })
   }
 
   

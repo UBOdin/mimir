@@ -1,0 +1,5 @@
+CREATE TABLE R (A int, B int);
+
+SELECT A, B FROM R
+  UNION
+SELECT A, B FROM R;

@@ -1,71 +1,6 @@
 package mimir.algebra;
 
-import java.sql._
-
-import mimir.ctables.CTables
-
-case class TypeException(found: Type.T, expected: Type.T, 
-                    context:String) 
-  extends Exception(
-    "Type Mismatch ["+context+
-    "]: found "+found.toString+
-    ", but expected "+expected.toString
-  );
 class RAException(msg: String) extends Exception(msg);
-
-/**
- * An enum class defining the type of primitive-valued expressions
- * (e.g., integers, floats, strings, etc...)
- */
-object Type extends Enumeration {
-  /**
-   * The base type of the enum.  Type.T is an instance of Type
-   */
-  type T = Value
-  /**
-   * The enum values themselves
-   */
-  val TInt, TFloat, TDate, TString, TBool, TRowId, TType, TAny = Value
-
-  /**
-   * Convert a type to a SQL-friendly name
-   */
-  def toString(t: T) = t match {
-    case TInt => "int"
-    case TFloat => "real"
-    case TDate => "date"
-    case TString => "varchar"
-    case TBool => "bool"
-    case TRowId => "rowid"
-    case TType => "type"
-    case TAny => "any"//throw new SQLException("Unable to produce string of type TAny");
-  }
-
-  def toStringPrimitive(t: T) = StringPrimitive(toString(t))
-
-  /**
-   * Convert a type from a SQL-friendly name
-   */
-  def fromString(t: String) = t.toLowerCase match {
-    case "int"     => Type.TInt
-    case "integer" => Type.TInt
-    case "float"   => Type.TFloat
-    case "decimal" => Type.TFloat
-    case "real"    => Type.TFloat
-    case "date"    => Type.TDate
-    case "varchar" => Type.TString
-    case "char"    => Type.TString
-    case "string"  => Type.TString
-    case "bool"    => Type.TBool
-    case "rowid"   => Type.TRowId
-    case "type"    => Type.TType
-    case _ =>  throw new SQLException("Invalid Type '" + t + "'");
-  }
-
-  def fromStringPrimitive(t: StringPrimitive) = fromString(t.asString)
-}
-
-import mimir.algebra.Type._
 
 /**
  * Base type for expression trees.  Represents a single node in the tree.
@@ -74,14 +9,14 @@ abstract class Expression {
   /**
    * Return all of the children of the current tree node
    */
-  def children: List[Expression] 
+  def children: Seq[Expression] 
   /**
    * Return a new instance of the same object, but with the 
    * children replaced with the provided list.  The list must
    * be of the same size returned by children.  This is mostly
    * to facilitate recur, below
    */
-  def rebuild(c: List[Expression]): Expression
+  def rebuild(c: Seq[Expression]): Expression
   /**
    * Perform a recursive rewrite.  
    * The following pattern is pretty common throughout Mimir:
@@ -104,152 +39,7 @@ abstract class Expression {
  */
 abstract class LeafExpression extends Expression {
   def children = List[Expression]();
-  def rebuild(c: List[Expression]):Expression = { return this }
-}
-
-/////////////// Primitive Values ///////////////
-
-/**
- * Slightly more specific base type for constant terms.  PrimitiveValue
- * also acts as a boxing type for constants in Mimir.
- */
-abstract class PrimitiveValue(t: Type.T) 
-  extends LeafExpression 
-{
-  def getType = t
-  /**
-   * Convert the current object into a long or throw a TypeException if 
-   * not possible
-   */
-  def asLong: Long;
-  /**
-   * Convert the current object into a double or throw a TypeException if 
-   * not possible
-   */
-  def asDouble: Double;
-  /**
-   * Convert the current object into a string or throw a TypeException if 
-   * not possible.  Note the difference between this and toString.
-   * asString returns the content, while toString returns a representation
-   * of the primitive value itself.
-   * An overt example of this is:
-   *   val temp = StringPrimitive('foo')
-   *   println(temp.asString)  // Returns "foo"
-   *   println(temp.toString)  // Returns "'foo'"
-   * Note the extra quotes.  If you ever see a problem involving strings
-   * with ''too many nested quotes'', your problem is probably with asString
-   */
-  def asString: String;
-  /**
-   * return the contents of the variable as just an object.
-   */
-  def payload: Object;
-}
-/**
- * Boxed representation of a long integer
- */
-case class IntPrimitive(v: Long) 
-  extends PrimitiveValue(TInt) 
-{
-  override def toString() = v.toString
-  def asLong: Long = v;
-  def asDouble: Double = v.toDouble;
-  def asString: String = v.toString;
-  def payload: Object = v.asInstanceOf[Object];
-}
-/**
- * Boxed representation of a string
- */
-case class StringPrimitive(v: String) 
-  extends PrimitiveValue(TString)
-{
-  override def toString() = "'"+v.toString+"'"
-  def asLong: Long = java.lang.Long.parseLong(v)
-  def asDouble: Double = java.lang.Double.parseDouble(v)
-  def asString: String = v;
-  def payload: Object = v.asInstanceOf[Object];
-}
-/**
- * Boxed representation of a type object
- */
-case class TypePrimitive(t: Type.T)
-  extends PrimitiveValue(Type.TType)
-{
-  override def toString() = t.toString
-  def asLong: Long = throw new TypeException(TType, TInt, "Cast")
-  def asDouble: Double = throw new TypeException(TType, TFloat, "Cast")
-  def asString: String = t.toString;
-  def payload: Object = t.asInstanceOf[Object];
-}
-/**
- * Boxed representation of a row identifier/provenance token
- */
-case class RowIdPrimitive(v: String)
-  extends PrimitiveValue(TRowId)
-{
-  override def toString() = "'"+v.toString+"'"
-  def asLong: Long = java.lang.Long.parseLong(v)
-  def asDouble: Double = java.lang.Double.parseDouble(v)
-  def asString: String = v;
-  def payload: Object = v.asInstanceOf[Object];
-}
-/**
- * Boxed representation of a double-precision floating point number
- */
-case class FloatPrimitive(v: Double) 
-  extends PrimitiveValue(TFloat)
-{
-  override def toString() = v.toString
-  def asLong: Long = throw new TypeException(TFloat, TInt, "Cast");
-  def asDouble: Double = v
-  def asString: String = v.toString;
-  def payload: Object = v.asInstanceOf[Object];
-}
-
-/**
- * Boxed representation of a date
- */
-case class DatePrimitive(y: Int, m: Int, d: Int) 
-  extends PrimitiveValue(TDate)
-{
-  override def toString() = "DATE '"+y+"-"+m+"-"+d+"'"
-  def asLong: Long = throw new TypeException(TDate, TInt, "Cast");
-  def asDouble: Double = throw new TypeException(TDate, TFloat, "Cast");
-  def asString: String = toString;
-  def payload: Object = (y, m, d).asInstanceOf[Object];
-  def compare(c: DatePrimitive): Integer = {
-    if(c.y < y){ -1 }
-    else if(c.y > y) { 1 }
-    else if(c.m < m) { -1 }
-    else if(c.m > m) { 1 }
-    else if(c.d < d) { -1 }
-    else if(c.d > d) { 1 }
-    else { 0 }
-  }
-}
-/**
- * Boxed representation of a boolean
- */
-case class BoolPrimitive(v: Boolean)
-  extends PrimitiveValue(TBool)
-{
-  override def toString() = if(v) {"TRUE"} else {"FALSE"}
-  def asLong: Long = throw new TypeException(TBool, TInt, "Cast");
-  def asDouble: Double = throw new TypeException(TBool, TFloat, "Cast");
-  def asString: String = toString;
-  def payload: Object = v.asInstanceOf[Object];
-}
-/**
- * Boxed representation of NULL
- */
-case class NullPrimitive()
-  extends PrimitiveValue(TAny)
-{
-  override def toString() = "NULL"
-  def asLong: Long = throw new TypeException(TAny, TInt, "Cast Null");
-  def asDouble: Double = throw new TypeException(TAny, TFloat, "Cast Null");
-  def asString: String = throw new TypeException(TAny, TString, "Cast Null");
-  def payload: Object = null
+  def rebuild(c: Seq[Expression]):Expression = { return this }
 }
 
 /////////////// Computations ///////////////
@@ -260,8 +50,8 @@ case class NullPrimitive()
 case class Not(child: Expression) 
   extends Expression 
 {
-  def children: List[Expression] = List[Expression](child)
-  def rebuild(x: List[Expression]): Expression = Not(x(0))
+  def children: Seq[Expression] = List[Expression](child)
+  def rebuild(x: Seq[Expression]): Expression = Not(x(0))
   override def toString = ("NOT(" + child.toString + ")")
 }
 
@@ -370,7 +160,7 @@ case class Arithmetic(op: Arith.Op, lhs: Expression,
   override def toString() = 
 	" (" + lhs.toString + Arith.opString(op) + rhs.toString + ") "
   def children = List(lhs, rhs)
-  def rebuild(c: List[Expression]) = Arithmetic(op, c(0), c(1))
+  def rebuild(c: Seq[Expression]) = Arithmetic(op, c(0), c(1))
 }
 
 /**
@@ -384,7 +174,7 @@ case class Comparison(op: Cmp.Op, lhs: Expression,
   override def toString() = 
 	" (" + lhs.toString + Cmp.opString(op) + rhs.toString + ") "
   def children = List(lhs, rhs)
-  def rebuild(c: List[Expression]) = Comparison(op, c(0), c(1))
+  def rebuild(c: Seq[Expression]) = Comparison(op, c(0), c(1))
 }
 
 /**
@@ -397,7 +187,7 @@ case class Comparison(op: Cmp.Op, lhs: Expression,
  * TODO: Move inline function definition from Eval to 
  *       FunctionRegistry
  */
-case class Function(op: String, params: List[Expression]) extends Expression {
+case class Function(op: String, params: Seq[Expression]) extends Expression {
   override def toString() = {
     op match {
       // Need to special case COUNT DISTINCT
@@ -412,7 +202,7 @@ case class Function(op: String, params: List[Expression]) extends Expression {
     }
   }
   def children = params
-  def rebuild(c: List[Expression]) = Function(op, c)
+  def rebuild(c: Seq[Expression]) = Function(op, c)
 }
 
 /**
@@ -439,6 +229,14 @@ case class RowIdVar() extends LeafExpression
 }
 
 /**
+ * Representation of a JDBC Variable.
+ */
+case class JDBCVar(t: Type) extends LeafExpression
+{
+  override def toString = "?";
+}
+
+/**
  * Representation of an If-Then-Else block.  Note that this differs from
  * SQL's use of CASE blocks.  If-Then-Else is substantially easier to work
  * with for recursive analyses.  
@@ -455,7 +253,7 @@ case class Conditional(condition: Expression, thenClause: Expression,
   	"IF "+condition.toString+" THEN "+thenClause.toString+
     " ELSE "+elseClause.toString+" END"
   def children = List(condition, thenClause, elseClause)
-  def rebuild(c: List[Expression]) = {
+  def rebuild(c: Seq[Expression]) = {
     Conditional(c(0), c(1), c(2))
   }
 }
@@ -466,5 +264,5 @@ case class Conditional(condition: Expression, thenClause: Expression,
 case class IsNullExpression(child: Expression) extends Expression { 
   override def toString() = {child.toString+" IS NULL"}
   def children = List(child)
-  def rebuild(c: List[Expression]) = IsNullExpression(c(0))
+  def rebuild(c: Seq[Expression]) = IsNullExpression(c(0))
 }

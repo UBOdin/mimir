@@ -31,11 +31,11 @@ class SqlToRA(db: Database)
     throw new SQLException("Unhandled Feature: "+feature)
   }
   
-  def convert(t : ColDataType): Type.T = {
+  def convert(t : ColDataType): Type = {
     t.getDataType.toUpperCase match { 
-      case "INT" => Type.TInt
-      case "NUMBER" => Type.TInt
-      case "CHAR" => Type.TString
+      case "INT" => TInt()
+      case "NUMBER" => TInt()
+      case "CHAR" => TString()
     }
   }
 /* Tests for unsupported aggregate query of the form "Select 1 + SUM(B) from R".
@@ -520,42 +520,23 @@ class SqlToRA(db: Database)
         IsNullChecker.setFrom(name);
       }
 
-      // Bind the table to a source: 
-      db.getView(name) match {
-        case None =>
-          val sch = db.getTableSchema(name) match {
-            case Some(sch) => sch
-            case None => throw new SQLException("Unknown table or view: "+name);
-          }
-          val newBindings = sch.map(
-              (x) => (x._1, alias+"_"+x._1)
-            ).toMap[String, String]
-          return (
-            Table(name, 
-              sch.map(
-                _ match { case (v, t) => (alias+"_"+v, t)}
-              ),
-              List[(String,Expression,Type.T)]()
-            ), 
-            newBindings, 
-            alias
-          )
-        case Some(view) =>
-          val sch = view.schema.map(_._1)
-          val newBindings = sch.map(
-            (x) => (x, alias+"_"+x)
-          ).toMap[String,String]
-          return (
-            Project(
-              sch.map( (x) => 
-                ProjectArg(alias+"_"+x, Var(x))
-              ),
-              view
-            ), 
-            newBindings,
-            alias
-          )
+      val sch = db.getTableSchema(name) match {
+        case Some(sch) => sch
+        case None => throw new SQLException("Unknown table or view: "+name);
       }
+      val newBindings = sch.map(
+          (x) => (x._1, alias+"_"+x._1)
+        ).toMap[String, String]
+      return (
+        Table(name, 
+          sch.map(
+            _ match { case (v, t) => (alias+"_"+v, t)}
+          ),
+          List[(String,Expression,Type)]()
+        ), 
+        newBindings, 
+        alias
+      )
       
     }
     unhandled("FromItem["+fi.getClass.toString+"]")

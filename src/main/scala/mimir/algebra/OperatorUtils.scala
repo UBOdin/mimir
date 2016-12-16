@@ -19,7 +19,7 @@ object OperatorUtils {
    *     Project(ret(N)._1, ret(N)._2) UNION
    */
   def columnExprForOperator(col: String, oper: Operator): 
-    List[(Expression, Operator)] =
+    Seq[(Expression, Operator)] =
   {
     oper match {
       case p @ Project(_, src) => 
@@ -36,7 +36,7 @@ object OperatorUtils {
    * Normalize an operator tree by distributing operators
    * over union terms.
    */
-  def extractUnions(o: Operator): List[Operator] =
+  def extractUnions(o: Operator): Seq[Operator] =
   {
     // println("Extract: " + o)
     o match {
@@ -59,13 +59,13 @@ object OperatorUtils {
     }
   }
 
-  def makeUnion(terms: List[Operator]): Operator = 
+  def makeUnion(terms: Seq[Operator]): Operator = 
   {
-    terms match {
-      case List() => throw new SQLException("Union of Empty List")
-      case List(head) => head
-      case head :: rest => Union(head, makeUnion(rest))
-    }
+    if(terms.isEmpty){ throw new SQLException("Union of Empty List") }
+    val head = terms.head 
+    val tail = terms.tail
+    if(tail.isEmpty){ return head }
+    else { return Union(head, makeUnion(tail)) }
   }
 
   def projectAwayColumn(column: String, oper: Operator): Operator =
@@ -119,4 +119,41 @@ object OperatorUtils {
       case BoolPrimitive(true) => oper
       case _ => Select(condition, oper)
     }
+
+  def projectColumns(cols: List[String], oper: Operator) =
+  {
+    Project(
+      cols.map( (col) => ProjectArg(col, Var(col)) ),
+      oper
+    )
+  }
+
+  def joinMergingColumns(cols: List[(String, (Expression,Expression) => Expression)], lhs: Operator, rhs: Operator) =
+  {
+    val allCols = lhs.schema.map(_._1).toSet ++ rhs.schema.map(_._1).toSet
+    val affectedCols = cols.map(_._1).toSet
+    val wrappedLHS = 
+      Project(
+        lhs.schema.map(_._1).map( x => 
+          ProjectArg(if(affectedCols.contains(x)) { "__MIMIR_LJ_"+x } else { x }, 
+                     Var(x))),
+        lhs
+      )
+    val wrappedRHS = 
+      Project(
+        rhs.schema.map(_._1).map( x => 
+          ProjectArg(if(affectedCols.contains(x)) { "__MIMIR_RJ_"+x } else { x }, 
+                     Var(x))),
+        rhs
+      )
+    Project(
+      ((allCols -- affectedCols).map( (x) => ProjectArg(x, Var(x)) )).toList ++
+      cols.map({
+        case (name, op) =>
+          ProjectArg(name, op(Var("__MIMIR_LJ_"+name), Var("__MIMIR_RJ_"+name)))
+
+        }),
+      Join(wrappedLHS, wrappedRHS)
+    )
+  }
 }

@@ -7,12 +7,11 @@ import mimir.Database
 import mimir.algebra._
 import mimir.provenance._
 import mimir.optimizer.{InlineProjections, PushdownSelections}
-import mimir.util.TypeUtils
 
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
 import net.sf.jsqlparser.expression.operators.relational._
-import net.sf.jsqlparser.expression.{BinaryExpression, DoubleValue, Function, LongValue, NullValue, InverseExpression, StringValue, WhenClause}
+import net.sf.jsqlparser.expression.{BinaryExpression, DoubleValue, Function, LongValue, NullValue, InverseExpression, StringValue, WhenClause, JdbcParameter}
 import net.sf.jsqlparser.{schema, expression}
 import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.statement.select.{SelectBody, PlainSelect, SubSelect, SelectExpressionItem, FromItem, SelectItem, SubJoin}
@@ -34,6 +33,7 @@ class RAToSql(db: Database) {
         )
         val metadata = tgtMetadata.map( { 
           case (out, Var(in), t) => ((in, Var(in), t), ProjectArg(out, Var(in))) 
+          case (o, i, t) => throw new SQLException("Unsupported Metadata: $o <- $i:$t")
         })
         Project(
           schMap ++ metadata.map(_._2),
@@ -54,8 +54,7 @@ class RAToSql(db: Database) {
     // standardizeTables adds a new layer of projections that we may be
     // able to optimize away.
     val optimized = 
-      InlineProjections.optimize(
-        PushdownSelections.optimize(standardized))
+      InlineProjections(PushdownSelections(standardized))
 
     // println("OPTIMIZED: "+optimized)
 
@@ -351,6 +350,7 @@ class RAToSql(db: Database) {
           throw new SQLException("Could not find appropriate source for '"+n+"' in "+sources)
         new Column(new net.sf.jsqlparser.schema.Table(null, src.head._1), n)
       }
+      case JDBCVar(t) => new JdbcParameter()
       case Conditional(_, _, _) => {
         val (whenClauses, elseClause) = ExpressionUtils.foldConditionalsToCase(e)
         val caseExpr = new net.sf.jsqlparser.expression.CaseExpression()
@@ -386,7 +386,7 @@ class RAToSql(db: Database) {
           rest.map(convert(_, sources)).foldLeft(convert(head, sources))(concat(_,_,"|"))
       }
       case mimir.algebra.Function("CAST", body_arg :: TypePrimitive(t) :: Nil) => {
-        return new CastOperation(convert(body_arg, sources), Type.toString(t));
+        return new CastOperation(convert(body_arg, sources), t.toString);
       }
       case mimir.algebra.Function("CAST", _) => {
         throw new SQLException("Invalid Cast: "+e)
