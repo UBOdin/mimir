@@ -134,27 +134,19 @@ class SqlToRA(db: Database)
 
     // Utility function to compute expansions for table wildcard 
     // targets (i.e., table.*).  
-    // Returns a 3-tuple: 
+    // Returns a 2-tuple: 
     //   t._1 : The base name of the variable in the output.
-    //   t._2 : The extended name of the variable in the output.
-    //   t._3 : The expression of the variable in the input.
+    //   t._2 : The expression of the variable in the input.
     // Some examples:
     //   SELECT A FROM R
-    //     -> ("A", "A", Var("A"))
+    //     -> ("A", Var("A"))
     //   SELECT A AS B FROM R
-    //     -> ("B", "B", Var("A"))
-    //   (SELECT A FROM R) AS S
-    //     -> ("A", "S_A", Var("A"))
-    val defaultTargetsForTable:(String => Seq[(String, String, Expression)]) = 
+    //     -> ("B", Var("A"))
+    val defaultTargetsForTable:(String => Seq[(String, Expression)]) = 
       (name: String) => {
         sources(name).map(
-          (x) => {
-            val baseOutputX = reverseBindings(x)
-            val extendedOutputX = 
-              if(tableAlias != null){ tableAlias.toUpperCase+"_"+baseOutputX }
-              else { baseOutputX }
-            (baseOutputX, extendedOutputX, Var(x))
-        })
+          (x) => (reverseBindings(x), Var(x))
+        )
       }
 
     // Start by converting to Mimir expressions and expanding clauses
@@ -162,16 +154,15 @@ class SqlToRA(db: Database)
     val selectItems: Seq[(net.sf.jsqlparser.statement.select.SelectItem, Int)] = 
       ps.getSelectItems().zipWithIndex
 
-    val targets: Seq[(String, String, Expression)] = 
+    val baseTargets: Seq[(String, Expression)] = 
       selectItems.flatMap({
         case (se:SelectExpressionItem, idx) => {
           val baseExpr: Expression = convert(se.getExpression, bindings.toMap)
 
           // Come up with a name for the expression
-          val baseAlias: String = SqlUtils.getAlias(se, idx+1).toUpperCase;
-          val extendedAlias: String = 
-            if(tableAlias == null){ baseAlias }
-            else { s"${tableAlias}_$baseAlias" }
+          // Note, this doesn't need to be unique (yet).  We assign unique
+          // names in a post-processing step
+          val alias: String = SqlUtils.getAlias(se).toUpperCase;
 
           // Some expressions need to be special-cased
           val extendedExpr = baseExpr match {
@@ -179,7 +170,7 @@ class SqlToRA(db: Database)
             case x => x
           }
 
-          Some( (baseAlias, extendedAlias, extendedExpr) )
+          Some( (alias, extendedExpr) )
         }
 
         case (_:AllColumns, _) => 
@@ -188,6 +179,32 @@ class SqlToRA(db: Database)
         case (tc:AllTableColumns, _) =>
           defaultTargetsForTable(tc.getTable.getName.toUpperCase)
       })
+
+    // After wildcard expansion, do some post-processing on the targets.
+    // First, it's possible that the aliases assigned here might contain 
+    // duplicates.  Make sure that all of the aliases have unique names
+    val uniqueAliases = 
+      SqlUtils.makeAliasesUnique(baseTargets.map(_._1))
+
+    val targetsWithUniqueAliases =
+      uniqueAliases.zip(baseTargets.map(_._2))
+
+    // We're also responsible for assigning a globally visible name based
+    // on the table alias (if it's present), and retaining a mapping back
+    // to the original name.  To do this, we need to create the global
+    // name by prepending the table alias we've been given.  The globally
+    // visible schema is what the ProjectArgs should use.
+    val targets: Seq[(String, String, Expression)] =
+      if(tableAlias == null){
+        // No table alias given.  The globally visible alias is just the one we picked
+        targetsWithUniqueAliases.map({ case (alias, expr) => 
+                                          (alias, alias, expr) })
+      } else {
+        // Table alias exists.  The globally visible alias needs the table name prepended
+        targetsWithUniqueAliases.map({ case (alias, expr) => 
+                                          (alias, s"${tableAlias}_${alias}", expr) })
+      }
+
 
     // Check if this is an Aggregate Select or Flat Select
     // This is an Aggregate Select if ...
