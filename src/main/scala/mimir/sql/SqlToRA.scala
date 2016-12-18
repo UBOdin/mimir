@@ -15,6 +15,7 @@ import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.statement.create.table._
 import net.sf.jsqlparser.statement.select.{AllColumns, AllTableColumns, FromItem, PlainSelect, SelectBody, SelectExpressionItem, SubJoin, SubSelect}
 import org.joda.time.LocalDate
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
@@ -22,6 +23,7 @@ import scala.collection.mutable.ListBuffer
 ;
 
 class SqlToRA(db: Database) 
+  extends LazyLogging
 {
   /*List of aggregate function names */
   val aggFuncNames = List("SUM", "AVG", "MAX", "MIN", "COUNT")
@@ -166,7 +168,7 @@ class SqlToRA(db: Database)
           val baseExpr: Expression = convert(se.getExpression, bindings.toMap)
 
           // Come up with a name for the expression
-          val baseAlias: String = SqlUtils.getAlias(se, idx).toUpperCase;
+          val baseAlias: String = SqlUtils.getAlias(se, idx+1).toUpperCase;
           val extendedAlias: String = 
             if(tableAlias == null){ baseAlias }
             else { s"${tableAlias}_$baseAlias" }
@@ -201,7 +203,9 @@ class SqlToRA(db: Database)
       (ps.getHaving() != null)
 
     val allReferencedFunctions =
-      targets.flatMap( tgt => ExpressionUtils.getFunctions(tgt._3) )
+      targets.flatMap( tgt => ExpressionUtils.getFunctions(tgt._3) ).
+        map( tgt => if(tgt.startsWith("DISTINCT_")) {tgt.substring("DISTINCT_".length)} 
+                    else { tgt })
 
     val isAggSelect =
       hasGroupByRefs || hasHavingClause || 
@@ -537,32 +541,39 @@ class SqlToRA(db: Database)
     Seq[(String,Boolean,Seq[Expression],String)]  // Referenced Expressions (fn, args, alias)
   ) =
   {
+    logger.debug(s"Fragmenting: $alias <- $expr")
+    val recur = () => {
+      val fragmentedChildren = 
+        expr.children.zipWithIndex.
+          map( child => fragmentAggregateExpression(child._1, alias+"_"+child._2) )
+
+      val (childExprs, childGBVars, childAggs) =
+        fragmentedChildren.unzip3
+
+      (
+        expr.rebuild(childExprs), 
+        childGBVars.flatten.toSet,
+        childAggs.flatten
+      )
+    }
+
     expr match {
       case Var(x) => (Var(x), Set(x), List())
 
-      case mimir.algebra.Function(fn, args) if AggregateRegistry.isAggregate(fn) => 
-        (Var(alias), Set(), List( (fn, false, args, alias) ))
+      case mimir.algebra.Function(fnBase, args) => {
+        val fnIsDistinct = (fnBase.toUpperCase.startsWith("DISTINCT_"))
+        val fn = 
+          if(fnIsDistinct){ fnBase.substring("DISTINCT_".length) }
+          else { fnBase }
 
-      case mimir.algebra.Function(fn, args) if (
-          fn.startsWith("DISTINCT_") 
-          && AggregateRegistry.isAggregate(fn.substring("DISTINCT_".length))
-        ) => 
-        (Var(alias), Set(), List( (fn, true, args, alias) ))
-
-      case _ => {
-        val fragmentedChildren = 
-          expr.children.zipWithIndex.
-            map( child => fragmentAggregateExpression(child._1, alias+"_"+child._2) )
-
-        val (childExprs, childGBVars, childAggs) =
-          fragmentedChildren.unzip3
-
-        (
-          expr.rebuild(childExprs), 
-          childGBVars.flatten.toSet,
-          childAggs.flatten
-        )
+        if(AggregateRegistry.isAggregate(fn)){
+          (Var(alias), Set(), List( (fn, fnIsDistinct, args, alias) ))
+        } else {
+          recur()
+        }
       }
+
+      case _ => recur()
     }
   }
 

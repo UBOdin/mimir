@@ -16,7 +16,7 @@ object AggregateRegistry
     registerStatistic("SUM")
     registerStatistic("MAX")
     registerStatistic("MIN")
-    register("COUNT", List(), TInt())
+    register("COUNT", (t) => TInt())
     register("AVG", List(TFloat()), TFloat())
     register("GROUP_AND", List(TBool()), TBool())
     register("GROUP_OR", List(TBool()), TBool())
@@ -34,7 +34,11 @@ object AggregateRegistry
     aggName: String
   ): Unit = {
     register(aggName, 
-      (t) => { Typechecker.assertNumeric(t.head, Function(aggName, List())); t.head }
+      (t) => { 
+        if(t.isEmpty){
+          throw new RAException(s"Invalid Call To $aggName(); No Args")
+        }
+        Typechecker.assertNumeric(t.head, Function(aggName, List())); t.head }
     )
   }
 

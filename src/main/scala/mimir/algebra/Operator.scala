@@ -1,5 +1,7 @@
 package mimir.algebra;
 
+import mimir.util.ListUtils
+
 /**
  * Abstract parent class of all relational algebra operators
  */
@@ -125,7 +127,7 @@ case class Project(columns: Seq[ProjectArg], source: Operator) extends Operator
 */
 case class AggFunction(function: String, distinct: Boolean, args: Seq[Expression], alias: String)
 {
-  override def toString = (function.toString + "(" + (if(distinct){"DISTINCT "}else{""}) + args.map(_.toString).mkString(", ") + ")" + ", " + alias)
+  override def toString = (alias + " <= " + function.toString + "(" + (if(distinct){"DISTINCT "}else{""}) + args.map(_.toString).mkString(", ") + ")")
   def getFunctionName() = function
   def getColumnNames() = args.map(x => x.toString).mkString(", ")
   def getAlias() = alias.toString
@@ -134,7 +136,9 @@ case class AggFunction(function: String, distinct: Boolean, args: Seq[Expression
 case class Aggregate(groupby: Seq[Var], aggregates: Seq[AggFunction], source: Operator) extends Operator
 {
   def toString(prefix: String) =
-    prefix + "AGGREGATE[" + groupby.mkString(", ") + "; " + aggregates.mkString(", ") + "](\n" +
+    prefix + "AGGREGATE[" + 
+      (groupby ++ aggregates).mkString(", ") + 
+      "](\n" +
       source.toString(prefix + "  ") + "\n" + prefix + ")"
 
   def children() = List(source)
@@ -142,11 +146,15 @@ case class Aggregate(groupby: Seq[Var], aggregates: Seq[AggFunction], source: Op
   def expressions = groupby ++ aggregates.flatMap(_.args)
   def rebuildExpressions(x: Seq[Expression]) = {
     val remainingExpressions = x.iterator
-    val newGroupBy = x.take(groupby.length).toSeq.map(_.asInstanceOf[Var])
+    val newGroupBy = 
+      ListUtils.headN(remainingExpressions, groupby.length).
+        map(_.asInstanceOf[Var])
+
     val newAggregates = 
       aggregates.
         map(curr => {
-          val newArgs = remainingExpressions.take(curr.args.size).toSeq
+          val newArgs = 
+            ListUtils.headN(remainingExpressions, curr.args.size)
           AggFunction(curr.function, curr.distinct, newArgs, curr.alias)
         })
     Aggregate(newGroupBy, newAggregates, source)

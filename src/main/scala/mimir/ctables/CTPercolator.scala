@@ -239,38 +239,52 @@ object CTPercolator {
             (arg._1, ExpressionUtils.makeAnd(arg._2, groupDeterminism))
           )
 
-        val aggFuncMetaColumns = 
+        val (aggFuncMetaColumns, aggFuncMetaExpressions) = 
           aggFuncDeterminism.map({case (aggName, aggDetExpr) =>
-            AggFunction(
-              "GROUP_AND",
-              false,
-              List(aggDetExpr),
-              "MIMIR_AGG_DET_"+aggName
-            )
-          })
+            if(ExpressionUtils.isDataDependent(aggDetExpr)){
+              ( 
+                Some(AggFunction(
+                  "GROUP_AND",
+                  false,
+                  List(aggDetExpr),
+                  "MIMIR_AGG_DET_"+aggName
+                )), 
+                (aggName, Var("MIMIR_AGG_DET_"+aggName))
+              )
+            } else {
+              (None, (aggName, aggDetExpr))
+            }
+          }).unzip
 
         // A group is deterministic if any of its group-by vars are
-        val groupMetaColumn =
-          AggFunction("GROUP_OR", false, List(groupDeterminism), "MIMIR_GROUP_DET")
+        val (groupMetaColumn, groupMetaExpression) =
+          if(ExpressionUtils.isDataDependent(groupDeterminism)){
+            (
+              Some(AggFunction("GROUP_OR", false, List(groupDeterminism), "MIMIR_GROUP_DET")),
+              Var("MIMIR_GROUP_DET")
+            )
+          } else {
+            (None, groupDeterminism)
+          }          
 
         // Assemble the aggregate function with metadata columns
         val extendedAggregate =
           Aggregate(
             groupBy, 
-            aggregates ++ aggFuncMetaColumns ++ Some(groupMetaColumn),
+            aggregates ++ aggFuncMetaColumns.flatten ++ groupMetaColumn,
             src
           )
 
         // Annotate all of the output columns
         val columnMetadata =
-          aggregates.map( agg => (agg.alias, Var("MIMIR_AGG_DET_"+agg.alias)) ) ++
-          groupBy.map( gb => (gb.name, Var("MIMIR_GROUP_DET")) )
+          aggFuncMetaExpressions ++
+          groupBy.map( gb => (gb.name, groupDeterminism) )
 
         // And return the new aggregate and annotations
         return (
           extendedAggregate,
           columnMetadata.toMap,
-          Var("MIMIR_GROUP_DET")
+          groupDeterminism
         )
       }
 
