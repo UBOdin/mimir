@@ -57,432 +57,272 @@ class SqlToRA(db: Database)
   def convert(sb : SelectBody) : Operator = 
     convert(sb, null)._1;
   
-  def convert(sb : SelectBody, tableAlias: String) : (Operator, Map[String, String]) = {
-    if(sb.isInstanceOf[PlainSelect]){
-      val ps = sb.asInstanceOf[PlainSelect]
-      
-      val bindings = scala.collection.mutable.Map[String, String]()
-      val reverseBindings = scala.collection.mutable.Map[String, String]()
-      val sources = scala.collection.mutable.Map[String, List[String]]()
-      
-      var (ret, currBindings, sourceAlias) = convert(ps.getFromItem)
-      sources.put(sourceAlias, currBindings.values.toList);
-      bindings.putAll(currBindings)
-      reverseBindings.putAll(
-        currBindings.map( _ match { case (x,y) => (y,x) } )
-      )
-
-      /* Check for join operator */
-      var joinCond = null;
-      
-      if(ps.getJoins() != null) { 
-        ret = ps.getJoins().foldLeft(ret)(
-          (a, j) => {
-            val (source, currBindings, sourceAlias) = convert(j.getRightItem())
-            sources.put(sourceAlias, currBindings.values.toList);
-            bindings.putAll(currBindings)
-            reverseBindings.putAll(
-              currBindings.map( _ match { case (x,y) => (y,x) } )
-            )
-            var r: Operator = Join(a, source)
-            if(j.getOnExpression() != null) { 
-              r = Select(convert(j.getOnExpression, bindings.toMap), r)
-            }
-            r
-          }
-        );
-      }
-
-      /* Check for selection operator */
-      if(ps.getWhere != null) {
-        ret = Select(convert(ps.getWhere, bindings.toMap), ret)
-      }
-
-      var exprId = 0;
-      var aggexprID = 0           //for un-aliased aggregate queries
-      var includeAll = false;
-      var needProject = (tableAlias != null);
-      
-      val defaultTargetsForTable = (name: String) => {
-        sources.get(name).get.map(
-          (x) => {
-            val baseX = reverseBindings.get(x).get
-            ( baseX, 
-              ProjectArg(
-                if(tableAlias != null){ tableAlias.toUpperCase+"_"+baseX }
-                  else { baseX },
-                Var(x)
-              ) 
-            )
-          })
-      }
-
-
-      /* Check if this is an Aggregate Select or Flat Select */
-
-
-
-      /* Map to reassemble projection order
-      val projectOrder: mutable.Buffer[(net.sf.jsqlparser.expression.Expression, String)] = ps.getSelectItems().
-        filter(x => x.isInstanceOf[SelectExpressionItem]).
-          map( x => mutable.Buffer( (x.asInstanceOf[SelectExpressionItem].getExpression(),
-            SqlUtils.getAlias(x.asInstanceOf[SelectExpressionItem])) )).flatten */
-
-      val isAggSelect = ps.getSelectItems().exists(x => x.isInstanceOf[SelectExpressionItem] &&
-        x.asInstanceOf[SelectExpressionItem].getExpression().isInstanceOf[net.sf.jsqlparser.expression.Function] &&
-        aggFuncNames.contains(x.asInstanceOf[SelectExpressionItem].getExpression().asInstanceOf[net.sf.jsqlparser.expression.Function].
-        getName.toUpperCase))
-
-      /* Boolean to check for non aggregate expressions in Aggregate Select
-      val hasFlatSelect = ps.getSelectItems().exists(x => x.isInstanceOf[SelectExpressionItem] &&
-        (!x.asInstanceOf[SelectExpressionItem].getExpression().isInstanceOf[net.sf.jsqlparser.expression.Function] ||
-          !aggFuncNames.contains(x.asInstanceOf[SelectExpressionItem].getExpression().
-          asInstanceOf[net.sf.jsqlparser.expression.Function].getName().toUpperCase)))
-
-      /* Map of function expression (keys) and corresponding aliases (values) */
-      val functions: Map[net.sf.jsqlparser.expression.Expression, String] = ps.getSelectItems().
-        filter(x => x.isInstanceOf[SelectExpressionItem] &&
-          x.asInstanceOf[SelectExpressionItem].getExpression().isInstanceOf[net.sf.jsqlparser.expression.Function] &&
-          aggFuncNames.contains(x.asInstanceOf[SelectExpressionItem].getExpression().
-          asInstanceOf[net.sf.jsqlparser.expression.Function].getName.toUpperCase)).
-            map(x => List( (x.asInstanceOf[SelectExpressionItem].getExpression(),
-              x.asInstanceOf[SelectExpressionItem].getAlias()) )).flatten.toMap
-
-      /* To be able to make changes when an alias is null--did not find a more clean way to convert to mutable Map */
-      val funcAliases = collection.mutable.Map(functions.toSeq: _*)
-
-
-      /* Lists variables for flat select and aggregate select respectively */ */
-      var target = List[(String, ProjectArg)]()
-      var aggArgs = new ListBuffer[AggregateArg]()
-      val gbCols: List[Expression] = if(ps.getGroupByColumnReferences == null) { List[Expression]()}
-        else { ps.getGroupByColumnReferences.toList.map(x => convert(x, bindings.toMap)) }
-
-      if(isAggSelect){
-        target =
-          ps.getSelectItems.map( (si) => {
-            /* If the item is a SelectExpressionItem */
-            if(si.isInstanceOf[SelectExpressionItem]) {
-              /*&&
-              si.asInstanceOf[SelectExpressionItem].getExpression().isInstanceOf[net.sf.jsqlparser.expression.Function] &&
-                aggFuncNames.contains(si.asInstanceOf[SelectExpressionItem].getExpression().
-                  asInstanceOf[net.sf.jsqlparser.expression.Function].getName().toUpperCase)) {*/
-
-              val se = si.asInstanceOf[SelectExpressionItem]
-              if (se.getExpression.isInstanceOf[net.sf.jsqlparser.expression.Function] &&
-                aggFuncNames.contains(se.getExpression.asInstanceOf[net.sf.jsqlparser.expression.Function].getName.toUpperCase)) {
-
-
-                val func = se.getExpression.asInstanceOf[net.sf.jsqlparser.expression.Function]
-                val parameters =
-                  if (func.getParameters == null) {
-                    if (func.isAllColumns()) {
-                      if (func.getName.toUpperCase != "COUNT") {
-                        throw new SQLException("Syntax error in query expression: " + func.getName.toUpperCase + "(*)");
-                      }
-                    }
-                    List[Expression]()
-                  }
-                  else {
-                    func.getParameters.getExpressions.toList.map(x => convert(x, bindings.toMap))
-                  }
-                var originalAlias: String = SqlUtils.getAlias(se)
-                var alias: String = originalAlias
-                if (alias == null) {
-                  exprId += 1
-                  alias = "EXPR_" + exprId
-                }
-                else {
-                  originalAlias = originalAlias.toUpperCase
-                  alias = alias.toUpperCase
-                }
-                if (tableAlias != null) {
-                  alias = tableAlias + "_" + alias
-                }
-                aggArgs += AggregateArg(func.getName().toUpperCase, parameters, alias)
-                List((originalAlias, ProjectArg(alias, Var(alias))))
-              }
-              /* Otherwise process the non-agg select expression item */
-              else {
-                val se = si.asInstanceOf[SelectExpressionItem]
-
-                /* Sanity check for illegal agg query in the form 'select 1 + sum(a)...' */
-                val expr = convert(se.getExpression, bindings.toMap)
-
-                val legal: Boolean = expr match {
-                  case Arithmetic(_, _, _) => isLegalAggQuery(expr) //function defined at line 43
-                  case _ => true
-                }
-                if(!legal){ throw new SQLException(
-                  "Illegal Aggregate query in the from of SELECT INT + AGG_FUNCTION.")}
-
-
-                val originalAlias: String = SqlUtils.getAlias(se).toUpperCase;
-                var alias: String = originalAlias;
-                if (alias == null) {
-                  exprId += 1
-                  alias = "EXPR_" + exprId
-                } else {
-                  alias = alias.toUpperCase
-                }
-                if (tableAlias != null) {
-                  alias = tableAlias + "_" + alias;
-                }
-                needProject = true;
-
-                if (!ps.getGroupByColumnReferences.contains(se.getExpression)) {
-                  throw new SQLException("Illegal Group By Query: '" + se.toString.toUpperCase + "' is not a Group By argument.")
-                }
-                List((
-                  originalAlias,
-                  ProjectArg(
-                    alias,
-                    convert(se.getExpression(), bindings.toMap)
-                  ))
-                )
-
-              }
-            }
-            else{
-              if (si.isInstanceOf[AllColumns]) {
-                throw new SQLException("Illegal use of 'All Columns' [*] in Aggregate Query.")
-              } else if (si.isInstanceOf[AllTableColumns]) {
-                throw new SQLException("Illegal use of 'All Table Columns' [" +
-                  si.asInstanceOf[AllTableColumns].getTable.getName + ".*] in Aggregate Query.")
-              } else {
-                unhandled("SelectItem[Unknown]")
-              }
-              List()
-            }
-          }).flatten.toList
-
-        ret = Aggregate(aggArgs.toList, gbCols, ret)
-        ret = Project(target.map( _._2 ), ret)
-      }
-     /*
-      var aggTarget = List[AggregateArg]()
-      var projArgs = List[(String, ProjectArg)]()
-
-      /* Choose the correct processing path */
-      if(isAggSelect) {
-        /* Aggregate Select Path */
-        aggTarget = projectOrder.map( (f) => {
-          /* Get the parameters */
-          if(f._1.isInstanceOf[net.sf.jsqlparser.expression.Function]) {
-            val func = f._1.asInstanceOf[net.sf.jsqlparser.expression.Function]
-            var parameters = List[Expression]()
-            parameters =
-              if (func.getParameters == null) {
-                if (func.isAllColumns()) {
-                  if (func.getName.toUpperCase != "COUNT") {
-                    throw new SQLException("Syntax error in query expression: " + func.getName.toUpperCase + "(*)");
-                  }
-                }
-                List[Expression]()
-              }
-              else {
-                func.getParameters.getExpressions.toList.map(x => convert(x, bindings.toMap))
-              }
-
-            /* Get column alias */
-           // var colAlias: String = projectOrder(f)
-
-            var alias: String = f._2
-            if ( alias == null) {
-              aggexprID += 1
-              alias = "EXPR_" + aggexprID
-              funcAliases(f._1) = alias
-              //f._2 = alias
-            }
-            else {
-              alias = alias.toUpperCase
-              funcAliases(f._1) = alias
-            }
-
-            if(tableAlias != null){
-              alias = tableAlias + "_" + alias;
-            }
-
-            List( (AggregateArg(func.getName.toUpperCase, parameters, alias)) )
-          }
-          else {
-              List()
-          }
-        }).flatten.toList
-
-        /* Retrieve GroupBy Columns */
-        val gb_cols : List[Expression] =
-          if(ps.getGroupByColumnReferences == null) { List[Expression]()}
-          else {
-            ps.getGroupByColumnReferences.toList.map(x => convert(x, bindings.toMap)) }
-
-        /* Process Aggregate Operator */
-        ret = Aggregate(aggTarget, gb_cols, ret);
-
-
-        if(hasFlatSelect)
-          {
-            /* Check for legal Group By query */
-            /* If flatSelect Item is a column, get the alias and see if it exists in groupby list */
-            projectOrder.foreach(x => if(!x._1.isInstanceOf[net.sf.jsqlparser.expression.Function] ||
-              !aggFuncNames.contains(x._1.asInstanceOf[net.sf.jsqlparser.expression.Function].getName().toUpperCase)){
-
-              if(!ps.getGroupByColumnReferences.contains(x._1)){
-                throw new SQLException("Illegal Group By Query: '" + x._2.toString.toUpperCase + "' is not a Group By argument.")
-              }
-            })
-
-          }
-
-        /* Create ProjectArgs for Project Operator */
-        projArgs = projectOrder.map(x =>
-          if(funcAliases.contains(x._1)) {
-            val aggAlias: String = funcAliases(x._1)//x._2
-            var alias: String = aggAlias
-            if(tableAlias != null){
-              alias = tableAlias + "_" + alias;
-            }
-            List( (aggAlias, ProjectArg(alias, Var(alias))) )
-          }
-          else {
-            var colAlias: String = x._2
-
-            var alias: String = colAlias
-            if(alias == null) {
-              exprId += 1
-              alias = "EXPR_" + exprId
-            } else {
-              alias = alias.toUpperCase
-              colAlias = colAlias.toUpperCase
-            }
-            if(tableAlias != null){
-              alias = tableAlias + "_" + alias;
-            }
-            List( (colAlias, ProjectArg(alias, convert(x._1, bindings.toMap))) )
-          }).flatten.toList
-        /* Process Projection Operator */
-        ret = Project(projArgs.map(_._2), ret)
-
-      }
-      */
-      else
-        {
-          /* (Flat Select) Projection Processing */
-          target =
-            ps.getSelectItems.map( (si) => {
-              if(si.isInstanceOf[SelectExpressionItem]) {
-                val se = si.asInstanceOf[SelectExpressionItem]
-
-                /* Sanity check for unsupported agg query in the form 'select 1 + sum(a)...' */
-                val expr = convert(se.getExpression, bindings.toMap)
-
-                val legal: Boolean = expr match {
-                  case Arithmetic(_, _, _) => isLegalAggQuery(expr)
-                  case _ => true
-                }
-                if(!legal){ throw new SQLException(
-                  "Illegal Aggregate query in the from of SELECT INT + AGG_FUNCTION.")}
-
-                /* END: Sanity Check */
-
-                val originalAlias: String = SqlUtils.getAlias(se);
-                var alias: String = originalAlias;
-                if(alias == null){
-                  exprId += 1
-                  alias = "EXPR_"+exprId
-                } else {
-                  alias = alias.toUpperCase
-                  originalAlias.toUpperCase
-                }
-                if(tableAlias != null){
-                  alias = tableAlias + "_" + alias;
-                }
-                needProject = true;
-                List( (
-                  originalAlias,
-                  ProjectArg(
-                    alias,
-                    convert(se.getExpression(), bindings.toMap)
-                  ) )
-                )
-
-
-
-              } else if(si.isInstanceOf[AllColumns]) {
-                includeAll = true;
-                sources.keys.map( defaultTargetsForTable(_) ).flatten.toList
-              } else if(si.isInstanceOf[AllTableColumns]) {
-                needProject = true;
-                defaultTargetsForTable(
-                  si.asInstanceOf[AllTableColumns].getTable.getName.toUpperCase
-                )
-              } else {
-                unhandled("SelectItem[Unknown]")
-              }
-            }).flatten.toList
-
-          // if(needProject){
-          ret = Project(target.map( _._2 ), ret);
-        }
-
-      // }
-
-  //     
-  //     var optionalClauses = List[OptionalSelectClause]();
-  //     
-      //if(ps.getGroupByColumnReferences != null) {
-        //unhandled("GROUP BY")
-  //       optionalClauses ++= List(
-  //         GroupByClause(ps.getGroupByColumnReferences.map(
-  //           (gb: Expression) => convert(gb)
-  //         ).toList)
-  //       )
-     // }
-      if(ps.getOrderByElements != null) {
-        unhandled("ORDER BY")
-  //       optionalClauses ++= List( 
-  //         OrderByClause(
-  //           ps.getOrderByElements.map( (o : OrderByElement) => {
-  //             ( if(o.isAsc) { OrderBy.Asc } else { OrderBy.Desc }, 
-  //               convert(o.getExpression)
-  //             )
-  //           }).toList
-  //         )
-  //       )
-      }
-      if(ps.getDistinct != null){
-        unhandled("DISTINCT")
-  //       optionalClauses ++= List(DistinctClause())
-      }
-      
-      if(ps.getHaving != null)  { unhandled("HAVING") }
-      if(ps.getLimit != null)   { unhandled("LIMIT") }
-
-
-      //target = target ++ projArgs
-      return (ret,
-        target.map(
-          (x) => (x._1, x._2.name)
-        ).toMap
-        );
-
-
-    } else if(sb.isInstanceOf[net.sf.jsqlparser.statement.select.Union]) {
-      val union = sb.asInstanceOf[net.sf.jsqlparser.statement.select.Union];
-      val isAll = (union.isAll() || !union.isDistinct());
-      if(!isAll){
-        throw new SQLException("Set Unions not supported yet");
-      }
-      return union.
-        getPlainSelects().
-        map( convert(_, tableAlias) ).
-        reduce( (a,b) => (Union(a._1,b._1), a._2) )
-    } else {
-      unhandled("SelectBody[Unknown]")
+  /**
+   * Convert a SelectBody into an Operator + A projection map.
+   */
+  def convert(sb : SelectBody, tableAlias: String) : (Operator, Map[String, String]) = 
+  {
+    sb match {
+      case ps: net.sf.jsqlparser.statement.select.PlainSelect => convert(ps, tableAlias)
+      case u: net.sf.jsqlparser.statement.select.Union => convert(u, tableAlias)
     }
-    return null;
   }
 
+  /**
+   * Convert a PlainSelect into an Operator + A projection map.
+   */
+  def convert(ps: PlainSelect, tableAlias: String) : (Operator, Map[String, String]) =
+  {
+    // Unlike SQL, Mimir's relational algebra does not use range variables.  Rather,
+    // variables are renamed into the form TABLENAME_VAR to prevent name conflicts.
+    // Because SQL allows variables without a matching range variable, we need to keep
+    // track of the variable's "base" name (without alias) and a mapping back to the
+    // variable's real name.
+    //
+    // The following variables facilitate this conversion
+    // 
+    // Bindings: A map from the base name to the extended name (or an arbitrary
+    //           name, if there are multiple source tables with the same variable)
+    val bindings = scala.collection.mutable.Map[String, String]()
+    // ReverseBindings: A map from the extended name back to the base name of the
+    //                  variable (useful for inferring aliases)
+    val reverseBindings = scala.collection.mutable.Map[String, String]()
+    // Sources: A map from table name to the matching set of *extended* variable names
+    val sources = scala.collection.mutable.Map[String, List[String]]()
+    
+    //////////////////////// CONVERT FROM CLAUSE /////////////////////////////
+
+    // JSqlParser makes a distinction between the first FromItem, and items 
+    // subsequently joined to it.  Start by extracting the first FromItem
+    var (ret, currBindings, sourceAlias) = convert(ps.getFromItem)
+    sources.put(sourceAlias, currBindings.values.toList);
+    bindings.putAll(currBindings)
+    reverseBindings.putAll(
+      currBindings.map( _ match { case (x,y) => (y,x) } )
+    )
+
+    var joinCond = null;
+
+    // Joins are optional, so make sure there is a join to begin with
+    if(ps.getJoins() != null) { 
+
+      // And then flatten out the join tree.
+      for(j <- ps.getJoins()){
+        val (source, currBindings, sourceAlias) = convert(j.getRightItem())
+        sources.put(sourceAlias, currBindings.values.toList);
+        bindings.putAll(currBindings)
+        reverseBindings.putAll(
+          currBindings.map( _ match { case (x,y) => (y,x) } )
+        )
+        ret = Join(ret, source)
+        if(j.getOnExpression() != null) { 
+          ret = Select(convert(j.getOnExpression, bindings.toMap), ret)
+        }
+      }
+    }
+    //////////////////////// CONVERT WHERE CLAUSE /////////////////////////////
+
+    // This one's super simple.  The where clause just becomes a Select on top
+    // of the return value.
+    if(ps.getWhere != null) {
+      ret = Select(convert(ps.getWhere, bindings.toMap), ret)
+    }
+
+    //////////////////////// CONVERT SELECT TARGETS /////////////////////////////
+
+    // Utility function to compute expansions for table wildcard 
+    // targets (i.e., table.*).  
+    // Returns a 3-tuple: 
+    //   t._1 : The base name of the variable in the output.
+    //   t._2 : The extended name of the variable in the output.
+    //   t._3 : The expression of the variable in the input.
+    // Some examples:
+    //   SELECT A FROM R
+    //     -> ("A", "A", Var("A"))
+    //   SELECT A AS B FROM R
+    //     -> ("B", "B", Var("A"))
+    //   (SELECT A FROM R) AS S
+    //     -> ("A", "S_A", Var("A"))
+    val defaultTargetsForTable:(String => Seq[(String, String, Expression)]) = 
+      (name: String) => {
+        sources(name).map(
+          (x) => {
+            val baseOutputX = reverseBindings(x)
+            val extendedOutputX = 
+              if(tableAlias != null){ tableAlias.toUpperCase+"_"+baseOutputX }
+              else { baseOutputX }
+            (baseOutputX, extendedOutputX, Var(x))
+        })
+      }
+
+    // Start by converting to Mimir expressions and expanding clauses
+    // Follows the same pattern as the utility function above
+    val selectItems: Seq[(net.sf.jsqlparser.statement.select.SelectItem, Int)] = 
+      ps.getSelectItems().zipWithIndex
+
+    val targets: Seq[(String, String, Expression)] = 
+      selectItems.flatMap({
+        case (se:SelectExpressionItem, idx) => {
+          val baseExpr: Expression = convert(se.getExpression, bindings.toMap)
+
+          // Come up with a name for the expression
+          val baseAlias: String = SqlUtils.getAlias(se, idx).toUpperCase;
+          val extendedAlias: String = 
+            if(tableAlias == null){ baseAlias }
+            else { s"${tableAlias}_$baseAlias" }
+
+          // Some expressions need to be special-cased
+          val extendedExpr = baseExpr match {
+            case Var("ROWID") => RowIdVar()
+            case x => x
+          }
+
+          Some( (baseAlias, extendedAlias, extendedExpr) )
+        }
+
+        case (_:AllColumns, _) => 
+          sources.keys.flatMap( defaultTargetsForTable(_) )
+
+        case (tc:AllTableColumns, _) =>
+          defaultTargetsForTable(tc.getTable.getName.toUpperCase)
+      })
+
+    // Check if this is an Aggregate Select or Flat Select
+    // This is an Aggregate Select if ...
+    //   ... any target column references an aggregate function
+    //   ... there is a group by clause
+    //   ... there is a having clause
+
+    val hasGroupByRefs = 
+      ((ps.getGroupByColumnReferences() != null)
+        && (!ps.getGroupByColumnReferences().isEmpty))
+
+    val hasHavingClause =
+      (ps.getHaving() != null)
+
+    val allReferencedFunctions =
+      targets.flatMap( tgt => ExpressionUtils.getFunctions(tgt._3) )
+
+    val isAggSelect =
+      hasGroupByRefs || hasHavingClause || 
+      allReferencedFunctions.exists( AggregateRegistry.isAggregate(_) )
+
+    if(!isAggSelect){
+      // NOT an aggregate select.  We just need to create a simple
+      // projection around the return value.
+      ret = 
+        Project(
+          targets.map({
+            case (baseName, extendedName, inputExpr) =>
+              ProjectArg(extendedName, inputExpr)
+          }),
+          ret
+        )
+    } else {
+      // This is an aggregate select.  
+      
+      // It's legitimate SQL to write an aggregate query with a 
+      // post-processing projection.  For example:
+      // SELECT A + SUM(B) FROM R GROUP BY A
+      // is entirely acceptable.  
+      // 
+      // Below, we've defined a function that segments this larger
+      // expression, extracting the post-processing step: 
+      //   (A + TMP)
+      // And returning the set of actual aggregates that we need
+      // to compute: 
+      //   TMP -> SUM(B)
+
+      val fragmentedTargets = 
+        targets.map( tgt => fragmentAggregateExpression(tgt._3, "MIMIR_AGG_"+tgt._2 ) )
+
+      val (targetPostProcExprs, perTargetGBVars, perTargetAggExprs) =
+        fragmentedTargets.unzip3
+
+      // The full set of referenced group by variables 
+      val referencedGBVars: Set[String] = perTargetGBVars.flatten.toSet
+
+      // The full list of aggregate expressions we need to compute
+      val allAggFunctions = 
+        perTargetAggExprs.flatten.
+          map({ case (aggName, distinct, args, alias) =>
+            AggFunction(aggName, distinct, args, alias)
+          })
+
+      // And pull out the list of group by variables that the user has declared for
+      // this expression
+      val declaredGBVars: Seq[Var] = 
+        if(ps.getGroupByColumnReferences == null) { List[Var]()}
+        else { 
+          ps.getGroupByColumnReferences.
+            map({ case c:Column => c }).
+            map(convertColumn(_, bindings.toMap))
+        }
+
+      // Sanity Check: We should not be referencing a variable that's not in the GB list.
+      val referencedNonGBVars = referencedGBVars -- declaredGBVars.map(_.name)
+      if(!referencedNonGBVars.isEmpty){
+        throw new SQLException(s"Variables $referencedNonGBVars not in group by list")
+      }
+
+      // Assemble the Aggregate
+      ret = Aggregate(declaredGBVars, allAggFunctions, ret)
+
+      // Generate the post-processing projection targets
+      val targetNames = targets.map( _._2 )
+      val postProcTargets = 
+        targetNames.zip(targetPostProcExprs).
+          map( tgt => ProjectArg(tgt._1, tgt._2) )
+
+      // Assemble the post-processing Project
+      ret = Project(postProcTargets, ret)
+
+      // Check for a having clause
+      if(ps.getHaving() != null){
+        // The having clause, as a post-processing step, uses a different set of
+        // bindings.  These include:
+        //  - The group by variable bindings
+        //  - The newly defined aggregate value bindings
+
+        val havingBindings =
+          targetNames.map( tgt => (tgt, tgt) ) ++
+          declaredGBVars.map( v => (v.name, bindings(v.name)) )
+
+        val havingExpr =
+          convert(ps.getHaving, havingBindings.toMap)
+
+        ret = Select(havingExpr, ret)
+      }
+    }
+
+    // Sanity check unimplemented features
+    if(ps.getOrderByElements != null){ unhandled("ORDER BY") }
+    if(ps.getLimit != null){ unhandled("LIMIT") }
+    if(ps.getDistinct != null){ unhandled("DISTINCT") }
+
+    // We're responsible for returning bindings for this specific
+    // query, so extract those from the target expressions we
+    // produced earlier
+    val returnedBindings =
+      targets.map( tgt => (tgt._1, tgt._2) ).toMap
+
+    // The operator should now be fully assembled.  Return it and
+    // its bindings
+    return (ret, returnedBindings)
+  }
+
+  def convert(union: net.sf.jsqlparser.statement.select.Union, alias: String): (Operator, Map[String,String]) =
+  {
+    val isAll = (union.isAll() || !union.isDistinct());
+    if(!isAll){ unhandled("UNION DISTINCT") }
+    if(union.getOrderByElements != null){ unhandled("UNION ORDER BY") }
+    if(union.getLimit != null){ unhandled("UNION LIMIT") }
+
+    return union.
+      getPlainSelects().
+      map( convert(_, alias) ).
+      reduce( (a,b) => (Union(a._1,b._1), a._2) )
+  }
 
   def convert(fi : FromItem) : (Operator, Map[String, String], String) = {
     if(fi.isInstanceOf[SubJoin]){
@@ -585,24 +425,7 @@ class SqlToRA(db: Database)
       unhandled("Expression[BinaryExpression]: "+e)
       return null;
     }
-    if(e.isInstanceOf[Column]){
-      val c = e.asInstanceOf[Column]
-      val table = c.getTable.getName match {
-        case null => null
-        case x => x.toUpperCase
-      }
-      val name = c.getColumnName.toUpperCase
-      if(table == null){
-        val binding = bindings.get(name);
-        if(binding.isEmpty){
-          if(name.equalsIgnoreCase("ROWID")) return RowIdVar()
-          else throw new SQLException("Unknown Variable: "+name+" in "+bindings.toString)
-        }
-        return Var(binding.get)
-      } else {
-        return Var(table + "_" + name);
-      }
-    }
+    if(e.isInstanceOf[Column]){ return convertColumn(e.asInstanceOf[Column], bindings) }
     if(e.isInstanceOf[net.sf.jsqlparser.expression.Function]){
       val f = e.asInstanceOf[net.sf.jsqlparser.expression.Function]
       val name = f.getName.toUpperCase
@@ -618,6 +441,7 @@ class SqlToRA(db: Database)
         case ("ROWID", List()) => RowIdVar()
         case ("ROWID", List(x: RowIdPrimitive)) => x
         case ("ROWID", List(x: PrimitiveValue)) => RowIdPrimitive(x.payload.toString)
+        case _ if f.isDistinct() => mimir.algebra.Function("DISTINCT_"+name, parameters)
         case _ => mimir.algebra.Function(name, parameters)
       }
       
@@ -662,4 +486,84 @@ class SqlToRA(db: Database)
     }
     unhandled("Expression["+e.getClass+"]: " + e)
   }
+
+  def convertColumn(c: Column, bindings: Map[String, String]): Var =
+  {
+    val table = c.getTable.getName match {
+      case null => null
+      case x => x.toUpperCase
+    }
+    val name = c.getColumnName.toUpperCase
+    if(table == null){
+      val binding = bindings.get(name);
+      if(binding.isEmpty){
+        if(name.equalsIgnoreCase("ROWID")) return Var("ROWID")
+        else throw new SQLException("Unknown Variable: "+name+" in "+bindings.toString)
+      }
+      return Var(binding.get)
+    } else {
+      return Var(table + "_" + name);
+    }
+  }
+
+  /**
+   * Split an aggregate target expression into its component parts.
+   * 
+   * This is needed to handle complex aggregate expressions.
+   * For example (if X is a group-by var):
+   * > X + SUM(Y) / COUNT(*) AS FOO
+   * This expression will return:
+   * > X + (FOO_1_0 / FOO_1_1)
+   * > [X]
+   * > [(SUM, [Y], FOO_1_0), (COUNT, [], FOO_1_1)]
+   *
+   * In short, this function descends through the expression tree
+   * and picks out all aggregates and var leaves that it hits.
+   *
+   * Aggregate expressions are removed from the nested expression
+   * and replaced by unique placeholder variables (as long as 
+   * alias is a unique prefix), and the entire expression is 
+   * reassembled.  
+   * 
+   * - Raw Variables are returned in the second tuple element
+   * - Aggregates are returned in the third tuple element
+   * 
+   * Unique placeholder variables are assigned unique names based
+   * on the path through the operator tree.
+   */
+  def fragmentAggregateExpression(expr: Expression, alias: String): (
+    Expression,                                   // The wrapper expression
+    Set[String],                                  // Referenced Group-By Variables
+    Seq[(String,Boolean,Seq[Expression],String)]  // Referenced Expressions (fn, args, alias)
+  ) =
+  {
+    expr match {
+      case Var(x) => (Var(x), Set(x), List())
+
+      case mimir.algebra.Function(fn, args) if AggregateRegistry.isAggregate(fn) => 
+        (Var(alias), Set(), List( (fn, false, args, alias) ))
+
+      case mimir.algebra.Function(fn, args) if (
+          fn.startsWith("DISTINCT_") 
+          && AggregateRegistry.isAggregate(fn.substring("DISTINCT_".length))
+        ) => 
+        (Var(alias), Set(), List( (fn, true, args, alias) ))
+
+      case _ => {
+        val fragmentedChildren = 
+          expr.children.zipWithIndex.
+            map( child => fragmentAggregateExpression(child._1, alias+"_"+child._2) )
+
+        val (childExprs, childGBVars, childAggs) =
+          fragmentedChildren.unzip3
+
+        (
+          expr.rebuild(childExprs), 
+          childGBVars.flatten.toSet,
+          childAggs.flatten
+        )
+      }
+    }
+  }
+
 }

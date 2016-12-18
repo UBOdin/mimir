@@ -9,14 +9,26 @@ object ExpressionUtils {
 	 * Extract the set of Var() terms (column references) in
 	 * the specified expression
 	 */
-	def getColumns(e: Expression): Set[String] = {
+	def getColumns(e: Expression): Set[String] = 
+  {
 		e match {
 			case Var(id) => Set(id)
-			case _ => e.children.
-						map(getColumns(_)).
-						foldLeft(Set[String]())(_++_)
+			case _ => e.children.flatMap(getColumns(_)).toSet
 		}
 	}
+
+  /**
+   * Extract the set of Function() names referenced in the
+   * specified expression
+   */
+  def getFunctions(e: Expression): Set[String] = 
+  {
+    e match {
+      case Function(fn, args) => Set(fn) ++ args.flatMap(getFunctions(_)).toSet
+      case _ => e.children.flatMap(getFunctions(_)).toSet
+    }
+  }
+
 	/**
 	 * Return true if the specified expression depends on
 	 * data

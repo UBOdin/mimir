@@ -44,23 +44,17 @@ object SqlUtils {
     exp
   }
   
-  def getAlias(expr : Expression): String = {
-    if(expr.isInstanceOf[Column]){
-      expr.asInstanceOf[Column].getColumnName();
-    } else {
-      null;
+  def getAlias(expr : Expression, uniqueId: Int): String = {
+    expr match {
+      case c: Column   => c.getColumnName
+      case f: Function => s"${f.getName}_$uniqueId"
+      case _           => s"EXPR_$uniqueId"
     }
   }
   
-  def getAlias(item : SelectExpressionItem): String = {
-    if(item.getAlias() == null) {
-      getAlias(item.getExpression());
-    } else {
-      item.getAlias();
-    }
-  }
-  def getAlias(item : SelectItem): String = { 
-    getAlias(item.asInstanceOf[SelectExpressionItem])
+  def getAlias(item : SelectExpressionItem, uniqueId: Int): String = {
+    if(item.getAlias() != null) { return item.getAlias() }
+    getAlias(item.getExpression(), uniqueId)
   }
   
   def changeColumnSources(e: Expression, newSource: String): Expression = {

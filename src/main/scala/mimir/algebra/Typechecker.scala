@@ -115,7 +115,7 @@ object Typechecker {
 				(new ExpressionChecker(srcSchema.toMap)).assert(cond, TBool(), "SELECT")
 				srcSchema
 
-			case Aggregate(args, groupBy, source) =>
+			case Aggregate(groupBy, agggregates, source) =>
 				/* Get child operator schema */
 				val srcSchema = schemaOf(source)
 				val chk = new ExpressionChecker(srcSchema.toMap)
@@ -124,18 +124,12 @@ object Typechecker {
 				val groupBySchema: Seq[(String, Type)] = groupBy.map(x => (x.toString, chk.typeOf(x)) )
 
 				/* Get function name, check for AVG *//* Get function parameters, verify type */
-				val aggSchema: Seq[(String, Type)] = args.map(x => 
-					x.function match {
-						case "AVG" => (x.alias, TFloat())
-						case "COUNT" => (x.alias, TInt())
-						case "SUM" | "MAX" | "MIN" => {
-							(x.alias, assertNumeric(chk.typeOf(x.columns(0)), x.columns(0)))
-						}
-						case "JSON_GROUP_ARRAY" => {
-							(x.alias, TString())
-						}
-						case fn => throw new SQLException("Unknown Aggregate Function: '"+fn+"'")
- 					})
+				val aggSchema: Seq[(String, Type)] = agggregates.map(x => 
+					(
+						x.alias, 
+						AggregateRegistry.typecheck(x.function, x.args.map(chk.typeOf(_)))
+					)
+				)
 
 				/* Send schema to parent operator */
 				val sch = groupBySchema ++ aggSchema ++ srcSchema

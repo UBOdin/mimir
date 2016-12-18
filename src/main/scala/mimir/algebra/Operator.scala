@@ -123,43 +123,33 @@ case class Project(columns: Seq[ProjectArg], source: Operator) extends Operator
       getOperatorName returns the operator name,
       getColumnName returns the column name
 */
-
-/* to fix list: first, we need to get the correct aliases; second, we need to make Aggregate have a list of AggregateArgs;
-third, we need to test and then branch in SqlToRa.scala (flat or agg select)
- */
-case class AggregateArg(function: String, columns: List[Expression], alias: String)
+case class AggFunction(function: String, distinct: Boolean, args: Seq[Expression], alias: String)
 {
-  override def toString = (function.toString + "(" + columns.map(_.toString).mkString(", ") + ")" + ", " + alias)
+  override def toString = (function.toString + "(" + (if(distinct){"DISTINCT "}else{""}) + args.map(_.toString).mkString(", ") + ")" + ", " + alias)
   def getFunctionName() = function
-  def getColumnNames() = columns.map(x => x.toString).mkString(", ")
+  def getColumnNames() = args.map(x => x.toString).mkString(", ")
   def getAlias() = alias.toString
 }
 
-/* Aggregate Operator refashioned 5/23/16, 5/31/16 */
-case class Aggregate(args: Seq[AggregateArg], groupby: Seq[Expression], source: Operator) extends Operator
+case class Aggregate(groupby: Seq[Var], aggregates: Seq[AggFunction], source: Operator) extends Operator
 {
   def toString(prefix: String) =
-    prefix + "AGGREGATE[ [" + args.map(_.toString).mkString("; ") + "], Group By [" + groupby.map( _.toString ).mkString(", ") +
-      "] ](\n" + source.toString(prefix + " ") + "\n" + prefix + ")"
+    prefix + "AGGREGATE[" + groupby.mkString(", ") + "; " + aggregates.mkString(", ") + "](\n" +
+      source.toString(prefix + "  ") + "\n" + prefix + ")"
 
   def children() = List(source)
-  def rebuild(x: Seq[Operator]) = new Aggregate(args, groupby, x(0))
-  //def getAliases() = args.map(x => x.getAlias())
-  def expressions = groupby ++ args.flatMap(_.columns)
+  def rebuild(x: Seq[Operator]) = new Aggregate(groupby, aggregates, x(0))
+  def expressions = groupby ++ aggregates.flatMap(_.args)
   def rebuildExpressions(x: Seq[Expression]) = {
-    val newGroupBy = 
-      groupby.zipWithIndex.map( _._2 ).map( x(_) )
-    val newArgs =
-      args.foldLeft((List[AggregateArg](), groupby.length))({ 
-        case ((arglist, baseIdx),AggregateArg(fn, cols, alias)) => 
-          (
-            arglist ++ List(
-              AggregateArg(fn, cols.zipWithIndex.map(_._2+baseIdx).map( x(_) ), alias)
-            ),
-            baseIdx + cols.length
-          )
-      })._1
-    Aggregate(newArgs, newGroupBy, source)
+    val remainingExpressions = x.iterator
+    val newGroupBy = x.take(groupby.length).toSeq.map(_.asInstanceOf[Var])
+    val newAggregates = 
+      aggregates.
+        map(curr => {
+          val newArgs = remainingExpressions.take(curr.args.size).toSeq
+          AggFunction(curr.function, curr.distinct, newArgs, curr.alias)
+        })
+    Aggregate(newGroupBy, newAggregates, source)
   }
 }
 

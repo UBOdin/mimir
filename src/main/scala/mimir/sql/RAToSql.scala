@@ -109,20 +109,20 @@ class RAToSql(db: Database) {
           oper.schema.map(_._1).map( (x) => ProjectArg(x, Var(x))).toList, oper
         ))
       }
-      case Aggregate(args, gbcols, child) =>
+      case Aggregate(gbcols, aggregates, child) =>
         val (childCond, childFroms) = extractSelectsAndJoins(child)
         val subBody = new PlainSelect()
         subBody.setFromItem(childFroms)
 
         subBody.setSelectItems(
           new java.util.ArrayList(
-            args.map( (arg) => {
+            aggregates.map( (agg) => {
               val item = new SelectExpressionItem()
-              item.setAlias(arg.alias)
+              item.setAlias(agg.alias)
               val func = new Function()
-              func.setName(arg.function)
+              func.setName(agg.function)
               func.setParameters(new ExpressionList(new java.util.ArrayList(
-                arg.columns.map(convert(_, getSchemas(childFroms))))))
+                agg.args.map(convert(_, getSchemas(childFroms))))))
 
               item.setExpression(func)
               item
