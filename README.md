@@ -10,14 +10,18 @@ Instead of forcing you to spend hours or days wrangling all your data upfront, M
 
 We don't have an official release yet.  For now, check out the repository and use sbt run to start the Mimir UI
 ```
-$> git clone https://github.com/UBOdin/mimir.git
+$> git clone https://github.com/UBOdin/mimir-ui.git
 ...
-$> cd mimir; sbt run
+$> cd mimir-ui; sbt run
 ...
 ```
 
 Once the Mimir graphical user interface server starts up, just point your web browser at `http://localhost:9000`
 
+Then, you can follow along with the example in our [Whitepaper](http://mimirdb.info/whitepaper.html)
+
+
 ## Hacking on Mimir
 
-* See the [developer guidelines](Development) before doing anything
+* See the [developer guidelines](https://github.com/UBOdin/mimir/wiki/Development)
+* Also see the [ScalaDoc](http://doc.odin.cse.buffalo.edu/mimir)

@@ -1,0 +1,3 @@
+CREATE TABLE R (A int, B int);
+
+SELECT A, AVG(B) FROM R GROUP BY A;
