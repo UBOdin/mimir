@@ -8,6 +8,15 @@ import mimir.lenses._
 
 object JDBCUtils {
 
+   /*
+   * Changes for MySQL -
+   *
+   * All TEXT types return Types.LONGVARCHAR with different getPrecision() values
+   * (65535, 255, 16777215, and 2147483647 respectively) with getColumnType() returning -1.
+   *
+   * See http://dev.mysql.com/doc/connector-j/5.1/en/connector-j-reference-type-conversions.html for more details
+   */
+
   def convertSqlType(t: Int): Type = {
     t match {
       case (java.sql.Types.FLOAT |
@@ -15,12 +24,13 @@ object JDBCUtils {
             java.sql.Types.REAL |
             java.sql.Types.DOUBLE |
             java.sql.Types.NUMERIC)   => TFloat()
-      case (java.sql.Types.INTEGER)  => TInt()
+      case (java.sql.Types.INTEGER) => TInt()
       case (java.sql.Types.DATE) => TDate()
       case (java.sql.Types.TIMESTAMP)   => TTimeStamp()
       case (java.sql.Types.VARCHAR |
             java.sql.Types.NULL |
-            java.sql.Types.CHAR)     => TString()
+            java.sql.Types.CHAR |
+            java.sql.Types.LONGVARCHAR) => TString()
       case (java.sql.Types.ROWID)    => TRowId()
     }
   }

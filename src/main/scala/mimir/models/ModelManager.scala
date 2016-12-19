@@ -34,9 +34,14 @@ class ModelManager(db:Database) {
    */
   def init(): Unit =
   {
+    /**
+      * Added IF NOT EXISTS string to support MySQL
+      *
+      */
+
     if(db.backend.getTableSchema(modelTable).isEmpty){
       db.backend.update(s"""
-        CREATE TABLE $modelTable(
+        CREATE TABLE IF NOT EXISTS $modelTable(
           name varchar(100), 
           encoded text,
           decoder varchar(30),
@@ -46,7 +51,7 @@ class ModelManager(db:Database) {
     }
     if(db.backend.getTableSchema(ownerTable).isEmpty){
       db.backend.update(s"""
-        CREATE TABLE $ownerTable(
+        CREATE TABLE IF NOT EXISTS $ownerTable(
           model varchar(100), 
           owner varchar(100)
         )

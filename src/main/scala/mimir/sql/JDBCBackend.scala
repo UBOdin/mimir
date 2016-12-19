@@ -35,6 +35,14 @@ class JDBCBackend(backend: String, filename: String) extends Backend
           case "oracle" =>
             Methods.getConn()
 
+          case "mysql" =>
+            val url = "jdbc:mysql://localhost/"+filename // filename here is the MySQL database name
+            val username = "root"
+            val password = "password"
+            Class.forName("com.mysql.jdbc.Driver")
+            var c:Connection = DriverManager.getConnection(url, username, password)
+            c
+
           case x =>
             println("Unsupported backend! Exiting..."); System.exit(-1); null
         }
@@ -44,7 +52,6 @@ class JDBCBackend(backend: String, filename: String) extends Backend
       openConnections = openConnections + 1
     })
   }
-
 
 
   def close(): Unit = {
@@ -61,7 +68,6 @@ class JDBCBackend(backend: String, filename: String) extends Backend
       if (openConnections == 0) assert(conn == null)
     })
   }
-
 
 
   def execute(sel: String): ResultSet = 
@@ -161,8 +167,24 @@ class JDBCBackend(backend: String, filename: String) extends Backend
             }
             columnRet.close()
             Some(ret)
+
+          case "mysql" => {
+            val stmt = conn.createStatement()
+            val ret = stmt.executeQuery(s"DESC $table")
+            val result = JDBCUtils.extractAllRows(ret).map( (x) => {
+              val name = x(0).asString.toUpperCase.trim
+              val rawType = Type.fromString(x(1).asString.replaceAll("[^a-zA-Z]",""))
+              val nullType = x(2).asString.trim
+              val key = x(3).asString.trim
+              val extra = x(5).asString.trim
+
+              (name, rawType)
+            })
+
+            if(result.hasNext){ Some(result.toList) } else { None }
+          }
         }
-        
+
         cols match { case None => (); case Some(s) => tableSchemas += table -> s }
         cols
     }
@@ -176,6 +198,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     val metadata = conn.getMetaData()
     val tables = backend match {
       case "sqlite" => metadata.getTables(null, null, "%", null)
+      case "mysql" => metadata.getTables(null, null, "%", null);
       case "oracle" => metadata.getTables(null, "ARINDAMN", "%", null) // TODO Generalize
     }
 
@@ -210,6 +233,4 @@ class JDBCBackend(backend: String, filename: String) extends Backend
       }
     })
   }
-
-  
 }
