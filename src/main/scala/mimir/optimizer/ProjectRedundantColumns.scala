@@ -79,10 +79,10 @@ object ProjectRedundantColumns {
         Join(apply(lhs, lhsDeps), apply(rhs, rhsDeps))
       }
 
-      case Aggregate(computed, groupby, source) => 
+      case Aggregate(groupby, computed, source) => 
       {
         val computedDependencies = 
-          computed.flatMap( _.columns ).
+          computed.flatMap( _.args ).
             flatMap( ExpressionUtils.getColumns(_) ).
             toSet
 
@@ -92,8 +92,8 @@ object ProjectRedundantColumns {
 
         val aggregate = 
           Aggregate(
-            computed.filter( (column) => dependencies contains column.alias ),
             groupby,
+            computed.filter( (column) => dependencies contains column.alias ),
             apply(source, computedDependencies ++ groupbyDependencies)
           )
 

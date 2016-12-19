@@ -75,6 +75,8 @@ class Compiler(db: Database) extends LazyLogging {
     // Replace VG-Terms with their "Best Guess values"
     oper = bestGuessQuery(oper)
 
+    logger.debug(s"GUESSED: $oper")
+
     // We'll need it a few times, so cache the final operator's schema.
     // This also forces the typechecker to run, so we get a final sanity
     // check on the output of the rewrite rules.

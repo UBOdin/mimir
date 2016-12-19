@@ -22,7 +22,7 @@ object FunctionRegistry {
 		scala.collection.mutable.Map.empty;
 
 	{
-		registerFunction("MIMIR_MAKE_ROWID", 
+		register("MIMIR_MAKE_ROWID", 
       Provenance.joinRowIds(_: Seq[PrimitiveValue]),
 			((args: Seq[Type]) => 
 				if(!args.forall( t => (t == TRowId()) || (t == TAny()) )) { 
@@ -33,7 +33,7 @@ object FunctionRegistry {
 			)
 		)
 
-    registerFunction("__Seq_MIN", 
+    register("__Seq_MIN", 
     	(params: Seq[PrimitiveValue]) => {
         FloatPrimitive(params.map( x => 
           try { x.asDouble } 
@@ -45,7 +45,7 @@ object FunctionRegistry {
     	}
     )
 
-    registerFunction("__LIST_MAX", 
+    register("__LIST_MAX", 
     	(params: Seq[PrimitiveValue]) => {
         FloatPrimitive(params.map( x => 
           try { x.asDouble } 
@@ -57,7 +57,7 @@ object FunctionRegistry {
     	}
     )
 
-    registerFunctionSet(List("CAST", "MIMIRCAST"), 
+    registerSet(List("CAST", "MIMIRCAST"), 
       (params: Seq[PrimitiveValue]) => {
         params match {
           case x :: TypePrimitive(t)    :: Nil => Cast(t, x)
@@ -67,7 +67,7 @@ object FunctionRegistry {
       (_) => TAny()
     )
 
-		registerFunctionSet(List("DATE", "TO_DATE"), 
+		registerSet(List("DATE", "TO_DATE"), 
 		  (params: Seq[PrimitiveValue]) => 
           { TextUtils.parseDate(params.head.asString) },
 		  _ match {
@@ -76,7 +76,7 @@ object FunctionRegistry {
 		  }
 		)
 
-		registerFunction("ABSOLUTE", 
+		register("ABSOLUTE", 
 			{
 	      case Seq(IntPrimitive(i))   => if(i < 0){ IntPrimitive(-i) } else { IntPrimitive(i) }
 	      case Seq(FloatPrimitive(f)) => if(f < 0){ FloatPrimitive(-f) } else { FloatPrimitive(f) }
@@ -86,27 +86,27 @@ object FunctionRegistry {
 			(x: Seq[Type]) => Typechecker.assertNumeric(x(0), Function("ABSOLUTE", List()))
 		)
 
-    registerFunction("SQRT",
+    register("SQRT",
       {
         case Seq(n:NumericPrimitive) => FloatPrimitive(Math.sqrt(n.asDouble))
       },
       (x: Seq[Type]) => Typechecker.assertNumeric(x(0), Function("ABSOLUTE", List()))
     )
 
-    registerFunction("BITWISE_AND", (x) => IntPrimitive(x(0).asLong & x(1).asLong), (_) => TInt())
+    register("BITWISE_AND", (x) => IntPrimitive(x(0).asLong & x(1).asLong), (_) => TInt())
 
-    registerFunction("JSON_EXTRACT",(_) => ???, (_) => TAny())
-    registerFunction("JSON_ARRAY_LENGTH",(_) => ???, (_) => TInt())
+    register("JSON_EXTRACT",(_) => ???, (_) => TAny())
+    register("JSON_ARRAY_LENGTH",(_) => ???, (_) => TInt())
 	}
 
-	def registerFunctionSet(
+	def registerSet(
 		fnames: Seq[String], 
 		eval:Seq[PrimitiveValue] => PrimitiveValue, 
 		typechecker: Seq[Type] => Type
 	): Unit =
-		fnames.map(registerFunction(_, eval, typechecker))
+		fnames.map(register(_, eval, typechecker))
 
-	def registerFunction(
+	def register(
 		fname: String, 
 		eval: Seq[PrimitiveValue] => PrimitiveValue, 
 		typechecker: Seq[Type] => Type

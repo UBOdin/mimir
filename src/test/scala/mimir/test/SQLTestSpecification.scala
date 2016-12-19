@@ -58,28 +58,13 @@ object DBTestInstances
  */
 abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,String] = Map())
   extends Specification
+  with SQLParsers
 {
 
   def dbFile = new File(tempDBName+".db")
 
   def db = DBTestInstances.get(tempDBName, config)
 
-  def stmts(f: File): List[Statement] = {
-    val p = new MimirJSqlParser(new FileReader(f))
-    var ret = List[Statement]();
-    var s: Statement = null;
-
-    do{
-      s = p.Statement()
-      if(s != null) {
-        ret = s :: ret;
-      }
-    } while(s != null)
-    ret.reverse
-  }
-  def stmt(s: String) = {
-    new MimirJSqlParser(new StringReader(s)).Statement()
-  }
   def select(s: String) = {
     db.sql.convert(
       stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
