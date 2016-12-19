@@ -27,6 +27,7 @@ libraryDependencies ++= Seq(
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
   "org.apache.lucene"          %    "lucene-spellchecker"   % "3.6.2",
   "org.xerial"                 %    "sqlite-jdbc"           % "3.14.2.1",
+  "mysql"                      %    "mysql-connector-java"  % "5.1.6",
   "info.mimirdb"               %    "jsqlparser"            % "1.0.0",
   "org.apache.commons"         %    "commons-csv"           % "1.4", 
   "commons-io"                 %    "commons-io"            % "2.5"
@@ -84,8 +85,8 @@ pomExtra := (
     </license>
   </licenses>
   <scm>
-    <url>git@github.com:ubodin/mimir.git</url>
-    <connection>scm:git:git@github.com:ubodin/mimir.git</connection>
+    <url>git@github.com:bizentass/mimir.git</url>
+    <connection>scm:git:git@github.com:bizentass/mimir.git</connection>
   </scm>)
 
 /////// Publishing Options ////////
