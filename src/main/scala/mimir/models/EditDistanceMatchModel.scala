@@ -79,7 +79,7 @@ class EditDistanceMatchModel(
 ) 
   extends SingleVarModel(name) 
   with DataIndependentSingleVarFeedback
-  with Serializable
+  with NoArgSingleVarModel
 {
   /** 
    * A mapping for this column.  Lucene Discance metrics use a [0-1] range as:

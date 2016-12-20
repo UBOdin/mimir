@@ -48,6 +48,7 @@ abstract class Backend {
 
   def close()
 
+  def canHandleVGTerms(): Boolean
   def specializeQuery(q: Operator): Operator
 
 }

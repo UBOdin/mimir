@@ -50,6 +50,11 @@ case class ModelException(error:String) extends RAException(error)
  */
 abstract class Model(val name: String) extends Serializable {
   /**
+   * The list of expected arg types (may be TAny)
+   */
+  def argTypes       (idx: Int): Seq[Type]
+
+  /**
    * Infer the type of the model from the types of the inputs
    * @param argTypes    The types of the arguments the the VGTerm
    * @return            The type of the value returned by this model
