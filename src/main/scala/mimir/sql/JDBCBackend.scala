@@ -2,6 +2,7 @@ package mimir.sql;
 
 import java.sql._
 
+import mimir.Database
 import mimir.Methods
 import mimir.algebra._
 import mimir.util.JDBCUtils
@@ -15,6 +16,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
 {
   var conn: Connection = null
   var openConnections = 0
+  var inliningAvailable = false;
 
   def driver() = backend
 
@@ -45,7 +47,14 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     })
   }
 
-
+  def enableInlining(db: Database): Unit =
+  {
+    backend match {
+      case "sqlite" => 
+        sqlite.VGTermFunctions.register(db, conn)
+        inliningAvailable = true
+    }
+  }
 
   def close(): Unit = {
     this.synchronized({
@@ -61,8 +70,6 @@ class JDBCBackend(backend: String, filename: String) extends Backend
       if (openConnections == 0) assert(conn == null)
     })
   }
-
-
 
   def execute(sel: String): ResultSet = 
   {
@@ -141,7 +148,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         if(!tables.contains(table.toUpperCase)) return None
 
         val cols: Option[List[(String, Type)]] = backend match {
-          case "sqlite" | "sqlite-inline" | "sqlite-bundles" => {
+          case "sqlite" => {
             // SQLite doesn't recognize anything more than the simplest possible types.
             // Type information is persisted but not interpreted, so conn.getMetaData() 
             // is useless for getting schema information.  Instead, we need to use a
@@ -189,9 +196,14 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     tableNames.toList
   }
 
+  def canHandleVGTerms(): Boolean = inliningAvailable
+
   def specializeQuery(q: Operator): Operator = {
     backend match {
-      case "sqlite" => SpecializeForSQLite(q)
+      case "sqlite" if inliningAvailable => 
+        VGTermFunctions.specialize(SpecializeForSQLite(q))
+      case "sqlite" =>
+        SpecializeForSQLite(q)
       case "oracle" => q
     }
   }

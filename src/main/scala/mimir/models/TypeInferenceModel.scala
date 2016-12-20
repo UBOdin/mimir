@@ -43,6 +43,7 @@ object TypeInferenceModel
 class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
   extends SingleVarModel(name)
   with DataIndependentSingleVarFeedback
+  with NoArgSingleVarModel
 {
   var totalVotes = 0.0
   val votes = scala.collection.mutable.Map[Type, Double]()

@@ -16,9 +16,9 @@ class DefaultMetaModel(name: String, context: String, models: Seq[String])
   extends SingleVarModel(name) 
   with DataIndependentSingleVarFeedback 
   with Serializable
+  with NoArgSingleVarModel
 {
-  def varType(argTypes:Seq[Type]) = TString()
-
+  def varType(args: Seq[Type]): Type = TString()
   def bestGuess(args: Seq[PrimitiveValue]): PrimitiveValue =
     choice.getOrElse(StringPrimitive(models.head))
   def sample(randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue =

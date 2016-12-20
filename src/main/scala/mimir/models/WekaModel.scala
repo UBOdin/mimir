@@ -190,7 +190,9 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
   def guessInputType: Type =
     db.bestGuessSchema(target)(colIdx)._2
 
-  def varType(argTypes: Seq[Type]): Type = guessInputType
+  def argTypes(): Seq[Type] = List(TRowId())
+
+  def varType(args: Seq[Type]): Type = guessInputType
   
   def bestGuess(args: Seq[PrimitiveValue]): PrimitiveValue =
   {
