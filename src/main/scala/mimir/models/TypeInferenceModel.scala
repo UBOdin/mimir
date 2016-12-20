@@ -43,6 +43,7 @@ object TypeInferenceModel
 class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
   extends SingleVarModel(name)
   with DataIndependentSingleVarFeedback
+  with FiniteDiscreteDomain
 {
   var totalVotes = 0.0
   val votes = scala.collection.mutable.Map[Type, Double]()
@@ -121,5 +122,8 @@ class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
         throw new ModelException(s"Invalid choice $c for $name")
     }
   }
+
+  def getDomain(idx: Int, args: List[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
+    votes.toList.map( x => (TypePrimitive(x._1), x._2))
 
 }

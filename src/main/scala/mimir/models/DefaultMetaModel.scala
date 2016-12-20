@@ -15,7 +15,7 @@ import mimir.util._
 class DefaultMetaModel(name: String, context: String, models: List[String]) 
   extends SingleVarModel(name) 
   with DataIndependentSingleVarFeedback 
-  with Serializable
+  with FiniteDiscreteDomain
 {
   def varType(argTypes:List[Type]) = TString()
 
@@ -36,4 +36,8 @@ class DefaultMetaModel(name: String, context: String, models: List[String])
     }
   }
   def validateChoice(v: PrimitiveValue) = models.contains(v.asString)
+
+  def getDomain(idx: Int, args: List[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
+    models.map( x => (StringPrimitive(x), 0.0) )
+
 }

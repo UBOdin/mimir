@@ -78,7 +78,7 @@ class EditDistanceMatchModel(
 ) 
   extends SingleVarModel(name) 
   with DataIndependentSingleVarFeedback
-  with Serializable
+  with FiniteDiscreteDomain
 {
   /** 
    * A mapping for this column.  Lucene Discance metrics use a [0-1] range as:
@@ -120,6 +120,12 @@ class EditDistanceMatchModel(
         val editDistance = ((colMapping.head._2) * 100).toInt
         s"I assumed that $sourceName maps to $targetName (Match: $editDistance% using $metricName Distance)"
       }
+
+      case Some(NullPrimitive()) => {
+        val targetName = target._1
+        s"You told me that nothing maps to $targetName"
+      }
+
       case Some(choicePrim) => {
         val targetName = target._1
         val choiceStr = choicePrim.asString
@@ -134,4 +140,7 @@ class EditDistanceMatchModel(
     EditDistanceMatchModel.logger.trace(s"Guesssing ($name) $target <- $guess")
     StringPrimitive(guess)
   }
+
+  def getDomain(idx: Int, args: List[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
+    (NullPrimitive(), 0.0) :: colMapping.map( x => (StringPrimitive(x._1), x._2))
 }

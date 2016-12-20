@@ -3,7 +3,7 @@ package mimir.exec;
 import java.sql._;
 
 import mimir.algebra._;
-import mimir.models.Reason;
+import mimir.ctables.Reason;
 
 class NonDetIterator(val src: ResultIterator, 
                      val schema: List[(String, Type)],

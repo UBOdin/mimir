@@ -1,7 +1,7 @@
 package mimir.exec;
 
 import mimir.algebra._;
-import mimir.models.Reason;
+import mimir.ctables.Reason;
 
 class BagUnionResultIterator(elems: List[ResultIterator]) extends ResultIterator
 {

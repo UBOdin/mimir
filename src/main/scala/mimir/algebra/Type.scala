@@ -58,8 +58,6 @@ object Type {
         case None => throw new RAException("Invalid Type '" + t + "'");
       }
     }
-
-
   }
   def toSQLiteType(i:Int) = i match {
     case 0 => TInt()
