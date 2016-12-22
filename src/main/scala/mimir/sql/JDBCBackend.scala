@@ -202,8 +202,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     backend match {
       case "sqlite" if inliningAvailable => 
         VGTermFunctions.specialize(SpecializeForSQLite(q))
-      case "sqlite" =>
-        SpecializeForSQLite(q)
+      case "sqlite" => SpecializeForSQLite(q)
       case "oracle" => q
     }
   }

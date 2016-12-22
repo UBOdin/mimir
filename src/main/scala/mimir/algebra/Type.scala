@@ -86,9 +86,8 @@ object Type {
     case TRowId() => 5
     case TType() => 6
     case TAny() => 7
-    case TUser(name,regex,sqlType)  => 
+    case TUser(name,regex,sqlType)  => TypeRegistry.typeIdx(name.toLowerCase)+8
       // 8 because this is the number of native types, if more are added then this number needs to increase
-      TypeRegistry.typeIdx(name.toLowerCase)+8
   }
 
   val tests = Map[Type,String](
@@ -143,7 +142,8 @@ object TypeRegistry {
     "container"     -> ("[A-Z]{4}[0-9]{7}",                TString()),
     "carriercode"   -> ("[A-Z]{4}",                        TString()),
     "mmsi"          -> ("MID\\d{6}|0MID\\d{5}|00MID\\{4}", TString()),
-    "billoflanding" -> ("[A-Z]{8}[0-9]{8}",                TString())
+    "billoflanding" -> ("[A-Z]{8}[0-9]{8}",                TString()),
+    "imo_code"      -> ("^\\d{7}$",                           TInt())
   )
   val idxType = typeList.keys.toIndexedSeq
   val typeIdx = idxType.zipWithIndex.toMap

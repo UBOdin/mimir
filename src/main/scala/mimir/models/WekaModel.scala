@@ -182,8 +182,17 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
 
   private def classToPrimitive(classIdx: Int): PrimitiveValue = 
   {
-    val att = learner.getModelContext.attribute(colIdx)
-    val str = att.value(classIdx)
+    val att:Attribute = learner.getModelContext.attribute(colIdx)
+    var str:String = ""
+    try{
+      str = att.value(classIdx)
+    }
+    catch{
+      case e:IndexOutOfBoundsException =>{
+        throw ModelException("Column " + colName + " May be all null, Model could not be built over this column")
+      }
+    }
+//    println("Attribute String: " + str)
     TextUtils.parsePrimitive(guessInputType, str)
   }
 
