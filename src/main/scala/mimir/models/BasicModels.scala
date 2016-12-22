@@ -6,6 +6,7 @@ import scala.util._
 
 abstract class SingleVarModel(name: String) extends Model(name) {
 
+  def argTypes(): Seq[Type]
   def varType(argTypes: Seq[Type]): Type
   def bestGuess(args: Seq[PrimitiveValue]): PrimitiveValue
   def sample(randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue
@@ -13,7 +14,9 @@ abstract class SingleVarModel(name: String) extends Model(name) {
   def feedback(args: Seq[PrimitiveValue], v: PrimitiveValue): Unit
   def isAcknowledged (args: Seq[PrimitiveValue]): Boolean
 
-  def varType(x: Int, argTypes: Seq[Type]): Type =
+  def argTypes(x: Int): Seq[Type] =
+    argTypes()
+  def varType(x: Int, args: Seq[Type]): Type =
     varType(argTypes)
   def bestGuess(x:Int, args: Seq[PrimitiveValue]): PrimitiveValue =
     bestGuess(args)
@@ -29,8 +32,10 @@ abstract class SingleVarModel(name: String) extends Model(name) {
 
 case class IndependentVarsModel(override val name: String, vars: Seq[SingleVarModel]) extends Model(name) {
 
-  def varType(idx: Int, argTypes: Seq[Type]) =
-    vars(idx).varType(argTypes)
+  def argTypes(idx: Int): Seq[Type] =
+    vars(idx).argTypes()
+  def varType(idx: Int, args: Seq[Type]) =
+    vars(idx).varType(args)
   def bestGuess(idx: Int, args: Seq[PrimitiveValue]) = 
     vars(idx).bestGuess(args);
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue]) =
@@ -44,6 +49,7 @@ case class IndependentVarsModel(override val name: String, vars: Seq[SingleVarMo
 }
 
 object UniformDistribution extends SingleVarModel("UNIFORM") with Serializable {
+  def argTypes() = List(TFloat(), TFloat())
   def varType(argTypes: Seq[Type]) = TFloat()
   def bestGuess(args: Seq[PrimitiveValue]) = 
     FloatPrimitive((args(0).asDouble + args(1).asDouble) / 2.0)
@@ -79,14 +85,15 @@ object UniformDistribution extends SingleVarModel("UNIFORM") with Serializable {
     false
 }
 
-case class NoOpModel(override val name: String, vt: Type, reasonText:String) 
+case class NoOpModel(override val name: String, reasonText:String) 
   extends SingleVarModel(name) 
   with Serializable 
 {
 
   var acked = false
 
-  def varType(argTypes: Seq[Type]) = vt
+  def argTypes() = List(TAny())
+  def varType(args: Seq[Type]) = args(0)
   def bestGuess(args: Seq[PrimitiveValue]) = args(0)
   def sample(randomness: Random, args: Seq[PrimitiveValue]) = args(0)
   def reason(args: Seq[PrimitiveValue]): String = reasonText
