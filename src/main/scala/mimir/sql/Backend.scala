@@ -20,29 +20,30 @@ abstract class Backend {
     return execute(sel);
   }
 
-  def resultRows(sel: String):Iterator[Seq[PrimitiveValue]] = 
-    JDBCUtils.extractAllRows(execute(sel))
-  def resultRows(sel: String, args: Seq[PrimitiveValue]):Iterator[Seq[PrimitiveValue]] =
-    JDBCUtils.extractAllRows(execute(sel, args))
-  def resultRows(sel: Select):Iterator[Seq[PrimitiveValue]] =
-    JDBCUtils.extractAllRows(execute(sel))
-  def resultRows(sel: SelectBody):Iterator[Seq[PrimitiveValue]] =
-    JDBCUtils.extractAllRows(execute(sel))
+  def resultRows(sel: String):Seq[Seq[PrimitiveValue]] = 
+    JDBCUtils.extractAllRows(execute(sel)).flush
+  def resultRows(sel: String, args: Seq[PrimitiveValue]):Seq[Seq[PrimitiveValue]] =
+    JDBCUtils.extractAllRows(execute(sel, args)).flush
+  def resultRows(sel: Select):Seq[Seq[PrimitiveValue]] =
+    JDBCUtils.extractAllRows(execute(sel)).flush
+  def resultRows(sel: SelectBody):Seq[Seq[PrimitiveValue]] =
+    JDBCUtils.extractAllRows(execute(sel)).flush
 
   def resultValue(sel:String):PrimitiveValue =
-    resultRows(sel).next.head
+    resultRows(sel).head.head
   def resultValue(sel:String, args: Seq[PrimitiveValue]):PrimitiveValue =
-    resultRows(sel, args).next.head
+    resultRows(sel, args).head.head
   def resultValue(sel:Select):PrimitiveValue =
-    resultRows(sel).next.head
+    resultRows(sel).head.head
   def resultValue(sel:SelectBody):PrimitiveValue =
-    resultRows(sel).next.head
+    resultRows(sel).head.head
   
   def getTableSchema(table: String): Option[Seq[(String, Type)]]
   
   def update(stmt: String): Unit
   def update(stmt: TraversableOnce[String]): Unit
   def update(stmt: String, args: Seq[PrimitiveValue]): Unit
+  def fastUpdateBatch(stmt: String, argArray: TraversableOnce[Seq[PrimitiveValue]]): Unit
 
   def getAllTables(): Seq[String]
 

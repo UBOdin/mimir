@@ -14,7 +14,7 @@ import org.apache.lucene.search.spell.{
 
 object EditDistanceMatchModel
 {
-  val logger = Logger(org.slf4j.LoggerFactory.getLogger("mimir.models.EditDistanceMatchModel"))
+  val logger = Logger(org.slf4j.LoggerFactory.getLogger(getClass.getName))
 
   /**
    * Available choices of distance metric, from Apache Lucene.

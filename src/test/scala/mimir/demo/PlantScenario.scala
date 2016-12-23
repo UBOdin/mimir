@@ -4,11 +4,11 @@ import org.specs2.mutable._
 import mimir.test._
 import mimir.util._
 
-object PlantDemoScript 
+object PlantScenario
   extends SQLTestSpecification("PlantDemoScript")
 {
 
-  "The Plant Demo" should {
+  "The Plant Scenario" should {
 
     "Be able to load Barnes" >> {
       db.loadTable("test/plants/Barnes.csv"); ok

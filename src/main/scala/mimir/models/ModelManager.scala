@@ -179,7 +179,7 @@ class ModelManager(db:Database) {
     )
   }
 
-  private def prefetchWithRows(rows:Iterator[Seq[PrimitiveValue]]): Unit =
+  private def prefetchWithRows(rows:TraversableOnce[Seq[PrimitiveValue]]): Unit =
   {
     rows.foreach({
       case List(decoder, encoded) => {
@@ -206,7 +206,7 @@ class ModelManager(db:Database) {
       """, List(
         StringPrimitive(model)
       ))
-    if(!otherOwners.hasNext){ dropModel(model) }
+    if(otherOwners.isEmpty){ dropModel(model) }
   }
 
   private def decodeSerializable(db: Database, data: Array[Byte]): Model =
