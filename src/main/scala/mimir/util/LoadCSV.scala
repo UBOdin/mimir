@@ -149,8 +149,7 @@ object LoadCSV extends StrictLogging {
             map({ case (value, (col, t)) =>
               if(value == null || value.equals("")) { NullPrimitive() }
               else {
-                if(Type.tests.contains(t) 
-                    && !value.matches(Type.tests(t)))
+                if(!Type.matches(Type.rootType(t), value))
                 {
                   logger.warn(s"fileName:${record.lineNumber}: $col ($t) on is unparseable '$value', using null instead");
                   NullPrimitive()

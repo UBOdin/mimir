@@ -98,7 +98,7 @@ object SimpleDemoScript
 			query("SELECT * FROM RATINGS1 WHERE RATING > 4;").allRows must have size(2)
 			query("SELECT * FROM RATINGS2;").allRows must have size(3)
 			db.bestGuessSchema(select("SELECT * FROM RATINGS2;")).
-				map(_._2).map(Typechecker.baseType _) must be equalTo List(TString(), TFloat(), TFloat())
+				map(_._2).map(Type.rootType _) must be equalTo List(TString(), TFloat(), TFloat())
 		}
 
 		"Compute Deterministic Aggregate Queries" >> {

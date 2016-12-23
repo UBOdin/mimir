@@ -14,7 +14,7 @@ object TypeInferenceModel
 
   def priority: Type => Int =
   {
-    case TUser(_,_,_) => 20
+    case TUser(_)     => 20
     case TInt()       => 10
     case TBool()      => 10
     case TDate()      => 10
@@ -26,15 +26,12 @@ object TypeInferenceModel
   }
 
   def detectType(v: String): Iterable[Type] = {
-    Type.tests.flatMap({ case (t, test) =>
-      if(v.matches(test)){ Some(t) }
-      else { None }
+    Type.tests.flatMap({ case (t, regexp) =>
+      regexp.findFirstMatchIn(v).map(_ => t)
     })++
-    TypeRegistry.typeList.flatMap({ case (name, (regexp, baseT)) => {
-      if(v.matches(regexp)) {
-        Some(TUser(name, regexp, baseT))
-      } else { None }
-    }})
+    TypeRegistry.matchers.flatMap({ case (regexp, name) =>
+      regexp.findFirstMatchIn(v).map(_ => TUser(name))
+    })
 
   }
 }

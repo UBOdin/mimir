@@ -58,8 +58,8 @@ object EditDistanceMatchModel
 
   def isTypeCompatible(a: Type, b: Type): Boolean = 
   {
-    val aBase = Typechecker.baseType(a)
-    val bBase = Typechecker.baseType(b)
+    val aBase = Type.rootType(a)
+    val bBase = Type.rootType(b)
     (aBase, bBase) match {
       case ((TInt()|TFloat()),  (TInt()|TFloat())) => true
       case (TAny(), _) => true

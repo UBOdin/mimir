@@ -35,7 +35,7 @@ object JDBCUtils {
       case TAny()       => java.sql.Types.VARCHAR
       case TBool()      => java.sql.Types.INTEGER
       case TType()      => java.sql.Types.VARCHAR
-      case TUser(_,_,t) => convertMimirType(t)
+      case TUser(t)     => convertMimirType(TypeRegistry.baseType(t))
     }
   }
 
@@ -72,7 +72,7 @@ object JDBCUtils {
             case e: NullPointerException =>
               new NullPrimitive
           }
-        case TUser(_,_,sqlType) => convertField(sqlType, results, field)
+        case TUser(t) => convertField(TypeRegistry.baseType(t), results, field)
       }
     if(results.wasNull()) { NullPrimitive() }
     else { ret }
