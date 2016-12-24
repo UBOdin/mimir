@@ -34,49 +34,55 @@ object CureScenario
       }
     }}
 
-    // "CURE Timing Tests" >> {
+    "Select from the source table" >> {
+      time("Type Inference Query", 
+        () => {
+          query("""
+            SELECT * FROM cureSource;
+          """).foreachRow((x) => {})
+        }
+      )
+      ok
+    }
 
-    //   time("Type Inference Query", 
+    "Create the source MV Lens" >> {
+      time("Source MV Lens",
+        () => {
+          update("""
+            CREATE LENS MV1 
+            AS SELECT * FROM cureSource 
+            WITH MISSING_VALUE('IMO_CODE');
+          """)
+        }
+      )
+      ok
+    }
+
+    "Create the locations MV Lens" >> {
+      time("Locations MV Lens",
+        () => {
+          update("""
+            CREATE LENS MV2 
+            AS SELECT * FROM cureLocations 
+            WITH MISSING_VALUE('IMO_CODE');
+          """)
+        }
+      )
+      ok
+    }
+
+    // "Run the CURE Query" >> {
+    //   time("CURE Query",
     //     () => {
     //       query("""
-    //         SELECT * FROM cureSource;
+    //         SELECT * 
+    //         FROM   MV1 AS source 
+    //           JOIN MV2 AS locations 
+    //                   ON source.IMO_CODE = locations.IMO_CODE;
     //       """).foreachRow((x) => {})
     //     }
     //   )
-
-    //   time("Source MV Lens",
-    //     () => {
-    //       update("""
-    //         CREATE LENS MV1 
-    //         AS SELECT * FROM cureSource 
-    //         WITH MISSING_VALUE('IMO_CODE');
-    //       """)
-    //     }
-    //   )
-
-    //   time("Locations MV Lens",
-    //     () => {
-    //       update("""
-    //         CREATE LENS MV2 
-    //         AS SELECT * FROM cureLocations 
-    //         WITH MISSING_VALUE('IMO_CODE');
-    //       """)
-    //     }
-    //   )
-
-  //     TimeUtils.monitor("CURE Query",
-  //       () => {
-  //         query("""
-  //           SELECT * 
-  //           FROM   MV1 AS source 
-  //             JOIN MV2 AS locations 
-  //                     ON source.IMO_CODE = locations.IMO_CODE;
-  //         """).foreachRow((x) => {})
-  //       },
-  //       logger.info(_)
-  //     )
-
-  //     ok
+    //   ok
     // }    
   }
 }

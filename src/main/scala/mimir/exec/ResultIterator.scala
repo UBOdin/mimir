@@ -100,6 +100,16 @@ abstract class ResultIterator {
   }
 
   /**
+   * Shorthand fold operator over the rows.
+   */
+  def foldRows[X](init:X, fn: (X, ResultIterator) => X): X =
+  {
+    var ret = init
+    foreachRow( (x) => { ret = fn(ret, this) } )
+    ret;
+  }
+
+  /**
    * A list of lists containing all rows remaining in the iterator.
    * Note that this operation exhausts the iterator: Calling this twice
    * will not work.
