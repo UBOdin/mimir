@@ -3,7 +3,7 @@ package mimir.models
 import java.io.File
 import java.sql.SQLException
 import java.util
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.slf4j.Logger
 
 import mimir.algebra._
 import mimir.ctables._
@@ -23,6 +23,8 @@ import scala.util._
 
 object WekaModel
 {
+  val logger = Logger(org.slf4j.LoggerFactory.getLogger(getClass.getName))
+
   def train(db: Database, name: String, cols: Seq[String], query:Operator): Map[String,(Model,Int)] = 
   {
     cols.map( (col) => {
@@ -42,7 +44,9 @@ object WekaModel
           } else { ret }
         })
 
-    new Attribute(col, new java.util.ArrayList(tokens))
+    val tokenList = new java.util.ArrayList(tokens)
+    java.util.Collections.sort(tokenList)
+    new Attribute(col, tokenList)
   }
 
   def getAttributes(db: Database, query: Operator): Seq[Attribute] =
@@ -58,7 +62,6 @@ object WekaModel
 class SimpleWekaModel(name: String, colName: String, query: Operator)
   extends SingleVarModel(name) 
   with NeedsReconnectToDatabase 
-  with LazyLogging
 {
   private val TRAINING_LIMIT = 10000
   var numSamples = 0
@@ -109,7 +112,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
 
     /* The second check poses a limit on the learning data and reduces time spent building the lens */
     while(iterator.getNext() && numInstances < TRAINING_LIMIT) {
-      logger.trace(s"ROW: ${iterator.currentRow()}")
+      WekaModel.logger.trace(s"ROW: ${iterator.currentRow()}")
       val instance = new DenseInstance(iterator.numCols)
       instance.setDataset(data)
       for(j <- 0 until iterator.numCols) {
@@ -131,7 +134,8 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
     iterator.close()
     data.setClassIndex(colIdx)
 
-    val model = new NaiveBayesMultinomialUpdateable()
+    // val model = new NaiveBayesMultinomialUpdateable()
+    val model = new NaiveBayesMultinomialText()
     model.buildClassifier(data)
     learner = model
   }
@@ -165,7 +169,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
     val row = new DenseInstance(rowValues.numCols)
     val data = new Instances("TestData", attributeMeta, 1)
     row.setDataset(data)
-    logger.debug(s"CLASSIFY: ${rowValues.currentRow}")
+    WekaModel.logger.debug(s"CLASSIFY: ${rowValues.currentRow}")
     (0 until rowValues.numCols).foreach((col) => {
       val v = rowValues(col)
       if (!v.isInstanceOf[NullPrimitive] && (col != colIdx)) {
@@ -174,18 +178,18 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
         //   row.setValue(col, v.asDouble)
         // }
         // else {
-          logger.trace(s"String: $col -> $v")
+          WekaModel.logger.trace(s"String: $col -> $v")
           row.setValue(col, v.asString)
         // }
       } else {
-        logger.trace(s"NULL: $col")
+        WekaModel.logger.trace(s"NULL: $col")
       }
     })
 
     rowValues.close()
     val votes = learner.distributionForInstance(row).toSeq
 
-    logger.debug(s"VOTES: $votes")
+    WekaModel.logger.debug(s"VOTES: $votes")
     votes.
       zipWithIndex.
       filter(_._1 > 0)

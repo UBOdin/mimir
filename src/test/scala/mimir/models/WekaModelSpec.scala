@@ -64,11 +64,23 @@ object WekaModelSpec extends SQLTestSpecification("WekaTest")
     }
 
     "Make reasonable predictions" >> {
+      val rowids = 
+        queryOneColumn("SELECT ROWID FROM CPUSPEED").toSeq
 
-      predict("BUSSPEEDINMHZ", "3") must be equalTo trueValue("BUSSPEEDINMHZ", "3")
-      predict("BUSSPEEDINMHZ", "9") must be equalTo trueValue("BUSSPEEDINMHZ", "9")
-      predict("TECHINMICRONS", "22") must be equalTo trueValue("TECHINMICRONS", "22")
-      predict("CORES", "20") must be equalTo trueValue("CORES", "20")
+      val predictions = 
+        rowids.map {
+          rowid => (
+            predict("CORES", rowid.asString),
+            trueValue("CORES", rowid.asString)
+          )
+        }
+
+      val successes = 
+        predictions.
+          map( x => if(x._1.equals(x._2)){ 1 } else { 0 } ).
+          fold(0)( _+_ )
+
+      successes must be >=(rowids.size / 3)
 
     }
 

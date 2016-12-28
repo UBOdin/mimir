@@ -480,12 +480,12 @@ object SqlParserSpec
 			 		db.bestGuessCache.cacheTableForModel(
 			 			db.models.getModel("SANER:WEKA:B"), 0)
 			 	)
-			guessCacheData must contain( ===(Seq[PrimitiveValue](IntPrimitive(3), IntPrimitive(3))) )
+			guessCacheData must contain( ===(Seq[PrimitiveValue](IntPrimitive(3), IntPrimitive(2))) )
 		 	
 			db.query(convert("SELECT * FROM SaneR")).allRows must be equalTo List(
 				List(IntPrimitive(1),IntPrimitive(2),IntPrimitive(3)),
 				List(IntPrimitive(1),IntPrimitive(3),IntPrimitive(1)),
-				List(IntPrimitive(2),IntPrimitive(3),IntPrimitive(1)),
+				List(IntPrimitive(2),IntPrimitive(2),IntPrimitive(1)),
 				List(IntPrimitive(1),IntPrimitive(2),NullPrimitive()),
 				List(IntPrimitive(1),IntPrimitive(4),IntPrimitive(2)),
 				List(IntPrimitive(2),IntPrimitive(2),IntPrimitive(1)),
