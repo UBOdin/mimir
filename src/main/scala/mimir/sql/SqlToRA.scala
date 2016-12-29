@@ -358,11 +358,6 @@ class SqlToRA(db: Database)
         fi.asInstanceOf[SubSelect].getAlias.toUpperCase
       );
 
-      // Used by the isNull check
-      if(IsNullChecker.lookingForFrom()){
-        IsNullChecker.setFrom("("+(fi.asInstanceOf[SubSelect].getSelectBody).toString() + ") as " + fi.asInstanceOf[SubSelect].getAlias);
-      }
-
       return (ret, bindings, fi.asInstanceOf[SubSelect].getAlias.toUpperCase)
     }
     if(fi.isInstanceOf[net.sf.jsqlparser.schema.Table]){
@@ -374,12 +369,6 @@ class SqlToRA(db: Database)
           getAlias
       if(alias == null){ alias = name }
       else { alias = alias.toUpperCase }
-
-
-      // Used by the isNull check
-      if(IsNullChecker.lookingForFrom()){
-        IsNullChecker.setFrom(name);
-      }
 
       val sch = db.getTableSchema(name) match {
         case Some(sch) => sch
@@ -489,12 +478,6 @@ class SqlToRA(db: Database)
     }
     if(e.isInstanceOf[NullValue]) { return NullPrimitive() }
     if(e.isInstanceOf[net.sf.jsqlparser.expression.operators.relational.IsNullExpression]) {
-
-      // IS NULL check
-      IsNullChecker.setIsNull(true); // need to set for check later
-      IsNullChecker.setIsNullExpression(e.asInstanceOf[net.sf.jsqlparser.expression.operators.relational.IsNullExpression]) // set the null expression for later
-      IsNullChecker.setLookingForFrom(false);
-
       val isNullExpression = e.asInstanceOf[net.sf.jsqlparser.expression.operators.relational.IsNullExpression]
       val ret = mimir.algebra.IsNullExpression(
         convert(isNullExpression.getLeftExpression, bindings)

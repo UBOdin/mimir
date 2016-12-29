@@ -1,6 +1,7 @@
 package mimir.algebra;
 
 import scala.collection.mutable.ListBuffer
+import scala.util.matching.Regex
 
 case class TypeException(found: Type, expected: Type, 
                     detail:String, context:Option[Expression] = None) 
@@ -36,7 +37,7 @@ object Type {
     case TRowId() => "rowid"
     case TType() => "type"
     case TAny() => "any"
-    case TUser(name,regex,sqlType) => name
+    case TUser(name) => name.toLowerCase
   }
   def fromString(t: String) = t.toLowerCase match {
     case "int"     => TInt()
@@ -52,14 +53,9 @@ object Type {
     case "bool"    => TBool()
     case "rowid"   => TRowId()
     case "type"    => TType()
-    case x         => {
-      TypeRegistry.typeList.get(x) match {
-        case Some((regex, baseType)) => TUser(x, regex, baseType)
-        case None => throw new RAException("Invalid Type '" + t + "'");
-      }
-    }
-
-
+    case x if TypeRegistry.registeredTypes contains x => TUser(x)
+    case _ => 
+      throw new RAException("Invalid Type '" + t + "'");
   }
   def toSQLiteType(i:Int) = i match {
     case 0 => TInt()
@@ -72,9 +68,7 @@ object Type {
     case 7 => TAny()
     case _ => {
       // 8 because this is the number of native types, if more are added then this number needs to increase
-      val name = TypeRegistry.idxType(i-8)
-      val record = TypeRegistry.typeList(name)
-      TUser(name,record._1,record._2)
+      TUser(TypeRegistry.idxType(i-8))
     }
   }
   def id(t:Type) = t match {
@@ -86,16 +80,28 @@ object Type {
     case TRowId() => 5
     case TType() => 6
     case TAny() => 7
-    case TUser(name,regex,sqlType)  => TypeRegistry.typeIdx(name.toLowerCase)+8
+    case TUser(name)  => TypeRegistry.typeIdx(name.toLowerCase)+8
       // 8 because this is the number of native types, if more are added then this number needs to increase
   }
 
-  val tests = Map[Type,String](
-    TInt()   -> "(\\+|-)?([0-9]+)",               
-    TFloat() -> "(\\+|-)?([0-9]*(\\.[0-9]+)?)",   
-    TDate()  -> "[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}", 
-    TBool()  -> "(?i:true|false)"
+  val tests = Map[Type,Regex](
+    TInt()   -> "^(\\+|-)?([0-9]+)$".r,
+    TFloat() -> "^(\\+|-)?([0-9]*(\\.[0-9]+)?)$".r,
+    TDate()  -> "^[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}$".r,
+    TBool()  -> "^(?i:true|false)$".r
   )
+  def matches(t: Type, v: String): Boolean =
+    tests.get(t) match {
+      case Some(test) => !test.findFirstIn(v).isEmpty
+      case None => true
+    }
+
+  def rootType(t: Type): Type =
+    t match {
+      case TUser(t2) => rootType(TypeRegistry.baseType(t2))
+      case t2 => t2
+    }
+
 }
 
 case class TInt() extends Type
@@ -106,7 +112,7 @@ case class TBool() extends Type
 case class TRowId() extends Type
 case class TType() extends Type
 case class TAny() extends Type
-case class TUser(name:String,regex:String,sqlType:Type) extends Type
+case class TUser(name:String) extends Type
 
 
 
@@ -133,18 +139,27 @@ These are the files that need to change to extend the TUser
     - update TUser type parameters
  */
 object TypeRegistry {
-  val typeList = Map[String,(String,Type)](
-    "tuser"         -> ("USER",                            TString()),
-    "tweight"       -> ("KG*",                             TString()),
-    "productid"     -> ("P\\d+",                           TString()),
-    "firecompany"   -> ("^[a-zA-Z]\\d{3}$",                TString()),
-    "zipcode"       -> ("^\\d{5}(?:[-\\s]\\d{4})?$",       TInt()),
-    "container"     -> ("[A-Z]{4}[0-9]{7}",                TString()),
-    "carriercode"   -> ("[A-Z]{4}",                        TString()),
-    "mmsi"          -> ("MID\\d{6}|0MID\\d{5}|00MID\\{4}", TString()),
-    "billoflanding" -> ("[A-Z]{8}[0-9]{8}",                TString()),
-    "imo_code"      -> ("^\\d{7}$",                           TInt())
+  val registeredTypes = Map[String,(Regex,Type)](
+    "tuser"         -> ("USER".r,                            TString()),
+    "tweight"       -> ("KG*".r,                             TString()),
+    "productid"     -> ("P\\d+".r,                           TString()),
+    "firecompany"   -> ("^[a-zA-Z]\\d{3}$".r,                TString()),
+    "zipcode"       -> ("^\\d{5}(?:[-\\s]\\d{4})?$".r,       TInt()),
+    "container"     -> ("[A-Z]{4}[0-9]{7}".r,                TString()),
+    "carriercode"   -> ("[A-Z]{4}".r,                        TString()),
+    "mmsi"          -> ("MID\\d{6}|0MID\\d{5}|00MID\\{4}".r, TString()),
+    "billoflanding" -> ("[A-Z]{8}[0-9]{8}".r,                TString()),
+    "imo_code"      -> ("^\\d{7}$".r,                        TInt())
   )
-  val idxType = typeList.keys.toIndexedSeq
+  val idxType = registeredTypes.keys.toIndexedSeq
   val typeIdx = idxType.zipWithIndex.toMap
+
+  val matchers = registeredTypes.toSeq.map( t => (t._2._1, t._1) )
+
+  def baseType(t: String): Type = registeredTypes(t)._2
+
+  def matcher(t: String): Regex = registeredTypes(t)._1
+
+  def matches(t: String, v: String): Boolean =
+    !matcher(t).findFirstIn(v).isEmpty
 }
