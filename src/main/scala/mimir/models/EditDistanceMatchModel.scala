@@ -77,9 +77,9 @@ class EditDistanceMatchModel(
   target: (String, Type), 
   sourceCandidates: Seq[String]
 ) 
-  extends SingleVarModel(name) 
-  with DataIndependentSingleVarFeedback
-  with NoArgSingleVarModel
+  extends Model(name) 
+  with DataIndependentFeedback
+  with NoArgModel
   with FiniteDiscreteDomain
 {
   /** 
@@ -103,20 +103,23 @@ class EditDistanceMatchModel(
     map({ case (k, v) => (k, v.toDouble) }).
     toIndexedSeq
   } 
-  def varType(argTypes: Seq[Type]) = TString()
+  def varType(idx: Int, t: Seq[Type]) = TString()
 
-  def sample(randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue = 
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue = 
   {
     StringPrimitive(
       RandUtils.pickFromWeightedList(randomness, colMapping)
     )
   }
 
-  def validateChoice(v: PrimitiveValue): Boolean =
+  def validateChoice(idx: Int, v: PrimitiveValue): Boolean =
+  { 
+    EditDistanceMatchModel.logger.debug(s"Validate Edit Distance $name -> $v")
     sourceCandidates.contains(v.asString)
+  }
 
-  def reason(args: Seq[PrimitiveValue]): String = {
-    choice match {
+  def reason(idx: Int, args: Seq[PrimitiveValue]): String = {
+    choices.get(idx) match {
       case None => {
         val sourceName = colMapping.maxBy(_._2)._1
         val targetName = target._1
@@ -137,14 +140,19 @@ class EditDistanceMatchModel(
     }
   }
 
-  def bestGuess(args: Seq[PrimitiveValue]): PrimitiveValue = 
+  def bestGuess(idx: Int, args: Seq[PrimitiveValue]): PrimitiveValue = 
   {
-    if(colMapping.isEmpty){
-      NullPrimitive()
-    } else {
-      val guess = colMapping.maxBy(_._2)._1
-      EditDistanceMatchModel.logger.trace(s"Guesssing ($name) $target <- $guess")
-      StringPrimitive(guess)
+    choices.get(idx) match { 
+      case None => {
+        if(colMapping.isEmpty){
+          NullPrimitive()
+        } else {
+          val guess = colMapping.maxBy(_._2)._1
+          EditDistanceMatchModel.logger.trace(s"Guesssing ($name) $target <- $guess")
+          StringPrimitive(guess)
+        }
+      }
+      case Some(s) => s
     }
   }
 

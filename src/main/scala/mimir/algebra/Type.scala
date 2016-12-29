@@ -84,6 +84,7 @@ object Type {
     case TRowId() => 5
     case TType() => 6
     case TAny() => 7
+    case TTimeStamp() => 8
     case TUser(name)  => TypeRegistry.typeIdx(name.toLowerCase)+9
       // 9 because this is the number of native types, if more are added then this number needs to increase
   }

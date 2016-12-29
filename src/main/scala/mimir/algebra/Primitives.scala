@@ -87,7 +87,7 @@ case class TypePrimitive(t: Type)
 {
   override def toString() = 
     t match {
-      case TUser(ut, _, _) => s"DOMAIN_TYPE('$ut')"
+      case TUser(ut) => s"DOMAIN_TYPE('$ut')"
       case _ => t.toString
     }
   def asLong: Long = throw new TypeException(TType(), TInt(), "Cast")

@@ -109,9 +109,14 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
 
   def bestGuess(idx: Int, args: Seq[PrimitiveValue]): PrimitiveValue = 
   {
-    val guess = voteList(idx).maxBy( rankFn _ )._1
-    TypeInferenceModel.logger.debug(s"Votes($idx): ${voteList(idx)} -> $guess")
-    TypePrimitive(guess)
+    choices.get(idx) match {
+      case None => {
+        val guess = voteList(idx).maxBy( rankFn _ )._1
+        TypeInferenceModel.logger.debug(s"Votes($idx): ${voteList(idx)} -> $guess")
+        TypePrimitive(guess)
+      }
+      case Some(s) => s
+    }
   }
 
   def validateChoice(idx: Int, v: PrimitiveValue): Boolean =
@@ -145,6 +150,6 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
   }
 
   def getDomain(idx: Int, args: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
-    votes.toList.map( x => (TypePrimitive(x._1), x._2))
+    votes(idx).toList.map( x => (TypePrimitive(x._1), x._2))
 
 }

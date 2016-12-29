@@ -27,7 +27,7 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       resolved1 must beAnInstanceOf[Project]
       val resolved2 = resolved1.asInstanceOf[Project]
       val coresColumnId = db.getTableOperator("CPUSPEED").schema.map(_._1).indexOf("CORES")
-      val coresModel = db.models.getModel("CPUSPEED")
+      val coresModel = db.models.get("CPUSPEED")
 
       // Make sure the model name is right.
       // Changes to the way the type inference lens assigns names will need to
