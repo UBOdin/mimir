@@ -357,12 +357,6 @@ class SqlToRA(db: Database)
         fi.asInstanceOf[SubSelect].getSelectBody,
         fi.asInstanceOf[SubSelect].getAlias.toUpperCase
       );
-
-      // Used by the isNull check
-      if(IsNullChecker.lookingForFrom()){
-        IsNullChecker.setFrom("("+(fi.asInstanceOf[SubSelect].getSelectBody).toString() + ") as " + fi.asInstanceOf[SubSelect].getAlias);
-      }
-
       return (ret, bindings, fi.asInstanceOf[SubSelect].getAlias.toUpperCase)
     }
     if(fi.isInstanceOf[net.sf.jsqlparser.schema.Table]){
@@ -444,6 +438,8 @@ class SqlToRA(db: Database)
 
           case like: LikeExpression =>
             return Comparison(if(like.isNot()){ Cmp.NotLike } else { Cmp.Like }, lhs, rhs)
+
+
         }
       }
       
@@ -485,6 +481,14 @@ class SqlToRA(db: Database)
           }).toList, 
           convert(c.getElseExpression(), bindings)
         )
+      }
+
+      case isnull: net.sf.jsqlparser.expression.operators.relational.IsNullExpression => {
+        val base = mimir.algebra.IsNullExpression(
+          convert(isnull.getLeftExpression, bindings)
+        )
+        if(isnull.isNot){ return Not(base) }
+        else { return base; }
       }
     }
   }
