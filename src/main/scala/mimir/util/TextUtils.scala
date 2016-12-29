@@ -20,7 +20,7 @@ object TextUtils {
       case TRowId()  => RowIdPrimitive(s)
       case TType()   => TypePrimitive(Type.fromString(s))
       case TAny()    => throw new RAException("Can't cast string to TAny")
-      case TUser(_,_,ut) => parsePrimitive(ut, s)
+      case TUser(t)  => parsePrimitive(TypeRegistry.baseType(t), s)
     }
   }
 

@@ -17,12 +17,13 @@ object Cast
         case TAny()             => x
         case TBool()            => BoolPrimitive(x.asLong != 0)
         case TType()            => TypePrimitive(Type.fromString(x.asString))
-        case TUser(_, regex, t2) => {
-          val base = apply(t2, x) 
-          if((base.asString.matches(regex))){
-            base
-          } else {
+        case TUser(name) => {
+          val (typeRegexp, baseT) = TypeRegistry.registeredTypes(name)
+          val base = apply(baseT, x) 
+          if(typeRegexp.findFirstMatchIn(base.asString).isEmpty){
             NullPrimitive()
+          } else {
+            base
           }
         }
       }

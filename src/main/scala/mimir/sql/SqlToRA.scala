@@ -369,12 +369,6 @@ class SqlToRA(db: Database)
       if(alias == null){ alias = name }
       else { alias = alias.toUpperCase }
 
-
-      // Used by the isNull check
-      if(IsNullChecker.lookingForFrom()){
-        IsNullChecker.setFrom(name);
-      }
-
       val sch = db.getTableSchema(name) match {
         case Some(sch) => sch
         case None => throw new SQLException("Unknown table or view: "+name);

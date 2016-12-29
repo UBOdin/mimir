@@ -12,8 +12,8 @@ object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
 
   def train(elems: List[String]): TypeInferenceModel = 
   {
-    val model = new TypeInferenceModel("TEST_MODEL", "TEST_COLUMN", 0.5)
-    elems.foreach( model.learn(_) )
+    val model = new TypeInferenceModel("TEST_MODEL", Array("TEST_COLUMN"), 0.5)
+    elems.foreach( model.learn(0, _) )
     return model
   }
 
@@ -47,7 +47,7 @@ object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
 
     "Recognize CPU Cores" >> {
       loadCSV("CPUSPEED", new File("test/data/CPUSpeed.csv"))
-      val model = new TypeInferenceModel("CPUSPEED:CORES", "CORES", 0.5)
+      val model = new TypeInferenceModel("CPUSPEED:CORES", Array("CORES"), 0.5)
       LoggerUtils.debug(List(
         //"mimir.models.TypeInferenceModel"
       ), () => {

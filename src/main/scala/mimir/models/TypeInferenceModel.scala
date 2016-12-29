@@ -14,7 +14,7 @@ object TypeInferenceModel
 
   def priority: Type => Int =
   {
-    case TUser(_,_,_) => 20
+    case TUser(_)     => 20
     case TInt()       => 10
     case TBool()      => 10
     case TDate()      => 10
@@ -27,84 +27,103 @@ object TypeInferenceModel
   }
 
   def detectType(v: String): Iterable[Type] = {
-    Type.tests.flatMap({ case (t, test) =>
-      if(v.matches(test)){ Some(t) }
-      else { None }
+    Type.tests.flatMap({ case (t, regexp) =>
+      regexp.findFirstMatchIn(v).map(_ => t)
     })++
-    TypeRegistry.typeList.flatMap({ case (name, (regexp, baseT)) => {
-      if(v.matches(regexp)) {
-        Some(TUser(name, regexp, baseT))
-      } else { None }
-    }})
+    TypeRegistry.matchers.flatMap({ case (regexp, name) =>
+      regexp.findFirstMatchIn(v).map(_ => TUser(name))
+    })
 
   }
 }
 
 @SerialVersionUID(1000L)
-class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
-  extends SingleVarModel(name)
-  with DataIndependentSingleVarFeedback
-  with NoArgSingleVarModel
+class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac: Double)
+  extends Model(name)
+  with DataIndependentFeedback
+  with NoArgModel
   with FiniteDiscreteDomain
 {
-  var totalVotes = 0.0
-  val votes = scala.collection.mutable.Map[Type, Double]()
+  var totalVotes = 
+    { val v = new scala.collection.mutable.ArraySeq[Double](columns.length)
+      for(col <- (0 until columns.size)){ v.update(col, 0.0) }
+      v
+    }
+  val votes = 
+    columns.map(
+      _ => scala.collection.mutable.Map[Type, Double]()
+    )
 
-  def train(db: Database, query: Operator)
+  def train(db: Database, query: Operator) =
   {
-    db.query(
-      Project(
-        List(ProjectArg(column, Var(column))),
-        query
-      )
-    ).
-    mapRows(_(0)).
-    filter({ 
-      case null            => false
-      case NullPrimitive() => false
-      case _               => true
-    }).
-    map(_.asString).
-    foreach( learn(_) )
+    TimeUtils.monitor(s"Train $name",
+      () => {
+        db.query(
+          Project(
+            columns.map( c => ProjectArg(c, Var(c)) ),
+            query
+          )
+        ).
+        foreachRow( row => learn(row.currentRow) )
+      },
+      TypeInferenceModel.logger.info(_)
+    )
   }
 
-  def learn(v: String)
+  final def learn(row: Seq[PrimitiveValue]):Unit =
   {
-    totalVotes += 1.0
+    row.zipWithIndex.foreach({ case (v, idx) => learn(idx, v) })
+  }
+
+  final def learn(idx: Int, p: PrimitiveValue):Unit =
+  {
+    p match { 
+      case null            => ()
+      case NullPrimitive() => ()
+      case _               => learn(idx, p.asString)
+    }
+  }
+
+  final def learn(idx: Int, v: String):Unit =
+  {
+    totalVotes(idx) += 1.0
     val candidates = TypeInferenceModel.detectType(v)
     TypeInferenceModel.logger.debug(s"Guesses for '$v': $candidates")
-    candidates.foreach( t => { votes(t) = votes.getOrElse(t, 0.0) + 1.0 } )
+    val votesForCurrentIdx = votes(idx)
+    for(t <- candidates){
+      votesForCurrentIdx(t) = votesForCurrentIdx.getOrElse(t, 0.0) + 1.0 
+    }
   }
 
-  private final def voteList = 
-    (TString(), defaultFrac * totalVotes) :: votes.toList
+  private final def voteList(idx: Int) = 
+    (TString(), defaultFrac * totalVotes(idx)) :: votes(idx).toList
 
   private final def rankFn(x:(Type, Double)) =
     (x._2, TypeInferenceModel.priority(x._1) )
 
-  def varType(argTypes: Seq[Type]) = TType()
-  def sample(randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue = 
+  def varType(idx: Int, argTypes: Seq[Type]) = TType()
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue = 
     TypePrimitive(
-      RandUtils.pickFromWeightedList(randomness, voteList)
+      RandUtils.pickFromWeightedList(randomness, voteList(idx))
     )
 
-  def bestGuess(args: Seq[PrimitiveValue]): PrimitiveValue = 
+  def bestGuess(idx: Int, args: Seq[PrimitiveValue]): PrimitiveValue = 
   {
-    val guess = voteList.maxBy( rankFn _ )._1
-    TypeInferenceModel.logger.debug(s"Votes: $voteList -> $guess")
+    val guess = voteList(idx).maxBy( rankFn _ )._1
+    TypeInferenceModel.logger.debug(s"Votes($idx): ${voteList(idx)} -> $guess")
     TypePrimitive(guess)
   }
 
-  def validateChoice(v: PrimitiveValue): Boolean =
+  def validateChoice(idx: Int, v: PrimitiveValue): Boolean =
     v.isInstanceOf[TypePrimitive]
 
 
-  def reason(args: Seq[PrimitiveValue]): String = {
-    choice match {
+  def reason(idx: Int, args: Seq[PrimitiveValue]): String = {
+    choices.get(idx) match {
       case None => {
-        val (guess, guessVotes) = voteList.maxBy( rankFn _ )
+        val (guess, guessVotes) = voteList(idx).maxBy( rankFn _ )
         val defaultPct = (defaultFrac * 100).toInt
-        val guessPct = ((guessVotes / totalVotes)*100).toInt
+        val guessPct = ((guessVotes / totalVotes(idx))*100).toInt
         val typeStr = Type.toString(guess).toUpperCase
         val reason =
           guess match {
@@ -115,11 +134,11 @@ class TypeInferenceModel(name: String, column: String, defaultFrac: Double)
             case _ => 
               s"around $guessPct% of the data fit"
           }
-        s"I guessed that $column was of type $typeStr because $reason"
+        s"I guessed that ${columns(idx)} was of type $typeStr because $reason"
       }
       case Some(TypePrimitive(t)) =>
         val typeStr = Type.toString(t).toUpperCase
-        s"You told me that $column was of type $typeStr"
+        s"You told me that ${columns(idx)} was of type $typeStr"
       case Some(c) =>
         throw new ModelException(s"Invalid choice $c for $name")
     }

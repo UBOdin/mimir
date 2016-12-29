@@ -132,34 +132,39 @@ object LoadCSV extends StrictLogging {
                             sch: Seq[(String, Type)]): Unit = {
 
     var location = 0
-    var numberOfColumns = 0
-    val keys = sch.map(_._1).map((x) => {numberOfColumns+= 1; "\'"+x+"\'"}).mkString(", ")
+    val keys = sch.map(_._1).map((x) => "\'"+x+"\'").mkString(", ")
+    var numberOfColumns = keys.size
+
+    val cmd = "INSERT INTO " + targetTable + "(" + keys + ") VALUES (" + sch.map(x=>"?").mkString(",") + ")"
 
     logger.trace("BEGIN IMPORT")
-    for (record <- rows) {
-      val data = record.fields.
-        take(numberOfColumns).
-        padTo(numberOfColumns, "").
-        map( _.trim ).
-        zip(sch).
-        map({ case (value, (col, t)) =>
-          if(value == null || value.equals("")) { NullPrimitive() }
-          else {
-            if(Type.tests.contains(t) 
-                && !value.matches(Type.tests(t)))
-            {
-              logger.warn(s"fileName:${record.lineNumber}: $col ($t) on is unparseable '$value', using null instead");
-              NullPrimitive()
-            } else {
-              TextUtils.parsePrimitive(t, value)
-            }
-          }
-        })
+    TimeUtils.monitor(s"Import CSV: $targetTable <- $sourceFile",
+      () => {
+        db.backend.fastUpdateBatch(cmd, rows.map({ record => 
+          val data = record.fields.
+            take(numberOfColumns).
+            padTo(numberOfColumns, "").
+            map( _.trim ).
+            zip(sch).
+            map({ case (value, (col, t)) =>
+              if(value == null || value.equals("")) { NullPrimitive() }
+              else {
+                if(!Type.matches(Type.rootType(t), value))
+                {
+                  logger.warn(s"fileName:${record.lineNumber}: $col ($t) on is unparseable '$value', using null instead");
+                  NullPrimitive()
+                } else {
+                  TextUtils.parsePrimitive(t, value)
+                }
+              }
+            })
 
-      val cmd = "INSERT INTO " + targetTable + "(" + keys + ") VALUES (" + data.map(x=>"?").mkString(",") + ")"
-      logger.trace(s"INSERT (line ${record.lineNumber}): $cmd \n <- $data")
-      db.backend.update(cmd, data)
-    }
+          logger.trace(s"INSERT (line ${record.lineNumber}): $cmd \n <- $data")
+          data
+        }))
+      },
+      logger.info(_)
+    )
 
   }
 }
