@@ -18,6 +18,7 @@
   <logger name="mimir.ctables.CTExplainer" level="INFO"/>
   <logger name="mimir.util.LoadCSV$" level="INFO"/>
   <logger name="mimir.util.NonStrictCSVParser" level="INFO"/>
+  <logger name="mimir.models.ModelManager" level="INFO"/>
   <logger name="mimir.models.EditDistanceMatchModel" level="INFO"/>
   <logger name="mimir.models.TypeInferenceModel" level="INFO"/>
   <logger name="mimir.models.WekaModel$" level="INFO"/>
