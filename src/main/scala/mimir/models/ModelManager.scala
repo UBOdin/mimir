@@ -1,6 +1,7 @@
 package mimir.models;
 
 import java.sql.SQLException
+import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.Database
 import mimir.algebra._
 import mimir.util._
@@ -20,7 +21,9 @@ import mimir.util._
  *
  * See below in this file for some traits used to decode things.
  */
-class ModelManager(db:Database) {
+class ModelManager(db:Database) 
+  extends LazyLogging
+{
   
   val decoders = Map[String,((Database, Array[Byte]) => Model)](
     "JAVA"          -> decodeSerializable _
@@ -111,7 +114,10 @@ class ModelManager(db:Database) {
   def get(name:String): Model =
   {
     if(!cache.contains(name)){ prefetch(name) }
-    return cache(name)
+    cache.get(name) match {
+      case Some(model) => return model
+      case None => throw new RAException(s"Invalid Model: $name")
+    }
   }
 
   /**
@@ -158,16 +164,30 @@ class ModelManager(db:Database) {
    */
   def dropOwner(owner:String): Unit =
   {
-    val models = 
-      db.backend.resultRows(s"""
-        SELECT model FROM $ownerTable WHERE owner = ?
-      """).flatten.toList
+    logger.debug(s"Drop Owner: $owner")
+    val models = associatedModels(owner)
+    logger.debug("Associated: $models")
     db.backend.update(s"""
       DELETE FROM $ownerTable WHERE owner = ?
     """, List(
       StringPrimitive(owner)
     ))
-    models.map(_.asString).foreach(garbageCollectIfNeeded(_))
+    for(model <- models) {
+      logger.trace(s"Garbage Collect: $model")
+      garbageCollectIfNeeded(model)
+    }
+  }
+
+  /**
+   * A list of all models presently associated with a given owner.
+   */
+  def associatedModels(owner: String): Seq[String] =
+  {
+    db.backend.resultRows(s"""
+      SELECT model FROM $ownerTable WHERE owner = ?
+    """, List(
+      StringPrimitive(owner)
+    )).map(_(0).asString)
   }
 
   /**
@@ -224,7 +244,7 @@ class ModelManager(db:Database) {
   {
     val otherOwners = 
       db.backend.resultRows(s"""
-        SELECT FROM $ownerTable WHERE model = ?
+        SELECT * FROM $ownerTable WHERE model = ?
       """, List(
         StringPrimitive(model)
       ))

@@ -1,11 +1,14 @@
 package mimir.lenses
 
 import java.io._
+import org.specs2.specification.core.{Fragment,Fragments}
+
 import mimir.algebra._
 import mimir.util._
 import mimir.ctables.{VGTerm}
 import mimir.optimizer.{ResolveViews,InlineVGTerms,InlineProjections}
 import mimir.test._
+import mimir.models._
 
 object LensManagerSpec extends SQLTestSpecification("LensTests") {
 
@@ -65,6 +68,34 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       lensTypes must contain("FAMILY" -> TString())
       lensTypes must contain("TECH_MICRON" -> TFloat())
 
+    }
+
+    "Clean up after a DROP LENS" >> {
+
+      queryOneColumn(s"""
+        SELECT model FROM ${db.models.ownerTable}
+        WHERE owner = 'LENS:SANER'
+      """).toSeq must not beEmpty
+
+      val modelNames = db.models.associatedModels("LENS:SANER")
+      modelNames must not beEmpty
+
+      update("DROP LENS SANER");
+      table("SANER") must throwA[Exception]
+
+      queryOneColumn(s"""
+        SELECT model FROM ${db.models.ownerTable}
+        WHERE owner = 'LENS:SANER'
+      """).toSeq must beEmpty
+
+      for(model <- modelNames){
+        val modelDefn = 
+          queryOneColumn(s"""
+            SELECT * FROM ${db.models.modelTable} WHERE name = '$model'
+          """).toSeq
+        modelDefn must beEmpty;
+      }
+      ok
     }
 
   }  
