@@ -148,6 +148,6 @@ class EditDistanceMatchModel(
     }
   }
 
-  def getDomain(idx: Int, args: List[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
-    (NullPrimitive(), 0.0) :: colMapping.map( x => (StringPrimitive(x._1), x._2))
+  def getDomain(idx: Int, args: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
+    List((NullPrimitive(), 0.0)) ++ colMapping.map( x => (StringPrimitive(x._1), x._2))
 }

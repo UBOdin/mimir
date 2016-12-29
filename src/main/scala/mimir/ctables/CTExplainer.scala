@@ -301,9 +301,9 @@ class CTExplainer(db: Database) extends LazyLogging {
 		(tuple, columnExprs, rowCondition)
 	}
 
-	def makeReason(term: VGTerm, v: List[PrimitiveValue]): Reason =
+	def makeReason(term: VGTerm, v: Seq[PrimitiveValue]): Reason =
 		makeReason(term.model, term.idx, v)
-	def makeReason(model: Model, idx: Int, v: List[PrimitiveValue]): Reason =
+	def makeReason(model: Model, idx: Int, v: Seq[PrimitiveValue]): Reason =
 	{
     Reason(
       model.reason(idx, v),
@@ -314,9 +314,9 @@ class CTExplainer(db: Database) extends LazyLogging {
     )
 	}
 
-	def makeRepair(term: VGTerm, v: List[PrimitiveValue]): Repair =
+	def makeRepair(term: VGTerm, v: Seq[PrimitiveValue]): Repair =
 		makeRepair(term.model, term.idx, v)
-	def makeRepair(model: Model, idx: Int, v: List[PrimitiveValue]): Repair =
+	def makeRepair(model: Model, idx: Int, v: Seq[PrimitiveValue]): Repair =
 	{
 		model match {
 			case finite:( Model with FiniteDiscreteDomain ) =>
