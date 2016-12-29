@@ -170,25 +170,27 @@ public interface MimirJSqlParserConstants {
   /** RegularExpression Id. */
   int K_INTERSECT = 72;
   /** RegularExpression Id. */
-  int S_DOUBLE = 73;
+  int K_FEEDBACK = 73;
   /** RegularExpression Id. */
-  int S_INTEGER = 74;
+  int S_DOUBLE = 74;
   /** RegularExpression Id. */
-  int DIGIT = 75;
+  int S_INTEGER = 75;
   /** RegularExpression Id. */
-  int LINE_COMMENT = 76;
+  int DIGIT = 76;
   /** RegularExpression Id. */
-  int MULTI_LINE_COMMENT = 77;
+  int LINE_COMMENT = 77;
   /** RegularExpression Id. */
-  int S_IDENTIFIER = 78;
+  int MULTI_LINE_COMMENT = 78;
   /** RegularExpression Id. */
-  int LETTER = 79;
+  int S_IDENTIFIER = 79;
   /** RegularExpression Id. */
-  int SPECIAL_CHARS = 80;
+  int LETTER = 80;
   /** RegularExpression Id. */
-  int S_CHAR_LITERAL = 81;
+  int SPECIAL_CHARS = 81;
   /** RegularExpression Id. */
-  int S_QUOTED_IDENTIFIER = 82;
+  int S_CHAR_LITERAL = 82;
+  /** RegularExpression Id. */
+  int S_QUOTED_IDENTIFIER = 83;
 
   /** Lexical state. */
   int DEFAULT = 0;
@@ -268,6 +270,7 @@ public interface MimirJSqlParserConstants {
     "\"TRUNCATE\"",
     "\"DISTINCT\"",
     "\"INTERSECT\"",
+    "\"FEEDBACK\"",
     "<S_DOUBLE>",
     "<S_INTEGER>",
     "<DIGIT>",
@@ -279,10 +282,10 @@ public interface MimirJSqlParserConstants {
     "<S_CHAR_LITERAL>",
     "<S_QUOTED_IDENTIFIER>",
     "\";\"",
-    "\"=\"",
-    "\",\"",
     "\"(\"",
+    "\",\"",
     "\")\"",
+    "\"=\"",
     "\".\"",
     "\"*\"",
     "\"?\"",
