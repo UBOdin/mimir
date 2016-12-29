@@ -378,4 +378,18 @@ case class Database(backend: Backend)
   def loadTable(sourceFile: File){
     loadTable(sourceFile.getName().split("\\.")(0), sourceFile)
   }
+
+  def selectInto(targetTable: String, sourceQuery: Operator){
+    val tableSchema = sourceQuery.schema
+    val tableDef = tableSchema.map( x => x._1+" "+Type.toString(x._2) ).mkString(",")
+    val tableCols = tableSchema.map( _._1 ).mkString(",")
+    val colFillIns = tableSchema.map( _ => "?").mkString(",")
+    backend.update(  s"CREATE TABLE $targetTable ( $tableDef );"  )
+    val insertCmd = s"INSERT INTO $targetTable( $tableCols ) VALUES ($colFillIns);"
+    println(insertCmd)
+    query(sourceQuery).foreachRow(
+      result =>
+        backend.update(insertCmd, result.currentRow())
+    )
+  }
 }
