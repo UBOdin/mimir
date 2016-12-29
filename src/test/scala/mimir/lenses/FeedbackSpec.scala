@@ -8,7 +8,7 @@ import mimir.algebra._
 import mimir.test._
 
 object FeedbackSpec 
-  extends SQLTestSpecification("LensTests")
+  extends SQLTestSpecification("FeedbackTests")
   with BeforeAll
 {
 
