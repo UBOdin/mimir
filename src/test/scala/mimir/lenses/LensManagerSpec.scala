@@ -26,7 +26,7 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       val resolved1 = InlineProjections(ResolveViews(db, db.getTableOperator("CPUSPEED")))
       resolved1 must beAnInstanceOf[Project]
       val resolved2 = resolved1.asInstanceOf[Project]
-      val coresModel = db.models.getModel("CPUSPEED:CORES")
+      val coresModel = db.models.get("CPUSPEED:CORES")
 
       // Make sure the model name is right.
       // Changes to the way the type inference lens assigns names will need to

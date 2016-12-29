@@ -107,7 +107,7 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     db.update(stmt(s))
   def loadCSV(table: String, file: File) =
     LoadCSV.handleLoadTable(db, table, file)
-  def parser = new OperatorParser(db.models.getModel, db.getTableSchema(_).get)
+  def parser = new OperatorParser(db.models.get, db.getTableSchema(_).get)
   def expr = parser.expr _
   def oper = parser.operator _
   def i = IntPrimitive(_:Long).asInstanceOf[PrimitiveValue]

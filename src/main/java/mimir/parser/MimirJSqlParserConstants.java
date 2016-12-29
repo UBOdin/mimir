@@ -282,6 +282,7 @@ public interface MimirJSqlParserConstants {
     "<S_CHAR_LITERAL>",
     "<S_QUOTED_IDENTIFIER>",
     "\";\"",
+    "\":\"",
     "\"(\"",
     "\",\"",
     "\")\"",

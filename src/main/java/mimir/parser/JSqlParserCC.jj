@@ -304,23 +304,23 @@ Statement CreateStatement() :
 
 Feedback FeedbackStatement() : 
 { 
-  String model;
+  String tempStr;
+  String model = "";
   Token idx;
   List<PrimitiveValue> args = new ArrayList<PrimitiveValue>();
-  PrimitiveValue temp;  
+  PrimitiveValue temp;
   PrimitiveValue value;  
 }
 {
   (
     <K_FEEDBACK> 
-    model = RelObjectName()
+    model = RelObjectName() 
+    ( ":" tempStr = RelObjectName() { model += ":" + tempStr; } )*
     idx = <S_INTEGER>
-    "("
-    [ 
+    [ "("
       temp = Literal() { args.add(temp); }
       ("," temp = Literal() { args.add(temp); } )*
-    ]
-    ")"
+    ")" ]
     <K_IS>
     value = Literal()
   ) { return new Feedback(model, Integer.parseInt(idx.image), args, value); }

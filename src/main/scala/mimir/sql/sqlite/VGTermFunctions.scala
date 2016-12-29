@@ -17,7 +17,7 @@ class BestGuessVGTerm(db:Database)
       val modelName = value_text(0).toUpperCase
       val idx = value_int(1)
 
-      val model = db.models.getModel(modelName)
+      val model = db.models.get(modelName)
 
       val argList =
         model.argTypes(idx).

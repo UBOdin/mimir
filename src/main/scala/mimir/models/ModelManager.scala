@@ -10,8 +10,8 @@ import mimir.util._
  *
  * The main function of the ModelManager is to provide a persistent
  * (Name -> Model) mapping.  Associations are created through
- * `persistModel`, removed with `dropModel`, and accessed with
- * `getModel`.  The name of the model is given by Model's name field
+ * `persist`, removed with `drop`, and accessed with
+ * `get`.  The name of the model is given by Model's name field
  *
  * The secondary function is garbage collection.  The manager also 
  * tracks a second set of 'owner' entities.  Owners can be used to
@@ -57,7 +57,7 @@ class ModelManager(db:Database) {
   /**
    * Declare (and cache) a new Name -> Model association
    */
-  def persistModel(model:Model): Unit =
+  def persist(model:Model): Unit =
   {
     val (serialized,decoder) = model.serialize
 
@@ -73,9 +73,31 @@ class ModelManager(db:Database) {
   }
 
   /**
+   * Register that a model has been updated
+   */
+  def update(name: String): Unit =
+    cache.get(name).foreach(update(_))
+
+  /**
+   * Register that a model has been updated
+   */
+  def update(model: Model): Unit =
+  {
+    val (serialized,decoder) = model.serialize
+
+    db.backend.update(s"""
+      UPDATE $modelTable SET encoded = ?, decoder = ? WHERE name = ?
+    """, List(
+      StringPrimitive(SerializationUtils.b64encode(serialized)),
+      StringPrimitive(decoder.toUpperCase),
+      StringPrimitive(model.name)
+    ))
+  }
+
+  /**
    * Remove an existing Name -> Model association if it exists
    */
-  def dropModel(name:String): Unit =
+  def drop(name:String): Unit =
   {
     db.backend.update(s"""
       DELETE FROM $modelTable WHERE name = ?
@@ -86,7 +108,7 @@ class ModelManager(db:Database) {
   /**
    * Retrieve a model by its name
    */
-  def getModel(name:String): Model =
+  def get(name:String): Model =
   {
     if(!cache.contains(name)){ prefetch(name) }
     return cache(name)
@@ -96,16 +118,16 @@ class ModelManager(db:Database) {
    * Declare (and cache) a new Name -> Model association, and 
    * assign the model to an owner entity.
    */
-  def persistModel(model:Model, owner:String): Unit =
+  def persist(model:Model, owner:String): Unit =
   {
-    persistModel(model);
-    associateOwner(model.name, owner);
+    persist(model);
+    associate(model.name, owner);
   }
 
   /**
    * Assign a model to an owner entity
    */
-  def associateOwner(model:String, owner:String): Unit =
+  def associate(model:String, owner:String): Unit =
   {
     db.backend.update(s"""
       INSERT INTO $ownerTable(model, owner) VALUES (?,?)
@@ -119,7 +141,7 @@ class ModelManager(db:Database) {
    * Disassociate a model from an owner entity and cascade the delete
    * to the model if this is the last owner
    */
-  def disassociateOwner(model:String, owner:String): Unit =
+  def disassociate(model:String, owner:String): Unit =
   {
     db.backend.update(s"""
       DELETE FROM $ownerTable WHERE model = ? AND owner = ?
@@ -206,7 +228,7 @@ class ModelManager(db:Database) {
       """, List(
         StringPrimitive(model)
       ))
-    if(!otherOwners.hasNext){ dropModel(model) }
+    if(!otherOwners.hasNext){ drop(model) }
   }
 
   private def decodeSerializable(db: Database, data: Array[Byte]): Model =

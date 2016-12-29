@@ -217,7 +217,7 @@ object SimpleDemoScript
 
 			val result1guesses =
 				db.backend.resultRows("SELECT MIMIR_KEY_0, MIMIR_DATA FROM "+
-						db.bestGuessCache.cacheTableForModel(db.models.getModel("RATINGS1FINAL:WEKA:RATING"), 0))
+						db.bestGuessCache.cacheTableForModel(db.models.get("RATINGS1FINAL:WEKA:RATING"), 0))
 
 			result1guesses.map( x => (x(0), x(1))).toList must contain((IntPrimitive(nullRow), FloatPrimitive(4.5)))
 

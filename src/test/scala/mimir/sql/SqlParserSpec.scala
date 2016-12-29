@@ -26,7 +26,7 @@ object SqlParserSpec
 
 	def convert(s: String) =
 		db.sql.convert(stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select])
-	def parser = new ExpressionParser(db.models.getModel)
+	def parser = new ExpressionParser(db.models.get)
 	def expr = parser.expr _
 
 	val tempDB:String = "tempDB"
@@ -478,7 +478,7 @@ object SqlParserSpec
 			 		db.bestGuessCache.keyColumn(0)+","+
 			 		db.bestGuessCache.dataColumn+" FROM "+
 			 		db.bestGuessCache.cacheTableForModel(
-			 			db.models.getModel("SANER:WEKA:B"), 0)
+			 			db.models.get("SANER:WEKA:B"), 0)
 			 	)
 			guessCacheData must contain( ===(Seq[PrimitiveValue](IntPrimitive(3), IntPrimitive(3))) )
 		 	

@@ -84,7 +84,7 @@ case class Database(backend: Backend)
   //// Parsing
   val sql             = new mimir.sql.SqlToRA(this)
   val ra              = new mimir.sql.RAToSql(this)
-  val operator        = new mimir.parser.OperatorParser(models.getModel _,
+  val operator        = new mimir.parser.OperatorParser(models.get _,
     (x) => 
       this.getTableSchema(x) match {
         case Some(x) => x
@@ -306,8 +306,9 @@ case class Database(backend: Backend)
         val args = feedback.getArgs().map(sql.convert(_))
         val v = sql.convert(feedback.getValue())
 
-        val model = models.getModel(name) 
+        val model = models.get(name) 
         model.feedback(idx, args, v)
+        models.update(model)
       }
 
       case lens: CreateLens => {
