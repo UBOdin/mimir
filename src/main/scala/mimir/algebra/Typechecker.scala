@@ -65,7 +65,7 @@ class ExpressionChecker(scope: (String => Type) = Map().apply _) extends LazyLog
 			case Conditional(condition, thenClause, elseClause) => 
 				assert(condition, TBool(), "WHEN")
 				Typechecker.escalate(
-					typeOf(thenClause), 
+					typeOf(thenClause),
 					typeOf(elseClause),
 					"IF RETURN", e
 				)
@@ -97,10 +97,10 @@ object Typechecker {
 	def typecheckerFor(o: Operator): ExpressionChecker =
 	{
 		val scope = schemaOf(o).toMap;
-		new ExpressionChecker(scope(_))	
+		new ExpressionChecker(scope(_))
 	}
 
-	def schemaOf(o: Operator): List[(String, Type)] =
+	def schemaOf(o: Operator): Seq[(String, Type)] =
 	{
 		o match {
 			case Project(cols, src) =>
@@ -115,27 +115,21 @@ object Typechecker {
 				(new ExpressionChecker(srcSchema.toMap)).assert(cond, TBool(), "SELECT")
 				srcSchema
 
-			case Aggregate(args, groupBy, source) =>
+			case Aggregate(groupBy, agggregates, source) =>
 				/* Get child operator schema */
 				val srcSchema = schemaOf(source)
 				val chk = new ExpressionChecker(srcSchema.toMap)
 
 				/* Get Group By Args and verify type */
-				val groupBySchema: List[(String, Type)] = groupBy.map(x => (x.toString, chk.typeOf(x)) )
+				val groupBySchema: Seq[(String, Type)] = groupBy.map(x => (x.toString, chk.typeOf(x)) )
 
 				/* Get function name, check for AVG *//* Get function parameters, verify type */
-				val aggSchema: List[(String, Type)] = args.map(x => 
-					x.function match {
-						case "AVG" => (x.alias, TFloat())
-						case "COUNT" => (x.alias, TInt())
-						case "SUM" | "MAX" | "MIN" => {
-							(x.alias, assertNumeric(chk.typeOf(x.columns(0)), x.columns(0)))
-						}
-						case "JSON_GROUP_ARRAY" => {
-							(x.alias, TString())
-						}
-						case fn => throw new SQLException("Unknown Aggregate Function: '"+fn+"'")
- 					})
+				val aggSchema: Seq[(String, Type)] = agggregates.map(x => 
+					(
+						x.alias, 
+						AggregateRegistry.typecheck(x.function, x.args.map(chk.typeOf(_)))
+					)
+				)
 
 				/* Send schema to parent operator */
 				val sch = groupBySchema ++ aggSchema ++ srcSchema
@@ -199,13 +193,13 @@ object Typechecker {
 		}
 	}
 
-	def escalate(l: List[Type]): Type =
+	def escalate(l: TraversableOnce[Type]): Type =
 		escalate(l, "Escalation")
-	def escalate(l: List[Type], msg: String): Type =
+	def escalate(l: TraversableOnce[Type], msg: String): Type =
 	{
 		l.fold(TAny())(escalate(_,_,msg))
 	}
-	def escalate(l: List[Type], msg: String, e: Expression): Type =
+	def escalate(l: TraversableOnce[Type], msg: String, e: Expression): Type =
 	{
 		l.fold(TAny())(escalate(_,_,msg,e))
 	}

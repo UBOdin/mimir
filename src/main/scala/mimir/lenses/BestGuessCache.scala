@@ -20,7 +20,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
 
 
   def cacheTableForModel(model: Model, varIdx: Int): String =
-    model.name.replaceAll(":","_") + "_CACHE_" + varIdx
+    "MIMIR_"+model.name.replaceAll(":","_") + "_CACHE_" + varIdx
   def cacheTableForTerm(term: VGTerm): String =
     cacheTableForModel(term.model, term.idx)
   def cacheTableDefinition(model: Model, varIdx: Int, termId: Int): Table = {
@@ -49,8 +49,8 @@ class BestGuessCache(db: Database) extends LazyLogging {
   }
 
 
-  private def buildOuterJoins(expressions: List[Expression], src: Operator): 
-    (List[Expression], Operator) =
+  private def buildOuterJoins(expressions: Seq[Expression], src: Operator): 
+    (Seq[Expression], Operator) =
   {
     assert(CTables.isDeterministic(src))
     val vgTerms = expressions.
@@ -157,7 +157,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
   }
   def buildCache(term: VGTerm, input: Operator): Unit =
     buildCache(term.model, term.idx, term.args, input)
-  def buildCache(model: Model, varIdx: Int, args: List[Expression], input: Operator): Unit = {
+  def buildCache(model: Model, varIdx: Int, args: Seq[Expression], input: Operator): Unit = {
     val cacheTable = cacheTableForModel(model, varIdx)
 
     // Use the best guess schema for the typechecker... we want just one instance
@@ -185,7 +185,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
     db.query(input).foreachRow(row => {
       val compiledArgs = args.map(Provenance.plugInToken(_, row.provenanceToken()))
       val tuple = row.currentTuple()
-      val dataArgs = compiledArgs.map(Eval.eval(_, tuple))
+      val dataArgs = compiledArgs.map(Eval.eval(_, tuple)).toList
       val guess = model.bestGuess(varIdx, dataArgs)
       logger.trace(s"Registering $dataArgs -> $guess")
       // println("BUILD: "+updateQuery)
@@ -202,7 +202,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
   private def dropCacheTable(cacheTable: String) =
     db.backend.update( "DROP TABLE "+cacheTable )
 
-  private def createCacheTable(cacheTable: String, dataType: Type, cacheTypes: List[Type]) = {
+  private def createCacheTable(cacheTable: String, dataType: Type, cacheTypes: Seq[Type]) = {
     val keyCols =
       cacheTypes.zipWithIndex.map( 
         typeIndex => (keyColumn(typeIndex._2), typeIndex._1)

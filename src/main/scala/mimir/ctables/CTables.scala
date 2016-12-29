@@ -7,13 +7,13 @@ import scala.util._
 case class VGTerm(
   model: Model, 
   idx: Int,
-  args: List[Expression]
+  args: Seq[Expression]
 ) extends Proc(args) {
   override def toString() = "{{ "+model.name+";"+idx+"["+args.mkString(", ")+"] }}"
-  override def getType(bindings: List[Type]):Type = model.varType(idx, bindings)
-  override def children: List[Expression] = args
-  override def rebuild(x: List[Expression]) = VGTerm(model, idx, x)
-  def get(v: List[PrimitiveValue]): PrimitiveValue = 
+  override def getType(bindings: Seq[Type]):Type = model.varType(idx, bindings)
+  override def children: Seq[Expression] = args
+  override def rebuild(x: Seq[Expression]) = VGTerm(model, idx, x)
+  def get(v: Seq[PrimitiveValue]): PrimitiveValue = 
   {
     // println("VGTerm: Get")
     model.bestGuess(idx, v)
@@ -87,17 +87,18 @@ object CTables
     }
   }
 
-  def getVGTerms(e: Expression): List[VGTerm] =
+  def getVGTerms(e: Expression): Set[VGTerm] =
     getVGTerms(e: Expression, Map[String, PrimitiveValue]())
 
-  def getVGTerms(e: Expression, bindings: Map[String, PrimitiveValue]): List[VGTerm] =
+  def getVGTerms(e: Expression, bindings: Map[String, PrimitiveValue]): Set[VGTerm] =
   {
+    val children: Set[VGTerm] = e.children.flatMap( getVGTerms(_) ).toSet
     e match {
-      case v : VGTerm => v :: e.children.flatMap( getVGTerms(_) )
-      case _ => e.children.flatMap( getVGTerms(_) )
+      case v : VGTerm => children + v
+      case _ => children
     }
   }
-  def getVGTerms(oper: Operator): List[VGTerm] = 
-    oper.expressions.flatMap(getVGTerms(_)) ++ 
-      oper.children.flatMap(getVGTerms(_))
+  def getVGTerms(oper: Operator): Set[VGTerm] = 
+    (oper.expressions.flatMap(getVGTerms(_)) ++ 
+          oper.children.flatMap(getVGTerms(_))).toSet
 }

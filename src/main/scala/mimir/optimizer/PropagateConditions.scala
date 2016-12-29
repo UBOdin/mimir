@@ -67,8 +67,12 @@ object PropagateConditions extends ExpressionOptimizerRule {
 	def apply(e: Expression): Expression = 
 		ExpressionUtils.makeAnd(propagateConditions(ExpressionUtils.getConjuncts(e)))
 
-	def propagateConditions(l: List[Expression]): List[Expression] = 
+	def propagateConditions(l: Seq[Expression]): Seq[Expression] = 
+		propagateConditions(l.toList)
+
+	private def propagateConditions(l: List[Expression]): List[Expression] = 
 	{
+
 		l match {
 			case head :: rest =>
 				val applyInliner: (Boolean, Expression, Expression) => Expression = 

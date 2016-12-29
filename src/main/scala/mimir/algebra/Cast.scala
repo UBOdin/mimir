@@ -12,6 +12,7 @@ object Cast
         case TFloat()           => FloatPrimitive(x.asDouble)
         case TString()          => StringPrimitive(x.asString)
         case TDate()            => TextUtils.parseDate(x.asString)
+        case TTimeStamp()       => TextUtils.parseTimeStamp(x.asString)
         case TRowId()           => RowIdPrimitive(x.asString)
         case TAny()             => x
         case TBool()            => BoolPrimitive(x.asLong != 0)

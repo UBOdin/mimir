@@ -19,7 +19,7 @@ object OperatorUtils {
    *     Project(ret(N)._1, ret(N)._2) UNION
    */
   def columnExprForOperator(col: String, oper: Operator): 
-    List[(Expression, Operator)] =
+    Seq[(Expression, Operator)] =
   {
     oper match {
       case p @ Project(_, src) => 
@@ -36,7 +36,7 @@ object OperatorUtils {
    * Normalize an operator tree by distributing operators
    * over union terms.
    */
-  def extractUnions(o: Operator): List[Operator] =
+  def extractUnions(o: Operator): Seq[Operator] =
   {
     // println("Extract: " + o)
     o match {
@@ -59,13 +59,13 @@ object OperatorUtils {
     }
   }
 
-  def makeUnion(terms: List[Operator]): Operator = 
+  def makeUnion(terms: Seq[Operator]): Operator = 
   {
-    terms match {
-      case List() => throw new SQLException("Union of Empty List")
-      case List(head) => head
-      case head :: rest => Union(head, makeUnion(rest))
-    }
+    if(terms.isEmpty){ throw new SQLException("Union of Empty List") }
+    val head = terms.head 
+    val tail = terms.tail
+    if(tail.isEmpty){ return head }
+    else { return Union(head, makeUnion(tail)) }
   }
 
   def projectAwayColumn(column: String, oper: Operator): Operator =

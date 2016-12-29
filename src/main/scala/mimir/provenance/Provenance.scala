@@ -13,9 +13,9 @@ object Provenance {
   val mergeRowIdFunction = "MIMIR_MAKE_ROWID"
   val rowidColnameBase = "MIMIR_ROWID"
 
-  def compile(oper: Operator): (Operator, List[String]) = {
+  def compile(oper: Operator): (Operator, Seq[String]) = {
     val makeRowIDProjectArgs = 
-      (rowids: List[String], offset: Integer, padLen: Integer) => {
+      (rowids: Seq[String], offset: Integer, padLen: Integer) => {
         rowids.map(Var(_)).
                padTo(padLen, RowIdPrimitive("-")).
                zipWithIndex.map( { case (v, i) => 
@@ -96,23 +96,23 @@ object Provenance {
           List(rowidColnameBase)
         )
 
-      case Aggregate(args, groupBy, child) =>
+      case Aggregate(groupBy, args, child) =>
         //val newargs = (new AggregateArg(ROWID_KEY, List(Var(ROWID_KEY)), ROWID_KEY)) :: args
         ( 
-          Aggregate(args, groupBy, compile(child)._1),
-          groupBy.map(_.asInstanceOf[Var].name)
+          Aggregate(groupBy, args, compile(child)._1),
+          groupBy.map(_.name)
         )
 
     }
   }
 
-  def rowIdVal(rowids: List[Expression]): Expression =
+  def rowIdVal(rowids: Seq[Expression]): Expression =
     Function(mergeRowIdFunction, rowids)    
 
-  def rowIdVar(rowids: List[String]): Expression = 
+  def rowIdVar(rowids: Seq[String]): Expression = 
     rowIdVal(rowids.map(Var(_)))
 
-  def expandVars(expr: Expression, rowids: List[String]): Expression = {
+  def expandVars(expr: Expression, rowids: Seq[String]): Expression = {
     expr match {
       case RowIdVar() => rowIdVar(rowids)
       case _ => expr.rebuild(expr.children.map(expandVars(_,rowids)))
@@ -126,22 +126,22 @@ object Provenance {
     }
   }
 
-  def joinRowIds(rowids: List[PrimitiveValue]): RowIdPrimitive =
+  def joinRowIds(rowids: Seq[PrimitiveValue]): RowIdPrimitive =
     RowIdPrimitive(rowids.map(_.asString).mkString("|"))
 
-  def splitRowIds(token: RowIdPrimitive): List[RowIdPrimitive] =
+  def splitRowIds(token: RowIdPrimitive): Seq[RowIdPrimitive] =
     token.asString.split("\\|").map( RowIdPrimitive(_) ).toList
 
-  def rowIdMap(token: RowIdPrimitive, rowIdFields:List[String]):Map[String,RowIdPrimitive] = 
+  def rowIdMap(token: RowIdPrimitive, rowIdFields:Seq[String]):Map[String,RowIdPrimitive] = 
     rowIdMap(splitRowIds(token), rowIdFields).toMap
 
-  def rowIdMap(token: List[RowIdPrimitive], rowIdFields:List[String]):Map[String,RowIdPrimitive] =
+  def rowIdMap(token: Seq[RowIdPrimitive], rowIdFields:Seq[String]):Map[String,RowIdPrimitive] =
     rowIdFields.zip(token).toMap
 
-  def filterForToken(operator:Operator, token: RowIdPrimitive, rowIdFields: List[String]): Operator =
+  def filterForToken(operator:Operator, token: RowIdPrimitive, rowIdFields: Seq[String]): Operator =
     filterForToken(operator, rowIdMap(token, rowIdFields))
 
-  def filterForToken(operator:Operator, token: List[RowIdPrimitive], rowIdFields: List[String]): Operator =
+  def filterForToken(operator:Operator, token: Seq[RowIdPrimitive], rowIdFields: Seq[String]): Operator =
     filterForToken(operator, rowIdMap(token, rowIdFields))
 
   def filterForToken(operator:Operator, rowIds: Map[String,PrimitiveValue]): Operator =

@@ -50,11 +50,16 @@ case class ModelException(error:String) extends RAException(error)
  */
 abstract class Model(val name: String) extends Serializable {
   /**
+   * The list of expected arg types (may be TAny)
+   */
+  def argTypes       (idx: Int): Seq[Type]
+
+  /**
    * Infer the type of the model from the types of the inputs
    * @param argTypes    The types of the arguments the the VGTerm
    * @return            The type of the value returned by this model
    */
-  def varType        (idx: Int, argTypes:List[Type]): Type
+  def varType        (idx: Int, argTypes: Seq[Type]): Type
 
   /**
    * Generate a best guess for a variable represented by this model.
@@ -62,7 +67,7 @@ abstract class Model(val name: String) extends Serializable {
    * @param args        The skolem identifier for the specific variable to generate a best guess for
    * @return            A primitive value representing the best guess value.
    */
-  def bestGuess      (idx: Int, args: List[PrimitiveValue]):  PrimitiveValue
+  def bestGuess      (idx: Int, args: Seq[PrimitiveValue]):  PrimitiveValue
   /**
    * Generate a sample from the distribution of a variable represented by this model.
    * @param idx         The index of the variable family to generate a sample for
@@ -70,28 +75,28 @@ abstract class Model(val name: String) extends Serializable {
    * @param args        The skolem identifier for the specific variable to generate a sample for
    * @return            A primitive value representing the generated sample
    */
-  def sample         (idx: Int, randomness: Random, args: List[PrimitiveValue]):  PrimitiveValue
+  def sample         (idx: Int, randomness: Random, args: Seq[PrimitiveValue]):  PrimitiveValue
   /**
    * Generate a human-readable explanation for the uncertainty captured by this model.
    * @param idx   The index of the variable family to explain
    * @param args  The skolem identifier for the specific variable to explain
    * @return      A string reason explaining the uncertainty in this model
    */
-  def reason         (idx: Int, args: List[PrimitiveValue]): (String)
+  def reason         (idx: Int, args: Seq[PrimitiveValue]): (String)
   /**
    * Record feedback given as the "correct" value for a variable represented by this model
    * @param idx   The index of the variable family to record feedback for
    * @param args  The skolem identifier for the specific variable to record feedback for
    * @param v     The correct value for the parameter
    */
-  def feedback       (idx: Int, args: List[PrimitiveValue], v: PrimitiveValue): Unit
+  def feedback       (idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit
   /**
    * Determine whether a variable represented by this model has been acknowledged or not
    * @param idx   The index of the variable family to check acknowledgement of
    * @param args  The skolem identifier for the specific variable to check acknowledgement of
    * @return      True if the variable has been acknowledged
    */
-  def isAcknowledged (idx: Int, args: List[PrimitiveValue]): Boolean
+  def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean
 
   /**
    * Encode the model for persistence to disk/the database

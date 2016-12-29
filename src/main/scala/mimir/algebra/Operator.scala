@@ -1,5 +1,7 @@
 package mimir.algebra;
 
+import mimir.util.ListUtils
+
 /**
  * Abstract parent class of all relational algebra operators
  */
@@ -19,14 +21,14 @@ abstract class Operator
   /**
    * Return all of the child nodes of this operator
    */
-  def children: List[Operator];
+  def children: Seq[Operator];
   /**
    * Return a new instance of the same object, but with the 
    * children replaced with the provided list.  The list must
    * be of the same size returned by children.  This is mostly
    * to facilitate recur, below
    */
-  def rebuild(c: List[Operator]): Operator;
+  def rebuild(c: Seq[Operator]): Operator;
   /**
    * Perform a recursive rewrite.  
    * The following pattern is pretty common throughout Mimir:
@@ -45,13 +47,13 @@ abstract class Operator
   /**
    * Convenience method to invoke the Typechecker
    */
-  def schema: List[(String, Type)] =
+  def schema: Seq[(String, Type)] =
     Typechecker.schemaOf(this)
 
   /**
    * Return all expression objects that appear in this node
    */
-  def expressions: List[Expression]
+  def expressions: Seq[Expression]
 
   /** 
    * Replace all of the expressions in this operator.  Like 
@@ -59,7 +61,7 @@ abstract class Operator
    * the same order as they're returned by the expressions 
    * method
    */
-  def rebuildExpressions(x: List[Expression]): Operator
+  def rebuildExpressions(x: Seq[Expression]): Operator
 
   /**
    * Apply a method to recursively rewrite all of the Expressions
@@ -95,7 +97,7 @@ case class ProjectArg(name: String, expression: Expression)
 /**
  * Generalized relational algebra projection
  */
-case class Project(columns: List[ProjectArg], source: Operator) extends Operator 
+case class Project(columns: Seq[ProjectArg], source: Operator) extends Operator 
 {
   def toString(prefix: String) =
     prefix + "PROJECT[" + 
@@ -104,13 +106,13 @@ case class Project(columns: List[ProjectArg], source: Operator) extends Operator
       "\n" + prefix + ")"
 
   def children() = List(source);
-  def rebuild(x: List[Operator]) = Project(columns, x.head)
+  def rebuild(x: Seq[Operator]) = Project(columns, x.head)
   def get(v: String): Option[Expression] = 
     columns.find( (_.name == v) ).map ( _.expression )
   def bindings: Map[String, Expression] =
     columns.map( (x) => (x.name, x.expression) ).toMap
   def expressions = columns.map(_.expression)
-  def rebuildExpressions(x: List[Expression]) = Project(
+  def rebuildExpressions(x: Seq[Expression]) = Project(
     columns.zip(x).map({ case (ProjectArg(name,_),expr) => ProjectArg(name, expr)}),
     source
   )
@@ -123,43 +125,39 @@ case class Project(columns: List[ProjectArg], source: Operator) extends Operator
       getOperatorName returns the operator name,
       getColumnName returns the column name
 */
-
-/* to fix list: first, we need to get the correct aliases; second, we need to make Aggregate have a list of AggregateArgs;
-third, we need to test and then branch in SqlToRa.scala (flat or agg select)
- */
-case class AggregateArg(function: String, columns: List[Expression], alias: String)
+case class AggFunction(function: String, distinct: Boolean, args: Seq[Expression], alias: String)
 {
-  override def toString = (function.toString + "(" + columns.map(_.toString).mkString(", ") + ")" + ", " + alias)
+  override def toString = (alias + " <= " + function.toString + "(" + (if(distinct){"DISTINCT "}else{""}) + args.map(_.toString).mkString(", ") + ")")
   def getFunctionName() = function
-  def getColumnNames() = columns.map(x => x.toString).mkString(", ")
+  def getColumnNames() = args.map(x => x.toString).mkString(", ")
   def getAlias() = alias.toString
 }
 
-/* Aggregate Operator refashioned 5/23/16, 5/31/16 */
-case class Aggregate(args: List[AggregateArg], groupby: List[Expression], source: Operator) extends Operator
+case class Aggregate(groupby: Seq[Var], aggregates: Seq[AggFunction], source: Operator) extends Operator
 {
   def toString(prefix: String) =
-    prefix + "AGGREGATE[" + args.map(_.toString).mkString("; ") + "]\n\t(Group By [" + groupby.map( _.toString ).mkString(", ") +
-      "])\n\t\t(" + source.toString(prefix + " ") + prefix + ")"
+    prefix + "AGGREGATE[" + 
+      (groupby ++ aggregates).mkString(", ") + 
+      "](\n" +
+      source.toString(prefix + "  ") + "\n" + prefix + ")"
 
   def children() = List(source)
-  def rebuild(x: List[Operator]) = new Aggregate(args, groupby, x(0))
-  //def getAliases() = args.map(x => x.getAlias())
-  def expressions = groupby ++ args.flatMap(_.columns)
-  def rebuildExpressions(x: List[Expression]) = {
+  def rebuild(x: Seq[Operator]) = new Aggregate(groupby, aggregates, x(0))
+  def expressions = groupby ++ aggregates.flatMap(_.args)
+  def rebuildExpressions(x: Seq[Expression]) = {
+    val remainingExpressions = x.iterator
     val newGroupBy = 
-      groupby.zipWithIndex.map( _._2 ).map( x(_) )
-    val newArgs =
-      args.foldLeft((List[AggregateArg](), groupby.length))({ 
-        case ((arglist, baseIdx),AggregateArg(fn, cols, alias)) => 
-          (
-            arglist ++ List(
-              AggregateArg(fn, cols.zipWithIndex.map(_._2+baseIdx).map( x(_) ), alias)
-            ),
-            baseIdx + cols.length
-          )
-      })._1
-    Aggregate(newArgs, newGroupBy, source)
+      ListUtils.headN(remainingExpressions, groupby.length).
+        map(_.asInstanceOf[Var])
+
+    val newAggregates = 
+      aggregates.
+        map(curr => {
+          val newArgs = 
+            ListUtils.headN(remainingExpressions, curr.args.size)
+          AggFunction(curr.function, curr.distinct, newArgs, curr.alias)
+        })
+    Aggregate(newGroupBy, newAggregates, source)
   }
 }
 
@@ -173,9 +171,9 @@ case class Select(condition: Expression, source: Operator) extends Operator
                   "\n" + prefix + ")"
 
   def children() = List(source)
-  def rebuild(x: List[Operator]) = new Select(condition, x(0))
+  def rebuild(x: Seq[Operator]) = new Select(condition, x(0))
   def expressions = List(condition)
-  def rebuildExpressions(x: List[Expression]) = Select(x(0), source)
+  def rebuildExpressions(x: Seq[Expression]) = Select(x(0), source)
 }
 
 /**
@@ -188,9 +186,9 @@ case class Join(left: Operator, right: Operator) extends Operator
     prefix + "JOIN(\n" + left.toString(prefix+"  ") + ",\n" + right.toString(prefix+"  ") + 
                   "\n" + prefix + ")"
   def children() = List(left, right);
-  def rebuild(x: List[Operator]) = Join(x(0), x(1))
+  def rebuild(x: Seq[Operator]) = Join(x(0), x(1))
   def expressions = List()
-  def rebuildExpressions(x: List[Expression]) = this
+  def rebuildExpressions(x: Seq[Expression]) = this
 }
 
 /**
@@ -205,9 +203,9 @@ case class Union(left: Operator, right: Operator) extends Operator
     prefix + ")";
 
   def children() = List(left, right)
-  def rebuild(x: List[Operator]) = Union(x(0), x(1))
+  def rebuild(x: Seq[Operator]) = Union(x(0), x(1))
   def expressions = List()
-  def rebuildExpressions(x: List[Expression]) = this
+  def rebuildExpressions(x: Seq[Expression]) = this
 }
 
 /**
@@ -230,8 +228,8 @@ case class Union(left: Operator, right: Operator) extends Operator
  * with the rowid type.
  */
 case class Table(name: String, 
-                 sch: List[(String,Type)],
-                 metadata: List[(String,Expression,Type)])
+                 sch: Seq[(String,Type)],
+                 metadata: Seq[(String,Expression,Type)])
   extends Operator
 {
   def toString(prefix: String) =
@@ -243,10 +241,10 @@ case class Table(name: String,
       )
     )+")" 
   def children: List[Operator] = List()
-  def rebuild(x: List[Operator]) = Table(name, sch, metadata)
+  def rebuild(x: Seq[Operator]) = Table(name, sch, metadata)
   def metadata_schema = metadata.map( x => (x._1, x._3) )
   def expressions = List()
-  def rebuildExpressions(x: List[Expression]) = this
+  def rebuildExpressions(x: Seq[Expression]) = this
 }
 
 /**
@@ -265,8 +263,8 @@ case class LeftOuterJoin(left: Operator,
 
   def children: List[Operator] = 
     List(left, right)
-  def rebuild(c: List[Operator]): Operator =
+  def rebuild(c: Seq[Operator]): Operator =
     LeftOuterJoin(c(0), c(1), condition)
   def expressions: List[Expression] = List(condition)
-  def rebuildExpressions(x: List[Expression]) = LeftOuterJoin(left, right, x(0))
+  def rebuildExpressions(x: Seq[Expression]) = LeftOuterJoin(left, right, x(0))
 }

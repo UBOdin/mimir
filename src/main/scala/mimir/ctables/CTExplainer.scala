@@ -207,13 +207,16 @@ class CTExplainer(db: Database) extends LazyLogging {
 			val avg = Eval.applyArith(Arith.Div, tot, FloatPrimitive(realCount.toDouble))
 			val stddev =
 				Eval.eval(
-					Function("ABSOLUTE", List(
-						Arithmetic(Arith.Sub, 
-							Arithmetic(Arith.Div, totSq, FloatPrimitive(realCount.toDouble)),
-							Arithmetic(Arith.Mult, avg, avg)
-						)
-					))
+					Function("SQRT", List(					
+						Function("ABSOLUTE", List(
+							Arithmetic(Arith.Sub, 
+								Arithmetic(Arith.Div, totSq, FloatPrimitive(realCount.toDouble)),
+								Arithmetic(Arith.Mult, avg, avg)
+							)
+						))
+					)
 				)
+			)
 			(avg, stddev)
 		} else {
 			(StringPrimitive("n/a"), StringPrimitive("n/a"))

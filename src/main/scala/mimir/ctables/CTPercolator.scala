@@ -5,6 +5,7 @@ import java.sql.SQLException
 import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
+import mimir.sql.sqlite.BoolAnd
 
 object CTPercolator {
 
@@ -181,6 +182,7 @@ object CTPercolator {
               if(ExpressionUtils.getColumns(isDeterministic).isEmpty) {
                 (col, isDeterministic)
               } else {
+                //add entry to map nd col to its determinism decision maker
                 (col, Var(mimirColDeterministicColumnPrefix+col))
               }
             }
@@ -197,6 +199,7 @@ object CTPercolator {
             )))
           }
 
+        //add the determinism metadata into the operator
         val retProject = Project(
             columns ++ computedDeterminismCols ++ rowDeterminismCols,
             rewrittenSrc
@@ -204,6 +207,87 @@ object CTPercolator {
 
         return (retProject, newColDeterminism.toMap, newRowDeterminism)
       }
+      case Aggregate(groupBy, aggregates, src) => {
+        val (rewrittenSrc, colDeterminism, rowDeterminism) = percolateLite(src)
+
+        // An aggregate value is is deterministic when...
+        //  1. All of its inputs are deterministic (all columns referenced in the expr are det)
+        //  2. All of its inputs are deterministically present (all rows in the group are det)
+
+        // Start with the first case.  Come up with an expression to evaluate
+        // whether the aggregate input is deterministic.
+        val aggArgDeterminism: Seq[(String, Expression)] =
+          aggregates.map((agg) => {
+            val argDeterminism =
+              agg.args.map(CTAnalyzer.compileDeterministic(_, colDeterminism))
+
+            (agg.alias, ExpressionUtils.makeAnd(argDeterminism))
+          })
+
+        // Now come up with an expression to compute general row-level determinism
+        val groupDeterminism: Expression =
+          ExpressionUtils.makeAnd(
+            rowDeterminism,
+            ExpressionUtils.makeAnd(
+              groupBy.map( group => colDeterminism(group.name) )
+            )
+          )
+
+        // An aggregate is deterministic if the group is fully deterministic
+        val aggFuncDeterminism: Seq[(String, Expression)] =
+          aggArgDeterminism.map(arg => 
+            (arg._1, ExpressionUtils.makeAnd(arg._2, groupDeterminism))
+          )
+
+        val (aggFuncMetaColumns, aggFuncMetaExpressions) = 
+          aggFuncDeterminism.map({case (aggName, aggDetExpr) =>
+            if(ExpressionUtils.isDataDependent(aggDetExpr)){
+              ( 
+                Some(AggFunction(
+                  "GROUP_AND",
+                  false,
+                  List(aggDetExpr),
+                  "MIMIR_AGG_DET_"+aggName
+                )), 
+                (aggName, Var("MIMIR_AGG_DET_"+aggName))
+              )
+            } else {
+              (None, (aggName, aggDetExpr))
+            }
+          }).unzip
+
+        // A group is deterministic if any of its group-by vars are
+        val (groupMetaColumn, groupMetaExpression) =
+          if(ExpressionUtils.isDataDependent(groupDeterminism)){
+            (
+              Some(AggFunction("GROUP_OR", false, List(groupDeterminism), "MIMIR_GROUP_DET")),
+              Var("MIMIR_GROUP_DET")
+            )
+          } else {
+            (None, groupDeterminism)
+          }          
+
+        // Assemble the aggregate function with metadata columns
+        val extendedAggregate =
+          Aggregate(
+            groupBy, 
+            aggregates ++ aggFuncMetaColumns.flatten ++ groupMetaColumn,
+            src
+          )
+
+        // Annotate all of the output columns
+        val columnMetadata =
+          aggFuncMetaExpressions ++
+          groupBy.map( gb => (gb.name, groupDeterminism) )
+
+        // And return the new aggregate and annotations
+        return (
+          extendedAggregate,
+          columnMetadata.toMap,
+          groupDeterminism
+        )
+      }
+
       case Select(cond, src) => {
         val (rewrittenSrc, colDeterminism, rowDeterminism) = percolateLite(src);
 

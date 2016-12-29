@@ -12,18 +12,18 @@ import mimir.util._
  * in the list.
  */
 @SerialVersionUID(1000L)
-class DefaultMetaModel(name: String, context: String, models: List[String]) 
+class DefaultMetaModel(name: String, context: String, models: Seq[String]) 
   extends SingleVarModel(name) 
   with DataIndependentSingleVarFeedback 
+  with NoArgSingleVarModel
   with FiniteDiscreteDomain
 {
-  def varType(argTypes:List[Type]) = TString()
-
-  def bestGuess(args: List[PrimitiveValue]): PrimitiveValue =
+  def varType(args: Seq[Type]): Type = TString()
+  def bestGuess(args: Seq[PrimitiveValue]): PrimitiveValue =
     choice.getOrElse(StringPrimitive(models.head))
-  def sample(randomness: Random, args: List[PrimitiveValue]): PrimitiveValue =
+  def sample(randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue =
     StringPrimitive(RandUtils.pickFromList(randomness, models))
-  def reason(args: List[PrimitiveValue]): String =
+  def reason(args: Seq[PrimitiveValue]): String =
   {
     choice match {
       case None => {

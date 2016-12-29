@@ -4,7 +4,7 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.models._
 
-class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => List[(String,Type)]))
+class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => Seq[(String,Type)]))
 	extends ExpressionParser(modelLookup) 
 {
 

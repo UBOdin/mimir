@@ -16,8 +16,8 @@ object JDBCUtils {
             java.sql.Types.DOUBLE |
             java.sql.Types.NUMERIC)   => TFloat()
       case (java.sql.Types.INTEGER)  => TInt()
-      case (java.sql.Types.DATE |
-            java.sql.Types.TIMESTAMP)     => TDate()
+      case (java.sql.Types.DATE) => TDate()
+      case (java.sql.Types.TIMESTAMP)   => TTimeStamp()
       case (java.sql.Types.VARCHAR |
             java.sql.Types.NULL |
             java.sql.Types.CHAR)     => TString()
@@ -30,6 +30,7 @@ object JDBCUtils {
       case TInt()       => java.sql.Types.INTEGER
       case TFloat()     => java.sql.Types.DOUBLE
       case TDate()      => java.sql.Types.DATE
+      case TTimeStamp()  => java.sql.Types.TIMESTAMP
       case TString()    => java.sql.Types.VARCHAR
       case TRowId()     => java.sql.Types.ROWID
       case TAny()       => java.sql.Types.VARCHAR
@@ -72,6 +73,15 @@ object JDBCUtils {
             case e: NullPointerException =>
               new NullPrimitive
           }
+        case TTimeStamp() =>
+          try {
+            convertTimeStamp(results.getTimestamp(field))
+          } catch {
+            case e: SQLException =>
+              convertTimeStamp(Timestamp.valueOf(results.getString(field)))
+            case e: NullPointerException =>
+              new NullPrimitive
+          }
         case TUser(_,_,sqlType) => convertField(sqlType, results, field)
       }
     if(results.wasNull()) { NullPrimitive() }
@@ -93,7 +103,23 @@ object JDBCUtils {
     new Date(cal.getTime().getTime());
   }
 
-  def extractAllRows(results: ResultSet): Iterator[List[PrimitiveValue]] =
+  def convertTimeStamp(c: Calendar): TimestampPrimitive =
+    TimestampPrimitive(c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DATE),
+                        c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), c.get(Calendar.SECOND))
+  def convertTimeStamp(ts: Timestamp): TimestampPrimitive =
+  {
+    val cal = Calendar.getInstance();
+    cal.setTime(ts)
+    convertTimeStamp(cal)
+  }
+  def convertTimeStamp(ts: TimestampPrimitive): Timestamp =
+  {
+    val cal = Calendar.getInstance()
+    cal.set(ts.y, ts.m, ts.d, ts.hh, ts.mm, ts.ss);
+    new Timestamp(cal.getTime().getTime());
+  }
+
+  def extractAllRows(results: ResultSet): Iterator[Seq[PrimitiveValue]] =
   {
     val meta = results.getMetaData()
     val schema = 
@@ -103,7 +129,7 @@ object JDBCUtils {
     extractAllRows(results, schema)    
   }
 
-  def extractAllRows(results: ResultSet, schema: List[Type]): Iterator[List[PrimitiveValue]] =
+  def extractAllRows(results: ResultSet, schema: Seq[Type]): Iterator[Seq[PrimitiveValue]] =
   {
     new JDBCResultSetIterable(results, schema)
   }
@@ -111,7 +137,7 @@ object JDBCUtils {
 }
 
 
-class JDBCResultSetIterable(results: ResultSet, schema: List[Type]) extends Iterator[List[PrimitiveValue]]
+class JDBCResultSetIterable(results: ResultSet, schema: Seq[Type]) extends Iterator[Seq[PrimitiveValue]]
 {
   def next(): List[PrimitiveValue] = 
   {

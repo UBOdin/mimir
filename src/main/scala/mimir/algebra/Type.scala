@@ -31,6 +31,7 @@ object Type {
     case TInt() => "int"
     case TFloat() => "real"
     case TDate() => "date"
+    case TTimeStamp() => "datetime"
     case TString() => "varchar"
     case TBool() => "bool"
     case TRowId() => "rowid"
@@ -45,7 +46,9 @@ object Type {
     case "decimal" => TFloat()
     case "real"    => TFloat()
     case "date"    => TDate()
+    case "datetime" => TTimeStamp()
     case "varchar" => TString()
+    case "nvarchar" => TString()
     case "char"    => TString()
     case "string"  => TString()
     case "text"    => TString()
@@ -68,9 +71,10 @@ object Type {
     case 5 => TRowId()
     case 6 => TType()
     case 7 => TAny()
+    case 8 => TTimeStamp()
     case _ => {
-      // 8 because this is the number of native types, if more are added then this number needs to increase
-      val name = TypeRegistry.idxType(i-8)
+      // 9 because this is the number of native types, if more are added then this number needs to increase
+      val name = TypeRegistry.idxType(i-9)
       val record = TypeRegistry.typeList(name)
       TUser(name,record._1,record._2)
     }
@@ -84,15 +88,17 @@ object Type {
     case TRowId() => 5
     case TType() => 6
     case TAny() => 7
+    case TTimeStamp() => 8
     case TUser(name,regex,sqlType)  => 
-      // 8 because this is the number of native types, if more are added then this number needs to increase
-      TypeRegistry.typeIdx(name.toLowerCase)+8
+      // 9 because this is the number of native types, if more are added then this number needs to increase
+      TypeRegistry.typeIdx(name.toLowerCase)+9
   }
 
   val tests = Map[Type,String](
     TInt()   -> "(\\+|-)?([0-9]+)",               
     TFloat() -> "(\\+|-)?([0-9]*(\\.[0-9]+)?)",   
-    TDate()  -> "[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}", 
+    TDate()  -> "[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}",
+    TTimeStamp()  -> "[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}\\ \\[0-9]{2}\\:[0-9]{2}\\:[0-9]{2}",
     TBool()  -> "(?i:true|false)"
   )
 }
@@ -106,6 +112,7 @@ case class TRowId() extends Type
 case class TType() extends Type
 case class TAny() extends Type
 case class TUser(name:String,regex:String,sqlType:Type) extends Type
+case class TTimeStamp() extends Type
 
 
 

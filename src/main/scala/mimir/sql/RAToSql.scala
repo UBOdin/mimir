@@ -8,6 +8,8 @@ import mimir.algebra._
 import mimir.provenance._
 import mimir.optimizer.{InlineProjections, PushdownSelections}
 
+import com.typesafe.scalalogging.slf4j.LazyLogging
+
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
 import net.sf.jsqlparser.expression.operators.relational._
@@ -18,7 +20,9 @@ import net.sf.jsqlparser.statement.select.{SelectBody, PlainSelect, SubSelect, S
 
 import scala.collection.JavaConversions._
 
-class RAToSql(db: Database) {
+class RAToSql(db: Database) 
+  extends LazyLogging 
+{
   
   def standardizeTables(oper: Operator): Operator = 
   {
@@ -47,7 +51,7 @@ class RAToSql(db: Database) {
   {
     // The actual recursive conversion is factored out into a separate fn
     // so that we can do a little preprocessing.
-    // println("CONVERT: "+oper)
+    logger.debug(s"PRE-CONVERT: $oper")
     // Start by rewriting table schemas to make it easier to inline them.
     val standardized = standardizeTables(oper)
 
@@ -64,6 +68,7 @@ class RAToSql(db: Database) {
 
   def doConvert(oper: Operator): SelectBody = 
   {
+    logger.debug(s"CONVERT: $oper")
     oper match {
       case Table(name, sch, metadata) => {
         val body = new PlainSelect();
@@ -109,41 +114,48 @@ class RAToSql(db: Database) {
           oper.schema.map(_._1).map( (x) => ProjectArg(x, Var(x))).toList, oper
         ))
       }
-      case Aggregate(args, gbcols, child) =>
-        val (childCond, childFroms) = extractSelectsAndJoins(child)
-        val subBody = new PlainSelect()
-        subBody.setFromItem(childFroms)
+      case Aggregate(gbcols, aggregates, child) =>
+        val body = new PlainSelect()
+        val (cond, source) = extractSelectsAndJoins(child)
+        val schemas = getSchemas(source)
+        body.setFromItem(source)
+        if(cond != BoolPrimitive(true)){
+          // println("---- SCHEMAS OF:"+source);
+          // println("---- ARE: "+schemas)
+          body.setWhere(convert(cond, schemas))
+        }
 
-        subBody.setSelectItems(
+        body.setSelectItems(
           new java.util.ArrayList(
-            args.map( (arg) => {
-              val item = new SelectExpressionItem()
-              item.setAlias(arg.alias)
-              val func = new Function()
-              func.setName(arg.function)
-              func.setParameters(new ExpressionList(new java.util.ArrayList(
-                arg.columns.map(convert(_, getSchemas(childFroms))))))
-
-              item.setExpression(func)
-              item
-            }) ++
             gbcols.map( (col) => {
               val item = new SelectExpressionItem()
-              val column =  convert(col, getSchemas(childFroms))
+              val column =  convert(col, schemas)
               item.setAlias(column.asInstanceOf[Column].getColumnName())
               item.setExpression(column)
+              item
+            }) ++
+            aggregates.map( (agg) => {
+              val item = new SelectExpressionItem()
+              item.setAlias(agg.alias)
+              val func = new Function()
+              func.setName(agg.function)
+              func.setParameters(new ExpressionList(new java.util.ArrayList(
+                agg.args.map(convert(_, schemas)))))
+              func.setDistinct(agg.distinct)
+
+              item.setExpression(func)
               item
             })
           )
         )
-        subBody.setGroupByColumnReferences(new java.util.ArrayList(
-          gbcols.map(convert(_, getSchemas(childFroms)).asInstanceOf[net.sf.jsqlparser.schema.Column])))
+        body.setGroupByColumnReferences(new java.util.ArrayList(
+          gbcols.map(convert(_, schemas).asInstanceOf[net.sf.jsqlparser.schema.Column])))
 
-        subBody
+        body
 
-      case Project(args, src) =>
+      case Project(args, child) =>
         val body = new PlainSelect()
-        val (cond, source) = extractSelectsAndJoins(src)
+        val (cond, source) = extractSelectsAndJoins(child)
         val schemas = getSchemas(source)
         body.setFromItem(source)
         if(cond != BoolPrimitive(true)){

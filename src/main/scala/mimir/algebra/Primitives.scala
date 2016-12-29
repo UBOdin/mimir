@@ -41,11 +41,14 @@ abstract class PrimitiveValue(t: Type)
    */
   def payload: Object;
 }
+
+abstract class NumericPrimitive(t: Type) extends PrimitiveValue(t)
+
 /**
  * Boxed representation of a long integer
  */
 case class IntPrimitive(v: Long) 
-  extends PrimitiveValue(TInt())
+  extends NumericPrimitive(TInt())
 {
   override def toString() = v.toString
   def asLong: Long = v;
@@ -108,7 +111,7 @@ case class RowIdPrimitive(v: String)
  * Boxed representation of a double-precision floating point number
  */
 case class FloatPrimitive(v: Double) 
-  extends PrimitiveValue(TFloat())
+  extends NumericPrimitive(TFloat())
 {
   override def toString() = v.toString
   def asLong: Long = throw new TypeException(TFloat(), TInt(), "Cast");
@@ -120,7 +123,7 @@ case class FloatPrimitive(v: Double)
 /**
  * Boxed representation of a date
  */
-case class DatePrimitive(y: Int, m: Int, d: Int) 
+case class DatePrimitive(y: Int, m: Int, d: Int)
   extends PrimitiveValue(TDate())
 {
   override def toString() = "DATE '"+y+"-"+m+"-"+d+"'"
@@ -135,6 +138,35 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
     else if(c.m > m) { 1 }
     else if(c.d < d) { -1 }
     else if(c.d > d) { 1 }
+    else { 0 }
+  }
+}
+
+/**
+  *
+  * Boxed Representation of Timestamp
+  */
+case class TimestampPrimitive(y: Int, m: Int, d: Int, hh: Int, mm: Int, ss: Int)
+  extends PrimitiveValue(TTimeStamp())
+{
+  override def toString() = "DATE '"+y+"-"+m+"-"+d+" "+hh+":"+mm+":"+ss+"'"
+  def asLong: Long = throw new TypeException(TDate(), TInt(), "Cast");
+  def asDouble: Double = throw new TypeException(TDate(), TFloat(), "Cast");
+  def asString: String = toString;
+  def payload: Object = (y, m, d).asInstanceOf[Object];
+  def compare(c: TimestampPrimitive): Integer = {
+    if(c.y < y){ -1 }
+    else if(c.y > y) { 1 }
+    else if(c.m < m) { -1 }
+    else if(c.m > m) { 1 }
+    else if(c.d < d) { -1 }
+    else if(c.d > d) { 1 }
+    else if(c.hh < hh) { -1 }
+    else if(c.hh > hh) { 1 }
+    else if(c.mm < mm) { -1 }
+    else if(c.mm > mm) { 1 }
+    else if(c.ss < ss) { -1 }
+    else if(c.ss > ss) { 1 }
     else { 0 }
   }
 }

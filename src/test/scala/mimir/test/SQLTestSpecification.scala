@@ -27,8 +27,12 @@ object DBTestInstances
           val shouldResetDB = config.getOrElse("reset", "YES") match { 
             case "NO" => false; case "YES" => true
           }
+          val shouldEnableInlining = config.getOrElse("inline", "YES") match { 
+            case "NO" => false; case "YES" => true
+          }
           val oldDBExists = dbFile.exists();
-          val tmpDB = new Database(new JDBCBackend(jdbcBackendMode, tempDBName+".db"));
+          val backend = new JDBCBackend(jdbcBackendMode, tempDBName+".db")
+          val tmpDB = new Database(backend);
           if(shouldResetDB){
             if(dbFile.exists()){ dbFile.delete(); }
           }
@@ -42,6 +46,9 @@ object DBTestInstances
           tmpDB.backend.open();
           if(shouldResetDB || !oldDBExists || !config.contains("initial_db")){
             tmpDB.initializeDBForMimir();
+          }
+          if(shouldEnableInlining){
+            backend.enableInlining(tmpDB)
           }
           databases.put(tempDBName, tmpDB)
           tmpDB
@@ -58,28 +65,13 @@ object DBTestInstances
  */
 abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,String] = Map())
   extends Specification
+  with SQLParsers
 {
 
   def dbFile = new File(tempDBName+".db")
 
   def db = DBTestInstances.get(tempDBName, config)
 
-  def stmts(f: File): List[Statement] = {
-    val p = new MimirJSqlParser(new FileReader(f))
-    var ret = List[Statement]();
-    var s: Statement = null;
-
-    do{
-      s = p.Statement()
-      if(s != null) {
-        ret = s :: ret;
-      }
-    } while(s != null)
-    ret.reverse
-  }
-  def stmt(s: String) = {
-    new MimirJSqlParser(new StringReader(s)).Statement()
-  }
   def select(s: String) = {
     db.sql.convert(
       stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
@@ -89,11 +81,11 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     val query = select(s)
     db.query(query)
   }
-  def queryOneColumn(s: String): List[PrimitiveValue] = 
+  def queryOneColumn(s: String): Iterable[PrimitiveValue] = 
     query(s).mapRows(_(0))
   def querySingleton(s: String): PrimitiveValue =
     queryOneColumn(s).head
-  def queryOneRow(s: String): List[PrimitiveValue] =
+  def queryOneRow(s: String): Iterable[PrimitiveValue] =
     query(s).mapRows( _.currentRow ).head
   def table(t: String) =
     db.getTableOperator(t)

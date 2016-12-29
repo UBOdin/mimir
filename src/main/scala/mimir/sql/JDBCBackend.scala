@@ -2,6 +2,7 @@ package mimir.sql;
 
 import java.sql._
 
+import mimir.Database
 import mimir.Methods
 import mimir.algebra._
 import mimir.util.JDBCUtils
@@ -15,10 +16,11 @@ class JDBCBackend(backend: String, filename: String) extends Backend
 {
   var conn: Connection = null
   var openConnections = 0
+  var inliningAvailable = false;
 
   def driver() = backend
 
-  val tableSchemas: scala.collection.mutable.Map[String, List[(String, Type)]] = mutable.Map()
+  val tableSchemas: scala.collection.mutable.Map[String, Seq[(String, Type)]] = mutable.Map()
 
   def open() = {
     this.synchronized({
@@ -45,7 +47,14 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     })
   }
 
-
+  def enableInlining(db: Database): Unit =
+  {
+    backend match {
+      case "sqlite" => 
+        sqlite.VGTermFunctions.register(db, conn)
+        inliningAvailable = true
+    }
+  }
 
   def close(): Unit = {
     this.synchronized({
@@ -61,8 +70,6 @@ class JDBCBackend(backend: String, filename: String) extends Backend
       if (openConnections == 0) assert(conn == null)
     })
   }
-
-
 
   def execute(sel: String): ResultSet = 
   {
@@ -80,7 +87,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         throw new SQLException("Error in "+sel, e)
     }
   }
-  def execute(sel: String, args: List[PrimitiveValue]): ResultSet = 
+  def execute(sel: String, args: Seq[PrimitiveValue]): ResultSet = 
   {
     //println(""+sel+" <- "+args)
     try {
@@ -106,7 +113,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     stmt.close()
   }
 
-  def update(upd: List[String]): Unit =
+  def update(upd: TraversableOnce[String]): Unit =
   {
     if(conn == null) {
       throw new SQLException("Trying to use unopened connection!")
@@ -117,7 +124,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     stmt.close()
   }
 
-  def update(upd: String, args: List[PrimitiveValue]): Unit =
+  def update(upd: String, args: Seq[PrimitiveValue]): Unit =
   {
     if(conn == null) {
       throw new SQLException("Trying to use unopened connection!")
@@ -128,7 +135,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     stmt.close()
   }
   
-  def getTableSchema(table: String): Option[List[(String, Type)]] =
+  def getTableSchema(table: String): Option[Seq[(String, Type)]] =
   {
     if(conn == null) {
       throw new SQLException("Trying to use unopened connection!")
@@ -141,7 +148,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         if(!tables.contains(table.toUpperCase)) return None
 
         val cols: Option[List[(String, Type)]] = backend match {
-          case "sqlite" | "sqlite-inline" | "sqlite-bundles" => {
+          case "sqlite" => {
             // SQLite doesn't recognize anything more than the simplest possible types.
             // Type information is persisted but not interpreted, so conn.getMetaData() 
             // is useless for getting schema information.  Instead, we need to use a
@@ -168,7 +175,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     }
   }
 
-  def getAllTables(): List[String] = {
+  def getAllTables(): Seq[String] = {
     if(conn == null) {
       throw new SQLException("Trying to use unopened connection!")
     }
@@ -189,14 +196,19 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     tableNames.toList
   }
 
+  def canHandleVGTerms(): Boolean = inliningAvailable
+
   def specializeQuery(q: Operator): Operator = {
     backend match {
-      case "sqlite" => SpecializeForSQLite(q)
+      case "sqlite" if inliningAvailable => 
+        VGTermFunctions.specialize(SpecializeForSQLite(q))
+      case "sqlite" =>
+        SpecializeForSQLite(q)
       case "oracle" => q
     }
   }
 
-  def setArgs(stmt: PreparedStatement, args: List[PrimitiveValue]): Unit =
+  def setArgs(stmt: PreparedStatement, args: Seq[PrimitiveValue]): Unit =
   {
     args.zipWithIndex.foreach(a => {
       val i = a._2+1

@@ -12,11 +12,16 @@
   <logger name="mimir.lenses.BestGuessCache" level="INFO"/>
   <logger name="mimir.views.ViewManager" level="INFO"/>
   <logger name="mimir.sql.sqlite.MimirCast$" level="INFO"/>
+  <logger name="mimir.sql.sqlite.BestGuessVGTerm" level="INFO"/>
+  <logger name="mimir.sql.RAToSql" level="INFO"/>
+  <logger name="mimir.sql.SqlToRA" level="INFO"/>
   <logger name="mimir.ctables.CTExplainer" level="INFO"/>
   <logger name="mimir.util.LoadCSV$" level="INFO"/>
+  <logger name="mimir.util.NonStrictCSVParser" level="INFO"/>
   <logger name="mimir.models.EditDistanceMatchModel" level="INFO"/>
   <logger name="mimir.models.TypeInferenceModel" level="INFO"/>
   <logger name="mimir.lenses.TypeInferenceLens$" level="INFO"/>
+
  
   <root level="TRACE">
     <appender-ref ref="STDOUT" />

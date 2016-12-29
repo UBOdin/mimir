@@ -42,7 +42,7 @@ object PushdownSelections {
 			case Select(_, (_:Table)) => o
 
 			case Select(cond, Join(lhs, rhs)) => {
-				val clauses: List[Expression] = ExpressionUtils.getConjuncts(cond)
+				val clauses: Seq[Expression] = ExpressionUtils.getConjuncts(cond)
 				val lhsSchema = lhs.schema.map(_._1).toSet
 				val rhsSchema = rhs.schema.map(_._1).toSet
 				val dualSchema = lhsSchema ++ rhsSchema
@@ -85,12 +85,12 @@ object PushdownSelections {
 			}
 
 			case Select(cond, LeftOuterJoin(lhs, rhs, outerJoinCond)) => {
-				val clauses: List[Expression] = ExpressionUtils.getConjuncts(cond)
+				val clauses: Seq[Expression] = ExpressionUtils.getConjuncts(cond)
 				val rhsSchema = rhs.schema.map(_._1).toSet
 
 				// Left-hand-side clauses are the ones where there's no overlap
 				// with variables from the right-hand-side
-				val (lhsClauses: List[Expression], lhsRest: List[Expression]) =
+				val (lhsClauses: Seq[Expression], lhsRest: Seq[Expression]) =
 					clauses.partition(
 						(x: Expression) => (ExpressionUtils.getColumns(x) & rhsSchema).isEmpty
 					)

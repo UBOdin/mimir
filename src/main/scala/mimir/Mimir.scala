@@ -60,6 +60,10 @@ object Mimir {
         db.models.prefetchForOwner(table.toUpperCase)
       }))
 
+      if(ExperimentalOptions.isEnabled("INLINE-VG")){
+        db.backend.asInstanceOf[JDBCBackend].enableInlining(db)
+      }
+
       if(conf.file.get == None || conf.file() == "-"){
         source = new InputStreamReader(System.in);
         usePrompt = !conf.quiet();

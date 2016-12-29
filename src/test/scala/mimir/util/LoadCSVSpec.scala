@@ -8,7 +8,6 @@ import mimir.algebra._
 
 object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
 {
-  
   "LoadCSV" should {
 
     "Load CSV files with headers" >> {
@@ -83,11 +82,21 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
 
     "Load CSV files with missing values" >> {
       LoadCSV.handleLoadTable(db, "R", new File("test/r_test/r.csv"), false)
-      val colNames: List[String] = db.getTableSchema("R").get.map(_._1)
+      val colNames: Seq[String] = db.getTableSchema("R").get.map(_._1)
       val b = colNames(1)
       val c = colNames(2)
       queryOneColumn(s"SELECT $b FROM R") must contain(NullPrimitive())
       queryOneColumn(s"SELECT $c FROM R") must contain(NullPrimitive())
+    }
+
+    "Load CSV files with garbled data" >> {
+      LoggerUtils.enhance("mimir.util.NonStrictCSVParser", LoggerUtils.ERROR, () => {
+        LoadCSV.handleLoadTable(db, "GARBLED", new File("test/data/garbledRatings.csv"))
+      })
+      queryOneColumn("SELECT PID FROM GARBLED") must contain(
+        eachOf(str("P123"), str("P124"))
+      )
+      queryOneColumn("SELECT PID FROM GARBLED") must have size(4)
     }
 
   }
