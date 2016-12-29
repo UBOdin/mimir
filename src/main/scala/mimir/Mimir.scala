@@ -128,13 +128,13 @@ object Mimir {
   }
 
   def handleSelect(sel: Select): Unit = {
-    TimeUtils.monitor("QUERY", _ => {
+    TimeUtils.monitor("QUERY", () => {
       val raw = db.sql.convert(sel)
       val results = db.query(raw)
       results.open()
       db.dump(results)
       results.close()
-    })
+    }, println(_))
   }
 
 }

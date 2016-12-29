@@ -180,16 +180,14 @@ object Typechecker {
 	def escalate(a: Type, b: Type, msg: String, e: Option[Expression]): Type = 
 	{
 		(a,b) match {
-			case (TUser(name,regex,sqlType),_) => escalate(sqlType,b,msg)
-			case (_,TUser(name,regex,sqlType)) => escalate(a,sqlType,msg)
+			case _ if a.equals(b) => a
+			case (TUser(name),_) => escalate(TypeRegistry.baseType(name),b,msg)
+			case (_,TUser(name)) => escalate(a,TypeRegistry.baseType(name),msg)
 			case (TAny(),_) => b
 			case (_,TAny()) => a
 			case (TInt(), TInt()) => TInt()
 			case ((TInt()|TFloat()), (TInt()|TFloat())) => TFloat()
-			case _ => 
-				if(a == b) { a } else {
-					throw new TypeException(a, b, msg, e);
-				}
+			case _ => throw new TypeException(a, b, msg, e);
 		}
 	}
 
@@ -203,10 +201,4 @@ object Typechecker {
 	{
 		l.fold(TAny())(escalate(_,_,msg,e))
 	}
-
-	def baseType(a: Type): Type = 
-    a match { 
-      case TUser(_,_,t) => baseType(t)
-      case _ => a
-    }
 }

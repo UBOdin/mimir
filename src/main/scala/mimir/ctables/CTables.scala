@@ -18,13 +18,6 @@ case class VGTerm(
     // println("VGTerm: Get")
     model.bestGuess(idx, v)
   }
-  def reason(v: Seq[PrimitiveValue]): Reason = 
-    Reason(
-      model.reason(idx, v),
-      model.name,
-      idx,
-      v
-    )
 }
 
 object CTables 

@@ -59,7 +59,7 @@ class Serialization(db: Database) {
   {
     expr match {
       case SerializableVGTerm(model, idx, args) => 
-        VGTerm(db.models.getModel(model), idx, args.map(desanitize(_)))
+        VGTerm(db.models.get(model), idx, args.map(desanitize(_)))
       case _ => 
         expr.recur(desanitize(_))
     }

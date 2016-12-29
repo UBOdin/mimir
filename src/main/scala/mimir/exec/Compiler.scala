@@ -4,7 +4,6 @@ package mimir.exec
 import java.sql._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-import mimir.sql.IsNullChecker
 import mimir.Database
 import mimir.algebra.Union
 import mimir.algebra._

@@ -357,12 +357,6 @@ class SqlToRA(db: Database)
         fi.asInstanceOf[SubSelect].getSelectBody,
         fi.asInstanceOf[SubSelect].getAlias.toUpperCase
       );
-
-      // Used by the isNull check
-      if(IsNullChecker.lookingForFrom()){
-        IsNullChecker.setFrom("("+(fi.asInstanceOf[SubSelect].getSelectBody).toString() + ") as " + fi.asInstanceOf[SubSelect].getAlias);
-      }
-
       return (ret, bindings, fi.asInstanceOf[SubSelect].getAlias.toUpperCase)
     }
     if(fi.isInstanceOf[net.sf.jsqlparser.schema.Table]){
@@ -374,12 +368,6 @@ class SqlToRA(db: Database)
           getAlias
       if(alias == null){ alias = name }
       else { alias = alias.toUpperCase }
-
-
-      // Used by the isNull check
-      if(IsNullChecker.lookingForFrom()){
-        IsNullChecker.setFrom(name);
-      }
 
       val sch = db.getTableSchema(name) match {
         case Some(sch) => sch
@@ -403,109 +391,100 @@ class SqlToRA(db: Database)
     unhandled("FromItem["+fi.getClass.toString+"]")
   }
   // 
+  def convert(e : net.sf.jsqlparser.expression.PrimitiveValue) : PrimitiveValue =
+  {
+    e match { 
+      case i: LongValue   => return IntPrimitive(i.getValue())
+      case f: DoubleValue => return FloatPrimitive(f.getValue())
+      case s: StringValue => return StringPrimitive(s.getValue())
+      case _: NullValue   => return NullPrimitive()
+      case d: DateValue   => {
+        val d2 = new LocalDate(e.asInstanceOf[DateValue].getValue())
+        return DatePrimitive(d2.getYear(), d2.getMonthOfYear(), d2.getDayOfMonth())
+      }
+    }    
+  }
+
   def convert(e : net.sf.jsqlparser.expression.Expression) : Expression = 
     convert(e, Map[String,String]())
   def convert(e : net.sf.jsqlparser.expression.Expression, bindings: Map[String, String]) : Expression = {
-    if(e.isInstanceOf[DateValue]){ 
-      val d = new LocalDate(e.asInstanceOf[DateValue].getValue())
-      return DatePrimitive(d.getYear(), d.getMonthOfYear(), d.getDayOfMonth())
-    }
-    if(e.isInstanceOf[LongValue]){ 
-      return IntPrimitive(e.asInstanceOf[LongValue].getValue()) 
-    }
-    if(e.isInstanceOf[DoubleValue]){ 
-      return FloatPrimitive(e.asInstanceOf[DoubleValue].getValue()) 
-    }
-    if(e.isInstanceOf[StringValue]){
-      return StringPrimitive(e.asInstanceOf[StringValue].getValue())
-    }
-    if(e.isInstanceOf[InverseExpression]){
-      return Not(convert(e.asInstanceOf[InverseExpression].getExpression, bindings))
-    }
-    if(e.isInstanceOf[BinaryExpression]){
-      val lhs = convert(e.asInstanceOf[BinaryExpression].getLeftExpression(), bindings)
-      val rhs = convert(e.asInstanceOf[BinaryExpression].getRightExpression(), bindings)
-  
-      if(e.isInstanceOf[Addition]){ return Arithmetic(Arith.Add, lhs, rhs); }
-      if(e.isInstanceOf[Subtraction]){ return Arithmetic(Arith.Sub, lhs, rhs); }
-      if(e.isInstanceOf[Multiplication]){ return Arithmetic(Arith.Mult, lhs, rhs); }
-      if(e.isInstanceOf[Division]){ return Arithmetic(Arith.Div, lhs, rhs); }
-      if(e.isInstanceOf[AndExpression]){ return Arithmetic(Arith.And, lhs, rhs); }
-      if(e.isInstanceOf[OrExpression]){ return Arithmetic(Arith.Or, lhs, rhs); }
+    e match {
+      case prim: net.sf.jsqlparser.expression.PrimitiveValue => convert(prim)
+      case inv: InverseExpression => 
+        return Not(convert(inv.getExpression, bindings))
+      case bin: BinaryExpression => {
+        val lhs = convert(bin.getLeftExpression(), bindings)
+        val rhs = convert(bin.getRightExpression(), bindings)
+        bin match {  
+          case _:Addition       => return Arithmetic(Arith.Add, lhs, rhs)
+          case _:Subtraction    => return Arithmetic(Arith.Sub, lhs, rhs)
+          case _:Multiplication => return Arithmetic(Arith.Mult, lhs, rhs)
+          case _:Division       => return Arithmetic(Arith.Div, lhs, rhs)
+          case _:AndExpression  => return Arithmetic(Arith.And, lhs, rhs)
+          case _:OrExpression   => return Arithmetic(Arith.Or, lhs, rhs)
       
-      if(e.isInstanceOf[EqualsTo]){ return Comparison(Cmp.Eq, lhs, rhs); }
-      if(e.isInstanceOf[NotEqualsTo]){ return Comparison(Cmp.Neq, lhs, rhs); }
-      if(e.isInstanceOf[GreaterThan]){ return Comparison(Cmp.Gt, lhs, rhs); }
-      if(e.isInstanceOf[MinorThan]){ return Comparison(Cmp.Lt, lhs, rhs); }
-      if(e.isInstanceOf[GreaterThanEquals]){ return Comparison(Cmp.Gte, lhs, rhs); }
-      if(e.isInstanceOf[MinorThanEquals]){ return Comparison(Cmp.Lte, lhs, rhs); }
-      if(e.isInstanceOf[LikeExpression]){ 
-        return Comparison(if(e.asInstanceOf[LikeExpression].isNot()) 
-                            { Cmp.NotLike } else { Cmp.Like }, lhs, rhs); 
-      }
-      unhandled("Expression[BinaryExpression]: "+e)
-      return null;
-    }
-    if(e.isInstanceOf[Column]){ return convertColumn(e.asInstanceOf[Column], bindings) }
-    if(e.isInstanceOf[net.sf.jsqlparser.expression.Function]){
-      val f = e.asInstanceOf[net.sf.jsqlparser.expression.Function]
-      val name = f.getName.toUpperCase
-      val parameters : List[Expression] = 
-        if(f.getParameters == null) { List[Expression]() }
-        else {
-          f.getParameters.
-            getExpressions.
-            map( (o : Any) => convert(o.asInstanceOf[net.sf.jsqlparser.expression.Expression], bindings) ).
-            toList
+          case _:EqualsTo          => return Comparison(Cmp.Eq, lhs, rhs)
+          case _:NotEqualsTo       => return Comparison(Cmp.Neq, lhs, rhs)
+          case _:GreaterThan       => return Comparison(Cmp.Gt, lhs, rhs)
+          case _:MinorThan         => return Comparison(Cmp.Lt, lhs, rhs)
+          case _:GreaterThanEquals => return Comparison(Cmp.Gte, lhs, rhs)
+          case _:MinorThanEquals   => return Comparison(Cmp.Lte, lhs, rhs)
+
+          case like: LikeExpression =>
+            return Comparison(if(like.isNot()){ Cmp.NotLike } else { Cmp.Like }, lhs, rhs)
+
+
         }
-      return (name, parameters) match {
-        case ("ROWID", List()) => RowIdVar()
-        case ("ROWID", List(x: RowIdPrimitive)) => x
-        case ("ROWID", List(x: PrimitiveValue)) => RowIdPrimitive(x.payload.toString)
-        case _ if f.isDistinct() => mimir.algebra.Function("DISTINCT_"+name, parameters)
-        case _ => mimir.algebra.Function(name, parameters)
       }
       
-      // unhandled("Expression[Function:"+name+"]")
-    }
-    if(e.isInstanceOf[net.sf.jsqlparser.expression.CaseExpression]){
-      val c = e.asInstanceOf[net.sf.jsqlparser.expression.CaseExpression]
-      val inlineSwitch: Expression => Expression = 
-        if(c.getSwitchExpression() == null){
-          (x) => x
-        } else {
-          val switch = convert(c.getSwitchExpression(), bindings)
-          (x) => Comparison(Cmp.Eq, switch, x)
+      case col:Column => return convertColumn(col, bindings)
+
+      case f:Function => {
+        val name = f.getName.toUpperCase
+        val parameters : List[Expression] = 
+          if(f.getParameters == null) { List[Expression]() }
+          else {
+            f.getParameters.
+              getExpressions.
+              map( (o : Any) => convert(o.asInstanceOf[net.sf.jsqlparser.expression.Expression], bindings) ).
+              toList
+          }
+        return (name, parameters) match {
+          case ("ROWID", List()) => RowIdVar()
+          case ("ROWID", List(x: RowIdPrimitive)) => x
+          case ("ROWID", List(x: PrimitiveValue)) => RowIdPrimitive(x.payload.toString)
+          case _ if f.isDistinct() => mimir.algebra.Function("DISTINCT_"+name, parameters)
+          case _ => mimir.algebra.Function(name, parameters)
         }
-      return ExpressionUtils.makeCaseExpression(
-        c.getWhenClauses().map ( (w: WhenClause) => {
-          (
-            inlineSwitch(convert(w.getWhenExpression(), bindings)),
-            convert(w.getThenExpression(), bindings)
-          )
-        }).toList, 
-        convert(c.getElseExpression(), bindings)
-      )
-    }
-    if(e.isInstanceOf[NullValue]) { return NullPrimitive() }
-    if(e.isInstanceOf[net.sf.jsqlparser.expression.operators.relational.IsNullExpression]) {
+      }
 
-      // IS NULL check
-      IsNullChecker.setIsNull(true); // need to set for check later
-      IsNullChecker.setIsNullExpression(e.asInstanceOf[net.sf.jsqlparser.expression.operators.relational.IsNullExpression]) // set the null expression for later
-      IsNullChecker.setLookingForFrom(false);
+      case c:net.sf.jsqlparser.expression.CaseExpression => {
+        val inlineSwitch: Expression => Expression = 
+          if(c.getSwitchExpression() == null){
+            (x) => x
+          } else {
+            val switch = convert(c.getSwitchExpression(), bindings)
+            (x) => Comparison(Cmp.Eq, switch, x)
+          }
+        return ExpressionUtils.makeCaseExpression(
+          c.getWhenClauses().map ( (w: WhenClause) => {
+            (
+              inlineSwitch(convert(w.getWhenExpression(), bindings)),
+              convert(w.getThenExpression(), bindings)
+            )
+          }).toList, 
+          convert(c.getElseExpression(), bindings)
+        )
+      }
 
-      val isNullExpression = e.asInstanceOf[net.sf.jsqlparser.expression.operators.relational.IsNullExpression]
-      val ret = mimir.algebra.IsNullExpression(
-        convert(isNullExpression.getLeftExpression, bindings)
-      )
-      if(isNullExpression.isNot){
-        return mimir.algebra.Not(ret)
-      } else {
-        return ret
+      case isnull: net.sf.jsqlparser.expression.operators.relational.IsNullExpression => {
+        val base = mimir.algebra.IsNullExpression(
+          convert(isnull.getLeftExpression, bindings)
+        )
+        if(isnull.isNot){ return Not(base) }
+        else { return base; }
       }
     }
-    unhandled("Expression["+e.getClass+"]: " + e)
   }
 
   def convertColumn(c: Column, bindings: Map[String, String]): Var =

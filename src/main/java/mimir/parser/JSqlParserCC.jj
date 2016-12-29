@@ -57,6 +57,7 @@ package mimir.parser;
 import java.util.ArrayList;
 import java.util.List;
 
+import net.sf.jsqlparser.expression.PrimitiveValue;
 import net.sf.jsqlparser.expression.BinaryExpression;
 import net.sf.jsqlparser.expression.DoubleValue;
 import net.sf.jsqlparser.expression.Expression;
@@ -107,6 +108,7 @@ import mimir.sql.CreateView;
 import mimir.sql.CreateLens;
 import mimir.sql.Analyze;
 import mimir.sql.Explain;
+import mimir.sql.Feedback;
 import net.sf.jsqlparser.statement.create.table.Index;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.drop.Drop;
@@ -221,6 +223,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_TRUNCATE:"TRUNCATE">
 |   <K_DISTINCT:"DISTINCT">
 |   <K_INTERSECT:"INTERSECT">
+|   <K_FEEDBACK:"FEEDBACK">
 }
 
 
@@ -264,6 +267,8 @@ Statement Statement() :
     |
     stm = CreateStatement()
     |
+    stm = FeedbackStatement()
+    |
     stm= Analyze()
     |
     stm= Explain()
@@ -297,6 +302,29 @@ Statement CreateStatement() :
   { return stm; }
 }
 
+Feedback FeedbackStatement() : 
+{ 
+  String tempStr;
+  String model = "";
+  Token idx;
+  List<PrimitiveValue> args = new ArrayList<PrimitiveValue>();
+  PrimitiveValue temp;
+  PrimitiveValue value;  
+}
+{
+  (
+    <K_FEEDBACK> 
+    model = RelObjectName() 
+    ( ":" tempStr = RelObjectName() { model += ":" + tempStr; } )*
+    idx = <S_INTEGER>
+    [ "("
+      temp = Literal() { args.add(temp); }
+      ("," temp = Literal() { args.add(temp); } )*
+    ")" ]
+    <K_IS>
+    value = Literal()
+  ) { return new Feedback(model, Integer.parseInt(idx.image), args, value); }
+}
 
 Update Update():
 { 
@@ -1521,6 +1549,31 @@ Expression PrimaryExpression():
 		}
     	return retval; 
     }
+}
+
+PrimitiveValue Literal():
+{ 
+  Token token = null;
+  PrimitiveValue retval; 
+  boolean isInverse = false;
+  String tmp = "";
+}
+{
+  ( 
+    LOOKAHEAD([ "+" | "-"] <S_DOUBLE>)  [ "+" | "-" { tmp = "-"; }]  token=<S_DOUBLE> { retval = new DoubleValue(tmp+token.image); }
+  
+  | LOOKAHEAD([ "+" | "-"] <S_INTEGER>)   [ "+" | "-" { tmp = "-"; }]  token=<S_INTEGER> { retval = new LongValue(tmp+token.image); }
+
+  | token=<S_CHAR_LITERAL> { retval = StringValue.parseEscaped(token.image); }
+
+  |   "{d" token=<S_CHAR_LITERAL> "}" { retval = new DateValue(token.image); }
+
+  |   "{t" token=<S_CHAR_LITERAL> "}" { retval = new TimeValue(token.image); }
+
+  |   "{ts" token=<S_CHAR_LITERAL> "}" { retval = new TimestampValue(token.image); }
+
+  ) { return retval; }
+
 }
 
 

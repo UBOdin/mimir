@@ -3,17 +3,18 @@ package mimir.models
 import java.io.File
 import java.sql.SQLException
 import java.util
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.slf4j.Logger
 
 import mimir.algebra._
 import mimir.ctables._
 import mimir.exec.ResultIterator
 import mimir.util.{RandUtils,TextUtils}
 import mimir.{Analysis, Database}
-import moa.classifiers.Classifier
 import moa.core.InstancesHeader
 import weka.core.{Attribute, DenseInstance, Instance, Instances}
 import weka.experiment.{DatabaseUtils, InstanceQueryAdapter}
+import weka.classifiers.{Classifier, UpdateableClassifier}
+import weka.classifiers.bayes.{NaiveBayesMultinomialUpdateable,NaiveBayesMultinomialText}
 import mimir.optimizer.InlineVGTerms
 import mimir.models._
 
@@ -22,26 +23,51 @@ import scala.util._
 
 object WekaModel
 {
-  def train(db: Database, name: String, cols: Seq[String], target:Operator): Map[String,(Model,Int)] = 
+  val logger = Logger(org.slf4j.LoggerFactory.getLogger(getClass.getName))
+
+  def train(db: Database, name: String, cols: Seq[String], query:Operator): Map[String,(Model,Int)] = 
   {
     cols.map( (col) => {
-      val model = new SimpleWekaModel(s"$name:$col", col, target)
+      val model = new SimpleWekaModel(s"$name:$col", col, query)
       model.train(db)
       col -> (model, 0)
     }).toMap
   }
+
+  def getStringAttribute(db: Database, col: String, query: Operator): Attribute =
+  {
+    val tokens =
+      db.query(Project(List(ProjectArg("V", Var(col))), query)).
+        foldRows[Set[String]](Set[String](), (ret, curr) => { 
+          if(!curr(0).isInstanceOf[NullPrimitive]){
+            ret + curr(0).asString 
+          } else { ret }
+        })
+
+    val tokenList = new java.util.ArrayList(tokens)
+    java.util.Collections.sort(tokenList)
+    new Attribute(col, tokenList)
+  }
+
+  def getAttributes(db: Database, query: Operator): Seq[Attribute] =
+  {
+    query.schema.map({
+      // case (col, TInt() | TFloat()) => new Attribute(col)
+      case (col, _) => getStringAttribute(db, col, query)
+    })
+  }
 }
 
 @SerialVersionUID(1000L)
-class SimpleWekaModel(name: String, colName: String, target: Operator)
+class SimpleWekaModel(name: String, colName: String, query: Operator)
   extends SingleVarModel(name) 
   with NeedsReconnectToDatabase 
-  with LazyLogging
 {
-  private val TRAINING_LIMIT = 1000
+  private val TRAINING_LIMIT = 10000
   var numSamples = 0
   var numCorrect = 0
-  val colIdx:Int = target.schema.map(_._1).indexOf(colName)
+  val colIdx:Int = query.schema.map(_._1).indexOf(colName)
+  var attributeMeta: java.util.ArrayList[Attribute] = null
 
   /**
    * The actual Weka model itself.  @SimpleWekaModel is just a wrapper around a 
@@ -49,7 +75,7 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
    * serializable, so we mark it transient and use a simple serialization hack.
    * See serializedLearner below.
    */
-  @transient var learner: Classifier = null
+  @transient var learner: Classifier with UpdateableClassifier = null
   /**
    * Due to silliness in Weka, @Classifier itself is not serializable, and we need
    * to use Weka's internal @SerializationHelper object to do the actual serialization
@@ -76,32 +102,30 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
   def train(db:Database)
   {
     this.db = db
-    learner = Analysis.getLearner("moa.classifiers.bayes.NaiveBayes")
-    val iterator = db.query(target)
-    val attributes = schemaToWeka(target.schema)
-    var data = new Instances("TrainData", attributes, 100)
+    val iterator = db.query(query)
+
+    attributeMeta = new java.util.ArrayList(WekaModel.getAttributes(db, query))
+    var data = new Instances("TrainData", attributeMeta, TRAINING_LIMIT)
 
     var numInstances = 0
     iterator.open()
 
     /* The second check poses a limit on the learning data and reduces time spent building the lens */
     while(iterator.getNext() && numInstances < TRAINING_LIMIT) {
-      // println("ROW: "+iterator.currentRow())
+      WekaModel.logger.trace(s"ROW: ${iterator.currentRow()}")
       val instance = new DenseInstance(iterator.numCols)
       instance.setDataset(data)
-      for(j <- 0 until iterator.numCols                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       ) {
-        iterator.schema(j)._2 match {
-          case (TInt() | TFloat()) if (j != colIdx) =>
-            try {
-              instance.setValue(j, iterator(j).asDouble)
-            } catch {
-              case e: Throwable =>
-
-            }
-          case _ =>
-            val field = iterator(j)
-            if (!field.isInstanceOf[NullPrimitive])
-              instance.setValue(j, iterator(j).asString)
+      for(j <- 0 until iterator.numCols) {
+        val field = iterator(j)
+        if(!field.isInstanceOf[NullPrimitive]){
+          val attr = attributeMeta(j) 
+          if(attr.isNumeric){
+            instance.setValue(j, field.asDouble)
+          } else if(attr.isNominal) {
+            instance.setValue(j, field.asString)
+          } else {
+            throw new RAException("Invalid attribute type")
+          }
         }
       }
       data.add(instance)
@@ -110,9 +134,10 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
     iterator.close()
     data.setClassIndex(colIdx)
 
-    learner.setModelContext(new InstancesHeader(data))
-    learner.prepareForUse()
-    data.foreach(learn(_))
+    // val model = new NaiveBayesMultinomialUpdateable()
+    val model = new NaiveBayesMultinomialText()
+    model.buildClassifier(data)
+    learner = model
   }
 
 
@@ -126,23 +151,7 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
    * Improve the model with one single data point
    */
   def learn(dataPoint: Instance) = {
-    numSamples += 1;
-    if (learner.correctlyClassifies(dataPoint)) {
-      numCorrect += 1;
-    }
-    learner.trainOnInstance(dataPoint);
-  }
-
-  private def schemaToWeka(sch: Seq[(String,Type)]): util.ArrayList[Attribute] = {
-    val attributes = new util.ArrayList[Attribute]()
-    sch.zipWithIndex.foreach { case ((n, t), i) =>
-      t match {
-        case TRowId() => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
-        case (TInt() | TFloat()) if (i != colIdx) => attributes.add(new Attribute(n))
-        case _ => attributes.add(new Attribute(n, null.asInstanceOf[util.ArrayList[String]]))
-      }
-    }
-    attributes
+    learner.updateClassifier(dataPoint)
   }
 
   private def classify(rowid: RowIdPrimitive): Seq[(Double, Int)] = {
@@ -150,7 +159,7 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
     val rowValues = db.query(
         Select(
           Comparison(Cmp.Eq, RowIdVar(), rowid),
-          target
+          query
         )
     )
     rowValues.open()
@@ -158,37 +167,51 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
       throw new SQLException("Invalid Source Data ROWID: " + rowid);
     }
     val row = new DenseInstance(rowValues.numCols)
-    val attributes = schemaToWeka(target.schema)
-    val data = new Instances("TestData", attributes, 1)
+    val data = new Instances("TestData", attributeMeta, 1)
     row.setDataset(data)
+    WekaModel.logger.debug(s"CLASSIFY: ${rowValues.currentRow}")
     (0 until rowValues.numCols).foreach((col) => {
       val v = rowValues(col)
-      if (!v.isInstanceOf[NullPrimitive]) {
-        if (v.isInstanceOf[IntPrimitive] || v.isInstanceOf[FloatPrimitive]) {
-          row.setValue(col, v.asDouble)
-        }
-        else {
+      if (!v.isInstanceOf[NullPrimitive] && (col != colIdx)) {
+        // if (v.isInstanceOf[IntPrimitive] || v.isInstanceOf[FloatPrimitive]) {
+        //   logger.trace(s"Double: $col -> $v")
+        //   row.setValue(col, v.asDouble)
+        // }
+        // else {
+          WekaModel.logger.trace(s"String: $col -> $v")
           row.setValue(col, v.asString)
-        }
+        // }
+      } else {
+        WekaModel.logger.trace(s"NULL: $col")
       }
     })
 
     rowValues.close()
-    learner.getVotesForInstance(row).
-      toList.
+    val votes = learner.distributionForInstance(row).toSeq
+
+    WekaModel.logger.debug(s"VOTES: $votes")
+    votes.
       zipWithIndex.
       filter(_._1 > 0)
   }
 
   private def classToPrimitive(classIdx: Int): PrimitiveValue = 
   {
-    val att = learner.getModelContext.attribute(colIdx)
-    val str = att.value(classIdx)
+    var str:String = ""
+    try{
+      str = attributeMeta(colIdx).value(classIdx)
+    }
+    catch{
+      case e:IndexOutOfBoundsException =>{
+        throw ModelException("Column " + colName + " May be all null, Model could not be built over this column")
+      }
+    }
+//    println("Attribute String: " + str)
     TextUtils.parsePrimitive(guessInputType, str)
   }
 
   def guessInputType: Type =
-    db.bestGuessSchema(target)(colIdx)._2
+    db.bestGuessSchema(query)(colIdx)._2
 
   def argTypes(): Seq[Type] = List(TRowId())
 
@@ -217,12 +240,14 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
   {
     val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val total:Double = classes.map(_._1).fold(0.0)(_+_)
-    val res = if (classes.isEmpty) { (0.0, 0) } 
-              else { classes.maxBy(_._1) }
-    val elem = classToPrimitive(res._2)
-    "I used a classifier to guess that "+colName+"="+elem+" on row "+
-    args(0)+" ("+res._1+" out of "+total+" votes)"
-
+    if (classes.isEmpty) { 
+      val elem = classToPrimitive(0)
+      s"The classifier isn't willing to make a guess about $colName, so I'm defaulting to $elem"
+    } else {
+      val choice = classes.maxBy(_._1)
+      val elem = classToPrimitive(choice._2)
+      s"I used a classifier to guess that $colName = $elem on row ${args(0)} (${choice._1} out of ${total} votes)"
+    }
   }
 
   /**
@@ -231,7 +256,7 @@ class SimpleWekaModel(name: String, colName: String, target: Operator)
   def reconnectToDatabase(db: Database): Unit = {
     this.db = db
     val bytes = new java.io.ByteArrayInputStream(serializedLearner)
-    learner = weka.core.SerializationHelper.read(bytes).asInstanceOf[Classifier]
+    learner = weka.core.SerializationHelper.read(bytes).asInstanceOf[Classifier with UpdateableClassifier]
     serializedLearner = null
   }
 

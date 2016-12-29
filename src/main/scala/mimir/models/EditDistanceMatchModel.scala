@@ -14,7 +14,7 @@ import org.apache.lucene.search.spell.{
 
 object EditDistanceMatchModel
 {
-  val logger = Logger(org.slf4j.LoggerFactory.getLogger("mimir.models.EditDistanceMatchModel"))
+  val logger = Logger(org.slf4j.LoggerFactory.getLogger(getClass.getName))
 
   /**
    * Available choices of distance metric, from Apache Lucene.
@@ -58,8 +58,8 @@ object EditDistanceMatchModel
 
   def isTypeCompatible(a: Type, b: Type): Boolean = 
   {
-    val aBase = Typechecker.baseType(a)
-    val bBase = Typechecker.baseType(b)
+    val aBase = Type.rootType(a)
+    val bBase = Type.rootType(b)
     (aBase, bBase) match {
       case ((TInt()|TFloat()),  (TInt()|TFloat())) => true
       case (TAny(), _) => true
@@ -77,9 +77,10 @@ class EditDistanceMatchModel(
   target: (String, Type), 
   sourceCandidates: Seq[String]
 ) 
-  extends SingleVarModel(name) 
-  with DataIndependentSingleVarFeedback
-  with NoArgSingleVarModel
+  extends Model(name) 
+  with DataIndependentFeedback
+  with NoArgModel
+  with FiniteDiscreteDomain
 {
   /** 
    * A mapping for this column.  Lucene Discance metrics use a [0-1] range as:
@@ -102,26 +103,35 @@ class EditDistanceMatchModel(
     map({ case (k, v) => (k, v.toDouble) }).
     toIndexedSeq
   } 
-  def varType(argTypes: Seq[Type]) = TString()
+  def varType(idx: Int, t: Seq[Type]) = TString()
 
-  def sample(randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue = 
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue = 
   {
     StringPrimitive(
       RandUtils.pickFromWeightedList(randomness, colMapping)
     )
   }
 
-  def validateChoice(v: PrimitiveValue): Boolean =
+  def validateChoice(idx: Int, v: PrimitiveValue): Boolean =
+  { 
+    EditDistanceMatchModel.logger.debug(s"Validate Edit Distance $name -> $v")
     sourceCandidates.contains(v.asString)
+  }
 
-  def reason(args: Seq[PrimitiveValue]): String = {
-    choice match {
+  def reason(idx: Int, args: Seq[PrimitiveValue]): String = {
+    choices.get(idx) match {
       case None => {
         val sourceName = colMapping.maxBy(_._2)._1
         val targetName = target._1
         val editDistance = ((colMapping.head._2) * 100).toInt
         s"I assumed that $sourceName maps to $targetName (Match: $editDistance% using $metricName Distance)"
       }
+
+      case Some(NullPrimitive()) => {
+        val targetName = target._1
+        s"You told me that nothing maps to $targetName"
+      }
+
       case Some(choicePrim) => {
         val targetName = target._1
         val choiceStr = choicePrim.asString
@@ -130,14 +140,22 @@ class EditDistanceMatchModel(
     }
   }
 
-  def bestGuess(args: Seq[PrimitiveValue]): PrimitiveValue = 
+  def bestGuess(idx: Int, args: Seq[PrimitiveValue]): PrimitiveValue = 
   {
-    if(colMapping.isEmpty){
-      NullPrimitive()
-    } else {
-      val guess = colMapping.maxBy(_._2)._1
-      EditDistanceMatchModel.logger.trace(s"Guesssing ($name) $target <- $guess")
-      StringPrimitive(guess)
+    choices.get(idx) match { 
+      case None => {
+        if(colMapping.isEmpty){
+          NullPrimitive()
+        } else {
+          val guess = colMapping.maxBy(_._2)._1
+          EditDistanceMatchModel.logger.trace(s"Guesssing ($name) $target <- $guess")
+          StringPrimitive(guess)
+        }
+      }
+      case Some(s) => s
     }
   }
+
+  def getDomain(idx: Int, args: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
+    List((NullPrimitive(), 0.0)) ++ colMapping.map( x => (StringPrimitive(x._1), x._2))
 }

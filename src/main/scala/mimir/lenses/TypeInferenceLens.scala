@@ -18,39 +18,51 @@ object TypeInferenceLens extends LazyLogging
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
   {
-    val (repairs, models) = 
+    val modelColumns = 
       query.schema.map({
-        case (col, (TString() | TAny())) => {
-          val model =
-            new TypeInferenceModel(
-              s"$name:$col",
-              col,
-              Eval.evalFloat(args(0))
-            )
-          logger.debug(s"Training $model.name on $query")
-          model.train(db, query)
+        case (col, (TString() | TAny())) => Some(col)
+        case _ => None
+      }).flatten.toIndexedSeq
 
-          val repair =
-            ProjectArg(col, 
-              Function("CAST", List(
-                Var(col),
-                VGTerm(model, 0, List[Expression]())
-              ))
-            )
-          logger.trace(s"Going to repair $col as $repair")
+    if(modelColumns.isEmpty){ 
+      logger.warn("Type inference lens created on table with no string attributes")
+      return (query, List())
+    }
 
-          (repair, Some(model))
+    if(args.isEmpty){
+      throw new ModelException("Type inference lens requires a single parameter")
+    }
+
+    val model = 
+      new TypeInferenceModel(
+        name,
+        modelColumns,
+        Eval.evalFloat(args(0))
+      )
+
+    val columnIndexes = 
+      modelColumns.zipWithIndex.toMap
+
+    logger.debug(s"Training $model.name on $query")
+    model.train(db, query)
+
+    val repairs = 
+      query.schema.map(_._1).map( col => {
+        if(columnIndexes contains col){
+          ProjectArg(col, 
+            Function("CAST", List(
+              Var(col),
+              VGTerm(model, columnIndexes(col), List[Expression]())
+            ))
+          )
+        } else {
+          ProjectArg(col, Var(col))
         }
-        case (col, t) => {
-          logger.debug(s"Don't need to cast $col of type $t")
-          ( ProjectArg(col, Var(col)), None )
-        }
-      }).
-      unzip
+      })
 
     (
       Project(repairs, query),
-      models.flatten
+      List(model)
     )
   }
 }

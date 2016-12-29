@@ -69,35 +69,42 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
                  | SQLiteCompat.BLOB    => result(java.lang.Double.parseDouble(value_text(0)))
               case SQLiteCompat.NULL    => result()
             }
-          case TString() | TRowId() | TDate() =>
+          case TString() | TRowId() | TDate() | TTimeStamp() =>
             result(value_text(0))
 
-          case TUser(name,regex,sqlType) =>
+          case TUser(name) =>
             val v:String = value_text(0)
             if(v != null) {
-              sqlType match {
+              Type.rootType(t) match {
                 case TRowId() =>
                   result(value_text(0))
-                case TString() | TDate() =>
-                    if (v.matches(regex)) {
-                      result(value_text(0))
-                    }
-                    else {
-                      result()
-                    }
-                case TInt() =>
-                    if (value_text(0).matches(regex)) {
-                      result(value_int(0))
-                    }
-                    else {
-                      result()
-                    }
+                case TString() | TDate() | TTimeStamp() =>
+                  val txt = value_text(0)
+                  if(TypeRegistry.matches(name, txt)){
+                    result(value_text(0))
+                  } else {
+                    result()
+                  }
+                case TInt() | TBool() =>
+                  if(TypeRegistry.matches(name, value_text(0))){
+                    result(value_int(0))
+                  } else {
+                    result()
+                  }
                 case TFloat() =>
-                  result(value_double(0))
+                  if(TypeRegistry.matches(name, value_text(0))){
+                    result(value_double(0))
+                  } else {
+                    result()
+                  }
                 case TAny() =>
-                  result()
-                case _ =>
-                  throw new Exception("In SQLiteCompat expected natural type but got: " + sqlType.toString())
+                  if(TypeRegistry.matches(name, value_text(0))){
+                    result(value_text(0))
+                  } else {
+                    result()
+                  }
+                case TUser(_) | TType() =>
+                  throw new Exception("In SQLiteCompat expected natural type but got: " + Type.rootType(t).toString())
               }
             }
             else{

@@ -36,7 +36,7 @@ object JDBCUtils {
       case TAny()       => java.sql.Types.VARCHAR
       case TBool()      => java.sql.Types.INTEGER
       case TType()      => java.sql.Types.VARCHAR
-      case TUser(_,_,t) => convertMimirType(t)
+      case TUser(t)     => convertMimirType(TypeRegistry.baseType(t))
     }
   }
 
@@ -82,7 +82,7 @@ object JDBCUtils {
             case e: NullPointerException =>
               new NullPrimitive
           }
-        case TUser(_,_,sqlType) => convertField(sqlType, results, field)
+        case TUser(t) => convertField(TypeRegistry.baseType(t), results, field)
       }
     if(results.wasNull()) { NullPrimitive() }
     else { ret }
@@ -119,7 +119,7 @@ object JDBCUtils {
     new Timestamp(cal.getTime().getTime());
   }
 
-  def extractAllRows(results: ResultSet): Iterator[Seq[PrimitiveValue]] =
+  def extractAllRows(results: ResultSet): JDBCResultSetIterable =
   {
     val meta = results.getMetaData()
     val schema = 
@@ -129,15 +129,14 @@ object JDBCUtils {
     extractAllRows(results, schema)    
   }
 
-  def extractAllRows(results: ResultSet, schema: Seq[Type]): Iterator[Seq[PrimitiveValue]] =
+  def extractAllRows(results: ResultSet, schema: Seq[Type]): JDBCResultSetIterable =
   {
     new JDBCResultSetIterable(results, schema)
   }
-
 }
 
-
-class JDBCResultSetIterable(results: ResultSet, schema: Seq[Type]) extends Iterator[Seq[PrimitiveValue]]
+class JDBCResultSetIterable(results: ResultSet, schema: Seq[Type]) 
+  extends Iterator[Seq[PrimitiveValue]]
 {
   def next(): List[PrimitiveValue] = 
   {
@@ -151,4 +150,12 @@ class JDBCResultSetIterable(results: ResultSet, schema: Seq[Type]) extends Itera
   }
 
   def hasNext(): Boolean = { return !results.isAfterLast() }
+  def close(): Unit = { results.close() }
+
+  def flush: Seq[Seq[PrimitiveValue]] = 
+  { 
+    val ret = toList
+    close()
+    return ret
+  }
 }

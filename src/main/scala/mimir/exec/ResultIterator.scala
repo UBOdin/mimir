@@ -1,7 +1,7 @@
 package mimir.exec;
 
 import mimir.algebra._;
-import mimir.models.Reason;
+import mimir.ctables.Reason;
 
 /**
  * An abstract interface for result iterators.  The level of 
@@ -97,6 +97,16 @@ abstract class ResultIterator {
     var ret = List[X]()
     foreachRow( (x) => { ret = fn(this) :: ret } )
     ret.reverse;
+  }
+
+  /**
+   * Shorthand fold operator over the rows.
+   */
+  def foldRows[X](init:X, fn: (X, ResultIterator) => X): X =
+  {
+    var ret = init
+    foreachRow( (x) => { ret = fn(ret, this) } )
+    ret;
   }
 
   /**

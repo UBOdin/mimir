@@ -45,7 +45,7 @@ class LensManager(db: Database) {
 
     // Persist the associated models
     for(model <- models){
-      db.models.persistModel(model, s"LENS:$saneName")
+      db.models.persist(model, s"LENS:$saneName")
     }
 
     // Populate the best-guess cache

@@ -1,6 +1,7 @@
 package mimir.models;
 
 import java.sql.SQLException
+import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.Database
 import mimir.algebra._
 import mimir.util._
@@ -10,8 +11,8 @@ import mimir.util._
  *
  * The main function of the ModelManager is to provide a persistent
  * (Name -> Model) mapping.  Associations are created through
- * `persistModel`, removed with `dropModel`, and accessed with
- * `getModel`.  The name of the model is given by Model's name field
+ * `persist`, removed with `drop`, and accessed with
+ * `get`.  The name of the model is given by Model's name field
  *
  * The secondary function is garbage collection.  The manager also 
  * tracks a second set of 'owner' entities.  Owners can be used to
@@ -20,7 +21,9 @@ import mimir.util._
  *
  * See below in this file for some traits used to decode things.
  */
-class ModelManager(db:Database) {
+class ModelManager(db:Database) 
+  extends LazyLogging
+{
   
   val decoders = Map[String,((Database, Array[Byte]) => Model)](
     "JAVA"          -> decodeSerializable _
@@ -57,7 +60,7 @@ class ModelManager(db:Database) {
   /**
    * Declare (and cache) a new Name -> Model association
    */
-  def persistModel(model:Model): Unit =
+  def persist(model:Model): Unit =
   {
     val (serialized,decoder) = model.serialize
 
@@ -73,9 +76,31 @@ class ModelManager(db:Database) {
   }
 
   /**
+   * Register that a model has been updated
+   */
+  def update(name: String): Unit =
+    cache.get(name).foreach(update(_))
+
+  /**
+   * Register that a model has been updated
+   */
+  def update(model: Model): Unit =
+  {
+    val (serialized,decoder) = model.serialize
+
+    db.backend.update(s"""
+      UPDATE $modelTable SET encoded = ?, decoder = ? WHERE name = ?
+    """, List(
+      StringPrimitive(SerializationUtils.b64encode(serialized)),
+      StringPrimitive(decoder.toUpperCase),
+      StringPrimitive(model.name)
+    ))
+  }
+
+  /**
    * Remove an existing Name -> Model association if it exists
    */
-  def dropModel(name:String): Unit =
+  def drop(name:String): Unit =
   {
     db.backend.update(s"""
       DELETE FROM $modelTable WHERE name = ?
@@ -86,26 +111,29 @@ class ModelManager(db:Database) {
   /**
    * Retrieve a model by its name
    */
-  def getModel(name:String): Model =
+  def get(name:String): Model =
   {
     if(!cache.contains(name)){ prefetch(name) }
-    return cache(name)
+    cache.get(name) match {
+      case Some(model) => return model
+      case None => throw new RAException(s"Invalid Model: $name")
+    }
   }
 
   /**
    * Declare (and cache) a new Name -> Model association, and 
    * assign the model to an owner entity.
    */
-  def persistModel(model:Model, owner:String): Unit =
+  def persist(model:Model, owner:String): Unit =
   {
-    persistModel(model);
-    associateOwner(model.name, owner);
+    persist(model);
+    associate(model.name, owner);
   }
 
   /**
    * Assign a model to an owner entity
    */
-  def associateOwner(model:String, owner:String): Unit =
+  def associate(model:String, owner:String): Unit =
   {
     db.backend.update(s"""
       INSERT INTO $ownerTable(model, owner) VALUES (?,?)
@@ -119,7 +147,7 @@ class ModelManager(db:Database) {
    * Disassociate a model from an owner entity and cascade the delete
    * to the model if this is the last owner
    */
-  def disassociateOwner(model:String, owner:String): Unit =
+  def disassociate(model:String, owner:String): Unit =
   {
     db.backend.update(s"""
       DELETE FROM $ownerTable WHERE model = ? AND owner = ?
@@ -136,16 +164,30 @@ class ModelManager(db:Database) {
    */
   def dropOwner(owner:String): Unit =
   {
-    val models = 
-      db.backend.resultRows(s"""
-        SELECT model FROM $ownerTable WHERE owner = ?
-      """).flatten.toList
+    logger.debug(s"Drop Owner: $owner")
+    val models = associatedModels(owner)
+    logger.debug("Associated: $models")
     db.backend.update(s"""
       DELETE FROM $ownerTable WHERE owner = ?
     """, List(
       StringPrimitive(owner)
     ))
-    models.map(_.asString).foreach(garbageCollectIfNeeded(_))
+    for(model <- models) {
+      logger.trace(s"Garbage Collect: $model")
+      garbageCollectIfNeeded(model)
+    }
+  }
+
+  /**
+   * A list of all models presently associated with a given owner.
+   */
+  def associatedModels(owner: String): Seq[String] =
+  {
+    db.backend.resultRows(s"""
+      SELECT model FROM $ownerTable WHERE owner = ?
+    """, List(
+      StringPrimitive(owner)
+    )).map(_(0).asString)
   }
 
   /**
@@ -179,7 +221,7 @@ class ModelManager(db:Database) {
     )
   }
 
-  private def prefetchWithRows(rows:Iterator[Seq[PrimitiveValue]]): Unit =
+  private def prefetchWithRows(rows:TraversableOnce[Seq[PrimitiveValue]]): Unit =
   {
     rows.foreach({
       case List(decoder, encoded) => {
@@ -202,11 +244,11 @@ class ModelManager(db:Database) {
   {
     val otherOwners = 
       db.backend.resultRows(s"""
-        SELECT FROM $ownerTable WHERE model = ?
+        SELECT * FROM $ownerTable WHERE model = ?
       """, List(
         StringPrimitive(model)
       ))
-    if(!otherOwners.hasNext){ dropModel(model) }
+    if(otherOwners.isEmpty){ drop(model) }
   }
 
   private def decodeSerializable(db: Database, data: Array[Byte]): Model =

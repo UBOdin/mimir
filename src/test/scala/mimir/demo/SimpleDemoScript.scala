@@ -1,11 +1,11 @@
 package mimir.demo
 
-import java.io.{StringReader,BufferedReader,FileReader,File}
+import java.io.{BufferedReader, File, FileReader, StringReader}
+import java.sql.SQLException
 
 import scala.collection.JavaConversions._
 import org.specs2.mutable._
 import org.specs2.matcher.FileMatchers
-
 import mimir._
 import mimir.sql._
 import mimir.parser._
@@ -15,7 +15,7 @@ import mimir.ctables._
 import mimir.exec._
 import mimir.util._
 import mimir.test._
-import net.sf.jsqlparser.statement.{Statement}
+import net.sf.jsqlparser.statement.Statement
 
 
 object SimpleDemoScript
@@ -52,10 +52,7 @@ object SimpleDemoScript
 		}
 
 		"Load CSV Files" >> {
-			db.loadTable(reviewDataFiles(0))
-			db.loadTable(reviewDataFiles(1))
-			db.loadTable(reviewDataFiles(2))
-			db.loadTable(reviewDataFiles(3))
+			reviewDataFiles.foreach( db.loadTable(_) )
 			query("SELECT * FROM RATINGS1;").allRows must have size(4)
 			query("SELECT RATING FROM RATINGS1_RAW;").allRows.flatten must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
 			query("SELECT * FROM RATINGS2;").allRows must have size(3)
@@ -89,22 +86,19 @@ object SimpleDemoScript
 
 
 		"Create and Query Type Inference Lenses" >> {
-//			println("Creating TI LENS")
 			update("""
 				CREATE LENS new_types
 				  AS SELECT * FROM USERTYPES
 				  WITH Type_Inference(.9)
 					 			""")
-//			println("Querying TI LENS")
 			query("SELECT * FROM new_types;").allRows must have size(3)
-//			println("Done Querying TI LENS")
 			query("SELECT * FROM RATINGS1;").allRows must have size(4)
 			query("SELECT RATING FROM RATINGS1;").allRows.flatten must contain(eachOf(f(4.5), f(4.0), f(6.4), NullPrimitive()))
 			query("SELECT * FROM RATINGS1 WHERE RATING IS NULL").allRows must have size(1)
 			query("SELECT * FROM RATINGS1 WHERE RATING > 4;").allRows must have size(2)
 			query("SELECT * FROM RATINGS2;").allRows must have size(3)
 			db.bestGuessSchema(select("SELECT * FROM RATINGS2;")).
-				map(_._2).map(Typechecker.baseType _) must be equalTo List(TString(), TFloat(), TFloat())
+				map(_._2).map(Type.rootType _) must be equalTo List(TString(), TFloat(), TFloat())
 		}
 
 		"Compute Deterministic Aggregate Queries" >> {
@@ -217,9 +211,9 @@ object SimpleDemoScript
 
 			val result1guesses =
 				db.backend.resultRows("SELECT MIMIR_KEY_0, MIMIR_DATA FROM "+
-						db.bestGuessCache.cacheTableForModel(db.models.getModel("RATINGS1FINAL:WEKA:RATING"), 0))
+						db.bestGuessCache.cacheTableForModel(db.models.get("RATINGS1FINAL:WEKA:RATING"), 0))
 
-			result1guesses.map( x => (x(0), x(1))).toList must contain((IntPrimitive(nullRow), FloatPrimitive(4.5)))
+			result1guesses.map( x => (x(0), x(1))).toList must contain((IntPrimitive(nullRow), FloatPrimitive(4.0)))
 
 			val result1 =
 				LoggerUtils.debug(List(
@@ -228,7 +222,7 @@ object SimpleDemoScript
 				)
 
 			result1 must have size(4)
-			result1 must contain(eachOf( f(4.5), f(4.0), f(4.5), f(6.4) ) )
+			result1 must contain(eachOf( f(4.5), f(4.0), f(4.0), f(6.4) ) )
 			val result2 = query("SELECT RATING FROM RATINGS1FINAL WHERE RATING < 5").allRows.flatten
 			result2 must have size(3)
 
@@ -278,19 +272,19 @@ object SimpleDemoScript
 			val expl1 = explainCell("""
 					SELECT * FROM RATINGS1FINAL
 				""", "2", "RATING")
-			expl1.toString must contain("I used a classifier to guess that RATING=")		
+			expl1.toString must contain("I used a classifier to guess that RATING =")		
 		}
 		"Obtain Cell Explanations for Queries with WHERE clauses" >> {
 			val expl1 = explainCell("""
 					SELECT * FROM RATINGS1FINAL WHERE RATING > 0
 				""", "2", "RATING")
-			expl1.toString must contain("I used a classifier to guess that RATING=")		
+			expl1.toString must contain("I used a classifier to guess that RATING =")		
 		}
 		"Guard Data-Dependent Explanations for Simple Queries" >> {
 			val expl2 = explainCell("""
 					SELECT * FROM RATINGS1FINAL
 				""", "1", "RATING")
-			expl2.toString must not contain("I used a classifier to guess that RATING=")		
+			expl2.toString must not contain("I used a classifier to guess that RATING =")		
 		}
 
 		"Query a Union of Lenses (projection first)" >> {
@@ -333,9 +327,8 @@ object SimpleDemoScript
 						UNION ALL
 					SELECT * FROM RATINGS2FINAL
 				) r
-				WHERE rating > 4;
+				WHERE rating >= 4;
 			""").allRows.flatten
-			result must have size(5)
 			result must contain(eachOf(
 				str("P123"), str("P2345"), str("P125"), str("P325"), str("P34234")
 			))
@@ -425,9 +418,9 @@ object SimpleDemoScript
 					SELECT * FROM RATINGS2FINAL
 				) r, Product p
 				WHERE r.pid = p.id
-				  AND rating > 4;
+				  AND rating >= 4;
 			""").allRows.flatten
-			result2 must have size(4)
+			result2 must have size(6)
 			result2 must contain(eachOf(
 				str("Apple 6s, White"),
 				str("Samsung Note2"),

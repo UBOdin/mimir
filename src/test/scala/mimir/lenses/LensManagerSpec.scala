@@ -1,11 +1,14 @@
 package mimir.lenses
 
 import java.io._
+import org.specs2.specification.core.{Fragment,Fragments}
+
 import mimir.algebra._
 import mimir.util._
 import mimir.ctables.{VGTerm}
 import mimir.optimizer.{ResolveViews,InlineVGTerms,InlineProjections}
 import mimir.test._
+import mimir.models._
 
 object LensManagerSpec extends SQLTestSpecification("LensTests") {
 
@@ -26,7 +29,8 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       val resolved1 = InlineProjections(ResolveViews(db, db.getTableOperator("CPUSPEED")))
       resolved1 must beAnInstanceOf[Project]
       val resolved2 = resolved1.asInstanceOf[Project]
-      val coresModel = db.models.getModel("CPUSPEED:CORES")
+      val coresColumnId = db.getTableOperator("CPUSPEED").schema.map(_._1).indexOf("CORES")
+      val coresModel = db.models.get("CPUSPEED")
 
       // Make sure the model name is right.
       // Changes to the way the type inference lens assigns names will need to
@@ -35,15 +39,15 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       coresModel must not be empty
 
       resolved2.get("CORES") must be equalTo(Some(
-        Function("CAST", List(Var("CORES"), VGTerm(coresModel, 0, List())))
+        Function("CAST", List(Var("CORES"), VGTerm(coresModel, coresColumnId, List())))
       ))
 
-      coresModel.reason(0, List()) must contain("was of type INT")
+      coresModel.reason(coresColumnId, List()) must contain("was of type INT")
 
-      val coresGuess1 = coresModel.bestGuess(0, List())
+      val coresGuess1 = coresModel.bestGuess(coresColumnId, List())
       coresGuess1 must be equalTo(TypePrimitive(TInt()))
 
-      val coresGuess2 = InlineVGTerms(VGTerm(coresModel, 0, List()))
+      val coresGuess2 = InlineVGTerms(VGTerm(coresModel, coresColumnId, List()))
       coresGuess2 must be equalTo(TypePrimitive(TInt()))
 
 
@@ -64,6 +68,34 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       lensTypes must contain("FAMILY" -> TString())
       lensTypes must contain("TECH_MICRON" -> TFloat())
 
+    }
+
+    "Clean up after a DROP LENS" >> {
+
+      queryOneColumn(s"""
+        SELECT model FROM ${db.models.ownerTable}
+        WHERE owner = 'LENS:SANER'
+      """).toSeq must not beEmpty
+
+      val modelNames = db.models.associatedModels("LENS:SANER")
+      modelNames must not beEmpty
+
+      update("DROP LENS SANER");
+      table("SANER") must throwA[Exception]
+
+      queryOneColumn(s"""
+        SELECT model FROM ${db.models.ownerTable}
+        WHERE owner = 'LENS:SANER'
+      """).toSeq must beEmpty
+
+      for(model <- modelNames){
+        val modelDefn = 
+          queryOneColumn(s"""
+            SELECT * FROM ${db.models.modelTable} WHERE name = '$model'
+          """).toSeq
+        modelDefn must beEmpty;
+      }
+      ok
     }
 
   }  
