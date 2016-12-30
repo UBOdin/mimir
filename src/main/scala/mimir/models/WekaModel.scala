@@ -60,7 +60,7 @@ object WekaModel
 
 @SerialVersionUID(1000L)
 class SimpleWekaModel(name: String, colName: String, query: Operator)
-  extends SingleVarModel(name) 
+  extends Model(name) 
   with NeedsReconnectToDatabase 
 {
   private val TRAINING_LIMIT = 10000
@@ -68,6 +68,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
   var numCorrect = 0
   val colIdx:Int = query.schema.map(_._1).indexOf(colName)
   var attributeMeta: java.util.ArrayList[Attribute] = null
+  val givens = scala.collection.mutable.Map[String,PrimitiveValue]()
 
   /**
    * The actual Weka model itself.  @SimpleWekaModel is just a wrapper around a 
@@ -140,12 +141,20 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
     learner = model
   }
 
+  def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
+  {
+    givens(args(0).asString) = v
+    val row = db.query(
+      Select(
+        Comparison(Cmp.Eq, RowIdVar(), args(0)),
+        query
+      )
+    ).allRows.head
 
-  def feedback(args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
-    ???
+  }
 
-  def isAcknowledged(args: Seq[PrimitiveValue]): Boolean =
-    ???
+  def isAcknowledged(idx: Int, args: Seq[PrimitiveValue]): Boolean =
+    givens contains(args(0).asString)
 
   /**
    * Improve the model with one single data point
@@ -213,18 +222,18 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
   def guessInputType: Type =
     db.bestGuessSchema(query)(colIdx)._2
 
-  def argTypes(): Seq[Type] = List(TRowId())
+  def argTypes(idx: Int): Seq[Type] = List(TRowId())
 
-  def varType(args: Seq[Type]): Type = guessInputType
+  def varType(idx: Int, args: Seq[Type]): Type = guessInputType
   
-  def bestGuess(args: Seq[PrimitiveValue]): PrimitiveValue =
+  def bestGuess(idx: Int, args: Seq[PrimitiveValue]): PrimitiveValue =
   {
     val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val res = if (classes.isEmpty) { 0 } 
               else { classes.maxBy(_._1)._2 }
     classToPrimitive(res)
   }
-  def sample(randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue = 
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue = 
   {
     val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val res = if (classes.isEmpty) { 0 }
@@ -236,7 +245,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
               }
     classToPrimitive(res)
   }
-  def reason(args: Seq[PrimitiveValue]): String = 
+  def reason(idx: Int, args: Seq[PrimitiveValue]): String = 
   {
     val classes = classify(args(0).asInstanceOf[RowIdPrimitive])
     val total:Double = classes.map(_._1).fold(0.0)(_+_)
