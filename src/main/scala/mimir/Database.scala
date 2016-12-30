@@ -309,6 +309,9 @@ case class Database(backend: Backend)
         val model = models.get(name) 
         model.feedback(idx, args, v)
         models.update(model)
+        if(!backend.canHandleVGTerms()){
+          bestGuessCache.update(model, idx, args, v)
+        }
       }
 
       case lens: CreateLens => {

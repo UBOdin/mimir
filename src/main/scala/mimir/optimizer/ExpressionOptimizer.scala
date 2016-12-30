@@ -25,7 +25,8 @@ object ExpressionOptimizer {
 		PullUpBranches,
 		FlattenBooleanConditionals,
 		PropagateConditions,
-		RemoveRedundantCasts
+		RemoveRedundantCasts,
+		InlineFunctions
 	)
 
 	def optimize(e:Expression, opts: List[ExpressionOptimizerRule]): Expression = {

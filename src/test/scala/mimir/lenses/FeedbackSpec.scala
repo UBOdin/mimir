@@ -18,6 +18,7 @@ object FeedbackSpec
     loadCSV("R", new File("test/r_test/r.csv"))
     update("CREATE LENS MATCH AS SELECT * FROM R WITH SCHEMA_MATCHING('B int', 'CX int')")
     update("CREATE LENS TI AS SELECT * FROM R WITH TYPE_INFERENCE(0.5)")
+    update("CREATE LENS MV AS SELECT * FROM R WITH MISSING_VALUE('B', 'C')")
   }
 
   "The Edit Distance Match Model" should {
@@ -63,6 +64,38 @@ object FeedbackSpec
       model.bestGuess(0, List()) must be equalTo(TypePrimitive(TFloat()))
       db.bestGuessSchema(table("TI")).
         find(_._1.equals("A")).get._2 must be equalTo(TFloat())
+    }
+  }
+
+  "The Weka Model" should {
+
+    "Support direct feedback" >> {
+      val model = db.models.get("MV:WEKA:B")
+      val nullRow = querySingleton("SELECT ROWID FROM R WHERE B IS NULL")
+
+      model.bestGuess(0, List(nullRow)) must not be equalTo(50)
+      model.feedback(0, List(nullRow), IntPrimitive(50))
+      model.bestGuess(0, List(nullRow)).asLong must be equalTo(50)
+
+    }
+
+    "Support SQL feedback" >> {
+      val model = db.models.get("MV:WEKA:C")
+      val nullRow = querySingleton("SELECT ROWID FROM R WHERE C IS NULL")
+
+      val originalGuess = model.bestGuess(0, List(nullRow)).asLong
+      querySingleton(s"""
+        SELECT C FROM MV WHERE ROWID() = ROWID($nullRow)
+      """) must be equalTo(IntPrimitive(originalGuess))
+      originalGuess must not be equalTo(800)
+
+      update(s"FEEDBACK MV:WEKA:C 0 ($nullRow) IS 800")
+      querySingleton(s"""
+        SELECT C FROM MV WHERE ROWID() = ROWID($nullRow)
+      """) must be equalTo(IntPrimitive(800))
+
+
+
     }
 
   }
