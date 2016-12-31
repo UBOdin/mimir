@@ -16,6 +16,13 @@ object InlineFunctions extends BottomUpExpressionOptimizerRule {
 
       case Function("CAST", Seq(x, TypePrimitive(TAny()))) => x
 
+      case Function(fname, args) => 
+        FunctionRegistry.unfold(fname, args) match {
+          case Some(unfolded) => unfolded
+          case None => e
+        }
+
+
       case _ => e
     }
   }

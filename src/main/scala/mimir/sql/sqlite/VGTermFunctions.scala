@@ -48,7 +48,7 @@ object VGTermFunctions
   def register(db: Database, conn: java.sql.Connection): Unit =
   {
     org.sqlite.Function.create(conn, bestGuessVGTermFn, new BestGuessVGTerm(db))
-    FunctionRegistry.register(
+    FunctionRegistry.registerNative(
       bestGuessVGTermFn, 
       (args) => { throw new SQLException("Mimir Cannot Execute VGTerm Functions Internally") },
       (_) => TAny()

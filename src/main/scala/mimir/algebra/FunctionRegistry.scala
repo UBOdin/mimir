@@ -5,15 +5,41 @@ import java.sql.SQLException
 import mimir.provenance._
 import mimir.ctables._
 import mimir.util._
+import mimir.parser.SimpleExpressionParser
 
-case class RegisteredFunction(
-	fname: String, 
+class RegisteredFunction(
+	val name: String, 
 	evaluator: Seq[PrimitiveValue] => PrimitiveValue, 
 	typechecker: Seq[Type] => Type
 ) {
-	def getName = fname;
 	def typecheck(args: Seq[Type]) = typechecker(args)
 	def eval(args: Seq[PrimitiveValue]) = evaluator(args)
+  def unfold(args: Seq[Expression]): Option[Expression] = None
+}
+
+class ExpressionFunction(name: String, args:Seq[String], expr: Expression)
+  extends RegisteredFunction(name, 
+    (argVal) => Eval.eval(expr, args.zip(argVal).toMap),
+    (argT) => Typechecker.typeOf(expr, args.zip(argT).toMap)
+  )
+{
+  override def unfold(argExprs: Seq[Expression]) = 
+    Some(Eval.inline(expr, args.zip(argExprs).toMap))
+}
+
+class FoldFunction(name: String, expr: Expression)
+  extends RegisteredFunction(name, 
+    (args) => args.tail.foldLeft(args.head){ case (curr,next) => 
+                Eval.eval(expr, Map("CURR" -> curr, "NEXT" -> next)) },
+    (args) => args.tail.foldLeft(args.head){ case (curr,next) => 
+                Typechecker.typeOf(expr, Map("CURR" -> curr, "NEXT" -> next)) }
+  )
+{
+  override def unfold(args: Seq[Expression]) = 
+    Some(
+      args.tail.foldLeft[Expression](args.head){ case (curr,next) => 
+        Eval.inline(expr, Map("CURR" -> curr, "NEXT" -> next)) }
+    )
 }
 
 object FunctionRegistry {
@@ -22,7 +48,7 @@ object FunctionRegistry {
 		scala.collection.mutable.Map.empty;
 
 	{
-		register("MIMIR_MAKE_ROWID", 
+		registerNative("MIMIR_MAKE_ROWID", 
       Provenance.joinRowIds(_: Seq[PrimitiveValue]),
 			((args: Seq[Type]) => 
 				if(!args.forall( t => (t == TRowId()) || (t == TAny()) )) { 
@@ -33,29 +59,8 @@ object FunctionRegistry {
 			)
 		)
 
-    register("__Seq_MIN", 
-    	(params: Seq[PrimitiveValue]) => {
-        FloatPrimitive(params.map( x => 
-          try { x.asDouble } 
-          catch { case e:TypeException => Double.MaxValue }
-        ).min)
-      },
-    	{ (x: Seq[Type]) => 
-    		Typechecker.assertNumeric(Typechecker.escalate(x), Function("__LIST_MIN", List())) 
-    	}
-    )
-
-    register("__LIST_MAX", 
-    	(params: Seq[PrimitiveValue]) => {
-        FloatPrimitive(params.map( x => 
-          try { x.asDouble } 
-          catch { case e:TypeException => Double.MinValue }
-        ).max)
-      },
-      { (x: Seq[Type]) => 
-    		Typechecker.assertNumeric(Typechecker.escalate(x), Function("__LIST_MAX", List())) 
-    	}
-    )
+    registerFold("SEQ_MIN", "IF CURR < NEXT THEN CURR ELSE NEXT END")
+    registerFold("SEQ_MAX", "IF CURR > NEXT THEN CURR ELSE NEXT END")
 
     registerSet(List("CAST", "MIMIRCAST"), 
       (params: Seq[PrimitiveValue]) => {
@@ -76,7 +81,7 @@ object FunctionRegistry {
 		  }
 		)
 
-		register("ABSOLUTE", 
+		registerNative("ABSOLUTE", 
 			{
 	      case Seq(IntPrimitive(i))   => if(i < 0){ IntPrimitive(-i) } else { IntPrimitive(i) }
 	      case Seq(FloatPrimitive(f)) => if(f < 0){ FloatPrimitive(-f) } else { FloatPrimitive(f) }
@@ -86,17 +91,23 @@ object FunctionRegistry {
 			(x: Seq[Type]) => Typechecker.assertNumeric(x(0), Function("ABSOLUTE", List()))
 		)
 
-    register("SQRT",
+    registerNative("SQRT",
       {
         case Seq(n:NumericPrimitive) => FloatPrimitive(Math.sqrt(n.asDouble))
       },
-      (x: Seq[Type]) => Typechecker.assertNumeric(x(0), Function("ABSOLUTE", List()))
+      (x: Seq[Type]) => Typechecker.assertNumeric(x(0), Function("SQRT", List()))
     )
+    registerExpr("DISTANCE", List("A", "B"), 
+      Function("SQRT", List(
+        Arithmetic(Arith.Add,
+          Arithmetic(Arith.Mult, Var("A"), Var("A")),
+          Arithmetic(Arith.Mult, Var("B"), Var("B"))
+      ))))
 
-    register("BITWISE_AND", (x) => IntPrimitive(x(0).asLong & x(1).asLong), (_) => TInt())
+    registerNative("BITWISE_AND", (x) => IntPrimitive(x(0).asLong & x(1).asLong), (_) => TInt())
 
-    register("JSON_EXTRACT",(_) => ???, (_) => TAny())
-    register("JSON_ARRAY_LENGTH",(_) => ???, (_) => TInt())
+    registerNative("JSON_EXTRACT",(_) => ???, (_) => TAny())
+    registerNative("JSON_ARRAY_LENGTH",(_) => ???, (_) => TInt())
 	}
 
 	def registerSet(
@@ -104,14 +115,27 @@ object FunctionRegistry {
 		eval:Seq[PrimitiveValue] => PrimitiveValue, 
 		typechecker: Seq[Type] => Type
 	): Unit =
-		fnames.map(register(_, eval, typechecker))
+		fnames.map(registerNative(_, eval, typechecker))
 
-	def register(
-		fname: String, 
-		eval: Seq[PrimitiveValue] => PrimitiveValue, 
-		typechecker: Seq[Type] => Type
-	): Unit =
-		functionPrototypes.put(fname, RegisteredFunction(fname, eval, typechecker))
+  def registerNative(
+    fname:String,
+    eval:Seq[PrimitiveValue] => PrimitiveValue, 
+    typechecker: Seq[Type] => Type
+  ): Unit =
+    register(new RegisteredFunction(fname, eval, typechecker))
+
+  def registerExpr(fname:String, args:Seq[String], expr:String): Unit =
+    registerExpr(fname, args, SimpleExpressionParser.expr(expr))
+  def registerExpr(fname:String, args:Seq[String], expr:Expression): Unit =
+    register(new ExpressionFunction(fname, args, expr))
+
+  def registerFold(fname:String, expr:String): Unit =
+    registerFold(fname, SimpleExpressionParser.expr(expr))
+  def registerFold(fname:String, expr:Expression): Unit =
+    register(new FoldFunction(fname, expr))
+
+	def register(fn: RegisteredFunction) =
+    functionPrototypes.put(fn.name, fn)
 
 	def typecheck(fname: String, args: Seq[Type]): Type = 
 		functionPrototypes(fname).typecheck(args)
@@ -119,4 +143,6 @@ object FunctionRegistry {
 	def eval(fname: String, args: Seq[PrimitiveValue]): PrimitiveValue =
 		functionPrototypes(fname).eval(args)
 
+  def unfold(fname: String, args: Seq[Expression]): Option[Expression] = 
+    functionPrototypes(fname).unfold(args)
 }
