@@ -53,6 +53,7 @@ object Type {
     case "bool"    => TBool()
     case "rowid"   => TRowId()
     case "type"    => TType()
+    case "any"     => TAny()
     case x if TypeRegistry.registeredTypes contains x => TUser(x)
     case _ => 
       throw new RAException("Invalid Type '" + t + "'");
