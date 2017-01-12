@@ -141,9 +141,6 @@ object LoadCSV extends StrictLogging {
     TimeUtils.monitor(s"Import CSV: $targetTable <- $sourceFile",
       () => {
         db.backend.fastUpdateBatch(cmd, rows.map({ record => 
-          if(record.recordNumber % 100000 == 0){
-            logger.info(s"Loaded ${record.recordNumber} records...")
-          }
           val data = record.fields.
             take(numberOfColumns).
             padTo(numberOfColumns, "").
