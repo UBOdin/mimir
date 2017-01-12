@@ -11,7 +11,7 @@ import mimir.models.Model
 import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
 import mimir.lenses.{LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
-import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens,CreateView,Explain,Feedback}
+import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens,CreateView,Explain,Feedback,Load}
 import mimir.optimizer.{InlineVGTerms, ResolveViews}
 import mimir.util.{LoadCSV,ExperimentalOptions}
 import mimir.web.WebIterator
@@ -324,6 +324,17 @@ case class Database(backend: Backend)
       }
       case view: CreateView => views.createView(view.getTable().getName(), 
                                                 sql.convert(view.getSelectBody()))
+      case load: Load => {
+        // Assign a default table name if needed
+        val target = 
+          load.getTable() match { 
+            case null => load.getFile.getName.replaceAll("\\..*", "").toUpperCase
+            case s => s
+          }
+
+        loadTable(target, load.getFile)
+      }
+
       case drop: Drop     => {
           drop.getType().toUpperCase match {
             case "TABLE" | "INDEX" => 
