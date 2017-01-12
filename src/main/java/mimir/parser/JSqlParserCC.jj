@@ -109,6 +109,7 @@ import mimir.sql.CreateLens;
 import mimir.sql.Analyze;
 import mimir.sql.Explain;
 import mimir.sql.Feedback;
+import mimir.sql.Load;
 import net.sf.jsqlparser.statement.create.table.Index;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.drop.Drop;
@@ -163,6 +164,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_VIEW:"VIEW">
 |   <K_LENS:"LENS">
 |   <K_LET:"LET">
+|   <K_LOAD:"LOAD">
 |   <K_BY:"BY">
 |   <K_DO:"DO">
 |   <K_IS:"IS">
@@ -284,6 +286,8 @@ Statement Statement() :
     stm = Drop()
     |
     stm = Truncate()
+    |
+    stm = Load()
     )
     (";" | <EOF>)    
     { return stm; }
@@ -1927,4 +1931,26 @@ Truncate Truncate():
 	{
 		return truncate;
 	}
+}
+
+Load Load():
+{ 
+  Token file = null;
+  Token table = null;
+}
+{
+  <K_LOAD> file=<S_CHAR_LITERAL> 
+  [ <K_AS> table=<S_IDENTIFIER> ]
+  { 
+    if(table == null){
+      return new Load(
+        StringValue.parseEscaped(file.image).getValue()
+      );
+    } else {
+      return new Load(
+        StringValue.parseEscaped(file.image).getValue(),
+        StringValue.parseEscaped(table.image).getValue()
+      );
+    }
+  }
 }
