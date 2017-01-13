@@ -3563,6 +3563,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   final public Extend Extend() throws ParseException {
   Extend.Op op = null;
   Token target = null;
+  Token temp = null;
   Expression value = null;
     jj_consume_token(K_EXTEND);
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -3570,22 +3571,23 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       jj_consume_token(K_SET);
       target = jj_consume_token(S_IDENTIFIER);
       jj_consume_token(93);
-      value = Expression();
+      value = SimpleExpression();
           op = Extend.Op.ADD_COLUMN;
       break;
     case K_ALTER:
       jj_consume_token(K_ALTER);
       target = jj_consume_token(S_IDENTIFIER);
       jj_consume_token(93);
-      value = Expression();
+      value = SimpleExpression();
           op = Extend.Op.ALTER_COLUMN;
       break;
     case K_RENAME:
       jj_consume_token(K_RENAME);
+      temp = jj_consume_token(S_IDENTIFIER);
+      jj_consume_token(K_AS);
       target = jj_consume_token(S_IDENTIFIER);
-      jj_consume_token(93);
-      value = Expression();
           op = Extend.Op.RENAME_COLUMN;
+          value = new Column(new Table(), temp.image);
       break;
     default:
       jj_la1[170] = jj_gen;

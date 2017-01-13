@@ -1970,12 +1970,12 @@ Extend Extend():
 }
 {
   <K_EXTEND> (
-    ( <K_SET> target=<S_IDENTIFIER> "=" value=Expression() 
+    ( <K_SET> target=<S_IDENTIFIER> "=" value=SimpleExpression() 
         { op = Extend.Op.ADD_COLUMN; } )
-  | ( <K_ALTER> target=<S_IDENTIFIER> "=" value=Expression() 
+  | ( <K_ALTER> target=<S_IDENTIFIER> "=" value=SimpleExpression() 
         { op = Extend.Op.ALTER_COLUMN; } )
   | ( <K_RENAME> temp=<S_IDENTIFIER> <K_AS> target=<S_IDENTIFIER>
         { op = Extend.Op.RENAME_COLUMN; 
-          value = new Column(new Table(), temp.image)} )
+          value = new Column(new Table(), temp.image); } )
   ) { return new Extend(op, target.image, value); }
 }
