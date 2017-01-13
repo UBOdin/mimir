@@ -23,7 +23,7 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
 
     "Produce Flat Queries for Tables" >> {
       convert("R(A, B)") must be equalTo 
-        "SELECT R.A AS A, R.B AS B FROM R"
+        "SELECT * FROM R AS R"
     }
 
     "Produce Flat Queries for Tables with Aliased Variables" >> {

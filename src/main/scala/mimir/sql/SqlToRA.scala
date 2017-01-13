@@ -317,8 +317,32 @@ class SqlToRA(db: Database)
     }
 
     // Sanity check unimplemented features
-    if(ps.getOrderByElements != null){ unhandled("ORDER BY") }
-    if(ps.getLimit != null){ unhandled("LIMIT") }
+    if(ps.getOrderByElements != null){ 
+      val sortDirectives = 
+        ps.getOrderByElements.map(ob => {
+          val column = 
+            ob.getExpression match {
+              case col:Column => convertColumn(col, bindings.toMap).toString
+              case _ => unhandled("ORDER BY on complex expression") 
+            }
+          SortColumn(column, ob.isAsc)
+        })
+      ret = Sort(sortDirectives, ret)      
+    }
+    if(ps.getLimit != null){ 
+      val limit = ps.getLimit
+      if(limit.isLimitAll || (limit.getRowCount <= 0)){
+        if(limit.getOffset > 0){
+          ret = Limit(limit.getOffset, None, ret)
+        }
+      } else {
+        ret = Limit(
+                math.max(0,limit.getOffset), 
+                Some(limit.getRowCount), 
+                ret
+              )
+      }
+    }
     if(ps.getDistinct != null){ unhandled("DISTINCT") }
 
     // We're responsible for returning bindings for this specific

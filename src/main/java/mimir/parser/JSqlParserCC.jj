@@ -110,6 +110,7 @@ import mimir.sql.Analyze;
 import mimir.sql.Explain;
 import mimir.sql.Feedback;
 import mimir.sql.Load;
+import mimir.sql.Extend;
 import net.sf.jsqlparser.statement.create.table.Index;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.drop.Drop;
@@ -160,11 +161,14 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_UNCERTAIN:"UNCERTAIN">
 |   <K_ANALYZE:"ANALYZE">
 |   <K_EXPLAIN:"EXPLAIN">
+|   <K_EXTEND:"EXTEND">
 |   <K_ASSUME:"ASSUME">
 |   <K_VIEW:"VIEW">
 |   <K_LENS:"LENS">
 |   <K_LET:"LET">
 |   <K_LOAD:"LOAD">
+|   <K_ALTER:"ALTER">
+|   <K_RENAME:"RENAME">
 |   <K_BY:"BY">
 |   <K_DO:"DO">
 |   <K_IS:"IS">
@@ -288,6 +292,8 @@ Statement Statement() :
     stm = Truncate()
     |
     stm = Load()
+    |
+    stm = Extend()
     )
     (";" | <EOF>)    
     { return stm; }
@@ -1949,8 +1955,27 @@ Load Load():
     } else {
       return new Load(
         StringValue.parseEscaped(file.image).getValue(),
-        StringValue.parseEscaped(table.image).getValue()
+        table.image
       );
     }
   }
+}
+
+Extend Extend():
+{ 
+  Extend.Op op = null;
+  Token target = null;
+  Token temp = null;
+  Expression value = null;
+}
+{
+  <K_EXTEND> (
+    ( <K_SET> target=<S_IDENTIFIER> "=" value=Expression() 
+        { op = Extend.Op.ADD_COLUMN; } )
+  | ( <K_ALTER> target=<S_IDENTIFIER> "=" value=Expression() 
+        { op = Extend.Op.ALTER_COLUMN; } )
+  | ( <K_RENAME> temp=<S_IDENTIFIER> <K_AS> target=<S_IDENTIFIER>
+        { op = Extend.Op.RENAME_COLUMN; 
+          value = new Column(new Table(), temp.image)} )
+  ) { return new Extend(op, target.image, value); }
 }

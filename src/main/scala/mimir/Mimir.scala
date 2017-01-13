@@ -7,7 +7,7 @@ import mimir.ctables.CTPercolator
 import mimir.parser._
 import mimir.sql._
 import mimir.util.{TimeUtils,ExperimentalOptions}
-import mimir.algebra.{Project,ProjectArg,Var,RAException}
+import mimir.algebra.{Operator,Project,ProjectArg,Var,RAException,OperatorUtils}
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
 import net.sf.jsqlparser.statement.drop.Drop
@@ -31,6 +31,7 @@ object Mimir {
   var conf: MimirConfig = null;
   var db: Database = null;
   var usePrompt = true;
+  var history: List[Operator] = Nil
 
   def main(args: Array[String]) {
     conf = new MimirConfig(args);
@@ -94,6 +95,7 @@ object Mimir {
           case null             => done = true
           case sel:  Select     => handleSelect(sel)
           case expl: Explain    => handleExplain(expl)
+          case extend: Extend   => handleExtend(extend)
           case _                => db.update(stmt)
         }
 
@@ -120,6 +122,22 @@ object Mimir {
     } while(!done)
   }
 
+  def handleSelect(sel: Select): Unit = {
+    val raw = db.sql.convert(sel)
+    handleQuery(raw)
+  }
+
+  def handleQuery(raw:Operator) = 
+  {
+    TimeUtils.monitor("QUERY", () => {
+      val results = db.query(raw)
+      results.open()
+      db.dump(results)
+      results.close()
+      history = raw :: history
+    }, println(_))
+  }
+
   def handleExplain(explain: Explain): Unit = {
     val raw = db.sql.convert(explain.getSelectBody())
     println("------ Raw Query ------")
@@ -138,14 +156,44 @@ object Mimir {
     }
   }
 
-  def handleSelect(sel: Select): Unit = {
-    TimeUtils.monitor("QUERY", () => {
-      val raw = db.sql.convert(sel)
-      val results = db.query(raw)
-      results.open()
-      db.dump(results)
-      results.close()
-    }, println(_))
+  def handleExtend(extend: Extend): Unit = {
+    val lastQuery = history.head
+    val columns = lastQuery.schema.map(_._1).toSet
+    val target = extend.getTarget.toUpperCase
+    val valueExpr = 
+      if(extend.getValue == null){ null }
+      else { db.sql.convert(extend.getValue, columns.map(x => (x,x)).toMap) }
+    val raw = 
+      extend.getOp match {
+        case Extend.Op.ADD_COLUMN => 
+          if(columns contains target){
+            throw new SQLException(s"Column '$target' already exists (Use EXTEND ALTER instead)");
+          }
+          if(valueExpr == null){
+            throw new SQLException(s"EXTEND ADD invalid, need a value expression")
+          }
+          OperatorUtils.projectInColumn(target, valueExpr, lastQuery)
+
+        case Extend.Op.ALTER_COLUMN => 
+          if(!(columns contains target)){
+            throw new SQLException(s"Column '$target' isn't an existing column (Use EXTEND ADD instead)");
+          }
+          if(valueExpr == null){
+            throw new SQLException(s"EXTEND ALTER invalid, need a value expression")
+          }
+          OperatorUtils.replaceColumn(target, valueExpr, lastQuery)
+
+        case Extend.Op.RENAME_COLUMN => 
+          if(!(columns contains target)){
+            throw new SQLException(s"Column '$target' isn't an existing column (Use EXTEND ADD instead)");
+          }
+          val sourceCol = valueExpr match {
+            case Var(c) => 
+            throw new SQLException(s"EXTEND RENAME invalid, need a column!")
+          }
+          OperatorUtils.renameColumn(sourceCol, target, lastQuery)
+      }
+    handleQuery(raw)
   }
 
 }

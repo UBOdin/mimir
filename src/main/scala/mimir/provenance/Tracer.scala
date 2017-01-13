@@ -122,6 +122,15 @@ object Tracer {
           ).toMap,
           BoolPrimitive(true)
         )
+
+      case Sort(_, src) => return trace(oper, targetRowId)
+      case Limit(_, _, src) => return trace(oper, targetRowId)
+
+      case _:LeftOuterJoin => 
+        throw new RAException("Tracer can't handle left outer joins")
+
+      case _:Aggregate => 
+        throw new RAException("Tracer can't handle aggregates")
     }
   }
 }

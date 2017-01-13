@@ -103,6 +103,19 @@ object Provenance {
           groupBy.map(_.name)
         )
 
+      case Sort(sortCols, child) => {
+        val (rewritten, cols) = compile(child)
+        (Sort(sortCols, rewritten), cols)
+      }
+
+      case Limit(offset, count, child) => {
+        val (rewritten, cols) = compile(child)
+        (Limit(offset, count, rewritten), cols)
+      }
+
+      case _:LeftOuterJoin => 
+        throw new RAException("Provenance can't handle left outer joins")
+
     }
   }
 
@@ -237,6 +250,33 @@ object Provenance {
           case None => 
             throw new ProvenanceError("Operator not compiled for provenance: "+operator)
         }
+
+      case Aggregate(gbCols, aggCols, src) =>
+        val lookupFilter = 
+          ExpressionUtils.makeAnd(
+            gbCols.map( col => 
+              Comparison(Cmp.Eq,
+                col,
+                rowIds(col.name)
+              )
+            )
+          )
+        return Some(
+          Aggregate(List(), aggCols, 
+            Select(lookupFilter, src)
+          )
+        )
+
+      case Sort(_, src) => 
+        // Sorts are irrelevant here, drop it
+        return doFilterForToken(src, rowIds)
+
+      case Limit(_, _, src) => 
+        // A limit would make this query invalid, drop it
+        return doFilterForToken(src, rowIds)
+
+      case _:LeftOuterJoin => 
+        throw new RAException("Provenance can't handle left outer joins")
 
     }
   }
