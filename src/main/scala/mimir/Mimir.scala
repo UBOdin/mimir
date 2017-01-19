@@ -1,17 +1,20 @@
 package mimir;
 
 import java.io._
-import java.sql.SQLException
 
-import mimir.ctables.CTPercolator
+import scala.collection.mutable.ListBuffer
+
+import org.rogach.scallop._
+
 import mimir.parser._
 import mimir.sql._
-import mimir.util.{TimeUtils,ExperimentalOptions}
-import mimir.algebra.{Project,ProjectArg,Var}
+import mimir.util.ExperimentalOptions
+import mimir.util.TimeUtils
 import net.sf.jsqlparser.statement.Statement
+import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
 import net.sf.jsqlparser.statement.select.Select
-import net.sf.jsqlparser.statement.drop.Drop
-import org.rogach.scallop._
+import mimir.gprom.algebra.OperatorTranslation
+import org.gprom.jdbc.jna.GProMWrapper
 
 
 /**
@@ -37,15 +40,15 @@ object Mimir {
 
     // Prepare experiments
     ExperimentalOptions.enable(conf.experimental())
-
+    
     // Set up the database connection(s)
-    db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
+    db = new Database(new GProMBackend(conf.backend(), conf.dbname()))
     db.backend.open()
 
     db.initializeDBForMimir();
 
     // Check for one-off commands
-    if(conf.loadTable.get != None){
+    /*if(conf.loadTable.get != None){
       db.loadTable(conf.loadTable(), conf.loadTable()+".csv");
     } else if(conf.rebuildBestGuess.get != None){
         db.bestGuessCache.buildCache(
@@ -61,7 +64,7 @@ object Mimir {
       }))
 
       if(ExperimentalOptions.isEnabled("INLINE-VG")){
-        db.backend.asInstanceOf[JDBCBackend].enableInlining(db)
+        db.backend.asInstanceOf[GProMBackend].enableInlining(db)
       }
 
       if(conf.file.get == None || conf.file() == "-"){
@@ -73,10 +76,58 @@ object Mimir {
       }
 
       eventLoop(source)
-    }
+    }*/
 
+    mikeMessingAround()
+    
     db.backend.close()
     if(!conf.quiet()) { println("\n\nDone.  Exiting."); }
+  }
+  
+  def mikeMessingAround() : Unit = {
+    //val dbtables = db.backend.getAllTables()
+    //println( dbtables.mkString("\n") )
+    //println( db.backend.getTableSchema(dbtables(0) ))
+    //val res = handleStatements("PROVENANCE OF (Select * from TESTDATA_RAW)")
+    //val ress = db.backend.execute("PROVENANCE WITH TABLE TEST_A_RAW OF (SELECT TEST_B_RAW.* from TEST_A_RAW JOIN TEST_B_RAW ON TEST_A_RAW.ROWID = TEST_B_RAW.ROWID );")
+    /*val ress = db.backend.execute("PROVENANCE OF ( SELECT * from TEST_A_RAW );")
+    val resmd = ress.getMetaData();
+    var i = 1;
+    var row = ""
+    while(i<=resmd.getColumnCount()){
+      row += resmd.getColumnName(i) + ", ";
+      i+=1;
+    }
+    println(row)
+    while(ress.next()){
+      i = 1;
+      row = ""
+      while(i<=resmd.getColumnCount()){
+        row += ress.getString(i) + ", ";
+        i+=1;
+      }
+      println(row)
+    }*/
+    //db.backend.execute("PROVENANCE OF (Select * from MIMIR_VIEWS);")
+    //db.loadTable("/Users/michaelbrachmann/Documents/test_a.mcsv")
+    //db.loadTable("/Users/michaelbrachmann/Documents/test_b.mcsv")
+    val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel("SELECT * from TEST_A_RAW;")
+    val testOper = OperatorTranslation.gpromStructureToMimirOperator(null, gpromNode)
+    for(i <- 1 to 20)
+      println("-------")
+    println(testOper)
+    for(i <- 1 to 20)
+      println("-------")
+    
+    val statements = db.parse("SELECT * from TEST_A_RAW")
+    val testOper2 = db.sql.convert(statements.head.asInstanceOf[Select])
+    for(i <- 1 to 20)
+      println("-------")
+    println(testOper2)
+    for(i <- 1 to 20)
+      println("-------")
+    
+    val results = db.query(testOper)
   }
 
   def eventLoop(source: Reader): Unit = {
@@ -108,6 +159,66 @@ object Mimir {
       }
     } while(!done)
   }
+  
+  
+  private def handleStatements(input: String): (List[Statement], List[String]) = {
+
+    val statements = db.parse(input)
+
+    val results = statements.map({
+      /*****************************************/           
+      case s: Select => {
+        try {
+         val raw = db.sql.convert(s)
+         val results = db.query(raw)
+         results.toString()
+        } 
+      }
+      /*****************************************/           
+      case s: ProvenanceStatement => {
+        try {
+         val raw = db.sql.convert(s)
+         val results = db.query(raw)
+         val data: ListBuffer[(List[String], Boolean)] = new ListBuffer()
+
+         results.open()
+         while(results.getNext()){
+           val list =
+            (
+              results.provenanceToken().payload.toString ::
+                results.schema.zipWithIndex.map( _._2).map( (i) => {
+                  results(i).toString + (if (!results.deterministicCol(i)) {"*"} else {""})
+                }).toList
+            )
+            data.append((list, results.deterministicRow()))
+          }
+          results.close()
+          data.foreach(f => println(f._1.mkString(",")))
+          data.mkString(",")
+        } 
+      }
+      /*****************************************/           
+      case s: CreateLens =>
+        db.update(s)
+        "Lens created successfully."
+      /*****************************************/           
+      case s: Explain => {
+        val raw = db.sql.convert(s.getSelectBody());
+        val op = db.optimize(raw)
+        val res = "------ Raw Query ------\n"+
+          raw.toString()+"\n"+
+          "--- Optimized Query ---\n"+
+          op.toString
+        res
+      }
+      /*****************************************/           
+      case s: Statement =>
+        db.update(s)
+        "Database updated."
+    })
+    (statements, results)
+  }
+  
 
   def handleExplain(explain: Explain): Unit = {
     val raw = db.sql.convert(explain.getSelectBody())

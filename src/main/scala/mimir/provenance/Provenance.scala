@@ -38,6 +38,12 @@ object Provenance {
         )
       }
 
+      case Recover(psel) => {
+        val provSelCmp = compile(psel)
+        val provCmp = (new Recover(provSelCmp._1), provSelCmp._2)
+        provCmp
+      }
+      
       case Select(cond, src) => {
         val (newSrc, rowids) = compile(src)
         ( 

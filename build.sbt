@@ -9,6 +9,19 @@ scalacOptions ++= Seq(
   "-feature"
 )
 
+//API docs with diagrams
+scalacOptions in (Compile, doc) ++= Seq(
+    "-diagrams",
+    "-diagrams-dot-path", "/opt/local/bin/dot",
+    // "-diagrams-dot-timeout", "20", "-diagrams-debug",
+    "-doc-title", name.value
+  )
+  
+unmanagedResourceDirectories in Compile += baseDirectory.value / "lib_extra"
+unmanagedClasspath in Runtime <+= (baseDirectory) map { bd => Attributed.blank(bd / "conf") }
+
+includeFilter in (Compile, unmanagedResourceDirectories):= ".dylib"
+
 resolvers += "MimirDB" at "http://maven.mimirdb.info/"
 
 libraryDependencies ++= Seq(

@@ -109,7 +109,10 @@ object Typechecker {
 						case ProjectArg(col, in) =>
 							(col, chk.typeOf(in))
 					})
-
+			
+			case Recover(psel) => 
+        schemaOf(psel)
+      
 			case Select(cond, src) =>
 				val srcSchema = schemaOf(src);
 				(new ExpressionChecker(srcSchema.toMap)).assert(cond, TBool(), "SELECT")

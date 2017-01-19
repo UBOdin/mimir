@@ -142,55 +142,57 @@ public interface MimirJSqlParserConstants {
   /** RegularExpression Id. */
   int K_SELECT = 58;
   /** RegularExpression Id. */
-  int K_OFFSET = 59;
+  int K_PROVENANCE_OF = 59;
   /** RegularExpression Id. */
-  int K_EXISTS = 60;
+  int K_OFFSET = 60;
   /** RegularExpression Id. */
-  int K_HAVING = 61;
+  int K_EXISTS = 61;
   /** RegularExpression Id. */
-  int K_INSERT = 62;
+  int K_HAVING = 62;
   /** RegularExpression Id. */
-  int K_UPDATE = 63;
+  int K_INSERT = 63;
   /** RegularExpression Id. */
-  int K_VALUES = 64;
+  int K_UPDATE = 64;
   /** RegularExpression Id. */
-  int K_ESCAPE = 65;
+  int K_VALUES = 65;
   /** RegularExpression Id. */
-  int K_PRIMARY = 66;
+  int K_ESCAPE = 66;
   /** RegularExpression Id. */
-  int K_NATURAL = 67;
+  int K_PRIMARY = 67;
   /** RegularExpression Id. */
-  int K_REPLACE = 68;
+  int K_NATURAL = 68;
   /** RegularExpression Id. */
-  int K_BETWEEN = 69;
+  int K_REPLACE = 69;
   /** RegularExpression Id. */
-  int K_TRUNCATE = 70;
+  int K_BETWEEN = 70;
   /** RegularExpression Id. */
-  int K_DISTINCT = 71;
+  int K_TRUNCATE = 71;
   /** RegularExpression Id. */
-  int K_INTERSECT = 72;
+  int K_DISTINCT = 72;
   /** RegularExpression Id. */
-  int K_FEEDBACK = 73;
+  int K_INTERSECT = 73;
   /** RegularExpression Id. */
-  int S_DOUBLE = 74;
+  int K_FEEDBACK = 74;
   /** RegularExpression Id. */
-  int S_INTEGER = 75;
+  int S_DOUBLE = 75;
   /** RegularExpression Id. */
-  int DIGIT = 76;
+  int S_INTEGER = 76;
   /** RegularExpression Id. */
-  int LINE_COMMENT = 77;
+  int DIGIT = 77;
   /** RegularExpression Id. */
-  int MULTI_LINE_COMMENT = 78;
+  int LINE_COMMENT = 78;
   /** RegularExpression Id. */
-  int S_IDENTIFIER = 79;
+  int MULTI_LINE_COMMENT = 79;
   /** RegularExpression Id. */
-  int LETTER = 80;
+  int S_IDENTIFIER = 80;
   /** RegularExpression Id. */
-  int SPECIAL_CHARS = 81;
+  int LETTER = 81;
   /** RegularExpression Id. */
-  int S_CHAR_LITERAL = 82;
+  int SPECIAL_CHARS = 82;
   /** RegularExpression Id. */
-  int S_QUOTED_IDENTIFIER = 83;
+  int S_CHAR_LITERAL = 83;
+  /** RegularExpression Id. */
+  int S_QUOTED_IDENTIFIER = 84;
 
   /** Lexical state. */
   int DEFAULT = 0;
@@ -256,6 +258,7 @@ public interface MimirJSqlParserConstants {
     "\"DELETE\"",
     "\"CREATE\"",
     "\"SELECT\"",
+    "\"PROVENANCE OF\"",
     "\"OFFSET\"",
     "\"EXISTS\"",
     "\"HAVING\"",

@@ -132,7 +132,7 @@ object CTPercolator
 
   val mimirRowDeterministicColumnName = "MIMIR_ROW_DET"
   val mimirColDeterministicColumnPrefix = "MIMIR_COL_DET_"
-
+  
   /**
    * Rewrite the input operator to evaluate a 'provenance lite'
    * 
@@ -299,6 +299,13 @@ object CTPercolator
         )
       }
 
+      case Recover(psel) => {
+        val provSelPrc = percolateLite(psel)
+        val provPrc = (new Recover(provSelPrc._1), provSelPrc._2, provSelPrc._3)
+        //GProMWrapper.inst.gpromRewriteQuery(sql);
+        provPrc
+      }
+      
       case Select(cond, src) => {
         val (rewrittenSrc, colDeterminism, rowDeterminism) = percolateLite(src);
 

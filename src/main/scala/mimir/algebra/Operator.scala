@@ -176,6 +176,23 @@ case class Select(condition: Expression, source: Operator) extends Operator
   def rebuildExpressions(x: Seq[Expression]) = Select(x(0), source)
 }
 
+
+
+/**
+ * provenance computation extraction operator -- Provenance Of
+ */
+case class Recover(subj: Operator) extends Operator
+{
+  def toString(prefix: String) =
+    // prefix + "Join of\n" + left.toString(prefix+"  ") + "\n" + prefix + "and\n" + right.toString(prefix+"  ")
+    prefix + "PROVENANCE(\n" + subj.toString(prefix+"  ") + ",\n" + 
+                  "\n" + prefix + ")"
+  def children() = List(subj);
+  def rebuild(x: Seq[Operator]) = Recover(x(0))
+  def expressions = List()
+  def rebuildExpressions(x: Seq[Expression]) = this
+}
+
 /**
  * Relational algebra cartesian product (I know, technically not an actual join)
  */

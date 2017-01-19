@@ -33,7 +33,13 @@ object ProjectRedundantColumns {
 
         Project( newArgs, apply(source, childDependencies) )
       }
-
+      
+       case Recover(psel) => {
+        val provSelApl = apply(psel)
+        val provApl = new Recover(provSelApl)
+        provApl
+      }
+      
       case Select(condition, source) => {
         val childDependencies = 
           ExpressionUtils.getColumns( condition ) ++ dependencies

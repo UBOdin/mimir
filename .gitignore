@@ -36,3 +36,4 @@ databases/tpch*.db
 
 # DBGen
 tpch-dbgen
+/bin/

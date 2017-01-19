@@ -14,12 +14,15 @@ import net.sf.jsqlparser.expression.{BinaryExpression, DateValue, DoubleValue, F
 import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.statement.create.table._
 import net.sf.jsqlparser.statement.select.{AllColumns, AllTableColumns, FromItem, PlainSelect, SelectBody, SelectExpressionItem, SubJoin, SubSelect}
+import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
 import org.joda.time.LocalDate
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
+import mimir.provenance.Provenance
+
 ;
 
 class SqlToRA(db: Database) 
@@ -51,6 +54,12 @@ class SqlToRA(db: Database)
     }
   }
 
+  def convert(s : ProvenanceStatement) : Operator  = {
+    val psel = new Recover(convert(s.getSelect()));
+    psel
+  }
+  
+  
   def convert(s : net.sf.jsqlparser.statement.select.Select) : Operator = convert(s, null)._1
   def convert(s : net.sf.jsqlparser.statement.select.Select, alias: String) : (Operator, Map[String, String]) = {
     convert(s.getSelectBody(), alias)
