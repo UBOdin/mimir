@@ -130,6 +130,52 @@ class SqlToRA(db: Database)
       ret = Select(convert(ps.getWhere, bindings.toMap), ret)
     }
 
+    //////////////////// CONVERT SORT AND LIMIT CLAUSES ///////////////////////
+
+    // Sort and limit are an odd and really really really annoying case, because of
+    // how they interact with aggregate and non-aggregate queries.  
+    // 
+    // - For non-aggregate queries, SORT and LIMIT get applied BEFORE projection.
+    //     - This is actually not entirely true... some SQL variants allow you to
+    //       use names in both the target and source columns...  eeeew
+    // - For aggregate quereis, SORT and LIMIT get applied AFTER aggregation.
+    //
+    // Because they could get applied in either of two places, we don't actually
+    // do the conversion here.  Instead we define the entire conversion in one
+    // place (here), wrapped in a function that gets called at the right place 
+    // below, once we figure out whether we're dealing with an aggregate or 
+    // flat query.
+    //
+    val applySortAndLimit = 
+    () => {
+      if(ps.getOrderByElements != null){ 
+        val sortDirectives = 
+          ps.getOrderByElements.map(ob => {
+            val column = 
+              ob.getExpression match {
+                case col:Column => convertColumn(col, bindings.toMap)
+                case _ => unhandled("ORDER BY on complex expression") 
+              }
+            SortColumn(column, ob.isAsc)
+          })
+        ret = Sort(sortDirectives, ret)
+      }
+      if(ps.getLimit != null){ 
+        val limit = ps.getLimit
+        if(limit.isLimitAll || (limit.getRowCount <= 0)){
+          if(limit.getOffset > 0){
+            ret = Limit(limit.getOffset, None, ret)
+          }
+        } else {
+          ret = Limit(
+                  math.max(0,limit.getOffset), 
+                  Some(limit.getRowCount), 
+                  ret
+                )
+        }
+      }
+    }
+
     //////////////////////// CONVERT SELECT TARGETS /////////////////////////////
 
     // Utility function to compute expansions for table wildcard 
@@ -229,8 +275,12 @@ class SqlToRA(db: Database)
       allReferencedFunctions.exists( AggregateRegistry.isAggregate(_) )
 
     if(!isAggSelect){
-      // NOT an aggregate select.  We just need to create a simple
-      // projection around the return value.
+      // NOT an aggregate select.  
+
+      // Apply the sort and limit clauses before the projection if necessary
+      applySortAndLimit()
+
+      // Create a simple projection around the return value.
       ret = 
         Project(
           targets.map({
@@ -314,35 +364,12 @@ class SqlToRA(db: Database)
 
         ret = Select(havingExpr, ret)
       }
+
+      // Apply sort and limit if necessary
+      applySortAndLimit()
     }
 
     // Sanity check unimplemented features
-    if(ps.getOrderByElements != null){ 
-      val sortDirectives = 
-        ps.getOrderByElements.map(ob => {
-          val column = 
-            ob.getExpression match {
-              case col:Column => convertColumn(col, bindings.toMap).toString
-              case _ => unhandled("ORDER BY on complex expression") 
-            }
-          SortColumn(column, ob.isAsc)
-        })
-      ret = Sort(sortDirectives, ret)      
-    }
-    if(ps.getLimit != null){ 
-      val limit = ps.getLimit
-      if(limit.isLimitAll || (limit.getRowCount <= 0)){
-        if(limit.getOffset > 0){
-          ret = Limit(limit.getOffset, None, ret)
-        }
-      } else {
-        ret = Limit(
-                math.max(0,limit.getOffset), 
-                Some(limit.getRowCount), 
-                ret
-              )
-      }
-    }
     if(ps.getDistinct != null){ unhandled("DISTINCT") }
 
     // We're responsible for returning bindings for this specific

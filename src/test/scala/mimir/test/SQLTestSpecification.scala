@@ -78,8 +78,6 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     stmt(s) match {
       case sel:net.sf.jsqlparser.statement.select.Select => 
         db.sql.convert(sel)
-      case ext:Extend =>
-        MimirQL.applyExtend(db, history.head, ext)
     }
   }
   def query(s: String): ResultIterator = {

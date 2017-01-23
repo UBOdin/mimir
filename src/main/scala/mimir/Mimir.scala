@@ -31,7 +31,6 @@ object Mimir {
   var conf: MimirConfig = null;
   var db: Database = null;
   var usePrompt = true;
-  var history: List[Operator] = Nil
 
   def main(args: Array[String]) = 
   {
@@ -97,7 +96,6 @@ object Mimir {
           case null             => done = true
           case sel:  Select     => handleSelect(sel)
           case expl: Explain    => handleExplain(expl)
-          case extend: Extend   => handleExtend(extend)
           case pragma: Pragma   => handlePragma(pragma)
           case _                => db.update(stmt)
         }
@@ -138,7 +136,6 @@ object Mimir {
       results.open()
       db.dump(results)
       results.close()
-      history = raw :: history
     }, println(_))
   }
 
@@ -158,15 +155,6 @@ object Mimir {
     } catch {
       case e:Throwable =>
         println("Unavailable: "+e.getMessage())
-    }
-  }
-
-  def handleExtend(extend: Extend): Unit = 
-  {
-    if(history.isEmpty){ 
-      throw new SQLException("EXTEND can not be the first query")
-    } else {
-      handleQuery(MimirQL.applyExtend(db, history.head, extend))
     }
   }
 

@@ -42,19 +42,19 @@ public interface MimirJSqlParserConstants {
   /** RegularExpression Id. */
   int K_EXPLAIN = 8;
   /** RegularExpression Id. */
-  int K_EXTEND = 9;
+  int K_ASSUME = 9;
   /** RegularExpression Id. */
-  int K_ASSUME = 10;
+  int K_VIEW = 10;
   /** RegularExpression Id. */
-  int K_VIEW = 11;
+  int K_LENS = 11;
   /** RegularExpression Id. */
-  int K_LENS = 12;
+  int K_LET = 12;
   /** RegularExpression Id. */
-  int K_LET = 13;
+  int K_LOAD = 13;
   /** RegularExpression Id. */
-  int K_LOAD = 14;
+  int K_ALTER = 14;
   /** RegularExpression Id. */
-  int K_ALTER = 15;
+  int K_SAVE = 15;
   /** RegularExpression Id. */
   int K_RENAME = 16;
   /** RegularExpression Id. */
@@ -216,13 +216,13 @@ public interface MimirJSqlParserConstants {
     "\"UNCERTAIN\"",
     "\"ANALYZE\"",
     "\"EXPLAIN\"",
-    "\"EXTEND\"",
     "\"ASSUME\"",
     "\"VIEW\"",
     "\"LENS\"",
     "\"LET\"",
     "\"LOAD\"",
     "\"ALTER\"",
+    "\"SAVE\"",
     "\"RENAME\"",
     "\"PRAGMA\"",
     "\"BY\"",

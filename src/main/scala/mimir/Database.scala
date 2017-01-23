@@ -322,7 +322,7 @@ case class Database(backend: Backend)
 
         lenses.createLens(t, name, query, args)
       }
-      case view: CreateView => views.createView(view.getTable().getName(), 
+      case view: CreateView => views.createView(view.getTable().getName().toUpperCase, 
                                                 sql.convert(view.getSelectBody()))
       case load: Load => {
         // Assign a default table name if needed
@@ -341,10 +341,10 @@ case class Database(backend: Backend)
               backend.update(drop.toString());
 
             case "VIEW" =>
-              views.dropView(drop.getName());
+              views.dropView(drop.getName().toUpperCase);
 
             case "LENS" =>
-              lenses.dropLens(drop.getName())
+              lenses.dropLens(drop.getName().toUpperCase)
 
             case _ =>
               throw new SQLException("Invalid drop type '"+drop.getType()+"'")

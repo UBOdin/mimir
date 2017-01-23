@@ -20,17 +20,26 @@ object TimeSeqScenarios
       ok
     }
 
-    "EXTEND correctly" >> {
+    "run limit queries" >> {
       query("select T, A, B from seq limit 20").allRows must have size(20)
+    }
+
+    "run order-by limit queries" >> {
+      query("select T, A, B from seq order by t limit 20").
+        allRows.toSeq.reverse.head must contain(i(20))
+      query("select T, A, B from seq order by t desc limit 20").
+        allRows.toSeq.reverse.head must contain(i(9980))
+    }
+
+    "generate categories correctly" >> {
       val r1 = query("""
-        extend set cat=
+        select T, A, B, 
           case when a is not null then 'A' 
                when b is not null then 'B' 
                else 'C' 
-          end
+          end as cat from seq limit 20
       """).allRows
       r1.map(_(3)).toSet must contain(eachOf(str("A"), str("B"), str("C")))
-
     }
 
   }

@@ -130,7 +130,7 @@ class RAToSql(db: Database)
     var head = oper
     val select = new PlainSelect()
 
-    logger.debug("Assembling Plain Select")
+    logger.debug("Assembling Plain Select:\n"+oper)
 
     // Limit clause is the final processing step, so we handle
     // it first.
@@ -151,45 +151,49 @@ class RAToSql(db: Database)
       case _ => ()
     }
 
-    // Sort comes after limit, but before Project/Select
-    head match {
-      case Sort(cols, src) => {
-        logger.debug("Assembling Plain Select: Including a SORT")
-        select.setOrderByElements(
-          cols.map(col => {
-            val ob = new net.sf.jsqlparser.statement.select.OrderByElement()
-            ob.setExpression(new net.sf.jsqlparser.schema.Column(
-              new net.sf.jsqlparser.schema.Table(null, null), 
-              col.name
-            ))
-            ob.setAsc(col.ascending)
-            ob
-          })
-        )
-        ////// Remember to strip the sort operator off //////
-        head = src
-
+    // Sort comes after limit, but before Project/Select.
+    // We need to get the per-source column bindings before actually adding the
+    // clause, so save the clause until we have those.
+    //
+    // There's also the oddity that ORDER BY behaves differently for aggregate
+    // and non-aggregate queries.  That is, for aggregate queries, ORDER BY uses
+    // the schema defined in the target clause.  For non-aggregate queries, 
+    // ORDER BY is *supposed* to use the schema of the source columns (although
+    // some databases allow you to use the target column names too).  Because this
+    // means a different ordering Sort(Aggregate(...)) vs Project(Sort(...)), we
+    // simply assume that the projection can be inlined.  
+    val sortClause: Option[Seq[SortColumn]] = 
+      head match {
+        case Sort(cols, src) => {
+          head = src; 
+          logger.debug("Assembling Plain Select: Will include a SORT: "+cols); 
+          Some(cols)
+        }
+        case _               => {
+          None
+        }
       }
-      case _ => ()
-    }
 
     // Project/Aggregate is next... Don't actually convert them yet, but 
     // pull them off the stack and save the arguments
-    val target:TargetClause = 
+    //
+    // We also save a set of bindings to rewrite the Sort clause if needed
+    //
+    val (target:TargetClause, sortBindings:Map[String,Expression]) = 
       head match {
-        case Project(cols, src)              => {
+        case p@Project(cols, src)              => {
           logger.debug("Assembling Plain Select: Target is a flat projection")
           head = src; 
-          ProjectTarget(cols)
+          (ProjectTarget(cols), p.bindings)
         }
         case Aggregate(gbCols, aggCols, src) => {
           logger.debug("Assembling Plain Select: Target is an aggregation")
           head = src; 
-          AggregateTarget(gbCols, aggCols)
+          (AggregateTarget(gbCols, aggCols), Map())
         }
         case _                               => {
           logger.debug("Assembling Plain Select: Target involves no computation")
-          AllTarget()
+          (AllTarget(), Map())
         }
       }
 
@@ -208,6 +212,26 @@ class RAToSql(db: Database)
       }
     }
 
+    // Apply the ORDER BY clause if we found one earlier
+    // Remember that the clause may have been further transformed if we hit a 
+    // projection instead of an aggregation.
+    sortClause.foreach { cols =>
+      select.setOrderByElements(
+        cols.map(col => {
+          val ob = new net.sf.jsqlparser.statement.select.OrderByElement()
+          //
+          ob.setExpression(
+            convert(
+              Eval.inline(col.expr, sortBindings),
+              schemas
+            ))
+          ob.setAsc(col.ascending)
+          logger.debug(s"Assembling Plain Select: ORDER BY: "+ob)
+          ob
+        })
+      )
+    }
+
     // Add the FROM clause
     logger.debug(s"Assembling Plain Select: FROM ($from)")
     select.setFromItem(from)
@@ -219,6 +243,7 @@ class RAToSql(db: Database)
           cols.map( col => 
             makeSelectItem(convert(col.expression, schemas), col.name) )
         )
+        logger.debug(s"Assembling Plain Select: SELECT "+select.getSelectItems)
       }
 
       case AggregateTarget(gbCols, aggCols) => {
@@ -430,14 +455,7 @@ class RAToSql(db: Database)
       case Arithmetic(Arith.Div, l, r)  => bin(new Division(), l, r, sources)
       case Arithmetic(Arith.And, l, r)  => new AndExpression(convert(l, sources), convert(r, sources))
       case Arithmetic(Arith.Or, l, r)   => new OrExpression(convert(l, sources), convert(r, sources))
-      case Var(n) => {
-        val src = sources.find( {
-          case (_, vars) => vars.exists( _.equalsIgnoreCase(n) )
-        })
-        if(src.isEmpty)
-          throw new SQLException("Could not find appropriate source for '"+n+"' in "+sources)
-        new Column(new net.sf.jsqlparser.schema.Table(null, src.head._1), n)
-      }
+      case Var(n) => convertColumn(n, sources)
       case JDBCVar(t) => new JdbcParameter()
       case Conditional(_, _, _) => {
         val (whenClauses, elseClause) = ExpressionUtils.foldConditionalsToCase(e)
@@ -489,6 +507,16 @@ class RAToSql(db: Database)
       case _ =>
         throw new SQLException("Compiler Error: I don't know how to translate "+e+" into SQL")
     }
+  }
+
+  private def convertColumn(n:String, sources: List[(String,List[String])]): Column =
+  {
+    val src = sources.find( {
+      case (_, vars) => vars.exists( _.equalsIgnoreCase(n) )
+    })
+    if(src.isEmpty)
+      throw new SQLException("Could not find appropriate source for '"+n+"' in "+sources)
+    new Column(new net.sf.jsqlparser.schema.Table(null, src.head._1), n)
   }
 
 

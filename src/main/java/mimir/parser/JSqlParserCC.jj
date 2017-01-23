@@ -110,7 +110,6 @@ import mimir.sql.Analyze;
 import mimir.sql.Explain;
 import mimir.sql.Feedback;
 import mimir.sql.Load;
-import mimir.sql.Extend;
 import mimir.sql.Pragma;
 import net.sf.jsqlparser.statement.create.table.Index;
 import net.sf.jsqlparser.statement.delete.Delete;
@@ -162,13 +161,13 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_UNCERTAIN:"UNCERTAIN">
 |   <K_ANALYZE:"ANALYZE">
 |   <K_EXPLAIN:"EXPLAIN">
-|   <K_EXTEND:"EXTEND">
 |   <K_ASSUME:"ASSUME">
 |   <K_VIEW:"VIEW">
 |   <K_LENS:"LENS">
 |   <K_LET:"LET">
 |   <K_LOAD:"LOAD">
 |   <K_ALTER:"ALTER">
+|   <K_SAVE:"SAVE">
 |   <K_RENAME:"RENAME">
 |   <K_PRAGMA:"PRAGMA">
 |   <K_BY:"BY">
@@ -294,8 +293,6 @@ Statement Statement() :
     stm = Truncate()
     |
     stm = Load()
-    |
-    stm = Extend()
     |
     stm = Pragma()
     )
@@ -1963,25 +1960,6 @@ Load Load():
       );
     }
   }
-}
-
-Extend Extend():
-{ 
-  Extend.Op op = null;
-  Token target = null;
-  Token temp = null;
-  Expression value = null;
-}
-{
-  <K_EXTEND> (
-    ( <K_SET> target=<S_IDENTIFIER> "=" value=SimpleExpression() 
-        { op = Extend.Op.ADD_COLUMN; } )
-  | ( <K_ALTER> target=<S_IDENTIFIER> "=" value=SimpleExpression() 
-        { op = Extend.Op.ALTER_COLUMN; } )
-  | ( <K_RENAME> temp=<S_IDENTIFIER> <K_AS> target=<S_IDENTIFIER>
-        { op = Extend.Op.RENAME_COLUMN; 
-          value = new Column(new Table(), temp.image); } )
-  ) { return new Extend(op, target.image, value); }
 }
 
 Pragma Pragma():

@@ -256,10 +256,10 @@ case class Table(name: String,
  *
  * (e.g., as in SELECT * FROM FOO ORDER BY bar ASC)
  */
-case class SortColumn(name: String, ascending:Boolean)
+case class SortColumn(expr: Expression, ascending:Boolean)
 {
   override def toString() = 
-    (name + " " + (if(ascending){"ASC"}else{"DESC"}))
+    (expr + " " + (if(ascending){"ASC"}else{"DESC"}))
 }
 /**
  * Indicates that the source operator's output should be sorted in the
@@ -271,14 +271,15 @@ case class Sort(sorts:Seq[SortColumn], src: Operator) extends Operator
   {
     prefix + "SORT[" + 
         sorts.map(_.toString).mkString(", ") +
-      "](" +
+      "](\n" +
         src.toString(prefix+"  ") +
-      ")"
+      "\n"+prefix+")"
   }
   def children: List[Operator] = List(src)
   def rebuild(x: Seq[Operator]) = Sort(sorts, x(0))
-  def expressions = List()
-  def rebuildExpressions(x: Seq[Expression]) = this
+  def expressions = sorts.map(_.expr)
+  def rebuildExpressions(x: Seq[Expression]) = 
+    Sort(x.zip(sorts).map { col => SortColumn(col._1, col._2.ascending) }, src)
 }
 
 /**

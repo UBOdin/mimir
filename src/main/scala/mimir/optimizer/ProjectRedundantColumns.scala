@@ -43,9 +43,9 @@ object ProjectRedundantColumns {
 
       case Sort(cols, source) => {
         val childDependencies = 
-          cols.map(_.name).toSet ++ dependencies
+          cols.map(_.expr).flatMap(ExpressionUtils.getColumns(_)) ++ dependencies
 
-        Sort(cols, apply(source, childDependencies))
+        Sort(cols, apply(source, childDependencies.toSet))
       }
 
       case l:Limit =>
