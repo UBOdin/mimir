@@ -7,7 +7,7 @@ import mimir.ctables.CTPercolator
 import mimir.parser._
 import mimir.sql._
 import mimir.util.{TimeUtils,ExperimentalOptions}
-import mimir.algebra.{Operator,Project,ProjectArg,Var,RAException,OperatorUtils}
+import mimir.algebra.{Operator,Project,ProjectArg,Var,RAException,OperatorUtils,Function}
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
 import net.sf.jsqlparser.statement.drop.Drop
@@ -33,7 +33,8 @@ object Mimir {
   var usePrompt = true;
   var history: List[Operator] = Nil
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]) = 
+  {
     conf = new MimirConfig(args);
 
     // Prepare experiments
@@ -82,7 +83,8 @@ object Mimir {
     if(!conf.quiet()) { println("\n\nDone.  Exiting."); }
   }
 
-  def eventLoop(source: Reader): Unit = {
+  def eventLoop(source: Reader): Unit = 
+  {
     var parser = new MimirJSqlParser(source);
     var done = false;
     do {
@@ -96,6 +98,7 @@ object Mimir {
           case sel:  Select     => handleSelect(sel)
           case expl: Explain    => handleExplain(expl)
           case extend: Extend   => handleExtend(extend)
+          case pragma: Pragma   => handlePragma(pragma)
           case _                => db.update(stmt)
         }
 
@@ -122,7 +125,8 @@ object Mimir {
     } while(!done)
   }
 
-  def handleSelect(sel: Select): Unit = {
+  def handleSelect(sel: Select): Unit = 
+  {
     val raw = db.sql.convert(sel)
     handleQuery(raw)
   }
@@ -138,7 +142,8 @@ object Mimir {
     }, println(_))
   }
 
-  def handleExplain(explain: Explain): Unit = {
+  def handleExplain(explain: Explain): Unit = 
+  {
     val raw = db.sql.convert(explain.getSelectBody())
     println("------ Raw Query ------")
     println(raw)
@@ -156,12 +161,33 @@ object Mimir {
     }
   }
 
-  def handleExtend(extend: Extend): Unit = {
+  def handleExtend(extend: Extend): Unit = 
+  {
     if(history.isEmpty){ 
       throw new SQLException("EXTEND can not be the first query")
     } else {
       handleQuery(MimirQL.applyExtend(db, history.head, extend))
     }
+  }
+
+  def handlePragma(pragma: Pragma): Unit = 
+  {
+    db.sql.convert(pragma.getExpression, (x:String) => x) match {
+
+      case Function("SHOW", Seq(Var("TABLES"))) => 
+        for(table <- db.getAllTables()){ println(table); }
+
+      case Function("SHOW", Seq(Var("SCHEMA"), Var(name))) => 
+        db.getTableSchema(name) match {
+          case None => 
+            println(s"'$name' is not a table")
+          case Some(schema) => 
+            println("CREATE TABLE "+name+" (\n"+
+              schema.map { col => "  "+col._1+" "+col._2 }.mkString(",\n")
+            +"\n);")
+        }
+    }
+
   }
 
 }

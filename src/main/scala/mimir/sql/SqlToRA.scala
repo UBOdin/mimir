@@ -431,7 +431,7 @@ class SqlToRA(db: Database)
 
   def convert(e : net.sf.jsqlparser.expression.Expression) : Expression = 
     convert(e, Map[String,String]())
-  def convert(e : net.sf.jsqlparser.expression.Expression, bindings: Map[String, String]) : Expression = {
+  def convert(e : net.sf.jsqlparser.expression.Expression, bindings: String => String) : Expression = {
     e match {
       case prim: net.sf.jsqlparser.expression.PrimitiveValue => convert(prim)
       case inv: InverseExpression => 
@@ -511,22 +511,22 @@ class SqlToRA(db: Database)
     }
   }
 
-  def convertColumn(c: Column, bindings: Map[String, String]): Var =
+  def convertColumn(c: Column, bindings: String => String): Var =
   {
-    val table = c.getTable.getName match {
-      case null => null
-      case x => x.toUpperCase
-    }
     val name = c.getColumnName.toUpperCase
-    if(table == null){
-      val binding = bindings.get(name);
-      if(binding.isEmpty){
-        if(name.equalsIgnoreCase("ROWID")) return Var("ROWID")
-        else throw new SQLException("Unknown Variable: "+name+" in "+bindings.toString)
-      }
-      return Var(binding.get)
-    } else {
-      return Var(table + "_" + name);
+
+    c.getTable.getName match {
+      case null => 
+        val binding = 
+          try {
+            bindings(name);
+          } catch {
+            case _:NoSuchElementException => 
+              throw new SQLException("Unknown Variable: "+name+" in "+bindings.toString)        
+          }
+        return Var(binding)
+      case table => 
+        return Var(table.toUpperCase + "_" + name);
     }
   }
 
