@@ -176,7 +176,27 @@ case class Select(condition: Expression, source: Operator) extends Operator
   def rebuildExpressions(x: Seq[Expression]) = Select(x(0), source)
 }
 
-
+/**
+ * invisify provenance attribute operator -- With Provenance
+ */
+case class Annotate(sch: Seq[(String,Type)],
+                 invisSch: Seq[(String,Type)])
+  extends Operator
+{
+  def toString(prefix: String) =
+    prefix + "ANNOTATE(" + (
+      sch.map( { case (v,t) => v+":"+t } ).mkString(", ") +
+      ( if(invisSch.size > 0)
+             { " // "+invisSch.map( { case (v,t) => v+":"+t } ).mkString(", ") }
+        else { "" }
+      )
+    )+")" 
+  def children: List[Operator] = List()
+  def rebuild(x: Seq[Operator]) = Annotate(sch, invisSch)
+  def invisible_schema = invisSch.map( x => (x._1, x._2) )
+  def expressions = List()
+  def rebuildExpressions(x: Seq[Expression]) = this
+}
 
 /**
  * provenance computation extraction operator -- Provenance Of

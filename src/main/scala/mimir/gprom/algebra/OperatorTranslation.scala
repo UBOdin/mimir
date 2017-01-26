@@ -1,10 +1,11 @@
 package mimir.gprom.algebra
 
 import org.gprom.jdbc.jna._
+import mimir.algebra._
 
 object OperatorTranslation {
   
-  def gpromStructureToMimirOperator(topOperator: mimir.algebra.Operator, gpromStruct: GProMStructure ) : mimir.algebra.Operator = {
+  def gpromStructureToMimirOperator(topOperator: Operator, gpromStruct: GProMStructure ) : Operator = {
     var topOp = topOperator
     gpromStruct match {
       case aggregationOperator : GProMAggregationOperator => { 
@@ -74,7 +75,7 @@ object OperatorTranslation {
       case projectionOperator : GProMProjectionOperator => {
         val sourceChild = gpromStructureToMimirOperator(topOp, projectionOperator.op)
         val columns = getProjectionColumnsFromGProMProjectionOperator(projectionOperator)
-        new mimir.algebra.Project(columns, sourceChild)
+        new Project(columns, sourceChild)
       }
       case provenanceComputation : GProMProvenanceComputation => { 
         null 
@@ -99,8 +100,8 @@ object OperatorTranslation {
         }
       case tableAccessOperator : GProMTableAccessOperator => { 
         val tableSchema = getSchemaFromGProMTableAccessOperator(tableAccessOperator)
-        val tableMeta = Seq[(String,mimir.algebra.Expression,mimir.algebra.Type)]() //tableSchema.map(tup => (tup._1,null,tup._2))
-        new mimir.algebra.Table(tableAccessOperator.tableName, tableSchema, tableMeta)
+        val tableMeta = Seq[(String,Expression,Type)]() //tableSchema.map(tup => (tup._1,null,tup._2))
+        new Table(tableAccessOperator.tableName, tableSchema, tableMeta)
       }
       case updateOperator : GProMUpdateOperator => { 
         null 
@@ -113,7 +114,7 @@ object OperatorTranslation {
   }
   
   
-  def getProjectionColumnsFromGProMProjectionOperator(gpromProjOp : GProMProjectionOperator) : Seq[mimir.algebra.ProjectArg] = {
+  def getProjectionColumnsFromGProMProjectionOperator(gpromProjOp : GProMProjectionOperator) : Seq[ProjectArg] = {
     val projExprs = gpromProjOp.projExprs;
     val projOpInputs =  gpromProjOp.op.inputs
     var listCell = projOpInputs.head
@@ -132,12 +133,12 @@ object OperatorTranslation {
     }
     
     listCell = projExprs.head
-    val columns : Seq[mimir.algebra.ProjectArg] =
+    val columns : Seq[ProjectArg] =
     for(i <- 1 to projExprs.length ) yield {
       val projExpr = GProMWrapper.inst.castGProMNode(new GProMNode(listCell.data.ptr_value))
       val projArg = projExpr match {
         case attrRef : GProMAttributeReference => {
-          new mimir.algebra.ProjectArg(attrRef.name, new mimir.algebra.Var(projTableName + attrRef.name))
+          new ProjectArg(attrRef.name, new Var(projTableName + attrRef.name))
         }
         case _ => null
       }
@@ -147,20 +148,20 @@ object OperatorTranslation {
     columns
   }
   
-  def getSchemaFromGProMTableAccessOperator(gpromTableOp : GProMTableAccessOperator) : Seq[(String, mimir.algebra.Type)] = {
+  def getSchemaFromGProMTableAccessOperator(gpromTableOp : GProMTableAccessOperator) : Seq[(String, Type)] = {
     val attrDefList = gpromTableOp.op.schema.attrDefs;
     var listCell = attrDefList.head
-    val columns : Seq[(String, mimir.algebra.Type)] =
+    val columns : Seq[(String, Type)] =
     for(i <- 1 to attrDefList.length ) yield {
       val attrDef = new GProMAttributeDef(listCell.data.ptr_value)
       val attrType = attrDef.dataType match {
-        case GProM_JNA.GProMDataType.GProM_DT_VARCHAR2 => new mimir.algebra.TString()
-        case GProM_JNA.GProMDataType.GProM_DT_BOOL => new mimir.algebra.TBool()
-        case GProM_JNA.GProMDataType.GProM_DT_FLOAT => new mimir.algebra.TFloat()
-        case GProM_JNA.GProMDataType.GProM_DT_INT => new mimir.algebra.TInt()
-        case GProM_JNA.GProMDataType.GProM_DT_LONG => new mimir.algebra.TInt()
-        case GProM_JNA.GProMDataType.GProM_DT_STRING => new mimir.algebra.TString()
-        case _ => new mimir.algebra.TAny()
+        case GProM_JNA.GProMDataType.GProM_DT_VARCHAR2 => new TString()
+        case GProM_JNA.GProMDataType.GProM_DT_BOOL => new TBool()
+        case GProM_JNA.GProMDataType.GProM_DT_FLOAT => new TFloat()
+        case GProM_JNA.GProMDataType.GProM_DT_INT => new TInt()
+        case GProM_JNA.GProMDataType.GProM_DT_LONG => new TInt()
+        case GProM_JNA.GProMDataType.GProM_DT_STRING => new TString()
+        case _ => new TAny()
       }
       val schItem = (gpromTableOp.tableName + "_" +attrDef.attrName, attrType)
       listCell = listCell.next
@@ -169,4 +170,160 @@ object OperatorTranslation {
     columns
   }
   
+ 
+  
+  def mimirOperatorToGProMStructure(mimirOperator :  Operator) : GProMStructure = {
+    /*mimirOperator match {
+			case Project(cols, src) => {
+			  null
+			 }
+			case Recover(psel) => {
+			  null
+			}
+			case Select(cond, src) => {
+			  null
+			}
+			case Aggregate(groupBy, agggregates, source) => {
+			  null
+			}
+
+			case Join(lhs, rhs) => { 
+			  null
+			}
+			case LeftOuterJoin(lhs, rhs, condition) => {
+			  null
+			}
+			case Table(name, sch, meta) => {
+			  null
+			}
+		}*/
+    mimirOperatorToGProMList(null, mimirOperator)
+  }
+  
+  def mimirOperatorToGProMList(inList : GProMList.ByReference, mimirOperator :  Operator) : GProMList.ByReference = {
+    var list  = inList
+    if(list == null){
+      list = new GProMList.ByReference()
+      list.`type` = GProM_JNA.GProMNodeTag.GProM_T_List
+      list.length = 0;
+    }
+    mimirOperator match {
+			case Project(cols, src) => {
+			   val tableName = src match {
+			     case Table(name, sch, meta) => {
+			       name
+			     }
+			     case _ => ""
+			   }
+			    val toQoScm = translateMimirSchemaToGProMSchema(tableName, mimirOperator.schema)
+			    val gqo = new GProMQueryOperator(GProM_JNA.GProMNodeTag.GProM_T_ProjectionOperator,  mimirOperatorToGProMList(null, src), toQoScm, null, null, null)  
+			   list.head = createGProMListCell(new GProMProjectionOperator(gqo, translateMimirProjArgsToGProMList(mimirOperator.schema.map(a => a._1 -> a._2).toMap, cols))) 
+			   list.length += 1;
+			   list
+			 }
+			case Recover(psel) => {
+			  list
+			}
+			case Select(cond, src) => {
+			  list
+			}
+			case Aggregate(groupBy, agggregates, source) => {
+			  list
+			}
+
+			case Join(lhs, rhs) => { 
+			  list
+			}
+			case LeftOuterJoin(lhs, rhs, condition) => {
+			  list
+			}
+			case Table(name, sch, meta) => {
+			  val toQoScm = translateMimirSchemaToGProMSchema(name, sch)
+			  val gqo = new GProMQueryOperator(GProM_JNA.GProMNodeTag.GProM_T_TableAccessOperator, new GProMList.ByReference(), toQoScm, null, null, null)
+			  val gpromTable = new GProMTableAccessOperator(gqo,name,null)
+			  list.head = createGProMListCell(gpromTable)
+			  list.length += 1
+			  list
+			}
+
+		}
+  }
+  
+  def createGProMListCell(gpromDataNode:GProMStructure) : GProMListCell.ByReference = {
+    val listCell = new GProMListCell.ByReference()
+    gpromDataNode.write()
+    val dataUnion = new GProMListCell.data_union(gpromDataNode.getPointer())
+    dataUnion.write()
+    listCell.data = dataUnion
+    listCell.next = null
+    listCell;
+  }
+  
+  def translateMimirSchemaToGProMSchema(tableName : String, schema : Seq[(String, Type)]) : GProMSchema.ByReference = {
+    var listCell : GProMListCell.ByReference = null
+    var lastListCell : GProMListCell.ByReference = null
+    var listTail : GProMListCell.ByReference = null
+    var i = 0;
+    for(schemaTup : ((String, Type)) <- schema.reverse){
+      val attrDef = new GProMAttributeDef(GProM_JNA.GProMNodeTag.GProM_T_AttributeDef, schemaTup._2 match {
+        case TString() => GProM_JNA.GProMDataType.GProM_DT_VARCHAR2
+        case TBool() => GProM_JNA.GProMDataType.GProM_DT_BOOL
+        case TFloat() => GProM_JNA.GProMDataType.GProM_DT_FLOAT
+        case TInt() => GProM_JNA.GProMDataType.GProM_DT_INT
+        case _ => GProM_JNA.GProMDataType.GProM_DT_STRING
+      }, schemaTup._1.replaceFirst(tableName+"_", "")) 
+      attrDef.write()
+      val dataUnion = new GProMListCell.data_union(attrDef.getPointer)
+      dataUnion.write()
+      listCell = new GProMListCell.ByReference()
+      if(i==0)
+        listTail
+      listCell.data = dataUnion
+      listCell.next = lastListCell
+      lastListCell = listCell;
+      i+=1
+    }
+    val attrDefList = new GProMList.ByReference();
+    attrDefList.`type` = GProM_JNA.GProMNodeTag.GProM_T_List
+    attrDefList.length = schema.length
+    attrDefList.head = listCell
+    attrDefList.tail = listTail
+    val scmByRef = new GProMSchema.ByReference()
+    scmByRef.`type` = GProM_JNA.GProMNodeTag.GProM_T_Schema
+    scmByRef.name = tableName
+    scmByRef.attrDefs = attrDefList
+    scmByRef
+  }
+  
+  def translateMimirProjArgsToGProMList(schema : Map[String, Type], cols : Seq[ProjectArg]) : GProMList.ByReference = {
+    var listCell : GProMListCell.ByReference = null
+    var lastListCell : GProMListCell.ByReference = null
+    var listTail : GProMListCell.ByReference = null
+    var i = 0;
+    for(projArg : ProjectArg <- cols.reverse){
+      val attrRef = new GProMAttributeReference(GProM_JNA.GProMNodeTag.GProM_T_AttributeReference, projArg.name, 0, cols.length - i, 0, schema(projArg.name) match {
+        case TString() => GProM_JNA.GProMDataType.GProM_DT_VARCHAR2
+        case TBool() => GProM_JNA.GProMDataType.GProM_DT_BOOL
+        case TFloat() => GProM_JNA.GProMDataType.GProM_DT_FLOAT
+        case TInt() => GProM_JNA.GProMDataType.GProM_DT_INT
+        case _ => GProM_JNA.GProMDataType.GProM_DT_STRING
+      }) 
+      attrRef.write()
+      val dataUnion = new GProMListCell.data_union(attrRef.getPointer)
+      dataUnion.write()
+      listCell = new GProMListCell.ByReference()
+      if(i==0)
+        listTail
+      listCell.data = dataUnion
+      listCell.next = lastListCell
+      lastListCell = listCell;
+      i+=1
+    }
+    val attrRefList = new GProMList.ByReference();
+    attrRefList.`type` = GProM_JNA.GProMNodeTag.GProM_T_List
+    attrRefList.length = cols.length
+    attrRefList.head = listCell
+    attrRefList.tail = listTail
+    attrRefList
+  }
 }

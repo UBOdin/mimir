@@ -108,26 +108,40 @@ object Mimir {
       }
       println(row)
     }*/
-    //db.backend.execute("PROVENANCE OF (Select * from MIMIR_VIEWS);")
+    //db.backend.execute("PROVENANCE OF (Select * from MIMIR_VIEWS)")
     //db.loadTable("/Users/michaelbrachmann/Documents/test_a.mcsv")
     //db.loadTable("/Users/michaelbrachmann/Documents/test_b.mcsv")
-    val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel("SELECT * from TEST_A_RAW;")
+   /*val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel("SELECT * from TEST_A_RAW;")
     val testOper = OperatorTranslation.gpromStructureToMimirOperator(null, gpromNode)
     for(i <- 1 to 20)
       println("-------")
     println(testOper)
     for(i <- 1 to 20)
-      println("-------")
+      println("-------")*/
     
-    val statements = db.parse("SELECT * from TEST_A_RAW")
+    //db.backend.execute("Select * from MIMIR_VIEWS")
+    
+    /*val statements = db.parse("SELECT * from TEST_A_RAW")
     val testOper2 = db.sql.convert(statements.head.asInstanceOf[Select])
     for(i <- 1 to 20)
       println("-------")
     println(testOper2)
     for(i <- 1 to 20)
       println("-------")
+      
+     val gpromNode = OperatorTranslation.mimirOperatorToGProMStructure(testOper2)
+     //val testOper3 = OperatorTranslation.gpromStructureToMimirOperator(null, gpromNode)
+     gpromNode.write()*/
+    val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel("PROVENANCE OF (SELECT * from TEST_A_RAW);")
+    //val provReWriteNode = GProMWrapper.inst.provRewriteOperator(gpromNode.getPointer)
+    val testOper3 = OperatorTranslation.gpromStructureToMimirOperator(null, gpromNode)
+    for(i <- 1 to 20)
+      println("-------")
+    println(testOper3)
+    for(i <- 1 to 20)
+      println("-------")
     
-    val results = db.query(testOper)
+    val results = db.query(testOper3)
   }
 
   def eventLoop(source: Reader): Unit = {
