@@ -27,22 +27,24 @@ libraryDependencies ++= Seq(
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
   "org.apache.lucene"             %   "lucene-spellchecker"   % "3.6.2",
   "org.xerial"                    %   "sqlite-jdbc"           % "3.8.11.2",
-  "net.sf.jung"                   %   "jung-graph-impl"       % "2.0",
-  "net.sf.jung"                   %   "jung-algorithms"       % "2.0",
-  "net.sf.jung"                   %   "jung-visualization"    % "2.0",
+  "net.sf.jung"                   %   "jung-graph-impl"       % "2.0.1",
+  "net.sf.jung"                   %   "jung-algorithms"       % "2.0.1",
+  "net.sf.jung"                   %   "jung-visualization"    % "2.0.1",
   "org.apache.servicemix.bundles" %   "org.apache.servicemix.bundles.collections-generic" % "4.01_1",
   "info.mimirdb"                  %   "jsqlparser"            % "1.0.0",
-  "com.github.wnameless" % "json-flattener" % "0.2.2"
+  "com.github.wnameless"          %   "json-flattener"        % "0.2.2",
+  "jgraph"                        %   "jgraph"                % "5.13.0.0"
+
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")
 
 parser := {
   val logger = streams.value.log
-  Process("rm -f src/main/java/mimir/parser/*.java") ! logger match {
-    case 0 => // Success
-    case n => sys.error(s"Could not clean up after old SQL Parser: $n")
-  }
+//  Process("rm -f src/main/java/mimir/parser/*.java") ! logger match {
+//    case 0 => // Success
+//    case n => sys.error(s"Could not clean up after old SQL Parser: $n")
+//  }
   Process(List(
     "java -cp lib/javacc.jar javacc",
     "-OUTPUT_DIRECTORY=src/main/java/mimir/parser",

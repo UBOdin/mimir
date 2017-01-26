@@ -48,147 +48,149 @@ public interface MimirJSqlParserConstants {
   /** RegularExpression Id. */
   int K_LENS = 11;
   /** RegularExpression Id. */
-  int K_LET = 12;
+  int K_ADAPTIVESCHEMA = 12;
   /** RegularExpression Id. */
-  int K_BY = 13;
+  int K_LET = 13;
   /** RegularExpression Id. */
-  int K_DO = 14;
+  int K_BY = 14;
   /** RegularExpression Id. */
-  int K_IS = 15;
+  int K_DO = 15;
   /** RegularExpression Id. */
-  int K_IN = 16;
+  int K_IS = 16;
   /** RegularExpression Id. */
-  int K_OR = 17;
+  int K_IN = 17;
   /** RegularExpression Id. */
-  int K_ON = 18;
+  int K_OR = 18;
   /** RegularExpression Id. */
-  int K_ALL = 19;
+  int K_ON = 19;
   /** RegularExpression Id. */
-  int K_AND = 20;
+  int K_ALL = 20;
   /** RegularExpression Id. */
-  int K_ANY = 21;
+  int K_AND = 21;
   /** RegularExpression Id. */
-  int K_KEY = 22;
+  int K_ANY = 22;
   /** RegularExpression Id. */
-  int K_NOT = 23;
+  int K_KEY = 23;
   /** RegularExpression Id. */
-  int K_SET = 24;
+  int K_NOT = 24;
   /** RegularExpression Id. */
-  int K_ASC = 25;
+  int K_SET = 25;
   /** RegularExpression Id. */
-  int K_TOP = 26;
+  int K_ASC = 26;
   /** RegularExpression Id. */
-  int K_END = 27;
+  int K_TOP = 27;
   /** RegularExpression Id. */
-  int K_DESC = 28;
+  int K_END = 28;
   /** RegularExpression Id. */
-  int K_INTO = 29;
+  int K_DESC = 29;
   /** RegularExpression Id. */
-  int K_NULL = 30;
+  int K_INTO = 30;
   /** RegularExpression Id. */
-  int K_LIKE = 31;
+  int K_NULL = 31;
   /** RegularExpression Id. */
-  int K_DROP = 32;
+  int K_LIKE = 32;
   /** RegularExpression Id. */
-  int K_JOIN = 33;
+  int K_DROP = 33;
   /** RegularExpression Id. */
-  int K_LEFT = 34;
+  int K_JOIN = 34;
   /** RegularExpression Id. */
-  int K_FROM = 35;
+  int K_LEFT = 35;
   /** RegularExpression Id. */
-  int K_OPEN = 36;
+  int K_FROM = 36;
   /** RegularExpression Id. */
-  int K_CASE = 37;
+  int K_OPEN = 37;
   /** RegularExpression Id. */
-  int K_WHEN = 38;
+  int K_CASE = 38;
   /** RegularExpression Id. */
-  int K_THEN = 39;
+  int K_WHEN = 39;
   /** RegularExpression Id. */
-  int K_ELSE = 40;
+  int K_THEN = 40;
   /** RegularExpression Id. */
-  int K_SOME = 41;
+  int K_ELSE = 41;
   /** RegularExpression Id. */
-  int K_FULL = 42;
+  int K_SOME = 42;
   /** RegularExpression Id. */
-  int K_WITH = 43;
+  int K_FULL = 43;
   /** RegularExpression Id. */
-  int K_TABLE = 44;
+  int K_WITH = 44;
   /** RegularExpression Id. */
-  int K_WHERE = 45;
+  int K_TABLE = 45;
   /** RegularExpression Id. */
-  int K_USING = 46;
+  int K_WHERE = 46;
   /** RegularExpression Id. */
-  int K_UNION = 47;
+  int K_USING = 47;
   /** RegularExpression Id. */
-  int K_GROUP = 48;
+  int K_UNION = 48;
   /** RegularExpression Id. */
-  int K_BEGIN = 49;
+  int K_GROUP = 49;
   /** RegularExpression Id. */
-  int K_INDEX = 50;
+  int K_BEGIN = 50;
   /** RegularExpression Id. */
-  int K_INNER = 51;
+  int K_INDEX = 51;
   /** RegularExpression Id. */
-  int K_LIMIT = 52;
+  int K_INNER = 52;
   /** RegularExpression Id. */
-  int K_OUTER = 53;
+  int K_LIMIT = 53;
   /** RegularExpression Id. */
-  int K_ORDER = 54;
+  int K_OUTER = 54;
   /** RegularExpression Id. */
-  int K_RIGHT = 55;
+  int K_ORDER = 55;
   /** RegularExpression Id. */
-  int K_DELETE = 56;
+  int K_RIGHT = 56;
   /** RegularExpression Id. */
-  int K_CREATE = 57;
+  int K_DELETE = 57;
   /** RegularExpression Id. */
-  int K_SELECT = 58;
+  int K_CREATE = 58;
   /** RegularExpression Id. */
-  int K_OFFSET = 59;
+  int K_SELECT = 59;
   /** RegularExpression Id. */
-  int K_EXISTS = 60;
+  int K_OFFSET = 60;
   /** RegularExpression Id. */
-  int K_HAVING = 61;
+  int K_EXISTS = 61;
   /** RegularExpression Id. */
-  int K_INSERT = 62;
+  int K_HAVING = 62;
   /** RegularExpression Id. */
-  int K_UPDATE = 63;
+  int K_INSERT = 63;
   /** RegularExpression Id. */
-  int K_VALUES = 64;
+  int K_UPDATE = 64;
   /** RegularExpression Id. */
-  int K_ESCAPE = 65;
+  int K_VALUES = 65;
   /** RegularExpression Id. */
-  int K_PRIMARY = 66;
+  int K_ESCAPE = 66;
   /** RegularExpression Id. */
-  int K_NATURAL = 67;
+  int K_PRIMARY = 67;
   /** RegularExpression Id. */
-  int K_REPLACE = 68;
+  int K_NATURAL = 68;
   /** RegularExpression Id. */
-  int K_BETWEEN = 69;
+  int K_REPLACE = 69;
   /** RegularExpression Id. */
-  int K_TRUNCATE = 70;
+  int K_BETWEEN = 70;
   /** RegularExpression Id. */
-  int K_DISTINCT = 71;
+  int K_TRUNCATE = 71;
   /** RegularExpression Id. */
-  int K_INTERSECT = 72;
+  int K_DISTINCT = 72;
   /** RegularExpression Id. */
-  int S_DOUBLE = 73;
+  int K_INTERSECT = 73;
   /** RegularExpression Id. */
-  int S_INTEGER = 74;
+  int S_DOUBLE = 74;
   /** RegularExpression Id. */
-  int DIGIT = 75;
+  int S_INTEGER = 75;
   /** RegularExpression Id. */
-  int LINE_COMMENT = 76;
+  int DIGIT = 76;
   /** RegularExpression Id. */
-  int MULTI_LINE_COMMENT = 77;
+  int LINE_COMMENT = 77;
   /** RegularExpression Id. */
-  int S_IDENTIFIER = 78;
+  int MULTI_LINE_COMMENT = 78;
   /** RegularExpression Id. */
-  int LETTER = 79;
+  int S_IDENTIFIER = 79;
   /** RegularExpression Id. */
-  int SPECIAL_CHARS = 80;
+  int LETTER = 80;
   /** RegularExpression Id. */
-  int S_CHAR_LITERAL = 81;
+  int SPECIAL_CHARS = 81;
   /** RegularExpression Id. */
-  int S_QUOTED_IDENTIFIER = 82;
+  int S_CHAR_LITERAL = 82;
+  /** RegularExpression Id. */
+  int S_QUOTED_IDENTIFIER = 83;
 
   /** Lexical state. */
   int DEFAULT = 0;
@@ -207,6 +209,7 @@ public interface MimirJSqlParserConstants {
     "\"ASSUME\"",
     "\"VIEW\"",
     "\"LENS\"",
+    "\"ADAPTIVESCHEMA\"",
     "\"LET\"",
     "\"BY\"",
     "\"DO\"",

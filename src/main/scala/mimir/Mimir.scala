@@ -80,6 +80,8 @@ object Mimir {
           db.createLens(stmt.asInstanceOf[CreateLens]);
         } else if(stmt.isInstanceOf[Explain]) {
           handleExplain(stmt.asInstanceOf[Explain]);
+        } else if(stmt.isInstanceOf[CreateAdaptiveSchema]) {
+          handleAdaptiveSchema(stmt.asInstanceOf[CreateAdaptiveSchema]);
         } else {
           db.backend.update(stmt.toString())
         }
@@ -111,6 +113,17 @@ object Mimir {
 
   def handleSelect(sel: Select): Unit = {
     val raw = db.sql.convert(sel)
+    val results = db.query(raw)
+    results.open()
+    db.dump(results)
+    results.close()
+  }
+
+  def handleAdaptiveSchema(adaptiveSchema: CreateAdaptiveSchema): Unit = {
+    // CREATE ADAPTIVESCHEMA TEST AS SELECT * FROM twitterSmallMediumCleanRAW;
+    println("WE IN HERE")
+    println(adaptiveSchema.getSelectBody.toString())
+    val raw = db.sql.convert(adaptiveSchema.getSelectBody())
     val results = db.query(raw)
     results.open()
     db.dump(results)

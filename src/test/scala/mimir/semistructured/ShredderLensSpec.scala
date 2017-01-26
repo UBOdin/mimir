@@ -18,6 +18,7 @@ object ShredderLensSpec
   sequential
 
   val testTable = "twitterSmallMediumCleanRAW"
+  val dbName = "TwitterSmall.db"
   var discala:FuncDep = null
   val testData = new File(
     "test/data/JSONOUTPUTWIDE.csv"
@@ -25,9 +26,9 @@ object ShredderLensSpec
   )
   val extractorName = "TEST_EXTRACTOR"
   var testLens:ShredderLens = null
-  val backend = new JDBCBackend("sqlite","debugNarrow.db")
+  val backend = new JDBCBackend("sqlite",dbName)
   backend.open()
-  val database = new Database("debugNarrow.db",backend)
+  val database = new Database(dbName,backend)
 
 //  var jtocsv:JsonToCSV = new JsonToCSV()
 
@@ -60,7 +61,7 @@ object ShredderLensSpec
 //       val schema = db.getTableSchema(testTable).get
 //       val schema = db.getTableSchema(testTable).get // for loading already existing table from a database
        discala = new FuncDep()
-       discala.buildAbadi(schema, database.backend.execute("select * from twitterSmallMediumCleanRaw;"))
+       discala.buildEntities(schema, database.backend.execute("SELECT * FROM " + testTable + ";"))
        discala.entityPairMatrix must not beNull
      }
 /*

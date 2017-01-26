@@ -28,36 +28,75 @@ import edu.uci.ics.jung.visualization.renderers.Renderer.VertexLabel.Position
 
 import scala.collection.JavaConverters._
 
+  /*
+  Steps to building ER
+
+  PreprocessingFDG:
+    - Takes in data from an iterator and stores it for later use
+    - The data collected is the count of the number of occurrences of each value in every column, and the percentage of nulls
+    - The data comes in row-wise, this is not efficent, ideally change so each column calls SELECT colName so it can be done in parallel and not store the data in RAM
+
+  ConstructFDG:
+    - Compare each column to every other column
+    - From this determine the strength between two columns
+    - Strength is defined using the formula strength(column1,column2) = (# unique column1 - # unique column1 mode(column2) pairs) / (# unique (column1,column2) pairs - # unique column1 mode(column2) pairs)
+    - This strength relationship is directional
+    - For a dependency to exist the strength must be >= threshold, and density column1 >= density column2 (Density requirement sometimes ommitted for tests)
+    - Find the longest path in this graph for each column
+    - Create a tree from this heuristic
+
+   */
+
 @SerialVersionUID(100L)
 class FuncDep 
   extends Serializable
 {
 
-  val threshhold:Double = 0.99
+  val threshhold:Double = 1.0 // this is the threshold that determines if there is a functional dependency between two columns
+  val flattenParentTable:Boolean = false // used if wanting to flatten the parent table so it uses the child of root
+  val outputEntityGraphs:Boolean = true // true if you want the entity graphs to be output
 
-  var table:ArrayList[ArrayList[PrimitiveValue]] = null
-  var countTable:ArrayList[TreeMap[String,Integer]] = null
+  // tables containing data for computations
+  var table:ArrayList[ArrayList[PrimitiveValue]] = null // This table contains the input table
+  var countTable:ArrayList[TreeMap[String,Integer]] = null // contains a count of every occurrence of every value in the column
   var densityTable:ArrayList[Integer] = null // gives the density for column, that is percentage of non-null values
-  var sch:List[(String, T)] = null // the schema, is a lookup for the type and
+
+  var sch:List[(String, T)] = null // the schema, is a lookup for the type and name
   var parentTable: TreeMap[Integer, ArrayList[Integer]] = null
   var entityPairMatrix:TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]] = null // outer string is entity pair so column#,column#: to a treemap that is essentially a look-up matrix for columns that contain column to column strengths
+  var entityGraphList:ArrayList[DirectedSparseMultigraph[Integer, String]] = null
+
+  // timers
   var startTime:Long = 0
   var endTime:Long = 0
   // Outputs
   var entityPairList:List[(Integer,Integer)] = Nil
 
 
-  /* inserts the input into table and fills the count table, table is the same as a generic sql table, and countTable is a count of each unique value for each column of the table */
+  // buildEntities calls all the functions required for ER creation, optionally each function could be called if only part of the computation is required
+  def buildEntities(schema: List[(String, T)],data: ResultIterator): Unit = {
+    preprocessFDG(schema,data)
+    constructFDG()
+  }
 
-  def buildAbadi(schema: List[(String, T)],data: ResultIterator): Unit = {
+  def buildEntities(schema: List[(String, T)],data: ResultSet): Unit = {
+    preprocessFDG(schema,data)
+    constructFDG()
+  }
 
-    table = new ArrayList[ArrayList[PrimitiveValue]]() // contains every row from resultIter, is the data from the input query
+
+  /* Preprocess collects all the data needed to build the functional dependency graph and to create the entities. It consumes the ResultSet and ResultIterator, this information is kept
+     inside this program so it has a high upfront ram cost, this can be changed on implementation to have each column call the database and in parallel collect this information
+     The data collected is a count of each unique value per column and the total number of nulls
+  */
+  def preprocessFDG(schema: List[(String, T)],data: ResultIterator): Unit = {
+
+    // initalize tables
+    table = new ArrayList[ArrayList[PrimitiveValue]]()
     entityPairMatrix = new TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]]()
     sch = schema
-    countTable = new ArrayList[TreeMap[String,Integer]]() // contains the rows
+    countTable = new ArrayList[TreeMap[String,Integer]]()
     densityTable = new ArrayList[Integer]()
-//    println(sch(56)._1)
-
     sch.map{ case(k, t) => {
       table.add(new util.ArrayList[PrimitiveValue]())
       countTable.add(new TreeMap[String,Integer])
@@ -65,11 +104,15 @@ class FuncDep
     }
     }
 
+    println("Column 65: " + sch(65))
+
+
+
     while(data.getNext()){ // adds every row to table
       (1 until data.numCols).map( (i) => {
         val v:PrimitiveValue = data(i)
         table.get(i-1).add(v)
-        if(!v.toString.toUpperCase().equals("NULL")){
+        if(!v.toString.equals("NULL") && !v.toString.equals("null") && !v.toString.equals("Null")){
           var temp = densityTable.get(i-1)
           temp+=1
           densityTable.set(i-1,temp)
@@ -83,17 +126,17 @@ class FuncDep
       })
     }
 
-    phaseOne()
   }
 
-  def buildAbadi(schema: List[(String, T)],data: ResultSet): Unit = {
+  def preprocessFDG(schema: List[(String, T)],data: ResultSet): Unit = {
 
-    table = new ArrayList[ArrayList[PrimitiveValue]]() // contains every row from resultIter aka data
+    // initalize tables
+    var d:List[List[PrimitiveValue]] = mimir.util.JDBCUtils.extractAllRows(data)
+    table = new ArrayList[ArrayList[PrimitiveValue]]()
     entityPairMatrix = new TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]]()
     sch = schema
-    countTable = new ArrayList[TreeMap[String,Integer]]() // contains the rows
+    countTable = new ArrayList[TreeMap[String,Integer]]()
     densityTable = new ArrayList[Integer]()
-
     sch.map{ case(k, t) => {
       table.add(new util.ArrayList[PrimitiveValue]())
       countTable.add(new TreeMap[String,Integer])
@@ -101,18 +144,21 @@ class FuncDep
     }
     }
 
-    var d:List[List[PrimitiveValue]] = mimir.util.JDBCUtils.extractAllRows(data)
 
     d.map((row)=>{
-        var loc = 0
-        row.map((pv) => {
-          table.get(loc).add(pv)
+        var loc = 0 // this is to track the column number because the data comes in row-wise
+        row.map((pv) => { // for everyone row in every column collect the data needed
 
-          if(!pv.toString.toUpperCase().equals("NULL")){
+          table.get(loc).add(pv) // add the value from the iterator to table for later lookup and use
+
+          // Check to see if the value is null, this gives the percent null
+          if(!pv.toString.equals("NULL") && !pv.toString.equals("null") && !pv.toString.equals("Null")){
             var temp = densityTable.get(loc)
             temp+=1
             densityTable.set(loc,temp)
           }
+
+          // add new values to countTable or update the count plus 1 for existing values
           if(countTable.get(loc).containsKey(pv.toString)){
             countTable.get(loc).replace(pv.toString,countTable.get(loc).get(pv.toString),countTable.get(loc).get(pv.toString)+1)
           }
@@ -120,108 +166,145 @@ class FuncDep
             countTable.get(loc).put(pv.toString,1)
           }
 
-          loc += 1
+          loc += 1 // move to the next column for this row
         })
     })
 
-    phaseOne()
   }
 
-  def phaseOne() {
+  /*
+  ConstructFDG constructs the functional dependency graph
+  The steps are as follows:
+    - Compare each column to every other column
+      - Compre using something other than strings, create tuple instead of merging and merge only when two conflicting PrimitiveValue types
+    - From this determine the strength between two columns
+    - Strength is defined using the formula strength(column1,column2) = (# unique column1 - # unique column1 mode(column2) pairs) / (# unique (column1,column2) pairs - # unique column1 mode(column2) pairs)
+    - This strength relationship is directional
+      - The merging to avoid cycles could be done better
+    - For a dependency to exist the strength must be >= threshold, and density column1 >= density column2 (Density requirement sometimes ommitted for tests)
+    - Find the longest path in this graph for each column
+    - Create a tree from this heuristic
+   */
+
+  def constructFDG() {
+
+    //Timers
     var startQ:Long = System.nanoTime();
-
     startTime = System.currentTimeMillis()
-    var nodeTable: ArrayList[Integer] = new ArrayList[Integer]() // contains a list of all the nodes
-    var edgeTable: ArrayList[String] = new ArrayList[String]() // contains the node numbers for the dependency graph, the names are numbers from the schema 0 to sch.length are the possibilities
-    var maxTable: ArrayList[String] = new ArrayList[String]() // contains the max values for each column, used for phase1 formula
-    val flattenParentTable:Boolean = false // used if wanting to flatten the parent table so it uses the child of root
 
+    // Initalize tables
+    var nodeTable: ArrayList[Integer] = new ArrayList[Integer]() // contains a list of all the nodes
+    // double is the strength for that edge
+    var edgeTable: ArrayList[(String,Double)] = new ArrayList[(String,Double)]() // contains the node numbers for the dependency graph, the names are numbers from the schema 0 to sch.length are the possibilities
+    var maxTable: ArrayList[String] = new ArrayList[String]() // contains the max values for each column, used for phase1 formula
     parentTable = new TreeMap[Integer, ArrayList[Integer]]()
 
-    // Finds the maxKey for each column
+    var columnLocation = 0
+    // Finds the maxKey for each column, this is the most occurring value for each column and puts them into maxTable
     countTable.asScala.map((tree)=>{
       var maxKey = ""
       var maxValue = 0
       var keyIt = tree.keySet().iterator()
       while (keyIt.hasNext) {
         var value:String = keyIt.next()
-        if(!value.toUpperCase().equals("NULL")) {
+        if(!value.toString.equals("NULL") && !value.toString.equals("null") && !value.toString.equals("Null")) {
           if (maxValue < tree.get(value)) {
             maxKey = value
             maxValue = tree.get(value)
           }
         }
       }
+/*      if(maxKey.equals("")){
+        throw new Exception("Column " + sch(columnLocation)._1 + " is a completely null column.")
+      }
+*/
       maxTable.add(maxKey)
+      columnLocation = columnLocation + 1
     })
 
+    // add the column number to each column for parallelization
     for(c <- 0 until table.size()){
       table.get(c).add(new IntPrimitive(c))
     }
 
-    table.asScala.par.map((locationJ)=>{
 
-      var outerLocation:Int = locationJ.get(locationJ.size()-1).asString.toInt
-      val leftType = sch(outerLocation)._2
-      val leftMap = new ArrayList[PrimitiveValue](locationJ)
-      val leftColumnName = sch(outerLocation)._1
-      val leftDensity = densityTable.get(outerLocation).toFloat / locationJ.size()
-      leftMap.remove(leftMap.size()-1)
-      table.asScala.map((locationK)=>{
-        var innerLocation = locationK.get(locationK.size()-1).asString.toInt
-        if (outerLocation != innerLocation){
-          val rightType = sch(innerLocation)._2
-          val rightMap = new ArrayList[PrimitiveValue](locationK)
-          val rightColumnName = sch(innerLocation)._1
-          val rightDensity = densityTable.get(innerLocation).toFloat / locationK.size()
-          var tempMap: HashMap[String, Integer] = new HashMap[String, Integer]() // the size of this will be the unique number of a1,a2 pairs
-          rightMap.remove(rightMap.size()-1)
+    // when done nodeTalbe will contain all column numbers that are involved in the FD graph, and edge table will contain all edges between the columns
+    table.asScala.par.map((leftColumn)=>{
 
+      // left and right are respective ways to keep track of comparing every column
+      // Initalize values and tables needed for the left column
+      val leftColumnNumber:Int = leftColumn.get(leftColumn.size()-1).asString.toInt // the location of the column in the schema, used for look-ups
+      val leftType = sch(leftColumnNumber)._2
+      val leftMap = new ArrayList[PrimitiveValue](leftColumn) // this is a copy of the left column to perform operations on
+      val leftColumnName = sch(leftColumnNumber)._1
+      val leftDensity = densityTable.get(leftColumnNumber).toFloat / leftColumn.size() -1 // -1 for the added column number
+      leftMap.remove(leftMap.size()-1) // remove the column number that was added above just to be picky
+
+      // right column would be the column that is being compared to left column pairwise, could be thought of as column1 and column2
+      table.asScala.map((rightColumn)=>{
+
+        // Initalize tables and values
+        val rightColumnNumber = rightColumn.get(rightColumn.size()-1).asString.toInt
+        if (leftColumnNumber != rightColumnNumber){
+          val rightType = sch(rightColumnNumber)._2
+          val rightMap = new ArrayList[PrimitiveValue](rightColumn)
+          val rightColumnName = sch(rightColumnNumber)._1
+          val rightDensity = densityTable.get(rightColumnNumber).toFloat / rightColumn.size() -1 // -1 for the added column number
+          var pairMap: HashMap[String, Integer] = new HashMap[String, Integer]() // the size of this will be the unique number of a1,a2 pairs
+          rightMap.remove(rightMap.size()-1) // remove the column number that was added above just to be picky
           val leftIter = leftMap.iterator()
           val rightIter = rightMap.iterator()
+          var rightMaxOccurrenceCount = 0 // how many unique pairings there are
 
-          var secondCount = 0 // how many unique pairings there are
-
-          while (leftIter.hasNext && rightIter.hasNext) {
+          // fills the pairMap with all pairings of leftColumn and rightColumn
+          while(leftIter.hasNext && rightIter.hasNext) {
             val leftVal: PrimitiveValue = leftIter.next()
             val rightVal: PrimitiveValue = rightIter.next()
-            val value: String = leftVal.toString() + ",M," + rightVal.toString() // doing this because I'm weird and will be taken out later when optimized
-            if (tempMap.containsKey(value)) {
-              tempMap.replace(value, tempMap.get(value), tempMap.get(value) + 1)
+            val value: String = leftVal.toString() + ",M," + rightVal.toString() // doing this to avoid accidental tuple collisions, super not efficent in so many ways
+            if(pairMap.containsKey(value)) {
+              pairMap.replace(value, pairMap.get(value), pairMap.get(value) + 1)
             }
             else {
-              tempMap.put(value, 1)
-              if (rightVal.toString().equals(maxTable.get(innerLocation))) {
-                secondCount += 1
+              pairMap.put(value, 1)
+              if (rightVal.toString().equals(maxTable.get(rightColumnNumber))) {
+                rightMaxOccurrenceCount += 1
               }
             }
           }
-          if (tempMap.size() != 0) {
-            val strength: Double = (countTable.get(outerLocation).size().toFloat - secondCount.toFloat) / (tempMap.size().toFloat - secondCount.toFloat) // using first formula from paper right now
-            if (strength >= threshhold && leftDensity >= rightDensity && secondCount > 9 && countTable.get(outerLocation).size() != table.get(outerLocation).size() && countTable.get(innerLocation).size() != table.get(innerLocation).size()) { // phase one constraints
+
+          // compute the strength from the formula
+          if(pairMap.size() != 0) {
+            val strength: Double = (countTable.get(leftColumnNumber).size().toFloat - rightMaxOccurrenceCount.toFloat) / (pairMap.size().toFloat - rightMaxOccurrenceCount.toFloat) // using first formula from paper right now
+//            if (strength >= threshhold && leftDensity >= rightDensity && countTable.get(leftColumnNumber).size() != table.get(leftColumnNumber).size() && countTable.get(rightColumnNumber).size() != table.get(rightColumnNumber).size()) { // phase one constraints
+//            if (strength >= threshhold && (countTable.get(leftColumnNumber).size() / table.get(leftColumnNumber).size()) <= .99  && (countTable.get(rightColumnNumber).size() / table.get(rightColumnNumber).size()) <= .99) { // phase one constraints
+            if (strength >= threshhold && leftDensity >= rightDensity) { // phase one constraints
             //if (strength >= threshhold  && countTable.get(outerLocation).size() != table.get(outerLocation).size() && countTable.get(innerLocation).size() != table.get(innerLocation).size()) { // phase one constraints
               /*                println("SECONDCOUNT IS: " + secondCount)
                               println("MAX VALUE IS: "+ maxTable.get(k))
                               println("Functional Dependancy between: " + leftColumnName + " and " + rightColumnName + " STR: " + strength)
                               println("Str EQUALS: " + countTable.get(j).size + " / " + tempMap.size())
-              */                edgeTable.add(outerLocation.toString + "," + innerLocation.toString)
-              if (!nodeTable.contains(outerLocation)) {
-                nodeTable.add(outerLocation)
+              */
+              edgeTable.add(new Tuple2(leftColumnNumber.toString + "," + rightColumnNumber.toString,strength))
+              if (!nodeTable.contains(leftColumnNumber)) {
+                nodeTable.add(leftColumnNumber)
               }
-              if (!nodeTable.contains(innerLocation)) {
-                nodeTable.add(innerLocation)
+              if (!nodeTable.contains(rightColumnNumber)) {
+                nodeTable.add(rightColumnNumber)
               }
             }
           }
+
         }
       })
     })
 
+    // remove the column number that was added
     for(c <- 0 until table.size()){
       table.get(c).remove(table.get(c).size() - 1)
     }
 
     println("NodeTable Size: " + nodeTable.size())
+    println("Starting graph generation")
 
     var g: DirectedSparseMultigraph[Integer, String] = new DirectedSparseMultigraph[Integer, String]();
 
@@ -232,6 +315,9 @@ class FuncDep
       while (nodeIter.hasNext) {
         g.addVertex(nodeIter.next())
       }
+    }
+    else{
+      throw new Exception("Node table is empty when creating FDG")
     }
 
     // now connect each node with root
@@ -246,10 +332,14 @@ class FuncDep
     if (!edgeTable.isEmpty()) {
       val edgeIter = edgeTable.iterator()
       while (edgeIter.hasNext) {
-        val value: String = edgeIter.next()
+        val value: String = edgeIter.next()._1
         val a1: String = (value.split(",")) (0)
         val a2: String = (value.split(",")) (1)
         if(!g.containsEdge(a2 + " to " + a1)){
+          g.addEdge(a1 + " to " + a2, a1.toInt, a2.toInt, EdgeType.DIRECTED)
+        }
+        else{
+          g.removeEdge(a2 + " to " + a1)
           g.addEdge(a1 + " to " + a2, a1.toInt, a2.toInt, EdgeType.DIRECTED)
         }
       }
@@ -276,6 +366,28 @@ class FuncDep
       }
     }
 
+    println("ParentTable Size: " + parentTable.size())
+
+    // create an ArrayList of all entity graphs, this is for display and traversal purposes
+    entityGraphList = new ArrayList[DirectedSparseMultigraph[Integer, String]]()
+    if(!parentTable.isEmpty()){
+      val rootChildren:ArrayList[Integer] = parentTable.get(-1)
+      val childrenIterator = rootChildren.iterator()
+      while(childrenIterator.hasNext){
+        val child:Integer = childrenIterator.next()
+        var entityGraph = new DirectedSparseMultigraph[Integer,String]
+        entityGraph.addVertex(-1)
+        entityGraph.addEdge("-1 to " + child, -1, child, EdgeType.DIRECTED)
+        buildEntityGraph(entityGraph,child)
+        entityGraphList.add(entityGraph)
+      }
+    }
+    else{
+      throw new Exception("parent table is empty when creating FDG")
+    }
+
+
+    // used for testing, disreguard
     if(flattenParentTable) {
 
       var parentKeys: ArrayList[Integer] = new ArrayList[Integer]()
@@ -311,8 +423,10 @@ class FuncDep
       }
     }
 
-    println("ParentTable Size: " + parentTable.size())
+//    println("ParentTable Size: " + parentTable.size())
 
+    // output for testing
+/*
     var keySet:util.Set[Integer] = parentTable.keySet()
     keySet.asScala.map((y) => {
       if(y != -1){
@@ -328,15 +442,37 @@ class FuncDep
         })
       }
     })
+*/
 
     var endQ:Long = System.nanoTime();
     println("PhaseOne TOOK: "+((endQ - startQ)/1000000) + " MILLISECONDS")
 
-    phaseTwo()
+    if(outputEntityGraphs){
+      val entityIter = entityGraphList.iterator()
+      while(entityIter.hasNext){
+        val entityGraph = entityIter.next()
+        showGraph(entityGraph)
+      }
+    }
+
+    var openFlag = true
+    while(openFlag){
+      println("For displaying graphs, please enter q or quit to close.")
+      val in = new java.util.Scanner(System.in)
+      val input = in.next()
+      if(input.toLowerCase().equals("q") || input.toLowerCase().equals("quit")){
+        openFlag = false
+      }
+
+    }
 
   }
 
-  def phaseTwo(){
+
+
+
+
+  def mergeEntities(){
     // PHASE 2
 
     var parentList:ArrayList[Integer] = new ArrayList[Integer]() // List of all possible entities, excludes root
@@ -513,7 +649,7 @@ class FuncDep
   }
 
   // entity is the root entity you're looking for
-  def best(pair:String,entity:Integer): ArrayList[((Integer,Integer),Float)] ={ // takes in an entiity pair as it's input
+  def best(pair:String,entity:Integer): ArrayList[((Integer,Integer),Float)] = { // takes in an entiity pair as it's input
 
     // the return value, (integer,integer) is the pair, the left will be part of the entity
     // passed in and the right will be the corresponding attribute number from the other entiity
@@ -584,6 +720,7 @@ class FuncDep
   }
 
 
+
   def longestPath(g:DirectedSparseMultigraph[Integer,String],predList:util.Collection[Integer],currentPath:ArrayList[Integer]): ArrayList[Integer] = {
     var longestPathV:ArrayList[Integer] = null
     if(predList.size() == 1){ // because of root
@@ -611,6 +748,23 @@ class FuncDep
       }
     }
     return longestPathV
+  }
+
+
+  // constructs the entity tree, -1 and parent must be added first and g initalized
+  def buildEntityGraph(g:DirectedSparseMultigraph[Integer,String], parent:Integer):Unit = {
+    if(parentTable.containsKey(parent)){
+      val childrenList = parentTable.get(parent)
+      val childrenIter = childrenList.iterator()
+      while(childrenIter.hasNext){
+        val child = childrenIter.next()
+        if(!g.containsVertex(child)){
+          g.addVertex(child)
+        }
+        g.addEdge(parent.toString + " to " + child.toString, parent, child, EdgeType.DIRECTED)
+        buildEntityGraph(g,child)
+      }
+    }
   }
 
   def showGraph(g:Graph[Integer,String]): Unit ={

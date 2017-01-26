@@ -64,8 +64,10 @@ object LoadCSV {
     var statements = new ListBuffer[String]()
     var count = 0
     var count2 = 1
+    var countFlag = true
+    val cap = 10000
 
-    while(true){
+    while(countFlag){
       val line = src.readLine()
       if(line == null) { if(statements.nonEmpty) db.backend.update(statements.toList); return }
       if(count == 1000){
@@ -91,6 +93,9 @@ object LoadCSV {
 
       statements.append("INSERT INTO "+targetTable+"("+keys+") VALUES ("+data+")")
       count+=1
+      if(count2 >= cap){
+        countFlag = false
+      }
     }
   }
 }

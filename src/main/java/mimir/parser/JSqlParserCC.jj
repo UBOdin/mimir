@@ -160,6 +160,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_ASSUME:"ASSUME">
 |   <K_VIEW:"VIEW">
 |   <K_LENS:"LENS">
+|   <K_ADAPTIVESCHEMA:"ADAPTIVESCHEMA">
 |   <K_LET:"LET">
 |   <K_BY:"BY">
 |   <K_DO:"DO">
@@ -293,6 +294,8 @@ Statement CreateStatement() :
     stm = CreateLens()
     | 
     stm = CreateTable()
+    |
+    stm = CreateAdaptiveSchema()
   )
   { return stm; }
 }
@@ -385,7 +388,7 @@ CreateLens CreateLens():
 
 CreateView CreateView():
 {
-   CreateView createView=new CreateView();
+   CreateView createView = new CreateView();
    Table table = null;
    SelectBody selectBody = null;
    Column tableColumn = null;
@@ -404,6 +407,24 @@ CreateView CreateView():
         createView.setnNullColumns(nNullcolumns);
         return createView; 
      }
+}
+
+CreateAdaptiveSchema CreateAdaptiveSchema():
+{
+   CreateAdaptiveSchema createAdaptiveSchema = new CreateAdaptiveSchema();
+   Table table = null;
+   SelectBody selectBody = null;
+}
+{
+    <K_ADAPTIVESCHEMA> table = Table()
+    <K_AS>selectBody = SelectBody()
+	{
+		createAdaptiveSchema.setSelectBody(selectBody);
+	}
+	{
+      createAdaptiveSchema.setTable(table);
+      return createAdaptiveSchema;
+    }
 }
 
 Replace Replace():
