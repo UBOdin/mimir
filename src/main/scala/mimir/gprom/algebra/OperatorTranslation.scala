@@ -5,7 +5,7 @@ import mimir.algebra._
 
 object OperatorTranslation {
   
-  def gpromStructureToMimirOperator(topOperator: Operator, gpromStruct: GProMStructure ) : Operator = {
+  def gpromStructureToMimirOperator(depth : Int, topOperator: Operator, gpromStruct: GProMStructure, gpromParentStruct: GProMStructure ) : Operator = {
     var topOp = topOperator
     gpromStruct match {
       case aggregationOperator : GProMAggregationOperator => { 
@@ -28,15 +28,15 @@ object OperatorTranslation {
         }
       case list:GProMList => {
         val listHead = list.head
-        gpromStructureToMimirOperator(topOperator, listHead)
+        gpromStructureToMimirOperator(depth, topOperator, listHead, gpromParentStruct)
       }
       case listCell : GProMListCell => { 
         val listCellDataGPStructure = new GProMNode(listCell.data.ptr_value)
         val cnvNode = GProMWrapper.inst.castGProMNode(listCellDataGPStructure);
         if(topOp == null){
-          topOp = gpromStructureToMimirOperator(null, cnvNode)
+          topOp = gpromStructureToMimirOperator(depth, null, cnvNode, gpromParentStruct)
           if(listCell.next != null)
-            gpromStructureToMimirOperator(topOp, listCell.next)
+            gpromStructureToMimirOperator(depth, topOp, listCell.next, gpromParentStruct)
           else
             topOp
         }
@@ -73,9 +73,21 @@ object OperatorTranslation {
         null 
         }
       case projectionOperator : GProMProjectionOperator => {
-        val sourceChild = gpromStructureToMimirOperator(topOp, projectionOperator.op)
+        val sourceChild = gpromStructureToMimirOperator(depth+1, topOp, projectionOperator.op, projectionOperator)
         val columns = getProjectionColumnsFromGProMProjectionOperator(projectionOperator)
-        new Project(columns, sourceChild)
+        val provAttrs = gpromIntPointerListToScalaList(projectionOperator.op.provAttrs)
+        if(provAttrs.length > 0 && depth == 0){
+          val invisibleSchema = getSchemaFromGProMQueryOperator(/*tableAccessOperator.tableName*/"", projectionOperator.op).zipWithIndex.map{ case (attr, index) => {
+                if(provAttrs.contains(index))
+                  Some(attr)
+                else
+                  None
+              }
+            }.flatten
+          new Recover(new Project(columns, sourceChild), invisibleSchema)
+        }
+        else
+          new Project(columns, sourceChild)
       }
       case provenanceComputation : GProMProvenanceComputation => { 
         null 
@@ -85,7 +97,7 @@ object OperatorTranslation {
         }
       case queryOperator : GProMQueryOperator => { 
         queryOperator.`type` match {
-          case GProM_JNA.GProMNodeTag.GProM_T_ProjectionOperator => gpromStructureToMimirOperator(topOp,queryOperator.inputs)
+          case GProM_JNA.GProMNodeTag.GProM_T_ProjectionOperator => gpromStructureToMimirOperator(depth+1, topOp,queryOperator.inputs, queryOperator)
           case _ => null
         }
       }
@@ -99,9 +111,27 @@ object OperatorTranslation {
         null 
         }
       case tableAccessOperator : GProMTableAccessOperator => { 
-        val tableSchema = getSchemaFromGProMTableAccessOperator(tableAccessOperator)
-        val tableMeta = Seq[(String,Expression,Type)]() //tableSchema.map(tup => (tup._1,null,tup._2))
-        new Table(tableAccessOperator.tableName, tableSchema, tableMeta)
+        gpromParentStruct match {
+          case queryOperator : GProMQueryOperator => {
+            val provAttrs = gpromIntPointerListToScalaList(queryOperator.provAttrs)
+            val invisibleSchema = getSchemaFromGProMQueryOperator(/*tableAccessOperator.tableName*/"", queryOperator).zipWithIndex.map{ case (attr, index) => {
+                if(provAttrs.contains(index))
+                  Some(attr)
+                else
+                  None
+              }
+            }.flatten
+            val tableSchema = getSchemaFromGProMQueryOperator(tableAccessOperator.tableName, tableAccessOperator.op)
+            val tableMeta = Seq[(String,Expression,Type)]() //tableSchema.map(tup => (tup._1,null,tup._2))
+            new Annotate(new Table(tableAccessOperator.tableName, tableSchema, tableMeta), invisibleSchema)
+          }
+          case _ => {
+            val tableSchema = getSchemaFromGProMQueryOperator(tableAccessOperator.tableName, tableAccessOperator.op)
+            val tableMeta = Seq[(String,Expression,Type)]() //tableSchema.map(tup => (tup._1,null,tup._2))
+            new Table(tableAccessOperator.tableName, tableSchema, tableMeta)
+          }
+        }
+        
       }
       case updateOperator : GProMUpdateOperator => { 
         null 
@@ -113,6 +143,23 @@ object OperatorTranslation {
     
   }
   
+  def gpromListToScalaList(list: GProMList) : List[GProMStructure] = {
+    var listCell = list.head
+    (for(i <- 1 to list.length ) yield {
+      val projInput = GProMWrapper.inst.castGProMNode(new GProMNode(listCell.data.ptr_value))
+      listCell = listCell.next
+      projInput
+    }).toList
+  }
+  
+  def gpromIntPointerListToScalaList(list: GProMList) : List[Int] = {
+    var listCell = list.head
+    (for(i <- 1 to list.length ) yield {
+      val projInput = listCell.data.int_value
+      listCell = listCell.next
+      projInput
+    }).toList
+  }
   
   def getProjectionColumnsFromGProMProjectionOperator(gpromProjOp : GProMProjectionOperator) : Seq[ProjectArg] = {
     val projExprs = gpromProjOp.projExprs;
@@ -132,24 +179,32 @@ object OperatorTranslation {
       listCell = listCell.next
     }
     
+    val provAttrs = gpromIntPointerListToScalaList(gpromProjOp.op.provAttrs)
     listCell = projExprs.head
     val columns : Seq[ProjectArg] =
-    for(i <- 1 to projExprs.length ) yield {
+    (for(i <- 1 to projExprs.length ) yield {
       val projExpr = GProMWrapper.inst.castGProMNode(new GProMNode(listCell.data.ptr_value))
       val projArg = projExpr match {
         case attrRef : GProMAttributeReference => {
-          new ProjectArg(attrRef.name, new Var(projTableName + attrRef.name))
+          if(!provAttrs.contains(i-1))
+            Some(new ProjectArg(attrRef.name, new Var(projTableName + attrRef.name)))
+          else
+            None
         }
-        case _ => null
+        case _ => None
       }
       listCell = listCell.next
       projArg
-    }
+    }).flatten
     columns
   }
   
-  def getSchemaFromGProMTableAccessOperator(gpromTableOp : GProMTableAccessOperator) : Seq[(String, Type)] = {
-    val attrDefList = gpromTableOp.op.schema.attrDefs;
+  def getSchemaFromGProMQueryOperator(tableName : String, gpromQueryOp : GProMQueryOperator) : Seq[(String, Type)] = {
+    val attrDefList = gpromQueryOp.schema.attrDefs;
+    val tableNameStr = tableName match { 
+        case "" => "" 
+        case _ => tableName + "_" 
+    }
     var listCell = attrDefList.head
     val columns : Seq[(String, Type)] =
     for(i <- 1 to attrDefList.length ) yield {
@@ -163,14 +218,13 @@ object OperatorTranslation {
         case GProM_JNA.GProMDataType.GProM_DT_STRING => new TString()
         case _ => new TAny()
       }
-      val schItem = (gpromTableOp.tableName + "_" +attrDef.attrName, attrType)
+      val schItem = ( tableNameStr +attrDef.attrName, attrType)
       listCell = listCell.next
       schItem
     }
     columns
   }
   
- 
   
   def mimirOperatorToGProMStructure(mimirOperator :  Operator) : GProMStructure = {
     /*mimirOperator match {
@@ -221,7 +275,7 @@ object OperatorTranslation {
 			   list.length += 1;
 			   list
 			 }
-			case Recover(psel) => {
+			case ProvenanceOf(psel) => {
 			  list
 			}
 			case Select(cond, src) => {

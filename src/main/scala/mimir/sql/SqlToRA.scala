@@ -14,7 +14,7 @@ import net.sf.jsqlparser.expression.{BinaryExpression, DateValue, DoubleValue, F
 import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.statement.create.table._
 import net.sf.jsqlparser.statement.select.{AllColumns, AllTableColumns, FromItem, PlainSelect, SelectBody, SelectExpressionItem, SubJoin, SubSelect}
-import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
+//import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
 import org.joda.time.LocalDate
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
@@ -55,7 +55,7 @@ class SqlToRA(db: Database)
   }
 
   def convert(s : ProvenanceStatement) : Operator  = {
-    val psel = new Recover(convert(s.getSelect()));
+    val psel = new ProvenanceOf(convert(s.getSelect()));
     psel
   }
   

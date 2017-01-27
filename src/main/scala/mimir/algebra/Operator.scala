@@ -177,38 +177,56 @@ case class Select(condition: Expression, source: Operator) extends Operator
 }
 
 /**
- * invisify provenance attribute operator -- With Provenance
+ * invisify provenance attributes operator -- With Provenance
  */
-case class Annotate(sch: Seq[(String,Type)],
+case class Annotate(subj: Operator,
                  invisSch: Seq[(String,Type)])
   extends Operator
 {
   def toString(prefix: String) =
-    prefix + "ANNOTATE(" + (
-      sch.map( { case (v,t) => v+":"+t } ).mkString(", ") +
-      ( if(invisSch.size > 0)
+    prefix + "ANNOTATE(" + 
+      ("\n" + subj.toString(prefix+"  ") +"\n" + prefix 
+      )+")" + 
+       ( if(invisSch.size > 0)
              { " // "+invisSch.map( { case (v,t) => v+":"+t } ).mkString(", ") }
-        else { "" }
-      )
-    )+")" 
-  def children: List[Operator] = List()
-  def rebuild(x: Seq[Operator]) = Annotate(sch, invisSch)
+        else { "" })
+  def children: List[Operator] = List(subj)
+  def rebuild(x: Seq[Operator]) = Annotate(subj, invisSch)
   def invisible_schema = invisSch.map( x => (x._1, x._2) )
   def expressions = List()
   def rebuildExpressions(x: Seq[Expression]) = this
 }
 
 /**
- * provenance computation extraction operator -- Provenance Of
+ * visify provenance attributes operator -- Provenance Of
  */
-case class Recover(subj: Operator) extends Operator
+case class Recover(subj: Operator,
+                 invisSch: Seq[(String,Type)]) extends Operator
 {
   def toString(prefix: String) =
     // prefix + "Join of\n" + left.toString(prefix+"  ") + "\n" + prefix + "and\n" + right.toString(prefix+"  ")
-    prefix + "PROVENANCE(\n" + subj.toString(prefix+"  ") + ",\n" + 
+    prefix + "RECOVER(\n" + subj.toString(prefix+"  ") + 
+                  "\n" + prefix + ")" + 
+       ( if(invisSch.size > 0)
+             { " // "+invisSch.map( { case (v,t) => v+":"+t } ).mkString(", ") }
+        else { "" })
+  def children() = List(subj);
+  def rebuild(x: Seq[Operator]) = Recover(subj, invisSch)
+  def expressions = List()
+  def rebuildExpressions(x: Seq[Expression]) = this
+}
+
+/**
+ * provenance of operator -- Provenance Of
+ */
+case class ProvenanceOf(subj: Operator) extends Operator
+{
+  def toString(prefix: String) =
+    // prefix + "Join of\n" + left.toString(prefix+"  ") + "\n" + prefix + "and\n" + right.toString(prefix+"  ")
+    prefix + "PROVENANCE(\n" + subj.toString(prefix+"  ") + 
                   "\n" + prefix + ")"
   def children() = List(subj);
-  def rebuild(x: Seq[Operator]) = Recover(x(0))
+  def rebuild(x: Seq[Operator]) = ProvenanceOf(x(0))
   def expressions = List()
   def rebuildExpressions(x: Seq[Expression]) = this
 }

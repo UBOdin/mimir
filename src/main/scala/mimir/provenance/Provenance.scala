@@ -38,9 +38,18 @@ object Provenance {
         )
       }
 
-      case Recover(psel) => {
+      case Annotate(subj,invisScm) => {
+        compile(subj)
+      }
+      
+			case Recover(subj,invisScm) => {
+        val provSelCmp = compile(subj)
+        (provSelCmp._1, provSelCmp._2)//.union(invisScm.map(f => f._1 )))
+      }
+      
+      case ProvenanceOf(psel) => {
         val provSelCmp = compile(psel)
-        val provCmp = (new Recover(provSelCmp._1), provSelCmp._2)
+        val provCmp = (new ProvenanceOf(provSelCmp._1), provSelCmp._2)
         provCmp
       }
       

@@ -17,7 +17,7 @@ import net.sf.jsqlparser.expression.{BinaryExpression, DoubleValue, Function, Lo
 import net.sf.jsqlparser.{schema, expression}
 import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.statement.select.{SelectBody, PlainSelect, SubSelect, SelectExpressionItem, FromItem, SelectItem, SubJoin}
-import net.sf.jsqlparser.statement.provenance.ProvenanceSelect
+//import net.sf.jsqlparser.statement.provenance.ProvenanceSelect
 
 import scala.collection.JavaConversions._
 
@@ -110,7 +110,19 @@ class RAToSql(db: Database)
         )
         union
       }
-      case Recover(psel) => {
+      case Annotate(subj,invisScm) => {
+        subj match {
+          case Table(name, sch, metadata) => {
+            metadata.addAll(invisScm.map(f => (f._1, null, f._2)))
+            doConvert(new Table(name, sch, metadata))
+          }
+        }
+      }
+      case Recover(subj,invisScm) => {
+        val pselBody = doConvert(subj).asInstanceOf[PlainSelect]
+        new ProvenanceSelect(pselBody)
+      }
+      case ProvenanceOf(psel) => {
         val pselBody = doConvert(psel).asInstanceOf[PlainSelect]
         new ProvenanceSelect(pselBody)
       }

@@ -299,9 +299,24 @@ object CTPercolator
         )
       }
 
-      case Recover(psel) => {
+      
+      case Annotate(subj,invisScm) => {
+        percolateLite(subj)
+      }
+      
+			case Recover(subj,invisScm) => {
+        val provSelPrc = percolateLite(subj)
+        val detColsSeq = provSelPrc._2.toSeq
+        val newDetCols = for ((name,ctype) <- invisScm) yield {
+          (name, CTAnalyzer.compileDeterministic(new Var(name), provSelPrc._2))
+        }
+       (oper, detColsSeq.union(newDetCols).toMap, provSelPrc._3)
+          
+      }
+      
+      case ProvenanceOf(psel) => {
         val provSelPrc = percolateLite(psel)
-        val provPrc = (new Recover(provSelPrc._1), provSelPrc._2, provSelPrc._3)
+        val provPrc = (new ProvenanceOf(provSelPrc._1), provSelPrc._2, provSelPrc._3)
         //GProMWrapper.inst.gpromRewriteQuery(sql);
         provPrc
       }

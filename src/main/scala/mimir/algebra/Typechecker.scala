@@ -110,10 +110,18 @@ object Typechecker {
 							(col, chk.typeOf(in))
 					})
 			
-			case Recover(psel) => 
+			case ProvenanceOf(psel) => 
         schemaOf(psel)
       
-			case Select(cond, src) =>
+			case Annotate(subj,invisScm) => {
+        schemaOf(subj)
+      }
+      
+			case Recover(subj,invisScm) => {
+        schemaOf(subj).union(invisScm)
+      }
+			
+      case Select(cond, src) =>
 				val srcSchema = schemaOf(src);
 				(new ExpressionChecker(srcSchema.toMap)).assert(cond, TBool(), "SELECT")
 				srcSchema

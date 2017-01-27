@@ -11,7 +11,7 @@ import mimir.sql._
 import mimir.util.ExperimentalOptions
 import mimir.util.TimeUtils
 import net.sf.jsqlparser.statement.Statement
-import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
+//import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
 import net.sf.jsqlparser.statement.select.Select
 import mimir.gprom.algebra.OperatorTranslation
 import org.gprom.jdbc.jna.GProMWrapper
@@ -108,7 +108,7 @@ object Mimir {
       }
       println(row)
     }*/
-    //db.backend.execute("PROVENANCE OF (Select * from MIMIR_VIEWS)")
+    //db.backend.execute("PROVENANCE OF (Select * from TEST_A_RAW)")
     //db.loadTable("/Users/michaelbrachmann/Documents/test_a.mcsv")
     //db.loadTable("/Users/michaelbrachmann/Documents/test_b.mcsv")
    /*val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel("SELECT * from TEST_A_RAW;")
@@ -134,7 +134,7 @@ object Mimir {
      gpromNode.write()*/
     val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel("PROVENANCE OF (SELECT * from TEST_A_RAW);")
     //val provReWriteNode = GProMWrapper.inst.provRewriteOperator(gpromNode.getPointer)
-    val testOper3 = OperatorTranslation.gpromStructureToMimirOperator(null, gpromNode)
+    val testOper3 = OperatorTranslation.gpromStructureToMimirOperator(0, null, gpromNode, null)
     for(i <- 1 to 20)
       println("-------")
     println(testOper3)
@@ -142,6 +142,24 @@ object Mimir {
       println("-------")
     
     val results = db.query(testOper3)
+    val data: ListBuffer[(List[String], Boolean)] = new ListBuffer()
+
+   results.open()
+   val cols = results.schema.map(f => f._1)
+   println(cols.mkString(", "))
+   while(results.getNext()){
+     val list =
+      (
+        results.provenanceToken().payload.toString ::
+          results.schema.zipWithIndex.map( _._2).map( (i) => {
+            results(i).toString + (if (!results.deterministicCol(i)) {"*"} else {""})
+          }).toList
+      )
+      data.append((list, results.deterministicRow()))
+    }
+    results.close()
+    data.foreach(f => println(f._1.mkString(",")))
+    data.mkString(",")
   }
 
   def eventLoop(source: Reader): Unit = {

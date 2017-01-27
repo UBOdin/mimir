@@ -34,9 +34,19 @@ object ProjectRedundantColumns {
         Project( newArgs, apply(source, childDependencies) )
       }
       
-       case Recover(psel) => {
+      case Annotate(subj,invisScm) => {
+        apply(subj)
+      }
+      
+			case Recover(subj,invisScm) => {
+        val provSelApl = apply(subj)
+        new Recover(provSelApl, invisScm)
+      }
+      
+      
+       case ProvenanceOf(psel) => {
         val provSelApl = apply(psel)
-        val provApl = new Recover(provSelApl)
+        val provApl = new ProvenanceOf(provSelApl)
         provApl
       }
       
