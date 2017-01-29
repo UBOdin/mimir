@@ -6,7 +6,7 @@ import java.sql.SQLException
 import mimir.ctables.CTPercolator
 import mimir.parser._
 import mimir.sql._
-import mimir.algebra.{Project,ProjectArg,Var}
+import mimir.algebra.{FuncDep, Project, ProjectArg, Var}
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
 import org.rogach.scallop._;
@@ -121,13 +121,16 @@ object Mimir {
 
   def handleAdaptiveSchema(adaptiveSchema: CreateAdaptiveSchema): Unit = {
     // CREATE ADAPTIVESCHEMA TEST AS SELECT * FROM twitterSmallMediumCleanRAW;
-    println("WE IN HERE")
-    println(adaptiveSchema.getSelectBody.toString())
-    val raw = db.sql.convert(adaptiveSchema.getSelectBody())
-    val results = db.query(raw)
-    results.open()
-    db.dump(results)
-    results.close()
+    // CREATE ADAPTIVESCHEMA TEST AS SELECT * FROM CURESOURCE;
+    val ent = new FuncDep()
+    val queryOper = db.sql.convert(adaptiveSchema.getSelectBody())
+    val schema = queryOper.schema
+    val sch = db.getTableSchema("CURESOURCE")
+    sch match {
+      case Some(s) =>
+        ent.buildEntities(s, db.backend.execute(adaptiveSchema.getSelectBody.toString()))
+      case None =>
+    }
   }
 
 //  def connectSqlite(filename: String): java.sql.Connection =

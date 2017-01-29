@@ -45,7 +45,7 @@ abstract class Operator
   /**
    * Convenience method to invoke the Typechecker
    */
-  def schema: List[(String, Type.T)] = 
+  def schema: List[(String, Type.T)] =
     Typechecker.schemaOf(this)
 
   /**

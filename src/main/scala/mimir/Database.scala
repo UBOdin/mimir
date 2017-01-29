@@ -317,12 +317,10 @@ case class Database(name: String, backend: Backend)
    */
 
   def loadTable(targetTable: String, sourceFile: File){
-    LoadCSV.handleLoadTable(this, targetTable+"RAW", sourceFile)
-    val targetRaw = targetTable + "RAW"
-    val oper = getTableOperator(targetRaw)
-    val l = List(new FloatPrimitive(.5))
+    LoadCSV.handleLoadTable(this, targetTable, sourceFile)
+//    val l = List(new FloatPrimitive(.5))
 
-    lenses.create(oper, targetTable, l,"TYPE_INFERENCE")
+//    lenses.create(oper, targetTable, l,"TYPE_INFERENCE")
   }
   
   def loadTable(targetTable: String, sourceFile: String){

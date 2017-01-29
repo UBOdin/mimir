@@ -8,22 +8,19 @@ import mimir.algebra.Type.T
 import java.util.TreeMap
 import java.util.ArrayList
 import java.util.HashMap
-import javax.swing.JFrame
+import javax.swing.{JFrame, JPanel, JScrollPane}
 
-import edu.uci.ics.jung.algorithms.layout.{CircleLayout, Layout}
-import edu.uci.ics.jung.graph.{DirectedSparseMultigraph, Graph, SparseMultigraph, UndirectedSparseMultigraph}
+import edu.uci.ics.jung.algorithms.layout.{CircleLayout, Layout, TreeLayout}
+import edu.uci.ics.jung.graph.{DelegateTree, DirectedGraph, DirectedSparseMultigraph, Forest, Graph, SparseMultigraph, Tree, UndirectedSparseMultigraph}
 import edu.uci.ics.jung.graph.util.EdgeType
 import edu.uci.ics.jung.visualization.BasicVisualizationServer
 import edu.uci.ics.jung.visualization.decorators.ToStringLabeller
 import org.apache.commons.collections15.Transformer
-import java.awt.BasicStroke
-import java.awt.Color
-import java.awt.Dimension
-import java.awt.Paint
-import java.awt.Stroke
+import java.awt.{BasicStroke, Color, Dimension, Paint, Rectangle, Stroke}
 import java.sql.ResultSet
-import mimir.util.JDBCUtils
 
+import com.jgraph.layout.tree.JGraphTreeLayout
+import mimir.util.JDBCUtils
 import edu.uci.ics.jung.visualization.renderers.Renderer.VertexLabel.Position
 
 import scala.collection.JavaConverters._
@@ -60,11 +57,14 @@ class FuncDep
   var table:ArrayList[ArrayList[PrimitiveValue]] = null // This table contains the input table
   var countTable:ArrayList[TreeMap[String,Integer]] = null // contains a count of every occurrence of every value in the column
   var densityTable:ArrayList[Integer] = null // gives the density for column, that is percentage of non-null values
+  var blackList:ArrayList[Integer] = null // a list of all the columns that are null or mostly null
+  var blackListThreshold =   .05 // minimum percentage of non-null columns to be included in the calculations
 
   var sch:List[(String, T)] = null // the schema, is a lookup for the type and name
   var parentTable: TreeMap[Integer, ArrayList[Integer]] = null
   var entityPairMatrix:TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]] = null // outer string is entity pair so column#,column#: to a treemap that is essentially a look-up matrix for columns that contain column to column strengths
-  var entityGraphList:ArrayList[DirectedSparseMultigraph[Integer, String]] = null
+  var entityGraphList:ArrayList[DelegateTree[Integer, String]] = null
+  var entityGraphString:ArrayList[DelegateTree[String, String]] = null
 
   // timers
   var startTime:Long = 0
@@ -104,15 +104,12 @@ class FuncDep
     }
     }
 
-    println("Column 65: " + sch(65))
-
-
 
     while(data.getNext()){ // adds every row to table
       (1 until data.numCols).map( (i) => {
         val v:PrimitiveValue = data(i)
         table.get(i-1).add(v)
-        if(!v.toString.equals("NULL") && !v.toString.equals("null") && !v.toString.equals("Null")){
+        if(!v.toString.equals("NULL") && !v.toString.equals("null") && !v.toString.equals("Null") && !v.toString.equals("\'NULL\'")){
           var temp = densityTable.get(i-1)
           temp+=1
           densityTable.set(i-1,temp)
@@ -131,6 +128,7 @@ class FuncDep
   def preprocessFDG(schema: List[(String, T)],data: ResultSet): Unit = {
 
     // initalize tables
+    blackList = new ArrayList[Integer]()
     var d:List[List[PrimitiveValue]] = mimir.util.JDBCUtils.extractAllRows(data)
     table = new ArrayList[ArrayList[PrimitiveValue]]()
     entityPairMatrix = new TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]]()
@@ -152,23 +150,35 @@ class FuncDep
           table.get(loc).add(pv) // add the value from the iterator to table for later lookup and use
 
           // Check to see if the value is null, this gives the percent null
-          if(!pv.toString.equals("NULL") && !pv.toString.equals("null") && !pv.toString.equals("Null")){
+          if(!pv.toString.equals("NULL")){
             var temp = densityTable.get(loc)
-            temp+=1
+            temp += 1
             densityTable.set(loc,temp)
-          }
 
-          // add new values to countTable or update the count plus 1 for existing values
-          if(countTable.get(loc).containsKey(pv.toString)){
-            countTable.get(loc).replace(pv.toString,countTable.get(loc).get(pv.toString),countTable.get(loc).get(pv.toString)+1)
-          }
-          else{
-            countTable.get(loc).put(pv.toString,1)
+            // add new values to countTable or update the count plus 1 for existing values
+            if(countTable.get(loc).containsKey(pv.toString)){
+              var tempCount = countTable.get(loc).get(pv.toString)
+              tempCount += 1
+              countTable.get(loc).remove(pv.toString())
+              countTable.get(loc).put(pv.toString,tempCount)
+            }
+            else{
+              countTable.get(loc).put(pv.toString,1)
+            }
           }
 
           loc += 1 // move to the next column for this row
         })
     })
+
+    for(i <- 0 until densityTable.size()){
+      if((densityTable.get(i).toFloat / table.get(0).size().toFloat) < blackListThreshold ){
+        blackList.add(i)
+      }
+      if(countTable.get(i).size() < 2){
+        blackList.add(i)
+      }
+    }
 
   }
 
@@ -187,6 +197,18 @@ class FuncDep
    */
 
   def constructFDG() {
+
+/*
+    println(sch(19))
+    println(densityTable.get(19))
+    for(i <- 0 until densityTable.size()){
+      println("Density at " + sch(i) + " : " + densityTable.get(i))
+    }
+    println(table.get(1).size())
+    println(sch(34))
+    println(sch(33))
+    println(sch(32))
+*/
 
     //Timers
     var startQ:Long = System.nanoTime();
@@ -207,17 +229,17 @@ class FuncDep
       var keyIt = tree.keySet().iterator()
       while (keyIt.hasNext) {
         var value:String = keyIt.next()
-        if(!value.toString.equals("NULL") && !value.toString.equals("null") && !value.toString.equals("Null")) {
+        if(!value.toString.equals("NULL")) {
           if (maxValue < tree.get(value)) {
             maxKey = value
             maxValue = tree.get(value)
           }
         }
       }
-/*      if(maxKey.equals("")){
-        throw new Exception("Column " + sch(columnLocation)._1 + " is a completely null column.")
+      if(maxKey.equals("")){
+        blackList.add(columnLocation)
       }
-*/
+
       maxTable.add(maxKey)
       columnLocation = columnLocation + 1
     })
@@ -237,7 +259,9 @@ class FuncDep
       val leftType = sch(leftColumnNumber)._2
       val leftMap = new ArrayList[PrimitiveValue](leftColumn) // this is a copy of the left column to perform operations on
       val leftColumnName = sch(leftColumnNumber)._1
-      val leftDensity = densityTable.get(leftColumnNumber).toFloat / leftColumn.size() -1 // -1 for the added column number
+      val leftDensity = densityTable.get(leftColumnNumber).toFloat / (leftColumn.size() -1).toFloat // -1 for the added column number
+//      println(densityTable.get(leftColumnNumber).toFloat + " / " + leftColumn.size())
+//      println(leftDensity)
       leftMap.remove(leftMap.size()-1) // remove the column number that was added above just to be picky
 
       // right column would be the column that is being compared to left column pairwise, could be thought of as column1 and column2
@@ -245,55 +269,64 @@ class FuncDep
 
         // Initalize tables and values
         val rightColumnNumber = rightColumn.get(rightColumn.size()-1).asString.toInt
-        if (leftColumnNumber != rightColumnNumber){
+        if (leftColumnNumber != rightColumnNumber && !maxTable.get(leftColumnNumber).equals("") && !maxTable.get(rightColumnNumber).equals("") && !blackList.contains(leftColumnNumber) && !blackList.contains(rightColumnNumber)){ // sanity check to avoid useless calculations
           val rightType = sch(rightColumnNumber)._2
           val rightMap = new ArrayList[PrimitiveValue](rightColumn)
           val rightColumnName = sch(rightColumnNumber)._1
-          val rightDensity = densityTable.get(rightColumnNumber).toFloat / rightColumn.size() -1 // -1 for the added column number
-          var pairMap: HashMap[String, Integer] = new HashMap[String, Integer]() // the size of this will be the unique number of a1,a2 pairs
-          rightMap.remove(rightMap.size()-1) // remove the column number that was added above just to be picky
-          val leftIter = leftMap.iterator()
-          val rightIter = rightMap.iterator()
-          var rightMaxOccurrenceCount = 0 // how many unique pairings there are
+          val rightDensity = densityTable.get(rightColumnNumber).toFloat / (rightColumn.size() -1).toFloat // -1 for the added column number
+          if(leftDensity >= rightDensity) { // no point in doing this computation since we won't use it if leftDen is less than rightDen
+            var pairMap: ArrayList[String] = new ArrayList[String]() // the size of this will be the unique number of a1,a2 pairs
+            rightMap.remove(rightMap.size() - 1) // remove the column number that was added above just to be picky
+            val leftIter = leftMap.iterator()
+            val rightIter = rightMap.iterator()
+            var rightMaxOccurrenceCount = 0 // how many unique pairings there are
 
-          // fills the pairMap with all pairings of leftColumn and rightColumn
-          while(leftIter.hasNext && rightIter.hasNext) {
-            val leftVal: PrimitiveValue = leftIter.next()
-            val rightVal: PrimitiveValue = rightIter.next()
-            val value: String = leftVal.toString() + ",M," + rightVal.toString() // doing this to avoid accidental tuple collisions, super not efficent in so many ways
-            if(pairMap.containsKey(value)) {
-              pairMap.replace(value, pairMap.get(value), pairMap.get(value) + 1)
+            // fills the pairMap with all pairings of leftColumn and rightColumn
+            while (leftIter.hasNext && rightIter.hasNext) {
+              val leftVal: PrimitiveValue = leftIter.next()
+              val rightVal: PrimitiveValue = rightIter.next()
+//              println(leftVal.toString + " | " + rightVal.toString)
+              if (!leftVal.toString.equals("NULL")) {
+                val value: String = leftVal.toString() + ",M," + rightVal.toString() // doing this to avoid accidental tuple collisions, super not efficent in so many ways
+                if(!pairMap.contains(value)) {
+                  pairMap.add(value)
+//                  println("Right Max is: " + maxTable.get(rightColumnNumber))
+                  if (rightVal.toString().equals(maxTable.get(rightColumnNumber))) {
+                    rightMaxOccurrenceCount += 1
+                  }
+                }
+              }
             }
-            else {
-              pairMap.put(value, 1)
-              if (rightVal.toString().equals(maxTable.get(rightColumnNumber))) {
-                rightMaxOccurrenceCount += 1
+
+            // compute the strength from the formula
+            if (pairMap.size() != 0) {
+              val strengthNumerator: Double = (countTable.get(leftColumnNumber).size().toFloat - rightMaxOccurrenceCount.toFloat)
+              val strengthDenominator: Double = (pairMap.size().toFloat - rightMaxOccurrenceCount.toFloat)
+              val strength: Double = strengthNumerator / strengthDenominator
+/*
+              println("Count left col: " + countTable.get(leftColumnNumber).size().toFloat)
+              println("Number of pairs: " + pairMap.size().toFloat)
+              println("Right Occurence: " + rightMaxOccurrenceCount)
+              println("Numerator: " + strengthNumerator)
+              println("Denominator: " + strengthDenominator)
+              println("Strength: " + strength)
+              println("")
+*/
+              if(strength > 1.0){
+                throw new Exception("Strength is > 1.0, something isn't right! In FuncDep")
+              }
+              if (strength >= threshhold && strengthDenominator > 0) {
+                // phase one constraints
+                edgeTable.add(new Tuple2(leftColumnNumber.toString + "," + rightColumnNumber.toString, strength))
+                if (!nodeTable.contains(leftColumnNumber)) {
+                  nodeTable.add(leftColumnNumber)
+                }
+                if (!nodeTable.contains(rightColumnNumber)) {
+                  nodeTable.add(rightColumnNumber)
+                }
               }
             }
           }
-
-          // compute the strength from the formula
-          if(pairMap.size() != 0) {
-            val strength: Double = (countTable.get(leftColumnNumber).size().toFloat - rightMaxOccurrenceCount.toFloat) / (pairMap.size().toFloat - rightMaxOccurrenceCount.toFloat) // using first formula from paper right now
-//            if (strength >= threshhold && leftDensity >= rightDensity && countTable.get(leftColumnNumber).size() != table.get(leftColumnNumber).size() && countTable.get(rightColumnNumber).size() != table.get(rightColumnNumber).size()) { // phase one constraints
-//            if (strength >= threshhold && (countTable.get(leftColumnNumber).size() / table.get(leftColumnNumber).size()) <= .99  && (countTable.get(rightColumnNumber).size() / table.get(rightColumnNumber).size()) <= .99) { // phase one constraints
-            if (strength >= threshhold && leftDensity >= rightDensity) { // phase one constraints
-            //if (strength >= threshhold  && countTable.get(outerLocation).size() != table.get(outerLocation).size() && countTable.get(innerLocation).size() != table.get(innerLocation).size()) { // phase one constraints
-              /*                println("SECONDCOUNT IS: " + secondCount)
-                              println("MAX VALUE IS: "+ maxTable.get(k))
-                              println("Functional Dependancy between: " + leftColumnName + " and " + rightColumnName + " STR: " + strength)
-                              println("Str EQUALS: " + countTable.get(j).size + " / " + tempMap.size())
-              */
-              edgeTable.add(new Tuple2(leftColumnNumber.toString + "," + rightColumnNumber.toString,strength))
-              if (!nodeTable.contains(leftColumnNumber)) {
-                nodeTable.add(leftColumnNumber)
-              }
-              if (!nodeTable.contains(rightColumnNumber)) {
-                nodeTable.add(rightColumnNumber)
-              }
-            }
-          }
-
         }
       })
     })
@@ -306,14 +339,14 @@ class FuncDep
     println("NodeTable Size: " + nodeTable.size())
     println("Starting graph generation")
 
-    var g: DirectedSparseMultigraph[Integer, String] = new DirectedSparseMultigraph[Integer, String]();
+    var fdGraph: DirectedSparseMultigraph[Integer, String] = new DirectedSparseMultigraph[Integer, String](); // parentCol, childCol
 
     if (!nodeTable.isEmpty()) {
       // all nodes will be added at the end of this, -1 is root
-      g.addVertex(-1)
+      fdGraph.addVertex(-1)
       val nodeIter = nodeTable.iterator()
       while (nodeIter.hasNext) {
-        g.addVertex(nodeIter.next())
+        fdGraph.addVertex(nodeIter.next())
       }
     }
     else{
@@ -325,9 +358,11 @@ class FuncDep
       val nodeIter = nodeTable.iterator()
       while (nodeIter.hasNext) {
         val value = nodeIter.next()
-        g.addEdge("-1 to " + value.toString, -1, value, EdgeType.DIRECTED)
+        fdGraph.addEdge("-1 to " + value.toString, -1, value, EdgeType.DIRECTED)
       }
     }
+
+    var removedCount = 0 // used to track how many collisions there are
     // now connect nodes with func dependencies
     if (!edgeTable.isEmpty()) {
       val edgeIter = edgeTable.iterator()
@@ -335,15 +370,20 @@ class FuncDep
         val value: String = edgeIter.next()._1
         val a1: String = (value.split(",")) (0)
         val a2: String = (value.split(",")) (1)
-        if(!g.containsEdge(a2 + " to " + a1)){
-          g.addEdge(a1 + " to " + a2, a1.toInt, a2.toInt, EdgeType.DIRECTED)
+        if(!fdGraph.containsEdge(a2 + " to " + a1)){
+          fdGraph.addEdge(a1 + " to " + a2, a1.toInt, a2.toInt, EdgeType.DIRECTED)
         }
         else{
-          g.removeEdge(a2 + " to " + a1)
-          g.addEdge(a1 + " to " + a2, a1.toInt, a2.toInt, EdgeType.DIRECTED)
+          removedCount += 1
+          fdGraph.removeEdge(a2 + " to " + a1)
+          fdGraph.addEdge(a1 + " to " + a2, a1.toInt, a2.toInt, EdgeType.DIRECTED)
         }
       }
     }
+
+    showGraph(fdGraph)
+
+    println("There were " + removedCount + " removed edges in the FD-graph.")
 
 
     if (!nodeTable.isEmpty()) {
@@ -351,7 +391,7 @@ class FuncDep
       val nodeIter = nodeTable.iterator()
       while (nodeIter.hasNext) {
         val value = nodeIter.next()
-        val parent = parentOfLongestPath(g, value) // will return an integer that is the parent of the longestpath
+        val parent = parentOfLongestPath(fdGraph, value) // will return an integer that is the parent of the longestpath
         if(value != -1 && parent != -1){
 //          println("VALUE,PARENT: " + sch(value)._1 + " , " + sch(parent)._1)
         }
@@ -366,18 +406,23 @@ class FuncDep
       }
     }
 
+    nodeTable.asScala.map((i) => {
+      println("PARENT OF " + i + " IS " + parentOfLongestPath(fdGraph,i))
+    })
+
     println("ParentTable Size: " + parentTable.size())
 
     // create an ArrayList of all entity graphs, this is for display and traversal purposes
-    entityGraphList = new ArrayList[DirectedSparseMultigraph[Integer, String]]()
+    entityGraphList = new ArrayList[DelegateTree[Integer, String]]()
+    entityGraphString = new ArrayList[DelegateTree[String, String]]()
     if(!parentTable.isEmpty()){
       val rootChildren:ArrayList[Integer] = parentTable.get(-1)
       val childrenIterator = rootChildren.iterator()
       while(childrenIterator.hasNext){
         val child:Integer = childrenIterator.next()
-        var entityGraph = new DirectedSparseMultigraph[Integer,String]
+        var entityGraph = new DelegateTree[Integer,String]
         entityGraph.addVertex(-1)
-        entityGraph.addEdge("-1 to " + child, -1, child, EdgeType.DIRECTED)
+        entityGraph.addChild("-1 to " + child, -1, child)
         buildEntityGraph(entityGraph,child)
         entityGraphList.add(entityGraph)
       }
@@ -451,7 +496,7 @@ class FuncDep
       val entityIter = entityGraphList.iterator()
       while(entityIter.hasNext){
         val entityGraph = entityIter.next()
-        showGraph(entityGraph)
+        showEntity(entityGraph)
       }
     }
 
@@ -632,7 +677,7 @@ class FuncDep
       var graphKey = pairIter.next()
       var pair:UndirectedSparseMultigraph[Integer,String] = graphPairs.get(graphKey)
       println(graphKey)
-      showGraph(pair)
+//      showGraph(pair)
     }
 
   }
@@ -731,7 +776,7 @@ class FuncDep
       while(listIter.hasNext) {
         var temp = listIter.next()
         if(temp != -1 && !currentPath.contains(temp)){
-          var ret1:ArrayList[Integer] = currentPath
+          var ret1:ArrayList[Integer] = new ArrayList[Integer](currentPath)
           ret1.add(temp)
           var returnPathV = longestPath(g, g.getPredecessors(temp), ret1)
           if(returnPathV != null){
@@ -752,22 +797,19 @@ class FuncDep
 
 
   // constructs the entity tree, -1 and parent must be added first and g initalized
-  def buildEntityGraph(g:DirectedSparseMultigraph[Integer,String], parent:Integer):Unit = {
+  def buildEntityGraph(g:DelegateTree[Integer,String], parent:Integer):Unit = {
     if(parentTable.containsKey(parent)){
       val childrenList = parentTable.get(parent)
       val childrenIter = childrenList.iterator()
       while(childrenIter.hasNext){
         val child = childrenIter.next()
-        if(!g.containsVertex(child)){
-          g.addVertex(child)
-        }
-        g.addEdge(parent.toString + " to " + child.toString, parent, child, EdgeType.DIRECTED)
+        g.addChild(parent.toString + " to " + child.toString, parent, child)
         buildEntityGraph(g,child)
       }
     }
   }
 
-  def showGraph(g:Graph[Integer,String]): Unit ={
+  def showGraph(g:DirectedSparseMultigraph[Integer,String]): Unit ={
     // The Layout<V, E> is parameterized by the vertex and edge types
     var layout: Layout[Integer, String] = new CircleLayout(g);
     layout.setSize(new Dimension(1200, 1200));
@@ -803,6 +845,43 @@ class FuncDep
     frame.getContentPane().add(vv);
     frame.pack();
     frame.setVisible(true);
+  }
+
+  def showEntity(g:DelegateTree[Integer,String]): Unit ={
+    // The Layout<V, E> is parameterized by the vertex and edge types
+    var layout: Layout[Integer, String] = new TreeLayout(g);
+//    layout.setSize(new Dimension(1200, 1200));
+    // sets the initial size of the space
+    // The BasicVisualizationServer<V,E> is parameterized by the edge types
+    var vv: BasicVisualizationServer[Integer, String] = new BasicVisualizationServer[Integer, String](layout);
+    vv.setBounds(1000,0,3000,3000)
+
+    var vertexPaint:Transformer[Integer,Paint] = new Transformer[Integer,Paint]() {
+      def transform(i: Integer): Paint = {
+        Color.GREEN
+      }
+    };
+
+    var dash:Array[Float] = Array(10.0f);
+    val edgeStroke:Stroke = new BasicStroke(1.0f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, dash, 0.0f);
+    var edgeStrokeTransformer:Transformer[String, Stroke] = new Transformer[String, Stroke]() {
+      def transform(s: String): Stroke = {
+        edgeStroke;
+      }
+    };
+
+    vv.getRenderContext().setVertexFillPaintTransformer(vertexPaint);
+    vv.getRenderContext().setEdgeStrokeTransformer(edgeStrokeTransformer);
+    vv.getRenderContext().setVertexLabelTransformer(new ToStringLabeller());
+    vv.getRenderContext().setEdgeLabelTransformer(new ToStringLabeller());
+    vv.getRenderer().getVertexLabelRenderer().setPosition(Position.CNTR);
+
+    //Sets the viewing area size
+    var frame : JFrame = new JFrame("Entity Graph")
+    frame.setBounds(0,1000,3000,3000)
+    frame.add(vv);
+    frame.setVisible(true);
+    frame.setVisible(true)
   }
 
   def serialize(): Array[Byte] = 
