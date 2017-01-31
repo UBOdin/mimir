@@ -49,39 +49,48 @@ class FuncDep
   extends Serializable
 {
 
-  val threshhold:Double = 1.0 // this is the threshold that determines if there is a functional dependency between two columns
+  // conditionals for output generation and other variables
+  val threshhold:Double = .99 // this is the threshold that determines if there is a functional dependency between two columns
   val flattenParentTable:Boolean = false // used if wanting to flatten the parent table so it uses the child of root
   val outputEntityGraphs:Boolean = true // true if you want the entity graphs to be output
+  val combineEntityGraphs : Boolean = true // if false then each entity will have it's own graph
+  val showFDGraph : Boolean = true // if you want the Functional Dependency Graph to be shown
+  val blackListThreshold = .05 // minimum percentage of non-null columns to be included in the calculations
 
   // tables containing data for computations
+  var sch:List[(String, T)] = null // the schema, is a lookup for the type and name
   var table:ArrayList[ArrayList[PrimitiveValue]] = null // This table contains the input table
   var countTable:ArrayList[TreeMap[String,Integer]] = null // contains a count of every occurrence of every value in the column
   var densityTable:ArrayList[Integer] = null // gives the density for column, that is percentage of non-null values
   var blackList:ArrayList[Integer] = null // a list of all the columns that are null or mostly null
-  var blackListThreshold =   .05 // minimum percentage of non-null columns to be included in the calculations
 
-  var sch:List[(String, T)] = null // the schema, is a lookup for the type and name
   var parentTable: TreeMap[Integer, ArrayList[Integer]] = null
   var entityPairMatrix:TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]] = null // outer string is entity pair so column#,column#: to a treemap that is essentially a look-up matrix for columns that contain column to column strengths
   var entityGraphList:ArrayList[DelegateTree[Integer, String]] = null
   var entityGraphString:ArrayList[DelegateTree[String, String]] = null
+  var singleEntityGraph : DelegateTree[Integer, String] = null
+  var entityPairList:ArrayList[(Integer,Integer)] = null
 
   // timers
   var startTime:Long = 0
   var endTime:Long = 0
-  // Outputs
-  var entityPairList:List[(Integer,Integer)] = Nil
 
 
   // buildEntities calls all the functions required for ER creation, optionally each function could be called if only part of the computation is required
   def buildEntities(schema: List[(String, T)],data: ResultIterator): Unit = {
     preprocessFDG(schema,data)
     constructFDG()
+    updateEntityGraph()
+    mergeEntities()
+    createViews()
   }
 
   def buildEntities(schema: List[(String, T)],data: ResultSet): Unit = {
     preprocessFDG(schema,data)
     constructFDG()
+    updateEntityGraph()
+    mergeEntities()
+    createViews()
   }
 
 
@@ -121,6 +130,15 @@ class FuncDep
           countTable.get(i-1).put(v.toString,1)
         }
       })
+    }
+
+    for(i <- 0 until densityTable.size()){
+      if((densityTable.get(i).toFloat / table.get(0).size().toFloat) < blackListThreshold ){
+        blackList.add(i)
+      }
+      if(countTable.get(i).size() < 2){
+        blackList.add(i)
+      }
     }
 
   }
@@ -182,6 +200,7 @@ class FuncDep
 
   }
 
+
   /*
   ConstructFDG constructs the functional dependency graph
   The steps are as follows:
@@ -221,6 +240,7 @@ class FuncDep
     var maxTable: ArrayList[String] = new ArrayList[String]() // contains the max values for each column, used for phase1 formula
     parentTable = new TreeMap[Integer, ArrayList[Integer]]()
 
+
     var columnLocation = 0
     // Finds the maxKey for each column, this is the most occurring value for each column and puts them into maxTable
     countTable.asScala.map((tree)=>{
@@ -250,8 +270,8 @@ class FuncDep
     }
 
 
-    // when done nodeTalbe will contain all column numbers that are involved in the FD graph, and edge table will contain all edges between the columns
-    table.asScala.par.map((leftColumn)=>{
+    // when done nodeTable will contain all column numbers that are involved in the FD graph, and edge table will contain all edges between the columns
+    table.asScala.map((leftColumn)=>{
 
       // left and right are respective ways to keep track of comparing every column
       // Initalize values and tables needed for the left column
@@ -260,8 +280,6 @@ class FuncDep
       val leftMap = new ArrayList[PrimitiveValue](leftColumn) // this is a copy of the left column to perform operations on
       val leftColumnName = sch(leftColumnNumber)._1
       val leftDensity = densityTable.get(leftColumnNumber).toFloat / (leftColumn.size() -1).toFloat // -1 for the added column number
-//      println(densityTable.get(leftColumnNumber).toFloat + " / " + leftColumn.size())
-//      println(leftDensity)
       leftMap.remove(leftMap.size()-1) // remove the column number that was added above just to be picky
 
       // right column would be the column that is being compared to left column pairwise, could be thought of as column1 and column2
@@ -279,18 +297,16 @@ class FuncDep
             rightMap.remove(rightMap.size() - 1) // remove the column number that was added above just to be picky
             val leftIter = leftMap.iterator()
             val rightIter = rightMap.iterator()
-            var rightMaxOccurrenceCount = 0 // how many unique pairings there are
+            var rightMaxOccurrenceCount = 0 // how many unique pairings there are where the rightCol value is its maxValue; Part of the formula
 
             // fills the pairMap with all pairings of leftColumn and rightColumn
             while (leftIter.hasNext && rightIter.hasNext) {
               val leftVal: PrimitiveValue = leftIter.next()
               val rightVal: PrimitiveValue = rightIter.next()
-//              println(leftVal.toString + " | " + rightVal.toString)
               if (!leftVal.toString.equals("NULL")) {
-                val value: String = leftVal.toString() + ",M," + rightVal.toString() // doing this to avoid accidental tuple collisions, super not efficent in so many ways
+                val value: String = leftVal.toString() + ",M," + rightVal.toString() // doing this to avoid accidental tuple collisions, super not efficient in so many ways
                 if(!pairMap.contains(value)) {
                   pairMap.add(value)
-//                  println("Right Max is: " + maxTable.get(rightColumnNumber))
                   if (rightVal.toString().equals(maxTable.get(rightColumnNumber))) {
                     rightMaxOccurrenceCount += 1
                   }
@@ -381,8 +397,9 @@ class FuncDep
       }
     }
 
-    showGraph(fdGraph)
-
+    if(showFDGraph) {
+      showGraph(fdGraph)
+    }
     println("There were " + removedCount + " removed edges in the FD-graph.")
 
 
@@ -406,33 +423,52 @@ class FuncDep
       }
     }
 
+/*
     nodeTable.asScala.map((i) => {
       println("PARENT OF " + i + " IS " + parentOfLongestPath(fdGraph,i))
     })
-
     println("ParentTable Size: " + parentTable.size())
+*/
+
 
     // create an ArrayList of all entity graphs, this is for display and traversal purposes
-    entityGraphList = new ArrayList[DelegateTree[Integer, String]]()
-    entityGraphString = new ArrayList[DelegateTree[String, String]]()
-    if(!parentTable.isEmpty()){
-      val rootChildren:ArrayList[Integer] = parentTable.get(-1)
-      val childrenIterator = rootChildren.iterator()
-      while(childrenIterator.hasNext){
-        val child:Integer = childrenIterator.next()
-        var entityGraph = new DelegateTree[Integer,String]
-        entityGraph.addVertex(-1)
-        entityGraph.addChild("-1 to " + child, -1, child)
-        buildEntityGraph(entityGraph,child)
-        entityGraphList.add(entityGraph)
+    if(combineEntityGraphs){
+      singleEntityGraph = new DelegateTree[Integer, String]()
+      if (!parentTable.isEmpty()) {
+        val rootChildren: ArrayList[Integer] = parentTable.get(-1)
+        singleEntityGraph.addVertex(-1)
+        val childrenIterator = rootChildren.iterator()
+        while (childrenIterator.hasNext) {
+          val child: Integer = childrenIterator.next()
+          singleEntityGraph.addChild("-1 to " + child, -1, child)
+          buildEntityGraph(singleEntityGraph, child)
+        }
+      }
+      else {
+        throw new Exception("parent table is empty when creating FDG")
       }
     }
-    else{
-      throw new Exception("parent table is empty when creating FDG")
+    else { // this will split all nodes with root as it's parent into it's own graph for viewing
+      entityGraphList = new ArrayList[DelegateTree[Integer, String]]()
+      entityGraphString = new ArrayList[DelegateTree[String, String]]()
+      if (!parentTable.isEmpty()) {
+        val rootChildren: ArrayList[Integer] = parentTable.get(-1)
+        val childrenIterator = rootChildren.iterator()
+        while (childrenIterator.hasNext) {
+          val child: Integer = childrenIterator.next()
+          var entityGraph = new DelegateTree[Integer, String]
+          entityGraph.addVertex(-1)
+          entityGraph.addChild("-1 to " + child, -1, child)
+          buildEntityGraph(entityGraph, child)
+          entityGraphList.add(entityGraph)
+        }
+      }
+      else {
+        throw new Exception("parent table is empty when creating FDG")
+      }
     }
 
-
-    // used for testing, disreguard
+    // used for testing, disregard
     if(flattenParentTable) {
 
       var parentKeys: ArrayList[Integer] = new ArrayList[Integer]()
@@ -492,34 +528,44 @@ class FuncDep
     var endQ:Long = System.nanoTime();
     println("PhaseOne TOOK: "+((endQ - startQ)/1000000) + " MILLISECONDS")
 
+  }
+
+  def updateEntityGraph():Unit = {
     if(outputEntityGraphs){
-      val entityIter = entityGraphList.iterator()
-      while(entityIter.hasNext){
-        val entityGraph = entityIter.next()
-        showEntity(entityGraph)
+      if(combineEntityGraphs){
+        showEntity(singleEntityGraph)
       }
-    }
-
-    var openFlag = true
-    while(openFlag){
-      println("For displaying graphs, please enter q or quit to close.")
-      val in = new java.util.Scanner(System.in)
-      val input = in.next()
-      if(input.toLowerCase().equals("q") || input.toLowerCase().equals("quit")){
-        openFlag = false
+      else {
+        val entityIter = entityGraphList.iterator()
+        while (entityIter.hasNext) {
+          val entityGraph = entityIter.next()
+          showEntity(entityGraph)
+        }
       }
 
-    }
+      var openFlag = true
+      while(openFlag){
+        println("For displaying graphs, please enter q or quit to close.")
+        val in = new java.util.Scanner(System.in)
+        val input = in.next()
+        if(input.toLowerCase().equals("q") || input.toLowerCase().equals("quit")){
+          openFlag = false
+        }
 
+      }
+    }
   }
 
 
+  /*
+  Attempts to merge entities generated above with one another:
 
-
+  */
 
   def mergeEntities(){
     // PHASE 2
 
+    entityPairList = new ArrayList[(Integer,Integer)]()
     var parentList:ArrayList[Integer] = new ArrayList[Integer]() // List of all possible entities, excludes root
     var parentKeySetIter = parentTable.keySet().iterator()
     while(parentKeySetIter.hasNext){
@@ -528,7 +574,7 @@ class FuncDep
         parentList.add(parentVal)
       }
     }
-    println("Number of parents: "+parentList.size())
+    println("Number of parents: " + parentList.size())
 
 //    var phase2Graph: DirectedSparseMultigraph[Integer, String] = new DirectedSparseMultigraph[Integer, String]();
 
@@ -654,11 +700,22 @@ class FuncDep
 
             if(phase2Graph.getVertexCount > 1){
               graphPairs.put(parentList.get(i)+","+parentList.get(j),phase2Graph)
-              entityPairList = (parentList.get(i), parentList.get(j)) :: entityPairList
+              entityPairList.add((parentList.get(i), parentList.get(j)))
             }
           }
         }
       }
+    }
+
+    if(!entityPairList.isEmpty){
+      entityPairList.asScala.map((tuple) => {
+        val col1 = tuple._1
+        val col2 = tuple._2
+        println(col1 + " AND " + col2 + " CAN BE MERGED")
+      })
+    }
+    else{
+      println("NO ENTITIES CAN BE MERGED")
     }
 
     endTime = System.currentTimeMillis()
@@ -668,6 +725,34 @@ class FuncDep
 
     //    matchEnt(graphPairs)
 //    entityPairMatrixResult()
+  }
+
+
+  /*
+    Create's views from parent table, basic implimentation that looks at the parentTable and creates a view for each parent if it has > 1 child
+  */
+
+  def createViews():Unit = {
+    val parentIter = parentTable.keySet().iterator()
+    while(parentIter.hasNext) {
+      val parent = parentIter.next()
+      val childrenArray = parentTable.get(parent)
+      if(childrenArray.size() > 1) {
+        var viewOutput = "CREATE VIEW "
+        if (parent == -1) {
+          viewOutput += " ROOT AS SELECT"
+        }
+        else {
+          viewOutput += sch(parent)._1 + " AS SELECT"
+        }
+        childrenArray.asScala.map((x) => {
+          viewOutput = viewOutput + " " + sch(x)._1 + ","
+        })
+        viewOutput = viewOutput.substring(0, viewOutput.size - 1) // to remove the last comma
+        viewOutput += " FROM CURESOURCE;"
+        println(viewOutput)
+      }
+    }
   }
 
   def matchEnt(graphPairs:TreeMap[String,UndirectedSparseMultigraph[Integer,String]],parentTable: TreeMap[Integer, ArrayList[Integer]]): Unit ={
@@ -684,7 +769,7 @@ class FuncDep
 
   def getPairs(entity:Integer): ArrayList[String] ={ // Returns an arrayList with all of the pairs that that entity is part of, entiity is a single entity
     var pairs:ArrayList[String] = new ArrayList[String]()
-    entityPairList.foreach( rawPair => {
+    entityPairList.asScala.foreach( rawPair => {
       if(rawPair._1 == entity || rawPair._2 == entity){
         pairs.add(rawPair._1+","+rawPair._2)
       }
@@ -730,7 +815,7 @@ class FuncDep
   }
 
   def entityPairMatrixResult():Unit = {
-    entityPairList.foreach( rawPair => {
+    entityPairList.asScala.foreach( rawPair => {
       val entityPair:String = rawPair._1+","+rawPair._2
       val attributeMatrix:TreeMap[Integer,TreeMap[Integer,Float]]= entityPairMatrix.get(entityPair)
       println("ENTITY PAIR: "+ entityPair)

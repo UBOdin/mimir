@@ -1,6 +1,7 @@
 package mimir.sql;
 
 import java.sql._
+import java.util
 
 import mimir.Database
 import mimir.algebra._
@@ -10,14 +11,14 @@ import net.sf.jsqlparser.expression
 import net.sf.jsqlparser.expression.operators.arithmetic._
 import net.sf.jsqlparser.expression.operators.conditional._
 import net.sf.jsqlparser.expression.operators.relational._
-import net.sf.jsqlparser.expression.{BinaryExpression, DateValue, DoubleValue, Function, LongValue, NullValue, InverseExpression, StringValue, WhenClause}
+import net.sf.jsqlparser.expression.{BinaryExpression, DateValue, DoubleValue, Function, InverseExpression, LongValue, NullValue, StringValue, WhenClause}
 import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.statement.create.table._
 import net.sf.jsqlparser.statement.select.{AllColumns, AllTableColumns, FromItem, PlainSelect, SelectBody, SelectExpressionItem, SubJoin, SubSelect}
 import org.joda.time.LocalDate
 
 import scala.collection.JavaConversions._
-import scala.collection.mutable
+import scala.collection.{immutable, mutable}
 import scala.collection.mutable.ListBuffer
 ;
 
@@ -527,7 +528,7 @@ class SqlToRA(db: Database)
             case Some(sch) => sch
             case None => throw new SQLException("Unknown table or view: "+name);
           }
-          val newBindings = sch.map(
+          val newBindings : Map[String,String] = sch.map(
               (x) => (x._1, alias+"_"+x._1)
             ).toMap[String, String]
           return (

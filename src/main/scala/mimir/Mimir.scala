@@ -128,8 +128,14 @@ object Mimir {
     val sch = db.getTableSchema("CURESOURCE")
     sch match {
       case Some(s) =>
+        var count = 0
+        s.map((tup) => {
+//          println(count + " is col " + tup._1)
+          count += 1
+        })
         ent.buildEntities(s, db.backend.execute(adaptiveSchema.getSelectBody.toString()))
       case None =>
+        throw new SQLException("Could not find that table.")
     }
   }
 
