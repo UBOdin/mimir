@@ -62,7 +62,7 @@ object ShredderLensSpec
 //       val schema = db.getTableSchema(testTable).get
 //       val schema = db.getTableSchema(testTable).get // for loading already existing table from a database
        discala = new FuncDep()
-       discala.buildEntities(schema, database.backend.execute("SELECT * FROM " + testTable + ";"))
+//       discala.buildEntities(schema, database.backend.execute("SELECT * FROM " + testTable + ";"))
        discala.entityPairMatrix must not beNull
      }
 /*

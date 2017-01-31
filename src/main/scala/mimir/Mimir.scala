@@ -6,9 +6,9 @@ import java.sql.SQLException
 import mimir.ctables.CTPercolator
 import mimir.parser._
 import mimir.sql._
-import mimir.algebra.{FuncDep, Project, ProjectArg, Var}
+import mimir.algebra._
 import net.sf.jsqlparser.statement.Statement
-import net.sf.jsqlparser.statement.select.Select
+import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody}
 import org.rogach.scallop._;
 
 
@@ -124,20 +124,62 @@ object Mimir {
     // CREATE ADAPTIVESCHEMA TEST AS SELECT * FROM CURESOURCE;
     val ent = new FuncDep()
     val queryOper = db.sql.convert(adaptiveSchema.getSelectBody())
-    val schema = queryOper.schema
-    val sch = db.getTableSchema("CURESOURCE")
-    sch match {
-      case Some(s) =>
-        var count = 0
-        s.map((tup) => {
-//          println(count + " is col " + tup._1)
-          count += 1
-        })
-        ent.buildEntities(s, db.backend.execute(adaptiveSchema.getSelectBody.toString()))
-      case None =>
-        throw new SQLException("Could not find that table.")
+//    val schema = queryOper.schema
+    val s : (List[(String,String)],String)= getOrderedSchema(adaptiveSchema.getSelectBody)
+    val schema : List[(String,Type.T)] = s._1.map((tup) => {(tup._1,Type.TString)})
+    val tableName :String = s._2
+
+    ent.buildEntities(schema, db.backend.execute(adaptiveSchema.getSelectBody.toString()), tableName)
+  }
+
+
+  def getOrderedSchema(sel : SelectBody) : (List[(String,String)],String) = {
+    var schema : (List[(String,String)],String) = null
+    if(sel.isInstanceOf[PlainSelect]){
+      schema = getOrderedSchema(sel.asInstanceOf[PlainSelect].getFromItem)
+    }
+    else{
+      throw new Exception("Only plainselect is supported for this demo")
+    }
+    schema
+  }
+
+
+  def getOrderedSchema(fi : FromItem) : (List[(String,String)],String) = {
+
+    if (fi.isInstanceOf[net.sf.jsqlparser.schema.Table]) {
+      val name =
+        fi.asInstanceOf[net.sf.jsqlparser.schema.Table].
+          getName.toUpperCase
+      var alias =
+        fi.asInstanceOf[net.sf.jsqlparser.schema.Table].
+          getAlias
+      if (alias == null) {
+        alias = name
+      }
+      else {
+        alias = alias.toUpperCase
+      }
+
+      // Bind the table to a source:
+      db.getView(name) match {
+        case None =>
+          val sch = db.getTableSchema(name) match {
+            case Some(sch) => sch
+            case None => throw new SQLException("Unknown table or view: " + name);
+          }
+          return (sch.map((x) => (x._1, alias + "_" + x._1)),name)
+
+        case Some(view) =>
+          val sch = view.schema.map(_._1)
+          return (sch.map((x) => (x, alias + "_" + x)),name)
+      }
+    }
+    else {
+      throw new Exception("Joins are not supported for the demo")
     }
   }
+
 
 //  def connectSqlite(filename: String): java.sql.Connection =
 //  {

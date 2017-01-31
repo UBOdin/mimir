@@ -121,12 +121,6 @@ case class Database(name: String, backend: Backend)
     println(result.schema.map( _._1 ).mkString(","))
     println("------")
 
-    val f = new mimir.algebra.FuncDep
-    getTableSchema("JSONOUTPUTWIDE") match{
-      case Some(sch) => f.buildEntities(sch,result)
-      case None => println("Table Not Found")
-    }
-
     while(result.getNext()){
       println(
         (0 until result.numCols).map( (i) => {

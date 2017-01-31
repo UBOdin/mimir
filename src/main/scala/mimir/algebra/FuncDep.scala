@@ -59,6 +59,7 @@ class FuncDep
 
   // tables containing data for computations
   var sch:List[(String, T)] = null // the schema, is a lookup for the type and name
+  var tableName : String = null
   var table:ArrayList[ArrayList[PrimitiveValue]] = null // This table contains the input table
   var countTable:ArrayList[TreeMap[String,Integer]] = null // contains a count of every occurrence of every value in the column
   var densityTable:ArrayList[Integer] = null // gives the density for column, that is percentage of non-null values
@@ -77,19 +78,20 @@ class FuncDep
 
 
   // buildEntities calls all the functions required for ER creation, optionally each function could be called if only part of the computation is required
-  def buildEntities(schema: List[(String, T)],data: ResultIterator): Unit = {
-    preprocessFDG(schema,data)
+
+  def buildEntities(schema: List[(String, T)],data: ResultIterator, tableName : String): Unit = {
+    preprocessFDG(schema,data,tableName)
     constructFDG()
     updateEntityGraph()
-    mergeEntities()
+//    mergeEntities()
     createViews()
   }
 
-  def buildEntities(schema: List[(String, T)],data: ResultSet): Unit = {
-    preprocessFDG(schema,data)
+  def buildEntities(schema: List[(String, T)],data: ResultSet, tableName : String): Unit = {
+    preprocessFDG(schema,data,tableName)
     constructFDG()
     updateEntityGraph()
-    mergeEntities()
+//    mergeEntities()
     createViews()
   }
 
@@ -98,10 +100,11 @@ class FuncDep
      inside this program so it has a high upfront ram cost, this can be changed on implementation to have each column call the database and in parallel collect this information
      The data collected is a count of each unique value per column and the total number of nulls
   */
-  def preprocessFDG(schema: List[(String, T)],data: ResultIterator): Unit = {
+  def preprocessFDG(schema: List[(String, T)],data: ResultIterator,tName : String): Unit = {
 
     // initalize tables
     table = new ArrayList[ArrayList[PrimitiveValue]]()
+    tableName = tName
     entityPairMatrix = new TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]]()
     sch = schema
     countTable = new ArrayList[TreeMap[String,Integer]]()
@@ -143,10 +146,11 @@ class FuncDep
 
   }
 
-  def preprocessFDG(schema: List[(String, T)],data: ResultSet): Unit = {
+  def preprocessFDG(schema: List[(String, T)],data: ResultSet,tName:String): Unit = {
 
     // initalize tables
     blackList = new ArrayList[Integer]()
+    tableName = tName
     var d:List[List[PrimitiveValue]] = mimir.util.JDBCUtils.extractAllRows(data)
     table = new ArrayList[ArrayList[PrimitiveValue]]()
     entityPairMatrix = new TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]]()
@@ -749,7 +753,7 @@ class FuncDep
           viewOutput = viewOutput + " " + sch(x)._1 + ","
         })
         viewOutput = viewOutput.substring(0, viewOutput.size - 1) // to remove the last comma
-        viewOutput += " FROM CURESOURCE;"
+        viewOutput += " FROM " + tableName + ";"
         println(viewOutput)
       }
     }
