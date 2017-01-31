@@ -305,13 +305,13 @@ object CTPercolator
       }
       
 			case Recover(subj,invisScm) => {
-        val provSelPrc = percolateLite(subj)
-        val detColsSeq = provSelPrc._2.toSeq
-        val newDetCols = for ((name,ctype) <- invisScm) yield {
+        /*val provSelPrc =*/ percolateLite(subj)
+        /*val detColsSeq = provSelPrc._2.toSeq
+        val newDetCols = for ((projArg, (name,ctype), tableName) <- invisScm) yield {
           (name, CTAnalyzer.compileDeterministic(new Var(name), provSelPrc._2))
         }
        (oper, detColsSeq.union(newDetCols).toMap, provSelPrc._3)
-          
+          */
       }
       
       case ProvenanceOf(psel) => {

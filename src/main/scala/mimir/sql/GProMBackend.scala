@@ -61,7 +61,7 @@ class GProMBackend(backend: String, filename: String) extends Backend
   {
     backend match {
       case "sqlite" => 
-        sqlite.VGTermFunctions.register(db, conn)
+        sqlite.VGTermFunctions.register(db, conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection]))
         inliningAvailable = true
     }
   }
@@ -89,7 +89,7 @@ class GProMBackend(backend: String, filename: String) extends Backend
         if(conn == null) {
           throw new SQLException("Trying to use unopened connection!")
         }
-        val stmt = conn.createStatement()
+        val stmt = conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection]).createStatement()
         var repSel = sel
         if(!sel.endsWith(";")) 
           repSel = repSel + ";"
@@ -117,7 +117,7 @@ class GProMBackend(backend: String, filename: String) extends Backend
         for ( x <- args ) {
            repSel = repSel.replaceFirst("\\?", "'"+x.asString + "'")
         }
-        val stmt = conn.createStatement()
+        val stmt = conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection]).createStatement()
         if(!repSel.endsWith(";")) 
           repSel = repSel + ";"
         println("UPS2: " +repSel)
@@ -144,7 +144,7 @@ class GProMBackend(backend: String, filename: String) extends Backend
       if(!repSel.endsWith(";")) 
           repSel = repSel + ";"
         
-      val stmt = conn.createStatement()
+      val stmt = conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection]).createStatement()
       stmt.executeUpdate(repSel)
       stmt.close()
     })
@@ -156,7 +156,7 @@ class GProMBackend(backend: String, filename: String) extends Backend
       if(conn == null) {
         throw new SQLException("Trying to use unopened connection!")
       }
-      val stmt = conn.createStatement()
+      val stmt = conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection]).createStatement()
       upd.foreach( u => {
           println("UP2: " +u)
           var repSel = u
@@ -182,7 +182,7 @@ class GProMBackend(backend: String, filename: String) extends Backend
       }
       if(!repSel.endsWith(";")) 
             repSel = repSel + ";"
-      val stmt = conn.createStatement()
+      val stmt = conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection]).createStatement()
       println("UP3: " + repSel)
       stmt.execute(repSel)
       stmt.close()
@@ -203,7 +203,7 @@ class GProMBackend(backend: String, filename: String) extends Backend
         update("PRAGMA temp_store=MEMORY")
       }*/
       println("turned off fast bulk insert changes for GProM testing..."); 
-      conn.setAutoCommit(false)
+      conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection]).setAutoCommit(false)
       try {
         argsList.foreach( (args) => {
           var repSel = upd;
@@ -212,7 +212,7 @@ class GProMBackend(backend: String, filename: String) extends Backend
           }
           if(!repSel.endsWith(";")) 
             repSel = repSel + ";"
-          val stmt = conn.createStatement()
+          val stmt = conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection]).createStatement()
           println("UP4: " +repSel)
           stmt.execute(repSel)
           stmt.close()
@@ -220,8 +220,8 @@ class GProMBackend(backend: String, filename: String) extends Backend
         })
         
       } finally {
-        conn.commit()
-        conn.setAutoCommit(true)
+        conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection]).commit()
+        conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection]).setAutoCommit(true)
         /*if(backend.equals("sqlite")){
           update("PRAGMA synchronous=ON")
           update("PRAGMA journal_mode=DELETE")
@@ -253,7 +253,7 @@ class GProMBackend(backend: String, filename: String) extends Backend
               SQLiteCompat.getTableSchema(conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection] ), table)
             }
             case "oracle" => 
-              val columnRet = conn.getMetaData().getColumns(null, "ARINDAMN", table, "%")  // TODO Generalize
+              val columnRet = conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection]).getMetaData().getColumns(null, "ARINDAMN", table, "%")  // TODO Generalize
               var ret = List[(String, Type)]()
               while(columnRet.isBeforeFirst()){ columnRet.next(); }
               while(!columnRet.isAfterLast()){
@@ -279,7 +279,7 @@ class GProMBackend(backend: String, filename: String) extends Backend
         throw new SQLException("Trying to use unopened connection!")
       }
 
-      val metadata = conn.getMetaData()
+      val metadata = conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection]).getMetaData()
       val tables = backend match {
         case "sqlite" => metadata.getTables(null, null, "%", null)
         case "oracle" => metadata.getTables(null, "ARINDAMN", "%", null) // TODO Generalize

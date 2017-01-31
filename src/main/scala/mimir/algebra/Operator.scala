@@ -180,7 +180,7 @@ case class Select(condition: Expression, source: Operator) extends Operator
  * invisify provenance attributes operator -- With Provenance
  */
 case class Annotate(subj: Operator,
-                 invisSch: Seq[(String,Type)])
+                 invisSch: Seq[(ProjectArg, (String,Type), String)])
   extends Operator
 {
   def toString(prefix: String) =
@@ -188,7 +188,7 @@ case class Annotate(subj: Operator,
       ("\n" + subj.toString(prefix+"  ") +"\n" + prefix 
       )+")" + 
        ( if(invisSch.size > 0)
-             { " // "+invisSch.map( { case (v,t) => v+":"+t } ).mkString(", ") }
+             { " // "+invisSch.map( { case (c,(v,t), ta) => c + ":"+t } ).mkString(", ") }
         else { "" })
   def children: List[Operator] = List(subj)
   def rebuild(x: Seq[Operator]) = Annotate(subj, invisSch)
@@ -201,14 +201,14 @@ case class Annotate(subj: Operator,
  * visify provenance attributes operator -- Provenance Of
  */
 case class Recover(subj: Operator,
-                 invisSch: Seq[(String,Type)]) extends Operator
+                 invisSch: Seq[(ProjectArg, (String,Type), String)]) extends Operator
 {
   def toString(prefix: String) =
     // prefix + "Join of\n" + left.toString(prefix+"  ") + "\n" + prefix + "and\n" + right.toString(prefix+"  ")
     prefix + "RECOVER(\n" + subj.toString(prefix+"  ") + 
                   "\n" + prefix + ")" + 
        ( if(invisSch.size > 0)
-             { " // "+invisSch.map( { case (v,t) => v+":"+t } ).mkString(", ") }
+             { " // "+invisSch.map( { case (c,(v,t), ta) => c+":"+t } ).mkString(", ") }
         else { "" })
   def children() = List(subj);
   def rebuild(x: Seq[Operator]) = Recover(subj, invisSch)

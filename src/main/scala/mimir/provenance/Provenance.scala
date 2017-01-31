@@ -26,11 +26,134 @@ object Provenance {
     }
     oper match {
       case Project(args, src) => {
+        src match {
+          case Annotate(subj,invisScm) => {
+            val (newSrc, rowids) = compile(src)
+              val newArgs = 
+                args.map( arg => 
+                  ProjectArg(arg.name, expandVars(arg.expression, rowids))
+                ).union(invisScm.map(invSchEl => ProjectArg( invSchEl._1.expression.toString, Var( (invSchEl._3 match { case "" => ""; case _ => invSchEl._3 + "_"}) +invSchEl._1.name) )))
+              val (newRowids, rowIDProjections) = makeRowIDProjectArgs(rowids, 0, 0)
+              (
+                Project(newArgs ++ rowIDProjections, newSrc),
+                newRowids
+              )
+          }
+          case _ => {
+            val (newSrc, rowids) = compile(src)
+            val newArgs = 
+              args.map( arg => 
+                ProjectArg(arg.name, expandVars(arg.expression, rowids))
+              )
+            val (newRowids, rowIDProjections) = makeRowIDProjectArgs(rowids, 0, 0)
+            (
+              Project(newArgs ++ rowIDProjections, newSrc),
+              newRowids
+            )
+          }
+        }
+      }
+
+      case Annotate(subj,invisScm) => {
+        compileProvSubj(subj, invisScm)
+      }
+      
+			case Recover(subj,invisScm) => {
+        compileProvSubj(subj, invisScm)
+      }
+      
+      case ProvenanceOf(psel) => {
+        val provSelCmp = compile(psel)
+        val provCmp = (new ProvenanceOf(provSelCmp._1), provSelCmp._2)
+        provCmp
+      }
+      
+      case Select(cond, src) => {
+        val (newSrc, rowids) = compile(src)
+        ( 
+          Select(expandVars(cond, rowids), newSrc), 
+          rowids
+        )
+      }
+
+      case Join(lhs, rhs) => {
+        val (newLhs, lhsRowids) = compile(lhs)
+        val (newRhs, rhsRowids) = compile(rhs)
+        val (newLhsRowids, lhsIdProjections) = 
+          makeRowIDProjectArgs(lhsRowids, 0, 0)
+        val (newRhsRowids, rhsIdProjections) = 
+          makeRowIDProjectArgs(rhsRowids, lhsRowids.size, 0)
+        val lhsProjectArgs =
+          lhs.schema.map(x => ProjectArg(x._1, Var(x._1))) ++ lhsIdProjections
+        val rhsProjectArgs = 
+          rhs.schema.map(x => ProjectArg(x._1, Var(x._1))) ++ rhsIdProjections
+        (
+          Join(
+            Project(lhsProjectArgs, newLhs),
+            Project(rhsProjectArgs, newRhs)
+          ),
+          newLhsRowids ++ newRhsRowids
+        )
+      }
+
+      case Union(lhs, rhs) => {
+        val (newLhs, lhsRowids) = compile(lhs)
+        val (newRhs, rhsRowids) = compile(rhs)
+        val (newRowids, lhsIdProjections) = 
+          makeRowIDProjectArgs(lhsRowids, 0, rhsRowids.size)
+        val (_,         rhsIdProjections) = 
+          makeRowIDProjectArgs(rhsRowids, 0, lhsRowids.size)
+        val lhsProjectArgs =
+          lhs.schema.map(x => ProjectArg(x._1, Var(x._1))) ++ 
+            lhsIdProjections ++ 
+            List(ProjectArg(rowidColnameBase+"_branch", RowIdPrimitive("left")))
+        val rhsProjectArgs = 
+          rhs.schema.map(x => ProjectArg(x._1, Var(x._1))) ++ 
+            rhsIdProjections ++ 
+            List(ProjectArg(rowidColnameBase+"_branch", RowIdPrimitive("right")))
+        (
+          Union(
+            Project(lhsProjectArgs, newLhs),
+            Project(rhsProjectArgs, newRhs)
+          ),
+          newRowids ++ List(rowidColnameBase+"_branch")
+        )
+      }
+
+      case Table(name, schema, meta) =>
+        (
+          Table(name, schema, meta ++ List((rowidColnameBase, Var("ROWID"), TRowId()))),
+          List(rowidColnameBase)
+        )
+
+      case Aggregate(groupBy, args, child) =>
+        //val newargs = (new AggregateArg(ROWID_KEY, List(Var(ROWID_KEY)), ROWID_KEY)) :: args
+        ( 
+          Aggregate(groupBy, args, compile(child)._1),
+          groupBy.map(_.name)
+        )
+
+    }
+  }
+  
+  def compileProvSubj(oper: Operator, invisSch: Seq[(ProjectArg, (String,Type), String)]): (Operator, Seq[String]) = {
+    val makeRowIDProjectArgs = 
+      (rowids: Seq[String], offset: Integer, padLen: Integer) => {
+        rowids.map(Var(_)).
+               padTo(padLen, RowIdPrimitive("-")).
+               zipWithIndex.map( { case (v, i) => 
+                  val newName = rowidColnameBase + "_" + (i+offset)
+                  (newName, ProjectArg(newName, v))
+               }).
+               unzip
+    }
+    oper match {
+      case Project(args, src) => {
         val (newSrc, rowids) = compile(src)
         val newArgs = 
           args.map( arg => 
             ProjectArg(arg.name, expandVars(arg.expression, rowids))
-          )
+          ).union(invisSch.map(invSchEl => invSchEl._1))
         val (newRowids, rowIDProjections) = makeRowIDProjectArgs(rowids, 0, 0)
         (
           Project(newArgs ++ rowIDProjections, newSrc),
@@ -39,12 +162,11 @@ object Provenance {
       }
 
       case Annotate(subj,invisScm) => {
-        compile(subj)
+        compileProvSubj(subj, invisScm)
       }
       
 			case Recover(subj,invisScm) => {
-        val provSelCmp = compile(subj)
-        (provSelCmp._1, provSelCmp._2)//.union(invisScm.map(f => f._1 )))
+        compileProvSubj(subj, invisScm)
       }
       
       case ProvenanceOf(psel) => {

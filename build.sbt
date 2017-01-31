@@ -42,7 +42,11 @@ libraryDependencies ++= Seq(
   "org.xerial"                 %    "sqlite-jdbc"           % "3.14.2.1",
   "info.mimirdb"               %    "jsqlparser"            % "1.0.0",
   "org.apache.commons"         %    "commons-csv"           % "1.4", 
-  "commons-io"                 %    "commons-io"            % "2.5"
+  "commons-io"                 %    "commons-io"            % "2.5",
+  "jna"                        %    "jna"                   % "4.2.2",
+  "jna-platform"               %    "jna-platform"          % "4.2.2",
+  "log4j"                      %    "log4j"                 % "1.2.17",
+  
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")

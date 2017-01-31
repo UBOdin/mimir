@@ -113,13 +113,24 @@ class RAToSql(db: Database)
       case Annotate(subj,invisScm) => {
         subj match {
           case Table(name, sch, metadata) => {
-            metadata.addAll(invisScm.map(f => (f._1, null, f._2)))
+            metadata.addAll(invisScm.map(f => (f._2._1, null, f._2._2)))
             doConvert(new Table(name, sch, metadata))
           }
         }
       }
       case Recover(subj,invisScm) => {
+        val schemas = invisScm.groupBy(_._3).toList.map{ f => (f._1, f._2.map{ s => s._2._1 }.toList) }
         val pselBody = doConvert(subj).asInstanceOf[PlainSelect]
+        pselBody.setSelectItems(pselBody.getSelectItems.union(
+          new java.util.ArrayList(
+            invisScm.map( (arg) => {
+              val item = new SelectExpressionItem()
+              item.setAlias(arg._1.name)
+              item.setExpression(convert(arg._1.expression, schemas))
+              item
+            })
+          )
+        ))
         new ProvenanceSelect(pselBody)
       }
       case ProvenanceOf(psel) => {
