@@ -23,6 +23,7 @@ unmanagedClasspath in Runtime <+= (baseDirectory) map { bd => Attributed.blank(b
 includeFilter in (Compile, unmanagedResourceDirectories):= ".dylib"
 
 resolvers += "MimirDB" at "http://maven.mimirdb.info/"
+resolvers += "MVNRepository" at "http://mvnrepository.com/artifact/"
 
 libraryDependencies ++= Seq(
   "org.rogach"                 %%   "scallop"               % "0.9.5",
@@ -43,8 +44,8 @@ libraryDependencies ++= Seq(
   "info.mimirdb"               %    "jsqlparser"            % "1.0.0",
   "org.apache.commons"         %    "commons-csv"           % "1.4", 
   "commons-io"                 %    "commons-io"            % "2.5",
-  "jna"                        %    "jna"                   % "4.2.2",
-  "jna-platform"               %    "jna-platform"          % "4.2.2",
+  "net.java.dev.jna"           %    "jna"                   % "4.2.2",
+  "net.java.dev.jna"           %    "jna-platform"          % "4.2.2",
   "log4j"                      %    "log4j"                 % "1.2.17"
 )
 
