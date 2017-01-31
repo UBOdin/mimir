@@ -45,8 +45,7 @@ libraryDependencies ++= Seq(
   "commons-io"                 %    "commons-io"            % "2.5",
   "jna"                        %    "jna"                   % "4.2.2",
   "jna-platform"               %    "jna-platform"          % "4.2.2",
-  "log4j"                      %    "log4j"                 % "1.2.17",
-  
+  "log4j"                      %    "log4j"                 % "1.2.17"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")
