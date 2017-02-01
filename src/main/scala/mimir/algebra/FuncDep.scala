@@ -79,20 +79,22 @@ class FuncDep
 
   // buildEntities calls all the functions required for ER creation, optionally each function could be called if only part of the computation is required
 
-  def buildEntities(schema: List[(String, T)],data: ResultIterator, tableName : String): Unit = {
+  def buildEntities(schema: List[(String, T)],data: ResultIterator, tableName : String): ArrayList[String] = {
     preprocessFDG(schema,data,tableName)
     constructFDG()
     updateEntityGraph()
 //    mergeEntities()
-    createViews()
+    val viewList = createViews()
+    viewList
   }
 
-  def buildEntities(schema: List[(String, T)],data: ResultSet, tableName : String): Unit = {
+  def buildEntities(schema: List[(String, T)],data: ResultSet, tableName : String): ArrayList[String] = {
     preprocessFDG(schema,data,tableName)
     constructFDG()
     updateEntityGraph()
 //    mergeEntities()
-    createViews()
+    val viewList = createViews()
+    viewList
   }
 
 
@@ -121,7 +123,7 @@ class FuncDep
       (1 until data.numCols).map( (i) => {
         val v:PrimitiveValue = data(i)
         table.get(i-1).add(v)
-        if(!v.toString.equals("NULL") && !v.toString.equals("null") && !v.toString.equals("Null") && !v.toString.equals("\'NULL\'")){
+        if(!v.toString.equals("NULL")){
           var temp = densityTable.get(i-1)
           temp+=1
           densityTable.set(i-1,temp)
@@ -736,8 +738,9 @@ class FuncDep
     Create's views from parent table, basic implimentation that looks at the parentTable and creates a view for each parent if it has > 1 child
   */
 
-  def createViews():Unit = {
+  def createViews():ArrayList[String] = {
     val parentIter = parentTable.keySet().iterator()
+    val viewList : ArrayList[String] = new ArrayList[String]()
     while(parentIter.hasNext) {
       val parent = parentIter.next()
       val childrenArray = parentTable.get(parent)
@@ -755,8 +758,10 @@ class FuncDep
         viewOutput = viewOutput.substring(0, viewOutput.size - 1) // to remove the last comma
         viewOutput += " FROM " + tableName + ";"
         println(viewOutput)
+        viewList.add(viewOutput)
       }
     }
+    return viewList
   }
 
   def matchEnt(graphPairs:TreeMap[String,UndirectedSparseMultigraph[Integer,String]],parentTable: TreeMap[Integer, ArrayList[Integer]]): Unit ={

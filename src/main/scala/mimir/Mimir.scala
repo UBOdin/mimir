@@ -2,6 +2,7 @@ package mimir;
 
 import java.io._
 import java.sql.SQLException
+import java.util
 
 import mimir.ctables.CTPercolator
 import mimir.parser._
@@ -10,6 +11,8 @@ import mimir.algebra._
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody}
 import org.rogach.scallop._;
+
+import scala.collection.JavaConverters._
 
 
 /**
@@ -129,7 +132,10 @@ object Mimir {
     val schema : List[(String,Type.T)] = s._1.map((tup) => {(tup._1,Type.TString)})
     val tableName :String = s._2
 
-    ent.buildEntities(schema, db.backend.execute(adaptiveSchema.getSelectBody.toString()), tableName)
+    val viewList : java.util.ArrayList[String] = ent.buildEntities(schema, db.backend.execute(adaptiveSchema.getSelectBody.toString()), tableName)
+    viewList.asScala.map((view) => {
+      db.backend.update(view)
+    })
   }
 
 
