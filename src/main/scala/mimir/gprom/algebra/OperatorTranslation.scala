@@ -1,6 +1,9 @@
 package mimir.gprom.algebra
 
 import org.gprom.jdbc.jna._
+import com.sun.jna.Pointer
+import com.sun.jna.Memory
+import com.sun.jna.Native
 import mimir.algebra._
 
 object ProjectionArgVisibility extends Enumeration {
@@ -14,22 +17,22 @@ object OperatorTranslation {
     var topOp = topOperator
     gpromStruct match {
       case aggregationOperator : GProMAggregationOperator => { 
-        null
+        throw new Exception("Translation Not Yet Implemented '"+aggregationOperator+"'")
         }
       case attributeDef : GProMAttributeDef => { 
-        null 
+        throw new Exception("Translation Not Yet Implemented '"+attributeDef+"'") 
         }
       case constRelOperator : GProMConstRelOperator => { 
-        null 
+        throw new Exception("Translation Not Yet Implemented '"+constRelOperator+"'") 
         }
       case constant : GProMConstant => { 
-        null 
+        throw new Exception("Translation Not Yet Implemented '"+constant+"'") 
         }
       case duplicateRemoval : GProMDuplicateRemoval => { 
-        null 
+        throw new Exception("Translation Not Yet Implemented '"+duplicateRemoval+"'") 
         }
       case joinOperator : GProMJoinOperator => { 
-        null 
+        throw new Exception("Translation Not Yet Implemented '"+joinOperator+"'") 
         }
       case list:GProMList => {
         val listHead = list.head
@@ -48,34 +51,34 @@ object OperatorTranslation {
         else{
           cnvNode match { 
             case projectionOperator : GProMProjectionOperator => { 
-              null 
+              throw new Exception("Translation Not Yet Implemented '"+projectionOperator+"'") 
               }
             case provenanceComputation : GProMProvenanceComputation => { 
-              null 
+              throw new Exception("Translation Not Yet Implemented '"+provenanceComputation+"'") 
               }
             case provenanceTransactionInfo : GProMProvenanceTransactionInfo => { 
-              null 
+              throw new Exception("Translation Not Yet Implemented '"+provenanceTransactionInfo+"'") 
               }
             case queryOperator : GProMQueryOperator => { 
-              null 
+              throw new Exception("Translation Not Yet Implemented '"+queryOperator+"'") 
               }
             case schema : GProMSchema => { 
-              null 
+              throw new Exception("Translation Not Yet Implemented '"+schema+"'") 
               }
             case selectionOperator : GProMSelectionOperator => { 
-              null 
+              throw new Exception("Translation Not Yet Implemented '"+selectionOperator+"'") 
               }
           }
         }
       }
       case nestingOperator : GProMNestingOperator => { 
-        null 
+        throw new Exception("Translation Not Yet Implemented '"+nestingOperator+"'") 
         }
       case node : GProMNode => { 
-        null 
+        throw new Exception("Translation Not Yet Implemented '"+node+"'") 
         }
       case orderOperator : GProMOrderOperator => { 
-        null 
+        throw new Exception("Translation Not Yet Implemented '"+orderOperator+"'") 
         }
       case projectionOperator : GProMProjectionOperator => {
         val sourceChild = gpromStructureToMimirOperator(depth+1, topOp, projectionOperator.op, projectionOperator)
@@ -95,10 +98,10 @@ object OperatorTranslation {
           new Project(visibleProjArgs, sourceChild)
       }
       case provenanceComputation : GProMProvenanceComputation => { 
-        null 
+        throw new Exception("Translation Not Yet Implemented '"+provenanceComputation+"'") 
         }
       case provenanceTransactionInfo : GProMProvenanceTransactionInfo => { 
-        null 
+        throw new Exception("Translation Not Yet Implemented '"+provenanceTransactionInfo+"'") 
         }
       case queryOperator : GProMQueryOperator => { 
         queryOperator.`type` match {
@@ -108,7 +111,7 @@ object OperatorTranslation {
         }
       }
       case schema : GProMSchema => { 
-        null 
+        throw new Exception("Translation Not Yet Implemented '"+schema+"'") 
         }
       case selectionOperator : GProMSelectionOperator => { 
           val condition = translateGProMConditionToMimirExpression(selectionOperator.cond) 
@@ -116,7 +119,7 @@ object OperatorTranslation {
           new Select(condition, sourceChild)
         }
       case setOperator : GProMSetOperator => { 
-        null 
+        throw new Exception("Translation Not Yet Implemented '"+setOperator+"'") 
         }
       case tableAccessOperator : GProMTableAccessOperator => { 
           val tableSchema = getSchemaFromGProMQueryOperator(tableAccessOperator.tableName, tableAccessOperator.op)
@@ -124,7 +127,7 @@ object OperatorTranslation {
           new Table(tableAccessOperator.tableName, tableSchema, tableMeta)
       }
       case updateOperator : GProMUpdateOperator => { 
-        null 
+        throw new Exception("Translation Not Yet Implemented '"+updateOperator+"'") 
         }
       case _ => { 
         null 
@@ -167,7 +170,7 @@ object OperatorTranslation {
            }
          }
        }
-       case _ => null
+       case x => throw new Exception("Expression Translation Not Yet Implemented '"+x+"'")
      }
   }
   
@@ -194,43 +197,43 @@ object OperatorTranslation {
       	}
       }
       case caseExpr : GProMCaseExpr => {
-      	null
+      	throw new Exception("Expression Translation Not Yet Implemented '"+caseExpr+"'")
       }
       case caseWhen : GProMCaseWhen => {
-      	null
+      	throw new Exception("Expression Translation Not Yet Implemented '"+caseWhen+"'")
       }
       case castExpr : GProMCastExpr => {
-      	null
+      	throw new Exception("Expression Translation Not Yet Implemented '"+castExpr+"'")
       }
       case functionCall : GProMFunctionCall => {
-      	null
+      	throw new Exception("Expression Translation Not Yet Implemented '"+functionCall+"'")
       }
       case isNullExpr : GProMIsNullExpr => {
-      	null
+      	throw new Exception("Expression Translation Not Yet Implemented '"+isNullExpr+"'")
       }
       case orderExpr : GProMOrderExpr => {
-      	null
+      	throw new Exception("Expression Translation Not Yet Implemented '"+orderExpr+"'")
       }
       case rowNumExpr : GProMRowNumExpr => {
-      	null
+      	throw new Exception("Expression Translation Not Yet Implemented '"+rowNumExpr+"'")
       }
       case sQLParameter : GProMSQLParameter => {
-      	null
+      	throw new Exception("Expression Translation Not Yet Implemented '"+sQLParameter+"'")
       }
       case windowBound : GProMWindowBound => {
-      	null
+      	throw new Exception("Expression Translation Not Yet Implemented '"+windowBound+"'")
       }
       case windowDef : GProMWindowDef => {
-      	null
+      	throw new Exception("Expression Translation Not Yet Implemented '"+windowDef+"'")
       }
       case windowFrame : GProMWindowFrame => {
-      	null
+      	throw new Exception("Expression Translation Not Yet Implemented '"+windowFrame+"'")
       }
       case windowFunction : GProMWindowFunction => {
-      	null
+      	throw new Exception("Expression Translation Not Yet Implemented '"+windowFunction+"'")
       }
-      case _ => {
-        null
+      case x => {
+        throw new Exception("Expression Translation Not Yet Implemented '"+x+"'")
       }
     }
   }
@@ -414,14 +417,8 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
     }
     mimirOperator match {
 			case Project(cols, src) => {
-			   val tableName = src match {
-			     case Table(name, sch, meta) => {
-			       name
-			     }
-			     case _ => ""
-			   }
-			    val toQoScm = translateMimirSchemaToGProMSchema(tableName, mimirOperator.schema)
-			    val gqo = new GProMQueryOperator(GProM_JNA.GProMNodeTag.GProM_T_ProjectionOperator,  mimirOperatorToGProMList(null, src), toQoScm, null, null, null)  
+			   val toQoScm = translateMimirSchemaToGProMSchema("PROJECTION", mimirOperator.schema)
+			   val gqo = new GProMQueryOperator(GProM_JNA.GProMNodeTag.GProM_T_ProjectionOperator,  mimirOperatorToGProMList(null, src), toQoScm, null, null, null)  
 			   list.head = createGProMListCell(new GProMProjectionOperator(gqo, translateMimirProjArgsToGProMList(mimirOperator.schema.map(a => a._1 -> a._2).toMap, cols))) 
 			   list.length += 1;
 			   list
@@ -436,7 +433,12 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         list
       }
 			case Select(cond, src) => {
-			  list
+			   //val srcSchemas = Typechecker.schemaOf(src)
+			   /*val toQoScm = translateMimirSchemaToGProMSchema("SELECT", mimirOperator.schema)
+			    val gqo = new GProMQueryOperator(GProM_JNA.GProMNodeTag.GProM_T_ProjectionOperator,  mimirOperatorToGProMList(null, src), toQoScm, null, null, null)  
+			   list.head = createGProMListCell(new GProMSelectionOperator(gqo, )) 
+			   list.length += 1;*/
+			   list
 			}
 			case Aggregate(groupBy, agggregates, source) => {
 			  list
@@ -460,6 +462,131 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
 		}
   }
   
+  def translateMimirExpressionToGProMCondition(mimirExpr : Expression) : GProMStructure = {
+     
+         var operatorEnumTypeValue = mimirExpr match {
+            case Comparison(op, lhs, rhs) => {
+              val cmpOp = op match {
+                case  Cmp.Eq => "=" 
+                case  Cmp.Neq  => "<>" 
+                case  Cmp.Gt  => ">" 
+                case  Cmp.Gte  => ">=" 
+                case  Cmp.Lt  => "<" 
+                case  Cmp.Lte  => "<=" 
+                case  Cmp.Like  => "LIKE" 
+                case  Cmp.NotLike => "NOT LIKE" 
+                case x => throw new Exception("Invalid operand '"+x+"'")
+              }
+              val list = new GProMList.ByReference()
+               list.`type` = GProM_JNA.GProMNodeTag.GProM_T_List
+               list.head = createGProMListCell(translateMimirExpressionToGProMStructure(lhs)) 
+			         list.head.next = createGProMListCell(translateMimirExpressionToGProMStructure(rhs))      
+               list.length = 2;
+              (cmpOp, list)
+            }
+            case Arithmetic(op, lhs, rhs) => {
+              val aritOp = op match {
+                case  Arith.Add => "+" 
+                case  Arith.Sub => "-" 
+                case  Arith.Mult => "*" 
+                case  Arith.Div => "/" 
+                case  Arith.And => "&" 
+                case  Arith.Or => "|" 
+                case  Arith.And => "AND" 
+                case  Arith.Or => "OR" 
+                case x => throw new Exception("Invalid operand '"+x+"'")
+              }
+              val list = new GProMList.ByReference()
+               list.`type` = GProM_JNA.GProMNodeTag.GProM_T_List
+               list.head = createGProMListCell(translateMimirExpressionToGProMStructure(lhs)) 
+			         list.head.next = createGProMListCell(translateMimirExpressionToGProMStructure(rhs))      
+               list.length = 2;
+              (aritOp, list)
+            }
+            case x => throw new Exception("Expression Translation not implemented '"+x+"'") 
+          }
+         
+         
+         new GProMOperator(GProM_JNA.GProMNodeTag.GProM_T_Operator, operatorEnumTypeValue._1, operatorEnumTypeValue._2)
+       
+  }
+  
+  def translateMimirExpressionToGProMStructure(mimirExpr : Expression) : GProMStructure = {
+    mimirExpr match {
+      case primitive : PrimitiveValue => translateMimirPrimitiveExpressionToGProMConstant(primitive)
+      case Comparison(_,_,_) => translateMimirExpressionToGProMCondition(mimirExpr)
+      case Arithmetic(_,_,_) => translateMimirExpressionToGProMCondition(mimirExpr)
+      case Conditional(_,_,_) => translateMimirExpressionToGProMCondition(mimirExpr)
+    }
+      /*GProMOperator 
+      GProMAttributeReference 
+      GProMConstant 
+      	if(constant.isNull == 1)
+      	 new NullPrimitive()
+      	else
+      	  constant.constType match {
+        	  case GProM_JNA.GProMDataType.GProM_DT_VARCHAR2 => new StringPrimitive(constant.value.getString(0))
+            case GProM_JNA.GProMDataType.GProM_DT_BOOL => new BoolPrimitive(constant.value.getInt(0)==1)
+            case GProM_JNA.GProMDataType.GProM_DT_FLOAT => new FloatPrimitive(constant.value.getFloat(0))
+            case GProM_JNA.GProMDataType.GProM_DT_INT => new IntPrimitive(constant.value.getInt(0))
+            case GProM_JNA.GProMDataType.GProM_DT_LONG => new IntPrimitive(constant.value.getLong(0))
+            case GProM_JNA.GProMDataType.GProM_DT_STRING => new StringPrimitive(constant.value.getString(0))
+            case _ => new NullPrimitive()
+      	}
+      GProMCaseExpr 
+      GProMCaseWhen 
+      GProMCastExpr
+      GProMFunctionCall 
+      GProMIsNullExpr 
+      GProMOrderExpr
+      GProMRowNumExpr
+      GProMSQLParameter
+      GProMWindowBound
+      GProMWindowDef
+      GProMWindowFrame
+      GProMWindowFunction */
+  }
+  
+  def translateMimirPrimitiveExpressionToGProMConstant(mimirPrimitive : PrimitiveValue) : GProMConstant = {
+    val typeValueIsNull = mimirPrimitive match {
+      case IntPrimitive(v) => {
+        val intPtr = new Memory(Native.getNativeSize(classOf[Int]));
+        intPtr.setInt(0, v.asInstanceOf[Int]);
+        (GProM_JNA.GProMDataType.GProM_DT_INT,intPtr,0)
+      }
+      case StringPrimitive(v) => {
+        val strPtr = new Memory(v.length()+1);
+        strPtr.setString(0, v);
+        (GProM_JNA.GProMDataType.GProM_DT_STRING,strPtr,0)
+      }
+      case FloatPrimitive(v) => {
+        val fltPtr = new Memory(Native.getNativeSize(classOf[Float]));
+        fltPtr.setFloat(0, v.asInstanceOf[Float]);
+        (GProM_JNA.GProMDataType.GProM_DT_FLOAT,fltPtr,0)
+      }
+      case RowIdPrimitive(v) => {
+        throw new Exception("Primitive Expression Translation not implemented '"+v+"'")
+      }
+      case BoolPrimitive(v) => {
+        val intPtr = new Memory(Native.getNativeSize(classOf[Int]));
+        intPtr.setInt(0, v.asInstanceOf[Int]);
+        (GProM_JNA.GProMDataType.GProM_DT_BOOL,intPtr,0)
+      }
+      case NullPrimitive() => {
+        val intPtr = new Memory(Native.getNativeSize(classOf[Int]));
+        intPtr.setInt(0,0);
+        (GProM_JNA.GProMDataType.GProM_DT_INT,intPtr,1)
+      }
+      case DatePrimitive(y,m,d) => {
+        val dtStr = ""+y+"-"+m+"-"+d
+        val strPtr = new Memory(dtStr.length()+1);
+        strPtr.setString(0, dtStr);
+        (GProM_JNA.GProMDataType.GProM_DT_STRING,strPtr,0)
+      }
+    }
+    new GProMConstant(GProM_JNA.GProMNodeTag.GProM_T_Constant, typeValueIsNull._1, typeValueIsNull._2, typeValueIsNull._3)
+  }
+  
   def createGProMListCell(gpromDataNode:GProMStructure) : GProMListCell.ByReference = {
     val listCell = new GProMListCell.ByReference()
     gpromDataNode.write()
@@ -480,13 +607,17 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
       }
   }
   
-  def translateMimirSchemaToGProMSchema(tableName : String, schema : Seq[(String, Type)]) : GProMSchema.ByReference = {
+  def translateMimirSchemaToGProMSchema(schemaName: String, schema : Seq[(String, Type)]) : GProMSchema.ByReference = {
     var listCell : GProMListCell.ByReference = null
     var lastListCell : GProMListCell.ByReference = null
     var listTail : GProMListCell.ByReference = null
+    val tableColType = schema.map( se => ( (se._1.split("_",2) match { 
+        case Array(table,field) => (table,field) 
+        case _ => ("", se._1)
+      } ), se._2 ) )
     var i = 0;
-    for(schemaTup : ((String, Type)) <- schema.reverse){
-      val attrDef = new GProMAttributeDef(GProM_JNA.GProMNodeTag.GProM_T_AttributeDef, getGProMDataTypeFromMimirType(schemaTup._2 ), schemaTup._1.replaceFirst(tableName+"_", "")) 
+    for(schemaTup : ((String, String), Type) <- tableColType.reverse){
+      val attrDef = new GProMAttributeDef(GProM_JNA.GProMNodeTag.GProM_T_AttributeDef, getGProMDataTypeFromMimirType(schemaTup._2 ), schemaTup._1._2) 
       attrDef.write()
       val dataUnion = new GProMListCell.data_union(attrDef.getPointer)
       dataUnion.write()
@@ -505,7 +636,7 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
     attrDefList.tail = listTail
     val scmByRef = new GProMSchema.ByReference()
     scmByRef.`type` = GProM_JNA.GProMNodeTag.GProM_T_Schema
-    scmByRef.name = tableName
+    scmByRef.name = schemaName
     scmByRef.attrDefs = attrDefList
     scmByRef
   }
