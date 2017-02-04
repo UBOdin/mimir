@@ -25,8 +25,6 @@ import scala.collection.mutable.ListBuffer
 class SqlToRA(db: Database) 
   extends LazyLogging
 {
-  /*List of aggregate function names */
-  val aggFuncNames = List("SUM", "AVG", "MAX", "MIN", "COUNT")
 
   def unhandled(feature : String) = {
     println("ERROR: Unhandled Feature: " + feature)
@@ -38,16 +36,6 @@ class SqlToRA(db: Database)
       case "INT" => TInt()
       case "NUMBER" => TInt()
       case "CHAR" => TString()
-    }
-  }
-/* Tests for unsupported aggregate query of the form "Select 1 + SUM(B) from R".
-* Returns false if such a query form is detected */
-  def isLegalAggQuery(expr: mimir.algebra.Expression): Boolean = {
-    expr match {
-      case Arithmetic(_, _, _) => expr.children.forall(x => isLegalAggQuery(x))
-      case Var(_) => true
-      case mimir.algebra.Function(op, _) => if(aggFuncNames.contains(op)){ false } else { true }
-      case _ => true
     }
   }
 
