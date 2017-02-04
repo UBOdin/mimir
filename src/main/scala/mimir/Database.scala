@@ -393,4 +393,59 @@ case class Database(backend: Backend)
   def loadTable(sourceFile: File){
     loadTable(sourceFile.getName().split("\\.")(0), sourceFile)
   }
+
+  def selectInto(targetTable: String, sourceQuery: Operator){
+    val tableSchema = sourceQuery.schema
+    val tableDef = tableSchema.map( x => x._1+" "+Type.toString(x._2) ).mkString(",")
+    val tableCols = tableSchema.map( _._1 ).mkString(",")
+    val colFillIns = tableSchema.map( _ => "?").mkString(",")
+    backend.update(  s"CREATE TABLE $targetTable ( $tableDef );"  )
+    val insertCmd = s"INSERT INTO $targetTable( $tableCols ) VALUES ($colFillIns);"
+    println(insertCmd)
+    query(sourceQuery).foreachRow(
+      result =>
+        backend.update(insertCmd, result.currentRow())
+    )
+  }
+
+  def selectInto(targetTable: String, tableName: String){
+/*    val v:Option[Operator] = getView(tableName)
+    val mod:Model = models.getModel(tableName)
+    mod.bestGuess()
+    v match {
+      case Some(o) => println("Schema: " + o.schema.toString())
+      case None => println("Not a View")
+    }
+*/
+    val tableS = this.getTableSchema(tableName)
+    var tableDef = ""
+    var tableCols = ""
+    var colFillIns = ""
+    tableS match {
+      case Some(tableSchema) => {
+        tableDef = tableSchema.map( x => x._1+" "+Type.toString(x._2) ).mkString(",")
+        tableCols = tableSchema.map( _._1 ).mkString(",")
+        colFillIns = tableSchema.map( _ => "?").mkString(",")
+      }
+      case None => throw new SQLException
+    }
+    println(  s"CREATE TABLE $targetTable ( $tableDef );"  )
+    backend.update(  s"CREATE TABLE $targetTable ( $tableDef );"  )
+    val insertCmd = s"INSERT INTO $targetTable( $tableCols ) VALUES ($colFillIns);"
+    println(insertCmd)
+    query("SELECT * FROM " + tableName + ";").foreachRow(
+      result =>
+        backend.update(insertCmd, result.currentRow())
+    )
+  }
+  def select(s: String) = {
+    this.sql.convert(stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select])
+  }
+  def query(s: String): ResultIterator = {
+    val query = select(s)
+    this.query(query)
+  }
+  def stmt(s: String) = {
+    new MimirJSqlParser(new StringReader(s)).Statement()
+  }
 }
