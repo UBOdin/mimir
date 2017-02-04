@@ -39,6 +39,9 @@ object SqlParserSpec
 			),
 			("T", new File("test/r_test/t.csv"),
 				List("D int", "E int")
+			),
+			(	"R_REVERSED", new File("test/r_test/r.csv"), 
+				List("C int", "B int", "A int")
 			)
 		)
 
@@ -455,6 +458,15 @@ object SqlParserSpec
 							), List()
 					))
 				))
+		}
+
+		"Respect column ordering of base relations" >> {
+			convert("SELECT * FROM R").schema.map(_._1).toList must be equalTo(
+				List("A", "B", "C")
+			)
+			convert("SELECT * FROM R_REVERSED").schema.map(_._1).toList must be equalTo(
+				List("C", "B", "A")
+			)
 		}
 
 		"Create and query lenses" >> {
