@@ -206,7 +206,7 @@ object SimpleDemoScript
 				  WITH MISSING_VALUE('RATING')
 			""")
 			})
-			val nullRow = query("SELECT ROWID FROM RATINGS1 WHERE RATING IS NULL").
+			val nullRow = query("SELECT ROWID() FROM RATINGS1 WHERE RATING IS NULL").
 											allRows.head(0).asLong
 
 			val result1guesses =
