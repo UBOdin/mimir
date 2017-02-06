@@ -25,8 +25,6 @@ import scala.collection.mutable.ListBuffer
 class SqlToRA(db: Database) 
   extends LazyLogging
 {
-  /*List of aggregate function names */
-  val aggFuncNames = List("SUM", "AVG", "MAX", "MIN", "COUNT")
 
   def unhandled(feature : String) = {
     println("ERROR: Unhandled Feature: " + feature)
@@ -40,19 +38,9 @@ class SqlToRA(db: Database)
       case "CHAR" => TString()
     }
   }
-/* Tests for unsupported aggregate query of the form "Select 1 + SUM(B) from R".
-* Returns false if such a query form is detected */
-  def isLegalAggQuery(expr: mimir.algebra.Expression): Boolean = {
-    expr match {
-      case Arithmetic(_, _, _) => expr.children.forall(x => isLegalAggQuery(x))
-      case Var(_) => true
-      case mimir.algebra.Function(op, _) => if(aggFuncNames.contains(op)){ false } else { true }
-      case _ => true
-    }
-  }
 
   def convert(s : net.sf.jsqlparser.statement.select.Select) : Operator = convert(s, null)._1
-  def convert(s : net.sf.jsqlparser.statement.select.Select, alias: String) : (Operator, Map[String, String]) = {
+  def convert(s : net.sf.jsqlparser.statement.select.Select, alias: String) : (Operator, Seq[(String, String)]) = {
     convert(s.getSelectBody(), alias)
   }
   
@@ -62,7 +50,7 @@ class SqlToRA(db: Database)
   /**
    * Convert a SelectBody into an Operator + A projection map.
    */
-  def convert(sb : SelectBody, tableAlias: String) : (Operator, Map[String, String]) = 
+  def convert(sb : SelectBody, tableAlias: String) : (Operator, Seq[(String, String)]) = 
   {
     sb match {
       case ps: net.sf.jsqlparser.statement.select.PlainSelect => convert(ps, tableAlias)
@@ -73,7 +61,7 @@ class SqlToRA(db: Database)
   /**
    * Convert a PlainSelect into an Operator + A projection map.
    */
-  def convert(ps: PlainSelect, tableAlias: String) : (Operator, Map[String, String]) =
+  def convert(ps: PlainSelect, tableAlias: String) : (Operator, Seq[(String, String)]) =
   {
     // Unlike SQL, Mimir's relational algebra does not use range variables.  Rather,
     // variables are renamed into the form TABLENAME_VAR to prevent name conflicts.
@@ -90,17 +78,17 @@ class SqlToRA(db: Database)
     //                  variable (useful for inferring aliases)
     val reverseBindings = scala.collection.mutable.Map[String, String]()
     // Sources: A map from table name to the matching set of *extended* variable names
-    val sources = scala.collection.mutable.Map[String, List[String]]()
+    val sources = scala.collection.mutable.MutableList[(String, List[String])]()
     
     //////////////////////// CONVERT FROM CLAUSE /////////////////////////////
 
     // JSqlParser makes a distinction between the first FromItem, and items 
     // subsequently joined to it.  Start by extracting the first FromItem
     var (ret, currBindings, sourceAlias) = convert(ps.getFromItem)
-    sources.put(sourceAlias, currBindings.values.toList);
-    bindings.putAll(currBindings)
+    sources += ( (sourceAlias, currBindings.map(_._2).toList) )
+    bindings.putAll(currBindings.toMap[String,String])
     reverseBindings.putAll(
-      currBindings.map( _ match { case (x,y) => (y,x) } )
+      currBindings.map( _ match { case (x,y) => (y,x) } ).toMap[String,String]
     )
 
     var joinCond = null;
@@ -111,10 +99,10 @@ class SqlToRA(db: Database)
       // And then flatten out the join tree.
       for(j <- ps.getJoins()){
         val (source, currBindings, sourceAlias) = convert(j.getRightItem())
-        sources.put(sourceAlias, currBindings.values.toList);
-        bindings.putAll(currBindings)
+        sources += ( (sourceAlias, currBindings.map(_._2).toList) )
+        bindings.putAll(currBindings.toMap[String,String])
         reverseBindings.putAll(
-          currBindings.map( _ match { case (x,y) => (y,x) } )
+          currBindings.map( _ match { case (x,y) => (y,x) } ).toMap[String,String]
         )
         ret = Join(ret, source)
         if(j.getOnExpression() != null) { 
@@ -190,7 +178,7 @@ class SqlToRA(db: Database)
     //     -> ("B", Var("A"))
     val defaultTargetsForTable:(String => Seq[(String, Expression)]) = 
       (name: String) => {
-        sources(name).map(
+        sources.find(_._1.equals(name)).get._2.map(
           (x) => (reverseBindings(x), Var(x))
         )
       }
@@ -220,7 +208,7 @@ class SqlToRA(db: Database)
         }
 
         case (_:AllColumns, _) => 
-          sources.keys.flatMap( defaultTargetsForTable(_) )
+          sources.map(_._1).flatMap( defaultTargetsForTable(_) )
 
         case (tc:AllTableColumns, _) =>
           defaultTargetsForTable(tc.getTable.getName.toUpperCase)
@@ -376,14 +364,14 @@ class SqlToRA(db: Database)
     // query, so extract those from the target expressions we
     // produced earlier
     val returnedBindings =
-      targets.map( tgt => (tgt._1, tgt._2) ).toMap
+      targets.map( tgt => (tgt._1, tgt._2) )
 
     // The operator should now be fully assembled.  Return it and
     // its bindings
     return (ret, returnedBindings)
   }
 
-  def convert(union: net.sf.jsqlparser.statement.select.Union, alias: String): (Operator, Map[String,String]) =
+  def convert(union: net.sf.jsqlparser.statement.select.Union, alias: String): (Operator, Seq[(String,String)]) =
   {
     val isAll = (union.isAll() || !union.isDistinct());
     if(!isAll){ unhandled("UNION DISTINCT") }
@@ -396,7 +384,7 @@ class SqlToRA(db: Database)
       reduce( (a,b) => (Union(a._1,b._1), a._2) )
   }
 
-  def convert(fi : FromItem) : (Operator, Map[String, String], String) = {
+  def convert(fi : FromItem) : (Operator, Seq[(String, String)], String) = {
     if(fi.isInstanceOf[SubJoin]){
       unhandled("FromItem[SubJoin]")
     }
@@ -426,7 +414,7 @@ class SqlToRA(db: Database)
       }
       val newBindings = sch.map(
           (x) => (x._1, alias+"_"+x._1)
-        ).toMap[String, String]
+        )
       return (
         Table(name, 
           sch.map(
