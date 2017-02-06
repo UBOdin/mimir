@@ -475,6 +475,22 @@ object CTPercolator
           BoolPrimitive(true)
         )
       }
+
+      // This is a bit hackish... Sort alone doesn't affect determinism
+      // metadata, and Limit doesn't either, but combine the two and you get some
+      // annoying behavior.  Since we're rewriting this particular fragment soon, 
+      // I'm going to hold off on any elegant solutions
+      case Sort(sortCols, src) => {
+        val (rewritten, cols, row) = percolateLite(src)
+        (Sort(sortCols, rewritten), cols, row)
+      }
+      case Limit(offset, count, src) => {
+        val (rewritten, cols, row) = percolateLite(src)
+        (Limit(offset, count, rewritten), cols, row)
+      }
+
+      case _:LeftOuterJoin =>
+        throw new RAException("Don't know how to percolate a left-outer-join")
     }
   }
 }

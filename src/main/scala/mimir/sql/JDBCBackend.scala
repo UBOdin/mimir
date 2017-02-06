@@ -143,7 +143,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
     })
   }
 
-  def fastUpdateBatch(upd: String, argsList: TraversableOnce[Seq[PrimitiveValue]]): Unit =
+  def fastUpdateBatch(upd: String, argsList: Iterable[Seq[PrimitiveValue]]): Unit =
   {
     this.synchronized({
       if(conn == null) {
@@ -159,9 +159,12 @@ class JDBCBackend(backend: String, filename: String) extends Backend
       conn.setAutoCommit(false)
       try {
         val stmt = conn.prepareStatement(upd);
+        var idx = 0
         argsList.foreach( (args) => {
+          idx += 1
           setArgs(stmt, args)
           stmt.execute()
+          if(idx % 500000 == 0){ conn.commit() }
         })
         stmt.close()
       } finally {

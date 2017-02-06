@@ -65,7 +65,7 @@ object WekaModelSpec extends SQLTestSpecification("WekaTest")
 
     "Make reasonable predictions" >> {
       val rowids = 
-        queryOneColumn("SELECT ROWID FROM CPUSPEED").toSeq
+        queryOneColumn("SELECT ROWID() FROM CPUSPEED").toSeq
 
       val predictions = 
         rowids.map {
@@ -101,7 +101,7 @@ object WekaModelSpec extends SQLTestSpecification("WekaTest")
         List("RATING"), 
         db.getTableOperator("RATINGS1")
       )("RATING")
-      val nullRow = querySingleton("SELECT ROWID FROM RATINGS1 WHERE RATING IS NULL")
+      val nullRow = querySingleton("SELECT ROWID() FROM RATINGS1 WHERE RATING IS NULL")
       model.bestGuess(idx, List(nullRow)) must beAnInstanceOf[FloatPrimitive]
 
 

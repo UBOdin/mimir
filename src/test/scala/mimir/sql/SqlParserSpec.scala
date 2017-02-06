@@ -522,5 +522,18 @@ object SqlParserSpec
 
 		}
 
+		"Support multi-clause CASE statements" in {
+			db.optimize(convert("""
+				SELECT CASE WHEN R.A = 1 THEN 'A' WHEN R.A = 2 THEN 'B' ELSE 'C' END AS Q FROM R
+			""")) must be equalTo
+				Project(List(ProjectArg("Q", 
+						Conditional(expr("R_A = 1"), StringPrimitive("A"),
+							Conditional(expr("R_A = 2"), StringPrimitive("B"), StringPrimitive("C")
+						)))),
+					Table("R", Map(("R_A", TInt()), ("R_B", TInt()), ("R_C", TInt())).toList, List())
+				)
+			
+		}
+
 	}
 }

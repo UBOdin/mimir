@@ -7,7 +7,7 @@ import mimir.ctables.CTPercolator
 import mimir.parser._
 import mimir.sql._
 import mimir.util.{TimeUtils,ExperimentalOptions}
-import mimir.algebra.{Project,ProjectArg,Var}
+import mimir.algebra.{Operator,Project,ProjectArg,Var,RAException,OperatorUtils,Function}
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
 import net.sf.jsqlparser.statement.drop.Drop
@@ -32,7 +32,8 @@ object Mimir {
   var db: Database = null;
   var usePrompt = true;
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]) = 
+  {
     conf = new MimirConfig(args);
 
     // Prepare experiments
@@ -40,6 +41,7 @@ object Mimir {
 
     // Set up the database connection(s)
     db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
+    println("Connecting to " + conf.backend() + "://" + conf.dbname() + "...")
     db.backend.open()
 
     db.initializeDBForMimir();
@@ -72,6 +74,7 @@ object Mimir {
         usePrompt = false;
       }
 
+      println("   ... ready")
       eventLoop(source)
     }
 
@@ -79,7 +82,8 @@ object Mimir {
     if(!conf.quiet()) { println("\n\nDone.  Exiting."); }
   }
 
-  def eventLoop(source: Reader): Unit = {
+  def eventLoop(source: Reader): Unit = 
+  {
     var parser = new MimirJSqlParser(source);
     var done = false;
     do {
@@ -92,13 +96,23 @@ object Mimir {
           case null             => done = true
           case sel:  Select     => handleSelect(sel)
           case expl: Explain    => handleExplain(expl)
+          case pragma: Pragma   => handlePragma(pragma)
           case _                => db.update(stmt)
         }
 
       } catch {
+        case e: FileNotFoundException =>
+          println(e.getMessage)
+
+        case e: SQLException =>
+          println("Error: "+e.getMessage)
+
+        case e: RAException =>
+          println("Error: "+e.getMessage)
+
         case e: Throwable => {
+          println("An unknown error occurred...");
           e.printStackTrace()
-          println("Command Ignored");
 
           // The parser pops the input stream back onto the queue, so
           // the next call to Statement() will throw the same exact 
@@ -109,7 +123,24 @@ object Mimir {
     } while(!done)
   }
 
-  def handleExplain(explain: Explain): Unit = {
+  def handleSelect(sel: Select): Unit = 
+  {
+    val raw = db.sql.convert(sel)
+    handleQuery(raw)
+  }
+
+  def handleQuery(raw:Operator) = 
+  {
+    TimeUtils.monitor("QUERY", () => {
+      val results = db.query(raw)
+      results.open()
+      db.dump(results)
+      results.close()
+    }, println(_))
+  }
+
+  def handleExplain(explain: Explain): Unit = 
+  {
     val raw = db.sql.convert(explain.getSelectBody())
     println("------ Raw Query ------")
     println(raw)
@@ -127,14 +158,24 @@ object Mimir {
     }
   }
 
-  def handleSelect(sel: Select): Unit = {
-    TimeUtils.monitor("QUERY", () => {
-      val raw = db.sql.convert(sel)
-      val results = db.query(raw)
-      results.open()
-      db.dump(results)
-      results.close()
-    }, println(_))
+  def handlePragma(pragma: Pragma): Unit = 
+  {
+    db.sql.convert(pragma.getExpression, (x:String) => x) match {
+
+      case Function("SHOW", Seq(Var("TABLES"))) => 
+        for(table <- db.getAllTables()){ println(table); }
+
+      case Function("SHOW", Seq(Var("SCHEMA"), Var(name))) => 
+        db.getTableSchema(name) match {
+          case None => 
+            println(s"'$name' is not a table")
+          case Some(schema) => 
+            println("CREATE TABLE "+name+" (\n"+
+              schema.map { col => "  "+col._1+" "+col._2 }.mkString(",\n")
+            +"\n);")
+        }
+    }
+
   }
 
 }

@@ -41,6 +41,16 @@ object ProjectRedundantColumns {
         Select(condition, apply(source, childDependencies))
       }
 
+      case Sort(cols, source) => {
+        val childDependencies = 
+          cols.map(_.expr).flatMap(ExpressionUtils.getColumns(_)) ++ dependencies
+
+        Sort(cols, apply(source, childDependencies.toSet))
+      }
+
+      case l:Limit =>
+        l.recur(apply(_, dependencies))
+
       case Union(lhs, rhs) => {
         // Naively, we could just push down the dependencies, but
         // in some cases we'll get back a superset of the desired 
@@ -101,6 +111,21 @@ object ProjectRedundantColumns {
       }
 
       case table: Table => table
+
+      case LeftOuterJoin(lhs, rhs, condition) => {
+        val childDependencies = 
+          ExpressionUtils.getColumns( condition ) ++ dependencies
+
+        val lhsDeps = lhs.schema.map(_._1).toSet & dependencies
+        val rhsDeps = rhs.schema.map(_._1).toSet & dependencies
+
+        LeftOuterJoin(
+          apply(lhs, lhsDeps),
+          apply(rhs, rhsDeps),
+          condition
+        )
+      }
+
     }
 
   }
