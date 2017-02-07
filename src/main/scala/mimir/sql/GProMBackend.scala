@@ -14,18 +14,30 @@ import org.gprom.jdbc.driver.GProMDriver
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import mimir.gprom.MimirGProMMetadataPlugin
-;
+import org.gprom.jdbc.driver.GProMConnection
+import org.gprom.jdbc.jna.GProMWrapper
 
-class GProMBackend(backend: String, filename: String) extends Backend
+class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) extends Backend
 {
   var conn: Connection = null
   var openConnections = 0
   var inliningAvailable = false
   //var gpromMetadataPlugin : MimirGProMMetadataPlugin = null
-
+  
   def driver() = backend
 
   val tableSchemas: scala.collection.mutable.Map[String, Seq[(String, Type)]] = mutable.Map()
+  
+  def setGProMLogLevel(level : Int) : Unit = {
+    gpromLogLevel = level
+    if(gpromLogLevel == -1)
+      GProMWrapper.inst.setSilenceLogger(true)
+    else
+      GProMWrapper.inst.setSilenceLogger(false)
+    if(conn != null){
+      conn.asInstanceOf[GProMConnection].getW().setLogLevel(level)
+    }
+  }
   
   def open() = {
     this.synchronized({
@@ -37,10 +49,15 @@ class GProMBackend(backend: String, filename: String) extends Backend
             Class.forName("org.sqlite.JDBC")
             val path = java.nio.file.Paths.get(filename).toString
             val info = new Properties()
+            if(gpromLogLevel == -1){
+              GProMWrapper.inst.setSilenceLogger(true)
+            }
 			      info.setProperty(GProMDriverProperties.JDBC_METADATA_LOOKUP, "TRUE")
             info.setProperty("plugin.analyzer","sqlite")
             info.setProperty("plugin.translator","sqlite")
+            info.setProperty("log.active","false")
             var c = java.sql.DriverManager.getConnection("jdbc:gprom:sqlite:" + path, info)
+            c.asInstanceOf[GProMConnection].getW().setLogLevel(gpromLogLevel)
             //gpromMetadataPlugin = new MimirGProMMetadataPlugin()
             SQLiteCompat.registerFunctions( c.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection] ) )
             c
@@ -83,7 +100,7 @@ class GProMBackend(backend: String, filename: String) extends Backend
 
   def execute(sel: String): ResultSet = 
   {
-    println("EX1: " +sel)
+    //println("EX1: " +sel)
     this.synchronized({
       try {
         if(conn == null) {
@@ -104,7 +121,7 @@ class GProMBackend(backend: String, filename: String) extends Backend
   }
   def execute(sel: String, args: Seq[PrimitiveValue]): ResultSet = 
   {
-    println("EX2: " +sel)
+    //println("EX2: " +sel)
     this.synchronized({
       try {
         if(conn == null) {
@@ -120,7 +137,7 @@ class GProMBackend(backend: String, filename: String) extends Backend
         val stmt = conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection]).createStatement()
         if(!repSel.endsWith(";")) 
           repSel = repSel + ";"
-        println("UPS2: " +repSel)
+        //println("UPS2: " +repSel)
         val ret = stmt.executeQuery(repSel)
         stmt.closeOnCompletion()
         ret
@@ -135,7 +152,7 @@ class GProMBackend(backend: String, filename: String) extends Backend
   
   def update(upd: String): Unit =
   {
-    println("UP1: " +upd)
+    //println("UP1: " +upd)
     this.synchronized({
       if(conn == null) {
         throw new SQLException("Trying to use unopened connection!")
@@ -158,7 +175,7 @@ class GProMBackend(backend: String, filename: String) extends Backend
       }
       val stmt = conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection]).createStatement()
       upd.foreach( u => {
-          println("UP2: " +u)
+          //println("UP2: " +u)
           var repSel = u
           if(!repSel.endsWith(";")) 
             repSel = repSel + ";"
@@ -183,7 +200,7 @@ class GProMBackend(backend: String, filename: String) extends Backend
       if(!repSel.endsWith(";")) 
             repSel = repSel + ";"
       val stmt = conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection]).createStatement()
-      println("UP3: " + repSel)
+      //println("UP3: " + repSel)
       stmt.execute(repSel)
       stmt.close()
     })
@@ -213,7 +230,7 @@ class GProMBackend(backend: String, filename: String) extends Backend
           if(!repSel.endsWith(";")) 
             repSel = repSel + ";"
           val stmt = conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection]).createStatement()
-          println("UP4: " +repSel)
+          //println("UP4: " +repSel)
           stmt.execute(repSel)
           stmt.close()
           

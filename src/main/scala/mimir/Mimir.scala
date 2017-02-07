@@ -42,7 +42,7 @@ object Mimir {
     ExperimentalOptions.enable(conf.experimental())
     
     // Set up the database connection(s)
-    db = new Database(new GProMBackend(conf.backend(), conf.dbname()))
+    db = new Database(new GProMBackend(conf.backend(), conf.dbname(), 0))    
     db.backend.open()
 
     db.initializeDBForMimir();
@@ -121,7 +121,7 @@ object Mimir {
     
     //db.backend.execute("Select * from MIMIR_VIEWS")
     
-    val statements = db.parse("SELECT * from TEST_A_RAW R")
+    /*val statements = db.parse("SELECT * from TEST_A_RAW R WHERE R.INSANE = 'true' AND (R.CITY = 'Utmeica' OR R.CITY = 'Ruminlow')")
     //val testOper2 = new mimir.algebra.Project( Seq[mimir.algebra.ProjectArg](new mimir.algebra.ProjectArg("test", new mimir.algebra.Var("test"))),new mimir.algebra.Select(new mimir.algebra.Comparison(mimir.algebra.Cmp.Eq, new mimir.algebra.Var("test"), mimir.algebra.StringPrimitive("yes")), new mimir.algebra.Table("R", Seq[(String, mimir.algebra.Type)](("test", mimir.algebra.TString()), ("untest", mimir.algebra.TString())), Seq[(String, mimir.algebra.Expression, mimir.algebra.Type)]())))//db.sql.convert(statements.head.asInstanceOf[Select])
     val testOper2 = db.sql.convert(statements.head.asInstanceOf[Select])
     for(i <- 1 to 20)
@@ -132,26 +132,41 @@ object Mimir {
      
      GProMWrapper.inst.gpromCreateMemContext() 
      val gpromNode = OperatorTranslation.mimirOperatorToGProMList(testOper2)
-     gpromNode.write()
+     gpromNode.write()*/
      
     //val testOper3 = OperatorTranslation.gpromStructureToMimirOperator(null, gpromNode)
     //val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel("PROVENANCE OF (SELECT * from TEST_A_RAW);")
     //val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel("PROVENANCE OF (SELECT * from TEST_A_RAW);")
      //db.backend.execute("SELECT * from TEST_A_RAW R WHERE R.INSANE = 'true' AND (R.CITY = 'Utmeica' OR R.CITY = 'Ruminlow')") 
      //val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel("PROVENANCE OF (SELECT * from TEST_A_RAW R WHERE R.INSANE = 'true' AND (R.CITY = 'Utmeica' OR R.CITY = 'Ruminlow'));")
+    //val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel("SELECT * from TEST_A_RAW R WHERE R.INSANE = 'true' AND (R.CITY = 'Utmeica' OR R.CITY = 'Ruminlow');")
     //val provReWriteNode = GProMWrapper.inst.provRewriteOperator(gpromNode.getPointer)
-    //val nodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
-     val testOper3 = OperatorTranslation.gpromStructureToMimirOperator(0, null, gpromNode, null)
+    /*val nodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
+     val testOper3 = OperatorTranslation.gpromStructureToMimirOperator(0, gpromNode, null)
     for(i <- 1 to 20)
       println("-------")
     println(testOper3)
     for(i <- 1 to 20)
-      println("-------")
+      println("-------")*/
       
     //GProMWrapper.inst.gpromFreeMemContext() 
      
     
-    val results = db.query(testOper3)
+     val queryStr = "SELECT * FROM TEST_A_RAW" 
+     val statements = db.parse(queryStr)
+     val testOper = db.sql.convert(statements.head.asInstanceOf[Select])
+     GProMWrapper.inst.gpromCreateMemContext() 
+     val gpromNode = OperatorTranslation.mimirOperatorToGProMList(testOper)
+     gpromNode.write()
+     val nodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
+     val gpromNode2 = GProMWrapper.inst.rewriteQueryToOperatorModel(queryStr+";")
+     val nodeStr2 = GProMWrapper.inst.gpromNodeToString(gpromNode2.getPointer())
+    
+    println(nodeStr)
+    println("---------------------")
+    println(nodeStr2)
+    
+    val results = db.query(testOper)
     val data: ListBuffer[(List[String], Boolean)] = new ListBuffer()
 
    results.open()
