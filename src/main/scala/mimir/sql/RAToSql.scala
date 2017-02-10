@@ -28,7 +28,7 @@ class RAToSql(db: Database)
   def standardizeTables(oper: Operator): Operator = 
   {
     oper match {
-      case Table(name, tgtSch, tgtMetadata) => {
+      case Table(name, alias, tgtSch, tgtMetadata) => {
         val realSch = db.getTableSchema(name) match {
           case Some(realSch) => realSch
           case None => throw new SQLException("Unknown Table '"+name+"'");
@@ -42,7 +42,7 @@ class RAToSql(db: Database)
         })
         Project(
           schMap ++ metadata.map(_._2),
-          Table(name, realSch, metadata.map(_._1))
+          Table(name, alias, realSch, metadata.map(_._1))
         )
       }
       case _ => oper.rebuild(oper.children.map(standardizeTables(_)))
@@ -71,7 +71,7 @@ class RAToSql(db: Database)
   {
     logger.debug(s"CONVERT: $oper")
     oper match {
-      case Table(name, sch, metadata) => {
+      case Table(name, alias, sch, metadata) => {
         val body = new PlainSelect();
         val table = new net.sf.jsqlparser.schema.Table(null, name)
         val baseSch = db.getTableSchema(name).get
@@ -112,9 +112,9 @@ class RAToSql(db: Database)
       }
       case Annotate(subj,invisScm) => {
         subj match {
-          case Table(name, sch, metadata) => {
+          case Table(name, alias, sch, metadata) => {
             metadata.addAll(invisScm.map(f => (f._2._1, null, f._2._2)))
-            doConvert(new Table(name, sch, metadata))
+            doConvert(new Table(name, alias, sch, metadata))
           }
         }
       }
@@ -288,7 +288,7 @@ class RAToSql(db: Database)
           joinItem
         )
 
-      case Table(name, tgtSch, metadata) =>
+      case Table(name, alias, tgtSch, metadata) =>
         val realSch = db.getTableSchema(name) match {
           case Some(realSch) => realSch
           case None => throw new SQLException("Unknown Table '"+name+"'");

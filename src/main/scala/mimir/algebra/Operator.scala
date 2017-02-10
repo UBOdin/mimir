@@ -283,6 +283,7 @@ case class Union(left: Operator, right: Operator) extends Operator
  * with the rowid type.
  */
 case class Table(name: String, 
+                 alias: String, 
                  sch: Seq[(String,Type)],
                  metadata: Seq[(String,Expression,Type)])
   extends Operator
@@ -296,7 +297,7 @@ case class Table(name: String,
       )
     )+")" 
   def children: List[Operator] = List()
-  def rebuild(x: Seq[Operator]) = Table(name, sch, metadata)
+  def rebuild(x: Seq[Operator]) = Table(name, alias, sch, metadata)
   def metadata_schema = metadata.map( x => (x._1, x._3) )
   def expressions = List()
   def rebuildExpressions(x: Seq[Expression]) = this

@@ -6,7 +6,7 @@ import mimir.algebra._
 class ResolveViews(db: Database) {
   def apply(oper: Operator): Operator = {
     oper match {
-      case Table(name, desiredSchema, meta) =>
+      case Table(name, alias, desiredSchema, meta) =>
         db.getView(name) match {
           case Some(viewQuery) => {
             val desiredSchemaNames = desiredSchema.map(_._1)

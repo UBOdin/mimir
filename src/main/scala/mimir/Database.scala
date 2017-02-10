@@ -279,7 +279,7 @@ case class Database(backend: Backend)
   def getTableOperator(table: String, metadata: Seq[(String, Expression, Type)]): Operator =
   {
     Table(
-      table, 
+      table, table,
       getTableSchema(table) match {
         case Some(x) => x
         case None => throw new SQLException("Table does not exist in db!")

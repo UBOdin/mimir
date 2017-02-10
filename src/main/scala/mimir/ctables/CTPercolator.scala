@@ -489,7 +489,7 @@ object CTPercolator
           ExpressionUtils.makeAnd(mappedRowDetLeft, mappedRowDetRight)
         )
       }
-      case Table(name, cols, metadata) => {
+      case Table(name, alias, cols, metadata) => {
         return (oper, 
           // All columns are deterministic
           cols.map(_._1).map((_, BoolPrimitive(true)) ).toMap,

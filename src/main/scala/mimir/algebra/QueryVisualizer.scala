@@ -32,7 +32,7 @@ object QueryVisualizer {
       case Select(cond, source) => new OperatorNode("Filter", List(convertToTree(source)), None)
       case Join(lhs, rhs) => new OperatorNode("Join", List(convertToTree(lhs), convertToTree(rhs)), None)
       case Union(lhs, rhs) => new OperatorNode("Union", List(convertToTree(lhs), convertToTree(rhs)), None)
-      case Table(name, schema, metadata) => new OperatorNode(name, List[OperatorNode](), None)
+      case Table(name, alias, schema, metadata) => new OperatorNode(name, List[OperatorNode](), None)
       case o: Operator => new OperatorNode(o.getClass.toString, o.children.map(convertToTree(_)), None)
     }
   }

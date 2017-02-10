@@ -120,9 +120,9 @@ object Provenance {
         )
       }
 
-      case Table(name, schema, meta) =>
+      case Table(name, alias, schema, meta) =>
         (
-          Table(name, schema, meta ++ List((rowidColnameBase, Var("ROWID"), TRowId()))),
+          Table(name, alias, schema, meta ++ List((rowidColnameBase, Var("ROWID"), TRowId()))),
           List(rowidColnameBase)
         )
 
@@ -227,9 +227,9 @@ object Provenance {
         )
       }
 
-      case Table(name, schema, meta) =>
+      case Table(name, alias, schema, meta) =>
         (
-          Table(name, schema, meta ++ List((rowidColnameBase, Var("ROWID"), TRowId()))),
+          Table(name, alias, schema, meta ++ List((rowidColnameBase, Var("ROWID"), TRowId()))),
           List(rowidColnameBase)
         )
 
@@ -359,7 +359,7 @@ object Provenance {
         doFilterForToken(lhs, rowIds).
           orElse(doFilterForToken(rhs, rowIds))
 
-      case Table(_, _, meta) =>
+      case Table(_,_, _, meta) =>
         meta.find( _._2.equals(Var("ROWID")) ) match {
           case Some( (colName, _, _) ) =>
             var rowIdForTable = rowIds.get(colName) match {

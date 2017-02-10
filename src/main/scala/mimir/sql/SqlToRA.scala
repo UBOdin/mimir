@@ -386,7 +386,7 @@ class SqlToRA(db: Database)
           (x) => (x._1, alias+"_"+x._1)
         ).toMap[String, String]
       return (
-        Table(name, 
+        Table(name,alias, 
           sch.map(
             _ match { case (v, t) => (alias+"_"+v, t)}
           ),
