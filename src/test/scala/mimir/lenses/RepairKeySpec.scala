@@ -50,8 +50,14 @@ object KeyRepairSpec
       result(1)._3 must be equalTo true
       // The input is deterministic, so the row itself is deterministic
       result(1)._6 must be equalTo true
-      // There are a number of possibilities for <A:1>[B]
+      // There are a number of possibilities for <A:1> on both columns B and C
       result(1)._4 must be equalTo false
+      result(1)._5 must be equalTo false
+
+      // The chosen values for <A:1> in columns B and C are arbitrary, but selected
+      // from a finite set of possibilities based on what's in R.
+      result(1)._1 must be oneOf(2, 3, 4)
+      result(1)._2 must be oneOf(1, 2, 3)
 
       // There is only one populated value for <A:2>[B], the other is null
       result(2)._1 must be equalTo 2
