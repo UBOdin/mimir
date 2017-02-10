@@ -106,6 +106,19 @@ object PushdownSelections {
 					)
 				)
 			}
+
+			// We're allowed to push selects down through aggregates if and only if 
+			// all of the variables that appear in the condition appear in the group-by
+			// clauses.
+			case Select(cond, Aggregate(gbcols, aggs, source)) 
+				if ExpressionUtils.getColumns(cond).map(Var(_)).forall( gbcols contains _ ) => {
+				Aggregate(gbcols, aggs, apply(Select(cond, source)))
+			}
+
+			// Otherwise, leave the select in place
+			case Select(cond, agg:Aggregate) => {
+				Select(cond, apply(agg))
+			}
 				
 
 			case Select(_,_) =>
