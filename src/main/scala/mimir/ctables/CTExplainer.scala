@@ -228,7 +228,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 	{
 		logger.trace(s"GETTING REASONS: $expr")
 		expr match {
-			case v: VGTerm => Map(v.model.name -> v.reason(v.args.map(Eval.eval(_,tuple))))
+			case v: VGTerm => Map(v.model.name -> makeReason(v, v.args.map(Eval.eval(_,tuple))))
 
 			case Conditional(c, t, e) =>
 				(
@@ -302,36 +302,28 @@ class CTExplainer(db: Database) extends LazyLogging {
 		(tuple, columnExprs, rowCondition)
 	}
 
-	def delveToProjection(oper: Operator, token: RowIdPrimitive):
-		(Map[String, Expression], Operator, RowIdPrimitive) =
+	def makeReason(term: VGTerm, v: Seq[PrimitiveValue]): Reason =
+		makeReason(term.model, term.idx, v)
+	def makeReason(model: Model, idx: Int, v: Seq[PrimitiveValue]): Reason =
 	{
-		oper match {
-			case Union(lhs, rhs) =>
-				val (newToken, isLHS) = stripUnionProvenance(token);
-				delveToProjection(if(isLHS){ lhs } else { rhs }, newToken);
-			case Project(targets, source) => 
-				return (
-					targets.map ( { case ProjectArg(n,e) => (n,e) } ).toMap,
-					source, 
-					token
-				)
-			case _ =>
-				throw InvalidProvenance("PERCOLATE", token)
-		}
+    Reason(
+      model.reason(idx, v),
+      model.name,
+      idx,
+      v,
+      makeRepair(model, idx, v)
+    )
 	}
 
-	def stripUnionProvenance(token: RowIdPrimitive): 
-		(RowIdPrimitive, Boolean) =
+	def makeRepair(term: VGTerm, v: Seq[PrimitiveValue]): Repair =
+		makeRepair(term.model, term.idx, v)
+	def makeRepair(model: Model, idx: Int, v: Seq[PrimitiveValue]): Repair =
 	{
-		val payload = token.payload.toString;
-		if(payload.endsWith(".left")){
-			return (RowIdPrimitive(payload.substring(0, payload.length() - 5)), true)
-		}
-		else if(payload.endsWith(".right")){
-			return (RowIdPrimitive(payload.substring(0, payload.length() - 5)), false)
-		}
-		else {
-			throw InvalidProvenance("UNION", token)
+		model match {
+			case finite:( Model with FiniteDiscreteDomain ) =>
+				RepairFromList(finite.getDomain(idx, v))
+			case _ => 
+				RepairByType(model.varType(idx, v.map(_.getType)))
 		}
 	}
 }

@@ -171,29 +171,44 @@ class BestGuessCache(db: Database) extends LazyLogging {
     createCacheTable(cacheTable, model.varType(varIdx, argTypes), argTypes)
 
     val modelName = model.name
+    logger.debug(s"Building cache for $modelName-$varIdx[$args] with\n$input")
 
-    val updateQuery = 
-        "INSERT INTO "+cacheTable+"("+dataColumn+
-          args.zipWithIndex.
-            map( arg => (","+keyColumn(arg._2)) ).
-            mkString("")+
-        ") VALUES (?"+
-          args.map(_ => ",?").mkString("")+
-        ")"
-    logger.debug(s"Building cache for $modelName-$varIdx[$args] with\n$input\n$updateQuery")
+    val guesses = 
+      db.query(input).mapRows(row => {
+        val compiledArgs = args.map(Provenance.plugInToken(_, row.provenanceToken()))
+        val tuple = row.currentTuple()
+        val dataArgs = compiledArgs.map(Eval.eval(_, tuple)).toList
+        val guess = model.bestGuess(varIdx, dataArgs)
 
-    db.query(input).foreachRow(row => {
-      val compiledArgs = args.map(Provenance.plugInToken(_, row.provenanceToken()))
-      val tuple = row.currentTuple()
-      val dataArgs = compiledArgs.map(Eval.eval(_, tuple)).toList
-      val guess = model.bestGuess(varIdx, dataArgs)
-      logger.trace(s"Registering $dataArgs -> $guess")
-      // println("BUILD: "+updateQuery)
-      db.backend.update(
-        updateQuery, 
+        logger.trace(s"Registering $dataArgs -> $guess")
+
         guess :: dataArgs
-      )
-    })
+      })
+
+    db.backend.fastUpdateBatch(
+      s"""INSERT INTO $cacheTable(
+        $dataColumn, 
+        ${args.zipWithIndex.
+          map( arg => keyColumn(arg._2) ).
+          mkString(", ")}
+      ) VALUES (?, ${args.map(_ => "?").mkString("?")})
+      """,
+      guesses
+    )
+  }
+
+  def update(model: Model, idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
+  {
+    if(args.isEmpty){ return; }
+    
+    db.backend.update(
+      s"""UPDATE ${cacheTableForModel(model, idx)} 
+        SET $dataColumn = ?
+        WHERE ${args.map(x => x+" = ?").mkString("?")}
+      """,
+      List(v) ++ args
+    )
+
   }
 
   private def emptyCacheTable(cacheTable: String) =

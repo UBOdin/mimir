@@ -5,7 +5,7 @@ import mimir.util.ListUtils
 /**
  * Abstract parent class of all relational algebra operators
  */
-abstract class Operator 
+sealed abstract class Operator 
 { 
   /**
    * Convert the operator into a string.  Because operators are
@@ -92,6 +92,7 @@ abstract class Operator
 case class ProjectArg(name: String, expression: Expression) 
 {
   override def toString = (name.toString + " <= " + expression.toString)
+  def toBinding = (name -> expression)
 }
 
 /**
@@ -110,7 +111,7 @@ case class Project(columns: Seq[ProjectArg], source: Operator) extends Operator
   def get(v: String): Option[Expression] = 
     columns.find( (_.name == v) ).map ( _.expression )
   def bindings: Map[String, Expression] =
-    columns.map( (x) => (x.name, x.expression) ).toMap
+    columns.map( _.toBinding ).toMap
   def expressions = columns.map(_.expression)
   def rebuildExpressions(x: Seq[Expression]) = Project(
     columns.zip(x).map({ case (ProjectArg(name,_),expr) => ProjectArg(name, expr)}),
@@ -243,6 +244,60 @@ case class Table(name: String,
   def children: List[Operator] = List()
   def rebuild(x: Seq[Operator]) = Table(name, sch, metadata)
   def metadata_schema = metadata.map( x => (x._1, x._3) )
+  def expressions = List()
+  def rebuildExpressions(x: Seq[Expression]) = this
+}
+
+/**
+ * A single sort directive
+ *
+ * Consists of a column name, as well as a binary "ascending" 
+ * or "descending"
+ *
+ * (e.g., as in SELECT * FROM FOO ORDER BY bar ASC)
+ */
+case class SortColumn(expr: Expression, ascending:Boolean)
+{
+  override def toString() = 
+    (expr + " " + (if(ascending){"ASC"}else{"DESC"}))
+}
+/**
+ * Indicates that the source operator's output should be sorted in the
+ * specified order
+ */
+case class Sort(sorts:Seq[SortColumn], src: Operator) extends Operator
+{
+  def toString(prefix: String) =
+  {
+    prefix + "SORT[" + 
+        sorts.map(_.toString).mkString(", ") +
+      "](\n" +
+        src.toString(prefix+"  ") +
+      "\n"+prefix+")"
+  }
+  def children: List[Operator] = List(src)
+  def rebuild(x: Seq[Operator]) = Sort(sorts, x(0))
+  def expressions = sorts.map(_.expr)
+  def rebuildExpressions(x: Seq[Expression]) = 
+    Sort(x.zip(sorts).map { col => SortColumn(col._1, col._2.ascending) }, src)
+}
+
+/**
+ * Indicates that the source operator's output should be truncated
+ * after the specified number of rows.
+ */
+case class Limit(offset: Long, count: Option[Long], src: Operator) extends Operator
+{
+  def toString(prefix: String) =
+  {
+    prefix + "LIMIT["+offset+","+
+        (count match { case None => "X"; case Some(i) => i })+
+      "](\n" +
+        src.toString(prefix+"  ") +
+      ")"
+  }
+  def children: List[Operator] = List(src)
+  def rebuild(x: Seq[Operator]) = Limit(offset, count, x(0))
   def expressions = List()
   def rebuildExpressions(x: Seq[Expression]) = this
 }

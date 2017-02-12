@@ -29,6 +29,10 @@ object TypeInferenceLens extends LazyLogging
       return (query, List())
     }
 
+    if(args.isEmpty){
+      throw new ModelException("Type inference lens requires a single parameter")
+    }
+
     val model = 
       new TypeInferenceModel(
         name,

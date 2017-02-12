@@ -17,13 +17,6 @@ import mimir.models._
 
 object CTPercolatorSpec extends Specification {
   
-  val baseModel = IndependentVarsModel("TEST", List(
-    UniformDistribution,
-    UniformDistribution,
-    UniformDistribution,
-    UniformDistribution,
-    UniformDistribution
-  ))
   val schema = Map[String,Map[String,Type]](
     ("R", Map( 
       ("R_A", TInt()),
@@ -37,7 +30,7 @@ object CTPercolatorSpec extends Specification {
   )
 
   def parser = new OperatorParser(
-    (x: String) => baseModel,
+    (x: String) => UniformDistribution,
     schema(_).toList
   )
   def expr = parser.expr _

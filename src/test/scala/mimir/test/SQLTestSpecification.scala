@@ -68,17 +68,21 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   with SQLParsers
 {
 
+  var history:List[Operator] = Nil
+
   def dbFile = new File(tempDBName+".db")
 
   def db = DBTestInstances.get(tempDBName, config)
 
   def select(s: String) = {
-    db.sql.convert(
-      stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-    )
+    stmt(s) match {
+      case sel:net.sf.jsqlparser.statement.select.Select => 
+        db.sql.convert(sel)
+    }
   }
   def query(s: String): ResultIterator = {
     val query = select(s)
+    history = query :: history
     db.query(query)
   }
   def queryOneColumn(s: String): Iterable[PrimitiveValue] = 
@@ -107,7 +111,7 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     db.update(stmt(s))
   def loadCSV(table: String, file: File) =
     LoadCSV.handleLoadTable(db, table, file)
-  def parser = new OperatorParser(db.models.getModel, db.getTableSchema(_).get)
+  def parser = new OperatorParser(db.models.get, db.getTableSchema(_).get)
   def expr = parser.expr _
   def oper = parser.operator _
   def i = IntPrimitive(_:Long).asInstanceOf[PrimitiveValue]

@@ -8,38 +8,46 @@ object QueryNamer
 			case Table(name, _, _) => name
 			case Project(cols, src) => 
 				cols.length match {
-					case 1 => cols(0).name+"_from_"+nameQuery(src)
+					case 1 => cols(0).name+"_FROM_"+nameQuery(src)
 					case 2 => 
-						cols(0).name+"_and_"+
-						cols(1).name+"_from_"+
+						cols(0).name+"_AND_"+
+						cols(1).name+"_FROM_"+
 						nameQuery(src)
 					case _ => nameQuery(src)
 				}
 			case Select(cond, src) =>
-				nameQuery(src)+"_where_"+nameBoolExpression(cond)
+				nameQuery(src)+"_WHERE_"+nameBoolExpression(cond)
 			case Join(lhs, rhs) =>
 				if(hasJoinOrUnion(lhs) || hasJoinOrUnion(rhs)) {
 					(getRelationNames(lhs)++getRelationNames(rhs)).mkString("_")
 				} else {
 					nameQuery(lhs)+"_"+nameQuery(rhs)
 				}
+			case LeftOuterJoin(lhs, _, _) =>
+				nameQuery(lhs)
 			case Union(lhs, rhs) =>
 				if(hasJoinOrUnion(lhs) || hasJoinOrUnion(rhs)) {
-					(getRelationNames(lhs)++getRelationNames(rhs)).mkString("_plus_")
+					(getRelationNames(lhs)++getRelationNames(rhs)).mkString("_PLUS_")
 				} else {
-					nameQuery(lhs)+"_plus_"+nameQuery(rhs)
+					nameQuery(lhs)+"_PLUS_"+nameQuery(rhs)
 				}
+			case Aggregate(_, _, src) =>
+				nameQuery(src)+"_SUMMARIZED"
+			case Limit(_, _, src) =>
+				nameQuery(src)
+			case Sort(cols, src) =>
+				nameQuery(src)+"_BY_"+cols.flatMap(col => ExpressionUtils.getColumns(col.expr)).mkString("_")
 		}
 	}
 
 	def nameArithExpression(e: Expression): String =
 	{
-		"an_expression"
+		"AN_EXPRESSION"
 	}
 
 	def nameBoolExpression(e: Expression): String =
 	{
-		"a_condition_holds"
+		"A_CONDITION_HOLDS"
 	}
 
 	def hasJoinOrUnion(q: Operator): Boolean =

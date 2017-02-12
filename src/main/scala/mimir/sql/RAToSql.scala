@@ -7,6 +7,7 @@ import mimir.Database
 import mimir.algebra._
 import mimir.provenance._
 import mimir.optimizer.{InlineProjections, PushdownSelections}
+import mimir.util.SqlUtils
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
@@ -20,10 +21,28 @@ import net.sf.jsqlparser.statement.select.{SelectBody, PlainSelect, SubSelect, S
 
 import scala.collection.JavaConversions._
 
+sealed abstract class TargetClause
+case class ProjectTarget(cols:Seq[ProjectArg]) extends TargetClause
+case class AggregateTarget(gbCols:Seq[Var], aggCols:Seq[AggFunction]) extends TargetClause
+case class AllTarget() extends TargetClause
+
+
+/**
+ * Utility methods for converting from RA Operators back into JSqlParser's Select objects
+ */
 class RAToSql(db: Database) 
   extends LazyLogging 
 {
-  
+
+  /**
+   * An optimizing rewrite to align the expected and real schemas of table operators
+   *
+   * RA Table operators are allowed to define their own naming conventions.  This
+   * forces us into an ugly hack where we need to wrap each table access in a nested 
+   * select.  These naming rewrites can sometimes be pulled out into the parent object
+   * by wrapping the table operator in a project that handles the renaming.  This rewrite 
+   * does so.
+   */
   def standardizeTables(oper: Operator): Operator = 
   {
     oper match {
@@ -47,6 +66,10 @@ class RAToSql(db: Database)
       case _ => oper.rebuild(oper.children.map(standardizeTables(_)))
     }
   }
+
+  /**
+   * [use case] Convert an operator tree into JSQLParser's SelectBody type.
+   */
   def convert(oper: Operator): SelectBody = 
   {
     // The actual recursive conversion is factored out into a separate fn
@@ -63,170 +86,204 @@ class RAToSql(db: Database)
     // println("OPTIMIZED: "+optimized)
 
     // and then actually do the conversion
-    doConvert(optimized)
+    makeSelect(optimized)
   }
 
-  def doConvert(oper: Operator): SelectBody = 
+  /**
+   * Step 1: Strip UNIONs off the top of the operator stack
+   * 
+   * These get converted to JSqlParser UNIONs.  Both branches invoke step 2
+   */
+  private def makeSelect(oper:Operator): SelectBody =
   {
-    logger.debug(s"CONVERT: $oper")
     oper match {
-      case Table(name, sch, metadata) => {
-        val body = new PlainSelect();
-        val table = new net.sf.jsqlparser.schema.Table(null, name)
-        val baseSch = db.getTableSchema(name).get
-        body.setFromItem(table)
-        body.setSelectItems(
-          // new java.util.ArrayList(
-            sch.map(_._1).zip(baseSch.map( _._1 )).map(_ match {
-              case (external, internal) =>
-                val item = new SelectExpressionItem()
-                item.setAlias(external)
-                item.setExpression(new Column(table, internal))
-                item
-            }) ++
-            metadata.map( (element) => {
-              val item = new SelectExpressionItem()
-              item.setAlias(element._1)
-              item.setExpression(convert(element._2, List( (name, List("ROWID")))))
-              item
-            })
-          // )
-        )
-        body
-      }
-      case Union(lhs, rhs) => {
-        val union = new net.sf.jsqlparser.statement.select.Union()
-        val unionList: (SelectBody => List[PlainSelect]) = _ match {
-          case s: PlainSelect => List(s)
-          case u: net.sf.jsqlparser.statement.select.Union =>
-            u.getPlainSelects().toList
-        }
+      case u:Union => {
+        var union = new net.sf.jsqlparser.statement.select.Union()
         union.setAll(true);
         union.setDistinct(false);
         union.setPlainSelects(
-          unionList(doConvert(lhs)) ++ 
-          unionList(doConvert(rhs))
+          OperatorUtils.extractUnionClauses(u).map(makePlainSelect(_))
         )
-        union
+        return union
       }
-      case Select(_,_) | Join(_,_) => {
-        doConvert(Project(
-          oper.schema.map(_._1).map( (x) => ProjectArg(x, Var(x))).toList, oper
-        ))
-      }
-      case Aggregate(gbcols, aggregates, child) =>
-        val body = new PlainSelect()
-        val (cond, source) = extractSelectsAndJoins(child)
-        val schemas = getSchemas(source)
-        body.setFromItem(source)
-        if(cond != BoolPrimitive(true)){
-          // println("---- SCHEMAS OF:"+source);
-          // println("---- ARE: "+schemas)
-          body.setWhere(convert(cond, schemas))
-        }
 
-        body.setSelectItems(
-          new java.util.ArrayList(
-            gbcols.map( (col) => {
-              val item = new SelectExpressionItem()
-              val column =  convert(col, schemas)
-              item.setAlias(column.asInstanceOf[Column].getColumnName())
-              item.setExpression(column)
-              item
-            }) ++
-            aggregates.map( (agg) => {
-              val item = new SelectExpressionItem()
-              item.setAlias(agg.alias)
-              val func = new Function()
-              func.setName(agg.function)
-              func.setParameters(new ExpressionList(new java.util.ArrayList(
-                agg.args.map(convert(_, schemas)))))
-              func.setDistinct(agg.distinct)
-
-              item.setExpression(func)
-              item
-            })
-          )
-        )
-        body.setGroupByColumnReferences(new java.util.ArrayList(
-          gbcols.map(convert(_, schemas).asInstanceOf[net.sf.jsqlparser.schema.Column])))
-
-        body
-
-      case Project(args, child) =>
-        val body = new PlainSelect()
-        val (cond, source) = extractSelectsAndJoins(child)
-        val schemas = getSchemas(source)
-        body.setFromItem(source)
-        if(cond != BoolPrimitive(true)){
-          // println("---- SCHEMAS OF:"+source);
-          // println("---- ARE: "+schemas)
-          body.setWhere(convert(cond, schemas))
-        }
-        body.setSelectItems(
-          new java.util.ArrayList(
-            args.map( (arg) => {
-              val item = new SelectExpressionItem()
-              item.setAlias(arg.name)
-              item.setExpression(convert(arg.expression, schemas))
-              item
-            })
-          )
-        )
-        body
-
+      case _ => 
+        return makePlainSelect(oper)
     }
   }
 
-  def getSchemas(source: FromItem): List[(String, List[String])] =
+  /**
+   * Step 2: Unwrap an operator stack into a PlainSelect
+   *
+   * The optimal case here is when operators are organized into
+   * the form:
+   *    Limit(Sort(Project/Aggregate(Select(Join(...)))))
+   * If these are out of order, we'll need to wrap them in nested 
+   * selects... but that's ok.  We pick off as many of them as we
+   * can and then stick them into a plain select
+   *
+   * Note that operators are unwrapped outside in, so they need to be
+   * applied in reverse order of how they are evaluated.
+   */
+  private def makePlainSelect(oper:Operator): PlainSelect =
   {
-    source match {
-      case subselect: SubSelect =>
-        List((subselect.getAlias(), subselect.getSelectBody() match {
-          case plainselect: PlainSelect => 
-            plainselect.getSelectItems().map({
-              case sei:SelectExpressionItem =>
-                sei.getAlias().toString
-            }).toList
-          case union: net.sf.jsqlparser.statement.select.Union =>
-            union.getPlainSelects().get(0).getSelectItems().map({
-              case sei:SelectExpressionItem =>
-                sei.getAlias().toString
-            }).toList
-        }))
-      case table: net.sf.jsqlparser.schema.Table =>
-        List(
-          ( table.getAlias(), 
-            db.getTableSchema(table.getName()).
-              get.map(_._1).toList++List("ROWID")
-          )
-        )
-      case join: SubJoin =>
-        getSchemas(join.getLeft()) ++
-          getSchemas(join.getJoin().getRightItem())
+    var head = oper
+    val select = new PlainSelect()
+
+    logger.debug("Assembling Plain Select:\n"+oper)
+
+    // Limit clause is the final processing step, so we handle
+    // it first.
+    head match {
+      case Limit(offset, maybeCount, src) => {
+        logger.debug("Assembling Plain Select: Including a LIMIT")
+        val limit = new net.sf.jsqlparser.statement.select.Limit()
+        if(offset > 0){ limit.setOffset(offset) }
+        maybeCount match {
+          case None        => limit.setLimitAll(true)
+          case Some(count) => limit.setRowCount(count)
+        }
+        select.setLimit(limit)
+
+        ////// Remember to strip the limit operator off //////
+        head = src
+      }
+      case _ => ()
     }
+
+    // Sort comes after limit, but before Project/Select.
+    // We need to get the per-source column bindings before actually adding the
+    // clause, so save the clause until we have those.
+    //
+    // There's also the oddity that ORDER BY behaves differently for aggregate
+    // and non-aggregate queries.  That is, for aggregate queries, ORDER BY uses
+    // the schema defined in the target clause.  For non-aggregate queries, 
+    // ORDER BY is *supposed* to use the schema of the source columns (although
+    // some databases allow you to use the target column names too).  Because this
+    // means a different ordering Sort(Aggregate(...)) vs Project(Sort(...)), we
+    // simply assume that the projection can be inlined.  
+    val sortClause: Option[Seq[SortColumn]] = 
+      head match {
+        case Sort(cols, src) => {
+          head = src; 
+          logger.debug("Assembling Plain Select: Will include a SORT: "+cols); 
+          Some(cols)
+        }
+        case _               => {
+          None
+        }
+      }
+
+    // Project/Aggregate is next... Don't actually convert them yet, but 
+    // pull them off the stack and save the arguments
+    //
+    // We also save a set of bindings to rewrite the Sort clause if needed
+    //
+    val (target:TargetClause, sortBindings:Map[String,Expression]) = 
+      head match {
+        case p@Project(cols, src)              => {
+          logger.debug("Assembling Plain Select: Target is a flat projection")
+          head = src; 
+          (ProjectTarget(cols), p.bindings)
+        }
+        case Aggregate(gbCols, aggCols, src) => {
+          logger.debug("Assembling Plain Select: Target is an aggregation")
+          head = src; 
+          (AggregateTarget(gbCols, aggCols), Map())
+        }
+        case _                               => {
+          logger.debug("Assembling Plain Select: Target involves no computation")
+          (AllTarget(), Map())
+        }
+      }
+
+    // Strip off the sources, select condition(s) and so forth
+    val (condition, from) = extractSelectsAndJoins(head)
+
+    // Extract the synthesized table names
+    val schemas = SqlUtils.getSchemas(from, db)
+
+    // Add the WHERE clause if needed
+    condition match {
+      case BoolPrimitive(true) => ()
+      case _ => {
+        logger.debug(s"Assembling Plain Select: Target has a WHERE ($condition)")
+        select.setWhere(convert(condition, schemas))
+      }
+    }
+
+    // Apply the ORDER BY clause if we found one earlier
+    // Remember that the clause may have been further transformed if we hit a 
+    // projection instead of an aggregation.
+    sortClause.foreach { cols =>
+      select.setOrderByElements(
+        cols.map(col => {
+          val ob = new net.sf.jsqlparser.statement.select.OrderByElement()
+          //
+          ob.setExpression(
+            convert(
+              Eval.inline(col.expr, sortBindings),
+              schemas
+            ))
+          ob.setAsc(col.ascending)
+          logger.debug(s"Assembling Plain Select: ORDER BY: "+ob)
+          ob
+        })
+      )
+    }
+
+    // Add the FROM clause
+    logger.debug(s"Assembling Plain Select: FROM ($from)")
+    select.setFromItem(from)
+
+    // Finally, generate the target clause
+    target match {
+      case ProjectTarget(cols) => {
+        select.setSelectItems(
+          cols.map( col => 
+            makeSelectItem(convert(col.expression, schemas), col.name) )
+        )
+        logger.debug(s"Assembling Plain Select: SELECT "+select.getSelectItems)
+      }
+
+      case AggregateTarget(gbCols, aggCols) => {
+        val gbConverted = gbCols.map(convert(_, schemas).asInstanceOf[Column])
+        val gbTargets = gbConverted.map( gb => makeSelectItem(gb, gb.getColumnName) )
+        val aggTargets = aggCols.map( agg => {
+          val func = new Function()
+          func.setName(agg.function)
+          func.setParameters(new ExpressionList(
+            agg.args.map(convert(_, schemas))))
+          func.setDistinct(agg.distinct)
+
+          makeSelectItem(func, agg.alias)
+        })
+        select.setSelectItems(gbTargets ++ aggTargets)
+        if(!gbConverted.isEmpty){ 
+          select.setGroupByColumnReferences(gbConverted)
+        }
+      }
+
+      case AllTarget() => {
+        select.setSelectItems(List(new net.sf.jsqlparser.statement.select.AllColumns()))
+      }
+    }
+
+    return select;
   }
 
-  def makeSubSelect(oper: Operator): FromItem =
-  {
-    val subSelect = new SubSelect()
-    subSelect.setSelectBody(doConvert(oper))//doConvert returns a plain select
-    subSelect.setAlias("SUBQ_"+oper.schema.map(_._1).head)
-    subSelect
-  }
-
-  def makeJoin(lhs: FromItem, rhs: FromItem): SubJoin =
-  {
-    val rhsJoin = new net.sf.jsqlparser.statement.select.Join();
-    rhsJoin.setRightItem(rhs)
-    // rhsJoin.setSimple(true)
-    val ret = new SubJoin()
-    ret.setLeft(lhs)
-    ret.setJoin(rhsJoin)
-    return ret
-  }
-  
-  def extractSelectsAndJoins(oper: Operator): 
+  /**
+   * Step 3: Build a FromItem Tree
+   *
+   * Selects, Joins, Tables, etc.. can be stacked into an odd tree 
+   * structure.  This method simultaneously pulls up Selects, while
+   * converting Joins, Tables, etc... into the corresponding 
+   * JSqlParser FromItem tree.  
+   * 
+   * If we get something that doesn't map to a FromItem, the conversion
+   * punts back up to step 1.
+   */
+  private def extractSelectsAndJoins(oper: Operator): 
     (Expression, FromItem) =
   {
     oper match {
@@ -253,7 +310,7 @@ class RAToSql(db: Database)
         joinItem.getJoin().setSimple(false)
         joinItem.getJoin().setOuter(true)
         joinItem.getJoin().setLeft(true)
-        joinItem.getJoin().setOnExpression(convert(cond, getSchemas(lhsFrom)++getSchemas(rhsFrom)))
+        joinItem.getJoin().setOnExpression(convert(cond, SqlUtils.getSchemas(lhsFrom, db)++SqlUtils.getSchemas(rhsFrom, db)))
 
         (
           lhsCond,
@@ -293,10 +350,54 @@ class RAToSql(db: Database)
     }
   }
 
+  /**
+   * Punt an Operator conversion back to step 1 and make a SubSelect
+   *
+   * If Step 3 hits something it can't convert directly to a FromItem, 
+   * we restart the conversion process by going back to step 1 to wrap
+   * the operator in a nested Select.  
+   *
+   * The nested select (SubSelect) needs to be assigned an alias, which
+   * we assign using the (guaranteed to be unique) first element of the
+   * schema.
+   */
+  def makeSubSelect(oper: Operator): FromItem =
+  {
+    val subSelect = new SubSelect()
+    subSelect.setSelectBody(makeSelect(oper))//doConvert returns a plain select
+    subSelect.setAlias("SUBQ_"+oper.schema.head._1)
+    subSelect
+  }
+
+  /**
+   * Slightly more elegant join constructor.
+   */
+  private def makeJoin(lhs: FromItem, rhs: FromItem): SubJoin =
+  {
+    val rhsJoin = new net.sf.jsqlparser.statement.select.Join();
+    rhsJoin.setRightItem(rhs)
+    // rhsJoin.setSimple(true)
+    val ret = new SubJoin()
+    ret.setLeft(lhs)
+    ret.setJoin(rhsJoin)
+    return ret
+  }
+
+  private def makeSelectItem(expr: net.sf.jsqlparser.expression.Expression, alias: String): SelectExpressionItem =
+  {
+    val item = new SelectExpressionItem()
+    item.setExpression(expr)
+    item.setAlias(alias)
+    return item
+  }
+
   def bin(b: BinaryExpression, l: Expression, r: Expression): BinaryExpression = {
     bin(b, l, r, List())
   }
 
+  /**
+   * Binary expression constructor
+   */
   def bin(b: BinaryExpression, l: Expression, r: Expression, sources: List[(String,List[String])]): BinaryExpression =
   {
     b.setLeftExpression(convert(l, sources))
@@ -354,14 +455,7 @@ class RAToSql(db: Database)
       case Arithmetic(Arith.Div, l, r)  => bin(new Division(), l, r, sources)
       case Arithmetic(Arith.And, l, r)  => new AndExpression(convert(l, sources), convert(r, sources))
       case Arithmetic(Arith.Or, l, r)   => new OrExpression(convert(l, sources), convert(r, sources))
-      case Var(n) => {
-        val src = sources.find( {
-          case (_, vars) => vars.exists( _.equalsIgnoreCase(n) )
-        })
-        if(src.isEmpty)
-          throw new SQLException("Could not find appropriate source for '"+n+"' in "+sources)
-        new Column(new net.sf.jsqlparser.schema.Table(null, src.head._1), n)
-      }
+      case Var(n) => convertColumn(n, sources)
       case JDBCVar(t) => new JdbcParameter()
       case Conditional(_, _, _) => {
         val (whenClauses, elseClause) = ExpressionUtils.foldConditionalsToCase(e)
@@ -404,17 +498,25 @@ class RAToSql(db: Database)
         throw new SQLException("Invalid Cast: "+e)
       }
       case mimir.algebra.Function(fname, fargs) => {
-          val func = new Function()
-          func.setName(fname)
-          val explist = 
-            new ExpressionList(
-              new util.ArrayList[expression.Expression](fargs.map(convert(_, sources))))
-          func.setParameters(explist)
-          return func
+        val func = new Function()
+        func.setName(fname)
+        func.setParameters(new ExpressionList(
+          fargs.map(convert(_, sources))))
+        return func
       }
       case _ =>
         throw new SQLException("Compiler Error: I don't know how to translate "+e+" into SQL")
     }
+  }
+
+  private def convertColumn(n:String, sources: List[(String,List[String])]): Column =
+  {
+    val src = sources.find( {
+      case (_, vars) => vars.exists( _.equalsIgnoreCase(n) )
+    })
+    if(src.isEmpty)
+      throw new SQLException("Could not find appropriate source for '"+n+"' in "+sources)
+    new Column(new net.sf.jsqlparser.schema.Table(null, src.head._1), n)
   }
 
 
@@ -429,5 +531,5 @@ class RAToSql(db: Database)
     e2.setRightExpression(rhs)
     e2
   }
-  
+
 }

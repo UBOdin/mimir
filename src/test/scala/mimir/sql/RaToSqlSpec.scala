@@ -13,6 +13,7 @@ import mimir.test._
 object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
 
   def convert(x: String) = db.ra.convert(oper(x)).toString
+  def convert(x: Expression) = db.ra.convert(x, List(("R", List("R_A", "R_B")))).toString
 
   def beforeAll =
   {
@@ -23,7 +24,7 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
 
     "Produce Flat Queries for Tables" >> {
       convert("R(A, B)") must be equalTo 
-        "SELECT R.A AS A, R.B AS B FROM R"
+        "SELECT * FROM R AS R"
     }
 
     "Produce Flat Queries for Tables with Aliased Variables" >> {
@@ -51,6 +52,23 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
         "SELECT R.A + R.B AS Z FROM R AS R WHERE R.A > R.B"
     }
 
+  }
+
+  "The Expression Converter" should {
+
+    "Correctly convert conditionals" >> {
+      convert(
+        Conditional(expr("R_A = 1"), str("A"), str("B"))
+      ) must be equalTo
+        "CASE WHEN R.R_A = 1 THEN 'A' ELSE 'B' END"
+
+      convert(
+        Conditional(expr("R_A = 1"), str("A"), 
+          Conditional(expr("R_A = 2"), str("B"), str("C")))
+      ).toString must be equalTo
+        "CASE WHEN R.R_A = 1 THEN 'A' WHEN R.R_A = 2 THEN 'B' ELSE 'C' END"
+      
+    }
   }
 
 }

@@ -87,7 +87,7 @@ object LoadCSV extends StrictLogging {
         case a::b::rest   => logger.warn(s"Too many fields on lines $a, $b, and "+(rest.size)+s" more of $sourceFile")
       }
 
-    populateTable(db, samples++parser, targetTable, sourceFile, targetSchema)
+    populateTable(db, samples.view++parser, targetTable, sourceFile, targetSchema)
     input.close()
   }
 
@@ -126,7 +126,7 @@ object LoadCSV extends StrictLogging {
   }
 
   private def populateTable(db: Database,
-                            rows: TraversableOnce[MimirCSVRecord],
+                            rows: Iterable[MimirCSVRecord],
                             targetTable: String,
                             sourceFile: File,
                             sch: Seq[(String, Type)]): Unit = {
@@ -140,7 +140,10 @@ object LoadCSV extends StrictLogging {
     logger.trace("BEGIN IMPORT")
     TimeUtils.monitor(s"Import CSV: $targetTable <- $sourceFile",
       () => {
-        db.backend.fastUpdateBatch(cmd, rows.map({ record => 
+        db.backend.fastUpdateBatch(cmd, rows.view.map({ record => 
+          if(record.recordNumber % 100000 == 0){
+            logger.info(s"Loaded ${record.recordNumber} records...")
+          }
           val data = record.fields.
             take(numberOfColumns).
             padTo(numberOfColumns, "").

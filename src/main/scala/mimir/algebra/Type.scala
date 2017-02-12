@@ -32,6 +32,7 @@ object Type {
     case TInt() => "int"
     case TFloat() => "real"
     case TDate() => "date"
+    case TTimeStamp() => "datetime"
     case TString() => "varchar"
     case TBool() => "bool"
     case TRowId() => "rowid"
@@ -46,7 +47,9 @@ object Type {
     case "decimal" => TFloat()
     case "real"    => TFloat()
     case "date"    => TDate()
+    case "datetime" => TTimeStamp()
     case "varchar" => TString()
+    case "nvarchar" => TString()
     case "char"    => TString()
     case "string"  => TString()
     case "text"    => TString()
@@ -67,9 +70,10 @@ object Type {
     case 5 => TRowId()
     case 6 => TType()
     case 7 => TAny()
+    case 8 => TTimeStamp()
     case _ => {
-      // 8 because this is the number of native types, if more are added then this number needs to increase
-      TUser(TypeRegistry.idxType(i-8))
+      // 9 because this is the number of native types, if more are added then this number needs to increase
+      TUser(TypeRegistry.idxType(i-9))
     }
   }
   def id(t:Type) = t match {
@@ -81,14 +85,16 @@ object Type {
     case TRowId() => 5
     case TType() => 6
     case TAny() => 7
-    case TUser(name)  => TypeRegistry.typeIdx(name.toLowerCase)+8
-      // 8 because this is the number of native types, if more are added then this number needs to increase
+    case TTimeStamp() => 8
+    case TUser(name)  => TypeRegistry.typeIdx(name.toLowerCase)+9
+      // 9 because this is the number of native types, if more are added then this number needs to increase
   }
 
   val tests = Map[Type,Regex](
     TInt()   -> "^(\\+|-)?([0-9]+)$".r,
     TFloat() -> "^(\\+|-)?([0-9]*(\\.[0-9]+)?)$".r,
     TDate()  -> "^[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}$".r,
+    TTimeStamp() -> "^[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}\\ \\[0-9]{2}\\:[0-9]{2}\\:[0-9]{2}".r,
     TBool()  -> "^(?i:true|false)$".r
   )
   def matches(t: Type, v: String): Boolean =
@@ -114,6 +120,7 @@ case class TRowId() extends Type
 case class TType() extends Type
 case class TAny() extends Type
 case class TUser(name:String) extends Type
+case class TTimeStamp() extends Type
 
 
 

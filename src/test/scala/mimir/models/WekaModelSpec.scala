@@ -15,6 +15,10 @@ object WekaModelSpec extends SQLTestSpecification("WekaTest")
     val (model, idx) = models(col)
     model.bestGuess(idx, List(RowIdPrimitive(row)))
   }
+  def explain(col:String, row:String): String = {
+    val (model, idx) = models(col)
+    model.reason(idx, List(RowIdPrimitive(row)))
+  }
   def trueValue(col:String, row:String): PrimitiveValue = {
     val t = db.getTableSchema("CPUSPEED").get.find(_._1.equals(col)).get._2
     JDBCUtils.extractAllRows(
@@ -60,10 +64,31 @@ object WekaModelSpec extends SQLTestSpecification("WekaTest")
     }
 
     "Make reasonable predictions" >> {
+      val rowids = 
+        queryOneColumn("SELECT ROWID() FROM CPUSPEED").toSeq
 
-      predict("BUSSPEEDINMHZ", "3") must be equalTo trueValue("BUSSPEEDINMHZ", "3")
-      predict("TECHINMICRONS", "22") must be equalTo trueValue("TECHINMICRONS", "22")
-      predict("CORES", "20") must be equalTo trueValue("CORES", "20")
+      val predictions = 
+        rowids.map {
+          rowid => (
+            predict("CORES", rowid.asString),
+            trueValue("CORES", rowid.asString)
+          )
+        }
+
+      val successes = 
+        predictions.
+          map( x => if(x._1.equals(x._2)){ 1 } else { 0 } ).
+          fold(0)( _+_ )
+
+      successes must be >=(rowids.size / 3)
+
+    }
+
+    "Produce reasonable explanations" >> {
+
+      explain("BUSSPEEDINMHZ", "3") must not contain("The classifier isn't willing to make a guess")
+      explain("TECHINMICRONS", "22") must not contain("The classifier isn't willing to make a guess")
+      explain("CORES", "20") must not contain("The classifier isn't willing to make a guess")
 
     }
   }
@@ -76,7 +101,7 @@ object WekaModelSpec extends SQLTestSpecification("WekaTest")
         List("RATING"), 
         db.getTableOperator("RATINGS1")
       )("RATING")
-      val nullRow = querySingleton("SELECT ROWID FROM RATINGS1 WHERE RATING IS NULL")
+      val nullRow = querySingleton("SELECT ROWID() FROM RATINGS1 WHERE RATING IS NULL")
       model.bestGuess(idx, List(nullRow)) must beAnInstanceOf[FloatPrimitive]
 
 

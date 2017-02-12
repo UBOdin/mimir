@@ -18,6 +18,7 @@ object TypeInferenceModel
     case TInt()       => 10
     case TBool()      => 10
     case TDate()      => 10
+    case TTimeStamp() => 10
     case TType()      => 10
     case TFloat()     => 5
     case TString()    => 0
@@ -41,6 +42,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
   extends Model(name)
   with DataIndependentFeedback
   with NoArgModel
+  with FiniteDiscreteDomain
 {
   var totalVotes = 
     { val v = new scala.collection.mutable.ArraySeq[Double](columns.length)
@@ -107,9 +109,14 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
 
   def bestGuess(idx: Int, args: Seq[PrimitiveValue]): PrimitiveValue = 
   {
-    val guess = voteList(idx).maxBy( rankFn _ )._1
-    TypeInferenceModel.logger.debug(s"Votes($idx): ${voteList(idx)} -> $guess")
-    TypePrimitive(guess)
+    choices.get(idx) match {
+      case None => {
+        val guess = voteList(idx).maxBy( rankFn _ )._1
+        TypeInferenceModel.logger.debug(s"Votes($idx): ${voteList(idx)} -> $guess")
+        TypePrimitive(guess)
+      }
+      case Some(s) => s
+    }
   }
 
   def validateChoice(idx: Int, v: PrimitiveValue): Boolean =
@@ -141,5 +148,8 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
         throw new ModelException(s"Invalid choice $c for $name")
     }
   }
+
+  def getDomain(idx: Int, args: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
+    votes(idx).toList.map( x => (TypePrimitive(x._1), x._2))
 
 }

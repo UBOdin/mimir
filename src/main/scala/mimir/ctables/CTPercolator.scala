@@ -1,13 +1,16 @@
 package mimir.ctables
 
 import java.sql.SQLException
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
 import mimir.sql.sqlite.BoolAnd
 
-object CTPercolator {
+object CTPercolator 
+  extends LazyLogging
+{
 
   private def extractMissingValueVar(expr: Expression): Var = {
     expr match {
@@ -151,6 +154,9 @@ object CTPercolator {
       case Project(columns, src) => {
         val (rewrittenSrc, colDeterminism, rowDeterminism) = percolateLite(src);
 
+        logger.trace(s"PERCOLATE: $oper")
+        logger.trace(s"GOT INPUT: $rewrittenSrc")
+
         // Compute the determinism of each column.
         val newColDeterminismBase = 
           columns.map( _ match { case ProjectArg(col, expr) => {
@@ -160,20 +166,23 @@ object CTPercolator {
             (col, isDeterministic)
           }})
 
+        logger.trace(s"PROJECT-BASE: $newColDeterminismBase")
+
         // Determine which of them are deterministic.
         val computedDeterminismCols = 
           newColDeterminismBase.filterNot( 
             // Retain only columns where the isDeterministic expression
             // is a constant (i.e., no Column references)
-            _ match { case (col, expr) => {
+            { case (col, expr) => 
               ExpressionUtils.getColumns(expr).isEmpty
-            }}
+            }
           ).map( 
             // Then just translate to a list of ProjectArgs
-            _ match { case (col, isDeterministic) => 
+            { case (col, isDeterministic) => 
               ProjectArg(mimirColDeterministicColumnPrefix+col, isDeterministic) 
             }
-         )
+          )
+        logger.trace(s"PROJECT-COLS: $computedDeterminismCols")
 
         // Rewrite these expressions so that the computed expressions use the
         // computed version from the source data.
@@ -204,6 +213,8 @@ object CTPercolator {
             columns ++ computedDeterminismCols ++ rowDeterminismCols,
             rewrittenSrc
           )
+
+        logger.trace(s"REWRITTEN: $retProject")
 
         return (retProject, newColDeterminism.toMap, newRowDeterminism)
       }
@@ -304,7 +315,7 @@ object CTPercolator {
           // If the predicate's determinism is data-independent... OR if the
           // predicate is deterministic already, then we don't need to add anything.
           // Just return what we already have!
-          return (Select(cond, src), colDeterminism, newRowDeterminism)
+          return (Select(cond, rewrittenSrc), colDeterminism, newRowDeterminism)
         } else {
           // Otherwise, we need to tack on a new projection operator to compute
           // the new non-determinism
@@ -464,6 +475,22 @@ object CTPercolator {
           BoolPrimitive(true)
         )
       }
+
+      // This is a bit hackish... Sort alone doesn't affect determinism
+      // metadata, and Limit doesn't either, but combine the two and you get some
+      // annoying behavior.  Since we're rewriting this particular fragment soon, 
+      // I'm going to hold off on any elegant solutions
+      case Sort(sortCols, src) => {
+        val (rewritten, cols, row) = percolateLite(src)
+        (Sort(sortCols, rewritten), cols, row)
+      }
+      case Limit(offset, count, src) => {
+        val (rewritten, cols, row) = percolateLite(src)
+        (Limit(offset, count, rewritten), cols, row)
+      }
+
+      case _:LeftOuterJoin =>
+        throw new RAException("Don't know how to percolate a left-outer-join")
     }
   }
 }

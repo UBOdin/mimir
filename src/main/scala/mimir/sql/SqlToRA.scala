@@ -25,8 +25,6 @@ import scala.collection.mutable.ListBuffer
 class SqlToRA(db: Database) 
   extends LazyLogging
 {
-  /*List of aggregate function names */
-  val aggFuncNames = List("SUM", "AVG", "MAX", "MIN", "COUNT")
 
   def unhandled(feature : String) = {
     println("ERROR: Unhandled Feature: " + feature)
@@ -40,19 +38,9 @@ class SqlToRA(db: Database)
       case "CHAR" => TString()
     }
   }
-/* Tests for unsupported aggregate query of the form "Select 1 + SUM(B) from R".
-* Returns false if such a query form is detected */
-  def isLegalAggQuery(expr: mimir.algebra.Expression): Boolean = {
-    expr match {
-      case Arithmetic(_, _, _) => expr.children.forall(x => isLegalAggQuery(x))
-      case Var(_) => true
-      case mimir.algebra.Function(op, _) => if(aggFuncNames.contains(op)){ false } else { true }
-      case _ => true
-    }
-  }
 
   def convert(s : net.sf.jsqlparser.statement.select.Select) : Operator = convert(s, null)._1
-  def convert(s : net.sf.jsqlparser.statement.select.Select, alias: String) : (Operator, Map[String, String]) = {
+  def convert(s : net.sf.jsqlparser.statement.select.Select, alias: String) : (Operator, Seq[(String, String)]) = {
     convert(s.getSelectBody(), alias)
   }
   
@@ -62,7 +50,7 @@ class SqlToRA(db: Database)
   /**
    * Convert a SelectBody into an Operator + A projection map.
    */
-  def convert(sb : SelectBody, tableAlias: String) : (Operator, Map[String, String]) = 
+  def convert(sb : SelectBody, tableAlias: String) : (Operator, Seq[(String, String)]) = 
   {
     sb match {
       case ps: net.sf.jsqlparser.statement.select.PlainSelect => convert(ps, tableAlias)
@@ -73,7 +61,7 @@ class SqlToRA(db: Database)
   /**
    * Convert a PlainSelect into an Operator + A projection map.
    */
-  def convert(ps: PlainSelect, tableAlias: String) : (Operator, Map[String, String]) =
+  def convert(ps: PlainSelect, tableAlias: String) : (Operator, Seq[(String, String)]) =
   {
     // Unlike SQL, Mimir's relational algebra does not use range variables.  Rather,
     // variables are renamed into the form TABLENAME_VAR to prevent name conflicts.
@@ -90,17 +78,17 @@ class SqlToRA(db: Database)
     //                  variable (useful for inferring aliases)
     val reverseBindings = scala.collection.mutable.Map[String, String]()
     // Sources: A map from table name to the matching set of *extended* variable names
-    val sources = scala.collection.mutable.Map[String, List[String]]()
+    val sources = scala.collection.mutable.MutableList[(String, List[String])]()
     
     //////////////////////// CONVERT FROM CLAUSE /////////////////////////////
 
     // JSqlParser makes a distinction between the first FromItem, and items 
     // subsequently joined to it.  Start by extracting the first FromItem
     var (ret, currBindings, sourceAlias) = convert(ps.getFromItem)
-    sources.put(sourceAlias, currBindings.values.toList);
-    bindings.putAll(currBindings)
+    sources += ( (sourceAlias, currBindings.map(_._2).toList) )
+    bindings.putAll(currBindings.toMap[String,String])
     reverseBindings.putAll(
-      currBindings.map( _ match { case (x,y) => (y,x) } )
+      currBindings.map( _ match { case (x,y) => (y,x) } ).toMap[String,String]
     )
 
     var joinCond = null;
@@ -111,10 +99,10 @@ class SqlToRA(db: Database)
       // And then flatten out the join tree.
       for(j <- ps.getJoins()){
         val (source, currBindings, sourceAlias) = convert(j.getRightItem())
-        sources.put(sourceAlias, currBindings.values.toList);
-        bindings.putAll(currBindings)
+        sources += ( (sourceAlias, currBindings.map(_._2).toList) )
+        bindings.putAll(currBindings.toMap[String,String])
         reverseBindings.putAll(
-          currBindings.map( _ match { case (x,y) => (y,x) } )
+          currBindings.map( _ match { case (x,y) => (y,x) } ).toMap[String,String]
         )
         ret = Join(ret, source)
         if(j.getOnExpression() != null) { 
@@ -128,6 +116,52 @@ class SqlToRA(db: Database)
     // of the return value.
     if(ps.getWhere != null) {
       ret = Select(convert(ps.getWhere, bindings.toMap), ret)
+    }
+
+    //////////////////// CONVERT SORT AND LIMIT CLAUSES ///////////////////////
+
+    // Sort and limit are an odd and really really really annoying case, because of
+    // how they interact with aggregate and non-aggregate queries.  
+    // 
+    // - For non-aggregate queries, SORT and LIMIT get applied BEFORE projection.
+    //     - This is actually not entirely true... some SQL variants allow you to
+    //       use names in both the target and source columns...  eeeew
+    // - For aggregate quereis, SORT and LIMIT get applied AFTER aggregation.
+    //
+    // Because they could get applied in either of two places, we don't actually
+    // do the conversion here.  Instead we define the entire conversion in one
+    // place (here), wrapped in a function that gets called at the right place 
+    // below, once we figure out whether we're dealing with an aggregate or 
+    // flat query.
+    //
+    val applySortAndLimit = 
+    () => {
+      if(ps.getOrderByElements != null){ 
+        val sortDirectives = 
+          ps.getOrderByElements.map(ob => {
+            val column = 
+              ob.getExpression match {
+                case col:Column => convertColumn(col, bindings.toMap)
+                case _ => unhandled("ORDER BY on complex expression") 
+              }
+            SortColumn(column, ob.isAsc)
+          })
+        ret = Sort(sortDirectives, ret)
+      }
+      if(ps.getLimit != null){ 
+        val limit = ps.getLimit
+        if(limit.isLimitAll || (limit.getRowCount <= 0)){
+          if(limit.getOffset > 0){
+            ret = Limit(limit.getOffset, None, ret)
+          }
+        } else {
+          ret = Limit(
+                  math.max(0,limit.getOffset), 
+                  Some(limit.getRowCount), 
+                  ret
+                )
+        }
+      }
     }
 
     //////////////////////// CONVERT SELECT TARGETS /////////////////////////////
@@ -144,7 +178,7 @@ class SqlToRA(db: Database)
     //     -> ("B", Var("A"))
     val defaultTargetsForTable:(String => Seq[(String, Expression)]) = 
       (name: String) => {
-        sources(name).map(
+        sources.find(_._1.equals(name)).get._2.map(
           (x) => (reverseBindings(x), Var(x))
         )
       }
@@ -174,7 +208,7 @@ class SqlToRA(db: Database)
         }
 
         case (_:AllColumns, _) => 
-          sources.keys.flatMap( defaultTargetsForTable(_) )
+          sources.map(_._1).flatMap( defaultTargetsForTable(_) )
 
         case (tc:AllTableColumns, _) =>
           defaultTargetsForTable(tc.getTable.getName.toUpperCase)
@@ -229,8 +263,12 @@ class SqlToRA(db: Database)
       allReferencedFunctions.exists( AggregateRegistry.isAggregate(_) )
 
     if(!isAggSelect){
-      // NOT an aggregate select.  We just need to create a simple
-      // projection around the return value.
+      // NOT an aggregate select.  
+
+      // Apply the sort and limit clauses before the projection if necessary
+      applySortAndLimit()
+
+      // Create a simple projection around the return value.
       ret = 
         Project(
           targets.map({
@@ -314,25 +352,26 @@ class SqlToRA(db: Database)
 
         ret = Select(havingExpr, ret)
       }
+
+      // Apply sort and limit if necessary
+      applySortAndLimit()
     }
 
     // Sanity check unimplemented features
-    if(ps.getOrderByElements != null){ unhandled("ORDER BY") }
-    if(ps.getLimit != null){ unhandled("LIMIT") }
     if(ps.getDistinct != null){ unhandled("DISTINCT") }
 
     // We're responsible for returning bindings for this specific
     // query, so extract those from the target expressions we
     // produced earlier
     val returnedBindings =
-      targets.map( tgt => (tgt._1, tgt._2) ).toMap
+      targets.map( tgt => (tgt._1, tgt._2) )
 
     // The operator should now be fully assembled.  Return it and
     // its bindings
     return (ret, returnedBindings)
   }
 
-  def convert(union: net.sf.jsqlparser.statement.select.Union, alias: String): (Operator, Map[String,String]) =
+  def convert(union: net.sf.jsqlparser.statement.select.Union, alias: String): (Operator, Seq[(String,String)]) =
   {
     val isAll = (union.isAll() || !union.isDistinct());
     if(!isAll){ unhandled("UNION DISTINCT") }
@@ -345,7 +384,7 @@ class SqlToRA(db: Database)
       reduce( (a,b) => (Union(a._1,b._1), a._2) )
   }
 
-  def convert(fi : FromItem) : (Operator, Map[String, String], String) = {
+  def convert(fi : FromItem) : (Operator, Seq[(String, String)], String) = {
     if(fi.isInstanceOf[SubJoin]){
       unhandled("FromItem[SubJoin]")
     }
@@ -357,7 +396,6 @@ class SqlToRA(db: Database)
         fi.asInstanceOf[SubSelect].getSelectBody,
         fi.asInstanceOf[SubSelect].getAlias.toUpperCase
       );
-
       return (ret, bindings, fi.asInstanceOf[SubSelect].getAlias.toUpperCase)
     }
     if(fi.isInstanceOf[net.sf.jsqlparser.schema.Table]){
@@ -376,7 +414,7 @@ class SqlToRA(db: Database)
       }
       val newBindings = sch.map(
           (x) => (x._1, alias+"_"+x._1)
-        ).toMap[String, String]
+        )
       return (
         Table(name, 
           sch.map(
@@ -392,121 +430,118 @@ class SqlToRA(db: Database)
     unhandled("FromItem["+fi.getClass.toString+"]")
   }
   // 
-  def convert(e : net.sf.jsqlparser.expression.Expression) : Expression = 
-    convert(e, Map[String,String]())
-  def convert(e : net.sf.jsqlparser.expression.Expression, bindings: Map[String, String]) : Expression = {
-    if(e.isInstanceOf[DateValue]){ 
-      val d = new LocalDate(e.asInstanceOf[DateValue].getValue())
-      return DatePrimitive(d.getYear(), d.getMonthOfYear(), d.getDayOfMonth())
-    }
-    if(e.isInstanceOf[LongValue]){ 
-      return IntPrimitive(e.asInstanceOf[LongValue].getValue()) 
-    }
-    if(e.isInstanceOf[DoubleValue]){ 
-      return FloatPrimitive(e.asInstanceOf[DoubleValue].getValue()) 
-    }
-    if(e.isInstanceOf[StringValue]){
-      return StringPrimitive(e.asInstanceOf[StringValue].getValue())
-    }
-    if(e.isInstanceOf[InverseExpression]){
-      return Not(convert(e.asInstanceOf[InverseExpression].getExpression, bindings))
-    }
-    if(e.isInstanceOf[BinaryExpression]){
-      val lhs = convert(e.asInstanceOf[BinaryExpression].getLeftExpression(), bindings)
-      val rhs = convert(e.asInstanceOf[BinaryExpression].getRightExpression(), bindings)
-  
-      if(e.isInstanceOf[Addition]){ return Arithmetic(Arith.Add, lhs, rhs); }
-      if(e.isInstanceOf[Subtraction]){ return Arithmetic(Arith.Sub, lhs, rhs); }
-      if(e.isInstanceOf[Multiplication]){ return Arithmetic(Arith.Mult, lhs, rhs); }
-      if(e.isInstanceOf[Division]){ return Arithmetic(Arith.Div, lhs, rhs); }
-      if(e.isInstanceOf[AndExpression]){ return Arithmetic(Arith.And, lhs, rhs); }
-      if(e.isInstanceOf[OrExpression]){ return Arithmetic(Arith.Or, lhs, rhs); }
-      
-      if(e.isInstanceOf[EqualsTo]){ return Comparison(Cmp.Eq, lhs, rhs); }
-      if(e.isInstanceOf[NotEqualsTo]){ return Comparison(Cmp.Neq, lhs, rhs); }
-      if(e.isInstanceOf[GreaterThan]){ return Comparison(Cmp.Gt, lhs, rhs); }
-      if(e.isInstanceOf[MinorThan]){ return Comparison(Cmp.Lt, lhs, rhs); }
-      if(e.isInstanceOf[GreaterThanEquals]){ return Comparison(Cmp.Gte, lhs, rhs); }
-      if(e.isInstanceOf[MinorThanEquals]){ return Comparison(Cmp.Lte, lhs, rhs); }
-      if(e.isInstanceOf[LikeExpression]){ 
-        return Comparison(if(e.asInstanceOf[LikeExpression].isNot()) 
-                            { Cmp.NotLike } else { Cmp.Like }, lhs, rhs); 
+  def convert(e : net.sf.jsqlparser.expression.PrimitiveValue) : PrimitiveValue =
+  {
+    e match { 
+      case i: LongValue   => return IntPrimitive(i.getValue())
+      case f: DoubleValue => return FloatPrimitive(f.getValue())
+      case s: StringValue => return StringPrimitive(s.getValue())
+      case _: NullValue   => return NullPrimitive()
+      case d: DateValue   => {
+        val d2 = new LocalDate(e.asInstanceOf[DateValue].getValue())
+        return DatePrimitive(d2.getYear(), d2.getMonthOfYear(), d2.getDayOfMonth())
       }
-      unhandled("Expression[BinaryExpression]: "+e)
-      return null;
-    }
-    if(e.isInstanceOf[Column]){ return convertColumn(e.asInstanceOf[Column], bindings) }
-    if(e.isInstanceOf[net.sf.jsqlparser.expression.Function]){
-      val f = e.asInstanceOf[net.sf.jsqlparser.expression.Function]
-      val name = f.getName.toUpperCase
-      val parameters : List[Expression] = 
-        if(f.getParameters == null) { List[Expression]() }
-        else {
-          f.getParameters.
-            getExpressions.
-            map( (o : Any) => convert(o.asInstanceOf[net.sf.jsqlparser.expression.Expression], bindings) ).
-            toList
-        }
-      return (name, parameters) match {
-        case ("ROWID", List()) => RowIdVar()
-        case ("ROWID", List(x: RowIdPrimitive)) => x
-        case ("ROWID", List(x: PrimitiveValue)) => RowIdPrimitive(x.payload.toString)
-        case _ if f.isDistinct() => mimir.algebra.Function("DISTINCT_"+name, parameters)
-        case _ => mimir.algebra.Function(name, parameters)
-      }
-      
-      // unhandled("Expression[Function:"+name+"]")
-    }
-    if(e.isInstanceOf[net.sf.jsqlparser.expression.CaseExpression]){
-      val c = e.asInstanceOf[net.sf.jsqlparser.expression.CaseExpression]
-      val inlineSwitch: Expression => Expression = 
-        if(c.getSwitchExpression() == null){
-          (x) => x
-        } else {
-          val switch = convert(c.getSwitchExpression(), bindings)
-          (x) => Comparison(Cmp.Eq, switch, x)
-        }
-      return ExpressionUtils.makeCaseExpression(
-        c.getWhenClauses().map ( (w: WhenClause) => {
-          (
-            inlineSwitch(convert(w.getWhenExpression(), bindings)),
-            convert(w.getThenExpression(), bindings)
-          )
-        }).toList, 
-        convert(c.getElseExpression(), bindings)
-      )
-    }
-    if(e.isInstanceOf[NullValue]) { return NullPrimitive() }
-    if(e.isInstanceOf[net.sf.jsqlparser.expression.operators.relational.IsNullExpression]) {
-      val isNullExpression = e.asInstanceOf[net.sf.jsqlparser.expression.operators.relational.IsNullExpression]
-      val ret = mimir.algebra.IsNullExpression(
-        convert(isNullExpression.getLeftExpression, bindings)
-      )
-      if(isNullExpression.isNot){
-        return mimir.algebra.Not(ret)
-      } else {
-        return ret
-      }
-    }
-    unhandled("Expression["+e.getClass+"]: " + e)
+    }    
   }
 
-  def convertColumn(c: Column, bindings: Map[String, String]): Var =
-  {
-    val table = c.getTable.getName match {
-      case null => null
-      case x => x.toUpperCase
-    }
-    val name = c.getColumnName.toUpperCase
-    if(table == null){
-      val binding = bindings.get(name);
-      if(binding.isEmpty){
-        if(name.equalsIgnoreCase("ROWID")) return Var("ROWID")
-        else throw new SQLException("Unknown Variable: "+name+" in "+bindings.toString)
+  def convert(e : net.sf.jsqlparser.expression.Expression) : Expression = 
+    convert(e, Map[String,String]())
+  def convert(e : net.sf.jsqlparser.expression.Expression, bindings: String => String) : Expression = {
+    e match {
+      case prim: net.sf.jsqlparser.expression.PrimitiveValue => convert(prim)
+      case inv: InverseExpression => 
+        return Not(convert(inv.getExpression, bindings))
+      case bin: BinaryExpression => {
+        val lhs = convert(bin.getLeftExpression(), bindings)
+        val rhs = convert(bin.getRightExpression(), bindings)
+        bin match {  
+          case _:Addition       => return Arithmetic(Arith.Add, lhs, rhs)
+          case _:Subtraction    => return Arithmetic(Arith.Sub, lhs, rhs)
+          case _:Multiplication => return Arithmetic(Arith.Mult, lhs, rhs)
+          case _:Division       => return Arithmetic(Arith.Div, lhs, rhs)
+          case _:AndExpression  => return Arithmetic(Arith.And, lhs, rhs)
+          case _:OrExpression   => return Arithmetic(Arith.Or, lhs, rhs)
+      
+          case _:EqualsTo          => return Comparison(Cmp.Eq, lhs, rhs)
+          case _:NotEqualsTo       => return Comparison(Cmp.Neq, lhs, rhs)
+          case _:GreaterThan       => return Comparison(Cmp.Gt, lhs, rhs)
+          case _:MinorThan         => return Comparison(Cmp.Lt, lhs, rhs)
+          case _:GreaterThanEquals => return Comparison(Cmp.Gte, lhs, rhs)
+          case _:MinorThanEquals   => return Comparison(Cmp.Lte, lhs, rhs)
+
+          case like: LikeExpression =>
+            return Comparison(if(like.isNot()){ Cmp.NotLike } else { Cmp.Like }, lhs, rhs)
+
+
+        }
       }
-      return Var(binding.get)
-    } else {
-      return Var(table + "_" + name);
+      
+      case col:Column => return convertColumn(col, bindings)
+
+      case f:Function => {
+        val name = f.getName.toUpperCase
+        val parameters : List[Expression] = 
+          if(f.getParameters == null) { List[Expression]() }
+          else {
+            f.getParameters.
+              getExpressions.
+              map( (o : Any) => convert(o.asInstanceOf[net.sf.jsqlparser.expression.Expression], bindings) ).
+              toList
+          }
+        return (name, parameters) match {
+          case ("ROWID", List()) => RowIdVar()
+          case ("ROWID", List(x: RowIdPrimitive)) => x
+          case ("ROWID", List(x: PrimitiveValue)) => RowIdPrimitive(x.payload.toString)
+          case _ if f.isDistinct() => mimir.algebra.Function("DISTINCT_"+name, parameters)
+          case _ => mimir.algebra.Function(name, parameters)
+        }
+      }
+
+      case c:net.sf.jsqlparser.expression.CaseExpression => {
+        val inlineSwitch: Expression => Expression = 
+          if(c.getSwitchExpression() == null){
+            (x) => x
+          } else {
+            val switch = convert(c.getSwitchExpression(), bindings)
+            (x) => Comparison(Cmp.Eq, switch, x)
+          }
+        return ExpressionUtils.makeCaseExpression(
+          c.getWhenClauses().map ( (w: WhenClause) => {
+            (
+              inlineSwitch(convert(w.getWhenExpression(), bindings)),
+              convert(w.getThenExpression(), bindings)
+            )
+          }).toList, 
+          convert(c.getElseExpression(), bindings)
+        )
+      }
+
+      case isnull: net.sf.jsqlparser.expression.operators.relational.IsNullExpression => {
+        val base = mimir.algebra.IsNullExpression(
+          convert(isnull.getLeftExpression, bindings)
+        )
+        if(isnull.isNot){ return Not(base) }
+        else { return base; }
+      }
+    }
+  }
+
+  def convertColumn(c: Column, bindings: String => String): Var =
+  {
+    val name = c.getColumnName.toUpperCase
+
+    c.getTable.getName match {
+      case null => 
+        val binding = 
+          try {
+            bindings(name);
+          } catch {
+            case _:NoSuchElementException => 
+              throw new SQLException("Unknown Variable: "+name+" in "+bindings.toString)        
+          }
+        return Var(binding)
+      case table => 
+        return Var(table.toUpperCase + "_" + name);
     }
   }
 

@@ -4,13 +4,13 @@ import mimir.algebra.{PrimitiveValue,StringPrimitive};
 
 object JSONBuilder {
 	
-	def list(content: List[String]): String =
+	def list(content: Seq[String]): String =
 		"["+content.mkString(",")+"]"
 
 	def dict(content: Map[String,String]): String =
 		dict(content.toList)
 
-	def dict(content: List[(String,String)]): String =
+	def dict(content: Seq[(String,String)]): String =
 		"{"+content.map( (x) => 
 			"\""+x._1.toLowerCase()+"\":"+x._2
 		).mkString(",")+"}"
@@ -20,6 +20,10 @@ object JSONBuilder {
 	}
 
 	def int(content: Int): String = {
+		content.toString();
+	}
+
+	def double(content: Double): String = {
 		content.toString();
 	}
 

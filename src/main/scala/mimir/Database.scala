@@ -11,7 +11,7 @@ import mimir.models.Model
 import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
 import mimir.lenses.{LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
-import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens,CreateView,Explain}
+import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens,CreateView,Explain,Feedback,Load}
 import mimir.optimizer.{InlineVGTerms, ResolveViews}
 import mimir.util.{LoadCSV,ExperimentalOptions}
 import mimir.web.WebIterator
@@ -84,7 +84,7 @@ case class Database(backend: Backend)
   //// Parsing
   val sql             = new mimir.sql.SqlToRA(this)
   val ra              = new mimir.sql.RAToSql(this)
-  val operator        = new mimir.parser.OperatorParser(models.getModel _,
+  val operator        = new mimir.parser.OperatorParser(models.get _,
     (x) => 
       this.getTableSchema(x) match {
         case Some(x) => x
@@ -299,6 +299,21 @@ case class Database(backend: Backend)
     stmt match {
       case sel:  Select     => throw new SQLException("Can't evaluate SELECT as an update")
       case expl: Explain    => throw new SQLException("Can't evaluate EXPLAIN as an update")
+
+      case feedback: Feedback => {
+        val name = feedback.getModel().toUpperCase()
+        val idx = feedback.getIdx()
+        val args = feedback.getArgs().map(sql.convert(_))
+        val v = sql.convert(feedback.getValue())
+
+        val model = models.get(name) 
+        model.feedback(idx, args, v)
+        models.update(model)
+        if(!backend.canHandleVGTerms()){
+          bestGuessCache.update(model, idx, args, v)
+        }
+      }
+
       case lens: CreateLens => {
         val t = lens.getType().toUpperCase()
         val name = lens.getName()
@@ -307,18 +322,29 @@ case class Database(backend: Backend)
 
         lenses.createLens(t, name, query, args)
       }
-      case view: CreateView => views.createView(view.getTable().getName(), 
+      case view: CreateView => views.createView(view.getTable().getName().toUpperCase, 
                                                 sql.convert(view.getSelectBody()))
+      case load: Load => {
+        // Assign a default table name if needed
+        val target = 
+          load.getTable() match { 
+            case null => load.getFile.getName.replaceAll("\\..*", "").toUpperCase
+            case s => s
+          }
+
+        loadTable(target, load.getFile)
+      }
+
       case drop: Drop     => {
           drop.getType().toUpperCase match {
             case "TABLE" | "INDEX" => 
               backend.update(drop.toString());
 
             case "VIEW" =>
-              views.dropView(drop.getName());
+              views.dropView(drop.getName().toUpperCase);
 
             case "LENS" =>
-              lenses.dropLens(drop.getName())
+              lenses.dropLens(drop.getName().toUpperCase)
 
             case _ =>
               throw new SQLException("Invalid drop type '"+drop.getType()+"'")

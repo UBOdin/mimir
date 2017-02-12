@@ -1,4 +1,4 @@
-package mimir.models
+package mimir.ctables
 
 import mimir.algebra._
 import mimir.util.JSONBuilder
@@ -7,7 +7,8 @@ case class Reason(
   val reason: String,
   val model: String,
   val idx: Int,
-  val args: Seq[PrimitiveValue]
+  val args: Seq[PrimitiveValue],
+  val repair: Repair
 ){
   override def toString: String = 
     reason+" ("+model+";"+idx+"["+args.mkString(", ")+"])"
@@ -17,6 +18,7 @@ case class Reason(
       "english" -> JSONBuilder.string(reason),
       "source"  -> JSONBuilder.string(model),
       "varid"   -> JSONBuilder.int(idx),
-      "args"    -> JSONBuilder.list( args.map( x => JSONBuilder.string(x.toString)).toList )
+      "args"    -> JSONBuilder.list( args.map( x => JSONBuilder.string(x.toString)).toList ),
+      "repair"  -> repair.toJSON
     ))
 }

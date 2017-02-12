@@ -13,19 +13,19 @@ import mimir.util._
  */
 @SerialVersionUID(1000L)
 class DefaultMetaModel(name: String, context: String, models: Seq[String]) 
-  extends SingleVarModel(name) 
-  with DataIndependentSingleVarFeedback 
-  with Serializable
-  with NoArgSingleVarModel
+  extends Model(name) 
+  with DataIndependentFeedback 
+  with NoArgModel
+  with FiniteDiscreteDomain
 {
-  def varType(args: Seq[Type]): Type = TString()
-  def bestGuess(args: Seq[PrimitiveValue]): PrimitiveValue =
-    choice.getOrElse(StringPrimitive(models.head))
-  def sample(randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue =
+  def varType(idx: Int, args: Seq[Type]): Type = TString()
+  def bestGuess(idx: Int, args: Seq[PrimitiveValue]): PrimitiveValue =
+    choices.getOrElse(idx, StringPrimitive(models.head))
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue =
     StringPrimitive(RandUtils.pickFromList(randomness, models))
-  def reason(args: Seq[PrimitiveValue]): String =
+  def reason(idx: Int, args: Seq[PrimitiveValue]): String =
   {
-    choice match {
+    choices.get(idx) match {
       case None => {
         val bestChoice = models.head
         val modelString = models.mkString(", ")
@@ -35,5 +35,9 @@ class DefaultMetaModel(name: String, context: String, models: Seq[String])
         s"You told me to use the $choiceStr model for $context"
     }
   }
-  def validateChoice(v: PrimitiveValue) = models.contains(v.asString)
+  def validateChoice(idx: Int, v: PrimitiveValue) = models.contains(v.asString)
+
+  def getDomain(idx: Int, args: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
+    models.map( x => (StringPrimitive(x), 0.0) )
+
 }

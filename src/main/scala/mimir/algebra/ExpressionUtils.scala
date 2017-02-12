@@ -109,10 +109,12 @@ object ExpressionUtils {
 			case Conditional(condition, thenClause, elseClause) =>
 			{
 				val thenCondition = makeAnd(prefix, condition)
+
 				val (thenWhenThens, thenElse) = 
 					foldConditionalsToCase(thenClause, thenCondition)
+
 				val (elseWhenThens, elseElse) = 
-					foldConditionalsToCase(elseClause, condition)
+					foldConditionalsToCase(elseClause, BoolPrimitive(true))
 				(	
 					thenWhenThens ++ Some((thenCondition, thenElse)) ++ elseWhenThens, 
 					elseElse

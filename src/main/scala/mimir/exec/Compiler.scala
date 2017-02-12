@@ -36,6 +36,8 @@ class Compiler(db: Database) extends LazyLogging {
     // Recursively expand all view tables using mimir.optimizer.ResolveViews
     var oper = ResolveViews(db, rawOper)
 
+    logger.debug(s"RAW: $oper")
+    
     // We'll need the pristine pre-manipulation schema down the line
     // As a side effect, this also forces the typechecker to run, 
     // acting as a sanity check on the query before we do any serious
@@ -64,6 +66,8 @@ class Compiler(db: Database) extends LazyLogging {
       outputSchema.map(_._1).toList ++
         colDeterminism.toList.flatMap( x => ExpressionUtils.getColumns(x._2)) ++ 
         ExpressionUtils.getColumns(rowDeterminism)
+
+    logger.debug(s"PRE-OPTIMIZED: $oper")
 
     // Clean things up a little... make the query prettier, tighter, and 
     // faster

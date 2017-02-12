@@ -133,3 +133,7 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 	def typeLeaf: Parser[Expression] = 
 		exprType ^^ { (t) => TypePrimitive(t) }
 }
+
+object SimpleExpressionParser extends ExpressionParser(Map())
+
+
