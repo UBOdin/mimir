@@ -21,6 +21,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
   def beforeAll =
   {
     update("CREATE TABLE R(A integer, B integer)")
+    update("CREATE TABLE T(C integer, D integer)")
   }
   
 
@@ -28,7 +29,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
 
     
     sequential
-    Fragments.foreach(1 to 10){ i => 
+    Fragments.foreach(1 to 3){ i => 
       sequential
       Fragments.foreach(Seq(
         (s"Queries for Tables - run $i", 
@@ -54,13 +55,16 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
         (s"Queries for Tables with Epression Attrinutes with Selection- run $i",
             "SELECT R.A + R.B AS Z FROM R WHERE R.A = R.B"),
         (s"Queries for Aliased Tables with Epression Attrinutes with Selection- run $i",
-            "SELECT S.A + S.B AS Z FROM R AS S WHERE S.A = S.B")
+            "SELECT S.A + S.B AS Z FROM R AS S WHERE S.A = S.B"),
+        (s"Queries for Joins with Aliased Tables with Aliased Attributes - run $i", 
+            "SELECT S.A AS P, U.C AS Q FROM R AS S JOIN T AS U ON S.A = U.C")
         )){
         daq =>  {
           {translateOperatorsFromMimirToGProM(daq)}
           {translateOperatorsFromGProMToMimir(daq)}
           {translateOperatorsFromMimirToGProMToMimir(daq)}
           {translateOperatorsFromGProMToMimirToGProM(daq)}
+          //{translateOperatorsFromMimirToGProMForRewriteFasterThanThroughSQL(daq)}
         }
       }
     }
@@ -116,10 +120,45 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
          GProMWrapper.inst.gpromFreeMemContext()
          val gpromNode2 = OperatorTranslation.mimirOperatorToGProMList(testOper)
          gpromNode2.write()
-         GProMWrapper.inst.gpromCreateMemContext() 
+         //GProMWrapper.inst.gpromCreateMemContext() 
          val nodeStr2 = GProMWrapper.inst.gpromNodeToString(gpromNode2.getPointer())
-         GProMWrapper.inst.gpromFreeMemContext()
+         //GProMWrapper.inst.gpromFreeMemContext()
          nodeStr.replaceAll("0x[a-zA-Z0-9]+", "") must be equalTo nodeStr2.replaceAll("0x[a-zA-Z0-9]+", "")
     }
 
+    
+    def translateOperatorsFromMimirToGProMForRewriteFasterThanThroughSQL(descAndQuery : (String, String)) =  s"Translate Operators from Mimir to GProM for Rewrite Faster Than SQL for ${descAndQuery._1}" >> {
+         val queryStr = descAndQuery._2 
+         val statements = db.parse(queryStr)
+         val testOper = db.sql.convert(statements.head.asInstanceOf[Select])
+         
+         val timeForRewriteThroughOperatorTranslation = time {
+           val gpromNode = OperatorTranslation.mimirOperatorToGProMList(testOper)
+           gpromNode.write()
+           GProMWrapper.inst.gpromCreateMemContext() 
+           val gpromNode2 = GProMWrapper.inst.provRewriteOperator(gpromNode.getPointer())
+           val testOper2 = OperatorTranslation.gpromStructureToMimirOperator(0, gpromNode2, null)
+           val operStr = testOper2.toString()
+           GProMWrapper.inst.gpromFreeMemContext()
+           operStr
+        }
+         
+        val timeForRewriteThroughSQL = time {
+           val sqlToRewrite = db.ra.convert(testOper)
+           val sqlRewritten = GProMWrapper.inst.gpromRewriteQuery(sqlToRewrite.toString()+";")
+           val statements2 = db.parse(sqlRewritten)
+           val testOper2 = db.sql.convert(statements.head.asInstanceOf[Select])
+           testOper2.toString()
+        }
+         
+         timeForRewriteThroughOperatorTranslation._1 must be equalTo timeForRewriteThroughSQL._1
+         timeForRewriteThroughOperatorTranslation._2 should be lessThan timeForRewriteThroughSQL._2 
+    }
+    
+    def time[F](anonFunc: => F): (F, Long) = {  
+      val tStart = System.nanoTime()
+      val anonFuncRet = anonFunc  
+      val tEnd = System.nanoTime()
+      (anonFuncRet, tEnd-tStart)
+    }
 }

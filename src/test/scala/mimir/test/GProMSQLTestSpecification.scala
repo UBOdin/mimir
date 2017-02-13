@@ -31,7 +31,7 @@ object GProMDBTestInstances
             case "NO" => false; case "YES" => true
           }
           val oldDBExists = dbFile.exists();
-          val backend = new GProMBackend(jdbcBackendMode, tempDBName+".db", 0)
+          val backend = new GProMBackend(jdbcBackendMode, tempDBName+".db", -1)
           val tmpDB = new Database(backend);
           if(shouldResetDB){
             if(dbFile.exists()){ dbFile.delete(); }

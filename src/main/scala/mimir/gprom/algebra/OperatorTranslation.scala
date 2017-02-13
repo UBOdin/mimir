@@ -31,7 +31,12 @@ object OperatorTranslation {
         throw new Exception("Translation Not Yet Implemented '"+duplicateRemoval+"'") 
         }
       case joinOperator : GProMJoinOperator => { 
-        throw new Exception("Translation Not Yet Implemented '"+joinOperator+"'") 
+        val lhs  = gpromStructureToMimirOperator(depth+1,joinOperator.op.inputs.head, joinOperator)
+        val rhs = gpromStructureToMimirOperator(depth+1,joinOperator.op.inputs.head.next, joinOperator)
+        val tableIntermSch = extractTableSchemaGProMOperator(joinOperator)
+        val condition = translateGProMConditionToMimirExpression(new GProMNode(joinOperator.cond.getPointer), tableIntermSch) 
+        new Select(condition, new Join(lhs, rhs) )
+        
         }
       case list:GProMList => {
         val listHead = list.head
@@ -41,8 +46,11 @@ object OperatorTranslation {
         val listCellDataGPStructure = new GProMNode(listCell.data.ptr_value)
         val cnvNode = GProMWrapper.inst.castGProMNode(listCellDataGPStructure);
         val retOp = gpromStructureToMimirOperator(depth, cnvNode, gpromParentStruct)
-        if(listCell.next != null)
-           throw new Exception("There are more operators in the list but they are not being translated '"+listCell.next+"'") 
+        /*if(listCell.next != null){
+          val warningException = new Exception("There are more operators in the list but they are not being translated '"+listCell.next+"'") 
+          println( warningException.toString() )
+          warningException.printStackTrace()
+        }*/
         retOp
       }
       case nestingOperator : GProMNestingOperator => { 
@@ -298,7 +306,7 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
           (for(i <- 1 to tableAccessOperator.op.schema.attrDefs.length ) yield {
             val attrDef = new GProMAttributeDef(listCell.data.ptr_value)
             listCell = listCell.next
-            new MimirToGProMIntermediateSchemaInfo(schemaNames._1, schemaNames._2, attrDef.attrName, schemaNames._2 + attrDef.attrName, "", getMimirTypeFromGProMDataType(attrDef.dataType), i-1)
+            new MimirToGProMIntermediateSchemaInfo(schemaNames._1, schemaNames._2, attrDef.attrName, schemaNames._2 + attrDef.attrName, "", getMimirTypeFromGProMDataType(attrDef.dataType), i-1, 0)
           }).toSeq
         }
         case projectionOperator : GProMProjectionOperator => { 
@@ -343,11 +351,14 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         case selectionOperator : GProMSelectionOperator => { 
             extractTableSchemaGProMOperator(selectionOperator.op.inputs)
           }
+        case joinOperator : GProMJoinOperator => { 
+            extractTableSchemaGProMOperator(joinOperator.op.inputs)
+          }
         case list:GProMList => {
             var listCell = list.head
             var reurnSeq = Seq[MimirToGProMIntermediateSchemaInfo]()
             for(i <- 1 to list.length ) {
-              reurnSeq = reurnSeq.union(extractTableSchemaGProMOperator( listCell))
+              reurnSeq = joinIntermSchemas(reurnSeq, extractTableSchemaGProMOperator( listCell), 0, true)
               listCell = listCell.next
             }
             reurnSeq
@@ -356,8 +367,11 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
             val listCellDataGPStructure = new GProMNode(listCell.data.ptr_value)
             val cnvNode = GProMWrapper.inst.castGProMNode(listCellDataGPStructure);
             val retOp = extractTableSchemaGProMOperator(cnvNode)
-            if(listCell.next != null)
-               throw new Exception("There are more operators in the list but they are not being translated '"+listCell.next+"'") 
+            /*if(listCell.next != null){
+              val warningException = new Exception("There are more operators in the list but they are not being translated '"+listCell.next+"'") 
+              println( warningException.toString() )
+              warningException.printStackTrace()
+            }*/
             retOp
           }
         case x => {
@@ -375,7 +389,7 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
     (for(i <- 1 to gpromSchema.attrDefs.length ) yield {
       val attrDef = new GProMAttributeDef(listCell.data.ptr_value)
       listCell = listCell.next
-      new MimirToGProMIntermediateSchemaInfo(schemaNames._1, schemaNames._2, attrDef.attrName, schemaNames._2 + attrDef.attrName, "", getMimirTypeFromGProMDataType(attrDef.dataType), i-1)
+      new MimirToGProMIntermediateSchemaInfo(schemaNames._1, schemaNames._2, attrDef.attrName, schemaNames._2 + attrDef.attrName, "", getMimirTypeFromGProMDataType(attrDef.dataType), i-1, 0)
     }).toSeq
   }
   
@@ -389,6 +403,13 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         case GProM_JNA.GProMDataType.GProM_DT_STRING => new TString()
         case _ => new TAny()
       }
+  }
+  
+  def joinIntermSchemas(intermSchema0 : Seq[MimirToGProMIntermediateSchemaInfo], intermSchema1 : Seq[MimirToGProMIntermediateSchemaInfo], fromClausePos : Int, offsetAttrPos : Boolean) : Seq[MimirToGProMIntermediateSchemaInfo] = {
+    var attrPosOffset = 0
+    if(offsetAttrPos)
+      attrPosOffset = intermSchema0.length
+    intermSchema0.union(intermSchema1.map(rise => new MimirToGProMIntermediateSchemaInfo(rise.name, rise.alias, rise.attrName, rise.attrMimirName, rise.attrProjectedName, rise.attrType, rise.attrPosition+attrPosOffset, fromClausePos)))
   }
   
   /*def getSchemaFromGProMQueryOperator(schema: Seq[MimirToGProMIntermediateSchemaInfo], gpromQueryOp : GProMQueryOperator) : Seq[(String, Type)] = {
@@ -435,7 +456,7 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
     (columns, provAttrs)
   }*/
   
-  class MimirToGProMIntermediateSchemaInfo(val name : String, val alias : String, val attrName : String, val attrMimirName : String, val attrProjectedName : String, val attrType : Type, val attrPosition : Int)  {
+  class MimirToGProMIntermediateSchemaInfo(val name : String, val alias : String, val attrName : String, val attrMimirName : String, val attrProjectedName : String, val attrType : Type, val attrPosition : Int, val attrFromClausePosition : Int)  {
     def getAttrPrefix() : String = {
       alias match { 
           case "" => ""
@@ -471,6 +492,25 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
 			case Recover(subj,invisScm) => {
         list
       }
+			
+			case Aggregate(groupBy, agggregates, source) => {
+			  list
+			}
+
+			case Select(cond, Join(lhs, rhs)) => { 
+			  val leftList = mimirOperatorToGProMList(lhs)
+			  val rightList = mimirOperatorToGProMList(rhs)
+			  val schTable = joinIntermSchemas(getSchemaForGProM(lhs), getSchemaForGProM(rhs), 1, false)
+        val toQoScm = translateMimirSchemaToGProMSchema("JOIN", schTable)
+			  val joinInputsList = joinGProMLists(leftList, rightList) 
+        val gqo = new GProMQueryOperator.ByValue(GProM_JNA.GProMNodeTag.GProM_T_JoinOperator, joinInputsList, toQoScm, null, null, null)
+			  val gpcond = translateMimirExpressionToGProMCondition(cond, schTable) 
+        val gpnbr = new GProMNode.ByReference(gpcond.getPointer)
+			  val gpjoinop = new GProMJoinOperator.ByValue(gqo, GProM_JNA.GProMJoinType.GProM_JOIN_INNER, gpnbr)
+			  list.head = createGProMListCell(gpjoinop) 
+			  list.length += 1; 
+			  list
+			}
 			case Select(cond, src) => {
 			  val schTable = getSchemaForGProM(mimirOperator)
         val toQoScm = translateMimirSchemaToGProMSchema("SELECT", schTable)
@@ -480,13 +520,6 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
 			  val gpselop = new GProMSelectionOperator.ByValue(gqo, gpnbr )
 			  list.head = createGProMListCell(gpselop) 
 			  list.length += 1; 
-			  list
-			}
-			case Aggregate(groupBy, agggregates, source) => {
-			  list
-			}
-
-			case Join(lhs, rhs) => { 
 			  list
 			}
 			case LeftOuterJoin(lhs, rhs, condition) => {
@@ -560,7 +593,7 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
       case Conditional(_,_,_) => translateMimirExpressionToGProMCondition(mimirExpr, schema)
       case Var(v) => {
         val indexOfCol = schema.map(ct => ct.attrMimirName).indexOf(v)
-        val attrRef = new GProMAttributeReference.ByValue(GProM_JNA.GProMNodeTag.GProM_T_AttributeReference, schema(indexOfCol).attrName, 0, schema(indexOfCol).attrPosition, 0, getGProMDataTypeFromMimirType(schema(indexOfCol).attrType ))
+        val attrRef = new GProMAttributeReference.ByValue(GProM_JNA.GProMNodeTag.GProM_T_AttributeReference, schema(indexOfCol).attrName, schema(indexOfCol).attrFromClausePosition, schema(indexOfCol).attrPosition, 0, getGProMDataTypeFromMimirType(schema(indexOfCol).attrType ))
         attrRef
       }
       case x => {
@@ -587,9 +620,9 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
   def translateMimirPrimitiveExpressionToGProMConstant(mimirPrimitive : PrimitiveValue) : GProMConstant.ByValue = {
     val typeValueIsNull = mimirPrimitive match {
       case IntPrimitive(v) => {
-        val intPtr = new Memory(Native.getNativeSize(classOf[Int])).getPointer(0)
+        val intPtr = new Memory(Native.getNativeSize(classOf[Int]))
         intPtr.setInt(0, v.asInstanceOf[Int]);
-        (GProM_JNA.GProMDataType.GProM_DT_INT,intPtr.getPointer(0),0)
+        (GProM_JNA.GProMDataType.GProM_DT_INT,intPtr,0)
       }
       case StringPrimitive(v) => {
         val strPtr = new Memory(v.length()+1)
@@ -597,7 +630,7 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         (GProM_JNA.GProMDataType.GProM_DT_STRING,strPtr,0)
       }
       case FloatPrimitive(v) => {
-        val fltPtr = new Memory(Native.getNativeSize(classOf[Float])).getPointer(0)
+        val fltPtr = new Memory(Native.getNativeSize(classOf[Float]))
         fltPtr.setFloat(0, v.asInstanceOf[Float]);
         (GProM_JNA.GProMDataType.GProM_DT_FLOAT,fltPtr,0)
       }
@@ -605,18 +638,18 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         throw new Exception("Primitive Expression Translation not implemented '"+v+"'")
       }
       case BoolPrimitive(v) => {
-        val intPtr = new Memory(Native.getNativeSize(classOf[Int])).getPointer(0)
+        val intPtr = new Memory(Native.getNativeSize(classOf[Int]))
         intPtr.setInt(0, v.asInstanceOf[Int]);
         (GProM_JNA.GProMDataType.GProM_DT_BOOL,intPtr,0)
       }
       case NullPrimitive() => {
-        val intPtr = new Memory(Native.getNativeSize(classOf[Int])).getPointer(0)
+        val intPtr = new Memory(Native.getNativeSize(classOf[Int]))
         intPtr.setInt(0,0);
         (GProM_JNA.GProMDataType.GProM_DT_INT,intPtr,1)
       }
       case DatePrimitive(y,m,d) => {
         val dtStr = ""+y+"-"+m+"-"+d
-        val strPtr = new Memory(dtStr.length()+1).getPointer(0)
+        val strPtr = new Memory(dtStr.length()+1)
         strPtr.setString(0, dtStr);
         (GProM_JNA.GProMDataType.GProM_DT_STRING,strPtr,0)
       }
@@ -641,7 +674,7 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         val tableSchema = extractTableSchemaForGProM(child)
         val pargsOut = args.map(pa => pa.name)
         val pargsIn = args.map(pa => pa.expression)
-        val plainSch = tableSchema.filter(se => pargsIn.indexOf(se.attrMimirName) >= 0).map(fse => new MimirToGProMIntermediateSchemaInfo(fse.name,fse.alias,fse.attrName,fse.attrMimirName,pargsOut(pargsIn.indexOf(fse.attrMimirName)),fse.attrType, fse.attrPosition))
+        val plainSch = tableSchema.filter(se => pargsIn.indexOf(se.attrMimirName) >= 0).map(fse => new MimirToGProMIntermediateSchemaInfo(fse.name,fse.alias,fse.attrName,fse.attrMimirName,pargsOut(pargsIn.indexOf(fse.attrMimirName)),fse.attrType, fse.attrPosition, 0))
         if(plainSch.length  != oper.schema.length){
           //TODO: replace this hack to get gprom expression attr names with something better
           val gpromExprAttrNames = args.map(pa => {
@@ -654,7 +687,7 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
               case exprNoAliasPattern(mimirExprName) => (gpromExprAttrNames(sch._2).toString.trim, mimirExprName,"")
               case x => (gpromExprAttrNames(sch._2).toString.trim, pargsIn(sch._2).toString, x)
             }
-            new MimirToGProMIntermediateSchemaInfo(tableSchema(0).name, tableSchema(0).alias, attrProjName._1, attrProjName._2, attrProjName._3, sch._1._2, sch._2)
+            new MimirToGProMIntermediateSchemaInfo(tableSchema(0).name, tableSchema(0).alias, attrProjName._1, attrProjName._2, attrProjName._3, sch._1._2, sch._2, 0)
           }).union(plainSch).sortBy(f => f.attrPosition)
         }
         else
@@ -670,7 +703,7 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         getSchemaForGProM(lhs).union(getSchemaForGProM(rhs))
       }
       case Table(name, alias, tgtSch, metadata) => {
-         oper.schema.zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, alias, sch._1._1.replaceFirst((alias + "_"), ""), sch._1._1, "", sch._1._2, sch._2))
+         oper.schema.zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, alias, sch._1._1.replaceFirst((alias + "_"), ""), sch._1._1, "", sch._1._2, sch._2, 0))
       }
       case x => {
         throw new Exception("Can Not extract schema '"+x+"'")
@@ -688,13 +721,13 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         extractTableSchemaForGProM(source)
       }
       case Join(lhs, rhs) => {
-        extractTableSchemaForGProM(lhs).union(extractTableSchemaForGProM(rhs))
+        joinIntermSchemas(extractTableSchemaForGProM(lhs), extractTableSchemaForGProM(rhs), 0, true)
       }
       case LeftOuterJoin(lhs, rhs, cond) => {
-        extractTableSchemaForGProM(lhs).union(extractTableSchemaForGProM(rhs))
+        joinIntermSchemas(extractTableSchemaForGProM(lhs), extractTableSchemaForGProM(rhs), 0, true)
       }
       case Table(name, alias, tgtSch, metadata) => {
-        oper.schema.zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, alias, sch._1._1.replaceFirst((alias + "_"), ""), sch._1._1, "", sch._1._2, sch._2))
+        oper.schema.zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, alias, sch._1._1.replaceFirst((alias + "_"), ""), sch._1._1, "", sch._1._2, sch._2, 0))
       }
       case x => {
         throw new Exception("Can Not extract schema '"+x+"'")
@@ -771,5 +804,28 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
     listCell.data = dataUnion
     listCell.next = null
     listCell;
+  }
+   
+   def joinGProMLists(list0 : GProMList.ByReference, list1 : GProMList.ByReference) : GProMList.ByReference = {
+    val list = new GProMList.ByReference()
+    list.`type` = GProM_JNA.GProMNodeTag.GProM_T_List
+    var listCell = list0.head
+    list.head = listCell
+    var newListCell = listCell
+    for(i <- 1 to (list0.length -1) ) {
+      listCell = listCell.next
+      newListCell.next = listCell
+      newListCell = newListCell.next
+    }
+    listCell = list1.head
+    newListCell.next = listCell
+    newListCell = newListCell.next
+    for(i <- 1 to list1.length ) {
+      listCell = listCell.next
+      newListCell.next = listCell
+      newListCell = newListCell.next
+    }
+    list.length = list0.length + list1.length;
+    list
   }
 }

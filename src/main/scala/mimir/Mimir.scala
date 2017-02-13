@@ -42,7 +42,7 @@ object Mimir {
     ExperimentalOptions.enable(conf.experimental())
     
     // Set up the database connection(s)
-    db = new Database(new GProMBackend(conf.backend(), conf.dbname(), 0))    
+    db = new Database(new GProMBackend(conf.backend(), conf.dbname(), -1))    
     db.backend.open()
 
     db.initializeDBForMimir();
@@ -117,19 +117,28 @@ object Mimir {
     //val queryStr = "PROVENANCE OF (SELECT * from TEST_A_RAW)"
     //val queryStr = "SELECT * from TEST_A_RAW R WHERE R.INSANE = 'true' AND (R.CITY = 'Utmeica' OR R.CITY = 'Ruminlow')"
      //val queryStr = "SELECT T.INT_COL_A + T.INT_COL_B AS AB, T.INT_COL_B + T.INT_COL_C FROM TEST_B_RAW AS T" 
-     val queryStr = "SELECT TEST_B_RAW.INT_COL_B AS B FROM TEST_B_RAW" 
+     val queryStr = "SELECT RB.INT_COL_B AS B, RC.INT_COL_D AS D FROM TEST_B_RAW RB JOIN TEST_C_RAW RC ON RB.INT_COL_A = RC.INT_COL_D" 
      
-     //translateOperatorsFromMimirToGProM(("",queryStr));
+     translateOperatorsFromMimirToGProM(("",queryStr));
      translateOperatorsFromGProMToMimir(("", queryStr))
+     /*for(i <- 1 to 20){
+       translateOperatorsFromMimirToGProMForRewriteFasterThanThroughSQL(("", queryStr +  " WHERE TEST_B_RAW.INT_COL_C = " + i))
+     }*/
      
-     /*GProMWrapper.inst.gpromCreateMemContext()
+     /*val statements = db.parse(queryStr)
+     val testOper2 = db.sql.convert(statements.head.asInstanceOf[Select])
+     val operStr2 = testOper2.toString()
+     println("---------v Actual Mimir Oper v----------")
+     println(operStr2)
+     println("---------^ Actual Mimir Oper ^----------")
+     
+     GProMWrapper.inst.gpromCreateMemContext()
      val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel(queryStr+";")
      val nodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
      GProMWrapper.inst.gpromFreeMemContext()
      println("---------v Actual GProM Oper v----------")
      println(nodeStr)
      println("---------^ Actual GProM Oper ^----------")*/
-         
    
   }
   
@@ -243,6 +252,49 @@ object Mimir {
          println("----------------^ "+success+" ^----------------")
     }
   
+    def translateOperatorsFromMimirToGProMForRewriteFasterThanThroughSQL(descAndQuery : (String, String)) =   {
+         val queryStr = descAndQuery._2 
+         val statements = db.parse(queryStr)
+         val testOper = db.sql.convert(statements.head.asInstanceOf[Select])
+         
+         val timeForRewriteThroughOperatorTranslation = time {
+           val gpromNode = OperatorTranslation.mimirOperatorToGProMList(testOper)
+           gpromNode.write()
+           GProMWrapper.inst.gpromCreateMemContext() 
+           val gpromNode2 = GProMWrapper.inst.provRewriteOperator(gpromNode.getPointer())
+           val testOper2 = OperatorTranslation.gpromStructureToMimirOperator(0, gpromNode2, null)
+           val operStr = testOper2.toString()
+           //val sqlRewritten = db.ra.convert(testOper2)
+           GProMWrapper.inst.gpromFreeMemContext()
+           operStr
+         }
+           
+         val timeForRewriteThroughSQL = time {
+           val sqlToRewrite = db.ra.convert(testOper)
+           val sqlRewritten = GProMWrapper.inst.gpromRewriteQuery(sqlToRewrite.toString()+";")
+           val statements2 = db.parse(sqlRewritten)
+           val testOper2 = db.sql.convert(statements.head.asInstanceOf[Select])
+           testOper2.toString()
+         }
+         val operStr = timeForRewriteThroughOperatorTranslation._1
+         val operStr2 = timeForRewriteThroughSQL._1
+         val success = operStr.equals(operStr2) &&  (timeForRewriteThroughOperatorTranslation._2 < timeForRewriteThroughSQL._2) 
+         
+         println("-----------v Translated Mimir Oper v-----------")
+         println(operStr)
+         println("Time: " + timeForRewriteThroughOperatorTranslation._2)
+         println("---------v SQL Translated Mimir Oper v---------")
+         println(operStr2)
+         println("Time: " + timeForRewriteThroughSQL._2)
+         println("----------------^ "+success+" ^----------------")
+    }
+    
+    def time[F](anonFunc: => F): (F, Long) = {  
+      val tStart = System.nanoTime()
+      val anonFuncRet = anonFunc  
+      val tEnd = System.nanoTime()
+      (anonFuncRet, tEnd-tStart)
+    }
   
   def eventLoop(source: Reader): Unit = {
     var parser = new MimirJSqlParser(source);
