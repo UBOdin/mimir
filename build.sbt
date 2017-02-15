@@ -84,6 +84,8 @@ fork := true
 
 testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
 
+javaOptions in Test ++= Seq("-Xss512M", "-Xms2048M", "-Xmx2048M")
+
 ////// Assembly Plugin //////
 // We use the assembly plugin to create self-contained jar files
 // https://github.com/sbt/sbt-assembly
