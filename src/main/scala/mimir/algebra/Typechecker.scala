@@ -132,7 +132,7 @@ object Typechecker {
 				)
 
 				/* Send schema to parent operator */
-				val sch = groupBySchema ++ aggSchema ++ srcSchema
+				val sch = groupBySchema ++ aggSchema
 				//println(sch)
 				sch
 
