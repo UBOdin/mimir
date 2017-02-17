@@ -301,4 +301,61 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 		(tuple, columnExprs, rowCondition)
 	}
+
+	def explainEverything(oper: Operator): Seq[ReasonSet] =
+	{
+		oper match {
+			case Table(_,_,_) => Seq()
+
+			case Project(args, child) => {
+				val argReasons =
+					args.flatMap { arg =>
+						CTables.getVGTerms(arg.expression)
+					}.map( ReasonSet.make(_, child) )
+
+				argReasons ++ explainEverything(child)
+			}
+
+			case Select(cond, child) => {
+				CTables.
+					getVGTerms(cond).
+					toSeq.
+					map( ReasonSet.make(_, child) ) ++
+				explainEverything(child)
+			}
+
+			case Aggregate(gbs, aggs, child) => {
+				val aggVGTerms = 
+					aggs.flatMap { agg => agg.args.flatMap( CTables.getVGTerms(_) ) }
+				val aggReasons =
+					aggVGTerms.map( ReasonSet.make(_, child) )
+
+				aggReasons ++ explainEverything(child)
+			}
+
+			case Join(lhs, rhs) => {
+				explainEverything(lhs) ++ explainEverything(rhs)
+			}
+
+			case LeftOuterJoin(left, right, cond) => 
+        throw new RAException("Don't know how to explain a left-outer-join")
+
+      case Limit(_, _, child) => 
+      	explainEverything(child)
+
+     	case Sort(args, child) => {
+				val argReasons =
+					args.flatMap { arg =>
+						CTables.getVGTerms(arg.expression)
+					}.map( ReasonSet.make(_, child) )
+
+				argReasons ++ explainEverything(child)
+			}
+
+			case Union(lhs, rhs) => {
+				explainEverything(lhs) ++ explainEverything(rhs)
+			}
+		}
+	}
+
 }

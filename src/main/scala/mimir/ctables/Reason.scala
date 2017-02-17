@@ -26,6 +26,31 @@ class Reason(
       "args"    -> JSONBuilder.list( args.map( x => JSONBuilder.string(x.toString)).toList ),
       "repair"  -> repair.toJSON
     ))
+
+  def equals(r: Reason): Boolean = 
+    model.name.equals(r.model.name) && 
+      (idx == r.idx) && 
+      (args.equals(r.args))
+
+  override def hashCode: Int = 
+    model.hashCode * idx * args.map(_.hashCode).sum
 }
 
-case class ReasonSet(model: String, idx: Int, args: Operator)
+class ReasonSet(model: Model, idx: Int, argLookup: Set[Operator])
+
+object ReasonSet
+{
+  def make(v:VGTerm, input: Operator): ReasonSet =
+  {
+    if(v.args.isEmpty){ return new ReasonSet(v.model, v.idx, Set()); }
+
+    val args =
+      v.args.zipWithIndex.map { case (expr, i) => ProjectArg("ARG_"+i, expr) }
+
+    return new ReasonSet(
+      v.model,
+      v.idx,
+      Set(Project(args, input))
+    );
+  }
+}

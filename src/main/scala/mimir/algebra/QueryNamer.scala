@@ -36,7 +36,7 @@ object QueryNamer
 			case Limit(_, _, src) =>
 				nameQuery(src)
 			case Sort(cols, src) =>
-				nameQuery(src)+"_BY_"+cols.flatMap(col => ExpressionUtils.getColumns(col.expr)).mkString("_")
+				nameQuery(src)+"_BY_"+cols.flatMap(col => ExpressionUtils.getColumns(col.expression)).mkString("_")
 		}
 	}
 
