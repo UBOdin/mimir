@@ -36,7 +36,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
 
     
     sequential
-    Fragments.foreach(1 to 10){ i => 
+    Fragments.foreach(1 to 5){ i => 
       sequential
       Fragments.foreach(Seq(
         (s"Queries for Tables - run $i", 
@@ -64,7 +64,9 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
         (s"Queries for Aliased Tables with Epression Attrinutes with Selection- run $i",
             "SELECT S.A + S.B AS Z FROM R AS S WHERE S.A = S.B"),
         (s"Queries for Aliased Tables with Joins with Aliased Attributes - run $i", 
-            "SELECT S.A AS P, U.C AS Q FROM R AS S JOIN T AS U ON S.A = U.C")
+            "SELECT S.A AS P, U.C AS Q FROM R AS S JOIN T AS U ON S.A = U.C"),
+        (s"Queries for Aliased Tables with Aggragates with Aliased Attributes - run $i",
+            "SELECT SUM(RB.INT_COL_B) AS SB, COUNT(RB.INT_COL_B) AS CB FROM TEST_B_RAW RB")
         )){
         daq =>  {
           {translateOperatorsFromMimirToGProM(daq)}

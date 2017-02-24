@@ -225,7 +225,11 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) e
         argsList.foreach( (args) => {
           var repSel = upd;
           for ( x <- args ) {
-             repSel = repSel.replaceFirst("\\?", "'"+x.asString + "'")
+             val paramStr = x match {
+               case NullPrimitive() => "NULL"
+               case _ => s"'${x.asString}'" 
+             }
+             repSel = repSel.replaceFirst("\\?", paramStr)
           }
           if(!repSel.endsWith(";")) 
             repSel = repSel + ";"
