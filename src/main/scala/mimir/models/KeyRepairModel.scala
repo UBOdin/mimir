@@ -19,6 +19,7 @@ class KeyRepairModel(
   source: Operator, 
   keys: Seq[(String, Type)], 
   target: String,
+  targetType: Type,
   scoreCol: Option[String]
 ) 
   extends Model(name)
@@ -27,13 +28,13 @@ class KeyRepairModel(
 {
   val choices = scala.collection.mutable.Map[List[PrimitiveValue], PrimitiveValue]();
 
-  def varType(idx: Int, args: Seq[Type]): Type = TInt()
+  def varType(idx: Int, args: Seq[Type]): Type = targetType
   def argTypes(idx: Int) = keys.map(_._2)
 
   def bestGuess(idx: Int, args: Seq[PrimitiveValue]): PrimitiveValue =
     choices.get(args.toList) match {
       case Some(choice) => choice
-      case None => getDomain(idx, args).sortBy(_._2).head._1
+      case None => getDomain(idx, args).sortBy(-_._2).head._1
     }
 
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue = 

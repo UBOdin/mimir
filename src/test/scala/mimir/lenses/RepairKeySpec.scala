@@ -15,12 +15,15 @@ object KeyRepairSpec
   with BeforeAll 
 {
 
+  sequential
+
   def beforeAll = 
   {
     update("CREATE TABLE R(A int, B int, C int)")
     loadCSV("R", new File("test/r_test/r.csv"))
     update("CREATE TABLE U(A int, B int, C int)")
     loadCSV("U", new File("test/r_test/u.csv"))
+    loadCSV("FD_DAG", new File("test/repair_key/fd_dag.csv"))
   }
 
   "The Key Repair Lens" should {
@@ -89,7 +92,28 @@ object KeyRepairSpec
       }.toMap[Int, (Int, Boolean, Boolean, Boolean)]
 
       result.keys must contain(eachOf(2, 3, 4))
-      result(2)._1 must be equalTo(4)
+      result(2)._1 must be equalTo(5)
+    }
+
+    "Work with the TI lens" >> {
+      update("""
+        CREATE LENS SCH_REPAIRED
+          AS SELECT * FROM FD_DAG
+        WITH KEY_REPAIR(ATTR, SCORE_BY(STRENGTH))
+      """);
+      val result = query("""
+        SELECT ATTR, PARENT FROM SCH_REPAIRED
+      """).mapRows { row => 
+        row(0).asLong.toInt -> 
+          row(1).asLong.toInt
+      }.toMap[Int, Int]
+
+      result.keys must contain(eachOf(1, 2, 3, 4))
+
+      result(1) must be equalTo(2)
+      result(2) must be equalTo(4)
+      result(3) must be equalTo(4)
+      result(4) must be equalTo(-1)
     }
   }
 

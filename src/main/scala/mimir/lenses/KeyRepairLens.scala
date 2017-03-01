@@ -16,7 +16,7 @@ object KeyRepairLens {
   ): (Operator, Seq[Model]) =
   {
 
-    var schema = query.schema
+    var schema = db.bestGuessSchema(query)
     val schemaMap = schema.toMap
     var scoreCol:Option[String] = None
     val keys: Seq[String] = args.flatMap {
@@ -33,16 +33,16 @@ object KeyRepairLens {
       case somethingElse => throw new SQLException(s"Invalid argument ($somethingElse) for KeyRepairLens $name")
     }
     val values: Seq[(String, Model)] = 
-      schema.map(_._1).
-      filterNot( (keys ++ scoreCol) contains _ ).
-      map { col => 
+      schema.
+      filterNot( (keys ++ scoreCol) contains _._1 ).
+      map { case (col, t) => 
         val model =
           new KeyRepairModel(
             s"$name:$col", 
             name, 
             query, 
             keys.map { k => (k, schemaMap(k)) }, 
-            col,
+            col, t,
             scoreCol
           )
         model.reconnectToDatabase(db)
