@@ -8,6 +8,7 @@ import mimir.parser._
 import mimir.sql._
 import mimir.util.{TimeUtils,ExperimentalOptions}
 import mimir.algebra.{Operator,Project,ProjectArg,Var,RAException,OperatorUtils,Function}
+import mimir.optimizer.ResolveViews
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
 import net.sf.jsqlparser.statement.drop.Drop
@@ -145,7 +146,10 @@ object Mimir {
     println("------ Raw Query ------")
     println(raw)
     db.check(raw)
-    val optimized = db.optimize(raw)
+    val expanded = ResolveViews(db,raw)
+    println("--- Expanded Query ----")
+    println(expanded)    
+    val optimized = db.optimize(expanded)
     println("--- Optimized Query ---")
     println(optimized)
     db.check(optimized)
