@@ -33,7 +33,11 @@ libraryDependencies ++= Seq(
   "org.apache.servicemix.bundles" %   "org.apache.servicemix.bundles.collections-generic" % "4.01_1",
   "info.mimirdb"                  %   "jsqlparser"            % "1.0.0",
   "com.github.wnameless"          %   "json-flattener"        % "0.2.2",
-  "jgraph"                        %   "jgraph"                % "5.13.0.0"
+  "jgraph"                        %   "jgraph"                % "5.13.0.0",
+  "org.apache.commons" % "commons-csv" % "1.4",
+  "commons-io" % "commons-io" % "2.5",
+  "com.twitter" % "hbc-core" % "2.0.1",
+  "org.apache.storm" % "storm-core" % "1.0.1"
 
 )
 

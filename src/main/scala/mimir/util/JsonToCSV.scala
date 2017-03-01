@@ -30,6 +30,50 @@ class JsonToCSV() {
     singleFile(inputFile,outputFileName,fileEncodingType,columnLimit,rowLimit)
   }
 
+  def splitFile(inputFile:File,outputFileName:String,fileEncodingType:String,returnLimit:Int):Unit = {
+    var writer: PrintWriter = null
+    var bw: BufferedWriter = null
+    try {
+      writer = new PrintWriter(outputFileName, fileEncodingType)
+      bw = new BufferedWriter(writer)
+    } catch {
+      case e: FileNotFoundException => e.printStackTrace()
+      case e: UnsupportedEncodingException => e.printStackTrace()
+    }
+
+      var x: FileReader = null
+      var br: BufferedReader = null
+      try {
+        x = new FileReader(inputFile)
+        br = new BufferedReader(x)
+      }
+      catch {
+        case e: Exception => println("Error")
+      }
+
+      if (x == null || br == null) {
+        println("x is null")
+      }
+
+    var rowCount = 0
+    var s = ""
+    var temp = ""
+
+    while((temp = br.readLine()) != null && rowCount < returnLimit){
+      if(temp.length > 1){
+        s += temp
+      }
+      else{
+        bw.write(s)
+        bw.newLine()
+        s = ""
+        rowCount += 1
+      }
+    }
+    bw.close()
+    writer.close()
+  }
+
 /*  def convertToCsv(inputFile:Array[File],outputFileName:String,fileEncodingType:String,columnLimit:Int,rowLimit:Int):Unit = {
     multipleFiles(inputFile,outputFileName,fileEncodingType,columnLimit,rowLimit);
   }
