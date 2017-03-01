@@ -19,6 +19,8 @@ object KeyRepairSpec
   {
     update("CREATE TABLE R(A int, B int, C int)")
     loadCSV("R", new File("test/r_test/r.csv"))
+    update("CREATE TABLE U(A int, B int, C int)")
+    loadCSV("U", new File("test/r_test/u.csv"))
   }
 
   "The Key Repair Lens" should {
@@ -68,6 +70,27 @@ object KeyRepairSpec
       result(2)._5 must be equalTo true
     }
 
+    "Work with Scores" >> {
+      update("""
+        CREATE LENS U_UNIQUE_B
+          AS SELECT * FROM U
+        WITH KEY_REPAIR(B, SCORE_BY(C))
+      """);
+
+      val result = query("""
+        SELECT B, A FROM U_UNIQUE_B
+      """).mapRows { row => 
+        row(0).asLong.toInt -> (
+          row(1).asLong.toInt, 
+          row.deterministicCol(0),
+          row.deterministicCol(1),
+          row.deterministicRow()
+        )
+      }.toMap[Int, (Int, Boolean, Boolean, Boolean)]
+
+      result.keys must contain(eachOf(2, 3, 4))
+      result(2)._1 must be equalTo(4)
+    }
   }
 
 }

@@ -16,19 +16,25 @@ object KeyRepairLens {
   ): (Operator, Seq[Model]) =
   {
 
-    val schema = query.schema
+    var schema = query.schema
     val schemaMap = schema.toMap
-    val keys: Seq[String] = args.map {
+    var scoreCol:Option[String] = None
+    val keys: Seq[String] = args.flatMap {
       case Var(col) => {
-        if(schemaMap contains col){ col }
+        if(schemaMap contains col){ Some(col) }
         else {
           throw new SQLException(s"Invalid column: $col in KeyRepairLens $name")
         }
       }
+      case Function("SCORE_BY", Seq(Var(col))) => {
+        scoreCol = Some(col.toUpperCase)
+        None
+      }
       case somethingElse => throw new SQLException(s"Invalid argument ($somethingElse) for KeyRepairLens $name")
     }
     val values: Seq[(String, Model)] = 
-      schema.map(_._1).filterNot( keys contains _ ).
+      schema.map(_._1).
+      filterNot( (keys ++ scoreCol) contains _ ).
       map { col => 
         val model =
           new KeyRepairModel(
@@ -36,7 +42,8 @@ object KeyRepairLens {
             name, 
             query, 
             keys.map { k => (k, schemaMap(k)) }, 
-            col
+            col,
+            scoreCol
           )
         model.reconnectToDatabase(db)
         ( col, model )
