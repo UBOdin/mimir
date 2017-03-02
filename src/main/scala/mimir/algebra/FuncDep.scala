@@ -22,6 +22,7 @@ import java.sql.ResultSet
 import com.jgraph.layout.tree.JGraphTreeLayout
 import mimir.util.JDBCUtils
 import edu.uci.ics.jung.visualization.renderers.Renderer.VertexLabel.Position
+import org.javacc.parser.OutputFile
 
 import scala.collection.JavaConverters._
 
@@ -64,6 +65,7 @@ class FuncDep
   var countTable:ArrayList[TreeMap[String,Integer]] = null // contains a count of every occurrence of every value in the column
   var densityTable:ArrayList[Integer] = null // gives the density for column, that is percentage of non-null values
   var blackList:ArrayList[Integer] = null // a list of all the columns that are null or mostly null
+  var fdGraph: DirectedSparseMultigraph[Integer, String] = null
 
   var parentTable: TreeMap[Integer, ArrayList[Integer]] = null
   var entityPairMatrix:TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]] = null // outer string is entity pair so column#,column#: to a treemap that is essentially a look-up matrix for columns that contain column to column strengths
@@ -361,7 +363,7 @@ class FuncDep
     println("NodeTable Size: " + nodeTable.size())
     println("Starting graph generation")
 
-    var fdGraph: DirectedSparseMultigraph[Integer, String] = new DirectedSparseMultigraph[Integer, String](); // parentCol, childCol
+    fdGraph = new DirectedSparseMultigraph[Integer, String](); // parentCol, childCol
 
     if (!nodeTable.isEmpty()) {
       // all nodes will be added at the end of this, -1 is root
@@ -407,6 +409,8 @@ class FuncDep
       showGraph(fdGraph)
     }
     println("There were " + removedCount + " removed edges in the FD-graph.")
+
+    writeToFile(nodeTable,"twitter100Cols10kRowsWithScore")
 
 
     if (!nodeTable.isEmpty()) {
@@ -994,6 +998,84 @@ class FuncDep
       List(StringPrimitive(name), BlobPrimitive(serialize()))
     )
   }
+
+  def depth(node:Integer,score:Integer): Integer ={
+    val pList = fdGraph.getPredecessors(node)
+    var highestScore = 0
+    if(pList.size() == 1){ // because of root
+      return score + 1
+    }
+    else{
+      var listIter = pList.iterator()
+      while(listIter.hasNext) {
+        var temp = listIter.next()
+        if(temp != -1){
+          val retScore = depth(temp,score + 1)
+          if(retScore > highestScore){
+            highestScore = retScore
+          }
+        }
+      }
+    }
+    return highestScore
+  }
+
+  def writeToFile(nodeTable:ArrayList[Integer],outputFileName: String): Unit = {
+    var writer: BufferedWriter = null
+    try {
+      writer = new BufferedWriter(new FileWriter(outputFileName+".csv"))
+    }
+    catch {
+      case e: FileNotFoundException => e.printStackTrace()
+      case e: UnsupportedEncodingException => e.printStackTrace()
+    }
+    writer.write("ATTR,PARENT,SCORE\n")
+
+    var deepestPath = 0
+    val scoreMap: util.TreeMap[Integer,Integer] = new util.TreeMap[Integer,Integer]()
+
+    nodeTable.asScala.map((node) => {
+      val score = depth(node,0)
+      scoreMap.put(node,score)
+      if(score > deepestPath){
+        deepestPath = score
+      }
+    })
+
+    nodeTable.asScala.map((node) => {
+      var parent: util.Collection[Integer] = fdGraph.getPredecessors(node)
+      if(parent != null) {
+        if (!parent.isEmpty) {
+          val pIter = parent.iterator()
+          while (pIter.hasNext) {
+            val p = pIter.next()
+/*
+            println("FOR NODE: " + node)
+            println(scoreMap.get(node))
+            println(deepestPath)
+            println((scoreMap.get(node).toFloat/deepestPath.toFloat))
+            println((scoreMap.get(node).toFloat/deepestPath.toFloat).toString)
+            println("")
+*/
+            if(p != -1) {
+              writer.write(node.toString + "," + p.toString + "," + (scoreMap.get(p).toFloat / deepestPath.toFloat).toString + "\n")
+            }
+            else{
+              writer.write(node.toString + "," + p.toString + "," + (1.toFloat / deepestPath.toFloat).toString + "\n")
+            }
+          }
+        }
+        else{
+          println("parent is empty!")
+        }
+      }
+      else{
+        println(node)
+      }
+    })
+    writer.close()
+  }
+
 }
 
 
@@ -1024,4 +1106,5 @@ object FuncDep {
       ).asInstanceOf[BlobPrimitive]
     deserialize(blob.v)
   }
+
 }

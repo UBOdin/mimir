@@ -93,6 +93,7 @@ object LoadCSV {
             db.backend.update(createTableStatement)
             handleLoadTable(db, targetTable, sourceFile)
     }
+    println("DONE LOADING TABLE")
   }
 
 

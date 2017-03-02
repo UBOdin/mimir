@@ -36,7 +36,7 @@ object Mimir {
   def main(args: Array[String]) {
 
     val test = new mimir.util.JsonToCSV
-//    test.singleFile(new File("dump-30.txt"),"twitterSmallMediumClean.csv","UTF-8",200,100000)
+//    test.singleFile(new File("dump-30.txt"),"twitter100Cols10kRows.csv","UTF-8",100,10000)
     conf = new MimirConfig(args);
 
     // Set up the database connection(s)
@@ -125,6 +125,7 @@ object Mimir {
   def handleAdaptiveSchema(adaptiveSchema: CreateAdaptiveSchema): Unit = {
     // CREATE ADAPTIVESCHEMA TEST AS SELECT * FROM twitterSmallMediumCleanRAW;
     // CREATE ADAPTIVESCHEMA TEST AS SELECT * FROM CURESOURCE;
+    // CREATE ADAPTIVESCHEMA TEST AS SELECT * FROM twitter100cols10krows;
     val ent = new FuncDep()
     val queryOper = db.sql.convert(adaptiveSchema.getSelectBody())
 //    val schema = queryOper.schema
