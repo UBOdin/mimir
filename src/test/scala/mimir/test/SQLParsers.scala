@@ -28,4 +28,11 @@ trait SQLParsers {
     stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
   }
 
+  def sqlSimpleExpr(s:String) = {
+    new MimirJSqlParser(new StringReader(s)).SimpleExpression()
+  }
+  def sqlBoolExpr(s:String) = {
+    new MimirJSqlParser(new StringReader(s)).Expression()
+  }
+
 }

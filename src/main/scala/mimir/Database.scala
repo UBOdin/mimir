@@ -11,7 +11,7 @@ import mimir.models.Model
 import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
 import mimir.lenses.{LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
-import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens,CreateView,Explain,Feedback}
+import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens,CreateView,Explain,Feedback,Load}
 import mimir.optimizer.{InlineVGTerms, ResolveViews}
 import mimir.util.{LoadCSV,ExperimentalOptions}
 import mimir.web.WebIterator
@@ -318,22 +318,33 @@ case class Database(backend: Backend)
         val t = lens.getType().toUpperCase()
         val name = lens.getName()
         val query = sql.convert(lens.getSelectBody())
-        val args = lens.getArgs().map(sql.convert(_)).toList
+        val args = lens.getArgs().map(sql.convert(_, x => x)).toList
 
         lenses.createLens(t, name, query, args)
       }
-      case view: CreateView => views.createView(view.getTable().getName(), 
+      case view: CreateView => views.createView(view.getTable().getName().toUpperCase, 
                                                 sql.convert(view.getSelectBody()))
+      case load: Load => {
+        // Assign a default table name if needed
+        val target = 
+          load.getTable() match { 
+            case null => load.getFile.getName.replaceAll("\\..*", "").toUpperCase
+            case s => s
+          }
+
+        loadTable(target, load.getFile)
+      }
+
       case drop: Drop     => {
           drop.getType().toUpperCase match {
             case "TABLE" | "INDEX" => 
               backend.update(drop.toString());
 
             case "VIEW" =>
-              views.dropView(drop.getName());
+              views.dropView(drop.getName().toUpperCase);
 
             case "LENS" =>
-              lenses.dropLens(drop.getName())
+              lenses.dropLens(drop.getName().toUpperCase)
 
             case _ =>
               throw new SQLException("Invalid drop type '"+drop.getType()+"'")

@@ -71,7 +71,7 @@ object FeedbackSpec
 
     "Support direct feedback" >> {
       val model = db.models.get("MV:WEKA:B")
-      val nullRow = querySingleton("SELECT ROWID FROM R WHERE B IS NULL")
+      val nullRow = querySingleton("SELECT ROWID() FROM R WHERE B IS NULL")
 
       model.bestGuess(0, List(nullRow)) must not be equalTo(50)
       model.feedback(0, List(nullRow), IntPrimitive(50))
@@ -81,7 +81,7 @@ object FeedbackSpec
 
     "Support SQL feedback" >> {
       val model = db.models.get("MV:WEKA:C")
-      val nullRow = querySingleton("SELECT ROWID FROM R WHERE C IS NULL")
+      val nullRow = querySingleton("SELECT ROWID() FROM R WHERE C IS NULL")
 
       val originalGuess = model.bestGuess(0, List(nullRow)).asLong
       querySingleton(s"""

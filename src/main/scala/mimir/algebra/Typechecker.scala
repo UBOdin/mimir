@@ -143,7 +143,7 @@ object Typechecker {
 				)
 
 				/* Send schema to parent operator */
-				val sch = groupBySchema ++ aggSchema ++ srcSchema
+				val sch = groupBySchema ++ aggSchema
 				//println(sch)
 				sch
 
@@ -171,6 +171,9 @@ object Typechecker {
 
 			case Table(_, _, sch, meta) => (sch ++ meta.map( x => (x._1, x._3) ))
 
+			case Limit(_, _, src) => schemaOf(src)
+
+			case Sort(_, src) => schemaOf(src)
 		}
 	}
 

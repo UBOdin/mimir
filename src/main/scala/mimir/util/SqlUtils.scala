@@ -8,7 +8,10 @@ import net.sf.jsqlparser.expression._
 import net.sf.jsqlparser.expression.operators.conditional._
 import net.sf.jsqlparser.expression.operators.relational._
 
+import scala.collection.JavaConversions._
+
 import mimir.context._
+import mimir.Database
 
 object SqlUtils {
   
@@ -118,7 +121,43 @@ object SqlUtils {
       s.asInstanceOf[SelectExpressionItem].getAlias()
     )
   }
-    
+ 
+  /**
+   * Extract source schemas from a FromItem
+   */
+  def getSchemas(source: FromItem, db: Database): List[(String, List[String])] =
+  {
+    source match {
+      case subselect: SubSelect =>
+        List((subselect.getAlias(), subselect.getSelectBody() match {
+          case plainselect: PlainSelect => 
+            plainselect.getSelectItems().flatMap({
+              case sei:SelectExpressionItem =>
+                List(sei.getAlias())
+              case _:AllColumns => 
+                getSchemas(plainselect.getFromItem, db).flatMap(_._2) ++
+                  plainselect.getJoins.flatMap( join => 
+                    getSchemas(join.getRightItem(), db).flatMap(_._2)
+                  )
+            }).toList
+          case union: net.sf.jsqlparser.statement.select.Union =>
+            union.getPlainSelects().get(0).getSelectItems().map({
+              case sei:SelectExpressionItem =>
+                sei.getAlias()
+            }).toList
+        }))
+      case table: net.sf.jsqlparser.schema.Table =>
+        List(
+          ( table.getAlias(), 
+            db.getTableSchema(table.getName()).
+              get.map(_._1).toList++List("ROWID")
+          )
+        )
+      case join: SubJoin =>
+        getSchemas(join.getLeft(), db) ++
+          getSchemas(join.getJoin().getRightItem(), db)
+    }
+  }   
 }
 
 class ReSourceColumns(s: String) extends ExpressionRewrite {

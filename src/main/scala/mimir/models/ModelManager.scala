@@ -264,3 +264,8 @@ class ModelManager(db:Database)
 trait NeedsReconnectToDatabase {
   def reconnectToDatabase(db: Database)
 }
+trait NeedsDatabase extends NeedsReconnectToDatabase 
+{
+  @transient var db:Database = null
+  def reconnectToDatabase(db: Database) = { this.db = db }
+}
