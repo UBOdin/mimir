@@ -134,9 +134,7 @@ object Mimir {
   {
     TimeUtils.monitor("QUERY", () => {
       val results = db.query(raw)
-      results.open()
       db.dump(results)
-      results.close()
     }, println(_))
   }
 

@@ -101,6 +101,13 @@ object KeyRepairSpec
           AS SELECT * FROM FD_DAG
         WITH KEY_REPAIR(ATTR, SCORE_BY(STRENGTH))
       """);
+
+      db.dump(
+        query("""
+          SELECT ATTR, PARENT FROM SCH_REPAIRED
+        """)
+      )
+
       val result = query("""
         SELECT ATTR, PARENT FROM SCH_REPAIRED
       """).mapRows { row => 
