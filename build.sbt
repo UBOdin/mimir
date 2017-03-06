@@ -10,6 +10,7 @@ scalacOptions ++= Seq(
 )
 
 resolvers += "MimirDB" at "http://maven.mimirdb.info/"
+resolvers += "osgeo" at "http://download.osgeo.org/webdav/geotools/"
 
 libraryDependencies ++= Seq(
   "org.rogach"                 %%   "scallop"               % "0.9.5",
@@ -29,7 +30,8 @@ libraryDependencies ++= Seq(
   "org.xerial"                 %    "sqlite-jdbc"           % "3.14.2.1",
   "info.mimirdb"               %    "jsqlparser"            % "1.0.0",
   "org.apache.commons"         %    "commons-csv"           % "1.4", 
-  "commons-io"                 %    "commons-io"            % "2.5"
+  "commons-io"                 %    "commons-io"            % "2.5",
+  "org.geotools"                 %    "gt-referencing"            % "16.2"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")

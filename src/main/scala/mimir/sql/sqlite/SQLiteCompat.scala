@@ -3,6 +3,7 @@ package mimir.sql.sqlite
 import mimir.algebra._
 import mimir.util.JDBCUtils
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import org.geotools.referencing.GeodeticCalculator
 
 object SQLiteCompat {
 
@@ -17,6 +18,9 @@ object SQLiteCompat {
     org.sqlite.Function.create(conn,"OTHERTEST", OtherTest)
     org.sqlite.Function.create(conn,"AGGTEST", AggTest)
     org.sqlite.Function.create(conn, "BOOLAND", BoolAnd)
+    org.sqlite.Function.create(conn, "SQRT", Sqrt)
+    org.sqlite.Function.create(conn, "DST", Distance)
+    org.sqlite.Function.create(conn, "MINUS", Minus)
   }
   
   def getTableSchema(conn:java.sql.Connection, table: String): Option[List[(String, Type)]] =
@@ -39,6 +43,31 @@ object SQLiteCompat {
   }
 }
 
+object Minus extends org.sqlite.Function with LazyLogging {
+  override def xFunc(): Unit = {
+    if (args != 2) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR SQRT, EXPECTED 2") }
+    value_double(0) - value_double(1)
+  }
+  }
+
+object Distance extends org.sqlite.Function with LazyLogging {
+  override def xFunc(): Unit = {
+    if (args != 4) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR DISTANCE, EXPECTED 4 -- LAT1, LON1, LAT2, LON2") }
+    val geodeticCalculator: GeodeticCalculator = new GeodeticCalculator()
+
+    geodeticCalculator.setStartingGeographicPoint(value_double(1), value_double(0))
+    geodeticCalculator.setDestinationGeographicPoint(value_double(3), value_double(2))
+
+    Math.abs(geodeticCalculator.getOrthodromicDistance)
+  }
+}
+
+object Sqrt extends org.sqlite.Function with LazyLogging {
+  override def xFunc(): Unit = {
+    if (args != 1) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR SQRT, EXPECTED 1") }
+    Math.sqrt(value_double(0))
+  }
+}
 
 object MimirCast extends org.sqlite.Function with LazyLogging {
 

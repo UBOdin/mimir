@@ -105,7 +105,19 @@ object FunctionRegistry {
       ))))
 
     registerNative("BITWISE_AND", (x) => IntPrimitive(x(0).asLong & x(1).asLong), (_) => TInt())
+/*
 
+    registerExpr("DISTANCE", List("LAT1", "LON1", "LAT2", "LON2"),
+      Function("SQRT", List(
+        Arithmetic(Arith.Add,
+          Arithmetic(Arith.Mult, Var("A"), Var("A")),
+          Arithmetic(Arith.Mult, Var("B"), Var("B"))
+        ))))
+*/
+
+
+    registerNative("MINUS",(_) => ???, (_) => TFloat())
+    registerNative("JULIANDAY",(_) => ???, (_) => TInt())
     registerNative("JSON_EXTRACT",(_) => ???, (_) => TAny())
     registerNative("JSON_ARRAY_LENGTH",(_) => ???, (_) => TInt())
 	}
