@@ -136,9 +136,13 @@ object SqlUtils {
                 List(sei.getAlias())
               case _:AllColumns => 
                 getSchemas(plainselect.getFromItem, db).flatMap(_._2) ++
-                  plainselect.getJoins.flatMap( join => 
-                    getSchemas(join.getRightItem(), db).flatMap(_._2)
-                  )
+                  plainselect.getJoins match {
+                    case null => None
+                    case joins => 
+                      joins.asInstanceOf[java.util.List[Join]].flatMap( (join:Join) => 
+                        getSchemas(join.getRightItem(), db).flatMap(_._2)
+                      )
+                  }
             }).toList
           case union: net.sf.jsqlparser.statement.select.Union =>
             union.getPlainSelects().get(0).getSelectItems().map({
