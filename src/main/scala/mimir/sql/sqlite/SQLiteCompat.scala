@@ -21,6 +21,7 @@ object SQLiteCompat {
     org.sqlite.Function.create(conn, "SQRT", Sqrt)
     org.sqlite.Function.create(conn, "DST", Distance)
     org.sqlite.Function.create(conn, "MINUS", Minus)
+    org.sqlite.Function.create(conn, "FIRST", First)
   }
   
   def getTableSchema(conn:java.sql.Connection, table: String): Option[List[(String, Type)]] =
@@ -173,6 +174,17 @@ object OtherTest extends org.sqlite.Function {
     } catch {
       case _: java.sql.SQLDataException => throw new java.sql.SQLDataException();
     }
+  }
+}
+
+object First extends org.sqlite.Function.Aggregate {
+  var firstVal: String = null;
+  @Override
+  def xStep(): Unit = {
+    if(firstVal == null){ firstVal = value_text(0); }
+  }
+  def xFinal(): Unit = {
+    if(firstVal == null){ result(); } else { result(firstVal); }
   }
 }
 

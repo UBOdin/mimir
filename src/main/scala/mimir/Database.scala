@@ -318,7 +318,7 @@ case class Database(backend: Backend)
         val t = lens.getType().toUpperCase()
         val name = lens.getName()
         val query = sql.convert(lens.getSelectBody())
-        val args = lens.getArgs().map(sql.convert(_)).toList
+        val args = lens.getArgs().map(sql.convert(_, x => x)).toList
 
         lenses.createLens(t, name, query, args)
       }

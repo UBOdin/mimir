@@ -15,7 +15,8 @@ class LensManager(db: Database) {
                               (Operator,TraversableOnce[Model]))](
     "MISSING_VALUE"     -> MissingValueLens.create _,
     "SCHEMA_MATCHING"   -> SchemaMatchingLens.create _,
-    "TYPE_INFERENCE"    -> TypeInferenceLens.create _
+    "TYPE_INFERENCE"    -> TypeInferenceLens.create _,
+    "KEY_REPAIR"        -> KeyRepairLens.create _
   )
 
   def init(): Unit =
