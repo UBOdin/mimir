@@ -24,6 +24,7 @@ object KeyRepairSpec
     update("CREATE TABLE U(A int, B int, C int)")
     loadCSV("U", new File("test/r_test/u.csv"))
     loadCSV("FD_DAG", new File("test/repair_key/fd_dag.csv"))
+    loadCSV("twitter100Cols10kRowsWithScore", new File("test/r_test/twitter100Cols10kRowsWithScore.csv"))
   }
 
   "The Key Repair Lens" should {
@@ -121,6 +122,42 @@ object KeyRepairSpec
       result(2) must be equalTo(4)
       result(3) must be equalTo(4)
       result(4) must be equalTo(-1)
+    }
+
+    "Update for large data" >> {
+
+      TimeUtils.monitor("CREATE", () => {
+        update(
+          """
+        CREATE LENS FD_UPDATE
+          AS SELECT * FROM twitter100Cols10kRowsWithScore
+        WITH KEY_REPAIR(ATTR, SCORE_BY(SCORE))
+             """);
+        }, println(_))
+
+      TimeUtils.monitor("QUERY", () => {
+        val result = query(
+          """
+        SELECT ATTR, PARENT FROM FD_UPDATE
+                         """).mapRows {
+          row =>
+        row(0).
+          asLong.toInt ->
+          row(1).asLong.
+            toInt
+      }.toMap[Int, Int]
+        },println(_))
+
+      TimeUtils.monitor("UPDATE", () => {
+        update("""FEEDBACK FD_UPDATE:PARENT 0('1') IS '-1';""")
+      },println(_))
+
+/*
+      result.map((out) => {
+        println(out)
+      })
+*/
+      true
     }
   }
 
