@@ -310,26 +310,32 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 			case Project(args, child) => {
 				val argReasons =
-					args.flatMap { arg =>
-						CTables.getVGTerms(arg.expression)
-					}.map( ReasonSet.make(_, child) )
+					args.flatMap {
+						  col => CTAnalyzer.compileCausality(col.expression)
+						}.map { case (condition, vgterm) => 
+							ReasonSet.make(vgterm, Select(condition, child))
+						}
 
 				argReasons ++ explainEverything(child)
 			}
 
 			case Select(cond, child) => {
-				CTables.
-					getVGTerms(cond).
-					toSeq.
-					map( ReasonSet.make(_, child) ) ++
-				explainEverything(child)
+				val condReasons =
+					CTAnalyzer.compileCausality(cond).
+						map { case (condition, vgterm) => 
+								ReasonSet.make(vgterm, Select(condition, child))
+							}
+
+				condReasons ++ explainEverything(child)
 			}
 
 			case Aggregate(gbs, aggs, child) => {
 				val aggVGTerms = 
-					aggs.flatMap { agg => agg.args.flatMap( CTables.getVGTerms(_) ) }
+					aggs.flatMap { agg => agg.args.flatMap( CTAnalyzer.compileCausality(_) ) }
 				val aggReasons =
-					aggVGTerms.map( ReasonSet.make(_, child) )
+					aggVGTerms.map { case (condition, vgterm) => 
+						ReasonSet.make(vgterm, Select(condition, child))
+					}
 
 				aggReasons ++ explainEverything(child)
 			}
@@ -346,9 +352,11 @@ class CTExplainer(db: Database) extends LazyLogging {
 
      	case Sort(args, child) => {
 				val argReasons =
-					args.flatMap { arg =>
-						CTables.getVGTerms(arg.expression)
-					}.map( ReasonSet.make(_, child) )
+					args.flatMap { arg => 
+						CTAnalyzer.compileCausality(arg.expression)
+					}.map { case (condition, vgterm) => 
+						ReasonSet.make(vgterm, Select(condition, child))
+					}
 
 				argReasons ++ explainEverything(child)
 			}

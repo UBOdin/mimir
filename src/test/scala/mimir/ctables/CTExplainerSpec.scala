@@ -1,11 +1,12 @@
-package mimir.lenses
+package mimir.ctables
 
 import java.io._
 import org.specs2.specification._
 import org.specs2.mutable._
+import mimir.algebra._
 import mimir.test._
 
-object AnalyzeSpec 
+object CTExplainerSpec 
   extends SQLTestSpecification("AnalyzeTests")
   with BeforeAll
 {
@@ -36,8 +37,35 @@ object AnalyzeSpec
         ("TI" -> 1l)
       ))
 
+      resultSets.map { 
+        set => (set.model.name -> set.allArgs(db).map(_.toList).toList)
+      }.toMap must contain(eachOf(
+        ("MV:WEKA:B" -> List(List[PrimitiveValue](RowIdPrimitive("2")))),
+        ("MV:WEKA:C" -> List(List[PrimitiveValue](RowIdPrimitive("3")))),
+        ("TI" -> List(List()))
+      ))
+    }
+
+    "Explain individual cells" >> {
+      val reasons = 
+        explainCell("""
+          SELECT * FROM MV
+        """, "2", "B"
+        ).reasons.map(_.reason).mkString("\n")
+      reasons must contain("I used a classifier to guess that B")
+    }
+
+    "Explain rows" >> {
+      val reasons = 
+        explainRow("""
+          SELECT * FROM MV
+          WHERE C > 1
+        """, "3"
+        ).reasons.map(_.reason).mkString("\n")
+      reasons must contain("I used a classifier to guess that C")
 
     }
+
   }
 
 }

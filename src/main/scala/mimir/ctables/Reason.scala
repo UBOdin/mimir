@@ -52,26 +52,28 @@ class ReasonSet(val model: Model, val idx: Int, argLookup: Option[Operator])
         1
     }
   }
-  def all(db: Database): Iterable[Reason] = 
+  def allArgs(db: Database): Iterable[Seq[PrimitiveValue]] =
   {
     argLookup match {
-      case Some(query) =>
-        db.query(query).mapRows( row => new Reason(model, idx, row.currentRow) )
-      case None => 
-        new Some(new Reason(model, idx, List()))
+      case Some(query) => db.query(query).allRows
+      case None =>  List(Seq())
     }
   }
-  def take(db: Database, count: Int): Iterable[Reason] = 
+  def takeArgs(db: Database, count: Int): Iterable[Seq[PrimitiveValue]] = 
   {
     if(count < 1){ return None }
     argLookup match {
-      case Some(query) =>
-        db.query(
-          Limit(0, Some(count), query)
-        ).mapRows( row => new Reason(model, idx, row.currentRow) )
-      case None => 
-        new Some(new Reason(model, idx, List()))
+      case Some(query) => db.query(Limit(0, Some(count), query)).allRows
+      case None =>  List(Seq())
     }
+  }
+  def all(db: Database): Iterable[Reason] = 
+  {
+    allArgs(db).map( new Reason(model, idx, _) )
+  }
+  def take(db: Database, count: Int): Iterable[Reason] = 
+  {
+    takeArgs(db, count).map( new Reason(model, idx, _) )
   }
 }
 
