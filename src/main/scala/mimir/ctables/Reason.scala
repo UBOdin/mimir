@@ -1,5 +1,6 @@
 package mimir.ctables
 
+import mimir.Database
 import mimir.algebra._
 import mimir.models._
 import mimir.util.JSONBuilder
@@ -36,13 +37,47 @@ class Reason(
     model.hashCode * idx * args.map(_.hashCode).sum
 }
 
-class ReasonSet(model: Model, idx: Int, argLookup: Set[Operator])
+class ReasonSet(model: Model, idx: Int, argLookup: Option[Operator])
+{
+  def countReasons(db: Database): Long =
+  {
+    argLookup match {
+      case Some(query) => 
+        db.query(
+          Aggregate(List(), List(AggFunction("COUNT", true, List(), "COUNT")), query)
+        ).allRows.head(0).asLong
+      case None => 
+        1
+    }
+  }
+  def allReasons(db: Database): Iterable[Reason] = 
+  {
+    argLookup match {
+      case Some(query) =>
+        db.query(query).mapRows( row => new Reason(model, idx, row.currentRow) )
+      case None => 
+        new Some(new Reason(model, idx, List()))
+    }
+  }
+  def someReasons(db: Database, count: Int): Iterable[Reason] = 
+  {
+    if(count < 1){ return None }
+    argLookup match {
+      case Some(query) =>
+        db.query(
+          Limit(0, Some(count), query)
+        ).mapRows( row => new Reason(model, idx, row.currentRow) )
+      case None => 
+        new Some(new Reason(model, idx, List()))
+    }
+  }
+}
 
 object ReasonSet
 {
   def make(v:VGTerm, input: Operator): ReasonSet =
   {
-    if(v.args.isEmpty){ return new ReasonSet(v.model, v.idx, Set()); }
+    if(v.args.isEmpty){ return new ReasonSet(v.model, v.idx, None); }
 
     val args =
       v.args.zipWithIndex.map { case (expr, i) => ProjectArg("ARG_"+i, expr) }
@@ -50,7 +85,7 @@ object ReasonSet
     return new ReasonSet(
       v.model,
       v.idx,
-      Set(Project(args, input))
+      Some(Project(args, input))
     );
   }
 }
