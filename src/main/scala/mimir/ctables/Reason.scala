@@ -37,14 +37,16 @@ class Reason(
     model.hashCode * idx * args.map(_.hashCode).sum
 }
 
-class ReasonSet(model: Model, idx: Int, argLookup: Option[Operator])
+class ReasonSet(val model: Model, val idx: Int, argLookup: Option[Operator])
 {
   def size(db: Database): Long =
   {
     argLookup match {
       case Some(query) => 
         db.query(
-          Aggregate(List(), List(AggFunction("COUNT", true, List(), "COUNT")), query)
+          Aggregate(List(), List(AggFunction("COUNT", false, List(), "COUNT")), 
+            OperatorUtils.makeDistinct(query)
+          )
         ).allRows.head(0).asLong
       case None => 
         1

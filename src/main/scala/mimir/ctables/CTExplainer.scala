@@ -304,6 +304,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 	def explainEverything(oper: Operator): Seq[ReasonSet] =
 	{
+		logger.trace("Explain Everything: \n"+oper)
 		oper match {
 			case Table(_,_,_) => Seq()
 
