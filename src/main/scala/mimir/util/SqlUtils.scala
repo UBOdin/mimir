@@ -137,7 +137,7 @@ object SqlUtils {
               case _:AllColumns => {
                 val fromSchemas = getSchemas(plainselect.getFromItem, db).flatMap(_._2)
                 val joinSchemas = 
-                  if(plainselect.getJoins == null){
+                  if(plainselect.getJoins != null){
                     plainselect.getJoins.asInstanceOf[java.util.List[Join]].flatMap( (join:Join) => 
                       getSchemas(join.getRightItem(), db).flatMap(_._2)
                     )
