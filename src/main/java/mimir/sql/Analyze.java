@@ -9,13 +9,13 @@ import net.sf.jsqlparser.statement.select.SelectBody;
 public class Analyze implements Statement{
 	private SelectBody selectBody;
 	private String column;
-	private PrimitiveValue rowid;
+	private PrimitiveValue rowId;
 
 	public Analyze(SelectBody selectBody, PrimitiveValue rowid, String column)
 	{
 		this.selectBody = selectBody;
 		this.column = column;
-		this.rowid = rowid;
+		this.rowId = rowId;
 	}
 
 	public SelectBody getSelectBody() 
@@ -35,13 +35,13 @@ public class Analyze implements Statement{
 		this.column = column;
 	}
 
-	public PrimitiveValue getRowid()
+	public PrimitiveValue getRowId()
 	{
-		return rowid;
+		return rowId;
 	}
-	public void setRowid(PrimitiveValue rowid)
+	public void setRowId(PrimitiveValue rowid)
 	{
-		this.rowid = rowid;
+		this.rowId = rowId;
 	}
 
 	@Override

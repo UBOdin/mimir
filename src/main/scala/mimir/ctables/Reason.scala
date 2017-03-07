@@ -39,7 +39,7 @@ class Reason(
 
 class ReasonSet(model: Model, idx: Int, argLookup: Option[Operator])
 {
-  def countReasons(db: Database): Long =
+  def size(db: Database): Long =
   {
     argLookup match {
       case Some(query) => 
@@ -50,7 +50,7 @@ class ReasonSet(model: Model, idx: Int, argLookup: Option[Operator])
         1
     }
   }
-  def allReasons(db: Database): Iterable[Reason] = 
+  def all(db: Database): Iterable[Reason] = 
   {
     argLookup match {
       case Some(query) =>
@@ -59,7 +59,7 @@ class ReasonSet(model: Model, idx: Int, argLookup: Option[Operator])
         new Some(new Reason(model, idx, List()))
     }
   }
-  def someReasons(db: Database, count: Int): Iterable[Reason] = 
+  def take(db: Database, count: Int): Iterable[Reason] = 
   {
     if(count < 1){ return None }
     argLookup match {

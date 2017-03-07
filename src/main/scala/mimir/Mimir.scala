@@ -3,11 +3,11 @@ package mimir;
 import java.io._
 import java.sql.SQLException
 
-import mimir.ctables.CTPercolator
+import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
 import mimir.util.{TimeUtils,ExperimentalOptions}
-import mimir.algebra.{Operator,Project,ProjectArg,Var,RAException,OperatorUtils,Function}
+import mimir.algebra.{Operator,Project,ProjectArg,Var,RAException,OperatorUtils,Function,RowIdPrimitive}
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
 import net.sf.jsqlparser.statement.drop.Drop
@@ -155,6 +155,47 @@ object Mimir {
     } catch {
       case e:Throwable =>
         println("Unavailable: "+e.getMessage())
+    }
+  }
+
+  def handleAnalyze(analyze: Analyze)
+  {
+    val rowId = analyze.getRowId()
+    val column = analyze.getColumn()
+    val query = db.sql.convert(analyze.getSelectBody())
+
+    if(rowId == null){
+      val reasonSets = db.explainer.explainEverything(query)
+      for(reasonSet <- reasonSets){
+        val count = reasonSet.size(db);
+        val reasons = reasonSet.take(db, 5);
+        printReasons(reasons);
+        if(count > reasons.size){
+          println(s"... and ${count - reasons.size} more")
+        }
+      }
+    } else {
+      val token = RowIdPrimitive(db.sql.convert(rowId).asString)
+      if(column == null){ 
+        val explanation = 
+          db.explainer.explainRow(query, token)
+        printReasons(explanation.reasons)
+        println("--------")
+        println("Row Probability: "+explanation.probability)
+      } else { 
+        val explanation = 
+          db.explainer.explainCell(query, token, column) 
+        printReasons(explanation.reasons)
+        println("--------")
+        println("Examples: "+explanation.examples.map(_.toString).mkString(", "))
+      }
+    }
+  }
+
+  def printReasons(reasons: Iterable[Reason])
+  {
+    for(reason <- reasons){
+      println(reason);
     }
   }
 
