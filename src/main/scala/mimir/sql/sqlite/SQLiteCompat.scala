@@ -59,7 +59,7 @@ object Distance extends org.sqlite.Function with LazyLogging {
     geodeticCalculator.setStartingGeographicPoint(value_double(1), value_double(0))
     geodeticCalculator.setDestinationGeographicPoint(value_double(3), value_double(2))
 
-    Math.abs(geodeticCalculator.getOrthodromicDistance)
+    result(Math.abs(geodeticCalculator.getOrthodromicDistance))
   }
 }
 

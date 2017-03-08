@@ -105,19 +105,18 @@ object FunctionRegistry {
       ))))
 
     registerNative("BITWISE_AND", (x) => IntPrimitive(x(0).asLong & x(1).asLong), (_) => TInt())
-/*
 
-    registerExpr("DISTANCE", List("LAT1", "LON1", "LAT2", "LON2"),
-      Function("SQRT", List(
-        Arithmetic(Arith.Add,
-          Arithmetic(Arith.Mult, Var("A"), Var("A")),
-          Arithmetic(Arith.Mult, Var("B"), Var("B"))
-        ))))
-*/
+    FunctionRegistry.registerNative(
+      "DST",
+      (args) => { throw new SQLException("Mimir Cannot Execute VGTerm Functions Internally") },
+      (_) => TFloat()
+    )
+    FunctionRegistry.registerNative(
+      "JULIANDAY",
+      (args) => { throw new SQLException("Mimir Cannot Execute VGTerm Functions Internally") },
+      (_) => TInt()
+    )
 
-
-    registerNative("MINUS",(_) => ???, (_) => TFloat())
-    registerNative("JULIANDAY",(_) => ???, (_) => TInt())
     registerNative("JSON_EXTRACT",(_) => ???, (_) => TAny())
     registerNative("JSON_ARRAY_LENGTH",(_) => ???, (_) => TInt())
 	}
