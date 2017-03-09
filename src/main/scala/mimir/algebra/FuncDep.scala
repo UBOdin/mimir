@@ -57,6 +57,7 @@ class FuncDep
   val combineEntityGraphs : Boolean = true // if false then each entity will have it's own graph
   val showFDGraph : Boolean = true // if you want the Functional Dependency Graph to be shown
   val blackListThreshold = .05 // minimum percentage of non-null columns to be included in the calculations
+  val writeFile : Boolean = false
 
   // tables containing data for computations
   var sch:List[(String, T)] = null // the schema, is a lookup for the type and name
@@ -82,6 +83,11 @@ class FuncDep
   // buildEntities calls all the functions required for ER creation, optionally each function could be called if only part of the computation is required
 
   def buildEntities(schema: List[(String, T)],data: ResultIterator, tableName : String): ArrayList[String] = {
+    var i = 0
+    schema.map((s)=>{
+      println(i + " : " + s._1)
+      i += 1
+    })
     preprocessFDG(schema,data,tableName)
     constructFDG()
     updateEntityGraph()
@@ -91,6 +97,11 @@ class FuncDep
   }
 
   def buildEntities(schema: List[(String, T)],data: ResultSet, tableName : String): ArrayList[String] = {
+    var i = 0
+    schema.map((s)=>{
+      println(i + " : " + s._1)
+      i += 1
+    })
     preprocessFDG(schema,data,tableName)
     constructFDG()
     updateEntityGraph()
@@ -410,7 +421,9 @@ class FuncDep
     }
     println("There were " + removedCount + " removed edges in the FD-graph.")
 
-    writeToFile(nodeTable,"twitter100Cols10kRowsWithScore")
+    if(writeFile) {
+      writeToFile(nodeTable, "twitter100Cols10kRowsWithScore")
+    }
 
 
     if (!nodeTable.isEmpty()) {

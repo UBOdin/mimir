@@ -18,8 +18,8 @@ object ShredderLensSpec
 {
   sequential
 
-  val testTable = "twitterSmallMediumCleanRAW"
-  val dbName = "TwitterSmall.db"
+  val testTable = "twitter100cols10krows"
+  val dbName = "TwitterFinal.db"
   var discala:FuncDep = null
   val testData = new File(
     "test/data/JSONOUTPUTWIDE.csv"
