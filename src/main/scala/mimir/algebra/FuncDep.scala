@@ -53,9 +53,10 @@ class FuncDep
   // conditionals for output generation and other variables
   val threshhold:Double = .99 // this is the threshold that determines if there is a functional dependency between two columns
   val flattenParentTable:Boolean = false // used if wanting to flatten the parent table so it uses the child of root
-  val outputEntityGraphs:Boolean = true // true if you want the entity graphs to be output
+  val computeEntityGraphs : Boolean = false
+  val outputEntityGraphs:Boolean = false // true if you want the entity graphs to be output
   val combineEntityGraphs : Boolean = true // if false then each entity will have it's own graph
-  val showFDGraph : Boolean = true // if you want the Functional Dependency Graph to be shown
+  val showFDGraph : Boolean = false // if you want the Functional Dependency Graph to be shown
   val blackListThreshold = .05 // minimum percentage of non-null columns to be included in the calculations
   val writeFile : Boolean = false
 
@@ -83,11 +84,12 @@ class FuncDep
   // buildEntities calls all the functions required for ER creation, optionally each function could be called if only part of the computation is required
 
   def buildEntities(schema: List[(String, T)],data: ResultIterator, tableName : String): ArrayList[String] = {
-    var i = 0
+/*    var i = 0
     schema.map((s)=>{
       println(i + " : " + s._1)
       i += 1
     })
+*/
     preprocessFDG(schema,data,tableName)
     constructFDG()
     updateEntityGraph()
@@ -97,11 +99,13 @@ class FuncDep
   }
 
   def buildEntities(schema: List[(String, T)],data: ResultSet, tableName : String): ArrayList[String] = {
+    /*
     var i = 0
     schema.map((s)=>{
       println(i + " : " + s._1)
       i += 1
     })
+    */
     preprocessFDG(schema,data,tableName)
     constructFDG()
     updateEntityGraph()
@@ -290,7 +294,7 @@ class FuncDep
 
 
     // when done nodeTable will contain all column numbers that are involved in the FD graph, and edge table will contain all edges between the columns
-    table.asScala.map((leftColumn)=>{
+    table.asScala.par.map((leftColumn)=>{
 
       // left and right are respective ways to keep track of comparing every column
       // Initalize values and tables needed for the left column
@@ -455,39 +459,42 @@ class FuncDep
 
 
     // create an ArrayList of all entity graphs, this is for display and traversal purposes
-    if(combineEntityGraphs){
-      singleEntityGraph = new DelegateTree[Integer, String]()
-      if (!parentTable.isEmpty()) {
-        val rootChildren: ArrayList[Integer] = parentTable.get(-1)
-        singleEntityGraph.addVertex(-1)
-        val childrenIterator = rootChildren.iterator()
-        while (childrenIterator.hasNext) {
-          val child: Integer = childrenIterator.next()
-          singleEntityGraph.addChild("-1 to " + child, -1, child)
-          buildEntityGraph(singleEntityGraph, child)
+    if(computeEntityGraphs) {
+      if (combineEntityGraphs) {
+        singleEntityGraph = new DelegateTree[Integer, String]()
+        if (!parentTable.isEmpty()) {
+          val rootChildren: ArrayList[Integer] = parentTable.get(-1)
+          singleEntityGraph.addVertex(-1)
+          val childrenIterator = rootChildren.iterator()
+          while (childrenIterator.hasNext) {
+            val child: Integer = childrenIterator.next()
+            singleEntityGraph.addChild("-1 to " + child, -1, child)
+            buildEntityGraph(singleEntityGraph, child)
+          }
+        }
+        else {
+          throw new Exception("parent table is empty when creating FDG")
         }
       }
       else {
-        throw new Exception("parent table is empty when creating FDG")
-      }
-    }
-    else { // this will split all nodes with root as it's parent into it's own graph for viewing
-      entityGraphList = new ArrayList[DelegateTree[Integer, String]]()
-      entityGraphString = new ArrayList[DelegateTree[String, String]]()
-      if (!parentTable.isEmpty()) {
-        val rootChildren: ArrayList[Integer] = parentTable.get(-1)
-        val childrenIterator = rootChildren.iterator()
-        while (childrenIterator.hasNext) {
-          val child: Integer = childrenIterator.next()
-          var entityGraph = new DelegateTree[Integer, String]
-          entityGraph.addVertex(-1)
-          entityGraph.addChild("-1 to " + child, -1, child)
-          buildEntityGraph(entityGraph, child)
-          entityGraphList.add(entityGraph)
+        // this will split all nodes with root as it's parent into it's own graph for viewing
+        entityGraphList = new ArrayList[DelegateTree[Integer, String]]()
+        entityGraphString = new ArrayList[DelegateTree[String, String]]()
+        if (!parentTable.isEmpty()) {
+          val rootChildren: ArrayList[Integer] = parentTable.get(-1)
+          val childrenIterator = rootChildren.iterator()
+          while (childrenIterator.hasNext) {
+            val child: Integer = childrenIterator.next()
+            var entityGraph = new DelegateTree[Integer, String]
+            entityGraph.addVertex(-1)
+            entityGraph.addChild("-1 to " + child, -1, child)
+            buildEntityGraph(entityGraph, child)
+            entityGraphList.add(entityGraph)
+          }
         }
-      }
-      else {
-        throw new Exception("parent table is empty when creating FDG")
+        else {
+          throw new Exception("parent table is empty when creating FDG")
+        }
       }
     }
 

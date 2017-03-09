@@ -62,7 +62,7 @@ object ShredderLensSpec
 //       val schema = db.getTableSchema(testTable).get
 //       val schema = db.getTableSchema(testTable).get // for loading already existing table from a database
        discala = new FuncDep()
-//       discala.buildEntities(schema, database.backend.execute("SELECT * FROM " + testTable + ";"))
+       discala.buildEntities(schema, database.backend.execute("SELECT * FROM " + testTable + ";"), testTable)
        discala.entityPairMatrix must not beNull
      }
 /*
@@ -87,7 +87,7 @@ object ShredderLensSpec
       discala.entityPairMatrix must not beNull
     }
 */
-    /*
+
     "contain enough information to create a lens" >> {
       val entities:List[Integer] = discala.entityPairList.flatMap( x => List(x._1, x._2) ).toSet.toList
       println("From Entities")
@@ -102,7 +102,7 @@ object ShredderLensSpec
           if(a == primaryEntity){ Some(b) }
           else if(b == primaryEntity){ Some(a) }
           else { None }
-        })
+        }).toList
 
 	
       val entityObject = (e:Integer) => (e.toInt, discala.parentTable.get(e).toList.map(_.toInt))
@@ -124,7 +124,7 @@ object ShredderLensSpec
         )
       testLens.schema must be equalTo(targetSchema)
     }
-*/
+
     "be queriable" >> {
       var startQuery:Long = System.nanoTime();
       database.query(testLens.view).foreachRow( _ => {} )
