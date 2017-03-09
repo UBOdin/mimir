@@ -139,8 +139,8 @@ object SqlUtils {
                   plainselect.getJoins match {
                     case null => None
                     case joins => 
-                      joins.flatMap( join => 
-                        getSchemas(join.getRightItem(), db).flatMap(_._2)
+                      joins.flatMap( join =>
+                        getSchemas(join.asInstanceOf[Join].getRightItem(), db).flatMap(_._2)
                       )
                   }
             }).toList
