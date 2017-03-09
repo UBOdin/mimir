@@ -25,6 +25,7 @@ object KeyRepairSpec
     loadCSV("U", new File("test/r_test/u.csv"))
     loadCSV("FD_DAG", new File("test/repair_key/fd_dag.csv"))
     loadCSV("twitter100Cols10kRowsWithScore", new File("test/r_test/twitter100Cols10kRowsWithScore.csv"))
+    loadCSV("cureSourceWithScore", new File("test/r_test/cureSourceWithScore.csv"))
   }
 
   "The Key Repair Lens" should {
@@ -75,6 +76,9 @@ object KeyRepairSpec
     }
 
     "Work with Scores" >> {
+
+      println("For Twitter")
+
       update("""
         CREATE LENS U_UNIQUE_B
           AS SELECT * FROM U
@@ -150,6 +154,40 @@ object KeyRepairSpec
 
       TimeUtils.monitor("UPDATE", () => {
         update("""FEEDBACK FD_UPDATE:PARENT 0('1') IS '-1';""")
+      },println(_))
+
+
+
+
+
+
+
+      println("For CureSource")
+
+      TimeUtils.monitor("CREATE", () => {
+        update(
+          """
+        CREATE LENS FD_CURE
+          AS SELECT * FROM cureSourceWithScore
+        WITH KEY_REPAIR(ATTR, SCORE_BY(SCORE))
+          """);
+      }, println(_))
+
+      TimeUtils.monitor("QUERY", () => {
+        val result = query(
+          """
+        SELECT ATTR, PARENT FROM FD_CURE
+          """).mapRows {
+          row =>
+            row(0).
+              asLong.toInt ->
+              row(1).asLong.
+                toInt
+        }.toMap[Int, Int]
+      },println(_))
+
+      TimeUtils.monitor("UPDATE", () => {
+        update("""FEEDBACK FD_CURE:PARENT 0('1') IS '-1';""")
       },println(_))
 
 /*
