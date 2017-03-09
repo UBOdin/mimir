@@ -43,8 +43,8 @@ class Serialization(db: Database) {
   def sanitize(expr: Expression): Expression =
   {
     expr match {
-      case VGTerm(model, idx, args) => 
-        SerializableVGTerm(model.name, idx, args.map(sanitize(_)))
+      case VGTerm(model, idx, args, hints) => 
+        SerializableVGTerm(model.name, idx, args.map(sanitize(_)), hints.map(sanitize(_)))
       case _ => 
         expr.recur(sanitize(_))
     }
@@ -58,8 +58,8 @@ class Serialization(db: Database) {
   def desanitize(expr: Expression): Expression =
   {
     expr match {
-      case SerializableVGTerm(model, idx, args) => 
-        VGTerm(db.models.get(model), idx, args.map(desanitize(_)))
+      case SerializableVGTerm(model, idx, args, hints) => 
+        VGTerm(db.models.get(model), idx, args.map(desanitize(_)), hints.map(desanitize(_)))
       case _ => 
         expr.recur(desanitize(_))
     }
@@ -80,8 +80,11 @@ class Serialization(db: Database) {
   }
 }
 
-case class SerializableVGTerm(model: String, idx: Integer, args: Seq[Expression]) extends Expression {
-  override def toString() = "{{ "+model+";"+idx+"["+args.mkString(", ")+"] }}"
-  def children: Seq[Expression] = args
-  def rebuild(x: Seq[Expression]) = SerializableVGTerm(model, idx, x)
+case class SerializableVGTerm(model: String, idx: Integer, args: Seq[Expression], hints: Seq[Expression]) extends Expression {
+  override def toString() = "{{ "+model+";"+idx+"["+args.mkString(", ")+"]"+"["+hints.mkString(", ")+"] }}"
+  def children: Seq[Expression] = args ++ hints
+  def rebuild(x: Seq[Expression]) = {
+    val (a, h) = x.splitAt(args.length)
+    SerializableVGTerm(model, idx, a, h)
+  }
 }

@@ -53,6 +53,10 @@ abstract class Model(val name: String) extends Serializable {
    * The list of expected arg types (may be TAny)
    */
   def argTypes       (idx: Int): Seq[Type]
+  /**
+   * The list of expected hint types (may be TAny)
+   */
+  def hintTypes      (idx: Int): Seq[Type]
 
   /**
    * Infer the type of the model from the types of the inputs
@@ -67,7 +71,7 @@ abstract class Model(val name: String) extends Serializable {
    * @param args        The skolem identifier for the specific variable to generate a best guess for
    * @return            A primitive value representing the best guess value.
    */
-  def bestGuess      (idx: Int, args: Seq[PrimitiveValue]):  PrimitiveValue
+  def bestGuess      (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]):  PrimitiveValue
   /**
    * Generate a sample from the distribution of a variable represented by this model.
    * @param idx         The index of the variable family to generate a sample for
@@ -75,14 +79,14 @@ abstract class Model(val name: String) extends Serializable {
    * @param args        The skolem identifier for the specific variable to generate a sample for
    * @return            A primitive value representing the generated sample
    */
-  def sample         (idx: Int, randomness: Random, args: Seq[PrimitiveValue]):  PrimitiveValue
+  def sample         (idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]):  PrimitiveValue
   /**
    * Generate a human-readable explanation for the uncertainty captured by this model.
    * @param idx   The index of the variable family to explain
    * @param args  The skolem identifier for the specific variable to explain
    * @return      A string reason explaining the uncertainty in this model
    */
-  def reason         (idx: Int, args: Seq[PrimitiveValue]): (String)
+  def reason         (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): (String)
   /**
    * Record feedback given as the "correct" value for a variable represented by this model
    * @param idx   The index of the variable family to record feedback for

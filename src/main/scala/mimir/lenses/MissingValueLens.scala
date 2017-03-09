@@ -39,22 +39,29 @@ object MissingValueLens {
       )
     }
 
-    val (
-      candidateModels: Map[String,List[(Model,Int,String)]],
-      modelEntities: List[Model]
-    ) = 
-      LensUtils.extractModelsByColumn(
-        ModelRegistry.imputations.toList,
-        ( modelCategory:String, 
-          constructor:ModelRegistry.ImputationConstructor
-        ) => 
+    val modelsByType: Seq[(String, Seq[(String, (Model, Int, Seq[Expression]))])] =
+      ModelRegistry.imputations.toSeq.map {
+        case ( 
+          modelCategory: String, 
+          constructor: ModelRegistry.ImputationConstructor
+        ) => {
+          val modelsByTypeAndColumn: Seq[(String, (Model, Int, Seq[Expression]))] = 
             constructor(
               db, 
               s"$name:$modelCategory", 
               targetColumns, 
               query
-            )
-      )
+            ).toSeq
+          
+          (modelCategory, modelsByTypeAndColumn)
+        }
+      }
+
+    val (
+      candidateModels: Map[String,Seq[(Model,Int,Seq[Expression],String)]],
+      modelEntities: Seq[Model]
+    ) = 
+      LensUtils.extractModelsByColumn(modelsByType)
 
     // Sanity check...
     targetColumns.foreach( target => {
@@ -64,22 +71,21 @@ object MissingValueLens {
     })
 
     val (
-      replacementExprsList:List[(String,Expression)], 
-      metaModels:List[Model]
+      replacementExprsList: Seq[(String,Expression)], 
+      metaModels: Seq[Model]
     ) =
       candidateModels.
-        toList.
         map({ 
           case (column, models) => {
             //TODO: Replace Default Model
             val metaModel = new DefaultMetaModel(
                 s"$name:META:$column", 
                 s"picking a value for column '$column'",
-                models.map(_._3)
+                models.map(_._4)
               )
             val metaExpr = LensUtils.buildMetaModel(
-              metaModel, 0, List[Expression](), 
-              models, List[Expression](RowIdVar())
+              metaModel, 0, Seq(), Seq(),
+              models, Seq[Expression](RowIdVar())
             )
 
             ( (column, metaExpr), metaModel )

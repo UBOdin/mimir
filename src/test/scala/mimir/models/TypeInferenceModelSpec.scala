@@ -22,7 +22,7 @@ object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
 
   def guess(model: Model): Type =
   {
-    model.bestGuess(0, List[PrimitiveValue]()) match {
+    model.bestGuess(0, List[PrimitiveValue](), List()) match {
       case TypePrimitive(t) => t
     }
   }

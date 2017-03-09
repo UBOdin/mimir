@@ -60,7 +60,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
     val typechecker = new ExpressionChecker(db.bestGuessSchema(src).toMap)
     val newSrc = 
       vgTerms.foldLeft(src)({
-        case (oldSrc, (v @ VGTerm(model,idx,args), termId)) =>
+        case (oldSrc, (v @ VGTerm(model, idx, args, hints), termId)) =>
           LeftOuterJoin(oldSrc,
             cacheTableDefinition(model, idx, termId),
             ExpressionUtils.makeAnd(
@@ -140,24 +140,24 @@ class BestGuessCache(db: Database) extends LazyLogging {
       filter( _._2.args.exists(ExpressionUtils.isDataDependent(_)) ).
       map( (x) => { logger.trace(s"Surviving: $x"); x }).
       // Extract the relevant features of the VGTerm
-      map({ case (cond, term) => ((term.model, term.idx, term.args), cond) }).
+      map({ case (cond, term) => ((term.model, term.idx, term.args, term.hints), cond) }).
       // Gather the conditions for each term
       groupBy( _._1 ).
       // The VGTerm applies if any of the gathered conditions are true
       map({ case (term, groups) => (term, ExpressionUtils.makeOr(groups.map(_._2))) }).
       // And build a cache for those terms where appropriate
-      foreach({ case ((model, idx, args), cond) =>
+      foreach({ case ((model, idx, args, hints), cond) =>
         if(view.children.length != 1){ 
           throw new SQLException("Assertion Failed: Expecting operator with expressions to have only one child")
         }
-        buildCache(model, idx, args, Select(cond, view.children.head))
+        buildCache(model, idx, args, hints, Select(cond, view.children.head))
       })
     // Finally recur to the child nodes
     view.children.foreach( buildCache(_) )
   }
   def buildCache(term: VGTerm, input: Operator): Unit =
-    buildCache(term.model, term.idx, term.args, input)
-  def buildCache(model: Model, varIdx: Int, args: Seq[Expression], input: Operator): Unit = {
+    buildCache(term.model, term.idx, term.args, term.hints, input)
+  def buildCache(model: Model, varIdx: Int, args: Seq[Expression], hints: Seq[Expression], input: Operator): Unit = {
     val cacheTable = cacheTableForModel(model, varIdx)
 
     // Use the best guess schema for the typechecker... we want just one instance
@@ -176,13 +176,15 @@ class BestGuessCache(db: Database) extends LazyLogging {
     val guesses = 
       db.query(input).mapRows(row => {
         val compiledArgs = args.map(Provenance.plugInToken(_, row.provenanceToken()))
+        val compiledHints = hints.map(Provenance.plugInToken(_, row.provenanceToken()))
         val tuple = row.currentTuple()
-        val dataArgs = compiledArgs.map(Eval.eval(_, tuple)).toList
-        val guess = model.bestGuess(varIdx, dataArgs)
+        val dataArgs = compiledArgs.map(Eval.eval(_, tuple))
+        val dataHints = compiledHints.map(Eval.eval(_, tuple))
+        val guess = model.bestGuess(varIdx, dataArgs, dataHints)
 
         logger.trace(s"Registering $dataArgs -> $guess")
 
-        guess :: dataArgs
+        guess :: dataArgs.toList
       })
 
     db.backend.fastUpdateBatch(
