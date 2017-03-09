@@ -44,7 +44,7 @@ object MimirVizier {
     ExperimentalOptions.enable(conf.experimental())
     
     // Set up the database connection(s)
-    db = new Database(new GProMBackend(conf.backend(), conf.dbname(), -1))    
+    db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))//new GProMBackend(conf.backend(), conf.dbname(), -1))    
     db.backend.open()
 
     db.initializeDBForMimir();
@@ -56,8 +56,8 @@ object MimirVizier {
   }
   
   def runServerForViztrails() : Unit = {
-    
-     val server = new GatewayServer(this, 33388)
+    //val str = vistrailsQueryMimir("Select * from LENSE_1783249682")
+    val server = new GatewayServer(this, 33388)
      server.addListener(new py4j.GatewayServerListener(){
         def connectionError(connExept : java.lang.Exception) = {
           println("Python GatewayServer connectionError: " + connExept)
@@ -95,10 +95,13 @@ object MimirVizier {
      
      while(true){
        Thread.sleep(90000)
-       
+       if(pythonCallThread != null){
+         println("Python Call Thread Stack Trace: ---------v ")
+         pythonCallThread.getStackTrace.foreach(ste => println(ste.toString()))
+       }
        pythonMimirCallListeners.foreach(listener => {
        
-         listener.callToPython("test")
+          println(listener.callToPython("knock knock, jvm here"))
          })
      }
      
@@ -108,7 +111,9 @@ object MimirVizier {
   //-------------------------------------------------
   //Python package defs
   ///////////////////////////////////////////////
+  var pythonCallThread : Thread = null
   def loadCSV(file : String) : String = {
+    pythonCallThread = Thread.currentThread()
     println("loadCSV: From Vistrails: [" + file + "]") ;
     val csvFile = new File(file)
     val tableName = (csvFile.getName().split("\\.")(0) + "_RAW").toUpperCase
@@ -121,24 +126,58 @@ object MimirVizier {
     return tableName 
   }
   
-  def createLense(input : Any, params : Seq[String], _type : String) : String = {
+  def createLense(input : Any, params : Seq[String], _type : String, materialize_input:Boolean) : String = {
+    pythonCallThread = Thread.currentThread()
     println("createLense: From Vistrails: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]"  ) ;
     val paramsStr = params.mkString(",")
     val lenseName = "LENSE_" + ((input.toString() + _type + paramsStr).hashCode().toString().replace("-", "") )
+    var query:String = null
     db.getView(lenseName) match {
       case None => {
-        val query = s"CREATE LENS ${lenseName} AS SELECT * FROM ${input} WITH ${_type}(${paramsStr})"  
+        if(materialize_input){
+          val materializedInput = "MATERIALIZED_"+input
+          query = s"CREATE LENS ${lenseName} AS SELECT * FROM ${materializedInput} WITH ${_type}(${paramsStr})"  
+          if(db.getAllTables().contains(materializedInput)){
+              println("createLense: From Vistrails: Materialized Input Already Exists: " + materializedInput)
+          }
+          else{  
+            val inputQuery = s"SELECT * FROM ${input}"
+            val oper = db.sql.convert(db.parse(inputQuery).head.asInstanceOf[Select])
+            val virtOper = db.compiler.virtualize(oper, db.compiler.standardOptimizations)
+            db.selectInto(materializedInput, virtOper.query)
+          }
+        }
+        else
+          query = s"CREATE LENS ${lenseName} AS SELECT * FROM ${input} WITH ${_type}(${paramsStr})"  
         println("createLense: query: " + query)
-        db.update(db.parse(query).head)
+        db.update(db.parse(query).head)    
       }
       case Some(_) => {
-        println("createLense: From Vistrails: Lense already exists" + lenseName)
+        println("createLense: From Vistrails: Lense already exists: " + lenseName)
       }
     }
     lenseName
   }
   
-  def vistrailsQueryMimir(query : String) : String = {
+  def createView(input : Any, query : String) : String = {
+    pythonCallThread = Thread.currentThread()
+    println("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
+    val inputSubstitutionQuery = query.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
+    val viewName = "VIEW_" + ((input.toString() + query).hashCode().toString().replace("-", "") )
+    db.getView(viewName) match {
+      case None => {
+        val viewQuery = s"CREATE VIEW $viewName AS $inputSubstitutionQuery"  
+        println("createView: query: " + viewQuery)
+        db.update(db.parse(viewQuery).head)
+      }
+      case Some(_) => {
+        println("createView: From Vistrails: View already exists: " + viewName)
+      }
+    }
+    viewName
+  }
+  
+  def vistrailsQueryMimir(query : String) : PythonCSVContainer = {
     val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
     operCSVResultsDeterminism(oper)
   }
@@ -154,36 +193,33 @@ object MimirVizier {
   
   def operCSVResults(oper : mimir.algebra.Operator) : String =  {
     val results = db.query(oper)
-    var resCSV = ""
-    results.open()
     val cols = results.schema.map(f => f._1)
-    resCSV += cols.mkString(", ") + "\n"
-    while(results.getNext()){
-      resCSV += results.currentRow().mkString(", ") + "\n"   
-    }
-    results.close()
+    val colsIndexes = results.schema.zipWithIndex.map( _._2)
+    val resCSV = cols.mkString(", ") + "\n" + results.mapRows(row => {
+      colsIndexes.map( (i) => {
+         row(i).toString 
+       }).mkString(", ")
+    }).mkString("\n")  
     resCSV 
   }
   //----------------------------------------------------------
   
-  def operCSVResultsDeterminism(oper : mimir.algebra.Operator) : String =  {
+  def operCSVResultsDeterminism(oper : mimir.algebra.Operator) : PythonCSVContainer =  {
      val results = db.query(oper)
-     var resCSV = ""
-     results.open()
      val cols = results.schema.map(f => f._1)
-     resCSV += cols.mkString(", ") + "\n"
-     while(results.getNext()){
-       val list = results.schema.zipWithIndex.map( _._2).map( (i) => {
-         results(i).toString + (if (!results.deterministicCol(i)) {"<?-*-?>"} else {""}) + (if (!results.deterministicRow()) {"<?---?>"} else {""}) 
-       }) 
-       resCSV += list.mkString(", ") + "\n"
-      }
-      results.close()
-      resCSV
+     val colsIndexes = results.schema.zipWithIndex.map( _._2)
+     val resCSV = results.mapRows(row => {
+       val truples = colsIndexes.map( (i) => {
+         (row(i).toString, row.deterministicCol(i)) 
+       }).unzip
+       (truples._1.mkString(", "), truples._2.toArray, row.deterministicRow())
+     }).unzip3
+     new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), resCSV._2.toArray, resCSV._3.toArray)
   }
-  
 }
 
 trait PythonMimirCallInterface {
 	def callToPython(callStr : String) : String
 }
+
+class PythonCSVContainer(val csvStr: String, val colsDet: Array[Array[Boolean]], val rowsDet: Array[Boolean]){}
