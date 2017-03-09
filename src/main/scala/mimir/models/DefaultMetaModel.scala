@@ -19,11 +19,11 @@ class DefaultMetaModel(name: String, context: String, models: Seq[String])
   with FiniteDiscreteDomain
 {
   def varType(idx: Int, args: Seq[Type]): Type = TString()
-  def bestGuess(idx: Int, args: Seq[PrimitiveValue]): PrimitiveValue =
+  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
     choices.getOrElse(idx, StringPrimitive(models.head))
-  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue =
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
     StringPrimitive(RandUtils.pickFromList(randomness, models))
-  def reason(idx: Int, args: Seq[PrimitiveValue]): String =
+  def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String =
   {
     choices.get(idx) match {
       case None => {

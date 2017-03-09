@@ -50,7 +50,7 @@ object KeyRepairLens {
             Conditional(
               Comparison(Cmp.Lte, Var(s"MIMIR_KR_COUNT_$col"), IntPrimitive(1)),
               Var(col),
-              VGTerm(model, 0, keys.map(Var(_)))
+              VGTerm(model, 0, keys.map(Var(_)), Seq())
             )
           )
         },

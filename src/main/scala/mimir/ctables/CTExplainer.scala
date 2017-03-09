@@ -20,7 +20,7 @@ abstract class Explanation(
 ) {
 	def fields: List[(String, PrimitiveValue)]
 
-	override def toString(): String = {
+	override def toString(): String = { 
 		(fields ++ List( 
 			("Reasons", reasons.map("\n    "+_.toString).mkString("")),
 			("Token", JSONBuilder.string(token.v))
@@ -228,7 +228,9 @@ class CTExplainer(db: Database) extends LazyLogging {
 	{
 		logger.trace(s"GETTING REASONS: $expr")
 		expr match {
-			case v: VGTerm => Map(v.model.name -> makeReason(v, v.args.map(Eval.eval(_,tuple))))
+			case v: VGTerm => Map(v.model.name -> 
+				makeReason(v, v.args.map(Eval.eval(_,tuple)), v.hints.map(Eval.eval(_,tuple)))
+			)
 
 			case Conditional(c, t, e) =>
 				(
@@ -302,12 +304,12 @@ class CTExplainer(db: Database) extends LazyLogging {
 		(tuple, columnExprs, rowCondition)
 	}
 
-	def makeReason(term: VGTerm, v: Seq[PrimitiveValue]): Reason =
-		makeReason(term.model, term.idx, v)
-	def makeReason(model: Model, idx: Int, v: Seq[PrimitiveValue]): Reason =
+	def makeReason(term: VGTerm, v: Seq[PrimitiveValue], h: Seq[PrimitiveValue]): Reason =
+		makeReason(term.model, term.idx, v, h)
+	def makeReason(model: Model, idx: Int, v: Seq[PrimitiveValue], h: Seq[PrimitiveValue]): Reason =
 	{
     Reason(
-      model.reason(idx, v),
+      model.reason(idx, v, h),
       model.name,
       idx,
       v,

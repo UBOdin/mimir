@@ -15,10 +15,10 @@ object EditDistanceMatchModelSpec extends Specification
   }
 
   def guess(model:(Model,Int)): String = 
-    model._1.bestGuess(model._2, List[PrimitiveValue]()).asString
+    model._1.bestGuess(model._2, List(), List()).asString
   def sample(model:(Model,Int), count:Int): List[String] = {
     (0 to count).map( i => 
-      model._1.sample(model._2, new Random(), List[PrimitiveValue]()).asString
+      model._1.sample(model._2, new Random(), List(), List()).asString
     ).toList
   }
 

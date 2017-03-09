@@ -25,12 +25,15 @@ object WekaModel
 {
   val logger = Logger(org.slf4j.LoggerFactory.getLogger(getClass.getName))
 
-  def train(db: Database, name: String, cols: Seq[String], query:Operator): Map[String,(Model,Int)] = 
+  def train(db: Database, name: String, cols: Seq[String], query:Operator): Map[String,(Model,Int,Seq[Expression])] = 
   {
     cols.map( (col) => {
       val model = new SimpleWekaModel(s"$name:$col", col, query)
       model.train(db)
-      col -> (model, 0)
+      // Ignore the hints field for now.  At some point, it would be useful to put some 
+      // subset of the attributes into this hint field to allow flow-through rather than 
+      // having the model run a query to figure out what the other attributes in the row are.
+      col -> (model, 0, Seq())
     }).toMap
   }
 
@@ -224,10 +227,11 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
     db.bestGuessSchema(query)(colIdx)._2
 
   def argTypes(idx: Int): Seq[Type] = List(TRowId())
+  def hintTypes(idx: Int) = Seq()
 
   def varType(idx: Int, args: Seq[Type]): Type = guessInputType
   
-  def bestGuess(idx: Int, args: Seq[PrimitiveValue]): PrimitiveValue =
+  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
   {
     val rowid = RowIdPrimitive(args(0).asString)
     feedback.get(rowid.asString) match {
@@ -239,7 +243,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
         classToPrimitive(res)
     }
   }
-  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue = 
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
   {
     val rowid = RowIdPrimitive(args(0).asString)
     val classes = classify(rowid)
@@ -252,7 +256,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
               }
     classToPrimitive(res)
   }
-  def reason(idx: Int, args: Seq[PrimitiveValue]): String = 
+  def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = 
   {
     val rowid = RowIdPrimitive(args(0).asString)
     feedback.get(rowid.asString) match {

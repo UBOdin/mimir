@@ -28,10 +28,10 @@ object FeedbackSpec
 
       // Base assumptions.  These may change, but the feedback tests 
       // below should be updated accordingly
-      model.bestGuess(0, List()) must be equalTo(str("B"))
+      model.bestGuess(0, List(), List()) must be equalTo(str("B"))
 
       model.feedback(0, List(), str("C"))
-      model.bestGuess(0, List()) must be equalTo(str("C"))
+      model.bestGuess(0, List(), List()) must be equalTo(str("C"))
     }
 
     "Support SQL Feedback" >> {
@@ -39,11 +39,11 @@ object FeedbackSpec
 
       // Base assumptions.  These may change, but the feedback tests 
       // below should be updated accordingly
-      model.bestGuess(0, List()) must be equalTo(str("C"))
+      model.bestGuess(0, List(), List()) must be equalTo(str("C"))
 
       // Test Model C
       update("FEEDBACK MATCH:EDITDISTANCE:CX 0 IS 'B'")
-      model.bestGuess(0, List()) must be equalTo(str("B"))
+      model.bestGuess(0, List(), List()) must be equalTo(str("B"))
     }
 
   }
@@ -55,13 +55,13 @@ object FeedbackSpec
 
       // Base assumptions.  These may change, but the feedback tests 
       // below should be updated accordingly
-      model.bestGuess(0, List()) must be equalTo(TypePrimitive(TInt()))
+      model.bestGuess(0, List(), List()) must be equalTo(TypePrimitive(TInt()))
       db.bestGuessSchema(table("TI")).
         find(_._1.equals("A")).get._2 must be equalTo(TInt())
 
       model.feedback(0, List(), TypePrimitive(TFloat()))
 
-      model.bestGuess(0, List()) must be equalTo(TypePrimitive(TFloat()))
+      model.bestGuess(0, List(), List()) must be equalTo(TypePrimitive(TFloat()))
       db.bestGuessSchema(table("TI")).
         find(_._1.equals("A")).get._2 must be equalTo(TFloat())
     }
@@ -73,9 +73,9 @@ object FeedbackSpec
       val model = db.models.get("MV:WEKA:B")
       val nullRow = querySingleton("SELECT ROWID() FROM R WHERE B IS NULL")
 
-      model.bestGuess(0, List(nullRow)) must not be equalTo(50)
+      model.bestGuess(0, List(nullRow), List()) must not be equalTo(50)
       model.feedback(0, List(nullRow), IntPrimitive(50))
-      model.bestGuess(0, List(nullRow)).asLong must be equalTo(50)
+      model.bestGuess(0, List(nullRow), List()).asLong must be equalTo(50)
 
     }
 
@@ -83,7 +83,7 @@ object FeedbackSpec
       val model = db.models.get("MV:WEKA:C")
       val nullRow = querySingleton("SELECT ROWID() FROM R WHERE C IS NULL")
 
-      val originalGuess = model.bestGuess(0, List(nullRow)).asLong
+      val originalGuess = model.bestGuess(0, List(nullRow), List()).asLong
       querySingleton(s"""
         SELECT C FROM MV WHERE ROWID() = ROWID($nullRow)
       """) must be equalTo(IntPrimitive(originalGuess))

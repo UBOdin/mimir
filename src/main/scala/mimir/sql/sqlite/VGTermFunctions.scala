@@ -23,8 +23,12 @@ class BestGuessVGTerm(db:Database)
         model.argTypes(idx).
           zipWithIndex.
           map( arg => value_mimir(arg._2+2, arg._1) )
+      val hintList = 
+        model.hintTypes(idx).
+          zipWithIndex.
+          map( arg => value_mimir(arg._2+argList.length+2, arg._1) )
 
-      val guess = model.bestGuess(idx, argList)
+      val guess = model.bestGuess(idx, argList, hintList)
 
       logger.trace(s"$modelName;$idx: $argList -> $guess")
 
@@ -57,11 +61,12 @@ object VGTermFunctions
 
   def specialize(e: Expression): Expression = {
     e match {
-      case VGTerm(model, idx, args) => 
+      case VGTerm(model, idx, args, hints) => 
         Function(
           bestGuessVGTermFn, 
           List(StringPrimitive(model.name), IntPrimitive(idx))++
-            args.map(specialize(_))
+            args.map(specialize(_))++
+            hints.map(specialize(_))
         )
       case _ => e.recur(specialize(_))
     }
