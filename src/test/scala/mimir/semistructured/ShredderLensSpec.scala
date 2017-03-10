@@ -11,6 +11,9 @@ import mimir.ctables._
 import mimir.exec.ResultIterator
 import mimir.util._
 import mimir.lenses._
+import mimir.parser.MimirJSqlParser
+import net.sf.jsqlparser.statement.Statement
+
 import scala.collection.JavaConverters._
 
 object ShredderLensSpec
@@ -58,12 +61,17 @@ object ShredderLensSpec
      "be initializable" >> {
 //       LoadCSV.handleLoadTable(db, testTable, testData)
 //       println("DATA LOADED")
+       var parser = new MimirJSqlParser(new StringReader("CREATE ADAPTIVESCHEMA TEST AS SELECT * FROM twitter100cols10krows;"))
+       val stmt: Statement = parser.Statement()
+       mimir.Mimir.handleAdaptiveSchema(stmt.asInstanceOf[CreateAdaptiveSchema],database)
+/*
        val schema = database.getTableSchema(testTable).get
 //       val schema = db.getTableSchema(testTable).get
 //       val schema = db.getTableSchema(testTable).get // for loading already existing table from a database
        discala = new FuncDep()
        discala.buildEntities(schema, database.backend.execute("SELECT * FROM " + testTable + ";"), testTable)
        discala.entityPairMatrix must not beNull
+*/
      }
 /*
      "be serializable" >> {
@@ -87,7 +95,7 @@ object ShredderLensSpec
       discala.entityPairMatrix must not beNull
     }
 */
-
+/*
     "contain enough information to create a lens" >> {
       val entities:List[Integer] = discala.entityPairList.flatMap( x => List(x._1, x._2) ).toSet.toList
       println("From Entities")
@@ -167,6 +175,7 @@ object ShredderLensSpec
 //      database.backend.execute("drop table if exists LENSOUTPUT;")
       true
     }
+    */
   }
 
 }

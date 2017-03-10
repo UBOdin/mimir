@@ -139,6 +139,70 @@ object Mimir {
     })
   }
 
+  def handleAdaptiveSchema(adaptiveSchema: CreateAdaptiveSchema,database: Database): Unit = {
+    // CREATE ADAPTIVESCHEMA TEST AS SELECT * FROM twitterSmallMediumCleanRAW;
+    // CREATE ADAPTIVESCHEMA TEST AS SELECT * FROM CURESOURCE;
+    // CREATE ADAPTIVESCHEMA TEST AS SELECT * FROM twitter100cols10krows;
+    val ent = new FuncDep()
+    val queryOper = database.sql.convert(adaptiveSchema.getSelectBody())
+    //    val schema = queryOper.schema
+    val s : (List[(String,String)],String)= getOrderedSchema(adaptiveSchema.getSelectBody,database)
+    val schema : List[(String,Type.T)] = s._1.map((tup) => {(tup._1,Type.TString)})
+    val tableName :String = s._2
+
+    val viewList : java.util.ArrayList[String] = ent.buildEntities(schema, database.backend.execute(adaptiveSchema.getSelectBody.toString()), tableName)
+    viewList.asScala.map((view) => {
+      database.backend.update(view)
+    })
+  }
+
+  // Passing a database allows for testing from test suites, just pass the db you're using
+  def getOrderedSchema(sel : SelectBody, database: Database) : (List[(String,String)],String) = {
+    var schema : (List[(String,String)],String) = null
+    if(sel.isInstanceOf[PlainSelect]){
+      schema = getOrderedSchema(sel.asInstanceOf[PlainSelect].getFromItem,database)
+    }
+    else{
+      throw new Exception("Only plainselect is supported for this demo")
+    }
+    schema
+  }
+
+  def getOrderedSchema(fi : FromItem, database: Database) : (List[(String,String)],String) = {
+
+    if (fi.isInstanceOf[net.sf.jsqlparser.schema.Table]) {
+      val name =
+        fi.asInstanceOf[net.sf.jsqlparser.schema.Table].
+          getName.toUpperCase
+      var alias =
+        fi.asInstanceOf[net.sf.jsqlparser.schema.Table].
+          getAlias
+      if (alias == null) {
+        alias = name
+      }
+      else {
+        alias = alias.toUpperCase
+      }
+
+      // Bind the table to a source:
+      database.getView(name) match {
+        case None =>
+          val sch = database.getTableSchema(name) match {
+            case Some(sch) => sch
+            case None => throw new SQLException("Unknown table or view: " + name);
+          }
+          return (sch.map((x) => (x._1, alias + "_" + x._1)),name)
+
+        case Some(view) =>
+          val sch = view.schema.map(_._1)
+          return (sch.map((x) => (x, alias + "_" + x)),name)
+      }
+    }
+    else {
+      throw new Exception("Joins are not supported for the demo")
+    }
+  }
+
 
   def getOrderedSchema(sel : SelectBody) : (List[(String,String)],String) = {
     var schema : (List[(String,String)],String) = null
