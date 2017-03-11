@@ -222,7 +222,7 @@ class RAToSql(db: Database)
           //
           ob.setExpression(
             convert(
-              Eval.inline(col.expr, sortBindings),
+              Eval.inline(col.expression, sortBindings),
               schemas
             ))
           ob.setAsc(col.ascending)

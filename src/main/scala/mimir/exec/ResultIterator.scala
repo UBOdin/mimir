@@ -118,11 +118,6 @@ abstract class ResultIterator {
     mapRows(_.currentRow())
 
   /**
-   * A list of explanations for the indicated column
-   */
-  def reason(ind: Int): Seq[Reason] = Seq()
-
-  /**
    * A unique identifier for every output that can be unwrapped to generate per-row provenance
    */
   def provenanceToken(): RowIdPrimitive

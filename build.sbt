@@ -50,10 +50,19 @@ lazy val parser = taskKey[Unit]("Builds the SQL Parser")
 
 parser := {
   val logger = streams.value.log
-//  Process("rm -f src/main/java/mimir/parser/*.java") ! logger match {
-//    case 0 => // Success
-//    case n => sys.error(s"Could not clean up after old SQL Parser: $n")
-//  }
+  Process(List(
+    "rm", "-f",
+    "src/main/java/mimir/parser/MimirJSqlParser.java",
+    "src/main/java/mimir/parser/MimirJSqlParserConstants.java",
+    "src/main/java/mimir/parser/MimirJSqlParserTokenManager.java",
+    "src/main/java/mimir/parser/ParseException.java",
+    "src/main/java/mimir/parser/SimpleCharStream.java",
+    "src/main/java/mimir/parser/Token.java",
+    "src/main/java/mimir/parser/TokenMgrError.java"
+  )) ! logger match {
+    case 0 => // Success
+    case n => sys.error(s"Could not clean up after old SQL Parser: $n")
+  }
   Process(List(
     "java -cp lib/javacc.jar javacc",
     "-OUTPUT_DIRECTORY=src/main/java/mimir/parser",

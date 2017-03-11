@@ -11,7 +11,7 @@ import mimir.models.Model
 import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
 import mimir.lenses.{LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
-import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens,CreateView,Explain,Feedback,Load}
+import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens,CreateView,Explain,Feedback,Load,Pragma,Analyze}
 import mimir.optimizer.{InlineVGTerms, ResolveViews}
 import mimir.util.{LoadCSV,ExperimentalOptions}
 import mimir.web.WebIterator
@@ -299,9 +299,13 @@ case class Database(backend: Backend)
   def update(stmt: Statement)
   {
     stmt match {
-      case sel:  Select     => throw new SQLException("Can't evaluate SELECT as an update")
-      case expl: Explain    => throw new SQLException("Can't evaluate EXPLAIN as an update")
+      /********** QUERY STATEMENTS **********/
+      case _: Select   => throw new SQLException("Can't evaluate SELECT as an update")
+      case _: Explain  => throw new SQLException("Can't evaluate EXPLAIN as an update")
+      case _: Pragma   => throw new SQLException("Can't evaluate PRAGMA as an update")
+      case _: Analyze  => throw new SQLException("Can't evaluate ANALYZE as an update")
 
+      /********** FEEDBACK STATEMENTS **********/
       case feedback: Feedback => {
         val name = feedback.getModel().toUpperCase()
         val idx = feedback.getIdx()
@@ -316,6 +320,7 @@ case class Database(backend: Backend)
         }
       }
 
+      /********** CREATE LENS STATEMENTS **********/
       case lens: CreateLens => {
         val t = lens.getType().toUpperCase()
         val name = lens.getName()
@@ -324,8 +329,11 @@ case class Database(backend: Backend)
 
         lenses.createLens(t, name, query, args)
       }
+
+      /********** CREATE VIEW STATEMENTS **********/
       case view: CreateView => views.createView(view.getTable().getName().toUpperCase, 
                                                 sql.convert(view.getSelectBody()))
+      /********** LOAD STATEMENTS **********/
       case load: Load => {
         // Assign a default table name if needed
         val target = 
@@ -337,21 +345,23 @@ case class Database(backend: Backend)
         loadTable(target, load.getFile)
       }
 
+      /********** DROP STATEMENTS **********/
       case drop: Drop     => {
-          drop.getType().toUpperCase match {
-            case "TABLE" | "INDEX" => 
-              backend.update(drop.toString());
+        drop.getType().toUpperCase match {
+          case "TABLE" | "INDEX" => 
+            backend.update(drop.toString());
 
-            case "VIEW" =>
-              views.dropView(drop.getName().toUpperCase);
+          case "VIEW" =>
+            views.dropView(drop.getName().toUpperCase);
 
-            case "LENS" =>
-              lenses.dropLens(drop.getName().toUpperCase)
+          case "LENS" =>
+            lenses.dropLens(drop.getName().toUpperCase)
 
-            case _ =>
-              throw new SQLException("Invalid drop type '"+drop.getType()+"'")
-          }
+          case _ =>
+            throw new SQLException("Invalid drop type '"+drop.getType()+"'")
+        }
       }
+
       case _                => backend.update(stmt.toString())
     }
   }

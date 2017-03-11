@@ -176,6 +176,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_IS:"IS">
 |   <K_IN:"IN">
 |   <K_OR:"OR">
+|   <K_OF:"OF">
 |   <K_ON:"ON">
 |   <K_ALL: "ALL">
 |   <K_AND: "AND">
@@ -381,23 +382,24 @@ Explain Explain():
 
 Analyze Analyze():
 	{
-		Analyze analyze=new Analyze();
 		SelectBody selectBody = null;
 		String col = null;
+    PrimitiveValue rowid = null;
 	}
 {
-	<K_ANALYZE> col = RelObjectName() <K_IN> selectBody = SelectBody()
+	<K_ANALYZE> 
+  [ 
+    [
+      col = RelObjectName() 
+      <K_OF>
+    ] 
+    rowid = Literal()
+    <K_IN>
+  ]
+  selectBody = SelectBody()
 	{ 
-		analyze.setSelectBody(selectBody);
-		if(col.toUpperCase().equals("COND")){
-		  analyze.setColumn("__MIMIR_CONDITION");
-		} else {
-  		analyze.setColumn(col);
-  	}
-	}
-	{
-  		return analyze;
-	}
+    return new Analyze(selectBody, rowid, col);
+  }
 }
 
 CreateLens CreateLens():

@@ -228,7 +228,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 	{
 		logger.trace(s"GETTING REASONS: $expr")
 		expr match {
-			case v: VGTerm => Map(v.model.name -> makeReason(v, v.args.map(Eval.eval(_,tuple))))
+			case v: VGTerm => Map(v.model.name -> new Reason(v.model, v.idx, v.args.map(Eval.eval(_,tuple))))
 
 			case Conditional(c, t, e) =>
 				(
@@ -302,28 +302,69 @@ class CTExplainer(db: Database) extends LazyLogging {
 		(tuple, columnExprs, rowCondition)
 	}
 
-	def makeReason(term: VGTerm, v: Seq[PrimitiveValue]): Reason =
-		makeReason(term.model, term.idx, v)
-	def makeReason(model: Model, idx: Int, v: Seq[PrimitiveValue]): Reason =
+	def explainEverything(oper: Operator): Seq[ReasonSet] =
 	{
-    Reason(
-      model.reason(idx, v),
-      model.name,
-      idx,
-      v,
-      makeRepair(model, idx, v)
-    )
-	}
+		logger.trace("Explain Everything: \n"+oper)
+		oper match {
+			case Table(_,_,_) => Seq()
 
-	def makeRepair(term: VGTerm, v: Seq[PrimitiveValue]): Repair =
-		makeRepair(term.model, term.idx, v)
-	def makeRepair(model: Model, idx: Int, v: Seq[PrimitiveValue]): Repair =
-	{
-		model match {
-			case finite:( Model with FiniteDiscreteDomain ) =>
-				RepairFromList(finite.getDomain(idx, v))
-			case _ => 
-				RepairByType(model.varType(idx, v.map(_.getType)))
+			case Project(args, child) => {
+				val argReasons =
+					args.flatMap {
+						  col => CTAnalyzer.compileCausality(col.expression)
+						}.map { case (condition, vgterm) => 
+							ReasonSet.make(vgterm, Select(condition, child))
+						}
+
+				argReasons ++ explainEverything(child)
+			}
+
+			case Select(cond, child) => {
+				val condReasons =
+					CTAnalyzer.compileCausality(cond).
+						map { case (condition, vgterm) => 
+								ReasonSet.make(vgterm, Select(condition, child))
+							}
+
+				condReasons ++ explainEverything(child)
+			}
+
+			case Aggregate(gbs, aggs, child) => {
+				val aggVGTerms = 
+					aggs.flatMap { agg => agg.args.flatMap( CTAnalyzer.compileCausality(_) ) }
+				val aggReasons =
+					aggVGTerms.map { case (condition, vgterm) => 
+						ReasonSet.make(vgterm, Select(condition, child))
+					}
+
+				aggReasons ++ explainEverything(child)
+			}
+
+			case Join(lhs, rhs) => {
+				explainEverything(lhs) ++ explainEverything(rhs)
+			}
+
+			case LeftOuterJoin(left, right, cond) => 
+        throw new RAException("Don't know how to explain a left-outer-join")
+
+      case Limit(_, _, child) => 
+      	explainEverything(child)
+
+     	case Sort(args, child) => {
+				val argReasons =
+					args.flatMap { arg => 
+						CTAnalyzer.compileCausality(arg.expression)
+					}.map { case (condition, vgterm) => 
+						ReasonSet.make(vgterm, Select(condition, child))
+					}
+
+				argReasons ++ explainEverything(child)
+			}
+
+			case Union(lhs, rhs) => {
+				explainEverything(lhs) ++ explainEverything(rhs)
+			}
 		}
 	}
+
 }

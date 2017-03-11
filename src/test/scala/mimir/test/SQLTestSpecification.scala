@@ -11,6 +11,7 @@ import mimir.sql._
 import mimir.algebra._
 import mimir.util._
 import mimir.exec._
+import mimir.optimizer._
 
 object DBTestInstances
 {
@@ -93,17 +94,28 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     query(s).mapRows( _.currentRow ).head
   def table(t: String) =
     db.getTableOperator(t)
-  def explainRow(s: String, t: String) = {
-    val query = db.sql.convert(
+  def resolveViews(q: Operator) =
+    ResolveViews(db,q)
+  def explainRow(s: String, t: String) = 
+  {
+    val query = resolveViews(db.sql.convert(
       stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-    )
+    ))
     db.explainRow(query, RowIdPrimitive(t))
   }
-  def explainCell(s: String, t: String, a:String) = {
-    val query = db.sql.convert(
+  def explainCell(s: String, t: String, a:String) = 
+  {
+    val query = resolveViews(db.sql.convert(
       stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-    )
+    ))
     db.explainCell(query, RowIdPrimitive(t), a)
+  }
+  def explainEverything(s: String) = 
+  {
+    val query = resolveViews(db.sql.convert(
+      stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
+    ))
+    db.explainer.explainEverything(query)
   }
   def update(s: Statement) = 
     db.update(s)

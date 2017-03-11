@@ -49,6 +49,15 @@ object OperatorUtils {
     else { return Union(head, makeUnion(tail)) }
   }
 
+  def makeDistinct(oper: Operator): Operator = 
+  {
+    Aggregate(
+      oper.schema.map(_._1).map(Var(_)),
+      Seq(),
+      oper
+    )
+  }
+
   def extractProjections(oper: Operator): (Seq[ProjectArg], Operator) =
   {
     oper match {
