@@ -91,7 +91,8 @@ case class Database(backend: Backend)
       this.getTableSchema(x) match {
         case Some(x) => x
         case None => throw new RAException("Table "+x+" does not exist in db!")
-      })
+      }
+  )
 
   /** 
    * Apply the standard set of Mimir compiler optimizations -- Used mostly for EXPLAIN.
@@ -156,27 +157,17 @@ case class Database(backend: Backend)
     }, () => {
       println(result.schema.map( _._1 ).mkString(","))
       println("------")
-      while(result.getNext()){
+      result.foreachRow { row => 
         println(
-          (0 until result.numCols).map( (i) => {
-            if( i == 0 ){
-              result(i) match {
-                case NullPrimitive() => "'NULL'"
-                case _ => result(i)
-              }
-
-            }
-            else{
-              result(i)+(
-                if(!result.deterministicCol(i)){ "*" } else { "" }
-                )
-            }
-
-          }).mkString(",")+(
-            if(!result.deterministicRow){
+          (0 until row.numCols).map { i => 
+            row(i)+(
+              if(!row.deterministicCol(i)){ "*" } else { "" }
+            )
+          }.mkString(",")+(
+            if(!row.deterministicRow){
               " (This row may be invalid)"
             } else { "" }
-            )
+          )
         )
       }
       if(result.missingRows()){

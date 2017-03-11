@@ -12,21 +12,29 @@ import mimir.util._
  * The one argument is a value for the key.  
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
-@SerialVersionUID(1000L)
-class KeyRepairModel(name: String, context: String, source: Operator, keys: Seq[(String, Type)], target: String) 
+@SerialVersionUID(1001L)
+class KeyRepairModel(
+  name: String, 
+  context: String, 
+  source: Operator, 
+  keys: Seq[(String, Type)], 
+  target: String,
+  targetType: Type,
+  scoreCol: Option[String]
+) 
   extends Model(name)
   with FiniteDiscreteDomain 
   with NeedsDatabase 
 {
   val choices = scala.collection.mutable.Map[List[PrimitiveValue], PrimitiveValue]();
 
-  def varType(idx: Int, args: Seq[Type]): Type = TInt()
+  def varType(idx: Int, args: Seq[Type]): Type = targetType
   def argTypes(idx: Int) = keys.map(_._2)
 
   def bestGuess(idx: Int, args: Seq[PrimitiveValue]): PrimitiveValue =
     choices.get(args.toList) match {
       case Some(choice) => choice
-      case None => getDomain(idx, args).sortBy(_._1.toString).head._1
+      case None => getDomain(idx, args).sortBy(-_._2).head._1
     }
 
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue = 
@@ -53,7 +61,7 @@ class KeyRepairModel(name: String, context: String, source: Operator, keys: Seq[
   final def getDomain(idx: Int, args: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
   {
     db.query(
-      OperatorUtils.projectColumns(List(target), 
+      OperatorUtils.projectColumns(List(target) ++ scoreCol, 
         Select(
           ExpressionUtils.makeAnd(
             keys.map(_._1).zip(args).map { 
@@ -63,7 +71,14 @@ class KeyRepairModel(name: String, context: String, source: Operator, keys: Seq[
           source
         )
       )
-    ).mapRows( _(0) ).map( (_, 1.0) ).toSeq
+    ).mapRows { row => 
+      ( row(0), 
+        scoreCol match { 
+          case None => 1.0; 
+          case Some(_) => row(1).asDouble
+        }
+      )
+    }.toSeq
   }
 
 }
