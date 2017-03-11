@@ -38,7 +38,7 @@ object CTExplainerSpec
       ))
 
       resultSets.map { 
-        set => (set.model.name -> set.allArgs(db).map(_.toList).toList)
+        set => (set.model.name -> set.allArgs(db).map(_._1.toList).toList)
       }.toMap must contain(eachOf(
         ("MV:WEKA:B" -> List(List[PrimitiveValue](RowIdPrimitive("2")))),
         ("MV:WEKA:C" -> List(List[PrimitiveValue](RowIdPrimitive("3")))),
