@@ -1,14 +1,14 @@
-package mimir.algebra
+package mimir.statistics
 
 import java.io._
 import java.util
 
-import mimir.exec.{ResultIterator, ResultSetIterator}
-import mimir.algebra.Type.T
 import java.util.TreeMap
 import java.util.ArrayList
 import java.util.HashMap
 import javax.swing.{JFrame, JPanel, JScrollPane}
+import java.awt.{BasicStroke, Color, Dimension, Paint, Rectangle, Stroke}
+import java.sql.ResultSet
 
 import edu.uci.ics.jung.algorithms.layout.{CircleLayout, Layout, TreeLayout}
 import edu.uci.ics.jung.graph.{DelegateTree, DirectedGraph, DirectedSparseMultigraph, Forest, Graph, SparseMultigraph, Tree, UndirectedSparseMultigraph}
@@ -16,15 +16,15 @@ import edu.uci.ics.jung.graph.util.EdgeType
 import edu.uci.ics.jung.visualization.BasicVisualizationServer
 import edu.uci.ics.jung.visualization.decorators.ToStringLabeller
 import org.apache.commons.collections15.Transformer
-import java.awt.{BasicStroke, Color, Dimension, Paint, Rectangle, Stroke}
-import java.sql.ResultSet
 
 import com.jgraph.layout.tree.JGraphTreeLayout
-import mimir.util.JDBCUtils
 import edu.uci.ics.jung.visualization.renderers.Renderer.VertexLabel.Position
 import org.javacc.parser.OutputFile
-
 import scala.collection.JavaConverters._
+
+import mimir.exec.{ResultIterator, ResultSetIterator}
+import mimir.algebra._
+import mimir.util.{JDBCUtils,SerializationUtils}
 
   /*
   Steps to building ER
@@ -61,7 +61,7 @@ class FuncDep
   val writeFile : Boolean = false
 
   // tables containing data for computations
-  var sch:List[(String, T)] = null // the schema, is a lookup for the type and name
+  var sch:Seq[(String, Type)] = null // the schema, is a lookup for the type and name
   var tableName : String = null
   var table:ArrayList[ArrayList[PrimitiveValue]] = null // This table contains the input table
   var countTable:ArrayList[TreeMap[String,Integer]] = null // contains a count of every occurrence of every value in the column
@@ -83,7 +83,7 @@ class FuncDep
 
   // buildEntities calls all the functions required for ER creation, optionally each function could be called if only part of the computation is required
 
-  def buildEntities(schema: List[(String, T)],data: ResultIterator, tableName : String): ArrayList[String] = {
+  def buildEntities(schema: Seq[(String, Type)],data: ResultIterator, tableName : String): ArrayList[String] = {
 /*    var i = 0
     schema.map((s)=>{
       println(i + " : " + s._1)
@@ -98,7 +98,7 @@ class FuncDep
     viewList
   }
 
-  def buildEntities(schema: List[(String, T)],data: ResultSet, tableName : String): ArrayList[String] = {
+  def buildEntities(schema: Seq[(String, Type)],data: ResultSet, tableName : String): ArrayList[String] = {
     /*
     var i = 0
     schema.map((s)=>{
@@ -119,7 +119,7 @@ class FuncDep
      inside this program so it has a high upfront ram cost, this can be changed on implementation to have each column call the database and in parallel collect this information
      The data collected is a count of each unique value per column and the total number of nulls
   */
-  def preprocessFDG(schema: List[(String, T)],data: ResultIterator,tName : String): Unit = {
+  def preprocessFDG(schema: Seq[(String, Type)],data: ResultIterator,tName : String): Unit = {
 
     // initalize tables
     table = new ArrayList[ArrayList[PrimitiveValue]]()
@@ -165,12 +165,12 @@ class FuncDep
 
   }
 
-  def preprocessFDG(schema: List[(String, T)],data: ResultSet,tName:String): Unit = {
+  def preprocessFDG(schema: Seq[(String, Type)],data: ResultSet,tName:String): Unit = {
 
     // initalize tables
     blackList = new ArrayList[Integer]()
     tableName = tName
-    var d:List[List[PrimitiveValue]] = mimir.util.JDBCUtils.extractAllRows(data)
+    var d:TraversableOnce[Seq[PrimitiveValue]] = mimir.util.JDBCUtils.extractAllRows(data)
     table = new ArrayList[ArrayList[PrimitiveValue]]()
     entityPairMatrix = new TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]]()
     sch = schema
@@ -181,7 +181,7 @@ class FuncDep
       countTable.add(new TreeMap[String,Integer])
       densityTable.add(0)
     }
-    }
+  }
 
 
     d.map((row)=>{
@@ -1015,7 +1015,7 @@ class FuncDep
     FuncDep.initBackstore(db)
     db.backend.update(
       "INSERT OR REPLACE INTO "+FuncDep.BACKSTORE_TABLE_NAME+"(name, data) VALUES (?,?)", 
-      List(StringPrimitive(name), BlobPrimitive(serialize()))
+      List(StringPrimitive(name), StringPrimitive(SerializationUtils.b64encode(serialize())))
     )
   }
 
@@ -1120,11 +1120,11 @@ object FuncDep {
   def deserialize(db: mimir.Database, name: String): FuncDep =
   {
     val blob = 
-      db.backend.singletonQuery(
+      db.backend.resultValue(
         "SELECT data FROM "+BACKSTORE_TABLE_NAME+" WHERE name=?", 
         List(StringPrimitive(name))
-      ).asInstanceOf[BlobPrimitive]
-    deserialize(blob.v)
+      ).asString
+    deserialize(SerializationUtils.b64decode(blob))
   }
 
 }

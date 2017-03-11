@@ -2,7 +2,6 @@ package mimir;
 
 import java.io._
 import java.sql.SQLException
-import java.util
 
 import mimir.ctables._
 import mimir.parser._
@@ -54,7 +53,7 @@ object Mimir {
       db.loadTable(conf.loadTable(), conf.loadTable()+".csv");
     } else if(conf.rebuildBestGuess.get != None){
         db.bestGuessCache.buildCache(
-          db.views.getView(
+          db.views.get(
             conf.rebuildBestGuess().toUpperCase
           ).get);
     } else {
@@ -100,7 +99,6 @@ object Mimir {
           case sel:  Select     => handleSelect(sel)
           case expl: Explain    => handleExplain(expl)
           case pragma: Pragma   => handlePragma(pragma)
-	      case adSch: CreateAdaptiveSchema => handleAdaptiveSchema(adSch)
           case _                => db.update(stmt)
         }
 

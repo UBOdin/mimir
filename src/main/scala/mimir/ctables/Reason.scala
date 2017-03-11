@@ -8,13 +8,14 @@ import mimir.util.JSONBuilder
 class Reason(
   val model: Model,
   val idx: Int,
-  val args: Seq[PrimitiveValue]
+  val args: Seq[PrimitiveValue],
+  val hints: Seq[PrimitiveValue]
 ){
   override def toString: String = 
     reason+" ("+model+";"+idx+"["+args.mkString(", ")+"])"
 
   def reason: String =
-    model.reason(idx, args)
+    model.reason(idx, args, hints)
 
   def repair: Repair = 
     Repair.makeRepair(model, idx, args)
@@ -37,59 +38,8 @@ class Reason(
     model.hashCode * idx * args.map(_.hashCode).sum
 }
 
-class ReasonSet(val model: Model, val idx: Int, argLookup: Option[Operator])
+object Reason
 {
-  def size(db: Database): Long =
-  {
-    argLookup match {
-      case Some(query) => 
-        db.query(
-          Aggregate(List(), List(AggFunction("COUNT", false, List(), "COUNT")), 
-            OperatorUtils.makeDistinct(query)
-          )
-        ).allRows.head(0).asLong
-      case None => 
-        1
-    }
-  }
-  def allArgs(db: Database): Iterable[Seq[PrimitiveValue]] =
-  {
-    argLookup match {
-      case Some(query) => db.query(query).allRows
-      case None =>  List(Seq())
-    }
-  }
-  def takeArgs(db: Database, count: Int): Iterable[Seq[PrimitiveValue]] = 
-  {
-    if(count < 1){ return None }
-    argLookup match {
-      case Some(query) => db.query(Limit(0, Some(count), query)).allRows
-      case None =>  List(Seq())
-    }
-  }
-  def all(db: Database): Iterable[Reason] = 
-  {
-    allArgs(db).map( new Reason(model, idx, _) )
-  }
-  def take(db: Database, count: Int): Iterable[Reason] = 
-  {
-    takeArgs(db, count).map( new Reason(model, idx, _) )
-  }
-}
-
-object ReasonSet
-{
-  def make(v:VGTerm, input: Operator): ReasonSet =
-  {
-    if(v.args.isEmpty){ return new ReasonSet(v.model, v.idx, None); }
-
-    val args =
-      v.args.zipWithIndex.map { case (expr, i) => ProjectArg("ARG_"+i, expr) }
-
-    return new ReasonSet(
-      v.model,
-      v.idx,
-      Some(Project(args, input))
-    );
-  }
+  def make(term: VGTerm, v: Seq[PrimitiveValue], h: Seq[PrimitiveValue]): Reason =
+    new Reason(term.model, term.idx, v, h)
 }

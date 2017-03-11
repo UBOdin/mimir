@@ -11,11 +11,12 @@ import mimir.models.Model
 import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
 import mimir.lenses.{LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
-import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens,CreateView,Explain,Feedback,Load,Pragma,Analyze}
+import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens,CreateView,Explain,Feedback,Load,Pragma,Analyze,CreateAdaptiveSchema}
 import mimir.optimizer.{InlineVGTerms, ResolveViews}
 import mimir.util.{LoadCSV,ExperimentalOptions}
 import mimir.web.WebIterator
 import mimir.parser.MimirJSqlParser
+import mimir.statistics.FuncDep
 
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
@@ -247,8 +248,7 @@ case class Database(backend: Backend)
   def getAllTables(): Set[String] =
   {
     (
-      backend.getAllTables() ++ 
-      views.listViews()
+      backend.getAllTables() ++ views.list()
     ).toSet[String];
   }
 
@@ -318,12 +318,31 @@ case class Database(backend: Backend)
         val query = sql.convert(lens.getSelectBody())
         val args = lens.getArgs().map(sql.convert(_, x => x)).toList
 
-        lenses.createLens(t, name, query, args)
+        lenses.create(t, name, query, args)
       }
 
       /********** CREATE VIEW STATEMENTS **********/
-      case view: CreateView => views.createView(view.getTable().getName().toUpperCase, 
-                                                sql.convert(view.getSelectBody()))
+      case view: CreateView => views.create(view.getTable().getName().toUpperCase, 
+                                             sql.convert(view.getSelectBody()))
+
+      /********** CREATE ADAPTIVE SCHEMA **********/
+      case adaptiveSchema: CreateAdaptiveSchema => {
+        val fdStats = new FuncDep()
+        val query = sql.convert(adaptiveSchema.getSelectBody())
+        val schema : Seq[(String,Type)] = query.schema
+
+        val viewList : java.util.ArrayList[String] = 
+          fdStats.buildEntities(
+            schema, 
+            backend.execute(adaptiveSchema.getSelectBody.toString()), 
+            adaptiveSchema.getTable.getName
+          )
+        viewList.foreach((view) => {
+          println(view)
+          // update(view)
+        })      
+      }
+
       /********** LOAD STATEMENTS **********/
       case load: Load => {
         // Assign a default table name if needed
@@ -343,10 +362,10 @@ case class Database(backend: Backend)
             backend.update(drop.toString());
 
           case "VIEW" =>
-            views.dropView(drop.getName().toUpperCase);
+            views.drop(drop.getName().toUpperCase);
 
           case "LENS" =>
-            lenses.dropLens(drop.getName().toUpperCase)
+            lenses.drop(drop.getName().toUpperCase)
 
           case _ =>
             throw new SQLException("Invalid drop type '"+drop.getType()+"'")
@@ -371,7 +390,7 @@ case class Database(backend: Backend)
    * name (or None if no such lens exists)
    */
   def getView(name: String): Option[(Operator)] =
-    views.getView(name)
+    views.get(name)
 
   /**
    * Load a CSV file into the database
@@ -395,7 +414,7 @@ case class Database(backend: Backend)
     val oper = getTableOperator(targetRaw)
     val l = List(new FloatPrimitive(.5))
 
-    lenses.createLens("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)
+    lenses.create("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)
   }
   
   def loadTable(targetTable: String, sourceFile: String){

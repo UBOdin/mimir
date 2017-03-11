@@ -57,9 +57,9 @@ class JsonToCSV() {
 
     var rowCount = 0
     var s = ""
-    var temp = ""
+    var temp = br.readLine()
 
-    while((temp = br.readLine()) != null && rowCount < returnLimit){
+    while((temp != null) && (rowCount < returnLimit)){
       if(temp.length > 1){
         s += temp
       }
@@ -69,147 +69,12 @@ class JsonToCSV() {
         s = ""
         rowCount += 1
       }
+      temp = br.readLine()
     }
     bw.close()
     writer.close()
   }
 
-/*  def convertToCsv(inputFile:Array[File],outputFileName:String,fileEncodingType:String,columnLimit:Int,rowLimit:Int):Unit = {
-    multipleFiles(inputFile,outputFileName,fileEncodingType,columnLimit,rowLimit);
-  }
-*/
-/*
-  def multipleFiles(inputFile:File,outputFileName:String,fileEncoding:String,columnLimit:Int,rowLimit:Int): Unit = {
-    var writer:PrintWriter  = null
-    try {
-      writer = new PrintWriter(outputFileName, fileEncoding)
-    } catch{
-      case e: FileNotFoundException => e.printStackTrace()
-      case e: UnsupportedEncodingException => e.printStackTrace()
-    }
-
-    var maxSchema:ArrayList[String] = new ArrayList[String]()
-    var columnCounter:Int = 0
-    var objectCount:Int = 0
-
-    var files:Array[File]  = inputFile.listFiles()
-    for(i <- 0 until files.length){
-
-      var x:Scanner = null
-      try{
-        x = new Scanner(files(i),fileEncoding)
-      }
-      catch{
-        case e:Exception => println("Error")
-      }
-
-      if(x == null){
-        println("x is null")
-      }
-
-      while(x.hasNextLine()){
-        if(objectCount > rowLimit){
-          break
-        }
-        var nextLine:String = x.nextLine()
-        if(nextLine.length() > 5){
-          val keySet:Set[String] = JsonFlattener.flattenAsMap(nextLine).keySet()
-          keySet.asScala.map((key:String) => {
-            if(!maxSchema.contains(key)){
-              maxSchema.add(key)
-            }
-          })
-          objectCount+=1
-        }
-
-      }
-
-      x.close()
-
-    }
-
-    var schemaHeader:String = ""
-    maxSchema.asScala.map((sch:String)=>{
-      if(columnCounter > columnLimit){
-        break
-      }
-      var s:String = sch
-      s = s.replaceAll("\\.", "_dot_")
-      s = s.replaceAll(",", "_com_")
-      s = s.replaceAll("\\[", "|")
-      s = s.replaceAll("\\]", "|")
-      schemaHeader += s + ","
-      columnCounter+=1
-    })
-
-    columnCounter = 0
-
-    writer.println(schemaHeader)
-
-    println("Maximal Schema Generated")
-
-    for(i <- 0 until files.length){
-      var x:Scanner = null;
-      try{
-        x = new Scanner(files(i),fileEncoding)
-      }
-      catch{
-        case e:Exception => println("Error")
-      }
-      if(x == null){
-        System.out.println("x is null")
-      }
-
-      objectCount = 0;
-
-      while(x.hasNextLine()){
-        if(objectCount > rowLimit){
-          break
-        }
-        var nextLine:String = x.nextLine()
-        if(nextLine.length() > 5){
-          var flatJson:Map[String, Object]  = JsonFlattener.flattenAsMap(nextLine)
-          if(flatJson != null){
-            var schemaIter:java.util.Iterator[String]  = maxSchema.iterator()
-            var row:String = ""
-
-            while(schemaIter.hasNext()){
-              if(columnCounter > columnLimit){
-                break
-              }
-              columnCounter+=1
-              var nextKey:String = schemaIter.next()
-              if(nextKey != null){
-                if(flatJson.containsKey(nextKey)){
-                  var value:Object = flatJson.get(nextKey)
-                  if(value != null){
-                    row += (value.toString()).replaceAll("'", "_SQ_").replaceAll(",", "_C_") + ","
-                  }
-                  else{
-                    row += ","
-                  }
-                }
-                else{
-                  row += ","
-                }
-              }
-            }
-            writer.println(row)
-          }
-          columnCounter = 0
-          objectCount+=1
-        }
-
-      }
-
-      x.close()
-    }
-    writer.close()
-
-    System.out.println("Finished Converting to CSV")
-
-  }
-*/
   def singleFile(inputFile:File,outputFileName:String,fileEncoding:String,columnLimit:Int,rowLimit:Int):Unit = {
 
     var maxSchema:ArrayList [String] = new ArrayList[String]()
@@ -231,9 +96,9 @@ class JsonToCSV() {
     var flag = true
     var prevLine:String = ""
     var buffer:Set[String] = null
-    var nextLine = ""
+    var nextLine = x.readLine()
 
-    while ((nextLine = x.readLine())!= null && flag == true) {
+    while ((nextLine != null) && (flag == true)) {
       if (rowCount >= rowLimit) {
         flag = false
       }
@@ -265,6 +130,7 @@ class JsonToCSV() {
         }
         prevLine = ""
       }
+      nextLine = x.readLine()
     }
 
     System.out.println("Maximal Schema Generated")
@@ -326,8 +192,9 @@ class JsonToCSV() {
     flag = true
     prevLine = ""
     buffer = null
+    nextLine = x.readLine()
 
-    while ((nextLine = x.readLine()) != null && flag == true) {
+    while ((nextLine != null) && (flag == true)) {
       if (rowCount >= rowLimit) {
         flag = false
       }
@@ -383,6 +250,7 @@ class JsonToCSV() {
         }
         prevLine = ""
       }
+      nextLine = x.readLine()
     }
 
     x.close()

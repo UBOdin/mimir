@@ -20,7 +20,7 @@ class ViewManager(db:Database) extends LazyLogging {
     }
   }
 
-  def createView(name: String, query: Operator): Unit =
+  def create(name: String, query: Operator): Unit =
   {
     logger.debug(s"CREATE VIEW $name AS $query")
     db.backend.update(s"INSERT INTO $viewTable(name, query) VALUES (?,?)", 
@@ -30,7 +30,7 @@ class ViewManager(db:Database) extends LazyLogging {
       ))
   }
 
-  def alterView(name: String, query: Operator): Unit =
+  def alter(name: String, query: Operator): Unit =
   {
     db.backend.update(s"UPDATE $viewTable SET query=? WHERE name=?", 
       List(
@@ -39,14 +39,14 @@ class ViewManager(db:Database) extends LazyLogging {
       )) 
   }
 
-  def dropView(name: String): Unit =
+  def drop(name: String): Unit =
   {
     db.backend.update(s"DELETE FROM $viewTable WHERE name=?", 
       List(StringPrimitive(name))
     )
   }
 
-  def getView(name: String): Option[Operator] =
+  def get(name: String): Option[Operator] =
   {
     val results = 
       db.backend.resultRows(s"SELECT query FROM $viewTable WHERE name = ?", 
@@ -60,7 +60,7 @@ class ViewManager(db:Database) extends LazyLogging {
     )
   }
 
-  def listViews(): List[String] =
+  def list(): List[String] =
   {
     db.backend.
       resultRows(s"SELECT name FROM $viewTable").

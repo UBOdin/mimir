@@ -229,7 +229,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 		logger.trace(s"GETTING REASONS: $expr")
 		expr match {
 			case v: VGTerm => Map(v.model.name -> 
-				makeReason(v, v.args.map(Eval.eval(_,tuple)), v.hints.map(Eval.eval(_,tuple)))
+				Reason.make(v, v.args.map(Eval.eval(_,tuple)), v.hints.map(Eval.eval(_,tuple)))
 			)
 
 			case Conditional(c, t, e) =>
@@ -303,33 +303,6 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 		(tuple, columnExprs, rowCondition)
 	}
-
-	def makeReason(term: VGTerm, v: Seq[PrimitiveValue], h: Seq[PrimitiveValue]): Reason =
-		makeReason(term.model, term.idx, v, h)
-	def makeReason(model: Model, idx: Int, v: Seq[PrimitiveValue], h: Seq[PrimitiveValue]): Reason =
-	{
-    Reason(
-      model.reason(idx, v, h),
-      model.name,
-      idx,
-      v,
-      makeRepair(model, idx, v)
-    )
-	}
-
-	def makeRepair(term: VGTerm, v: Seq[PrimitiveValue]): Repair =
-		makeRepair(term.model, term.idx, v)
-	def makeRepair(model: Model, idx: Int, v: Seq[PrimitiveValue]): Repair =
-	{
-		model match {
-			case finite:( Model with FiniteDiscreteDomain ) =>
-				RepairFromList(finite.getDomain(idx, v))
-			case _ => 
-				RepairByType(model.varType(idx, v.map(_.getType)))
-		}
-	}
-
-
 
 	def explainEverything(oper: Operator): Seq[ReasonSet] =
 	{
