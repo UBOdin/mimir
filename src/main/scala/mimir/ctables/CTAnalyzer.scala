@@ -3,29 +3,6 @@ package mimir.ctables
 import mimir.algebra._
 import scala.util._
 import mimir.models._
-import java.sql.SQLException
-
-case class VGTermSampler(model: Model, idx: Int, args: Seq[Expression], seed: Expression) 
-  extends Proc(  (seed :: args.toList)  )
-{
-  def getType(argTypes: Seq[Type]): Type =
-    model.varType(idx, argTypes)
-  def get(v: Seq[PrimitiveValue]): PrimitiveValue = 
-  {
-    if(v.size < 1){ throw new SQLException("Internal error.  Expecting seed.") }
-    val seed = v.head
-    val argValues = v.tail    
-    val seedForThisVar = ((seed.asLong * argValues.hashCode) + 13) * model.name.hashCode
-    model.sample(idx, new Random(seedForThisVar), argValues)
-  }
-  def rebuild(v: Seq[Expression]) = 
-  {
-    if(v.size < 1){ throw new SQLException("Internal error.  Expecting seed.") }
-    VGTermSampler(model, idx, v.tail, v.head)
-  }
-
-}
-
 
 object CTAnalyzer {
 
@@ -169,7 +146,7 @@ object CTAnalyzer {
   def compileSample(expr: Expression, seed: Expression): Expression =
   {
     expr match {
-      case VGTerm(model, idx, args) => VGTermSampler(model, idx, args, seed)
+      case VGTerm(model, idx, args, hints) => VGTermSampler(model, idx, args, hints, seed)
       case _ => expr.rebuild(expr.children.map(compileSample(_, seed)))
     }
   }

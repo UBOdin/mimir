@@ -30,17 +30,18 @@ class KeyRepairModel(
 
   def varType(idx: Int, args: Seq[Type]): Type = targetType
   def argTypes(idx: Int) = keys.map(_._2)
+  def hintTypes(idx: Int) = Seq()
 
-  def bestGuess(idx: Int, args: Seq[PrimitiveValue]): PrimitiveValue =
+  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
     choices.get(args.toList) match {
       case Some(choice) => choice
       case None => getDomain(idx, args).sortBy(-_._2).head._1
     }
 
-  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue = 
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
     RandUtils.pickFromWeightedList(randomness, getDomain(idx, args))
 
-  def reason(idx: Int, args: Seq[PrimitiveValue]): String =
+  def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String =
   {
     choices.get(args.toList) match {
       case None => {

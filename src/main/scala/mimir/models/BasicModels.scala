@@ -6,10 +6,11 @@ import scala.util._
 
 object UniformDistribution extends Model("UNIFORM") with Serializable {
   def argTypes(idx: Int) = List(TFloat(), TFloat())
+  def hintTypes(idx: Int) = Seq()
   def varType(idx: Int, argTypes: Seq[Type]) = TFloat()
-  def bestGuess(idx: Int, args: Seq[PrimitiveValue]) = 
+  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = 
     FloatPrimitive((args(0).asDouble + args(1).asDouble) / 2.0)
-  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue]) = {
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = {
     val low = args(0).asDouble
     val high = args(1).asDouble
     FloatPrimitive(
@@ -31,7 +32,7 @@ object UniformDistribution extends Model("UNIFORM") with Serializable {
     )
 
 
-  def reason(idx: Int, args: Seq[PrimitiveValue]): String = 
+  def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = 
     "I put in a random value between "+args(0)+" and "+args(1)
 
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
@@ -48,10 +49,11 @@ case class NoOpModel(override val name: String, reasonText:String)
   var acked = false
 
   def argTypes(idx: Int) = List(TAny())
+  def hintTypes(idx: Int) = Seq()
   def varType(idx: Int, args: Seq[Type]) = args(0)
-  def bestGuess(idx: Int, args: Seq[PrimitiveValue]) = args(0)
-  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue]) = args(0)
-  def reason(idx: Int, args: Seq[PrimitiveValue]): String = reasonText
+  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = args(0)
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = args(0)
+  def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = reasonText
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = { acked = true }
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = acked
 }

@@ -4,136 +4,113 @@ import java.sql.SQLException
 import scala.util._
 
 import mimir.Database
-import mimir.algebra.Type.T
 import mimir.algebra._
-import mimir.ctables.{Model, VGTerm}
+import mimir.ctables.VGTerm
 import mimir.optimizer.{InlineVGTerms}
+import mimir.models._
 import org.apache.lucene.search.spell.{JaroWinklerDistance, LevensteinDistance, NGramDistance, StringDistance}
 
-class SchemaMatchingLens(name: String, args: List[Expression], source: Operator)
-  extends Lens(name, args, source) {
+object SchemaMatchingLens {
 
-  var targetSchema: Map[String, Type.T] = null
-  var sourceSchema: Map[String, Type.T] = Typechecker.schemaOf(InlineVGTerms.optimize(source)).toMap
-  var db: Database = null
-  var model: Model = null
-
-  def init() = {
-
-    if (args.length % 2 != 0)
-      throw new SQLException("Incorrect parameters for " + lensType + " Lens")
-
-    if (targetSchema == null) {
-      targetSchema = Map[String, Type.T]()
-      var i = 0
-      while (i < args.length) {
-        val col = args(i).toString.toUpperCase
-        i += 1
-        val t = Type.fromString(args(i).toString)
-        i += 1
-        targetSchema += (col -> t)
-      }
-    }
-  }
-
-  def schema(): List[(String, Type.T)] = targetSchema.toList
-
-  def lensType = "SCHEMA_MATCHING"
-
-  def isTypeCompatible(a: T, b: T): Boolean = 
+  def create(
+    db: Database, 
+    name: String, 
+    query: Operator, 
+    args:Seq[Expression]
+  ): (Operator, Seq[Model]) =
   {
-    (a,b) match {
-      case ((Type.TInt|Type.TFloat),  (Type.TInt|Type.TFloat)) => true
-      case (Type.TAny, _) => true
-      case (_, Type.TAny) => true
-      case _ => a == b
-    }
+    var targetSchema =
+      args.
+        map(field => {
+          val split = Eval.evalString(field).split(" +")
+          val varName  = split(0).toUpperCase
+          val typeName = split(1)
+          (
+            varName.toString.toUpperCase -> 
+              Type.fromString(typeName.toString)
+          )
+        }).
+        toList
 
-  }
+    val modelsByType = 
+      ModelRegistry.schemamatchers.toSeq.map {
+        case (
+          modelCategory:String, 
+          constructor:ModelRegistry.SchemaMatchConstructor
+        ) => {
+          val modelsByColAndType =
+            constructor(
+              db, 
+              s"$name:$modelCategory", 
+              Left(query), 
+              Right(targetSchema)
+            ).toSeq.map {
+              case (col, (model, idx)) => (col, (model, idx, Seq[Expression]()))
+            }
 
-  /**
-   * `view` emits an Operator that defines the Virtual C-Table for the lens
-   */
-  override def view: Operator = {
-    // println("SourceSchema: "+sourceSchema)
-    // println("SourceSchema: "+targetSchema)
-    Project(
-      targetSchema.keys.toList.zipWithIndex.map { case (key, idx) => ProjectArg(
-        key,
-        ExpressionUtils.makeCaseExpression(
-          sourceSchema.filter(
-            (src) => isTypeCompatible(src._2, targetSchema(key))
-          ).keys.toList.map(b => (
-            Comparison(Cmp.Eq,
-              VGTerm((name, model), idx, List(StringPrimitive(key), StringPrimitive(b))),
-              BoolPrimitive(true)),
-            Var(b))
-          ),
-          NullPrimitive()
-        ))
-      },
-      source
-    )
-  }
+          (modelCategory, modelsByColAndType)
+        }
+      }
 
-  /**
-   * Initialize the lens' model by building it from scratch.  Typically this involves
-   * using `db` to evaluate `source`
-   */
-  def build(db: Database): Unit = {
-    init()
-    this.db = db
-    model = new SchemaMatchingModel(this)
-    model.asInstanceOf[SchemaMatchingModel].learn(targetSchema, sourceSchema)
-  }
-}
-class SchemaMatchingModel(lens: SchemaMatchingLens) extends Model {
+    val (
+      candidateModels: Map[String,Seq[(Model,Int,Seq[Expression],String)]],
+      modelEntities: Seq[Model]
+    ) = 
+      LensUtils.extractModelsByColumn(modelsByType)
 
-  val numVars = lens.args.length/2
-  var schema: Map[String, Type.T] = null
-  var colMapping: Map[String, Map[String, Double]] = null
+    // Sanity check...
+    targetSchema.map(_._1).foreach( target => {
+      if(!candidateModels.contains(target)){ 
+        throw new SQLException("No valid schema matching model for column '"+target+"' in lens '"+name+"'");
+      }
+    })
 
-  def getSchemaMatching(criteria: String, targetColumn: String, sourceColumns: List[String]): Map[String, Double] = {
-    val matcher: StringDistance = criteria match {
-      case "JaroWinklerDistance" => new JaroWinklerDistance()
-      case "LevensteinDistance" => new LevensteinDistance()
-      case "NGramDistance" => new NGramDistance()
-      case _ => null
-    }
-    var total = 0.0
-    // calculate distance
-    val sorted = sourceColumns.map(a => {
-      val dist = matcher.getDistance(targetColumn, a)
-      total += dist
-      (a, dist)
-    }).sortBy(_._2).toMap
-    // normalize
-    sorted.map { case (k, v) => (k, v / total) }
-  }
 
-  def learn(targetSchema: Map[String, Type.T], sourceSchema: Map[String, Type.T]) = {
-    colMapping = targetSchema.map { case (k, v) =>
-      (k, getSchemaMatching("NGramDistance", k, sourceSchema.filter( (src) => lens.isTypeCompatible(src._2, v)).keys.toList))
-    }
-    schema = targetSchema
-  }
+    val (
+      schemaChoice:List[(String,Expression)], 
+      metaModels:List[Model]
+    ) =
+      candidateModels.
+        toList.
+        map({ 
+          case (column, models) => {
+            //TODO: Replace Default Model
+            val metaModel = new DefaultMetaModel(
+                s"$name:META:$column", 
+                s"picking a source for column '$column'",
+                models.map(_._4)
+              )
+            val metaExpr = LensUtils.buildMetaModel(
+              metaModel, 0, Seq[Expression](), Seq[Expression](),
+              models, Seq[Expression]()
+            )
 
-  def varType(idx: Int, argTypes: List[Type.T]) = Type.TBool
+            ( (column, metaExpr), metaModel )
+          }
+        }).
+        unzip
 
-  def sample(idx: Int, randomness: Random, args: List[PrimitiveValue]): PrimitiveValue = 
-    bestGuess(idx, args)
+    val sourceColumns = query.schema.map(_._1)
 
-  def bestGuess(idx: Int, args: List[PrimitiveValue]): PrimitiveValue = {
-    val targetCol = args(0).asString
-    val sourceCol = args(1).asString
-    if (colMapping(targetCol).maxBy(_._2)._1.equals(sourceCol))
-      BoolPrimitive(true)
-    else BoolPrimitive(false)
-  }
+    val projectArgs = 
+      schemaChoice.
+        map({ case (targetCol, sourceChoiceModel) => {
+          val sourceChoices = 
+            sourceColumns.map( attr => 
+              ( StringPrimitive(attr), Var(attr) )
+            )
+          ProjectArg(targetCol,
+            ExpressionUtils.makeCaseExpression(
+              sourceChoiceModel,
+              sourceChoices,
+              NullPrimitive()
+            )
+          )
+        }})
 
-  def reason(idx: Int, args: List[Expression]): String = {
-    val target = schema.keys.toList(idx)
-    val source = colMapping(target).maxBy(_._2)
-    ("I assumed that " + source._1 + " maps to " + target + " ("+ (source._2 * 100).toInt +"% likely)")
+    return ( 
+      Project(projectArgs, query), 
+      modelEntities ++ metaModels
+    ) 
   }
 }

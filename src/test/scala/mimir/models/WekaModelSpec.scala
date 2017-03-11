@@ -9,15 +9,15 @@ object WekaModelSpec extends SQLTestSpecification("WekaTest")
 {
   sequential
 
-  var models = Map[String,(Model,Int)]()
+  var models = Map[String,(Model,Int,Seq[Expression])]()
 
   def predict(col:String, row:String): PrimitiveValue = {
-    val (model, idx) = models(col)
-    model.bestGuess(idx, List(RowIdPrimitive(row)))
+    val (model, idx, hints) = models(col)
+    model.bestGuess(idx, List(RowIdPrimitive(row)), List())
   }
   def explain(col:String, row:String): String = {
-    val (model, idx) = models(col)
-    model.reason(idx, List(RowIdPrimitive(row)))
+    val (model, idx, hints) = models(col)
+    model.reason(idx, List(RowIdPrimitive(row)), List())
   }
   def trueValue(col:String, row:String): PrimitiveValue = {
     val t = db.getTableSchema("CPUSPEED").get.find(_._1.equals(col)).get._2
@@ -96,13 +96,13 @@ object WekaModelSpec extends SQLTestSpecification("WekaTest")
   "When combined with a TI Lens, the Weka Model" should {
     "Be trainable" >> {
       db.loadTable("RATINGS1", new File("test/data/ratings1.csv"))
-      val (model, idx) = WekaModel.train(db,
+      val (model, idx, hints) = WekaModel.train(db,
         "RATINGS1REPAIRED", 
         List("RATING"), 
         db.getTableOperator("RATINGS1")
       )("RATING")
       val nullRow = querySingleton("SELECT ROWID() FROM RATINGS1 WHERE RATING IS NULL")
-      model.bestGuess(idx, List(nullRow)) must beAnInstanceOf[FloatPrimitive]
+      model.bestGuess(idx, List(nullRow), List()) must beAnInstanceOf[FloatPrimitive]
 
 
     }
