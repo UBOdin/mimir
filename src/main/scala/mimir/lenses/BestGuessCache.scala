@@ -4,10 +4,11 @@ import java.sql.SQLException
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir._
-import mimir.algebra._;
-import mimir.ctables._;
-import mimir.provenance._;
-import mimir.optimizer._;
+import mimir.algebra._
+import mimir.ctables._
+import mimir.provenance._
+import mimir.optimizer._
+import mimir.models._
 
 class BestGuessCache(db: Database) extends LazyLogging {
 
@@ -18,12 +19,12 @@ class BestGuessCache(db: Database) extends LazyLogging {
   def joinKeyColumn(idx: Int, termId: Int) = "MIMIR_ARG_"+termId+"_KEY_"+idx
 
 
-  def cacheTableForLens(lensName: String, varIdx: Int): String =
-    lensName + "_CACHE_" + varIdx
+  def cacheTableForModel(model: Model, varIdx: Int): String =
+    "MIMIR_"+model.name.replaceAll(":","_") + "_CACHE_" + varIdx
   def cacheTableForTerm(term: VGTerm): String =
-    cacheTableForLens(term.model._1, term.idx)
-  def cacheTableDefinition(model: String, varIdx: Int, termId: Int): Table = {
-    val tableName = cacheTableForLens(model, varIdx)
+    cacheTableForModel(term.model, term.idx)
+  def cacheTableDefinition(model: Model, varIdx: Int, termId: Int): Table = {
+    val tableName = cacheTableForModel(model, varIdx)
     val sch = db.getTableSchema(tableName).get;
     
     val keyCols = (0 to (sch.length - 2)).map( joinKeyColumn(_, termId) ).toList
@@ -48,18 +49,18 @@ class BestGuessCache(db: Database) extends LazyLogging {
   }
 
 
-  private def buildOuterJoins(expressions: List[Expression], src: Operator): 
-    (List[Expression], Operator) =
+  private def buildOuterJoins(expressions: Seq[Expression], src: Operator): 
+    (Seq[Expression], Operator) =
   {
     assert(CTables.isDeterministic(src))
     val vgTerms = expressions.
       flatMap( CTables.getVGTerms(_) ).
       toSet.toList.
       zipWithIndex
-    val typechecker = new ExpressionChecker(Typechecker.schemaOf(src).toMap)
+    val typechecker = new ExpressionChecker(db.bestGuessSchema(src).toMap)
     val newSrc = 
       vgTerms.foldLeft(src)({
-        case (oldSrc, (v @ VGTerm((model,_),idx,args), termId)) =>
+        case (oldSrc, (v @ VGTerm(model,idx,args), termId)) =>
           LeftOuterJoin(oldSrc,
             cacheTableDefinition(model, idx, termId),
             ExpressionUtils.makeAnd(
@@ -68,11 +69,11 @@ class BestGuessCache(db: Database) extends LazyLogging {
                   val keyBase = Var(joinKeyColumn(arg._2, termId))
                   val key = 
                     typechecker.typeOf(arg._1) match {
-                      case Type.TRowId => 
+                      case TRowId() =>
                         // We materialize rowids as Strings in the backing store.  As
                         // a result, we need to convince the typechecker that we're
                         // being sane here.
-                        Function("CAST", List[Expression](keyBase, TypePrimitive(Type.TRowId)))
+                        Function("CAST", List[Expression](keyBase, TypePrimitive(TRowId())))
                       case _  =>
                         keyBase
                     }
@@ -127,40 +128,40 @@ class BestGuessCache(db: Database) extends LazyLogging {
     }
   }
 
-  def buildCache(lens: Lens) =
-    recurCacheBuildThroughLensView(lens.view, lens.name)
-
-  private def recurCacheBuildThroughLensView(view: Operator, lensName: String): Unit =
+  def buildCache(view: Operator): Unit =
   {
     // Start with all the expressions in the current RA node
     view.expressions.
-      // Find all of the VG terms in each expression
-      flatMap(CTables.getVGTerms(_)).
-      // Pick out those belonging to the current lens
-      filter( _.model._1.equals(lensName) ).
+      // Pick out all of the VG terms, along with the conditions under which they 
+      // contaminate the result
+      flatMap(CTAnalyzer.compileCausality(_)).
+      map( (x) => { logger.trace(s"Causality: $x"); x }).
       // We only need caches for data-dependent terms
-      filter( _.args.exists(ExpressionUtils.isDataDependent(_)) ).
-      // Extract the relevant attributes
-      map( (x:VGTerm) => (x.model._2, x.idx, x.args) ).
-      // Eliminate duplicates (in case the same VGTerm appears multiple times)
-      toSet.
-      // And build caches for each var
-      foreach( (x:(Model, Int, List[Expression])) => {
+      filter( _._2.args.exists(ExpressionUtils.isDataDependent(_)) ).
+      map( (x) => { logger.trace(s"Surviving: $x"); x }).
+      // Extract the relevant features of the VGTerm
+      map({ case (cond, term) => ((term.model, term.idx, term.args), cond) }).
+      // Gather the conditions for each term
+      groupBy( _._1 ).
+      // The VGTerm applies if any of the gathered conditions are true
+      map({ case (term, groups) => (term, ExpressionUtils.makeOr(groups.map(_._2))) }).
+      // And build a cache for those terms where appropriate
+      foreach({ case ((model, idx, args), cond) =>
         if(view.children.length != 1){ 
           throw new SQLException("Assertion Failed: Expecting operator with expressions to have only one child")
         }
-        buildCache(lensName, x._1, x._2, x._3, view.children.head)
+        buildCache(model, idx, args, Select(cond, view.children.head))
       })
     // Finally recur to the child nodes
-    view.children.foreach( recurCacheBuildThroughLensView(_, lensName) )
+    view.children.foreach( buildCache(_) )
   }
   def buildCache(term: VGTerm, input: Operator): Unit =
-    buildCache(term.model._1, term.model._2, term.idx, term.args, input)
-  def buildCache(lensName: String, model: Model, varIdx: Int, args: List[Expression], input: Operator): Unit = {
-    val cacheTable = cacheTableForLens(lensName, varIdx)
-    // We inline VG terms as a temporary hack to deal with the fact that 
-    // the TypeInference lens completely messes with the typechecker.
-    val typechecker = new ExpressionChecker(Typechecker.schemaOf(InlineVGTerms.optimize(input)).toMap)
+    buildCache(term.model, term.idx, term.args, input)
+  def buildCache(model: Model, varIdx: Int, args: Seq[Expression], input: Operator): Unit = {
+    val cacheTable = cacheTableForModel(model, varIdx)
+
+    // Use the best guess schema for the typechecker... we want just one instance
+    val typechecker = new ExpressionChecker(db.bestGuessSchema(input).toMap)
 
     if(db.getTableSchema(cacheTable) != None) {
       dropCacheTable(cacheTable)
@@ -169,25 +170,45 @@ class BestGuessCache(db: Database) extends LazyLogging {
     val argTypes = args.map( typechecker.typeOf(_) )
     createCacheTable(cacheTable, model.varType(varIdx, argTypes), argTypes)
 
-    db.query(input).foreachRow(row => {
-      val compiledArgs = args.map(Provenance.plugInToken(_, row.provenanceToken()))
-      val tuple = row.currentTuple()
-      val dataArgs = compiledArgs.map(Eval.eval(_, tuple))
-      val guess = model.bestGuess(varIdx, dataArgs)
-      val updateQuery = 
-          "INSERT INTO "+cacheTable+"("+dataColumn+
-            dataArgs.zipWithIndex.
-              map( arg => (","+keyColumn(arg._2)) ).
-              mkString("")+
-          ") VALUES (?"+
-            dataArgs.map(_ => ",?").mkString("")+
-          ")"
-      // println("BUILD: "+updateQuery)
-      db.backend.update(
-        updateQuery, 
+    val modelName = model.name
+    logger.debug(s"Building cache for $modelName-$varIdx[$args] with\n$input")
+
+    val guesses = 
+      db.query(input).mapRows(row => {
+        val compiledArgs = args.map(Provenance.plugInToken(_, row.provenanceToken()))
+        val tuple = row.currentTuple()
+        val dataArgs = compiledArgs.map(Eval.eval(_, tuple)).toList
+        val guess = model.bestGuess(varIdx, dataArgs)
+
+        logger.trace(s"Registering $dataArgs -> $guess")
+
         guess :: dataArgs
-      )
-    })
+      })
+
+    db.backend.fastUpdateBatch(
+      s"""INSERT INTO $cacheTable(
+        $dataColumn, 
+        ${args.zipWithIndex.
+          map( arg => keyColumn(arg._2) ).
+          mkString(", ")}
+      ) VALUES (?, ${args.map(_ => "?").mkString("?")})
+      """,
+      guesses
+    )
+  }
+
+  def update(model: Model, idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
+  {
+    if(args.isEmpty){ return; }
+    
+    db.backend.update(
+      s"""UPDATE ${cacheTableForModel(model, idx)} 
+        SET $dataColumn = ?
+        WHERE ${args.map(x => x+" = ?").mkString("?")}
+      """,
+      List(v) ++ args
+    )
+
   }
 
   private def emptyCacheTable(cacheTable: String) =
@@ -196,7 +217,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
   private def dropCacheTable(cacheTable: String) =
     db.backend.update( "DROP TABLE "+cacheTable )
 
-  private def createCacheTable(cacheTable: String, dataType: Type.T, cacheTypes: List[Type.T]) = {
+  private def createCacheTable(cacheTable: String, dataType: Type, cacheTypes: Seq[Type]) = {
     val keyCols =
       cacheTypes.zipWithIndex.map( 
         typeIndex => (keyColumn(typeIndex._2), typeIndex._1)
@@ -207,7 +228,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
     val dataCols = List( (dataColumn, dataType) )
     val tableDirectives = 
       (keyCols ++ dataCols).map( 
-        col => { col._1+" "+Type.toString(col._2) }
+        col => { col._1+" "+col._2 }
       ) ++ List(
         "PRIMARY KEY ("+keyCols.map(_._1).mkString(", ")+")"
       )

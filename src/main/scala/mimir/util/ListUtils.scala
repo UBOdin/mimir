@@ -12,5 +12,11 @@ object ListUtils {
           (head :: rest)
         )
       )
-    } 
+    }
+
+  def headN[A](t: Iterator[A], n: Int): List[A] =
+  {
+    if(n > 0){ t.next :: headN(t, n-1) }
+    else { Nil }
+  }
 }

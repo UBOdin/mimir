@@ -13,30 +13,24 @@ import mimir.sql._
 import mimir.optimizer._
 import mimir.exec._
 import mimir.provenance._
+import mimir.models._
 
 object CTPercolatorSpec extends Specification {
   
-  val baseModel = IndependentVarsModel(List(
-    UniformDistribution,
-    UniformDistribution,
-    UniformDistribution,
-    UniformDistribution,
-    UniformDistribution
-  ))
-  val schema = Map[String,Map[String,Type.T]](
+  val schema = Map[String,Map[String,Type]](
     ("R", Map( 
-      ("R_A", Type.TInt), 
-      ("R_B", Type.TInt), 
-      ("R_C", Type.TInt)
+      ("R_A", TInt()),
+      ("R_B", TInt()),
+      ("R_C", TInt())
     )),
     ("S", Map( 
-      ("S_C", Type.TInt), 
-      ("S_D", Type.TFloat)
+      ("S_C", TInt()),
+      ("S_D", TFloat())
     ))
   )
 
   def parser = new OperatorParser(
-    (x: String) => baseModel,
+    (x: String) => UniformDistribution,
     schema(_).toList
   )
   def expr = parser.expr _
@@ -129,7 +123,7 @@ object CTPercolatorSpec extends Specification {
         expr("MIMIR_ROW_DET")
       ))
     }
-    "Handle Deterministic Join" in {
+    "Handle Deterministic Joins" in {
       percolite("""
         JOIN(R(A,B), S(C,D))
       """) must be equalTo ((
@@ -210,6 +204,46 @@ object CTPercolatorSpec extends Specification {
           ("B", expr("true"))
         ),
         expr("MIMIR_ROW_DET")
+      ))
+    }
+    "Handle Deterministic Aggregates" in {
+      CTPercolator.percolateLite(
+        Project(
+          List(
+            ProjectArg("COMPANY", Var("PRODUCT_INVENTORY_COMPANY")),
+            ProjectArg("SUM_2", Var("MIMIR_AGG_SUM_2"))
+          ),
+          Aggregate(
+            List(Var("PRODUCT_INVENTORY_COMPANY")), 
+            List(AggFunction("SUM", false, List(Var("PRODUCT_INVENTORY_QUANTITY")), "MIMIR_AGG_SUM_2")),
+            Table("PRODUCT_INVENTORY", List( 
+                ("PRODUCT_INVENTORY_ID", TString()), 
+                ("PRODUCT_INVENTORY_COMPANY", TString()), 
+                ("PRODUCT_INVENTORY_QUANTITY", TInt()), 
+                ("PRODUCT_INVENTORY_PRICE", TFloat()) 
+              ), List())
+        ))
+      ) must be equalTo( (
+        Project(
+          List(
+            ProjectArg("COMPANY", Var("PRODUCT_INVENTORY_COMPANY")),
+            ProjectArg("SUM_2", Var("MIMIR_AGG_SUM_2"))
+          ),
+          Aggregate(
+            List(Var("PRODUCT_INVENTORY_COMPANY")), 
+            List(AggFunction("SUM", false, List(Var("PRODUCT_INVENTORY_QUANTITY")), "MIMIR_AGG_SUM_2")),
+            Table("PRODUCT_INVENTORY", List( 
+                ("PRODUCT_INVENTORY_ID", TString()), 
+                ("PRODUCT_INVENTORY_COMPANY", TString()), 
+                ("PRODUCT_INVENTORY_QUANTITY", TInt()), 
+                ("PRODUCT_INVENTORY_PRICE", TFloat()) 
+              ), List())
+        )),
+        Map(
+          "COMPANY" -> expr("true"),
+          "SUM_2" -> expr("true")
+        ),
+        expr("true")
       ))
     }
 

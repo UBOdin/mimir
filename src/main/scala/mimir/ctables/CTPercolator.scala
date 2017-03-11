@@ -1,12 +1,16 @@
 package mimir.ctables
 
 import java.sql.SQLException
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
+import mimir.sql.sqlite.BoolAnd
 
-object CTPercolator {
+object CTPercolator 
+  extends LazyLogging
+{
 
   private def extractMissingValueVar(expr: Expression): Var = {
     expr match {
@@ -150,6 +154,9 @@ object CTPercolator {
       case Project(columns, src) => {
         val (rewrittenSrc, colDeterminism, rowDeterminism) = percolateLite(src);
 
+        logger.trace(s"PERCOLATE: $oper")
+        logger.trace(s"GOT INPUT: $rewrittenSrc")
+
         // Compute the determinism of each column.
         val newColDeterminismBase = 
           columns.map( _ match { case ProjectArg(col, expr) => {
@@ -159,20 +166,23 @@ object CTPercolator {
             (col, isDeterministic)
           }})
 
+        logger.trace(s"PROJECT-BASE: $newColDeterminismBase")
+
         // Determine which of them are deterministic.
         val computedDeterminismCols = 
           newColDeterminismBase.filterNot( 
             // Retain only columns where the isDeterministic expression
             // is a constant (i.e., no Column references)
-            _ match { case (col, expr) => {
+            { case (col, expr) => 
               ExpressionUtils.getColumns(expr).isEmpty
-            }}
+            }
           ).map( 
             // Then just translate to a list of ProjectArgs
-            _ match { case (col, isDeterministic) => 
+            { case (col, isDeterministic) => 
               ProjectArg(mimirColDeterministicColumnPrefix+col, isDeterministic) 
             }
-         )
+          )
+        logger.trace(s"PROJECT-COLS: $computedDeterminismCols")
 
         // Rewrite these expressions so that the computed expressions use the
         // computed version from the source data.
@@ -181,6 +191,7 @@ object CTPercolator {
               if(ExpressionUtils.getColumns(isDeterministic).isEmpty) {
                 (col, isDeterministic)
               } else {
+                //add entry to map nd col to its determinism decision maker
                 (col, Var(mimirColDeterministicColumnPrefix+col))
               }
             }
@@ -197,13 +208,97 @@ object CTPercolator {
             )))
           }
 
+        //add the determinism metadata into the operator
         val retProject = Project(
             columns ++ computedDeterminismCols ++ rowDeterminismCols,
             rewrittenSrc
           )
 
+        logger.trace(s"REWRITTEN: $retProject")
+
         return (retProject, newColDeterminism.toMap, newRowDeterminism)
       }
+      case Aggregate(groupBy, aggregates, src) => {
+        val (rewrittenSrc, colDeterminism, rowDeterminism) = percolateLite(src)
+
+        // An aggregate value is is deterministic when...
+        //  1. All of its inputs are deterministic (all columns referenced in the expr are det)
+        //  2. All of its inputs are deterministically present (all rows in the group are det)
+
+        // Start with the first case.  Come up with an expression to evaluate
+        // whether the aggregate input is deterministic.
+        val aggArgDeterminism: Seq[(String, Expression)] =
+          aggregates.map((agg) => {
+            val argDeterminism =
+              agg.args.map(CTAnalyzer.compileDeterministic(_, colDeterminism))
+
+            (agg.alias, ExpressionUtils.makeAnd(argDeterminism))
+          })
+
+        // Now come up with an expression to compute general row-level determinism
+        val groupDeterminism: Expression =
+          ExpressionUtils.makeAnd(
+            rowDeterminism,
+            ExpressionUtils.makeAnd(
+              groupBy.map( group => colDeterminism(group.name) )
+            )
+          )
+
+        // An aggregate is deterministic if the group is fully deterministic
+        val aggFuncDeterminism: Seq[(String, Expression)] =
+          aggArgDeterminism.map(arg => 
+            (arg._1, ExpressionUtils.makeAnd(arg._2, groupDeterminism))
+          )
+
+        val (aggFuncMetaColumns, aggFuncMetaExpressions) = 
+          aggFuncDeterminism.map({case (aggName, aggDetExpr) =>
+            if(ExpressionUtils.isDataDependent(aggDetExpr)){
+              ( 
+                Some(AggFunction(
+                  "GROUP_AND",
+                  false,
+                  List(aggDetExpr),
+                  "MIMIR_AGG_DET_"+aggName
+                )), 
+                (aggName, Var("MIMIR_AGG_DET_"+aggName))
+              )
+            } else {
+              (None, (aggName, aggDetExpr))
+            }
+          }).unzip
+
+        // A group is deterministic if any of its group-by vars are
+        val (groupMetaColumn, groupMetaExpression) =
+          if(ExpressionUtils.isDataDependent(groupDeterminism)){
+            (
+              Some(AggFunction("GROUP_OR", false, List(groupDeterminism), "MIMIR_GROUP_DET")),
+              Var("MIMIR_GROUP_DET")
+            )
+          } else {
+            (None, groupDeterminism)
+          }          
+
+        // Assemble the aggregate function with metadata columns
+        val extendedAggregate =
+          Aggregate(
+            groupBy, 
+            aggregates ++ aggFuncMetaColumns.flatten ++ groupMetaColumn,
+            src
+          )
+
+        // Annotate all of the output columns
+        val columnMetadata =
+          aggFuncMetaExpressions ++
+          groupBy.map( gb => (gb.name, groupDeterminism) )
+
+        // And return the new aggregate and annotations
+        return (
+          extendedAggregate,
+          columnMetadata.toMap,
+          groupDeterminism
+        )
+      }
+
       case Select(cond, src) => {
         val (rewrittenSrc, colDeterminism, rowDeterminism) = percolateLite(src);
 
@@ -220,7 +315,7 @@ object CTPercolator {
           // If the predicate's determinism is data-independent... OR if the
           // predicate is deterministic already, then we don't need to add anything.
           // Just return what we already have!
-          return (Select(cond, src), colDeterminism, newRowDeterminism)
+          return (Select(cond, rewrittenSrc), colDeterminism, newRowDeterminism)
         } else {
           // Otherwise, we need to tack on a new projection operator to compute
           // the new non-determinism
@@ -380,6 +475,22 @@ object CTPercolator {
           BoolPrimitive(true)
         )
       }
+
+      // This is a bit hackish... Sort alone doesn't affect determinism
+      // metadata, and Limit doesn't either, but combine the two and you get some
+      // annoying behavior.  Since we're rewriting this particular fragment soon, 
+      // I'm going to hold off on any elegant solutions
+      case Sort(sortCols, src) => {
+        val (rewritten, cols, row) = percolateLite(src)
+        (Sort(sortCols, rewritten), cols, row)
+      }
+      case Limit(offset, count, src) => {
+        val (rewritten, cols, row) = percolateLite(src)
+        (Limit(offset, count, rewritten), cols, row)
+      }
+
+      case _:LeftOuterJoin =>
+        throw new RAException("Don't know how to percolate a left-outer-join")
     }
   }
 }

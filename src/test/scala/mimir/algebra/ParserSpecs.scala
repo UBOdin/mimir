@@ -12,14 +12,15 @@ import mimir.sql._
 import mimir.ctables._
 
 object ParserSpecs extends Specification {
-  val schema = Map[String,Map[String,Type.T]](
+  val schema = Map[String,Map[String,Type]](
     ("R", Map( 
-      ("A", Type.TInt), 
-      ("B", Type.TInt), 
-      ("C", Type.TInt)
+      ("A", TInt()),
+      ("B", TInt()),
+      ("C", TInt())
     ))
   )
-  def parser = new OperatorParser((x: String) => null, schema.get(_).get.toList)
+  def model(x:String) = mimir.models.NoOpModel(x, "TEST")
+  def parser = new OperatorParser((x: String) => model(x), schema.get(_).get.toList)
   def expr = parser.expr _
   def oper = parser.operator _
   def sch(x: String) = Table(x, schema.get(x).get.toList, List())
@@ -43,23 +44,23 @@ object ParserSpecs extends Specification {
     }
     "Handle VGTerms without parameters" in {
       expr("{{ TR1INFER_0[] }}") must be equalTo
-        VGTerm( ("TR1INFER", null), 0, List())
+        VGTerm( model("TR1INFER"), 0, List())
     }
     "Handle fields nested in VGTerms" in {
       expr("{{ TEST_0[ 1 ] }}") must be equalTo 
-        VGTerm( ("TEST", null), 0, List(IntPrimitive(1)))
+        VGTerm( model("TEST"), 0, List(IntPrimitive(1)))
     }
     "Handle recursively nested VGTerms" in {
       expr("{{ TEST_0[ {{ TEST_1 }} ] }}") must be equalTo
-        VGTerm( ("TEST", null), 0, List(
-          VGTerm( ("TEST", null), 1, List())
+        VGTerm( model("TEST"), 0, List(
+          VGTerm( model("TEST"), 1, List())
         ))
     }
     "Handle recursively nested VGTerms mixed with others" in {
       expr("{{ TR1CAST_0[ROWID, {{ TR1INFER_0[] }}] }}") must be equalTo
-        VGTerm( ("TR1CAST", null), 0, List(
+        VGTerm( model("TR1CAST"), 0, List(
           RowIdVar(),
-          VGTerm( ("TR1INFER", null), 0, List())
+          VGTerm( model("TR1INFER"), 0, List())
         ))
     }
   }

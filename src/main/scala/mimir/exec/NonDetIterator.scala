@@ -6,8 +6,8 @@ import mimir.algebra._;
 import mimir.ctables.Reason;
 
 class NonDetIterator(val src: ResultIterator, 
-                     val schema: List[(String, Type.T)],
-                     colDeterminism: List[Expression], 
+                     val schema: Seq[(String, Type)],
+                     colDeterminism: Seq[Expression], 
                      rowDeterminism: Expression) 
   extends ResultIterator
 {

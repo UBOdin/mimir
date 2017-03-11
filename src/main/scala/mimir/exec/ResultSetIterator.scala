@@ -3,19 +3,18 @@ package mimir.exec;
 import java.sql._;
 import mimir.util.JDBCUtils;
 import mimir.algebra._;
-import mimir.algebra.Type._;
 import mimir.provenance._;
 
 class ResultSetIterator(
   val src: ResultSet, 
-  val visibleSchema: Map[String,Type.T], 
-  val visibleColumns: List[Int], 
-  val provenanceTokenColumns: List[Int]
+  val visibleSchema: Map[String,Type],
+  val visibleColumns: Seq[Int], 
+  val provenanceTokenColumns: Seq[Int]
 ) extends ResultIterator
 {
   val meta = src.getMetaData();
-  val (schema: List[(String,Type.T)], 
-       extract: List[() => PrimitiveValue]
+  val (schema: Seq[(String,Type)],
+       extract: Seq[() => PrimitiveValue]
       ) = 
     visibleColumns.map( (i) => {
       // println("Visible: "+visibleSchema)

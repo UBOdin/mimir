@@ -10,7 +10,7 @@ abstract class Backend {
   def open(): Unit
 
   def execute(sel: String): ResultSet
-  def execute(sel: String, args: List[PrimitiveValue]): ResultSet
+  def execute(sel: String, args: Seq[PrimitiveValue]): ResultSet
   def execute(sel: Select): ResultSet = {
     execute(sel.toString());
   }
@@ -19,48 +19,37 @@ abstract class Backend {
     sel.setSelectBody(selB);
     return execute(sel);
   }
-  def resultRows(sel: String) = 
-    JDBCUtils.extractAllRows(execute(sel))
-  def resultRows(sel: String, args: List[PrimitiveValue]) =
-    JDBCUtils.extractAllRows(execute(sel, args))
-  def resultRows(sel: Select) =
-    JDBCUtils.extractAllRows(execute(sel))
-  def resultRows(sel: SelectBody) =
-    JDBCUtils.extractAllRows(execute(sel))
 
-  def singletonQuery(sel: String) = 
-    JDBCUtils.extractSingleton(execute(sel))
-  def singletonQuery(sel: String, args: List[PrimitiveValue]) =
-    JDBCUtils.extractSingleton(execute(sel, args))
-  def singletonQuery(sel: Select) =
-    JDBCUtils.extractSingleton(execute(sel))
-  def singletonQuery(sel: SelectBody) =
-    JDBCUtils.extractSingleton(execute(sel))
+  def resultRows(sel: String):Seq[Seq[PrimitiveValue]] = 
+    JDBCUtils.extractAllRows(execute(sel)).flush
+  def resultRows(sel: String, args: Seq[PrimitiveValue]):Seq[Seq[PrimitiveValue]] =
+    JDBCUtils.extractAllRows(execute(sel, args)).flush
+  def resultRows(sel: Select):Seq[Seq[PrimitiveValue]] =
+    JDBCUtils.extractAllRows(execute(sel)).flush
+  def resultRows(sel: SelectBody):Seq[Seq[PrimitiveValue]] =
+    JDBCUtils.extractAllRows(execute(sel)).flush
 
-  def getTableSchema(table: String): Option[List[(String, Type.T)]]
-  def getTableOperator(table: String): Operator =
-    getTableOperator(table, List[(String,Expression,Type.T)]())
-  def getTableOperator(table: String, metadata: List[(String, Expression, Type.T)]):
-    Operator =
-  {
-    Table(
-      table, 
-      getTableSchema(table) match {
-        case Some(x) => x
-        case None => throw new SQLException("Table does not exist in db!")
-      },
-      metadata
-    )
-  }
+  def resultValue(sel:String):PrimitiveValue =
+    resultRows(sel).head.head
+  def resultValue(sel:String, args: Seq[PrimitiveValue]):PrimitiveValue =
+    resultRows(sel, args).head.head
+  def resultValue(sel:Select):PrimitiveValue =
+    resultRows(sel).head.head
+  def resultValue(sel:SelectBody):PrimitiveValue =
+    resultRows(sel).head.head
+  
+  def getTableSchema(table: String): Option[Seq[(String, Type)]]
   
   def update(stmt: String): Unit
-  def update(stmt: List[String]): Unit
-  def update(stmt: String, args: List[PrimitiveValue]): Unit
+  def update(stmt: TraversableOnce[String]): Unit
+  def update(stmt: String, args: Seq[PrimitiveValue]): Unit
+  def fastUpdateBatch(stmt: String, argArray: Iterable[Seq[PrimitiveValue]]): Unit
 
-  def getAllTables(): List[String]
+  def getAllTables(): Seq[String]
 
   def close()
 
+  def canHandleVGTerms(): Boolean
   def specializeQuery(q: Operator): Operator
 
 }

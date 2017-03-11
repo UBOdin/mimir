@@ -2,6 +2,7 @@ package mimir.algebra
 
 import org.specs2.mutable._
 import mimir.parser._;
+import mimir.optimizer._;
 
 object EvalSpec extends Specification {
 
@@ -39,6 +40,22 @@ object EvalSpec extends Specification {
           )
         )
       ) must be equalTo expr("CAST(RATINGS2_NUM_RATINGS, real)>3")
+    }
+
+    "The Inliner" should {
+
+      "Properly expand DISTANCE" >> {
+        Eval.eval(expr("DISTANCE(3, 4)")) must be equalTo(FloatPrimitive(5))
+        InlineFunctions(expr("DISTANCE(Q, R)")) must be equalTo(
+          Function("SQRT", List(
+            Arithmetic(Arith.Add,
+              Arithmetic(Arith.Mult, Var("Q"), Var("Q")),
+              Arithmetic(Arith.Mult, Var("R"), Var("R"))
+            )
+        ))
+        )
+      }
+
     }
 
   }

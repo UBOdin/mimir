@@ -14,7 +14,7 @@ object PushdownSelections {
 		}
 	}
 
-	def optimize(o: Operator): Operator = 
+	def apply(o: Operator): Operator = 
 	{
 		o match {
 			case Project(cols, src) =>
@@ -24,25 +24,25 @@ object PushdownSelections {
 				if(conditionCol.isEmpty) {
 					// println("NOT CONVERTING")
 					// If there's no condition column, just recur
-					return Project(cols, optimize(src))
+					return Project(cols, apply(src))
 				} else {
 					// println("CONVERTING")
 					// If there is a condition column, convert it to a selection
-					return Project(rest, optimize(Select(conditionCol.head.expression, src)))
+					return Project(rest, apply(Select(conditionCol.head.expression, src)))
 				}
 			case Select(cond1, Select(cond2, src)) =>
-				optimize(Select(ExpressionUtils.makeAnd(cond1, cond2), src))
+				apply(Select(ExpressionUtils.makeAnd(cond1, cond2), src))
 
 			case Select(cond, (p @ Project(cols, src))) =>
-				optimize(Project(cols, Select(Eval.inline(cond, p.bindings), src)))
+				apply(Project(cols, Select(Eval.inline(cond, p.bindings), src)))
 
 			case Select(cond, Union(lhs, rhs)) =>
-				Union(optimize(Select(cond, lhs)), optimize(Select(cond, rhs)))
+				Union(apply(Select(cond, lhs)), apply(Select(cond, rhs)))
 
 			case Select(_, (_:Table)) => o
 
 			case Select(cond, Join(lhs, rhs)) => {
-				val clauses: List[Expression] = ExpressionUtils.getConjuncts(cond)
+				val clauses: Seq[Expression] = ExpressionUtils.getConjuncts(cond)
 				val lhsSchema = lhs.schema.map(_._1).toSet
 				val rhsSchema = rhs.schema.map(_._1).toSet
 				val dualSchema = lhsSchema ++ rhsSchema
@@ -79,18 +79,18 @@ object PushdownSelections {
 				val outerCond = ExpressionUtils.makeAnd(rhsRest)
 
 				wrap(outerCond, Join(
-					optimize(wrap(lhsCond, lhs)),
-					optimize(wrap(rhsCond, rhs))
+					apply(wrap(lhsCond, lhs)),
+					apply(wrap(rhsCond, rhs))
 				))
 			}
 
 			case Select(cond, LeftOuterJoin(lhs, rhs, outerJoinCond)) => {
-				val clauses: List[Expression] = ExpressionUtils.getConjuncts(cond)
+				val clauses: Seq[Expression] = ExpressionUtils.getConjuncts(cond)
 				val rhsSchema = rhs.schema.map(_._1).toSet
 
 				// Left-hand-side clauses are the ones where there's no overlap
 				// with variables from the right-hand-side
-				val (lhsClauses: List[Expression], lhsRest: List[Expression]) =
+				val (lhsClauses: Seq[Expression], lhsRest: Seq[Expression]) =
 					clauses.partition(
 						(x: Expression) => (ExpressionUtils.getColumns(x) & rhsSchema).isEmpty
 					)
@@ -106,12 +106,25 @@ object PushdownSelections {
 					)
 				)
 			}
+
+			// We're allowed to push selects down through aggregates if and only if 
+			// all of the variables that appear in the condition appear in the group-by
+			// clauses.
+			case Select(cond, Aggregate(gbcols, aggs, source)) 
+				if ExpressionUtils.getColumns(cond).map(Var(_)).forall( gbcols contains _ ) => {
+				Aggregate(gbcols, aggs, apply(Select(cond, source)))
+			}
+
+			// Otherwise, leave the select in place
+			case Select(cond, agg:Aggregate) => {
+				Select(cond, apply(agg))
+			}
 				
 
 			case Select(_,_) =>
 				throw new SQLException("Unhandled Select Case in Pushdown: " + o)
 
-			case _ => o.rebuild(o.children.map(optimize(_)))
+			case _ => o.rebuild(o.children.map(apply(_)))
 
 		}
 	}

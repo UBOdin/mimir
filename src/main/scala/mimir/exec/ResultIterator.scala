@@ -18,6 +18,9 @@ import mimir.ctables.Reason;
  *   // etc...
  * }
  * iterator.close()
+ * 
+ * TODO: 
+ *  Make this a TraversableOnce
  */
 
 abstract class ResultIterator {
@@ -61,7 +64,7 @@ abstract class ResultIterator {
   /**
    * Return the schema of the given expression
    */
-  def schema: List[(String,Type.T)];
+  def schema: Seq[(String,Type)];
   
   /**
    * Return the number of columns (i.e., iterator.schema().size())
@@ -71,8 +74,8 @@ abstract class ResultIterator {
   /**
    * Return the current row as a list
    */
-  def currentRow(): List[PrimitiveValue] =
-    (0 until numCols).map( this(_) ).toList
+  def currentRow(): Seq[PrimitiveValue] =
+    (0 until numCols).map( this(_) ).toIndexedSeq
 
   def currentTuple(): Map[String, PrimitiveValue] =
     schema.map(_._1).zip(currentRow).toMap
@@ -89,7 +92,7 @@ abstract class ResultIterator {
   /**
    * Shorthand map operator over the rows.
    */
-  def mapRows[X](fn: ResultIterator => X): List[X] =
+  def mapRows[X](fn: ResultIterator => X): Iterable[X] =
   {
     var ret = List[X]()
     foreachRow( (x) => { ret = fn(this) :: ret } )
@@ -97,17 +100,27 @@ abstract class ResultIterator {
   }
 
   /**
+   * Shorthand fold operator over the rows.
+   */
+  def foldRows[X](init:X, fn: (X, ResultIterator) => X): X =
+  {
+    var ret = init
+    foreachRow( (x) => { ret = fn(ret, this) } )
+    ret;
+  }
+
+  /**
    * A list of lists containing all rows remaining in the iterator.
    * Note that this operation exhausts the iterator: Calling this twice
    * will not work.
    */
-  def allRows(): List[List[PrimitiveValue]] = 
+  def allRows(): Iterable[Seq[PrimitiveValue]] = 
     mapRows(_.currentRow())
 
   /**
    * A list of explanations for the indicated column
    */
-  def reason(ind: Int): List[Reason] = List()
+  def reason(ind: Int): Seq[Reason] = Seq()
 
   /**
    * A unique identifier for every output that can be unwrapped to generate per-row provenance

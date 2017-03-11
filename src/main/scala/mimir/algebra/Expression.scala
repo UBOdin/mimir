@@ -1,17 +1,5 @@
 package mimir.algebra;
 
-import java.sql.SQLException
-
-import mimir.ctables.CTables
-import mimir.algebra.Type._
-
-case class TypeException(found: Type.T, expected: Type.T, 
-                    context:String) 
-  extends Exception(
-    "Type Mismatch ["+context+
-    "]: found "+found.toString+
-    ", but expected "+expected.toString
-  );
 class RAException(msg: String) extends Exception(msg);
 
 /**
@@ -21,14 +9,14 @@ abstract class Expression {
   /**
    * Return all of the children of the current tree node
    */
-  def children: List[Expression] 
+  def children: Seq[Expression] 
   /**
    * Return a new instance of the same object, but with the 
    * children replaced with the provided list.  The list must
    * be of the same size returned by children.  This is mostly
    * to facilitate recur, below
    */
-  def rebuild(c: List[Expression]): Expression
+  def rebuild(c: Seq[Expression]): Expression
   /**
    * Perform a recursive rewrite.  
    * The following pattern is pretty common throughout Mimir:
@@ -51,9 +39,8 @@ abstract class Expression {
  */
 abstract class LeafExpression extends Expression {
   def children = List[Expression]();
-  def rebuild(c: List[Expression]):Expression = { return this }
+  def rebuild(c: Seq[Expression]):Expression = { return this }
 }
-
 
 /////////////// Computations ///////////////
 
@@ -63,8 +50,8 @@ abstract class LeafExpression extends Expression {
 case class Not(child: Expression) 
   extends Expression 
 {
-  def children: List[Expression] = List[Expression](child)
-  def rebuild(x: List[Expression]): Expression = Not(x(0))
+  def children: Seq[Expression] = List[Expression](child)
+  def rebuild(x: Seq[Expression]): Expression = Not(x(0))
   override def toString = ("NOT(" + child.toString + ")")
 }
 
@@ -173,7 +160,7 @@ case class Arithmetic(op: Arith.Op, lhs: Expression,
   override def toString() = 
 	" (" + lhs.toString + Arith.opString(op) + rhs.toString + ") "
   def children = List(lhs, rhs)
-  def rebuild(c: List[Expression]) = Arithmetic(op, c(0), c(1))
+  def rebuild(c: Seq[Expression]) = Arithmetic(op, c(0), c(1))
 }
 
 /**
@@ -187,7 +174,7 @@ case class Comparison(op: Cmp.Op, lhs: Expression,
   override def toString() = 
 	" (" + lhs.toString + Cmp.opString(op) + rhs.toString + ") "
   def children = List(lhs, rhs)
-  def rebuild(c: List[Expression]) = Comparison(op, c(0), c(1))
+  def rebuild(c: Seq[Expression]) = Comparison(op, c(0), c(1))
 }
 
 /**
@@ -200,7 +187,7 @@ case class Comparison(op: Cmp.Op, lhs: Expression,
  * TODO: Move inline function definition from Eval to 
  *       FunctionRegistry
  */
-case class Function(op: String, params: List[Expression]) extends Expression {
+case class Function(op: String, params: Seq[Expression]) extends Expression {
   override def toString() = {
     op match {
       // Need to special case COUNT DISTINCT
@@ -215,7 +202,7 @@ case class Function(op: String, params: List[Expression]) extends Expression {
     }
   }
   def children = params
-  def rebuild(c: List[Expression]) = Function(op, c)
+  def rebuild(c: Seq[Expression]) = Function(op, c)
 }
 
 /**
@@ -242,6 +229,14 @@ case class RowIdVar() extends LeafExpression
 }
 
 /**
+ * Representation of a JDBC Variable.
+ */
+case class JDBCVar(t: Type) extends LeafExpression
+{
+  override def toString = "?";
+}
+
+/**
  * Representation of an If-Then-Else block.  Note that this differs from
  * SQL's use of CASE blocks.  If-Then-Else is substantially easier to work
  * with for recursive analyses.  
@@ -258,7 +253,7 @@ case class Conditional(condition: Expression, thenClause: Expression,
   	"IF "+condition.toString+" THEN "+thenClause.toString+
     " ELSE "+elseClause.toString+" END"
   def children = List(condition, thenClause, elseClause)
-  def rebuild(c: List[Expression]) = {
+  def rebuild(c: Seq[Expression]) = {
     Conditional(c(0), c(1), c(2))
   }
 }
@@ -269,5 +264,5 @@ case class Conditional(condition: Expression, thenClause: Expression,
 case class IsNullExpression(child: Expression) extends Expression { 
   override def toString() = {child.toString+" IS NULL"}
   def children = List(child)
-  def rebuild(c: List[Expression]) = IsNullExpression(c(0))
+  def rebuild(c: Seq[Expression]) = IsNullExpression(c(0))
 }

@@ -19,7 +19,7 @@ object OperatorUtils {
    *     Project(ret(N)._1, ret(N)._2) UNION
    */
   def columnExprForOperator(col: String, oper: Operator): 
-    List[(Expression, Operator)] =
+    Seq[(Expression, Operator)] =
   {
     oper match {
       case p @ Project(_, src) => 
@@ -32,39 +32,28 @@ object OperatorUtils {
     }
   }
 
-  /**
-   * Normalize an operator tree by distributing operators
-   * over union terms.
-   */
-  def extractUnions(o: Operator): List[Operator] =
+  def extractUnionClauses(o: Operator): Seq[Operator] =
   {
-    // println("Extract: " + o)
-    o match {
-      case Union(lhs, rhs) => 
-        extractUnions(lhs) ++ extractUnions(rhs)
-      case Project(args, c) =>
-        extractUnions(c).map ( Project(args, _) )
-      case Select(expr, c) =>
-        extractUnions(c).map ( Select(expr, _) )
-      case Aggregate(args, groupBy, child) =>
-        extractUnions(child).map(Aggregate(args, groupBy, _))
-      case t : Table => List[Operator](t)
-      case Join(lhs, rhs) =>
-        extractUnions(lhs).flatMap (
-          (lhsTerm: Operator) =>
-            extractUnions(rhs).map( 
-              Join(lhsTerm, _)
-            )
-        )
+    o match { 
+      case Union(lhs, rhs) => extractUnionClauses(lhs) ++ extractUnionClauses(rhs)
+      case _ => List(o)
     }
   }
 
-  def makeUnion(terms: List[Operator]): Operator = 
+  def makeUnion(terms: Seq[Operator]): Operator = 
   {
-    terms match {
-      case List() => throw new SQLException("Union of Empty List")
-      case List(head) => head
-      case head :: rest => Union(head, makeUnion(rest))
+    if(terms.isEmpty){ throw new SQLException("Union of Empty List") }
+    val head = terms.head 
+    val tail = terms.tail
+    if(tail.isEmpty){ return head }
+    else { return Union(head, makeUnion(tail)) }
+  }
+
+  def extractProjections(oper: Operator): (Seq[ProjectArg], Operator) =
+  {
+    oper match {
+      case Project(cols, src) => (cols.map(col => ProjectArg(col.name, col.expression)), src)
+      case _ => (oper.schema.map(col => ProjectArg(col._1, Var(col._1))), oper)
     }
   }
 
@@ -73,46 +62,50 @@ object OperatorUtils {
     Project( columns.map( x => ProjectArg(x, Var(x)) ), oper)
   }
 
-  def projectAwayColumn(column: String, oper: Operator): Operator =
+  def projectAwayColumn(target: String, oper: Operator): Operator =
   {
+    val (cols, src) = extractProjections(oper)
     Project(
-      oper.schema.
-        map(_._1).
-        filter( !_.equalsIgnoreCase(column) ).
-        map( x => ProjectArg(x, Var(x)) ),
-      oper
+      cols.filter( !_.name.equalsIgnoreCase(target) ),
+      src
     )
   }
 
-  def projectInColumn(column: String, value: Expression, oper: Operator): Operator =
+  def projectInColumn(target: String, value: Expression, oper: Operator): Operator =
   {
+    val (cols, src) = extractProjections(oper)
+    val bindings = cols.map(_.toBinding).toMap
     Project(
-      (oper.schema.
-              map(_._1)
-              map( (x:String) => ProjectArg(x, Var(x)) ))++
-        List(ProjectArg(column, value)),
-      oper
+      cols ++ Some(ProjectArg(target, Eval.inline(value, bindings))), 
+      src
     )
   }
 
-  def replaceColumn(column: String, replacement: Expression, oper: Operator) =
+  def replaceColumn(target: String, replacement: Expression, oper: Operator) =
   {
+    val (cols, src) = extractProjections(oper)
+    val bindings = cols.map(_.toBinding).toMap
     Project(
-      oper.schema.
-        map(_._1).
-        map(x => if(x.equalsIgnoreCase(column)){ ProjectArg(x, replacement) } else { ProjectArg(x, Var(x)) } ),
-      oper
-    );
+      cols.map( col => 
+        if(col.name.equalsIgnoreCase(target)){
+          ProjectArg(target, Eval.inline(replacement, bindings))  
+        } else { col }
+      ),
+      src
+    )
   }
 
-  def renameColumn(column: String, replacement: String, oper: Operator) =
+  def renameColumn(target: String, replacement: String, oper: Operator) =
   {
+    val (cols, src) = extractProjections(oper)
     Project(
-      oper.schema.
-        map(_._1).
-        map(x => if(x.equalsIgnoreCase(column)){ ProjectArg(replacement, Var(column)) } else { ProjectArg(x, Var(x)) } ),
-      oper
-    );
+      cols.map( col => 
+        if(col.name.equalsIgnoreCase(target)){
+          ProjectArg(replacement, col.expression)
+        } else { col }
+      ),
+      src
+    )
   }
 
 
@@ -124,4 +117,41 @@ object OperatorUtils {
       case BoolPrimitive(true) => oper
       case _ => Select(condition, oper)
     }
+
+  def projectColumns(cols: List[String], oper: Operator) =
+  {
+    Project(
+      cols.map( (col) => ProjectArg(col, Var(col)) ),
+      oper
+    )
+  }
+
+  def joinMergingColumns(cols: List[(String, (Expression,Expression) => Expression)], lhs: Operator, rhs: Operator) =
+  {
+    val allCols = lhs.schema.map(_._1).toSet ++ rhs.schema.map(_._1).toSet
+    val affectedCols = cols.map(_._1).toSet
+    val wrappedLHS = 
+      Project(
+        lhs.schema.map(_._1).map( x => 
+          ProjectArg(if(affectedCols.contains(x)) { "__MIMIR_LJ_"+x } else { x }, 
+                     Var(x))),
+        lhs
+      )
+    val wrappedRHS = 
+      Project(
+        rhs.schema.map(_._1).map( x => 
+          ProjectArg(if(affectedCols.contains(x)) { "__MIMIR_RJ_"+x } else { x }, 
+                     Var(x))),
+        rhs
+      )
+    Project(
+      ((allCols -- affectedCols).map( (x) => ProjectArg(x, Var(x)) )).toList ++
+      cols.map({
+        case (name, op) =>
+          ProjectArg(name, op(Var("__MIMIR_LJ_"+name), Var("__MIMIR_RJ_"+name)))
+
+        }),
+      Join(wrappedLHS, wrappedRHS)
+    )
+  }
 }
