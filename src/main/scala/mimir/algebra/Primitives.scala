@@ -57,17 +57,6 @@ case class IntPrimitive(v: Long)
   def asString: String = v.toString;
   def payload: Object = v.asInstanceOf[Object];
 }
-/*
-case class UserPrimitive(v: String)
-  extends PrimitiveValue(TUser)
-{
-  override def toString() = v.toString
-  def asLong: Long = v.toLong;
-  def asDouble: Double = v.toDouble;
-  def asString: String = v;
-  def payload: Object = v.asInstanceOf[Object];
-}
-*/
 /**
  * Boxed representation of a string
  */

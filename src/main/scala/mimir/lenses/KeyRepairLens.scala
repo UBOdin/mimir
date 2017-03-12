@@ -50,29 +50,38 @@ object KeyRepairLens {
       }
 
     (
-      Project(
-        keys.map { col => ProjectArg(col, Var(col))} ++
-        values.map { case (col, model) => 
-          ProjectArg(col, 
-            Conditional(
-              Comparison(Cmp.Lte, Var(s"MIMIR_KR_COUNT_$col"), IntPrimitive(1)),
-              Var(col),
-              VGTerm(model, 0, keys.map(Var(_)), Seq())
-            )
+      assemble(query, keys, values),
+      values.map(_._2)
+    )
+  }
+
+  def assemble(
+    query: Operator,
+    keys: Seq[String],
+    values: Seq[(String, Model)]
+  ): Operator =
+  {
+    Project(
+      keys.map { col => ProjectArg(col, Var(col))} ++
+      values.map { case (col, model) => 
+        ProjectArg(col, 
+          Conditional(
+            Comparison(Cmp.Lte, Var(s"MIMIR_KR_COUNT_$col"), IntPrimitive(1)),
+            Var(col),
+            VGTerm(model, 0, keys.map(Var(_)), Seq())
+          )
+        )
+      },
+      Aggregate(
+        keys.map(Var(_)),
+        values.flatMap { case (col, _) => 
+          List(
+            AggFunction("FIRST", false, List(Var(col)), col),
+            AggFunction("COUNT", true, List(Var(col)), s"MIMIR_KR_COUNT_$col")
           )
         },
-        Aggregate(
-          keys.map(Var(_)),
-          values.flatMap { case (col, _) => 
-            List(
-              AggFunction("FIRST", false, List(Var(col)), col),
-              AggFunction("COUNT", true, List(Var(col)), s"MIMIR_KR_COUNT_$col")
-            )
-          },
-          query
-        )
-      ),
-      values.map(_._2)
+        query
+      )
     )
 
   }

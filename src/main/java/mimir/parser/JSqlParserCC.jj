@@ -165,7 +165,8 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_ASSUME:"ASSUME">
 |   <K_VIEW:"VIEW">
 |   <K_LENS:"LENS">
-|   <K_ADAPTIVESCHEMA:"ADAPTIVESCHEMA">
+|   <K_ADAPTIVE:"ADAPTIVE">
+|   <K_SCHEMA:"SCHEMA">
 |   <K_LET:"LET">
 |   <K_LOAD:"LOAD">
 |   <K_ALTER:"ALTER">
@@ -418,10 +419,7 @@ CreateLens CreateLens():
     <K_WITH> lensType = RelObjectName()
 	  "(" [ 
 	    e = SimpleExpression() { args.add(e); }
-      [e = SimpleExpression() { args.add(e); }]
-	    ( "," e = SimpleExpression() { args.add(e); } 
-           [e = SimpleExpression() { args.add(e); }]
-      ) *
+	    ( "," e = SimpleExpression() { args.add(e); } ) *
 	  ] ")"
   { 
   	return new CreateLens(lensName, body, lensType, args);
@@ -454,19 +452,27 @@ CreateView CreateView():
 CreateAdaptiveSchema CreateAdaptiveSchema():
 {
    CreateAdaptiveSchema createAdaptiveSchema = new CreateAdaptiveSchema();
-   Table table = null;
+   String name = null;
    SelectBody selectBody = null;
+   String type = null;
+   List<Expression> args = new ArrayList<Expression>();
+   Expression e = null;
 }
 {
-    <K_ADAPTIVESCHEMA> table = Table()
-    <K_AS>selectBody = SelectBody()
+    <K_ADAPTIVE> <K_SCHEMA> name = RelObjectName()
+    <K_AS> selectBody = SelectBody()
+    <K_WITH> type = RelObjectName()
+    "(" [ 
+      e = SimpleExpression() { args.add(e); }
+      ( "," e = SimpleExpression() { args.add(e); } ) *
+    ] ")"
 	{
+    createAdaptiveSchema.setName(name);
 		createAdaptiveSchema.setSelectBody(selectBody);
+    createAdaptiveSchema.setType(type);
+    createAdaptiveSchema.setArgs(args);
+    return createAdaptiveSchema;
 	}
-	{
-      createAdaptiveSchema.setTable(table);
-      return createAdaptiveSchema;
-    }
 }
 
 Replace Replace():

@@ -57,6 +57,8 @@ import scala.collection.mutable.ListBuffer
   *    Responsible for creating, serializing, and deserializing models.
   * * mimir.lenses.LensManager (lenses)
   *    Responsible for creating and managing lenses
+  * * mimir.adaptive.AdaptiveSchemaManager (adaptiveSchemas)
+  *    Responsible for creating and managing adaptive schemas (multilenses)
   * 
   * === Logic ===
   * * mimir.sql.Backend (backend)
@@ -79,6 +81,7 @@ case class Database(backend: Backend)
   val views           = new mimir.views.ViewManager(this)
   val bestGuessCache  = new mimir.lenses.BestGuessCache(this)
   val querySerializer = new mimir.algebra.Serialization(this)
+  val adaptiveSchemas = new mimir.adaptive.AdaptiveSchemaManager(this)
 
   //// Logic
   val compiler        = new mimir.exec.Compiler(this)
@@ -326,21 +329,13 @@ case class Database(backend: Backend)
                                              sql.convert(view.getSelectBody()))
 
       /********** CREATE ADAPTIVE SCHEMA **********/
-      case adaptiveSchema: CreateAdaptiveSchema => {
-        val fdStats = new FuncDep()
-        val query = sql.convert(adaptiveSchema.getSelectBody())
-        val schema : Seq[(String,Type)] = query.schema
-
-        val viewList : java.util.ArrayList[String] = 
-          fdStats.buildEntities(
-            schema, 
-            backend.execute(adaptiveSchema.getSelectBody.toString()), 
-            adaptiveSchema.getTable.getName
-          )
-        viewList.foreach((view) => {
-          println(view)
-          // update(view)
-        })      
+      case createAdaptive: CreateAdaptiveSchema => {
+        adaptiveSchemas.create(
+          createAdaptive.getName.toUpperCase,
+          createAdaptive.getType.toUpperCase,
+          sql.convert(createAdaptive.getSelectBody()),
+          createAdaptive.getArgs.map( sql.convert(_, x => x) )
+        )
       }
 
       /********** LOAD STATEMENTS **********/
@@ -383,6 +378,7 @@ case class Database(backend: Backend)
     models.init()
     views.init()
     lenses.init()
+    adaptiveSchemas.init()
   }
 
   /**
