@@ -49,8 +49,11 @@ object DiscalaAbadiSpec
           )
         )
       ).mapRows { row => 
-        (row(0).asString,row(1).asString) 
-      } must contain("ROOT")
+        (row(0).asString, row(1).asString, row.deterministicRow)
+      } must contain( eachOf( 
+        ("ROOT", "SHIPPING", true),
+        ("CONTAINER_1", "SHIPPING", false)
+      ))
 
     }
 

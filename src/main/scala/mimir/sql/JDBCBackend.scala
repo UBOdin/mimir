@@ -266,6 +266,7 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         case _:NullPrimitive     => stmt.setNull(i, Types.VARCHAR)
         case d:DatePrimitive     => stmt.setDate(i, JDBCUtils.convertDate(d))
         case r:RowIdPrimitive    => stmt.setString(i,r.v)
+        case t:TypePrimitive     => stmt.setString(i, t.t.toString)
       }
     })
   }

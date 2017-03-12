@@ -22,6 +22,21 @@ object DiscalaAbadiNormalizer
       val fd = new FuncDep()
       fd.buildEntities(db, config.query, config.schema)
 
+    logger.debug("Dumping Base Schema")
+      val schTable = s"MIMIR_DA_SCH_${config.schema}"
+      val fullSchema = Seq((("ROOT", TRowId()), -1)) ++ fd.sch.zipWithIndex
+
+      db.backend.update(s"""
+        CREATE TABLE $schTable (ATTR_NAME string, ATTR_NODE int, ATTR_TYPE string);
+      """)
+      db.backend.fastUpdateBatch(s"""
+        INSERT INTO $schTable (ATTR_NAME, ATTR_NODE, ATTR_TYPE) VALUES (?, ?, ?);
+      """, 
+        fullSchema.map { case ((attr, t), idx) => 
+          Seq(StringPrimitive(attr), IntPrimitive(idx), TypePrimitive(t))
+        }
+      )
+
     logger.debug("Dumping FD Graph")
       val fdTable = s"MIMIR_DA_FDG_${config.schema}"
       db.backend.update(s"""
@@ -59,12 +74,19 @@ object DiscalaAbadiNormalizer
     val spanningTree = spanningTreeLens(db, config)
     logger.trace(s"Table Catalog Spanning Tree: \n$spanningTree")
     val tableQuery = 
-      OperatorUtils.makeDistinct(
-        Project(Seq(ProjectArg("TABLE_NAME", Var("MIMIR_FD_PARENT"))),
-          spanningTree
+      Project(Seq(ProjectArg("TABLE_NAME", Var("ATTR_NAME"))),
+        Select(Comparison(Cmp.Eq, Var("TABLE_NODE"), Var("ATTR_NODE")),
+          Join(
+            db.getTableOperator(s"MIMIR_DA_SCH_${config.schema}"),
+            OperatorUtils.makeDistinct(
+              Project(Seq(ProjectArg("TABLE_NODE", Var("MIMIR_FD_PARENT"))),
+                spanningTree
+              )
+            )
+          )
         )
       )
-    logger.trace(s"Table Catalog Query: \n$tableQuery")
+    logger.debug(s"Table Catalog Query: \n$tableQuery")
     return tableQuery
   }
   def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
