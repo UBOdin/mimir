@@ -45,12 +45,21 @@ object DiscalaAbadiNormalizer
       db.backend.fastUpdateBatch(s"""
         INSERT INTO $fdTable (MIMIR_FD_PARENT, MIMIR_FD_CHILD, MIMIR_FD_PATH_LENGTH) VALUES (?, ?, ?);
       """, 
+        // Add the basic edges
         fd.fdGraph.getEdges.asScala.map { case (edge_parent, edge_child) =>
           Seq(
             IntPrimitive(edge_parent), 
             IntPrimitive(edge_child),
             if(fd.parentTable.getOrElse(edge_parent, Set[Int]()) contains edge_child){ IntPrimitive(2) } 
               else { IntPrimitive(1) }
+          )
+        } ++
+        // And add in each blacklisted node as an edge off of the root
+        fd.blackList.map { col => 
+          Seq(
+            IntPrimitive(-1),
+            IntPrimitive(col),
+            IntPrimitive(2)
           )
         }
       )
@@ -116,14 +125,7 @@ object DiscalaAbadiNormalizer
           )
         )
       )
-      // Project(Seq(ProjectArg("TABLE_NAME", Var("ATTR_NAME"))),
-      //   Select(Comparison(Cmp.Eq, Var("TABLE_NODE"), Var("ATTR_NODE")),
-      //     Join(
-      //       db.getTableOperator(s"MIMIR_DA_SCH_${config.schema}"),
-      //     )
-      //   )
-      // )
-    logger.debug(s"Table Catalog Query: \n$tableQuery")
+    logger.trace(s"Table Catalog Query: \n$tableQuery")
     return tableQuery
   }
   def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
@@ -146,7 +148,9 @@ object DiscalaAbadiNormalizer
           ProjectArg("IS_KEY", BoolPrimitive(true))
         ),
         convertNodesToNamesInQuery(db, config, "TABLE_NODE", "TABLE_NAME", Some("ATTR_TYPE"),
-          Select(Comparison(Cmp.Gte, Var("TABLE_NODE"), IntPrimitive(0)),
+          // SQLite does something stupid with FIRST that prevents it from figuring out that 
+          // -1 is an integer.  Add 1 to force it to realize that it's dealing with a number
+          Select(Comparison(Cmp.Gt, Arithmetic(Arith.Add, Var("TABLE_NODE"), IntPrimitive(1)), IntPrimitive(0)),
             OperatorUtils.makeDistinct(
               Project(Seq(ProjectArg("TABLE_NODE", Var("MIMIR_FD_PARENT"))),
                 spanningTree
@@ -157,7 +161,7 @@ object DiscalaAbadiNormalizer
       )
     val jointQuery =
       Union(childAttributeQuery, parentAttributeQuery)
-    logger.debug(s"Attr Catalog Query: \n$jointQuery")
+    logger.trace(s"Attr Catalog Query: \n$jointQuery")
     return jointQuery
   }
   def viewFor(db: Database, config: MultilensConfig, table: String): Operator = 

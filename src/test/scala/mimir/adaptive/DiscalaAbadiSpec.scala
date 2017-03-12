@@ -56,10 +56,12 @@ object DiscalaAbadiSpec
           MultilensConfig("SHIPPING", db.getTableOperator("SHIPPING"), Seq())
         )
       LoggerUtils.debug(
-        "mimir.exec.Compiler", () =>
+        List(
+          // "mimir.exec.Compiler"
+        ), () =>
         db.query(
           Project(Seq(ProjectArg("TABLE_NODE", Var("TABLE_NODE"))),
-            Select(Comparison(Cmp.Gte, Var("TABLE_NODE"), IntPrimitive(0)),
+            Select(Comparison(Cmp.Gt, Arithmetic(Arith.Add, Var("TABLE_NODE"), IntPrimitive(1)), IntPrimitive(0)),
               OperatorUtils.makeDistinct(
                 Project(Seq(ProjectArg("TABLE_NODE", Var("MIMIR_FD_PARENT"))),
                   spanningTree
@@ -91,7 +93,7 @@ object DiscalaAbadiSpec
 
       val attrs =
         db.query(
-          Sort(Seq(SortColumn(Var("IS_KEY"), true), SortColumn(Var("TABLE_NAME"), true)),
+          Sort(Seq(SortColumn(Var("TABLE_NAME"), true), SortColumn(Var("IS_KEY"), false)),
             OperatorUtils.projectDownToColumns(
               Seq("TABLE_NAME", "ATTR_NAME", "IS_KEY"),
               OperatorUtils.makeUnion(
@@ -103,10 +105,30 @@ object DiscalaAbadiSpec
           (row(0).asString, row(1).asString, row(2).asInstanceOf[BoolPrimitive].v)
         } 
       attrs must contain( eachOf( 
-        ("ROOT","QUANTITY",false),
-        ("BILL_OF_LADING_NBR","WORLD_REGION_BY_COUNTRY_OF_ORIGIN",false)
+        ("ROOT","WORLD_REGION_BY_COUNTRY_OF_ORIGIN",false),
+        ("BILL_OF_LADING_NBR","QUANTITY",false)
       ) )
       attrs.map( row => (row._1, row._2) ) must not contain( ("ROOT", "ROOT") )
+    }
+
+    "Allocate all attributes to some relation" >> {
+      val attrs =
+        db.query(
+          Sort(Seq(SortColumn(Var("TABLE_NAME"), true), SortColumn(Var("IS_KEY"), false)),
+            OperatorUtils.projectDownToColumns(
+              Seq("TABLE_NAME", "ATTR_NAME", "IS_KEY"),
+              OperatorUtils.makeUnion(
+                db.adaptiveSchemas.attrCatalogs
+              )
+            )
+          )
+        ).mapRows { row => 
+          (row(1).asString)
+        } 
+      attrs.toSet must be equalTo(
+        db.getTableOperator("SHIPPING").schema.map(_._1).toSet
+      )
+
 
     }
 

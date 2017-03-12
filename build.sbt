@@ -44,7 +44,7 @@ libraryDependencies ++= Seq(
 
   "com.twitter"                   %   "hbc-core"              % "2.0.1",
 
-  "info.mimirdb"                  %   "jsqlparser"            % "1.0.0"
+  "info.mimirdb"                  %   "jsqlparser"            % "1.0.1"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")

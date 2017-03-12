@@ -107,7 +107,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
   var table:mutable.IndexedSeq[mutable.Buffer[PrimitiveValue]] = null // This table contains the input table
   var countTable:mutable.IndexedSeq[mutable.Map[PrimitiveValue,Long]] = null // contains a count of every occurrence of every value in the column
   var densityTable:mutable.IndexedSeq[Long] = null // gives the density for column, that is percentage of non-null values
-  var blackList:mutable.Set[Integer] = null // a list of all the columns that are null or mostly null
+  var blackList:mutable.Set[Int] = null // a list of all the columns that are null or mostly null
   var fdGraph: DirectedSparseMultigraph[Int, (Int,Int)] = null
 
   var parentTable: mutable.Map[Int, mutable.Set[Int]] = null
@@ -135,7 +135,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
 
   def initializeTables(schema: Seq[(String, Type)],tName : String): Unit =
   {
-    blackList = mutable.Set[Integer]()
+    blackList = mutable.Set[Int]()
     tableName = tName
     entityPairMatrix = new TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]]()
     sch = schema
@@ -336,7 +336,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
     if(showFDGraph) {
       showGraph(fdGraph)
     }
-    println("There were " + removedCount + " removed edges in the FD-graph.")
+    logger.debug("There were " + removedCount + " removed edges in the FD-graph.")
 
     if (!nodeTable.isEmpty()) {
       // will create a map, the keyset is the parents and the arraylist of each key is the grouping 'new tables', any ones with -1 as longest path are parentless
@@ -449,7 +449,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
 */
 
     var endQ:Long = System.nanoTime();
-    logger.debug(s"PhaseOne TOOK: ${((endQ - startQ)/1000000)} MILLISECONDS")
+    logger.info(s"PhaseOne TOOK: ${((endQ - startQ)/1000000)} MILLISECONDS")
   }
 
   def updateEntityGraph():Unit = {

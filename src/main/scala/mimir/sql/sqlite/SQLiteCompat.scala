@@ -19,6 +19,8 @@ object SQLiteCompat {
     org.sqlite.Function.create(conn, "GROUP_AND", GroupAnd)
     org.sqlite.Function.create(conn, "GROUP_OR", GroupOr)
     org.sqlite.Function.create(conn, "FIRST", First)
+    org.sqlite.Function.create(conn, "FIRST_INT", First)
+    org.sqlite.Function.create(conn, "FIRST_FLOAT", First)
   }
   
   def getTableSchema(conn:java.sql.Connection, table: String): Option[List[(String, Type)]] =
@@ -170,6 +172,32 @@ object First extends org.sqlite.Function.Aggregate {
   }
   def xFinal(): Unit = {
     if(firstVal == null){ result(); } else { result(firstVal); }
+  }
+}
+
+object FirstInt extends org.sqlite.Function.Aggregate {
+  var firstVal: Int = 0;
+  var empty = true
+
+  @Override
+  def xStep(): Unit = {
+    if(empty){ firstVal = value_int(0); empty = false }
+  }
+  def xFinal(): Unit = {
+    if(empty){ result(); } else { result(firstVal); }
+  }
+}
+
+object FirstFloat extends org.sqlite.Function.Aggregate {
+  var firstVal: Double = 0.0;
+  var empty = false
+
+  @Override
+  def xStep(): Unit = {
+    if(empty){ firstVal = value_double(0); empty = true }
+  }
+  def xFinal(): Unit = {
+    if(empty){ result(); } else { result(firstVal); }
   }
 }
 
