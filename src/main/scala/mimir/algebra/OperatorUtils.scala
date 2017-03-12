@@ -66,7 +66,7 @@ object OperatorUtils {
     }
   }
 
-  def projectDownToColumns(columns: List[String], oper: Operator): Operator =
+  def projectDownToColumns(columns: Seq[String], oper: Operator): Operator =
   {
     Project( columns.map( x => ProjectArg(x, Var(x)) ), oper)
   }

@@ -25,10 +25,10 @@ object DiscalaAbadiNormalizer
     logger.debug("Dumping FD Graph")
       val fdTable = s"MIMIR_DA_FDG_${config.schema}"
       db.backend.update(s"""
-        CREATE TABLE $fdTable (FD_KEY int, FD_VALUE int);
+        CREATE TABLE $fdTable (MIMIR_FD_PARENT int, MIMIR_FD_CHILD int);
       """)
       db.backend.fastUpdateBatch(s"""
-        INSERT INTO $fdTable (FD_KEY, FD_VALUE) VALUES (?, ?);
+        INSERT INTO $fdTable (MIMIR_FD_PARENT, MIMIR_FD_CHILD) VALUES (?, ?);
       """, 
         fd.fdGraph.getEdges.asScala.map { edge =>
           Seq(IntPrimitive(edge._1), IntPrimitive(edge._2))
@@ -36,16 +36,36 @@ object DiscalaAbadiNormalizer
       )
 
     val (_, models) = KeyRepairLens.create(
-      db, fdTable,
+      db, s"MIMIR_DA_CHOSEN_${config.schema}",
       db.getTableOperator(fdTable),
-      Seq(Var("FD_KEY"))
+      Seq(Var("MIMIR_FD_CHILD"))
     )
 
     models
   }
+
+  def spanningTreeLens(db: Database, config: MultilensConfig): Operator =
+  {
+    val model = db.models.get(s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_FD_PARENT")
+    KeyRepairLens.assemble(
+      db.getTableOperator(s"MIMIR_DA_FDG_${config.schema}"),
+      Seq("MIMIR_FD_CHILD"), 
+      Seq(("MIMIR_FD_PARENT", model))
+    )
+  }
+
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    ???
+    val spanningTree = spanningTreeLens(db, config)
+    logger.trace(s"Table Catalog Spanning Tree: \n$spanningTree")
+    val tableQuery = 
+      OperatorUtils.makeDistinct(
+        Project(Seq(ProjectArg("TABLE_NAME", Var("MIMIR_FD_PARENT"))),
+          spanningTree
+        )
+      )
+    logger.trace(s"Table Catalog Query: \n$tableQuery")
+    return tableQuery
   }
   def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
   {

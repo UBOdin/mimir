@@ -16,7 +16,8 @@ object SQLiteCompat {
     org.sqlite.Function.create(conn,"MIMIRCAST", MimirCast)
     org.sqlite.Function.create(conn,"OTHERTEST", OtherTest)
     org.sqlite.Function.create(conn,"AGGTEST", AggTest)
-    org.sqlite.Function.create(conn, "BOOLAND", BoolAnd)
+    org.sqlite.Function.create(conn, "GROUP_AND", GroupAnd)
+    org.sqlite.Function.create(conn, "GROUP_OR", GroupOr)
     org.sqlite.Function.create(conn, "FIRST", First)
   }
   
@@ -124,16 +125,29 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
     }
 }
 
-object BoolAnd extends org.sqlite.Function.Aggregate {
-  var isDet = 1
+object GroupAnd extends org.sqlite.Function.Aggregate {
+  var agg = true
 
   @Override
   def xStep(): Unit = {
-    isDet = isDet & value_int(0)
+    agg = agg && (value_int(0) != 0)
   }
 
   def xFinal(): Unit = {
-    result(isDet)
+    result(if(agg){ 1 } else { 0 })
+  }
+}
+
+object GroupOr extends org.sqlite.Function.Aggregate {
+  var agg = false
+
+  @Override
+  def xStep(): Unit = {
+    agg = agg || (value_int(0) != 0)
+  }
+
+  def xFinal(): Unit = {
+    result(if(agg){ 1 } else { 0 })
   }
 }
 

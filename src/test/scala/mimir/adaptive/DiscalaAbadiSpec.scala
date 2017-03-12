@@ -34,6 +34,24 @@ object DiscalaAbadiSpec
       querySingleton("""
         SELECT NAME FROM MIMIR_ADAPTIVE_SCHEMAS
       """) must be equalTo(StringPrimitive("SHIPPING"))
+      querySingleton("""
+        SELECT NAME FROM MIMIR_MODELS
+      """) must be equalTo(StringPrimitive("MIMIR_DA_CHOSEN_SHIPPING:MIMIR_FD_PARENT"))
+    }
+
+    "Create a schema" >> {
+
+      db.query(
+        OperatorUtils.projectDownToColumns(
+          Seq("TABLE_NAME", "SCHEMA"),
+          OperatorUtils.makeUnion(
+            db.adaptiveSchemas.tableCatalogs
+          )
+        )
+      ).mapRows { row => 
+        (row(0).asString,row(1).asString) 
+      } must contain("ROOT")
+
     }
 
 

@@ -9,6 +9,17 @@ class AdaptiveSchemaManager(db: Database)
 {
   val dataTable = "MIMIR_ADAPTIVE_SCHEMAS"
 
+  val tableCatalogSchema = 
+    Seq( 
+      ("TABLE_NAME", TString()) 
+    )
+  val attrCatalogSchema =
+    Seq( 
+      ("TABLE_NAME", TString()), 
+      ("ATTR_NAME", TString()),
+      ("IS_KEY", TBool())
+    )
+
   def init(): Unit = 
   {
     if(db.backend.getTableSchema(dataTable).isEmpty){
@@ -26,9 +37,10 @@ class AdaptiveSchemaManager(db: Database)
 
   def create(schema: String, mlensType: String, query: Operator, args: Seq[Expression]) = 
   {
-    val lens = MultilensRegistry.multilenses(mlensType)
-    val lensArgs = MultilensConfig(schema, query, args);
-    val lensModels = lens.initSchema(db, lensArgs);
+    val constructor = MultilensRegistry.multilenses(mlensType)
+    val config = MultilensConfig(schema, query, args);
+    val models = constructor.initSchema(db, config);
+    
     db.backend.update(s"""
       INSERT INTO $dataTable(NAME, MLENS_TYPE, QUERY, ARGS) VALUES (?,?,?,?)
     """, Seq(
@@ -37,6 +49,11 @@ class AdaptiveSchemaManager(db: Database)
       StringPrimitive(db.querySerializer.serialize(query)),
       StringPrimitive(args.map(db.querySerializer.serialize(_)).mkString("~"))
     ))
+
+    // Persist the associated models
+    for(model <- models){
+      db.models.persist(model, s"MULTILENS:$schema")
+    }
   }
 
   def all: TraversableOnce[(Multilens, MultilensConfig)] =
@@ -58,13 +75,31 @@ class AdaptiveSchemaManager(db: Database)
     }
   }
 
-  def attrCatalogs: Seq[Operator] =
-  {
-    all.map { case(mlens, config) => mlens.attrCatalogFor(db, config) }.toSeq
-  }
-
   def tableCatalogs: Seq[Operator] =
   {
-    all.map { case(mlens, config) => mlens.attrCatalogFor(db, config) }.toSeq
+    all.map { case(mlens, config) => 
+      OperatorUtils.projectInColumn(
+        "SCHEMA",
+        StringPrimitive(config.schema),
+        OperatorUtils.projectDownToColumns(
+          tableCatalogSchema.map( _._1 ),
+          mlens.tableCatalogFor(db, config)         
+        )
+      )
+    }.toSeq
+  }
+
+  def attrCatalogs: Seq[Operator] =
+  {
+    all.map { case(mlens, config) => 
+      OperatorUtils.projectInColumn(
+        "SCHEMA",
+        StringPrimitive(config.schema),
+        OperatorUtils.projectDownToColumns(
+          attrCatalogSchema.map( _._1 ),
+          mlens.attrCatalogFor(db, config)         
+        )
+      )
+    }.toSeq
   }
 }
