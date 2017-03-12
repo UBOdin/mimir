@@ -18,7 +18,7 @@ class Reason(
     model.reason(idx, args, hints)
 
   def repair: Repair = 
-    Repair.makeRepair(model, idx, args)
+    Repair.makeRepair(model, idx, args, hints)
 
   def toJSON: String =
     JSONBuilder.dict(Map(

@@ -37,7 +37,7 @@ class DefaultMetaModel(name: String, context: String, models: Seq[String])
   }
   def validateChoice(idx: Int, v: PrimitiveValue) = models.contains(v.asString)
 
-  def getDomain(idx: Int, args: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
+  def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
     models.map( x => (StringPrimitive(x), 0.0) )
 
 }

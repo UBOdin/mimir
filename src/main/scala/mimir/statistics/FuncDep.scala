@@ -110,7 +110,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
   var blackList:mutable.Set[Integer] = null // a list of all the columns that are null or mostly null
   var fdGraph: DirectedSparseMultigraph[Int, (Int,Int)] = null
 
-  var parentTable: TreeMap[Integer, ArrayList[Integer]] = null
+  var parentTable: mutable.Map[Int, mutable.Set[Int]] = null
   var entityPairMatrix:TreeMap[String,TreeMap[Integer,TreeMap[Integer,Float]]] = null // outer string is entity pair so column#,column#: to a treemap that is essentially a look-up matrix for columns that contain column to column strengths
   var entityGraphList:ArrayList[DelegateTree[Integer, String]] = null
   var entityGraphString:ArrayList[DelegateTree[String, String]] = null
@@ -213,7 +213,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
     var edgeTable: mutable.Buffer[(Int, Int, Double)] = mutable.Buffer[(Int, Int, Double)]() // contains the node numbers for the dependency graph, the names are numbers from the schema 0 to sch.length are the possibilities
     var maxTable:mutable.IndexedSeq[PrimitiveValue] = 
       mutable.IndexedSeq.fill(countTable.size){ NullPrimitive() } // contains the max values for each column, used for phase1 formula
-    parentTable = new TreeMap[Integer, ArrayList[Integer]]()
+    parentTable = mutable.Map()
 
 
     // Finds the maxKey for each column, this is the most occurring value for each column and puts them into maxTable
@@ -347,13 +347,11 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
         if(value != -1 && parent != -1){
 //          println("VALUE,PARENT: " + sch(value)._1 + " , " + sch(parent)._1)
         }
-        if (parentTable.containsKey(parent)) {
-          parentTable.get(parent).add(value)
+        if (parentTable contains parent) {
+          parentTable(parent) += value
         }
         else {
-          var aList = new ArrayList[Integer]()
-          aList.add(value)
-          parentTable.put(parent, aList)
+          parentTable(parent) =  mutable.Set[Int](value)
         }
       }
     }
@@ -370,12 +368,9 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
     if(computeEntityGraphs) {
       if (combineEntityGraphs) {
         singleEntityGraph = new DelegateTree[Integer, String]()
-        if (!parentTable.isEmpty()) {
-          val rootChildren: ArrayList[Integer] = parentTable.get(-1)
+        if (!parentTable.isEmpty) {
           singleEntityGraph.addVertex(-1)
-          val childrenIterator = rootChildren.iterator()
-          while (childrenIterator.hasNext) {
-            val child: Integer = childrenIterator.next()
+          for(child <- parentTable(-1)){
             singleEntityGraph.addChild("-1 to " + child, -1, child)
             buildEntityGraph(singleEntityGraph, child)
           }
@@ -388,11 +383,8 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
         // this will split all nodes with root as it's parent into it's own graph for viewing
         entityGraphList = new ArrayList[DelegateTree[Integer, String]]()
         entityGraphString = new ArrayList[DelegateTree[String, String]]()
-        if (!parentTable.isEmpty()) {
-          val rootChildren: ArrayList[Integer] = parentTable.get(-1)
-          val childrenIterator = rootChildren.iterator()
-          while (childrenIterator.hasNext) {
-            val child: Integer = childrenIterator.next()
+        if (!parentTable.isEmpty) {
+          for(child <- parentTable(-1)){
             var entityGraph = new DelegateTree[Integer, String]
             entityGraph.addVertex(-1)
             entityGraph.addChild("-1 to " + child, -1, child)
@@ -409,26 +401,19 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
     // used for testing, disregard
     if(flattenParentTable) {
 
-      var parentKeys: ArrayList[Integer] = new ArrayList[Integer]()
-      var parentKeyIter = parentTable.keySet().iterator()
-      while (parentKeyIter.hasNext) {
-        parentKeys.add(parentKeyIter.next())
-      }
+      var parentKeys: Seq[Int] = parentTable.keys.toSeq
 
       var removeParents: ArrayList[Integer] = new ArrayList[Integer]()
 
-      for (outerLoc <- 0 until parentKeys.size()) {
-        var outerParent: Integer = parentKeys.get(outerLoc) // should be an interger that is the parent
+      for (outerLoc <- 0 until parentKeys.size) {
+        val outerParent: Int = parentKeys(outerLoc) // should be an interger that is the parent
         if (outerParent != -1) {
-          var outerList: ArrayList[Integer] = parentTable.get(outerParent)
-          for (innerLoc <- 0 until parentKeys.size()) {
-            var innerParent: Integer = parentKeys.get(innerLoc)
+          val outerList: mutable.Set[Int] = parentTable(outerParent)
+          for (innerParent <- outerList) {
             if (innerParent != -1) {
-              val innerList: ArrayList[Integer] = parentTable.get(innerParent)
+              val innerList: mutable.Set[Int] = parentTable(innerParent)
               if (outerList.contains(innerParent)) {
-                var newList: ArrayList[Integer] = new ArrayList[Integer]()
-                newList.addAll(outerList)
-                newList.addAll(innerList)
+                val newList = innerList ++ outerList
                 parentTable.put(outerParent, newList)
                 removeParents.add(innerParent)
               }
@@ -503,36 +488,29 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
     // PHASE 2
 
     entityPairList = new ArrayList[(Integer,Integer)]()
-    var parentList:ArrayList[Integer] = new ArrayList[Integer]() // List of all possible entities, excludes root
-    var parentKeySetIter = parentTable.keySet().iterator()
-    while(parentKeySetIter.hasNext){
-      val parentVal = parentKeySetIter.next()
-      if(parentVal != -1){
-        parentList.add(parentVal)
-      }
-    }
-    println("Number of parents: " + parentList.size())
+    var parentList:Seq[Int] = parentTable.keys.toSeq
+    println("Number of parents: " + parentList.size)
 
 //    var phase2Graph: DirectedSparseMultigraph[Integer, String] = new DirectedSparseMultigraph[Integer, String]();
 
     val graphPairs = new TreeMap[String,UndirectedSparseMultigraph[Integer,String]]()
 
-    if(parentList.size() > 1){ // need at least 2 to compare, this compares the entities to each other and the values of their children
-      for(i <- 0 until parentList.size()){
-        for(j <- i until parentList.size()){
+    if(parentList.size > 1){ // need at least 2 to compare, this compares the entities to each other and the values of their children
+      for(i <- 0 until parentList.size){
+        for(j <- i until parentList.size){
           if(i != j){
 
             var phase2Graph:UndirectedSparseMultigraph[Integer,String] = new UndirectedSparseMultigraph[Integer,String]()
-            var leftEntity:ArrayList[Integer] = parentTable.get(parentList.get(i)) // these are the atttributes of the left parent
-            var rightEntity:ArrayList[Integer] = parentTable.get(parentList.get(j)) // these two sets should be disjoint
-            var leftEntityColumn:mutable.Buffer[PrimitiveValue] = table(parentList.get(i)) // The column of values of the parent
-            var rightEntityColumn:mutable.Buffer[PrimitiveValue] = table(parentList.get(j))
-            var childrenMatrix:ArrayList[ArrayList[Integer]] = new ArrayList[ArrayList[Integer]]() // this is a matrix that contains the values
+            var leftEntity:Seq[Int] = parentTable(parentList(i)).toSeq // these are the atttributes of the left parent
+            var rightEntity:Seq[Int] = parentTable(parentList(j)).toSeq // these two sets should be disjoint
+            var leftEntityColumn:mutable.Buffer[PrimitiveValue] = table(parentList(i)) // The column of values of the parent
+            var rightEntityColumn:mutable.Buffer[PrimitiveValue] = table(parentList(j))
+            var childrenMatrix:ArrayList[ArrayList[Int]] = new ArrayList[ArrayList[Int]]() // this is a matrix that contains the values
             var numberOfJoins:Int = 0
 
-            for(t <- 0 until parentTable.get(parentList.get(i)).size()){
-              var tempL:ArrayList[Integer] = new ArrayList[Integer]
-              for(g <- 0 until parentTable.get(parentList.get(j)).size()){
+            for(t <- 0 until parentTable(parentList(i)).size){
+              var tempL:ArrayList[Int] = new ArrayList[Int]
+              for(g <- 0 until parentTable(parentList(j)).size){
                 tempL.add(0)
               }
               childrenMatrix.add(tempL) // initalize an arraylist with value 0 for each possible entry
@@ -543,11 +521,11 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
                 if (leftParentValue.equals(rightParentValue)){
                   // same thing as join on the
                   // now need to look at the values of their children and update the matrix
-                  for (g <- 0 until leftEntity.size()) {
-                    for (t <- 0 until rightEntity.size()) {
-                      if (leftEntity.get(g) != parentList.get(i) && leftEntity.get(g) != parentList.get(j) && rightEntity.get(t) != parentList.get(i) && rightEntity.get(t) != parentList.get(j)) {
-                        val leftValue: PrimitiveValue = table(leftEntity.get(g))(location)
-                        val rightValue: PrimitiveValue = table(rightEntity.get(t))(location)
+                  for (g <- 0 until leftEntity.size) {
+                    for (t <- 0 until rightEntity.size) {
+                      if (leftEntity(g) != parentList(i) && leftEntity(g) != parentList(j) && rightEntity(t) != parentList(i) && rightEntity(t) != parentList(j)) {
+                        val leftValue: PrimitiveValue = table(leftEntity(g))(location)
+                        val rightValue: PrimitiveValue = table(rightEntity(t))(location)
                         if ((leftValue.toString).equals(rightValue.toString)) {
                           // then these could map to the same concept
                           var temp = childrenMatrix.get(g).get(t)
@@ -569,25 +547,25 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
               for (t <- 0 until childrenMatrix.size()) { // This will be the left EntAttributes
               var rightAtt:TreeMap[Integer,Float] = new TreeMap[Integer,Float]()
                 for (g <- 0 until childrenMatrix.get(t).size()) { // This will be the right EntAttributes
-                  rightAtt.put(rightEntity.get(g),childrenMatrix.get(t).get(g).toFloat/numberOfJoins.toFloat)
+                  rightAtt.put(rightEntity(g),childrenMatrix.get(t).get(g).toFloat/numberOfJoins.toFloat)
                 }
-                tempEntPairMatrix.put(leftEntity.get(t),rightAtt)
+                tempEntPairMatrix.put(leftEntity(t),rightAtt)
               }
             }
 
             if((numberOfJoins.toFloat/table(0).size.toFloat) >= (.01).toFloat) { // do this is reduce any poor results
               // this will add the children matrix to the entityPairMatrix with the key being the string of the entity pairs
-              for (t <- 0 until rightEntity.size()) { // This will be the left EntAttributes
+              for (t <- 0 until rightEntity.size) { // This will be the left EntAttributes
               var leftAtt:TreeMap[Integer,Float] = new TreeMap[Integer,Float]()
-                for (g <- 0 until leftEntity.size()) { // This will be the right EntAttributes
-                  leftAtt.put(leftEntity.get(g),childrenMatrix.get(g).get(t).toFloat/numberOfJoins.toFloat)
+                for (g <- 0 until leftEntity.size) { // This will be the right EntAttributes
+                  leftAtt.put(leftEntity(g),childrenMatrix.get(g).get(t).toFloat/numberOfJoins.toFloat)
                 }
-                tempEntPairMatrix.put(rightEntity.get(t),leftAtt)
+                tempEntPairMatrix.put(rightEntity(t),leftAtt)
               }
             }
 
             if(tempEntPairMatrix.size() >= 1 && tempEntPairMatrix != null) {
-              entityPairMatrix.put(parentList.get(i) + "," + parentList.get(j), tempEntPairMatrix)
+              entityPairMatrix.put(parentList(i) + "," + parentList(j), tempEntPairMatrix)
             }
 
             val bestColumn = true
@@ -608,13 +586,13 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
                 if (highestValue.toFloat/numberOfJoins.toFloat >= (threshhold.toFloat * threshhold.toFloat) && (numberOfJoins.toFloat/table(0).size.toFloat) >= (.01).toFloat) {
                   // then childrenMatrix at t is a pairing
                   if (highestPlace != -1) {
-                    if (!(phase2Graph.containsVertex(leftEntity.get(t)))) {
-                      phase2Graph.addVertex(leftEntity.get(t))
+                    if (!(phase2Graph.containsVertex(leftEntity(t)))) {
+                      phase2Graph.addVertex(leftEntity(t))
                     }
-                    if (!(phase2Graph.containsVertex(rightEntity.get(highestPlace)))) {
-                      phase2Graph.addVertex(rightEntity.get(highestPlace))
+                    if (!(phase2Graph.containsVertex(rightEntity(highestPlace)))) {
+                      phase2Graph.addVertex(rightEntity(highestPlace))
                     }
-                    phase2Graph.addEdge(leftEntity.get(t) + " And " + rightEntity.get(highestPlace), leftEntity.get(t), rightEntity.get(highestPlace))
+                    phase2Graph.addEdge(leftEntity(t) + " And " + rightEntity(highestPlace), leftEntity(t), rightEntity(highestPlace))
                   }
                 }
               }
@@ -622,13 +600,13 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
                 for (g <- 0 until childrenMatrix.get(t).size()) {
                   if (childrenMatrix.get(t).get(g).toFloat/numberOfJoins.toFloat >= (threshhold.toFloat * threshhold.toFloat)) {
                     // then childrenMatrix at t is a pairing
-                    if (!(phase2Graph.containsVertex(leftEntity.get(t)))) {
-                      phase2Graph.addVertex(leftEntity.get(t))
+                    if (!(phase2Graph.containsVertex(leftEntity(t)))) {
+                      phase2Graph.addVertex(leftEntity(t))
                     }
-                    if (!(phase2Graph.containsVertex(rightEntity.get(g)))) {
-                      phase2Graph.addVertex(rightEntity.get(g))
+                    if (!(phase2Graph.containsVertex(rightEntity(g)))) {
+                      phase2Graph.addVertex(rightEntity(g))
                     }
-                    phase2Graph.addEdge(leftEntity.get(t) + " And " + rightEntity.get(g), leftEntity.get(t), rightEntity.get(g))
+                    phase2Graph.addEdge(leftEntity(t) + " And " + rightEntity(g), leftEntity(t), rightEntity(g))
                     //                      println("STR: "+childrenMatrix.get(t).get(g).toFloat/numberOfJoins.toFloat + " > " + (threshhold.toFloat * threshhold.toFloat))
                   }
                 }
@@ -636,8 +614,8 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
             }
 
             if(phase2Graph.getVertexCount > 1){
-              graphPairs.put(parentList.get(i)+","+parentList.get(j),phase2Graph)
-              entityPairList.add((parentList.get(i), parentList.get(j)))
+              graphPairs.put(parentList(i)+","+parentList(j),phase2Graph)
+              entityPairList.add((parentList(i), parentList(j)))
             }
           }
         }
@@ -670,12 +648,9 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
   */
 
   def createViews():ArrayList[String] = {
-    val parentIter = parentTable.keySet().iterator()
     val viewList : ArrayList[String] = new ArrayList[String]()
-    while(parentIter.hasNext) {
-      val parent = parentIter.next()
-      val childrenArray = parentTable.get(parent)
-      if(childrenArray.size() > 1) {
+    for((parent, childrenArray) <- parentTable) {
+      if(childrenArray.size > 1) {
         var viewOutput = "CREATE VIEW "
         if (parent == -1) {
           viewOutput += " ROOT AS SELECT"
@@ -683,7 +658,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
         else {
           viewOutput += sch(parent)._1 + " AS SELECT"
         }
-        childrenArray.asScala.map((x) => {
+        childrenArray.map((x) => {
           viewOutput = viewOutput + " " + sch(x)._1 + ","
         })
         viewOutput = viewOutput.substring(0, viewOutput.size - 1) // to remove the last comma
@@ -727,12 +702,12 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
 
     var list:ArrayList[((Integer,Integer),Float)] = new ArrayList[((Integer,Integer),Float)]()
 
-    var attributeList:ArrayList[Integer] = parentTable.get(entity) // the attributelist
+    var attributeList:Seq[Int] = parentTable(entity).toSeq // the attributelist
     var lookupMatrix:TreeMap[Integer,TreeMap[Integer,Float]] = entityPairMatrix.get(pair)
-    for(i <- 0 until attributeList.size()){ // loop through all the specific entities attributes
+    for(i <- 0 until attributeList.size){ // loop through all the specific entities attributes
       var highestStrength:Float = (0.0).toFloat
       var bestAttributeMatch = -1
-      var attribute:Integer = attributeList.get(i)
+      var attribute:Integer = attributeList(i)
       var strengthList:TreeMap[Integer,Float] = lookupMatrix.get(attribute)
       var keyIter:util.Iterator[Integer] = strengthList.keySet().iterator()
 
@@ -823,11 +798,8 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
 
   // constructs the entity tree, -1 and parent must be added first and g initalized
   def buildEntityGraph(g:DelegateTree[Integer,String], parent:Integer):Unit = {
-    if(parentTable.containsKey(parent)){
-      val childrenList = parentTable.get(parent)
-      val childrenIter = childrenList.iterator()
-      while(childrenIter.hasNext){
-        val child = childrenIter.next()
+    if(parentTable contains parent){
+      for(child <- parentTable(parent)) {
         g.addChild(parent.toString + " to " + child.toString, parent, child)
         buildEntityGraph(g,child)
       }

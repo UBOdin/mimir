@@ -50,7 +50,7 @@ object KeyRepairLens {
       }
 
     (
-      assemble(query, keys, values),
+      assemble(query, keys, values, scoreCol),
       values.map(_._2)
     )
   }
@@ -58,7 +58,8 @@ object KeyRepairLens {
   def assemble(
     query: Operator,
     keys: Seq[String],
-    values: Seq[(String, Model)]
+    values: Seq[(String, Model)],
+    scoreCol: Option[String]
   ): Operator =
   {
     Project(
@@ -68,7 +69,10 @@ object KeyRepairLens {
           Conditional(
             Comparison(Cmp.Lte, Var(s"MIMIR_KR_COUNT_$col"), IntPrimitive(1)),
             Var(col),
-            VGTerm(model, 0, keys.map(Var(_)), Seq())
+            VGTerm(model, 0, keys.map(Var(_)), 
+              Seq(Var(s"MIMIR_KR_HINT_COL_$col")) ++ 
+                scoreCol.map( _ => Var("MIMIR_KR_HINT_SCORE"))
+            )
           )
         )
       },
@@ -77,9 +81,12 @@ object KeyRepairLens {
         values.flatMap { case (col, _) => 
           List(
             AggFunction("FIRST", false, List(Var(col)), col),
-            AggFunction("COUNT", true, List(Var(col)), s"MIMIR_KR_COUNT_$col")
+            AggFunction("COUNT", true, List(Var(col)), s"MIMIR_KR_COUNT_$col"),
+            AggFunction("JSON_GROUP_ARRAY", true, List(Var(col)), s"MIMIR_KR_HINT_COL_$col")
           )
-        },
+        } ++ scoreCol.map { col => 
+            AggFunction("JSON_GROUP_ARRAY", true, List(Var(col)), "MIMIR_KR_HINT_SCORE")
+          },
         query
       )
     )

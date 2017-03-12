@@ -27,11 +27,12 @@ libraryDependencies ++= Seq(
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
 
   "org.apache.lucene"             %   "lucene-spellchecker"   % "3.6.2",
-  "org.xerial"                    %   "sqlite-jdbc"           % "3.8.11.2",
+  "org.xerial"                    %   "sqlite-jdbc"           % "3.16.1",
 
   "net.sf.jung"                   %   "jung-graph-impl"       % "2.0.1",
   "net.sf.jung"                   %   "jung-algorithms"       % "2.0.1",
   "net.sf.jung"                   %   "jung-visualization"    % "2.0.1",
+  "jgraph"                        %   "jgraph"                % "5.13.0.0",
 
   "org.apache.servicemix.bundles" %   "org.apache.servicemix.bundles.collections-generic" % "4.01_1",
   "org.apache.commons"            %   "commons-csv"           % "1.4",
@@ -39,7 +40,7 @@ libraryDependencies ++= Seq(
   "org.apache.storm"              %   "storm-core"            % "1.0.1",
 
   "com.github.wnameless"          %   "json-flattener"        % "0.2.2",
-  "jgraph"                        %   "jgraph"                % "5.13.0.0",
+  "com.typesafe.play"             %%  "play-json"             % "2.4.11",
 
   "com.twitter"                   %   "hbc-core"              % "2.0.1",
 

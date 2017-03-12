@@ -40,44 +40,113 @@ object DiscalaAbadiNormalizer
     logger.debug("Dumping FD Graph")
       val fdTable = s"MIMIR_DA_FDG_${config.schema}"
       db.backend.update(s"""
-        CREATE TABLE $fdTable (MIMIR_FD_PARENT int, MIMIR_FD_CHILD int);
+        CREATE TABLE $fdTable (MIMIR_FD_PARENT int, MIMIR_FD_CHILD int, MIMIR_FD_PATH_LENGTH int);
       """)
       db.backend.fastUpdateBatch(s"""
-        INSERT INTO $fdTable (MIMIR_FD_PARENT, MIMIR_FD_CHILD) VALUES (?, ?);
+        INSERT INTO $fdTable (MIMIR_FD_PARENT, MIMIR_FD_CHILD, MIMIR_FD_PATH_LENGTH) VALUES (?, ?, ?);
       """, 
-        fd.fdGraph.getEdges.asScala.map { edge =>
-          Seq(IntPrimitive(edge._1), IntPrimitive(edge._2))
+        fd.fdGraph.getEdges.asScala.map { case (edge_parent, edge_child) =>
+          Seq(
+            IntPrimitive(edge_parent), 
+            IntPrimitive(edge_child),
+            if(fd.parentTable.getOrElse(edge_parent, Set[Int]()) contains edge_child){ IntPrimitive(2) } 
+              else { IntPrimitive(1) }
+          )
         }
       )
 
     val (_, models) = KeyRepairLens.create(
       db, s"MIMIR_DA_CHOSEN_${config.schema}",
       db.getTableOperator(fdTable),
-      Seq(Var("MIMIR_FD_CHILD"))
+      Seq(Var("MIMIR_FD_CHILD"), Function("SCORE_BY", Seq(Var("MIMIR_FD_PATH_LENGTH"))))
     )
 
     models
   }
 
-  def spanningTreeLens(db: Database, config: MultilensConfig): Operator =
+  final def spanningTreeLens(db: Database, config: MultilensConfig): Operator =
   {
     val model = db.models.get(s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_FD_PARENT")
     KeyRepairLens.assemble(
       db.getTableOperator(s"MIMIR_DA_FDG_${config.schema}"),
       Seq("MIMIR_FD_CHILD"), 
-      Seq(("MIMIR_FD_PARENT", model))
+      Seq(("MIMIR_FD_PARENT", model)),
+      Some("MIMIR_FD_PATH_LENGTH")
     )
   }
+
+  final def convertNodesToNamesInQuery(
+    db: Database, 
+    config: MultilensConfig, 
+    nodeCol: String, 
+    labelCol: String, 
+    typeCol: Option[String],
+    query: Operator
+  ): Operator = 
+  {
+    Project(
+      query.schema.map(_._1).map { col => 
+        if(col.equals(nodeCol)){ 
+          ProjectArg(labelCol, Var("ATTR_NAME")) 
+        } else { 
+          ProjectArg(col, Var(col))
+        } 
+      } ++ typeCol.map { col =>
+        ProjectArg(col, Var("ATTR_TYPE"))
+      },
+      Select(Comparison(Cmp.Eq, Var(nodeCol), Var("ATTR_NODE")),
+        Join(      
+          db.getTableOperator(s"MIMIR_DA_SCH_${config.schema}"),
+          query
+        )
+      )
+    )
+  }
+
 
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
     val spanningTree = spanningTreeLens(db, config)
     logger.trace(s"Table Catalog Spanning Tree: \n$spanningTree")
     val tableQuery = 
-      Project(Seq(ProjectArg("TABLE_NAME", Var("ATTR_NAME"))),
-        Select(Comparison(Cmp.Eq, Var("TABLE_NODE"), Var("ATTR_NODE")),
-          Join(
-            db.getTableOperator(s"MIMIR_DA_SCH_${config.schema}"),
+      convertNodesToNamesInQuery(db, config, "TABLE_NODE", "TABLE_NAME", None,
+        OperatorUtils.makeDistinct(
+          Project(Seq(ProjectArg("TABLE_NODE", Var("MIMIR_FD_PARENT"))),
+            spanningTree
+          )
+        )
+      )
+      // Project(Seq(ProjectArg("TABLE_NAME", Var("ATTR_NAME"))),
+      //   Select(Comparison(Cmp.Eq, Var("TABLE_NODE"), Var("ATTR_NODE")),
+      //     Join(
+      //       db.getTableOperator(s"MIMIR_DA_SCH_${config.schema}"),
+      //     )
+      //   )
+      // )
+    logger.debug(s"Table Catalog Query: \n$tableQuery")
+    return tableQuery
+  }
+  def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
+  {
+    val spanningTree = spanningTreeLens(db, config)
+    logger.trace(s"Attr Catalog Spanning Tree: \n$spanningTree")
+    val childAttributeQuery =
+      OperatorUtils.projectInColumn("IS_KEY", BoolPrimitive(false),
+        convertNodesToNamesInQuery(db, config, "MIMIR_FD_CHILD", "ATTR_NAME", Some("ATTR_TYPE"),
+          convertNodesToNamesInQuery(db, config, "MIMIR_FD_PARENT", "TABLE_NAME", None,
+            spanningTree
+          )
+        )
+      )
+    val parentAttributeQuery =
+      Project(Seq(
+          ProjectArg("TABLE_NAME", Var("TABLE_NAME")),
+          ProjectArg("ATTR_NAME", Var("TABLE_NAME")),
+          ProjectArg("ATTR_TYPE", Var("ATTR_TYPE")),
+          ProjectArg("IS_KEY", BoolPrimitive(true))
+        ),
+        convertNodesToNamesInQuery(db, config, "TABLE_NODE", "TABLE_NAME", Some("ATTR_TYPE"),
+          Select(Comparison(Cmp.Gte, Var("TABLE_NODE"), IntPrimitive(0)),
             OperatorUtils.makeDistinct(
               Project(Seq(ProjectArg("TABLE_NODE", Var("MIMIR_FD_PARENT"))),
                 spanningTree
@@ -86,12 +155,10 @@ object DiscalaAbadiNormalizer
           )
         )
       )
-    logger.debug(s"Table Catalog Query: \n$tableQuery")
-    return tableQuery
-  }
-  def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
-  {
-    ???
+    val jointQuery =
+      Union(childAttributeQuery, parentAttributeQuery)
+    logger.debug(s"Attr Catalog Query: \n$jointQuery")
+    return jointQuery
   }
   def viewFor(db: Database, config: MultilensConfig, table: String): Operator = 
   {

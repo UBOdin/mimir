@@ -149,7 +149,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
     }
   }
 
-  def getDomain(idx: Int, args: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
+  def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
     votes(idx).toList.map( x => (TypePrimitive(x._1), x._2))
 
 }

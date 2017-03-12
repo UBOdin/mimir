@@ -11,13 +11,13 @@ sealed trait Repair
 
 object Repair
 {
-  def makeRepair(term: VGTerm, v: Seq[PrimitiveValue]): Repair =
-    makeRepair(term.model, term.idx, v)
-  def makeRepair(model: Model, idx: Int, v: Seq[PrimitiveValue]): Repair =
+  def makeRepair(term: VGTerm, v: Seq[PrimitiveValue], h: Seq[PrimitiveValue]): Repair =
+    makeRepair(term.model, term.idx, v, h)
+  def makeRepair(model: Model, idx: Int, v: Seq[PrimitiveValue], h: Seq[PrimitiveValue]): Repair =
   {
     model match {
       case finite:( Model with FiniteDiscreteDomain ) =>
-        RepairFromList(finite.getDomain(idx, v))
+        RepairFromList(finite.getDomain(idx, v, h))
       case _ => 
         RepairByType(model.varType(idx, v.map(_.getType)))
     }
