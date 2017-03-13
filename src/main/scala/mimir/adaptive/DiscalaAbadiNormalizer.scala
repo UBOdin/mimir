@@ -55,7 +55,9 @@ object DiscalaAbadiNormalizer
           )
         } ++
         // And add in each blacklisted node as an edge off of the root
-        fd.blackList.map { col => 
+        ( 
+          (0 until fd.sch.size).toSet[Int] -- fd.nodeTable.asScala.map(_.toInt).toSet
+        ).map { col => 
           Seq(
             IntPrimitive(-1),
             IntPrimitive(col),

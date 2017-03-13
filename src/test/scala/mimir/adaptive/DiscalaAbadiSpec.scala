@@ -112,7 +112,7 @@ object DiscalaAbadiSpec
     }
 
     "Allocate all attributes to some relation" >> {
-      skipped("Will, you need to look at this")
+      // skipped("Will, you need to look at this")
       val attrs =
         db.query(
           Sort(Seq(SortColumn(Var("TABLE_NAME"), true), SortColumn(Var("IS_KEY"), false)),
