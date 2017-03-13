@@ -164,25 +164,25 @@ object DiscalaAbadiNormalizer
     logger.trace(s"Attr Catalog Query: \n$jointQuery")
     return jointQuery
   }
-  def viewFor(db: Database, config: MultilensConfig, table: String): Operator = 
+  def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] = 
   {
-    ???
+    val attrs:Seq[String] = 
+      db.query(
+        Project(
+          Seq(ProjectArg("ATTR_NAME", Var("ATTR_NAME"))),
+          Select(
+            Comparison(Cmp.Eq, Var("TABLE_NAME"), StringPrimitive(table)),
+            attrCatalogFor(db, config)
+          )
+        )
+      ).mapRows( row => row(0).asString ).toSeq
+
+    if(attrs.isEmpty){ return None; }
+
+    Some(Project(
+      attrs.map( attr => ProjectArg(attr, Var(attr)) ),
+      config.query
+    ))
   }
 
 }
-
-
-// val fdStats = new FuncDep()
-// val query = sql.convert(adaptiveSchema.getSelectBody())
-// val schema : Seq[(String,Type)] = query.schema
-
-// val viewList : java.util.ArrayList[String] = 
-//   fdStats.buildEntities(
-//     schema, 
-//     backend.execute(adaptiveSchema.getSelectBody.toString()), 
-//     adaptiveSchema.getTable.getName
-//   )
-// viewList.foreach((view) => {
-//   println(view)
-//   // update(view)
-// })      

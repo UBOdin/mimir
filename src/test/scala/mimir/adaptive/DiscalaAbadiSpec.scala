@@ -197,7 +197,7 @@ object DiscalaAbadiSpec
     "Create queriable relations" >> {
       query("""
         SELECT QUANTITY FROM SHIPPING.BILL_OF_LADING_NBR"""
-      ).mapRows( row => row(0).asLong ) must contain(-2)
+      ).mapRows( row => row(0) ) must contain(StringPrimitive("1"))
     }
 
   }

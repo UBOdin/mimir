@@ -299,7 +299,7 @@ class JDBCBackend(backend: String, filename: String)
   {
     backend match {
       case "sqlite" => {
-        logger.warn("SQLITE has no programatic way to access attributes in SQL... this is frustrating")
+        logger.warn("SQLITE has no programatic way to access attributes in SQL")
         EmptyTable(Seq(
           ("TABLE_NAME", TString()), 
           ("ATTR_NAME", TString()),

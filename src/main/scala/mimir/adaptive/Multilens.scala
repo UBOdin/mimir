@@ -15,6 +15,6 @@ trait Multilens
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model]
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator
   def attrCatalogFor(db: Database, config: MultilensConfig): Operator
-  def viewFor(db: Database, config: MultilensConfig, table: String): Operator
+  def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator]
 }
 
