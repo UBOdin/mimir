@@ -90,13 +90,10 @@ class KeyRepairModel(
           case _ => throw ModelException(s"Invalid Value Hint in Repair Model $name: ${hints(0).asString}")
         }
 
-      if(hints.size > 1){
+      if(hints.size > 1 && !hints(1).isInstanceOf[NullPrimitive]){
         possibilities.zip(
           Json.parse(hints(1).asString) match {
-            case JsArray(values) => values.map {
-              case JsNumber(n) => n.toDouble
-              case _ => throw ModelException(s"Invalid Score Hint in Repair Model $name: ${hints(1).asString}")
-            }
+            case JsArray(values) => values.map( v => JSONUtils.parsePrimitive(TFloat(), v).asDouble )
             case _ => throw ModelException(s"Invalid Score Hint in Repair Model $name: ${hints(1).asString}")
           }
         )

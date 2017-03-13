@@ -70,8 +70,12 @@ object KeyRepairLens {
             Comparison(Cmp.Lte, Var(s"MIMIR_KR_COUNT_$col"), IntPrimitive(1)),
             Var(col),
             VGTerm(model, 0, keys.map(Var(_)), 
-              Seq(Var(s"MIMIR_KR_HINT_COL_$col")) ++ 
-                scoreCol.map( _ => Var("MIMIR_KR_HINT_SCORE"))
+              Seq(
+                Var(s"MIMIR_KR_HINT_COL_$col"),
+                scoreCol.
+                  map { _ => Var("MIMIR_KR_HINT_SCORE") }.
+                  getOrElse( NullPrimitive() )
+              )
             )
           )
         )
