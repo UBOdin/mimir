@@ -134,16 +134,16 @@ These are the files that need to change to extend the TUser
  */
 object TypeRegistry {
   val registeredTypes = Map[String,(Regex,Type)](
-    "tuser"         -> ("USER".r,                            TString()),
-    "tweight"       -> ("KG*".r,                             TString()),
-    "productid"     -> ("P\\d+".r,                           TString()),
-    "firecompany"   -> ("^[a-zA-Z]\\d{3}$".r,                TString()),
-    "zipcode"       -> ("^\\d{5}(?:[-\\s]\\d{4})?$".r,       TInt()),
-    "container"     -> ("[A-Z]{4}[0-9]{7}".r,                TString()),
-    "carriercode"   -> ("[A-Z]{4}".r,                        TString()),
-    "mmsi"          -> ("MID\\d{6}|0MID\\d{5}|00MID\\{4}".r, TString()),
-    "billoflanding" -> ("[A-Z]{8}[0-9]{8}".r,                TString()),
-    "imo_code"      -> ("^\\d{7}$".r,                        TInt())
+    "tuser"         -> ("USER".r,                              TString()),
+    "tweight"       -> ("KG*".r,                               TString()),
+    "productid"     -> ("^P\\d+$".r,                           TString()),
+    "firecompany"   -> ("^[a-zA-Z]\\d{3}$".r,                  TString()),
+    "zipcode"       -> ("^\\d{5}(?:[-\\s]\\d{4})?$".r,         TString()),
+    "container"     -> ("^[A-Z]{4}[0-9]{7}$".r,                TString()),
+    "carriercode"   -> ("^[A-Z]{4}$".r,                        TString()),
+    "mmsi"          -> ("^MID\\d{6}|0MID\\d{5}|00MID\\{4}$".r, TString()),
+    "billoflanding" -> ("^[A-Z]{8}[0-9]{8}$".r,                TString()),
+    "imo_code"      -> ("^\\d{7}$".r,                          TInt())
   )
   val idxType = registeredTypes.keys.toIndexedSeq
   val typeIdx = idxType.zipWithIndex.toMap

@@ -339,7 +339,10 @@ Feedback FeedbackStatement() :
       ("," temp = Literal() { args.add(temp); } )*
     ")" ]
     <K_IS>
-    value = Literal()
+    (
+        value = Literal()
+      | tempStr = RelObjectName() { value = new StringValue(tempStr); }
+    )
   ) { return new Feedback(model, Integer.parseInt(idx.image), args, value); }
 }
 
