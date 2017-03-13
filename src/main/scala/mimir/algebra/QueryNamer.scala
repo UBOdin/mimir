@@ -37,6 +37,8 @@ object QueryNamer
 				nameQuery(src)
 			case Sort(cols, src) =>
 				nameQuery(src)+"_BY_"+cols.flatMap(col => ExpressionUtils.getColumns(col.expression)).mkString("_")
+			case EmptyTable(_) => 
+				"EMPTY_QUERY"
 		}
 	}
 

@@ -17,7 +17,7 @@
   <logger name="mimir.sql.SqlToRA" level="INFO"/>
   <logger name="mimir.views.ViewManager" level="INFO"/>
   <logger name="mimir.ctables.CTPercolator" level="INFO"/>
-  <logger name="mimir.ctables.CTExplainer" level="INFO"/>
+  <logger name="mimir.ctables.CTExplainer" level="DEBUG"/>
   <logger name="mimir.lenses.BestGuessCache" level="INFO"/>
   <logger name="mimir.lenses.ShredderLens" level="INFO"/>
   <logger name="mimir.lenses.TypeInferenceLens$" level="INFO"/>
@@ -27,6 +27,7 @@
   <logger name="mimir.models.TypeInferenceModel" level="INFO"/>
   <logger name="mimir.models.WekaModel$" level="INFO"/>
   <logger name="mimir.statistics.FuncDep" level="TRACE"/>
+  <logger name="mimir.statistics.SystemCatalog" level="INFO"/>
 
  
   <root level="TRACE">

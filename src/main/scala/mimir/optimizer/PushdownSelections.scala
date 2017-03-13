@@ -119,7 +119,8 @@ object PushdownSelections {
 			case Select(cond, agg:Aggregate) => {
 				Select(cond, apply(agg))
 			}
-				
+			
+			case Select(cond, EmptyTable(sch)) => EmptyTable(sch)
 
 			case Select(_,_) =>
 				throw new SQLException("Unhandled Select Case in Pushdown: " + o)

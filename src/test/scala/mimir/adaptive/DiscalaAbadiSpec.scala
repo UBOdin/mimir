@@ -78,7 +78,7 @@ object DiscalaAbadiSpec
       val tables = 
         db.query(
           OperatorUtils.projectDownToColumns(
-            Seq("TABLE_NAME", "SCHEMA"),
+            Seq("TABLE_NAME", "SOURCE"),
             OperatorUtils.makeUnion(
               db.adaptiveSchemas.tableCatalogs
             )
@@ -105,7 +105,7 @@ object DiscalaAbadiSpec
           (row(0).asString, row(1).asString, row(2).asInstanceOf[BoolPrimitive].v)
         } 
       attrs must contain( eachOf( 
-        ("ROOT","WORLD_REGION_BY_COUNTRY_OF_ORIGIN",false),
+        ("ROOT","MONTH",false),
         ("BILL_OF_LADING_NBR","QUANTITY",false)
       ) )
       attrs.map( row => (row._1, row._2) ) must not contain( ("ROOT", "ROOT") )
@@ -128,8 +128,76 @@ object DiscalaAbadiSpec
       attrs.toSet must be equalTo(
         db.getTableOperator("SHIPPING").schema.map(_._1).toSet
       )
+    }
 
+    "Allow native SQL queries over the catalog tables" >> {
 
+      val tables =
+        LoggerUtils.debug(
+          List(
+            // "mimir.exec.Compiler"
+          ), () => {
+            query("""
+              SELECT TABLE_NAME, SOURCE FROM MIMIR_SYS_TABLES
+            """).mapRows { row => (row(0), row(1)) }
+        }) 
+
+      tables must contain( (StringPrimitive("ROOT"), StringPrimitive("SHIPPING")) )
+      tables must contain( (StringPrimitive("MIMIR_VIEWS"), StringPrimitive("RAW")) )
+      tables must contain( (StringPrimitive("SHIPPING"), StringPrimitive("RAW")) )
+
+      val attrs = 
+        query("""
+          SELECT TABLE_NAME, ATTR_NAME FROM MIMIR_SYS_ATTRS
+        """).mapRows { row => (row(0), row(1)) }
+
+      attrs must contain( (StringPrimitive("ROOT"), StringPrimitive("MONTH")) )
+      attrs must contain( (StringPrimitive("BILL_OF_LADING_NBR"), StringPrimitive("QUANTITY")) )
+
+      val attrStrings = 
+        LoggerUtils.debug(
+          List(
+            // "mimir.exec.Compiler"
+          ), () => {
+            query("""
+              SELECT ATTR_NAME FROM MIMIR_SYS_ATTRS
+              WHERE SOURCE = 'SHIPPING'
+                AND TABLE_NAME = 'ROOT'
+            """).mapRows( _.rowString )
+        })
+      attrStrings must contain(
+        "'FOREIGN_DESTINATION' (This row may be invalid)"
+      )
+    }
+
+    "Be introspectable" >> {
+      val baseQuery = """
+          SELECT ATTR_NAME, ROWID() FROM MIMIR_SYS_ATTRS
+          WHERE SOURCE = 'SHIPPING'
+            AND TABLE_NAME = 'BILL_OF_LADING_NBR'
+        """
+
+      val attrStrings = 
+        LoggerUtils.debug(
+          List(
+            // "mimir.exec.Compiler"
+          ), () => {
+            query(baseQuery).mapRows( _.rowString )
+        })
+      attrStrings must contain(
+        "'QUANTITY','47|21|45|left|right|right' (This row may be invalid)"
+      )
+
+      val explanation =
+        explainRow(baseQuery, "47|21|45|left|right|right")
+
+      explanation.reasons.map(_.reason).head must contain("there were 2 options for MIMIR_FD_PARENT")
+    }
+
+    "Create queriable relations" >> {
+      query("""
+        SELECT QUANTITY FROM SHIPPING.BILL_OF_LADING_NBR"""
+      ).mapRows( row => row(0).asLong ) must contain(-2)
     }
 
   }

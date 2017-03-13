@@ -123,6 +123,15 @@ object Tracer {
           BoolPrimitive(true)
         )
 
+      case EmptyTable(schema) => 
+        ( 
+          EmptyTable(schema),
+          schema.map(_._1).map(
+            col => (col, Var(col))
+          ).toMap,
+          BoolPrimitive(true)
+        )
+
       case Sort(_, src) => return trace(oper, targetRowId)
       case Limit(_, _, src) => return trace(oper, targetRowId)
 

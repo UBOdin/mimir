@@ -96,6 +96,12 @@ object Provenance {
           List(rowidColnameBase)
         )
 
+      case EmptyTable(schema) =>
+        (
+          EmptyTable(schema),
+          List()
+        )
+
       case Aggregate(groupBy, args, child) =>
         //val newargs = (new AggregateArg(ROWID_KEY, List(Var(ROWID_KEY)), ROWID_KEY)) :: args
         ( 
@@ -251,19 +257,30 @@ object Provenance {
             throw new ProvenanceError("Operator not compiled for provenance: "+operator)
         }
 
+      case EmptyTable(sch) => None 
+
       case Aggregate(gbCols, aggCols, src) =>
+        val sch = src.schema.toMap
+
+        val castTokenValues = 
+          gbCols.map { col => (col.name, Cast(sch(col.name), rowIds(col.name))) }.toMap
+
         val lookupFilter = 
           ExpressionUtils.makeAnd(
             gbCols.map( col => 
               Comparison(Cmp.Eq,
                 col,
-                rowIds(col.name)
+                castTokenValues(col.name)
               )
             )
           )
         return Some(
-          Aggregate(List(), aggCols, 
-            Select(lookupFilter, src)
+          Project(
+            gbCols.map { col => ProjectArg(col.name, castTokenValues(col.name)) } ++
+              aggCols.map { col => ProjectArg(col.alias, Var(col.alias)) },
+            Aggregate(List(), aggCols, 
+              Select(lookupFilter, src)
+            )
           )
         )
 

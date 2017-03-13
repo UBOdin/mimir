@@ -101,7 +101,7 @@ object CTAnalyzer {
 
         conditionCausality ++ 
           compileCausality(thenClause, thenElseCondition) ++
-          compileCausality(elseClause, thenElseCondition)
+          compileCausality(elseClause, ExpressionUtils.makeNot(thenElseCondition))
       }
 
       case Arithmetic(Arith.And, l, r) => {

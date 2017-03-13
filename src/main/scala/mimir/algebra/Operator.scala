@@ -249,6 +249,25 @@ case class Table(name: String,
 }
 
 /**
+ * A blank table --- Corresponds roughly to Oracle's DUAL, or a 
+ * SELECT ... FROM ... WHERE FALSE.
+ * 
+ * Not really used, just a placeholder for intermediate optimization.
+ */
+case class EmptyTable(sch: Seq[(String, Type)])
+  extends Operator
+{
+    def toString(prefix: String) =
+    prefix + "!!EMPTY!!(" + (
+      sch.map( { case (v,t) => v+":"+t } ).mkString(", ") 
+    )+")" 
+  def children: List[Operator] = List()
+  def rebuild(x: Seq[Operator]) = this
+  def expressions = List()
+  def rebuildExpressions(x: Seq[Expression]) = this
+}
+
+/**
  * A single sort directive
  *
  * Consists of a column name, as well as a binary "ascending" 

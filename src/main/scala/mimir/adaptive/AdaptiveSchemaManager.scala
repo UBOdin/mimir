@@ -4,21 +4,11 @@ import scala.collection.mutable
 
 import mimir.Database
 import mimir.algebra._
+import mimir.statistics.SystemCatalog
 
 class AdaptiveSchemaManager(db: Database)
 {
   val dataTable = "MIMIR_ADAPTIVE_SCHEMAS"
-
-  val tableCatalogSchema = 
-    Seq( 
-      ("TABLE_NAME", TString()) 
-    )
-  val attrCatalogSchema =
-    Seq( 
-      ("TABLE_NAME", TString()), 
-      ("ATTR_NAME", TString()),
-      ("IS_KEY", TBool())
-    )
 
   def init(): Unit = 
   {
@@ -79,10 +69,10 @@ class AdaptiveSchemaManager(db: Database)
   {
     all.map { case(mlens, config) => 
       OperatorUtils.projectInColumn(
-        "SCHEMA",
+        "SOURCE",
         StringPrimitive(config.schema),
         OperatorUtils.projectDownToColumns(
-          tableCatalogSchema.map( _._1 ),
+          SystemCatalog.tableCatalogSchema.filter(_._1 != "SOURCE").map( _._1 ),
           mlens.tableCatalogFor(db, config)         
         )
       )
@@ -93,10 +83,10 @@ class AdaptiveSchemaManager(db: Database)
   {
     all.map { case(mlens, config) => 
       OperatorUtils.projectInColumn(
-        "SCHEMA",
+        "SOURCE",
         StringPrimitive(config.schema),
         OperatorUtils.projectDownToColumns(
-          attrCatalogSchema.map( _._1 ),
+          SystemCatalog.attrCatalogSchema.filter(_._1 != "SOURCE").map( _._1 ),
           mlens.attrCatalogFor(db, config)         
         )
       )

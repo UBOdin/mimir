@@ -82,10 +82,10 @@ object KeyRepairLens {
           List(
             AggFunction("FIRST", false, List(Var(col)), col),
             AggFunction("COUNT", true, List(Var(col)), s"MIMIR_KR_COUNT_$col"),
-            AggFunction("JSON_GROUP_ARRAY", true, List(Var(col)), s"MIMIR_KR_HINT_COL_$col")
+            AggFunction("JSON_GROUP_ARRAY", false, List(Var(col)), s"MIMIR_KR_HINT_COL_$col")
           )
         } ++ scoreCol.map { col => 
-            AggFunction("JSON_GROUP_ARRAY", true, List(Var(col)), "MIMIR_KR_HINT_SCORE")
+            AggFunction("JSON_GROUP_ARRAY", false, List(Var(col)), "MIMIR_KR_HINT_SCORE")
           },
         query
       )

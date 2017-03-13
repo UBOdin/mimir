@@ -66,10 +66,12 @@ import scala.collection.mutable.ListBuffer
   *    a simplified form of JDBC.  See mimir.sql._ for examples.
   * * mimir.lenses.LensManager (lenses)
   *    Responsible for creating, serializing, and deserializing lenses and virtual views.
-  * * mimir.exec.Compiler
+  * * mimir.exec.Compiler (compiler)
   *    Responsible for query execution.  Acts as a wrapper around the logic in mimir.ctables._, 
   *    mimir.lenses._, and mimir.exec._ that prepares non-deterministic queries to be evaluated
   *    on the backend database.  
+  * * mimir.statistics.SystemCatalog (catalog)
+  *    Responsible for managing the system catalog tables/views
   * * mimir.explainer.CTExplainer (explainer)
   *    Responsible for creating explanation objects.
   */
@@ -86,6 +88,7 @@ case class Database(backend: Backend)
   //// Logic
   val compiler        = new mimir.exec.Compiler(this)
   val explainer       = new mimir.ctables.CTExplainer(this)
+  val catalog         = new mimir.statistics.SystemCatalog(this)
 
   //// Parsing
   val sql             = new mimir.sql.SqlToRA(this)
@@ -161,19 +164,7 @@ case class Database(backend: Backend)
     }, () => {
       println(result.schema.map( _._1 ).mkString(","))
       println("------")
-      result.foreachRow { row => 
-        println(
-          (0 until row.numCols).map { i => 
-            row(i)+(
-              if(!row.deterministicCol(i)){ "*" } else { "" }
-            )
-          }.mkString(",")+(
-            if(!row.deterministicRow){
-              " (This row may be invalid)"
-            } else { "" }
-          )
-        )
-      }
+      result.foreachRow { row => println(row.rowString) }
       if(result.missingRows()){
         println("( There may be missing result rows )")
       }
@@ -386,7 +377,9 @@ case class Database(backend: Backend)
    * name (or None if no such lens exists)
    */
   def getView(name: String): Option[(Operator)] =
-    views.get(name)
+    catalog(name).orElse(
+      views.get(name)
+    )
 
   /**
    * Load a CSV file into the database

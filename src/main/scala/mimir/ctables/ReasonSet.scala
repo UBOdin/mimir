@@ -53,9 +53,19 @@ class ReasonSet(val model: Model, val idx: Int, argLookup: Option[(Operator, Seq
     allArgs(db, Some(count))
 
   def all(db: Database): Iterable[Reason] = 
-    allArgs(db).map { case (args, hints) => new Reason(model, idx, args, hints) }
+    allArgs(db).map { case (args, hints) => new ModelReason(model, idx, args, hints) }
   def take(db: Database, count: Int): Iterable[Reason] = 
-    takeArgs(db, count).map { case (args, hints) => new Reason(model, idx, args, hints) }
+    takeArgs(db, count).map { case (args, hints) => new ModelReason(model, idx, args, hints) }
+
+  override def toString: String =
+  {
+    val lookupString =
+      argLookup match {
+        case Some((query, args, hints)) => "[" + args.mkString(", ") + "][" + hints.mkString(", ") + "] <- \n" + query.toString("   ")
+        case None => ""
+      }
+    s"${model.name};${idx}${lookupString}"
+  }
 }
 
 object ReasonSet

@@ -111,6 +111,7 @@ object ProjectRedundantColumns {
       }
 
       case table: Table => table
+      case table: EmptyTable => table
 
       case LeftOuterJoin(lhs, rhs, condition) => {
         val childDependencies = 

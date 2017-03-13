@@ -13,8 +13,8 @@ class ViewManager(db:Database) extends LazyLogging {
     if(db.backend.getTableSchema(viewTable).isEmpty){
       db.backend.update(s"""
         CREATE TABLE $viewTable(
-          name varchar(100), 
-          query text,
+          NAME varchar(100), 
+          QUERY text,
           PRIMARY KEY(name)
         )""")
     }
@@ -67,6 +67,26 @@ class ViewManager(db:Database) extends LazyLogging {
       flatten.
       map( _.asString ).
       toList
+  }
+
+  def listViewsQuery: Operator = 
+  {
+    Project(
+      Seq(
+        ProjectArg("TABLE_NAME", Var("NAME"))
+      ),
+      db.getTableOperator(viewTable)
+    )
+  }
+  def listAttrsQuery: Operator = 
+  {
+    logger.warn("Constructing lens attribute list not implemented yet")
+    EmptyTable(Seq(
+      ("TABLE_NAME", TString()), 
+      ("ATTR_NAME", TString()),
+      ("ATTR_TYPE", TString()),
+      ("IS_KEY", TBool())
+    ))
   }
 
 }
