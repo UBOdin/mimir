@@ -11,7 +11,7 @@ public class Analyze implements Statement{
 	private String column;
 	private PrimitiveValue rowId;
 
-	public Analyze(SelectBody selectBody, PrimitiveValue rowid, String column)
+	public Analyze(SelectBody selectBody, PrimitiveValue rowId, String column)
 	{
 		this.selectBody = selectBody;
 		this.column = column;

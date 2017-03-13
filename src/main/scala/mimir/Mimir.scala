@@ -99,6 +99,7 @@ object Mimir {
           case sel:  Select     => handleSelect(sel)
           case expl: Explain    => handleExplain(expl)
           case pragma: Pragma   => handlePragma(pragma)
+          case analyze: Analyze => handleAnalyze(analyze)
           case _                => db.update(stmt)
         }
 
@@ -168,6 +169,7 @@ object Mimir {
     val query = db.sql.convert(analyze.getSelectBody())
 
     if(rowId == null){
+      println("==== Explain Table ====")
       val reasonSets = db.explainer.explainEverything(query)
       for(reasonSet <- reasonSets){
         val count = reasonSet.size(db);
@@ -180,12 +182,14 @@ object Mimir {
     } else {
       val token = RowIdPrimitive(db.sql.convert(rowId).asString)
       if(column == null){ 
+        println("==== Explain Row ====")
         val explanation = 
           db.explainer.explainRow(query, token)
         printReasons(explanation.reasons)
         println("--------")
         println("Row Probability: "+explanation.probability)
       } else { 
+      println("==== Explain Cell ====")
         val explanation = 
           db.explainer.explainCell(query, token, column) 
         printReasons(explanation.reasons)

@@ -15,7 +15,8 @@
   <logger name="mimir.sql.sqlite.BestGuessVGTerm" level="INFO"/>
   <logger name="mimir.sql.RAToSql" level="INFO"/>
   <logger name="mimir.sql.SqlToRA" level="INFO"/>
-  <logger name="mimir.views.ViewManager" level="INFO"/>
+  <logger name="mimir.sql.JDBCBackend" level="ERROR"/>
+  <logger name="mimir.views.ViewManager" level="ERROR"/>
   <logger name="mimir.ctables.CTPercolator" level="INFO"/>
   <logger name="mimir.ctables.CTExplainer" level="INFO"/>
   <logger name="mimir.lenses.BestGuessCache" level="INFO"/>
