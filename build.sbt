@@ -46,7 +46,9 @@ libraryDependencies ++= Seq(
 
   "info.mimirdb"                  %   "jsqlparser"            % "1.0.1",
 
-  "org.geotools"                  %    "gt-referencing"       % "16.2"
+  "org.geotools"                  %    "gt-referencing"       % "16.2",
+  "org.geotools"                  %    "gt-referencing"       % "16.2",
+  "org.geotools"                  %    "gt-epsg-hsql"         % "16.2"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")
@@ -100,8 +102,7 @@ mainClass in assembly := Some("mimir.Mimir")
 
 publishMavenStyle := true
 
-pomExtra := (
-  <url>http://mimirdb.info</url>
+pomExtra := <url>http://mimirdb.info</url>
   <licenses>
     <license>
       <name>Apache License 2.0</name>
@@ -112,7 +113,7 @@ pomExtra := (
   <scm>
     <url>git@github.com:ubodin/mimir.git</url>
     <connection>scm:git:git@github.com:ubodin/mimir.git</connection>
-  </scm>)
+  </scm>
 
 /////// Publishing Options ////////
 // use `sbt publish` to update the package in 

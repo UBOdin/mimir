@@ -106,6 +106,11 @@ object FunctionRegistry {
       (_) => TFloat()
     )
     FunctionRegistry.registerNative(
+      "SPEED",
+      (args) => { throw new SQLException("Mimir Cannot Execute VGTerm Functions Internally") },
+      (_) => TFloat()
+    )
+    FunctionRegistry.registerNative(
       "JULIANDAY",
       (args) => { throw new SQLException("Mimir Cannot Execute VGTerm Functions Internally") },
       (_) => TInt()

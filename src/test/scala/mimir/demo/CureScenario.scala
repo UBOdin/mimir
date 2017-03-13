@@ -8,7 +8,7 @@ import mimir.test._
 import mimir.util._
 
 object CureScenario
-  extends SQLTestSpecification("CureScenario",  Map("reset" -> "NO"))
+  extends SQLTestSpecification("CureScenario",  Map("reset" -> "YES"))
 {
 
   val dataFiles = List(
@@ -93,12 +93,24 @@ object CureScenario
        time("CURE Query",
          () => {
            query("""
-             SELECT *
-             FROM   MV1 AS source
-               JOIN MV2 AS locations
-                       ON source.IMO_CODE = locations.IMO_CODE;
+             SELECT
+                     BILL_OF_LADING_NBR,
+                     SRC.IMO_CODE           AS "SRC_IMO",
+                     LOC.LAT                AS "VESSEL_LAT",
+                     LOC.LON                AS "VESSEL_LON",
+                     PORTS.LAT              AS "PORT_LAT",
+                     PORTS.LON              AS "PORT_LON",
+                     DATE(SRC.DATE)          AS "SRC_DATE",
+                     DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON) AS "DISTANCE",  SPEED(DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON), SRC.DATE, NULL) AS "SPEED"
+                   FROM CURESOURCE_RAW AS SRC
+                    JOIN CURELOCATIONS_RAW AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
+                     LEFT OUTER JOIN CUREPORTS_RAW AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
+                   ;
            """).foreachRow((x) => {})
          }
+
+//         failed type detection --> run type inferencing
+//         --> repair with repairing tool
        )
        ok
      }
@@ -177,21 +189,19 @@ LIMIT 1;
 
 
 
-SELECT
+SELECT DISTINCT
   BILL_OF_LADING_NBR,
   SRC.IMO_CODE           AS "SRC_IMO",
   LOC.LAT                AS "VESSEL_LAT",
   LOC.LON                AS "VESSEL_LON",
   PORTS.LAT              AS "PORT_LAT",
   PORTS.LON              AS "PORT_LON",
-  DATE('now')            AS "NOW",
-  SRC.DATE,
   DATE(SRC.DATE)          AS "SRC_DATE",
-  DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON)
+  DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON) AS "DISTANCE",  SPEED(DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON), SRC.DATE, NULL) AS "SPEED"
 FROM CURESOURCE_RAW AS SRC
   JOIN CURELOCATIONS_RAW AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
   LEFT OUTER JOIN CUREPORTS_RAW AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
-LIMIT 1;
+LIMIT 100;
      */
   }
 }
