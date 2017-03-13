@@ -37,7 +37,6 @@ libraryDependencies ++= Seq(
   "org.apache.servicemix.bundles" %   "org.apache.servicemix.bundles.collections-generic" % "4.01_1",
   "org.apache.commons"            %   "commons-csv"           % "1.4",
   "commons-io"                    %   "commons-io"            % "2.5",
-  "org.apache.storm"              %   "storm-core"            % "1.0.1",
 
   "com.github.wnameless"          %   "json-flattener"        % "0.2.2",
   "com.typesafe.play"             %%  "play-json"             % "2.4.11",

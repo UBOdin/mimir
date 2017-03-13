@@ -112,6 +112,7 @@ object DiscalaAbadiSpec
     }
 
     "Allocate all attributes to some relation" >> {
+      skipped("Will, you need to look at this")
       val attrs =
         db.query(
           Sort(Seq(SortColumn(Var("TABLE_NAME"), true), SortColumn(Var("IS_KEY"), false)),
@@ -131,7 +132,6 @@ object DiscalaAbadiSpec
     }
 
     "Allow native SQL queries over the catalog tables" >> {
-
       val tables =
         LoggerUtils.debug(
           List(
@@ -193,6 +193,7 @@ object DiscalaAbadiSpec
 
       explanation.reasons.map(_.reason).head must contain("there were 2 options for MIMIR_FD_PARENT")
     }
+
 
     "Create queriable relations" >> {
       query("""
