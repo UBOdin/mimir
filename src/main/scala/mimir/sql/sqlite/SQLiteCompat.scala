@@ -17,11 +17,14 @@ object SQLiteCompat {
     org.sqlite.Function.create(conn,"MIMIRCAST", MimirCast)
     org.sqlite.Function.create(conn,"OTHERTEST", OtherTest)
     org.sqlite.Function.create(conn,"AGGTEST", AggTest)
-    org.sqlite.Function.create(conn, "BOOLAND", BoolAnd)
     org.sqlite.Function.create(conn, "SQRT", Sqrt)
     org.sqlite.Function.create(conn, "DST", Distance)
     org.sqlite.Function.create(conn, "MINUS", Minus)
+    org.sqlite.Function.create(conn, "GROUP_AND", GroupAnd)
+    org.sqlite.Function.create(conn, "GROUP_OR", GroupOr)
     org.sqlite.Function.create(conn, "FIRST", First)
+    org.sqlite.Function.create(conn, "FIRST_INT", First)
+    org.sqlite.Function.create(conn, "FIRST_FLOAT", First)
   }
   
   def getTableSchema(conn:java.sql.Connection, table: String): Option[List[(String, Type)]] =
@@ -153,16 +156,29 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
     }
 }
 
-object BoolAnd extends org.sqlite.Function.Aggregate {
-  var isDet = 1
+object GroupAnd extends org.sqlite.Function.Aggregate {
+  var agg = true
 
   @Override
   def xStep(): Unit = {
-    isDet = isDet & value_int(0)
+    agg = agg && (value_int(0) != 0)
   }
 
   def xFinal(): Unit = {
-    result(isDet)
+    result(if(agg){ 1 } else { 0 })
+  }
+}
+
+object GroupOr extends org.sqlite.Function.Aggregate {
+  var agg = false
+
+  @Override
+  def xStep(): Unit = {
+    agg = agg || (value_int(0) != 0)
+  }
+
+  def xFinal(): Unit = {
+    result(if(agg){ 1 } else { 0 })
   }
 }
 
@@ -185,6 +201,32 @@ object First extends org.sqlite.Function.Aggregate {
   }
   def xFinal(): Unit = {
     if(firstVal == null){ result(); } else { result(firstVal); }
+  }
+}
+
+object FirstInt extends org.sqlite.Function.Aggregate {
+  var firstVal: Int = 0;
+  var empty = true
+
+  @Override
+  def xStep(): Unit = {
+    if(empty){ firstVal = value_int(0); empty = false }
+  }
+  def xFinal(): Unit = {
+    if(empty){ result(); } else { result(firstVal); }
+  }
+}
+
+object FirstFloat extends org.sqlite.Function.Aggregate {
+  var firstVal: Double = 0.0;
+  var empty = false
+
+  @Override
+  def xStep(): Unit = {
+    if(empty){ firstVal = value_double(0); empty = true }
+  }
+  def xFinal(): Unit = {
+    if(empty){ result(); } else { result(firstVal); }
   }
 }
 

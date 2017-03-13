@@ -44,24 +44,24 @@ object ParserSpecs extends Specification {
     }
     "Handle VGTerms without parameters" in {
       expr("{{ TR1INFER_0[] }}") must be equalTo
-        VGTerm( model("TR1INFER"), 0, List())
+        VGTerm( model("TR1INFER"), 0, List(), List())
     }
     "Handle fields nested in VGTerms" in {
       expr("{{ TEST_0[ 1 ] }}") must be equalTo 
-        VGTerm( model("TEST"), 0, List(IntPrimitive(1)))
+        VGTerm( model("TEST"), 0, List(IntPrimitive(1)), List())
     }
     "Handle recursively nested VGTerms" in {
       expr("{{ TEST_0[ {{ TEST_1 }} ] }}") must be equalTo
         VGTerm( model("TEST"), 0, List(
-          VGTerm( model("TEST"), 1, List())
-        ))
+          VGTerm( model("TEST"), 1, List(), List())
+        ), List())
     }
     "Handle recursively nested VGTerms mixed with others" in {
       expr("{{ TR1CAST_0[ROWID, {{ TR1INFER_0[] }}] }}") must be equalTo
         VGTerm( model("TR1CAST"), 0, List(
           RowIdVar(),
-          VGTerm( model("TR1INFER"), 0, List())
-        ))
+          VGTerm( model("TR1INFER"), 0, List(), List())
+        ), List())
     }
   }
 

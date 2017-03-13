@@ -3,19 +3,6 @@ package mimir.algebra;
 import scala.collection.mutable.ListBuffer
 import scala.util.matching.Regex
 
-case class TypeException(found: Type, expected: Type, 
-                    detail:String, context:Option[Expression] = None) 
-   extends Exception(
-    "Type Mismatch ["+detail+
-     "]: found "+found.toString+
-    ", but expected "+expected.toString+(
-      context match {
-        case None => ""
-        case Some(expr) => " "+expr.toString
-      }
-    )
-);
-
 /**
  * An enum class defining the type of primitive-valued expressions
  * (e.g., integers, floats, strings, etc...)

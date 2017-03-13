@@ -3,16 +3,18 @@ package mimir;
 import java.io._
 import java.sql.SQLException
 
-import mimir.ctables.CTPercolator
+import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
 import mimir.util.{TimeUtils,ExperimentalOptions}
-import mimir.algebra.{Operator,Project,ProjectArg,Var,RAException,OperatorUtils,Function}
+import mimir.algebra._
+import mimir.optimizer.ResolveViews
 import net.sf.jsqlparser.statement.Statement
-import net.sf.jsqlparser.statement.select.Select
+import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody} 
 import net.sf.jsqlparser.statement.drop.Drop
 import org.rogach.scallop._
 
+import scala.collection.JavaConverters._
 
 /**
  * The primary interface to Mimir.  Responsible for:
@@ -51,7 +53,7 @@ object Mimir {
       db.loadTable(conf.loadTable(), conf.loadTable()+".csv");
     } else if(conf.rebuildBestGuess.get != None){
         db.bestGuessCache.buildCache(
-          db.views.getView(
+          db.views.get(
             conf.rebuildBestGuess().toUpperCase
           ).get);
     } else {
@@ -97,6 +99,7 @@ object Mimir {
           case sel:  Select     => handleSelect(sel)
           case expl: Explain    => handleExplain(expl)
           case pragma: Pragma   => handlePragma(pragma)
+          case analyze: Analyze => handleAnalyze(analyze)
           case _                => db.update(stmt)
         }
 
@@ -133,9 +136,7 @@ object Mimir {
   {
     TimeUtils.monitor("QUERY", () => {
       val results = db.query(raw)
-      results.open()
       db.dump(results)
-      results.close()
     }, println(_))
   }
 
@@ -145,7 +146,10 @@ object Mimir {
     println("------ Raw Query ------")
     println(raw)
     db.check(raw)
-    val optimized = db.optimize(raw)
+    val expanded = ResolveViews(db,raw)
+    println("--- Expanded Query ----")
+    println(expanded)    
+    val optimized = db.optimize(expanded)
     println("--- Optimized Query ---")
     println(optimized)
     db.check(optimized)
@@ -155,6 +159,50 @@ object Mimir {
     } catch {
       case e:Throwable =>
         println("Unavailable: "+e.getMessage())
+    }
+  }
+
+  def handleAnalyze(analyze: Analyze)
+  {
+    val rowId = analyze.getRowId()
+    val column = analyze.getColumn()
+    val query = db.sql.convert(analyze.getSelectBody())
+
+    if(rowId == null){
+      println("==== Explain Table ====")
+      val reasonSets = db.explainer.explainEverything(query)
+      for(reasonSet <- reasonSets){
+        val count = reasonSet.size(db);
+        val reasons = reasonSet.take(db, 5);
+        printReasons(reasons);
+        if(count > reasons.size){
+          println(s"... and ${count - reasons.size} more")
+        }
+      }
+    } else {
+      val token = RowIdPrimitive(db.sql.convert(rowId).asString)
+      if(column == null){ 
+        println("==== Explain Row ====")
+        val explanation = 
+          db.explainer.explainRow(query, token)
+        printReasons(explanation.reasons)
+        println("--------")
+        println("Row Probability: "+explanation.probability)
+      } else { 
+      println("==== Explain Cell ====")
+        val explanation = 
+          db.explainer.explainCell(query, token, column) 
+        printReasons(explanation.reasons)
+        println("--------")
+        println("Examples: "+explanation.examples.map(_.toString).mkString(", "))
+      }
+    }
+  }
+
+  def printReasons(reasons: Iterable[Reason])
+  {
+    for(reason <- reasons){
+      println(reason);
     }
   }
 

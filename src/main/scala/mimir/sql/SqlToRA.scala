@@ -1,6 +1,7 @@
 package mimir.sql;
 
 import java.sql._
+import java.util
 
 import mimir.Database
 import mimir.algebra._
@@ -18,7 +19,7 @@ import org.joda.time.LocalDate
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import scala.collection.JavaConversions._
-import scala.collection.mutable
+import scala.collection.{immutable, mutable}
 import scala.collection.mutable.ListBuffer
 ;
 
@@ -399,7 +400,7 @@ class SqlToRA(db: Database)
       return (ret, bindings, fi.asInstanceOf[SubSelect].getAlias.toUpperCase)
     }
     if(fi.isInstanceOf[net.sf.jsqlparser.schema.Table]){
-      val name =
+      var name =
         fi.asInstanceOf[net.sf.jsqlparser.schema.Table].
           getName.toUpperCase
       var alias =
@@ -408,23 +409,45 @@ class SqlToRA(db: Database)
       if(alias == null){ alias = name }
       else { alias = alias.toUpperCase }
 
-      val sch = db.getTableSchema(name) match {
-        case Some(sch) => sch
-        case None => throw new SQLException("Unknown table or view: "+name);
-      }
-      val newBindings = sch.map(
-          (x) => (x._1, alias+"_"+x._1)
+      if(fi.asInstanceOf[net.sf.jsqlparser.schema.Table].getSchemaName == null){
+        val sch = db.getTableSchema(name) match {
+          case Some(sch) => sch
+          case None => throw new SQLException("Unknown table or view: "+name);
+        }
+        val newBindings = sch.map(
+            (x) => (x._1, alias+"_"+x._1)
+          )
+        return (
+          Table(name, 
+            sch.map(
+              _ match { case (v, t) => (alias+"_"+v, t)}
+            ),
+            List[(String,Expression,Type)]()
+          ), 
+          newBindings, 
+          alias
         )
-      return (
-        Table(name, 
-          sch.map(
-            _ match { case (v, t) => (alias+"_"+v, t)}
+      } else {
+        val multilens =
+          fi.asInstanceOf[net.sf.jsqlparser.schema.Table].getSchemaName.toUpperCase
+
+        val viewQuery = 
+          db.adaptiveSchemas.viewFor(multilens, name) match {
+            case Some(query) => query
+            case None => throw new SQLException("Unknown adaptive schema view: "+multilens+"."+name);
+          }
+        val newBindings = 
+          viewQuery.schema.map(_._1).
+            map { x => (x, alias+"_"+x) }
+        return ( 
+          Project(
+            newBindings.map( x => ProjectArg(x._2, Var(x._1)) ),
+            viewQuery
           ),
-          List[(String,Expression,Type)]()
-        ), 
-        newBindings, 
-        alias
-      )
+          newBindings,
+          alias
+        )
+      }
       
     }
     unhandled("FromItem["+fi.getClass.toString+"]")

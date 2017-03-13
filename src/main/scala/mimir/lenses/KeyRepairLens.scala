@@ -16,56 +16,83 @@ object KeyRepairLens {
   ): (Operator, Seq[Model]) =
   {
 
-    val schema = query.schema
+    var schema = db.bestGuessSchema(query)
     val schemaMap = schema.toMap
-    val keys: Seq[String] = args.map {
+    var scoreCol:Option[String] = None
+    val keys: Seq[String] = args.flatMap {
       case Var(col) => {
-        if(schemaMap contains col){ col }
+        if(schemaMap contains col){ Some(col) }
         else {
           throw new SQLException(s"Invalid column: $col in KeyRepairLens $name")
         }
       }
+      case Function("SCORE_BY", Seq(Var(col))) => {
+        scoreCol = Some(col.toUpperCase)
+        None
+      }
       case somethingElse => throw new SQLException(s"Invalid argument ($somethingElse) for KeyRepairLens $name")
     }
     val values: Seq[(String, Model)] = 
-      schema.map(_._1).filterNot( keys contains _ ).
-      map { col => 
+      schema.
+      filterNot( (keys ++ scoreCol) contains _._1 ).
+      map { case (col, t) => 
         val model =
           new KeyRepairModel(
             s"$name:$col", 
             name, 
             query, 
             keys.map { k => (k, schemaMap(k)) }, 
-            col
+            col, t,
+            scoreCol
           )
         model.reconnectToDatabase(db)
         ( col, model )
       }
 
     (
-      Project(
-        keys.map { col => ProjectArg(col, Var(col))} ++
-        values.map { case (col, model) => 
-          ProjectArg(col, 
-            Conditional(
-              Comparison(Cmp.Lte, Var(s"MIMIR_KR_COUNT_$col"), IntPrimitive(1)),
-              Var(col),
-              VGTerm(model, 0, keys.map(Var(_)))
+      assemble(query, keys, values, scoreCol),
+      values.map(_._2)
+    )
+  }
+
+  def assemble(
+    query: Operator,
+    keys: Seq[String],
+    values: Seq[(String, Model)],
+    scoreCol: Option[String]
+  ): Operator =
+  {
+    Project(
+      keys.map { col => ProjectArg(col, Var(col))} ++
+      values.map { case (col, model) => 
+        ProjectArg(col, 
+          Conditional(
+            Comparison(Cmp.Lte, Var(s"MIMIR_KR_COUNT_$col"), IntPrimitive(1)),
+            Var(col),
+            VGTerm(model, 0, keys.map(Var(_)), 
+              Seq(
+                Var(s"MIMIR_KR_HINT_COL_$col"),
+                scoreCol.
+                  map { _ => Var("MIMIR_KR_HINT_SCORE") }.
+                  getOrElse( NullPrimitive() )
+              )
             )
           )
-        },
-        Aggregate(
-          keys.map(Var(_)),
-          values.flatMap { case (col, _) => 
-            List(
-              AggFunction("FIRST", false, List(Var(col)), col),
-              AggFunction("COUNT", true, List(Var(col)), s"MIMIR_KR_COUNT_$col")
-            )
-          },
-          query
         )
-      ),
-      values.map(_._2)
+      },
+      Aggregate(
+        keys.map(Var(_)),
+        values.flatMap { case (col, _) => 
+          List(
+            AggFunction("FIRST", false, List(Var(col)), col),
+            AggFunction("COUNT", true, List(Var(col)), s"MIMIR_KR_COUNT_$col"),
+            AggFunction("JSON_GROUP_ARRAY", false, List(Var(col)), s"MIMIR_KR_HINT_COL_$col")
+          )
+        } ++ scoreCol.map { col => 
+            AggFunction("JSON_GROUP_ARRAY", false, List(Var(col)), "MIMIR_KR_HINT_SCORE")
+          },
+        query
+      )
     )
 
   }

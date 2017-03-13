@@ -1,24 +1,9 @@
 package mimir.ctables
 
 import mimir.algebra._
+import mimir.util.JSONBuilder
 import mimir.models._
 import scala.util._
-
-case class VGTerm(
-  model: Model, 
-  idx: Int,
-  args: Seq[Expression]
-) extends Proc(args) {
-  override def toString() = "{{ "+model.name+";"+idx+"["+args.mkString(", ")+"] }}"
-  override def getType(bindings: Seq[Type]):Type = model.varType(idx, bindings)
-  override def children: Seq[Expression] = args
-  override def rebuild(x: Seq[Expression]) = VGTerm(model, idx, x)
-  def get(v: Seq[PrimitiveValue]): PrimitiveValue = 
-  {
-    // println("VGTerm: Get")
-    model.bestGuess(idx, v)
-  }
-}
 
 object CTables 
 {
@@ -42,7 +27,7 @@ object CTables
    */
   def isProbabilistic(expr: Expression): Boolean = 
   expr match {
-    case VGTerm(_, _, _) => true
+    case VGTerm(_, _, _, _) => true
     case _ => expr.children.exists( isProbabilistic(_) )
   }
 

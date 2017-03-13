@@ -32,23 +32,31 @@ object SchemaMatchingLens {
         }).
         toList
 
-    val (
-      candidateModels: Map[String,List[(Model,Int,String)]],
-      modelEntities: List[Model]
-    ) = 
-      LensUtils.extractModelsByColumn(
-        ModelRegistry.schemamatchers.toList,
-        (
+    val modelsByType = 
+      ModelRegistry.schemamatchers.toSeq.map {
+        case (
           modelCategory:String, 
           constructor:ModelRegistry.SchemaMatchConstructor
-        ) => 
+        ) => {
+          val modelsByColAndType =
             constructor(
               db, 
               s"$name:$modelCategory", 
               Left(query), 
               Right(targetSchema)
-            )
-      )
+            ).toSeq.map {
+              case (col, (model, idx)) => (col, (model, idx, Seq[Expression]()))
+            }
+
+          (modelCategory, modelsByColAndType)
+        }
+      }
+
+    val (
+      candidateModels: Map[String,Seq[(Model,Int,Seq[Expression],String)]],
+      modelEntities: Seq[Model]
+    ) = 
+      LensUtils.extractModelsByColumn(modelsByType)
 
     // Sanity check...
     targetSchema.map(_._1).foreach( target => {
@@ -70,11 +78,11 @@ object SchemaMatchingLens {
             val metaModel = new DefaultMetaModel(
                 s"$name:META:$column", 
                 s"picking a source for column '$column'",
-                models.map(_._3)
+                models.map(_._4)
               )
             val metaExpr = LensUtils.buildMetaModel(
-              metaModel, 0, List[Expression](), 
-              models, List[Expression]()
+              metaModel, 0, Seq[Expression](), Seq[Expression](),
+              models, Seq[Expression]()
             )
 
             ( (column, metaExpr), metaModel )

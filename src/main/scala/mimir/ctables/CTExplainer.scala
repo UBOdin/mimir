@@ -20,7 +20,7 @@ abstract class Explanation(
 ) {
 	def fields: List[(String, PrimitiveValue)]
 
-	override def toString(): String = {
+	override def toString(): String = { 
 		(fields ++ List( 
 			("Reasons", reasons.map("\n    "+_.toString).mkString("")),
 			("Token", JSONBuilder.string(token.v))
@@ -93,29 +93,47 @@ class CTExplainer(db: Database) extends LazyLogging {
 	
 	def explainRow(oper: Operator, token: RowIdPrimitive): RowExplanation =
 	{
-		val (tuple, _, provenance) = getProvenance(oper, token)
+		val singleRowQuery = filterByProvenance(oper, token)
+		val reasonSets =
+			explainSubset(singleRowQuery, Set(), true, false)
+
+		logger.debug(s"EXPLAINED: \n${reasonSets.map(_.toString).mkString("\n")}")
+
+		// Oliver Says: 
+		// This try block is a hack: getProvenance only really works on non-aggregate
+		// queries, since we can't (easily) expand out aggregates.  For now, we just skip
+		// the provenance computation if getProvenance blows up.
+		// The right way to implement this is to use MCDB style evaluation (which doesn't 
+		// exist yet).
 		val probability = 
-			if(CTables.isDeterministic(provenance)){ 1.0 }
-			else { 
-				sampleExpression[(Int,Int)](provenance, tuple, NUM_SAMPLES, (0,0), 
-					(cnt: (Int,Int), present: PrimitiveValue) => 
-						present match {
-							case NullPrimitive() => (cnt._1, cnt._2)
-							case BoolPrimitive(t) => 
-								( cnt._1 + (if(t){ 1 } else { 0 }),
-								  cnt._2 + 1
-								 )
+			try {
+				val (tuple, _, provenance) = getProvenance(oper, token)
+				val probability = 
+					if(CTables.isDeterministic(provenance)){ 1.0 }
+					else { 
+						sampleExpression[(Int,Int)](provenance, tuple, NUM_SAMPLES, (0,0), 
+							(cnt: (Int,Int), present: PrimitiveValue) => 
+								present match {
+									case NullPrimitive() => (cnt._1, cnt._2)
+									case BoolPrimitive(t) => 
+										( cnt._1 + (if(t){ 1 } else { 0 }),
+										  cnt._2 + 1
+										 )
+								}
+						) match { 
+							case (_, 0) => -1.0
+							case (hits, total) => hits.toDouble / total.toDouble
 						}
-				) match { 
-					case (_, 0) => -1.0
-					case (hits, total) => hits.toDouble / total.toDouble
-				}
+					}
+				logger.debug(s"tuple: $tuple\ncondition: $provenance\nprobability: $probability")
+				probability
+			} catch {
+				case x:RAException => -1.0
 			}
-		logger.debug(s"tuple: $tuple\ncondition: $provenance\nprobability: $probability")
 
 		RowExplanation(
 			probability,
-			getFocusedReasons(provenance, tuple).values.toList,
+			getFocusedReasons(reasonSets).toList,
 			token
 		)
 	}
@@ -223,12 +241,26 @@ class CTExplainer(db: Database) extends LazyLogging {
 		}
 	}
 
+	def getFocusedReasons(reasonSets: Seq[ReasonSet]): Seq[Reason] =
+	{
+		reasonSets.flatMap { reasonSet => 
+			val subReasons = reasonSet.take(db, 4).toSeq
+			if(subReasons.size > 3){
+				Seq(new MultiReason(db, reasonSet))
+			} else {
+				subReasons
+			}
+		}
+	}
+
 	def getFocusedReasons(expr: Expression, tuple: Map[String,PrimitiveValue]):
 		Map[String,Reason] =
 	{
 		logger.trace(s"GETTING REASONS: $expr")
 		expr match {
-			case v: VGTerm => Map(v.model.name -> makeReason(v, v.args.map(Eval.eval(_,tuple))))
+			case v: VGTerm => Map(v.model.name -> 
+				Reason.make(v, v.args.map(Eval.eval(_,tuple)), v.hints.map(Eval.eval(_,tuple)))
+			)
 
 			case Conditional(c, t, e) =>
 				(
@@ -255,11 +287,26 @@ class CTExplainer(db: Database) extends LazyLogging {
 		}
 	}
 
+	def filterByProvenance(rawOper: Operator, token: RowIdPrimitive): Operator =
+	{
+		val oper = PropagateEmptyViews(ResolveViews(db, rawOper))
+		logger.debug(s"RESOLVED: \n$oper")
+		val (provQuery, rowIdCols) = Provenance.compile(oper)
+		val filteredQuery =
+			InlineProjections(
+				PushdownSelections(
+					Provenance.filterForToken(provQuery, token, rowIdCols)
+				)
+			)
+		logger.debug(s"FILTERED: \n$filteredQuery")
+		return filteredQuery
+	}
+
 	def getProvenance(rawOper: Operator, token: RowIdPrimitive): 
 		(Map[String,PrimitiveValue], Map[String, Expression], Expression) =
 	{
 		val oper = ResolveViews(db, rawOper)
-		logger.debug(s"RESOLVED: $oper")
+		logger.trace(s"RESOLVED: $oper")
 
 		// Annotate the query to produce a provenance trace
 		val (provQuery, rowIdCols) = Provenance.compile(oper)
@@ -302,28 +349,114 @@ class CTExplainer(db: Database) extends LazyLogging {
 		(tuple, columnExprs, rowCondition)
 	}
 
-	def makeReason(term: VGTerm, v: Seq[PrimitiveValue]): Reason =
-		makeReason(term.model, term.idx, v)
-	def makeReason(model: Model, idx: Int, v: Seq[PrimitiveValue]): Reason =
-	{
-    Reason(
-      model.reason(idx, v),
-      model.name,
-      idx,
-      v,
-      makeRepair(model, idx, v)
-    )
-	}
+	def explainEverything(oper: Operator): Seq[ReasonSet] =
+		explainSubset(oper, oper.schema.map(_._1).toSet, true, true)
 
-	def makeRepair(term: VGTerm, v: Seq[PrimitiveValue]): Repair =
-		makeRepair(term.model, term.idx, v)
-	def makeRepair(model: Model, idx: Int, v: Seq[PrimitiveValue]): Repair =
+	def explainSubset(
+		oper: Operator, 
+		wantCol: Set[String], 
+		wantRow:Boolean, 
+		wantSort:Boolean
+	): Seq[ReasonSet] =
 	{
-		model match {
-			case finite:( Model with FiniteDiscreteDomain ) =>
-				RepairFromList(finite.getDomain(idx, v))
-			case _ => 
-				RepairByType(model.varType(idx, v.map(_.getType)))
+		logger.trace("Explain Subset: \n"+oper)
+		oper match {
+			case Table(_,_,_) => Seq()
+			case EmptyTable(_) => Seq()
+
+			case Project(args, child) => {
+				val relevantArgs =
+					args.filter { col => wantCol(col.name) }
+
+				val argReasons = 
+					relevantArgs.
+						flatMap {
+						  col => CTAnalyzer.compileCausality(col.expression)
+						}.map { case (condition, vgterm) => 
+							ReasonSet.make(vgterm, Select(condition, child))
+						}
+				val argDependencies =
+					relevantArgs.
+						flatMap {
+							col => ExpressionUtils.getColumns(col.expression)
+						}.toSet
+
+				argReasons ++ explainSubset(child, argDependencies, wantRow, wantSort)
+			}
+
+			case Select(cond, child) => {
+				val (condReasons:Seq[ReasonSet], condDependencies:Set[String]) =
+					if(wantRow){
+						(
+							CTAnalyzer.compileCausality(cond).
+								map { case (condition, vgterm) => 
+										ReasonSet.make(vgterm, Select(condition, child))
+									},
+							ExpressionUtils.getColumns(cond)
+						)
+					} else { ( Seq(), Set() ) }
+
+				condReasons ++ explainSubset(child, wantCol ++ condDependencies, wantRow, wantSort)
+			}
+
+			case Aggregate(gbs, aggs, child) => {
+				val aggVGTerms = 
+					aggs.flatMap { agg => agg.args.flatMap( CTAnalyzer.compileCausality(_) ) }
+				val aggReasons =
+					aggVGTerms.map { case (condition, vgterm) => 
+						ReasonSet.make(vgterm, Select(condition, child))
+					}
+				val gbDependencies =
+					gbs.map( _.name ).filter { gb => wantRow || wantCol(gb) }.toSet
+				val aggDependencies =
+				  aggs.
+				  	filter { agg => wantCol(agg.alias) }.
+						flatMap { agg => 
+							agg.args.flatMap( ExpressionUtils.getColumns(_) )
+						}.toSet
+
+				aggReasons ++ explainSubset(child, 
+					// We need all of the input dependencies
+					gbDependencies ++ aggDependencies, 
+					// If we want the output row presence, input row reasons are relevant
+					// If there are any agg dependencies, input row reasons are also relevant
+					wantRow || !aggDependencies.isEmpty,
+					// Sort is never relevant for aggregates
+					false
+				)
+			}
+
+			case Join(lhs, rhs) => {
+				explainSubset(lhs, lhs.schema.map(_._1).filter(wantCol(_)).toSet, wantRow, wantSort) ++ 
+				explainSubset(rhs, rhs.schema.map(_._1).filter(wantCol(_)).toSet, wantRow, wantSort)
+			}
+
+			case LeftOuterJoin(left, right, cond) => 
+        throw new RAException("Don't know how to explain a left-outer-join")
+
+      case Limit(_, _, child) => 
+      	explainSubset(child, wantCol, wantRow, wantSort || wantRow)
+
+     	case Sort(args, child) => {
+				val (argReasons, argDependencies) =
+					if(wantSort){
+						(
+							args.flatMap { arg => 
+								CTAnalyzer.compileCausality(arg.expression)
+							}.map { case (condition, vgterm) => 
+								ReasonSet.make(vgterm, Select(condition, child))
+							},
+							args.flatMap { arg => ExpressionUtils.getColumns(arg.expression) }
+						)
+					} else { (Seq(),Set()) }
+
+				argReasons ++ explainSubset(child,argDependencies.toSet ++ wantCol,wantRow,wantSort)
+			}
+
+			case Union(lhs, rhs) => {
+				explainSubset(lhs,wantCol,wantRow,wantSort) ++ 
+				explainSubset(rhs,wantCol,wantRow,wantSort)
+			}
 		}
 	}
 }

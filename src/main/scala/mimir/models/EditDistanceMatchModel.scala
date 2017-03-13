@@ -105,7 +105,7 @@ class EditDistanceMatchModel(
   } 
   def varType(idx: Int, t: Seq[Type]) = TString()
 
-  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue = 
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
   {
     StringPrimitive(
       RandUtils.pickFromWeightedList(randomness, colMapping)
@@ -118,7 +118,7 @@ class EditDistanceMatchModel(
     sourceCandidates.contains(v.asString)
   }
 
-  def reason(idx: Int, args: Seq[PrimitiveValue]): String = {
+  def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = {
     choices.get(idx) match {
       case None => {
         val sourceName = colMapping.maxBy(_._2)._1
@@ -140,7 +140,7 @@ class EditDistanceMatchModel(
     }
   }
 
-  def bestGuess(idx: Int, args: Seq[PrimitiveValue]): PrimitiveValue = 
+  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
   {
     choices.get(idx) match { 
       case None => {
@@ -156,6 +156,6 @@ class EditDistanceMatchModel(
     }
   }
 
-  def getDomain(idx: Int, args: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
+  def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
     List((NullPrimitive(), 0.0)) ++ colMapping.map( x => (StringPrimitive(x._1), x._2))
 }

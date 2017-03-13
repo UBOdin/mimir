@@ -24,7 +24,7 @@ class LensManager(db: Database) {
     // no-op for now.
   }
 
-  def createLens(
+  def create(
     t: String, 
     name: String, 
     query: Operator, 
@@ -42,7 +42,7 @@ class LensManager(db: Database) {
     val (view, models) = constructor(db, saneName, query, args)
 
     // Create a lens query
-    db.views.createView(saneName, view)
+    db.views.create(saneName, view)
 
     // Persist the associated models
     for(model <- models){
@@ -53,11 +53,10 @@ class LensManager(db: Database) {
     db.bestGuessCache.buildCache(view)
   }
 
-  def dropLens(name: String): Unit =
+  def drop(name: String): Unit =
   {
-    db.views.dropView(name)
+    db.views.drop(name)
     db.models.dropOwner(s"LENS:$name")
   }
 
 }
-

@@ -102,12 +102,12 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
     (x._2, TypeInferenceModel.priority(x._1) )
 
   def varType(idx: Int, argTypes: Seq[Type]) = TType()
-  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue]): PrimitiveValue = 
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
     TypePrimitive(
       RandUtils.pickFromWeightedList(randomness, voteList(idx))
     )
 
-  def bestGuess(idx: Int, args: Seq[PrimitiveValue]): PrimitiveValue = 
+  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
   {
     choices.get(idx) match {
       case None => {
@@ -123,7 +123,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
     v.isInstanceOf[TypePrimitive]
 
 
-  def reason(idx: Int, args: Seq[PrimitiveValue]): String = {
+  def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = {
     choices.get(idx) match {
       case None => {
         val (guess, guessVotes) = voteList(idx).maxBy( rankFn _ )
@@ -149,7 +149,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
     }
   }
 
-  def getDomain(idx: Int, args: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
+  def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
     votes(idx).toList.map( x => (TypePrimitive(x._1), x._2))
 
 }

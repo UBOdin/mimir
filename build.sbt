@@ -13,32 +13,56 @@ resolvers += "MimirDB" at "http://maven.mimirdb.info/"
 resolvers += "osgeo" at "http://download.osgeo.org/webdav/geotools/"
 
 libraryDependencies ++= Seq(
-  "org.rogach"                 %%   "scallop"               % "0.9.5",
-  "com.github.nscala-time"     %%   "nscala-time"           % "1.2.0",
-  "ch.qos.logback"             %    "logback-classic"       % "1.1.7",
-  "com.typesafe.scala-logging" %%   "scala-logging-slf4j"   % "2.1.2",
-  "org.specs2"                 %%   "specs2-core"           % "3.8.4" % "test",
-  "org.specs2"                 %%   "specs2-matcher-extra"  % "3.8.4" % "test",
-  "org.specs2"                 %%   "specs2-junit"          % "3.8.4" % "test",
-  ("nz.ac.waikato.cms.weka"    %    "weka-stable"           % "3.8.1").
+  "org.rogach"                    %%   "scallop"               % "0.9.5",
+  "com.github.nscala-time"        %%   "nscala-time"           % "1.2.0",
+  "ch.qos.logback"                %    "logback-classic"       % "1.1.7",
+  "com.typesafe.scala-logging"    %%   "scala-logging-slf4j"   % "2.1.2",
+  "org.specs2"                    %%   "specs2-core"           % "3.8.4" % "test",
+  "org.specs2"                    %%   "specs2-matcher-extra"  % "3.8.4" % "test",
+  "org.specs2"                    %%   "specs2-junit"          % "3.8.4" % "test",
+  ("nz.ac.waikato.cms.weka"       %    "weka-stable"           % "3.8.1").
     exclude("nz.ac.waikato.cms.weka", "weka-dev").
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
-  ("nz.ac.waikato.cms.moa"     %    "moa"                   % "2014.11").
+  ("nz.ac.waikato.cms.moa"        %    "moa"                   % "2014.11").
     exclude("nz.ac.waikato.cms.weka", "weka-dev").
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
-  "org.apache.lucene"          %    "lucene-spellchecker"   % "3.6.2",
-  "org.xerial"                 %    "sqlite-jdbc"           % "3.14.2.1",
-  "info.mimirdb"               %    "jsqlparser"            % "1.0.0",
-  "org.apache.commons"         %    "commons-csv"           % "1.4", 
-  "commons-io"                 %    "commons-io"            % "2.5",
-  "org.geotools"                 %    "gt-referencing"            % "16.2"
+
+  "org.apache.lucene"             %   "lucene-spellchecker"   % "3.6.2",
+  "org.xerial"                    %   "sqlite-jdbc"           % "3.16.1",
+
+  "net.sf.jung"                   %   "jung-graph-impl"       % "2.0.1",
+  "net.sf.jung"                   %   "jung-algorithms"       % "2.0.1",
+  "net.sf.jung"                   %   "jung-visualization"    % "2.0.1",
+  "jgraph"                        %   "jgraph"                % "5.13.0.0",
+
+  "org.apache.servicemix.bundles" %   "org.apache.servicemix.bundles.collections-generic" % "4.01_1",
+  "org.apache.commons"            %   "commons-csv"           % "1.4",
+  "commons-io"                    %   "commons-io"            % "2.5",
+
+  "com.github.wnameless"          %   "json-flattener"        % "0.2.2",
+  "com.typesafe.play"             %%  "play-json"             % "2.4.11",
+
+  "com.twitter"                   %   "hbc-core"              % "2.0.1",
+
+  "info.mimirdb"                  %   "jsqlparser"            % "1.0.1",
+
+  "org.geotools"                  %    "gt-referencing"       % "16.2"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")
 
 parser := {
   val logger = streams.value.log
-  Process("rm -f src/main/java/mimir/parser/*.java") ! logger match {
+  Process(List(
+    "rm", "-f",
+    "src/main/java/mimir/parser/MimirJSqlParser.java",
+    "src/main/java/mimir/parser/MimirJSqlParserConstants.java",
+    "src/main/java/mimir/parser/MimirJSqlParserTokenManager.java",
+    "src/main/java/mimir/parser/ParseException.java",
+    "src/main/java/mimir/parser/SimpleCharStream.java",
+    "src/main/java/mimir/parser/Token.java",
+    "src/main/java/mimir/parser/TokenMgrError.java"
+  )) ! logger match {
     case 0 => // Success
     case n => sys.error(s"Could not clean up after old SQL Parser: $n")
   }

@@ -8,23 +8,19 @@ import mimir.ctables._
 
 object LensUtils {
 
-  def extractModelsByColumn[CONSTR_TYPE](
-    constructors:List[(String,CONSTR_TYPE)],
-    callConstructor:((String,CONSTR_TYPE) => Map[String,(Model,Int)])
-  ): (Map[String,List[(Model,Int,String)]], List[Model]) =
+  def extractModelsByColumn(
+    modelMap: Seq[(String, Seq[(String, (Model, Int, Seq[Expression]))])]
+  ): (Map[String,Seq[(Model,Int,Seq[Expression],String)]], Seq[Model]) =
   {
     val candidateModels =
-      constructors.
-        map({ case (modelCategory, constructor) => {
-          val modelCandidates = 
-            callConstructor(modelCategory,constructor)
-
-          modelCandidates.toList.
-            map({ case (column, (model, idx)) =>
-              (column, (model, idx, modelCategory))
-            })
-        }}).
-        flatten.
+      modelMap.
+        flatMap {
+          case (modelGroup, perColumnImplementations) =>
+            perColumnImplementations.map {
+              case (col, (model, idx, hints)) => 
+                (col, (model, idx, hints, modelGroup))
+            }
+        }.
         groupBy(_._1).            // Group candidates by target column
         map( x => (x._1, x._2.map(_._2)) )   // Convert to Column -> List[(Model, Idx, Category)]
 
@@ -43,16 +39,17 @@ object LensUtils {
   def buildMetaModel(
     metaModel: Model, 
     metaModelIdx: Int,
-    metaModelArgs: List[Expression],
-    inputModels:List[(Model,Int,String)], 
-    inputArgs: List[Expression]
+    metaModelArgs: Seq[Expression],
+    metaModelHints: Seq[Expression],
+    inputModels: Seq[(Model,Int,Seq[Expression],String)], 
+    inputArgs: Seq[Expression]
   ): Expression =
   {
     val inputVGTerms =
       inputModels.
-        map({case (model, idx, cat) => (
+        map({case (model, idx, hints, cat) => (
           StringPrimitive(cat), 
-          VGTerm(model, idx, inputArgs)
+          VGTerm(model, idx, inputArgs, hints)
         )})
 
     inputVGTerms match {
@@ -61,7 +58,7 @@ object LensUtils {
       case List((_, term)) => term
       case _ => 
         ExpressionUtils.makeCaseExpression(
-          VGTerm(metaModel, metaModelIdx, metaModelArgs),
+          VGTerm(metaModel, metaModelIdx, metaModelArgs, metaModelHints),
           inputVGTerms,
           NullPrimitive()
         )

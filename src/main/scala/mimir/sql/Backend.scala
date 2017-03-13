@@ -52,4 +52,7 @@ abstract class Backend {
   def canHandleVGTerms(): Boolean
   def specializeQuery(q: Operator): Operator
 
+  def listTablesQuery: Operator
+  def listAttrsQuery: Operator
+
 }

@@ -1,7 +1,5 @@
 package mimir.algebra;
 
-class RAException(msg: String) extends Exception(msg);
-
 /**
  * Base type for expression trees.  Represents a single node in the tree.
  */

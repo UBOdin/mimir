@@ -8,16 +8,27 @@ import mimir.util._;
 
 object SpecializeForSQLite {
 
-  def apply(e: Expression): Expression =
+  def apply(e: Expression, schema: Map[String, Type]): Expression =
   {
-    e match {
+    (e match {
+  
       case Function("CAST", List(target, TypePrimitive(t))) => 
         {//println("TYPE ID: "+t.id(t))
-          Function("MIMIRCAST", List(apply(target), IntPrimitive(Type.id(t))))}
+          Function("MIMIRCAST", List(target, IntPrimitive(Type.id(t))))}
+
       case Function("CAST", _) =>
         throw new SQLException("Invalid CAST: "+e)
-      case _ => e.recur(apply(_: Expression))
-    }
+
+      case Function("FIRST", Seq(arg)) =>
+        Typechecker.typeOf(arg, schema) match {
+          case TInt()   => Function("FIRST_INT", Seq(arg))
+          case TFloat() => Function("FIRST_FLOAT", Seq(arg))
+          case _        => Function("FIRST", Seq(arg))
+        }
+
+      case _ => e
+
+    }).recur( apply(_, schema) )
   }
 
   def apply(o: Operator): Operator = 
@@ -30,7 +41,8 @@ object SpecializeForSQLite {
        * with our own.
        */
       case _ => 
-        o.recurExpressions( apply(_:Expression) ).
+        val schema = o.schema.toMap
+        o.recurExpressions( apply(_:Expression, schema) ).
           recur( apply(_:Operator) )
 
     }

@@ -29,14 +29,14 @@ object ViewsSpec extends SQLTestSpecification("ViewsTest")
     }
 
     "Support Simple SELECTs" >> {
-      db.views.createView("RAB", select("SELECT A, B FROM R"))
+      db.views.create("RAB", select("SELECT A, B FROM R"))
       val result = query("SELECT A FROM RAB").allRows.flatten 
 
       result must contain(eachOf(i(1), i(1), i(1), i(2), i(4)))
     }
 
     "Support Joins" >> {
-      db.views.createView("RS", select("SELECT A, B, R.C, D FROM R, S WHERE R.C = S.C"))
+      db.views.create("RS", select("SELECT A, B, R.C, D FROM R, S WHERE R.C = S.C"))
 
       val result = query("SELECT B FROM RS").allRows.flatten
       result must contain(eachOf(i(3),i(3),i(3),i(3),i(2),i(2)))

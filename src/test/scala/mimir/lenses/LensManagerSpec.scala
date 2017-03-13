@@ -39,15 +39,15 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       coresModel must not be empty
 
       resolved2.get("CORES") must be equalTo(Some(
-        Function("CAST", List(Var("CORES"), VGTerm(coresModel, coresColumnId, List())))
+        Function("CAST", List(Var("CORES"), VGTerm(coresModel, coresColumnId, List(), List())))
       ))
 
-      coresModel.reason(coresColumnId, List()) must contain("was of type INT")
+      coresModel.reason(coresColumnId, List(), List()) must contain("was of type INT")
 
-      val coresGuess1 = coresModel.bestGuess(coresColumnId, List())
+      val coresGuess1 = coresModel.bestGuess(coresColumnId, List(), List())
       coresGuess1 must be equalTo(TypePrimitive(TInt()))
 
-      val coresGuess2 = InlineVGTerms(VGTerm(coresModel, coresColumnId, List()))
+      val coresGuess2 = InlineVGTerms(VGTerm(coresModel, coresColumnId, List(), List()))
       coresGuess2 must be equalTo(TypePrimitive(TInt()))
 
 

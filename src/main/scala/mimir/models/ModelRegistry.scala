@@ -26,7 +26,8 @@ object ModelRegistry
    *    List[String]    -> A list of column names to impute on
    *    Operator        -> The relation to impute on
    * Outputs:
-   *    Map[...]        -> A map from column name to a Model/Idx pair 
+   *    Map[...]        -> A map from column name to a Model/Idx pair,
+   *                       along with a sequence of "hint" expressions,
    *                       defining a way to repair the attribute
    *
    * Note that although we request models for a set of columns in a
@@ -50,7 +51,7 @@ object ModelRegistry
    * operator: Select[ROWID = rowid](oper)
    */
   type ImputationConstructor = 
-    ((Database, String, List[String], Operator) => Map[String, (Model,Int)])
+    ((Database, String, List[String], Operator) => Map[String, (Model,Int,Seq[Expression])])
 
   /**
    * Factory method type for SchemaMatch model constructors

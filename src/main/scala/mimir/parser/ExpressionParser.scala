@@ -117,12 +117,20 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 
 
 	def vgterm = ("\\{\\{ *".r ~> id ~ 
-					opt("[" ~> exprList <~ "]") <~ 
+					opt(("[" ~> exprList <~ "]") ~
+						opt("[" ~> exprList <~ "]")
+					) <~ 
 					" *\\}\\}".r) ^^ {
-		case v ~ args => {
+		case v ~ argsAndHints => {
+			val (args:Seq[Expression], hints:Seq[Expression]) =
+				argsAndHints match {
+					case Some(args ~ Some(hints)) => (args, hints)
+					case Some(args ~ None) => (args, Seq())
+					case None => (Seq(), Seq())
+				}
+
 			val fields = v.split("_")
-			VGTerm(modelLookup(fields(0)), fields(1).toInt,
-				   args.getOrElse(List()))
+			VGTerm(modelLookup(fields(0)), fields(1).toInt, args, hints)
 		}
 	}
 

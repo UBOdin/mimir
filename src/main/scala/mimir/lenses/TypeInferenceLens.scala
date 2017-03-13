@@ -50,9 +50,9 @@ object TypeInferenceLens extends LazyLogging
       query.schema.map(_._1).map( col => {
         if(columnIndexes contains col){
           ProjectArg(col, 
-            Function("CAST", List(
+            Function("CAST", Seq(
               Var(col),
-              VGTerm(model, columnIndexes(col), List[Expression]())
+              VGTerm(model, columnIndexes(col), Seq(), Seq())
             ))
           )
         } else {
