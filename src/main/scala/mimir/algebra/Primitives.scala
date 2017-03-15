@@ -77,11 +77,7 @@ case class StringPrimitive(v: String)
 case class TypePrimitive(t: Type)
   extends PrimitiveValue(TType())
 {
-  override def toString() = 
-    t match {
-      case TUser(ut) => s"DOMAIN_TYPE('$ut')"
-      case _ => t.toString
-    }
+  override def toString() = t.toString
   def asLong: Long = throw new TypeException(TType(), TInt(), "Cast")
   def asDouble: Double = throw new TypeException(TType(), TFloat(), "Cast")
   def asString: String = t.toString;

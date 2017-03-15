@@ -7,6 +7,8 @@ import mimir.util._
 sealed trait Repair
 {
   def toJSON: String
+
+  def exampleString: String
 }
 
 object Repair
@@ -37,6 +39,9 @@ case class RepairFromList(choices: Seq[(PrimitiveValue, Double)])
           ))
         }))
     ))
+
+  def exampleString =
+    s"< pick one of { ${choices.map(_._1).mkString(", ")} } >"
 }
 
 case class RepairByType(t: Type)
@@ -47,4 +52,14 @@ case class RepairByType(t: Type)
       "selector" -> JSONBuilder.string("by_type"),
       "type"     -> JSONBuilder.prim(TypePrimitive(t))
     ))
+
+  def exampleString =
+  {
+    val tString =
+      t match {
+        case TUser(ut) => ut
+        case _ => t.toString
+      }
+    s"< ${tString} >"
+  }
 }

@@ -166,7 +166,11 @@ object Mimir {
   {
     val rowId = analyze.getRowId()
     val column = analyze.getColumn()
-    val query = db.sql.convert(analyze.getSelectBody())
+    val query = 
+      ResolveViews(
+        db, 
+        db.sql.convert(analyze.getSelectBody())
+      )
 
     if(rowId == null){
       println("==== Explain Table ====")
@@ -176,7 +180,7 @@ object Mimir {
         val reasons = reasonSet.take(db, 5);
         printReasons(reasons);
         if(count > reasons.size){
-          println(s"... and ${count - reasons.size} more")
+          println(s"... and ${count - reasons.size} more like the last")
         }
       }
     } else {
@@ -201,8 +205,17 @@ object Mimir {
 
   def printReasons(reasons: Iterable[Reason])
   {
-    for(reason <- reasons){
-      println(reason);
+    for(reason <- reasons.toSeq.sortBy( r => if(r.confirmed){ 1 } else { 0 } )){
+      val argString = 
+        if(!reason.args.isEmpty){
+          " (" + reason.args.mkString(",") + ")"
+        } else { "" }
+      println(reason.reason)
+      if(!reason.confirmed){
+        println(s"   ... repair with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.repair.exampleString }`");
+        println(s"   ... confirm with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.guess }`");
+      }
+      println("")
     }
   }
 

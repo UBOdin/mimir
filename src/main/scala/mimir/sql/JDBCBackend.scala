@@ -12,7 +12,7 @@ import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-class JDBCBackend(backend: String, filename: String) 
+class JDBCBackend(val backend: String, val filename: String) 
   extends Backend
   with LazyLogging
 {

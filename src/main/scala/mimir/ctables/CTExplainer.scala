@@ -244,10 +244,13 @@ class CTExplainer(db: Database) extends LazyLogging {
 	def getFocusedReasons(reasonSets: Seq[ReasonSet]): Seq[Reason] =
 	{
 		reasonSets.flatMap { reasonSet => 
+			logger.trace(s"Trying to Expand: $reasonSet")
 			val subReasons = reasonSet.take(db, 4).toSeq
 			if(subReasons.size > 3){
+				logger.trace("   -> Too many explanations to fit in one group")
 				Seq(new MultiReason(db, reasonSet))
 			} else {
+				logger.trace(s"   -> Only ${subReasons.size} explanations")
 				subReasons
 			}
 		}
@@ -349,8 +352,10 @@ class CTExplainer(db: Database) extends LazyLogging {
 		(tuple, columnExprs, rowCondition)
 	}
 
-	def explainEverything(oper: Operator): Seq[ReasonSet] =
+	def explainEverything(oper: Operator): Seq[ReasonSet] = {
+		logger.debug("Explain Everything: \n"+oper)
 		explainSubset(oper, oper.schema.map(_._1).toSet, true, true)
+	}
 
 	def explainSubset(
 		oper: Operator, 
@@ -359,7 +364,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 		wantSort:Boolean
 	): Seq[ReasonSet] =
 	{
-		logger.trace("Explain Subset: \n"+oper)
+		logger.trace(s"Explain Subset (${wantCol.mkString(", ")}; $wantRow; $wantSort): \n$oper")
 		oper match {
 			case Table(_,_,_) => Seq()
 			case EmptyTable(_) => Seq()

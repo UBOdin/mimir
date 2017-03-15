@@ -22,6 +22,8 @@ abstract class Reason
 
   def reason: String
   def repair: Repair
+  def guess: PrimitiveValue = model.bestGuess(idx, args, hints)
+  def confirmed: Boolean = model.isAcknowledged(idx, args)
 
   def toJSON: String =
     JSONBuilder.dict(Map(
