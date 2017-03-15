@@ -6,7 +6,7 @@ import java.sql.SQLException
 import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
-import mimir.util.{TimeUtils,ExperimentalOptions}
+import mimir.util.{TimeUtils,ExperimentalOptions,LineReaderInputSource}
 import mimir.algebra._
 import mimir.optimizer.ResolveViews
 import net.sf.jsqlparser.statement.Statement
@@ -69,7 +69,7 @@ object Mimir {
       }
 
       if(conf.file.get == None || conf.file() == "-"){
-        source = new InputStreamReader(System.in);
+        source = new LineReaderInputSource();
         usePrompt = !conf.quiet();
       } else {
         source = new FileReader(conf.file());
@@ -84,13 +84,12 @@ object Mimir {
     if(!conf.quiet()) { println("\n\nDone.  Exiting."); }
   }
 
-  def eventLoop(source: Reader): Unit = 
+  def eventLoop(source: Reader): Unit =
   {
     var parser = new MimirJSqlParser(source);
     var done = false;
     do {
       try {
-        if(usePrompt){ print("\nmimir> "); }
 
         val stmt: Statement = parser.Statement();
 
