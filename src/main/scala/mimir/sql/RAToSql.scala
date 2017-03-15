@@ -140,13 +140,13 @@ class RAToSql(db: Database)
         subj match {
           case Table(name, alias, sch, metadata) => {
             metadata.addAll(invisScm.map(f => (f._2._1, null, f._2._2)))
-            doConvert(new Table(name, alias, sch, metadata))
+            makePlainSelect(new Table(name, alias, sch, metadata))
           }
         }
       }
       case Recover(subj,invisScm) => {
         val schemas = invisScm.groupBy(_._3).toList.map{ f => (f._1, f._2.map{ s => s._2._1 }.toList) }
-        val pselBody = doConvert(subj).asInstanceOf[PlainSelect]
+        val pselBody = makePlainSelect(subj).asInstanceOf[PlainSelect]
         pselBody.setSelectItems(pselBody.getSelectItems.union(
           new java.util.ArrayList(
             invisScm.map( (arg) => {
@@ -160,7 +160,7 @@ class RAToSql(db: Database)
         new ProvenanceSelect(pselBody)
       }
       case ProvenanceOf(psel) => {
-        val pselBody = doConvert(psel).asInstanceOf[PlainSelect]
+        val pselBody = makePlainSelect(psel).asInstanceOf[PlainSelect]
         new ProvenanceSelect(pselBody)
       }
       case Limit(offset, maybeCount, src) => {

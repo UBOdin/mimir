@@ -60,7 +60,7 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) e
             var c = java.sql.DriverManager.getConnection("jdbc:gprom:sqlite:" + path, info)
             c.asInstanceOf[GProMConnection].getW().setLogLevel(gpromLogLevel)
             //gpromMetadataPlugin = new MimirGProMMetadataPlugin()
-            unwrappedConn = conn.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection])
+            unwrappedConn = c.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection])
             SQLiteCompat.registerFunctions( unwrappedConn )
             c
           case "oracle" =>

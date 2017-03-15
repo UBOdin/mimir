@@ -71,7 +71,7 @@ class Compiler(db: Database) extends LazyLogging {
 
     // Clean things up a little... make the query prettier, tighter, and 
     // faster
-    oper = optimize(oper, opts)
+    //----------oper = optimize(oper, opts)
 
     logger.debug(s"OPTIMIZED: $oper")
 

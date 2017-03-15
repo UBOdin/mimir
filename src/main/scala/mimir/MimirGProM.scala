@@ -119,10 +119,10 @@ object MimirGProM {
     //testDebug = true
     runTests(30) 
    
-    
-     /*val statements = db.parse(queryStr)
+    /*val queryStr = "SELECT S.A FROM R AS S GROUP BY S.A"
+     val statements = db.parse(queryStr)
      var testOper2 = db.sql.convert(statements.head.asInstanceOf[Select])
-     testOper2 = db.compiler.optimize(testOper2, db.compiler.standardOptimizations)
+     //testOper2 = db.compiler.optimize(testOper2, db.compiler.standardOptimizations)
      val operStr2 = testOper2.toString()
      println("---------v Actual Mimir Oper v----------")
      println(operStr2)

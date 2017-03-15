@@ -16,6 +16,7 @@ import net.sf.jsqlparser.statement.select.Select
 import mimir.gprom.algebra.OperatorTranslation
 import org.gprom.jdbc.jna.GProMWrapper
 import py4j.GatewayServer
+import mimir.provenance.Provenance
 
 
 /**
@@ -56,7 +57,6 @@ object MimirVizier {
   }
   
   def runServerForViztrails() : Unit = {
-    //val str = vistrailsQueryMimir("Select * from LENSE_1783249682")
     val server = new GatewayServer(this, 33388)
      server.addListener(new py4j.GatewayServerListener(){
         def connectionError(connExept : java.lang.Exception) = {
@@ -126,11 +126,11 @@ object MimirVizier {
     return tableName 
   }
   
-  def createLense(input : Any, params : Seq[String], _type : String, materialize_input:Boolean) : String = {
+  def createLens(input : Any, params : Seq[String], _type : String, materialize_input:Boolean) : String = {
     pythonCallThread = Thread.currentThread()
-    println("createLense: From Vistrails: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]"  ) ;
+    println("createLens: From Vistrails: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]"  ) ;
     val paramsStr = params.mkString(",")
-    val lenseName = "LENSE_" + ((input.toString() + _type + paramsStr).hashCode().toString().replace("-", "") )
+    val lenseName = "LENS_" + ((input.toString() + _type + paramsStr + materialize_input).hashCode().toString().replace("-", "") )
     var query:String = null
     db.getView(lenseName) match {
       case None => {
@@ -138,22 +138,24 @@ object MimirVizier {
           val materializedInput = "MATERIALIZED_"+input
           query = s"CREATE LENS ${lenseName} AS SELECT * FROM ${materializedInput} WITH ${_type}(${paramsStr})"  
           if(db.getAllTables().contains(materializedInput)){
-              println("createLense: From Vistrails: Materialized Input Already Exists: " + materializedInput)
+              println("createLens: From Vistrails: Materialized Input Already Exists: " + materializedInput)
           }
           else{  
             val inputQuery = s"SELECT * FROM ${input}"
             val oper = db.sql.convert(db.parse(inputQuery).head.asInstanceOf[Select])
-            val virtOper = db.compiler.virtualize(oper, db.compiler.standardOptimizations)
-            db.selectInto(materializedInput, virtOper.query)
+            //val virtOper = db.compiler.virtualize(oper, db.compiler.standardOptimizations)
+            db.selectInto(materializedInput, oper)//virtOper.query)
           }
         }
-        else
-          query = s"CREATE LENS ${lenseName} AS SELECT * FROM ${input} WITH ${_type}(${paramsStr})"  
-        println("createLense: query: " + query)
+        else{
+          val inputQuery = s"SELECT * FROM ${input}"
+          query = s"CREATE LENS ${lenseName} AS $inputQuery WITH ${_type}(${paramsStr})"  
+        }
+        println("createLens: query: " + query)
         db.update(db.parse(query).head)    
       }
       case Some(_) => {
-        println("createLense: From Vistrails: Lense already exists: " + lenseName)
+        println("createLens: From Vistrails: Lens already exists: " + lenseName)
       }
     }
     lenseName
@@ -177,9 +179,15 @@ object MimirVizier {
     viewName
   }
   
-  def vistrailsQueryMimir(query : String) : PythonCSVContainer = {
+  def vistrailsQueryMimir(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : PythonCSVContainer = {
+    println("vistrailsQueryMimir: " + query)
     val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
-    operCSVResultsDeterminism(oper)
+    if(includeUncertainty && includeReasons)
+      operCSVResultsDeterminismAndExplanation(oper)
+    else if(includeUncertainty)
+      operCSVResultsDeterminism(oper)
+    else 
+      operCSVResults(oper)
   }
   
   def registerPythonMimirCallListener(listener : PythonMimirCallInterface) = {
@@ -191,7 +199,7 @@ object MimirVizier {
     db.lenses.lensTypes.keySet.toSeq.mkString(",")
   }
   
-  def operCSVResults(oper : mimir.algebra.Operator) : String =  {
+  def operCSVResults(oper : mimir.algebra.Operator) : PythonCSVContainer =  {
     val results = db.query(oper)
     val cols = results.schema.map(f => f._1)
     val colsIndexes = results.schema.zipWithIndex.map( _._2)
@@ -200,11 +208,10 @@ object MimirVizier {
          row(i).toString 
        }).mkString(", ")
     }).mkString("\n")  
-    resCSV 
+    new PythonCSVContainer(resCSV, Array[Array[Boolean]](), Array[Boolean](), Array[Array[String]]())
   }
-  //----------------------------------------------------------
   
-  def operCSVResultsDeterminism(oper : mimir.algebra.Operator) : PythonCSVContainer =  {
+ def operCSVResultsDeterminism(oper : mimir.algebra.Operator) : PythonCSVContainer =  {
      val results = db.query(oper)
      val cols = results.schema.map(f => f._1)
      val colsIndexes = results.schema.zipWithIndex.map( _._2)
@@ -214,12 +221,31 @@ object MimirVizier {
        }).unzip
        (truples._1.mkString(", "), truples._2.toArray, row.deterministicRow())
      }).unzip3
-     new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), resCSV._2.toArray, resCSV._3.toArray)
+     new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), resCSV._2.toArray, resCSV._3.toArray, Array[Array[String]]())
+  }
+ 
+ def operCSVResultsDeterminismAndExplanation(oper : mimir.algebra.Operator) : PythonCSVContainer =  {
+     val results = db.query(oper)
+     val cols = results.schema.map(f => f._1)
+     val colsIndexes = results.schema.zipWithIndex.map( _._2)
+     val resCSV = results.mapRows(row => {
+       val truples = colsIndexes.map( (i) => {
+         (row(i).toString, row.deterministicCol(i), if(!row.deterministicCol(i))db.explainCell(oper, row.provenanceToken(), cols(i)).reasons.mkString(",")else"") 
+       }).unzip3
+       (truples._1.mkString(", "), (truples._2.toArray, row.deterministicRow()), truples._3.toArray)
+     }).unzip3
+     val detLists = resCSV._2.unzip
+     println(resCSV._3.map(s=>s.mkString(",")).mkString(","))
+     new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), detLists._1.toArray, detLists._2.toArray, resCSV._3.toArray)
   }
 }
+
+
+//----------------------------------------------------------
+  
 
 trait PythonMimirCallInterface {
 	def callToPython(callStr : String) : String
 }
 
-class PythonCSVContainer(val csvStr: String, val colsDet: Array[Array[Boolean]], val rowsDet: Array[Boolean]){}
+class PythonCSVContainer(val csvStr: String, val colsDet: Array[Array[Boolean]], val rowsDet: Array[Boolean], val celReasons:Array[Array[String]]){}

@@ -91,6 +91,16 @@ object FunctionRegistry {
 			(x: Seq[Type]) => Typechecker.assertNumeric(x(0), Function("ABSOLUTE", List()))
 		)
 
+		registerNative("ROUND", 
+			{
+	      case Seq(IntPrimitive(i))   =>  IntPrimitive(i) 
+	      case Seq(FloatPrimitive(f)) => IntPrimitive(Math.round(f) )
+	      case Seq(NullPrimitive())   => NullPrimitive()
+	      case x => throw new SQLException("Non-numeric parameter to round: '"+x+"'")
+	    },
+			(x: Seq[Type]) => Typechecker.assertNumeric(x(0), Function("ROUND", List()))
+		)
+		
     registerNative("SQRT",
       {
         case Seq(n:NumericPrimitive) => FloatPrimitive(Math.sqrt(n.asDouble))
