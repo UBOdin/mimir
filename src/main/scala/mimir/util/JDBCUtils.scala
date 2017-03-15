@@ -64,7 +64,6 @@ object JDBCUtils {
             results.getString(field)
           ))
         case TDate() =>
-          val calendar = Calendar.getInstance()
           try {
             convertDate(results.getDate(field))
           } catch {

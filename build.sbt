@@ -13,42 +13,54 @@ resolvers += "MimirDB" at "http://maven.mimirdb.info/"
 resolvers += "osgeo" at "http://download.osgeo.org/webdav/geotools/"
 
 libraryDependencies ++= Seq(
-  "org.rogach"                    %%   "scallop"               % "0.9.5",
-  "com.github.nscala-time"        %%   "nscala-time"           % "1.2.0",
-  "ch.qos.logback"                %    "logback-classic"       % "1.1.7",
-  "com.typesafe.scala-logging"    %%   "scala-logging-slf4j"   % "2.1.2",
-  "org.specs2"                    %%   "specs2-core"           % "3.8.4" % "test",
-  "org.specs2"                    %%   "specs2-matcher-extra"  % "3.8.4" % "test",
-  "org.specs2"                    %%   "specs2-junit"          % "3.8.4" % "test",
-  ("nz.ac.waikato.cms.weka"       %    "weka-stable"           % "3.8.1").
-    exclude("nz.ac.waikato.cms.weka", "weka-dev").
-    exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
-  ("nz.ac.waikato.cms.moa"        %    "moa"                   % "2014.11").
-    exclude("nz.ac.waikato.cms.weka", "weka-dev").
-    exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
+  ////////////////////// Command-Line Interface Utilities //////////////////////
+  "org.rogach"                    %%  "scallop"               % "0.9.5",
+  "org.jline"                     %   "jline"                 % "3.2.0",
+  "info.mimirdb"                  %   "jsqlparser"            % "1.0.1",
 
+  ////////////////////// Dev Tools -- Logging, Testing, etc... //////////////////////
+  "com.typesafe.scala-logging"    %%  "scala-logging-slf4j"   % "2.1.2",
+  "ch.qos.logback"                %   "logback-classic"       % "1.1.7",
+  "org.specs2"                    %%  "specs2-core"           % "3.8.4" % "test",
+  "org.specs2"                    %%  "specs2-matcher-extra"  % "3.8.4" % "test",
+  "org.specs2"                    %%  "specs2-junit"          % "3.8.4" % "test",
+
+  //////////////////////// Data Munging Tools //////////////////////
+  "com.github.nscala-time"        %%  "nscala-time"           % "1.2.0",
   "org.apache.lucene"             %   "lucene-spellchecker"   % "3.6.2",
-  "org.xerial"                    %   "sqlite-jdbc"           % "3.16.1",
+  "org.apache.servicemix.bundles" %   "org.apache.servicemix.bundles.collections-generic" 
+                                                              % "4.01_1",
+  "org.apache.commons"            %   "commons-csv"           % "1.4",
+  "commons-io"                    %   "commons-io"            % "2.5",
+  "com.github.wnameless"          %   "json-flattener"        % "0.2.2",
+  "com.typesafe.play"             %%  "play-json"             % "2.4.11",
 
+  //////////////////////// Lens Libraries //////////////////////
+  // WEKA - General-purpose Classifier Training/Deployment Library
+  // Used by the imputation lens
+  ("nz.ac.waikato.cms.weka"       %   "weka-stable"           % "3.8.1").
+    exclude("nz.ac.waikato.cms.weka",  "weka-dev").
+    exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
+  ("nz.ac.waikato.cms.moa"        %   "moa"                   % "2014.11").
+    exclude("nz.ac.waikato.cms.weka",  "weka-dev").
+    exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
+ 
+  // Jung - General purpose graph manipulation library
+  // Used to detect and analyze Functional Dependencies
   "net.sf.jung"                   %   "jung-graph-impl"       % "2.0.1",
   "net.sf.jung"                   %   "jung-algorithms"       % "2.0.1",
   "net.sf.jung"                   %   "jung-visualization"    % "2.0.1",
   "jgraph"                        %   "jgraph"                % "5.13.0.0",
 
-  "org.apache.servicemix.bundles" %   "org.apache.servicemix.bundles.collections-generic" % "4.01_1",
-  "org.apache.commons"            %   "commons-csv"           % "1.4",
-  "commons-io"                    %   "commons-io"            % "2.5",
+  // Geotools - Geospatial data transformations
+  // Used by the CURE scenario
+  "org.geotools"                  %   "gt-referencing"        % "16.2",
+  "org.geotools"                  %   "gt-referencing"        % "16.2",
+  "org.geotools"                  %   "gt-epsg-hsql"          % "16.2",
 
-  "com.github.wnameless"          %   "json-flattener"        % "0.2.2",
-  "com.typesafe.play"             %%  "play-json"             % "2.4.11",
+  //////////////////////// JDBC Backends //////////////////////
+  "org.xerial"                    %   "sqlite-jdbc"           % "3.16.1"
 
-  "com.twitter"                   %   "hbc-core"              % "2.0.1",
-
-  "info.mimirdb"                  %   "jsqlparser"            % "1.0.1",
-
-  "org.geotools"                  %    "gt-referencing"       % "16.2",
-  "org.geotools"                  %    "gt-referencing"       % "16.2",
-  "org.geotools"                  %    "gt-epsg-hsql"         % "16.2"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")
