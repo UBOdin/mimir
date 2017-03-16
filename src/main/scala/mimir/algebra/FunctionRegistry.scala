@@ -65,12 +65,14 @@ object FunctionRegistry {
     registerSet(List("CAST", "MIMIRCAST"), 
       (params: Seq[PrimitiveValue]) => {
         params match {
-          case x :: TypePrimitive(t)    :: Nil => Cast(t, x)
+          case x :: IntPrimitive(i) :: Nil   =>  Cast(mimir.algebra.Type.toSQLiteType(i.toInt), x)
+	        case x :: TypePrimitive(t)    :: Nil => Cast(t, x)
           case _ => throw new SQLException("Invalid cast: "+params)
         }
       },
       (_) => TAny()
     )
+    
 
 		registerSet(List("DATE", "TO_DATE"), 
 		  (params: Seq[PrimitiveValue]) => 

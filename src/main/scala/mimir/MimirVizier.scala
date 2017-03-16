@@ -17,6 +17,8 @@ import mimir.gprom.algebra.OperatorTranslation
 import org.gprom.jdbc.jna.GProMWrapper
 import py4j.GatewayServer
 import mimir.provenance.Provenance
+import net.sf.jsqlparser.statement.select.SelectBody
+import mimir.algebra.RowIdPrimitive
 
 
 /**
@@ -190,6 +192,13 @@ object MimirVizier {
       operCSVResults(oper)
   }
   
+  def explainCell(query: String, col:Int, row:Int) : String = {
+    println("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
+    val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
+    val cols = oper.schema.map(f => f._1)
+    db.explainCell(oper, RowIdPrimitive(row.toString()), cols(col)).toString()
+  }
+  
   def registerPythonMimirCallListener(listener : PythonMimirCallInterface) = {
     println("registerPythonMimirCallListener: From Vistrails: ") ;
     pythonMimirCallListeners = pythonMimirCallListeners.union(Seq(listener))
@@ -239,7 +248,6 @@ object MimirVizier {
      new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), detLists._1.toArray, detLists._2.toArray, resCSV._3.toArray)
   }
 }
-
 
 //----------------------------------------------------------
   
