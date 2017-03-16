@@ -11,11 +11,12 @@ import mimir.models.Model
 import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
 import mimir.lenses.{LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
-import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens,CreateView,Explain,Feedback,Load}
+import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens,CreateView,Explain,Feedback,Load,Pragma,Analyze,CreateAdaptiveSchema}
 import mimir.optimizer.{InlineVGTerms, ResolveViews}
 import mimir.util.{LoadCSV,ExperimentalOptions}
 import mimir.web.WebIterator
 import mimir.parser.MimirJSqlParser
+import mimir.statistics.FuncDep
 
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
@@ -39,33 +40,39 @@ import scala.collection.mutable.ListBuffer
   * accessor method to Database instead.
   *
   * === Parsing ===
-  * - mimir.sql.SqlToRA (sql)
+  * * mimir.sql.SqlToRA (sql)
   *    Responsible for translating JSqlParser AST elements into corresponding AST elements from
   *    mimir.algebra._  
-  * - mimir.sql.RAToSql (ra)
+  * * mimir.sql.RAToSql (ra)
   *    Responsible for translating mimir.algebra._ AST elements back to JSqlParser's AST.  This is
   *    typically only required for compatibility with JDBC.
-  * - mimir.parser.OperatorParser (operator)
+  * * mimir.parser.OperatorParser (operator)
   *    Responsible for directly constructing mimir.algebra.{Operator,Expression} ASTs from string
   *    representations.  Allows these ASTs to be serialized through toString()
   *
   * === Persistence ===
-  * - mimir.views.ViewManager (views)
+  * * mimir.views.ViewManager (views)
   *    Responsible for creating, serializing, and deserializing virtual Mimir-level views.
-  * - mimir.views.ModelManager (models)
+  * * mimir.views.ModelManager (models)
   *    Responsible for creating, serializing, and deserializing models.
-  * - mimir.lenses.LensManager (lenses)
+  * * mimir.lenses.LensManager (lenses)
   *    Responsible for creating and managing lenses
-  * 
+  * * mimir.adaptive.AdaptiveSchemaManager (adaptiveSchemas)
+  *    Responsible for creating and managing adaptive schemas (multilenses)
+  *
   * === Logic ===
-  * - mimir.sql.Backend (backend)
+  * * mimir.sql.Backend (backend)
   *    Pluggable wrapper for database backends over which Mimir will actually run.  Basically,
   *    a simplified form of JDBC.  See mimir.sql._ for examples.
-  * - mimir.exec.Compiler
+  * * mimir.lenses.LensManager (lenses)
+  *    Responsible for creating, serializing, and deserializing lenses and virtual views.
+  * * mimir.exec.Compiler (compiler)
   *    Responsible for query execution.  Acts as a wrapper around the logic in mimir.ctables._, 
   *    mimir.lenses._, and mimir.exec._ that prepares non-deterministic queries to be evaluated
   *    on the backend database.  
-  * - mimir.explainer.CTExplainer (explainer)
+  * * mimir.statistics.SystemCatalog (catalog)
+  *    Responsible for managing the system catalog tables/views
+  * * mimir.explainer.CTExplainer (explainer)
   *    Responsible for creating explanation objects.
   */
 case class Database(backend: Backend)
@@ -76,10 +83,12 @@ case class Database(backend: Backend)
   val views           = new mimir.views.ViewManager(this)
   val bestGuessCache  = new mimir.lenses.BestGuessCache(this)
   val querySerializer = new mimir.algebra.Serialization(this)
+  val adaptiveSchemas = new mimir.adaptive.AdaptiveSchemaManager(this)
 
   //// Logic
   val compiler        = new mimir.exec.Compiler(this)
   val explainer       = new mimir.ctables.CTExplainer(this)
+  val catalog         = new mimir.statistics.SystemCatalog(this)
 
   //// Parsing
   val sql             = new mimir.sql.SqlToRA(this)
@@ -89,7 +98,8 @@ case class Database(backend: Backend)
       this.getTableSchema(x) match {
         case Some(x) => x
         case None => throw new RAException("Table "+x+" does not exist in db!")
-      })
+      }
+  )
 
   /** 
    * Apply the standard set of Mimir compiler optimizations -- Used mostly for EXPLAIN.
@@ -154,29 +164,7 @@ case class Database(backend: Backend)
     }, () => {
       println(result.schema.map( _._1 ).mkString(","))
       println("------")
-      while(result.getNext()){
-        println(
-          (0 until result.numCols).map( (i) => {
-            if( i == 0 ){
-              result(i) match {
-                case NullPrimitive() => "'NULL'"
-                case _ => result(i)
-              }
-
-            }
-            else{
-              result(i)+(
-                if(!result.deterministicCol(i)){ "*" } else { "" }
-                )
-            }
-
-          }).mkString(",")+(
-            if(!result.deterministicRow){
-              " (This row may be invalid)"
-            } else { "" }
-            )
-        )
-      }
+      result.foreachRow { row => println(row.rowString) }
       if(result.missingRows()){
         println("( There may be missing result rows )")
       }
@@ -254,8 +242,7 @@ case class Database(backend: Backend)
   def getAllTables(): Set[String] =
   {
     (
-      backend.getAllTables() ++ 
-      views.listViews()
+      backend.getAllTables() ++ views.list()
     ).toSet[String];
   }
 
@@ -297,9 +284,13 @@ case class Database(backend: Backend)
   def update(stmt: Statement)
   {
     stmt match {
-      case sel:  Select     => throw new SQLException("Can't evaluate SELECT as an update")
-      case expl: Explain    => throw new SQLException("Can't evaluate EXPLAIN as an update")
+      /********** QUERY STATEMENTS **********/
+      case _: Select   => throw new SQLException("Can't evaluate SELECT as an update")
+      case _: Explain  => throw new SQLException("Can't evaluate EXPLAIN as an update")
+      case _: Pragma   => throw new SQLException("Can't evaluate PRAGMA as an update")
+      case _: Analyze  => throw new SQLException("Can't evaluate ANALYZE as an update")
 
+      /********** FEEDBACK STATEMENTS **********/
       case feedback: Feedback => {
         val name = feedback.getModel().toUpperCase()
         val idx = feedback.getIdx()
@@ -314,16 +305,31 @@ case class Database(backend: Backend)
         }
       }
 
+      /********** CREATE LENS STATEMENTS **********/
       case lens: CreateLens => {
         val t = lens.getType().toUpperCase()
         val name = lens.getName()
         val query = sql.convert(lens.getSelectBody())
         val args = lens.getArgs().map(sql.convert(_, x => x)).toList
 
-        lenses.createLens(t, name, query, args)
+        lenses.create(t, name, query, args)
       }
-      case view: CreateView => views.createView(view.getTable().getName().toUpperCase, 
-                                                sql.convert(view.getSelectBody()))
+
+      /********** CREATE VIEW STATEMENTS **********/
+      case view: CreateView => views.create(view.getTable().getName().toUpperCase,
+                                             sql.convert(view.getSelectBody()))
+
+      /********** CREATE ADAPTIVE SCHEMA **********/
+      case createAdaptive: CreateAdaptiveSchema => {
+        adaptiveSchemas.create(
+          createAdaptive.getName.toUpperCase,
+          createAdaptive.getType.toUpperCase,
+          sql.convert(createAdaptive.getSelectBody()),
+          createAdaptive.getArgs.map( sql.convert(_, x => x) )
+        )
+      }
+
+      /********** LOAD STATEMENTS **********/
       case load: Load => {
         // Assign a default table name if needed
         val target = 
@@ -335,21 +341,23 @@ case class Database(backend: Backend)
         loadTable(target, load.getFile)
       }
 
+      /********** DROP STATEMENTS **********/
       case drop: Drop     => {
-          drop.getType().toUpperCase match {
-            case "TABLE" | "INDEX" => 
-              backend.update(drop.toString());
+        drop.getType().toUpperCase match {
+          case "TABLE" | "INDEX" =>
+            backend.update(drop.toString());
 
-            case "VIEW" =>
-              views.dropView(drop.getName().toUpperCase);
+          case "VIEW" =>
+            views.drop(drop.getName().toUpperCase);
 
-            case "LENS" =>
-              lenses.dropLens(drop.getName().toUpperCase)
+          case "LENS" =>
+            lenses.drop(drop.getName().toUpperCase)
 
-            case _ =>
-              throw new SQLException("Invalid drop type '"+drop.getType()+"'")
-          }
+          case _ =>
+            throw new SQLException("Invalid drop type '"+drop.getType()+"'")
+        }
       }
+
       case _                => backend.update(stmt.toString())
     }
   }
@@ -361,6 +369,7 @@ case class Database(backend: Backend)
     models.init()
     views.init()
     lenses.init()
+    adaptiveSchemas.init()
   }
 
   /**
@@ -368,7 +377,9 @@ case class Database(backend: Backend)
    * name (or None if no such lens exists)
    */
   def getView(name: String): Option[(Operator)] =
-    views.getView(name)
+    catalog(name).orElse(
+      views.get(name)
+    )
 
   /**
    * Load a CSV file into the database
@@ -392,7 +403,7 @@ case class Database(backend: Backend)
     val oper = getTableOperator(targetRaw)
     val l = List(new FloatPrimitive(.5))
 
-    lenses.createLens("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)
+    lenses.create("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)
   }
   
   def loadTable(targetTable: String, sourceFile: String){
@@ -404,7 +415,10 @@ case class Database(backend: Backend)
   def loadTable(sourceFile: File){
     loadTable(sourceFile.getName().split("\\.")(0), sourceFile)
   }
-  
+
+  /**
+    * Materialize a view into the database
+    */
   def selectInto(targetTable: String, sourceQuery: Operator){
     val tableSchema = sourceQuery.schema
     val tableDef = tableSchema.map( x => x._1+" "+Type.toString(x._2) ).mkString(",")
@@ -415,7 +429,45 @@ case class Database(backend: Backend)
     println(insertCmd)
     backend.fastUpdateBatch(insertCmd, query(sourceQuery).allRows())
   }
-  
-  
 
+  def selectInto(targetTable: String, tableName: String){
+/*    val v:Option[Operator] = getView(tableName)
+    val mod:Model = models.getModel(tableName)
+    mod.bestGuess()
+    v match {
+      case Some(o) => println("Schema: " + o.schema.toString())
+      case None => println("Not a View")
+    }
+*/
+    val tableS = this.getTableSchema(tableName)
+    var tableDef = ""
+    var tableCols = ""
+    var colFillIns = ""
+    tableS match {
+      case Some(tableSchema) => {
+        tableDef = tableSchema.map( x => x._1+" "+Type.toString(x._2) ).mkString(",")
+        tableCols = tableSchema.map( _._1 ).mkString(",")
+        colFillIns = tableSchema.map( _ => "?").mkString(",")
+      }
+      case None => throw new SQLException
+    }
+    println(  s"CREATE TABLE $targetTable ( $tableDef );"  )
+    backend.update(  s"CREATE TABLE $targetTable ( $tableDef );"  )
+    val insertCmd = s"INSERT INTO $targetTable( $tableCols ) VALUES ($colFillIns);"
+    println(insertCmd)
+    query("SELECT * FROM " + tableName + ";").foreachRow(
+      result =>
+        backend.update(insertCmd, result.currentRow())
+    )
+  }
+  def select(s: String) = {
+    this.sql.convert(stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select])
+  }
+  def query(s: String): ResultIterator = {
+    val query = select(s)
+    this.query(query)
+  }
+  def stmt(s: String) = {
+    new MimirJSqlParser(new StringReader(s)).Statement()
+  }
 }

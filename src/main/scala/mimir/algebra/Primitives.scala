@@ -47,6 +47,7 @@ abstract class NumericPrimitive(t: Type) extends PrimitiveValue(t)
 /**
  * Boxed representation of a long integer
  */
+@SerialVersionUID(100L)
 case class IntPrimitive(v: Long) 
   extends NumericPrimitive(TInt())
 {
@@ -56,20 +57,10 @@ case class IntPrimitive(v: Long)
   def asString: String = v.toString;
   def payload: Object = v.asInstanceOf[Object];
 }
-/*
-case class UserPrimitive(v: String)
-  extends PrimitiveValue(TUser)
-{
-  override def toString() = v.toString
-  def asLong: Long = v.toLong;
-  def asDouble: Double = v.toDouble;
-  def asString: String = v;
-  def payload: Object = v.asInstanceOf[Object];
-}
-*/
 /**
  * Boxed representation of a string
  */
+@SerialVersionUID(100L)
 case class StringPrimitive(v: String) 
   extends PrimitiveValue(TString())
 {
@@ -82,14 +73,11 @@ case class StringPrimitive(v: String)
 /**
  * Boxed representation of a type object
  */
+@SerialVersionUID(100L)
 case class TypePrimitive(t: Type)
   extends PrimitiveValue(TType())
 {
-  override def toString() = 
-    t match {
-      case TUser(ut) => s"DOMAIN_TYPE('$ut')"
-      case _ => t.toString
-    }
+  override def toString() = t.toString
   def asLong: Long = throw new TypeException(TType(), TInt(), "Cast")
   def asDouble: Double = throw new TypeException(TType(), TFloat(), "Cast")
   def asString: String = t.toString;
@@ -98,6 +86,7 @@ case class TypePrimitive(t: Type)
 /**
  * Boxed representation of a row identifier/provenance token
  */
+@SerialVersionUID(100L)
 case class RowIdPrimitive(v: String)
   extends PrimitiveValue(TRowId())
 {
@@ -110,6 +99,7 @@ case class RowIdPrimitive(v: String)
 /**
  * Boxed representation of a double-precision floating point number
  */
+@SerialVersionUID(100L)
 case class FloatPrimitive(v: Double) 
   extends NumericPrimitive(TFloat())
 {
@@ -123,6 +113,7 @@ case class FloatPrimitive(v: Double)
 /**
  * Boxed representation of a date
  */
+@SerialVersionUID(100L)
 case class DatePrimitive(y: Int, m: Int, d: Int)
   extends PrimitiveValue(TDate())
 {
@@ -146,6 +137,7 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
   *
   * Boxed Representation of Timestamp
   */
+@SerialVersionUID(100L)
 case class TimestampPrimitive(y: Int, m: Int, d: Int, hh: Int, mm: Int, ss: Int)
   extends PrimitiveValue(TTimeStamp())
 {
@@ -173,6 +165,7 @@ case class TimestampPrimitive(y: Int, m: Int, d: Int, hh: Int, mm: Int, ss: Int)
 /**
  * Boxed representation of a boolean
  */
+@SerialVersionUID(100L)
 case class BoolPrimitive(v: Boolean)
   extends PrimitiveValue(TBool())
 {
@@ -185,6 +178,7 @@ case class BoolPrimitive(v: Boolean)
 /**
  * Boxed representation of NULL
  */
+@SerialVersionUID(100L)
 case class NullPrimitive()
   extends PrimitiveValue(TAny())
 {

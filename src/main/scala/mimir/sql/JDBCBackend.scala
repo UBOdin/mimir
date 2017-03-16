@@ -10,9 +10,11 @@ import mimir.sql.sqlite._
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
-;
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
-class JDBCBackend(backend: String, filename: String) extends Backend
+class JDBCBackend(val backend: String, val filename: String) 
+  extends Backend
+  with LazyLogging
 {
   var conn: Connection = null
   var openConnections = 0
@@ -32,7 +34,12 @@ class JDBCBackend(backend: String, filename: String) extends Backend
             val path = java.nio.file.Paths.get(filename).toString
             var c = java.sql.DriverManager.getConnection("jdbc:sqlite:" + path)
             SQLiteCompat.registerFunctions(c)
+            tableSchemas.put("SQLITE_MASTER", Seq(
+              ("NAME", TString()),
+              ("TYPE", TString())
+            ))
             c
+
 
           case "oracle" =>
             Methods.getConn()
@@ -266,9 +273,43 @@ class JDBCBackend(backend: String, filename: String) extends Backend
         case _:NullPrimitive     => stmt.setNull(i, Types.VARCHAR)
         case d:DatePrimitive     => stmt.setDate(i, JDBCUtils.convertDate(d))
         case r:RowIdPrimitive    => stmt.setString(i,r.v)
+        case t:TypePrimitive     => stmt.setString(i, t.t.toString)
       }
     })
   }
 
+  def listTablesQuery: Operator = 
+  {
+    backend match {
+      case "sqlite" => 
+        Project(
+          Seq(
+            ProjectArg("TABLE_NAME", Var("NAME"))
+          ),
+          Select(
+            ExpressionUtils.makeInTest(Var("TYPE"), Seq(StringPrimitive("table"), StringPrimitive("view"))),
+            Table("SQLITE_MASTER", Seq(("NAME", TString()), ("TYPE", TString())), Seq())
+          )
+        )
+
+      case "oracle" => ???
+    }
+  }
+  def listAttrsQuery: Operator = 
+  {
+    backend match {
+      case "sqlite" => {
+        logger.warn("SQLITE has no programatic way to access attributes in SQL")
+        EmptyTable(Seq(
+          ("TABLE_NAME", TString()), 
+          ("ATTR_NAME", TString()),
+          ("ATTR_TYPE", TString()),
+          ("IS_KEY", TBool())
+        ));
+      }
+
+      case "oracle" => ???
+    }
+  }
   
 }

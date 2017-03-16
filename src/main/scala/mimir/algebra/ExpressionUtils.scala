@@ -123,6 +123,15 @@ object ExpressionUtils {
 			case _ => (List[(Expression, Expression)](), e)
 		}
 	}
+
+  /**
+   * Create an IN test (i.e., X IN (A, B, C, ...))
+   */
+  def makeInTest(lhs: Expression, cases: Seq[Expression]): Expression =
+  {
+    makeOr(cases.map( Comparison(Cmp.Eq, lhs, _) ))
+  }
+
   /**
    * Create a sum from an arbitrary list
    */

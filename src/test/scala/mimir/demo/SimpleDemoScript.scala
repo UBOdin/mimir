@@ -387,7 +387,7 @@ object SimpleDemoScript
 						) r, Product p
 						""", "1|right|3", "RATING")
 				)
-			explain0.reasons.map(_.model.replaceAll(":.*", "")) must contain(eachOf(
+			explain0.reasons.map(_.model.name.replaceAll(":.*", "")) must contain(eachOf(
 				"RATINGS2FINAL",
 				"RATINGS2"
 			))

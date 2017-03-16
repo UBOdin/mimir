@@ -65,9 +65,9 @@ class ExpressionChecker(scope: (String => Type) = Map().apply _) extends LazyLog
 			case Conditional(condition, thenClause, elseClause) => 
 				assert(condition, TBool(), "WHEN")
 				Typechecker.escalate(
-					typeOf(thenClause),
 					typeOf(elseClause),
-					"IF RETURN", e
+					typeOf(thenClause),
+					"IF, ELSE CLAUSE", e
 				)
 			case IsNullExpression(child) =>
 				typeOf(child);
@@ -170,6 +170,8 @@ object Typechecker {
 				lSchema
 
 			case Table(_, _, sch, meta) => (sch ++ meta.map( x => (x._1, x._3) ))
+
+			case EmptyTable(sch) => sch
 
 			case Limit(_, _, src) => schemaOf(src)
 

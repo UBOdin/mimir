@@ -49,12 +49,26 @@ object OperatorUtils {
     else { return Union(head, makeUnion(tail)) }
   }
 
+  def makeDistinct(oper: Operator): Operator = 
+  {
+    Aggregate(
+      oper.schema.map(_._1).map(Var(_)),
+      Seq(),
+      oper
+    )
+  }
+
   def extractProjections(oper: Operator): (Seq[ProjectArg], Operator) =
   {
     oper match {
       case Project(cols, src) => (cols.map(col => ProjectArg(col.name, col.expression)), src)
       case _ => (oper.schema.map(col => ProjectArg(col._1, Var(col._1))), oper)
     }
+  }
+
+  def projectDownToColumns(columns: Seq[String], oper: Operator): Operator =
+  {
+    Project( columns.map( x => ProjectArg(x, Var(x)) ), oper)
   }
 
   def projectAwayColumn(target: String, oper: Operator): Operator =

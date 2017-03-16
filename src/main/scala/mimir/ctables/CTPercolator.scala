@@ -6,7 +6,6 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
-import mimir.sql.sqlite.BoolAnd
 
 object CTPercolator 
   extends LazyLogging
@@ -166,7 +165,7 @@ object CTPercolator
             (col, isDeterministic)
           }})
 
-        logger.trace(s"PROJECT-BASE: $newColDeterminismBase")
+        logger.debug(s"PROJECT-BASE: $newColDeterminismBase")
 
         // Determine which of them are deterministic.
         val computedDeterminismCols = 
@@ -182,7 +181,7 @@ object CTPercolator
               ProjectArg(mimirColDeterministicColumnPrefix+col, isDeterministic) 
             }
           )
-        logger.trace(s"PROJECT-COLS: $computedDeterminismCols")
+        logger.debug(s"PROJECT-COLS: $computedDeterminismCols")
 
         // Rewrite these expressions so that the computed expressions use the
         // computed version from the source data.
@@ -214,7 +213,7 @@ object CTPercolator
             rewrittenSrc
           )
 
-        logger.trace(s"REWRITTEN: $retProject")
+        logger.debug(s"REWRITTEN: $retProject")
 
         return (retProject, newColDeterminism.toMap, newRowDeterminism)
       }
@@ -283,19 +282,33 @@ object CTPercolator
           Aggregate(
             groupBy, 
             aggregates ++ aggFuncMetaColumns.flatten ++ groupMetaColumn,
-            src
+            rewrittenSrc
           )
+
+        logger.debug(s"Aggregate Meta Columns: $groupMetaColumn // $aggFuncMetaColumns")
+        logger.debug(s"Aggregate Determinism [Aggregates]: $aggFuncMetaExpressions")
+        logger.debug(s"Aggregate Determinism [Row]: $groupMetaExpression")
 
         // Annotate all of the output columns
         val columnMetadata =
           aggFuncMetaExpressions ++
-          groupBy.map( gb => (gb.name, groupDeterminism) )
+          groupBy.map( gb => (gb.name, BoolPrimitive(true)) )
+
+        // Oliver says:
+        // In this code, we're associating nondeterminism in the G.B. attributes with
+        // the group's row, rather than with the G.B. cols.  There are some cases where
+        // this isn't the intuitive thing to do (e.g., for the Type Inference Lens).
+        // However, this is the more general approach, and so we're going to use it for
+        // now --- Some user/expert studies down the line might be warranted.
+        // 
+        // Since this code is going to start migrating into GProM, we're going to want to 
+        // start thinking of propagation rules in a more abstract Semiring style.
 
         // And return the new aggregate and annotations
         return (
           extendedAggregate,
           columnMetadata.toMap,
-          groupDeterminism
+          groupMetaExpression
         )
       }
 
@@ -493,6 +506,14 @@ object CTPercolator
         return (oper, 
           // All columns are deterministic
           cols.map(_._1).map((_, BoolPrimitive(true)) ).toMap,
+          // All rows are deterministic
+          BoolPrimitive(true)
+        )
+      }
+      case EmptyTable(sch) => {
+        return (oper, 
+          // All columns are deterministic
+          sch.map(_._1).map((_, BoolPrimitive(true)) ).toMap,
           // All rows are deterministic
           BoolPrimitive(true)
         )

@@ -115,12 +115,12 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
         TypeInferenceModel.logger.debug(s"Votes($idx): ${voteList(idx)} -> $guess")
         TypePrimitive(guess)
       }
-      case Some(s) => s
+      case Some(s) => Cast(TType(), s)
     }
   }
 
   def validateChoice(idx: Int, v: PrimitiveValue): Boolean =
-    v.isInstanceOf[TypePrimitive]
+    try { Cast(TType(), v); true } catch { case _:RAException => false }
 
 
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = {
@@ -141,15 +141,13 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
           }
         s"I guessed that ${columns(idx)} was of type $typeStr because $reason"
       }
-      case Some(TypePrimitive(t)) =>
-        val typeStr = Type.toString(t).toUpperCase
+      case Some(t) =>
+        val typeStr = Cast(TType(), t).toString.toUpperCase
         s"You told me that ${columns(idx)} was of type $typeStr"
-      case Some(c) =>
-        throw new ModelException(s"Invalid choice $c for $name")
     }
   }
 
-  def getDomain(idx: Int, args: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
-    votes(idx).toList.map( x => (TypePrimitive(x._1), x._2))
+  def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
+    votes(idx).toList.map( x => (TypePrimitive(x._1), x._2)) ++ Seq( (TypePrimitive(TString()), defaultFrac) )
 
 }

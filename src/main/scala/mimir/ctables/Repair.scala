@@ -1,11 +1,29 @@
 package mimir.ctables
 
 import mimir.algebra._
+import mimir.models._
 import mimir.util._
 
 sealed trait Repair
 {
   def toJSON: String
+
+  def exampleString: String
+}
+
+object Repair
+{
+  def makeRepair(term: VGTerm, v: Seq[PrimitiveValue], h: Seq[PrimitiveValue]): Repair =
+    makeRepair(term.model, term.idx, v, h)
+  def makeRepair(model: Model, idx: Int, v: Seq[PrimitiveValue], h: Seq[PrimitiveValue]): Repair =
+  {
+    model match {
+      case finite:( Model with FiniteDiscreteDomain ) =>
+        RepairFromList(finite.getDomain(idx, v, h))
+      case _ => 
+        RepairByType(model.varType(idx, v.map(_.getType)))
+    }
+  }
 }
 
 case class RepairFromList(choices: Seq[(PrimitiveValue, Double)])
@@ -21,6 +39,9 @@ case class RepairFromList(choices: Seq[(PrimitiveValue, Double)])
           ))
         }))
     ))
+
+  def exampleString =
+    s"< pick one of { ${choices.map(_._1).mkString(", ")} } >"
 }
 
 case class RepairByType(t: Type)
@@ -31,4 +52,14 @@ case class RepairByType(t: Type)
       "selector" -> JSONBuilder.string("by_type"),
       "type"     -> JSONBuilder.prim(TypePrimitive(t))
     ))
+
+  def exampleString =
+  {
+    val tString =
+      t match {
+        case TUser(ut) => ut
+        case _ => t.toString
+      }
+    s"< ${tString} >"
+  }
 }

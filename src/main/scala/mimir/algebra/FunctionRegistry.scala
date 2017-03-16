@@ -50,13 +50,7 @@ object FunctionRegistry {
 	{
 		registerNative("MIMIR_MAKE_ROWID", 
       Provenance.joinRowIds(_: Seq[PrimitiveValue]),
-			((args: Seq[Type]) => 
-				if(!args.forall( t => (t == TRowId()) || (t == TAny()) )) { 
-					throw new TypeException(TAny(), TRowId(), "MIMIR_MAKE_ROWID")
-				} else {
-					TRowId()
-				}
-			)
+			((args: Seq[Type]) => TRowId())
 		)
 
     registerFold("SEQ_MIN", "IF CURR < NEXT THEN CURR ELSE NEXT END")
@@ -118,6 +112,22 @@ object FunctionRegistry {
 
     registerNative("BITWISE_AND", (x) => IntPrimitive(x(0).asLong & x(1).asLong), (_) => TInt())
 
+    FunctionRegistry.registerNative(
+      "DST",
+      (args) => { throw new SQLException("Mimir Cannot Execute VGTerm Functions Internally") },
+      (_) => TFloat()
+    )
+    FunctionRegistry.registerNative(
+      "SPEED",
+      (args) => { throw new SQLException("Mimir Cannot Execute VGTerm Functions Internally") },
+      (_) => TFloat()
+    )
+    FunctionRegistry.registerNative(
+      "JULIANDAY",
+      (args) => { throw new SQLException("Mimir Cannot Execute VGTerm Functions Internally") },
+      (_) => TInt()
+    )
+
     registerNative("JSON_EXTRACT",(_) => ???, (_) => TAny())
     registerNative("JSON_ARRAY_LENGTH",(_) => ???, (_) => TInt())
 	}
@@ -149,8 +159,14 @@ object FunctionRegistry {
 	def register(fn: RegisteredFunction) =
     functionPrototypes.put(fn.name, fn)
 
-	def typecheck(fname: String, args: Seq[Type]): Type = 
-		functionPrototypes(fname).typecheck(args)
+	def typecheck(fname: String, args: Seq[Type]): Type = {
+    try {
+  		functionPrototypes(fname).typecheck(args)
+    } catch {
+      case TypeException(found, expected, detail, None) =>
+        throw TypeException(found, expected, detail, Some(Function(fname, args.map{ TypePrimitive(_) })))
+    }
+  }
 
 	def eval(fname: String, args: Seq[PrimitiveValue]): PrimitiveValue =
 		functionPrototypes(fname).eval(args)

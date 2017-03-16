@@ -26,7 +26,8 @@ object ExpressionOptimizer {
 		FlattenBooleanConditionals,
 		PropagateConditions,
 		RemoveRedundantCasts,
-		InlineFunctions
+		InlineFunctions,
+		PushDownNots
 	)
 
 	def optimize(e:Expression, opts: List[ExpressionOptimizerRule]): Expression = {

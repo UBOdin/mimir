@@ -103,7 +103,9 @@ class RAToSql(db: Database)
         union.setAll(true);
         union.setDistinct(false);
         union.setPlainSelects(
-          OperatorUtils.extractUnionClauses(u).map(makePlainSelect(_))
+          alignUnionOrders(
+            OperatorUtils.extractUnionClauses(u)
+          ).map(makePlainSelect(_))
         )
         return union
       }
@@ -250,7 +252,7 @@ class RAToSql(db: Database)
           //
           ob.setExpression(
             convert(
-              Eval.inline(col.expr, sortBindings),
+              Eval.inline(col.expression, sortBindings),
               schemas
             ))
           ob.setAsc(col.ascending)
@@ -409,6 +411,24 @@ class RAToSql(db: Database)
     ret.setLeft(lhs)
     ret.setJoin(rhsJoin)
     return ret
+  }
+
+  /**
+   * Make sure that the schemas of union elements follow the same order
+   */
+  private def alignUnionOrders(clauses: Seq[Operator]): Seq[Operator] =
+  {
+    val targetSchema = clauses.head.schema.map(_._1).toList
+    clauses.map { clause =>
+      if(clause.schema.map(_._1).toList.equals(targetSchema)){
+        clause
+      } else {
+        Project(
+          targetSchema.map( col => ProjectArg(col, Var(col)) ),
+          clause
+        )
+      }
+    }
   }
 
   private def makeSelectItem(expr: net.sf.jsqlparser.expression.Expression, alias: String): SelectExpressionItem =

@@ -4,8 +4,6 @@ import scala.util.Random
 import mimir.algebra._
 import mimir.util._
 
-case class ModelException(error:String) extends RAException(error)
-
 /**
  * Root class for Model objects.
  *

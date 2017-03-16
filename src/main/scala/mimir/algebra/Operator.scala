@@ -305,6 +305,25 @@ case class Table(name: String,
 }
 
 /**
+ * A blank table --- Corresponds roughly to Oracle's DUAL, or a 
+ * SELECT ... FROM ... WHERE FALSE.
+ * 
+ * Not really used, just a placeholder for intermediate optimization.
+ */
+case class EmptyTable(sch: Seq[(String, Type)])
+  extends Operator
+{
+    def toString(prefix: String) =
+    prefix + "!!EMPTY!!(" + (
+      sch.map( { case (v,t) => v+":"+t } ).mkString(", ") 
+    )+")" 
+  def children: List[Operator] = List()
+  def rebuild(x: Seq[Operator]) = this
+  def expressions = List()
+  def rebuildExpressions(x: Seq[Expression]) = this
+}
+
+/**
  * A single sort directive
  *
  * Consists of a column name, as well as a binary "ascending" 
@@ -312,10 +331,10 @@ case class Table(name: String,
  *
  * (e.g., as in SELECT * FROM FOO ORDER BY bar ASC)
  */
-case class SortColumn(expr: Expression, ascending:Boolean)
+case class SortColumn(expression: Expression, ascending:Boolean)
 {
   override def toString() = 
-    (expr + " " + (if(ascending){"ASC"}else{"DESC"}))
+    (expression + " " + (if(ascending){"ASC"}else{"DESC"}))
 }
 /**
  * Indicates that the source operator's output should be sorted in the
@@ -333,7 +352,7 @@ case class Sort(sorts:Seq[SortColumn], src: Operator) extends Operator
   }
   def children: List[Operator] = List(src)
   def rebuild(x: Seq[Operator]) = Sort(sorts, x(0))
-  def expressions = sorts.map(_.expr)
+  def expressions = sorts.map(_.expression)
   def rebuildExpressions(x: Seq[Expression]) = 
     Sort(x.zip(sorts).map { col => SortColumn(col._1, col._2.ascending) }, src)
 }

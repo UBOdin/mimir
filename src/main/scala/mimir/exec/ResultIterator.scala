@@ -118,12 +118,20 @@ abstract class ResultIterator {
     mapRows(_.currentRow())
 
   /**
-   * A list of explanations for the indicated column
-   */
-  def reason(ind: Int): Seq[Reason] = Seq()
-
-  /**
    * A unique identifier for every output that can be unwrapped to generate per-row provenance
    */
   def provenanceToken(): RowIdPrimitive
+
+  def rowString: String =
+  {
+    (0 until numCols).map { i => 
+      apply(i)+(
+        if(!deterministicCol(i)){ "*" } else { "" }
+      )
+    }.mkString(",")+(
+      if(!deterministicRow){
+        " (This row may be invalid)"
+      } else { "" }
+    )
+  }
 }

@@ -64,12 +64,13 @@ object JDBCUtils {
             results.getString(field)
           ))
         case TDate() =>
-          val calendar = Calendar.getInstance()
           try {
             convertDate(results.getDate(field))
           } catch {
             case e: SQLException =>
-              convertDate(Date.valueOf(results.getString(field)))
+              try {
+                convertDate(Date.valueOf(results.getString(field)))
+              } catch { case e: java.lang.IllegalArgumentException => new NullPrimitive }
             case e: NullPointerException =>
               new NullPrimitive
           }

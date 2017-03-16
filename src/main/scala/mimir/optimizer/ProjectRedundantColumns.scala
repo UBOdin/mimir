@@ -59,7 +59,7 @@ object ProjectRedundantColumns {
 
       case Sort(cols, source) => {
         val childDependencies = 
-          cols.map(_.expr).flatMap(ExpressionUtils.getColumns(_)) ++ dependencies
+          cols.map(_.expression).flatMap(ExpressionUtils.getColumns(_)) ++ dependencies
 
         Sort(cols, apply(source, childDependencies.toSet))
       }
@@ -127,6 +127,7 @@ object ProjectRedundantColumns {
       }
 
       case table: Table => table
+      case table: EmptyTable => table
 
       case LeftOuterJoin(lhs, rhs, condition) => {
         val childDependencies = 

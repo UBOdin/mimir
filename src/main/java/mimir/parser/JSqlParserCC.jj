@@ -106,6 +106,7 @@ import net.sf.jsqlparser.statement.create.table.ColumnDefinition;
 import net.sf.jsqlparser.statement.create.table.CreateTable;
 import mimir.sql.CreateView;
 import mimir.sql.CreateLens;
+import mimir.sql.CreateAdaptiveSchema;
 import mimir.sql.Analyze;
 import mimir.sql.Explain;
 import mimir.sql.Feedback;
@@ -165,6 +166,8 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_ASSUME:"ASSUME">
 |   <K_VIEW:"VIEW">
 |   <K_LENS:"LENS">
+|   <K_ADAPTIVE:"ADAPTIVE">
+|   <K_SCHEMA:"SCHEMA">
 |   <K_LET:"LET">
 |   <K_LOAD:"LOAD">
 |   <K_ALTER:"ALTER">
@@ -176,6 +179,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_IS:"IS">
 |   <K_IN:"IN">
 |   <K_OR:"OR">
+|   <K_OF:"OF">
 |   <K_ON:"ON">
 |   <K_ALL: "ALL">
 |   <K_AND: "AND">
@@ -313,6 +317,8 @@ Statement CreateStatement() :
     stm = CreateLens()
     | 
     stm = CreateTable()
+    |
+    stm = CreateAdaptiveSchema()
   )
   { return stm; }
 }
@@ -337,7 +343,10 @@ Feedback FeedbackStatement() :
       ("," temp = Literal() { args.add(temp); } )*
     ")" ]
     <K_IS>
-    value = Literal()
+    (
+        value = Literal()
+      | tempStr = RelObjectName() { value = new StringValue(tempStr); }
+    )
   ) { return new Feedback(model, Integer.parseInt(idx.image), args, value); }
 }
 
@@ -382,23 +391,24 @@ Explain Explain():
 
 Analyze Analyze():
 	{
-		Analyze analyze=new Analyze();
 		SelectBody selectBody = null;
 		String col = null;
+    PrimitiveValue rowid = null;
 	}
 {
-	<K_ANALYZE> col = RelObjectName() <K_IN> selectBody = SelectBody()
+	<K_ANALYZE> 
+  [ 
+    [
+      col = RelObjectName() 
+      <K_OF>
+    ] 
+    rowid = Literal()
+    <K_IN>
+  ]
+  selectBody = SelectBody()
 	{ 
-		analyze.setSelectBody(selectBody);
-		if(col.toUpperCase().equals("COND")){
-		  analyze.setColumn("__MIMIR_CONDITION");
-		} else {
-  		analyze.setColumn(col);
-  	}
-	}
-	{
-  		return analyze;
-	}
+    return new Analyze(selectBody, rowid, col);
+  }
 }
 
 CreateLens CreateLens():
@@ -416,10 +426,7 @@ CreateLens CreateLens():
     <K_WITH> lensType = RelObjectName()
 	  "(" [ 
 	    e = SimpleExpression() { args.add(e); }
-      [e = SimpleExpression() { args.add(e); }]
-	    ( "," e = SimpleExpression() { args.add(e); } 
-           [e = SimpleExpression() { args.add(e); }]
-      ) *
+	    ( "," e = SimpleExpression() { args.add(e); } ) *
 	  ] ")"
   { 
   	return new CreateLens(lensName, body, lensType, args);
@@ -428,7 +435,7 @@ CreateLens CreateLens():
 
 CreateView CreateView():
 {
-   CreateView createView=new CreateView();
+   CreateView createView = new CreateView();
    Table table = null;
    SelectBody selectBody = null;
    Column tableColumn = null;
@@ -447,6 +454,32 @@ CreateView CreateView():
         createView.setnNullColumns(nNullcolumns);
         return createView; 
      }
+}
+
+CreateAdaptiveSchema CreateAdaptiveSchema():
+{
+   CreateAdaptiveSchema createAdaptiveSchema = new CreateAdaptiveSchema();
+   String name = null;
+   SelectBody selectBody = null;
+   String type = null;
+   List<Expression> args = new ArrayList<Expression>();
+   Expression e = null;
+}
+{
+    <K_ADAPTIVE> <K_SCHEMA> name = RelObjectName()
+    <K_AS> selectBody = SelectBody()
+    <K_WITH> type = RelObjectName()
+    "(" [ 
+      e = SimpleExpression() { args.add(e); }
+      ( "," e = SimpleExpression() { args.add(e); } ) *
+    ] ")"
+	{
+    createAdaptiveSchema.setName(name);
+		createAdaptiveSchema.setSelectBody(selectBody);
+    createAdaptiveSchema.setType(type);
+    createAdaptiveSchema.setArgs(args);
+    return createAdaptiveSchema;
+	}
 }
 
 Replace Replace():

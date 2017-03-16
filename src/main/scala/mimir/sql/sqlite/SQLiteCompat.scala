@@ -3,6 +3,8 @@ package mimir.sql.sqlite
 import mimir.algebra._
 import mimir.util.JDBCUtils
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import org.geotools.referencing.datum.DefaultEllipsoid
+import org.joda.time.DateTime
 
 object SQLiteCompat {
 
@@ -16,8 +18,15 @@ object SQLiteCompat {
     org.sqlite.Function.create(conn,"MIMIRCAST", MimirCast)
     org.sqlite.Function.create(conn,"OTHERTEST", OtherTest)
     org.sqlite.Function.create(conn,"AGGTEST", AggTest)
-    org.sqlite.Function.create(conn, "BOOLAND", BoolAnd)
+    org.sqlite.Function.create(conn, "SQRT", Sqrt)
+    org.sqlite.Function.create(conn, "DST", Distance)
+    org.sqlite.Function.create(conn, "SPEED", Speed)
+    org.sqlite.Function.create(conn, "MINUS", Minus)
+    org.sqlite.Function.create(conn, "GROUP_AND", GroupAnd)
+    org.sqlite.Function.create(conn, "GROUP_OR", GroupOr)
     org.sqlite.Function.create(conn, "FIRST", First)
+    org.sqlite.Function.create(conn, "FIRST_INT", First)
+    org.sqlite.Function.create(conn, "FIRST_FLOAT", First)
   }
   
   def getTableSchema(conn:java.sql.Connection, table: String): Option[List[(String, Type)]] =
@@ -40,6 +49,51 @@ object SQLiteCompat {
   }
 }
 
+object Minus extends org.sqlite.Function with LazyLogging {
+  override def xFunc(): Unit = {
+    if (args != 2) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR SQRT, EXPECTED 2") }
+    value_double(0) - value_double(1)
+  }
+  }
+
+object Distance extends org.sqlite.Function with LazyLogging {
+  override def xFunc(): Unit = {
+    if (args != 4) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR DISTANCE, EXPECTED 4 -- LAT1, LON1, LAT2, LON2") }
+    val lon1: Double = value_double(1)
+    val lat1: Double = value_double(0)
+    val lon2: Double = value_double(3)
+    val lat2: Double = value_double(2)
+
+    result(DefaultEllipsoid.WGS84.orthodromicDistance(lon1, lat1, lon2, lat2))
+  }
+}
+
+object Speed extends org.sqlite.Function with LazyLogging {
+  override def xFunc(): Unit = {
+    if (args != 3) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR SPEED, EXPECTED 3 -- DISTANCE (METERS), STARING DATE, ENDING DATE") }
+    val distance: Double = value_double(0)
+
+    val startingDateText: String = value_text(1)
+    val endingDateText: String = value_text(2)
+
+    val startingDate: DateTime = DateTime.parse(startingDateText)
+    var endingDate: DateTime = new DateTime
+    if(endingDateText != null) {
+      endingDate = DateTime.parse(endingDateText)
+    }
+
+    val numberOfHours: Long = Math.abs(endingDate.getMillis - startingDate.getMillis) / 1000 / 60 / 60
+
+    result(distance / 1000 / numberOfHours) // kmph
+  }
+}
+
+object Sqrt extends org.sqlite.Function with LazyLogging {
+  override def xFunc(): Unit = {
+    if (args != 1) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR SQRT, EXPECTED 1") }
+    Math.sqrt(value_double(0))
+  }
+}
 
 object MimirCast extends org.sqlite.Function with LazyLogging {
 
@@ -124,16 +178,29 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
     }
 }
 
-object BoolAnd extends org.sqlite.Function.Aggregate {
-  var isDet = 1
+object GroupAnd extends org.sqlite.Function.Aggregate {
+  var agg = true
 
   @Override
   def xStep(): Unit = {
-    isDet = isDet & value_int(0)
+    agg = agg && (value_int(0) != 0)
   }
 
   def xFinal(): Unit = {
-    result(isDet)
+    result(if(agg){ 1 } else { 0 })
+  }
+}
+
+object GroupOr extends org.sqlite.Function.Aggregate {
+  var agg = false
+
+  @Override
+  def xStep(): Unit = {
+    agg = agg || (value_int(0) != 0)
+  }
+
+  def xFinal(): Unit = {
+    result(if(agg){ 1 } else { 0 })
   }
 }
 
@@ -156,6 +223,32 @@ object First extends org.sqlite.Function.Aggregate {
   }
   def xFinal(): Unit = {
     if(firstVal == null){ result(); } else { result(firstVal); }
+  }
+}
+
+object FirstInt extends org.sqlite.Function.Aggregate {
+  var firstVal: Int = 0;
+  var empty = true
+
+  @Override
+  def xStep(): Unit = {
+    if(empty){ firstVal = value_int(0); empty = false }
+  }
+  def xFinal(): Unit = {
+    if(empty){ result(); } else { result(firstVal); }
+  }
+}
+
+object FirstFloat extends org.sqlite.Function.Aggregate {
+  var firstVal: Double = 0.0;
+  var empty = false
+
+  @Override
+  def xStep(): Unit = {
+    if(empty){ firstVal = value_double(0); empty = true }
+  }
+  def xFinal(): Unit = {
+    if(empty){ result(); } else { result(firstVal); }
   }
 }
 
