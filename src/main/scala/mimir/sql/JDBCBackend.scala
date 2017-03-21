@@ -288,7 +288,7 @@ class JDBCBackend(val backend: String, val filename: String)
           ),
           Select(
             ExpressionUtils.makeInTest(Var("TYPE"), Seq(StringPrimitive("table"), StringPrimitive("view"))),
-            Table("SQLITE_MASTER", Seq(("NAME", TString()), ("TYPE", TString())), Seq())
+            Table("SQLITE_MASTER", "SQLITE_MASTER", Seq(("NAME", TString()), ("TYPE", TString())), Seq())
           )
         )
 

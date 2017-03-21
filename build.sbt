@@ -72,7 +72,8 @@ libraryDependencies ++= Seq(
   "net.sf.jung"                   %   "jung-algorithms"       % "2.0.1",
   "net.sf.jung"                   %   "jung-visualization"    % "2.0.1",
   "jgraph"                        %   "jgraph"                % "5.13.0.0",
-
+  "javax.media" 				  %   "jai_core"              % "1.1.3",
+  
   // Geotools - Geospatial data transformations
   // Used by the CURE scenario
   "org.geotools"                  %   "gt-referencing"        % "16.2",
@@ -80,8 +81,14 @@ libraryDependencies ++= Seq(
   "org.geotools"                  %   "gt-epsg-hsql"          % "16.2",
 
   //////////////////////// JDBC Backends //////////////////////
-  "org.xerial"                    %   "sqlite-jdbc"           % "3.16.1"
+  "org.xerial"                    %   "sqlite-jdbc"           % "3.16.1",
 
+
+  ///////////////////  GProM/Native Integration //////////////
+  "net.java.dev.jna"              %    "jna"                  % "4.2.2",
+  "net.java.dev.jna"              %    "jna-platform"         % "4.2.2",
+  "log4j"                         %    "log4j"                % "1.2.17"
+  
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")

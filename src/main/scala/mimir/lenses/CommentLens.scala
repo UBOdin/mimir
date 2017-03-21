@@ -33,7 +33,7 @@ object CommentLens {
          val commexpr = db.operator.expr(arg._1._1)
          ((commexpr, arg._2), ("COMMENT_ARG_"+arg._2, Typechecker.typeOf(commexpr, query)))
     }).unzip
-    val modelSchema = query.schema.union(argTypesAndExprs._2).unzip
+    val modelSchema = argTypesAndExprs._2.unzip
     val model : CommentModel = new CommentModel(name, modelSchema._1, modelSchema._2, colCommentLists._2)
     val projArgs =  
       query.schema.map(_._1).map( col => {

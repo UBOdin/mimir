@@ -52,6 +52,10 @@ object MimirVizier {
 
     db.initializeDBForMimir();
 
+    if(ExperimentalOptions.isEnabled("INLINE-VG")){
+        db.backend.asInstanceOf[JDBCBackend].enableInlining(db)
+      }
+    
     runServerForViztrails()
     
     db.backend.close()

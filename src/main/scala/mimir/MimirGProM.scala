@@ -117,10 +117,11 @@ object MimirGProM {
     //db.update(new MimirJSqlParser(new StringReader("CREATE TABLE R(A integer, B integer)")).Statement())
     //db.update(new MimirJSqlParser(new StringReader("CREATE TABLE T(C integer, D integer)")).Statement())
     //testDebug = true
-    runTests(30) 
+    //runTests(30) 
    
-    /*val queryStr = "SELECT S.A FROM R AS S GROUP BY S.A"
-     val statements = db.parse(queryStr)
+    //val queryStr = "SELECT S.A FROM R AS S GROUP BY S.A"
+     val queryStr = "Select * from LENS_1981079022"
+    val statements = db.parse(queryStr)
      var testOper2 = db.sql.convert(statements.head.asInstanceOf[Select])
      //testOper2 = db.compiler.optimize(testOper2, db.compiler.standardOptimizations)
      val operStr2 = testOper2.toString()
@@ -134,7 +135,7 @@ object MimirGProM {
      GProMWrapper.inst.gpromFreeMemContext(memctx)
      println("---------v Actual GProM Oper v----------")
      println(nodeStr)
-     println("---------^ Actual GProM Oper ^----------")*/
+     println("---------^ Actual GProM Oper ^----------")
    
   }
   

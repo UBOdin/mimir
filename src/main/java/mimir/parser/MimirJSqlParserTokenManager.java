@@ -80,7 +80,7 @@ import mimir.sql.Explain;
 import mimir.sql.Feedback;
 import mimir.sql.Load;
 import mimir.sql.Pragma;
-import net.sf.jsqlparser.statement.provenance.ProvenanceStatement;
+import mimir.sql.ProvenanceStatement;
 import net.sf.jsqlparser.statement.create.table.Index;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.drop.Drop;
