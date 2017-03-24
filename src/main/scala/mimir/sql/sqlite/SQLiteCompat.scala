@@ -27,7 +27,6 @@ object SQLiteCompat {
     org.sqlite.Function.create(conn, "FIRST", First)
     org.sqlite.Function.create(conn, "FIRST_INT", First)
     org.sqlite.Function.create(conn, "FIRST_FLOAT", First)
-    org.sqlite.Function.create(conn, "ROUND", Round)
   }
   
   def getTableSchema(conn:java.sql.Connection, table: String): Option[List[(String, Type)]] =
@@ -266,9 +265,3 @@ object AggTest extends org.sqlite.Function.Aggregate {
   }
 }
 
-object Round extends org.sqlite.Function with LazyLogging {
-  override def xFunc(): Unit = {
-    if (args != 1) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR Round, EXPECTED 1") }
-    Math.round(value_double(0))
-  }
-}

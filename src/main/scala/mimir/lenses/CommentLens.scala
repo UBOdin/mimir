@@ -44,7 +44,7 @@ object CommentLens {
     val oper = Project(projArgs, query)
     return (
       oper,
-      List(model)
+      Seq(model)
     )
   }
 }

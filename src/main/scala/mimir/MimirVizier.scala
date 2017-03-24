@@ -18,8 +18,7 @@ import org.gprom.jdbc.jna.GProMWrapper
 import py4j.GatewayServer
 import mimir.provenance.Provenance
 import net.sf.jsqlparser.statement.select.SelectBody
-import mimir.algebra.RowIdPrimitive
-
+import mimir.algebra._
 
 /**
  * The primary interface to Mimir.  Responsible for:

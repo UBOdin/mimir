@@ -17,7 +17,8 @@ class LensManager(db: Database) {
     "SCHEMA_MATCHING"   -> SchemaMatchingLens.create _,
     "TYPE_INFERENCE"    -> TypeInferenceLens.create _,
     "KEY_REPAIR"        -> KeyRepairLens.create _,
-    "COMMENT"           -> CommentLens.create _
+    "COMMENT"           -> CommentLens.create _,
+    "MISSING_KEY"       -> MissingKeyLens.create _
   )
 
   def init(): Unit =
