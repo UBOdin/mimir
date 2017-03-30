@@ -22,6 +22,8 @@ object AggregateRegistry
     register("GROUP_OR", List(TBool()), TBool())
     register("JSON_GROUP_ARRAY", (t) => TString())
     register("FIRST", (t:Seq[Type]) => t.head)
+    register("FIRST_FLOAT", (t:Seq[Type]) => t.head)
+    register("FIRST_INT", (t:Seq[Type]) => t.head)
   }
 
   def register(

@@ -28,24 +28,28 @@ object DBTestInstances
           val shouldResetDB = config.getOrElse("reset", "YES") match { 
             case "NO" => false; case "YES" => true
           }
+          val shouldCleanupDB = config.getOrElse("cleanup", config.getOrElse("reset", "YES")) match { 
+            case "NO" => false; case "YES" => true
+          }
           val shouldEnableInlining = config.getOrElse("inline", "YES") match { 
             case "NO" => false; case "YES" => true
           }
-          val oldDBExists = dbFile.exists();
-          val backend = new JDBCBackend(jdbcBackendMode, tempDBName+".db")
-          val tmpDB = new Database(backend);
           if(shouldResetDB){
             if(dbFile.exists()){ dbFile.delete(); }
           }
+          val oldDBExists = dbFile.exists();
+          // println("Exists: "+oldDBExists)
+          val backend = new JDBCBackend(jdbcBackendMode, tempDBName+".db")
+          val tmpDB = new Database(backend);
           config.get("initial_db") match {
             case None => ()
             case Some(path) => Runtime.getRuntime().exec(s"cp $path $dbFile")
           }
-          if(shouldResetDB){    
+          if(shouldCleanupDB){    
             dbFile.deleteOnExit();
           }
           tmpDB.backend.open();
-          if(shouldResetDB && !oldDBExists && !config.contains("initial_db")){
+          if((shouldResetDB || !oldDBExists) && !config.contains("initial_db")){
             tmpDB.initializeDBForMimir();
           }
           if(shouldEnableInlining){
