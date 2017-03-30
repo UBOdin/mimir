@@ -127,7 +127,7 @@ object OperatorUtils {
       case _ => Select(condition, oper)
     }
 
-  def projectColumns(cols: List[String], oper: Operator) =
+  def projectColumns(cols: Seq[String], oper: Operator) =
   {
     Project(
       cols.map( (col) => ProjectArg(col, Var(col)) ),

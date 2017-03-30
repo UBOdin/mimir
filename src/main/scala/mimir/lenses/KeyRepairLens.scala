@@ -6,8 +6,9 @@ import mimir.Database
 import mimir.models._
 import mimir.algebra._
 import mimir.ctables._
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
-object KeyRepairLens {
+object KeyRepairLens extends LazyLogging {
   def create(
     db: Database, 
     name: String, 
@@ -89,13 +90,6 @@ object KeyRepairLens {
     table: String
   ): Unit =
   {
-    val tableElements = 
-      keys.map { k => k._1 + " " + k._2 }.mkString(", ") ++
-      values.map { v => v + " int"} +
-      s"PRIMARY KEY (${keys.map(_._1).mkString(",")})"
-
-    db.backend.update(s"CREATE TABLE $table (${ tableElements.mkString(", ") });")
-
     db.selectInto(table, 
       Aggregate(
         keys.map( k => Var(k._1)),
@@ -111,25 +105,32 @@ object KeyRepairLens {
     query: Operator,
     keys: Seq[String],
     values: Seq[(String, Model)],
-    scoreCol: Option[String]
+    scoreCol: Option[String],
+    forceGuess: Boolean = false
   ): Operator =
   {
+
     Project(
       keys.map { col => ProjectArg(col, Var(col))} ++
       values.map { case (col, model) => 
-        ProjectArg(col, 
-          Conditional(
-            Comparison(Cmp.Lte, Var(s"MIMIR_KR_COUNT_$col"), IntPrimitive(1)),
-            Var(col),
-            VGTerm(model, 0, keys.map(Var(_)), 
-              Seq(
-                Var(s"MIMIR_KR_HINT_COL_$col"),
-                scoreCol.
-                  map { _ => Var("MIMIR_KR_HINT_SCORE") }.
-                  getOrElse( NullPrimitive() )
-              )
+        val vgTerm = 
+          VGTerm(model, 0, keys.map(Var(_)), 
+            Seq(
+              Var(s"MIMIR_KR_HINT_COL_$col"),
+              scoreCol.
+                map { _ => Var("MIMIR_KR_HINT_SCORE") }.
+                getOrElse( NullPrimitive() )
             )
           )
+
+        ProjectArg(col, 
+          if(forceGuess){ vgTerm } 
+          else {
+            Conditional(
+              Comparison(Cmp.Lte, Var(s"MIMIR_KR_COUNT_$col"), IntPrimitive(1)),
+              Var(col), vgTerm
+            )
+          }
         )
       },
       Aggregate(
@@ -158,16 +159,19 @@ object KeyRepairLens {
   ): Operator =
   {
     val rowsWhere = (cond:Expression) => {
-      Select(
-        ExpressionUtils.makeAnd(keys.map { k => 
-          Comparison(Cmp.Eq, Var(s"MIMIR_KR_$k"), Var(k))
-        }),
-        Join(
-          Project(
-            keys.map { k => ProjectArg(s"MIMIR_KR_$k", Var(k)) },
-            Select(cond, db.getTableOperator(fastPathTable))
-          ),
-          query
+      OperatorUtils.projectColumns(
+        keys ++ values.map(_._1),
+        Select(
+          ExpressionUtils.makeAnd(keys.map { k => 
+            Comparison(Cmp.Eq, Var(s"MIMIR_KR_$k"), Var(k))
+          }),
+          Join(
+            Project(
+              keys.map { k => ProjectArg(s"MIMIR_KR_$k", Var(k)) },
+              Select(cond, db.getTableOperator(fastPathTable))
+            ),
+            query
+          )
         )
       )}
     val rowsWithDuplicates =
@@ -188,7 +192,8 @@ object KeyRepairLens {
         rowsWithDuplicates,
         keys,
         values,
-        scoreCol
+        scoreCol,
+        forceGuess = true
       )
     )
   }

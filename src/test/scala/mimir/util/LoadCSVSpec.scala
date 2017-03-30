@@ -18,7 +18,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
     }
 
     "Load CSV files without headers" >> {
-      LoadCSV.handleLoadTable(db, "U", new File("test/r_test/u.csv"), false)
+      LoadCSV.handleLoadTable(db, "U", new File("test/r_test/u.csv"), Map("HEADER" -> "NO"))
       val col1: String = db.getTableSchema("U").get.head._1
       queryOneColumn(s"SELECT $col1 FROM U") must contain(eachOf(
         str("1"), str("2"), str("3"), str("4"), str("5")
@@ -50,7 +50,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
           C int
         );
       """)
-      LoadCSV.handleLoadTable(db, "U2", new File("test/r_test/u.csv"), false)
+      LoadCSV.handleLoadTable(db, "U2", new File("test/r_test/u.csv"), Map("HEADER" -> "NO"))
       val col1: String = db.getTableSchema("U2").get.head._1
       queryOneColumn(s"SELECT $col1 FROM U2") must contain(eachOf(
         i(1), i(2), i(3), i(4), i(5)
@@ -81,7 +81,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
     }
 
     "Load CSV files with missing values" >> {
-      LoadCSV.handleLoadTable(db, "R", new File("test/r_test/r.csv"), false)
+      LoadCSV.handleLoadTable(db, "R", new File("test/r_test/r.csv"), Map("HEADER" -> "NO"))
       val colNames: Seq[String] = db.getTableSchema("R").get.map(_._1)
       val b = colNames(1)
       val c = colNames(2)

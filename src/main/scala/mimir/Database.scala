@@ -427,9 +427,9 @@ case class Database(backend: Backend)
     backend.update(  s"CREATE TABLE $targetTable ( $tableDef );"  )
     val insertCmd = s"INSERT INTO $targetTable( $tableCols ) VALUES ($colFillIns);"
     println(insertCmd)
-    query(sourceQuery).foreachRow(
-      result =>
-        backend.update(insertCmd, result.currentRow())
+    backend.fastUpdateBatch(
+      insertCmd,
+      query(sourceQuery).mapRows( _.currentRow )
     )
   }
 
