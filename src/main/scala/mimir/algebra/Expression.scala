@@ -60,12 +60,12 @@ case class Not(child: Expression)
  */
 object Arith extends Enumeration {
   type Op = Value
-  val Add, Sub, Mult, Div, And, Or = Value
+  val Add, Sub, Mult, Div, And, Or, BitAnd, BitOr = Value
   
   /**
    * Regular expresion to match any and all binary operations
    */
-  def matchRegex = """\+|-|\*|/|\||&""".r
+  def matchRegex = """\+|-|\*|/|\|\||&&|\||&""".r
 
   /**
    * Convert from the operator's string encoding to its Arith.Op rep
@@ -76,8 +76,10 @@ object Arith extends Enumeration {
       case "-" => Sub
       case "*" => Mult
       case "/" => Div
-      case "&" => And
-      case "|" => Or
+      case "&" => BitAnd
+      case "|" => BitOr
+      case "&&" => And
+      case "||" => Or
       case x => throw new Exception("Invalid operand '"+x+"'")
     }
   }
@@ -90,6 +92,8 @@ object Arith extends Enumeration {
       case Sub => "-"
       case Mult => "*"
       case Div => "/"
+      case BitAnd => "&"
+      case BitOr => "|"
       case And => " AND "
       case Or => " OR "
     }
@@ -105,7 +109,7 @@ object Arith extends Enumeration {
   }
 
   /**
-   * Is this binary operation a numeric operator (+, -, *, /)
+   * Is this binary operation a numeric operator (+, -, *, /, & , |)
    */
   def isNumeric(v: Op): Boolean = !isBool(v)
 
