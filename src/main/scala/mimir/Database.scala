@@ -440,6 +440,7 @@ case class Database(backend: Backend)
       query(sourceQuery).mapRows( _.currentRow )
     )
   }
+  
 
   def selectInto(targetTable: String, tableName: String){
 /*    val v:Option[Operator] = getView(tableName)
