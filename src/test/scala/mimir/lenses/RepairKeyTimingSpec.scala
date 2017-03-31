@@ -126,50 +126,50 @@ object RepairKeyTimingSpec
         }
       }
       Fragments.foreach(Seq(
-        ("""
-            select ok.orderkey, od.orderdate, os.shippriority 
-            from cust_c_mktsegment cs, cust_c_custkey cck, 
-                 orders_o_orderkey ok, orders_o_orderdate od, 
-                   orders_o_shippriority os, orders_o_custkey ock, 
-                 lineitem_l_orderkey lok, lineitem_l_shipdate lsd 
-            where cs.mktsegment = 'BUILDING' 
-              and cs.tid = cck.tid 
-              and cck.custkey = ock.custkey 
-              and ok.orderkey = lok.orderkey 
+        (s"""
+            select ok.orderkey, od.orderdate, os.shippriority
+            from cust_c_mktsegment_run_$i cs, cust_c_custkey_run_$i cck,
+                 orders_o_orderkey_run_$i ok, orders_o_orderdate_run_$i od,
+                   orders_o_shippriority_run_$i os, orders_o_custkey_run_$i ock,
+                 lineitem_l_orderkey_run_$i lok, lineitem_l_shipdate_run_$i lsd
+            where cs.mktsegment = 'BUILDING'
+              and cs.tid = cck.tid
+              and cck.custkey = ock.custkey
+              and ok.orderkey = lok.orderkey
               and od.orderdate > DATE('1995-03-15')
               and ock.tid = ok.tid and od.tid = ok.tid and os.tid = ok.tid
               and lsd.shipdate < DATE('1995-03-17')
               and lsd.tid = lok.tid
-        """, 1976525000l ),
-        ("""
-            select liep.extendedprice 
-            from lineitem_l_extendedprice liep, lineitem_l_shipdate lisd, 
-                 lineitem_l_discount lidi, lineitem_l_quantity liq 
+         """, 1976525000l ),
+        (s"""
+            select liep.extendedprice
+            from lineitem_l_extendedprice_run_$i liep, lineitem_l_shipdate_run_$i lisd,
+                 lineitem_l_discount_run_$i lidi, lineitem_l_quantity_run_$i liq
             where lisd.shipdate between DATE('1994-01-01') and DATE('1996-01-01')
-              and lidi.tid = lisd.tid 
+              and lidi.tid = lisd.tid
               and lidi.discount between 0.05 and 0.08
-              and liq.tid = lidi.tid 
-              and liq.quantity < 24 
+              and liq.tid = lidi.tid
+              and liq.quantity < 24
               and liep.tid = liq.tid
-        """, 14182710000l ),
-        ("""
-            select nn1.name, nn2.name 
-            from supp_s_suppkey sk, supp_s_nationkey snk, 
-                 lineitem_l_orderkey lok, lineitem_l_suppkey lsk, 
-                 orders_o_orderkey ok, orders_o_custkey ock, 
-                 cust_c_custkey ck, cust_c_nationkey cnk, 
-                 nation_n_name nn1, nation_n_name nn2, 
-                 nation_n_nationkey nk1, nation_n_nationkey nk2 
+         """, 14182710000l ),
+        (s"""
+            select nn1.name, nn2.name
+            from supp_s_suppkey_run_$i sk, supp_s_nationkey_run_$i snk,
+                 lineitem_l_orderkey_run_$i lok, lineitem_l_suppkey_run_$i lsk,
+                 orders_o_orderkey_run_$i ok, orders_o_custkey_run_$i ock,
+                 cust_c_custkey_run_$i ck, cust_c_nationkey_run_$i cnk,
+                 nation_n_name_run_$i nn1, nation_n_name_run_$i nn2,
+                 nation_n_nationkey_run_$i nk1, nation_n_nationkey_run_$i nk2
             where nn2.name='IRAQ' and nn1.name='GERMANY'
               and cnk.nationkey = nk2.nationkey and snk.nationkey = nk1.nationkey
-              and sk.suppkey = lsk.suppkey 
-              and ok.orderkey = lok.orderkey 
-              and ck.custkey = ock.custkey 
-              and lok.tid = lsk.tid 
-              and ock.tid = ok.tid 
-              and snk.tid = sk.tid 
-              and nk2.tid = nn2.tid and nk1.tid = nn1.tid 
-        """, 53196000l )
+              and sk.suppkey = lsk.suppkey
+              and ok.orderkey = lok.orderkey
+              and ck.custkey = ock.custkey
+              and lok.tid = lsk.tid
+              and ock.tid = ok.tid
+              and snk.tid = sk.tid
+              and nk2.tid = nn2.tid and nk1.tid = nn1.tid
+         """, 53196000l )
     )){
       qat =>  {
           {queryKeyRepairLens(qat)}
