@@ -240,19 +240,19 @@ object KeyRepairSpec
       query("""
         SELECT TUPLE_ID
         FROM MIMIR_FASTPATH_CUST_ACCTBAL_FASTPATH
-        WHERE acctbal > 1
+        WHERE num_instances > 1
       """).allRows must not beEmpty 
 
       querySingleton("""
         SELECT COUNT(*)
         FROM MIMIR_FASTPATH_CUST_ACCTBAL_FASTPATH
-        WHERE acctbal > 1
+        WHERE num_instances > 1
       """).asLong must be equalTo(1506l)
 
       querySingleton("""
         SELECT COUNT(*)
         FROM MIMIR_FASTPATH_CUST_ACCTBAL_FASTPATH
-        WHERE acctbal = 1
+        WHERE num_instances = 1
       """).asLong must be equalTo(148494l)
 
       db.backend.resultValue("""
