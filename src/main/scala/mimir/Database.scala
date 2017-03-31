@@ -247,6 +247,14 @@ case class Database(backend: Backend)
   }
 
   /**
+   * Determine whether the specified table exists
+   */
+  def tableExists(name: String): Boolean =
+  {
+    getTableSchema(name) != None
+  }
+
+  /**
    * Look up the schema for the table with the provided name.
    */
   def getTableSchema(name: String): Option[Seq[(String,Type)]] =
