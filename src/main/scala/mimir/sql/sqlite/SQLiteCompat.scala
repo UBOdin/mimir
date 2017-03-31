@@ -24,6 +24,8 @@ object SQLiteCompat {
     org.sqlite.Function.create(conn, "MINUS", Minus)
     org.sqlite.Function.create(conn, "GROUP_AND", GroupAnd)
     org.sqlite.Function.create(conn, "GROUP_OR", GroupOr)
+    org.sqlite.Function.create(conn, "GROUP_BITWISE_AND", GroupBitwiseAnd)
+    org.sqlite.Function.create(conn, "GROUP_BITWISE_OR", GroupBitwiseOr)
     org.sqlite.Function.create(conn, "FIRST", First)
     org.sqlite.Function.create(conn, "FIRST_INT", FirstInt)
     org.sqlite.Function.create(conn, "FIRST_FLOAT", FirstFloat)
@@ -201,6 +203,32 @@ object GroupOr extends org.sqlite.Function.Aggregate {
 
   def xFinal(): Unit = {
     result(if(agg){ 1 } else { 0 })
+  }
+}
+
+object GroupBitwiseAnd extends org.sqlite.Function.Aggregate {
+  var agg:Long = 0xffffffffffffffffl
+
+  @Override
+  def xStep(): Unit = {
+    agg = agg & value_int(0)
+  }
+
+  def xFinal(): Unit = {
+    result(agg)
+  }
+}
+
+object GroupBitwiseOr extends org.sqlite.Function.Aggregate {
+  var agg:Long = 0
+
+  @Override
+  def xStep(): Unit = {
+    agg = agg | value_int(0)
+  }
+
+  def xFinal(): Unit = {
+    result(agg)
   }
 }
 

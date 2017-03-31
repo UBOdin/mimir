@@ -39,14 +39,10 @@ object CTables
    */
   def isProbabilistic(oper: Operator): Boolean = 
   {
-    (oper match {
-      case Project(cols, _) => 
-        cols.exists( (x: ProjectArg) => isProbabilistic(x.expression) )
-      case Select(expr, _) => 
-        isProbabilistic(expr)
-      case _ => false;
-    }) || oper.children.exists( isProbabilistic(_) )
+    oper.expressions.exists( isProbabilistic(_) ) ||
+      oper.children.exists( isProbabilistic(_) )
   }
+
 
   def isDeterministic(expr:Expression): Boolean = !isProbabilistic(expr)
   def isDeterministic(oper:Operator): Boolean = !isProbabilistic(oper)

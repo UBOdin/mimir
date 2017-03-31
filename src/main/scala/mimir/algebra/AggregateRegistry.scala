@@ -20,6 +20,8 @@ object AggregateRegistry
     register("AVG", List(TFloat()), TFloat())
     register("GROUP_AND", List(TBool()), TBool())
     register("GROUP_OR", List(TBool()), TBool())
+    register("GROUP_BITWISE_AND", List(TInt()), TInt())
+    register("GROUP_BITWISE_OR", List(TInt()), TInt())
     register("JSON_GROUP_ARRAY", (t) => TString())
     register("FIRST", (t:Seq[Type]) => t.head)
     register("FIRST_FLOAT", (t:Seq[Type]) => t.head)
