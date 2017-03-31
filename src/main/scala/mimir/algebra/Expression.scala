@@ -60,7 +60,7 @@ case class Not(child: Expression)
  */
 object Arith extends Enumeration {
   type Op = Value
-  val Add, Sub, Mult, Div, And, Or, BitAnd, BitOr = Value
+  val Add, Sub, Mult, Div, And, Or, BitAnd, BitOr, ShiftLeft, ShiftRight = Value
   
   /**
    * Regular expresion to match any and all binary operations
@@ -78,6 +78,8 @@ object Arith extends Enumeration {
       case "/" => Div
       case "&" => BitAnd
       case "|" => BitOr
+      case "<<" => ShiftLeft
+      case ">>" => ShiftRight
       case "&&" => And
       case "||" => Or
       case x => throw new Exception("Invalid operand '"+x+"'")
@@ -94,6 +96,8 @@ object Arith extends Enumeration {
       case Div => "/"
       case BitAnd => "&"
       case BitOr => "|"
+      case ShiftLeft => "<<"
+      case ShiftRight => ">>"
       case And => " AND "
       case Or => " OR "
     }
