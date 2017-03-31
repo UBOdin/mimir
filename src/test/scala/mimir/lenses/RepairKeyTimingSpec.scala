@@ -130,7 +130,7 @@ object RepairKeyTimingSpec
             select ok.orderkey, od.orderdate, os.shippriority
             from cust_c_mktsegment_run_$i cs, cust_c_custkey_run_$i cck,
                  orders_o_orderkey_run_$i ok, orders_o_orderdate_run_$i od,
-                   orders_o_shippriority_run_$i os, orders_o_custkey_run_$i ock,
+                 orders_o_shippriority_run_$i os, orders_o_custkey_run_$i ock,
                  lineitem_l_orderkey_run_$i lok, lineitem_l_shipdate_run_$i lsd
             where cs.mktsegment = 'BUILDING'
               and cs.tid = cck.tid
@@ -199,7 +199,7 @@ object RepairKeyTimingSpec
         )
       )
     }
-    if(!query(s"SELECT NAME FROM MIMIR_VIEWS WHERE NAME = '${tableAndKeyColumn._1}'").allRows.isEmpty){
+    if(query(s"SELECT NAME FROM MIMIR_VIEWS WHERE NAME = '${tableAndKeyColumn._1}'").allRows.isEmpty){
       val timeForQuery = time {
       update(s"""
         CREATE LENS ${tableAndKeyColumn._1}
