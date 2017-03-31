@@ -216,7 +216,10 @@ object RepairKeyTimingSpec
 
  def queryKeyRepairLens(queryAndTime : (String, Long)) =  s"Query Key Repair Lens : ${queryAndTime._1}" >> {
       val timeForQuery = time {
-        query(queryAndTime._1)
+        var x = 0
+        val r = query(queryAndTime._1)
+        while(r.getNext()){ x += 1 }
+        println(s"$x rows in the result")
      }
      println(s"Time:${timeForQuery._2} nanoseconds <- Query:${queryAndTime._1} ")
      timeForQuery._2 should be lessThan queryAndTime._2
