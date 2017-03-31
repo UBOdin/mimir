@@ -4,7 +4,7 @@ import java.sql._;
 import java.util.NoSuchElementException;
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-import Arith.{Add, Sub, Mult, Div, And, Or}
+import Arith.{Add, Sub, Mult, Div, And, Or, BitAnd, BitOr, ShiftLeft, ShiftRight}
 import Cmp.{Gt, Lt, Lte, Gte, Eq, Neq, Like, NotLike}
 
 class MissingVariable(varName: String, e: Throwable) extends 
@@ -25,7 +25,7 @@ class ExpressionChecker(scope: (String => Type) = Map().apply _) extends LazyLog
 			case p: PrimitiveValue => p.getType;
 			case Not(child) => assert(child, TBool(), "NOT"); TBool()
 			case p: Proc => p.getType(p.children.map(typeOf(_)))
-			case Arithmetic(op @ (Add | Sub | Mult | Div), lhs, rhs) =>
+			case Arithmetic(op @ (Add | Sub | Mult | Div | BitAnd | BitOr | ShiftLeft | ShiftRight), lhs, rhs) =>
 				Typechecker.assertNumeric(Typechecker.escalate(typeOf(lhs), typeOf(rhs), op.toString, e), e);
 			case Arithmetic((And | Or), lhs, rhs) =>
 				assert(lhs, TBool(), "BoolOp");
@@ -106,8 +106,13 @@ object Typechecker {
 			case Project(cols, src) =>
 				val chk = new ExpressionChecker(schemaOf(src).toMap);
 				cols.map( { 
-						case ProjectArg(col, in) =>
-							(col, chk.typeOf(in))
+						case ProjectArg(col, expression) =>
+							try {
+								(col, chk.typeOf(expression))
+							} catch {
+								case mv: MissingVariable => 
+									throw new RAException("Missing Variable: "+mv.getMessage(), Some(o))
+							}
 					})
 
 			case Select(cond, src) =>

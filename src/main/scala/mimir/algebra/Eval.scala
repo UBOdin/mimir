@@ -233,6 +233,14 @@ object Eval
         FloatPrimitive(a.asDouble * b.asDouble)
       case (Arith.Div, (TFloat()|TInt())) => 
         FloatPrimitive(a.asDouble / b.asDouble)
+      case (Arith.BitAnd, TInt()) =>
+        IntPrimitive(a.asLong & b.asLong)
+      case (Arith.BitOr, TInt()) =>
+        IntPrimitive(a.asLong | b.asLong)
+      case (Arith.ShiftLeft, TInt()) =>
+        IntPrimitive(a.asLong << b.asLong)
+      case (Arith.ShiftRight, TInt()) =>
+        IntPrimitive(a.asLong >> b.asLong)
       case (_, _) => 
         throw new RAException(s"Invalid Arithmetic $a $op $b")
     }
