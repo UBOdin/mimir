@@ -119,87 +119,107 @@ object MimirVizier {
   var pythonCallThread : Thread = null
   def loadCSV(file : String) : String = {
     pythonCallThread = Thread.currentThread()
-    println("loadCSV: From Vistrails: [" + file + "]") ;
-    val csvFile = new File(file)
-    val tableName = (csvFile.getName().split("\\.")(0) + "_RAW").toUpperCase
-    if(db.getAllTables().contains(tableName)){
-      println("loadCSV: From Vistrails: Table Already Exists: " + tableName)
+    val timeRes = time {
+      println("loadCSV: From Vistrails: [" + file + "]") ;
+      val csvFile = new File(file)
+      val tableName = (csvFile.getName().split("\\.")(0) + "_RAW").toUpperCase
+      if(db.getAllTables().contains(tableName)){
+        println("loadCSV: From Vistrails: Table Already Exists: " + tableName)
+      }
+      else{
+        db.loadTable(csvFile)
+      }
+      tableName 
     }
-    else{
-      db.loadTable(csvFile)
-    }
-    return tableName 
+    println(s"loadCSV Took: ${timeRes._2}")
+    timeRes._1
   }
   
   def createLens(input : Any, params : Seq[String], _type : String, materialize_input:Boolean) : String = {
     pythonCallThread = Thread.currentThread()
-    println("createLens: From Vistrails: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]"  ) ;
-    val paramsStr = params.mkString(",")
-    val lenseName = "LENS_" + ((input.toString() + _type + paramsStr + materialize_input).hashCode().toString().replace("-", "") )
-    var query:String = null
-    db.getView(lenseName) match {
-      case None => {
-        if(materialize_input){
-          val materializedInput = "MATERIALIZED_"+input
-          query = s"CREATE LENS ${lenseName} AS SELECT * FROM ${materializedInput} WITH ${_type}(${paramsStr})"  
-          if(db.getAllTables().contains(materializedInput)){
-              println("createLens: From Vistrails: Materialized Input Already Exists: " + materializedInput)
+    val timeRes = time {
+      println("createLens: From Vistrails: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]"  ) ;
+      val paramsStr = params.mkString(",")
+      val lenseName = "LENS_" + ((input.toString() + _type + paramsStr + materialize_input).hashCode().toString().replace("-", "") )
+      var query:String = null
+      db.getView(lenseName) match {
+        case None => {
+          if(materialize_input){
+            val materializedInput = "MATERIALIZED_"+input
+            query = s"CREATE LENS ${lenseName} AS SELECT * FROM ${materializedInput} WITH ${_type}(${paramsStr})"  
+            if(db.getAllTables().contains(materializedInput)){
+                println("createLens: From Vistrails: Materialized Input Already Exists: " + materializedInput)
+            }
+            else{  
+              val inputQuery = s"SELECT * FROM ${input}"
+              val oper = db.sql.convert(db.parse(inputQuery).head.asInstanceOf[Select])
+              //val virtOper = db.compiler.virtualize(oper, db.compiler.standardOptimizations)
+              db.selectInto(materializedInput, oper)//virtOper.query)
+            }
           }
-          else{  
+          else{
             val inputQuery = s"SELECT * FROM ${input}"
-            val oper = db.sql.convert(db.parse(inputQuery).head.asInstanceOf[Select])
-            //val virtOper = db.compiler.virtualize(oper, db.compiler.standardOptimizations)
-            db.selectInto(materializedInput, oper)//virtOper.query)
+            query = s"CREATE LENS ${lenseName} AS $inputQuery WITH ${_type}(${paramsStr})"  
           }
+          println("createLens: query: " + query)
+          db.update(db.parse(query).head)    
         }
-        else{
-          val inputQuery = s"SELECT * FROM ${input}"
-          query = s"CREATE LENS ${lenseName} AS $inputQuery WITH ${_type}(${paramsStr})"  
+        case Some(_) => {
+          println("createLens: From Vistrails: Lens already exists: " + lenseName)
         }
-        println("createLens: query: " + query)
-        db.update(db.parse(query).head)    
       }
-      case Some(_) => {
-        println("createLens: From Vistrails: Lens already exists: " + lenseName)
-      }
+      lenseName
     }
-    lenseName
+    println(s"createLens ${_type} Took: ${timeRes._2}")
+    timeRes._1
   }
   
   def createView(input : Any, query : String) : String = {
     pythonCallThread = Thread.currentThread()
-    println("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
-    val inputSubstitutionQuery = query.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
-    val viewName = "VIEW_" + ((input.toString() + query).hashCode().toString().replace("-", "") )
-    db.getView(viewName) match {
-      case None => {
-        val viewQuery = s"CREATE VIEW $viewName AS $inputSubstitutionQuery"  
-        println("createView: query: " + viewQuery)
-        db.update(db.parse(viewQuery).head)
+    val timeRes = time {
+      println("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
+      val inputSubstitutionQuery = query.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
+      val viewName = "VIEW_" + ((input.toString() + query).hashCode().toString().replace("-", "") )
+      db.getView(viewName) match {
+        case None => {
+          val viewQuery = s"CREATE VIEW $viewName AS $inputSubstitutionQuery"  
+          println("createView: query: " + viewQuery)
+          db.update(db.parse(viewQuery).head)
+        }
+        case Some(_) => {
+          println("createView: From Vistrails: View already exists: " + viewName)
+        }
       }
-      case Some(_) => {
-        println("createView: From Vistrails: View already exists: " + viewName)
-      }
+      viewName
     }
-    viewName
+    println(s"createView Took: ${timeRes._2}")
+    timeRes._1
   }
   
   def vistrailsQueryMimir(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : PythonCSVContainer = {
-    println("vistrailsQueryMimir: " + query)
-    val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
-    if(includeUncertainty && includeReasons)
-      operCSVResultsDeterminismAndExplanation(oper)
-    else if(includeUncertainty)
-      operCSVResultsDeterminism(oper)
-    else 
-      operCSVResults(oper)
+    val timeRes = time {
+      println("vistrailsQueryMimir: " + query)
+      val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
+      if(includeUncertainty && includeReasons)
+        operCSVResultsDeterminismAndExplanation(oper)
+      else if(includeUncertainty)
+        operCSVResultsDeterminism(oper)
+      else 
+        operCSVResults(oper)
+    }
+    println(s"vistrailsQueryMimir Took: ${timeRes._2}")
+    timeRes._1
   }
   
   def explainCell(query: String, col:Int, row:Int) : String = {
-    println("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
-    val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
-    val cols = oper.schema.map(f => f._1)
-    db.explainCell(oper, RowIdPrimitive(row.toString()), cols(col)).toString()
+    val timeRes = time {
+      println("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
+      val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
+      val cols = oper.schema.map(f => f._1)
+      db.explainCell(oper, RowIdPrimitive(row.toString()), cols(col)).toString()
+    }
+    println(s"explainCell Took: ${timeRes._2}")
+    timeRes._1
   }
   
   def registerPythonMimirCallListener(listener : PythonMimirCallInterface) = {
@@ -250,10 +270,16 @@ object MimirVizier {
      println(resCSV._3.map(s=>s.mkString(",")).mkString(","))
      new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), detLists._1.toArray, detLists._2.toArray, resCSV._3.toArray)
   }
+ 
+ def time[F](anonFunc: => F): (F, Long) = {  
+      val tStart = System.nanoTime()
+      val anonFuncRet = anonFunc  
+      val tEnd = System.nanoTime()
+      (anonFuncRet, tEnd-tStart)
+    }  
 }
 
 //----------------------------------------------------------
-  
 
 trait PythonMimirCallInterface {
 	def callToPython(callStr : String) : String
