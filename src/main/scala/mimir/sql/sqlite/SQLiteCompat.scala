@@ -227,28 +227,38 @@ object First extends org.sqlite.Function.Aggregate {
 }
 
 object FirstInt extends org.sqlite.Function.Aggregate {
-  var firstVal: Int = 0;
+  var firstVal: Int = 0
   var empty = true
 
   @Override
   def xStep(): Unit = {
-    if(empty){ firstVal = value_int(0); empty = false }
+    if(empty){ 
+      if(value_type(0) != SQLiteCompat.NULL) {
+        firstVal = value_int(0) 
+        empty = false
+      }
+    }
   }
   def xFinal(): Unit = {
-    if(empty){ result(); } else { result(firstVal); }
+    if(empty){ result() } else { result(firstVal) }
   }
 }
 
 object FirstFloat extends org.sqlite.Function.Aggregate {
-  var firstVal: Double = 0.0;
+  var firstVal: Double = 0.0
   var empty = true
 
   @Override
   def xStep(): Unit = {
-    if(empty){ firstVal = value_double(0); empty = false }
+    if(empty){ 
+      if(value_type(0) != SQLiteCompat.NULL) {
+        firstVal = value_double(0) 
+        empty = false 
+      }
+    }
   }
   def xFinal(): Unit = {
-    if(empty){ result(); } else { result(firstVal); }
+    if(empty){ result() } else { result(firstVal) }
   }
 }
 

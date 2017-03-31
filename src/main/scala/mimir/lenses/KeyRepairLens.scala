@@ -93,9 +93,7 @@ object KeyRepairLens extends LazyLogging {
     db.selectInto(table, 
       Aggregate(
         keys.map( k => Var(k._1)),
-        values.map { col => 
-          AggFunction("COUNT", true, List(Var(col)), col)
-        },
+        Seq(AggFunction("COUNT", false, Seq(), "NUM_INSTANCES")),
         query
       )
     )
@@ -176,15 +174,11 @@ object KeyRepairLens extends LazyLogging {
       )}
     val rowsWithDuplicates =
       rowsWhere(
-        ExpressionUtils.makeOr(
-          values.map { v => Comparison(Cmp.Neq, Var(v._1), IntPrimitive(1)) }
-        )
+        Comparison(Cmp.Neq, Var("NUM_INSTANCES"), IntPrimitive(1))
       )
     val rowsWithoutDuplicates =
       rowsWhere(
-        ExpressionUtils.makeAnd(
-          values.map { v => Comparison(Cmp.Eq, Var(v._1), IntPrimitive(1)) }
-        )
+        Comparison(Cmp.Eq, Var("NUM_INSTANCES"), IntPrimitive(1))
       )
     Union(
       rowsWithoutDuplicates,
