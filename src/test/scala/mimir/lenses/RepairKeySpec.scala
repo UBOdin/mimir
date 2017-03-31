@@ -220,7 +220,7 @@ object KeyRepairSpec
         update("""
           CREATE LENS CUST_ACCTBAL_FASTPATH
           AS SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_WITHDUPS
-          WITH KEY_REPAIR(TUPLE_ID, FASTPATH())
+          WITH KEY_REPAIR(TUPLE_ID, ENABLE(FAST_PATH))
         """)
       },println(_))
       ok

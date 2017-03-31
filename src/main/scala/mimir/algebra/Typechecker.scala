@@ -35,7 +35,7 @@ class ExpressionChecker(scope: (String => Type) = Map().apply _) extends LazyLog
 				Typechecker.escalate(typeOf(lhs), typeOf(rhs), "Comparison", e);
 				TBool()
 			case Comparison((Gt | Gte | Lt | Lte), lhs, rhs) =>
-				if(typeOf(lhs) != TDate && typeOf(rhs) != TDate) {
+				if(typeOf(lhs) != TDate() && typeOf(rhs) != TDate()) {
 					Typechecker.assertNumeric(Typechecker.escalate(typeOf(lhs), typeOf(rhs), "Comparison", e), e)
 				}
 				TBool()

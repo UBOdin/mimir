@@ -34,8 +34,13 @@ object KeyRepairLens extends LazyLogging {
         scoreCol = Some(col.toUpperCase)
         None
       }
-      case Function("FASTPATH", Seq()) => {
-        fastPath = Some("MIMIR_FASTPATH_"+name)
+      case Function("ENABLE", opts) => {
+        opts.foreach { 
+          case Var("FAST_PATH") => 
+            fastPath = Some("MIMIR_FASTPATH_"+name)
+          case x => 
+            throw new SQLException(s"Invalid Key-Repair option: $x")
+        }
         None
       }
       case somethingElse => throw new SQLException(s"Invalid argument ($somethingElse) for KeyRepairLens $name")
