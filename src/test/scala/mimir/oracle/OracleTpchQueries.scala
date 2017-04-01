@@ -41,5 +41,7 @@ object OracleTpchQueries extends Specification {
         firstRow.size must beGreaterThan(0)
       }
     }
+  } else {
+    skipped("Skipping Oracle Tests (add a config/jdbc.property to test)")
   }
 }

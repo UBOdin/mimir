@@ -19,4 +19,7 @@ case class VGTermAcknowledged(
   }
   def rebuild(v: Seq[Expression]) = 
     VGTermAcknowledged(model, idx, v)
+
+  override def toString =
+    s"VGTERM_ACKNOWLEDGED(${(Seq(model.name, idx.toString) ++ args.map(_.toString)).mkString(", ")})"
 }

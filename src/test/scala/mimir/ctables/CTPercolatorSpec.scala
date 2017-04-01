@@ -14,8 +14,12 @@ import mimir.optimizer._
 import mimir.exec._
 import mimir.provenance._
 import mimir.models._
+import mimir.test._
 
-object CTPercolatorSpec extends Specification {
+object CTPercolatorSpec 
+  extends Specification 
+  with RAParsers
+{
   
   val schema = Map[String,Map[String,Type]](
     ("R", Map( 
@@ -29,12 +33,9 @@ object CTPercolatorSpec extends Specification {
     ))
   )
 
-  def parser = new OperatorParser(
-    (x: String) => UniformDistribution,
-    schema(_).toList
-  )
-  def expr = parser.expr _
-  def oper:(String => Operator) = parser.operator _
+  def modelLookup(model: String) = UniformDistribution
+  def schemaLookup(table: String) = schema(table).toList
+
   def project(cols: List[(String,String)], src: Operator): Operator =
     Project(cols.map( { case (name,e) => ProjectArg(name, expr(e))}), src) 
 
@@ -69,7 +70,7 @@ object CTPercolatorSpec extends Specification {
         oper("PROJECT[A <= A, B <= {{X_1[ROWID]}}](R(A, B))"),
         Map( 
           ("A", expr("true")),
-          ("B", expr("false"))
+          ("B", VGTermAcknowledged(UniformDistribution, 1, Seq(RowIdVar())))
         ),
         expr("true")
       ))
@@ -83,8 +84,10 @@ object CTPercolatorSpec extends Specification {
           PROJECT[A <= A, 
                   B <= IF B IS NULL THEN {{X_1[ROWID]}} ELSE B END, 
                   MIMIR_COL_DET_B <= 
-                       IF B IS NULL THEN FALSE ELSE TRUE END
-                ](R(A, B))"""),
+                       IF B IS NULL THEN B_ACK ELSE TRUE END
+                ](R(A, B))""",
+          Map("B_ACK" -> VGTermAcknowledged(UniformDistribution, 1, Seq(RowIdVar())))
+        ),
         Map( 
           ("A", expr("true")),
           ("B", expr("MIMIR_COL_DET_B"))

@@ -5,6 +5,7 @@ import org.specs2.specification._
 
 import mimir.algebra._
 import mimir.util._
+import mimir.exec.DefaultOutputFormat
 import mimir.ctables.{VGTerm}
 import mimir.optimizer.{ResolveViews,InlineVGTerms,InlineProjections}
 import mimir.test._
@@ -107,7 +108,7 @@ object KeyRepairSpec
         WITH KEY_REPAIR(ATTR, SCORE_BY(STRENGTH))
       """);
 
-      db.dump(
+      DefaultOutputFormat.print(
         query("""
           SELECT ATTR, PARENT FROM SCH_REPAIRED
         """)
@@ -193,111 +194,114 @@ object KeyRepairSpec
     }
   }
 
-  "RepairKey-FastPath" should {
-    "Load Customer Account Balances" >> {
-      update("""
-        CREATE TABLE CUST_ACCTBAL_WITHDUPS(
-          TUPLE_ID int,
-          WORLD_ID int,
-          VAR_ID int,
-          acctbal float
-        )
-      """)
-      LoadCSV.handleLoadTable(db, 
-        "CUST_ACCTBAL_WITHDUPS", 
-        new File("test/maybms/cust_c_acctbal.tbl"), 
-        Map(
-          "HEADER" -> "NO",
-          "DELIMITER" -> "|"
-        )
-      )
-      update("""
-        CREATE LENS CUST_ACCTBAL_CLASSIC
-        AS SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_WITHDUPS
-        WITH KEY_REPAIR(TUPLE_ID)
-      """)
-      TimeUtils.monitor("CREATE_FASTPATH", () => {
+  if(new File("test/pdbench").exists()){
+    "RepairKey-FastPath" should {
+      "Load Customer Account Balances" >> {
         update("""
-          CREATE LENS CUST_ACCTBAL_FASTPATH
-          AS SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_WITHDUPS
-          WITH KEY_REPAIR(TUPLE_ID, ENABLE(FAST_PATH))
+          CREATE TABLE CUST_ACCTBAL_WITHDUPS(
+            TUPLE_ID int,
+            WORLD_ID int,
+            VAR_ID int,
+            acctbal float
+          )
         """)
-      },println(_))
-      ok
-    }
-
-    "Create a fast-path cache table" >> {
-      querySingleton("""
-        SELECT COUNT(*)
-        FROM (
-          SELECT TUPLE_ID, COUNT(DISTINCT WORLD_ID) AS CT
-          FROM CUST_ACCTBAL_WITHDUPS
-          GROUP BY TUPLE_ID
-        ) C
-        WHERE CT > 1
-      """).asLong must be equalTo(1506l)
-
-      query("""
-        SELECT TUPLE_ID
-        FROM MIMIR_FASTPATH_CUST_ACCTBAL_FASTPATH
-        WHERE num_instances > 1
-      """).allRows must not beEmpty 
-
-      querySingleton("""
-        SELECT COUNT(*)
-        FROM MIMIR_FASTPATH_CUST_ACCTBAL_FASTPATH
-        WHERE num_instances > 1
-      """).asLong must be equalTo(1506l)
-
-      querySingleton("""
-        SELECT COUNT(*)
-        FROM MIMIR_FASTPATH_CUST_ACCTBAL_FASTPATH
-        WHERE num_instances = 1
-      """).asLong must be equalTo(148494l)
-
-      db.backend.resultValue("""
-        SELECT COUNT(*) FROM CUST_ACCTBAL_WITHDUPS
-        WHERE WORLD_ID = 1
-      """).asLong must be equalTo(150000l)
-
-    }
-
-    "Produce the same results" >> {
-      val classic = 
-        TimeUtils.monitor("QUERY_CLASSIC", () => {
-          query("""
-            SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_CLASSIC
-          """).mapRows { x => Seq(x(0), x(1)) }
+        LoadCSV.handleLoadTable(db, 
+          "CUST_ACCTBAL_WITHDUPS", 
+          new File("test/maybms/cust_c_acctbal.tbl"), 
+          Map(
+            "HEADER" -> "NO",
+            "DELIMITER" -> "|"
+          )
+        )
+        update("""
+          CREATE LENS CUST_ACCTBAL_CLASSIC
+          AS SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_WITHDUPS
+          WITH KEY_REPAIR(TUPLE_ID)
+        """)
+        TimeUtils.monitor("CREATE_FASTPATH", () => {
+          update("""
+            CREATE LENS CUST_ACCTBAL_FASTPATH
+            AS SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_WITHDUPS
+            WITH KEY_REPAIR(TUPLE_ID, ENABLE(FAST_PATH))
+          """)
         },println(_))
-      val fastpath =
+        ok
+      }
+
+      "Create a fast-path cache table" >> {
+        querySingleton("""
+          SELECT COUNT(*)
+          FROM (
+            SELECT TUPLE_ID, COUNT(DISTINCT WORLD_ID) AS CT
+            FROM CUST_ACCTBAL_WITHDUPS
+            GROUP BY TUPLE_ID
+          ) C
+          WHERE CT > 1
+        """).asLong must be equalTo(1506l)
+
+        query("""
+          SELECT TUPLE_ID
+          FROM MIMIR_FASTPATH_CUST_ACCTBAL_FASTPATH
+          WHERE num_instances > 1
+        """).allRows must not beEmpty 
+
+        querySingleton("""
+          SELECT COUNT(*)
+          FROM MIMIR_FASTPATH_CUST_ACCTBAL_FASTPATH
+          WHERE num_instances > 1
+        """).asLong must be equalTo(1506l)
+
+        querySingleton("""
+          SELECT COUNT(*)
+          FROM MIMIR_FASTPATH_CUST_ACCTBAL_FASTPATH
+          WHERE num_instances = 1
+        """).asLong must be equalTo(148494l)
+
+        db.backend.resultValue("""
+          SELECT COUNT(*) FROM CUST_ACCTBAL_WITHDUPS
+          WHERE WORLD_ID = 1
+        """).asLong must be equalTo(150000l)
+
+      }
+
+      "Produce the same results" >> {
+        val classic = 
+          TimeUtils.monitor("QUERY_CLASSIC", () => {
+            query("""
+              SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_CLASSIC
+            """).mapRows { x => Seq(x(0), x(1)) }
+          },println(_))
+        val fastpath =
+          TimeUtils.monitor("QUERY_FASTPATH", () => {
+            query("""
+              SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_FASTPATH
+            """).mapRows { x => Seq(x(0), x(1)) }
+          },println(_))
+        classic.size must be equalTo(150000)
+        fastpath.size must be equalTo(150000)
+      }
+
+      "Produce the same results under selection" >> {
+        db.backend.resultValue("""
+          SELECT COUNT(*) FROM CUST_ACCTBAL_WITHDUPS
+          WHERE WORLD_ID = 1 and acctbal < 0
+        """).asLong must be equalTo(13721l)
+
         TimeUtils.monitor("QUERY_FASTPATH", () => {
           query("""
-            SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_FASTPATH
-          """).mapRows { x => Seq(x(0), x(1)) }
-        },println(_))
-      classic.size must be equalTo(150000)
-      fastpath.size must be equalTo(150000)
+            SELECT TUPLE_ID FROM CUST_ACCTBAL_FASTPATH WHERE acctbal < 0
+          """).mapRows { x => x(0) }
+        },println(_)).size must be between(13721, 13721+579)  
+
+        TimeUtils.monitor("QUERY_CLASSIC", () => {
+          query("""
+            SELECT TUPLE_ID FROM CUST_ACCTBAL_CLASSIC WHERE acctbal < 0
+          """).mapRows { x => x(0) }
+        },println(_)).size must be between(13721, 13721+579)  
+      }
     }
-
-    "Produce the same results under selection" >> {
-      db.backend.resultValue("""
-        SELECT COUNT(*) FROM CUST_ACCTBAL_WITHDUPS
-        WHERE WORLD_ID = 1 and acctbal < 0
-      """).asLong must be equalTo(13721l)
-
-      TimeUtils.monitor("QUERY_FASTPATH", () => {
-        query("""
-          SELECT TUPLE_ID FROM CUST_ACCTBAL_FASTPATH WHERE acctbal < 0
-        """).mapRows { x => x(0) }
-      },println(_)).size must be between(13721, 13721+579)  
-
-      TimeUtils.monitor("QUERY_CLASSIC", () => {
-        query("""
-          SELECT TUPLE_ID FROM CUST_ACCTBAL_CLASSIC WHERE acctbal < 0
-        """).mapRows { x => x(0) }
-      },println(_)).size must be between(13721, 13721+579)  
-    }
-
+  } else {
+    skipped("Skipping FastPath tests (Run `sbt datasets` to download required data)")
   }
 
 }
