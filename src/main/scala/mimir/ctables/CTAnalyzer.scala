@@ -61,8 +61,12 @@ object CTAnalyzer {
           )
         )
 
-      case _: VGTerm =>
-        BoolPrimitive(false)
+      case v: VGTerm =>
+        if(v.args.isEmpty){
+          BoolPrimitive(v.model.isAcknowledged(v.idx, Seq()))
+        } else {
+          VGTermAcknowledged(v.model, v.idx, v.args)
+        }
       
       case Var(v) => 
         varMap.get(v).getOrElse(BoolPrimitive(true))
