@@ -27,9 +27,16 @@ trait RAParsers {
   {
     var parsed = parser.operator(raw)
     if(!inlineExpression.isEmpty){
-      parsed = parsed.recurExpressions(Eval.inlineWithoutSimplifying(_, inlineExpression))
+      parsed = 
+        inlineOperExpressions(parsed, inlineExpression)
     }
     return parsed
+  }
+  def inlineOperExpressions(op: Operator, exprs: Map[String, Expression]): Operator =
+  {
+    op.
+      recurExpressions(Eval.inlineWithoutSimplifying(_, exprs)).
+      recur(inlineOperExpressions(_, exprs))
   }
 
   def i = IntPrimitive(_:Long).asInstanceOf[PrimitiveValue]

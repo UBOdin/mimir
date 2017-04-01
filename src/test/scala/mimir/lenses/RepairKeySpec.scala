@@ -12,7 +12,7 @@ import mimir.test._
 import mimir.models._
 
 object KeyRepairSpec 
-  extends SQLTestSpecification("KeyRepair", Map("cleanup" -> "NO")) 
+  extends SQLTestSpecification("KeyRepair", Map("cleanup" -> "YES")) 
   with BeforeAll 
 {
 
@@ -194,9 +194,9 @@ object KeyRepairSpec
     }
   }
 
-  if(new File("test/pdbench").exists()){
-    "RepairKey-FastPath" should {
-      "Load Customer Account Balances" >> {
+  "RepairKey-FastPath" should {
+    "Load Customer Account Balances" >> {
+      if(PDBench.isDownloaded){
         update("""
           CREATE TABLE CUST_ACCTBAL_WITHDUPS(
             TUPLE_ID int,
@@ -207,7 +207,7 @@ object KeyRepairSpec
         """)
         LoadCSV.handleLoadTable(db, 
           "CUST_ACCTBAL_WITHDUPS", 
-          new File("test/maybms/cust_c_acctbal.tbl"), 
+          new File("test/pdbench/cust_c_acctbal.tbl"), 
           Map(
             "HEADER" -> "NO",
             "DELIMITER" -> "|"
@@ -226,9 +226,13 @@ object KeyRepairSpec
           """)
         },println(_))
         ok
+      } else {
+        skipped("Skipping FastPath tests (Run `sbt datasets` to download required data)"); ko
       }
+    }
 
-      "Create a fast-path cache table" >> {
+    "Create a fast-path cache table" >> {
+      if(PDBench.isDownloaded){
         querySingleton("""
           SELECT COUNT(*)
           FROM (
@@ -261,10 +265,13 @@ object KeyRepairSpec
           SELECT COUNT(*) FROM CUST_ACCTBAL_WITHDUPS
           WHERE WORLD_ID = 1
         """).asLong must be equalTo(150000l)
-
+      } else {
+        skipped("Skipping FastPath tests (Run `sbt datasets` to download required data)"); ko
       }
+    }
 
-      "Produce the same results" >> {
+    "Produce the same results" >> {
+      if(PDBench.isDownloaded){
         val classic = 
           TimeUtils.monitor("QUERY_CLASSIC", () => {
             query("""
@@ -279,9 +286,13 @@ object KeyRepairSpec
           },println(_))
         classic.size must be equalTo(150000)
         fastpath.size must be equalTo(150000)
+      } else {
+        skipped("Skipping FastPath tests (Run `sbt datasets` to download required data)"); ko
       }
+    }
 
-      "Produce the same results under selection" >> {
+    "Produce the same results under selection" >> {
+      if(PDBench.isDownloaded){
         db.backend.resultValue("""
           SELECT COUNT(*) FROM CUST_ACCTBAL_WITHDUPS
           WHERE WORLD_ID = 1 and acctbal < 0
@@ -297,11 +308,11 @@ object KeyRepairSpec
           query("""
             SELECT TUPLE_ID FROM CUST_ACCTBAL_CLASSIC WHERE acctbal < 0
           """).mapRows { x => x(0) }
-        },println(_)).size must be between(13721, 13721+579)  
-      }
+        },println(_)).size must be between(13721, 13721+579) 
+      } else {
+        skipped("Skipping FastPath tests (Run `sbt datasets` to download required data)"); ko
+      } 
     }
-  } else {
-    skipped("Skipping FastPath tests (Run `sbt datasets` to download required data)")
   }
 
 }

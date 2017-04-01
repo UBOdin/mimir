@@ -5,7 +5,7 @@ import mimir.algebra._
 
 object PDBench
 {
-  def downloaded = new File("test/pdbench").exists()
+  def isDownloaded = new File("test/pdbench").exists()
 
   val attributes = Seq(
     //  Attribute Table Name     Attribute        Type       Load Timeout
