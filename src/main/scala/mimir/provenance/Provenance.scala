@@ -5,6 +5,7 @@ import java.sql.SQLException
 import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
+import mimir.views.ViewMetadata
 
 class ProvenanceError(e:String) extends Exception(e) {}
 
@@ -89,6 +90,10 @@ object Provenance {
           newRowids ++ List(rowidColnameBase+"_branch")
         )
       }
+
+      case View(name, query, meta) => 
+        val (newQuery, rowIds) = compile(query)
+        ( View(name, query, meta + ViewMetadata.PROVENANCE), rowIds)
 
       case Table(name, schema, meta) =>
         (
@@ -240,6 +245,11 @@ object Provenance {
       case Union(lhs, rhs) => 
         doFilterForToken(lhs, rowIds).
           orElse(doFilterForToken(rhs, rowIds))
+
+      // We don't handle materializing the entire history of a given value
+      // for now... drop the view and focus on the query itself.
+      case View(_, query, _) => 
+        doFilterForToken(query, rowIds)
 
       case Table(_, _, meta) =>
         meta.find( _._2.equals(Var("ROWID")) ) match {

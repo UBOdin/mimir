@@ -112,6 +112,7 @@ import mimir.sql.Explain;
 import mimir.sql.Feedback;
 import mimir.sql.Load;
 import mimir.sql.Pragma;
+import mimir.sql.AlterViewMaterialize;
 import net.sf.jsqlparser.statement.create.table.Index;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.drop.Drop;
@@ -173,6 +174,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_SAVE:"SAVE">
 |   <K_RENAME:"RENAME">
 |   <K_PRAGMA:"PRAGMA">
+|   <K_MATERIALIZE:"MATERIALIZE">
 |   <K_BY:"BY">
 |   <K_DO:"DO">
 |   <K_IS:"IS">
@@ -299,6 +301,8 @@ Statement Statement() :
     stm = Load()
     |
     stm = Pragma()
+    | 
+    stm = Alter()
     )
     (";" | <EOF>)    
     { return stm; }
@@ -2002,4 +2006,19 @@ Pragma Pragma():
 {
   <K_PRAGMA> value = SimpleExpression()
     { return new Pragma(value); }
+}
+
+Statement Alter():
+{
+  Token target;
+  boolean drop = false;
+}
+{
+  <K_ALTER> (
+    ( <K_VIEW> target = <S_IDENTIFIER> (
+      ((<K_DROP> { drop = true; })? <K_MATERIALIZE> { 
+        return new AlterViewMaterialize(target.image, drop); 
+      })
+    ))
+  )
 }

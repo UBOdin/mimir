@@ -1,6 +1,7 @@
 package mimir.algebra;
 
 import mimir.util.ListUtils
+import mimir.views.ViewMetadata
 
 /**
  * Abstract parent class of all relational algebra operators
@@ -345,16 +346,25 @@ case class LeftOuterJoin(left: Operator,
 
 /**
  * A materialized view
+ *
+ * When initialized by RAToSql, the query field will contain the raw unmodified 
+ * query that the view was instantiated with.  As the view goes through compilation,
+ * the nested query will be modified; The metadata field tracks which forms of 
+ * compilation have been applied to it, so that the system can decide whether it has
+ * an appropriate materialized form of the view ready.
  */
-case class View(name: String, sch: Seq[(String, Type)], metadata: Seq[(String,Type)])
+case class View(name: String, query: Operator, metadata: Set[ViewMetadata.T] = Set())
   extends Operator
 {
-  def children: Seq[Operator] = Seq()
+  def children: Seq[Operator] = Seq(query)
   def expressions: Seq[Expression] = Seq()
-  def rebuild(c: Seq[Operator]): Operator = this
+  def rebuild(c: Seq[Operator]): Operator = View(name, c(0), metadata)
   def rebuildExpressions(x: Seq[Expression]): Operator = this
-  def toString(prefix: String): String = s"$name(${sch.map{_._1}.mkString(", ")} // is a view)"
+  def toString(prefix: String): String = 
+    s"$prefix$name := (\n${query.toString(prefix+"   ")}\n$prefix)"
 
-  def withMetadata(newMetadata: Seq[(String, Type)]): View =
-    View(name, sch, (metadata.toMap ++ newMetadata.toMap).toSeq)
+  def withMetadata(newMetadata: ViewMetadata.T): View =
+    withMetadata(Set(newMetadata))
+  def withMetadata(newMetadata: Iterable[ViewMetadata.T]): View =
+    View(name, query, metadata ++ newMetadata)
 }

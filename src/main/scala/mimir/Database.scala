@@ -364,7 +364,7 @@ case class Database(backend: Backend)
    */
   def getView(name: String): Option[(Operator)] =
     catalog(name).orElse(
-      views.get(name)
+      views.get(name).map(_.operator)
     )
 
   /**

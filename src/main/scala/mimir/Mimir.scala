@@ -56,11 +56,6 @@ object Mimir {
     // Check for one-off commands
     if(conf.loadTable.get != None){
       db.loadTable(conf.loadTable(), conf.loadTable()+".csv");
-    } else if(conf.rebuildBestGuess.get != None){
-        db.bestGuessCache.buildCache(
-          db.views.get(
-            conf.rebuildBestGuess().toUpperCase
-          ).get);
     } else {
       var source: Reader = null;
 

@@ -7,11 +7,10 @@ import mimir.provenance._;
 import mimir.ctables._;
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
+
 class ViewManager(db:Database) extends LazyLogging {
   
   val viewTable = "MIMIR_VIEWS"
-
-
 
   /**
    * Initialize the view manager: 
@@ -41,7 +40,7 @@ class ViewManager(db:Database) extends LazyLogging {
       throw new SQLException(s"View '$name' already exists")
     }
     db.backend.update(s"INSERT INTO $viewTable(NAME, QUERY, MATERIALIZED) VALUES (?,?,0)", 
-      List(
+      Seq(
         StringPrimitive(name), 
         StringPrimitive(db.querySerializer.serialize(query))
       ))
@@ -58,7 +57,7 @@ class ViewManager(db:Database) extends LazyLogging {
   {
     val properties = apply(name)
     db.backend.update(s"UPDATE $viewTable SET QUERY=? WHERE NAME=?", 
-      List(
+      Seq(
         StringPrimitive(db.querySerializer.serialize(query)),
         StringPrimitive(name)
       )) 
@@ -77,7 +76,7 @@ class ViewManager(db:Database) extends LazyLogging {
   {
     val properties = apply(name)
     db.backend.update(s"DELETE FROM $viewTable WHERE NAME=?", 
-      List(StringPrimitive(name))
+      Seq(StringPrimitive(name))
     )
     if(properties.isMaterialized){
       db.backend.update("DROP TABLE ${name}")
@@ -93,7 +92,7 @@ class ViewManager(db:Database) extends LazyLogging {
   {
     val results = 
       db.backend.resultRows(s"SELECT QUERY, METADATA FROM $viewTable WHERE name = ?", 
-        List(StringPrimitive(name))
+        Seq(StringPrimitive(name))
       )
     results.take(1).headOption.map(_.toSeq).map( 
       { 
@@ -101,22 +100,9 @@ class ViewManager(db:Database) extends LazyLogging {
           val query =
             db.querySerializer.deserializeQuery(s)
           val isMaterialized = 
-            ViewMetadata.isMaterialized(meta)
-          val rowId = 
-            if(ViewMetadata.hasRowId(meta)){
-              Some(Provenance.compile(query)._2)    
-            } else { None}
-          val taint =
-            if(ViewMetadata.hasTaint(meta)){
-              Some( (
-                query.schema.map { 
-                  col => (col._1 -> Var(CTPercolator.mimirColDeterministicColumnPrefix+col._1))
-                }.toMap,
-                Var(CTPercolator.mimirRowDeterministicColumnName)
-              ) )
-            } else { None }
+            meta != 0
           
-          new ViewMetadata(query, isMaterialized, rowId, taint)
+          new ViewMetadata(name, query, isMaterialized)
         }
       }
     )
@@ -155,8 +141,29 @@ class ViewManager(db:Database) extends LazyLogging {
       rowTaint,
       provenance
     ) = db.compiler.compileInline(properties.query)
+
+    val columns = baseSchema.map(_._1)
+
+    val completeQuery = 
+      Project(
+        columns.map { col => ProjectArg(col, Var(col)) } ++
+        columns.map { col => ProjectArg(
+          CTPercolator.mimirColDeterministicColumnPrefix + col,
+          columnTaint(col)
+        )} ++
+        Seq(ProjectArg(CTPercolator.mimirRowDeterministicColumnName, rowTaint)) ++
+        provenance.map { col => ProjectArg(col, Var(col)) },
+        query
+      )
+
     val inlinedSQL = db.compiler.sqlForBackend(query)
-    db.backend.selectInto(name, inlinedSQL)
+    db.backend.selectInto(name, inlinedSQL.toString)
+
+    db.backend.update(s"""
+      UPDATE $viewTable SET METADATA = 1 WHERE NAME = ?
+    """, Seq(
+      StringPrimitive(name)
+    ))
   }
 
   /**

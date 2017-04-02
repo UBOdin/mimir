@@ -185,6 +185,13 @@ class JDBCBackend(val backend: String, val filename: String)
       }
     })
   }
+  def selectInto(table: String, query: String): Unit =
+  {
+    backend match {
+      case "sqlite" => 
+        update(s"CREATE TABLE $table AS $query")
+    }
+  }
   
   def getTableSchema(table: String): Option[Seq[(String, Type)]] =
   {

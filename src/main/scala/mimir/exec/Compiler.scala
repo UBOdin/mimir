@@ -104,7 +104,7 @@ class Compiler(db: Database) extends LazyLogging {
     val provenanceCols = provenance._2
 
     // Tag rows/columns with provenance metadata
-    val tagging = CTPercolator.percolateLite(oper, Some(db))
+    val tagging = CTPercolator.percolateLite(oper)
     oper               = tagging._1
     val colDeterminism = tagging._2
     val rowDeterminism = tagging._3

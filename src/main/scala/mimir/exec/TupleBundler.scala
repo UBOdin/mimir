@@ -316,6 +316,9 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
 
       }
 
+      // We don't handle materialized tuple bundles (at the moment)
+      // so give up and drop the view.
+      case View(_, query, _) =>  compileFlat(query)
 
       case ( Sort(_,_) | Limit(_,_,_) | LeftOuterJoin(_,_,_) ) =>
         throw new RAException("Tuple-Bundler presently doesn't support LeftOuterJoin, Sort, or Limit")
