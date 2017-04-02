@@ -44,6 +44,7 @@ abstract class Backend {
   def update(stmt: TraversableOnce[String]): Unit
   def update(stmt: String, args: Seq[PrimitiveValue]): Unit
   def fastUpdateBatch(stmt: String, argArray: Iterable[Seq[PrimitiveValue]]): Unit
+  def selectInto(table: String, query: String): Unit
 
   def getAllTables(): Seq[String]
 

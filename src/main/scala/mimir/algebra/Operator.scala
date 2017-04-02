@@ -342,3 +342,19 @@ case class LeftOuterJoin(left: Operator,
   def expressions: List[Expression] = List(condition)
   def rebuildExpressions(x: Seq[Expression]) = LeftOuterJoin(left, right, x(0))
 }
+
+/**
+ * A materialized view
+ */
+case class View(name: String, sch: Seq[(String, Type)], metadata: Seq[(String,Type)])
+  extends Operator
+{
+  def children: Seq[Operator] = Seq()
+  def expressions: Seq[Expression] = Seq()
+  def rebuild(c: Seq[Operator]): Operator = this
+  def rebuildExpressions(x: Seq[Expression]): Operator = this
+  def toString(prefix: String): String = s"$name(${sch.map{_._1}.mkString(", ")} // is a view)"
+
+  def withMetadata(newMetadata: Seq[(String, Type)]): View =
+    View(name, sch, (metadata.toMap ++ newMetadata.toMap).toSeq)
+}

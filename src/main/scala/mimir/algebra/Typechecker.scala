@@ -165,6 +165,8 @@ object Typechecker {
 
 			case Table(_, sch, meta) => (sch ++ meta.map( x => (x._1, x._3) ))
 
+			case View(_, sch, meta) => sch ++ meta
+
 			case EmptyTable(sch) => sch
 
 			case Limit(_, _, src) => schemaOf(src)

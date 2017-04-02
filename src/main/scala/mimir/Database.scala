@@ -460,4 +460,40 @@ case class Database(backend: Backend)
   def stmt(s: String) = {
     new MimirJSqlParser(new StringReader(s)).Statement()
   }
+
+  /**
+   * Utility for modules to ensure that a table with the specified schema exists.
+   *
+   * If the table doesn't exist, it will be created.
+   * If the table does exist, non-existant columns will be created.
+   * If the table does exist and a column has a different type, an error will be thrown.
+   */
+  def requireTable(name: String, schema: Seq[(String, Type)], primaryKey: Option[String] = None)
+  {
+    val typeMap = schema.map { x => (x._1.toUpperCase -> x._2) }.toMap
+    backend.getTableSchema(name) match {
+      case None => 
+        val schemaElements = 
+          schema.map { case (name, t) => s"$name $t" } ++ 
+          (if(primaryKey.isEmpty) { Seq() } else {
+            s"PRIMARY KEY (${primaryKey.get})"
+          })
+        backend.update(s"""
+          CREATE TABLE $name(
+            ${schemaElements.mkString(",\n            ")}
+          )
+        """)
+      case Some(oldSch) => {
+        val currentColumns = oldSch.map { _._1 }.toSet
+        for(column <- (typeMap.keySet ++ currentColumns)){
+          if(typeMap contains column){
+            if(!(currentColumns contains column)){
+              backend.update(s"ALTER TABLE $name ADD COLUMN $column ${typeMap(column)}")
+            }
+          }
+        }
+      }
+
+    }
+  }
 }
