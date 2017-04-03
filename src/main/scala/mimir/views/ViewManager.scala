@@ -39,7 +39,7 @@ class ViewManager(db:Database) extends LazyLogging {
     if(db.tableExists(name)){
       throw new SQLException(s"View '$name' already exists")
     }
-    db.backend.update(s"INSERT INTO $viewTable(NAME, QUERY, MATERIALIZED) VALUES (?,?,0)", 
+    db.backend.update(s"INSERT INTO $viewTable(NAME, QUERY, METADATA) VALUES (?,?,0)", 
       Seq(
         StringPrimitive(name), 
         StringPrimitive(db.querySerializer.serialize(query))
@@ -208,6 +208,26 @@ class ViewManager(db:Database) extends LazyLogging {
       ("ATTR_TYPE", TString()),
       ("IS_KEY", TBool())
     ))
+  }
+
+  /**
+   * Resolve views: The final step in query rewriting.
+   *
+   * For each view in the provided query, decide whether the view can be resolved to
+   * a materialized view table, or whether it needs to be executed directly.  
+   * @param op    The operator to resolve views in
+   * @return      A version of the tree for `op` with no View nodes.
+   */
+  def resolve(op: Operator): Operator =
+  {
+    op match {
+      case View(name, query, annotations) =>
+        // ignore for now
+        resolve(query)
+
+      case _ =>
+        op.recur(resolve(_))
+    }
   }
 
 }

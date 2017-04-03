@@ -111,7 +111,7 @@ object Typechecker {
 								(col, chk.typeOf(expression))
 							} catch {
 								case mv: MissingVariable => 
-									throw new RAException("Missing Variable: "+mv.getMessage(), Some(o))
+									throw new RAException(s"Missing Variable: ${mv.getMessage()} (${schemaOf(src).map(_._1).mkString(", ")})", Some(o))
 							}
 					})
 

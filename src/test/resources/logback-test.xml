@@ -6,7 +6,9 @@
       <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
     </encoder>
   </appender>
-   
+  
+  <logger name="mimir.Database" level="INFO"/>
+  <logger name="mimir.Mimir" level="INFO"/>
   <logger name="mimir.util.LoadCSV$" level="INFO"/>
   <logger name="mimir.util.NonStrictCSVParser" level="INFO"/>
   <logger name="mimir.util.LineReaderInputSource" level="INFO"/>

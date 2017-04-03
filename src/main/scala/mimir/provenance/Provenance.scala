@@ -5,7 +5,7 @@ import java.sql.SQLException
 import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
-import mimir.views.ViewMetadata
+import mimir.views.ViewAnnotation
 
 class ProvenanceError(e:String) extends Exception(e) {}
 
@@ -93,7 +93,7 @@ object Provenance {
 
       case View(name, query, meta) => 
         val (newQuery, rowIds) = compile(query)
-        ( View(name, query, meta + ViewMetadata.PROVENANCE), rowIds)
+        ( View(name, newQuery, meta + ViewAnnotation.PROVENANCE), rowIds)
 
       case Table(name, schema, meta) =>
         (

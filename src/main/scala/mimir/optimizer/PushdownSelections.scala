@@ -122,7 +122,10 @@ object PushdownSelections {
 			
 			case Select(cond, EmptyTable(sch)) => EmptyTable(sch)
 
-			case Select(_,_) =>
+			case Select(cond, View(name, query, annotations)) => 
+				Select(cond, View(name, apply(query), annotations))
+
+			case Select(_,_) => 
 				throw new SQLException("Unhandled Select Case in Pushdown: " + o)
 
 			case _ => o.rebuild(o.children.map(apply(_)))

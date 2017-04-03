@@ -22,8 +22,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
 
   def apply(query: Operator): Operator =
   {
-    val inlined = ResolveViews(db, query)
-    val (compiled, nonDeterministicColumns) = compileFlat(inlined)    
+    val (compiled, nonDeterministicColumns) = compileFlat(query)    
     Project(
       query.schema.map(_._1).map { col => 
         ProjectArg(col, 

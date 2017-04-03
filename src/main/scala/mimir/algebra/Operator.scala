@@ -1,7 +1,7 @@
 package mimir.algebra;
 
 import mimir.util.ListUtils
-import mimir.views.ViewMetadata
+import mimir.views.ViewAnnotation
 
 /**
  * Abstract parent class of all relational algebra operators
@@ -353,18 +353,13 @@ case class LeftOuterJoin(left: Operator,
  * compilation have been applied to it, so that the system can decide whether it has
  * an appropriate materialized form of the view ready.
  */
-case class View(name: String, query: Operator, metadata: Set[ViewMetadata.T] = Set())
+case class View(name: String, query: Operator, annotations: Set[ViewAnnotation.T] = Set())
   extends Operator
 {
   def children: Seq[Operator] = Seq(query)
   def expressions: Seq[Expression] = Seq()
-  def rebuild(c: Seq[Operator]): Operator = View(name, c(0), metadata)
+  def rebuild(c: Seq[Operator]): Operator = View(name, c(0), annotations)
   def rebuildExpressions(x: Seq[Expression]): Operator = this
   def toString(prefix: String): String = 
-    s"$prefix$name := (\n${query.toString(prefix+"   ")}\n$prefix)"
-
-  def withMetadata(newMetadata: ViewMetadata.T): View =
-    withMetadata(Set(newMetadata))
-  def withMetadata(newMetadata: Iterable[ViewMetadata.T]): View =
-    View(name, query, metadata ++ newMetadata)
+    s"$prefix$name[${annotations.mkString(", ")}] := (\n${query.toString(prefix+"   ")}\n$prefix)"
 }

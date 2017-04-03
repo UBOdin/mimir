@@ -410,20 +410,15 @@ class SqlToRA(db: Database)
       else { alias = alias.toUpperCase }
 
       if(fi.asInstanceOf[net.sf.jsqlparser.schema.Table].getSchemaName == null){
-        val sch = db.getTableSchema(name) match {
-          case Some(sch) => sch
-          case None => throw new SQLException("Unknown table or view: "+name);
-        }
-        val newBindings = sch.map(
+        val tableOp = db.getTableOperator(name)
+        val newBindings = tableOp.schema.map(
             (x) => (x._1, alias+"_"+x._1)
           )
         return (
-          Table(name, 
-            sch.map(
-              _ match { case (v, t) => (alias+"_"+v, t)}
-            ),
-            List[(String,Expression,Type)]()
-          ), 
+          Project(
+            newBindings.map { x => ProjectArg(x._2, Var(x._1)) },
+            tableOp
+          ),
           newBindings, 
           alias
         )

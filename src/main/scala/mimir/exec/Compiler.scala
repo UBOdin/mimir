@@ -27,9 +27,7 @@ class Compiler(db: Database) extends LazyLogging {
    */
   def compile(rawOper: Operator, opts: List[Operator => Operator] = standardOptimizations): ResultIterator = 
   {
-    // Recursively expand all view tables using mimir.optimizer.ResolveViews
-    var oper = ResolveViews(db, rawOper)
-    
+    var oper = rawOper
     logger.debug(s"RAW: $oper")
     
     val compiled = compileInline(oper, opts)
@@ -103,6 +101,9 @@ class Compiler(db: Database) extends LazyLogging {
     oper               = provenance._1
     val provenanceCols = provenance._2
 
+    logger.debug(s"WITH-PROVENANCE: $oper")
+
+
     // Tag rows/columns with provenance metadata
     val tagging = CTPercolator.percolateLite(oper)
     oper               = tagging._1
@@ -110,6 +111,10 @@ class Compiler(db: Database) extends LazyLogging {
     val rowDeterminism = tagging._3
 
     logger.debug(s"PRE-OPTIMIZED: $oper")
+
+    oper = db.views.resolve(oper)
+
+    logger.debug(s"INLINED: $oper")
 
     // Clean things up a little... make the query prettier, tighter, and 
     // faster
@@ -143,7 +148,7 @@ class Compiler(db: Database) extends LazyLogging {
     logger.debug(s"SPECIALIZED: $specialized")
     
     // Generate the SQL
-    val sql = db.ra.convert(oper)
+    val sql = db.ra.convert(specialized)
 
     logger.debug(s"SQL: $sql")
 
@@ -186,7 +191,22 @@ class Compiler(db: Database) extends LazyLogging {
   /**
    * Optimize the query
    */
-  def optimize(oper: Operator, opts: List[Operator => Operator]): Operator =
-    opts.foldLeft(oper)((o, fn) => fn(o))
+  def optimize(rawOper: Operator, opts: List[Operator => Operator]): Operator = {
+    var oper = rawOper
+    // Repeatedly apply optimizations up to a fixed point or an arbitrary cutoff of 10 iterations
+    for( i <- (0 until 10) ){
+      logger.debug(s"Optimizing, cycle $i: \n$oper")
+      // Try to optimize
+      val newOper = 
+        opts.foldLeft(oper)((o, fn) => fn(o))
+
+      // Return if we've reached a fixed point 
+      if(oper.equals(newOper)){ return newOper; }
+
+      // Otherwise repeat
+      oper = newOper;
+    }
+    return oper;
+  }
 
 }

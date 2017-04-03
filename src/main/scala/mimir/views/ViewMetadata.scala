@@ -15,7 +15,7 @@ class ViewMetadata(
     query.schema
 }
 
-object ViewMetadata
+object ViewAnnotation
   extends Enumeration
 {
   type T = Value

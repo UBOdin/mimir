@@ -292,7 +292,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 	def filterByProvenance(rawOper: Operator, token: RowIdPrimitive): Operator =
 	{
-		val oper = PropagateEmptyViews(ResolveViews(db, rawOper))
+		val oper = PropagateEmptyViews(rawOper)
 		logger.debug(s"RESOLVED: \n$oper")
 		val (provQuery, rowIdCols) = Provenance.compile(oper)
 		val filteredQuery =
@@ -305,12 +305,9 @@ class CTExplainer(db: Database) extends LazyLogging {
 		return filteredQuery
 	}
 
-	def getProvenance(rawOper: Operator, token: RowIdPrimitive): 
+	def getProvenance(oper: Operator, token: RowIdPrimitive): 
 		(Map[String,PrimitiveValue], Map[String, Expression], Expression) =
 	{
-		val oper = ResolveViews(db, rawOper)
-		logger.trace(s"RESOLVED: $oper")
-
 		// Annotate the query to produce a provenance trace
 		val (provQuery, rowIdCols) = Provenance.compile(oper)
 

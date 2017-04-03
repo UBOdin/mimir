@@ -7,7 +7,7 @@ import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
 import mimir.Database
-import mimir.views.ViewMetadata
+import mimir.views.ViewAnnotation
 
 object CTPercolator 
   extends LazyLogging
@@ -499,10 +499,10 @@ object CTPercolator
             columns.map { col => ProjectArg(col, Var(col)) } ++
             columns.map { col => ProjectArg(mimirColDeterministicColumnPrefix+col, colDeterminism(col)) } ++
             Seq( ProjectArg(mimirRowDeterministicColumnName, rowDeterminism) ),
-            query
+            newQuery
           )
         (
-          View(name, inlinedQuery, metadata + ViewMetadata.TAINT),
+          View(name, inlinedQuery, metadata + ViewAnnotation.TAINT),
           columns.map { col => (col -> Var(mimirColDeterministicColumnPrefix+col)) }.toMap,
           Var(mimirRowDeterministicColumnName)
         )

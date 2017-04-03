@@ -7,7 +7,7 @@ import mimir.algebra._
 import mimir.util._
 import mimir.exec.DefaultOutputFormat
 import mimir.ctables.{VGTerm}
-import mimir.optimizer.{ResolveViews,InlineVGTerms,InlineProjections}
+import mimir.optimizer.{InlineVGTerms,InlineProjections}
 import mimir.test._
 import mimir.models._
 
