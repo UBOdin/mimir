@@ -9,9 +9,11 @@ import mimir.sql._
 import mimir.util.{TimeUtils,ExperimentalOptions,LineReaderInputSource}
 import mimir.algebra._
 import mimir.optimizer.ResolveViews
+import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody} 
 import net.sf.jsqlparser.statement.drop.Drop
+import org.jline.terminal.{Terminal,TerminalBuilder}
 import org.rogach.scallop._
 
 import scala.collection.JavaConverters._
@@ -32,7 +34,8 @@ object Mimir {
 
   var conf: MimirConfig = null;
   var db: Database = null;
-  var usePrompt = true;
+  lazy val terminal: Terminal = TerminalBuilder.terminal()
+  var output: OutputFormat = DefaultOutputFormat
 
   def main(args: Array[String]) = 
   {
@@ -43,7 +46,9 @@ object Mimir {
 
     // Set up the database connection(s)
     db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
-    println("Connecting to " + conf.backend() + "://" + conf.dbname() + "...")
+    if(!conf.quiet()){
+      output.print("Connecting to " + conf.backend() + "://" + conf.dbname() + "...")
+    }
     db.backend.open()
 
     db.initializeDBForMimir();
@@ -60,7 +65,7 @@ object Mimir {
       var source: Reader = null;
 
       conf.precache.foreach( (opt) => opt.split(",").foreach( (table) => { 
-        println(s"Precaching... $table")
+        output.print(s"Precaching... $table")
         db.models.prefetchForOwner(table.toUpperCase)
       }))
 
@@ -69,19 +74,21 @@ object Mimir {
       }
 
       if(conf.file.get == None || conf.file() == "-"){
-        source = new LineReaderInputSource();
-        usePrompt = !conf.quiet();
+        source = new LineReaderInputSource(terminal);
+        output = new PrettyOutputFormat(terminal)
       } else {
         source = new FileReader(conf.file());
-        usePrompt = false;
+        output = DefaultOutputFormat
       }
 
-      println("   ... ready")
+      if(!conf.quiet()){
+        output.print("   ... ready")
+      }
       eventLoop(source)
     }
 
     db.backend.close()
-    if(!conf.quiet()) { println("\n\nDone.  Exiting."); }
+    if(!conf.quiet()) { output.print("\n\nDone.  Exiting."); }
   }
 
   def eventLoop(source: Reader): Unit =
@@ -104,16 +111,16 @@ object Mimir {
 
       } catch {
         case e: FileNotFoundException =>
-          println(e.getMessage)
+          output.print(e.getMessage)
 
         case e: SQLException =>
-          println("Error: "+e.getMessage)
+          output.print("Error: "+e.getMessage)
 
         case e: RAException =>
-          println("Error: "+e.getMessage)
+          output.print("Error: "+e.getMessage)
 
         case e: Throwable => {
-          println("An unknown error occurred...");
+          output.print("An unknown error occurred...");
           e.printStackTrace()
 
           // The parser pops the input stream back onto the queue, so
@@ -135,29 +142,29 @@ object Mimir {
   {
     TimeUtils.monitor("QUERY", () => {
       val results = db.query(raw)
-      db.dump(results)
-    }, println(_))
+      output.print(results)
+    }, output.print(_))
   }
 
   def handleExplain(explain: Explain): Unit = 
   {
     val raw = db.sql.convert(explain.getSelectBody())
-    println("------ Raw Query ------")
-    println(raw)
+    output.print("------ Raw Query ------")
+    output.print(raw.toString)
     db.check(raw)
     val expanded = ResolveViews(db,raw)
-    println("--- Expanded Query ----")
-    println(expanded)    
+    output.print("--- Expanded Query ----")
+    output.print(expanded.toString)    
     val optimized = db.optimize(expanded)
-    println("--- Optimized Query ---")
-    println(optimized)
+    output.print("--- Optimized Query ---")
+    output.print(optimized.toString)
     db.check(optimized)
-    println("--- SQL ---")
+    output.print("--- SQL ---")
     try {
-      println(db.ra.convert(optimized).toString)
+      output.print(db.ra.convert(optimized).toString)
     } catch {
       case e:Throwable =>
-        println("Unavailable: "+e.getMessage())
+        output.print("Unavailable: "+e.getMessage())
     }
   }
 
@@ -172,32 +179,32 @@ object Mimir {
       )
 
     if(rowId == null){
-      println("==== Explain Table ====")
+      output.print("==== Explain Table ====")
       val reasonSets = db.explainer.explainEverything(query)
       for(reasonSet <- reasonSets){
         val count = reasonSet.size(db);
         val reasons = reasonSet.take(db, 5);
         printReasons(reasons);
         if(count > reasons.size){
-          println(s"... and ${count - reasons.size} more like the last")
+          output.print(s"... and ${count - reasons.size} more like the last")
         }
       }
     } else {
       val token = RowIdPrimitive(db.sql.convert(rowId).asString)
       if(column == null){ 
-        println("==== Explain Row ====")
+        output.print("==== Explain Row ====")
         val explanation = 
           db.explainer.explainRow(query, token)
         printReasons(explanation.reasons)
-        println("--------")
-        println("Row Probability: "+explanation.probability)
+        output.print("--------")
+        output.print("Row Probability: "+explanation.probability)
       } else { 
-      println("==== Explain Cell ====")
+      output.print("==== Explain Cell ====")
         val explanation = 
           db.explainer.explainCell(query, token, column) 
         printReasons(explanation.reasons)
-        println("--------")
-        println("Examples: "+explanation.examples.map(_.toString).mkString(", "))
+        output.print("--------")
+        output.print("Examples: "+explanation.examples.map(_.toString).mkString(", "))
       }
     }
   }
@@ -209,12 +216,12 @@ object Mimir {
         if(!reason.args.isEmpty){
           " (" + reason.args.mkString(",") + ")"
         } else { "" }
-      println(reason.reason)
+      output.print(reason.reason)
       if(!reason.confirmed){
-        println(s"   ... repair with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.repair.exampleString }`");
-        println(s"   ... confirm with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.guess }`");
+        output.print(s"   ... repair with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.repair.exampleString }`");
+        output.print(s"   ... confirm with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.guess }`");
       }
-      println("")
+      output.print("")
     }
   }
 
@@ -223,14 +230,14 @@ object Mimir {
     db.sql.convert(pragma.getExpression, (x:String) => x) match {
 
       case Function("SHOW", Seq(Var("TABLES"))) => 
-        for(table <- db.getAllTables()){ println(table); }
+        for(table <- db.getAllTables()){ output.print(table); }
 
       case Function("SHOW", Seq(Var("SCHEMA"), Var(name))) => 
         db.getTableSchema(name) match {
           case None => 
-            println(s"'$name' is not a table")
+            output.print(s"'$name' is not a table")
           case Some(schema) => 
-            println("CREATE TABLE "+name+" (\n"+
+            output.print("CREATE TABLE "+name+" (\n"+
               schema.map { col => "  "+col._1+" "+col._2 }.mkString(",\n")
             +"\n);")
         }

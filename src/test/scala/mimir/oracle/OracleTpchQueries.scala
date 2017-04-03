@@ -22,9 +22,9 @@ object OracleTpchQueries extends Specification {
   val backend = "oracle"
   val db = new Database(new JDBCBackend(backend, dbName))
 
-  if(new File("config/jdbc.property").exists()){
-    "Mimir" should  {
-      "Run tpch query 5 on Oracle" >> {
+  "Mimir" should  {
+    "Run tpch query 5 on Oracle" >> {
+      if(new File("config/jdbc.property").exists()){
 
         db.backend.open()
         val parser = new MimirJSqlParser(new FileReader(new File(queryFolder, q5)))
@@ -39,7 +39,10 @@ object OracleTpchQueries extends Specification {
 
         db.backend.close()
         firstRow.size must beGreaterThan(0)
+      } else {
+        skipped("Skipping Oracle Tests (add a config/jdbc.property to test)")
       }
+      ok
     }
   }
 }
