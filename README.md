@@ -6,20 +6,38 @@ Mimir is about getting you to your data analytics as fast as possible. It attach
 
 Instead of forcing you to spend hours or days wrangling all your data upfront, Mimir makes educated guesses to get your wrangling done sooner, and give you acess to your data. Then, when you start your analysis, Mimir uses simple visual cues to let you know when your analysis might need you to actually do some data wrangling and how badly it needs it. Then, Mimir streamlines the process of after-the-fact wrangling, focusing you on those parts of the data that need it most.
 
-## Getting Started with Mimir
+## Quick-Start
 
-We don't have an official release yet.  For now, check out the repository and use sbt run to start the Mimir UI
+Download the latest version of Mimir:
+* [0.2 (Nightly Build)](http://maven.mimirdb.info/mimirdb/mimir-core_2.10/0.2-SNAPSHOT/Mimir.jar)
+* [0.1 (Stable)](http://maven.mimirdb.info/mimirdb/mimir-core_2.10/0.1/Mimir.jar)
+
+This is a self-contained jar.  Run it with
 ```
-$> git clone https://github.com/UBOdin/mimir-ui.git
-...
-$> cd mimir-ui; sbt run
-...
+$> java -jar Mimir.jar
 ```
 
-Once the Mimir graphical user interface server starts up, just point your web browser at `http://localhost:9000`
+## User Guides
+* Our [Whitepaper Example](http://mimirdb.info/whitepaper.html)
+* [MimirSQL Docs](https://github.com/UBOdin/mimir/wiki/Mimir-SQL)
+* [Mimir Command-Line Docs](https://github.com/UBOdin/mimir/wiki/Mimir-CLI)
 
-Then, you can follow along with the example in our [Whitepaper](http://mimirdb.info/whitepaper.html)
 
+## Compiling Mimir
+
+To compile from source, check out Mimir, and use one of the following to compile and run mimir.
+```
+$> git clone https://github.com/UBOdin/mimir.git
+...
+$> cd mimir
+$> sbt run
+```
+OR
+```
+$> sbt assembly
+...
+$> ./bin/mimir
+```
 
 ## Hacking on Mimir
 
