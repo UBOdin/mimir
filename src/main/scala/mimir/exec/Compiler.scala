@@ -36,7 +36,7 @@ class Compiler(db: Database) extends LazyLogging {
   {
     // Recursively expand all view tables using mimir.optimizer.ResolveViews
     var oper = ResolveViews(db, rawOper)
-
+    
     logger.debug(s"RAW: $oper")
     
     // We'll need the pristine pre-manipulation schema down the line
@@ -44,7 +44,7 @@ class Compiler(db: Database) extends LazyLogging {
     // acting as a sanity check on the query before we do any serious
     // work.
     val outputSchema = oper.schema;
-
+      
     // The names that the provenance compilation step assigns will
     // be different depending on the structure of the query.  As a 
     // result it is **critical** that this be the first step in 
@@ -98,9 +98,9 @@ class Compiler(db: Database) extends LazyLogging {
     // a lookup table with name + position in the query being execed.
     val finalSchemaOrderLookup = 
       finalSchema.map(_._1).zipWithIndex.toMap
-
+   
     logger.debug(s"SCHEMA: $finalSchema")
-
+    
     // Generate the SQL
     val sql = db.ra.convert(oper)
 
@@ -121,7 +121,10 @@ class Compiler(db: Database) extends LazyLogging {
       outputSchema.map(_._1).map(colDeterminism(_)), 
       rowDeterminism
     )
+   
   }
+  
+  
 
   /**
    * Remove all VGTerms in the query and replace them with the 

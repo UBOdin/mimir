@@ -225,6 +225,14 @@ case class Database(backend: Backend)
   }
 
   /**
+   * Determine whether the specified table exists
+   */
+  def tableExists(name: String): Boolean =
+  {
+    getTableSchema(name) != None
+  }
+
+  /**
    * Look up the schema for the table with the provided name.
    */
   def getTableSchema(name: String): Option[Seq[(String,Type)]] =
@@ -405,11 +413,12 @@ case class Database(backend: Backend)
     backend.update(  s"CREATE TABLE $targetTable ( $tableDef );"  )
     val insertCmd = s"INSERT INTO $targetTable( $tableCols ) VALUES ($colFillIns);"
     println(insertCmd)
-    query(sourceQuery).foreachRow(
-      result =>
-        backend.update(insertCmd, result.currentRow())
+    backend.fastUpdateBatch(
+      insertCmd,
+      query(sourceQuery).mapRows( _.currentRow )
     )
   }
+  
 
   def selectInto(targetTable: String, tableName: String){
 /*    val v:Option[Operator] = getView(tableName)

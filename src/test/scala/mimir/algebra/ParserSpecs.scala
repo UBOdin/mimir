@@ -36,7 +36,7 @@ object ParserSpecs extends Specification {
       expr("(1)") must be equalTo IntPrimitive(1)
     }
     "Parse Conjunctions" in {
-      expr("(A = B) & (B = C)") must be equalTo
+      expr("(A = B) && (B = C)") must be equalTo
         Arithmetic(Arith.And,
           Comparison(Cmp.Eq, Var("A"), Var("B")),
           Comparison(Cmp.Eq, Var("B"), Var("C"))

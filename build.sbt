@@ -67,7 +67,6 @@ libraryDependencies ++= Seq(
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")
-
 parser := {
   val logger = streams.value.log
   Process(List(
@@ -92,6 +91,39 @@ parser := {
     case n => sys.error(s"Could not build SQL Parser: $n")
   }
 }
+
+lazy val datasets = taskKey[Unit]("Loads Datasets for Test Cases")
+datasets := {
+  val logger = streams.value.log
+  if(!new File("test/pdbench").exists()){
+    Process(List(
+      "curl", "-O", "http://odin.cse.buffalo.edu/public_data/pdbench-1g-columnar.tgz"
+    )) ! logger match {
+      case 0 => // Success
+      case n => sys.error(s"Could not download PDBench Data: $n")
+    }
+    Process(List("mkdir", "test/pdbench")) ! logger match {
+      case 0 => // Success
+      case n => sys.error(s"Could not create PDBench directory")
+    }
+    Process(List(
+      "tar", "-xvf", 
+      "pdbench-1g-columnar.tgz", 
+      "--strip-components=1", 
+      "--directory=test/pdbench"
+    )) ! logger match {
+      case 0 => // Success
+      case n => sys.error(s"Could not clean up after old SQL Parser: $n")
+    }
+    Process(List("rm", "pdbench-1g-columnar.tgz")) ! logger match {
+      case 0 => // Success
+      case n => sys.error(s"Could not create PDBench directory")
+    }
+  } else {
+    println("Found `pdbench` data in test/pdbench");
+  }
+}
+
 
 scalacOptions in Test ++= Seq("-Yrangepos")
 

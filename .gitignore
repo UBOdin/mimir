@@ -34,5 +34,8 @@ serialized/*.db/
 databases/noisy.db
 databases/tpch*.db
 
+# Large Data Files
+test/pdbench
+
 # DBGen
 tpch-dbgen
