@@ -156,6 +156,7 @@ object RepairKeyTimingSpec
         println(s"Time:${timeForQuery._2} nanoseconds <- RepairKeyLens:${testTable}")
         timeForQuery._2 should be lessThan timeout
       }
+      db.tableExists(testTable) must beTrue
     }
   }
 
