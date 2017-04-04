@@ -66,13 +66,19 @@ object DiscalaAbadiNormalizer
         }
       )
 
-    val (_, models) = KeyRepairLens.create(
-      db, s"MIMIR_DA_CHOSEN_${config.schema}",
-      db.getTableOperator(fdTable),
-      Seq(Var("MIMIR_FD_CHILD"), Function("SCORE_BY", Seq(Var("MIMIR_FD_PATH_LENGTH"))))
-    )
+    val model = 
+      new DAFDRepairModel(
+        s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_FD_PARENT",
+        config.schema,
+        db.getTableOperator(fdTable),
+        Seq(("MIMIR_FD_CHILD", TInt())),
+        "MIMIR_FD_PARENT",
+        TInt(),
+        Some("MIMIR_FD_PATH_LENGTH"),
+        fullSchema.map { x => (x._2.toLong -> x._1._1) }.toMap
+      )
 
-    models
+    return Seq(model)
   }
 
   final def spanningTreeLens(db: Database, config: MultilensConfig): Operator =
@@ -186,5 +192,31 @@ object DiscalaAbadiNormalizer
       config.query
     ))
   }
+}
 
+
+@SerialVersionUID(1001L)
+class DAFDRepairModel(
+  name: String, 
+  context: String, 
+  source: Operator, 
+  keys: Seq[(String, Type)], 
+  target: String,
+  targetType: Type,
+  scoreCol: Option[String],
+  attrLookup: Map[Long,String]
+) extends KeyRepairModel(name, context, source, keys, target, targetType, scoreCol)
+{
+  override def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String =
+  {
+    choices.get(args.toList) match {
+      case None => {
+        val possibilities = getDomain(idx, args, hints).sortBy(-_._2).map { _._1.asLong }
+        val best = possibilities.head
+        s"${attrLookup(args(0).asLong)} could be organized under any of ${possibilities.map { x =>  attrLookup(x)+" ("+x+")" }.mkString(", ")}; I chose ${attrLookup(best) }"
+      }
+      case Some(choice) => 
+        s"You told me to organize ${attrLookup(args(0).asLong)} under ${attrLookup(choice.asLong)}"
+    }
+  }
 }
