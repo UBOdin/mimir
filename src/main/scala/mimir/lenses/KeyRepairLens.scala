@@ -141,7 +141,7 @@ object KeyRepairLens extends LazyLogging {
         values.flatMap { case (col, _) => 
           List(
             AggFunction("FIRST", false, List(Var(col)), col),
-            AggFunction("COUNT", false, List(Var(col)), s"MIMIR_KR_COUNT_$col"),
+            AggFunction("COUNT", true, List(Var(col)), s"MIMIR_KR_COUNT_$col"),
             AggFunction("JSON_GROUP_ARRAY", false, List(Var(col)), s"MIMIR_KR_HINT_COL_$col")
           )
         } ++ scoreCol.map { col => 
