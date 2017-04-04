@@ -520,6 +520,17 @@ class SqlToRA(db: Database)
         }
       }
 
+      case b:net.sf.jsqlparser.expression.operators.relational.Between => {
+        val lhs = convert(b.getLeftExpression(), bindings)
+        val start = convert(b.getBetweenExpressionStart(), bindings)
+        val end = convert(b.getBetweenExpressionEnd(), bindings)
+        Arithmetic(
+          Arith.And,
+          Comparison(Cmp.Lte, start, lhs),
+          Comparison(Cmp.Lte, lhs, end)
+        )
+      }
+
       case c:net.sf.jsqlparser.expression.CaseExpression => {
         val inlineSwitch: Expression => Expression = 
           if(c.getSwitchExpression() == null){

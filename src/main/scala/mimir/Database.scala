@@ -150,28 +150,6 @@ case class Database(backend: Backend)
     ret.reverse
   }
 
-
-  /**
-   * Flush the provided ResultIterator to the console.
-   */
-  def dump(result: ResultIterator): Unit =
-  {
-    ExperimentalOptions.ifEnabled("SILENT-TEST", () => {
-      var x = 0
-      while(result.getNext()){ x += 1; if(x % 10000 == 0) {println(s"$x rows")} }
-      val missingRows = result.missingRows()
-      println(s"Total $x rows; Missing: $missingRows")
-    }, () => {
-      println(result.schema.map( _._1 ).mkString(","))
-      println("------")
-      result.foreachRow { row => println(row.rowString) }
-      if(result.missingRows()){
-        println("( There may be missing result rows )")
-      }
-    })
-
-  }
-
   /**
    * Construct a WebIterator from a ResultIterator
    */
@@ -244,6 +222,14 @@ case class Database(backend: Backend)
     (
       backend.getAllTables() ++ views.list()
     ).toSet[String];
+  }
+
+  /**
+   * Determine whether the specified table exists
+   */
+  def tableExists(name: String): Boolean =
+  {
+    getTableSchema(name) != None
   }
 
   /**
@@ -427,11 +413,12 @@ case class Database(backend: Backend)
     backend.update(  s"CREATE TABLE $targetTable ( $tableDef );"  )
     val insertCmd = s"INSERT INTO $targetTable( $tableCols ) VALUES ($colFillIns);"
     println(insertCmd)
-    query(sourceQuery).foreachRow(
-      result =>
-        backend.update(insertCmd, result.currentRow())
+    backend.fastUpdateBatch(
+      insertCmd,
+      query(sourceQuery).mapRows( _.currentRow )
     )
   }
+  
 
   def selectInto(targetTable: String, tableName: String){
 /*    val v:Option[Operator] = getView(tableName)

@@ -9,13 +9,14 @@
    
   <logger name="mimir.util.LoadCSV$" level="INFO"/>
   <logger name="mimir.util.NonStrictCSVParser" level="INFO"/>
+  <logger name="mimir.util.LineReaderInputSource" level="INFO"/>
   <logger name="mimir.algebra.ExpressionChecker" level="INFO"/>
   <logger name="mimir.exec.Compiler" level="INFO"/>
   <logger name="mimir.sql.sqlite.MimirCast$" level="INFO"/>
   <logger name="mimir.sql.sqlite.BestGuessVGTerm" level="INFO"/>
   <logger name="mimir.sql.RAToSql" level="INFO"/>
   <logger name="mimir.sql.SqlToRA" level="INFO"/>
-  <logger name="mimir.sql.JDBCBackend" level="ERROR"/>
+  <logger name="mimir.sql.JDBCBackend" level="TRACE"/>
   <logger name="mimir.views.ViewManager" level="ERROR"/>
   <logger name="mimir.ctables.CTPercolator" level="INFO"/>
   <logger name="mimir.ctables.CTExplainer" level="INFO"/>

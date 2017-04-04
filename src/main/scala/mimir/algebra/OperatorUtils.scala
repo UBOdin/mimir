@@ -80,6 +80,16 @@ object OperatorUtils {
     )
   }
 
+  def projectAwayColumns(targets: Set[String], oper: Operator): Operator =
+  {
+    val targetsUpperCase = targets.map(_.toUpperCase)
+    val (cols, src) = extractProjections(oper)
+    Project(
+      cols.filter { col => !targetsUpperCase(col.name.toUpperCase) },
+      src
+    )
+  }
+
   def projectInColumn(target: String, value: Expression, oper: Operator): Operator =
   {
     val (cols, src) = extractProjections(oper)
@@ -127,7 +137,7 @@ object OperatorUtils {
       case _ => Select(condition, oper)
     }
 
-  def projectColumns(cols: List[String], oper: Operator) =
+  def projectColumns(cols: Seq[String], oper: Operator) =
   {
     Project(
       cols.map( (col) => ProjectArg(col, Var(col)) ),
