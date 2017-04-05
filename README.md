@@ -20,6 +20,7 @@ $> java -jar Mimir.jar
 ## User Guides
 * Our [Whitepaper Example](http://mimirdb.info/whitepaper.html)
 * [MimirSQL Docs](https://github.com/UBOdin/mimir/wiki/Mimir-SQL)
+* [Lens and Adaptive Schema Docs](https://github.com/UBOdin/mimir/wiki/Lenses-and-Adaptive-Schemas)
 * [Mimir Command-Line Docs](https://github.com/UBOdin/mimir/wiki/Mimir-CLI)
 
 
