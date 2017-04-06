@@ -9,6 +9,9 @@ scalacOptions ++= Seq(
   "-feature"
 )
 
+connectInput in run := true
+outputStrategy in run := Some(StdoutOutput)
+
 resolvers += "MimirDB" at "http://maven.mimirdb.info/"
 resolvers += "osgeo" at "http://download.osgeo.org/webdav/geotools/"
 
