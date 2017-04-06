@@ -46,11 +46,11 @@ object DiscalaAbadiNormalizer
         INSERT INTO $fdTable (MIMIR_FD_PARENT, MIMIR_FD_CHILD, MIMIR_FD_PATH_LENGTH) VALUES (?, ?, ?);
       """, 
         // Add the basic edges
-        fd.fdGraph.getEdges.asScala.map { case (edge_parent, edge_child) =>
+        fd.fdGraph.getEdges.asScala.map { case (edgeParent, edgeChild) =>
           Seq(
-            IntPrimitive(edge_parent), 
-            IntPrimitive(edge_child),
-            if(fd.parentTable.getOrElse(edge_parent, Set[Int]()) contains edge_child){ IntPrimitive(2) } 
+            IntPrimitive(edgeParent), 
+            IntPrimitive(edgeChild),
+            if(fd.parentTable.getOrElse(edgeParent, Set[Int]()) contains edgeChild){ IntPrimitive(2) } 
               else { IntPrimitive(1) }
           )
         } ++
@@ -66,7 +66,7 @@ object DiscalaAbadiNormalizer
         }
       )
 
-    val model = 
+    val groupingModel = 
       new DAFDRepairModel(
         s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_FD_PARENT",
         config.schema,
@@ -78,7 +78,30 @@ object DiscalaAbadiNormalizer
         fullSchema.map { x => (x._2.toLong -> x._1._1) }.toMap
       )
 
-    return Seq(model)
+    val schemaLookup =
+      fullSchema.map( x => (x._2 -> x._1) ).toMap
+
+    // for every possible parent/child relationship except for ROOT
+    val parentKeyRepairs = 
+      fd.fdGraph.getEdges.asScala.
+        filter( _._1 != -1 ).
+        map { case (edgeParent, edgeChild) =>
+          val (parent, parentType) = schemaLookup(edgeParent)
+          val (child, childType) = schemaLookup(edgeChild)
+          val model = 
+            new KeyRepairModel(
+              s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_NORM:$parent:$child", 
+              s"$child in $parent",
+              config.query,
+              Seq((parent, parentType)),
+              child,
+              childType,
+              None
+            )
+          logger.warn(s"INSTALLING: $parent -> $child: ${model.name}")
+          model 
+        }
+    return Seq(groupingModel)++parentKeyRepairs
   }
 
   final def spanningTreeLens(db: Database, config: MultilensConfig): Operator =
@@ -187,10 +210,32 @@ object DiscalaAbadiNormalizer
 
     if(attrs.isEmpty){ return None; }
 
-    Some(Project(
-      attrs.map( attr => ProjectArg(attr, Var(attr)) ),
-      config.query
-    ))
+    var baseQuery =
+      Project(
+        attrs.map( attr => ProjectArg(attr, Var(attr)) ),
+        config.query
+      )
+
+    if(table == "ROOT"){
+      Some(baseQuery)
+    } else {
+      val repairModels = attrs.
+        filter { !_.equals(table) }.
+        map { attr => 
+          (
+            attr, 
+            db.models.get(s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_NORM:$table:$attr")
+          )
+        }
+      Some(
+        KeyRepairLens.assemble(
+          baseQuery,
+          Seq(table), 
+          repairModels,
+          None
+        )
+      )
+    }
   }
 }
 

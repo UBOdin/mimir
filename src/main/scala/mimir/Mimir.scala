@@ -65,7 +65,7 @@ object Mimir extends LazyLogging {
         db.models.prefetchForOwner(table.toUpperCase)
       }))
 
-      if(ExperimentalOptions.isEnabled("INLINE-VG")){
+      if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
         db.backend.asInstanceOf[JDBCBackend].enableInlining(db)
       }
 
