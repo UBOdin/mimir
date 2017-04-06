@@ -156,11 +156,29 @@ class ViewManager(db:Database) extends LazyLogging {
         query
       )
 
-    val inlinedSQL = db.compiler.sqlForBackend(query)
+    val inlinedSQL = db.compiler.sqlForBackend(completeQuery)
     db.backend.selectInto(name, inlinedSQL.toString)
 
     db.backend.update(s"""
       UPDATE $viewTable SET METADATA = 1 WHERE NAME = ?
+    """, Seq(
+      StringPrimitive(name)
+    ))
+  }
+
+  /**
+   * Remove the materialization for the specified view
+   * @param  name        The name of the view to dematerialize
+   */
+  def dematerialize(name: String): Unit = {
+    if(db.backend.getTableSchema(name) == None){
+      throw new SQLException(s"View '$name' is not materialized")
+    }
+    db.backend.update(s"""
+      DROP TABLE $name
+    """)
+    db.backend.update(s"""
+      UPDATE $viewTable SET METADATA = 0 WHERE NAME = ?
     """, Seq(
       StringPrimitive(name)
     ))

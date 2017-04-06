@@ -11,7 +11,18 @@ import mimir.models.Model
 import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
 import mimir.lenses.{LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
-import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens,CreateView,Explain,Feedback,Load,Pragma,Analyze,CreateAdaptiveSchema}
+import mimir.sql.{SqlToRA,RAToSql,Backend}
+import mimir.sql.{
+    CreateLens,
+    CreateView,
+    Explain,
+    Feedback,
+    Load,
+    Pragma,
+    Analyze,
+    CreateAdaptiveSchema,
+    AlterViewMaterialize
+  }
 import mimir.optimizer.{InlineVGTerms}
 import mimir.util.{LoadCSV,ExperimentalOptions}
 import mimir.web.WebIterator
@@ -339,6 +350,15 @@ case class Database(backend: Backend)
           case _ =>
             throw new SQLException("Invalid drop type '"+drop.getType()+"'")
         }
+      }
+
+      /********** ALTER STATEMENTS **********/
+      case alter: AlterViewMaterialize => {
+        if(alter.getDrop){
+          views.dematerialize(alter.getTarget.toUpperCase)
+        } else {
+          views.materialize(alter.getTarget.toUpperCase)
+        } 
       }
 
       case _                => backend.update(stmt.toString())
