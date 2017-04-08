@@ -52,7 +52,7 @@ object CTExplainerSpec
           SELECT * FROM MV
         """, "2", "B"
         ).reasons.map(_.reason).mkString("\n")
-      reasons must contain("I used a classifier to guess that B")
+      reasons must contain("I used a classifier to guess that MV.B")
     }
 
     "Explain rows" >> {
@@ -62,7 +62,7 @@ object CTExplainerSpec
           WHERE C > 1
         """, "3"
         ).reasons.map(_.reason).mkString("\n")
-      reasons must contain("I used a classifier to guess that C")
+      reasons must contain("I used a classifier to guess that MV.C")
 
     }
 

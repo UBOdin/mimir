@@ -274,19 +274,19 @@ object SimpleDemoScript
 			val expl1 = explainCell("""
 					SELECT * FROM RATINGS1FINAL
 				""", "2", "RATING")
-			expl1.toString must contain("I used a classifier to guess that RATING =")		
+			expl1.toString must contain("I used a classifier to guess that RATINGS1FINAL.RATING =")		
 		}
 		"Obtain Cell Explanations for Queries with WHERE clauses" >> {
 			val expl1 = explainCell("""
 					SELECT * FROM RATINGS1FINAL WHERE RATING > 0
 				""", "2", "RATING")
-			expl1.toString must contain("I used a classifier to guess that RATING =")		
+			expl1.toString must contain("I used a classifier to guess that RATINGS1FINAL.RATING =")		
 		}
 		"Guard Data-Dependent Explanations for Simple Queries" >> {
 			val expl2 = explainCell("""
 					SELECT * FROM RATINGS1FINAL
 				""", "1", "RATING")
-			expl2.toString must not contain("I used a classifier to guess that RATING =")		
+			expl2.toString must not contain("I used a classifier to guess that RATINGS1FINAL.RATING =")		
 		}
 
 		"Query a Union of Lenses (projection first)" >> {

@@ -98,7 +98,7 @@ object DiscalaAbadiNormalizer
               childType,
               None
             )
-          logger.warn(s"INSTALLING: $parent -> $child: ${model.name}")
+          logger.trace(s"INSTALLING: $parent -> $child: ${model.name}")
           model 
         }
     return Seq(groupingModel)++parentKeyRepairs

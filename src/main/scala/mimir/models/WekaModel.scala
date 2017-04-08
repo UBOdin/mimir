@@ -271,7 +271,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
         } else {
           val choice = classes.maxBy(_._1)
           val elem = classToPrimitive(choice._2)
-          s"I used a classifier to guess that $name.$colName = $elem on row $rowid (${choice._1} out of ${total} votes)"
+          s"I used a classifier to guess that ${name.split(":")(0)}.$colName = $elem on row $rowid (${choice._1} out of ${total} votes)"
         }
     }
   }
