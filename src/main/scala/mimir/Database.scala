@@ -248,9 +248,11 @@ case class Database(backend: Backend)
   /**
    * Look up the schema for the table with the provided name.
    */
-  def getTableSchema(name: String): Option[Seq[(String,Type)]] =
+  def getTableSchema(name: String): Option[Seq[(String,Type)]] = {
+    logger.debug(s"Table schema for $name")
     getView(name).map(_.schema).
       orElse(backend.getTableSchema(name))
+  }
 
   /**
    * Build a Table operator for the table with the provided name.
@@ -310,8 +312,13 @@ case class Database(backend: Backend)
       }
 
       /********** CREATE VIEW STATEMENTS **********/
-      case view: CreateView => views.create(view.getTable().getName().toUpperCase,
-                                             sql.convert(view.getSelectBody()))
+      case view: CreateView => {
+        val viewName = view.getTable().getName().toUpperCase
+        val baseQuery = sql.convert(view.getSelectBody())
+        val optQuery = compiler.optimize(baseQuery)
+
+        views.create(viewName, optQuery);
+      }
 
       /********** CREATE ADAPTIVE SCHEMA **********/
       case createAdaptive: CreateAdaptiveSchema => {

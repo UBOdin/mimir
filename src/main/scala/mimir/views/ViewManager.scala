@@ -149,15 +149,20 @@ class ViewManager(db:Database) extends LazyLogging {
         columns.map { col => ProjectArg(col, Var(col)) } ++
         columns.map { col => ProjectArg(
           CTPercolator.mimirColDeterministicColumnPrefix + col,
-          columnTaint(col)
+          Conditional(columnTaint(col), IntPrimitive(1), IntPrimitive(0))
         )} ++
-        Seq(ProjectArg(CTPercolator.mimirRowDeterministicColumnName, rowTaint)) ++
+        Seq(ProjectArg(CTPercolator.mimirRowDeterministicColumnName, 
+          Function("CAST", Seq(Conditional(rowTaint, IntPrimitive(1), IntPrimitive(0)), TypePrimitive(TInt())))
+        )) ++
         provenance.map { col => ProjectArg(col, Var(col)) },
         query
       )
 
     val inlinedSQL = db.compiler.sqlForBackend(completeQuery)
     db.backend.selectInto(name, inlinedSQL.toString)
+
+    logger.debug(s"MATERIALIZE: $name(${completeQuery.schema.mkString(",")})")
+    logger.debug(s"QUERY: $inlinedSQL")
 
     db.backend.update(s"""
       UPDATE $viewTable SET METADATA = 1 WHERE NAME = ?
@@ -239,9 +244,33 @@ class ViewManager(db:Database) extends LazyLogging {
   def resolve(op: Operator): Operator =
   {
     op match {
-      case View(name, query, annotations) =>
-        // ignore for now
-        resolve(query)
+      case View(name, query, wantAnnotations) => {
+        val metadata = apply(name)
+        if(!metadata.isMaterialized){
+          logger.debug(s"Invalid materialized view: '$name' is not materialized")
+          return resolve(query)
+        }
+        val haveAnnotations = Set(
+          ViewAnnotation.BEST_GUESS,
+          ViewAnnotation.TAINT,
+          ViewAnnotation.PROVENANCE
+        )
+        val missingAnnotations = wantAnnotations -- haveAnnotations
+
+        if(!missingAnnotations.isEmpty) {
+          logger.debug(s"Invalid materialized view: Missing { ${missingAnnotations.mkString(", ")} } from '$name'")
+          return resolve(query)
+        }
+
+        logger.debug(s"Valid materialized view: Using Materialized '$name' with { ${wantAnnotations.mkString(", ")} }")
+
+        Project(
+          metadata.schemaWith(wantAnnotations).map { col => 
+            ProjectArg(col._1, Var(col._1))
+          },
+          Table(name,metadata.fullSchema,Seq())
+        )
+      }
 
       case _ =>
         op.recur(resolve(_))
