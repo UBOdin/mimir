@@ -141,6 +141,12 @@ object InlineProjections extends LazyLogging {
 		extractRenaming(cols) match {
 			case None => return None
 			case Some(renaming) => {
+				// If the renaming is non-unique...
+				if(renaming.map(_._1).toSet.size != renaming.size){
+					return None
+				}
+
+
 				val (gbExpected, aggExpected) = renaming.splitAt(gb.size)
 
 				// Check 3: We can't rename GB columns in the aggregate

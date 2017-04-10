@@ -102,7 +102,7 @@ class Compiler(db: Database) extends LazyLogging {
     oper               = provenance._1
     val provenanceCols = provenance._2
 
-    logger.debug(s"WITH-PROVENANCE: $oper")
+    logger.debug(s"WITH-PROVENANCE (${provenanceCols.mkString(", ")}): $oper")
 
 
     // Tag rows/columns with provenance metadata
