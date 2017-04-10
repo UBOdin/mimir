@@ -46,11 +46,11 @@ object DiscalaAbadiNormalizer
         INSERT INTO $fdTable (MIMIR_FD_PARENT, MIMIR_FD_CHILD, MIMIR_FD_PATH_LENGTH) VALUES (?, ?, ?);
       """, 
         // Add the basic edges
-        fd.fdGraph.getEdges.asScala.map { case (edge_parent, edge_child) =>
+        fd.fdGraph.getEdges.asScala.map { case (edgeParent, edgeChild) =>
           Seq(
-            IntPrimitive(edge_parent), 
-            IntPrimitive(edge_child),
-            if(fd.parentTable.getOrElse(edge_parent, Set[Int]()) contains edge_child){ IntPrimitive(2) } 
+            IntPrimitive(edgeParent), 
+            IntPrimitive(edgeChild),
+            if(fd.parentTable.getOrElse(edgeParent, Set[Int]()) contains edgeChild){ IntPrimitive(2) } 
               else { IntPrimitive(1) }
           )
         } ++
@@ -66,13 +66,42 @@ object DiscalaAbadiNormalizer
         }
       )
 
-    val (_, models) = KeyRepairLens.create(
-      db, s"MIMIR_DA_CHOSEN_${config.schema}",
-      db.getTableOperator(fdTable),
-      Seq(Var("MIMIR_FD_CHILD"), Function("SCORE_BY", Seq(Var("MIMIR_FD_PATH_LENGTH"))))
-    )
+    val groupingModel = 
+      new DAFDRepairModel(
+        s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_FD_PARENT",
+        config.schema,
+        db.getTableOperator(fdTable),
+        Seq(("MIMIR_FD_CHILD", TInt())),
+        "MIMIR_FD_PARENT",
+        TInt(),
+        Some("MIMIR_FD_PATH_LENGTH"),
+        fullSchema.map { x => (x._2.toLong -> x._1._1) }.toMap
+      )
 
-    models
+    val schemaLookup =
+      fullSchema.map( x => (x._2 -> x._1) ).toMap
+
+    // for every possible parent/child relationship except for ROOT
+    val parentKeyRepairs = 
+      fd.fdGraph.getEdges.asScala.
+        filter( _._1 != -1 ).
+        map { case (edgeParent, edgeChild) =>
+          val (parent, parentType) = schemaLookup(edgeParent)
+          val (child, childType) = schemaLookup(edgeChild)
+          val model = 
+            new KeyRepairModel(
+              s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_NORM:$parent:$child", 
+              s"$child in $parent",
+              config.query,
+              Seq((parent, parentType)),
+              child,
+              childType,
+              None
+            )
+          logger.trace(s"INSTALLING: $parent -> $child: ${model.name}")
+          model 
+        }
+    return Seq(groupingModel)++parentKeyRepairs
   }
 
   final def spanningTreeLens(db: Database, config: MultilensConfig): Operator =
@@ -181,10 +210,58 @@ object DiscalaAbadiNormalizer
 
     if(attrs.isEmpty){ return None; }
 
-    Some(Project(
-      attrs.map( attr => ProjectArg(attr, Var(attr)) ),
-      config.query
-    ))
-  }
+    var baseQuery =
+      Project(
+        attrs.map( attr => ProjectArg(attr, Var(attr)) ),
+        config.query
+      )
 
+    if(table == "ROOT"){
+      Some(baseQuery)
+    } else {
+      val repairModels = attrs.
+        filter { !_.equals(table) }.
+        map { attr => 
+          (
+            attr, 
+            db.models.get(s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_NORM:$table:$attr")
+          )
+        }
+      Some(
+        KeyRepairLens.assemble(
+          baseQuery,
+          Seq(table), 
+          repairModels,
+          None
+        )
+      )
+    }
+  }
+}
+
+
+@SerialVersionUID(1001L)
+class DAFDRepairModel(
+  name: String, 
+  context: String, 
+  source: Operator, 
+  keys: Seq[(String, Type)], 
+  target: String,
+  targetType: Type,
+  scoreCol: Option[String],
+  attrLookup: Map[Long,String]
+) extends KeyRepairModel(name, context, source, keys, target, targetType, scoreCol)
+{
+  override def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String =
+  {
+    choices.get(args.toList) match {
+      case None => {
+        val possibilities = getDomain(idx, args, hints).sortBy(-_._2).map { _._1.asLong }
+        val best = possibilities.head
+        s"${attrLookup(args(0).asLong)} could be organized under any of ${possibilities.map { x =>  attrLookup(x)+" ("+x+")" }.mkString(", ")}; I chose ${attrLookup(best) }"
+      }
+      case Some(choice) => 
+        s"You told me to organize ${attrLookup(args(0).asLong)} under ${attrLookup(choice.asLong)}"
+    }
+  }
 }

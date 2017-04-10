@@ -26,8 +26,10 @@ class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => Se
 		| projectArg ^^ { List(_) }
 	)
 
-	def projectArg: Parser[ProjectArg] =
-		id ~ "<=" ~ exprBase ^^ { case name ~ _ ~ e => ProjectArg(name, e) }
+	def projectArg: Parser[ProjectArg] = (
+		  id ~ "<=" ~ exprBase ^^ { case name ~ _ ~ e => ProjectArg(name, e) }
+		| id ^^ { case name => ProjectArg(name, Var(name)) }
+	)
 
 	def select =
 		"SELECT[" ~> (exprBase <~ "](") ~ operatorBase <~ ")" ^^ {

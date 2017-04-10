@@ -6,7 +6,7 @@ import org.specs2.specification._
 import mimir.algebra._
 import mimir.util._
 import mimir.ctables.{VGTerm}
-import mimir.optimizer.{ResolveViews,InlineVGTerms,InlineProjections}
+import mimir.optimizer.{InlineVGTerms,InlineProjections}
 import mimir.test.{SQLTestSpecification, PDBench}
 import mimir.models._
 import org.specs2.specification.core.Fragments
@@ -73,7 +73,7 @@ object RepairKeyTimingSpec
               and ok.orderkey = lok.orderkey
               and od.tid = ok.tid 
               and os.tid = ok.tid
-         """, 1976525000l ),
+         """, 1.976525000 ),
         (s"""
             select liep.extendedprice
             from lineitem_l_extendedprice_run_$i liep, lineitem_l_shipdate_run_$i lisd,
@@ -84,7 +84,7 @@ object RepairKeyTimingSpec
               and lisd.tid = lidi.tid
               and liq.tid = lidi.tid
               and liep.tid = liq.tid
-         """, 14182710000l ),
+         """, 14.182710000 ),
         (s"""
             select nn1.name, nn2.name
             from supp_s_suppkey_run_$i sk, supp_s_nationkey_run_$i snk,
@@ -103,7 +103,7 @@ object RepairKeyTimingSpec
               and ock.tid = ok.tid
               and snk.tid = sk.tid
               and nk2.tid = nn2.tid and nk1.tid = nn1.tid
-         """, 53196000l )
+         """, .053196000 )
     )){
       qat =>  {
           {queryKeyRepairLens(qat)}
@@ -113,7 +113,7 @@ object RepairKeyTimingSpec
 
   }
 
-  def createKeyRepairLens(tableFields:(String, String, Type, Int), tableSuffix: String = "_cleaned") =  
+  def createKeyRepairLens(tableFields:(String, String, Type, Double), tableSuffix: String = "_cleaned") =  
   {
     val (baseTable, columnName, columnType, timeout) = tableFields
     val testTable = (baseTable+tableSuffix).toUpperCase
@@ -147,35 +147,44 @@ object RepairKeyTimingSpec
         update(s"""
           CREATE LENS ${testTable}
             AS SELECT TID, ${columnName} FROM ${baseTable}
-          WITH KEY_REPAIR(TID, ENABLE(FAST_PATH))
+          WITH KEY_REPAIR(TID)
         """);
           //val materializeQuery = s"SELECT * FROM ${tableAndKeyColumn._1}_UNMAT"
           //val oper = db.sql.convert(db.parse(materializeQuery).head.asInstanceOf[Select])
           //db.selectInto(tableAndKeyColumn._1, oper)
         }
-        println(s"Time:${timeForQuery._2} nanoseconds <- RepairKeyLens:${testTable}")
+        println(s"Create Time:${timeForQuery._2} seconds <- RepairKeyLens:${testTable}")
         timeForQuery._2 should be lessThan timeout
       }
       db.tableExists(testTable) must beTrue
     }
+    s"Materialize Lens: $testTable" >> {
+      if(!db.views(testTable).isMaterialized){
+        val timeForQuery = time {
+          update(s"ALTER VIEW ${testTable} MATERIALIZE")
+        }
+        println(s"Materialize Time:${timeForQuery._2} seconds <- RepairKeyLens:${testTable}")
+      }
+      db.views(testTable).isMaterialized must beTrue
+    }
   }
 
- def queryKeyRepairLens(queryAndTime : (String, Long)) =  s"Query Key Repair Lens : ${queryAndTime._1}" >> {
+ def queryKeyRepairLens(queryAndTime : (String, Double)) =  s"Query Key Repair Lens : ${queryAndTime._1}" >> {
       val timeForQuery = time {
         var x = 0
         val r = query(queryAndTime._1)
         while(r.getNext()){ x += 1 }
         println(s"$x rows in the result")
      }
-     println(s"Time:${timeForQuery._2} nanoseconds <- Query:${queryAndTime._1} ")
+     println(s"Time:${timeForQuery._2} seconds <- Query:${queryAndTime._1} ")
      timeForQuery._2 should be lessThan queryAndTime._2
   }
 
-  def time[F](anonFunc: => F): (F, Long) = {
+  def time[F](anonFunc: => F): (F, Double) = {
       val tStart = System.nanoTime()
       val anonFuncRet = anonFunc
       val tEnd = System.nanoTime()
-      (anonFuncRet, tEnd-tStart)
+      (anonFuncRet, (tEnd-tStart).toDouble/1000.0/1000.0/1000.0)
     }
 
 }

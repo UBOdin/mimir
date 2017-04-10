@@ -8,13 +8,14 @@ import mimir.parser._
 import mimir.sql._
 import mimir.util.{TimeUtils,ExperimentalOptions,LineReaderInputSource}
 import mimir.algebra._
-import mimir.optimizer.ResolveViews
 import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody} 
 import net.sf.jsqlparser.statement.drop.Drop
 import org.jline.terminal.{Terminal,TerminalBuilder}
 import org.rogach.scallop._
+
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import scala.collection.JavaConverters._
 
@@ -30,7 +31,7 @@ import scala.collection.JavaConverters._
  * Mimir provides a friendly command-line user 
  * interface on top of Database()
  */
-object Mimir {
+object Mimir extends LazyLogging {
 
   var conf: MimirConfig = null;
   var db: Database = null;
@@ -56,11 +57,6 @@ object Mimir {
     // Check for one-off commands
     if(conf.loadTable.get != None){
       db.loadTable(conf.loadTable(), conf.loadTable()+".csv");
-    } else if(conf.rebuildBestGuess.get != None){
-        db.bestGuessCache.buildCache(
-          db.views.get(
-            conf.rebuildBestGuess().toUpperCase
-          ).get);
     } else {
       var source: Reader = null;
 
@@ -69,7 +65,7 @@ object Mimir {
         db.models.prefetchForOwner(table.toUpperCase)
       }))
 
-      if(ExperimentalOptions.isEnabled("INLINE-VG")){
+      if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
         db.backend.asInstanceOf[JDBCBackend].enableInlining(db)
       }
 
@@ -118,6 +114,7 @@ object Mimir {
 
         case e: RAException =>
           output.print("Error: "+e.getMessage)
+          logger.debug(e.getMessage + "\n" + e.getStackTrace.map(_.toString).mkString("\n"))
 
         case e: Throwable => {
           output.print("An unknown error occurred...");
@@ -152,10 +149,7 @@ object Mimir {
     output.print("------ Raw Query ------")
     output.print(raw.toString)
     db.check(raw)
-    val expanded = ResolveViews(db,raw)
-    output.print("--- Expanded Query ----")
-    output.print(expanded.toString)    
-    val optimized = db.optimize(expanded)
+    val optimized = db.optimize(raw)
     output.print("--- Optimized Query ---")
     output.print(optimized.toString)
     db.check(optimized)
@@ -172,11 +166,7 @@ object Mimir {
   {
     val rowId = analyze.getRowId()
     val column = analyze.getColumn()
-    val query = 
-      ResolveViews(
-        db, 
-        db.sql.convert(analyze.getSelectBody())
-      )
+    val query = db.sql.convert(analyze.getSelectBody())
 
     if(rowId == null){
       output.print("==== Explain Table ====")

@@ -15,4 +15,11 @@ object RandUtils {
   {
     fields(rnd.nextInt(fields.length))
   }
+
+  def uniqueName(name: String, conflicts: Set[String]): String =
+  {
+    var i = 0;
+    while(conflicts(name+"_"+i)){ i += 1 }
+    name+"_"+i
+  }
 }

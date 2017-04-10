@@ -100,7 +100,7 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   def table(t: String) =
     db.getTableOperator(t)
   def resolveViews(q: Operator) =
-    ResolveViews(db,q)
+    db.views.resolve(q)
   def explainRow(s: String, t: String) = 
   {
     val query = resolveViews(db.sql.convert(

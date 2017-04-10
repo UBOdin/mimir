@@ -6,6 +6,8 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
+import mimir.Database
+import mimir.views.ViewAnnotation
 
 object CTPercolator 
   extends LazyLogging
@@ -486,6 +488,23 @@ object CTPercolator
           cols.map(_._1).map((_, BoolPrimitive(true)) ).toMap,
           // All rows are deterministic
           BoolPrimitive(true)
+        )
+      }
+      case v @ View(name, query, metadata) => {
+        val (newQuery, colDeterminism, rowDeterminism) = percolateLite(query)
+        val columns = query.schema.map(_._1)
+
+        val inlinedQuery = 
+          Project(
+            columns.map { col => ProjectArg(col, Var(col)) } ++
+            columns.map { col => ProjectArg(mimirColDeterministicColumnPrefix+col, colDeterminism(col)) } ++
+            Seq( ProjectArg(mimirRowDeterministicColumnName, rowDeterminism) ),
+            newQuery
+          )
+        (
+          View(name, inlinedQuery, metadata + ViewAnnotation.TAINT),
+          columns.map { col => (col -> Var(mimirColDeterministicColumnPrefix+col)) }.toMap,
+          Var(mimirRowDeterministicColumnName)
         )
       }
       case EmptyTable(sch) => {

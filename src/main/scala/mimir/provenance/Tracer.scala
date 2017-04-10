@@ -107,6 +107,9 @@ object Tracer {
             trace(rhs, targetRowId)
         }
 
+      case View(_, query, _) => 
+        trace(query, targetRowId)
+
       case Table(name, schema, meta) =>
         val targetFilter = 
           ExpressionUtils.makeAnd(

@@ -29,7 +29,7 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
 
     "Produce Flat Queries for Tables with Aliased Variables" >> {
       convert("R(P, Q)") must be equalTo 
-        "SELECT R.A AS P, R.B AS Q FROM R AS R"
+        "SELECT * FROM (SELECT R.A AS P, R.B AS Q FROM R AS R) SUBQ_P"
     }
 
     "Produce Flat Queries for Projections" >> {
@@ -39,7 +39,7 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
 
     "Produce Flat Queries for Projections with Aliased Variables" >> {
       convert("PROJECT[Z <= P+Q](R(P, Q))") must be equalTo 
-        "SELECT (R.A + R.B) AS Z FROM R AS R"
+        "SELECT (SUBQ_P.P + SUBQ_P.Q) AS Z FROM (SELECT R.A AS P, R.B AS Q FROM R AS R) SUBQ_P"
     }
 
     "Produce Flat Queries for Project-Selections" >> {
@@ -49,7 +49,7 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
 
     "Produce Flat Queries for Project-Selections with Aliased Variables" >> {
       convert("PROJECT[Z <= P+Q](SELECT[P > Q](R(P, Q)))") must be equalTo 
-        "SELECT (R.A + R.B) AS Z FROM R AS R WHERE (R.A > R.B)"
+        "SELECT (SUBQ_P.P + SUBQ_P.Q) AS Z FROM (SELECT R.A AS P, R.B AS Q FROM R AS R) SUBQ_P WHERE (SUBQ_P.P > SUBQ_P.Q)"
     }
 
   }

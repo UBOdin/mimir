@@ -11,8 +11,19 @@ import mimir.models.Model
 import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
 import mimir.lenses.{LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
-import mimir.sql.{SqlToRA,RAToSql,Backend,CreateLens,CreateView,Explain,Feedback,Load,Pragma,Analyze,CreateAdaptiveSchema}
-import mimir.optimizer.{InlineVGTerms, ResolveViews}
+import mimir.sql.{SqlToRA,RAToSql,Backend}
+import mimir.sql.{
+    CreateLens,
+    CreateView,
+    Explain,
+    Feedback,
+    Load,
+    Pragma,
+    Analyze,
+    CreateAdaptiveSchema,
+    AlterViewMaterialize
+  }
+import mimir.optimizer.{InlineVGTerms}
 import mimir.util.{LoadCSV,ExperimentalOptions}
 import mimir.web.WebIterator
 import mimir.parser.MimirJSqlParser
@@ -23,8 +34,9 @@ import net.sf.jsqlparser.statement.select.Select
 import net.sf.jsqlparser.statement.create.table.CreateTable
 import net.sf.jsqlparser.statement.drop.Drop
 
-import scala.collection.JavaConversions._
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
+import scala.collection.JavaConversions._
 import scala.collection.mutable.ListBuffer
 
 
@@ -76,6 +88,7 @@ import scala.collection.mutable.ListBuffer
   *    Responsible for creating explanation objects.
   */
 case class Database(backend: Backend)
+  extends LazyLogging
 {
   //// Persistence
   val lenses          = new mimir.lenses.LensManager(this)
@@ -132,7 +145,7 @@ case class Database(backend: Backend)
    */
   def bestGuessSchema(oper: Operator): Seq[(String, Type)] =
   {
-    InlineVGTerms(ResolveViews(this, oper)).schema
+    InlineVGTerms(oper).schema
   }
 
   /**
@@ -235,30 +248,27 @@ case class Database(backend: Backend)
   /**
    * Look up the schema for the table with the provided name.
    */
-  def getTableSchema(name: String): Option[Seq[(String,Type)]] =
+  def getTableSchema(name: String): Option[Seq[(String,Type)]] = {
+    logger.debug(s"Table schema for $name")
     getView(name).map(_.schema).
       orElse(backend.getTableSchema(name))
+  }
 
   /**
    * Build a Table operator for the table with the provided name.
    */
   def getTableOperator(table: String): Operator =
-    getTableOperator(table, Nil)
-
-  /**
-   * Build a Table operator for the table with the provided name, requesting the
-   * specified metadata.
-   */
-  def getTableOperator(table: String, metadata: Seq[(String, Expression, Type)]): Operator =
   {
-    Table(
-      table, 
-      getTableSchema(table) match {
-        case Some(x) => x
-        case None => throw new SQLException("Table does not exist in db!")
-      },
-      metadata
-    )  
+    getView(table).getOrElse(
+      Table(
+        table, 
+        backend.getTableSchema(table) match {
+          case Some(x) => x
+          case None => throw new SQLException(s"No such table or view '$table'")
+        },
+        Nil
+      ) 
+    )
   }
 
   /**
@@ -302,8 +312,13 @@ case class Database(backend: Backend)
       }
 
       /********** CREATE VIEW STATEMENTS **********/
-      case view: CreateView => views.create(view.getTable().getName().toUpperCase,
-                                             sql.convert(view.getSelectBody()))
+      case view: CreateView => {
+        val viewName = view.getTable().getName().toUpperCase
+        val baseQuery = sql.convert(view.getSelectBody())
+        val optQuery = compiler.optimize(baseQuery)
+
+        views.create(viewName, optQuery);
+      }
 
       /********** CREATE ADAPTIVE SCHEMA **********/
       case createAdaptive: CreateAdaptiveSchema => {
@@ -344,6 +359,15 @@ case class Database(backend: Backend)
         }
       }
 
+      /********** ALTER STATEMENTS **********/
+      case alter: AlterViewMaterialize => {
+        if(alter.getDrop){
+          views.dematerialize(alter.getTarget.toUpperCase)
+        } else {
+          views.materialize(alter.getTarget.toUpperCase)
+        } 
+      }
+
       case _                => backend.update(stmt.toString())
     }
   }
@@ -364,7 +388,7 @@ case class Database(backend: Backend)
    */
   def getView(name: String): Option[(Operator)] =
     catalog(name).orElse(
-      views.get(name)
+      views.get(name).map(_.operator)
     )
 
   /**
@@ -459,5 +483,45 @@ case class Database(backend: Backend)
   }
   def stmt(s: String) = {
     new MimirJSqlParser(new StringReader(s)).Statement()
+  }
+
+  /**
+   * Utility for modules to ensure that a table with the specified schema exists.
+   *
+   * If the table doesn't exist, it will be created.
+   * If the table does exist, non-existant columns will be created.
+   * If the table does exist and a column has a different type, an error will be thrown.
+   */
+  def requireTable(name: String, schema: Seq[(String, Type)], primaryKey: Option[String] = None)
+  {
+    val typeMap = schema.map { x => (x._1.toUpperCase -> x._2) }.toMap
+    backend.getTableSchema(name) match {
+      case None => {
+        val schemaElements = 
+          schema.map { case (name, t) => s"$name $t" } ++ 
+          (if(primaryKey.isEmpty) { Seq() } else {
+            Seq(s"PRIMARY KEY (${primaryKey.get})")
+          })
+        val createCmd = s"""
+          CREATE TABLE $name(
+            ${schemaElements.mkString(",\n            ")}
+          )
+        """
+        logger.debug(s"CREATE: $createCmd")
+        backend.update(createCmd);
+      }
+      case Some(oldSch) => {
+        val currentColumns = oldSch.map { _._1 }.toSet
+        for(column <- (typeMap.keySet ++ currentColumns)){
+          if(typeMap contains column){
+            if(!(currentColumns contains column)){
+              logger.debug("Need to add $column to $name(${typemap.keys.mkString(", ")})")
+              backend.update(s"ALTER TABLE $name ADD COLUMN $column ${typeMap(column)}")
+            }
+          }
+        }
+      }
+
+    }
   }
 }

@@ -6,7 +6,7 @@ import org.specs2.specification.core.{Fragment,Fragments}
 import mimir.algebra._
 import mimir.util._
 import mimir.ctables.{VGTerm}
-import mimir.optimizer.{ResolveViews,InlineVGTerms,InlineProjections}
+import mimir.optimizer.{InlineVGTerms,InlineProjections}
 import mimir.test._
 import mimir.models._
 
@@ -26,7 +26,7 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
 
     "Produce reasonable views" >> {
       db.loadTable("CPUSPEED", new File("test/data/CPUSpeed.csv"))
-      val resolved1 = InlineProjections(ResolveViews(db, db.getTableOperator("CPUSPEED")))
+      val resolved1 = InlineProjections(db.views.resolve(db.getTableOperator("CPUSPEED")))
       resolved1 must beAnInstanceOf[Project]
       val resolved2 = resolved1.asInstanceOf[Project]
       val coresColumnId = db.getTableOperator("CPUSPEED").schema.map(_._1).indexOf("CORES")

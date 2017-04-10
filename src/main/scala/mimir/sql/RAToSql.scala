@@ -47,7 +47,7 @@ class RAToSql(db: Database)
   {
     oper match {
       case Table(name, tgtSch, tgtMetadata) => {
-        val realSch = db.getTableSchema(name) match {
+        val realSch = db.backend.getTableSchema(name) match {
           case Some(realSch) => realSch
           case None => throw new SQLException("Unknown Table '"+name+"'");
         }
@@ -75,13 +75,11 @@ class RAToSql(db: Database)
     // The actual recursive conversion is factored out into a separate fn
     // so that we can do a little preprocessing.
     logger.debug(s"PRE-CONVERT: $oper")
-    // Start by rewriting table schemas to make it easier to inline them.
-    val standardized = standardizeTables(oper)
 
     // standardizeTables adds a new layer of projections that we may be
     // able to optimize away.
     val optimized = 
-      InlineProjections(PushdownSelections(standardized))
+      InlineProjections(PushdownSelections(oper))
 
     // println("OPTIMIZED: "+optimized)
 
@@ -200,10 +198,22 @@ class RAToSql(db: Database)
       }
 
     // Strip off the sources, select condition(s) and so forth
-    val (condition, from) = extractSelectsAndJoins(head)
+    val (condition, froms) = extractSelectsAndJoins(head)
 
     // Extract the synthesized table names
-    val schemas = SqlUtils.getSchemas(from, db)
+    val schemas = 
+      froms.map { from => (from.getAlias, SqlUtils.getSchemas(from, db).flatMap(_._2)) }.toList
+
+    // Sanity check...
+    val extractedSchema = schemas.flatMap(_._2).toSet
+    val expectedSchema = target match { 
+      case ProjectTarget(cols) => cols.flatMap { col => ExpressionUtils.getColumns(col.expression) }.toSet
+      case AggregateTarget(gbCols, aggCols) => gbCols.map(_.name).toSet ++ aggCols.flatMap { col => col.args.flatMap { arg => ExpressionUtils.getColumns(arg) } }.toSet
+      case AllTarget() => head.columnNames.toSet
+    }
+    if(!(expectedSchema -- extractedSchema).isEmpty){
+      throw new SQLException(s"Error Extracting Joins!\nExpected: $expectedSchema\nGot: $extractedSchema\nMissing: ${expectedSchema -- extractedSchema}\n$head\n${froms.mkString("\n")}")
+    }
 
     // Add the WHERE clause if needed
     condition match {
@@ -235,8 +245,14 @@ class RAToSql(db: Database)
     }
 
     // Add the FROM clause
-    logger.debug(s"Assembling Plain Select: FROM ($from)")
-    select.setFromItem(from)
+    logger.debug(s"Assembling Plain Select: FROM ($froms)")
+    select.setFromItem(froms.head)
+    select.setJoins(froms.tail.map { from =>
+      val join = new net.sf.jsqlparser.statement.select.Join()
+      join.setSimple(true)
+      join.setRightItem(from)
+      join
+    }.toList)
 
     // Finally, generate the target clause
     target match {
@@ -286,27 +302,27 @@ class RAToSql(db: Database)
    * punts back up to step 1.
    */
   private def extractSelectsAndJoins(oper: Operator): 
-    (Expression, FromItem) =
+    (Expression, Seq[FromItem]) =
   {
     oper match {
       case Select(cond, source) =>
-        val (childCond, from) = 
+        val (childCond, froms) = 
           extractSelectsAndJoins(source)
         (
           ExpressionUtils.makeAnd(cond, childCond),
-          from
+          froms
         )
 
       case Join(lhs, rhs) =>
-        val (lhsCond, lhsFrom) = extractSelectsAndJoins(lhs)
-        val (rhsCond, rhsFrom) = extractSelectsAndJoins(rhs)
+        val (lhsCond, lhsFroms) = extractSelectsAndJoins(lhs)
+        val (rhsCond, rhsFroms) = extractSelectsAndJoins(rhs)
         (
           ExpressionUtils.makeAnd(lhsCond, rhsCond),
-          makeJoin(lhsFrom, rhsFrom)
+          lhsFroms ++ rhsFroms
         )
 
       case LeftOuterJoin(lhs, rhs, cond) => 
-        val (lhsCond, lhsFrom) = extractSelectsAndJoins(lhs)
+        val lhsFrom = makeSubSelect(lhs)
         val rhsFrom = makeSubSelect(rhs)
         val joinItem = makeJoin(lhsFrom, rhsFrom)
         joinItem.getJoin().setSimple(false)
@@ -315,8 +331,8 @@ class RAToSql(db: Database)
         joinItem.getJoin().setOnExpression(convert(cond, SqlUtils.getSchemas(lhsFrom, db)++SqlUtils.getSchemas(rhsFrom, db)))
 
         (
-          lhsCond,
-          joinItem
+          BoolPrimitive(true),
+          Seq(joinItem)
         )
 
       case Table(name, tgtSch, metadata) =>
@@ -342,13 +358,17 @@ class RAToSql(db: Database)
           // If they are equivalent, then...
           val ret = new net.sf.jsqlparser.schema.Table(name);
           ret.setAlias(name);
-          (BoolPrimitive(true), ret)
+          (BoolPrimitive(true), Seq(ret))
         } else {
           // If they're not equivalent, revert to old behavior
-          (BoolPrimitive(true), makeSubSelect(oper))
+          (BoolPrimitive(true), Seq(makeSubSelect(standardizeTables(oper))))
         }
 
-      case _ => (BoolPrimitive(true), makeSubSelect(oper))
+      case View(name, query, annotations) => 
+        logger.warn("Inlined view when constructing SQL: RAToSQL will not use materialized views")
+        extractSelectsAndJoins(query)
+
+      case _ => (BoolPrimitive(true), Seq(makeSubSelect(oper)))
     }
   }
 

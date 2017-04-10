@@ -7,7 +7,7 @@ import scala.util.Random
 import mimir.algebra._
 import mimir.util._
 import mimir.ctables.{VGTerm}
-import mimir.optimizer.{ResolveViews,InlineVGTerms,InlineProjections}
+import mimir.optimizer.{InlineVGTerms,InlineProjections}
 import mimir.test._
 import mimir.models._
 import org.specs2.specification.core.Fragments
@@ -18,6 +18,7 @@ object TupleBundlerSpec
 {
 
   sequential
+  skipAll
 
   def beforeAll = 
   {
@@ -36,9 +37,9 @@ object TupleBundlerSpec
 
       val q1 = 
         // db.compiler.optimize(
-          sampler.compileFlat(ResolveViews(db, select("""
+          sampler.compileFlat(select("""
             SELECT * FROM R_CLASSIC WHERE B = 2
-          """)))._1
+          """))._1
         // )
       q1.schema.map(_._1) must contain( eachOf("A", "MIMIR_SAMPLE_0_B", "MIMIR_SAMPLE_2_C", "MIMIR_WORLD_BITS" ) )
     }

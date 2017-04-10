@@ -44,6 +44,7 @@ object Type {
     case "rowid"   => TRowId()
     case "type"    => TType()
     case "any"     => TAny()
+    case ""        => TAny() // SQLite doesn't do types sometimes
     case x if TypeRegistry.registeredTypes contains x => TUser(x)
     case _ => 
       throw new RAException("Invalid Type '" + t + "'");

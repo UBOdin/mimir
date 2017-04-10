@@ -22,8 +22,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
 
   def apply(query: Operator): Operator =
   {
-    val inlined = ResolveViews(db, query)
-    val (compiled, nonDeterministicColumns) = compileFlat(inlined)    
+    val (compiled, nonDeterministicColumns) = compileFlat(query)    
     Project(
       query.schema.map(_._1).map { col => 
         ProjectArg(col, 
@@ -149,33 +148,18 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
 
         // To safely join the two together, we need to rename the world-bit columns
         val rewrittenJoin =
-          Join(
-            OperatorUtils.renameColumn(
-              "MIMIR_WORLD_BITS", "MIMIR_WORLD_BITS_LEFT", 
-              lhsNewChild
+          OperatorUtils.joinMergingColumns(
+            Seq( ("MIMIR_WORLD_BITS",
+                    (lhs:Expression, rhs:Expression) => Arithmetic(Arith.BitAnd, lhs, rhs))
             ),
-            OperatorUtils.renameColumn(
-              "MIMIR_WORLD_BITS", "MIMIR_WORLD_BITS_RIGHT", 
-              rhsNewChild
-            )
-          )
-
-        // Next we need to merge the two world-bit columns
-        val joinWithOneWorldBitsColumn =
-          OperatorUtils.projectAwayColumns(
-            Set("MIMIR_WORLD_BITS_LEFT", "MIMIR_WORLD_BITS_RIGHT"),
-            OperatorUtils.projectInColumn(
-              "MIMIR_WORLD_BITS", 
-              Arithmetic(Arith.BitAnd, Var("MIMIR_WORLD_BITS_LEFT"), Var("MIMIR_WORLD_BITS_RIGHT")),
-              rewrittenJoin
-            )
+            lhsNewChild, rhsNewChild
           )
 
         // Finally, add a selection to filter out values that can be filtered out in all worlds.
         val completedJoin =
           Select(
             Comparison(Cmp.Neq, Var("MIMIR_WORLD_BITS"), IntPrimitive(0)),
-            joinWithOneWorldBitsColumn
+            rewrittenJoin
           )
 
         (completedJoin, lhsNonDeterministicInput ++ rhsNonDeterministicInput)
@@ -316,6 +300,9 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
 
       }
 
+      // We don't handle materialized tuple bundles (at the moment)
+      // so give up and drop the view.
+      case View(_, query, _) =>  compileFlat(query)
 
       case ( Sort(_,_) | Limit(_,_,_) | LeftOuterJoin(_,_,_) ) =>
         throw new RAException("Tuple-Bundler presently doesn't support LeftOuterJoin, Sort, or Limit")

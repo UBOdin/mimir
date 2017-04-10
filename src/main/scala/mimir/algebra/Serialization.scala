@@ -67,14 +67,26 @@ class Serialization(db: Database) {
 
   def deserializeQuery(in:String): Operator =
   {
-    val objects = new ObjectInputStream(new ByteArrayInputStream(base64in.decode(in)))
+    val objects = 
+      new ObjectInputStream(new ByteArrayInputStream(base64in.decode(in))) {
+        override def resolveClass(desc: java.io.ObjectStreamClass): Class[_] = {
+          try { Class.forName(desc.getName, false, getClass.getClassLoader) }
+          catch { case ex: ClassNotFoundException => super.resolveClass(desc) }
+        }
+      }
+
     val query = objects.readObject().asInstanceOf[Operator];
     return desanitize(query);
   }
 
   def deserializeExpression(in:String): Expression =
   {
-    val objects = new ObjectInputStream(new ByteArrayInputStream(base64in.decode(in)))
+    val objects = new ObjectInputStream(new ByteArrayInputStream(base64in.decode(in))) {
+        override def resolveClass(desc: java.io.ObjectStreamClass): Class[_] = {
+          try { Class.forName(desc.getName, false, getClass.getClassLoader) }
+          catch { case ex: ClassNotFoundException => super.resolveClass(desc) }
+        }
+      }
     val expression = objects.readObject().asInstanceOf[Expression];
     return desanitize(expression);
   }

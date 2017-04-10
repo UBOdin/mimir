@@ -121,4 +121,8 @@ abstract class Model(val name: String) extends Serializable {
   def serialize(): (Array[Byte], String) =
     (SerializationUtils.serialize(this), "JAVA")
 
+  /**
+   * A string representation of this model
+   */
+  override def toString: String = name
 }
