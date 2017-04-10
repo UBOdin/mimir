@@ -345,7 +345,7 @@ class RAToSql(db: Database)
           (BoolPrimitive(true), ret)
         } else {
           // If they're not equivalent, revert to old behavior
-          (BoolPrimitive(true), makeSubSelect(oper))
+          (BoolPrimitive(true), makeSubSelect(standardizeTables(oper)))
         }
 
       case View(name, query, annotations) => 

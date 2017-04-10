@@ -52,6 +52,12 @@ sealed abstract class Operator
     Typechecker.schemaOf(this)
 
   /**
+   * Convenience method to get the column names from schema
+   */
+  def columnNames: Seq[String] =
+    schema.map(_._1)
+
+  /**
    * Return all expression objects that appear in this node
    */
   def expressions: Seq[Expression]

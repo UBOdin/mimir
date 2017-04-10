@@ -148,33 +148,18 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
 
         // To safely join the two together, we need to rename the world-bit columns
         val rewrittenJoin =
-          Join(
-            OperatorUtils.renameColumn(
-              "MIMIR_WORLD_BITS", "MIMIR_WORLD_BITS_LEFT", 
-              lhsNewChild
+          OperatorUtils.joinMergingColumns(
+            Seq( ("MIMIR_WORLD_BITS",
+                    (lhs:Expression, rhs:Expression) => Arithmetic(Arith.BitAnd, lhs, rhs))
             ),
-            OperatorUtils.renameColumn(
-              "MIMIR_WORLD_BITS", "MIMIR_WORLD_BITS_RIGHT", 
-              rhsNewChild
-            )
-          )
-
-        // Next we need to merge the two world-bit columns
-        val joinWithOneWorldBitsColumn =
-          OperatorUtils.projectAwayColumns(
-            Set("MIMIR_WORLD_BITS_LEFT", "MIMIR_WORLD_BITS_RIGHT"),
-            OperatorUtils.projectInColumn(
-              "MIMIR_WORLD_BITS", 
-              Arithmetic(Arith.BitAnd, Var("MIMIR_WORLD_BITS_LEFT"), Var("MIMIR_WORLD_BITS_RIGHT")),
-              rewrittenJoin
-            )
+            lhsNewChild, rhsNewChild
           )
 
         // Finally, add a selection to filter out values that can be filtered out in all worlds.
         val completedJoin =
           Select(
             Comparison(Cmp.Neq, Var("MIMIR_WORLD_BITS"), IntPrimitive(0)),
-            joinWithOneWorldBitsColumn
+            rewrittenJoin
           )
 
         (completedJoin, lhsNonDeterministicInput ++ rhsNonDeterministicInput)

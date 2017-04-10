@@ -100,6 +100,9 @@ object Typechecker {
 		new ExpressionChecker(scope(_))
 	}
 
+	def typecheck(o: Operator): Unit =
+		schemaOf(o)
+
 	def schemaOf(o: Operator): Seq[(String, Type)] =
 	{
 		o match {
@@ -117,7 +120,12 @@ object Typechecker {
 
 			case Select(cond, src) =>
 				val srcSchema = schemaOf(src);
-				(new ExpressionChecker(srcSchema.toMap)).assert(cond, TBool(), "SELECT")
+				try {
+					(new ExpressionChecker(srcSchema.toMap)).assert(cond, TBool(), "SELECT")
+				} catch {
+					case mv: MissingVariable => 
+						throw new RAException(s"Missing Variable: ${mv.getMessage()} (${schemaOf(src).map(_._1).mkString(", ")})", Some(o))
+				}
 				srcSchema
 
 			case Aggregate(groupBy, agggregates, source) =>

@@ -13,6 +13,7 @@
   <logger name="mimir.util.NonStrictCSVParser" level="INFO"/>
   <logger name="mimir.util.LineReaderInputSource" level="INFO"/>
   <logger name="mimir.algebra.ExpressionChecker" level="INFO"/>
+  <logger name="mimir.algebra.OperatorUtils" level="INFO"/>
   <logger name="mimir.exec.Compiler" level="INFO"/>
   <logger name="mimir.sql.sqlite.MimirCast$" level="INFO"/>
   <logger name="mimir.sql.sqlite.BestGuessVGTerm" level="INFO"/>
