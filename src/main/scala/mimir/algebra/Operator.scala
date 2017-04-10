@@ -7,6 +7,7 @@ import mimir.views.ViewAnnotation
  * Abstract parent class of all relational algebra operators
  */
 sealed abstract class Operator 
+  extends Serializable
 { 
   /**
    * Convert the operator into a string.  Because operators are
@@ -97,6 +98,7 @@ sealed abstract class Operator
  * A single column output by a projection
  */
 case class ProjectArg(name: String, expression: Expression) 
+  extends Serializable
 {
   override def toString = (name.toString + " <= " + expression.toString)
   def toBinding = (name -> expression)
@@ -134,6 +136,7 @@ case class Project(columns: Seq[ProjectArg], source: Operator) extends Operator
       getColumnName returns the column name
 */
 case class AggFunction(function: String, distinct: Boolean, args: Seq[Expression], alias: String)
+  extends Serializable
 {
   override def toString = (alias + " <= " + function.toString + "(" + (if(distinct){"DISTINCT "}else{""}) + args.map(_.toString).mkString(", ") + ")")
   def getFunctionName() = function
