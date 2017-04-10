@@ -19,32 +19,39 @@ object SpecializeForSQLite {
       case Function("CAST", _) =>
         throw new SQLException("Invalid CAST: "+e)
 
-      case Function("FIRST", Seq(arg)) =>
-        Typechecker.typeOf(arg, schema) match {
-          case TInt()   => Function("FIRST_INT", Seq(arg))
-          case TFloat() => Function("FIRST_FLOAT", Seq(arg))
-          case _        => Function("FIRST", Seq(arg))
-        }
-
       case _ => e
 
-    }).recur( apply(_, schema) )
+    }).recur( apply(_:Expression, schema) )
+  }
+
+  def apply(agg: AggFunction, schema: Map[String,Type]): AggFunction =
+  {
+    agg match {
+      case AggFunction("FIRST", d, args, alias) =>
+        Typechecker.typeOf(args(0), schema) match {
+          case TInt()   => AggFunction("FIRST_INT", d, args, alias)
+          case TFloat() => AggFunction("FIRST_FLOAT", d, args, alias)
+          case t        => AggFunction("FIRST", d, args, alias)
+        }
+      case x => x
+    }    
   }
 
   def apply(o: Operator): Operator = 
   {
-    o match {
+    val schema = o.schema.toMap
+    o.recurExpressions( 
+      apply(_:Expression, schema) 
+    ) match {
+      case Aggregate(gb, agg, source) =>
+        Aggregate(
+          gb,
+          agg.map( apply(_:AggFunction, schema) ),
+          apply(source)
+        )
 
-      /*
-       * Rewrite Expressions to replace SQLite's built in CAST 
-       * operation, which masks failures with default types, 
-       * with our own.
-       */
-      case _ => 
-        val schema = o.schema.toMap
-        o.recurExpressions( apply(_:Expression, schema) ).
-          recur( apply(_:Operator) )
-
+      case o2 => 
+        o2.recur( apply(_:Operator) )
     }
   }
 

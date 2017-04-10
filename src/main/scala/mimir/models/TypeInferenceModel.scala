@@ -139,11 +139,11 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
             case _ => 
               s"around $guessPct% of the data fit"
           }
-        s"I guessed that ${columns(idx)} was of type $typeStr because $reason"
+        s"I guessed that $name.${columns(idx)} was of type $typeStr because $reason"
       }
       case Some(t) =>
         val typeStr = Cast(TType(), t).toString.toUpperCase
-        s"You told me that ${columns(idx)} was of type $typeStr"
+        s"You told me that $name.${columns(idx)} was of type $typeStr"
     }
   }
 

@@ -48,10 +48,10 @@ class KeyRepairModel(
     choices.get(args.toList) match {
       case None => {
         val possibilities = getDomain(idx, args, hints)
-        s"In $context, there were ${possibilities.length} options for $target on the row for <${args.map(_.toString).mkString(", ")}>, and I arbitrarilly picked ${possibilities.sortBy(_.toString).head._1}"
+        s"In $context, there were ${possibilities.length} options for $target on the row identified by <${args.map(_.toString).mkString(", ")}>, and I arbitrarilly picked ${possibilities.sortBy(-_._2).head._1}"
       }
       case Some(choice) => 
-        s"In $context, you told me to use ${choice.toString} for $target on the row for <${args.map(_.toString).mkString(", ")}>"
+        s"In $context, you told me to use ${choice.toString} for $target on the identified by <${args.map(_.toString).mkString(", ")}>"
     }
   }
 

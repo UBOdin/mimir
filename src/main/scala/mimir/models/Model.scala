@@ -46,6 +46,7 @@ import mimir.util._
  * conventions in terms of their types, how they use arguments, and how
  * they are constructed.
  */
+@SerialVersionUID(1001L)
 abstract class Model(val name: String) extends Serializable {
   /**
    * The list of expected arg types (may be TAny)
@@ -79,6 +80,18 @@ abstract class Model(val name: String) extends Serializable {
    */
   def sample         (idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]):  PrimitiveValue
   /**
+   * Generate a sample from the distribution of a variable represented by this model.
+   * @param idx         The index of the variable family to generate a sample for
+   * @param seed        The global world identifier (seed) to sample from
+   * @param args        The skolem identifier for the specific variable to generate a sample for
+   * @return            A primitive value representing the generated sample
+   */
+  def sample         (idx: Int, seed: Long, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]):  PrimitiveValue =
+  {
+    val seedForThisVar = ((seed * args.hashCode) + 13) * name.hashCode
+    sample(idx, new Random(seedForThisVar), args, hints)
+  }
+  /**
    * Generate a human-readable explanation for the uncertainty captured by this model.
    * @param idx   The index of the variable family to explain
    * @param args  The skolem identifier for the specific variable to explain
@@ -108,4 +121,8 @@ abstract class Model(val name: String) extends Serializable {
   def serialize(): (Array[Byte], String) =
     (SerializationUtils.serialize(this), "JAVA")
 
+  /**
+   * A string representation of this model
+   */
+  override def toString: String = name
 }

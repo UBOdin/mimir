@@ -185,6 +185,13 @@ class JDBCBackend(val backend: String, val filename: String)
       }
     })
   }
+  def selectInto(table: String, query: String): Unit =
+  {
+    backend match {
+      case "sqlite" => 
+        update(s"CREATE TABLE $table AS $query")
+    }
+  }
   
   def getTableSchema(table: String): Option[Seq[(String, Type)]] =
   {
@@ -271,7 +278,13 @@ class JDBCBackend(val backend: String, val filename: String)
         case p:IntPrimitive      => stmt.setLong(i, p.v)
         case p:FloatPrimitive    => stmt.setDouble(i, p.v)
         case _:NullPrimitive     => stmt.setNull(i, Types.VARCHAR)
-        case d:DatePrimitive     => stmt.setDate(i, JDBCUtils.convertDate(d))
+        case d:DatePrimitive     => 
+          backend match {
+            case "sqlite" => 
+              stmt.setString(i, d.asString)
+            case _ =>
+              stmt.setDate(i, JDBCUtils.convertDate(d))
+          }
         case r:RowIdPrimitive    => stmt.setString(i,r.v)
         case t:TypePrimitive     => stmt.setString(i, t.t.toString)
       }

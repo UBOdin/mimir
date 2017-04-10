@@ -1,30 +1,31 @@
-package mimir.optimizer;
+package mimir.optimizer
 
-import java.sql._;
+import java.sql._
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
-import mimir.algebra._;
-import mimir.ctables._;
+import mimir.algebra._
+import mimir.ctables._
 
-object InlineProjections {
+object InlineProjections extends LazyLogging {
 
 	def apply(o: Operator): Operator = 
-		o match {
+		o.recur(apply(_)) match {
 			// If we have a Project[*](X), we can replace it with just X
 			case Project(cols, src) if (cols.forall( _ match {
 					case ProjectArg(colName, Var(varName)) => colName.equals(varName)
 					case _ => false
 				}) && (src.schema.map(_._1).toSet &~ cols.map(_.name).toSet).isEmpty)
-				 => apply(src)
+				 => src
 
 			// Project[...](Project[...](X)) can be composed into a single Project[...](X)
 			case Project(cols, p @ Project(_, src)) =>
 				val bindings = p.bindings;
-				apply(Project(
+				Project(
 					cols.map( (arg:ProjectArg) =>
 						ProjectArg(arg.name, Eval.inline(arg.expression, bindings))
 					),
 					src
-				))
+				)
 
 			// Under some limited conditions, Project[...](Aggregate[...](X)) can be
 			// composed into just Aggregate[...](X)
@@ -40,32 +41,75 @@ object InlineProjections {
 									renaming(agg.alias)
 								)
 							)
-						Aggregate(groupBy, rewrittenAggs, apply(src))
+						Aggregate(groupBy, rewrittenAggs, src)
 					}
-					case None => Project(cols, apply(agg))
+					case None => Project(cols, agg)
 				}
 			}
 
 			// Under some limited conditions, Aggregate[...](Project[...](X)) can be
 			// composed into just Aggregate[...](X)
-			case Aggregate(groupBy, aggregates, p @ Project(cols, src)) => {
-				if(canInlineAggregateProject(groupBy, p)){
-					val bindings = p.bindings
-					val rewrittenAggs = 
-						aggregates.map( agg => 
-							AggFunction(
-								agg.function, 
-								agg.distinct, 
-								agg.args.map( arg => Eval.inline(arg, bindings) ),
-								agg.alias
-							)
-						)
-					Aggregate(groupBy, rewrittenAggs, apply(src))
-				} else {
-					Aggregate(groupBy, aggregates, apply(p))
-				}
+			case oldAgg @ Aggregate(groupBy, aggregates, p @ Project(cols, src)) => {
+				val bindings = p.bindings
+				val gbBindings = groupBy.flatMap { col =>
+					bindings(col.name) match {
+						case Var(newName) => 
+							if(newName.equals(col.name)) { None } 
+							else { Some( col.name -> Var(newName) ) }
+						case _ => 
+							// If there's a non variable rewrite, the projection needs to stay in place
+							// Abort the rewrite right here
+							return Aggregate(groupBy, aggregates, p)
+					}
+				}.toMap
 
+				val rewrittenAggs = 
+					aggregates.map( agg => 
+						AggFunction(
+							agg.function, 
+							agg.distinct, 
+							agg.args.map( arg => Eval.inline(arg, bindings) ),
+							agg.alias
+						)
+					)
+
+				// If we don't need to rewrite any group-by columns, the entire projection
+				// can be folded into the aggregate.  Otherwise, we need a post-processing
+				// step to rename the conflicting attributes.
+				if(gbBindings.isEmpty){
+					Aggregate(groupBy, rewrittenAggs, src)
+				} else {
+					Project(
+						oldAgg.columnNames.map { col =>
+							ProjectArg( col, gbBindings.getOrElse(col, Var(col)) )
+						},
+						Aggregate(
+							groupBy.map { col => gbBindings.getOrElse(col.name, col) },
+							rewrittenAggs,
+							src
+						)
+					)
+				}
 			}
+
+      case Join(lhs, rhs) if (lhs.isInstanceOf[Project] || rhs.isInstanceOf[Project]) => {
+      	val (lhsCols, lhsBase) = OperatorUtils.extractProjections(lhs)
+      	val (rhsCols, rhsBase) = OperatorUtils.extractProjections(rhs)
+      	val (safeJoin, rhsRewrites) = 
+          OperatorUtils.makeSafeJoin(lhsBase, rhsBase)
+        val rhsRewriteMapping =
+        	rhsRewrites.map { case (orig, rewritten) => (orig -> Var(rewritten)) }
+
+        Typechecker.typecheck(safeJoin)
+
+        Project(
+          lhsCols ++
+          	rhsCols.map { case ProjectArg(name, expression) =>
+          		ProjectArg(name, Eval.inline(expression, rhsRewriteMapping))
+          	},
+          safeJoin
+        )
+      }
 
 			// Otherwise, we might still be able to simplify the nested expressions
 			// Do a quick Eval.inline pass over them.
@@ -74,11 +118,12 @@ object InlineProjections {
 					cols.map( (arg:ProjectArg) =>
 						ProjectArg(arg.name, Eval.inline(arg.expression))
 					),
-					apply(src)
+					src
 				)
 
-			// If it's not a projection, this optimization doesn't care
-			case _ => o.recur(apply(_:Operator))
+			// If it's anything else, this optimization doesn't care 
+			// (recursion is handled bottom-up at the start of this function)
+			case anythingElse => anythingElse
 	}
 
 	def canInlineProjectAggregate(
@@ -96,6 +141,12 @@ object InlineProjections {
 		extractRenaming(cols) match {
 			case None => return None
 			case Some(renaming) => {
+				// If the renaming is non-unique...
+				if(renaming.map(_._1).toSet.size != renaming.size){
+					return None
+				}
+
+
 				val (gbExpected, aggExpected) = renaming.splitAt(gb.size)
 
 				// Check 3: We can't rename GB columns in the aggregate
@@ -126,14 +177,5 @@ object InlineProjections {
 			case ProjectArg(out, Var(in)) => (in, out)
 			case _ => return None
 		}))
-	}
-
-	def canInlineAggregateProject(gb: Seq[Var], p: Project): Boolean =
-	{
-		gb.map(_.name).
-			forall( gbVar => p.get(gbVar) match {
-				case Some(Var(cmpVar))	=> gbVar.equals(cmpVar)
-				case _ => false
-			})
 	}
 }

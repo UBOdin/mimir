@@ -191,7 +191,7 @@ object DiscalaAbadiSpec
       val explanation =
         explainRow(baseQuery, "47|21|45|left|right|right")
 
-      explanation.reasons.map(_.reason).head must contain("there were 2 options for MIMIR_FD_PARENT")
+      explanation.reasons.map(_.reason).head must contain("QUANTITY could be organized under any of BILL_OF_LADING_NBR")
     }
 
 

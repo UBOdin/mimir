@@ -261,17 +261,17 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
     val rowid = RowIdPrimitive(args(0).asString)
     feedback.get(rowid.asString) match {
       case Some(v) =>
-        s"You told me that $colName = $v on row $rowid"
+        s"You told me that $name.$colName = $v on row $rowid"
       case None => 
         val classes = classify(rowid.asInstanceOf[RowIdPrimitive])
         val total:Double = classes.map(_._1).fold(0.0)(_+_)
         if (classes.isEmpty) { 
           val elem = classToPrimitive(0)
-          s"The classifier isn't able to make a guess about $colName, so I'm defaulting to $elem"
+          s"The classifier isn't able to make a guess about $name.$colName, so I'm defaulting to $elem"
         } else {
           val choice = classes.maxBy(_._1)
           val elem = classToPrimitive(choice._2)
-          s"I used a classifier to guess that $colName = $elem on row $rowid (${choice._1} out of ${total} votes)"
+          s"I used a classifier to guess that ${name.split(":")(0)}.$colName = $elem on row $rowid (${choice._1} out of ${total} votes)"
         }
     }
   }

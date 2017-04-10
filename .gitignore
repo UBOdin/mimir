@@ -2,6 +2,7 @@
 *.log
 *.swp
 *.db
+*.bak
 
 # sbt specific
 .cache/
@@ -33,6 +34,9 @@ serialized/*.db/
 # Large databases
 databases/noisy.db
 databases/tpch*.db
+
+# Large Data Files
+test/pdbench
 
 # DBGen
 tpch-dbgen

@@ -14,8 +14,12 @@ import mimir.optimizer._
 import mimir.exec._
 import mimir.provenance._
 import mimir.models._
+import mimir.test._
 
-object CTPercolatorSpec extends Specification {
+object CTPercolatorSpec 
+  extends Specification 
+  with RAParsers
+{
   
   val schema = Map[String,Map[String,Type]](
     ("R", Map( 
@@ -29,12 +33,13 @@ object CTPercolatorSpec extends Specification {
     ))
   )
 
-  def parser = new OperatorParser(
-    (x: String) => UniformDistribution,
-    schema(_).toList
-  )
-  def expr = parser.expr _
-  def oper:(String => Operator) = parser.operator _
+  def modelLookup(model: String) = UniformDistribution
+  def schemaLookup(table: String) = schema(table).toList
+  def ack(
+    idx: Int = 1, 
+    args: Seq[Expression] = Seq(RowIdVar())
+  ): Expression = VGTermAcknowledged(UniformDistribution, idx, args)
+
   def project(cols: List[(String,String)], src: Operator): Operator =
     Project(cols.map( { case (name,e) => ProjectArg(name, expr(e))}), src) 
 
@@ -69,12 +74,12 @@ object CTPercolatorSpec extends Specification {
         oper("PROJECT[A <= A, B <= {{X_1[ROWID]}}](R(A, B))"),
         Map( 
           ("A", expr("true")),
-          ("B", expr("false"))
+          ("B", ack())
         ),
         expr("true")
       ))
     }
-    "Handle Data-Dependent Non-Deterministic Projection" in {
+    "Handle Data-Dependent Non-Deterministic Projection 1" in {
       percolite("""
         PROJECT[A <= A, 
                 B <= IF B IS NULL THEN {{X_1[ROWID]}} ELSE B END
@@ -83,8 +88,10 @@ object CTPercolatorSpec extends Specification {
           PROJECT[A <= A, 
                   B <= IF B IS NULL THEN {{X_1[ROWID]}} ELSE B END, 
                   MIMIR_COL_DET_B <= 
-                       IF B IS NULL THEN FALSE ELSE TRUE END
-                ](R(A, B))"""),
+                       IF B IS NULL THEN B_ACK ELSE TRUE END
+                ](R(A, B))""",
+          Map("B_ACK" -> ack())
+        ),
         Map( 
           ("A", expr("true")),
           ("B", expr("MIMIR_COL_DET_B"))
@@ -99,10 +106,10 @@ object CTPercolatorSpec extends Specification {
           ("A", expr("true")),
           ("B", expr("true"))
         ),
-        expr("false")
+        ack()
       ))
     }
-    "Handle Data-Dependent Non-Deterministic Projection" in {
+    "Handle Data-Dependent Non-Deterministic Projection 2" in {
       percolite("""
         SELECT[B = 3](
           PROJECT[A <= A, 
@@ -114,8 +121,10 @@ object CTPercolatorSpec extends Specification {
             PROJECT[A <= A, 
                     B <= IF B IS NULL THEN {{X_1[ROWID]}} ELSE B END, 
                     MIMIR_COL_DET_B <= 
-                         IF B IS NULL THEN FALSE ELSE TRUE END
-                  ](R(A, B))))"""),
+                         IF B IS NULL THEN B_ACK ELSE TRUE END
+                  ](R(A, B))))""",
+          Map("B_ACK" -> ack())
+        ),
         Map( 
           ("A", expr("true")),
           ("B", expr("MIMIR_COL_DET_B"))
@@ -148,12 +157,12 @@ object CTPercolatorSpec extends Specification {
       """) must be equalTo ((
         oper("""
           JOIN(
-            PROJECT[A <= {{X_1[ROWID,A]}}](R(A,B)), 
+            PROJECT[A <= {{X_1[ROWID,A]}}, MIMIR_COL_DET_A <= A_ACK](R(A,B)), 
             S(C,D)
           )
-        """),
+        """, Map("A_ACK" -> ack( args = Seq(RowIdVar(), Var("A")) ))),
         Map( 
-          ("A", expr("false")),
+          ("A", Var("MIMIR_COL_DET_A")),
           ("C", expr("true")),
           ("D", expr("true"))
         ),
@@ -170,13 +179,16 @@ object CTPercolatorSpec extends Specification {
         oper("""
           JOIN(
             PROJECT[A <= A, B <= B, MIMIR_ROW_DET_LEFT <= MIMIR_ROW_DET](
-              PROJECT[A <= A, B <= B, MIMIR_ROW_DET <= IF A < 3 THEN FALSE ELSE TRUE END](
+              PROJECT[A <= A, B <= B, MIMIR_ROW_DET <= IF A < 3 THEN LHS_ACK ELSE TRUE END](
                 SELECT[B < IF A < 3 THEN {{X_1[A]}} ELSE 3 END](R(A,B)))), 
             PROJECT[C <= C, D <= D, MIMIR_ROW_DET_RIGHT <= MIMIR_ROW_DET](
-              PROJECT[C <= C, D <= D, MIMIR_ROW_DET <= IF D > 5 THEN FALSE ELSE TRUE END](
+              PROJECT[C <= C, D <= D, MIMIR_ROW_DET <= IF D > 5 THEN RHS_ACK ELSE TRUE END](
                 SELECT[C < IF D > 5 THEN {{X_2[D]}} ELSE 5 END](S(C,D))))
           )
-        """),
+        """, Map(
+          "LHS_ACK" -> ack( idx = 1, args = Seq(Var("A")) ),
+          "RHS_ACK" -> ack( idx = 2, args = Seq(Var("D")) )
+        )),
         Map( 
           ("A", expr("true")),
           ("B", expr("true")),
@@ -194,11 +206,13 @@ object CTPercolatorSpec extends Specification {
       """) must be equalTo ((
         oper("""
           PROJECT[A <= A, B <= B, MIMIR_ROW_DET <= MIMIR_ROW_DET](
-            PROJECT[A <= A, B <= B, MIMIR_ROW_DET <= IF A < 5 THEN FALSE ELSE TRUE END](
+            PROJECT[A <= A, B <= B, MIMIR_ROW_DET <= IF A < 5 THEN A_ACK ELSE TRUE END](
               SELECT[IF A < 5 THEN {{X_1[A]}} ELSE A END > 5](R(A,B))
             )
           )
-        """),
+        """, Map(
+          "A_ACK" -> ack( args = Seq(Var("A")) )
+        )),
         Map(
           ("A", expr("true")),
           ("B", expr("true"))

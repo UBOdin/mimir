@@ -4,7 +4,7 @@ import java.sql._;
 import java.util.NoSuchElementException;
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-import Arith.{Add, Sub, Mult, Div, And, Or}
+import Arith.{Add, Sub, Mult, Div, And, Or, BitAnd, BitOr, ShiftLeft, ShiftRight}
 import Cmp.{Gt, Lt, Lte, Gte, Eq, Neq, Like, NotLike}
 
 class MissingVariable(varName: String, e: Throwable) extends 
@@ -25,7 +25,7 @@ class ExpressionChecker(scope: (String => Type) = Map().apply _) extends LazyLog
 			case p: PrimitiveValue => p.getType;
 			case Not(child) => assert(child, TBool(), "NOT"); TBool()
 			case p: Proc => p.getType(p.children.map(typeOf(_)))
-			case Arithmetic(op @ (Add | Sub | Mult | Div), lhs, rhs) =>
+			case Arithmetic(op @ (Add | Sub | Mult | Div | BitAnd | BitOr | ShiftLeft | ShiftRight), lhs, rhs) =>
 				Typechecker.assertNumeric(Typechecker.escalate(typeOf(lhs), typeOf(rhs), op.toString, e), e);
 			case Arithmetic((And | Or), lhs, rhs) =>
 				assert(lhs, TBool(), "BoolOp");
@@ -35,7 +35,7 @@ class ExpressionChecker(scope: (String => Type) = Map().apply _) extends LazyLog
 				Typechecker.escalate(typeOf(lhs), typeOf(rhs), "Comparison", e);
 				TBool()
 			case Comparison((Gt | Gte | Lt | Lte), lhs, rhs) =>
-				if(typeOf(lhs) != TDate && typeOf(rhs) != TDate) {
+				if(typeOf(lhs) != TDate() && typeOf(rhs) != TDate()) {
 					Typechecker.assertNumeric(Typechecker.escalate(typeOf(lhs), typeOf(rhs), "Comparison", e), e)
 				}
 				TBool()
@@ -100,14 +100,22 @@ object Typechecker {
 		new ExpressionChecker(scope(_))
 	}
 
+	def typecheck(o: Operator): Unit =
+		schemaOf(o)
+
 	def schemaOf(o: Operator): Seq[(String, Type)] =
 	{
 		o match {
 			case Project(cols, src) =>
 				val chk = new ExpressionChecker(schemaOf(src).toMap);
 				cols.map( { 
-						case ProjectArg(col, in) =>
-							(col, chk.typeOf(in))
+						case ProjectArg(col, expression) =>
+							try {
+								(col, chk.typeOf(expression))
+							} catch {
+								case mv: MissingVariable => 
+									throw new RAException(s"Missing Variable: ${mv.getMessage()} (${schemaOf(src).map(_._1).mkString(", ")})", Some(o))
+							}
 					})
 			
 			case ProvenanceOf(psel) => 
@@ -123,7 +131,12 @@ object Typechecker {
 			
       case Select(cond, src) =>
 				val srcSchema = schemaOf(src);
-				(new ExpressionChecker(srcSchema.toMap)).assert(cond, TBool(), "SELECT")
+				try {
+					(new ExpressionChecker(srcSchema.toMap)).assert(cond, TBool(), "SELECT")
+				} catch {
+					case mv: MissingVariable => 
+						throw new RAException(s"Missing Variable: ${mv.getMessage()} (${schemaOf(src).map(_._1).mkString(", ")})", Some(o))
+				}
 				srcSchema
 
 			case Aggregate(groupBy, agggregates, source) =>
@@ -170,6 +183,8 @@ object Typechecker {
 				lSchema
 
 			case Table(_, _, sch, meta) => (sch ++ meta.map( x => (x._1, x._3) ))
+
+			case View(_, query, _) => query.schema
 
 			case EmptyTable(sch) => sch
 

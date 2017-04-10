@@ -419,20 +419,15 @@ class SqlToRA(db: Database)
       else { alias = alias.toUpperCase }
 
       if(fi.asInstanceOf[net.sf.jsqlparser.schema.Table].getSchemaName == null){
-        val sch = db.getTableSchema(name) match {
-          case Some(sch) => sch
-          case None => throw new SQLException("Unknown table or view: "+name);
-        }
-        val newBindings = sch.map(
+        val tableOp = db.getTableOperator(name)
+        val newBindings = tableOp.schema.map(
             (x) => (x._1, alias+"_"+x._1)
           )
         return (
-          Table(name,alias, 
-            sch.map(
-              _ match { case (v, t) => (alias+"_"+v, t)}
-            ),
-            List[(String,Expression,Type)]()
-          ), 
+          Project(
+            newBindings.map { x => ProjectArg(x._2, Var(x._1)) },
+            tableOp
+          ),
           newBindings, 
           alias
         )
@@ -527,6 +522,17 @@ class SqlToRA(db: Database)
           case _ if f.isDistinct() => mimir.algebra.Function("DISTINCT_"+name, parameters)
           case _ => mimir.algebra.Function(name, parameters)
         }
+      }
+
+      case b:net.sf.jsqlparser.expression.operators.relational.Between => {
+        val lhs = convert(b.getLeftExpression(), bindings)
+        val start = convert(b.getBetweenExpressionStart(), bindings)
+        val end = convert(b.getBetweenExpressionEnd(), bindings)
+        Arithmetic(
+          Arith.And,
+          Comparison(Cmp.Lte, start, lhs),
+          Comparison(Cmp.Lte, lhs, end)
+        )
       }
 
       case c:net.sf.jsqlparser.expression.CaseExpression => {

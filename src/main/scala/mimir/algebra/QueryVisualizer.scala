@@ -3,7 +3,6 @@ package mimir.algebra
 import mimir.Database
 import mimir.web.OperatorNode
 import mimir.ctables.CTables
-import mimir.optimizer.ResolveViews
 
 object QueryVisualizer {
   def convertToTree(op: Operator): OperatorNode = 
@@ -35,10 +34,5 @@ object QueryVisualizer {
       case Table(name, alias, schema, metadata) => new OperatorNode(name, List[OperatorNode](), None)
       case o: Operator => new OperatorNode(o.getClass.toString, o.children.map(convertToTree(_)), None)
     }
-  }
-
-  def convertToTree(db: Database, op: Operator): OperatorNode = 
-  {
-    convertToTree(ResolveViews(db, op))
   }
 }

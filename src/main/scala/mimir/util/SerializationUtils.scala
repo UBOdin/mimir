@@ -22,7 +22,12 @@ object SerializationUtils {
   {
     val objects = new java.io.ObjectInputStream(
       new java.io.ByteArrayInputStream(data)
-    )
+    ) {
+        override def resolveClass(desc: java.io.ObjectStreamClass): Class[_] = {
+          try { Class.forName(desc.getName, false, getClass.getClassLoader) }
+          catch { case ex: ClassNotFoundException => super.resolveClass(desc) }
+        }
+      }
     objects.readObject().asInstanceOf[A]
   }
   def deserializeFromBase64[A](data: String): A =

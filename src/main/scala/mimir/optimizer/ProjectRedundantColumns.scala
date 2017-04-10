@@ -126,6 +126,7 @@ object ProjectRedundantColumns {
         projectIfNeeded(aggregate, dependencies)
       }
 
+      case view: View => view
       case table: Table => table
       case table: EmptyTable => table
 

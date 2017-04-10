@@ -129,6 +129,7 @@ object FunctionRegistry {
     )
 
     registerNative("JSON_EXTRACT",(_) => ???, (_) => TAny())
+    registerNative("JSON_ARRAY",(_) => ???, (_) => TInt())
     registerNative("JSON_ARRAY_LENGTH",(_) => ???, (_) => TInt())
 	}
 

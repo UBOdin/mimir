@@ -1,11 +1,13 @@
 package mimir.algebra;
 
 import mimir.util.ListUtils
+import mimir.views.ViewAnnotation
 
 /**
  * Abstract parent class of all relational algebra operators
  */
 sealed abstract class Operator 
+  extends Serializable
 { 
   /**
    * Convert the operator into a string.  Because operators are
@@ -51,6 +53,12 @@ sealed abstract class Operator
     Typechecker.schemaOf(this)
 
   /**
+   * Convenience method to get the column names from schema
+   */
+  def columnNames: Seq[String] =
+    schema.map(_._1)
+
+  /**
    * Return all expression objects that appear in this node
    */
   def expressions: Seq[Expression]
@@ -90,6 +98,7 @@ sealed abstract class Operator
  * A single column output by a projection
  */
 case class ProjectArg(name: String, expression: Expression) 
+  extends Serializable
 {
   override def toString = (name.toString + " <= " + expression.toString)
   def toBinding = (name -> expression)
@@ -127,6 +136,7 @@ case class Project(columns: Seq[ProjectArg], source: Operator) extends Operator
       getColumnName returns the column name
 */
 case class AggFunction(function: String, distinct: Boolean, args: Seq[Expression], alias: String)
+  extends Serializable
 {
   override def toString = (alias + " <= " + function.toString + "(" + (if(distinct){"DISTINCT "}else{""}) + args.map(_.toString).mkString(", ") + ")")
   def getFunctionName() = function
@@ -397,4 +407,24 @@ case class LeftOuterJoin(left: Operator,
     LeftOuterJoin(c(0), c(1), condition)
   def expressions: List[Expression] = List(condition)
   def rebuildExpressions(x: Seq[Expression]) = LeftOuterJoin(left, right, x(0))
+}
+
+/**
+ * A materialized view
+ *
+ * When initialized by RAToSql, the query field will contain the raw unmodified 
+ * query that the view was instantiated with.  As the view goes through compilation,
+ * the nested query will be modified; The metadata field tracks which forms of 
+ * compilation have been applied to it, so that the system can decide whether it has
+ * an appropriate materialized form of the view ready.
+ */
+case class View(name: String, query: Operator, annotations: Set[ViewAnnotation.T] = Set())
+  extends Operator
+{
+  def children: Seq[Operator] = Seq(query)
+  def expressions: Seq[Expression] = Seq()
+  def rebuild(c: Seq[Operator]): Operator = View(name, c(0), annotations)
+  def rebuildExpressions(x: Seq[Expression]): Operator = this
+  def toString(prefix: String): String = 
+    s"$prefix$name[${annotations.mkString(", ")}] := (\n${query.toString(prefix+"   ")}\n$prefix)"
 }

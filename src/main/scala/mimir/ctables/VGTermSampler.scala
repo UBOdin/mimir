@@ -21,8 +21,7 @@ case class VGTermSampler(
     if(v.size < 1){ throw new SQLException("Internal error.  Expecting seed.") }
     val seed = v.head
     val (argValues, hintValues) = v.tail.splitAt(args.length)
-    val seedForThisVar = ((seed.asLong * argValues.hashCode) + 13) * model.name.hashCode
-    model.sample(idx, new Random(seedForThisVar), argValues, hintValues)
+    model.sample(idx, seed.asLong, argValues, hintValues)
   }
   def rebuild(v: Seq[Expression]) = 
   {

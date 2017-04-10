@@ -44,7 +44,7 @@ class ModelReason(
   extends Reason
 {
   override def toString: String = 
-    reason+" ("+model+";"+idx+"["+args.mkString(", ")+"])"
+    reason+" {{"+model+";"+idx+"["+args.mkString(", ")+"]}}"
 
   def reason: String =
     model.reason(idx, args, hints)

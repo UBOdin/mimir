@@ -24,9 +24,11 @@ object SQLiteCompat {
     org.sqlite.Function.create(conn, "MINUS", Minus)
     org.sqlite.Function.create(conn, "GROUP_AND", GroupAnd)
     org.sqlite.Function.create(conn, "GROUP_OR", GroupOr)
+    org.sqlite.Function.create(conn, "GROUP_BITWISE_AND", GroupBitwiseAnd)
+    org.sqlite.Function.create(conn, "GROUP_BITWISE_OR", GroupBitwiseOr)
     org.sqlite.Function.create(conn, "FIRST", First)
-    org.sqlite.Function.create(conn, "FIRST_INT", First)
-    org.sqlite.Function.create(conn, "FIRST_FLOAT", First)
+    org.sqlite.Function.create(conn, "FIRST_INT", FirstInt)
+    org.sqlite.Function.create(conn, "FIRST_FLOAT", FirstFloat)
   }
   
   def getTableSchema(conn:java.sql.Connection, table: String): Option[List[(String, Type)]] =
@@ -204,6 +206,32 @@ object GroupOr extends org.sqlite.Function.Aggregate {
   }
 }
 
+object GroupBitwiseAnd extends org.sqlite.Function.Aggregate {
+  var agg:Long = 0xffffffffffffffffl
+
+  @Override
+  def xStep(): Unit = {
+    agg = agg & value_int(0)
+  }
+
+  def xFinal(): Unit = {
+    result(agg)
+  }
+}
+
+object GroupBitwiseOr extends org.sqlite.Function.Aggregate {
+  var agg:Long = 0
+
+  @Override
+  def xStep(): Unit = {
+    agg = agg | value_int(0)
+  }
+
+  def xFinal(): Unit = {
+    result(agg)
+  }
+}
+
 object OtherTest extends org.sqlite.Function {
   @Override
   def xFunc(): Unit = {
@@ -227,28 +255,38 @@ object First extends org.sqlite.Function.Aggregate {
 }
 
 object FirstInt extends org.sqlite.Function.Aggregate {
-  var firstVal: Int = 0;
+  var firstVal: Int = 0
   var empty = true
 
   @Override
   def xStep(): Unit = {
-    if(empty){ firstVal = value_int(0); empty = false }
+    if(empty){ 
+      if(value_type(0) != SQLiteCompat.NULL) {
+        firstVal = value_int(0) 
+        empty = false
+      }
+    }
   }
   def xFinal(): Unit = {
-    if(empty){ result(); } else { result(firstVal); }
+    if(empty){ result() } else { result(firstVal) }
   }
 }
 
 object FirstFloat extends org.sqlite.Function.Aggregate {
-  var firstVal: Double = 0.0;
-  var empty = false
+  var firstVal: Double = 0.0
+  var empty = true
 
   @Override
   def xStep(): Unit = {
-    if(empty){ firstVal = value_double(0); empty = true }
+    if(empty){ 
+      if(value_type(0) != SQLiteCompat.NULL) {
+        firstVal = value_double(0) 
+        empty = false 
+      }
+    }
   }
   def xFinal(): Unit = {
-    if(empty){ result(); } else { result(firstVal); }
+    if(empty){ result() } else { result(firstVal) }
   }
 }
 

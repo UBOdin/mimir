@@ -8,6 +8,7 @@ import mimir.ctables._
 import mimir.sql._
 import mimir.models._
 import mimir.util.JDBCUtils
+import mimir.util.ExperimentalOptions
 
 class LensManager(db: Database) {
 
@@ -53,7 +54,9 @@ class LensManager(db: Database) {
     }
 
     // Populate the best-guess cache
-    //db.bestGuessCache.buildCache(view)
+    if(!db.backend.canHandleVGTerms()){
+      db.bestGuessCache.buildCache(view)
+    }
   }
 
   def drop(name: String): Unit =

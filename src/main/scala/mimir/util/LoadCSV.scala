@@ -24,13 +24,14 @@ object LoadCSV extends StrictLogging {
   def SAMPLE_SIZE = 10000
 
   def handleLoadTable(db: Database, targetTable: String, sourceFile: File): Unit =
-    handleLoadTable(db, targetTable, sourceFile, true)
+    handleLoadTable(db, targetTable, sourceFile, Map())
 
-  def handleLoadTable(db: Database, targetTable: String, sourceFile: File, assumeHeader: Boolean){
+  def handleLoadTable(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
     val input = new FileReader(sourceFile)
+    val assumeHeader = options.getOrElse("HEADER", "YES").equals("YES")
 
     // Allocate the parser, and make its iterator scala-friendly
-    val parser = new NonStrictCSVParser(input)
+    val parser = new NonStrictCSVParser(input, options)
 
     // Pull out the header if appropriate
     val header: Seq[String] = 
@@ -154,7 +155,7 @@ object LoadCSV extends StrictLogging {
               else {
                 if(!Type.matches(Type.rootType(t), value))
                 {
-                  logger.warn(s"fileName:${record.lineNumber}: $col ($t) on is unparseable '$value', using null instead");
+                  logger.warn(s"$sourceFile:${record.lineNumber}: $col ($t) on is unparseable '$value', using null instead");
                   NullPrimitive()
                 } else {
                   TextUtils.parsePrimitive(t, value)
@@ -189,11 +190,15 @@ case class MimirCSVRecord(fields: Seq[String], lineNumber: Long, recordNumber: L
  *  - Swap out CSVParser with a different off-the-shelf parser (e.g., Spark has a few)
  *  - Write our own CSVParser.
  */
-class NonStrictCSVParser(in:Reader)
+class NonStrictCSVParser(in:Reader, options: Map[String,String] = Map())
   extends Iterator[MimirCSVRecord]
   with StrictLogging
 {
-  val format = CSVFormat.DEFAULT.withAllowMissingColumnNames()
+  var format = CSVFormat.DEFAULT.withAllowMissingColumnNames()
+  options.get("DELIMITER") match {
+    case None => ()
+    case Some(delim) => format = format.withDelimiter(delim.charAt(0))
+  }
   val parser = new CSVParser(in, format)
   val iter = parser.iterator.asScala
   var record: Option[(Seq[String], Option[String])] = None

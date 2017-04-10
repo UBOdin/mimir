@@ -23,42 +23,19 @@ class Compiler(db: Database) extends LazyLogging {
 
   /**
    * Perform a full end-end compilation pass.  Return an iterator over
-   * the result set.
+   * the result set.  
    */
-  def compile(oper: Operator): ResultIterator =
-    compile(oper, standardOptimizations)
-
-  /**
-   * Perform a full end-end compilation pass.  Return an iterator over
-   * the result set.  Use only the specified list of optimizations.
-   */
-  def compile(rawOper: Operator, opts: List[Operator => Operator]): ResultIterator = 
+  def compile(rawOper: Operator, opts: List[Operator => Operator] = standardOptimizations): ResultIterator = 
   {
-    // Recursively expand all view tables using mimir.optimizer.ResolveViews
-    var oper = ResolveViews(db, rawOper)
-
+    var oper = rawOper
     logger.debug(s"RAW: $oper")
     
-    // We'll need the pristine pre-manipulation schema down the line
-    // As a side effect, this also forces the typechecker to run, 
-    // acting as a sanity check on the query before we do any serious
-    // work.
-    val outputSchema = oper.schema;
-
-    // The names that the provenance compilation step assigns will
-    // be different depending on the structure of the query.  As a 
-    // result it is **critical** that this be the first step in 
-    // compilation.  
-    val provenance = Provenance.compile(oper)
-    oper               = provenance._1
-    val provenanceCols = provenance._2
-
-
-    // Tag rows/columns with provenance metadata
-    val tagging = CTPercolator.percolateLite(oper)
-    oper               = tagging._1
-    val colDeterminism = tagging._2
-    val rowDeterminism = tagging._3
+    val compiled = compileInline(oper, opts)
+    oper               = compiled._1
+    val outputSchema   = compiled._2
+    val colDeterminism = compiled._3
+    val rowDeterminism = compiled._4
+    val provenanceCols = compiled._5
 
     // The deterministic result set iterator should strip off the 
     // provenance columns.  Figure out which columns need to be
@@ -68,43 +45,20 @@ class Compiler(db: Database) extends LazyLogging {
         colDeterminism.toList.flatMap( x => ExpressionUtils.getColumns(x._2)) ++ 
         ExpressionUtils.getColumns(rowDeterminism)
 
-    logger.debug(s"PRE-OPTIMIZED: $oper")
-
-    // Clean things up a little... make the query prettier, tighter, and 
-    // faster
-    oper = optimize(oper, opts)
-
-    logger.debug(s"OPTIMIZED: $oper")
-
-    // Replace VG-Terms with their "Best Guess values"
-    oper = bestGuessQuery(oper)
-
-    logger.debug(s"GUESSED: $oper")
-
     // We'll need it a few times, so cache the final operator's schema.
     // This also forces the typechecker to run, so we get a final sanity
     // check on the output of the rewrite rules.
     val finalSchema = oper.schema
-
-    // The final stage is to apply any database-specific rewrites to adapt
-    // the query to the quirks of each specific target database.  Each
-    // backend defines a specializeQuery method that handles this
-    oper = db.backend.specializeQuery(oper)
-
-    logger.debug(s"FINAL: $oper")
 
     // We'll need to line the attributes in the output up with
     // the order in which the user expects to see them.  Build
     // a lookup table with name + position in the query being execed.
     val finalSchemaOrderLookup = 
       finalSchema.map(_._1).zipWithIndex.toMap
-
+   
     logger.debug(s"SCHEMA: $finalSchema")
 
-    // Generate the SQL
-    val sql = db.ra.convert(oper)
-
-    logger.debug(s"SQL: $sql")
+    val sql = sqlForBackend(oper, opts)
 
     // Deploy to the backend
     val results = 
@@ -121,6 +75,99 @@ class Compiler(db: Database) extends LazyLogging {
       outputSchema.map(_._1).map(colDeterminism(_)), 
       rowDeterminism
     )
+  }
+
+  def compileInline(operRaw: Operator, opts: List[Operator => Operator] = standardOptimizations): (
+    Operator,                   // The compiled query
+    Seq[(String, Type)],        // The base schema
+    Map[String, Expression],    // Column taint annotations
+    Expression,                 // Row taint annotation
+    Seq[String]                 // Provenance columns
+  ) =
+  {
+    var oper = operRaw
+    val rawColumns = operRaw.columnNames.toSet
+
+    // We'll need the pristine pre-manipulation schema down the line
+    // As a side effect, this also forces the typechecker to run, 
+    // acting as a sanity check on the query before we do any serious
+    // work.
+    val outputSchema = oper.schema;
+      
+    // The names that the provenance compilation step assigns will
+    // be different depending on the structure of the query.  As a 
+    // result it is **critical** that this be the first step in 
+    // compilation.  
+    val provenance = Provenance.compile(oper)
+    oper               = provenance._1
+    val provenanceCols = provenance._2
+
+    logger.debug(s"WITH-PROVENANCE (${provenanceCols.mkString(", ")}): $oper")
+
+
+    // Tag rows/columns with provenance metadata
+    val tagging = CTPercolator.percolateLite(oper)
+    oper               = tagging._1
+    val colDeterminism = tagging._2.filter( col => rawColumns(col._1) )
+    val rowDeterminism = tagging._3
+
+    logger.debug(s"PERCOLATED: $oper")
+
+    // It's a bit of a hack for now, but provenance
+    // adds determinism columns for provenance metadata, since
+    // we have no way to explicitly track what's an annotation
+    // and what's "real".  Remove this metadata now...
+    val minimalSchema: Set[String] = 
+      operRaw.columnNames.toSet ++ 
+      provenanceCols.toSet ++
+      (colDeterminism.map(_._2) ++ Seq(rowDeterminism)).flatMap( ExpressionUtils.getColumns(_) ).toSet
+
+
+    oper = ProjectRedundantColumns(oper, minimalSchema)
+
+    logger.debug(s"PRE-OPTIMIZED: $oper")
+
+    oper = db.views.resolve(oper)
+
+    logger.debug(s"INLINED: $oper")
+
+    // Clean things up a little... make the query prettier, tighter, and 
+    // faster
+    oper = optimize(oper, opts)
+
+    logger.debug(s"OPTIMIZED: $oper")
+
+    // Replace VG-Terms with their "Best Guess values"
+    oper = bestGuessQuery(oper)
+
+    logger.debug(s"GUESSED: $oper")
+
+    return (
+      oper,
+      outputSchema,
+      colDeterminism,
+      rowDeterminism,
+      provenanceCols
+    )
+  }
+
+  def sqlForBackend(oper: Operator, opts: List[Operator => Operator] = standardOptimizations): SelectBody =
+  {
+    val optimized = optimize(oper)
+
+    // The final stage is to apply any database-specific rewrites to adapt
+    // the query to the quirks of each specific target database.  Each
+    // backend defines a specializeQuery method that handles this
+    val specialized = db.backend.specializeQuery(optimized)
+
+    logger.debug(s"SPECIALIZED: $specialized")
+    
+    // Generate the SQL
+    val sql = db.ra.convert(specialized)
+
+    logger.debug(s"SQL: $sql")
+
+    return sql
   }
   
   case class VirtualizedQuery(
@@ -221,7 +268,22 @@ class Compiler(db: Database) extends LazyLogging {
   /**
    * Optimize the query
    */
-  def optimize(oper: Operator, opts: List[Operator => Operator]): Operator =
-    opts.foldLeft(oper)((o, fn) => fn(o))
+  def optimize(rawOper: Operator, opts: List[Operator => Operator]): Operator = {
+    var oper = rawOper
+    // Repeatedly apply optimizations up to a fixed point or an arbitrary cutoff of 10 iterations
+    for( i <- (0 until 10) ){
+      logger.debug(s"Optimizing, cycle $i: \n$oper")
+      // Try to optimize
+      val newOper = 
+        opts.foldLeft(oper)((o, fn) => fn(o))
+
+      // Return if we've reached a fixed point 
+      if(oper.equals(newOper)){ return newOper; }
+
+      // Otherwise repeat
+      oper = newOper;
+    }
+    return oper;
+  }
 
 }

@@ -5,7 +5,8 @@ object QueryNamer
 	def nameQuery(op: Operator): String = 
 	{
 		op match { 
-			case Table(name, alias, _, _) => name
+			case Table(name,alias, _, _) => name
+			case View(name, _, _) => name
 			case Project(cols, src) => 
 				cols.length match {
 					case 1 => cols(0).name+"_FROM_"+nameQuery(src)

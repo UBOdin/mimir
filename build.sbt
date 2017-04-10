@@ -15,19 +15,8 @@ scalacOptions ++= Seq(
   "-feature"
 )
 
-//API docs with diagrams
-scalacOptions in (Compile, doc) ++= Seq(
-    "-diagrams",
-    "-diagrams-dot-path", "/opt/local/bin/dot",
-    // "-diagrams-dot-timeout", "20", "-diagrams-debug",
-    "-doc-title", name.value
-  )
-  
-unmanagedResourceDirectories in Compile += baseDirectory.value / "lib_extra"
-unmanagedClasspath in Runtime <+= (baseDirectory) map { bd => Attributed.blank(bd / "conf") }
-unmanagedClasspath in Test <+= (baseDirectory) map { bd => Attributed.blank(bd / "conf") }
-
-includeFilter in (Compile, unmanagedResourceDirectories):= ".dylib"
+connectInput in run := true
+outputStrategy in run := Some(StdoutOutput)
 
 resolvers += "MimirDB" at "http://maven.mimirdb.info/"
 resolvers += "osgeo" at "http://download.osgeo.org/webdav/geotools/"
@@ -92,7 +81,6 @@ libraryDependencies ++= Seq(
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")
-
 parser := {
   val logger = streams.value.log
   Process(List(
@@ -118,17 +106,46 @@ parser := {
   }
 }
 
+lazy val datasets = taskKey[Unit]("Loads Datasets for Test Cases")
+datasets := {
+  val logger = streams.value.log
+  if(!new File("test/pdbench").exists()){
+    Process(List(
+      "curl", "-O", "http://odin.cse.buffalo.edu/public_data/pdbench-1g-columnar.tgz"
+    )) ! logger match {
+      case 0 => // Success
+      case n => sys.error(s"Could not download PDBench Data: $n")
+    }
+    Process(List("mkdir", "test/pdbench")) ! logger match {
+      case 0 => // Success
+      case n => sys.error(s"Could not create PDBench directory")
+    }
+    Process(List(
+      "tar", "-xvf", 
+      "pdbench-1g-columnar.tgz", 
+      "--strip-components=1", 
+      "--directory=test/pdbench"
+    )) ! logger match {
+      case 0 => // Success
+      case n => sys.error(s"Could not clean up after old SQL Parser: $n")
+    }
+    Process(List("rm", "pdbench-1g-columnar.tgz")) ! logger match {
+      case 0 => // Success
+      case n => sys.error(s"Could not create PDBench directory")
+    }
+  } else {
+    println("Found `pdbench` data in test/pdbench");
+  }
+}
+
+
 scalacOptions in Test ++= Seq("-Yrangepos")
 
 parallelExecution in Test := false
 
 resolvers ++= Seq("snapshots", "releases").map(Resolver.sonatypeRepo)
 
-fork := true
-
 testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
-
-javaOptions in Test ++= Seq("-Xss512M", "-Xms2048M", "-Xmx2048M")
 
 ////// Assembly Plugin //////
 // We use the assembly plugin to create self-contained jar files
