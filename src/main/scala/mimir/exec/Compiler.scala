@@ -86,6 +86,7 @@ class Compiler(db: Database) extends LazyLogging {
   ) =
   {
     var oper = operRaw
+    val rawColumns = operRaw.columnNames.toSet
 
     // We'll need the pristine pre-manipulation schema down the line
     // As a side effect, this also forces the typechecker to run, 
@@ -107,8 +108,22 @@ class Compiler(db: Database) extends LazyLogging {
     // Tag rows/columns with provenance metadata
     val tagging = CTPercolator.percolateLite(oper)
     oper               = tagging._1
-    val colDeterminism = tagging._2
+    val colDeterminism = tagging._2.filter( col => rawColumns(col._1) )
     val rowDeterminism = tagging._3
+
+    logger.debug(s"PERCOLATED: $oper")
+
+    // It's a bit of a hack for now, but provenance
+    // adds determinism columns for provenance metadata, since
+    // we have no way to explicitly track what's an annotation
+    // and what's "real".  Remove this metadata now...
+    val minimalSchema: Set[String] = 
+      operRaw.columnNames.toSet ++ 
+      provenanceCols.toSet ++
+      (colDeterminism.map(_._2) ++ Seq(rowDeterminism)).flatMap( ExpressionUtils.getColumns(_) ).toSet
+
+
+    oper = ProjectRedundantColumns(oper, minimalSchema)
 
     logger.debug(s"PRE-OPTIMIZED: $oper")
 

@@ -156,7 +156,7 @@ object SqlUtils {
       case table: net.sf.jsqlparser.schema.Table =>
         List(
           ( table.getAlias(), 
-            db.getTableSchema(table.getName()).
+            db.backend.getTableSchema(table.getName()).
               get.map(_._1).toList++List("ROWID")
           )
         )

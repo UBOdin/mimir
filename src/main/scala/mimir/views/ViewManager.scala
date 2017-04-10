@@ -262,13 +262,13 @@ class ViewManager(db:Database) extends LazyLogging {
           return resolve(query)
         }
 
-        logger.debug(s"Valid materialized view: Using Materialized '$name' with { ${wantAnnotations.mkString(", ")} }")
+        logger.debug(s"Valid materialized view: Using Materialized '$name' with { ${wantAnnotations.mkString(", ")} } <- ${metadata.table}")
 
         Project(
           metadata.schemaWith(wantAnnotations).map { col => 
             ProjectArg(col._1, Var(col._1))
           },
-          Table(name,metadata.fullSchema,Seq())
+          metadata.table
         )
       }
 

@@ -13,6 +13,9 @@ class ViewMetadata(
   def operator: Operator =
     View(name, query, Set())
 
+  def table: Operator =
+    Table(name,fullSchema,Seq())
+
   def schema =
     query.schema
 
