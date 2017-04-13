@@ -42,6 +42,8 @@ class AdaptiveSchemaManager(db: Database)
 
     // Persist the associated models
     for(model <- models){
+      if(model.isInstanceOf[mimir.models.NeedsReconnectToDatabase])
+        model.asInstanceOf[mimir.models.NeedsReconnectToDatabase].reconnectToDatabase(db)
       db.models.persist(model, s"MULTILENS:$schema")
     }
   }
