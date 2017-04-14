@@ -31,8 +31,6 @@ class KeyRepairModel(
 {
   val choices = scala.collection.mutable.Map[List[PrimitiveValue], PrimitiveValue]();
 
-  @transient var db: Database = null
-  
   def varType(idx: Int, args: Seq[Type]): Type = targetType
   def argTypes(idx: Int) = keys.map(_._2)
   def hintTypes(idx: Int) = Seq(TString(), TString())
@@ -107,6 +105,7 @@ class KeyRepairModel(
     }
   }
   
+   @transient var db:Database = null
   def reconnectToDatabase(db: Database) = { 
     this.db = db 
     source = db.querySerializer.desanitize(source)
