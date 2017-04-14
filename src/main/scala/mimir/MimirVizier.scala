@@ -2,23 +2,16 @@ package mimir;
 
 import java.io._
 
-import scala.collection.mutable.ListBuffer
+
 
 import org.rogach.scallop._
 
-import mimir.parser._
+import mimir.algebra._
 import mimir.sql._
 import mimir.util.ExperimentalOptions
-import mimir.util.TimeUtils
-import net.sf.jsqlparser.statement.Statement
 //import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
 import net.sf.jsqlparser.statement.select.Select
-import mimir.gprom.algebra.OperatorTranslation
-import org.gprom.jdbc.jna.GProMWrapper
 import py4j.GatewayServer
-import mimir.provenance.Provenance
-import net.sf.jsqlparser.statement.select.SelectBody
-import mimir.algebra._
 
 /**
  * The primary interface to Mimir.  Responsible for:
@@ -101,12 +94,12 @@ object MimirVizier {
      while(true){
        Thread.sleep(90000)
        if(pythonCallThread != null){
-         println("Python Call Thread Stack Trace: ---------v ")
-         pythonCallThread.getStackTrace.foreach(ste => println(ste.toString()))
+         //println("Python Call Thread Stack Trace: ---------v ")
+         //pythonCallThread.getStackTrace.foreach(ste => println(ste.toString()))
        }
        pythonMimirCallListeners.foreach(listener => {
        
-          println(listener.callToPython("knock knock, jvm here"))
+          //println(listener.callToPython("knock knock, jvm here"))
          })
      }
      
@@ -135,16 +128,16 @@ object MimirVizier {
     timeRes._1
   }
   
-  def createLens(input : Any, params : Seq[String], _type : String, materialize_input:Boolean) : String = {
+  def createLens(input : Any, params : Seq[String], _type : String, make_input_certain:Boolean, materialize:Boolean) : String = {
     pythonCallThread = Thread.currentThread()
     val timeRes = time {
       println("createLens: From Vistrails: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]"  ) ;
       val paramsStr = params.mkString(",")
-      val lenseName = "LENS_" + ((input.toString() + _type + paramsStr + materialize_input).hashCode().toString().replace("-", "") )
+      val lenseName = "LENS_" + _type + ((input.toString() + _type + paramsStr + make_input_certain + materialize).hashCode().toString().replace("-", "") )
       var query:String = null
       db.getView(lenseName) match {
         case None => {
-          if(materialize_input){
+          if(make_input_certain){
             val materializedInput = "MATERIALIZED_"+input
             query = s"CREATE LENS ${lenseName} AS SELECT * FROM ${materializedInput} WITH ${_type}(${paramsStr})"  
             if(db.getAllTables().contains(materializedInput)){
@@ -162,11 +155,15 @@ object MimirVizier {
             query = s"CREATE LENS ${lenseName} AS $inputQuery WITH ${_type}(${paramsStr})"  
           }
           println("createLens: query: " + query)
-          db.update(db.parse(query).head)    
+          db.update(db.parse(query).head) 
         }
         case Some(_) => {
           println("createLens: From Vistrails: Lens already exists: " + lenseName)
         }
+      }
+      if(materialize){
+        if(!db.views(lenseName).isMaterialized)
+          db.update(db.parse(s"ALTER VIEW ${lenseName} MATERIALIZE").head)
       }
       lenseName
     }
@@ -211,15 +208,64 @@ object MimirVizier {
     timeRes._1
   }
   
-  def explainCell(query: String, col:Int, row:Int) : String = {
+  def explainCell(query: String, col:Int, row:String) : Seq[mimir.ctables.Reason] = {
     val timeRes = time {
       println("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
-      val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
+      val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+      println(oper)
+      //val compiledOper = db.compiler.compileInline(oper, db.compiler.standardOptimizations)._1
       val cols = oper.schema.map(f => f._1)
-      db.explainCell(oper, RowIdPrimitive(row.toString()), cols(col)).toString()
+      //println(s"explaining Cell: [${cols(col)}][$row]")
+      //db.explainCell(oper, RowIdPrimitive(row.toString()), cols(col)).toString()
+      db.explainer.getFocusedReasons(db.explainer.explainSubset(
+              db.explainer.filterByProvenance(oper,RowIdPrimitive(row)), 
+              Seq(cols(col)).toSet, false, false))
     }
     println(s"explainCell Took: ${timeRes._2}")
     timeRes._1
+  }
+  
+  def explainRow(query: String, row:String) : Seq[mimir.ctables.Reason] = {
+    val timeRes = time {
+      println("explainRow: From Vistrails: [ "+ row +" ] [" + query + "]"  ) ;
+     // val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
+      //val cols = oper.schema.map(f => f._1)
+      //db.explainRow(oper, RowIdPrimitive(row)).toString()
+      val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+      //val compiledOper = db.compiler.compileInline(oper, db.compiler.standardOptimizations)._1
+      val cols = oper.schema.map(f => f._1)
+      db.explainer.getFocusedReasons(db.explainer.explainSubset(
+              db.explainer.filterByProvenance(oper,RowIdPrimitive(row)), 
+              Seq().toSet, true, false))
+    }
+    println(s"explainRow Took: ${timeRes._2}")
+    timeRes._1
+  }
+
+  
+  def repairReason(reasons: Seq[mimir.ctables.Reason], idx:Int) : mimir.ctables.Repair = {
+    val timeRes = time {
+      println("repairReason: From Vistrails: [" + idx + "] [ " + reasons(idx) + " ]" ) ;
+      reasons(idx).repair
+    }
+    println(s"repairReason Took: ${timeRes._2}")
+    timeRes._1
+  }
+  
+  def feedback(reasons: Seq[mimir.ctables.Reason], idx:Int, ack: Boolean, repairStr: String) : Unit = {
+    val timeRes = time {
+      println("feedback: From Vistrails: [" + idx + "] [ " + reasons(idx) + " ] [ " + ack + " ] [ " +repairStr+" ]" ) ;
+      val reason = reasons(idx) 
+      val argString = 
+          if(!reason.args.isEmpty){
+            " (" + reason.args.mkString(",") + ")"
+          } else { "" }
+      if(ack)
+        db.update(db.parse(s"FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.guess }").head)
+      else 
+        db.update(db.parse(s"FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ repairStr }").head)
+    }
+    println(s"feedback Took: ${timeRes._2}")
   }
   
   def registerPythonMimirCallListener(listener : PythonMimirCallInterface) = {
@@ -235,12 +281,13 @@ object MimirVizier {
     val results = db.query(oper)
     val cols = results.schema.map(f => f._1)
     val colsIndexes = results.schema.zipWithIndex.map( _._2)
-    val resCSV = cols.mkString(", ") + "\n" + results.mapRows(row => {
-      colsIndexes.map( (i) => {
+    val rowsWithProv = results.mapRows(row => {
+      (colsIndexes.map( (i) => {
          row(i).toString 
-       }).mkString(", ")
-    }).mkString("\n")  
-    new PythonCSVContainer(resCSV, Array[Array[Boolean]](), Array[Boolean](), Array[Array[String]]())
+       }).mkString(", "),  row.provenanceToken().asString)
+    }).unzip
+    val resCSV = cols.mkString(", ") + "\n" + rowsWithProv._1.mkString("\n")
+    new PythonCSVContainer(resCSV, Array[Array[Boolean]](), Array[Boolean](), Array[Array[String]](), rowsWithProv._2.toArray)
   }
   
  def operCSVResultsDeterminism(oper : mimir.algebra.Operator) : PythonCSVContainer =  {
@@ -251,9 +298,10 @@ object MimirVizier {
        val truples = colsIndexes.map( (i) => {
          (row(i).toString, row.deterministicCol(i)) 
        }).unzip
-       (truples._1.mkString(", "), truples._2.toArray, row.deterministicRow())
+       (truples._1.mkString(", "), truples._2.toArray, (row.deterministicRow(), row.provenanceToken().asString))
      }).unzip3
-     new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), resCSV._2.toArray, resCSV._3.toArray, Array[Array[String]]())
+     val rowDetAndProv = resCSV._3.unzip
+     new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), resCSV._2.toArray, rowDetAndProv._1.toArray, Array[Array[String]](), rowDetAndProv._2.toArray)
   }
  
  def operCSVResultsDeterminismAndExplanation(oper : mimir.algebra.Operator) : PythonCSVContainer =  {
@@ -264,11 +312,10 @@ object MimirVizier {
        val truples = colsIndexes.map( (i) => {
          (row(i).toString, row.deterministicCol(i), if(!row.deterministicCol(i))db.explainCell(oper, row.provenanceToken(), cols(i)).reasons.mkString(",")else"") 
        }).unzip3
-       (truples._1.mkString(", "), (truples._2.toArray, row.deterministicRow()), truples._3.toArray)
+       (truples._1.mkString(", "), (truples._2.toArray, row.deterministicRow(), row.provenanceToken().asString), truples._3.toArray)
      }).unzip3
-     val detLists = resCSV._2.unzip
-     println(resCSV._3.map(s=>s.mkString(",")).mkString(","))
-     new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), detLists._1.toArray, detLists._2.toArray, resCSV._3.toArray)
+     val detListsAndProv = resCSV._2.unzip3
+     new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), detListsAndProv._1.toArray, detListsAndProv._2.toArray, resCSV._3.toArray, detListsAndProv._3.toArray)
   }
  
  def time[F](anonFunc: => F): (F, Long) = {  
@@ -277,6 +324,17 @@ object MimirVizier {
       val tEnd = System.nanoTime()
       (anonFuncRet, tEnd-tStart)
     }  
+ 
+ def totallyOptimize(oper : mimir.algebra.Operator) : mimir.algebra.Operator = {
+    val preOpt = oper.toString() 
+    val postOptOper = db.compiler.optimize(oper)
+    val postOpt = postOptOper.toString() 
+    if(preOpt.equals(postOpt))
+      postOptOper
+    else
+      totallyOptimize(postOptOper)
+  }
+ 
 }
 
 //----------------------------------------------------------
@@ -285,4 +343,5 @@ trait PythonMimirCallInterface {
 	def callToPython(callStr : String) : String
 }
 
-class PythonCSVContainer(val csvStr: String, val colsDet: Array[Array[Boolean]], val rowsDet: Array[Boolean], val celReasons:Array[Array[String]]){}
+class PythonCSVContainer(val csvStr: String, val colsDet: Array[Array[Boolean]], val rowsDet: Array[Boolean], val celReasons:Array[Array[String]], val prov: Array[String]){}
+

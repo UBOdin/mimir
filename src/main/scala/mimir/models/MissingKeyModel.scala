@@ -19,44 +19,58 @@ class MissingKeyModel(override val name: String, keys:Seq[String], colTypes:Seq[
   with Serializable
   with FiniteDiscreteDomain
 {
-  var acked = false
-
+  val feedback = scala.collection.mutable.Map[String,PrimitiveValue]()
+  
   def argTypes(idx: Int) = {
-    if(idx < keys.length)
-      Seq(TInt())
-    else
-      Seq(TAny()) 
+      Seq(TRowId())
   }
   def varType(idx: Int, args: Seq[Type]) = colTypes(idx)
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ) = {
-    if(idx < keys.length)
-      args(idx)
-    else
-      NullPrimitive() 
+    val rowid = RowIdPrimitive(args(0).asString)
+    feedback.get(rowid.asString) match {
+      case Some(v) => v
+      case None => hints(0) 
+    }
   }
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = {
-    if(idx < keys.length)
-      args(idx)
-    else
-      NullPrimitive() 
+    hints(idx)
   }
   def reason(idx: Int, args: Seq[PrimitiveValue],hints: Seq[PrimitiveValue]): String = {
-    args(0) match {
-      case NullPrimitive() => {
-        "I guessed that the row of this cell was missing. The value of this cell is unknown so I have made it NULL."
+    val rowid = RowIdPrimitive(args(0).asString)
+    feedback.get(rowid.asString) match {
+      case Some(v) => v match {
+          case NullPrimitive() => {
+            "You told me that the row of this cell was missing and that he value of this cell is unknown so I have made it NULL."
+          }
+          case IntPrimitive(i) => {
+            s"You told me that this key was missing because it was in a sequence but not in the query results: $i" 
+          }
+          case FloatPrimitive(i)  => {
+            s"You told me that this key was missing because it was in a sequence but not in the query results: $i" 
+          }
       }
-      case IntPrimitive(i) => {
-        s"I guessed that this key was missing because it was in a sequence but not in the query results: $i" 
-      }
-      case FloatPrimitive(i)  => {
-        s"I guessed that this key was missing because it was in a sequence but not in the query results: $i" 
+      case None => hints(0) match {
+        case NullPrimitive() => {
+          "I guessed that the row of this cell was missing. The value of this cell is unknown so I have made it NULL."
+        }
+        case IntPrimitive(i) => {
+          s"I guessed that this key was missing because it was in a sequence but not in the query results: $i" 
+        }
+        case FloatPrimitive(i)  => {
+          s"I guessed that this key was missing because it was in a sequence but not in the query results: $i" 
+        }
       }
     }
   }
-  def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = { acked = true }
-  def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = acked
-  def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq()
-  def getDomain(idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = Seq((args(0), 0.0))
+  def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = { 
+    val rowid = args(0).asString
+    feedback(rowid) = v
+  }
+  def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = {
+    feedback contains(args(0).asString)
+  }
+  def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq(TAny())
+  def getDomain(idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = Seq((hints(0), 0.0))
   
      
 }

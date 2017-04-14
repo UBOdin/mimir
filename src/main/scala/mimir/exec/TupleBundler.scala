@@ -74,7 +74,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
   def compileFlat(query: Operator): (Operator, Set[String]) =
   {
     query match {
-      case (Table(_,_,_) | EmptyTable(_)) => 
+      case (Table(_,_,_,_) | EmptyTable(_)) => 
         (
           OperatorUtils.projectInColumn(
             "MIMIR_WORLD_BITS", IntPrimitive(fullBitVector), 

@@ -261,7 +261,7 @@ case class Database(backend: Backend)
   {
     getView(table).getOrElse(
       Table(
-        table, table
+        table, table,
         backend.getTableSchema(table) match {
           case Some(x) => x
           case None => throw new SQLException(s"No such table or view '$table'")

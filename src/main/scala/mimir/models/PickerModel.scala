@@ -15,15 +15,17 @@ import mimir.Database
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1000L)
-class PickerModel(override val name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[Type], query: Operator) 
+class PickerModel(override val name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[Type], var source: Operator) 
   extends Model(name) 
   with Serializable
-  with NeedsReconnectToDatabase 
+  with NeedsReconnectToDatabase
+  with FiniteDiscreteDomain
 {
   
   val feedback = scala.collection.mutable.Map[String,PrimitiveValue]()
   
   @transient var db: Database = null
+  
   
   def argTypes(idx: Int) = {
       Seq(TRowId())
@@ -42,7 +44,7 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = {
     val rowid = RowIdPrimitive(args(0).asString)
     this.db = db
-    val iterator = db.query(Select(Comparison(Cmp.Eq, RowIdVar(), rowid), query))
+    val iterator = db.query(Select(Comparison(Cmp.Eq, RowIdVar(), rowid), source))
     val sampleChoices = scala.collection.mutable.Map[String,Seq[PrimitiveValue]]()
     val pickCols = iterator.schema.map(_._1).zipWithIndex.flatMap( si => {
       if(pickFromCols.contains(si._1))
@@ -78,9 +80,23 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
   }
   def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq(TAny())
    
-  def reconnectToDatabase(db: Database): Unit = {
-    this.db = db
-  }
   
+  def getDomain(idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = Seq((hints(0), 0.0))
+  
+  def reconnectToDatabase(db: Database) = { 
+    this.db = db 
+    source = db.querySerializer.desanitize(source)
+  }
+
+  /**
+   * Interpose on the serialization pipeline to safely serialize the
+   * source query
+   */
+  override def serialize: (Array[Byte], String) =
+  {
+    source = db.querySerializer.sanitize(source)
+    val ret = super.serialize()
+    return ret
+  }
   
 }

@@ -77,7 +77,7 @@ object DiscalaAbadiNormalizer
         Some("MIMIR_FD_PATH_LENGTH"),
         fullSchema.map { x => (x._2.toLong -> x._1._1) }.toMap
       )
-
+    groupingModel.reconnectToDatabase(db)
     val schemaLookup =
       fullSchema.map( x => (x._2 -> x._1) ).toMap
 
@@ -98,6 +98,7 @@ object DiscalaAbadiNormalizer
               childType,
               None
             )
+          groupingModel.reconnectToDatabase(db)
           logger.trace(s"INSTALLING: $parent -> $child: ${model.name}")
           model 
         }

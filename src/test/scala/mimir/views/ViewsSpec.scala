@@ -95,7 +95,7 @@ object ViewsSpec
 
       db.views.resolve(db.views("MATTEST").operator) must be equalTo(
         Project(Seq(ProjectArg("A", Var("A")),ProjectArg("B", Var("B"))),
-          Table("MATTEST", db.views("MATTEST").fullSchema, Seq())
+          Table("MATTEST", "MATTEST", db.views("MATTEST").fullSchema, Seq())
         )
       )
 
@@ -110,7 +110,7 @@ object ViewsSpec
             ProjectArg("A", Var("A")),
             ProjectArg("B", Var("B"))
           ) ++ rowidCols.map { col => ProjectArg(col, Var(col)) },
-          Table("MATTEST", db.views("MATTEST").fullSchema, Seq())
+          Table("MATTEST", "MATTEST", db.views("MATTEST").fullSchema, Seq())
         )
       )
 
@@ -128,7 +128,7 @@ object ViewsSpec
             ProjectArg(CTPercolator.mimirColDeterministicColumnPrefix+"B", Var(CTPercolator.mimirColDeterministicColumnPrefix+"B")),
             ProjectArg(CTPercolator.mimirRowDeterministicColumnName, Var(CTPercolator.mimirRowDeterministicColumnName))
           ) ++ rowidCols.map { col => ProjectArg(col, Var(col)) },
-          Table("MATTEST", db.views("MATTEST").fullSchema, Seq())
+          Table("MATTEST", "MATTEST", db.views("MATTEST").fullSchema, Seq())
         )
       )
       

@@ -151,6 +151,59 @@ object OperatorTranslation {
      }
   }
   
+  def translateGProMExpressionToMimirExpressionList(gpromExpr : GProMNode, intermSchema : Seq[MimirToGProMIntermediateSchemaInfo]) : Seq[Expression] = {
+     val conditionNode = GProMWrapper.inst.castGProMNode(gpromExpr)
+     conditionNode match {
+        case list:GProMList => {
+          val listHead = list.head
+          translateGProMExpressionToMimirExpressionListHelper( listHead, intermSchema, Seq())
+        }
+       case x => Seq(translateGProMStructureToMimirExpression(conditionNode, intermSchema));
+     }
+  } 
+  
+  def translateGProMExpressionToMimirExpressionListHelper(gpromStruct : GProMStructure, intermSchema : Seq[MimirToGProMIntermediateSchemaInfo], exprsTail: Seq[Expression]) : Seq[Expression] = {
+    gpromStruct match {
+      case listCell : GProMListCell => { 
+          val listCellDataGPStructure = new GProMNode(listCell.data.ptr_value)
+          if(listCell.next != null){
+            translateGProMExpressionToMimirExpressionListHelper(listCell.next,intermSchema, exprsTail.union(Seq(translateGProMExpressionToMimirExpression( listCellDataGPStructure, intermSchema))))
+          }
+          else
+            exprsTail.union(Seq(translateGProMExpressionToMimirExpression( listCellDataGPStructure, intermSchema)))
+        }
+       case x => Seq(translateGProMStructureToMimirExpression(gpromStruct, intermSchema));
+    }
+  }
+  
+  
+  def translateGProMCaseWhenListToMimirExpressionList(gpromStruct : GProMStructure, intermSchema : Seq[MimirToGProMIntermediateSchemaInfo], exprsTail: Seq[(Expression, Expression)]) : Seq[(Expression, Expression)] = {
+    gpromStruct match {
+      case listCell : GProMListCell => { 
+          val listCellDataGPStructure = new GProMNode(listCell.data.ptr_value)
+          if(listCell.next != null){
+            translateGProMCaseWhenListToMimirExpressionList(listCell.next,intermSchema, exprsTail.union(Seq(translateGProMCaseWhenToMimirExpressions( listCellDataGPStructure, intermSchema))))
+          }
+          else
+            exprsTail.union(Seq(translateGProMCaseWhenToMimirExpressions( listCellDataGPStructure, intermSchema)))
+        }
+       case x => {
+          	throw new Exception("Expression not a list cell '"+x+"'")
+          }
+    }
+  }
+  
+  def translateGProMCaseWhenToMimirExpressions(gpromStruct : GProMStructure, intermSchema : Seq[MimirToGProMIntermediateSchemaInfo]) :  (Expression, Expression) = {
+    gpromStruct match {
+      case caseWhen : GProMCaseWhen => {
+          	(translateGProMExpressionToMimirExpression(caseWhen.when, intermSchema), translateGProMExpressionToMimirExpression(caseWhen.then, intermSchema))
+          }
+      case x => {
+          	throw new Exception("Expression not a case when clause '"+x+"'")
+          }
+    }
+  }
+  
   def translateGProMStructureToMimirExpression(gpromStruct : GProMStructure, intermSchema : Seq[MimirToGProMIntermediateSchemaInfo]) : Expression = {
     gpromStruct match {
       case operator : GProMOperator => {
@@ -178,25 +231,29 @@ object OperatorTranslation {
       	}
       }
       case caseExpr : GProMCaseExpr => {
-      	throw new Exception("Expression Translation Not Yet Implemented '"+caseExpr+"'")
+      	val testExpr = translateGProMExpressionToMimirExpression(caseExpr.expr, intermSchema) 
+      	val whenThenClauses = translateGProMCaseWhenListToMimirExpressionList(caseExpr.whenClauses.head, intermSchema, Seq())
+        val elseClause = translateGProMExpressionToMimirExpression(caseExpr.elseRes, intermSchema) 
+      	ExpressionUtils.makeCaseExpression(testExpr, whenThenClauses, elseClause)
       }
       case caseWhen : GProMCaseWhen => {
-      	throw new Exception("Expression Translation Not Yet Implemented '"+caseWhen+"'")
+      	throw new Exception("You need to use translateGProMCaseWhenListToMimirExpressionList for '"+caseWhen+"'")
       }
       case castExpr : GProMCastExpr => {
-      	throw new Exception("Expression Translation Not Yet Implemented '"+castExpr+"'")
+      	Function("CAST", translateGProMExpressionToMimirExpressionList(castExpr.expr, intermSchema))
       }
       case functionCall : GProMFunctionCall => {
-      	throw new Exception("Expression Translation Not Yet Implemented '"+functionCall+"'")
+        Function(functionCall.functionname, gpromListToScalaList(functionCall.args).map( gpromParam => translateGProMExpressionToMimirExpression(new GProMNode(gpromParam.getPointer), intermSchema)))
       }
       case isNullExpr : GProMIsNullExpr => {
-      	throw new Exception("Expression Translation Not Yet Implemented '"+isNullExpr+"'")
+      	IsNullExpression(translateGProMExpressionToMimirExpression(isNullExpr.expr, intermSchema))
       }
       case orderExpr : GProMOrderExpr => {
       	throw new Exception("Expression Translation Not Yet Implemented '"+orderExpr+"'")
       }
       case rowNumExpr : GProMRowNumExpr => {
-      	throw new Exception("Expression Translation Not Yet Implemented '"+rowNumExpr+"'")
+      	RowIdVar()
+        throw new Exception("Expression Translation Not Yet Implemented '"+rowNumExpr+"'")
       }
       case sQLParameter : GProMSQLParameter => {
       	throw new Exception("Expression Translation Not Yet Implemented '"+sQLParameter+"'")
@@ -822,6 +879,11 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         val attrRef = new GProMAttributeReference.ByValue(GProM_JNA.GProMNodeTag.GProM_T_AttributeReference, schema(indexOfCol).attrName, schema(indexOfCol).attrFromClausePosition, schema(indexOfCol).attrPosition, 0, getGProMDataTypeFromMimirType(schema(indexOfCol).attrType ))
         attrRef
       }
+      case Function(op, params) => {
+        val gpromExprList = translateMimirExpressionsToGProMList(schema, params)
+        val gpromFunc = new GProMFunctionCall.ByValue(GProM_JNA.GProMNodeTag.GProM_T_FunctionCall, op, gpromExprList, 0)
+        gpromFunc
+      }
       case x => {
         throw new Exception("Expression Translation not implemented '"+x+"'")
       }
@@ -832,7 +894,7 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
       GProMCaseExpr 
       GProMCaseWhen 
       GProMCastExpr
-      GProMFunctionCall 
+      --GProMFunctionCall 
       GProMIsNullExpr 
       GProMOrderExpr
       GProMRowNumExpr
@@ -921,6 +983,9 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         val indexOfCol = schema.map(ct => ct.attrMimirName).indexOf(v)
         schema(indexOfCol).attrName
       }
+      case Function(op, params) => {
+        params.map(param => translateMimirExpressionToStringForGProM(param, schema) ).mkString(s"$op(", ",", ")")
+      }
       case x => {
         throw new Exception("Expression Translation not implemented '"+x+"'")
       }
@@ -931,7 +996,7 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
       GProMCaseExpr 
       GProMCaseWhen 
       GProMCastExpr
-      GProMFunctionCall 
+      --GProMFunctionCall 
       GProMIsNullExpr 
       GProMOrderExpr
       GProMRowNumExpr
@@ -1177,6 +1242,27 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
     aggrsList
   }
  
+  def translateMimirExpressionsToGProMList(schema : Seq[MimirToGProMIntermediateSchemaInfo], exprs: Seq[Expression]) : GProMList.ByReference = {
+    val gpromExprs = new GProMList.ByReference()
+    gpromExprs.`type` = GProM_JNA.GProMNodeTag.GProM_T_List
+    var j = 0;
+    var exprListCell = gpromExprs.head
+    exprs.foreach(expr => {
+      val gpromExpr = translateMimirExpressionToGProMCondition(expr, schema)
+      val newArgCell = createGProMListCell(gpromExpr)
+      if(j == 0){
+        gpromExprs.head = newArgCell
+        exprListCell = gpromExprs.head
+      }
+      else{
+        exprListCell.next = newArgCell
+        exprListCell = exprListCell.next
+      }
+      j+=1
+      gpromExprs.length += 1
+    })
+    gpromExprs
+  }
   
   def setGProMQueryOperatorParentsList(subject : GProMStructure, parent:GProMStructure) : Unit = {
     subject match {

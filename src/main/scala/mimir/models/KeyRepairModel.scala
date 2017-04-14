@@ -6,6 +6,7 @@ import play.api.libs.json._
 
 import mimir.algebra._
 import mimir.util._
+import mimir.Database
 
 /**
  * A model representing a key-repair choice.
@@ -18,7 +19,7 @@ import mimir.util._
 class KeyRepairModel(
   name: String, 
   context: String, 
-  source: Operator, 
+  var source: Operator, 
   keys: Seq[(String, Type)], 
   target: String,
   targetType: Type,
@@ -26,10 +27,12 @@ class KeyRepairModel(
 ) 
   extends Model(name)
   with FiniteDiscreteDomain 
-  with NeedsDatabase 
+  with NeedsReconnectToDatabase 
 {
   val choices = scala.collection.mutable.Map[List[PrimitiveValue], PrimitiveValue]();
 
+  @transient var db: Database = null
+  
   def varType(idx: Int, args: Seq[Type]): Type = targetType
   def argTypes(idx: Int) = keys.map(_._2)
   def hintTypes(idx: Int) = Seq(TString(), TString())
@@ -102,6 +105,22 @@ class KeyRepairModel(
       }
 
     }
+  }
+  
+  def reconnectToDatabase(db: Database) = { 
+    this.db = db 
+    source = db.querySerializer.desanitize(source)
+  }
+
+  /**
+   * Interpose on the serialization pipeline to safely serialize the
+   * source query
+   */
+  override def serialize: (Array[Byte], String) =
+  {
+    source = db.querySerializer.sanitize(source)
+    val ret = super.serialize()
+    return ret
   }
 
 }

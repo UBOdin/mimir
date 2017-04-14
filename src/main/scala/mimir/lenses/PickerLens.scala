@@ -37,7 +37,7 @@ object PickerLens {
     
     val resultColName = "PICK_ONE_" +pickFromColumns.mkString("_") 
     
-    val pickerModel = new PickerModel(name+"_PICKER_MODEL", resultColName, pickFromColumns, pickerColTypes, query) 
+    val pickerModel = new PickerModel(name+"_PICKER_MODEL:"+pickFromColumns.mkString("_"), resultColName, pickFromColumns, pickerColTypes, query) 
     pickerModel.reconnectToDatabase(db)
     
     val pickUncertainExprs : List[(Expression, Expression)] = args.flatMap {
@@ -68,7 +68,7 @@ object PickerLens {
         map(_._1).
         flatMap( col => pickerColsTypeMap.get(col) match {
           case None => Some(ProjectArg(col, Var(col)))
-          case Some(pickFromCol) => None
+          case Some(pickFromCol) => Some(ProjectArg(col, Var(col)))//None //none if you dont want the from cols
         }).union(Seq(ProjectArg(resultColName, pickExpr)))
 
     return (

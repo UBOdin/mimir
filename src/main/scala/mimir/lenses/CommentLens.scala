@@ -34,12 +34,12 @@ object CommentLens {
          ((commexpr, arg._2), ("COMMENT_ARG_"+arg._2, Typechecker.typeOf(commexpr, query)))
     }).unzip
     val modelSchema = argTypesAndExprs._2.unzip
-    val model : CommentModel = new CommentModel(name, modelSchema._1, modelSchema._2, colCommentLists._2)
+    val model : CommentModel = new CommentModel(name + ":"+colCommentLists._1.mkString("_").replaceAll("[ ,'\"()\\[\\]~!@#$%^&*<>?/\\|{}=;.-]", "") + Math.abs(colComments.mkString("_").hashCode()), modelSchema._1, modelSchema._2, colCommentLists._2)
     val projArgs =  
       query.schema.map(_._1).map( col => {
           ProjectArg(col, Var(col))
       }).union(
-          argTypesAndExprs._1.map(comExpr => ProjectArg("COMMENT_ARG_"+comExpr._2, VGTerm(model, comExpr._2, Seq(comExpr._1), Seq()) ))
+          argTypesAndExprs._1.map(comExpr => ProjectArg("COMMENT_ARG_"+comExpr._2, VGTerm(model, /*comExpr._2*/0, Seq(RowIdVar()), Seq(comExpr._1)) ))
       )
     val oper = Project(projArgs, query)
     return (

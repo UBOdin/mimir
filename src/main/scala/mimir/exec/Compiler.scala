@@ -182,7 +182,7 @@ class Compiler(db: Database) extends LazyLogging {
    * The body of the end-end compilation pass.  Return a marked-up version of the
    * query.  This part should be entirely superceded by GProM.
    */
-  def virtualize(rawOper: Operator, opts: List[Operator => Operator]): VirtualizedQuery =
+  /*def virtualize(rawOper: Operator, opts: List[Operator => Operator]): VirtualizedQuery =
   {
     // Recursively expand all view tables using mimir.optimizer.ResolveViews
     var oper = ResolveViews(db, rawOper)
@@ -230,7 +230,7 @@ class Compiler(db: Database) extends LazyLogging {
       rowDeterminism,
       provenanceCols
     )
-  }
+  }*/
 
   /**
    * Remove all VGTerms in the query and replace them with the 

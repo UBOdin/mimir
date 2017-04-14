@@ -7,7 +7,6 @@ import mimir.models._
 import mimir.algebra._
 import mimir.ctables._
 import net.sf.jsqlparser.statement.select.Select
-import mimir.optimizer.ResolveViews
 
 object MissingKeyLens {
   def create(
@@ -105,10 +104,7 @@ object MissingKeyLens {
                     Project(projArgsRight, Table(rTalebName,"rght",keys,List())), 
                     Comparison(Cmp.Eq, Var("rght_"+keys.head._1), Var("lft_"+keys.head._1))
                   ))
-      println(missingKeysOper)
       val sql = db.ra.convert(missingKeysOper)
-      println(sql)
-      //val missingKeysSch = missingKeysOper.schema
       val results = new mimir.exec.ResultSetIterator(db.backend.execute(sql), 
         keys.toMap,
         keys.zipWithIndex.map(_._2), 
@@ -116,18 +112,17 @@ object MissingKeyLens {
       )
       val createMissingKeysTableSql = s"CREATE TABLE $missingKeysTableName(${keys.map(kt => kt._1 +" "+ kt._2.toString()).mkString(",")})"
       db.update(db.stmt(createMissingKeysTableSql))
-      //db.update(db.stmt(s"INSERT INTO $missingKeysTableName $sql"))
       db.backend.fastUpdateBatch(s"INSERT INTO $missingKeysTableName VALUES(${keys.map(kt => "?").mkString(",")})", results.allRows())
     
     }
     val colsTypes = keys.unzip
-    val model = new MissingKeyModel(name,colsTypes._1, colsTypes._2.union(rSch.map(_ => TAny())))
+    val model = new MissingKeyModel(name+":"+ keys.unzip._1.mkString("_"),colsTypes._1, colsTypes._2.union(rSch.map(_ => TAny())))
     
     val projArgs =  
         keys.map(_._1).zipWithIndex.map( col => {
-            ProjectArg(col._1, VGTerm(model, col._2, Seq(Var(col._1)), Seq()))
+            ProjectArg(col._1, VGTerm(model, col._2, Seq(RowIdVar()), Seq(Var(col._1))))
         }).union(rSch.map(_._1).zipWithIndex.map( col => {
-            ProjectArg(col._1,  VGTerm(model, keys.length+col._2, Seq(NullPrimitive()), Seq()))
+            ProjectArg(col._1,  VGTerm(model, keys.length+col._2, Seq(RowIdVar()), Seq(NullPrimitive())))
         }))
     
     val missingKeysOper = Project(projArgs, Table(missingKeysTableName,missingKeysTableName,keys,List()))
@@ -139,7 +134,6 @@ object MissingKeyLens {
       if(sortCols.isEmpty) allOrMissingOper;
       else Sort(sortCols, allOrMissingOper);
     }
-    println(oper)
     (
       oper,
       Seq(model)

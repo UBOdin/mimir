@@ -15,7 +15,9 @@ import net.sf.jsqlparser.statement.select.Select
 import org.specs2.specification.core.Fragments
 
 object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorTranslation") with BeforeAll with AfterAll {
- 
+
+  args(skipAll = true)
+  
   var memctx : com.sun.jna.Pointer = null
   
   def convert(x: String) = db.ra.convert(oper(x)).toString
@@ -34,7 +36,6 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
 
   "The GProM - Mimir Operator Translator" should {
 
-    
     sequential
     Fragments.foreach(1 to 5){ i => 
       sequential

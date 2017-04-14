@@ -379,4 +379,10 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) e
     }
   }
 
+  def selectInto(table: String, query: String){
+    backend match {
+      case "sqlite" => 
+        update(s"CREATE TABLE $table AS $query")
+    }
+  }
 }

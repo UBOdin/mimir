@@ -24,7 +24,8 @@ class ReasonSet(val model: Model, val idx: Int, argLookup: Option[(Operator, Seq
         1
     }
   }
-  def allArgs(db: Database, limit: Option[Int]): Iterable[(Seq[PrimitiveValue], Seq[PrimitiveValue])] =
+  def allArgs(db: Database, limit: Option[Int] ): Iterable[(Seq[PrimitiveValue], Seq[PrimitiveValue])] = allArgs(db, limit, None)
+  def allArgs(db: Database, limit: Option[Int], offset: Option[Int]): Iterable[(Seq[PrimitiveValue], Seq[PrimitiveValue])] =
   {
     argLookup match {
       case None => Seq((Seq[PrimitiveValue](), Seq[PrimitiveValue]()))
@@ -33,7 +34,13 @@ class ReasonSet(val model: Model, val idx: Int, argLookup: Option[(Operator, Seq
         val limitedQuery = 
           limit match {
             case None => baseQuery
-            case Some(rowCount) => Limit(0, Some(rowCount.toLong), baseQuery)
+            case Some(rowCount) => {
+              val rowOffset = offset match {
+                case None => 0
+                case Some(rowOffset) => rowOffset
+              }
+              Limit(rowOffset, Some(rowCount.toLong), baseQuery)
+            }
           }
 
         val argCols = argExprs.zipWithIndex.map { arg => ProjectArg("ARG_"+arg._2, arg._1) }
@@ -51,12 +58,17 @@ class ReasonSet(val model: Model, val idx: Int, argLookup: Option[(Operator, Seq
     allArgs(db, None)
   def takeArgs(db: Database, count: Int): Iterable[(Seq[PrimitiveValue], Seq[PrimitiveValue])] = 
     allArgs(db, Some(count))
+  def takeArgs(db: Database, count: Int, offset: Int): Iterable[(Seq[PrimitiveValue], Seq[PrimitiveValue])] = 
+    allArgs(db, Some(count), Some(offset))
 
   def all(db: Database): Iterable[Reason] = 
     allArgs(db).map { case (args, hints) => new ModelReason(model, idx, args, hints) }
   def take(db: Database, count: Int): Iterable[Reason] = 
     takeArgs(db, count).map { case (args, hints) => new ModelReason(model, idx, args, hints) }
+  def take(db: Database, count: Int, offset:Int): Iterable[Reason] = 
+    takeArgs(db, count, offset).map { case (args, hints) => new ModelReason(model, idx, args, hints) }
 
+  
   override def toString: String =
   {
     val lookupString =
