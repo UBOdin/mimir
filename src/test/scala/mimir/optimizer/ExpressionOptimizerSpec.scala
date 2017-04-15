@@ -50,7 +50,7 @@ object ExpressionOptimizerSpec extends Specification {
 
     "Flatten Boolean Expressions" >> {
       booleanOpts("(IF A = 1 THEN B ELSE C END) = 2") must be equalTo expr("""
-        ((A = 1) AND (B = 2)) OR ((NOT (A = 1)) AND (C = 2))
+        ((A = 1) AND (B = 2)) OR ((A != 1) AND (C = 2))
       """)
     }
   }

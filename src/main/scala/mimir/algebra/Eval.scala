@@ -161,14 +161,12 @@ object Eval
         }
       } else e match { 
         case Conditional(condition, thenClause, elseClause) =>
-          val conditionValue = simplify(condition)
-          if(conditionValue.isInstanceOf[BoolPrimitive]){
-            if(conditionValue.asInstanceOf[BoolPrimitive].v){
-              simplify(thenClause)
-            } else {
-              simplify(elseClause)
-            }
-          } else { e.rebuild(e.children.map(simplify(_))) }
+          simplify(condition) match {
+            case BoolPrimitive(true)  => simplify(thenClause)
+            case BoolPrimitive(false) => simplify(elseClause)
+            case somethingElse => 
+              Conditional(somethingElse, simplify(thenClause), simplify(elseClause))
+          }
         case Arithmetic(Arith.And, lhs, rhs) => 
           ExpressionUtils.makeAnd(simplify(lhs), simplify(rhs))
         case Arithmetic(Arith.Or, lhs, rhs) => 

@@ -495,6 +495,8 @@ class RAToSql(db: Database)
       case Arithmetic(Arith.Div, l, r)  => bin(new Division(), l, r, sources)
       case Arithmetic(Arith.And, l, r)  => new AndExpression(convert(l, sources), convert(r, sources))
       case Arithmetic(Arith.Or, l, r)   => new OrExpression(convert(l, sources), convert(r, sources))
+      case Arithmetic(Arith.BitAnd, l, r) => new BitwiseAnd(convert(l, sources), convert(r, sources))
+      case Arithmetic(Arith.BitOr, l, r) => new BitwiseOr(convert(l, sources), convert(r, sources))
       case Var(n) => convertColumn(n, sources)
       case JDBCVar(t) => new JdbcParameter()
       case Conditional(_, _, _) => {
