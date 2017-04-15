@@ -47,7 +47,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
     return expressionHasANonDeterministicInput || expressionIsNonDeterministic
   }
 
-  def splitExpressions(expressions: Seq[Expression], nonDeterministicInputs: Set[String]): Seq[Seq[Expression]] =
+  def splitExpressionsByWorlds(expressions: Seq[Expression], nonDeterministicInputs: Set[String]): Seq[Seq[Expression]] =
   {
     val outputColumns =
       sampleSeeds.zipWithIndex.map { case (seed, i) => 
@@ -66,9 +66,9 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
     outputColumns
   }
 
-  def splitExpression(expression: Expression, nonDeterministicInputs: Set[String]): Seq[Expression] =
+  def splitExpressionByWorlds(expression: Expression, nonDeterministicInputs: Set[String]): Seq[Expression] =
   {
-    splitExpressions(Seq(expression), nonDeterministicInputs).map(_(0))
+    splitExpressionsByWorlds(Seq(expression), nonDeterministicInputs).map(_(0))
   }
 
   def compileFlat(query: Operator): (Operator, Set[String]) =
@@ -92,7 +92,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
         ):(Seq[Seq[ProjectArg]], Seq[Set[String]]) = columns.map { col => 
             if(doesExpressionNeedSplit(col.expression, nonDeterministicInput)){
               (
-                splitExpression(col.expression, nonDeterministicInput).
+                splitExpressionByWorlds(col.expression, nonDeterministicInput).
                   zipWithIndex
                   map { case (expr, i) => ProjectArg(colNameInSample(col.name, i), expr) },
                 Set(col.name)
@@ -115,7 +115,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
         val (newChild, nonDeterministicInput) = compileFlat(oldChild)
 
         if(doesExpressionNeedSplit(condition, nonDeterministicInput)){
-          val replacements = splitExpression(condition, nonDeterministicInput)
+          val replacements = splitExpressionByWorlds(condition, nonDeterministicInput)
 
           val updatedWorldBits =
             Arithmetic(Arith.BitAnd,
@@ -124,6 +124,8 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
                 Conditional(expr, IntPrimitive(1 << i), IntPrimitive(0))
               }.fold(IntPrimitive(0))(Arithmetic(Arith.BitOr, _, _))
             )
+
+          logger.debug(s"Updated World Bits: \n${updatedWorldBits}")
           val newChildWithUpdatedWorldBits =
             OperatorUtils.replaceColumn(
               "MIMIR_WORLD_BITS",
@@ -278,7 +280,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
             aggColumns.map { case AggFunction(name, distinct, args, alias) =>
               if(args.exists(doesExpressionNeedSplit(_, nonDeterministicInput))){
                 val splitAggregates =
-                  splitExpressions(args, nonDeterministicInput).
+                  splitExpressionsByWorlds(args, nonDeterministicInput).
                     zipWithIndex.
                     map { case (newArgs, i) => AggFunction(name, distinct, newArgs, colNameInSample(alias, i)) }
                 (splitAggregates, Set(alias))

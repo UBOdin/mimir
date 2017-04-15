@@ -18,7 +18,6 @@ object TupleBundlerSpec
 {
 
   sequential
-  skipAll
 
   def beforeAll = 
   {
