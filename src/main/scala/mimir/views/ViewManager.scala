@@ -5,6 +5,7 @@ import mimir._;
 import mimir.algebra._;
 import mimir.provenance._;
 import mimir.ctables._;
+import mimir.exec._;
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 
@@ -140,7 +141,7 @@ class ViewManager(db:Database) extends LazyLogging {
       columnTaint,
       rowTaint,
       provenance
-    ) = db.compiler.compileInline(properties.query)
+    ) = BestGuesser(db, properties.query)
 
     val columns = baseSchema.map(_._1)
 

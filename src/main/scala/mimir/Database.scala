@@ -119,7 +119,7 @@ case class Database(backend: Backend)
    */
   def optimize(oper: Operator): Operator =
   {
-    compiler.optimize(oper)
+    Compiler.optimize(oper)
   }
 
   /**
@@ -128,7 +128,7 @@ case class Database(backend: Backend)
    */
   def query(oper: Operator): ResultIterator = 
   {
-    compiler.compile(oper)
+    compiler.compileForBestGuess(oper)
   }
 
   /**
@@ -315,7 +315,7 @@ case class Database(backend: Backend)
       case view: CreateView => {
         val viewName = view.getTable().getName().toUpperCase
         val baseQuery = sql.convert(view.getSelectBody())
-        val optQuery = compiler.optimize(baseQuery)
+        val optQuery = Compiler.optimize(baseQuery)
 
         views.create(viewName, optQuery);
       }

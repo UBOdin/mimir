@@ -339,7 +339,7 @@ object SimpleDemoScript
 				SELECT * FROM RATINGS1FINAL r, Product p
 				WHERE r.pid = p.id;
 			""")
-			val q3compiled = db.compiler.compile(q3)
+			val q3compiled = db.compiler.compileForBestGuess(q3)
 			q3compiled.open()
 
 			// Preliminaries: This isn't required for correctness, but the test case depends on it.
