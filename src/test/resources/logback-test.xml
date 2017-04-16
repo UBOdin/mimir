@@ -15,7 +15,8 @@
   <logger name="mimir.algebra.ExpressionChecker" level="INFO"/>
   <logger name="mimir.algebra.OperatorUtils" level="INFO"/>
   <logger name="mimir.exec.Compiler" level="INFO"/>
-  <logger name="mimir.exec.TupleBundler" level="DEBUG"/>
+  <logger name="mimir.exec.TupleBundler" level="INFO"/>
+  <logger name="mimir.exec.WorldBits" level="INFO"/>
   <logger name="mimir.sql.sqlite.MimirCast$" level="INFO"/>
   <logger name="mimir.sql.sqlite.BestGuessVGTerm" level="INFO"/>
   <logger name="mimir.sql.sqlite.SampleVGTerm" level="INFO"/>

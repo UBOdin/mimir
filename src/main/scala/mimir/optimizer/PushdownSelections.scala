@@ -33,8 +33,13 @@ object PushdownSelections {
 			case Select(cond1, Select(cond2, src)) =>
 				apply(Select(ExpressionUtils.makeAnd(cond1, cond2), src))
 
-			case Select(cond, (p @ Project(cols, src))) =>
-				apply(Project(cols, Select(Eval.inline(cond, p.bindings), src)))
+			case Select(cond, (p @ Project(cols, src))) => {
+				Eval.inline(cond, p.bindings) match {
+					case BoolPrimitive(true) => apply(Project(cols, src))
+					case BoolPrimitive(false) => EmptyTable(o.schema)
+					case newCond => apply(Project(cols, Select(newCond, src)))
+				}
+			}
 
 			case Select(cond, Union(lhs, rhs)) =>
 				Union(apply(Select(cond, lhs)), apply(Select(cond, rhs)))

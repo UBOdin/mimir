@@ -94,6 +94,7 @@ class RAToSql(db: Database)
    */
   private def makeSelect(oper:Operator): SelectBody =
   {
+    logger.trace(s"makeSelect: \n$oper")
     oper match {
       case u:Union => {
         var union = new net.sf.jsqlparser.statement.select.Union()
@@ -105,6 +106,10 @@ class RAToSql(db: Database)
           ).map(makePlainSelect(_))
         )
         return union
+      }
+
+      case EmptyTable(_) => {
+        throw new SQLException(s"Error, can't compile an empty table!\n$oper")
       }
 
       case _ => 
