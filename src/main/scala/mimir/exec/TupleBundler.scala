@@ -20,6 +20,16 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
   def fullBitVector =
     (0 until sampleSeeds.size).map { 1 << _ }.fold(0)( _ | _ )
 
+  def confidence(bv: Long): Double =
+  {
+    val hits = 
+      (0 until sampleSeeds.size).
+        map { i => (bv & (1 << i)) >> i }.
+        sum
+    logger.debug(s"Testing: $bv <- $hits bits set")
+    hits.toDouble / sampleSeeds.size.toDouble
+  }
+
   def apply(query: Operator): Operator =
   {
     val (compiled, nonDeterministicColumns) = compileFlat(query)    
@@ -311,4 +321,9 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
 
     }
   }
+}
+
+object TupleBundler
+{
+
 }

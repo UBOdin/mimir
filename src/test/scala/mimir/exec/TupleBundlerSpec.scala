@@ -31,6 +31,8 @@ object TupleBundlerSpec
   val numSamples = 10
   val sampler = new TupleBundler(db, (0 until numSamples).map { _ => rand.nextInt })
 
+  def conf(bv: Long): Double = sampler.confidence(bv)
+
   "Tuple Bundle Evaluation" should {
     "Compile sanely" >> {
 
@@ -43,7 +45,27 @@ object TupleBundlerSpec
       q1.schema.map(_._1) must contain( eachOf("A", "MIMIR_SAMPLE_0_B", "MIMIR_SAMPLE_2_C", "MIMIR_WORLD_BITS" ) )
     }
 
-    "Create Sane Results" >> {
+    "Project Query" >> {
+      val q1 =
+        sampler.compileFlat(select("""
+          SELECT A, B FROM R_CLASSIC
+        """))._1
+
+      val r1 =
+        db.query(q1).mapRows( x => 
+          (
+            x(0).asLong.toInt, 
+            (1 until 11).map { i => x(i).asLong.toInt }.toSet
+          ) 
+        ).toMap
+
+      r1 must contain(eachOf( (2 -> Set(2)), (4 -> Set(2)) ))
+      r1(1) should contain(eachOf( 4, 2, 3 ))
+
+    }
+
+
+    "Select-Project Query" >> {
       val q1 =
         sampler.compileFlat(select("""
           SELECT A FROM R_CLASSIC WHERE B = 2
@@ -52,15 +74,16 @@ object TupleBundlerSpec
       q1.schema.map(_._1) must beEqualTo(Seq("A", "MIMIR_WORLD_BITS"))
 
       val r1 =
-        db.query(q1).mapRows( x => (x(0).asLong.toInt -> x(1).asLong.toInt) ).toMap
+        db.query(q1).mapRows( x => (x(0).asLong.toInt -> x(1).asLong) ).toMap
 
-      print(r1.keys)
-      r1.keys must contain( 4 )
+      r1.keys should contain( eachOf(1, 2, 4) )
       if(r1 contains 2){
-        r1(2) must be equalTo ((1 << numSamples)-1)
+        r1(2) must be equalTo ((1l << numSamples)-1l)
       }
-      ok
 
+      conf(r1(1)) should beBetween(0.0, 0.6)
+      conf(r1(2)) must beEqualTo(1.0)
+      conf(r1(4)) must beEqualTo(1.0)
     }
 
   }
