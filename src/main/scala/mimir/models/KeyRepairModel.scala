@@ -91,16 +91,19 @@ class KeyRepairModel(
           case _ => throw ModelException(s"Invalid Value Hint in Repair Model $name: ${hints(0).asString}")
         }
 
-      if(hints.size > 1 && !hints(1).isInstanceOf[NullPrimitive]){
-        possibilities.zip(
-          Json.parse(hints(1).asString) match {
-            case JsArray(values) => values.map( v => JSONUtils.parsePrimitive(TFloat(), v).asDouble )
-            case _ => throw ModelException(s"Invalid Score Hint in Repair Model $name: ${hints(1).asString}")
-          }
-        )
-      } else {
-        possibilities.map( (_, 1.0) )
-      }
+      val possibilitiesWithProbabilities =
+        if(hints.size > 1 && !hints(1).isInstanceOf[NullPrimitive]){
+          possibilities.zip(
+            Json.parse(hints(1).asString) match {
+              case JsArray(values) => values.map( v => JSONUtils.parsePrimitive(TFloat(), v).asDouble )
+              case _ => throw ModelException(s"Invalid Score Hint in Repair Model $name: ${hints(1).asString}")
+            }
+          )
+        } else {
+          possibilities.map( (_, 1.0) )
+        }
+
+      possibilitiesWithProbabilities.filter(!_._1.isInstanceOf[NullPrimitive])
 
     }
   }
