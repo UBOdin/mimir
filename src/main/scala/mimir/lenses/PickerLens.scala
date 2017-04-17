@@ -15,6 +15,7 @@ import weka.core.{Attribute, DenseInstance, Instance, Instances}
 import weka.experiment.{DatabaseUtils, InstanceQueryAdapter}
 import mimir.optimizer.InlineVGTerms
 import mimir.models._
+import mimir.optimizer.ExpressionOptimizer
 
 import scala.collection.JavaConversions._
 import scala.util._
@@ -68,8 +69,8 @@ object PickerLens {
         map(_._1).
         flatMap( col => pickerColsTypeMap.get(col) match {
           case None => Some(ProjectArg(col, Var(col)))
-          case Some(pickFromCol) => Some(ProjectArg(col, Var(col)))//None //none if you dont want the from cols
-        }).union(Seq(ProjectArg(resultColName, pickExpr)))
+          case Some(pickFromCol) => None //none if you dont want the from cols
+        }).union(Seq(ProjectArg(resultColName, ExpressionOptimizer.optimize( pickExpr))))
 
     return (
       Project(projectArgs, query),

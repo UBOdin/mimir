@@ -212,7 +212,6 @@ object MimirVizier {
     val timeRes = time {
       println("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
       val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
-      println(oper)
       //val compiledOper = db.compiler.compileInline(oper, db.compiler.standardOptimizations)._1
       val cols = oper.schema.map(f => f._1)
       //println(s"explaining Cell: [${cols(col)}][$row]")
