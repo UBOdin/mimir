@@ -4,6 +4,7 @@ import mimir.Database
 import mimir.optimizer._
 import mimir.algebra._
 import mimir.ctables._
+import mimir.provenance._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 /**
@@ -26,7 +27,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
  * can be achieved by using convertFlatToLong.
  */
 
-class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
+class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
   extends LazyLogging
 {
   def colNameInSample(col: String, i: Int): String =
@@ -40,20 +41,12 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
   def fullBitVector =
     (0 until sampleSeeds.size).map { 1 << _ }.fold(0)( _ | _ )
 
-  def apply(query: Operator): Operator =
+  def apply(query: Operator): (Operator, Set[String], Seq[String]) =
   {
-    val (compiled, nonDeterministicColumns) = compileFlat(query)    
-    Project(
-      query.schema.map(_._1).map { col => 
-        ProjectArg(col, 
-          if(nonDeterministicColumns(col)){
-            Function("JSON_ARRAY", sampleCols(col).map( Var(_) ))
-          } else {
-            Var(col) 
-          }
-        )} ++ Seq(ProjectArg("MIMIR_WORLD_BITS", Var("MIMIR_WORLD_BITS"))), 
-      compiled
-    )
+    val (withProvenance, provenanceCols) = Provenance.compile(query)
+    val (compiled, nonDeterministicColumns) = compileFlat(withProvenance)    
+
+    (compiled, nonDeterministicColumns, provenanceCols)
   }
 
   def doesExpressionNeedSplit(expression: Expression, nonDeterministicInputs: Set[String]): Boolean =
@@ -397,6 +390,12 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
 
     }
   }
+}
+
+object TupleBundler
+{
+  def apply(db: Database, oper: Operator, seeds: Seq[Long]): (Operator, Set[String], Seq[String]) =
+    new TupleBundler(db, seeds)(oper)
 }
 
 object WorldBits

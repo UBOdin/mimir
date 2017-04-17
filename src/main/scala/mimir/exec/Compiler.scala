@@ -3,6 +3,7 @@ package mimir.exec
 
 import java.sql._
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import scala.util.Random
 
 import mimir.Database
 import mimir.algebra.Union
@@ -13,6 +14,8 @@ import mimir.provenance._
 import net.sf.jsqlparser.statement.select._
 
 class Compiler(db: Database) extends LazyLogging {
+
+  val rnd = new Random
 
   /**
    * Perform a full end-end compilation pass.  Return an iterator over
@@ -70,23 +73,63 @@ class Compiler(db: Database) extends LazyLogging {
     )
   }
 
-  def compileForSamples(rawOper: Operator, opts: Compiler.Optimizations = Compiler.standardOptimizations): Operator =
-    ???
-  // {
-  //   var oper = rawOper
-  //   logger.debug(s"COMPILING FOR SAMPLES: $oper")
+  def compileForSamples(
+    rawOper: Operator, 
+    opts: Compiler.Optimizations = Compiler.standardOptimizations, 
+    seeds: Seq[Long] = (0 until 10).map { _ => rnd.nextLong() }
+  ): SampleResultIterator =
+  {
+    var oper = rawOper
+    logger.debug(s"COMPILING FOR SAMPLES: $oper")
     
-  //   oper = optimize(oper, opts);
-  //   logger.debug(s"OPTIMIZED: $oper")
+    oper = Compiler.optimize(oper, opts);
+    logger.debug(s"OPTIMIZED: $oper")
 
-  //   val bundled = TupleBundler.compileFlat(oper)
+    val bundled = TupleBundler(db, oper, seeds)
+    oper               = bundled._1
+    val nonDetColumns  = bundled._2
+    val provenanceCols = bundled._3
+    val provenanceColSet = provenanceCols.toSet
 
+    logger.debug(s"BUNDLED: $oper")
 
+    oper = Compiler.optimize(oper, opts);
 
+    logger.debug(s"RE-OPTIMIZED: $oper")
 
+    // We'll need it a few times, so cache the final operator's schema.
+    // This also forces the typechecker to run, so we get a final sanity
+    // check on the output of the rewrite rules.
+    val finalSchema = oper.schema
 
-  //   val (rewritten, TupleBundler
-  // }
+    // We'll need to line the attributes in the output up with
+    // the order in which the user expects to see them.  Build
+    // a lookup table with name + position in the query being execed.
+    val finalSchemaOrderLookup = 
+      finalSchema.map(_._1).zipWithIndex.toMap
+
+    val nonProvenanceSchema = 
+      finalSchema.
+        map(_._1).
+        filter { col => !provenanceColSet(col) }
+
+    val sql = sqlForBackend(oper, opts)
+
+    // Deploy to the backend
+    val results = 
+      db.backend.execute(sql)
+
+    new SampleResultIterator(
+      new ResultSetIterator(results, 
+        finalSchema.toMap,
+        nonProvenanceSchema.map(finalSchemaOrderLookup(_)), 
+        provenanceCols.map(finalSchemaOrderLookup(_))
+      ),
+      rawOper.schema,
+      nonDetColumns,
+      seeds.size
+    )
+  }
 
   def sqlForBackend(oper: Operator, opts: Compiler.Optimizations = Compiler.standardOptimizations): SelectBody =
   {
