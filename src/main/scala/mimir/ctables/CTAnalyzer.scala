@@ -31,11 +31,18 @@ object CTAnalyzer {
     val recur = (x:Expression) => compileDeterministic(x, varMap)
     expr match { 
       
-      case Conditional(condition, thenClause, elseClause) =>
-        ExpressionUtils.makeAnd(
-          recur(condition), 
-          Conditional(condition, recur(thenClause), recur(elseClause))
-        )
+      case Conditional(condition, thenClause, elseClause) => {
+        val thenDeterministic = recur(thenClause)
+        val elseDeterministic = recur(elseClause)
+        if(thenDeterministic.equals(elseDeterministic)){
+          thenDeterministic
+        } else {
+          ExpressionUtils.makeAnd(
+            recur(condition), 
+            Conditional(condition, recur(thenClause), recur(elseClause))
+          )
+        }
+      }
 
       case Arithmetic(Arith.And, l, r) =>
         ExpressionUtils.makeOr(
