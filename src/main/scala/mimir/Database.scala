@@ -347,6 +347,7 @@ case class Database(backend: Backend)
         drop.getType().toUpperCase match {
           case "TABLE" | "INDEX" =>
             backend.update(drop.toString());
+            backend.invalidateCache();
 
           case "VIEW" =>
             views.drop(drop.getName().toUpperCase);
