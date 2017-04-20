@@ -9,18 +9,15 @@ class LineReaderInputSource(terminal: Terminal)
   extends Reader
   with LazyLogging
 {
+  private val historyFile = System.getProperty("user.home") + File.separator + ".mimir_history"
   val input: LineReader = 
     LineReaderBuilder.
       builder().
       terminal(terminal).
+      variable(LineReader.HISTORY_FILE, historyFile).
       build()
   var pos: Int = -1;
   var curr: String = null;
-  {
-    val historyFile = System.getProperty("user.home") + File.separator + ".mimir_history"
-    logger.warn(s"History: $historyFile")
-    input.setVariable(LineReader.HISTORY_FILE, historyFile);
-  }
 
   def close() = input.getTerminal.close
   def read(cbuf: Array[Char], offset: Int, len: Int): Int =
