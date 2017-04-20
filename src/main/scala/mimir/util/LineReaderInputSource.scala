@@ -16,6 +16,9 @@ class LineReaderInputSource(terminal: Terminal)
       build()
   var pos: Int = -1;
   var curr: String = null;
+  {
+    input.setVariable(LineReader.HISTORY_FILE, "~/.mimir_history")
+  }
 
   def close() = input.getTerminal.close
   def read(cbuf: Array[Char], offset: Int, len: Int): Int =
