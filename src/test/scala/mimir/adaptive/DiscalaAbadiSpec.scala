@@ -78,7 +78,7 @@ object DiscalaAbadiSpec
       val tables = 
         db.query(
           OperatorUtils.projectDownToColumns(
-            Seq("TABLE_NAME", "SOURCE"),
+            Seq("TABLE_NAME", "SCHEMA_NAME"),
             OperatorUtils.makeUnion(
               db.adaptiveSchemas.tableCatalogs
             )
@@ -138,13 +138,13 @@ object DiscalaAbadiSpec
             // "mimir.exec.Compiler"
           ), () => {
             query("""
-              SELECT TABLE_NAME, SOURCE FROM MIMIR_SYS_TABLES
+              SELECT TABLE_NAME, SCHEMA_NAME FROM MIMIR_SYS_TABLES
             """).mapRows { row => (row(0), row(1)) }
         }) 
 
       tables must contain( (StringPrimitive("ROOT"), StringPrimitive("SHIPPING")) )
-      tables must contain( (StringPrimitive("MIMIR_VIEWS"), StringPrimitive("RAW")) )
-      tables must contain( (StringPrimitive("SHIPPING"), StringPrimitive("RAW")) )
+      tables must contain( (StringPrimitive("MIMIR_VIEWS"), StringPrimitive("BACKEND")) )
+      tables must contain( (StringPrimitive("SHIPPING"), StringPrimitive("BACKEND")) )
 
       val attrs = 
         query("""
@@ -161,7 +161,7 @@ object DiscalaAbadiSpec
           ), () => {
             query("""
               SELECT ATTR_NAME FROM MIMIR_SYS_ATTRS
-              WHERE SOURCE = 'SHIPPING'
+              WHERE SCHEMA_NAME = 'SHIPPING'
                 AND TABLE_NAME = 'ROOT'
             """).mapRows( _.rowString )
         })
@@ -173,7 +173,7 @@ object DiscalaAbadiSpec
     "Be introspectable" >> {
       val baseQuery = """
           SELECT ATTR_NAME, ROWID() FROM MIMIR_SYS_ATTRS
-          WHERE SOURCE = 'SHIPPING'
+          WHERE SCHEMA_NAME = 'SHIPPING'
             AND TABLE_NAME = 'BILL_OF_LADING_NBR'
         """
 

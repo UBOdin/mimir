@@ -71,10 +71,10 @@ class AdaptiveSchemaManager(db: Database)
   {
     all.map { case(mlens, config) => 
       OperatorUtils.projectInColumn(
-        "SOURCE",
+        "SCHEMA_NAME",
         StringPrimitive(config.schema),
         OperatorUtils.projectDownToColumns(
-          SystemCatalog.tableCatalogSchema.filter(_._1 != "SOURCE").map( _._1 ),
+          SystemCatalog.tableCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 ),
           mlens.tableCatalogFor(db, config)         
         )
       )
@@ -85,10 +85,10 @@ class AdaptiveSchemaManager(db: Database)
   {
     all.map { case(mlens, config) => 
       OperatorUtils.projectInColumn(
-        "SOURCE",
+        "SCHEMA_NAME",
         StringPrimitive(config.schema),
         OperatorUtils.projectDownToColumns(
-          SystemCatalog.attrCatalogSchema.filter(_._1 != "SOURCE").map( _._1 ),
+          SystemCatalog.attrCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 ),
           mlens.attrCatalogFor(db, config)         
         )
       )

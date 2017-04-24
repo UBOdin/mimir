@@ -29,7 +29,7 @@ object TupleBundlerSpec
 
   val rand = new Random(42)
   val numSamples = 10
-  val sampler = new TupleBundler(db, (0 until numSamples).map { _ => rand.nextInt })
+  val sampler = new TupleBundler(db, (0 until numSamples).map { _ => rand.nextLong })
   val allWorlds = sampler.fullBitVector
 
   def conf(bv: Long): Double = WorldBits.confidence(bv, numSamples)
