@@ -349,9 +349,58 @@ class CTExplainer(db: Database) extends LazyLogging {
 		(tuple, columnExprs, rowCondition)
 	}
 
-	def explainEverything(oper: Operator): Seq[ReasonSet] = {
+	def mergeReasons(reasons: Seq[ReasonSet]): Seq[ReasonSet] =
+	{
+		reasons.
+			groupBy { r => (r.model.name, r.idx) }.
+			values.
+			map { 
+				case Seq(singleReason) => 
+					logger.debug(s"Not Merging ${singleReason.model};${singleReason.idx}")
+					singleReason
+				case multipleReasons => {
+					logger.debug(s"Merging ${multipleReasons.size} reason sources for ${multipleReasons.head.model};${multipleReasons.head.idx}")
+					val (allReasonLookups: Seq[Operator], allReasonArgs: Seq[Seq[Var]], allReasonHints: Seq[Seq[Var]]) =
+						multipleReasons.
+							flatMap { r => r.argLookup }.
+							map { case (query, args, hints) => 
+								(
+									Project(
+										args.zipWithIndex.map { case (expr, i) => ProjectArg("ARG_"+i, expr) }++
+										hints.zipWithIndex.map { case (expr, i) => ProjectArg("HINT_"+i, expr) },
+										query
+									),
+									args.zipWithIndex.map("ARG_"+_._2).map(Var(_)),
+									hints.zipWithIndex.map("HINT_"+_._2).map(Var(_))
+								)
+							}.unzip3
+					logger.debug(s" ... ${allReasonLookups.mkString("\n ... ")}")
+					// A bit of a simplification... Going to assume for now that we're consistent
+					// with how we use VGTerms throughout and that two identical VGTerms should have
+					// identical ARG/HINT schemas. 
+					// -Oliver
+					new ReasonSet(
+						multipleReasons.head.model, 
+						multipleReasons.head.idx, 
+						if(allReasonLookups.isEmpty){ None }
+						else { Some( (
+							OperatorUtils.makeDistinct(
+								OperatorUtils.makeUnion(
+									allReasonLookups
+								)
+							),
+							allReasonArgs.head,
+							allReasonHints.head
+						) )}
+					)
+				}
+			}.toSeq
+	}
+
+	def explainEverything(oper: Operator): Seq[ReasonSet] = 
+	{
 		logger.debug("Explain Everything: \n"+oper)
-		explainSubset(oper, oper.schema.map(_._1).toSet, true, true)
+		mergeReasons(explainSubset(oper, oper.schema.map(_._1).toSet, true, true))
 	}
 
 	def explainSubset(
@@ -388,6 +437,10 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 				argReasons ++ explainSubset(child, argDependencies, wantRow, wantSort)
 			}
+
+			// Keep views unless we can push selections down into them
+			case Select(cond, View(_,query,_)) => 
+				explainSubset(Select(cond, query), wantCol, wantRow, wantSort)
 
 			case Select(cond, child) => {
 				val (condReasons:Seq[ReasonSet], condDependencies:Set[String]) =

@@ -333,13 +333,13 @@ case class Database(backend: Backend)
       /********** LOAD STATEMENTS **********/
       case load: Load => {
         // Assign a default table name if needed
-        val target = 
+        val (target, force) = 
           load.getTable() match { 
-            case null => load.getFile.getName.replaceAll("\\..*", "").toUpperCase
-            case s => s
+            case null => (load.getFile.getName.replaceAll("\\..*", "").toUpperCase, false)
+            case s => (s, true)
           }
 
-        loadTable(target, load.getFile)
+        loadTable(target, load.getFile, force = force)
       }
 
       /********** DROP STATEMENTS **********/
@@ -347,6 +347,7 @@ case class Database(backend: Backend)
         drop.getType().toUpperCase match {
           case "TABLE" | "INDEX" =>
             backend.update(drop.toString());
+            backend.invalidateCache();
 
           case "VIEW" =>
             views.drop(drop.getName().toUpperCase);
@@ -407,8 +408,11 @@ case class Database(backend: Backend)
    * supplies an appropriate header.
    */
 
-  def loadTable(targetTable: String, sourceFile: File){
+  def loadTable(targetTable: String, sourceFile: File, force:Boolean = true){
     val targetRaw = targetTable.toUpperCase + "_RAW"
+    if(tableExists(targetRaw) && !force){
+      throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' AS tableName`; to override.")
+    }
     LoadCSV.handleLoadTable(this, targetRaw, sourceFile)
     val oper = getTableOperator(targetRaw)
     val l = List(new FloatPrimitive(.5))

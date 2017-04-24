@@ -4,7 +4,7 @@ import mimir.Database
 import mimir.algebra._
 import mimir.models._
 
-class ReasonSet(val model: Model, val idx: Int, argLookup: Option[(Operator, Seq[Expression], Seq[Expression])])
+class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator, Seq[Expression], Seq[Expression])])
 {
   def size(db: Database): Long =
   {

@@ -47,6 +47,7 @@ abstract class Backend {
   def selectInto(table: String, query: String): Unit
 
   def getAllTables(): Seq[String]
+  def invalidateCache();
 
   def close()
 

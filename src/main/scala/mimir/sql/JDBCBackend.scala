@@ -24,7 +24,8 @@ class JDBCBackend(val backend: String, val filename: String)
 
   val tableSchemas: scala.collection.mutable.Map[String, Seq[(String, Type)]] = mutable.Map()
 
-  def open() = {
+  def open() = 
+  {
     this.synchronized({
       assert(openConnections >= 0)
       if (openConnections == 0) {
@@ -53,6 +54,9 @@ class JDBCBackend(val backend: String, val filename: String)
       openConnections = openConnections + 1
     })
   }
+
+  def invalidateCache() = 
+    tableSchemas.clear()
 
   def enableInlining(db: Database): Unit =
   {
