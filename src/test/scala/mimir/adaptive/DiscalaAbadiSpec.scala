@@ -44,12 +44,16 @@ object DiscalaAbadiSpec
       query("""
         SELECT ATTR_NODE FROM MIMIR_DA_SCH_SHIPPING
         WHERE ATTR_NAME = 'ROOT'
-      """).allRows.toSeq must haveSize(1)
+      """){ 
+        _.toSeq must haveSize(1)
+      }
       query("""
         SELECT ATTR_NODE FROM MIMIR_DA_SCH_SHIPPING
         WHERE ATTR_NAME = 'ROOT'
           AND ATTR_NODE >= 0
-      """).allRows.toSeq must haveSize(0)
+      """){
+        _.toSeq must haveSize(0)
+      }
 
       val spanningTree = 
         DiscalaAbadiNormalizer.spanningTreeLens(db, 
@@ -58,7 +62,8 @@ object DiscalaAbadiSpec
       LoggerUtils.debug(
         List(
           // "mimir.exec.Compiler"
-        ), () =>
+        )
+      ){
         db.query(
           Project(Seq(ProjectArg("TABLE_NODE", Var("TABLE_NODE"))),
             Select(Comparison(Cmp.Gt, Arithmetic(Arith.Add, Var("TABLE_NODE"), IntPrimitive(1)), IntPrimitive(0)),
@@ -69,8 +74,8 @@ object DiscalaAbadiSpec
               )
             )
           )
-        ).allRows.flatten
-      ) must not contain(IntPrimitive(-1))
+        ){ _.toSeq must not contain(IntPrimitive(-1)) }
+      }
 
     }
 

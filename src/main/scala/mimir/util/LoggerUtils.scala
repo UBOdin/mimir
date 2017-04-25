@@ -11,39 +11,39 @@ object LoggerUtils {
   val WARN  = Level.WARN
   val ERROR = Level.ERROR
 
-  def trace[A](loggerName: String, body: () => A): A =
-    enhance(loggerName, Level.TRACE, body)
+  def trace[A](loggerName: String)(body: => A): A =
+    enhance(loggerName, Level.TRACE){ body } 
 
-  def trace[A](loggerName: List[String], body: () => A): A =
-    enhance(loggerName, Level.TRACE, body)
+  def trace[A](loggerName: List[String])(body: => A): A =
+    enhance(loggerName, Level.TRACE){ body }
 
-  def debug[A](loggerName: String, body: () => A): A =
-    enhance(loggerName, Level.DEBUG, body)
+  def debug[A](loggerName: String)(body: => A): A =
+    enhance(loggerName, Level.DEBUG){ body }
 
-  def debug[A](loggerName: List[String], body: () => A): A =
-    enhance(loggerName, Level.DEBUG, body)
+  def debug[A](loggerName: List[String])(body: => A): A =
+    enhance(loggerName, Level.DEBUG){ body }
 
-  def enhance[A](loggerName: String, level: Level, body: () => A): A =
+  def enhance[A](loggerName: String, level: Level)(body: => A): A =
   {
     val loggerBase = LoggerFactory.getLogger(loggerName)
     if(loggerBase.isInstanceOf[Logger]){
       val logger = loggerBase.asInstanceOf[Logger]
       val originalLevel = logger.getLevel();
       logger.setLevel(level)
-      val ret = body()
+      val ret = body
       logger.setLevel(originalLevel)
       ret
     } else {
       loggerBase.warn(s"Unable to set logger is instance of ${loggerBase.getClass}")
-      body()
+      body
     }
   }
 
-  def enhance[A](loggerName: List[String], level: Level, body: () => A): A =
+  def enhance[A](loggerName: List[String], level: Level)(body: => A): A =
   {
     loggerName match {
-      case Nil => body()
-      case hd :: rest => enhance(rest, level, () => enhance(hd, level, body))
+      case Nil => body
+      case hd :: rest => enhance(rest, level){ enhance(hd, level)(body) }
     }
   }
 
