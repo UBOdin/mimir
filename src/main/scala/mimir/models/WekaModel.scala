@@ -62,7 +62,7 @@ object WekaModel
 }
 
 @SerialVersionUID(1000L)
-class SimpleWekaModel(name: String, colName: String, query: Operator)
+class SimpleWekaModel(name: String, colName: String, var query: Operator)
   extends Model(name) 
   with NeedsReconnectToDatabase 
 {
@@ -281,6 +281,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
    */
   def reconnectToDatabase(db: Database): Unit = {
     this.db = db
+    query = db.querySerializer.desanitize(query)
     val bytes = new java.io.ByteArrayInputStream(serializedLearner)
     learner = weka.core.SerializationHelper.read(bytes).asInstanceOf[Classifier with UpdateableClassifier]
     serializedLearner = null
@@ -295,7 +296,9 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
     val bytes = new java.io.ByteArrayOutputStream()
     weka.core.SerializationHelper.write(bytes,learner)
     serializedLearner = bytes.toByteArray()
+    query = db.querySerializer.sanitize(query)
     val ret = super.serialize()
+    query = db.querySerializer.desanitize(query)
     serializedLearner = null
     return ret
   }
