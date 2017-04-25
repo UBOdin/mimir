@@ -62,7 +62,7 @@ class Compiler(db: Database) extends LazyLogging {
     var oper = rawOper
     logger.debug(s"COMPILING FOR SAMPLES: $oper")
     
-    oper = Compiler.optimize(oper, Seq(InlineProjections));
+    oper = Compiler.optimize(oper, Seq(InlineProjections(_)));
     logger.debug(s"OPTIMIZED: $oper")
 
     val bundled = TupleBundler(db, oper, seeds)
@@ -91,13 +91,13 @@ class Compiler(db: Database) extends LazyLogging {
   ): ResultIterator =
   {
     var oper = compiledOper
-    val isAnOutputCol = outputCols.toSeq
+    val isAnOutputCol = outputCols.toSet
 
     // Run a final typecheck to check the sanitity of the rewrite rules
-    oper.schema()
+    oper.schema
 
     // Optimize
-    oper = optimize(oper, opts)
+    oper = Compiler.optimize(oper, opts)
 
     // Strip off the final projection operator
     val extracted = OperatorUtils.extractProjections(oper)
@@ -115,7 +115,7 @@ class Compiler(db: Database) extends LazyLogging {
 
     new ProjectionResultIterator(
       outputCols.map( projections(_) ),
-      annotationCols.map( projections(_) ),
+      annotationCols.map( projections(_) ).toSeq,
       oper.schema,
       results
     )

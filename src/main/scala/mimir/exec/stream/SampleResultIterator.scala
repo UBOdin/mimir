@@ -35,6 +35,11 @@ class SampleResultIterator(
 
 case class SampleRow(input: Row, source: SampleResultIterator) extends Row
 {
+  def annotation(name: String): PrimitiveValue = input.annotation(name)
+  def annotation(idx: Int): PrimitiveValue     = input.annotation(idx)
+  def tupleSchema: Seq[(String, mimir.algebra.Type)] = input.tupleSchema
+
+
   private def values(v: Int): Seq[(PrimitiveValue, Double)] =
     source.lookup(v).map { case (i, p) => (input(i), p) }
 

@@ -16,10 +16,10 @@ class ProjectionResultIterator(
   // Set up the schema details
   //
   private val typechecker = new ExpressionChecker(inputSchema.toMap)
-  val schema: Seq[(String,(Int, Type))] = 
-    tupleDefinition.zipWithIndex.map { case (ProjectArg(name, expr), idx) => (name, (idx, typechecker.typeOf(expr))) }
-  val annotations: Seq[(String,(Int, Type))] = ???
-    annotationDefinition.zipWithIndex.map { case (ProjectArg(name, expr), idx) => (name, (idx, typechecker.typeOf(expr))) }
+  val schema: Seq[(String,Type)] = 
+    tupleDefinition.map { case ProjectArg(name, expr) => (name, typechecker.typeOf(expr)) }
+  val annotations: Seq[(String,Type)] = 
+    annotationDefinition.map { case ProjectArg(name, expr) => (name, typechecker.typeOf(expr)) }
 
   //
   // Compile the query expressions further to make it
@@ -72,7 +72,7 @@ class ProjectionResultIterator(
     if(currentRow == None){
       while(source.isBeforeFirst()){ if(!source.next){ return } }
       if(source.next){
-        currentRow = Some(new Row(
+        currentRow = Some(new ExplicitRow(
           columnOutputs.map(_()), 
           annotationOutputs.map(_()),
           this

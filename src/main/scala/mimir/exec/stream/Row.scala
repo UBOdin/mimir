@@ -12,7 +12,8 @@ trait Row
     tupleSchema.zip(tuple).map { x => (x._1._1 -> x._2) }.toMap
 
   def apply(idx: Int): PrimitiveValue
-  def apply(name: String): PrimitiveValue
+  def apply(name: String): PrimitiveValue = 
+    apply(tupleSchema.indexWhere( _._1.equals(name) ))
 
   def annotation(idx: Int): PrimitiveValue
   def annotation(name: String): PrimitiveValue
@@ -36,10 +37,9 @@ case class ExplicitRow(val tuple: Seq[PrimitiveValue], val annotations: Seq[Prim
   extends Row
 {
   def apply(idx: Int): PrimitiveValue = tuple(idx)
-  def apply(name: String): PrimitiveValue = tuple(source.getIdx(name))
 
   def annotation(idx: Int): PrimitiveValue = annotation(idx)
   def annotation(name: String): PrimitiveValue = annotation(source.getAnnotationIdx(name))
 
-  def schema = source.schema;
+  def tupleSchema = source.schema;
 }

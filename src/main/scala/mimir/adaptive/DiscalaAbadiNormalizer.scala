@@ -207,7 +207,7 @@ object DiscalaAbadiNormalizer
             attrCatalogFor(db, config)
           )
         )
-      ).mapRows( row => row(0).asString ).toSeq
+      ) { _.map { row => row(0).asString }.toSeq }
 
     if(attrs.isEmpty){ return None; }
 

@@ -127,24 +127,36 @@ object FunctionRegistry {
         TupleBundler.mostLikelyValue(
           args.head.asLong,
           args.tail.grouped(2).
-            map { arg => (arg(1), arg(0).asDouble) }
-        )
+            map { arg => (arg(1), arg(0).asDouble) }.toSeq
+        ) match {
+          case Some(v) => v
+          case None => NullPrimitive()
+        }
       },
       (types: Seq[Type]) => {
-        Typechecker.assertNumeric(types.head)
+        Typechecker.assertNumeric(types.head, 
+          Function("BEST_SAMPLE", types.map(TypePrimitive(_))))
         Typechecker.escalate(
           types.tail.grouped(2).
-            map { t => Typechecker.assertNumeric(t(0)); t(1) }
+            map { t => 
+              Typechecker.assertNumeric(t(0),
+                Function("BEST_SAMPLE", types.map(TypePrimitive(_))))
+              t(1)
+            }
         )
       }
     )
 
     registerNative("SAMPLE_CONFIDENCE",
       (args: Seq[PrimitiveValue]) => 
-        WorldBits.confidence(args(0).asLong, args(0).asLong.toInt),
+        FloatPrimitive(
+          WorldBits.confidence(args(0).asLong, args(0).asLong.toInt)
+        ),
       (types: Seq[Type]) => {
-        Typechecker.assertNumeric(types(0))
-        Typechecker.assertNumeric(types(1))
+        Typechecker.assertNumeric(types(0), 
+          Function("SAMPLE_CONFIDENCE", types.map(TypePrimitive(_))))
+        Typechecker.assertNumeric(types(1),
+          Function("SAMPLE_CONFIDENCE", types.map(TypePrimitive(_))))
         TFloat()
       }
     )
