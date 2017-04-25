@@ -138,8 +138,7 @@ object Mimir extends LazyLogging {
   def handleQuery(raw:Operator) = 
   {
     TimeUtils.monitor("QUERY", () => {
-      val results = db.query(raw)
-      output.print(results)
+      db.query(raw) { output.print(_) }
     }, output.print(_))
   }
 

@@ -30,12 +30,10 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
   extends LazyLogging
 {
-  def colNameInSample(col: String, i: Int): String =
-    s"MIMIR_SAMPLE_${i}_$col"
 
   def sampleCols(col: String): Seq[String] =
   {
-    (0 until sampleSeeds.size).map { i => colNameInSample(col, i) }
+    (0 until sampleSeeds.size).map { i => TupleBundler.colNameInSample(col, i) }
   }
 
   def fullBitVector =
@@ -66,7 +64,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
       sampleSeeds.zipWithIndex.map { case (seed, i) => 
         val inputInstancesInThisSample = 
           nonDeterministicInputs.
-            map { x => (x -> Var(colNameInSample(x, i)) ) }.
+            map { x => (x -> Var(TupleBundler.colNameInSample(x, i)) ) }.
             toMap
         expressions.map { expression => 
           CTAnalyzer.compileSample(
@@ -91,17 +89,17 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
         val mergedSamples =
           baseSchema.map { col =>
             ProjectArg(col, 
-              if(nonDeterministicInput(col)){ Var(colNameInSample(col, i)) }
+              if(nonDeterministicInput(col)){ Var(TupleBundler.colNameInSample(col, i)) }
               else { Var(col) }
             )
           } ++ Seq(
-            ProjectArg("MIMIR_WORLD_BITS", IntPrimitive(1 << i))
+            ProjectArg(TupleBundler.worldBitsColumnName, IntPrimitive(1 << i))
           )
 
         val filterWorldPredicate =
           Comparison(Cmp.Eq,
             Arithmetic(Arith.BitAnd, 
-              Var("MIMIR_WORLD_BITS"),
+              Var(TupleBundler.worldBitsColumnName),
               IntPrimitive(1 << i)
             ),
             IntPrimitive(1 << i)
@@ -130,7 +128,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
     if(CTables.isDeterministic(query)){
       return (
         OperatorUtils.projectInColumn(
-          "MIMIR_WORLD_BITS", IntPrimitive(fullBitVector), 
+          TupleBundler.worldBitsColumnName, IntPrimitive(fullBitVector), 
           query
         ),
         Set[String]()
@@ -140,7 +138,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
       case (Table(_,_,_) | EmptyTable(_)) => 
         (
           OperatorUtils.projectInColumn(
-            "MIMIR_WORLD_BITS", IntPrimitive(fullBitVector), 
+            TupleBundler.worldBitsColumnName, IntPrimitive(fullBitVector), 
             query
           ),
           Set[String]()
@@ -157,7 +155,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
               (
                 splitExpressionByWorlds(col.expression, nonDeterministicInput).
                   zipWithIndex
-                  map { case (expr, i) => ProjectArg(colNameInSample(col.name, i), expr) },
+                  map { case (expr, i) => ProjectArg(TupleBundler.colNameInSample(col.name, i), expr) },
                 Set(col.name)
               )
             } else {
@@ -167,7 +165,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
 
         val replacementProjection =
           Project(
-            newColumns.flatten ++ Seq(ProjectArg("MIMIR_WORLD_BITS", Var("MIMIR_WORLD_BITS"))),
+            newColumns.flatten ++ Seq(ProjectArg(TupleBundler.worldBitsColumnName, Var(TupleBundler.worldBitsColumnName))),
             newChild
           )
 
@@ -182,7 +180,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
 
           val updatedWorldBits =
             Arithmetic(Arith.BitAnd,
-              Var("MIMIR_WORLD_BITS"),
+              Var(TupleBundler.worldBitsColumnName),
               replacements.zipWithIndex.map { case (expr, i) =>
                 Conditional(expr, IntPrimitive(1 << i), IntPrimitive(0))
               }.fold(IntPrimitive(0))(Arithmetic(Arith.BitOr, _, _))
@@ -191,13 +189,13 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
           logger.debug(s"Updated World Bits: \n${updatedWorldBits}")
           val newChildWithUpdatedWorldBits =
             OperatorUtils.replaceColumn(
-              "MIMIR_WORLD_BITS",
+              TupleBundler.worldBitsColumnName,
               updatedWorldBits,
               newChild
             )
           (
             Select(
-              Comparison(Cmp.Neq, Var("MIMIR_WORLD_BITS"), IntPrimitive(0)),
+              Comparison(Cmp.Neq, Var(TupleBundler.worldBitsColumnName), IntPrimitive(0)),
               newChildWithUpdatedWorldBits
             ),
             nonDeterministicInput
@@ -214,7 +212,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
         // To safely join the two together, we need to rename the world-bit columns
         val rewrittenJoin =
           OperatorUtils.joinMergingColumns(
-            Seq( ("MIMIR_WORLD_BITS",
+            Seq( (TupleBundler.worldBitsColumnName,
                     (lhs:Expression, rhs:Expression) => Arithmetic(Arith.BitAnd, lhs, rhs))
             ),
             lhsNewChild, rhsNewChild
@@ -223,7 +221,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
         // Finally, add a selection to filter out values that can be filtered out in all worlds.
         val completedJoin =
           Select(
-            Comparison(Cmp.Neq, Var("MIMIR_WORLD_BITS"), IntPrimitive(0)),
+            Comparison(Cmp.Neq, Var(TupleBundler.worldBitsColumnName), IntPrimitive(0)),
             rewrittenJoin
           )
 
@@ -318,7 +316,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
                       Conditional(
                         Comparison(Cmp.Eq,
                           Arithmetic(Arith.BitAnd, 
-                            Var("MIMIR_WORLD_BITS"),
+                            Var(TupleBundler.worldBitsColumnName),
                             IntPrimitive(1 << i)
                           ),
                           IntPrimitive(1 << i)
@@ -327,7 +325,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
                         NullPrimitive()
                       )
                     },
-                    colNameInSample(alias, i)
+                    TupleBundler.colNameInSample(alias, i)
                   )
                 }
               (splitAggregates, Set(alias))
@@ -336,7 +334,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
           // We also need to figure out which worlds each group will be present in.
           // We take an OR of all of the worlds that lead to the aggregate being present.
           val worldBitsAgg = 
-            AggFunction("GROUP_BITWISE_OR", false, Seq(Var("MIMIR_WORLD_BITS")), "MIMIR_WORLD_BITS")
+            AggFunction("GROUP_BITWISE_OR", false, Seq(Var(TupleBundler.worldBitsColumnName)), TupleBundler.worldBitsColumnName)
 
           (
             Aggregate(gbColumns, splitAggregates.flatten ++ Seq(worldBitsAgg), shardedChild),
@@ -359,7 +357,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
                 val splitAggregates =
                   splitExpressionsByWorlds(args, nonDeterministicInput).
                     zipWithIndex.
-                    map { case (newArgs, i) => AggFunction(name, distinct, newArgs, colNameInSample(alias, i)) }
+                    map { case (newArgs, i) => AggFunction(name, distinct, newArgs, TupleBundler.colNameInSample(alias, i)) }
                 (splitAggregates, Set(alias))
               } else {
                 (Seq(AggFunction(name, distinct, args, alias)), Set[String]())
@@ -369,7 +367,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
           // Same deal as before: figure out which worlds the group will be present in.
 
           val worldBitsAgg = 
-            AggFunction("GROUP_BITWISE_OR", false, Seq(Var("MIMIR_WORLD_BITS")), "MIMIR_WORLD_BITS")
+            AggFunction("GROUP_BITWISE_OR", false, Seq(Var(TupleBundler.worldBitsColumnName)), TupleBundler.worldBitsColumnName)
 
           (
             Aggregate(gbColumns, splitAggregates.flatten ++ Seq(worldBitsAgg), newChild),
@@ -396,6 +394,32 @@ object TupleBundler
 {
   def apply(db: Database, oper: Operator, seeds: Seq[Long]): (Operator, Set[String], Seq[String]) =
     new TupleBundler(db, seeds)(oper)
+
+  val worldBitsColumnName = "MIMIR_WORLD_BITS"
+  def colNameInSample(col: String, i: Int): String = s"MIMIR_SAMPLE_${i}_$col"
+  def columnNames(col: String, seeds: Seq[Long]): Seq[String] =
+    (0 until seeds.length).map(colNameInSample(col, _))
+
+  def possibleValues(bv: Long, worlds: Seq[(PrimitiveValue, Double)]): Map[PrimitiveValue, Double] =
+  {
+    worlds.zipWithIndex.
+      // Pick out only those values in legitimate worlds
+      filter { case ((v, p), i) => WorldBits.isInWorld(bv, i) }.
+      // Group together probabilities for identical values
+      groupBy( _._1._1 ).
+      // And total up the probabilities for each group
+      mapValues( _.map(_._1._2).sum )
+  }
+
+  def mostLikelyValue(bv: Long, worlds: Seq[(PrimitiveValue, Double)]): Option[PrimitiveValue] =
+  {
+    val p = possibleValues(bv, worlds)
+    if(p.isEmpty){ 
+      return None 
+    } else { 
+      return Some(p.maxBy(_._2)._1)
+    }
+  }
 }
 
 object WorldBits

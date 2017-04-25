@@ -52,7 +52,7 @@ class AdaptiveSchemaManager(db: Database)
   {
     db.query(
       db.getTableOperator(dataTable)
-    ).mapRows { row => 
+    ){ _.map { row => 
       val name = row(0).asString
       val mlensType = row(1).asString
       val query = db.querySerializer.deserializeQuery(row(2).asString)
@@ -64,7 +64,7 @@ class AdaptiveSchemaManager(db: Database)
         MultilensRegistry.multilenses(mlensType), 
         MultilensConfig(name, query, args)
       )
-    }
+    }.toSeq }
   }
 
   def tableCatalogs: Seq[Operator] =

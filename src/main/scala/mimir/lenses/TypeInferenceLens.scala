@@ -6,7 +6,6 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.Database
 import mimir.algebra._
 import mimir.ctables._
-import mimir.exec.ResultIterator
 import mimir.models._
 
 object TypeInferenceLens extends LazyLogging

@@ -8,7 +8,8 @@ import java.sql.ResultSet
 import mimir.algebra._
 import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, RowExplanation, VGTerm}
 import mimir.models.Model
-import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
+import mimir.exec.Compiler
+import mimir.exec.stream.{ResultIterator, Row}
 import mimir.lenses.{LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
 import mimir.sql.{SqlToRA,RAToSql,Backend}
@@ -25,7 +26,6 @@ import mimir.sql.{
   }
 import mimir.optimizer.{InlineVGTerms}
 import mimir.util.{LoadCSV,ExperimentalOptions}
-import mimir.web.WebIterator
 import mimir.parser.MimirJSqlParser
 import mimir.statistics.FuncDep
 
@@ -126,18 +126,32 @@ case class Database(backend: Backend)
    * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
    * and rewrites the query to properly account for Virtual Tables.
    */
-  def query(oper: Operator): ResultIterator = 
+  def query[T](oper: Operator)(handler: ResultIterator => T): T =
   {
-    compiler.compileForBestGuess(oper)
+    val iterator = compiler.compileForBestGuess(oper)
+    try {
+      handler(iterator)
+    } finally {
+      iterator.close()
+    }
   }
 
   /**
    * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
    * optimizations and rewrites the query to properly account for Virtual Tables.
    */
-  def query(stmt: net.sf.jsqlparser.statement.select.Select): ResultIterator = 
+  def query[T](stmt: net.sf.jsqlparser.statement.select.Select)(handler: ResultIterator => T): T = 
   {
-    query(sql.convert(stmt))
+    query(sql.convert(stmt))(handler)
+  }
+
+  /**
+   * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
+   * optimizations and rewrites the query to properly account for Virtual Tables.
+   */
+  def query[T](stmt: String)(handler: ResultIterator => T): T = 
+  {
+    query(select(stmt))(handler)
   }
 
   /**
@@ -161,36 +175,6 @@ case class Database(backend: Backend)
     while( stmt != null ) { ret = stmt :: ret ; stmt = parser.Statement() }
 
     ret.reverse
-  }
-
-  /**
-   * Construct a WebIterator from a ResultIterator
-   */
-  def generateWebIterator(result: ResultIterator): WebIterator =
-  {
-    val startTime = System.nanoTime()
-
-    // println("SCHEMA: "+result.schema)
-    val headers: List[String] = "MIMIR_ROWID" :: result.schema.map(_._1).toList
-    val data: ListBuffer[(List[String], Boolean)] = new ListBuffer()
-
-    var i = 0
-    while(result.getNext()){
-      val list =
-        (
-          result.provenanceToken().payload.toString ::
-            result.schema.zipWithIndex.map( _._2).map( (i) => {
-              result(i).toString + (if (!result.deterministicCol(i)) {"*"} else {""})
-            }).toList
-        )
-
-     // println("RESULTS: "+list)
-      if(i < 100) data.append((list, result.deterministicRow()))
-      i = i + 1
-    }
-
-    val executionTime = (System.nanoTime() - startTime) / (1 * 1000 * 1000)
-    new WebIterator(headers, data.toList, i, result.missingRows(), executionTime)
   }
 
   /**
@@ -443,12 +427,13 @@ case class Database(backend: Backend)
     println(insertCmd)
     backend.fastUpdateBatch(
       insertCmd,
-      query(sourceQuery).mapRows( _.currentRow )
+      query(sourceQuery) { result => result.map( _.tuple ) }
     )
   }
   
 
-  def selectInto(targetTable: String, tableName: String){
+  def selectInto(targetTable: String, tableName: String): Unit =
+  {
 /*    val v:Option[Operator] = getView(tableName)
     val mod:Model = models.getModel(tableName)
     mod.bestGuess()
@@ -473,17 +458,13 @@ case class Database(backend: Backend)
     backend.update(  s"CREATE TABLE $targetTable ( $tableDef );"  )
     val insertCmd = s"INSERT INTO $targetTable( $tableCols ) VALUES ($colFillIns);"
     println(insertCmd)
-    query("SELECT * FROM " + tableName + ";").foreachRow(
-      result =>
-        backend.update(insertCmd, result.currentRow())
-    )
+    query("SELECT * FROM " + tableName + ";")(_.foreach { result =>
+      backend.update(insertCmd, result.tuple)
+    })
   }
-  def select(s: String) = {
+  def select(s: String) = 
+  {
     this.sql.convert(stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select])
-  }
-  def query(s: String): ResultIterator = {
-    val query = select(s)
-    this.query(query)
   }
   def stmt(s: String) = {
     new MimirJSqlParser(new StringReader(s)).Statement()

@@ -11,6 +11,7 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.optimizer._
 import mimir.provenance._
+import mimir.exec.stream._
 import net.sf.jsqlparser.statement.select._
 
 class Compiler(db: Database) extends LazyLogging {
@@ -26,6 +27,7 @@ class Compiler(db: Database) extends LazyLogging {
     var oper = rawOper
     logger.debug(s"RAW: $oper")
     
+    // Compute the best-guess expression
     val compiled = BestGuesser(db, oper, opts)
     oper               = compiled._1
     val outputSchema   = compiled._2
@@ -33,44 +35,22 @@ class Compiler(db: Database) extends LazyLogging {
     val rowDeterminism = compiled._4
     val provenanceCols = compiled._5
 
-    // The deterministic result set iterator should strip off the 
-    // provenance columns.  Figure out which columns need to be
-    // kept.  Note that the order here actually matters.
-    val tagPlusOutputSchemaNames = 
-      outputSchema.map(_._1).toList ++
-        colDeterminism.toList.flatMap( x => ExpressionUtils.getColumns(x._2)) ++ 
-        ExpressionUtils.getColumns(rowDeterminism)
+    // Fold the annotations back in
+    oper =
+      Project(
+        rawOper.columnNames.map { name => ProjectArg(name, Var(name)) } ++
+        colDeterminism.map { case (name, expression) => ProjectArg(CTPercolator.mimirColDeterministicColumnPrefix + name, expression) } ++
+        Seq(
+          ProjectArg(CTPercolator.mimirRowDeterministicColumnName, rowDeterminism),
+          ProjectArg(Provenance.rowidColnameBase, Function(Provenance.mergeRowIdFunction, provenanceCols.map( Var(_) ) ))
+        ),
+        oper
+      )
 
-    // We'll need it a few times, so cache the final operator's schema.
-    // This also forces the typechecker to run, so we get a final sanity
-    // check on the output of the rewrite rules.
-    val finalSchema = oper.schema
+    logger.debug(s"FULL STACK: $oper")
 
-    // We'll need to line the attributes in the output up with
-    // the order in which the user expects to see them.  Build
-    // a lookup table with name + position in the query being execed.
-    val finalSchemaOrderLookup = 
-      finalSchema.map(_._1).zipWithIndex.toMap
-   
-    logger.debug(s"SCHEMA: $finalSchema")
+    deploy(oper, rawOper.columnNames, opts)
 
-    val sql = sqlForBackend(oper, opts)
-
-    // Deploy to the backend
-    val results = 
-      db.backend.execute(sql)
-
-    // And wrap the results.
-    new NonDetIterator(
-      new ResultSetIterator(results, 
-        finalSchema.toMap,
-        tagPlusOutputSchemaNames.map(finalSchemaOrderLookup(_)), 
-        provenanceCols.map(finalSchemaOrderLookup(_))
-      ),
-      outputSchema,
-      outputSchema.map(_._1).map(colDeterminism(_)), 
-      rowDeterminism
-    )
   }
 
   def compileForSamples(
@@ -82,14 +62,13 @@ class Compiler(db: Database) extends LazyLogging {
     var oper = rawOper
     logger.debug(s"COMPILING FOR SAMPLES: $oper")
     
-    oper = Compiler.optimize(oper, opts);
+    oper = Compiler.optimize(oper, Seq(InlineProjections));
     logger.debug(s"OPTIMIZED: $oper")
 
     val bundled = TupleBundler(db, oper, seeds)
     oper               = bundled._1
     val nonDetColumns  = bundled._2
     val provenanceCols = bundled._3
-    val provenanceColSet = provenanceCols.toSet
 
     logger.debug(s"BUNDLED: $oper")
 
@@ -97,21 +76,36 @@ class Compiler(db: Database) extends LazyLogging {
 
     logger.debug(s"RE-OPTIMIZED: $oper")
 
-    // We'll need it a few times, so cache the final operator's schema.
-    // This also forces the typechecker to run, so we get a final sanity
-    // check on the output of the rewrite rules.
-    val finalSchema = oper.schema
+    new SampleResultIterator(
+      deploy(oper, rawOper.columnNames, opts),
+      rawOper.schema,
+      nonDetColumns,
+      seeds.size
+    )
+  }
 
-    // We'll need to line the attributes in the output up with
-    // the order in which the user expects to see them.  Build
-    // a lookup table with name + position in the query being execed.
-    val finalSchemaOrderLookup = 
-      finalSchema.map(_._1).zipWithIndex.toMap
+  def deploy(
+    compiledOper: Operator, 
+    outputCols: Seq[String], 
+    opts: Compiler.Optimizations = Compiler.standardOptimizations
+  ): ResultIterator =
+  {
+    var oper = compiledOper
+    val isAnOutputCol = outputCols.toSeq
 
-    val nonProvenanceSchema = 
-      finalSchema.
-        map(_._1).
-        filter { col => !provenanceColSet(col) }
+    // Run a final typecheck to check the sanitity of the rewrite rules
+    oper.schema()
+
+    // Optimize
+    oper = optimize(oper, opts)
+
+    // Strip off the final projection operator
+    val extracted = OperatorUtils.extractProjections(oper)
+    val projections = extracted._1.map { col => (col.name -> col) }.toMap
+    oper            = extracted._2
+
+    val annotationCols =
+      projections.keys.filter( !isAnOutputCol(_) )
 
     val sql = sqlForBackend(oper, opts)
 
@@ -119,15 +113,11 @@ class Compiler(db: Database) extends LazyLogging {
     val results = 
       db.backend.execute(sql)
 
-    new SampleResultIterator(
-      new ResultSetIterator(results, 
-        finalSchema.toMap,
-        nonProvenanceSchema.map(finalSchemaOrderLookup(_)), 
-        provenanceCols.map(finalSchemaOrderLookup(_))
-      ),
-      rawOper.schema,
-      nonDetColumns,
-      seeds.size
+    new ProjectionResultIterator(
+      outputCols.map( projections(_) ),
+      annotationCols.map( projections(_) ),
+      oper.schema,
+      results
     )
   }
 

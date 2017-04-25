@@ -154,7 +154,7 @@ class JDBCBackend(val backend: String, val filename: String)
     })
   }
 
-  def fastUpdateBatch(upd: String, argsList: Iterable[Seq[PrimitiveValue]]): Unit =
+  def fastUpdateBatch(upd: String, argsList: TraversableOnce[Seq[PrimitiveValue]]): Unit =
   {
     this.synchronized({
       if(conn == null) {

@@ -5,6 +5,7 @@ import org.jline.terminal.Terminal
 import org.jline.utils.{AttributedStyle,AttributedStringBuilder,AttributedString}
 
 import mimir.util.ExperimentalOptions
+import mimir.exec.stream.{ResultIterator,Row}
 
 trait OutputFormat
 {
@@ -19,20 +20,28 @@ object DefaultOutputFormat
   {
     println(msg);
   }
-  def print(result: ResultIterator)
+  def print(row: Row)
+  {
+    println(
+      row.tuple.zipWithIndex.map { case (field, idx) => 
+        field.toString + (
+          if(row.isColDeterministic(idx)){ "" } else { "*" }
+        )
+      }.mkString(",") + (
+        if(row.isDeterministic){ "" } else { " (This row may be invalid)" }
+      )
+    )
+  }
+  def print(output: ResultIterator)
   {
     ExperimentalOptions.ifEnabled("SILENT-TEST", () => {
       var x = 0
-      while(result.getNext()){ x += 1; if(x % 10000 == 0) {println(s"$x rows")} }
-      val missingRows = result.missingRows()
-      println(s"Total $x rows; Missing: $missingRows")
+      output.foreach { row => x += 1; if(x % 10000 == 0) {println(s"$x rows")} }
+      println(s"Total $x rows")
     }, () => {
-      println(result.schema.map( _._1 ).mkString(","))
+      println(output.schema.map( _._1 ).mkString(","))
       println("------")
-      result.foreachRow { row => println(row.rowString) }
-      if(result.missingRows()){
-        println("( There may be missing result rows )")
-      }
+      output.foreach { row => print(row) }
     })
   }
 }
@@ -46,22 +55,15 @@ class PrettyOutputFormat(terminal: Terminal)
     if(msg.length <= 0  || msg.charAt(msg.length - 1) != '\n'){ terminal.writer.write('\n') }
   }
 
-  type ResultRow = (Seq[(String,Boolean)], Boolean)
-
-  def print(result: ResultIterator)
+  def print(output: ResultIterator)
   {
-    val header:Seq[String] = result.schema.map( _._1 )
-    val spacing = scala.collection.mutable.Seq[Int]()++header.map(_.length)
-    var results:Iterable[ResultRow] = 
-      result.mapRows { row => 
-        ((0 until row.numCols).map { i =>
-          val cell = row(i).toString
-          (cell, row.deterministicCol(i))
-        }, row.deterministicRow())
-      }
-    for( (fields, _) <- results) {
+    val header:Seq[String] = output.schema.map( _._1 )
+    var spacing = scala.collection.mutable.Seq[Int]()++header.map(_.length)
+    var results:Seq[Row] = output.toSeq
+
+    for( row <- results ) {
       for(i <- 0 until spacing.size){
-        val fieldString = fields(i)._1.toString
+        val fieldString = row(i).toString
         if(fieldString.length > spacing(i)){
           spacing(i) = fieldString.length
         }
@@ -77,17 +79,17 @@ class PrettyOutputFormat(terminal: Terminal)
       spacing.map { width => "".padTo(width+2, '-') }.mkString("+")+"\n"
     )
 
-    for( (fields, rowDet) <- results ) {
+    for( row <- results ) {
       var sep = " "
       val lineStyle = 
-        if(rowDet){ AttributedStyle.DEFAULT }
+        if(row.isDeterministic){ AttributedStyle.DEFAULT }
         else { AttributedStyle.DEFAULT.faint().underline() }
       val currLine = new AttributedStringBuilder(200)
-      for( ((field, fieldDet), width) <- fields.zip(spacing) ){
+      for( i <- 0 until spacing.size ){
         currLine.append(sep, lineStyle)
         currLine.append(
-          field.toString.padTo(width, ' '),
-          if(fieldDet){ lineStyle } 
+          row(i).toString.padTo(spacing(i), ' '),
+          if(row.isColDeterministic(i)){ lineStyle } 
             else { lineStyle.foreground(AttributedStyle.RED) }
         )
         sep = " | "

@@ -174,10 +174,10 @@ class BestGuessCache(db: Database) extends LazyLogging {
     logger.debug(s"Building cache for $modelName-$varIdx[$args] with\n$input")
 
     val guesses = 
-      db.query(input).mapRows(row => {
-        val compiledArgs = args.map(Provenance.plugInToken(_, row.provenanceToken()))
-        val compiledHints = hints.map(Provenance.plugInToken(_, row.provenanceToken()))
-        val tuple = row.currentTuple()
+      db.query(input) { _.map { row => 
+        val compiledArgs = args.map(Provenance.plugInToken(_, row.provenance))
+        val compiledHints = hints.map(Provenance.plugInToken(_, row.provenance))
+        val tuple = row.tupleMap
         val dataArgs = compiledArgs.map(Eval.eval(_, tuple))
         val dataHints = compiledHints.map(Eval.eval(_, tuple))
         val guess = model.bestGuess(varIdx, dataArgs, dataHints)
@@ -185,7 +185,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
         logger.trace(s"Registering $dataArgs -> $guess")
 
         guess :: dataArgs.toList
-      })
+      }.toSeq }
 
     db.backend.fastUpdateBatch(
       s"""INSERT INTO $cacheTable(
@@ -210,7 +210,6 @@ class BestGuessCache(db: Database) extends LazyLogging {
       """,
       List(v) ++ args
     )
-
   }
 
   private def emptyCacheTable(cacheTable: String) =

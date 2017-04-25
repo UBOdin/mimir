@@ -63,8 +63,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
             columns.map( c => ProjectArg(c, Var(c)) ),
             query
           )
-        ).
-        foreachRow( row => learn(row.currentRow) )
+        ) { _.foreach { row => learn(row.tuple)  } }
       },
       TypeInferenceModel.logger.info(_)
     )

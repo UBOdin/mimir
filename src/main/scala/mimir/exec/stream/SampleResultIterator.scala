@@ -1,8 +1,9 @@
-package mimir.exec
+package mimir.exec.stream
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir.algebra._
+import mimir.exec.{WorldBits,TupleBundler}
 
 class SampleResultIterator(
   val src: ResultIterator, 
@@ -13,7 +14,7 @@ class SampleResultIterator(
   extends ResultIterator
   with LazyLogging
 {
-  val inputs:Seq[Seq[(Int, Double)]] = 
+  val lookup:Seq[Seq[(Int, Double)]] = 
     schema.map { case (name, t) =>
       if(nonDet(name)) {
         (0 until numSamples).map { i => 
@@ -23,33 +24,37 @@ class SampleResultIterator(
         Seq( (src.schema.indexWhere(_._1.equals(name)), 1.0) )
       }
     }
-  val worldBitsInput = src.schema.indexWhere(_._1.equals("MIMIR_WORLD_BITS"))
+  val worldBitsColumnIdx = src.schema.indexWhere(_._1.equals("MIMIR_WORLD_BITS"))
 
+  def annotations = src.annotations
+
+  def close() = src.close()
+  def hasNext() = src.hasNext()
+  def next() = SampleRow(src.next(), this)
+}
+
+case class SampleRow(input: Row, source: SampleResultIterator) extends Row
+{
   private def values(v: Int): Seq[(PrimitiveValue, Double)] =
-    inputs(v).map { case (i, p) => (src(i), p) }
+    source.lookup(v).map { case (i, p) => (input(i), p) }
+
+  def tuple: Seq[PrimitiveValue] = 
+    (0 until source.lookup.size).map { i => apply(i) }
 
   /**
    * Return the most common value as the "default"
    */
   def apply(v: Int): PrimitiveValue = 
-    possibilities(v).toSeq.sortBy(-_._2).head._1
+    possibilities(v).toSeq.maxBy(_._2)._1
 
-  def open(): Unit = src.open()
-  def close(): Unit = src.close()
-  def getNext(): Boolean = src.getNext()
-  def numCols: Int = schema.size
-
-  def deterministicCol(v: Int): Boolean = (inputs(v).size > 1)
+  def deterministicCol(v: Int): Boolean = (source.lookup(v).size > 1)
   def deterministicRow(): Boolean = confidence() >= 1.0
-
-  def missingRows(): Boolean = src.missingRows()
-  def provenanceToken(): RowIdPrimitive = src.provenanceToken()
 
   /**
    * Return the probability associated with this row
    */
   def confidence(): Double =
-    WorldBits.confidence(src(worldBitsInput).asLong, numSamples)
+    WorldBits.confidence(input(source.worldBitsColumnIdx).asLong, source.numSamples)
 
   /**
    * Return the set of all possible values with their associated probabilities
