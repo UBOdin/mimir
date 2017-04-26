@@ -42,7 +42,7 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
         val projectedQuery =
           Project(argCols ++ hintCols, limitedQuery)
 
-        db.query(projectedQuery) { _.toSeq.map { _.tuple.splitAt(argExprs.size) } }
+        db.query(projectedQuery) { _.toIndexedSeq.map { _.tuple.splitAt(argExprs.size) } }
       }
     }
   }

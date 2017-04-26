@@ -23,102 +23,145 @@ object EvalSpec
   "The query evaluator" should {
 
     "Compute Deterministic Aggregate Queries" >> {
-      val q0 = query("""
+      val q0 = querySingleton("""
         SELECT SUM(QUANTITY)
         FROM PRODUCT_INVENTORY
-      """).allRows.flatten
-      q0 must have size(1)
-      q0 must contain(i(92))
+      """).asLong
+      q0 must beEqualTo(92)
 
-      val q1 = 
-        LoggerUtils.debug(List(
-          // "mimir.exec.Compiler"
-        ), () => {
-          query("""
-            SELECT COMPANY, SUM(QUANTITY)
-            FROM PRODUCT_INVENTORY
-            GROUP BY COMPANY;
-          """)
-        }).allRows.flatten
-      q1 must have size(6)
-      q1 must contain( str("Apple"), i(9), str("HP"), i(69), str("Sony"), i(14) )
-
-      val q2 = query("""
-        SELECT COMPANY, MAX(PRICE)
+      LoggerUtils.debug(
+        // "mimir.exec.Compiler"
+      ) {query("""
+        SELECT COMPANY, SUM(QUANTITY) AS QTY
         FROM PRODUCT_INVENTORY
         GROUP BY COMPANY;
-                                                  """).allRows.flatten
-      q2 must have size(6)
-      q2 must contain( str("Apple"), f(13.00), str("HP"), f(102.74), str("Sony"), f(38.74) )
+      """){ result =>
+        val q1 = result.map { row => 
+          (row("COMPANY").asString, row("QTY").asLong) 
+        }.toSeq
+        q1 must have size(3)
+        q1 must contain(
+          ("Apple", 9), 
+          ("HP", 69), 
+          ("Sony", 14)
+        )
 
-      val q3 = query("""
-        SELECT COMPANY, AVG(PRICE)
+      }}
+
+      query("""
+        SELECT COMPANY, MAX(PRICE) AS MP
         FROM PRODUCT_INVENTORY
         GROUP BY COMPANY;
-                                                  """).allRows.flatten
+      """) { result => 
+        val q2 = result.map { row => 
+          (row("COMPANY").asString, row("MP").asDouble) 
+        }.toSeq
+        q2 must have size(3)
+        q2 must contain( 
+          ("Apple", 13.00), 
+          ("HP", 102.74), 
+          ("Sony", 38.74) 
+        )
+      }
 
-      q3 must have size(6)
-      q3 must contain( str("Apple"), f(12.5), str("HP"), f(64.41333333333334), str("Sony"), f(38.74) )
+      query("""
+        SELECT COMPANY, AVG(PRICE) AS AP
+        FROM PRODUCT_INVENTORY
+        GROUP BY COMPANY;
+      """) { result =>
+        val q3 = result.map { row => 
+          (row("COMPANY").asString, row("AP").asDouble) 
+        }.toSeq
+        q3 must have size(3)
+        q3 must contain( 
+          ("Apple", 12.5), 
+          ("HP", 64.41333333333334), 
+          ("Sony", 38.74) 
+        )
+      }
 
-      val q4 = query("""SELECT COMPANY, MIN(QUANTITY)FROM PRODUCT_INVENTORY GROUP BY COMPANY;""").allRows.flatten
-      q4 must have size(6)
-      q4 must contain( str("Apple"), i(4), str("HP"), i(9), str("Sony"), i(14) )
 
-      val q5 = query("""
+      query("""
+        SELECT COMPANY, MIN(QUANTITY) AS MQ 
+        FROM PRODUCT_INVENTORY 
+        GROUP BY COMPANY;
+      """){ result =>
+        val q4 = result.toSeq.map { row => (row("COMPANY").asString, row("MQ").asLong) } 
+        q4 must have size(3)
+        q4 must contain( 
+          ("Apple", 4), 
+          ("HP", 9), 
+          ("Sony", 14) 
+        )
+      }
+
+      querySingleton("""
         SELECT COUNT(*)
         FROM PRODUCT_INVENTORY;
-      """).allRows.flatten
-      q5 must have size(1)
-      q5 must contain( i(6) )
+      """).asLong must beEqualTo(6l)
 
-      val q6 = query("""
+      querySingleton("""
         SELECT COUNT(DISTINCT COMPANY)
         FROM PRODUCT_INVENTORY;
-      """).allRows.flatten
-      q6 must have size(1)
-      q6 must contain( i(3) )
+      """).asLong must beEqualTo(3l)
 
-      val q7a = query("""
+      querySingleton("""
         SELECT COUNT(*)
         FROM PRODUCT_INVENTORY
         WHERE COMPANY = 'Apple';
-      """).allRows.flatten
-      q7a must have size(1)
-      q7a must contain( i(2) )
+      """).asLong must beEqualTo(2l)
 
-      val q7b = query("""
+      querySingleton("""
         SELECT COUNT(DISTINCT COMPANY)
         FROM PRODUCT_INVENTORY
         WHERE COMPANY = 'Apple';
-      """).allRows.flatten
-      q7b must have size(1)
-      q7b must contain( i(1) )
+      """).asLong must beEqualTo(1l)
 
-      val q8 = query("""
+      query("""
         SELECT P.COMPANY, P.QUANTITY, P.PRICE
         FROM (SELECT COMPANY, MAX(PRICE) AS COST
           FROM PRODUCT_INVENTORY
           GROUP BY COMPANY)subq, PRODUCT_INVENTORY P
         WHERE subq.COMPANY = P.COMPANY AND subq.COST = P.PRICE;
-                                                                                                              """).allRows.flatten
-      q8 must have size(9)
-      q8 must contain( str("Apple"), i(5), f(13.00), str("HP"), i(37), f(102.74), str("Sony"), i(14), f(38.74) )
+      """){ result => 
+        val q8 = result.toSeq.map { row => (
+          row("COMPANY").asString, 
+          row("QUANTITY").asLong, 
+          row("PRICE").asDouble
+        )} 
+        q8 must have size(3)
+        q8 must contain( 
+          ("Apple", 5, 13.00), 
+          ("HP", 37, 102.74), 
+          ("Sony", 14, 38.74) 
+        )
+      }
 
-      val q9 = query("""
+      query("""
         SELECT P.COMPANY, P.PRICE
-        FROM (SELECT AVG(PRICE) AS A FROM PRODUCT_INVENTORY)subq, PRODUCT_INVENTORY P
+        FROM (SELECT AVG(PRICE) AS A FROM PRODUCT_INVENTORY) subq, PRODUCT_INVENTORY P
         WHERE PRICE > subq.A;
-                                                                                                                                  """).allRows.flatten
-      q9 must have size(4)
-      q9 must contain( str("HP"), f(65.00), str("HP"), f(102.74) )
+      """) { result =>
+        val q9 = result.toSeq.map { row => (
+          row("COMPANY").asString,
+          row("PRICE").asDouble
+        )}
+        q9 must have size(2)
+        q9 must contain( 
+          ("HP", 65.00), 
+          ("HP", 102.74) 
+        )
+      }
 
-      val q10 = query("""
+      query("""
         SELECT MIN(subq2.B)
         FROM (SELECT P.PRICE AS B FROM (SELECT AVG(QUANTITY) AS A FROM PRODUCT_INVENTORY)subq, PRODUCT_INVENTORY P
         WHERE P.QUANTITY > subq.A)subq2;
-                                                    """).allRows.flatten
-      q10 must have size(1)
-      q10 must contain( f(65.00) )
+      """) { result =>
+        val q10 = result.toSeq.map { row => row(0).asDouble } 
+        q10 must have size(1)
+        q10 must contain( 65.00 )
+      }
     }
 
   }

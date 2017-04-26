@@ -31,6 +31,7 @@ object TupleBundlerSpec
   val numSamples = 10
   val sampler = new TupleBundler(db, (0 until numSamples).map { _ => rand.nextLong })
   val allWorlds = sampler.fullBitVector
+  val columnNames = TupleBundler.columnNames(_:String, numSamples)
 
   def conf(bv: Long): Double = WorldBits.confidence(bv, numSamples)
 
@@ -75,12 +76,12 @@ object TupleBundlerSpec
         """))._1
 
       val r1 =
-        db.query(q1).mapRows( x => 
+        db.query(q1){ _.map { row => 
           (
-            x(0).asLong.toInt, 
-            (1 until 11).map { i => x(i).asLong.toInt }.toSet
+            row("A").asLong.toInt, 
+            columnNames("B").map { row(_).asLong.toInt }.toSet
           ) 
-        ).toMap
+        }.toMap }
 
       // Deterministic rows.  Should always be there
       r1 must contain(eachOf( (2 -> Set(2)), (4 -> Set(2)) ))
@@ -100,7 +101,10 @@ object TupleBundlerSpec
       q1.schema.map(_._1) must beEqualTo(Seq("A", "MIMIR_WORLD_BITS"))
 
       val r1 =
-        db.query(q1).mapRows( x => (x(0).asLong.toInt -> x(1).asLong) ).toMap
+        db.query(q1) { _.map { row => 
+            (row("A").asInt, row("MIMIR_WORLD_BITS").asLong)
+          }.toMap 
+        }
 
       r1.keys should contain( eachOf(1, 2, 4) )
       if(r1 contains 2){
@@ -126,8 +130,10 @@ object TupleBundlerSpec
       q1.schema.map(_._1) must beEqualTo(Seq("A", "MIMIR_WORLD_BITS"))
 
       val r1 =
-        db.query(q1).mapRows( x => (x(0).asLong.toInt, x(1).asLong) ).toSeq
-
+        db.query(q1){ _.map { row =>
+            (row("A").asInt, row("MIMIR_WORLD_BITS").asLong)
+          }.toIndexedSeq
+        }
 
       // This particular result should be deterministic
       r1 must haveSize(1)
@@ -145,16 +151,14 @@ object TupleBundlerSpec
       // This test assumes that compileFlat just splits 'B' into samples and 
       // adds a world bits column.
       q1.schema.map(_._1) must beEqualTo(
-        (0 until numSamples).map(sampler.colNameInSample("B", _)).toSeq ++
-        Seq("MIMIR_WORLD_BITS")
+        columnNames("B").toSeq ++ Seq("MIMIR_WORLD_BITS")
       )
 
       // Extract into (Seq(B values), worldBits)
       val r1 =
-        db.query(q1).mapRows { x => (
-          (0 until numSamples).map { x(_).asLong.toInt }.toSeq,
-          x(numSamples).asLong
-        )}.toSeq
+        db.query(q1) { _.map { row => 
+          ( columnNames("B").map { row(_).asInt }.toSeq, row("MIMIR_WORLD_BITS").asLong )
+        }.toIndexedSeq }
 
       // This particular result *row* should be deterministic
       r1 must haveSize(1)
@@ -173,18 +177,18 @@ object TupleBundlerSpec
         """))._1
 
       // This test assumes that compileFlat just adds a WORLDS_BITS column
-      q1.schema.map(_._1) must beEqualTo(Seq("A")++
-        (0 until numSamples).map(sampler.colNameInSample("B", _)).toSeq ++
-        Seq("MIMIR_WORLD_BITS")
+      q1.schema.map(_._1) must beEqualTo(
+        Seq("A")++ columnNames("B") ++ Seq("MIMIR_WORLD_BITS")
       )
 
       val r1 =
-        db.query(q1).mapRows { x => (
-          x(0).asLong.toInt -> (
-            (1 until (numSamples+1)).map { x(_).asLong.toInt }.toSeq,
-            x(numSamples+1).asLong
+        db.query(q1){ _.map { row => 
+          ( row("A").asInt -> 
+            ( columnNames("B").map { row(_).asInt }.toSeq, 
+              row("MIMIR_WORLD_BITS").asLong
+            )
           )
-        )}.toMap
+        }.toMap }
 
       // A is deterministic.  We should see all possibilities
       r1.keys must contain(eachOf( 1, 2, 4 ))
@@ -206,19 +210,19 @@ object TupleBundlerSpec
           SELECT B, SUM(A) AS A FROM R_CLASSIC GROUP BY B
         """))._1
 
-      q1.schema.map(_._1) must beEqualTo(Seq("B")++
-        (0 until numSamples).map(sampler.colNameInSample("A", _)).toSeq ++
-        Seq("MIMIR_WORLD_BITS")
+      q1.schema.map(_._1) must beEqualTo(
+        Seq("B")++columnNames("A")++Seq("MIMIR_WORLD_BITS")
       )
 
-      val r1 =
-        db.query(q1).mapRows { x => 
-          val b = x(0).asLong.toInt
-          val worlds = WorldBits.worlds(x(numSamples+1).asLong, numSamples)
-          val a = worlds.map { i => x(i + 1).asLong.toInt }
-
-          ( b -> (a, worlds) )
-        }.toMap
+      val r1: Map[Int, (Set[Int], Set[Int])] =
+        db.query(q1){ _.map { row => 
+          val bv = row("MIMIR_WORLD_BITS").asLong
+          ( row("B").asInt -> (
+              TupleBundler.possibleValues(bv, columnNames("A").map { row(_) }).keySet.map { _.asInt },
+              WorldBits.worlds(bv, numSamples)
+            )
+          )
+        }.toMap }
 
       r1.keys must contain( 2 )
       r1.keys should contain(eachOf( 3, 4 ))

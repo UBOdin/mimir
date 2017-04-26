@@ -15,9 +15,9 @@ object PlantScenario
     }
     "Be able to load GBIF (which has garbled data)" >> {
       // disable data import warnings
-      LoggerUtils.enhance("mimir.util.NonStrictCSVParser", LoggerUtils.ERROR, () => {
+      LoggerUtils.error("mimir.util.NonStrictCSVParser"){
         db.loadTable("test/plants/GBIF.csv"); 
-      })
+      }
 
       // Lines 469 and 1212 of the file GBIF.csv have some garbling.
       // For example, line 469, where

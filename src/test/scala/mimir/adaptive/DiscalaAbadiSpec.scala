@@ -60,9 +60,7 @@ object DiscalaAbadiSpec
           MultilensConfig("SHIPPING", db.getTableOperator("SHIPPING"), Seq())
         )
       LoggerUtils.debug(
-        List(
           // "mimir.exec.Compiler"
-        )
       ){
         db.query(
           Project(Seq(ProjectArg("TABLE_NODE", Var("TABLE_NODE"))),
@@ -74,124 +72,139 @@ object DiscalaAbadiSpec
               )
             )
           )
-        ){ _.toSeq must not contain(IntPrimitive(-1)) }
+        ){ _.map { _("TABLE_NODE") }.toSeq must not contain(IntPrimitive(-1)) }
       }
 
     }
 
     "Create a schema that can be queried" >> {
-      val tables = 
-        db.query(
-          OperatorUtils.projectDownToColumns(
-            Seq("TABLE_NAME", "SCHEMA_NAME"),
-            OperatorUtils.makeUnion(
-              db.adaptiveSchemas.tableCatalogs
-            )
+      db.query(
+        OperatorUtils.projectDownToColumns(
+          Seq("TABLE_NAME", "SCHEMA_NAME"),
+          OperatorUtils.makeUnion(
+            db.adaptiveSchemas.tableCatalogs
           )
-        ).mapRows { row => 
-          (row(0).asString, row(1).asString, row.deterministicRow)
-        }
-      tables must contain( eachOf( 
-        ("ROOT", "SHIPPING", true),
-        ("CONTAINER_1", "SHIPPING", false)
-      ))
+        )
+      ) { _.map { row => 
+          (
+            row("TABLE_NAME").asString, 
+            row("SCHEMA_NAME").asString,
+            row.isDeterministic
+          )
+        } must contain( 
+          ("ROOT", "SHIPPING", true),
+          ("CONTAINER_1", "SHIPPING", false)
+        )
+      }
 
-      val attrs =
-        db.query(
-          Sort(Seq(SortColumn(Var("TABLE_NAME"), true), SortColumn(Var("IS_KEY"), false)),
-            OperatorUtils.projectDownToColumns(
-              Seq("TABLE_NAME", "ATTR_NAME", "IS_KEY"),
-              OperatorUtils.makeUnion(
-                db.adaptiveSchemas.attrCatalogs
-              )
+      db.query(
+        Sort(Seq(SortColumn(Var("TABLE_NAME"), true), SortColumn(Var("IS_KEY"), false)),
+          OperatorUtils.projectDownToColumns(
+            Seq("TABLE_NAME", "ATTR_NAME", "IS_KEY"),
+            OperatorUtils.makeUnion(
+              db.adaptiveSchemas.attrCatalogs
             )
           )
-        ).mapRows { row => 
-          (row(0).asString, row(1).asString, row(2).asInstanceOf[BoolPrimitive].v)
-        } 
-      attrs must contain( eachOf( 
-        ("ROOT","MONTH",false),
-        ("BILL_OF_LADING_NBR","QUANTITY",false)
-      ) )
-      attrs.map( row => (row._1, row._2) ) must not contain( ("ROOT", "ROOT") )
+        )
+      ){ results =>
+        val attrs = results.map { row => 
+          (
+            row("TABLE_NAME").asString, 
+            row("ATTR_NAME").asString,
+            row("IS_KEY").asInstanceOf[BoolPrimitive].v
+          )
+        }.toSeq 
+        attrs must contain( eachOf( 
+          ("ROOT","MONTH",false),
+          ("BILL_OF_LADING_NBR","QUANTITY",false)
+        ) )
+        attrs.map( row => (row._1, row._2) ) must not contain( ("ROOT", "ROOT") )
+      }
     }
 
     "Allocate all attributes to some relation" >> {
-      // skipped("Will, you need to look at this")
-      val attrs =
-        db.query(
-          Sort(Seq(SortColumn(Var("TABLE_NAME"), true), SortColumn(Var("IS_KEY"), false)),
-            OperatorUtils.projectDownToColumns(
-              Seq("TABLE_NAME", "ATTR_NAME", "IS_KEY"),
-              OperatorUtils.makeUnion(
-                db.adaptiveSchemas.attrCatalogs
-              )
+      db.query(
+        Sort(Seq(SortColumn(Var("TABLE_NAME"), true), SortColumn(Var("IS_KEY"), false)),
+          OperatorUtils.projectDownToColumns(
+            Seq("TABLE_NAME", "ATTR_NAME", "IS_KEY"),
+            OperatorUtils.makeUnion(
+              db.adaptiveSchemas.attrCatalogs
             )
           )
-        ).mapRows { row => 
-          (row(1).asString)
-        } 
-      attrs.toSet must be equalTo(
-        db.getTableOperator("SHIPPING").schema.map(_._1).toSet
-      )
+        )
+      ){ _.map { row => 
+          row("ATTR_NAME").asString
+        }.toSet must be equalTo(
+          db.getTableOperator("SHIPPING").schema.map(_._1).toSet
+        )
+      }
     }
 
     "Allow native SQL queries over the catalog tables" >> {
-      val tables =
-        LoggerUtils.debug(
-          List(
-            // "mimir.exec.Compiler"
-          ), () => {
-            query("""
-              SELECT TABLE_NAME, SCHEMA_NAME FROM MIMIR_SYS_TABLES
-            """).mapRows { row => (row(0), row(1)) }
-        }) 
-
-      tables must contain( (StringPrimitive("ROOT"), StringPrimitive("SHIPPING")) )
-      tables must contain( (StringPrimitive("MIMIR_VIEWS"), StringPrimitive("BACKEND")) )
-      tables must contain( (StringPrimitive("SHIPPING"), StringPrimitive("BACKEND")) )
-
-      val attrs = 
+      LoggerUtils.debug(
+        // "mimir.exec.Compiler"
+      ) {
         query("""
-          SELECT TABLE_NAME, ATTR_NAME FROM MIMIR_SYS_ATTRS
-        """).mapRows { row => (row(0), row(1)) }
+          SELECT TABLE_NAME, SCHEMA_NAME FROM MIMIR_SYS_TABLES
+        """){ results =>
+          val tables = results.map { row => (row("TABLE_NAME").asString, row("SCHEMA_NAME").asString) }.toSeq 
 
-      attrs must contain( (StringPrimitive("ROOT"), StringPrimitive("MONTH")) )
-      attrs must contain( (StringPrimitive("BILL_OF_LADING_NBR"), StringPrimitive("QUANTITY")) )
+          tables must contain( ("ROOT", "SHIPPING") )
+          tables must contain( ("MIMIR_VIEWS", "BACKEND") )
+          tables must contain( ("SHIPPING", "BACKEND") )
+        }
+      } 
 
-      val attrStrings = 
-        LoggerUtils.debug(
-          List(
-            // "mimir.exec.Compiler"
-          ), () => {
-            query("""
-              SELECT ATTR_NAME FROM MIMIR_SYS_ATTRS
-              WHERE SCHEMA_NAME = 'SHIPPING'
-                AND TABLE_NAME = 'ROOT'
-            """).mapRows( _.rowString )
-        })
-      attrStrings must contain(
-        "'FOREIGN_DESTINATION' (This row may be invalid)"
-      )
+
+      
+      query("""
+        SELECT TABLE_NAME, ATTR_NAME FROM MIMIR_SYS_ATTRS
+      """) { results =>
+        val attrs = results.map { row => (row("TABLE_NAME").asString, row("ATTR_NAME").asString) }.toSeq 
+        attrs must contain( ("ROOT", "MONTH") )
+        attrs must contain( ("BILL_OF_LADING_NBR", "QUANTITY") )
+      }
+
+      LoggerUtils.debug(
+        // "mimir.exec.Compiler"
+      ) {
+        query("""
+          SELECT ATTR_NAME FROM MIMIR_SYS_ATTRS
+          WHERE SCHEMA_NAME = 'SHIPPING'
+            AND TABLE_NAME = 'ROOT'
+        """) { results =>
+          val attrStrings = results.map { row => (row("ATTR_NAME").asString, row.isDeterministic) }.toSeq 
+          attrStrings must contain(
+            ("FOREIGN_DESTINATION", false)
+          )
+        }
+      }
     }
 
     "Be introspectable" >> {
       val baseQuery = """
-          SELECT ATTR_NAME, ROWID() FROM MIMIR_SYS_ATTRS
+          SELECT ATTR_NAME, ROWID() AS ID FROM MIMIR_SYS_ATTRS
           WHERE SCHEMA_NAME = 'SHIPPING'
             AND TABLE_NAME = 'BILL_OF_LADING_NBR'
         """
 
-      val attrStrings = 
-        LoggerUtils.debug(
-          List(
-            // "mimir.exec.Compiler"
-          ), () => {
-            query(baseQuery).mapRows( _.rowString )
-        })
-      attrStrings must contain(
-        "'QUANTITY','47|21|45|left|right|right' (This row may be invalid)"
-      )
+      
+      LoggerUtils.debug(
+        // "mimir.exec.Compiler"
+      ){
+        query(baseQuery){ results =>
+          val attrStrings = results.map { row => 
+            (
+              row("ATTR_NAME").asString, 
+              row("ID").asString, 
+              row.isDeterministic
+            ) 
+          }.toSeq 
+          attrStrings must contain(
+            ("QUANTITY","47|21|45|left|right|right",false)
+          )
+        }
+      }
 
       val explanation =
         explainRow(baseQuery, "47|21|45|left|right|right")
@@ -201,9 +214,9 @@ object DiscalaAbadiSpec
 
 
     "Create queriable relations" >> {
-      query("""
+      queryOneColumn("""
         SELECT QUANTITY FROM SHIPPING.BILL_OF_LADING_NBR"""
-      ).mapRows( row => row(0) ) must contain(StringPrimitive("1"))
+      ){ _.toSeq must contain(StringPrimitive("1")) }
     }
 
   }

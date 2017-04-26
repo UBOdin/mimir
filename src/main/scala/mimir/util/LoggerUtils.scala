@@ -11,17 +11,17 @@ object LoggerUtils {
   val WARN  = Level.WARN
   val ERROR = Level.ERROR
 
-  def trace[A](loggerName: String)(body: => A): A =
+  def trace[A]()(body: => A) = body
+  def trace[A](loggerName: String*)(body: => A): A =
     enhance(loggerName, Level.TRACE){ body } 
 
-  def trace[A](loggerName: List[String])(body: => A): A =
-    enhance(loggerName, Level.TRACE){ body }
-
-  def debug[A](loggerName: String)(body: => A): A =
+  def debug[A]()(body: => A) = body
+  def debug[A](loggerName: String*)(body: => A): A =
     enhance(loggerName, Level.DEBUG){ body }
 
-  def debug[A](loggerName: List[String])(body: => A): A =
-    enhance(loggerName, Level.DEBUG){ body }
+  def error[A]()(body: => A) = body
+  def error[A](loggerName: String*)(body: => A): A =
+    enhance(loggerName, Level.ERROR){ body }
 
   def enhance[A](loggerName: String, level: Level)(body: => A): A =
   {
@@ -39,11 +39,13 @@ object LoggerUtils {
     }
   }
 
-  def enhance[A](loggerName: List[String], level: Level)(body: => A): A =
+  def enhance[A](loggerName: Seq[String], level: Level)(body: => A): A =
   {
-    loggerName match {
-      case Nil => body
-      case hd :: rest => enhance(rest, level){ enhance(hd, level)(body) }
+    if(loggerName.isEmpty){ body }
+    else { 
+      enhance(loggerName.tail, level){ 
+        enhance(loggerName.head, level)(body) 
+      }
     }
   }
 

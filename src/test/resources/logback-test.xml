@@ -19,6 +19,7 @@
   <logger name="mimir.exec.BestGuesser" level="INFO"/>
   <logger name="mimir.exec.TupleBundler" level="INFO"/>
   <logger name="mimir.exec.WorldBits" level="INFO"/>
+  <logger name="mimir.exec.stream.ProjectionResultIterator" level="INFO"/>
   <logger name="mimir.sql.sqlite.MimirCast$" level="INFO"/>
   <logger name="mimir.sql.sqlite.BestGuessVGTerm" level="INFO"/>
   <logger name="mimir.sql.sqlite.SampleVGTerm" level="INFO"/>

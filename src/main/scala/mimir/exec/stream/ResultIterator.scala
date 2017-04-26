@@ -8,9 +8,9 @@ trait ResultIterator
   def schema: Seq[(String, Type)]
   def annotations: Seq[(String, Type)]
 
-  val schemaLookup: Map[String, (Int, Type)] = 
+  lazy val schemaLookup: Map[String, (Int, Type)] = 
     schema.zipWithIndex.map { case ((name, t), idx) => (name -> (idx, t)) }.toMap
-  val annotationsLookup: Map[String, (Int, Type)] = 
+  lazy val annotationsLookup: Map[String, (Int, Type)] = 
     annotations.zipWithIndex.map { case ((name, t), idx) => (name -> (idx, t)) }.toMap
 
   def getIdx(name: String): Int = schemaLookup(name)._1

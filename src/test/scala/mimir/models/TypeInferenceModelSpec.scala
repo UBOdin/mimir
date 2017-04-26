@@ -48,12 +48,12 @@ object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
     "Recognize CPU Cores" >> {
       loadCSV("CPUSPEED", new File("test/data/CPUSpeed.csv"))
       val model = new TypeInferenceModel("CPUSPEED:CORES", Array("CORES"), 0.5)
-      LoggerUtils.debug(List(
+      LoggerUtils.debug(
         //"mimir.models.TypeInferenceModel"
-      ), () => {
+      ){
         model.train(db, table("CPUSPEED"))
         guess(model) must be equalTo(TInt())
-      })
+      }
     }
 
   }

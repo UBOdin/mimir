@@ -397,10 +397,22 @@ object TupleBundler
 
   val worldBitsColumnName = "MIMIR_WORLD_BITS"
   def colNameInSample(col: String, i: Int): String = s"MIMIR_SAMPLE_${i}_$col"
+  def columnNames(col: String, worlds: Int): Seq[String] =
+    (0 until worlds).map(colNameInSample(col, _))
   def columnNames(col: String, seeds: Seq[Long]): Seq[String] =
-    (0 until seeds.length).map(colNameInSample(col, _))
+    columnNames(col, seeds.length)
 
-  def possibleValues(bv: Long, worlds: Seq[(PrimitiveValue, Double)]): Map[PrimitiveValue, Double] =
+  def possibleValues(bv: Long, worlds: Seq[PrimitiveValue]): Map[PrimitiveValue, Int] =
+  {
+    worlds.zipWithIndex.
+      // Pick out only those values in legitimate worlds
+      filter { case (_, i) => WorldBits.isInWorld(bv, i) }.
+      // Group together identical values
+      groupBy( _._1 ).
+      // And total up the counts for each group
+      mapValues( _.size )
+  }
+  def possibleValuesWithProbability(bv: Long, worlds: Seq[(PrimitiveValue, Double)]): Map[PrimitiveValue, Double] =
   {
     worlds.zipWithIndex.
       // Pick out only those values in legitimate worlds
@@ -413,7 +425,7 @@ object TupleBundler
 
   def mostLikelyValue(bv: Long, worlds: Seq[(PrimitiveValue, Double)]): Option[PrimitiveValue] =
   {
-    val p = possibleValues(bv, worlds)
+    val p = possibleValuesWithProbability(bv, worlds)
     if(p.isEmpty){ 
       return None 
     } else { 

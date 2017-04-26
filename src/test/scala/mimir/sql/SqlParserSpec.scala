@@ -419,12 +419,12 @@ object SqlParserSpec
 			)
 			q.schema must contain(eachOf[(String,Type)]( ("COMPANY",TString()), ("SUM", TInt()) ))
 
-			LoggerUtils.debug(List(
+			LoggerUtils.debug(
 				// "mimir.sql.RAToSql",
 				// "mimir.exec.Compiler"
-			), () => {
-				db.query(q).allRows
-			}) must not beEmpty
+			){
+				db.query(q){ _.toSeq must not beEmpty }
+			} 
 		}
 
 		"Support DISTINCT Aggregates" >> {
@@ -507,15 +507,17 @@ object SqlParserSpec
 			 	)
 			guessCacheData must contain( ===(Seq[PrimitiveValue](IntPrimitive(3), IntPrimitive(2))) )
 		 	
-			db.query(convert("SELECT * FROM SaneR")).allRows must be equalTo List(
-				List(IntPrimitive(1),IntPrimitive(2),IntPrimitive(3)),
-				List(IntPrimitive(1),IntPrimitive(3),IntPrimitive(1)),
-				List(IntPrimitive(2),IntPrimitive(2),IntPrimitive(1)),
-				List(IntPrimitive(1),IntPrimitive(2),NullPrimitive()),
-				List(IntPrimitive(1),IntPrimitive(4),IntPrimitive(2)),
-				List(IntPrimitive(2),IntPrimitive(2),IntPrimitive(1)),
-				List(IntPrimitive(4),IntPrimitive(2),IntPrimitive(4))
-			)
+			db.query(convert("SELECT * FROM SaneR")){ _.map { row =>
+				(row("A").asInt, row("B").asInt, row("C"))
+			}.toSeq must contain(
+				(1, 2, IntPrimitive(3)),
+				(1, 3, IntPrimitive(1)),
+				(2, 2, IntPrimitive(1)),
+				(1, 2, NullPrimitive()),
+				(1, 4, IntPrimitive(2)),
+				(2, 2, IntPrimitive(1)),
+				(4, 2, IntPrimitive(4))
+			) }
 		}
 
 		"Create Lenses with no or multiple arguments" in {

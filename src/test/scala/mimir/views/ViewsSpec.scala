@@ -38,24 +38,25 @@ object ViewsSpec
 
     "Support Simple SELECTs" >> {
       db.views.create("RAB", select("SELECT A, B FROM R"))
-      val result = query("SELECT A FROM RAB").allRows.flatten 
-
-      result must contain(eachOf(i(1), i(1), i(1), i(2), i(4)))
+      queryOneColumn("SELECT A FROM RAB"){ 
+        _.toSeq must contain(i(1), i(1), i(1), i(2), i(4))
+      }
     }
 
     "Support Joins" >> {
       db.views.create("RS", select("SELECT A, B, R.C, D FROM R, S WHERE R.C = S.C"))
 
-      val result = query("SELECT B FROM RS").allRows.flatten
-      result must contain(eachOf(i(3),i(3),i(3),i(3),i(2),i(2)))
+      queryOneColumn("SELECT B FROM RS"){ 
+        _.toSeq must contain(i(3),i(3),i(3),i(3),i(2),i(2))
+      }
       
     }
 
     "Process CREATE VIEW statements" >> {
       update("CREATE VIEW TEST1 AS SELECT A, B FROM R")
-      val result = query("SELECT A FROM TEST1").allRows.flatten 
-
-      result must contain(eachOf(i(1), i(1), i(1), i(2), i(4)))
+      queryOneColumn("SELECT A FROM TEST1"){ 
+        _.toSeq must contain(i(1), i(1), i(1), i(2), i(4))
+      }
     }
 
   }

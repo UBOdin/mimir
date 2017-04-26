@@ -126,11 +126,27 @@ case class Database(backend: Backend)
    * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
    * and rewrites the query to properly account for Virtual Tables.
    */
-  def query[T](oper: Operator)(handler: ResultIterator => T): T =
+  final def query[T](oper: Operator)(handler: ResultIterator => T): T =
   {
     val iterator = compiler.compileForBestGuess(oper)
     try {
-      handler(iterator)
+      val ret = handler(iterator)
+
+      // A bit of a hack, but necessary for safety...
+      // The iterator we pass to the handler is only valid within this block.
+      // It is incredibly easy to accidentally have the handler return the
+      // iterator as-is.  For example:
+      // > 
+      // > query(...) { _.map { ... } }
+      // >
+      // In this above example, the return value of the block becomes invalid,
+      // since a map of an iterator doesn't drain the iterator, but simply applies
+      // a continuation to it.  
+      // 
+      if(ret.isInstanceOf[Iterator[_]]){
+        logger.warn("Returning a sequence from Database.query may lead to the Scala compiler's optimizations closing the ResultIterator before it's fully drained")
+      }
+      return ret
     } finally {
       iterator.close()
     }
@@ -140,7 +156,7 @@ case class Database(backend: Backend)
    * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
    * optimizations and rewrites the query to properly account for Virtual Tables.
    */
-  def query[T](stmt: net.sf.jsqlparser.statement.select.Select)(handler: ResultIterator => T): T = 
+  final def query[T](stmt: net.sf.jsqlparser.statement.select.Select)(handler: ResultIterator => T): T = 
   {
     query(sql.convert(stmt))(handler)
   }
@@ -149,7 +165,7 @@ case class Database(backend: Backend)
    * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
    * optimizations and rewrites the query to properly account for Virtual Tables.
    */
-  def query[T](stmt: String)(handler: ResultIterator => T): T = 
+  final def query[T](stmt: String)(handler: ResultIterator => T): T = 
   {
     query(select(stmt))(handler)
   }

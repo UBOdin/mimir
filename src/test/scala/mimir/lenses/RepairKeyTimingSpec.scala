@@ -172,8 +172,7 @@ object RepairKeyTimingSpec
  def queryKeyRepairLens(queryAndTime : (String, Double)) =  s"Query Key Repair Lens : ${queryAndTime._1}" >> {
       val timeForQuery = time {
         var x = 0
-        val r = query(queryAndTime._1)
-        while(r.getNext()){ x += 1 }
+        val r = query(queryAndTime._1) { _.foreach { row => x += 1 } }
         println(s"$x rows in the result")
      }
      println(s"Time:${timeForQuery._2} seconds <- Query:${queryAndTime._1} ")

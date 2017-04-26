@@ -1,6 +1,7 @@
 package mimir.exec.stream
 
 import java.sql._
+import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
 import mimir.util._
 
@@ -11,6 +12,7 @@ class ProjectionResultIterator(
   source: ResultSet
 )
   extends ResultIterator
+  with LazyLogging
 {
   //
   // Set up the schema details
@@ -52,7 +54,13 @@ class ProjectionResultIterator(
   private def compile(arg: ProjectArg): (() => PrimitiveValue) =
   {
     Eval.simplify(arg.expression) match {
-      case pv: PrimitiveValue => return { () => pv }
+      case pv: PrimitiveValue => {
+        return { () => pv }
+      }
+      case Var(name) => {
+        val idx = inputSchema.indexWhere(_._1.equals(name))
+        return { () => JDBCUtils.convertField(inputSchema(idx)._2, source, idx+1) }
+      }
       case expr => {
         val inlined = inlineProcs(expr)
         return { () => Eval.eval(inlined) }
@@ -63,20 +71,30 @@ class ProjectionResultIterator(
   val columnOutputs: Seq[() => PrimitiveValue] = tupleDefinition.map( compile(_) )
   val annotationOutputs: Seq[() => PrimitiveValue] = annotationDefinition.map( compile(_) )
 
-  def close(): Unit = source.close()
+  var closed = false
+  def close(): Unit = {
+    closed = true;
+    source.close()
+  }
 
   var currentRow: Option[Row] = None;
 
   def bufferRow()
   {
+    if(closed){
+      throw new SQLException("Attempting to read from closed iterator.  This is probably because you're trying to return an unmaterialized iterator from Database.query")
+    }
     if(currentRow == None){
-      while(source.isBeforeFirst()){ if(!source.next){ return } }
+      logger.trace("BUFFERING")
       if(source.next){
         currentRow = Some(new ExplicitRow(
           columnOutputs.map(_()), 
           annotationOutputs.map(_()),
           this
         ))
+        logger.trace(s"READ: ${currentRow.get}")
+      } else { 
+        logger.trace("EMPTY")
       }
     }
   }

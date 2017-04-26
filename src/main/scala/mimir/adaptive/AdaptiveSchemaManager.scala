@@ -64,7 +64,7 @@ class AdaptiveSchemaManager(db: Database)
         MultilensRegistry.multilenses(mlensType), 
         MultilensConfig(name, query, args)
       )
-    }.toSeq }
+    }.toIndexedSeq }
   }
 
   def tableCatalogs: Seq[Operator] =
