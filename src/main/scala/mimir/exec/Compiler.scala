@@ -12,6 +12,7 @@ import mimir.ctables._
 import mimir.optimizer._
 import mimir.provenance._
 import mimir.exec.stream._
+import mimir.util._
 import net.sf.jsqlparser.statement.select._
 
 class Compiler(db: Database) extends LazyLogging {
@@ -111,7 +112,9 @@ class Compiler(db: Database) extends LazyLogging {
 
     // Deploy to the backend
     val results = 
-      db.backend.execute(sql)
+      TimeUtils.monitor("EXECUTE", logger.info(_)){
+        db.backend.execute(sql)
+      }
 
     new ProjectionResultIterator(
       outputCols.map( projections(_) ),
@@ -163,17 +166,19 @@ object Compiler
   def optimize(rawOper: Operator, opts: Optimizations = standardOptimizations): Operator = {
     var oper = rawOper
     // Repeatedly apply optimizations up to a fixed point or an arbitrary cutoff of 10 iterations
-    for( i <- (0 until 10) ){
-      logger.debug(s"Optimizing, cycle $i: \n$oper")
-      // Try to optimize
-      val newOper = 
-        opts.foldLeft(oper)((o, fn) => fn(o))
+    TimeUtils.monitor("OPTIMIZE", logger.info(_)){
+      for( i <- (0 until 10) ){
+        logger.debug(s"Optimizing, cycle $i: \n$oper")
+        // Try to optimize
+        val newOper = 
+          opts.foldLeft(oper)((o, fn) => fn(o))
 
-      // Return if we've reached a fixed point 
-      if(oper.equals(newOper)){ return newOper; }
+        // Return if we've reached a fixed point 
+        if(oper.equals(newOper)){ return newOper; }
 
-      // Otherwise repeat
-      oper = newOper;
+        // Otherwise repeat
+        oper = newOper;
+      }
     }
     return oper;
   }

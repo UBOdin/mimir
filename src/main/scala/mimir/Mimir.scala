@@ -137,9 +137,9 @@ object Mimir extends LazyLogging {
 
   def handleQuery(raw:Operator) = 
   {
-    TimeUtils.monitor("QUERY", () => {
+    TimeUtils.monitor("QUERY", output.print(_)) {
       db.query(raw) { output.print(_) }
-    }, output.print(_))
+    }
   }
 
   def handleExplain(explain: Explain): Unit = 

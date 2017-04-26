@@ -17,9 +17,8 @@ object CureScenario
     new File("test/data/curePorts.csv")
   )
 
-  def time[A](description: String)(op: => A): A = {
-    TimeUtils.monitor(description, { () => op }, println(_)) 
-  }
+  def time[A](description: String): ( => A) => A =
+    TimeUtils.monitor(description)
 
   sequential 
 

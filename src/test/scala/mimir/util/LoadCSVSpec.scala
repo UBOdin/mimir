@@ -119,6 +119,29 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
       }
     }
 
+    "Load Dates Properly" >> {
+      update("""
+        CREATE TABLE EMPLOYEE(
+          Name string, 
+          Age int,
+          JoinDate date,
+          Salary float,
+          Married bool
+        )
+      """)
+      LoggerUtils.error("mimir.util.NonStrictCSVParser") {
+        LoadCSV.handleLoadTable(db, "EMPLOYEE", new File("test/data/Employee.csv"))
+      }
+      db.backend.resultRows("""
+        SELECT cast(JOINDATE as varchar) FROM EMPLOYEE
+      """).map{ _(0).asString } must contain(
+        "2011-08-01",
+        "2014-06-19",
+        "2007-11-11",
+        "2005-01-11"
+      )
+    }
+
   }
 
 }

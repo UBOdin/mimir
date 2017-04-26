@@ -137,11 +137,11 @@ case class FloatPrimitive(v: Double)
 case class DatePrimitive(y: Int, m: Int, d: Int)
   extends PrimitiveValue(TDate())
 {
-  override def toString() = "DATE '"+y+"-"+m+"-"+d+"'"
+  override def toString() = s"DATE '${asString}'"
   def asLong: Long = throw new TypeException(TDate(), TInt(), "Cast");
   def asDouble: Double = throw new TypeException(TDate(), TFloat(), "Cast");
   def asBool: Boolean = throw new TypeException(TDate(), TBool(), "Cast")
-  def asString: String = toString;
+  def asString: String = f"$y%04d-$m%02d-$d%02d"
   def payload: Object = (y, m, d).asInstanceOf[Object];
   def compare(c: DatePrimitive): Integer = {
     if(c.y < y){ -1 }
@@ -162,11 +162,11 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
 case class TimestampPrimitive(y: Int, m: Int, d: Int, hh: Int, mm: Int, ss: Int)
   extends PrimitiveValue(TTimeStamp())
 {
-  override def toString() = "DATE '"+y+"-"+m+"-"+d+" "+hh+":"+mm+":"+ss+"'"
+  override def toString() = s"DATE '${asString}'"
   def asLong: Long = throw new TypeException(TDate(), TInt(), "Cast");
   def asDouble: Double = throw new TypeException(TDate(), TFloat(), "Cast");
   def asBool: Boolean = throw new TypeException(TDate(), TBool(), "Cast")
-  def asString: String = toString;
+  def asString: String = f"$y%04d-$m%02d-$d%02d $hh%02d:$mm%02d:$ss%02d"
   def payload: Object = (y, m, d).asInstanceOf[Object];
   def compare(c: TimestampPrimitive): Integer = {
     if(c.y < y){ -1 }

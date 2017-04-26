@@ -56,17 +56,14 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
 
   def train(db: Database, query: Operator) =
   {
-    TimeUtils.monitor(s"Train $name",
-      () => {
-        db.query(
-          Project(
-            columns.map( c => ProjectArg(c, Var(c)) ),
-            query
-          )
-        ) { _.foreach { row => learn(row.tuple)  } }
-      },
-      TypeInferenceModel.logger.info(_)
-    )
+    TimeUtils.monitor(s"Train $name", TypeInferenceModel.logger.info(_)){
+      db.query(
+        Project(
+          columns.map( c => ProjectArg(c, Var(c)) ),
+          query
+        )
+      ) { _.foreach { row => learn(row.tuple)  } }
+    }
   }
 
   final def learn(row: Seq[PrimitiveValue]):Unit =
