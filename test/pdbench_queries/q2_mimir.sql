@@ -1,4 +1,4 @@
-CREATE TABLE res_q2_maybms AS
+CREATE TABLE res_q2_mimir AS
 SELECT l_extendedprice
 FROM
   (SELECT l_extendedprice,
