@@ -4,8 +4,8 @@ FROM
   (SELECT l_extendedprice,
           l_discount,
           lineitem_tid
-     (SELECT l_extendedprice,
    FROM
+     (SELECT l_extendedprice,
              lineitem_tid
       FROM
         (SELECT lineitem_tid
