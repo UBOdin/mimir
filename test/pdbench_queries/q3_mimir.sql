@@ -1,4 +1,4 @@
-CREATE TABLE res_q3_maybms AS
+CREATE TABLE res_q3_mimir AS
 SELECT n_name,
        n_name2
 FROM
