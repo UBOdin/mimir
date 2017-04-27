@@ -10,33 +10,78 @@ class ViewMetadata(
   val isMaterialized: Boolean
 )
 {
+  val annotations = 
+    Set( ViewAnnotation.TAINT, ViewAnnotation.PROVENANCE )
+
   def operator: Operator =
     View(name, query, Set())
 
-  def table: Operator =
-    Table(name,fullSchema,Seq())
+  def table: Operator = {
+    val baseTable = 
+      Project(
+        schema.map { case (col, _) => ProjectArg(col, Var(col)) } ++ 
+        schema.zipWithIndex.map { case ((col, _), idx) => 
+          ProjectArg(
+            CTPercolator.mimirColDeterministicColumnPrefix+col,
+            Comparison(Cmp.Eq,
+              Arithmetic(Arith.BitAnd,
+                Var(ViewManager.taintBitVectorColumn),
+                IntPrimitive(1l << (idx+1))
+              )
+            )
+          )
+        }++ 
+        Seq(
+          ProjectArg(
+            CTPercolator.mimirRowDeterministicColumnName,
+            Comparison(Cmp.Eq,
+              Arithmetic(Arith.BitAnd,
+                Var(ViewManager.taintBitVectorColumn),
+                IntPrimitive(1l)
+              )
+            )
+          ),
+          ProjectArg(ViewAnnotation.PROVENANCE, Var(ViewAnnotation.PROVENANCE))
+        ),
+        Table(name, 
+          schema ++ 
+          if(annotations(ViewAnnotation.TAINT)){
+            (ViewManager.taintBitVectorColumn, TInt())
+          } else { None } ++ 
+          if(annotations(ViewAnnotation.PROVENANCE)){
+            Provenance.compile(query)._2.map { (_, TRowId()) }
+          }
+        )
+      )
+
+  }
+    Project(
+
+    Table(name, schemaWith(annotations - ViewAnnotation.Provenance)
+
+      ,Seq())
 
   def schema =
     query.schema
 
-  def schemaWith(annotations:Set[ViewAnnotation.T]) =
+  def schemaWith(requiredAnnotations:Set[ViewAnnotation.T]) =
   {
     schema ++ (
-      if(annotations(ViewAnnotation.TAINT)) {
+      if(requiredAnnotations(ViewAnnotation.TAINT)) {
         schema.map { col => 
           (CTPercolator.mimirColDeterministicColumnPrefix + col._1, TBool())
         }++
         Seq((CTPercolator.mimirRowDeterministicColumnName, TBool()))
       } else { Seq() }
     ) ++ (
-      if(annotations(ViewAnnotation.PROVENANCE)) {
+      if(requiredAnnotations(ViewAnnotation.PROVENANCE)) {
         Provenance.compile(query)._2.map { (_, TRowId()) }
       } else { Seq() }
     )
   }
 
   def fullSchema =
-    schemaWith( Set( ViewAnnotation.TAINT, ViewAnnotation.PROVENANCE ) )
+    schemaWith( annotations )
       
 }
 

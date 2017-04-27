@@ -12,6 +12,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 class ViewManager(db:Database) extends LazyLogging {
   
   val viewTable = "MIMIR_VIEWS"
+  val taintBitVectorColumn = "MIMIR_DET_BIT_VECTOR"
 
   /**
    * Initialize the view manager: 
@@ -148,6 +149,17 @@ class ViewManager(db:Database) extends LazyLogging {
     val completeQuery = 
       Project(
         columns.map { col => ProjectArg(col, Var(col)) } ++
+        Seq(
+          ProjectArg(
+            taintBitVectorColumn,
+            ExpressionUtils.boolsToBitVector(
+              Seq(CTPercolator.mimirRowDeterministicColumnName)++
+              columns.map { col => 
+                Var(CTPercolator.mimirColDeterministicColumnPrefix+col) 
+              }
+            )
+          )
+        )++
         columns.map { col => ProjectArg(
           CTPercolator.mimirColDeterministicColumnPrefix + col,
           Conditional(columnTaint(col), IntPrimitive(1), IntPrimitive(0))
