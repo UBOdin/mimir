@@ -148,21 +148,24 @@ class ViewManager(db:Database) extends LazyLogging {
     val completeQuery = 
       Project(
         columns.map { col => ProjectArg(col, Var(col)) } ++
-        columns.map { col => ProjectArg(
-          CTPercolator.mimirColDeterministicColumnPrefix + col,
-          Conditional(columnTaint(col), IntPrimitive(1), IntPrimitive(0))
-        )} ++
-        Seq(ProjectArg(CTPercolator.mimirRowDeterministicColumnName, 
-          Function("CAST", Seq(Conditional(rowTaint, IntPrimitive(1), IntPrimitive(0)), TypePrimitive(TInt())))
-        )) ++
+        Seq(
+          ProjectArg(
+            ViewAnnotation.taintBitVectorColumn,
+            ExpressionUtils.boolsToBitVector(
+              Seq(rowTaint)++columns.map { col => columnTaint(col) }
+            )
+          )
+        )++
         provenance.map { col => ProjectArg(col, Var(col)) },
         query
       )
 
+    logger.debug(s"RAW: $completeQuery")
+    logger.debug(s"MATERIALIZE: $name(${completeQuery.schema.mkString(",")})")
+
     val inlinedSQL = db.compiler.sqlForBackend(completeQuery)
     db.backend.selectInto(name, inlinedSQL.toString)
 
-    logger.debug(s"MATERIALIZE: $name(${completeQuery.schema.mkString(",")})")
     logger.debug(s"QUERY: $inlinedSQL")
 
     db.backend.update(s"""
@@ -248,7 +251,7 @@ class ViewManager(db:Database) extends LazyLogging {
       case View(name, query, wantAnnotations) => {
         val metadata = apply(name)
         if(!metadata.isMaterialized){
-          logger.debug(s"Invalid materialized view: '$name' is not materialized")
+          logger.debug(s"Not using materialized view: '$name' is not materialized")
           return resolve(query)
         }
         val haveAnnotations = Set(
@@ -259,11 +262,11 @@ class ViewManager(db:Database) extends LazyLogging {
         val missingAnnotations = wantAnnotations -- haveAnnotations
 
         if(!missingAnnotations.isEmpty) {
-          logger.debug(s"Invalid materialized view: Missing { ${missingAnnotations.mkString(", ")} } from '$name'")
+          logger.debug(s"Not using materialized view: Missing { ${missingAnnotations.mkString(", ")} } from '$name'")
           return resolve(query)
         }
 
-        logger.debug(s"Valid materialized view: Using Materialized '$name' with { ${wantAnnotations.mkString(", ")} } <- ${metadata.table}")
+        logger.debug(s"Using materialized view: Materialized '$name' with { ${wantAnnotations.mkString(", ")} } <- ${metadata.table}")
 
         Project(
           metadata.schemaWith(wantAnnotations).map { col => 
