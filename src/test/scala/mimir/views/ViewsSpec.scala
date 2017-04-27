@@ -1,6 +1,7 @@
 package mimir.views;
 
 import org.specs2.specification._
+import mimir.exec._
 import mimir.algebra._
 import mimir.util._
 import mimir.test._
@@ -76,27 +77,27 @@ object ViewsSpec
       val results = 
         db.backend.resultRows(s"""
           SELECT A, B, 
-            ${CTPercolator.mimirColDeterministicColumnPrefix}A, 
-            ${CTPercolator.mimirColDeterministicColumnPrefix}B,
-            ${CTPercolator.mimirRowDeterministicColumnName},
+            ${ViewAnnotation.taintBitVectorColumn}, 
             MIMIR_ROWID_0
            FROM MATTEST
         """).map { row => 
-          ( row(0).asLong, row(1).asLong, row(2).asLong, row(3).asLong, row(4).asLong, row(5).asLong ) 
+          ( row(0).asLong, row(1).asLong, row(2).asLong, row(3).asLong ) 
         }
 
       results must contain(eachOf(
-        (1l, 3l, 1l, 1l, 1l, db.backend.resultValue("SELECT ROWID FROM R WHERE A = 1 AND B = 3 AND C = 1").asLong),
-        (2l, 2l, 1l, 1l, 1l, db.backend.resultValue("SELECT ROWID FROM R WHERE A = 2 AND B = 2 AND C = 1").asLong)
+        (1l, 3l, 7l, db.backend.resultValue("SELECT ROWID FROM R WHERE A = 1 AND B = 3 AND C = 1").asLong),
+        (2l, 2l, 7l, db.backend.resultValue("SELECT ROWID FROM R WHERE A = 2 AND B = 2 AND C = 1").asLong)
       ))
 
     }
 
     "Support raw queries" >> {
 
-      db.views.resolve(db.views("MATTEST").operator) must be equalTo(
+      Compiler.optimize(
+        db.views.resolve(db.views("MATTEST").operator)
+      ) must be equalTo(
         Project(Seq(ProjectArg("A", Var("A")),ProjectArg("B", Var("B"))),
-          Table("MATTEST", db.views("MATTEST").fullSchema, Seq())
+          Table("MATTEST", db.views("MATTEST").materializedSchema, Seq())
         )
       )
 
@@ -106,12 +107,14 @@ object ViewsSpec
 
       val (query, rowidCols) = Provenance.compile(db.views("MATTEST").operator)
 
-      db.views.resolve(query) must be equalTo(
+      Compiler.optimize(
+        db.views.resolve(query)
+      ) must be equalTo(
         Project(Seq(
             ProjectArg("A", Var("A")),
             ProjectArg("B", Var("B"))
           ) ++ rowidCols.map { col => ProjectArg(col, Var(col)) },
-          Table("MATTEST", db.views("MATTEST").fullSchema, Seq())
+          Table("MATTEST", db.views("MATTEST").materializedSchema, Seq())
         )
       )
 
@@ -121,15 +124,17 @@ object ViewsSpec
 
       val (query, rowidCols) = Provenance.compile(db.views("MATTEST").operator)
 
-      db.views.resolve(CTPercolator.percolateLite(query)._1) must be equalTo(
+      Compiler.optimize(
+        db.views.resolve(CTPercolator.percolateLite(query)._1) 
+      ) must be equalTo(
         Project(Seq(
             ProjectArg("A", Var("A")),
             ProjectArg("B", Var("B")),
-            ProjectArg(CTPercolator.mimirColDeterministicColumnPrefix+"A", Var(CTPercolator.mimirColDeterministicColumnPrefix+"A")),
-            ProjectArg(CTPercolator.mimirColDeterministicColumnPrefix+"B", Var(CTPercolator.mimirColDeterministicColumnPrefix+"B")),
-            ProjectArg(CTPercolator.mimirRowDeterministicColumnName, Var(CTPercolator.mimirRowDeterministicColumnName))
+            ProjectArg(CTPercolator.mimirColDeterministicColumnPrefix+"A", Comparison(Cmp.Eq, Arithmetic(Arith.BitAnd, Var(ViewAnnotation.taintBitVectorColumn), IntPrimitive(2)), IntPrimitive(2))),
+            ProjectArg(CTPercolator.mimirColDeterministicColumnPrefix+"B", Comparison(Cmp.Eq, Arithmetic(Arith.BitAnd, Var(ViewAnnotation.taintBitVectorColumn), IntPrimitive(4)), IntPrimitive(4))),
+            ProjectArg(CTPercolator.mimirRowDeterministicColumnName, Comparison(Cmp.Eq, Arithmetic(Arith.BitAnd, Var(ViewAnnotation.taintBitVectorColumn), IntPrimitive(1)), IntPrimitive(1)))
           ) ++ rowidCols.map { col => ProjectArg(col, Var(col)) },
-          Table("MATTEST", db.views("MATTEST").fullSchema, Seq())
+          Table("MATTEST", db.views("MATTEST").materializedSchema, Seq())
         )
       )
       
