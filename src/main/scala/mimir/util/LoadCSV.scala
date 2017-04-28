@@ -163,6 +163,7 @@ object LoadCSV extends StrictLogging {
           })
 
         logger.trace(s"INSERT (line ${record.lineNumber}): $cmd \n <- $data")
+        record.fields = null
         data
       }))
     }
