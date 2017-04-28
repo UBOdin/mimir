@@ -8,7 +8,7 @@
   </appender>
   
   <logger name="mimir.Database" level="INFO"/>
-  <logger name="mimir.Mimir$" level="DEBUG"/>
+  <logger name="mimir.Mimir$" level="INFO"/>
   <logger name="mimir.adaptive.DiscalaAbadiNormalizer$" level="INFO"/>
   <logger name="mimir.algebra.ExpressionChecker" level="INFO"/>
   <logger name="mimir.algebra.OperatorUtils" level="INFO"/>
@@ -19,7 +19,7 @@
   <logger name="mimir.exec.BestGuesser" level="INFO"/>
   <logger name="mimir.exec.TupleBundler" level="INFO"/>
   <logger name="mimir.exec.WorldBits" level="INFO"/>
-  <logger name="mimir.exec.stream.ProjectionResultIterator" level="DEBUG"/>
+  <logger name="mimir.exec.stream.ProjectionResultIterator" level="INFO"/>
   <logger name="mimir.lenses.BestGuessCache" level="INFO"/>
   <logger name="mimir.lenses.ShredderLens" level="INFO"/>
   <logger name="mimir.lenses.TypeInferenceLens$" level="INFO"/>
