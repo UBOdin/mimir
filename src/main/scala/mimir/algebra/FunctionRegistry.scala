@@ -160,6 +160,12 @@ object FunctionRegistry {
         TFloat()
       }
     )
+
+    val prng = new scala.util.Random()
+    registerNative("RANDOM",
+      (args: Seq[PrimitiveValue]) => IntPrimitive(prng.nextLong),
+      (types: Seq[Type]) => { TInt() }
+    )
 	}
 
 	def registerSet(

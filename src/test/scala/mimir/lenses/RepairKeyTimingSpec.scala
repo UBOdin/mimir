@@ -7,13 +7,14 @@ import mimir.algebra._
 import mimir.util._
 import mimir.ctables.{VGTerm}
 import mimir.optimizer.{InlineVGTerms,InlineProjections}
-import mimir.test.{SQLTestSpecification, PDBench}
+import mimir.test.{SQLTestSpecification, PDBench, TestTimer}
 import mimir.models._
 import org.specs2.specification.core.Fragments
 
 object RepairKeyTimingSpec
   extends SQLTestSpecification("RepairKeyTiming", Map("reset" -> "NO", "inline" -> "YES"))
   with BeforeAll
+  with TestTimer
 {
 
   sequential
@@ -182,12 +183,5 @@ object RepairKeyTimingSpec
      println(s"Time:${totalTimeForQuery._2} seconds (${totalTimeForQuery._1} seconds reading results) <- Query:${queryAndTime._1} ")
      totalTimeForQuery._2 should be lessThan queryAndTime._2+2 // Add 2 seconds for the optimizer (for now)
   }
-
-  def time[F](anonFunc: => F): (F, Double) = {
-      val tStart = System.nanoTime()
-      val anonFuncRet = anonFunc
-      val tEnd = System.nanoTime()
-      (anonFuncRet, (tEnd-tStart).toDouble/1000.0/1000.0/1000.0)
-    }
 
 }

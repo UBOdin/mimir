@@ -262,7 +262,12 @@ class JDBCBackend(val backend: String, val filename: String)
     })
   }
 
-  def canHandleVGTerms(): Boolean = inliningAvailable
+  def canHandleVGTerms: Boolean = inliningAvailable
+  def rowIdType: Type = 
+    backend match {
+      case "sqlite" => TInt()
+      case _ => TString()
+    }
 
   def specializeQuery(q: Operator): Operator = {
     backend match {

@@ -51,7 +51,8 @@ abstract class Backend {
 
   def close()
 
-  def canHandleVGTerms(): Boolean
+  def canHandleVGTerms: Boolean
+  def rowIdType: Type
   def specializeQuery(q: Operator): Operator
 
   def listTablesQuery: Operator

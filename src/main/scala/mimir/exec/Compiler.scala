@@ -120,7 +120,8 @@ class Compiler(db: Database) extends LazyLogging {
       outputCols.map( projections(_) ),
       annotationCols.map( projections(_) ).toSeq,
       oper.schema,
-      results
+      results,
+      db.backend.rowIdType
     )
   }
 

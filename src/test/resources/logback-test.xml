@@ -19,7 +19,7 @@
   <logger name="mimir.exec.BestGuesser" level="INFO"/>
   <logger name="mimir.exec.TupleBundler" level="INFO"/>
   <logger name="mimir.exec.WorldBits" level="INFO"/>
-  <logger name="mimir.exec.stream.ProjectionResultIterator" level="INFO"/>
+  <logger name="mimir.exec.stream.ProjectionResultIterator" level="DEBUG"/>
   <logger name="mimir.lenses.BestGuessCache" level="INFO"/>
   <logger name="mimir.lenses.ShredderLens" level="INFO"/>
   <logger name="mimir.lenses.TypeInferenceLens$" level="INFO"/>

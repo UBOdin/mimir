@@ -113,7 +113,7 @@ object SimpleDemoScript
 			}
 			val nullRow = querySingleton("SELECT ROWID() FROM RATINGS1 WHERE RATING IS NULL").asLong
 
-			if(!db.backend.canHandleVGTerms()){
+			if(!db.backend.canHandleVGTerms){
 				val result1guesses =
 					db.backend.resultRows("SELECT MIMIR_KEY_0, MIMIR_DATA FROM "+
 							db.bestGuessCache.cacheTableForModel(db.models.get("RATINGS1FINAL:WEKA:RATING"), 0))

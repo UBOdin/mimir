@@ -9,11 +9,13 @@ class ProjectionResultIterator(
   tupleDefinition: Seq[ProjectArg],
   annotationDefinition: Seq[ProjectArg],
   inputSchema: Seq[(String,Type)],
-  source: ResultSet
+  source: ResultSet,
+  rowIdType: Type
 )
   extends ResultIterator
   with LazyLogging
 {
+
   //
   // Set up the schema details
   //
@@ -70,6 +72,16 @@ class ProjectionResultIterator(
 
   val columnOutputs: Seq[() => PrimitiveValue] = tupleDefinition.map( compile(_) )
   val annotationOutputs: Seq[() => PrimitiveValue] = annotationDefinition.map( compile(_) )
+  val extractInputs: Seq[() => (String, PrimitiveValue)] =
+    inputSchema.
+      zipWithIndex.
+      map { case ((name, t), idx) => 
+        logger.debug(s"Extracting: $name (@$idx) -> $t")
+        val fn = JDBCUtils.convertFunction(t, idx+1, rowIdType = rowIdType)
+        () => {
+          (name, fn(source))
+        }
+      }
 
   var closed = false
   def close(): Unit = {
@@ -79,6 +91,27 @@ class ProjectionResultIterator(
 
   var currentRow: Option[Row] = None;
 
+
+  val makeRow =
+    if(ExperimentalOptions.isEnabled("AGGRESSIVE-ROW-COMPUTE")) {
+      () => {
+        new ExplicitRow(
+          columnOutputs.map(_()), 
+          annotationOutputs.map(_()),
+          this
+        )
+      }
+    } else {
+      () => {
+        new LazyRow(
+          extractInputs.map { x => x() }.toMap,
+          tupleDefinition,
+          annotationDefinition,
+          schema
+        )
+      }
+    }
+
   def bufferRow()
   {
     if(closed){
@@ -87,11 +120,7 @@ class ProjectionResultIterator(
     if(currentRow == None){
       logger.trace("BUFFERING")
       if(source.next){
-        currentRow = Some(new ExplicitRow(
-          columnOutputs.map(_()), 
-          annotationOutputs.map(_()),
-          this
-        ))
+        currentRow = Some(makeRow())
         logger.trace(s"READ: ${currentRow.get}")
       } else { 
         logger.trace("EMPTY")
