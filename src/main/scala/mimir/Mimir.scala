@@ -13,6 +13,8 @@ import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody} 
 import net.sf.jsqlparser.statement.drop.Drop
 import org.jline.terminal.{Terminal,TerminalBuilder}
+import org.slf4j.{LoggerFactory}
+import ch.qos.logback.classic.{Level, Logger}
 import org.rogach.scallop._
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
@@ -111,6 +113,7 @@ object Mimir extends LazyLogging {
 
         case e: SQLException =>
           output.print("Error: "+e.getMessage)
+          logger.debug(e.getMessage + "\n" + e.getStackTrace.map(_.toString).mkString("\n"))
 
         case e: RAException =>
           output.print("Error: "+e.getMessage)
@@ -137,10 +140,9 @@ object Mimir extends LazyLogging {
 
   def handleQuery(raw:Operator) = 
   {
-    TimeUtils.monitor("QUERY", () => {
-      val results = db.query(raw)
-      output.print(results)
-    }, output.print(_))
+    TimeUtils.monitor("QUERY", output.print(_)) {
+      db.query(raw) { output.print(_) }
+    }
   }
 
   def handleExplain(explain: Explain): Unit = 
@@ -220,9 +222,8 @@ object Mimir extends LazyLogging {
     db.sql.convert(pragma.getExpression, (x:String) => x) match {
 
       case Function("SHOW", Seq(Var("TABLES"))) => 
-        for(table <- db.getAllTables()){ output.print(table); }
-
-      case Function("SHOW", Seq(Var("SCHEMA"), Var(name))) => 
+        for(table <- db.getAllTables()){ output.print(table.toUpperCase); }
+      case Function("SHOW", Seq(Var(name))) => 
         db.getTableSchema(name) match {
           case None => 
             output.print(s"'$name' is not a table")
@@ -231,9 +232,38 @@ object Mimir extends LazyLogging {
               schema.map { col => "  "+col._1+" "+col._2 }.mkString(",\n")
             +"\n);")
         }
+      case Function("SHOW", _) => 
+        output.print("Syntax: SHOW(TABLES) | SHOW(tableName)")
+
+      case Function("LOG", Seq(StringPrimitive(loggerName))) => 
+        setLogLevel(loggerName)
+
+      case Function("LOG", Seq(StringPrimitive(loggerName), Var(level))) => 
+        setLogLevel(loggerName, level.toUpperCase match {
+          case "TRACE" => Level.TRACE
+          case "DEBUG" => Level.DEBUG
+          case "INFO"  => Level.INFO
+          case "WARN"  => Level.WARN
+          case "ERROR" => Level.ERROR
+          case _ => throw new SQLException(s"Invalid log level: $level");
+        })
+      case Function("LOG", _) =>
+        output.print("Syntax: LOG('logger') | LOG('logger', TRACE|DEBUG|INFO|WARN|ERROR)");
+
     }
 
   }
+
+  def setLogLevel(loggerName: String, level: Level = Level.DEBUG)
+  {
+    LoggerFactory.getLogger(loggerName) match {
+      case logger: Logger => 
+        logger.setLevel(level)
+        output.print(s"$loggerName <- $level")
+      case _ => throw new SQLException(s"Invalid Logger: '$loggerName'")
+    }
+  }
+
 
 }
 

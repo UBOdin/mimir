@@ -17,58 +17,49 @@ object CureScenario
     new File("test/data/curePorts.csv")
   )
 
-  def time[A](description: String, op: () => A): A = {
-    val t:StringBuilder = new StringBuilder()
-    TimeUtils.monitor(description, op, println(_)) 
-  }
+  def time[A](description: String): ( => A) => A =
+    TimeUtils.monitor(description)
 
   sequential 
 
   "The CURE Scenario" should {
     Fragment.foreach(dataFiles){ table => {
       s"Load '$table'" >> {
-        time(
-          s"Load '$table'",
-          () => { db.loadTable(table) }
-        )
+        time(s"Load '$table'") {
+          db.loadTable(table) 
+        }
         ok
       }
     }}
 
     "Select from the source table" >> {
-      time("Type Inference Query", 
-        () => {
-          query("""
-            SELECT * FROM cureSource;
-          """).foreachRow((x) => {})
-        }
-      )
+      time("Type Inference Query"){ 
+        query("""
+          SELECT * FROM cureSource;
+        """){ _.foreach { row => {} } }
+      }
       ok
     }
 
     "Create the source MV Lens" >> {
-      time("Source MV Lens",
-        () => {
-          update("""
-            CREATE LENS MV1 
-            AS SELECT * FROM cureSource 
-            WITH MISSING_VALUE('IMO_CODE');
-          """)
-        }
-      )
+      time("Source MV Lens"){
+        update("""
+          CREATE LENS MV1 
+          AS SELECT * FROM cureSource 
+          WITH MISSING_VALUE('IMO_CODE');
+        """)
+      }
       ok
     }
 
     "Create the locations MV Lens" >> {
-      time("Locations MV Lens",
-        () => {
-          update("""
-            CREATE LENS MV2 
-            AS SELECT * FROM cureLocations 
-            WITH MISSING_VALUE('IMO_CODE');
-          """)
-        }
-      )
+      time("Locations MV Lens"){
+        update("""
+          CREATE LENS MV2 
+          AS SELECT * FROM cureLocations 
+          WITH MISSING_VALUE('IMO_CODE');
+        """)
+      }
       ok
     }
 
@@ -90,28 +81,25 @@ object CureScenario
 
 //    true
      "Run the CURE Query" >> {
-       time("CURE Query",
-         () => {
-           query("""
-             SELECT
-                     BILL_OF_LADING_NBR,
-                     SRC.IMO_CODE           AS "SRC_IMO",
-                     LOC.LAT                AS "VESSEL_LAT",
-                     LOC.LON                AS "VESSEL_LON",
-                     PORTS.LAT              AS "PORT_LAT",
-                     PORTS.LON              AS "PORT_LON",
-                     DATE(SRC.DATE)          AS "SRC_DATE",
-                     DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON) AS "DISTANCE",  SPEED(DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON), SRC.DATE, NULL) AS "SPEED"
-                   FROM CURESOURCE_RAW AS SRC
-                    JOIN CURELOCATIONS_RAW AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
-                     LEFT OUTER JOIN CUREPORTS_RAW AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
-                   ;
-           """).foreachRow((x) => {})
-         }
-
+       time("CURE Query"){
+         query("""
+           SELECT
+                   BILL_OF_LADING_NBR,
+                   SRC.IMO_CODE           AS "SRC_IMO",
+                   LOC.LAT                AS "VESSEL_LAT",
+                   LOC.LON                AS "VESSEL_LON",
+                   PORTS.LAT              AS "PORT_LAT",
+                   PORTS.LON              AS "PORT_LON",
+                   DATE(SRC.DATE)          AS "SRC_DATE",
+                   DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON) AS "DISTANCE",  SPEED(DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON), SRC.DATE, NULL) AS "SPEED"
+                 FROM CURESOURCE_RAW AS SRC
+                  JOIN CURELOCATIONS_RAW AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
+                   LEFT OUTER JOIN CUREPORTS_RAW AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
+                 ;
+         """){ _.foreach { row => {} } }
+       }
 //         failed type detection --> run type inferencing
 //         --> repair with repairing tool
-       )
        ok
      }
 

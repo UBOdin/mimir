@@ -4,36 +4,47 @@ import mimir.Database
 import mimir.optimizer._
 import mimir.algebra._
 import mimir.ctables._
+import mimir.provenance._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
+/**
+ * TupleBundles ( http://dl.acm.org/citation.cfm?id=1376686 ) are a tactic for
+ * computing over probabilistic data.  Loosely put, the approach is to compile
+ * the query to evaluate simultaneously in N possible worlds.  The results can
+ * then be aggregated to produce an assortment of statistics, etc...
+ *
+ * This class actually wraps three different compilation strategies inspired
+ * by tuple bundles, each handling parallelization in a slightly different way
+ * 
+ * * **Long**:  Not technically "TupleBundles".  This approach simply unions 
+ * *            together a set of results, one per possible world sampled.
+ * * **Flat**:  Creates a wide result, splitting each non-deterministic column
+ *              into a set of columns, one per sample.
+ * * **Array**: Like flat, but uses native array types to avoid overpopulating
+ *              the result schema.
+ *
+ * At present, only 'Flat' is fully implemented, although a 'Long'-like approach
+ * can be achieved by using convertFlatToLong.
+ */
+
+class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
   extends LazyLogging
 {
-  def colNameInSample(col: String, i: Int): String =
-    s"MIMIR_SAMPLE_${i}_$col"
 
   def sampleCols(col: String): Seq[String] =
   {
-    (0 until sampleSeeds.size).map { i => colNameInSample(col, i) }
+    (0 until sampleSeeds.size).map { i => TupleBundler.colNameInSample(col, i) }
   }
 
   def fullBitVector =
     (0 until sampleSeeds.size).map { 1 << _ }.fold(0)( _ | _ )
 
-  def apply(query: Operator): Operator =
+  def apply(query: Operator): (Operator, Set[String], Seq[String]) =
   {
-    val (compiled, nonDeterministicColumns) = compileFlat(query)    
-    Project(
-      query.schema.map(_._1).map { col => 
-        ProjectArg(col, 
-          if(nonDeterministicColumns(col)){
-            Function("JSON_ARRAY", sampleCols(col).map( Var(_) ))
-          } else {
-            Var(col) 
-          }
-        )} ++ Seq(ProjectArg("MIMIR_WORLD_BITS", Var("MIMIR_WORLD_BITS"))), 
-      compiled
-    )
+    val (withProvenance, provenanceCols) = Provenance.compile(query)
+    val (compiled, nonDeterministicColumns) = compileFlat(withProvenance)    
+
+    (compiled, nonDeterministicColumns, provenanceCols)
   }
 
   def doesExpressionNeedSplit(expression: Expression, nonDeterministicInputs: Set[String]): Boolean =
@@ -47,13 +58,13 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
     return expressionHasANonDeterministicInput || expressionIsNonDeterministic
   }
 
-  def splitExpressions(expressions: Seq[Expression], nonDeterministicInputs: Set[String]): Seq[Seq[Expression]] =
+  def splitExpressionsByWorlds(expressions: Seq[Expression], nonDeterministicInputs: Set[String]): Seq[Seq[Expression]] =
   {
     val outputColumns =
       sampleSeeds.zipWithIndex.map { case (seed, i) => 
         val inputInstancesInThisSample = 
           nonDeterministicInputs.
-            map { x => (x -> Var(colNameInSample(x, i)) ) }.
+            map { x => (x -> Var(TupleBundler.colNameInSample(x, i)) ) }.
             toMap
         expressions.map { expression => 
           CTAnalyzer.compileSample(
@@ -66,18 +77,68 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
     outputColumns
   }
 
-  def splitExpression(expression: Expression, nonDeterministicInputs: Set[String]): Seq[Expression] =
+  def splitExpressionByWorlds(expression: Expression, nonDeterministicInputs: Set[String]): Seq[Expression] =
   {
-    splitExpressions(Seq(expression), nonDeterministicInputs).map(_(0))
+    splitExpressionsByWorlds(Seq(expression), nonDeterministicInputs).map(_(0))
+  }
+
+  def convertFlatToLong(compiledQuery: Operator, baseSchema: Seq[String], nonDeterministicInput: Set[String]): Operator =
+  {
+    val sampleShards =
+      (0 until sampleSeeds.size).map { i =>
+        val mergedSamples =
+          baseSchema.map { col =>
+            ProjectArg(col, 
+              if(nonDeterministicInput(col)){ Var(TupleBundler.colNameInSample(col, i)) }
+              else { Var(col) }
+            )
+          } ++ Seq(
+            ProjectArg(TupleBundler.worldBitsColumnName, IntPrimitive(1 << i))
+          )
+
+        val filterWorldPredicate =
+          Comparison(Cmp.Eq,
+            Arithmetic(Arith.BitAnd, 
+              Var(TupleBundler.worldBitsColumnName),
+              IntPrimitive(1 << i)
+            ),
+            IntPrimitive(1 << i)
+          )
+          
+        InlineProjections(
+          ProjectRedundantColumns(
+            Project(
+              mergedSamples, 
+              PushdownSelections(
+                Select(filterWorldPredicate, compiledQuery)
+              )
+            )
+          )
+        )
+      }
+
+    logger.trace(s"Converting FlatToLong: \n$compiledQuery\n ---> TO:\n${sampleShards(0)}")
+
+    OperatorUtils.makeUnion(sampleShards)
   }
 
   def compileFlat(query: Operator): (Operator, Set[String]) =
   {
+    // Check for a shortcut opportunity... if the expression is deterministic, we're done!
+    if(CTables.isDeterministic(query)){
+      return (
+        OperatorUtils.projectInColumn(
+          TupleBundler.worldBitsColumnName, IntPrimitive(fullBitVector), 
+          query
+        ),
+        Set[String]()
+      )
+    }
     query match {
       case (Table(_,_,_) | EmptyTable(_)) => 
         (
           OperatorUtils.projectInColumn(
-            "MIMIR_WORLD_BITS", IntPrimitive(fullBitVector), 
+            TupleBundler.worldBitsColumnName, IntPrimitive(fullBitVector), 
             query
           ),
           Set[String]()
@@ -92,9 +153,9 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
         ):(Seq[Seq[ProjectArg]], Seq[Set[String]]) = columns.map { col => 
             if(doesExpressionNeedSplit(col.expression, nonDeterministicInput)){
               (
-                splitExpression(col.expression, nonDeterministicInput).
+                splitExpressionByWorlds(col.expression, nonDeterministicInput).
                   zipWithIndex
-                  map { case (expr, i) => ProjectArg(colNameInSample(col.name, i), expr) },
+                  map { case (expr, i) => ProjectArg(TupleBundler.colNameInSample(col.name, i), expr) },
                 Set(col.name)
               )
             } else {
@@ -104,7 +165,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
 
         val replacementProjection =
           Project(
-            newColumns.flatten ++ Seq(ProjectArg("MIMIR_WORLD_BITS", Var("MIMIR_WORLD_BITS"))),
+            newColumns.flatten ++ Seq(ProjectArg(TupleBundler.worldBitsColumnName, Var(TupleBundler.worldBitsColumnName))),
             newChild
           )
 
@@ -115,24 +176,26 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
         val (newChild, nonDeterministicInput) = compileFlat(oldChild)
 
         if(doesExpressionNeedSplit(condition, nonDeterministicInput)){
-          val replacements = splitExpression(condition, nonDeterministicInput)
+          val replacements = splitExpressionByWorlds(condition, nonDeterministicInput)
 
           val updatedWorldBits =
             Arithmetic(Arith.BitAnd,
-              Var("MIMIR_WORLD_BITS"),
+              Var(TupleBundler.worldBitsColumnName),
               replacements.zipWithIndex.map { case (expr, i) =>
                 Conditional(expr, IntPrimitive(1 << i), IntPrimitive(0))
               }.fold(IntPrimitive(0))(Arithmetic(Arith.BitOr, _, _))
             )
+
+          logger.debug(s"Updated World Bits: \n${updatedWorldBits}")
           val newChildWithUpdatedWorldBits =
             OperatorUtils.replaceColumn(
-              "MIMIR_WORLD_BITS",
+              TupleBundler.worldBitsColumnName,
               updatedWorldBits,
               newChild
             )
           (
             Select(
-              Comparison(Cmp.Neq, Var("MIMIR_WORLD_BITS"), IntPrimitive(0)),
+              Comparison(Cmp.Neq, Var(TupleBundler.worldBitsColumnName), IntPrimitive(0)),
               newChildWithUpdatedWorldBits
             ),
             nonDeterministicInput
@@ -149,7 +212,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
         // To safely join the two together, we need to rename the world-bit columns
         val rewrittenJoin =
           OperatorUtils.joinMergingColumns(
-            Seq( ("MIMIR_WORLD_BITS",
+            Seq( (TupleBundler.worldBitsColumnName,
                     (lhs:Expression, rhs:Expression) => Arithmetic(Arith.BitAnd, lhs, rhs))
             ),
             lhsNewChild, rhsNewChild
@@ -158,7 +221,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
         // Finally, add a selection to filter out values that can be filtered out in all worlds.
         val completedJoin =
           Select(
-            Comparison(Cmp.Neq, Var("MIMIR_WORLD_BITS"), IntPrimitive(0)),
+            Comparison(Cmp.Neq, Var(TupleBundler.worldBitsColumnName), IntPrimitive(0)),
             rewrittenJoin
           )
 
@@ -209,86 +272,102 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
       case Aggregate(gbColumns, aggColumns, oldChild) => {
         val (newChild, nonDeterministicInput) = compileFlat(oldChild)
 
+        // We divide the aggregate into two cases, an easy one and a hard one.
+        //
+        // The easy case is when all of the group-by columns are deterministic.
+        // If that's all, we know that the groups themselves are deterministic, and
+        // can guarantee that we fold each tuple into the right group.  We still
+        // need to split one or more aggregate functions into possible-worlds, but
+        // the core of the expression stays fixed.
+        //
+        // The hard case is when even one of the group-by columns is 
+        // non-deterministic.  When that happens, classical aggregation no longer
+        // really works in the same way, since a single tuple may contribute to 
+        // potentially multiple groups.  What we do in that case is resort to 'Long'
+        // rewriting, creating one tuple for every possible world.  These tuples then
+        // get aggregated.
+        // 
+
         val oneOfTheGroupByColumnsIsNonDeterministic =
           gbColumns.map(_.name).exists(nonDeterministicInput(_))
 
         if(oneOfTheGroupByColumnsIsNonDeterministic){
+          logger.trace(s"Processing non-deterministic aggregate: \n$query")
 
-          val sampleShards =
-            (0 until sampleSeeds.size).map { i =>
-              val mergedSamples =
-                oldChild.schema.map(_._1).map { col =>
-                  ProjectArg(col, 
-                    if(nonDeterministicInput(col)){ Var(colNameInSample(col, i)) }
-                    else { Var(col) }
-                  )
-                } ++ Seq(
-                  ProjectArg("MIMIR_SAMPLE_ID", IntPrimitive(i))
-                )
-              
-              Project(
-                mergedSamples, 
-                Select(
-                  Comparison(Cmp.Neq,
-                    Var("MIMIR_WORLD_BITS"),
-                    IntPrimitive(1 << i)
-                  ),
-                  newChild
-                )
-              )
-            }
+          // This is the hard case: One of the group-by columns is non-deterministic
+          // We need to resort to evaluating the query with the 'Long' evaluation strategy.
+          // If we created our own evaluation engine, we could get around this limitation, but
+          // as long as we need to run on a normal backend, this is required.
+          val shardedChild = convertFlatToLong(newChild, oldChild.schema.map(_._1), nonDeterministicInput)
 
-          val shardedChild = OperatorUtils.makeUnion(sampleShards)
-
+          // Split the aggregate columns.  Because a group-by attribute is uncertain, all
+          // sources of uncertainty can be, potentially, non-deterministic.
+          // As a result, we convert expressions to aggregates over case statements:  
+          // i.e., SUM(A) AS A becomes
+          // SUM(CASE WHEN inputIsInWorld(1) THEN A ELSE NULL END) AS A_1,
+          // SUM(CASE WHEN inputIsInWorld(2) THEN A ELSE NULL END) AS A_2,
+          // ...
           val (splitAggregates, nonDeterministicOutputs) =
             aggColumns.map { case AggFunction(name, distinct, args, alias) =>
-              if(args.exists(doesExpressionNeedSplit(_, nonDeterministicInput))){
-                val splitAggregates =
-                  (0 until sampleSeeds.size).map { i =>
-                    AggFunction(name, distinct, 
-                      args.map { arg => 
-                        Conditional(
-                          Comparison(Cmp.Eq, Var("MIMIR_SAMPLE_ID"), IntPrimitive(i)),
-                          arg,
-                          NullPrimitive()
-                        )
-                      },
-                      colNameInSample(alias, i)
-                    )
-                  }
-                (splitAggregates, Set(alias))
-              } else {
-                (Seq(AggFunction(name, distinct, args, alias)), Set[String]())
-              }
+              val splitAggregates =
+                (0 until sampleSeeds.size).map { i =>
+                  AggFunction(name, distinct, 
+                    args.map { arg => 
+                      Conditional(
+                        Comparison(Cmp.Eq,
+                          Arithmetic(Arith.BitAnd, 
+                            Var(TupleBundler.worldBitsColumnName),
+                            IntPrimitive(1 << i)
+                          ),
+                          IntPrimitive(1 << i)
+                        ),
+                        arg,
+                        NullPrimitive()
+                      )
+                    },
+                    TupleBundler.colNameInSample(alias, i)
+                  )
+                }
+              (splitAggregates, Set(alias))
             }.unzip
 
+          // We also need to figure out which worlds each group will be present in.
+          // We take an OR of all of the worlds that lead to the aggregate being present.
           val worldBitsAgg = 
-            AggFunction("GROUP_BITWISE_OR", false, Seq(
-              Arithmetic(Arith.ShiftLeft, IntPrimitive(1), Var("MIMIR_SAMPLE_ID"))
-            ), "MIMIR_WORLD_BITS")
+            AggFunction("GROUP_BITWISE_OR", false, Seq(Var(TupleBundler.worldBitsColumnName)), TupleBundler.worldBitsColumnName)
 
           (
-            Aggregate(gbColumns, splitAggregates.flatten ++ Seq(worldBitsAgg), newChild),
+            Aggregate(gbColumns, splitAggregates.flatten ++ Seq(worldBitsAgg), shardedChild),
             nonDeterministicOutputs.flatten.toSet
           )
           
         } else {
 
+          logger.trace(s"Processing deterministic aggregate: \n$query")
+
+          // This is the easy case: All of the group-by columns are non-deterministic 
+          // and we can safely use classical aggregation to compute this expression.
+
+          // As before we may need to split aggregate columns, but here we can first
+          // check to see if the aggregate expression depends on non-deterministic 
+          // values.  If it does not, then we can avoid splitting it.
           val (splitAggregates, nonDeterministicOutputs) =
             aggColumns.map { case AggFunction(name, distinct, args, alias) =>
               if(args.exists(doesExpressionNeedSplit(_, nonDeterministicInput))){
                 val splitAggregates =
-                  splitExpressions(args, nonDeterministicInput).
+                  splitExpressionsByWorlds(args, nonDeterministicInput).
                     zipWithIndex.
-                    map { case (newArgs, i) => AggFunction(name, distinct, newArgs, colNameInSample(alias, i)) }
+                    map { case (newArgs, i) => AggFunction(name, distinct, newArgs, TupleBundler.colNameInSample(alias, i)) }
                 (splitAggregates, Set(alias))
               } else {
                 (Seq(AggFunction(name, distinct, args, alias)), Set[String]())
               }
             }.unzip
 
+          // Same deal as before: figure out which worlds the group will be present in.
+
           val worldBitsAgg = 
-            AggFunction("GROUP_BITWISE_OR", false, Seq(Var("MIMIR_WORLD_BITS")), "MIMIR_WORLD_BITS")
+            AggFunction("GROUP_BITWISE_OR", false, Seq(Var(TupleBundler.worldBitsColumnName)), TupleBundler.worldBitsColumnName)
 
           (
             Aggregate(gbColumns, splitAggregates.flatten ++ Seq(worldBitsAgg), newChild),
@@ -305,8 +384,76 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Int] = (0 until 10))
       case View(_, query, _) =>  compileFlat(query)
 
       case ( Sort(_,_) | Limit(_,_,_) | LeftOuterJoin(_,_,_) ) =>
-        throw new RAException("Tuple-Bundler presently doesn't support LeftOuterJoin, Sort, or Limit")
+        throw new RAException("Tuple-Bundler presently doesn't support LeftOuterJoin, Sort, or Limit (probably need to resort to 'Long' evaluation)")
 
     }
+  }
+}
+
+object TupleBundler
+{
+  def apply(db: Database, oper: Operator, seeds: Seq[Long]): (Operator, Set[String], Seq[String]) =
+    new TupleBundler(db, seeds)(oper)
+
+  val worldBitsColumnName = "MIMIR_WORLD_BITS"
+  def colNameInSample(col: String, i: Int): String = s"MIMIR_SAMPLE_${i}_$col"
+  def columnNames(col: String, worlds: Int): Seq[String] =
+    (0 until worlds).map(colNameInSample(col, _))
+  def columnNames(col: String, seeds: Seq[Long]): Seq[String] =
+    columnNames(col, seeds.length)
+
+  def possibleValues(bv: Long, worlds: Seq[PrimitiveValue]): Map[PrimitiveValue, Int] =
+  {
+    worlds.zipWithIndex.
+      // Pick out only those values in legitimate worlds
+      filter { case (_, i) => WorldBits.isInWorld(bv, i) }.
+      // Group together identical values
+      groupBy( _._1 ).
+      // And total up the counts for each group
+      mapValues( _.size )
+  }
+  def possibleValuesWithProbability(bv: Long, worlds: Seq[(PrimitiveValue, Double)]): Map[PrimitiveValue, Double] =
+  {
+    worlds.zipWithIndex.
+      // Pick out only those values in legitimate worlds
+      filter { case ((v, p), i) => WorldBits.isInWorld(bv, i) }.
+      // Group together probabilities for identical values
+      groupBy( _._1._1 ).
+      // And total up the probabilities for each group
+      mapValues( _.map(_._1._2).sum )
+  }
+
+  def mostLikelyValue(bv: Long, worlds: Seq[(PrimitiveValue, Double)]): Option[PrimitiveValue] =
+  {
+    val p = possibleValuesWithProbability(bv, worlds)
+    if(p.isEmpty){ 
+      return None 
+    } else { 
+      return Some(p.maxBy(_._2)._1)
+    }
+  }
+}
+
+object WorldBits
+  extends LazyLogging
+{
+  def isInWorld(bv: Long, worldId: Int): Boolean =
+    ((bv & (1 << worldId)) > 0)
+
+  def worlds(bv: Long, numSamples: Int): Set[Int] =
+  {
+    (0 until numSamples).
+      filter( isInWorld(bv, _) ).
+      toSet
+  }
+
+  def confidence(bv: Long, numSamples: Int): Double =
+  {
+    val hits = 
+      (0 until numSamples).
+        count( isInWorld(bv, _) )
+
+    logger.debug(s"Testing: $bv <- $hits bits set")
+    hits.toDouble / numSamples.toDouble
   }
 }

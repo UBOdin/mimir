@@ -19,7 +19,7 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
               )
             )
           )
-        ).allRows.head(0).asLong
+        ) { _.next.tuple(0).asLong }
       case None => 
         1
     }
@@ -42,7 +42,7 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
         val projectedQuery =
           Project(argCols ++ hintCols, limitedQuery)
 
-        db.query(projectedQuery).allRows.map( _.splitAt(argExprs.size) )
+        db.query(projectedQuery) { _.toIndexedSeq.map { _.tuple.splitAt(argExprs.size) } }
       }
     }
   }

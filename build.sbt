@@ -94,7 +94,14 @@ parser := {
 
 lazy val datasets = taskKey[Unit]("Loads Datasets for Test Cases")
 datasets := {
-  val logger = streams.value.log
+  // Redirect stderr to stdin
+  val logger = 
+    new ProcessLogger {
+      def buffer[T](x: => T): T = x
+      def error(x: => String) = streams.value.log.info(x)
+      def info(x: => String) = streams.value.log.info(x)
+    }
+
   if(!new File("test/pdbench").exists()){
     Process(List(
       "curl", "-O", "http://odin.cse.buffalo.edu/public_data/pdbench-1g-columnar.tgz"
@@ -120,7 +127,7 @@ datasets := {
       case n => sys.error(s"Could not create PDBench directory")
     }
   } else {
-    println("Found `pdbench` data in test/pdbench");
+    logger.info("Found `pdbench` data in test/pdbench");
   }
 }
 

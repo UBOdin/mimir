@@ -40,53 +40,63 @@ object JDBCUtils {
     }
   }
 
-  def convertField(t: Type, results: ResultSet, field: Integer): PrimitiveValue =
+
+  def convertFunction(t: Type, field: Integer, rowIdType: Type = TString()): (ResultSet => PrimitiveValue) =
   {
-    val ret =
-      t match {
-        case TAny() =>
-          convertField(
-              convertSqlType(results.getMetaData().getColumnType(field)),
-              results, field
-            )
-        case TFloat() =>
-          FloatPrimitive(results.getDouble(field))
-        case TInt() =>
-          IntPrimitive(results.getLong(field))
-        case TString() =>
-          StringPrimitive(results.getString(field))
-        case TRowId() =>
-          RowIdPrimitive(results.getString(field))
-        case TBool() =>
-          BoolPrimitive(results.getInt(field) != 0)
-        case TType() => 
-          TypePrimitive(Type.fromString(
-            results.getString(field)
-          ))
-        case TDate() =>
-          try {
-            convertDate(results.getDate(field))
-          } catch {
-            case e: SQLException =>
-              try {
-                convertDate(Date.valueOf(results.getString(field)))
-              } catch { case e: java.lang.IllegalArgumentException => new NullPrimitive }
-            case e: NullPointerException =>
-              new NullPrimitive
-          }
-        case TTimeStamp() =>
-          try {
-            convertTimeStamp(results.getTimestamp(field))
-          } catch {
-            case e: SQLException =>
-              convertTimeStamp(Timestamp.valueOf(results.getString(field)))
-            case e: NullPointerException =>
-              new NullPrimitive
-          }
-        case TUser(t) => convertField(TypeRegistry.baseType(t), results, field)
+    val checkNull: ((ResultSet, => PrimitiveValue) => PrimitiveValue) = {
+      (r, call) => {
+        val ret = call
+        if(r.wasNull()){ NullPrimitive() }
+        else { ret }
       }
-    if(results.wasNull()) { NullPrimitive() }
-    else { ret }
+    }
+
+    t match {
+      case TAny() =>       throw new SQLException("Can't extract TAny")
+      case TFloat() =>     (r) => checkNull(r, { FloatPrimitive(r.getDouble(field)) })
+      case TInt() =>       (r) => checkNull(r, { IntPrimitive(r.getLong(field)) })
+      case TString() =>    (r) => checkNull(r, { StringPrimitive(r.getString(field)) })
+      case TRowId() => 
+        rowIdType match {
+          case TInt() =>   (r) => checkNull(r, { RowIdPrimitive(r.getInt(field).toString) })
+          case _ =>        (r) => checkNull(r, { RowIdPrimitive(r.getString(field)) })
+        }
+      case TBool() =>      (r) => checkNull(r, { BoolPrimitive(r.getInt(field) != 0) })
+      case TType() =>      (r) => checkNull(r, { TypePrimitive(Type.fromString(r.getString(field))) })
+      case TDate() =>      (r) => checkNull(r, { try {
+                                    convertDate(r.getDate(field))
+                                  } catch {
+                                    case e: SQLException =>
+                                      try {
+                                        convertDate(Date.valueOf(r.getString(field)))
+                                      } catch { case e: java.lang.IllegalArgumentException => new NullPrimitive }
+                                    case e: NullPointerException =>
+                                      new NullPrimitive
+                                  }
+                                })
+      case TTimeStamp() => (r) => checkNull(r, { try {
+                                      convertTimeStamp(r.getTimestamp(field))
+                                    } catch {
+                                      case e: SQLException =>
+                                        convertTimeStamp(Timestamp.valueOf(r.getString(field)))
+                                      case e: NullPointerException =>
+                                        new NullPrimitive
+                                    }
+                                  })
+      case TUser(t) => convertFunction(TypeRegistry.baseType(t), field, rowIdType)
+    }
+  }
+
+  def convertField(t: Type, results: ResultSet, field: Integer, rowIdType: Type = TString()): PrimitiveValue =
+  {
+    convertFunction(
+      t match {
+        case TAny() => convertSqlType(results.getMetaData().getColumnType(field))
+        case _ => t
+      }, 
+      field, 
+      rowIdType
+    )(results)
   }
 
   def convertDate(c: Calendar): DatePrimitive =

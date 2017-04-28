@@ -321,11 +321,11 @@ class CTExplainer(db: Database) extends LazyLogging {
 		logger.debug(s"EXPRS: $columnExprs")
 		logger.debug(s"ROW: $rowCondition")
 
-		val inlinedQuery = db.compiler.bestGuessQuery(tracedQuery)
+		val inlinedQuery = BestGuesser.bestGuessQuery(db, tracedQuery)
 
 		logger.debug(s"INLINE: $inlinedQuery")
 
-		val optQuery = db.compiler.optimize(inlinedQuery)
+		val optQuery = Compiler.optimize(inlinedQuery)
 
 		val finalSchema = optQuery.schema
 
@@ -411,7 +411,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 	): Seq[ReasonSet] =
 	{
 		logger.trace(s"Explain Subset (${wantCol.mkString(", ")}; $wantRow; $wantSort): \n$oper")
-		db.compiler.optimize(oper) match {
+		Compiler.optimize(oper) match {
 			case Table(_,_,_) => Seq()
 			case View(_,query,_) => 
 				explainSubset(query, wantCol, wantRow, wantSort)

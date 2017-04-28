@@ -9,6 +9,7 @@
 
   <logger name="mimir.sql.JDBCBackend" level="ERROR"/>
   <logger name="mimir.views.ViewManager" level="ERROR"/>
+  <logger name="mimir.Mimir$" level="ERROR"/>
 
   <root level="WARN">
     <appender-ref ref="STDOUT" />

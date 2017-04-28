@@ -198,44 +198,45 @@ object DiscalaAbadiNormalizer
   }
   def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] = 
   {
-    val attrs:Seq[String] = 
-      db.query(
-        Project(
-          Seq(ProjectArg("ATTR_NAME", Var("ATTR_NAME"))),
-          Select(
-            Comparison(Cmp.Eq, Var("TABLE_NAME"), StringPrimitive(table)),
-            attrCatalogFor(db, config)
-          )
-        )
-      ).mapRows( row => row(0).asString ).toSeq
-
-    if(attrs.isEmpty){ return None; }
-
-    var baseQuery =
+    db.query(
       Project(
-        attrs.map( attr => ProjectArg(attr, Var(attr)) ),
-        config.query
-      )
-
-    if(table == "ROOT"){
-      Some(baseQuery)
-    } else {
-      val repairModels = attrs.
-        filter { !_.equals(table) }.
-        map { attr => 
-          (
-            attr, 
-            db.models.get(s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_NORM:$table:$attr")
-          )
-        }
-      Some(
-        KeyRepairLens.assemble(
-          baseQuery,
-          Seq(table), 
-          repairModels,
-          None
+        Seq(ProjectArg("ATTR_NAME", Var("ATTR_NAME"))),
+        Select(
+          Comparison(Cmp.Eq, Var("TABLE_NAME"), StringPrimitive(table)),
+          attrCatalogFor(db, config)
         )
       )
+    ) { results => 
+      val attrs:Seq[String] = results.map { row => row(0).asString }.toSeq 
+
+      if(attrs.isEmpty){ return None; }
+
+      var baseQuery =
+        Project(
+          attrs.map( attr => ProjectArg(attr, Var(attr)) ),
+          config.query
+        )
+
+      if(table == "ROOT"){
+        Some(baseQuery)
+      } else {
+        val repairModels = attrs.
+          filter { !_.equals(table) }.
+          map { attr => 
+            (
+              attr, 
+              db.models.get(s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_NORM:$table:$attr")
+            )
+          }
+        Some(
+          KeyRepairLens.assemble(
+            baseQuery,
+            Seq(table), 
+            repairModels,
+            None
+          )
+        )
+      }
     }
   }
 }

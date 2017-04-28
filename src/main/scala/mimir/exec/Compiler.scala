@@ -2,7 +2,9 @@ package mimir.exec
 
 
 import java.sql._
+import org.slf4j.{LoggerFactory}
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import scala.util.Random
 
 import mimir.Database
 import mimir.algebra.Union
@@ -10,150 +12,123 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.optimizer._
 import mimir.provenance._
+import mimir.exec.stream._
+import mimir.util._
 import net.sf.jsqlparser.statement.select._
 
 class Compiler(db: Database) extends LazyLogging {
 
-  def standardOptimizations: List[Operator => Operator] = List(
-    ProjectRedundantColumns(_),
-    InlineProjections(_),
-    PushdownSelections(_),
-    PropagateEmptyViews(_)
-  )
+  val rnd = new Random
 
   /**
    * Perform a full end-end compilation pass.  Return an iterator over
    * the result set.  
    */
-  def compile(rawOper: Operator, opts: List[Operator => Operator] = standardOptimizations): ResultIterator = 
+  def compileForBestGuess(rawOper: Operator, opts: Compiler.Optimizations = Compiler.standardOptimizations): ResultIterator = 
   {
     var oper = rawOper
     logger.debug(s"RAW: $oper")
     
-    val compiled = compileInline(oper, opts)
+    // Compute the best-guess expression
+    val compiled = BestGuesser(db, oper, opts)
     oper               = compiled._1
     val outputSchema   = compiled._2
     val colDeterminism = compiled._3
     val rowDeterminism = compiled._4
     val provenanceCols = compiled._5
 
-    // The deterministic result set iterator should strip off the 
-    // provenance columns.  Figure out which columns need to be
-    // kept.  Note that the order here actually matters.
-    val tagPlusOutputSchemaNames = 
-      outputSchema.map(_._1).toList ++
-        colDeterminism.toList.flatMap( x => ExpressionUtils.getColumns(x._2)) ++ 
-        ExpressionUtils.getColumns(rowDeterminism)
+    // Fold the annotations back in
+    oper =
+      Project(
+        rawOper.columnNames.map { name => ProjectArg(name, Var(name)) } ++
+        colDeterminism.map { case (name, expression) => ProjectArg(CTPercolator.mimirColDeterministicColumnPrefix + name, expression) } ++
+        Seq(
+          ProjectArg(CTPercolator.mimirRowDeterministicColumnName, rowDeterminism),
+          ProjectArg(Provenance.rowidColnameBase, Function(Provenance.mergeRowIdFunction, provenanceCols.map( Var(_) ) ))
+        ),
+        oper
+      )
 
-    // We'll need it a few times, so cache the final operator's schema.
-    // This also forces the typechecker to run, so we get a final sanity
-    // check on the output of the rewrite rules.
-    val finalSchema = oper.schema
+    logger.debug(s"FULL STACK: $oper")
 
-    // We'll need to line the attributes in the output up with
-    // the order in which the user expects to see them.  Build
-    // a lookup table with name + position in the query being execed.
-    val finalSchemaOrderLookup = 
-      finalSchema.map(_._1).zipWithIndex.toMap
-   
-    logger.debug(s"SCHEMA: $finalSchema")
+    deploy(oper, rawOper.columnNames, opts)
+
+  }
+
+  def compileForSamples(
+    rawOper: Operator, 
+    opts: Compiler.Optimizations = Compiler.standardOptimizations, 
+    seeds: Seq[Long] = (0 until 10).map { _ => rnd.nextLong() }
+  ): SampleResultIterator =
+  {
+    var oper = rawOper
+    logger.debug(s"COMPILING FOR SAMPLES: $oper")
+    
+    oper = Compiler.optimize(oper, Seq(InlineProjections(_)));
+    logger.debug(s"OPTIMIZED: $oper")
+
+    val bundled = TupleBundler(db, oper, seeds)
+    oper               = bundled._1
+    val nonDetColumns  = bundled._2
+    val provenanceCols = bundled._3
+
+    logger.debug(s"BUNDLED: $oper")
+
+    oper = Compiler.optimize(oper, opts);
+
+    logger.debug(s"RE-OPTIMIZED: $oper")
+
+    new SampleResultIterator(
+      deploy(oper, rawOper.columnNames, opts),
+      rawOper.schema,
+      nonDetColumns,
+      seeds.size
+    )
+  }
+
+  def deploy(
+    compiledOper: Operator, 
+    outputCols: Seq[String], 
+    opts: Compiler.Optimizations = Compiler.standardOptimizations
+  ): ResultIterator =
+  {
+    var oper = compiledOper
+    val isAnOutputCol = outputCols.toSet
+
+    // Run a final typecheck to check the sanitity of the rewrite rules
+    oper.schema
+
+    // Optimize
+    oper = Compiler.optimize(oper, opts)
+
+    // Strip off the final projection operator
+    val extracted = OperatorUtils.extractProjections(oper)
+    val projections = extracted._1.map { col => (col.name -> col) }.toMap
+    oper            = extracted._2
+
+    val annotationCols =
+      projections.keys.filter( !isAnOutputCol(_) )
 
     val sql = sqlForBackend(oper, opts)
 
     // Deploy to the backend
     val results = 
-      db.backend.execute(sql)
+      TimeUtils.monitor("EXECUTE", logger.info(_)){
+        db.backend.execute(sql)
+      }
 
-    // And wrap the results.
-    new NonDetIterator(
-      new ResultSetIterator(results, 
-        finalSchema.toMap,
-        tagPlusOutputSchemaNames.map(finalSchemaOrderLookup(_)), 
-        provenanceCols.map(finalSchemaOrderLookup(_))
-      ),
-      outputSchema,
-      outputSchema.map(_._1).map(colDeterminism(_)), 
-      rowDeterminism
+    new ProjectionResultIterator(
+      outputCols.map( projections(_) ),
+      annotationCols.map( projections(_) ).toSeq,
+      oper.schema,
+      results,
+      db.backend.rowIdType
     )
   }
 
-  def compileInline(operRaw: Operator, opts: List[Operator => Operator] = standardOptimizations): (
-    Operator,                   // The compiled query
-    Seq[(String, Type)],        // The base schema
-    Map[String, Expression],    // Column taint annotations
-    Expression,                 // Row taint annotation
-    Seq[String]                 // Provenance columns
-  ) =
+  def sqlForBackend(oper: Operator, opts: Compiler.Optimizations = Compiler.standardOptimizations): SelectBody =
   {
-    var oper = operRaw
-    val rawColumns = operRaw.columnNames.toSet
-
-    // We'll need the pristine pre-manipulation schema down the line
-    // As a side effect, this also forces the typechecker to run, 
-    // acting as a sanity check on the query before we do any serious
-    // work.
-    val outputSchema = oper.schema;
-      
-    // The names that the provenance compilation step assigns will
-    // be different depending on the structure of the query.  As a 
-    // result it is **critical** that this be the first step in 
-    // compilation.  
-    val provenance = Provenance.compile(oper)
-    oper               = provenance._1
-    val provenanceCols = provenance._2
-
-    logger.debug(s"WITH-PROVENANCE (${provenanceCols.mkString(", ")}): $oper")
-
-
-    // Tag rows/columns with provenance metadata
-    val tagging = CTPercolator.percolateLite(oper)
-    oper               = tagging._1
-    val colDeterminism = tagging._2.filter( col => rawColumns(col._1) )
-    val rowDeterminism = tagging._3
-
-    logger.debug(s"PERCOLATED: $oper")
-
-    // It's a bit of a hack for now, but provenance
-    // adds determinism columns for provenance metadata, since
-    // we have no way to explicitly track what's an annotation
-    // and what's "real".  Remove this metadata now...
-    val minimalSchema: Set[String] = 
-      operRaw.columnNames.toSet ++ 
-      provenanceCols.toSet ++
-      (colDeterminism.map(_._2) ++ Seq(rowDeterminism)).flatMap( ExpressionUtils.getColumns(_) ).toSet
-
-
-    oper = ProjectRedundantColumns(oper, minimalSchema)
-
-    logger.debug(s"PRE-OPTIMIZED: $oper")
-
-    oper = db.views.resolve(oper)
-
-    logger.debug(s"INLINED: $oper")
-
-    // Clean things up a little... make the query prettier, tighter, and 
-    // faster
-    oper = optimize(oper, opts)
-
-    logger.debug(s"OPTIMIZED: $oper")
-
-    // Replace VG-Terms with their "Best Guess values"
-    oper = bestGuessQuery(oper)
-
-    logger.debug(s"GUESSED: $oper")
-
-    return (
-      oper,
-      outputSchema,
-      colDeterminism,
-      rowDeterminism,
-      provenanceCols
-    )
-  }
-
-  def sqlForBackend(oper: Operator, opts: List[Operator => Operator] = standardOptimizations): SelectBody =
-  {
-    val optimized = optimize(oper)
+    val optimized = Compiler.optimize(oper)
 
     // The final stage is to apply any database-specific rewrites to adapt
     // the query to the quirks of each specific target database.  Each
@@ -170,58 +145,44 @@ class Compiler(db: Database) extends LazyLogging {
     return sql
   }
 
-  /**
-   * Remove all VGTerms in the query and replace them with the 
-   * equivalent best guess values
-   */
-  def bestGuessQuery(oper: Operator): Operator =
-  {
-    // Remove any VG Terms for which static best-guesses are possible
-    // In other words, best guesses that don't depend on which row we're
-    // looking at (like the Type Inference or Schema Matching lenses)
-    val mostlyDeterministicOper =
-      InlineVGTerms(oper)
+}
 
-    // Deal with the remaining VG-Terms.  
-    if(db.backend.canHandleVGTerms()){
-      // The best way to do this would be a database-specific "BestGuess" 
-      // UDF if it's available.
-      return mostlyDeterministicOper
-    } else {
-      // Unfortunately, this UDF may not always be available, so if needed
-      // we fall back to the Guess Cache
-      val fullyDeterministicOper =
-        db.bestGuessCache.rewriteToUseCache(mostlyDeterministicOper)
+object Compiler
+{
 
-      return fullyDeterministicOper
-    }
-  }
+  val logger = LoggerFactory.getLogger("mimir.exec.Compiler")
+
+  type Optimization = Operator => Operator
+  type Optimizations = Seq[Optimization]
+
+  def standardOptimizations: Optimizations =
+    Seq(
+      ProjectRedundantColumns(_),
+      InlineProjections(_),
+      PushdownSelections(_),
+      PropagateEmptyViews(_)
+    )
 
   /**
    * Optimize the query
    */
-  def optimize(oper: Operator): Operator = 
-    optimize(oper, standardOptimizations)
-
-  /**
-   * Optimize the query
-   */
-  def optimize(rawOper: Operator, opts: List[Operator => Operator]): Operator = {
+  def optimize(rawOper: Operator, opts: Optimizations = standardOptimizations): Operator = {
     var oper = rawOper
     // Repeatedly apply optimizations up to a fixed point or an arbitrary cutoff of 10 iterations
-    for( i <- (0 until 10) ){
-      logger.debug(s"Optimizing, cycle $i: \n$oper")
-      // Try to optimize
-      val newOper = 
-        opts.foldLeft(oper)((o, fn) => fn(o))
+    TimeUtils.monitor("OPTIMIZE", logger.info(_)){
+      for( i <- (0 until 10) ){
+        logger.debug(s"Optimizing, cycle $i: \n$oper")
+        // Try to optimize
+        val newOper = 
+          opts.foldLeft(oper)((o, fn) => fn(o))
 
-      // Return if we've reached a fixed point 
-      if(oper.equals(newOper)){ return newOper; }
+        // Return if we've reached a fixed point 
+        if(oper.equals(newOper)){ return newOper; }
 
-      // Otherwise repeat
-      oper = newOper;
+        // Otherwise repeat
+        oper = newOper;
+      }
     }
     return oper;
   }
-
 }

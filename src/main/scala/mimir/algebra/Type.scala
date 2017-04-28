@@ -44,6 +44,7 @@ object Type {
     case "rowid"   => TRowId()
     case "type"    => TType()
     case "any"     => TAny()
+    case "num"     => TFloat()
     case ""        => TAny() // SQLite doesn't do types sometimes
     case x if TypeRegistry.registeredTypes contains x => TUser(x)
     case _ => 

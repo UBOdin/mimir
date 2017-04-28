@@ -19,10 +19,25 @@ abstract class PrimitiveValue(t: Type)
    */
   def asLong: Long;
   /**
+   * Convert the current object into an int or throw a TypeException if
+   * not possible
+   */
+  def asInt: Int = asLong.toInt
+  /**
    * Convert the current object into a double or throw a TypeException if 
    * not possible
    */
   def asDouble: Double;
+  /**
+   * Convert the current object into a float or throw a TypeException if 
+   * not possible
+   */
+  def asFloat: Float = asDouble.toFloat
+  /**
+   * Convert the current object into a boolean or throw a TypeException if 
+   * not possible
+   */
+  def asBool: Boolean;
   /**
    * Convert the current object into a string or throw a TypeException if 
    * not possible.  Note the difference between this and toString.
@@ -54,6 +69,7 @@ case class IntPrimitive(v: Long)
   override def toString() = v.toString
   def asLong: Long = v;
   def asDouble: Double = v.toDouble;
+  def asBool: Boolean = throw new TypeException(TInt(), TBool(), "Cast")
   def asString: String = v.toString;
   def payload: Object = v.asInstanceOf[Object];
 }
@@ -67,6 +83,7 @@ case class StringPrimitive(v: String)
   override def toString() = "'"+v.toString+"'"
   def asLong: Long = java.lang.Long.parseLong(v)
   def asDouble: Double = java.lang.Double.parseDouble(v)
+  def asBool: Boolean = throw new TypeException(TString(), TBool(), "Cast")
   def asString: String = v;
   def payload: Object = v.asInstanceOf[Object];
 }
@@ -80,6 +97,7 @@ case class TypePrimitive(t: Type)
   override def toString() = t.toString
   def asLong: Long = throw new TypeException(TType(), TInt(), "Cast")
   def asDouble: Double = throw new TypeException(TType(), TFloat(), "Cast")
+  def asBool: Boolean = throw new TypeException(TType(), TBool(), "Cast")
   def asString: String = t.toString;
   def payload: Object = t.asInstanceOf[Object];
 }
@@ -93,6 +111,7 @@ case class RowIdPrimitive(v: String)
   override def toString() = "'"+v.toString+"'"
   def asLong: Long = java.lang.Long.parseLong(v)
   def asDouble: Double = java.lang.Double.parseDouble(v)
+  def asBool: Boolean = throw new TypeException(TRowId(), TBool(), "Cast")
   def asString: String = v;
   def payload: Object = v.asInstanceOf[Object];
 }
@@ -106,6 +125,7 @@ case class FloatPrimitive(v: Double)
   override def toString() = v.toString
   def asLong: Long = throw new TypeException(TFloat(), TInt(), "Cast");
   def asDouble: Double = v
+  def asBool: Boolean = throw new TypeException(TFloat(), TBool(), "Cast")
   def asString: String = v.toString;
   def payload: Object = v.asInstanceOf[Object];
 }
@@ -117,10 +137,11 @@ case class FloatPrimitive(v: Double)
 case class DatePrimitive(y: Int, m: Int, d: Int)
   extends PrimitiveValue(TDate())
 {
-  override def toString() = "DATE '"+y+"-"+m+"-"+d+"'"
+  override def toString() = s"DATE '${asString}'"
   def asLong: Long = throw new TypeException(TDate(), TInt(), "Cast");
   def asDouble: Double = throw new TypeException(TDate(), TFloat(), "Cast");
-  def asString: String = toString;
+  def asBool: Boolean = throw new TypeException(TDate(), TBool(), "Cast")
+  def asString: String = f"$y%04d-$m%02d-$d%02d"
   def payload: Object = (y, m, d).asInstanceOf[Object];
   def compare(c: DatePrimitive): Integer = {
     if(c.y < y){ -1 }
@@ -141,10 +162,11 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
 case class TimestampPrimitive(y: Int, m: Int, d: Int, hh: Int, mm: Int, ss: Int)
   extends PrimitiveValue(TTimeStamp())
 {
-  override def toString() = "DATE '"+y+"-"+m+"-"+d+" "+hh+":"+mm+":"+ss+"'"
+  override def toString() = s"DATE '${asString}'"
   def asLong: Long = throw new TypeException(TDate(), TInt(), "Cast");
   def asDouble: Double = throw new TypeException(TDate(), TFloat(), "Cast");
-  def asString: String = toString;
+  def asBool: Boolean = throw new TypeException(TDate(), TBool(), "Cast")
+  def asString: String = f"$y%04d-$m%02d-$d%02d $hh%02d:$mm%02d:$ss%02d"
   def payload: Object = (y, m, d).asInstanceOf[Object];
   def compare(c: TimestampPrimitive): Integer = {
     if(c.y < y){ -1 }
@@ -172,6 +194,7 @@ case class BoolPrimitive(v: Boolean)
   override def toString() = if(v) {"TRUE"} else {"FALSE"}
   def asLong: Long = throw new TypeException(TBool(), TInt(), "Cast");
   def asDouble: Double = throw new TypeException(TBool(), TFloat(), "Cast");
+  def asBool: Boolean = v
   def asString: String = toString;
   def payload: Object = v.asInstanceOf[Object];
 }
@@ -186,5 +209,6 @@ case class NullPrimitive()
   def asLong: Long = throw new TypeException(TAny(), TInt(), "Cast Null");
   def asDouble: Double = throw new TypeException(TAny(), TFloat(), "Cast Null");
   def asString: String = throw new TypeException(TAny(), TString(), "Cast Null");
+  def asBool: Boolean = throw new TypeException(TAny(), TBool(), "Cast Null")
   def payload: Object = null
 }

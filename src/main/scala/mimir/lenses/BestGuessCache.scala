@@ -173,30 +173,29 @@ class BestGuessCache(db: Database) extends LazyLogging {
     val modelName = model.name
     logger.debug(s"Building cache for $modelName-$varIdx[$args] with\n$input")
 
-    val guesses = 
-      db.query(input).mapRows(row => {
-        val compiledArgs = args.map(Provenance.plugInToken(_, row.provenanceToken()))
-        val compiledHints = hints.map(Provenance.plugInToken(_, row.provenanceToken()))
-        val tuple = row.currentTuple()
-        val dataArgs = compiledArgs.map(Eval.eval(_, tuple))
-        val dataHints = compiledHints.map(Eval.eval(_, tuple))
-        val guess = model.bestGuess(varIdx, dataArgs, dataHints)
+    db.query(input) { results =>
+      db.backend.fastUpdateBatch(s"""
+        INSERT INTO $cacheTable(
+          $dataColumn, 
+          ${args.zipWithIndex.
+            map( arg => keyColumn(arg._2) ).
+            mkString(", ")}
+        ) VALUES (?, ${args.map(_ => "?").mkString("?")})
+        """, 
+        results.map { row => 
+          val compiledArgs = args.map(Provenance.plugInToken(_, row.provenance))
+          val compiledHints = hints.map(Provenance.plugInToken(_, row.provenance))
+          val tuple = row.tupleMap
+          val dataArgs = compiledArgs.map(Eval.eval(_, tuple))
+          val dataHints = compiledHints.map(Eval.eval(_, tuple))
+          val guess = model.bestGuess(varIdx, dataArgs, dataHints)
 
-        logger.trace(s"Registering $dataArgs -> $guess")
+          logger.trace(s"Registering $dataArgs -> $guess")
 
-        guess :: dataArgs.toList
-      })
-
-    db.backend.fastUpdateBatch(
-      s"""INSERT INTO $cacheTable(
-        $dataColumn, 
-        ${args.zipWithIndex.
-          map( arg => keyColumn(arg._2) ).
-          mkString(", ")}
-      ) VALUES (?, ${args.map(_ => "?").mkString("?")})
-      """,
-      guesses
-    )
+          guess :: dataArgs.toList
+        }.toSeq 
+      )
+    }
   }
 
   def update(model: Model, idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
@@ -210,7 +209,6 @@ class BestGuessCache(db: Database) extends LazyLogging {
       """,
       List(v) ++ args
     )
-
   }
 
   private def emptyCacheTable(cacheTable: String) =
