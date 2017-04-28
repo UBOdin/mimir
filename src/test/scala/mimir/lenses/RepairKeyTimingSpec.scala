@@ -247,7 +247,7 @@ object RepairKeyTimingSpec
         "KEY_REPAIR", 
         testTable,
         justTheAttributes, 
-        tableKeys.map { _.toUpperCase }.map { Var(_) }
+        Seq(Var("TID"))
       )
       db.tableExists(testTable) must beTrue
     }
