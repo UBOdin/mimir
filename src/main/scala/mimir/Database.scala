@@ -441,10 +441,12 @@ case class Database(backend: Backend)
     backend.update(  s"CREATE TABLE $targetTable ( $tableDef );"  )
     val insertCmd = s"INSERT INTO $targetTable( $tableCols ) VALUES ($colFillIns);"
     println(insertCmd)
-    backend.fastUpdateBatch(
-      insertCmd,
-      query(sourceQuery) { result => result.map( _.tuple ) }
-    )
+    query(sourceQuery) { result =>
+      backend.fastUpdateBatch(
+        insertCmd,
+        result.map( _.tuple ) 
+      )
+    }
   }
   
 
