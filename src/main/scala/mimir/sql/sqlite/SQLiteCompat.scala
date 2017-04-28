@@ -5,8 +5,9 @@ import mimir.util.JDBCUtils
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import org.geotools.referencing.datum.DefaultEllipsoid
 import org.joda.time.DateTime
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
-object SQLiteCompat {
+object SQLiteCompat extends LazyLogging{
 
   val INTEGER = 1
   val FLOAT   = 2
@@ -40,7 +41,13 @@ object SQLiteCompat {
       val name = x(1).asString.toUpperCase.trim
       val rawType = x(2).asString.trim
       val baseType = rawType.split("\\(")(0).trim
-      val inferredType = Type.fromString(baseType)
+      val inferredType = try {
+        Type.fromString(baseType)
+      } catch {
+        case e:RAException => 
+          logger.warn(s"While getting schema for table '$table': ${e.getMessage}")
+          TAny()          
+      }
       
       // println(s"$name -> $rawType -> $baseType -> $inferredType"); 
 

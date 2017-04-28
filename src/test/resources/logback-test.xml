@@ -8,7 +8,7 @@
   </appender>
   
   <logger name="mimir.Database" level="INFO"/>
-  <logger name="mimir.Mimir" level="INFO"/>
+  <logger name="mimir.Mimir$" level="DEBUG"/>
   <logger name="mimir.adaptive.DiscalaAbadiNormalizer$" level="INFO"/>
   <logger name="mimir.algebra.ExpressionChecker" level="INFO"/>
   <logger name="mimir.algebra.OperatorUtils" level="INFO"/>

@@ -2,6 +2,7 @@ package mimir.exec
 
 
 import java.sql._
+import org.slf4j.{LoggerFactory}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import scala.util.Random
 
@@ -147,8 +148,9 @@ class Compiler(db: Database) extends LazyLogging {
 }
 
 object Compiler
-  extends LazyLogging
 {
+
+  val logger = LoggerFactory.getLogger("mimir.exec.Compiler")
 
   type Optimization = Operator => Operator
   type Optimizations = Seq[Optimization]
