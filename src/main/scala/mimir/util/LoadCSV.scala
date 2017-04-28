@@ -163,6 +163,7 @@ object LoadCSV extends StrictLogging {
           })
 
         logger.trace(s"INSERT (line ${record.lineNumber}): $cmd \n <- $data")
+        record.fields = null
         data
       }))
     }
@@ -170,7 +171,7 @@ object LoadCSV extends StrictLogging {
   }
 }
 
-case class MimirCSVRecord(fields: Seq[String], lineNumber: Long, recordNumber: Long, comment: Option[String])
+case class MimirCSVRecord(var fields: Seq[String], lineNumber: Long, recordNumber: Long, comment: Option[String])
 
 /**
  * A wrapper around the Apache Commons CSVParser that can recover from malformed data.
