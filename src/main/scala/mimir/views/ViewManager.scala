@@ -6,6 +6,7 @@ import mimir.algebra._;
 import mimir.provenance._;
 import mimir.ctables._;
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import mimir.sql.JDBCBackend
 
 
 class ViewManager(db:Database) extends LazyLogging {
@@ -102,7 +103,7 @@ class ViewManager(db:Database) extends LazyLogging {
           val isMaterialized = 
             meta != 0
           
-          new ViewMetadata(name, query, isMaterialized)
+          new ViewMetadata(name, query, db.bestGuessSchema(query), isMaterialized)
         }
       }
     )
@@ -143,10 +144,11 @@ class ViewManager(db:Database) extends LazyLogging {
     ) = db.compiler.compileInline(properties.query)
 
     val columns = baseSchema.map(_._1)
-
+    val colbg = db.bestGuessSchema(properties.query)
+    
     val completeQuery = 
       Project(
-        columns.map { col => ProjectArg(col, Var(col)) } ++
+        colbg.map { col => ProjectArg(col._1, Function("CAST",Seq(Var(col._1), TypePrimitive(col._2)))) } ++
         columns.map { col => ProjectArg(
           CTPercolator.mimirColDeterministicColumnPrefix + col,
           Conditional(columnTaint(col), IntPrimitive(1), IntPrimitive(0))
@@ -154,12 +156,22 @@ class ViewManager(db:Database) extends LazyLogging {
         Seq(ProjectArg(CTPercolator.mimirRowDeterministicColumnName, 
           Function("CAST", Seq(Conditional(rowTaint, IntPrimitive(1), IntPrimitive(0)), TypePrimitive(TInt())))
         )) ++
-        provenance.map { col => ProjectArg(col, Var(col)) },
+        provenance.map { col => ProjectArg(col, Var(col)) } ++
+        provenance.map { col => ProjectArg(CTPercolator.mimirColDeterministicColumnPrefix + col, IntPrimitive(1))},
         query
       )
 
     val inlinedSQL = db.compiler.sqlForBackend(completeQuery)
-    db.backend.selectInto(name, inlinedSQL.toString)
+    val tableSchema = completeQuery.schema
+    val tableDef = tableSchema.map( x => x._1+" "+Type.toString(x._2) ).mkString(",")
+    val tableCols = tableSchema.map( _._1 ).mkString(",")
+    val colFillIns = tableSchema.map( _ => "?").mkString(",")
+    //val insertCmd = s"INSERT INTO $name( $tableCols ) VALUES ($colFillIns);"
+    val insertCmd = s"INSERT INTO $name $inlinedSQL;"
+    db.backend.update(  s"CREATE TABLE $name ( $tableDef );"  )
+    db.backend.update(insertCmd)
+    //db.backend.asInstanceOf[JDBCBackend].fastUpdateBatch(insertCmd, db.backend.execute(inlinedSQL))
+    //db.backend.selectInto(name, inlinedSQL.toString)
 
     logger.debug(s"MATERIALIZE: $name(${completeQuery.schema.mkString(",")})")
     logger.debug(s"QUERY: $inlinedSQL")

@@ -145,9 +145,12 @@ object LoadCSV extends StrictLogging {
           if(record.recordNumber % 100000 == 0){
             logger.info(s"Loaded ${record.recordNumber} records...")
           }
+          /*if(record.recordNumber > 400000){
+            Thread.sleep(1000);
+          }*/
           val data = record.fields.
             take(numberOfColumns).
-            padTo(numberOfColumns, "").
+            padTo( numberOfColumns, "").
             map( _.trim ).
             zip(sch).
             map({ case (value, (col, t)) =>
@@ -162,10 +165,11 @@ object LoadCSV extends StrictLogging {
                 }
               }
             })
-
+            
           logger.trace(s"INSERT (line ${record.lineNumber}): $cmd \n <- $data")
+          record.fields = null
           data
-        }))
+        })) 
       },
       logger.info(_)
     )
@@ -173,7 +177,7 @@ object LoadCSV extends StrictLogging {
   }
 }
 
-case class MimirCSVRecord(fields: Seq[String], lineNumber: Long, recordNumber: Long, comment: Option[String])
+case class MimirCSVRecord(var fields: Seq[String], lineNumber: Long, recordNumber: Long, comment: Option[String])
 
 /**
  * A wrapper around the Apache Commons CSVParser that can recover from malformed data.

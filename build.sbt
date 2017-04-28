@@ -136,6 +136,33 @@ datasets := {
   } else {
     println("Found `pdbench` data in test/pdbench");
   }
+  if(!new File("test/mcdb").exists()){
+    Process(List(
+      "curl", "-O", "http://odin.cse.buffalo.edu/public_data/tpch.tgz"
+    )) ! logger match {
+      case 0 => // Success
+      case n => sys.error(s"Could not download MCDB Data: $n")
+    }
+    Process(List("mkdir", "test/mcdb")) ! logger match {
+      case 0 => // Success
+      case n => sys.error(s"Could not create MCDB directory")
+    }
+    Process(List(
+      "tar", "-xvf", 
+      "tpch.tgz", 
+      "--strip-components=1", 
+      "--directory=test/mcdb"
+    )) ! logger match {
+      case 0 => // Success
+      case n => sys.error(s"Could not clean up after old SQL Parser: $n")
+    }
+    Process(List("rm", "tpch.tgz")) ! logger match {
+      case 0 => // Success
+      case n => sys.error(s"Could not create MCDB directory")
+    }
+  } else {
+    println("Found `mcdb` data in test/mcdb");
+  }
 }
 
 

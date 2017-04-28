@@ -120,7 +120,7 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
   override def toString() = "DATE '"+y+"-"+m+"-"+d+"'"
   def asLong: Long = throw new TypeException(TDate(), TInt(), "Cast");
   def asDouble: Double = throw new TypeException(TDate(), TFloat(), "Cast");
-  def asString: String = toString;
+  def asString: String = f"$y-$m%02d-$d%02d"
   def payload: Object = (y, m, d).asInstanceOf[Object];
   def compare(c: DatePrimitive): Integer = {
     if(c.y < y){ -1 }

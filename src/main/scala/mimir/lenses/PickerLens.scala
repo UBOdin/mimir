@@ -31,20 +31,43 @@ object PickerLens {
   {
     val operSchema = query.schema
     val schemaMap = operSchema.toMap
-    val (pickFromColumns, pickerColTypes ) = args.flatMap {
-      case Var(col) => Some((col, schemaMap(col)))
-      case _ => None
-    }.unzip
     
-    val resultColName = "PICK_ONE_" +pickFromColumns.mkString("_") 
+    val (pickFromColumns, pickerColTypes ) = args.flatMap {
+      case Function("PICK_FROM", cols:Seq[Var] ) => Some( cols.map(col => (col.name, schemaMap(col.name))) )
+      case _ => None
+    }.toSeq.flatten.unzip
+    
+    val pickToCol = args.flatMap {
+      case Function("PICK_AS", Seq(Var(col))) => Some( col )
+      case _ => None
+    }
+    
+    val resultColName = pickToCol.length match {
+      case 0 => "PICK_ONE_" +pickFromColumns.mkString("_") 
+      case 1 => pickToCol.head
+    }
     
     val pickerModel = new PickerModel(name+"_PICKER_MODEL:"+pickFromColumns.mkString("_"), resultColName, pickFromColumns, pickerColTypes, query) 
     pickerModel.reconnectToDatabase(db)
     
+    lazy val expressionSubstitutions : (Expression) => Expression = (expr) => {
+    expr match {
+      case Function("AVG", Seq(Var(col))) => {
+        val exprSubQ = Project(Seq(ProjectArg(s"AVG_$col", expr)), query)
+        val results = db.query(exprSubQ)
+        results.open()
+        val replacementExpr = results.currentRow()(0)
+        results.close()
+        replacementExpr
+      }
+      case x => x.recur(expressionSubstitutions(_))
+    }
+  }
+    
     val pickUncertainExprs : List[(Expression, Expression)] = args.flatMap {
       case Function("UEXPRS", Seq(StringPrimitive(expr), StringPrimitive(resultExpr)) ) => Some( (
           db.parseExpression(expr), 
-          VGTerm(pickerModel, 0,Seq[Expression](RowIdVar()), Seq(db.parseExpression(resultExpr))) 
+          VGTerm(pickerModel, 0,Seq[Expression](RowIdVar()), Seq(expressionSubstitutions(db.parseExpression(resultExpr)))) 
           ) )
       case _ => None
     }.toList
@@ -52,7 +75,7 @@ object PickerLens {
     val pickCertainExprs : List[(Expression, Expression)] = args.flatMap {
       case Function("EXPRS", Seq(StringPrimitive(expr), StringPrimitive(resultExpr)) ) => Some( (
           db.parseExpression(expr), 
-          db.parseExpression(resultExpr)
+          expressionSubstitutions(db.parseExpression(resultExpr))
           ) )
       case _ => None
     }.toList
@@ -77,5 +100,7 @@ object PickerLens {
       Seq(pickerModel)
     )
   }
+  
+
 }
 

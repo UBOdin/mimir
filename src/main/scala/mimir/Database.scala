@@ -257,11 +257,12 @@ case class Database(backend: Backend)
   /**
    * Build a Table operator for the table with the provided name.
    */
-  def getTableOperator(table: String): Operator =
+  def getTableOperator(table: String) : Operator = getTableOperator(table, table)
+  def getTableOperator(table: String, alias:String): Operator =
   {
     getView(table).getOrElse(
       Table(
-        table, table,
+        table, alias,
         backend.getTableSchema(table) match {
           case Some(x) => x
           case None => throw new SQLException(s"No such table or view '$table'")

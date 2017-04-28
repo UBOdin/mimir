@@ -93,7 +93,7 @@ class RAToSql(db: Database)
    * 
    * These get converted to JSqlParser UNIONs.  Both branches invoke step 2
    */
-  private def makeSelect(oper:Operator): SelectBody =
+  def makeSelect(oper:Operator): SelectBody =
   {
     oper match {
       case u:Union => {

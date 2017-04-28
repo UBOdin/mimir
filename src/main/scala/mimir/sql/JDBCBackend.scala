@@ -281,7 +281,7 @@ class JDBCBackend(val backend: String, val filename: String)
         case d:DatePrimitive     => 
           backend match {
             case "sqlite" => 
-              stmt.setString(i, d.asString)
+              stmt.setString(i, d.asString )
             case _ =>
               stmt.setDate(i, JDBCUtils.convertDate(d))
           }

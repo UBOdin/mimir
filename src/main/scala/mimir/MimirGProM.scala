@@ -16,6 +16,8 @@ import net.sf.jsqlparser.statement.select.Select
 import mimir.gprom.algebra.OperatorTranslation
 import org.gprom.jdbc.jna.GProMWrapper
 import scala.util.control.Exception.Catch
+import org.gprom.jdbc.jna.GProMNode
+import mimir.optimizer.InlineVGTerms
 
 
 /**
@@ -34,6 +36,7 @@ object MimirGProM {
 
   var conf: MimirConfig = null;
   var db: Database = null;
+  var gp: GProMBackend = null
   var usePrompt = true;
   var pythonMimirCallListeners = Seq[PythonMimirCallInterface]()
 
@@ -44,13 +47,21 @@ object MimirGProM {
     ExperimentalOptions.enable(conf.experimental())
     
     // Set up the database connection(s)
-    db = new Database(new GProMBackend(conf.backend(), conf.dbname(), -1))    
+    gp = new GProMBackend(conf.backend(), conf.dbname(), 1)
+    db = new Database(gp)    
     db.backend.open()
-
+    gp.metadataLookupPlugin.db = db;
+    
     db.initializeDBForMimir();
 
+   if(ExperimentalOptions.isEnabled("INLINE-VG")){
+        db.backend.asInstanceOf[GProMBackend].enableInlining(db)
+      }
    
-    mikeMessingAround()
+   // Prepare GProM-Mimir Translator
+   OperatorTranslation.db = db
+   
+   mikeMessingAround()
     
     db.backend.close()
     if(!conf.quiet()) { println("\n\nDone.  Exiting."); }
@@ -118,25 +129,103 @@ object MimirGProM {
     //db.update(new MimirJSqlParser(new StringReader("CREATE TABLE T(C integer, D integer)")).Statement())
     //testDebug = true
     //runTests(30) 
+    //runTests(1) 
+    
+    /*val queryStr0 = "SELECT S.A AS P, S.B AS Q FROM R AS S"
+    val statements2 = db.parse(queryStr0)
+     var testOper4 = db.sql.convert(statements2.head.asInstanceOf[Select])
+     var gpnode = GProMWrapper.inst.rewriteQueryToOperatorModel(queryStr0+";")
+   val gpnodeStr = GProMWrapper.inst.gpromNodeToString(gpnode.getPointer())
+   val mimirnode = OperatorTranslation.gpromStructureToMimirOperator(0, gpnode, null)  
    
+     //GProMWrapper.inst.gpromFreeMemContext(memctx)
+     println("---------v Actual GProM Oper v----------")
+     println(gpnodeStr)
+     println("---------^ Actual GProM Oper ^----------")
+     println("---------v Trans Mimir Oper v----------")
+     println(mimirnode)
+     println("---------^ Trans Mimir Oper ^----------")
+     println("---------v Actual Mimir Oper v----------")
+     println(totallyOptimize(testOper4))
+     println("---------^ Actual Mimir Oper ^----------")*/
+     
     //val queryStr = "SELECT S.A FROM R AS S GROUP BY S.A"
-     val queryStr = "Select * from LENS_1981079022"
-    val statements = db.parse(queryStr)
+     val queryStr = "Select * from LENS_PICKER84547667"
+     val statements = db.parse(queryStr)
      var testOper2 = db.sql.convert(statements.head.asInstanceOf[Select])
+     val query = testOper2//InlineVGTerms(testOper2 )
+     
+    gp.metadataLookupPlugin.setOper(query)
+      
+     /*val inlinedSQL = db.compiler.sqlForBackend(query).toString()
+     println("MIMIR: " + inlinedSQL)
+     val tmimirres = time{ getQueryResults(inlinedSQL) }
+     println(tmimirres._2)
+     println("----------------------")
+     val sqlRewritten = GProMWrapper.inst.gpromRewriteQuery(inlinedSQL+";")
+     println("GPROM: " + sqlRewritten)
+     val tgpromres = time{ getQueryResults(sqlRewritten) }
+     println(tgpromres._2)*/
+    
      //testOper2 = db.compiler.optimize(testOper2, db.compiler.standardOptimizations)
-     val operStr2 = testOper2.toString()
+     testOper2 = totallyOptimize(testOper2)
+     //val inlinedSQL = db.compiler.sqlForBackend(query).toString()
+     val operStr2 = query.toString()
      println("---------v Actual Mimir Oper v----------")
      println(operStr2)
      println("---------^ Actual Mimir Oper ^----------")
      
+     println("-------v Optimized Mimir Oper v---------")
+     println(testOper2.toString())
+     println("-------^ Optimized Mimir Oper ^---------")
+     
      val memctx = GProMWrapper.inst.gpromCreateMemContext()
-     val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel(queryStr+";")
-     val nodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
-     GProMWrapper.inst.gpromFreeMemContext(memctx)
+     val memctxq = GProMWrapper.inst.createMemContextName("QUERY_CONTEXT")
+     //val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel(queryStr+";")
+    val gpromNode = OperatorTranslation.mimirOperatorToGProMList(query)
+     gpromNode.write()
+    /* val nodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
+     
+     //GProMWrapper.inst.gpromFreeMemContext(memctx)
      println("---------v Actual GProM Oper v----------")
      println(nodeStr)
      println("---------^ Actual GProM Oper ^----------")
+     */
+     val optimizedGpromNode = GProMWrapper.inst.optimizeOperatorModel(gpromNode.getPointer)
    
+     //val localOp = new GProMNode.ByReference(optimizedGpromNode.getPointer)
+     //localOp.write()
+     val optNodeStr = GProMWrapper.inst.gpromNodeToString(optimizedGpromNode.getPointer())
+     
+     //GProMWrapper.inst.gpromFreeMemContext(memctx)
+     println("-------v Optimized GProM Oper v---------")
+     println(optNodeStr)
+     println("-------^ Optimized GProM Oper ^---------")
+     
+     val testOper3 = OperatorTranslation.gpromStructureToMimirOperator(0, optimizedGpromNode, null)
+     val operStr3 = testOper3.toString()
+     println("---------v Trans Mimir Oper v----------")
+     println(operStr3)
+     println("---------^ Trans Mimir Oper ^----------") 
+     
+     val compiled = db.compiler.compileInline(db.querySerializer.desanitize(testOper3), List())
+     
+     val gpromRun = time {
+       getQueryResults(db.compiler.sqlForBackend(compiled._1).toString())
+           //db.compiler.bestGuessQuery(
+           //db.querySerializer.sanitize(testOper3))).toString())
+     }
+     
+     val mimirRun = time {
+       getQueryResults(db.compiler.sqlForBackend(testOper2).toString())
+     }
+     
+     println(s"gpromRun: ${gpromRun._2}\nmimirRun: ${mimirRun._2}")
+     
+     /*val optSqlStr = GProMWrapper.inst.operatorModelToSql(optimizedGpromNode.getPointer())
+     println("-------v Optimized GProM Sql v---------")
+     println(optSqlStr)
+     println("-------^ Optimized GProM Sql ^---------")*/
   }
   
   def getQueryResults(oper : mimir.algebra.Operator) : String =  {
@@ -467,11 +556,11 @@ object MimirGProM {
              gpromNode.write()
              //val memctx = GProMWrapper.inst.gpromCreateMemContext() 
              val gpromNode2 = GProMWrapper.inst.provRewriteOperator(gpromNode.getPointer())
-             val testOper2 = OperatorTranslation.gpromStructureToMimirOperator(0, gpromNode2, null)
-             val operStr = testOper2.toString()
+             //val testOper2 = OperatorTranslation.gpromStructureToMimirOperator(0, gpromNode2, null)
+             //val operStr = testOper2.toString()
              //val sqlRewritten = db.ra.convert(testOper2)
              //GProMWrapper.inst.gpromFreeMemContext(memctx)
-             operStr
+             ""//operStr
            }
              
            val timeForRewriteThroughSQL = time {

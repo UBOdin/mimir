@@ -24,7 +24,8 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) e
   var openConnections = 0
   var inliningAvailable = false
   //var gpromMetadataPlugin : MimirGProMMetadataPlugin = null
-
+  var metadataLookupPlugin : GProMMedadataLookup = null
+  
   def driver() = backend
 
   val tableSchemas: scala.collection.mutable.Map[String, Seq[(String, Type)]] = mutable.Map()
@@ -62,6 +63,8 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) e
             //gpromMetadataPlugin = new MimirGProMMetadataPlugin()
             unwrappedConn = c.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection])
             SQLiteCompat.registerFunctions( unwrappedConn )
+            metadataLookupPlugin = new GProMMedadataLookup(c)
+            GProMWrapper.inst.setupPlugins(c, metadataLookupPlugin.getPlugin) 
             c
           case "oracle" =>
             Methods.getConn()

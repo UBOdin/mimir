@@ -5,6 +5,12 @@ import com.sun.jna.Pointer
 import com.sun.jna.Memory
 import com.sun.jna.Native
 import mimir.algebra._
+import mimir.ctables.VGTerm
+import mimir.sql.sqlite.VGTermFunctions
+import mimir.ctables.VGTermAcknowledged
+import mimir.ctables.VGTermAcknowledged
+import mimir.ctables.VGTerm
+import mimir.optimizer.InlineVGTerms
 
 object ProjectionArgVisibility extends Enumeration {
    val Visible = Value("Visible")
@@ -12,7 +18,7 @@ object ProjectionArgVisibility extends Enumeration {
 } 
 
 object OperatorTranslation {
-  
+  var db: mimir.Database = null
   def gpromStructureToMimirOperator(depth : Int, gpromStruct: GProMStructure, gpromParentStruct: GProMStructure ) : Operator = {
     gpromStruct match {
       case aggregationOperator : GProMAggregationOperator => { 
@@ -60,8 +66,8 @@ object OperatorTranslation {
         throw new Exception("Translation Not Yet Implemented '"+nestingOperator+"'") 
         }
       case node : GProMNode => { 
-        throw new Exception("Translation Not Yet Implemented '"+node+"'") 
-        }
+        gpromStructureToMimirOperator(depth, GProMWrapper.inst.castGProMNode(node), gpromParentStruct)
+      }
       case orderOperator : GProMOrderOperator => { 
         throw new Exception("Translation Not Yet Implemented '"+orderOperator+"'") 
         }
@@ -185,7 +191,7 @@ object OperatorTranslation {
             translateGProMCaseWhenListToMimirExpressionList(listCell.next,intermSchema, exprsTail.union(Seq(translateGProMCaseWhenToMimirExpressions( listCellDataGPStructure, intermSchema))))
           }
           else
-            exprsTail.union(Seq(translateGProMCaseWhenToMimirExpressions( listCellDataGPStructure, intermSchema)))
+            exprsTail.union(Seq(translateGProMCaseWhenToMimirExpressions( GProMWrapper.inst.castGProMNode(listCellDataGPStructure), intermSchema)))
         }
        case x => {
           	throw new Exception("Expression not a list cell '"+x+"'")
@@ -198,6 +204,9 @@ object OperatorTranslation {
       case caseWhen : GProMCaseWhen => {
           	(translateGProMExpressionToMimirExpression(caseWhen.when, intermSchema), translateGProMExpressionToMimirExpression(caseWhen.then, intermSchema))
           }
+      case node : GProMNode => { 
+        translateGProMCaseWhenToMimirExpressions( GProMWrapper.inst.castGProMNode(node),  intermSchema)
+      }
       case x => {
           	throw new Exception("Expression not a case when clause '"+x+"'")
           }
@@ -231,10 +240,18 @@ object OperatorTranslation {
       	}
       }
       case caseExpr : GProMCaseExpr => {
-      	val testExpr = translateGProMExpressionToMimirExpression(caseExpr.expr, intermSchema) 
       	val whenThenClauses = translateGProMCaseWhenListToMimirExpressionList(caseExpr.whenClauses.head, intermSchema, Seq())
         val elseClause = translateGProMExpressionToMimirExpression(caseExpr.elseRes, intermSchema) 
-      	ExpressionUtils.makeCaseExpression(testExpr, whenThenClauses, elseClause)
+        caseExpr.expr match {
+      	  case null => {
+      	    ExpressionUtils.makeCaseExpression(whenThenClauses.toList, elseClause)
+      	  }
+      	  case _ => {
+      	    val testExpr = translateGProMExpressionToMimirExpression(caseExpr.expr, intermSchema) 
+      	    ExpressionUtils.makeCaseExpression(testExpr, whenThenClauses, elseClause)
+      	  }
+      	}
+        
       }
       case caseWhen : GProMCaseWhen => {
       	throw new Exception("You need to use translateGProMCaseWhenListToMimirExpressionList for '"+caseWhen+"'")
@@ -243,7 +260,29 @@ object OperatorTranslation {
       	Function("CAST", translateGProMExpressionToMimirExpressionList(castExpr.expr, intermSchema))
       }
       case functionCall : GProMFunctionCall => {
-        Function(functionCall.functionname, gpromListToScalaList(functionCall.args).map( gpromParam => translateGProMExpressionToMimirExpression(new GProMNode(gpromParam.getPointer), intermSchema)))
+        functionCall.functionname match {
+          case "NOT" => {
+            Not(translateGProMExpressionToMimirExpression(new GProMNode(functionCall.args.head.data.ptr_value), intermSchema))
+          }
+          case "BEST_GUESS_VGTERM" => {
+            val fargs = OperatorTranslation.gpromListToScalaList(functionCall.args).map(arg => translateGProMExpressionToMimirExpression(new GProMNode(arg.getPointer), intermSchema))
+            val model = db.models.get(fargs(0).toString().replaceAll("'", ""))
+          val idx = fargs(1).asInstanceOf[IntPrimitive].v.toInt;
+          val vgtArgs =
+            model.argTypes(idx).
+              zipWithIndex.
+              map( arg => fargs(arg._2+2))
+          val vgtHints = 
+            model.hintTypes(idx).
+              zipWithIndex.
+              map( arg => fargs(arg._2+vgtArgs.length+2))
+          
+            VGTerm(model, idx, vgtArgs, vgtHints)
+          }
+          case _ => {
+            Function(functionCall.functionname, gpromListToScalaList(functionCall.args).map( gpromParam => translateGProMExpressionToMimirExpression(new GProMNode(gpromParam.getPointer), intermSchema)))
+          }
+        }
       }
       case isNullExpr : GProMIsNullExpr => {
       	IsNullExpression(translateGProMExpressionToMimirExpression(isNullExpr.expr, intermSchema))
@@ -253,7 +292,6 @@ object OperatorTranslation {
       }
       case rowNumExpr : GProMRowNumExpr => {
       	RowIdVar()
-        throw new Exception("Expression Translation Not Yet Implemented '"+rowNumExpr+"'")
       }
       case sQLParameter : GProMSQLParameter => {
       	throw new Exception("Expression Translation Not Yet Implemented '"+sQLParameter+"'")
@@ -285,6 +323,12 @@ object OperatorTranslation {
       }
       case attributeReference : GProMAttributeReference => {
         attributeReference.attrPosition
+      }
+      case functionCall : GProMFunctionCall => {
+        0
+      }
+      case caseExpr : GProMCaseExpr=> {
+        0
       }
       case x => throw new Exception("get AttrPosition Not Yet Implemented for '"+x+"'")
     }
@@ -425,10 +469,10 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
               case "" => {
                 tableAccessOperator.tableName match { 
                   case "" => ("", "", "")
-                  case _ => (tableAccessOperator.tableName, tableAccessOperator.tableName, tableAccessOperator.tableName + "_")
+                  case _ => (tableAccessOperator.tableName, tableAccessOperator.tableName, "")//tableAccessOperator.tableName + "_")
                 }  
               }
-              case _ => (tableAccessOperator.tableName, schemaName, schemaName + "_") 
+              case _ => (tableAccessOperator.tableName, schemaName, "")//schemaName + "_") 
           }
           var listCell = tableAccessOperator.op.schema.attrDefs.head
           (for(i <- 1 to tableAccessOperator.op.schema.attrDefs.length ) yield {
@@ -595,9 +639,9 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
     val schemaNames = tableNameAlias match {
       case null | ("","") => gpromSchema.name match {
         case "" => ("", "", "")
-        case _ => (gpromSchema.name, gpromSchema.name, gpromSchema.name + "_") 
+        case _ => (gpromSchema.name, "", "") 
       }
-      case (tn, ta) =>  (tn, ta, ta + "_") 
+      case (tn, ta) =>  (tn, ta, "")//ta + "_") 
     }
     var exprNoAliasCount = 0
     var firstExprNoAliasIndex = 0
@@ -719,7 +763,7 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
     def getAttrPrefix() : String = {
       alias match { 
           case "" => ""
-          case x =>  x + "_"
+          case x =>  ""//x + "_"
       }
     }
     override def toString() : String = {
@@ -741,7 +785,7 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
             case Aggregate(_,_,_) => getSchemaForGProM(src)
             case _ => Seq[MimirToGProMIntermediateSchemaInfo]()
   			 })
-         val schProj = getSchemaForGProM(mimirOperator)
+  			 val schProj = getSchemaForGProM(mimirOperator)
   			 val toQoScm = translateMimirSchemaToGProMSchema("PROJECTION", schProj)
   			 val gqoInputs = mimirOperatorToGProMList(src) 
   			 val gqo = new GProMQueryOperator.ByValue(GProM_JNA.GProMNodeTag.GProM_T_ProjectionOperator,  gqoInputs, toQoScm, null, null, null)
@@ -817,7 +861,9 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
 			  list.length += 1 
 			  list
 			}
-
+			case View(name, query, meta) => {
+			  mimirOperatorToGProMList(query)
+			}
 		}
   }
   
@@ -862,6 +908,14 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
                list.length = 2;
                new GProMOperator.ByValue(GProM_JNA.GProMNodeTag.GProM_T_Operator, aritOp,list)
             }
+            case Conditional(cond, thenClause, elseClause) => {
+              val whenThen = new GProMCaseWhen.ByValue(GProM_JNA.GProMNodeTag.GProM_T_CaseWhen, new GProMNode.ByReference(translateMimirExpressionToGProMStructure(cond, schema).getPointer), new GProMNode.ByReference(translateMimirExpressionToGProMStructure(thenClause, schema).getPointer))
+              val list = new GProMList.ByReference()
+               list.`type` = GProM_JNA.GProMNodeTag.GProM_T_List
+               list.head = createGProMListCell(whenThen) 
+			         list.length = 1;
+               new GProMCaseExpr.ByValue(GProM_JNA.GProMNodeTag.GProM_T_CaseExpr,null, list, new GProMNode.ByReference(translateMimirExpressionToGProMStructure(elseClause, schema).getPointer))
+            }
             case x => {
               translateMimirExpressionToGProMStructure(x, schema)
             }
@@ -875,13 +929,45 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
       case Arithmetic(_,_,_) => translateMimirExpressionToGProMCondition(mimirExpr, schema)
       case Conditional(_,_,_) => translateMimirExpressionToGProMCondition(mimirExpr, schema)
       case Var(v) => {
-        val indexOfCol = schema.map(ct => ct.attrMimirName).indexOf(v)
-        val attrRef = new GProMAttributeReference.ByValue(GProM_JNA.GProMNodeTag.GProM_T_AttributeReference, schema(indexOfCol).attrName, schema(indexOfCol).attrFromClausePosition, schema(indexOfCol).attrPosition, 0, getGProMDataTypeFromMimirType(schema(indexOfCol).attrType ))
+        var indexOfCol = schema.map(ct => ct.attrMimirName).indexOf(v)
+          if(indexOfCol < 0)
+            indexOfCol = schema.map(ct => ct.attrName).indexOf(v)
+            if(indexOfCol < 0)
+              indexOfCol = schema.map(ct => ct.attrProjectedName).indexOf(v)
+              if(indexOfCol < 0)
+                /*indexOfCol = schema.map(ct => ct.attrMimirName).indexOf(v.replaceFirst(schema(0).alias+"_", ""))
+                if(indexOfCol < 0)*/
+                  throw new Exception(s"Missing Var $v: not found in : ${schema.mkString(",")}")
+        val attrRef = new GProMAttributeReference.ByValue(GProM_JNA.GProMNodeTag.GProM_T_AttributeReference, v, schema(indexOfCol).attrFromClausePosition, schema(indexOfCol).attrPosition, 0, getGProMDataTypeFromMimirType(schema(indexOfCol).attrType ))
         attrRef
+      }
+      case RowIdVar() => {
+        val ridexpr = new GProMRowNumExpr.ByValue(GProM_JNA.GProMNodeTag.GProM_T_RowNumExpr)
+        ridexpr
       }
       case Function(op, params) => {
         val gpromExprList = translateMimirExpressionsToGProMList(schema, params)
         val gpromFunc = new GProMFunctionCall.ByValue(GProM_JNA.GProMNodeTag.GProM_T_FunctionCall, op, gpromExprList, 0)
+        gpromFunc
+      }
+      case VGTerm(model, idx, args, hints) => {
+        val gpromExprList = translateMimirExpressionsToGProMList(schema, Seq(StringPrimitive(model.name), IntPrimitive(idx)).union(args.union(hints)))
+        val gpromFunc = new GProMFunctionCall.ByValue(GProM_JNA.GProMNodeTag.GProM_T_FunctionCall, VGTermFunctions.bestGuessVGTermFn, gpromExprList, 0)
+        gpromFunc
+      }
+      case VGTermAcknowledged(model, idx, args) => {
+        val gpromExprList = translateMimirExpressionsToGProMList(schema, Seq(StringPrimitive(model.name), IntPrimitive(idx)).union(args))
+        val gpromFunc = new GProMFunctionCall.ByValue(GProM_JNA.GProMNodeTag.GProM_T_FunctionCall, VGTermFunctions.acknowledgedVGTermFn, gpromExprList, 0)
+        gpromFunc
+      }
+      case IsNullExpression(expr) => {
+        val gpromExpr = translateMimirExpressionToGProMCondition(expr, schema);
+        val gpromIsNullExpr = new GProMIsNullExpr.ByValue(GProM_JNA.GProMNodeTag.GProM_T_IsNullExpr, new GProMNode.ByReference(gpromExpr.getPointer))
+        gpromIsNullExpr
+      }
+      case Not(expr) => {
+        val gpromExprList = translateMimirExpressionsToGProMList(schema, Seq(expr))
+        val gpromFunc = new GProMFunctionCall.ByValue(GProM_JNA.GProMNodeTag.GProM_T_FunctionCall, "NOT", gpromExprList, 0)
         gpromFunc
       }
       case x => {
@@ -923,7 +1009,10 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         (GProM_JNA.GProMDataType.GProM_DT_FLOAT,fltPtr,0)
       }
       case RowIdPrimitive(v) => {
-        throw new Exception("Primitive Expression Translation not implemented '"+v+"'")
+        val strPtr = new Memory(v.length()+1)
+        strPtr.setString(0, v);
+        (GProM_JNA.GProMDataType.GProM_DT_STRING,strPtr,0)
+        //throw new Exception("Primitive Expression Translation not implemented '"+v+"'")
       }
       case BoolPrimitive(v) => {
         val intPtr = new Memory(Native.getNativeSize(classOf[Int]))
@@ -940,6 +1029,12 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         val strPtr = new Memory(dtStr.length()+1)
         strPtr.setString(0, dtStr);
         (GProM_JNA.GProMDataType.GProM_DT_STRING,strPtr,0)
+      }
+      case TypePrimitive(t) => {
+        val v = Type.id(t)
+        val intPtr = new Memory(Native.getNativeSize(classOf[Int]))
+        intPtr.setInt(0, v.asInstanceOf[Int]);
+        (GProM_JNA.GProMDataType.GProM_DT_INT,intPtr,0)
       }
     }
     val gpc = new GProMConstant.ByValue(GProM_JNA.GProMNodeTag.GProM_T_Constant, typeValueIsNull._1, typeValueIsNull._2, typeValueIsNull._3)
@@ -978,23 +1073,48 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         }
         "("+translateMimirExpressionToStringForGProM(lhs, schema) + aritOp + translateMimirExpressionToStringForGProM(rhs, schema)+")"    
       }
-      case Conditional(_,_,_) => throw new Exception("Expression Translation not implemented '"+mimirExpr+"'")
+      case Conditional(cond, thenClause, elseClause) => {
+        "( IF "+translateMimirExpressionToStringForGProM(cond, schema) + " THEN " + translateMimirExpressionToStringForGProM(thenClause, schema) + " ELSE " + translateMimirExpressionToStringForGProM(elseClause, schema)+" END )"    
+      }
       case Var(v) => {
-        val indexOfCol = schema.map(ct => ct.attrMimirName).indexOf(v)
-        schema(indexOfCol).attrName
+        var indexOfCol = schema.map(ct => ct.attrMimirName).indexOf(v)
+          if(indexOfCol < 0)
+            /*indexOfCol = schema.map(ct => ct.attrName).indexOf(v)
+            if(indexOfCol < 0)
+              indexOfCol = schema.map(ct => ct.attrProjectedName).indexOf(v)
+              if(indexOfCol < 0)*/
+                //throw new Exception(s"Missing Var $v: not found in : ${schema.mkString(",")}")
+            v
+          else
+            schema(indexOfCol).attrName
+      }
+      case RowIdVar() => {
+        mimirExpr.toString()
       }
       case Function(op, params) => {
         params.map(param => translateMimirExpressionToStringForGProM(param, schema) ).mkString(s"$op(", ",", ")")
       }
+      case VGTerm(model, idx, args, hints) => {
+        Seq(StringPrimitive(model.name), IntPrimitive(idx)).union(args.union(hints)).map(param => translateMimirExpressionToStringForGProM(param, schema) ).mkString(s"${VGTermFunctions.bestGuessVGTermFn}(", ",", ")")
+      }
+      case VGTermAcknowledged(model, idx, args) => {
+        Seq(StringPrimitive(model.name), IntPrimitive(idx)).union(args).map(param => translateMimirExpressionToStringForGProM(param, schema) ).mkString(s"${VGTermFunctions.acknowledgedVGTermFn}(", ",", ")")
+      }
+      case IsNullExpression(expr) => {
+        "("+translateMimirExpressionToStringForGProM(expr, schema) + " IS NULL )" 
+      }
+      case Not(expr) => {
+        "(NOT(" + translateMimirExpressionToStringForGProM(expr, schema)+"))"
+      }
       case x => {
-        throw new Exception("Expression Translation not implemented '"+x+"'")
+        throw new Exception("Expression Translation not implemented "+x.getClass.toString()+": '"+x+"'")
       }
     }
       /*//GProMOperator 
       //GProMAttributeReference 
       //GProMConstant 
-      GProMCaseExpr 
-      GProMCaseWhen 
+      --GProMCaseExpr 
+      --GProMCaseWhen 
       GProMCastExpr
       --GProMFunctionCall 
       GProMIsNullExpr 
@@ -1060,7 +1180,7 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         val pargsOut = args.map(pa => pa.name)
         val pargsIn = args.map(pa => pa.expression.toString)
         val gpargsIn = args.map(pa =>  translateMimirExpressionToStringForGProM(pa.expression, tableSchema))
-        val operSchema = oper.schema
+        val operSchema = db.bestGuessSchema(oper)       
         pargsOut.zipWithIndex.map( index_argOut => {
           val fse = tableSchema(0)
           val index = index_argOut._2
@@ -1078,8 +1198,8 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
       case Aggregate(groupBy, agggregates, source) => {
         //TODO: fix this hack for matching to gprom AGGR_{N} names to mimir MIMIR_AGG_{attrAlias}
         val tableSchema = extractTableSchemaForGProM(source)
-       agggregates.zip(oper.schema).zipWithIndex.map(aggr => {
-          val attrNameInfo = ("AGGR_"+aggr._2, aggr._1._2._1, "")//aggFunctionToGProMName(aggr._1._1, tableSchema(0))
+       (groupBy.union(agggregates)).zip(db.bestGuessSchema(oper)).zipWithIndex.map(aggr => {
+          val attrNameInfo = (aggr._1._2._1/*"AGGR_"+aggr._2*/, aggr._1._2._1, "")//aggFunctionToGProMName(aggr._1._1, tableSchema(0))
           new MimirToGProMIntermediateSchemaInfo(tableSchema(0).name, tableSchema(0).alias, attrNameInfo._1, attrNameInfo._2, attrNameInfo._3, aggr._1._2._2, aggr._2, 0)
         })
         //getSchemaForGProM(source)
@@ -1094,7 +1214,10 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         getSchemaForGProM(lhs).union(getSchemaForGProM(rhs))
       }
       case Table(name, alias, tgtSch, metadata) => {
-         oper.schema.zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, alias, sch._1._1.replaceFirst((alias + "_"), ""), sch._1._1, "", sch._1._2, sch._2, 0))
+         db.bestGuessSchema(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, alias, sch._1._1.replaceFirst((alias + "_"), ""), if(sch._1._1.startsWith(alias + "_")) sch._1._1 else alias + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
+      }
+      case View(name, query, annotations) => {
+        db.bestGuessSchema(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, sch._1._1.replaceFirst((name + "_"), ""), if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
       }
       case x => {
         throw new Exception("Can Not extract schema '"+x+"'")
@@ -1121,10 +1244,13 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         joinIntermSchemas(extractTableSchemaForGProM(lhs), extractTableSchemaForGProM(rhs), 0, true)
       }
       case Table(name, alias, tgtSch, metadata) => {
-        oper.schema.zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, alias, sch._1._1.replaceFirst((alias + "_"), ""), sch._1._1, "", sch._1._2, sch._2, 0))
+        db.bestGuessSchema(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, alias, sch._1._1.replaceFirst((alias + "_"), ""), if(sch._1._1.startsWith(alias + "_")) sch._1._1 else alias + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
+      }
+      case View(name, query, annotations) => {
+        db.bestGuessSchema(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, sch._1._1.replaceFirst((name + "_"), ""), if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
       }
       case x => {
-        throw new Exception("Can Not extract schema '"+x+"'")
+        throw new Exception("Can Not extract schema "+x.getClass.toString()+": '"+x+"'")
       }
     }
   }

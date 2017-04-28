@@ -419,7 +419,7 @@ class SqlToRA(db: Database)
       else { alias = alias.toUpperCase }
 
       if(fi.asInstanceOf[net.sf.jsqlparser.schema.Table].getSchemaName == null){
-        val tableOp = db.getTableOperator(name)
+        val tableOp = db.getTableOperator(name, alias)
         val newBindings = tableOp.schema.map(
             (x) => (x._1, alias+"_"+x._1)
           )

@@ -7,6 +7,7 @@ import mimir.provenance.Provenance
 class ViewMetadata(
   val name: String,
   val query: Operator,
+  val schema: Seq[(String, Type)],
   val isMaterialized: Boolean
 )
 {
@@ -16,8 +17,6 @@ class ViewMetadata(
   def table: Operator =
     Table(name,name,fullSchema,Seq())
 
-  def schema =
-    query.schema
 
   def schemaWith(annotations:Set[ViewAnnotation.T]) =
   {
@@ -31,6 +30,10 @@ class ViewMetadata(
     ) ++ (
       if(annotations(ViewAnnotation.PROVENANCE)) {
         Provenance.compile(query)._2.map { (_, TRowId()) }
+      } else { Seq() }
+    ) ++ (
+      if(annotations(ViewAnnotation.PROVENANCE)) {
+        Provenance.compile(query)._2.map { col => (CTPercolator.mimirColDeterministicColumnPrefix + col, TBool()) }
       } else { Seq() }
     )
   }

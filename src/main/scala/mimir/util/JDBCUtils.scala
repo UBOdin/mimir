@@ -5,6 +5,7 @@ import java.util.{Calendar, GregorianCalendar}
 
 import mimir.algebra._
 import mimir.lenses._
+import java.text.SimpleDateFormat
 
 object JDBCUtils {
 
@@ -103,7 +104,6 @@ object JDBCUtils {
     cal.set(d.y, d.m, d.d);
     new Date(cal.getTime().getTime());
   }
-
   def convertTimeStamp(c: Calendar): TimestampPrimitive =
     TimestampPrimitive(c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DATE),
                         c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), c.get(Calendar.SECOND))
