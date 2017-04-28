@@ -201,13 +201,13 @@ object DiscalaAbadiSpec
             ) 
           }.toSeq 
           attrStrings must contain(
-            ("QUANTITY","47|21|45|left|right|right",false)
+            ("QUANTITY","47|21|45|0|1|1",false)
           )
         }
       }
 
       val explanation =
-        explainRow(baseQuery, "47|21|45|left|right|right")
+        explainRow(baseQuery, "47|21|45|0|1|1")
 
       explanation.reasons.map(_.reason).head must contain("QUANTITY could be organized under any of BILL_OF_LADING_NBR")
     }
