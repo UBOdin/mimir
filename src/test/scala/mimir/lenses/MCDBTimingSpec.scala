@@ -38,7 +38,7 @@ object MCDBTimingSpec
      "region"  
   )
 
-  "The Key Repair Lens Timing" should {
+  "The MCDB Workload Timing" should {
 
     sequential
     Fragments.foreach(1 to 1){ i =>
@@ -48,7 +48,8 @@ object MCDBTimingSpec
           filter( x => relevantTables(x._1) )
       ){ createTable(_, s"_run_$i") }
       
-      {q2(s"run $i",20)}
+      {q1(s"run $i",1500)}
+      {q2(s"run $i",2160)}
     }
 
   }
@@ -73,9 +74,9 @@ object MCDBTimingSpec
     }
   }
 
- def q1(queryAndTime : (String, Double)) =  s"Q1 : ${queryAndTime._1}" >> {
+ def q1(queryAndTime : (String, Double)) =  s"Q1 faster than timeout: ${queryAndTime._2} : ${queryAndTime._1}" >> {
      val updSql1 = """
-          CREATE VIEW FROM_JAPAN AS
+          CREATE TABLE FROM_JAPAN AS
           SELECT *
           FROM nation, supplier, lineitem, partsupp
           WHERE n_name='JAPAN' AND s_suppkey=ps_suppkey AND
@@ -84,7 +85,7 @@ object MCDBTimingSpec
         """
      
      val updSql2 = """    
-          CREATE VIEW INCREASE_PER_CUST AS
+          CREATE TABLE INCREASE_PER_CUST AS
           SELECT o_custkey AS custkey, SUM(strftime('%Y', o_orderdate)
             -1994.0)/SUM(1995.0-strftime('%Y', o_orderdate)) AS incr
           FROM ORDERS
@@ -97,7 +98,7 @@ object MCDBTimingSpec
               SELECT o_orderkey, INCR  
               FROM ORDERS, increase_per_cust 
               WHERE o_custkey=custkey AND
-                strftime('%Y', o_orderdate)='1995'
+                MIMIRCAST(strftime('%Y', o_orderdate), 3)='1995'
                 WITH PICKER(
                   UEXPRS('TRUE','POSSION(INCR)'),
                   PICK_FROM(incr),
@@ -114,19 +115,19 @@ object MCDBTimingSpec
        """
      
      val querySql = """
-          SELECT NEWREV, OLDREV
+          SELECT (NEWREV - OLDREV)
           FROM REV_INCREASE
         """
      
      val timeForQuery = time {
-        //if(!db.tableExists("FROM_JAPAN"))
+        if(!db.tableExists("FROM_JAPAN"))
         //  db.views.drop("FROM_JAPAN") 
-        update(updSql1)
+          db.backend.update(updSql1)
         println("created from_japan")
      
-        //if(!db.tableExists("increase_per_cust".toUpperCase()))
+        if(!db.tableExists("increase_per_cust".toUpperCase()))
         //  db.views.drop("increase_per_cust".toUpperCase())
-        update(updSql2)
+          db.backend.update(updSql2)
         println("created increase_per_cust")
      
         //if(db.tableExists("ORDER_INCREASE"))
@@ -150,16 +151,16 @@ object MCDBTimingSpec
   }
  
  
-  def q2(queryAndTime : (String, Double)) =  s"Q2 : ${queryAndTime._1}" >> {
+  def q2(queryAndTime : (String, Double)) =  s"Q2 faster than timeout: ${queryAndTime._2} : ${queryAndTime._1}" >> {
      
     val updSql1 = """
-      CREATE VIEW orders_today AS
+      CREATE TABLE ORDERS_TODAY AS
       SELECT * FROM orders, lineitem
-      WHERE o_orderdate=date('now') AND o_orderkey=l_orderkey
+      WHERE o_orderdate=date('1997-10-31') AND o_orderkey=l_orderkey
     """
     
     val updSql2 = """
-      CREATE VIEW params AS
+      CREATE TABLE PARAMS AS
       SELECT AVG(strftime('%s',l_shipdate)-strftime('%s',o_orderdate)) AS ship_mu,
         AVG(strftime('%s',l_receiptdate)-strftime('%s',l_shipdate)) AS arrv_mu,
         STDDEV(strftime('%s',l_shipdate)-strftime('%s',o_orderdate)) AS ship_sigma,
@@ -197,10 +198,12 @@ object MCDBTimingSpec
      """
     
      val timeForQuery = time {
-        update(updSql1)
+        if(!db.tableExists("ORDERS_TODAY"))
+          db.backend.update(updSql1)
         println("created orders_today")
      
-        update(updSql2)
+        if(!db.tableExists("PARAMS"))
+          db.backend.update(updSql2)
         println("created params")
      
         update(updSql3)
@@ -212,8 +215,10 @@ object MCDBTimingSpec
         val r = query(querySql)
         println("queried arrv_times and ship_times")
         var x = 0
+        r.open
         while(r.getNext()){ x += 1 }
-        println(s"$x rows in the result")
+        
+        println(s"$x Rows ")
      }
      println(s"Time:${timeForQuery._2} seconds <- Query:$updSql1$updSql2$updSql3$querySql ")
      timeForQuery._2 should be lessThan queryAndTime._2

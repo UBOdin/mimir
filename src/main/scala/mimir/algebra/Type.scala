@@ -33,6 +33,7 @@ object Type {
     case "float"   => TFloat()
     case "decimal" => TFloat()
     case "real"    => TFloat()
+    case "num"    => TFloat()
     case "date"    => TDate()
     case "datetime" => TTimeStamp()
     case "varchar" => TString()

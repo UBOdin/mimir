@@ -32,6 +32,7 @@ object SQLiteCompat {
     org.sqlite.Function.create(conn, "POSSION", Possion)
     org.sqlite.Function.create(conn, "GAMMA", Gamma)
     org.sqlite.Function.create(conn, "STDDEV", StdDev)
+    org.sqlite.Function.create(conn, "MAX", Max)
   }
   
   def getTableSchema(conn:java.sql.Connection, table: String): Option[List[(String, Type)]] =
@@ -58,7 +59,6 @@ object Possion extends org.sqlite.Function with LazyLogging {
   private var rng: scala.util.Random = new scala.util.Random(
     java.util.Calendar.getInstance.getTimeInMillis + Thread.currentThread().getId)
   def poisson_helper(mean:Double):Int = {
-    println("poisson_helper")
     val L = math.exp(-mean)
     var k = 0
     var p = 1.0
@@ -73,6 +73,8 @@ object Possion extends org.sqlite.Function with LazyLogging {
     val m = value_double(0) 
     result(poisson_helper(m))
   }
+  
+  
  }
 
 
@@ -135,6 +137,8 @@ object Gamma extends org.sqlite.Function with LazyLogging {
     val theta = value_double(1)
      result(sampleGamma(k, theta))
   }
+  
+   
   }
 
 object Minus extends org.sqlite.Function with LazyLogging {
@@ -398,7 +402,7 @@ object StdDev extends org.sqlite.Function.Aggregate {
    @Override
    def xStep(): Unit ={
         if(value_type(0) != SQLiteCompat.NULL) {
-          val value = value_int(0)
+          val value = value_double(0)
           val tM = m
           m += (value - tM) / k
           s += (value - tM) * (value - m)
@@ -406,9 +410,30 @@ object StdDev extends org.sqlite.Function.Aggregate {
         }
    }
 
-    def xFinal(): Unit ={
-        if(k >= 3)
+   override def xFinal(): Unit ={
+       //println(s"sdev - xfinal: $k, $s, $m") 
+       if(k >= 3)
             result(math.sqrt(s / (k-2)))
+        else
+            result(0)
     }
+}
+
+object Max extends org.sqlite.Function.Aggregate {
+
+  var theVal: Double = 0.0
+  var empty = true
+
+  @Override
+  def xStep(): Unit = {
+    if(value_type(0) != SQLiteCompat.NULL) {
+      if(theVal < value_double(0) )
+        theVal = value_double(0) 
+      empty = false 
+    }
+  }
+  def xFinal(): Unit = {
+    if(empty){ result() } else { result(theVal) }
+  }
 }
 
