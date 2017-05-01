@@ -74,7 +74,7 @@ object RepairKeyTimingSpec
               and ok.orderkey = lok.orderkey
               and od.tid = ok.tid 
               and os.tid = ok.tid
-         """, 24.0 ),
+         """, 60.0 ),
         (s"""
             select liep.extendedprice
             from lineitem_l_extendedprice_run_$i liep, lineitem_l_shipdate_run_$i lisd,
@@ -85,7 +85,7 @@ object RepairKeyTimingSpec
               and lisd.tid = lidi.tid
               and liq.tid = lidi.tid
               and liep.tid = liq.tid
-         """, 14.0 ),
+         """, 60.0 ),
         (s"""
             select nn1.name, nn2.name
             from supp_s_suppkey_run_$i sk, supp_s_nationkey_run_$i snk,
@@ -105,7 +105,7 @@ object RepairKeyTimingSpec
               and snk.tid = sk.tid
               and cnk.tid = ck.tid
               and nk2.tid = nn2.tid and nk1.tid = nn1.tid
-         """, 21.0 )
+         """, 60.0 )
     )){
       qat =>  {
           {queryKeyRepairLens(qat)}
