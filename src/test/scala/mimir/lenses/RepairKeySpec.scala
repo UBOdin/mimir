@@ -263,13 +263,13 @@ object KeyRepairSpec
           TimeUtils.monitor("QUERY_CLASSIC"){
             query("""
               SELECT TUPLE_ID, ACCTBAL FROM CUST_ACCTBAL_CLASSIC
-            """){ _.map { row => (row("TUPLE_ID").asLong, row("ACCTBAL").asInt) }.toSeq }
+            """){ _.map { row => (row("TUPLE_ID").asLong, row("ACCTBAL").asDouble) }.toSeq }
           }
         val fastpath =
           TimeUtils.monitor("QUERY_FASTPATH"){
             query("""
               SELECT TUPLE_ID, ACCTBAL FROM CUST_ACCTBAL_FASTPATH
-            """){ _.map { row => (row("TUPLE_ID").asLong, row("ACCTBAL").asInt) }.toSeq }
+            """){ _.map { row => (row("TUPLE_ID").asLong, row("ACCTBAL").asDouble) }.toSeq }
           }
         classic.size must be equalTo(150000)
         fastpath.size must be equalTo(150000)
