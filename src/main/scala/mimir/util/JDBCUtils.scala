@@ -41,7 +41,7 @@ object JDBCUtils {
   }
 
 
-  def convertFunction(t: Type, field: Integer, rowIdType: Type = TString()): (ResultSet => PrimitiveValue) =
+  def convertFunction(t: Type, field: Integer, rowIdType: Type = TString(), dateType: Type = TDate()): (ResultSet => PrimitiveValue) =
   {
     val checkNull: ((ResultSet, => PrimitiveValue) => PrimitiveValue) = {
       (r, call) => {
@@ -52,37 +52,50 @@ object JDBCUtils {
     }
 
     t match {
-      case TAny() =>       throw new SQLException("Can't extract TAny")
-      case TFloat() =>     (r) => checkNull(r, { FloatPrimitive(r.getDouble(field)) })
-      case TInt() =>       (r) => checkNull(r, { IntPrimitive(r.getLong(field)) })
-      case TString() =>    (r) => checkNull(r, { StringPrimitive(r.getString(field)) })
+      case TAny() =>        throw new SQLException("Can't extract TAny")
+      case TFloat() =>      (r) => checkNull(r, { FloatPrimitive(r.getDouble(field)) })
+      case TInt() =>        (r) => checkNull(r, { IntPrimitive(r.getLong(field)) })
+      case TString() =>     (r) => checkNull(r, { StringPrimitive(r.getString(field)) })
       case TRowId() => 
         rowIdType match {
-          case TInt() =>   (r) => checkNull(r, { RowIdPrimitive(r.getInt(field).toString) })
-          case _ =>        (r) => checkNull(r, { RowIdPrimitive(r.getString(field)) })
+          case TInt() =>    (r) => checkNull(r, { RowIdPrimitive(r.getInt(field).toString) })
+          case _ =>         (r) => checkNull(r, { RowIdPrimitive(r.getString(field)) })
         }
-      case TBool() =>      (r) => checkNull(r, { BoolPrimitive(r.getInt(field) != 0) })
-      case TType() =>      (r) => checkNull(r, { TypePrimitive(Type.fromString(r.getString(field))) })
-      case TDate() =>      (r) => checkNull(r, { try {
-                                    convertDate(r.getDate(field))
-                                  } catch {
-                                    case e: SQLException =>
-                                      try {
-                                        convertDate(Date.valueOf(r.getString(field)))
-                                      } catch { case e: java.lang.IllegalArgumentException => new NullPrimitive }
-                                    case e: NullPointerException =>
-                                      new NullPrimitive
-                                  }
-                                })
-      case TTimeStamp() => (r) => checkNull(r, { try {
-                                      convertTimeStamp(r.getTimestamp(field))
-                                    } catch {
-                                      case e: SQLException =>
-                                        convertTimeStamp(Timestamp.valueOf(r.getString(field)))
-                                      case e: NullPointerException =>
-                                        new NullPrimitive
-                                    }
-                                  })
+      case TBool() =>       (r) => checkNull(r, { BoolPrimitive(r.getInt(field) != 0) })
+      case TType() =>       (r) => checkNull(r, { TypePrimitive(Type.fromString(r.getString(field))) })
+      case TDate() =>
+        dateType match {
+          case TDate() =>   (r) => { val d = r.getDate(field); if(d == null){ NullPrimitive() } else { convertDate(d) } }
+          case TString() => (r) => { 
+              val d = r.getString(field)
+              if(d == null){ NullPrimitive() } 
+              else { 
+                try {
+                  convertDate(Date.valueOf(d))
+                } catch { 
+                  case _:IllegalArgumentException => NullPrimitive()
+                }
+              }
+            }
+          case _ =>         throw new SQLException(s"Can't extract TDate as $dateType")
+        }
+      case TTimeStamp() => 
+        dateType match {
+          case TDate() =>   (r) => { val t = r.getTimestamp(field); if(t == null){ NullPrimitive() } else { convertTimeStamp(t) } }
+          case TString() => (r) => {
+              val t = r.getString(field)
+              if(t == null){ NullPrimitive() }
+              else {
+                try {
+                  convertTimeStamp(Timestamp.valueOf(t))
+                } catch { 
+                  case _:IllegalArgumentException => NullPrimitive()
+                }
+              }
+            }
+          case _ =>         throw new SQLException(s"Can't extract TTimestamp as $dateType")
+
+        }
       case TUser(t) => convertFunction(TypeRegistry.baseType(t), field, rowIdType)
     }
   }

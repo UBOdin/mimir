@@ -53,6 +53,7 @@ abstract class Backend {
 
   def canHandleVGTerms: Boolean
   def rowIdType: Type
+  def dateType: Type
   def specializeQuery(q: Operator): Operator
 
   def listTablesQuery: Operator

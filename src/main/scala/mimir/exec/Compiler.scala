@@ -96,7 +96,8 @@ class Compiler(db: Database) extends LazyLogging {
     val isAnOutputCol = outputCols.toSet
 
     // Run a final typecheck to check the sanitity of the rewrite rules
-    oper.schema
+    val schema = oper.schema
+    logger.debug(s"SCHEMA: $schema.mkString(", ")")
 
     // Optimize
     oper = Compiler.optimize(oper, opts)
@@ -122,7 +123,7 @@ class Compiler(db: Database) extends LazyLogging {
       annotationCols.map( projections(_) ).toSeq,
       oper.schema,
       results,
-      db.backend.rowIdType
+      (db.backend.rowIdType, db.backend.dateType)
     )
   }
 

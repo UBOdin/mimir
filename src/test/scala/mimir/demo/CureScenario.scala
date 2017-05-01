@@ -6,6 +6,7 @@ import org.specs2.specification.core.{Fragment,Fragments}
 
 import mimir.test._
 import mimir.util._
+import LoggerUtils.trace
 
 object CureScenario
   extends SQLTestSpecification("CureScenario",  Map("reset" -> "YES"))
@@ -24,11 +25,15 @@ object CureScenario
 
   "The CURE Scenario" should {
     Fragment.foreach(dataFiles){ table => {
+      val basename = table.getName().replace(".csv", "").toUpperCase
       s"Load '$table'" >> {
         time(s"Load '$table'") {
-          db.loadTable(table) 
+          update(s"LOAD '$table';") 
         }
-        ok
+        // time(s"Materialize '$basename'"){
+        //   update(s"ALTER VIEW $basename MATERIALIZE;")
+        // }
+        db.tableExists(basename) must beTrue
       }
     }}
 

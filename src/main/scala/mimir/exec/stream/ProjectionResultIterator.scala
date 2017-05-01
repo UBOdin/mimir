@@ -10,7 +10,7 @@ class ProjectionResultIterator(
   annotationDefinition: Seq[ProjectArg],
   inputSchema: Seq[(String,Type)],
   source: ResultSet,
-  rowIdType: Type
+  rowIdAndDateType: (Type, Type)
 )
   extends ResultIterator
   with LazyLogging
@@ -77,7 +77,7 @@ class ProjectionResultIterator(
       zipWithIndex.
       map { case ((name, t), idx) => 
         logger.debug(s"Extracting: $name (@$idx) -> $t")
-        val fn = JDBCUtils.convertFunction(t, idx+1, rowIdType = rowIdType)
+        val fn = JDBCUtils.convertFunction(t, idx+1, rowIdType = rowIdAndDateType._1, dateType = rowIdAndDateType._2)
         () => {
           (name, fn(source))
         }

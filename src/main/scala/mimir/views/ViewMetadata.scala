@@ -56,7 +56,8 @@ class ViewMetadata(
     Provenance.compile(query)._2
 
   def schema =
-    query.schema
+    //XXX: HACK!  Type Inference really really really needs to become an adaptive schema
+    mimir.optimizer.InlineVGTerms(query).schema
 
   def schemaWith(requiredAnnotations:Set[ViewAnnotation.T]) =
   {

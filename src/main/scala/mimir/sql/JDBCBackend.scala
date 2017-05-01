@@ -268,6 +268,11 @@ class JDBCBackend(val backend: String, val filename: String)
       case "sqlite" => TInt()
       case _ => TString()
     }
+  def dateType: Type =
+    backend match {
+      case "sqlite" => TString()
+      case _ => TDate()
+    }
 
   def specializeQuery(q: Operator): Operator = {
     backend match {

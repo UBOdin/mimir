@@ -7,7 +7,7 @@ import com.typesafe.scalalogging.slf4j.Logger
 
 import mimir.algebra._
 import mimir.ctables._
-import mimir.util.{RandUtils,TextUtils}
+import mimir.util.{RandUtils,TextUtils,TimeUtils}
 import mimir.{Analysis, Database}
 import moa.core.InstancesHeader
 import weka.core.{Attribute, DenseInstance, Instance, Instances}
@@ -108,38 +108,40 @@ class SimpleWekaModel(name: String, colName: String, var query: Operator)
   def train(db:Database)
   {
     this.db = db
-    db.query(query) { iterator => 
-      attributeMeta = new java.util.ArrayList(WekaModel.getAttributes(db, query))
-      var data = new Instances("TrainData", attributeMeta, TRAINING_LIMIT)
+    TimeUtils.monitor(s"Train $name.$colName", WekaModel.logger.info(_)){
+      db.query(query) { iterator => 
+        attributeMeta = new java.util.ArrayList(WekaModel.getAttributes(db, query))
+        var data = new Instances("TrainData", attributeMeta, TRAINING_LIMIT)
 
-      var numInstances = 0
-      /* The second check poses a limit on the learning data and reduces time spent building the lens */
+        var numInstances = 0
+        /* The second check poses a limit on the learning data and reduces time spent building the lens */
 
-      for( row <- iterator.take(TRAINING_LIMIT) ){
-        WekaModel.logger.trace(s"ROW: $row")
-        val instance = new DenseInstance(row.tuple.size)
-        instance.setDataset(data)
-        for( (field, j) <- row.tuple.zipWithIndex ){
-          if(!field.isInstanceOf[NullPrimitive]){
-            val attr = attributeMeta(j) 
-            if(attr.isNumeric){
-              instance.setValue(j, field.asDouble)
-            } else if(attr.isNominal) {
-              instance.setValue(j, field.asString)
-            } else {
-              throw new RAException("Invalid attribute type")
+        for( row <- iterator.take(TRAINING_LIMIT) ){
+          WekaModel.logger.trace(s"ROW: $row")
+          val instance = new DenseInstance(row.tuple.size)
+          instance.setDataset(data)
+          for( (field, j) <- row.tuple.zipWithIndex ){
+            if(!field.isInstanceOf[NullPrimitive]){
+              val attr = attributeMeta(j) 
+              if(attr.isNumeric){
+                instance.setValue(j, field.asDouble)
+              } else if(attr.isNominal) {
+                instance.setValue(j, field.asString)
+              } else {
+                throw new RAException("Invalid attribute type")
+              }
             }
           }
+          data.add(instance)
+          numInstances = numInstances + 1
         }
-        data.add(instance)
-        numInstances = numInstances + 1
-      }
-      data.setClassIndex(colIdx)
+        data.setClassIndex(colIdx)
 
-      // val model = new NaiveBayesMultinomialUpdateable()
-      val model = new NaiveBayesMultinomialText()
-      model.buildClassifier(data)
-      learner = model
+        // val model = new NaiveBayesMultinomialUpdateable()
+        val model = new NaiveBayesMultinomialText()
+        model.buildClassifier(data)
+        learner = model
+      }
     }
   }
 
