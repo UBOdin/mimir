@@ -115,7 +115,7 @@ object MCDBTimingSpec
        """
      
      val querySql = """
-          SELECT (NEWREV - OLDREV)
+          SELECT SUM(NEWREV - OLDREV)
           FROM REV_INCREASE
         """
      

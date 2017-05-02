@@ -136,6 +136,12 @@ datasets := {
   } else {
     println("Found `pdbench` data in test/pdbench");
   }
+}
+
+
+lazy val mcdbdatasets = taskKey[Unit]("Loads Datasets for Test Cases")
+mcdbdatasets := {
+  val logger = streams.value.log
   if(!new File("test/mcdb").exists()){
     Process(List(
       "curl", "-O", "http://odin.cse.buffalo.edu/public_data/tpch.tgz"
@@ -164,7 +170,6 @@ datasets := {
     println("Found `mcdb` data in test/mcdb");
   }
 }
-
 
 scalacOptions in Test ++= Seq("-Yrangepos")
 

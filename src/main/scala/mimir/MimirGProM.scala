@@ -150,7 +150,7 @@ object MimirGProM {
      println("---------^ Actual Mimir Oper ^----------")*/
      
     //val queryStr = "SELECT S.A FROM R AS S GROUP BY S.A"
-     val queryStr = "Select * from LENS_PICKER84547667"
+     val queryStr = "Select * FROM LENS_PICKER1562291232"//LENS_MISSING_KEY93961111"
      val statements = db.parse(queryStr)
      var testOper2 = db.sql.convert(statements.head.asInstanceOf[Select])
      val query = testOper2//InlineVGTerms(testOper2 )
@@ -210,6 +210,9 @@ object MimirGProM {
      
      val compiled = db.compiler.compileInline(db.querySerializer.desanitize(testOper3), List())
      
+     val compiledmimir = db.compiler.compileInline(query, db.compiler.standardOptimizations)
+     
+      
      val gpromRun = time {
        getQueryResults(db.compiler.sqlForBackend(compiled._1).toString())
            //db.compiler.bestGuessQuery(
@@ -217,10 +220,11 @@ object MimirGProM {
      }
      
      val mimirRun = time {
-       getQueryResults(db.compiler.sqlForBackend(testOper2).toString())
+       getQueryResults(db.compiler.sqlForBackend(compiledmimir._1).toString())
      }
      
-     println(s"gpromRun: ${gpromRun._2}\nmimirRun: ${mimirRun._2}")
+     
+     println(s"gpromRun: ${gpromRun._2}\n${gpromRun._1}\n---------------------\nmimirRun: ${mimirRun._2}\n${mimirRun._1}\n-------------------")
      
      /*val optSqlStr = GProMWrapper.inst.operatorModelToSql(optimizedGpromNode.getPointer())
      println("-------v Optimized GProM Sql v---------")
