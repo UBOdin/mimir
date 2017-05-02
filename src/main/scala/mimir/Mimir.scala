@@ -8,6 +8,7 @@ import mimir.parser._
 import mimir.sql._
 import mimir.util.{TimeUtils,ExperimentalOptions,LineReaderInputSource}
 import mimir.algebra._
+import mimir.plot.Plot
 import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody} 
@@ -249,6 +250,14 @@ object Mimir extends LazyLogging {
         })
       case Function("LOG", _) =>
         output.print("Syntax: LOG('logger') | LOG('logger', TRACE|DEBUG|INFO|WARN|ERROR)");
+
+      case Function("PLOT", Seq(Var(table), Var(x), Var(y))) =>
+        db.query(
+          Project(Seq(ProjectArg(x, Var(x)), ProjectArg(y, Var(y))), db.getTableOperator(table))
+        ) { result =>
+          Plot.plot(result, table, x, y)
+        }
+
 
     }
 
