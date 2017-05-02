@@ -14,19 +14,35 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
   def compile(e: Expression): Compiled[PrimitiveValue] = 
     compile(e, typeOf(e))
 
+  def checkNull(op: Compiled[PrimitiveValue]): Compiled[PrimitiveValue] =
+  {
+    (t: T) => {
+      try { op(t) }
+      catch {
+        case _:NullPointerException => NullPrimitive()
+      }
+    }
+  }
+
   def compile(e: Expression, t:Type): Compiled[PrimitiveValue] =
   {
-    t match {
-      case TAny()       => throw new RAException("Can not compile untyped expression")
-      case TInt()       => val v = compileForLong(e);   (t:T) => { try { IntPrimitive(v(t))    } catch { case _:NullPointerException => NullPrimitive() } }
-      case TFloat()     => val v = compileForDouble(e); (t:T) => { try { FloatPrimitive(v(t))  } catch { case _:NullPointerException => NullPrimitive() } }
-      case TBool()      => val v = compileForBool(e);   (t:T) => { try { BoolPrimitive(v(t))   } catch { case _:NullPointerException => NullPrimitive() } }
-      case TString()    => val v = compileForString(e); (t:T) => { try { StringPrimitive(v(t)) } catch { case _:NullPointerException => NullPrimitive() } }
-      case TType()      => val v = compileForType(e);   (t:T) => { try { TypePrimitive(v(t))   } catch { case _:NullPointerException => NullPrimitive() } }
-      case TDate()      => compileForDate(e); 
-      case TTimeStamp() => compileForTimestamp(e); 
-      case TRowId()     => compileForRowId(e); 
-      case TUser(ut)    => compile(e, TypeRegistry.baseType(ut));
+    e match { 
+      case p:PrimitiveValue => { (_:T) => p }
+      case Var(name) => scope(name)._2
+      case _ => 
+        t match {
+          case TAny()       => 
+            throw new RAException(s"Can not compile untyped expression: $e")
+          case TInt()       => val v = compileForLong(e);   checkNull { (t:T) => IntPrimitive(v(t))    }
+          case TFloat()     => val v = compileForDouble(e); checkNull { (t:T) => FloatPrimitive(v(t))  }
+          case TBool()      => val v = compileForBool(e);   checkNull { (t:T) => BoolPrimitive(v(t))   }
+          case TString()    => val v = compileForString(e); checkNull { (t:T) => StringPrimitive(v(t)) }
+          case TType()      => val v = compileForType(e);   checkNull { (t:T) => TypePrimitive(v(t))   }
+          case TDate()      => checkNull { compileForDate(e) }
+          case TTimeStamp() => checkNull { compileForTimestamp(e) }
+          case TRowId()     => checkNull { compileForRowId(e) }
+          case TUser(ut)    => checkNull { compile(e, TypeRegistry.baseType(ut)) }
+        }
     }
   }
 
@@ -48,6 +64,16 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
     val ev = rcr(e)
     (t) => { if(cv(t)){ tv(t) } else { ev(t) } }
   }
+  def getVar(v: String): Compiled[PrimitiveValue] =
+  {
+    val l = scope(v)._2
+    (t) => { 
+      l(t) match { 
+        case NullPrimitive() => throw new NullPointerException()
+        case x => x
+      }
+    }
+  }
 
   final def compileBinary[RA,RB](a: Expression, b: Expression, rcr: Expression => (T=>RA))(op:(RA,RA)=>RB): T => RB =
   {
@@ -60,8 +86,9 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
   def compileForLong(e: Expression): Compiled[Long] = 
   {
     e match {
+      case NullPrimitive()              => throw new NullPointerException()
       case pv:PrimitiveValue            => (t:T) => pv.asLong
-      case Var(vname)                   => val l = scope(vname)._2; { l(_).asLong }
+      case Var(vname)                   => val l = getVar(vname); { l(_).asLong }
       case p:Proc                       => val l = compileProc(p); { l(_).asLong }
       case Arithmetic(op, lhs, rhs)     => {
         val lv = compileForLong(lhs)
@@ -91,8 +118,9 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
   def compileForDouble(e: Expression): Compiled[Double] = 
   {
     e match {
+      case NullPrimitive()              => throw new NullPointerException()
       case pv:PrimitiveValue            => (t:T) => pv.asDouble
-      case Var(vname)                   => val l = scope(vname)._2; { l(_).asDouble }
+      case Var(vname)                   => val l = getVar(vname); { l(_).asDouble }
       case p:Proc                       => val l = compileProc(p); { l(_).asDouble }
       case Arithmetic(op, lhs, rhs)     => {
         val lv = compileForDouble(lhs)
@@ -124,8 +152,9 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
   def compileForBool(e: Expression): Compiled[Boolean] = 
   {
     e match {
+      case NullPrimitive()              => throw new NullPointerException()
       case pv:PrimitiveValue            => (t:T) => pv.asBool
-      case Var(vname)                   => val l = scope(vname)._2; { l(_).asBool }
+      case Var(vname)                   => val l = getVar(vname); { l(_).asBool }
       case p:Proc                       => val l = compileProc(p); { l(_).asBool }
       case Arithmetic(op, lhs, rhs)     => {
         val lv = compileForBool(lhs)
@@ -209,8 +238,9 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
   final def compilePassthrough[R](e: Expression, rcr: Expression => Compiled[R], prim: PrimitiveValue => R): Compiled[R] =
   {
     e match {
+      case NullPrimitive()              => throw new NullPointerException()
       case pv:PrimitiveValue            => (t:T) => prim(pv)
-      case Var(vname)                   => val l = scope(vname)._2; (t) => prim(l(t))
+      case Var(vname)                   => val l = getVar(vname); (t) => prim(l(t))
       case p:Proc                       => val l = compileProc(p); (t) => prim(l(t))
       case Function(name, args) => {
         val func = FunctionRegistry.functionPrototypes(name)

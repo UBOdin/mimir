@@ -97,9 +97,9 @@ object CureScenario
                    PORTS.LON              AS "PORT_LON",
                    DATE(SRC.DATE)          AS "SRC_DATE",
                    DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON) AS "DISTANCE",  SPEED(DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON), SRC.DATE, NULL) AS "SPEED"
-                 FROM CURESOURCE_RAW AS SRC
-                  JOIN CURELOCATIONS_RAW AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
-                   LEFT OUTER JOIN CUREPORTS_RAW AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
+                 FROM CURESOURCE AS SRC
+                  JOIN CURELOCATIONS AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
+                   LEFT OUTER JOIN CUREPORTS AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
                  ;
          """){ _.foreach { row => {} } }
        }
