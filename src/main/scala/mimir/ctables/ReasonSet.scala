@@ -4,7 +4,7 @@ import mimir.Database
 import mimir.algebra._
 import mimir.models._
 
-class ReasonSet(val model: Model, val idx: Int, argLookup: Option[(Operator, Seq[Expression], Seq[Expression])])
+class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator, Seq[Expression], Seq[Expression])])
 {
   def size(db: Database): Long =
   {
@@ -19,7 +19,7 @@ class ReasonSet(val model: Model, val idx: Int, argLookup: Option[(Operator, Seq
               )
             )
           )
-        ).allRows.head(0).asLong
+        ) { _.next.tuple(0).asLong }
       case None => 
         1
     }
@@ -49,7 +49,7 @@ class ReasonSet(val model: Model, val idx: Int, argLookup: Option[(Operator, Seq
         val projectedQuery =
           Project(argCols ++ hintCols, limitedQuery)
 
-        db.query(projectedQuery).allRows.map( _.splitAt(argExprs.size) )
+        db.query(projectedQuery) { _.toIndexedSeq.map { _.tuple.splitAt(argExprs.size) } }
       }
     }
   }

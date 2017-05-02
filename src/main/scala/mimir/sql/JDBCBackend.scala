@@ -24,7 +24,8 @@ class JDBCBackend(val backend: String, val filename: String)
 
   val tableSchemas: scala.collection.mutable.Map[String, Seq[(String, Type)]] = mutable.Map()
 
-  def open() = {
+  def open() = 
+  {
     this.synchronized({
       assert(openConnections >= 0)
       if (openConnections == 0) {
@@ -53,6 +54,9 @@ class JDBCBackend(val backend: String, val filename: String)
       openConnections = openConnections + 1
     })
   }
+
+  def invalidateCache() = 
+    tableSchemas.clear()
 
   def enableInlining(db: Database): Unit =
   {
@@ -150,7 +154,7 @@ class JDBCBackend(val backend: String, val filename: String)
     })
   }
 
-  def fastUpdateBatch(upd: String, argsList: Iterable[Seq[PrimitiveValue]]): Unit =
+  def fastUpdateBatch(upd: String, argsList: TraversableOnce[Seq[PrimitiveValue]]): Unit =
   {
     this.synchronized({
       if(conn == null) {
@@ -258,7 +262,17 @@ class JDBCBackend(val backend: String, val filename: String)
     })
   }
 
-  def canHandleVGTerms(): Boolean = inliningAvailable
+  def canHandleVGTerms: Boolean = inliningAvailable
+  def rowIdType: Type = 
+    backend match {
+      case "sqlite" => TInt()
+      case _ => TString()
+    }
+  def dateType: Type =
+    backend match {
+      case "sqlite" => TString()
+      case _ => TDate()
+    }
 
   def specializeQuery(q: Operator): Operator = {
     backend match {
@@ -274,19 +288,21 @@ class JDBCBackend(val backend: String, val filename: String)
     args.zipWithIndex.foreach(a => {
       val i = a._2+1
       a._1 match {
-        case p:StringPrimitive   => stmt.setString(i, p.v)
-        case p:IntPrimitive      => stmt.setLong(i, p.v)
-        case p:FloatPrimitive    => stmt.setDouble(i, p.v)
-        case _:NullPrimitive     => stmt.setNull(i, Types.VARCHAR)
-        case d:DatePrimitive     => 
+        case p:StringPrimitive    => stmt.setString(i, p.v)
+        case p:IntPrimitive       => stmt.setLong(i, p.v)
+        case p:FloatPrimitive     => stmt.setDouble(i, p.v)
+        case _:NullPrimitive      => stmt.setNull(i, Types.VARCHAR)
+        case d:DatePrimitive      => 
           backend match {
             case "sqlite" => 
               stmt.setString(i, d.asString )
             case _ =>
               stmt.setDate(i, JDBCUtils.convertDate(d))
           }
-        case r:RowIdPrimitive    => stmt.setString(i,r.v)
-        case t:TypePrimitive     => stmt.setString(i, t.t.toString)
+        case r:RowIdPrimitive     => stmt.setString(i,r.v)
+        case t:TypePrimitive      => stmt.setString(i, t.t.toString)
+        case BoolPrimitive(true)  => stmt.setInt(i, 1)
+        case BoolPrimitive(false) => stmt.setInt(i, 0)
       }
     })
   }

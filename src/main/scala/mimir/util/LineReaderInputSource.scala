@@ -1,6 +1,6 @@
 package mimir.util
 
-import java.io.Reader
+import java.io.{Reader,File}
 import org.jline.terminal.{Terminal,TerminalBuilder}
 import org.jline.reader.{LineReader,LineReaderBuilder,EndOfFileException,UserInterruptException}
 import com.typesafe.scalalogging.slf4j.LazyLogging
@@ -9,10 +9,12 @@ class LineReaderInputSource(terminal: Terminal)
   extends Reader
   with LazyLogging
 {
+  private val historyFile = System.getProperty("user.home") + File.separator + ".mimir_history"
   val input: LineReader = 
     LineReaderBuilder.
       builder().
       terminal(terminal).
+      variable(LineReader.HISTORY_FILE, historyFile).
       build()
   var pos: Int = -1;
   var curr: String = null;

@@ -28,7 +28,7 @@ import scala.collection.JavaConverters._
 
 import mimir.algebra._
 import mimir.Database
-import mimir.exec.{ResultIterator, ResultSetIterator}
+import mimir.exec.stream.{ResultIterator}
 import mimir.util.{JDBCUtils,SerializationUtils}
 
   /*
@@ -160,15 +160,17 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
     // 
     // As a side effect, pushing all of the computation into the backend 
     // would make it unnecessary to have the tables object stored in memory
-    db.query(query).foreachRow { row =>
-      for((v, i) <- row.currentRow.zipWithIndex) {
-        table(i).append(v)
-        if(!v.isInstanceOf[NullPrimitive]){ 
-          densityTable(i) += 1 
-          countTable(i)(v) = countTable(i).getOrElse(v, 0l) 
+    db.query(query) { result =>
+      for(row <- result){
+        for((v, i) <- row.tuple.zipWithIndex) {
+          table(i).append(v)
+          if(!v.isInstanceOf[NullPrimitive]){ 
+            densityTable(i) += 1 
+            countTable(i)(v) = countTable(i).getOrElse(v, 0l) 
+          }
         }
+        rowCount += 1;
       }
-      rowCount += 1;
     }
 
     for(((density, counts), i) <- densityTable.zip(countTable).zipWithIndex){

@@ -76,14 +76,15 @@ class KeyRepairModel(
             source
           )
         )
-      ).mapRows { row => 
-        ( row(0), 
-          scoreCol match { 
-            case None => 1.0; 
-            case Some(_) => row(1).asDouble
-          }
-        )
-      }.toSeq
+      ){ _.map { row => 
+          ( row(0), 
+            scoreCol match { 
+              case None => 1.0; 
+              case Some(_) => row(1).asDouble
+            }
+          )
+        }.toSeq
+      }
     } else {
       val possibilities = 
         Json.parse(hints(0).asString) match {
@@ -91,15 +92,25 @@ class KeyRepairModel(
           case _ => throw ModelException(s"Invalid Value Hint in Repair Model $name: ${hints(0).asString}")
         }
 
-      if(hints.size > 1 && !hints(1).isInstanceOf[NullPrimitive]){
-        possibilities.zip(
-          Json.parse(hints(1).asString) match {
-            case JsArray(values) => values.map( v => JSONUtils.parsePrimitive(TFloat(), v).asDouble )
-            case _ => throw ModelException(s"Invalid Score Hint in Repair Model $name: ${hints(1).asString}")
-          }
-        )
+      val possibilitiesWithProbabilities =
+        if(hints.size > 1 && !hints(1).isInstanceOf[NullPrimitive]){
+          possibilities.zip(
+            Json.parse(hints(1).asString) match {
+              case JsArray(values) => values.map( v => JSONUtils.parsePrimitive(TFloat(), v).asDouble )
+              case _ => throw ModelException(s"Invalid Score Hint in Repair Model $name: ${hints(1).asString}")
+            }
+          )
+        } else {
+          possibilities.map( (_, 1.0) )
+        }
+
+      val goodPossibilities =
+        possibilitiesWithProbabilities.filter(!_._1.isInstanceOf[NullPrimitive])
+
+      if(goodPossibilities.isEmpty){
+        Seq((NullPrimitive(), 1.0))
       } else {
-        possibilities.map( (_, 1.0) )
+        goodPossibilities
       }
 
     }

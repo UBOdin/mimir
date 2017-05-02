@@ -8,7 +8,8 @@ import java.sql.ResultSet
 import mimir.algebra._
 import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, RowExplanation, VGTerm}
 import mimir.models.Model
-import mimir.exec.{Compiler, ResultIterator, ResultSetIterator}
+import mimir.exec.Compiler
+import mimir.exec.stream.{ResultIterator, Row}
 import mimir.lenses.{LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
 import mimir.sql.{SqlToRA,RAToSql,Backend}
@@ -25,7 +26,6 @@ import mimir.sql.{
   }
 import mimir.optimizer.{InlineVGTerms}
 import mimir.util.{LoadCSV,ExperimentalOptions}
-import mimir.web.WebIterator
 import mimir.parser.MimirJSqlParser
 import mimir.statistics.FuncDep
 
@@ -119,25 +119,55 @@ case class Database(backend: Backend)
    */
   def optimize(oper: Operator): Operator =
   {
-    compiler.optimize(oper)
+    Compiler.optimize(oper)
   }
 
   /**
    * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
    * and rewrites the query to properly account for Virtual Tables.
    */
-  def query(oper: Operator): ResultIterator = 
+  final def query[T](oper: Operator)(handler: ResultIterator => T): T =
   {
-    compiler.compile(oper)
+    val iterator = compiler.compileForBestGuess(oper)
+    try {
+      val ret = handler(iterator)
+
+      // A bit of a hack, but necessary for safety...
+      // The iterator we pass to the handler is only valid within this block.
+      // It is incredibly easy to accidentally have the handler return the
+      // iterator as-is.  For example:
+      // > 
+      // > query(...) { _.map { ... } }
+      // >
+      // In this above example, the return value of the block becomes invalid,
+      // since a map of an iterator doesn't drain the iterator, but simply applies
+      // a continuation to it.  
+      // 
+      if(ret.isInstanceOf[Iterator[_]]){
+        logger.warn("Returning a sequence from Database.query may lead to the Scala compiler's optimizations closing the ResultIterator before it's fully drained")
+      }
+      return ret
+    } finally {
+      iterator.close()
+    }
   }
 
   /**
    * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
    * optimizations and rewrites the query to properly account for Virtual Tables.
    */
-  def query(stmt: net.sf.jsqlparser.statement.select.Select): ResultIterator = 
+  final def query[T](stmt: net.sf.jsqlparser.statement.select.Select)(handler: ResultIterator => T): T = 
   {
-    query(sql.convert(stmt))
+    query(sql.convert(stmt))(handler)
+  }
+
+  /**
+   * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
+   * optimizations and rewrites the query to properly account for Virtual Tables.
+   */
+  final def query[T](stmt: String)(handler: ResultIterator => T): T = 
+  {
+    query(select(stmt))(handler)
   }
 
   /**
@@ -161,36 +191,6 @@ case class Database(backend: Backend)
     while( stmt != null ) { ret = stmt :: ret ; stmt = parser.Statement() }
 
     ret.reverse
-  }
-
-  /**
-   * Construct a WebIterator from a ResultIterator
-   */
-  def generateWebIterator(result: ResultIterator): WebIterator =
-  {
-    val startTime = System.nanoTime()
-
-    // println("SCHEMA: "+result.schema)
-    val headers: List[String] = "MIMIR_ROWID" :: result.schema.map(_._1).toList
-    val data: ListBuffer[(List[String], Boolean)] = new ListBuffer()
-
-    var i = 0
-    while(result.getNext()){
-      val list =
-        (
-          result.provenanceToken().payload.toString ::
-            result.schema.zipWithIndex.map( _._2).map( (i) => {
-              result(i).toString + (if (!result.deterministicCol(i)) {"*"} else {""})
-            }).toList
-        )
-
-     // println("RESULTS: "+list)
-      if(i < 100) data.append((list, result.deterministicRow()))
-      i = i + 1
-    }
-
-    val executionTime = (System.nanoTime() - startTime) / (1 * 1000 * 1000)
-    new WebIterator(headers, data.toList, i, result.missingRows(), executionTime)
   }
 
   /**
@@ -297,7 +297,7 @@ case class Database(backend: Backend)
         val model = models.get(name) 
         model.feedback(idx, args, v)
         models.update(model)
-        if(!backend.canHandleVGTerms()){
+        if(!backend.canHandleVGTerms){
           bestGuessCache.update(model, idx, args, v)
         }
       }
@@ -316,7 +316,7 @@ case class Database(backend: Backend)
       case view: CreateView => {
         val viewName = view.getTable().getName().toUpperCase
         val baseQuery = sql.convert(view.getSelectBody())
-        val optQuery = compiler.optimize(baseQuery)
+        val optQuery = Compiler.optimize(baseQuery)
 
         views.create(viewName, optQuery);
       }
@@ -334,13 +334,13 @@ case class Database(backend: Backend)
       /********** LOAD STATEMENTS **********/
       case load: Load => {
         // Assign a default table name if needed
-        val target = 
+        val (target, force) = 
           load.getTable() match { 
-            case null => load.getFile.getName.replaceAll("\\..*", "").toUpperCase
-            case s => s
+            case null => (load.getFile.getName.replaceAll("\\..*", "").toUpperCase, false)
+            case s => (s, true)
           }
 
-        loadTable(target, load.getFile)
+        loadTable(target, load.getFile, force = force)
       }
 
       /********** DROP STATEMENTS **********/
@@ -348,6 +348,7 @@ case class Database(backend: Backend)
         drop.getType().toUpperCase match {
           case "TABLE" | "INDEX" =>
             backend.update(drop.toString());
+            backend.invalidateCache();
 
           case "VIEW" =>
             views.drop(drop.getName().toUpperCase);
@@ -408,8 +409,11 @@ case class Database(backend: Backend)
    * supplies an appropriate header.
    */
 
-  def loadTable(targetTable: String, sourceFile: File){
+  def loadTable(targetTable: String, sourceFile: File, force:Boolean = true){
     val targetRaw = targetTable.toUpperCase + "_RAW"
+    if(tableExists(targetRaw) && !force){
+      throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' AS tableName`; to override.")
+    }
     LoadCSV.handleLoadTable(this, targetRaw, sourceFile)
     val oper = getTableOperator(targetRaw)
     val l = List(new FloatPrimitive(.5))
@@ -438,14 +442,17 @@ case class Database(backend: Backend)
     backend.update(  s"CREATE TABLE $targetTable ( $tableDef );"  )
     val insertCmd = s"INSERT INTO $targetTable( $tableCols ) VALUES ($colFillIns);"
     println(insertCmd)
-    backend.fastUpdateBatch(
-      insertCmd,
-      query(sourceQuery).mapRows( _.currentRow )
-    )
+    query(sourceQuery) { result =>
+      backend.fastUpdateBatch(
+        insertCmd,
+        result.map( _.tuple ) 
+      )
+    }
   }
   
 
-  def selectInto(targetTable: String, tableName: String){
+  def selectInto(targetTable: String, tableName: String): Unit =
+  {
 /*    val v:Option[Operator] = getView(tableName)
     val mod:Model = models.getModel(tableName)
     mod.bestGuess()
@@ -470,17 +477,13 @@ case class Database(backend: Backend)
     backend.update(  s"CREATE TABLE $targetTable ( $tableDef );"  )
     val insertCmd = s"INSERT INTO $targetTable( $tableCols ) VALUES ($colFillIns);"
     println(insertCmd)
-    query("SELECT * FROM " + tableName + ";").foreachRow(
-      result =>
-        backend.update(insertCmd, result.currentRow())
-    )
+    query("SELECT * FROM " + tableName + ";")(_.foreach { result =>
+      backend.update(insertCmd, result.tuple)
+    })
   }
-  def select(s: String) = {
+  def select(s: String) = 
+  {
     this.sql.convert(stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select])
-  }
-  def query(s: String): ResultIterator = {
-    val query = select(s)
-    this.query(query)
   }
   def stmt(s: String) = {
     new MimirJSqlParser(new StringReader(s)).Statement()

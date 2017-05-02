@@ -45,11 +45,15 @@ object OperatorUtils extends LazyLogging {
 
   def makeUnion(terms: Seq[Operator]): Operator = 
   {
-    if(terms.isEmpty){ throw new SQLException("Union of Empty List") }
-    val head = terms.head 
-    val tail = terms.tail
-    if(tail.isEmpty){ return head }
-    else { return Union(head, makeUnion(tail)) }
+    if(terms.isEmpty){  }
+    terms match {
+      case Seq() => throw new SQLException("Union of Empty List")
+      case Seq(singleton) => singleton
+      case _ => {
+        val (head, tail) = terms.splitAt(terms.size / 2)
+        Union(makeUnion(head), makeUnion(tail))
+      }
+    }
   }
 
   def makeDistinct(oper: Operator): Operator = 

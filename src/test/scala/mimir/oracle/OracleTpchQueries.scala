@@ -35,10 +35,10 @@ object OracleTpchQueries extends Specification {
           List(ProjectArg("MIMIR_PROVENANCE", Var("ROWID_MIMIR"))) ++
             raw.schema.map( (x) => ProjectArg(x._1, Var(x._1))),
           raw)
-        val firstRow = db.query(rawPlusRowID).currentRow()
+        val firstRow = db.query(rawPlusRowID){ _.next }
 
         db.backend.close()
-        firstRow.size must beGreaterThan(0)
+        firstRow.tuple.size must beGreaterThan(0)
       } else {
         skipped("Skipping Oracle Tests (add a config/jdbc.property to test)")
       }

@@ -155,6 +155,26 @@ object ExpressionUtils {
   }
 
   /**
+   * Create a bitwise-or from an arbitrary list
+   */
+  def makeBitOr(el: TraversableOnce[Expression]): Expression =
+  {
+    el.fold(IntPrimitive(0))(makeBitOr(_, _))
+  }
+
+  /**
+   * Create a bitwise-or from two values, ignoring zeroes
+   */
+  def makeBitOr(a:Expression, b:Expression): Expression =
+  {
+    (a, b) match {
+      case (IntPrimitive(0), _)     => b
+      case (_, IntPrimitive(0))     => a
+      case _ => Arithmetic(Arith.BitOr, a, b)
+    }
+  }
+
+  /**
    * Optimizing AND constructor that dynamically folds in 
    * Boolean constants.  For example:
    *   makeAnd(true, X) returns X
@@ -220,7 +240,8 @@ object ExpressionUtils {
    * For example:
    *   AND(A, AND(AND(B, C), D) becomes [A, B, C, D]
    */
-  def getConjuncts(e: Expression): Seq[Expression] = {
+  def getConjuncts(e: Expression): Seq[Expression] = 
+  {
     e match {
       case BoolPrimitive(true) => List[Expression]()
       case Arithmetic(Arith.And, a, b) => 
@@ -233,13 +254,41 @@ object ExpressionUtils {
    * For example:
    *   OR(A, OR(OR(B, C), D) becomes [A, B, C, D]
    */
-  def getDisjuncts(e: Expression): Seq[Expression] = {
+  def getDisjuncts(e: Expression): Seq[Expression] = 
+  {
     e match {
       case BoolPrimitive(false) => List[Expression]()
       case Arithmetic(Arith.Or, a, b) => 
         getConjuncts(a) ++ getConjuncts(b)
       case _ => List(e)
     }
+  }
+
+  /**
+   * Convert a boolean-valued expression into a 1 for true, 0 for false
+   */
+  def boolToOneZero(e: Expression): Expression =
+  {
+    e match {
+      case BoolPrimitive(true) => IntPrimitive(1)
+      case BoolPrimitive(false) => IntPrimitive(0)
+      case _ => Conditional(e, IntPrimitive(1), IntPrimitive(0))
+    }
+  }
+
+  /**
+   * Create a bit vector
+   */
+  def boolsToBitVector(bv: Seq[Expression]): Expression = 
+  {
+    makeBitOr(
+      bv.zipWithIndex.map { case (expr, idx) =>
+        Arithmetic(Arith.ShiftLeft, 
+          boolToOneZero(expr), 
+          IntPrimitive(idx)
+        )
+      }
+    )
   }
 
   /**

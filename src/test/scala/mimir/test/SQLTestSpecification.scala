@@ -11,6 +11,7 @@ import mimir.sql._
 import mimir.algebra._
 import mimir.util._
 import mimir.exec._
+import mimir.exec.stream._
 import mimir.optimizer._
 
 object DBTestInstances
@@ -74,8 +75,6 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   with RAParsers
 {
 
-  var history:List[Operator] = Nil
-
   def dbFile = new File(tempDBName+".db")
 
   def db = DBTestInstances.get(tempDBName, config)
@@ -86,17 +85,14 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
         db.sql.convert(sel)
     }
   }
-  def query(s: String): ResultIterator = {
-    val query = select(s)
-    history = query :: history
-    db.query(query)
-  }
-  def queryOneColumn(s: String): Iterable[PrimitiveValue] = 
-    query(s).mapRows(_(0))
+  def query[T](s: String)(handler: ResultIterator => T): T =
+    db.query(s)(handler)
+  def queryOneColumn[T](s: String)(handler: Iterator[PrimitiveValue] => T): T = 
+    query(s){ result => handler(result.map(_(0))) }
   def querySingleton(s: String): PrimitiveValue =
-    queryOneColumn(s).head
-  def queryOneRow(s: String): Iterable[PrimitiveValue] =
-    query(s).mapRows( _.currentRow ).head
+    queryOneColumn(s){ _.next }
+  def queryOneRow(s: String): Row =
+    query(s){ _.next }
   def table(t: String) =
     db.getTableOperator(t)
   def resolveViews(q: Operator) =

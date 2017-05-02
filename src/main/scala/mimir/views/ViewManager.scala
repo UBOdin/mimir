@@ -5,6 +5,7 @@ import mimir._;
 import mimir.algebra._;
 import mimir.provenance._;
 import mimir.ctables._;
+import mimir.exec._;
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.sql.JDBCBackend
 
@@ -141,39 +142,32 @@ class ViewManager(db:Database) extends LazyLogging {
       columnTaint,
       rowTaint,
       provenance
-    ) = db.compiler.compileInline(properties.query)
+    ) = BestGuesser(db, properties.query)
 
     val columns = baseSchema.map(_._1)
-    val colbg = db.bestGuessSchema(properties.query)
-    
+
     val completeQuery = 
       Project(
-        colbg.map { col => ProjectArg(col._1, Function("CAST",Seq(Var(col._1), TypePrimitive(col._2)))) } ++
-        columns.map { col => ProjectArg(
-          CTPercolator.mimirColDeterministicColumnPrefix + col,
-          Conditional(columnTaint(col), IntPrimitive(1), IntPrimitive(0))
-        )} ++
-        Seq(ProjectArg(CTPercolator.mimirRowDeterministicColumnName, 
-          Function("CAST", Seq(Conditional(rowTaint, IntPrimitive(1), IntPrimitive(0)), TypePrimitive(TInt())))
-        )) ++
-        provenance.map { col => ProjectArg(col, Var(col)) } ++
-        provenance.map { col => ProjectArg(CTPercolator.mimirColDeterministicColumnPrefix + col, IntPrimitive(1))},
+        columns.map { col => ProjectArg(col, Var(col)) } ++
+        Seq(
+          ProjectArg(
+            ViewAnnotation.taintBitVectorColumn,
+            ExpressionUtils.boolsToBitVector(
+              Seq(rowTaint)++columns.map { col => columnTaint(col) }
+            )
+          )
+        )++
+        provenance.map { col => ProjectArg(col, Var(col)) },
         query
       )
 
-    val inlinedSQL = db.compiler.sqlForBackend(completeQuery)
-    val tableSchema = completeQuery.schema
-    val tableDef = tableSchema.map( x => x._1+" "+Type.toString(x._2) ).mkString(",")
-    val tableCols = tableSchema.map( _._1 ).mkString(",")
-    val colFillIns = tableSchema.map( _ => "?").mkString(",")
-    //val insertCmd = s"INSERT INTO $name( $tableCols ) VALUES ($colFillIns);"
-    val insertCmd = s"INSERT INTO $name $inlinedSQL;"
-    db.backend.update(  s"CREATE TABLE $name ( $tableDef );"  )
-    db.backend.update(insertCmd)
-    //db.backend.asInstanceOf[JDBCBackend].fastUpdateBatch(insertCmd, db.backend.execute(inlinedSQL))
-    //db.backend.selectInto(name, inlinedSQL.toString)
-
+    logger.debug(s"RAW: $completeQuery")
     logger.debug(s"MATERIALIZE: $name(${completeQuery.schema.mkString(",")})")
+
+    val inlinedSQL = db.compiler.sqlForBackend(completeQuery)
+        
+    db.backend.selectInto(name, inlinedSQL.toString)
+
     logger.debug(s"QUERY: $inlinedSQL")
 
     db.backend.update(s"""
@@ -199,6 +193,7 @@ class ViewManager(db:Database) extends LazyLogging {
     """, Seq(
       StringPrimitive(name)
     ))
+    db.backend.invalidateCache
   }
 
   /**
@@ -259,7 +254,7 @@ class ViewManager(db:Database) extends LazyLogging {
       case View(name, query, wantAnnotations) => {
         val metadata = apply(name)
         if(!metadata.isMaterialized){
-          logger.debug(s"Invalid materialized view: '$name' is not materialized")
+          logger.debug(s"Not using materialized view: '$name' is not materialized")
           return resolve(query)
         }
         val haveAnnotations = Set(
@@ -270,11 +265,11 @@ class ViewManager(db:Database) extends LazyLogging {
         val missingAnnotations = wantAnnotations -- haveAnnotations
 
         if(!missingAnnotations.isEmpty) {
-          logger.debug(s"Invalid materialized view: Missing { ${missingAnnotations.mkString(", ")} } from '$name'")
+          logger.debug(s"Not using materialized view: Missing { ${missingAnnotations.mkString(", ")} } from '$name'")
           return resolve(query)
         }
 
-        logger.debug(s"Valid materialized view: Using Materialized '$name' with { ${wantAnnotations.mkString(", ")} } <- ${metadata.table}")
+        logger.debug(s"Using materialized view: Materialized '$name' with { ${wantAnnotations.mkString(", ")} } <- ${metadata.table}")
 
         Project(
           metadata.schemaWith(wantAnnotations).map { col => 

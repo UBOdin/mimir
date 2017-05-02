@@ -5,6 +5,7 @@ import java.sql.SQLException
 import mimir.provenance._
 import mimir.ctables._
 import mimir.util._
+import mimir.exec.{TupleBundler,WorldBits}
 import mimir.parser.SimpleExpressionParser
 
 class RegisteredFunction(
@@ -139,30 +140,75 @@ object FunctionRegistry {
 
     registerNative("BITWISE_AND", (x) => IntPrimitive(x(0).asLong & x(1).asLong), (_) => TInt())
 
-    FunctionRegistry.registerNative(
+    registerNative(
       "DST",
-      (args) => { throw new SQLException("Mimir Cannot Execute VGTerm Functions Internally") },
+      (args) => ???,
       (_) => TFloat()
     )
-    FunctionRegistry.registerNative(
+    registerNative(
       "SPEED",
-      (args) => { throw new SQLException("Mimir Cannot Execute VGTerm Functions Internally") },
+      (args) => ???,
       (_) => TFloat()
     )
-    FunctionRegistry.registerNative(
+    registerNative(
       "JULIANDAY",
-      (args) => { throw new SQLException("Mimir Cannot Execute VGTerm Functions Internally") },
+      (args) => ???,
       (_) => TInt()
     )
 
     registerNative("JSON_EXTRACT",(_) => ???, (_) => TAny())
-    registerNative("JSON_ARRAY",(_) => ???, (_) => TInt())
+    registerNative("JSON_ARRAY",(_) => ???, (_) => TString())
     registerNative("JSON_ARRAY_LENGTH",(_) => ???, (_) => TInt())
-    
+    registerNative("JSON_OBJECT", (_) => ???, (_) => TString())
+
+    registerNative("BEST_SAMPLE", 
+      (args: Seq[PrimitiveValue]) => {
+        TupleBundler.mostLikelyValue(
+          args.head.asLong,
+          args.tail.grouped(2).
+            map { arg => (arg(1), arg(0).asDouble) }.toSeq
+        ) match {
+          case Some(v) => v
+          case None => NullPrimitive()
+        }
+      },
+      (types: Seq[Type]) => {
+        Typechecker.assertNumeric(types.head, 
+          Function("BEST_SAMPLE", types.map(TypePrimitive(_))))
+        Typechecker.escalate(
+          types.tail.grouped(2).
+            map { t => 
+              Typechecker.assertNumeric(t(0),
+                Function("BEST_SAMPLE", types.map(TypePrimitive(_))))
+              t(1)
+            }
+        )
+      }
+    )
+
+    registerNative("SAMPLE_CONFIDENCE",
+      (args: Seq[PrimitiveValue]) => 
+        FloatPrimitive(
+          WorldBits.confidence(args(0).asLong, args(0).asLong.toInt)
+        ),
+      (types: Seq[Type]) => {
+        Typechecker.assertNumeric(types(0), 
+          Function("SAMPLE_CONFIDENCE", types.map(TypePrimitive(_))))
+        Typechecker.assertNumeric(types(1),
+          Function("SAMPLE_CONFIDENCE", types.map(TypePrimitive(_))))
+        TFloat()
+      }
+    )
+
+    val prng = new scala.util.Random()
+    registerNative("RANDOM",
+      (args: Seq[PrimitiveValue]) => IntPrimitive(prng.nextLong),
+      (types: Seq[Type]) => { TInt() }
+    )
+
     registerNative("AVG",(_) => ???, (_) => TInt())
     registerNative("STRFTIME",(_) => ???, (_) => TInt())
     registerNative("STDDEV",(_) => ???, (_) => TFloat())
-    
 	}
 
 	def registerSet(

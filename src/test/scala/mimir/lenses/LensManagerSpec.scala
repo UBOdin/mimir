@@ -19,9 +19,9 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
     "Be able to create and query missing value lenses" >> {
       update("CREATE TABLE R(A int, B int, C int);")
       loadCSV("R", new File("test/r_test/r.csv"))
-      query("SELECT B FROM R").mapRows(_(0)) should contain(NullPrimitive())
+      queryOneColumn("SELECT B FROM R"){ _.toSeq should contain(NullPrimitive()) }
       update("CREATE LENS SANER AS SELECT * FROM R WITH MISSING_VALUE('B')")
-      query("SELECT B FROM SANER").mapRows(_(0)) should not contain(NullPrimitive())
+      queryOneColumn("SELECT B FROM SANER"){ _.toSeq should not contain(NullPrimitive()) }
     }
 
     "Produce reasonable views" >> {
@@ -75,7 +75,7 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       queryOneColumn(s"""
         SELECT model FROM ${db.models.ownerTable}
         WHERE owner = 'LENS:SANER'
-      """).toSeq must not beEmpty
+      """){ _.toSeq must not beEmpty }
 
       val modelNames = db.models.associatedModels("LENS:SANER")
       modelNames must not beEmpty
@@ -86,13 +86,13 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       queryOneColumn(s"""
         SELECT model FROM ${db.models.ownerTable}
         WHERE owner = 'LENS:SANER'
-      """).toSeq must beEmpty
+      """){ _.toSeq must beEmpty }
 
       for(model <- modelNames){
         val modelDefn = 
           queryOneColumn(s"""
             SELECT * FROM ${db.models.modelTable} WHERE name = '$model'
-          """).toSeq
+          """){ _.toSeq }
         modelDefn must beEmpty;
       }
       ok

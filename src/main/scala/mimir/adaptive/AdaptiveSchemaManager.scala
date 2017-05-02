@@ -52,7 +52,7 @@ class AdaptiveSchemaManager(db: Database)
   {
     db.query(
       db.getTableOperator(dataTable)
-    ).mapRows { row => 
+    ){ _.map { row => 
       val name = row(0).asString
       val mlensType = row(1).asString
       val query = db.querySerializer.deserializeQuery(row(2).asString)
@@ -64,17 +64,17 @@ class AdaptiveSchemaManager(db: Database)
         MultilensRegistry.multilenses(mlensType), 
         MultilensConfig(name, query, args)
       )
-    }
+    }.toIndexedSeq }
   }
 
   def tableCatalogs: Seq[Operator] =
   {
     all.map { case(mlens, config) => 
       OperatorUtils.projectInColumn(
-        "SOURCE",
+        "SCHEMA_NAME",
         StringPrimitive(config.schema),
         OperatorUtils.projectDownToColumns(
-          SystemCatalog.tableCatalogSchema.filter(_._1 != "SOURCE").map( _._1 ),
+          SystemCatalog.tableCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 ),
           mlens.tableCatalogFor(db, config)         
         )
       )
@@ -85,10 +85,10 @@ class AdaptiveSchemaManager(db: Database)
   {
     all.map { case(mlens, config) => 
       OperatorUtils.projectInColumn(
-        "SOURCE",
+        "SCHEMA_NAME",
         StringPrimitive(config.schema),
         OperatorUtils.projectDownToColumns(
-          SystemCatalog.attrCatalogSchema.filter(_._1 != "SOURCE").map( _._1 ),
+          SystemCatalog.attrCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 ),
           mlens.attrCatalogFor(db, config)         
         )
       )
@@ -102,19 +102,22 @@ class AdaptiveSchemaManager(db: Database)
         Comparison(Cmp.Eq, Var("NAME"), StringPrimitive(schema)),
         db.getTableOperator(dataTable)
       )
-    ).mapRows { row => 
-      val name = row(0).asString
-      val mlensType = row(1).asString
-      val query = db.querySerializer.deserializeQuery(row(2).asString)
-      val args:Seq[Expression] = 
-        if(row(3).equals(StringPrimitive(""))) { Seq() }
-        else { row(3).asString.split("~").map( db.querySerializer.deserializeExpression(_) ) }
- 
-      ( 
-        MultilensRegistry.multilenses(mlensType), 
-        MultilensConfig(name, query, args)
-      )
-    }.headOption
+    ){ result =>
+      if(result.hasNext){
+        val row = result.next
+        val name = row(0).asString
+        val mlensType = row(1).asString
+        val query = db.querySerializer.deserializeQuery(row(2).asString)
+        val args:Seq[Expression] = 
+          if(row(3).equals(StringPrimitive(""))) { Seq() }
+          else { row(3).asString.split("~").map( db.querySerializer.deserializeExpression(_) ) }
+   
+        Some(( 
+          MultilensRegistry.multilenses(mlensType), 
+          MultilensConfig(name, query, args)
+        ))
+      } else { None }
+    }
   }
 
   def viewFor(schema: String, table: String): Option[Operator] =

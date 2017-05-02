@@ -13,6 +13,9 @@ object CTPercolator
   extends LazyLogging
 {
 
+  val mimirRowDeterministicColumnName = "MIMIR_ROW_DET"
+  val mimirColDeterministicColumnPrefix = "MIMIR_COL_DET_"
+
   private def extractMissingValueVar(expr: Expression): Var = {
     expr match {
       case Conditional(IsNullExpression(v1: Var), vg: VGTerm, v2: Var) =>
@@ -131,9 +134,6 @@ object CTPercolator
     }
   }
 
-  val mimirRowDeterministicColumnName = "MIMIR_ROW_DET"
-  val mimirColDeterministicColumnPrefix = "MIMIR_COL_DET_"
-  
   /**
    * Rewrite the input operator to evaluate a 'provenance lite'
    * 

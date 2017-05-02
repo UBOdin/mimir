@@ -139,40 +139,34 @@ object LoadCSV extends StrictLogging {
     val cmd = "INSERT INTO " + targetTable + "(" + keys + ") VALUES (" + sch.map(x=>"?").mkString(",") + ")"
 
     logger.trace("BEGIN IMPORT")
-    TimeUtils.monitor(s"Import CSV: $targetTable <- $sourceFile",
-      () => {
-        db.backend.fastUpdateBatch(cmd, rows.view.map({ record => 
-          if(record.recordNumber % 100000 == 0){
-            logger.info(s"Loaded ${record.recordNumber} records...")
-          }
-          /*if(record.recordNumber > 400000){
-            Thread.sleep(1000);
-          }*/
-          val data = record.fields.
-            take(numberOfColumns).
-            padTo( numberOfColumns, "").
-            map( _.trim ).
-            zip(sch).
-            map({ case (value, (col, t)) =>
-              if(value == null || value.equals("")) { NullPrimitive() }
-              else {
-                if(!Type.matches(Type.rootType(t), value))
-                {
-                  logger.warn(s"$sourceFile:${record.lineNumber}: $col ($t) on is unparseable '$value', using null instead");
-                  NullPrimitive()
-                } else {
-                  TextUtils.parsePrimitive(t, value)
-                }
+    TimeUtils.monitor(s"Import CSV: $targetTable <- $sourceFile", logger.info(_)){
+      db.backend.fastUpdateBatch(cmd, rows.view.map({ record => 
+        if(record.recordNumber % 100000 == 0){
+          logger.info(s"Loaded ${record.recordNumber} records...")
+        }
+        val data = record.fields.
+          take(numberOfColumns).
+          padTo(numberOfColumns, "").
+          map( _.trim ).
+          zip(sch).
+          map({ case (value, (col, t)) =>
+            if(value == null || value.equals("")) { NullPrimitive() }
+            else {
+              if(!Type.matches(Type.rootType(t), value))
+              {
+                logger.warn(s"$sourceFile:${record.lineNumber}: $col ($t) on is unparseable '$value', using null instead");
+                NullPrimitive()
+              } else {
+                TextUtils.parsePrimitive(t, value)
               }
-            })
-            
-          logger.trace(s"INSERT (line ${record.lineNumber}): $cmd \n <- $data")
-          record.fields = null
-          data
-        })) 
-      },
-      logger.info(_)
-    )
+            }
+          })
+
+        logger.trace(s"INSERT (line ${record.lineNumber}): $cmd \n <- $data")
+        record.fields = null
+        data
+      }))
+    }
 
   }
 }

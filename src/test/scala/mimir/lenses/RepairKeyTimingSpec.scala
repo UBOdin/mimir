@@ -7,13 +7,14 @@ import mimir.algebra._
 import mimir.util._
 import mimir.ctables.{VGTerm}
 import mimir.optimizer.{InlineVGTerms,InlineProjections}
-import mimir.test.{SQLTestSpecification, PDBench}
+import mimir.test.{SQLTestSpecification, PDBench, TestTimer}
 import mimir.models._
 import org.specs2.specification.core.Fragments
 
 object RepairKeyTimingSpec
   extends SQLTestSpecification("RepairKeyTiming", Map("reset" -> "NO", "inline" -> "YES"))
   with BeforeAll
+  with TestTimer
 {
 
   sequential
@@ -73,7 +74,7 @@ object RepairKeyTimingSpec
               and ok.orderkey = lok.orderkey
               and od.tid = ok.tid 
               and os.tid = ok.tid
-         """, 1.976525000 ),
+         """, 60.0 ),
         (s"""
             select liep.extendedprice
             from lineitem_l_extendedprice_run_$i liep, lineitem_l_shipdate_run_$i lisd,
@@ -84,7 +85,7 @@ object RepairKeyTimingSpec
               and lisd.tid = lidi.tid
               and liq.tid = lidi.tid
               and liep.tid = liq.tid
-         """, 14.182710000 ),
+         """, 60.0 ),
         (s"""
             select nn1.name, nn2.name
             from supp_s_suppkey_run_$i sk, supp_s_nationkey_run_$i snk,
@@ -102,8 +103,9 @@ object RepairKeyTimingSpec
               and lok.tid = lsk.tid
               and ock.tid = ok.tid
               and snk.tid = sk.tid
+              and cnk.tid = ck.tid
               and nk2.tid = nn2.tid and nk1.tid = nn1.tid
-         """, .053196000 )
+         """, 60.0 )
     )){
       qat =>  {
           {queryKeyRepairLens(qat)}
@@ -122,9 +124,9 @@ object RepairKeyTimingSpec
       if(!db.tableExists(baseTable)){
         update(s"""
           CREATE TABLE $baseTable(
-            TID int,
-            WORLD_ID int,
             VAR_ID int,
+            WORLD_ID int,
+            TID int,
             $columnName $columnType,
             PRIMARY KEY (TID, WORLD_ID, VAR_ID)
           )
@@ -170,21 +172,16 @@ object RepairKeyTimingSpec
   }
 
  def queryKeyRepairLens(queryAndTime : (String, Double)) =  s"Query Key Repair Lens : ${queryAndTime._1}" >> {
-      val timeForQuery = time {
+      val totalTimeForQuery: (Double, Double) = time {
         var x = 0
-        val r = query(queryAndTime._1)
-        while(r.getNext()){ x += 1 }
+        val backendTime = query(queryAndTime._1) { results =>
+          time { results.foreach { row => (x = x + 1) } } 
+        }
         println(s"$x rows in the result")
+        backendTime._2
      }
-     println(s"Time:${timeForQuery._2} seconds <- Query:${queryAndTime._1} ")
-     timeForQuery._2 should be lessThan queryAndTime._2
+     println(s"Time:${totalTimeForQuery._2} seconds (${totalTimeForQuery._1} seconds reading results) <- Query:${queryAndTime._1} ")
+     totalTimeForQuery._2 should be lessThan queryAndTime._2+2 // Add 2 seconds for the optimizer (for now)
   }
-
-  def time[F](anonFunc: => F): (F, Double) = {
-      val tStart = System.nanoTime()
-      val anonFuncRet = anonFunc
-      val tEnd = System.nanoTime()
-      (anonFuncRet, (tEnd-tStart).toDouble/1000.0/1000.0/1000.0)
-    }
 
 }

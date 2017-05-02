@@ -107,11 +107,11 @@ object Provenance {
         val lhsProjectArgs =
           lhs.schema.map(x => ProjectArg(x._1, Var(x._1))) ++ 
             lhsIdProjections ++ 
-            List(ProjectArg(rowidColnameBase+"_branch", RowIdPrimitive("left")))
+            List(ProjectArg(rowidColnameBase+"_branch", RowIdPrimitive("0")))
         val rhsProjectArgs = 
           rhs.schema.map(x => ProjectArg(x._1, Var(x._1))) ++ 
             rhsIdProjections ++ 
-            List(ProjectArg(rowidColnameBase+"_branch", RowIdPrimitive("right")))
+            List(ProjectArg(rowidColnameBase+"_branch", RowIdPrimitive("1")))
         (
           Union(
             Project(lhsProjectArgs, newLhs),

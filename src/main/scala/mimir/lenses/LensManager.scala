@@ -54,7 +54,7 @@ class LensManager(db: Database) {
     }
 
     // Populate the best-guess cache
-    if(!db.backend.canHandleVGTerms()){
+    if(!db.backend.canHandleVGTerms){
       db.bestGuessCache.buildCache(view)
     }
   }

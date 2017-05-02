@@ -173,45 +173,32 @@ class BestGuessCache(db: Database) extends LazyLogging {
 
     val modelName = model.name
     logger.debug(s"Building cache for $modelName-$varIdx[$args] with\n$input")
-    
-    val guesses = 
-      db.query(input).mapRows(row => {
-        val compiledArgs = args.map(Provenance.plugInToken(_, row.provenanceToken()))
-        val compiledHints = hints.map(Provenance.plugInToken(_, row.provenanceToken()))
-        val tuple = row.currentTuple()
-        val dataArgs = compiledArgs.map(Eval.eval(_, tuple))
-        val dataHints = compiledHints.map(Eval.eval(_, tuple))
-        val guess = model.bestGuess(varIdx, dataArgs, dataHints)
-        
-        logger.trace(s"Registering $dataArgs -> $guess")
-        
-        guess :: dataArgs.toList
-      })
-      
-    val uniqueMap = collection.mutable.Map[String, Boolean]()
-    val uniqueKeysGuesses = guesses.map(row => {
-        val keyVal = row.last.toString
-        if(uniqueMap.contains(keyVal))
-          None
-        else{
-          uniqueMap(keyVal) = true
-          Some(row)
-        }
-      }
-      ).flatten
 
-    db.backend.fastUpdateBatch(
-      s"""INSERT INTO $cacheTable(
-        $dataColumn, 
-        ${args.zipWithIndex.
-          map( arg => keyColumn(arg._2) ).
-          mkString(", ")}
-      ) VALUES (?, ${args.map(_ => "?").mkString("?")})
-      """,
-      uniqueKeysGuesses
-    )
+    db.query(input) { results =>
+      db.backend.fastUpdateBatch(s"""
+        INSERT INTO $cacheTable(
+          $dataColumn, 
+          ${args.zipWithIndex.
+            map( arg => keyColumn(arg._2) ).
+            mkString(", ")}
+        ) VALUES (?, ${args.map(_ => "?").mkString("?")})
+        """, 
+        results.map { row => 
+          val compiledArgs = args.map(Provenance.plugInToken(_, row.provenance))
+          val compiledHints = hints.map(Provenance.plugInToken(_, row.provenance))
+          val tuple = row.tupleMap
+          val dataArgs = compiledArgs.map(Eval.eval(_, tuple))
+          val dataHints = compiledHints.map(Eval.eval(_, tuple))
+          val guess = model.bestGuess(varIdx, dataArgs, dataHints)
+
+          logger.trace(s"Registering $dataArgs -> $guess")
+
+          guess :: dataArgs.toList
+        }.toSeq 
+      )
+    }
   }
-  
+
   def update(model: Model, idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
   {
     if(args.isEmpty){ return; }
@@ -223,7 +210,6 @@ class BestGuessCache(db: Database) extends LazyLogging {
       """,
       List(v) ++ args
     )
-
   }
 
   private def emptyCacheTable(cacheTable: String) =

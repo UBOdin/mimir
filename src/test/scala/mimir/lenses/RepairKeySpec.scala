@@ -40,16 +40,16 @@ object KeyRepairSpec
 
       val result = query("""
         SELECT A, B, C FROM R_UNIQUE_A
-      """).mapRows { row => 
-        row(0).asLong.toInt -> (
-          row(1).asLong.toInt, 
-          row(2).asLong.toInt, 
-          row.deterministicCol(0),
-          row.deterministicCol(1),
-          row.deterministicCol(2),
-          row.deterministicRow()
+      """){ _.map { row => 
+        row("A").asInt -> (
+          row("B").asInt, 
+          row("C").asInt, 
+          row.isColDeterministic("A"),
+          row.isColDeterministic("B"),
+          row.isColDeterministic("C"),
+          row.isDeterministic()
         )
-      }.toMap[Int, (Int,Int, Boolean, Boolean, Boolean, Boolean)]
+      }.toMap[Int, (Int,Int, Boolean, Boolean, Boolean, Boolean)] }
 
       result.keys must contain(eachOf(1, 2, 4))
       result must have size(3)
@@ -88,14 +88,14 @@ object KeyRepairSpec
 
       val result = query("""
         SELECT B, A FROM U_UNIQUE_B
-      """).mapRows { row => 
-        row(0).asLong.toInt -> (
-          row(1).asLong.toInt, 
-          row.deterministicCol(0),
-          row.deterministicCol(1),
-          row.deterministicRow()
+      """){ _.map { row => 
+        row("B").asInt -> (
+          row("A").asInt, 
+          row.isColDeterministic("B"),
+          row.isColDeterministic("A"),
+          row.isDeterministic()
         )
-      }.toMap[Int, (Int, Boolean, Boolean, Boolean)]
+      }.toMap[Int, (Int, Boolean, Boolean, Boolean)] }
 
       result.keys must contain(eachOf(2, 3, 4))
       result(2)._1 must be equalTo(5)
@@ -108,18 +108,15 @@ object KeyRepairSpec
         WITH KEY_REPAIR(ATTR, SCORE_BY(STRENGTH))
       """);
 
-      DefaultOutputFormat.print(
-        query("""
-          SELECT ATTR, PARENT FROM SCH_REPAIRED
-        """)
-      )
+      query("""
+        SELECT ATTR, PARENT FROM SCH_REPAIRED
+      """){ DefaultOutputFormat.print(_) }
 
       val result = query("""
         SELECT ATTR, PARENT FROM SCH_REPAIRED
-      """).mapRows { row => 
-        row(0).asLong.toInt -> 
-          row(1).asLong.toInt
-      }.toMap[Int, Int]
+      """){ _.map { row => 
+        row("ATTR").asInt -> row("PARENT").asInt
+      }.toMap[Int, Int] }
 
       result.keys must contain(eachOf(1, 2, 3, 4))
 
@@ -131,59 +128,49 @@ object KeyRepairSpec
 
     "Update for large data" >> {
 
-      TimeUtils.monitor("CREATE", () => {
+      TimeUtils.monitor("CREATE") {
         update(
-          """
-        CREATE LENS FD_UPDATE
-          AS SELECT * FROM twitter100Cols10kRowsWithScore
-        WITH KEY_REPAIR(ATTR, SCORE_BY(SCORE))
-             """);
-        }, println(_))
+        """
+          CREATE LENS FD_UPDATE
+            AS SELECT * FROM twitter100Cols10kRowsWithScore
+          WITH KEY_REPAIR(ATTR, SCORE_BY(SCORE))
+        """);
+      }
 
-      TimeUtils.monitor("QUERY", () => {
-        val result = query(
-          """
-        SELECT ATTR, PARENT FROM FD_UPDATE
-                         """).mapRows {
-          row =>
-        row(0).
-          asLong.toInt ->
-          row(1).asLong.
-            toInt
-      }.toMap[Int, Int]
-        },println(_))
+      TimeUtils.monitor("QUERY") {
+        val result = query("""
+          SELECT ATTR, PARENT FROM FD_UPDATE
+        """){ _.map { row =>
+          row("ATTR").asInt -> row("PARENT").asInt
+        }.toMap[Int, Int] }
+      }
 
-      TimeUtils.monitor("UPDATE", () => {
+      TimeUtils.monitor("UPDATE") {
         update("""FEEDBACK FD_UPDATE:PARENT 0('1') IS '-1';""")
-      },println(_))
+      }
 
       println("For CureSource")
 
-      TimeUtils.monitor("CREATE", () => {
+      TimeUtils.monitor("CREATE") {
         update(
           """
         CREATE LENS FD_CURE
           AS SELECT * FROM cureSourceWithScore
         WITH KEY_REPAIR(ATTR, SCORE_BY(SCORE))
           """);
-      }, println(_))
+      }
 
-      TimeUtils.monitor("QUERY", () => {
-        val result = query(
-          """
-        SELECT ATTR, PARENT FROM FD_CURE
-          """).mapRows {
-          row =>
-            row(0).
-              asLong.toInt ->
-              row(1).asLong.
-                toInt
-        }.toMap[Int, Int]
-      },println(_))
+      TimeUtils.monitor("QUERY") {
+        val result = query("""
+          SELECT ATTR, PARENT FROM FD_CURE
+        """){ _.map { row =>
+            row("ATTR").asInt -> row("PARENT").asInt
+        }.toMap[Int, Int] }
+      }
 
-      TimeUtils.monitor("UPDATE", () => {
+      TimeUtils.monitor("UPDATE"){
         update("""FEEDBACK FD_CURE:PARENT 0('1') IS '-1';""")
-      },println(_))
+      }
 
 /*
       result.map((out) => {
@@ -218,13 +205,13 @@ object KeyRepairSpec
           AS SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_WITHDUPS
           WITH KEY_REPAIR(TUPLE_ID)
         """)
-        TimeUtils.monitor("CREATE_FASTPATH", () => {
+        TimeUtils.monitor("CREATE_FASTPATH") {
           update("""
             CREATE LENS CUST_ACCTBAL_FASTPATH
             AS SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_WITHDUPS
             WITH KEY_REPAIR(TUPLE_ID, ENABLE(FAST_PATH))
           """)
-        },println(_))
+        }
         ok
       } else {
         skipped("Skipping FastPath tests (Run `sbt datasets` to download required data)"); ko
@@ -247,7 +234,7 @@ object KeyRepairSpec
           SELECT TUPLE_ID
           FROM MIMIR_FASTPATH_CUST_ACCTBAL_FASTPATH
           WHERE num_instances > 1
-        """).allRows must not beEmpty 
+        """){ _.toSeq must not beEmpty }
 
         querySingleton("""
           SELECT COUNT(*)
@@ -273,17 +260,17 @@ object KeyRepairSpec
     "Produce the same results" >> {
       if(PDBench.isDownloaded){
         val classic = 
-          TimeUtils.monitor("QUERY_CLASSIC", () => {
+          TimeUtils.monitor("QUERY_CLASSIC"){
             query("""
-              SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_CLASSIC
-            """).mapRows { x => Seq(x(0), x(1)) }
-          },println(_))
+              SELECT TUPLE_ID, ACCTBAL FROM CUST_ACCTBAL_CLASSIC
+            """){ _.map { row => (row("TUPLE_ID").asLong, row("ACCTBAL").asDouble) }.toSeq }
+          }
         val fastpath =
-          TimeUtils.monitor("QUERY_FASTPATH", () => {
+          TimeUtils.monitor("QUERY_FASTPATH"){
             query("""
-              SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_FASTPATH
-            """).mapRows { x => Seq(x(0), x(1)) }
-          },println(_))
+              SELECT TUPLE_ID, ACCTBAL FROM CUST_ACCTBAL_FASTPATH
+            """){ _.map { row => (row("TUPLE_ID").asLong, row("ACCTBAL").asDouble) }.toSeq }
+          }
         classic.size must be equalTo(150000)
         fastpath.size must be equalTo(150000)
       } else {
@@ -298,17 +285,17 @@ object KeyRepairSpec
           WHERE WORLD_ID = 1 and acctbal < 0
         """).asLong must be equalTo(13721l)
 
-        TimeUtils.monitor("QUERY_FASTPATH", () => {
-          query("""
+        TimeUtils.monitor("QUERY_FASTPATH"){
+          queryOneColumn("""
             SELECT TUPLE_ID FROM CUST_ACCTBAL_FASTPATH WHERE acctbal < 0
-          """).mapRows { x => x(0) }
-        },println(_)).size must be between(13721, 13721+579)  
+          """){ _.toSeq.size must be between(13721, 13721+579) }
+        }  
 
-        TimeUtils.monitor("QUERY_CLASSIC", () => {
-          query("""
+        TimeUtils.monitor("QUERY_CLASSIC"){
+          queryOneColumn("""
             SELECT TUPLE_ID FROM CUST_ACCTBAL_CLASSIC WHERE acctbal < 0
-          """).mapRows { x => x(0) }
-        },println(_)).size must be between(13721, 13721+579) 
+          """){ _.toSeq.size must be between(13721, 13721+579) }
+        }
       } else {
         skipped("Skipping FastPath tests (Run `sbt datasets` to download required data)"); ko
       } 
