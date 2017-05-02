@@ -30,9 +30,9 @@ object CureScenario
         time(s"Load '$table'") {
           update(s"LOAD '$table';") 
         }
-        // time(s"Materialize '$basename'"){
-        //   update(s"ALTER VIEW $basename MATERIALIZE;")
-        // }
+        time(s"Materialize '$basename'"){
+          update(s"ALTER VIEW $basename MATERIALIZE;")
+        }
         db.tableExists(basename) must beTrue
       }
     }}
