@@ -143,7 +143,7 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
   def asBool: Boolean = throw new TypeException(TDate(), TBool(), "Cast")
   def asString: String = f"$y%04d-$m%02d-$d%02d"
   def payload: Object = (y, m, d).asInstanceOf[Object];
-  def compare(c: DatePrimitive): Integer = {
+  final def compare(c: DatePrimitive): Integer = {
     if(c.y < y){ -1 }
     else if(c.y > y) { 1 }
     else if(c.m < m) { -1 }
@@ -152,6 +152,11 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
     else if(c.d > d) { 1 }
     else { 0 }
   }
+
+  def >(c:DatePrimitive): Boolean = compare(c) > 0
+  def >=(c:DatePrimitive): Boolean = compare(c) >= 0
+  def <(c:DatePrimitive): Boolean = compare(c) < 0
+  def <=(c:DatePrimitive): Boolean = compare(c) <= 0
 }
 
 /**
@@ -168,7 +173,7 @@ case class TimestampPrimitive(y: Int, m: Int, d: Int, hh: Int, mm: Int, ss: Int)
   def asBool: Boolean = throw new TypeException(TDate(), TBool(), "Cast")
   def asString: String = f"$y%04d-$m%02d-$d%02d $hh%02d:$mm%02d:$ss%02d"
   def payload: Object = (y, m, d).asInstanceOf[Object];
-  def compare(c: TimestampPrimitive): Integer = {
+  final def compare(c: TimestampPrimitive): Integer = {
     if(c.y < y){ -1 }
     else if(c.y > y) { 1 }
     else if(c.m < m) { -1 }
@@ -183,6 +188,11 @@ case class TimestampPrimitive(y: Int, m: Int, d: Int, hh: Int, mm: Int, ss: Int)
     else if(c.ss > ss) { 1 }
     else { 0 }
   }
+
+  def >(c:TimestampPrimitive): Boolean = compare(c) > 0
+  def >=(c:TimestampPrimitive): Boolean = compare(c) >= 0
+  def <(c:TimestampPrimitive): Boolean = compare(c) < 0
+  def <=(c:TimestampPrimitive): Boolean = compare(c) <= 0
 }
 /**
  * Boxed representation of a boolean

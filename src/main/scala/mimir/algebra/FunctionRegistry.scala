@@ -18,7 +18,7 @@ class RegisteredFunction(
   def unfold(args: Seq[Expression]): Option[Expression] = None
 }
 
-class ExpressionFunction(name: String, args:Seq[String], expr: Expression)
+class ExpressionFunction(name: String, val args:Seq[String], val expr: Expression)
   extends RegisteredFunction(name, 
     (argVal) => Eval.eval(expr, args.zip(argVal).toMap),
     (argT) => Typechecker.typeOf(expr, args.zip(argT).toMap)
