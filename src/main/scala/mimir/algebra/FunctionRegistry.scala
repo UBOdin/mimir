@@ -7,6 +7,8 @@ import mimir.ctables._
 import mimir.util._
 import mimir.exec.{TupleBundler,WorldBits}
 import mimir.parser.SimpleExpressionParser
+import org.geotools.referencing.datum.DefaultEllipsoid
+import org.joda.time.DateTime
 
 class RegisteredFunction(
 	val name: String, 
@@ -18,7 +20,7 @@ class RegisteredFunction(
   def unfold(args: Seq[Expression]): Option[Expression] = None
 }
 
-class ExpressionFunction(name: String, args:Seq[String], expr: Expression)
+class ExpressionFunction(name: String, val args:Seq[String], val expr: Expression)
   extends RegisteredFunction(name, 
     (argVal) => Eval.eval(expr, args.zip(argVal).toMap),
     (argT) => Typechecker.typeOf(expr, args.zip(argT).toMap)
@@ -71,7 +73,7 @@ object FunctionRegistry {
 		  (params: Seq[PrimitiveValue]) => 
           { TextUtils.parseDate(params.head.asString) },
 		  _ match {
-		    case TString() :: Nil => TDate()
+		    case _ :: Nil => TDate()
 		    case _ => throw new SQLException("Invalid parameters to DATE()")
 		  }
 		)
@@ -103,12 +105,34 @@ object FunctionRegistry {
 
     registerNative(
       "DST",
-      (args) => ???,
-      (_) => TFloat()
+      (args) => {
+        FloatPrimitive(DefaultEllipsoid.WGS84.orthodromicDistance(
+          args(0).asDouble, //lon1
+          args(1).asDouble, //lat1
+          args(2).asDouble, //lon2
+          args(3).asDouble  //lat2
+        ))
+      },
+      (args) => {
+        (0 until 4).foreach { i => Typechecker.assertNumeric(args(i), Function("DST", List())) }; 
+        TFloat()
+      }
     )
     registerNative(
       "SPEED",
-      (args) => ???,
+      (args) => {
+        val distance: Double = args(0).asDouble
+        val startingDate: DateTime = args(1).asDateTime
+        val endingDate: DateTime =
+          args(2) match {
+            case NullPrimitive() => new DateTime()
+            case x => x.asDateTime
+          }
+
+        val numberOfHours: Long = Math.abs(endingDate.getMillis - startingDate.getMillis) / 1000 / 60 / 60
+
+        FloatPrimitive(distance / 1000 / numberOfHours) // kmph
+      },
       (_) => TFloat()
     )
     registerNative(
