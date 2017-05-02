@@ -42,21 +42,11 @@ class ProjectionResultIterator(
     }.toMap
   private val eval = new EvalInlined[Seq[PrimitiveValue]](evalScope)
 
-  lazy val columnOutputs: Seq[Seq[PrimitiveValue] => PrimitiveValue] = 
+  val columnOutputs: Seq[Seq[PrimitiveValue] => PrimitiveValue] = 
     tupleDefinition.map { _.expression }.map { eval.compile(_) }
-  lazy val annotationOutputs: Seq[Seq[PrimitiveValue] => PrimitiveValue] = 
+  val annotationOutputs: Seq[Seq[PrimitiveValue] => PrimitiveValue] = 
     annotationDefinition.map { _.expression }.map { eval.compile(_) }
-  val extractInputs: Seq[() => (String, PrimitiveValue)] =
-    inputSchema.
-      zipWithIndex.
-      map { case ((name, t), idx) => 
-        logger.debug(s"Extracting: $name (@$idx) -> $t")
-        val fn = JDBCUtils.convertFunction(t, idx+1, rowIdType = rowIdAndDateType._1, dateType = rowIdAndDateType._2)
-        () => {
-          (name, fn(source))
-        }
-      }
-  val extractInputsRaw: Seq[() => PrimitiveValue] = 
+  val extractInputs: Seq[() => PrimitiveValue] = 
     inputSchema.
       zipWithIndex.
       map { case ((name, t), idx) => 
@@ -64,6 +54,8 @@ class ProjectionResultIterator(
         val fn = JDBCUtils.convertFunction(t, idx+1, rowIdType = rowIdAndDateType._1, dateType = rowIdAndDateType._2)
         () => { fn(source) }
       }
+  val annotationIndexes: Map[String,Int] =
+    annotationDefinition.map { _.name }.zipWithIndex.toMap
 
   var closed = false
   def close(): Unit = {
@@ -74,22 +66,23 @@ class ProjectionResultIterator(
   var currentRow: Option[Row] = None;
 
   val makeRow =
-    if(ExperimentalOptions.isEnabled("LAZY-ROW-COMPUTE")) {
+    if(ExperimentalOptions.isEnabled("AGGRESSIVE-ROW-COMPUTE")) {
       () => {
-        new LazyRow(
-          extractInputs.map { x => x() }.toMap,
-          tupleDefinition,
-          annotationDefinition,
-          schema
-        )
-      }
-    } else {
-      () => {
-        val tuple = extractInputsRaw.map { _() }
+        val tuple = extractInputs.map { _() }
         new ExplicitRow(
           columnOutputs.map(_(tuple)), 
           annotationOutputs.map(_(tuple)),
           this
+        )
+      }
+    } else {
+      () => {
+        new LazyRow(
+          extractInputs.map { _() },
+          columnOutputs,
+          annotationOutputs,
+          schema,
+          annotationIndexes
         )
       }
     }
