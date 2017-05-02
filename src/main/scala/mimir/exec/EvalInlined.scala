@@ -55,7 +55,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
   def compileFunction(func: RegisteredFunction, argExprs: Seq[Expression]): Compiled[PrimitiveValue] =
   {
     val args = argExprs.map { compile(_) }
-    (t) => { func.eval(args.map { _(t) }) }
+    (t) => { func.eval(args.map { _(t) }) match { case NullPrimitive() => throw new NullPointerException(); case x => x } }
   }
   def compileConditional[R](c: Expression, t: Expression, e: Expression, rcr: Expression => Compiled[R]): Compiled[R]=
   {
@@ -160,8 +160,18 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
         val lv = compileForBool(lhs)
         val rv = compileForBool(rhs)
         op match {
-          case Arith.And  => (t:T) => { lv(t) && rv(t) }
-          case Arith.Or   => (t:T) => { lv(t) || rv(t) }
+          case Arith.And  => (t:T) => { 
+            val l = try { lv(t) } catch { 
+              case _:NullPointerException => if(rv(t)){ throw new NullPointerException() } else { false }
+            }
+            l && rv(t) 
+          }
+          case Arith.Or   => (t:T) => {
+            val l = try { lv(t) } catch { 
+              case _:NullPointerException => if(rv(t)){ true } else { throw new NullPointerException() }
+            }
+            l || rv(t) 
+          }
           case _                => throw new RAException(s"Invalid Arithmetic on Float: $op")
         }
       }
@@ -182,7 +192,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
           case (Cmp.Eq, TRowId(), TRowId())         => compileBinary(lhs, rhs, compileForRowId) { _.equals(_) }
           case (Cmp.Eq, _, _) 
               => throw new RAException(s"Invalid comparison: $e")
-          case (Cmp.Neq, _, _)                      => compileForBool(ExpressionUtils.makeNot(Comparison(Cmp.Eq, lhs, rhs)))
+          case (Cmp.Neq, _, _)                      => compileForBool(Not(Comparison(Cmp.Eq, lhs, rhs)))
           case (Cmp.Gt, TInt(), TInt())             => compileBinary(lhs, rhs, compileForLong) { _ > _ }
           case (Cmp.Gte, TInt(), TInt())            => compileBinary(lhs, rhs, compileForLong) { _ >= _ }
           case (Cmp.Lt, TInt(), TInt())             => compileBinary(lhs, rhs, compileForLong) { _ < _ }
@@ -215,7 +225,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
             }
           }
           case (Cmp.Like, _, _) => throw new RAException(s"Invalid comparison: LIKE: $e")
-          case (Cmp.NotLike, TString(), TString()) => compileForBool(ExpressionUtils.makeNot(Comparison(Cmp.Like, lhs, rhs)))
+          case (Cmp.NotLike, TString(), TString()) => compileForBool(Not(Comparison(Cmp.Like, lhs, rhs)))
           case (Cmp.NotLike, _, _) => throw new RAException(s"Invalid comparison: NOT LIKE: $e")
           case (_, a, b) => throw new RAException(s"Invalid comparison: $a $op $b")
 
@@ -337,6 +347,10 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
             Arithmetic(Arith.And, ExpressionUtils.makeNot(c), e)
           )
         )
+      }
+      case f:Function => {
+        val v = compile(f);
+        Right( { (t:T) => v(t).isInstanceOf[NullPrimitive] } )
       }
     }
   }

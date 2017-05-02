@@ -74,22 +74,22 @@ class ProjectionResultIterator(
   var currentRow: Option[Row] = None;
 
   val makeRow =
-    if(ExperimentalOptions.isEnabled("AGGRESSIVE-ROW-COMPUTE")) {
-      () => {
-        val tuple = extractInputsRaw.map { _() }
-        new ExplicitRow(
-          columnOutputs.map(_(tuple)), 
-          annotationOutputs.map(_(tuple)),
-          this
-        )
-      }
-    } else {
+    if(ExperimentalOptions.isEnabled("LAZY-ROW-COMPUTE")) {
       () => {
         new LazyRow(
           extractInputs.map { x => x() }.toMap,
           tupleDefinition,
           annotationDefinition,
           schema
+        )
+      }
+    } else {
+      () => {
+        val tuple = extractInputsRaw.map { _() }
+        new ExplicitRow(
+          columnOutputs.map(_(tuple)), 
+          annotationOutputs.map(_(tuple)),
+          this
         )
       }
     }
