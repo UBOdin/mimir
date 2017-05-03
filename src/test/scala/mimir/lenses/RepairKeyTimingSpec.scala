@@ -29,6 +29,14 @@ object RepairKeyTimingSpec
   }
 
   val relevantTables = Set(
+    "customer",
+    "orders",
+    "lineitem",
+    "nation",
+    "supplier"
+  )
+
+  val relevantAttributes = Set(
     "cust_c_custkey",
     "cust_c_mktsegment",
     "cust_c_nationkey",
@@ -53,10 +61,24 @@ object RepairKeyTimingSpec
     sequential
     Fragments.foreach(1 to 1){ i =>
       sequential
+
+      // LOAD DATA
+      Fragments.foreach(
+        relevantTables.toSeq.flatMap { PDBench.tables(_)._2 }
+      ){ loadTable(_) }
+
+      // CREATE COLUMNAR LENSES
       Fragments.foreach(
         PDBench.attributes.
-          filter( x => relevantTables(x._1) )
+          filter( x => relevantAttributes(x._1) )
       ){ createKeyRepairLens(_, s"_run_$i") }
+
+      // CREATE ROW-WISE LENSES
+      Fragments.foreach(
+        relevantTables.map { table => (table, PDBench.tables(table)) }.toSeq
+      ){ createKeyRepairRowWiseLens(_, s"_run_$i") }
+
+      // QUERIES
       Fragments.foreach(Seq(
         (s"""
             select ok.orderkey, od.orderdate, os.shippriority
@@ -115,12 +137,10 @@ object RepairKeyTimingSpec
 
   }
 
-  def createKeyRepairLens(tableFields:(String, String, Type, Double), tableSuffix: String = "_cleaned") =  
+  def loadTable(tableFields:(String, String, Type, Double)) =
   {
     val (baseTable, columnName, columnType, timeout) = tableFields
-    val testTable = (baseTable+tableSuffix).toUpperCase
-
-    s"Create Key Repair Lens for table: $testTable" >> {
+    s"Load Table: $baseTable" >> {
       if(!db.tableExists(baseTable)){
         update(s"""
           CREATE TABLE $baseTable(
@@ -140,6 +160,16 @@ object RepairKeyTimingSpec
           )
         )
       }
+      db.tableExists(baseTable) must beTrue
+    }
+  }
+
+  def createKeyRepairLens(tableFields:(String, String, Type, Double), tableSuffix: String = "_cleaned") =  
+  {
+    val (baseTable, columnName, columnType, timeout) = tableFields
+    val testTable = (baseTable+tableSuffix).toUpperCase
+
+    s"Create Key Repair Lens for table: $testTable" >> {
       if(!db.tableExists(testTable)){
         val fastPathCacheTable = "MIMIR_FASTPATH_"+testTable
         if(db.tableExists("MIMIR_FASTPATH_"+testTable)){
@@ -170,8 +200,64 @@ object RepairKeyTimingSpec
       db.views(testTable).isMaterialized must beTrue
     }
   }
+ 
+  def createKeyRepairRowWiseLens(tableData: (String, (Seq[String], Seq[(String,String,Type,Double)])), tableSuffix: String = "_cleaned") =
+  {
+    val (baseTable, (tableKeys, tableFields)) = tableData
+    val testTable = (baseTable+tableSuffix).toUpperCase
 
- def queryKeyRepairLens(queryAndTime : (String, Double)) =  s"Query Key Repair Lens : ${queryAndTime._1}" >> {
+    s"Create Key Repair Lens for table: $testTable" >> {
+      val sourceProjections: Seq[(String, Operator)] = 
+        tableFields.map { case (columnTable, colName, _, _) =>
+          val tidCol = s"TID_${colName.toUpperCase}"
+          (
+            tidCol,
+            Project(Seq(
+              ProjectArg(tidCol, Var("TID")),
+              ProjectArg(colName.toUpperCase, Var(colName.toUpperCase))
+            ), db.getTableOperator(columnTable))
+          )
+        }
+
+      val joined: (String,Operator) = 
+        sourceProjections.tail.fold(sourceProjections.head) { 
+          case ((tidLeft: String, sourceLeft: Operator), (tidRight: String, sourceRight: Operator)) =>
+          ( tidLeft,
+            Select(
+              Comparison(Cmp.Eq, Var(tidLeft), Var(tidRight)),
+              Join(sourceLeft, sourceRight)
+            )
+          )
+        }
+
+      val justTheAttributes = 
+        Project(
+          tableFields.map(_._2).map { field => ProjectArg(field.toUpperCase, Var(field.toUpperCase)) },
+          joined._2
+        )
+
+      db.lenses.create(
+        "KEY_REPAIR", 
+        testTable,
+        justTheAttributes, 
+        Seq(Var("TID"))
+      )
+      db.tableExists(testTable) must beTrue
+    }
+    s"Materialize Lens: $testTable" >> {
+      if(!db.views(testTable).isMaterialized){
+        val timeForQuery = time {
+          update(s"ALTER VIEW ${testTable} MATERIALIZE")
+        }
+        println(s"Materialize Time:${timeForQuery._2} seconds <- RepairKeyLens:${testTable}")
+      }
+      db.views(testTable).isMaterialized must beTrue
+    }
+
+  }
+
+ def queryKeyRepairLens(queryAndTime : (String, Double)) =  
+   s"Query Key Repair Lens : ${queryAndTime._1}" >> {
       val totalTimeForQuery: (Double, Double) = time {
         var x = 0
         val backendTime = query(queryAndTime._1) { results =>
