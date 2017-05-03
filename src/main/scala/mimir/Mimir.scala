@@ -251,9 +251,15 @@ object Mimir extends LazyLogging {
       case Function("LOG", _) =>
         output.print("Syntax: LOG('logger') | LOG('logger', TRACE|DEBUG|INFO|WARN|ERROR)");
 
-      case Function("PLOT", Seq(Var(table), Var(x), Var(y))) =>
+      case Function("PLOT", args) =>
+        val table = args(0).asInstanceOf[Var].name
+        val x = args(1).asInstanceOf[Var].name
+        val y = args.tail.tail.map { _.asInstanceOf[Var].name }
         db.query(
-          Project(Seq(ProjectArg(x, Var(x)), ProjectArg(y, Var(y))), db.getTableOperator(table))
+          Project(
+            Seq(ProjectArg(x, Var(x))) ++ y.map { c => ProjectArg(c, Var(c)) } , 
+            db.getTableOperator(table)
+          )
         ) { result =>
           Plot.plot(result, table, x, y)
         }

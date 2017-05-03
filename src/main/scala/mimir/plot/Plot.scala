@@ -2,8 +2,13 @@ package mimir.plot
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
+import java.io.{File, FileWriter}
+
 import vegas._
-import vegas.render.WindowRenderer
+import vegas.DSL.SpecBuilder
+import vegas.render.WindowRenderer._
+// import vegas.render.HTMLRenderer._
+
 
 import mimir.algebra._
 import mimir.exec.stream._
@@ -28,7 +33,7 @@ object Plot
 {
 
   def value: (PrimitiveValue => Object) = {
-    case NullPrimitive() => null
+    case NullPrimitive() => 0:java.lang.Long
     case IntPrimitive(l) => l:java.lang.Long
     case FloatPrimitive(f) => f:java.lang.Double
     case StringPrimitive(s) => s
@@ -36,27 +41,41 @@ object Plot
     case t:TimestampPrimitive => t.asDateTime
   }
 
-  def plot(data: ResultIterator, title: String, x: String, y: String)
+  def plot(data: ResultIterator, title: String, x: String, y: Seq[String])
   {
     logger.debug(s"Plotting: $title")
+    val sch = data.schema.map { _._1 }
     val values = 
-      data.map { row => 
+      data.flatMap { row => 
         logger.trace(s"Read: ${row.tuple}")
-        (value(row(x)), value(row(y)))
+        y.map { c => Map( "X" -> row(x), "Y" -> row(c), "LINE" -> c ) }
       }.
-      filter { case (x, y) => (x != null && y != null) }.
-      map { row => Map(x -> row._1, y -> row._2) }.
       toSeq
 
     values.foreach { row => logger.debug(s"Plot: $row") }
 
-    val chart = Vegas(title).
-      withData(values:_*).
-      encodeX(x, Quantitative).
-      encodeY(y, Quantitative).
-      mark(Line)
-    
-    (chart:WindowRenderer).show
+    Vegas(title).
+      withData(values).
+      encodeX("X", Quantitative, title = x).
+      encodeY("Y", Quantitative, title = y.mkString(", ")).
+      mark(Line).
+      encodeColor(field = "LINE", Ordinal).
+      show
+  }
 
+  def test()
+  {
+    val plot = Vegas("Country Pop").
+      withData(Seq(
+          Map("country" -> "USA", "population" -> 314),
+          Map("country" -> "UK", "population" -> 64),
+          Map("country" -> "DK", "population" -> 80)
+        )
+      ).
+      encodeX("country", Nominal).
+      encodeY("population", Quantitative).
+      mark(Bar)
+
+    plot.show
   }
 }
