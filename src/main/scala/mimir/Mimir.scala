@@ -105,6 +105,7 @@ object Mimir extends LazyLogging {
           case expl: Explain    => handleExplain(expl)
           case pragma: Pragma   => handlePragma(pragma)
           case analyze: Analyze => handleAnalyze(analyze)
+          case plot: DrawPlot   => Plot.plot(plot, db)
           case _                => db.update(stmt)
         }
 
@@ -261,7 +262,7 @@ object Mimir extends LazyLogging {
             db.getTableOperator(table)
           )
         ) { result =>
-          Plot.plot(result, table, x, y)
+          Plot.plot(result, table, x, y, output)
         }
 
 

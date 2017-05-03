@@ -11,6 +11,7 @@ trait OutputFormat
 {
   def print(msg: String): Unit
   def print(results: ResultIterator): Unit
+  def printRaw(msg: Array[Char]): Unit
 }
 
 object DefaultOutputFormat
@@ -44,11 +45,18 @@ object DefaultOutputFormat
       output.foreach { row => print(row) }
     })
   }
+
+  def printRaw(msg: Array[Char])
+  {
+    println(msg.mkString)
+  }
+
 }
 
 class PrettyOutputFormat(terminal: Terminal)
   extends OutputFormat
 {
+
   def print(msg: String)
   {
     terminal.writer.write(msg)
@@ -101,4 +109,8 @@ class PrettyOutputFormat(terminal: Terminal)
     }
   }
 
+  def printRaw(msg: Array[Char])
+  {
+    terminal.writer.write(msg)
+  }
 }

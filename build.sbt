@@ -67,7 +67,8 @@ libraryDependencies ++= Seq(
   "org.xerial"                    %   "sqlite-jdbc"           % "3.16.1",
 
   //////////////////////// Visualization ////////////////////////
-  "org.vegas-viz"                 %%  "vegas"                 % "0.3.9"
+  "org.vegas-viz"                 %%  "vegas"                 % "0.3.9",
+  "org.sameersingh.scalaplot"     % "scalaplot"               % "0.0.4"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")

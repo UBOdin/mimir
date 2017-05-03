@@ -2,6 +2,8 @@ package mimir.algebra;
 
 object QueryNamer 
 {
+	def apply(op: Operator) = nameQuery(op)
+
 	def nameQuery(op: Operator): String = 
 	{
 		op match { 
