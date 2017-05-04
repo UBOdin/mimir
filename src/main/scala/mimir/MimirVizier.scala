@@ -1,17 +1,20 @@
 package mimir;
 
 import java.io._
-
-
+import java.util.Vector
 
 import org.rogach.scallop._
 
 import mimir.algebra._
+import mimir.exec.stream.Row
 import mimir.sql._
 import mimir.util.ExperimentalOptions
 //import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
 import net.sf.jsqlparser.statement.select.Select
 import py4j.GatewayServer
+import mimir.exec.Compiler
+import mimir.gprom.algebra.OperatorTranslation
+import org.gprom.jdbc.jna.GProMWrapper
 
 /**
  * The primary interface to Mimir.  Responsible for:
@@ -29,6 +32,7 @@ object MimirVizier {
 
   var conf: MimirConfig = null;
   var db: Database = null;
+  var gp: GProMBackend = null
   var usePrompt = true;
   var pythonMimirCallListeners = Seq[PythonMimirCallInterface]()
 
@@ -39,14 +43,22 @@ object MimirVizier {
     ExperimentalOptions.enable(conf.experimental())
     
     // Set up the database connection(s)
-    db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))//new GProMBackend(conf.backend(), conf.dbname(), -1))    
+    //db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))//new GProMBackend(conf.backend(), conf.dbname(), -1))    
+    //db.backend.open()
+    
+    gp = new GProMBackend(conf.backend(), conf.dbname(), 4)
+    db = new Database(gp)    
     db.backend.open()
-
+    gp.metadataLookupPlugin.db = db;
+    
+    
     db.initializeDBForMimir();
 
     if(ExperimentalOptions.isEnabled("INLINE-VG")){
-        db.backend.asInstanceOf[JDBCBackend].enableInlining(db)
+        db.backend.asInstanceOf[GProMBackend].enableInlining(db)
       }
+    
+    OperatorTranslation.db = db
     
     runServerForViztrails()
     
@@ -277,41 +289,60 @@ object MimirVizier {
   }
   
   def operCSVResults(oper : mimir.algebra.Operator) : PythonCSVContainer =  {
-    val results = db.query(oper)
+    db.query(oper)(results => {
     val cols = results.schema.map(f => f._1)
     val colsIndexes = results.schema.zipWithIndex.map( _._2)
-    val rowsWithProv = results.mapRows(row => {
-      (colsIndexes.map( (i) => {
+    val rows = new StringBuffer()
+    val prov = new Vector[String]()
+    while(results.hasNext){
+      val row = results.next()
+      rows.append(colsIndexes.map( (i) => {
          row(i).toString 
-       }).mkString(", "),  row.provenanceToken().asString)
-    }).unzip
-    val resCSV = cols.mkString(", ") + "\n" + rowsWithProv._1.mkString("\n")
-    new PythonCSVContainer(resCSV, Array[Array[Boolean]](), Array[Boolean](), Array[Array[String]](), rowsWithProv._2.toArray)
+       }).mkString(", ")).append("\n")
+       prov.add(row.provenance.asString)
+    }
+    val resCSV = cols.mkString(", ") + "\n" + rows.toString()
+    new PythonCSVContainer(resCSV, Array[Array[Boolean]](), Array[Boolean](), Array[Array[String]](), prov.toArray[String](Array()))
+    })
   }
   
  def operCSVResultsDeterminism(oper : mimir.algebra.Operator) : PythonCSVContainer =  {
-     val results = db.query(oper)
-     val cols = results.schema.map(f => f._1)
-     val colsIndexes = results.schema.zipWithIndex.map( _._2)
-     val resCSV = results.mapRows(row => {
+     val results = new Vector[Row]()
+     var cols : Seq[String] = null
+     var colsIndexes : Seq[Int] = null
+     
+     db.query(oper)( resIter => {
+         cols = resIter.schema.map(f => f._1)
+         colsIndexes = resIter.schema.zipWithIndex.map( _._2)
+         while(resIter.hasNext())
+           results.add(resIter.next)
+     })
+     val resCSV = results.toArray[Row](Array()).seq.map(row => {
        val truples = colsIndexes.map( (i) => {
-         (row(i).toString, row.deterministicCol(i)) 
+         (row(i).toString, row.isColDeterministic(i)) 
        }).unzip
-       (truples._1.mkString(", "), truples._2.toArray, (row.deterministicRow(), row.provenanceToken().asString))
+       (truples._1.mkString(", "), truples._2.toArray, (row.isDeterministic(), row.provenance.asString))
      }).unzip3
      val rowDetAndProv = resCSV._3.unzip
      new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), resCSV._2.toArray, rowDetAndProv._1.toArray, Array[Array[String]](), rowDetAndProv._2.toArray)
   }
  
  def operCSVResultsDeterminismAndExplanation(oper : mimir.algebra.Operator) : PythonCSVContainer =  {
-     val results = db.query(oper)
-     val cols = results.schema.map(f => f._1)
-     val colsIndexes = results.schema.zipWithIndex.map( _._2)
-     val resCSV = results.mapRows(row => {
+     val results = new Vector[Row]()
+     var cols : Seq[String] = null
+     var colsIndexes : Seq[Int] = null
+     
+     db.query(oper)( resIter => {
+         cols = resIter.schema.map(f => f._1)
+         colsIndexes = resIter.schema.zipWithIndex.map( _._2)
+         while(resIter.hasNext())
+           results.add(resIter.next)
+     })
+     val resCSV = results.toArray[Row](Array()).seq.map(row => {
        val truples = colsIndexes.map( (i) => {
-         (row(i).toString, row.deterministicCol(i), if(!row.deterministicCol(i))db.explainCell(oper, row.provenanceToken(), cols(i)).reasons.mkString(",")else"") 
+         (row(i).toString, row.isColDeterministic(i), if(!row.isColDeterministic(i))db.explainCell(oper, row.provenance, cols(i)).reasons.mkString(",")else"") 
        }).unzip3
-       (truples._1.mkString(", "), (truples._2.toArray, row.deterministicRow(), row.provenanceToken().asString), truples._3.toArray)
+       (truples._1.mkString(", "), (truples._2.toArray, row.isDeterministic(), row.provenance.asString), truples._3.toArray)
      }).unzip3
      val detListsAndProv = resCSV._2.unzip3
      new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), detListsAndProv._1.toArray, detListsAndProv._2.toArray, resCSV._3.toArray, detListsAndProv._3.toArray)
@@ -326,7 +357,7 @@ object MimirVizier {
  
  def totallyOptimize(oper : mimir.algebra.Operator) : mimir.algebra.Operator = {
     val preOpt = oper.toString() 
-    val postOptOper = db.compiler.optimize(oper)
+    val postOptOper = Compiler.optimize(oper)
     val postOpt = postOptOper.toString() 
     if(preOpt.equals(postOpt))
       postOptOper

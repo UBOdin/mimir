@@ -7,6 +7,8 @@ import mimir.models._
 import mimir.algebra._
 import mimir.ctables._
 import net.sf.jsqlparser.statement.select.Select
+import mimir.exec.stream.Row
+import mimir.util.JDBCUtils
 
 object MissingKeyLens {
   def create(
@@ -65,15 +67,14 @@ object MissingKeyLens {
           query
         )
        )
-      val minMaxForSeries = db.query(seriesTableMinMaxOper)
-      minMaxForSeries.open()
-      minMaxForSeries.getNext()
-      val minMax = (
-      minMaxForSeries(0).asDouble.toLong,
-      minMaxForSeries(1).asDouble.toLong
-      )
-      minMaxForSeries.close()
-      db.backend.fastUpdateBatch(s"INSERT INTO $seriesTableName VALUES(?)", (minMax._1 to minMax._2).toSeq.map( i => Seq(IntPrimitive(i))))
+      db.query(seriesTableMinMaxOper)(minMaxForSeries => {
+        val row = minMaxForSeries.next()
+        val minMax = (
+          row(0).asDouble.toLong,
+          row(1).asDouble.toLong
+        )
+        db.backend.fastUpdateBatch(s"INSERT INTO $seriesTableName VALUES(?)", (minMax._1 to minMax._2).toSeq.map( i => Seq(IntPrimitive(i))))
+      })
     }
     if(!allTables.contains(keysTableName)){
       val projArgsKeys =  
@@ -82,10 +83,14 @@ object MissingKeyLens {
         })
       var keysOper : Operator = Project(projArgsKeys, query)             
       println(keysOper)
-      val results = db.compiler.compile(keysOper, List())
+      val resIter = db.compiler.compileForBestGuess(keysOper, List())
       val createKeysTableSql = s"CREATE TABLE $keysTableName(${keys.map(kt => kt._1 +" "+ kt._2.toString()).mkString(",")})"
       db.update(db.stmt(createKeysTableSql))
-      db.backend.fastUpdateBatch(s"INSERT INTO $keysTableName VALUES(${keys.map(kt => "?").mkString(",")})", results.allRows())
+      val results = new java.util.Vector[Row]()
+      while(resIter.hasNext())
+        results.add(resIter.next)
+     
+      db.backend.fastUpdateBatch(s"INSERT INTO $keysTableName VALUES(${keys.map(kt => "?").mkString(",")})", Seq(results.toArray().seq.asInstanceOf[Seq[PrimitiveValue]]).iterator)
     }
     if(!allTables.contains(missingKeysTableName)){
       val lTalebName = seriesTableName
@@ -105,14 +110,19 @@ object MissingKeyLens {
                     Comparison(Cmp.Eq, Var("rght_"+keys.head._1), Var("lft_"+keys.head._1))
                   ))
       val sql = db.ra.convert(missingKeysOper)
-      val results = new mimir.exec.ResultSetIterator(db.backend.execute(sql), 
-        keys.toMap,
-        keys.zipWithIndex.map(_._2), 
-        Seq()
-      )
+      val results = {
+        val resSet = db.backend.execute(sql)
+        var theResults = Seq[Seq[PrimitiveValue]]()
+          while(resSet.next()){
+              theResults = theResults.union( Seq(keys.zipWithIndex.map( key => {
+                JDBCUtils.convertField(key._1._2, resSet, key._2+1)
+              })))
+          }
+        theResults.iterator
+      }
       val createMissingKeysTableSql = s"CREATE TABLE $missingKeysTableName(${keys.map(kt => kt._1 +" "+ kt._2.toString()).mkString(",")})"
       db.update(db.stmt(createMissingKeysTableSql))
-      db.backend.fastUpdateBatch(s"INSERT INTO $missingKeysTableName VALUES(${keys.map(kt => "?").mkString(",")})", results.allRows())
+      db.backend.fastUpdateBatch(s"INSERT INTO $missingKeysTableName VALUES(${keys.map(kt => "?").mkString(",")})", results)
     
     }
     val colsTypes = keys.unzip

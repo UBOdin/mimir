@@ -18,7 +18,13 @@ import org.gprom.jdbc.jna.GProMWrapper
 import scala.util.control.Exception.Catch
 import org.gprom.jdbc.jna.GProMNode
 import mimir.optimizer.InlineVGTerms
-
+import mimir.exec.Compiler
+import mimir.exec.BestGuesser
+import mimir.ctables.CTPercolator
+import mimir.provenance.Provenance
+import mimir.algebra.ProjectArg
+import mimir.algebra.Var
+import mimir.algebra.Project
 
 /**
  * The primary interface to Mimir.  Responsible for:
@@ -149,14 +155,26 @@ object MimirGProM {
      println(totallyOptimize(testOper4))
      println("---------^ Actual Mimir Oper ^----------")*/
      
-    //val queryStr = "SELECT S.A FROM R AS S GROUP BY S.A"
-     val queryStr = "Select * FROM LENS_PICKER1562291232"//LENS_MISSING_KEY93961111"
+     val queryStr = "SELECT R.A, TRUE AS t FROM R "
+       var gpnode = GProMWrapper.inst.rewriteQueryToOperatorModel(queryStr+";")
+   gpnode = GProMWrapper.inst.optimizeOperatorModel(gpnode.getPointer)
+   val gpnodeStr = GProMWrapper.inst.gpromNodeToString(gpnode.getPointer())
+     
+     //GProMWrapper.inst.gpromFreeMemContext(memctx)
+     println("-------v GProM Oper v---------")
+     println(gpnodeStr)
+     println("-------^ GProM Oper ^---------")
+     
+     //val queryStr = "Select * FROM LENS_PICKER804228897 "//LENS_PICKER1562291232"//LENS_MISSING_KEY93961111"
      val statements = db.parse(queryStr)
      var testOper2 = db.sql.convert(statements.head.asInstanceOf[Select])
      val query = testOper2//InlineVGTerms(testOper2 )
      
+    
     gp.metadataLookupPlugin.setOper(query)
       
+    
+    
      /*val inlinedSQL = db.compiler.sqlForBackend(query).toString()
      println("MIMIR: " + inlinedSQL)
      val tmimirres = time{ getQueryResults(inlinedSQL) }
@@ -168,7 +186,7 @@ object MimirGProM {
      println(tgpromres._2)*/
     
      //testOper2 = db.compiler.optimize(testOper2, db.compiler.standardOptimizations)
-     testOper2 = totallyOptimize(testOper2)
+     //testOper2 = totallyOptimize(testOper2)
      //val inlinedSQL = db.compiler.sqlForBackend(query).toString()
      val operStr2 = query.toString()
      println("---------v Actual Mimir Oper v----------")
@@ -208,23 +226,39 @@ object MimirGProM {
      println(operStr3)
      println("---------^ Trans Mimir Oper ^----------") 
      
-     val compiled = db.compiler.compileInline(db.querySerializer.desanitize(testOper3), List())
+     val compiled = BestGuesser(db, testOper3, List())
      
-     val compiledmimir = db.compiler.compileInline(query, db.compiler.standardOptimizations)
+     val gpromOperCompiled = Project(
+        testOper3.columnNames.map { name => ProjectArg(name, Var(name)) } ++
+        Seq(ProjectArg(Provenance.rowidColnameBase, mimir.algebra.Function(Provenance.mergeRowIdFunction, compiled._5.map( Var(_) ) ))) ++
+        compiled._3.map { case (name, expression) => ProjectArg(CTPercolator.mimirColDeterministicColumnPrefix + name, expression) } ++
+        Seq( ProjectArg(CTPercolator.mimirRowDeterministicColumnName, compiled._4)),
+        compiled._1
+      )
      
-      
-     val gpromRun = time {
-       getQueryResults(db.compiler.sqlForBackend(compiled._1).toString())
-           //db.compiler.bestGuessQuery(
-           //db.querySerializer.sanitize(testOper3))).toString())
+     val compiledmimir = BestGuesser(db, query, Compiler.standardOptimizations)
+     
+     val mimirSqlStr = db.compiler.sqlForBackend(compiledmimir._1).toString()
+     val gpromSqlStr = db.compiler.sqlForBackend(gpromOperCompiled, List()).toString() 
+     
+     println(s"mimir op schema: ${compiledmimir._1.schema.mkString(",")}")
+     println(s"bprom op schema: ${gpromOperCompiled.schema.mkString(",")}")
+     
+     for( i <- 1 to 5){
+       val mimirRun = time {
+         getQueryResults(mimirSqlStr)
+       }
+       val gpromRun = time {
+         getQueryResults(gpromSqlStr)
+       }
+       
+       println(s"""                   ---------Results: ${gpromRun._1.equals(mimirRun._1)}
+                   gpromRun: ${gpromRun._2} 
+                   mimirRun: ${mimirRun._2}
+                   ------------------------""")
+       //println(s"gpromRun: ${gpromRun._2}\n${gpromRun._1}\n---------------------\nmimirRun: ${mimirRun._2}\n${mimirRun._1}\n-------------------")
      }
      
-     val mimirRun = time {
-       getQueryResults(db.compiler.sqlForBackend(compiledmimir._1).toString())
-     }
-     
-     
-     println(s"gpromRun: ${gpromRun._2}\n${gpromRun._1}\n---------------------\nmimirRun: ${mimirRun._2}\n${mimirRun._1}\n-------------------")
      
      /*val optSqlStr = GProMWrapper.inst.operatorModelToSql(optimizedGpromNode.getPointer())
      println("-------v Optimized GProM Sql v---------")
@@ -255,30 +289,31 @@ object MimirGProM {
   }
  
   def printOperResults(oper : mimir.algebra.Operator) : String =  {
-     val results = db.query(oper)
+     db.query(oper)(results => { 
       val data: ListBuffer[(List[String], Boolean)] = new ListBuffer()
   
-     results.open()
      val cols = results.schema.map(f => f._1)
      println(cols.mkString(", "))
-     while(results.getNext()){
+     while(results.hasNext()){
+       val row = results.next()
        val list =
         (
-          results.provenanceToken().payload.toString ::
+          row.provenance.payload.toString ::
             results.schema.zipWithIndex.map( _._2).map( (i) => {
-              results(i).toString + (if (!results.deterministicCol(i)) {"*"} else {""})
+              row(i).toString + (if (!row.isColDeterministic(i)) {"*"} else {""})
             }).toList
         )
-        data.append((list, results.deterministicRow()))
+        data.append((list, row.isDeterministic()))
       }
       results.close()
       data.foreach(f => println(f._1.mkString(",")))
       data.mkString(",")
+      })
   }
   
   def totallyOptimize(oper : mimir.algebra.Operator) : mimir.algebra.Operator = {
     val preOpt = oper.toString() 
-    val postOptOper = db.compiler.optimize(oper)
+    val postOptOper = Compiler.optimize(oper)
     val postOpt = postOptOper.toString() 
     if(preOpt.equals(postOpt))
       postOptOper

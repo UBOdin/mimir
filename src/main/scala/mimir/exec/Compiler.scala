@@ -15,6 +15,7 @@ import mimir.provenance._
 import mimir.exec.stream._
 import mimir.util._
 import net.sf.jsqlparser.statement.select._
+import mimir.gprom.algebra.OperatorTranslation
 
 class Compiler(db: Database) extends LazyLogging {
 
@@ -247,5 +248,6 @@ object Compiler
       }
     }
     return oper;
+   // OperatorTranslation.optimizeWithGProM(rawOper)
   }
 }

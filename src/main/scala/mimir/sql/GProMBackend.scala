@@ -211,7 +211,7 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) e
     })
   }
 
-  def fastUpdateBatch(upd: String, argsList: Iterable[Seq[PrimitiveValue]]): Unit =
+  def fastUpdateBatch(upd: String, argsList: TraversableOnce[Seq[PrimitiveValue]]): Unit =
   {
     this.synchronized({
       if(conn == null) {
@@ -388,4 +388,8 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) e
         update(s"CREATE TABLE $table AS $query")
     }
   }
+  
+  def dateType: mimir.algebra.Type = TDate()
+  def invalidateCache(): Unit = {}
+  def rowIdType: mimir.algebra.Type = TRowId()
 }

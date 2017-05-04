@@ -6,7 +6,6 @@ import java.util
 
 import mimir.algebra._
 import mimir.ctables._
-import mimir.exec.ResultIterator
 import mimir.util.RandUtils
 import mimir.{Analysis, Database}
 import moa.classifiers.Classifier
@@ -42,6 +41,11 @@ object PickerLens {
       case _ => None
     }
     
+    val projectedOutPicFromCols = args.flatMap {
+      case Function("HIDE_PICK_FROM", Seq(Var(col))) => Some( col )
+      case _ => None
+    }
+    
     val resultColName = pickToCol.length match {
       case 0 => "PICK_ONE_" +pickFromColumns.mkString("_") 
       case 1 => pickToCol.head
@@ -54,11 +58,14 @@ object PickerLens {
     expr match {
       case Function("AVG", Seq(Var(col))) => {
         val exprSubQ = Project(Seq(ProjectArg(s"AVG_$col", expr)), query)
-        val results = db.query(exprSubQ)
-        results.open()
-        val replacementExpr = results.currentRow()(0)
+        db.query(exprSubQ)( results => {
+        var replacementExpr : Expression = NullPrimitive()
+        if(results.hasNext()){
+          replacementExpr = results.next()(0)
+        }
         results.close()
         replacementExpr
+        })
       }
       case x => x.recur(expressionSubstitutions(_))
     }
@@ -92,7 +99,12 @@ object PickerLens {
         map(_._1).
         flatMap( col => pickerColsTypeMap.get(col) match {
           case None => Some(ProjectArg(col, Var(col)))
-          case Some(pickFromCol) => None //none if you dont want the from cols
+          case Some(pickFromCol) => {
+            if(projectedOutPicFromCols.contains(col))
+              None //none if you dont want the from cols 
+            else
+              Some(ProjectArg(col, Var(col)))
+          }
         }).union(Seq(ProjectArg(resultColName, ExpressionOptimizer.optimize( pickExpr))))
 
     return (

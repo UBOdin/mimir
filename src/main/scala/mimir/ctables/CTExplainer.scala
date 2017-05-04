@@ -412,7 +412,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 	{
 		logger.trace(s"Explain Subset (${wantCol.mkString(", ")}; $wantRow; $wantSort): \n$oper")
 		Compiler.optimize(oper) match {
-			case Table(_,_,_) => Seq()
+			case Table(_,_,_,_) => Seq()
 			case View(_,query,_) => 
 				explainSubset(query, wantCol, wantRow, wantSort)
 

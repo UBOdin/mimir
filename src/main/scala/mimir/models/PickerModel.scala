@@ -44,22 +44,21 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = {
     val rowid = RowIdPrimitive(args(0).asString)
     this.db = db
-    val iterator = db.query(Select(Comparison(Cmp.Eq, RowIdVar(), rowid), source))
     val sampleChoices = scala.collection.mutable.Map[String,Seq[PrimitiveValue]]()
+   db.query(Select(Comparison(Cmp.Eq, RowIdVar(), rowid), source))( iterator => {
     val pickCols = iterator.schema.map(_._1).zipWithIndex.flatMap( si => {
       if(pickFromCols.contains(si._1))
         Some((pickFromCols.indexOf(si._1), si))
       else
          None
     }).sortBy(_._1).unzip._2
-   iterator.open()
-    while(iterator.getNext() ) {
-      sampleChoices(iterator.provenanceToken().asString) = pickCols.map(si => {
-        iterator(si._2)
+    while(iterator.hasNext() ) {
+      val row = iterator.next()
+      sampleChoices(row.provenance.asString) = pickCols.map(si => {
+        row(si._2)
       })
     }
-    iterator.close()
-    
+   })
     RandUtils.pickFromList(randomness, sampleChoices(rowid.asString))
   }
   def reason(idx: Int, args: Seq[PrimitiveValue],hints: Seq[PrimitiveValue]): String = {

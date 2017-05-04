@@ -104,7 +104,7 @@ class ViewManager(db:Database) extends LazyLogging {
           val isMaterialized = 
             meta != 0
           
-          new ViewMetadata(name, query, db.bestGuessSchema(query), isMaterialized)
+          new ViewMetadata(name, query, isMaterialized)
         }
       }
     )
