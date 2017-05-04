@@ -1,3 +1,0 @@
-test/data/readings.tsv filter=lfs diff=lfs merge=lfs -text
-*.dat filter=lfs diff=lfs merge=lfs -text
-*.tbl filter=lfs diff=lfs merge=lfs -text
