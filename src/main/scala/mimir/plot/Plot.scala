@@ -79,14 +79,47 @@ object Plot
 
   }
 
-  def generate(chart: XYChart, name: String)
+  def generate(chart: XYChart, name: String, console: OutputFormat)
   {
-    output(PDF("./", name), chart)
+    System.getenv().get("TERM_PROGRAM") match 
+    {
+      case "iTerm.app" => {
+        output(PNG("./", name), chart)
+        inline(new File(name+".png"), console)
+      }
+      case _ => {
+        output(PDF("./", name), chart)
+        open(new File(name+".pdf"))
+      }
+    }
+  }
+
+  def open(f: File)
+  {
     try {
-      Process(s"open $name.pdf")!!
+      Process(s"open ${f}")!!
     } catch {
       case e:Exception => logger.debug(s"Can't open: ${e.getMessage}")
     }
+  }
+
+  def inline(f: File, console: OutputFormat)
+  {
+    console.printRaw(
+      Array[Byte](
+        '\u001b',
+        ']',
+        '1', '3', '3', '7', ';',
+        'F', 'i', 'l', 'e', '='
+      ) ++ f.getName.getBytes ++
+      Array[Byte](
+        ';','i','n','l','i','n','e','=','1',';',':'
+      ) ++ mimir.util.SerializationUtils.b64encode(f).getBytes ++
+      Array[Byte](
+        '\n','\u0007'
+      )
+    )
+    console.print("\n")
   }
 
   def getXY(input: Seq[Row], x: String, y: String): Seq[(Double,Double)] =
@@ -99,7 +132,7 @@ object Plot
         }
       }
 
-  def plot(spec: mimir.sql.DrawPlot, db: Database)
+  def plot(spec: mimir.sql.DrawPlot, db: Database, console: OutputFormat)
   {
     val convertConfig = (in:java.util.Map[String,net.sf.jsqlparser.expression.PrimitiveValue]) => {
       in.asScala.mapValues { db.sql.convert(_) }.toMap
@@ -174,7 +207,7 @@ object Plot
 
       val title = globalSettings.getOrElse("TITLE", StringPrimitive(QueryNamer(dataQuery))).asString
 
-      generate(chart, title)
+      generate(chart, title, console)
     }
 
   }
