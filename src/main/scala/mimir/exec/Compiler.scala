@@ -12,7 +12,7 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.optimizer._
 import mimir.provenance._
-import mimir.exec.stream._
+import mimir.exec.result._
 import mimir.util._
 import net.sf.jsqlparser.statement.select._
 

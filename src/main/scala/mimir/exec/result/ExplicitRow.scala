@@ -1,4 +1,4 @@
-package mimir.exec.stream
+package mimir.exec.result
 
 import mimir.algebra._
 

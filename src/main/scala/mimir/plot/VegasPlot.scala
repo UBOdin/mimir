@@ -11,7 +11,7 @@ import vegas.render.WindowRenderer._
 
 
 import mimir.algebra._
-import mimir.exec.stream._
+import mimir.exec.result._
 
 /**
  * Starting to play around with using Mimir to replace my normal analytics workflows.

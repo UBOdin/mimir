@@ -15,7 +15,7 @@ import org.sameersingh.scalaplot.Implicits._
 import mimir._
 import mimir.algebra._
 import mimir.exec._
-import mimir.exec.stream._
+import mimir.exec.result._
 import mimir.util._
 
 /**

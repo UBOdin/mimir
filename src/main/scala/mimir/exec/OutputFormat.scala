@@ -5,7 +5,7 @@ import org.jline.terminal.Terminal
 import org.jline.utils.{AttributedStyle,AttributedStringBuilder,AttributedString}
 
 import mimir.util.ExperimentalOptions
-import mimir.exec.stream.{ResultIterator,Row}
+import mimir.exec.result.{ResultIterator,Row}
 
 trait OutputFormat
 {

@@ -9,7 +9,7 @@ import mimir.algebra._
 import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, RowExplanation, VGTerm}
 import mimir.models.Model
 import mimir.exec.Compiler
-import mimir.exec.stream.{ResultIterator, Row}
+import mimir.exec.result.{ResultIterator,Row}
 import mimir.lenses.{LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
 import mimir.sql.{SqlToRA,RAToSql,Backend}

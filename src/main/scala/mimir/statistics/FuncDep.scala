@@ -28,7 +28,7 @@ import scala.collection.JavaConverters._
 
 import mimir.algebra._
 import mimir.Database
-import mimir.exec.stream.{ResultIterator}
+import mimir.exec.result.{ResultIterator}
 import mimir.util.{JDBCUtils,SerializationUtils}
 
   /*
