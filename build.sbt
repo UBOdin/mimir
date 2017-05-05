@@ -1,7 +1,7 @@
 name := "Mimir-Core"
 version := "0.2-SNAPSHOT"
 organization := "info.mimirdb"
-scalaVersion := "2.10.5"
+scalaVersion := "2.11.11"
 
 dependencyOverrides += "org.scala-lang" % "scala-library" % scalaVersion.value
 
@@ -48,22 +48,27 @@ libraryDependencies ++= Seq(
     exclude("nz.ac.waikato.cms.weka",  "weka-dev").
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
  
-  // Jung - General purpose graph manipulation library
+  //////////////////////// Jung ////////////////////////
+  // General purpose graph manipulation library
   // Used to detect and analyze Functional Dependencies
   "net.sf.jung"                   %   "jung-graph-impl"       % "2.0.1",
   "net.sf.jung"                   %   "jung-algorithms"       % "2.0.1",
   "net.sf.jung"                   %   "jung-visualization"    % "2.0.1",
   "jgraph"                        %   "jgraph"                % "5.13.0.0",
+  //
 
-  // Geotools - Geospatial data transformations
-  // Used by the CURE scenario
+  //////////////////////// Geotools ////////////////////////
+  // Geospatial data transformations, Used by the CURE scenario
   "org.geotools"                  %   "gt-referencing"        % "16.2",
   "org.geotools"                  %   "gt-referencing"        % "16.2",
   "org.geotools"                  %   "gt-epsg-hsql"          % "16.2",
 
   //////////////////////// JDBC Backends //////////////////////
-  "org.xerial"                    %   "sqlite-jdbc"           % "3.16.1"
+  "org.xerial"                    %   "sqlite-jdbc"           % "3.16.1",
 
+  //////////////////////// Visualization ////////////////////////
+  "org.vegas-viz"                 %%  "vegas"                 % "0.3.9",
+  "org.sameersingh.scalaplot"     % "scalaplot"               % "0.0.4"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")

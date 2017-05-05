@@ -164,6 +164,7 @@ class ViewManager(db:Database) extends LazyLogging {
     logger.debug(s"MATERIALIZE: $name(${completeQuery.schema.mkString(",")})")
 
     val inlinedSQL = db.compiler.sqlForBackend(completeQuery)
+        
     db.backend.selectInto(name, inlinedSQL.toString)
 
     logger.debug(s"QUERY: $inlinedSQL")
@@ -191,6 +192,7 @@ class ViewManager(db:Database) extends LazyLogging {
     """, Seq(
       StringPrimitive(name)
     ))
+    db.backend.invalidateCache
   }
 
   /**

@@ -557,7 +557,7 @@ class SqlToRA(db: Database)
 
   def convertColumn(c: Column, bindings: String => String): Var =
   {
-    val name = c.getColumnName.toUpperCase
+    var name = SqlUtils.canonicalizeIdentifier(c.getColumnName)
 
     c.getTable.getName match {
       case null => 

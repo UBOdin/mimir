@@ -2,6 +2,7 @@ package mimir.exec
 
 
 import java.sql._
+import org.slf4j.{LoggerFactory}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import scala.util.Random
 
@@ -11,7 +12,7 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.optimizer._
 import mimir.provenance._
-import mimir.exec.stream._
+import mimir.exec.result._
 import mimir.util._
 import net.sf.jsqlparser.statement.select._
 
@@ -95,7 +96,8 @@ class Compiler(db: Database) extends LazyLogging {
     val isAnOutputCol = outputCols.toSet
 
     // Run a final typecheck to check the sanitity of the rewrite rules
-    oper.schema
+    val schema = oper.schema
+    logger.debug(s"SCHEMA: $schema.mkString(", ")")
 
     // Optimize
     oper = Compiler.optimize(oper, opts)
@@ -120,7 +122,8 @@ class Compiler(db: Database) extends LazyLogging {
       outputCols.map( projections(_) ),
       annotationCols.map( projections(_) ).toSeq,
       oper.schema,
-      results
+      results,
+      (db.backend.rowIdType, db.backend.dateType)
     )
   }
 
@@ -146,8 +149,9 @@ class Compiler(db: Database) extends LazyLogging {
 }
 
 object Compiler
-  extends LazyLogging
 {
+
+  val logger = LoggerFactory.getLogger("mimir.exec.Compiler")
 
   type Optimization = Operator => Operator
   type Optimizations = Seq[Optimization]

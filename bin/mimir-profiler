@@ -1,8 +1,8 @@
 #!/bin/bash
 
 ME=$(dirname $0)/..
-SCALA_VERSION=2.11
+SCALA_VERSION=2.10
 JAR=$ME/target/scala-$SCALA_VERSION/Mimir.jar
-CMD="java -jar $JAR"
+CMD="java -agentlib:hprof=cpu=samples,depth=6 -jar $JAR"
 
 $CMD $*

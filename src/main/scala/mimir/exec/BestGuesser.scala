@@ -107,7 +107,7 @@ object BestGuesser
       InlineVGTerms(oper)
 
     // Deal with the remaining VG-Terms.  
-    if(db.backend.canHandleVGTerms()){
+    if(db.backend.canHandleVGTerms){
       // The best way to do this would be a database-specific "BestGuess" 
       // UDF if it's available.
       return mostlyDeterministicOper

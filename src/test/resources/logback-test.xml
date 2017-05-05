@@ -8,14 +8,13 @@
   </appender>
   
   <logger name="mimir.Database" level="INFO"/>
-  <logger name="mimir.Mimir" level="INFO"/>
+  <logger name="mimir.Mimir$" level="INFO"/>
   <logger name="mimir.adaptive.DiscalaAbadiNormalizer$" level="INFO"/>
   <logger name="mimir.algebra.ExpressionChecker" level="INFO"/>
   <logger name="mimir.algebra.OperatorUtils" level="INFO"/>
   <logger name="mimir.ctables.CTPercolator" level="INFO"/>
   <logger name="mimir.ctables.CTExplainer" level="INFO"/>
-  <logger name="mimir.exec.Compiler" level="INFO"/>
-  <logger name="mimir.exec.Compiler$" level="INFO"/>
+  <logger name="mimir.exec.Compiler" level="WARN"/>
   <logger name="mimir.exec.BestGuesser" level="INFO"/>
   <logger name="mimir.exec.TupleBundler" level="INFO"/>
   <logger name="mimir.exec.WorldBits" level="INFO"/>
@@ -38,7 +37,7 @@
   <logger name="mimir.util.LoadCSV$" level="INFO"/>
   <logger name="mimir.util.NonStrictCSVParser" level="INFO"/>
   <logger name="mimir.util.LineReaderInputSource" level="INFO"/>
-  <logger name="mimir.views.ViewManager" level="INFO"/>
+  <logger name="mimir.views.ViewManager" level="DEBUG"/>
 
  
   <root level="TRACE">

@@ -11,7 +11,7 @@ import mimir.sql._
 import mimir.algebra._
 import mimir.util._
 import mimir.exec._
-import mimir.exec.stream._
+import mimir.exec.result._
 import mimir.optimizer._
 
 object DBTestInstances

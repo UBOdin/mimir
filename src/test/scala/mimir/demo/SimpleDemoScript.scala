@@ -113,7 +113,7 @@ object SimpleDemoScript
 			}
 			val nullRow = querySingleton("SELECT ROWID() FROM RATINGS1 WHERE RATING IS NULL").asLong
 
-			if(!db.backend.canHandleVGTerms()){
+			if(!db.backend.canHandleVGTerms){
 				val result1guesses =
 					db.backend.resultRows("SELECT MIMIR_KEY_0, MIMIR_DATA FROM "+
 							db.bestGuessCache.cacheTableForModel(db.models.get("RATINGS1FINAL:WEKA:RATING"), 0))
@@ -288,12 +288,12 @@ object SimpleDemoScript
 				WHERE r.pid = p.id;
 			"""){ 
 				_.toSeq.map { _.provenance.asString } must contain(
-					"3|right|6",
-					"2|right|5",
-					"2|left|4",
-					"1|right|3",
-					"3|left|2",
-					"1|left|1"
+					"3|1|6",
+					"2|1|5",
+					"2|0|4",
+					"1|1|3",
+					"3|0|2",
+					"1|0|1"
 				)
 			}
 
@@ -307,7 +307,7 @@ object SimpleDemoScript
 								UNION ALL 
 							SELECT * FROM RATINGS2FINAL
 						) r, Product p
-						""", "1|right|3", "RATING")
+						""", "1|1|3", "RATING")
 				}
 			explain0.reasons.map(_.model.name.replaceAll(":.*", "")) must contain(eachOf(
 				"RATINGS2FINAL",

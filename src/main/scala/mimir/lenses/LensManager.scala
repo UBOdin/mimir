@@ -29,7 +29,7 @@ class LensManager(db: Database) {
     t: String, 
     name: String, 
     query: Operator, 
-    args: List[Expression]
+    args: Seq[Expression]
   ): Unit =
   {
     val saneName = name.toUpperCase
@@ -51,7 +51,7 @@ class LensManager(db: Database) {
     }
 
     // Populate the best-guess cache
-    if(!db.backend.canHandleVGTerms()){
+    if(!db.backend.canHandleVGTerms){
       db.bestGuessCache.buildCache(view)
     }
   }

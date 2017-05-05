@@ -50,7 +50,10 @@ object LoadCSV extends StrictLogging {
         case None => {
 
           val idxToCol: Map[Int, String] = 
-            header.zipWithIndex.map( x => (x._2, x._1) ).toMap
+            header.zipWithIndex.map { x => 
+              if(x._1.equals("")){ (x._2, s"COLUMN_${x._2}")}
+              else { (x._2, x._1) }
+            }.toMap
 
           logger.debug(s"HEADER_MAP: $idxToCol")
 
@@ -163,6 +166,7 @@ object LoadCSV extends StrictLogging {
           })
 
         logger.trace(s"INSERT (line ${record.lineNumber}): $cmd \n <- $data")
+        record.fields = null
         data
       }))
     }
@@ -170,7 +174,7 @@ object LoadCSV extends StrictLogging {
   }
 }
 
-case class MimirCSVRecord(fields: Seq[String], lineNumber: Long, recordNumber: Long, comment: Option[String])
+case class MimirCSVRecord(var fields: Seq[String], lineNumber: Long, recordNumber: Long, comment: Option[String])
 
 /**
  * A wrapper around the Apache Commons CSVParser that can recover from malformed data.

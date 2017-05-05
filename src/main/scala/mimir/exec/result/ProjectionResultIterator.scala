@@ -1,26 +1,29 @@
-package mimir.exec.stream
+package mimir.exec.result
 
 import java.sql._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
 import mimir.util._
+import mimir.exec._
 
 class ProjectionResultIterator(
   tupleDefinition: Seq[ProjectArg],
   annotationDefinition: Seq[ProjectArg],
   inputSchema: Seq[(String,Type)],
-  source: ResultSet
+  source: ResultSet,
+  rowIdAndDateType: (Type, Type)
 )
   extends ResultIterator
   with LazyLogging
 {
+
   //
   // Set up the schema details
   //
   private val typechecker = new ExpressionChecker(inputSchema.toMap)
-  val schema: Seq[(String,Type)] = 
+  val tupleSchema: Seq[(String,Type)] = 
     tupleDefinition.map { case ProjectArg(name, expr) => (name, typechecker.typeOf(expr)) }
-  val annotations: Seq[(String,Type)] = 
+  val annotationSchema: Seq[(String,Type)] = 
     annotationDefinition.map { case ProjectArg(name, expr) => (name, typechecker.typeOf(expr)) }
 
   //
@@ -33,43 +36,26 @@ class ProjectionResultIterator(
   // and the result is the columnOutput, annotationOutput 
   // elements defined below.
   // 
-  private val inputProcs: Map[String,Proc] =
-  {
-    inputSchema.zipWithIndex.map { case ((name, t), idx) =>
-      (name -> new Proc(Seq()) {
-        def getType(argTypes: Seq[Type]): Type = t
-        def get(v: Seq[PrimitiveValue]): PrimitiveValue =
-          JDBCUtils.convertField(t, source, idx+1)
-        def rebuild(x: Seq[Expression]) = this
-      })
+  private val evalScope: Map[String,(Type, Seq[PrimitiveValue] => PrimitiveValue)] =
+    inputSchema.zipWithIndex.map { 
+      case ((name, t), idx) => (name, (t, (_:Seq[PrimitiveValue])(idx))) 
     }.toMap
-  }  
-  private def inlineProcs(expr: Expression): Expression =
-  {
-    expr match {
-      case Var(name) => inputProcs(name)
-      case _ => expr.recur(inlineProcs(_))
-    }
-  }
-  private def compile(arg: ProjectArg): (() => PrimitiveValue) =
-  {
-    Eval.simplify(arg.expression) match {
-      case pv: PrimitiveValue => {
-        return { () => pv }
-      }
-      case Var(name) => {
-        val idx = inputSchema.indexWhere(_._1.equals(name))
-        return { () => JDBCUtils.convertField(inputSchema(idx)._2, source, idx+1) }
-      }
-      case expr => {
-        val inlined = inlineProcs(expr)
-        return { () => Eval.eval(inlined) }
-      }
-    }
-  }
+  private val eval = new EvalInlined[Seq[PrimitiveValue]](evalScope)
 
-  val columnOutputs: Seq[() => PrimitiveValue] = tupleDefinition.map( compile(_) )
-  val annotationOutputs: Seq[() => PrimitiveValue] = annotationDefinition.map( compile(_) )
+  val columnOutputs: Seq[Seq[PrimitiveValue] => PrimitiveValue] = 
+    tupleDefinition.map { _.expression }.map { eval.compile(_) }
+  val annotationOutputs: Seq[Seq[PrimitiveValue] => PrimitiveValue] = 
+    annotationDefinition.map { _.expression }.map { eval.compile(_) }
+  val extractInputs: Seq[() => PrimitiveValue] = 
+    inputSchema.
+      zipWithIndex.
+      map { case ((name, t), idx) => 
+        logger.debug(s"Extracting Raw: $name (@$idx) -> $t")
+        val fn = JDBCUtils.convertFunction(t, idx+1, rowIdType = rowIdAndDateType._1, dateType = rowIdAndDateType._2)
+        () => { fn(source) }
+      }
+  val annotationIndexes: Map[String,Int] =
+    annotationDefinition.map { _.name }.zipWithIndex.toMap
 
   var closed = false
   def close(): Unit = {
@@ -79,6 +65,28 @@ class ProjectionResultIterator(
 
   var currentRow: Option[Row] = None;
 
+  val makeRow =
+    if(ExperimentalOptions.isEnabled("AGGRESSIVE-ROW-COMPUTE")) {
+      () => {
+        val tuple = extractInputs.map { _() }
+        new ExplicitRow(
+          columnOutputs.map(_(tuple)), 
+          annotationOutputs.map(_(tuple)),
+          this
+        )
+      }
+    } else {
+      () => {
+        new LazyRow(
+          extractInputs.map { _() },
+          columnOutputs,
+          annotationOutputs,
+          schema,
+          annotationIndexes
+        )
+      }
+    }
+
   def bufferRow()
   {
     if(closed){
@@ -87,11 +95,7 @@ class ProjectionResultIterator(
     if(currentRow == None){
       logger.trace("BUFFERING")
       if(source.next){
-        currentRow = Some(new ExplicitRow(
-          columnOutputs.map(_()), 
-          annotationOutputs.map(_()),
-          this
-        ))
+        currentRow = Some(makeRow())
         logger.trace(s"READ: ${currentRow.get}")
       } else { 
         logger.trace("EMPTY")
@@ -115,4 +119,5 @@ class ProjectionResultIterator(
       }
     }
   }
+
 }
