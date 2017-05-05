@@ -8,6 +8,15 @@ Instead of forcing you to spend hours or days wrangling all your data upfront, M
 
 ## Quick-Start
 
+#### Install with Homebrew
+
+```
+$> brew tap UBOdin/ubodin
+$> brew install mimir
+$> mimir --help
+```
+
+#### Manually download the JAR 
 Download the latest version of Mimir:
 * [0.2 (Nightly Build)](http://maven.mimirdb.info/mimirdb/mimir-core_2.10/0.2-SNAPSHOT/Mimir.jar)
 * [0.1 (Stable)](http://maven.mimirdb.info/mimirdb/mimir-core_2.10/0.1/Mimir.jar)
@@ -18,6 +27,9 @@ $> java -jar Mimir.jar
 ```
 
 ## User Guides
+
+Mimir adds some useful language features to SQL.  See the [MimirSQL Docs](https://github.com/UBOdin/mimir/wiki/Mimir-SQL) for more details, as well as the [Lens and Adaptive Schema Docs](https://github.com/UBOdin/mimir/wiki/Lenses-and-Adaptive-Schemas) for more information about Mimir's data cleaning components.
+
 * Our [Whitepaper Example](http://mimirdb.info/whitepaper.html)
 * [MimirSQL Docs](https://github.com/UBOdin/mimir/wiki/Mimir-SQL)
 * [Lens and Adaptive Schema Docs](https://github.com/UBOdin/mimir/wiki/Lenses-and-Adaptive-Schemas)
