@@ -137,7 +137,7 @@ object RepairKeyTimingSpec
         }
 
       Fragments.foreach(
-        if(skipBestGuessQueries){ Seq() } else { Seq(
+        if(skipTupleBundleQueries){ Seq() } else { Seq(
           s"""
               select ok.orderkey, od.orderdate, os.shippriority
               from cust_c_mktsegment_run_$i cs, cust_c_custkey_run_$i cck,
