@@ -21,4 +21,11 @@ trait ResultIterator
 
   def hasNext(): Boolean
   def next(): Row
+
+  override def toSeq: ResultSeq = 
+    new ResultSeq(super.toIndexedSeq, tupleSchema, annotationSchema)
+  override def toIndexedSeq: ResultSeq = 
+    new ResultSeq(super.toIndexedSeq, tupleSchema, annotationSchema)
+  override def toList: List[Row] = 
+    this.toIndexedSeq.toList
 }

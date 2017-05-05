@@ -3,11 +3,11 @@ package mimir.exec.result
 import mimir.algebra._
 
 class ResultSeq(
-  data: IndexedSeq[Row], 
+  data: scala.collection.immutable.IndexedSeq[Row], 
   val tupleSchema: Seq[(String, Type)], 
   val annotationSchema: Seq[(String, Type)]
 )
-  extends IndexedSeq[Row]
+  extends scala.collection.immutable.IndexedSeq[Row]
 {
   lazy val schemaLookup: Map[String, (Int, Type)] = 
     tupleSchema.zipWithIndex.map { case ((name, t), idx) => (name -> (idx, t)) }.toMap

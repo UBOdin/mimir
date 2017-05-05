@@ -120,8 +120,4 @@ class ProjectionResultIterator(
     }
   }
 
-  override def toSeq: ResultSeq = 
-    new ResultSeq(this.toIndexedSeq, tupleSchema, annotationSchema)
-  override def toList: List[Row] = 
-    this.toIndexedSeq.toList
 }
