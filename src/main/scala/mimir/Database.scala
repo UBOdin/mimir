@@ -9,7 +9,7 @@ import mimir.algebra._
 import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, RowExplanation, VGTerm}
 import mimir.models.Model
 import mimir.exec.Compiler
-import mimir.exec.result.{ResultIterator,Row}
+import mimir.exec.result.{ResultIterator,SampleResultIterator,Row}
 import mimir.lenses.{LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
 import mimir.sql.{SqlToRA,RAToSql,Backend}
@@ -171,7 +171,44 @@ case class Database(backend: Backend)
   }
 
   /**
+   * Compute the query result with samples.
+   */
+  def sampleQuery[T](oper: Operator)(handler: SampleResultIterator => T): T =
+  {
+    val iterator: SampleResultIterator = compiler.compileForSamples(oper)
+    try {
+      val ret = handler(iterator)
+
+      // See the comments on query for an explanation on the hackishness here.
+      if(ret.isInstanceOf[Iterator[_]]){
+        logger.warn("Returning a sequence from Database.sampleQuery may lead to the Scala compiler's optimizations closing the ResultIterator before it's fully drained")
+      }
+      return ret;
+    } finally {
+      iterator.close()
+    }
+  }
+
+  /**
+   * Compute the query result with samples.
+   */
+  def sampleQuery[T](stmt: net.sf.jsqlparser.statement.select.Select)(handler: SampleResultIterator => T): T =
+  {
+    sampleQuery(sql.convert(stmt))(handler)
+  }
+
+  /**
+   * Compute the query result with samples.
+   */
+  def sampleQuery[T](stmt: String)(handler: SampleResultIterator => T): T =
+  {
+    sampleQuery(select(stmt))(handler)
+  }
+
+  /**
    * Make an educated guess about what the query's schema should be
+   * XXX: Only required because the TypeInference lens is a little punk birch that needs to
+   *      be converted into an adaptive schema (#193).
    */
   def bestGuessSchema(oper: Operator): Seq[(String, Type)] =
   {
