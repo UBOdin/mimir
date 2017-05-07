@@ -277,7 +277,7 @@ object OperatorUtils extends LazyLogging {
                 AggFunction(
                   agg.function,
                   agg.distinct,
-                  agg.args.map(rewrite(_)),
+                  agg.args,
                   replacement
                 )
               } else { agg }
