@@ -68,6 +68,8 @@ class PrettyOutputFormat(terminal: Terminal)
     val header:Seq[String] = output.schema.map( _._1 )
     var spacing = scala.collection.mutable.Seq[Int]()++header.map(_.length)
     var results:Seq[Row] = output.toSeq
+    var haveUncertainLine = false;
+    var haveUncertainValue = false;
 
     for( row <- results ) {
       for(i <- 0 until spacing.size){
@@ -91,20 +93,44 @@ class PrettyOutputFormat(terminal: Terminal)
       var sep = " "
       val lineStyle = 
         if(row.isDeterministic){ AttributedStyle.DEFAULT }
-        else { AttributedStyle.DEFAULT.faint().underline() }
-      val currLine = new AttributedStringBuilder(200)
+        else { 
+          haveUncertainLine = true; 
+          AttributedStyle.DEFAULT.faint().underline() 
+        }
+      val line = new AttributedStringBuilder(200)
       for( i <- 0 until spacing.size ){
-        currLine.append(sep, lineStyle)
-        currLine.append(
+        line.append(sep, lineStyle)
+        line.append(
           row(i).toString.padTo(spacing(i), ' '),
           if(row.isColDeterministic(i)){ lineStyle } 
-            else { lineStyle.foreground(AttributedStyle.RED) }
+          else { 
+            haveUncertainValue = true;
+            lineStyle.foreground(AttributedStyle.RED) 
+          }
         )
         sep = " | "
       }
-      currLine.append("\n")
+      line.append("\n")
       terminal.writer.write(
-        currLine.toAttributedString.toAnsi(terminal)
+        line.toAttributedString.toAnsi(terminal)
+      )
+    }
+
+    if(haveUncertainValue || haveUncertainLine){
+      val line = new AttributedStringBuilder(200)
+      line.append("I had to make guesses about some ")
+      if(haveUncertainValue){
+        line.append("values", AttributedStyle.DEFAULT.foreground(AttributedStyle.RED))
+      }
+      if(haveUncertainValue && haveUncertainLine){
+        line.append(" and ")
+      }
+      if(haveUncertainLine){
+        line.append("rows of data", AttributedStyle.DEFAULT.faint().underline())
+      }
+      line.append(" that I just showed you.  You can use `ANALYZE` to see them.\n");
+      terminal.writer.write(
+        line.toAttributedString.toAnsi(terminal)
       )
     }
   }
