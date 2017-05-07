@@ -7,11 +7,50 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import Arith.{Add, Sub, Mult, Div, And, Or, BitAnd, BitOr, ShiftLeft, ShiftRight}
 import Cmp.{Gt, Lt, Lte, Gte, Eq, Neq, Like, NotLike}
 
-class MissingVariable(varName: String, e: Throwable) extends 
-	Exception(varName, e)
+class TypecheckError(msg: String, e: Throwable, context: Option[Operator] = None)
+	extends Exception(msg, e)
+{
+	def errorTypeString =
+		getClass().getTypeName()
 
-/* what's going on with scope and Map().apply? */
-class ExpressionChecker(scope: (String => Type) = Map().apply _) extends LazyLogging {
+	override def toString =
+		context match {
+			case None => s"$errorTypeString : $msg"
+			case Some(oper) => s"$errorTypeString : $msg\n$oper"
+		}
+
+
+	override def getMessage =
+		context match {
+			case None => msg
+			case Some(oper) => s"$msg in ${oper.toString.filter { _ != '\n' }.take(200)}"
+		}
+}
+
+class MissingVariable(varName: String, e: Throwable, context: Option[Operator] = None)
+	extends TypecheckError(varName, e, context);
+
+/**
+ * ExpressionChecker wraps around a bit of context that makes
+ * recursion through Expression objects easier.  Concretely
+ * 
+ * `scope`: ... is a lookup function for the types of variables,
+ *          which the Typechecker has no way to figure out on
+ *          its own.  The easiest way to pull this off is to simply
+ *          pass a Map[String,TAny] object, as its apply() method
+ *          will do the trick, but it's handy to leave this open
+ *          to any lookup function.  The scope doesn't need to be
+ *          present for the typechecker to work, but if it isn't
+ *          then it'll fail if it hits any Var object.
+ *
+ * `context` : ... is an operator for debugging purposes.  If
+ *             any typechecker error occurs, then we'll annotate the
+ *             error with this operator.
+ */
+class ExpressionChecker(
+	scope: (String => Type) = { (_:String) => throw new RAException("Need a scope to typecheck expressions with variables") }, 
+	context: Option[Operator] = None
+) extends LazyLogging {
 	/* Assert that the expressions claimed type is its type */
 	def assert(e: Expression, t: Type, msg: String = "Typechecker"): Unit = {
 		val eType = typeOf(e);
@@ -49,7 +88,7 @@ class ExpressionChecker(scope: (String => Type) = Map().apply _) extends LazyLog
 					logger.debug(s"Type of $name is $t")
 					t
 				} catch {
-					case x:NoSuchElementException => throw new MissingVariable(name, x)
+					case x:NoSuchElementException => throw new MissingVariable(name, x, context)
 				}
 			case JDBCVar(t) => t
 			case Function("CAST", fargs) =>
@@ -107,31 +146,21 @@ object Typechecker {
 	{
 		o match {
 			case Project(cols, src) =>
-				val chk = new ExpressionChecker(schemaOf(src).toMap);
+				val chk = new ExpressionChecker(schemaOf(src).toMap, context = Some(src));
 				cols.map( { 
 						case ProjectArg(col, expression) =>
-							try {
-								(col, chk.typeOf(expression))
-							} catch {
-								case mv: MissingVariable => 
-									throw new RAException(s"Missing Variable: ${mv.getMessage()} (${schemaOf(src).map(_._1).mkString(", ")})", Some(o))
-							}
+							(col, chk.typeOf(expression))
 					})
 
 			case Select(cond, src) =>
 				val srcSchema = schemaOf(src);
-				try {
-					(new ExpressionChecker(srcSchema.toMap)).assert(cond, TBool(), "SELECT")
-				} catch {
-					case mv: MissingVariable => 
-						throw new RAException(s"Missing Variable: ${mv.getMessage()} (${schemaOf(src).map(_._1).mkString(", ")})", Some(o))
-				}
+				(new ExpressionChecker(srcSchema.toMap, context = Some(src))).assert(cond, TBool(), "SELECT")
 				srcSchema
 
 			case Aggregate(groupBy, agggregates, source) =>
 				/* Get child operator schema */
 				val srcSchema = schemaOf(source)
-				val chk = new ExpressionChecker(srcSchema.toMap)
+				val chk = new ExpressionChecker(srcSchema.toMap, context = Some(source))
 
 				/* Get Group By Args and verify type */
 				val groupBySchema: Seq[(String, Type)] = groupBy.map(x => (x.toString, chk.typeOf(x)) )
