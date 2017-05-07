@@ -53,6 +53,13 @@ sealed abstract class Operator
     Typechecker.schemaOf(this)
 
   /**
+   * Convenience method to get an expression checker for this
+   * schema
+   */
+  def typechecker: ExpressionChecker =
+    Typechecker.typecheckerFor(this)
+
+  /**
    * Convenience method to get the column names from schema
    */
   def columnNames: Seq[String] =
@@ -107,6 +114,7 @@ case class ProjectArg(name: String, expression: Expression)
 /**
  * Generalized relational algebra projection
  */
+@SerialVersionUID(100L)
 case class Project(columns: Seq[ProjectArg], source: Operator) extends Operator 
 {
   def toString(prefix: String) =
@@ -135,6 +143,7 @@ case class Project(columns: Seq[ProjectArg], source: Operator) extends Operator
       getOperatorName returns the operator name,
       getColumnName returns the column name
 */
+@SerialVersionUID(100L)
 case class AggFunction(function: String, distinct: Boolean, args: Seq[Expression], alias: String)
   extends Serializable
 {
@@ -144,6 +153,7 @@ case class AggFunction(function: String, distinct: Boolean, args: Seq[Expression
   def getAlias() = alias.toString
 }
 
+@SerialVersionUID(100L)
 case class Aggregate(groupby: Seq[Var], aggregates: Seq[AggFunction], source: Operator) extends Operator
 {
   def toString(prefix: String) =
@@ -175,6 +185,7 @@ case class Aggregate(groupby: Seq[Var], aggregates: Seq[AggFunction], source: Op
 /**
  * Relational algebra selection
  */
+@SerialVersionUID(100L)
 case class Select(condition: Expression, source: Operator) extends Operator
 {
   def toString(prefix: String) =
@@ -190,6 +201,7 @@ case class Select(condition: Expression, source: Operator) extends Operator
 /**
  * Relational algebra cartesian product (I know, technically not an actual join)
  */
+@SerialVersionUID(100L)
 case class Join(left: Operator, right: Operator) extends Operator
 {
   def toString(prefix: String) =
@@ -205,6 +217,7 @@ case class Join(left: Operator, right: Operator) extends Operator
 /**
  * Relational algebra bag union
  */
+@SerialVersionUID(100L)
 case class Union(left: Operator, right: Operator) extends Operator
 {
   def toString(prefix: String) =
@@ -238,6 +251,7 @@ case class Union(left: Operator, right: Operator) extends Operator
  * will extract SQL's implicit ROWID attribute into the new column "MIMIR_ROWID" 
  * with the rowid type.
  */
+@SerialVersionUID(100L)
 case class Table(name: String, 
                  sch: Seq[(String,Type)],
                  metadata: Seq[(String,Expression,Type)])
@@ -264,6 +278,7 @@ case class Table(name: String,
  * 
  * Not really used, just a placeholder for intermediate optimization.
  */
+@SerialVersionUID(100L)
 case class EmptyTable(sch: Seq[(String, Type)])
   extends Operator
 {
@@ -285,6 +300,7 @@ case class EmptyTable(sch: Seq[(String, Type)])
  *
  * (e.g., as in SELECT * FROM FOO ORDER BY bar ASC)
  */
+@SerialVersionUID(100L)
 case class SortColumn(expression: Expression, ascending:Boolean)
 {
   override def toString() = 
@@ -294,6 +310,7 @@ case class SortColumn(expression: Expression, ascending:Boolean)
  * Indicates that the source operator's output should be sorted in the
  * specified order
  */
+@SerialVersionUID(100L)
 case class Sort(sorts:Seq[SortColumn], src: Operator) extends Operator
 {
   def toString(prefix: String) =
@@ -315,6 +332,7 @@ case class Sort(sorts:Seq[SortColumn], src: Operator) extends Operator
  * Indicates that the source operator's output should be truncated
  * after the specified number of rows.
  */
+@SerialVersionUID(100L)
 case class Limit(offset: Long, count: Option[Long], src: Operator) extends Operator
 {
   def toString(prefix: String) =
@@ -334,6 +352,7 @@ case class Limit(offset: Long, count: Option[Long], src: Operator) extends Opera
 /**
  * A left outer join
  */
+@SerialVersionUID(100L)
 case class LeftOuterJoin(left: Operator, 
                          right: Operator,
                          condition: Expression)
@@ -362,6 +381,7 @@ case class LeftOuterJoin(left: Operator,
  * compilation have been applied to it, so that the system can decide whether it has
  * an appropriate materialized form of the view ready.
  */
+@SerialVersionUID(100L)
 case class View(name: String, query: Operator, annotations: Set[ViewAnnotation.T] = Set())
   extends Operator
 {

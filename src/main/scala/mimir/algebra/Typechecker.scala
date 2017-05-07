@@ -136,7 +136,7 @@ object Typechecker {
 	def typecheckerFor(o: Operator): ExpressionChecker =
 	{
 		val scope = schemaOf(o).toMap;
-		new ExpressionChecker(scope(_))
+		new ExpressionChecker(scope(_), context = Some(o))
 	}
 
 	def typecheck(o: Operator): Unit =

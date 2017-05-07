@@ -35,6 +35,7 @@ abstract class Expression {
  * Slightly more specific base type for nodes without children
  * Like Expression, but handles children/rebuild for free
  */
+@SerialVersionUID(100L)
 abstract class LeafExpression extends Expression {
   def children = List[Expression]();
   def rebuild(c: Seq[Expression]):Expression = { return this }
@@ -45,6 +46,7 @@ abstract class LeafExpression extends Expression {
 /**
  * Boolean Negation
  */
+@SerialVersionUID(100L)
 case class Not(child: Expression) 
   extends Expression 
 {
@@ -159,6 +161,7 @@ object Cmp extends Enumeration {
  * 
  * See the Arith enum above for a full list of available operations.
  */
+@SerialVersionUID(100L)
 case class Arithmetic(op: Arith.Op, lhs: Expression, 
                       rhs: Expression) 
 	extends Expression 
@@ -173,6 +176,7 @@ case class Arithmetic(op: Arith.Op, lhs: Expression,
  * Relational binary operations.  This includes equality/inequality,
  * ordering operators, and simple string comparators (e.g., SQL's LIKE)
  */
+@SerialVersionUID(100L)
 case class Comparison(op: Cmp.Op, lhs: Expression, 
                       rhs: Expression) 
 	extends Expression 
@@ -193,6 +197,7 @@ case class Comparison(op: Cmp.Op, lhs: Expression,
  * TODO: Move inline function definition from Eval to 
  *       FunctionRegistry
  */
+@SerialVersionUID(100L)
 case class Function(op: String, params: Seq[Expression]) extends Expression {
   override def toString() = {
     op match {
@@ -216,6 +221,7 @@ case class Function(op: String, params: Seq[Expression]) extends Expression {
  * needed.  Typechecker expects Operators to be self-contained, but not 
  * Expressions.
  */
+@SerialVersionUID(100L)
 case class Var(name: String) extends LeafExpression {
   override def toString = name;
 }
@@ -229,6 +235,7 @@ case class Var(name: String) extends LeafExpression {
  * 
  * see mimir.provenance.Provenance for more details.
  */
+@SerialVersionUID(100L)
 case class RowIdVar() extends LeafExpression
 {
   override def toString = "ROWID";
@@ -237,6 +244,7 @@ case class RowIdVar() extends LeafExpression
 /**
  * Representation of a JDBC Variable.
  */
+@SerialVersionUID(100L)
 case class JDBCVar(t: Type) extends LeafExpression
 {
   override def toString = "?";
@@ -252,6 +260,7 @@ case class JDBCVar(t: Type) extends LeafExpression
  *  - foldConditionalsToCase
  * in mimir.algebra.ExpressionUtils.
  */
+@SerialVersionUID(100L)
 case class Conditional(condition: Expression, thenClause: Expression,
                        elseClause: Expression) extends Expression 
 {
@@ -267,6 +276,7 @@ case class Conditional(condition: Expression, thenClause: Expression,
 /**
  * Representation of a unary IS NULL
  */
+@SerialVersionUID(100L)
 case class IsNullExpression(child: Expression) extends Expression { 
   override def toString() = {child.toString+" IS NULL"}
   def children = List(child)
