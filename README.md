@@ -31,6 +31,15 @@ This is a self-contained jar.  Run it with
 $> java -jar Mimir.jar
 ```
 
+#### Link with SBT (or Maven)
+
+Add the following to your build.sbt
+```
+resolvers += "MimirDB" at "http://maven.mimirdb.info/"
+libraryDependencies += "info.mimirdb" %% "mimir" % "0.2-SNAPSHOT"
+```
+
+
 ## User Guides
 
 Mimir adds some useful language features to SQL.  See the [MimirSQL Docs](https://github.com/UBOdin/mimir/wiki/Mimir-SQL) for more details, as well as the [Lens and Adaptive Schema Docs](https://github.com/UBOdin/mimir/wiki/Lenses-and-Adaptive-Schemas) for more information about Mimir's data cleaning components.
