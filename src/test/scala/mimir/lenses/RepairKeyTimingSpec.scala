@@ -304,6 +304,7 @@ object RepairKeyTimingSpec
   {
     val (queryString, idx) = config
     s"Sample From Key Repair Lens : ${queryString}" >> {
+      println(s"QUERY $idx")
       val ((rows, backendTime), totalTime) = time {
          var x = 0
          val backendTime = db.sampleQuery(queryString) { results =>
