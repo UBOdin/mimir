@@ -6,6 +6,7 @@ import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
 import mimir.views.ViewAnnotation
+import mimir.gprom.algebra.OperatorTranslation
 
 class ProvenanceError(e:String) extends Exception(e) {}
 
@@ -15,6 +16,10 @@ object Provenance {
   val rowidColnameBase = "MIMIR_ROWID"
 
   def compile(oper: Operator): (Operator, Seq[String]) = {
+    OperatorTranslation.compileProvenanceWithGProM(oper)
+  }
+  
+  def compileMimir(oper: Operator): (Operator, Seq[String]) = {
     val makeRowIDProjectArgs = 
       (rowids: Seq[String], offset: Integer, padLen: Integer) => {
         rowids.map(Var(_)).

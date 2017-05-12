@@ -202,10 +202,12 @@ case class Annotate(subj: Operator,
              { " // "+invisSch.map( { case (c,(v,t), ta) => c + ":"+t } ).mkString(", ") }
         else { "" })
   def children: List[Operator] = List(subj)
-  def rebuild(x: Seq[Operator]) = Annotate(subj, invisSch)
+  def rebuild(x: Seq[Operator]) = Annotate(x.head, invisSch)
   def invisible_schema = invisSch.map( x => (x._1, x._2) )
-  def expressions = List()
-  def rebuildExpressions(x: Seq[Expression]) = this
+  def expressions = invisSch.map(invsCol => invsCol._1.expression )
+  def rebuildExpressions(x: Seq[Expression]) = Annotate(subj,
+    invisSch.zip(x).map({ case ((ProjectArg(name,_),ntt,alias),expr) => (ProjectArg(name,expr),ntt,alias)})   
+  )
 }
 
 /**
@@ -222,9 +224,11 @@ case class Recover(subj: Operator,
              { " // "+invisSch.map( { case (c,(v,t), ta) => c+":"+t } ).mkString(", ") }
         else { "" })
   def children() = List(subj);
-  def rebuild(x: Seq[Operator]) = Recover(subj, invisSch)
-  def expressions = List()
-  def rebuildExpressions(x: Seq[Expression]) = this
+  def rebuild(x: Seq[Operator]) = Recover(x.head, invisSch)
+  def expressions = invisSch.map(invsCol => invsCol._1.expression )
+  def rebuildExpressions(x: Seq[Expression]) = Recover(subj,
+    invisSch.zip(x).map({ case ((ProjectArg(name,_),ntt,alias),expr) => (ProjectArg(name,expr),ntt,alias)})   
+  )
 }
 
 /**

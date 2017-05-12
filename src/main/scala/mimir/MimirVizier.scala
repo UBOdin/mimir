@@ -46,7 +46,7 @@ object MimirVizier {
     //db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))//new GProMBackend(conf.backend(), conf.dbname(), -1))    
     //db.backend.open()
     
-    gp = new GProMBackend(conf.backend(), conf.dbname(), 4)
+    gp = new GProMBackend(conf.backend(), conf.dbname(), 1)
     db = new Database(gp)    
     db.backend.open()
     gp.metadataLookupPlugin.db = db;

@@ -130,7 +130,7 @@ class Compiler(db: Database) extends LazyLogging {
 
   def sqlForBackend(oper: Operator, opts: Compiler.Optimizations = Compiler.standardOptimizations): SelectBody =
   {
-    val optimized = Compiler.optimize(oper)
+    val optimized = Compiler.gpromOptimize(oper)
 
     // The final stage is to apply any database-specific rewrites to adapt
     // the query to the quirks of each specific target database.  Each
@@ -247,7 +247,11 @@ object Compiler
         oper = newOper;
       }
     }
-    return oper;
-   // OperatorTranslation.optimizeWithGProM(rawOper)
+    return oper
   }
+  
+  def gpromOptimize(rawOper: Operator): Operator = {
+    OperatorTranslation.optimizeWithGProM(rawOper)
+  }
+  
 }

@@ -56,8 +56,12 @@ class ExpressionChecker(scope: (String => Type) = Map().apply _) extends LazyLog
 				// Special case CAST
 				Eval.inline(fargs(1)) match {
 					case TypePrimitive(t) => t
-					case p:PrimitiveValue => 
-						throw new SQLException("Invalid CAST to '"+p+"' of type: "+typeOf(p))
+					case p:PrimitiveValue => { p match {
+              case StringPrimitive(s) => Type.toSQLiteType(Integer.parseInt(s))
+              case IntPrimitive(i)  =>  Type.toSQLiteType(i.toInt)
+      	      case _ => throw new SQLException("Invalid CAST to '"+p+"' of type: "+typeOf(p))
+            }
+					}
 					case _ => TAny()
 				}
 			case Function(fname, fargs) =>
@@ -217,6 +221,7 @@ object Typechecker {
 			case (TAny(),_) => b
 			case (_,TAny()) => a
 			case (TInt(), TInt()) => TInt()
+			case (TRowId(), TString()) => TBool()
 			case ((TInt()|TFloat()), (TInt()|TFloat())) => TFloat()
 			case _ => throw new TypeException(a, b, msg, e);
 		}

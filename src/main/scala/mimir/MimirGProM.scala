@@ -25,6 +25,7 @@ import mimir.provenance.Provenance
 import mimir.algebra.ProjectArg
 import mimir.algebra.Var
 import mimir.algebra.Project
+import mimir.algebra.ProvenanceOf
 
 /**
  * The primary interface to Mimir.  Responsible for:
@@ -53,7 +54,7 @@ object MimirGProM {
     ExperimentalOptions.enable(conf.experimental())
     
     // Set up the database connection(s)
-    gp = new GProMBackend(conf.backend(), conf.dbname(), 1)
+    gp = new GProMBackend(conf.backend(), conf.dbname(), -1)
     db = new Database(gp)    
     db.backend.open()
     gp.metadataLookupPlugin.db = db;
@@ -154,16 +155,59 @@ object MimirGProM {
      println("---------v Actual Mimir Oper v----------")
      println(totallyOptimize(testOper4))
      println("---------^ Actual Mimir Oper ^----------")*/
-     
-     val queryStr = "SELECT R.A, TRUE AS t FROM R "
-       var gpnode = GProMWrapper.inst.rewriteQueryToOperatorModel(queryStr+";")
-   gpnode = GProMWrapper.inst.optimizeOperatorModel(gpnode.getPointer)
-   val gpnodeStr = GProMWrapper.inst.gpromNodeToString(gpnode.getPointer())
-     
+   
+    val queryqStr = "SELECT R.A, POSSION(A) AS P FROM R"
+    val querypStr = s"PROVENANCE OF ($queryqStr)"
+    var gpnodepStr = GProMWrapper.inst.gpromRewriteQuery(querypStr+";")
+   //GProMWrapper.inst.gpromFreeMemContext(memctx)
+     println(gpnodepStr)
+     println("-------v GProM Oper RW v---------")
+     println(getQueryResults(gpnodepStr))
+     println("-------^ GProM Oper RW ^---------") 
+    
+    var gpnodep = GProMWrapper.inst.rewriteQueryToOperatorModel(querypStr+";")
+    gpnodepStr = GProMWrapper.inst.gpromNodeToString(gpnodep.getPointer())
+    println("-------v GProM Oper OMRW v---------")
+    println(gpnodepStr)
+    println("-------^ GProM Oper OMRW ^---------")
+    
+    gpnodep = GProMWrapper.inst.provRewriteOperator(gpnodep.getPointer)
+    gpnodepStr = GProMWrapper.inst.gpromNodeToString(gpnodep.getPointer())
+    println("-------v GProM Oper PRW v---------")
+    println(gpnodepStr)
+    println("-------^ GProM Oper PRW ^---------")
+    
+    val statements1 = db.parse(queryqStr)
+    var testOper7 = db.sql.convert(statements1.head.asInstanceOf[Select])
+    gpnodep = OperatorTranslation.mimirOperatorToGProMList(ProvenanceOf(testOper7))
+    gpnodep.write()
+    gpnodepStr = GProMWrapper.inst.gpromNodeToString(gpnodep.getPointer())
+    println("-------v GProM Oper TRW v---------")
+    println(gpnodepStr)
+    println("-------^ GProM Oper TRW ^---------")
+    
+    gpnodep = GProMWrapper.inst.provRewriteOperator(gpnodep.getPointer)
+    gpnodepStr = GProMWrapper.inst.gpromNodeToString(gpnodep.getPointer())
+    println("-------v GProM Oper TPRW v---------")
+    println(gpnodepStr)
+    println("-------^ GProM Oper TPRW ^---------")
+    
+    
+    val queryStr = "SELECT R.A FROM R"
+    val statements0 = db.parse(queryStr)
+    var testOper6 = db.sql.convert(statements0.head.asInstanceOf[Select])
+    var gpnode = OperatorTranslation.mimirOperatorToGProMList(ProvenanceOf(testOper6))
+    gpnode.write()
+    val provGpromNode = GProMWrapper.inst.provRewriteOperator(gpnode.getPointer)
+    
+    val gpnodeStr = GProMWrapper.inst.gpromNodeToString(provGpromNode.getPointer())
+    
      //GProMWrapper.inst.gpromFreeMemContext(memctx)
      println("-------v GProM Oper v---------")
      println(gpnodeStr)
      println("-------^ GProM Oper ^---------")
+     
+     
      
      //val queryStr = "Select * FROM LENS_PICKER804228897 "//LENS_PICKER1562291232"//LENS_MISSING_KEY93961111"
      val statements = db.parse(queryStr)
@@ -327,7 +371,7 @@ object MimirGProM {
     for(i <- 1 to runLoops ){
       val memctx = GProMWrapper.inst.gpromCreateMemContext() 
       val testSeq = Seq(
-        (s"Queries for Tables - run $i", 
+        /*(s"Queries for Tables - run $i", 
             "SELECT R.A, R.B FROM R" ), 
         (s"Queries for Aliased Tables - run $i", 
             "SELECT S.A, S.B FROM R AS S" ), 
@@ -352,7 +396,7 @@ object MimirGProM {
         (s"Queries for Aliased Tables with Epression Attrinutes with Selection- run $i",
             "SELECT S.A + S.B AS Z FROM R AS S WHERE S.A = S.B"),
         (s"Queries for Aliased Tables with Joins with Aliased Attributes - run $i", 
-            "SELECT S.A AS P, U.C AS Q FROM R AS S JOIN T AS U ON S.A = U.C"),
+            "SELECT S.A AS P, U.C AS Q FROM R AS S JOIN T AS U ON S.A = U.C"),*/
         (s"Queries for Tables with Aggregates - run $i",
             "SELECT SUM(INT_COL_B), COUNT(INT_COL_B) FROM TEST_B_RAW"),
         (s"Queries for Aliased Tables with Aggregates - run $i",
@@ -376,7 +420,7 @@ object MimirGProM {
         }
         }
        GProMWrapper.inst.gpromFreeMemContext(memctx)
-       scala.sys.runtime.gc()
+       //scala.sys.runtime.gc()
      } 
   }
   
@@ -398,6 +442,7 @@ object MimirGProM {
          try{
            val statements = db.parse(queryStr)
            val testOper = db.sql.convert(statements.head.asInstanceOf[Select])
+           gp.metadataLookupPlugin.setOper(testOper)
            val gpromNode = OperatorTranslation.mimirOperatorToGProMList(testOper)
            gpromNode.write()
            //val memctx = GProMWrapper.inst.gpromCreateMemContext() 
@@ -442,11 +487,13 @@ object MimirGProM {
          try{
            val statements = db.parse(queryStr)
            val testOper2 = db.sql.convert(statements.head.asInstanceOf[Select])
+           gp.metadataLookupPlugin.setOper(testOper2)
            var operStr2 = testOper2.toString()
            //val memctx = GProMWrapper.inst.gpromCreateMemContext()
            val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel(queryStr+";")
            val nodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
            val testOper = OperatorTranslation.gpromStructureToMimirOperator(0, gpromNode, null)
+           gp.metadataLookupPlugin.setOper(testOper)
            
            var operStr = testOper.toString()
            //GProMWrapper.inst.gpromFreeMemContext(memctx)
@@ -493,6 +540,7 @@ object MimirGProM {
          try{
            val statements = db.parse(queryStr)
            val testOper = db.sql.convert(statements.head.asInstanceOf[Select])
+           gp.metadataLookupPlugin.setOper(testOper)
            var operStr = testOper.toString()
            val gpromNode = OperatorTranslation.mimirOperatorToGProMList(testOper)
            gpromNode.write()
@@ -543,6 +591,7 @@ object MimirGProM {
            //val memctx = GProMWrapper.inst.gpromCreateMemContext() 
            val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel(queryStr+";")
            val testOper = totallyOptimize(OperatorTranslation.gpromStructureToMimirOperator(0, gpromNode, null))
+           gp.metadataLookupPlugin.setOper(testOper)
            val nodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
            //val statements = db.parse(convert(testOper.toString()))
            //val testOper2 = db.sql.convert(statements.head.asInstanceOf[Select])

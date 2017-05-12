@@ -126,7 +126,7 @@ object MissingKeyLens {
     
     }
     val colsTypes = keys.unzip
-    val model = new MissingKeyModel(name+":"+ keys.unzip._1.mkString("_"),colsTypes._1, colsTypes._2.union(rSch.map(_ => TAny())))
+    val model = new MissingKeyModel(name+":"+ keys.unzip._1.mkString("_"),colsTypes._1, colsTypes._2.union(rSch.map(sche => sche._2)))
     
     val projArgs =  
         keys.map(_._1).zipWithIndex.map( col => {

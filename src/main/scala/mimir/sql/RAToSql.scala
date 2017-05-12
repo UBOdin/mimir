@@ -23,6 +23,7 @@ import net.sf.jsqlparser.statement.select.{SelectBody, PlainSelect, SubSelect, S
 import scala.collection.JavaConversions._
 
 sealed abstract class TargetClause
+case class AnnotateTarget(invisSch:Seq[(ProjectArg, (String,Type), String)]) extends TargetClause
 case class ProjectTarget(cols:Seq[ProjectArg]) extends TargetClause
 case class AggregateTarget(gbCols:Seq[Var], aggCols:Seq[AggFunction]) extends TargetClause
 case class AllTarget() extends TargetClause
@@ -57,7 +58,7 @@ class RAToSql(db: Database)
         )
         val metadata = tgtMetadata.map( { 
           case (out, Var(in), t) => ((in, Var(in), t), ProjectArg(out, Var(in))) 
-          case (o, i, t) => throw new SQLException("Unsupported Metadata: $o <- $i:$t")
+          case (o, i, t) => throw new SQLException(s"Unsupported Metadata: $o <- $i:$t")
         })
         Project(
           schMap ++ metadata.map(_._2),
@@ -141,14 +142,6 @@ class RAToSql(db: Database)
     // Limit clause is the final processing step, so we handle
     // it first.
     head match {
-      case Annotate(subj,invisScm) => {
-        subj match {
-          case Table(name, alias, sch, metadata) => {
-            metadata.addAll(invisScm.map(f => (f._2._1, null, f._2._2)))
-            makePlainSelect(new Table(name, alias, sch, metadata))
-          }
-        }
-      }
       case Recover(subj,invisScm) => {
         val schemas = invisScm.groupBy(_._3).toList.map{ f => (f._1, f._2.map{ s => s._2._1 }.toList) }
         val pselBody = makePlainSelect(subj).asInstanceOf[PlainSelect]
@@ -162,11 +155,11 @@ class RAToSql(db: Database)
             })
           )
         ))
-        new ProvenanceSelect(pselBody)
+        return pselBody//new ProvenanceSelect(pselBody)
       }
       case ProvenanceOf(psel) => {
         val pselBody = makePlainSelect(psel).asInstanceOf[PlainSelect]
-        new ProvenanceSelect(pselBody)
+        return new ProvenanceSelect(pselBody)
       }
       case Limit(offset, maybeCount, src) => {
         logger.debug("Assembling Plain Select: Including a LIMIT")
@@ -214,6 +207,16 @@ class RAToSql(db: Database)
     //
     val (target:TargetClause, sortBindings:Map[String,Expression]) = 
       head match {
+        case Annotate(subj,invisScm) => {
+          /*subj match {
+            case Table(name, alias, sch, metadata) => {
+              head = Table(name, alias, sch, metadata.union(invisScm.map(f => (f._2._1, f._1.expression, f._2._2))))
+            }
+            case _ => head = subj
+          }*/
+          head = subj
+          (AnnotateTarget(invisScm), Map())
+        }
         case p@Project(cols, src)              => {
           logger.debug("Assembling Plain Select: Target is a flat projection")
           head = src; 
@@ -240,6 +243,7 @@ class RAToSql(db: Database)
     // Sanity check...
     val extractedSchema = schemas.flatMap(_._2).toSet
     val expectedSchema = target match { 
+      case AnnotateTarget(invisScm) => head.columnNames.union(invisScm.map(invisCol => ExpressionUtils.getColumns(invisCol._1.expression))).toSet
       case ProjectTarget(cols) => cols.flatMap { col => ExpressionUtils.getColumns(col.expression) }.toSet
       case AggregateTarget(gbCols, aggCols) => gbCols.map(_.name).toSet ++ aggCols.flatMap { col => col.args.flatMap { arg => ExpressionUtils.getColumns(arg) } }.toSet
       case AllTarget() => head.columnNames.toSet
@@ -289,6 +293,14 @@ class RAToSql(db: Database)
 
     // Finally, generate the target clause
     target match {
+      case AnnotateTarget(invisScm) => {
+        select.setSelectItems(
+           head.columnNames.map( col => makeSelectItem(convert(Var(col)), col)).union( invisScm.map( invisCol => 
+            makeSelectItem(convert(invisCol._1.expression, schemas), invisCol._1.name) ))
+        )
+        logger.debug(s"Assembling Plain Select: SELECT "+select.getSelectItems)
+      }
+      
       case ProjectTarget(cols) => {
         select.setSelectItems(
           cols.map( col => 
@@ -345,6 +357,16 @@ class RAToSql(db: Database)
           ExpressionUtils.makeAnd(cond, childCond),
           froms
         )
+        
+      case Annotate(subj,invisScm) => {
+          /*subj match {
+            case Table(name, alias, sch, metadata) => {
+              extractSelectsAndJoins(Table(name, alias, sch, metadata.union(invisScm.map(f => (f._2._1, f._1.expression, f._2._2)))))
+            }
+            case _ => extractSelectsAndJoins(subj)
+          }*/
+        extractSelectsAndJoins(subj)
+      }
 
       case Join(lhs, rhs) =>
         val (lhsCond, lhsFroms) = extractSelectsAndJoins(lhs)
