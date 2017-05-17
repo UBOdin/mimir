@@ -35,7 +35,7 @@ object ProjectRedundantColumns {
       }
       
       case Annotate(subj,invisScm) => {
-        apply(subj)
+        Annotate(apply(subj),invisScm)
       }
       
 			case Recover(subj,invisScm) => {

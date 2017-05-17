@@ -156,17 +156,28 @@ object MimirGProM {
      println(totallyOptimize(testOper4))
      println("---------^ Actual Mimir Oper ^----------")*/
    
-    val queryqStr = "SELECT R.A, POSSION(A) AS P FROM R"
+    val queryqStr = "SELECT R.A FROM R"
     val querypStr = s"PROVENANCE OF ($queryqStr)"
-    var gpnodepStr = GProMWrapper.inst.gpromRewriteQuery(querypStr+";")
+    /*var gpnodepStr = GProMWrapper.inst.gpromRewriteQuery(querypStr+";")
    //GProMWrapper.inst.gpromFreeMemContext(memctx)
      println(gpnodepStr)
      println("-------v GProM Oper RW v---------")
      println(getQueryResults(gpnodepStr))
-     println("-------^ GProM Oper RW ^---------") 
+     println("-------^ GProM Oper RW ^---------") */
     
+    val statements3 = db.parse(queryqStr)
+    var testOper8 = db.sql.convert(statements3.head.asInstanceOf[Select])
+    val operProv = OperatorTranslation.compileProvenanceWithGProM(testOper8)
+    testOper8 = operProv._1 
+    println(testOper8)
+    testOper8 = BestGuesser.bestGuessQuery(db, testOper8)
+    testOper8 = db.backend.specializeQuery(testOper8)
+    println("-------v GProM Oper RW v---------")
+    println(getQueryResults(testOper8))
+    println("-------^ GProM Oper RW ^---------")
+     
     var gpnodep = GProMWrapper.inst.rewriteQueryToOperatorModel(querypStr+";")
-    gpnodepStr = GProMWrapper.inst.gpromNodeToString(gpnodep.getPointer())
+    var gpnodepStr = GProMWrapper.inst.gpromNodeToString(gpnodep.getPointer())
     println("-------v GProM Oper OMRW v---------")
     println(gpnodepStr)
     println("-------^ GProM Oper OMRW ^---------")

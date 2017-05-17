@@ -412,7 +412,6 @@ object OperatorTranslation {
       while(listCell != null){
         val projInput = listCell.data.int_value
         listCell = listCell.next
-        projInput
         scList =  scList :+ projInput 
         i+=1
       }
@@ -942,7 +941,8 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
 			  mimirOperatorToGProMList(query)
 			}
 			case Table(name, alias, sch, meta) => {
-			  val schTable = getSchemaForGProM(mimirOperator)
+			  var schTable = getSchemaForGProM(mimirOperator)
+			  schTable = joinIntermSchemas(schTable, Seq(new MimirToGProMIntermediateSchemaInfo(schTable(0).name, schTable(0).alias, RowIdVar().toString(), "MIMIR_ROWID", "", db.backend.rowIdType, 0, 0) ), 0, true)
 			  val toQoScm = translateMimirSchemaToGProMSchema(alias, schTable)//mimirOperator)
 			  val gqo = new GProMQueryOperator.ByValue(GProM_JNA.GProMNodeTag.GProM_T_TableAccessOperator, null, toQoScm, null, null, null)
 			  val gpromTable = new GProMTableAccessOperator.ByValue(gqo,name,null)
@@ -1627,29 +1627,17 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         val memctxq = GProMWrapper.inst.createMemContextName("QUERY_CONTEXT")
         val gpromNode = mimirOperatorToGProMList(ProvenanceOf(oper))
         gpromNode.write()
-        //val gpromNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
         val provGpromNode = GProMWrapper.inst.provRewriteOperator(gpromNode.getPointer)
-        
-        val optNodeStr = GProMWrapper.inst.gpromNodeToString(provGpromNode.getPointer())
+        /*val provNodeStr = GProMWrapper.inst.gpromNodeToString(provGpromNode.getPointer())
         println("------------------------------------------------")
         println(oper)
         println("------------------------------------------------")
-        println(optNodeStr)
-        println("------------------------------------------------")
-        //Thread.sleep(500)
+        println(provNodeStr)
+        println("------------------------------------------------")*/
         var opOut = gpromStructureToMimirOperator(0, provGpromNode, null)
         //GProMWrapper.inst.gpromFreeMemContext(memctx)
+        db.ra.provenanceColsFromRecover(opOut)
         
-        opOut = BestGuesser.bestGuessQuery(db, opOut)
-        opOut = db.backend.specializeQuery(opOut)
-        val sql = db.ra.convert(opOut).toString
-        println(sql)
-        println("-------v GProM Oper RW v---------")
-        println(getQueryResults(sql))
-        println("-------^ GProM Oper RW ^---------") 
-        
-        
-        (opOut, Seq("MIMIR_ROWID"))
     }
   }
    

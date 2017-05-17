@@ -142,6 +142,9 @@ class RAToSql(db: Database)
     // Limit clause is the final processing step, so we handle
     // it first.
     head match {
+      /*case Annotate(subj,invisScm) => {
+          head = Project(invisScm.map( _._1), subj)
+      }
       case Recover(subj,invisScm) => {
         val schemas = invisScm.groupBy(_._3).toList.map{ f => (f._1, f._2.map{ s => s._2._1 }.toList) }
         val pselBody = makePlainSelect(subj).asInstanceOf[PlainSelect]
@@ -156,7 +159,7 @@ class RAToSql(db: Database)
           )
         ))
         return pselBody//new ProvenanceSelect(pselBody)
-      }
+      }*/
       case ProvenanceOf(psel) => {
         val pselBody = makePlainSelect(psel).asInstanceOf[PlainSelect]
         return new ProvenanceSelect(pselBody)
@@ -207,7 +210,7 @@ class RAToSql(db: Database)
     //
     val (target:TargetClause, sortBindings:Map[String,Expression]) = 
       head match {
-        case Annotate(subj,invisScm) => {
+        /*case Annotate(subj,invisScm) => {
           /*subj match {
             case Table(name, alias, sch, metadata) => {
               head = Table(name, alias, sch, metadata.union(invisScm.map(f => (f._2._1, f._1.expression, f._2._2))))
@@ -216,7 +219,7 @@ class RAToSql(db: Database)
           }*/
           head = subj
           (AnnotateTarget(invisScm), Map())
-        }
+        }*/
         case p@Project(cols, src)              => {
           logger.debug("Assembling Plain Select: Target is a flat projection")
           head = src; 
@@ -243,7 +246,7 @@ class RAToSql(db: Database)
     // Sanity check...
     val extractedSchema = schemas.flatMap(_._2).toSet
     val expectedSchema = target match { 
-      case AnnotateTarget(invisScm) => head.columnNames.union(invisScm.map(invisCol => ExpressionUtils.getColumns(invisCol._1.expression))).toSet
+      //case AnnotateTarget(invisScm) => head.columnNames.union(invisScm.map(invisCol => ExpressionUtils.getColumns(invisCol._1.expression))).toSet
       case ProjectTarget(cols) => cols.flatMap { col => ExpressionUtils.getColumns(col.expression) }.toSet
       case AggregateTarget(gbCols, aggCols) => gbCols.map(_.name).toSet ++ aggCols.flatMap { col => col.args.flatMap { arg => ExpressionUtils.getColumns(arg) } }.toSet
       case AllTarget() => head.columnNames.toSet
@@ -293,13 +296,13 @@ class RAToSql(db: Database)
 
     // Finally, generate the target clause
     target match {
-      case AnnotateTarget(invisScm) => {
+      /*case AnnotateTarget(invisScm) => {
         select.setSelectItems(
            head.columnNames.map( col => makeSelectItem(convert(Var(col)), col)).union( invisScm.map( invisCol => 
             makeSelectItem(convert(invisCol._1.expression, schemas), invisCol._1.name) ))
         )
         logger.debug(s"Assembling Plain Select: SELECT "+select.getSelectItems)
-      }
+      }*/
       
       case ProjectTarget(cols) => {
         select.setSelectItems(
@@ -358,15 +361,15 @@ class RAToSql(db: Database)
           froms
         )
         
-      case Annotate(subj,invisScm) => {
+      /*case Annotate(subj,invisScm) => {
           /*subj match {
             case Table(name, alias, sch, metadata) => {
               extractSelectsAndJoins(Table(name, alias, sch, metadata.union(invisScm.map(f => (f._2._1, f._1.expression, f._2._2)))))
             }
             case _ => extractSelectsAndJoins(subj)
           }*/
-        extractSelectsAndJoins(subj)
-      }
+        extractSelectsAndJoins(Project(invisScm.map( _._1), subj))
+      }*/
 
       case Join(lhs, rhs) =>
         val (lhsCond, lhsFroms) = extractSelectsAndJoins(lhs)
@@ -424,6 +427,102 @@ class RAToSql(db: Database)
         extractSelectsAndJoins(query)
 
       case _ => (BoolPrimitive(true), Seq(makeSubSelect(oper)))
+    }
+  }
+  
+  def provenanceColsFromRecover(oper:Operator) : (Operator, Seq[String]) = {
+    oper match {
+     case Recover(subj,invisScm) => {
+       (annotationsAndRecoveryToProjections(oper), invisScm.map(ise => ise._1.name))
+     }
+    }
+  }
+  
+  def annotationsAndRecoveryToProjections(oper:Operator) : Operator = {
+    oper match {
+      case Recover(subj,invisScm) => {
+        subj match {
+          case Project(cols, src) => {
+            val recoveredOp = annotationsAndRecoveryToProjections(src)
+             recoveredOp match {
+              case Project(ncols, nsrc) => {
+                val schMap = nsrc.schema.toMap
+                val srcColsMap = ncols.map(srcCol => (srcCol.name, srcCol)).toMap
+                val noRemAnno = invisScm.map(ise => (ise._1.name, ise._1)).toMap
+                val newAnno = cols.map(col => {
+                  col.expression match {
+                    case Var(v) => {
+                      srcColsMap(v)
+                    }
+                    case x => col
+                  }
+                }).union(noRemAnno.filter( p => schMap.contains(p._1)).toSeq.map(f => f._2))
+                Project(newAnno, nsrc)
+              }
+              case x => throw new Exception("Recover Op needs project, not: "+x.getClass.toString())
+            }
+            
+          }
+          case x => throw new Exception("Recover Op needs project child, not: "+x.getClass.toString())
+        }
+      }
+      case Project(cols, src) => {
+        src match {
+          case Annotate(subj,invisScm) => {
+            val repAnno = invisScm.map(ise => (ise._1.name, ise._1)).toMap
+            val colSet = cols.map(col => col.name).toSet
+            val newAnno = invisScm.flatMap(ise => {
+              if(colSet.contains(ise._1.name)){
+                None
+              }
+              else
+                Some(ise._1)
+            })
+            
+            val annotatedOp = Project(cols.map(col => {
+              if(repAnno.contains(col.name)){
+                repAnno(col.name)
+              }
+              else
+                col
+            }).union(newAnno), annotationsAndRecoveryToProjections(subj))
+            annotatedOp
+          }
+          case x => x
+        }
+      }
+      /*case Annotate(subj,invisScm) => {
+        subj match {
+          case Annotate(subj,invisScms) => {
+            val annotatedOp = annotationsAndRecoveryToProjections(subj)
+            val repAnno = invisScms.map(ise => (ise._1.name, ise._1)).toMap
+            Project(invisScm.map(ise => {
+              if(repAnno.contains(ise._1.name)){
+                repAnno(ise._1.name)
+              }
+              else
+                ise._1
+            }), annotatedOp)
+          }
+          case _ => Project(invisScm.map( _._1), annotationsAndRecoveryToProjections(subj))
+        }
+      }*/
+      case Aggregate(groupBy, agggregates, source) => {
+         Aggregate(groupBy, agggregates, annotationsAndRecoveryToProjections(source))
+      }
+      case Select(cond, source) => {
+         Select(cond,annotationsAndRecoveryToProjections(source))
+      }
+      case Join(lhs, rhs) => {
+        Join(annotationsAndRecoveryToProjections(lhs), annotationsAndRecoveryToProjections(rhs))
+      }
+      case LeftOuterJoin(lhs, rhs, cond) => {
+        LeftOuterJoin(annotationsAndRecoveryToProjections(lhs), annotationsAndRecoveryToProjections(rhs), cond)
+      }
+      case Limit(off,lim,query) => {
+        Limit(off,lim,annotationsAndRecoveryToProjections(query))
+      }
+      case x => x
     }
   }
 
