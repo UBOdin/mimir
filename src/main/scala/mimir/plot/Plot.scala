@@ -2,8 +2,6 @@ package mimir.plot
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-import vegas._
-import vegas.render.WindowRenderer
 
 import mimir.algebra._
 import mimir.exec.stream._
@@ -35,7 +33,7 @@ object Plot
     case d:DatePrimitive => d.asDateTime
     case t:TimestampPrimitive => t.asDateTime
   }
-
+/*
   def plot(data: ResultIterator, title: String, x: String, y: String)
   {
     logger.debug(s"Plotting: $title")
@@ -59,4 +57,5 @@ object Plot
     (chart:WindowRenderer).show
 
   }
+  */
 }
