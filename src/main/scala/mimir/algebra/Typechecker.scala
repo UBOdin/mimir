@@ -54,12 +54,17 @@ class ExpressionChecker(scope: (String => Type) = Map().apply _) extends LazyLog
 			case JDBCVar(t) => t
 			case Function("CAST", fargs) =>
 				// Special case CAST
-				Eval.inline(fargs(1)) match {
-					case TypePrimitive(t) => t
-					case p:PrimitiveValue => 
-						throw new SQLException("Invalid CAST to '"+p+"' of type: "+typeOf(p))
-					case _ => TAny()
+				try {
+					Eval.inline(fargs(1)) match {
+						case TypePrimitive(t) => t
+						case p: PrimitiveValue =>
+							// println(p.toString)
+							Type.fromString(p.toString.replace("\'","")) // last chance check, this will throw an error if it isn't a type
+							// throw new SQLException("Invalid CAST to '" + p + "' of type: " + typeOf(p))
+						case _ => TAny()
+					}
 				}
+
 			case Function(fname, fargs) =>
 				FunctionRegistry.typecheck(fname, fargs.map(typeOf(_)))
 			case Conditional(condition, thenClause, elseClause) => 

@@ -255,7 +255,7 @@ object Mimir extends LazyLogging {
         db.query(
           Project(Seq(ProjectArg(x, Var(x)), ProjectArg(y, Var(y))), db.getTableOperator(table))
         ) { result =>
-          Plot.plot(result, table, x, y)
+//          Plot.plot(result, table, x, y)
         }
 
 

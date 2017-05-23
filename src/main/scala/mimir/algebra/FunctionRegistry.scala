@@ -5,8 +5,9 @@ import java.sql.SQLException
 import mimir.provenance._
 import mimir.ctables._
 import mimir.util._
-import mimir.exec.{TupleBundler,WorldBits}
+import mimir.exec.{TupleBundler, WorldBits}
 import mimir.parser.SimpleExpressionParser
+import net.sf.jsqlparser.expression.PrimitiveValue
 import org.geotools.referencing.datum.DefaultEllipsoid
 import org.joda.time.DateTime
 
@@ -63,7 +64,7 @@ object FunctionRegistry {
       (params: Seq[PrimitiveValue]) => {
         params match {
           case x :: TypePrimitive(t)    :: Nil => Cast(t, x)
-          case _ => throw new SQLException("Invalid cast: "+params)
+          case _ => Cast(Type.fromString(params(1).toString.replace("\'","")), params(0)) // this hack is for typeInference because of single quotes //throw new SQLException("Invalid cast: "+params)
         }
       },
       (_) => TAny()

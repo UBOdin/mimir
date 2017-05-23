@@ -81,12 +81,12 @@ object TypeInferenceLens extends LazyLogging
     // Creating the table for the repair_key function
     val countTableName = name + "_TIBacked"
     if(!db.tableExists(countTableName)) {
-      var createTableStatement = s"CREATE TABLE $countTableName(columnName TEXT, typeGuess TEXT, projscore REAL, typeExplicit INT , score REAL);"
+      var createTableStatement = s"CREATE TABLE $countTableName(columnName TEXT, typeGuess TEXT, projscore REAL, typeExplicit TEXT, score REAL);"
       try{
         db.backend.update(createTableStatement)
       }
       catch{
-        case sQLException: SQLException => println("What?");
+        case sQLException: SQLException => println("TI backed table not created");
       }
 
     }
@@ -100,7 +100,7 @@ object TypeInferenceLens extends LazyLogging
       val totalV = totalVotes(loc)
       loc += 1
       v.map((tup) => { // loop over types
-        val typ = tup._1
+        val typ:String = tup._1.toString()
         var score = 0.0
         if(totalV > 0.0){
           score = tup._2 / totalV
@@ -138,17 +138,16 @@ object TypeInferenceLens extends LazyLogging
             ))
           )
 */
-
           val VGGuess = VGTerm(RKmodel(0), columnIndexes(col), Seq(), Seq())
-          val VGExpected = VGTerm(RKmodel(1), columnIndexes(col), Seq(), Seq())
-          val VGScore = VGTerm(RKmodel(2), columnIndexes(col), Seq(), Seq())
+          val VGExpected = VGTerm(RKmodel(2), columnIndexes(col), Seq(), Seq())
+          val VGScore = VGTerm(RKmodel(1), columnIndexes(col), Seq(), Seq())
 
           val threshold = args(0) // threshold passed in as the argument, from the lens creation
 
           ProjectArg(col,
             Conditional(Not(IsNullExpression(VGExpected)),
               Function("CAST",Seq(Var(col),VGExpected)),
-              Conditional(Comparison(mimir.algebra.Cmp.Gte,VGScore,threshold),Function("CAST",Seq(VGGuess,Var(col))),Var(col))
+              Conditional(Comparison(mimir.algebra.Cmp.Gte,VGScore,threshold),Function("CAST",Seq(Var(col),VGGuess)),Var(col))
             )
           )
 
@@ -157,6 +156,8 @@ object TypeInferenceLens extends LazyLogging
           ProjectArg(col, Var(col))
         }
       })
+
+    // println(repairs)
 
     (
       Project(repairs, query),
