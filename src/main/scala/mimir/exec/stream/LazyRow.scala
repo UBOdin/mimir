@@ -22,4 +22,5 @@ case class LazyRow(
     )
   def annotation(idx: Int): PrimitiveValue = 
     Eval.eval(annotationDefinition(idx).expression, input)
+  
 }

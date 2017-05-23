@@ -19,6 +19,7 @@ object Provenance {
     OperatorTranslation.compileProvenanceWithGProM(oper)
   }
   
+  
   def compile(oper: Operator): (Operator, Seq[String]) = {
     val makeRowIDProjectArgs = 
       (rowids: Seq[String], offset: Integer, padLen: Integer) => {

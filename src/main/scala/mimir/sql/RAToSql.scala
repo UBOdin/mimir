@@ -446,17 +446,17 @@ class RAToSql(db: Database)
             val recoveredOp = annotationsAndRecoveryToProjections(src)
              recoveredOp match {
               case Project(ncols, nsrc) => {
-                val schMap = nsrc.schema.toMap
+                //val schMap = nsrc.schema.toMap
                 val srcColsMap = ncols.map(srcCol => (srcCol.name, srcCol)).toMap
                 val noRemAnno = invisScm.map(ise => (ise._1.name, ise._1)).toMap
                 val newAnno = cols.map(col => {
                   col.expression match {
                     case Var(v) => {
-                      srcColsMap(v)
+                      ProjectArg(col.name, srcColsMap(v).expression)
                     }
                     case x => col
                   }
-                }).union(noRemAnno.filter( p => schMap.contains(p._1)).toSeq.map(f => f._2))
+                }).union(noRemAnno/*.filter( p => schMap.contains(p._1))*/.toSeq.map(f => f._2))
                 Project(newAnno, nsrc)
               }
               case x => throw new Exception("Recover Op needs project, not: "+x.getClass.toString())

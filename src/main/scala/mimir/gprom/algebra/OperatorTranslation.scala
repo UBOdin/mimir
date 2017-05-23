@@ -10,6 +10,7 @@ import mimir.ctables.VGTerm
 import mimir.ctables.VGTermAcknowledged
 import mimir.sql.sqlite.VGTermFunctions
 import mimir.exec.BestGuesser
+import mimir.provenance.Provenance
 
 object ProjectionArgVisibility extends Enumeration {
    val Visible = Value("Visible")
@@ -230,7 +231,7 @@ object OperatorTranslation {
           case Some(attrInterm) => attrInterm.attrMimirName
         }
         attrMimirName match {
-          case "ROWID" => RowIdVar()
+          case "ROWID" => Var(Provenance.rowidColnameBase)//RowIdVar()
           case _ => new Var(attrMimirName)
         }
       }
@@ -323,7 +324,7 @@ object OperatorTranslation {
       	throw new Exception("Expression Translation Not Yet Implemented '"+orderExpr+"'")
       }
       case rowNumExpr : GProMRowNumExpr => {
-      	RowIdVar()
+      	/*Var(Provenance.rowidColnameBase)*/RowIdVar()
       }
       case sQLParameter : GProMSQLParameter => {
       	throw new Exception("Expression Translation Not Yet Implemented '"+sQLParameter+"'")
@@ -438,14 +439,14 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
     val projOpInputs =  gpromProjOp.op.inputs
     val tableSchema = extractChildSchemaGProMOperator(gpromProjOp)
     val projSchema = getIntermediateSchemaFromGProMSchema(null,gpromProjOp.op.schema)
-    
-   val provAttrs = gpromIntPointerListToScalaList(gpromProjOp.op.provAttrs)
-     
+    val provAttrs = gpromIntPointerListToScalaList(gpromProjOp.op.provAttrs)
     var scList = Seq[(ProjectArg, ProjectionArgVisibility.Value, (String, Type), String)]()   
     var listCell = projExprs.head
     var i  = 1
     while(listCell != null){
       val projExpr = new GProMNode(listCell.data.ptr_value)
+      //if(projSchema(i-1).attrProjectedName.matches("_P_SIDE_.+"))
+      //    println(projSchema(i-1))
       val mimirExpr = translateGProMExpressionToMimirExpression(projExpr, tableSchema )
       val attrRefAttrPos = getGProMAttributeReferenceAttrPosition(projExpr, tableSchema)
       val projVisibility = {
@@ -455,7 +456,17 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
           ProjectionArgVisibility.Invisible 
       }
       listCell = listCell.next
-      scList = scList :+ (new ProjectArg(projSchema(i-1).attrProjectedName, mimirExpr), projVisibility, (projSchema(i-1).attrName, projSchema(i-1).attrType), tableSchema(attrRefAttrPos).alias)
+      //sanity check
+      /*if(projSchema.length <= i-1)
+        throw new Exception(s"Something is very wrong: i: $i : ${mimirExpr.toString()} \n$tableSchema \n--------------\n$projSchema")
+      else if(tableSchema.length <= attrRefAttrPos)
+        throw new Exception(s"Something is very wrong: attrrefpos: $attrRefAttrPos : ${mimirExpr.toString()} \n$tableSchema \n--------------\n$projSchema ")
+      */
+      var tablealias = ""
+      if(tableSchema.length > attrRefAttrPos)
+        tablealias = tableSchema(attrRefAttrPos).alias  
+      
+      scList = scList :+ (new ProjectArg(projSchema(i-1).attrProjectedName, mimirExpr), projVisibility, (projSchema(i-1).attrName, projSchema(i-1).attrType), tablealias)
       i+=1
     }
     scList.seq
@@ -749,9 +760,9 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
             }
           }
           case x => x
+        }
       }
-      }
-      /*attrProjName match {
+      /*attrProjName = attrProjName match {
         case "ROWID" => "MIMIR_ROWID"
         case _ => attrProjName
       }*/
@@ -1315,7 +1326,8 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         //TODO: fix this hack for matching to gprom AGGR_{N} names to mimir MIMIR_AGG_{attrAlias}
         val tableSchema = extractTableSchemaForGProM(source)
         val aggrSchema = db.bestGuessSchema(oper)
-        (groupBy.union(agggregates)).zip(aggrSchema).zipWithIndex.map(aggr => {
+        val fullSchema = (groupBy.union(agggregates)).zip(aggrSchema).zipWithIndex
+        fullSchema.map(aggr => {
           val attrNameInfo = (aggr._1._2._1/*"AGGR_"+aggr._2*/, aggr._1._2._1, "")//aggFunctionToGProMName(aggr._1._1, tableSchema(0))
           new MimirToGProMIntermediateSchemaInfo(tableSchema(0).name, tableSchema(0).alias, attrNameInfo._1, attrNameInfo._2, attrNameInfo._3, aggr._1._2._2, aggr._2, 0)
         })
@@ -1627,17 +1639,34 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         val memctxq = GProMWrapper.inst.createMemContextName("QUERY_CONTEXT")
         val gpromNode = mimirOperatorToGProMList(ProvenanceOf(oper))
         gpromNode.write()
+        val gpNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
+        println("------------------------------------------------")
+        println(gpNodeStr)
+        println("------------------------------------------------")
         val provGpromNode = GProMWrapper.inst.provRewriteOperator(gpromNode.getPointer)
-        /*val provNodeStr = GProMWrapper.inst.gpromNodeToString(provGpromNode.getPointer())
+        val provNodeStr = GProMWrapper.inst.gpromNodeToString(provGpromNode.getPointer())
         println("------------------------------------------------")
         println(oper)
         println("------------------------------------------------")
         println(provNodeStr)
-        println("------------------------------------------------")*/
+        println("------------------------------------------------")
         var opOut = gpromStructureToMimirOperator(0, provGpromNode, null)
         //GProMWrapper.inst.gpromFreeMemContext(memctx)
-        db.ra.provenanceColsFromRecover(opOut)
+        db.ra.provenanceColsFromRecover(recoverForRowId(opOut))
         
+    }
+  }
+   
+  def recoverForRowId(oper:Operator) : Operator = {
+    oper match {
+      case Recover(subj,invisScm) => {
+        Recover(subj, invisScm.flatMap(isce => {
+          if(isce._2._1.matches(".*ROWID"))
+            Some(isce)
+          else
+            None
+        }))
+      }
     }
   }
    

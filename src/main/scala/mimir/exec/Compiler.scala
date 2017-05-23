@@ -46,7 +46,7 @@ class Compiler(db: Database) extends LazyLogging {
         Seq(
           ProjectArg(CTPercolator.mimirRowDeterministicColumnName, rowDeterminism),
           ProjectArg(Provenance.rowidColnameBase, Function(Provenance.mergeRowIdFunction, provenanceCols.map( Var(_) ) ))
-        ),
+        ),// ++ provenanceCols.map(pc => ProjectArg(pc,Var(pc))),
         oper
       )
 
@@ -130,7 +130,7 @@ class Compiler(db: Database) extends LazyLogging {
 
   def sqlForBackend(oper: Operator, opts: Compiler.Optimizations = Compiler.standardOptimizations): SelectBody =
   {
-    val optimized = Compiler.optimize(oper)//gpromOptimize(oper)
+    val optimized = { if(db.backend.isInstanceOf[mimir.sql.GProMBackend] ) Compiler.gpromOptimize(oper) else Compiler.optimize(oper, opts)}
 
     // The final stage is to apply any database-specific rewrites to adapt
     // the query to the quirks of each specific target database.  Each

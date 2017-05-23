@@ -136,7 +136,7 @@ object MimirGProM {
     //db.update(new MimirJSqlParser(new StringReader("CREATE TABLE T(C integer, D integer)")).Statement())
     //testDebug = true
     //runTests(30) 
-    //runTests(1) 
+    runTests(1) 
     
     /*val queryStr0 = "SELECT S.A AS P, S.B AS Q FROM R AS S"
     val statements2 = db.parse(queryStr0)
@@ -156,8 +156,9 @@ object MimirGProM {
      println(totallyOptimize(testOper4))
      println("---------^ Actual Mimir Oper ^----------")*/
    
-    val queryqStr = "SELECT R.A FROM R"
-    val querypStr = s"PROVENANCE OF ($queryqStr)"
+    /*val queryqStr = "SELECT R.A FROM R"
+    val querypStr = s"PROVENANCE OF ($queryqStr)"*/
+    
     /*var gpnodepStr = GProMWrapper.inst.gpromRewriteQuery(querypStr+";")
    //GProMWrapper.inst.gpromFreeMemContext(memctx)
      println(gpnodepStr)
@@ -165,7 +166,7 @@ object MimirGProM {
      println(getQueryResults(gpnodepStr))
      println("-------^ GProM Oper RW ^---------") */
     
-    val statements3 = db.parse(queryqStr)
+    /*val statements3 = db.parse(queryqStr)
     var testOper8 = db.sql.convert(statements3.head.asInstanceOf[Select])
     val operProv = OperatorTranslation.compileProvenanceWithGProM(testOper8)
     testOper8 = operProv._1 
@@ -226,7 +227,7 @@ object MimirGProM {
      val query = testOper2//InlineVGTerms(testOper2 )
      
     
-    gp.metadataLookupPlugin.setOper(query)
+    gp.metadataLookupPlugin.setOper(query)*/
       
     
     
@@ -240,7 +241,7 @@ object MimirGProM {
      val tgpromres = time{ getQueryResults(sqlRewritten) }
      println(tgpromres._2)*/
     
-     //testOper2 = db.compiler.optimize(testOper2, db.compiler.standardOptimizations)
+     /*//testOper2 = db.compiler.optimize(testOper2, db.compiler.standardOptimizations)
      //testOper2 = totallyOptimize(testOper2)
      //val inlinedSQL = db.compiler.sqlForBackend(query).toString()
      val operStr2 = query.toString()
@@ -318,7 +319,7 @@ object MimirGProM {
      /*val optSqlStr = GProMWrapper.inst.operatorModelToSql(optimizedGpromNode.getPointer())
      println("-------v Optimized GProM Sql v---------")
      println(optSqlStr)
-     println("-------^ Optimized GProM Sql ^---------")*/
+     println("-------^ Optimized GProM Sql ^---------")*/*/
   }
   
   def getQueryResults(oper : mimir.algebra.Operator) : String =  {
@@ -382,7 +383,7 @@ object MimirGProM {
     for(i <- 1 to runLoops ){
       val memctx = GProMWrapper.inst.gpromCreateMemContext() 
       val testSeq = Seq(
-        /*(s"Queries for Tables - run $i", 
+        (s"Queries for Tables - run $i", 
             "SELECT R.A, R.B FROM R" ), 
         (s"Queries for Aliased Tables - run $i", 
             "SELECT S.A, S.B FROM R AS S" ), 
@@ -407,7 +408,7 @@ object MimirGProM {
         (s"Queries for Aliased Tables with Epression Attrinutes with Selection- run $i",
             "SELECT S.A + S.B AS Z FROM R AS S WHERE S.A = S.B"),
         (s"Queries for Aliased Tables with Joins with Aliased Attributes - run $i", 
-            "SELECT S.A AS P, U.C AS Q FROM R AS S JOIN T AS U ON S.A = U.C"),*/
+            "SELECT S.A AS P, U.C AS Q FROM R AS S JOIN T AS U ON S.A = U.C"),
         (s"Queries for Tables with Aggregates - run $i",
             "SELECT SUM(INT_COL_B), COUNT(INT_COL_B) FROM TEST_B_RAW"),
         (s"Queries for Aliased Tables with Aggregates - run $i",

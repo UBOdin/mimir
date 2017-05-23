@@ -187,6 +187,7 @@ case class Select(condition: Expression, source: Operator) extends Operator
   def rebuildExpressions(x: Seq[Expression]) = Select(x(0), source)
 }
 
+
 /**
  * invisify provenance attributes operator -- With Provenance
  */
