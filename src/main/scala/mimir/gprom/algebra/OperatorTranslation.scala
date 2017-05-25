@@ -106,8 +106,17 @@ object OperatorTranslation {
       case selectionOperator : GProMSelectionOperator => { 
           val tableIntermSch = extractChildSchemaGProMOperator(selectionOperator)
           val condition = translateGProMExpressionToMimirExpression(new GProMNode(selectionOperator.cond.getPointer), tableIntermSch) 
-          val sourceChild = gpromStructureToMimirOperator(depth+1, selectionOperator.op, selectionOperator)
-          new Select(condition, sourceChild)
+          if(selectionOperator.op.provAttrs != null && selectionOperator.op.provAttrs.length > 0 && depth == 0){
+            val sourceChild = gpromStructureToMimirOperator(-1, selectionOperator.op, selectionOperator)
+            sourceChild match {
+              case Recover(proj@Project(visibleProjArgs, sourceChild), invisibleSchema) => new Recover(new Select(condition, proj), invisibleSchema)
+              case x => throw new Exception("Translation error: Should Be Recover but got:'"+x+"'")
+            }
+          }
+          else{
+            val sourceChild = gpromStructureToMimirOperator(depth+1, selectionOperator.op, selectionOperator)
+            new Select(condition, sourceChild)
+          }
         }
       case setOperator : GProMSetOperator => { 
         throw new Exception("Translation Not Yet Implemented '"+setOperator+"'") 
@@ -232,6 +241,7 @@ object OperatorTranslation {
         }
         attrMimirName match {
           case "ROWID" => Var(Provenance.rowidColnameBase)//RowIdVar()
+          //case s if s.matches("_P_SIDE_.+") => Function("CAST", Seq(Var(attrMimirName),TypePrimitive(TInt())))
           case _ => new Var(attrMimirName)
         }
       }
@@ -278,6 +288,11 @@ object OperatorTranslation {
         functionCall.functionname match {
           case "NOT" => {
             Not(translateGProMExpressionToMimirExpression(new GProMNode(functionCall.args.head.data.ptr_value), intermSchema))
+          }
+          case "sys_op_map_nonnull" => {
+            val arg = translateGProMExpressionToMimirExpression(new GProMNode(functionCall.args.head.data.ptr_value), intermSchema)
+            //arg
+            Function("CAST", Seq(arg,TypePrimitive(TString())))
           }
           case "BEST_GUESS_VGTERM" => {
             val fargs = OperatorTranslation.gpromListToScalaList(functionCall.args).map(arg => translateGProMExpressionToMimirExpression(new GProMNode(arg.getPointer), intermSchema))
@@ -479,16 +494,24 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
       case null => Seq[Var]()
       case x => {  
         val aggOpInputs =  gpromAggOp.op.inputs
-        val tableSchema = extractTableSchemaGProMOperator(aggOpInputs)
-        val aggSchema = getIntermediateSchemaFromGProMSchema(null,gpromAggOp.op.schema)
-    
+        //val tableSchema = extractTableSchemaGProMOperator(aggOpInputs)
+        //val aggSchema = getIntermediateSchemaFromGProMSchema(null,gpromAggOp.op.schema)
+        val aggSchema = getIntermediateSchemaFromGProMStructure(gpromAggOp)
+        
+        val projInputHead = new GProMNode(aggOpInputs.head.data.ptr_value)
+        val arrgIntermSch = projInputHead.`type` match {
+          case GProM_JNA.GProMNodeTag.GProM_T_ProjectionOperator => aggSchema
+          case GProM_JNA.GProMNodeTag.GProM_T_TableAccessOperator => extractChildSchemaGProMOperator(gpromAggOp)
+          case _ => aggSchema
+        }
+        
         var scList = Seq[Var]()
         var listCell = gropByExprs.head
         var i = 1
         while(listCell != null) {
-          val scmPrefix = tableSchema(i-1).getAttrPrefix()
+          //val scmPrefix = tableSchema(i-1).getAttrPrefix()
           val groupByExpr = new GProMNode(listCell.data.ptr_value)
-          val mimirExpr = translateGProMExpressionToMimirExpression(groupByExpr, tableSchema )
+          val mimirExpr = translateGProMExpressionToMimirExpression(groupByExpr, arrgIntermSch )
           listCell = listCell.next
           i+=1
           scList = scList :+ mimirExpr.asInstanceOf[Var]
@@ -513,17 +536,18 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
     }
  
     var startIdx = 1
-    if(gropByExprs != null)
-      startIdx += gropByExprs.length
+    /*if(gropByExprs != null)
+      startIdx += gropByExprs.length*/
     
     if(aggrs == null)
       return Seq()
       
     var listCell = aggrs.head
-    var i = 1;
+    var i = startIdx;
     var aggFunctions = Seq[AggFunction]()
     while(listCell != null ) {
       //val scmPrefix = childSchema(i-1).getAttrPrefix()
+      var distinct = false
       val aggr = new GProMFunctionCall(listCell.data.ptr_value)
       val aggrArgs = aggr.args
       var aggrArgListCell = aggrArgs.head
@@ -531,10 +555,16 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         val aggrArg =  new GProMNode(aggrArgListCell.data.ptr_value)
         val mimirExpr = translateGProMExpressionToMimirExpression(aggrArg, arrgIntermSch )
         aggrArgListCell = aggrArgListCell.next
-        mimirExpr
+        mimirExpr match {
+          case Function("DISTINCT", distinctArgs) => {
+            distinct = true
+            distinctArgs(0)  
+          }
+          case _ => mimirExpr 
+        }
       }
       listCell = listCell.next
-      aggFunctions = aggFunctions ++  Seq(new AggFunction(aggr.functionname, (aggr.isAgg == 0), mimirAggrArgs, aggSchema(i-1).attrMimirName))
+      aggFunctions = aggFunctions ++  Seq(new AggFunction(aggr.functionname, distinct, mimirAggrArgs, aggSchema(i-1).attrMimirName))
       i+=1
     }
     aggFunctions
@@ -953,7 +983,13 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
 			}
 			case Table(name, alias, sch, meta) => {
 			  var schTable = getSchemaForGProM(mimirOperator)
-			  schTable = joinIntermSchemas(schTable, Seq(new MimirToGProMIntermediateSchemaInfo(schTable(0).name, schTable(0).alias, RowIdVar().toString(), "MIMIR_ROWID", "", db.backend.rowIdType, 0, 0) ), 0, true)
+			  var hasRowID = false;
+			  schTable.map(x => {
+			     if(x.attrName.matches(".*ROWID"))
+			       hasRowID = true;
+			  })
+			  if(!hasRowID)
+			    schTable = joinIntermSchemas(schTable, Seq(new MimirToGProMIntermediateSchemaInfo(schTable(0).name, schTable(0).alias, RowIdVar().toString(), "MIMIR_ROWID", "", db.backend.rowIdType, 0, 0) ), 0, true)
 			  val toQoScm = translateMimirSchemaToGProMSchema(alias, schTable)//mimirOperator)
 			  val gqo = new GProMQueryOperator.ByValue(GProM_JNA.GProMNodeTag.GProM_T_TableAccessOperator, null, toQoScm, null, null, null)
 			  val gpromTable = new GProMTableAccessOperator.ByValue(gqo,name,null)
@@ -1325,8 +1361,10 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
       case Aggregate(groupBy, agggregates, source) => {
         //TODO: fix this hack for matching to gprom AGGR_{N} names to mimir MIMIR_AGG_{attrAlias}
         val tableSchema = extractTableSchemaForGProM(source)
-        val aggrSchema = db.bestGuessSchema(oper)
-        val fullSchema = (groupBy.union(agggregates)).zip(aggrSchema).zipWithIndex
+        var aggrSchema = db.bestGuessSchema(oper)
+        for(i <- 0 to (groupBy.length-1))
+          aggrSchema = aggrSchema.tail.union(Seq(aggrSchema.head))
+        val fullSchema = (agggregates.union(groupBy)).zip(aggrSchema).zipWithIndex
         fullSchema.map(aggr => {
           val attrNameInfo = (aggr._1._2._1/*"AGGR_"+aggr._2*/, aggr._1._2._1, "")//aggFunctionToGProMName(aggr._1._1, tableSchema(0))
           new MimirToGProMIntermediateSchemaInfo(tableSchema(0).name, tableSchema(0).alias, attrNameInfo._1, attrNameInfo._2, attrNameInfo._3, aggr._1._2._2, aggr._2, 0)
@@ -1472,7 +1510,12 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
       var j = 0;
       var aggrArgListCell = gpromAggrArgs.head
       aggr.args.foreach(arg => {
-        val gpromArg = translateMimirExpressionToGProMCondition(arg, schema)
+        val gpromArg = {
+          if(aggr.distinct)
+            translateMimirExpressionToGProMCondition(Function("DISTINCT",Seq(arg)), schema)
+          else
+            translateMimirExpressionToGProMCondition(arg, schema)
+        }
         val newArgCell = createGProMListCell(gpromArg)
         if(j == 0){
         gpromAggrArgs.head = newArgCell
@@ -1617,10 +1660,13 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         //val memctxq = GProMWrapper.inst.createMemContextName("QUERY_CONTEXT")
         val gpromNode = mimirOperatorToGProMList(oper)
         gpromNode.write()
-        //val gpromNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
+        val gpromNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
+        /*println("------------------------------------------------")
+        println(gpromNodeStr)
+        println("------------------------------------------------")*/
         val optimizedGpromNode = GProMWrapper.inst.optimizeOperatorModel(gpromNode.getPointer)
-        /*val optNodeStr = GProMWrapper.inst.gpromNodeToString(optimizedGpromNode.getPointer())
-        println("------------------------------------------------")
+        val optNodeStr = GProMWrapper.inst.gpromNodeToString(optimizedGpromNode.getPointer())
+        /*println("------------------------------------------------")
         println(oper)
         println("------------------------------------------------")
         println(optNodeStr)
@@ -1639,20 +1685,20 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
         val memctxq = GProMWrapper.inst.createMemContextName("QUERY_CONTEXT")
         val gpromNode = mimirOperatorToGProMList(ProvenanceOf(oper))
         gpromNode.write()
-        val gpNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
+        /*val gpNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
         println("------------------------------------------------")
         println(gpNodeStr)
-        println("------------------------------------------------")
+        println("------------------------------------------------")*/
         val provGpromNode = GProMWrapper.inst.provRewriteOperator(gpromNode.getPointer)
-        val provNodeStr = GProMWrapper.inst.gpromNodeToString(provGpromNode.getPointer())
+        /*val provNodeStr = GProMWrapper.inst.gpromNodeToString(provGpromNode.getPointer())
         println("------------------------------------------------")
         println(oper)
         println("------------------------------------------------")
         println(provNodeStr)
-        println("------------------------------------------------")
+        println("------------------------------------------------")*/
         var opOut = gpromStructureToMimirOperator(0, provGpromNode, null)
         //GProMWrapper.inst.gpromFreeMemContext(memctx)
-        db.ra.provenanceColsFromRecover(recoverForRowId(opOut))
+        provenanceColsFromRecover(recoverForRowId(opOut))
         
     }
   }
@@ -1667,6 +1713,130 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
             None
         }))
       }
+    }
+  }
+  
+  def provenanceColsFromRecover(oper:Operator) : (Operator, Seq[String]) = {
+    oper match {
+     case Recover(subj,invisScm) => {
+       (annotationsAndRecoveryToProjections(oper), invisScm.map(ise => ise._1.name))
+     }
+    }
+  }
+  
+  def replaceRowIdVars(expr: Expression, rowIdCol :String): Expression = {
+    expr match {
+      case RowIdVar() => Var(rowIdCol)
+      case _ => expr.rebuild(expr.children.map(replaceRowIdVars(_,rowIdCol)))
+    }
+  }
+  
+  def recoverProject(invisScm: Seq[(ProjectArg, (String,Type), String)], cols:Seq[ProjectArg], recoveredOp: Operator) : Operator = {
+     recoveredOp match {
+      case Project(ncols, nsrc) => {
+        //val schMap = nsrc.schema.toMap
+        val srcColsMap = ncols.map(srcCol => (srcCol.name, srcCol)).toMap
+        val noRemAnno = invisScm.map(ise => (ise._1.name, ise._1)).toMap
+        val rowIdCol = invisScm.filter(ise => ise._1.name.matches(".*ROWID"))(0)._1.name
+        val newAnno = cols.map(col => {
+          col.expression match {
+            case Var(v) => {
+              ProjectArg(col.name, replaceRowIdVars(srcColsMap(v).expression, rowIdCol))
+            }
+            case x => col
+          }
+        }).union(noRemAnno/*.filter( p => schMap.contains(p._1))*/.toSeq.map(f => f._2))
+        Project(newAnno, nsrc)
+      }
+      case Select(cond, proj@Project(ncols, src)) => {
+         Select(cond,recoverProject(invisScm, cols, proj))
+      }
+      case Select(cond, ssel@Select(scond,sop)) => {
+        Select(cond,recoverProject(invisScm, cols, ssel))
+      }
+      case x => throw new Exception("Recover Op needs project, not: "+x.toString())
+    }
+  }
+  
+  def annotationsAndRecoveryToProjections(oper:Operator) : Operator = {
+    oper match {
+      case Recover(subj,invisScm) => {
+        subj match {
+          case Project(cols, src) => {
+            val recoveredOp = annotationsAndRecoveryToProjections(src)
+            recoverProject(invisScm, cols, recoveredOp)
+          }  
+          case Select(cond, Project(cols, src)) => {
+            val recoveredOp = annotationsAndRecoveryToProjections(src)
+            Select(cond,recoverProject(invisScm, cols, recoveredOp))
+          }
+          case x => throw new Exception("Recover Op needs project child, not: "+x.getClass.toString())
+        }
+      }
+      case Project(cols, src) => {
+        src match {
+         case Annotate(subj,invisScm) => {
+            val repAnno = invisScm.map(ise => (ise._1.name, ise._1)).toMap
+            val rowIdCol = invisScm.filter(ise => ise._1.name.matches(".*ROWID"))(0)._1.name
+            val colSet = cols.map(col => col.name).toSet
+            val newAnno = invisScm.flatMap(ise => {
+              if(colSet.contains(ise._1.name)){
+                None
+              }
+              else
+                Some(ise._1)
+            })
+            
+            val annotatedOp = Project(cols.map(col => {
+              val projArg = {
+                if(repAnno.contains(col.name)){
+                  repAnno(col.name)
+                }
+                else{
+                  col
+                }
+              }
+              ProjectArg(projArg.name, replaceRowIdVars(projArg.expression,rowIdCol))  
+            }).union(newAnno), annotationsAndRecoveryToProjections(subj) )
+            annotatedOp
+          }
+          case x => x
+        }
+      }
+      /*case Annotate(subj,invisScm) => {
+        subj match {
+          case Annotate(subj,invisScms) => {
+            val annotatedOp = annotationsAndRecoveryToProjections(subj)
+            val repAnno = invisScms.map(ise => (ise._1.name, ise._1)).toMap
+            Project(invisScm.map(ise => {
+              if(repAnno.contains(ise._1.name)){
+                repAnno(ise._1.name)
+              }
+              else
+                ise._1
+            }), annotatedOp)
+          }
+          case _ => Project(invisScm.map( _._1), annotationsAndRecoveryToProjections(subj))
+        }
+      }*/
+      case Aggregate(groupBy, agggregates, source) => {
+        val provSrc  = compileProvenanceWithGProM(source)._1
+        Aggregate(groupBy, agggregates, annotationsAndRecoveryToProjections(provSrc)) 
+        //Aggregate(groupBy, agggregates, annotationsAndRecoveryToProjections(source))
+      }
+      case Select(cond, source) => {
+         Select(cond,annotationsAndRecoveryToProjections(source))
+      }
+      case Join(lhs, rhs) => {
+        Join(annotationsAndRecoveryToProjections(lhs), annotationsAndRecoveryToProjections(rhs))
+      }
+      case LeftOuterJoin(lhs, rhs, cond) => {
+        LeftOuterJoin(annotationsAndRecoveryToProjections(lhs), annotationsAndRecoveryToProjections(rhs), cond)
+      }
+      case Limit(off,lim,query) => {
+        Limit(off,lim,annotationsAndRecoveryToProjections(query))
+      }
+      case x => x
     }
   }
    

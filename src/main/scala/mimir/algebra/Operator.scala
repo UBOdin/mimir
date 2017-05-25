@@ -49,8 +49,8 @@ sealed abstract class Operator
   /**
    * Convenience method to invoke the Typechecker
    */
-  def schema: Seq[(String, Type)] =
-    Typechecker.schemaOf(this)
+  def schema: Seq[(String, Type)] = Typechecker.schemaOf(this)
+   
 
   /**
    * Convenience method to get the column names from schema
