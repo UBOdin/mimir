@@ -55,16 +55,18 @@ libraryDependencies ++= Seq(
     exclude("nz.ac.waikato.cms.weka",  "weka-dev").
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
  
-  // Jung - General purpose graph manipulation library
+  //////////////////////// Jung ////////////////////////
+  // General purpose graph manipulation library
   // Used to detect and analyze Functional Dependencies
   "net.sf.jung"                   %   "jung-graph-impl"       % "2.0.1",
   "net.sf.jung"                   %   "jung-algorithms"       % "2.0.1",
   "net.sf.jung"                   %   "jung-visualization"    % "2.0.1",
   "jgraph"                        %   "jgraph"                % "5.13.0.0",
-  "javax.media" 				  %   "jai_core"              % "1.1.3",
-  
-  // Geotools - Geospatial data transformations
-  // Used by the CURE scenario
+  "javax.media" 		  %   "jai_core"              % "1.1.3",  
+  //
+
+  //////////////////////// Geotools ////////////////////////
+  // Geospatial data transformations, Used by the CURE scenario
   "org.geotools"                  %   "gt-referencing"        % "16.2",
   "org.geotools"                  %   "gt-referencing"        % "16.2",
   "org.geotools"                  %   "gt-epsg-hsql"          % "16.2",
@@ -78,6 +80,8 @@ libraryDependencies ++= Seq(
   "net.java.dev.jna"              %    "jna-platform"         % "4.2.2",
   "log4j"                         %    "log4j"                % "1.2.17"
   
+  //////////////////////// Visualization ////////////////////////
+  "com.github.aishfenton"         %%  "vegas"                 % "0.2.3"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")
