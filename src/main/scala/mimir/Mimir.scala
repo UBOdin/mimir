@@ -73,10 +73,10 @@ object Mimir extends LazyLogging {
       }
 
       if(conf.file.get == None || conf.file() == "-"){
-        source = new LineReaderInputSource(terminal);
+        source = new LineReaderInputSource(terminal)
         output = new PrettyOutputFormat(terminal)
       } else {
-        source = new FileReader(conf.file());
+        source = new FileReader(conf.file())
         output = DefaultOutputFormat
       }
 
@@ -105,6 +105,7 @@ object Mimir extends LazyLogging {
           case expl: Explain    => handleExplain(expl)
           case pragma: Pragma   => handlePragma(pragma)
           case analyze: Analyze => handleAnalyze(analyze)
+          case plot: DrawPlot   => Plot.plot(plot, db, output)
           case _                => db.update(stmt)
         }
 
@@ -261,7 +262,7 @@ object Mimir extends LazyLogging {
             db.getTableOperator(table)
           )
         ) { result =>
-          Plot.plot(result, table, x, y)
+          Plot.plot(result, table, x, y, output)
         }
 
 

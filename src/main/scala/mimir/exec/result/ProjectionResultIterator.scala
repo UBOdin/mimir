@@ -1,4 +1,4 @@
-package mimir.exec.stream
+package mimir.exec.result
 
 import java.sql._
 import com.typesafe.scalalogging.slf4j.LazyLogging
@@ -21,9 +21,9 @@ class ProjectionResultIterator(
   // Set up the schema details
   //
   private val typechecker = new ExpressionChecker(inputSchema.toMap)
-  val schema: Seq[(String,Type)] = 
+  val tupleSchema: Seq[(String,Type)] = 
     tupleDefinition.map { case ProjectArg(name, expr) => (name, typechecker.typeOf(expr)) }
-  val annotations: Seq[(String,Type)] = 
+  val annotationSchema: Seq[(String,Type)] = 
     annotationDefinition.map { case ProjectArg(name, expr) => (name, typechecker.typeOf(expr)) }
 
   //
@@ -119,4 +119,5 @@ class ProjectionResultIterator(
       }
     }
   }
+
 }

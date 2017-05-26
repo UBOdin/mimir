@@ -19,4 +19,12 @@ object ListUtils {
     if(n > 0){ t.next :: headN(t, n-1) }
     else { Nil }
   }
+
+  def pivot[A](t: Seq[Seq[A]]): IndexedSeq[Seq[A]] = 
+  {
+    val maxWidth = t.map { _.size }.max
+    (0 until maxWidth).map { 
+      i => t.map { _(i) }
+    }.toIndexedSeq
+  }
 }

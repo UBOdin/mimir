@@ -1,4 +1,4 @@
-package mimir.exec.stream
+package mimir.exec.result
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
@@ -7,7 +7,7 @@ import mimir.exec.{WorldBits,TupleBundler}
 
 class SampleResultIterator(
   val src: ResultIterator, 
-  val schema: Seq[(String, Type)],
+  val tupleSchema: Seq[(String, Type)],
   val nonDet: Set[String],
   val numSamples: Int
 )
@@ -26,7 +26,7 @@ class SampleResultIterator(
     }
   val worldBitsColumnIdx = src.schema.indexWhere(_._1.equals("MIMIR_WORLD_BITS"))
 
-  def annotations = src.annotations
+  def annotationSchema = src.annotationSchema
 
   def close() = src.close()
   def hasNext() = src.hasNext()

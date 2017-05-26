@@ -5,12 +5,13 @@ import org.jline.terminal.Terminal
 import org.jline.utils.{AttributedStyle,AttributedStringBuilder,AttributedString}
 
 import mimir.util.ExperimentalOptions
-import mimir.exec.stream.{ResultIterator,Row}
+import mimir.exec.result.{ResultIterator,Row}
 
 trait OutputFormat
 {
   def print(msg: String): Unit
   def print(results: ResultIterator): Unit
+  def printRaw(msg: Array[Byte]): Unit
 }
 
 object DefaultOutputFormat
@@ -44,11 +45,18 @@ object DefaultOutputFormat
       output.foreach { row => print(row) }
     })
   }
+
+  def printRaw(msg: Array[Byte])
+  {
+    println(msg.mkString)
+  }
+
 }
 
 class PrettyOutputFormat(terminal: Terminal)
   extends OutputFormat
 {
+
   def print(msg: String)
   {
     terminal.writer.write(msg)
@@ -101,4 +109,8 @@ class PrettyOutputFormat(terminal: Terminal)
     }
   }
 
+  def printRaw(msg: Array[Byte])
+  {
+    terminal.output.write(msg)
+  }
 }

@@ -1,4 +1,4 @@
-package mimir.exec.stream
+package mimir.exec.result
 
 import java.sql.SQLException
 import mimir.algebra._

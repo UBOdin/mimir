@@ -1,5 +1,8 @@
 package mimir.util
 
+import java.io._
+import scala.collection.mutable.Buffer
+
 object SerializationUtils {
 
   private val base64in = java.util.Base64.getDecoder()
@@ -39,5 +42,17 @@ object SerializationUtils {
     base64out.encodeToString(data)
   def b64decode(data: String): Array[Byte] =
     base64in.decode(data)
+
+  def b64encode(file: File): String =
+  {
+    val in = new FileInputStream(file);
+    val buff = Buffer[Byte]();
+    var c = in.read();
+    while(c >= 0){
+      buff += c.toByte
+      c = in.read();
+    }
+    return b64encode(buff.toArray);
+  }
 
 }
