@@ -138,13 +138,18 @@ object MCDBTimingSpec
         update(updSql4)
         println("created REV_INCREASE")
      
-        val r = query(querySql)
+       val rowCnt = query(querySql)(r => {
+           var x = 0
+           while(r.hasNext()){ 
+             r.next()
+             x += 1 
+            }
+            x
+          })
         println("queried REV_INCREASE")
-        var x = 0
-        r.open
-        while(r.getNext()){ x += 1 }
         
-        println(s"$x Rows ")
+        
+        println(s"$rowCnt Rows ")
      }
      println(s"Time:${timeForQuery._2} seconds <- Query:$updSql1$updSql2$updSql3$querySql ")
      timeForQuery._2 should be lessThan queryAndTime._2
@@ -212,13 +217,17 @@ object MCDBTimingSpec
         update(updSql4)
         println("created arrv_times")
      
-        val r = query(querySql)
+        val rowCnt = query(querySql)(r => {
+           var x = 0
+           while(r.hasNext()){ 
+             r.next()
+             x += 1 
+            }
+            x
+          })
         println("queried arrv_times and ship_times")
-        var x = 0
-        r.open
-        while(r.getNext()){ x += 1 }
         
-        println(s"$x Rows ")
+        println(s"$rowCnt Rows ")
      }
      println(s"Time:${timeForQuery._2} seconds <- Query:$updSql1$updSql2$updSql3$querySql ")
      timeForQuery._2 should be lessThan queryAndTime._2

@@ -1,18 +1,15 @@
 package mimir.gprom.algebra
 
-import mimir.parser.{MimirJSqlParser}
-import org.specs2.mutable._
+import org.gprom.jdbc.jna.GProMWrapper
 import org.specs2.specification._
+import org.specs2.specification.core.Fragments
 
 import mimir._
-import mimir.parser._
 import mimir.algebra._
 import mimir.sql._
 import mimir.test._
-import org.gprom.jdbc.jna.GProMWrapper
-import org.gprom.jdbc.jna.GProMNode
 import net.sf.jsqlparser.statement.select.Select
-import org.specs2.specification.core.Fragments
+import mimir.exec.Compiler
 
 object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorTranslation") with BeforeAll with AfterAll {
 
@@ -232,7 +229,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
     
     def totallyOptimize(oper : mimir.algebra.Operator) : mimir.algebra.Operator = {
       val preOpt = oper.toString() 
-      val postOptOper = db.compiler.optimize(oper)
+      val postOptOper = Compiler.optimize(oper, Compiler.standardOptimizations)
       val postOpt = postOptOper.toString() 
       if(preOpt.equals(postOpt))
         postOptOper

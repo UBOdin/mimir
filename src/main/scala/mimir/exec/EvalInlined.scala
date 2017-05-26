@@ -2,6 +2,8 @@ package mimir.exec;
 
 import mimir.algebra._
 import scala.util.matching._
+import mimir.ctables.VGTerm
+import mimir.ctables.VGTermAcknowledged
 
 class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
 {
@@ -19,7 +21,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
     (t: T) => {
       try { op(t) }
       catch {
-        case _:NullPointerException => NullPrimitive()
+        case _:NullPointerException | _:NullTypeException => NullPrimitive()
       }
     }
   }
@@ -49,7 +51,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
   def compileProc(p: Proc): Compiled[PrimitiveValue] =
   {
     val args = p.getArgs.map { compile(_) }
-    (t) => { p.get(args.map { _(t) }) }
+    (t) => { p.get(args.map { _(t) } ) }
   }
 
   def compileFunction(func: RegisteredFunction, argExprs: Seq[Expression]): Compiled[PrimitiveValue] =
@@ -57,10 +59,10 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
     val args = argExprs.map { compile(_) }
     (t) => { func.eval(args.map { _(t) }) match { case NullPrimitive() => throw new NullPointerException(); case x => x } }
   }
-  def compileConditional[R](c: Expression, t: Expression, e: Expression, rcr: Expression => Compiled[R]): Compiled[R]=
-  {
+  def compileConditional[R](c: Expression, te: Expression, e: Expression, rcr: Expression => Compiled[R]): Compiled[R]=
+  {   
     val cv = compileForBool(c)
-    val tv = rcr(t)
+    val tv = rcr(te)
     val ev = rcr(e)
     (t) => { if(cv(t)){ tv(t) } else { ev(t) } }
   }
@@ -86,7 +88,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
   def compileForLong(e: Expression): Compiled[Long] = 
   {
     e match {
-      case NullPrimitive()              => throw new NullPointerException()
+      case NullPrimitive()              => (_) => throw new NullPointerException()
       case pv:PrimitiveValue            => (t:T) => pv.asLong
       case Var(vname)                   => val l = getVar(vname); { l(_).asLong }
       case p:Proc                       => val l = compileProc(p); { l(_).asLong }
@@ -118,10 +120,10 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
   def compileForDouble(e: Expression): Compiled[Double] = 
   {
     e match {
-      case NullPrimitive()              => throw new NullPointerException()
+      case NullPrimitive()              => (_) => throw new NullPointerException()
       case pv:PrimitiveValue            => (t:T) => pv.asDouble
       case Var(vname)                   => val l = getVar(vname); { l(_).asDouble }
-      case p:Proc                       => val l = compileProc(p); { l(_).asDouble }
+      case p:Proc                       => val l = compileProc(p); { l(_).asDouble  }
       case Arithmetic(op, lhs, rhs)     => {
         val lv = compileForDouble(lhs)
         val rv = compileForDouble(rhs)
@@ -152,7 +154,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
   def compileForBool(e: Expression): Compiled[Boolean] = 
   {
     e match {
-      case NullPrimitive()              => throw new NullPointerException()
+      case NullPrimitive()              => (_) => throw new NullPointerException()
       case pv:PrimitiveValue            => (t:T) => pv.asBool
       case Var(vname)                   => val l = getVar(vname); { l(_).asBool }
       case p:Proc                       => val l = compileProc(p); { l(_).asBool }
@@ -162,13 +164,13 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
         op match {
           case Arith.And  => (t:T) => { 
             val l = try { lv(t) } catch { 
-              case _:NullPointerException => if(rv(t)){ throw new NullPointerException() } else { false }
+              case _:NullPointerException | _:NullTypeException => if(rv(t)){ throw new NullPointerException() } else { false }
             }
             l && rv(t) 
           }
           case Arith.Or   => (t:T) => {
             val l = try { lv(t) } catch { 
-              case _:NullPointerException => if(rv(t)){ true } else { throw new NullPointerException() }
+              case _:NullPointerException | _:NullTypeException => if(rv(t)){ true } else { throw new NullPointerException() }
             }
             l || rv(t) 
           }
@@ -248,7 +250,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
   final def compilePassthrough[R](e: Expression, rcr: Expression => Compiled[R], prim: PrimitiveValue => R): Compiled[R] =
   {
     e match {
-      case NullPrimitive()              => throw new NullPointerException()
+      case NullPrimitive()              => (_) => throw new NullPointerException()
       case pv:PrimitiveValue            => (t:T) => prim(pv)
       case Var(vname)                   => val l = getVar(vname); (t) => prim(l(t))
       case p:Proc                       => val l = compileProc(p); (t) => prim(l(t))
@@ -352,7 +354,14 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
         val v = compile(f);
         Right( { (t:T) => v(t).isInstanceOf[NullPrimitive] } )
       }
+      case p:Proc => {
+        val v = compileProc(p); 
+        Right( { (t) => v(t).isInstanceOf[NullPrimitive] } ) 
+      }
+      
     }
   }
+  
+ 
 
 }
