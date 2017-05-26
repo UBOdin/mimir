@@ -37,6 +37,7 @@ import net.sf.jsqlparser.statement.drop.Drop
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
 
@@ -376,7 +377,12 @@ case class Database(backend: Backend)
             case s => (s, true)
           }
 
-        loadTable(target, load.getFile, force = force)
+        loadTable(
+          target, 
+          load.getFile, 
+          force = force,
+          (load.getFormat, load.getFormatArgs.asScala.toSeq.map { sql.convert(_) })
+        )
       }
 
       /********** DROP STATEMENTS **********/
@@ -444,17 +450,40 @@ case class Database(backend: Backend)
    * header or not is unimplemented. So its assumed every CSV file
    * supplies an appropriate header.
    */
+  def loadTable(
+    targetTable: String, 
+    sourceFile: File, 
+    force:Boolean = true, 
+    format:(String, Seq[PrimitiveValue]) = ("CSV", Seq(StringPrimitive(",")))
+  ){
+    (format._1 match {
+           case null => "CSV"
+           case x => x.toUpperCase
+     }) match {
+      case "CSV" => {
+        val delim =
+          format._2 match {
+            case Seq(StringPrimitive(delim)) => delim
+            case Seq() | null => ","
+            case _ => throw new SQLException("The CSV format expects a single string argument (CSV('delim'))")
+          }
 
-  def loadTable(targetTable: String, sourceFile: File, force:Boolean = true){
-    val targetRaw = targetTable.toUpperCase + "_RAW"
-    if(tableExists(targetRaw) && !force){
-      throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' AS tableName`; to override.")
+          val targetRaw = targetTable.toUpperCase + "_RAW"
+          if(tableExists(targetRaw) && !force){
+            throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' INTO tableName`; to append to existing data.")
+          }
+          LoadCSV.handleLoadTable(this, targetRaw, sourceFile, 
+            Map("DELIMITER" -> delim)
+          )
+          if(!tableExists(targetTable.toUpperCase)){
+            val oper = getTableOperator(targetRaw)
+            val l = List(new FloatPrimitive(.5))
+            lenses.create("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)       
+          }
+        }
+      case fmt =>
+        throw new SQLException(s"Unknown load format '$fmt'")
     }
-    LoadCSV.handleLoadTable(this, targetRaw, sourceFile)
-    val oper = getTableOperator(targetRaw)
-    val l = List(new FloatPrimitive(.5))
-
-    lenses.create("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)
   }
   
   def loadTable(targetTable: String, sourceFile: String){

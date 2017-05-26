@@ -1983,24 +1983,24 @@ Truncate Truncate():
 
 Load Load():
 { 
+  Load load = null;
   Token file = null;
   Token table = null;
+  Token format = null;
+  PrimitiveValue arg = null;
 }
 {
-  <K_LOAD> file=<S_CHAR_LITERAL> 
-  [ <K_AS> table=<S_IDENTIFIER> ]
-  { 
-    if(table == null){
-      return new Load(
-        StringValue.parseEscaped(file.image).getValue()
-      );
-    } else {
-      return new Load(
-        StringValue.parseEscaped(file.image).getValue(),
-        table.image
-      );
-    }
-  }
+  <K_LOAD> file=<S_CHAR_LITERAL> { load = new Load(StringValue.parseEscaped(file.image).getValue()); }
+  [ <K_AS> format=<S_IDENTIFIER> { load.setFormat(format.image); }
+    [ "(" 
+        [ arg = Literal() { load.addFormatArg(arg); } 
+          ( "," arg = Literal() { load.addFormatArg(arg); } ) *
+        ]
+      ")"
+    ]
+  ]
+  [ <K_INTO> table=<S_IDENTIFIER> { load.setTable(table.image); }]
+  { return load; }
 }
 
 Pragma Pragma():

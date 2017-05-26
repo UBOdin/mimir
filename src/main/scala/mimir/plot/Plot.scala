@@ -45,29 +45,50 @@ object Plot
     case StringPrimitive(s) => s
     case d:DatePrimitive => d.asDateTime
     case t:TimestampPrimitive => t.asDateTime
+    case BoolPrimitive(true) => 1:java.lang.Long
+    case BoolPrimitive(false) => 0:java.lang.Long
+    case RowIdPrimitive(s) => s
+    case TypePrimitive(t) => t
   }
 
   def plot(input: ResultIterator, table: String, x: String, ys: Seq[String], console: OutputFormat)
   {
     val raw = input.toSeq
     val extracted: Seq[XYSeries] = 
-      ys.zip(defaultFormats).map { case (y, format) => 
-        val data = raw.flatMap { row => 
-            (row(x), row(y)) match {
-              case (_:NullPrimitive, _) => None
-              case (_, _:NullPrimitive) => None
-              case (xval:NumericPrimitive, yval:NumericPrimitive) => Some( (xval.asDouble, yval.asDouble) )
-              case (xval, yval) => throw new RAException(s"Invalid Data Point: < $x: $xval, $y: $yval >")
-            }
-          }.toIndexedSeq
-        logger.debug(s"For < $x, $y >: ${data.size} records with $format")
-        XY(
-          data,
-          color = format.color,
+      if(ys.isEmpty){
+        val data = raw.map(_(x)).flatMap { 
+            case xval:NumericPrimitive => Some( xval.asDouble )
+            case NullPrimitive() => None
+            case xval => throw new RAException(s"Invalid Data Point: < $x: $xval >")
+          }.sortBy(x => x).
+          zipWithIndex.
+          map { x => (x._2.toDouble, x._1) }
+        Seq(XY(
+          data, 
+          color = defaultFormats(0).color,
           lw = 2,
-          pt = format.pointType,
-          label = y
-        )
+          pt = defaultFormats(0).pointType,
+          label = x
+        ))
+      } else {
+        ys.zip(defaultFormats).map { case (y, format) => 
+          val data = raw.flatMap { row => 
+              (row(x), row(y)) match {
+                case (_:NullPrimitive, _) => None
+                case (_, _:NullPrimitive) => None
+                case (xval:NumericPrimitive, yval:NumericPrimitive) => Some( (xval.asDouble, yval.asDouble) )
+                case (xval, yval) => throw new RAException(s"Invalid Data Point: < $x: $xval, $y: $yval >")
+              }
+            }.toIndexedSeq
+          logger.debug(s"For < $x, $y >: ${data.size} records with $format")
+          XY(
+            data,
+            color = format.color,
+            lw = 2,
+            pt = format.pointType,
+            label = y
+          )
+        }
       }
 
     val data: XYData = extracted
@@ -122,15 +143,29 @@ object Plot
     console.print("\n")
   }
 
-  def getXY(input: Seq[Row], x: String, y: String): Seq[(Double,Double)] =
-    input.flatMap { row => 
-      (row(x), row(y)) match {
-          case (_:NullPrimitive, _) => None
-          case (_, _:NullPrimitive) => None
-          case (xval:NumericPrimitive, yval:NumericPrimitive) => Some( (xval.asDouble, yval.asDouble) )
-          case (xval, yval) => throw new RAException(s"Invalid Data Point: < $x: $xval, $y: $yval >")
+  def getX(record:(Row, Int), x: String, count: Int): Option[Double] =
+  {
+    x match {
+      case "MIMIR_PLOT_INDEX" => Some(record._2.toDouble)
+      case "MIMIR_PLOT_CDF" => Some((record._2.toDouble+1) / count.toDouble)
+      case _ => {
+        record._1(x) match {
+          case (_:NullPrimitive) => None
+          case (xval:NumericPrimitive) => Some( xval.asDouble )
+          case xval => throw new RAException(s"Invalid Data Point: < $x: $xval >")
         }
       }
+    }
+  }
+
+  def getXY(input: Seq[(Row, Int)], x: String, y: String): Seq[(Double,Double)] =
+    input.flatMap { case record => 
+      (getX(record, x, input.size), getX(record, y, input.size)) match {
+        case (_, None) => None
+        case (None, _) => None
+        case (Some(xval), Some(yval)) => Some((xval, yval))
+      }
+    }
 
   def plot(spec: mimir.sql.DrawPlot, db: Database, console: OutputFormat)
   {
@@ -154,9 +189,14 @@ object Plot
           throw new RAException(s"No valid columns for plotting: ${db.bestGuessSchema(dataQuery).map { x => x._1+":"+x._2 }.mkString(",")}")
         }
         val x = columns.head
-        logger.info(s"No explicit columns given, implicitly using X = $x, Y = [${columns.tail.mkString(", ")}]")
-        columns.tail.map { y => 
-          (x, y, Map("TITLE" -> StringPrimitive(y)))
+        if(columns.tail.isEmpty){
+          dataQuery = Sort(Seq(SortColumn(Var(x), true)), dataQuery)
+          Seq( ("MIMIR_PLOT_CDF", x, Map("TITLE" -> StringPrimitive(x))) )
+        } else {
+          logger.info(s"No explicit columns given, implicitly using X = $x, Y = [${columns.tail.mkString(", ")}]")
+          columns.tail.map { y => 
+            (x, y, Map("TITLE" -> StringPrimitive(y)))
+          }
         }
       } else {
         val sch = dataQuery.schema
@@ -186,7 +226,7 @@ object Plot
 
     db.query(dataQuery) { resultsRaw =>
       // We'll need multiple scans, so sequencify the results
-      val results = resultsRaw.toSeq
+      val results = resultsRaw.toSeq.zipWithIndex
 
       val data: XYData = 
         lines.zip(defaultFormats).map { case ((x, y, config), default) =>

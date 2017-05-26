@@ -88,7 +88,7 @@ class KeyRepairModel(
     } else {
       val possibilities = 
         Json.parse(hints(0).asString) match {
-          case JsArray(values) => values.map { JSONUtils.parsePrimitive(targetType, _)  }
+          case JsArray(values) => values.map { JsonUtils.parsePrimitive(targetType, _)  }
           case _ => throw ModelException(s"Invalid Value Hint in Repair Model $name: ${hints(0).asString}")
         }
 
@@ -96,7 +96,7 @@ class KeyRepairModel(
         if(hints.size > 1 && !hints(1).isInstanceOf[NullPrimitive]){
           possibilities.zip(
             Json.parse(hints(1).asString) match {
-              case JsArray(values) => values.map( v => JSONUtils.parsePrimitive(TFloat(), v).asDouble )
+              case JsArray(values) => values.map( v => JsonUtils.parsePrimitive(TFloat(), v).asDouble )
               case _ => throw ModelException(s"Invalid Score Hint in Repair Model $name: ${hints(1).asString}")
             }
           )
