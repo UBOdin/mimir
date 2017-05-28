@@ -18,7 +18,7 @@
   <logger name="mimir.exec.BestGuesser" level="INFO"/>
   <logger name="mimir.exec.TupleBundler" level="INFO"/>
   <logger name="mimir.exec.WorldBits" level="INFO"/>
-  <logger name="mimir.exec.stream.ProjectionResultIterator" level="INFO"/>
+  <logger name="mimir.exec.result.ProjectionResultIterator" level="INFO"/>
   <logger name="mimir.lenses.BestGuessCache" level="INFO"/>
   <logger name="mimir.lenses.ShredderLens" level="INFO"/>
   <logger name="mimir.lenses.TypeInferenceLens$" level="INFO"/>
@@ -37,7 +37,7 @@
   <logger name="mimir.util.LoadCSV$" level="INFO"/>
   <logger name="mimir.util.NonStrictCSVParser" level="INFO"/>
   <logger name="mimir.util.LineReaderInputSource" level="INFO"/>
-  <logger name="mimir.views.ViewManager" level="DEBUG"/>
+  <logger name="mimir.views.ViewManager" level="INFO"/>
 
  
   <root level="TRACE">
