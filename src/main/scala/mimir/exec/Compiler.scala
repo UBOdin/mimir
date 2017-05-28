@@ -13,6 +13,7 @@ import mimir.ctables._
 import mimir.optimizer._
 import mimir.provenance._
 import mimir.exec.result._
+import mimir.exec.stats._
 import mimir.util._
 import net.sf.jsqlparser.statement.select._
 
@@ -84,6 +85,32 @@ class Compiler(db: Database) extends LazyLogging {
       nonDetColumns,
       seeds.size
     )
+  }
+
+  def compileForStats(
+    rawOper: Operator,
+    stats: Seq[Statistic],
+    opts: Compiler.Optimizations = Compiler.standardOptimizations,
+    seeds: Seq[Long] = (0 until 10).map { _ => rnd.nextLong() }
+  ): ResultIterator =
+  {
+    var oper = rawOper
+    logger.debug(s"COMPILING FOR STATS: $oper")
+    
+    oper = Compiler.optimize(oper, Seq(InlineProjections(_)));
+    logger.debug(s"OPTIMIZED: $oper")
+
+    val sampled = TupleSampler(db, oper, stats, seeds)
+    oper               = sampled._1
+    val provenanceCols = sampled._2
+
+    logger.debug(s"SAMPLED: $oper")
+
+    oper = Compiler.optimize(oper, opts);
+
+    logger.debug(s"RE-OPTIMIZED: $oper")
+
+    deploy(oper, oper.columnNames, opts)
   }
 
   def deploy(
