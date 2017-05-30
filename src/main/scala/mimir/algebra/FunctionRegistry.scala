@@ -51,6 +51,33 @@ object FunctionRegistry {
 		scala.collection.mutable.Map.empty;
 
 	{
+	  registerNative("POSSION", 
+      {
+	      case Seq(IntPrimitive(m))   => {
+          IntPrimitive(mimir.sql.sqlite.Possion.poisson_helper(m))
+	      }
+        case Seq(FloatPrimitive(m))   => {
+          IntPrimitive(mimir.sql.sqlite.Possion.poisson_helper(m))
+	      }
+        case Seq(NullPrimitive())   => NullPrimitive()
+	      case x => throw new SQLException("Non-numeric parameter to possion: '"+x+"'")
+      },
+      ((args: Seq[Type]) => TInt())
+		)
+		
+		registerNative("GAMMA", 
+      {
+	      case Seq(FloatPrimitive(k), FloatPrimitive(theta))   => {
+          FloatPrimitive(mimir.sql.sqlite.Gamma.sampleGamma(k, theta))
+	      }
+        case Seq(NullPrimitive(), FloatPrimitive(r))   => NullPrimitive()
+        case Seq(FloatPrimitive(r), NullPrimitive())   => NullPrimitive()
+        case Seq(NullPrimitive(), NullPrimitive())   => NullPrimitive()
+	      case x => throw new SQLException("Non-numeric parameter to gamma: '"+x+"'")
+      },
+      ((args: Seq[Type]) => TFloat())
+		)
+	  
 		registerNative("MIMIR_MAKE_ROWID", 
       Provenance.joinRowIds(_: Seq[PrimitiveValue]),
 			((args: Seq[Type]) => TRowId())
@@ -88,6 +115,16 @@ object FunctionRegistry {
 			(x: Seq[Type]) => Typechecker.assertNumeric(x(0), Function("ABSOLUTE", List()))
 		)
 
+		registerNative("ROUND", 
+			{
+	      case Seq(IntPrimitive(i))   =>  IntPrimitive(i) 
+	      case Seq(FloatPrimitive(f)) => IntPrimitive(Math.round(f) )
+	      case Seq(NullPrimitive())   => NullPrimitive()
+	      case x => throw new SQLException("Non-numeric parameter to round: '"+x+"'")
+	    },
+			(x: Seq[Type]) => Typechecker.assertNumeric(x(0), Function("ROUND", List()))
+		)
+		
     registerNative("SQRT",
       {
         case Seq(n:NumericPrimitive) => FloatPrimitive(Math.sqrt(n.asDouble))
@@ -190,6 +227,10 @@ object FunctionRegistry {
       (args: Seq[PrimitiveValue]) => IntPrimitive(prng.nextLong),
       (types: Seq[Type]) => { TInt() }
     )
+
+    registerNative("AVG",(_) => ???, (_) => TInt())
+    registerNative("STRFTIME",(_) => ???, (_) => TInt())
+    registerNative("STDDEV",(_) => ???, (_) => TFloat())
 	}
 
 	def registerSet(
