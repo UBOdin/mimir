@@ -1,25 +1,87 @@
 create table Part(
-	partkey INTEGER PRIMARY KEY, name, mfgr, brand, type, size INTEGER, container, retailprice real, comment);
+	partkey INTEGER PRIMARY KEY, 
+  name STRING, 
+  mfgr STRING, 
+  brand STRING, 
+  type STRING, 
+  size INTEGER, 
+  container STRING, 
+  retailprice REAL, 
+  comment STRING
+);
 
 create table Supplier(
-	suppKey INTEGER PRIMARY KEY, name, address, nationkey INTEGER, phone, acctbal REAL, comment);
+	suppKey INTEGER PRIMARY KEY, 
+  name STRING, 
+  address STRING, 
+  nationkey INTEGER, 
+  phone STRING, 
+  acctbal REAL, 
+  comment STRING
+);
 
 create table PartSupp(
-	partKey INTEGER, suppKey INTEGER, availqty  INTEGER, supplycost REAL, comment);
+	partKey INTEGER, 
+  suppKey INTEGER, 
+  availqty INTEGER, 
+  supplycost REAL, 
+  comment STRING
+);
 
-create table Customer(CustKey INTEGER PRIMARY KEY, name, address, nationkey INTEGER, phone, acctbal REAL, mktsegment, comment);
+create table Customer(
+  custKey INTEGER PRIMARY KEY, 
+  name STRING, 
+  address STRING, 
+  nationkey INTEGER, 
+  phone STRING, 
+  acctbal REAL, 
+  mktsegment STRING, 
+  comment STRING
+);
 
 create table Nation(
-	nationkey  INTEGER PRIMARY KEY, name, regionkey INTEGER, comment);
+	nationkey INTEGER PRIMARY KEY, 
+  name STRING, 
+  regionkey INTEGER, 
+  comment STRING
+);
 
 create table Region(
-	regionkey INTEGER PRIMARY KEY, name, comment);
+	regionkey INTEGER PRIMARY KEY, 
+  name STRING, 
+  comment STRING
+);
 
 create table LineItem(
-	orderKey INTEGER, partKey INTEGER, suppKey INTEGER, lineNumber INTEGER, quantity INTEGER, extendedPrice REAL, discount REAL, tax REAL, returnFlag, lineStatus, shipDate DATE, commitDate DATE, receiptDate DATE, shipInstruct, shipMode, comment);
+	orderKey INTEGER, 
+  partKey INTEGER, 
+  suppKey INTEGER, 
+  lineNumber INTEGER, 
+  quantity INTEGER, 
+  extendedPrice REAL, 
+  discount REAL, 
+  tax REAL, 
+  returnFlag STRING, 
+  lineStatus STRING, 
+  shipDate DATE, 
+  commitDate DATE, 
+  receiptDate DATE, 
+  shipInstruct STRING, 
+  shipMode STRING, 
+  comment STRING
+);
 
 create table Orders(
-	orderKey INTEGER PRIMARY KEY, custKey INTEGER, orderStatus, totalPrice REAL, orderDate, orderPriority, clerk, shipPriority, comment);
+	orderKey INTEGER PRIMARY KEY, 
+  custKey INTEGER, 
+  orderStatus STRING, 
+  totalPrice REAL, 
+  orderDate DATE, 
+  orderPriority STRING, 
+  clerk STRING, 
+  shipPriority STRING, 
+  comment STRING
+);
 
 create index PartPKI on Part(partkey);
 create index SupplierPK on Supplier(suppkey);
