@@ -32,7 +32,11 @@ object WekaModel
       // Ignore the hints field for now.  At some point, it would be useful to put some 
       // subset of the attributes into this hint field to allow flow-through rather than 
       // having the model run a query to figure out what the other attributes in the row are.
-      col -> (model, 0, Seq())
+      col -> (
+        model,            // The model for the column
+        0,                // The model index of the column's replacement variable
+        cols.map(Var(_))  // 'Hints' for the model -- All of the remaining column values
+      )
     }).toMap
   }
 
@@ -161,44 +165,48 @@ class SimpleWekaModel(name: String, colName: String, var query: Operator)
     learner.updateClassifier(dataPoint)
   }
 
-  private def classify(rowid: RowIdPrimitive): Seq[(Double, Int)] = {
+  private def classify(rowid: RowIdPrimitive, rowValueHints: Seq[PrimitiveValue] = Seq()): Seq[(Double, Int)] = {
     //println("Classify: "+rowid)
-    db.query(
-        Select(
-          Comparison(Cmp.Eq, RowIdVar(), rowid),
-          query
-        )
-    ) { results =>
-      if (!results.hasNext()) {
-        throw new SQLException("Invalid Source Data ROWID: " + rowid);
-      }
-      val rowValues = results.next()
-      val row = new DenseInstance(rowValues.tuple.size)
-      val data = new Instances("TestData", attributeMeta, 1)
-      row.setDataset(data)
-      WekaModel.logger.debug(s"CLASSIFY: ${rowValues}")
-      for( (v, col) <- rowValues.tuple.zipWithIndex ){
-        if (!v.isInstanceOf[NullPrimitive] && (col != colIdx)) {
-          // if (v.isInstanceOf[IntPrimitive] || v.isInstanceOf[FloatPrimitive]) {
-          //   logger.trace(s"Double: $col -> $v")
-          //   row.setValue(col, v.asDouble)
-          // }
-          // else {
-            WekaModel.logger.trace(s"String: $col -> $v")
-            row.setValue(col, v.asString)
-          // }
-        } else {
-          WekaModel.logger.trace(s"NULL: $col")
+    val rowValues = 
+      if(rowValueHints.isEmpty){
+        db.query(
+            Select(
+              Comparison(Cmp.Eq, RowIdVar(), rowid),
+              query
+            )
+        ) { results =>
+          if (!results.hasNext()) {
+            throw new SQLException("Invalid Source Data for Weka Model on ROWID: " + rowid);
+          }
+          results.next.tuple
         }
+      } else { rowValueHints }
+    
+    val row = new DenseInstance(rowValues.size)
+    val data = new Instances("TestData", attributeMeta, 1)
+    row.setDataset(data)
+    WekaModel.logger.debug(s"CLASSIFY: ${rowValues}")
+    for( (v, col) <- rowValues.zipWithIndex ){
+      if (!v.isInstanceOf[NullPrimitive] && (col != colIdx)) {
+        // if (v.isInstanceOf[IntPrimitive] || v.isInstanceOf[FloatPrimitive]) {
+        //   logger.trace(s"Double: $col -> $v")
+        //   row.setValue(col, v.asDouble)
+        // }
+        // else {
+          WekaModel.logger.trace(s"String: $col -> $v")
+          row.setValue(col, v.asString)
+        // }
+      } else {
+        WekaModel.logger.trace(s"NULL: $col")
       }
-
-      val votes = learner.distributionForInstance(row).toSeq
-
-      WekaModel.logger.debug(s"VOTES: $votes")
-      votes.
-        zipWithIndex.
-        filter(_._1 > 0)
     }
+
+    val votes = learner.distributionForInstance(row).toSeq
+
+    WekaModel.logger.debug(s"VOTES: $votes")
+    votes.
+      zipWithIndex.
+      filter(_._1 > 0)
   }
 
   private def classToPrimitive(classIdx: Int): PrimitiveValue = 
@@ -230,7 +238,7 @@ class SimpleWekaModel(name: String, colName: String, var query: Operator)
     feedback.get(rowid.asString) match {
       case Some(v) => v
       case None => 
-        val classes = classify(rowid)
+        val classes = classify(rowid, hints)
         val res = if (classes.isEmpty) { 0 } 
                   else { classes.maxBy(_._1)._2 }
         classToPrimitive(res)
@@ -239,7 +247,7 @@ class SimpleWekaModel(name: String, colName: String, var query: Operator)
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
   {
     val rowid = RowIdPrimitive(args(0).asString)
-    val classes = classify(rowid)
+    val classes = classify(rowid, hints)
     val res = if (classes.isEmpty) { 0 }
               else {
                 RandUtils.pickFromWeightedList(
@@ -256,7 +264,7 @@ class SimpleWekaModel(name: String, colName: String, var query: Operator)
       case Some(v) =>
         s"You told me that $name.$colName = $v on row $rowid"
       case None => 
-        val classes = classify(rowid.asInstanceOf[RowIdPrimitive])
+        val classes = classify(rowid.asInstanceOf[RowIdPrimitive], hints)
         val total:Double = classes.map(_._1).fold(0.0)(_+_)
         if (classes.isEmpty) { 
           val elem = classToPrimitive(0)
