@@ -143,7 +143,8 @@ class ViewManager(db:Database) extends LazyLogging {
       provenance
     ) = BestGuesser(db, properties.query)
 
-    val columns = baseSchema.map(_._1)
+    val columns:Seq[String] = baseSchema.map(_._1)
+    logger.debug(s"SCHEMA: $columns; $rowTaint; $columnTaint; $provenance")
 
     val completeQuery = 
       Project(
@@ -156,7 +157,7 @@ class ViewManager(db:Database) extends LazyLogging {
             )
           )
         )++
-        provenance.map { col => ProjectArg(col, Var(col)) },
+        (provenance.toSet -- columns.toSet).map { col => ProjectArg(col, Var(col)) },
         query
       )
 

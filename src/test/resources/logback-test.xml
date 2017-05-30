@@ -37,7 +37,7 @@
   <logger name="mimir.util.LoadCSV$" level="INFO"/>
   <logger name="mimir.util.NonStrictCSVParser" level="INFO"/>
   <logger name="mimir.util.LineReaderInputSource" level="INFO"/>
-  <logger name="mimir.views.ViewManager" level="INFO"/>
+  <logger name="mimir.views.ViewManager" level="DEBUG"/>
 
  
   <root level="TRACE">

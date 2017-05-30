@@ -1,4 +1,4 @@
-package mimir.exec.stats
+package mimir.exec.uncertainty
 
 import mimir.algebra._
 

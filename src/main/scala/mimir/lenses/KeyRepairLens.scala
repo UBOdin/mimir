@@ -65,21 +65,24 @@ object KeyRepairLens extends LazyLogging {
       }
 
     //////////  Build Fastpath Lookup Cache If Needed  //////////
-    fastPath.foreach { fastPathTable => 
-      buildFastPathCache(
-        db, 
-        query, 
-        keys.map( k => (k, schemaMap(k))), 
-        values.map(_._1), 
-        fastPathTable
-      )
+    fastPath match { 
+      case None => ()
+      case Some(fastPathTable) => {
+        buildFastPathCache(
+          db, 
+          query, 
+          keys.map( k => (k, schemaMap(k))), 
+          values.map(_._1), 
+          fastPathTable
+        )
+      }
     }
 
     //////////  Assemble the query  //////////
     val lensQuery = 
       fastPath match {
         case None => 
-          assemble(query, keys, values, scoreCol)
+          assembleView(db, query, keys, values, scoreCol, "MIMIR_KR_SOURCE_"+name)
         case Some(fastPathTable) => 
           assembleFastPath(db, query, keys, values, scoreCol, fastPathTable)
       }
@@ -112,6 +115,7 @@ object KeyRepairLens extends LazyLogging {
     forceGuess: Boolean = false
   ): Operator =
   {
+    logger.debug(s"Assembling KR Lens RAW")
 
     Project(
       keys.map { col => ProjectArg(col, Var(col))} ++
@@ -152,6 +156,61 @@ object KeyRepairLens extends LazyLogging {
     )
   }
 
+  def assembleView(
+    db: Database,
+    query: Operator,
+    keys: Seq[String],
+    values: Seq[(String, Model)],
+    scoreCol: Option[String],
+    view: String,
+    forceGuess: Boolean = false
+  ): Operator =
+  {
+    logger.debug(s"Assembling KR Lens with View $view")
+    db.views.create(
+      view,
+      Aggregate(
+        keys.map(Var(_)),
+        values.flatMap { case (col, _) => 
+          List(
+            AggFunction("FIRST", false, List(Var(col)), col),
+            AggFunction("COUNT", true, List(Var(col)), s"MIMIR_KR_COUNT_$col"),
+            AggFunction("JSON_GROUP_ARRAY", false, List(Var(col)), s"MIMIR_KR_HINT_COL_$col")
+          )
+        } ++ scoreCol.map { col => 
+            AggFunction("JSON_GROUP_ARRAY", false, List(Var(col)), "MIMIR_KR_HINT_SCORE")
+          },
+        query
+      )
+    )
+
+    Project(
+      keys.map { col => ProjectArg(col, Var(col))} ++
+      values.map { case (col, model) => 
+        val vgTerm = 
+          VGTerm(model, 0, keys.map(Var(_)), 
+            Seq(
+              Var(s"MIMIR_KR_HINT_COL_$col"),
+              scoreCol.
+                map { _ => Var("MIMIR_KR_HINT_SCORE") }.
+                getOrElse( NullPrimitive() )
+            )
+          )
+
+        ProjectArg(col, 
+          if(forceGuess){ vgTerm } 
+          else {
+            Conditional(
+              Comparison(Cmp.Lte, Var(s"MIMIR_KR_COUNT_$col"), IntPrimitive(1)),
+              Var(col), vgTerm
+            )
+          }
+        )
+      },
+      db.views.get(view).get.operator
+    )
+  }
+
   def assembleFastPath(
     db: Database,
     query: Operator,
@@ -161,6 +220,7 @@ object KeyRepairLens extends LazyLogging {
     fastPathTable: String
   ): Operator =
   {
+    logger.debug(s"Assembling KR Lens FastPath $fastPathTable")
     val rowsWhere = (cond:Expression) => {
       OperatorUtils.projectColumns(
         keys ++ values.map(_._1),

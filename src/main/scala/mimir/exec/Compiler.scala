@@ -13,7 +13,7 @@ import mimir.ctables._
 import mimir.optimizer._
 import mimir.provenance._
 import mimir.exec.result._
-import mimir.exec.stats._
+import mimir.exec.uncertainty._
 import mimir.util._
 import net.sf.jsqlparser.statement.select._
 
@@ -188,7 +188,8 @@ object Compiler
       ProjectRedundantColumns(_),
       InlineProjections(_),
       PushdownSelections(_),
-      PropagateEmptyViews(_)
+      PropagateEmptyViews(_),
+      EvaluateExpressions(_)
     )
 
   /**
@@ -199,7 +200,7 @@ object Compiler
     // Repeatedly apply optimizations up to a fixed point or an arbitrary cutoff of 10 iterations
     TimeUtils.monitor("OPTIMIZE", logger.info(_)){
       for( i <- (0 until 10) ){
-        logger.debug(s"Optimizing, cycle $i: \n$oper")
+        logger.trace(s"Optimizing, cycle $i: \n$oper")
         // Try to optimize
         val newOper = 
           opts.foldLeft(oper)((o, fn) => fn(o))

@@ -134,6 +134,15 @@ datasets := {
   } else {
     logger.info("Found `pdbench` data in test/pdbench");
   }
+
+  if(!new File("test/tpch-impute-1g.db").exists()){
+    Process(List(
+      "curl", "-o", "test/tpch-impute-1g.db", "http://odin.cse.buffalo.edu/public_data/tpch-impute-1g.db"
+    )) ! logger match {
+      case 0 => // Success
+      case n => sys.error(s"Could not download TPC-H Impute Data: $n")
+    }    
+  }
 }
 
 

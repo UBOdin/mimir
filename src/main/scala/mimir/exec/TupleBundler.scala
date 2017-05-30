@@ -39,12 +39,19 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
   def fullBitVector =
     (0 until sampleSeeds.size).map { 1 << _ }.fold(0)( _ | _ )
 
-  def apply(query: Operator): (Operator, Set[String], Seq[String]) =
+  def apply(queryRaw: Operator): (Operator, Set[String], Seq[String]) =
   {
-    val (withProvenance, provenanceCols) = Provenance.compile(query)
-    val (compiled, nonDeterministicColumns) = compileFlat(withProvenance)    
+    var query = queryRaw
 
-    (compiled, nonDeterministicColumns, provenanceCols)
+    val (withProvenance, provenanceCols) = Provenance.compile(query)
+    query = withProvenance
+
+    val (compiled, nonDeterministicColumns) = compileFlat(query)    
+    query = compiled
+
+    query = db.views.resolve(query)
+
+    (query, nonDeterministicColumns, provenanceCols)
   }
 
   def doesExpressionNeedSplit(expression: Expression, nonDeterministicInputs: Set[String]): Boolean =
