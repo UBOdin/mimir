@@ -66,7 +66,7 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
         OperatorTranslation.translateGProMExpressionToMimirExpression(new GProMNode.ByReference(arg.getPointer), gpischm)
       })
       
-      println(s"Metadata lookup: function: $fName(${argSeq.mkString(",")})")
+      //println(s"Metadata lookup: function: $fName(${argSeq.mkString(",")})")
       val tp = fName match {
 		    case "SUM" => TInt()
 		    case "COUNT" => TInt()
@@ -80,7 +80,7 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
 		  }
       
       val gpt = getGProMDataTypeStringFromMimirType(tp)
-      println(s"Metadata lookup: $tp -> $gpt")
+      //println(s"Metadata lookup: $tp -> $gpt")
       gpt
     } catch {
       case t: Throwable => {
