@@ -103,6 +103,9 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
     val testTable = (baseTable+tableSuffix).toUpperCase
 
     s"Create Missing Value Imputation Lens for table: $testTable" >> {
+      // if(db.tableExists(testTable)){
+      //   update(s"DROP LENS $testTable")
+      // }
       if(db.views.get(testTable).isEmpty){
         if(db.tableExists(testTable)){
           update(s"DROP TABLE $testTable")

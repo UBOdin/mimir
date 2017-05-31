@@ -40,12 +40,11 @@ object ImputeTiming
   }
 
   val relevantTables = Seq(
-    // ("CUSTOMER", Seq("NATIONKEY")),
-    // ("LINEITEM", Seq("ORDERKEY", "PARTKEY", "SUPPKEY")),
-    // ("PARTSUPP", Seq("PARTKEY", "SUPPKEY")),
-    // ("NATION", Seq("REGIONKEY")),
-    // ("SUPPLIER", Seq("NATIOKEY")),
-    // ("REGION", Seq()),
+    ("CUSTOMER", Seq("NATIONKEY")),
+    ("LINEITEM", Seq("ORDERKEY", "PARTKEY", "SUPPKEY")),
+    ("PARTSUPP", Seq("PARTKEY", "SUPPKEY")),
+    ("NATION", Seq("REGIONKEY")),
+    ("SUPPLIER", Seq("NATIONKEY")),
     ("ORDERS", Seq("CUSTKEY"))
   )
 
@@ -85,7 +84,7 @@ object ImputeTiming
           """,
           s"""
             SELECT n.name, SUM(l.extendedprice * (1 - l.discount)) AS revenue 
-            FROM   customer_run_$i c, orders_run_$i o, lineitem_run_$i l, supplier_run_$i s, nation_run_$i n, region_run_$i r
+            FROM   customer_run_$i c, orders_run_$i o, lineitem_run_$i l, supplier_run_$i s, nation_run_$i n, region r
             WHERE  c.custkey = o.custkey
               AND  l.orderkey = o.orderkey 
               AND  l.suppkey = s.suppkey

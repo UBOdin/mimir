@@ -25,7 +25,7 @@
   <logger name="mimir.models.ModelManager" level="INFO"/>
   <logger name="mimir.models.EditDistanceMatchModel" level="INFO"/>
   <logger name="mimir.models.TypeInferenceModel" level="INFO"/>
-  <logger name="mimir.models.WekaModel$" level="INFO"/>
+  <logger name="mimir.models.WekaModel$" level="DEBUG"/>
   <logger name="mimir.sql.sqlite.MimirCast$" level="INFO"/>
   <logger name="mimir.sql.sqlite.BestGuessVGTerm" level="INFO"/>
   <logger name="mimir.sql.sqlite.SampleVGTerm" level="INFO"/>

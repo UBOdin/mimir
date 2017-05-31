@@ -5,6 +5,7 @@ import java.sql._
 import org.slf4j.{LoggerFactory}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import scala.util.Random
+import com.github.nscala_time.time.Imports._
 
 import mimir.Database
 import mimir.algebra.Union
@@ -198,6 +199,7 @@ object Compiler
   def optimize(rawOper: Operator, opts: Optimizations = standardOptimizations): Operator = {
     var oper = rawOper
     // Repeatedly apply optimizations up to a fixed point or an arbitrary cutoff of 10 iterations
+    var startTime = DateTime.now
     TimeUtils.monitor("OPTIMIZE", logger.info(_)){
       for( i <- (0 until 10) ){
         logger.trace(s"Optimizing, cycle $i: \n$oper")
@@ -210,6 +212,15 @@ object Compiler
 
         // Otherwise repeat
         oper = newOper;
+
+        val timeSoFar = startTime to DateTime.now
+        if(timeSoFar.millis > 5000){
+          logger.warn("""OPTIMIZE TIMEOUT (${timeSoFar.millis} ms)
+            ---- ORIGINAL QUERY ----\n$rawOper
+            ---- CURRENT QUERY (${i+1} iterations) ----\n$oper
+            """)
+          return oper;
+        }
       }
     }
     return oper;
