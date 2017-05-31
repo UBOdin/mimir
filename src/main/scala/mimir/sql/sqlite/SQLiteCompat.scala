@@ -30,6 +30,10 @@ object SQLiteCompat extends LazyLogging{
     org.sqlite.Function.create(conn, "FIRST", First)
     org.sqlite.Function.create(conn, "FIRST_INT", FirstInt)
     org.sqlite.Function.create(conn, "FIRST_FLOAT", FirstFloat)
+    org.sqlite.Function.create(conn, "POSSION", Possion)
+    org.sqlite.Function.create(conn, "GAMMA", Gamma)
+    org.sqlite.Function.create(conn, "STDDEV", StdDev)
+    org.sqlite.Function.create(conn, "MAX", Max)
   }
   
   def getTableSchema(conn:java.sql.Connection, table: String): Option[List[(String, Type)]] =
@@ -58,9 +62,95 @@ object SQLiteCompat extends LazyLogging{
   }
 }
 
+object Possion extends org.sqlite.Function with LazyLogging {
+  private var rng: scala.util.Random = new scala.util.Random(
+    java.util.Calendar.getInstance.getTimeInMillis + Thread.currentThread().getId)
+  def poisson_helper(mean:Double):Int = {
+    val L = math.exp(-mean)
+    var k = 0
+    var p = 1.0
+    do {
+        p = p * rng.nextDouble()
+        k+=1
+    } while (p > L)
+    k - 1
+  }
+  override def xFunc(): Unit = {
+    if (args != 1) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR POSSION, EXPECTED 1") }
+    val m = value_double(0) 
+    result(poisson_helper(m))
+  }
+  
+  
+ }
+
+
+object Gamma extends org.sqlite.Function with LazyLogging {
+  private var rng: scala.util.Random = new scala.util.Random(
+    java.util.Calendar.getInstance.getTimeInMillis + Thread.currentThread().getId)
+
+  def sampleGamma(k: Double, theta: Double): Double = {
+    var accept: Boolean = false
+    if (k < 1) {
+// Weibull algorithm
+      val c: Double = (1 / k)
+      val d: Double = ((1 - k) * Math.pow(k, (k / (1 - k))))
+      var u: Double = 0.0
+      var v: Double = 0.0
+      var z: Double = 0.0
+      var e: Double = 0.0
+      var x: Double = 0.0
+      do {
+        u = rng.nextDouble()
+        v = rng.nextDouble()
+        z = -Math.log(u)
+        e = -Math.log(v)
+        x = Math.pow(z, c)
+        if ((z + e) >= (d + x)) {
+          accept = true
+        }
+      } while (!accept);
+      (x * theta)
+    } else {
+// Cheng's algorithm
+      val b: Double = (k - Math.log(4))
+      val c: Double = (k + Math.sqrt(2 * k - 1))
+      val lam: Double = Math.sqrt(2 * k - 1)
+      val cheng: Double = (1 + Math.log(4.5))
+      var u: Double = 0.0
+      var v: Double = 0.0
+      var x: Double = 0.0
+      var y: Double = 0.0
+      var z: Double = 0.0
+      var r: Double = 0.0
+      do {
+        u = rng.nextDouble()
+        v = rng.nextDouble()
+        y = ((1 / lam) * Math.log(v / (1 - v)))
+        x = (k * Math.exp(y))
+        z = (u * v * v)
+        r = (b + (c * y) - x)
+        if ((r >= ((4.5 * z) - cheng)) || (r >= Math.log(z))) {
+          accept = true
+        }
+      } while (!accept);
+      (x * theta)
+    }
+  }
+
+  override def xFunc(): Unit = {
+    if (args != 2) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR GAMMA, EXPECTED 2") }
+    val k = value_double(0) 
+    val theta = value_double(1)
+     result(sampleGamma(k, theta))
+  }
+  
+   
+  }
+
 object Minus extends org.sqlite.Function with LazyLogging {
   override def xFunc(): Unit = {
-    if (args != 2) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR SQRT, EXPECTED 2") }
+    if (args != 2) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR MINUS, EXPECTED 2") }
     value_double(0) - value_double(1)
   }
   }
@@ -309,3 +399,48 @@ object AggTest extends org.sqlite.Function.Aggregate {
     result(total)
   }
 }
+
+object StdDev extends org.sqlite.Function.Aggregate {
+
+   var m = 0.0
+   var s = 0.0
+   var k = 1
+
+   @Override
+   def xStep(): Unit ={
+        if(value_type(0) != SQLiteCompat.NULL) {
+          val value = value_double(0)
+          val tM = m
+          m += (value - tM) / k
+          s += (value - tM) * (value - m)
+          k += 1
+        }
+   }
+
+   override def xFinal(): Unit ={
+       //println(s"sdev - xfinal: $k, $s, $m") 
+       if(k >= 3)
+            result(math.sqrt(s / (k-2)))
+        else
+            result(0)
+    }
+}
+
+object Max extends org.sqlite.Function.Aggregate {
+
+  var theVal: Double = 0.0
+  var empty = true
+
+  @Override
+  def xStep(): Unit = {
+    if(value_type(0) != SQLiteCompat.NULL) {
+      if(theVal < value_double(0) )
+        theVal = value_double(0) 
+      empty = false 
+    }
+  }
+  def xFinal(): Unit = {
+    if(empty){ result() } else { result(theVal) }
+  }
+}
+

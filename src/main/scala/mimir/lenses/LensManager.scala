@@ -17,7 +17,8 @@ class LensManager(db: Database) {
     "MISSING_VALUE"     -> MissingValueLens.create _,
     "SCHEMA_MATCHING"   -> SchemaMatchingLens.create _,
     "TYPE_INFERENCE"    -> TypeInferenceLens.create _,
-    "KEY_REPAIR"        -> KeyRepairLens.create _
+    "KEY_REPAIR"        -> KeyRepairLens.create _,
+    "PICKER"            -> PickerLens.create _
   )
 
   def init(): Unit =
