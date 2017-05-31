@@ -5,7 +5,7 @@ import java.sql._;
 import mimir.algebra._;
 import mimir.ctables._;
 
-object PushdownSelections {
+object PushdownSelections extends OperatorOptimization {
 
 	def wrap(selectCond: Expression, child: Operator): Operator = {
 		selectCond match {

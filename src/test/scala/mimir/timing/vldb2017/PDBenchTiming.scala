@@ -28,6 +28,7 @@ object PDBenchTiming
   val runBestGuessQueries = false
   val runTupleBundleQueries = true
   val runSamplerQueries = false
+  val useMaterialized = true
 
   val timeout = 30.minute
 
@@ -148,7 +149,7 @@ object PDBenchTiming
       // QUERIES
       Fragments.foreach( 
         if(!runBestGuessQueries){ Seq() } 
-        else { PDBenchQueries.map { (_, 60.0) }.zipWithIndex }
+        else { PDBenchQueries.zipWithIndex }
       ) {
         queryLens(_)
       }

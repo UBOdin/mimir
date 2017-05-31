@@ -44,3 +44,15 @@ trait RAParsers {
   def str = StringPrimitive(_:String).asInstanceOf[PrimitiveValue]
 
 }
+
+trait DumbRAParsers extends RAParsers {
+
+  def modelLookup(model: String): Model = UniformDistribution
+  def schemaLookup(table: String): Seq[(String,Type)] = 
+    Seq(
+      (s"${table}_A", TInt()),
+      (s"${table}_B", TInt()),
+      (s"${table}_C", TInt())
+    )
+
+}

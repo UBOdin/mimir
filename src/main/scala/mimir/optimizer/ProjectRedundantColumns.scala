@@ -5,7 +5,7 @@ import java.sql._;
 import mimir.algebra._;
 import mimir.ctables._;
 
-object ProjectRedundantColumns {
+object ProjectRedundantColumns extends OperatorOptimization {
 
   private def projectIfNeeded(oper: Operator, dependencies: Set[String]) = 
   {

@@ -39,6 +39,8 @@ class Compiler(db: Database) extends LazyLogging {
     val rowDeterminism = compiled._4
     val provenanceCols = compiled._5
 
+    logger.trace(s"GUESSED: $oper")
+
     // Fold the annotations back in
     oper =
       Project(
@@ -51,7 +53,7 @@ class Compiler(db: Database) extends LazyLogging {
         oper
       )
 
-    logger.debug(s"FULL STACK: $oper")
+    logger.trace(s"FULL STACK: $oper")
 
     deploy(oper, rawOper.columnNames, opts)
 
@@ -64,21 +66,21 @@ class Compiler(db: Database) extends LazyLogging {
   ): SampleResultIterator =
   {
     var oper = rawOper
-    logger.debug(s"COMPILING FOR SAMPLES: $oper")
+    logger.trace(s"COMPILING FOR SAMPLES: $oper")
     
-    oper = Compiler.optimize(oper, Seq(InlineProjections(_)));
-    logger.debug(s"OPTIMIZED: $oper")
+    oper = Compiler.optimize(oper, Seq(InlineProjections));
+    logger.trace(s"OPTIMIZED: $oper")
 
     val bundled = TupleBundler(db, oper, seeds)
     oper               = bundled._1
     val nonDetColumns  = bundled._2
     val provenanceCols = bundled._3
 
-    logger.debug(s"BUNDLED: $oper")
+    logger.trace(s"BUNDLED: $oper")
 
     oper = Compiler.optimize(oper, opts);
 
-    logger.debug(s"RE-OPTIMIZED: $oper")
+    logger.trace(s"RE-OPTIMIZED: $oper")
 
     new SampleResultIterator(
       deploy(oper, rawOper.columnNames, opts),
@@ -96,20 +98,20 @@ class Compiler(db: Database) extends LazyLogging {
   ): ResultIterator =
   {
     var oper = rawOper
-    logger.debug(s"COMPILING FOR STATS: $oper")
+    logger.trace(s"COMPILING FOR STATS: $oper")
     
-    oper = Compiler.optimize(oper, Seq(InlineProjections(_)));
-    logger.debug(s"OPTIMIZED: $oper")
+    oper = Compiler.optimize(oper, Seq(InlineProjections));
+    logger.trace(s"OPTIMIZED: $oper")
 
     val sampled = TupleSampler(db, oper, stats, seeds)
     oper               = sampled._1
     val provenanceCols = sampled._2
 
-    logger.debug(s"SAMPLED: $oper")
+    logger.trace(s"SAMPLED: $oper")
 
     oper = Compiler.optimize(oper, opts);
 
-    logger.debug(s"RE-OPTIMIZED: $oper")
+    logger.trace(s"RE-OPTIMIZED: $oper")
 
     deploy(oper, oper.columnNames, opts)
   }
@@ -142,7 +144,7 @@ class Compiler(db: Database) extends LazyLogging {
 
     // Deploy to the backend
     val results = 
-      TimeUtils.monitor("EXECUTE", logger.info(_)){
+      TimeUtils.monitor(s"EXECUTE\n${compiledOper.toString("   ")}\n", logger.info(_)){
         db.backend.execute(sql)
       }
 
@@ -164,12 +166,12 @@ class Compiler(db: Database) extends LazyLogging {
     // backend defines a specializeQuery method that handles this
     val specialized = db.backend.specializeQuery(optimized)
 
-    logger.debug(s"SPECIALIZED: $specialized")
+    logger.info(s"SPECIALIZED: $specialized")
     
     // Generate the SQL
     val sql = db.ra.convert(specialized)
 
-    logger.debug(s"SQL: $sql")
+    logger.info(s"SQL: $sql")
 
     return sql
   }
@@ -181,16 +183,16 @@ object Compiler
 
   val logger = LoggerFactory.getLogger("mimir.exec.Compiler")
 
-  type Optimization = Operator => Operator
-  type Optimizations = Seq[Optimization]
+  type Optimizations = Seq[OperatorOptimization]
 
   def standardOptimizations: Optimizations =
     Seq(
-      ProjectRedundantColumns(_),
-      InlineProjections(_),
-      PushdownSelections(_),
-      PropagateEmptyViews(_),
-      EvaluateExpressions(_)
+      ProjectRedundantColumns,
+      InlineProjections,
+      PushdownSelections,
+      PropagateEmptyViews,
+      PropagateConditions,
+      EvaluateExpressions
     )
 
   /**
@@ -201,11 +203,15 @@ object Compiler
     // Repeatedly apply optimizations up to a fixed point or an arbitrary cutoff of 10 iterations
     var startTime = DateTime.now
     TimeUtils.monitor("OPTIMIZE", logger.info(_)){
-      for( i <- (0 until 10) ){
+      for( i <- (0 until 4) ){
         logger.trace(s"Optimizing, cycle $i: \n$oper")
         // Try to optimize
         val newOper = 
-          opts.foldLeft(oper)((o, fn) => fn(o))
+          opts.foldLeft(oper) { (o, fn) =>
+            logger.trace(s"Applying: $fn")
+            fn(o)
+          }
+          
 
         // Return if we've reached a fixed point 
         if(oper.equals(newOper)){ return newOper; }
@@ -215,7 +221,7 @@ object Compiler
 
         val timeSoFar = startTime to DateTime.now
         if(timeSoFar.millis > 5000){
-          logger.warn("""OPTIMIZE TIMEOUT (${timeSoFar.millis} ms)
+          logger.warn(s"""OPTIMIZE TIMEOUT (${timeSoFar.millis} ms)
             ---- ORIGINAL QUERY ----\n$rawOper
             ---- CURRENT QUERY (${i+1} iterations) ----\n$oper
             """)

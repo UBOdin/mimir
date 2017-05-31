@@ -2,7 +2,7 @@ package mimir.optimizer
 
 import mimir.algebra._
 
-object PropagateEmptyViews 
+object PropagateEmptyViews extends OperatorOptimization
 {
   def apply(o: Operator): Operator =
   {

@@ -6,7 +6,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
 import mimir.ctables._
 
-object InlineProjections extends LazyLogging {
+object InlineProjections extends OperatorOptimization with LazyLogging {
 
 	def apply(o: Operator): Operator = 
 		o.recur(apply(_)) match {

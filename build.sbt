@@ -11,6 +11,7 @@ scalacOptions ++= Seq(
 
 connectInput in run := true
 outputStrategy in run := Some(StdoutOutput)
+cancelable in Global := true
 
 resolvers += "MimirDB" at "http://maven.mimirdb.info/"
 resolvers += "osgeo" at "http://download.osgeo.org/webdav/geotools/"

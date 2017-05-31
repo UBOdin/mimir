@@ -130,17 +130,13 @@ class SimpleWekaModel(name: String, colName: String, var query: Operator)
             case _ => instance.setValue(idx, field.asDouble)
           }
         } else if(attr.isNominal) {
-          WekaModel.logger.trace(s"Nominal: $idx -> $field")
-          try {
-            instance.setValue(idx, field.asString)
-          } catch {
-            // setValue can throw an Illegal Argument exception if it's never seen 
-            // field as a value before (because it expects field to be from a finite
-            // set of possible values -- an enum).  
-            // Log the error, but don't worry about it --- the classifier will have one 
-            // fewer value to work with.
-            case e: IllegalArgumentException => 
-              WekaModel.logger.warn(s"${e.getMessage} ($idx): $field")
+          val fieldString = field.asString
+          val enumId = attr.indexOfValue(fieldString)
+          WekaModel.logger.trace(s"Nominal: $idx -> $field ($enumId)")
+          if(enumId >= 0){
+            instance.setValue(idx, fieldString)            
+          } else {
+            WekaModel.logger.debug(s"Undefined Nominal Class ($idx): $field")
           }
         } else {
           throw new RAException("Invalid attribute type")
@@ -214,26 +210,6 @@ class SimpleWekaModel(name: String, colName: String, var query: Operator)
     
     val data = new Instances("TestData", attributeMeta, 1)
     val row = rowToInstance(rowValues, data)
-    // WekaModel.logger.debug(s"CLASSIFY: ${rowValues}")
-    // for( (field, j) <- rowValues.zipWithIndex ){
-    //   if(!field.isInstanceOf[NullPrimitive] && (j != colIdx)){
-    //     val attr = attributeMeta(j) 
-    //     if(attr.isNumeric){
-    //       WekaModel.logger.trace(s"Number: $j -> $field")
-    //       row.setValue(j, field.asDouble)
-    //     } else if(attr.isNominal) {
-    //       WekaModel.logger.trace(s"String: $j -> $field")
-    //       try {
-    //         row.setValue(j, field.asString)
-    //       } catch {
-    //         case e:java.lang.IllegalArgumentException =>
-    //           WekaModel.logger.warn(s"${e.getMessage} ($j): $field")
-    //       }
-    //     } else {
-    //       throw new RAException("Invalid attribute type")
-    //     }
-    //   }
-    // }
 
     val votes = learner.distributionForInstance(row).toSeq
 

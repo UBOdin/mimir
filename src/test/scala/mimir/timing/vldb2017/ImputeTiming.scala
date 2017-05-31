@@ -23,11 +23,12 @@ object ImputeTiming
   sequential
 
   val fullReset = false
-  val runBestGuessQueries = false
+  val runBestGuessQueries = true
   val runTupleBundleQueries = false
   val runSamplerQueries = false
+  val useMaterialized = true
 
-  val timeout = 30.minute
+  val timeout = 5.minute
 
   def beforeAll =
   {
@@ -48,6 +49,33 @@ object ImputeTiming
     ("ORDERS", Seq("CUSTKEY"))
   )
 
+  val relevantIndexes = Seq(
+    ("SUPPLIER", Seq(
+      Seq("SUPPKEY"),
+      Seq("NATIONKEY")
+    )),
+    ("PARTSUPP", Seq(
+      Seq("PARTKEY", "SUPPKEY"),
+      Seq("SUPPKEY")
+    )),
+    ("CUSTOMER", Seq(
+      Seq("CUSTKEY"),
+      Seq("NATIONKEY")
+    )),
+    ("NATION", Seq(
+      Seq("NATIONKEY")
+    )),
+    ("LINEITEM", Seq(
+      Seq("ORDERKEY", "LINENUMBER"),
+      Seq("PARTKEY"),
+      Seq("SUPPKEY")
+    )),
+    ("ORDERS", Seq(
+      Seq("ORDERKEY"),
+      Seq("CUSTKEY")
+    ))
+  )
+
   "TPCH Impute" should {
 
     sequential
@@ -55,33 +83,35 @@ object ImputeTiming
 
       val TPCHQueries = 
         Seq(
-          s"""
-            SELECT returnflag, linestatus, 
-              SUM(quantity) AS sum_qty,
-              SUM(extendedprice) AS sum_base_price,
-              SUM(extendedprice * (1-discount)) AS sum_disc_price,
-              SUM(extendedprice * (1-discount)*(1+tax)) AS sum_charge,
-              AVG(quantity) AS avg_qty,
-              AVG(extendedprice) AS avg_price,
-              AVG(discount) AS avg_disc,
-              COUNT(*) AS count_order
-            FROM lineitem_run_$i
-            WHERE shipdate <= DATE('1997-09-01')
-            GROUP BY returnflag, linestatus;  
-          """,
-          s"""
-            SELECT o.orderkey, 
-                   o.orderdate,
-                   o.shippriority,
-                   SUM(extendedprice * (1 - discount)) AS query3
-            FROM   customer_run_$i c, orders_run_$i o, lineitem_run_$i l
-            WHERE  c.mktsegment = 'BUILDING'
-              AND  o.custkey = c.custkey
-              AND  l.orderkey = o.orderkey
-              AND  o.orderdate < DATE('1995-03-15')
-              AND  l.shipdate > DATE('1995-03-15')
-            GROUP BY o.orderkey, o.orderdate, o.shippriority;
-          """,
+          // s"""
+          //   SELECT returnflag, linestatus, 
+          //     SUM(quantity) AS sum_qty,
+          //     SUM(extendedprice) AS sum_base_price,
+          //     SUM(extendedprice * (1-discount)) AS sum_disc_price,
+          //     SUM(extendedprice * (1-discount)*(1+tax)) AS sum_charge,
+          //     AVG(quantity) AS avg_qty,
+          //     AVG(extendedprice) AS avg_price,
+          //     AVG(discount) AS avg_disc,
+          //     COUNT(*) AS count_order
+          //   FROM lineitem_run_$i
+          //   WHERE shipdate <= DATE('1997-09-01')
+          //   GROUP BY returnflag, linestatus;  
+          // """
+          //,
+          // s"""
+          //   SELECT o.orderkey, 
+          //          o.orderdate,
+          //          o.shippriority,
+          //          SUM(extendedprice * (1 - discount)) AS query3
+          //   FROM   customer_run_$i c, orders_run_$i o, lineitem_run_$i l
+          //   WHERE  c.mktsegment = 'BUILDING'
+          //     AND  o.custkey = c.custkey
+          //     AND  l.orderkey = o.orderkey
+          //     AND  o.orderdate < DATE('1995-03-15')
+          //     AND  l.shipdate > DATE('1995-03-15')
+          //   GROUP BY o.orderkey, o.orderdate, o.shippriority;
+          // """
+          // ,
           s"""
             SELECT n.name, SUM(l.extendedprice * (1 - l.discount)) AS revenue 
             FROM   customer_run_$i c, orders_run_$i o, lineitem_run_$i l, supplier_run_$i s, nation_run_$i n, region r
@@ -95,25 +125,26 @@ object ImputeTiming
               AND  o.orderdate >= DATE('1994-01-01')
               AND  o.orderdate <  DATE('1995-01-01')
             GROUP BY n.name
-          """,
-          s"""
-            SELECT nation, o_year, SUM(amount) AS sum_profit 
-            FROM (
-              SELECT n.name AS nation, 
-                     EXTRACT(year from o.orderdate) AS o_year,
-                     ((l.extendedprice * (1 - l.discount)) - (ps.supplycost * l.quantity))
-                        AS amount
-              FROM   part_run_$i p, supplier_run_$i s, lineitem_run_$i l, partsupp_run_$i ps, orders_run_$i o, nation_run_$i n
-              WHERE  s.suppkey = l.suppkey
-                AND  ps.suppkey = l.suppkey 
-                AND  ps.partkey = l.partkey
-                AND  p.partkey = l.partkey
-                AND  o.orderkey = l.orderkey 
-                AND  s.nationkey = n.nationkey 
-                AND  (p.name LIKE '%green%')
-              ) AS profit 
-            GROUP BY nation, o_year;
           """
+          // ,
+          // s"""
+          //   SELECT nation, o_year, SUM(amount) AS sum_profit 
+          //   FROM (
+          //     SELECT n.name AS nation, 
+          //            EXTRACT(year from o.orderdate) AS o_year,
+          //            ((l.extendedprice * (1 - l.discount)) - (ps.supplycost * l.quantity))
+          //               AS amount
+          //     FROM   part_run_$i p, supplier_run_$i s, lineitem_run_$i l, partsupp_run_$i ps, orders_run_$i o, nation_run_$i n
+          //     WHERE  s.suppkey = l.suppkey
+          //       AND  ps.suppkey = l.suppkey 
+          //       AND  ps.partkey = l.partkey
+          //       AND  p.partkey = l.partkey
+          //       AND  o.orderkey = l.orderkey 
+          //       AND  s.nationkey = n.nationkey 
+          //       AND  (p.name LIKE '%green%')
+          //     ) AS profit 
+          //   GROUP BY nation, o_year;
+          // """
         )
 
 
@@ -122,29 +153,45 @@ object ImputeTiming
       // CREATE LENSES
       Fragments.foreach(
         relevantTables.toSeq
-      ){ createMissingValueLens(_, s"_run_$i") }
+      ){ createMissingValueLens(_, s"_RUN_$i") }
+
+      // // INDEXES
+      if(useMaterialized){
+        Fragments.foreach( relevantIndexes ) {
+          case (baseTable, indices) => 
+            val viewTable = s"${baseTable}_RUN_$i"
+            Fragments.foreach(indices){ index =>
+              s"Create Index $viewTable(${index.mkString(",")})" >> {
+                val indexName = viewTable+"_"+index.mkString("_")
+                println(s"CREATE INDEX $indexName")
+                db.backend.update(s"CREATE INDEX IF NOT EXISTS $indexName ON $viewTable(${index.mkString(",")})")
+                ok
+              }
+            }
+        }
+      } else { ok }
 
       // QUERIES
-      Fragments.foreach( 
-        if(!runBestGuessQueries){ Seq() } 
-        else { TPCHQueries.map { (_, 60.0) }.zipWithIndex }
-      ) {
-        queryLens(_)
-      }
+      if(runBestGuessQueries){
+        Fragments.foreach( TPCHQueries.zipWithIndex )
+        {
+          queryLens(_)
+        }
+      } else { ok }
 
-      Fragments.foreach(
-        if(!runTupleBundleQueries){ Seq() } 
-        else { TPCHQueries.zipWithIndex }
-      ){
-        sampleFromLens(_)
-      }
+      // Fragments.foreach(
+      //   if(!runTupleBundleQueries){ Seq() } 
+      //   else { TPCHQueries.zipWithIndex }
+      // ){
+      //   sampleFromLens(_)
+      // }
 
-      Fragments.foreach(
-        if(!runSamplerQueries){ Seq() } 
-        else { TPCHQueries.zipWithIndex }
-      ){
-        expectedFromLens(_)
-      }
+      // Fragments.foreach(
+      //   if(!runSamplerQueries){ Seq() } 
+      //   else { TPCHQueries.zipWithIndex }
+      // ){
+      //   expectedFromLens(_)
+      // }
 
 
     }

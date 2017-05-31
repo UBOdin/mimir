@@ -19,6 +19,7 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
 {
 
   val timeout: Duration
+  val useMaterialized: Boolean
 
 
   def loadTable(tableFields:(String, String, Type, Double)) =
@@ -87,13 +88,20 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
       db.views(testTable).isMaterialized must beTrue
     }
     s"Materialize Lens: $testTable" >> {
-      if(!db.views(testTable).isMaterialized){
-        val timeForQuery = time {
-          update(s"ALTER VIEW ${testTable} MATERIALIZE")
+      if(useMaterialized){
+        if(!db.views(testTable).isMaterialized){
+          val timeForQuery = time {
+            update(s"ALTER VIEW ${testTable} MATERIALIZE")
+          }
+          println(s"Materialize Time:${timeForQuery._2} seconds <- RepairKeyLens:${testTable}")
         }
-        println(s"Materialize Time:${timeForQuery._2} seconds <- RepairKeyLens:${testTable}")
+        db.views(testTable).isMaterialized must beTrue
+      } else {
+        if(db.views(testTable).isMaterialized){
+          update(s"ALTER VIEW ${testTable} NO MATERIALIZE")
+        }
+        db.views(testTable).isMaterialized must beFalse
       }
-      db.views(testTable).isMaterialized must beTrue
     }
   }
 
@@ -122,14 +130,22 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
       db.tableExists(testTable) must beTrue
     }
     s"Materialize Lens: $testTable" >> {
-      if(!db.views(testTable).isMaterialized){
-        val timeForQuery = time {
-          update(s"ALTER VIEW ${testTable} MATERIALIZE")
+      if(useMaterialized){
+        if(!db.views(testTable).isMaterialized){
+          val timeForQuery = time {
+            update(s"ALTER VIEW ${testTable} MATERIALIZE")
+          }
+          println(s"Materialize Time:${timeForQuery._2} seconds <- RepairKeyLens:${testTable}")
         }
-        println(s"Materialize Time:${timeForQuery._2} seconds <- RepairKeyLens:${testTable}")
+        db.views(testTable).isMaterialized must beTrue
+      } else {
+        if(db.views(testTable).isMaterialized){
+          update(s"ALTER VIEW ${testTable} DROP MATERIALIZE")
+        }
+        db.views(testTable).isMaterialized must beFalse
       }
-      db.views(testTable).isMaterialized must beTrue
     }
+
   }
  
   def createKeyRepairRowWiseLens(tableData: (String, (Seq[String], Seq[(String,String,Type,Double)])), tableSuffix: String = "_cleaned") =
@@ -187,20 +203,22 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
 
   }
 
-  def queryLens(config : ((String, Double), Int)) = 
+  def queryLens(config : (String, Int)) = 
   {
-    val ((queryString, timeout), idx) = config
+    val (queryString, idx) = config
     s"Query Lens ($idx): ${queryString}" >> {
-      val ((rows, backendTime), totalTime) = time {
-        var x = 0
-        val backendTime = query(queryString) { results =>
-          time { results.foreach { row => (x = x + 1) } } 
+      implicit ee: ExecutionEnv => 
+        upTo(timeout){
+          val ((rows, backendTime), totalTime) = time {
+            var x = 0
+            val backendTime = query(queryString) { results =>
+              time { results.foreach { row => (x = x + 1) } } 
+            }
+            (x, backendTime._2)
+          }
+          println(s"Time:${totalTime} seconds (${backendTime} seconds reading $rows results);  <- Query $idx: \n$queryString")
+          rows must be_>(0)
         }
-        (x, backendTime._2)
-      }
-      println(s"Time:${totalTime} seconds (${backendTime} seconds reading $rows results);  <- Query $idx: \n$queryString")
-      rows must be_>(0)
-      totalTime should be lessThan timeout+2 // Add 2 seconds for the optimizer (for now)
     }
   }
 

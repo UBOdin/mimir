@@ -23,8 +23,7 @@ object ExpressionOptimizer {
 
 	val standardOptimizatins = List[ExpressionOptimizerRule](
 		PullUpBranches,
-		FlattenBooleanConditionals,
-		PropagateConditions,
+		// FlattenBooleanConditionals,
 		RemoveRedundantCasts,
 		InlineFunctions,
 		PushDownNots

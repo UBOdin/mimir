@@ -1,9 +1,11 @@
 package mimir.optimizer;
 
+import com.typesafe.scalalogging.slf4j.LazyLogging
+
 import mimir.ctables._;
 import mimir.algebra._;
 
-object PropagateConditions extends ExpressionOptimizerRule {
+object PropagateConditions extends OperatorOptimization with LazyLogging {
 
 	def applyAssertion(assertion: Expression, target: Expression): Expression =
 		applyAssertion(true, assertion, target)
@@ -64,8 +66,54 @@ object PropagateConditions extends ExpressionOptimizerRule {
 		}
 	}
 
-	def apply(e: Expression): Expression = 
-		ExpressionUtils.makeAnd(propagateConditions(ExpressionUtils.getConjuncts(e)))
+	def apply(e: Expression, assertions: Seq[Expression] = Seq()): Expression = 
+	{
+		assertions.foldRight(
+			ExpressionUtils.makeAnd(propagateConditions(ExpressionUtils.getConjuncts(e)))
+		) { 
+			applyAssertion(_, _)
+		}
+	}
+
+  def recur(o: Operator): (Operator, Seq[Expression]) =
+  {
+  	logger.debug(s"Propagating conditions in $o")
+  	o match {
+  		case Select(cond, src) =>
+  			val (rewrittenSelect, srcAssertions) = recur(src)
+  			logger.debug(s"Propagating: $srcAssertions into $cond")
+  			val rewrittenCond = apply(cond, srcAssertions)
+  			logger.debug(s"   -> $rewrittenCond")
+  			(
+  				Select(rewrittenCond, rewrittenSelect), 
+  				ExpressionUtils.getConjuncts(cond).filter(isUsefulAssertion(_)) ++ srcAssertions
+				)
+			case Join(lhs, rhs) =>
+				val (lhsRewriten, lhsAssertions) = recur(lhs)
+				val (rhsRewritten, rhsAssertions) = recur(rhs)
+				(
+					Join(lhsRewriten, rhsRewritten),
+					lhsAssertions ++ rhsAssertions
+				)
+			case _ => 
+				val rewrite = 
+					o.children match {
+						case Seq(src) => 
+			  			val (rewritten, srcAssertions) = recur(src)
+			  			logger.debug(s"Rewriting \n$o\nwith $srcAssertions")
+		  				o.recurExpressions(apply(_, srcAssertions))
+		  				 .rebuild(Seq(rewritten))
+
+			  		case _ =>
+			  			o.recur(apply(_))
+	  			} 
+  			logger.debug(s"Replacing with\n$rewrite")
+	  		(rewrite, Seq())
+  	}
+  }
+
+	def apply(o: Operator): Operator =
+		recur(o)._1
 
 	def propagateConditions(l: Seq[Expression]): Seq[Expression] = 
 		propagateConditions(l.toList)
