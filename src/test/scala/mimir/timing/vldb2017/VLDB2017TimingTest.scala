@@ -67,7 +67,7 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
         update(s"""
           CREATE LENS ${testTable}
             AS SELECT TID, ${columnName} FROM ${baseTable}
-          WITH KEY_REPAIR(TID)
+          WITH KEY_REPAIR(TID, ENABLE(FAST_PATH))
         """);
           //val materializeQuery = s"SELECT * FROM ${tableAndKeyColumn._1}_UNMAT"
           //val oper = db.sql.convert(db.parse(materializeQuery).head.asInstanceOf[Select])
@@ -277,5 +277,21 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
         }
     }
   }
+  
+  /*
+SQLite Timing
+   
+PDB	
+time printf "create table q1_sqlite_time as select ok.orderkey, od.orderdate, os.shippriority from cust_c_mktsegment_run_1 cs, cust_c_custkey_run_1 cck, orders_o_orderkey_run_1 ok, orders_o_orderdate_run_1 od, orders_o_shippriority_run_1 os, orders_o_custkey_run_1 ock, lineitem_l_orderkey_run_1 lok, lineitem_l_shipdate_run_1 lsd where od.orderdate > DATE('1995-03-15') and lsd.shipdate < DATE('1995-03-17') and cs.mktsegment = 'BUILDING' and lok.tid = lsd.tid and cck.tid = cs.tid and cck.custkey = ock.custkey and ok.tid = ock.tid and ok.orderkey = lok.orderkey and od.tid = ok.tid and os.tid = ok.tid;" | sqlite3 VLDB2017PDBench.db > /dev/null 	9.521
+time printf "create table q2_sqlite_time as select liep.extendedprice from lineitem_l_extendedprice_run_1 liep, lineitem_l_shipdate_run_1 lisd, lineitem_l_discount_run_1 lidi, lineitem_l_quantity_run_1 liq where lisd.shipdate between DATE('1994-01-01') and DATE('1996-01-01') and lidi.discount between 0.05 and 0.08 and liq.quantity < 24 and lisd.tid = lidi.tid and liq.tid = lidi.tid and liep.tid = liq.tid;" | sqlite3 VLDB2017PDBench.db > /dev/null 	7.59
+time printf "create table q3_sqlite_time as select nn1.name, nn2.name from supp_s_suppkey_run_1 sk, supp_s_nationkey_run_1 snk, lineitem_l_orderkey_run_1 lok, lineitem_l_suppkey_run_1 lsk, orders_o_orderkey_run_1 ok, orders_o_custkey_run_1 ock, cust_c_custkey_run_1 ck, cust_c_nationkey_run_1 cnk, nation_n_name_run_1 nn1, nation_n_name_run_1 nn2, nation_n_nationkey_run_1 nk1, nation_n_nationkey_run_1 nk2 where nn2.name='IRAQ' and nn1.name='GERMANY' and cnk.nationkey = nk2.nationkey and snk.nationkey = nk1.nationkey and sk.suppkey = lsk.suppkey and ok.orderkey = lok.orderkey and ck.custkey = ock.custkey and lok.tid = lsk.tid and ock.tid = ok.tid and snk.tid = sk.tid and cnk.tid = ck.tid and nk2.tid = nn2.tid and nk1.tid = nn1.tid;" | sqlite3 VLDB2017PDBench.db > /dev/null 	31.22
+	
+TPCH	
+time printf "create table tpch_q1_sqlite_time as select l_returnflag, l_linestatus, sum(l_quantity) as sum_qty, sum(l_extendedprice) as sum_base_price, sum(l_extendedprice *(1 - l_discount)) as sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge, avg(l_quantity) as avg_qty, avg(l_extendedprice) as avg_price, avg(l_discount) as avg_disc, count(*) as count_order from lineitem where l_shipdate <= DATE('1997-09-01') group by l_returnflag, l_linestatus order by l_returnflag, l_linestatus;" | sqlite3 source/mimir/MCDBTiming.db > /dev/null  	19.561
+time printf "create table tpch_q3_sqlite_time as  select l_orderkey, sum(l_extendedprice *(1 - l_discount)) as revenue, o_orderdate, o_shippriority from customer, orders, lineitem where c_mktsegment = 'BUILDING' and c_custkey = o_custkey and l_orderkey = o_orderkey and o_orderdate < DATE('1995-03-15') and l_shipdate > DATE('1995-03-15') group by l_orderkey, o_orderdate, o_shippriority order by revenue desc, o_orderdate; " | sqlite3 source/mimir/MCDBTiming.db > /dev/null  	22.835
+time printf "create table tpch_q5_sqlite_time as  select n_name, sum(l_extendedprice *(1 - l_discount)) as revenue from customer, orders, lineitem, supplier, nation, region where c_custkey = o_custkey and l_orderkey = o_orderkey and l_suppkey = s_suppkey and c_nationkey = s_nationkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'ASIA' and o_orderdate >= DATE('1994-01-01') and o_orderdate < DATE(‘1995-01-01') group by n_name order by revenue desc; " | sqlite3 source/mimir/MCDBTiming.db > /dev/null  	33.308
+time printf "create table tpch_q9_sqlite_time as  select nation, o_year, sum(amount) as sum_profit from (select n_name as nation, strftime('%Y', o_orderdate) as o_year, l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount from part, supplier, lineitem, partsupp, orders, nation where s_suppkey = l_suppkey and ps_suppkey = l_suppkey and ps_partkey = l_partkey and p_partkey = l_partkey and o_orderkey = l_orderkey and s_nationkey = n_nationkey and p_name like 'green') as profit group by nation, o_year order by nation, o_year desc;" | sqlite3 source/mimir/MCDBTiming.db > /dev/null  	51.125
+   
+   */
 
 }
