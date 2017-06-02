@@ -7,7 +7,7 @@ import mimir.models._
 import mimir.algebra._
 import mimir.ctables._
 import net.sf.jsqlparser.statement.select.Select
-import mimir.exec.stream.Row
+import mimir.exec.result.Row
 import mimir.util.JDBCUtils
 
 object MissingKeyLens {

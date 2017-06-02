@@ -20,6 +20,9 @@ object UtilityFunctions
       (args) => ???,
       (_) => TInt()
     )
+    
+    FunctionRegistry.registerNative("STRFTIME",(_) => ???, (_) => TInt())
+    
   }
 
 }

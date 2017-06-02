@@ -15,6 +15,11 @@ scalacOptions ++= Seq(
   "-feature"
 )
 
+unmanagedResourceDirectories in Compile += baseDirectory.value / "lib_extra"
+unmanagedClasspath in Runtime <+= (baseDirectory) map { bd => Attributed.blank(bd / "conf") }
+
+includeFilter in (Compile, unmanagedResourceDirectories):= ".dylib"
+
 connectInput in run := true
 outputStrategy in run := Some(StdoutOutput)
 
@@ -189,7 +194,7 @@ parallelExecution in Test := false
 
 resolvers ++= Seq("snapshots", "releases").map(Resolver.sonatypeRepo)
 
-fork := true
+fork := false
 
 testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
 

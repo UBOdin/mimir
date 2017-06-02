@@ -11,8 +11,8 @@ import mimir.sql._
 import mimir.algebra._
 import mimir.util._
 import mimir.exec._
-import mimir.exec.stream.ResultIterator
-import mimir.exec.stream.Row
+import mimir.exec.result.ResultIterator
+import mimir.exec.result.Row
 
 object GProMDBTestInstances
 {
@@ -46,6 +46,7 @@ object GProMDBTestInstances
             dbFile.deleteOnExit();
           }
           tmpDB.backend.open();
+          backend.metadataLookupPlugin.db = tmpDB;
           if(shouldResetDB || !oldDBExists || !config.contains("initial_db")){
             tmpDB.initializeDBForMimir();
           }

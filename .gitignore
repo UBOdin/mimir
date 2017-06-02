@@ -46,3 +46,4 @@ tpch-dbgen
 *.png
 *.pdf
 *.gpl
+/bin/

@@ -6,7 +6,7 @@ import java.util.Vector
 import org.rogach.scallop._
 
 import mimir.algebra._
-import mimir.exec.stream.Row
+import mimir.exec.result.Row
 import mimir.sql._
 import mimir.util.ExperimentalOptions
 //import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
@@ -43,20 +43,20 @@ object MimirVizier {
     ExperimentalOptions.enable(conf.experimental())
     
     // Set up the database connection(s)
-    db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
-    db.backend.open()
+    //db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
+    //db.backend.open()
     
     //Use GProM Backend
-    /*gp = new GProMBackend(conf.backend(), conf.dbname(), -1)
+    gp = new GProMBackend(conf.backend(), conf.dbname(), -1)
     db = new Database(gp)    
     db.backend.open()
-    gp.metadataLookupPlugin.db = db;*/
+    gp.metadataLookupPlugin.db = db;
     
     
     db.initializeDBForMimir();
 
     if(ExperimentalOptions.isEnabled("INLINE-VG")){
-        db.backend.asInstanceOf[JDBCBackend].enableInlining(db)
+        db.backend.asInstanceOf[GProMBackend].enableInlining(db)
       }
     
     OperatorTranslation.db = db

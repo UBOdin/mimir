@@ -33,6 +33,9 @@ object NumericFunctions
       (x) => IntPrimitive(x(0).asLong | x(1).asLong), 
       (_) => TInt()
     )
+    
+    FunctionRegistry.registerNative("AVG",(_) => ???, (_) => TInt())
+    FunctionRegistry.registerNative("STDDEV",(_) => ???, (_) => TFloat())
 
   }
 

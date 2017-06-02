@@ -13,7 +13,7 @@ import mimir.exec.Compiler
 
 object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorTranslation") with BeforeAll with AfterAll {
 
-  args(skipAll = true)
+  args(skipAll = false)
   
   var memctx : com.sun.jna.Pointer = null
   
@@ -34,7 +34,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
   "The GProM - Mimir Operator Translator" should {
 
     sequential
-    Fragments.foreach(1 to 5){ i => 
+    Fragments.foreach(1 to 1){ i => 
       sequential
       Fragments.foreach(Seq(
         (s"Queries for Tables - run $i", 
