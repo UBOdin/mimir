@@ -208,6 +208,21 @@ object FunctionRegistry {
       }
     )
 
+    registerNative("YEAR_PART", 
+      (args: Seq[PrimitiveValue]) => IntPrimitive(args(0).asDateTime.getYear),
+      (types: Seq[Type]) => TInt()
+    )
+
+    registerNative("MONTH_PART", 
+      (args: Seq[PrimitiveValue]) => IntPrimitive(args(0).asDateTime.getMonthOfYear),
+      (types: Seq[Type]) => TInt()
+    )
+
+    registerNative("DAY_PART", 
+      (args: Seq[PrimitiveValue]) => IntPrimitive(args(0).asDateTime.getDayOfMonth),
+      (types: Seq[Type]) => TInt()
+    )
+
     registerNative("SAMPLE_CONFIDENCE",
       (args: Seq[PrimitiveValue]) => 
         FloatPrimitive(

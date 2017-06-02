@@ -84,47 +84,34 @@ object OperatorOptimizerRegressions
     }
 
     "Push deep into expressions" >> {
-      val testBit = (i:Int) => { Comparison(Cmp.Eq, Var("MIMIR_DET_BIT_VECTOR"), IntPrimitive(i)) }
-      val and = ExpressionUtils.makeAnd(_:Expression,_:Expression)
-      val or = ExpressionUtils.makeOr(_:Expression,_:Expression)
-
       val problemExpr = expr("((((MIMIR_DET_BIT_VECTOR & 2) =2)  AND  ( (MIMIR_DET_BIT_VECTOR_0 & 4) =4) )  AND  (CUSTKEY !=  CUSTKEY_0) )")
-      // and(
-      //   testBit(64), 
-      //   testBit(128)
-      // )
-//       val problemExpr = expr("""
-// ( 
-//   ( 
-//     ( 
-//       ( 
-//         ( 
-//           ( 
-//             ( 
-//               ( 
-//                 ( 
-//                   ( (MIMIR_DET_BIT_VECTOR_1 & 64) =64)  AND  ( (MIMIR_DET_BIT_VECTOR_1 & 128) =128) 
-//                 )  AND  ( 
-//                   ( 
-//                     ( 
-//                       ( 
-//                         ( 
-//                           ( 
-//                             ( 
-//                               ( 
-//                                 ( 
-//                                   ( 
-//                                     ( 
-//                                       ( 
-//                                         ( 
-//                                           ( 
-//                                             ( 
-//                                               ( 
-//                                                 ( 
-//                                                   (MIMIR_DET_BIT_VECTOR & 2) =2)  AND  ( (MIMIR_DET_BIT_VECTOR_0 & 4) =4) )  
-//                                                   AND  (CUSTKEY<>CUSTKEY_0) )  OR  ( ( ( (MIMIR_DET_BIT_VECTOR_1 & 2) =2)  AND  ( (MIMIR_DET_BIT_VECTOR_0 & 2) =2) )  AND  (ORDERKEY_0<>ORDERKEY) ) )  AND  ( (CUSTKEY<>CUSTKEY_0)  OR  (ORDERKEY_0<>ORDERKEY) ) )  OR  ( ( ( (MIMIR_DET_BIT_VECTOR_1 & 8) =8)  AND  ( (MIMIR_DET_BIT_VECTOR_2 & 2) =2) )  AND  (SUPPKEY<>SUPPKEY_0) ) )  AND  ( ( (CUSTKEY<>CUSTKEY_0)  OR  (ORDERKEY_0<>ORDERKEY) )  OR  (SUPPKEY<>SUPPKEY_0) ) )  OR  ( ( ( (MIMIR_DET_BIT_VECTOR & 16) =16)  AND  ( (MIMIR_DET_BIT_VECTOR_2 & 16) =16) )  AND  (NATIONKEY<>NATIONKEY_0) ) )  AND  ( ( ( (CUSTKEY<>CUSTKEY_0)  OR  (ORDERKEY_0<>ORDERKEY) )  OR  (SUPPKEY<>SUPPKEY_0) )  OR  (NATIONKEY<>NATIONKEY_0) ) )  OR  ( ( ( (MIMIR_DET_BIT_VECTOR_2 & 16) =16)  AND  ( (MIMIR_DET_BIT_VECTOR_3 & 2) =2) )  AND  (NATIONKEY_0<>NATIONKEY_1) ) )  AND  ( ( ( ( (CUSTKEY<>CUSTKEY_0)  OR  (ORDERKEY_0<>ORDERKEY) )  OR  (SUPPKEY<>SUPPKEY_0) )  OR  (NATIONKEY<>NATIONKEY_0) )  OR  (NATIONKEY_0<>NATIONKEY_1) ) )  OR  ( ( (MIMIR_DET_BIT_VECTOR_3 & 8) =8)  AND  (REGIONKEY<>REGIONKEY_0) ) )  AND  ( ( ( ( ( (CUSTKEY<>CUSTKEY_0)  OR  (ORDERKEY_0<>ORDERKEY) )  OR  (SUPPKEY<>SUPPKEY_0) )  OR  (NATIONKEY<>NATIONKEY_0) )  OR  (NATIONKEY_0<>NATIONKEY_1) )  OR  (REGIONKEY<>REGIONKEY_0) ) )  AND  ( ( ( ( ( (CUSTKEY<>CUSTKEY_0)  OR  (ORDERKEY_0<>ORDERKEY) )  OR  (SUPPKEY<>SUPPKEY_0) )  OR  (NATIONKEY<>NATIONKEY_0) )  OR  (NATIONKEY_0<>NATIONKEY_1) )  OR  (REGIONKEY<>REGIONKEY_0) ) )  OR  ( ( (MIMIR_DET_BIT_VECTOR_0 & 32) =32)  AND  (ORDERDATE<DATE '1994-01-01') ) )  AND  ( ( ( ( ( ( (CUSTKEY<>CUSTKEY_0)  OR  (ORDERKEY_0<>ORDERKEY) )  OR  (SUPPKEY<>SUPPKEY_0) )  OR  (NATIONKEY<>NATIONKEY_0) )  OR  (NATIONKEY_0<>NATIONKEY_1) )  OR  (REGIONKEY<>REGIONKEY_0) )  OR  (ORDERDATE<DATE '1994-01-01') ) )  OR  ( ( (MIMIR_DET_BIT_VECTOR_0 & 32) =32)  AND  (ORDERDATE>=DATE '1995-01-01') ) ) )  AND  ( (MIMIR_DET_BIT_VECTOR & 1) =1) )  AND  ( (MIMIR_DET_BIT_VECTOR_0 & 1) =1) )  AND  ( (MIMIR_DET_BIT_VECTOR_1 & 1) =1) )  AND  ( (MIMIR_DET_BIT_VECTOR_2 & 1) =1) )  AND  ( (MIMIR_DET_BIT_VECTOR_3 & 1) =1) )  AND  ( (MIMIR_DET_BIT_VECTOR_3 & 4) =4) ) )
-//       """)
-      PropagateConditions(problemExpr, Seq(expr("CUSTKEY_0=CUSTKEY"))) must be equalTo(BoolPrimitive(false))
+      Eval.inline(
+        PropagateConditions(problemExpr, Seq(expr("CUSTKEY_0=CUSTKEY")))
+      ) must be equalTo(BoolPrimitive(false))
+    }
+
+    "Propagate IsNull" >> {
+      val problemExpr = 
+        Arithmetic(Arith.Or,
+          Var("C"),
+          Arithmetic(Arith.And,
+            Not(IsNullExpression(Var("REGIONKEY_0"))),
+            Conditional(
+              IsNullExpression(Var("REGIONKEY_0")),
+              Var("A"),
+              Var("B")
+            )
+          )
+        )
+      PropagateConditions(problemExpr) must be equalTo(
+        Arithmetic(Arith.Or,
+          Var("C"),
+          Arithmetic(Arith.And,
+            Not(IsNullExpression(Var("REGIONKEY_0"))),
+            Var("B")
+          )
+        )
+      )
     }
 
   }

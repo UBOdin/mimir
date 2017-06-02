@@ -78,12 +78,12 @@ class Compiler(db: Database) extends LazyLogging {
 
     logger.trace(s"BUNDLED: $oper")
 
-    oper = Compiler.optimize(oper, opts);
+    oper = Compiler.optimize(oper, opts)
 
     logger.trace(s"RE-OPTIMIZED: $oper")
 
     new SampleResultIterator(
-      deploy(oper, rawOper.columnNames, opts),
+      deploy(oper, TupleBundler.splitColumnNames(rawOper.columnNames, nonDetColumns, seeds.length), opts),
       rawOper.schema,
       nonDetColumns,
       seeds.size
@@ -116,6 +116,36 @@ class Compiler(db: Database) extends LazyLogging {
     deploy(oper, oper.columnNames, opts)
   }
 
+  def compilePartition(
+    rawOper: Operator,
+    opts: Compiler.Optimizations = Compiler.standardOptimizations
+  ): ResultIterator =
+  {
+    var oper = rawOper
+    logger.trace(s"COMPILING FOR PARTITION: $oper")
+
+    oper = StripViews(oper, onlyProbabilistic = true)
+
+    oper = Compiler.optimize(oper, Seq(InlineProjections));
+
+    oper = CTPercolatorClassic.percolate(oper)
+
+    val partitions =
+      OperatorUtils.extractUnionClauses(oper).map {
+        OperatorUtils.extractProjections(_)
+      }.map { 
+        case (proj, oper) => 
+          assert(CTables.isDeterministic(oper))
+          (proj, Compiler.optimize(oper, opts))
+      }.iterator.map { 
+        case (proj, oper) => 
+          deploy(Project(proj, oper), rawOper.columnNames, Seq())
+      }
+
+    return new UnionResultIterator(partitions)
+
+  }
+
   def deploy(
     compiledOper: Operator, 
     outputCols: Seq[String], 
@@ -140,21 +170,78 @@ class Compiler(db: Database) extends LazyLogging {
     val annotationCols =
       projections.keys.filter( !isAnOutputCol(_) )
 
-    val sql = sqlForBackend(oper, opts)
+    val requiredColumns = 
+      projections.values
+        .map(_.expression)
+        .flatMap { ExpressionUtils.getColumns(_) }
+        .toSet
 
-    // Deploy to the backend
-    val results = 
-      TimeUtils.monitor(s"EXECUTE\n${compiledOper.toString("   ")}\n", logger.info(_)){
-        db.backend.execute(sql)
+    val (agg: Option[(Seq[Var], Seq[AggFunction])], unionClauses: Seq[Operator]) = 
+      DecomposeAggregates(oper) match {
+        case Aggregate(gbCols, aggCols, src) => 
+          (Some((gbCols, aggCols)), OperatorUtils.extractUnionClauses(src))
+        case _ => 
+          (None, OperatorUtils.extractUnionClauses(oper))
       }
+      
+    if(unionClauses.size > 1 && ExperimentalOptions.isEnabled("AVOID-IN-SITU-UNIONS")){
 
-    new ProjectionResultIterator(
-      outputCols.map( projections(_) ),
-      annotationCols.map( projections(_) ).toSeq,
-      oper.schema,
-      results,
-      (db.backend.rowIdType, db.backend.dateType)
-    )
+      val requiredColumnsInOrder = 
+        agg match {
+          case None => 
+            requiredColumns.toSeq
+          case Some((gbCols, aggFunctions)) => 
+            gbCols.map { _.name } ++ 
+            aggFunctions
+              .flatMap { _.args }
+              .flatMap { ExpressionUtils.getColumns(_) }
+              .toSet.toSeq
+        }
+      val sourceColumnTypes = unionClauses(0).schema.toMap
+
+
+      val nested = unionClauses.map { deploy(_, requiredColumnsInOrder, opts = opts) }
+      val jointIterator = new UnionResultIterator(nested.iterator)
+
+      val aggregateIterator =
+        agg match {
+          case None => 
+            jointIterator
+          case Some((gbCols, aggFunctions)) => 
+            new AggregateResultIterator(
+              gbCols, 
+              aggFunctions,
+              requiredColumnsInOrder.map { col => (col, sourceColumnTypes(col)) },
+              jointIterator
+            )
+        }
+      return new ProjectionResultIterator(
+        outputCols.map( projections(_) ),
+        annotationCols.map( projections(_) ).toSeq,
+        oper.schema,
+        aggregateIterator
+      )
+
+    } else {
+      // Make the set of columns we're interested in explicitly part of the query
+      oper = 
+        OperatorUtils.projectDownToColumns(requiredColumns.toSeq, oper)
+
+      val sql = sqlForBackend(oper, opts)
+
+      logger.info(s"PROJECTIONS: $projections")
+
+      new ProjectionResultIterator(
+        outputCols.map( projections(_) ),
+        annotationCols.map( projections(_) ).toSeq,
+        oper.schema,
+        new JDBCResultIterator(
+          oper.schema,
+          sql, db.backend,
+          (db.backend.rowIdType, db.backend.dateType)
+        )
+      )
+    }
   }
 
   def sqlForBackend(oper: Operator, opts: Compiler.Optimizations = Compiler.standardOptimizations): SelectBody =
@@ -192,7 +279,9 @@ object Compiler
       PushdownSelections,
       PropagateEmptyViews,
       PropagateConditions,
-      EvaluateExpressions
+      EvaluateExpressions,
+      PartitionUncertainJoins,
+      PullUpUnions
     )
 
   /**

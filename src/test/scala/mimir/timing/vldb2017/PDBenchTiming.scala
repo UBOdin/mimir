@@ -26,11 +26,12 @@ object PDBenchTiming
 
   val fullReset = false
   val runBestGuessQueries = false
-  val runTupleBundleQueries = true
-  val runSamplerQueries = false
-  val useMaterialized = true
+  val runTupleBundleQueries = false
+  val runSamplerQueries = true
+  val runPartitionQueries = false
+  val useMaterialized = false
 
-  val timeout = 30.minute
+  val timeout = 10.minute
 
   def beforeAll =
   {
@@ -93,38 +94,40 @@ object PDBenchTiming
                 and ok.orderkey = lok.orderkey
                 and od.tid = ok.tid 
                 and os.tid = ok.tid
-          """,
-          s"""
-              select liep.extendedprice
-              from lineitem_l_extendedprice_run_$i liep, lineitem_l_shipdate_run_$i lisd,
-                   lineitem_l_discount_run_$i lidi, lineitem_l_quantity_run_$i liq
-              where lisd.shipdate between DATE('1994-01-01') and DATE('1996-01-01')
-                and lidi.discount between 0.05 and 0.08
-                and liq.quantity < 24
-                and lisd.tid = lidi.tid
-                and liq.tid = lidi.tid
-                and liep.tid = liq.tid
-           """,
-           s"""
-              select nn1.name, nn2.name
-              from supp_s_suppkey_run_$i sk, supp_s_nationkey_run_$i snk,
-                   lineitem_l_orderkey_run_$i lok, lineitem_l_suppkey_run_$i lsk,
-                   orders_o_orderkey_run_$i ok, orders_o_custkey_run_$i ock,
-                   cust_c_custkey_run_$i ck, cust_c_nationkey_run_$i cnk,
-                   nation_n_name_run_$i nn1, nation_n_name_run_$i nn2,
-                   nation_n_nationkey_run_$i nk1, nation_n_nationkey_run_$i nk2
-              where nn2.name='IRAQ' and nn1.name='GERMANY'
-                and cnk.nationkey = nk2.nationkey 
-                and snk.nationkey = nk1.nationkey
-                and sk.suppkey = lsk.suppkey
-                and ok.orderkey = lok.orderkey
-                and ck.custkey = ock.custkey
-                and lok.tid = lsk.tid
-                and ock.tid = ok.tid
-                and snk.tid = sk.tid
-                and cnk.tid = ck.tid
-                and nk2.tid = nn2.tid and nk1.tid = nn1.tid
-           """
+          """
+          // ,
+          // s"""
+          //     select liep.extendedprice
+          //     from lineitem_l_extendedprice_run_$i liep, lineitem_l_shipdate_run_$i lisd,
+          //          lineitem_l_discount_run_$i lidi, lineitem_l_quantity_run_$i liq
+          //     where lisd.shipdate between DATE('1994-01-01') and DATE('1996-01-01')
+          //       and lidi.discount between 0.05 and 0.08
+          //       and liq.quantity < 24
+          //       and lisd.tid = lidi.tid
+          //       and liq.tid = lidi.tid
+          //       and liep.tid = liq.tid
+          //  """
+          //  ,
+           // s"""
+           //    select nn1.name, nn2.name
+           //    from supp_s_suppkey_run_$i sk, supp_s_nationkey_run_$i snk,
+           //         lineitem_l_orderkey_run_$i lok, lineitem_l_suppkey_run_$i lsk,
+           //         orders_o_orderkey_run_$i ok, orders_o_custkey_run_$i ock,
+           //         cust_c_custkey_run_$i ck, cust_c_nationkey_run_$i cnk,
+           //         nation_n_name_run_$i nn1, nation_n_name_run_$i nn2,
+           //         nation_n_nationkey_run_$i nk1, nation_n_nationkey_run_$i nk2
+           //    where nn2.name='IRAQ' and nn1.name='GERMANY'
+           //      and cnk.nationkey = nk2.nationkey 
+           //      and snk.nationkey = nk1.nationkey
+           //      and sk.suppkey = lsk.suppkey
+           //      and ok.orderkey = lok.orderkey
+           //      and ck.custkey = ock.custkey
+           //      and lok.tid = lsk.tid
+           //      and ock.tid = ok.tid
+           //      and snk.tid = sk.tid
+           //      and cnk.tid = ck.tid
+           //      and nk2.tid = nn2.tid and nk1.tid = nn1.tid
+           // """
         )
 
 
@@ -147,26 +150,21 @@ object PDBenchTiming
       // ){ createKeyRepairRowWiseLens(_, s"_run_$i") }
 
       // QUERIES
-      Fragments.foreach( 
-        if(!runBestGuessQueries){ Seq() } 
-        else { PDBenchQueries.zipWithIndex }
-      ) {
-        queryLens(_)
-      }
+      if(runBestGuessQueries){
+        Fragments.foreach( PDBenchQueries.zipWithIndex ) { queryLens(_) }
+      } else { "Skipping Best Guess Queries" >> ok }
 
-      Fragments.foreach(
-        if(!runTupleBundleQueries){ Seq() } 
-        else { PDBenchQueries.zipWithIndex }
-      ){
-        sampleFromLens(_)
-      }
+      if(runTupleBundleQueries){
+        Fragments.foreach( PDBenchQueries.zipWithIndex ) { sampleFromLens(_) }
+      } else { "Skipping Tuple Bundle Queries" >> ok }
 
-      Fragments.foreach(
-        if(!runSamplerQueries){ Seq() } 
-        else { PDBenchQueries.zipWithIndex }
-      ){
-        expectedFromLens(_)
-      }
+      if(runSamplerQueries){
+        Fragments.foreach( PDBenchQueries.zipWithIndex ) { expectedFromLens(_) }
+      } else { "Skipping Sampler Queries" >> ok }
+
+      if(runPartitionQueries){
+        Fragments.foreach( PDBenchQueries.zipWithIndex ) { partitionLens(_) }
+      } else { "Skipping Partition Queries" >> ok }
 
 
     }

@@ -160,6 +160,8 @@ object Eval
             e.rebuild(e.children.map(simplify(_)))
         }
       } else e match { 
+        case Comparison(Cmp.Eq, a, b) if a.equals(b) => BoolPrimitive(true)
+        case Comparison(Cmp.Neq, a, b) if a.equals(b) => BoolPrimitive(false)
         case Conditional(condition, thenClause, elseClause) =>
           simplify(condition) match {
             case BoolPrimitive(true)  => simplify(thenClause)

@@ -42,11 +42,11 @@ object PullUpBranches extends TopDownExpressionOptimizerRule {
 				Conditional(condition, Comparison(op, lhs, thenClause), 
 									   Comparison(op, lhs, elseClause))
 			case Arithmetic(op, Conditional(condition, thenClause, elseClause), rhs)
-				if(!containsConditional(rhs)) => 
+				if(!containsConditional(rhs) && !Arith.isBool(op)) => 
 				Conditional(condition, Arithmetic(op, thenClause, rhs), 
 									   Arithmetic(op, elseClause, rhs))
 			case Arithmetic(op, lhs, Conditional(condition, thenClause, elseClause))
-				if(!containsConditional(lhs)) => 
+				if(!containsConditional(lhs) && !Arith.isBool(op)) => 
 				Conditional(condition, Arithmetic(op, lhs, thenClause), 
 									   Arithmetic(op, lhs, elseClause))
 			case _ => e

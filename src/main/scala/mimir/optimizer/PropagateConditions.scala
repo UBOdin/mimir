@@ -55,6 +55,7 @@ object PropagateConditions extends OperatorOptimization with LazyLogging {
 			ExpressionUtils.getColumns(e).isEmpty
 		  )
 		e match {
+			case Comparison(Cmp.Eq, Var(_), Var(_)) => true
 			case Comparison(Cmp.Eq, Var(c), e) => isSimpler(e)
 			case Comparison(Cmp.Eq, e, Var(c)) => isSimpler(e)
 			case Comparison(Cmp.Neq, a, b) => 
@@ -69,10 +70,10 @@ object PropagateConditions extends OperatorOptimization with LazyLogging {
 	def apply(e: Expression, assertions: Seq[Expression] = Seq()): Expression = 
 	{
 		assertions.foldRight(
-			ExpressionUtils.makeAnd(propagateConditions(ExpressionUtils.getConjuncts(e)))
+			propagateConditions(e)
 		) { 
 			applyAssertion(_, _)
-		}
+		}.recur(apply(_, assertions))
 	}
 
   def recur(o: Operator): (Operator, Seq[Expression]) =
@@ -114,6 +115,16 @@ object PropagateConditions extends OperatorOptimization with LazyLogging {
 
 	def apply(o: Operator): Operator =
 		recur(o)._1
+
+
+	def propagateConditions(e: Expression): Expression =
+		ExpressionUtils.makeAnd(
+			propagateConditions(
+				ExpressionUtils.getConjuncts(e)
+					.map{ _.recur(propagateConditions(_)) }
+			)
+		)
+
 
 	def propagateConditions(l: Seq[Expression]): Seq[Expression] = 
 		propagateConditions(l.toList)

@@ -39,7 +39,7 @@ object OperatorUtils extends LazyLogging {
   {
     o match { 
       case Union(lhs, rhs) => extractUnionClauses(lhs) ++ extractUnionClauses(rhs)
-      case _ => List(o)
+      case _ => Seq(o)
     }
   }
 
@@ -107,6 +107,15 @@ object OperatorUtils extends LazyLogging {
     )
   }
 
+  def mergeWithColumn(target: String, default: Expression, oper: Operator)(merge: Expression => Expression): Operator =
+  {
+    if(oper.columnNames.contains(target)){
+      replaceColumn(target, merge(Var(target)), oper)
+    } else {
+      projectInColumn(target, merge(default), oper)
+    }
+  }
+
   def replaceColumn(target: String, replacement: Expression, oper: Operator) =
   {
     val (cols, src) = extractProjections(oper)
@@ -127,7 +136,13 @@ object OperatorUtils extends LazyLogging {
   def applyFilter(condition: Expression, oper: Operator): Operator =
     condition match {
       case BoolPrimitive(true) => oper
-      case _ => Select(condition, oper)
+      case _ => 
+        oper match {
+          case Select(otherCond, src) =>
+            Select(ExpressionUtils.makeAnd(condition, otherCond), src)
+          case _ => 
+            Select(condition, oper)
+        }
     }
 
   def projectColumns(cols: Seq[String], oper: Operator) =
@@ -140,8 +155,8 @@ object OperatorUtils extends LazyLogging {
 
   def joinMergingColumns(cols: Seq[(String, (Expression,Expression) => Expression)], lhs: Operator, rhs: Operator) =
   {
-    val allCols = lhs.schema.map(_._1).toSet ++ rhs.schema.map(_._1).toSet
-    val affectedCols = cols.map(_._1).toSet
+    val allCols = lhs.columnNames.toSet ++ rhs.columnNames.toSet
+    val affectedCols = cols.map(_._1).toSet & lhs.columnNames.toSet & rhs.columnNames.toSet
     val wrappedLHS = 
       Project(
         lhs.schema.map(_._1).map( x => 
@@ -157,11 +172,18 @@ object OperatorUtils extends LazyLogging {
         rhs
       )
     Project(
-      ((allCols -- affectedCols).map( (x) => ProjectArg(x, Var(x)) )).toList ++
-      cols.map({
+      ((allCols -- cols.map(_._1).toSet).map( (x) => ProjectArg(x, Var(x)) )).toList ++
+      cols.flatMap({
         case (name, op) =>
-          ProjectArg(name, op(Var("__MIMIR_LJ_"+name), Var("__MIMIR_RJ_"+name)))
-
+          if(affectedCols(name)){
+            Some(ProjectArg(name, op(Var("__MIMIR_LJ_"+name), Var("__MIMIR_RJ_"+name))))
+          } else {
+            if(allCols(name)){
+              Some(ProjectArg(name, Var(name)))
+            } else { 
+              None
+            }
+          }
         }),
       Join(wrappedLHS, wrappedRHS)
     )

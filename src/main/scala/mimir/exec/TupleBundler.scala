@@ -408,6 +408,16 @@ object TupleBundler
     (0 until worlds).map(colNameInSample(col, _))
   def columnNames(col: String, seeds: Seq[Long]): Seq[String] =
     columnNames(col, seeds.length)
+  def splitColumnNames(cols: Seq[String], nonDetColumns: Set[String], worlds: Int): Seq[String] =
+  {
+    cols.flatMap { col =>
+      if(nonDetColumns(col)){
+        columnNames(col, worlds)
+      } else {
+        Some(col)
+      }
+    }
+  }
 
   def possibleValues(bv: Long, worlds: Seq[PrimitiveValue]): Map[PrimitiveValue, Int] =
   {

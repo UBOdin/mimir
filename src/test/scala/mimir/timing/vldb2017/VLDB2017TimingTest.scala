@@ -49,7 +49,7 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
     }
   }
 
-  def createKeyRepairLens(tableFields:(String, String, Type, Double), tableSuffix: String = "_cleaned") =  
+  def createKeyRepairLens(tableFields:(String, String, Type, Double), tableSuffix: String) =  
   {
     val (baseTable, columnName, columnType, timeout) = tableFields
     val testTable = (baseTable+tableSuffix).toUpperCase
@@ -59,9 +59,11 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
         if(db.tableExists(testTable)){
           update(s"DROP TABLE $testTable")
         }
-        val fastPathCacheTable = "MIMIR_FASTPATH_"+testTable
         if(db.tableExists("MIMIR_FASTPATH_"+testTable)){
-          update(s"DROP TABLE $fastPathCacheTable")
+          update(s"DROP TABLE MIMIR_FASTPATH_$testTable")
+        }
+        if(db.tableExists("MIMIR_KR_SOURCE_"+testTable)){
+          update(s"DROP TABLE MIMIR_KR_SOURCE_${testTable}")
         }
         val timeForQuery = time {
         update(s"""
@@ -98,7 +100,7 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
         db.views(testTable).isMaterialized must beTrue
       } else {
         if(db.views(testTable).isMaterialized){
-          update(s"ALTER VIEW ${testTable} NO MATERIALIZE")
+          update(s"ALTER VIEW ${testTable} DROP MATERIALIZE")
         }
         db.views(testTable).isMaterialized must beFalse
       }
@@ -209,15 +211,23 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
     s"Query Lens ($idx): ${queryString}" >> {
       implicit ee: ExecutionEnv => 
         upTo(timeout){
-          val ((rows, backendTime), totalTime) = time {
-            var x = 0
-            val backendTime = query(queryString) { results =>
-              time { results.foreach { row => (x = x + 1) } } 
+          try {
+            println(s"GUESS QUERY: \n$queryString")
+            val ((rows, backendTime), totalTime) = time {
+              var x = 0
+              val backendTime = query(queryString) { results =>
+                time { results.foreach { row => (x = x + 1) } } 
+              }
+              (x, backendTime._2)
             }
-            (x, backendTime._2)
+            println(s"Time:${totalTime} seconds (${backendTime} seconds reading $rows results);  <- Query $idx: \n$queryString")
+            rows must be_>(0)
+          } catch {
+            case e: Throwable => {
+              e.printStackTrace
+              ko
+            }
           }
-          println(s"Time:${totalTime} seconds (${backendTime} seconds reading $rows results);  <- Query $idx: \n$queryString")
-          rows must be_>(0)
         }
     }
   }
@@ -228,16 +238,23 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
     s"Sample From Lens ($idx): ${queryString}" >> {
       implicit ee: ExecutionEnv => 
         upTo(timeout){
-          println(s"SAMPLE QUERY $idx:\n$queryString")
-          val ((rows, backendTime), totalTime) = time {
-             var x = 0
-             val backendTime = db.sampleQuery(queryString) { results =>
-               time { results.foreach { row => (x = x + 1) } }
-             }
-             (x, backendTime._2)
+          try {
+            println(s"SAMPLE QUERY $idx:\n$queryString")
+            val ((rows, backendTime), totalTime) = time {
+               var x = 0
+               val backendTime = db.sampleQuery(queryString) { results =>
+                 time { results.foreach { row => (x = x + 1) } }
+               }
+               (x, backendTime._2)
+            }
+            println(s"Time:${totalTime} seconds (${backendTime} seconds reading $rows results);  <- Query $idx: \n$queryString")
+            rows must be_>(0)
+          } catch {
+            case e: Throwable => {
+              e.printStackTrace
+              ko
+            }
           }
-          println(s"Time:${totalTime} seconds (${backendTime} seconds reading $rows results);  <- Query $idx: \n$queryString")
-          rows must be_>(0)
         }
     }
   }
@@ -248,32 +265,73 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
     s"Expectation, StdDev, and Confidence From Lens ($idx): ${queryString}" >> {
       implicit ee: ExecutionEnv => 
         upTo(timeout){
-          println(s"EXPECTATION QUERY $idx: $queryString")
-          val ((rows, backendTime), totalTime) = time {
-            var x = 0
-            val queryStmt = db.stmt(queryString).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-            val query = db.sql.convert(queryStmt)
-            val stats = query.columnNames.flatMap {
-              col => Seq( 
-                Expectation(col, col), 
-                StdDev(col, "DEV_"+col)
+          try {
+            println(s"EXPECTATION QUERY $idx: $queryString")
+            val ((rows, backendTime), totalTime) = time {
+              var x = 0
+              val queryStmt = db.stmt(queryString).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
+              val query = db.sql.convert(queryStmt)
+              val stats = query.schema.flatMap {
+                case (col, t) if(Type.isNumeric(t)) => Seq( 
+                  Expectation(col, col), 
+                  StdDev(col, "DEV_"+col)
+                )
+                case (col, _) => Seq(
+                  AnyValue(col, col)
+                )
+              } ++ Seq(Confidence("CONF"))
+
+              val results = db.compiler.compileForStats(
+                query,
+                stats
               )
-            } ++ Seq(Confidence("CONF"))
+              val backendTime = time {
+                results.foreach { row => (x = x + 1) }
+              }
+              results.close()
 
-            val results = db.compiler.compileForStats(
-              query,
-              stats,
-              seeds = Seq(1l, 2l)
-            )
-            val backendTime = time {
-              results.foreach { row => (x = x + 1) }
+              (x, backendTime._2)
             }
-            results.close()
-
-            (x, backendTime._2)
+            println(s"Time:${totalTime} seconds (${backendTime} seconds reading $rows results);  <- Query $idx: \n$queryString")
+            rows must be_>(0)
+          } catch {
+            case e: Throwable => {
+              e.printStackTrace
+              ko
+            }
           }
-          println(s"Time:${totalTime} seconds (${backendTime} seconds reading $rows results);  <- Query $idx: \n$queryString")
-          rows must be_>(0)
+        }
+    }
+  }
+
+  def partitionLens(config : (String, Int)) =
+  {
+    val (queryString, idx) = config
+    s"Partitioning Lens ($idx): ${queryString}" >> {
+      implicit ee: ExecutionEnv => 
+        upTo(timeout){
+          try {
+            println(s"PARTITION QUERY $idx: $queryString")
+            val ((rows, backendTime), totalTime) = time {
+              var x = 0
+              val queryStmt = db.stmt(queryString).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
+              val query = db.sql.convert(queryStmt)
+              val results = db.compiler.compilePartition(query)
+              val backendTime = time {
+                results.foreach { row => (x = x + 1) }
+              }
+              results.close()
+
+              (x, backendTime._2)
+            }
+            println(s"Time:${totalTime} seconds (${backendTime} seconds reading $rows results);  <- Query $idx: \n$queryString")
+            rows must be_>(0)
+          } catch {
+            case e: Throwable => {
+              e.printStackTrace
+              ko
+            }
+          }
         }
     }
   }

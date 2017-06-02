@@ -16,9 +16,11 @@
   <logger name="mimir.ctables.CTExplainer" level="INFO"/>
   <logger name="mimir.exec.Compiler" level="INFO"/>
   <logger name="mimir.exec.BestGuesser" level="INFO"/>
-  <logger name="mimir.exec.TupleBundler" level="INFO"/>
+  <logger name="mimir.exec.TupleBundler" level="DEBUG"/>
   <logger name="mimir.exec.WorldBits" level="INFO"/>
   <logger name="mimir.exec.result.ProjectionResultIterator" level="INFO"/>
+  <logger name="mimir.exec.result.AggregateResultIterator" level="INFO"/>
+  <logger name="mimir.exec.result.JDBCResultIterator" level="INFO"/>
   <logger name="mimir.lenses.BestGuessCache" level="INFO"/>
   <logger name="mimir.lenses.ShredderLens" level="INFO"/>
   <logger name="mimir.lenses.TypeInferenceLens$" level="INFO"/>
@@ -27,6 +29,7 @@
   <logger name="mimir.models.TypeInferenceModel" level="INFO"/>
   <logger name="mimir.models.WekaModel$" level="INFO"/>
   <logger name="mimir.optimizer.PropagateConditions$" level="INFO"/>
+  <logger name="mimir.optimizer.PartitionUncertainJoins" level="INFO"/>
   <logger name="mimir.sql.sqlite.MimirCast$" level="INFO"/>
   <logger name="mimir.sql.sqlite.BestGuessVGTerm" level="INFO"/>
   <logger name="mimir.sql.sqlite.SampleVGTerm" level="INFO"/>

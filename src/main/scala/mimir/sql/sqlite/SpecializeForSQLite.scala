@@ -12,12 +12,30 @@ object SpecializeForSQLite {
   {
     (e match {
   
-      case Function("CAST", List(target, TypePrimitive(t))) => 
+      case Function("CAST", Seq(target, TypePrimitive(t))) => 
         {//println("TYPE ID: "+t.id(t))
-          Function("MIMIRCAST", List(target, IntPrimitive(Type.id(t))))}
+          Function("MIMIRCAST", Seq(target, IntPrimitive(Type.id(t))))}
 
       case Function("CAST", _) =>
         throw new SQLException("Invalid CAST: "+e)
+
+      case Function("YEAR_PART", Seq(d)) => 
+        Function("CAST", Seq(
+          Function("STRFTIME", Seq(StringPrimitive("%Y"), d)),
+          TypePrimitive(TInt())
+        ))
+
+      case Function("MONTH_PART", Seq(d)) => 
+        Function("CAST", Seq(
+          Function("STRFTIME", Seq(StringPrimitive("%m"), d)),
+          TypePrimitive(TInt())
+        ))
+
+      case Function("DAY_PART", Seq(d)) => 
+        Function("CAST", Seq(
+          Function("STRFTIME", Seq(StringPrimitive("%d"), d)),
+          TypePrimitive(TInt())
+        ))
 
       case _ => e
 

@@ -16,6 +16,7 @@ object AggregateRegistry
     registerStatistic("SUM")
     registerStatistic("MAX")
     registerStatistic("MIN")
+    registerStatistic("STDDEV")
     register("COUNT", (t) => TInt())
     register("AVG", List(TFloat()), TFloat())
     register("GROUP_AND", List(TBool()), TBool())

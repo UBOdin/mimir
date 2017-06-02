@@ -163,7 +163,8 @@ object KeyRepairLens extends LazyLogging {
     values: Seq[(String, Model)],
     scoreCol: Option[String],
     view: String,
-    forceGuess: Boolean = false
+    forceGuess: Boolean = false,
+    useUnions: Boolean = false
   ): Operator =
   {
     logger.debug(s"Assembling KR Lens with View $view")
@@ -184,31 +185,61 @@ object KeyRepairLens extends LazyLogging {
       )
     )
 
-    Project(
-      keys.map { col => ProjectArg(col, Var(col))} ++
-      values.map { case (col, model) => 
-        val vgTerm = 
-          VGTerm(model, 0, keys.map(Var(_)), 
-            Seq(
-              Var(s"MIMIR_KR_HINT_COL_$col"),
-              scoreCol.
-                map { _ => Var("MIMIR_KR_HINT_SCORE") }.
-                getOrElse( NullPrimitive() )
+    val uncertainRows =
+      Project(
+        keys.map { col => ProjectArg(col, Var(col))} ++
+        values.map { case (col, model) => 
+          val vgTerm = 
+            VGTerm(model, 0, keys.map(Var(_)), 
+              Seq(
+                Var(s"MIMIR_KR_HINT_COL_$col"),
+                scoreCol.
+                  map { _ => Var("MIMIR_KR_HINT_SCORE") }.
+                  getOrElse( NullPrimitive() )
+              )
             )
-          )
 
-        ProjectArg(col, 
-          if(forceGuess){ vgTerm } 
-          else {
-            Conditional(
-              Comparison(Cmp.Lte, Var(s"MIMIR_KR_COUNT_$col"), IntPrimitive(1)),
-              Var(col), vgTerm
-            )
-          }
+          ProjectArg(col, 
+            if(forceGuess){ vgTerm } 
+            else {
+              Conditional(
+                Comparison(Cmp.Lte, Var(s"MIMIR_KR_COUNT_$col"), IntPrimitive(1)),
+                Var(col), vgTerm
+              )
+            }
+          )
+        },
+        if(forceGuess || !useUnions){
+          db.views.get(view).get.operator
+        } else {
+          Select(
+            ExpressionUtils.makeOr(
+              values.map { v => 
+                Comparison(Cmp.Gt, Var(s"MIMIR_KR_COUNT_${v._1}"), IntPrimitive(1))
+              }
+            ),
+            db.views.get(view).get.operator
+          )
+        }
+      )
+    if(forceGuess || !useUnions){ uncertainRows }
+    else {
+      val certainRows =
+        Project(
+          (keys ++ values.map { _._1 })
+            .map { col => ProjectArg(col, Var(col))} ,
+          Select(
+            ExpressionUtils.makeAnd(
+              values.map { v => 
+                Comparison(Cmp.Lte, Var(s"MIMIR_KR_COUNT_${v._1}"), IntPrimitive(1))
+              }
+            ), 
+            db.views.get(view).get.operator
+          )
         )
-      },
-      db.views.get(view).get.operator
-    )
+
+      Union(certainRows, uncertainRows)
+    }
   }
 
   def assembleFastPath(

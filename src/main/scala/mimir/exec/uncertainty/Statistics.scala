@@ -19,9 +19,12 @@ abstract class ColumnStatistic(
 }
 
 case class Expectation(inputColumn: String, outputColumn: String) 
-  extends ColumnStatistic(inputColumn, "AVERAGE", outputColumn)
+  extends ColumnStatistic(inputColumn, "AVG", outputColumn)
 
 case class StdDev(inputColumn: String, outputColumn: String) 
-  extends ColumnStatistic(inputColumn, "AVERAGE", outputColumn)
+  extends ColumnStatistic(inputColumn, "STDDEV", outputColumn)
+
+case class AnyValue(inputColumn: String, outputColumn: String) 
+  extends ColumnStatistic(inputColumn, "FIRST", outputColumn)
 
 case class Confidence(output: String) extends Statistic
