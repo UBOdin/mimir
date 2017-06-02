@@ -135,7 +135,7 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
       )
     }
     query match {
-      case (Table(_,_,_) | EmptyTable(_)) => 
+      case (Table(_,_,_,_) | EmptyTable(_)) => 
         (
           OperatorUtils.projectInColumn(
             TupleBundler.worldBitsColumnName, IntPrimitive(fullBitVector), 

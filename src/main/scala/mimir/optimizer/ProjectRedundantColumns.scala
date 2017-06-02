@@ -33,7 +33,23 @@ object ProjectRedundantColumns {
 
         Project( newArgs, apply(source, childDependencies) )
       }
-
+      
+      case Annotate(subj,invisScm) => {
+        Annotate(apply(subj),invisScm)
+      }
+      
+			case Recover(subj,invisScm) => {
+        val provSelApl = apply(subj)
+        new Recover(provSelApl, invisScm)
+      }
+      
+      
+       case ProvenanceOf(psel) => {
+        val provSelApl = apply(psel)
+        val provApl = new ProvenanceOf(provSelApl)
+        provApl
+      }
+      
       case Select(condition, source) => {
         val childDependencies = 
           ExpressionUtils.getColumns( condition ) ++ dependencies

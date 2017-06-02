@@ -230,7 +230,7 @@ object CTPercolatorSpec
           Aggregate(
             List(Var("PRODUCT_INVENTORY_COMPANY")), 
             List(AggFunction("SUM", false, List(Var("PRODUCT_INVENTORY_QUANTITY")), "MIMIR_AGG_SUM_2")),
-            Table("PRODUCT_INVENTORY", List( 
+            Table("PRODUCT_INVENTORY","PRODUCT_INVENTORY", List( 
                 ("PRODUCT_INVENTORY_ID", TString()), 
                 ("PRODUCT_INVENTORY_COMPANY", TString()), 
                 ("PRODUCT_INVENTORY_QUANTITY", TInt()), 
@@ -246,7 +246,7 @@ object CTPercolatorSpec
           Aggregate(
             List(Var("PRODUCT_INVENTORY_COMPANY")), 
             List(AggFunction("SUM", false, List(Var("PRODUCT_INVENTORY_QUANTITY")), "MIMIR_AGG_SUM_2")),
-            Table("PRODUCT_INVENTORY", List( 
+            Table("PRODUCT_INVENTORY","PRODUCT_INVENTORY", List( 
                 ("PRODUCT_INVENTORY_ID", TString()), 
                 ("PRODUCT_INVENTORY_COMPANY", TString()), 
                 ("PRODUCT_INVENTORY_QUANTITY", TInt()), 

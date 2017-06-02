@@ -314,6 +314,28 @@ object CTPercolator
         )
       }
 
+      
+      case Annotate(subj,invisScm) => {
+        percolateLite(subj)
+      }
+      
+			case Recover(subj,invisScm) => {
+        /*val provSelPrc =*/ percolateLite(subj)
+        /*val detColsSeq = provSelPrc._2.toSeq
+        val newDetCols = for ((projArg, (name,ctype), tableName) <- invisScm) yield {
+          (name, CTAnalyzer.compileDeterministic(new Var(name), provSelPrc._2))
+        }
+       (oper, detColsSeq.union(newDetCols).toMap, provSelPrc._3)
+          */
+      }
+      
+      case ProvenanceOf(psel) => {
+        val provSelPrc = percolateLite(psel)
+        val provPrc = (new ProvenanceOf(provSelPrc._1), provSelPrc._2, provSelPrc._3)
+        //GProMWrapper.inst.gpromRewriteQuery(sql);
+        provPrc
+      }
+      
       case Select(cond, src) => {
         val (rewrittenSrc, colDeterminism, rowDeterminism) = percolateLite(src);
 
@@ -482,7 +504,7 @@ object CTPercolator
           ExpressionUtils.makeAnd(mappedRowDetLeft, mappedRowDetRight)
         )
       }
-      case Table(name, cols, metadata) => {
+      case Table(name, alias, cols, metadata) => {
         return (oper, 
           // All columns are deterministic
           cols.map(_._1).map((_, BoolPrimitive(true)) ).toMap,

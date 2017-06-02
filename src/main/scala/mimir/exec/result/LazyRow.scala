@@ -1,6 +1,7 @@
-package mimir.exec.stream
+package mimir.exec.result
 
 import mimir.algebra._
+
 
 case class LazyRow(
   input: Seq[PrimitiveValue], 

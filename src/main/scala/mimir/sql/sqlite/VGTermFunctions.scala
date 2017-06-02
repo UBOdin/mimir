@@ -133,7 +133,7 @@ object VGTermFunctions
     FunctionRegistry.registerNative(
       acknowledgedVGTermFn, 
       (args) => { throw new SQLException("Mimir Cannot Execute VGTerm Functions Internally") },
-      (_) => TAny()
+      (_) => TBool()
     )
   }
 

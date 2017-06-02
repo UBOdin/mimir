@@ -58,8 +58,11 @@ class Serialization(db: Database) {
   def desanitize(expr: Expression): Expression =
   {
     expr match {
-      case SerializableVGTerm(model, idx, args, hints) => 
-        VGTerm(db.models.get(model), idx, args.map(desanitize(_)), hints.map(desanitize(_)))
+      case SerializableVGTerm(model, idx, args, hints) => { 
+        val dargs = args.map(desanitize(_))
+        val dhints = hints.map(desanitize(_))
+        VGTerm(db.models.get(model), idx, dargs, dhints)
+      }
       case _ => 
         expr.recur(desanitize(_))
     }

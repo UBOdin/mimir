@@ -2,13 +2,8 @@ package mimir.algebra;
 
 import java.sql.SQLException
 
-import mimir.provenance._
-import mimir.ctables._
-import mimir.util._
-import mimir.exec.{TupleBundler,WorldBits}
 import mimir.parser.SimpleExpressionParser
-import org.geotools.referencing.datum.DefaultEllipsoid
-import org.joda.time.DateTime
+import mimir.algebra.function._
 
 class RegisteredFunction(
 	val name: String, 
@@ -51,145 +46,13 @@ object FunctionRegistry {
 		scala.collection.mutable.Map.empty;
 
 	{
-		registerNative("MIMIR_MAKE_ROWID", 
-      Provenance.joinRowIds(_: Seq[PrimitiveValue]),
-			((args: Seq[Type]) => TRowId())
-		)
-
-    registerFold("SEQ_MIN", "IF CURR < NEXT THEN CURR ELSE NEXT END")
-    registerFold("SEQ_MAX", "IF CURR > NEXT THEN CURR ELSE NEXT END")
-
-    registerSet(List("CAST", "MIMIRCAST"), 
-      (params: Seq[PrimitiveValue]) => {
-        params match {
-          case x :: TypePrimitive(t)    :: Nil => Cast(t, x)
-          case _ => throw new SQLException("Invalid cast: "+params)
-        }
-      },
-      (_) => TAny()
-    )
-
-		registerSet(List("DATE", "TO_DATE"), 
-		  (params: Seq[PrimitiveValue]) => 
-          { TextUtils.parseDate(params.head.asString) },
-		  _ match {
-		    case _ :: Nil => TDate()
-		    case _ => throw new SQLException("Invalid parameters to DATE()")
-		  }
-		)
-
-		registerNative("ABSOLUTE", 
-			{
-	      case Seq(IntPrimitive(i))   => if(i < 0){ IntPrimitive(-i) } else { IntPrimitive(i) }
-	      case Seq(FloatPrimitive(f)) => if(f < 0){ FloatPrimitive(-f) } else { FloatPrimitive(f) }
-	      case Seq(NullPrimitive())   => NullPrimitive()
-	      case x => throw new SQLException("Non-numeric parameter to absolute: '"+x+"'")
-	    },
-			(x: Seq[Type]) => Typechecker.assertNumeric(x(0), Function("ABSOLUTE", List()))
-		)
-
-    registerNative("SQRT",
-      {
-        case Seq(n:NumericPrimitive) => FloatPrimitive(Math.sqrt(n.asDouble))
-      },
-      (x: Seq[Type]) => Typechecker.assertNumeric(x(0), Function("SQRT", List()))
-    )
-    registerExpr("DISTANCE", List("A", "B"), 
-      Function("SQRT", List(
-        Arithmetic(Arith.Add,
-          Arithmetic(Arith.Mult, Var("A"), Var("A")),
-          Arithmetic(Arith.Mult, Var("B"), Var("B"))
-      ))))
-
-    registerNative("BITWISE_AND", (x) => IntPrimitive(x(0).asLong & x(1).asLong), (_) => TInt())
-
-    registerNative(
-      "DST",
-      (args) => {
-        FloatPrimitive(DefaultEllipsoid.WGS84.orthodromicDistance(
-          args(0).asDouble, //lon1
-          args(1).asDouble, //lat1
-          args(2).asDouble, //lon2
-          args(3).asDouble  //lat2
-        ))
-      },
-      (args) => {
-        (0 until 4).foreach { i => Typechecker.assertNumeric(args(i), Function("DST", List())) }; 
-        TFloat()
-      }
-    )
-    registerNative(
-      "SPEED",
-      (args) => {
-        val distance: Double = args(0).asDouble
-        val startingDate: DateTime = args(1).asDateTime
-        val endingDate: DateTime =
-          args(2) match {
-            case NullPrimitive() => new DateTime()
-            case x => x.asDateTime
-          }
-
-        val numberOfHours: Long = Math.abs(endingDate.getMillis - startingDate.getMillis) / 1000 / 60 / 60
-
-        FloatPrimitive(distance / 1000 / numberOfHours) // kmph
-      },
-      (_) => TFloat()
-    )
-    registerNative(
-      "JULIANDAY",
-      (args) => ???,
-      (_) => TInt()
-    )
-
-    registerNative("JSON_EXTRACT",(_) => ???, (_) => TAny())
-    registerNative("JSON_ARRAY",(_) => ???, (_) => TString())
-    registerNative("JSON_ARRAY_LENGTH",(_) => ???, (_) => TInt())
-    registerNative("JSON_OBJECT", (_) => ???, (_) => TString())
-
-    registerNative("BEST_SAMPLE", 
-      (args: Seq[PrimitiveValue]) => {
-        TupleBundler.mostLikelyValue(
-          args.head.asLong,
-          args.tail.grouped(2).
-            map { arg => (arg(1), arg(0).asDouble) }.toSeq
-        ) match {
-          case Some(v) => v
-          case None => NullPrimitive()
-        }
-      },
-      (types: Seq[Type]) => {
-        Typechecker.assertNumeric(types.head, 
-          Function("BEST_SAMPLE", types.map(TypePrimitive(_))))
-        Typechecker.escalate(
-          types.tail.grouped(2).
-            map { t => 
-              Typechecker.assertNumeric(t(0),
-                Function("BEST_SAMPLE", types.map(TypePrimitive(_))))
-              t(1)
-            }
-        )
-      }
-    )
-
-    registerNative("SAMPLE_CONFIDENCE",
-      (args: Seq[PrimitiveValue]) => 
-        FloatPrimitive(
-          WorldBits.confidence(args(0).asLong, args(0).asLong.toInt)
-        ),
-      (types: Seq[Type]) => {
-        Typechecker.assertNumeric(types(0), 
-          Function("SAMPLE_CONFIDENCE", types.map(TypePrimitive(_))))
-        Typechecker.assertNumeric(types(1),
-          Function("SAMPLE_CONFIDENCE", types.map(TypePrimitive(_))))
-        TFloat()
-      }
-    )
-
-    val prng = new scala.util.Random()
-    registerNative("RANDOM",
-      (args: Seq[PrimitiveValue]) => IntPrimitive(prng.nextLong),
-      (types: Seq[Type]) => { TInt() }
-    )
+    GeoFunctions.register()
+    JsonFunctions.register()
+    NumericFunctions.register()
+    SampleFunctions.register()
+    StringFunctions.register()
+    TypeFunctions.register()
+    UtilityFunctions.register()
 	}
 
 	def registerSet(
@@ -219,9 +82,17 @@ object FunctionRegistry {
 	def register(fn: RegisteredFunction) =
     functionPrototypes.put(fn.name, fn)
 
+  def get(fname: String): RegisteredFunction =
+  {
+    functionPrototypes.get(fname) match { 
+      case Some(func) => func
+      case None => throw new RAException(s"Unknown function '$fname'")
+    }
+  }
+
 	def typecheck(fname: String, args: Seq[Type]): Type = {
     try {
-  		functionPrototypes(fname).typecheck(args)
+  		get(fname).typecheck(args)
     } catch {
       case TypeException(found, expected, detail, None) =>
         throw TypeException(found, expected, detail, Some(Function(fname, args.map{ TypePrimitive(_) })))

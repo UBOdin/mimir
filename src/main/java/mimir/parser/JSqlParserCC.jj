@@ -113,6 +113,8 @@ import mimir.sql.Feedback;
 import mimir.sql.Load;
 import mimir.sql.Pragma;
 import mimir.sql.AlterViewMaterialize;
+import mimir.sql.ProvenanceStatement;
+import mimir.sql.DrawPlot;
 import net.sf.jsqlparser.statement.create.table.Index;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.drop.Drop;
@@ -170,6 +172,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_SCHEMA:"SCHEMA">
 |   <K_LET:"LET">
 |   <K_LOAD:"LOAD">
+|   <K_PLOT:"PLOT">
 |   <K_ALTER:"ALTER">
 |   <K_SAVE:"SAVE">
 |   <K_RENAME:"RENAME">
@@ -222,6 +225,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_DELETE:"DELETE">
 |   <K_CREATE:"CREATE">
 |   <K_SELECT:"SELECT">
+|	<K_PROVENANCE_OF:"PROVENANCE OF">
 |   <K_OFFSET:"OFFSET">
 |   <K_EXISTS:"EXISTS">
 |   <K_HAVING:"HAVING">
@@ -276,6 +280,8 @@ Statement Statement() :
   (<EOF> { return null; })
   |
 	( 
+    stm = ProvenanceStatement()
+    |
     stm = Select()
     |
     stm = CreateStatement()
@@ -303,6 +309,8 @@ Statement Statement() :
     stm = Pragma()
     | 
     stm = Alter()
+    |
+    stm = Plot()
     )
     (";" | <EOF>)    
     { return stm; }
@@ -663,7 +671,17 @@ Table Table():
 	
 }
 
+ProvenanceStatement ProvenanceStatement():
+{
+   Select select = null;
+}
+{
 
+    <K_PROVENANCE_OF> [LOOKAHEAD(2) "(" ] select = Select() [")"]
+  { 
+  	return new ProvenanceStatement(select);
+  }
+}
 
 Select Select():
 { 
@@ -1979,24 +1997,24 @@ Truncate Truncate():
 
 Load Load():
 { 
+  Load load = null;
   Token file = null;
   Token table = null;
+  Token format = null;
+  PrimitiveValue arg = null;
 }
 {
-  <K_LOAD> file=<S_CHAR_LITERAL> 
-  [ <K_AS> table=<S_IDENTIFIER> ]
-  { 
-    if(table == null){
-      return new Load(
-        StringValue.parseEscaped(file.image).getValue()
-      );
-    } else {
-      return new Load(
-        StringValue.parseEscaped(file.image).getValue(),
-        table.image
-      );
-    }
-  }
+  <K_LOAD> file=<S_CHAR_LITERAL> { load = new Load(StringValue.parseEscaped(file.image).getValue()); }
+  [ <K_AS> format=<S_IDENTIFIER> { load.setFormat(format.image); }
+    [ "(" 
+        [ arg = Literal() { load.addFormatArg(arg); } 
+          ( "," arg = Literal() { load.addFormatArg(arg); } ) *
+        ]
+      ")"
+    ]
+  ]
+  [ <K_INTO> table=<S_IDENTIFIER> { load.setTable(table.image); }]
+  { return load; }
 }
 
 Pragma Pragma():
@@ -2021,4 +2039,50 @@ Statement Alter():
       })
     ))
   )
+}
+
+DrawPlot Plot():
+{
+  DrawPlot ret = null;
+  FromItem source = null;
+  Token varName = null;
+  PrimitiveValue varValue = null;
+  DrawPlot.LineSpec line = null;
+}
+{
+  <K_PLOT> (
+      ( "(" source = SubSelect() ")" )
+    | (source = Table())
+  ) { ret = new DrawPlot(source); }
+  [<K_WITH> 
+    ( 
+      ( varName = <S_IDENTIFIER> varValue = Literal() ) { ret.addConfig(varName.image, varValue); }
+    )*
+  ]
+  [<K_USING> 
+    (line = PlotLineSpec()) { ret.addLine(line); }
+    ("," (line = PlotLineSpec()) { ret.addLine(line); })*
+  ]
+  {
+    return ret;
+  }
+}
+
+DrawPlot.LineSpec PlotLineSpec():
+{
+  DrawPlot.LineSpec spec = null;
+  Expression x = null, y = null;
+  Token varName = null;
+  PrimitiveValue varValue = null;
+}
+{
+  "(" x = SimpleExpression() "," y = SimpleExpression() ")"
+  { spec = new DrawPlot.LineSpec(x, y); }
+  (
+    ( varName = <S_IDENTIFIER> varValue = Literal() ) { spec.addConfig(varName.image, varValue); }
+  )*
+  {
+    return spec;
+  }
+
 }

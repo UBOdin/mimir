@@ -7,6 +7,7 @@ import mimir.provenance._;
 import mimir.ctables._;
 import mimir.exec._;
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import mimir.sql.JDBCBackend
 
 
 class ViewManager(db:Database) extends LazyLogging {

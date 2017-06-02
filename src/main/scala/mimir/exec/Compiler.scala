@@ -12,9 +12,10 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.optimizer._
 import mimir.provenance._
-import mimir.exec.stream._
+import mimir.exec.result._
 import mimir.util._
 import net.sf.jsqlparser.statement.select._
+import mimir.gprom.algebra.OperatorTranslation
 
 class Compiler(db: Database) extends LazyLogging {
 
@@ -45,7 +46,7 @@ class Compiler(db: Database) extends LazyLogging {
         Seq(
           ProjectArg(CTPercolator.mimirRowDeterministicColumnName, rowDeterminism),
           ProjectArg(Provenance.rowidColnameBase, Function(Provenance.mergeRowIdFunction, provenanceCols.map( Var(_) ) ))
-        ),
+        ),// ++ provenanceCols.map(pc => ProjectArg(pc,Var(pc))),
         oper
       )
 
@@ -129,7 +130,8 @@ class Compiler(db: Database) extends LazyLogging {
 
   def sqlForBackend(oper: Operator, opts: Compiler.Optimizations = Compiler.standardOptimizations): SelectBody =
   {
-    val optimized = Compiler.optimize(oper)
+    val optimized = { if(db.backend.isInstanceOf[mimir.sql.GProMBackend] ) Compiler.gpromOptimize(oper) else Compiler.optimize(oper, opts)}
+    //val optimized =  Compiler.optimize(oper, opts)
 
     // The final stage is to apply any database-specific rewrites to adapt
     // the query to the quirks of each specific target database.  Each
@@ -145,6 +147,68 @@ class Compiler(db: Database) extends LazyLogging {
 
     return sql
   }
+  
+  case class VirtualizedQuery(
+    query: Operator,
+    visibleSchema: Seq[(String, Type)],
+    colDeterminism: Map[String, Expression],
+    rowDeterminism: Expression,
+    provenance: Seq[String]
+  )
+  
+  /** 
+   * The body of the end-end compilation pass.  Return a marked-up version of the
+   * query.  This part should be entirely superceded by GProM.
+   */
+  /*def virtualize(rawOper: Operator, opts: List[Operator => Operator]): VirtualizedQuery =
+  {
+    // Recursively expand all view tables using mimir.optimizer.ResolveViews
+    var oper = ResolveViews(db, rawOper)
+
+    logger.debug(s"RAW: $oper")
+    
+    // We'll need the pristine pre-manipulation schema down the line
+    // As a side effect, this also forces the typechecker to run, 
+    // acting as a sanity check on the query before we do any serious
+    // work.
+    val visibleSchema = oper.schema;
+
+    // The names that the provenance compilation step assigns will
+    // be different depending on the structure of the query.  As a 
+    // result it is **critical** that this be the first step in 
+    // compilation.  
+    val provenance = Provenance.compile(oper)
+    oper               = provenance._1
+    val provenanceCols = provenance._2
+
+
+    // Tag rows/columns with provenance metadata
+    val tagging = CTPercolator.percolateLite(oper)
+    oper               = tagging._1
+    val colDeterminism = tagging._2
+    val rowDeterminism = tagging._3    
+
+    logger.debug(s"PRE-OPTIMIZED: $oper")
+
+    // Clean things up a little... make the query prettier, tighter, and 
+    // faster
+    oper = optimize(oper, opts)
+
+    logger.debug(s"OPTIMIZED: $oper")
+
+    // Replace VG-Terms with their "Best Guess values"
+    oper = bestGuessQuery(oper)
+
+    logger.debug(s"GUESSED: $oper")
+
+    VirtualizedQuery(
+      oper, 
+      visibleSchema,
+      colDeterminism,
+      rowDeterminism,
+      provenanceCols
+    )
+  }*/
 
 }
 
@@ -184,6 +248,11 @@ object Compiler
         oper = newOper;
       }
     }
-    return oper;
+    return oper
   }
+  
+  def gpromOptimize(rawOper: Operator): Operator = {
+    OperatorTranslation.optimizeWithGProM(rawOper)
+  }
+  
 }

@@ -2,10 +2,12 @@ package mimir.algebra;
 
 object QueryNamer 
 {
+	def apply(op: Operator) = nameQuery(op)
+
 	def nameQuery(op: Operator): String = 
 	{
 		op match { 
-			case Table(name, _, _) => name
+			case Table(name,alias, _, _) => name
 			case View(name, _, _) => name
 			case Project(cols, src) => 
 				cols.length match {
@@ -64,7 +66,7 @@ object QueryNamer
 	def getRelationNames(q: Operator): List[String] =
 	{
 		q match {
-			case Table(tn, _, _) => List(tn)
+			case Table(tn, ta, _, _) => List(tn)
 			case _ => q.children.map( getRelationNames(_) ).
 														foldLeft(List[String]())( _ ++ _ )
 		}

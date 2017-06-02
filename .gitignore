@@ -41,3 +41,9 @@ test/pdbench
 
 # DBGen
 tpch-dbgen
+
+# Plots
+*.png
+*.pdf
+*.gpl
+/bin/

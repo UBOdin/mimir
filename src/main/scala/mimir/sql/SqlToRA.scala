@@ -15,12 +15,15 @@ import net.sf.jsqlparser.expression.{BinaryExpression, DateValue, DoubleValue, F
 import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.statement.create.table._
 import net.sf.jsqlparser.statement.select.{AllColumns, AllTableColumns, FromItem, PlainSelect, SelectBody, SelectExpressionItem, SubJoin, SubSelect}
+//import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
 import org.joda.time.LocalDate
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import scala.collection.JavaConversions._
 import scala.collection.{immutable, mutable}
 import scala.collection.mutable.ListBuffer
+import mimir.provenance.Provenance
+
 ;
 
 class SqlToRA(db: Database) 
@@ -40,6 +43,12 @@ class SqlToRA(db: Database)
     }
   }
 
+  def convert(s : ProvenanceStatement) : Operator  = {
+    val psel = new ProvenanceOf(convert(s.getSelect()));
+    psel
+  }
+  
+  
   def convert(s : net.sf.jsqlparser.statement.select.Select) : Operator = convert(s, null)._1
   def convert(s : net.sf.jsqlparser.statement.select.Select, alias: String) : (Operator, Seq[(String, String)]) = {
     convert(s.getSelectBody(), alias)
@@ -410,7 +419,7 @@ class SqlToRA(db: Database)
       else { alias = alias.toUpperCase }
 
       if(fi.asInstanceOf[net.sf.jsqlparser.schema.Table].getSchemaName == null){
-        val tableOp = db.getTableOperator(name)
+        val tableOp = db.getTableOperator(name, alias)
         val newBindings = tableOp.schema.map(
             (x) => (x._1, alias+"_"+x._1)
           )
@@ -557,7 +566,7 @@ class SqlToRA(db: Database)
 
   def convertColumn(c: Column, bindings: String => String): Var =
   {
-    val name = c.getColumnName.toUpperCase
+    var name = SqlUtils.canonicalizeIdentifier(c.getColumnName)
 
     c.getTable.getName match {
       case null => 

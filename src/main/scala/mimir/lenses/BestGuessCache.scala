@@ -32,6 +32,7 @@ class BestGuessCache(db: Database) extends LazyLogging {
 
     Table(
       tableName,
+      tableName,
       (keyCols++dataCols).zip(sch.map(_._2)),
       List()
     )

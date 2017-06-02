@@ -14,6 +14,25 @@ import mimir.context._
 import mimir.Database
 
 object SqlUtils {
+
+  def canonicalizeIdentifier(id: String): String =
+  {
+    if(id(0) == '`'){
+      if(id(id.length - 1) == '`'){
+        return id.substring(1, id.length-1);
+      } else {
+        throw new SQLException(s"Malformed Identifier: '$id'")
+      }
+    } else if(id(0) == '"') {
+      if(id(id.length - 1) == '`'){
+        return id.substring(1, id.length-1);
+      } else {
+        throw new SQLException(s"Malformed Identifier: '$id'")
+      }
+    } else {
+      id.toUpperCase
+    }
+  }
   
   def aggPartition(selectItems : List[SelectItem]) = 
   {
@@ -52,7 +71,7 @@ object SqlUtils {
   def getAlias(expr : Expression): String = 
   {
     expr match {
-      case c: Column   => c.getColumnName.toUpperCase
+      case c: Column   => canonicalizeIdentifier(c.getColumnName)
       case f: Function => f.getName.toUpperCase
       case _           => "EXPR"
     }

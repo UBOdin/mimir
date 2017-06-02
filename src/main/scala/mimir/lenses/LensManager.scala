@@ -17,7 +17,10 @@ class LensManager(db: Database) {
     "MISSING_VALUE"     -> MissingValueLens.create _,
     "SCHEMA_MATCHING"   -> SchemaMatchingLens.create _,
     "TYPE_INFERENCE"    -> TypeInferenceLens.create _,
-    "KEY_REPAIR"        -> KeyRepairLens.create _
+    "KEY_REPAIR"        -> KeyRepairLens.create _,
+    "COMMENT"           -> CommentLens.create _,
+    "MISSING_KEY"       -> MissingKeyLens.create _,
+    "PICKER"            -> PickerLens.create _
   )
 
   def init(): Unit =
@@ -29,7 +32,7 @@ class LensManager(db: Database) {
     t: String, 
     name: String, 
     query: Operator, 
-    args: List[Expression]
+    args: Seq[Expression]
   ): Unit =
   {
     val saneName = name.toUpperCase

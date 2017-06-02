@@ -48,7 +48,7 @@ class ViewMetadata(
       (if(annotations(ViewAnnotation.PROVENANCE)){
         provenanceCols.map { col => ProjectArg(col, Var(col)) }
       } else { None }),
-      Table(name, materializedSchema, Seq())
+      Table(name, name, materializedSchema, Seq())
     )
   }
 

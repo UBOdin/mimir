@@ -6,6 +6,7 @@ import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
 import mimir.views.ViewAnnotation
+import mimir.gprom.algebra.OperatorTranslation
 
 class ProvenanceError(e:String) extends Exception(e) {}
 
@@ -14,6 +15,11 @@ object Provenance {
   val mergeRowIdFunction = "MIMIR_MAKE_ROWID"
   val rowidColnameBase = "MIMIR_ROWID"
 
+  def compileGProM(oper: Operator): (Operator, Seq[String]) = {
+    OperatorTranslation.compileProvenanceWithGProM(oper)
+  }
+  
+  
   def compile(oper: Operator): (Operator, Seq[String]) = {
     val makeRowIDProjectArgs = 
       (rowids: Seq[String], offset: Integer, padLen: Integer) => {
@@ -27,18 +33,48 @@ object Provenance {
     }
     oper match {
       case Project(args, src) => {
-        val (newSrc, rowids) = compile(src)
-        val newArgs = 
-          args.map( arg => 
-            ProjectArg(arg.name, expandVars(arg.expression, rowids))
-          )
-        val (newRowids, rowIDProjections) = makeRowIDProjectArgs(rowids, 0, 0)
-        (
-          Project(newArgs ++ rowIDProjections, newSrc),
-          newRowids
-        )
+        src match {
+          case Annotate(subj,invisScm) => {
+            val (newSrc, rowids) = compile(src)
+              val newArgs =
+                args.map( arg =>
+                  ProjectArg(arg.name, expandVars(arg.expression, rowids))
+                ).union(invisScm.map(invSchEl => ProjectArg( invSchEl._1.expression.toString, Var( (invSchEl._3 match { case "" => ""; case _ => invSchEl._3 + "_"}) +invSchEl._1.name) )))
+              val (newRowids, rowIDProjections) = makeRowIDProjectArgs(rowids, 0, 0)
+              (
+                Project(newArgs ++ rowIDProjections, newSrc),
+                newRowids
+              )
+          }
+          case _ => {
+            val (newSrc, rowids) = compile(src)
+            val newArgs = 
+              args.map( arg => 
+                ProjectArg(arg.name, expandVars(arg.expression, rowids))
+              )
+            val (newRowids, rowIDProjections) = makeRowIDProjectArgs(rowids, 0, 0)
+            (
+              Project(newArgs ++ rowIDProjections, newSrc),
+              newRowids
+            )
+          }
+        }
       }
 
+      case Annotate(subj,invisScm) => {
+        compile(subj)
+      }
+
+			case Recover(subj,invisScm) => {
+        compile(subj)
+      }
+
+      case ProvenanceOf(psel) => {
+        val provSelCmp = compile(psel)
+        val provCmp = (new ProvenanceOf(provSelCmp._1), provSelCmp._2)
+        provCmp
+      }
+      
       case Select(cond, src) => {
         val (newSrc, rowids) = compile(src)
         ( 
@@ -95,9 +131,9 @@ object Provenance {
         val (newQuery, rowIds) = compile(query)
         ( View(name, newQuery, meta + ViewAnnotation.PROVENANCE), rowIds)
 
-      case Table(name, schema, meta) =>
+      case Table(name, alias, schema, meta) =>
         (
-          Table(name, schema, meta ++ List((rowidColnameBase, Var("ROWID"), TRowId()))),
+          Table(name, alias, schema, meta ++ List((rowidColnameBase, Var("ROWID"), TRowId()))),
           List(rowidColnameBase)
         )
 
@@ -129,7 +165,9 @@ object Provenance {
 
     }
   }
-
+  
+  
+  
   def rowIdVal(rowids: Seq[Expression]): Expression =
     Function(mergeRowIdFunction, rowids)    
 
@@ -251,7 +289,7 @@ object Provenance {
       case View(_, query, _) => 
         doFilterForToken(query, rowIds)
 
-      case Table(_, _, meta) =>
+      case Table(_,_, _, meta) =>
         meta.find( _._2.equals(Var("ROWID")) ) match {
           case Some( (colName, _, _) ) =>
             var rowIdForTable = rowIds.get(colName) match {

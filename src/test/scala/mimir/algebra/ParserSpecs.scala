@@ -23,7 +23,7 @@ object ParserSpecs extends Specification {
   def parser = new OperatorParser((x: String) => model(x), schema.get(_).get.toList)
   def expr = parser.expr _
   def oper = parser.operator _
-  def sch(x: String) = Table(x, schema.get(x).get.toList, List())
+  def sch(x: String) = Table(x,x,schema.get(x).get.toList, List())
 
   "The Expression Parser" should { 
     "Parse Constants" in {

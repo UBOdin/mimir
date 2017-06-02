@@ -110,7 +110,7 @@ object Tracer {
       case View(_, query, _) => 
         trace(query, targetRowId)
 
-      case Table(name, schema, meta) =>
+      case Table(name, alias, schema, meta) =>
         val targetFilter = 
           ExpressionUtils.makeAnd(
             targetRowId.toList.map({ case (rowIdColKey, rowIdColValue) => 

@@ -56,8 +56,12 @@ class ExpressionChecker(scope: (String => Type) = Map().apply _) extends LazyLog
 				// Special case CAST
 				Eval.inline(fargs(1)) match {
 					case TypePrimitive(t) => t
-					case p:PrimitiveValue => 
-						throw new SQLException("Invalid CAST to '"+p+"' of type: "+typeOf(p))
+					case p:PrimitiveValue => { p match {
+              case StringPrimitive(s) => Type.toSQLiteType(Integer.parseInt(s))
+              case IntPrimitive(i)  =>  Type.toSQLiteType(i.toInt)
+      	      case _ => throw new SQLException("Invalid CAST to '"+p+"' of type: "+typeOf(p))
+            }
+					}
 					case _ => TAny()
 				}
 			case Function(fname, fargs) =>
@@ -117,8 +121,19 @@ object Typechecker {
 									throw new RAException(s"Missing Variable: ${mv.getMessage()} (${schemaOf(src).map(_._1).mkString(", ")})", Some(o))
 							}
 					})
-
-			case Select(cond, src) =>
+			
+			case ProvenanceOf(psel) => 
+        schemaOf(psel)
+      
+			case Annotate(subj,invisScm) => {
+        schemaOf(subj)
+      }
+      
+			case Recover(subj,invisScm) => {
+        schemaOf(subj).union(invisScm.map(pasct => pasct._2))
+      }
+			
+      case Select(cond, src) =>
 				val srcSchema = schemaOf(src);
 				try {
 					(new ExpressionChecker(srcSchema.toMap)).assert(cond, TBool(), "SELECT")
@@ -171,7 +186,7 @@ object Typechecker {
 				}
 				lSchema
 
-			case Table(_, sch, meta) => (sch ++ meta.map( x => (x._1, x._3) ))
+			case Table(_, _, sch, meta) => (sch ++ meta.map( x => (x._1, x._3) ))
 
 			case View(_, query, _) => query.schema
 
@@ -206,6 +221,7 @@ object Typechecker {
 			case (TAny(),_) => b
 			case (_,TAny()) => a
 			case (TInt(), TInt()) => TInt()
+			case (TRowId(), TString()) => TBool()
 			case ((TInt()|TFloat()), (TInt()|TFloat())) => TFloat()
 			case _ => throw new TypeException(a, b, msg, e);
 		}
