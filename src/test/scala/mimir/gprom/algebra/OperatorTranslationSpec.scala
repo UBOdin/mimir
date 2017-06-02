@@ -13,7 +13,7 @@ import mimir.exec.Compiler
 
 object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorTranslation") with BeforeAll with AfterAll {
 
-  args(skipAll = false)
+  args(skipAll = true)
   
   var memctx : com.sun.jna.Pointer = null
   
