@@ -26,7 +26,7 @@ object MissingKeyLens {
       case Var(col) => {
         if(schemaMap contains col){ Some((col, schemaMap(col))) }
         else {
-          throw new SQLException(s"Invalid column: $col in KeyRepairLens $name")
+          throw new RAException(s"Invalid column: $col in KeyRepairLens $name")
         }
       }
       case Function("MISSING_ONLY", Seq(Var(bool))) => {
@@ -36,15 +36,18 @@ object MissingKeyLens {
         }
         None
       }
-      case Function("SORT", cols:Seq[Var]) => {
-        sortCols = cols.map(col => {
-          if(!schemaMap.contains(col.name))
-            throw new SQLException(s"Invalid sort column: $col in KeyRepairLens $name")
-          SortColumn(col, true) 
-        })
+      case Function("SORT", cols) => {
+        sortCols = cols.map { 
+          case col:Var => 
+            if(!schemaMap.contains(col.name))
+              throw new RAException(s"Invalid sort column: $col in KeyRepairLens $name (not a column in the input)")
+            SortColumn(col, true) 
+          case col => 
+            throw new RAException(s"Invalid sort column: $col in KeyRepairLens $name (not a column reference)")
+        }
         None
       }
-      case somethingElse => throw new SQLException(s"Invalid argument ($somethingElse) for MissingKeyLens $name")
+      case somethingElse => throw new RAException(s"Invalid argument ($somethingElse) for MissingKeyLens $name")
     }
     val rSch = schema.filter(p => !keys.contains(p))
     val seriesTableName = name.toUpperCase()+"_SERIES"

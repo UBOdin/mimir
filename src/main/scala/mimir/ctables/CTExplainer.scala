@@ -1,5 +1,5 @@
 package mimir.ctables;
-
+ 
 import java.util.Random;
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
@@ -516,6 +516,13 @@ class CTExplainer(db: Database) extends LazyLogging {
 				explainSubset(lhs,wantCol,wantRow,wantSort) ++ 
 				explainSubset(rhs,wantCol,wantRow,wantSort)
 			}
+
+			case Annotate(src, _) => 
+				explainSubset(src,wantCol,wantRow,wantSort)
+
+			case ProvenanceOf(_) => ???
+
+			case Recover(_, _) => ???
 		}
 	}
 }

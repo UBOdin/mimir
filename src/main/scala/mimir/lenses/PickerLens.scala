@@ -32,7 +32,10 @@ object PickerLens {
     val schemaMap = operSchema.toMap
     
     val (pickFromColumns, pickerColTypes ) = args.flatMap {
-      case Function("PICK_FROM", cols:Seq[Var] ) => Some( cols.map(col => (col.name, schemaMap(col.name))) )
+      case Function("PICK_FROM", cols ) => 
+        Some( cols.map { case col:Var => (col.name, schemaMap(col.name)) 
+                         case col => throw new RAException(s"Invalid pick_from argument: $col in PickerLens $name (not a column reference)")
+                       } )
       case _ => None
     }.toSeq.flatten.unzip
     

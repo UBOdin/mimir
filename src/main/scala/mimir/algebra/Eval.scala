@@ -8,6 +8,8 @@ import mimir.ctables.{VGTerm, CTables}
 import mimir.optimizer.ExpressionOptimizer
 
 
+class EvalTypeException(msg: String, e: Expression, v: PrimitiveValue) extends Exception
+
 object Eval 
 {
 
@@ -62,13 +64,6 @@ object Eval
           case None => throw new SQLException("Variable Out Of Scope: "+v+" (in "+bindings+")");
           case Some(s) => s
         }
-        /*case rid@RowIdVar() => bindings.get(rid.toString()) match {
-          case None => bindings.get("MIMIR_ROWID") match {
-            case None => throw new SQLException("Row Id Variable Out Of Scope: MIMIR_ROWID (in "+bindings+")");
-            case Some(s) => s
-          }
-          case Some(s) => s
-        }*/
         // Special case And/Or arithmetic to enable shortcutting
         case Arithmetic(Arith.And, lhs, rhs) =>
           eval(lhs, bindings) match {
@@ -77,8 +72,11 @@ object Eval
             case NullPrimitive() => 
               eval(rhs, bindings) match {
                 case BoolPrimitive(false) => BoolPrimitive(false)
-                case _ => NullPrimitive()
+                case NullPrimitive() | BoolPrimitive(_) => NullPrimitive()
+                case r => throw new EvalTypeException("Invalid Right Hand Side (Expected Bool)", e, r)
               }
+            case r => throw new EvalTypeException("Invalid Left Hand Side (Expected Bool)", e, r)
+
           }
 
         // Special case And/Or arithmetic to enable shortcutting
@@ -89,8 +87,10 @@ object Eval
             case NullPrimitive() => 
               eval(rhs, bindings) match {
                 case BoolPrimitive(true) => BoolPrimitive(true)
-                case _ => NullPrimitive()
+                case NullPrimitive() | BoolPrimitive(_) => NullPrimitive()
+                case r => throw new EvalTypeException("Invalid Right Hand Side (Expected Bool)", e, r)
               }
+            case r => throw new EvalTypeException("Invalid Left Hand Side (Expected Bool)", e, r)
           }
 
         case Arithmetic(op, lhs, rhs) =>
@@ -289,15 +289,6 @@ object Eval
                 a.asInstanceOf[DatePrimitive].
                  compare(b.asInstanceOf[DatePrimitive])<=0
               )
-            case TBool() => BoolPrimitive(a match {
-              case BoolPrimitive(true) => true
-              case BoolPrimitive(false) => {
-                b match {
-                  case BoolPrimitive(true) => false
-                  case _ => true
-                }
-              }
-            })
             case _ => throw new RAException("Invalid Comparison $a $op $b")
           }
         case Cmp.Lt => 

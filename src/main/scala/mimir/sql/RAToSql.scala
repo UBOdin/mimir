@@ -23,7 +23,7 @@ import net.sf.jsqlparser.statement.select.{SelectBody, PlainSelect, SubSelect, S
 import scala.collection.JavaConversions._
 
 sealed abstract class TargetClause
-case class AnnotateTarget(invisSch:Seq[(ProjectArg, (String,Type), String)]) extends TargetClause
+// case class AnnotateTarget(invisSch:Seq[(ProjectArg, (String,Type), String)]) extends TargetClause
 case class ProjectTarget(cols:Seq[ProjectArg]) extends TargetClause
 case class AggregateTarget(gbCols:Seq[Var], aggCols:Seq[AggFunction]) extends TargetClause
 case class AllTarget() extends TargetClause
@@ -412,7 +412,7 @@ class RAToSql(db: Database)
                   case "ROWID" => true
                   case _ => false
                 })
-        ){
+        ){ 
           // If they are equivalent, then...
           val ret = new net.sf.jsqlparser.schema.Table(name);
           ret.setAlias(name);

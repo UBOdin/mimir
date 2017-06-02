@@ -1,5 +1,6 @@
 package mimir.algebra.function
 
+import mimir.algebra._
 
 object RandomnessFunctions
 {
@@ -23,7 +24,7 @@ object RandomnessFunctions
           IntPrimitive(mimir.sql.sqlite.Possion.poisson_helper(m))
         }
         case Seq(NullPrimitive())   => NullPrimitive()
-        case x => throw new SQLException("Non-numeric parameter to possion: '"+x+"'")
+        case x => throw new RAException("Non-numeric parameter to possion: '"+x+"'")
       },
       ((args: Seq[Type]) => TInt())
     )
@@ -36,7 +37,7 @@ object RandomnessFunctions
         case Seq(NullPrimitive(), FloatPrimitive(r))   => NullPrimitive()
         case Seq(FloatPrimitive(r), NullPrimitive())   => NullPrimitive()
         case Seq(NullPrimitive(), NullPrimitive())   => NullPrimitive()
-        case x => throw new SQLException("Non-numeric parameter to gamma: '"+x+"'")
+        case x => throw new RAException("Non-numeric parameter to gamma: '"+x+"'")
       },
       ((args: Seq[Type]) => TFloat())
     )

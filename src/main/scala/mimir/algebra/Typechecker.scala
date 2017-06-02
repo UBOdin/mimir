@@ -157,6 +157,7 @@ object Typechecker {
 					})
 			
 			case ProvenanceOf(psel) => 
+				// Not 100% sure this is kosher... doesn't ProvenanceOf introduce new columns?
         schemaOf(psel)
       
 			case Annotate(subj,invisScm) => {

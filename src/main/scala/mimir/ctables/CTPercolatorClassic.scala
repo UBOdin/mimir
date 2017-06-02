@@ -253,6 +253,16 @@ object CTPercolatorClassic {
         }
         return ret
       }
+      case Sort(_,_) => ???
+      case View(_,_,_) => ???
+      case EmptyTable(_) => ???
+      case LeftOuterJoin(_,_,_) => ???
+      case Union(_,_) => ???
+      case Aggregate(_,_,_) => ???
+      case Limit(_,_,_) => ???
+      case Annotate(_, _) => ???
+      case ProvenanceOf(_) => ???
+      case Recover(_, _) => ???
     }
   }
   
@@ -269,10 +279,18 @@ object CTPercolatorClassic {
     oper match {
       case Project(cols, _) => cols.contains( (_:ProjectArg).name.equals(ROWID_KEY))
       case Select(_, src) => hasRowID(src)
-      case Table(_,_,meta) => meta.contains( (_:(String,Type))._1.equals(ROWID_KEY))
+      case Table(_,_,_,meta) => meta.contains( (_:(String,Type))._1.equals(ROWID_KEY))
       case Union(_,_) => false
       case Join(_,_) => false
       case Aggregate(_,_,_) => false
+      case Sort(_,_) => ???
+      case View(_,_,_) => ???
+      case EmptyTable(_) => ???
+      case LeftOuterJoin(_,_,_) => ???
+      case Limit(_,_,_) => ???
+      case Annotate(_, _) => ???
+      case ProvenanceOf(_) => ???
+      case Recover(_, _) => ???
     }
   }
   
@@ -363,13 +381,21 @@ object CTPercolatorClassic {
             )
           }
         
-        case Table(name, sch, metadata) =>
+        case Table(name, alias, sch, metadata) =>
           if(force && !metadata.exists( _._1 == ROWID_KEY )){
-            Table(name, sch, metadata ++ Seq((ROWID_KEY, Var("ROWID"), TRowId())))
+            Table(name, alias, sch, metadata ++ Seq((ROWID_KEY, Var("ROWID"), TRowId())))
           } else {
-            Table(name, sch, metadata)
+            Table(name, alias, sch, metadata)
           }
-      
+
+      case Sort(_,_) => ???
+      case View(_,_,_) => ???
+      case EmptyTable(_) => ???
+      case LeftOuterJoin(_,_,_) => ???
+      case Limit(_,_,_) => ???
+      case Annotate(_, _) => ???
+      case ProvenanceOf(_) => ???
+      case Recover(_, _) => ???      
     }
   }
 
@@ -740,7 +766,7 @@ object CTPercolatorClassic {
           ExpressionUtils.makeAnd(mappedRowDetLeft, mappedRowDetRight)
         )
       }
-      case Table(name, cols, metadata) => {
+      case Table(_, _, cols, _) => {
         return (oper, 
           // All columns are deterministic
           cols.map(_._1).map((_, BoolPrimitive(true)) ).toMap,
@@ -748,6 +774,16 @@ object CTPercolatorClassic {
           BoolPrimitive(true)
         )
       }
+
+      case Sort(_,_) => ???
+      case View(_,_,_) => ???
+      case EmptyTable(_) => ???
+      case LeftOuterJoin(_,_,_) => ???
+      case Aggregate(_,_,_) => ???
+      case Limit(_,_,_) => ???
+      case Annotate(_, _) => ???
+      case ProvenanceOf(_) => ???
+      case Recover(_, _) => ???
     }
   }
 }

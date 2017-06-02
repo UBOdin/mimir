@@ -264,6 +264,19 @@ object OperatorUtils extends LazyLogging {
         findRenamingConflicts(name, src)
       case LeftOuterJoin(lhs, rhs, cond) =>
         findRenamingConflicts(name, lhs) ++ findRenamingConflicts(name, rhs)
+      case Annotate(src, _) => 
+        findRenamingConflicts(name, src)
+      case ProvenanceOf(src) =>
+        findRenamingConflicts(name, src)
+      case Recover(src, cols) =>
+        // Check to see if the column is a recovered annotation... if that's the case,
+        // we can apply the renaming here and this operator acts like a Project.
+        // Otherwise, we flow-through.
+        if(cols.exists { _._2._1.equals(name) }){
+          src.columnNames.toSet ++ cols.map { _._2._1 }.toSet
+        } else {
+          findRenamingConflicts(name, src)
+        }
     }
   }
 
@@ -348,10 +361,30 @@ object OperatorUtils extends LazyLogging {
           oper
         )
       }
-      case Sort(_, _) | Select(_, _) | Limit(_, _, _) => 
+      case Sort(_, _) | Select(_, _) | Limit(_, _, _) | Annotate(_, _) | ProvenanceOf(_) => 
         oper.
           recurExpressions(rewrite(_)).
           recur(deepRenameColumn(target, replacement, _))
+
+      case Recover(src, cols) =>
+        // Check to see if the column is a recovered annotation... if that's the case,
+        // we can apply the renaming here and this operator acts like a Project.
+        // Otherwise, we flow-through.
+        if(cols.exists { _._2._1.equals(target) }){
+          Recover(src, 
+            cols.map { case old @ (proj,(col,t),annotationClass) => 
+              if(col.equals(target)){
+                (proj, (replacement, t), annotationClass)
+              } else {
+                old
+              }
+            }
+          )
+        } else {
+          oper.
+            recurExpressions(rewrite(_)).
+            recur(deepRenameColumn(target, replacement, _))
+        }
     }
   }
 }
