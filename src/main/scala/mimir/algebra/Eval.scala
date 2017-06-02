@@ -62,7 +62,13 @@ object Eval
           case None => throw new SQLException("Variable Out Of Scope: "+v+" (in "+bindings+")");
           case Some(s) => s
         }
-
+        /*case rid@RowIdVar() => bindings.get(rid.toString()) match {
+          case None => bindings.get("MIMIR_ROWID") match {
+            case None => throw new SQLException("Row Id Variable Out Of Scope: MIMIR_ROWID (in "+bindings+")");
+            case Some(s) => s
+          }
+          case Some(s) => s
+        }*/
         // Special case And/Or arithmetic to enable shortcutting
         case Arithmetic(Arith.And, lhs, rhs) =>
           eval(lhs, bindings) match {
@@ -231,6 +237,8 @@ object Eval
         IntPrimitive(a.asLong * b.asLong)
       case (Arith.Mult, TFloat()) => 
         FloatPrimitive(a.asDouble * b.asDouble)
+      case (Arith.Div, (TInt()|TInt())) => 
+        IntPrimitive(a.asLong / b.asLong)
       case (Arith.Div, (TFloat()|TInt())) => 
         FloatPrimitive(a.asDouble / b.asDouble)
       case (Arith.BitAnd, TInt()) =>

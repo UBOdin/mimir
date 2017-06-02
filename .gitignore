@@ -38,6 +38,7 @@ databases/tpch*.db
 
 # Large Data Files
 test/pdbench
+test/tpch
 
 # DBGen
 tpch-dbgen
@@ -46,3 +47,4 @@ tpch-dbgen
 *.png
 *.pdf
 *.gpl
+/bin/

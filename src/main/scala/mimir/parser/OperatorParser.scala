@@ -49,9 +49,9 @@ class OperatorParser(modelLookup: (String => Model), schemaLookup: (String => Se
 			case name ~ cols_and_metadata => {
 				cols_and_metadata match {
 					case None => 
-						Table(name, schemaLookup(name), List[(String,Expression,Type)]())
+						Table(name, name, schemaLookup(name), List[(String,Expression,Type)]())
 					case Some((cols ~ metadata)) => 
-						Table(name, 
+						Table(name, name, 
 							schemaLookup(name).zip(cols).map {
 								case ((_,t),(v,TAny())) => (v,t)
 								case ((_,_),(v,t)) => (v,t)

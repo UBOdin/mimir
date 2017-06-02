@@ -44,6 +44,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
   with NoArgModel
   with FiniteDiscreteDomain
 {
+  var sampleLimit = 1000
   var totalVotes = 
     { val v = new scala.collection.mutable.ArraySeq[Double](columns.length)
       for(col <- (0 until columns.size)){ v.update(col, 0.0) }
@@ -58,10 +59,10 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
   {
     TimeUtils.monitor(s"Train $name", TypeInferenceModel.logger.info(_)){
       db.query(
-        Project(
+        Limit(0, Some(sampleLimit), Project(
           columns.map( c => ProjectArg(c, Var(c)) ),
           query
-        )
+        ))
       ) { _.foreach { row => learn(row.tuple)  } }
     }
   }

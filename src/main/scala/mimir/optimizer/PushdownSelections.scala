@@ -130,6 +130,12 @@ object PushdownSelections extends OperatorOptimization {
 			case Select(cond, View(name, query, annotations)) => 
 				Select(cond, View(name, apply(query), annotations))
 
+			case Select(cond, Sort(order, src)) => 
+				Sort(order, Select(cond, src))
+
+			case Select(cond, src:Limit) => 
+				Select(cond, src)
+
 			case Select(_,_) => 
 				throw new SQLException("Unhandled Select Case in Pushdown: " + o)
 

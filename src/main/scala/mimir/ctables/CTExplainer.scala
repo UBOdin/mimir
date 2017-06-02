@@ -119,6 +119,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 										( cnt._1 + (if(t){ 1 } else { 0 }),
 										  cnt._2 + 1
 										 )
+									case _ => throw new RAException("Expecting Boolean from Samples")
 								}
 						) match { 
 							case (_, 0) => -1.0
@@ -412,7 +413,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 	{
 		logger.trace(s"Explain Subset (${wantCol.mkString(", ")}; $wantRow; $wantSort): \n$oper")
 		Compiler.optimize(oper) match {
-			case Table(_,_,_) => Seq()
+			case Table(_,_,_,_) => Seq()
 			case View(_,query,_) => 
 				explainSubset(query, wantCol, wantRow, wantSort)
 

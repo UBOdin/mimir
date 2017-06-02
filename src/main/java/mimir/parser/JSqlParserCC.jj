@@ -114,6 +114,7 @@ import mimir.sql.Feedback;
 import mimir.sql.Load;
 import mimir.sql.Pragma;
 import mimir.sql.AlterViewMaterialize;
+import mimir.sql.ProvenanceStatement;
 import mimir.sql.DrawPlot;
 import net.sf.jsqlparser.statement.create.table.Index;
 import net.sf.jsqlparser.statement.delete.Delete;
@@ -225,6 +226,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_DELETE:"DELETE">
 |   <K_CREATE:"CREATE">
 |   <K_SELECT:"SELECT">
+|	<K_PROVENANCE_OF:"PROVENANCE OF">
 |   <K_OFFSET:"OFFSET">
 |   <K_EXISTS:"EXISTS">
 |   <K_HAVING:"HAVING">
@@ -280,6 +282,8 @@ Statement Statement() :
   (<EOF> { return null; })
   |
 	( 
+    stm = ProvenanceStatement()
+    |
     stm = Select()
     |
     stm = CreateStatement()
@@ -669,7 +673,17 @@ Table Table():
 	
 }
 
+ProvenanceStatement ProvenanceStatement():
+{
+   Select select = null;
+}
+{
 
+    <K_PROVENANCE_OF> [LOOKAHEAD(2) "(" ] select = Select() [")"]
+  { 
+  	return new ProvenanceStatement(select);
+  }
+}
 
 Select Select():
 { 
@@ -2018,24 +2032,24 @@ Truncate Truncate():
 
 Load Load():
 { 
+  Load load = null;
   Token file = null;
   Token table = null;
+  Token format = null;
+  PrimitiveValue arg = null;
 }
 {
-  <K_LOAD> file=<S_CHAR_LITERAL> 
-  [ <K_AS> table=<S_IDENTIFIER> ]
-  { 
-    if(table == null){
-      return new Load(
-        StringValue.parseEscaped(file.image).getValue()
-      );
-    } else {
-      return new Load(
-        StringValue.parseEscaped(file.image).getValue(),
-        table.image
-      );
-    }
-  }
+  <K_LOAD> file=<S_CHAR_LITERAL> { load = new Load(StringValue.parseEscaped(file.image).getValue()); }
+  [ <K_AS> format=<S_IDENTIFIER> { load.setFormat(format.image); }
+    [ "(" 
+        [ arg = Literal() { load.addFormatArg(arg); } 
+          ( "," arg = Literal() { load.addFormatArg(arg); } ) *
+        ]
+      ")"
+    ]
+  ]
+  [ <K_INTO> table=<S_IDENTIFIER> { load.setTable(table.image); }]
+  { return load; }
 }
 
 Pragma Pragma():

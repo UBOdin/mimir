@@ -97,7 +97,7 @@ object ViewsSpec
         db.views.resolve(db.views("MATTEST").operator)
       ) must be equalTo(
         Project(Seq(ProjectArg("A", Var("A")),ProjectArg("B", Var("B"))),
-          Table("MATTEST", db.views("MATTEST").materializedSchema, Seq())
+          Table("MATTEST","MATTEST", db.views("MATTEST").materializedSchema, Seq())
         )
       )
 
@@ -114,7 +114,7 @@ object ViewsSpec
             ProjectArg("A", Var("A")),
             ProjectArg("B", Var("B"))
           ) ++ rowidCols.map { col => ProjectArg(col, Var(col)) },
-          Table("MATTEST", db.views("MATTEST").materializedSchema, Seq())
+          Table("MATTEST","MATTEST", db.views("MATTEST").materializedSchema, Seq())
         )
       )
 
@@ -134,7 +134,7 @@ object ViewsSpec
             ProjectArg(CTPercolator.mimirColDeterministicColumnPrefix+"B", Comparison(Cmp.Eq, Arithmetic(Arith.BitAnd, Var(ViewAnnotation.taintBitVectorColumn), IntPrimitive(4)), IntPrimitive(4))),
             ProjectArg(CTPercolator.mimirRowDeterministicColumnName, Comparison(Cmp.Eq, Arithmetic(Arith.BitAnd, Var(ViewAnnotation.taintBitVectorColumn), IntPrimitive(1)), IntPrimitive(1)))
           ) ++ rowidCols.map { col => ProjectArg(col, Var(col)) },
-          Table("MATTEST", db.views("MATTEST").materializedSchema, Seq())
+          Table("MATTEST","MATTEST", db.views("MATTEST").materializedSchema, Seq())
         )
       )
       

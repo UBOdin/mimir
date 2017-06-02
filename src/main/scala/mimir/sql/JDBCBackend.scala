@@ -295,7 +295,7 @@ class JDBCBackend(val backend: String, val filename: String)
         case d:DatePrimitive      => 
           backend match {
             case "sqlite" => 
-              stmt.setString(i, d.asString)
+              stmt.setString(i, d.asString )
             case _ =>
               stmt.setDate(i, JDBCUtils.convertDate(d))
           }
@@ -317,7 +317,7 @@ class JDBCBackend(val backend: String, val filename: String)
           ),
           Select(
             ExpressionUtils.makeInTest(Var("TYPE"), Seq(StringPrimitive("table"), StringPrimitive("view"))),
-            Table("SQLITE_MASTER", Seq(("NAME", TString()), ("TYPE", TString())), Seq())
+            Table("SQLITE_MASTER", "SQLITE_MASTER", Seq(("NAME", TString()), ("TYPE", TString())), Seq())
           )
         )
 

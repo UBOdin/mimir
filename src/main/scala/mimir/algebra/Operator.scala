@@ -49,8 +49,8 @@ sealed abstract class Operator
   /**
    * Convenience method to invoke the Typechecker
    */
-  def schema: Seq[(String, Type)] =
-    Typechecker.schemaOf(this)
+  def schema: Seq[(String, Type)] = Typechecker.schemaOf(this)
+   
 
   /**
    * Convenience method to get an expression checker for this
@@ -198,6 +198,66 @@ case class Select(condition: Expression, source: Operator) extends Operator
   def rebuildExpressions(x: Seq[Expression]) = Select(x(0), source)
 }
 
+
+/**
+ * invisify provenance attributes operator -- With Provenance
+ */
+case class Annotate(subj: Operator,
+                 invisSch: Seq[(ProjectArg, (String,Type), String)])
+  extends Operator
+{
+  def toString(prefix: String) =
+    prefix + "ANNOTATE(" + 
+      ("\n" + subj.toString(prefix+"  ") +"\n" + prefix 
+      )+")" + 
+       ( if(invisSch.size > 0)
+             { " // "+invisSch.map( { case (c,(v,t), ta) => c + ":"+t } ).mkString(", ") }
+        else { "" })
+  def children: List[Operator] = List(subj)
+  def rebuild(x: Seq[Operator]) = Annotate(x.head, invisSch)
+  def invisible_schema = invisSch.map( x => (x._1, x._2) )
+  def expressions = invisSch.map(invsCol => invsCol._1.expression )
+  def rebuildExpressions(x: Seq[Expression]) = Annotate(subj,
+    invisSch.zip(x).map({ case ((ProjectArg(name,_),ntt,alias),expr) => (ProjectArg(name,expr),ntt,alias)})   
+  )
+}
+
+/**
+ * visify provenance attributes operator -- Provenance Of
+ */
+case class Recover(subj: Operator,
+                 invisSch: Seq[(ProjectArg, (String,Type), String)]) extends Operator
+{
+  def toString(prefix: String) =
+    // prefix + "Join of\n" + left.toString(prefix+"  ") + "\n" + prefix + "and\n" + right.toString(prefix+"  ")
+    prefix + "RECOVER(\n" + subj.toString(prefix+"  ") + 
+                  "\n" + prefix + ")" + 
+       ( if(invisSch.size > 0)
+             { " // "+invisSch.map( { case (c,(v,t), ta) => c+":"+t } ).mkString(", ") }
+        else { "" })
+  def children() = List(subj);
+  def rebuild(x: Seq[Operator]) = Recover(x.head, invisSch)
+  def expressions = invisSch.map(invsCol => invsCol._1.expression )
+  def rebuildExpressions(x: Seq[Expression]) = Recover(subj,
+    invisSch.zip(x).map({ case ((ProjectArg(name,_),ntt,alias),expr) => (ProjectArg(name,expr),ntt,alias)})   
+  )
+}
+
+/**
+ * provenance of operator -- Provenance Of
+ */
+case class ProvenanceOf(subj: Operator) extends Operator
+{
+  def toString(prefix: String) =
+    // prefix + "Join of\n" + left.toString(prefix+"  ") + "\n" + prefix + "and\n" + right.toString(prefix+"  ")
+    prefix + "PROVENANCE(\n" + subj.toString(prefix+"  ") + 
+                  "\n" + prefix + ")"
+  def children() = List(subj);
+  def rebuild(x: Seq[Operator]) = ProvenanceOf(x(0))
+  def expressions = List()
+  def rebuildExpressions(x: Seq[Expression]) = this
+}
+
 /**
  * Relational algebra cartesian product (I know, technically not an actual join)
  */
@@ -253,6 +313,7 @@ case class Union(left: Operator, right: Operator) extends Operator
  */
 @SerialVersionUID(100L)
 case class Table(name: String, 
+                 alias: String, 
                  sch: Seq[(String,Type)],
                  metadata: Seq[(String,Expression,Type)])
   extends Operator
@@ -266,7 +327,7 @@ case class Table(name: String,
       )
     )+")" 
   def children: List[Operator] = List()
-  def rebuild(x: Seq[Operator]) = Table(name, sch, metadata)
+  def rebuild(x: Seq[Operator]) = Table(name, alias, sch, metadata)
   def metadata_schema = metadata.map( x => (x._1, x._3) )
   def expressions = List()
   def rebuildExpressions(x: Seq[Expression]) = this

@@ -2,6 +2,7 @@ package mimir.exec.result
 
 import mimir.algebra._
 
+
 case class LazyRow(
   input: Row, 
   tupleDefinition: Seq[Row=>PrimitiveValue],

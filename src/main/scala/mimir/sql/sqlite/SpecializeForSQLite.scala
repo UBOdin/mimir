@@ -37,6 +37,15 @@ object SpecializeForSQLite {
           TypePrimitive(TInt())
         ))
 
+      case Function("JSON_EXTRACT_INT", args) => Function("JSON_EXTRACT", args)
+      case Function("JSON_EXTRACT_FLOAT", args) => Function("JSON_EXTRACT", args)
+      case Function("JSON_EXTRACT_STR", args) => Function("JSON_EXTRACT", args)
+
+      case Function("CONCAT", args) =>
+        Function("PRINTF", Seq(
+          StringPrimitive(args.map{ _ => "%s"}.mkString)
+        ) ++ args)
+
       case _ => e
 
     }).recur( apply(_:Expression) )
