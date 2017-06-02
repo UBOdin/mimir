@@ -9,7 +9,7 @@ import mimir.algebra._
 import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, RowExplanation, VGTerm}
 import mimir.models.Model
 import mimir.exec.Compiler
-import mimir.exec.stream.{ResultIterator, Row}
+import mimir.exec.result.{ResultIterator,SampleResultIterator,Row}
 import mimir.lenses.{LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
 import mimir.sql.{SqlToRA,RAToSql,Backend}
@@ -37,6 +37,7 @@ import net.sf.jsqlparser.statement.drop.Drop
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
 
@@ -171,7 +172,44 @@ case class Database(backend: Backend)
   }
 
   /**
+   * Compute the query result with samples.
+   */
+  def sampleQuery[T](oper: Operator)(handler: SampleResultIterator => T): T =
+  {
+    val iterator: SampleResultIterator = compiler.compileForSamples(oper)
+    try {
+      val ret = handler(iterator)
+
+      // See the comments on query for an explanation on the hackishness here.
+      if(ret.isInstanceOf[Iterator[_]]){
+        logger.warn("Returning a sequence from Database.sampleQuery may lead to the Scala compiler's optimizations closing the ResultIterator before it's fully drained")
+      }
+      return ret;
+    } finally {
+      iterator.close()
+    }
+  }
+
+  /**
+   * Compute the query result with samples.
+   */
+  def sampleQuery[T](stmt: net.sf.jsqlparser.statement.select.Select)(handler: SampleResultIterator => T): T =
+  {
+    sampleQuery(sql.convert(stmt))(handler)
+  }
+
+  /**
+   * Compute the query result with samples.
+   */
+  def sampleQuery[T](stmt: String)(handler: SampleResultIterator => T): T =
+  {
+    sampleQuery(select(stmt))(handler)
+  }
+
+  /**
    * Make an educated guess about what the query's schema should be
+   * XXX: Only required because the TypeInference lens is a little punk birch that needs to
+   *      be converted into an adaptive schema (#193).
    */
   def bestGuessSchema(oper: Operator): Seq[(String, Type)] =
   {
@@ -340,7 +378,12 @@ case class Database(backend: Backend)
             case s => (s, true)
           }
 
-        loadTable(target, load.getFile, force = force)
+        loadTable(
+          target, 
+          load.getFile, 
+          force = force,
+          (load.getFormat, load.getFormatArgs.asScala.toSeq.map { sql.convert(_) })
+        )
       }
 
       /********** DROP STATEMENTS **********/
@@ -408,17 +451,40 @@ case class Database(backend: Backend)
    * header or not is unimplemented. So its assumed every CSV file
    * supplies an appropriate header.
    */
+  def loadTable(
+    targetTable: String, 
+    sourceFile: File, 
+    force:Boolean = true, 
+    format:(String, Seq[PrimitiveValue]) = ("CSV", Seq(StringPrimitive(",")))
+  ){
+    (format._1 match {
+           case null => "CSV"
+           case x => x.toUpperCase
+     }) match {
+      case "CSV" => {
+        val delim =
+          format._2 match {
+            case Seq(StringPrimitive(delim)) => delim
+            case Seq() | null => ","
+            case _ => throw new SQLException("The CSV format expects a single string argument (CSV('delim'))")
+          }
 
-  def loadTable(targetTable: String, sourceFile: File, force:Boolean = true){
-    val targetRaw = targetTable.toUpperCase + "_RAW"
-    if(tableExists(targetRaw) && !force){
-      throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' AS tableName`; to override.")
+          val targetRaw = targetTable.toUpperCase + "_RAW"
+          if(tableExists(targetRaw) && !force){
+            throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' INTO tableName`; to append to existing data.")
+          }
+          LoadCSV.handleLoadTable(this, targetRaw, sourceFile, 
+            Map("DELIMITER" -> delim)
+          )
+          if(!tableExists(targetTable.toUpperCase)){
+            val oper = getTableOperator(targetRaw)
+            val l = List(new FloatPrimitive(.5))
+            lenses.create("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)       
+          }
+        }
+      case fmt =>
+        throw new SQLException(s"Unknown load format '$fmt'")
     }
-    LoadCSV.handleLoadTable(this, targetRaw, sourceFile)
-    val oper = getTableOperator(targetRaw)
-    val l = List(new FloatPrimitive(.5))
-
-    lenses.create("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)
   }
   
   def loadTable(targetTable: String, sourceFile: String){

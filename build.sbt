@@ -1,7 +1,7 @@
 name := "Mimir-Core"
 version := "0.2-SNAPSHOT"
 organization := "info.mimirdb"
-scalaVersion := "2.10.5"
+scalaVersion := "2.11.11"
 
 dependencyOverrides += "org.scala-lang" % "scala-library" % scalaVersion.value
 
@@ -81,7 +81,8 @@ libraryDependencies ++= Seq(
   "log4j"                         %    "log4j"                % "1.2.17",
   
   //////////////////////// Visualization ////////////////////////
-  "com.github.aishfenton"         %%  "vegas"                 % "0.2.3"
+  "org.vegas-viz"                 %%  "vegas"                 % "0.3.9",
+  "org.sameersingh.scalaplot"     % "scalaplot"               % "0.0.4"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")

@@ -32,7 +32,7 @@ class LensManager(db: Database) {
     t: String, 
     name: String, 
     query: Operator, 
-    args: List[Expression]
+    args: Seq[Expression]
   ): Unit =
   {
     val saneName = name.toUpperCase

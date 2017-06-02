@@ -12,12 +12,21 @@ object SpecializeForSQLite {
   {
     (e match {
   
-      case Function("CAST", List(target, TypePrimitive(t))) => 
+      case Function("CAST", Seq(target, TypePrimitive(t))) => 
         {//println("TYPE ID: "+t.id(t))
-          Function("MIMIRCAST", List(target, IntPrimitive(Type.id(t))))}
+          Function("MIMIRCAST", Seq(target, IntPrimitive(Type.id(t))))}
 
       case Function("CAST", _) =>
         throw new SQLException("Invalid CAST: "+e)
+
+      case Function("JSON_EXTRACT_INT", args) => Function("JSON_EXTRACT", args)
+      case Function("JSON_EXTRACT_FLOAT", args) => Function("JSON_EXTRACT", args)
+      case Function("JSON_EXTRACT_STR", args) => Function("JSON_EXTRACT", args)
+
+      case Function("CONCAT", args) =>
+        Function("PRINTF", Seq(
+          StringPrimitive(args.map{ _ => "%s"}.mkString)
+        ) ++ args)
 
       case _ => e
 
