@@ -82,13 +82,17 @@ object JDBCUtils {
         }
       case TTimeStamp() => 
         dateType match {
-          case TDate() =>   (r) => { val t = r.getTimestamp(field); if(t == null){ NullPrimitive() } else { convertTimeStamp(t) } }
+          case TDate() =>   (r) => { 
+              val t = r.getTimestamp(field); 
+              if(t == null){ NullPrimitive() } 
+              else { convertTimestamp(t) } 
+            }
           case TString() => (r) => {
               val t = r.getString(field)
               if(t == null){ NullPrimitive() }
               else {
                 try {
-                  convertTimeStamp(Timestamp.valueOf(t))
+                  convertTimestamp(Timestamp.valueOf(t))
                 } catch { 
                   case _:IllegalArgumentException => NullPrimitive()
                 }
@@ -127,16 +131,16 @@ object JDBCUtils {
     cal.set(d.y, d.m, d.d);
     new Date(cal.getTime().getTime());
   }
-  def convertTimeStamp(c: Calendar): TimestampPrimitive =
+  def convertTimestamp(c: Calendar): TimestampPrimitive =
     TimestampPrimitive(c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DATE),
                         c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), c.get(Calendar.SECOND))
-  def convertTimeStamp(ts: Timestamp): TimestampPrimitive =
+  def convertTimestamp(ts: Timestamp): TimestampPrimitive =
   {
     val cal = Calendar.getInstance();
     cal.setTime(ts)
-    convertTimeStamp(cal)
+    convertTimestamp(cal)
   }
-  def convertTimeStamp(ts: TimestampPrimitive): Timestamp =
+  def convertTimestamp(ts: TimestampPrimitive): Timestamp =
   {
     val cal = Calendar.getInstance()
     cal.set(ts.y, ts.m, ts.d, ts.hh, ts.mm, ts.ss);

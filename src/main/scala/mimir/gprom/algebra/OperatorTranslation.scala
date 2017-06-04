@@ -1563,7 +1563,7 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
       j+=1
       gpromExprs.length += 1
     })
-    gpromExprs
+    gpromExprs 
   }
   
   def setGProMQueryOperatorParentsList(subject : GProMStructure, parent:GProMStructure) : Unit = {
