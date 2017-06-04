@@ -196,20 +196,25 @@ object DiscalaAbadiSpec
           val attrStrings = results.map { row => 
             (
               row("ATTR_NAME").asString, 
-              row("ID").asString, 
-              row.isDeterministic
+              ( row("ID").asString, 
+                row.isDeterministic
+              )
             ) 
-          }.toSeq 
-          attrStrings must contain(
-            ("QUANTITY","47|21|45|0|1|1",false)
+          }.toMap
+           
+          attrStrings.keys must contain("QUANTITY")
+          attrStrings("QUANTITY")._2 must beFalse
+
+          val explanation =
+            explainRow(baseQuery, attrStrings("QUANTITY")._1)
+    
+          explanation.reasons.map(_.reason).head must contain(
+            "QUANTITY could be organized under any of BILL_OF_LADING_NBR"
           )
         }
       }
 
-      val explanation =
-        explainRow(baseQuery, "47|21|45|0|1|1")
 
-      explanation.reasons.map(_.reason).head must contain("QUANTITY could be organized under any of BILL_OF_LADING_NBR")
     }
 
 

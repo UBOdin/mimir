@@ -228,16 +228,16 @@ class Compiler(db: Database) extends LazyLogging {
       oper = 
         OperatorUtils.projectDownToColumns(requiredColumns.toSeq, oper)
 
-      val sql = sqlForBackend(oper, opts)
+      val (sql, sqlSchema) = sqlForBackend(oper, opts)
 
       logger.info(s"PROJECTIONS: $projections")
 
       new ProjectionResultIterator(
         outputCols.map( projections(_) ),
         annotationCols.map( projections(_) ).toSeq,
-        oper.schema,
+        sqlSchema,
         new JDBCResultIterator(
-          oper.schema,
+          sqlSchema,
           sql, db.backend,
           (db.backend.rowIdType, db.backend.dateType)
         )
@@ -245,10 +245,22 @@ class Compiler(db: Database) extends LazyLogging {
     }
   }
 
-  def sqlForBackend(oper: Operator, opts: Compiler.Optimizations = Compiler.standardOptimizations): SelectBody =
+  def sqlForBackend(
+    oper: Operator, 
+    opts: Compiler.Optimizations = Compiler.standardOptimizations
+  ): 
+    (SelectBody, Seq[(String,Type)]) =
   {
-    val optimized = { if(db.backend.isInstanceOf[mimir.sql.GProMBackend] ) Compiler.gpromOptimize(oper) else Compiler.optimize(oper, opts)}
+    val optimized = { 
+      if(db.backend.isInstanceOf[mimir.sql.GProMBackend] ) {
+        Compiler.gpromOptimize(oper) 
+      } else { 
+        Compiler.optimize(oper, opts)
+      }
+    }
     //val optimized =  Compiler.optimize(oper, opts)
+
+    logger.debug(s"PRE-SPECIALIZED: $oper")
 
     // The final stage is to apply any database-specific rewrites to adapt
     // the query to the quirks of each specific target database.  Each
@@ -256,13 +268,15 @@ class Compiler(db: Database) extends LazyLogging {
     val specialized = db.backend.specializeQuery(optimized)
 
     logger.info(s"SPECIALIZED: $specialized")
+
+    logger.info(s"SCHEMA: ${oper.schema.mkString(", ")} -> ${optimized.schema.mkString(", ")}")
     
     // Generate the SQL
     val sql = db.ra.convert(specialized)
 
     logger.info(s"SQL: $sql")
 
-    return sql
+    return (sql, optimized.schema)
   }
   
   case class VirtualizedQuery(

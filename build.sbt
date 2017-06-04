@@ -124,7 +124,7 @@ parallelExecution in Test := false
 
 resolvers ++= Seq("snapshots", "releases").map(Resolver.sonatypeRepo)
 
-fork := false
+fork := true
 
 testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
 

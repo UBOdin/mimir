@@ -16,7 +16,7 @@ class AdaptiveSchemaManager(db: Database)
       db.backend.update(s"""
         CREATE TABLE $dataTable(
           NAME varchar(100), 
-          MLENS_TYPE varchar(100),
+          MLENS varchar(100),
           QUERY text,
           ARGS text,
           PRIMARY KEY (name)
@@ -32,7 +32,7 @@ class AdaptiveSchemaManager(db: Database)
     val models = constructor.initSchema(db, config);
     
     db.backend.update(s"""
-      INSERT INTO $dataTable(NAME, MLENS_TYPE, QUERY, ARGS) VALUES (?,?,?,?)
+      INSERT INTO $dataTable(NAME, MLENS, QUERY, ARGS) VALUES (?,?,?,?)
     """, Seq(
       StringPrimitive(schema),
       StringPrimitive(mlensType),
@@ -51,7 +51,13 @@ class AdaptiveSchemaManager(db: Database)
   def all: TraversableOnce[(Multilens, MultilensConfig)] =
   {
     db.query(
-      db.getTableOperator(dataTable)
+      Project(
+        Seq(ProjectArg("NAME", Var("NAME")), 
+            ProjectArg("MLENS", Var("MLENS")), 
+            ProjectArg("QUERY", Var("QUERY")),
+            ProjectArg("ARGS", Var("ARGS"))),
+        db.getTableOperator(dataTable)
+      )
     ){ _.map { row => 
       val name = row(0).asString
       val mlensType = row(1).asString

@@ -23,6 +23,7 @@ object OperatorOptimizerRegressions
           ),
           Table(
             "ORDERS_O_CUSTKEY",
+            "ORDERS_O_CUSTKEY",
             Seq(
               ("VAR_ID", TInt()), 
               ("WORLD_ID", TInt()), 
@@ -60,7 +61,7 @@ object OperatorOptimizerRegressions
         Select(expr("CUSTKEY_0=CUSTKEY"),
           Join(
             Select(expr("MKTSEGMENT = 'BUILDING'"),
-              Table("CUSTOMER_RUN_1",
+              Table("CUSTOMER_RUN_1","CUSTOMER_RUN_1",
                 Seq(
                   ("CUSTKEY", TInt()),
                   ("MKTSEGMENT", TString())
@@ -68,7 +69,7 @@ object OperatorOptimizerRegressions
               )
             ),
             Select(expr("ORDERDATE<DATE('1995-03-15')"),
-              Table("ORDERS_RUN_1",
+              Table("ORDERS_RUN_1","ORDERS_RUN_1",
                 Seq(
                   ("ORDERKEY", TInt()),
                   ("CUSTKEY_0", TInt()),
