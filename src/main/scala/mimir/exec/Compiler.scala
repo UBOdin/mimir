@@ -371,7 +371,7 @@ object Compiler
     var startTime = DateTime.now
     TimeUtils.monitor("OPTIMIZE", logger.info(_)){
       for( i <- (0 until 4) ){
-        logger.trace(s"Optimizing, cycle $i: \n$oper")
+        logger.debug(s"Optimizing, cycle $i: \n$oper")
         // Try to optimize
         val newOper = 
           opts.foldLeft(oper) { (o, fn) =>

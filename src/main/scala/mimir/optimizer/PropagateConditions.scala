@@ -20,12 +20,19 @@ object PropagateConditions extends OperatorOptimization with LazyLogging {
 		if(truth) {
 			// Some fast-path cases
 			assertion match {
+				case Comparison(Cmp.Eq, Var(v1), Var(v2)) =>
+					// For variable replacements, and for sanity's sake give preference to the shorter name
+					if(v1.length <= v2.length){
+						return Eval.inline(target, Map(v2 -> Var(v1)))
+					} else {
+						return Eval.inline(target, Map(v1 -> Var(v2)))
+					}
 				case Comparison(Cmp.Eq, Var(c), e) =>
-					return Eval.inline(target, Map((c, e)))
+					return Eval.inline(target, Map(c -> e))
 				case Comparison(Cmp.Eq, e, Var(c)) =>
-					return Eval.inline(target, Map((c, e)))
+					return Eval.inline(target, Map(c -> e))
 				case IsNullExpression(Var(c)) =>
-					return Eval.inline(target, Map((c, NullPrimitive())))
+					return Eval.inline(target, Map(c -> NullPrimitive()))
 				case _ => ()
 			}
 		}

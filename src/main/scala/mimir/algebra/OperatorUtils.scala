@@ -116,6 +116,25 @@ object OperatorUtils extends LazyLogging {
     }
   }
 
+  def shallowRename(mapping: Map[String, String], oper: Operator): Operator =
+  {
+    // Shortcut if the mapping is a no-op
+    if(!mapping.exists { 
+      case (original, replacement) => !original.equals(replacement) 
+    }) { return oper; }
+
+    // Strip off any existing projections:
+    val (baseProjections, input) = extractProjections(oper)
+
+    // Then rename and reapply them
+    Project(
+      baseProjections.map { case ProjectArg(name, expr) => 
+        ProjectArg(mapping.getOrElse(name, name), expr)
+      }, 
+      input
+    )
+  }
+
   def replaceColumn(target: String, replacement: Expression, oper: Operator) =
   {
     val (cols, src) = extractProjections(oper)
