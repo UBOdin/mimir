@@ -17,17 +17,20 @@ scalacOptions ++= Seq(
 
 unmanagedResourceDirectories in Compile += baseDirectory.value / "lib_extra"
 unmanagedClasspath in Runtime += baseDirectory.value / "conf"
-// unmanagedClasspath in Runtime <+= (baseDirectory) map { bd => Attributed.blank(bd / "conf") }
-
 includeFilter in (Compile, unmanagedResourceDirectories):= ".dylib"
 
+fork := true
 connectInput in run := true
 outputStrategy in run := Some(StdoutOutput)
 cancelable in Global := true
+scalacOptions in Test ++= Seq("-Yrangepos")
+parallelExecution in Test := false
+testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
 
 resolvers += "MimirDB" at "http://maven.mimirdb.info/"
 resolvers += "osgeo" at "http://download.osgeo.org/webdav/geotools/"
 resolvers += "MVNRepository" at "http://mvnrepository.com/artifact/"
+resolvers ++= Seq("snapshots", "releases").map(Resolver.sonatypeRepo)
 
 libraryDependencies ++= Seq(
   ////////////////////// Command-Line Interface Utilities //////////////////////
@@ -117,16 +120,6 @@ parser := {
     case n => sys.error(s"Could not build SQL Parser: $n")
   }
 }
-
-scalacOptions in Test ++= Seq("-Yrangepos")
-
-parallelExecution in Test := false
-
-resolvers ++= Seq("snapshots", "releases").map(Resolver.sonatypeRepo)
-
-fork := true
-
-testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
 
 ////// Assembly Plugin //////
 // We use the assembly plugin to create self-contained jar files

@@ -89,7 +89,7 @@ object DiscalaAbadiNormalizer
           val (parent, parentType) = schemaLookup(edgeParent)
           val (child, childType) = schemaLookup(edgeChild)
           val model = 
-            new KeyRepairModel(
+            new RepairKeyModel(
               s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_NORM:$parent:$child", 
               s"$child in $parent",
               config.query,
@@ -108,7 +108,7 @@ object DiscalaAbadiNormalizer
   final def spanningTreeLens(db: Database, config: MultilensConfig): Operator =
   {
     val model = db.models.get(s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_FD_PARENT")
-    KeyRepairLens.assemble(
+    RepairKeyLens.assemble(
       db.getTableOperator(s"MIMIR_DA_FDG_${config.schema}"),
       Seq("MIMIR_FD_CHILD"), 
       Seq(("MIMIR_FD_PARENT", model)),
@@ -229,7 +229,7 @@ object DiscalaAbadiNormalizer
             )
           }
         Some(
-          KeyRepairLens.assemble(
+          RepairKeyLens.assemble(
             baseQuery,
             Seq(table), 
             repairModels,
@@ -252,7 +252,7 @@ class DAFDRepairModel(
   targetType: Type,
   scoreCol: Option[String],
   attrLookup: Map[Long,String]
-) extends KeyRepairModel(name, context, source, keys, target, targetType, scoreCol)
+) extends RepairKeyModel(name, context, source, keys, target, targetType, scoreCol)
 {
   override def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String =
   {

@@ -11,7 +11,7 @@ import mimir.optimizer.{InlineVGTerms,InlineProjections}
 import mimir.test._
 import mimir.models._
 
-object KeyRepairSpec 
+object RepairKeySpec 
   extends SQLTestSpecification("KeyRepair", Map("cleanup" -> "YES")) 
   with BeforeAll 
 {

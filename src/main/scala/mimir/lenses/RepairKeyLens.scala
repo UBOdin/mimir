@@ -8,7 +8,7 @@ import mimir.algebra._
 import mimir.ctables._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-object KeyRepairLens extends LazyLogging {
+object RepairKeyLens extends LazyLogging {
   def create(
     db: Database, 
     name: String, 
@@ -27,7 +27,7 @@ object KeyRepairLens extends LazyLogging {
       case Var(col) => {
         if(schemaMap contains col){ Some(col) }
         else {
-          throw new SQLException(s"Invalid column: $col in KeyRepairLens $name")
+          throw new SQLException(s"Invalid column: $col in RepairKeyLens $name")
         }
       }
       case Function("SCORE_BY", Seq(Var(col))) => {
@@ -43,7 +43,7 @@ object KeyRepairLens extends LazyLogging {
         }
         None
       }
-      case somethingElse => throw new SQLException(s"Invalid argument ($somethingElse) for KeyRepairLens $name")
+      case somethingElse => throw new SQLException(s"Invalid argument ($somethingElse) for RepairKeyLens $name")
     }
 
     //////////  Assemble Models  //////////
@@ -52,7 +52,7 @@ object KeyRepairLens extends LazyLogging {
       filterNot( (keys ++ scoreCol) contains _._1 ).
       map { case (col, t) => 
         val model =
-          new KeyRepairModel(
+          new RepairKeyModel(
             s"$name:$col", 
             name, 
             query, 
