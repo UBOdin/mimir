@@ -16,9 +16,7 @@ scalacOptions ++= Seq(
 )
 
 unmanagedResourceDirectories in Compile += baseDirectory.value / "lib_extra"
-unmanagedClasspath in Runtime <+= (baseDirectory) map { bd => Attributed.blank(bd / "conf") }
-
-includeFilter in (Compile, unmanagedResourceDirectories):= ".dylib"
+unmanagedClasspath in Runtime += baseDirectory.value / "conf"
 
 connectInput in run := true
 outputStrategy in run := Some(StdoutOutput)

@@ -39,7 +39,7 @@ object Provenance {
               val newArgs =
                 args.map( arg =>
                   ProjectArg(arg.name, expandVars(arg.expression, rowids))
-                ).union(invisScm.map(invSchEl => ProjectArg( invSchEl._1.expression.toString, Var( (invSchEl._3 match { case "" => ""; case _ => invSchEl._3 + "_"}) +invSchEl._1.name) )))
+                ).union(invisScm.map(invSchEl => ProjectArg( invSchEl.name, invSchEl.expr )))
               val (newRowids, rowIDProjections) = makeRowIDProjectArgs(rowids, 0, 0)
               (
                 Project(newArgs ++ rowIDProjections, newSrc),
