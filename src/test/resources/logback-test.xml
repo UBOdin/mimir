@@ -7,42 +7,65 @@
     </encoder>
   </appender>
   
+  <!--+++++++++++++++++++++  Mimir Root  ++++++++++++++++++++++-->
   <logger name="mimir.Database"                                 level="WARN"/>
   <logger name="mimir.Mimir$"                                   level="WARN"/>
+
+  <!--++++++++++++++++++  Adaptive Schemas  +++++++++++++++++++-->
   <logger name="mimir.adaptive.DiscalaAbadiNormalizer$"         level="WARN"/>
+
+  <!--+++++++++++++++++++++++  Algebra  +++++++++++++++++++++++-->
   <logger name="mimir.algebra.ExpressionChecker"                level="WARN"/>
   <logger name="mimir.algebra.OperatorUtils"                    level="WARN"/>
+
+  <!--+++++++++++++++++++++++  CTables  +++++++++++++++++++++++-->
   <logger name="mimir.ctables.CTPercolator"                     level="WARN"/>
   <logger name="mimir.ctables.CTExplainer"                      level="WARN"/>
-  <logger name="mimir.exec.Compiler"                            level="DEBUG"/>
+
+  <!--++++++++++++++++++++++++  Exec  +++++++++++++++++++++++++-->
+  <logger name="mimir.exec.Compiler"                            level="WARN"/>
   <logger name="mimir.exec.BestGuesser"                         level="WARN"/>
   <logger name="mimir.exec.TupleBundler"                        level="WARN"/>
   <logger name="mimir.exec.WorldBits"                           level="WARN"/>
   <logger name="mimir.exec.result.ProjectionResultIterator"     level="WARN"/>
   <logger name="mimir.exec.result.AggregateResultIterator"      level="WARN"/>
   <logger name="mimir.exec.result.JDBCResultIterator"           level="WARN"/>
+
+  <!--+++++++++++++++++++++++  Lenses  ++++++++++++++++++++++++-->
   <logger name="mimir.lenses.BestGuessCache"                    level="WARN"/>
   <logger name="mimir.lenses.ShredderLens"                      level="WARN"/>
   <logger name="mimir.lenses.TypeInferenceLens$"                level="WARN"/>
   <logger name="mimir.lenses.KeyRepairLens$"                    level="WARN"/>
+
+  <!--+++++++++++++++++++++++  Models  ++++++++++++++++++++++++-->
   <logger name="mimir.models.ModelManager"                      level="WARN"/>
   <logger name="mimir.models.EditDistanceMatchModel"            level="INFO"/> <!-- Slow, Use INFO to track stats -->
   <logger name="mimir.models.TypeInferenceModel"                level="INFO"/> <!-- Slow, Use INFO to track stats -->
   <logger name="mimir.models.WekaModel$"                        level="INFO"/> <!-- Slow, Use INFO to track stats -->
+
+  <!--+++++++++++++++++++++  Optimizer  +++++++++++++++++++++++-->
   <logger name="mimir.optimizer.PropagateConditions$"           level="WARN"/>
   <logger name="mimir.optimizer.PartitionUncertainJoins$"       level="WARN"/>
   <logger name="mimir.optimizer.InlineProjections$"             level="WARN"/>
+
+  <!--++++++++++++++++++++++++  SQL  ++++++++++++++++++++++++++-->
   <logger name="mimir.sql.sqlite.MimirCast$"                    level="WARN"/>
   <logger name="mimir.sql.sqlite.BestGuessVGTerm"               level="WARN"/>
   <logger name="mimir.sql.sqlite.SampleVGTerm"                  level="WARN"/>
   <logger name="mimir.sql.RAToSql"                              level="WARN"/>
   <logger name="mimir.sql.SqlToRA"                              level="WARN"/>
   <logger name="mimir.sql.JDBCBackend"                          level="WARN"/>
+
+  <!--+++++++++++++++++++++  Statistics  ++++++++++++++++++++++-->
   <logger name="mimir.statistics.FuncDep"                       level="WARN"/>
   <logger name="mimir.statistics.SystemCatalog"                 level="WARN"/>
+
+  <!--+++++++++++++++++++++++  Util  ++++++++++++++++++++++++++-->
   <logger name="mimir.util.LoadCSV$"                            level="INFO"/> <!-- Slow, Use INFO to track stats -->
   <logger name="mimir.util.NonStrictCSVParser"                  level="INFO"/> <!-- Slow, Use INFO to track stats -->
   <logger name="mimir.util.LineReaderInputSource"               level="WARN"/>
+
+  <!--+++++++++++++++++++++++  Views  +++++++++++++++++++++++++-->
   <logger name="mimir.views.ViewManager"                        level="WARN"/>
 
  

@@ -75,4 +75,9 @@ trait OperatorConstructors
     )
   }
 
+  def sort(sortCols: (String, Boolean)*): Operator =
+    Sort( sortCols.map { col => SortColumn(Var(col._1), col._2) }, toOperator )
+
+  def limit(count: Int = -1, offset: Int = 0 ): Operator =
+    Limit( offset, if(count >= 0) { Some(count) } else { None }, toOperator )
 }

@@ -63,15 +63,13 @@ object DiscalaAbadiSpec
           // "mimir.exec.Compiler"
       ){
         db.query(
-          Project(Seq(ProjectArg("TABLE_NODE", Var("TABLE_NODE"))),
-            Select(Comparison(Cmp.Gt, Arithmetic(Arith.Add, Var("TABLE_NODE"), IntPrimitive(1)), IntPrimitive(0)),
-              OperatorUtils.makeDistinct(
-                Project(Seq(ProjectArg("TABLE_NODE", Var("MIMIR_FD_PARENT"))),
-                  spanningTree
-                )
-              )
-            )
-          )
+
+          spanningTree
+            .map("TABLE_NODE" -> Var("MIMIR_FD_PARENT"))
+            .distinct
+            .filter( Comparison(Cmp.Gt, Arithmetic(Arith.Add, Var("TABLE_NODE"), IntPrimitive(1)), IntPrimitive(0)) )
+            .project( "TABLE_NODE" )
+
         ){ _.map { _("TABLE_NODE") }.toSeq must not contain(IntPrimitive(-1)) }
       }
 
@@ -79,12 +77,10 @@ object DiscalaAbadiSpec
 
     "Create a schema that can be queried" >> {
       db.query(
-        OperatorUtils.projectDownToColumns(
-          Seq("TABLE_NAME", "SCHEMA_NAME"),
-          OperatorUtils.makeUnion(
-            db.adaptiveSchemas.tableCatalogs
-          )
-        )
+
+        OperatorUtils.makeUnion(db.adaptiveSchemas.tableCatalogs)
+          .project( "TABLE_NAME", "SCHEMA_NAME" )
+
       ) { _.map { row => 
           (
             row("TABLE_NAME").asString, 
@@ -98,14 +94,11 @@ object DiscalaAbadiSpec
       }
 
       db.query(
-        Sort(Seq(SortColumn(Var("TABLE_NAME"), true), SortColumn(Var("IS_KEY"), false)),
-          OperatorUtils.projectDownToColumns(
-            Seq("TABLE_NAME", "ATTR_NAME", "IS_KEY"),
-            OperatorUtils.makeUnion(
-              db.adaptiveSchemas.attrCatalogs
-            )
-          )
-        )
+
+        OperatorUtils.makeUnion( db.adaptiveSchemas.attrCatalogs )
+          .project( "TABLE_NAME", "ATTR_NAME", "IS_KEY" )
+          .sort( "TABLE_NAME" -> true, "IS_KEY" -> false )
+
       ){ results =>
         val attrs = results.map { row => 
           (
@@ -124,14 +117,11 @@ object DiscalaAbadiSpec
 
     "Allocate all attributes to some relation" >> {
       db.query(
-        Sort(Seq(SortColumn(Var("TABLE_NAME"), true), SortColumn(Var("IS_KEY"), false)),
-          OperatorUtils.projectDownToColumns(
-            Seq("TABLE_NAME", "ATTR_NAME", "IS_KEY"),
-            OperatorUtils.makeUnion(
-              db.adaptiveSchemas.attrCatalogs
-            )
-          )
-        )
+
+        OperatorUtils.makeUnion( db.adaptiveSchemas.attrCatalogs )
+          .project( "TABLE_NAME", "ATTR_NAME", "IS_KEY" )
+          .sort( "TABLE_NAME" -> true, "IS_KEY" -> false )
+
       ){ _.map { row => 
           row("ATTR_NAME").asString
         }.toSet must be equalTo(

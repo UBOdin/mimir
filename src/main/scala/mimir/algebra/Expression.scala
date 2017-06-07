@@ -3,11 +3,17 @@ package mimir.algebra;
 /**
  * Base type for expression trees.  Represents a single node in the tree.
  */
-abstract class Expression { 
+abstract class Expression extends ExpressionConstructors { 
   /**
    * Return all of the children of the current tree node
    */
   def children: Seq[Expression] 
+
+  /**
+   * Return this
+   */
+  def toExpression = this
+
   /**
    * Return a new instance of the same object, but with the 
    * children replaced with the provided list.  The list must

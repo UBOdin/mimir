@@ -24,15 +24,20 @@ object PropagateConditions extends OperatorOptimization with LazyLogging {
 				case Comparison(Cmp.Eq, Var(v1), Var(v2)) =>
 					// For variable replacements, and for sanity's sake give preference to the shorter name
 					if(v1.length <= v2.length){
+						logger.trace(s"Fastpath case 1: Replacing $v2 with $v1")
 						return Eval.inline(target, Map(v2 -> Var(v1)))
 					} else {
+						logger.trace(s"Fastpath case 2: Replacing $v1 with $v2")
 						return Eval.inline(target, Map(v1 -> Var(v2)))
 					}
 				case Comparison(Cmp.Eq, Var(c), e) =>
+					logger.trace(s"Fastpath case 3: Replacing $c with $e")
 					return Eval.inline(target, Map(c -> e))
 				case Comparison(Cmp.Eq, e, Var(c)) =>
+					logger.trace(s"Fastpath case 4: Replacing $c with $e")
 					return Eval.inline(target, Map(c -> e))
 				case IsNullExpression(Var(c)) =>
+					logger.trace(s"Fastpath case 3: Replacing $c with NULL")
 					return Eval.inline(target, Map(c -> NullPrimitive()))
 				case _ => ()
 			}
@@ -77,12 +82,15 @@ object PropagateConditions extends OperatorOptimization with LazyLogging {
 
 	def apply(e: Expression, assertions: Seq[Expression] = Seq()): Expression = 
 	{
-		logger.debug(s"Apply([${assertions.mkString("; ")}] -> $e)")
-		assertions.foldRight(
-			propagateConditions(e)
-		) { 
-			applyAssertion(_, _)
-		}.recur(apply(_, assertions))
+		var locallyPropagated = propagateConditions(e)
+		logger.debug(s"Apply([${assertions.mkString("; ")}] -> $locallyPropagated)")
+
+		val locallyApplied =
+			assertions.foldRight(locallyPropagated)
+				{ applyAssertion(_, _) }
+
+		logger.trace(s"After apply: $locallyApplied")
+		locallyApplied.recur(apply(_, assertions))
 	}
 
   def recur(o: Operator): (Operator, Seq[Expression]) =
@@ -107,7 +115,7 @@ object PropagateConditions extends OperatorOptimization with LazyLogging {
 				)
 			case Limit(offset, limit, src) =>
 				val (rewrittenSrc, srcAssertions) = recur(src)
-				(Limit(offset, limit, src), srcAssertions)
+				(Limit(offset, limit, rewrittenSrc), srcAssertions)
 			case _ => 
 				val rewrite = 
 					o.children match {
