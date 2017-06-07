@@ -69,8 +69,6 @@ object MissingValueLens {
       }
     })
 
-    println(s"$candidateModels")
-
     val (
       replacementExprsList: Seq[(String,Expression)], 
       metaModels: Seq[Model]

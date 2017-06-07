@@ -21,7 +21,7 @@ class JDBCResultIterator(
   def annotationSchema: Seq[(String, Type)] = Seq()
   def tupleSchema: Seq[(String, Type)] = inputSchema
 
-  lazy val extractInputs: Seq[() => PrimitiveValue] = 
+  val extractInputs: Seq[() => PrimitiveValue] = 
     inputSchema.
       zipWithIndex.
       map { case ((name, t), idx) => 

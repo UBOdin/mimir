@@ -105,6 +105,9 @@ object PropagateConditions extends OperatorOptimization with LazyLogging {
 					Join(lhsRewriten, rhsRewritten),
 					lhsAssertions ++ rhsAssertions
 				)
+			case Limit(offset, limit, src) =>
+				val (rewrittenSrc, srcAssertions) = recur(src)
+				(Limit(offset, limit, src), srcAssertions)
 			case _ => 
 				val rewrite = 
 					o.children match {

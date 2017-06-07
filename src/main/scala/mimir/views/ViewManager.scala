@@ -1,6 +1,9 @@
 package mimir.views;
 
 import java.sql.SQLException;
+
+import net.sf.jsqlparser.statement.select.SelectBody
+
 import mimir._;
 import mimir.algebra._;
 import mimir.provenance._;
@@ -165,7 +168,7 @@ class ViewManager(db:Database) extends LazyLogging {
     logger.debug(s"RAW: $completeQuery")
     logger.debug(s"MATERIALIZE: $name(${completeQuery.schema.mkString(",")})")
 
-    val (inlinedSQL, schema) = db.compiler.sqlForBackend(completeQuery)
+    val (inlinedSQL:SelectBody, _) = db.compiler.sqlForBackend(completeQuery)
         
     logger.debug(s"QUERY: $inlinedSQL")
 
