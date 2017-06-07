@@ -384,15 +384,16 @@ class CTExplainer(db: Database) extends LazyLogging {
 						multipleReasons.head.model, 
 						multipleReasons.head.idx, 
 						if(allReasonLookups.isEmpty){ None }
-						else { Some( (
-							OperatorUtils.makeDistinct(
+						else { 
+							val jointQuery = 
 								OperatorUtils.makeUnion(
 									allReasonLookups
 								)
-							),
-							allReasonArgs.head,
-							allReasonHints.head
-						) )}
+							Some( (
+								jointQuery.distinct,
+								allReasonArgs.head,
+								allReasonHints.head
+							) ) }
 					)
 				}
 			}.toSeq

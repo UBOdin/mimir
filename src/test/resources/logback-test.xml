@@ -14,7 +14,7 @@
   <logger name="mimir.algebra.OperatorUtils"                    level="WARN"/>
   <logger name="mimir.ctables.CTPercolator"                     level="WARN"/>
   <logger name="mimir.ctables.CTExplainer"                      level="WARN"/>
-  <logger name="mimir.exec.Compiler"                            level="WARN"/>
+  <logger name="mimir.exec.Compiler"                            level="DEBUG"/>
   <logger name="mimir.exec.BestGuesser"                         level="WARN"/>
   <logger name="mimir.exec.TupleBundler"                        level="WARN"/>
   <logger name="mimir.exec.WorldBits"                           level="WARN"/>

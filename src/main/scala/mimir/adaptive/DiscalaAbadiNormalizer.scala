@@ -151,11 +151,9 @@ object DiscalaAbadiNormalizer
     logger.trace(s"Table Catalog Spanning Tree: \n$spanningTree")
     val tableQuery = 
       convertNodesToNamesInQuery(db, config, "TABLE_NODE", "TABLE_NAME", None,
-        OperatorUtils.makeDistinct(
-          Project(Seq(ProjectArg("TABLE_NODE", Var("MIMIR_FD_PARENT"))),
-            spanningTree
-          )
-        )
+        spanningTree
+          .map( "TABLE_NODE" -> Var("MIMIR_FD_PARENT") )
+          .distinct
       )
     logger.trace(s"Table Catalog Query: \n$tableQuery")
     return tableQuery
@@ -165,13 +163,12 @@ object DiscalaAbadiNormalizer
     val spanningTree = spanningTreeLens(db, config)
     logger.trace(s"Attr Catalog Spanning Tree: \n$spanningTree")
     val childAttributeQuery =
-      OperatorUtils.projectInColumn("IS_KEY", BoolPrimitive(false),
-        convertNodesToNamesInQuery(db, config, "MIMIR_FD_CHILD", "ATTR_NAME", Some("ATTR_TYPE"),
-          convertNodesToNamesInQuery(db, config, "MIMIR_FD_PARENT", "TABLE_NAME", None,
-            spanningTree
-          )
+      convertNodesToNamesInQuery(db, config, "MIMIR_FD_CHILD", "ATTR_NAME", Some("ATTR_TYPE"),
+        convertNodesToNamesInQuery(db, config, "MIMIR_FD_PARENT", "TABLE_NAME", None,
+          spanningTree
         )
-      )
+      ).addColumn("IS_KEY" -> BoolPrimitive(false))
+
     val parentAttributeQuery =
       Project(Seq(
           ProjectArg("TABLE_NAME", Var("TABLE_NAME")),
@@ -182,13 +179,10 @@ object DiscalaAbadiNormalizer
         convertNodesToNamesInQuery(db, config, "TABLE_NODE", "TABLE_NAME", Some("ATTR_TYPE"),
           // SQLite does something stupid with FIRST that prevents it from figuring out that 
           // -1 is an integer.  Add 1 to force it to realize that it's dealing with a number
-          Select(Comparison(Cmp.Gt, Arithmetic(Arith.Add, Var("TABLE_NODE"), IntPrimitive(1)), IntPrimitive(0)),
-            OperatorUtils.makeDistinct(
-              Project(Seq(ProjectArg("TABLE_NODE", Var("MIMIR_FD_PARENT"))),
-                spanningTree
-              )
-            )
-          )
+          spanningTree
+            .map( "TABLE_NODE" -> Var("MIMIR_FD_PARENT") )
+            .distinct
+            .filter( Comparison(Cmp.Gt, Arithmetic(Arith.Add, Var("TABLE_NODE"), IntPrimitive(1)), IntPrimitive(0)) )
         )
       )
     val jointQuery =

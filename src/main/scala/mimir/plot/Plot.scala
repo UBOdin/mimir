@@ -208,7 +208,7 @@ object Plot
             case expr => {
               extraColumnCounter += 1
               val column = s"PLOT_EXPRESSION_$extraColumnCounter"
-              dataQuery = OperatorUtils.projectInColumn(column, expr, dataQuery)
+              dataQuery = dataQuery.addColumn( column -> expr )
               column
             }
           }

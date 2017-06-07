@@ -56,15 +56,6 @@ object OperatorUtils extends LazyLogging {
     }
   }
 
-  def makeDistinct(oper: Operator): Operator = 
-  {
-    Aggregate(
-      oper.schema.map(_._1).map(Var(_)),
-      Seq(),
-      oper
-    )
-  }
-
   def extractProjections(oper: Operator): (Seq[ProjectArg], Operator) =
   {
     oper match {
@@ -73,46 +64,12 @@ object OperatorUtils extends LazyLogging {
     }
   }
 
-  def projectDownToColumns(columns: Seq[String], oper: Operator): Operator =
-  {
-    Project( columns.map( x => ProjectArg(x, Var(x)) ), oper)
-  }
-
-  def projectAwayColumn(target: String, oper: Operator): Operator =
-  {
-    val (cols, src) = extractProjections(oper)
-    Project(
-      cols.filter( !_.name.equalsIgnoreCase(target) ),
-      src
-    )
-  }
-
-  def projectAwayColumns(targets: Set[String], oper: Operator): Operator =
-  {
-    val targetsUpperCase = targets.map(_.toUpperCase)
-    val (cols, src) = extractProjections(oper)
-    Project(
-      cols.filter { col => !targetsUpperCase(col.name.toUpperCase) },
-      src
-    )
-  }
-
-  def projectInColumn(target: String, value: Expression, oper: Operator): Operator =
-  {
-    val (cols, src) = extractProjections(oper)
-    val bindings = cols.map(_.toBinding).toMap
-    Project(
-      cols ++ Some(ProjectArg(target, Eval.inline(value, bindings))), 
-      src
-    )
-  }
-
   def mergeWithColumn(target: String, default: Expression, oper: Operator)(merge: Expression => Expression): Operator =
   {
     if(oper.columnNames.contains(target)){
       replaceColumn(target, merge(Var(target)), oper)
     } else {
-      projectInColumn(target, merge(default), oper)
+      oper.addColumn(target -> merge(default))
     }
   }
 

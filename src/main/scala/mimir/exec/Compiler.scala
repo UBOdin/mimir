@@ -225,8 +225,7 @@ class Compiler(db: Database) extends LazyLogging {
 
     } else {
       // Make the set of columns we're interested in explicitly part of the query
-      oper = 
-        OperatorUtils.projectDownToColumns(requiredColumns.toSeq, oper)
+      oper = oper.project( requiredColumns.toSeq:_* )
 
       val (sql, sqlSchema) = sqlForBackend(oper, opts)
 

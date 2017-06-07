@@ -350,7 +350,7 @@ object CTPercolatorClassic {
 
         case agg@Aggregate(gbArgs, _, _) =>
           if(force){
-            OperatorUtils.projectInColumn(ROWID_KEY, Function("JOIN_ROWIDS", gbArgs), agg)
+            agg.addColumn(ROWID_KEY -> Function("JOIN_ROWIDS", gbArgs))
           } else { agg }
         
         

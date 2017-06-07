@@ -76,28 +76,28 @@ class AdaptiveSchemaManager(db: Database)
   def tableCatalogs: Seq[Operator] =
   {
     all.map { case(mlens, config) => 
-      OperatorUtils.projectInColumn(
-        "SCHEMA_NAME",
-        StringPrimitive(config.schema),
-        OperatorUtils.projectDownToColumns(
-          SystemCatalog.tableCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 ),
-          mlens.tableCatalogFor(db, config)         
-        )
-      )
+
+      val tableBaseSchemaColumns =
+        SystemCatalog.tableCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 )
+
+      mlens.tableCatalogFor(db, config)
+        .project( tableBaseSchemaColumns:_* )
+        .addColumn( "SCHEMA_NAME" -> StringPrimitive(config.schema) )
+
     }.toSeq
   }
 
   def attrCatalogs: Seq[Operator] =
   {
     all.map { case(mlens, config) => 
-      OperatorUtils.projectInColumn(
-        "SCHEMA_NAME",
-        StringPrimitive(config.schema),
-        OperatorUtils.projectDownToColumns(
-          SystemCatalog.attrCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 ),
-          mlens.attrCatalogFor(db, config)         
-        )
-      )
+
+      val attrBaseSchemaColumns =
+        SystemCatalog.attrCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 )
+
+      mlens.attrCatalogFor(db, config)         
+        .project( attrBaseSchemaColumns:_* )
+        .addColumn( "SCHEMA_NAME" -> StringPrimitive(config.schema) )
+
     }.toSeq
   }
 

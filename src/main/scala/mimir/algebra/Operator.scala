@@ -8,6 +8,7 @@ import mimir.views.ViewAnnotation
  */
 sealed abstract class Operator 
   extends Serializable
+  with OperatorConstructors
 { 
   /**
    * Convert the operator into a string.  Because operators are
@@ -19,6 +20,13 @@ sealed abstract class Operator
    * The starting point for stringification is to have no indentation
    */
   override def toString() = this.toString("");
+
+  /**
+   * Return Self.
+   * 
+   * This mainly exists in support of OperatorConstructors
+   */
+  def toOperator = this
 
   /**
    * Return all of the child nodes of this operator

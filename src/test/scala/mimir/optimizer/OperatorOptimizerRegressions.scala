@@ -122,6 +122,17 @@ object OperatorOptimizerRegressions
       )
     }
 
+    "Propagate IsNull deep into expressions" >> {
+      // PROJECT[A <= A, MIMIR_ROW_DET <= MIMIR_ROW_DET, MIMIR_ROWID <= MIMIR_ROWID, B <= B, C <= C](
+      //   LIMIT[0,4](
+      //     PROJECT[A <= A, B <= B, C <= C, MIMIR_ROWID <= MIMIR_ROWID, MIMIR_ROWID <= MIMIR_ROWID, MIMIR_ROW_DET <=  ( (MIMIR_ROWID<>'3')  OR NOT(C IS NULL)) ](
+      //       SELECT[ ( (MIMIR_ROWID='3')  AND C IS NULL) ](
+      //         R(A:varchar, B:int, C:int // MIMIR_ROWID:rowid <- ROWID, MIMIR_ROWID:rowid <- ROWID)
+      //       )
+      //     ))
+      // )
+    }
+
   }
 
 }

@@ -134,9 +134,8 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
     // Check for a shortcut opportunity... if the expression is deterministic, we're done!
     if(CTables.isDeterministic(query)){
       return (
-        OperatorUtils.projectInColumn(
-          TupleBundler.worldBitsColumnName, IntPrimitive(fullBitVector), 
-          query
+        query.addColumn(
+          TupleBundler.worldBitsColumnName -> IntPrimitive(fullBitVector)
         ),
         Set[String]()
       )
@@ -144,9 +143,8 @@ class TupleBundler(db: Database, sampleSeeds: Seq[Long] = (0l until 10l).toSeq)
     query match {
       case (Table(_,_,_,_) | EmptyTable(_)) => 
         (
-          OperatorUtils.projectInColumn(
-            TupleBundler.worldBitsColumnName, IntPrimitive(fullBitVector), 
-            query
+          query.addColumn(
+            TupleBundler.worldBitsColumnName -> IntPrimitive(fullBitVector)
           ),
           Set[String]()
         )
