@@ -85,8 +85,15 @@ object OperatorOptimizerRegressions
     }
 
     "Push deep into expressions" >> {
-      val problemExpr = expr("((((MIMIR_DET_BIT_VECTOR & 2) =2)  AND  ( (MIMIR_DET_BIT_VECTOR_0 & 4) =4) )  AND  (CUSTKEY !=  CUSTKEY_0) )")
-      Eval.inline(
+      val problemExpr = 
+        ExpressionUtils.makeAnd(
+          Seq(
+            Comparison(Cmp.Eq, expr("MIMIR_DET_BIT_VECTOR & 2"), IntPrimitive(2)),
+            Comparison(Cmp.Eq, expr("MIMIR_DET_BIT_VECTOR_0 & 4"), IntPrimitive(4)),
+            expr("CUSTKEY !=  CUSTKEY_0")
+          )
+        )
+      Eval.simplify(
         PropagateConditions(problemExpr, Seq(expr("CUSTKEY_0=CUSTKEY")))
       ) must be equalTo(BoolPrimitive(false))
     }

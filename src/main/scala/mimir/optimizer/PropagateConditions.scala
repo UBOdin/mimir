@@ -12,6 +12,7 @@ object PropagateConditions extends OperatorOptimization with LazyLogging {
 
 	def applyAssertion(truth: Boolean, assertion: Expression, target: Expression): Expression =
 	{
+		logger.trace(s"applyAssertion(${if(truth){""}else{"!"}}$assertion -> $target")
 		assertion match { 
 			case Not(e) => return applyAssertion(!truth, e, target)
 			case Comparison(Cmp.Neq,a,b) => return applyAssertion(!truth, Comparison(Cmp.Eq,a,b), target)
@@ -76,6 +77,7 @@ object PropagateConditions extends OperatorOptimization with LazyLogging {
 
 	def apply(e: Expression, assertions: Seq[Expression] = Seq()): Expression = 
 	{
+		logger.debug(s"Apply([${assertions.mkString("; ")}] -> $e)")
 		assertions.foldRight(
 			propagateConditions(e)
 		) { 
