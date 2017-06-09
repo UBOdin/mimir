@@ -2,8 +2,8 @@ package mimir.ctables;
 
 import optimus.optimization._
 
-object Prioritizer {
-
+object CTPrioritizer {
+	def optimize = {
 	implicit val problem = LQProblem(SolverLib.ojalgo)
 
 	val x = MPFloatVar("x", 100, 200)
@@ -17,4 +17,6 @@ object Prioritizer {
 	println("x = " + x.value + "y = " + y.value)
 
 	release()
+
+	}
 }
