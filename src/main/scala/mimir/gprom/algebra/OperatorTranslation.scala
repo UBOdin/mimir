@@ -76,7 +76,7 @@ object OperatorTranslation {
         val projArgs = getProjectionColumnsFromGProMProjectionOperator(projectionOperator)
         val visibleProjArgs = projArgs.map{ projArgT => projArgT._2 match { case ProjectionArgVisibility.Visible => Some(projArgT._1); case _ => None }}.flatten
         val invisibleProjArgs = projArgs.map{ projArgT => projArgT._2 match { case ProjectionArgVisibility.Invisible => Some(projArgT._1); case _ => None }}.flatten
-        val invisibleSchema = projArgs.map{ projArgT => projArgT._2 match { case ProjectionArgVisibility.Invisible => Some((projArgT._1, projArgT._3, projArgT._4)); case _ => None }}.flatten
+        val invisibleSchema = projArgs.map{ projArgT => projArgT._2 match { case ProjectionArgVisibility.Invisible => Some(AnnotateArg(projArgT._1.name, projArgT._3._2, projArgT._1.expression)); case _ => None }}.flatten
          
         if(projectionOperator.op.provAttrs != null && projectionOperator.op.provAttrs.length > 0 && depth == 0){
           new Recover(new Project(visibleProjArgs, sourceChild), invisibleSchema)
@@ -1707,7 +1707,7 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
     oper match {
       case Recover(subj,invisScm) => {
         Recover(subj, invisScm.flatMap(isce => {
-          if(isce._2._1.matches(".*ROWID"))
+          if(isce.name.matches(".*ROWID"))
             Some(isce)
           else
             None
@@ -1719,7 +1719,7 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
   def provenanceColsFromRecover(oper:Operator) : (Operator, Seq[String]) = {
     oper match {
      case Recover(subj,invisScm) => {
-       (annotationsAndRecoveryToProjections(oper), invisScm.map(ise => ise._1.name))
+       (annotationsAndRecoveryToProjections(oper), invisScm.map(ise => ise.name))
      }
     }
   }
@@ -1731,13 +1731,13 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
     }
   }
   
-  def recoverProject(invisScm: Seq[(ProjectArg, (String,Type), String)], cols:Seq[ProjectArg], recoveredOp: Operator) : Operator = {
+  def recoverProject(invisScm: Seq[AnnotateArg], cols:Seq[ProjectArg], recoveredOp: Operator) : Operator = {
      recoveredOp match {
       case Project(ncols, nsrc) => {
         //val schMap = nsrc.schema.toMap
         val srcColsMap = ncols.map(srcCol => (srcCol.name, srcCol)).toMap
-        val noRemAnno = invisScm.map(ise => (ise._1.name, ise._1)).toMap
-        val rowIdCol = invisScm.filter(ise => ise._1.name.matches(".*ROWID"))(0)._1.name
+        val noRemAnno = invisScm.map(ise => (ise.name, ProjectArg(ise.name, ise.expr))).toMap
+        val rowIdCol = invisScm.filter(ise => ise.name.matches(".*ROWID"))(0).name
         val newAnno = cols.map(col => {
           col.expression match {
             case Var(v) => {
@@ -1776,15 +1776,15 @@ object ProjectionArgVisibility extends Enum[ProjectionArgVisibility] {
       case Project(cols, src) => {
         src match {
          case Annotate(subj,invisScm) => {
-            val repAnno = invisScm.map(ise => (ise._1.name, ise._1)).toMap
-            val rowIdCol = invisScm.filter(ise => ise._1.name.matches(".*ROWID"))(0)._1.name
+            val repAnno = invisScm.map(ise => (ise.name, ProjectArg(ise.name, ise.expr))).toMap
+            val rowIdCol = invisScm.filter(ise => ise.name.matches(".*ROWID"))(0).name
             val colSet = cols.map(col => col.name).toSet
             val newAnno = invisScm.flatMap(ise => {
-              if(colSet.contains(ise._1.name)){
+              if(colSet.contains(ise.name)){
                 None
               }
               else
-                Some(ise._1)
+                Some(ProjectArg(ise.name, ise.expr))
             })
             
             val annotatedOp = Project(cols.map(col => {

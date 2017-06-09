@@ -165,7 +165,7 @@ object Typechecker {
       }
       
 			case Recover(subj,invisScm) => {
-        schemaOf(subj).union(invisScm.map(pasct => pasct._2))
+        schemaOf(subj).union(invisScm.map(pasct => (pasct.name,pasct.typ)))
       }
 			
       case Select(cond, src) =>

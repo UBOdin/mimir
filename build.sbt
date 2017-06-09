@@ -17,7 +17,6 @@ scalacOptions ++= Seq(
 
 unmanagedResourceDirectories in Compile += baseDirectory.value / "lib_extra"
 unmanagedClasspath in Runtime += baseDirectory.value / "conf"
-includeFilter in (Compile, unmanagedResourceDirectories):= ".dylib"
 
 fork := true
 connectInput in run := true
