@@ -54,7 +54,7 @@ libraryDependencies ++= Seq(
   //////////////////////// Data Munging Tools //////////////////////
   "com.github.nscala-time"        %%  "nscala-time"           % "1.2.0",
   "org.apache.lucene"             %   "lucene-spellchecker"   % "3.6.2",
-  "org.apache.servicemix.bundles" %   "org.apache.servicemix.bundles.collections-generic" 
+  "org.apache.servicemix.bundles" %   "org.apache.servicemix.bundles.collections-generic"
                                                               % "4.01_1",
   "org.apache.commons"            %   "commons-csv"           % "1.4",
   "commons-io"                    %   "commons-io"            % "2.5",
@@ -70,7 +70,7 @@ libraryDependencies ++= Seq(
   ("nz.ac.waikato.cms.moa"        %   "moa"                   % "2014.11").
     exclude("nz.ac.waikato.cms.weka",  "weka-dev").
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
- 
+
   //////////////////////// Jung ////////////////////////
   // General purpose graph manipulation library
   // Used to detect and analyze Functional Dependencies
@@ -78,7 +78,7 @@ libraryDependencies ++= Seq(
   "net.sf.jung"                   %   "jung-algorithms"       % "2.0.1",
   "net.sf.jung"                   %   "jung-visualization"    % "2.0.1",
   "jgraph"                        %   "jgraph"                % "5.13.0.0",
-  "javax.media" 		  %   "jai_core"              % "1.1.3",  
+  "javax.media" 		  %   "jai_core"              % "1.1.3",
   //
 
   //////////////////////// Geotools ////////////////////////
@@ -95,10 +95,14 @@ libraryDependencies ++= Seq(
   "net.java.dev.jna"              %    "jna"                  % "4.2.2",
   "net.java.dev.jna"              %    "jna-platform"         % "4.2.2",
   "log4j"                         %    "log4j"                % "1.2.17",
-  
+
   //////////////////////// Visualization ////////////////////////
   "org.vegas-viz"                 %%  "vegas"                 % "0.3.9",
-  "org.sameersingh.scalaplot"     % "scalaplot"               % "0.0.4"
+  "org.sameersingh.scalaplot"     % "scalaplot"               % "0.0.4",
+
+  //////////////////////// Linear Solver /////////////////////////
+  "com.github.vagmcs"             %% "optimus"                % "2.0.0",
+  "com.github.vagmcs"             %% "optimus-solver-oj"      % "2.0.0"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")
@@ -136,7 +140,7 @@ assemblyJarName in assembly := "Mimir.jar"
 mainClass in assembly := Some("mimir.Mimir")
 
 ////// Publishing Metadata //////
-// use `sbt publish make-pom` to generate 
+// use `sbt publish make-pom` to generate
 // a publishable jar artifact and its POM metadata
 
 publishMavenStyle := true
@@ -155,6 +159,6 @@ pomExtra := <url>http://mimirdb.info</url>
   </scm>
 
 /////// Publishing Options ////////
-// use `sbt publish` to update the package in 
+// use `sbt publish` to update the package in
 // your own local ivy cache
 publishTo := Some(Resolver.file("file",  new File(Path.userHome.absolutePath+"/.m2/repository")))
