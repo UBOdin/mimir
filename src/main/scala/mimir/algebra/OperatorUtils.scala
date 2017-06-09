@@ -248,8 +248,8 @@ object OperatorUtils extends LazyLogging {
         // Check to see if the column is a recovered annotation... if that's the case,
         // we can apply the renaming here and this operator acts like a Project.
         // Otherwise, we flow-through.
-        if(cols.exists { _._2._1.equals(name) }){
-          src.columnNames.toSet ++ cols.map { _._2._1 }.toSet
+        if(cols.exists { _.name.equals(name) }){
+          src.columnNames.toSet ++ cols.map { _.name }.toSet
         } else {
           findRenamingConflicts(name, src)
         }
@@ -346,11 +346,13 @@ object OperatorUtils extends LazyLogging {
         // Check to see if the column is a recovered annotation... if that's the case,
         // we can apply the renaming here and this operator acts like a Project.
         // Otherwise, we flow-through.
-        if(cols.exists { _._2._1.equals(target) }){
+        if(cols.exists { _.name.equals(target) }){
           Recover(src, 
-            cols.map { case old @ (proj,(col,t),annotationClass) => 
+            cols.map { case old @ AnnotateArg(col, t, expr) =>
               if(col.equals(target)){
-                (proj, (replacement, t), annotationClass)
+                // XXX: The semantics of AnnotateArg don't allow us to rename columns here... 
+                // We should settle on something that makes Recover a bit more flexible.
+                ???
               } else {
                 old
               }

@@ -180,7 +180,7 @@ object DiscalaAbadiSpec
 
       
       LoggerUtils.debug(
-        // "mimir.exec.Compiler"
+         // "mimir.exec.Compiler"
       ){
         query(baseQuery){ results =>
           val attrStrings = results.map { row => 
@@ -194,6 +194,8 @@ object DiscalaAbadiSpec
            
           attrStrings.keys must contain("QUANTITY")
           attrStrings("QUANTITY")._2 must beFalse
+
+          attrStrings("QUANTITY")._1 must contain('|')
 
           val explanation =
             explainRow(baseQuery, attrStrings("QUANTITY")._1)

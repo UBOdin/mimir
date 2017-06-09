@@ -1,6 +1,7 @@
 package mimir.sql.sqlite
 
 import mimir.algebra._
+import mimir.provenance._
 import mimir.util.JDBCUtils
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import org.geotools.referencing.datum.DefaultEllipsoid
@@ -17,6 +18,7 @@ object SQLiteCompat extends LazyLogging{
 
   def registerFunctions(conn:java.sql.Connection):Unit = {
     org.sqlite.Function.create(conn,"MIMIRCAST", MimirCast)
+    org.sqlite.Function.create(conn,"MIMIR_MAKE_ROWID", MimirMakeRowId)
     org.sqlite.Function.create(conn,"OTHERTEST", OtherTest)
     org.sqlite.Function.create(conn,"AGGTEST", AggTest)
     org.sqlite.Function.create(conn, "SQRT", Sqrt)
@@ -191,6 +193,18 @@ object Sqrt extends org.sqlite.Function with LazyLogging {
   override def xFunc(): Unit = {
     if (args != 1) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR SQRT, EXPECTED 1") }
     Math.sqrt(value_double(0))
+  }
+}
+
+object MimirMakeRowId extends org.sqlite.Function {
+
+  @Override
+  def xFunc(): Unit = { 
+    result(
+      Provenance.joinRowIds(
+        (0 until args) map { i => RowIdPrimitive(value_text(i)) }
+      ).asString
+    )
   }
 }
 

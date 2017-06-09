@@ -238,7 +238,7 @@ class Compiler(db: Database) extends LazyLogging {
         new JDBCResultIterator(
           sqlSchema,
           sql, db.backend,
-          (db.backend.rowIdType, db.backend.dateType)
+          db.backend.dateType
         )
       )
     }

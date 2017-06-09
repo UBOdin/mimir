@@ -35,18 +35,21 @@
   <logger name="mimir.lenses.BestGuessCache"                    level="WARN"/>
   <logger name="mimir.lenses.ShredderLens"                      level="WARN"/>
   <logger name="mimir.lenses.TypeInferenceLens$"                level="WARN"/>
-  <logger name="mimir.lenses.KeyRepairLens$"                    level="WARN"/>
+  <logger name="mimir.lenses.RepairKeyLens$"                    level="WARN"/>
 
   <!--+++++++++++++++++++++++  Models  ++++++++++++++++++++++++-->
   <logger name="mimir.models.ModelManager"                      level="WARN"/>
-  <logger name="mimir.models.EditDistanceMatchModel"            level="INFO"/> <!-- Slow, Use INFO to track stats -->
-  <logger name="mimir.models.TypeInferenceModel"                level="INFO"/> <!-- Slow, Use INFO to track stats -->
-  <logger name="mimir.models.WekaModel$"                        level="INFO"/> <!-- Slow, Use INFO to track stats -->
+  <logger name="mimir.models.EditDistanceMatchModel"            level="INFO"/> <!-- Use INFO to track stats -->
+  <logger name="mimir.models.TypeInferenceModel"                level="INFO"/> <!-- Use INFO to track stats -->
+  <logger name="mimir.models.WekaModel$"                        level="INFO"/> <!-- Use INFO to track stats -->
 
   <!--+++++++++++++++++++++  Optimizer  +++++++++++++++++++++++-->
   <logger name="mimir.optimizer.PropagateConditions$"           level="WARN"/>
   <logger name="mimir.optimizer.PartitionUncertainJoins$"       level="WARN"/>
   <logger name="mimir.optimizer.InlineProjections$"             level="WARN"/>
+
+  <!--+++++++++++++++++++++  Provenance  ++++++++++++++++++++++-->
+  <logger name="mimir.provenance.Provenance$"                   level="WARN"/>
 
   <!--++++++++++++++++++++++++  SQL  ++++++++++++++++++++++++++-->
   <logger name="mimir.sql.sqlite.MimirCast$"                    level="WARN"/>
@@ -61,8 +64,8 @@
   <logger name="mimir.statistics.SystemCatalog"                 level="WARN"/>
 
   <!--+++++++++++++++++++++++  Util  ++++++++++++++++++++++++++-->
-  <logger name="mimir.util.LoadCSV$"                            level="INFO"/> <!-- Slow, Use INFO to track stats -->
-  <logger name="mimir.util.NonStrictCSVParser"                  level="INFO"/> <!-- Slow, Use INFO to track stats -->
+  <logger name="mimir.util.LoadCSV$"                            level="INFO"/> <!-- Use INFO to track stats -->
+  <logger name="mimir.util.NonStrictCSVParser"                  level="INFO"/> <!-- Use INFO to track stats -->
   <logger name="mimir.util.LineReaderInputSource"               level="WARN"/>
 
   <!--+++++++++++++++++++++++  Views  +++++++++++++++++++++++++-->

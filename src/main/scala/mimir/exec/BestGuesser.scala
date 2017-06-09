@@ -8,6 +8,7 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.provenance._
 import mimir.optimizer._
+import mimir.util.ExperimentalOptions
 
 object BestGuesser
   extends LazyLogging
@@ -41,8 +42,12 @@ object BestGuesser
     // be different depending on the structure of the query.  As a 
     // result it is **critical** that this be the first step in 
     // compilation.  
-    //val provenance = Provenance.compile(oper) 
-    val provenance = { if(db.backend.isInstanceOf[mimir.sql.GProMBackend] ) Provenance.compileGProM(oper) else Provenance.compile(oper) }
+    val provenance = 
+    if(ExperimentalOptions.isEnabled("GPROM-PROVENANCE")
+        && db.backend.isInstanceOf[mimir.sql.GProMBackend])
+      { Provenance.compileGProM(oper) }
+      else { Provenance.compile(oper) }
+
     oper               = provenance._1
     val provenanceCols = provenance._2
 

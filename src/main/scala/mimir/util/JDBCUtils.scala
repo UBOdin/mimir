@@ -42,7 +42,7 @@ object JDBCUtils {
   }
 
 
-  def convertFunction(t: Type, field: Integer, rowIdType: Type = TString(), dateType: Type = TDate()): (ResultSet => PrimitiveValue) =
+  def convertFunction(t: Type, field: Integer, dateType: Type = TDate()): (ResultSet => PrimitiveValue) =
   {
     val checkNull: ((ResultSet, => PrimitiveValue) => PrimitiveValue) = {
       (r, call) => {
@@ -57,11 +57,7 @@ object JDBCUtils {
       case TFloat() =>      (r) => checkNull(r, { FloatPrimitive(r.getDouble(field)) })
       case TInt() =>        (r) => checkNull(r, { IntPrimitive(r.getLong(field)) })
       case TString() =>     (r) => checkNull(r, { StringPrimitive(r.getString(field)) })
-      case TRowId() => 
-        rowIdType match {
-          case TInt() =>    (r) => checkNull(r, { RowIdPrimitive(r.getInt(field).toString) })
-          case _ =>         (r) => checkNull(r, { RowIdPrimitive(r.getString(field)) })
-        }
+      case TRowId() =>      (r) => checkNull(r, { RowIdPrimitive(r.getString(field)) })
       case TBool() =>       (r) => checkNull(r, { BoolPrimitive(r.getInt(field) != 0) })
       case TType() =>       (r) => checkNull(r, { TypePrimitive(Type.fromString(r.getString(field))) })
       case TDate() =>
@@ -101,7 +97,7 @@ object JDBCUtils {
           case _ =>         throw new SQLException(s"Can't extract TTimestamp as $dateType")
 
         }
-      case TUser(t) => convertFunction(TypeRegistry.baseType(t), field, rowIdType)
+      case TUser(t) => convertFunction(TypeRegistry.baseType(t), field, dateType)
     }
   }
 

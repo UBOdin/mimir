@@ -587,12 +587,6 @@ class RAToSql(db: Database)
       case Not(subexp) => {
         new InverseExpression(convert(subexp, sources))
       }
-      case mimir.algebra.Function(Provenance.mergeRowIdFunction, Nil) => {
-          throw new SQLException("MIMIR_MAKE_ROWID with no arguments")
-      }
-      case mimir.algebra.Function(Provenance.mergeRowIdFunction, head :: rest) => {
-          rest.map(convert(_, sources)).foldLeft(convert(head, sources))(concat(_,_,"|"))
-      }
       case mimir.algebra.Function("CAST", body_arg :: TypePrimitive(t) :: Nil) => {
         return new CastOperation(convert(body_arg, sources), t.toString);
       }

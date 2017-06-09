@@ -93,7 +93,6 @@ object ProvenanceSpec extends Specification {
         UNION(PROJECT[D <= A, E <= E](JOIN(R(A, B, C), S(D, E))), S(D, E))
       """)
     }
-
   }
 
 }

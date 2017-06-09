@@ -12,7 +12,7 @@ class JDBCResultIterator(
   inputSchema: Seq[(String,Type)],
   query: SelectBody,
   backend: Backend,
-  rowIdAndDateType: (Type, Type)
+  dateType: (Type)
 )
   extends ResultIterator
   with LazyLogging
@@ -26,7 +26,7 @@ class JDBCResultIterator(
       zipWithIndex.
       map { case ((name, t), idx) => 
         logger.debug(s"Extracting Raw: $name (@$idx) -> $t")
-        val fn = JDBCUtils.convertFunction(t, idx+1, rowIdType = rowIdAndDateType._1, dateType = rowIdAndDateType._2)
+        val fn = JDBCUtils.convertFunction(t, idx+1, dateType = dateType)
         () => { fn(source) }
       }
 
