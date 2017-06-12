@@ -11,25 +11,26 @@ object CTPrioritizerSpec extends Specification {
 
   //val test = CTPrioritizer.optimize
 
-
-  implicit val problem = LQProblem(SolverLib.ojalgo)
+  "test" should {
+  	"pass" >> {
+  implicit val problem = MIProblem(SolverLib.ojalgo)
 
   // Data (filled randomly)
   val numI = 5
   val I = 0 until numI
   val numJ = 5
   val J = 0 until numJ
-  var q = Array.tabulate(numI)(_*0.2)
-  var w = Array.tabulate(numI)(_*0.1)
+  var q = Array.tabulate(numI)(x=>(x+1)*0.2)
+  var w = Array.tabulate(numI)(x=>(x+1)*0.1)
   var to = Array.tabulate(numI,numJ)((x,y)=>x+y)
   var r = Array.tabulate(numI,numJ)((x,y)=>0.1*x+0.2*y)
-  var c = Array.tabulate(numI,numJ)((x,y)=>x+2*y)
+  var c = Array.tabulate(numI,numJ)((x,y)=>x+1+2*y)
   var B = 50
   var T = Array.tabulate(numJ)(x => (x+2)*3)
   var M = 1000
 
   //Variables
-  val x = Array.tabulate(numI,numJ)((i,j) => MPIntVar(s"x($i,$j)", 0 to 1))
+  val x = Array.tabulate(numI,numJ)((i,j) => MPIntVar( 0 to 1))
   val y = Array.tabulate(numI)(i=>MPFloatVar(s"y$i"))
   val z = Array.tabulate(numI)(i=>MPIntVar(s"z$i", 0 to 1))
 
@@ -52,14 +53,29 @@ object CTPrioritizerSpec extends Specification {
   for ( i <- I ) {
     for ( j <- J ) {
       //if ( x(i)(j).value > 0 )
-       println ("Oracle "+(j+1)+" is assigned to UDO "+(i+1)+" "+x(i)(j).value)
+      x(i)(j).value match {
+        case Some(value) => if(value==1) println ("Oracle "+(j+1)+" is assigned to UDO "+(i+1))
+                            //else println((i,j)+" "+value)
+        case None => None
+      }
+       //println ("Oracle "+(j+1)+" is assigned to UDO "+(i+1)+" "+x(i)(j).value)
     }
   }
 
   for (i <- I) {
-    println ("Credibility of UDO "+(i+1)+" after curation: "+y(i).value)
+    y(i).value match {
+      case Some(value) => println ("Credibility of UDO "+(i+1)+" after curation: "+value)
+      case None => None
+    }
+    //println ("Credibility of UDO "+(i+1)+" after curation: "+y(i).value)
     //if ( z(i).value > 0 )
-    println ("UDO "+(i+1)+" was repaired by a Repairing Oracle "+z(i).value)
+    z(i).value match {
+      case Some(value) => if(value==1) println ("UDO "+(i+1)+" was repaired by a Repairing Oracle ")
+                          //else  println (value)
+
+      case None => None
+    }
+    //println ("UDO "+(i+1)+" was repaired by a Repairing Oracle "+z(i).value)
   }
   release()
 
@@ -100,12 +116,38 @@ object CTPrioritizerSpec extends Specification {
   */
 
 
-  "test" should {
-  	"pass" >> {
+
+
+        x.foreach(_.foreach(_.isBinary should beTrue))
         z.foreach(_.isBinary should beTrue)
         checkConstraints() should beTrue
         status should beEqualTo(ProblemStatus.OPTIMAL)
   	}
+  	/*"pass this also" >> {
+
+    implicit val lp = MIProblem(SolverLib.ojalgo)
+
+    val x = Array.tabulate(6)(j => MPIntVar(s"x$j", 0 to 1))
+    val z = 3 * x(0) + 5 * x(1) + 6 * x(2) + 9 * x(3) + 10 * x(4) + 10 * x(5)
+    minimize(z)
+    add(-2 * x(0) + 6 * x(1) - 3 * x(2) + 4 * x(3) + x(4) - 2 * x(5) >:= 2)
+    add(-5 * x(0) - 3 * x(1) + x(2) + 3 * x(3) - 2 * x(4) + x(5) >:= -2)
+    add(5 * x(0) - x(1) + 4 * x(2) -2 * x(3) + 2 * x(4) - x(5) >:= 3)
+
+    x.foreach(_.isBinary should beTrue)
+
+    start()
+
+    release()
+
+    for ( a<-x){
+      println(a.value)
+    }
+    //x.foreach(println(_.value))
+
+    status should beEqualTo(ProblemStatus.OPTIMAL)
+    lp.objectiveValue should beEqualTo(11.0)
+  }*/
   }
 
 

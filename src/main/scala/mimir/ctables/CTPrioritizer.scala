@@ -5,7 +5,7 @@ import optimus.algebra._
 
 object CTPrioritizer {
 	def optimize = {
-	implicit val problem = LQProblem(SolverLib.ojalgo)
+	implicit val problem = MIProblem(SolverLib.ojalgo)
 
 	// Data (filled randomly)
 	// val I = 5
@@ -32,7 +32,7 @@ object CTPrioritizer {
 	/*var f = J*w(0)*y(0)+J*w(1)*y(1)
 	*for ( i <- 2 to I-1 ) {
 	*	for ( j <- 0 to J-1 ) {
-	*		f+=(w(i)*y(i))	
+	*		f+=(w(i)*y(i))
 	*	}
 	*}
 	*maximize(f)
@@ -40,7 +40,7 @@ object CTPrioritizer {
 
 	maximize(sum(I,J){ (i,j) => w(i)*y(i) })
 
-	
+
 	//var temp1 = new Array[optimus.algebra.Expression](J)
 	//var temp1 = t(0)(0)*x(0)(0)+t(1)(0)*x(1)(0)
 	//var temp2 = new Array[optimus.algebra.Expression](I)
@@ -50,12 +50,12 @@ object CTPrioritizer {
 		/*for ( i <- 0 to I-1 ) {
 		*	//if( !(j==0 && i<2) ) {
 		*	temp1(j)+=t(i)(j)*x(i)(j)
-		*	//}		
+		*	//}
 		*}
 		*/
 		//add(temp1(j) <:= T(j))
 		add(sum(I)(i => t(i)(j)*x(i)(j))<:=T(j))
-		
+
 	}
 	for ( i <- I ) {
 		add(y(i) <:= q(i) + M*z(i))
@@ -80,7 +80,7 @@ object CTPrioritizer {
 	*/
 	//add(temp4 <:= B)
 	add(sum(I,J){(i,j) => c(i)(j)*x(i)(j)} <:= B)
-	
+
 
 
 	start()
@@ -89,13 +89,13 @@ object CTPrioritizer {
 		for ( j <- J ) {
 			//if ( x(i)(j).value > 0 )
 			 println ("Oracle "+(j+1)+" is assigned to UDO "+(i+1)+" "+x(i)(j).value)
-		}				
+		}
 	}
 
 	for (i <- I) {
 		println ("Credibility of UDO "+(i+1)+" after curation: "+y(i).value)
-		//if ( z(i).value > 0 ) 
-		println ("UDO "+(i+1)+" was repaired by a Repairing Oracle "+z(i).value)		
+		//if ( z(i).value > 0 )
+		println ("UDO "+(i+1)+" was repaired by a Repairing Oracle "+z(i).value)
 	}
 	//println("x = " + x.value + "y = " + y.value + "z = " + z.value)
 
