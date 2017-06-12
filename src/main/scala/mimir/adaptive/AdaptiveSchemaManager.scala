@@ -27,7 +27,7 @@ class AdaptiveSchemaManager(db: Database)
 
   def create(schema: String, mlensType: String, query: Operator, args: Seq[Expression]) = 
   {
-    val constructor = MultilensRegistry.multilenses(mlensType)
+    val constructor:Multilens = MultilensRegistry.multilenses(mlensType)
     val config = MultilensConfig(schema, query, args);
     val models = constructor.initSchema(db, config);
     

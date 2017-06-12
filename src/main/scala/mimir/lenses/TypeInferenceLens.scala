@@ -56,14 +56,6 @@ object TypeInferenceLens extends LazyLogging
       throw new ModelException("Type inference lens requires a single parameter")
     }
 
-    val model = 
-      new TypeInferenceModel(
-        name,
-        modelColumns,
-        Eval.evalFloat(args(0))
-      )
-
-
     val columnIndexes =
       modelColumns.zipWithIndex.toMap
 
@@ -77,18 +69,17 @@ object TypeInferenceLens extends LazyLogging
       ) { _.foreach { row => learn(row.tuple)  } }
     }
 
-
     // Creating the table for the repair_key function
-    val countTableName = name + "_TIBacked"
+    val countTableName = "MIMIR_TIBACKEND_" + name.toUpperCase()
     if(!db.tableExists(countTableName)) {
       var createTableStatement = s"CREATE TABLE $countTableName(columnName TEXT, typeGuess TEXT, projscore REAL, typeExplicit TEXT, score REAL);"
       try{
+//        db.requireTable(countTableName,)
         db.backend.update(createTableStatement)
       }
       catch{
         case sQLException: SQLException => println("TI backed table not created");
       }
-
     }
 
     // create the table for the key repair to operate over, I will use this model for the TI lens
@@ -113,6 +104,8 @@ object TypeInferenceLens extends LazyLogging
       })
     })
 
+    // put in as adaptive schema
+
     // create key repair model from this table and use it for the lens
 
     val RKname = countTableName + "_RK"
@@ -128,22 +121,14 @@ object TypeInferenceLens extends LazyLogging
       query.schema.map(_._1).map( col => {
         if(columnIndexes contains col){
 
-/*
-          println(VGTerm(RKmodel(0), columnIndexes(col), Seq(), Seq()))
-          println(VGTerm(RKmodel(1), columnIndexes(col), Seq(), Seq()))
-          ProjectArg(col,
-            Function("CAST", Seq(
-              Var(col),
-              VGTerm(model, columnIndexes(col), Seq(), Seq())
-            ))
-          )
-*/
           val VGGuess = VGTerm(RKmodel(0), columnIndexes(col), Seq(), Seq())
           val VGExpected = VGTerm(RKmodel(2), columnIndexes(col), Seq(), Seq())
           val VGScore = VGTerm(RKmodel(1), columnIndexes(col), Seq(), Seq())
 
           val threshold = args(0) // threshold passed in as the argument, from the lens creation
 
+          // can call key repair assemble
+          // spanning tree lens
           ProjectArg(col,
             Conditional(Not(IsNullExpression(VGExpected)),
               Function("CAST",Seq(Var(col),VGExpected)),
@@ -151,13 +136,10 @@ object TypeInferenceLens extends LazyLogging
             )
           )
 
-
         } else {
           ProjectArg(col, Var(col))
         }
       })
-
-    // println(repairs)
 
     (
       Project(repairs, query),

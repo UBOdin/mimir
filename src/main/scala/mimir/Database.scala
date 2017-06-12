@@ -417,7 +417,8 @@ case class Database(backend: Backend)
     val oper = getTableOperator(targetRaw)
     val l = List(new FloatPrimitive(.5))
 
-    lenses.create("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)
+    // Create Type Inference over the csv by default
+    adaptiveSchemas.create(targetTable.toUpperCase, "TYPE_INFERENCE", oper, l)
   }
   
   def loadTable(targetTable: String, sourceFile: String){
