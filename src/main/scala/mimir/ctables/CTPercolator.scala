@@ -149,8 +149,6 @@ object CTPercolator
    */
   def percolateLite(oper: Operator): (Operator, Map[String,Expression], Expression) =
   {
-    val schema = oper.schema;
-
     oper match {
       case Project(columns, src) => {
         val (rewrittenSrc, colDeterminism, rowDeterminism) = percolateLite(src);

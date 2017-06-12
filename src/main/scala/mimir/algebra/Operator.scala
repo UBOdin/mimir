@@ -142,6 +142,7 @@ case class Project(columns: Seq[ProjectArg], source: Operator) extends Operator
     columns.zip(x).map({ case (ProjectArg(name,_),expr) => ProjectArg(name, expr)}),
     source
   )
+  override def columnNames: Seq[String] = columns.map { _.name }
 }
 
 /* AggregateArg is a wrapper for the args argument in Aggregate case class where:
@@ -188,6 +189,8 @@ case class Aggregate(groupby: Seq[Var], aggregates: Seq[AggFunction], source: Op
         })
     Aggregate(newGroupBy, newAggregates, source)
   }
+  override def columnNames: Seq[String] = 
+    groupby.map { _.name } ++ aggregates.map { _.alias }
 }
 
 /**
@@ -204,6 +207,7 @@ case class Select(condition: Expression, source: Operator) extends Operator
   def rebuild(x: Seq[Operator]) = new Select(condition, x(0))
   def expressions = List(condition)
   def rebuildExpressions(x: Seq[Expression]) = Select(x(0), source)
+  override def columnNames: Seq[String] = source.columnNames
 }
 
 
