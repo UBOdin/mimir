@@ -22,4 +22,5 @@ case class VGTerm(
     val (a, h) = v.splitAt(args.length)
     model.bestGuess(idx, a, h)
   }
+  def isDataDependent: Boolean = args.size > 0
 }

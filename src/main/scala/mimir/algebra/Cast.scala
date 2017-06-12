@@ -16,7 +16,7 @@ object Cast
             case _:DatePrimitive => x
             case _ => TextUtils.parseDate(x.asString)
           }
-        case TTimeStamp()       => TextUtils.parseTimeStamp(x.asString)
+        case TTimestamp()       => TextUtils.parseTimeStamp(x.asString)
         case TRowId()           => RowIdPrimitive(x.asString)
         case TAny()             => x
         case TBool()            => BoolPrimitive(x.asLong != 0)

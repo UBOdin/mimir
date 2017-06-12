@@ -22,15 +22,17 @@ object SampleFunctions
         }
       },
       (types: Seq[Type]) => {
-        Typechecker.assertNumeric(types.head, 
-          Function("BEST_SAMPLE", types.map(TypePrimitive(_))))
+        val debugExpr = Function("BEST_SAMPLE", types.map(TypePrimitive(_)))
+
+        Typechecker.assertNumeric(types.head, debugExpr)
         Typechecker.escalate(
           types.tail.grouped(2).
             map { t => 
-              Typechecker.assertNumeric(t(0),
-                Function("BEST_SAMPLE", types.map(TypePrimitive(_))))
+              Typechecker.assertNumeric(t(0),debugExpr)
               t(1)
-            }
+            },
+          "BEST_SAMPLE",
+          debugExpr
         )
       }
     )

@@ -18,7 +18,7 @@ object JDBCUtils {
             java.sql.Types.NUMERIC)   => TFloat()
       case (java.sql.Types.INTEGER)  => TInt()
       case (java.sql.Types.DATE) => TDate()
-      case (java.sql.Types.TIMESTAMP)   => TTimeStamp()
+      case (java.sql.Types.TIMESTAMP)   => TTimestamp()
       case (java.sql.Types.VARCHAR |
             java.sql.Types.NULL |
             java.sql.Types.CHAR)     => TString()
@@ -31,7 +31,7 @@ object JDBCUtils {
       case TInt()       => java.sql.Types.INTEGER
       case TFloat()     => java.sql.Types.DOUBLE
       case TDate()      => java.sql.Types.DATE
-      case TTimeStamp()  => java.sql.Types.TIMESTAMP
+      case TTimestamp()  => java.sql.Types.TIMESTAMP
       case TString()    => java.sql.Types.VARCHAR
       case TRowId()     => java.sql.Types.ROWID
       case TAny()       => java.sql.Types.VARCHAR
@@ -76,7 +76,7 @@ object JDBCUtils {
             }
           case _ =>         throw new SQLException(s"Can't extract TDate as $dateType")
         }
-      case TTimeStamp() => 
+      case TTimestamp() => 
         dateType match {
           case TDate() =>   (r) => { 
               val t = r.getTimestamp(field); 

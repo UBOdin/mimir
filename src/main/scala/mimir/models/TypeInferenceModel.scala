@@ -18,7 +18,7 @@ object TypeInferenceModel
     case TInt()       => 10
     case TBool()      => 10
     case TDate()      => 10
-    case TTimeStamp() => 10
+    case TTimestamp() => 10
     case TType()      => 10
     case TFloat()     => 5
     case TString()    => 0

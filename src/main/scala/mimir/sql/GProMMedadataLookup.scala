@@ -30,7 +30,7 @@ import mimir.algebra.TRowId
 import mimir.algebra.TUser
 import mimir.algebra.TDate
 import mimir.algebra.TType
-import mimir.algebra.TTimeStamp
+import mimir.algebra.TTimestamp
 import mimir.algebra.TimestampPrimitive
 import mimir.algebra.StringPrimitive
 import mimir.algebra.BoolPrimitive
@@ -110,7 +110,7 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
         case TInt() => IntPrimitive(0)
         case TFloat() => FloatPrimitive(0.0)
         case TDate() => DatePrimitive(0,0,0)
-        case TTimeStamp() => TimestampPrimitive(0,0,0,0,0,0)
+        case TTimestamp() => TimestampPrimitive(0,0,0,0,0,0)
         case TString() => StringPrimitive("")
         case TBool() => BoolPrimitive(false)
         case TRowId() => RowIdPrimitive("1")

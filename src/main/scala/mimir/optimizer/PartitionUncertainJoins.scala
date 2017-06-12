@@ -2,9 +2,15 @@ package mimir.optimizer
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
+import mimir.ctables._
 
 object PartitionUncertainJoins extends OperatorOptimization with LazyLogging
 {
+  def containsDataDependentVGTerm(e: Expression): Boolean =
+  {
+    CTables.getVGTerms(e).exists { _.isDataDependent }
+  }
+
   def isGoodJoin(cond: Expression, lSrc: Operator, rSrc: Operator): Boolean =
   {
     val lNames = lSrc.columnNames.toSet
@@ -15,6 +21,9 @@ object PartitionUncertainJoins extends OperatorOptimization with LazyLogging
         val aCols = ExpressionUtils.getColumns(a)
         val bCols = ExpressionUtils.getColumns(b)
         return (
+             containsDataDependentVGTerm(a) 
+          || containsDataDependentVGTerm(b)
+        ) && (
           (aCols.forall { lNames(_) } && bCols.forall { rNames(_) }) 
         ||(bCols.forall { lNames(_) } && aCols.forall { rNames(_) }) 
         )

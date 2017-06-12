@@ -236,32 +236,47 @@ object Typechecker {
  		t;
  	}
 
-	def escalate(a: Type, b: Type): Type =
-		escalate(a, b, "Escalation")
+ 	def escalateLeft(a: Type, b: Type): Option[Type] =
+ 	{
+		(a,b) match {
+			case _ if a.equals(b)         => Some(a)
+			case (TUser(name),_)          => escalateLeft(TypeRegistry.baseType(name),b)
+			case (TAny(),_)               => Some(b)
+			case (_,TAny())               => Some(a)
+			case (TInt(),TFloat())        => Some(TFloat())
+			case (TDate(), TTimestamp())  => Some(TTimestamp())
+			case _                        => None
+		}
+ 	}
+
 	def escalate(a: Type, b: Type, msg: String, e: Expression): Type = 
 		escalate(a, b, msg, Some(e))
-	def escalate(a: Type, b: Type, msg: String): Type = 
-		escalate(a, b, msg, None)
 	def escalate(a: Type, b: Type, msg: String, e: Option[Expression]): Type = 
 	{
-		(a,b) match {
-			case _ if a.equals(b) => a
-			case (TUser(name),_) => escalate(TypeRegistry.baseType(name),b,msg)
-			case (_,TUser(name)) => escalate(a,TypeRegistry.baseType(name),msg)
-			case (TAny(),_) => b
-			case (_,TAny()) => a
-			case (TInt(), TInt()) => TInt()
-			case (TRowId(), TString()) => TBool()
-			case ((TInt()|TFloat()), (TInt()|TFloat())) => TFloat()
-			case _ => throw new TypeException(a, b, msg, e);
+		escalate(a, b) match {
+			case Some(t) => t
+			case None => throw new TypeException(a, b, msg, e);
+		}
+	}
+	def escalate(a: Type, b: Type): Option[Type] = 
+	{
+		escalateLeft(a, b) match {
+			case s@Some(_) => s
+			case None   => escalateLeft(b, a)
+		}
+	}
+	def escalate(a: Option[Type], b: Option[Type]): Option[Type] =
+	{
+		(a, b) match {
+			case (None,_) => b
+			case (_,None) => a
+			case (Some(at), Some(bt)) => escalate(at, bt)
 		}
 	}
 
-	def escalate(l: TraversableOnce[Type]): Type =
-		escalate(l, "Escalation")
-	def escalate(l: TraversableOnce[Type], msg: String): Type =
+	def escalate(l: TraversableOnce[Type]): Option[Type] =
 	{
-		l.fold(TAny())(escalate(_,_,msg))
+		l.map(Some(_)).fold(None)(escalate(_,_))
 	}
 	def escalate(l: TraversableOnce[Type], msg: String, e: Expression): Type =
 	{

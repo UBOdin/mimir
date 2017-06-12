@@ -178,7 +178,7 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
   */
 @SerialVersionUID(100L)
 case class TimestampPrimitive(y: Int, m: Int, d: Int, hh: Int, mm: Int, ss: Int)
-  extends PrimitiveValue(TTimeStamp())
+  extends PrimitiveValue(TTimestamp())
 {
   override def toString() = s"DATE '${asString}'"
   def asLong: Long = throw new TypeException(TDate(), TInt(), "Hard Cast");

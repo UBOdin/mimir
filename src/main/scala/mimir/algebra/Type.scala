@@ -19,7 +19,7 @@ object Type {
     case TInt() => "int"
     case TFloat() => "real"
     case TDate() => "date"
-    case TTimeStamp() => "datetime"
+    case TTimestamp() => "datetime"
     case TString() => "varchar"
     case TBool() => "bool"
     case TRowId() => "rowid"
@@ -35,7 +35,7 @@ object Type {
     case "real"    => TFloat() 
     case "num"    => TFloat()
     case "date"    => TDate()
-    case "datetime" => TTimeStamp()
+    case "datetime" => TTimestamp()
     case "varchar" => TString()
     case "nvarchar" => TString()
     case "char"    => TString()
@@ -59,7 +59,7 @@ object Type {
     case 5 => TRowId()
     case 6 => TType()
     case 7 => TAny()
-    case 8 => TTimeStamp()
+    case 8 => TTimestamp()
     case _ => {
       // 9 because this is the number of native types, if more are added then this number needs to increase
       TUser(TypeRegistry.idxType(i-9))
@@ -74,7 +74,7 @@ object Type {
     case TRowId() => 5
     case TType() => 6
     case TAny() => 7
-    case TTimeStamp() => 8
+    case TTimestamp() => 8
     case TUser(name)  => TypeRegistry.typeIdx(name.toLowerCase)+9
       // 9 because this is the number of native types, if more are added then this number needs to increase
   }
@@ -83,7 +83,7 @@ object Type {
     TInt()   -> "^(\\+|-)?([0-9]+)$".r,
     TFloat() -> "^(\\+|-)?([0-9]*(\\.[0-9]+)?)$".r,
     TDate()  -> "^[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}$".r,
-    TTimeStamp() -> "^[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}\\ \\[0-9]{2}\\:[0-9]{2}\\:[0-9]{2}".r,
+    TTimestamp() -> "^[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}\\ \\[0-9]{2}\\:[0-9]{2}\\:[0-9]{2}".r,
     TBool()  -> "^(?i:true|false)$".r
   )
   def matches(t: Type, v: String): Boolean =
@@ -117,7 +117,7 @@ case class TRowId() extends Type
 case class TType() extends Type
 case class TAny() extends Type
 case class TUser(name:String) extends Type
-case class TTimeStamp() extends Type
+case class TTimestamp() extends Type
 
 
 

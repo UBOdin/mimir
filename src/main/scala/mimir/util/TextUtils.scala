@@ -10,7 +10,7 @@ object TextUtils {
       case TInt()    => IntPrimitive(java.lang.Long.parseLong(s))
       case TFloat()  => FloatPrimitive(java.lang.Double.parseDouble(s))
       case TDate()   => parseDate(s)
-      case TTimeStamp() => parseTimeStamp(s)
+      case TTimestamp() => parseTimeStamp(s)
       case TString() => StringPrimitive(s)
       case TBool()   => 
         s.toUpperCase match {

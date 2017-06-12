@@ -126,9 +126,9 @@ object OperatorOptimizerRegressions
       val r = Table("R", "R", Seq("A" -> TString(), "B" -> TInt(), "C" -> TInt()), Seq( ("MIMIR_ROWID", Var("ROWID"), TRowId())))
 
       val problemExpr =
-        r .filter(  ( Var("MIMIR_ROWID").eq(StringPrimitive("3")) ) and ( Var("C").isNull ) )
+        r .filter(  ( Var("MIMIR_ROWID").eq(RowIdPrimitive("3")) ) and ( Var("C").isNull ) )
           .project( "A", "B", "C", "MIMIR_ROWID" )
-          .addColumn( "MIMIR_ROW_DET" -> Var("MIMIR_ROWID").neq(StringPrimitive("3")).or ( Not(Var("C").isNull) ) )
+          .addColumn( "MIMIR_ROW_DET" -> Var("MIMIR_ROWID").neq(RowIdPrimitive("3")).or ( Not(Var("C").isNull) ) )
           .limit(4)
           .project( "A", "MIMIR_ROW_DET", "MIMIR_ROWID", "B", "C" )
 
