@@ -1,4 +1,4 @@
-package mimir.exec
+package mimir.exec.mode
 
 import java.sql._
 import com.typesafe.scalalogging.slf4j.LazyLogging
@@ -8,11 +8,18 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.provenance._
 import mimir.optimizer._
+import mimir.exec._
+import mimir.exec.result._
 import mimir.util.ExperimentalOptions
 
-object BestGuesser
-  extends LazyLogging
+object BestGuess
+  extends CompileMode[ResultIterator]
+  with LazyLogging
 {
+  type MetadataT = (
+    Seq[String]                 // Provenance columns
+  )
+
   /**
    * Compile the query for best-guess-style evalaution.
    *
@@ -21,7 +28,7 @@ object BestGuesser
    *  * Taint Annotations
    *  * One result from the "Best Guess" world.
    */ 
-  def apply(db: Database, operRaw: Operator, opts: Compiler.Optimizations = Compiler.standardOptimizations): (
+  def rewriteRaw(db: Database, operRaw: Operator): (
     Operator,                   // The compiled query
     Seq[(String, Type)],        // The base schema
     Map[String, Expression],    // Column taint annotations
@@ -82,7 +89,7 @@ object BestGuesser
 
     // Clean things up a little... make the query prettier, tighter, and 
     // faster
-    oper = Compiler.optimize(oper, opts)
+    oper = Compiler.optimize(oper)
 
     logger.debug(s"OPTIMIZED: $oper")
 
@@ -92,10 +99,34 @@ object BestGuesser
     logger.debug(s"GUESSED: $oper")
 
     return (
-      oper,
+      oper, 
       outputSchema,
       colDeterminism,
       rowDeterminism,
+      provenanceCols
+    )
+  }
+
+  def rewrite(db: Database, operRaw: Operator): (Operator, Seq[String], MetadataT) =
+  {
+    val (oper, outputSchema, colDeterminism, rowDeterminism, provenanceCols) =
+      rewriteRaw(db, operRaw)
+
+    // Finally, fold the annotations back in
+    val completeOper =
+      Project(
+        operRaw.columnNames.map { name => ProjectArg(name, Var(name)) } ++
+        colDeterminism.map { case (name, expression) => ProjectArg(CTPercolator.mimirColDeterministicColumnPrefix + name, expression) } ++
+        Seq(
+          ProjectArg(CTPercolator.mimirRowDeterministicColumnName, rowDeterminism),
+          ProjectArg(Provenance.rowidColnameBase, Function(Provenance.mergeRowIdFunction, provenanceCols.map( Var(_) ) ))
+        ),// ++ provenanceCols.map(pc => ProjectArg(pc,Var(pc))),
+        oper
+      )
+
+    return (
+      completeOper, 
+      operRaw.columnNames,
       provenanceCols
     )
   }
@@ -126,4 +157,7 @@ object BestGuesser
       return fullyDeterministicOper
     }
   }
+
+  def wrap(db: Database, results: ResultIterator, query: Operator, meta: MetadataT): ResultIterator =
+    results
 }

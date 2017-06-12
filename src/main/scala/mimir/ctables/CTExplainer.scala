@@ -7,6 +7,7 @@ import mimir._
 import mimir.algebra._
 import mimir.provenance._
 import mimir.exec._
+import mimir.exec.mode._
 import mimir.util._
 import mimir.optimizer._
 import mimir.models._
@@ -322,7 +323,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 		logger.debug(s"EXPRS: $columnExprs")
 		logger.debug(s"ROW: $rowCondition")
 
-		val inlinedQuery = BestGuesser.bestGuessQuery(db, tracedQuery)
+		val inlinedQuery = BestGuess.bestGuessQuery(db, tracedQuery)
 
 		logger.debug(s"INLINE: $inlinedQuery")
 

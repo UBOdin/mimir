@@ -1,15 +1,18 @@
 package mimir.timing.vldb2017
 
+import java.util.Random
+import java.io.File
+
 import org.specs2.specification._
 import org.specs2.specification.core.Fragments
 import org.specs2.concurrent._
 import scala.concurrent.duration._
 
-import java.io.File
 
 import mimir.test.{SQLTestSpecification, PDBench, TestTimer}
 import mimir.util._
 import mimir.algebra._
+import mimir.exec.mode._
 import mimir.exec.uncertainty._
 
 abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
@@ -20,6 +23,9 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
 
   val timeout: Duration
   val useMaterialized: Boolean
+  val random = new Random(42)
+  val tupleBundle = new TupleBundle( (0 until 10).map { _ => random.nextLong })
+  val sampler     = new SampleRows( (0 until 10).map { _ => random.nextLong })
 
 
   def loadTable(tableFields:(String, String, Type, Double)) =
@@ -242,7 +248,7 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
             println(s"SAMPLE QUERY $idx:\n$queryString")
             val ((rows, backendTime), totalTime) = time {
                var x = 0
-               val backendTime = db.sampleQuery(queryString) { results =>
+               val backendTime = db.query(queryString) { results =>
                  time { results.foreach { row => (x = x + 1) } }
                }
                (x, backendTime._2)
@@ -268,30 +274,18 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
           try {
             println(s"EXPECTATION QUERY $idx: $queryString")
             val ((rows, backendTime), totalTime) = time {
-              var x = 0
-              val queryStmt = db.stmt(queryString).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-              val query = db.sql.convert(queryStmt)
-              val stats = query.schema.flatMap {
-                case (col, t) if(Type.isNumeric(t)) => Seq( 
-                  Expectation(col, col), 
-                  StdDev(col, "DEV_"+col)
-                )
-                case (col, _) => Seq(
-                  AnyValue(col, col)
-                )
-              } ++ Seq(Confidence("CONF"))
+              db.query(queryString, sampler) { results =>
 
-              val results = db.compiler.compileForStats(
-                query,
-                stats
-              )
-              val backendTime = time {
-                results.foreach { row => (x = x + 1) }
+                var x = 0
+  
+                val backendTime = time {
+                  results.foreach { row => (x = x + 1) }
+                }
+
+                (x, backendTime._2)
               }
-              results.close()
-
-              (x, backendTime._2)
             }
+
             println(s"Time:${totalTime} seconds (${backendTime} seconds reading $rows results);  <- Query $idx: \n$queryString")
             rows must be_>(0)
           } catch {
@@ -313,16 +307,13 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
           try {
             println(s"PARTITION QUERY $idx: $queryString")
             val ((rows, backendTime), totalTime) = time {
-              var x = 0
-              val queryStmt = db.stmt(queryString).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-              val query = db.sql.convert(queryStmt)
-              val results = db.compiler.compilePartition(query)
-              val backendTime = time {
-                results.foreach { row => (x = x + 1) }
+              db.query(queryString, Partition) { results =>
+                var x = 0
+                val backendTime = time {
+                  results.foreach { row => (x = x + 1) }
+                }
+                (x, backendTime._2)
               }
-              results.close()
-
-              (x, backendTime._2)
             }
             println(s"Time:${totalTime} seconds (${backendTime} seconds reading $rows results);  <- Query $idx: \n$queryString")
             rows must be_>(0)

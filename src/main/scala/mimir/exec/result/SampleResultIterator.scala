@@ -3,7 +3,7 @@ package mimir.exec.result
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir.algebra._
-import mimir.exec.{WorldBits,TupleBundler}
+import mimir.exec.mode.{WorldBits,TupleBundle}
 
 class SampleResultIterator(
   val src: ResultIterator, 

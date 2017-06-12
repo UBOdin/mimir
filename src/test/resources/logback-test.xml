@@ -24,9 +24,9 @@
 
   <!--++++++++++++++++++++++++  Exec  +++++++++++++++++++++++++-->
   <logger name="mimir.exec.Compiler"                            level="WARN"/>
-  <logger name="mimir.exec.BestGuesser"                         level="WARN"/>
-  <logger name="mimir.exec.TupleBundler"                        level="WARN"/>
-  <logger name="mimir.exec.WorldBits"                           level="WARN"/>
+  <logger name="mimir.exec.mode.BestGuess$"                     level="WARN"/>
+  <logger name="mimir.exec.mode.TupleBundle"                    level="WARN"/>
+  <logger name="mimir.exec.mode.WorldBits$"                     level="WARN"/>
   <logger name="mimir.exec.result.ProjectionResultIterator"     level="WARN"/>
   <logger name="mimir.exec.result.AggregateResultIterator"      level="WARN"/>
   <logger name="mimir.exec.result.JDBCResultIterator"           level="WARN"/>
@@ -55,6 +55,7 @@
   <logger name="mimir.sql.sqlite.MimirCast$"                    level="WARN"/>
   <logger name="mimir.sql.sqlite.BestGuessVGTerm"               level="WARN"/>
   <logger name="mimir.sql.sqlite.SampleVGTerm"                  level="WARN"/>
+  <logger name="mimir.sql.sqlite.VGTermFunctions$"              level="WARN"/>
   <logger name="mimir.sql.RAToSql"                              level="WARN"/>
   <logger name="mimir.sql.SqlToRA"                              level="WARN"/>
   <logger name="mimir.sql.JDBCBackend"                          level="WARN"/>

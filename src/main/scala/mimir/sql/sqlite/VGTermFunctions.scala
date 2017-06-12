@@ -109,6 +109,7 @@ class AcknowledgedVGTerm(db:Database)
 }
 
 object VGTermFunctions 
+  extends LazyLogging
 {
 
   def bestGuessVGTermFn = "BEST_GUESS_VGTERM"
@@ -120,19 +121,19 @@ object VGTermFunctions
     org.sqlite.Function.create(conn, bestGuessVGTermFn, new BestGuessVGTerm(db))
     FunctionRegistry.registerNative(
       bestGuessVGTermFn, 
-      (args) => { throw new SQLException("Mimir Cannot Execute VGTerm Functions Internally") },
+      (args) => { throw new RAException(s"Mimir Cannot Execute VGTerm Functions Internally: $bestGuessVGTermFn:$args") },
       (_) => TAny()
     )
     org.sqlite.Function.create(conn, sampleVGTermFn, new SampleVGTerm(db))
     FunctionRegistry.registerNative(
       sampleVGTermFn, 
-      (args) => { throw new SQLException("Mimir Cannot Execute VGTerm Functions Internally") },
+      (args) => { throw new RAException(s"Mimir Cannot Execute VGTerm Functions Internally: $sampleVGTermFn:$args") },
       (_) => TAny()
     )
     org.sqlite.Function.create(conn, acknowledgedVGTermFn, new AcknowledgedVGTerm(db))
     FunctionRegistry.registerNative(
       acknowledgedVGTermFn, 
-      (args) => { throw new SQLException("Mimir Cannot Execute VGTerm Functions Internally") },
+      (args) => { throw new RAException(s"Mimir Cannot Execute VGTerm Functions Internally: $acknowledgedVGTermFn:$args") },
       (_) => TBool()
     )
   }
@@ -140,16 +141,17 @@ object VGTermFunctions
   def specialize(e: Expression): Expression = {
     e match {
       case VGTerm(model, idx, args, hints) => 
+      logger.debug(s"Specializing: $model;$idx[${args.mkString(",")}][${hints.mkString(",")}]")
         Function(
           bestGuessVGTermFn, 
-          List(StringPrimitive(model.name), IntPrimitive(idx))++
+          Seq(StringPrimitive(model.name), IntPrimitive(idx))++
             args.map(specialize(_))++
             hints.map(specialize(_))
         )
       case VGTermSampler(model, idx, args, hints, seed) => 
         Function(
           sampleVGTermFn,
-          List(
+          Seq(
               StringPrimitive(model.name), 
               IntPrimitive(idx), 
               specialize(seed)
@@ -160,7 +162,7 @@ object VGTermFunctions
       case VGTermAcknowledged(model, idx, args) => 
         Function(
           acknowledgedVGTermFn,
-          List(
+          Seq(
               StringPrimitive(model.name), 
               IntPrimitive(idx)
             )++

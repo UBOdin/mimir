@@ -4,11 +4,12 @@ import java.sql.SQLException;
 
 import net.sf.jsqlparser.statement.select.SelectBody
 
-import mimir._;
-import mimir.algebra._;
-import mimir.provenance._;
-import mimir.ctables._;
-import mimir.exec._;
+import mimir._
+import mimir.algebra._
+import mimir.provenance._
+import mimir.ctables._
+import mimir.exec._
+import mimir.exec.mode._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.sql.JDBCBackend
 
@@ -140,12 +141,12 @@ class ViewManager(db:Database) extends LazyLogging {
     }
     val properties = apply(name)
     val (
-      query,
+      query, 
       baseSchema,
       columnTaint,
       rowTaint,
       provenance
-    ) = BestGuesser(db, properties.query)
+    ) = BestGuess.rewriteRaw(db, properties.query)
 
     val columns:Seq[String] = baseSchema.map(_._1)
     logger.debug(s"SCHEMA: $columns; $rowTaint; $columnTaint; $provenance")

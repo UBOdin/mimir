@@ -19,7 +19,6 @@ import scala.util.control.Exception.Catch
 import org.gprom.jdbc.jna.GProMNode
 import mimir.optimizer.InlineVGTerms
 import mimir.exec.Compiler
-import mimir.exec.BestGuesser
 import mimir.ctables.CTPercolator
 import mimir.provenance.Provenance
 import mimir.algebra.ProjectArg

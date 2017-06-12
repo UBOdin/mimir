@@ -86,14 +86,13 @@ object MissingKeyLens {
         })
       var keysOper : Operator = Project(projArgsKeys, query)             
       println(keysOper)
-      val resIter = db.compiler.compileForBestGuess(keysOper, List())
+
       val createKeysTableSql = s"CREATE TABLE $keysTableName(${keys.map(kt => kt._1 +" "+ kt._2.toString()).mkString(",")})"
       db.update(db.stmt(createKeysTableSql))
-      val results = new java.util.Vector[Row]()
-      while(resIter.hasNext())
-        results.add(resIter.next)
+      val results = 
+        db.query(keysOper) { _.map { _.tuple }.toIndexedSeq }
      
-      db.backend.fastUpdateBatch(s"INSERT INTO $keysTableName VALUES(${keys.map(kt => "?").mkString(",")})", Seq(results.toArray().seq.asInstanceOf[Seq[PrimitiveValue]]).iterator)
+      db.backend.fastUpdateBatch(s"INSERT INTO $keysTableName VALUES(${keys.map(kt => "?").mkString(",")})", results)
     }
     if(!allTables.contains(missingKeysTableName)){
       val lTalebName = seriesTableName

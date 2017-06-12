@@ -53,11 +53,13 @@ object SqlParserSpec
 				if(dbFile.exists()){ dbFile.delete(); }
 				dbFile.deleteOnExit();
 			}
-			val d = new Database(new JDBCBackend("sqlite",
-				if(tempDB == null){ "testdb" } else { tempDB.toString }
-			))
-		    try {
-			    d.backend.open();
+			val j = new JDBCBackend("sqlite",
+									if(tempDB == null){ "testdb" } else { tempDB.toString }
+							)
+			val d = new Database(j)
+	    try {
+		    d.backend.open();
+				j.enableInlining(d)
 				d.initializeDBForMimir();
 			} catch {
 				case e:Exception => e.printStackTrace()
@@ -501,14 +503,14 @@ object SqlParserSpec
 					Set[mimir.views.ViewAnnotation.T]()
 				)
 
-			val guessCacheData = 
-			 	db.backend.resultRows("SELECT "+
-			 		db.bestGuessCache.keyColumn(0)+","+
-			 		db.bestGuessCache.dataColumn+" FROM "+
-			 		db.bestGuessCache.cacheTableForModel(
-			 			db.models.get("SANER:WEKA:B"), 0)
-			 	)
-			guessCacheData must contain( ===(Seq[PrimitiveValue](IntPrimitive(3), IntPrimitive(2))) )
+			// val guessCacheData = 
+			//  	db.backend.resultRows("SELECT "+
+			//  		db.bestGuessCache.keyColumn(0)+","+
+			//  		db.bestGuessCache.dataColumn+" FROM "+
+			//  		db.bestGuessCache.cacheTableForModel(
+			//  			db.models.get("SANER:WEKA:B"), 0)
+			//  	)
+			// guessCacheData must contain( ===(Seq[PrimitiveValue](IntPrimitive(3), IntPrimitive(2))) )
 		 	
 			db.query(convert("SELECT * FROM SaneR")){ _.map { row =>
 				(row("A").asInt, row("B").asInt, row("C"))

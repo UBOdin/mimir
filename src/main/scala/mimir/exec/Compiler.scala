@@ -14,6 +14,7 @@ import mimir.ctables._
 import mimir.optimizer._
 import mimir.provenance._
 import mimir.exec.result._
+import mimir.exec.mode._
 import mimir.exec.uncertainty._
 import mimir.util._
 import net.sf.jsqlparser.statement.select._
@@ -24,128 +25,11 @@ class Compiler(db: Database) extends LazyLogging {
   val rnd = new Random
 
   /**
-   * Perform a full end-end compilation pass.  Return an iterator over
-   * the result set.  
+   * Perform a full end-end compilation pass producing best guess results.  
+   * Return an iterator over the result set.  
    */
-  def compileForBestGuess(rawOper: Operator, opts: Compiler.Optimizations = Compiler.standardOptimizations): ResultIterator = 
-  {
-    var oper = rawOper
-    logger.debug(s"RAW: $oper")
-    
-    // Compute the best-guess expression
-    val compiled = BestGuesser(db, oper, opts)
-    oper               = compiled._1
-    val outputSchema   = compiled._2
-    val colDeterminism = compiled._3
-    val rowDeterminism = compiled._4
-    val provenanceCols = compiled._5
-
-    logger.trace(s"GUESSED: $oper")
-
-    // Fold the annotations back in
-    oper =
-      Project(
-        rawOper.columnNames.map { name => ProjectArg(name, Var(name)) } ++
-        colDeterminism.map { case (name, expression) => ProjectArg(CTPercolator.mimirColDeterministicColumnPrefix + name, expression) } ++
-        Seq(
-          ProjectArg(CTPercolator.mimirRowDeterministicColumnName, rowDeterminism),
-          ProjectArg(Provenance.rowidColnameBase, Function(Provenance.mergeRowIdFunction, provenanceCols.map( Var(_) ) ))
-        ),// ++ provenanceCols.map(pc => ProjectArg(pc,Var(pc))),
-        oper
-      )
-
-    logger.trace(s"FULL STACK: $oper")
-
-    deploy(oper, rawOper.columnNames, opts)
-
-  }
-
-  def compileForSamples(
-    rawOper: Operator, 
-    opts: Compiler.Optimizations = Compiler.standardOptimizations, 
-    seeds: Seq[Long] = (0 until 10).map { _ => rnd.nextLong() }
-  ): SampleResultIterator =
-  {
-    var oper = rawOper
-    logger.trace(s"COMPILING FOR SAMPLES: $oper")
-    
-    oper = Compiler.optimize(oper, Seq(InlineProjections));
-    logger.trace(s"OPTIMIZED: $oper")
-
-    val bundled = TupleBundler(db, oper, seeds)
-    oper               = bundled._1
-    val nonDetColumns  = bundled._2
-    val provenanceCols = bundled._3
-
-    logger.trace(s"BUNDLED: $oper")
-
-    oper = Compiler.optimize(oper, opts)
-
-    logger.trace(s"RE-OPTIMIZED: $oper")
-
-    new SampleResultIterator(
-      deploy(oper, TupleBundler.splitColumnNames(rawOper.columnNames, nonDetColumns, seeds.length), opts),
-      rawOper.schema,
-      nonDetColumns,
-      seeds.size
-    )
-  }
-
-  def compileForStats(
-    rawOper: Operator,
-    stats: Seq[Statistic],
-    opts: Compiler.Optimizations = Compiler.standardOptimizations,
-    seeds: Seq[Long] = (0 until 10).map { _ => rnd.nextLong() }
-  ): ResultIterator =
-  {
-    var oper = rawOper
-    logger.trace(s"COMPILING FOR STATS: $oper")
-    
-    oper = Compiler.optimize(oper, Seq(InlineProjections));
-    logger.trace(s"OPTIMIZED: $oper")
-
-    val sampled = TupleSampler(db, oper, stats, seeds)
-    oper               = sampled._1
-    val provenanceCols = sampled._2
-
-    logger.trace(s"SAMPLED: $oper")
-
-    oper = Compiler.optimize(oper, opts);
-
-    logger.trace(s"RE-OPTIMIZED: $oper")
-
-    deploy(oper, oper.columnNames, opts)
-  }
-
-  def compilePartition(
-    rawOper: Operator,
-    opts: Compiler.Optimizations = Compiler.standardOptimizations
-  ): ResultIterator =
-  {
-    var oper = rawOper
-    logger.trace(s"COMPILING FOR PARTITION: $oper")
-
-    oper = StripViews(oper, onlyProbabilistic = true)
-
-    oper = Compiler.optimize(oper, Seq(InlineProjections));
-
-    oper = CTPercolatorClassic.percolate(oper)
-
-    val partitions =
-      OperatorUtils.extractUnionClauses(oper).map {
-        OperatorUtils.extractProjections(_)
-      }.map { 
-        case (proj, oper) => 
-          assert(CTables.isDeterministic(oper))
-          (proj, Compiler.optimize(oper, opts))
-      }.iterator.map { 
-        case (proj, oper) => 
-          deploy(Project(proj, oper), rawOper.columnNames, Seq())
-      }
-
-    return new UnionResultIterator(partitions)
-
-  }
+  def compile[R <:ResultIterator](query: Operator, mode: CompileMode[R]): R =
+    mode(db, query)
 
   def deploy(
     compiledOper: Operator, 
@@ -285,61 +169,6 @@ class Compiler(db: Database) extends LazyLogging {
     rowDeterminism: Expression,
     provenance: Seq[String]
   )
-  
-  /** 
-   * The body of the end-end compilation pass.  Return a marked-up version of the
-   * query.  This part should be entirely superceded by GProM.
-   */
-  /*def virtualize(rawOper: Operator, opts: List[Operator => Operator]): VirtualizedQuery =
-  {
-    // Recursively expand all view tables using mimir.optimizer.ResolveViews
-    var oper = ResolveViews(db, rawOper)
-
-    logger.debug(s"RAW: $oper")
-    
-    // We'll need the pristine pre-manipulation schema down the line
-    // As a side effect, this also forces the typechecker to run, 
-    // acting as a sanity check on the query before we do any serious
-    // work.
-    val visibleSchema = oper.schema;
-
-    // The names that the provenance compilation step assigns will
-    // be different depending on the structure of the query.  As a 
-    // result it is **critical** that this be the first step in 
-    // compilation.  
-    val provenance = Provenance.compile(oper)
-    oper               = provenance._1
-    val provenanceCols = provenance._2
-
-
-    // Tag rows/columns with provenance metadata
-    val tagging = CTPercolator.percolateLite(oper)
-    oper               = tagging._1
-    val colDeterminism = tagging._2
-    val rowDeterminism = tagging._3    
-
-    logger.debug(s"PRE-OPTIMIZED: $oper")
-
-    // Clean things up a little... make the query prettier, tighter, and 
-    // faster
-    oper = optimize(oper, opts)
-
-    logger.debug(s"OPTIMIZED: $oper")
-
-    // Replace VG-Terms with their "Best Guess values"
-    oper = bestGuessQuery(oper)
-
-    logger.debug(s"GUESSED: $oper")
-
-    VirtualizedQuery(
-      oper, 
-      visibleSchema,
-      colDeterminism,
-      rowDeterminism,
-      provenanceCols
-    )
-  }*/
-
 }
 
 object Compiler

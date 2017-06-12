@@ -9,7 +9,6 @@ import mimir.algebra._
 import mimir.ctables.VGTerm
 import mimir.ctables.VGTermAcknowledged
 import mimir.sql.sqlite.VGTermFunctions
-import mimir.exec.BestGuesser
 import mimir.provenance.Provenance
 
 object ProjectionArgVisibility extends Enumeration {

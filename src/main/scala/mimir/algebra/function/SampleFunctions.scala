@@ -1,6 +1,6 @@
 package mimir.algebra.function;
 
-import mimir.exec.{TupleBundler,WorldBits}
+import mimir.exec.mode.{TupleBundle,WorldBits}
 import mimir.algebra._
 import java.sql.SQLException
 
@@ -12,7 +12,7 @@ object SampleFunctions
 
     FunctionRegistry.registerNative("BEST_SAMPLE", 
       (args: Seq[PrimitiveValue]) => {
-        TupleBundler.mostLikelyValue(
+        TupleBundle.mostLikelyValue(
           args.head.asLong,
           args.tail.grouped(2).
             map { arg => (arg(1), arg(0).asDouble) }.toSeq
