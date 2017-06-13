@@ -132,6 +132,11 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
   	      case x :: TypePrimitive(t)    :: Nil => t
         }
       }
+      case mimir.algebra.Function("JSON_GROUP_ARRAY", args) => TString()
+      case mimir.algebra.Function("FIRST", Seq(expr)) => Typechecker.typeOf(expr,operator)  
+      case mimir.algebra.Function("DISTINCT", Seq(expr)) => Typechecker.typeOf(expr,operator)  
+      case mimir.algebra.Function("DENSE_RANK", args) => { println(args.mkString(",")); TInt() } 
+      case mimir.algebra.Function("ROW_NUMBER", args) => { println(args.mkString(",")); TInt() } 
       case expr => Typechecker.typeOf(expr,operator)  
       
      }

@@ -47,7 +47,7 @@ object MimirVizier {
     //db.backend.open()
     
     //Use GProM Backend
-    gp = new GProMBackend(conf.backend(), conf.dbname(), -1)
+    gp = new GProMBackend(conf.backend(), conf.dbname(), 1)
     db = new Database(gp)    
     db.backend.open()
     gp.metadataLookupPlugin.db = db;

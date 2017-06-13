@@ -54,7 +54,7 @@ object MimirGProM {
     ExperimentalOptions.enable(conf.experimental())
     
     // Set up the database connection(s)
-    gp = new GProMBackend(conf.backend(), conf.dbname(), -1)
+    gp = new GProMBackend(conf.backend(), conf.dbname(), 1)
     db = new Database(gp)    
     db.backend.open()
     gp.metadataLookupPlugin.db = db;
@@ -76,9 +76,18 @@ object MimirGProM {
   
   def testing() : Unit = {
     //testDebug = true
-    //runTests(30) 
-    runTests(1) 
+    //runTests(130) 
+    //runTests(1) 
     
+    val query = "SELECT * FROM LENS_PICKER2009618197"; //airbus eng err repaired data
+    //val query = "SELECT * FROM LENS_MISSING_KEY912796204"; //airbus eng err missing groups
+    val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
+    val operResults = printOperResults(oper) 
+    
+        
+    /*var query = "PROVENANCE OF (SELECT a FROM r USE PROVENANCE (ROWID))"
+    query = GProMWrapper.inst.gpromRewriteQuery(query+";")       
+    println(getQueryResults(query))*/
   }
   
   def getQueryResults(oper : mimir.algebra.Operator) : String =  {
@@ -140,58 +149,63 @@ object MimirGProM {
   def runTests(runLoops : Int) = {
     val ConsoleOutputColorMap = Map(true -> (scala.Console.GREEN + "+"), false -> (scala.Console.RED + "-"))
     for(i <- 1 to runLoops ){
-      val memctx = GProMWrapper.inst.gpromCreateMemContext() 
-      val testSeq = Seq(
-        (s"Queries for Tables - run $i", 
-            "SELECT R.A, R.B FROM R" ), 
-        (s"Queries for Aliased Tables - run $i", 
-            "SELECT S.A, S.B FROM R AS S" ), 
-        (s"Queries for Tables with Aliased Attributes - run $i", 
-            "SELECT R.A AS P, R.B AS Q FROM R"), 
-        (s"Queries for Aliased Tables with Aliased Attributes- run $i", 
-            "SELECT S.A AS P, S.B AS Q FROM R AS S"),
-        (s"Queries for Tables with Epression Attrinutes - run $i",
-            "SELECT R.A + R.B AS Z FROM R"),
-        (s"Queries for Aliased Tables with Epression Attrinutes - run $i",
-            "SELECT S.A + S.B AS Z FROM R AS S"),
-        (s"Queries for Tables with Selection - run $i", 
-            "SELECT R.A, R.B FROM R WHERE R.A = R.B" ), 
-        (s"Queries for Aliased Tables with Selection - run $i", 
-            "SELECT S.A, S.B FROM R AS S WHERE S.A = S.B" ), 
-        (s"Queries for Tables with Aliased Attributes with Selection - run $i", 
-            "SELECT R.A AS P, R.B AS Q FROM R WHERE R.A = R.B"), 
-        (s"Queries for Aliased Tables with Aliased Attributes with Selection- run $i", 
-            "SELECT S.A AS P, S.B AS Q FROM R AS S WHERE S.A = S.B"), 
-        (s"Queries for Tables with Epression Attrinutes with Selection- run $i",
-            "SELECT R.A + R.B AS Z FROM R WHERE R.A = R.B"),
-        (s"Queries for Aliased Tables with Epression Attrinutes with Selection- run $i",
-            "SELECT S.A + S.B AS Z FROM R AS S WHERE S.A = S.B"),
-        (s"Queries for Aliased Tables with Joins with Aliased Attributes - run $i", 
-            "SELECT S.A AS P, U.C AS Q FROM R AS S JOIN T AS U ON S.A = U.C"),
-        (s"Queries for Tables with Aggregates - run $i",
-            "SELECT SUM(INT_COL_B), COUNT(INT_COL_B) FROM TEST_B_RAW"),
-        (s"Queries for Aliased Tables with Aggregates - run $i",
-            "SELECT SUM(RB.INT_COL_B), COUNT(RB.INT_COL_B) FROM TEST_B_RAW RB"),
-        (s"Queries for Aliased Tables with Aggregates with Aliased Attributes - run $i",
-            "SELECT SUM(RB.INT_COL_B) AS SB, COUNT(RB.INT_COL_B) AS CB FROM TEST_B_RAW RB"),
-        (s"Queries for Aliased Tables with Aggregates with Aliased Attributes Containing Expressions - run $i",
-            "SELECT SUM(RB.INT_COL_A + RB.INT_COL_B) AS SAB, COUNT(RB.INT_COL_B) AS CB FROM TEST_B_RAW RB"),
-        (s"Queries for Aliased Tables with Aggregates with Expressions of Aggregates with Aliased Attributes Containing Expressions - run $i",
-            "SELECT SUM(RB.INT_COL_A + RB.INT_COL_B) + SUM(RB.INT_COL_A + RB.INT_COL_B) AS SAB, COUNT(RB.INT_COL_B) AS CB FROM TEST_B_RAW RB")
-        )
-        testSeq.zipWithIndex.foreach {
-        daq =>  {
-          print(ConsoleOutputColorMap(translateOperatorsFromMimirToGProM(daq._1))); println(scala.Console.BLACK + " translateOperatorsFromMimirToGProM for " + daq._1._1 + " - " + (daq._2+1) + " of " + testSeq.length)
-          print(ConsoleOutputColorMap(translateOperatorsFromGProMToMimir(daq._1))); println(scala.Console.BLACK + " translateOperatorsFromGProMToMimir for " + daq._1._1 + " - " + (daq._2+1) + " of " + testSeq.length)
-          print(ConsoleOutputColorMap(translateOperatorsFromMimirToGProMToMimir(daq._1))); println(scala.Console.BLACK + " translateOperatorsFromMimirToGProMToMimir for " + daq._1._1 + " - " + (daq._2+1) + " of " + testSeq.length)
-          print(ConsoleOutputColorMap(translateOperatorsFromGProMToMimirToGProM(daq._1))); println(scala.Console.BLACK + " translateOperatorsFromGProMToMimirToGProM for " + daq._1._1 + " - " + (daq._2+1) + " of " + testSeq.length)
-          print(ConsoleOutputColorMap(translateOperatorsFromMimirToGProMForRewriteFasterThanThroughSQL(daq._1))); println(scala.Console.BLACK + " translateOperatorsFromMimirToGProMForRewriteFasterThanThroughSQL for " + daq._1._1 + " - " + (daq._2+1) + " of " + testSeq.length)
-          //print(ConsoleOutputColorMap(mimirMemTest(daq))); println(scala.Console.BLACK + " mimirMemTest for " + daq._1 )
-          //print(ConsoleOutputColorMap(gpromMemTest(daq))); println(scala.Console.BLACK + " gpromMemTest for " + daq._1 )
-        }
-        }
-       GProMWrapper.inst.gpromFreeMemContext(memctx)
-       //scala.sys.runtime.gc()
+        
+        val testSeq = Seq(
+          (s"Queries for Tables - run $i", 
+              "SELECT R.A, R.B FROM R" ), 
+          (s"Queries for Aliased Tables - run $i", 
+              "SELECT S.A, S.B FROM R AS S" ), 
+          (s"Queries for Tables with Aliased Attributes - run $i", 
+              "SELECT R.A AS P, R.B AS Q FROM R"), 
+          (s"Queries for Aliased Tables with Aliased Attributes- run $i", 
+              "SELECT S.A AS P, S.B AS Q FROM R AS S"),
+          (s"Queries for Tables with Epression Attrinutes - run $i",
+              "SELECT R.A + R.B AS Z FROM R"),
+          (s"Queries for Aliased Tables with Epression Attrinutes - run $i",
+              "SELECT S.A + S.B AS Z FROM R AS S"),
+          (s"Queries for Tables with Selection - run $i", 
+              "SELECT R.A, R.B FROM R WHERE R.A = R.B" ), 
+          (s"Queries for Aliased Tables with Selection - run $i", 
+              "SELECT S.A, S.B FROM R AS S WHERE S.A = S.B" ), 
+          (s"Queries for Tables with Aliased Attributes with Selection - run $i", 
+              "SELECT R.A AS P, R.B AS Q FROM R WHERE R.A = R.B"), 
+          (s"Queries for Aliased Tables with Aliased Attributes with Selection- run $i", 
+              "SELECT S.A AS P, S.B AS Q FROM R AS S WHERE S.A = S.B"), 
+          (s"Queries for Tables with Epression Attrinutes with Selection- run $i",
+              "SELECT R.A + R.B AS Z FROM R WHERE R.A = R.B"),
+          (s"Queries for Aliased Tables with Epression Attrinutes with Selection- run $i",
+              "SELECT S.A + S.B AS Z FROM R AS S WHERE S.A = S.B"),
+          (s"Queries for Aliased Tables with Joins with Aliased Attributes - run $i", 
+              "SELECT S.A AS P, U.C AS Q FROM R AS S JOIN T AS U ON S.A = U.C"),
+          (s"Queries for Tables with Aggregates - run $i",
+              "SELECT SUM(INT_COL_B), COUNT(INT_COL_B) FROM TEST_B_RAW"),
+          (s"Queries for Aliased Tables with Aggregates - run $i",
+              "SELECT SUM(RB.INT_COL_B), COUNT(RB.INT_COL_B) FROM TEST_B_RAW RB"),
+          (s"Queries for Aliased Tables with Aggregates with Aliased Attributes - run $i",
+              "SELECT SUM(RB.INT_COL_B) AS SB, COUNT(RB.INT_COL_B) AS CB FROM TEST_B_RAW RB"),
+          (s"Queries for Aliased Tables with Aggregates with Aliased Attributes Containing Expressions - run $i",
+              "SELECT SUM(RB.INT_COL_A + RB.INT_COL_B) AS SAB, COUNT(RB.INT_COL_B) AS CB FROM TEST_B_RAW RB"),
+          (s"Queries for Aliased Tables with Aggregates with Expressions of Aggregates with Aliased Attributes Containing Expressions - run $i",
+              "SELECT SUM(RB.INT_COL_A + RB.INT_COL_B) + SUM(RB.INT_COL_A + RB.INT_COL_B) AS SAB, COUNT(RB.INT_COL_B) AS CB FROM TEST_B_RAW RB")
+          )
+          testSeq.zipWithIndex.foreach {
+          daq =>  {
+            org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized{
+              val memctx = GProMWrapper.inst.gpromCreateMemContext() 
+              print(ConsoleOutputColorMap(translateOperatorsFromMimirToGProM(daq._1))); println(scala.Console.BLACK + " translateOperatorsFromMimirToGProM for " + daq._1._1 + " - " + (daq._2+1) + " of " + testSeq.length)
+              print(ConsoleOutputColorMap(translateOperatorsFromGProMToMimir(daq._1))); println(scala.Console.BLACK + " translateOperatorsFromGProMToMimir for " + daq._1._1 + " - " + (daq._2+1) + " of " + testSeq.length)
+              print(ConsoleOutputColorMap(translateOperatorsFromMimirToGProMToMimir(daq._1))); println(scala.Console.BLACK + " translateOperatorsFromMimirToGProMToMimir for " + daq._1._1 + " - " + (daq._2+1) + " of " + testSeq.length)
+              print(ConsoleOutputColorMap(translateOperatorsFromGProMToMimirToGProM(daq._1))); println(scala.Console.BLACK + " translateOperatorsFromGProMToMimirToGProM for " + daq._1._1 + " - " + (daq._2+1) + " of " + testSeq.length)
+              print(ConsoleOutputColorMap(translateOperatorsFromMimirToGProMForRewriteFasterThanThroughSQL(daq._1))); println(scala.Console.BLACK + " translateOperatorsFromMimirToGProMForRewriteFasterThanThroughSQL for " + daq._1._1 + " - " + (daq._2+1) + " of " + testSeq.length)
+            //print(ConsoleOutputColorMap(mimirMemTest(daq))); println(scala.Console.BLACK + " mimirMemTest for " + daq._1 )
+            //print(ConsoleOutputColorMap(gpromMemTest(daq))); println(scala.Console.BLACK + " gpromMemTest for " + daq._1 )
+            GProMWrapper.inst.gpromFreeMemContext(memctx)
+            }
+          }
+          }
+         
+         //scala.sys.runtime.gc()
+      
      } 
   }
   
@@ -225,7 +239,7 @@ object MimirGProM {
            if(!success){
              val resQuery = GProMWrapper.inst.gpromOperatorModelToQuery(gpromNode.getPointer)
              success = getQueryResults(resQuery).equals(getQueryResults(queryStr))
-             println("-------------v-- Operators are different but the results are the same --v-------------")
+             println("\t-------------v-- Operators are different but the results are the same --v-------------")
            }
            if(!success || testDebug){
              println("-------------v Mimir Oper v-------------")
@@ -276,7 +290,7 @@ object MimirGProM {
            }
            if(!success){
              success = getQueryResults(testOper).equals(getQueryResults(queryStr))
-             println("-------------v-- Operators are different but the results are the same --v-------------")
+             println("\t-------------v-- Operators are different but the results are the same --v-------------")
            }
            if(!success || testDebug){
              println("---------v Actual GProM Oper v----------")
@@ -328,7 +342,7 @@ object MimirGProM {
            }
            if(!success){
              success = getQueryResults(testOper2).equals(getQueryResults(queryStr))
-             println("-------------v-- Operators are different but the results are the same --v-------------")
+             println("\t-------------v-- Operators are different but the results are the same --v-------------")
            }
            if(!success || testDebug){
              println("---------v Actual Mimir Oper v----------")
@@ -376,7 +390,7 @@ object MimirGProM {
            if(!success){
              val resQuery = GProMWrapper.inst.gpromOperatorModelToQuery(gpromNode2.getPointer)
              success = getQueryResults(resQuery).equals(getQueryResults(queryStr))
-             println("-------------v-- Operators are different but the results are the same --v-------------")
+             println("\t-------------v-- Operators are different but the results are the same --v-------------")
            }
            if(!success || testDebug){
              println("---------v Actual GProM Oper v----------")
