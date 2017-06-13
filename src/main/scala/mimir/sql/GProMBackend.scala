@@ -68,6 +68,10 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) e
             SQLiteCompat.registerFunctions( unwrappedConn )
             metadataLookupPlugin = new GProMMedadataLookup(c)
             GProMWrapper.inst.setupPlugins(c, metadataLookupPlugin.getPlugin) 
+            //GProMWrapper.inst.setBoolOption("pi_cs_use_composable", true)
+           // GProMWrapper.inst.setBoolOption("pi_cs_rewrite_agg_window", false)
+           // GProMWrapper.inst.setBoolOption("cost_based_optimizer", false)
+           // GProMWrapper.inst.setBoolOption("optimization.remove_unnecessary_window_operators", true)
             c
           case "oracle" =>
             Methods.getConn()
