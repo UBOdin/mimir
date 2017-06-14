@@ -1,5 +1,5 @@
 package mimir.ctables;
-
+ 
 import java.util.Random;
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
@@ -7,6 +7,7 @@ import mimir._
 import mimir.algebra._
 import mimir.provenance._
 import mimir.exec._
+import mimir.exec.mode._
 import mimir.util._
 import mimir.optimizer._
 import mimir.models._
@@ -322,7 +323,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 		logger.debug(s"EXPRS: $columnExprs")
 		logger.debug(s"ROW: $rowCondition")
 
-		val inlinedQuery = BestGuesser.bestGuessQuery(db, tracedQuery)
+		val inlinedQuery = BestGuess.bestGuessQuery(db, tracedQuery)
 
 		logger.debug(s"INLINE: $inlinedQuery")
 
@@ -384,15 +385,16 @@ class CTExplainer(db: Database) extends LazyLogging {
 						multipleReasons.head.model, 
 						multipleReasons.head.idx, 
 						if(allReasonLookups.isEmpty){ None }
-						else { Some( (
-							OperatorUtils.makeDistinct(
+						else { 
+							val jointQuery = 
 								OperatorUtils.makeUnion(
 									allReasonLookups
 								)
-							),
-							allReasonArgs.head,
-							allReasonHints.head
-						) )}
+							Some( (
+								jointQuery.distinct,
+								allReasonArgs.head,
+								allReasonHints.head
+							) ) }
 					)
 				}
 			}.toSeq
@@ -516,6 +518,13 @@ class CTExplainer(db: Database) extends LazyLogging {
 				explainSubset(lhs,wantCol,wantRow,wantSort) ++ 
 				explainSubset(rhs,wantCol,wantRow,wantSort)
 			}
+
+			case Annotate(src, _) => 
+				explainSubset(src,wantCol,wantRow,wantSort)
+
+			case ProvenanceOf(_) => ???
+
+			case Recover(_, _) => ???
 		}
 	}
 }

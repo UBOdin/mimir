@@ -11,7 +11,7 @@ import mimir.optimizer.{InlineVGTerms,InlineProjections}
 import mimir.test._
 import mimir.models._
 
-object KeyRepairSpec 
+object RepairKeySpec 
   extends SQLTestSpecification("KeyRepair", Map("cleanup" -> "YES")) 
   with BeforeAll 
 {
@@ -263,13 +263,13 @@ object KeyRepairSpec
           TimeUtils.monitor("QUERY_CLASSIC"){
             query("""
               SELECT TUPLE_ID, ACCTBAL FROM CUST_ACCTBAL_CLASSIC
-            """){ _.map { row => (row("TUPLE_ID").asLong, row("ACCTBAL").asDouble) }.toSeq }
+            """){ _.map { row => (row("TUPLE_ID").asLong, row("ACCTBAL").asDouble) }.toIndexedSeq }
           }
         val fastpath =
           TimeUtils.monitor("QUERY_FASTPATH"){
             query("""
               SELECT TUPLE_ID, ACCTBAL FROM CUST_ACCTBAL_FASTPATH
-            """){ _.map { row => (row("TUPLE_ID").asLong, row("ACCTBAL").asDouble) }.toSeq }
+            """){ _.map { row => (row("TUPLE_ID").asLong, row("ACCTBAL").asDouble) }.toIndexedSeq }
           }
         classic.size must be equalTo(150000)
         fastpath.size must be equalTo(150000)

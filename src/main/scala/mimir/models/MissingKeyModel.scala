@@ -6,7 +6,7 @@ import mimir.algebra._
 import mimir.util._
 import mimir.ctables.VGTerm
 
-/**
+/** 
  * A model representing a key-repair choice.
  * 
  * The index is ignored.
@@ -41,12 +41,9 @@ class MissingKeyModel(override val name: String, keys:Seq[String], colTypes:Seq[
     feedback.get(rowid.asString+"_"+idx) match {
       case Some(v) => v match {
           case NullPrimitive() => {
-            "You told me that the row of this cell was missing and that he value of this cell is unknown so I have made it NULL."
+            "You told me that the row of this cell was missing and that the value of this cell is unknown so I have made it NULL."
           }
-          case IntPrimitive(i) => {
-            s"You told me that this key was missing because it was in a sequence but not in the query results: $i" 
-          }
-          case FloatPrimitive(i)  => {
+          case i => {
             s"You told me that this key was missing because it was in a sequence but not in the query results: $i" 
           }
       }
@@ -54,10 +51,7 @@ class MissingKeyModel(override val name: String, keys:Seq[String], colTypes:Seq[
         case NullPrimitive() => {
           "I guessed that the row of this cell was missing. The value of this cell is unknown so I have made it NULL."
         }
-        case IntPrimitive(i) => {
-          s"I guessed that this key was missing because it was in a sequence but not in the query results: $i" 
-        }
-        case FloatPrimitive(i)  => {
+        case i => {
           s"I guessed that this key was missing because it was in a sequence but not in the query results: $i" 
         }
       }

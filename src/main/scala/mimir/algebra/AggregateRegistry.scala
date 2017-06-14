@@ -16,6 +16,7 @@ object AggregateRegistry
     registerStatistic("SUM")
     registerStatistic("MAX")
     registerStatistic("MIN")
+    registerStatistic("STDDEV")
     register("COUNT", (t) => TInt())
     register("AVG", List(TFloat()), TFloat())
     register("GROUP_AND", List(TBool()), TBool())
@@ -57,7 +58,11 @@ object AggregateRegistry
         if(t.length != argTypes.length){
           throw new RAException("Invalid arg list ["+aggName+"]: "+argTypes.mkString(", "))
         }
-        t.zip(argTypes).foreach( t => Typechecker.escalate(t._1, t._2, aggName) ); 
+        if(
+          t.zip(argTypes).exists { t => Typechecker.escalate(t._1, t._2) == None }
+        ){ 
+          throw new RAException("Invalid arg list ["+aggName+"]: "+argTypes.mkString(", "))
+        }
         retType 
       }
     )

@@ -10,9 +10,10 @@ import mimir.ctables.{VGTerm}
 import mimir.optimizer.{InlineVGTerms,InlineProjections}
 import mimir.test._
 import mimir.models._
+import mimir.exec.mode._
 import org.specs2.specification.core.Fragments
 
-object TupleBundlerSpec
+object TupleBundleSpec
   extends SQLTestSpecification("TupleBundler")
   with BeforeAll 
 {
@@ -29,9 +30,10 @@ object TupleBundlerSpec
 
   val rand = new Random(42)
   val numSamples = 10
-  val sampler = new TupleBundler(db, (0 until numSamples).map { _ => rand.nextLong })
-  val allWorlds = sampler.fullBitVector
-  val columnNames = TupleBundler.columnNames(_:String, numSamples)
+  val bundler = new TupleBundle((0 until numSamples).map { _ => rand.nextLong })
+  def compileFlat(query: Operator) = bundler.compileFlat(query)
+  val allWorlds = WorldBits.fullBitVector(numSamples)
+  val columnNames = TupleBundle.columnNames(_:String, numSamples)
 
   def conf(bv: Long): Double = WorldBits.confidence(bv, numSamples)
 
@@ -57,7 +59,7 @@ object TupleBundlerSpec
 
       val q1 = 
         // db.compiler.optimize(
-          sampler.compileFlat(select("""
+          compileFlat(select("""
             SELECT * FROM R_CLASSIC WHERE B = 2
           """))._1
         // )
@@ -71,7 +73,7 @@ object TupleBundlerSpec
 
     "Evaluate Project Queries" >> {
       val q1 =
-        sampler.compileFlat(select("""
+        compileFlat(select("""
           SELECT A, B FROM R_CLASSIC
         """))._1
 
@@ -94,7 +96,7 @@ object TupleBundlerSpec
 
     "Evaluate Select-Project Queries" >> {
       val q1 =
-        sampler.compileFlat(select("""
+        compileFlat(select("""
           SELECT A FROM R_CLASSIC WHERE B = 2
         """))._1
 
@@ -122,7 +124,7 @@ object TupleBundlerSpec
 
     "Evaluate Deterministic Aggregate Queries without Group-Bys" >> {
       val q1 = 
-        sampler.compileFlat(select("""
+        compileFlat(select("""
           SELECT SUM(A) AS A FROM R_CLASSIC
         """))._1
 
@@ -144,7 +146,7 @@ object TupleBundlerSpec
 
     "Evaluate Aggregate Queries without Group-Bys" >> {
       val q1 = 
-        sampler.compileFlat(select("""
+        compileFlat(select("""
           SELECT SUM(B) AS B FROM R_CLASSIC
         """))._1
 
@@ -172,7 +174,7 @@ object TupleBundlerSpec
 
     "Evaluate Aggregate Queries with Nondeterministic Aggregates" >> {
       val q1 = 
-        sampler.compileFlat(select("""
+        compileFlat(select("""
           SELECT A, SUM(B) AS B FROM R_CLASSIC GROUP BY A
         """))._1
 
@@ -206,7 +208,7 @@ object TupleBundlerSpec
 
     "Evaluate Aggregate Queries with Nondeterministic Group-Bys" >> {
       val q1 = 
-        sampler.compileFlat(select("""
+        compileFlat(select("""
           SELECT B, SUM(A) AS A FROM R_CLASSIC GROUP BY B
         """))._1
 
@@ -218,7 +220,7 @@ object TupleBundlerSpec
         db.query(q1){ _.map { row => 
           val bv = row("MIMIR_WORLD_BITS").asLong
           ( row("B").asInt -> (
-              TupleBundler.possibleValues(bv, columnNames("A").map { row(_) }).keySet.map { _.asInt },
+              TupleBundle.possibleValues(bv, columnNames("A").map { row(_) }).keySet.map { _.asInt },
               WorldBits.worlds(bv, numSamples)
             )
           )

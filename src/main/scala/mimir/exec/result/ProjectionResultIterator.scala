@@ -10,8 +10,7 @@ class ProjectionResultIterator(
   tupleDefinition: Seq[ProjectArg],
   annotationDefinition: Seq[ProjectArg],
   inputSchema: Seq[(String,Type)],
-  source: ResultSet,
-  rowIdAndDateType: (Type, Type)
+  source: ResultIterator
 )
   extends ResultIterator
   with LazyLogging
@@ -36,39 +35,22 @@ class ProjectionResultIterator(
   // and the result is the columnOutput, annotationOutput 
   // elements defined below.
   // 
-  private val evalScope: Map[String,(Type, Seq[PrimitiveValue] => PrimitiveValue)] =
+  private val evalScope: Map[String,(Type, Row => PrimitiveValue)] =
     inputSchema.zipWithIndex.map { 
-      case ((name, t), idx) => (name, (t, (_:Seq[PrimitiveValue])(idx))) 
+      case ((name, t), idx) => (name, (t, (_:Row)(idx))) 
     }.toMap
-  private val eval = new EvalInlined[Seq[PrimitiveValue]](evalScope)
+  private val eval = new EvalInlined[Row](evalScope)
 
-  val columnOutputs: Seq[Seq[PrimitiveValue] => PrimitiveValue] = 
+  val columnOutputs: Seq[Row => PrimitiveValue] = 
     tupleDefinition.map { _.expression }.map { eval.compile(_) }
-  val annotationOutputs: Seq[Seq[PrimitiveValue] => PrimitiveValue] = 
+  val annotationOutputs: Seq[Row => PrimitiveValue] = 
     annotationDefinition.map { _.expression }.map { eval.compile(_) }
-  val extractInputs: Seq[() => PrimitiveValue] = 
-    inputSchema.
-      zipWithIndex.
-      map { case ((name, t), idx) => 
-        logger.debug(s"Extracting Raw: $name (@$idx) -> $t")
-        val fn = JDBCUtils.convertFunction(t, idx+1, rowIdType = rowIdAndDateType._1, dateType = rowIdAndDateType._2)
-        () => { fn(source) }
-      }
   val annotationIndexes: Map[String,Int] =
     annotationDefinition.map { _.name }.zipWithIndex.toMap
 
-  var closed = false
-  def close(): Unit = {
-    closed = true;
-    source.close()
-  }
-
-  var currentRow: Option[Row] = None;
-
   val makeRow =
     if(ExperimentalOptions.isEnabled("AGGRESSIVE-ROW-COMPUTE")) {
-      () => {
-        val tuple = extractInputs.map { _() }
+      (tuple: Row) => {
         new ExplicitRow(
           columnOutputs.map(_(tuple)), 
           annotationOutputs.map(_(tuple)),
@@ -76,9 +58,9 @@ class ProjectionResultIterator(
         )
       }
     } else {
-      () => {
+      (tuple: Row) => {
         new LazyRow(
-          extractInputs.map { _() },
+          tuple,
           columnOutputs,
           annotationOutputs,
           schema,
@@ -87,37 +69,11 @@ class ProjectionResultIterator(
       }
     }
 
-  def bufferRow()
-  {
-    if(closed){
-      throw new SQLException("Attempting to read from closed iterator.  This is probably because you're trying to return an unmaterialized iterator from Database.query")
-    }
-    if(currentRow == None){
-      logger.trace("BUFFERING")
-      if(source.next){
-        currentRow = Some(makeRow())
-        logger.trace(s"READ: ${currentRow.get}")
-      } else { 
-        logger.trace("EMPTY")
-      }
-    }
-  }
-
+  def close(): Unit =
+    source.close
   def hasNext(): Boolean = 
-  {
-    bufferRow()
-    return currentRow != None
-  }
+    source.hasNext
   def next(): Row = 
-  {
-    bufferRow()
-    currentRow match {
-      case None => throw new SQLException("Trying to read past the end of an empty iterator")
-      case Some(row) => {
-        currentRow = None
-        return row
-      }
-    }
-  }
+    makeRow(source.next())
 
 }

@@ -7,11 +7,50 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import Arith.{Add, Sub, Mult, Div, And, Or, BitAnd, BitOr, ShiftLeft, ShiftRight}
 import Cmp.{Gt, Lt, Lte, Gte, Eq, Neq, Like, NotLike}
 
-class MissingVariable(varName: String, e: Throwable) extends 
-	Exception(varName, e)
+class TypecheckError(msg: String, e: Throwable, context: Option[Operator] = None)
+	extends Exception(msg, e)
+{
+	def errorTypeString =
+		getClass().getTypeName()
 
-/* what's going on with scope and Map().apply? */
-class ExpressionChecker(scope: (String => Type) = Map().apply _) extends LazyLogging {
+	override def toString =
+		context match {
+			case None => s"$errorTypeString : $msg"
+			case Some(oper) => s"$errorTypeString : $msg\n$oper"
+		}
+
+
+	override def getMessage =
+		context match {
+			case None => msg
+			case Some(oper) => s"$msg in ${oper.toString.filter { _ != '\n' }.take(200)}"
+		}
+}
+
+class MissingVariable(varName: String, e: Throwable, context: Option[Operator] = None)
+	extends TypecheckError(varName, e, context);
+
+/**
+ * ExpressionChecker wraps around a bit of context that makes
+ * recursion through Expression objects easier.  Concretely
+ * 
+ * `scope`: ... is a lookup function for the types of variables,
+ *          which the Typechecker has no way to figure out on
+ *          its own.  The easiest way to pull this off is to simply
+ *          pass a Map[String,TAny] object, as its apply() method
+ *          will do the trick, but it's handy to leave this open
+ *          to any lookup function.  The scope doesn't need to be
+ *          present for the typechecker to work, but if it isn't
+ *          then it'll fail if it hits any Var object.
+ *
+ * `context` : ... is an operator for debugging purposes.  If
+ *             any typechecker error occurs, then we'll annotate the
+ *             error with this operator.
+ */
+class ExpressionChecker(
+	scope: (String => Type) = { (_:String) => throw new RAException("Need a scope to typecheck expressions with variables") }, 
+	context: Option[Operator] = None
+) extends LazyLogging {
 	/* Assert that the expressions claimed type is its type */
 	def assert(e: Expression, t: Type, msg: String = "Typechecker"): Unit = {
 		val eType = typeOf(e);
@@ -49,7 +88,7 @@ class ExpressionChecker(scope: (String => Type) = Map().apply _) extends LazyLog
 					logger.debug(s"Type of $name is $t")
 					t
 				} catch {
-					case x:NoSuchElementException => throw new MissingVariable(name, x)
+					case x:NoSuchElementException => throw new MissingVariable(name, x, context)
 				}
 			case JDBCVar(t) => t
 			case Function("CAST", fargs) =>
@@ -101,7 +140,7 @@ object Typechecker {
 	def typecheckerFor(o: Operator): ExpressionChecker =
 	{
 		val scope = schemaOf(o).toMap;
-		new ExpressionChecker(scope(_))
+		new ExpressionChecker(scope(_), context = Some(o))
 	}
 
 	def typecheck(o: Operator): Unit =
@@ -111,18 +150,14 @@ object Typechecker {
 	{
 		o match {
 			case Project(cols, src) =>
-				val chk = new ExpressionChecker(schemaOf(src).toMap);
+				val chk = new ExpressionChecker(schemaOf(src).toMap, context = Some(src));
 				cols.map( { 
 						case ProjectArg(col, expression) =>
-							try {
-								(col, chk.typeOf(expression))
-							} catch {
-								case mv: MissingVariable => 
-									throw new RAException(s"Missing Variable: ${mv.getMessage()} (${schemaOf(src).map(_._1).mkString(", ")})", Some(o))
-							}
+							(col, chk.typeOf(expression))
 					})
 			
 			case ProvenanceOf(psel) => 
+				// Not 100% sure this is kosher... doesn't ProvenanceOf introduce new columns?
         schemaOf(psel)
       
 			case Annotate(subj,invisScm) => {
@@ -135,18 +170,13 @@ object Typechecker {
 			
       case Select(cond, src) =>
 				val srcSchema = schemaOf(src);
-				try {
-					(new ExpressionChecker(srcSchema.toMap)).assert(cond, TBool(), "SELECT")
-				} catch {
-					case mv: MissingVariable => 
-						throw new RAException(s"Missing Variable: ${mv.getMessage()} (${schemaOf(src).map(_._1).mkString(", ")})", Some(o))
-				}
+				(new ExpressionChecker(srcSchema.toMap, context = Some(src))).assert(cond, TBool(), "SELECT")
 				srcSchema
 
 			case Aggregate(groupBy, agggregates, source) =>
 				/* Get child operator schema */
 				val srcSchema = schemaOf(source)
-				val chk = new ExpressionChecker(srcSchema.toMap)
+				val chk = new ExpressionChecker(srcSchema.toMap, context = Some(source))
 
 				/* Get Group By Args and verify type */
 				val groupBySchema: Seq[(String, Type)] = groupBy.map(x => (x.toString, chk.typeOf(x)) )
@@ -200,38 +230,53 @@ object Typechecker {
 
 	def assertNumeric(t: Type, e: Expression): Type =
  	{
-		if(escalate(t, TFloat(), "Numeric") != TFloat()){
+		if(!Type.isNumeric(t)){
 			throw new TypeException(t, TFloat(), "Numeric", Some(e))
  		}
  		t;
  	}
 
-	def escalate(a: Type, b: Type): Type =
-		escalate(a, b, "Escalation")
+ 	def escalateLeft(a: Type, b: Type): Option[Type] =
+ 	{
+		(a,b) match {
+			case _ if a.equals(b)         => Some(a)
+			case (TUser(name),_)          => escalateLeft(TypeRegistry.baseType(name),b)
+			case (TAny(),_)               => Some(b)
+			case (_,TAny())               => Some(a)
+			case (TInt(),TFloat())        => Some(TFloat())
+			case (TDate(), TTimestamp())  => Some(TTimestamp())
+			case _                        => None
+		}
+ 	}
+
 	def escalate(a: Type, b: Type, msg: String, e: Expression): Type = 
 		escalate(a, b, msg, Some(e))
-	def escalate(a: Type, b: Type, msg: String): Type = 
-		escalate(a, b, msg, None)
 	def escalate(a: Type, b: Type, msg: String, e: Option[Expression]): Type = 
 	{
-		(a,b) match {
-			case _ if a.equals(b) => a
-			case (TUser(name),_) => escalate(TypeRegistry.baseType(name),b,msg)
-			case (_,TUser(name)) => escalate(a,TypeRegistry.baseType(name),msg)
-			case (TAny(),_) => b
-			case (_,TAny()) => a
-			case (TInt(), TInt()) => TInt()
-			case (TRowId(), TString()) => TBool()
-			case ((TInt()|TFloat()), (TInt()|TFloat())) => TFloat()
-			case _ => throw new TypeException(a, b, msg, e);
+		escalate(a, b) match {
+			case Some(t) => t
+			case None => throw new TypeException(a, b, msg, e);
+		}
+	}
+	def escalate(a: Type, b: Type): Option[Type] = 
+	{
+		escalateLeft(a, b) match {
+			case s@Some(_) => s
+			case None   => escalateLeft(b, a)
+		}
+	}
+	def escalate(a: Option[Type], b: Option[Type]): Option[Type] =
+	{
+		(a, b) match {
+			case (None,_) => b
+			case (_,None) => a
+			case (Some(at), Some(bt)) => escalate(at, bt)
 		}
 	}
 
-	def escalate(l: TraversableOnce[Type]): Type =
-		escalate(l, "Escalation")
-	def escalate(l: TraversableOnce[Type], msg: String): Type =
+	def escalate(l: TraversableOnce[Type]): Option[Type] =
 	{
-		l.fold(TAny())(escalate(_,_,msg))
+		l.map(Some(_)).fold(None)(escalate(_,_))
 	}
 	def escalate(l: TraversableOnce[Type], msg: String, e: Expression): Type =
 	{

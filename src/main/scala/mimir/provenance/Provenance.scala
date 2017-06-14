@@ -1,6 +1,7 @@
 package mimir.provenance
 
 import java.sql.SQLException
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir.algebra._
 import mimir.util._
@@ -10,7 +11,7 @@ import mimir.gprom.algebra.OperatorTranslation
 
 class ProvenanceError(e:String) extends Exception(e) {}
 
-object Provenance {
+object Provenance extends LazyLogging {
 
   val mergeRowIdFunction = "MIMIR_MAKE_ROWID"
   val rowidColnameBase = "MIMIR_ROWID"
@@ -33,21 +34,24 @@ object Provenance {
     }
     oper match {
       case Project(args, src) => {
-        src match {
-          case Annotate(subj,invisScm) => {
+        // src match {
+        //   case Annotate(subj,invisScm) => {
+        //     val (newSrc, rowids) = compile(src)
+        //       val newArgs =
+        //         args.map( arg =>
+        //           ProjectArg(arg.name, expandVars(arg.expression, rowids))
+        //         ).union(invisScm.map(invSchEl => ProjectArg( invSchEl.name, invSchEl.expr )))
+        //       val (newRowids, rowIDProjections) = makeRowIDProjectArgs(rowids, 0, 0)
+        //       (
+        //         Project(newArgs ++ rowIDProjections, newSrc),
+        //         newRowids
+        //       )
+        //   }
+        //   case _ => {
             val (newSrc, rowids) = compile(src)
-              val newArgs =
-                args.map( arg =>
-                  ProjectArg(arg.name, expandVars(arg.expression, rowids))
-                ).union(invisScm.map(invSchEl => ProjectArg( invSchEl.name, invSchEl.expr )))
-              val (newRowids, rowIDProjections) = makeRowIDProjectArgs(rowids, 0, 0)
-              (
-                Project(newArgs ++ rowIDProjections, newSrc),
-                newRowids
-              )
-          }
-          case _ => {
-            val (newSrc, rowids) = compile(src)
+
+            logger.trace(s"PROJECT: $rowids in \n$oper")
+
             val newArgs = 
               args.map( arg => 
                 ProjectArg(arg.name, expandVars(arg.expression, rowids))
@@ -57,8 +61,8 @@ object Provenance {
               Project(newArgs ++ rowIDProjections, newSrc),
               newRowids
             )
-          }
-        }
+          // }
+        // }
       }
 
       case Annotate(subj,invisScm) => {
@@ -86,6 +90,9 @@ object Provenance {
       case Join(lhs, rhs) => {
         val (newLhs, lhsRowids) = compile(lhs)
         val (newRhs, rhsRowids) = compile(rhs)
+
+        logger.trace(s"JOIN: $lhsRowids || $rhsRowids in\n$oper")
+
         val (newLhsRowids, lhsIdProjections) = 
           makeRowIDProjectArgs(lhsRowids, 0, 0)
         val (newRhsRowids, rhsIdProjections) = 
@@ -106,6 +113,9 @@ object Provenance {
       case Union(lhs, rhs) => {
         val (newLhs, lhsRowids) = compile(lhs)
         val (newRhs, rhsRowids) = compile(rhs)
+        
+        logger.trace(s"UNION: $lhsRowids || $rhsRowids in\n$oper")
+
         val (newRowids, lhsIdProjections) = 
           makeRowIDProjectArgs(lhsRowids, 0, rhsRowids.size)
         val (_,         rhsIdProjections) = 
@@ -113,17 +123,17 @@ object Provenance {
         val lhsProjectArgs =
           lhs.schema.map(x => ProjectArg(x._1, Var(x._1))) ++ 
             lhsIdProjections ++ 
-            List(ProjectArg(rowidColnameBase+"_branch", RowIdPrimitive("0")))
+            List(ProjectArg(rowidColnameBase+"_BRANCH", RowIdPrimitive("0")))
         val rhsProjectArgs = 
           rhs.schema.map(x => ProjectArg(x._1, Var(x._1))) ++ 
             rhsIdProjections ++ 
-            List(ProjectArg(rowidColnameBase+"_branch", RowIdPrimitive("1")))
+            List(ProjectArg(rowidColnameBase+"_BRANCH", RowIdPrimitive("1")))
         (
           Union(
             Project(lhsProjectArgs, newLhs),
             Project(rhsProjectArgs, newRhs)
           ),
-          newRowids ++ List(rowidColnameBase+"_branch")
+          newRowids ++ List(rowidColnameBase+"_BRANCH")
         )
       }
 
@@ -189,7 +199,10 @@ object Provenance {
   }
 
   def joinRowIds(rowids: Seq[PrimitiveValue]): RowIdPrimitive =
+  {
+    logger.debug(s"JOIN ROWIDS: $rowids")
     RowIdPrimitive(rowids.map(_.asString).mkString("|"))
+  }
 
   def splitRowIds(token: RowIdPrimitive): Seq[RowIdPrimitive] =
     token.asString.split("\\|").map( RowIdPrimitive(_) ).toList
@@ -231,6 +244,7 @@ object Provenance {
 
   def doFilterForToken(operator: Operator, rowIds:Map[String,PrimitiveValue]): Option[Operator] =
   {
+    logger.trace(s"doFilterForToken($rowIds) in \n$operator")
     // println(rowIds.toString+" -> "+operator)
     operator match {
       case p @ Project(args, src) =>

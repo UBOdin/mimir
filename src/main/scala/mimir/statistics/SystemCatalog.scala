@@ -18,14 +18,10 @@ class SystemCatalog(db: Database)
         },
         OperatorUtils.makeUnion(
           Seq(
-            OperatorUtils.projectInColumn(
-              "SCHEMA_NAME", StringPrimitive("BACKEND"),
-              db.backend.listTablesQuery
-            ),
-            OperatorUtils.projectInColumn(
-              "SCHEMA_NAME", StringPrimitive("MIMIR"),
-              db.views.listViewsQuery
-            )
+            db.backend.listTablesQuery
+              .addColumn( "SCHEMA_NAME" -> StringPrimitive("BACKEND") ),
+            db.views.listViewsQuery
+              .addColumn( "SCHEMA_NAME" -> StringPrimitive("MIMIR") )
           )++db.adaptiveSchemas.tableCatalogs
         )
       )
@@ -42,14 +38,10 @@ class SystemCatalog(db: Database)
         },
         OperatorUtils.makeUnion(
           Seq(
-            OperatorUtils.projectInColumn(
-              "SCHEMA_NAME", StringPrimitive("BACKEND"),
-              db.backend.listAttrsQuery
-            ),
-            OperatorUtils.projectInColumn(
-              "SCHEMA_NAME", StringPrimitive("MIMIR"),
-              db.views.listAttrsQuery
-            )
+            db.backend.listAttrsQuery
+              .addColumn( "SCHEMA_NAME" -> StringPrimitive("BACKEND") ),
+            db.views.listAttrsQuery
+              .addColumn( "SCHEMA_NAME" -> StringPrimitive("MIMIR") )
           )++db.adaptiveSchemas.attrCatalogs
         )
       )

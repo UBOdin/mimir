@@ -91,7 +91,7 @@ object ViewAnnotation
   extends Enumeration
 {
   type T = Value
-  val BEST_GUESS, TAINT, TAINT_BITS, PROVENANCE = Value
+  val BEST_GUESS, TAINT, TAINT_BITS, PROVENANCE, SAMPLES = Value
   val taintBitVectorColumn = "MIMIR_DET_BIT_VECTOR"
 }
 

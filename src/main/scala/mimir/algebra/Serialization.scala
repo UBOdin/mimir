@@ -95,6 +95,7 @@ class Serialization(db: Database) {
   }
 }
 
+@SerialVersionUID(100L)
 case class SerializableVGTerm(model: String, idx: Integer, args: Seq[Expression], hints: Seq[Expression]) extends Expression {
   override def toString() = "{{ "+model+";"+idx+"["+args.mkString(", ")+"]"+"["+hints.mkString(", ")+"] }}"
   def children: Seq[Expression] = args ++ hints

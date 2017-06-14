@@ -1,6 +1,7 @@
 package mimir.sql.sqlite
 
 import mimir.algebra._
+import mimir.provenance._
 import mimir.util.JDBCUtils
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import org.geotools.referencing.datum.DefaultEllipsoid
@@ -17,6 +18,7 @@ object SQLiteCompat extends LazyLogging{
 
   def registerFunctions(conn:java.sql.Connection):Unit = {
     org.sqlite.Function.create(conn,"MIMIRCAST", MimirCast)
+    org.sqlite.Function.create(conn,"MIMIR_MAKE_ROWID", MimirMakeRowId)
     org.sqlite.Function.create(conn,"OTHERTEST", OtherTest)
     org.sqlite.Function.create(conn,"AGGTEST", AggTest)
     org.sqlite.Function.create(conn, "SQRT", Sqrt)
@@ -194,6 +196,18 @@ object Sqrt extends org.sqlite.Function with LazyLogging {
   }
 }
 
+object MimirMakeRowId extends org.sqlite.Function {
+
+  @Override
+  def xFunc(): Unit = { 
+    result(
+      Provenance.joinRowIds(
+        (0 until args) map { i => RowIdPrimitive(value_text(i)) }
+      ).asString
+    )
+  }
+}
+
 object MimirCast extends org.sqlite.Function with LazyLogging {
 
 
@@ -223,7 +237,7 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
                  | SQLiteCompat.BLOB    => result(java.lang.Double.parseDouble(value_text(0)))
               case SQLiteCompat.NULL    => result()
             }
-          case TString() | TRowId() | TDate() | TTimeStamp() =>
+          case TString() | TRowId() | TDate() | TTimestamp() =>
             result(value_text(0))
 
           case TUser(name) =>
@@ -232,7 +246,7 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
               Type.rootType(t) match {
                 case TRowId() =>
                   result(value_text(0))
-                case TString() | TDate() | TTimeStamp() =>
+                case TString() | TDate() | TTimestamp() =>
                   val txt = value_text(0)
                   if(TypeRegistry.matches(name, txt)){
                     result(value_text(0))

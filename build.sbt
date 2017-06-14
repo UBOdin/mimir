@@ -1,5 +1,5 @@
 name := "Mimir-Core"
-version := "0.2-SNAPSHOT"
+version := "0.2"
 organization := "info.mimirdb"
 scalaVersion := "2.11.11"
 
@@ -18,12 +18,18 @@ scalacOptions ++= Seq(
 unmanagedResourceDirectories in Compile += baseDirectory.value / "lib_extra"
 unmanagedClasspath in Runtime += baseDirectory.value / "conf"
 
+fork := true
 connectInput in run := true
 outputStrategy in run := Some(StdoutOutput)
+cancelable in Global := true
+scalacOptions in Test ++= Seq("-Yrangepos")
+parallelExecution in Test := false
+testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
 
 resolvers += "MimirDB" at "http://maven.mimirdb.info/"
 resolvers += "osgeo" at "http://download.osgeo.org/webdav/geotools/"
 resolvers += "MVNRepository" at "http://mvnrepository.com/artifact/"
+resolvers ++= Seq("snapshots", "releases").map(Resolver.sonatypeRepo)
 
 libraryDependencies ++= Seq(
   ////////////////////// Command-Line Interface Utilities //////////////////////
@@ -113,88 +119,6 @@ parser := {
     case n => sys.error(s"Could not build SQL Parser: $n")
   }
 }
-
-lazy val datasets = taskKey[Unit]("Loads Datasets for Test Cases")
-datasets := {
-  // Redirect stderr to stdin
-  val logger = 
-    new ProcessLogger {
-      def buffer[T](x: => T): T = x
-      def error(x: => String) = streams.value.log.info(x)
-      def info(x: => String) = streams.value.log.info(x)
-    }
-
-  if(!new File("test/pdbench").exists()){
-    Process(List(
-      "curl", "-O", "http://odin.cse.buffalo.edu/public_data/pdbench-1g-columnar.tgz"
-    )) ! logger match {
-      case 0 => // Success
-      case n => sys.error(s"Could not download PDBench Data: $n")
-    }
-    Process(List("mkdir", "test/pdbench")) ! logger match {
-      case 0 => // Success
-      case n => sys.error(s"Could not create PDBench directory")
-    }
-    Process(List(
-      "tar", "-xvf", 
-      "pdbench-1g-columnar.tgz", 
-      "--strip-components=1", 
-      "--directory=test/pdbench"
-    )) ! logger match {
-      case 0 => // Success
-      case n => sys.error(s"Could not clean up after old SQL Parser: $n")
-    }
-    Process(List("rm", "pdbench-1g-columnar.tgz")) ! logger match {
-      case 0 => // Success
-      case n => sys.error(s"Could not create PDBench directory")
-    }
-  } else {
-    logger.info("Found `pdbench` data in test/pdbench");
-  }
-}
-
-
-lazy val mcdbdatasets = taskKey[Unit]("Loads Datasets for Test Cases")
-mcdbdatasets := {
-  val logger = streams.value.log
-  if(!new File("test/mcdb").exists()){
-    Process(List(
-      "curl", "-O", "http://odin.cse.buffalo.edu/public_data/tpch.tgz"
-    )) ! logger match {
-      case 0 => // Success
-      case n => sys.error(s"Could not download MCDB Data: $n")
-    }
-    Process(List("mkdir", "test/mcdb")) ! logger match {
-      case 0 => // Success
-      case n => sys.error(s"Could not create MCDB directory")
-    }
-    Process(List(
-      "tar", "-xvf", 
-      "tpch.tgz", 
-      "--strip-components=1", 
-      "--directory=test/mcdb"
-    )) ! logger match {
-      case 0 => // Success
-      case n => sys.error(s"Could not clean up after old SQL Parser: $n")
-    }
-    Process(List("rm", "tpch.tgz")) ! logger match {
-      case 0 => // Success
-      case n => sys.error(s"Could not create MCDB directory")
-    }
-  } else {
-    println("Found `mcdb` data in test/mcdb");
-  }
-}
-
-scalacOptions in Test ++= Seq("-Yrangepos")
-
-parallelExecution in Test := false
-
-resolvers ++= Seq("snapshots", "releases").map(Resolver.sonatypeRepo)
-
-fork := false
-
-testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
 
 ////// Assembly Plugin //////
 // We use the assembly plugin to create self-contained jar files

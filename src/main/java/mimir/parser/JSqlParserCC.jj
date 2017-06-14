@@ -54,6 +54,7 @@ PARSER_BEGIN(MimirJSqlParser)
 
 package mimir.parser;
 
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -241,6 +242,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_DISTINCT:"DISTINCT">
 |   <K_INTERSECT:"INTERSECT">
 |   <K_FEEDBACK:"FEEDBACK">
+|   <K_EXTRACT:"EXTRACT">
 }
 
 
@@ -1709,23 +1711,56 @@ Function Function():
 	ExpressionList expressionList = null;  
 }
 {
-	["{fn" { retval.setEscaped(true); } ]
-	(
-	    funcName=RelObjectName()
-    	| 
-    	// workaround for replace(string) function (name clash with mysql REPLACE expression)
-	    <K_REPLACE> { funcName = "REPLACE"; }
-    ) [ "." tmp=RelObjectName() { funcName+= "." + tmp; } ["." tmp=RelObjectName() { funcName+= "." + tmp; }]]
-    "(" [ [<K_DISTINCT> { retval.setDistinct(true); } | <K_ALL> { retval.setAllColumns(true); }] (expressionList=SimpleExpressionList() | "*" { retval.setAllColumns(true); }) ] ")"
-    
-    ["}"]
-    { 
-	    retval.setParameters(expressionList);
-	    retval.setName(funcName);
-    	return retval; 
-    }
+  (
+    ( 
+      <K_EXTRACT> "(" retval = ExtractClause() ")" { return retval; } 
+    ) | (
+    	["{fn" { retval.setEscaped(true); } ]
+    	(
+    	    funcName=RelObjectName()
+        	| 
+        	// workaround for replace(string) function (name clash with mysql REPLACE expression)
+    	    <K_REPLACE> { funcName = "REPLACE"; }
+        ) [ "." tmp=RelObjectName() { funcName+= "." + tmp; } ["." tmp=RelObjectName() { funcName+= "." + tmp; }]]
+        "(" [ [<K_DISTINCT> { retval.setDistinct(true); } | <K_ALL> { retval.setAllColumns(true); }] (expressionList=SimpleExpressionList() | "*" { retval.setAllColumns(true); }) ] ")"
+        
+        ["}"]
+        { 
+    	    retval.setParameters(expressionList);
+    	    retval.setName(funcName);
+        	return retval; 
+        }
+    )
+  )
 }
 
+Function ExtractClause():
+{
+  Function retval = new Function();
+  Expression target = null;
+  Token field = null;
+
+}
+{
+  field =  <S_IDENTIFIER>
+           <K_FROM> 
+  target = SimpleExpression()
+  {
+    switch(field.image.toUpperCase()){
+      case "YEAR": 
+      case "MONTH": 
+      case "DAY": 
+        retval.setName(field.image.toUpperCase()+"_PART");
+        break;
+      default:
+        throw new ParseException("Invalid EXTRACT: '"+field+"'");
+    }
+    ExpressionList param = new ExpressionList();
+    param.setExpressions(Arrays.asList(target));
+    retval.setParameters(param);
+    return retval;
+  }
+}
 
 
 SubSelect SubSelect():

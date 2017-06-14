@@ -299,8 +299,15 @@ class JDBCBackend(val backend: String, val filename: String)
             case _ =>
               stmt.setDate(i, JDBCUtils.convertDate(d))
           }
+        case t:TimestampPrimitive      => 
+          backend match {
+            case "sqlite" => 
+              stmt.setString(i, t.asString )
+            case _ =>
+              stmt.setTimestamp(i, JDBCUtils.convertTimestamp(t))
+          }
         case r:RowIdPrimitive     => stmt.setString(i,r.v)
-        case t:TypePrimitive      => stmt.setString(i, t.t.toString)
+        case t:TypePrimitive      => stmt.setString(i, t.t.toString) 
         case BoolPrimitive(true)  => stmt.setInt(i, 1)
         case BoolPrimitive(false) => stmt.setInt(i, 0)
       }

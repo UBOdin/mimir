@@ -1,11 +1,15 @@
 package mimir.views;
 
 import java.sql.SQLException;
-import mimir._;
-import mimir.algebra._;
-import mimir.provenance._;
-import mimir.ctables._;
-import mimir.exec._;
+
+import net.sf.jsqlparser.statement.select.SelectBody
+
+import mimir._
+import mimir.algebra._
+import mimir.provenance._
+import mimir.ctables._
+import mimir.exec._
+import mimir.exec.mode._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.sql.JDBCBackend
 
@@ -137,14 +141,15 @@ class ViewManager(db:Database) extends LazyLogging {
     }
     val properties = apply(name)
     val (
-      query,
+      query, 
       baseSchema,
       columnTaint,
       rowTaint,
       provenance
-    ) = BestGuesser(db, properties.query)
+    ) = BestGuess.rewriteRaw(db, properties.query)
 
-    val columns = baseSchema.map(_._1)
+    val columns:Seq[String] = baseSchema.map(_._1)
+    logger.debug(s"SCHEMA: $columns; $rowTaint; $columnTaint; $provenance")
 
     val completeQuery = 
       Project(
@@ -157,18 +162,18 @@ class ViewManager(db:Database) extends LazyLogging {
             )
           )
         )++
-        provenance.map { col => ProjectArg(col, Var(col)) },
+        (provenance.toSet -- columns.toSet).map { col => ProjectArg(col, Var(col)) },
         query
       )
 
     logger.debug(s"RAW: $completeQuery")
     logger.debug(s"MATERIALIZE: $name(${completeQuery.schema.mkString(",")})")
 
-    val inlinedSQL = db.compiler.sqlForBackend(completeQuery)
+    val (inlinedSQL:SelectBody, _) = db.compiler.sqlForBackend(completeQuery)
         
-    db.backend.selectInto(name, inlinedSQL.toString)
-
     logger.debug(s"QUERY: $inlinedSQL")
+
+    db.backend.selectInto(name, inlinedSQL.toString)
 
     db.backend.update(s"""
       UPDATE $viewTable SET METADATA = 1 WHERE NAME = ?

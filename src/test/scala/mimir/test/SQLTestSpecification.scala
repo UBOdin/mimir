@@ -42,17 +42,17 @@ object DBTestInstances
           // println("Exists: "+oldDBExists)
           val backend = new JDBCBackend(jdbcBackendMode, tempDBName+".db")
           val tmpDB = new Database(backend);
-          config.get("initial_db") match {
-            case None => ()
-            case Some(path) => Runtime.getRuntime().exec(s"cp $path $dbFile")
-          }
           if(shouldCleanupDB){    
             dbFile.deleteOnExit();
           }
           tmpDB.backend.open();
-          if((shouldResetDB || !oldDBExists) && !config.contains("initial_db")){
-            tmpDB.initializeDBForMimir();
+          if(shouldResetDB || !oldDBExists){
+            config.get("initial_db") match {
+              case None => ()
+              case Some(path) => Runtime.getRuntime().exec(s"cp $path $dbFile")
+            }
           }
+          tmpDB.initializeDBForMimir();
           if(shouldEnableInlining){
             backend.enableInlining(tmpDB)
           }

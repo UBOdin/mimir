@@ -41,7 +41,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
           case TString()    => val v = compileForString(e); checkNull { (t:T) => StringPrimitive(v(t)) }
           case TType()      => val v = compileForType(e);   checkNull { (t:T) => TypePrimitive(v(t))   }
           case TDate()      => checkNull { compileForDate(e) }
-          case TTimeStamp() => checkNull { compileForTimestamp(e) }
+          case TTimestamp() => checkNull { compileForTimestamp(e) }
           case TRowId()     => checkNull { compileForRowId(e) }
           case TUser(ut)    => checkNull { compile(e, TypeRegistry.baseType(ut)) }
         }
@@ -190,7 +190,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
           case (Cmp.Eq, TString(), TString())       => compileBinary(lhs, rhs, compileForString) { _.equals(_) }
           case (Cmp.Eq, TType(), TType())           => compileBinary(lhs, rhs, compileForType) { _.equals(_) }
           case (Cmp.Eq, TDate(), TDate())           => compileBinary(lhs, rhs, compileForDate) { _.equals(_) }
-          case (Cmp.Eq, TTimeStamp(), TTimeStamp()) => compileBinary(lhs, rhs, compileForTimestamp) { _.equals(_) }
+          case (Cmp.Eq, TTimestamp(), TTimestamp()) => compileBinary(lhs, rhs, compileForTimestamp) { _.equals(_) }
           case (Cmp.Eq, TRowId(), TRowId())         => compileBinary(lhs, rhs, compileForRowId) { _.equals(_) }
           case (Cmp.Eq, _, _) 
               => throw new RAException(s"Invalid comparison: $e")
@@ -211,10 +211,10 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
           case (Cmp.Gte, TDate(), TDate())          => compileBinary(lhs, rhs, compileForDate) { _ >= _ }
           case (Cmp.Lt, TDate(), TDate())           => compileBinary(lhs, rhs, compileForDate) { _ < _ }
           case (Cmp.Lte, TDate(), TDate())          => compileBinary(lhs, rhs, compileForDate) { _ <= _ }
-          case (Cmp.Gt, TTimeStamp(), TTimeStamp()) => compileBinary(lhs, rhs, compileForTimestamp) { _ > _ }
-          case (Cmp.Gte, TTimeStamp(), TTimeStamp())=> compileBinary(lhs, rhs, compileForTimestamp) { _ >= _ }
-          case (Cmp.Lt, TTimeStamp(), TTimeStamp()) => compileBinary(lhs, rhs, compileForTimestamp) { _ < _ }
-          case (Cmp.Lte, TTimeStamp(), TTimeStamp())=> compileBinary(lhs, rhs, compileForTimestamp) { _ <= _ }
+          case (Cmp.Gt, TTimestamp(), TTimestamp()) => compileBinary(lhs, rhs, compileForTimestamp) { _ > _ }
+          case (Cmp.Gte, TTimestamp(), TTimestamp())=> compileBinary(lhs, rhs, compileForTimestamp) { _ >= _ }
+          case (Cmp.Lt, TTimestamp(), TTimestamp()) => compileBinary(lhs, rhs, compileForTimestamp) { _ < _ }
+          case (Cmp.Lte, TTimestamp(), TTimestamp())=> compileBinary(lhs, rhs, compileForTimestamp) { _ <= _ }
           case (Cmp.Like, TString(), TString()) => {
             val lv = compileForString(rhs)
             rhs match {

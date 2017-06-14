@@ -140,7 +140,32 @@ object SqlUtils {
       s.asInstanceOf[SelectExpressionItem].getAlias()
     )
   }
- 
+
+  def getSchema(source: SelectBody, db: Database): List[String] =
+  {
+    source match {
+      case plainselect: PlainSelect => 
+        plainselect.getSelectItems().flatMap({
+          case sei:SelectExpressionItem =>
+            List(sei.getAlias())
+          case _:AllColumns => {
+            val fromSchemas = getSchemas(plainselect.getFromItem, db).flatMap(_._2)
+            val joinSchemas = 
+              if(plainselect.getJoins != null){
+                plainselect.getJoins.asInstanceOf[java.util.List[Join]].flatMap( (join:Join) => 
+                  getSchemas(join.getRightItem(), db).flatMap(_._2)
+                )
+              } else {
+                List()
+              }
+            fromSchemas ++ joinSchemas
+          }
+        }).toList
+      case union: net.sf.jsqlparser.statement.select.Union =>
+        getSchema(union.getPlainSelects().get(0), db)
+    }
+  } 
+
   /**
    * Extract source schemas from a FromItem
    */
@@ -148,30 +173,7 @@ object SqlUtils {
   {
     source match {
       case subselect: SubSelect =>
-        List((subselect.getAlias(), subselect.getSelectBody() match {
-          case plainselect: PlainSelect => 
-            plainselect.getSelectItems().flatMap({
-              case sei:SelectExpressionItem =>
-                List(sei.getAlias())
-              case _:AllColumns => {
-                val fromSchemas = getSchemas(plainselect.getFromItem, db).flatMap(_._2)
-                val joinSchemas = 
-                  if(plainselect.getJoins != null){
-                    plainselect.getJoins.asInstanceOf[java.util.List[Join]].flatMap( (join:Join) => 
-                      getSchemas(join.getRightItem(), db).flatMap(_._2)
-                    )
-                  } else {
-                    List()
-                  }
-                fromSchemas ++ joinSchemas
-              }
-            }).toList
-          case union: net.sf.jsqlparser.statement.select.Union =>
-            union.getPlainSelects().get(0).getSelectItems().map({
-              case sei:SelectExpressionItem =>
-                sei.getAlias()
-            }).toList
-        }))
+        List((subselect.getAlias(), getSchema(subselect.getSelectBody(), db) ))
       case table: net.sf.jsqlparser.schema.Table =>
         List(
           ( table.getAlias(), 

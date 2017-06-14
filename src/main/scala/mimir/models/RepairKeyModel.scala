@@ -16,7 +16,7 @@ import mimir.Database
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1001L)
-class KeyRepairModel(
+class RepairKeyModel(
   name: String, 
   context: String, 
   var source: Operator, 

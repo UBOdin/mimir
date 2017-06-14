@@ -8,6 +8,7 @@ import mimir.views.ViewAnnotation
  */
 sealed abstract class Operator 
   extends Serializable
+  with OperatorConstructors
 { 
   /**
    * Convert the operator into a string.  Because operators are
@@ -19,6 +20,13 @@ sealed abstract class Operator
    * The starting point for stringification is to have no indentation
    */
   override def toString() = this.toString("");
+
+  /**
+   * Return Self.
+   * 
+   * This mainly exists in support of OperatorConstructors
+   */
+  def toOperator = this
 
   /**
    * Return all of the child nodes of this operator
@@ -51,6 +59,13 @@ sealed abstract class Operator
    */
   def schema: Seq[(String, Type)] = Typechecker.schemaOf(this)
    
+
+  /**
+   * Convenience method to get an expression checker for this
+   * schema
+   */
+  def typechecker: ExpressionChecker =
+    Typechecker.typecheckerFor(this)
 
   /**
    * Convenience method to get the column names from schema
@@ -107,6 +122,7 @@ case class ProjectArg(name: String, expression: Expression)
 /**
  * Generalized relational algebra projection
  */
+@SerialVersionUID(100L)
 case class Project(columns: Seq[ProjectArg], source: Operator) extends Operator 
 {
   def toString(prefix: String) =
@@ -126,6 +142,7 @@ case class Project(columns: Seq[ProjectArg], source: Operator) extends Operator
     columns.zip(x).map({ case (ProjectArg(name,_),expr) => ProjectArg(name, expr)}),
     source
   )
+  override def columnNames: Seq[String] = columns.map { _.name }
 }
 
 /* AggregateArg is a wrapper for the args argument in Aggregate case class where:
@@ -135,6 +152,7 @@ case class Project(columns: Seq[ProjectArg], source: Operator) extends Operator
       getOperatorName returns the operator name,
       getColumnName returns the column name
 */
+@SerialVersionUID(100L)
 case class AggFunction(function: String, distinct: Boolean, args: Seq[Expression], alias: String)
   extends Serializable
 {
@@ -144,6 +162,7 @@ case class AggFunction(function: String, distinct: Boolean, args: Seq[Expression
   def getAlias() = alias.toString
 }
 
+@SerialVersionUID(100L)
 case class Aggregate(groupby: Seq[Var], aggregates: Seq[AggFunction], source: Operator) extends Operator
 {
   def toString(prefix: String) =
@@ -170,11 +189,14 @@ case class Aggregate(groupby: Seq[Var], aggregates: Seq[AggFunction], source: Op
         })
     Aggregate(newGroupBy, newAggregates, source)
   }
+  override def columnNames: Seq[String] = 
+    groupby.map { _.name } ++ aggregates.map { _.alias }
 }
 
 /**
  * Relational algebra selection
  */
+@SerialVersionUID(100L)
 case class Select(condition: Expression, source: Operator) extends Operator
 {
   def toString(prefix: String) =
@@ -185,6 +207,7 @@ case class Select(condition: Expression, source: Operator) extends Operator
   def rebuild(x: Seq[Operator]) = new Select(condition, x(0))
   def expressions = List(condition)
   def rebuildExpressions(x: Seq[Expression]) = Select(x(0), source)
+  override def columnNames: Seq[String] = source.columnNames
 }
 
 
@@ -253,6 +276,7 @@ case class ProvenanceOf(subj: Operator) extends Operator
 /**
  * Relational algebra cartesian product (I know, technically not an actual join)
  */
+@SerialVersionUID(100L)
 case class Join(left: Operator, right: Operator) extends Operator
 {
   def toString(prefix: String) =
@@ -268,6 +292,7 @@ case class Join(left: Operator, right: Operator) extends Operator
 /**
  * Relational algebra bag union
  */
+@SerialVersionUID(100L)
 case class Union(left: Operator, right: Operator) extends Operator
 {
   def toString(prefix: String) =
@@ -301,6 +326,7 @@ case class Union(left: Operator, right: Operator) extends Operator
  * will extract SQL's implicit ROWID attribute into the new column "MIMIR_ROWID" 
  * with the rowid type.
  */
+@SerialVersionUID(100L)
 case class Table(name: String, 
                  alias: String, 
                  sch: Seq[(String,Type)],
@@ -328,6 +354,7 @@ case class Table(name: String,
  * 
  * Not really used, just a placeholder for intermediate optimization.
  */
+@SerialVersionUID(100L)
 case class EmptyTable(sch: Seq[(String, Type)])
   extends Operator
 {
@@ -349,6 +376,7 @@ case class EmptyTable(sch: Seq[(String, Type)])
  *
  * (e.g., as in SELECT * FROM FOO ORDER BY bar ASC)
  */
+@SerialVersionUID(100L)
 case class SortColumn(expression: Expression, ascending:Boolean)
 {
   override def toString() = 
@@ -358,6 +386,7 @@ case class SortColumn(expression: Expression, ascending:Boolean)
  * Indicates that the source operator's output should be sorted in the
  * specified order
  */
+@SerialVersionUID(100L)
 case class Sort(sorts:Seq[SortColumn], src: Operator) extends Operator
 {
   def toString(prefix: String) =
@@ -379,6 +408,7 @@ case class Sort(sorts:Seq[SortColumn], src: Operator) extends Operator
  * Indicates that the source operator's output should be truncated
  * after the specified number of rows.
  */
+@SerialVersionUID(100L)
 case class Limit(offset: Long, count: Option[Long], src: Operator) extends Operator
 {
   def toString(prefix: String) =
@@ -398,6 +428,7 @@ case class Limit(offset: Long, count: Option[Long], src: Operator) extends Opera
 /**
  * A left outer join
  */
+@SerialVersionUID(100L)
 case class LeftOuterJoin(left: Operator, 
                          right: Operator,
                          condition: Expression)
@@ -426,6 +457,7 @@ case class LeftOuterJoin(left: Operator,
  * compilation have been applied to it, so that the system can decide whether it has
  * an appropriate materialized form of the view ready.
  */
+@SerialVersionUID(100L)
 case class View(name: String, query: Operator, annotations: Set[ViewAnnotation.T] = Set())
   extends Operator
 {

@@ -53,6 +53,7 @@ object FunctionRegistry {
     StringFunctions.register()
     TypeFunctions.register()
     UtilityFunctions.register()
+    RandomnessFunctions.register()
 	}
 
 	def registerSet(

@@ -4,9 +4,9 @@ import mimir.algebra._
 
 
 case class LazyRow(
-  input: Seq[PrimitiveValue], 
-  tupleDefinition: Seq[Seq[PrimitiveValue]=>PrimitiveValue],
-  annotationDefinition: Seq[Seq[PrimitiveValue]=>PrimitiveValue],
+  input: Row, 
+  tupleDefinition: Seq[Row=>PrimitiveValue],
+  annotationDefinition: Seq[Row=>PrimitiveValue],
   val tupleSchema: Seq[(String, Type)],
   val annotationIndexes: Map[String,Int]
 ) extends Row {

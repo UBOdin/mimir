@@ -11,14 +11,10 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
     argLookup match {
       case Some((query, argExprs, hintExprs)) => 
         db.query(
-          Aggregate(List(), List(AggFunction("COUNT", false, List(), "COUNT")), 
-            OperatorUtils.makeDistinct(
-              Project(
-                argExprs.zipWithIndex.map { arg => ProjectArg("ARG_"+arg._2, arg._1) },
-                query
-              )
-            )
-          )
+          query
+            .map( argExprs.zipWithIndex.map { arg => ("ARG_"+arg._2 -> arg._1) }:_* )
+            .distinct
+            .count( alias = "COUNT" )
         ) { _.next.tuple(0).asLong }
       case None => 
         1

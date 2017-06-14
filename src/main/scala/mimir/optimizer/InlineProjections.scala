@@ -6,7 +6,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
 import mimir.ctables._
 
-object InlineProjections extends LazyLogging {
+object InlineProjections extends OperatorOptimization with LazyLogging {
 
 	def apply(o: Operator): Operator = 
 		o.recur(apply(_)) match {
@@ -110,6 +110,10 @@ object InlineProjections extends LazyLogging {
           safeJoin
         )
       }
+
+      // Pull up projections outside of Limits
+      case Limit(offset, limit, Project(cols, src)) =>
+      	Project(cols, Limit(offset, limit, src))
 
 			// Otherwise, we might still be able to simplify the nested expressions
 			// Do a quick Eval.inline pass over them.

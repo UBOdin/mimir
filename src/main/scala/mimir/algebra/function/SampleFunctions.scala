@@ -1,23 +1,18 @@
 package mimir.algebra.function;
 
-import mimir.exec.{TupleBundler,WorldBits}
+import mimir.exec.mode.{TupleBundle,WorldBits}
 import mimir.algebra._
 import java.sql.SQLException
 
 object SampleFunctions
 {
-  val prng = new scala.util.Random()
 
   def register()
   {
-    FunctionRegistry.registerNative("RANDOM",
-      (args: Seq[PrimitiveValue]) => IntPrimitive(prng.nextLong),
-      (types: Seq[Type]) => { TInt() }
-    )
 
     FunctionRegistry.registerNative("BEST_SAMPLE", 
       (args: Seq[PrimitiveValue]) => {
-        TupleBundler.mostLikelyValue(
+        TupleBundle.mostLikelyValue(
           args.head.asLong,
           args.tail.grouped(2).
             map { arg => (arg(1), arg(0).asDouble) }.toSeq
@@ -27,15 +22,17 @@ object SampleFunctions
         }
       },
       (types: Seq[Type]) => {
-        Typechecker.assertNumeric(types.head, 
-          Function("BEST_SAMPLE", types.map(TypePrimitive(_))))
+        val debugExpr = Function("BEST_SAMPLE", types.map(TypePrimitive(_)))
+
+        Typechecker.assertNumeric(types.head, debugExpr)
         Typechecker.escalate(
           types.tail.grouped(2).
             map { t => 
-              Typechecker.assertNumeric(t(0),
-                Function("BEST_SAMPLE", types.map(TypePrimitive(_))))
+              Typechecker.assertNumeric(t(0),debugExpr)
               t(1)
-            }
+            },
+          "BEST_SAMPLE",
+          debugExpr
         )
       }
     )

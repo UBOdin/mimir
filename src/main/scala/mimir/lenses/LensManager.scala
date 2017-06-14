@@ -17,7 +17,8 @@ class LensManager(db: Database) {
     "MISSING_VALUE"     -> MissingValueLens.create _,
     "SCHEMA_MATCHING"   -> SchemaMatchingLens.create _,
     "TYPE_INFERENCE"    -> TypeInferenceLens.create _,
-    "KEY_REPAIR"        -> KeyRepairLens.create _,
+    "KEY_REPAIR"        -> RepairKeyLens.create _,
+    "REPAIR_KEY"        -> RepairKeyLens.create _,
     "COMMENT"           -> CommentLens.create _,
     "MISSING_KEY"       -> MissingKeyLens.create _,
     "PICKER"            -> PickerLens.create _

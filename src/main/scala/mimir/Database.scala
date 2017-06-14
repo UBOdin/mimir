@@ -9,6 +9,7 @@ import mimir.algebra._
 import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, RowExplanation, VGTerm}
 import mimir.models.Model
 import mimir.exec.Compiler
+import mimir.exec.mode.{CompileMode, BestGuess}
 import mimir.exec.result.{ResultIterator,SampleResultIterator,Row}
 import mimir.lenses.{LensManager, BestGuessCache}
 import mimir.parser.OperatorParser
@@ -127,9 +128,9 @@ case class Database(backend: Backend)
    * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
    * and rewrites the query to properly account for Virtual Tables.
    */
-  final def query[T](oper: Operator)(handler: ResultIterator => T): T =
+  final def query[T, R <:ResultIterator](oper: Operator, mode: CompileMode[R])(handler: R => T): T =
   {
-    val iterator = compiler.compileForBestGuess(oper)
+    val iterator = mode(this, oper)
     try {
       val ret = handler(iterator)
 
@@ -157,54 +158,37 @@ case class Database(backend: Backend)
    * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
    * optimizations and rewrites the query to properly account for Virtual Tables.
    */
+  final def query[T, R <:ResultIterator](stmt: net.sf.jsqlparser.statement.select.Select, mode: CompileMode[R])(handler: R => T): T =
+    query(sql.convert(stmt), mode)(handler)
+
+  /**
+   * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
+   * optimizations and rewrites the query to properly account for Virtual Tables.
+   */
+  final def query[T, R <:ResultIterator](stmt: String, mode: CompileMode[R])(handler: R => T): T =
+    query(select(stmt), mode)(handler)
+
+  /**
+   * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
+   * and rewrites the query to properly account for Virtual Tables.
+   */
+  final def query[T](oper: Operator)(handler: ResultIterator => T): T =
+    query(oper, BestGuess)(handler)
+
+  /**
+   * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
+   * optimizations and rewrites the query to properly account for Virtual Tables.
+   */
   final def query[T](stmt: net.sf.jsqlparser.statement.select.Select)(handler: ResultIterator => T): T = 
-  {
-    query(sql.convert(stmt))(handler)
-  }
+    query(stmt, BestGuess)(handler)
 
   /**
    * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
    * optimizations and rewrites the query to properly account for Virtual Tables.
    */
   final def query[T](stmt: String)(handler: ResultIterator => T): T = 
-  {
-    query(select(stmt))(handler)
-  }
+    query(select(stmt), BestGuess)(handler)
 
-  /**
-   * Compute the query result with samples.
-   */
-  def sampleQuery[T](oper: Operator)(handler: SampleResultIterator => T): T =
-  {
-    val iterator: SampleResultIterator = compiler.compileForSamples(oper)
-    try {
-      val ret = handler(iterator)
-
-      // See the comments on query for an explanation on the hackishness here.
-      if(ret.isInstanceOf[Iterator[_]]){
-        logger.warn("Returning a sequence from Database.sampleQuery may lead to the Scala compiler's optimizations closing the ResultIterator before it's fully drained")
-      }
-      return ret;
-    } finally {
-      iterator.close()
-    }
-  }
-
-  /**
-   * Compute the query result with samples.
-   */
-  def sampleQuery[T](stmt: net.sf.jsqlparser.statement.select.Select)(handler: SampleResultIterator => T): T =
-  {
-    sampleQuery(sql.convert(stmt))(handler)
-  }
-
-  /**
-   * Compute the query result with samples.
-   */
-  def sampleQuery[T](stmt: String)(handler: SampleResultIterator => T): T =
-  {
-    sampleQuery(select(stmt))(handler)
-  }
 
   /**
    * Make an educated guess about what the query's schema should be
@@ -334,7 +318,7 @@ case class Database(backend: Backend)
 
         val model = models.get(name) 
         model.feedback(idx, args, v)
-        models.update(model)
+        models.persist(model)
         if(!backend.canHandleVGTerms){
           bestGuessCache.update(model, idx, args, v)
         }

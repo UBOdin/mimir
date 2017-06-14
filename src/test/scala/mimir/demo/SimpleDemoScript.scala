@@ -54,6 +54,7 @@ object SimpleDemoScript
 				_.map { _(0) }.toSeq must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
 			}
 			query("SELECT * FROM RATINGS2;") { _.toSeq must have size(3) }
+			query("SELECT PID FROM RATINGS2;") { _.map { _(0) } must contain((_:PrimitiveValue).isInstanceOf[StringPrimitive]).forall }
 		}
 
 
@@ -259,26 +260,30 @@ object SimpleDemoScript
 		}
 
 		"Query a Join of a Union of Lenses" >> {
-			query("""
-				SELECT p.name, r.rating FROM (
-					SELECT * FROM RATINGS1FINAL
-						UNION ALL
-					SELECT * FROM RATINGS2FINAL
-				) r, Product p
-				WHERE r.pid = p.id;
-			"""){ result =>
-				val result0 = result.toSeq.map { _(0).asString } 
-				result0 must have size(6)
-				result0 must contain(
-					"Apple 6s, White",
-					"Sony to inches",
-					"Apple 5s, Black",
-					"Samsung Note2",
-					"Dell, Intel 4 core",
-					"HP, AMD 2 core"
-				)
+			LoggerUtils.debug(
+				// "mimir.exec.Compiler"
+			) {
+				query("""
+					SELECT p.name, r.rating FROM (
+						SELECT * FROM RATINGS1FINAL
+							UNION ALL
+						SELECT * FROM RATINGS2FINAL
+					) r, Product p
+					WHERE r.pid = p.id;
+				"""){ result =>
+					val result0 = result.toSeq.map { _(0).asString } 
+					result0 must have size(6)
+					result0 must contain(
+						"Apple 6s, White",
+						"Sony to inches",
+						"Apple 5s, Black",
+						"Samsung Note2",
+						"Dell, Intel 4 core",
+						"HP, AMD 2 core"
+					)
+				}
 			}
-
+			
 			val result0tokens = query("""
 				SELECT p.name, r.rating FROM (
 					SELECT * FROM RATINGS1FINAL

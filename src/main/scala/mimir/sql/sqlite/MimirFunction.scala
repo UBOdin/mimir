@@ -38,6 +38,8 @@ abstract class MimirFunction extends org.sqlite.Function
       case BoolPrimitive(true)  => result(1)
       case BoolPrimitive(false) => result(0)
       case RowIdPrimitive(r)    => result(r)
+      case t:TimestampPrimitive => result(t.asString)
+      case TypePrimitive(t)     => result(Type.toString(t))
       case NullPrimitive()      => result()
     }
   }
