@@ -1036,10 +1036,10 @@ object OperatorTranslation {
 			  list
 			}
 			case Annotate(subj,invisScm) => {
-        list
+        throw new Exception("Operator Translation not implemented '"+mimirOperator+"'")
       }
 			case Recover(subj,invisScm) => {
-        list
+        throw new Exception("Operator Translation not implemented '"+mimirOperator+"'")
       }
 			
 			case Aggregate(groupBy, agggregates, source) => {
@@ -1089,6 +1089,36 @@ object OperatorTranslation {
 			  list
 			}
 			case LeftOuterJoin(lhs, rhs, condition) => {
+			  val leftList = mimirOperatorToGProMList(lhs)
+			  val rightList = mimirOperatorToGProMList(rhs)
+			  val schTable = joinIntermSchemas(getSchemaForGProM(lhs), getSchemaForGProM(rhs), 1, false)
+        val toQoScm = translateMimirSchemaToGProMSchema("JOIN", schTable)
+			  val joinInputsList = joinGProMLists(leftList, rightList) 
+        val gqo = new GProMQueryOperator.ByValue(GProM_JNA.GProMNodeTag.GProM_T_JoinOperator, joinInputsList, toQoScm, null, null, null)
+			  val gpcond = translateMimirExpressionToGProMCondition(condition, schTable) 
+        val gpnbr = new GProMNode.ByReference(gpcond.getPointer)
+			  val gpjoinop = new GProMJoinOperator.ByValue(gqo, GProM_JNA.GProMJoinType.GProM_JOIN_LEFT_OUTER, gpnbr)
+			  setGProMQueryOperatorParentsList(leftList,gpjoinop)
+			  setGProMQueryOperatorParentsList(rightList,gpjoinop)
+			  list.head = createGProMListCell(gpjoinop) 
+			  list.length += 1; 
+			  list
+			}
+			case Join(lhs, rhs) => {
+			  mimirOperatorToGProMList(Select(BoolPrimitive(true), mimirOperator))
+			}
+			case Union(lhs, rhs) => {
+			  val leftList = mimirOperatorToGProMList(lhs)
+			  val rightList = mimirOperatorToGProMList(rhs)
+			  val schTable = joinIntermSchemas(getSchemaForGProM(lhs), getSchemaForGProM(rhs), 1, false)
+        val toQoScm = translateMimirSchemaToGProMSchema("UNION", schTable)
+			  val unionInputsList = joinGProMLists(leftList, rightList) 
+        val gqo = new GProMQueryOperator.ByValue(GProM_JNA.GProMNodeTag.GProM_T_SetOperator, unionInputsList, toQoScm, null, null, null)
+			  val gpjoinop = new GProMSetOperator.ByValue(gqo, GProM_JNA.GProMSetOpType.GProM_SETOP_UNION)
+			  setGProMQueryOperatorParentsList(leftList,gpjoinop)
+			  setGProMQueryOperatorParentsList(rightList,gpjoinop)
+			  list.head = createGProMListCell(gpjoinop) 
+			  list.length += 1; 
 			  list
 			}
 			case Limit(offset, limit, query) => {
@@ -1114,6 +1144,22 @@ object OperatorTranslation {
 			}
 			case View(name, query, meta) => {
 			  mimirOperatorToGProMList(query)
+			}
+			case EmptyTable(sch)=> {
+			   throw new Exception("Operator Translation not implemented '"+mimirOperator+"'")
+			}
+			case Sort(sortCols, src) => {
+			  val schTable = getSchemaForGProM(mimirOperator)
+        val toQoScm = translateMimirSchemaToGProMSchema("ORDER", schTable)
+        val gqoInputs = mimirOperatorToGProMList(src)
+  			val gqo = new GProMQueryOperator.ByValue(GProM_JNA.GProMNodeTag.GProM_T_OrderOperator, gqoInputs, toQoScm, null, null, null) 
+        val gporderexprs = translateMimirSortColumnsToGProMList(schTable, sortCols) 
+        val gpnbr = new GProMNode.ByReference(gporderexprs.getPointer)
+			  val gpselop = new GProMSelectionOperator.ByValue(gqo, gpnbr )
+			  setGProMQueryOperatorParentsList(gqoInputs,gpselop)
+			  list.head = createGProMListCell(gpselop) 
+			  list.length += 1; 
+			  list
 			}
 		}
     }
@@ -1296,6 +1342,12 @@ object OperatorTranslation {
       }
       case DatePrimitive(y,m,d) => {
         val dtStr = ""+y+"-"+m+"-"+d
+        val strPtr = new Memory(dtStr.length()+1)
+        strPtr.setString(0, dtStr);
+        (GProM_JNA.GProMDataType.GProM_DT_STRING,strPtr,0)
+      }
+      case TimestampPrimitive(y,m,d, h, mm, s) => {
+        val dtStr = s"$y-$m-$d $h:$mm:$s"
         val strPtr = new Memory(dtStr.length()+1)
         strPtr.setString(0, dtStr);
         (GProM_JNA.GProMDataType.GProM_DT_STRING,strPtr,0)
@@ -1607,6 +1659,31 @@ object OperatorTranslation {
     projExprList
   }
   
+  def translateMimirSortColumnsToGProMList(schema : Seq[MimirToGProMIntermediateSchemaInfo], cols : Seq[SortColumn]) : GProMList.ByReference = {
+    var listCell : GProMListCell.ByReference = null
+    var lastListCell : GProMListCell.ByReference = null
+    var listTail : GProMListCell.ByReference = null
+    var i = 0;
+    for(sortCol : SortColumn <- cols.reverse){
+      val exprGprom = translateMimirExpressionToGProMCondition(sortCol.expression, schema)
+      val orderExpr = new GProMOrderExpr( GProM_JNA.GProMNodeTag.GProM_T_OrderExpr, new GProMNode.ByReference(exprGprom.getPointer), {if(sortCol.ascending) 0; else 1; }, 0 )
+      val dataUnion = new GProMListCell.data_union.ByValue(orderExpr.getPointer)
+      listCell = new GProMListCell.ByReference()
+      if(i==0)
+        listTail
+      listCell.data = dataUnion
+      listCell.next = lastListCell
+      lastListCell = listCell;
+      i+=1
+    }
+    val orderExprList = new GProMList.ByReference();
+    orderExprList.`type` = GProM_JNA.GProMNodeTag.GProM_T_List
+    orderExprList.length = cols.length
+    orderExprList.head = listCell
+    orderExprList.tail = listTail
+    orderExprList
+  }
+  
   def translateMimirGroupByToGProMList(schema : Seq[MimirToGProMIntermediateSchemaInfo], groupBy : Seq[Var]) : GProMList.ByReference = {
     if(groupBy.isEmpty)
       null
@@ -1840,6 +1917,7 @@ object OperatorTranslation {
             None
         }))
       }
+      case x => throw new Exception("Recover Op required, not: "+x.toString())
     }
   }
   
@@ -1848,6 +1926,7 @@ object OperatorTranslation {
       case Recover(subj,invisScm) => {
         Recover(subj, Seq())
       }
+      case x => throw new Exception("Recover Op required, not: "+x.toString())
     }
   }
   
@@ -1856,6 +1935,7 @@ object OperatorTranslation {
      case Recover(subj,invisScm) => {
        (annotationsAndRecoveryToProjections(oper), invisScm.map(ise => ise.name))
      }
+     case x => throw new Exception("Recover Op required, not: "+x.toString())
     }
   }
   
