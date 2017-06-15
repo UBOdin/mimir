@@ -11,7 +11,7 @@ import mimir.algebra._
 import mimir.plot.Plot
 import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
 import net.sf.jsqlparser.statement.Statement
-import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody} 
+import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody}
 import net.sf.jsqlparser.statement.drop.Drop
 import org.jline.terminal.{Terminal,TerminalBuilder}
 import org.slf4j.{LoggerFactory}
@@ -27,11 +27,11 @@ import scala.collection.JavaConverters._
  * - Parsing and processing command line arguments.
  * - Initializing internal state (Database())
  * - Providing a command-line prompt (if appropriate)
- * - Invoking MimirJSqlParser and dispatching the 
+ * - Invoking MimirJSqlParser and dispatching the
  *   resulting statements to Database()
  *
  * Database() handles all of the logical dispatching,
- * Mimir provides a friendly command-line user 
+ * Mimir provides a friendly command-line user
  * interface on top of Database()
  */
 object Mimir extends LazyLogging {
@@ -41,7 +41,7 @@ object Mimir extends LazyLogging {
   lazy val terminal: Terminal = TerminalBuilder.terminal()
   var output: OutputFormat = DefaultOutputFormat
 
-  def main(args: Array[String]) = 
+  def main(args: Array[String]) =
   {
     conf = new MimirConfig(args);
 
@@ -63,7 +63,7 @@ object Mimir extends LazyLogging {
     } else {
       var source: Reader = null;
 
-      conf.precache.foreach( (opt) => opt.split(",").foreach( (table) => { 
+      conf.precache.foreach( (opt) => opt.split(",").foreach( (table) => {
         output.print(s"Precaching... $table")
         db.models.prefetchForOwner(table.toUpperCase)
       }))
@@ -126,7 +126,7 @@ object Mimir extends LazyLogging {
           e.printStackTrace()
 
           // The parser pops the input stream back onto the queue, so
-          // the next call to Statement() will throw the same exact 
+          // the next call to Statement() will throw the same exact
           // Exception.  To prevent this from happening, reset the parser:
           parser = new MimirJSqlParser(source);
         }
@@ -134,20 +134,20 @@ object Mimir extends LazyLogging {
     } while(!done)
   }
 
-  def handleSelect(sel: Select): Unit = 
+  def handleSelect(sel: Select): Unit =
   {
     val raw = db.sql.convert(sel)
     handleQuery(raw)
   }
 
-  def handleQuery(raw:Operator) = 
+  def handleQuery(raw:Operator) =
   {
     TimeUtils.monitor("QUERY", output.print(_)) {
       db.query(raw) { output.print(_) }
     }
   }
 
-  def handleExplain(explain: Explain): Unit = 
+  def handleExplain(explain: Explain): Unit =
   {
     val raw = db.sql.convert(explain.getSelectBody())
     output.print("------ Raw Query ------")
@@ -179,23 +179,24 @@ object Mimir extends LazyLogging {
         val count = reasonSet.size(db);
         val reasons = reasonSet.take(db, 5);
         printReasons(reasons);
+        CTPrioritizer.prioritize(reasons);
         if(count > reasons.size){
           output.print(s"... and ${count - reasons.size} more like the last")
         }
       }
     } else {
       val token = RowIdPrimitive(db.sql.convert(rowId).asString)
-      if(column == null){ 
+      if(column == null){
         output.print("==== Explain Row ====")
-        val explanation = 
+        val explanation =
           db.explainer.explainRow(query, token)
         printReasons(explanation.reasons)
         output.print("--------")
         output.print("Row Probability: "+explanation.probability)
-      } else { 
+      } else {
       output.print("==== Explain Cell ====")
-        val explanation = 
-          db.explainer.explainCell(query, token, column) 
+        val explanation =
+          db.explainer.explainCell(query, token, column)
         printReasons(explanation.reasons)
         output.print("--------")
         output.print("Examples: "+explanation.examples.map(_.toString).mkString(", "))
@@ -206,7 +207,7 @@ object Mimir extends LazyLogging {
   def printReasons(reasons: Iterable[Reason])
   {
     for(reason <- reasons.toSeq.sortBy( r => if(r.confirmed){ 1 } else { 0 } )){
-      val argString = 
+      val argString =
         if(!reason.args.isEmpty){
           " (" + reason.args.mkString(",") + ")"
         } else { "" }
@@ -221,28 +222,28 @@ object Mimir extends LazyLogging {
     }
   }
 
-  def handlePragma(pragma: Pragma): Unit = 
+  def handlePragma(pragma: Pragma): Unit =
   {
     db.sql.convert(pragma.getExpression, (x:String) => x) match {
 
-      case Function("SHOW", Seq(Var("TABLES"))) => 
+      case Function("SHOW", Seq(Var("TABLES"))) =>
         for(table <- db.getAllTables()){ output.print(table.toUpperCase); }
       case Function("SHOW", Seq(Var(name))) => 
         db.tableSchema(name) match {
           case None => 
             output.print(s"'$name' is not a table")
-          case Some(schema) => 
+          case Some(schema) =>
             output.print("CREATE TABLE "+name+" (\n"+
               schema.map { col => "  "+col._1+" "+col._2 }.mkString(",\n")
             +"\n);")
         }
-      case Function("SHOW", _) => 
+      case Function("SHOW", _) =>
         output.print("Syntax: SHOW(TABLES) | SHOW(tableName)")
 
-      case Function("LOG", Seq(StringPrimitive(loggerName))) => 
+      case Function("LOG", Seq(StringPrimitive(loggerName))) =>
         setLogLevel(loggerName)
 
-      case Function("LOG", Seq(StringPrimitive(loggerName), Var(level))) => 
+      case Function("LOG", Seq(StringPrimitive(loggerName), Var(level))) =>
         setLogLevel(loggerName, level.toUpperCase match {
           case "TRACE" => Level.TRACE
           case "DEBUG" => Level.DEBUG
@@ -253,7 +254,21 @@ object Mimir extends LazyLogging {
         })
       case Function("LOG", _) =>
         output.print("Syntax: LOG('logger') | LOG('logger', TRACE|DEBUG|INFO|WARN|ERROR)");
-        
+
+      case Function("PLOT", args) =>
+        val table = args(0).asInstanceOf[Var].name
+        val x = args(1).asInstanceOf[Var].name
+        val y = args.tail.tail.map { _.asInstanceOf[Var].name }
+        db.query(
+          Project(
+            Seq(ProjectArg(x, Var(x))) ++ y.map { c => ProjectArg(c, Var(c)) } ,
+            db.getTableOperator(table)
+          )
+        ) { result =>
+          Plot.plot(result, table, x, y, output)
+        }
+
+
     }
 
   }
@@ -261,7 +276,7 @@ object Mimir extends LazyLogging {
   def setLogLevel(loggerName: String, level: Level = Level.DEBUG)
   {
     LoggerFactory.getLogger(loggerName) match {
-      case logger: Logger => 
+      case logger: Logger =>
         logger.setLevel(level)
         output.print(s"$loggerName <- $level")
       case _ => throw new SQLException(s"Invalid Logger: '$loggerName'")
@@ -286,7 +301,7 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   val backend = opt[String]("driver", descr = "Which backend database to use? ([sqlite],oracle)",
     default = Some("sqlite"))
   val precache = opt[String]("precache", descr = "Precache one or more lenses")
-  val rebuildBestGuess = opt[String]("rebuild-bestguess")  
+  val rebuildBestGuess = opt[String]("rebuild-bestguess")
   val quiet  = toggle("quiet", default = Some(false))
   val file = trailArg[String](required = false)
   val experimental = opt[List[String]]("X", default = Some(List[String]()))
