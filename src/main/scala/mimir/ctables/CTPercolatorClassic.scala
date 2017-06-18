@@ -253,16 +253,6 @@ object CTPercolatorClassic {
         }
         return ret
       }
-      case Sort(_,_) => ???
-      case View(_,_,_) => ???
-      case EmptyTable(_) => ???
-      case LeftOuterJoin(_,_,_) => ???
-      case Union(_,_) => ???
-      case Aggregate(_,_,_) => ???
-      case Limit(_,_,_) => ???
-      case Annotate(_, _) => ???
-      case ProvenanceOf(_) => ???
-      case Recover(_, _) => ???
     }
   }
   
@@ -283,14 +273,6 @@ object CTPercolatorClassic {
       case Union(_,_) => false
       case Join(_,_) => false
       case Aggregate(_,_,_) => false
-      case Sort(_,_) => ???
-      case View(_,_,_) => ???
-      case EmptyTable(_) => ???
-      case LeftOuterJoin(_,_,_) => ???
-      case Limit(_,_,_) => ???
-      case Annotate(_, _) => ???
-      case ProvenanceOf(_) => ???
-      case Recover(_, _) => ???
     }
   }
   
@@ -388,14 +370,6 @@ object CTPercolatorClassic {
             Table(name, alias, sch, metadata)
           }
 
-      case Sort(_,_) => ???
-      case View(_,_,_) => ???
-      case EmptyTable(_) => ???
-      case LeftOuterJoin(_,_,_) => ???
-      case Limit(_,_,_) => ???
-      case Annotate(_, _) => ???
-      case ProvenanceOf(_) => ???
-      case Recover(_, _) => ???      
     }
   }
 

@@ -14,7 +14,7 @@ import mimir.Database
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1000L)
-class PickerModel(override val name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[Type], var source: Operator) 
+class PickerModel(override val name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[Type], source: Operator) 
   extends Model(name) 
   with Serializable
   with NeedsReconnectToDatabase
@@ -83,18 +83,6 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
   
   def reconnectToDatabase(db: Database) = { 
     this.db = db 
-    source = ???
-  }
-
-  /**
-   * Interpose on the serialization pipeline to safely serialize the
-   * source query
-   */
-  override def serialize: (Array[Byte], String) =
-  {
-    source = ???
-    val ret = super.serialize()
-    return ret
   }
   
 }

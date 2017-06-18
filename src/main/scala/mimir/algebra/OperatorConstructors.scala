@@ -43,6 +43,15 @@ trait OperatorConstructors
     )
   }
 
+  def rename(targets: (String, String)*): Operator =
+  {
+    val renamings = targets.toMap
+    map(toOperator.columnNames.map { 
+      case name if targets contains name => (name, Var(renamings(name))) 
+      case name => (name, Var(name))
+    }:_*)
+  }
+
   def removeColumn(targets: String*): Operator =
   {
     val isTarget = targets.toSet
@@ -56,8 +65,9 @@ trait OperatorConstructors
   def addColumn(newCols: (String, Expression)*): Operator =
   {
     val (cols, src) = OperatorUtils.extractProjections(toOperator)
+    val bindings = cols.map { _.toBinding }.toMap
     Project(
-      cols ++ newCols.map { col => ProjectArg(col._1, col._2) },
+      cols ++ newCols.map { col => ProjectArg(col._1, Eval.inline(col._2, bindings)) },
       src
     )
   }

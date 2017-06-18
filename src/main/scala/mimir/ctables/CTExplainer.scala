@@ -529,9 +529,6 @@ class CTExplainer(db: Database) extends LazyLogging {
 			case Annotate(src, _) => 
 				explainSubset(src,wantCol,wantRow,wantSort)
 
-			case ProvenanceOf(_) => ???
-
-			case Recover(_, _) => ???
 		}
 	}
 }

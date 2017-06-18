@@ -144,7 +144,6 @@ object Tracer {
       case _:Aggregate => 
         throw new RAException("Tracer can't handle aggregates")
 
-      case (Annotate(_, _) | ProvenanceOf(_) | Recover(_, _)) => ???
     }
   }
 }

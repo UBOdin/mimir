@@ -20,7 +20,7 @@ import mimir.Database
 class RepairKeyModel(
   name: String, 
   context: String, 
-  var source: Operator, 
+  source: Operator, 
   keys: Seq[(String, Type)], 
   target: String,
   targetType: Type,
@@ -31,6 +31,7 @@ class RepairKeyModel(
   with NeedsReconnectToDatabase 
 {
   val choices = scala.collection.mutable.Map[List[PrimitiveValue], PrimitiveValue]();
+  @transient var db:Database = null
 
   def varType(idx: Int, args: Seq[Type]): Type = targetType
   def argTypes(idx: Int) = keys.map(_._2)
@@ -117,21 +118,8 @@ class RepairKeyModel(
     }
   }
   
-   @transient var db:Database = null
   def reconnectToDatabase(db: Database) = { 
     this.db = db 
-    source = ???
-  }
-
-  /**
-   * Interpose on the serialization pipeline to safely serialize the
-   * source query
-   */
-  override def serialize: (Array[Byte], String) =
-  {
-    source = ???
-    val ret = super.serialize()
-    return ret
   }
 
 }

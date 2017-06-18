@@ -347,17 +347,8 @@ object OperatorUtils extends LazyLogging {
         // we can apply the renaming here and this operator acts like a Project.
         // Otherwise, we flow-through.
         if(cols.exists { _.name.equals(target) }){
-          Recover(src, 
-            cols.map { case old @ AnnotateArg(col, t, expr) =>
-              if(col.equals(target)){
-                // XXX: The semantics of AnnotateArg don't allow us to rename columns here... 
-                // We should settle on something that makes Recover a bit more flexible.
-                ???
-              } else {
-                old
-              }
-            }
-          )
+          // XXX Recover doesn't let us rename things
+          Recover(src, cols).rename( target -> replacement )
         } else {
           oper.
             recurExpressions(rewrite(_)).
