@@ -270,7 +270,7 @@ class SqlToRA(db: Database)
 
     val isAggSelect =
       hasGroupByRefs || hasHavingClause || 
-      allReferencedFunctions.exists( AggregateRegistry.isAggregate(_) )
+      allReferencedFunctions.exists( db.aggregates.isAggregate(_) )
 
     if(!isAggSelect){
       // NOT an aggregate select.  
@@ -419,10 +419,8 @@ class SqlToRA(db: Database)
       else { alias = alias.toUpperCase }
 
       if(fi.asInstanceOf[net.sf.jsqlparser.schema.Table].getSchemaName == null){
-        val tableOp = db.getTableOperator(name, alias)
-        val newBindings = tableOp.schema.map(
-            (x) => (x._1, alias+"_"+x._1)
-          )
+        val tableOp = db.table(name, alias)
+        val newBindings = tableOp.columnNames.map { x => (x, alias+"_"+x) }
         return (
           Project(
             newBindings.map { x => ProjectArg(x._2, Var(x._1)) },
@@ -440,9 +438,7 @@ class SqlToRA(db: Database)
             case Some(query) => query
             case None => throw new SQLException("Unknown adaptive schema view: "+multilens+"."+name);
           }
-        val newBindings = 
-          viewQuery.schema.map(_._1).
-            map { x => (x, alias+"_"+x) }
+        val newBindings = viewQuery.columnNames.map { x => (x, alias+"_"+x) }
         return ( 
           Project(
             newBindings.map( x => ProjectArg(x._2, Var(x._1)) ),
@@ -639,7 +635,7 @@ class SqlToRA(db: Database)
           if(fnIsDistinct){ fnBase.substring("DISTINCT_".length) }
           else { fnBase }
 
-        if(AggregateRegistry.isAggregate(fn)){
+        if(db.aggregates.isAggregate(fn)){
           (Var(alias), Set(), List( (fn, fnIsDistinct, args, alias) ))
         } else {
           recur()

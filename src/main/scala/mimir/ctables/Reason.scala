@@ -7,8 +7,8 @@ import mimir.util.JSONBuilder
 
 object Reason
 {
-  def make(term: VGTerm, v: Seq[PrimitiveValue], h: Seq[PrimitiveValue]): Reason =
-    new ModelReason(term.model, term.idx, v, h)
+  def make(model: Model, idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Reason =
+    new ModelReason(model, idx, args, hints)
 }
 
 abstract class Reason

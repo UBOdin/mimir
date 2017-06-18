@@ -1,5 +1,7 @@
 package mimir.algebra
 
+import mimir.parser.ExpressionParser
+
 trait OperatorConstructors
 {
   def toOperator: Operator
@@ -13,12 +15,16 @@ trait OperatorConstructors
   def filter(condition: Expression): Operator =
     condition match {
       case BoolPrimitive(true)  => toOperator
-      case BoolPrimitive(false) => EmptyTable(toOperator.schema)
       case _ => Select(condition, toOperator)
     }
+  def filterParsed(condition: String): Operator =
+    filter(ExpressionParser.expr(condition))
 
   def project(cols: String*): Operator =
     map(cols.map { col => (col, Var(col)) }:_* )
+
+  def mapParsed(cols: (String, String)*): Operator =
+    map(cols.map { case (name, expr) => (name, ExpressionParser.expr(expr)) }:_*)
 
   def map(cols: (String, Expression)*): Operator =
   {

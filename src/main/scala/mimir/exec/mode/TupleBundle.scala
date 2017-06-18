@@ -1,7 +1,7 @@
 package mimir.exec.mode
 
 import mimir.Database
-import mimir.optimizer._
+import mimir.optimizer.operator._
 import mimir.algebra._
 import mimir.ctables._
 import mimir.provenance._
@@ -62,7 +62,7 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
   {
     new SampleResultIterator(
       results,
-      query.schema,
+      db.typechecker.schemaOf(query),
       meta._1,
       seeds.size
     )
@@ -250,7 +250,7 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
       case Union(lhsOldChild, rhsOldChild) => {
         val (lhsNewChild, lhsNonDeterministicInput) = compileFlat(lhsOldChild)
         val (rhsNewChild, rhsNonDeterministicInput) = compileFlat(rhsOldChild)
-        val schema = query.schema.map(_._1)
+        val schema = query.columnNames
 
         val alignNonDeterminism = (
           query: Operator, 
@@ -317,7 +317,7 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
           // We need to resort to evaluating the query with the 'Long' evaluation strategy.
           // If we created our own evaluation engine, we could get around this limitation, but
           // as long as we need to run on a normal backend, this is required.
-          val shardedChild = convertFlatToLong(newChild, oldChild.schema.map(_._1), nonDeterministicInput)
+          val shardedChild = convertFlatToLong(newChild, oldChild.columnNames, nonDeterministicInput)
 
           // Split the aggregate columns.  Because a group-by attribute is uncertain, all
           // sources of uncertainty can be, potentially, non-deterministic.

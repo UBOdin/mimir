@@ -8,11 +8,6 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.util.RandUtils
 import mimir.{Analysis, Database}
-import moa.classifiers.Classifier
-import moa.core.InstancesHeader
-import weka.core.{Attribute, DenseInstance, Instance, Instances}
-import weka.experiment.{DatabaseUtils, InstanceQueryAdapter}
-import mimir.optimizer.InlineVGTerms
 import mimir.models._
 
 import scala.collection.JavaConversions._
@@ -27,8 +22,8 @@ object MissingValueLens {
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
   {
-    val targetColumns:List[String] = args.map(Eval.evalString(_).toUpperCase).toSet.toList
-    val schema:Set[String] = query.schema.map(_._1).toSet
+    val targetColumns:List[String] = args.map(db.interpreter.evalString(_).toUpperCase).toSet.toList
+    val schema:Set[String] = query.columnNames.toSet
     val missingColumns = targetColumns.toSet -- schema
 
     if(!missingColumns.isEmpty){
@@ -57,7 +52,7 @@ object MissingValueLens {
       }
 
     val (
-      candidateModels: Map[String,Seq[(Model,Int,Seq[Expression],String)]],
+      candidateModels: Map[String,Seq[(String,Int,Seq[Expression],String)]],
       modelEntities: Seq[Model]
     ) = 
       LensUtils.extractModelsByColumn(modelsByType)
@@ -83,7 +78,7 @@ object MissingValueLens {
                 models.map(_._4)
               )
             val metaExpr = LensUtils.buildMetaModel(
-              metaModel, 0, Seq(), Seq(),
+              metaModel.name, 0, Seq(), Seq(),
               models, Seq[Expression](RowIdVar())
             )
 
@@ -94,8 +89,7 @@ object MissingValueLens {
 
     val replacementExprs = replacementExprsList.toMap
     val projectArgs = 
-      query.schema.
-        map(_._1).
+      query.columnNames.
         map( col => replacementExprs.get(col) match {
           case None => ProjectArg(col, Var(col))
           case Some(replacementExpr) => 

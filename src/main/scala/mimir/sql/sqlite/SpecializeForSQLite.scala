@@ -1,10 +1,11 @@
-package mimir.sql.sqlite;
+package mimir.sql.sqlite
 
-import java.sql._;
+import java.sql._
 
-import mimir.algebra._;
-import mimir.ctables._;
-import mimir.util._;
+import mimir.Database
+import mimir.algebra._
+import mimir.ctables._
+import mimir.util._
 
 object SpecializeForSQLite {
 
@@ -64,7 +65,7 @@ object SpecializeForSQLite {
     }    
   }
 
-  def apply(o: Operator): Operator = 
+  def apply(o: Operator, db: Database): Operator = 
   {
     o.recurExpressions( 
       apply(_:Expression) 
@@ -73,13 +74,13 @@ object SpecializeForSQLite {
 
         Aggregate(
           gb,
-          agg.map( apply(_:AggFunction, source.typechecker.typeOf(_)) ),
-          apply(source)
+          agg.map( apply(_:AggFunction, db.typechecker.typeOf(_, o)) ),
+          apply(source, db)
         )
       }
 
       case o2 => 
-        o2.recur( apply(_:Operator) )
+        o2.recur( apply(_:Operator, db) )
     }
   }
 

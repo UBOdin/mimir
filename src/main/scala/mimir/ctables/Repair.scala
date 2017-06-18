@@ -13,8 +13,6 @@ sealed trait Repair
 
 object Repair
 {
-  def makeRepair(term: VGTerm, v: Seq[PrimitiveValue], h: Seq[PrimitiveValue]): Repair =
-    makeRepair(term.model, term.idx, v, h)
   def makeRepair(model: Model, idx: Int, v: Seq[PrimitiveValue], h: Seq[PrimitiveValue]): Repair =
   {
     model match {

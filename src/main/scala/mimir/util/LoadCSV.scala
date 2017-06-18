@@ -45,7 +45,7 @@ object LoadCSV extends StrictLogging {
     // Produce a schema --- either one already exists, or we need
     // to generate one.
     val targetSchema = 
-      db.getTableSchema(targetTable) match {
+      db.tableSchema(targetTable) match {
         case Some(sch) => sch
         case None => {
 

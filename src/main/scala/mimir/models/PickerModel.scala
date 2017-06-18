@@ -4,7 +4,6 @@ import scala.util.Random
 
 import mimir.algebra._
 import mimir.util._
-import mimir.ctables.VGTerm
 import mimir.Database
 
 /**
@@ -84,7 +83,7 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
   
   def reconnectToDatabase(db: Database) = { 
     this.db = db 
-    source = db.querySerializer.desanitize(source)
+    source = ???
   }
 
   /**
@@ -93,7 +92,7 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
    */
   override def serialize: (Array[Byte], String) =
   {
-    source = db.querySerializer.sanitize(source)
+    source = ???
     val ret = super.serialize()
     return ret
   }

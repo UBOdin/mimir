@@ -1,11 +1,12 @@
-package mimir.optimizer;
+package mimir.optimizer.operator
 
-import java.sql._;
+import java.sql._
 
-import mimir.algebra._;
-import mimir.ctables._;
+import mimir.algebra._
+import mimir.ctables._
 
-object StripViews {
+object StripViews 
+{
 
   def apply(o: Operator, onlyProbabilistic: Boolean = false): Operator =
   {

@@ -7,16 +7,16 @@ import mimir.algebra._
 object GeoFunctions
 {
 
-  def register()
+  def register(fr: FunctionRegistry)
   {
-    FunctionRegistry.registerExpr("DISTANCE", List("A", "B"), 
+    fr.registerExpr("DISTANCE", List("A", "B"), 
       Function("SQRT", List(
         Arithmetic(Arith.Add,
           Arithmetic(Arith.Mult, Var("A"), Var("A")),
           Arithmetic(Arith.Mult, Var("B"), Var("B"))
       ))))
 
-    FunctionRegistry.registerNative(
+    fr.register(
       "DST",
       (args) => {
         FloatPrimitive(DefaultEllipsoid.WGS84.orthodromicDistance(
@@ -31,7 +31,7 @@ object GeoFunctions
         TFloat()
       }
     )
-    FunctionRegistry.registerNative(
+    fr.register(
       "SPEED",
       (args) => {
         val distance: Double = args(0).asDouble

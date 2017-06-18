@@ -3,6 +3,7 @@ package mimir.ctables
 import mimir.algebra._
 import scala.util._
 import mimir.models._
+import mimir.Database
 
 object CTAnalyzer {
 
@@ -21,14 +22,14 @@ object CTAnalyzer {
    * Everything else (other than CASE) is an AND of whether the 
    * child subexpressions are deterministic
    */
-  def compileDeterministic(expr: Expression): Expression =
-    compileDeterministic(expr, Map[String,Expression]())
+  def compileDeterministic(expr: Expression, models: (String => Model)): Expression =
+    compileDeterministic(expr, models, Map[String,Expression]())
 
 
-  def compileDeterministic(expr: Expression, 
+  def compileDeterministic(expr: Expression, models: (String => Model), 
                            varMap: Map[String,Expression]): Expression =
   {
-    val recur = (x:Expression) => compileDeterministic(x, varMap)
+    val recur = (x:Expression) => compileDeterministic(x, models, varMap)
     expr match { 
       
       case Conditional(condition, thenClause, elseClause) => {
@@ -70,9 +71,14 @@ object CTAnalyzer {
 
       case v: VGTerm =>
         if(v.args.isEmpty){
-          BoolPrimitive(v.model.isAcknowledged(v.idx, Seq()))
+          BoolPrimitive(
+            models(v.name).isAcknowledged(v.idx, Seq())
+          )
         } else {
-          VGTermAcknowledged(v.model, v.idx, v.args)
+          Function(CTables.FN_IS_ACKED, Seq(
+            StringPrimitive(v.name), 
+            IntPrimitive(v.idx)
+          )++v.args)
         }
       
       case Var(v) => 
@@ -165,7 +171,12 @@ object CTAnalyzer {
   def compileSample(expr: Expression, seed: Expression): Expression =
   {
     expr match {
-      case VGTerm(model, idx, args, hints) => VGTermSampler(model, idx, args, hints, seed)
+      case VGTerm(model, idx, args, hints) => 
+        Function("VGTERM_SAMPLE", Seq(
+          StringPrimitive(model),
+          IntPrimitive(idx),
+          seed
+        ) ++ args ++ hints)
       case _ => expr.rebuild(expr.children.map(compileSample(_, seed)))
     }
   }

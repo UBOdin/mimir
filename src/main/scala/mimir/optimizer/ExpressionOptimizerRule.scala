@@ -18,23 +18,3 @@ abstract class BottomUpExpressionOptimizerRule extends ExpressionOptimizerRule {
 	def apply(e: Expression): Expression = 
 		applyOne(e.recur(apply _))
 }
-
-object ExpressionOptimizer {
-
-	val standardOptimizatins = List[ExpressionOptimizerRule](
-		PullUpBranches,
-		FlattenTrivialBooleanConditionals,
-		// FlattenBooleanConditionals,
-		RemoveRedundantCasts,
-		InlineFunctions,
-		PushDownNots
-	)
-
-	def optimize(e:Expression, opts: List[ExpressionOptimizerRule]): Expression = {
-		opts.foldLeft(e)( (currE, f) => f(currE) )
-	}
-
-	def optimize(e: Expression): Expression =
-		optimize(e, standardOptimizatins)
-
-}

@@ -61,7 +61,7 @@ object SimpleDemoScript
 
 		"Use Sane Types in Lenses" >> {
 			var oper = select("SELECT * FROM RATINGS2")
-			Typechecker.typeOf(Var("NUM_RATINGS"), oper) must be oneOf(TInt(), TFloat(), TAny())
+			db.typechecker.typeOf(Var("NUM_RATINGS"), oper) must be oneOf(TInt(), TFloat(), TAny())
 		}
 
     "Create and Query Type Inference Lens with NULL values" >> {
@@ -113,23 +113,6 @@ object SimpleDemoScript
 				""")
 			}
 			val nullRow = querySingleton("SELECT ROWID() FROM RATINGS1 WHERE RATING IS NULL").asLong
-
-			if(!db.backend.canHandleVGTerms){
-				val result1guesses =
-					db.backend.resultRows("SELECT MIMIR_KEY_0, MIMIR_DATA FROM "+
-							db.bestGuessCache.cacheTableForModel(db.models.get("RATINGS1FINAL:WEKA:RATING"), 0))
-
-				result1guesses.map( x => (x(0), x(1))).toList must contain((IntPrimitive(nullRow), FloatPrimitive(4.0)))
-
-				val result1 =
-					LoggerUtils.debug(
-						// "mimir.exec.Compiler"
-					){ 
-						query("SELECT RATING FROM RATINGS1FINAL") { _.map { _(0).asDouble }.toSeq }
-					}
-				result1 must have size(4)
-				result1 must contain(eachOf( 4.5, 4.0, 4.0, 6.4 ) )
-			}
 
 			query("""
 				SELECT RATING FROM RATINGS1FINAL WHERE RATING < 5

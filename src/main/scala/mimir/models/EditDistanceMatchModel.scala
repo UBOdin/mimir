@@ -4,8 +4,6 @@ import scala.util._
 import com.typesafe.scalalogging.slf4j.Logger
 import mimir.Database
 import mimir.algebra._
-import mimir.ctables.VGTerm
-import mimir.optimizer.{InlineVGTerms}
 import mimir.util.RandUtils
 import org.apache.lucene.search.spell.{
   JaroWinklerDistance, LevensteinDistance, NGramDistance, 

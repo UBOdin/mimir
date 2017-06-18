@@ -1,10 +1,11 @@
-package mimir.optimizer
+package mimir.optimizer.operator
 
 import java.sql._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir.algebra._
 import mimir.ctables._
+import mimir.optimizer.OperatorOptimization
 
 object InlineProjections extends OperatorOptimization with LazyLogging {
 
@@ -14,7 +15,7 @@ object InlineProjections extends OperatorOptimization with LazyLogging {
 			case Project(cols, src) if (cols.forall( _ match {
 					case ProjectArg(colName, Var(varName)) => colName.equals(varName)
 					case _ => false
-				}) && (src.schema.map(_._1).toSet &~ cols.map(_.name).toSet).isEmpty)
+				}) && (src.columnNames.toSet &~ cols.map(_.name).toSet).isEmpty)
 				 => src
 
 			// Project[...](Project[...](X)) can be composed into a single Project[...](X)
@@ -100,8 +101,6 @@ object InlineProjections extends OperatorOptimization with LazyLogging {
         val rhsRewriteMapping =
         	rhsRewrites.map { case (orig, rewritten) => (orig -> Var(rewritten)) }
 
-        Typechecker.typecheck(safeJoin)
-
         Project(
           lhsCols ++
           	rhsCols.map { case ProjectArg(name, expression) =>
@@ -114,16 +113,6 @@ object InlineProjections extends OperatorOptimization with LazyLogging {
       // Pull up projections outside of Limits
       case Limit(offset, limit, Project(cols, src)) =>
       	Project(cols, Limit(offset, limit, src))
-
-			// Otherwise, we might still be able to simplify the nested expressions
-			// Do a quick Eval.inline pass over them.
-			case Project(cols, src) => 
-				Project(
-					cols.map( (arg:ProjectArg) =>
-						ProjectArg(arg.name, Eval.inline(arg.expression))
-					),
-					src
-				)
 
 			// If it's anything else, this optimization doesn't care 
 			// (recursion is handled bottom-up at the start of this function)

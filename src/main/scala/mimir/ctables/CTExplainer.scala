@@ -9,7 +9,7 @@ import mimir.provenance._
 import mimir.exec._
 import mimir.exec.mode._
 import mimir.util._
-import mimir.optimizer._
+import mimir.optimizer.operator._
 import mimir.models._
 
 case class InvalidProvenance(msg: String, token: RowIdPrimitive) 
@@ -146,7 +146,10 @@ class CTExplainer(db: Database) extends LazyLogging {
 		val (tuple, allExpressions, _) = getProvenance(oper, token)
 		logger.debug(s"ExplainCell Provenance: $allExpressions")
 		val expr = allExpressions.get(column).get
-		val colType = Typechecker.typeOf(InlineVGTerms(expr), tuple.mapValues( _.getType ))
+		val colType = db.typechecker.typeOf(
+			InlineVGTerms(expr, db), 
+			scope = tuple.mapValues( _.getType )
+		)
 
 		val examples = 
 			sampleExpression[List[PrimitiveValue]](
@@ -187,7 +190,7 @@ class CTExplainer(db: Database) extends LazyLogging {
         (0 until count).
         	map( (i) => 
         		try {
-	        		Eval.eval(
+	        		db.interpreter.eval(
 	        			sampleExpr, 
 		        		bindings ++ Map(CTables.SEED_EXP -> IntPrimitive(rnd.nextInt()))
 		        	)
@@ -226,7 +229,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 		if(realCount > 0){
 			val avg = Eval.applyArith(Arith.Div, tot, FloatPrimitive(realCount.toDouble))
 			val stddev =
-				Eval.eval(
+				db.interpreter.eval(
 					Function("SQRT", List(					
 						Function("ABSOLUTE", List(
 							Arithmetic(Arith.Sub, 
@@ -263,13 +266,17 @@ class CTExplainer(db: Database) extends LazyLogging {
 	{
 		logger.trace(s"GETTING REASONS: $expr")
 		expr match {
-			case v: VGTerm => Map(v.model.name -> 
-				Reason.make(v, v.args.map(Eval.eval(_,tuple)), v.hints.map(Eval.eval(_,tuple)))
+			case v: VGTerm => Map(v.name -> 
+				Reason.make(
+					db.models.get(v.name), 
+					v.idx, 
+					v.args.map(db.interpreter.eval(_,tuple)), v.hints.map(db.interpreter.eval(_,tuple))
+				)
 			)
 
 			case Conditional(c, t, e) =>
 				(
-					if(Eval.evalBool(c, tuple)){
+					if(db.interpreter.evalBool(c, tuple)){
 						getFocusedReasons(t, tuple)
 					} else {
 						getFocusedReasons(e, tuple)
@@ -278,7 +285,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 			case Arithmetic(op @ (Arith.And | Arith.Or), a, b) =>
 				(
-					(op, Eval.evalBool(InlineVGTerms.inline(a), tuple)) match {
+					(op, db.interpreter.evalBool(InlineVGTerms.inline(a, db), tuple)) match {
 						case (Arith.And, true) => getFocusedReasons(b, tuple)
 						case (Arith.Or, false) => getFocusedReasons(b, tuple)
 						case _ => Map()
@@ -294,13 +301,13 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 	def filterByProvenance(rawOper: Operator, token: RowIdPrimitive): Operator =
 	{
-		val oper = PropagateEmptyViews(rawOper)
+		val oper = new PropagateEmptyViews(db.typechecker)(rawOper)
 		logger.debug(s"RESOLVED: \n$oper")
 		val (provQuery, rowIdCols) = Provenance.compile(oper)
 		val filteredQuery =
 			InlineProjections(
 				PushdownSelections(
-					Provenance.filterForToken(provQuery, token, rowIdCols)
+					Provenance.filterForToken(provQuery, token, rowIdCols, db)
 				)
 			)
 		logger.debug(s"FILTERED: \n$filteredQuery")
@@ -327,9 +334,9 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 		logger.debug(s"INLINE: $inlinedQuery")
 
-		val optQuery = Compiler.optimize(inlinedQuery)
+		val optQuery = db.compiler.optimize(inlinedQuery)
 
-		val finalSchema = optQuery.schema
+		val finalSchema = db.typechecker.schemaOf(optQuery)
 
 		val sqlQuery = db.ra.convert(optQuery)
 
@@ -403,7 +410,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 	def explainEverything(oper: Operator): Seq[ReasonSet] = 
 	{
 		logger.debug("Explain Everything: \n"+oper)
-		mergeReasons(explainSubset(oper, oper.schema.map(_._1).toSet, true, true))
+		mergeReasons(explainSubset(oper, oper.columnNames.toSet, true, true))
 	}
 
 	def explainSubset(
@@ -414,7 +421,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 	): Seq[ReasonSet] =
 	{
 		logger.trace(s"Explain Subset (${wantCol.mkString(", ")}; $wantRow; $wantSort): \n$oper")
-		Compiler.optimize(oper) match {
+		db.compiler.optimize(oper) match {
 			case Table(_,_,_,_) => Seq()
 			case View(_,query,_) => 
 				explainSubset(query, wantCol, wantRow, wantSort)
@@ -430,7 +437,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 						flatMap {
 						  col => CTAnalyzer.compileCausality(col.expression)
 						}.map { case (condition, vgterm) => 
-							ReasonSet.make(vgterm, Select(condition, child))
+							ReasonSet.make(vgterm, db, Select(condition, child))
 						}
 				val argDependencies =
 					relevantArgs.
@@ -451,7 +458,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 						(
 							CTAnalyzer.compileCausality(cond).
 								map { case (condition, vgterm) => 
-										ReasonSet.make(vgterm, Select(condition, child))
+										ReasonSet.make(vgterm, db, Select(condition, child))
 									},
 							ExpressionUtils.getColumns(cond)
 						)
@@ -465,7 +472,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 					aggs.flatMap { agg => agg.args.flatMap( CTAnalyzer.compileCausality(_) ) }
 				val aggReasons =
 					aggVGTerms.map { case (condition, vgterm) => 
-						ReasonSet.make(vgterm, Select(condition, child))
+						ReasonSet.make(vgterm, db, Select(condition, child))
 					}
 				val gbDependencies =
 					gbs.map( _.name ).filter { gb => wantRow || wantCol(gb) }.toSet
@@ -488,8 +495,8 @@ class CTExplainer(db: Database) extends LazyLogging {
 			}
 
 			case Join(lhs, rhs) => {
-				explainSubset(lhs, lhs.schema.map(_._1).filter(wantCol(_)).toSet, wantRow, wantSort) ++ 
-				explainSubset(rhs, rhs.schema.map(_._1).filter(wantCol(_)).toSet, wantRow, wantSort)
+				explainSubset(lhs, lhs.columnNames.filter(wantCol(_)).toSet, wantRow, wantSort) ++ 
+				explainSubset(rhs, rhs.columnNames.filter(wantCol(_)).toSet, wantRow, wantSort)
 			}
 
 			case LeftOuterJoin(left, right, cond) => 
@@ -505,7 +512,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 							args.flatMap { arg => 
 								CTAnalyzer.compileCausality(arg.expression)
 							}.map { case (condition, vgterm) => 
-								ReasonSet.make(vgterm, Select(condition, child))
+								ReasonSet.make(vgterm, db, Select(condition, child))
 							},
 							args.flatMap { arg => ExpressionUtils.getColumns(arg.expression) }
 						)

@@ -6,8 +6,7 @@ import com.sun.jna.Memory
 import com.sun.jna.Native
 
 import mimir.algebra._
-import mimir.ctables.VGTerm
-import mimir.ctables.VGTermAcknowledged
+import mimir.ctables.CTables
 import mimir.sql.sqlite.VGTermFunctions
 import mimir.provenance.Provenance
 
@@ -281,6 +280,7 @@ object OperatorTranslation {
       	val fixedType = castArgs.last match {
           case IntPrimitive(i) => TypePrimitive(Type.toSQLiteType(i.toInt))
           case TypePrimitive(t) => TypePrimitive(t)
+          case _ => throw new RuntimeException(s"Invalid Cast Expression: $castExpr")
         }
         Function("CAST", Seq(castArgs.head,fixedType)  )
       }
@@ -294,7 +294,7 @@ object OperatorTranslation {
             //arg
             Function("CAST", Seq(arg,TypePrimitive(TString())))
           }
-          case "BEST_GUESS_VGTERM" => {
+          case CTables.FN_TEMP_ENCODED => {
             val fargs = OperatorTranslation.gpromListToScalaList(functionCall.args).map(arg => translateGProMExpressionToMimirExpression(new GProMNode(arg.getPointer), intermSchema))
             val model = db.models.get(fargs(0).toString().replaceAll("'", ""))
             val idx = fargs(1).asInstanceOf[IntPrimitive].v.toInt;
@@ -306,17 +306,7 @@ object OperatorTranslation {
               model.hintTypes(idx).
                 zipWithIndex.
                 map( arg => fargs(arg._2+vgtArgs.length+2))
-            VGTerm(model, idx, vgtArgs, vgtHints)
-          }
-          case "ACKNOWLEDGED_VGTERM" => {
-            val fargs = OperatorTranslation.gpromListToScalaList(functionCall.args).map(arg => translateGProMExpressionToMimirExpression(new GProMNode(arg.getPointer), intermSchema))
-            val model = db.models.get(fargs(0).toString().replaceAll("'", ""))
-            val idx = fargs(1).asInstanceOf[IntPrimitive].v.toInt;
-            val vgtArgs =
-              model.argTypes(idx).
-                zipWithIndex.
-                map( arg => fargs(arg._2+2))
-            VGTermAcknowledged(model, idx, vgtArgs)
+            VGTerm(model.name, idx, vgtArgs, vgtHints)
           }
           case "CAST" => {
             val castArgs = gpromListToScalaList(functionCall.args).map( gpromParam => translateGProMExpressionToMimirExpression(new GProMNode(gpromParam.getPointer), intermSchema))
@@ -1265,14 +1255,9 @@ object OperatorTranslation {
         val gpromFunc = new GProMFunctionCall.ByValue(GProM_JNA.GProMNodeTag.GProM_T_FunctionCall, op, gpromExprList, 0)
         gpromFunc
       }
-      case VGTerm(model, idx, args, hints) => {
-        val gpromExprList = translateMimirExpressionsToGProMList(schema, Seq(StringPrimitive(model.name), IntPrimitive(idx)).union(args.union(hints)))
-        val gpromFunc = new GProMFunctionCall.ByValue(GProM_JNA.GProMNodeTag.GProM_T_FunctionCall, VGTermFunctions.bestGuessVGTermFn, gpromExprList, 0)
-        gpromFunc
-      }
-      case VGTermAcknowledged(model, idx, args) => {
-        val gpromExprList = translateMimirExpressionsToGProMList(schema, Seq(StringPrimitive(model.name), IntPrimitive(idx)).union(args))
-        val gpromFunc = new GProMFunctionCall.ByValue(GProM_JNA.GProMNodeTag.GProM_T_FunctionCall, VGTermFunctions.acknowledgedVGTermFn, gpromExprList, 0)
+      case VGTerm(name, idx, args, hints) => {
+        val gpromExprList = translateMimirExpressionsToGProMList(schema, Seq(StringPrimitive(name), IntPrimitive(idx)).union(args.union(hints)))
+        val gpromFunc = new GProMFunctionCall.ByValue(GProM_JNA.GProMNodeTag.GProM_T_FunctionCall, CTables.FN_TEMP_ENCODED, gpromExprList, 0)
         gpromFunc
       }
       case IsNullExpression(expr) => {
@@ -1416,11 +1401,8 @@ object OperatorTranslation {
       case Function(op, params) => {
         params.map(param => translateMimirExpressionToStringForGProM(param, schema) ).mkString(s"$op(", ",", ")")
       }
-      case VGTerm(model, idx, args, hints) => {
-        Seq(StringPrimitive(model.name), IntPrimitive(idx)).union(args.union(hints)).map(param => translateMimirExpressionToStringForGProM(param, schema) ).mkString(s"${VGTermFunctions.bestGuessVGTermFn}(", ",", ")")
-      }
-      case VGTermAcknowledged(model, idx, args) => {
-        Seq(StringPrimitive(model.name), IntPrimitive(idx)).union(args).map(param => translateMimirExpressionToStringForGProM(param, schema) ).mkString(s"${VGTermFunctions.acknowledgedVGTermFn}(", ",", ")")
+      case VGTerm(name, idx, args, hints) => {
+        Seq(StringPrimitive(name), IntPrimitive(idx)).union(args.union(hints)).map(param => translateMimirExpressionToStringForGProM(param, schema) ).mkString(s"${VGTermFunctions.bestGuessVGTermFn}(", ",", ")")
       }
       case IsNullExpression(expr) => {
         "("+translateMimirExpressionToStringForGProM(expr, schema) + " IS NULL )" 

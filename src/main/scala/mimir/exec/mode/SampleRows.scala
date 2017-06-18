@@ -37,7 +37,7 @@ class SampleRows(
           statsQuery.stats
         }
         case _ => {
-          SampleRows.defaultStats(query.schema)
+          SampleRows.defaultStats(db.typechecker.schemaOf(query))
         }
       }
 

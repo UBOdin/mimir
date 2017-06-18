@@ -10,6 +10,7 @@ import mimir.provenance._
 import mimir.ctables._
 import mimir.exec._
 import mimir.exec.mode._
+import mimir.serialization._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.sql.JDBCBackend
 
@@ -48,7 +49,7 @@ class ViewManager(db:Database) extends LazyLogging {
     db.backend.update(s"INSERT INTO $viewTable(NAME, QUERY, METADATA) VALUES (?,?,0)", 
       Seq(
         StringPrimitive(name), 
-        StringPrimitive(db.querySerializer.serialize(query))
+        StringPrimitive(Json.ofOperator(query).toString)
       ))
     // updateMaterialization(name)
   }
@@ -64,7 +65,7 @@ class ViewManager(db:Database) extends LazyLogging {
     val properties = apply(name)
     db.backend.update(s"UPDATE $viewTable SET QUERY=? WHERE NAME=?", 
       Seq(
-        StringPrimitive(db.querySerializer.serialize(query)),
+        StringPrimitive(Json.ofOperator(query).toString),
         StringPrimitive(name)
       )) 
     if(properties.isMaterialized){
@@ -103,12 +104,11 @@ class ViewManager(db:Database) extends LazyLogging {
     results.take(1).headOption.map(_.toSeq).map( 
       { 
         case Seq(StringPrimitive(s), IntPrimitive(meta)) => {
-          val query =
-            db.querySerializer.deserializeQuery(s)
+          val query = Json.toOperator(Json.parse(s))
           val isMaterialized = 
             meta != 0
           
-          new ViewMetadata(name, query, isMaterialized)
+          new ViewMetadata(name, query, isMaterialized, db)
         }
       }
     )
@@ -167,7 +167,7 @@ class ViewManager(db:Database) extends LazyLogging {
       )
 
     logger.debug(s"RAW: $completeQuery")
-    logger.debug(s"MATERIALIZE: $name(${completeQuery.schema.mkString(",")})")
+    logger.debug(s"MATERIALIZE: $name(${completeQuery.columnNames.mkString(",")})")
 
     val (inlinedSQL:SelectBody, _) = db.compiler.sqlForBackend(completeQuery)
         
@@ -225,7 +225,7 @@ class ViewManager(db:Database) extends LazyLogging {
       Seq(
         ProjectArg("TABLE_NAME", Var("NAME"))
       ),
-      db.getTableOperator(viewTable)
+      db.table(viewTable)
     )
   }
 
