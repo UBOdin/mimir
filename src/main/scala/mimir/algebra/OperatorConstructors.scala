@@ -21,15 +21,34 @@ trait OperatorConstructors
     filter(ExpressionParser.expr(condition))
 
   def project(cols: String*): Operator =
-    map(cols.map { col => (col, Var(col)) }:_* )
+    mapImpl(cols.map { col => (col, Var(col)) } )
+
+  def projectNoInline(cols: String*): Operator =
+    mapImpl(cols.map { col => (col, Var(col)) }, noInline = true)
 
   def mapParsed(cols: (String, String)*): Operator =
-    map(cols.map { case (name, expr) => (name, ExpressionParser.expr(expr)) }:_*)
+    mapImpl(cols.map { case (name, expr) => (name, ExpressionParser.expr(expr)) } )
 
   def map(cols: (String, Expression)*): Operator =
+    mapImpl(cols)
+
+  def mapParsedNoInline(cols: (String, String)*): Operator =
+    mapImpl(
+      cols.map { case (name, expr) => (name, ExpressionParser.expr(expr)) },
+      noInline = true
+    )
+
+  def mapNoInline(cols: (String, Expression)*): Operator =
+    mapImpl(cols, noInline = true)
+
+  def mapImpl(cols: Seq[(String, Expression)], noInline:Boolean = false): Operator =
   {
     val (oldProjections, strippedOperator) =
-      OperatorUtils.extractProjections(toOperator)
+      if(noInline) { 
+        (toOperator.columnNames.map { x => ProjectArg(x, Var(x)) }, toOperator)
+      } else {
+        OperatorUtils.extractProjections(toOperator)
+      }
     val lookupMap: Map[String,Expression] = 
       oldProjections
         .map { _.toBinding }

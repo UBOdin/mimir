@@ -3,6 +3,7 @@ package mimir.ctables
 import mimir.algebra._
 import scala.util._
 import mimir.models._
+import mimir.ctables.vgterm._
 import mimir.Database
 
 object CTAnalyzer {
@@ -75,10 +76,7 @@ object CTAnalyzer {
             models(v.name).isAcknowledged(v.idx, Seq())
           )
         } else {
-          Function(CTables.FN_IS_ACKED, Seq(
-            StringPrimitive(v.name), 
-            IntPrimitive(v.idx)
-          )++v.args)
+          IsAcknowledged(models(v.name), v.idx, v.args)
         }
       
       case Var(v) => 

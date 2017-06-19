@@ -4,12 +4,12 @@ import mimir.Database
 import mimir.algebra._
 import mimir.optimizer.OperatorOptimization
 
-class EvaluateExpressions(db: Database)
+class OptimizeExpressions(optimize: Expression => Expression)
   extends OperatorOptimization
 {
   def apply(oper: Operator): Operator =
   {
-    oper.recurExpressions(db.compiler.optimize(_))
+    oper.recurExpressions(optimize(_))
         .recur(apply(_))
   }
 }

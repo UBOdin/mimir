@@ -24,13 +24,12 @@ object CTPercolatorSpec
   
   val schema = Map[String,Seq[(String,Type)]](
     ("R", Seq( 
-      ("R_A", TInt()),
-      ("R_B", TInt()),
-      ("R_C", TInt())
+      ("A", TInt()),
+      ("B", TInt())
     )),
     ("S", Seq( 
-      ("S_C", TInt()),
-      ("S_D", TFloat())
+      ("C", TInt()),
+      ("D", TFloat())
     ))
   )
 
@@ -205,7 +204,7 @@ object CTPercolatorSpec
           .filterParsed("B < IF A < 3 THEN {{X_1[A]}} ELSE 3 END")
           .join(
             table("S")
-              .filterParsed("B < IF A < 3 THEN {{X_1[A]}} ELSE 3 END")
+              .filterParsed("C < IF D > 5 THEN {{X_2[D]}} ELSE 5 END")
           )
       ) must be equalTo ((
         table("R")
@@ -220,7 +219,7 @@ object CTPercolatorSpec
                                     BoolPrimitive(true)
                                   )
           )
-          .mapParsed(
+          .mapParsedNoInline(
             "A" -> "A",
             "B" -> "B",
             "MIMIR_ROW_DET_LEFT" -> "MIMIR_ROW_DET"
@@ -239,9 +238,9 @@ object CTPercolatorSpec
                                       )
 
               )
-              .mapParsed(
-                "A" -> "A",
-                "B" -> "B",
+              .mapParsedNoInline(
+                "C" -> "C",
+                "D" -> "D",
                 "MIMIR_ROW_DET_RIGHT" -> "MIMIR_ROW_DET"
               )
           ),
@@ -269,12 +268,12 @@ object CTPercolatorSpec
               Var("A")
                 .lt(5)
                 .thenElse( 
-                  ack() 
+                  ack( args = Seq(Var("A")) ) 
                 )(
                   BoolPrimitive(true)
                 )
           )
-          .project("A", "B", "MIMIR_ROW_DET"), 
+          .projectNoInline("A", "B", "MIMIR_ROW_DET"), 
         Map(
           ("A", expr("true")),
           ("B", expr("true"))

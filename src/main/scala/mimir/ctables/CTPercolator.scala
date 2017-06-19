@@ -439,7 +439,8 @@ object CTPercolator
       {
         val (rewrittenLeft, colDetLeft, rowDetLeft) = percolateLite(left, models);
         val (rewrittenRight, colDetRight, rowDetRight) = percolateLite(right, models);
-
+        logger.trace(s"JOIN:\n$left\n$right")
+        logger.trace(s"INTO:\n$rewrittenLeft\n$rewrittenRight")
         // if left and right have no schema overlap, then the only
         // possible overlap in rewrittenLeft and rewrittenRight is
         // the row determinism column.  Start by detecting whether

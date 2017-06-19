@@ -114,7 +114,7 @@ object OperatorOptimizerRegressions
             )
           )
         )
-      PropagateConditions(problemExpr) must be equalTo(
+      simplify(PropagateConditions(problemExpr)) must be equalTo(
         Arithmetic(Arith.Or,
           Var("C"),
           Arithmetic(Arith.And,

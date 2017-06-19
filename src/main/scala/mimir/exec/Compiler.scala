@@ -31,7 +31,7 @@ class Compiler(db: Database) extends LazyLogging {
       PushdownSelections,
       new PropagateEmptyViews(db.typechecker),
       PropagateConditions,
-      new EvaluateExpressions(db),
+      new OptimizeExpressions(optimize(_:Expression)),
       PartitionUncertainJoins,
       PullUpUnions
     )

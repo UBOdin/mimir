@@ -9,16 +9,20 @@ import mimir._
 import mimir.parser._
 import mimir.algebra._
 import mimir.sql._
+import mimir.test.RASimplify
 import mimir.optimizer.expression._
 import mimir.optimizer.operator._
 
-object ExpressionOptimizerSpec extends Specification {
+object ExpressionOptimizerSpec 
+  extends Specification 
+  with RASimplify
+{
   
   def typechecker = new Typechecker  
   def expr = ExpressionParser.expr _
 
   def conditionals(x:String) = 
-    PropagateConditions(expr(x))
+    simplify(PropagateConditions(expr(x)))
 
   def booleanOpts(x:String) =
     new FlattenBooleanConditionals(typechecker)(PullUpBranches(expr(x)))

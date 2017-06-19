@@ -11,8 +11,12 @@ import mimir.algebra._
 import mimir.sql._
 import mimir.util._
 import mimir.models._
+import mimir.test.RASimplify
 
-object CTPartitionSpec extends Specification {
+object CTPartitionSpec 
+  extends Specification 
+  with RASimplify
+{
   
   val schema = Map[String,Seq[(String,Type)]](
     ("R", Seq( 
@@ -33,7 +37,7 @@ object CTPartitionSpec extends Specification {
   def db = Database(null);
   def expr = ExpressionParser.expr _
 
-  def partition(x:Operator) = CTPartition.partition(x)
+  def partition(x:Operator) = simplify(CTPartition.partition(x))
   def extract(x:Expression) = CTPartition.allCandidateConditions(x)
 
   "The Partitioner" should {
@@ -101,8 +105,11 @@ object CTPartitionSpec extends Specification {
             table("R").filterParsed("A IS NULL")
           ),
           table("R")
-            .filterParsed("(A IS NOT NULL) AND (A > 4)")
-            .project("A")
+            .filterParsed("A IS NOT NULL")
+            .mapParsed(
+              "A" -> "A",
+              CTables.conditionColumn -> "A > 4"
+            )
         )
       )
     }

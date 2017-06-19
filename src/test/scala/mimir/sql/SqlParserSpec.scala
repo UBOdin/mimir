@@ -110,7 +110,7 @@ object SqlParserSpec
 					Table("R","R", Map(("A", TInt()), ("B", TInt()), ("C", TInt())).toList, List()
 					))
 
-			db.compiler.optimize(convert("SELECT SUM(*) AS TIM FROM R")) must throwA[RAException]
+			db.typechecker.schemaOf(convert("SELECT SUM(*) AS TIM FROM R")) must throwA[RAException]
 
 			db.compiler.optimize(convert("SELECT AVG(A) FROM R")) must be equalTo
 				Aggregate(List(), List(AggFunction("AVG", false, List(Var("A")), "AVG")),

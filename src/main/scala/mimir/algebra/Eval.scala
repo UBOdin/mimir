@@ -207,6 +207,10 @@ object Eval
         IntPrimitive(a.asLong << b.asLong)
       case (Arith.ShiftRight, TInt()) =>
         IntPrimitive(a.asLong >> b.asLong)
+      case (Arith.And, TBool()) =>
+        BoolPrimitive(a.asBool && b.asBool)
+      case (Arith.Or, TBool()) =>
+        BoolPrimitive(a.asBool || b.asBool)
       case (_, _) => 
         throw new RAException(s"Invalid Arithmetic $a $op $b")
     }
