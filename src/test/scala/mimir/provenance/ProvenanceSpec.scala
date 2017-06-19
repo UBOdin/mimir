@@ -16,13 +16,12 @@ object ProvenanceSpec extends Specification {
 
   val schema = Map[String,Seq[(String,Type)]](
     ("R", Seq( 
-      ("R_A", TInt()),
-      ("R_B", TInt()),
-      ("R_C", TInt())
+      ("A", TInt()),
+      ("B", TInt())
     )),
     ("S", Seq( 
-      ("S_C", TInt()),
-      ("S_D", TFloat())
+      ("C", TInt()),
+      ("D", TFloat())
     ))
   )
   def table(name: String): Operator =
@@ -60,7 +59,7 @@ object ProvenanceSpec extends Specification {
       )
       checkProv(1, 
         table("R")
-          .mapParsed( ("A", "A"), ("Z", "C") )
+          .mapParsed( ("A", "A"), ("Z", "B") )
       )
     }
 
@@ -81,7 +80,7 @@ object ProvenanceSpec extends Specification {
           .project("A")
           .join(
             table("S")
-              .filterParsed("D > E")
+              .filterParsed("C > D")
           )
       )
     }
@@ -89,14 +88,14 @@ object ProvenanceSpec extends Specification {
     "Work with unions" >> {
       checkProv(2, 
         table("R")
-          .mapParsed( ("D", "A"), ("E", "B") )
+          .mapParsed( ("C" -> "A"), ("D" -> "B") )
           .union(table("S"))
       )
       checkProv(3, 
         table("R").
           join(
             table("R")
-              .mapParsed( ("D", "A"), ("E", "B") )
+              .mapParsed( ("C" -> "A"), ("D" -> "B") )
               .union(table("S"))
           )
       )
@@ -106,7 +105,7 @@ object ProvenanceSpec extends Specification {
       checkProv(3, 
         table("R")
           .join(table("S"))
-          .mapParsed( ("D", "A"), ("E", "E") )
+          .mapParsed( ("D" -> "C"), ("C", "A") )
           .union(table("S"))
       )
     }

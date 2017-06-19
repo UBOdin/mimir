@@ -63,12 +63,12 @@ class Compiler(db: Database) extends LazyLogging {
     var oper = compiledOper
     val isAnOutputCol = outputCols.toSet
 
+    // Optimize
+    oper = optimize(oper)
+
     // Run a final typecheck to check the sanitity of the rewrite rules
     val schema = db.typechecker.schemaOf(oper)
     logger.debug(s"SCHEMA: $schema.mkString(", ")")
-
-    // Optimize
-    oper = optimize(oper)
 
     // Strip off the final projection operator
     val extracted = OperatorUtils.extractProjections(oper)

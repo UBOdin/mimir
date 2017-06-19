@@ -145,11 +145,9 @@ class CTExplainer(db: Database) extends LazyLogging {
 		logger.debug(s"ExplainCell INPUT: $oper")
 		val (tuple, allExpressions, _) = getProvenance(oper, token)
 		logger.debug(s"ExplainCell Provenance: $allExpressions")
-		val expr = allExpressions.get(column).get
-		val colType = db.typechecker.typeOf(
-			InlineVGTerms(expr, db), 
-			scope = tuple.mapValues( _.getType )
-		)
+		val expr = allExpressions(column)
+		val guessExpr = db.compiler.optimize(Eval.inline(InlineVGTerms(expr, db), tuple))
+		val colType = db.typechecker.typeOf(guessExpr)
 
 		val examples = 
 			sampleExpression[List[PrimitiveValue]](

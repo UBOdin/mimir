@@ -24,6 +24,7 @@ import mimir.sql.{
     CreateAdaptiveSchema,
     AlterViewMaterialize
   }
+import mimir.optimizer.operator.OptimizeExpressions
 import mimir.util.{LoadCSV,ExperimentalOptions}
 import mimir.parser.MimirJSqlParser
 import mimir.statistics.FuncDep
@@ -187,7 +188,8 @@ case class Database(backend: Backend)
    */
   def bestGuessSchema(oper: Operator): Seq[(String, Type)] =
   {
-    typechecker.schemaOf(InlineVGTerms(oper, this))
+    val Inline = new OptimizeExpressions(compiler.optimize(_))
+    typechecker.schemaOf(Inline(InlineVGTerms(oper, this)))
   }
 
   /**
