@@ -166,16 +166,16 @@ object CTAnalyzer {
     }
   }
 
-  def compileSample(expr: Expression, seed: Expression): Expression =
+  def compileSample(expr: Expression, seed: Expression, models: (String => Model)): Expression =
   {
-    expr match {
-      case VGTerm(model, idx, args, hints) => 
-        Function("VGTERM_SAMPLE", Seq(
-          StringPrimitive(model),
-          IntPrimitive(idx),
-          seed
-        ) ++ args ++ hints)
-      case _ => expr.rebuild(expr.children.map(compileSample(_, seed)))
-    }
+    val replacement =
+      expr match {
+        case VGTerm(name, idx, args, hints) => 
+          Sampler(models(name), idx, args, hints, seed)
+        case _ => expr
+      }
+
+    return replacement.recur(compileSample(_, seed, models))
+
   }
 }

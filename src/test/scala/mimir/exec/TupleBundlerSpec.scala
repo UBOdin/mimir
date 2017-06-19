@@ -29,7 +29,7 @@ object TupleBundleSpec
   val rand = new Random(42)
   val numSamples = 10
   val bundler = new TupleBundle((0 until numSamples).map { _ => rand.nextLong })
-  def compileFlat(query: Operator) = bundler.compileFlat(query)
+  def compileFlat(query: Operator) = bundler.compileFlat(query, db.models.get(_))
   val allWorlds = WorldBits.fullBitVector(numSamples)
   val columnNames = TupleBundle.columnNames(_:String, numSamples)
 

@@ -186,7 +186,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 		init: A, accum: ((A, PrimitiveValue) => A)
 	): A = 
 	{
-		val sampleExpr = CTAnalyzer.compileSample(expr, Var(CTables.SEED_EXP))
+		val sampleExpr = CTAnalyzer.compileSample(expr, Var(CTables.SEED_EXP), db.models.get(_))
         (0 until count).
         	map( (i) => 
         		try {
@@ -270,13 +270,18 @@ class CTExplainer(db: Database) extends LazyLogging {
 				Reason.make(
 					db.models.get(v.name), 
 					v.idx, 
-					v.args.map(db.interpreter.eval(_,tuple)), v.hints.map(db.interpreter.eval(_,tuple))
+					v.args.map { arg => 
+						db.interpreter.eval(InlineVGTerms(arg, db),tuple)
+					}, 
+					v.hints.map { arg =>
+						db.interpreter.eval(InlineVGTerms(arg, db),tuple)
+					}
 				)
 			)
 
 			case Conditional(c, t, e) =>
 				(
-					if(db.interpreter.evalBool(c, tuple)){
+					if(db.interpreter.evalBool(InlineVGTerms(c, db), tuple)){
 						getFocusedReasons(t, tuple)
 					} else {
 						getFocusedReasons(e, tuple)
@@ -285,7 +290,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 			case Arithmetic(op @ (Arith.And | Arith.Or), a, b) =>
 				(
-					(op, db.interpreter.evalBool(InlineVGTerms.inline(a, db), tuple)) match {
+					(op, db.interpreter.evalBool(InlineVGTerms(a, db), tuple)) match {
 						case (Arith.And, true) => getFocusedReasons(b, tuple)
 						case (Arith.Or, false) => getFocusedReasons(b, tuple)
 						case _ => Map()

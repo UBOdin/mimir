@@ -7,6 +7,7 @@ import mimir.ctables._
 import mimir.provenance._
 import mimir.exec._
 import mimir.exec.result._
+import mimir.models.Model
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 /**
@@ -46,7 +47,7 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
     val (withProvenance, provenanceCols) = Provenance.compile(query)
     query = withProvenance
 
-    val (compiled, nonDeterministicColumns) = compileFlat(query)    
+    val (compiled, nonDeterministicColumns) = compileFlat(query, db.models.get(_))    
     query = compiled
 
     query = db.views.resolve(query)
@@ -79,7 +80,7 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
     return expressionHasANonDeterministicInput || expressionIsNonDeterministic
   }
 
-  def splitExpressionsByWorlds(expressions: Seq[Expression], nonDeterministicInputs: Set[String]): Seq[Seq[Expression]] =
+  def splitExpressionsByWorlds(expressions: Seq[Expression], nonDeterministicInputs: Set[String], models: (String => Model)): Seq[Seq[Expression]] =
   {
     val outputColumns =
       seeds.zipWithIndex.map { case (seed, i) => 
@@ -90,7 +91,8 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
         expressions.map { expression => 
           CTAnalyzer.compileSample(
             Eval.inline(expression, inputInstancesInThisSample),
-            IntPrimitive(seed)
+            IntPrimitive(seed), 
+            models
           )
         }
       }
@@ -98,9 +100,9 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
     outputColumns
   }
 
-  def splitExpressionByWorlds(expression: Expression, nonDeterministicInputs: Set[String]): Seq[Expression] =
+  def splitExpressionByWorlds(expression: Expression, nonDeterministicInputs: Set[String], models: (String => Model)): Seq[Expression] =
   {
-    splitExpressionsByWorlds(Seq(expression), nonDeterministicInputs).map(_(0))
+    splitExpressionsByWorlds(Seq(expression), nonDeterministicInputs, models).map(_(0))
   }
 
   def convertFlatToLong(compiledQuery: Operator, baseSchema: Seq[String], nonDeterministicInput: Set[String]): Operator =
@@ -143,7 +145,7 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
     OperatorUtils.makeUnion(sampleShards)
   }
 
-  def compileFlat(query: Operator): (Operator, Set[String]) =
+  def compileFlat(query: Operator, models: (String => Model)): (Operator, Set[String]) =
   {
     // Check for a shortcut opportunity... if the expression is deterministic, we're done!
     if(CTables.isDeterministic(query)){
@@ -164,7 +166,7 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
         )
 
       case Project(columns, oldChild) => {
-        val (newChild, nonDeterministicInput) = compileFlat(oldChild)
+        val (newChild, nonDeterministicInput) = compileFlat(oldChild, models)
 
         val (
           newColumns,
@@ -172,7 +174,7 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
         ):(Seq[Seq[ProjectArg]], Seq[Set[String]]) = columns.map { col => 
             if(doesExpressionNeedSplit(col.expression, nonDeterministicInput)){
               (
-                splitExpressionByWorlds(col.expression, nonDeterministicInput).
+                splitExpressionByWorlds(col.expression, nonDeterministicInput, models).
                   zipWithIndex
                   map { case (expr, i) => ProjectArg(TupleBundle.colNameInSample(col.name, i), expr) },
                 Set(col.name)
@@ -192,10 +194,10 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
       }
 
       case Select(condition, oldChild) => {
-        val (newChild, nonDeterministicInput) = compileFlat(oldChild)
+        val (newChild, nonDeterministicInput) = compileFlat(oldChild, models)
 
         if(doesExpressionNeedSplit(condition, nonDeterministicInput)){
-          val replacements = splitExpressionByWorlds(condition, nonDeterministicInput)
+          val replacements = splitExpressionByWorlds(condition, nonDeterministicInput, models)
 
           val updatedWorldBits =
             Arithmetic(Arith.BitAnd,
@@ -225,8 +227,8 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
       }
 
       case Join(lhsOldChild, rhsOldChild) => {
-        val (lhsNewChild, lhsNonDeterministicInput) = compileFlat(lhsOldChild)
-        val (rhsNewChild, rhsNonDeterministicInput) = compileFlat(rhsOldChild)
+        val (lhsNewChild, lhsNonDeterministicInput) = compileFlat(lhsOldChild, models)
+        val (rhsNewChild, rhsNonDeterministicInput) = compileFlat(rhsOldChild, models)
 
         // To safely join the two together, we need to rename the world-bit columns
         val rewrittenJoin =
@@ -248,8 +250,8 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
       }
 
       case Union(lhsOldChild, rhsOldChild) => {
-        val (lhsNewChild, lhsNonDeterministicInput) = compileFlat(lhsOldChild)
-        val (rhsNewChild, rhsNonDeterministicInput) = compileFlat(rhsOldChild)
+        val (lhsNewChild, lhsNonDeterministicInput) = compileFlat(lhsOldChild, models)
+        val (rhsNewChild, rhsNonDeterministicInput) = compileFlat(rhsOldChild, models)
         val schema = query.columnNames
 
         val alignNonDeterminism = (
@@ -289,7 +291,7 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
       }
 
       case Aggregate(gbColumns, aggColumns, oldChild) => {
-        val (newChild, nonDeterministicInput) = compileFlat(oldChild)
+        val (newChild, nonDeterministicInput) = compileFlat(oldChild, models)
 
         // We divide the aggregate into two cases, an easy one and a hard one.
         //
@@ -374,7 +376,7 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
             aggColumns.map { case AggFunction(name, distinct, args, alias) =>
               if(args.exists(doesExpressionNeedSplit(_, nonDeterministicInput))){
                 val splitAggregates =
-                  splitExpressionsByWorlds(args, nonDeterministicInput).
+                  splitExpressionsByWorlds(args, nonDeterministicInput, models).
                     zipWithIndex.
                     map { case (newArgs, i) => AggFunction(name, distinct, newArgs, TupleBundle.colNameInSample(alias, i)) }
                 (splitAggregates, Set(alias))
@@ -400,7 +402,7 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
 
       // We don't handle materialized tuple bundles (at the moment)
       // so give up and drop the view.
-      case View(_, query, _) =>  compileFlat(query)
+      case View(_, query, _) =>  compileFlat(query, models)
 
       case ( Sort(_,_) | Limit(_,_,_) | LeftOuterJoin(_,_,_) | Annotate(_, _) | ProvenanceOf(_) | Recover(_, _) ) =>
         throw new RAException("Tuple-Bundler presently doesn't support LeftOuterJoin, Sort, or Limit (probably need to resort to 'Long' evaluation)")

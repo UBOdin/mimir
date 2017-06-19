@@ -545,7 +545,6 @@ abstract class Proc(val args: Seq[Expression]) extends Expression
   def get(v: Seq[PrimitiveValue]): PrimitiveValue
 }
 
-
 case class VGTerm(
   name: String, 
   idx: Int,

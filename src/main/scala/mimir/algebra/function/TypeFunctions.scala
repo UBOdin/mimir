@@ -19,7 +19,7 @@ object TypeFunctions
         functionName,
         (params: Seq[PrimitiveValue]) => {
           params match {
-            case x :: TypePrimitive(t)    :: Nil => Cast(t, x)
+            case Seq(x, TypePrimitive(t)) => Cast(t, x)
             case _ => throw new RAException("Invalid cast: "+params)
           }
         },
@@ -33,7 +33,7 @@ object TypeFunctions
         (params: Seq[PrimitiveValue]) => 
             { TextUtils.parseDate(params.head.asString) },
         _ match {
-          case _ :: Nil => TDate()
+          case Seq(_) => TDate()
           case _ => throw new RAException("Invalid parameters to DATE()")
         }
       )
