@@ -78,8 +78,8 @@ object MimirGProM {
     //runTests(130) 
     //runTests(1) 
     
-    //val query = "SELECT * FROM LENS_PICKER2009618197"; //airbus eng err repaired data
-    val query = "SELECT * FROM LENS_MISSING_KEY912796204"; //airbus eng err missing groups
+    val query = "SELECT * FROM LENS_PICKER2009618197"; //airbus eng err repaired data
+    //val query = "SELECT * FROM LENS_MISSING_KEY912796204"; //airbus eng err missing groups
     val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
     val operResults = printOperResults(oper) 
     
