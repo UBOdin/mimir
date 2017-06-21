@@ -109,7 +109,8 @@ case class Database(backend: Backend)
   val catalog         = new mimir.statistics.SystemCatalog(this)
   val typechecker     = new mimir.algebra.Typechecker(
                                   functions = Some(functions), 
-                                  aggregates = Some(aggregates)
+                                  aggregates = Some(aggregates),
+                                  models = Some(models)
                                 )
   val interpreter     = new mimir.algebra.Eval(
                                   functions = Some(functions)
