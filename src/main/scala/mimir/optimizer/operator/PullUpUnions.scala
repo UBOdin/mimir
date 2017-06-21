@@ -1,7 +1,8 @@
-package mimir.optimizer
+package mimir.optimizer.operator
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
+import mimir.optimizer.OperatorOptimization
 
 object PullUpUnions extends OperatorOptimization with LazyLogging
 {

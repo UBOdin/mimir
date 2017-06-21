@@ -5,8 +5,8 @@ import org.specs2.specification.core.{Fragment,Fragments}
 
 import mimir.algebra._
 import mimir.util._
-import mimir.ctables.{VGTerm}
-import mimir.optimizer.{InlineVGTerms,InlineProjections}
+import mimir.ctables.InlineVGTerms
+import mimir.optimizer.operator.InlineProjections
 import mimir.test._
 import mimir.models._
 
@@ -26,10 +26,10 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
 
     "Produce reasonable views" >> {
       db.loadTable("CPUSPEED", new File("test/data/CPUSpeed.csv"))
-      val resolved1 = InlineProjections(db.views.resolve(db.getTableOperator("CPUSPEED")))
+      val resolved1 = InlineProjections(db.views.resolve(db.table("CPUSPEED")))
       resolved1 must beAnInstanceOf[Project]
       val resolved2 = resolved1.asInstanceOf[Project]
-      val coresColumnId = db.getTableOperator("CPUSPEED").schema.map(_._1).indexOf("CORES")
+      val coresColumnId = db.table("CPUSPEED").columnNames.indexOf("CORES")
       val coresModel = db.models.get("CPUSPEED")
 
       // Make sure the model name is right.
@@ -39,7 +39,7 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       coresModel must not be empty
 
       resolved2.get("CORES") must be equalTo(Some(
-        Function("CAST", List(Var("CORES"), VGTerm(coresModel, coresColumnId, List(), List())))
+        Function("CAST", List(Var("CORES"), VGTerm(coresModel.name, coresColumnId, List(), List())))
       ))
 
       coresModel.reason(coresColumnId, List(), List()) must contain("was of type INT")
@@ -47,7 +47,7 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       val coresGuess1 = coresModel.bestGuess(coresColumnId, List(), List())
       coresGuess1 must be equalTo(TypePrimitive(TInt()))
 
-      val coresGuess2 = InlineVGTerms(VGTerm(coresModel, coresColumnId, List(), List()))
+      val coresGuess2 = InlineVGTerms(VGTerm(coresModel.name, coresColumnId, List(), List()), db)
       coresGuess2 must be equalTo(TypePrimitive(TInt()))
 
 
@@ -55,14 +55,14 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
 
     "Be able to create and query type inference lenses" >> {
 
-      val baseTypes = db.bestGuessSchema(db.getTableOperator("CPUSPEED_RAW")).toMap
+      val baseTypes = db.bestGuessSchema(db.table("CPUSPEED_RAW")).toMap
       baseTypes.keys must contain(eachOf("CORES", "FAMILY", "TECH_MICRON"))
       baseTypes must contain("CORES" -> TString())
       baseTypes must contain("FAMILY" -> TString())
       baseTypes must contain("TECH_MICRON" -> TString())
 
 
-      val lensTypes = db.bestGuessSchema(db.getTableOperator("CPUSPEED")).toMap
+      val lensTypes = db.bestGuessSchema(db.table("CPUSPEED")).toMap
       lensTypes.keys must contain(eachOf("CORES", "FAMILY", "TECH_MICRON"))
       lensTypes must contain("CORES" -> TInt())
       lensTypes must contain("FAMILY" -> TString())

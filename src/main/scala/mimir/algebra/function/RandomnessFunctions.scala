@@ -7,15 +7,15 @@ object RandomnessFunctions
 
   val prng = new scala.util.Random()
 
-  def register()
+  def register(fr: FunctionRegistry)
   {
 
-    FunctionRegistry.registerNative("RANDOM",
+    fr.register("RANDOM",
       (args: Seq[PrimitiveValue]) => IntPrimitive(prng.nextLong),
       (types: Seq[Type]) => { TInt() }
     )
 
-    FunctionRegistry.registerNative("POSSION", 
+    fr.register("POSSION", 
       {
         case Seq(IntPrimitive(m))   => {
           IntPrimitive(mimir.sql.sqlite.Possion.poisson_helper(m))
@@ -29,7 +29,7 @@ object RandomnessFunctions
       ((args: Seq[Type]) => TInt())
     )
 
-    FunctionRegistry.registerNative("GAMMA", 
+    fr.register("GAMMA", 
       {
         case Seq(FloatPrimitive(k), FloatPrimitive(theta))   => {
           FloatPrimitive(mimir.sql.sqlite.Gamma.sampleGamma(k, theta))

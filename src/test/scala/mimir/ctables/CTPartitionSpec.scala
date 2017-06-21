@@ -11,50 +11,68 @@ import mimir.algebra._
 import mimir.sql._
 import mimir.util._
 import mimir.models._
+import mimir.test.RASimplify
 
-object CTPartitionSpec extends Specification {
+object CTPartitionSpec 
+  extends Specification 
+  with RASimplify
+{
   
-  val schema = Map[String,List[(String,Type)]](
-    ("R", List( 
+  val schema = Map[String,Seq[(String,Type)]](
+    ("R", Seq( 
       ("A", TInt()),
       ("B", TInt())
     )),
-    ("S", List( 
+    ("S", Seq( 
       ("C", TInt()),
       ("D", TInt())
     ))
   )
 
-  def db = Database(null);
-  def parser = new OperatorParser((x: String) => UniformDistribution, schema(_))
-  def expr = parser.expr _
-  def oper = parser.operator _
+  def table(name: String, meta: Seq[(String, Expression, Type)] = Seq()): Operator =
+    Table(name, name, schema(name), meta)
 
-  def partition(x:Operator) = CTPartition.partition(x)
-  def partition(x:String) = CTPartition.partition(oper(x))
+  val withRowId = Seq(("ROWID", RowIdVar(), TRowId()))
+
+  def db = Database(null);
+  def expr = ExpressionParser.expr _
+
+  def partition(x:Operator) = simplify(CTPartition.partition(x))
   def extract(x:Expression) = CTPartition.allCandidateConditions(x)
-  def extract(x:String) = CTPartition.allCandidateConditions(expr(x))
 
   "The Partitioner" should {
 
     "Handle Base Relations" in {
-      partition("R(A, B)") must be equalTo oper("R(A, B)")
+      partition(table("R")) must be equalTo table("R")
 
-      partition("R(A, B // ROWID:rowid <- ROWID)") must be equalTo 
-        oper("R(A, B // ROWID:rowid <- ROWID)")
+      partition(table("R", withRowId)) must be equalTo 
+        table("R", withRowId)
     }
 
     "Handle Deterministic Projection" in {
-      partition("PROJECT[A <= A](R(A, B))") must be equalTo 
-        oper("PROJECT[A <= A](R(A, B))")
+      partition(
+        table("R").
+          project("A")
+      ) must be equalTo(
+        table("R").
+          project("A")
+      )
     }
 
     "Handle Simple Non-Determinstic Projection" in {
-      partition("""
-        PROJECT[A <= A, __MIMIR_CONDITION <= {{Q_1[B, ROWID]}}](R(A, B))
-      """) must be equalTo oper("""
-        PROJECT[A <= A, __MIMIR_CONDITION <= {{Q_1[B, ROWID]}}](R(A, B))
-      """)
+      partition(
+        table("R").
+          mapParsed(
+            "A" -> "A",
+            "__MIMIR_CONDITION" -> "{{Q_1[B, ROWID]}}"
+          )
+      ) must be equalTo (
+        table("R").
+          mapParsed(
+            "A" -> "A",
+            "__MIMIR_CONDITION" -> "{{Q_1[B, ROWID]}}"
+          )
+      )
     }
 
     "Extract Conditions Correctly" in {
@@ -76,7 +94,7 @@ object CTPartitionSpec extends Specification {
               )
             )
           ),
-          oper("R(A,B)")
+          table("R")
         )
       ) must be equalTo (
         Union(
@@ -84,9 +102,14 @@ object CTPartitionSpec extends Specification {
               ProjectArg("A", expr("A")),
               ProjectArg(CTables.conditionColumn, expr("{{Q_1[ROWID]}} > 4"))
             ),
-            oper("SELECT[A IS NULL](R(A,B))")
+            table("R").filterParsed("A IS NULL")
           ),
-          oper("PROJECT[A <= A](SELECT[(A IS NOT NULL) AND (A > 4)](R(A,B)))")
+          table("R")
+            .filterParsed("A IS NOT NULL")
+            .mapParsed(
+              "A" -> "A",
+              CTables.conditionColumn -> "A > 4"
+            )
         )
       )
     }

@@ -60,7 +60,7 @@ object OperatorUtils extends LazyLogging {
   {
     oper match {
       case Project(cols, src) => (cols.map(col => ProjectArg(col.name, col.expression)), src)
-      case _ => (oper.schema.map(col => ProjectArg(col._1, Var(col._1))), oper)
+      case _ => (oper.columnNames.map(col => ProjectArg(col, Var(col))), oper)
     }
   }
 
@@ -135,14 +135,14 @@ object OperatorUtils extends LazyLogging {
     val affectedCols = cols.map(_._1).toSet & lhs.columnNames.toSet & rhs.columnNames.toSet
     val wrappedLHS = 
       Project(
-        lhs.schema.map(_._1).map( x => 
+        lhs.columnNames.map( x => 
           ProjectArg(if(affectedCols.contains(x)) { "__MIMIR_LJ_"+x } else { x }, 
                      Var(x))),
         lhs
       )
     val wrappedRHS = 
       Project(
-        rhs.schema.map(_._1).map( x => 
+        rhs.columnNames.map( x => 
           ProjectArg(if(affectedCols.contains(x)) { "__MIMIR_RJ_"+x } else { x }, 
                      Var(x))),
         rhs
@@ -175,8 +175,8 @@ object OperatorUtils extends LazyLogging {
    */
   def makeSafeJoin(lhs: Operator, rhs: Operator): (Operator, Map[String,String]) = 
   {
-    def lhsCols = lhs.schema.map(_._1).toSet
-    def rhsCols = rhs.schema.map(_._1).toSet
+    def lhsCols = lhs.columnNames.toSet
+    def rhsCols = rhs.columnNames.toSet
     def conflicts = lhsCols & rhsCols
     logger.trace(s"Make Safe Join: $lhsCols & $rhsCols = $conflicts => \n${Join(lhs, rhs)}")
     if(conflicts.isEmpty){
@@ -207,7 +207,7 @@ object OperatorUtils extends LazyLogging {
   def makeColumnNameUnique(name: String, conflicts: Set[String], oper: Operator): (String, Operator) =
   {
     if(!conflicts(name)){ return (name, oper); }
-    if(!oper.schema.exists { col => col._1.equals(name) }){ 
+    if(!oper.columnNames.exists { _.equals(name) }){ 
       throw new RAException(s"Error in makeColumnNameUnique: Wanting to rename $name in \n$oper")
     }
     val allConflicts = conflicts ++ findRenamingConflicts(name, oper)
@@ -233,7 +233,7 @@ object OperatorUtils extends LazyLogging {
       case Join(lhs, rhs) => 
         findRenamingConflicts(name, lhs) ++ findRenamingConflicts(name, rhs)
       case EmptyTable(_) | Table(_,_,_,_) | View(_,_,_) => 
-        oper.schema.map(_._1).toSet
+        oper.columnNames.toSet
       case Sort(_, src) =>
         findRenamingConflicts(name, src)
       case Limit(_, _, src) =>
@@ -298,7 +298,7 @@ object OperatorUtils extends LazyLogging {
         }
       }
       case Join(lhs, rhs) => {
-        if(lhs.schema.exists( _._1.equals(target) )){
+        if(lhs.columnNames.exists( _.equals(target) )){
           Join(deepRenameColumn(target, replacement, lhs), rhs)
         } else {
           Join(lhs, deepRenameColumn(target, replacement, rhs))
@@ -311,7 +311,7 @@ object OperatorUtils extends LazyLogging {
         )
       }
       case LeftOuterJoin(lhs, rhs, cond) => {
-        if(lhs.schema.exists( _._1.equals(target) )){
+        if(lhs.columnNames.exists( _.equals(target) )){
           LeftOuterJoin(deepRenameColumn(target, replacement, lhs), rhs, rewrite(cond))
         } else {
           LeftOuterJoin(lhs, deepRenameColumn(target, replacement, rhs), rewrite(cond))
@@ -330,7 +330,7 @@ object OperatorUtils extends LazyLogging {
       }
       case View(_, _, _) => {
         Project(
-          oper.schema.map(_._1).map { col =>
+          oper.columnNames.map { col =>
             if(col.equals(target)){ ProjectArg(replacement, Var(target)) }
             else { ProjectArg(col, Var(col)) }
           },

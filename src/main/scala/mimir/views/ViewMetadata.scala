@@ -1,5 +1,6 @@
 package mimir.views
 
+import mimir.Database
 import mimir.algebra._
 import mimir.ctables.CTPercolator
 import mimir.provenance.Provenance
@@ -7,7 +8,8 @@ import mimir.provenance.Provenance
 class ViewMetadata(
   val name: String,
   val query: Operator,
-  val isMaterialized: Boolean
+  val isMaterialized: Boolean,
+  db: Database
 )
 {
   val annotations = 
@@ -55,15 +57,19 @@ class ViewMetadata(
   def provenanceCols: Seq[String] = 
     Provenance.compile(query)._2
 
-  def schema =
+  def schema: Seq[(String, Type)] =
+  {
     //XXX: HACK!  Type Inference really really really needs to become an adaptive schema
-    mimir.optimizer.InlineVGTerms(query).schema
+    db.bestGuessSchema(query)
+  }
 
   def schemaWith(requiredAnnotations:Set[ViewAnnotation.T]) =
   {
-    schema ++ (
+    val sch = schema
+
+    sch ++ (
       if(requiredAnnotations(ViewAnnotation.TAINT)) {
-        schema.map { col => 
+        sch.map { col => 
           (CTPercolator.mimirColDeterministicColumnPrefix + col._1, TBool())
         }++
         Seq((CTPercolator.mimirRowDeterministicColumnName, TBool()))

@@ -226,7 +226,7 @@ object MimirVizier {
       println("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
       val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
       //val compiledOper = db.compiler.compileInline(oper, db.compiler.standardOptimizations)._1
-      val cols = oper.schema.map(f => f._1)
+      val cols = oper.columnNames
       //println(s"explaining Cell: [${cols(col)}][$row]")
       //db.explainCell(oper, RowIdPrimitive(row.toString()), cols(col)).toString()
       db.explainer.getFocusedReasons(db.explainer.explainSubset(
@@ -245,7 +245,7 @@ object MimirVizier {
       //db.explainRow(oper, RowIdPrimitive(row)).toString()
       val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
       //val compiledOper = db.compiler.compileInline(oper, db.compiler.standardOptimizations)._1
-      val cols = oper.schema.map(f => f._1)
+      val cols = oper.columnNames
       db.explainer.getFocusedReasons(db.explainer.explainSubset(
               db.explainer.filterByProvenance(oper,RowIdPrimitive(row)), 
               Seq().toSet, true, false))
@@ -358,7 +358,7 @@ object MimirVizier {
  
  def totallyOptimize(oper : mimir.algebra.Operator) : mimir.algebra.Operator = {
     val preOpt = oper.toString() 
-    val postOptOper = Compiler.optimize(oper)
+    val postOptOper = db.compiler.optimize(oper)
     val postOpt = postOptOper.toString() 
     if(preOpt.equals(postOpt))
       postOptOper

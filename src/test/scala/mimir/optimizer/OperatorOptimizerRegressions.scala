@@ -3,10 +3,13 @@ package mimir.optimizer
 import org.specs2.mutable._
 import mimir.algebra._
 import mimir.test._
+import mimir.optimizer.expression._
+import mimir.optimizer.operator._
 
 object OperatorOptimizerRegressions
   extends Specification
-  with DumbRAParsers
+  with RAParsers
+  with RASimplify
   // extends SQLTestSpecification("OperOptRegressions")
 {
 
@@ -93,7 +96,7 @@ object OperatorOptimizerRegressions
             expr("CUSTKEY !=  CUSTKEY_0")
           )
         )
-      Eval.simplify(
+      simplify(
         PropagateConditions(problemExpr, Seq(expr("CUSTKEY_0=CUSTKEY")))
       ) must be equalTo(BoolPrimitive(false))
     }
@@ -111,7 +114,7 @@ object OperatorOptimizerRegressions
             )
           )
         )
-      PropagateConditions(problemExpr) must be equalTo(
+      simplify(PropagateConditions(problemExpr)) must be equalTo(
         Arithmetic(Arith.Or,
           Var("C"),
           Arithmetic(Arith.And,

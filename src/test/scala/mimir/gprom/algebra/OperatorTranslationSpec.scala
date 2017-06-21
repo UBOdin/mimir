@@ -17,8 +17,6 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
   
   var memctx : com.sun.jna.Pointer = null
   
-  def convert(x: String) = db.ra.convert(oper(x)).toString
-
   def beforeAll =
   {
     update("CREATE TABLE R(A integer, B integer)")
@@ -229,7 +227,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
     
     def totallyOptimize(oper : mimir.algebra.Operator) : mimir.algebra.Operator = {
       val preOpt = oper.toString() 
-      val postOptOper = Compiler.optimize(oper, Compiler.standardOptimizations)
+      val postOptOper = db.compiler.optimize(oper)
       val postOpt = postOptOper.toString() 
       if(preOpt.equals(postOpt))
         postOptOper

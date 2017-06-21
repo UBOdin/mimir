@@ -1,15 +1,16 @@
-package mimir.optimizer;
+package mimir.optimizer.operator
 
-import java.sql._;
+import java.sql._
 
-import mimir.algebra._;
-import mimir.ctables._;
+import mimir.algebra._
+import mimir.ctables._
+import mimir.optimizer.OperatorOptimization
 
 object ProjectRedundantColumns extends OperatorOptimization {
 
   private def projectIfNeeded(oper: Operator, dependencies: Set[String]) = 
   {
-    val existingColumns = oper.schema.map(_._1)
+    val existingColumns = oper.columnNames
     if(existingColumns.forall( dependencies contains _ )){ oper }
     else {
       OperatorUtils.projectColumns(dependencies.toList, oper)
@@ -17,7 +18,7 @@ object ProjectRedundantColumns extends OperatorOptimization {
   }
 
   def apply(o: Operator): Operator = 
-    apply(o, o.schema.map(_._1).toSet)
+    apply(o, o.columnNames.toSet)
 
   def apply(o: Operator, dependencies: Set[String]): Operator =
   {
@@ -79,8 +80,8 @@ object ProjectRedundantColumns extends OperatorOptimization {
 
         val newLhs = apply(lhs, dependencies)
         val newRhs = apply(rhs, dependencies)
-        val newLhsSchema = lhs.schema.map(_._1).toSet
-        val newRhsSchema = rhs.schema.map(_._1).toSet
+        val newLhsSchema = lhs.columnNames.toSet
+        val newRhsSchema = rhs.columnNames.toSet
 
         if(   (!(dependencies -- newLhsSchema).isEmpty)
             ||(!(dependencies -- newRhsSchema).isEmpty))
@@ -99,8 +100,8 @@ object ProjectRedundantColumns extends OperatorOptimization {
       }
 
       case Join(lhs, rhs) => {
-        val lhsDeps = lhs.schema.map(_._1).toSet & dependencies
-        val rhsDeps = rhs.schema.map(_._1).toSet & dependencies
+        val lhsDeps = lhs.columnNames.toSet & dependencies
+        val rhsDeps = rhs.columnNames.toSet & dependencies
 
         Join(apply(lhs, lhsDeps), apply(rhs, rhsDeps))
       }
@@ -134,8 +135,8 @@ object ProjectRedundantColumns extends OperatorOptimization {
         val childDependencies = 
           ExpressionUtils.getColumns( condition ) ++ dependencies
 
-        val lhsDeps = lhs.schema.map(_._1).toSet & dependencies
-        val rhsDeps = rhs.schema.map(_._1).toSet & dependencies
+        val lhsDeps = lhs.columnNames.toSet & dependencies
+        val rhsDeps = rhs.columnNames.toSet & dependencies
 
         LeftOuterJoin(
           apply(lhs, lhsDeps),

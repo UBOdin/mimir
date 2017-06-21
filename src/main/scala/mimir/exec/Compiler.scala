@@ -12,6 +12,8 @@ import mimir.algebra.Union
 import mimir.algebra._
 import mimir.ctables._
 import mimir.optimizer._
+import mimir.optimizer.operator._
+import mimir.optimizer.expression._
 import mimir.provenance._
 import mimir.exec.result._
 import mimir.exec.mode._
@@ -21,6 +23,28 @@ import net.sf.jsqlparser.statement.select._
 import mimir.gprom.algebra.OperatorTranslation
 
 class Compiler(db: Database) extends LazyLogging {
+
+  def operatorOptimizations: Seq[OperatorOptimization] =
+    Seq(
+      ProjectRedundantColumns,
+      InlineProjections,
+      PushdownSelections,
+      new PropagateEmptyViews(db.typechecker),
+      PropagateConditions,
+      new OptimizeExpressions(optimize(_:Expression)),
+      PartitionUncertainJoins,
+      PullUpUnions
+    )
+
+  def expressionOptimizations: Seq[ExpressionOptimizerRule] =
+    Seq(
+      PullUpBranches,
+      new FlattenTrivialBooleanConditionals(db.typechecker),
+      // FlattenBooleanConditionals,
+      RemoveRedundantCasts,
+      PushDownNots,
+      new SimplifyExpressions(db.interpreter, db.functions)
+    )
 
   val rnd = new Random
 
@@ -33,19 +57,18 @@ class Compiler(db: Database) extends LazyLogging {
 
   def deploy(
     compiledOper: Operator, 
-    outputCols: Seq[String], 
-    opts: Compiler.Optimizations = Compiler.standardOptimizations
+    outputCols: Seq[String]
   ): ResultIterator =
   {
     var oper = compiledOper
     val isAnOutputCol = outputCols.toSet
 
-    // Run a final typecheck to check the sanitity of the rewrite rules
-    val schema = oper.schema
-    logger.debug(s"SCHEMA: $schema.mkString(", ")")
-
     // Optimize
-    oper = Compiler.optimize(oper, opts)
+    oper = optimize(oper)
+
+    // Run a final typecheck to check the sanitity of the rewrite rules
+    val schema = db.typechecker.schemaOf(oper)
+    logger.debug(s"SCHEMA: $schema.mkString(", ")")
 
     // Strip off the final projection operator
     val extracted = OperatorUtils.extractProjections(oper)
@@ -62,7 +85,7 @@ class Compiler(db: Database) extends LazyLogging {
         .toSet
 
     val (agg: Option[(Seq[Var], Seq[AggFunction])], unionClauses: Seq[Operator]) = 
-      DecomposeAggregates(oper) match {
+      DecomposeAggregates(oper, db.typechecker) match {
         case Aggregate(gbCols, aggCols, src) => 
           (Some((gbCols, aggCols)), OperatorUtils.extractUnionClauses(src))
         case _ => 
@@ -82,10 +105,10 @@ class Compiler(db: Database) extends LazyLogging {
               .flatMap { ExpressionUtils.getColumns(_) }
               .toSet.toSeq
         }
-      val sourceColumnTypes = unionClauses(0).schema.toMap
+      val sourceColumnTypes = db.typechecker.schemaOf(unionClauses(0)).toMap
 
 
-      val nested = unionClauses.map { deploy(_, requiredColumnsInOrder, opts = opts) }
+      val nested = unionClauses.map { deploy(_, requiredColumnsInOrder) }
       val jointIterator = new UnionResultIterator(nested.iterator)
 
       val aggregateIterator =
@@ -97,21 +120,23 @@ class Compiler(db: Database) extends LazyLogging {
               gbCols, 
               aggFunctions,
               requiredColumnsInOrder.map { col => (col, sourceColumnTypes(col)) },
-              jointIterator
+              jointIterator,
+              db
             )
         }
       return new ProjectionResultIterator(
         outputCols.map( projections(_) ),
         annotationCols.map( projections(_) ).toSeq,
-        oper.schema,
-        aggregateIterator
+        db.typechecker.schemaOf(oper),
+        aggregateIterator, 
+        db
       )
 
     } else {
       // Make the set of columns we're interested in explicitly part of the query
       oper = oper.project( requiredColumns.toSeq:_* )
 
-      val (sql, sqlSchema) = sqlForBackend(oper, opts)
+      val (sql, sqlSchema) = sqlForBackend(oper)
 
       logger.info(s"PROJECTIONS: $projections")
 
@@ -123,14 +148,14 @@ class Compiler(db: Database) extends LazyLogging {
           sqlSchema,
           sql, db.backend,
           db.backend.dateType
-        )
+        ),
+        db
       )
     }
   }
 
   def sqlForBackend(
-    oper: Operator, 
-    opts: Compiler.Optimizations = Compiler.standardOptimizations
+    oper: Operator
   ): 
     (SelectBody, Seq[(String,Type)]) =
   {
@@ -139,7 +164,7 @@ class Compiler(db: Database) extends LazyLogging {
         && db.backend.isInstanceOf[mimir.sql.GProMBackend] ) {
         Compiler.gpromOptimize(oper) 
       } else { 
-        Compiler.optimize(oper, opts)
+        optimize(oper)
       }
     }
     //val optimized =  Compiler.optimize(oper, opts)
@@ -149,87 +174,30 @@ class Compiler(db: Database) extends LazyLogging {
     // The final stage is to apply any database-specific rewrites to adapt
     // the query to the quirks of each specific target database.  Each
     // backend defines a specializeQuery method that handles this
-    val specialized = db.backend.specializeQuery(optimized)
+    val specialized = db.backend.specializeQuery(optimized, db)
 
     logger.info(s"SPECIALIZED: $specialized")
 
-    logger.info(s"SCHEMA: ${oper.schema.mkString(", ")} -> ${optimized.schema.mkString(", ")}")
+    logger.info(s"SCHEMA: ${oper.columnNames.mkString(", ")} -> ${optimized.columnNames.mkString(", ")}")
     
     // Generate the SQL
     val sql = db.ra.convert(specialized)
 
     logger.info(s"SQL: $sql")
 
-    return (sql, optimized.schema)
+    return (sql, db.typechecker.schemaOf(optimized))
   }
   
-  case class VirtualizedQuery(
-    query: Operator,
-    visibleSchema: Seq[(String, Type)],
-    colDeterminism: Map[String, Expression],
-    rowDeterminism: Expression,
-    provenance: Seq[String]
-  )
+  // case class VirtualizedQuery(
+  //   query: Operator,
+  //   visibleSchema: Seq[(String, Type)],
+  //   colDeterminism: Map[String, Expression],
+  //   rowDeterminism: Expression,
+  //   provenance: Seq[String]
+  // )
+
+  def optimize(query: Operator) = Optimizer.optimize(query, operatorOptimizations)
+
+  def optimize(e: Expression): Expression = Optimizer.optimize(e, expressionOptimizations)
 }
 
-object Compiler
-{
-
-  val logger = LoggerFactory.getLogger("mimir.exec.Compiler")
-
-  type Optimizations = Seq[OperatorOptimization]
-
-  def standardOptimizations: Optimizations =
-    Seq(
-      ProjectRedundantColumns,
-      InlineProjections,
-      PushdownSelections,
-      PropagateEmptyViews,
-      PropagateConditions,
-      EvaluateExpressions,
-      PartitionUncertainJoins,
-      PullUpUnions
-    )
-
-  /**
-   * Optimize the query
-   */
-  def optimize(rawOper: Operator, opts: Optimizations = standardOptimizations): Operator = {
-    var oper = rawOper
-    // Repeatedly apply optimizations up to a fixed point or an arbitrary cutoff of 10 iterations
-    var startTime = DateTime.now
-    TimeUtils.monitor("OPTIMIZE", logger.info(_)){
-      for( i <- (0 until 4) ){
-        logger.debug(s"Optimizing, cycle $i: \n$oper")
-        // Try to optimize
-        val newOper = 
-          opts.foldLeft(oper) { (o, fn) =>
-            logger.trace(s"Applying: $fn")
-            fn(o)
-          }
-          
-
-        // Return if we've reached a fixed point 
-        if(oper.equals(newOper)){ return newOper; }
-
-        // Otherwise repeat
-        oper = newOper;
-
-        val timeSoFar = startTime to DateTime.now
-        if(timeSoFar.millis > 5000){
-          logger.warn(s"""OPTIMIZE TIMEOUT (${timeSoFar.millis} ms)
-            ---- ORIGINAL QUERY ----\n$rawOper
-            ---- CURRENT QUERY (${i+1} iterations) ----\n$oper
-            """)
-          return oper;
-        }
-      }
-    }
-    return oper
-  }
-  
-  def gpromOptimize(rawOper: Operator): Operator = {
-    OperatorTranslation.optimizeWithGProM(rawOper)
-  }
-  
-}

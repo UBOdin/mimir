@@ -70,7 +70,7 @@ object DiscalaAbadiNormalizer
       new DAFDRepairModel(
         s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_FD_PARENT",
         config.schema,
-        db.getTableOperator(fdTable),
+        db.table(fdTable),
         Seq(("MIMIR_FD_CHILD", TInt())),
         "MIMIR_FD_PARENT",
         TInt(),
@@ -109,7 +109,7 @@ object DiscalaAbadiNormalizer
   {
     val model = db.models.get(s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_FD_PARENT")
     RepairKeyLens.assemble(
-      db.getTableOperator(s"MIMIR_DA_FDG_${config.schema}"),
+      db.table(s"MIMIR_DA_FDG_${config.schema}"),
       Seq("MIMIR_FD_CHILD"), 
       Seq(("MIMIR_FD_PARENT", model)),
       Some("MIMIR_FD_PATH_LENGTH")
@@ -126,7 +126,7 @@ object DiscalaAbadiNormalizer
   ): Operator = 
   {
     Project(
-      query.schema.map(_._1).map { col => 
+      query.columnNames.map { col => 
         if(col.equals(nodeCol)){ 
           ProjectArg(labelCol, Var("ATTR_NAME")) 
         } else { 
@@ -137,7 +137,7 @@ object DiscalaAbadiNormalizer
       },
       Select(Comparison(Cmp.Eq, Var(nodeCol), Var("ATTR_NODE")),
         Join(      
-          db.getTableOperator(s"MIMIR_DA_SCH_${config.schema}"),
+          db.table(s"MIMIR_DA_SCH_${config.schema}"),
           query
         )
       )

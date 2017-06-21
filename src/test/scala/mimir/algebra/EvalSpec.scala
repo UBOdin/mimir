@@ -1,14 +1,16 @@
 package mimir.algebra
 
 import org.specs2.mutable._
-import mimir.parser._;
-import mimir.optimizer._;
+import mimir.parser._
+import mimir.algebra._
+import mimir.algebra.function.FunctionRegistry
+import mimir.optimizer._
+import mimir.optimizer.expression._
+import mimir.test._
 
-object EvalSpec extends Specification {
+object EvalSpec extends Specification with RASimplify {
 
-  def parser = new ExpressionParser((x: String) => null)
-  def expr = parser.expr _
-  def simplify(x: String) = Eval.simplify(expr(x))
+  def expr = ExpressionParser.expr _
 
   "The Evaluator" should {
     "not insert spurious nulls" >> {
@@ -19,13 +21,13 @@ object EvalSpec extends Specification {
       simplify("""
         NOT( (FALSE=TRUE) ) AND  ( (TRUE=TRUE)  AND  (CAST(RATINGS2_NUM_RATINGS, real)>3) )
       """) must be equalTo expr("CAST(RATINGS2_NUM_RATINGS, real)>3")
-      Eval.simplify(
+      simplify(
         Arithmetic(Arith.And,
           Not(expr("TRUE=TRUE")),
           Comparison(Cmp.Gt, NullPrimitive(), IntPrimitive(3))
         )
       ) must be equalTo BoolPrimitive(false)
-      Eval.simplify(
+      simplify(
         Arithmetic(Arith.And,
           Not(expr("FALSE=TRUE")),
           Arithmetic(Arith.Or,
@@ -45,8 +47,8 @@ object EvalSpec extends Specification {
     "The Inliner" should {
 
       "Properly expand DISTANCE" >> {
-        Eval.eval(expr("DISTANCE(3, 4)")) must be equalTo(FloatPrimitive(5))
-        InlineFunctions(expr("DISTANCE(Q, R)")) must be equalTo(
+        simplify("DISTANCE(3, 4)") must be equalTo(FloatPrimitive(5))
+        simplify("DISTANCE(Q, R)") must be equalTo(
           Function("SQRT", List(
             Arithmetic(Arith.Add,
               Arithmetic(Arith.Mult, Var("Q"), Var("Q")),

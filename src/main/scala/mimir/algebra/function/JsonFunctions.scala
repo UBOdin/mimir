@@ -2,6 +2,7 @@ package mimir.algebra.function;
 
 import play.api.libs.json._
 import mimir.algebra._
+import mimir.serialization.Json
 import mimir.util._
 
 object JsonFunctions
@@ -15,7 +16,7 @@ object JsonFunctions
 
   def extract(args: Seq[PrimitiveValue], t: Type): PrimitiveValue =
   {
-    JsonUtils.parsePrimitive(t, extract(args))
+    Json.toPrimitive(t, extract(args))
   }
 
   def extractAny(args: Seq[PrimitiveValue]): PrimitiveValue =
@@ -32,34 +33,34 @@ object JsonFunctions
     JsonUtils.seekPath(json, path.substring(1))
   }
 
-  def register()
+  def register(fr: FunctionRegistry)
   {
-    FunctionRegistry.registerNative("JSON_EXTRACT", extractAny(_), (_) => TString())
-    FunctionRegistry.registerNative("JSON_EXTRACT_INT", extract(_, TInt()), (_) => TInt())
-    FunctionRegistry.registerNative("JSON_EXTRACT_FLOAT", extract(_, TFloat()), (_) => TFloat())
-    FunctionRegistry.registerNative("JSON_EXTRACT_STR", extract(_, TString()), (_) => TString())
-    FunctionRegistry.registerNative("JSON_ARRAY",
+    fr.register("JSON_EXTRACT", extractAny(_), (_) => TString())
+    fr.register("JSON_EXTRACT_INT", extract(_, TInt()), (_) => TInt())
+    fr.register("JSON_EXTRACT_FLOAT", extract(_, TFloat()), (_) => TFloat())
+    fr.register("JSON_EXTRACT_STR", extract(_, TString()), (_) => TString())
+    fr.register("JSON_ARRAY",
       (params: Seq[PrimitiveValue]) => 
         StringPrimitive(
           JsArray(
-            params.map( JsonUtils.toJson(_) )
+            params.map( Json.ofPrimitive(_) )
           ).toString
         ),
       (_) => TString()
     )
-    FunctionRegistry.registerNative("JSON_OBJECT", 
+    fr.register("JSON_OBJECT", 
       (params: Seq[PrimitiveValue]) => {
         StringPrimitive(
           JsObject(
             params.grouped(2).map {
-              case Seq(k, v) => (k.asString -> JsonUtils.toJson(v))
+              case Seq(k, v) => (k.asString -> Json.ofPrimitive(v))
             }.toMap
           ).toString
         )
       },
       (_) => TString()
     )
-    FunctionRegistry.registerNative("JSON_ARRAY_LENGTH",
+    fr.register("JSON_ARRAY_LENGTH",
       _ match {
         case Seq(text) => {
           Json.parse(text.asString) match {

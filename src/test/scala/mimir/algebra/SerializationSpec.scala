@@ -6,6 +6,7 @@ import org.specs2.mutable._
 
 import mimir.util._
 import mimir.test._
+import mimir.serialization._
 
 object SqlFilesOnly extends FileFilter {
 
@@ -41,8 +42,8 @@ object SerializationSpec extends SQLTestSpecification("SerializationTest") {
             case s:net.sf.jsqlparser.statement.select.Select => {
               i = i + 1;
               val query = db.sql.convert(s)
-              val serialized = db.querySerializer.serialize(query)
-              val deserialized = db.querySerializer.deserializeQuery(serialized)
+              val serialized = Json.ofOperator(query)
+              val deserialized = Json.toOperator(serialized)
 
               Some(deserialized must be equalTo query)
             }
