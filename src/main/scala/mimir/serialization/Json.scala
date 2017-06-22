@@ -132,17 +132,30 @@ object Json
         ))
 
       case Annotate(source, annotations) => 
-        JsObject(Map[String, JsValue](
-          "type" -> JsString("annotate"),
-          "source" -> ofOperator(source),
-          "annotations" -> JsArray(annotations.map { ofAnnotation(_) })
+         JsObject(Map[String, JsValue](
+            "type" -> JsString("annotate"),
+            "source" -> ofOperator(source),
+            "annotations" -> JsArray(annotations.map ( annotation => {
+                JsObject(Map[String, JsValue](
+                  "name" -> JsString(annotation._1),
+                  "annotation" -> ofAnnotation(annotation._2) 
+                )) 
+              }
+            ))
+          
         ))
 
       case Recover(source, annotations) => 
         JsObject(Map[String, JsValue](
           "type" -> JsString("recover"),
           "source" -> ofOperator(source),
-          "annotations" -> JsArray(annotations.map { ofAnnotation(_) })
+          "annotations" -> JsArray(annotations.map ( annotation => {
+                JsObject(Map[String, JsValue](
+                  "name" -> JsString(annotation._1),
+                  "annotation" -> ofAnnotation(annotation._2) 
+                )) 
+              }
+            ))
         ))
 
 
@@ -170,7 +183,10 @@ object Json
       case "annotate" =>
         Annotate(
           toOperator(elems("source")),
-          elems("annotations").as[JsArray].value.map { toAnnotation(_) }
+          elems("annotations").as[JsArray].value.map( annot => {
+            val nameAnnot = annot.as[JsObject].value
+            ( nameAnnot("name").as[JsString].value, toAnnotation( nameAnnot("annotation").as[JsObject]) ) 
+            })
         )
       case "join" =>
         Join(
@@ -263,6 +279,7 @@ object Json
 
   def ofAnnotation(annot: AnnotateArg): JsObject = 
     JsObject(Map[String, JsValue](
+      "annotation_type" -> ofAnnotationType(annot.annotationType),
       "name"       -> JsString(annot.name),
       "type"       -> ofType(annot.typ),
       "expression" -> ofExpression(annot.expr)
@@ -271,6 +288,7 @@ object Json
   {
     val fields = json.as[JsObject].value
     AnnotateArg(
+      toAnnotationType(fields("annotation_type")),
       fields("name").as[JsString].value,
       toType(fields("type")),
       toExpression(fields("expression"))
@@ -440,6 +458,12 @@ object Json
       )
     }
 
+  def ofAnnotationType(at: ViewAnnotation.T): JsValue = 
+    JsString(at.toString())
+
+  def toAnnotationType(json: JsValue): ViewAnnotation.T = 
+    ViewAnnotation.withName(json.as[JsString].value)
+    
   def ofType(t: Type): JsValue = 
     JsString(Type.toString(t))
 

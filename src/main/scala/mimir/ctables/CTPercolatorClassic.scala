@@ -253,6 +253,17 @@ object CTPercolatorClassic {
         }
         return ret
       }
+      case Annotate(subj,invisScm) => {
+        percolateOne(subj)
+      }
+      
+			case Recover(subj,invisScm) => {
+        percolateOne(subj)
+      }
+      
+      case ProvenanceOf(psel) => {
+        percolateOne(psel)
+      }
     }
   }
   
@@ -273,6 +284,7 @@ object CTPercolatorClassic {
       case Union(_,_) => false
       case Join(_,_) => false
       case Aggregate(_,_,_) => false
+      case (Annotate(_, _) | ProvenanceOf(_) | Recover(_, _)) => ???
     }
   }
   
@@ -369,7 +381,8 @@ object CTPercolatorClassic {
           } else {
             Table(name, alias, sch, metadata)
           }
-
+          
+        case (Annotate(_, _) | ProvenanceOf(_) | Recover(_, _)) => ???
     }
   }
 

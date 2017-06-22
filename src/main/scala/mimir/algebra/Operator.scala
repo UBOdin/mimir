@@ -229,7 +229,7 @@ case class Recover(source: Operator,
   def rebuildExpressions(x: Seq[Expression]) = Recover(source,
     invisSch.zip(x).map({ case ((an,AnnotateArg(at, name, typ, _)), expr) => (an,AnnotateArg(at, name, typ, expr))})   
   )
-  def columnNames = source.columnNames.union(invisSch.map(_.name))
+  def columnNames = source.columnNames.union(invisSch.map(_._2.name))
 }
 
 /**
