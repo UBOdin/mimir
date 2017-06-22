@@ -15,6 +15,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 class JDBCBackend(val backend: String, val filename: String) 
   extends Backend
   with LazyLogging
+  with InlinableBackend
 {
   var conn: Connection = null
   var openConnections = 0

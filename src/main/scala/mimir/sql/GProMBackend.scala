@@ -18,7 +18,9 @@ import org.gprom.jdbc.driver.GProMConnection
 import org.gprom.jdbc.jna.GProMWrapper
 import com.sun.jna.Native
 
-class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) extends Backend
+class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) 
+  extends Backend
+  with InlinableBackend
 {
   var conn: Connection = null
   var unwrappedConn: org.sqlite.SQLiteConnection = null

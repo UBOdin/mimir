@@ -61,3 +61,7 @@ abstract class Backend {
   def listAttrsQuery: Operator
 
 }
+
+trait InlinableBackend {
+	def enableInlining(db: Database) : Unit
+}

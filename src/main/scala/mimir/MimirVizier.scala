@@ -42,21 +42,23 @@ object MimirVizier {
     // Prepare experiments
     ExperimentalOptions.enable(conf.experimental())
     
-    // Set up the database connection(s)
-    //db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
-    //db.backend.open()
-    
-    //Use GProM Backend
-    gp = new GProMBackend(conf.backend(), conf.dbname(), 1)
-    db = new Database(gp)    
-    db.backend.open()
-    gp.metadataLookupPlugin.db = db;
-    
+    if(true){
+      // Set up the database connection(s)
+      db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
+      db.backend.open()
+    }
+    else {
+      //Use GProM Backend
+      gp = new GProMBackend(conf.backend(), conf.dbname(), 1)
+      db = new Database(gp)    
+      db.backend.open()
+      gp.metadataLookupPlugin.db = db;
+    }
     
     db.initializeDBForMimir();
 
     if(ExperimentalOptions.isEnabled("INLINE-VG")){
-        db.backend.asInstanceOf[GProMBackend].enableInlining(db)
+        db.backend.asInstanceOf[InlinableBackend].enableInlining(db)
       }
     
     OperatorTranslation.db = db
@@ -234,7 +236,7 @@ object MimirVizier {
               Seq(cols(col)).toSet, false, false))
     }
     println(s"explainCell Took: ${timeRes._2}")
-    timeRes._1
+    timeRes._1.distinct
   }
   
   def explainRow(query: String, row:String) : Seq[mimir.ctables.Reason] = {
@@ -251,7 +253,7 @@ object MimirVizier {
               Seq().toSet, true, false))
     }
     println(s"explainRow Took: ${timeRes._2}")
-    timeRes._1
+    timeRes._1.distinct
   }
 
   

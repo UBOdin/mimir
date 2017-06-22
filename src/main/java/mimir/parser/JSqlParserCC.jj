@@ -1799,6 +1799,7 @@ CreateTable CreateTable():
 {
 	// TODO:
 //	[ [ GLOBAL | LOCAL ] { TEMPORARY | TEMP } ] 
+[<K_OR> <K_REPLACE> { createTable.setOrReplaceTable(true); } ]
 	(CreateParameter())*
   <K_TABLE> 
 [<K_IF> <K_NOT> <K_EXISTS> { createTable.setTableIfNotExists(true); } ]
