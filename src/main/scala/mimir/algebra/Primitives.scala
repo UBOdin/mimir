@@ -91,7 +91,7 @@ case class StringPrimitive(v: String)
   def asLong: Long = java.lang.Long.parseLong(v)
   def asDouble: Double = java.lang.Double.parseDouble(v)
   def asBool: Boolean = throw new TypeException(TString(), TBool(), "Hard Cast")
-  def asDateTime: DateTime = throw new TypeException(TString(), TDate(), "Hard Cast")
+  def asDateTime: DateTime = DateTime.parse(v)
   def asString: String = v;
   def payload: Object = v.asInstanceOf[Object];
 }
@@ -239,3 +239,19 @@ case class NullPrimitive()
   def asDateTime: DateTime = throw new NullTypeException(TAny(), TDate(), "Hard Cast")
   def payload: Object = null
 }
+/**
+ * Boxed representation of Interval
+ */
+@SerialVersionUID(100L)
+case class IntervalPrimitive(ms: Long)
+  extends PrimitiveValue(TInterval())
+{
+  override def toString() = ms.toString
+  def asLong: Long = ms;
+  def asDouble: Double = ms;
+  def asString: String = "'"+ms.toString+"'";
+  def asBool: Boolean = throw new NullTypeException(TAny(), TBool(), "Hard Cast Null")
+  def asDateTime: DateTime = throw new NullTypeException(TAny(), TDate(), "Hard Cast")
+  def payload: Object = null
+}
+
