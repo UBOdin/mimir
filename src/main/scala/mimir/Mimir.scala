@@ -227,9 +227,9 @@ object Mimir extends LazyLogging {
 
       case Function("SHOW", Seq(Var("TABLES"))) =>
         for(table <- db.getAllTables()){ output.print(table.toUpperCase); }
-      case Function("SHOW", Seq(Var(name))) => 
+      case Function("SHOW", Seq(Var(name))) =>
         db.tableSchema(name) match {
-          case None => 
+          case None =>
             output.print(s"'$name' is not a table")
           case Some(schema) =>
             output.print("CREATE TABLE "+name+" (\n"+
@@ -253,20 +253,6 @@ object Mimir extends LazyLogging {
         })
       case Function("LOG", _) =>
         output.print("Syntax: LOG('logger') | LOG('logger', TRACE|DEBUG|INFO|WARN|ERROR)");
-
-      case Function("PLOT", args) =>
-        val table = args(0).asInstanceOf[Var].name
-        val x = args(1).asInstanceOf[Var].name
-        val y = args.tail.tail.map { _.asInstanceOf[Var].name }
-        db.query(
-          Project(
-            Seq(ProjectArg(x, Var(x))) ++ y.map { c => ProjectArg(c, Var(c)) } ,
-            db.getTableOperator(table)
-          )
-        ) { result =>
-          Plot.plot(result, table, x, y, output)
-        }
-
 
     }
 
