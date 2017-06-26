@@ -179,7 +179,6 @@ object Mimir extends LazyLogging {
         val count = reasonSet.size(db);
         val reasons = reasonSet.take(db, 5);
         printReasons(reasons);
-        CTPrioritizer.prioritize(reasons);
         if(count > reasons.size){
           output.print(s"... and ${count - reasons.size} more like the last")
         }

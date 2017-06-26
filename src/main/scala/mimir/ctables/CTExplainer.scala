@@ -1,5 +1,5 @@
 package mimir.ctables;
- 
+
 import java.util.Random;
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
@@ -12,17 +12,17 @@ import mimir.util._
 import mimir.optimizer.operator._
 import mimir.models._
 
-case class InvalidProvenance(msg: String, token: RowIdPrimitive) 
+case class InvalidProvenance(msg: String, token: RowIdPrimitive)
 	extends Exception("Invalid Provenance Token ["+msg+"]: "+token);
 
 abstract class Explanation(
-	val reasons: List[Reason], 
+	val reasons: List[Reason],
 	val token: RowIdPrimitive
 ) {
 	def fields: List[(String, PrimitiveValue)]
 
-	override def toString(): String = { 
-		(fields ++ List( 
+	override def toString(): String = {
+		(fields ++ List(
 			("Reasons", reasons.map("\n    "+_.toString).mkString("")),
 			("Token", JSONBuilder.string(token.v))
 		)).map((x) => x._1+": "+x._2).mkString("\n")
@@ -30,9 +30,9 @@ abstract class Explanation(
 
 	def toJSON(): String = {
 		JSONBuilder.dict(
-			fields.map( { case (k, v) => (k, JSONBuilder.prim(v)) } ) ++ 
+			fields.map( { case (k, v) => (k, JSONBuilder.prim(v)) } ) ++
 			List(
-				("reasons", 
+				("reasons",
 					JSONBuilder.list(reasons.map( _.toJSON ) )),
 				("token", JSONBuilder.string(token.v))
 		))
@@ -40,8 +40,8 @@ abstract class Explanation(
 }
 
 case class RowExplanation (
-	val probability: Double, 
-	override val reasons: List[Reason], 
+	val probability: Double,
+	override val reasons: List[Reason],
 	override val token: RowIdPrimitive
 ) extends Explanation(reasons, token) {
 	def fields = List(
@@ -51,7 +51,7 @@ case class RowExplanation (
 
 class CellExplanation(
 	val examples: List[PrimitiveValue],
-	override val reasons: List[Reason], 
+	override val reasons: List[Reason],
 	override val token: RowIdPrimitive,
 	val column: String
 ) extends Explanation(reasons, token) {
@@ -63,7 +63,7 @@ class CellExplanation(
 
 case class GenericCellExplanation (
 	override val examples: List[PrimitiveValue],
-	override val reasons: List[Reason], 
+	override val reasons: List[Reason],
 	override val token: RowIdPrimitive,
 	override val column: String
 ) extends CellExplanation(examples, reasons, token, column) {
@@ -73,11 +73,11 @@ case class NumericCellExplanation (
 	val mean: PrimitiveValue,
 	val sttdev: PrimitiveValue,
 	override val examples: List[PrimitiveValue],
-	override val reasons: List[Reason], 
+	override val reasons: List[Reason],
 	override val token: RowIdPrimitive,
 	override val column: String
 ) extends CellExplanation(examples, reasons, token, column) {
-	override def fields = 
+	override def fields =
 		List(
 			("mean", mean),
 			("stddev", sttdev)
@@ -91,7 +91,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 	val NUM_EXAMPLE_TRIALS = 20
 	val NUM_FINAL_EXAMPLES = 3
 	val rnd = new Random();
-	
+
 	def explainRow(oper: Operator, token: RowIdPrimitive): RowExplanation =
 	{
 		val singleRowQuery = filterByProvenance(oper, token)
@@ -100,29 +100,29 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 		logger.debug(s"EXPLAINED: \n${reasonSets.map(_.toString).mkString("\n")}")
 
-		// Oliver Says: 
+		// Oliver Says:
 		// This try block is a hack: getProvenance only really works on non-aggregate
 		// queries, since we can't (easily) expand out aggregates.  For now, we just skip
 		// the provenance computation if getProvenance blows up.
-		// The right way to implement this is to use MCDB style evaluation (which doesn't 
+		// The right way to implement this is to use MCDB style evaluation (which doesn't
 		// exist yet).
-		val probability = 
+		val probability =
 			try {
 				val (tuple, _, provenance) = getProvenance(oper, token)
-				val probability = 
+				val probability =
 					if(CTables.isDeterministic(provenance)){ 1.0 }
-					else { 
-						sampleExpression[(Int,Int)](provenance, tuple, NUM_SAMPLES, (0,0), 
-							(cnt: (Int,Int), present: PrimitiveValue) => 
+					else {
+						sampleExpression[(Int,Int)](provenance, tuple, NUM_SAMPLES, (0,0),
+							(cnt: (Int,Int), present: PrimitiveValue) =>
 								present match {
 									case NullPrimitive() => (cnt._1, cnt._2)
-									case BoolPrimitive(t) => 
+									case BoolPrimitive(t) =>
 										( cnt._1 + (if(t){ 1 } else { 0 }),
 										  cnt._2 + 1
 										 )
 									case _ => throw new RAException("Expecting Boolean from Samples")
 								}
-						) match { 
+						) match {
 							case (_, 0) => -1.0
 							case (hits, total) => hits.toDouble / total.toDouble
 						}
@@ -149,11 +149,11 @@ class CTExplainer(db: Database) extends LazyLogging {
 		val guessExpr = db.compiler.optimize(Eval.inline(InlineVGTerms(expr, db), tuple))
 		val colType = db.typechecker.typeOf(guessExpr)
 
-		val examples = 
+		val examples =
 			sampleExpression[List[PrimitiveValue]](
-				expr, tuple, NUM_EXAMPLE_TRIALS, 
-				List[PrimitiveValue](), 
-				(_++List(_)) 
+				expr, tuple, NUM_EXAMPLE_TRIALS,
+				List[PrimitiveValue](),
+				(_++List(_))
 			).toSet.take(NUM_FINAL_EXAMPLES)
 
 		colType match {
@@ -161,15 +161,15 @@ class CTExplainer(db: Database) extends LazyLogging {
 				val (avg, stddev) = getStats(expr, tuple, NUM_SAMPLES)
 
 				NumericCellExplanation(
-					avg, 
-					stddev, 
+					avg,
+					stddev,
 					examples.toSet.toList,
 					getFocusedReasons(expr, tuple).values.toList,
-					token, 
+					token,
 					column
 				)
 
-			case _ => 
+			case _ =>
 				GenericCellExplanation(
 					examples.toSet.toList,
 					getFocusedReasons(expr, tuple).values.toList,
@@ -180,13 +180,13 @@ class CTExplainer(db: Database) extends LazyLogging {
 	}
 
 	def sampleExpression[A](
-		expr: Expression, bindings: Map[String,PrimitiveValue], count: Int, 
+		expr: Expression, bindings: Map[String,PrimitiveValue], count: Int,
 		init: A, accum: ((A, PrimitiveValue) => A)
-	): A = 
+	): A =
 	{
 		val sampleExpr = CTAnalyzer.compileSample(expr, Var(CTables.SEED_EXP), db.models.get(_))
         (0 until count).
-        	map( (i) => 
+        	map( (i) =>
         		try {
 	        		db.interpreter.eval(
 	        			sampleExpr, 
@@ -202,14 +202,14 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 	}
 
-	def getStats(expr: Expression, tuple: Map[String,PrimitiveValue], desiredCount: Integer): 
+	def getStats(expr: Expression, tuple: Map[String,PrimitiveValue], desiredCount: Integer):
 		(PrimitiveValue, PrimitiveValue) =
 	{
 		val (tot, totSq, realCount) =
 			sampleExpression[(PrimitiveValue, PrimitiveValue, Int)](
 				expr, tuple, desiredCount,
 				(IntPrimitive(0), IntPrimitive(0), 0),
-				{ case ((tot, totSq, ct), v) => 
+				{ case ((tot, totSq, ct), v) =>
 					try {
 						(
 							Eval.applyArith(Arith.Add, tot, v),
@@ -230,7 +230,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 				db.interpreter.eval(
 					Function("SQRT", List(					
 						Function("ABSOLUTE", List(
-							Arithmetic(Arith.Sub, 
+							Arithmetic(Arith.Sub,
 								Arithmetic(Arith.Div, totSq, FloatPrimitive(realCount.toDouble)),
 								Arithmetic(Arith.Mult, avg, avg)
 							)
@@ -246,7 +246,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 	def getFocusedReasons(reasonSets: Seq[ReasonSet]): Seq[Reason] =
 	{
-		reasonSets.flatMap { reasonSet => 
+		reasonSets.flatMap { reasonSet =>
 			logger.trace(s"Trying to Expand: $reasonSet")
 			val subReasons = reasonSet.take(db, 4).toSeq
 			if(subReasons.size > 3){
@@ -295,7 +295,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 					}
 				) ++ getFocusedReasons(a, tuple)
 
-			case _ => 
+			case _ =>
 				expr.children.
 					map( getFocusedReasons(_, tuple) ).
 					foldLeft(Map[String,Reason]())(_++_)
@@ -317,7 +317,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 		return filteredQuery
 	}
 
-	def getProvenance(oper: Operator, token: RowIdPrimitive): 
+	def getProvenance(oper: Operator, token: RowIdPrimitive):
 		(Map[String,PrimitiveValue], Map[String, Expression], Expression) =
 	{
 		// Annotate the query to produce a provenance trace
@@ -347,14 +347,14 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 		val results = db.backend.execute(sqlQuery)
 
-		val baseData = 
+		val baseData =
 			JDBCUtils.extractAllRows(results, finalSchema.map(_._2)).flush
 
 		if(baseData.isEmpty){
 			val resultRowString = baseData.map( _.mkString(", ") ).mkString("\n")
 			logger.debug(s"Results: $resultRowString")
 			throw new InvalidProvenance(""+baseData.size+" rows for token", token)
-		}	
+		}
 
 		val tuple = finalSchema.map(_._1).zip(baseData.head).toMap
 
@@ -366,8 +366,8 @@ class CTExplainer(db: Database) extends LazyLogging {
 		reasons.
 			groupBy { r => (r.model.name, r.idx) }.
 			values.
-			map { 
-				case Seq(singleReason) => 
+			map {
+				case Seq(singleReason) =>
 					logger.debug(s"Not Merging ${singleReason.model};${singleReason.idx}")
 					singleReason
 				case multipleReasons => {
@@ -375,7 +375,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 					val (allReasonLookups: Seq[Operator], allReasonArgs: Seq[Seq[Var]], allReasonHints: Seq[Seq[Var]]) =
 						multipleReasons.
 							flatMap { r => r.argLookup }.
-							map { case (query, args, hints) => 
+							map { case (query, args, hints) =>
 								(
 									Project(
 										args.zipWithIndex.map { case (expr, i) => ProjectArg("ARG_"+i, expr) }++
@@ -389,14 +389,14 @@ class CTExplainer(db: Database) extends LazyLogging {
 					logger.debug(s" ... ${allReasonLookups.mkString("\n ... ")}")
 					// A bit of a simplification... Going to assume for now that we're consistent
 					// with how we use VGTerms throughout and that two identical VGTerms should have
-					// identical ARG/HINT schemas. 
+					// identical ARG/HINT schemas.
 					// -Oliver
 					new ReasonSet(
-						multipleReasons.head.model, 
-						multipleReasons.head.idx, 
+						multipleReasons.head.model,
+						multipleReasons.head.idx,
 						if(allReasonLookups.isEmpty){ None }
-						else { 
-							val jointQuery = 
+						else {
+							val jointQuery =
 								OperatorUtils.makeUnion(
 									allReasonLookups
 								)
@@ -410,16 +410,16 @@ class CTExplainer(db: Database) extends LazyLogging {
 			}.toSeq
 	}
 
-	def explainEverything(oper: Operator): Seq[ReasonSet] = 
+	def explainEverything(oper: Operator): Seq[ReasonSet] =
 	{
 		logger.debug("Explain Everything: \n"+oper)
 		mergeReasons(explainSubset(oper, oper.columnNames.toSet, true, true))
 	}
 
 	def explainSubset(
-		oper: Operator, 
-		wantCol: Set[String], 
-		wantRow:Boolean, 
+		oper: Operator,
+		wantCol: Set[String],
+		wantRow:Boolean,
 		wantSort:Boolean
 	): Seq[ReasonSet] =
 		explainSubsetWithoutOptimizing(db.compiler.optimize(oper), wantCol, wantRow, wantSort)
@@ -443,7 +443,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 				val relevantArgs =
 					args.filter { col => wantCol(col.name) }
 
-				val argReasons = 
+				val argReasons =
 					relevantArgs.
 						flatMap {
 						  col => {
@@ -499,13 +499,13 @@ class CTExplainer(db: Database) extends LazyLogging {
 				val aggDependencies =
 				  aggs.
 				  	filter { agg => wantCol(agg.alias) }.
-						flatMap { agg => 
+						flatMap { agg =>
 							agg.args.flatMap( ExpressionUtils.getColumns(_) )
 						}.toSet
 
 				aggReasons ++ explainSubsetWithoutOptimizing(child, 
 					// We need all of the input dependencies
-					gbDependencies ++ aggDependencies, 
+					gbDependencies ++ aggDependencies,
 					// If we want the output row presence, input row reasons are relevant
 					// If there are any agg dependencies, input row reasons are also relevant
 					wantRow || !aggDependencies.isEmpty,
@@ -519,7 +519,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 				explainSubsetWithoutOptimizing(rhs, rhs.columnNames.filter(wantCol(_)).toSet, wantRow, wantSort)
 			}
 
-			case LeftOuterJoin(left, right, cond) => 
+			case LeftOuterJoin(left, right, cond) =>
         throw new RAException("Don't know how to explain a left-outer-join")
 
       case Limit(_, _, child) => 

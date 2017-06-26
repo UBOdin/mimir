@@ -7,6 +7,7 @@ import org.specs2.specification.core.{Fragment,Fragments}
 import mimir.test._
 import mimir.util._
 import LoggerUtils.trace
+import mimir.ctables._
 
 object CureScenario
   extends SQLTestSpecification("CureScenario",  Map("reset" -> "YES"))
@@ -21,14 +22,14 @@ object CureScenario
   def time[A](description: String): ( => A) => A =
     TimeUtils.monitor(description)
 
-  sequential 
+  sequential
 
   "The CURE Scenario" should {
     Fragment.foreach(dataFiles){ table => {
       val basename = table.getName().replace(".csv", "").toUpperCase
       s"Load '$table'" >> {
         time(s"Load '$table'") {
-          update(s"LOAD '$table';") 
+          update(s"LOAD '$table';")
         }
         time(s"Materialize '$basename'"){
           update(s"ALTER VIEW $basename MATERIALIZE;")
@@ -38,7 +39,7 @@ object CureScenario
     }}
 
     "Select from the source table" >> {
-      time("Type Inference Query"){ 
+      time("Type Inference Query"){
         query("""
           SELECT * FROM cureSource;
         """){ _.foreach { row => {} } }
@@ -49,8 +50,8 @@ object CureScenario
     "Create the source MV Lens" >> {
       time("Source MV Lens"){
         update("""
-          CREATE LENS MV1 
-          AS SELECT * FROM cureSource 
+          CREATE LENS MV1
+          AS SELECT * FROM cureSource
           WITH MISSING_VALUE('IMO_CODE');
         """)
       }
@@ -60,8 +61,8 @@ object CureScenario
     "Create the locations MV Lens" >> {
       time("Locations MV Lens"){
         update("""
-          CREATE LENS MV2 
-          AS SELECT * FROM cureLocations 
+          CREATE LENS MV2
+          AS SELECT * FROM cureLocations
           WITH MISSING_VALUE('IMO_CODE');
         """)
       }
@@ -105,6 +106,20 @@ object CureScenario
        }
 //         failed type detection --> run type inferencing
 //         --> repair with repairing tool
+       ok
+     }
+
+     "Test Prioritizer" >> {
+       update("CREATE TABLE R(A string, B int, C int)")
+       loadCSV("R", new File("test/r_test/r.csv"))
+       update("CREATE LENS TI AS SELECT * FROM R WITH TYPE_INFERENCE(0.5)")
+       update("CREATE LENS MV AS SELECT * FROM TI WITH MISSING_VALUE('B', 'C')")
+       val reasonsets = explainEverything("SELECT * FROM MV")
+       var reasonList : List[Reason] = List()
+       for(reasonset <- reasonsets) {
+         reasonList = reasonList ++ reasonset.all(db)
+       }
+       CTPrioritizer.prioritize(reasonList)
        ok
      }
 
