@@ -422,12 +422,20 @@ class CTExplainer(db: Database) extends LazyLogging {
 		wantRow:Boolean, 
 		wantSort:Boolean
 	): Seq[ReasonSet] =
+		explainSubsetWithoutOptimizing(db.compiler.optimize(oper), wantCol, wantRow, wantSort)
+
+	def explainSubsetWithoutOptimizing(
+		oper: Operator, 
+		wantCol: Set[String], 
+		wantRow:Boolean, 
+		wantSort:Boolean
+	): Seq[ReasonSet] =
 	{
 		logger.trace(s"Explain Subset (${wantCol.mkString(", ")}; $wantRow; $wantSort): \n$oper")
-		/*db.compiler.optimize(*/oper/*)*/ match {
+		oper match {
 			case Table(_,_,_,_) => Seq()
 			case View(_,query,_) => 
-				explainSubset(query, wantCol, wantRow, wantSort)
+				explainSubsetWithoutOptimizing(query, wantCol, wantRow, wantSort)
 
 			case EmptyTable(_) => Seq()
 
@@ -453,12 +461,12 @@ class CTExplainer(db: Database) extends LazyLogging {
 							col => ExpressionUtils.getColumns(col.expression)
 						}.toSet
 
-				argReasons ++ explainSubset(child, argDependencies, wantRow, wantSort)
+				argReasons ++ explainSubsetWithoutOptimizing(child, argDependencies, wantRow, wantSort)
 			}
 
 			// Keep views unless we can push selections down into them
 			case Select(cond, View(_,query,_)) => 
-				explainSubset(Select(cond, query), wantCol, wantRow, wantSort)
+				explainSubsetWithoutOptimizing(Select(cond, query), wantCol, wantRow, wantSort)
 
 			case Select(cond, child) => {
 				val (condReasons:Seq[ReasonSet], condDependencies:Set[String]) =
@@ -472,7 +480,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 						)
 					} else { ( Seq(), Set() ) }
 
-				condReasons ++ explainSubset(child, wantCol ++ condDependencies, wantRow, wantSort)
+				condReasons ++ explainSubsetWithoutOptimizing(child, wantCol ++ condDependencies, wantRow, wantSort)
 			}
 
 			case Aggregate(gbs, aggs, child) => {
@@ -491,7 +499,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 							agg.args.flatMap( ExpressionUtils.getColumns(_) )
 						}.toSet
 
-				aggReasons ++ explainSubset(child, 
+				aggReasons ++ explainSubsetWithoutOptimizing(child, 
 					// We need all of the input dependencies
 					gbDependencies ++ aggDependencies, 
 					// If we want the output row presence, input row reasons are relevant
@@ -503,15 +511,15 @@ class CTExplainer(db: Database) extends LazyLogging {
 			}
 
 			case Join(lhs, rhs) => {
-				explainSubset(lhs, lhs.columnNames.filter(wantCol(_)).toSet, wantRow, wantSort) ++ 
-				explainSubset(rhs, rhs.columnNames.filter(wantCol(_)).toSet, wantRow, wantSort)
+				explainSubsetWithoutOptimizing(lhs, lhs.columnNames.filter(wantCol(_)).toSet, wantRow, wantSort) ++ 
+				explainSubsetWithoutOptimizing(rhs, rhs.columnNames.filter(wantCol(_)).toSet, wantRow, wantSort)
 			}
 
 			case LeftOuterJoin(left, right, cond) => 
         throw new RAException("Don't know how to explain a left-outer-join")
 
       case Limit(_, _, child) => 
-      	explainSubset(child, wantCol, wantRow, wantSort || wantRow)
+      	explainSubsetWithoutOptimizing(child, wantCol, wantRow, wantSort || wantRow)
 
      	case Sort(args, child) => {
 				val (argReasons, argDependencies) =
@@ -526,16 +534,16 @@ class CTExplainer(db: Database) extends LazyLogging {
 						)
 					} else { (Seq(),Set()) }
 
-				argReasons ++ explainSubset(child,argDependencies.toSet ++ wantCol,wantRow,wantSort)
+				argReasons ++ explainSubsetWithoutOptimizing(child,argDependencies.toSet ++ wantCol,wantRow,wantSort)
 			}
 
 			case Union(lhs, rhs) => {
-				explainSubset(lhs,wantCol,wantRow,wantSort) ++ 
-				explainSubset(rhs,wantCol,wantRow,wantSort)
+				explainSubsetWithoutOptimizing(lhs,wantCol,wantRow,wantSort) ++ 
+				explainSubsetWithoutOptimizing(rhs,wantCol,wantRow,wantSort)
 			}
 
 			case Annotate(src, _) => 
-				explainSubset(src,wantCol,wantRow,wantSort)
+				explainSubsetWithoutOptimizing(src,wantCol,wantRow,wantSort)
 
 			case ProvenanceOf(_) => ???
 
