@@ -91,7 +91,7 @@ case class StringPrimitive(v: String)
   def asLong: Long = java.lang.Long.parseLong(v)
   def asDouble: Double = java.lang.Double.parseDouble(v)
   def asBool: Boolean = throw new TypeException(TString(), TBool(), "Hard Cast")
-  def asDateTime: DateTime = throw new TypeException(TString(), TDate(), "Hard Cast")
+  def asDateTime: DateTime = DateTime.parse(v)
   def asString: String = v;
   def payload: Object = v.asInstanceOf[Object];
 }
@@ -149,10 +149,12 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
   extends PrimitiveValue(TDate())
 {
   override def toString() = s"DATE '${asString}'"
-  def asLong: Long = throw new TypeException(TDate(), TInt(), "Hard Cast");
+  //def asLong: Long = throw new TypeException(TDate(), TInt(), "Hard Cast");
+  def asLong : Long = new DateTime(y,m,d,0,0,0).getMillis
   def asDouble: Double = throw new TypeException(TDate(), TFloat(), "Hard Cast");
   def asBool: Boolean = throw new TypeException(TDate(), TBool(), "Hard Cast")
   def asString: String = f"$y%04d-$m%02d-$d%02d"
+  def asInterval : Long = new DateTime(y,m,d,0,0,0).getMillis
   def payload: Object = (y, m, d).asInstanceOf[Object];
   final def compare(c: DatePrimitive): Integer = {
     if(c.y < y){ -1 }
@@ -181,10 +183,12 @@ case class TimestampPrimitive(y: Int, m: Int, d: Int, hh: Int, mm: Int, ss: Int)
   extends PrimitiveValue(TTimestamp())
 {
   override def toString() = s"DATE '${asString}'"
-  def asLong: Long = throw new TypeException(TDate(), TInt(), "Hard Cast");
+  //def asLong: Long = throw new TypeException(TDate(), TInt(), "Hard Cast");
+  def asLong : Long = new DateTime(y, m, d, hh, mm, ss).getMillis;
   def asDouble: Double = throw new TypeException(TDate(), TFloat(), "Hard Cast");
   def asBool: Boolean = throw new TypeException(TDate(), TBool(), "Hard Cast")
   def asString: String = f"$y%04d-$m%02d-$d%02d $hh%02d:$mm%02d:$ss%02d"
+  def asInterval: Long = new DateTime(y, m, d, hh, mm, ss).getMillis;
   def payload: Object = (y, m, d).asInstanceOf[Object];
   final def compare(c: TimestampPrimitive): Integer = {
     if(c.y < y){ -1 }
@@ -239,3 +243,20 @@ case class NullPrimitive()
   def asDateTime: DateTime = throw new NullTypeException(TAny(), TDate(), "Hard Cast")
   def payload: Object = null
 }
+/**
+ * Boxed representation of Interval
+ */
+@SerialVersionUID(100L)
+case class IntervalPrimitive(ms: Long)
+  extends PrimitiveValue(TInterval())
+{
+  override def toString() = ms.toString
+  def asLong: Long = ms;
+  def asDouble: Double = ms;
+  def asString: String = "'"+ms.toString+"'";
+  def asBool: Boolean = throw new NullTypeException(TAny(), TBool(), "Hard Cast Null")
+  def asInterval: Long = ms;
+  def asDateTime: DateTime = new DateTime(1970,1,1,0,0,0).plusMillis(ms.toInt)
+  def payload: Object = null
+}
+

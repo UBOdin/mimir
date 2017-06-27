@@ -54,6 +54,7 @@ object FunctionRegistry {
     TypeFunctions.register()
     UtilityFunctions.register()
     RandomnessFunctions.register()
+    IntervalFunctions.register()
 	}
 
 	def registerSet(

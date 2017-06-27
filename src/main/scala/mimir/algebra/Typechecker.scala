@@ -239,12 +239,18 @@ object Typechecker {
  	def escalateLeft(a: Type, b: Type): Option[Type] =
  	{
 		(a,b) match {
+			case (TDate(), TDate())  => Some(TInterval())
+			case (TTimestamp(), TDate())  => Some(TInterval())
+			case (TDate(), TTimestamp())  => Some(TInterval())
+			case (TTimestamp(), TTimestamp())  => Some(TInterval())
+			case (TDate(), TInterval())  => Some(TTimestamp())
+			case (TTimestamp(), TInterval())  => Some(TTimestamp())
+
 			case _ if a.equals(b)         => Some(a)
 			case (TUser(name),_)          => escalateLeft(TypeRegistry.baseType(name),b)
 			case (TAny(),_)               => Some(b)
 			case (_,TAny())               => Some(a)
 			case (TInt(),TFloat())        => Some(TFloat())
-			case (TDate(), TTimestamp())  => Some(TTimestamp())
 			case _                        => None
 		}
  	}
