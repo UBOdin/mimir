@@ -15,6 +15,7 @@ import py4j.GatewayServer
 import mimir.exec.Compiler
 import mimir.gprom.algebra.OperatorTranslation
 import org.gprom.jdbc.jna.GProMWrapper
+import mimir.ctables.Reason
 
 /**
  * The primary interface to Mimir.  Responsible for:
@@ -225,18 +226,28 @@ object MimirVizier {
   
   def explainCell(query: String, col:Int, row:String) : Seq[mimir.ctables.Reason] = {
     val timeRes = time {
+      try {
       println("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
       val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
       //val compiledOper = db.compiler.compileInline(oper, db.compiler.standardOptimizations)._1
       val cols = oper.columnNames
       //println(s"explaining Cell: [${cols(col)}][$row]")
       //db.explainCell(oper, RowIdPrimitive(row.toString()), cols(col)).toString()
-      db.explainer.getFocusedReasons(db.explainer.explainSubset(
-              db.explainer.filterByProvenance(oper,RowIdPrimitive(row)), 
-              Seq(cols(col)).toSet, false, false))
+      val provFilteredOper = db.explainer.filterByProvenance(oper,RowIdPrimitive(row))
+      val subsetReasons = db.explainer.explainSubset(
+              provFilteredOper, 
+              Seq(cols(col)).toSet, false, false)
+      db.explainer.getFocusedReasons(subsetReasons)
+      } catch {
+          case t: Throwable => {
+            t.printStackTrace() // TODO: handle error
+            Seq[Reason]()
+          }
+        }
+      
     }
     println(s"explainCell Took: ${timeRes._2}")
-    timeRes._1.distinct
+    timeRes._1
   }
   
   def explainRow(query: String, row:String) : Seq[mimir.ctables.Reason] = {
@@ -289,6 +300,22 @@ object MimirVizier {
   
   def getAvailableLenses() : String = {
     db.lenses.lensTypes.keySet.toSeq.mkString(",")
+  }
+  
+  
+  def getTuple(oper: mimir.algebra.Operator) : Map[String,PrimitiveValue] = {
+    db.query(oper)(results => {
+      val cols = results.schema.map(f => f._1)
+      val colsIndexes = results.schema.zipWithIndex.map( _._2)
+      if(results.hasNext){
+        val row = results.next()
+        colsIndexes.map( (i) => {
+           (cols(i), row(i)) 
+         }).toMap
+      }
+      else
+        Map[String,PrimitiveValue]()
+    })
   }
   
   def operCSVResults(oper : mimir.algebra.Operator) : PythonCSVContainer =  {

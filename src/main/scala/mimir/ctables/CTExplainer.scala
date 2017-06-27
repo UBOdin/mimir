@@ -424,7 +424,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 	): Seq[ReasonSet] =
 	{
 		logger.trace(s"Explain Subset (${wantCol.mkString(", ")}; $wantRow; $wantSort): \n$oper")
-		db.compiler.optimize(oper) match {
+		/*db.compiler.optimize(*/oper/*)*/ match {
 			case Table(_,_,_,_) => Seq()
 			case View(_,query,_) => 
 				explainSubset(query, wantCol, wantRow, wantSort)
@@ -438,7 +438,12 @@ class CTExplainer(db: Database) extends LazyLogging {
 				val argReasons = 
 					relevantArgs.
 						flatMap {
-						  col => CTAnalyzer.compileCausality(col.expression)
+						  col => {
+						    val compiledCausalityExpr = CTAnalyzer.compileCausality(col.expression)
+						    compiledCausalityExpr.map {
+						      case (condition, vgterm) => (vgterm.toString, (condition, vgterm))
+						    }.toMap.toSeq.map(f => f._2)
+						  }
 						}.map { case (condition, vgterm) => 
 							ReasonSet.make(vgterm, db, Select(condition, child))
 						}
