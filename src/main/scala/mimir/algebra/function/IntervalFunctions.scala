@@ -71,12 +71,20 @@ object IntervalFunctions
     FunctionRegistry.registerNative(
       "PLUSINTERVAL",
       (x) => {
-	val d = x(0).asDateTime.plusMillis(java.lang.Integer.parseInt(x(1).asString))
+	val d = x(0).asDateTime.plusMillis(x(1).asLong.toInt)
         TimestampPrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth,d.getHourOfDay,d.getMinuteOfHour,d.getSecondOfMinute)
       },
       (_) => TInt()
     )
 
+    FunctionRegistry.registerNative(
+      "SUBINTERVAL",
+      (x) => {
+	val d = x(0).asDateTime.plusMillis(-x(1).asLong.toInt)
+        TimestampPrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth,d.getHourOfDay,d.getMinuteOfHour,d.getSecondOfMinute)
+      },
+      (_) => TInt()
+    )
   }
 
 }

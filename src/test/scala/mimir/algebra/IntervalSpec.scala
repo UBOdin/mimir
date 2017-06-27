@@ -38,5 +38,26 @@ object IntervalSpec extends Specification {
       }
 
 
+
+      "INTVPLUSINTV" >> {
+        Eval.eval(expr("PLUSSECONDS(7, 4)+PLUSSECONDS(1, 2)")) must be equalTo(IntervalPrimitive(6008))
+      }
+
+      "INTVSUBINTV" >> {
+        Eval.eval(expr("PLUSSECONDS(7, 4)-PLUSSECONDS(1, 2)")) must be equalTo(IntervalPrimitive(2006))
+      }
+
+      "TIMESUBTIME" >> {
+        Eval.eval(expr("PLUSINTERVAL('2017-01-01T00:01:00Z',0)-PLUSINTERVAL('2017-01-01T00:00:00Z',0)")) must be equalTo(IntervalPrimitive(60000)) 
+      }
+
+      "TIMEPLUSINTV" >> {
+        Eval.eval(expr("PLUSINTERVAL('2017-01-01T00:01:00Z',0)+PLUSDAYS(0,1)")) must be equalTo(TimestampPrimitive(2017,1,2,0,1,0)) 
+      }
+
+      "TIMESUBINTV" >> {
+        Eval.eval(expr("PLUSINTERVAL('2017-01-02T00:01:00Z',0)-PLUSDAYS(0,1)")) must be equalTo(TimestampPrimitive(2017,1,1,0,1,0)) 
+      }
+
     }
 }

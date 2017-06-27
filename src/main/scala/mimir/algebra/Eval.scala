@@ -249,6 +249,19 @@ object Eval
         IntPrimitive(a.asLong << b.asLong)
       case (Arith.ShiftRight, TInt()) =>
         IntPrimitive(a.asLong >> b.asLong)
+
+      case (Arith.Add, TInterval()) =>
+        IntervalPrimitive(a.asLong + b.asLong)
+
+      case (Arith.Sub, TInterval()) =>
+        IntervalPrimitive(a.asLong - b.asLong)
+
+      case (Arith.Add, TTimestamp()) =>
+        FunctionRegistry.eval("PLUSINTERVAL",List(a,b))
+
+      case (Arith.Sub, TTimestamp()) =>
+        FunctionRegistry.eval("SUBINTERVAL",List(a,b))
+
       case (_, _) => 
         throw new RAException(s"Invalid Arithmetic $a $op $b")
     }
