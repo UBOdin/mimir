@@ -535,6 +535,24 @@ class SqlToRA(db: Database)
         )
       }
 
+      case i:net.sf.jsqlparser.expression.operators.relational.InExpression => {
+        val lhs = convert(i.getLeftExpression)
+        i.getItemsList match {
+          case e: net.sf.jsqlparser.expression.operators.relational.ExpressionList => {
+            val comparables = e.getExpressions.map { convert(_) }
+
+            val baseTest = ExpressionUtils.makeAnd(
+                comparables.map { Comparison(Cmp.Eq, lhs, _) }
+              )
+
+            if(i.isNot){
+              ExpressionUtils.makeNot(baseTest)
+            } else { baseTest }
+          }
+        }
+
+      }
+
       case c:net.sf.jsqlparser.expression.CaseExpression => {
         val inlineSwitch: Expression => Expression = 
           if(c.getSwitchExpression() == null){
