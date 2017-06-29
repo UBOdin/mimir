@@ -170,7 +170,7 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
             Project(Seq(
               ProjectArg(tidCol, Var("TID")),
               ProjectArg(colName.toUpperCase, Var(colName.toUpperCase))
-            ), db.getTableOperator(columnTable))
+            ), db.table(columnTable))
           )
         }
 

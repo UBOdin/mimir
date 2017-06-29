@@ -15,6 +15,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 class JDBCBackend(val backend: String, val filename: String) 
   extends Backend
   with LazyLogging
+  with InlinableBackend
 {
   var conn: Connection = null
   var openConnections = 0
@@ -274,11 +275,11 @@ class JDBCBackend(val backend: String, val filename: String)
       case _ => TDate()
     }
 
-  def specializeQuery(q: Operator): Operator = {
+  def specializeQuery(q: Operator, db: Database): Operator = {
     backend match {
       case "sqlite" if inliningAvailable => 
-        VGTermFunctions.specialize(SpecializeForSQLite(q))
-      case "sqlite" => SpecializeForSQLite(q)
+        VGTermFunctions.specialize(SpecializeForSQLite(q, db))
+      case "sqlite" => SpecializeForSQLite(q, db)
       case "oracle" => q
     }
   }

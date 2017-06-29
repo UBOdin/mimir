@@ -1,8 +1,9 @@
-package mimir.optimizer
+package mimir.optimizer.operator
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
 import mimir.ctables._
+import mimir.optimizer.OperatorOptimization
 
 object PartitionUncertainJoins extends OperatorOptimization with LazyLogging
 {

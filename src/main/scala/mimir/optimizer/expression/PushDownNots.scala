@@ -1,6 +1,7 @@
-package mimir.optimizer;
+package mimir.optimizer.expression
 
-import mimir.algebra._;
+import mimir.algebra._
+import mimir.optimizer._
 
 object PushDownNots extends TopDownExpressionOptimizerRule {
 

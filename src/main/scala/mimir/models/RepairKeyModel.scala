@@ -6,6 +6,7 @@ import play.api.libs.json._
 
 import mimir.algebra._
 import mimir.util._
+import mimir.serialization.Json
 import mimir.Database
 
 /**
@@ -19,7 +20,7 @@ import mimir.Database
 class RepairKeyModel(
   name: String, 
   context: String, 
-  var source: Operator, 
+  source: Operator, 
   keys: Seq[(String, Type)], 
   target: String,
   targetType: Type,
@@ -30,6 +31,7 @@ class RepairKeyModel(
   with NeedsReconnectToDatabase 
 {
   val choices = scala.collection.mutable.Map[List[PrimitiveValue], PrimitiveValue]();
+  @transient var db:Database = null
 
   def varType(idx: Int, args: Seq[Type]): Type = targetType
   def argTypes(idx: Int) = keys.map(_._2)
@@ -88,7 +90,7 @@ class RepairKeyModel(
     } else {
       val possibilities = 
         Json.parse(hints(0).asString) match {
-          case JsArray(values) => values.map { JsonUtils.parsePrimitive(targetType, _)  }
+          case JsArray(values) => values.map { Json.toPrimitive(targetType, _)  }
           case _ => throw ModelException(s"Invalid Value Hint in Repair Model $name: ${hints(0).asString}")
         }
 
@@ -96,7 +98,7 @@ class RepairKeyModel(
         if(hints.size > 1 && !hints(1).isInstanceOf[NullPrimitive]){
           possibilities.zip(
             Json.parse(hints(1).asString) match {
-              case JsArray(values) => values.map( v => JsonUtils.parsePrimitive(TFloat(), v).asDouble )
+              case JsArray(values) => values.map( v => Json.toPrimitive(TFloat(), v).asDouble )
               case _ => throw ModelException(s"Invalid Score Hint in Repair Model $name: ${hints(1).asString}")
             }
           )
@@ -116,21 +118,8 @@ class RepairKeyModel(
     }
   }
   
-   @transient var db:Database = null
   def reconnectToDatabase(db: Database) = { 
     this.db = db 
-    source = db.querySerializer.desanitize(source)
-  }
-
-  /**
-   * Interpose on the serialization pipeline to safely serialize the
-   * source query
-   */
-  override def serialize: (Array[Byte], String) =
-  {
-    source = db.querySerializer.sanitize(source)
-    val ret = super.serialize()
-    return ret
   }
 
 }

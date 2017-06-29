@@ -9,8 +9,8 @@ import scala.concurrent.duration._
 
 import mimir.algebra._
 import mimir.util._
-import mimir.ctables.{VGTerm}
-import mimir.optimizer.{InlineVGTerms,InlineProjections}
+import mimir.ctables.InlineVGTerms
+import mimir.optimizer.operator.InlineProjections
 import mimir.test.{SQLTestSpecification, PDBench, TestTimer}
 import mimir.models._
 import mimir.exec.uncertainty._

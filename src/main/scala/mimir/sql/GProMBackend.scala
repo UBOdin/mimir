@@ -18,7 +18,9 @@ import org.gprom.jdbc.driver.GProMConnection
 import org.gprom.jdbc.jna.GProMWrapper
 import com.sun.jna.Native
 
-class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) extends Backend
+class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) 
+  extends Backend
+  with InlinableBackend
 {
   var conn: Connection = null
   var unwrappedConn: org.sqlite.SQLiteConnection = null
@@ -331,11 +333,11 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) e
 
   def canHandleVGTerms(): Boolean = inliningAvailable
 
-  def specializeQuery(q: Operator): Operator = {
+  def specializeQuery(q: Operator, db: Database): Operator = {
     backend match {
       case "sqlite" if inliningAvailable =>
-        VGTermFunctions.specialize(SpecializeForSQLite(q))
-      case "sqlite" => SpecializeForSQLite(q)
+        VGTermFunctions.specialize(SpecializeForSQLite(q, db))
+      case "sqlite" => SpecializeForSQLite(q, db)
       case "oracle" => q
     }
   }

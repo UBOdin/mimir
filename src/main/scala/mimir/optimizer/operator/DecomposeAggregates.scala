@@ -1,8 +1,8 @@
-package mimir.optimizer
+package mimir.optimizer.operator
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
-
+import mimir.optimizer._
 
 case class DecomposedAggregate(postprocess: ProjectArg, mergeAggregates: Seq[AggFunction], sourceAggregates: Seq[AggFunction])
 {
@@ -12,7 +12,7 @@ case class DecomposedAggregate(postprocess: ProjectArg, mergeAggregates: Seq[Agg
   }
 }
 
-object DecomposeAggregates extends OperatorOptimization with LazyLogging
+object DecomposeAggregates extends LazyLogging
 {
   def decomposeAggregate(agg: AggFunction): Option[DecomposedAggregate] =
   {
@@ -42,13 +42,13 @@ object DecomposeAggregates extends OperatorOptimization with LazyLogging
     }
   }
 
-  def apply(o: Operator): Operator =
+  def apply(o: Operator, typechecker: Typechecker): Operator =
   {
     o match {
       case Aggregate(gbCols, aggFns, src) => 
       {
         PullUpUnions.pullOutUnions(src) match {
-          case Seq() => return EmptyTable(o.schema)
+          case Seq() => return EmptyTable(typechecker.schemaOf(o))
           case Seq(noUnions) => 
             // No unions... just a single sub node.  Return the aggregate as-is
             Aggregate(gbCols, aggFns, noUnions)

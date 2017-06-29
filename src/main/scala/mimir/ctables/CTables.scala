@@ -8,10 +8,10 @@ import scala.util._
 object CTables 
 {
 
-  // Function names for calculating row probability, variance and confidence
-  val ROW_PROBABILITY = "PROB"
-  val VARIANCE = "VAR"
-  val CONFIDENCE = "CONFIDENCE"
+  val FN_BEST_GUESS = "VGTERM_BEST_GUESS"
+  val FN_SAMPLE = "VGTERM_SAMPLE"
+  val FN_IS_ACKED = "VGTERM_IS_ACKNOWLEDGED"
+  val FN_TEMP_ENCODED = "MIMIR_ENCODED_VGTERM"
 
   val SEED_EXP = "__SEED"
 

@@ -1,9 +1,10 @@
-package mimir.optimizer;
+package mimir.optimizer.operator
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-import mimir.ctables._;
-import mimir.algebra._;
+import mimir.ctables._
+import mimir.algebra._
+import mimir.optimizer.OperatorOptimization
 
 object PropagateConditions extends OperatorOptimization with LazyLogging {
 
@@ -158,8 +159,7 @@ object PropagateConditions extends OperatorOptimization with LazyLogging {
 					if(isUsefulAssertion(head)){ applyAssertion _ } 
 					else                       { hardInline _ }
 				val newRest = 
-					rest.map( applyInliner(true, head, _) ).
-						 map( Eval.inline(_) )
+					rest.map( applyInliner(true, head, _) )
 				head :: propagateConditions(newRest)
 			case List() => List()
 		}

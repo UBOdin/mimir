@@ -121,7 +121,7 @@ object RepairKeyLens extends LazyLogging {
       keys.map { col => ProjectArg(col, Var(col))} ++
       values.map { case (col, model) => 
         val vgTerm = 
-          VGTerm(model, 0, keys.map(Var(_)), 
+          VGTerm(model.name, 0, keys.map(Var(_)), 
             Seq(
               Var(s"MIMIR_KR_HINT_COL_$col"),
               scoreCol.
@@ -190,7 +190,7 @@ object RepairKeyLens extends LazyLogging {
         keys.map { col => ProjectArg(col, Var(col))} ++
         values.map { case (col, model) => 
           val vgTerm = 
-            VGTerm(model, 0, keys.map(Var(_)), 
+            VGTerm(model.name, 0, keys.map(Var(_)), 
               Seq(
                 Var(s"MIMIR_KR_HINT_COL_$col"),
                 scoreCol.
@@ -262,7 +262,7 @@ object RepairKeyLens extends LazyLogging {
           Join(
             Project(
               keys.map { k => ProjectArg(s"MIMIR_KR_$k", Var(k)) },
-              Select(cond, db.getTableOperator(fastPathTable))
+              Select(cond, db.table(fastPathTable))
             ),
             query
           )

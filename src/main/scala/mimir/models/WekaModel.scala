@@ -14,7 +14,6 @@ import weka.core.{Attribute, DenseInstance, Instance, Instances}
 import weka.experiment.{DatabaseUtils, InstanceQueryAdapter}
 import weka.classifiers.{Classifier, UpdateableClassifier}
 import weka.classifiers.bayes.{NaiveBayesMultinomial,NaiveBayesMultinomialUpdateable,NaiveBayesMultinomialText}
-import mimir.optimizer.InlineVGTerms
 import mimir.models._
 
 import scala.collection.JavaConversions._
@@ -71,7 +70,7 @@ object WekaModel
 
   def getAttributes(db: Database, query: Operator): Seq[Attribute] =
   {
-    query.schema.map({
+    db.typechecker.schemaOf(query).map({
       // case (col, TInt() | TFloat() | TDate()) => new Attribute(col)
       case (col, _) => getStringAttribute(db, col, query)
     })
@@ -79,13 +78,13 @@ object WekaModel
 }
 
 @SerialVersionUID(1000L)
-class SimpleWekaModel(name: String, colName: String, var query: Operator)
+class SimpleWekaModel(name: String, colName: String, query: Operator)
   extends Model(name) 
   with NeedsReconnectToDatabase 
 {
   var numSamples = 0
   var numCorrect = 0
-  val colIdx:Int = query.schema.map(_._1).indexOf(colName)
+  val colIdx:Int = query.columnNames.indexOf(colName)
   var attributeMeta: java.util.ArrayList[Attribute] = null
   val feedback = scala.collection.mutable.Map[String,PrimitiveValue]()
 
@@ -238,7 +237,7 @@ class SimpleWekaModel(name: String, colName: String, var query: Operator)
     db.bestGuessSchema(query)(colIdx)._2
 
   def argTypes(idx: Int): Seq[Type] = List(TRowId())
-  def hintTypes(idx: Int) = query.schema.map(_._2)
+  def hintTypes(idx: Int) = db.typechecker.schemaOf(query).map(_._2)
 
   def varType(idx: Int, args: Seq[Type]): Type = guessInputType
   
@@ -292,7 +291,6 @@ class SimpleWekaModel(name: String, colName: String, var query: Operator)
    */
   def reconnectToDatabase(db: Database): Unit = {
     this.db = db
-    query = db.querySerializer.desanitize(query)
     val bytes = new java.io.ByteArrayInputStream(serializedLearner)
     learner = weka.core.SerializationHelper.read(bytes).asInstanceOf[Classifier with UpdateableClassifier]
     serializedLearner = null
@@ -308,9 +306,7 @@ class SimpleWekaModel(name: String, colName: String, var query: Operator)
     weka.core.SerializationHelper.write(bytes,learner)
     serializedLearner = bytes.toByteArray()
     WekaModel.logger.debug(s"Serialized Learner is ${serializedLearner.size} bytes")
-    query = db.querySerializer.sanitize(query)
     val ret = super.serialize()
-    query = db.querySerializer.desanitize(query)
     serializedLearner = null
     return ret
   }

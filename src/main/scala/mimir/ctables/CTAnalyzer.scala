@@ -3,6 +3,8 @@ package mimir.ctables
 import mimir.algebra._
 import scala.util._
 import mimir.models._
+import mimir.ctables.vgterm._
+import mimir.Database
 
 object CTAnalyzer {
 
@@ -21,14 +23,14 @@ object CTAnalyzer {
    * Everything else (other than CASE) is an AND of whether the 
    * child subexpressions are deterministic
    */
-  def compileDeterministic(expr: Expression): Expression =
-    compileDeterministic(expr, Map[String,Expression]())
+  def compileDeterministic(expr: Expression, models: (String => Model)): Expression =
+    compileDeterministic(expr, models, Map[String,Expression]())
 
 
-  def compileDeterministic(expr: Expression, 
+  def compileDeterministic(expr: Expression, models: (String => Model), 
                            varMap: Map[String,Expression]): Expression =
   {
-    val recur = (x:Expression) => compileDeterministic(x, varMap)
+    val recur = (x:Expression) => compileDeterministic(x, models, varMap)
     expr match { 
       
       case Conditional(condition, thenClause, elseClause) => {
@@ -70,9 +72,11 @@ object CTAnalyzer {
 
       case v: VGTerm =>
         if(v.args.isEmpty){
-          BoolPrimitive(v.model.isAcknowledged(v.idx, Seq()))
+          BoolPrimitive(
+            models(v.name).isAcknowledged(v.idx, Seq())
+          )
         } else {
-          VGTermAcknowledged(v.model, v.idx, v.args)
+          IsAcknowledged(models(v.name), v.idx, v.args)
         }
       
       case Var(v) => 
@@ -104,57 +108,21 @@ object CTAnalyzer {
         val conditionCausality = compileCausality(condition, inputCondition)
 
         val thenElseCondition = 
-          if(CTables.isDeterministic(condition)){ 
-            ExpressionUtils.makeAnd(inputCondition, condition)
-          } else {
-            inputCondition
-          }
-
+          ExpressionUtils.makeAnd(inputCondition, condition)
+          
         conditionCausality ++ 
           compileCausality(thenClause, thenElseCondition) ++
           compileCausality(elseClause, ExpressionUtils.makeNot(thenElseCondition))
       }
 
       case Arithmetic(Arith.And, l, r) => {
-        (CTables.isDeterministic(l), CTables.isDeterministic(r)) match {
-          case (true, true)   => List()
-          case (false, true)  => 
-            // if the RHS is deterministic, then the LHS is relevant if and 
-            // only if r is true, since ? && F == F
-            compileCausality(l, 
-              ExpressionUtils.makeAnd(inputCondition, r)
-            )
-          case (true, false)  => 
-            // if the LHS is deterministic, then the RHS is relevant if and 
-            // only if r is true, since F && ? == F
-            compileCausality(r, 
-              ExpressionUtils.makeAnd(inputCondition, l)
-            )
-          case (false, false) => 
-            compileCausality(l, inputCondition) ++ compileCausality(r, inputCondition)
-        }
+       compileCausality(l, inputCondition) ++ compileCausality(r, inputCondition)
       }
 
       case Arithmetic(Arith.Or, l, r) => {
-        (CTables.isDeterministic(l), CTables.isDeterministic(r)) match {
-          case (true, true)   => List()
-          case (false, true)  => 
-            // if the RHS is deterministic, then the LHS is relevant if and 
-            // only if r is false, since ? || T == T
-            compileCausality(l, 
-              ExpressionUtils.makeAnd(inputCondition, ExpressionUtils.makeNot(r))
-            )
-          case (true, false)  => 
-            // if the LHS is deterministic, then the RHS is relevant if and 
-            // only if r is true, since T || ? == T
-            compileCausality(r, 
-              ExpressionUtils.makeAnd(inputCondition, ExpressionUtils.makeNot(l))
-            )
-          case (false, false) => 
-            compileCausality(l, inputCondition) ++ compileCausality(r, inputCondition)
-        }
+        compileCausality(l, inputCondition) ++ compileCausality(r, inputCondition)
       }
-
+      
       case x: VGTerm => List( (inputCondition, x) )
 
       case _ => expr.children.flatMap(compileCausality(_, inputCondition))
@@ -162,11 +130,16 @@ object CTAnalyzer {
     }
   }
 
-  def compileSample(expr: Expression, seed: Expression): Expression =
+  def compileSample(expr: Expression, seed: Expression, models: (String => Model)): Expression =
   {
-    expr match {
-      case VGTerm(model, idx, args, hints) => VGTermSampler(model, idx, args, hints, seed)
-      case _ => expr.rebuild(expr.children.map(compileSample(_, seed)))
-    }
+    val replacement =
+      expr match {
+        case VGTerm(name, idx, args, hints) => 
+          Sampler(models(name), idx, args, hints, seed)
+        case _ => expr
+      }
+
+    return replacement.recur(compileSample(_, seed, models))
+
   }
 }

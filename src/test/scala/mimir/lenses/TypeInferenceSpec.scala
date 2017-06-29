@@ -11,25 +11,23 @@ object TypeInferenceSpec
 
   "The Type Inference Lens" should {
 
-    "Behave sanely" >> {
+    "Be able to create and query type inference lenses" >> {
 
-      db.loadTable("CPUSPEED", new File("test/data/CPUSpeed.csv"))
-
-      val baseTypes = db.bestGuessSchema(db.getTableOperator("CPUSPEED_RAW")).toMap
+      val baseTypes = db.bestGuessSchema(db.table("CPUSPEED_RAW")).toMap
       baseTypes.keys must contain(eachOf("CORES", "FAMILY", "TECH_MICRON"))
       baseTypes must contain("CORES" -> TString())
       baseTypes must contain("FAMILY" -> TString())
       baseTypes must contain("TECH_MICRON" -> TString())
 
 
-      val lensTypes = db.bestGuessSchema(db.getTableOperator("CPUSPEED")).toMap
+      val lensTypes = db.bestGuessSchema(db.table("CPUSPEED")).toMap
       lensTypes.keys must contain(eachOf("CORES", "FAMILY", "TECH_MICRON"))
       lensTypes must contain("CORES" -> TInt())
       lensTypes must contain("FAMILY" -> TString())
       lensTypes must contain("TECH_MICRON" -> TFloat())
 
     }
-
+    
     "Detect Timestamps Correctly" >> {
 
       Type.matches(TTimestamp(), "2014-06-15 08:23:19") must beTrue

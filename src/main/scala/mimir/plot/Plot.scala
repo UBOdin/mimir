@@ -177,7 +177,7 @@ object Plot
       case q:net.sf.jsqlparser.statement.select.SubSelect => 
         db.sql.convert(q.getSelectBody())
       case q:net.sf.jsqlparser.schema.Table => 
-        db.getTableOperator(SqlUtils.canonicalizeIdentifier(q.getName()))
+        db.table(SqlUtils.canonicalizeIdentifier(q.getName()))
     }
     val globalSettings = convertConfig(spec.getConfig())
     val lines: Seq[(String, String, Map[String, PrimitiveValue])] = 
@@ -199,7 +199,7 @@ object Plot
           }
         }
       } else {
-        val sch = dataQuery.schema
+        val sch = db.typechecker.schemaOf(dataQuery)
         var extraColumnCounter = 0;
 
         val convertExpression = (raw: net.sf.jsqlparser.expression.Expression) => {

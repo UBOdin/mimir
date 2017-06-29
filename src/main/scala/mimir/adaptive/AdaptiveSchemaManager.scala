@@ -5,6 +5,8 @@ import scala.collection.mutable
 import mimir.Database
 import mimir.algebra._
 import mimir.statistics.SystemCatalog
+import mimir.serialization._
+import mimir.util._
 
 class AdaptiveSchemaManager(db: Database)
 {
@@ -36,8 +38,8 @@ class AdaptiveSchemaManager(db: Database)
     """, Seq(
       StringPrimitive(schema),
       StringPrimitive(mlensType),
-      StringPrimitive(db.querySerializer.serialize(query)),
-      StringPrimitive(args.map(db.querySerializer.serialize(_)).mkString("~"))
+      StringPrimitive(Json.ofOperator(query).toString),
+      StringPrimitive(Json.ofExpressionList(args).toString)
     ))
 
     // Persist the associated models
@@ -56,15 +58,14 @@ class AdaptiveSchemaManager(db: Database)
             ProjectArg("MLENS", Var("MLENS")), 
             ProjectArg("QUERY", Var("QUERY")),
             ProjectArg("ARGS", Var("ARGS"))),
-        db.getTableOperator(dataTable)
+        db.table(dataTable)
       )
     ){ _.map { row => 
       val name = row(0).asString
       val mlensType = row(1).asString
-      val query = db.querySerializer.deserializeQuery(row(2).asString)
+      val query = Json.toOperator(Json.parse(row(2).asString))
       val args:Seq[Expression] = 
-        if(row(3).equals(StringPrimitive(""))) { Seq() }
-        else { row(3).asString.split("~").map( db.querySerializer.deserializeExpression(_) ) }
+        Json.toExpressionList(Json.parse(row(3).asString))
  
       ( 
         MultilensRegistry.multilenses(mlensType), 
@@ -106,17 +107,16 @@ class AdaptiveSchemaManager(db: Database)
     db.query(
       Select(
         Comparison(Cmp.Eq, Var("NAME"), StringPrimitive(schema)),
-        db.getTableOperator(dataTable)
+        db.table(dataTable)
       )
     ){ result =>
       if(result.hasNext){
         val row = result.next
         val name = row(0).asString
         val mlensType = row(1).asString
-        val query = db.querySerializer.deserializeQuery(row(2).asString)
+        val query = Json.toOperator(Json.parse(row(2).asString))
         val args:Seq[Expression] = 
-          if(row(3).equals(StringPrimitive(""))) { Seq() }
-          else { row(3).asString.split("~").map( db.querySerializer.deserializeExpression(_) ) }
+          Json.toExpressionList(Json.parse(row(3).asString))
    
         Some(( 
           MultilensRegistry.multilenses(mlensType), 

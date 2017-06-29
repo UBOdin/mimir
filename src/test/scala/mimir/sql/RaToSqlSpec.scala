@@ -12,7 +12,19 @@ import mimir.test._
 
 object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
 
-  def convert(x: String) = db.ra.convert(oper(x)).toString
+  def table(name: String)(cols: String*) =
+  {
+    if(cols.isEmpty){
+      name match {
+        case "R" => Table(name, name, Seq(("A", TInt()), ("B", TInt())), Seq())
+      }
+    } else {
+      Table(name, name, cols.map { (_, TInt()) }, Seq())      
+    }
+  }
+
+  def expr(x: String) = ExpressionParser.expr(x)
+  def convert(x: Operator) = db.ra.convert(x).toString
   def convert(x: Expression) = db.ra.convert(x, List(("R", List("R_A", "R_B")))).toString
 
   def beforeAll =
@@ -23,32 +35,50 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
   "The RA to SQL converter" should {
 
     "Produce Flat Queries for Tables" >> {
-      convert("R(A, B)") must be equalTo 
+      convert(
+        table("R")()
+      ) must be equalTo 
         "SELECT * FROM R AS R"
     }
 
     "Produce Flat Queries for Tables with Aliased Variables" >> {
-      convert("R(P, Q)") must be equalTo 
+      convert(
+        table("R")("P", "Q")
+      ) must be equalTo 
         "SELECT * FROM (SELECT R.A AS P, R.B AS Q FROM R AS R) SUBQ_P"
     }
 
     "Produce Flat Queries for Projections" >> {
-      convert("PROJECT[Z <= A+B](R(A, B))") must be equalTo 
+      convert(
+        table("R")()
+          .mapParsed( ("Z", "A+B") )
+      ) must be equalTo 
         "SELECT (R.A + R.B) AS Z FROM R AS R"
     }
 
     "Produce Flat Queries for Projections with Aliased Variables" >> {
-      convert("PROJECT[Z <= P+Q](R(P, Q))") must be equalTo 
+      convert(
+        table("R")("P", "Q")
+          mapParsed( ("Z", "P+Q") )
+      ) must be equalTo 
         "SELECT (SUBQ_P.P + SUBQ_P.Q) AS Z FROM (SELECT R.A AS P, R.B AS Q FROM R AS R) SUBQ_P"
     }
 
     "Produce Flat Queries for Project-Selections" >> {
-      convert("PROJECT[Z <= A+B](SELECT[A > B](R(A, B)))") must be equalTo 
+      convert(
+        table("R")()
+          .filterParsed( "A > B" )
+          .mapParsed( ("Z", "A+B") )
+      ) must be equalTo 
         "SELECT (R.A + R.B) AS Z FROM R AS R WHERE (R.A > R.B)"
     }
 
     "Produce Flat Queries for Project-Selections with Aliased Variables" >> {
-      convert("PROJECT[Z <= P+Q](SELECT[P > Q](R(P, Q)))") must be equalTo 
+      convert(
+        table("R")("P", "Q")
+          .filterParsed( "P > Q" )
+          mapParsed( ("Z", "P+Q") )
+      ) must be equalTo 
         "SELECT (SUBQ_P.P + SUBQ_P.Q) AS Z FROM (SELECT R.A AS P, R.B AS Q FROM R AS R) SUBQ_P WHERE (SUBQ_P.P > SUBQ_P.Q)"
     }
 

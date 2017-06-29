@@ -94,7 +94,7 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   def queryOneRow(s: String): Row =
     query(s){ _.next }
   def table(t: String) =
-    db.getTableOperator(t)
+    db.table(t)
   def resolveViews(q: Operator) =
     db.views.resolve(q)
   def explainRow(s: String, t: String) = 
@@ -126,5 +126,5 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     LoadCSV.handleLoadTable(db, table, file)
  
   def modelLookup(model: String) = db.models.get(model)
-  def schemaLookup(table: String) = db.getTableSchema(table).get
+  def schemaLookup(table: String) = db.tableSchema(table).get
  }
