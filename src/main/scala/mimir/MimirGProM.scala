@@ -51,7 +51,7 @@ object MimirGProM {
     // Prepare experiments
     ExperimentalOptions.enable(conf.experimental())
     
-   if(true){
+   if(false){
       // Set up the database connection(s)
       db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
       db.backend.open()
@@ -96,6 +96,9 @@ object MimirGProM {
     /*var query = "PROVENANCE OF (SELECT a FROM r USE PROVENANCE (ROWID))"
     query = GProMWrapper.inst.gpromRewriteQuery(query+";")       
     println(getQueryResults(query))*/
+    
+    println(explainCell("SELECT * FROM LENS_PICKER2009618197", 1, "1420266763").mkString("\n"))
+    println("\n\n")
     
     println(explainCell("SELECT * FROM LENS_MISSING_VALUE1133189369", 1, "4").mkString("\n"))
     println("\n\n")
