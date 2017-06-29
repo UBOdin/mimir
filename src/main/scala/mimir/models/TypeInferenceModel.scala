@@ -65,6 +65,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
         ))
       ) { _.foreach { row => learn(row.tuple)  } }
     }
+    TypeInferenceModel.logger.debug(s"VOTES:${columns.zip(votes).map { col => "\n   "+col._1+": "+col._2.map { vote => "\n      "+vote._1+"->"+vote._2 }}}")
   }
 
   final def learn(row: Seq[PrimitiveValue]):Unit =
@@ -85,7 +86,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
   {
     totalVotes(idx) += 1.0
     val candidates = TypeInferenceModel.detectType(v)
-    TypeInferenceModel.logger.debug(s"Guesses for '$v': $candidates")
+    TypeInferenceModel.logger.trace(s"Guesses for '$v': $candidates")
     val votesForCurrentIdx = votes(idx)
     for(t <- candidates){
       votesForCurrentIdx(t) = votesForCurrentIdx.getOrElse(t, 0.0) + 1.0 
@@ -109,7 +110,6 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
     choices.get(idx) match {
       case None => {
         val guess = voteList(idx).maxBy( rankFn _ )._1
-        TypeInferenceModel.logger.debug(s"Votes($idx): ${voteList(idx)} -> $guess")
         TypePrimitive(guess)
       }
       case Some(s) => Cast(TType(), s)
