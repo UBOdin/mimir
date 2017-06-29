@@ -109,7 +109,7 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
         case TInt() => IntPrimitive(0)
         case TFloat() => FloatPrimitive(0.0)
         case TDate() => DatePrimitive(0,0,0)
-        case TTimestamp() => TimestampPrimitive(0,0,0,0,0,0)
+        case TTimestamp() => TimestampPrimitive(0,0,0,0,0,0,0)
         case TString() => StringPrimitive("")
         case TBool() => BoolPrimitive(false)
         case TRowId() => RowIdPrimitive("1")
