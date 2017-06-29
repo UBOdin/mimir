@@ -177,14 +177,14 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
   * Boxed Representation of Timestamp
   */
 @SerialVersionUID(100L)
-case class TimestampPrimitive(y: Int, m: Int, d: Int, hh: Int, mm: Int, ss: Int)
+case class TimestampPrimitive(y: Int, m: Int, d: Int, hh: Int, mm: Int, ss: Int, ms: Int)
   extends PrimitiveValue(TTimestamp())
 {
   override def toString() = s"DATE '${asString}'"
   def asLong: Long = throw new TypeException(TDate(), TInt(), "Hard Cast");
   def asDouble: Double = throw new TypeException(TDate(), TFloat(), "Hard Cast");
   def asBool: Boolean = throw new TypeException(TDate(), TBool(), "Hard Cast")
-  def asString: String = f"$y%04d-$m%02d-$d%02d $hh%02d:$mm%02d:$ss%02d"
+  def asString: String = f"$y%04d-$m%02d-$d%02d $hh%02d:$mm%02d:$ss%02d.$ms%04d"
   def payload: Object = (y, m, d).asInstanceOf[Object];
   final def compare(c: TimestampPrimitive): Integer = {
     if(c.y < y){ -1 }
@@ -207,7 +207,7 @@ case class TimestampPrimitive(y: Int, m: Int, d: Int, hh: Int, mm: Int, ss: Int)
   def <(c:TimestampPrimitive): Boolean = compare(c) < 0
   def <=(c:TimestampPrimitive): Boolean = compare(c) <= 0
 
-  def asDateTime: DateTime = new DateTime(y, m, d, hh, mm, ss)
+  def asDateTime: DateTime = new DateTime(y, m, d, hh, mm, ss, ms)
 }
 /**
  * Boxed representation of a boolean

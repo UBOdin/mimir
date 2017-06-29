@@ -1397,14 +1397,14 @@ object OperatorTranslation {
         intPtr.setInt(0,0);
         (GProM_JNA.GProMDataType.GProM_DT_INT,intPtr,1)
       }
-      case DatePrimitive(y,m,d) => {
-        val dtStr = ""+y+"-"+m+"-"+d
+      case d:DatePrimitive => {
+        val dtStr = d.asString
         val strPtr = new Memory(dtStr.length()+1)
         strPtr.setString(0, dtStr);
         (GProM_JNA.GProMDataType.GProM_DT_STRING,strPtr,0)
       }
-      case TimestampPrimitive(y,m,d, h, mm, s) => {
-        val dtStr = s"$y-$m-$d $h:$mm:$s"
+      case t:TimestampPrimitive => {
+        val dtStr = t.asString
         val strPtr = new Memory(dtStr.length()+1)
         strPtr.setString(0, dtStr);
         (GProM_JNA.GProMDataType.GProM_DT_STRING,strPtr,0)

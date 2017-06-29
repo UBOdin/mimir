@@ -16,8 +16,8 @@ class LineReaderInputSource(terminal: Terminal)
       terminal(terminal).
       variable(LineReader.HISTORY_FILE, historyFile).
       build()
-  var pos: Int = -1;
-  var curr: String = null;
+  var pos: Int = 1;
+  var curr: String = "";
 
   def close() = input.getTerminal.close
   def read(cbuf: Array[Char], offset: Int, len: Int): Int =
@@ -26,9 +26,10 @@ class LineReaderInputSource(terminal: Terminal)
       var i:Int = 0;
       logger.debug(s"being asked for $len characters")
       while(i < len){
-        while(curr == null || pos >= curr.length){
+        while(pos >= curr.length){
           if(i > 0){ logger.debug(s"returning $i characters"); return i; }
           curr = input.readLine("mimir> ")
+          if(curr == null){ logger.debug("Reached end"); return -1; }
           logger.debug(s"Read: '$curr'")
           pos = 0;
         }

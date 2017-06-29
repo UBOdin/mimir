@@ -57,8 +57,8 @@ object JsonUtils {
       case FloatPrimitive(f) => JsNumber(f)
       case StringPrimitive(s) => JsString(s)
       case BoolPrimitive(b) => JsBoolean(b)
-      case DatePrimitive(y,m,d) => JsString(f"$y%04d-$m%02d-$d%02d")
-      case TimestampPrimitive(y,m,d,hr,min,sec) => JsString(f"$y%04d-$m%02d-$d%02d $hr%02d:$min%02d:$sec%02d")
+      case d:DatePrimitive => JsString(d.asString)
+      case t:TimestampPrimitive => JsString(t.asString)
       case RowIdPrimitive(r) => JsString(r)
       case TypePrimitive(t) => JsString(t.toString)
     }

@@ -10,7 +10,7 @@ object TextUtils {
       case TInt()    => IntPrimitive(java.lang.Long.parseLong(s))
       case TFloat()  => FloatPrimitive(java.lang.Double.parseDouble(s))
       case TDate()   => parseDate(s)
-      case TTimestamp() => parseTimeStamp(s)
+      case TTimestamp() => parseTimestamp(s)
       case TString() => StringPrimitive(s)
       case TBool()   => 
         s.toUpperCase match {
@@ -24,31 +24,25 @@ object TextUtils {
     }
   }
 
+  val dateRegexp = "(\\d+)-(\\d+)-(\\d+)".r
+  val timestampRegexp = "(\\d+)-(\\d+)-(\\d+) (\\d+):(\\d+):(\\d+|\\d+[.]\\d*)".r
+
   def parseDate(s: String): PrimitiveValue =
   {
-    try {
-      val fields = s.split("-").map( Integer.parseInt(_) )
-      DatePrimitive(fields(0), fields(1), fields(2))
-    } catch {
-      case n: NumberFormatException => NullPrimitive()
+    s match {
+      case dateRegexp(y, m, d) => 
+        DatePrimitive(y.toInt, m.toInt, d.toInt)
+      case _ => NullPrimitive()
     }
   }
 
-  def parseTimeStamp(s: String): PrimitiveValue =
+  def parseTimestamp(s: String): PrimitiveValue =
   {
-    try {
-      var initialFields = s.split("-") // format is YYYY-MM-DD hh:mm:ss
-      val tempDayField = initialFields(2).split(" ") // timeStampFields(2) should be DD hh:mm:ss
-      val tempTimeFields = tempDayField(1).split(":") //tempDayField(1) should be hh:mm:ss
-      initialFields(2) = tempDayField(0)
-      initialFields = initialFields ++ tempTimeFields
-
-      val timeStampFields = initialFields.map(_.toInt)
-
-      TimestampPrimitive(timeStampFields(0), timeStampFields(1), timeStampFields(1),
-                      timeStampFields(1), timeStampFields(1), timeStampFields(1))
-    } catch {
-      case n: NumberFormatException => NullPrimitive()
+    s match {
+      case timestampRegexp(yr, mo, da, hr, mi, se) => 
+        val seconds = se.toDouble
+        TimestampPrimitive(yr.toInt, mo.toInt, da.toInt, hr.toInt, mi.toInt, seconds.toInt, (seconds*1000).toInt % 1000)
+      case _ => NullPrimitive()
     }
   }
 

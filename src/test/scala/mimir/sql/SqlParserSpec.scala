@@ -100,6 +100,10 @@ object SqlParserSpec
 			)
 		}
 
+		"Handle IN queries" in {
+			db.backend.resultRows("SELECT B FROM R WHERE A IN (2,3,4)").toList must not contain(Seq(IntPrimitive(3)))
+		}
+
 		"Parse trivial aggregate queries" in {
 			db.optimize(convert("SELECT SUM(A) FROM R")) must be equalTo
 				Aggregate(List(), List(AggFunction("SUM", false, List(Var("A")), "SUM")),
