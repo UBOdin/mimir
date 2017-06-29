@@ -1,17 +1,16 @@
 package mimir.exec;
 
-import mimir.algebra._
 import scala.util.matching._
-import mimir.ctables.VGTerm
-import mimir.ctables.VGTermAcknowledged
 
-class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
+import mimir.Database
+import mimir.algebra._
+import mimir.algebra.function._
+
+class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Database)
 {
-  val typechecker = new ExpressionChecker(scope.mapValues(_._1))
+  val typeOf = db.typechecker.typeOf(_:Expression, scope.mapValues(_._1))
 
   type Compiled[R] = (T => R)
-
-  def typeOf(e: Expression): Type = typechecker.typeOf(e)
 
   def compile(e: Expression): Compiled[PrimitiveValue] = 
     compile(e, typeOf(e))
@@ -23,6 +22,14 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
       catch {
         case _:NullPointerException | _:NullTypeException => NullPrimitive()
       }
+    }
+  }
+
+  final def throwOnNull(p: PrimitiveValue): PrimitiveValue = 
+  {
+    p match { 
+      case NullPrimitive() => throw new NullPointerException() 
+      case _ => p
     }
   }
 
@@ -54,11 +61,24 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
     (t) => { p.get(args.map { _(t) } ) }
   }
 
-  def compileFunction(func: RegisteredFunction, argExprs: Seq[Expression]): Compiled[PrimitiveValue] =
+  def compileFunction(func: String, argExprs: Seq[Expression]): Compiled[PrimitiveValue] =
   {
-    val args = argExprs.map { compile(_) }
-    (t) => { func.eval(args.map { _(t) }) match { case NullPrimitive() => throw new NullPointerException(); case x => x } }
+    db.functions.get(func) match {
+      case NativeFunction(_, eval, _) => {
+        val args = argExprs.map { compile(_) };
+        { (t:T) => throwOnNull(eval(args.map { _(t) })) }
+      }
+      case ExpressionFunction(_, argNames, expr) => 
+        compile(Eval.inline(expr, argNames.zip(argExprs).toMap))
+      case FoldFunction(_, expr) => 
+        compile(
+          argExprs.tail.foldLeft(argExprs.head){ case (curr, next) =>
+            Eval.inline(expr, Map("CURR" -> curr, "NEXT" -> next))
+          }
+        )
+    }
   }
+
   def compileConditional[R](c: Expression, te: Expression, e: Expression, rcr: Expression => Compiled[R]): Compiled[R]=
   {   
     val cv = compileForBool(c)
@@ -107,11 +127,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
         }
       }
       case Function(name, args) => {
-        val func = FunctionRegistry.functionPrototypes(name)
-        func.unfold(args) match {
-          case Some(fExpr) => compileForLong(fExpr)
-          case None => val l = compileFunction(func, args); { l(_).asLong }
-        }
+        val l = compileFunction(name, args); { l(_).asLong }
       }
       case Conditional(c, t, e) => compileConditional(c, t, e, compileForLong)
       case _ => throw new RAException(s"Invalid Expression on Int: $e")
@@ -136,11 +152,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
         }
       }
       case Function(name, args) => {
-        val func = FunctionRegistry.functionPrototypes(name)
-        func.unfold(args) match {
-          case Some(fExpr) => compileForDouble(fExpr)
-          case None => val l = compileFunction(func, args); { l(_).asDouble }
-        }
+        val l = compileFunction(name, args); { l(_).asDouble }
       }
       case Conditional(c, t, e) => compileConditional(c, t, e, compileForDouble)
       case _ => throw new RAException(s"Invalid Expression on Float: $e")
@@ -236,11 +248,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
       case Not(e)                       => val l = compileForBool(e); { !l(_) }
       case IsNullExpression(e)          => compileForIsNull(e) match { case Left(x) => {(t) => x}; case Right(x) => x}
       case Function(name, args) => {
-        val func = FunctionRegistry.functionPrototypes(name)
-        func.unfold(args) match {
-          case Some(fExpr) => compileForBool(fExpr)
-          case None => val l = compileFunction(func, args); { l(_).asBool }
-        }
+        val l = compileFunction(name, args); { l(_).asBool }
       }
       case Conditional(c, t, e) => compileConditional(c, t, e, compileForBool)
       case _ => throw new RAException(s"Invalid Expression on Bool: $e")
@@ -255,11 +263,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
       case Var(vname)                   => val l = getVar(vname); (t) => prim(l(t))
       case p:Proc                       => val l = compileProc(p); (t) => prim(l(t))
       case Function(name, args) => {
-        val func = FunctionRegistry.functionPrototypes(name)
-        func.unfold(args) match {
-          case Some(fExpr) => rcr(fExpr)
-          case None => val l = compileFunction(func, args); (t) => prim(l(t))
-        }
+        val l = compileFunction(name, args); (t) => prim(l(t))
       }
       case Conditional(c, t, e) => compileConditional(c, t, e, rcr)
       case _ => throw new RAException(s"Invalid Passthrough Expression: $e")
@@ -358,7 +362,15 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))])
         val v = compileProc(p); 
         Right( { (t) => v(t).isInstanceOf[NullPrimitive] } ) 
       }
-      
+      case _:IsNullExpression => {
+        Left(false)
+      }
+      case _:JDBCVar => 
+        throw new RAException("JDBCVars not supported")
+      case _:RowIdVar => 
+        throw new RAException("Error: ROWIDVars should have been compiled out")
+      case _:VGTerm => 
+        throw new RAException("Error: VGTerms should have been compiled out")
     }
   }
   

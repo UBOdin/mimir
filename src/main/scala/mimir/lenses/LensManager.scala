@@ -53,11 +53,6 @@ class LensManager(db: Database) {
     for(model <- models){
       db.models.persist(model, s"LENS:$saneName")
     }
-
-    // Populate the best-guess cache
-    if(!db.backend.canHandleVGTerms){
-      db.bestGuessCache.buildCache(view)
-    }
   }
 
   def drop(name: String): Unit =

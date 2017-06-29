@@ -1,4 +1,7 @@
-package mimir.algebra;
+package mimir.algebra.function
+
+import mimir.Database
+import mimir.algebra._
 
 case class RegisteredAggregate(
   aggName: String,
@@ -7,7 +10,7 @@ case class RegisteredAggregate(
   def typecheck(args: Seq[Type]) = typechecker(args)
 }
 
-object AggregateRegistry
+class AggregateRegistry
 {
   var prototypes: scala.collection.mutable.Map[String, RegisteredAggregate] = 
     scala.collection.mutable.Map.empty;

@@ -1,5 +1,6 @@
 package mimir.exec.result
 
+import mimir.Database
 import mimir.exec._
 import mimir.algebra._
 import com.typesafe.scalalogging.slf4j.LazyLogging
@@ -101,19 +102,21 @@ class AggregateResultIterator(
   groupByColumns: Seq[Var],
   aggregates: Seq[AggFunction],
   inputSchema: Seq[(String,Type)],
-  src: ResultIterator
+  src: ResultIterator,
+  db: Database
 ) 
   extends ResultIterator
   with LazyLogging
 {
   private val typeOfInputColumn: Map[String, Type] = inputSchema.toMap
-  private val typechecker = new ExpressionChecker(typeOfInputColumn)
+  private val typeOf = db.typechecker.typeOf(_:Expression, scope = typeOfInputColumn)
+
   val tupleSchema: Seq[(String,Type)] = 
     groupByColumns.map { col => (col.name, typeOfInputColumn(col.name)) } ++ 
     aggregates.map { fn => 
       (
         fn.alias, 
-        AggregateRegistry.typecheck(fn.function, fn.args.map { typechecker.typeOf(_) })
+        db.aggregates.typecheck(fn.function, fn.args.map { typeOf(_) })
       ) 
     }
   val annotationSchema: Seq[(String,Type)] = Seq()
@@ -121,7 +124,7 @@ class AggregateResultIterator(
   val aggNames =
     aggregates.map { _.alias }
   val aggTypes =
-    aggregates.map { agg => (agg, agg.args.map { typechecker.typeOf(_) }) }
+    aggregates.map { agg => (agg, agg.args.map { typeOf(_) }) }
 
   private val aggEvalScope: Map[String,(Type, Row => PrimitiveValue)] =
     inputSchema.zipWithIndex.map { 
@@ -129,7 +132,7 @@ class AggregateResultIterator(
         logger.debug(s"For $name ($t) using idx = $idx")
         (name, (t, (r:Row) => { logger.trace(s"read $name @ $idx"); r(idx) })) 
     }.toMap
-  private val aggEval = new EvalInlined[Row](aggEvalScope)
+  private val aggEval = new EvalInlined[Row](aggEvalScope, db: Database)
 
   val groupConstructor: Seq[() => AggregateValue] = 
     aggTypes.map { agg =>

@@ -7,14 +7,9 @@ import java.util
 import mimir.algebra._
 import mimir.ctables._
 import mimir.util.RandUtils
-import mimir.{Analysis, Database}
-import moa.classifiers.Classifier
-import moa.core.InstancesHeader
-import weka.core.{Attribute, DenseInstance, Instance, Instances}
-import weka.experiment.{DatabaseUtils, InstanceQueryAdapter}
-import mimir.optimizer.InlineVGTerms
+import mimir.Database
+import mimir.parser._
 import mimir.models._
-import mimir.optimizer.ExpressionOptimizer
 
 import scala.collection.JavaConversions._
 import scala.util._
@@ -28,7 +23,7 @@ object PickerLens {
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
   {
-    val operSchema = query.schema
+    val operSchema = db.typechecker.schemaOf(query)
     val schemaMap = operSchema.toMap
     
     val (pickFromColumns, pickerColTypes ) = args.flatMap {
@@ -76,16 +71,16 @@ object PickerLens {
     
     val pickUncertainExprs : List[(Expression, Expression)] = args.flatMap {
       case Function("UEXPRS", Seq(StringPrimitive(expr), StringPrimitive(resultExpr)) ) => Some( (
-          db.parseExpression(expr), 
-          VGTerm(pickerModel, 0,Seq[Expression](RowIdVar()), Seq(expressionSubstitutions(db.parseExpression(resultExpr)))) 
+          ExpressionParser.expr(expr), 
+          VGTerm(pickerModel.name, 0,Seq[Expression](RowIdVar()), Seq(expressionSubstitutions(ExpressionParser.expr(resultExpr)))) 
           ) )
       case _ => None
     }.toList
     
     val pickCertainExprs : List[(Expression, Expression)] = args.flatMap {
       case Function("EXPRS", Seq(StringPrimitive(expr), StringPrimitive(resultExpr)) ) => Some( (
-          db.parseExpression(expr), 
-          expressionSubstitutions(db.parseExpression(resultExpr))
+          ExpressionParser.expr(expr), 
+          expressionSubstitutions(ExpressionParser.expr(resultExpr))
           ) )
       case _ => None
     }.toList
@@ -98,8 +93,7 @@ object PickerLens {
     val pickerColsTypeMap = pickFromColumns.zip(pickerColTypes).toMap
     
     val projectArgs = 
-      query.schema.
-        map(_._1).
+      query.columnNames.
         flatMap( col => pickerColsTypeMap.get(col) match {
           case None => Some(ProjectArg(col, Var(col)))
           case Some(pickFromCol) => {
@@ -108,7 +102,7 @@ object PickerLens {
             else
               Some(ProjectArg(col, Var(col)))
           }
-        }).union(Seq(ProjectArg(resultColName, ExpressionOptimizer.optimize( pickExpr))))
+        }).union(Seq(ProjectArg(resultColName, db.compiler.optimize(pickExpr))))
 
     return (
       Project(projectArgs, query),

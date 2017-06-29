@@ -132,9 +132,9 @@ object MissingKeyLens {
     
     val projArgs =  
         keys.map(_._1).zipWithIndex.map( col => {
-            ProjectArg(col._1, VGTerm(model, col._2, Seq(RowIdVar()), Seq(Var(col._1))))
+            ProjectArg(col._1, VGTerm(model.name, col._2, Seq(RowIdVar()), Seq(Var(col._1))))
         }).union(rSch.map(_._1).zipWithIndex.map( col => {
-            ProjectArg(col._1,  VGTerm(model, keys.length+col._2, Seq(RowIdVar()), Seq(NullPrimitive())))
+            ProjectArg(col._1,  VGTerm(model.name, keys.length+col._2, Seq(RowIdVar()), Seq(NullPrimitive())))
         }))
     
     val missingKeysOper = Project(projArgs, Table(missingKeysTableName,missingKeysTableName,keys,List()))

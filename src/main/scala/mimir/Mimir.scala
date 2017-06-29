@@ -152,11 +152,11 @@ object Mimir extends LazyLogging {
     val raw = db.sql.convert(explain.getSelectBody())
     output.print("------ Raw Query ------")
     output.print(raw.toString)
-    db.check(raw)
-    val optimized = db.optimize(raw)
+    db.typechecker.schemaOf(raw)        // <- discard results, just make sure it typechecks
+    val optimized = db.compiler.optimize(raw)
     output.print("--- Optimized Query ---")
     output.print(optimized.toString)
-    db.check(optimized)
+    db.typechecker.schemaOf(optimized)  // <- discard results, just make sure it typechecks
     output.print("--- SQL ---")
     try {
       output.print(db.ra.convert(optimized).toString)
@@ -228,7 +228,7 @@ object Mimir extends LazyLogging {
       case Function("SHOW", Seq(Var("TABLES"))) => 
         for(table <- db.getAllTables()){ output.print(table.toUpperCase); }
       case Function("SHOW", Seq(Var(name))) => 
-        db.getTableSchema(name) match {
+        db.tableSchema(name) match {
           case None => 
             output.print(s"'$name' is not a table")
           case Some(schema) => 
@@ -253,21 +253,7 @@ object Mimir extends LazyLogging {
         })
       case Function("LOG", _) =>
         output.print("Syntax: LOG('logger') | LOG('logger', TRACE|DEBUG|INFO|WARN|ERROR)");
-
-      case Function("PLOT", args) =>
-        val table = args(0).asInstanceOf[Var].name
-        val x = args(1).asInstanceOf[Var].name
-        val y = args.tail.tail.map { _.asInstanceOf[Var].name }
-        db.query(
-          Project(
-            Seq(ProjectArg(x, Var(x))) ++ y.map { c => ProjectArg(c, Var(c)) } , 
-            db.getTableOperator(table)
-          )
-        ) { result =>
-          Plot.plot(result, table, x, y, output)
-        }
-
-
+        
     }
 
   }

@@ -6,8 +6,6 @@ import scala.util.Random
 
 import mimir.algebra._
 import mimir.util._
-import mimir.ctables.{VGTerm}
-import mimir.optimizer.{InlineVGTerms,InlineProjections}
 import mimir.test._
 import mimir.models._
 import mimir.exec.mode._
@@ -31,7 +29,7 @@ object TupleBundleSpec
   val rand = new Random(42)
   val numSamples = 10
   val bundler = new TupleBundle((0 until numSamples).map { _ => rand.nextLong })
-  def compileFlat(query: Operator) = bundler.compileFlat(query)
+  def compileFlat(query: Operator) = bundler.compileFlat(query, db.models.get(_))
   val allWorlds = WorldBits.fullBitVector(numSamples)
   val columnNames = TupleBundle.columnNames(_:String, numSamples)
 
@@ -63,7 +61,7 @@ object TupleBundleSpec
             SELECT * FROM R_CLASSIC WHERE B = 2
           """))._1
         // )
-      q1.schema.map(_._1) must contain(eachOf(
+      q1.columnNames must contain(eachOf(
         "A", 
         "MIMIR_SAMPLE_0_B", 
         "MIMIR_SAMPLE_2_C", 
@@ -100,7 +98,7 @@ object TupleBundleSpec
           SELECT A FROM R_CLASSIC WHERE B = 2
         """))._1
 
-      q1.schema.map(_._1) must beEqualTo(Seq("A", "MIMIR_WORLD_BITS"))
+      q1.columnNames must beEqualTo(Seq("A", "MIMIR_WORLD_BITS"))
 
       val r1 =
         db.query(q1) { _.map { row => 
@@ -129,7 +127,7 @@ object TupleBundleSpec
         """))._1
 
       // This test assumes that compileFlat just adds a WORLDS_BITS column
-      q1.schema.map(_._1) must beEqualTo(Seq("A", "MIMIR_WORLD_BITS"))
+      q1.columnNames must beEqualTo(Seq("A", "MIMIR_WORLD_BITS"))
 
       val r1 =
         db.query(q1){ _.map { row =>
@@ -152,7 +150,7 @@ object TupleBundleSpec
 
       // This test assumes that compileFlat just splits 'B' into samples and 
       // adds a world bits column.
-      q1.schema.map(_._1) must beEqualTo(
+      q1.columnNames must beEqualTo(
         columnNames("B").toSeq ++ Seq("MIMIR_WORLD_BITS")
       )
 
@@ -179,11 +177,11 @@ object TupleBundleSpec
         """))._1
 
       // This test assumes that compileFlat just adds a WORLDS_BITS column
-      q1.schema.map(_._1) must beEqualTo(
+      q1.columnNames must beEqualTo(
         Seq("A")++ columnNames("B") ++ Seq("MIMIR_WORLD_BITS")
       )
 
-      val r1 =
+      val r1:Map[Int, (Seq[Int], Long)] =
         db.query(q1){ _.map { row => 
           ( row("A").asInt -> 
             ( columnNames("B").map { row(_).asInt }.toSeq, 
@@ -212,7 +210,7 @@ object TupleBundleSpec
           SELECT B, SUM(A) AS A FROM R_CLASSIC GROUP BY B
         """))._1
 
-      q1.schema.map(_._1) must beEqualTo(
+      q1.columnNames must beEqualTo(
         Seq("B")++columnNames("A")++Seq("MIMIR_WORLD_BITS")
       )
 

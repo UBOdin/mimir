@@ -17,7 +17,6 @@ import mimir.gprom.algebra.OperatorTranslation
 import org.gprom.jdbc.jna.GProMWrapper
 import scala.util.control.Exception.Catch
 import org.gprom.jdbc.jna.GProMNode
-import mimir.optimizer.InlineVGTerms
 import mimir.exec.Compiler
 import mimir.ctables.CTPercolator
 import mimir.provenance.Provenance
@@ -136,7 +135,7 @@ object MimirGProM {
   
   def totallyOptimize(oper : mimir.algebra.Operator) : mimir.algebra.Operator = {
     val preOpt = oper.toString() 
-    val postOptOper = Compiler.optimize(oper)
+    val postOptOper = db.compiler.optimize(oper)
     val postOpt = postOptOper.toString() 
     if(preOpt.equals(postOpt))
       postOptOper

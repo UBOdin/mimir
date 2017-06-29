@@ -4,7 +4,7 @@ import java.sql.SQLException
 
 import mimir.algebra._
 import mimir.util._
-import mimir.optimizer.PropagateConditions;
+import mimir.optimizer.operator.PropagateConditions;
 
 
 object CTPartition {

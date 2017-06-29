@@ -5,23 +5,23 @@ import mimir.algebra._
 object UtilityFunctions
 {
 
-  def register()
+  def register(fr: FunctionRegistry)
   {
-    FunctionRegistry.registerFold("SEQ_MIN", """
+    fr.registerFold("SEQ_MIN", """
       IF CURR < NEXT THEN CURR ELSE NEXT END
     """)
 
-    FunctionRegistry.registerFold("SEQ_MAX", """
+    fr.registerFold("SEQ_MAX", """
       IF CURR > NEXT THEN CURR ELSE NEXT END
     """)
 
-    FunctionRegistry.registerNative(
+    fr.register(
       "JULIANDAY",
       (args) => ???,
       (_) => TInt()
     )
     
-    FunctionRegistry.registerNative("STRFTIME",(_) => ???, (_) => TInt())
+    fr.register("STRFTIME",(_) => ???, (_) => TInt())
     
   }
 

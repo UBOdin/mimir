@@ -42,15 +42,15 @@ object Tracer {
       }
 
       case Join(lhs, rhs) => {
-        val lhsBaseSchema = lhs.schema.map(_._1).toSet
+        val lhsBaseSchema = lhs.columnNames.toSet
         val (lhsTargetRowId, rhsTargetRowId) = 
           targetRowId.partition( x => lhsBaseSchema.contains(x._1) )
 
         val (lhsRetOper, lhsRetExprs, lhsRetCondition) = trace(lhs, lhsTargetRowId)
         val (rhsRetOper, rhsRetExprs, rhsRetCondition) = trace(rhs, rhsTargetRowId)
 
-        val lhsSchema = lhsRetOper.schema.map(_._1).toSet
-        val rhsSchema = rhsRetOper.schema.map(_._1).toSet
+        val lhsSchema = lhsRetOper.columnNames.toSet
+        val rhsSchema = rhsRetOper.columnNames.toSet
         val overlappingSchema = lhsSchema & rhsSchema
 
         if(overlappingSchema.isEmpty){
@@ -82,18 +82,18 @@ object Tracer {
             (
               lhsRetExprs.map(
                 x => (x._1,
-                  Eval.inlineWithoutSimplifying(x._2, lhsReplacements)
+                  Eval.inline(x._2, lhsReplacements)
                 )
               ) ++
               rhsRetExprs.map(
                 x => (x._1,
-                  Eval.inlineWithoutSimplifying(x._2, rhsReplacements)
+                  Eval.inline(x._2, rhsReplacements)
                 )
               )
             ),
             ExpressionUtils.makeAnd(
-              Eval.inlineWithoutSimplifying(lhsRetCondition, lhsReplacements),
-              Eval.inlineWithoutSimplifying(rhsRetCondition, rhsReplacements)
+              Eval.inline(lhsRetCondition, lhsReplacements),
+              Eval.inline(rhsRetCondition, rhsReplacements)
             )
           )
         }
@@ -144,7 +144,6 @@ object Tracer {
       case _:Aggregate => 
         throw new RAException("Tracer can't handle aggregates")
 
-      case (Annotate(_, _) | ProvenanceOf(_) | Recover(_, _)) => ???
     }
   }
 }

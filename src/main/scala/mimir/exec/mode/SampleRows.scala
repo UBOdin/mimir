@@ -6,6 +6,7 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.provenance._
 import mimir.views._
+import mimir.models.Model
 import mimir.exec.result.ResultIterator
 import mimir.exec.uncertainty.{Statistic, Confidence, ColumnStatistic}
 import com.typesafe.scalalogging.slf4j.LazyLogging
@@ -37,7 +38,7 @@ class SampleRows(
           statsQuery.stats
         }
         case _ => {
-          SampleRows.defaultStats(query.schema)
+          SampleRows.defaultStats(db.typechecker.schemaOf(query))
         }
       }
 
@@ -49,7 +50,7 @@ class SampleRows(
 
     // Construct a set of samples
     val querySamples =
-      sampleSeeds.map( compileForWorld(withProvenance, _) )
+      sampleSeeds.map( compileForWorld(withProvenance, _, db.models.get(_)) )
     val allSamples =
       OperatorUtils.makeUnion( querySamples )
 
@@ -83,11 +84,11 @@ class SampleRows(
     return (query, baseSchema, provenanceCols)
   }
 
-  def compileForWorld(query: Operator, seed: Long): Operator =
+  def compileForWorld(query: Operator, seed: Long, models:(String => Model)): Operator =
   {
     (
-      query.recurExpressions{ expr:Expression => CTAnalyzer.compileSample(expr, IntPrimitive(seed)) }.
-            recur(compileForWorld(_, seed))
+      query.recurExpressions{ expr:Expression => CTAnalyzer.compileSample(expr, IntPrimitive(seed), models) }.
+            recur(compileForWorld(_, seed, models))
     ) match {
 
       case View(name, subquery, annotations) if CTables.isProbabilistic(subquery) => 

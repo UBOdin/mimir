@@ -331,11 +331,11 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) e
 
   def canHandleVGTerms(): Boolean = inliningAvailable
 
-  def specializeQuery(q: Operator): Operator = {
+  def specializeQuery(q: Operator, db: Database): Operator = {
     backend match {
       case "sqlite" if inliningAvailable =>
-        VGTermFunctions.specialize(SpecializeForSQLite(q))
-      case "sqlite" => SpecializeForSQLite(q)
+        VGTermFunctions.specialize(SpecializeForSQLite(q, db))
+      case "sqlite" => SpecializeForSQLite(q, db)
       case "oracle" => q
     }
   }

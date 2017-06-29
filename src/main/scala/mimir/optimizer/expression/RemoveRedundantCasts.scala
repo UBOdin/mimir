@@ -1,7 +1,8 @@
-package mimir.optimizer;
+package mimir.optimizer.expression
 
-import mimir.ctables._;
-import mimir.algebra._;
+import mimir.ctables._
+import mimir.algebra._
+import mimir.optimizer._
 
 object RemoveRedundantCasts extends ExpressionOptimizerRule {
 

@@ -30,10 +30,10 @@ object OracleTpchQueries extends Specification {
         val parser = new MimirJSqlParser(new FileReader(new File(queryFolder, q5)))
         val sel = parser.Statement().asInstanceOf[Select]
         val raw = db.sql.convert(sel)
-        db.check(raw)
+        db.typechecker.schemaOf(raw) // Just a sanity check
         val rawPlusRowID = Project(
           List(ProjectArg("MIMIR_PROVENANCE", Var("ROWID_MIMIR"))) ++
-            raw.schema.map( (x) => ProjectArg(x._1, Var(x._1))),
+            raw.columnNames.map( (x) => ProjectArg(x, Var(x))),
           raw)
         val firstRow = db.query(rawPlusRowID){ _.next }
 

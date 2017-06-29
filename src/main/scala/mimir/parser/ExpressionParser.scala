@@ -8,7 +8,7 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.models._
 
-class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
+object ExpressionParser extends RegexParsers {
 	override type Elem = Char
 
 	def id = """[a-zA-Z_][a-zA-Z0-9_]*""".r
@@ -130,7 +130,7 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 				}
 
 			val fields = v.split("_")
-			VGTerm(modelLookup(fields(0)), fields(1).toInt, args, hints)
+			VGTerm(fields(0), fields(1).toInt, args, hints)
 		}
 	}
 
@@ -141,7 +141,4 @@ class ExpressionParser(modelLookup: (String => Model)) extends RegexParsers {
 	def typeLeaf: Parser[Expression] = 
 		exprType ^^ { (t) => TypePrimitive(t) }
 }
-
-object SimpleExpressionParser extends ExpressionParser(Map())
-
 

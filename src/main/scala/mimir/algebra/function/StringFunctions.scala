@@ -5,14 +5,14 @@ import mimir.algebra._
 object StringFunctions
 {
 
-  def register()
+  def register(fr: FunctionRegistry)
   {
-    FunctionRegistry.registerNative("CONCAT", 
+    fr.register("CONCAT", 
       (params: Seq[PrimitiveValue]) => StringPrimitive(params.map( _.asString ).mkString),
       (x: Seq[Type]) => TString()
     )
 
-    FunctionRegistry.registerNative("PRINTF", 
+    fr.register("PRINTF", 
       (params: Seq[PrimitiveValue]) => ???,
       (x: Seq[Type]) => TString()
     )

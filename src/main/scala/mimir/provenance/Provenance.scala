@@ -3,6 +3,7 @@ package mimir.provenance
 import java.sql.SQLException
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
+import mimir.Database
 import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
@@ -98,9 +99,9 @@ object Provenance extends LazyLogging {
         val (newRhsRowids, rhsIdProjections) = 
           makeRowIDProjectArgs(rhsRowids, lhsRowids.size, 0)
         val lhsProjectArgs =
-          lhs.schema.map(x => ProjectArg(x._1, Var(x._1))) ++ lhsIdProjections
+          lhs.columnNames.map(x => ProjectArg(x, Var(x))) ++ lhsIdProjections
         val rhsProjectArgs = 
-          rhs.schema.map(x => ProjectArg(x._1, Var(x._1))) ++ rhsIdProjections
+          rhs.columnNames.map(x => ProjectArg(x, Var(x))) ++ rhsIdProjections
         (
           Join(
             Project(lhsProjectArgs, newLhs),
@@ -121,11 +122,11 @@ object Provenance extends LazyLogging {
         val (_,         rhsIdProjections) = 
           makeRowIDProjectArgs(rhsRowids, 0, lhsRowids.size)
         val lhsProjectArgs =
-          lhs.schema.map(x => ProjectArg(x._1, Var(x._1))) ++ 
+          lhs.columnNames.map(x => ProjectArg(x, Var(x))) ++ 
             lhsIdProjections ++ 
             List(ProjectArg(rowidColnameBase+"_BRANCH", RowIdPrimitive("0")))
         val rhsProjectArgs = 
-          rhs.schema.map(x => ProjectArg(x._1, Var(x._1))) ++ 
+          rhs.columnNames.map(x => ProjectArg(x, Var(x))) ++ 
             rhsIdProjections ++ 
             List(ProjectArg(rowidColnameBase+"_BRANCH", RowIdPrimitive("1")))
         (
@@ -213,13 +214,13 @@ object Provenance extends LazyLogging {
   def rowIdMap(token: Seq[RowIdPrimitive], rowIdFields:Seq[String]):Map[String,RowIdPrimitive] =
     rowIdFields.zip(token).toMap
 
-  def filterForToken(operator:Operator, token: RowIdPrimitive, rowIdFields: Seq[String]): Operator =
-    filterForToken(operator, rowIdMap(token, rowIdFields))
+  def filterForToken(operator:Operator, token: RowIdPrimitive, rowIdFields: Seq[String], db: Database): Operator =
+    filterForToken(operator, rowIdMap(token, rowIdFields), db)
 
-  def filterForToken(operator:Operator, token: Seq[RowIdPrimitive], rowIdFields: Seq[String]): Operator =
-    filterForToken(operator, rowIdMap(token, rowIdFields))
+  def filterForToken(operator:Operator, token: Seq[RowIdPrimitive], rowIdFields: Seq[String], db: Database): Operator =
+    filterForToken(operator, rowIdMap(token, rowIdFields), db)
 
-  def filterForToken(operator:Operator, rowIds: Map[String,PrimitiveValue]): Operator =
+  def filterForToken(operator:Operator, rowIds: Map[String,PrimitiveValue], db: Database): Operator =
   {
     // Distributivity of unions makes this particular rewrite a little
     // tricky.  Specifically, UNION might assign either 'left' or 'right' to one
@@ -235,14 +236,14 @@ object Provenance extends LazyLogging {
     // there's a hardcoded rowid column that doesn't match the target field.
     // At the very end, we strip off the final Option.
 
-    doFilterForToken(operator, rowIds) match {
+    doFilterForToken(operator, rowIds, db) match {
       case Some(s) => s
       case None => throw new ProvenanceError("No branch matching all union terms")
     }
 
   }
 
-  def doFilterForToken(operator: Operator, rowIds:Map[String,PrimitiveValue]): Option[Operator] =
+  def doFilterForToken(operator: Operator, rowIds:Map[String,PrimitiveValue], db: Database): Option[Operator] =
   {
     logger.trace(s"doFilterForToken($rowIds) in \n$operator")
     // println(rowIds.toString+" -> "+operator)
@@ -269,7 +270,7 @@ object Provenance extends LazyLogging {
           // println("COMPARE: "+rowIds(col).asString+" to "+v)
           rowIds(col).asString.equals(v)
         })) {
-          doFilterForToken(src, newRowIdMap).
+          doFilterForToken(src, newRowIdMap, db).
             map(Project(args, _))
         } else {
           None
@@ -278,16 +279,16 @@ object Provenance extends LazyLogging {
       case Select(cond, src) => 
         // technically not necessary... since we're already filtering down to
         // a single tuple.  But keep it here for now.
-        doFilterForToken(src, rowIds).map( Select(cond, _) )
+        doFilterForToken(src, rowIds, db).map( Select(cond, _) )
 
       case Join(lhs, rhs) => 
-        val lhsSchema = lhs.schema.map(_._1).toSet
+        val lhsSchema = lhs.columnNames.toSet
         val (lhsRowIds, rhsRowIds) = 
           rowIds.toList.partition( x => lhsSchema.contains(x._1) )
         // println("LHS: "+lhsRowIds)
         // println("RHS: "+rhsRowIds)
-        ( doFilterForToken(lhs, lhsRowIds.toMap), 
-          doFilterForToken(rhs, rhsRowIds.toMap) 
+        ( doFilterForToken(lhs, lhsRowIds.toMap, db), 
+          doFilterForToken(rhs, rhsRowIds.toMap, db) 
         ) match {
           case (Some(newLhs), Some(newRhs)) => Some(Join(newLhs, newRhs))
           case _ => None
@@ -295,13 +296,13 @@ object Provenance extends LazyLogging {
         
 
       case Union(lhs, rhs) => 
-        doFilterForToken(lhs, rowIds).
-          orElse(doFilterForToken(rhs, rowIds))
+        doFilterForToken(lhs, rowIds, db).
+          orElse(doFilterForToken(rhs, rowIds, db))
 
       // We don't handle materializing the entire history of a given value
       // for now... drop the view and focus on the query itself.
       case View(_, query, _) => 
-        doFilterForToken(query, rowIds)
+        doFilterForToken(query, rowIds, db)
 
       case Table(_,_, _, meta) =>
         meta.find( _._2.equals(Var("ROWID")) ) match {
@@ -322,7 +323,7 @@ object Provenance extends LazyLogging {
       case EmptyTable(sch) => None 
 
       case Aggregate(gbCols, aggCols, src) =>
-        val sch = src.schema.toMap
+        val sch = db.typechecker.schemaOf(src).toMap
 
         val castTokenValues = 
           gbCols.map { col => (col.name, Cast(sch(col.name), rowIds(col.name))) }.toMap
@@ -348,14 +349,21 @@ object Provenance extends LazyLogging {
 
       case Sort(_, src) => 
         // Sorts are irrelevant here, drop it
-        return doFilterForToken(src, rowIds)
+        return doFilterForToken(src, rowIds, db)
 
       case Limit(_, _, src) => 
         // A limit would make this query invalid, drop it
-        return doFilterForToken(src, rowIds)
+        return doFilterForToken(src, rowIds, db)
 
       case _:LeftOuterJoin => 
         throw new RAException("Provenance can't handle left outer joins")
+
+      case _:ProvenanceOf => 
+        throw new RAException("Provenance can't handle ProvenanceOf")
+      case _:Annotate => 
+        throw new RAException("Provenance can't handle Annotate")
+      case _:Recover => 
+        throw new RAException("Provenance can't handle Recover")
 
     }
   }

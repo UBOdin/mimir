@@ -1,9 +1,10 @@
-package mimir.optimizer;
+package mimir.optimizer.operator
 
-import java.sql._;
+import java.sql._
 
-import mimir.algebra._;
-import mimir.ctables._;
+import mimir.algebra._
+import mimir.ctables._
+import mimir.optimizer.OperatorOptimization
 
 object PushdownSelections extends OperatorOptimization {
 
@@ -36,7 +37,6 @@ object PushdownSelections extends OperatorOptimization {
 			case Select(cond, (p @ Project(cols, src))) => {
 				Eval.inline(cond, p.bindings) match {
 					case BoolPrimitive(true) => apply(Project(cols, src))
-					case BoolPrimitive(false) => EmptyTable(o.schema)
 					case newCond => apply(Project(cols, Select(newCond, src)))
 				}
 			}
@@ -48,8 +48,8 @@ object PushdownSelections extends OperatorOptimization {
 
 			case Select(cond, Join(lhs, rhs)) => {
 				val clauses: Seq[Expression] = ExpressionUtils.getConjuncts(cond)
-				val lhsSchema = lhs.schema.map(_._1).toSet
-				val rhsSchema = rhs.schema.map(_._1).toSet
+				val lhsSchema = lhs.columnNames.toSet
+				val rhsSchema = rhs.columnNames.toSet
 				val dualSchema = lhsSchema ++ rhsSchema
 
 				if(! (lhsSchema & rhsSchema).isEmpty ){
@@ -91,7 +91,7 @@ object PushdownSelections extends OperatorOptimization {
 
 			case Select(cond, LeftOuterJoin(lhs, rhs, outerJoinCond)) => {
 				val clauses: Seq[Expression] = ExpressionUtils.getConjuncts(cond)
-				val rhsSchema = rhs.schema.map(_._1).toSet
+				val rhsSchema = rhs.columnNames.toSet
 
 				// Left-hand-side clauses are the ones where there's no overlap
 				// with variables from the right-hand-side

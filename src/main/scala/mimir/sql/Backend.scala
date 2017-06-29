@@ -2,6 +2,7 @@ package mimir.sql;
 
 import java.sql._
 
+import mimir.Database
 import mimir.algebra._
 import mimir.util.JDBCUtils
 import net.sf.jsqlparser.statement.select.{Select, SelectBody};
@@ -54,7 +55,7 @@ abstract class Backend {
   def canHandleVGTerms: Boolean
   def rowIdType: Type
   def dateType: Type
-  def specializeQuery(q: Operator): Operator
+  def specializeQuery(q: Operator, db: Database): Operator
 
   def listTablesQuery: Operator
   def listAttrsQuery: Operator

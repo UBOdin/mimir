@@ -69,6 +69,7 @@ object GProMDBTestInstances
 abstract class GProMSQLTestSpecification(val tempDBName:String, config: Map[String,String] = Map())
   extends Specification
   with SQLParsers
+  with RAParsers
 {
   args.execute(threadsNb = 1)
   def dbFile = new File(tempDBName+".db")
@@ -89,7 +90,7 @@ abstract class GProMSQLTestSpecification(val tempDBName:String, config: Map[Stri
   def queryOneRow(s: String): Row =
     query(s){ _.next }
   def table(t: String) =
-    db.getTableOperator(t)
+    db.table(t)
   def explainRow(s: String, t: String) = {
     val query = db.sql.convert(
       stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
@@ -108,10 +109,4 @@ abstract class GProMSQLTestSpecification(val tempDBName:String, config: Map[Stri
     db.update(stmt(s))
   def loadCSV(table: String, file: File) =
     LoadCSV.handleLoadTable(db, table, file)
-  def parser = new OperatorParser(db.models.get, db.getTableSchema(_).get)
-  def expr = parser.expr _
-  def oper = parser.operator _
-  def i = IntPrimitive(_:Long).asInstanceOf[PrimitiveValue]
-  def f = FloatPrimitive(_:Double).asInstanceOf[PrimitiveValue]
-  def str = StringPrimitive(_:String).asInstanceOf[PrimitiveValue]
 }
