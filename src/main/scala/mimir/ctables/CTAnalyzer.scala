@@ -108,57 +108,21 @@ object CTAnalyzer {
         val conditionCausality = compileCausality(condition, inputCondition)
 
         val thenElseCondition = 
-          if(CTables.isDeterministic(condition)){ 
-            ExpressionUtils.makeAnd(inputCondition, condition)
-          } else {
-            inputCondition
-          }
-
+          ExpressionUtils.makeAnd(inputCondition, condition)
+          
         conditionCausality ++ 
           compileCausality(thenClause, thenElseCondition) ++
           compileCausality(elseClause, ExpressionUtils.makeNot(thenElseCondition))
       }
 
       case Arithmetic(Arith.And, l, r) => {
-        (CTables.isDeterministic(l), CTables.isDeterministic(r)) match {
-          case (true, true)   => List()
-          case (false, true)  => 
-            // if the RHS is deterministic, then the LHS is relevant if and 
-            // only if r is true, since ? && F == F
-            compileCausality(l, 
-              ExpressionUtils.makeAnd(inputCondition, r)
-            )
-          case (true, false)  => 
-            // if the LHS is deterministic, then the RHS is relevant if and 
-            // only if r is true, since F && ? == F
-            compileCausality(r, 
-              ExpressionUtils.makeAnd(inputCondition, l)
-            )
-          case (false, false) => 
-            compileCausality(l, inputCondition) ++ compileCausality(r, inputCondition)
-        }
+       compileCausality(l, inputCondition) ++ compileCausality(r, inputCondition)
       }
 
       case Arithmetic(Arith.Or, l, r) => {
-        (CTables.isDeterministic(l), CTables.isDeterministic(r)) match {
-          case (true, true)   => List()
-          case (false, true)  => 
-            // if the RHS is deterministic, then the LHS is relevant if and 
-            // only if r is false, since ? || T == T
-            compileCausality(l, 
-              ExpressionUtils.makeAnd(inputCondition, ExpressionUtils.makeNot(r))
-            )
-          case (true, false)  => 
-            // if the LHS is deterministic, then the RHS is relevant if and 
-            // only if r is true, since T || ? == T
-            compileCausality(r, 
-              ExpressionUtils.makeAnd(inputCondition, ExpressionUtils.makeNot(l))
-            )
-          case (false, false) => 
-            compileCausality(l, inputCondition) ++ compileCausality(r, inputCondition)
-        }
+        compileCausality(l, inputCondition) ++ compileCausality(r, inputCondition)
       }
-
+      
       case x: VGTerm => List( (inputCondition, x) )
 
       case _ => expr.children.flatMap(compileCausality(_, inputCondition))

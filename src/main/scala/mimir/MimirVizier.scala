@@ -15,6 +15,7 @@ import py4j.GatewayServer
 import mimir.exec.Compiler
 import mimir.gprom.algebra.OperatorTranslation
 import org.gprom.jdbc.jna.GProMWrapper
+import mimir.ctables.Reason
 
 /**
  * The primary interface to Mimir.  Responsible for:
@@ -42,21 +43,23 @@ object MimirVizier {
     // Prepare experiments
     ExperimentalOptions.enable(conf.experimental())
     
-    // Set up the database connection(s)
-    //db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
-    //db.backend.open()
-    
-    //Use GProM Backend
-    gp = new GProMBackend(conf.backend(), conf.dbname(), 1)
-    db = new Database(gp)    
-    db.backend.open()
-    gp.metadataLookupPlugin.db = db;
-    
+    if(true){
+      // Set up the database connection(s)
+      db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
+      db.backend.open()
+    }
+    else {
+      //Use GProM Backend
+      gp = new GProMBackend(conf.backend(), conf.dbname(), 1)
+      db = new Database(gp)    
+      db.backend.open()
+      gp.metadataLookupPlugin.db = db;
+    }
     
     db.initializeDBForMimir();
 
     if(ExperimentalOptions.isEnabled("INLINE-VG")){
-        db.backend.asInstanceOf[GProMBackend].enableInlining(db)
+        db.backend.asInstanceOf[InlinableBackend].enableInlining(db)
       }
     
     OperatorTranslation.db = db
@@ -223,15 +226,25 @@ object MimirVizier {
   
   def explainCell(query: String, col:Int, row:String) : Seq[mimir.ctables.Reason] = {
     val timeRes = time {
+      try {
       println("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
       val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
       //val compiledOper = db.compiler.compileInline(oper, db.compiler.standardOptimizations)._1
       val cols = oper.columnNames
       //println(s"explaining Cell: [${cols(col)}][$row]")
       //db.explainCell(oper, RowIdPrimitive(row.toString()), cols(col)).toString()
-      db.explainer.getFocusedReasons(db.explainer.explainSubset(
-              db.explainer.filterByProvenance(oper,RowIdPrimitive(row)), 
-              Seq(cols(col)).toSet, false, false))
+      val provFilteredOper = db.explainer.filterByProvenance(oper,RowIdPrimitive(row))
+      val subsetReasons = db.explainer.explainSubset(
+              provFilteredOper, 
+              Seq(cols(col)).toSet, false, false)
+      db.explainer.getFocusedReasons(subsetReasons)
+      } catch {
+          case t: Throwable => {
+            t.printStackTrace() // TODO: handle error
+            Seq[Reason]()
+          }
+        }
+      
     }
     println(s"explainCell Took: ${timeRes._2}")
     timeRes._1
@@ -251,7 +264,7 @@ object MimirVizier {
               Seq().toSet, true, false))
     }
     println(s"explainRow Took: ${timeRes._2}")
-    timeRes._1
+    timeRes._1.distinct
   }
 
   
@@ -287,6 +300,22 @@ object MimirVizier {
   
   def getAvailableLenses() : String = {
     db.lenses.lensTypes.keySet.toSeq.mkString(",")
+  }
+  
+  
+  def getTuple(oper: mimir.algebra.Operator) : Map[String,PrimitiveValue] = {
+    db.query(oper)(results => {
+      val cols = results.schema.map(f => f._1)
+      val colsIndexes = results.schema.zipWithIndex.map( _._2)
+      if(results.hasNext){
+        val row = results.next()
+        colsIndexes.map( (i) => {
+           (cols(i), row(i)) 
+         }).toMap
+      }
+      else
+        Map[String,PrimitiveValue]()
+    })
   }
   
   def operCSVResults(oper : mimir.algebra.Operator) : PythonCSVContainer =  {

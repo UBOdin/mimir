@@ -160,8 +160,9 @@ class Compiler(db: Database) extends LazyLogging {
     (SelectBody, Seq[(String,Type)]) =
   {
     val optimized = { 
-      if(db.backend.isInstanceOf[mimir.sql.GProMBackend] ) {
-        Optimizer.gpromOptimize(oper) 
+      if(ExperimentalOptions.isEnabled("GPROM-OPTIMIZE")
+        && db.backend.isInstanceOf[mimir.sql.GProMBackend] ) {
+        OperatorTranslation.optimizeWithGProM(oper)
       } else { 
         optimize(oper)
       }

@@ -446,7 +446,12 @@ class CTExplainer(db: Database) extends LazyLogging {
 				val argReasons = 
 					relevantArgs.
 						flatMap {
-						  col => CTAnalyzer.compileCausality(col.expression)
+						  col => {
+						    val compiledCausalityExpr = CTAnalyzer.compileCausality(col.expression)
+						    compiledCausalityExpr.map {
+						      case (condition, vgterm) => (vgterm.toString, (condition, vgterm))
+						    }.toMap.toSeq.map(_._2)
+						  }
 						}.map { case (condition, vgterm) => 
 							ReasonSet.make(vgterm, db, Select(condition, child))
 						}
@@ -467,7 +472,9 @@ class CTExplainer(db: Database) extends LazyLogging {
 				val (condReasons:Seq[ReasonSet], condDependencies:Set[String]) =
 					if(wantRow){
 						(
-							CTAnalyzer.compileCausality(cond).
+							CTAnalyzer.compileCausality(cond).map {
+						      case (condition, vgterm) => (vgterm.toString, (condition, vgterm))
+						    }.toMap.toSeq.map(_._2).
 								map { case (condition, vgterm) => 
 										ReasonSet.make(vgterm, db, Select(condition, child))
 									},
@@ -480,7 +487,9 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 			case Aggregate(gbs, aggs, child) => {
 				val aggVGTerms = 
-					aggs.flatMap { agg => agg.args.flatMap( CTAnalyzer.compileCausality(_) ) }
+					aggs.flatMap { agg => agg.args.flatMap( CTAnalyzer.compileCausality(_).map {
+						      case (condition, vgterm) => (vgterm.toString, (condition, vgterm))
+						    }.toMap.toSeq.map(_._2) ) }
 				val aggReasons =
 					aggVGTerms.map { case (condition, vgterm) => 
 						ReasonSet.make(vgterm, db, Select(condition, child))
@@ -521,7 +530,9 @@ class CTExplainer(db: Database) extends LazyLogging {
 					if(wantSort){
 						(
 							args.flatMap { arg => 
-								CTAnalyzer.compileCausality(arg.expression)
+								CTAnalyzer.compileCausality(arg.expression).map {
+						      case (condition, vgterm) => (vgterm.toString, (condition, vgterm))
+						    }.toMap.toSeq.map(_._2)
 							}.map { case (condition, vgterm) => 
 								ReasonSet.make(vgterm, db, Select(condition, child))
 							},
@@ -540,6 +551,9 @@ class CTExplainer(db: Database) extends LazyLogging {
 			case Annotate(src, _) => 
 				explainSubsetWithoutOptimizing(src,wantCol,wantRow,wantSort)
 
+			case ProvenanceOf(_) => ???
+
+			case Recover(_, _) => ???
 		}
 	}
 }

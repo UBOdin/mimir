@@ -183,14 +183,14 @@ case class Select(condition: Expression, source: Operator) extends Operator
 }
 
 
-case class AnnotateArg(name: String, typ: Type, expr:Expression) {
+case class AnnotateArg(annotationType: ViewAnnotation.T, name: String, typ: Type, expr:Expression) {
   override def toString = (name.toString + " <= " + expr.toString + ":" + typ)
 }
 /**
  * invisify provenance attributes operator -- With Provenance
  */
 case class Annotate(source: Operator,
-                 invisSch: Seq[AnnotateArg])
+                 invisSch: Seq[(String, AnnotateArg)])
   extends Operator
 {
   def toString(prefix: String) =
@@ -198,14 +198,14 @@ case class Annotate(source: Operator,
       ("\n" + source.toString(prefix+"  ") +"\n" + prefix 
       )+")" + 
        ( if(invisSch.size > 0)
-             { " // "+invisSch.map( { case AnnotateArg(n, t, e) => n + ":"+t } ).mkString(", ") }
+             { " // "+invisSch.map( { case (an,AnnotateArg(at, n, t, e)) => an + "->" +n + ":"+t } ).mkString(", ") }
         else { "" })
   def children: List[Operator] = List(source)
   def rebuild(x: Seq[Operator]) = Annotate(x.head, invisSch)
-  def invisible_schema = invisSch.map( x => (x.name, x.typ) )
-  def expressions = invisSch.map(invsCol => invsCol.expr )
+  def invisible_schema = invisSch.map( x => (x._2.name, x._2.typ) )
+  def expressions = invisSch.map(invsCol => invsCol._2.expr )
   def rebuildExpressions(x: Seq[Expression]) = Annotate(source,
-    invisSch.zip(x).map({ case (AnnotateArg(name, typ, _), expr) => AnnotateArg(name, typ, expr)})   
+    invisSch.zip(x).map({ case ((an,AnnotateArg(at, name, typ, _)), expr) =>(an,AnnotateArg(at, name, typ, expr))})   
   )
   def columnNames = source.columnNames
 }
@@ -214,22 +214,22 @@ case class Annotate(source: Operator,
  * visify provenance attributes operator -- Provenance Of
  */
 case class Recover(source: Operator,
-                 invisSch: Seq[AnnotateArg]) extends Operator
+                 invisSch: Seq[(String, AnnotateArg)]) extends Operator
 {
   def toString(prefix: String) =
     // prefix + "Join of\n" + left.toString(prefix+"  ") + "\n" + prefix + "and\n" + right.toString(prefix+"  ")
     prefix + "RECOVER(\n" + source.toString(prefix+"  ") + 
                   "\n" + prefix + ")" + 
        ( if(invisSch.size > 0)
-             { " // "+invisSch.map( { case AnnotateArg(n, t, e) => n + ":"+t } ).mkString(", ") }
+             { " // "+invisSch.map( { case (an,AnnotateArg(at, n, t, e)) => an + "->" +n + ":"+t } ).mkString(", ") }
         else { "" })
   def children() = List(source);
   def rebuild(x: Seq[Operator]) = Recover(x.head, invisSch)
-  def expressions = invisSch.map(invsCol => invsCol.expr )
+  def expressions = invisSch.map(invsCol => invsCol._2.expr )
   def rebuildExpressions(x: Seq[Expression]) = Recover(source,
-    invisSch.zip(x).map({ case (AnnotateArg(name, typ, _), expr) => AnnotateArg(name, typ, expr)})   
+    invisSch.zip(x).map({ case ((an,AnnotateArg(at, name, typ, _)), expr) => (an,AnnotateArg(at, name, typ, expr))})   
   )
-  def columnNames = source.columnNames.union(invisSch.map(_.name))
+  def columnNames = source.columnNames.union(invisSch.map(_._2.name))
 }
 
 /**

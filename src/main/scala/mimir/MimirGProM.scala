@@ -51,17 +51,24 @@ object MimirGProM {
     // Prepare experiments
     ExperimentalOptions.enable(conf.experimental())
     
-    // Set up the database connection(s)
-    gp = new GProMBackend(conf.backend(), conf.dbname(), 1)
-    db = new Database(gp)    
-    db.backend.open()
-    gp.metadataLookupPlugin.db = db;
+   if(false){
+      // Set up the database connection(s)
+      db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
+      db.backend.open()
+    }
+    else {
+      //Use GProM Backend
+      gp = new GProMBackend(conf.backend(), conf.dbname(), 1)
+      db = new Database(gp)    
+      db.backend.open()
+      gp.metadataLookupPlugin.db = db;
+    }
     
     db.initializeDBForMimir();
 
-   if(ExperimentalOptions.isEnabled("INLINE-VG")){
-        db.backend.asInstanceOf[GProMBackend].enableInlining(db)
-      }
+    if(ExperimentalOptions.isEnabled("INLINE-VG")){
+      db.backend.asInstanceOf[InlinableBackend].enableInlining(db)
+    }
    
    // Prepare GProM-Mimir Translator
    OperatorTranslation.db = db
@@ -74,18 +81,63 @@ object MimirGProM {
   
   def testing() : Unit = {
     //testDebug = true
-    //runTests(130) 
+    //runTests(80) 
     //runTests(1) 
     
-    val query = "SELECT * FROM LENS_PICKER2009618197"; //airbus eng err repaired data
-    //val query = "SELECT * FROM LENS_MISSING_KEY912796204"; //airbus eng err missing groups
+    /*val query = "SELECT * FROM LENS_PICKER2009618197"; //airbus eng err repaired data
     val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
     val operResults = printOperResults(oper) 
     
+    val query2 = "SELECT * FROM LENS_MISSING_KEY912796204"; //airbus eng err missing groups
+    val oper2 = db.sql.convert(db.parse(query2).head.asInstanceOf[Select])
+    val operResults2 = printOperResults(oper2) 
+    */
         
     /*var query = "PROVENANCE OF (SELECT a FROM r USE PROVENANCE (ROWID))"
     query = GProMWrapper.inst.gpromRewriteQuery(query+";")       
     println(getQueryResults(query))*/
+    
+    println(explainCell("SELECT * FROM LENS_PICKER2009618197", 1, "1420266763").mkString("\n"))
+    println("\n\n")
+    
+    println(explainCell("SELECT * FROM LENS_MISSING_VALUE1133189369", 1, "4").mkString("\n"))
+    println("\n\n")
+    println(explainCell("SELECT * FROM LENS_MISSING_VALUE1133189369", 1, "2").mkString("\n"))
+    
+    
+  }
+  
+  def explainCell(query: String, col:Int, row:String) : Seq[mimir.ctables.Reason] = {
+    val timeRes = time {
+      println("explainCell: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
+      val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+      //val compiledOper = db.compiler.compileInline(oper, db.compiler.standardOptimizations)._1
+      val cols = oper.columnNames
+      //println(s"explaining Cell: [${cols(col)}][$row]")
+      //db.explainCell(oper, RowIdPrimitive(row.toString()), cols(col)).toString()
+      val provFilteredOper = db.explainer.filterByProvenance(oper,mimir.algebra.RowIdPrimitive(row))
+      val subsetReasons = db.explainer.explainSubset(
+              provFilteredOper, 
+              Seq(cols(col)).toSet, false, false)
+      db.explainer.getFocusedReasons(subsetReasons)
+    }
+    println(s"explainCell Took: ${timeRes._2}")
+    timeRes._1.distinct
+  }
+  
+  def getTuple(oper: mimir.algebra.Operator) : Map[String,mimir.algebra.PrimitiveValue] = {
+    db.query(oper)(results => {
+      val cols = results.schema.map(f => f._1)
+      val colsIndexes = results.schema.zipWithIndex.map( _._2)
+      if(results.hasNext){
+        val row = results.next()
+        colsIndexes.map( (i) => {
+           (cols(i), row(i)) 
+         }).toMap
+      }
+      else
+        Map[String,mimir.algebra.PrimitiveValue]()
+    })
   }
   
   def getQueryResults(oper : mimir.algebra.Operator) : String =  {

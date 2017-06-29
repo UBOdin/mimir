@@ -181,6 +181,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_MATERIALIZE:"MATERIALIZE">
 |   <K_BY:"BY">
 |   <K_DO:"DO">
+|	<K_IF:"IF">
 |   <K_IS:"IS">
 |   <K_IN:"IN">
 |   <K_OR:"OR">
@@ -1798,8 +1799,10 @@ CreateTable CreateTable():
 {
 	// TODO:
 //	[ [ GLOBAL | LOCAL ] { TEMPORARY | TEMP } ] 
+[<K_OR> <K_REPLACE> { createTable.setOrReplaceTable(true); } ]
 	(CreateParameter())*
   <K_TABLE> 
+[<K_IF> <K_NOT> <K_EXISTS> { createTable.setTableIfNotExists(true); } ]
 
 	table=Table() 
 	[
