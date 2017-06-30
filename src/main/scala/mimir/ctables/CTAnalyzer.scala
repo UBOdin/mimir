@@ -114,13 +114,46 @@ object CTAnalyzer {
           compileCausality(thenClause, thenElseCondition) ++
           compileCausality(elseClause, ExpressionUtils.makeNot(thenElseCondition))
       }
-
+      //TODO: We should come up with a more complete way to compile causality
+      //        for And and Or
       case Arithmetic(Arith.And, l, r) => {
-       compileCausality(l, inputCondition) ++ compileCausality(r, inputCondition)
+        (CTables.isDeterministic(l), CTables.isDeterministic(r)) match {
+          case (true, true)   => List()
+          case (false, true)  => 
+            // if the RHS is deterministic, then the LHS is relevant if and 
+            // only if r is true, since ? && F == F
+            compileCausality(l, 
+              ExpressionUtils.makeAnd(inputCondition, r)
+            )
+          case (true, false)  => 
+            // if the LHS is deterministic, then the RHS is relevant if and 
+            // only if r is true, since F && ? == F
+            compileCausality(r, 
+              ExpressionUtils.makeAnd(inputCondition, l)
+            )
+          case (false, false) => 
+            compileCausality(l, inputCondition) ++ compileCausality(r, inputCondition)
+        }
       }
 
       case Arithmetic(Arith.Or, l, r) => {
-        compileCausality(l, inputCondition) ++ compileCausality(r, inputCondition)
+        (CTables.isDeterministic(l), CTables.isDeterministic(r)) match {
+          case (true, true)   => List()
+          case (false, true)  => 
+            // if the RHS is deterministic, then the LHS is relevant if and 
+            // only if r is false, since ? || T == T
+            compileCausality(l, 
+              ExpressionUtils.makeAnd(inputCondition, ExpressionUtils.makeNot(r))
+            )
+          case (true, false)  => 
+            // if the LHS is deterministic, then the RHS is relevant if and 
+            // only if r is true, since T || ? == T
+            compileCausality(r, 
+              ExpressionUtils.makeAnd(inputCondition, ExpressionUtils.makeNot(l))
+            )
+          case (false, false) => 
+            compileCausality(l, inputCondition) ++ compileCausality(r, inputCondition)
+        }
       }
       
       case x: VGTerm => List( (inputCondition, x) )
