@@ -279,7 +279,7 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int)
           val tables = this.getAllTables().map{(x) => x.toUpperCase}
           if(!tables.contains(table.toUpperCase)) return None
 
-          val cols: Option[List[(String, Type)]] = backend match {
+          val cols: Option[Seq[(String, Type)]] = backend match {
             case "sqlite" => {
               // SQLite doesn't recognize anything more than the simplest possible types.
               // Type information is persisted but not interpreted, so conn.getMetaData()

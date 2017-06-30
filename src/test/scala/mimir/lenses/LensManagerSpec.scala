@@ -53,23 +53,6 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
 
     }
 
-    "Be able to create and query type inference lenses" >> {
-
-      val baseTypes = db.bestGuessSchema(db.table("CPUSPEED_RAW")).toMap
-      baseTypes.keys must contain(eachOf("CORES", "FAMILY", "TECH_MICRON"))
-      baseTypes must contain("CORES" -> TString())
-      baseTypes must contain("FAMILY" -> TString())
-      baseTypes must contain("TECH_MICRON" -> TString())
-
-
-      val lensTypes = db.bestGuessSchema(db.table("CPUSPEED")).toMap
-      lensTypes.keys must contain(eachOf("CORES", "FAMILY", "TECH_MICRON"))
-      lensTypes must contain("CORES" -> TInt())
-      lensTypes must contain("FAMILY" -> TString())
-      lensTypes must contain("TECH_MICRON" -> TFloat())
-
-    }
-
     "Clean up after a DROP LENS" >> {
 
       queryOneColumn(s"""

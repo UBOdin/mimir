@@ -22,9 +22,10 @@ object SerializationSpec extends SQLTestSpecification("SerializationTest") {
 
   def reset() =
   {
-    db.getAllTables().
-      filter( !_.startsWith("MIMIR_") ).
-      foreach( (x) => db.backend.update(s"DROP TABLE $x;") );
+    db.getAllTables()
+      .filter( !_.startsWith("MIMIR_") )
+      .filter( !_.equals("SQLITE_MASTER") )
+      .foreach( (x) => db.backend.update(s"DROP TABLE $x;") );
   }
 
   "The Algebra Serializer" should {
