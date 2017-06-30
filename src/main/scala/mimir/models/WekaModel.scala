@@ -169,12 +169,19 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
         // val model = new NaiveBayesMultinomialUpdateable()
         // val model = new NaiveBayesMultinomial()
         val model = new NaiveBayesMultinomialText()
+        hackToPreventGUILaunch()
         model.buildClassifier(data)
         learner = model
       }
     }
   }
 
+  def hackToPreventGUILaunch(){
+    val f = classOf[java.awt.GraphicsEnvironment].getDeclaredField("headless");
+    f.setAccessible(true);
+    f.set(null, true);
+  }
+  
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
   {
     val rowid = args(0).asString
