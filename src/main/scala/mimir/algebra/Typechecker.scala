@@ -275,6 +275,8 @@ object Typechecker
  	def escalateLeft(a: Type, b: Type): Option[Type] =
  	{
 		(a,b) match {
+			case (TDate() | TTimestamp(), TDate() | TTimestamp())  => Some(TInterval())
+			case (TDate() | TTimestamp(), TInterval())  => Some(TTimestamp())
 			case _ if a.equals(b)         => Some(a)
 			case (TUser(name),_)          => escalateLeft(TypeRegistry.baseType(name),b)
 			case (TAny(),_)               => Some(b)

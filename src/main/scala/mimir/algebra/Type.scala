@@ -26,6 +26,7 @@ object Type {
     case TType() => "type"
     case TAny() => "any"
     case TUser(name) => name.toLowerCase
+    case TInterval() => "interval"
   }
   def fromString(t: String) = t.toLowerCase match {
     case "int"     => TInt()
@@ -45,6 +46,7 @@ object Type {
     case "rowid"   => TRowId()
     case "type"    => TType()
     case "any"     => TAny()
+    case "interval" => TInterval()
     case ""        => TAny() // SQLite doesn't do types sometimes
     case x if TypeRegistry.registeredTypes contains x => TUser(x)
     case _ => 
@@ -118,6 +120,7 @@ case class TType() extends Type
 case class TAny() extends Type
 case class TUser(name:String) extends Type
 case class TTimestamp() extends Type
+case class TInterval() extends Type
 
 
 

@@ -39,6 +39,17 @@ object TypeFunctions
       )
     }
 
+    for(functionName <- Seq("INTERVAL", "TO_INTERVAL")){
+      fr.register(
+        functionName,
+        (params: Seq[PrimitiveValue]) => 
+            { TextUtils.parseInterval(params.head.asString) },
+        _ match {
+          case Seq(_) => TDate()
+          case _ => throw new RAException("Invalid parameters to INTERVAL()")
+        }
+      )
+    }
 
 
   }
