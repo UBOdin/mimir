@@ -45,7 +45,7 @@ object TypeFunctions
         (params: Seq[PrimitiveValue]) => 
             { TextUtils.parseInterval(params.head.asString) },
         _ match {
-          case Seq(_) => TDate()
+          case Seq(_) => TInterval()
           case _ => throw new RAException("Invalid parameters to INTERVAL()")
         }
       )
