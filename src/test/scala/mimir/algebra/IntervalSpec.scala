@@ -21,27 +21,22 @@ object IntervalSpec extends Specification with RASimplify {
 
 
       "INTERVALPLUSINTERVAL" >> {
-        simplify("INTERVALPLUSINTERVAL(INTERVAL('P1Y2M3W4DT5H6M7.008S'), INTERVAL('P0Y1M1W1DT0H0M0S'))") must be equalTo(IntervalPrimitive(1,3,4,5,5,6,7,8))
         simplify("INTERVAL('P1Y2M3W4DT5H6M7.008S')+INTERVAL('P0Y1M1W1DT0H0M0S')") must be equalTo(IntervalPrimitive(1,3,4,5,5,6,7,8))
       }
 
       "INTERVALSUBINTERVAL" >> {
-        simplify("INTERVALSUBINTERVAL(INTERVAL('P1Y2M3W4DT5H6M7.008S'), INTERVAL('P0Y1M1W1DT0H0M0S'))") must be equalTo(IntervalPrimitive(1,1,2,3,5,6,7,8))
         simplify("INTERVAL('P1Y3M4W5DT5H6M7.008S')-INTERVAL('P0Y1M1W1DT0H0M0S')") must be equalTo(IntervalPrimitive(1,2,3,4,5,6,7,8))
       }
 
       "DATEPLUSINTERVAL" >> {
-        simplify("DATEPLUSINTERVAL(DATE('2017-01-01'), INTERVAL('P0Y1M1W1DT0H0M0S'))") must be equalTo(TimestampPrimitive(2017,2,9,0,0,0,0))
         simplify("DATE('2017-01-01')+INTERVAL('P0Y1M1W1DT0H0M0S')") must be equalTo(TimestampPrimitive(2017,2,9,0,0,0,0))
       }
 
       "DATESUBINTERVAL" >> {
-        simplify("DATESUBINTERVAL(DATE('2017-02-09'), INTERVAL('P0Y1M1W1DT0H0M0S'))") must be equalTo(TimestampPrimitive(2017,1,1,0,0,0,0))
         simplify("DATE('2017-02-09')-INTERVAL('P0Y1M1W1DT0H0M0S')") must be equalTo(TimestampPrimitive(2017,1,1,0,0,0,0))
       }
 
       "DATESUBDATE" >> {
-        simplify("DATESUBDATE(DATE('2017-05-01'), DATE('2017-01-01'))") must be equalTo(IntervalPrimitive(0,4,0,0,0,0,0,0))
         simplify("DATE('2017-05-01')-DATE('2017-01-01')") must be equalTo(IntervalPrimitive(0,4,0,0,0,0,0,0))
       }
 
