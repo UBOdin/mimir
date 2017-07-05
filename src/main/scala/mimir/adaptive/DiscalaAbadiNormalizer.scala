@@ -70,7 +70,7 @@ object DiscalaAbadiNormalizer
       new DAFDRepairModel(
         s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_FD_PARENT",
         config.schema,
-        db.getTableOperator(fdTable),
+        db.table(fdTable),
         Seq(("MIMIR_FD_CHILD", TInt())),
         "MIMIR_FD_PARENT",
         TInt(),
@@ -89,7 +89,7 @@ object DiscalaAbadiNormalizer
           val (parent, parentType) = schemaLookup(edgeParent)
           val (child, childType) = schemaLookup(edgeChild)
           val model = 
-            new KeyRepairModel(
+            new RepairKeyModel(
               s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_NORM:$parent:$child", 
               s"$child in $parent",
               config.query,
@@ -108,8 +108,8 @@ object DiscalaAbadiNormalizer
   final def spanningTreeLens(db: Database, config: MultilensConfig): Operator =
   {
     val model = db.models.get(s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_FD_PARENT")
-    KeyRepairLens.assemble(
-      db.getTableOperator(s"MIMIR_DA_FDG_${config.schema}"),
+    RepairKeyLens.assemble(
+      db.table(s"MIMIR_DA_FDG_${config.schema}"),
       Seq("MIMIR_FD_CHILD"), 
       Seq(("MIMIR_FD_PARENT", model)),
       Some("MIMIR_FD_PATH_LENGTH")
@@ -126,7 +126,7 @@ object DiscalaAbadiNormalizer
   ): Operator = 
   {
     Project(
-      query.schema.map(_._1).map { col => 
+      query.columnNames.map { col => 
         if(col.equals(nodeCol)){ 
           ProjectArg(labelCol, Var("ATTR_NAME")) 
         } else { 
@@ -137,7 +137,7 @@ object DiscalaAbadiNormalizer
       },
       Select(Comparison(Cmp.Eq, Var(nodeCol), Var("ATTR_NODE")),
         Join(      
-          db.getTableOperator(s"MIMIR_DA_SCH_${config.schema}"),
+          db.table(s"MIMIR_DA_SCH_${config.schema}"),
           query
         )
       )
@@ -151,11 +151,9 @@ object DiscalaAbadiNormalizer
     logger.trace(s"Table Catalog Spanning Tree: \n$spanningTree")
     val tableQuery = 
       convertNodesToNamesInQuery(db, config, "TABLE_NODE", "TABLE_NAME", None,
-        OperatorUtils.makeDistinct(
-          Project(Seq(ProjectArg("TABLE_NODE", Var("MIMIR_FD_PARENT"))),
-            spanningTree
-          )
-        )
+        spanningTree
+          .map( "TABLE_NODE" -> Var("MIMIR_FD_PARENT") )
+          .distinct
       )
     logger.trace(s"Table Catalog Query: \n$tableQuery")
     return tableQuery
@@ -165,13 +163,12 @@ object DiscalaAbadiNormalizer
     val spanningTree = spanningTreeLens(db, config)
     logger.trace(s"Attr Catalog Spanning Tree: \n$spanningTree")
     val childAttributeQuery =
-      OperatorUtils.projectInColumn("IS_KEY", BoolPrimitive(false),
-        convertNodesToNamesInQuery(db, config, "MIMIR_FD_CHILD", "ATTR_NAME", Some("ATTR_TYPE"),
-          convertNodesToNamesInQuery(db, config, "MIMIR_FD_PARENT", "TABLE_NAME", None,
-            spanningTree
-          )
+      convertNodesToNamesInQuery(db, config, "MIMIR_FD_CHILD", "ATTR_NAME", Some("ATTR_TYPE"),
+        convertNodesToNamesInQuery(db, config, "MIMIR_FD_PARENT", "TABLE_NAME", None,
+          spanningTree
         )
-      )
+      ).addColumn("IS_KEY" -> BoolPrimitive(false))
+
     val parentAttributeQuery =
       Project(Seq(
           ProjectArg("TABLE_NAME", Var("TABLE_NAME")),
@@ -182,13 +179,10 @@ object DiscalaAbadiNormalizer
         convertNodesToNamesInQuery(db, config, "TABLE_NODE", "TABLE_NAME", Some("ATTR_TYPE"),
           // SQLite does something stupid with FIRST that prevents it from figuring out that 
           // -1 is an integer.  Add 1 to force it to realize that it's dealing with a number
-          Select(Comparison(Cmp.Gt, Arithmetic(Arith.Add, Var("TABLE_NODE"), IntPrimitive(1)), IntPrimitive(0)),
-            OperatorUtils.makeDistinct(
-              Project(Seq(ProjectArg("TABLE_NODE", Var("MIMIR_FD_PARENT"))),
-                spanningTree
-              )
-            )
-          )
+          spanningTree
+            .map( "TABLE_NODE" -> Var("MIMIR_FD_PARENT") )
+            .distinct
+            .filter( Comparison(Cmp.Gt, Arithmetic(Arith.Add, Var("TABLE_NODE"), IntPrimitive(1)), IntPrimitive(0)) )
         )
       )
     val jointQuery =
@@ -229,7 +223,7 @@ object DiscalaAbadiNormalizer
             )
           }
         Some(
-          KeyRepairLens.assemble(
+          RepairKeyLens.assemble(
             baseQuery,
             Seq(table), 
             repairModels,
@@ -252,7 +246,7 @@ class DAFDRepairModel(
   targetType: Type,
   scoreCol: Option[String],
   attrLookup: Map[Long,String]
-) extends KeyRepairModel(name, context, source, keys, target, targetType, scoreCol)
+) extends RepairKeyModel(name, context, source, keys, target, targetType, scoreCol)
 {
   override def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String =
   {

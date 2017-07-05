@@ -5,8 +5,6 @@ import scala.util._
 
 import mimir.Database
 import mimir.algebra._
-import mimir.ctables.VGTerm
-import mimir.optimizer.{InlineVGTerms}
 import mimir.models._
 import org.apache.lucene.search.spell.{JaroWinklerDistance, LevensteinDistance, NGramDistance, StringDistance}
 
@@ -22,7 +20,7 @@ object SchemaMatchingLens {
     var targetSchema =
       args.
         map(field => {
-          val split = Eval.evalString(field).split(" +")
+          val split = db.interpreter.evalString(field).split(" +")
           val varName  = split(0).toUpperCase
           val typeName = split(1)
           (
@@ -53,7 +51,7 @@ object SchemaMatchingLens {
       }
 
     val (
-      candidateModels: Map[String,Seq[(Model,Int,Seq[Expression],String)]],
+      candidateModels: Map[String,Seq[(String,Int,Seq[Expression],String)]],
       modelEntities: Seq[Model]
     ) = 
       LensUtils.extractModelsByColumn(modelsByType)
@@ -81,7 +79,7 @@ object SchemaMatchingLens {
                 models.map(_._4)
               )
             val metaExpr = LensUtils.buildMetaModel(
-              metaModel, 0, Seq[Expression](), Seq[Expression](),
+              metaModel.name, 0, Seq[Expression](), Seq[Expression](),
               models, Seq[Expression]()
             )
 
@@ -90,7 +88,7 @@ object SchemaMatchingLens {
         }).
         unzip
 
-    val sourceColumns = query.schema.map(_._1)
+    val sourceColumns = query.columnNames
 
     val projectArgs = 
       schemaChoice.

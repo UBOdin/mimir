@@ -1,12 +1,18 @@
 package mimir.views;
 
 import java.sql.SQLException;
-import mimir._;
-import mimir.algebra._;
-import mimir.provenance._;
-import mimir.ctables._;
-import mimir.exec._;
+
+import net.sf.jsqlparser.statement.select.SelectBody
+
+import mimir._
+import mimir.algebra._
+import mimir.provenance._
+import mimir.ctables._
+import mimir.exec._
+import mimir.exec.mode._
+import mimir.serialization._
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import mimir.sql.JDBCBackend
 
 
 class ViewManager(db:Database) extends LazyLogging {
@@ -43,7 +49,7 @@ class ViewManager(db:Database) extends LazyLogging {
     db.backend.update(s"INSERT INTO $viewTable(NAME, QUERY, METADATA) VALUES (?,?,0)", 
       Seq(
         StringPrimitive(name), 
-        StringPrimitive(db.querySerializer.serialize(query))
+        StringPrimitive(Json.ofOperator(query).toString)
       ))
     // updateMaterialization(name)
   }
@@ -59,7 +65,7 @@ class ViewManager(db:Database) extends LazyLogging {
     val properties = apply(name)
     db.backend.update(s"UPDATE $viewTable SET QUERY=? WHERE NAME=?", 
       Seq(
-        StringPrimitive(db.querySerializer.serialize(query)),
+        StringPrimitive(Json.ofOperator(query).toString),
         StringPrimitive(name)
       )) 
     if(properties.isMaterialized){
@@ -98,12 +104,11 @@ class ViewManager(db:Database) extends LazyLogging {
     results.take(1).headOption.map(_.toSeq).map( 
       { 
         case Seq(StringPrimitive(s), IntPrimitive(meta)) => {
-          val query =
-            db.querySerializer.deserializeQuery(s)
+          val query = Json.toOperator(Json.parse(s))
           val isMaterialized = 
             meta != 0
           
-          new ViewMetadata(name, query, isMaterialized)
+          new ViewMetadata(name, query, isMaterialized, db)
         }
       }
     )
@@ -136,14 +141,15 @@ class ViewManager(db:Database) extends LazyLogging {
     }
     val properties = apply(name)
     val (
-      query,
+      query, 
       baseSchema,
       columnTaint,
       rowTaint,
       provenance
-    ) = BestGuesser(db, properties.query)
+    ) = BestGuess.rewriteRaw(db, properties.query)
 
-    val columns = baseSchema.map(_._1)
+    val columns:Seq[String] = baseSchema.map(_._1)
+    logger.debug(s"SCHEMA: $columns; $rowTaint; $columnTaint; $provenance")
 
     val completeQuery = 
       Project(
@@ -156,18 +162,18 @@ class ViewManager(db:Database) extends LazyLogging {
             )
           )
         )++
-        provenance.map { col => ProjectArg(col, Var(col)) },
+        (provenance.toSet -- columns.toSet).map { col => ProjectArg(col, Var(col)) },
         query
       )
 
     logger.debug(s"RAW: $completeQuery")
-    logger.debug(s"MATERIALIZE: $name(${completeQuery.schema.mkString(",")})")
+    logger.debug(s"MATERIALIZE: $name(${completeQuery.columnNames.mkString(",")})")
 
-    val inlinedSQL = db.compiler.sqlForBackend(completeQuery)
+    val (inlinedSQL:SelectBody, _) = db.compiler.sqlForBackend(completeQuery)
         
-    db.backend.selectInto(name, inlinedSQL.toString)
-
     logger.debug(s"QUERY: $inlinedSQL")
+
+    db.backend.selectInto(name, inlinedSQL.toString)
 
     db.backend.update(s"""
       UPDATE $viewTable SET METADATA = 1 WHERE NAME = ?
@@ -219,7 +225,7 @@ class ViewManager(db:Database) extends LazyLogging {
       Seq(
         ProjectArg("TABLE_NAME", Var("NAME"))
       ),
-      db.getTableOperator(viewTable)
+      db.table(viewTable)
     )
   }
 

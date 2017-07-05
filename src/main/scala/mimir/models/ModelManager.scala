@@ -65,7 +65,7 @@ class ModelManager(db:Database)
     val (serialized,decoder) = model.serialize
 
     db.backend.update(s"""
-      INSERT INTO $modelTable(name, encoded, decoder)
+      INSERT OR REPLACE INTO $modelTable(name, encoded, decoder)
              VALUES (?, ?, ?)
     """, List(
       StringPrimitive(model.name),
@@ -73,28 +73,6 @@ class ModelManager(db:Database)
       StringPrimitive(decoder.toUpperCase)
     ))
     cache.put(model.name, model)
-  }
-
-  /**
-   * Register that a model has been updated
-   */
-  def update(name: String): Unit =
-    cache.get(name).foreach(update(_))
-
-  /**
-   * Register that a model has been updated
-   */
-  def update(model: Model): Unit =
-  {
-    val (serialized,decoder) = model.serialize
-
-    db.backend.update(s"""
-      UPDATE $modelTable SET encoded = ?, decoder = ? WHERE name = ?
-    """, List(
-      StringPrimitive(SerializationUtils.b64encode(serialized)),
-      StringPrimitive(decoder.toUpperCase),
-      StringPrimitive(model.name)
-    ))
   }
 
   /**
@@ -113,11 +91,19 @@ class ModelManager(db:Database)
    */
   def get(name:String): Model =
   {
-    if(!cache.contains(name)){ prefetch(name) }
-    cache.get(name) match {
+    getOption(name) match {
       case Some(model) => return model
       case None => throw new RAException(s"Invalid Model: $name")
     }
+  }
+
+  /**
+   * Retreive a model by its name when it may not be present
+   */
+  def getOption(name: String): Option[Model] =
+  {
+    if(!cache.contains(name)){ prefetch(name) }
+    return cache.get(name)
   }
 
   /**

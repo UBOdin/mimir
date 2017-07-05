@@ -54,6 +54,7 @@ PARSER_BEGIN(MimirJSqlParser)
 
 package mimir.parser;
 
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -113,6 +114,9 @@ import mimir.sql.Feedback;
 import mimir.sql.Load;
 import mimir.sql.Pragma;
 import mimir.sql.AlterViewMaterialize;
+import mimir.sql.ProvenanceStatement;
+import mimir.sql.DrawPlot;
+import mimir.sql.CastOperation;
 import net.sf.jsqlparser.statement.create.table.Index;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.drop.Drop;
@@ -170,6 +174,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_SCHEMA:"SCHEMA">
 |   <K_LET:"LET">
 |   <K_LOAD:"LOAD">
+|   <K_PLOT:"PLOT">
 |   <K_ALTER:"ALTER">
 |   <K_SAVE:"SAVE">
 |   <K_RENAME:"RENAME">
@@ -177,6 +182,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_MATERIALIZE:"MATERIALIZE">
 |   <K_BY:"BY">
 |   <K_DO:"DO">
+|   <K_IF:"IF">
 |   <K_IS:"IS">
 |   <K_IN:"IN">
 |   <K_OR:"OR">
@@ -222,6 +228,8 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_DELETE:"DELETE">
 |   <K_CREATE:"CREATE">
 |   <K_SELECT:"SELECT">
+|   <K_CAST:"CAST">
+|   <K_PROVENANCE_OF:"PROVENANCE OF">
 |   <K_OFFSET:"OFFSET">
 |   <K_EXISTS:"EXISTS">
 |   <K_HAVING:"HAVING">
@@ -237,6 +245,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_DISTINCT:"DISTINCT">
 |   <K_INTERSECT:"INTERSECT">
 |   <K_FEEDBACK:"FEEDBACK">
+|   <K_EXTRACT:"EXTRACT">
 }
 
 
@@ -262,7 +271,7 @@ SPECIAL_TOKEN:
 
 TOKEN:
 {
-	< S_IDENTIFIER: ( <LETTER> )+ ( <DIGIT> | <LETTER> |<SPECIAL_CHARS>)* >
+    < S_IDENTIFIER: ( <LETTER> )+ ( <DIGIT> | <LETTER> |<SPECIAL_CHARS>)* >
 | 	< #LETTER: ["a"-"z", "A"-"Z", "_"] >
 |   < #SPECIAL_CHARS: "$" | "_">
 |   < S_CHAR_LITERAL: "'" (~["'"])* "'" ("'" (~["'"])* "'")*>
@@ -276,6 +285,8 @@ Statement Statement() :
   (<EOF> { return null; })
   |
 	( 
+    stm = ProvenanceStatement()
+    |
     stm = Select()
     |
     stm = CreateStatement()
@@ -303,6 +314,8 @@ Statement Statement() :
     stm = Pragma()
     | 
     stm = Alter()
+    |
+    stm = Plot()
     )
     (";" | <EOF>)    
     { return stm; }
@@ -663,7 +676,17 @@ Table Table():
 	
 }
 
+ProvenanceStatement ProvenanceStatement():
+{
+   Select select = null;
+}
+{
 
+    <K_PROVENANCE_OF> [LOOKAHEAD(2) "(" ] select = Select() [")"]
+  { 
+  	return new ProvenanceStatement(select);
+  }
+}
 
 Select Select():
 { 
@@ -1568,7 +1591,7 @@ Expression PrimaryExpression():
 	
 	| "?" { retval = new JdbcParameter(); }
 	
-	|    LOOKAHEAD([ "+" | "-"] Function()) [ "+" | "-" { isInverse = true; }] retval=Function() 
+	| LOOKAHEAD([ "+" | "-"] Function()) [ "+" | "-" { isInverse = true; }] retval=Function() 
 	
 	| LOOKAHEAD([	"+" | "-"] <S_DOUBLE>) 	[	"+" | "-" { tmp = "-"; }]  token=<S_DOUBLE> { retval = new DoubleValue(tmp+token.image); }
 	
@@ -1691,23 +1714,80 @@ Function Function():
 	ExpressionList expressionList = null;  
 }
 {
-	["{fn" { retval.setEscaped(true); } ]
-	(
-	    funcName=RelObjectName()
-    	| 
-    	// workaround for replace(string) function (name clash with mysql REPLACE expression)
-	    <K_REPLACE> { funcName = "REPLACE"; }
-    ) [ "." tmp=RelObjectName() { funcName+= "." + tmp; } ["." tmp=RelObjectName() { funcName+= "." + tmp; }]]
-    "(" [ [<K_DISTINCT> { retval.setDistinct(true); } | <K_ALL> { retval.setAllColumns(true); }] (expressionList=SimpleExpressionList() | "*" { retval.setAllColumns(true); }) ] ")"
-    
-    ["}"]
-    { 
-	    retval.setParameters(expressionList);
-	    retval.setName(funcName);
-    	return retval; 
-    }
+  (
+    ( 
+      <K_EXTRACT> "(" retval = ExtractClause() ")" { return retval; } 
+    ) | (
+      <K_CAST> "(" retval = CastClause() ")" { return retval; }
+    ) | (
+    	["{fn" { retval.setEscaped(true); } ]
+    	(
+    	    funcName=RelObjectName()
+        	| 
+        	// workaround for replace(string) function (name clash with mysql REPLACE expression)
+    	    <K_REPLACE> { funcName = "REPLACE"; }
+        ) [ "." tmp=RelObjectName() { funcName+= "." + tmp; } ["." tmp=RelObjectName() { funcName+= "." + tmp; }]]
+        "(" [ [<K_DISTINCT> { retval.setDistinct(true); } | <K_ALL> { retval.setAllColumns(true); }] (expressionList=SimpleExpressionList() | "*" { retval.setAllColumns(true); }) ] ")"
+        
+        ["}"]
+        { 
+    	    retval.setParameters(expressionList);
+    	    retval.setName(funcName);
+        	return retval; 
+        }
+    )
+  )
 }
 
+Function ExtractClause():
+{
+  Function retval = new Function();
+  Expression target = null;
+  Token field = null;
+}
+{
+  field =  <S_IDENTIFIER>
+           <K_FROM> 
+  target = SimpleExpression()
+  {
+    switch(field.image.toUpperCase()){
+      case "YEAR": 
+      case "MONTH": 
+      case "DAY": 
+      case "HOUR":
+      case "MINUTE":
+      case "SECOND":
+      case "MILLISECOND":
+        retval.setName(field.image.toUpperCase()+"_PART");
+        break;
+      default:
+        throw new ParseException("Invalid EXTRACT: '"+field+"'");
+    }
+    ExpressionList param = new ExpressionList();
+    param.setExpressions(Arrays.asList(target));
+    retval.setParameters(param);
+    return retval;
+  }
+}
+
+Function CastClause():
+{
+  Function retval = null;
+  Expression target = null;
+  String type = null;
+  Token typeTok = null;
+}
+{
+  target = SimpleExpression()
+  (<K_AS> | ",")
+  (
+      typeTok = <S_IDENTIFIER>   { type = typeTok.image;  }
+    | typeTok = <S_CHAR_LITERAL> { type = StringValue.parseEscaped(typeTok.image).toRawString(); }
+  )
+  { 
+    return new CastOperation(target, type.toUpperCase());
+  }
+}
 
 
 SubSelect SubSelect():
@@ -1745,8 +1825,10 @@ CreateTable CreateTable():
 {
 	// TODO:
 //	[ [ GLOBAL | LOCAL ] { TEMPORARY | TEMP } ] 
+[<K_OR> <K_REPLACE> { createTable.setOrReplaceTable(true); } ]
 	(CreateParameter())*
   <K_TABLE> 
+[<K_IF> <K_NOT> <K_EXISTS> { createTable.setTableIfNotExists(true); } ]
 
 	table=Table() 
 	[
@@ -1979,24 +2061,24 @@ Truncate Truncate():
 
 Load Load():
 { 
+  Load load = null;
   Token file = null;
   Token table = null;
+  Token format = null;
+  PrimitiveValue arg = null;
 }
 {
-  <K_LOAD> file=<S_CHAR_LITERAL> 
-  [ <K_AS> table=<S_IDENTIFIER> ]
-  { 
-    if(table == null){
-      return new Load(
-        StringValue.parseEscaped(file.image).getValue()
-      );
-    } else {
-      return new Load(
-        StringValue.parseEscaped(file.image).getValue(),
-        table.image
-      );
-    }
-  }
+  <K_LOAD> file=<S_CHAR_LITERAL> { load = new Load(StringValue.parseEscaped(file.image).getValue()); }
+  [ <K_AS> format=<S_IDENTIFIER> { load.setFormat(format.image); }
+    [ "(" 
+        [ arg = Literal() { load.addFormatArg(arg); } 
+          ( "," arg = Literal() { load.addFormatArg(arg); } ) *
+        ]
+      ")"
+    ]
+  ]
+  [ <K_INTO> table=<S_IDENTIFIER> { load.setTable(table.image); }]
+  { return load; }
 }
 
 Pragma Pragma():
@@ -2021,4 +2103,50 @@ Statement Alter():
       })
     ))
   )
+}
+
+DrawPlot Plot():
+{
+  DrawPlot ret = null;
+  FromItem source = null;
+  Token varName = null;
+  PrimitiveValue varValue = null;
+  DrawPlot.LineSpec line = null;
+}
+{
+  <K_PLOT> (
+      ( "(" source = SubSelect() ")" )
+    | (source = Table())
+  ) { ret = new DrawPlot(source); }
+  [<K_WITH> 
+    ( 
+      ( varName = <S_IDENTIFIER> varValue = Literal() ) { ret.addConfig(varName.image, varValue); }
+    )*
+  ]
+  [<K_USING> 
+    (line = PlotLineSpec()) { ret.addLine(line); }
+    ("," (line = PlotLineSpec()) { ret.addLine(line); })*
+  ]
+  {
+    return ret;
+  }
+}
+
+DrawPlot.LineSpec PlotLineSpec():
+{
+  DrawPlot.LineSpec spec = null;
+  Expression x = null, y = null;
+  Token varName = null;
+  PrimitiveValue varValue = null;
+}
+{
+  "(" x = SimpleExpression() "," y = SimpleExpression() ")"
+  { spec = new DrawPlot.LineSpec(x, y); }
+  (
+    ( varName = <S_IDENTIFIER> varValue = Literal() ) { spec.addConfig(varName.image, varValue); }
+  )*
+  {
+    return spec;
+  }
+
 }

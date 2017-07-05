@@ -28,7 +28,7 @@ import scala.collection.JavaConverters._
 
 import mimir.algebra._
 import mimir.Database
-import mimir.exec.stream.{ResultIterator}
+import mimir.exec.result.{ResultIterator}
 import mimir.util.{JDBCUtils,SerializationUtils}
 
   /*
@@ -986,7 +986,7 @@ object FuncDep {
 
   def initBackstore(db: mimir.Database)
   {
-    if(db.getTableSchema(FuncDep.BACKSTORE_TABLE_NAME) == None){
+    if(!db.tableExists(FuncDep.BACKSTORE_TABLE_NAME)){
       db.backend.update(
         "CREATE TABLE "+FuncDep.BACKSTORE_TABLE_NAME+"(name varchar(40), data blob, PRIMARY KEY(name))"
       )

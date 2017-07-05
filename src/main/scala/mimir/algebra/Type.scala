@@ -19,7 +19,7 @@ object Type {
     case TInt() => "int"
     case TFloat() => "real"
     case TDate() => "date"
-    case TTimeStamp() => "datetime"
+    case TTimestamp() => "datetime"
     case TString() => "varchar"
     case TBool() => "bool"
     case TRowId() => "rowid"
@@ -28,24 +28,26 @@ object Type {
     case TUser(name) => name.toLowerCase
   }
   def fromString(t: String) = t.toLowerCase match {
-    case "int"     => TInt()
-    case "integer" => TInt()
-    case "float"   => TFloat()
-    case "decimal" => TFloat()
-    case "real"    => TFloat()
-    case "date"    => TDate()
-    case "datetime" => TTimeStamp()
-    case "varchar" => TString()
-    case "nvarchar" => TString()
-    case "char"    => TString()
-    case "string"  => TString()
-    case "text"    => TString()
-    case "bool"    => TBool()
-    case "rowid"   => TRowId()
-    case "type"    => TType()
-    case "any"     => TAny()
-    case "num"     => TFloat()
-    case ""        => TAny() // SQLite doesn't do types sometimes
+    case "int"       => TInt()
+    case "integer"   => TInt()
+    case "float"     => TFloat()
+    case "double"    => TFloat()
+    case "decimal"   => TFloat()
+    case "real"      => TFloat() 
+    case "num"       => TFloat()
+    case "date"      => TDate()
+    case "datetime"  => TTimestamp()
+    case "timestamp" => TTimestamp()
+    case "varchar"   => TString()
+    case "nvarchar"  => TString()
+    case "char"      => TString()
+    case "string"    => TString()
+    case "text"      => TString()
+    case "bool"      => TBool()
+    case "rowid"     => TRowId()
+    case "type"      => TType()
+    case "any"       => TAny()
+    case ""          => TAny() // SQLite doesn't do types sometimes
     case x if TypeRegistry.registeredTypes contains x => TUser(x)
     case _ => 
       throw new RAException("Invalid Type '" + t + "'");
@@ -59,7 +61,7 @@ object Type {
     case 5 => TRowId()
     case 6 => TType()
     case 7 => TAny()
-    case 8 => TTimeStamp()
+    case 8 => TTimestamp()
     case _ => {
       // 9 because this is the number of native types, if more are added then this number needs to increase
       TUser(TypeRegistry.idxType(i-9))
@@ -74,7 +76,7 @@ object Type {
     case TRowId() => 5
     case TType() => 6
     case TAny() => 7
-    case TTimeStamp() => 8
+    case TTimestamp() => 8
     case TUser(name)  => TypeRegistry.typeIdx(name.toLowerCase)+9
       // 9 because this is the number of native types, if more are added then this number needs to increase
   }
@@ -82,8 +84,8 @@ object Type {
   val tests = Map[Type,Regex](
     TInt()   -> "^(\\+|-)?([0-9]+)$".r,
     TFloat() -> "^(\\+|-)?([0-9]*(\\.[0-9]+)?)$".r,
-    TDate()  -> "^[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}$".r,
-    TTimeStamp() -> "^[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}\\ \\[0-9]{2}\\:[0-9]{2}\\:[0-9]{2}".r,
+    TDate()  -> "^[0-9]{4}\\-[0-9]{1,2}\\-[0-9]{1,2}$".r,
+    TTimestamp() -> "^[0-9]{4}\\-[0-9]{1,2}\\-[0-9]{1,2}\\s+[0-9]{1,2}:[0-9]{1,2}:([0-9]{1,2}|[0-9]{0,2}\\.[0-9]*)$".r,
     TBool()  -> "^(?i:true|false)$".r
   )
   def matches(t: Type, v: String): Boolean =
@@ -125,7 +127,7 @@ case class TRowId() extends Type
 case class TType() extends Type
 case class TAny() extends Type
 case class TUser(name:String) extends Type
-case class TTimeStamp() extends Type
+case class TTimestamp() extends Type
 
 
 
@@ -153,16 +155,16 @@ These are the files that need to change to extend the TUser
  */
 object TypeRegistry {
   val registeredTypes = Map[String,(Regex,Type)](
-//    "tuser"         -> ("USER".r,                              TString()),
-//    "tweight"       -> ("KG*".r,                               TString()),
-//   "productid"     -> ("^P\\d+$".r,                           TString())//,
-//    "firecompany"   -> ("^[a-zA-Z]\\d{3}$".r,                  TString()),
-//    "zipcode"       -> ("^\\d{5}(?:[-\\s]\\d{4})?$".r,         TString()),
-//    "container"     -> ("^[A-Z]{4}[0-9]{7}$".r,                TString()),
-//    "carriercode"   -> ("^[A-Z]{4}$".r,                        TString()),
-//    "mmsi"          -> ("^MID\\d{6}|0MID\\d{5}|00MID\\{4}$".r, TString()),
-//    "billoflanding" -> ("^[A-Z]{8}[0-9]{8}$".r,                TString()),
-//    "imo_code"      -> ("^\\d{7}$".r,                          TInt())
+    "tuser"         -> ("USER".r,                              TString()),
+    "tweight"       -> ("KG*".r,                               TString()),
+    "productid"     -> ("^P\\d+$".r,                           TString()),
+    "firecompany"   -> ("^[a-zA-Z]\\d{3}$".r,                  TString()),
+    "zipcode"       -> ("^\\d{5}(?:[-\\s]\\d{4})?$".r,         TString()),
+    "container"     -> ("^[A-Z]{4}[0-9]{7}$".r,                TString()),
+    "carriercode"   -> ("^[A-Z]{4}$".r,                        TString()),
+    "mmsi"          -> ("^MID\\d{6}|0MID\\d{5}|00MID\\{4}$".r, TString()),
+    "billoflanding" -> ("^[A-Z]{8}[0-9]{8}$".r,                TString()),
+    "imo_code"      -> ("^\\d{7}$".r,                          TInt())
   )
   val idxType = registeredTypes.keys.toIndexedSeq
   val typeIdx = idxType.zipWithIndex.toMap

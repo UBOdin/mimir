@@ -6,12 +6,12 @@ import java.sql.SQLException
 import java.sql.ResultSet
 
 import mimir.algebra._
-import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, RowExplanation, VGTerm}
+import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, RowExplanation, InlineVGTerms}
 import mimir.models.Model
 import mimir.exec.Compiler
-import mimir.exec.stream.{ResultIterator, Row}
-import mimir.lenses.{LensManager, BestGuessCache}
-import mimir.parser.OperatorParser
+import mimir.exec.mode.{CompileMode, BestGuess}
+import mimir.exec.result.{ResultIterator,SampleResultIterator,Row}
+import mimir.lenses.{LensManager}
 import mimir.sql.{SqlToRA,RAToSql,Backend}
 import mimir.sql.{
     CreateLens,
@@ -24,7 +24,7 @@ import mimir.sql.{
     CreateAdaptiveSchema,
     AlterViewMaterialize
   }
-import mimir.optimizer.{InlineVGTerms}
+import mimir.optimizer.operator.OptimizeExpressions
 import mimir.util.{LoadCSV,ExperimentalOptions}
 import mimir.parser.MimirJSqlParser
 import mimir.statistics.FuncDep
@@ -37,6 +37,7 @@ import net.sf.jsqlparser.statement.drop.Drop
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
 
@@ -94,41 +95,34 @@ case class Database(backend: Backend)
   val lenses          = new mimir.lenses.LensManager(this)
   val models          = new mimir.models.ModelManager(this)
   val views           = new mimir.views.ViewManager(this)
-  val bestGuessCache  = new mimir.lenses.BestGuessCache(this)
-  val querySerializer = new mimir.algebra.Serialization(this)
   val adaptiveSchemas = new mimir.adaptive.AdaptiveSchemaManager(this)
+
+  //// Parsing & Reference
+  val sql             = new mimir.sql.SqlToRA(this)
+  val ra              = new mimir.sql.RAToSql(this)
+  val functions       = new mimir.algebra.function.FunctionRegistry
+  val aggregates      = new mimir.algebra.function.AggregateRegistry
 
   //// Logic
   val compiler        = new mimir.exec.Compiler(this)
   val explainer       = new mimir.ctables.CTExplainer(this)
   val catalog         = new mimir.statistics.SystemCatalog(this)
-
-  //// Parsing
-  val sql             = new mimir.sql.SqlToRA(this)
-  val ra              = new mimir.sql.RAToSql(this)
-  val operator        = new mimir.parser.OperatorParser(models.get _,
-    (x) => 
-      this.getTableSchema(x) match {
-        case Some(x) => x
-        case None => throw new RAException("Table "+x+" does not exist in db!")
-      }
-  )
-
-  /** 
-   * Apply the standard set of Mimir compiler optimizations -- Used mostly for EXPLAIN.
-   */
-  def optimize(oper: Operator): Operator =
-  {
-    Compiler.optimize(oper)
-  }
+  val typechecker     = new mimir.algebra.Typechecker(
+                                  functions = Some(functions), 
+                                  aggregates = Some(aggregates),
+                                  models = Some(models)
+                                )
+  val interpreter     = new mimir.algebra.Eval(
+                                  functions = Some(functions)
+                                )  
 
   /**
    * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
    * and rewrites the query to properly account for Virtual Tables.
    */
-  final def query[T](oper: Operator)(handler: ResultIterator => T): T =
+  final def query[T, R <:ResultIterator](oper: Operator, mode: CompileMode[R])(handler: R => T): T =
   {
-    val iterator = compiler.compileForBestGuess(oper)
+    val iterator = mode(this, oper)
     try {
       val ret = handler(iterator)
 
@@ -156,26 +150,47 @@ case class Database(backend: Backend)
    * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
    * optimizations and rewrites the query to properly account for Virtual Tables.
    */
+  final def query[T, R <:ResultIterator](stmt: net.sf.jsqlparser.statement.select.Select, mode: CompileMode[R])(handler: R => T): T =
+    query(sql.convert(stmt), mode)(handler)
+
+  /**
+   * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
+   * optimizations and rewrites the query to properly account for Virtual Tables.
+   */
+  final def query[T, R <:ResultIterator](stmt: String, mode: CompileMode[R])(handler: R => T): T =
+    query(select(stmt), mode)(handler)
+
+  /**
+   * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
+   * and rewrites the query to properly account for Virtual Tables.
+   */
+  final def query[T](oper: Operator)(handler: ResultIterator => T): T =
+    query(oper, BestGuess)(handler)
+
+  /**
+   * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
+   * optimizations and rewrites the query to properly account for Virtual Tables.
+   */
   final def query[T](stmt: net.sf.jsqlparser.statement.select.Select)(handler: ResultIterator => T): T = 
-  {
-    query(sql.convert(stmt))(handler)
-  }
+    query(stmt, BestGuess)(handler)
 
   /**
    * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
    * optimizations and rewrites the query to properly account for Virtual Tables.
    */
   final def query[T](stmt: String)(handler: ResultIterator => T): T = 
-  {
-    query(select(stmt))(handler)
-  }
+    query(select(stmt), BestGuess)(handler)
+
 
   /**
    * Make an educated guess about what the query's schema should be
+   * XXX: Only required because the TypeInference lens is a little punk birch that needs to
+   *      be converted into an adaptive schema (#193).
    */
   def bestGuessSchema(oper: Operator): Seq[(String, Type)] =
   {
-    InlineVGTerms(oper).schema
+    val Inline = new OptimizeExpressions(compiler.optimize(_))
+    typechecker.schemaOf(Inline(InlineVGTerms(oper, this)))
   }
 
   /**
@@ -206,28 +221,6 @@ case class Database(backend: Backend)
     explainer.explainCell(query, token, column)
 
   /**
-   * Validate that the specified operator is valid
-   */
-  def check(oper: Operator): Unit =
-    Typechecker.schemaOf(oper);
-
-  /**
-   * Parse the provided string as a Mimir Expression AST
-   */
-  def parseExpression(exprString: String): Expression =
-    operator.expr(exprString)
-  /**
-   * Parse the provided string as a list of comma-delimited Mimir Expression ASTs
-   */
-  def parseExpressionList(exprListString: String): List[Expression] =
-    operator.exprList(exprListString)
-  /**
-   * Parse the provided string as a Mimir RA AST
-   */
-  def parseOperator(operString: String): Operator =
-    operator.operator(operString)
-
-  /**
    * Get all availale table names 
    */
   def getAllTables(): Set[String] =
@@ -242,29 +235,32 @@ case class Database(backend: Backend)
    */
   def tableExists(name: String): Boolean =
   {
-    getTableSchema(name) != None
+    tableSchema(name) != None
   }
 
   /**
    * Look up the schema for the table with the provided name.
    */
-  def getTableSchema(name: String): Option[Seq[(String,Type)]] = {
+  def tableSchema(name: String): Option[Seq[(String,Type)]] = {
     logger.debug(s"Table schema for $name")
-    getView(name).map(_.schema).
-      orElse(backend.getTableSchema(name))
+    views.get(name) match { 
+      case Some(viewDefinition) => Some(viewDefinition.schema)
+      case None => backend.getTableSchema(name)
+    }
   }
 
   /**
    * Build a Table operator for the table with the provided name.
    */
-  def getTableOperator(table: String): Operator =
+  def table(tableName: String) : Operator = table(tableName, tableName)
+  def table(tableName: String, alias:String): Operator =
   {
-    getView(table).getOrElse(
+    getView(tableName).getOrElse(
       Table(
-        table, 
-        backend.getTableSchema(table) match {
+        tableName, alias,
+        backend.getTableSchema(tableName) match {
           case Some(x) => x
-          case None => throw new SQLException(s"No such table or view '$table'")
+          case None => throw new SQLException(s"No such table or view '$tableName'")
         },
         Nil
       ) 
@@ -295,10 +291,7 @@ case class Database(backend: Backend)
 
         val model = models.get(name) 
         model.feedback(idx, args, v)
-        models.update(model)
-        if(!backend.canHandleVGTerms){
-          bestGuessCache.update(model, idx, args, v)
-        }
+        models.persist(model)
       }
 
       /********** CREATE LENS STATEMENTS **********/
@@ -315,7 +308,7 @@ case class Database(backend: Backend)
       case view: CreateView => {
         val viewName = view.getTable().getName().toUpperCase
         val baseQuery = sql.convert(view.getSelectBody())
-        val optQuery = Compiler.optimize(baseQuery)
+        val optQuery = compiler.optimize(baseQuery)
 
         views.create(viewName, optQuery);
       }
@@ -339,7 +332,12 @@ case class Database(backend: Backend)
             case s => (s, true)
           }
 
-        loadTable(target, load.getFile, force = force)
+        loadTable(
+          target, 
+          load.getFile, 
+          force = force,
+          (load.getFormat, load.getFormatArgs.asScala.toSeq.map { sql.convert(_) })
+        )
       }
 
       /********** DROP STATEMENTS **********/
@@ -407,18 +405,40 @@ case class Database(backend: Backend)
    * header or not is unimplemented. So its assumed every CSV file
    * supplies an appropriate header.
    */
+  def loadTable(
+    targetTable: String, 
+    sourceFile: File, 
+    force:Boolean = true, 
+    format:(String, Seq[PrimitiveValue]) = ("CSV", Seq(StringPrimitive(",")))
+  ){
+    (format._1 match {
+           case null => "CSV"
+           case x => x.toUpperCase
+     }) match {
+      case "CSV" => {
+        val delim =
+          format._2 match {
+            case Seq(StringPrimitive(delim)) => delim
+            case Seq() | null => ","
+            case _ => throw new SQLException("The CSV format expects a single string argument (CSV('delim'))")
+          }
 
-  def loadTable(targetTable: String, sourceFile: File, force:Boolean = true){
-    val targetRaw = targetTable.toUpperCase + "_RAW"
-    if(tableExists(targetRaw) && !force){
-      throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' AS tableName`; to override.")
+          val targetRaw = targetTable.toUpperCase + "_RAW"
+          if(tableExists(targetRaw) && !force){
+            throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' INTO tableName`; to append to existing data.")
+          }
+          LoadCSV.handleLoadTable(this, targetRaw, sourceFile, 
+            Map("DELIMITER" -> delim)
+          )
+          if(!tableExists(targetTable.toUpperCase)){
+            val oper = table(targetRaw)
+            val l = List(new FloatPrimitive(.5))
+            lenses.create("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)       
+          }
+        }
+      case fmt =>
+        throw new SQLException(s"Unknown load format '$fmt'")
     }
-    LoadCSV.handleLoadTable(this, targetRaw, sourceFile)
-    val oper = getTableOperator(targetRaw)
-    val l = List(new FloatPrimitive(.5))
-
-    // Create Type Inference over the csv by default
-    adaptiveSchemas.create(targetTable.toUpperCase, "TYPE_INFERENCE", oper, l)
   }
 
   def loadTableNoTI(targetTable: String, sourceFile: File, force:Boolean = true): Unit ={
@@ -452,7 +472,7 @@ case class Database(backend: Backend)
     * Materialize a view into the database
     */
   def selectInto(targetTable: String, sourceQuery: Operator){
-    val tableSchema = sourceQuery.schema
+    val tableSchema = typechecker.schemaOf(sourceQuery)
     val tableDef = tableSchema.map( x => x._1+" "+Type.toString(x._2) ).mkString(",")
     val tableCols = tableSchema.map( _._1 ).mkString(",")
     val colFillIns = tableSchema.map( _ => "?").mkString(",")
@@ -478,15 +498,15 @@ case class Database(backend: Backend)
       case None => println("Not a View")
     }
 */
-    val tableS = this.getTableSchema(tableName)
+    val tableS = this.tableSchema(tableName)
     var tableDef = ""
     var tableCols = ""
     var colFillIns = ""
     tableS match {
-      case Some(tableSchema) => {
-        tableDef = tableSchema.map( x => x._1+" "+Type.toString(x._2) ).mkString(",")
-        tableCols = tableSchema.map( _._1 ).mkString(",")
-        colFillIns = tableSchema.map( _ => "?").mkString(",")
+      case Some(sch) => {
+        tableDef = sch.map( x => x._1+" "+Type.toString(x._2) ).mkString(",")
+        tableCols = sch.map( _._1 ).mkString(",")
+        colFillIns = sch.map( _ => "?").mkString(",")
       }
       case None => throw new SQLException
     }

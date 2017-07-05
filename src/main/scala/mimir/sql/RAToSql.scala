@@ -6,7 +6,7 @@ import java.util
 import mimir.Database
 import mimir.algebra._
 import mimir.provenance._
-import mimir.optimizer.{InlineProjections, PushdownSelections}
+import mimir.optimizer.operator.{InlineProjections, PushdownSelections}
 import mimir.util.SqlUtils
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
@@ -18,10 +18,12 @@ import net.sf.jsqlparser.expression.{BinaryExpression, DoubleValue, Function, Lo
 import net.sf.jsqlparser.{schema, expression}
 import net.sf.jsqlparser.schema.Column
 import net.sf.jsqlparser.statement.select.{SelectBody, PlainSelect, SubSelect, SelectExpressionItem, FromItem, SelectItem, SubJoin}
+//import net.sf.jsqlparser.statement.provenance.ProvenanceSelect
 
 import scala.collection.JavaConversions._
 
 sealed abstract class TargetClause
+// case class AnnotateTarget(invisSch:Seq[(ProjectArg, (String,Type), String)]) extends TargetClause
 case class ProjectTarget(cols:Seq[ProjectArg]) extends TargetClause
 case class AggregateTarget(gbCols:Seq[Var], aggCols:Seq[AggFunction]) extends TargetClause
 case class AllTarget() extends TargetClause
@@ -46,7 +48,7 @@ class RAToSql(db: Database)
   def standardizeTables(oper: Operator): Operator = 
   {
     oper match {
-      case Table(name, tgtSch, tgtMetadata) => {
+      case Table(name, alias, tgtSch, tgtMetadata) => {
         val realSch = db.backend.getTableSchema(name) match {
           case Some(realSch) => realSch
           case None => throw new SQLException("Unknown Table '"+name+"'");
@@ -56,11 +58,11 @@ class RAToSql(db: Database)
         )
         val metadata = tgtMetadata.map( { 
           case (out, Var(in), t) => ((in, Var(in), t), ProjectArg(out, Var(in))) 
-          case (o, i, t) => throw new SQLException("Unsupported Metadata: $o <- $i:$t")
+          case (o, i, t) => throw new SQLException(s"Unsupported Metadata: $o <- $i:$t")
         })
         Project(
           schMap ++ metadata.map(_._2),
-          Table(name, realSch, metadata.map(_._1))
+          Table(name, alias, realSch, metadata.map(_._1))
         )
       }
       case _ => oper.rebuild(oper.children.map(standardizeTables(_)))
@@ -92,7 +94,7 @@ class RAToSql(db: Database)
    * 
    * These get converted to JSqlParser UNIONs.  Both branches invoke step 2
    */
-  private def makeSelect(oper:Operator): SelectBody =
+  def makeSelect(oper:Operator): SelectBody =
   {
     logger.trace(s"makeSelect: \n$oper")
     oper match {
@@ -140,6 +142,28 @@ class RAToSql(db: Database)
     // Limit clause is the final processing step, so we handle
     // it first.
     head match {
+      /*case Annotate(subj,invisScm) => {
+          head = Project(invisScm.map( _._1), subj)
+      }
+      case Recover(subj,invisScm) => {
+        val schemas = invisScm.groupBy(_._3).toList.map{ f => (f._1, f._2.map{ s => s._2._1 }.toList) }
+        val pselBody = makePlainSelect(subj).asInstanceOf[PlainSelect]
+        pselBody.setSelectItems(pselBody.getSelectItems.union(
+          new java.util.ArrayList(
+            invisScm.map( (arg) => {
+              val item = new SelectExpressionItem()
+              item.setAlias(arg._1.name)
+              item.setExpression(convert(arg._1.expression, schemas))
+              item
+            })
+          )
+        ))
+        return pselBody//new ProvenanceSelect(pselBody)
+      }*/
+      case ProvenanceOf(psel) => {
+        val pselBody = makePlainSelect(psel).asInstanceOf[PlainSelect]
+        return new ProvenanceSelect(pselBody)
+      }
       case Limit(offset, maybeCount, src) => {
         logger.debug("Assembling Plain Select: Including a LIMIT")
         val limit = new net.sf.jsqlparser.statement.select.Limit()
@@ -186,6 +210,16 @@ class RAToSql(db: Database)
     //
     val (target:TargetClause, sortBindings:Map[String,Expression]) = 
       head match {
+        /*case Annotate(subj,invisScm) => {
+          /*subj match {
+            case Table(name, alias, sch, metadata) => {
+              head = Table(name, alias, sch, metadata.union(invisScm.map(f => (f._2._1, f._1.expression, f._2._2))))
+            }
+            case _ => head = subj
+          }*/
+          head = subj
+          (AnnotateTarget(invisScm), Map())
+        }*/
         case p@Project(cols, src)              => {
           logger.debug("Assembling Plain Select: Target is a flat projection")
           head = src; 
@@ -212,6 +246,7 @@ class RAToSql(db: Database)
     // Sanity check...
     val extractedSchema = schemas.flatMap(_._2).toSet
     val expectedSchema = target match { 
+      //case AnnotateTarget(invisScm) => head.columnNames.union(invisScm.map(invisCol => ExpressionUtils.getColumns(invisCol._1.expression))).toSet
       case ProjectTarget(cols) => cols.flatMap { col => ExpressionUtils.getColumns(col.expression) }.toSet
       case AggregateTarget(gbCols, aggCols) => gbCols.map(_.name).toSet ++ aggCols.flatMap { col => col.args.flatMap { arg => ExpressionUtils.getColumns(arg) } }.toSet
       case AllTarget() => head.columnNames.toSet
@@ -261,6 +296,14 @@ class RAToSql(db: Database)
 
     // Finally, generate the target clause
     target match {
+      /*case AnnotateTarget(invisScm) => {
+        select.setSelectItems(
+           head.columnNames.map( col => makeSelectItem(convert(Var(col)), col)).union( invisScm.map( invisCol => 
+            makeSelectItem(convert(invisCol._1.expression, schemas), invisCol._1.name) ))
+        )
+        logger.debug(s"Assembling Plain Select: SELECT "+select.getSelectItems)
+      }*/
+      
       case ProjectTarget(cols) => {
         select.setSelectItems(
           cols.map( col => 
@@ -317,6 +360,16 @@ class RAToSql(db: Database)
           ExpressionUtils.makeAnd(cond, childCond),
           froms
         )
+        
+      /*case Annotate(subj,invisScm) => {
+          /*subj match {
+            case Table(name, alias, sch, metadata) => {
+              extractSelectsAndJoins(Table(name, alias, sch, metadata.union(invisScm.map(f => (f._2._1, f._1.expression, f._2._2)))))
+            }
+            case _ => extractSelectsAndJoins(subj)
+          }*/
+        extractSelectsAndJoins(Project(invisScm.map( _._1), subj))
+      }*/
 
       case Join(lhs, rhs) =>
         val (lhsCond, lhsFroms) = extractSelectsAndJoins(lhs)
@@ -340,8 +393,8 @@ class RAToSql(db: Database)
           Seq(joinItem)
         )
 
-      case Table(name, tgtSch, metadata) =>
-        val realSch = db.getTableSchema(name) match {
+      case Table(name, alias, tgtSch, metadata) =>
+        val realSch = db.tableSchema(name) match {
           case Some(realSch) => realSch
           case None => throw new SQLException("Unknown Table '"+name+"'");
         }
@@ -359,7 +412,7 @@ class RAToSql(db: Database)
                   case "ROWID" => true
                   case _ => false
                 })
-        ){
+        ){ 
           // If they are equivalent, then...
           val ret = new net.sf.jsqlparser.schema.Table(name);
           ret.setAlias(name);
@@ -376,6 +429,8 @@ class RAToSql(db: Database)
       case _ => (BoolPrimitive(true), Seq(makeSubSelect(oper)))
     }
   }
+  
+  
 
   /**
    * Punt an Operator conversion back to step 1 and make a SubSelect
@@ -392,7 +447,7 @@ class RAToSql(db: Database)
   {
     val subSelect = new SubSelect()
     subSelect.setSelectBody(makeSelect(oper))//doConvert returns a plain select
-    subSelect.setAlias("SUBQ_"+oper.schema.head._1)
+    subSelect.setAlias("SUBQ_"+oper.columnNames.head)
     subSelect
   }
 
@@ -415,9 +470,9 @@ class RAToSql(db: Database)
    */
   private def alignUnionOrders(clauses: Seq[Operator]): Seq[Operator] =
   {
-    val targetSchema = clauses.head.schema.map(_._1).toList
+    val targetSchema = clauses.head.columnNames
     clauses.map { clause =>
-      if(clause.schema.map(_._1).toList.equals(targetSchema)){
+      if(clause.columnNames.equals(targetSchema)){
         clause
       } else {
         Project(
@@ -531,12 +586,6 @@ class RAToSql(db: Database)
       }
       case Not(subexp) => {
         new InverseExpression(convert(subexp, sources))
-      }
-      case mimir.algebra.Function(Provenance.mergeRowIdFunction, Nil) => {
-          throw new SQLException("MIMIR_MAKE_ROWID with no arguments")
-      }
-      case mimir.algebra.Function(Provenance.mergeRowIdFunction, head :: rest) => {
-          rest.map(convert(_, sources)).foldLeft(convert(head, sources))(concat(_,_,"|"))
       }
       case mimir.algebra.Function("CAST", body_arg :: TypePrimitive(t) :: Nil) => {
         return new CastOperation(convert(body_arg, sources), t.toString);

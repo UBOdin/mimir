@@ -23,8 +23,8 @@ object LoadCSV extends StrictLogging {
 
   def SAMPLE_SIZE = 10000
 
-  def handleLoadTable(db: Database, targetTable: String, sourceFile: File): Unit =
-    handleLoadTable(db, targetTable, sourceFile, Map())
+  // def handleLoadTable(db: Database, targetTable: String, sourceFile: File): Unit =
+  //   handleLoadTable(db, targetTable, sourceFile, Map())
 
   def handleLoadTable(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
     val input = new FileReader(sourceFile)
@@ -45,7 +45,7 @@ object LoadCSV extends StrictLogging {
     // Produce a schema --- either one already exists, or we need
     // to generate one.
     val targetSchema = 
-      db.getTableSchema(targetTable) match {
+      db.tableSchema(targetTable) match {
         case Some(sch) => sch
         case None => {
 
@@ -102,6 +102,7 @@ object LoadCSV extends StrictLogging {
       replaceAll("^([0-9])","COLUMN_\1").  // Prefix leading digits with a 'COL_'
       replaceAll("[^a-zA-Z0-9]+", "_").    // Replace sequences of non-alphanumeric characters with underscores
       replaceAll("_+$", "").               // Strip trailing underscores
+      replaceAll("^_+", "").               // Strip leading underscores
       toUpperCase                          // Capitalize
   }
 
@@ -198,7 +199,10 @@ class NonStrictCSVParser(in:Reader, options: Map[String,String] = Map())
   var format = CSVFormat.DEFAULT.withAllowMissingColumnNames()
   options.get("DELIMITER") match {
     case None => ()
-    case Some(delim) => format = format.withDelimiter(delim.charAt(0))
+    case Some(delim) => {
+      logger.debug(s"Using Delimiter ${delim.charAt(0)}")
+      format = format.withDelimiter(delim.charAt(0))
+    }
   }
   val parser = new CSVParser(in, format)
   val iter = parser.iterator.asScala

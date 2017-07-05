@@ -3,25 +3,29 @@ package mimir.util;
 import play.api.libs.json._
 import mimir.algebra._
 
-object JSONUtils {
+object JsonUtils {
 
-  def parsePrimitive(t: Type, jv: JsValue): PrimitiveValue =
+  val dotPrefix = "\\.([^.\\[]+)".r
+  val bracketPrefix = "\\[([0-9]+)\\]".r
+
+  def seekPath(jv: JsValue, path: String): JsValue =
   {
-    (jv,t) match {
-      case (JsNull, _)              => NullPrimitive()
+    path match {
 
-      case (JsNumber(v), TInt())    => IntPrimitive(v.toInt)
-      case (JsNumber(v), TFloat())  => FloatPrimitive(v.toDouble)
-      case (JsNumber(v), TString()) => StringPrimitive(v.toString)
-      case (JsNumber(_), _)         => throw new IllegalArgumentException(s"Invalid JSON ($jv) for Type $t")
+      case "" => return jv;
 
-      case (JsString(v), _)         => TextUtils.parsePrimitive(t, v)
+      case dotPrefix(arg) => {
+        val jo:JsObject = jv.as[JsObject]
+        seekPath(jo.value(arg), path.substring(arg.length + 1))
+      }
 
-      case (JsBoolean(v), TBool())  => BoolPrimitive(v)
-      case (JsBoolean(v), _)        => throw new IllegalArgumentException(s"Invalid JSON ($jv) for Type $t")
+      case bracketPrefix(arg) => {
+        val ja:JsArray = jv.as[JsArray]
+        seekPath(ja.value(Integer.parseInt(arg)), path.substring(arg.length + 2))
+      }
 
-      case (JsArray(_), _)          => throw new IllegalArgumentException(s"Invalid JSON ($jv) for Type $t")
-      case (JsObject(_), _)         => throw new IllegalArgumentException(s"Invalid JSON ($jv) for Type $t")
+      case _ =>
+        throw new RAException(s"Invalid JSON Path Expression: '$path'")
     }
   }
 

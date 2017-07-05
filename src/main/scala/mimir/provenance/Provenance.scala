@@ -1,19 +1,27 @@
 package mimir.provenance
 
 import java.sql.SQLException
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
+import mimir.Database
 import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
 import mimir.views.ViewAnnotation
+import mimir.gprom.algebra.OperatorTranslation
 
 class ProvenanceError(e:String) extends Exception(e) {}
 
-object Provenance {
+object Provenance extends LazyLogging {
 
   val mergeRowIdFunction = "MIMIR_MAKE_ROWID"
   val rowidColnameBase = "MIMIR_ROWID"
 
+  def compileGProM(oper: Operator): (Operator, Seq[String]) = {
+    OperatorTranslation.compileProvenanceWithGProM(oper)
+  }
+  
+  
   def compile(oper: Operator): (Operator, Seq[String]) = {
     val makeRowIDProjectArgs = 
       (rowids: Seq[String], offset: Integer, padLen: Integer) => {
@@ -27,18 +35,51 @@ object Provenance {
     }
     oper match {
       case Project(args, src) => {
-        val (newSrc, rowids) = compile(src)
-        val newArgs = 
-          args.map( arg => 
-            ProjectArg(arg.name, expandVars(arg.expression, rowids))
-          )
-        val (newRowids, rowIDProjections) = makeRowIDProjectArgs(rowids, 0, 0)
-        (
-          Project(newArgs ++ rowIDProjections, newSrc),
-          newRowids
-        )
+        // src match {
+        //   case Annotate(subj,invisScm) => {
+        //     val (newSrc, rowids) = compile(src)
+        //       val newArgs =
+        //         args.map( arg =>
+        //           ProjectArg(arg.name, expandVars(arg.expression, rowids))
+        //         ).union(invisScm.map(invSchEl => ProjectArg( invSchEl.name, invSchEl.expr )))
+        //       val (newRowids, rowIDProjections) = makeRowIDProjectArgs(rowids, 0, 0)
+        //       (
+        //         Project(newArgs ++ rowIDProjections, newSrc),
+        //         newRowids
+        //       )
+        //   }
+        //   case _ => {
+            val (newSrc, rowids) = compile(src)
+
+            logger.trace(s"PROJECT: $rowids in \n$oper")
+
+            val newArgs = 
+              args.map( arg => 
+                ProjectArg(arg.name, expandVars(arg.expression, rowids))
+              )
+            val (newRowids, rowIDProjections) = makeRowIDProjectArgs(rowids, 0, 0)
+            (
+              Project(newArgs ++ rowIDProjections, newSrc),
+              newRowids
+            )
+          // }
+        // }
       }
 
+      case Annotate(subj,invisScm) => {
+        compile(subj)
+      }
+
+			case Recover(subj,invisScm) => {
+        compile(subj)
+      }
+
+      case ProvenanceOf(psel) => {
+        val provSelCmp = compile(psel)
+        val provCmp = (new ProvenanceOf(provSelCmp._1), provSelCmp._2)
+        provCmp
+      }
+      
       case Select(cond, src) => {
         val (newSrc, rowids) = compile(src)
         ( 
@@ -50,14 +91,17 @@ object Provenance {
       case Join(lhs, rhs) => {
         val (newLhs, lhsRowids) = compile(lhs)
         val (newRhs, rhsRowids) = compile(rhs)
+
+        logger.trace(s"JOIN: $lhsRowids || $rhsRowids in\n$oper")
+
         val (newLhsRowids, lhsIdProjections) = 
           makeRowIDProjectArgs(lhsRowids, 0, 0)
         val (newRhsRowids, rhsIdProjections) = 
           makeRowIDProjectArgs(rhsRowids, lhsRowids.size, 0)
         val lhsProjectArgs =
-          lhs.schema.map(x => ProjectArg(x._1, Var(x._1))) ++ lhsIdProjections
+          lhs.columnNames.map(x => ProjectArg(x, Var(x))) ++ lhsIdProjections
         val rhsProjectArgs = 
-          rhs.schema.map(x => ProjectArg(x._1, Var(x._1))) ++ rhsIdProjections
+          rhs.columnNames.map(x => ProjectArg(x, Var(x))) ++ rhsIdProjections
         (
           Join(
             Project(lhsProjectArgs, newLhs),
@@ -70,24 +114,27 @@ object Provenance {
       case Union(lhs, rhs) => {
         val (newLhs, lhsRowids) = compile(lhs)
         val (newRhs, rhsRowids) = compile(rhs)
+        
+        logger.trace(s"UNION: $lhsRowids || $rhsRowids in\n$oper")
+
         val (newRowids, lhsIdProjections) = 
           makeRowIDProjectArgs(lhsRowids, 0, rhsRowids.size)
         val (_,         rhsIdProjections) = 
           makeRowIDProjectArgs(rhsRowids, 0, lhsRowids.size)
         val lhsProjectArgs =
-          lhs.schema.map(x => ProjectArg(x._1, Var(x._1))) ++ 
+          lhs.columnNames.map(x => ProjectArg(x, Var(x))) ++ 
             lhsIdProjections ++ 
-            List(ProjectArg(rowidColnameBase+"_branch", RowIdPrimitive("0")))
+            List(ProjectArg(rowidColnameBase+"_BRANCH", RowIdPrimitive("0")))
         val rhsProjectArgs = 
-          rhs.schema.map(x => ProjectArg(x._1, Var(x._1))) ++ 
+          rhs.columnNames.map(x => ProjectArg(x, Var(x))) ++ 
             rhsIdProjections ++ 
-            List(ProjectArg(rowidColnameBase+"_branch", RowIdPrimitive("1")))
+            List(ProjectArg(rowidColnameBase+"_BRANCH", RowIdPrimitive("1")))
         (
           Union(
             Project(lhsProjectArgs, newLhs),
             Project(rhsProjectArgs, newRhs)
           ),
-          newRowids ++ List(rowidColnameBase+"_branch")
+          newRowids ++ List(rowidColnameBase+"_BRANCH")
         )
       }
 
@@ -95,9 +142,9 @@ object Provenance {
         val (newQuery, rowIds) = compile(query)
         ( View(name, newQuery, meta + ViewAnnotation.PROVENANCE), rowIds)
 
-      case Table(name, schema, meta) =>
+      case Table(name, alias, schema, meta) =>
         (
-          Table(name, schema, meta ++ List((rowidColnameBase, Var("ROWID"), TRowId()))),
+          Table(name, alias, schema, meta ++ List((rowidColnameBase, Var("ROWID"), TRowId()))),
           List(rowidColnameBase)
         )
 
@@ -129,7 +176,9 @@ object Provenance {
 
     }
   }
-
+  
+  
+  
   def rowIdVal(rowids: Seq[Expression]): Expression =
     Function(mergeRowIdFunction, rowids)    
 
@@ -151,7 +200,10 @@ object Provenance {
   }
 
   def joinRowIds(rowids: Seq[PrimitiveValue]): RowIdPrimitive =
+  {
+    logger.debug(s"JOIN ROWIDS: $rowids")
     RowIdPrimitive(rowids.map(_.asString).mkString("|"))
+  }
 
   def splitRowIds(token: RowIdPrimitive): Seq[RowIdPrimitive] =
     token.asString.split("\\|").map( RowIdPrimitive(_) ).toList
@@ -162,13 +214,13 @@ object Provenance {
   def rowIdMap(token: Seq[RowIdPrimitive], rowIdFields:Seq[String]):Map[String,RowIdPrimitive] =
     rowIdFields.zip(token).toMap
 
-  def filterForToken(operator:Operator, token: RowIdPrimitive, rowIdFields: Seq[String]): Operator =
-    filterForToken(operator, rowIdMap(token, rowIdFields))
+  def filterForToken(operator:Operator, token: RowIdPrimitive, rowIdFields: Seq[String], db: Database): Operator =
+    filterForToken(operator, rowIdMap(token, rowIdFields), db)
 
-  def filterForToken(operator:Operator, token: Seq[RowIdPrimitive], rowIdFields: Seq[String]): Operator =
-    filterForToken(operator, rowIdMap(token, rowIdFields))
+  def filterForToken(operator:Operator, token: Seq[RowIdPrimitive], rowIdFields: Seq[String], db: Database): Operator =
+    filterForToken(operator, rowIdMap(token, rowIdFields), db)
 
-  def filterForToken(operator:Operator, rowIds: Map[String,PrimitiveValue]): Operator =
+  def filterForToken(operator:Operator, rowIds: Map[String,PrimitiveValue], db: Database): Operator =
   {
     // Distributivity of unions makes this particular rewrite a little
     // tricky.  Specifically, UNION might assign either 'left' or 'right' to one
@@ -184,15 +236,16 @@ object Provenance {
     // there's a hardcoded rowid column that doesn't match the target field.
     // At the very end, we strip off the final Option.
 
-    doFilterForToken(operator, rowIds) match {
+    doFilterForToken(operator, rowIds, db) match {
       case Some(s) => s
       case None => throw new ProvenanceError("No branch matching all union terms")
     }
 
   }
 
-  def doFilterForToken(operator: Operator, rowIds:Map[String,PrimitiveValue]): Option[Operator] =
+  def doFilterForToken(operator: Operator, rowIds:Map[String,PrimitiveValue], db: Database): Option[Operator] =
   {
+    logger.trace(s"doFilterForToken($rowIds) in \n$operator")
     // println(rowIds.toString+" -> "+operator)
     operator match {
       case p @ Project(args, src) =>
@@ -217,7 +270,7 @@ object Provenance {
           // println("COMPARE: "+rowIds(col).asString+" to "+v)
           rowIds(col).asString.equals(v)
         })) {
-          doFilterForToken(src, newRowIdMap).
+          doFilterForToken(src, newRowIdMap, db).
             map(Project(args, _))
         } else {
           None
@@ -226,16 +279,16 @@ object Provenance {
       case Select(cond, src) => 
         // technically not necessary... since we're already filtering down to
         // a single tuple.  But keep it here for now.
-        doFilterForToken(src, rowIds).map( Select(cond, _) )
+        doFilterForToken(src, rowIds, db).map( Select(cond, _) )
 
       case Join(lhs, rhs) => 
-        val lhsSchema = lhs.schema.map(_._1).toSet
+        val lhsSchema = lhs.columnNames.toSet
         val (lhsRowIds, rhsRowIds) = 
           rowIds.toList.partition( x => lhsSchema.contains(x._1) )
         // println("LHS: "+lhsRowIds)
         // println("RHS: "+rhsRowIds)
-        ( doFilterForToken(lhs, lhsRowIds.toMap), 
-          doFilterForToken(rhs, rhsRowIds.toMap) 
+        ( doFilterForToken(lhs, lhsRowIds.toMap, db), 
+          doFilterForToken(rhs, rhsRowIds.toMap, db) 
         ) match {
           case (Some(newLhs), Some(newRhs)) => Some(Join(newLhs, newRhs))
           case _ => None
@@ -243,15 +296,15 @@ object Provenance {
         
 
       case Union(lhs, rhs) => 
-        doFilterForToken(lhs, rowIds).
-          orElse(doFilterForToken(rhs, rowIds))
+        doFilterForToken(lhs, rowIds, db).
+          orElse(doFilterForToken(rhs, rowIds, db))
 
       // We don't handle materializing the entire history of a given value
       // for now... drop the view and focus on the query itself.
       case View(_, query, _) => 
-        doFilterForToken(query, rowIds)
+        doFilterForToken(query, rowIds, db)
 
-      case Table(_, _, meta) =>
+      case Table(_,_, _, meta) =>
         meta.find( _._2.equals(Var("ROWID")) ) match {
           case Some( (colName, _, _) ) =>
             var rowIdForTable = rowIds.get(colName) match {
@@ -270,7 +323,7 @@ object Provenance {
       case EmptyTable(sch) => None 
 
       case Aggregate(gbCols, aggCols, src) =>
-        val sch = src.schema.toMap
+        val sch = db.typechecker.schemaOf(src).toMap
 
         val castTokenValues = 
           gbCols.map { col => (col.name, Cast(sch(col.name), rowIds(col.name))) }.toMap
@@ -296,14 +349,21 @@ object Provenance {
 
       case Sort(_, src) => 
         // Sorts are irrelevant here, drop it
-        return doFilterForToken(src, rowIds)
+        return doFilterForToken(src, rowIds, db)
 
       case Limit(_, _, src) => 
         // A limit would make this query invalid, drop it
-        return doFilterForToken(src, rowIds)
+        return doFilterForToken(src, rowIds, db)
 
       case _:LeftOuterJoin => 
         throw new RAException("Provenance can't handle left outer joins")
+
+      case _:ProvenanceOf => 
+        throw new RAException("Provenance can't handle ProvenanceOf")
+      case _:Annotate => 
+        throw new RAException("Provenance can't handle Annotate")
+      case _:Recover => 
+        throw new RAException("Provenance can't handle Recover")
 
     }
   }

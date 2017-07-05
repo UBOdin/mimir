@@ -11,7 +11,7 @@ import mimir.sql._
 import mimir.algebra._
 import mimir.util._
 import mimir.exec._
-import mimir.exec.stream._
+import mimir.exec.result._
 import mimir.optimizer._
 
 object DBTestInstances
@@ -42,17 +42,17 @@ object DBTestInstances
           // println("Exists: "+oldDBExists)
           val backend = new JDBCBackend(jdbcBackendMode, tempDBName+".db")
           val tmpDB = new Database(backend);
-          config.get("initial_db") match {
-            case None => ()
-            case Some(path) => Runtime.getRuntime().exec(s"cp $path $dbFile")
-          }
           if(shouldCleanupDB){    
             dbFile.deleteOnExit();
           }
           tmpDB.backend.open();
-          if((shouldResetDB || !oldDBExists) && !config.contains("initial_db")){
-            tmpDB.initializeDBForMimir();
+          if(shouldResetDB || !oldDBExists){
+            config.get("initial_db") match {
+              case None => ()
+              case Some(path) => Runtime.getRuntime().exec(s"cp $path $dbFile")
+            }
           }
+          tmpDB.initializeDBForMimir();
           if(shouldEnableInlining){
             backend.enableInlining(tmpDB)
           }
@@ -94,7 +94,7 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   def queryOneRow(s: String): Row =
     query(s){ _.next }
   def table(t: String) =
-    db.getTableOperator(t)
+    db.table(t)
   def resolveViews(q: Operator) =
     db.views.resolve(q)
   def explainRow(s: String, t: String) = 
@@ -126,5 +126,5 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     LoadCSV.handleLoadTable(db, table, file)
  
   def modelLookup(model: String) = db.models.get(model)
-  def schemaLookup(table: String) = db.getTableSchema(table).get
+  def schemaLookup(table: String) = db.tableSchema(table).get
  }

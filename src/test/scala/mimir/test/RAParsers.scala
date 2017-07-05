@@ -7,36 +7,14 @@ import mimir.parser._
 
 trait RAParsers {
 
-  def modelLookup(model: String): Model
-  def schemaLookup(table: String): Seq[(String,Type)]
-
-  def parser = new OperatorParser(modelLookup _, schemaLookup _)
   def expr(
     raw: String, 
     inlineExpression: Map[String,Expression] = Map()
   ): Expression =
   {
-    val parsed = parser.expr(raw)
+    val parsed = ExpressionParser.expr(raw)
     if(inlineExpression.isEmpty){ return parsed; }
-    else { return Eval.inlineWithoutSimplifying(parsed, inlineExpression) }
-  }
-  def oper(
-    raw: String, 
-    inlineExpression: Map[String, Expression] = Map()
-  ): Operator =
-  {
-    var parsed = parser.operator(raw)
-    if(!inlineExpression.isEmpty){
-      parsed = 
-        inlineOperExpressions(parsed, inlineExpression)
-    }
-    return parsed
-  }
-  def inlineOperExpressions(op: Operator, exprs: Map[String, Expression]): Operator =
-  {
-    op.
-      recurExpressions(Eval.inlineWithoutSimplifying(_, exprs)).
-      recur(inlineOperExpressions(_, exprs))
+    else { return Eval.inline(parsed, inlineExpression) }
   }
 
   def i = IntPrimitive(_:Long).asInstanceOf[PrimitiveValue]

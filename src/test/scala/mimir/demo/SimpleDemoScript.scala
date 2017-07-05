@@ -54,13 +54,14 @@ object SimpleDemoScript
 				_.map { _(0) }.toSeq must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
 			}
 			query("SELECT * FROM RATINGS2;") { _.toSeq must have size(3) }
+			query("SELECT PID FROM RATINGS2;") { _.map { _(0) } must contain((_:PrimitiveValue).isInstanceOf[StringPrimitive]).forall }
 		}
 
 
 
 		"Use Sane Types in Lenses" >> {
 			var oper = select("SELECT * FROM RATINGS2")
-			Typechecker.typeOf(Var("NUM_RATINGS"), oper) must be oneOf(TInt(), TFloat(), TAny())
+			db.typechecker.typeOf(Var("NUM_RATINGS"), oper) must be oneOf(TInt(), TFloat(), TAny())
 		}
 
     "Create and Query Type Inference Lens with NULL values" >> {
@@ -112,23 +113,6 @@ object SimpleDemoScript
 				""")
 			}
 			val nullRow = querySingleton("SELECT ROWID() FROM RATINGS1 WHERE RATING IS NULL").asLong
-
-			if(!db.backend.canHandleVGTerms){
-				val result1guesses =
-					db.backend.resultRows("SELECT MIMIR_KEY_0, MIMIR_DATA FROM "+
-							db.bestGuessCache.cacheTableForModel(db.models.get("RATINGS1FINAL:WEKA:RATING"), 0))
-
-				result1guesses.map( x => (x(0), x(1))).toList must contain((IntPrimitive(nullRow), FloatPrimitive(4.0)))
-
-				val result1 =
-					LoggerUtils.debug(
-						// "mimir.exec.Compiler"
-					){ 
-						query("SELECT RATING FROM RATINGS1FINAL") { _.map { _(0).asDouble }.toSeq }
-					}
-				result1 must have size(4)
-				result1 must contain(eachOf( 4.5, 4.0, 4.0, 6.4 ) )
-			}
 
 			query("""
 				SELECT RATING FROM RATINGS1FINAL WHERE RATING < 5
@@ -259,26 +243,30 @@ object SimpleDemoScript
 		}
 
 		"Query a Join of a Union of Lenses" >> {
-			query("""
-				SELECT p.name, r.rating FROM (
-					SELECT * FROM RATINGS1FINAL
-						UNION ALL
-					SELECT * FROM RATINGS2FINAL
-				) r, Product p
-				WHERE r.pid = p.id;
-			"""){ result =>
-				val result0 = result.toSeq.map { _(0).asString } 
-				result0 must have size(6)
-				result0 must contain(
-					"Apple 6s, White",
-					"Sony to inches",
-					"Apple 5s, Black",
-					"Samsung Note2",
-					"Dell, Intel 4 core",
-					"HP, AMD 2 core"
-				)
+			LoggerUtils.debug(
+				// "mimir.exec.Compiler"
+			) {
+				query("""
+					SELECT p.name, r.rating FROM (
+						SELECT * FROM RATINGS1FINAL
+							UNION ALL
+						SELECT * FROM RATINGS2FINAL
+					) r, Product p
+					WHERE r.pid = p.id;
+				"""){ result =>
+					val result0 = result.toSeq.map { _(0).asString } 
+					result0 must have size(6)
+					result0 must contain(
+						"Apple 6s, White",
+						"Sony to inches",
+						"Apple 5s, Black",
+						"Samsung Note2",
+						"Dell, Intel 4 core",
+						"HP, AMD 2 core"
+					)
+				}
 			}
-
+			
 			val result0tokens = query("""
 				SELECT p.name, r.rating FROM (
 					SELECT * FROM RATINGS1FINAL

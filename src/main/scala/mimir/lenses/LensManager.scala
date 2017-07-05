@@ -17,7 +17,11 @@ class LensManager(db: Database) {
     "MISSING_VALUE"     -> MissingValueLens.create _,
     "SCHEMA_MATCHING"   -> SchemaMatchingLens.create _,
     "TYPE_INFERENCE"    -> TypeInferenceLens.create _,
-    "KEY_REPAIR"        -> KeyRepairLens.create _
+    "KEY_REPAIR"        -> RepairKeyLens.create _,
+    "REPAIR_KEY"        -> RepairKeyLens.create _,
+    "COMMENT"           -> CommentLens.create _,
+    "MISSING_KEY"       -> MissingKeyLens.create _,
+    "PICKER"            -> PickerLens.create _
   )
 
   def init(): Unit =
@@ -29,7 +33,7 @@ class LensManager(db: Database) {
     t: String, 
     name: String, 
     query: Operator, 
-    args: List[Expression]
+    args: Seq[Expression]
   ): Unit =
   {
     val saneName = name.toUpperCase
@@ -48,11 +52,6 @@ class LensManager(db: Database) {
     // Persist the associated models
     for(model <- models){
       db.models.persist(model, s"LENS:$saneName")
-    }
-
-    // Populate the best-guess cache
-    if(!db.backend.canHandleVGTerms){
-      db.bestGuessCache.buildCache(view)
     }
   }
 

@@ -70,7 +70,10 @@ object ViewsSpec
 
       db.views("MATTEST").operator must be equalTo
         View("MATTEST",
-          oper("PROJECT[A,B](SELECT[C=1](R))")
+          db.
+            table("R").
+            filter(expr("C = 1")).
+            project("A", "B")
         )
 
       update("ALTER VIEW MATTEST MATERIALIZE")
@@ -93,11 +96,11 @@ object ViewsSpec
 
     "Support raw queries" >> {
 
-      Compiler.optimize(
+      db.compiler.optimize(
         db.views.resolve(db.views("MATTEST").operator)
       ) must be equalTo(
         Project(Seq(ProjectArg("A", Var("A")),ProjectArg("B", Var("B"))),
-          Table("MATTEST", db.views("MATTEST").materializedSchema, Seq())
+          Table("MATTEST","MATTEST", db.views("MATTEST").materializedSchema, Seq())
         )
       )
 
@@ -107,14 +110,14 @@ object ViewsSpec
 
       val (query, rowidCols) = Provenance.compile(db.views("MATTEST").operator)
 
-      Compiler.optimize(
+      db.compiler.optimize(
         db.views.resolve(query)
       ) must be equalTo(
         Project(Seq(
             ProjectArg("A", Var("A")),
             ProjectArg("B", Var("B"))
           ) ++ rowidCols.map { col => ProjectArg(col, Var(col)) },
-          Table("MATTEST", db.views("MATTEST").materializedSchema, Seq())
+          Table("MATTEST","MATTEST", db.views("MATTEST").materializedSchema, Seq())
         )
       )
 
@@ -124,8 +127,8 @@ object ViewsSpec
 
       val (query, rowidCols) = Provenance.compile(db.views("MATTEST").operator)
 
-      Compiler.optimize(
-        db.views.resolve(CTPercolator.percolateLite(query)._1) 
+      db.compiler.optimize(
+        db.views.resolve(CTPercolator.percolateLite(query, db.models.get(_))._1) 
       ) must be equalTo(
         Project(Seq(
             ProjectArg("A", Var("A")),
@@ -134,7 +137,7 @@ object ViewsSpec
             ProjectArg(CTPercolator.mimirColDeterministicColumnPrefix+"B", Comparison(Cmp.Eq, Arithmetic(Arith.BitAnd, Var(ViewAnnotation.taintBitVectorColumn), IntPrimitive(4)), IntPrimitive(4))),
             ProjectArg(CTPercolator.mimirRowDeterministicColumnName, Comparison(Cmp.Eq, Arithmetic(Arith.BitAnd, Var(ViewAnnotation.taintBitVectorColumn), IntPrimitive(1)), IntPrimitive(1)))
           ) ++ rowidCols.map { col => ProjectArg(col, Var(col)) },
-          Table("MATTEST", db.views("MATTEST").materializedSchema, Seq())
+          Table("MATTEST","MATTEST", db.views("MATTEST").materializedSchema, Seq())
         )
       )
       

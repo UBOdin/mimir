@@ -39,7 +39,7 @@ object OperatorUtils extends LazyLogging {
   {
     o match { 
       case Union(lhs, rhs) => extractUnionClauses(lhs) ++ extractUnionClauses(rhs)
-      case _ => List(o)
+      case _ => Seq(o)
     }
   }
 
@@ -56,54 +56,39 @@ object OperatorUtils extends LazyLogging {
     }
   }
 
-  def makeDistinct(oper: Operator): Operator = 
-  {
-    Aggregate(
-      oper.schema.map(_._1).map(Var(_)),
-      Seq(),
-      oper
-    )
-  }
-
   def extractProjections(oper: Operator): (Seq[ProjectArg], Operator) =
   {
     oper match {
       case Project(cols, src) => (cols.map(col => ProjectArg(col.name, col.expression)), src)
-      case _ => (oper.schema.map(col => ProjectArg(col._1, Var(col._1))), oper)
+      case _ => (oper.columnNames.map(col => ProjectArg(col, Var(col))), oper)
     }
   }
 
-  def projectDownToColumns(columns: Seq[String], oper: Operator): Operator =
+  def mergeWithColumn(target: String, default: Expression, oper: Operator)(merge: Expression => Expression): Operator =
   {
-    Project( columns.map( x => ProjectArg(x, Var(x)) ), oper)
+    if(oper.columnNames.contains(target)){
+      replaceColumn(target, merge(Var(target)), oper)
+    } else {
+      oper.addColumn(target -> merge(default))
+    }
   }
 
-  def projectAwayColumn(target: String, oper: Operator): Operator =
+  def shallowRename(mapping: Map[String, String], oper: Operator): Operator =
   {
-    val (cols, src) = extractProjections(oper)
-    Project(
-      cols.filter( !_.name.equalsIgnoreCase(target) ),
-      src
-    )
-  }
+    // Shortcut if the mapping is a no-op
+    if(!mapping.exists { 
+      case (original, replacement) => !original.equals(replacement) 
+    }) { return oper; }
 
-  def projectAwayColumns(targets: Set[String], oper: Operator): Operator =
-  {
-    val targetsUpperCase = targets.map(_.toUpperCase)
-    val (cols, src) = extractProjections(oper)
-    Project(
-      cols.filter { col => !targetsUpperCase(col.name.toUpperCase) },
-      src
-    )
-  }
+    // Strip off any existing projections:
+    val (baseProjections, input) = extractProjections(oper)
 
-  def projectInColumn(target: String, value: Expression, oper: Operator): Operator =
-  {
-    val (cols, src) = extractProjections(oper)
-    val bindings = cols.map(_.toBinding).toMap
+    // Then rename and reapply them
     Project(
-      cols ++ Some(ProjectArg(target, Eval.inline(value, bindings))), 
-      src
+      baseProjections.map { case ProjectArg(name, expr) => 
+        ProjectArg(mapping.getOrElse(name, name), expr)
+      }, 
+      input
     )
   }
 
@@ -127,7 +112,13 @@ object OperatorUtils extends LazyLogging {
   def applyFilter(condition: Expression, oper: Operator): Operator =
     condition match {
       case BoolPrimitive(true) => oper
-      case _ => Select(condition, oper)
+      case _ => 
+        oper match {
+          case Select(otherCond, src) =>
+            Select(ExpressionUtils.makeAnd(condition, otherCond), src)
+          case _ => 
+            Select(condition, oper)
+        }
     }
 
   def projectColumns(cols: Seq[String], oper: Operator) =
@@ -140,28 +131,35 @@ object OperatorUtils extends LazyLogging {
 
   def joinMergingColumns(cols: Seq[(String, (Expression,Expression) => Expression)], lhs: Operator, rhs: Operator) =
   {
-    val allCols = lhs.schema.map(_._1).toSet ++ rhs.schema.map(_._1).toSet
-    val affectedCols = cols.map(_._1).toSet
+    val allCols = lhs.columnNames.toSet ++ rhs.columnNames.toSet
+    val affectedCols = cols.map(_._1).toSet & lhs.columnNames.toSet & rhs.columnNames.toSet
     val wrappedLHS = 
       Project(
-        lhs.schema.map(_._1).map( x => 
+        lhs.columnNames.map( x => 
           ProjectArg(if(affectedCols.contains(x)) { "__MIMIR_LJ_"+x } else { x }, 
                      Var(x))),
         lhs
       )
     val wrappedRHS = 
       Project(
-        rhs.schema.map(_._1).map( x => 
+        rhs.columnNames.map( x => 
           ProjectArg(if(affectedCols.contains(x)) { "__MIMIR_RJ_"+x } else { x }, 
                      Var(x))),
         rhs
       )
     Project(
-      ((allCols -- affectedCols).map( (x) => ProjectArg(x, Var(x)) )).toList ++
-      cols.map({
+      ((allCols -- cols.map(_._1).toSet).map( (x) => ProjectArg(x, Var(x)) )).toList ++
+      cols.flatMap({
         case (name, op) =>
-          ProjectArg(name, op(Var("__MIMIR_LJ_"+name), Var("__MIMIR_RJ_"+name)))
-
+          if(affectedCols(name)){
+            Some(ProjectArg(name, op(Var("__MIMIR_LJ_"+name), Var("__MIMIR_RJ_"+name))))
+          } else {
+            if(allCols(name)){
+              Some(ProjectArg(name, Var(name)))
+            } else { 
+              None
+            }
+          }
         }),
       Join(wrappedLHS, wrappedRHS)
     )
@@ -177,8 +175,8 @@ object OperatorUtils extends LazyLogging {
    */
   def makeSafeJoin(lhs: Operator, rhs: Operator): (Operator, Map[String,String]) = 
   {
-    def lhsCols = lhs.schema.map(_._1).toSet
-    def rhsCols = rhs.schema.map(_._1).toSet
+    def lhsCols = lhs.columnNames.toSet
+    def rhsCols = rhs.columnNames.toSet
     def conflicts = lhsCols & rhsCols
     logger.trace(s"Make Safe Join: $lhsCols & $rhsCols = $conflicts => \n${Join(lhs, rhs)}")
     if(conflicts.isEmpty){
@@ -209,7 +207,7 @@ object OperatorUtils extends LazyLogging {
   def makeColumnNameUnique(name: String, conflicts: Set[String], oper: Operator): (String, Operator) =
   {
     if(!conflicts(name)){ return (name, oper); }
-    if(!oper.schema.exists { col => col._1.equals(name) }){ 
+    if(!oper.columnNames.exists { _.equals(name) }){ 
       throw new RAException(s"Error in makeColumnNameUnique: Wanting to rename $name in \n$oper")
     }
     val allConflicts = conflicts ++ findRenamingConflicts(name, oper)
@@ -234,14 +232,27 @@ object OperatorUtils extends LazyLogging {
         findRenamingConflicts(name, lhs) ++ findRenamingConflicts(name, rhs)
       case Join(lhs, rhs) => 
         findRenamingConflicts(name, lhs) ++ findRenamingConflicts(name, rhs)
-      case EmptyTable(_) | Table(_,_,_) | View(_,_,_) => 
-        oper.schema.map(_._1).toSet
+      case EmptyTable(_) | Table(_,_,_,_) | View(_,_,_) => 
+        oper.columnNames.toSet
       case Sort(_, src) =>
         findRenamingConflicts(name, src)
       case Limit(_, _, src) =>
         findRenamingConflicts(name, src)
       case LeftOuterJoin(lhs, rhs, cond) =>
         findRenamingConflicts(name, lhs) ++ findRenamingConflicts(name, rhs)
+      case Annotate(src, _) => 
+        findRenamingConflicts(name, src)
+      case ProvenanceOf(src) =>
+        findRenamingConflicts(name, src)
+      case Recover(src, cols) =>
+        // Check to see if the column is a recovered annotation... if that's the case,
+        // we can apply the renaming here and this operator acts like a Project.
+        // Otherwise, we flow-through.
+        if(cols.exists { _._2.name.equals(name) }){
+          src.columnNames.toSet ++ cols.map { _._2.name }.toSet
+        } else {
+          findRenamingConflicts(name, src)
+        }
     }
   }
 
@@ -277,7 +288,7 @@ object OperatorUtils extends LazyLogging {
                 AggFunction(
                   agg.function,
                   agg.distinct,
-                  agg.args.map(rewrite(_)),
+                  agg.args,
                   replacement
                 )
               } else { agg }
@@ -287,7 +298,7 @@ object OperatorUtils extends LazyLogging {
         }
       }
       case Join(lhs, rhs) => {
-        if(lhs.schema.exists( _._1.equals(target) )){
+        if(lhs.columnNames.exists( _.equals(target) )){
           Join(deepRenameColumn(target, replacement, lhs), rhs)
         } else {
           Join(lhs, deepRenameColumn(target, replacement, rhs))
@@ -300,14 +311,14 @@ object OperatorUtils extends LazyLogging {
         )
       }
       case LeftOuterJoin(lhs, rhs, cond) => {
-        if(lhs.schema.exists( _._1.equals(target) )){
+        if(lhs.columnNames.exists( _.equals(target) )){
           LeftOuterJoin(deepRenameColumn(target, replacement, lhs), rhs, rewrite(cond))
         } else {
           LeftOuterJoin(lhs, deepRenameColumn(target, replacement, rhs), rewrite(cond))
         }
       }
-      case Table(name, sch, meta) => {
-        Table(name, 
+      case Table(name, alias, sch, meta) => {
+        Table(name, alias, 
           sch.map { col => if(col._1.equals(target)) { (replacement, col._2) } else { col } },
           meta.map { col => if(col._1.equals(target)) { (replacement, col._2, col._3) } else { col } }
         )
@@ -319,17 +330,37 @@ object OperatorUtils extends LazyLogging {
       }
       case View(_, _, _) => {
         Project(
-          oper.schema.map(_._1).map { col =>
+          oper.columnNames.map { col =>
             if(col.equals(target)){ ProjectArg(replacement, Var(target)) }
             else { ProjectArg(col, Var(col)) }
           },
           oper
         )
       }
-      case Sort(_, _) | Select(_, _) | Limit(_, _, _) => 
+      case Sort(_, _) | Select(_, _) | Limit(_, _, _) | Annotate(_, _) | ProvenanceOf(_) => 
         oper.
           recurExpressions(rewrite(_)).
           recur(deepRenameColumn(target, replacement, _))
+
+      case Recover(src, cols) =>
+        // Check to see if the column is a recovered annotation... if that's the case,
+        // we can apply the renaming here and this operator acts like a Project.
+        // Otherwise, we flow-through.
+        if(cols.exists { _._2.name.equals(target) }){
+          Recover(src, 
+            cols.map { case old @ (name, AnnotateArg(at, col, t, expr)) =>
+              if(col.equals(target)){
+                (replacement, AnnotateArg(at, col, t, expr))
+              } else {
+                old
+              }
+            }
+          )
+        } else {
+          oper.
+            recurExpressions(rewrite(_)).
+            recur(deepRenameColumn(target, replacement, _))
+        }
     }
   }
 }

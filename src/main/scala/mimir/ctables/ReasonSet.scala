@@ -11,20 +11,17 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
     argLookup match {
       case Some((query, argExprs, hintExprs)) => 
         db.query(
-          Aggregate(List(), List(AggFunction("COUNT", false, List(), "COUNT")), 
-            OperatorUtils.makeDistinct(
-              Project(
-                argExprs.zipWithIndex.map { arg => ProjectArg("ARG_"+arg._2, arg._1) },
-                query
-              )
-            )
-          )
+          query
+            .map( argExprs.zipWithIndex.map { arg => ("ARG_"+arg._2 -> arg._1) }:_* )
+            .distinct
+            .count( alias = "COUNT" )
         ) { _.next.tuple(0).asLong }
       case None => 
         1
     }
   }
-  def allArgs(db: Database, limit: Option[Int]): Iterable[(Seq[PrimitiveValue], Seq[PrimitiveValue])] =
+  def allArgs(db: Database, limit: Option[Int] ): Iterable[(Seq[PrimitiveValue], Seq[PrimitiveValue])] = allArgs(db, limit, None)
+  def allArgs(db: Database, limit: Option[Int], offset: Option[Int]): Iterable[(Seq[PrimitiveValue], Seq[PrimitiveValue])] =
   {
     argLookup match {
       case None => Seq((Seq[PrimitiveValue](), Seq[PrimitiveValue]()))
@@ -33,7 +30,13 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
         val limitedQuery = 
           limit match {
             case None => baseQuery
-            case Some(rowCount) => Limit(0, Some(rowCount.toLong), baseQuery)
+            case Some(rowCount) => {
+              val rowOffset = offset match {
+                case None => 0
+                case Some(rowOffset) => rowOffset
+              }
+              Limit(rowOffset, Some(rowCount.toLong), baseQuery)
+            }
           }
 
         val argCols = argExprs.zipWithIndex.map { arg => ProjectArg("ARG_"+arg._2, arg._1) }
@@ -51,12 +54,17 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
     allArgs(db, None)
   def takeArgs(db: Database, count: Int): Iterable[(Seq[PrimitiveValue], Seq[PrimitiveValue])] = 
     allArgs(db, Some(count))
+  def takeArgs(db: Database, count: Int, offset: Int): Iterable[(Seq[PrimitiveValue], Seq[PrimitiveValue])] = 
+    allArgs(db, Some(count), Some(offset))
 
   def all(db: Database): Iterable[Reason] = 
     allArgs(db).map { case (args, hints) => new ModelReason(model, idx, args, hints) }
   def take(db: Database, count: Int): Iterable[Reason] = 
     takeArgs(db, count).map { case (args, hints) => new ModelReason(model, idx, args, hints) }
+  def take(db: Database, count: Int, offset:Int): Iterable[Reason] = 
+    takeArgs(db, count, offset).map { case (args, hints) => new ModelReason(model, idx, args, hints) }
 
+  
   override def toString: String =
   {
     val lookupString =
@@ -70,14 +78,25 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
 
 object ReasonSet
 {
-  def make(v:VGTerm, input: Operator): ReasonSet =
+  def make(vgterm: VGTerm, db: Database, input: Operator): ReasonSet =
   {
-    if(v.args.isEmpty){ return new ReasonSet(v.model, v.idx, None); }
-
-    return new ReasonSet(
-      v.model,
-      v.idx,
-      Some((input, v.args, v.hints))
-    );
+    if(vgterm.args.isEmpty){
+      return new ReasonSet(
+        db.models.get(vgterm.name),
+        vgterm.idx,
+        None
+      )
+    } else {
+      return new ReasonSet(
+        db.models.get(vgterm.name),
+        vgterm.idx,
+        Some(
+          input,
+          vgterm.args,
+          vgterm.hints
+        )
+      )
+    }
   }
+
 }

@@ -1,25 +1,41 @@
 name := "Mimir-Core"
-version := "0.2-SNAPSHOT"
+version := "0.2"
 organization := "info.mimirdb"
-scalaVersion := "2.10.5"
+scalaVersion := "2.11.11"
 
 dependencyOverrides += "org.scala-lang" % "scala-library" % scalaVersion.value
+
+// Needed to avoid cryptic EOFException crashes in forked tests
+// in Travis with `sudo: false`.
+// See https://github.com/sbt/sbt/issues/653
+// and https://github.com/travis-ci/travis-ci/issues/3775
+javaOptions += "-Xmx2G"
 
 scalacOptions ++= Seq(
   "-feature"
 )
 
+unmanagedResourceDirectories in Compile += baseDirectory.value / "lib_extra"
+unmanagedClasspath in Runtime += baseDirectory.value / "conf"
+
+fork := true
 connectInput in run := true
 outputStrategy in run := Some(StdoutOutput)
+cancelable in Global := true
+scalacOptions in Test ++= Seq("-Yrangepos")
+parallelExecution in Test := false
+testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
 
 resolvers += "MimirDB" at "http://maven.mimirdb.info/"
 resolvers += "osgeo" at "http://download.osgeo.org/webdav/geotools/"
+resolvers += "MVNRepository" at "http://mvnrepository.com/artifact/"
+resolvers ++= Seq("snapshots", "releases").map(Resolver.sonatypeRepo)
 
 libraryDependencies ++= Seq(
   ////////////////////// Command-Line Interface Utilities //////////////////////
   "org.rogach"                    %%  "scallop"               % "0.9.5",
   "org.jline"                     %   "jline"                 % "3.2.0",
-  "info.mimirdb"                  %   "jsqlparser"            % "1.0.1",
+  "info.mimirdb"                  %   "jsqlparser"            % "1.0.2",
 
   ////////////////////// Dev Tools -- Logging, Testing, etc... //////////////////////
   "com.typesafe.scala-logging"    %%  "scala-logging-slf4j"   % "2.1.2",
@@ -55,6 +71,7 @@ libraryDependencies ++= Seq(
   "net.sf.jung"                   %   "jung-algorithms"       % "2.0.1",
   "net.sf.jung"                   %   "jung-visualization"    % "2.0.1",
   "jgraph"                        %   "jgraph"                % "5.13.0.0",
+  "javax.media" 		  %   "jai_core"              % "1.1.3",  
   //
 
   //////////////////////// Geotools ////////////////////////
@@ -66,8 +83,15 @@ libraryDependencies ++= Seq(
   //////////////////////// JDBC Backends //////////////////////
   "org.xerial"                    %   "sqlite-jdbc"           % "3.16.1",
 
+
+  ///////////////////  GProM/Native Integration //////////////
+  "net.java.dev.jna"              %    "jna"                  % "4.2.2",
+  "net.java.dev.jna"              %    "jna-platform"         % "4.2.2",
+  "log4j"                         %    "log4j"                % "1.2.17",
+  
   //////////////////////// Visualization ////////////////////////
-  "com.github.aishfenton"         %%  "vegas"                 % "0.2.3"
+  "org.vegas-viz"                 %%  "vegas"                 % "0.3.9",
+  "org.sameersingh.scalaplot"     % "scalaplot"               % "0.0.4"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")
@@ -95,56 +119,6 @@ parser := {
     case n => sys.error(s"Could not build SQL Parser: $n")
   }
 }
-
-lazy val datasets = taskKey[Unit]("Loads Datasets for Test Cases")
-datasets := {
-  // Redirect stderr to stdin
-  val logger = 
-    new ProcessLogger {
-      def buffer[T](x: => T): T = x
-      def error(x: => String) = streams.value.log.info(x)
-      def info(x: => String) = streams.value.log.info(x)
-    }
-
-  if(!new File("test/pdbench").exists()){
-    Process(List(
-      "curl", "-O", "http://odin.cse.buffalo.edu/public_data/pdbench-1g-columnar.tgz"
-    )) ! logger match {
-      case 0 => // Success
-      case n => sys.error(s"Could not download PDBench Data: $n")
-    }
-    Process(List("mkdir", "test/pdbench")) ! logger match {
-      case 0 => // Success
-      case n => sys.error(s"Could not create PDBench directory")
-    }
-    Process(List(
-      "tar", "-xvf", 
-      "pdbench-1g-columnar.tgz", 
-      "--strip-components=1", 
-      "--directory=test/pdbench"
-    )) ! logger match {
-      case 0 => // Success
-      case n => sys.error(s"Could not clean up after old SQL Parser: $n")
-    }
-    Process(List("rm", "pdbench-1g-columnar.tgz")) ! logger match {
-      case 0 => // Success
-      case n => sys.error(s"Could not create PDBench directory")
-    }
-  } else {
-    logger.info("Found `pdbench` data in test/pdbench");
-  }
-}
-
-
-scalacOptions in Test ++= Seq("-Yrangepos")
-
-parallelExecution in Test := false
-
-resolvers ++= Seq("snapshots", "releases").map(Resolver.sonatypeRepo)
-
-fork := true
-
-testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
 
 ////// Assembly Plugin //////
 // We use the assembly plugin to create self-contained jar files

@@ -73,10 +73,10 @@ object Mimir extends LazyLogging {
       }
 
       if(conf.file.get == None || conf.file() == "-"){
-        source = new LineReaderInputSource(terminal);
+        source = new LineReaderInputSource(terminal)
         output = new PrettyOutputFormat(terminal)
       } else {
-        source = new FileReader(conf.file());
+        source = new FileReader(conf.file())
         output = DefaultOutputFormat
       }
 
@@ -105,6 +105,7 @@ object Mimir extends LazyLogging {
           case expl: Explain    => handleExplain(expl)
           case pragma: Pragma   => handlePragma(pragma)
           case analyze: Analyze => handleAnalyze(analyze)
+          case plot: DrawPlot   => Plot.plot(plot, db, output)
           case _                => db.update(stmt)
         }
 
@@ -151,11 +152,11 @@ object Mimir extends LazyLogging {
     val raw = db.sql.convert(explain.getSelectBody())
     output.print("------ Raw Query ------")
     output.print(raw.toString)
-    db.check(raw)
-    val optimized = db.optimize(raw)
+    db.typechecker.schemaOf(raw)        // <- discard results, just make sure it typechecks
+    val optimized = db.compiler.optimize(raw)
     output.print("--- Optimized Query ---")
     output.print(optimized.toString)
-    db.check(optimized)
+    db.typechecker.schemaOf(optimized)  // <- discard results, just make sure it typechecks
     output.print("--- SQL ---")
     try {
       output.print(db.ra.convert(optimized).toString)
@@ -213,6 +214,8 @@ object Mimir extends LazyLogging {
       if(!reason.confirmed){
         output.print(s"   ... repair with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.repair.exampleString }`");
         output.print(s"   ... confirm with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.guess }`");
+      } else {
+        output.print(s"   ... ammend with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.repair.exampleString }`");
       }
       output.print("")
     }
@@ -225,7 +228,7 @@ object Mimir extends LazyLogging {
       case Function("SHOW", Seq(Var("TABLES"))) => 
         for(table <- db.getAllTables()){ output.print(table.toUpperCase); }
       case Function("SHOW", Seq(Var(name))) => 
-        db.getTableSchema(name) match {
+        db.tableSchema(name) match {
           case None => 
             output.print(s"'$name' is not a table")
           case Some(schema) => 
@@ -250,15 +253,7 @@ object Mimir extends LazyLogging {
         })
       case Function("LOG", _) =>
         output.print("Syntax: LOG('logger') | LOG('logger', TRACE|DEBUG|INFO|WARN|ERROR)");
-
-      case Function("PLOT", Seq(Var(table), Var(x), Var(y))) =>
-        db.query(
-          Project(Seq(ProjectArg(x, Var(x)), ProjectArg(y, Var(y))), db.getTableOperator(table))
-        ) { result =>
-//          Plot.plot(result, table, x, y)
-        }
-
-
+        
     }
 
   }

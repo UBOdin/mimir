@@ -14,30 +14,27 @@ import mimir.models._
 
 object ProvenanceSpec extends Specification {
 
-  val schema = Map[String,Map[String,Type]](
-    ("R", Map( 
-      ("R_A", TInt()),
-      ("R_B", TInt()),
-      ("R_C", TInt())
+  val schema = Map[String,Seq[(String,Type)]](
+    ("R", Seq( 
+      ("A", TInt()),
+      ("B", TInt())
     )),
-    ("S", Map( 
-      ("S_C", TInt()),
-      ("S_D", TFloat())
+    ("S", Seq( 
+      ("C", TInt()),
+      ("D", TFloat())
     ))
   )
+  def table(name: String): Operator =
+    Table(name, name, schema(name), Seq())
 
-  def parser = new OperatorParser(
-    (x: String) => UniformDistribution,
-    schema(_).toList
-  )
-  def expr = parser.expr _
-  def oper:(String => Operator) = parser.operator _
+  def typechecker = new Typechecker
+  def expr = ExpressionParser.expr _
 
-  def prov(x: String) = Provenance.compile(oper(x))
+  def prov(x: Operator) = Provenance.compile(x)
 
-  def checkProv(expectedColCount: Integer, oper:String) = {
+  def checkProv(expectedColCount: Integer, oper:Operator) = {
     val (provOper:Operator, provCols:List[String]) = prov(oper);
-    val provSchema = provOper.schema.toMap
+    val provSchema = typechecker.schemaOf(provOper).toMap
     val initial = (if(expectedColCount > 0) {
       provCols must have size expectedColCount
     } else {
@@ -51,49 +48,67 @@ object ProvenanceSpec extends Specification {
   "The Provenance Compiler" should {
 
     "Work with one relation" >> {
-      checkProv(1, "R(A, B, C)")
-      checkProv(1, "S(C, D)")
+      checkProv(1, table("R"))
+      checkProv(1, table("S"))
     }
 
     "Work with projection" >> {
-      checkProv(1, """
-        PROJECT[A<=A](R(A, B, C))
-      """)
-      checkProv(1, """
-        PROJECT[A<=A, Z<=C](R(A, B, C))
-      """)
+      checkProv(1, 
+        table("R")
+          .project("A")
+      )
+      checkProv(1, 
+        table("R")
+          .mapParsed( ("A", "A"), ("Z", "B") )
+      )
     }
 
     "Work with selection" >> {
-      checkProv(1, """
-        SELECT[A > B](R(A, B, C))
-      """)
+      checkProv(1, 
+        table("R")
+          .filterParsed("A > B")
+      )
     }
 
     "Work with joins" >> {
-      checkProv(2, """
-        JOIN(R(A, B, C), S(D, E))
-      """)
-      checkProv(2, """
-        JOIN(PROJECT[A <= A](R(A, B, C)), SELECT[D>E](S(D, E)))
-      """)
+      checkProv(2, 
+        table("R")
+          .join(table("S"))
+      )
+      checkProv(2, 
+        table("R")
+          .project("A")
+          .join(
+            table("S")
+              .filterParsed("C > D")
+          )
+      )
     }
 
     "Work with unions" >> {
-      checkProv(2, """
-        UNION(PROJECT[D <= A, E <= B](R(A, B, C)), S(D, E))
-      """)
-      checkProv(3, """
-        JOIN(R(A, B, C), UNION(PROJECT[D <= A, E <= B](R(A, B, C)), S(D, E)))
-      """)
+      checkProv(2, 
+        table("R")
+          .mapParsed( ("C" -> "A"), ("D" -> "B") )
+          .union(table("S"))
+      )
+      checkProv(3, 
+        table("R").
+          join(
+            table("R")
+              .mapParsed( ("C" -> "A"), ("D" -> "B") )
+              .union(table("S"))
+          )
+      )
     }
 
     "Work with misaligned unions" >> {
-      checkProv(3, """
-        UNION(PROJECT[D <= A, E <= E](JOIN(R(A, B, C), S(D, E))), S(D, E))
-      """)
+      checkProv(3, 
+        table("R")
+          .join(table("S"))
+          .mapParsed( ("D" -> "C"), ("C", "A") )
+          .union(table("S"))
+      )
     }
-
   }
 
 }

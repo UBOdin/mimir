@@ -7,8 +7,8 @@ import mimir.util.JSONBuilder
 
 object Reason
 {
-  def make(term: VGTerm, v: Seq[PrimitiveValue], h: Seq[PrimitiveValue]): Reason =
-    new ModelReason(term.model, term.idx, v, h)
+  def make(model: Model, idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Reason =
+    new ModelReason(model, idx, args, hints)
 }
 
 abstract class Reason
@@ -64,16 +64,25 @@ class ModelReason(
 class MultiReason(db: Database, reasons: ReasonSet)
   extends Reason
 {
+  var ackedOffset = getAckedOffset() 
+  def getAckedOffset() : Int = {
+    for(i <- 0 to (reasons.size(db).toInt - 1)){
+      val taken = reasons.take(db, 1, i).head
+      if(!taken.model.isAcknowledged(taken.idx, taken.args))
+        return i
+    }
+    0
+  }
   def model = reasons.model
   def idx: Int = reasons.idx
   def args = 
-    reasons.takeArgs(db, 1).head._1
+    reasons.takeArgs(db, 1, ackedOffset).head._1
   def hints = 
-    reasons.takeArgs(db, 1).head._2
+    reasons.takeArgs(db, 1, ackedOffset).head._2
 
-  override def toString: String = reasons.toString
+  override def toString: String = reason//reasons.toString
   def reason: String =
-    s"${reasons.size(db)} reasons like ${reasons.take(db, 1).head.reason}"
+    s"${reasons.size(db)} reasons like ${ackedOffset + 1}: ${reasons.take(db, 1, ackedOffset).head.reason}"
   def repair: Repair =
-    reasons.take(db, 1).head.repair
+    reasons.take(db, 1, ackedOffset).head.repair
 }

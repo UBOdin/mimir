@@ -5,6 +5,7 @@ import java.util.{Calendar, GregorianCalendar}
 
 import mimir.algebra._
 import mimir.lenses._
+import java.text.SimpleDateFormat
 
 object JDBCUtils {
 
@@ -17,7 +18,7 @@ object JDBCUtils {
             java.sql.Types.NUMERIC)   => TFloat()
       case (java.sql.Types.INTEGER)  => TInt()
       case (java.sql.Types.DATE) => TDate()
-      case (java.sql.Types.TIMESTAMP)   => TTimeStamp()
+      case (java.sql.Types.TIMESTAMP)   => TTimestamp()
       case (java.sql.Types.VARCHAR |
             java.sql.Types.NULL |
             java.sql.Types.CHAR)     => TString()
@@ -30,7 +31,7 @@ object JDBCUtils {
       case TInt()       => java.sql.Types.INTEGER
       case TFloat()     => java.sql.Types.DOUBLE
       case TDate()      => java.sql.Types.DATE
-      case TTimeStamp()  => java.sql.Types.TIMESTAMP
+      case TTimestamp()  => java.sql.Types.TIMESTAMP
       case TString()    => java.sql.Types.VARCHAR
       case TRowId()     => java.sql.Types.ROWID
       case TAny()       => java.sql.Types.VARCHAR
@@ -41,7 +42,7 @@ object JDBCUtils {
   }
 
 
-  def convertFunction(t: Type, field: Integer, rowIdType: Type = TString(), dateType: Type = TDate()): (ResultSet => PrimitiveValue) =
+  def convertFunction(t: Type, field: Integer, dateType: Type = TDate()): (ResultSet => PrimitiveValue) =
   {
     val checkNull: ((ResultSet, => PrimitiveValue) => PrimitiveValue) = {
       (r, call) => {
@@ -56,11 +57,7 @@ object JDBCUtils {
       case TFloat() =>      (r) => checkNull(r, { FloatPrimitive(r.getDouble(field)) })
       case TInt() =>        (r) => checkNull(r, { IntPrimitive(r.getLong(field)) })
       case TString() =>     (r) => checkNull(r, { StringPrimitive(r.getString(field)) })
-      case TRowId() => 
-        rowIdType match {
-          case TInt() =>    (r) => checkNull(r, { RowIdPrimitive(r.getInt(field).toString) })
-          case _ =>         (r) => checkNull(r, { RowIdPrimitive(r.getString(field)) })
-        }
+      case TRowId() =>      (r) => checkNull(r, { RowIdPrimitive(r.getString(field)) })
       case TBool() =>       (r) => checkNull(r, { BoolPrimitive(r.getInt(field) != 0) })
       case TType() =>       (r) => checkNull(r, { TypePrimitive(Type.fromString(r.getString(field))) })
       case TDate() =>
@@ -79,15 +76,19 @@ object JDBCUtils {
             }
           case _ =>         throw new SQLException(s"Can't extract TDate as $dateType")
         }
-      case TTimeStamp() => 
+      case TTimestamp() => 
         dateType match {
-          case TDate() =>   (r) => { val t = r.getTimestamp(field); if(t == null){ NullPrimitive() } else { convertTimeStamp(t) } }
+          case TDate() =>   (r) => { 
+              val t = r.getTimestamp(field); 
+              if(t == null){ NullPrimitive() } 
+              else { convertTimestamp(t) } 
+            }
           case TString() => (r) => {
               val t = r.getString(field)
               if(t == null){ NullPrimitive() }
               else {
                 try {
-                  convertTimeStamp(Timestamp.valueOf(t))
+                  convertTimestamp(Timestamp.valueOf(t))
                 } catch { 
                   case _:IllegalArgumentException => NullPrimitive()
                 }
@@ -96,7 +97,7 @@ object JDBCUtils {
           case _ =>         throw new SQLException(s"Can't extract TTimestamp as $dateType")
 
         }
-      case TUser(t) => convertFunction(TypeRegistry.baseType(t), field, rowIdType)
+      case TUser(t) => convertFunction(TypeRegistry.baseType(t), field, dateType)
     }
   }
 
@@ -126,17 +127,17 @@ object JDBCUtils {
     cal.set(d.y, d.m, d.d);
     new Date(cal.getTime().getTime());
   }
-
-  def convertTimeStamp(c: Calendar): TimestampPrimitive =
+  def convertTimestamp(c: Calendar): TimestampPrimitive =
     TimestampPrimitive(c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DATE),
-                        c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), c.get(Calendar.SECOND))
-  def convertTimeStamp(ts: Timestamp): TimestampPrimitive =
+                        c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), c.get(Calendar.SECOND), 
+                        c.get(Calendar.MILLISECOND))
+  def convertTimestamp(ts: Timestamp): TimestampPrimitive =
   {
     val cal = Calendar.getInstance();
     cal.setTime(ts)
-    convertTimeStamp(cal)
+    convertTimestamp(cal)
   }
-  def convertTimeStamp(ts: TimestampPrimitive): Timestamp =
+  def convertTimestamp(ts: TimestampPrimitive): Timestamp =
   {
     val cal = Calendar.getInstance()
     cal.set(ts.y, ts.m, ts.d, ts.hh, ts.mm, ts.ss);
