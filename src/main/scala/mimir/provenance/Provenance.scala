@@ -154,6 +154,12 @@ object Provenance extends LazyLogging {
           List()
         )
 
+      case SingletonTable(schema, data) =>
+        (
+          SingletonTable(schema, data),
+          List()
+        )
+
       case Aggregate(groupBy, args, child) =>
         //val newargs = (new AggregateArg(ROWID_KEY, List(Var(ROWID_KEY)), ROWID_KEY)) :: args
         ( 
