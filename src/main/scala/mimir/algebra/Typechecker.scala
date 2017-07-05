@@ -250,6 +250,8 @@ class Typechecker(
 
 			case EmptyTable(sch) => sch
 
+			case SingletonTable(sch, _) => sch
+
 			case Limit(_, _, src) => schemaOf(src)
 
 			case Sort(_, src) => schemaOf(src)

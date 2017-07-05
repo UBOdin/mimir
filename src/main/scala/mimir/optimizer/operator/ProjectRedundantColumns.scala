@@ -130,6 +130,7 @@ object ProjectRedundantColumns extends OperatorOptimization {
       case view: View => view
       case table: Table => table
       case table: EmptyTable => table
+      case table: SingletonTable => table
 
       case LeftOuterJoin(lhs, rhs, condition) => {
         val childDependencies = 

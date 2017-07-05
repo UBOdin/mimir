@@ -538,6 +538,14 @@ object CTPercolator
           BoolPrimitive(true)
         )
       }
+      case SingletonTable(sch, _) => {
+        return (oper, 
+          // All columns are deterministic
+          sch.map(_._1).map((_, BoolPrimitive(true)) ).toMap,
+          // All rows are deterministic
+          BoolPrimitive(true)
+        )
+      }
 
       // This is a bit hackish... Sort alone doesn't affect determinism
       // metadata, and Limit doesn't either, but combine the two and you get some

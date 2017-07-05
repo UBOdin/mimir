@@ -92,6 +92,13 @@ object Json
           "schema" -> ofSchema(schema)
         ))
 
+      case SingletonTable(schema, data) => 
+        JsObject(Map[String, JsValue](
+          "type" -> JsString("table_singleton"),
+          "schema" -> ofSchema(schema),
+          "data" -> JsArray(data.map { ofPrimitive(_) })
+        ))
+
       case View(name, query, annotations) => 
         JsObject(Map[String,JsValue](
           "type" -> JsString("table_view"),
@@ -244,6 +251,14 @@ object Json
         )
       case "table_empty" =>
         EmptyTable(toSchema(elems("schema")))
+
+      case "table_singleton" => {
+        val sch = toSchema(elems("schema"))
+        val jsElems = elems("data").as[JsArray].value
+        val data =
+          sch.map { _._2 }.zip(jsElems).map { case (t, v) => toPrimitive(t, v) }
+        SingletonTable(sch, data)
+      }
 
       case "table_normal" =>
         Table(
