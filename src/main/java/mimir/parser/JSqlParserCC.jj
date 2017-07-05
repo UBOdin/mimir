@@ -116,6 +116,7 @@ import mimir.sql.Pragma;
 import mimir.sql.AlterViewMaterialize;
 import mimir.sql.ProvenanceStatement;
 import mimir.sql.DrawPlot;
+import mimir.sql.CastOperation;
 import net.sf.jsqlparser.statement.create.table.Index;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.drop.Drop;
@@ -181,7 +182,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_MATERIALIZE:"MATERIALIZE">
 |   <K_BY:"BY">
 |   <K_DO:"DO">
-|	<K_IF:"IF">
+|   <K_IF:"IF">
 |   <K_IS:"IS">
 |   <K_IN:"IN">
 |   <K_OR:"OR">
@@ -227,7 +228,8 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_DELETE:"DELETE">
 |   <K_CREATE:"CREATE">
 |   <K_SELECT:"SELECT">
-|	<K_PROVENANCE_OF:"PROVENANCE OF">
+|   <K_CAST:"CAST">
+|   <K_PROVENANCE_OF:"PROVENANCE OF">
 |   <K_OFFSET:"OFFSET">
 |   <K_EXISTS:"EXISTS">
 |   <K_HAVING:"HAVING">
@@ -269,7 +271,7 @@ SPECIAL_TOKEN:
 
 TOKEN:
 {
-	< S_IDENTIFIER: ( <LETTER> )+ ( <DIGIT> | <LETTER> |<SPECIAL_CHARS>)* >
+    < S_IDENTIFIER: ( <LETTER> )+ ( <DIGIT> | <LETTER> |<SPECIAL_CHARS>)* >
 | 	< #LETTER: ["a"-"z", "A"-"Z", "_"] >
 |   < #SPECIAL_CHARS: "$" | "_">
 |   < S_CHAR_LITERAL: "'" (~["'"])* "'" ("'" (~["'"])* "'")*>
@@ -1589,7 +1591,7 @@ Expression PrimaryExpression():
 	
 	| "?" { retval = new JdbcParameter(); }
 	
-	|    LOOKAHEAD([ "+" | "-"] Function()) [ "+" | "-" { isInverse = true; }] retval=Function() 
+	| LOOKAHEAD([ "+" | "-"] Function()) [ "+" | "-" { isInverse = true; }] retval=Function() 
 	
 	| LOOKAHEAD([	"+" | "-"] <S_DOUBLE>) 	[	"+" | "-" { tmp = "-"; }]  token=<S_DOUBLE> { retval = new DoubleValue(tmp+token.image); }
 	
@@ -1716,6 +1718,8 @@ Function Function():
     ( 
       <K_EXTRACT> "(" retval = ExtractClause() ")" { return retval; } 
     ) | (
+      <K_CAST> "(" retval = CastClause() ")" { return retval; }
+    ) | (
     	["{fn" { retval.setEscaped(true); } ]
     	(
     	    funcName=RelObjectName()
@@ -1740,7 +1744,6 @@ Function ExtractClause():
   Function retval = new Function();
   Expression target = null;
   Token field = null;
-
 }
 {
   field =  <S_IDENTIFIER>
@@ -1751,6 +1754,10 @@ Function ExtractClause():
       case "YEAR": 
       case "MONTH": 
       case "DAY": 
+      case "HOUR":
+      case "MINUTE":
+      case "SECOND":
+      case "MILLISECOND":
         retval.setName(field.image.toUpperCase()+"_PART");
         break;
       default:
@@ -1760,6 +1767,25 @@ Function ExtractClause():
     param.setExpressions(Arrays.asList(target));
     retval.setParameters(param);
     return retval;
+  }
+}
+
+Function CastClause():
+{
+  Function retval = null;
+  Expression target = null;
+  String type = null;
+  Token typeTok = null;
+}
+{
+  target = SimpleExpression()
+  (<K_AS> | ",")
+  (
+      typeTok = <S_IDENTIFIER>   { type = typeTok.image;  }
+    | typeTok = <S_CHAR_LITERAL> { type = StringValue.parseEscaped(typeTok.image).toRawString(); }
+  )
+  { 
+    return new CastOperation(target, type.toUpperCase());
   }
 }
 
