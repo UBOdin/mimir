@@ -113,15 +113,14 @@ class Typechecker(
 					case x:NoSuchElementException => throw new MissingVariable(name, x, context)
 				}
 			case JDBCVar(t) => t
-			case Function("CAST", fargs) =>
+			case Function("CAST", args) =>
 				// Special case CAST
-				fargs(1) match {
+				args(1) match {
 					case TypePrimitive(t) => t
-					case p:PrimitiveValue => { p match {
-                    case StringPrimitive(s) => Type.toSQLiteType(Integer.parseInt(s))
-                    case IntPrimitive(i)  =>  Type.toSQLiteType(i.toInt)
-                    case _ => throw new SQLException("Invalid CAST to '"+p+"' of type: "+recur(p))
-                }
+          case StringPrimitive(s) => Type.toSQLiteType(Integer.parseInt(s))
+          case IntPrimitive(i)  =>  Type.toSQLiteType(i.toInt)
+          case _ => throw new SQLException("Invalid CAST to '"+args(1)+"' of type: "+recur(args(1)))
+        }
 
 			case Function(name, args) =>
 				returnTypeOfFunction(name, args.map { recur(_) })

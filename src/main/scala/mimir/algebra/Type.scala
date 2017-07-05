@@ -100,6 +100,14 @@ object Type {
       case t2 => t2
     }
 
+  def isNumeric(t: Type): Boolean =
+  {
+    rootType(t) match {
+      case TInt() | TFloat() => true
+      case _ => false
+    }
+  }
+
   def getType(s:String): Type = {
     var t: Type = TString() // default
 
@@ -112,7 +120,7 @@ object Type {
     else if(s.matches("^[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}$"))
       t = TDate()
     else if(s.matches("^[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}\\ \\[0-9]{2}\\:[0-9]{2}\\:[0-9]{2}"))
-      t = TTimeStamp()
+      t = TTimestamp()
     t
   }
 

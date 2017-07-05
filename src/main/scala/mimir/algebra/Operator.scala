@@ -336,7 +336,7 @@ case class Table(name: String,
 case class EmptyTable(sch: Seq[(String, Type)])
   extends Operator
 {
-    def toString(prefix: String) =
+  def toString(prefix: String) =
     prefix + "!!EMPTY!!(" + (
       sch.map( { case (v,t) => v+":"+t } ).mkString(", ") 
     )+")" 
@@ -344,6 +344,19 @@ case class EmptyTable(sch: Seq[(String, Type)])
   def rebuild(x: Seq[Operator]) = this
   def expressions = List()
   def rebuildExpressions(x: Seq[Expression]) = this
+  def columnNames = sch.map(_._1)
+}
+
+@SerialVersionUID(100L)
+case class SingletonTable(sch: Seq[(String, Type)], data: Seq[PrimitiveValue])
+  extends Operator
+{
+  def toString(prefix: String) =
+    prefix + "SINGLETON[" + data.mkString(", ") + "]"
+  def children: List[Operator] = List()
+  def rebuild(x: Seq[Operator]) = this
+  def expressions = data
+  def rebuildExpressions(x: Seq[Expression]) = SingletonTable(sch, data.map { _.asInstanceOf[PrimitiveValue] })
   def columnNames = sch.map(_._1)
 }
 
