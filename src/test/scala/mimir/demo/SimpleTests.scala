@@ -42,8 +42,33 @@ object SimpleTests
     }
 
     "Load CSV Files" >> {
-      reviewDataFiles.foreach(db.loadTableNoTI(_))
-      val query1 =  "SELECT * FROM JSONDATA;"
+
+      // load all tables without TI lens
+//      reviewDataFiles.foreach(db.loadTableNoTI(_))
+
+      db.loadTable(new File("test/data/ratings1.csv"))
+      query("SELECT * FROM RATINGS1;"){
+        _.map{
+          _(0)
+        }
+      }
+
+/*
+      // Test Create Type Inference
+      val createTI: String = """CREATE LENS TI1 as SELECT * FROM RATINGS1 WITH TYPE_INFERENCE(.8);"""
+      update(createTI)
+
+      // Try and select from TI lens
+      query("SELECT * FROM TI1;"){
+        _.map{
+          _(0)
+        }
+      }
+*/
+/*
+      // JSON EXPLORER Query
+
+      val JsonQuery =  "SELECT * FROM JSONDATA;"
       query("SELECT * FROM JSONTEST;"){
         _.map{
           _(0)
@@ -51,8 +76,8 @@ object SimpleTests
       }
 
       val explorer = JsonExplorerLens
-      explorer.create(database,"TEST1",mimir.util.SqlUtils.plainSelectStringtoOperator(database,query1), List(StringPrimitive("JSONCOLUMN").asInstanceOf[PrimitiveValue]))
-
+      explorer.create(database,"TEST1",mimir.util.SqlUtils.plainSelectStringtoOperator(database,JsonQuery), List(StringPrimitive("JSONCOLUMN").asInstanceOf[PrimitiveValue]))
+*/
 /*
       query("SELECT RATING FROM RATINGS1_RAW;") {
         _.map {
