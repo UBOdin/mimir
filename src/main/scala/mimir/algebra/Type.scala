@@ -98,6 +98,22 @@ object Type {
       case t2 => t2
     }
 
+  def getType(s:String): Type = {
+    var t: Type = TString() // default
+
+    if(s.matches("^(\\+|-)?([0-9]*(\\.[0-9]+)?)$")) // float
+      t = TFloat()
+    else if(s.matches("^(\\+|-)?([0-9]+)$")) // Int
+      t = TInt()
+    else if(s.matches("^(?i:true|false)$")) // Bool
+      t = TBool()
+    else if(s.matches("^[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}$"))
+      t = TDate()
+    else if(s.matches("^[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}\\ \\[0-9]{2}\\:[0-9]{2}\\:[0-9]{2}"))
+      t = TTimeStamp()
+    t
+  }
+
 }
 
 case class TInt() extends Type

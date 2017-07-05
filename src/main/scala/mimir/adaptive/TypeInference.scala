@@ -142,21 +142,30 @@ object TypeInference
   }
 
 
+  /*
+    Used to project the tables used,
+  */
+
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
     val ti = typeInferenceLens(db, config)
     logger.trace(s"Table Catalog TI: \n$ti")
-    val tableQuery =
-      convertNodesToNamesInQuery(db, config, "TABLE_NODE", "TABLE_NAME", None,
+    val tableQuery = null
+/*      convertNodesToNamesInQuery(db, config, "TABLE_SCH", None,
         OperatorUtils.makeDistinct(
-          Project(Seq(ProjectArg("TABLE_NODE", Var("MIMIR_TI_PARENT"))),
+          Project(Seq(ProjectArg("TABLE_SCH", Var("MIMIR_TI_PARENT"))),
             ti
           )
         )
       )
+*/
     logger.trace(s"Table Catalog Query: \n$tableQuery")
     return tableQuery
   }
+
+  /*
+
+  */
 
   def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
@@ -164,7 +173,7 @@ object TypeInference
     logger.trace(s"Attr Catalog Spanning Tree: \n$spanningTree")
     val childAttributeQuery =
       OperatorUtils.projectInColumn("IS_KEY", BoolPrimitive(false),
-        convertNodesToNamesInQuery(db, config, "MIMIR_TI_CHILD", "ATTR_NAME", Some("ATTR_TYPE"),
+        convertNodesToNamesInQuery(db, config, "MIMIR_TI_SCH", "ATTR_NAME", Some("ATTR_TYPE"),
           convertNodesToNamesInQuery(db, config, "MIMIR_TI_PARENT", "TABLE_NAME", None,
             spanningTree
           )
@@ -194,6 +203,10 @@ object TypeInference
     logger.trace(s"Attr Catalog Query: \n$jointQuery")
     return jointQuery
   }
+
+  /*
+    Creates the view for TI, this is similar to the lens
+  */
 
   def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
   {

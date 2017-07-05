@@ -420,6 +420,23 @@ case class Database(backend: Backend)
     // Create Type Inference over the csv by default
     adaptiveSchemas.create(targetTable.toUpperCase, "TYPE_INFERENCE", oper, l)
   }
+
+  def loadTableNoTI(targetTable: String, sourceFile: File, force:Boolean = true): Unit ={
+    if(tableExists(targetTable) && !force){
+      throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' AS tableName`; to override.")
+    }
+    LoadCSV.handleLoadTable(this, targetTable, sourceFile)
+  }
+
+  def loadTableNoTI(targetTable: String, sourceFile: String){
+    loadTableNoTI(targetTable, new File(sourceFile))
+  }
+  def loadTableNoTI(sourceFile: String){
+    loadTableNoTI(new File(sourceFile))
+  }
+  def loadTableNoTI(sourceFile: File){
+    loadTableNoTI(sourceFile.getName().split("\\.")(0), sourceFile)
+  }
   
   def loadTable(targetTable: String, sourceFile: String){
     loadTable(targetTable, new File(sourceFile))
