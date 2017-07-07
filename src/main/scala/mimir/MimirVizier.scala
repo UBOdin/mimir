@@ -43,7 +43,7 @@ object MimirVizier {
     // Prepare experiments
     ExperimentalOptions.enable(conf.experimental())
     
-    if(true){
+    if(false){
       // Set up the database connection(s)
       db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
       db.backend.open()
