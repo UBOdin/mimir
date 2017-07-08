@@ -103,6 +103,27 @@ object SqlParserSpec
 			db.backend.resultRows("SELECT B FROM R WHERE A IN (2,3,4)").toList must not contain(Seq(IntPrimitive(3)))
 		}
 
+		"Handle CAST operations" in {
+			val cast1:(String=>Type) = (tstring: String) =>
+				db.typechecker.schemaOf(convert(s"SELECT CAST('FOO' AS $tstring) FROM R"))(0)._2
+			val cast2:(String=>Type) = (tstring: String) =>
+				db.typechecker.schemaOf(convert(s"SELECT CAST('FOO', '$tstring') FROM R"))(0)._2
+
+			cast1("int") must be equalTo TInt()
+			cast1("double") must be equalTo TFloat()
+			cast1("string") must be equalTo TString()
+			cast1("date") must be equalTo TDate()
+			cast1("timestamp") must be equalTo TTimestamp()
+			cast1("flibble") must throwA[RAException]
+
+			cast2("int") must be equalTo TInt()
+			cast2("double") must be equalTo TFloat()
+			cast2("string") must be equalTo TString()
+			cast2("date") must be equalTo TDate()
+			cast2("timestamp") must be equalTo TTimestamp()
+			cast2("flibble") must throwA[RAException]
+		}
+
 		"Parse trivial aggregate queries" in {
 			db.compiler.optimize(convert("SELECT SUM(A) FROM R")) must be equalTo
 				Aggregate(List(), List(AggFunction("SUM", false, List(Var("A")), "SUM")),
