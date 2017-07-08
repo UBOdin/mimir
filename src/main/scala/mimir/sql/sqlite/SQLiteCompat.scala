@@ -256,7 +256,7 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
               Type.rootType(t) match {
                 case TRowId() =>
                   result(value_text(0))
-                case TString() | TDate() | TTimestamp() =>
+                case TString() | TDate() | TTimestamp() | TInterval()  =>
                   val txt = value_text(0)
                   if(TypeRegistry.matches(name, txt)){
                     result(value_text(0))

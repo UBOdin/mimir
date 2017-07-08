@@ -45,6 +45,7 @@ object Plot
     case StringPrimitive(s) => s
     case d:DatePrimitive => d.asDateTime
     case t:TimestampPrimitive => t.asDateTime
+    case i:IntervalPrimitive => i.asInterval
     case BoolPrimitive(true) => 1:java.lang.Long
     case BoolPrimitive(false) => 0:java.lang.Long
     case RowIdPrimitive(s) => s

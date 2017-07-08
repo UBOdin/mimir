@@ -1406,6 +1406,12 @@ object OperatorTranslation {
         strPtr.setString(0, dtStr);
         (GProM_JNA.GProMDataType.GProM_DT_STRING,strPtr,0)
       }
+      case i:TimestampPrimitive => {
+        val dtStr = i.asString
+        val strPtr = new Memory(dtStr.length()+1)
+        strPtr.setString(0, dtStr);
+        (GProM_JNA.GProMDataType.GProM_DT_STRING,strPtr,0)
+      }
       case TypePrimitive(t) => {
         val v = Type.id(t)
         val intPtr = new Memory(Native.getNativeSize(classOf[Int]))

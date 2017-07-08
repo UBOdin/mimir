@@ -11,6 +11,7 @@ object TextUtils {
       case TFloat()  => FloatPrimitive(java.lang.Double.parseDouble(s))
       case TDate()   => parseDate(s)
       case TTimestamp() => parseTimestamp(s)
+      case TInterval() => parseInterval(s)
       case TString() => StringPrimitive(s)
       case TBool()   => 
         s.toUpperCase match {
