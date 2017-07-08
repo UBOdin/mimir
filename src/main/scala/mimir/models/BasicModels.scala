@@ -8,7 +8,7 @@ object UniformDistribution extends Model("UNIFORM") with Serializable {
   def argTypes(idx: Int) = List(TFloat(), TFloat())
   def hintTypes(idx: Int) = Seq()
   def varType(idx: Int, argTypes: Seq[Type]) = TFloat()
-  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = 
+  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) =
     FloatPrimitive((args(0).asDouble + args(1).asDouble) / 2.0)
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = {
     val low = args(0).asDouble
@@ -17,12 +17,12 @@ object UniformDistribution extends Model("UNIFORM") with Serializable {
       (randomness.nextDouble() * (high - low)) + high
     )
   }
-  def bestGuessExpr(idx: Int, args: Seq[Expression]) = 
+  def bestGuessExpr(idx: Int, args: Seq[Expression]) =
     Arithmetic(Arith.Div,
       Arithmetic(Arith.Add, args(0), args(1)),
       FloatPrimitive(2.0)
     )
-  def sampleExpr(idx: Int, randomness: Expression, args: Seq[Expression]) = 
+  def sampleExpr(idx: Int, randomness: Expression, args: Seq[Expression]) =
     Arithmetic(Arith.Add,
       Arithmetic(Arith.Mult,
         randomness,
@@ -32,7 +32,7 @@ object UniformDistribution extends Model("UNIFORM") with Serializable {
     )
 
 
-  def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = 
+  def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String =
     "I put in a random value between "+args(0)+" and "+args(1)
 
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
@@ -40,11 +40,14 @@ object UniformDistribution extends Model("UNIFORM") with Serializable {
 
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean =
     false
+
+  // Random, so...
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Double = 0.5
 }
 
-case class NoOpModel(override val name: String, reasonText:String) 
-  extends Model(name) 
-  with Serializable 
+case class NoOpModel(override val name: String, reasonText:String)
+  extends Model(name)
+  with Serializable
 {
   var acked = false
 
@@ -56,4 +59,5 @@ case class NoOpModel(override val name: String, reasonText:String)
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = reasonText
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = { acked = true }
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = acked
+  def confidence(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Double = 0.5 // Random, so...
 }

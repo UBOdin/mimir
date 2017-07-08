@@ -110,16 +110,31 @@ object CureScenario
      }
 
      "Test Prioritizer" >> {
+
+
        update("CREATE TABLE R(A string, B int, C int)")
        loadCSV("R", new File("test/r_test/r.csv"))
        update("CREATE LENS TI AS SELECT * FROM R WITH TYPE_INFERENCE(0.5)")
        update("CREATE LENS MV AS SELECT * FROM TI WITH MISSING_VALUE('B', 'C')")
-       val reasonsets = explainEverything("SELECT * FROM MV")
-       var reasonList : List[Reason] = List()
-       for(reasonset <- reasonsets) {
-         reasonList = reasonList ++ reasonset.all(db)
-       }
-       CTPrioritizer.prioritize(reasonList)
+       val reasonsets = explainEverything("SELECT * FROM MV").flatMap(x=>x.all(db))
+       /*
+       val reasonsets = explainEverything("""
+         SELECT
+                 BILL_OF_LADING_NBR,
+                 SRC.IMO_CODE           AS "SRC_IMO",
+                 LOC.LAT                AS "VESSEL_LAT",
+                 LOC.LON                AS "VESSEL_LON",
+                 PORTS.LAT              AS "PORT_LAT",
+                 PORTS.LON              AS "PORT_LON",
+                 DATE(SRC.DATE)          AS "SRC_DATE",
+                 DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON) AS "DISTANCE",  SPEED(DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON), SRC.DATE, NULL) AS "SPEED"
+               FROM CURESOURCE AS SRC
+                JOIN CURELOCATIONS AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
+                 LEFT OUTER JOIN CUREPORTS AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
+               ;
+       """).flatMap(x=>x.all(db))
+       */
+       CTPrioritizer.prioritize(reasonsets)
        ok
      }
 

@@ -19,24 +19,28 @@ object CTPrioritizer {
 
 		if(reasons.size != 0) {
 			val trcmap = collection.mutable.LinkedHashMap[(Model,Int,Seq[PrimitiveValue]),(Double,Double,Double)]()
-			var i = 0.0
+			var i = 0
 			var j = 0.0
 			var k = 0.0
+
+			val numI = reasons.size // Number of UDOs
+			val I = 0 until numI
+			val numJ = 1 // Number of Oracles
+			val J = 0 until numJ
+			var q = new Array[Double](5) // Reliability of UDO prior to curation
 			for (reason <- reasons) {
 				i += 1
 				j += 0.5
 				k += 2
 				//trcmap += ("{{"+reason.model+";"+reason.idx+"["+reason.args.mkString(", ")+"]}}" -> (i,j,k))
 				trcmap += ((reason.model,reason.idx,reason.args) -> (i,j,k))
+				q(i-1) = reason.model.confidence(reason.idx,reason.args,reason.hints)
 			}
 			val oracle = new Oracle(10,trcmap)
 			// println(reasons)
 			// Data (filled randomly)
-			val numI = reasons.size // Number of UDOs
-			val I = 0 until numI
-			val numJ = 1 // Number of Oracles
-			val J = 0 until numJ
-			var q = Array.tabulate(numI)(_*0.2) // Reliability of UDO prior to curation
+
+			// var q = Array.tabulate(numI)(_*0.2) // Reliability of UDO prior to curation
 			var w = Array.tabulate(numI)(_=>1) // Temporarily set to 1
 			//var t = Array.tabulate(numI,numJ)((x,y)=>x+y) // Time
 			//var r = Array.tabulate(numI,numJ)((x,y)=>0.1*x+0.2*y) // Reliability
@@ -103,6 +107,7 @@ object CTPrioritizer {
 			}
 
 			release()
+
 
 		}
 	}

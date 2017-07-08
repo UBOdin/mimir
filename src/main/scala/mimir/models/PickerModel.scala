@@ -8,24 +8,24 @@ import mimir.Database
 
 /**
  * A model representing a key-repair choice.
- * 
+ *
  * The index is ignored.
- * The one argument is a value for the key.  
+ * The one argument is a value for the key.
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1000L)
-class PickerModel(override val name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[Type], source: Operator) 
-  extends Model(name) 
+class PickerModel(override val name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[Type], source: Operator)
+  extends Model(name)
   with Serializable
   with NeedsReconnectToDatabase
   with FiniteDiscreteDomain
 {
-  
+
   val feedback = scala.collection.mutable.Map[String,PrimitiveValue]()
-  
+
   @transient var db: Database = null
-  
-  
+
+
   def argTypes(idx: Int) = {
       Seq(TRowId())
   }
@@ -33,11 +33,13 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ) = {
     val rowid = RowIdPrimitive(args(0).asString)
     feedback.get(rowid.asString) match {
-      case Some(v) => v
+      case Some(v) => {
+        v
+      }
       case None => {
         hints(0)
       }
-      
+
     }
   }
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = {
@@ -65,11 +67,11 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
     feedback.get(rowid.asString) match {
       case Some(v) =>
         s"You told me that $resultColumn = $v on row $rowid"
-      case None => 
+      case None =>
          s"I used an expressions to pick a value for $resultColumn from columns: ${pickFromCols.mkString(",")}"
     }
   }
-  def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = { 
+  def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = {
     val rowid = args(0).asString
     feedback(rowid) = v
   }
@@ -77,12 +79,20 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
     feedback contains(args(0).asString)
   }
   def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq(TAny())
-   
-  
+
+
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = Seq((hints(0), 0.0))
-  
-  def reconnectToDatabase(db: Database) = { 
-    this.db = db 
+
+  def reconnectToDatabase(db: Database) = {
+    this.db = db
   }
-  
+
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Double = {
+    val rowid = RowIdPrimitive(args(0).asString)
+    feedback.get(rowid.asString+"_"+idx) match {
+    case Some(v) => 1.0
+    case None => 0.0
+    }
+  }
+
 }

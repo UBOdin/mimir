@@ -6,7 +6,7 @@ import mimir.Database
 import mimir.algebra._
 import mimir.util.RandUtils
 import org.apache.lucene.search.spell.{
-  JaroWinklerDistance, LevensteinDistance, NGramDistance, 
+  JaroWinklerDistance, LevensteinDistance, NGramDistance,
   StringDistance
 }
 
@@ -28,11 +28,11 @@ object EditDistanceMatchModel
   val defaultMetric = "NGRAM"
 
   def train(
-    db: Database, 
+    db: Database,
     name: String,
-    source: Either[Operator,Seq[(String,Type)]], 
+    source: Either[Operator,Seq[(String,Type)]],
     target: Either[Operator,Seq[(String,Type)]]
-  ): Map[String,(Model,Int)] = 
+  ): Map[String,(Model,Int)] =
   {
     val sourceSch: Seq[(String,Type)] = source match {
         case Left(oper) => db.bestGuessSchema(oper)
@@ -54,7 +54,7 @@ object EditDistanceMatchModel
     }).toMap
   }
 
-  def isTypeCompatible(a: Type, b: Type): Boolean = 
+  def isTypeCompatible(a: Type, b: Type): Boolean =
   {
     val aBase = Type.rootType(a)
     val bBase = Type.rootType(b)
@@ -72,23 +72,23 @@ object EditDistanceMatchModel
 class EditDistanceMatchModel(
   name: String,
   metricName: String,
-  target: (String, Type), 
+  target: (String, Type),
   sourceCandidates: Seq[String]
-) 
-  extends Model(name) 
+)
+  extends Model(name)
   with DataIndependentFeedback
   with NoArgModel
   with FiniteDiscreteDomain
 {
-  /** 
+  /**
    * A mapping for this column.  Lucene Discance metrics use a [0-1] range as:
    *    0 == Strings Are Maximally Different
    *    1 == Strings Are Identical
-   * 
+   *
    * In other words, distance is a bit of a misnomer.  It's more of a score, which
    * in turn allows us to use it as-is.
    */
-  var colMapping:IndexedSeq[(String,Double)] = 
+  var colMapping:IndexedSeq[(String,Double)] =
   {
     val metric = EditDistanceMatchModel.metrics(metricName)
     var cumSum = 0.0
@@ -100,10 +100,10 @@ class EditDistanceMatchModel(
     }).
     map({ case (k, v) => (k, v.toDouble) }).
     toIndexedSeq
-  } 
+  }
   def varType(idx: Int, t: Seq[Type]) = TString()
 
-  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
   {
     StringPrimitive(
       RandUtils.pickFromWeightedList(randomness, colMapping)
@@ -111,7 +111,7 @@ class EditDistanceMatchModel(
   }
 
   def validateChoice(idx: Int, v: PrimitiveValue): Boolean =
-  { 
+  {
     EditDistanceMatchModel.logger.debug(s"Validate Edit Distance $name -> $v")
     sourceCandidates.contains(v.asString)
   }
@@ -138,9 +138,9 @@ class EditDistanceMatchModel(
     }
   }
 
-  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
+  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
   {
-    choices.get(idx) match { 
+    choices.get(idx) match {
       case None => {
         if(colMapping.isEmpty){
           NullPrimitive()
@@ -156,4 +156,17 @@ class EditDistanceMatchModel(
 
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
     List((NullPrimitive(), 0.0)) ++ colMapping.map( x => (StringPrimitive(x._1), x._2))
+
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Double  = {
+    choices.get(idx) match {
+      case None => {
+        if(colMapping.isEmpty){
+          0.0
+        } else {
+          colMapping.maxBy(_._2)._2/colMapping.map(_._2).sum
+        }
+      }
+      case Some(s) => 1.0
+    }
+  }
 }

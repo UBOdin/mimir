@@ -8,25 +8,27 @@ import java.sql.SQLException
 
 /**
  * A model representing a key-repair choice.
- * 
+ *
  * The index is ignored.
- * The one argument is a value for the key.  
+ * The one argument is a value for the key.
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1000L)
-class CommentModel(override val name: String, cols:Seq[String], colTypes:Seq[Type], comments:Seq[String]) 
-  extends Model(name) 
+class CommentModel(override val name: String, cols:Seq[String], colTypes:Seq[Type], comments:Seq[String])
+  extends Model(name)
   with Serializable
   //with FiniteDiscreteDomain
 {
   val feedback = scala.collection.mutable.Map[String,PrimitiveValue]()
-  
+
   def argTypes(idx: Int) = Seq(TRowId())
   def varType(idx: Int, args: Seq[Type]) = colTypes(idx)
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ) = {
     val rowid = RowIdPrimitive(args(0).asString)
     feedback.get(rowid.asString) match {
-      case Some(v) => v
+      case Some(v) => {
+        v
+      }
       case None => {
         hints(0)
       }
@@ -43,13 +45,24 @@ class CommentModel(override val name: String, cols:Seq[String], colTypes:Seq[Typ
     }
     rval
   }
-  def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = { 
+  def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = {
     val rowid = args(0).asString
     feedback(rowid) = v
   }
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = feedback contains(args(0).asString)
   def hintTypes(idx: Int): Seq[mimir.algebra.Type] = colTypes
   //def getDomain(idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = Seq((hints(0), 0.0))
-  
-     
+
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Double = {
+    val rowid = RowIdPrimitive(args(0).asString)
+    feedback.get(rowid.asString) match {
+      case Some(v) => {
+        1.0
+      }
+      case None => {
+        0.0
+      }
+    }
+  }
+
 }
