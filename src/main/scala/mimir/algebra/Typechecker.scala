@@ -282,7 +282,6 @@ object Typechecker
 			case (TAny(),_)               => Some(b)
 			case (_,TAny())               => Some(a)
 			case (TInt(),TFloat())        => Some(TFloat())
-			case (TDate(), TTimestamp())  => Some(TTimestamp())
 			case (TRowId(),TString())     => Some(b)
 			case _                        => None
 		}

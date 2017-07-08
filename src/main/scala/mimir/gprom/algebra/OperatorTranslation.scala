@@ -1406,7 +1406,7 @@ object OperatorTranslation {
         strPtr.setString(0, dtStr);
         (GProM_JNA.GProMDataType.GProM_DT_STRING,strPtr,0)
       }
-      case i:TimestampPrimitive => {
+      case i:IntervalPrimitive => {
         val dtStr = i.asString
         val strPtr = new Memory(dtStr.length()+1)
         strPtr.setString(0, dtStr);
