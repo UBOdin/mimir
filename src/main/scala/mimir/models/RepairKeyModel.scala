@@ -11,24 +11,24 @@ import mimir.Database
 
 /**
  * A model representing a key-repair choice.
- * 
+ *
  * The index is ignored.
- * The one argument is a value for the key.  
+ * The one argument is a value for the key.
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1001L)
 class RepairKeyModel(
-  name: String, 
-  context: String, 
-  source: Operator, 
-  keys: Seq[(String, Type)], 
+  name: String,
+  context: String,
+  source: Operator,
+  keys: Seq[(String, Type)],
   target: String,
   targetType: Type,
   scoreCol: Option[String]
-) 
+)
   extends Model(name)
-  with FiniteDiscreteDomain 
-  with NeedsReconnectToDatabase 
+  with FiniteDiscreteDomain
+  with NeedsReconnectToDatabase
 {
   val choices = scala.collection.mutable.Map[List[PrimitiveValue], PrimitiveValue]();
   @transient var db:Database = null
@@ -40,10 +40,12 @@ class RepairKeyModel(
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
     choices.get(args.toList) match {
       case Some(choice) => choice
-      case None => getDomain(idx, args, hints).sortBy(-_._2).head._1
+      case None => {
+        getDomain(idx, args, hints).sortBy(-_._2).head._1
+      }
     }
 
-  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
     RandUtils.pickFromWeightedList(randomness, getDomain(idx, args, hints))
 
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String =
@@ -53,7 +55,7 @@ class RepairKeyModel(
         val possibilities = getDomain(idx, args, hints)
         s"In $context, there were ${possibilities.length} options for $target on the row identified by <${args.map(_.toString).mkString(", ")}>, and I arbitrarilly picked ${possibilities.sortBy(-_._2).head._1}"
       }
-      case Some(choice) => 
+      case Some(choice) =>
         s"In $context, you told me to use ${choice.toString} for $target on the identified by <${args.map(_.toString).mkString(", ")}>"
     }
   }
@@ -68,27 +70,27 @@ class RepairKeyModel(
   {
     if(hints.isEmpty){
       db.query(
-        OperatorUtils.projectColumns(List(target) ++ scoreCol, 
+        OperatorUtils.projectColumns(List(target) ++ scoreCol,
           Select(
             ExpressionUtils.makeAnd(
-              keys.map(_._1).zip(args).map { 
+              keys.map(_._1).zip(args).map {
                 case (k,v) => Comparison(Cmp.Eq, Var(k), v)
               }
             ),
             source
           )
         )
-      ){ _.map { row => 
-          ( row(0), 
-            scoreCol match { 
-              case None => 1.0; 
+      ){ _.map { row =>
+          ( row(0),
+            scoreCol match {
+              case None => 1.0;
               case Some(_) => row(1).asDouble
             }
           )
         }.toSeq
       }
     } else {
-      val possibilities = 
+      val possibilities =
         Json.parse(hints(0).asString) match {
           case JsArray(values) => values.map { Json.toPrimitive(targetType, _)  }
           case _ => throw ModelException(s"Invalid Value Hint in Repair Model $name: ${hints(0).asString}")
@@ -117,9 +119,16 @@ class RepairKeyModel(
 
     }
   }
-  
-  def reconnectToDatabase(db: Database) = { 
-    this.db = db 
+
+  def reconnectToDatabase(db: Database) = {
+    this.db = db
+  }
+
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Double = {
+    choices.get(args.toList) match {
+      case Some(choice) => 1.0
+      case None => getDomain(idx, args, hints).sortBy(-_._2).head._1.asDouble / getDomain(idx, args, hints).map(_._2).sum
+    }
   }
 
 }

@@ -12,9 +12,9 @@ import mimir.util._
  * in the list.
  */
 @SerialVersionUID(1000L)
-class DefaultMetaModel(name: String, context: String, models: Seq[String]) 
-  extends Model(name) 
-  with DataIndependentFeedback 
+class DefaultMetaModel(name: String, context: String, models: Seq[String])
+  extends Model(name)
+  with DataIndependentFeedback
   with NoArgModel
   with FiniteDiscreteDomain
 {
@@ -31,7 +31,7 @@ class DefaultMetaModel(name: String, context: String, models: Seq[String])
         val modelString = models.mkString(", ")
         s"I defaulted to guessing with '$bestChoice' (out of $modelString) for $context"
       }
-      case Some(choiceStr) => 
+      case Some(choiceStr) =>
         s"You told me to use the $choiceStr model for $context"
     }
   }
@@ -39,5 +39,7 @@ class DefaultMetaModel(name: String, context: String, models: Seq[String])
 
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
     models.map( x => (StringPrimitive(x), 0.0) )
+
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = 1.0/models.size
 
 }
