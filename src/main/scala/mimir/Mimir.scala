@@ -8,6 +8,7 @@ import mimir.parser._
 import mimir.sql._
 import mimir.util.{TimeUtils,ExperimentalOptions,LineReaderInputSource}
 import mimir.algebra._
+import mimir.statistics.DetectSeries
 import mimir.plot.Plot
 import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
 import net.sf.jsqlparser.statement.Statement

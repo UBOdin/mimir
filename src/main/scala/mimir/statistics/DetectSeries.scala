@@ -26,7 +26,7 @@ case class SeriesColumnItem(columnName: String, reason: String, score: Double)
  *  -> Column Names
  *  -> Markov Predictor
  */
-class DetectSeries(db: Database) { 
+class DetectSeries(db: Database, threshold: Double) { 
   
   //Stores the list of series corresponding to each table
   val tabSeqMap = collection.mutable.Map[String, List[SeriesColumnItem]]()
@@ -44,13 +44,47 @@ class DetectSeries(db: Database) {
         case _ => None
       }
     }
-//    Not working! Typechecker.schemaOf is not detecting type for csv loaded files( detected as 'Any')
-//    val seqCol = Typechecker.schemaOf(oper) 
     val seqCol = db.bestGuessSchema(oper)
     
-    val seriesColTemp = seqCol.flatMap( tup => getType(tup._1, tup._2))
+    val seriesColDate = seqCol.flatMap( tup => getType(tup._1, tup._2))
+
+    var series = seriesColDate.toList
     
-    seriesColTemp.toList
+    val seriesColNumIdx: Seq[Int] = seqCol.zipWithIndex.filter(tup => Seq(TInt(),TFloat()).contains(tup._1._2)).map(x => x._2).toSeq
+    
+    if(!seriesColNumIdx.isEmpty){
+      db.query(oper){result =>
+//        var prevVal = new ArrayBuffer[PrimitiveValue](seriesColNumIdx.size)
+        val initRow = result.next
+        var prevVal = seriesColNumIdx.map(initRow.tuple(_)).toArray
+        var countInc = new Array[Double](seriesColNumIdx.size)
+        var countDec = new Array[Double](seriesColNumIdx.size)
+        var totalTup = 1;
+        result.foreach(row => 
+          { totalTup = totalTup+1;
+            seriesColNumIdx.zipWithIndex.foreach(x => 
+              if(db.interpreter.evalBool(prevVal(x._2).lt(row.tuple(x._1))))
+                { prevVal(x._2)=row.tuple(x._1); countInc(x._2) = countInc(x._2)+1.0}
+              else if(db.interpreter.evalBool(prevVal(x._2).eq(row.tuple(x._1)))){
+                prevVal(x._2)=row.tuple(x._1); countInc(x._2) = countInc(x._2)+1.0; countDec(x._2) = countDec(x._2)+1.0;
+              }
+              else
+                { 
+                  if(!db.interpreter.evalBool(row.tuple(x._1).isNull.or(prevVal(x._2).isNull)))
+                  {countDec(x._2) = countDec(x._2)+1.0}
+                  prevVal(x._2)=row.tuple(x._1);
+                 })
+          })
+        val seriesIncProb: Seq[Double] = countInc.map(x => (x.toDouble/(totalTup-1).toDouble))
+        val seriesDecProb: Seq[Double] = countDec.map(x => (x.toDouble/(totalTup-1).toDouble))
+        val numIncSeries: Seq[SeriesColumnItem] = seriesIncProb.zipWithIndex.filter(x => x._1 > threshold).map(x => SeriesColumnItem(seqCol(seriesColNumIdx(x._2))._1, "The column is a Numeric("+seqCol(seriesColNumIdx(x._2))._2.toString()+") datatype with high imcremental ordering.", x._1))
+        val numDecSeries: Seq[SeriesColumnItem] = seriesDecProb.zipWithIndex.filter(x => x._1 > threshold).map(x => SeriesColumnItem(seqCol(seriesColNumIdx(x._2))._1, "The column is a Numeric("+seqCol(seriesColNumIdx(x._2))._2.toString()+") datatype with high decremental ordering.", x._1))
+
+        series = series ++ numIncSeries.toList ++ numDecSeries.toList
+      }
+    }    
+
+    series
   }
 
 }
