@@ -34,6 +34,8 @@ object CureScenario
         time(s"Materialize '$basename'"){
           update(s"ALTER VIEW $basename MATERIALIZE;")
         }
+        explainEverything(s"SELECT * FROM $basename") must not beEmpty;
+        explainEverything(s"SELECT * FROM $basename").flatMap { _.all(db) } must not beEmpty;
         db.tableExists(basename) must beTrue
       }
     }}
@@ -116,9 +118,13 @@ object CureScenario
        loadCSV("R", new File("test/r_test/r.csv"))
        update("CREATE LENS TI AS SELECT * FROM R WITH TYPE_INFERENCE(0.5)")
        update("CREATE LENS MV AS SELECT * FROM TI WITH MISSING_VALUE('B', 'C')")
-       val reasonsets = explainEverything("SELECT * FROM MV").flatMap(x=>x.all(db))
-       /*
-       val reasonsets = explainEverything("""
+       val reasonsets1 = explainEverything("SELECT * FROM MV").flatMap(x=>x.all(db))
+
+       reasonsets1 must not beEmpty;
+
+       CTPrioritizer.prioritize(reasonsets1)
+
+       val reasonsets2 = explainEverything("""
          SELECT
                  BILL_OF_LADING_NBR,
                  SRC.IMO_CODE           AS "SRC_IMO",
@@ -133,8 +139,10 @@ object CureScenario
                  LEFT OUTER JOIN CUREPORTS AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
                ;
        """).flatMap(x=>x.all(db))
-       */
-       CTPrioritizer.prioritize(reasonsets)
+
+       reasonsets2 must not beEmpty;
+
+       CTPrioritizer.prioritize(reasonsets1)
        ok
      }
 
