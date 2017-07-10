@@ -7,6 +7,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import org.geotools.referencing.datum.DefaultEllipsoid
 import org.joda.time.DateTime
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import scala.util.parsing.json._
 
 object SQLiteCompat extends LazyLogging{
 
@@ -36,6 +37,7 @@ object SQLiteCompat extends LazyLogging{
     org.sqlite.Function.create(conn, "GAMMA", Gamma)
     org.sqlite.Function.create(conn, "STDDEV", StdDev)
     org.sqlite.Function.create(conn, "MAX", Max)
+    org.sqlite.Function.create(conn, "JSONEXPLORERAGG", JsonExplorerAgg)
   }
   
   def getTableSchema(conn:java.sql.Connection, table: String): Option[Seq[(String, Type)]] =
@@ -468,3 +470,62 @@ object Max extends org.sqlite.Function.Aggregate {
   }
 }
 
+object JsonExplorerAgg extends org.sqlite.Function.Aggregate {
+  // value is the result and flag is what is returned
+
+  // max
+  var maxValue: Double = 0.0
+  // min
+  var minValue: Double = 0.0
+  // count
+  var countValue: Int = 0
+  var valuesSet: Boolean = false
+  // countNull
+  var countNullValue: Int = 0
+  var nullSet: Boolean = false
+
+  // TypeCount
+
+
+  @Override
+  def xStep(): Unit = {
+    if(value_type(0) != SQLiteCompat.NULL) { // the value is not null, so perform operations needed
+      // perform and update the values as required, each return carage should be a new operation
+/*
+      // initialize values
+      if(maxValue == null)
+        maxValue = value_double(0)
+      if(minValue == null)
+        minValue = value_double(0)
+*/
+      if(maxValue < value_double(0) )
+        maxValue = value_double(0)
+
+      if(minValue > value_double(0) )
+        minValue = value_double(0)
+
+      countValue += 1
+
+      valuesSet = true
+    } // end value is not null section
+    else{ // value is null, so act accordingly
+      countNullValue += 1
+      nullSet = true
+    } // end null section
+  }
+
+  def xFinal(): Unit = {
+    // this is what is returned, return a json object with all the encoded information
+
+    val resultMap = Map[String,Any](
+      "max" -> maxValue,
+      "min" -> minValue,
+      "count" -> countValue,
+      "nullCount" -> countNullValue
+    )
+
+    println(JSONObject(resultMap))
+
+    if(valuesSet){ result(JSONObject(resultMap).toString()) } else { result() }
+  }
+}
