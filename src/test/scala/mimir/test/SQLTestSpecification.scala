@@ -113,9 +113,9 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   }
   def explainEverything(s: String) = 
   {
-    val query = resolveViews(db.sql.convert(
+    val query = db.sql.convert(
       stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-    ))
+    )
     db.explainer.explainEverything(query)
   }
   def update(s: Statement) = 

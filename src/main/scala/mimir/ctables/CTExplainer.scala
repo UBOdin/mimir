@@ -466,7 +466,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 			// Keep views unless we can push selections down into them
 			case Select(cond, View(_,query,_)) => 
-				explainSubsetWithoutOptimizing(Select(cond, query), wantCol, wantRow, wantSort)
+				explainSubset(Select(cond, query), wantCol, wantRow, wantSort)
 
 			case Select(cond, child) => {
 				val (condReasons:Seq[ReasonSet], condDependencies:Set[String]) =
