@@ -2,6 +2,7 @@ package mimir.algebra;
 
 import mimir.algebra.Type._;
 import org.joda.time.DateTime;
+import org.joda.time.Period;
 
 /**
  * Base type for expression trees.  Represents a single node in the tree.
@@ -349,6 +350,10 @@ abstract sealed class PrimitiveValue(t: Type)
   /**
    * return the contents of the variable as just an object.
    */
+  def asInterval: Period;
+  /**
+   * return the contents of the variable as just an object.
+   */
   def payload: Object;
 }
 
@@ -367,6 +372,7 @@ case class IntPrimitive(v: Long)
   def asBool: Boolean = throw new TypeException(TInt(), TBool(), "Hard Cast")
   def asDateTime: DateTime = throw new TypeException(TInt(), TDate(), "Hard Cast")
   def asString: String = v.toString;
+  def asInterval: Period = throw new TypeException(TInt(), TInterval(), "Hard Cast")
   def payload: Object = v.asInstanceOf[Object];
 }
 /**
@@ -382,6 +388,7 @@ case class StringPrimitive(v: String)
   def asBool: Boolean = throw new TypeException(TString(), TBool(), "Hard Cast")
   def asDateTime: DateTime = throw new TypeException(TString(), TDate(), "Hard Cast")
   def asString: String = v;
+  def asInterval: Period = throw new TypeException(TString(), TInterval(), "Hard Cast")
   def payload: Object = v.asInstanceOf[Object];
 }
 /**
@@ -397,6 +404,7 @@ case class TypePrimitive(t: Type)
   def asBool: Boolean = throw new TypeException(TType(), TBool(), "Hard Cast")
   def asDateTime: DateTime = throw new TypeException(TType(), TDate(), "Hard Cast")
   def asString: String = t.toString;
+  def asInterval: Period = throw new TypeException(TType(), TInterval(), "Hard Cast")
   def payload: Object = t.asInstanceOf[Object];
 }
 /**
@@ -412,6 +420,7 @@ case class RowIdPrimitive(v: String)
   def asBool: Boolean = throw new TypeException(TRowId(), TBool(), "Hard Cast")
   def asDateTime: DateTime = throw new TypeException(TRowId(), TDate(), "Hard Cast")
   def asString: String = v;
+  def asInterval: Period = throw new TypeException(TRowId(), TInterval(), "Hard Cast")
   def payload: Object = v.asInstanceOf[Object];
 }
 /**
@@ -427,6 +436,7 @@ case class FloatPrimitive(v: Double)
   def asBool: Boolean = throw new TypeException(TFloat(), TBool(), "Hard Cast")
   def asDateTime: DateTime = throw new TypeException(TFloat(), TDate(), "Hard Cast")
   def asString: String = v.toString;
+  def asInterval: Period = throw new TypeException(TFloat(), TInterval(), "Hard Cast")
   def payload: Object = v.asInstanceOf[Object];
 }
 
@@ -442,6 +452,7 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
   def asDouble: Double = throw new TypeException(TDate(), TFloat(), "Hard Cast");
   def asBool: Boolean = throw new TypeException(TDate(), TBool(), "Hard Cast")
   def asString: String = f"$y%04d-$m%02d-$d%02d"
+  def asInterval: Period = throw new TypeException(TDate(), TInterval(), "Hard Cast")
   def payload: Object = (y, m, d).asInstanceOf[Object];
   final def compare(c: DatePrimitive): Integer = {
     if(c.y < y){ -1 }
@@ -474,6 +485,7 @@ case class TimestampPrimitive(y: Int, m: Int, d: Int, hh: Int, mm: Int, ss: Int,
   def asDouble: Double = throw new TypeException(TDate(), TFloat(), "Hard Cast");
   def asBool: Boolean = throw new TypeException(TDate(), TBool(), "Hard Cast")
   def asString: String = f"$y%04d-$m%02d-$d%02d $hh%02d:$mm%02d:$ss%02d.$ms%04d"
+  def asInterval: Period = throw new TypeException(TDate(), TInterval(), "Hard Cast")
   def payload: Object = (y, m, d).asInstanceOf[Object];
   final def compare(c: TimestampPrimitive): Integer = {
     if(c.y < y){ -1 }
@@ -511,6 +523,7 @@ case class BoolPrimitive(v: Boolean)
   def asDateTime: DateTime = throw new TypeException(TBool(), TDate(), "Hard Cast")
   def asBool: Boolean = v
   def asString: String = toString;
+  def asInterval: Period = throw new TypeException(TBool(), TInterval(), "Hard Cast")
   def payload: Object = v.asInstanceOf[Object];
 }
 /**
@@ -526,7 +539,27 @@ case class NullPrimitive()
   def asString: String = throw new NullTypeException(TAny(), TString(), "Hard Cast Null");
   def asBool: Boolean = throw new NullTypeException(TAny(), TBool(), "Hard Cast Null")
   def asDateTime: DateTime = throw new NullTypeException(TAny(), TDate(), "Hard Cast")
+  def asInterval: Period = throw new TypeException(TAny(), TInterval(), "Hard Cast")
   def payload: Object = null
+}
+
+
+/**
+  *
+  * Boxed Representation of Interval
+  */
+@SerialVersionUID(100L)
+case class IntervalPrimitive(y: Int, m: Int, w: Int, d: Int, hh: Int, mm: Int, ss: Int, ms: Int)
+  extends PrimitiveValue(TInterval())
+{
+  override def toString() = s"INTERVAL '${asString}'"
+  def asLong: Long = throw new TypeException(TInterval(), TInt(), "Hard Cast");
+  def asDouble: Double = throw new TypeException(TInterval(), TFloat(), "Hard Cast");
+  def asBool: Boolean = throw new TypeException(TInterval(), TBool(), "Hard Cast")
+  def asString: String = f"P$y%dY$m%dM$w%dW$d%dDT$hh%dD$mm%dM$ss%d.$ms%03dS"
+  def payload: Object = (y, m, d).asInstanceOf[Object];
+  def asDateTime: DateTime =  throw new TypeException(TInterval(), TDate(), "Hard Cast")
+  def asInterval: Period = new Period(y,m,w,d,hh,mm,ss,ms);
 }
 
 /////////////// Special Expression Types ///////////////

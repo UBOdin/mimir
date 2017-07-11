@@ -11,6 +11,7 @@ object TextUtils {
       case TFloat()  => FloatPrimitive(java.lang.Double.parseDouble(s))
       case TDate()   => parseDate(s)
       case TTimestamp() => parseTimestamp(s)
+      case TInterval() => parseInterval(s)
       case TString() => StringPrimitive(s)
       case TBool()   => 
         s.toUpperCase match {
@@ -26,6 +27,7 @@ object TextUtils {
 
   val dateRegexp = "(\\d+)-(\\d+)-(\\d+)".r
   val timestampRegexp = "(\\d+)-(\\d+)-(\\d+) (\\d+):(\\d+):(\\d+|\\d+[.]\\d*)".r
+  val intervalRegexp = "P(\\d+)Y(\\d+)M(\\d+)W(\\d+)DT(\\d+)H(\\d+)M(\\d+|\\d+[.]\\d*)S".r
 
   def parseDate(s: String): PrimitiveValue =
   {
@@ -46,4 +48,13 @@ object TextUtils {
     }
   }
 
+  def parseInterval(s: String): PrimitiveValue =
+  {
+    s match {
+      case intervalRegexp(y, m, w, d, hh, mm, se) => 
+        val seconds = se.toDouble
+        IntervalPrimitive(y.toInt, m.toInt, w.toInt, d.toInt, hh.toInt, mm.toInt, seconds.toInt, (seconds*1000).toInt % 1000)
+      case _ => NullPrimitive()
+    }
+  }
 }
