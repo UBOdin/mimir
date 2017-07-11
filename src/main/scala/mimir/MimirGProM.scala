@@ -81,7 +81,7 @@ object MimirGProM {
   
   def testing() : Unit = {
     //testDebug = true
-    //runTests(80) 
+    runTests(80) 
     //runTests(1) 
     
     //val sql = "SELECT R.A + R.B AS Z FROM R WHERE R.A = R.B"
@@ -113,13 +113,13 @@ object MimirGProM {
     query = GProMWrapper.inst.gpromRewriteQuery(query+";")       
     println(getQueryResults(query))*/
     
-    println(explainCell("SELECT * FROM LENS_PICKER2009618197", 1, "1420266763").mkString("\n"))
+    /*println(explainCell("SELECT * FROM LENS_PICKER2009618197", 1, "1420266763").mkString("\n"))
     println("\n\n")
     
-    println(explainCell("SELECT * FROM LENS_MISSING_VALUE1133189369", 1, "4").mkString("\n"))
+    println(explainCell("SELECT * FROM LENS_MISSING_VALUE1914014057", 1, "3").mkString("\n"))
     println("\n\n")
-    println(explainCell("SELECT * FROM LENS_MISSING_VALUE1133189369", 1, "2").mkString("\n"))
-    
+    println(explainCell("SELECT * FROM LENS_MISSING_VALUE1914014057", 1, "2").mkString("\n"))
+    */
     
   }
   
@@ -266,7 +266,7 @@ object MimirGProM {
               print(ConsoleOutputColorMap(translateOperatorsFromMimirToGProMForRewriteFasterThanThroughSQL(daq._1))); println(scala.Console.BLACK + " translateOperatorsFromMimirToGProMForRewriteFasterThanThroughSQL for " + daq._1._1 + " - " + (daq._2+1) + " of " + testSeq.length)
             //print(ConsoleOutputColorMap(mimirMemTest(daq))); println(scala.Console.BLACK + " mimirMemTest for " + daq._1 )
             //print(ConsoleOutputColorMap(gpromMemTest(daq))); println(scala.Console.BLACK + " gpromMemTest for " + daq._1 )
-            GProMWrapper.inst.gpromFreeMemContext(memctx)
+              GProMWrapper.inst.gpromFreeMemContext(memctx)
             }
           }
           }
