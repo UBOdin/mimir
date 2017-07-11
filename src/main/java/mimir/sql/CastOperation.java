@@ -17,6 +17,26 @@ public class CastOperation extends Function
     ));
   }
 
+  public void setTarget(Expression target)
+  {
+    getParameters().getExpressions().set(0, target);
+  }
+
+  public Expression getTarget()
+  {
+    return getParameters().getExpressions().get(0);
+  }
+
+  public void setType(String type)
+  {
+    getParameters().getExpressions().set(1, new StringValue(type));
+  }
+
+  public String getType()
+  {
+    return ((StringValue)getParameters().getExpressions().get(1)).toRawString();
+  }
+
   public String toString()
   {
     List<Expression> exprs = getParameters().getExpressions();

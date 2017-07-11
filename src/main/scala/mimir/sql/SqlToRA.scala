@@ -501,6 +501,21 @@ class SqlToRA(db: Database)
       
       case col:Column => return convertColumn(col, bindings)
 
+      case cast:Function if cast.getName.toUpperCase.equals("CAST") => {
+        val params = cast.getParameters.getExpressions
+        if(params.size() != 2){
+          throw new SQLException(s"Invalid CAST: $cast")
+        }
+        val target = convert(params(0))
+        val t = params(1) match {
+          case s: StringValue => Type.fromString(s.toRawString)
+          case c: Column => Type.fromString(c.getColumnName)
+          case _ => throw new SQLException(s"Invalid CAST Type: $cast")
+        }
+
+        return mimir.algebra.Function("CAST", Seq(target, TypePrimitive(t)))
+      }
+
       case f:Function => {
         val name = f.getName.toUpperCase
         val parameters : List[Expression] = 

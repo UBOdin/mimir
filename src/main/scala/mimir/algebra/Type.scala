@@ -26,26 +26,30 @@ object Type {
     case TType() => "type"
     case TAny() => "any"
     case TUser(name) => name.toLowerCase
+    case TInterval() => "interval"
   }
   def fromString(t: String) = t.toLowerCase match {
-    case "int"     => TInt()
-    case "integer" => TInt()
-    case "float"   => TFloat()
-    case "decimal" => TFloat()
-    case "real"    => TFloat() 
-    case "num"    => TFloat()
-    case "date"    => TDate()
-    case "datetime" => TTimestamp()
-    case "varchar" => TString()
-    case "nvarchar" => TString()
-    case "char"    => TString()
-    case "string"  => TString()
-    case "text"    => TString()
-    case "bool"    => TBool()
-    case "rowid"   => TRowId()
-    case "type"    => TType()
-    case "any"     => TAny()
-    case ""        => TAny() // SQLite doesn't do types sometimes
+    case "int"       => TInt()
+    case "integer"   => TInt()
+    case "float"     => TFloat()
+    case "double"    => TFloat()
+    case "decimal"   => TFloat()
+    case "real"      => TFloat() 
+    case "num"       => TFloat()
+    case "date"      => TDate()
+    case "datetime"  => TTimestamp()
+    case "timestamp" => TTimestamp()
+    case "interval"  => TInterval()
+    case "varchar"   => TString()
+    case "nvarchar"  => TString()
+    case "char"      => TString()
+    case "string"    => TString()
+    case "text"      => TString()
+    case "bool"      => TBool()
+    case "rowid"     => TRowId()
+    case "type"      => TType()
+    case "any"       => TAny()
+    case ""          => TAny() // SQLite doesn't do types sometimes
     case x if TypeRegistry.registeredTypes contains x => TUser(x)
     case _ => 
       throw new RAException("Invalid Type '" + t + "'");
@@ -60,9 +64,10 @@ object Type {
     case 6 => TType()
     case 7 => TAny()
     case 8 => TTimestamp()
+    case 9 => TInterval()
     case _ => {
       // 9 because this is the number of native types, if more are added then this number needs to increase
-      TUser(TypeRegistry.idxType(i-9))
+      TUser(TypeRegistry.idxType(i-10))
     }
   }
   def id(t:Type) = t match {
@@ -75,7 +80,8 @@ object Type {
     case TType() => 6
     case TAny() => 7
     case TTimestamp() => 8
-    case TUser(name)  => TypeRegistry.typeIdx(name.toLowerCase)+9
+    case TInterval() => 9
+    case TUser(name)  => TypeRegistry.typeIdx(name.toLowerCase)+10
       // 9 because this is the number of native types, if more are added then this number needs to increase
   }
 
@@ -118,6 +124,7 @@ case class TType() extends Type
 case class TAny() extends Type
 case class TUser(name:String) extends Type
 case class TTimestamp() extends Type
+case class TInterval() extends Type
 
 
 

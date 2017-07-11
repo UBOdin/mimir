@@ -49,6 +49,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
           case TType()      => val v = compileForType(e);   checkNull { (t:T) => TypePrimitive(v(t))   }
           case TDate()      => checkNull { compileForDate(e) }
           case TTimestamp() => checkNull { compileForTimestamp(e) }
+          case TInterval() => checkNull { compileForInterval(e) }
           case TRowId()     => checkNull { compileForRowId(e) }
           case TUser(ut)    => checkNull { compile(e, TypeRegistry.baseType(ut)) }
         }
@@ -278,6 +279,8 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
     compilePassthrough(e, compileForDate, _.asInstanceOf[DatePrimitive])    
   def compileForTimestamp(e: Expression): Compiled[TimestampPrimitive] = 
     compilePassthrough(e, compileForTimestamp, _.asInstanceOf[TimestampPrimitive])    
+  def compileForInterval(e: Expression): Compiled[IntervalPrimitive] = 
+    compilePassthrough(e, compileForInterval, _.asInstanceOf[IntervalPrimitive])    
   def compileForRowId(e: Expression): Compiled[RowIdPrimitive] = 
     compilePassthrough(e, compileForRowId, _.asInstanceOf[RowIdPrimitive])    
   def and(a: Compiled[Boolean], b: Compiled[Boolean]): Compiled[Boolean] =
