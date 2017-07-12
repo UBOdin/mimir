@@ -81,7 +81,7 @@ object MimirGProM {
   
   def testing() : Unit = {
     //testDebug = true
-    runTests(80) 
+    //runTests(15) 
     //runTests(1) 
     
     //val sql = "SELECT R.A + R.B AS Z FROM R WHERE R.A = R.B"
@@ -89,6 +89,9 @@ object MimirGProM {
     
     //val sql = "SELECT R.A, R.B FROM R WHERE R.A = R.B"
     //translateOperatorsFromGProMToMimirToGProM(("testQ",sql))
+    
+    val sql = "SELECT SUM(INT_COL_B), COUNT(INT_COL_B) FROM TEST_B_RAW"
+    translateOperatorsFromMimirToGProM(("testQ",sql))
     
     /*val sql = "SELECT S.A AS P, U.C AS Q FROM R AS S JOIN T AS U ON S.A = U.C"
     var oper = db.sql.convert(db.parse(sql).head.asInstanceOf[Select])
