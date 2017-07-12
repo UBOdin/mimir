@@ -14,13 +14,22 @@ import mimir.exec.Compiler
 object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorTranslation") with BeforeAll with AfterAll {
 
   args(skipAll = false)
-  
+ 
   var memctx : com.sun.jna.Pointer = null
+  var qmemctx : com.sun.jna.Pointer = null
   
   def beforeAll =
   {
     update("CREATE TABLE R(A integer, B integer)")
+    update("INSERT INTO R (A, B) VALUES(1, 1)")
+    update("INSERT INTO R (A, B) VALUES(2, 2)")
+    update("INSERT INTO R (A, B) VALUES(3, 3)")
+    update("INSERT INTO R (A, B) VALUES(4, 4)")
     update("CREATE TABLE T(C integer, D integer)")
+    update("INSERT INTO T (C, D) VALUES(1, 4)")
+    update("INSERT INTO T (C, D) VALUES(2, 3)")
+    update("INSERT INTO T (C, D) VALUES(3, 2)")
+    update("INSERT INTO T (C, D) VALUES(4, 1)")
   }
   
   def afterAll = {
@@ -30,6 +39,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
 
   "The GProM - Mimir Operator Translator" should {
     sequential
+    //isolated
     Fragments.foreach(1 to 1){ i => 
       sequential
       Fragments.foreach(Seq(
@@ -85,12 +95,13 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
   
   def createGProMMemoryContext(descAndQuery : ((String, String), Int)) = s"Create GProM Memory Context for: ${descAndQuery._2} ${descAndQuery._1._1}" >> {
     memctx = GProMWrapper.inst.gpromCreateMemContext()
+    qmemctx = GProMWrapper.inst.createMemContextName("QUERY_MEM_CONTEXT")
     (memctx != null) must be equalTo true
   }
   
   def freeGProMMemoryContext(descAndQuery : ((String, String), Int)) = s"Free GProM Memory Context for: ${descAndQuery._2} ${descAndQuery._1._1}" >> {
+    GProMWrapper.inst.gpromFreeMemContext(qmemctx)
     GProMWrapper.inst.gpromFreeMemContext(memctx)
-    Thread.sleep(50)
     memctx = null
     memctx must be equalTo null
   }
