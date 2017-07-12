@@ -29,61 +29,51 @@ case class SeriesColumnItem(columnName: String, reason: String, score: Double)
 class DetectSeries(db: Database, threshold: Double) { 
   
   //Stores the list of series corresponding to each table
-  val tabSeqMap = collection.mutable.Map[String, List[SeriesColumnItem]]()
+  val tabSeqMap = collection.mutable.Map[String, Seq[SeriesColumnItem]]()
   
-  def detectSeriesOf(sel: Select): List[SeriesColumnItem] = {
+  def detectSeriesOf(sel: Select): Seq[SeriesColumnItem] = {
     
     val queryOperator = db.sql.convert(sel)
     detectSeriesOf(queryOperator)
   }
-  def detectSeriesOf(oper: Operator): List[SeriesColumnItem] = {
+  def detectSeriesOf(oper: Operator): Seq[SeriesColumnItem] = {
 
-    def getType(col: String, colType: Type) = {
-      colType match{
-        case TDate() | TTimestamp() =>  Some(SeriesColumnItem(col, "The column is a "+colType.toString()+" datatype.", 1.0))
+    val queryColumns = db.bestGuessSchema(oper)
+    
+    val seriesColumnDate = queryColumns.flatMap( tup => 
+      tup._2 match{
+        case TDate() | TTimestamp() =>  Some(SeriesColumnItem(tup._1, "The column is a "+tup._2.toString()+" datatype.", 1.0))
         case _ => None
       }
-    }
-    val seqCol = db.bestGuessSchema(oper)
-    
-    val seriesColDate = seqCol.flatMap( tup => getType(tup._1, tup._2))
+    )
 
-    var series = seriesColDate.toList
+    var series = seriesColumnDate.toSeq
     
-    val seriesColNumIdx: Seq[Int] = seqCol.zipWithIndex.filter(tup => Seq(TInt(),TFloat()).contains(tup._1._2)).map(x => x._2).toSeq
+    val seriesColumnNumeric: Seq[(String, Type)] = queryColumns.filter(tup => Seq(TInt(),TFloat()).contains(tup._2)).toSeq
     
-    if(!seriesColNumIdx.isEmpty){
-      db.query(oper){result =>
-//        var prevVal = new ArrayBuffer[PrimitiveValue](seriesColNumIdx.size)
-        val initRow = result.next
-        var prevVal = seriesColNumIdx.map(initRow.tuple(_)).toArray
-        var countInc = new Array[Double](seriesColNumIdx.size)
-        var countDec = new Array[Double](seriesColNumIdx.size)
-        var totalTup = 1;
-        result.foreach(row => 
-          { totalTup = totalTup+1;
-            seriesColNumIdx.zipWithIndex.foreach(x => 
-              if(db.interpreter.evalBool(prevVal(x._2).lt(row.tuple(x._1))))
-                { prevVal(x._2)=row.tuple(x._1); countInc(x._2) = countInc(x._2)+1.0}
-              else if(db.interpreter.evalBool(prevVal(x._2).eq(row.tuple(x._1)))){
-                prevVal(x._2)=row.tuple(x._1); countInc(x._2) = countInc(x._2)+1.0; countDec(x._2) = countDec(x._2)+1.0;
-              }
-              else
-                { 
-                  if(!db.interpreter.evalBool(row.tuple(x._1).isNull.or(prevVal(x._2).isNull)))
-                  {countDec(x._2) = countDec(x._2)+1.0}
-                  prevVal(x._2)=row.tuple(x._1);
-                 })
-          })
-        val seriesIncProb: Seq[Double] = countInc.map(x => (x.toDouble/(totalTup-1).toDouble))
-        val seriesDecProb: Seq[Double] = countDec.map(x => (x.toDouble/(totalTup-1).toDouble))
-        val numIncSeries: Seq[SeriesColumnItem] = seriesIncProb.zipWithIndex.filter(x => x._1 > threshold).map(x => SeriesColumnItem(seqCol(seriesColNumIdx(x._2))._1, "The column is a Numeric("+seqCol(seriesColNumIdx(x._2))._2.toString()+") datatype with high imcremental ordering.", x._1))
-        val numDecSeries: Seq[SeriesColumnItem] = seriesDecProb.zipWithIndex.filter(x => x._1 > threshold).map(x => SeriesColumnItem(seqCol(seriesColNumIdx(x._2))._1, "The column is a Numeric("+seqCol(seriesColNumIdx(x._2))._2.toString()+") datatype with high decremental ordering.", x._1))
+    val queryList = seriesColumnNumeric.map(x => oper.sort((x._1, true)).project(x._1))
+    
+    queryList.zipWithIndex.foreach(x => db.query(x._1) {result =>
+      val rowWindow = result.sliding(2)
+      var diffAdj: Seq[Double] = Seq()
+      var sum: Double = 0
+      var count = 0
 
-        series = series ++ numIncSeries.toList ++ numDecSeries.toList
+      while(rowWindow.hasNext){
+        val rowPair = rowWindow.next
+        if(!db.interpreter.evalBool(rowPair(1).tuple(0).isNull.or(rowPair(0).tuple(0).isNull))){
+          val currDiff = rowPair(1).tuple(0).asDouble - rowPair(0).tuple(0).asDouble
+          sum += currDiff
+          diffAdj = diffAdj :+ (currDiff)
+          count += 1
+        }
       }
-    }    
-
+      val mean = Math.floor((sum/count)*10000)/10000
+      val stdDev = Math.floor(Math.sqrt((diffAdj.map(x => (x-mean)*(x-mean)).sum)/count)*10000)/10000
+      val relativeStdDev = Math.abs(stdDev/mean)
+      if(relativeStdDev < threshold)
+        series = series :+ (SeriesColumnItem(seriesColumnNumeric(x._2)._1, "The column is a Numeric("+seriesColumnNumeric(x._2)._2.toString()+") datatype with an effective increasing pattern.", if((1-relativeStdDev)<0) 0 else 1-relativeStdDev))
+    })
     series
   }
 

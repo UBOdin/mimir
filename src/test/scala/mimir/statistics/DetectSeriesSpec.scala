@@ -23,7 +23,7 @@ object DetectSeriesSpec
 	
 	sequential
 	
-	val testDS = new DetectSeries(db, 0.9)
+	val testDS = new DetectSeries(db, 0.1)
 	def testDetectSeriesof(oper: Operator) = testDS.detectSeriesOf(oper)
 	
 	
@@ -59,7 +59,7 @@ object DetectSeriesSpec
 			val colSeq: Seq[String] = testDetectSeriesof(queryOper).map{_.columnName.toString}
 			
 			colSeq must have size(6)
-			colSeq must contain("TRAN_TS","EXP_DT", "JOIN_DT", "DOB", "ROW_ID", "GRADE")
+			colSeq must contain("TRAN_TS","EXP_DT", "JOIN_DT", "DOB", "ROW_ID", "QUALITY")
 		}
 		
 	}	
