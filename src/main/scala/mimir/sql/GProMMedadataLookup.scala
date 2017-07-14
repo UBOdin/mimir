@@ -63,7 +63,8 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
   override def getFuncReturnType( fName:String, args: GProMList,
 		  numArgs:Int) : String = {
 		org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized{
-      try {
+      //println(s"Metadata lookup: $fName ( ${args.length} args )")
+		  try {
   		  fName match{
   		    case "SUM" => "DT_INT"
   		    case "COUNT" => "DT_INT"

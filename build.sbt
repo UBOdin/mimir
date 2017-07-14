@@ -27,6 +27,7 @@ cancelable in Global := true
 scalacOptions in Test ++= Seq("-Yrangepos")
 parallelExecution in Test := false
 testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
+envVars in Test := Map(("LD_PRELOAD",System.getProperty("java.home")+"/lib/"+System.getProperty("os.arch")+"/libjsig.so"))
 
 //if you want to debug tests uncomment this
 //javaOptions in (Test) += "-Xdebug"
