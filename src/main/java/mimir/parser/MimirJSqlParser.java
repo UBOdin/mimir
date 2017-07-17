@@ -136,14 +136,14 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     case K_REPLACE:
     case K_TRUNCATE:
     case K_FEEDBACK:
-    case 100:
+    case 101:
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case K_PROVENANCE:
         stm = ProvenanceStatement();
         break;
       case K_WITH:
       case K_SELECT:
-      case 100:
+      case 101:
         stm = Select();
         break;
       case K_CREATE:
@@ -194,8 +194,8 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         throw new ParseException();
       }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 98:
-        jj_consume_token(98);
+      case 99:
+        jj_consume_token(99);
         break;
       case 0:
         jj_consume_token(0);
@@ -235,8 +235,8 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     case S_INTEGER:
     case S_IDENTIFIER:
     case S_CHAR_LITERAL:
-    case 100:
-    case 103:
+    case 101:
+    case 104:
       stm = CreateTable();
       break;
     case K_ADAPTIVE:
@@ -263,38 +263,38 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     label_1:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 99:
+      case 100:
         ;
         break;
       default:
         jj_la1[4] = jj_gen;
         break label_1;
       }
-      jj_consume_token(99);
+      jj_consume_token(100);
       tempStr = RelObjectName();
                                       model += ":" + tempStr;
     }
     idx = jj_consume_token(S_INTEGER);
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-    case 100:
-      jj_consume_token(100);
+    case 101:
+      jj_consume_token(101);
       temp = Literal();
                          args.add(temp);
       label_2:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 101:
+        case 102:
           ;
           break;
         default:
           jj_la1[5] = jj_gen;
           break label_2;
         }
-        jj_consume_token(101);
+        jj_consume_token(102);
         temp = Literal();
                               args.add(temp);
       }
-      jj_consume_token(102);
+      jj_consume_token(103);
       break;
     default:
       jj_la1[6] = jj_gen;
@@ -305,11 +305,11 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     case S_DOUBLE:
     case S_INTEGER:
     case S_CHAR_LITERAL:
-    case 117:
     case 118:
-    case 121:
-    case 123:
+    case 119:
+    case 122:
     case 124:
+    case 125:
       value = Literal();
       break;
     case S_IDENTIFIER:
@@ -338,22 +338,22 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     table = TableWithAlias();
     jj_consume_token(K_SET);
     tableColumn = Column();
-    jj_consume_token(103);
+    jj_consume_token(104);
     value = SimpleExpression();
                                                                 columns.add(tableColumn); expList.add(value);
     label_3:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 101:
+      case 102:
         ;
         break;
       default:
         jj_la1[8] = jj_gen;
         break label_3;
       }
-      jj_consume_token(101);
+      jj_consume_token(102);
       tableColumn = Column();
-      jj_consume_token(103);
+      jj_consume_token(104);
       value = SimpleExpression();
                                                                             columns.add(tableColumn); expList.add(value);
     }
@@ -388,18 +388,29 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                 SelectBody selectBody = null;
                 String col = null;
     PrimitiveValue rowid = null;
+    Boolean assign = false;
     jj_consume_token(K_ANALYZE);
+    switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
+    case K_WITH:
+      jj_consume_token(K_WITH);
+      jj_consume_token(K_ASSIGNMENTS);
+                              assign = true;
+      break;
+    default:
+      jj_la1[10] = jj_gen;
+      ;
+    }
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
     case S_DOUBLE:
     case S_INTEGER:
     case S_IDENTIFIER:
     case S_CHAR_LITERAL:
     case S_QUOTED_IDENTIFIER:
-    case 117:
     case 118:
-    case 121:
-    case 123:
+    case 119:
+    case 122:
     case 124:
+    case 125:
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case S_IDENTIFIER:
       case S_QUOTED_IDENTIFIER:
@@ -407,18 +418,18 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         jj_consume_token(K_OF);
         break;
       default:
-        jj_la1[10] = jj_gen;
+        jj_la1[11] = jj_gen;
         ;
       }
       rowid = Literal();
       jj_consume_token(K_IN);
       break;
     default:
-      jj_la1[11] = jj_gen;
+      jj_la1[12] = jj_gen;
       ;
     }
     selectBody = SelectBody();
-    {if (true) return new Analyze(selectBody, rowid, col);}
+    {if (true) return new Analyze(selectBody, rowid, col, assign);}
     throw new Error("Missing return statement in function");
   }
 
@@ -434,7 +445,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     body = SelectBody();
     jj_consume_token(K_WITH);
     lensType = RelObjectName();
-    jj_consume_token(100);
+    jj_consume_token(101);
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
     case K_NULL:
     case K_CASE:
@@ -446,36 +457,36 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     case S_IDENTIFIER:
     case S_CHAR_LITERAL:
     case S_QUOTED_IDENTIFIER:
-    case 100:
-    case 106:
-    case 117:
+    case 101:
+    case 107:
     case 118:
-    case 121:
-    case 123:
+    case 119:
+    case 122:
     case 124:
     case 125:
+    case 126:
       e = SimpleExpression();
                                      args.add(e);
       label_4:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 101:
+        case 102:
           ;
           break;
         default:
-          jj_la1[12] = jj_gen;
+          jj_la1[13] = jj_gen;
           break label_4;
         }
-        jj_consume_token(101);
+        jj_consume_token(102);
         e = SimpleExpression();
                                            args.add(e);
       }
       break;
     default:
-      jj_la1[13] = jj_gen;
+      jj_la1[14] = jj_gen;
       ;
     }
-    jj_consume_token(102);
+    jj_consume_token(103);
         {if (true) return new CreateLens(lensName, body, lensType, args);}
     throw new Error("Missing return statement in function");
   }
@@ -503,13 +514,13 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
           ;
           break;
         default:
-          jj_la1[14] = jj_gen;
+          jj_la1[15] = jj_gen;
           break label_5;
         }
       }
       break;
     default:
-      jj_la1[15] = jj_gen;
+      jj_la1[16] = jj_gen;
       ;
     }
         createView.setTable(table);
@@ -532,7 +543,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     selectBody = SelectBody();
     jj_consume_token(K_WITH);
     type = RelObjectName();
-    jj_consume_token(100);
+    jj_consume_token(101);
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
     case K_NULL:
     case K_CASE:
@@ -544,36 +555,36 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     case S_IDENTIFIER:
     case S_CHAR_LITERAL:
     case S_QUOTED_IDENTIFIER:
-    case 100:
-    case 106:
-    case 117:
+    case 101:
+    case 107:
     case 118:
-    case 121:
-    case 123:
+    case 119:
+    case 122:
     case 124:
     case 125:
+    case 126:
       e = SimpleExpression();
                                args.add(e);
       label_6:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 101:
+        case 102:
           ;
           break;
         default:
-          jj_la1[16] = jj_gen;
+          jj_la1[17] = jj_gen;
           break label_6;
         }
-        jj_consume_token(101);
+        jj_consume_token(102);
         e = SimpleExpression();
                                      args.add(e);
       }
       break;
     default:
-      jj_la1[17] = jj_gen;
+      jj_la1[18] = jj_gen;
       ;
     }
-    jj_consume_token(102);
+    jj_consume_token(103);
     createAdaptiveSchema.setName(name);
                 createAdaptiveSchema.setSelectBody(selectBody);
     createAdaptiveSchema.setType(type);
@@ -598,7 +609,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       jj_consume_token(K_INTO);
       break;
     default:
-      jj_la1[18] = jj_gen;
+      jj_la1[19] = jj_gen;
       ;
     }
     table = Table();
@@ -606,22 +617,22 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     case K_SET:
       jj_consume_token(K_SET);
       tableColumn = Column();
-      jj_consume_token(103);
+      jj_consume_token(104);
       value = SimpleExpression();
                                                                                 columns.add(tableColumn); expList.add(value);
       label_7:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 101:
+        case 102:
           ;
           break;
         default:
-          jj_la1[19] = jj_gen;
+          jj_la1[20] = jj_gen;
           break label_7;
         }
-        jj_consume_token(101);
+        jj_consume_token(102);
         tableColumn = Column();
-        jj_consume_token(103);
+        jj_consume_token(104);
         value = SimpleExpression();
                                                                                    columns.add(tableColumn); expList.add(value);
       }
@@ -629,66 +640,66 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       break;
     case K_SELECT:
     case K_VALUES:
-    case 100:
+    case 101:
       if (jj_2_1(2)) {
-        jj_consume_token(100);
+        jj_consume_token(101);
         tableColumn = Column();
                                                               columns.add(tableColumn);
         label_8:
         while (true) {
           switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-          case 101:
+          case 102:
             ;
             break;
           default:
-            jj_la1[20] = jj_gen;
+            jj_la1[21] = jj_gen;
             break label_8;
           }
-          jj_consume_token(101);
+          jj_consume_token(102);
           tableColumn = Column();
                                                                                                                       columns.add(tableColumn);
         }
-        jj_consume_token(102);
+        jj_consume_token(103);
       } else {
         ;
       }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case K_VALUES:
         jj_consume_token(K_VALUES);
-        jj_consume_token(100);
+        jj_consume_token(101);
         exp = PrimaryExpression();
                                                                           expList.add(exp);
         label_9:
         while (true) {
           switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-          case 101:
+          case 102:
             ;
             break;
           default:
-            jj_la1[21] = jj_gen;
+            jj_la1[22] = jj_gen;
             break label_9;
           }
-          jj_consume_token(101);
+          jj_consume_token(102);
           exp = PrimaryExpression();
                                                                                 expList.add(exp);
         }
-        jj_consume_token(102);
+        jj_consume_token(103);
                                                                                                              itemsList = new ExpressionList(expList);
         break;
       case K_SELECT:
-      case 100:
+      case 101:
                                           replace.setUseValues(false);
         itemsList = SubSelect();
         break;
       default:
-        jj_la1[22] = jj_gen;
+        jj_la1[23] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
                                 replace.setItemsList(itemsList);
       break;
     default:
-      jj_la1[23] = jj_gen;
+      jj_la1[24] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -713,75 +724,75 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       jj_consume_token(K_INTO);
       break;
     default:
-      jj_la1[24] = jj_gen;
+      jj_la1[25] = jj_gen;
       ;
     }
     table = Table();
     if (jj_2_2(2)) {
-      jj_consume_token(100);
+      jj_consume_token(101);
       tableColumn = Column();
                                               columns.add(tableColumn);
       label_10:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 101:
+        case 102:
           ;
           break;
         default:
-          jj_la1[25] = jj_gen;
+          jj_la1[26] = jj_gen;
           break label_10;
         }
-        jj_consume_token(101);
+        jj_consume_token(102);
         tableColumn = Column();
                                                                                                       columns.add(tableColumn);
       }
-      jj_consume_token(102);
+      jj_consume_token(103);
     } else {
       ;
     }
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
     case K_VALUES:
       jj_consume_token(K_VALUES);
-      jj_consume_token(100);
+      jj_consume_token(101);
       exp = SimpleExpression();
                                                          primaryExpList.add(exp);
       label_11:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 101:
+        case 102:
           ;
           break;
         default:
-          jj_la1[26] = jj_gen;
+          jj_la1[27] = jj_gen;
           break label_11;
         }
-        jj_consume_token(101);
+        jj_consume_token(102);
         exp = SimpleExpression();
                                                                primaryExpList.add(exp);
       }
-      jj_consume_token(102);
+      jj_consume_token(103);
                                                                                                    itemsList = new ExpressionList(primaryExpList);
       break;
     case K_SELECT:
-    case 100:
+    case 101:
       if (jj_2_3(2)) {
-        jj_consume_token(100);
+        jj_consume_token(101);
       } else {
         ;
       }
                           insert.setUseValues(false);
       itemsList = SubSelect();
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 102:
-        jj_consume_token(102);
+      case 103:
+        jj_consume_token(103);
         break;
       default:
-        jj_la1[27] = jj_gen;
+        jj_la1[28] = jj_gen;
         ;
       }
       break;
     default:
-      jj_la1[28] = jj_gen;
+      jj_la1[29] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -803,7 +814,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       jj_consume_token(K_FROM);
       break;
     default:
-      jj_la1[29] = jj_gen;
+      jj_la1[30] = jj_gen;
       ;
     }
     table = TableWithAlias();
@@ -813,7 +824,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                            delete.setWhere(where);
       break;
     default:
-      jj_la1[30] = jj_gen;
+      jj_la1[31] = jj_gen;
       ;
     }
         delete.setTable(table);
@@ -828,21 +839,21 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     // [schema.][tabella.]colonna
         name1 = RelObjectName();
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-    case 104:
-      jj_consume_token(104);
+    case 105:
+      jj_consume_token(105);
       name2 = RelObjectName();
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 104:
-        jj_consume_token(104);
+      case 105:
+        jj_consume_token(105);
         name3 = RelObjectName();
         break;
       default:
-        jj_la1[31] = jj_gen;
+        jj_la1[32] = jj_gen;
         ;
       }
       break;
     default:
-      jj_la1[32] = jj_gen;
+      jj_la1[33] = jj_gen;
       ;
     }
         String colName = null;
@@ -872,7 +883,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       tk = jj_consume_token(S_QUOTED_IDENTIFIER);
       break;
     default:
-      jj_la1[33] = jj_gen;
+      jj_la1[34] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -892,7 +903,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                                        table.setAlias(alias);
       break;
     default:
-      jj_la1[34] = jj_gen;
+      jj_la1[35] = jj_gen;
       ;
     }
           {if (true) return table;}
@@ -905,7 +916,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         String name2 = null;
     if (jj_2_4(3)) {
       name1 = RelObjectName();
-      jj_consume_token(104);
+      jj_consume_token(105);
       name2 = RelObjectName();
                                                                    table = new Table(name1, name2);
     } else {
@@ -916,7 +927,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                                         table = new Table(null, name1);
         break;
       default:
-        jj_la1[35] = jj_gen;
+        jj_la1[36] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -930,17 +941,17 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     jj_consume_token(K_PROVENANCE);
     jj_consume_token(K_OF);
     if (jj_2_5(2)) {
-      jj_consume_token(100);
+      jj_consume_token(101);
     } else {
       ;
     }
     select = Select();
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-    case 102:
-      jj_consume_token(102);
+    case 103:
+      jj_consume_token(103);
       break;
     default:
-      jj_la1[36] = jj_gen;
+      jj_la1[37] = jj_gen;
       ;
     }
         {if (true) return new ProvenanceStatement(select);}
@@ -957,7 +968,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                             select.setWithItemsList(with);
       break;
     default:
-      jj_la1[37] = jj_gen;
+      jj_la1[38] = jj_gen;
       ;
     }
     selectBody = SelectBody();
@@ -976,7 +987,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         selectBody = PlainSelect();
         break;
       default:
-        jj_la1[38] = jj_gen;
+        jj_la1[39] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -1011,24 +1022,24 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
         case K_ON:
           jj_consume_token(K_ON);
-          jj_consume_token(100);
+          jj_consume_token(101);
           distinctOn = SelectItemsList();
                                                                            plainSelect.getDistinct().setOnSelectItems(distinctOn);
-          jj_consume_token(102);
+          jj_consume_token(103);
           break;
         default:
-          jj_la1[39] = jj_gen;
+          jj_la1[40] = jj_gen;
           ;
         }
         break;
       default:
-        jj_la1[40] = jj_gen;
+        jj_la1[41] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
       break;
     default:
-      jj_la1[41] = jj_gen;
+      jj_la1[42] = jj_gen;
       ;
     }
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -1037,7 +1048,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                       plainSelect.setTop(top);
       break;
     default:
-      jj_la1[42] = jj_gen;
+      jj_la1[43] = jj_gen;
       ;
     }
     selectItems = SelectItemsList();
@@ -1046,7 +1057,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       IntoClause();
       break;
     default:
-      jj_la1[43] = jj_gen;
+      jj_la1[44] = jj_gen;
       ;
     }
     jj_consume_token(K_FROM);
@@ -1058,7 +1069,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                             plainSelect.setWhere(where);
       break;
     default:
-      jj_la1[44] = jj_gen;
+      jj_la1[45] = jj_gen;
       ;
     }
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -1067,7 +1078,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                                                           plainSelect.setGroupByColumnReferences(groupByColumnReferences);
       break;
     default:
-      jj_la1[45] = jj_gen;
+      jj_la1[46] = jj_gen;
       ;
     }
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -1076,7 +1087,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                         plainSelect.setHaving(having);
       break;
     default:
-      jj_la1[46] = jj_gen;
+      jj_la1[47] = jj_gen;
       ;
     }
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -1085,7 +1096,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                                                                          plainSelect.setOrderByElements(orderByElements);
       break;
     default:
-      jj_la1[47] = jj_gen;
+      jj_la1[48] = jj_gen;
       ;
     }
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -1095,7 +1106,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                           plainSelect.setLimit(limit);
       break;
     default:
-      jj_la1[48] = jj_gen;
+      jj_la1[49] = jj_gen;
       ;
     }
                 plainSelect.setSelectItems(selectItems);
@@ -1113,11 +1124,11 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         PlainSelect select = null;
         ArrayList selects = new ArrayList();
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-    case 100:
-      jj_consume_token(100);
+    case 101:
+      jj_consume_token(101);
       select = PlainSelect();
                                                   selects.add(select);
-      jj_consume_token(102);
+      jj_consume_token(103);
       jj_consume_token(K_UNION);
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case K_ALL:
@@ -1132,19 +1143,19 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                                                                                                   union.setDistinct(true);
           break;
         default:
-          jj_la1[49] = jj_gen;
+          jj_la1[50] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
         break;
       default:
-        jj_la1[50] = jj_gen;
+        jj_la1[51] = jj_gen;
         ;
       }
-      jj_consume_token(100);
+      jj_consume_token(101);
       select = PlainSelect();
                                                   selects.add(select);
-      jj_consume_token(102);
+      jj_consume_token(103);
       label_12:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -1152,7 +1163,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
           ;
           break;
         default:
-          jj_la1[51] = jj_gen;
+          jj_la1[52] = jj_gen;
           break label_12;
         }
         jj_consume_token(K_UNION);
@@ -1167,19 +1178,19 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
             jj_consume_token(K_DISTINCT);
             break;
           default:
-            jj_la1[52] = jj_gen;
+            jj_la1[53] = jj_gen;
             jj_consume_token(-1);
             throw new ParseException();
           }
           break;
         default:
-          jj_la1[53] = jj_gen;
+          jj_la1[54] = jj_gen;
           ;
         }
-        jj_consume_token(100);
+        jj_consume_token(101);
         select = PlainSelect();
                                                                                                selects.add(select);
-        jj_consume_token(102);
+        jj_consume_token(103);
       }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case K_ORDER:
@@ -1187,7 +1198,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                                                             union.setOrderByElements(orderByElements);
         break;
       default:
-        jj_la1[54] = jj_gen;
+        jj_la1[55] = jj_gen;
         ;
       }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -1197,7 +1208,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                                         union.setLimit(limit);
         break;
       default:
-        jj_la1[55] = jj_gen;
+        jj_la1[56] = jj_gen;
         ;
       }
       break;
@@ -1218,13 +1229,13 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                                                                                                   union.setDistinct(true);
           break;
         default:
-          jj_la1[56] = jj_gen;
+          jj_la1[57] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
         break;
       default:
-        jj_la1[57] = jj_gen;
+        jj_la1[58] = jj_gen;
         ;
       }
       select = PlainSelect();
@@ -1236,7 +1247,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
           ;
           break;
         default:
-          jj_la1[58] = jj_gen;
+          jj_la1[59] = jj_gen;
           break label_13;
         }
         jj_consume_token(K_UNION);
@@ -1251,13 +1262,13 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
             jj_consume_token(K_DISTINCT);
             break;
           default:
-            jj_la1[59] = jj_gen;
+            jj_la1[60] = jj_gen;
             jj_consume_token(-1);
             throw new ParseException();
           }
           break;
         default:
-          jj_la1[60] = jj_gen;
+          jj_la1[61] = jj_gen;
           ;
         }
         select = PlainSelect();
@@ -1265,7 +1276,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       }
       break;
     default:
-      jj_la1[61] = jj_gen;
+      jj_la1[62] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -1283,14 +1294,14 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     label_14:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 101:
+      case 102:
         ;
         break;
       default:
-        jj_la1[62] = jj_gen;
+        jj_la1[63] = jj_gen;
         break label_14;
       }
-      jj_consume_token(101);
+      jj_consume_token(102);
       with = WithItem();
                                                                                      withItemsList.add(with);
     }
@@ -1306,21 +1317,21 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     name = RelObjectName();
                                 with.setName(name);
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-    case 100:
-      jj_consume_token(100);
+    case 101:
+      jj_consume_token(101);
       selectItems = SelectItemsList();
-      jj_consume_token(102);
+      jj_consume_token(103);
                                                    with.setWithItemList(selectItems);
       break;
     default:
-      jj_la1[63] = jj_gen;
+      jj_la1[64] = jj_gen;
       ;
     }
     jj_consume_token(K_AS);
-    jj_consume_token(100);
+    jj_consume_token(101);
     selectBody = SelectBody();
                                          with.setSelectBody(selectBody);
-    jj_consume_token(102);
+    jj_consume_token(103);
            {if (true) return with;}
     throw new Error("Missing return statement in function");
   }
@@ -1333,14 +1344,14 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     label_15:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 101:
+      case 102:
         ;
         break;
       default:
-        jj_la1[64] = jj_gen;
+        jj_la1[65] = jj_gen;
         break label_15;
       }
-      jj_consume_token(101);
+      jj_consume_token(102);
       selectItem = SelectItem();
                                                                                                 selectItemsList.add(selectItem);
     }
@@ -1358,12 +1369,12 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         Expression expression = null;
         SubSelect subSelect = null;
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-    case 105:
-      jj_consume_token(105);
+    case 106:
+      jj_consume_token(106);
            selectItem = new AllColumns();
       break;
     default:
-      jj_la1[66] = jj_gen;
+      jj_la1[67] = jj_gen;
       if (jj_2_7(2147483647)) {
         selectItem = AllTableColumns();
       } else {
@@ -1378,14 +1389,14 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         case S_IDENTIFIER:
         case S_CHAR_LITERAL:
         case S_QUOTED_IDENTIFIER:
-        case 100:
-        case 106:
-        case 117:
+        case 101:
+        case 107:
         case 118:
-        case 121:
-        case 123:
+        case 119:
+        case 122:
         case 124:
         case 125:
+        case 126:
           expression = SimpleExpression();
                                          selectExpressionItem = new SelectExpressionItem(); selectExpressionItem.setExpression(expression);
           switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -1396,13 +1407,13 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                                           selectExpressionItem.setAlias(alias);
             break;
           default:
-            jj_la1[65] = jj_gen;
+            jj_la1[66] = jj_gen;
             ;
           }
                                                                                      selectItem = selectExpressionItem;
           break;
         default:
-          jj_la1[67] = jj_gen;
+          jj_la1[68] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
@@ -1415,8 +1426,8 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   final public AllTableColumns AllTableColumns() throws ParseException {
         Table table = null;
     table = Table();
-    jj_consume_token(104);
     jj_consume_token(105);
+    jj_consume_token(106);
                 {if (true) return new AllTableColumns(table);}
     throw new Error("Missing return statement in function");
   }
@@ -1428,7 +1439,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       jj_consume_token(K_AS);
       break;
     default:
-      jj_la1[68] = jj_gen;
+      jj_la1[69] = jj_gen;
       ;
     }
     retval = RelObjectName();
@@ -1442,14 +1453,14 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     label_16:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 101:
+      case 102:
         ;
         break;
       default:
-        jj_la1[69] = jj_gen;
+        jj_la1[70] = jj_gen;
         break label_16;
       }
-      jj_consume_token(101);
+      jj_consume_token(102);
       Table();
     }
   }
@@ -1458,30 +1469,30 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         FromItem fromItem = null;
         String alias = null;
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-    case 100:
-      jj_consume_token(100);
+    case 101:
+      jj_consume_token(101);
       if (jj_2_8(2147483647)) {
         fromItem = SubJoin();
       } else {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
         case K_SELECT:
-        case 100:
+        case 101:
           fromItem = SubSelect();
           break;
         default:
-          jj_la1[70] = jj_gen;
+          jj_la1[71] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
       }
-      jj_consume_token(102);
+      jj_consume_token(103);
       break;
     case S_IDENTIFIER:
     case S_QUOTED_IDENTIFIER:
       fromItem = Table();
       break;
     default:
-      jj_la1[71] = jj_gen;
+      jj_la1[72] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -1493,7 +1504,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                          fromItem.setAlias(alias);
       break;
     default:
-      jj_la1[72] = jj_gen;
+      jj_la1[73] = jj_gen;
       ;
     }
                 {if (true) return fromItem;}
@@ -1525,11 +1536,11 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       case K_OUTER:
       case K_RIGHT:
       case K_NATURAL:
-      case 101:
+      case 102:
         ;
         break;
       default:
-        jj_la1[73] = jj_gen;
+        jj_la1[74] = jj_gen;
         break label_17;
       }
       join = JoinerExpression();
@@ -1568,13 +1579,13 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                                 join.setNatural(true);
         break;
       default:
-        jj_la1[74] = jj_gen;
+        jj_la1[75] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
       break;
     default:
-      jj_la1[75] = jj_gen;
+      jj_la1[76] = jj_gen;
       ;
     }
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -1590,25 +1601,25 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                               join.setInner(true);
         break;
       default:
-        jj_la1[76] = jj_gen;
+        jj_la1[77] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
       break;
     default:
-      jj_la1[77] = jj_gen;
+      jj_la1[78] = jj_gen;
       ;
     }
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
     case K_JOIN:
       jj_consume_token(K_JOIN);
       break;
-    case 101:
-      jj_consume_token(101);
+    case 102:
+      jj_consume_token(102);
                                join.setSimple(true);
       break;
     default:
-      jj_la1[78] = jj_gen;
+      jj_la1[79] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -1624,34 +1635,34 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         break;
       case K_USING:
         jj_consume_token(K_USING);
-        jj_consume_token(100);
+        jj_consume_token(101);
         tableColumn = Column();
                                                        columns = new ArrayList(); columns.add(tableColumn);
         label_18:
         while (true) {
           switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-          case 101:
+          case 102:
             ;
             break;
           default:
-            jj_la1[79] = jj_gen;
+            jj_la1[80] = jj_gen;
             break label_18;
           }
-          jj_consume_token(101);
+          jj_consume_token(102);
           tableColumn = Column();
                                                             columns.add(tableColumn);
         }
-        jj_consume_token(102);
+        jj_consume_token(103);
                     join.setUsingColumns(columns);
         break;
       default:
-        jj_la1[80] = jj_gen;
+        jj_la1[81] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
       break;
     default:
-      jj_la1[81] = jj_gen;
+      jj_la1[82] = jj_gen;
       ;
     }
         join.setRightItem(right);
@@ -1685,14 +1696,14 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     label_19:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 101:
+      case 102:
         ;
         break;
       default:
-        jj_la1[82] = jj_gen;
+        jj_la1[83] = jj_gen;
         break label_19;
       }
-      jj_consume_token(101);
+      jj_consume_token(102);
       columnReference = SimpleExpression();
                                               columnReferences.add(columnReference);
     }
@@ -1718,14 +1729,14 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     label_20:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 101:
+      case 102:
         ;
         break;
       default:
-        jj_la1[83] = jj_gen;
+        jj_la1[84] = jj_gen;
         break label_20;
       }
-      jj_consume_token(101);
+      jj_consume_token(102);
       orderByElement = OrderByElement();
                                                orderByList.add(orderByElement);
     }
@@ -1750,13 +1761,13 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                            orderByElement.setAsc(false);
         break;
       default:
-        jj_la1[84] = jj_gen;
+        jj_la1[85] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
       break;
     default:
-      jj_la1[85] = jj_gen;
+      jj_la1[86] = jj_gen;
       ;
     }
         orderByElement.setExpression(columnReference);
@@ -1774,27 +1785,27 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         token = jj_consume_token(S_INTEGER);
                                                                     limit.setOffset(Long.parseLong(token.image));
         break;
-      case 106:
-        jj_consume_token(106);
+      case 107:
+        jj_consume_token(107);
                                                       limit.setOffsetJdbcParameter(true);
         break;
       default:
-        jj_la1[86] = jj_gen;
+        jj_la1[87] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
-      jj_consume_token(101);
+      jj_consume_token(102);
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case S_INTEGER:
         token = jj_consume_token(S_INTEGER);
                                                     limit.setRowCount(Long.parseLong(token.image));
         break;
-      case 106:
-        jj_consume_token(106);
+      case 107:
+        jj_consume_token(107);
                                                                                                               limit.setRowCountJdbcParameter(true);
         break;
       default:
-        jj_la1[87] = jj_gen;
+        jj_la1[88] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -1807,12 +1818,12 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
           token = jj_consume_token(S_INTEGER);
                                                       limit.setOffset(Long.parseLong(token.image));
           break;
-        case 106:
-          jj_consume_token(106);
+        case 107:
+          jj_consume_token(107);
                                                                                                               limit.setOffsetJdbcParameter(true);
           break;
         default:
-          jj_la1[88] = jj_gen;
+          jj_la1[89] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
@@ -1824,8 +1835,8 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
           token = jj_consume_token(S_INTEGER);
                                                             limit.setRowCount(Long.parseLong(token.image));
           break;
-        case 106:
-          jj_consume_token(106);
+        case 107:
+          jj_consume_token(107);
                                               limit.setRowCountJdbcParameter(true);
           break;
         case K_ALL:
@@ -1833,7 +1844,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                                                   limit.setLimitAll(true);
           break;
         default:
-          jj_la1[89] = jj_gen;
+          jj_la1[90] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
@@ -1845,23 +1856,23 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
             token = jj_consume_token(S_INTEGER);
                                                               limit.setOffset(Long.parseLong(token.image));
             break;
-          case 106:
-            jj_consume_token(106);
+          case 107:
+            jj_consume_token(107);
                                                                                                                       limit.setOffsetJdbcParameter(true);
             break;
           default:
-            jj_la1[90] = jj_gen;
+            jj_la1[91] = jj_gen;
             jj_consume_token(-1);
             throw new ParseException();
           }
           break;
         default:
-          jj_la1[91] = jj_gen;
+          jj_la1[92] = jj_gen;
           ;
         }
         break;
       default:
-        jj_la1[92] = jj_gen;
+        jj_la1[93] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -1879,12 +1890,12 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       token = jj_consume_token(S_INTEGER);
                                     top.setRowCount(Long.parseLong(token.image));
       break;
-    case 106:
-      jj_consume_token(106);
+    case 107:
+      jj_consume_token(107);
                       top.setRowCountJdbcParameter(true);
       break;
     default:
-      jj_la1[93] = jj_gen;
+      jj_la1[94] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -1898,13 +1909,13 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       retval = OrExpression();
     } else {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 100:
-        jj_consume_token(100);
+      case 101:
+        jj_consume_token(101);
         retval = Expression();
-        jj_consume_token(102);
+        jj_consume_token(103);
         break;
       default:
-        jj_la1[94] = jj_gen;
+        jj_la1[95] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -1941,26 +1952,26 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     } else {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case K_NOT:
-      case 100:
+      case 101:
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
         case K_NOT:
           jj_consume_token(K_NOT);
                         not = true;
           break;
         default:
-          jj_la1[95] = jj_gen;
+          jj_la1[96] = jj_gen;
           ;
         }
-        jj_consume_token(100);
+        jj_consume_token(101);
         left = OrExpression();
-        jj_consume_token(102);
+        jj_consume_token(103);
         if (not) {
           left = new InverseExpression(left);
           not = false;
         }
         break;
       default:
-        jj_la1[96] = jj_gen;
+        jj_la1[97] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -1979,26 +1990,26 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       } else {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
         case K_NOT:
-        case 100:
+        case 101:
           switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
           case K_NOT:
             jj_consume_token(K_NOT);
                                 not = true;
             break;
           default:
-            jj_la1[97] = jj_gen;
+            jj_la1[98] = jj_gen;
             ;
           }
-          jj_consume_token(100);
+          jj_consume_token(101);
           right = OrExpression();
-          jj_consume_token(102);
+          jj_consume_token(103);
           if (not) {
             right = new InverseExpression(right);
             not = false;
           }
           break;
         default:
-          jj_la1[98] = jj_gen;
+          jj_la1[99] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
@@ -2030,18 +2041,18 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       case S_IDENTIFIER:
       case S_CHAR_LITERAL:
       case S_QUOTED_IDENTIFIER:
-      case 100:
-      case 106:
-      case 117:
+      case 101:
+      case 107:
       case 118:
-      case 121:
-      case 123:
+      case 119:
+      case 122:
       case 124:
       case 125:
+      case 126:
         result = RegularCondition();
         break;
       default:
-        jj_la1[99] = jj_gen;
+        jj_la1[100] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -2061,54 +2072,54 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                     not = true;
       break;
     default:
-      jj_la1[100] = jj_gen;
+      jj_la1[101] = jj_gen;
       ;
     }
     leftExpression = ComparisonItem();
                                           result = leftExpression;
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-    case 107:
-      jj_consume_token(107);
-              result = new GreaterThan();
-      break;
     case 108:
       jj_consume_token(108);
-                result = new MinorThan();
-      break;
-    case 103:
-      jj_consume_token(103);
-                result = new EqualsTo();
+              result = new GreaterThan();
       break;
     case 109:
       jj_consume_token(109);
-                 result = new GreaterThanEquals();
+                result = new MinorThan();
+      break;
+    case 104:
+      jj_consume_token(104);
+                result = new EqualsTo();
       break;
     case 110:
       jj_consume_token(110);
-                 result = new MinorThanEquals();
+                 result = new GreaterThanEquals();
       break;
     case 111:
+      jj_consume_token(111);
+                 result = new MinorThanEquals();
+      break;
     case 112:
+    case 113:
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 111:
-        jj_consume_token(111);
-        break;
       case 112:
         jj_consume_token(112);
         break;
+      case 113:
+        jj_consume_token(113);
+        break;
       default:
-        jj_la1[101] = jj_gen;
+        jj_la1[102] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
                           result = new NotEqualsTo();
       break;
-    case 113:
-      jj_consume_token(113);
+    case 114:
+      jj_consume_token(114);
                  result = new Matches();
       break;
     default:
-      jj_la1[102] = jj_gen;
+      jj_la1[103] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -2145,18 +2156,18 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       case S_IDENTIFIER:
       case S_CHAR_LITERAL:
       case S_QUOTED_IDENTIFIER:
-      case 100:
-      case 106:
-      case 117:
+      case 101:
+      case 107:
       case 118:
-      case 121:
-      case 123:
+      case 119:
+      case 122:
       case 124:
       case 125:
+      case 126:
         result = LikeExpression();
         break;
       default:
-        jj_la1[103] = jj_gen;
+        jj_la1[104] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -2176,11 +2187,11 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                result.setNot(true);
       break;
     default:
-      jj_la1[104] = jj_gen;
+      jj_la1[105] = jj_gen;
       ;
     }
     jj_consume_token(K_IN);
-    jj_consume_token(100);
+    jj_consume_token(101);
     if (jj_2_20(2147483647)) {
       itemsList = SubSelect();
     } else {
@@ -2195,23 +2206,23 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       case S_IDENTIFIER:
       case S_CHAR_LITERAL:
       case S_QUOTED_IDENTIFIER:
-      case 100:
-      case 106:
-      case 117:
+      case 101:
+      case 107:
       case 118:
-      case 121:
-      case 123:
+      case 119:
+      case 122:
       case 124:
       case 125:
+      case 126:
         itemsList = SimpleExpressionList();
         break;
       default:
-        jj_la1[105] = jj_gen;
+        jj_la1[106] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
     }
-    jj_consume_token(102);
+    jj_consume_token(103);
                 result.setLeftExpression(leftExpression);
                 result.setItemsList(itemsList);
                 {if (true) return result;}
@@ -2230,7 +2241,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                        result.setNot(true);
       break;
     default:
-      jj_la1[106] = jj_gen;
+      jj_la1[107] = jj_gen;
       ;
     }
     jj_consume_token(K_BETWEEN);
@@ -2255,7 +2266,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                result.setNot(true);
       break;
     default:
-      jj_la1[107] = jj_gen;
+      jj_la1[108] = jj_gen;
       ;
     }
     jj_consume_token(K_LIKE);
@@ -2267,7 +2278,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                                          result.setEscape((StringValue.parseEscaped(token.image)).getValue());
       break;
     default:
-      jj_la1[108] = jj_gen;
+      jj_la1[109] = jj_gen;
       ;
     }
                 result.setLeftExpression(leftExpression);
@@ -2287,7 +2298,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                       result.setNot(true);
       break;
     default:
-      jj_la1[109] = jj_gen;
+      jj_la1[110] = jj_gen;
       ;
     }
     jj_consume_token(K_NULL);
@@ -2305,7 +2316,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                result.setNot(true);
       break;
     default:
-      jj_la1[110] = jj_gen;
+      jj_la1[111] = jj_gen;
       ;
     }
     jj_consume_token(K_EXISTS);
@@ -2324,14 +2335,14 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     label_23:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 101:
+      case 102:
         ;
         break;
       default:
-        jj_la1[111] = jj_gen;
+        jj_la1[112] = jj_gen;
         break label_23;
       }
-      jj_consume_token(101);
+      jj_consume_token(102);
       expr = Expression();
                                                                           expressions.add(expr);
     }
@@ -2349,14 +2360,14 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     label_24:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 101:
+      case 102:
         ;
         break;
       default:
-        jj_la1[112] = jj_gen;
+        jj_la1[113] = jj_gen;
         break label_24;
       }
-      jj_consume_token(101);
+      jj_consume_token(102);
       expr = SimpleExpression();
                                                                                       expressions.add(expr);
     }
@@ -2385,18 +2396,18 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     case S_IDENTIFIER:
     case S_CHAR_LITERAL:
     case S_QUOTED_IDENTIFIER:
-    case 100:
-    case 106:
-    case 117:
+    case 101:
+    case 107:
     case 118:
-    case 121:
-    case 123:
+    case 119:
+    case 122:
     case 124:
     case 125:
+    case 126:
       retval = SimpleExpression();
       break;
     default:
-      jj_la1[113] = jj_gen;
+      jj_la1[114] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -2408,9 +2419,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         AllComparisonExpression retval = null;
         SubSelect subselect = null;
     jj_consume_token(K_ALL);
-    jj_consume_token(100);
+    jj_consume_token(101);
     subselect = SubSelect();
-    jj_consume_token(102);
+    jj_consume_token(103);
                                          retval = new AllComparisonExpression(subselect);
       {if (true) return retval;}
     throw new Error("Missing return statement in function");
@@ -2427,13 +2438,13 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       jj_consume_token(K_SOME);
       break;
     default:
-      jj_la1[114] = jj_gen;
+      jj_la1[115] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
-    jj_consume_token(100);
+    jj_consume_token(101);
     subselect = SubSelect();
-    jj_consume_token(102);
+    jj_consume_token(103);
                                                       retval = new AnyComparisonExpression(subselect);
       {if (true) return retval;}
     throw new Error("Missing return statement in function");
@@ -2445,13 +2456,13 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       retval = BitwiseAndOr();
     } else {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 100:
-        jj_consume_token(100);
+      case 101:
+        jj_consume_token(101);
         retval = BitwiseAndOr();
-        jj_consume_token(102);
+        jj_consume_token(103);
         break;
       default:
-        jj_la1[115] = jj_gen;
+        jj_la1[116] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -2469,14 +2480,14 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     label_25:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 114:
+      case 115:
         ;
         break;
       default:
-        jj_la1[116] = jj_gen;
+        jj_la1[117] = jj_gen;
         break label_25;
       }
-      jj_consume_token(114);
+      jj_consume_token(115);
       rightExpression = AdditiveExpression();
                         Concat binExp = new Concat();
                         binExp.setLeftExpression(leftExpression);
@@ -2502,16 +2513,16 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         break label_26;
       }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 115:
-        jj_consume_token(115);
-                                              result = new BitwiseOr();
-        break;
       case 116:
         jj_consume_token(116);
+                                              result = new BitwiseOr();
+        break;
+      case 117:
+        jj_consume_token(117);
                                               result = new BitwiseAnd();
         break;
       default:
-        jj_la1[117] = jj_gen;
+        jj_la1[118] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -2539,16 +2550,16 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         break label_27;
       }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 117:
-        jj_consume_token(117);
-                            result = new Addition();
-        break;
       case 118:
         jj_consume_token(118);
+                            result = new Addition();
+        break;
+      case 119:
+        jj_consume_token(119);
                                                                         result = new Subtraction();
         break;
       default:
-        jj_la1[118] = jj_gen;
+        jj_la1[119] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -2570,13 +2581,13 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       leftExpression = BitwiseXor();
     } else {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 100:
-        jj_consume_token(100);
+      case 101:
+        jj_consume_token(101);
         leftExpression = AdditiveExpression();
-        jj_consume_token(102);
+        jj_consume_token(103);
         break;
       default:
-        jj_la1[119] = jj_gen;
+        jj_la1[120] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -2590,16 +2601,16 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         break label_28;
       }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 105:
-        jj_consume_token(105);
+      case 106:
+        jj_consume_token(106);
                             result = new Multiplication();
         break;
-      case 119:
-        jj_consume_token(119);
+      case 120:
+        jj_consume_token(120);
                                                                         result = new Division();
         break;
       default:
-        jj_la1[120] = jj_gen;
+        jj_la1[121] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -2607,13 +2618,13 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         rightExpression = BitwiseXor();
       } else {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 100:
-          jj_consume_token(100);
+        case 101:
+          jj_consume_token(101);
           rightExpression = AdditiveExpression();
-          jj_consume_token(102);
+          jj_consume_token(103);
           break;
         default:
-          jj_la1[121] = jj_gen;
+          jj_la1[122] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
@@ -2636,14 +2647,14 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     label_29:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 120:
+      case 121:
         ;
         break;
       default:
-        jj_la1[122] = jj_gen;
+        jj_la1[123] = jj_gen;
         break label_29;
       }
-      jj_consume_token(120);
+      jj_consume_token(121);
       rightExpression = PrimaryExpression();
                         BitwiseXor binExp = new BitwiseXor();
                         binExp.setLeftExpression(leftExpression);
@@ -2668,185 +2679,185 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     case K_CASE:
       retval = CaseWhenExpression();
       break;
-    case 106:
-      jj_consume_token(106);
+    case 107:
+      jj_consume_token(107);
                 retval = new JdbcParameter();
       break;
     default:
-      jj_la1[135] = jj_gen;
+      jj_la1[136] = jj_gen;
       if (jj_2_27(2147483647)) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 117:
         case 118:
+        case 119:
           switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-          case 117:
-            jj_consume_token(117);
-            break;
           case 118:
             jj_consume_token(118);
+            break;
+          case 119:
+            jj_consume_token(119);
                                                            isInverse = true;
             break;
           default:
-            jj_la1[123] = jj_gen;
+            jj_la1[124] = jj_gen;
             jj_consume_token(-1);
             throw new ParseException();
           }
           break;
         default:
-          jj_la1[124] = jj_gen;
+          jj_la1[125] = jj_gen;
           ;
         }
         retval = Function();
       } else if (jj_2_28(2147483647)) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 117:
         case 118:
+        case 119:
           switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-          case 117:
-            jj_consume_token(117);
-            break;
           case 118:
             jj_consume_token(118);
+            break;
+          case 119:
+            jj_consume_token(119);
                                                                     tmp = "-";
             break;
           default:
-            jj_la1[125] = jj_gen;
+            jj_la1[126] = jj_gen;
             jj_consume_token(-1);
             throw new ParseException();
           }
           break;
         default:
-          jj_la1[126] = jj_gen;
+          jj_la1[127] = jj_gen;
           ;
         }
         token = jj_consume_token(S_DOUBLE);
                                                                                                       retval = new DoubleValue(tmp+token.image);
       } else if (jj_2_29(2147483647)) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 117:
         case 118:
+        case 119:
           switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-          case 117:
-            jj_consume_token(117);
-            break;
           case 118:
             jj_consume_token(118);
+            break;
+          case 119:
+            jj_consume_token(119);
                                                                             tmp = "-";
             break;
           default:
-            jj_la1[127] = jj_gen;
+            jj_la1[128] = jj_gen;
             jj_consume_token(-1);
             throw new ParseException();
           }
           break;
         default:
-          jj_la1[128] = jj_gen;
+          jj_la1[129] = jj_gen;
           ;
         }
         token = jj_consume_token(S_INTEGER);
                                                                                                                retval = new LongValue(tmp+token.image);
       } else if (jj_2_30(2)) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 117:
         case 118:
+        case 119:
           switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-          case 117:
-            jj_consume_token(117);
-            break;
           case 118:
             jj_consume_token(118);
+            break;
+          case 119:
+            jj_consume_token(119);
                                       isInverse = true;
             break;
           default:
-            jj_la1[129] = jj_gen;
+            jj_la1[130] = jj_gen;
             jj_consume_token(-1);
             throw new ParseException();
           }
           break;
         default:
-          jj_la1[130] = jj_gen;
+          jj_la1[131] = jj_gen;
           ;
         }
         retval = Column();
       } else if (jj_2_31(2)) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 117:
         case 118:
+        case 119:
           switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-          case 117:
-            jj_consume_token(117);
-            break;
           case 118:
             jj_consume_token(118);
+            break;
+          case 119:
+            jj_consume_token(119);
                                      isInverse = true;
             break;
           default:
-            jj_la1[131] = jj_gen;
+            jj_la1[132] = jj_gen;
             jj_consume_token(-1);
             throw new ParseException();
           }
           break;
         default:
-          jj_la1[132] = jj_gen;
+          jj_la1[133] = jj_gen;
           ;
         }
-        jj_consume_token(100);
+        jj_consume_token(101);
         retval = PrimaryExpression();
-        jj_consume_token(102);
+        jj_consume_token(103);
       } else {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
         case S_CHAR_LITERAL:
           token = jj_consume_token(S_CHAR_LITERAL);
                                    retval = StringValue.parseEscaped(token.image);
           break;
-        case 100:
-        case 117:
+        case 101:
         case 118:
+        case 119:
           switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-          case 117:
           case 118:
+          case 119:
             switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-            case 117:
-              jj_consume_token(117);
-              break;
             case 118:
               jj_consume_token(118);
+              break;
+            case 119:
+              jj_consume_token(119);
                         isInverse = true;
               break;
             default:
-              jj_la1[133] = jj_gen;
+              jj_la1[134] = jj_gen;
               jj_consume_token(-1);
               throw new ParseException();
             }
             break;
           default:
-            jj_la1[134] = jj_gen;
+            jj_la1[135] = jj_gen;
             ;
           }
-          jj_consume_token(100);
+          jj_consume_token(101);
           retval = SubSelect();
-          jj_consume_token(102);
+          jj_consume_token(103);
           break;
-        case 121:
-          jj_consume_token(121);
-          token = jj_consume_token(S_CHAR_LITERAL);
+        case 122:
           jj_consume_token(122);
-                                                  retval = new DateValue(token.image);
-          break;
-        case 123:
+          token = jj_consume_token(S_CHAR_LITERAL);
           jj_consume_token(123);
-          token = jj_consume_token(S_CHAR_LITERAL);
-          jj_consume_token(122);
-                                                  retval = new TimeValue(token.image);
+                                                  retval = new DateValue(token.image);
           break;
         case 124:
           jj_consume_token(124);
           token = jj_consume_token(S_CHAR_LITERAL);
-          jj_consume_token(122);
+          jj_consume_token(123);
+                                                  retval = new TimeValue(token.image);
+          break;
+        case 125:
+          jj_consume_token(125);
+          token = jj_consume_token(S_CHAR_LITERAL);
+          jj_consume_token(123);
                                                    retval = new TimestampValue(token.image);
           break;
         default:
-          jj_la1[136] = jj_gen;
+          jj_la1[137] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
@@ -2866,48 +2877,48 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   String tmp = "";
     if (jj_2_32(2147483647)) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 117:
       case 118:
+      case 119:
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 117:
-          jj_consume_token(117);
-          break;
         case 118:
           jj_consume_token(118);
+          break;
+        case 119:
+          jj_consume_token(119);
                                                       tmp = "-";
           break;
         default:
-          jj_la1[137] = jj_gen;
+          jj_la1[138] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
         break;
       default:
-        jj_la1[138] = jj_gen;
+        jj_la1[139] = jj_gen;
         ;
       }
       token = jj_consume_token(S_DOUBLE);
                                                                                         retval = new DoubleValue(tmp+token.image);
     } else if (jj_2_33(2147483647)) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 117:
       case 118:
+      case 119:
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 117:
-          jj_consume_token(117);
-          break;
         case 118:
           jj_consume_token(118);
+          break;
+        case 119:
+          jj_consume_token(119);
                                                         tmp = "-";
           break;
         default:
-          jj_la1[139] = jj_gen;
+          jj_la1[140] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
         break;
       default:
-        jj_la1[140] = jj_gen;
+        jj_la1[141] = jj_gen;
         ;
       }
       token = jj_consume_token(S_INTEGER);
@@ -2918,26 +2929,26 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         token = jj_consume_token(S_CHAR_LITERAL);
                              retval = StringValue.parseEscaped(token.image);
         break;
-      case 121:
-        jj_consume_token(121);
-        token = jj_consume_token(S_CHAR_LITERAL);
+      case 122:
         jj_consume_token(122);
-                                        retval = new DateValue(token.image);
-        break;
-      case 123:
+        token = jj_consume_token(S_CHAR_LITERAL);
         jj_consume_token(123);
-        token = jj_consume_token(S_CHAR_LITERAL);
-        jj_consume_token(122);
-                                        retval = new TimeValue(token.image);
+                                        retval = new DateValue(token.image);
         break;
       case 124:
         jj_consume_token(124);
         token = jj_consume_token(S_CHAR_LITERAL);
-        jj_consume_token(122);
+        jj_consume_token(123);
+                                        retval = new TimeValue(token.image);
+        break;
+      case 125:
+        jj_consume_token(125);
+        token = jj_consume_token(S_CHAR_LITERAL);
+        jj_consume_token(123);
                                          retval = new TimestampValue(token.image);
         break;
       default:
-        jj_la1[141] = jj_gen;
+        jj_la1[142] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -2964,7 +2975,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
           ;
           break;
         default:
-          jj_la1[142] = jj_gen;
+          jj_la1[143] = jj_gen;
           break label_30;
         }
       }
@@ -2974,7 +2985,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         elseExp = PrimaryExpression();
         break;
       default:
-        jj_la1[143] = jj_gen;
+        jj_la1[144] = jj_gen;
         ;
       }
       break;
@@ -2988,14 +2999,14 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     case S_IDENTIFIER:
     case S_CHAR_LITERAL:
     case S_QUOTED_IDENTIFIER:
-    case 100:
-    case 106:
-    case 117:
+    case 101:
+    case 107:
     case 118:
-    case 121:
-    case 123:
+    case 119:
+    case 122:
     case 124:
     case 125:
+    case 126:
       switchExp = PrimaryExpression();
       label_31:
       while (true) {
@@ -3004,7 +3015,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
           ;
           break;
         default:
-          jj_la1[144] = jj_gen;
+          jj_la1[145] = jj_gen;
           break label_31;
         }
         clause = WhenThenValue();
@@ -3016,12 +3027,12 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         elseExp = PrimaryExpression();
         break;
       default:
-        jj_la1[145] = jj_gen;
+        jj_la1[146] = jj_gen;
         ;
       }
       break;
     default:
-      jj_la1[146] = jj_gen;
+      jj_la1[147] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -3069,29 +3080,29 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
     case K_EXTRACT:
       jj_consume_token(K_EXTRACT);
-      jj_consume_token(100);
+      jj_consume_token(101);
       retval = ExtractClause();
-      jj_consume_token(102);
+      jj_consume_token(103);
                                                      {if (true) return retval;}
       break;
     case K_CAST:
       jj_consume_token(K_CAST);
-      jj_consume_token(100);
+      jj_consume_token(101);
       retval = CastClause();
-      jj_consume_token(102);
+      jj_consume_token(103);
                                                {if (true) return retval;}
       break;
     case K_REPLACE:
     case S_IDENTIFIER:
     case S_QUOTED_IDENTIFIER:
-    case 125:
+    case 126:
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 125:
-        jj_consume_token(125);
+      case 126:
+        jj_consume_token(126);
                  retval.setEscaped(true);
         break;
       default:
-        jj_la1[147] = jj_gen;
+        jj_la1[148] = jj_gen;
         ;
       }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -3104,31 +3115,31 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                           funcName = "REPLACE";
         break;
       default:
-        jj_la1[148] = jj_gen;
+        jj_la1[149] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 104:
-        jj_consume_token(104);
+      case 105:
+        jj_consume_token(105);
         tmp = RelObjectName();
                                       funcName+= "." + tmp;
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 104:
-          jj_consume_token(104);
+        case 105:
+          jj_consume_token(105);
           tmp = RelObjectName();
                                                                                          funcName+= "." + tmp;
           break;
         default:
-          jj_la1[149] = jj_gen;
+          jj_la1[150] = jj_gen;
           ;
         }
         break;
       default:
-        jj_la1[150] = jj_gen;
+        jj_la1[151] = jj_gen;
         ;
       }
-      jj_consume_token(100);
+      jj_consume_token(101);
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
       case K_ALL:
       case K_NULL:
@@ -3142,15 +3153,15 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       case S_IDENTIFIER:
       case S_CHAR_LITERAL:
       case S_QUOTED_IDENTIFIER:
-      case 100:
-      case 105:
+      case 101:
       case 106:
-      case 117:
+      case 107:
       case 118:
-      case 121:
-      case 123:
+      case 119:
+      case 122:
       case 124:
       case 125:
+      case 126:
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
         case K_ALL:
         case K_DISTINCT:
@@ -3164,13 +3175,13 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                                                                       retval.setAllColumns(true);
             break;
           default:
-            jj_la1[151] = jj_gen;
+            jj_la1[152] = jj_gen;
             jj_consume_token(-1);
             throw new ParseException();
           }
           break;
         default:
-          jj_la1[152] = jj_gen;
+          jj_la1[153] = jj_gen;
           ;
         }
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -3184,37 +3195,37 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         case S_IDENTIFIER:
         case S_CHAR_LITERAL:
         case S_QUOTED_IDENTIFIER:
-        case 100:
-        case 106:
-        case 117:
+        case 101:
+        case 107:
         case 118:
-        case 121:
-        case 123:
+        case 119:
+        case 122:
         case 124:
         case 125:
+        case 126:
           expressionList = SimpleExpressionList();
           break;
-        case 105:
-          jj_consume_token(105);
+        case 106:
+          jj_consume_token(106);
                                                                                                                                                     retval.setAllColumns(true);
           break;
         default:
-          jj_la1[153] = jj_gen;
+          jj_la1[154] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
         break;
       default:
-        jj_la1[154] = jj_gen;
+        jj_la1[155] = jj_gen;
         ;
       }
-      jj_consume_token(102);
+      jj_consume_token(103);
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 122:
-        jj_consume_token(122);
+      case 123:
+        jj_consume_token(123);
         break;
       default:
-        jj_la1[155] = jj_gen;
+        jj_la1[156] = jj_gen;
         ;
       }
             retval.setParameters(expressionList);
@@ -3222,7 +3233,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                 {if (true) return retval;}
       break;
     default:
-      jj_la1[156] = jj_gen;
+      jj_la1[157] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -3266,11 +3277,11 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     case K_AS:
       jj_consume_token(K_AS);
       break;
-    case 101:
-      jj_consume_token(101);
+    case 102:
+      jj_consume_token(102);
       break;
     default:
-      jj_la1[157] = jj_gen;
+      jj_la1[158] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -3284,7 +3295,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                                    type = StringValue.parseEscaped(typeTok.image).toRawString();
       break;
     default:
-      jj_la1[158] = jj_gen;
+      jj_la1[159] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -3325,7 +3336,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                       createTable.setOrReplaceTable(true);
       break;
     default:
-      jj_la1[159] = jj_gen;
+      jj_la1[160] = jj_gen;
       ;
     }
     label_32:
@@ -3339,12 +3350,12 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       case S_INTEGER:
       case S_IDENTIFIER:
       case S_CHAR_LITERAL:
-      case 100:
-      case 103:
+      case 101:
+      case 104:
         ;
         break;
       default:
-        jj_la1[160] = jj_gen;
+        jj_la1[161] = jj_gen;
         break label_32;
       }
       CreateParameter();
@@ -3358,13 +3369,13 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                              createTable.setTableIfNotExists(true);
       break;
     default:
-      jj_la1[161] = jj_gen;
+      jj_la1[162] = jj_gen;
       ;
     }
     table = Table();
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-    case 100:
-      jj_consume_token(100);
+    case 101:
+      jj_consume_token(101);
       columnName = jj_consume_token(S_IDENTIFIER);
       colDataType = ColDataType();
                         columnSpecs = new ArrayList();
@@ -3379,12 +3390,12 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         case S_INTEGER:
         case S_IDENTIFIER:
         case S_CHAR_LITERAL:
-        case 100:
-        case 103:
+        case 101:
+        case 104:
           ;
           break;
         default:
-          jj_la1[162] = jj_gen;
+          jj_la1[163] = jj_gen;
           break label_33;
         }
         parameter = CreateParameter();
@@ -3399,14 +3410,14 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       label_34:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 101:
+        case 102:
           ;
           break;
         default:
-          jj_la1[163] = jj_gen;
+          jj_la1[164] = jj_gen;
           break label_34;
         }
-        jj_consume_token(101);
+        jj_consume_token(102);
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
         case K_INDEX:
           tk = jj_consume_token(K_INDEX);
@@ -3452,12 +3463,12 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
             case S_INTEGER:
             case S_IDENTIFIER:
             case S_CHAR_LITERAL:
-            case 100:
-            case 103:
+            case 101:
+            case 104:
               ;
               break;
             default:
-              jj_la1[164] = jj_gen;
+              jj_la1[165] = jj_gen;
               break label_35;
             }
             parameter = CreateParameter();
@@ -3471,12 +3482,12 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                                                 columnDefinitions.add(coldef);
           break;
         default:
-          jj_la1[165] = jj_gen;
+          jj_la1[166] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
       }
-      jj_consume_token(102);
+      jj_consume_token(103);
       label_36:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -3488,12 +3499,12 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         case S_INTEGER:
         case S_IDENTIFIER:
         case S_CHAR_LITERAL:
-        case 100:
-        case 103:
+        case 101:
+        case 104:
           ;
           break;
         default:
-          jj_la1[166] = jj_gen;
+          jj_la1[167] = jj_gen;
           break label_36;
         }
         parameter = CreateParameter();
@@ -3501,7 +3512,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       }
       break;
     default:
-      jj_la1[167] = jj_gen;
+      jj_la1[168] = jj_gen;
       ;
     }
                 createTable.setTable(table);
@@ -3522,7 +3533,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     tk = jj_consume_token(S_IDENTIFIER);
                               colDataType.setDataType(tk.image);
     if (jj_2_34(2)) {
-      jj_consume_token(100);
+      jj_consume_token(101);
       label_37:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -3531,7 +3542,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
           ;
           break;
         default:
-          jj_la1[168] = jj_gen;
+          jj_la1[169] = jj_gen;
           break label_37;
         }
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -3542,22 +3553,22 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
           tk = jj_consume_token(S_CHAR_LITERAL);
           break;
         default:
-          jj_la1[169] = jj_gen;
+          jj_la1[170] = jj_gen;
           jj_consume_token(-1);
           throw new ParseException();
         }
                                                                      argumentsStringList.add(tk.image);
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 101:
-          jj_consume_token(101);
+        case 102:
+          jj_consume_token(102);
 
           break;
         default:
-          jj_la1[170] = jj_gen;
+          jj_la1[171] = jj_gen;
           ;
         }
       }
-      jj_consume_token(102);
+      jj_consume_token(103);
     } else {
       ;
     }
@@ -3603,15 +3614,15 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       tk = jj_consume_token(S_DOUBLE);
                                         retval = tk.image;
       break;
-    case 103:
-      jj_consume_token(103);
+    case 104:
+      jj_consume_token(104);
                               retval = "=";
       break;
-    case 100:
+    case 101:
       retval = AList();
       break;
     default:
-      jj_la1[171] = jj_gen;
+      jj_la1[172] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -3622,7 +3633,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   final public String AList() throws ParseException {
         StringBuffer retval = new StringBuffer("(");
         Token tk = null;
-    jj_consume_token(100);
+    jj_consume_token(101);
     label_38:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -3633,7 +3644,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         ;
         break;
       default:
-        jj_la1[172] = jj_gen;
+        jj_la1[173] = jj_gen;
         break label_38;
       }
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -3650,22 +3661,22 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         tk = jj_consume_token(S_IDENTIFIER);
         break;
       default:
-        jj_la1[173] = jj_gen;
+        jj_la1[174] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
                                                                                         retval.append(tk.image);
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 101:
-        jj_consume_token(101);
+      case 102:
+        jj_consume_token(102);
                                                                                                                          retval.append(",");
         break;
       default:
-        jj_la1[174] = jj_gen;
+        jj_la1[175] = jj_gen;
         ;
       }
     }
-    jj_consume_token(102);
+    jj_consume_token(103);
                 retval.append(")");
                 {if (true) return retval.toString();}
     throw new Error("Missing return statement in function");
@@ -3674,24 +3685,24 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   final public List ColumnsNamesList() throws ParseException {
         List retval = new ArrayList();
         Token tk = null;
-    jj_consume_token(100);
+    jj_consume_token(101);
     tk = jj_consume_token(S_IDENTIFIER);
                                     retval.add(tk.image);
     label_39:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 101:
+      case 102:
         ;
         break;
       default:
-        jj_la1[175] = jj_gen;
+        jj_la1[176] = jj_gen;
         break label_39;
       }
-      jj_consume_token(101);
+      jj_consume_token(102);
       tk = jj_consume_token(S_IDENTIFIER);
                                           retval.add(tk.image);
     }
-    jj_consume_token(102);
+    jj_consume_token(103);
                 {if (true) return retval;}
     throw new Error("Missing return statement in function");
   }
@@ -3718,7 +3729,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       tk = jj_consume_token(K_LENS);
       break;
     default:
-      jj_la1[176] = jj_gen;
+      jj_la1[177] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -3732,7 +3743,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         ;
         break;
       default:
-        jj_la1[177] = jj_gen;
+        jj_la1[178] = jj_gen;
         break label_40;
       }
       tk = jj_consume_token(S_IDENTIFIER);
@@ -3770,47 +3781,47 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       format = jj_consume_token(S_IDENTIFIER);
                                    load.setFormat(format.image);
       switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-      case 100:
-        jj_consume_token(100);
+      case 101:
+        jj_consume_token(101);
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
         case S_DOUBLE:
         case S_INTEGER:
         case S_CHAR_LITERAL:
-        case 117:
         case 118:
-        case 121:
-        case 123:
+        case 119:
+        case 122:
         case 124:
+        case 125:
           arg = Literal();
                             load.addFormatArg(arg);
           label_41:
           while (true) {
             switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-            case 101:
+            case 102:
               ;
               break;
             default:
-              jj_la1[178] = jj_gen;
+              jj_la1[179] = jj_gen;
               break label_41;
             }
-            jj_consume_token(101);
+            jj_consume_token(102);
             arg = Literal();
                                   load.addFormatArg(arg);
           }
           break;
         default:
-          jj_la1[179] = jj_gen;
+          jj_la1[180] = jj_gen;
           ;
         }
-        jj_consume_token(102);
+        jj_consume_token(103);
         break;
       default:
-        jj_la1[180] = jj_gen;
+        jj_la1[181] = jj_gen;
         ;
       }
       break;
     default:
-      jj_la1[181] = jj_gen;
+      jj_la1[182] = jj_gen;
       ;
     }
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -3820,7 +3831,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                                     load.setTable(table.image);
       break;
     default:
-      jj_la1[182] = jj_gen;
+      jj_la1[183] = jj_gen;
       ;
     }
     {if (true) return load;}
@@ -3847,7 +3858,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
                    drop = true;
       break;
     default:
-      jj_la1[183] = jj_gen;
+      jj_la1[184] = jj_gen;
       ;
     }
     jj_consume_token(K_MATERIALIZE);
@@ -3863,17 +3874,17 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   DrawPlot.LineSpec line = null;
     jj_consume_token(K_PLOT);
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-    case 100:
-      jj_consume_token(100);
+    case 101:
+      jj_consume_token(101);
       source = SubSelect();
-      jj_consume_token(102);
+      jj_consume_token(103);
       break;
     case S_IDENTIFIER:
     case S_QUOTED_IDENTIFIER:
       source = Table();
       break;
     default:
-      jj_la1[184] = jj_gen;
+      jj_la1[185] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -3888,7 +3899,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
           ;
           break;
         default:
-          jj_la1[185] = jj_gen;
+          jj_la1[186] = jj_gen;
           break label_42;
         }
         varName = jj_consume_token(S_IDENTIFIER);
@@ -3897,7 +3908,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       }
       break;
     default:
-      jj_la1[186] = jj_gen;
+      jj_la1[187] = jj_gen;
       ;
     }
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
@@ -3908,20 +3919,20 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       label_43:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
-        case 101:
+        case 102:
           ;
           break;
         default:
-          jj_la1[187] = jj_gen;
+          jj_la1[188] = jj_gen;
           break label_43;
         }
-        jj_consume_token(101);
+        jj_consume_token(102);
         line = PlotLineSpec();
                                    ret.addLine(line);
       }
       break;
     default:
-      jj_la1[188] = jj_gen;
+      jj_la1[189] = jj_gen;
       ;
     }
     {if (true) return ret;}
@@ -3933,11 +3944,11 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   Expression x = null, y = null;
   Token varName = null;
   PrimitiveValue varValue = null;
-    jj_consume_token(100);
-    x = SimpleExpression();
     jj_consume_token(101);
-    y = SimpleExpression();
+    x = SimpleExpression();
     jj_consume_token(102);
+    y = SimpleExpression();
+    jj_consume_token(103);
     spec = new DrawPlot.LineSpec(x, y);
     label_44:
     while (true) {
@@ -3946,7 +3957,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         ;
         break;
       default:
-        jj_la1[189] = jj_gen;
+        jj_la1[190] = jj_gen;
         break label_44;
       }
       varName = jj_consume_token(S_IDENTIFIER);
@@ -4317,7 +4328,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_64() {
-    if (jj_scan_token(117)) return true;
+    if (jj_scan_token(118)) return true;
     return false;
   }
 
@@ -4340,12 +4351,12 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_254() {
-    if (jj_scan_token(106)) return true;
+    if (jj_scan_token(107)) return true;
     return false;
   }
 
   private boolean jj_3R_242() {
-    if (jj_scan_token(106)) return true;
+    if (jj_scan_token(107)) return true;
     return false;
   }
 
@@ -4376,12 +4387,12 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_62() {
-    if (jj_scan_token(116)) return true;
+    if (jj_scan_token(117)) return true;
     return false;
   }
 
   private boolean jj_3R_61() {
-    if (jj_scan_token(115)) return true;
+    if (jj_scan_token(116)) return true;
     return false;
   }
 
@@ -4396,7 +4407,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_51() {
-    if (jj_scan_token(106)) return true;
+    if (jj_scan_token(107)) return true;
     return false;
   }
 
@@ -4516,7 +4527,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_212() {
-    if (jj_scan_token(105)) return true;
+    if (jj_scan_token(106)) return true;
     return false;
   }
 
@@ -4549,7 +4560,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     jj_scanpos = xsp;
     if (jj_3R_51()) return true;
     }
-    if (jj_scan_token(101)) return true;
+    if (jj_scan_token(102)) return true;
     xsp = jj_scanpos;
     if (jj_3R_249()) {
     jj_scanpos = xsp;
@@ -4587,7 +4598,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_150() {
-    if (jj_scan_token(114)) return true;
+    if (jj_scan_token(115)) return true;
     if (jj_3R_104()) return true;
     return false;
   }
@@ -4623,9 +4634,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_146() {
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_60()) return true;
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
@@ -4654,7 +4665,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
 
   private boolean jj_3_4() {
     if (jj_3R_46()) return true;
-    if (jj_scan_token(104)) return true;
+    if (jj_scan_token(105)) return true;
     if (jj_3R_46()) return true;
     return false;
   }
@@ -4670,19 +4681,19 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_265() {
-    if (jj_scan_token(104)) return true;
+    if (jj_scan_token(105)) return true;
     if (jj_3R_46()) return true;
     return false;
   }
 
   private boolean jj_3R_227() {
-    if (jj_scan_token(101)) return true;
+    if (jj_scan_token(102)) return true;
     if (jj_3R_226()) return true;
     return false;
   }
 
   private boolean jj_3R_206() {
-    if (jj_scan_token(101)) return true;
+    if (jj_scan_token(102)) return true;
     if (jj_3R_96()) return true;
     return false;
   }
@@ -4716,9 +4727,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     jj_scanpos = xsp;
     if (jj_scan_token(52)) return true;
     }
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_59()) return true;
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
@@ -4736,15 +4747,15 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   private boolean jj_3R_46() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_scan_token(93)) {
+    if (jj_scan_token(94)) {
     jj_scanpos = xsp;
-    if (jj_scan_token(97)) return true;
+    if (jj_scan_token(98)) return true;
     }
     return false;
   }
 
   private boolean jj_3R_112() {
-    if (jj_scan_token(104)) return true;
+    if (jj_scan_token(105)) return true;
     if (jj_3R_46()) return true;
     Token xsp;
     xsp = jj_scanpos;
@@ -4753,13 +4764,13 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_209() {
-    if (jj_scan_token(104)) return true;
+    if (jj_scan_token(105)) return true;
     if (jj_3R_46()) return true;
     return false;
   }
 
   private boolean jj_3R_247() {
-    if (jj_scan_token(101)) return true;
+    if (jj_scan_token(102)) return true;
     if (jj_3R_96()) return true;
     return false;
   }
@@ -4771,9 +4782,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
 
   private boolean jj_3R_259() {
     if (jj_scan_token(K_ALL)) return true;
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_59()) return true;
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
@@ -4805,7 +4816,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     xsp = jj_scanpos;
     if (jj_scan_token(5)) {
     jj_scanpos = xsp;
-    if (jj_scan_token(101)) return true;
+    if (jj_scan_token(102)) return true;
     }
     xsp = jj_scanpos;
     if (jj_3R_207()) {
@@ -4816,7 +4827,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_231() {
-    if (jj_scan_token(101)) return true;
+    if (jj_scan_token(102)) return true;
     if (jj_3R_45()) return true;
     return false;
   }
@@ -4864,20 +4875,20 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_138() {
-    if (jj_scan_token(101)) return true;
+    if (jj_scan_token(102)) return true;
     return false;
   }
 
   private boolean jj_3R_191() {
     if (jj_scan_token(K_USING)) return true;
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_45()) return true;
     Token xsp;
     while (true) {
       xsp = jj_scanpos;
       if (jj_3R_231()) { jj_scanpos = xsp; break; }
     }
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
@@ -4987,7 +4998,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_156() {
-    if (jj_scan_token(104)) return true;
+    if (jj_scan_token(105)) return true;
     if (jj_3R_46()) return true;
     Token xsp;
     xsp = jj_scanpos;
@@ -5017,7 +5028,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3_3() {
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     return false;
   }
 
@@ -5058,7 +5069,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_153() {
-    if (jj_scan_token(125)) return true;
+    if (jj_scan_token(126)) return true;
     return false;
   }
 
@@ -5073,12 +5084,12 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     }
     xsp = jj_scanpos;
     if (jj_3R_156()) jj_scanpos = xsp;
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     xsp = jj_scanpos;
     if (jj_3R_157()) jj_scanpos = xsp;
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     xsp = jj_scanpos;
-    if (jj_scan_token(122)) jj_scanpos = xsp;
+    if (jj_scan_token(123)) jj_scanpos = xsp;
     return false;
   }
 
@@ -5089,9 +5100,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
 
   private boolean jj_3R_109() {
     if (jj_scan_token(K_CAST)) return true;
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_152()) return true;
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
@@ -5112,14 +5123,14 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
 
   private boolean jj_3R_108() {
     if (jj_scan_token(K_EXTRACT)) return true;
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_151()) return true;
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
   private boolean jj_3_2() {
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_45()) return true;
     return false;
   }
@@ -5214,7 +5225,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3_1() {
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_45()) return true;
     return false;
   }
@@ -5238,14 +5249,14 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_133() {
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     Token xsp;
     xsp = jj_scanpos;
     if (jj_3R_181()) {
     jj_scanpos = xsp;
     if (jj_3R_182()) return true;
     }
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
@@ -5274,7 +5285,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_246() {
-    if (jj_scan_token(101)) return true;
+    if (jj_scan_token(102)) return true;
     if (jj_3R_84()) return true;
     return false;
   }
@@ -5326,7 +5337,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_220() {
-    if (jj_scan_token(101)) return true;
+    if (jj_scan_token(102)) return true;
     if (jj_3R_219()) return true;
     return false;
   }
@@ -5337,13 +5348,13 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     xsp = jj_scanpos;
     if (jj_3R_97()) jj_scanpos = xsp;
     if (jj_scan_token(K_IN)) return true;
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     xsp = jj_scanpos;
     if (jj_3R_98()) {
     jj_scanpos = xsp;
     if (jj_3R_99()) return true;
     }
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
@@ -5363,7 +5374,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_215() {
-    if (jj_scan_token(118)) return true;
+    if (jj_scan_token(119)) return true;
     return false;
   }
 
@@ -5411,7 +5422,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   private boolean jj_3R_161() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_scan_token(117)) {
+    if (jj_scan_token(118)) {
     jj_scanpos = xsp;
     if (jj_3R_215()) return true;
     }
@@ -5439,7 +5450,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_214() {
-    if (jj_scan_token(118)) return true;
+    if (jj_scan_token(119)) return true;
     return false;
   }
 
@@ -5475,7 +5486,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   private boolean jj_3R_160() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_scan_token(117)) {
+    if (jj_scan_token(118)) {
     jj_scanpos = xsp;
     if (jj_3R_214()) return true;
     }
@@ -5485,26 +5496,26 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   private boolean jj_3R_80() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_scan_token(117)) {
+    if (jj_scan_token(118)) {
     jj_scanpos = xsp;
-    if (jj_scan_token(118)) return true;
+    if (jj_scan_token(119)) return true;
     }
     return false;
   }
 
   private boolean jj_3R_48() {
     if (jj_3R_84()) return true;
-    if (jj_scan_token(104)) return true;
     if (jj_scan_token(105)) return true;
+    if (jj_scan_token(106)) return true;
     return false;
   }
 
   private boolean jj_3R_79() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_scan_token(117)) {
+    if (jj_scan_token(118)) {
     jj_scanpos = xsp;
-    if (jj_scan_token(118)) return true;
+    if (jj_scan_token(119)) return true;
     }
     return false;
   }
@@ -5526,7 +5537,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_213() {
-    if (jj_scan_token(118)) return true;
+    if (jj_scan_token(119)) return true;
     return false;
   }
 
@@ -5543,7 +5554,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   private boolean jj_3R_159() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_scan_token(117)) {
+    if (jj_scan_token(118)) {
     jj_scanpos = xsp;
     if (jj_3R_213()) return true;
     }
@@ -5564,37 +5575,37 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_203() {
-    if (jj_scan_token(113)) return true;
+    if (jj_scan_token(114)) return true;
     return false;
   }
 
   private boolean jj_3R_202() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_scan_token(111)) {
+    if (jj_scan_token(112)) {
     jj_scanpos = xsp;
-    if (jj_scan_token(112)) return true;
+    if (jj_scan_token(113)) return true;
     }
     return false;
   }
 
   private boolean jj_3R_201() {
-    if (jj_scan_token(110)) return true;
+    if (jj_scan_token(111)) return true;
     return false;
   }
 
   private boolean jj_3R_113() {
-    if (jj_scan_token(118)) return true;
+    if (jj_scan_token(119)) return true;
     return false;
   }
 
   private boolean jj_3R_243() {
-    if (jj_scan_token(105)) return true;
+    if (jj_scan_token(106)) return true;
     return false;
   }
 
   private boolean jj_3R_200() {
-    if (jj_scan_token(109)) return true;
+    if (jj_scan_token(110)) return true;
     return false;
   }
 
@@ -5604,7 +5615,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_111() {
-    if (jj_scan_token(118)) return true;
+    if (jj_scan_token(119)) return true;
     return false;
   }
 
@@ -5622,31 +5633,31 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_199() {
-    if (jj_scan_token(103)) return true;
+    if (jj_scan_token(104)) return true;
     return false;
   }
 
   private boolean jj_3R_198() {
-    if (jj_scan_token(108)) return true;
+    if (jj_scan_token(109)) return true;
     return false;
   }
 
   private boolean jj_3R_124() {
-    if (jj_scan_token(124)) return true;
+    if (jj_scan_token(125)) return true;
     if (jj_scan_token(S_CHAR_LITERAL)) return true;
-    if (jj_scan_token(122)) return true;
+    if (jj_scan_token(123)) return true;
     return false;
   }
 
   private boolean jj_3R_197() {
-    if (jj_scan_token(107)) return true;
+    if (jj_scan_token(108)) return true;
     return false;
   }
 
   private boolean jj_3R_77() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_scan_token(117)) {
+    if (jj_scan_token(118)) {
     jj_scanpos = xsp;
     if (jj_3R_113()) return true;
     }
@@ -5656,7 +5667,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   private boolean jj_3R_76() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_scan_token(117)) {
+    if (jj_scan_token(118)) {
     jj_scanpos = xsp;
     if (jj_3R_111()) return true;
     }
@@ -5664,9 +5675,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_123() {
-    if (jj_scan_token(123)) return true;
+    if (jj_scan_token(124)) return true;
     if (jj_scan_token(S_CHAR_LITERAL)) return true;
-    if (jj_scan_token(122)) return true;
+    if (jj_scan_token(123)) return true;
     return false;
   }
 
@@ -5676,14 +5687,14 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_216() {
-    if (jj_scan_token(118)) return true;
+    if (jj_scan_token(119)) return true;
     return false;
   }
 
   private boolean jj_3R_122() {
-    if (jj_scan_token(121)) return true;
-    if (jj_scan_token(S_CHAR_LITERAL)) return true;
     if (jj_scan_token(122)) return true;
+    if (jj_scan_token(S_CHAR_LITERAL)) return true;
+    if (jj_scan_token(123)) return true;
     return false;
   }
 
@@ -5719,9 +5730,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   private boolean jj_3R_75() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_scan_token(117)) {
+    if (jj_scan_token(118)) {
     jj_scanpos = xsp;
-    if (jj_scan_token(118)) return true;
+    if (jj_scan_token(119)) return true;
     }
     return false;
   }
@@ -5729,9 +5740,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   private boolean jj_3R_74() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_scan_token(117)) {
+    if (jj_scan_token(118)) {
     jj_scanpos = xsp;
-    if (jj_scan_token(118)) return true;
+    if (jj_scan_token(119)) return true;
     }
     return false;
   }
@@ -5744,7 +5755,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   private boolean jj_3R_162() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_scan_token(117)) {
+    if (jj_scan_token(118)) {
     jj_scanpos = xsp;
     if (jj_3R_216()) return true;
     }
@@ -5762,9 +5773,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   private boolean jj_3R_72() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_scan_token(117)) {
+    if (jj_scan_token(118)) {
     jj_scanpos = xsp;
-    if (jj_scan_token(118)) return true;
+    if (jj_scan_token(119)) return true;
     }
     return false;
   }
@@ -5781,9 +5792,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_3R_162()) jj_scanpos = xsp;
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_59()) return true;
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
@@ -5814,9 +5825,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_3R_77()) jj_scanpos = xsp;
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_78()) return true;
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
@@ -5903,7 +5914,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_116() {
-    if (jj_scan_token(106)) return true;
+    if (jj_scan_token(107)) return true;
     return false;
   }
 
@@ -5923,7 +5934,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_69() {
-    if (jj_scan_token(119)) return true;
+    if (jj_scan_token(120)) return true;
     return false;
   }
 
@@ -5951,9 +5962,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_3R_232()) jj_scanpos = xsp;
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_52()) return true;
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
@@ -5972,7 +5983,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_269() {
-    if (jj_scan_token(106)) return true;
+    if (jj_scan_token(107)) return true;
     return false;
   }
 
@@ -5982,9 +5993,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_71() {
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_104()) return true;
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
@@ -5996,9 +6007,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   private boolean jj_3R_81() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_scan_token(89)) {
+    if (jj_scan_token(90)) {
     jj_scanpos = xsp;
-    if (jj_scan_token(96)) return true;
+    if (jj_scan_token(97)) return true;
     }
     return false;
   }
@@ -6008,9 +6019,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_3R_175()) jj_scanpos = xsp;
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_125()) return true;
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
@@ -6098,7 +6109,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_252() {
-    if (jj_scan_token(106)) return true;
+    if (jj_scan_token(107)) return true;
     return false;
   }
 
@@ -6116,30 +6127,30 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_3R_192()) jj_scanpos = xsp;
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_52()) return true;
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
   private boolean jj_3_34() {
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     Token xsp;
     while (true) {
       xsp = jj_scanpos;
       if (jj_3R_81()) { jj_scanpos = xsp; break; }
     }
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
   private boolean jj_3R_250() {
-    if (jj_scan_token(106)) return true;
+    if (jj_scan_token(107)) return true;
     return false;
   }
 
   private boolean jj_3R_107() {
-    if (jj_scan_token(120)) return true;
+    if (jj_scan_token(121)) return true;
     if (jj_3R_78()) return true;
     return false;
   }
@@ -6150,16 +6161,16 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_82() {
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_125()) return true;
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     if (jj_scan_token(K_UNION)) return true;
     Token xsp;
     xsp = jj_scanpos;
     if (jj_3R_126()) jj_scanpos = xsp;
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_125()) return true;
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     while (true) {
       xsp = jj_scanpos;
       if (jj_3R_127()) { jj_scanpos = xsp; break; }
@@ -6172,7 +6183,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_65() {
-    if (jj_scan_token(118)) return true;
+    if (jj_scan_token(119)) return true;
     return false;
   }
 
@@ -6221,7 +6232,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_68() {
-    if (jj_scan_token(105)) return true;
+    if (jj_scan_token(106)) return true;
     return false;
   }
 
@@ -6242,7 +6253,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   private Token jj_scanpos, jj_lastpos;
   private int jj_la;
   private int jj_gen;
-  final private int[] jj_la1 = new int[190];
+  final private int[] jj_la1 = new int[191];
   static private int[] jj_la1_0;
   static private int[] jj_la1_1;
   static private int[] jj_la1_2;
@@ -6254,16 +6265,16 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       jj_la1_init_3();
    }
    private static void jj_la1_init_0() {
-      jj_la1_0 = new int[] {0x138180,0x1,0x138181,0x8001c00,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x200,0x200,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x20,0x0,0x0,0x0,0x0,0x20000000,0x40000000,0x40000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40000000,0x40000000,0x0,0x40000000,0x40000000,0x0,0x0,0x40000000,0x40000000,0x0,0x40000000,0x40000000,0x0,0x0,0x0,0x0,0x20,0x0,0x0,0x20,0x0,0x0,0x0,0x20,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x20000000,0x20000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40000000,0x40000000,0x0,0x40000000,0x0,0x0,0x20,0x0,0x8000000,0x0,0x1000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0xc00,0x0,0x0,0x0,0x0,0x20,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,};
+      jj_la1_0 = new int[] {0x138180,0x1,0x138181,0x8001c00,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x200,0x200,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x20,0x0,0x0,0x0,0x0,0x20000000,0x40000000,0x40000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40000000,0x40000000,0x0,0x40000000,0x40000000,0x0,0x0,0x40000000,0x40000000,0x0,0x40000000,0x40000000,0x0,0x0,0x0,0x0,0x20,0x0,0x0,0x20,0x0,0x0,0x0,0x20,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x20000000,0x20000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40000000,0x40000000,0x0,0x40000000,0x0,0x0,0x20,0x0,0x8000000,0x0,0x1000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0xc00,0x0,0x0,0x0,0x0,0x20,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,};
    }
    private static void jj_la1_init_1() {
-      jj_la1_1 = new int[] {0x400800,0x0,0x400800,0x800206,0x0,0x0,0x0,0x0,0x0,0x1000000,0x0,0x0,0x0,0x10200,0x0,0x0,0x0,0x10200,0x100,0x0,0x0,0x0,0x0,0x8,0x100,0x0,0x0,0x0,0x0,0x4000,0x1000000,0x0,0x0,0x0,0x0,0x0,0x0,0x400000,0x0,0x0,0x0,0x0,0x20,0x100,0x1000000,0x8000000,0x0,0x0,0x80000000,0x0,0x0,0x4000000,0x0,0x0,0x0,0x80000000,0x0,0x0,0x4000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x10200,0x0,0x0,0x0,0x0,0x0,0x40203000,0x202000,0x202000,0x40000000,0x40000000,0x1000,0x0,0x2000000,0x2000000,0x0,0x0,0x90,0x90,0x0,0x0,0x0,0x0,0x0,0x0,0x80000000,0x0,0x0,0x4,0x4,0x4,0x4,0x110205,0x4,0x0,0x0,0x10200,0x4,0x10200,0x4,0x4,0x0,0x4,0x4,0x0,0x0,0x110201,0x100001,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x10200,0x0,0x0,0x0,0x0,0x0,0x0,0x20000,0x80000,0x20000,0x80000,0x30200,0x0,0x0,0x0,0x0,0x0,0x0,0x10200,0x10200,0x0,0x0,0x0,0x0,0x0,0x206,0x0,0x206,0x0,0x206,0x20000002,0x206,0x0,0x0,0x0,0x0,0x206,0x0,0x0,0x0,0x0,0x20800000,0x0,0x0,0x0,0x0,0x0,0x100,0x800,0x0,0x0,0x400000,0x0,0x2000000,0x0,};
+      jj_la1_1 = new int[] {0x400800,0x0,0x400800,0x800206,0x0,0x0,0x0,0x0,0x0,0x1000000,0x400000,0x0,0x0,0x0,0x10200,0x0,0x0,0x0,0x10200,0x100,0x0,0x0,0x0,0x0,0x8,0x100,0x0,0x0,0x0,0x0,0x4000,0x1000000,0x0,0x0,0x0,0x0,0x0,0x0,0x400000,0x0,0x0,0x0,0x0,0x20,0x100,0x1000000,0x8000000,0x0,0x0,0x80000000,0x0,0x0,0x4000000,0x0,0x0,0x0,0x80000000,0x0,0x0,0x4000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x10200,0x0,0x0,0x0,0x0,0x0,0x40203000,0x202000,0x202000,0x40000000,0x40000000,0x1000,0x0,0x2000000,0x2000000,0x0,0x0,0x90,0x90,0x0,0x0,0x0,0x0,0x0,0x0,0x80000000,0x0,0x0,0x4,0x4,0x4,0x4,0x110205,0x4,0x0,0x0,0x10200,0x4,0x10200,0x4,0x4,0x0,0x4,0x4,0x0,0x0,0x110201,0x100001,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x10200,0x0,0x0,0x0,0x0,0x0,0x0,0x20000,0x80000,0x20000,0x80000,0x30200,0x0,0x0,0x0,0x0,0x0,0x0,0x10200,0x10200,0x0,0x0,0x0,0x0,0x0,0x206,0x0,0x206,0x0,0x206,0x20000002,0x206,0x0,0x0,0x0,0x0,0x206,0x0,0x0,0x0,0x0,0x20800000,0x0,0x0,0x0,0x0,0x0,0x100,0x800,0x0,0x0,0x400000,0x0,0x2000000,0x0,};
    }
    private static void jj_la1_init_2() {
-      jj_la1_2 = new int[] {0x4a18b8,0x0,0x4a18b8,0x23008000,0x0,0x0,0x0,0x23000000,0x0,0x0,0x20000000,0x23000000,0x0,0x23820040,0x0,0x0,0x0,0x23820040,0x0,0x0,0x0,0x0,0x2020,0x2020,0x0,0x0,0x0,0x0,0x2020,0x0,0x0,0x0,0x0,0x20000000,0x20000000,0x20000000,0x0,0x0,0x20,0x0,0x100000,0x100000,0x0,0x0,0x0,0x0,0x400,0x2,0x100,0x100000,0x100000,0x0,0x100000,0x100000,0x2,0x100,0x100000,0x100000,0x0,0x100000,0x100000,0x20,0x0,0x0,0x0,0x20000000,0x0,0x23820040,0x0,0x0,0x20,0x20000000,0x20000000,0x10005,0x10004,0x10004,0x1,0x1,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x2000000,0x2000000,0x2000000,0x2000000,0x2000000,0x100,0x100,0x2000000,0x0,0x0,0x0,0x0,0x0,0x23820040,0x0,0x0,0x0,0x23820040,0x0,0x23820040,0x0,0x0,0x4000,0x0,0x0,0x0,0x0,0x23820040,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x23820040,0x0,0x20020000,0x0,0x0,0x100000,0x100000,0x23820040,0x23920040,0x0,0x20820040,0x0,0x20000000,0x0,0x23008000,0x0,0x23008000,0x0,0x23008000,0x20008000,0x23008000,0x0,0x2000000,0x2000000,0x0,0x23008000,0x23000000,0x23000000,0x0,0x0,0x20000000,0x20000000,0x0,0x3000000,0x0,0x0,0x0,0x0,0x20000000,0x20000000,0x0,0x0,0x0,0x20000000,};
+      jj_la1_2 = new int[] {0x4a18b8,0x0,0x4a18b8,0x46008000,0x0,0x0,0x0,0x46000000,0x0,0x0,0x0,0x40000000,0x46000000,0x0,0x46820040,0x0,0x0,0x0,0x46820040,0x0,0x0,0x0,0x0,0x2020,0x2020,0x0,0x0,0x0,0x0,0x2020,0x0,0x0,0x0,0x0,0x40000000,0x40000000,0x40000000,0x0,0x0,0x20,0x0,0x100000,0x100000,0x0,0x0,0x0,0x0,0x400,0x2,0x100,0x100000,0x100000,0x0,0x100000,0x100000,0x2,0x100,0x100000,0x100000,0x0,0x100000,0x100000,0x20,0x0,0x0,0x0,0x40000000,0x0,0x46820040,0x0,0x0,0x20,0x40000000,0x40000000,0x10005,0x10004,0x10004,0x1,0x1,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x4000000,0x4000000,0x4000000,0x4000000,0x4000000,0x100,0x100,0x4000000,0x0,0x0,0x0,0x0,0x0,0x46820040,0x0,0x0,0x0,0x46820040,0x0,0x46820040,0x0,0x0,0x4000,0x0,0x0,0x0,0x0,0x46820040,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x46820040,0x0,0x40020000,0x0,0x0,0x100000,0x100000,0x46820040,0x46920040,0x0,0x40820040,0x0,0x40000000,0x0,0x46008000,0x0,0x46008000,0x0,0x46008000,0x40008000,0x46008000,0x0,0x4000000,0x4000000,0x0,0x46008000,0x46000000,0x46000000,0x0,0x0,0x40000000,0x40000000,0x0,0x6000000,0x0,0x0,0x0,0x0,0x40000000,0x40000000,0x0,0x0,0x0,0x40000000,};
    }
    private static void jj_la1_init_3() {
-      jj_la1_3 = new int[] {0x10,0x4,0x10,0x91,0x8,0x20,0x10,0x1a600003,0x20,0x0,0x2,0x1a600003,0x20,0x3a600413,0x0,0x0,0x20,0x3a600413,0x0,0x20,0x20,0x20,0x10,0x10,0x0,0x20,0x20,0x40,0x10,0x0,0x0,0x100,0x100,0x2,0x2,0x2,0x40,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x10,0x20,0x10,0x20,0x2,0x200,0x3a600413,0x0,0x20,0x10,0x12,0x2,0x20,0x0,0x0,0x0,0x0,0x20,0x20,0x0,0x0,0x20,0x20,0x0,0x0,0x400,0x400,0x400,0x400,0x400,0x0,0x0,0x400,0x10,0x0,0x10,0x0,0x10,0x3a600413,0x0,0x18000,0x3f880,0x3a600413,0x0,0x3a600413,0x0,0x0,0x0,0x0,0x0,0x20,0x20,0x3a600413,0x0,0x10,0x40000,0x180000,0x600000,0x10,0x800200,0x10,0x1000000,0x600000,0x600000,0x600000,0x600000,0x600000,0x600000,0x600000,0x600000,0x600000,0x600000,0x600000,0x600000,0x400,0x1a600011,0x600000,0x600000,0x600000,0x600000,0x1a000001,0x0,0x0,0x0,0x0,0x3a600413,0x20000000,0x2,0x100,0x100,0x0,0x0,0x3a600613,0x3a600613,0x4000000,0x20000002,0x20,0x1,0x0,0x91,0x0,0x91,0x20,0x91,0x0,0x91,0x10,0x1,0x1,0x20,0x91,0x1,0x1,0x20,0x20,0x0,0x0,0x20,0x1a600001,0x10,0x0,0x0,0x0,0x12,0x0,0x0,0x20,0x0,0x0,};
+      jj_la1_3 = new int[] {0x20,0x8,0x20,0x122,0x10,0x40,0x20,0x34c00006,0x40,0x0,0x0,0x4,0x34c00006,0x40,0x74c00826,0x0,0x0,0x40,0x74c00826,0x0,0x40,0x40,0x40,0x20,0x20,0x0,0x40,0x40,0x80,0x20,0x0,0x0,0x200,0x200,0x4,0x4,0x4,0x80,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x20,0x40,0x20,0x40,0x4,0x400,0x74c00826,0x0,0x40,0x20,0x24,0x4,0x40,0x0,0x0,0x0,0x0,0x40,0x40,0x0,0x0,0x40,0x40,0x0,0x0,0x800,0x800,0x800,0x800,0x800,0x0,0x0,0x800,0x20,0x0,0x20,0x0,0x20,0x74c00826,0x0,0x30000,0x7f100,0x74c00826,0x0,0x74c00826,0x0,0x0,0x0,0x0,0x0,0x40,0x40,0x74c00826,0x0,0x20,0x80000,0x300000,0xc00000,0x20,0x1000400,0x20,0x2000000,0xc00000,0xc00000,0xc00000,0xc00000,0xc00000,0xc00000,0xc00000,0xc00000,0xc00000,0xc00000,0xc00000,0xc00000,0x800,0x34c00022,0xc00000,0xc00000,0xc00000,0xc00000,0x34000002,0x0,0x0,0x0,0x0,0x74c00826,0x40000000,0x4,0x200,0x200,0x0,0x0,0x74c00c26,0x74c00c26,0x8000000,0x40000004,0x40,0x2,0x0,0x122,0x0,0x122,0x40,0x122,0x0,0x122,0x20,0x2,0x2,0x40,0x122,0x2,0x2,0x40,0x40,0x0,0x0,0x40,0x34c00002,0x20,0x0,0x0,0x0,0x24,0x0,0x0,0x40,0x0,0x0,};
    }
   final private JJCalls[] jj_2_rtns = new JJCalls[34];
   private boolean jj_rescan = false;
@@ -6280,7 +6291,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 190; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 191; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -6295,7 +6306,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 190; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 191; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -6306,7 +6317,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 190; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 191; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -6317,7 +6328,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 190; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 191; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -6327,7 +6338,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 190; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 191; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -6337,7 +6348,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     token = new Token();
     jj_ntk = -1;
     jj_gen = 0;
-    for (int i = 0; i < 190; i++) jj_la1[i] = -1;
+    for (int i = 0; i < 191; i++) jj_la1[i] = -1;
     for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -6449,12 +6460,12 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   /** Generate ParseException. */
   public ParseException generateParseException() {
     jj_expentries.clear();
-    boolean[] la1tokens = new boolean[126];
+    boolean[] la1tokens = new boolean[127];
     if (jj_kind >= 0) {
       la1tokens[jj_kind] = true;
       jj_kind = -1;
     }
-    for (int i = 0; i < 190; i++) {
+    for (int i = 0; i < 191; i++) {
       if (jj_la1[i] == jj_gen) {
         for (int j = 0; j < 32; j++) {
           if ((jj_la1_0[i] & (1<<j)) != 0) {
@@ -6472,7 +6483,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         }
       }
     }
-    for (int i = 0; i < 126; i++) {
+    for (int i = 0; i < 127; i++) {
       if (la1tokens[i]) {
         jj_expentry = new int[1];
         jj_expentry[0] = i;

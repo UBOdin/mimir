@@ -13,7 +13,7 @@ class Oracle(time : Double, trcmap : collection.mutable.LinkedHashMap[(Model,Int
 
 object CTPrioritizer {
 
-	def prioritize(reasons : Iterable[Reason]) = {
+	def prioritize(reasons : Iterable[Reason]) : Option[(Array[Array[MPIntVar]],Array[MPFloatVar],Array[MPIntVar])]= {
 
 		implicit val problem = MIProblem(SolverLib.ojalgo)
 
@@ -27,7 +27,7 @@ object CTPrioritizer {
 			val I = 0 until numI
 			val numJ = 1 // Number of Oracles
 			val J = 0 until numJ
-			var q = new Array[Double](5) // Reliability of UDO prior to curation
+			var q = new Array[Double](numI) // Reliability of UDO prior to curation
 			for (reason <- reasons) {
 				i += 1
 				j += 0.5
@@ -105,10 +105,11 @@ object CTPrioritizer {
 					case None => None
 				}
 			}
-
+			
 			release()
 
-
+			Some((x,y,z))
 		}
+		else None
 	}
 }

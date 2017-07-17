@@ -122,7 +122,7 @@ object CureScenario
 
        reasonsets1 must not beEmpty;
 
-       CTPrioritizer.prioritize(reasonsets1)
+       //CTPrioritizer.prioritize(reasonsets1)
 
        val reasonsets2 = explainEverything("""
          SELECT
@@ -142,7 +142,7 @@ object CureScenario
 
        reasonsets2 must not beEmpty;
 
-       CTPrioritizer.prioritize(reasonsets1)
+       CTPrioritizer.prioritize(reasonsets2)
        ok
      }
 
