@@ -214,14 +214,34 @@ private final int jjStopStringLiteralDfa_0(int pos, long active0, long active1)
             return 36;
          return -1;
       case 9:
-         if ((active0 & 0x200000L) != 0L || (active1 & 0x1000000L) != 0L)
+         if ((active0 & 0x200000L) != 0L || (active1 & 0x1000080L) != 0L)
          {
             jjmatchedKind = 94;
             jjmatchedPos = 9;
             return 36;
          }
          if ((active1 & 0x80L) != 0L)
+         {
+            if (jjmatchedPos < 9)
+            {
+               jjmatchedKind = 94;
+               jjmatchedPos = 9;
+            }
+            return -1;
+         }
+         if ((active0 & 0x200000L) != 0L || (active1 & 0x1000000L) != 0L)
             return 36;
+         return -1;
+      case 11:
+         if ((active1 & 0x80L) != 0L)
+         {
+            if (jjmatchedPos < 9)
+            {
+               jjmatchedKind = 94;
+               jjmatchedPos = 9;
+            }
+            return -1;
+         }
          return -1;
       default :
          return -1;
