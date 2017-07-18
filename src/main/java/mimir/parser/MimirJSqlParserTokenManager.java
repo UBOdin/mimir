@@ -214,34 +214,14 @@ private final int jjStopStringLiteralDfa_0(int pos, long active0, long active1)
             return 36;
          return -1;
       case 9:
-         if ((active0 & 0x200000L) != 0L || (active1 & 0x1000080L) != 0L)
+         if ((active0 & 0x200000L) != 0L || (active1 & 0x1000000L) != 0L)
          {
             jjmatchedKind = 94;
             jjmatchedPos = 9;
             return 36;
          }
          if ((active1 & 0x80L) != 0L)
-         {
-            if (jjmatchedPos < 9)
-            {
-               jjmatchedKind = 94;
-               jjmatchedPos = 9;
-            }
-            return -1;
-         }
-         if ((active0 & 0x200000L) != 0L || (active1 & 0x1000000L) != 0L)
             return 36;
-         return -1;
-      case 11:
-         if ((active1 & 0x80L) != 0L)
-         {
-            if (jjmatchedPos < 9)
-            {
-               jjmatchedKind = 94;
-               jjmatchedPos = 9;
-            }
-            return -1;
-         }
          return -1;
       default :
          return -1;
@@ -1014,7 +994,9 @@ private int jjMoveStringLiteralDfa9_0(long old0, long active0, long old1, long a
    {
       case 69:
       case 101:
-         return jjMoveStringLiteralDfa10_0(active0, 0L, active1, 0x80L);
+         if ((active1 & 0x80L) != 0L)
+            return jjStartNfaWithStates_0(9, 71, 36);
+         break;
       case 84:
       case 116:
          return jjMoveStringLiteralDfa10_0(active0, 0L, active1, 0x1000000L);
@@ -1032,7 +1014,7 @@ private int jjMoveStringLiteralDfa10_0(long old0, long active0, long old1, long 
       return jjStartNfa_0(8, old0, old1);
    try { curChar = input_stream.readChar(); }
    catch(java.io.IOException e) {
-      jjStopStringLiteralDfa_0(9, active0, 0L);
+      jjStopStringLiteralDfa_0(9, active0, active1);
       return 10;
    }
    switch(curChar)
@@ -1050,7 +1032,7 @@ private int jjMoveStringLiteralDfa10_0(long old0, long active0, long old1, long 
       default :
          break;
    }
-   return jjStartNfa_0(9, active0, 0L);
+   return jjStartNfa_0(9, active0, active1);
 }
 private int jjStartNfaWithStates_0(int pos, int kind, int state)
 {

@@ -4206,11 +4206,6 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     finally { jj_save(33, xla); }
   }
 
-  private boolean jj_3_24() {
-    if (jj_3R_67()) return true;
-    return false;
-  }
-
   private boolean jj_3_25() {
     Token xsp;
     xsp = jj_scanpos;
@@ -4227,17 +4222,17 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_106() {
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_104()) return true;
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
   private boolean jj_3R_240() {
     if (jj_scan_token(K_ON)) return true;
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_165()) return true;
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
@@ -4257,9 +4252,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_258() {
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     if (jj_3R_230()) return true;
-    if (jj_scan_token(102)) return true;
+    if (jj_scan_token(103)) return true;
     return false;
   }
 
@@ -4570,7 +4565,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3_5() {
-    if (jj_scan_token(100)) return true;
+    if (jj_scan_token(101)) return true;
     return false;
   }
 
@@ -6239,6 +6234,11 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   private boolean jj_3R_88() {
     if (jj_scan_token(K_OR)) return true;
     if (jj_3R_87()) return true;
+    return false;
+  }
+
+  private boolean jj_3_24() {
+    if (jj_3R_67()) return true;
     return false;
   }
 
