@@ -137,7 +137,7 @@ object CureScenario
                FROM CURESOURCE AS SRC
                 JOIN CURELOCATIONS AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
                  LEFT OUTER JOIN CUREPORTS AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
-               ;
+                 WHERE SPEED(DST(LOC.LON, LOC.LAT, PORTS.LON, PORTS.LAT),SRC.DATE, NULL) > 100;
        """).flatMap(x=>x.all(db))
 
        reasonsets2 must not beEmpty;
