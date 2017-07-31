@@ -6,34 +6,22 @@ import java.sql.SQLException
 import java.sql.ResultSet
 
 import mimir.algebra._
-import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, RowExplanation, InlineVGTerms}
+import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, InlineVGTerms, RowExplanation}
 import mimir.models.Model
 import mimir.exec.Compiler
-import mimir.exec.mode.{CompileMode, BestGuess}
-import mimir.exec.result.{ResultIterator,SampleResultIterator,Row}
-import mimir.lenses.{LensManager}
-import mimir.sql.{SqlToRA,RAToSql,Backend}
-import mimir.sql.{
-    CreateLens,
-    CreateView,
-    Explain,
-    Feedback,
-    Load,
-    Pragma,
-    Analyze,
-    CreateAdaptiveSchema,
-    AlterViewMaterialize
-  }
+import mimir.exec.mode.{BestGuess, CompileMode}
+import mimir.exec.result.{ResultIterator, Row, SampleResultIterator}
+import mimir.lenses.LensManager
+import mimir.sql.{Backend, RAToSql, SqlToRA}
+import mimir.sql.{AlterViewMaterialize, Analyze, CreateAdaptiveSchema, CreateLens, CreateView, Explain, Feedback, Load, Pragma}
 import mimir.optimizer.operator.OptimizeExpressions
-import mimir.util.{LoadCSV,ExperimentalOptions}
+import mimir.util.{ExperimentalOptions, LoadCSV, LoadJSON}
 import mimir.parser.MimirJSqlParser
 import mimir.statistics.FuncDep
-
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
 import net.sf.jsqlparser.statement.create.table.CreateTable
 import net.sf.jsqlparser.statement.drop.Drop
-
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import scala.collection.JavaConversions._
@@ -436,6 +424,12 @@ case class Database(backend: Backend)
             lenses.create("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)       
           }
         }
+      case "JSON" => {
+        if(tableExists(targetTable) && !force){
+          throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' AS tableName`; to override.")
+        }
+        LoadJSON.handleSingleJSON(this, targetTable, sourceFile)
+      }
       case fmt =>
         throw new SQLException(s"Unknown load format '$fmt'")
     }

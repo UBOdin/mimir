@@ -1,12 +1,17 @@
 package mimir.sql.sqlite
 
+import java.util.Set
+
+import com.github.wnameless.json.flattener.JsonFlattener
 import mimir.algebra._
 import mimir.provenance._
-import mimir.util.JDBCUtils
+import mimir.util.{JDBCUtils, JsonUtils}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import org.geotools.referencing.datum.DefaultEllipsoid
 import org.joda.time.DateTime
 import com.typesafe.scalalogging.slf4j.LazyLogging
+
+import scala.collection.JavaConverters._
 import scala.util.parsing.json._
 
 object SQLiteCompat extends LazyLogging{
@@ -37,7 +42,7 @@ object SQLiteCompat extends LazyLogging{
     org.sqlite.Function.create(conn, "GAMMA", Gamma)
     org.sqlite.Function.create(conn, "STDDEV", StdDev)
     org.sqlite.Function.create(conn, "MAX", Max)
-    org.sqlite.Function.create(conn, "JSONEXPLORERAGG", JsonExplorerAgg)
+    org.sqlite.Function.create(conn, "JSON_EXPLORER_MERGE", JsonMerge)
   }
   
   def getTableSchema(conn:java.sql.Connection, table: String): Option[Seq[(String, Type)]] =
@@ -470,62 +475,47 @@ object Max extends org.sqlite.Function.Aggregate {
   }
 }
 
-object JsonExplorerAgg extends org.sqlite.Function.Aggregate {
+object JsonMerge extends org.sqlite.Function.Aggregate {
   // value is the result and flag is what is returned
 
-  // max
-  var maxValue: Double = 0.0
-  // min
-  var minValue: Double = 0.0
-  // count
-  var countValue: Int = 0
-  var valuesSet: Boolean = false
-  // countNull
-  var countNullValue: Int = 0
-  var nullSet: Boolean = false
-
-  // TypeCount
-
+  var columnMap: Map[String,Any] = Map[String,Any]()
 
   @Override
   def xStep(): Unit = {
-    if(value_type(0) != SQLiteCompat.NULL) { // the value is not null, so perform operations needed
-      // perform and update the values as required, each return carage should be a new operation
-/*
-      // initialize values
-      if(maxValue == null)
-        maxValue = value_double(0)
-      if(minValue == null)
-        minValue = value_double(0)
-*/
-      if(maxValue < value_double(0) )
-        maxValue = value_double(0)
 
-      if(minValue > value_double(0) )
-        minValue = value_double(0)
+    if(value_type(0) != SQLiteCompat.NULL) { // the value is not null, so merge the JSON objects
 
-      countValue += 1
+      var collectedMap: Map[String,Any] = Map[String,Any]()
+      var typeMap: Map[String,Any] = Map[String,Any]()
+      val jsonRow: String = value_text(0)
 
-      valuesSet = true
+      try {
+        val jsonMap: java.util.Map[String,AnyRef] = JsonFlattener.flattenAsMap(jsonRow) // map of all the
+        val jsonMapKeySet: Set[String] = jsonMap.keySet()
+        for (key:String <- jsonMapKeySet.asScala){ // iterate through each key, for each key find it's type
+          val json:String = jsonMap.get(key).toString
+          if(columnMap.contains(key)){ // this column is in the map already, we need to merge the data
+          // this is the section where merging takes place, type counts need to be incremented
+            val mergedJSON = JsonUtils.jsonMerge(columnMap.get(key).toString,json)
+            columnMap = columnMap + (key -> mergedJSON)
+          }
+          else { // this column is not in the table yet, so we can safely store the value
+            columnMap = columnMap + (key -> json)
+          }
+        } // end for, now columnMap should be updated for this row
+      } // end try
+      catch{
+        case e: Exception => throw new Exception("Json_Miner expects Json string as an input, check the input")
+      }
+
     } // end value is not null section
-    else{ // value is null, so act accordingly
-      countNullValue += 1
-      nullSet = true
-    } // end null section
   }
 
   def xFinal(): Unit = {
     // this is what is returned, return a json object with all the encoded information
 
-    val resultMap = Map[String,Any](
-      "max" -> maxValue,
-      "min" -> minValue,
-      "count" -> countValue,
-      "nullCount" -> countNullValue
-    )
+    //println(JSONObject(resultMap))
+    result(JSONObject(columnMap).toString())
 
-    println(JSONObject(resultMap))
-
-    if(valuesSet){ result(JSONObject(resultMap).toString()) } else { result() }
   }
 }

@@ -40,20 +40,15 @@ object SimpleTests
       dbFile must beAFile
     }
 
-    "Run the Load Product Data Script" >> {
-      stmts(productDataFile).map( update(_) )
-      db.backend.resultRows("SELECT * FROM PRODUCT;") must have size(6)
-    }
-
     "Load CSV Files" >> {
 
       // load all tables without TI lens
-      reviewDataFiles.foreach(db.loadTableNoTI(_))
+      //reviewDataFiles.foreach(db.loadTableNoTI(_))
+      db.loadTable("JSONTEST",new File("test/data/jsonTest.csv"),false,("JSON",Seq(new StringPrimitive(""))))
 
-      debugDB.query("SELECT * FROM RATINGS1;"){
-        _.map{
-          _(0)
-        }
+      query("SELECT JSON_MINER(JSONCOLUMN) FROM JSONTEST;")
+      {
+        _.foreach(println(_))
       }
 
       /*

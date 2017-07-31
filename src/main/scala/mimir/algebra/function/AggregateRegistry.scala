@@ -27,6 +27,7 @@ class AggregateRegistry
     register("GROUP_BITWISE_AND", List(TInt()), TInt())
     register("GROUP_BITWISE_OR", List(TInt()), TInt())
     register("JSON_GROUP_ARRAY", (t) => TString())
+    register("JSON_EXPLORER_MERGER", (t) => TString())
     register("FIRST", (t:Seq[Type]) => t.head)
     register("FIRST_FLOAT", (t:Seq[Type]) => t.head)
     register("FIRST_INT", (t:Seq[Type]) => t.head)

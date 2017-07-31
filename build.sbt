@@ -54,7 +54,8 @@ libraryDependencies ++= Seq(
   "com.github.wnameless"          %   "json-flattener"        % "0.2.2",
   "com.typesafe.play"             %%  "play-json"             % "2.4.11",
 
-  //////////////////////// Lens Libraries //////////////////////
+
+    //////////////////////// Lens Libraries //////////////////////
   // WEKA - General-purpose Classifier Training/Deployment Library
   // Used by the imputation lens
   ("nz.ac.waikato.cms.weka"       %   "weka-stable"           % "3.8.1").
