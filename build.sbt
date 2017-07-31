@@ -52,7 +52,7 @@ libraryDependencies ++= Seq(
   "org.apache.commons"            %   "commons-csv"           % "1.4",
   "commons-io"                    %   "commons-io"            % "2.5",
   "com.github.wnameless"          %   "json-flattener"        % "0.2.2",
-  "com.typesafe.play"             %%  "play-json"             % "2.4.11",
+  "com.typesafe.play"             % "play-json_2.11"          % "2.6.2",
 
 
     //////////////////////// Lens Libraries //////////////////////

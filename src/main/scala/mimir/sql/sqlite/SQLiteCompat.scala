@@ -5,13 +5,16 @@ import java.util.Set
 import com.github.wnameless.json.flattener.JsonFlattener
 import mimir.algebra._
 import mimir.provenance._
-import mimir.util.{JDBCUtils, JsonUtils}
+import mimir.util.{JDBCUtils, JsonPlay, JsonUtils}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import org.geotools.referencing.datum.DefaultEllipsoid
 import org.joda.time.DateTime
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import play.api.libs.json._
+import mimir.util.JsonPlay._
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 import scala.util.parsing.json._
 
 object SQLiteCompat extends LazyLogging{
@@ -42,7 +45,8 @@ object SQLiteCompat extends LazyLogging{
     org.sqlite.Function.create(conn, "GAMMA", Gamma)
     org.sqlite.Function.create(conn, "STDDEV", StdDev)
     org.sqlite.Function.create(conn, "MAX", Max)
-    org.sqlite.Function.create(conn, "JSON_EXPLORER_MERGE", JsonMerge)
+    org.sqlite.Function.create(conn, "JSON_EXPLORER_MERGE", JsonExplorerMerge)
+    org.sqlite.Function.create(conn, "JSON_EXPLORER_PROJECT", JsonExplorerProject)
   }
   
   def getTableSchema(conn:java.sql.Connection, table: String): Option[Seq[(String, Type)]] =
@@ -475,47 +479,171 @@ object Max extends org.sqlite.Function.Aggregate {
   }
 }
 
-object JsonMerge extends org.sqlite.Function.Aggregate {
+
+
+object JsonExplorerProject extends org.sqlite.Function with LazyLogging {
+
+  /*
+    The shape of the json object being output will be the following
+    {
+      "path" : "pathName will be stored here"
+      "typeData" : [{
+                      "typeName" : "varchar" // for example
+                      "typeCount" : 1
+                   }]
+    }
+    - this is one row, to merge multiple rows add a new type in the type data arrow or increase the count
+    - this is an example for one 'column' so the total structure would look like the following if the previous structure is denoted as 's'
+
+    {
+      "data" : [s],
+      "rowCount" : 1
+    }
+
+    - this is so it can be parsed by a json shredder and can support changes in the future
+    - during aggregation total count and other things can be added
+
+   */
+
+  override def xFunc(): Unit = {
+
+    val dataList: ListBuffer[AllData] = ListBuffer[AllData]()
+
+    try {
+      value_type(0) match {
+        case SQLiteCompat.TEXT => {
+          val jsonString: String = value_text(0)
+
+          // try to clean up the json object, might want to replace this later
+          var clean = jsonString.replace("\\\\", "") // clean the string of variables that will throw off parsing
+          clean = clean.replace("\\\"", "")
+          clean = clean.replace("\\n", "")
+          clean = clean.replace("\\r", "")
+          clean = clean.replace("\n", "")
+          clean = clean.replace("\r", "")
+          try {
+            val jsonMap: java.util.Map[String,AnyRef] = JsonFlattener.flattenAsMap(clean) // create a flat map of the json object
+            val jsonMapKeySet: Set[String] = jsonMap.keySet()
+            for (key: String <- jsonMapKeySet.asScala){ // iterate through each key which can be thought of as a column
+              val jsonType: String = Type.getType(jsonMap.get(key).toString).toString() // returns the
+              val tJson: TypeData = JsonPlay.TypeData(jsonType,1)
+              val dJson: AllData = JsonPlay.AllData(key,Seq[TypeData](tJson))
+              dataList += dJson
+            }
+          }
+          catch{
+            case e: Exception => {
+              println(s"Not of JSON format in Json_Explorer_Project, so null returned: $jsonString")
+              result()
+            } // is not a proper json format so return null since there's nothing we can do about this right now
+          }
+          val jsonResult: ExplorerObject = ExplorerObject(dataList,1)
+          val output: JsValue = Json.toJson(jsonResult)
+//          println(Json.prettyPrint(output))
+          result(Json.stringify(output))
+        }
+        case _ => result() // else return null
+      }
+
+    } catch {
+      case e: Exception => throw new Exception("Something went wrong in sqlitecompact Json_Explorer_Project")
+    }
+
+  }
+}
+
+
+object JsonExplorerMerge extends org.sqlite.Function.Aggregate {
   // value is the result and flag is what is returned
 
-  var columnMap: Map[String,Any] = Map[String,Any]()
+  var x = 0
+  var rowCount = 0
+  var columnMap: Map[String,Map[String,Int]] = Map[String,Map[String,Int]]()
 
   @Override
   def xStep(): Unit = {
 
+    rowCount += 1
+/*    var i = 0
+    for(i <- 0 to 10){
+      x += 1
+      println(x)
+    }
+    println(x)
+*/
     if(value_type(0) != SQLiteCompat.NULL) { // the value is not null, so merge the JSON objects
 
-      var collectedMap: Map[String,Any] = Map[String,Any]()
-      var typeMap: Map[String,Any] = Map[String,Any]()
-      val jsonRow: String = value_text(0)
+      val json: JsValue = Json.parse(value_text(0))
+      json.validate[ExplorerObject] match {
+        case s: JsSuccess[ExplorerObject] => {
+          val row: ExplorerObject = s.get
+          val allColumns: Seq[AllData] = row.data
+          val updates: Seq[(String,Map[String,Int])] = allColumns.map((a: AllData) => {
 
-      try {
-        val jsonMap: java.util.Map[String,AnyRef] = JsonFlattener.flattenAsMap(jsonRow) // map of all the
-        val jsonMapKeySet: Set[String] = jsonMap.keySet()
-        for (key:String <- jsonMapKeySet.asScala){ // iterate through each key, for each key find it's type
-          val json:String = jsonMap.get(key).toString
-          if(columnMap.contains(key)){ // this column is in the map already, we need to merge the data
-          // this is the section where merging takes place, type counts need to be incremented
-            val mergedJSON = JsonUtils.jsonMerge(columnMap.get(key).toString,json)
-            columnMap = columnMap + (key -> mergedJSON)
-          }
-          else { // this column is not in the table yet, so we can safely store the value
-            columnMap = columnMap + (key -> json)
-          }
-        } // end for, now columnMap should be updated for this row
-      } // end try
-      catch{
-        case e: Exception => throw new Exception("Json_Miner expects Json string as an input, check the input")
+            val colName: String = a.name
+            val typeInfo: Seq[TypeData] = a.td
+            val typeSeq: Seq[(String,Int)] = typeInfo.map((t) => {
+              (t.typeName,t.typeCount)
+            })
+            // now add type map for that column to colMap
+            (colName -> typeSeq.toMap)
+          })
+          columnMap = updateMap(columnMap, updates)
+
+          // all column information has now been updated
+        } // end case Explorer Object
+        case e: JsError => // failed, probably not the right shape
       }
-
     } // end value is not null section
   }
 
+  def updateMap(m: Map[String,Map[String,Int]], seq: Seq[(String,Map[String,Int])]): Map[String,Map[String,Int]] = {
+
+    var tempMap: Map[String,Map[String,Int]] = m
+
+      seq.foreach((col) => {
+      val colName: String = col._1
+      col._2.foreach((t) => {
+        val typeName: String = t._1
+        val typeCount: Int = t._2
+        tempMap.get(colName) match {
+          case Some(cMap) => {
+            cMap.get(typeName) match {
+              case Some(tCount: Int) =>
+                tempMap += (colName -> Map((typeName -> (tCount + typeCount))))
+              case None =>
+                tempMap += (colName -> Map((typeName -> typeCount)))
+            } // end type map portion
+          }
+          case None =>
+            tempMap += (colName -> Map((typeName -> typeCount))) // no previous enteries so just add to the temp map
+        }
+      })
+    })
+    tempMap
+  }
+
+  def format(m: Map[String,Map[String,Int]],count: Int): ExplorerObject = {
+    val allColumns: Seq[AllData] =  m.map((cols) => {
+      val colName: String = cols._1
+      val types: Seq[JsonPlay.TypeData] = cols._2.map((t) => {
+        JsonPlay.TypeData(t._1,t._2)
+      }).toSeq
+      JsonPlay.AllData(colName,types)
+    }).toSeq
+    ExplorerObject(allColumns,count)
+  }
+
+
   def xFinal(): Unit = {
     // this is what is returned, return a json object with all the encoded information
+//    println(x)
 
-    //println(JSONObject(resultMap))
-    result(JSONObject(columnMap).toString())
+    val eo: ExplorerObject = format(columnMap,rowCount)
+    val output: JsValue = Json.toJson(eo)
 
+    println(Json.prettyPrint(output))
+    result(Json.stringify(output))
   }
+
 }

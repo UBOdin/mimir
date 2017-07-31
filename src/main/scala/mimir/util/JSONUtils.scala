@@ -35,33 +35,22 @@ object JsonUtils {
     }
   }
 
-  def jsonMerge(json1: String, json2: String): String = {
-    // merge two json objects, this is a module made for the JSON_Explorer so it may be added to later
-    // this is expecting a map essentially containing type information and possibly other details such as count, max, min
-
-    var jsonMapCombined: Map[String, Any] = Map[String, Any]()
-
-    try {
-      val jsonMap1: java.util.Map[String,AnyRef] = JsonFlattener.flattenAsMap(json1)
-      val jsonMap2: java.util.Map[String,AnyRef] = JsonFlattener.flattenAsMap(json1)
-      val jsonMapKeySet: Set[String] = jsonMap1.keySet()
-      for (key:String <- jsonMapKeySet.asScala){ // iterate through each key, for each key find it's type
-        val jsonValue: String = jsonMap1.get(key).toString
-        key.toLowerCase() match {
-          case ("real" | "varchar" | "int") => {
-            jsonMapCombined.get(key) match {
-              case Some(v) => jsonMapCombined = jsonMapCombined + (key -> (jsonValue.toInt + v.toString.toInt))
-              case None => jsonMapCombined = jsonMapCombined + (key -> jsonValue.toInt)
-            }
-          }
-          case ("max") => ???
-        }
-      }
+  // remove unwanted characters from a json string
+  def JsonClean(s: String): String = {
+    // returns a cleaned json object hopefully
+    var clean = s.replace("\\\\", "") // clean the string of variables that will throw off parsing
+    clean = clean.replace("\\\"", "")
+    clean = clean.replace("\\n", "")
+    clean = clean.replace("\\r", "")
+    clean = clean.replace("\n", "")
+    clean = clean.replace("\r", "")
+    while (clean.charAt(0) != '{' || clean.charAt(clean.size - 1) != '}'){ // give it the best shot at being in json format
+      if(clean.charAt(0) != '{')
+        clean = clean.substring(1,clean.size)
+      if (clean.charAt(clean.size - 1) != '}')
+        clean = clean.substring(0,clean.size - 1)
     }
-    catch{
-      case e: Exception => throw new Exception("JsonMerge trying to merge two objects and at least one is not json")
-    }
-    JSONObject(jsonMapCombined).toString()
+    return clean
   }
 
 }

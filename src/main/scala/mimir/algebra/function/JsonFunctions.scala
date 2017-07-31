@@ -30,7 +30,7 @@ object JsonFunctions
     StringPrimitive(extract(args).toString)
   }
 
-  def jsonMiner(args: Seq[PrimitiveValue]): PrimitiveValue =
+  def jsonExplorerProject(args: Seq[PrimitiveValue]): PrimitiveValue =
   {
 
     var columnData: Map[String,Any] = Map[String,Any]()
@@ -45,7 +45,13 @@ object JsonFunctions
           clean = clean.replace("\\r", "")
           clean = clean.replace("\n", "")
           clean = clean.replace("\r", "")
-          clean = clean.substring(1,clean.size - 1)
+          while (clean.charAt(0) != '{' || clean.charAt(clean.size - 1) != '}'){ // give it the best shot at being in json format
+            if(clean.charAt(0) != '{')
+              clean = clean.substring(1,clean.size)
+            if (clean.charAt(clean.size - 1) != '}')
+              clean = clean.substring(0,clean.size - 1)
+          }
+
           try {
             val jsonMap: java.util.Map[String,AnyRef] = JsonFlattener.flattenAsMap(clean) // map of all the
             val jsonMapKeySet: Set[String] = jsonMap.keySet()
@@ -82,7 +88,7 @@ object JsonFunctions
   def register(fr: FunctionRegistry)
   {
     fr.register("JSON_EXTRACT", extractAny(_), (_) => TString())
-    fr.register("JSON_MINER"   , jsonMiner(_), (_) => TString())
+    fr.register("JSON_EXPLORER_PROJECT"   , jsonExplorerProject(_), (_) => TString())
     fr.register("JSON_EXTRACT_INT", extract(_, TInt()), (_) => TInt())
     fr.register("JSON_EXTRACT_FLOAT", extract(_, TFloat()), (_) => TFloat())
     fr.register("JSON_EXTRACT_STR", extract(_, TString()), (_) => TString())
@@ -119,5 +125,4 @@ object JsonFunctions
       (_) => TInt()
     )
   }
-
 }
