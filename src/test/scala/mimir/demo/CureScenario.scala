@@ -19,6 +19,20 @@ object CureScenario
     new File("test/data/curePorts.csv")
   )
 
+  val cureQuery = """
+    SELECT BILL_OF_LADING_NBR,
+           SRC.IMO_CODE           AS "SRC_IMO",
+           LOC.LAT                AS "VESSEL_LAT",
+           LOC.LON                AS "VESSEL_LON",
+           PORTS.LAT              AS "PORT_LAT",
+           PORTS.LON              AS "PORT_LON",
+           DATE(SRC.DATE)          AS "SRC_DATE",
+           DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON) AS "DISTANCE",  SPEED(DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON), SRC.DATE, NULL) AS "SPEED"
+    FROM CURESOURCE AS SRC
+      JOIN CURELOCATIONS AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
+        LEFT OUTER JOIN CUREPORTS AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
+    ;"""
+
   def time[A](description: String): ( => A) => A =
     TimeUtils.monitor(description)
 
@@ -88,23 +102,16 @@ object CureScenario
 */
 
 //    true
+    "Explain the CURE Query" >> {
+      // The type inference lens strikes again...
+      //    we should be able to use schemaOf, but instead we need bestGuessSchema
+      // db.typechecker.schemaOf(select(cureQuery))
+      db.bestGuessSchema(select(cureQuery))
+      ok
+    }
      "Run the CURE Query" >> {
        time("CURE Query"){
-         query("""
-           SELECT
-                   BILL_OF_LADING_NBR,
-                   SRC.IMO_CODE           AS "SRC_IMO",
-                   LOC.LAT                AS "VESSEL_LAT",
-                   LOC.LON                AS "VESSEL_LON",
-                   PORTS.LAT              AS "PORT_LAT",
-                   PORTS.LON              AS "PORT_LON",
-                   DATE(SRC.DATE)          AS "SRC_DATE",
-                   DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON) AS "DISTANCE",  SPEED(DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON), SRC.DATE, NULL) AS "SPEED"
-                 FROM CURESOURCE AS SRC
-                  JOIN CURELOCATIONS AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
-                   LEFT OUTER JOIN CUREPORTS AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
-                 ;
-         """){ _.foreach { row => {} } }
+         query(cureQuery){ _.foreach { row => {} } }
        }
 //         failed type detection --> run type inferencing
 //         --> repair with repairing tool

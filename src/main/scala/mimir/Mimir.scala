@@ -152,11 +152,11 @@ object Mimir extends LazyLogging {
     val raw = db.sql.convert(explain.getSelectBody())
     output.print("------ Raw Query ------")
     output.print(raw.toString)
-    db.typechecker.schemaOf(raw)        // <- discard results, just make sure it typechecks
+    db.bestGuessSchema(raw)        // <- discard results, just make sure it typechecks
     val optimized = db.compiler.optimize(raw)
     output.print("--- Optimized Query ---")
     output.print(optimized.toString)
-    db.typechecker.schemaOf(optimized)  // <- discard results, just make sure it typechecks
+    db.bestGuessSchema(optimized)  // <- discard results, just make sure it typechecks
     output.print("--- SQL ---")
     try {
       output.print(db.ra.convert(optimized).toString)
