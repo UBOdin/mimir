@@ -45,7 +45,10 @@ object SimpleTests
       // load all tables without TI lens
       //reviewDataFiles.foreach(db.loadTableNoTI(_))
       db.loadTable("JSONTEST",new File("test/data/jsonTest.csv"),false,("JSON",Seq(new StringPrimitive(""))))
-
+      db.loadTable("JSONTEST2",new File("test/data/meteorite.json"),false,("JSON",Seq(new StringPrimitive(""))))
+//      db.loadTable("JSONTEST3",new File("test/data/nasa.json"),false,("JSON",Seq(new StringPrimitive(""))))
+//      db.loadTable("JSONTEST4",new File("test/data/jeopardy.json"),false,("JSON",Seq(new StringPrimitive(""))))
+/*
       query("SELECT JSON_EXPLORER_PROJECT(JSONCOLUMN) FROM JSONTEST;"){
         _.map{
           _(0)
@@ -57,6 +60,20 @@ object SimpleTests
           _(0)
         }
       }
+*/
+/*
+      query("SELECT JSON_EXPLORER_PROJECT(JSONCOLUMN) FROM JSONTEST2;"){
+        _.foreach(println(_))
+      }
+*/
+
+
+      query("SELECT JSON_EXPLORER_MERGE(JSON_EXPLORER_PROJECT(JSONCOLUMN)) FROM JSONTEST;"){
+        _.map{
+          _(0)
+        }
+      }
+
 
       /*
             // Test Create Type Inference

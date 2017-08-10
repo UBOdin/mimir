@@ -524,11 +524,28 @@ object JsonExplorerProject extends org.sqlite.Function with LazyLogging {
           try {
             val jsonMap: java.util.Map[String,AnyRef] = JsonFlattener.flattenAsMap(clean) // create a flat map of the json object
             val jsonMapKeySet: Set[String] = jsonMap.keySet()
-            for (key: String <- jsonMapKeySet.asScala){ // iterate through each key which can be thought of as a column
-              val jsonType: String = Type.getType(jsonMap.get(key).toString).toString() // returns the
-              val tJson: TypeData = JsonPlay.TypeData(jsonType,1)
-              val dJson: AllData = JsonPlay.AllData(key,Seq[TypeData](tJson))
-              dataList += dJson
+            val fullKeySet: ListBuffer[String] = createFullObjectSet(jsonMapKeySet)
+            for (key: String <- fullKeySet){ // iterate through each key which can be thought of as a column
+              jsonMapKeySet.contains(key) match {
+                case true => // it is a leaf and is a type
+                  val jsonType: String = Type.getType(jsonMap.get(key).toString).toString() // returns the
+                  val tJson: TypeData = JsonPlay.TypeData(jsonType,1)
+                  val dJson: AllData = JsonPlay.AllData(key,Option[Seq[TypeData]](Seq[TypeData]((tJson))),None)
+                  dataList += dJson
+
+                case false => // it is an object and has no type for this record
+                  var objectSeq: ListBuffer[String] = ListBuffer[String]()
+                  jsonMapKeySet.asScala.map((x: String) => {
+                    val objectList = x.split("\\.")
+                    if(!x.equals(key)) {
+                      if(objectList.contains(key) && !objectList.last.equals(key)){ // contains key and it's not the last object
+                        objectSeq += x
+                      }
+                    }
+                  })
+                  val dJson: AllData = JsonPlay.AllData(key,None,Option[Seq[ObjectTracker]](Seq[ObjectTracker](JsonPlay.ObjectTracker(objectSeq.toSeq,1))))
+                  dataList += dJson
+              }
             }
           }
           catch{
@@ -550,6 +567,19 @@ object JsonExplorerProject extends org.sqlite.Function with LazyLogging {
     }
 
   }
+
+  // returns a set that consists of all possible keys
+  def createFullObjectSet(s: java.util.Set[String]): ListBuffer[String] = {
+    var returnSet: ListBuffer[String] = ListBuffer[String]()
+    s.asScala.map((x: String) => {
+      val keySplit: Array[String] = x.split("\\.")
+      keySplit.foreach((i) => {
+        if(!returnSet.contains(i: String))
+          returnSet += i
+      })
+    })
+    returnSet
+  }
 }
 
 
@@ -558,8 +588,9 @@ object JsonExplorerMerge extends org.sqlite.Function.Aggregate {
 
   var x = 0
   var rowCount = 0
-  var columnMap: Map[String,Map[String,Int]] = Map[String,Map[String,Int]]()
-
+  // the outer string is the 'column' name, the next map contains a name to be used for merging, this will go through a case class
+  var columnMap: Map[String,Map[String,Seq[(Any,Int)]]] = Map[String,Map[String,Seq[(Any,Int)]]]()
+  //                 colName    dataName
   @Override
   def xStep(): Unit = {
 
@@ -578,15 +609,29 @@ object JsonExplorerMerge extends org.sqlite.Function.Aggregate {
         case s: JsSuccess[ExplorerObject] => {
           val row: ExplorerObject = s.get
           val allColumns: Seq[AllData] = row.data
-          val updates: Seq[(String,Map[String,Int])] = allColumns.map((a: AllData) => {
+          val updates: Seq[(String,Map[String,Seq[(Any,Int)]])] = allColumns.map((a: AllData) => {
 
             val colName: String = a.name
-            val typeInfo: Seq[TypeData] = a.td
-            val typeSeq: Seq[(String,Int)] = typeInfo.map((t) => {
-              (t.typeName,t.typeCount)
-            })
+            var resultMap: Map[String,Seq[(Any,Int)]] = Map[String,Seq[(Any,Int)]]()
+            a.td match {
+              case Some(typeInfo: Seq[TypeData]) =>
+                val temp: Seq[(String,Int)] = typeInfo.map((t) => {
+                  (t.typeName,t.typeCount)
+                })
+                resultMap += ("TYPE" -> temp)
+              case None =>
+            }
+            a.ot match {
+              case Some(objectInfo: Seq[ObjectTracker]) =>
+                val temp: Seq[(Seq[String],Int)] = objectInfo.map((t) => {
+                  (t.objectRelationship,t.objectCount)
+                })
+                resultMap += ("OBJECT" -> temp)
+              case None =>
+
+            }
             // now add type map for that column to colMap
-            (colName -> typeSeq.toMap)
+            (colName -> resultMap)
           })
           columnMap = updateMap(columnMap, updates)
 
@@ -597,39 +642,109 @@ object JsonExplorerMerge extends org.sqlite.Function.Aggregate {
     } // end value is not null section
   }
 
-  def updateMap(m: Map[String,Map[String,Int]], seq: Seq[(String,Map[String,Int])]): Map[String,Map[String,Int]] = {
+  def updateMap(m: Map[String,Map[String,Seq[(Any,Int)]]], seq: Seq[(String,Map[String,Seq[(Any,Int)]])]): Map[String,Map[String,Seq[(Any,Int)]]] = {
+    // merges two maps together effectively, should add to the total map or it should increase the count for repeated objects
 
-    var tempMap: Map[String,Map[String,Int]] = m
+    var retMap: Map[String,Map[String,Seq[(Any,Int)]]] = m
 
       seq.foreach((col) => {
-      val colName: String = col._1
-      col._2.foreach((t) => {
-        val typeName: String = t._1
-        val typeCount: Int = t._2
-        tempMap.get(colName) match {
-          case Some(cMap) => {
-            cMap.get(typeName) match {
-              case Some(tCount: Int) =>
-                tempMap += (colName -> Map((typeName -> (tCount + typeCount))))
-              case None =>
-                tempMap += (colName -> Map((typeName -> typeCount)))
-            } // end type map portion
-          }
-          case None =>
-            tempMap += (colName -> Map((typeName -> typeCount))) // no previous enteries so just add to the temp map
+        val colName: String = col._1
+        col._2.get("TYPE") match {
+          case Some(typeMap) =>
+            typeMap.foreach((t) => { // update type information for each type possibility
+              val typeName: String = t._1.toString
+              val typeCount: Int = t._2
+              retMap.get(colName) match {
+                case Some(tempMap: Map[String,Seq[(Any,Int)]]) => { // temp map is the map for that column
+                  tempMap.get("TYPE") match {
+                    case Some(typeSeq) =>
+                      val updates: Seq[(Any,Int)] = typeSeq.map((t) => {
+                        val typeInMap: String = t._1.toString
+                        if(typeInMap.equals(typeName)){
+                          (typeInMap,typeCount + t._2)
+                        }
+                        else{
+                          (typeInMap,t._2)
+                        }
+                      })
+                      val localTempMap = tempMap + ("TYPE" -> updates)
+                      retMap += (colName -> localTempMap) // covers the case where TYPE is present but not that type, and also when it should be updated
+
+                    case None => // TYPE is not present for that column so make one
+                      var tempSeq: ListBuffer[(Any,Int)] = ListBuffer[(Any,Int)]()
+                      tempSeq += Tuple2(typeName,typeCount)
+                      retMap += (colName -> Map(("TYPE" -> tempSeq)))
+                  }
+                }
+                case None =>
+                  retMap += (colName -> col._2)
+              }
+            })
+          case None => // no need to add type info yet if none exists
         }
-      })
+        col._2.get("OBJECT") match {
+          case Some(typeMap) =>
+            typeMap.map((t) => {
+              val objectShape: Seq[String] = t._1.asInstanceOf[Seq[String]]
+              val objectCount: Int = t._2
+              retMap.get(colName) match {
+                case Some(tempMap: Map[String,Seq[(Any,Int)]]) => {
+                  tempMap.get("OBJECT") match {
+                    case Some(objSeq: Seq[(Any,Int)]) =>
+                      val updates: Seq[(Any,Int)] = objSeq.map((t) => {
+                        val objectInMap: Seq[String] = t._1.asInstanceOf[Seq[String]]
+                        if(objectInMap == objectShape){
+                          (objectShape,objectCount + t._2)
+                        }
+                        else{
+                          (objectInMap,t._2)
+                        }
+                      })
+                      val localTempMap = tempMap + ("OBJECT" -> updates)
+                      retMap += (colName -> localTempMap) // covers the case where TYPE is present but not that type, and also when it should be updated
+
+                    case None => // does not contain object, but the column is present
+                      var tempSeq: ListBuffer[(Any,Int)] = ListBuffer[(Any,Int)]()
+                      tempSeq += Tuple2(objectShape,objectCount)
+                      retMap += (colName -> Map(("OBJECT" -> tempSeq)))
+                  }
+                }
+                case None => // column not present so add the default
+                  retMap += (colName -> col._2)
+              }
+            })
+          case None => // there is no object so no need to add one
+        }
     })
-    tempMap
+    retMap
   }
 
-  def format(m: Map[String,Map[String,Int]],count: Int): ExplorerObject = {
+  def format(m: Map[String,Map[String,Seq[(Any,Int)]]],count: Int): ExplorerObject = {
+    // this is the function that converts the map into the json structure for output
     val allColumns: Seq[AllData] =  m.map((cols) => {
       val colName: String = cols._1
-      val types: Seq[JsonPlay.TypeData] = cols._2.map((t) => {
-        JsonPlay.TypeData(t._1,t._2)
-      }).toSeq
-      JsonPlay.AllData(colName,types)
+      var typeData: Option[Seq[TypeData]] = None
+      var objectData: Option[Seq[ObjectTracker]] = None
+      val dataMap: Map[String,Seq[(Any,Int)]] = cols._2
+      dataMap.get("TYPE") match {
+        case Some(td) =>
+          val temp: Seq[TypeData] = td.map((t) => {
+            JsonPlay.TypeData(t._1.toString,t._2)
+          }).toSeq
+          typeData = Option[Seq[TypeData]](temp)
+
+        case None =>
+      }
+      dataMap.get("OBJECT") match {
+        case Some(od) =>
+          val temp: Seq[ObjectTracker] = od.map((obj) => {
+            JsonPlay.ObjectTracker(obj._1.asInstanceOf[Seq[String]],obj._2)
+          }).toSeq
+          objectData = Option[Seq[ObjectTracker]](temp)
+
+        case None =>
+      }
+      JsonPlay.AllData(colName,typeData,objectData)
     }).toSeq
     ExplorerObject(allColumns,count)
   }

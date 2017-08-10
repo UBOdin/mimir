@@ -1,13 +1,7 @@
 package mimir.util;
 
-import java.util.Set
-
-import com.github.wnameless.json.flattener.JsonFlattener
 import play.api.libs.json._
 import mimir.algebra._
-import scala.collection.JavaConverters._
-
-import scala.util.parsing.json.JSONObject
 
 object JsonUtils {
 

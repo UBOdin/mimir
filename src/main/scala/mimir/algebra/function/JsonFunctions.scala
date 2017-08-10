@@ -3,13 +3,15 @@ package mimir.algebra.function;
 import java.util.Set
 
 import com.github.wnameless.json.flattener.JsonFlattener
-import play.api.libs.json._
 import mimir.algebra._
 import mimir.serialization.Json
+import mimir.sql.sqlite.JsonExplorerProject.createFullObjectSet
+import mimir.util.JsonPlay.{AllData, ExplorerObject, ObjectTracker, TypeData}
 import mimir.util._
-import scala.collection.JavaConverters._
+import play.api.libs.json._
 
-import scala.util.parsing.json.JSONObject
+import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 
 object JsonFunctions
 {
@@ -33,43 +35,60 @@ object JsonFunctions
   def jsonExplorerProject(args: Seq[PrimitiveValue]): PrimitiveValue =
   {
 
-    var columnData: Map[String,Any] = Map[String,Any]()
+    val dataList: ListBuffer[AllData] = ListBuffer[AllData]()
 
     args match {
       case Seq(row) => {
         if(row.isInstanceOf[StringPrimitive]) { // the value is not null, so perform operations needed
-          val jsonString:String = row.toString
+          val jsonString: String = row.asString
+
+          // try to clean up the json object, might want to replace this later
           var clean = jsonString.replace("\\\\", "") // clean the string of variables that will throw off parsing
           clean = clean.replace("\\\"", "")
           clean = clean.replace("\\n", "")
           clean = clean.replace("\\r", "")
           clean = clean.replace("\n", "")
           clean = clean.replace("\r", "")
-          while (clean.charAt(0) != '{' || clean.charAt(clean.size - 1) != '}'){ // give it the best shot at being in json format
-            if(clean.charAt(0) != '{')
-              clean = clean.substring(1,clean.size)
-            if (clean.charAt(clean.size - 1) != '}')
-              clean = clean.substring(0,clean.size - 1)
-          }
-
           try {
-            val jsonMap: java.util.Map[String,AnyRef] = JsonFlattener.flattenAsMap(clean) // map of all the
+            val jsonMap: java.util.Map[String,AnyRef] = JsonFlattener.flattenAsMap(clean) // create a flat map of the json object
             val jsonMapKeySet: Set[String] = jsonMap.keySet()
-            for (key:String <- jsonMapKeySet.asScala){ // iterate through each key, for each key find it's type
-              val jsonType:String = Type.getType(jsonMap.get(key).toString).toString()
-              var typeData: Map[String,Integer] = Map[String,Integer]() // contains column type data, this is
-              typeData = typeData + (jsonType -> 1)
-              columnData = columnData + (key -> JSONObject(typeData).toString())
+            val fullKeySet: ListBuffer[String] = createFullObjectSet(jsonMapKeySet)
+            for (key: String <- fullKeySet){ // iterate through each key which can be thought of as a column
+              jsonMapKeySet.contains(key) match {
+                case true => // it is a leaf and is a type
+                  val jsonType: String = Type.getType(jsonMap.get(key).toString).toString() // returns the
+                  val tJson: TypeData = JsonPlay.TypeData(jsonType,1)
+                  val dJson: AllData = JsonPlay.AllData(key,Option[Seq[TypeData]](Seq[TypeData]((tJson))),None)
+                  dataList += dJson
+
+                case false => // it is an object and has no type for this record
+                  var objectSeq: ListBuffer[String] = ListBuffer[String]()
+                  jsonMapKeySet.asScala.map((x: String) => {
+                    val objectList = x.split("\\.")
+                    if(!x.equals(key)) {
+                      if(objectList.contains(key) && !objectList.last.equals(key)){ // contains key and it's not the last object
+                        objectSeq += x
+                      }
+                    }
+                  })
+                  val dJson: AllData = JsonPlay.AllData(key,None,Option[Seq[ObjectTracker]](Seq[ObjectTracker](JsonPlay.ObjectTracker(objectSeq.toSeq,1))))
+                  dataList += dJson
+              }
             }
           }
           catch{
-            case e: Exception => throw new Exception("Json_Miner expects Json string as an input, check the input")
+            case e: Exception => {
+              println(s"Not of JSON format in Json_Explorer_Project, so null returned: $jsonString")
+              return NullPrimitive()
+            } // is not a proper json format so return null since there's nothing we can do about this right now
           }
+          val jsonResult: ExplorerObject = ExplorerObject(dataList,1)
+          val output: JsValue = play.api.libs.json.Json.toJson(jsonResult)
+          return StringPrimitive(play.api.libs.json.Json.stringify(output))
         }
-        // now return the json output
-        // println(JSONObject(columnData).toString())
-
-        return StringPrimitive(JSONObject(columnData).toString())
+        else {
+          return NullPrimitive()
+        }
       }
       case _ => throw new Exception("JSON_Miner args are not of the right form") // should be single column of json text
     }

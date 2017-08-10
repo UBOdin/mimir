@@ -428,7 +428,7 @@ case class Database(backend: Backend)
         if(tableExists(targetTable) && !force){
           throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' AS tableName`; to override.")
         }
-        LoadJSON.handleSingleJSON(this, targetTable, sourceFile)
+        LoadJSON.loadJson(this, targetTable, sourceFile)
       }
       case fmt =>
         throw new SQLException(s"Unknown load format '$fmt'")
