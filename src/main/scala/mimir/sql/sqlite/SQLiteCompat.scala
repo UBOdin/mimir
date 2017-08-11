@@ -16,6 +16,8 @@ import mimir.util.JsonPlay._
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.util.parsing.json._
+import scala.xml.Utility._
+
 
 object SQLiteCompat extends LazyLogging{
 
@@ -515,12 +517,14 @@ object JsonExplorerProject extends org.sqlite.Function with LazyLogging {
           val jsonString: String = value_text(0)
 
           // try to clean up the json object, might want to replace this later
-          var clean = jsonString.replace("\\\\", "") // clean the string of variables that will throw off parsing
-          clean = clean.replace("\\\"", "")
+          //var clean = unescape(jsonString)
+          var clean = jsonString.replace("\r", "") // clean the string of variables that will throw off parsing
+          clean = clean.replace("\n", "")
           clean = clean.replace("\\n", "")
           clean = clean.replace("\\r", "")
-          clean = clean.replace("\n", "")
-          clean = clean.replace("\r", "")
+          clean = clean.replace("\\\"", "")
+          clean = clean.replace("\\\\", "")
+
           try {
             val jsonMap: java.util.Map[String,AnyRef] = JsonFlattener.flattenAsMap(clean) // create a flat map of the json object
             val jsonMapKeySet: Set[String] = jsonMap.keySet()
@@ -550,7 +554,7 @@ object JsonExplorerProject extends org.sqlite.Function with LazyLogging {
           }
           catch{
             case e: Exception => {
-              println(s"Not of JSON format in Json_Explorer_Project, so null returned: $jsonString")
+//              println(s"Not of JSON format in Json_Explorer_Project, so null returned: $jsonString")
               result()
             } // is not a proper json format so return null since there's nothing we can do about this right now
           }
@@ -648,6 +652,7 @@ object JsonExplorerMerge extends org.sqlite.Function.Aggregate {
     var retMap: Map[String,Map[String,Seq[(Any,Int)]]] = m
 
       seq.foreach((col) => {
+
         val colName: String = col._1
         col._2.get("TYPE") match {
           case Some(typeMap) =>
@@ -657,16 +662,21 @@ object JsonExplorerMerge extends org.sqlite.Function.Aggregate {
               retMap.get(colName) match {
                 case Some(tempMap: Map[String,Seq[(Any,Int)]]) => { // temp map is the map for that column
                   tempMap.get("TYPE") match {
-                    case Some(typeSeq) =>
-                      val updates: Seq[(Any,Int)] = typeSeq.map((t) => {
-                        val typeInMap: String = t._1.toString
+                    case Some(typeSeq) => // types exist in both so need to merge
+                      var added = false
+                      var updates: ListBuffer[(Any,Int)] = ListBuffer[(Any,Int)]()
+                      typeSeq.foreach((tCols) => {
+                        val typeInMap: String = tCols._1.toString
                         if(typeInMap.equals(typeName)){
-                          (typeInMap,typeCount + t._2)
+                          added = true
+                          updates += Tuple2(typeInMap,typeCount + tCols._2)
                         }
                         else{
-                          (typeInMap,t._2)
+                          updates += Tuple2(typeInMap,tCols._2)
                         }
                       })
+                      if(!added)
+                        updates += Tuple2(typeName,typeCount)
                       val localTempMap = tempMap + ("TYPE" -> updates)
                       retMap += (colName -> localTempMap) // covers the case where TYPE is present but not that type, and also when it should be updated
 
@@ -676,7 +686,7 @@ object JsonExplorerMerge extends org.sqlite.Function.Aggregate {
                       retMap += (colName -> Map(("TYPE" -> tempSeq)))
                   }
                 }
-                case None =>
+                case None => // the main map does not contain this column yet
                   retMap += (colName -> col._2)
               }
             })
@@ -691,15 +701,20 @@ object JsonExplorerMerge extends org.sqlite.Function.Aggregate {
                 case Some(tempMap: Map[String,Seq[(Any,Int)]]) => {
                   tempMap.get("OBJECT") match {
                     case Some(objSeq: Seq[(Any,Int)]) =>
-                      val updates: Seq[(Any,Int)] = objSeq.map((t) => {
-                        val objectInMap: Seq[String] = t._1.asInstanceOf[Seq[String]]
+                      var added = false
+                      val updates: ListBuffer[(Any,Int)] = ListBuffer[(Any,Int)]()
+                      objSeq.foreach((o) => {
+                        val objectInMap: Seq[String] = o._1.asInstanceOf[Seq[String]]
                         if(objectInMap == objectShape){
-                          (objectShape,objectCount + t._2)
+                          added = true
+                          updates += Tuple2(objectShape,objectCount + o._2)
                         }
                         else{
-                          (objectInMap,t._2)
+                          updates += Tuple2(objectInMap,o._2)
                         }
                       })
+                      if(!added)
+                        updates += Tuple2(objectShape,objectCount)
                       val localTempMap = tempMap + ("OBJECT" -> updates)
                       retMap += (colName -> localTempMap) // covers the case where TYPE is present but not that type, and also when it should be updated
 
@@ -754,6 +769,7 @@ object JsonExplorerMerge extends org.sqlite.Function.Aggregate {
     // this is what is returned, return a json object with all the encoded information
 //    println(x)
 
+    println("FINAL")
     val eo: ExplorerObject = format(columnMap,rowCount)
     val output: JsValue = Json.toJson(eo)
 

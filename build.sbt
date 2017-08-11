@@ -44,15 +44,16 @@ libraryDependencies ++= Seq(
   "org.specs2"                    %%  "specs2-matcher-extra"  % "3.8.4" % "test",
   "org.specs2"                    %%  "specs2-junit"          % "3.8.4" % "test",
 
-  //////////////////////// Data Munging Tools //////////////////////
+//////////////////////// Data Munging Tools //////////////////////
   "com.github.nscala-time"        %%  "nscala-time"           % "1.2.0",
   "org.apache.lucene"             %   "lucene-spellchecker"   % "3.6.2",
   "org.apache.servicemix.bundles" %   "org.apache.servicemix.bundles.collections-generic" 
                                                               % "4.01_1",
+  "org.apache.commons"            %   "commons-text"          % "1.1",
   "org.apache.commons"            %   "commons-csv"           % "1.4",
   "commons-io"                    %   "commons-io"            % "2.5",
   "com.github.wnameless"          %   "json-flattener"        % "0.2.2",
-  "com.typesafe.play"             % "play-json_2.11"          % "2.6.2",
+  "com.typesafe.play"             %   "play-json_2.11"        % "2.6.2",
 
 
     //////////////////////// Lens Libraries //////////////////////

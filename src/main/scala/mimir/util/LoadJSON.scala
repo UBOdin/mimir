@@ -22,6 +22,8 @@ object LoadJSON {
 
     createJsonTable(db,tableName,columnName)
 
+    val updateStatement: String = s"INSERT INTO $tableName($columnName) VALUES (?);"
+    var rows : ListBuffer[PrimitiveValue] = ListBuffer[PrimitiveValue]()
     val input = new BufferedReader(new FileReader(sourceFile))
     var line:String = input.readLine()
     while(line != null && line != ""){
@@ -32,7 +34,7 @@ object LoadJSON {
           if (line.charAt(line.size - 1) != '}')
             line = line.substring(0, line.size - 1)
         }
-        db.backend.update(s"INSERT INTO $tableName($columnName) VALUES ('$line');")
+        rows += StringPrimitive(line)
         line = input.readLine()
       } catch {
         case e: Exception => // it's not json so just don't add it
@@ -40,20 +42,28 @@ object LoadJSON {
           nonJsonCount += 1
       }
       rowCount += 1
+      if((rowCount % 10000) == 0 && !rows.isEmpty){
+        db.backend.fastUpdateBatch(updateStatement, rows.map((x) => Seq(x)))
+        rows = new ListBuffer[PrimitiveValue]()
+      }
+    }
+    if(!rows.isEmpty){
+      db.backend.fastUpdateBatch(updateStatement, rows.map((x) => Seq(x)))
+      rows = new ListBuffer[PrimitiveValue]()
     }
     input.close()
 
-    if((nonJsonCount/rowCount) >= .9){
+    if((nonJsonCount/rowCount) >= .9 || rowCount == 1){
       // this is a last ditch attempt to load the json object, this will not use return carriage so it should be slow
       db.backend.update(s"DROP TABLE $tableName;")
       createJsonTable(db,tableName,columnName)
+      println("time to kick the Json Loader into... MAXIMUM OVERDRIVE!!!")
 
       var indent = 0 // this tracks how far indented in a object you are, if it is at 1 then it is done
       val input = new BufferedReader(new FileReader(sourceFile))
       var line: String = input.readLine()
       var jsonObj: String = "" // holds the json object
-      val updateStatement: String = s"INSERT INTO $tableName($columnName) VALUES (?);"
-      var rows : ListBuffer[PrimitiveValue] = new ListBuffer[PrimitiveValue]()
+      rows = ListBuffer[PrimitiveValue]()
       var rowCount = 0
       try {
         line.charAt(0) match {
@@ -69,15 +79,15 @@ object LoadJSON {
                     if (indent > 0)
                       jsonObj += c
                   case '}' =>
-                    indent -= 1
                     if (indent > 0)
                       jsonObj += c
+                    indent -= 1
                   case ',' => // if indent is at 1 then stop object
-                    if (indent == 1) {
+                    if (indent == 0) {
                       rows += StringPrimitive(jsonObj)
                       jsonObj = ""
                       rowCount += 1
-                      if (rowCount >= 69435) {
+                      if (rowCount >= 10000) {
                         db.backend.fastUpdateBatch(updateStatement, rows.map((x) => Seq(x)))
                         rows = new ListBuffer[PrimitiveValue]()
                         rowCount = 0
@@ -100,6 +110,8 @@ object LoadJSON {
         case e: EOFException => // do nothing the file just ended
       }
       input.close()
+      if(!rows.isEmpty)
+        db.backend.fastUpdateBatch(updateStatement, rows.map((x) => Seq(x)))
       println("done")
     } // end json not working attempt
 

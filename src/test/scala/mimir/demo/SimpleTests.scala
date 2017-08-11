@@ -9,11 +9,16 @@ import org.specs2.matcher.FileMatchers
 import mimir.test._
 import mimir.lenses.JsonExplorerLens
 import mimir.sql.JDBCBackend
+import mimir.util.TimeUtils
 
 object SimpleTests
   extends SQLTestSpecification("tempDBDemoScript")
     with FileMatchers
 {
+
+
+  def time[A](description: String): ( => A) => A =
+    TimeUtils.monitor(description)
 
   // The demo spec uses cumulative tests --- Each stage depends on the stages that
   // precede it.  The 'sequential' keyword below is necessary to prevent Specs2 from
@@ -44,11 +49,15 @@ object SimpleTests
 
       // load all tables without TI lens
       //reviewDataFiles.foreach(db.loadTableNoTI(_))
+//      db.loadTable("TWITTER",new File("test/data/twitter10kRows.txt"),false,("JSON",Seq(new StringPrimitive(""))))
       db.loadTable("JSONTEST",new File("test/data/jsonTest.csv"),false,("JSON",Seq(new StringPrimitive(""))))
       db.loadTable("JSONTEST2",new File("test/data/meteorite.json"),false,("JSON",Seq(new StringPrimitive(""))))
 //      db.loadTable("JSONTEST3",new File("test/data/nasa.json"),false,("JSON",Seq(new StringPrimitive(""))))
-//      db.loadTable("JSONTEST4",new File("test/data/jeopardy.json"),false,("JSON",Seq(new StringPrimitive(""))))
+      db.loadTable("JSONTEST4",new File("test/data/jeopardy.json"),false,("JSON",Seq(new StringPrimitive(""))))
+
+      println("DONE LOADING")
 /*
+
       query("SELECT JSON_EXPLORER_PROJECT(JSONCOLUMN) FROM JSONTEST;"){
         _.map{
           _(0)
@@ -62,18 +71,18 @@ object SimpleTests
       }
 */
 /*
-      query("SELECT JSON_EXPLORER_PROJECT(JSONCOLUMN) FROM JSONTEST2;"){
+      query("SELECT * FROM JSONTEST4;"){
         _.foreach(println(_))
       }
 */
 
-
-      query("SELECT JSON_EXPLORER_MERGE(JSON_EXPLORER_PROJECT(JSONCOLUMN)) FROM JSONTEST;"){
-        _.map{
-          _(0)
+    time("Query Time") {
+      query("SELECT JSON_EXPLORER_MERGE(JSON_EXPLORER_PROJECT(JSONCOLUMN)) FROM JSONTEST4;") {
+        _.map {
+          _ (0)
         }
       }
-
+    }
 
       /*
             // Test Create Type Inference
