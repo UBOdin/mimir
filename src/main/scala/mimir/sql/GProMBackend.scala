@@ -365,6 +365,8 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int)
             case _ =>
               stmt.setTimestamp(i, JDBCUtils.convertTimestamp(t))
           }
+        case t:IntervalPrimitive => 
+          stmt.setString(i, t.asString)
         case r:RowIdPrimitive     => stmt.setString(i,r.v)
         case t:TypePrimitive      => stmt.setString(i, t.t.toString) 
         case BoolPrimitive(true)  => stmt.setInt(i, 1)
