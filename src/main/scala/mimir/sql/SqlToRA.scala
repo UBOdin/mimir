@@ -287,6 +287,14 @@ class SqlToRA(db: Database)
           }),
           ret
         )
+
+      // Check if a DISTINCT is required
+      val distinct = ps.getDistinct()
+      if(distinct != null){
+        val distinctOn = distinct.getOnSelectItems()
+        if(distinctOn != null){ unhandled("DISTINCT ON") }
+        ret = ret.distinct // OperatorConstructors.scala
+      }
     } else {
       // This is an aggregate select.  
       
@@ -365,10 +373,10 @@ class SqlToRA(db: Database)
 
       // Apply sort and limit if necessary
       applySortAndLimit()
-    }
 
-    // Sanity check unimplemented features
-    if(ps.getDistinct != null){ unhandled("DISTINCT") }
+      // Sanity check unimplemented features
+      if(ps.getDistinct != null){ unhandled("Aggregate DISTINCT") }
+    }
 
     // We're responsible for returning bindings for this specific
     // query, so extract those from the target expressions we
