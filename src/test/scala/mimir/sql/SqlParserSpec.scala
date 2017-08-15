@@ -490,16 +490,6 @@ object SqlParserSpec
 				))
 		}
 
-		"Parse DISTINCT queries" >> {
-			db.compiler.optimize(convert("SELECT DISTINCT * FROM R")) must be equalTo(
-				db.table("R").distinct
-			)
-			db.compiler.optimize(convert("SELECT DISTINCT A FROM R")) must be equalTo(
-				Aggregate(Seq(Var("A")), Seq(), db.table("R"))
-			)
-			db.compiler.optimize(convert("SELECT DISTINCT ON (C) A, B FROM R")) must throwA[SQLException]
-		}
-
 		"Respect column ordering of base relations" >> {
 			convert("SELECT * FROM R").columnNames must be equalTo(
 				Seq("A", "B", "C")
