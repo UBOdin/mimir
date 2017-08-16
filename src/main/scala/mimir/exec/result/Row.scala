@@ -40,3 +40,19 @@ trait Row
     tupleSchema.zip(tuple).map { case ((name,_),v) => name+":"+v }.mkString(", ") + 
   ">"
 }
+
+class RowMatcher(columns: Seq[String])
+{
+  def unapplySeq(r: Row): Option[Seq[PrimitiveValue]] = 
+  {
+    val m = r.tupleMap
+    Some(columns.map( m(_) ))
+  }
+}
+
+object Row
+{
+  def unapplySeq(r: Row): Option[Seq[PrimitiveValue]] = Some(r.tuple)
+
+  def apply(columns: Seq[String]) = new RowMatcher(columns)
+}

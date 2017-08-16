@@ -101,9 +101,8 @@ class ViewManager(db:Database) extends LazyLogging {
       db.backend.resultRows(s"SELECT QUERY, METADATA FROM $viewTable WHERE name = ?", 
         Seq(StringPrimitive(name))
       )
-    results.take(1).headOption.map(_.toSeq).map( 
-      { 
-        case Seq(StringPrimitive(s), IntPrimitive(meta)) => {
+    results.take(1).headOption.map { 
+        case Row("QUERY", "METADATA")(StringPrimitive(s), IntPrimitive(meta)) => {
           val query = Json.toOperator(Json.parse(s))
           val isMaterialized = 
             meta != 0
