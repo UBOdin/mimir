@@ -10,6 +10,7 @@ import mimir.provenance._
 import mimir.ctables._
 import mimir.exec._
 import mimir.exec.mode._
+import mimir.exec.result._
 import mimir.serialization._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.sql.JDBCBackend
@@ -102,7 +103,7 @@ class ViewManager(db:Database) extends LazyLogging {
         Seq(StringPrimitive(name))
       )
     results.take(1).headOption.map { 
-        case Row("QUERY", "METADATA")(StringPrimitive(s), IntPrimitive(meta)) => {
+        case Seq(StringPrimitive(s), IntPrimitive(meta)) => {
           val query = Json.toOperator(Json.parse(s))
           val isMaterialized = 
             meta != 0
@@ -110,7 +111,7 @@ class ViewManager(db:Database) extends LazyLogging {
           new ViewMetadata(name, query, isMaterialized, db)
         }
       }
-    )
+    
   }
 
   /**

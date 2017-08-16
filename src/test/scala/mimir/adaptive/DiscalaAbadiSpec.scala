@@ -107,9 +107,9 @@ object DiscalaAbadiSpec
             row("IS_KEY").asInstanceOf[BoolPrimitive].v
           )
         }.toSeq 
-        attrs must contain( eachOf( 
-          ("ROOT","MONTH",false),
-          ("BILL_OF_LADING_NBR","QUANTITY",false)
+        attrs should contain( eachOf( 
+          ("PORT_OF_ARRIVAL","US_REGION",false),
+          ("SHIPPER_ADDRESS","SHIPPER_ADDRESS",true)
         ) )
         attrs.map( row => (row._1, row._2) ) must not contain( ("ROOT", "ROOT") )
       }
@@ -135,13 +135,12 @@ object DiscalaAbadiSpec
         // "mimir.exec.Compiler"
       ) {
         query("""
-          SELECT TABLE_NAME, SCHEMA_NAME FROM MIMIR_SYS_TABLES
+          SELECT TABLE_NAME FROM MIMIR_SYS_TABLES
         """){ results =>
-          val tables = results.map { row => (row("TABLE_NAME").asString, row("SCHEMA_NAME").asString) }.toSeq 
+          val tables = results.map { _("TABLE_NAME").asString }.toSeq 
 
-          tables must contain( ("ROOT", "SHIPPING") )
-          tables must contain( ("MIMIR_VIEWS", "BACKEND") )
-          tables must contain( ("SHIPPING", "BACKEND") )
+          tables must contain( "SHIPPING" )
+          tables must contain( "PORT_OF_ARRIVAL" )
         }
       } 
 
@@ -150,9 +149,10 @@ object DiscalaAbadiSpec
       query("""
         SELECT TABLE_NAME, ATTR_NAME FROM MIMIR_SYS_ATTRS
       """) { results =>
-        val attrs = results.map { row => (row("TABLE_NAME").asString, row("ATTR_NAME").asString) }.toSeq 
-        attrs must contain( ("ROOT", "MONTH") )
-        attrs must contain( ("BILL_OF_LADING_NBR", "QUANTITY") )
+        val attrs = results.map { _("ATTR_NAME").asString }.toSeq 
+        attrs must contain( "PORT_OF_ARRIVAL" )
+        attrs must contain( "BILL_OF_LADING_NBR" )
+        attrs must contain( "QUANTITY" )
       }
 
       LoggerUtils.debug(
@@ -192,16 +192,16 @@ object DiscalaAbadiSpec
             ) 
           }.toMap
            
-          attrStrings.keys must contain("QUANTITY")
-          attrStrings("QUANTITY")._2 must beFalse
+          attrStrings.keys must contain("PLACE_OF_RECEIPT")
+          attrStrings("PLACE_OF_RECEIPT")._2 must beFalse
 
-          attrStrings("QUANTITY")._1 must contain('|')
+          attrStrings("PLACE_OF_RECEIPT")._1 must contain('|')
 
           val explanation =
-            explainRow(baseQuery, attrStrings("QUANTITY")._1)
+            explainRow(baseQuery, attrStrings("PLACE_OF_RECEIPT")._1)
     
           explanation.reasons.map(_.reason).head must contain(
-            "QUANTITY could be organized under any of BILL_OF_LADING_NBR"
+            "PLACE_OF_RECEIPT could be organized under any of BILL_OF_LADING_NBR"
           )
         }
       }
@@ -212,8 +212,8 @@ object DiscalaAbadiSpec
 
     "Create queriable relations" >> {
       queryOneColumn("""
-        SELECT QUANTITY FROM SHIPPING.BILL_OF_LADING_NBR"""
-      ){ _.toSeq must contain(StringPrimitive("1")) }
+        SELECT PLACE_OF_RECEIPT FROM SHIPPING.BILL_OF_LADING_NBR"""
+      ){ _.toSeq must contain(StringPrimitive("QINGDAO, CHINA")) }
     }
 
   }
