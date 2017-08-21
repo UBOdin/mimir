@@ -136,14 +136,16 @@ object Plot
              results.foreach{data=>in.write((data+"\n").getBytes)};
              in.close();
             },
-         out=> {println(out);},
-         err=>{println(err);}
+         out=> {},
+         err=>{}
         )
 
         //run the python process using the ProcessIO
-        val process="python src/main/scala/mimir/plot/testFunction.py".run(io);
+        val process="python src/main/scala/mimir/plot/Plot.py".run(io);
         //wait for the process to finish....
-        process.exitValue();
+        val exit=process.exitValue();
+        println("EXIT VALUE:")
+        println(exit)
         //fin
     }
 

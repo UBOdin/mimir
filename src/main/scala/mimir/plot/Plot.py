@@ -15,25 +15,25 @@ import sys;
 #clean up the user input for Key Location to make sure that it's a valid location (default to best if not)
 def cleanKeyLoc(loc):
     loc=loc.lower()
-    if(loc=='upper right' or loc='ur'):
+    if(loc=='upper right' or loc=='ur'):
         return 'upper right'
-    if(loc=='upper left' or loc='ul'):
+    if(loc=='upper left' or loc=='ul'):
         return 'upper left'
-    if(loc=='lower left' or loc='ll'):
+    if(loc=='lower left' or loc=='ll'):
         return 'lower left'
-    if(loc=='lower right' or loc='lr'):
+    if(loc=='lower right' or loc=='lr'):
         return 'lower right'
-    if(loc=='right' or loc='r'):
+    if(loc=='right' or loc=='r'):
         return 'right'
-    if(loc=='center left' or loc='cl'):
+    if(loc=='center left' or loc=='cl'):
         return 'center left'
-    if(loc=='center right' or loc='cr'):
+    if(loc=='center right' or loc=='cr'):
         return 'center right'
-    if(loc=='lower center' or loc='lc'):
+    if(loc=='lower center' or loc=='lc'):
         return 'lower center'
-    if(loc=='upper center' or loc='uc'):
+    if(loc=='upper center' or loc=='uc'):
         return 'upper center'
-    if(loc=='center' or loc='c'):
+    if(loc=='center' or loc=='c'):
         return 'center'
     return 'best'
 
@@ -293,19 +293,23 @@ def addDefaultGlobalValues(definedValues,xmax,xmin,ymax,ymin):
     #make sure that the x/y mins and maxs are all usable values.
     #If any are not, remove them and let them be replaced with defaults
     try:
-        definedValues['XMAX']=float(definedValues['XMAX'])
+        if 'XMAX' in definedValues:
+            definedValues['XMAX']=float(definedValues['XMAX'])
     except:
         del definedValues['XMAX']
     try:
-        definedValues['XMIN']=float(definedValues['XMIN'])
+        if 'XMIN' in definedValues:
+            definedValues['XMIN']=float(definedValues['XMIN'])
     except:
         del definedValues['XMIN']
     try:
-        definedValues['YMIN']=float(definedValues['YMIN'])
+        if 'YMIN' in definedValues:
+            definedValues['YMIN']=float(definedValues['YMIN'])
     except:
         del definedValues['YMIN']
     try:
-        definedValues['YMAX']=float(definedValues['YMAX'])
+        if 'YMAX' in definedValues:
+            definedValues['YMAX']=float(definedValues['YMAX'])
     except:
         del definedValues['YMAX']
     #fill in any missing values with the default values
@@ -373,8 +377,8 @@ split=0
 #Split=1 indicates that the data being read are line settings
 #split=2 indicates that the data being read is data
 
-openFlile=open("data.txt",'r')
-for line in openFlile:
+#openFlile=open("data.txt",'r')
+for line in sys.stdin:
     line=line.replace("\n","")
     if(line[0]=="-"):
         split=split+1
@@ -411,7 +415,7 @@ for line in openFlile:
         if(split==0):
             line=line.replace("(","").replace(")","").replace("'","").split(',')
             globSet[line[0]]=line[1]
-openFlile.close
+#openFlile.close
 
 #
 # At this point, all data is read into its proper data structures
@@ -568,11 +572,14 @@ for line in lineSet:
             usedStyles=colorStyleResults[0]
             line[2]['COLOR']=colorStyleResults[1]
             line[2]['STYLE']=colorStyleResults[2]
-        #if there is not a defined value for WEIGHT, or that value is not numeric, assign the value to 1.0    
+        #if there is not a defined value for WEIGHT, or that value is not numeric, assign the value to 1.0
         try:
             line[2]['WEIGHT']=float(line[2]['WEIGHT'])
         except:
-            line[2]['WEIGHT']=1.0
+            if(globSet['FORMAT']=='scatter'):
+                line[2]['WEIGHT']=5.0
+            else:
+                line[2]['WEIGHT']=1.0
     #add a default value for lineName if it isn't defined
     if 'LINENAME' not in line[2]:
         line[2]['LINENAME']=line[3]+', '+line[4]
