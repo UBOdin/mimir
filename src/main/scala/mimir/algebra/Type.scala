@@ -109,6 +109,8 @@ object Type {
   }
 
   def getType(s:String): Type = {
+    if(s == null)
+      return TAny()
     var t: Type = TString() // default
 
     if(s.matches("^(\\+|-)?([0-9]*(\\.[0-9]+)?)$")) // float

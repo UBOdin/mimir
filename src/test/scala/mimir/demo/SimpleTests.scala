@@ -50,10 +50,12 @@ object SimpleTests
       // load all tables without TI lens
       //reviewDataFiles.foreach(db.loadTableNoTI(_))
 //      db.loadTable("TWITTER",new File("test/data/twitter10kRows.txt"),false,("JSON",Seq(new StringPrimitive(""))))
-      db.loadTable("JSONTEST",new File("test/data/jsonTest.csv"),false,("JSON",Seq(new StringPrimitive(""))))
-      db.loadTable("JSONTEST2",new File("test/data/meteorite.json"),false,("JSON",Seq(new StringPrimitive(""))))
+//      db.loadTable("JSONTEST",new File("test/data/jsonTest.csv"),false,("JSON",Seq(new StringPrimitive(""))))
+//      db.loadTable("JSONTEST2",new File("test/data/meteorite.json"),false,("JSON",Seq(new StringPrimitive(""))))
+      db.loadTable("TWITTERFULL",new File("test/data/dump-30.txt"),false,("JSON",Seq(new StringPrimitive(""))))
 //      db.loadTable("JSONTEST3",new File("test/data/nasa.json"),false,("JSON",Seq(new StringPrimitive(""))))
-      db.loadTable("JSONTEST4",new File("test/data/jeopardy.json"),false,("JSON",Seq(new StringPrimitive(""))))
+//      db.loadTable("JSONTEST4",new File("test/data/jeopardy.json"),false,("JSON",Seq(new StringPrimitive(""))))
+//      db.loadTable("JSONTEST5",new File("test/data/billionaires.json"),false,("JSON",Seq(new StringPrimitive(""))))
 
       println("DONE LOADING")
 /*
@@ -77,7 +79,7 @@ object SimpleTests
 */
 
     time("Query Time") {
-      query("SELECT JSON_EXPLORER_MERGE(JSON_EXPLORER_PROJECT(JSONCOLUMN)) FROM JSONTEST4;") {
+      query("SELECT JSON_EXPLORER_MERGE(JSON_EXPLORER_PROJECT(JSONCOLUMN)) FROM TWITTERFULL;") {
         _.map {
           _ (0)
         }

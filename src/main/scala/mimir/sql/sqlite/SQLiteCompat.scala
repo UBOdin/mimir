@@ -511,46 +511,44 @@ object JsonExplorerProject extends org.sqlite.Function with LazyLogging {
 
     val dataList: ListBuffer[AllData] = ListBuffer[AllData]()
 
+
     try {
       value_type(0) match {
         case SQLiteCompat.TEXT => {
           val jsonString: String = value_text(0)
 
-          // try to clean up the json object, might want to replace this later
-          //var clean = unescape(jsonString)
-          var clean = jsonString.replace("\r", "") // clean the string of variables that will throw off parsing
-          clean = clean.replace("\n", "")
-          clean = clean.replace("\\n", "")
-          clean = clean.replace("\\r", "")
-          clean = clean.replace("\\\"", "")
-          clean = clean.replace("\\\\", "")
-
           try {
-            val jsonMap: java.util.Map[String,AnyRef] = JsonFlattener.flattenAsMap(clean) // create a flat map of the json object
-            val jsonMapKeySet: Set[String] = jsonMap.keySet()
-            val fullKeySet: ListBuffer[String] = createFullObjectSet(jsonMapKeySet)
-            for (key: String <- fullKeySet){ // iterate through each key which can be thought of as a column
-              jsonMapKeySet.contains(key) match {
-                case true => // it is a leaf and is a type
-                  val jsonType: String = Type.getType(jsonMap.get(key).toString).toString() // returns the
-                  val tJson: TypeData = JsonPlay.TypeData(jsonType,1)
-                  val dJson: AllData = JsonPlay.AllData(key,Option[Seq[TypeData]](Seq[TypeData]((tJson))),None)
-                  dataList += dJson
+            val jsonMap: java.util.Map[String,AnyRef] = JsonFlattener.flattenAsMap(jsonString) // create a flat map of the json object
+            val jsonLeafKeySet: Set[String] = jsonMap.keySet()
+            val objectKeySet: ListBuffer[String] = createFullObjectSet(jsonLeafKeySet)
 
-                case false => // it is an object and has no type for this record
-                  var objectSeq: ListBuffer[String] = ListBuffer[String]()
-                  jsonMapKeySet.asScala.map((x: String) => {
-                    val objectList = x.split("\\.")
-                    if(!x.equals(key)) {
-                      if(objectList.contains(key) && !objectList.last.equals(key)){ // contains key and it's not the last object
-                        objectSeq += x
-                      }
-                    }
-                  })
-                  val dJson: AllData = JsonPlay.AllData(key,None,Option[Seq[ObjectTracker]](Seq[ObjectTracker](JsonPlay.ObjectTracker(objectSeq.toSeq,1))))
-                  dataList += dJson
+            // preform the type counting
+            for (key: String <- jsonLeafKeySet.asScala){ // iterate through each key which can be thought of as a column
+              try {
+                val jsonType: String = Type.getType(jsonMap.get(key).toString).toString() // returns the type
+                val tJson: TypeData = JsonPlay.TypeData(jsonType, 1)
+                val dJson: AllData = JsonPlay.AllData(key, Option[Seq[TypeData]](Seq[TypeData]((tJson))), None)
+                dataList += dJson
+              } catch {
+                case e: Exception => // do nothing
               }
             }
+
+            // now look at the objects
+            objectKeySet.foreach((objectKey: String) => { // for every object, find the structure
+              var objectSeq: ListBuffer[String] = ListBuffer[String]()
+              jsonLeafKeySet.asScala.foreach((x: String) => { // for every leaf, if object is in the path then it contains it
+                val leafList = pullApart(x)
+                if(!x.equals(objectKey)) {
+                  if(leafList.contains(objectKey)){ // contains key and it's not the last object
+                    objectSeq += x
+                  }
+                }
+              })
+//              println(objectSeq)
+              val dJson: AllData = JsonPlay.AllData(objectKey,None,Option[Seq[ObjectTracker]](Seq[ObjectTracker](JsonPlay.ObjectTracker(objectSeq.toSeq,1))))
+              dataList += dJson
+            })
           }
           catch{
             case e: Exception => {
@@ -567,9 +565,25 @@ object JsonExplorerProject extends org.sqlite.Function with LazyLogging {
       }
 
     } catch {
-      case e: Exception => throw new Exception("Something went wrong in sqlitecompact Json_Explorer_Project")
+      case e: Exception =>
+        throw e
+        //throw new Exception("Something went wrong in sqlitecompact Json_Explorer_Project")
     }
 
+  }
+
+  def pullApart(s: String): ListBuffer[String] = {
+    var returnSet: ListBuffer[String] = ListBuffer[String]()
+    val keySplit: Array[String] = s.split("\\.")
+    var runningPath: String = ""
+    for(i <- 0 until keySplit.size){
+      if(i != 0)
+        runningPath += "."
+      runningPath += keySplit(i)
+      if(!returnSet.contains(runningPath))
+        returnSet += runningPath
+    }
+    returnSet
   }
 
   // returns a set that consists of all possible keys
@@ -577,10 +591,14 @@ object JsonExplorerProject extends org.sqlite.Function with LazyLogging {
     var returnSet: ListBuffer[String] = ListBuffer[String]()
     s.asScala.map((x: String) => {
       val keySplit: Array[String] = x.split("\\.")
-      keySplit.foreach((i) => {
-        if(!returnSet.contains(i: String))
-          returnSet += i
-      })
+      var runningPath: String = ""
+      for(i <- 0 until keySplit.size - 1){ // exclude the last element
+        if(i != 0)
+          runningPath += "."
+        runningPath += keySplit(i)
+        if(!returnSet.contains(runningPath))
+          returnSet += runningPath
+      }
     })
     returnSet
   }
@@ -613,6 +631,7 @@ object JsonExplorerMerge extends org.sqlite.Function.Aggregate {
         case s: JsSuccess[ExplorerObject] => {
           val row: ExplorerObject = s.get
           val allColumns: Seq[AllData] = row.data
+//          println(allColumns)
           val updates: Seq[(String,Map[String,Seq[(Any,Int)]])] = allColumns.map((a: AllData) => {
 
             val colName: String = a.name
@@ -683,7 +702,7 @@ object JsonExplorerMerge extends org.sqlite.Function.Aggregate {
                     case None => // TYPE is not present for that column so make one
                       var tempSeq: ListBuffer[(Any,Int)] = ListBuffer[(Any,Int)]()
                       tempSeq += Tuple2(typeName,typeCount)
-                      retMap += (colName -> Map(("TYPE" -> tempSeq)))
+                      retMap += (colName -> (tempMap + ("TYPE" -> tempSeq)))
                   }
                 }
                 case None => // the main map does not contain this column yet
@@ -721,7 +740,7 @@ object JsonExplorerMerge extends org.sqlite.Function.Aggregate {
                     case None => // does not contain object, but the column is present
                       var tempSeq: ListBuffer[(Any,Int)] = ListBuffer[(Any,Int)]()
                       tempSeq += Tuple2(objectShape,objectCount)
-                      retMap += (colName -> Map(("OBJECT" -> tempSeq)))
+                      retMap += (colName -> (tempMap + ("OBJECT" -> tempSeq)))
                   }
                 }
                 case None => // column not present so add the default
