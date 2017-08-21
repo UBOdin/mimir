@@ -141,11 +141,14 @@ object Plot
         )
 
         //run the python process using the ProcessIO
-        val process="python src/main/scala/mimir/plot/Plot.py".run(io);
+        val process="python src/main/scala/mimir/plot/testFunction.py".run(io);
         //wait for the process to finish....
         val exit=process.exitValue();
-        println("EXIT VALUE:")
-        println(exit)
+        if(exit==0){
+            println("Plot was successful.")
+        }else{
+            println("PLOT ERROR \n If plotting a bar graph, please make sure any specified (x,y) values are correct \n or try using a different value for the BARORIENT parameter.")
+        }
         //fin
     }
 

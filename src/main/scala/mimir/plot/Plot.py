@@ -10,10 +10,10 @@ import sys;
 #
 
 #globalSetting options:
-#FORMAT, KEY,XMAX,YMAX,XMIN.YMIN, PLOTNAME,XLABEL, YLABEL, and SAVEAS
+#FORMAT, LEGEND,XMAX,YMAX,XMIN.YMIN, PLOTNAME,XLABEL, YLABEL, and SAVEAS
 
-#clean up the user input for Key Location to make sure that it's a valid location (default to best if not)
-def cleanKeyLoc(loc):
+#clean up the user input for Legend Location to make sure that it's a valid location (default to best if not)
+def cleanLegendLoc(loc):
     loc=loc.lower()
     if(loc=='upper right' or loc=='ur'):
         return 'upper right'
@@ -61,7 +61,7 @@ def drawPlot(lineSettings,globalSettings):
 
     #AT THIS POINT BAR GRAPH DATA IS STILL IN STRINGS AND NOT CLEANED
     plottype=globalSettings['FORMAT']
-    showLegend=globalSettings['KEY']=='show'
+    showLegend=globalSettings['LEGEND']=='show'
     legendLabels=[]
     barNo=0
 
@@ -113,7 +113,7 @@ def drawPlot(lineSettings,globalSettings):
                             plt.ylim(globalSettings['YMIN'],globalSettings['YMAX'])
                             barNo=barNo+1
     if showLegend:
-        location=cleanKeyLoc(globalSettings['KEYLOC'])
+        location=cleanLegendLoc(globalSettings['LEGENDLOC'])
         plt.legend(legendLabels,loc=location)
     print("setting labels")
     plt.xlabel(globalSettings['XLABEL'])
@@ -147,6 +147,10 @@ def getMin(val1,val2):
     else:
         return val2
 
+#return true if the line has data to plot. Used for filtering out dataless lines from lineSet
+def dataCheck(lineData):
+    return ((len(lineData[0])!=0)and(len(lineData[0])!=0))
+
 
 # remove any data points in a non-bar graph that are not points of type (integer,integer)
 def cleanAndCastData(xvals,yvals):
@@ -161,9 +165,7 @@ def cleanAndCastData(xvals,yvals):
             cleanY.append(yCoord)
             cleanX.append(xCoord)
         except:
-            #because python gets grumpy if you try to do absolutely nothing here
-            #despite the fact that that's what we need here
-            x=1
+            pass
     return [cleanX,cleanY]
 
 
@@ -186,8 +188,7 @@ def castAndCleanBarData(xvals,yvals,orientation):
             cleanVals.append(num)
             cleanNames.append(barNames[i])
         except:
-            #do nothing, but python won't let you actually do nothing, so:
-            placeholder=1
+            pass
     if(orientation=='vertical'):
         return [cleanNames,cleanVals]
     else:
@@ -278,7 +279,7 @@ def addDefaultGlobalValues(definedValues,xmax,xmin,ymax,ymin):
         saveName=definedValues['SAVENAME']
     default=[
     ('FORMAT',"line"),
-    ('KEY',"show"),
+    ('LEGEND',"show"),
     ('PLOTNAME',saveName),
     ('XLABEL',""),
     ('YLABEL',""),
@@ -287,7 +288,7 @@ def addDefaultGlobalValues(definedValues,xmax,xmin,ymax,ymin):
     ('YMAX',float(ymax)*1.2),
     ('XMIN',float(xmin)*0.8),
     ('XMAX',float(xmax)*1.2),
-    ('KEYLOC','best'),
+    ('LEGENDLOC','best'),
     ('SAVENAME',saveName)
     ]
     #make sure that the x/y mins and maxs are all usable values.
@@ -377,8 +378,9 @@ split=0
 #Split=1 indicates that the data being read are line settings
 #split=2 indicates that the data being read is data
 
-#openFlile=open("data.txt",'r')
-for line in sys.stdin:
+openFlile=open("data.txt",'r')
+#for line in sys.stdin:
+for line in openFlile:
     line=line.replace("\n","")
     if(line[0]=="-"):
         split=split+1
@@ -415,7 +417,7 @@ for line in sys.stdin:
         if(split==0):
             line=line.replace("(","").replace(")","").replace("'","").split(',')
             globSet[line[0]]=line[1]
-#openFlile.close
+openFlile.close
 
 #
 # At this point, all data is read into its proper data structures
@@ -478,6 +480,8 @@ for line in lineSet:
         cleanedData=castAndCleanBarData(line[0],line[1],globSet['BARORIENT'])
         line[0]=cleanedData[0]
         line[1]=cleanedData[1]
+
+
     #for each line, get the symbols for color and style(if defined).
     #also filter out invalid options
     if('COLOR' in line[2]):
@@ -505,44 +509,52 @@ for line in lineSet:
     #update the x/y min/maxs to reflect the data from this line:
     #(yvalues for the given line are line[1], x values are line[0])
 
-    #TODO
-    #find the integer values for the bar graph and use those to get the numeric column's max and min
-    if(isBar):
-        if globSet['BARORIENT']=='vertical':
-            #x values are all strings, they don't have a numerical max or min
-            xmax=0
-            xmin=0
+    #if either line is completely empty, don't do this next bit...
+    if not((not line[0]) or (not line[1])):
+        #find the integer values for the bar graph and use those to get the numeric column's max and min
+        if(isBar):
+            if globSet['BARORIENT']=='vertical':
+                #x values are all strings, they don't have a numerical max or min
+                xmax=0
+                xmin=0
+                lineYmax=max(line[1])
+                lineYmin=min(line[1])
+                ymax=getMax(ymax,lineYmax)
+                ymin=getMin(ymin,lineYmin)
+            else:
+                #y values are all strings, so they have no numerical max or min
+                ymin=0
+                ymax=0
+                lineXmax=max(line[0])
+                lineXmin=min(line[0])
+                xmin=getMin(xmin,lineXmin)
+                xmax=getMax(xmax,lineXmax)
+        else:
+
+            lineXmax=max(line[0])
             lineYmax=max(line[1])
             lineYmin=min(line[1])
-            ymax=getMax(ymax,lineYmax)
-            ymin=getMin(ymin,lineYmin)
-        else:
-            #y values are all strings, so they have no numerical max or min
-            ymin=0
-            ymax=0
-            lineXmax=max(line[0])
             lineXmin=min(line[0])
-            xmin=getMin(xmin,lineXmin)
             xmax=getMax(xmax,lineXmax)
-    else:
+            ymax=getMax(ymax,lineYmax)
+            xmin=getMin(xmin,lineXmin)
+            ymin=getMin(ymin,lineYmin)
+        print('======MAX & MIN======')
+        print("xmax: "+str(xmax))
+        print("ymax: "+str(ymax))
+        print("xmin: "+str(xmin))
+        print("ymin: "+str(ymin))
+        print('--------------------')
 
-        lineXmax=max(line[0])
-        lineYmax=max(line[1])
-        lineYmin=min(line[1])
-        lineXmin=min(line[0])
-        xmax=getMax(xmax,lineXmax)
-        ymax=getMax(ymax,lineYmax)
-        xmin=getMin(xmin,lineXmin)
-        ymin=getMin(ymin,lineYmin)
-    print('======MAX & MIN======')
-    print("xmax: "+str(xmax))
-    print("ymax: "+str(ymax))
-    print("xmin: "+str(xmin))
-    print("ymin: "+str(ymin))
-    print('--------------------')
 
+lineSet={x for x in lineSet if dataCheck(x)}
+for line in lineSet:
+    print(line)
 #get all the global defaults filled in (need the graph format to determine usable style points)
-globSet=addDefaultGlobalValues(globSet,xmax,xmin,ymax,ymin)
+if (len(lineSet)==0):
+    globSet=addDefaultGlobalValues(globSet,0,0,0,0)
+else:
+    globSet=addDefaultGlobalValues(globSet,xmax,xmin,ymax,ymin)
 
 
 #next loop is to give default values to any settings that isn't user defined
