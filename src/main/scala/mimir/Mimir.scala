@@ -6,7 +6,7 @@ import java.sql.SQLException
 import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
-import mimir.util.{TimeUtils,ExperimentalOptions,LineReaderInputSource}
+import mimir.util.{TimeUtils,ExperimentalOptions,LineReaderInputSource,PythonProcess}
 import mimir.algebra._
 import mimir.plot.Plot
 import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
@@ -254,19 +254,9 @@ object Mimir extends LazyLogging {
       case Function("LOG", _) =>
         output.print("Syntax: LOG('logger') | LOG('logger', TRACE|DEBUG|INFO|WARN|ERROR)");
 
-      case Function("PLOT", args) =>
-        val table = args(0).asInstanceOf[Var].name
-        val x = args(1).asInstanceOf[Var].name
-        val y = args.tail.tail.map { _.asInstanceOf[Var].name }
-        db.query(
-          Project(
-            Seq(ProjectArg(x, Var(x))) ++ y.map { c => ProjectArg(c, Var(c)) } , 
-            db.getTableOperator(table)
-          )
-        ) { result =>
-          Plot.plot(result, table, x, y, output)
-        }
-
+      case Function("TEST_PYTHON", args) =>
+        val p = PythonProcess(s"test ${args.map { _.toString }.mkString(" ")}")
+        output.print(s"Python Exited: ${p.exitValue()}")
 
     }
 

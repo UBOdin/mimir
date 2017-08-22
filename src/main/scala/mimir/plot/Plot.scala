@@ -51,14 +51,6 @@ object Plot
     case TypePrimitive(t) => t
   }
 
-  def plot(input: ResultIterator, table: String, x: String, ys: Seq[String], console: OutputFormat)
-  {
-      println("hi, I'm the unused plot function")
-  }
-
-
-
-
   def plot(spec: mimir.sql.DrawPlot, db: Database, console: OutputFormat)
   {
     val convertConfig = (in:java.util.Map[String,net.sf.jsqlparser.expression.PrimitiveValue]) => {
@@ -141,14 +133,10 @@ object Plot
         )
 
         //run the python process using the ProcessIO
-        val process="python src/main/scala/mimir/plot/Plot.py".run(io);
+        val process = PythonProcess("plot", io)
         //wait for the process to finish....
         val exit=process.exitValue();
-        if(exit==0){
-            println("Plot was successful.")
-        }else{
-            println("Plot was not successful."); 
-            }
+        if(exit != 0){ logger.error("Plot was unsuccessful.") }
         //fin
     }
 

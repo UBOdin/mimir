@@ -360,240 +360,240 @@ def getColorSymbol(word):
         return ''
 
 
-
-#
-#
-#
-#
-#   START OFF BY READING IN ALL THE DATA FROM THE SCALA PROGRAM (READ LINES FROM SYS.STDIN)
-#
-#
-#
-globSet={}
-lineSet=[]
-finishedData={}
-split=0
-#Split=0 indicates that the data being read are globalSettings
-#Split=1 indicates that the data being read are line settings
-#split=2 indicates that the data being read is data
-
-
-for line in sys.stdin:
-    line=line.replace("\n","")
-    if(line[0]=="-"):
-        split=split+1
-    else:
-        if(split==2):
-            lineStr=""
-            line=line.replace("<","").replace(">","").split(',')
-            for data in line:
-                data=data.split(':')
-                data[0]=data[0].replace(" ","")
-                if data[0] not in finishedData:
-                    finishedData[data[0]]=[data[1]]
-                else:
-                    finishedData[data[0]].append(data[1])
+def run(args = []):
+    #
+    #
+    #
+    #
+    #   START OFF BY READING IN ALL THE DATA FROM THE SCALA PROGRAM (READ LINES FROM SYS.STDIN)
+    #
+    #
+    #
+    globSet={}
+    lineSet=[]
+    finishedData={}
+    split=0
+    #Split=0 indicates that the data being read are globalSettings
+    #Split=1 indicates that the data being read are line settings
+    #split=2 indicates that the data being read is data
 
 
-        if(split==1):
-            #Split on commas
-            line=line.split(',')
-            #strip the ( from the first division
-            line[0]=line[0].replace("(","")
-            settings={}
-            #create a dictionary of all the settings assocaited with that line
-            #(everything in 'line' after the names of the x and y columns)
-            #This involves removing many extraneous characters
-            for i in range (2,len(line)):
-                line[i]=line[i].replace("Map(","").replace("))","").replace("->","-").split('-')
-                settings[line[i][0].replace(" ","")]=line[i][1].replace("'","").replace(" ","")
-            while(len(line)>3):
-                line.pop(3)
-            line[2]=settings
-            lineSet.append(line)
-
-        if(split==0):
-            line=line.replace("(","").replace(")","").replace("'","").split(',')
-            globSet[line[0]]=line[1]
-
-#
-# At this point, all data is read into its proper data structures
-# The next steps are
-# 1. getting the actual x,y data for each line (instead of just the column names)
-# 2. filling the default values wherever there is no user-defined value
-#
-
-#keep track of if the plot is a bar graph, since it may have data that is not an integer
-isBar=(('FORMAT' in globSet) and (globSet['FORMAT']=='bar'))
-usedStyles=[]
-# initalize all the minimums and maximums to a value already in the x/y datapool
-#(to avoid  situation where, say, ymax is initalized to 0, but all y data to be plotted is negative)
-xmin=finishedData[lineSet[0][0]][0] #the first x value in the first line of lineSet
-ymin=finishedData[lineSet[0][1]][0] #the first y value in the first line of lineSet
-xmax=finishedData[lineSet[0][0]][0]
-ymax=finishedData[lineSet[0][1]][0]
-
-
-#replace the column names in lineSet with the actual data
-#then make note of all the user-defined colors and styles (to avoid repeating colors)
-#also extract the min and max for x and y of all data to be plotted--> used in globalSetting defaults
-
-#in this loop:
-#line[0] is initally = x column name (later becomes a list of values)
-#line[1] is initally = y column name (later becomes a list of values)
-#line[2] is a dictionary of settings for the line
-#line[3] is the x column name once line[0] is overwritten with data values
-#line[4] is the y column name once line[1] is overwritten with data values
-for line in lineSet:
-    line.append(line[0])
-    line.append(line[1])
-    #filter the data if the user defines any filtering
-    if 'FILTER' in line[2]:
-        #pointsData will contain the name of the column to filter based on, and the value from said column to filter on
-        pointsData=line[2]['FILTER'].replace(" ","").split('=')
-        print(pointsData)
-        #gather the x and y values to filter, the column off which filtering will be based, and the filter value
-        xToFilter=finishedData[line[0].replace("'","")]
-        yToFilter=finishedData[line[1].replace("'","")]
-        filterColumn=finishedData[pointsData[0].upper()]
-        filterValue=pointsData[1]
-
-        filteredData=filterPoints(xToFilter,yToFilter,filterColumn,filterValue)
-        line[0]=filteredData[0]
-        line[1]=filteredData[1]
-    else:
-        line[0]=finishedData[line[0].replace("'","")]
-        line[1]=finishedData[line[1].replace("'","")]
-
-    #if the plot is a scatter or line graph, all string data can be removed from the graph
-    #and all points can be cast to floats
-    if(not isBar):
-        cleanedData=cleanAndCastData(line[0],line[1])
-        line[0]=cleanedData[0]
-        line[1]=cleanedData[1]
-    else:
-        if 'BARORIENT' not in globSet:
-            globSet['BARORIENT']='vertical'
-        cleanedData=castAndCleanBarData(line[0],line[1],globSet['BARORIENT'])
-        line[0]=cleanedData[0]
-        line[1]=cleanedData[1]
-
-
-    #for each line, get the symbols for color and style(if defined).
-    #also filter out invalid options
-    if('COLOR' in line[2]):
-        colorSymbol=getColorSymbol(line[2]['COLOR'])
-        if (colorSymbol==''):
-            #this might not work, may need to use a var for line[2]
-            del line[2]['COLOR']
+    for line in sys.stdin:
+        line=line.replace("\n","")
+        if(line[0]=="-"):
+            split=split+1
         else:
-            line[2]['COLOR']=colorSymbol
-        if('STYLE' in line[2]):
-            if 'FORMAT' not in globSet:
-                graphFormat='line'
-            else:
-                graphFormat=globSet['FORMAT']
-            styleSymbol=getStyleSymbol(line[2]['STYLE'],graphFormat)
-            if (styleSymbol==''):
+            if(split==2):
+                lineStr=""
+                line=line.replace("<","").replace(">","").split(',')
+                for data in line:
+                    data=data.split(':')
+                    data[0]=data[0].replace(" ","")
+                    if data[0] not in finishedData:
+                        finishedData[data[0]]=[data[1]]
+                    else:
+                        finishedData[data[0]].append(data[1])
+
+
+            if(split==1):
+                #Split on commas
+                line=line.split(',')
+                #strip the ( from the first division
+                line[0]=line[0].replace("(","")
+                settings={}
+                #create a dictionary of all the settings assocaited with that line
+                #(everything in 'line' after the names of the x and y columns)
+                #This involves removing many extraneous characters
+                for i in range (2,len(line)):
+                    line[i]=line[i].replace("Map(","").replace("))","").replace("->","-").split('-')
+                    settings[line[i][0].replace(" ","")]=line[i][1].replace("'","").replace(" ","")
+                while(len(line)>3):
+                    line.pop(3)
+                line[2]=settings
+                lineSet.append(line)
+
+            if(split==0):
+                line=line.replace("(","").replace(")","").replace("'","").split(',')
+                globSet[line[0]]=line[1]
+
+    #
+    # At this point, all data is read into its proper data structures
+    # The next steps are
+    # 1. getting the actual x,y data for each line (instead of just the column names)
+    # 2. filling the default values wherever there is no user-defined value
+    #
+
+    #keep track of if the plot is a bar graph, since it may have data that is not an integer
+    isBar=(('FORMAT' in globSet) and (globSet['FORMAT']=='bar'))
+    usedStyles=[]
+    # initalize all the minimums and maximums to a value already in the x/y datapool
+    #(to avoid  situation where, say, ymax is initalized to 0, but all y data to be plotted is negative)
+    xmin=finishedData[lineSet[0][0]][0] #the first x value in the first line of lineSet
+    ymin=finishedData[lineSet[0][1]][0] #the first y value in the first line of lineSet
+    xmax=finishedData[lineSet[0][0]][0]
+    ymax=finishedData[lineSet[0][1]][0]
+
+
+    #replace the column names in lineSet with the actual data
+    #then make note of all the user-defined colors and styles (to avoid repeating colors)
+    #also extract the min and max for x and y of all data to be plotted--> used in globalSetting defaults
+
+    #in this loop:
+    #line[0] is initally = x column name (later becomes a list of values)
+    #line[1] is initally = y column name (later becomes a list of values)
+    #line[2] is a dictionary of settings for the line
+    #line[3] is the x column name once line[0] is overwritten with data values
+    #line[4] is the y column name once line[1] is overwritten with data values
+    for line in lineSet:
+        line.append(line[0])
+        line.append(line[1])
+        #filter the data if the user defines any filtering
+        if 'FILTER' in line[2]:
+            #pointsData will contain the name of the column to filter based on, and the value from said column to filter on
+            pointsData=line[2]['FILTER'].replace(" ","").split('=')
+            print(pointsData)
+            #gather the x and y values to filter, the column off which filtering will be based, and the filter value
+            xToFilter=finishedData[line[0].replace("'","")]
+            yToFilter=finishedData[line[1].replace("'","")]
+            filterColumn=finishedData[pointsData[0].upper()]
+            filterValue=pointsData[1]
+
+            filteredData=filterPoints(xToFilter,yToFilter,filterColumn,filterValue)
+            line[0]=filteredData[0]
+            line[1]=filteredData[1]
+        else:
+            line[0]=finishedData[line[0].replace("'","")]
+            line[1]=finishedData[line[1].replace("'","")]
+
+        #if the plot is a scatter or line graph, all string data can be removed from the graph
+        #and all points can be cast to floats
+        if(not isBar):
+            cleanedData=cleanAndCastData(line[0],line[1])
+            line[0]=cleanedData[0]
+            line[1]=cleanedData[1]
+        else:
+            if 'BARORIENT' not in globSet:
+                globSet['BARORIENT']='vertical'
+            cleanedData=castAndCleanBarData(line[0],line[1],globSet['BARORIENT'])
+            line[0]=cleanedData[0]
+            line[1]=cleanedData[1]
+
+
+        #for each line, get the symbols for color and style(if defined).
+        #also filter out invalid options
+        if('COLOR' in line[2]):
+            colorSymbol=getColorSymbol(line[2]['COLOR'])
+            if (colorSymbol==''):
                 #this might not work, may need to use a var for line[2]
-                del line[2]['STYLE']
+                del line[2]['COLOR']
             else:
-                line[2]['STYLE']=styleSymbol
-#if the line still has its color AND style defined, get the symbols and mark it as used
-    if (('COLOR' in line[2]) and ('STYLE' in line[2])):
-        usedStyles.append((line[2]['COLOR'])+(line[2]['STYLE']))
+                line[2]['COLOR']=colorSymbol
+            if('STYLE' in line[2]):
+                if 'FORMAT' not in globSet:
+                    graphFormat='line'
+                else:
+                    graphFormat=globSet['FORMAT']
+                styleSymbol=getStyleSymbol(line[2]['STYLE'],graphFormat)
+                if (styleSymbol==''):
+                    #this might not work, may need to use a var for line[2]
+                    del line[2]['STYLE']
+                else:
+                    line[2]['STYLE']=styleSymbol
+    #if the line still has its color AND style defined, get the symbols and mark it as used
+        if (('COLOR' in line[2]) and ('STYLE' in line[2])):
+            usedStyles.append((line[2]['COLOR'])+(line[2]['STYLE']))
 
-    #update the x/y min/maxs to reflect the data from this line:
-    #(yvalues for the given line are line[1], x values are line[0])
+        #update the x/y min/maxs to reflect the data from this line:
+        #(yvalues for the given line are line[1], x values are line[0])
 
-    #if either line is completely empty, don't do this next bit...
-    if not((not line[0]) or (not line[1])):
-        #find the integer values for the bar graph and use those to get the numeric column's max and min
-        if(isBar):
-            if globSet['BARORIENT']=='vertical':
-                #x values are all strings, they don't have a numerical max or min
-                xmax=0
-                xmin=0
+        #if either line is completely empty, don't do this next bit...
+        if not((not line[0]) or (not line[1])):
+            #find the integer values for the bar graph and use those to get the numeric column's max and min
+            if(isBar):
+                if globSet['BARORIENT']=='vertical':
+                    #x values are all strings, they don't have a numerical max or min
+                    xmax=0
+                    xmin=0
+                    lineYmax=max(line[1])
+                    lineYmin=min(line[1])
+                    ymax=getMax(ymax,lineYmax)
+                    ymin=getMin(ymin,lineYmin)
+                else:
+                    #y values are all strings, so they have no numerical max or min
+                    ymin=0
+                    ymax=0
+                    lineXmax=max(line[0])
+                    lineXmin=min(line[0])
+                    xmin=getMin(xmin,lineXmin)
+                    xmax=getMax(xmax,lineXmax)
+            else:
+
+                lineXmax=max(line[0])
                 lineYmax=max(line[1])
                 lineYmin=min(line[1])
-                ymax=getMax(ymax,lineYmax)
-                ymin=getMin(ymin,lineYmin)
-            else:
-                #y values are all strings, so they have no numerical max or min
-                ymin=0
-                ymax=0
-                lineXmax=max(line[0])
                 lineXmin=min(line[0])
-                xmin=getMin(xmin,lineXmin)
                 xmax=getMax(xmax,lineXmax)
-        else:
-
-            lineXmax=max(line[0])
-            lineYmax=max(line[1])
-            lineYmin=min(line[1])
-            lineXmin=min(line[0])
-            xmax=getMax(xmax,lineXmax)
-            ymax=getMax(ymax,lineYmax)
-            xmin=getMin(xmin,lineXmin)
-            ymin=getMin(ymin,lineYmin)
-        print('======MAX & MIN======')
-        print("xmax: "+str(xmax))
-        print("ymax: "+str(ymax))
-        print("xmin: "+str(xmin))
-        print("ymin: "+str(ymin))
-        print('--------------------')
+                ymax=getMax(ymax,lineYmax)
+                xmin=getMin(xmin,lineXmin)
+                ymin=getMin(ymin,lineYmin)
+            print('======MAX & MIN======')
+            print("xmax: "+str(xmax))
+            print("ymax: "+str(ymax))
+            print("xmin: "+str(xmin))
+            print("ymin: "+str(ymin))
+            print('--------------------')
 
 
-lineSet=[x for x in lineSet if dataCheck(x)]
-for line in lineSet:
-    print(line)
-#get all the global defaults filled in (need the graph format to determine usable style points)
-if (len(lineSet)==0):
-    globSet=addDefaultGlobalValues(globSet,0,0,0,0)
-else:
-    globSet=addDefaultGlobalValues(globSet,xmax,xmin,ymax,ymin)
-
-
-#next loop is to give default values to any settings that isn't user defined
-#check if it has a color and style
-#if it has both then skip
-#if it's missing either then send it into a function that will find an unused combination, if possible
-for line in lineSet:
-    #determine what is missing from the line's settings
-    missing=''
-    colorStyle=''
-    if('COLOR' not in line[2]):
-        missing=missing+'c'
+    lineSet=[x for x in lineSet if dataCheck(x)]
+    for line in lineSet:
+        print(line)
+    #get all the global defaults filled in (need the graph format to determine usable style points)
+    if (len(lineSet)==0):
+        globSet=addDefaultGlobalValues(globSet,0,0,0,0)
     else:
-        colorStyle=colorStyle+line[2]['COLOR']
-    #bar graphs should not be given a point style, as they have no points
-    if(globSet['FORMAT']!='bar'):
-        if('STYLE' not in line[2]):
-            missing=missing+'s'
+        globSet=addDefaultGlobalValues(globSet,xmax,xmin,ymax,ymin)
+
+
+    #next loop is to give default values to any settings that isn't user defined
+    #check if it has a color and style
+    #if it has both then skip
+    #if it's missing either then send it into a function that will find an unused combination, if possible
+    for line in lineSet:
+        #determine what is missing from the line's settings
+        missing=''
+        colorStyle=''
+        if('COLOR' not in line[2]):
+            missing=missing+'c'
         else:
-            colorStyle=colorStyle+line[2]['STYLE']
-    if(missing !=''):
-        colorStyleResults=getUnusedColorandStyle(usedStyles,colorStyle,globSet['FORMAT'])
-        if globSet['FORMAT']=='bar':
-            usedStyles=colorStyleResults[0]
-            line[2]['COLOR']=colorStyleResults[1]
-        else:
-            usedStyles=colorStyleResults[0]
-            line[2]['COLOR']=colorStyleResults[1]
-            line[2]['STYLE']=colorStyleResults[2]
-        #if there is not a defined value for WEIGHT, or that value is not numeric, assign the value to 1.0
-        try:
-            line[2]['WEIGHT']=float(line[2]['WEIGHT'])
-        except:
-            if(globSet['FORMAT']=='scatter'):
-                line[2]['WEIGHT']=5.0
+            colorStyle=colorStyle+line[2]['COLOR']
+        #bar graphs should not be given a point style, as they have no points
+        if(globSet['FORMAT']!='bar'):
+            if('STYLE' not in line[2]):
+                missing=missing+'s'
             else:
-                line[2]['WEIGHT']=1.0
-    #add a default value for lineName if it isn't defined
-    if 'LINENAME' not in line[2]:
-        line[2]['LINENAME']=line[3]+', '+line[4]
+                colorStyle=colorStyle+line[2]['STYLE']
+        if(missing !=''):
+            colorStyleResults=getUnusedColorandStyle(usedStyles,colorStyle,globSet['FORMAT'])
+            if globSet['FORMAT']=='bar':
+                usedStyles=colorStyleResults[0]
+                line[2]['COLOR']=colorStyleResults[1]
+            else:
+                usedStyles=colorStyleResults[0]
+                line[2]['COLOR']=colorStyleResults[1]
+                line[2]['STYLE']=colorStyleResults[2]
+            #if there is not a defined value for WEIGHT, or that value is not numeric, assign the value to 1.0
+            try:
+                line[2]['WEIGHT']=float(line[2]['WEIGHT'])
+            except:
+                if(globSet['FORMAT']=='scatter'):
+                    line[2]['WEIGHT']=5.0
+                else:
+                    line[2]['WEIGHT']=1.0
+        #add a default value for lineName if it isn't defined
+        if 'LINENAME' not in line[2]:
+            line[2]['LINENAME']=line[3]+', '+line[4]
 
 
 
 
-drawPlot(lineSet,globSet)
+    drawPlot(lineSet,globSet)

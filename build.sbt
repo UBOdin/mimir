@@ -25,6 +25,7 @@ cancelable in Global := true
 scalacOptions in Test ++= Seq("-Yrangepos")
 parallelExecution in Test := false
 testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
+mainClass in Compile := Some("mimir.Mimir")
 
 resolvers += "MimirDB" at "http://maven.mimirdb.info/"
 resolvers += "osgeo" at "http://download.osgeo.org/webdav/geotools/"
