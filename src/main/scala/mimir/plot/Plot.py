@@ -59,7 +59,6 @@ def drawPlot(lineSettings,globalSettings):
 
     #global settings is a dictionary of globalsetting field keys with their values, default of user-defined
 
-    #AT THIS POINT BAR GRAPH DATA IS STILL IN STRINGS AND NOT CLEANED
     plottype=globalSettings['FORMAT']
     showLegend=globalSettings['LEGEND']=='show'
     legendLabels=[]
@@ -120,9 +119,9 @@ def drawPlot(lineSettings,globalSettings):
     plt.ylabel(globalSettings['YLABEL'])
     plt.title(globalSettings['PLOTNAME'])
     print("saving to file")
-    fileName=globalSettings['SAVENAME']+globalSettings['SAVEFORMAT']
+    fileName=globalSettings['SAVENAME']+"."+globalSettings['SAVEFORMAT']
     #once testing is done, sub in fileName for test.png
-    plt.savefig('test.png',format=globalSettings['SAVEFORMAT'])
+    plt.savefig(fileName,format=globalSettings['SAVEFORMAT'])
     print("saved!")
     return 0
 
@@ -149,7 +148,7 @@ def getMin(val1,val2):
 
 #return true if the line has data to plot. Used for filtering out dataless lines from lineSet
 def dataCheck(lineData):
-    return ((len(lineData[0])!=0)and(len(lineData[0])!=0))
+    return ((len(lineData[0])!=0)and(len(lineData[1])!=0))
 
 
 # remove any data points in a non-bar graph that are not points of type (integer,integer)
@@ -378,9 +377,8 @@ split=0
 #Split=1 indicates that the data being read are line settings
 #split=2 indicates that the data being read is data
 
-openFlile=open("data.txt",'r')
-#for line in sys.stdin:
-for line in openFlile:
+
+for line in sys.stdin:
     line=line.replace("\n","")
     if(line[0]=="-"):
         split=split+1
@@ -417,7 +415,6 @@ for line in openFlile:
         if(split==0):
             line=line.replace("(","").replace(")","").replace("'","").split(',')
             globSet[line[0]]=line[1]
-openFlile.close
 
 #
 # At this point, all data is read into its proper data structures
@@ -547,7 +544,7 @@ for line in lineSet:
         print('--------------------')
 
 
-lineSet={x for x in lineSet if dataCheck(x)}
+lineSet=[x for x in lineSet if dataCheck(x)]
 for line in lineSet:
     print(line)
 #get all the global defaults filled in (need the graph format to determine usable style points)
