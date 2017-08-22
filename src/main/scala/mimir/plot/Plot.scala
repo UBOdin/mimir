@@ -109,7 +109,7 @@ object Plot
         }
       }
 
-    logger.info("QUERY: $dataQuery")
+    logger.info(s"QUERY: $dataQuery")
 
     db.query(dataQuery) { resultsRaw =>
       val results = resultsRaw.toSeq
@@ -128,8 +128,8 @@ object Plot
              results.foreach{data=>in.write((data+"\n").getBytes)};
              in.close();
             },
-         out=> {},
-         err=>{}
+         out=>{ for(l <- Source.fromInputStream(out).getLines()){ logger.info(l) }; out.close() },
+         err=>{ for(l <- Source.fromInputStream(err).getLines()){ logger.error(l) }; err.close() }
         )
 
         //run the python process using the ProcessIO

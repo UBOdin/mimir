@@ -283,10 +283,10 @@ def addDefaultGlobalValues(definedValues,xmax,xmin,ymax,ymin):
     ('XLABEL',""),
     ('YLABEL',""),
     ('SAVEFORMAT',"png"),
-    ('YMIN',float(ymin)*0.8),
-    ('YMAX',float(ymax)*1.2),
-    ('XMIN',float(xmin)*0.8),
-    ('XMAX',float(xmax)*1.2),
+    ('YMIN',float(ymin)-(float(ymax)-float(ymin))*0.2),
+    ('YMAX',float(ymax)+(float(ymax)-float(ymin))*0.2),
+    ('XMIN',float(xmin)-(float(xmax)-float(xmin))*0.2),
+    ('XMAX',float(xmax)+(float(xmax)-float(xmin))*0.2),
     ('LEGENDLOC','best'),
     ('SAVENAME',saveName)
     ]
