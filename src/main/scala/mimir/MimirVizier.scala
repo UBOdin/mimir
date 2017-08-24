@@ -62,12 +62,15 @@ object MimirVizier {
         db.backend.asInstanceOf[InlinableBackend].enableInlining(db)
       }
     
-    OperatorTranslation.db = db
+    OperatorTranslation.db = db       
+     
+    if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
+      runServerForViztrails()
+      db.backend.close()
+      if(!conf.quiet()) { println("\n\nDone.  Exiting."); }
+    }
     
-    runServerForViztrails()
     
-    db.backend.close()
-    if(!conf.quiet()) { println("\n\nDone.  Exiting."); }
   }
   
   def runServerForViztrails() : Unit = {
@@ -148,7 +151,7 @@ object MimirVizier {
     pythonCallThread = Thread.currentThread()
     val timeRes = time {
       println("createLens: From Vistrails: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]"  ) ;
-      val paramsStr = params.mkString(",")
+      val paramsStr = params.mkString(",").replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
       val lenseName = "LENS_" + _type + ((input.toString() + _type + paramsStr + make_input_certain + materialize).hashCode().toString().replace("-", "") )
       var query:String = null
       db.getView(lenseName) match {
@@ -224,6 +227,51 @@ object MimirVizier {
     timeRes._1
   }
   
+  def vistrailsDeployWorkflowToViztool(input : Any, name:String, dataType:String, users:Seq[String], startTime:String, endTime:String, fields:String, latlonFields:String, houseNumberField:String, streetField:String, cityField:String, stateField:String, orderByFields:String) : String = {
+    val timeRes = time {
+      val inputTable = input.toString()
+      val hash = ((inputTable + dataType + users.mkString("") + name + startTime + endTime).hashCode().toString().replace("-", "") )
+      if(isWorkflowDeployed(hash)){
+        println(s"vistrailsDeployWorkflowToViztool: workflow already deployed: $hash: $name")
+      }
+      else{
+        val fieldsRegex = "\\s*(?:[a-zA-Z0-9_.]+\\s*(?:AS\\s+[a-zA-Z0-9_]+)?\\s*,\\s*)+[a-zA-Z0-9_.]+\\s*".r
+        val fieldRegex = "\\s*[a-zA-Z0-9_.]+\\s*(?:AS\\s+[a-zA-Z0-9_]+)?\\s*".r
+        val fieldStr = fields.toUpperCase() match {
+          case "" => "*"
+          case "*" => "*"
+          case fieldsRegex() => fields.toUpperCase()  
+          case fieldRegex() => fields.toUpperCase()
+          case x => throw new Exception("bad fields format: should be field, field")
+        }
+        val latLonFieldsRegex = "\\s*([a-zA-Z0-9_.]+)\\s*,\\s*([a-zA-Z0-9_.]+)\\s*".r
+        val latlonFieldsSeq = latlonFields.toUpperCase() match {
+          case "" | null => Seq("LATITUDE","LONGITUDE")
+          case latLonFieldsRegex(latField, lonField) => Seq(latField, lonField)  
+          case x => throw new Exception("bad fields format: should be latField, lonField")
+        }
+        val orderFieldsRegex = "\\s*(?:[a-zA-Z0-9_.]+\\s*,\\s*)+[a-zA-Z0-9_.]+\\s*(?:DESC)?\\s*".r
+        val orderBy = orderByFields.toUpperCase() match {
+          case orderFieldsRegex() => "ORDER BY " + orderByFields.toUpperCase()  
+          case x => ""
+        }
+        val query = s"SELECT $fieldStr FROM ${input} $orderBy"
+        println("vistrailsDeployWorkflowToViztool: " + query + " users:" + users.mkString(","))
+        if(startTime.matches("") && endTime.matches(""))
+          deployWorkflowToViztool(hash, inputTable, query, name, dataType, users, latlonFieldsSeq, Seq(houseNumberField, streetField, cityField, stateField))
+        else if(!startTime.matches(""))
+          deployWorkflowToViztool(hash, inputTable, query, name, dataType, users, latlonFieldsSeq, Seq(houseNumberField, streetField, cityField, stateField), startTime)
+        else if(!endTime.matches(""))
+          deployWorkflowToViztool(hash, inputTable, query, name, dataType, users, latlonFieldsSeq, Seq(houseNumberField, streetField, cityField, stateField), endTime = endTime)
+        else
+          deployWorkflowToViztool(hash, inputTable, query, name, dataType, users, latlonFieldsSeq, Seq(houseNumberField, streetField, cityField, stateField), startTime, endTime)
+      }
+      input.toString()
+    }
+    println(s"vistrailsDeployWorkflowToViztool Took: ${timeRes._2}")
+    timeRes._1
+  }
+  
   def explainCell(query: String, col:Int, row:String) : Seq[mimir.ctables.Reason] = {
     val timeRes = time {
       try {
@@ -266,7 +314,45 @@ object MimirVizier {
     println(s"explainRow Took: ${timeRes._2}")
     timeRes._1.distinct
   }
+  
+  def explainSubset(query: String, rows:Seq[String], cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
+    val timeRes = time {
+      println("explainSubset: From Vistrails: [ "+ rows +" ] [" + query + "]"  ) ;
+     // val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
+      //val cols = oper.schema.map(f => f._1)
+      //db.explainRow(oper, RowIdPrimitive(row)).toString()
+      //val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+      val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
+      //val compiledOper = db.compiler.compileInline(oper, db.compiler.standardOptimizations)._1
+      val explCols = cols match {
+        case Seq() => oper.columnNames
+        case _ => cols
+      }
+      rows.map(row => {
+        db.explainer.explainSubset(
+          db.explainer.filterByProvenance(oper,RowIdPrimitive(row)), 
+          explCols.toSet, true, false)
+      }).flatten
+    }
+    println(s"explainSubset Took: ${timeRes._2}")
+    timeRes._1
+  }
 
+  def explainEverything(query: String) : Seq[mimir.ctables.ReasonSet] = {
+    val timeRes = time {
+      println("explainEverything: From Vistrails: [" + query + "]"  ) ;
+     // val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
+      //val cols = oper.schema.map(f => f._1)
+      //db.explainRow(oper, RowIdPrimitive(row)).toString()
+      //val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+      val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
+      //val compiledOper = db.compiler.compileInline(oper, db.compiler.standardOptimizations)._1
+      val cols = oper.columnNames
+      db.explainer.explainEverything( oper)
+    }
+    println(s"explainEverything Took: ${timeRes._2}")
+    timeRes._1
+  }
   
   def repairReason(reasons: Seq[mimir.ctables.Reason], idx:Int) : mimir.ctables.Repair = {
     val timeRes = time {
@@ -299,9 +385,36 @@ object MimirVizier {
   }
   
   def getAvailableLenses() : String = {
-    db.lenses.lensTypes.keySet.toSeq.mkString(",")
+    val ret = db.lenses.lensTypes.keySet.toSeq.mkString(",")
+    println(s"getAvailableLenses: From Viztrails: $ret")
+    ret
   }
   
+  def getAvailableViztoolUsers() : String = {
+    var userIDs = Seq[String]()
+    val ret = db.query(parseQuery("SELECT USER_ID, FIRST_NAME, LAST_NAME FROM USERS"))(results => {
+    while(results.hasNext) {
+      val row = results.next()
+      userIDs = userIDs:+s"${row(0)}- ${row(1).asString} ${row(2).asString}"
+    }
+    userIDs.mkString(",") 
+    })
+    println(s"getAvailableViztoolUsers: From Viztrails: $ret")
+    ret
+  }
+  
+  def getAvailableViztoolDeployTypes() : String = {
+    var types = Seq[String]("GIS", "DATA")
+    val ret = db.query(parseQuery("SELECT TYPE FROM CLEANING_JOBS"))(results => {
+    while(results.hasNext) {
+      val row = results.next()
+     types = types:+s"${row(0).asString}"
+    }
+    types.distinct.mkString(",")
+    })
+    println(s"getAvailableViztoolDeployTypes: From Viztrails: $ret")
+    ret
+  }
   
   def getTuple(oper: mimir.algebra.Operator) : Map[String,PrimitiveValue] = {
     db.query(oper)(results => {
@@ -316,6 +429,10 @@ object MimirVizier {
       else
         Map[String,PrimitiveValue]()
     })
+  }
+  
+  def parseQuery(query:String) : Operator = {
+    db.sql.convert(db.parse(query).head.asInstanceOf[Select])
   }
   
   def operCSVResults(oper : mimir.algebra.Operator) : PythonCSVContainer =  {
@@ -377,6 +494,53 @@ object MimirVizier {
      val detListsAndProv = resCSV._2.unzip3
      new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), detListsAndProv._1.toArray, detListsAndProv._2.toArray, resCSV._3.toArray, detListsAndProv._3.toArray)
   }
+ 
+ def isWorkflowDeployed(hash:String) : Boolean = {
+   db.query(parseQuery(s"SELECT CLEANING_JOB_ID from CLEANING_JOBS WHERE HASH = '$hash'"))( resIter => resIter.hasNext())
+ }
+                                                                                              //by default we'll start now and end when the galaxy class Enterprise launches
+ def deployWorkflowToViztool(hash:String, input:String, query : String, name:String, dataType:String, users:Seq[String], latlonFields:Seq[String] = Seq("LATITUDE","LONGITUDE"), addrFields: Seq[String] = Seq("STRNUMBER", "STRNAME", "CITY", "STATE"), startTime:String = "2017-08-13 00:00:00", endTime:String = "2363-01-01 00:00:00") : Unit = {
+   val backend = db.backend.asInstanceOf[JDBCBackend]
+   val jobID = backend.insertAndReturnKey(
+       "INSERT INTO CLEANING_JOBS ( CLEANING_JOB_NAME, TYPE, IMAGE, HASH) VALUES ( ?, ?, ?, ? )", 
+       Seq(StringPrimitive(name),StringPrimitive(dataType),StringPrimitive(s"app/images/$dataType.png"),StringPrimitive(hash))  
+     )
+   val dataID = backend.insertAndReturnKey(
+       "INSERT INTO CLEANING_JOB_DATA ( CLEANING_JOB_ID, NAME, [QUERY] ) VALUES ( ?, ?, ? )",
+       Seq(IntPrimitive(jobID),StringPrimitive(name),StringPrimitive(query))  
+     )
+   val datetimeprim = mimir.util.TextUtils.parseTimestamp(_)
+   users.map(userID => {
+     val schedID = backend.insertAndReturnKey(
+         "INSERT INTO SCHEDULE_CLEANING_JOBS ( CLEANING_JOB_ID, START_TIME, END_TIME ) VALUES ( ?, ?, ? )",
+         Seq(IntPrimitive(jobID),datetimeprim(startTime),datetimeprim(endTime))  
+     )
+     backend.insertAndReturnKey(
+       "INSERT INTO SCHEDULE_USERS ( USER_ID, SCHEDULE_CLEANING_JOBS_ID, START_TIME, END_TIME ) VALUES ( ?, ?, ?, ? )",
+       Seq(IntPrimitive(userID.split("-")(0).toLong),IntPrimitive(schedID),datetimeprim(startTime),datetimeprim(endTime))  
+     )
+   })
+   dataType match {
+     case "GIS" => {
+       backend.insertAndReturnKey(
+         "INSERT INTO CLEANING_JOB_SETTINGS_OPTIONS ( CLEANING_JOB_DATA_ID, TYPE, NAME, ID, OPTION ) VALUES ( ?, ?, ?, ?, ?)",
+         Seq(IntPrimitive(dataID),StringPrimitive("GIS_LAT_LON_COLS"),StringPrimitive("Lat and Lon Columns"),StringPrimitive("LATLON"),StringPrimitive(s"""{"latCol":"${latlonFields(0)}", "lonCol":"${latlonFields(1)}" }"""))  
+       )
+       backend.insertAndReturnKey(
+         "INSERT INTO CLEANING_JOB_SETTINGS_OPTIONS ( CLEANING_JOB_DATA_ID, TYPE, NAME, ID, OPTION ) VALUES ( ?, ?, ?, ?, ?)",
+         Seq(IntPrimitive(dataID),StringPrimitive("GIS_ADDR_COLS"),StringPrimitive("Address Columns"),StringPrimitive("ADDR"),StringPrimitive(s"""{"houseNumber":"${addrFields(0)}", "street":"${addrFields(1)}", "city":"${addrFields(2)}", "state":"${addrFields(3)}" }"""))  
+       )
+       backend.insertAndReturnKey(
+         "INSERT INTO CLEANING_JOB_SETTINGS_OPTIONS ( CLEANING_JOB_DATA_ID, TYPE, NAME, ID, OPTION ) VALUES ( ?, ?, ?, ?, ?)",
+         Seq(IntPrimitive(dataID),StringPrimitive("LOCATION_FILTER"),StringPrimitive("Near Me"),StringPrimitive("NEAR_ME"),StringPrimitive(s"""{"distance":804.67,"latCol":"$input.${latlonFields(0)}","lonCol":"$input.${latlonFields(1)}"}"""))  
+       )
+       backend.insertAndReturnKey(
+         "INSERT INTO CLEANING_JOB_SETTINGS_OPTIONS ( CLEANING_JOB_DATA_ID, TYPE, NAME, ID, OPTION ) VALUES ( ?, ?, ?, ?, ?)",
+         Seq(IntPrimitive(dataID),StringPrimitive("MAP_CLUSTERER"),StringPrimitive("Cluster Markers"),StringPrimitive("CLUSTER"),StringPrimitive("{}"))  
+       )
+     }
+   }
+ }
  
  def time[F](anonFunc: => F): (F, Long) = {  
       val tStart = System.nanoTime()

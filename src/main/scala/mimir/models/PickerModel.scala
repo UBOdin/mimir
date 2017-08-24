@@ -5,6 +5,8 @@ import scala.util.Random
 import mimir.algebra._
 import mimir.util._
 import mimir.Database
+import mimir.ml.spark.{MultiClassClassification, ReverseIndexRecord}
+
 
 /**
  * A model representing a key-repair choice.
@@ -14,7 +16,7 @@ import mimir.Database
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1000L)
-class PickerModel(override val name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[Type], source: Operator) 
+class PickerModel(override val name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[Type], useClassifier:Option[MultiClassClassification.ClassifierModelGenerator], source: Operator) 
   extends Model(name) 
   with Serializable
   with NeedsReconnectToDatabase
@@ -22,20 +24,32 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
 {
   
   val feedback = scala.collection.mutable.Map[String,PrimitiveValue]()
+  val classificationCache = scala.collection.mutable.Map[String,PrimitiveValue]()
+  val TRAINING_LIMIT = 10000
+  var classifierModel: Option[MultiClassClassification.ClassifierModel] = None
   
   @transient var db: Database = null
   
   
   def argTypes(idx: Int) = {
-      Seq(TRowId())
+      Seq(TRowId()).union(colTypes)
   }
   def varType(idx: Int, args: Seq[Type]) = colTypes(idx)
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ) = {
-    val rowid = RowIdPrimitive(args(0).asString)
-    feedback.get(rowid.asString) match {
+    val rowid = args(0).asString
+    feedback.get(rowid) match {
       case Some(v) => v
       case None => {
-        hints(0)
+        val arg1 = args(1)
+        val arg2 = args(2)
+        useClassifier match { //use result of case expression
+          case None => hints(0)
+          case Some(modelGen) => 
+            classificationCache.get(rowid) match {
+              case None => classify(idx, args, hints)
+              case Some(v) => v
+            }
+        }
       }
       
     }
@@ -65,8 +79,12 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
     feedback.get(rowid.asString) match {
       case Some(v) =>
         s"You told me that $resultColumn = $v on row $rowid"
-      case None => 
-         s"I used an expressions to pick a value for $resultColumn from columns: ${pickFromCols.mkString(",")}"
+      case None => {
+        useClassifier match { //use result of case expression
+          case None => s"I used an expressions to pick a value for $resultColumn from columns: ${pickFromCols.mkString(",")}"
+          case Some(modelGen) => s"I used a classifier to pick a value for $resultColumn from columns: ${pickFromCols.mkString(",")}"
+        }
+      }
     }
   }
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = { 
@@ -85,4 +103,63 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
     this.db = db 
   }
   
+  def train(modelGen:MultiClassClassification.ClassifierModelGenerator) : MultiClassClassification.ClassifierModel = {
+    val trainingQuery = Limit(0, Some(TRAINING_LIMIT), Project(pickFromCols.map(col => ProjectArg(col, Var(col))), source))
+    classifierModel = Some(modelGen(trainingQuery, db, pickFromCols.head))
+    db.models.persist(this)
+    classifierModel.get
+  }
+  
+  def classify(idx:Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) : PrimitiveValue = {
+    //val classifier = classifierModel match {
+      case None => train(useClassifier.get)
+      case Some(clsfymodel) => clsfymodel
+    }
+    val predictions = MultiClassClassification.classify(classifier, pickFromCols, List(args))
+    //predictions.show()
+    val sqlContext = MultiClassClassification.getSparkSqlContext()
+    import sqlContext.implicits._  
+    val predictionProbabilityAndIndexes = predictions.select("probability").rdd.map(r => r(0)).collect().map { item =>
+        item.asInstanceOf[org.apache.spark.ml.linalg.DenseVector].toArray.zipWithIndex 
+      }
+      val top2PredictionProbabilit = predictionProbabilityAndIndexes(0).sortBy(_._1).reverse.slice(0, 2)
+      val sortedPredictionProbabilitLabels = top2PredictionProbabilit.map { case(element, index) =>
+         val predictionProbability = ReverseIndexRecord(index.toDouble) :: Nil
+         ( classifier.stages(classifier.stages.length-1).transform(predictionProbability.toDF()).select("predictedLabel").rdd.map { x => x(0) }.collect()(0).toString(), element ) 
+      }
+    val prediction = mimir.parser.ExpressionParser.expr( sortedPredictionProbabilitLabels(0)._1).asInstanceOf[PrimitiveValue]
+    classificationCache(args(0).asString) = prediction
+    prediction
+  }
+  
+  /*def classifyAll() : Unit = {
+    val classifier = classifierModel match {
+      case None => train(useClassifier.get)
+      case Some(clsfymodel) => clsfymodel
+    }
+    val classifyAllQuery = Project(pickFromCols.map(col => ProjectArg(col, Var(col))), source)
+    val tuples = db.query(classifyAllQuery, mimir.exec.mode.BestGuess)(results => {
+      results.toList.map(row => (row.provenance :: row.tuple.toList).toSeq)
+    })
+    val predictions = MultiClassClassification.classify(classifier, pickFromCols, tuples)
+    val sqlContext = MultiClassClassification.getSparkSqlContext()
+    import sqlContext.implicits._  
+    val predictionRowIDAndIndexes = predictions.select("rowid").rdd.map(r => r(0)).collect().map { item =>
+        item.asInstanceOf[org.apache.spark.ml.linalg.DenseVector].toArray.zipWithIndex 
+      }
+    val rows =  predictionRowIDAndIndexes.map( row => {
+       row.map { case(element, index) =>
+         val predictionRow = ReverseIndexRecord(index.toDouble) :: Nil
+         ( classifier.stages(classifier.stages.length-1).transform(predictionRow.toDF()).select("rowid","predictedLabel").rdd.map { x => x(0) }.collect(), element ) 
+      }})
+     rows.map(row => {
+       val prediction = mimir.parser.ExpressionParser.expr( row._1(1)).asInstanceOf[PrimitiveValue]
+       classificationCache(row._1(0)) = prediction
+     })
+    db.models.persist(this)
+    
+  }*/
 }
+
+
+

@@ -5,8 +5,8 @@ import mimir.algebra._
 
 object JsonUtils {
 
-  val dotPrefix = "\\.([^.\\[]+)".r
-  val bracketPrefix = "\\[([0-9]+)\\]".r
+  val dotPrefix = "\\.([^.\\[]+).*".r
+  val bracketPrefix = "\\[([0-9]+)\\].*".r
 
   def seekPath(jv: JsValue, path: String): JsValue =
   {

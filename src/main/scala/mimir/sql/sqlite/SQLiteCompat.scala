@@ -2,7 +2,7 @@ package mimir.sql.sqlite
 
 import mimir.algebra._
 import mimir.provenance._
-import mimir.util.JDBCUtils
+import mimir.util.{JDBCUtils, HTTPUtils, JsonUtils}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import org.geotools.referencing.datum.DefaultEllipsoid
 import org.joda.time.DateTime
@@ -36,6 +36,11 @@ object SQLiteCompat extends LazyLogging{
     org.sqlite.Function.create(conn, "GAMMA", Gamma)
     org.sqlite.Function.create(conn, "STDDEV", StdDev)
     org.sqlite.Function.create(conn, "MAX", Max)
+    org.sqlite.Function.create(conn, "WEB", Web)
+    org.sqlite.Function.create(conn, "WEBJSON", WebJson)
+    org.sqlite.Function.create(conn, "WEBJSONPATH", WebJsonPath)
+    org.sqlite.Function.create(conn, "WEBGEOCODEDISTANCE",WebGeocodeDistance)
+    org.sqlite.Function.create(conn, "METOLOCDST",MeToLocationDistance)
   }
   
   def getTableSchema(conn:java.sql.Connection, table: String): Option[Seq[(String, Type)]] =
@@ -159,6 +164,88 @@ object Gamma extends org.sqlite.Function with LazyLogging {
   
    
   }
+
+object Web extends org.sqlite.Function with LazyLogging {
+  override def xFunc(): Unit = {
+    if (args != 1) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR WEB, EXPECTED 1") }
+    val url = value_text(0) 
+    try {
+        val content = HTTPUtils.get(url)
+        result(content)
+    } catch {
+        case ioe: java.io.IOException =>  result()
+        case ste: java.net.SocketTimeoutException => result()
+    }
+  }
+}
+
+object WebJson extends org.sqlite.Function with LazyLogging {
+  override def xFunc(): Unit = {
+    if (args != 1) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR WEBJSON, EXPECTED 1") }
+    val url = value_text(0) 
+    try {
+        val content = HTTPUtils.getJson(url)
+        result(content.toString())
+    } catch {
+        case ioe: Exception =>  result()
+    }
+  }
+}
+
+object WebJsonPath extends org.sqlite.Function with LazyLogging {
+  override def xFunc(): Unit = {
+    if (args != 2) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR WEBJSONPATH, EXPECTED 2") }
+    val url = value_text(0)
+    val path = value_text(1) 
+    try {
+        val content = HTTPUtils.getJsonSeekPath(url,path)
+        result(content.toString())
+    } catch {
+        case ioe: Exception =>  result()
+    }
+  }
+}
+
+object WebGeocodeDistance extends org.sqlite.Function with LazyLogging {
+  override def xFunc(): Unit = {
+    if (args != 7) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR WebGeocodeDistance, EXPECTED 6") }
+    val lat = value_double(0)
+    val lon = value_double(1)
+    val houseNumber = value_text(2)
+    val streetName = value_text(3)
+    val city = value_text(4)
+    val state = value_text(5)
+    val geocoder = value_text(6)
+    val (url, latPath, lonPath) = geocoder match {
+      case "GOOGLE" => (s"https://maps.googleapis.com/maps/api/geocode/json?address=${s"$houseNumber+${streetName.replaceAll(" ", "+")},+${city.replaceAll(" ", "+")},+$state".replaceAll("\\+\\+", "+")}&key=AIzaSyAKc9sTF-pVezJY8-Dkuvw07v1tdYIKGHk", ".results[0].geometry.location.lat", ".results[0].geometry.location.lng")
+      case "OSM" | _ => (s"http://52.0.26.255/?format=json&street=$houseNumber $streetName&city=$city&state=$state", "[0].lat", "[0].lon")
+    }
+    try {
+        val geoRes = HTTPUtils.getJson(url)
+        val glat = JsonUtils.seekPath( geoRes, latPath).toString().replaceAll("\"", "").toDouble
+        val glon = JsonUtils.seekPath( geoRes, lonPath).toString().replaceAll("\"", "").toDouble
+        result(DefaultEllipsoid.WGS84.orthodromicDistance(lon, lat, glon, glat))
+    } catch {
+        case ioe: Exception =>  {
+          println(ioe.toString())
+          result()
+        }
+    }
+  }
+}
+
+object MeToLocationDistance extends org.sqlite.Function with LazyLogging {
+  var myLat:Option[Double] = None
+  var myLon:Option[Double] = None
+  override def xFunc(): Unit = {
+    if (args != 2) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR MeToLocationDistance, EXPECTED 2") }
+    val lat = myLat.get
+    val lon = myLon.get
+    val otherLat: Double = value_double(0)
+    val otherLon: Double = value_double(1)
+    result(DefaultEllipsoid.WGS84.orthodromicDistance(lon, lat, otherLon, otherLat))
+  }
+}
 
 object Minus extends org.sqlite.Function with LazyLogging {
   override def xFunc(): Unit = {

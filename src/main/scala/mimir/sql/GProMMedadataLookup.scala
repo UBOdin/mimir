@@ -82,15 +82,16 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
       		    case _ => {
       		      val fc = mimir.algebra.Function(fName,argSeq) 
                 vgtFunctionType(fc);
+      		      //db.typechecker.returnTypeOfFunction(fName,argSeq)
       		    }
       		  }
             
             val gpt = getGProMDataTypeStringFromMimirType(tp)
             //println(s"Metadata lookup: $tp -> $gpt")
             gpt
+		        
   		    }
   		  }
-        
       } catch {
         case t: Throwable => {
           println(s"Metadata lookup: Exception: for function: $fName")
