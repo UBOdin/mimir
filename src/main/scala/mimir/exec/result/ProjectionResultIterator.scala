@@ -5,12 +5,14 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
 import mimir.util._
 import mimir.exec._
+import mimir.Database
 
 class ProjectionResultIterator(
   tupleDefinition: Seq[ProjectArg],
   annotationDefinition: Seq[ProjectArg],
   inputSchema: Seq[(String,Type)],
-  source: ResultIterator
+  source: ResultIterator,
+  db: Database
 )
   extends ResultIterator
   with LazyLogging
@@ -19,11 +21,13 @@ class ProjectionResultIterator(
   //
   // Set up the schema details
   //
-  private val typechecker = new ExpressionChecker(inputSchema.toMap)
+  private val inputSchemaLookup = inputSchema.toMap
+  private val typeOf = db.typechecker.typeOf(_:Expression, inputSchemaLookup)
+
   val tupleSchema: Seq[(String,Type)] = 
-    tupleDefinition.map { case ProjectArg(name, expr) => (name, typechecker.typeOf(expr)) }
+    tupleDefinition.map { case ProjectArg(name, expr) => (name, typeOf(expr)) }
   val annotationSchema: Seq[(String,Type)] = 
-    annotationDefinition.map { case ProjectArg(name, expr) => (name, typechecker.typeOf(expr)) }
+    annotationDefinition.map { case ProjectArg(name, expr) => (name, typeOf(expr)) }
 
   //
   // Compile the query expressions further to make it
@@ -39,7 +43,7 @@ class ProjectionResultIterator(
     inputSchema.zipWithIndex.map { 
       case ((name, t), idx) => (name, (t, (_:Row)(idx))) 
     }.toMap
-  private val eval = new EvalInlined[Row](evalScope)
+  private val eval = new EvalInlined[Row](evalScope, db)
 
   val columnOutputs: Seq[Row => PrimitiveValue] = 
     tupleDefinition.map { _.expression }.map { eval.compile(_) }

@@ -34,6 +34,7 @@ object Plot
     case StringPrimitive(s) => s
     case d:DatePrimitive => d.asDateTime
     case t:TimestampPrimitive => t.asDateTime
+    case i:IntervalPrimitive => i.asInterval
     case BoolPrimitive(true) => 1:java.lang.Long
     case BoolPrimitive(false) => 0:java.lang.Long
     case RowIdPrimitive(s) => s
@@ -49,8 +50,8 @@ object Plot
     var dataQuery = spec.getSource match {
       case q:net.sf.jsqlparser.statement.select.SubSelect =>
         db.sql.convert(q.getSelectBody())
-      case q:net.sf.jsqlparser.schema.Table =>
-        db.getTableOperator(SqlUtils.canonicalizeIdentifier(q.getName()))
+      case q:net.sf.jsqlparser.schema.Table => 
+        db.table(SqlUtils.canonicalizeIdentifier(q.getName()))
     }
     val globalSettings = convertConfig(spec.getConfig())
 
@@ -75,7 +76,7 @@ object Plot
           }
         }
       } else {
-        val sch = dataQuery.schema
+        val sch = db.typechecker.schemaOf(dataQuery)
         var extraColumnCounter = 0;
 
         val convertExpression = (raw: net.sf.jsqlparser.expression.Expression) => {
@@ -141,4 +142,7 @@ object Plot
     }
   }
 
+case class PlotConfig(color: Color.Value, pointType: PointType.Value)
+{
+  override def toString: String = s" { color : $color, pt : $pointType }"
 }

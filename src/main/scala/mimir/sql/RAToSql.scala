@@ -6,7 +6,7 @@ import java.util
 import mimir.Database
 import mimir.algebra._
 import mimir.provenance._
-import mimir.optimizer.{InlineProjections, PushdownSelections}
+import mimir.optimizer.operator.{InlineProjections, PushdownSelections}
 import mimir.util.SqlUtils
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
@@ -394,7 +394,7 @@ class RAToSql(db: Database)
         )
 
       case Table(name, alias, tgtSch, metadata) =>
-        val realSch = db.getTableSchema(name) match {
+        val realSch = db.tableSchema(name) match {
           case Some(realSch) => realSch
           case None => throw new SQLException("Unknown Table '"+name+"'");
         }
@@ -447,7 +447,7 @@ class RAToSql(db: Database)
   {
     val subSelect = new SubSelect()
     subSelect.setSelectBody(makeSelect(oper))//doConvert returns a plain select
-    subSelect.setAlias("SUBQ_"+oper.schema.head._1)
+    subSelect.setAlias("SUBQ_"+oper.columnNames.head)
     subSelect
   }
 
@@ -470,9 +470,9 @@ class RAToSql(db: Database)
    */
   private def alignUnionOrders(clauses: Seq[Operator]): Seq[Operator] =
   {
-    val targetSchema = clauses.head.schema.map(_._1).toList
+    val targetSchema = clauses.head.columnNames
     clauses.map { clause =>
-      if(clause.schema.map(_._1).toList.equals(targetSchema)){
+      if(clause.columnNames.equals(targetSchema)){
         clause
       } else {
         Project(

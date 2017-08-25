@@ -78,14 +78,25 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
 
 object ReasonSet
 {
-  def make(v:VGTerm, input: Operator): ReasonSet =
+  def make(vgterm: VGTerm, db: Database, input: Operator): ReasonSet =
   {
-    if(v.args.isEmpty){ return new ReasonSet(v.model, v.idx, None); }
-
-    return new ReasonSet(
-      v.model,
-      v.idx,
-      Some((input, v.args, v.hints))
-    );
+    if(vgterm.args.isEmpty){
+      return new ReasonSet(
+        db.models.get(vgterm.name),
+        vgterm.idx,
+        None
+      )
+    } else {
+      return new ReasonSet(
+        db.models.get(vgterm.name),
+        vgterm.idx,
+        Some(
+          input,
+          vgterm.args,
+          vgterm.hints
+        )
+      )
+    }
   }
+
 }

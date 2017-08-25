@@ -15,6 +15,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 class JDBCBackend(val backend: String, val filename: String) 
   extends Backend
   with LazyLogging
+  with InlinableBackend
 {
   var conn: Connection = null
   var openConnections = 0
@@ -35,10 +36,6 @@ class JDBCBackend(val backend: String, val filename: String)
             val path = java.nio.file.Paths.get(filename).toString
             var c = java.sql.DriverManager.getConnection("jdbc:sqlite:" + path)
             SQLiteCompat.registerFunctions(c)
-            tableSchemas.put("SQLITE_MASTER", Seq(
-              ("NAME", TString()),
-              ("TYPE", TString())
-            ))
             c
 
 
@@ -210,7 +207,7 @@ class JDBCBackend(val backend: String, val filename: String)
           val tables = this.getAllTables().map{(x) => x.toUpperCase}
           if(!tables.contains(table.toUpperCase)) return None
 
-          val cols: Option[List[(String, Type)]] = backend match {
+          val cols: Option[Seq[(String, Type)]] = backend match {
             case "sqlite" => {
               // SQLite doesn't recognize anything more than the simplest possible types.
               // Type information is persisted but not interpreted, so conn.getMetaData() 
@@ -245,13 +242,18 @@ class JDBCBackend(val backend: String, val filename: String)
         throw new SQLException("Trying to use unopened connection!")
       }
 
+      val tableNames = new ListBuffer[String]()
       val metadata = conn.getMetaData()
       val tables = backend match {
-        case "sqlite" => metadata.getTables(null, null, "%", null)
-        case "oracle" => metadata.getTables(null, "ARINDAMN", "%", null) // TODO Generalize
+        case "sqlite" => {
+          tableNames.append("SQLITE_MASTER")
+          metadata.getTables(null, null, "%", null)
+        }
+        case "oracle" => {
+          metadata.getTables(null, "ARINDAMN", "%", null) // TODO Generalize
+        }
       }
 
-      val tableNames = new ListBuffer[String]()
 
       while(tables.next()) {
         tableNames.append(tables.getString("TABLE_NAME"))
@@ -274,11 +276,11 @@ class JDBCBackend(val backend: String, val filename: String)
       case _ => TDate()
     }
 
-  def specializeQuery(q: Operator): Operator = {
+  def specializeQuery(q: Operator, db: Database): Operator = {
     backend match {
       case "sqlite" if inliningAvailable => 
-        VGTermFunctions.specialize(SpecializeForSQLite(q))
-      case "sqlite" => SpecializeForSQLite(q)
+        VGTermFunctions.specialize(SpecializeForSQLite(q, db))
+      case "sqlite" => SpecializeForSQLite(q, db)
       case "oracle" => q
     }
   }

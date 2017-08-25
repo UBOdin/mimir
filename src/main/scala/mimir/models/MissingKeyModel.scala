@@ -4,7 +4,6 @@ import scala.util.Random
 
 import mimir.algebra._
 import mimir.util._
-import mimir.ctables.VGTerm
 
 /** 
  * A model representing a key-repair choice.

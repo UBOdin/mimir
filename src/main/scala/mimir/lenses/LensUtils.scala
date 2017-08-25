@@ -10,7 +10,7 @@ object LensUtils {
 
   def extractModelsByColumn(
     modelMap: Seq[(String, Seq[(String, (Model, Int, Seq[Expression]))])]
-  ): (Map[String,Seq[(Model,Int,Seq[Expression],String)]], Seq[Model]) =
+  ): (Map[String,Seq[(String,Int,Seq[Expression],String)]], Seq[Model]) =
   {
     val candidateModels =
       modelMap.
@@ -18,30 +18,29 @@ object LensUtils {
           case (modelGroup, perColumnImplementations) =>
             perColumnImplementations.map {
               case (col, (model, idx, hints)) => 
-                (col, (model, idx, hints, modelGroup))
+                (col, (model.name, idx, hints, modelGroup))
             }
         }.
         groupBy(_._1).            // Group candidates by target column
         map( x => (x._1, x._2.map(_._2)) )   // Convert to Column -> List[(Model, Idx, Category)]
 
     val modelEntities =
-      candidateModels.         // Start with the models per column
-        values.                // We only care about the models themselves
-        flatten.               // Unnest the lists
-        groupBy( _._1.name ).  // Organize by model name
+      modelMap.                // Start with the models
+        flatMap { _._2.map { _._2._1 } }.
+                               // We only care about the models themselves
+        groupBy( _.name ).     // Organize by model name
         map( _._2.head ).      // We only need one copy of each model
-        map( _._1).            // We only care about the model itself
-        toList
+        toSeq
 
     (candidateModels, modelEntities)
   }
  
   def buildMetaModel(
-    metaModel: Model, 
+    metaModel: String, 
     metaModelIdx: Int,
     metaModelArgs: Seq[Expression],
     metaModelHints: Seq[Expression],
-    inputModels: Seq[(Model,Int,Seq[Expression],String)], 
+    inputModels: Seq[(String,Int,Seq[Expression],String)], 
     inputArgs: Seq[Expression]
   ): Expression =
   {

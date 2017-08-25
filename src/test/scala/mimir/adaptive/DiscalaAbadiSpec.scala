@@ -57,7 +57,7 @@ object DiscalaAbadiSpec
 
       val spanningTree = 
         DiscalaAbadiNormalizer.spanningTreeLens(db, 
-          MultilensConfig("SHIPPING", db.getTableOperator("SHIPPING"), Seq())
+          MultilensConfig("SHIPPING", db.table("SHIPPING"), Seq())
         )
       LoggerUtils.debug(
           // "mimir.exec.Compiler"
@@ -125,7 +125,7 @@ object DiscalaAbadiSpec
       ){ _.map { row => 
           row("ATTR_NAME").asString
         }.toSet must be equalTo(
-          db.getTableOperator("SHIPPING").schema.map(_._1).toSet
+          db.table("SHIPPING").columnNames.toSet
         )
       }
     }

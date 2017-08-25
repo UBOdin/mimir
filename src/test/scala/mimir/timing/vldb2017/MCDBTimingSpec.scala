@@ -5,8 +5,8 @@ import org.specs2.specification._
 
 import mimir.algebra._
 import mimir.util._
-import mimir.ctables.{VGTerm}
-import mimir.optimizer.{InlineVGTerms,InlineProjections}
+import mimir.ctables.InlineVGTerms
+import mimir.optimizer.operator.InlineProjections
 import mimir.test.{SQLTestSpecification, MCDBWorkload}
 import mimir.models._
 import org.specs2.specification.core.Fragments

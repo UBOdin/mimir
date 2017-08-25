@@ -8,6 +8,7 @@ import mimir.parser._
 import mimir.sql._
 import mimir.util.{TimeUtils,ExperimentalOptions,LineReaderInputSource,PythonProcess}
 import mimir.algebra._
+import mimir.statistics.DetectSeries
 import mimir.plot.Plot
 import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
 import net.sf.jsqlparser.statement.Statement
@@ -152,11 +153,11 @@ object Mimir extends LazyLogging {
     val raw = db.sql.convert(explain.getSelectBody())
     output.print("------ Raw Query ------")
     output.print(raw.toString)
-    db.check(raw)
-    val optimized = db.optimize(raw)
+    db.typechecker.schemaOf(raw)        // <- discard results, just make sure it typechecks
+    val optimized = db.compiler.optimize(raw)
     output.print("--- Optimized Query ---")
     output.print(optimized.toString)
-    db.check(optimized)
+    db.typechecker.schemaOf(optimized)  // <- discard results, just make sure it typechecks
     output.print("--- SQL ---")
     try {
       output.print(db.ra.convert(optimized).toString)
@@ -228,7 +229,7 @@ object Mimir extends LazyLogging {
       case Function("SHOW", Seq(Var("TABLES"))) => 
         for(table <- db.getAllTables()){ output.print(table.toUpperCase); }
       case Function("SHOW", Seq(Var(name))) => 
-        db.getTableSchema(name) match {
+        db.tableSchema(name) match {
           case None => 
             output.print(s"'$name' is not a table")
           case Some(schema) => 

@@ -4,7 +4,7 @@ import java.sql.SQLException
 
 import mimir.algebra._
 import mimir.util._
-import mimir.optimizer._
+import mimir.optimizer.operator._
 
 object CTPercolatorClassic {
 
@@ -54,12 +54,12 @@ object CTPercolatorClassic {
               rest
             )
           case _ => (
-              e.schema.map(_._1).map( (x) => (x, Var(x)) ).toSeq,
+              e.columnNames.map( (x) => (x, Var(x)) ).toSeq,
               e
             )
         }
     val addConstraintCol = (e: Operator) => {
-      if(e.schema.map(_._1).toSet contains CTables.conditionColumn) {
+      if(e.columnNames.toSet contains CTables.conditionColumn) {
         Seq(ProjectArg(CTables.conditionColumn, Var(CTables.conditionColumn)))
       } else {
         Seq[ProjectArg]()
@@ -149,8 +149,8 @@ object CTPercolatorClassic {
         // Pulling projections up through a join may require
         // renaming columns under the join if the same column
         // name appears on both sides of the source
-        val lhsColNames = lhsChild.schema.map(_._1).toSet
-        val rhsColNames = rhsChild.schema.map(_._1).toSet
+        val lhsColNames = lhsChild.columnNames.toSet
+        val rhsColNames = rhsChild.columnNames.toSet
 
         val conflicts = (
           (lhsColNames & rhsColNames)
@@ -188,7 +188,7 @@ object CTPercolatorClassic {
             // name.
             val rewrite = (child:Operator, rename:String => String) => {
               Project(
-                child.schema.map(_._1).
+                child.columnNames.
                   map( fullMapping(_, rename) ).
                   map( (x) => ProjectArg(x._1, x._2)).toSeq,
                 child
@@ -253,16 +253,17 @@ object CTPercolatorClassic {
         }
         return ret
       }
-      case Sort(_,_) => ???
-      case View(_,_,_) => ???
-      case EmptyTable(_) => ???
-      case LeftOuterJoin(_,_,_) => ???
-      case Union(_,_) => ???
-      case Aggregate(_,_,_) => ???
-      case Limit(_,_,_) => ???
-      case Annotate(_, _) => ???
-      case ProvenanceOf(_) => ???
-      case Recover(_, _) => ???
+      case Annotate(subj,invisScm) => {
+        percolateOne(subj)
+      }
+      
+			case Recover(subj,invisScm) => {
+        percolateOne(subj)
+      }
+      
+      case ProvenanceOf(psel) => {
+        percolateOne(psel)
+      }
     }
   }
   
@@ -283,14 +284,7 @@ object CTPercolatorClassic {
       case Union(_,_) => false
       case Join(_,_) => false
       case Aggregate(_,_,_) => false
-      case Sort(_,_) => ???
-      case View(_,_,_) => ???
-      case EmptyTable(_) => ???
-      case LeftOuterJoin(_,_,_) => ???
-      case Limit(_,_,_) => ???
-      case Annotate(_, _) => ???
-      case ProvenanceOf(_) => ???
-      case Recover(_, _) => ???
+      case (Annotate(_, _) | ProvenanceOf(_) | Recover(_, _)) => ???
     }
   }
   
@@ -323,19 +317,19 @@ object CTPercolatorClassic {
           Project(
             Seq(ProjectArg(ROWID_KEY,
               Function("JOIN_ROWIDS", Seq[Expression](Var("LEFT_ROWID"), Var("RIGHT_ROWID"))))) ++
-            (left.schema ++ right.schema).map(_._1).map(
+            (left.columnNames ++ right.columnNames).map(
               (x) => ProjectArg(x, Var(x)) 
             ).toSeq,
             Join(
               Project(
                 Seq(ProjectArg("LEFT_ROWID", Var(ROWID_KEY))) ++
-                left.schema.map(_._1).map(
+                left.columnNames.map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toSeq,
                 propagateRowIDs(left, true)),
               Project(
                 Seq(ProjectArg("RIGHT_ROWID", Var(ROWID_KEY))) ++
-                right.schema.map(_._1).map(
+                right.columnNames.map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toSeq,
                 propagateRowIDs(right, true))
@@ -361,7 +355,7 @@ object CTPercolatorClassic {
                 Seq(ProjectArg(ROWID_KEY,
                   Function("__LEFT_UNION_ROWID",
                     Seq[Expression](Var(ROWID_KEY))))) ++
-                left.schema.map(_._1).map(
+                left.columnNames.map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toSeq,
                 propagateRowIDs(left, true)),
@@ -369,7 +363,7 @@ object CTPercolatorClassic {
                 Seq(ProjectArg(ROWID_KEY,
                   Function("__RIGHT_UNION_ROWID",
                     Seq[Expression](Var(ROWID_KEY))))) ++
-                right.schema.map(_._1).map(
+                right.columnNames.map(
                   (x) => ProjectArg(x, Var(x)) 
                 ).toSeq,
                 propagateRowIDs(right, true))
@@ -387,15 +381,8 @@ object CTPercolatorClassic {
           } else {
             Table(name, alias, sch, metadata)
           }
-
-      case Sort(_,_) => ???
-      case View(_,_,_) => ???
-      case EmptyTable(_) => ???
-      case LeftOuterJoin(_,_,_) => ???
-      case Limit(_,_,_) => ???
-      case Annotate(_, _) => ???
-      case ProvenanceOf(_) => ???
-      case Recover(_, _) => ???      
+          
+        case (Annotate(_, _) | ProvenanceOf(_) | Recover(_, _)) => ???
     }
   }
 
@@ -523,267 +510,5 @@ object CTPercolatorClassic {
   val mimirRowDeterministicColumnName = "MIMIR_ROW_DET"
   val mimirColDeterministicColumnPrefix = "MIMIR_COL_DET_"
 
-  /**
-   * Rewrite the input operator to evaluate a 'provenance lite'
-   * 
-   * The operator's output will be extended with three types of columns:
-   *   - a binary 'Row Deterministic' column that stores whether the row 
-   *     is non-deterministically in the result set (true = deterministic).
-   *   - a set of binary 'Column Deterministic' columns that store whether
-   *     the value of the column is deterministic or not.
-   *
-   * The return value is a triple: The rewritten operator, an expression
-   * for computing the non determinism of all columns, and an expression for
-   * computing the non-determinism of all rows.
-   */
-  def percolateLite(oper: Operator): (Operator, Map[String,Expression], Expression) =
-  {
-    val schema = oper.schema;
 
-    oper match {
-      case Project(columns, src) => {
-        val (rewrittenSrc, colDeterminism, rowDeterminism) = percolateLite(src);
-
-        // Compute the determinism of each column.
-        val newColDeterminismBase = 
-          columns.map( _ match { case ProjectArg(col, expr) => {
-            val isDeterministic = 
-              CTAnalyzer.compileDeterministic(expr, colDeterminism)
-            
-            (col, isDeterministic)
-          }})
-
-        // Determine which of them are deterministic.
-        val computedDeterminismCols = 
-          newColDeterminismBase.filterNot( 
-            // Retain only columns where the isDeterministic expression
-            // is a constant (i.e., no Column references)
-            _ match { case (col, expr) => {
-              ExpressionUtils.getColumns(expr).isEmpty
-            }}
-          ).map( 
-            // Then just translate to a list of ProjectArgs
-            _ match { case (col, isDeterministic) => 
-              ProjectArg(mimirColDeterministicColumnPrefix+col, isDeterministic) 
-            }
-         )
-
-        // Rewrite these expressions so that the computed expressions use the
-        // computed version from the source data.
-        val newColDeterminism =
-          newColDeterminismBase.map( _ match { case (col, isDeterministic) =>
-              if(ExpressionUtils.getColumns(isDeterministic).isEmpty) {
-                (col, isDeterministic)
-              } else {
-                (col, Var(mimirColDeterministicColumnPrefix+col))
-              }
-            }
-          )
-
-        val (newRowDeterminism, rowDeterminismCols) = 
-          if(ExpressionUtils.getColumns(rowDeterminism).isEmpty){
-            (rowDeterminism, Seq())
-          } else {
-            (Var(mimirRowDeterministicColumnName), 
-              Seq(ProjectArg(
-                mimirRowDeterministicColumnName, 
-                rowDeterminism
-            )))
-          }
-
-        val retProject = Project(
-            columns ++ computedDeterminismCols ++ rowDeterminismCols,
-            rewrittenSrc
-          )
-
-        return (retProject, newColDeterminism.toMap, newRowDeterminism)
-      }
-      case Select(cond, src) => {
-        val (rewrittenSrc, colDeterminism, rowDeterminism) = percolateLite(src);
-
-        // Compute the determinism of the selection predicate
-        val condDeterminism = 
-          CTAnalyzer.compileDeterministic(cond, colDeterminism)
-
-        // Combine the determinism with the computed determinism from the child...
-        val newRowDeterminism = 
-          ExpressionUtils.makeAnd(condDeterminism, rowDeterminism)
-        if( ExpressionUtils.getColumns(newRowDeterminism).isEmpty
-            || condDeterminism.equals(BoolPrimitive(true))
-          ){
-          // If the predicate's determinism is data-independent... OR if the
-          // predicate is deterministic already, then we don't need to add anything.
-          // Just return what we already have!
-          return (Select(cond, src), colDeterminism, newRowDeterminism)
-        } else {
-          // Otherwise, we need to tack on a new projection operator to compute
-          // the new non-determinism
-
-          val projectArgs = 
-            // remap the existing schema
-            rewrittenSrc.schema.
-              map(_._1).
-              // drop any existing row non-determinsm column
-              filterNot( _.equals(mimirRowDeterministicColumnName) ).
-              // pass the rest through unchanged
-              map( (x) => ProjectArg(x, Var(x))) ++
-            Seq(ProjectArg(
-              mimirRowDeterministicColumnName,
-              newRowDeterminism
-            ))
-
-          val newOperator = 
-            Project(projectArgs, Select(cond, rewrittenSrc) )
-
-          return (newOperator, colDeterminism, Var(mimirRowDeterministicColumnName))
-        }
-      }
-      case Union(left, right) => 
-      {
-        val (rewrittenLeft, colDetLeft, rowDetLeft) = percolateLite(left);
-        val (rewrittenRight, colDetRight, rowDetRight) = percolateLite(right);
-        val columnNames = colDetLeft.keys.toSet ++ colDetRight.keys.toSet
-        // We need to make the schemas line up: the schemas of the left and right
-        // need to have all of the relevant columns
-        // Going to cheat a bit here and just force the projection on.
-
-        val mergeNonDeterminism = 
-          (col:String, detCol:String, colLeft:Expression, colRight:Expression) => {
-          // It's only safe to skip the non-determinism column if both
-          // LHS and RHS have exactly the same condition AND that condition
-          // is data-independent.
-          if(  ExpressionUtils.getColumns(colLeft).isEmpty
-            && ExpressionUtils.getColumns(colRight).isEmpty
-            && colLeft.equals(colRight)
-          ){
-            // Skip the column and return the data-independent condition
-            (Seq[(ProjectArg, ProjectArg)](), (col, colLeft))
-          } else {
-            // Otherwise, materialize the condition, and return a reference
-            // to the new condition.
-            ( Seq( (ProjectArg(detCol, colLeft), 
-                     ProjectArg(detCol, colRight) )), 
-              (col, Var(detCol))
-            )
-          }
-        }
-
-        val (colProjectArgs, colDeterminism) =
-          columnNames.map(
-            (col) => 
-              mergeNonDeterminism(
-                col, mimirColDeterministicColumnPrefix+col, 
-                colDetLeft(col), colDetRight(col)
-              )
-          ).unzip
-
-        val (condProjectArgs, condDeterminism) =
-          mergeNonDeterminism(
-            null, mimirRowDeterministicColumnName,
-            rowDetLeft, rowDetRight
-          )
-        
-        val (projectArgsLeft, projectArgsRight) = 
-          (colProjectArgs.flatten ++ condProjectArgs).unzip
-        val projectArgsBase = 
-          columnNames.map( 
-            (col) => ProjectArg(col, Var(col)) 
-          ).toSeq
-
-        val newOperator = 
-          Union(
-              Project(projectArgsBase ++ projectArgsLeft, rewrittenLeft),
-              Project(projectArgsBase ++ projectArgsRight, rewrittenRight)
-            )
-
-        return (newOperator, colDeterminism.toMap, condDeterminism._2)
-
-      }
-      case Join(left, right) =>
-      {
-        val (rewrittenLeft, colDetLeft, rowDetLeft) = percolateLite(left);
-        val (rewrittenRight, colDetRight, rowDetRight) = percolateLite(right);
-
-        // if left and right have no schema overlap, then the only
-        // possible overlap in rewrittenLeft and rewrittenRight is
-        // the row determinism column.  Start by detecting whether
-        // this column is present in both inputs:
-        val (schemaLeft,detColumnLeft) = 
-          rewrittenLeft.schema.map(_._1).
-            partition( _ != mimirRowDeterministicColumnName )
-        val (schemaRight,detColumnRight) = 
-          rewrittenRight.schema.map(_._1).
-            partition( _ != mimirRowDeterministicColumnName )
-
-        // If either left or right side lacks a determinism column,
-        // we're safe.  Fast-path return a simple join.
-        if(detColumnLeft.isEmpty || detColumnRight.isEmpty){
-          return (
-            Join(rewrittenLeft, rewrittenRight),
-            colDetLeft ++ colDetRight,
-            ExpressionUtils.makeAnd(rowDetLeft, rowDetRight)
-          )          
-        }
-
-        // if both left and right have a row determinism column,
-        // then we need to rewrite them to prevent a namespace
-        // collision.
-
-        // Generate a schema mapping that leaves normal columns
-        // intact.
-        val schemaMappingLeft = 
-          schemaLeft.map( (x) => ProjectArg(x, Var(x))) ++ 
-          (detColumnLeft.map( 
-            (_) => ProjectArg(
-                mimirRowDeterministicColumnName+"_LEFT",
-                Var(mimirRowDeterministicColumnName)
-              ))
-          )
-        val schemaMappingRight = 
-          schemaRight.map( (x) => ProjectArg(x, Var(x))) ++ 
-          (detColumnRight.map( 
-            (_) => ProjectArg(
-                mimirRowDeterministicColumnName+"_RIGHT",
-                Var(mimirRowDeterministicColumnName)
-              ))
-          )
-
-        // Map the variables in the determinism columns...
-        val mappedRowDetLeft = Eval.inline(rowDetLeft, 
-            Map((mimirRowDeterministicColumnName, 
-                 Var(mimirRowDeterministicColumnName+"_LEFT"))))
-        val mappedRowDetRight = Eval.inline(rowDetRight, 
-            Map((mimirRowDeterministicColumnName, 
-                 Var(mimirRowDeterministicColumnName+"_RIGHT"))))
-
-        // And return it.
-        return (
-          Join(
-            Project(schemaMappingLeft, rewrittenLeft), 
-            Project(schemaMappingRight, rewrittenRight)
-          ),
-          colDetLeft ++ colDetRight,
-          ExpressionUtils.makeAnd(mappedRowDetLeft, mappedRowDetRight)
-        )
-      }
-      case Table(_, _, cols, _) => {
-        return (oper, 
-          // All columns are deterministic
-          cols.map(_._1).map((_, BoolPrimitive(true)) ).toMap,
-          // All rows are deterministic
-          BoolPrimitive(true)
-        )
-      }
-
-      case Sort(_,_) => ???
-      case View(_,_,_) => ???
-      case EmptyTable(_) => ???
-      case LeftOuterJoin(_,_,_) => ???
-      case Aggregate(_,_,_) => ???
-      case Limit(_,_,_) => ???
-      case Annotate(_, _) => ???
-      case ProvenanceOf(_) => ???
-      case Recover(_, _) => ???
-    }
-  }
 }

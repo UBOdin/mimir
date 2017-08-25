@@ -1,5 +1,7 @@
 package mimir.algebra
 
+import mimir.parser.ExpressionParser
+
 trait OperatorConstructors
 {
   def toOperator: Operator
@@ -13,17 +15,40 @@ trait OperatorConstructors
   def filter(condition: Expression): Operator =
     condition match {
       case BoolPrimitive(true)  => toOperator
-      case BoolPrimitive(false) => EmptyTable(toOperator.schema)
       case _ => Select(condition, toOperator)
     }
+  def filterParsed(condition: String): Operator =
+    filter(ExpressionParser.expr(condition))
 
   def project(cols: String*): Operator =
-    map(cols.map { col => (col, Var(col)) }:_* )
+    mapImpl(cols.map { col => (col, Var(col)) } )
+
+  def projectNoInline(cols: String*): Operator =
+    mapImpl(cols.map { col => (col, Var(col)) }, noInline = true)
+
+  def mapParsed(cols: (String, String)*): Operator =
+    mapImpl(cols.map { case (name, expr) => (name, ExpressionParser.expr(expr)) } )
 
   def map(cols: (String, Expression)*): Operator =
+    mapImpl(cols)
+
+  def mapParsedNoInline(cols: (String, String)*): Operator =
+    mapImpl(
+      cols.map { case (name, expr) => (name, ExpressionParser.expr(expr)) },
+      noInline = true
+    )
+
+  def mapNoInline(cols: (String, Expression)*): Operator =
+    mapImpl(cols, noInline = true)
+
+  def mapImpl(cols: Seq[(String, Expression)], noInline:Boolean = false): Operator =
   {
     val (oldProjections, strippedOperator) =
-      OperatorUtils.extractProjections(toOperator)
+      if(noInline) { 
+        (toOperator.columnNames.map { x => ProjectArg(x, Var(x)) }, toOperator)
+      } else {
+        OperatorUtils.extractProjections(toOperator)
+      }
     val lookupMap: Map[String,Expression] = 
       oldProjections
         .map { _.toBinding }
@@ -35,6 +60,15 @@ trait OperatorConstructors
       },
       strippedOperator
     )
+  }
+
+  def rename(targets: (String, String)*): Operator =
+  {
+    val renamings = targets.toMap
+    map(toOperator.columnNames.map { 
+      case name if targets contains name => (name, Var(renamings(name))) 
+      case name => (name, Var(name))
+    }:_*)
   }
 
   def removeColumn(targets: String*): Operator =
@@ -50,8 +84,9 @@ trait OperatorConstructors
   def addColumn(newCols: (String, Expression)*): Operator =
   {
     val (cols, src) = OperatorUtils.extractProjections(toOperator)
+    val bindings = cols.map { _.toBinding }.toMap
     Project(
-      cols ++ newCols.map { col => ProjectArg(col._1, col._2) },
+      cols ++ newCols.map { col => ProjectArg(col._1, Eval.inline(col._2, bindings)) },
       src
     )
   }

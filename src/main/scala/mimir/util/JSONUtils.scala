@@ -6,26 +6,6 @@ import mimir.algebra._
 
 object JsonUtils {
 
-  def parsePrimitive(t: Type, jv: JsValue): PrimitiveValue =
-  {
-    (jv,t) match {
-      case (JsNull, _)              => NullPrimitive()
-
-      case (JsNumber(v), TInt())    => IntPrimitive(v.toInt)
-      case (JsNumber(v), TFloat())  => FloatPrimitive(v.toDouble)
-      case (JsNumber(v), TString()) => StringPrimitive(v.toString)
-      case (JsNumber(_), _)         => throw new IllegalArgumentException(s"Invalid JSON ($jv) for Type $t")
-
-      case (JsString(v), _)         => TextUtils.parsePrimitive(t, v)
-
-      case (JsBoolean(v), TBool())  => BoolPrimitive(v)
-      case (JsBoolean(v), _)        => throw new IllegalArgumentException(s"Invalid JSON ($jv) for Type $t")
-
-      case (JsArray(_), _)          => throw new IllegalArgumentException(s"Invalid JSON ($jv) for Type $t")
-      case (JsObject(_), _)         => throw new IllegalArgumentException(s"Invalid JSON ($jv) for Type $t")
-    }
-  }
-
   val dotPrefix = "\\.([^.\\[]+)".r
   val bracketPrefix = "\\[([0-9]+)\\]".r
 
@@ -50,26 +30,4 @@ object JsonUtils {
     }
   }
 
-  def toJson(p: PrimitiveValue): JsValue =
-  {
-    p match {
-      case NullPrimitive() => JsNull
-      case IntPrimitive(i) => JsNumber(i)
-      case FloatPrimitive(f) => JsNumber(f)
-      case StringPrimitive(s) => JsString(s)
-      case BoolPrimitive(b) => JsBoolean(b)
-      case DatePrimitive(y,m,d) => JsString(f"$y%04d-$m%02d-$d%02d")
-      case TimestampPrimitive(y,m,d,hr,min,sec) => JsString(f"$y%04d-$m%02d-$d%02d $hr%02d:$min%02d:$sec%02d")
-      case RowIdPrimitive(r) => JsString(r)
-      case TypePrimitive(t) => JsString(t.toString)
-    }
-  }
-
-  implicit val primitiveValueWrites = new Writes[PrimitiveValue] {
-    def writes(p: PrimitiveValue): JsValue = 
-    {
-      JsonUtils.toJson(p)
-    }
-  }
 }
-

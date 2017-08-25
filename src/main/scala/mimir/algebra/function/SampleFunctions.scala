@@ -7,10 +7,10 @@ import java.sql.SQLException
 object SampleFunctions
 {
 
-  def register()
+  def register(fr: FunctionRegistry)
   {
 
-    FunctionRegistry.registerNative("BEST_SAMPLE", 
+    fr.register("BEST_SAMPLE", 
       (args: Seq[PrimitiveValue]) => {
         TupleBundle.mostLikelyValue(
           args.head.asLong,
@@ -37,7 +37,7 @@ object SampleFunctions
       }
     )
 
-    FunctionRegistry.registerNative("SAMPLE_CONFIDENCE",
+    fr.register("SAMPLE_CONFIDENCE",
       (args: Seq[PrimitiveValue]) => 
         FloatPrimitive(
           WorldBits.confidence(args(0).asLong, args(0).asLong.toInt)
@@ -51,7 +51,7 @@ object SampleFunctions
       }
     )
     
-    FunctionRegistry.registerNative("POSSION", 
+    fr.register("POSSION", 
       {
 	      case Seq(IntPrimitive(m))   => {
           IntPrimitive(mimir.sql.sqlite.Possion.poisson_helper(m))
@@ -65,7 +65,7 @@ object SampleFunctions
       ((args: Seq[Type]) => TInt())
 		)
 		
-		FunctionRegistry.registerNative("GAMMA", 
+		fr.register("GAMMA", 
       {
 	      case Seq(FloatPrimitive(k), FloatPrimitive(theta))   => {
           FloatPrimitive(mimir.sql.sqlite.Gamma.sampleGamma(k, theta))

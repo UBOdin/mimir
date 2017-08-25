@@ -4,6 +4,9 @@ import java.sql._;
 import java.util.NoSuchElementException;
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
+import mimir.Database
+import mimir.algebra.function._
+import mimir.models.{Model, ModelManager}
 import Arith.{Add, Sub, Mult, Div, And, Or, BitAnd, BitOr, ShiftLeft, ShiftRight}
 import Cmp.{Gt, Lt, Lte, Gte, Eq, Neq, Like, NotLike}
 
@@ -47,41 +50,60 @@ class MissingVariable(varName: String, e: Throwable, context: Option[Operator] =
  *             any typechecker error occurs, then we'll annotate the
  *             error with this operator.
  */
-class ExpressionChecker(
-	scope: (String => Type) = { (_:String) => throw new RAException("Need a scope to typecheck expressions with variables") }, 
-	context: Option[Operator] = None
+class Typechecker(
+	functions: Option[FunctionRegistry] = None, 
+	aggregates: Option[AggregateRegistry] = None,
+	models: Option[ModelManager] = None
 ) extends LazyLogging {
 	/* Assert that the expressions claimed type is its type */
-	def assert(e: Expression, t: Type, msg: String = "Typechecker"): Unit = {
-		val eType = typeOf(e);
+	def assert(e: Expression, t: Type, scope: (String => Type), context: Option[Operator] = None, msg: String = "Typechecker"): Unit = {
+		val eType = typeOf(e, scope);
 		if(Typechecker.escalate(eType, t, msg, e) != t){
 			throw new TypeException(eType, t, msg, Some(e))
 		}
 	}
 
-	def typeOf(e: Expression): Type = {
+	def weakTypeOf(e: Expression) =
+		typeOf(e, (_) => TAny())
+
+	def typeOf(e: Expression, o: Operator): Type =
+		typeOf(e, scope = schemaOf(o).toMap, context = Some(o))
+
+	def typeOf(
+		e: Expression, 
+		scope: (String => Type) = { (_:String) => throw new RAException("Need a scope to typecheck expressions with variables") }, 
+		context: Option[Operator] = None
+	): Type = {
+		val recur = typeOf(_:Expression, scope, context)
+
 		e match {
 			case p: PrimitiveValue => p.getType;
-			case Not(child) => assert(child, TBool(), "NOT"); TBool()
-			case p: Proc => p.getType(p.children.map(typeOf(_)))
-			case Arithmetic(op @ (Add | Sub | Mult | Div | BitAnd | BitOr | ShiftLeft | ShiftRight), lhs, rhs) =>
-				Typechecker.assertNumeric(Typechecker.escalate(typeOf(lhs), typeOf(rhs), op.toString, e), e);
-			case Arithmetic((And | Or), lhs, rhs) =>
-				assert(lhs, TBool(), "BoolOp");
-				assert(rhs, TBool(), "BoolOp");
-				TBool()
-			case Comparison((Eq | Neq), lhs, rhs) =>
-				Typechecker.escalate(typeOf(lhs), typeOf(rhs), "Comparison", e);
-				TBool()
-			case Comparison((Gt | Gte | Lt | Lte), lhs, rhs) =>
-				if(typeOf(lhs) != TDate() && typeOf(rhs) != TDate()) {
-					Typechecker.assertNumeric(Typechecker.escalate(typeOf(lhs), typeOf(rhs), "Comparison", e), e)
+			case Not(child) => assert(child, TBool(), scope, context, "NOT"); TBool()
+			case p: Proc => p.getType(p.children.map(recur(_)))
+			case Arithmetic(op, lhs, rhs) => {
+				op match {
+					case (Add | Sub | Mult | Div | BitAnd | BitOr | ShiftLeft | ShiftRight) => 
+					  Typechecker.assertNumeric(Typechecker.escalate(recur(lhs), recur(rhs), op.toString, e), e);
+					case (And | Or) => 
+						assert(lhs, TBool(), scope, context, "BoolOp");
+						assert(rhs, TBool(), scope, context, "BoolOp");
+						TBool()
+				}
+			}
+			case Comparison(op, lhs, rhs) => {
+				op match {
+					case (Eq | Neq) => 
+						Typechecker.escalate(recur(lhs), recur(rhs), "Comparison", e);
+					case (Gt | Gte | Lt | Lte) => 
+						if(recur(lhs) != TDate() && recur(rhs) != TDate()) {
+							Typechecker.assertNumeric(Typechecker.escalate(recur(lhs), recur(rhs), "Comparison", e), e)
+						}
+					case (Like | NotLike) =>
+						assert(lhs, TString(), scope, context, "LIKE")
+						assert(rhs, TString(), scope, context, "LIKE")
 				}
 				TBool()
-			case Comparison((Like | NotLike), lhs, rhs) =>
-				assert(lhs, TString(), "LIKE")
-				assert(rhs, TString(), "LIKE")
-				TBool()
+			}
 			case Var(name) => 
 				try { 
 					val t = scope(name)
@@ -93,67 +115,67 @@ class ExpressionChecker(
 			case JDBCVar(t) => t
 			case Function("CAST", fargs) =>
 				// Special case CAST
-				Eval.inline(fargs(1)) match {
+				fargs(1) match {
 					case TypePrimitive(t) => t
 					case p:PrimitiveValue => { p match {
               case StringPrimitive(s) => Type.toSQLiteType(Integer.parseInt(s))
               case IntPrimitive(i)  =>  Type.toSQLiteType(i.toInt)
-      	      case _ => throw new SQLException("Invalid CAST to '"+p+"' of type: "+typeOf(p))
+      	      case _ => throw new SQLException("Invalid CAST to '"+p+"' of type: "+recur(p))
             }
 					}
 					case _ => TAny()
 				}
-			case Function(fname, fargs) =>
-				FunctionRegistry.typecheck(fname, fargs.map(typeOf(_)))
+			case Function(name, args) => 
+				returnTypeOfFunction(name, args.map { recur(_) })
+
 			case Conditional(condition, thenClause, elseClause) => 
-				assert(condition, TBool(), "WHEN")
+				assert(condition, TBool(), scope, context, "WHEN")
 				Typechecker.escalate(
-					typeOf(elseClause),
-					typeOf(thenClause),
+					recur(elseClause),
+					recur(thenClause),
 					"IF, ELSE CLAUSE", e
 				)
 			case IsNullExpression(child) =>
-				typeOf(child);
+				recur(child);
 				TBool()
 			case RowIdVar() => TRowId()
-
+			case VGTerm(model, idx, args, hints) => 
+				models match {
+					case Some(registry) =>
+						registry.get(model).varType(idx, args.map(recur(_)))
+					case None => throw new RAException("Need Model Manager to typecheck expressions with VGTerms")
+				}
     }
   }
 
-}
+	def returnTypeOfFunction(name: String, args: Seq[Type]): Type = {
+    try {
+      functions.flatMap { _.getOption(name) } match {
+        case Some(NativeFunction(_, _, getType)) => 
+          getType(args)
+        case Some(ExpressionFunction(_, argNames, expr)) => 
+          typeOf(expr, scope = argNames.zip(args).toMap)
+        case Some(FoldFunction(_, expr)) =>
+          args.tail.foldLeft(args.head){ case (curr,next) => 
+            typeOf(expr, Map("CURR" -> curr, "NEXT" -> next)) }
+        case None => 
+        	throw new RAException(s"Function $name(${args.mkString(",")}) is undefined")
+      }
+    } catch {
+      case TypeException(found, expected, detail, None) =>
+        throw TypeException(found, expected, detail, Some(Function(name, args.map{ TypePrimitive(_) })))
+    }
+  }
 
-object Typechecker {
-
-	val simpleChecker = new ExpressionChecker();
-	val weakChecker = new ExpressionChecker((_) => TAny())
-
-	def typeOf(e: Expression): Type =
-		{ simpleChecker.typeOf(e) }
-	def weakTypeOf(e: Expression): Type =
-		{ weakChecker.typeOf(e) }
-	def typeOf(e: Expression, scope: (String => Type)): Type =
-		{ (new ExpressionChecker(scope)).typeOf(e) }
-	def typeOf(e: Expression, o: Operator): Type =
-	{ 
-		typecheckerFor(o).typeOf(e)
-	}
-	def typecheckerFor(o: Operator): ExpressionChecker =
-	{
-		val scope = schemaOf(o).toMap;
-		new ExpressionChecker(scope(_), context = Some(o))
-	}
-
-	def typecheck(o: Operator): Unit =
-		schemaOf(o)
 
 	def schemaOf(o: Operator): Seq[(String, Type)] =
 	{
 		o match {
 			case Project(cols, src) =>
-				val chk = new ExpressionChecker(schemaOf(src).toMap, context = Some(src));
+				val schema = schemaOf(src).toMap
 				cols.map( { 
 						case ProjectArg(col, expression) =>
-							(col, chk.typeOf(expression))
+							(col, typeOf(expression, scope = schema(_), context = Some(src)))
 					})
 			
 			case ProvenanceOf(psel) => 
@@ -165,34 +187,43 @@ object Typechecker {
       }
       
 			case Recover(subj,invisScm) => {
-        schemaOf(subj).union(invisScm.map(pasct => (pasct.name,pasct.typ)))
+        schemaOf(subj).union(invisScm.map(_._2).map(pasct => (pasct.name,pasct.typ)))
       }
 			
-      case Select(cond, src) =>
+      case Select(cond, src) => {
 				val srcSchema = schemaOf(src);
-				(new ExpressionChecker(srcSchema.toMap, context = Some(src))).assert(cond, TBool(), "SELECT")
-				srcSchema
+      	assert(cond, TBool(), srcSchema.toMap, Some(src), "SELECT")
+      	return srcSchema
+      }
 
-			case Aggregate(groupBy, agggregates, source) =>
-				/* Get child operator schema */
-				val srcSchema = schemaOf(source)
-				val chk = new ExpressionChecker(srcSchema.toMap, context = Some(source))
+			case Aggregate(gbCols, aggCols, src) =>
+				aggregates match {
+					case None => throw new RAException("Need Aggregate Registry to typecheck aggregates")
+					case Some(registry) => {
 
-				/* Get Group By Args and verify type */
-				val groupBySchema: Seq[(String, Type)] = groupBy.map(x => (x.toString, chk.typeOf(x)) )
+						/* Nested Typechecker */
+						val srcSchema = schemaOf(src).toMap
+						val chk = typeOf(_:Expression, scope = srcSchema, context = Some(src))
 
-				/* Get function name, check for AVG *//* Get function parameters, verify type */
-				val aggSchema: Seq[(String, Type)] = agggregates.map(x => 
-					(
-						x.alias, 
-						AggregateRegistry.typecheck(x.function, x.args.map(chk.typeOf(_)))
-					)
-				)
+						/* Get Group By Args and verify type */
+						val groupBySchema: Seq[(String, Type)] = gbCols.map(x => (x.toString, chk(x)))
 
-				/* Send schema to parent operator */
-				val sch = groupBySchema ++ aggSchema
-				//println(sch)
-				sch
+						/* Get function name, check for AVG *//* Get function parameters, verify type */
+						val aggSchema: Seq[(String, Type)] = aggCols.map(x => 
+							(
+								x.alias, 
+								registry.typecheck(x.function, x.args.map(chk(_)))
+							)
+						)
+
+						/* Send schema to parent operator */
+						val sch = groupBySchema ++ aggSchema
+						//println(sch)
+						sch
+
+					}
+
+				}
 
 			case Join(lhs, rhs) =>
 				val lSchema = schemaOf(lhs);
@@ -218,7 +249,7 @@ object Typechecker {
 
 			case Table(_, _, sch, meta) => (sch ++ meta.map( x => (x._1, x._3) ))
 
-			case View(_, query, _) => query.schema
+			case View(_, query, _) => schemaOf(query)
 
 			case EmptyTable(sch) => sch
 
@@ -227,6 +258,11 @@ object Typechecker {
 			case Sort(_, src) => schemaOf(src)
 		}
 	}
+}
+
+object Typechecker 
+{
+
 
 	def assertNumeric(t: Type, e: Expression): Type =
  	{
@@ -239,12 +275,14 @@ object Typechecker {
  	def escalateLeft(a: Type, b: Type): Option[Type] =
  	{
 		(a,b) match {
+			case (TDate() | TTimestamp(), TDate() | TTimestamp())  => Some(TInterval())
+			case (TDate() | TTimestamp(), TInterval())  => Some(TTimestamp())
 			case _ if a.equals(b)         => Some(a)
 			case (TUser(name),_)          => escalateLeft(TypeRegistry.baseType(name),b)
 			case (TAny(),_)               => Some(b)
 			case (_,TAny())               => Some(a)
 			case (TInt(),TFloat())        => Some(TFloat())
-			case (TDate(), TTimestamp())  => Some(TTimestamp())
+			case (TRowId(),TString())     => Some(b)
 			case _                        => None
 		}
  	}

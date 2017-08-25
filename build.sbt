@@ -16,16 +16,23 @@ scalacOptions ++= Seq(
 )
 
 unmanagedResourceDirectories in Compile += baseDirectory.value / "lib_extra"
+includeFilter in (Compile, unmanagedResourceDirectories):= ".dylib,.dll,.so"
 unmanagedClasspath in Runtime += baseDirectory.value / "conf"
+unmanagedResourceDirectories in Test += baseDirectory.value / "conf"
 
-fork := true
+fork := true 
 connectInput in run := true
 outputStrategy in run := Some(StdoutOutput)
 cancelable in Global := true
 scalacOptions in Test ++= Seq("-Yrangepos")
 parallelExecution in Test := false
 testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
+envVars in Test := Map(("LD_PRELOAD",System.getProperty("java.home")+"/lib/"+System.getProperty("os.arch")+"/libjsig.so"))
 mainClass in Compile := Some("mimir.Mimir")
+
+//if you want to debug tests uncomment this
+//javaOptions in (Test) += "-Xdebug"
+//javaOptions in (Test) += "-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005"
 
 resolvers += "MimirDB" at "http://maven.mimirdb.info/"
 resolvers += "osgeo" at "http://download.osgeo.org/webdav/geotools/"
@@ -36,7 +43,7 @@ libraryDependencies ++= Seq(
   ////////////////////// Command-Line Interface Utilities //////////////////////
   "org.rogach"                    %%  "scallop"                  % "0.9.5",
   "org.jline"                     %   "jline"                    % "3.2.0",
-  "info.mimirdb"                  %   "jsqlparser"               % "1.0.1",
+  "info.mimirdb"                  %   "jsqlparser"               % "1.0.2",
 
   ////////////////////// Dev Tools -- Logging, Testing, etc... //////////////////////
   "com.typesafe.scala-logging"    %%  "scala-logging-slf4j"      % "2.1.2",

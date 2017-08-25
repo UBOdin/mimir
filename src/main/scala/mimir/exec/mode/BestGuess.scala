@@ -7,7 +7,7 @@ import mimir.Database
 import mimir.algebra._
 import mimir.ctables._
 import mimir.provenance._
-import mimir.optimizer._
+import mimir.optimizer.operator._
 import mimir.exec._
 import mimir.exec.result._
 import mimir.util.ExperimentalOptions
@@ -62,7 +62,7 @@ object BestGuess
 
 
     // Tag rows/columns with provenance metadata
-    val tagging = CTPercolator.percolateLite(oper)
+    val tagging = CTPercolator.percolateLite(oper, db.models.get(_))
     oper               = tagging._1
     val colDeterminism = tagging._2.filter( col => rawColumns(col._1) )
     val rowDeterminism = tagging._3
@@ -89,7 +89,7 @@ object BestGuess
 
     // Clean things up a little... make the query prettier, tighter, and 
     // faster
-    oper = Compiler.optimize(oper)
+    oper = db.compiler.optimize(oper)
 
     logger.debug(s"OPTIMIZED: $oper")
 
@@ -141,7 +141,7 @@ object BestGuess
     // In other words, best guesses that don't depend on which row we're
     // looking at (like the Type Inference or Schema Matching lenses)
     val mostlyDeterministicOper =
-      InlineVGTerms(oper)
+      InlineVGTerms(oper, db)
 
     // Deal with the remaining VG-Terms.  
     if(db.backend.canHandleVGTerms){
@@ -149,12 +149,7 @@ object BestGuess
       // UDF if it's available.
       return mostlyDeterministicOper
     } else {
-      // Unfortunately, this UDF may not always be available, so if needed
-      // we fall back to the Guess Cache
-      val fullyDeterministicOper =
-        db.bestGuessCache.rewriteToUseCache(mostlyDeterministicOper)
-
-      return fullyDeterministicOper
+      throw new RAException("Error, Best Guess Cache Doesn't Work")
     }
   }
 

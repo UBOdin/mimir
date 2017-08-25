@@ -6,10 +6,10 @@ import mimir.parser._
 
 object TypecheckerSpec extends Specification {
   
-  def parser = new ExpressionParser(null)
-  def expr = parser.expr _
-  def check(e: String) = Typechecker.typeOf(expr(e))
-  def checkWeak(e: String) = Typechecker.weakTypeOf(expr(e))
+  def typechecker = new Typechecker
+  def expr = ExpressionParser.expr _
+  def check(e: String) = typechecker.typeOf(expr(e))
+  def checkWeak(e: String) = typechecker.weakTypeOf(expr(e))
 
   "The Typechecker" should {
   	"Infer Conditional Types Correctly" >> {

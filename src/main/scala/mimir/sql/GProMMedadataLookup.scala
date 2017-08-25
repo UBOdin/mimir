@@ -21,6 +21,7 @@ import mimir.algebra.TypePrimitive
 import mimir.algebra.IntPrimitive
 import mimir.algebra.PrimitiveValue
 import mimir.algebra.Eval
+import mimir.algebra.VGTerm
 import mimir.models.ModelManager
 import mimir.Database
 import mimir.models.ModelManager
@@ -32,18 +33,18 @@ import mimir.algebra.TDate
 import mimir.algebra.TType
 import mimir.algebra.TTimestamp
 import mimir.algebra.TimestampPrimitive
+import mimir.algebra.TInterval
+import mimir.algebra.IntervalPrimitive
 import mimir.algebra.StringPrimitive
 import mimir.algebra.BoolPrimitive
 import mimir.algebra.RowIdPrimitive
 import mimir.algebra.NullPrimitive
 import mimir.algebra.Expression
 import mimir.algebra.PrimitiveValue
-import mimir.ctables.VGTerm
 import mimir.algebra.PrimitiveValue
 import mimir.algebra.RowIdVar
-import mimir.ctables.VGTermAcknowledged
 import mimir.algebra.Var
-
+import mimir.ctables.CTables
 
 class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_lookup.sqlite.SQLiteMetadataLookup(conn)
 {
@@ -61,35 +62,44 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
   }
   override def getFuncReturnType( fName:String, args: GProMList,
 		  numArgs:Int) : String = {
-		try {
-		  val argSeq = OperatorTranslation.gpromListToScalaList(args).map(arg => {
-        OperatorTranslation.translateGProMExpressionToMimirExpression(new GProMNode.ByReference(arg.getPointer), gpischm)
-      })
-      
-      //println(s"Metadata lookup: function: $fName(${argSeq.mkString(",")})")
-      val tp = fName match {
-		    case "SUM" => TInt()
-		    case "COUNT" => TInt()
-		    case "&" => TInt()
-		    case "MIMIR_MAKE_ROWID" => TRowId()
-		    case "sys_op_map_nonnull" => Typechecker.typeOf(argSeq(0), operator) 
-		    case _ => {
-		      val fc = mimir.algebra.Function(fName,argSeq) 
-          vgtFunctionType(fc);
-		    }
-		  }
-      
-      val gpt = getGProMDataTypeStringFromMimirType(tp)
-      //println(s"Metadata lookup: $tp -> $gpt")
-      gpt
-    } catch {
-      case t: Throwable => {
-        println(s"Metadata lookup: Exception: for function: $fName")
-        println(t.toString())
-        t.printStackTrace()
-        "DT_STRING"// TODO: handle error
+		org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized{
+      //println(s"Metadata lookup: $fName ( ${args.length} args )")
+		  try {
+  		  fName match{
+  		    case "SUM" => "DT_INT"
+  		    case "COUNT" => "DT_INT"
+  		    case "&" => "DT_INT"
+  		    case "MIMIR_MAKE_ROWID" => "DT_STRING"
+  		    case _ => {
+  		      val argSeq = OperatorTranslation.gpromListToScalaList(args).map(arg => {
+              OperatorTranslation.translateGProMExpressionToMimirExpression(new GProMNode.ByReference(arg.getPointer), gpischm)
+            })
+            
+            //println(s"Metadata lookup: function: $fName(${argSeq.mkString(",")})")
+            val tp = fName match {
+      		    
+      		    case "sys_op_map_nonnull" => db.typechecker.typeOf(argSeq(0), operator) 
+      		    case _ => {
+      		      val fc = mimir.algebra.Function(fName,argSeq) 
+                vgtFunctionType(fc);
+      		    }
+      		  }
+            
+            val gpt = getGProMDataTypeStringFromMimirType(tp)
+            //println(s"Metadata lookup: $tp -> $gpt")
+            gpt
+  		    }
+  		  }
+        
+      } catch {
+        case t: Throwable => {
+          println(s"Metadata lookup: Exception: for function: $fName")
+          println(t.toString())
+          t.printStackTrace()
+          "DT_STRING"// TODO: handle error
+        }
       }
-    }
+		}
 	}
   
   def getGProMDataTypeStringFromMimirType(mimirType : Type) : String = {
@@ -110,7 +120,8 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
         case TInt() => IntPrimitive(0)
         case TFloat() => FloatPrimitive(0.0)
         case TDate() => DatePrimitive(0,0,0)
-        case TTimestamp() => TimestampPrimitive(0,0,0,0,0,0)
+        case TTimestamp() => TimestampPrimitive(0,0,0,0,0,0,0)
+        case TInterval() => IntervalPrimitive(0,0,0,0,0,0,0,0)
         case TString() => StringPrimitive("")
         case TBool() => BoolPrimitive(false)
         case TRowId() => RowIdPrimitive("1")
@@ -133,11 +144,11 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
         }
       }
       case mimir.algebra.Function("JSON_GROUP_ARRAY", args) => TString()
-      case mimir.algebra.Function("FIRST", Seq(expr)) => Typechecker.typeOf(expr,operator)  
-      case mimir.algebra.Function("DISTINCT", Seq(expr)) => Typechecker.typeOf(expr,operator)  
+      case mimir.algebra.Function("FIRST", Seq(expr)) => db.typechecker.typeOf(expr,operator)  
+      case mimir.algebra.Function("DISTINCT", Seq(expr)) => db.typechecker.typeOf(expr,operator)  
       case mimir.algebra.Function("DENSE_RANK", args) => { println(args.mkString(",")); TInt() } 
       case mimir.algebra.Function("ROW_NUMBER", args) => { println(args.mkString(",")); TInt() } 
-      case expr => Typechecker.typeOf(expr,operator)  
+      case expr => db.typechecker.typeOf(expr,operator)  
       
      }
   }
@@ -160,12 +171,10 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
    def replaceVGTerms(expr: Expression): Expression =
   {
     expr match {
-      case mimir.algebra.Function("BEST_GUESS_VGTERM"|"ACKNOWLEDGED_VGTERM", fargs) => {
+      case mimir.algebra.Function(CTables.FN_BEST_GUESS | CTables.FN_IS_ACKED, _) => {
         replaceVGTermArg(expr)
       }
       case VGTerm(model, idx, args, hints) => 
-        replaceVGTermArg(expr)
-      case VGTermAcknowledged(model, idx, args) => 
         replaceVGTermArg(expr)
       case _ => 
         expr.recur(replaceVGTerms(_))
@@ -200,7 +209,8 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
         /*val varType = model.varType(idx, model.argTypes(idx))
         TypePrimitive(varType)*/
       }
-      case VGTerm(model,idx,vgtArgs, vgtHints) => {
+      case VGTerm(name,idx,vgtArgs, vgtHints) => {
+        val model = db.models.get(name)
         val bg = model.bestGuess(idx, vgtArgs.map(vgarg => replaceVGTermArg(vgarg)), vgtHints.map(vghint => replaceVGTermArg(vghint)))
         bg match {
           case NullPrimitive() => {
@@ -212,15 +222,13 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
         //val varType = model.varType(idx, model.argTypes(idx))
         //TypePrimitive(varType)
       }
-      case VGTermAcknowledged(model, idx, args) => 
-        TypePrimitive(TBool())
       case mimir.algebra.Function("ACKNOWLEDGED_VGTERM", fargs) => {
         TypePrimitive(TBool())
       }
       case Var("MIMIR_ROWID" | "MIMIR_ROWID_0") => RowIdPrimitive("1")
       case RowIdVar() => RowIdPrimitive("1")
       case mimir.algebra.Function("MIMIR_MAKE_ROWID",_) => RowIdPrimitive("1")
-      case _ => Eval.eval(arg, fakeTuple)
+      case _ => db.interpreter.eval(arg, fakeTuple)
     }
   }
 }

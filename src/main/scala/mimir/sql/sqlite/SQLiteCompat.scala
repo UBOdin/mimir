@@ -38,8 +38,18 @@ object SQLiteCompat extends LazyLogging{
     org.sqlite.Function.create(conn, "MAX", Max)
   }
   
-  def getTableSchema(conn:java.sql.Connection, table: String): Option[List[(String, Type)]] =
+  def getTableSchema(conn:java.sql.Connection, table: String): Option[Seq[(String, Type)]] =
   {
+    // Hardcoded table schemas:
+    table.toUpperCase match {
+      case "SQLITE_MASTER" => 
+        return Some(Seq(
+            ("NAME", TString()),
+            ("TYPE", TString())
+          ))
+      case _ => ()
+    }
+
     val stmt = conn.createStatement()
     val ret = stmt.executeQuery(s"PRAGMA table_info('$table')")
     stmt.closeOnCompletion()
@@ -246,7 +256,7 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
               Type.rootType(t) match {
                 case TRowId() =>
                   result(value_text(0))
-                case TString() | TDate() | TTimestamp() =>
+                case TString() | TDate() | TTimestamp() | TInterval()  =>
                   val txt = value_text(0)
                   if(TypeRegistry.matches(name, txt)){
                     result(value_text(0))
