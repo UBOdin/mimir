@@ -50,6 +50,14 @@ object PickerLens {
       case _ => None
     }
     
+    val classifyUpFront = args.flatMap {
+      case Function("CLASSIFY_UP_FRONT", Seq(bp@BoolPrimitive(b))) => Some( bp )
+      case _ => None
+    } match {
+      case Seq() => true
+      case Seq(BoolPrimitive(b)) => b
+    }
+    
     val useClassifier = args.foldLeft(None:Option[MultiClassClassification.ClassifierModelGenerator])((init, expr) => init match { 
       case None => expr match {
         case Function("UEXPRS", exprs) => None
@@ -57,7 +65,7 @@ object PickerLens {
       }
       case s@Some(modelGen) => s
     })
-    val pickerModel = new PickerModel(name+"_PICKER_MODEL:"+pickFromColumns.mkString("_"), pickToCol, pickFromColumns, pickerColTypes, useClassifier, query) 
+    val pickerModel = new PickerModel(name+"_PICKER_MODEL:"+pickFromColumns.mkString("_"), pickToCol, pickFromColumns, pickerColTypes, useClassifier, classifyUpFront, query) 
     pickerModel.reconnectToDatabase(db)
     
     lazy val expressionSubstitutions : (Expression) => Expression = (expr) => {
@@ -117,7 +125,7 @@ object PickerLens {
               Some(ProjectArg(col, Var(col)))
           }
         }).union(Seq(ProjectArg(pickToCol, db.compiler.optimize(pickExpr))))
-
+    
     return (
       Project(projectArgs, query),
       Seq(pickerModel)

@@ -176,7 +176,7 @@ object MultiClassClassification {
         (tokenizer, hashingTF)
       }).unzip
       val assembler = new VectorAssembler().setInputCols(query.columnNames.map(col => s"${col}_features").toArray).setOutputCol("features")
-      val classifier = new RandomForestClassifier().setLabelCol("label").setFeaturesCol("features")//.setModelType("multinomial")
+      val classifier = new RandomForestClassifier().setLabelCol("label").setFeaturesCol("features")
       val labelConverter = new IndexToString().setInputCol(classifier.getPredictionCol).setOutputCol("predictedLabel").setLabels(indexerModel.labels)
       val stages = indexer :: tokenizers ++: hashingTFs ++: (assembler :: classifier :: labelConverter :: Nil)
       val pipeline = new Pipeline().setStages(stages.toArray)

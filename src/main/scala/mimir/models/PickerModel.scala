@@ -16,7 +16,7 @@ import mimir.ml.spark.{MultiClassClassification, ReverseIndexRecord}
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1000L)
-class PickerModel(override val name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[Type], useClassifier:Option[MultiClassClassification.ClassifierModelGenerator], source: Operator) 
+class PickerModel(override val name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[Type], useClassifier:Option[MultiClassClassification.ClassifierModelGenerator], classifyUpFrontAndCache:Boolean, source: Operator) 
   extends Model(name) 
   with Serializable
   with NeedsReconnectToDatabase
@@ -46,7 +46,14 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
           case None => hints(0)
           case Some(modelGen) => 
             classificationCache.get(rowid) match {
-              case None => classify(idx, args, hints)
+              case None => {
+                if(classifyUpFrontAndCache){
+                  classifyAll()
+                  classificationCache(rowid)
+                }
+                else
+                  classify(idx, args, hints)
+              }
               case Some(v) => v
             }
         }
@@ -119,20 +126,19 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
     //predictions.show()
     val sqlContext = MultiClassClassification.getSparkSqlContext()
     import sqlContext.implicits._  
-    val predictionProbabilityAndIndexes = predictions.select("probability").rdd.map(r => r(0)).collect().map { item =>
-        item.asInstanceOf[org.apache.spark.ml.linalg.DenseVector].toArray.zipWithIndex 
-      }
-      val top2PredictionProbabilit = predictionProbabilityAndIndexes(0).sortBy(_._1).reverse.slice(0, 2)
-      val sortedPredictionProbabilitLabels = top2PredictionProbabilit.map { case(element, index) =>
+    val sortedPredictionProbabilitLabels = predictions.select("probability").rdd.map(r => r(0)).collect().map { item =>
+        item.asInstanceOf[org.apache.spark.ml.linalg.DenseVector].toArray.zipWithIndex
+          .sortBy(_._1).reverse.slice(0, 1)
+          .map { case(probability, index) =>
          val predictionProbability = ReverseIndexRecord(index.toDouble) :: Nil
-         ( classifier.stages(classifier.stages.length-1).transform(predictionProbability.toDF()).select("predictedLabel").rdd.map { x => x(0) }.collect()(0).toString(), element ) 
-      }
+         ( classifier.stages(classifier.stages.length-1).transform(predictionProbability.toDF()).select("predictedLabel").rdd.map { x => x(0) }.collect()(0).toString(), probability ) 
+      }}.head
     val prediction = mimir.parser.ExpressionParser.expr( sortedPredictionProbabilitLabels(0)._1).asInstanceOf[PrimitiveValue]
     classificationCache(args(0).asString) = prediction
     prediction
   }
   
-  /*def classifyAll() : Unit = {
+  def classifyAll() : Unit = {
     val classifier = classifierModel match {
       case None => train(useClassifier.get)
       case Some(clsfymodel) => clsfymodel
@@ -144,21 +150,22 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
     val predictions = MultiClassClassification.classify(classifier, pickFromCols, tuples)
     val sqlContext = MultiClassClassification.getSparkSqlContext()
     import sqlContext.implicits._  
-    val predictionRowIDAndIndexes = predictions.select("rowid").rdd.map(r => r(0)).collect().map { item =>
-        item.asInstanceOf[org.apache.spark.ml.linalg.DenseVector].toArray.zipWithIndex 
-      }
-    val rows =  predictionRowIDAndIndexes.map( row => {
-       row.map { case(element, index) =>
-         val predictionRow = ReverseIndexRecord(index.toDouble) :: Nil
-         ( classifier.stages(classifier.stages.length-1).transform(predictionRow.toDF()).select("rowid","predictedLabel").rdd.map { x => x(0) }.collect(), element ) 
-      }})
-     rows.map(row => {
-       val prediction = mimir.parser.ExpressionParser.expr( row._1(1)).asInstanceOf[PrimitiveValue]
-       classificationCache(row._1(0)) = prediction
-     })
-    db.models.persist(this)
     
-  }*/
+    //method 1: window, rank, and drop
+    /*import org.apache.spark.sql.functions.row_number
+    import org.apache.spark.sql.expressions.Window
+    val w = Window.partitionBy($"rowid").orderBy($"probability".desc)
+    val topPredictionsForEachRow = predictions.withColumn("rn", row_number.over(w)).where($"rn" === 1).drop("rn")*/
+    
+    //method 2: group and first
+    import org.apache.spark.sql.functions.first
+    val topPredictionsForEachRow = predictions.sort($"rowid", $"probability".desc).groupBy($"rowid").agg(first(predictions.columns.tail.head).alias(predictions.columns.tail.head), predictions.columns.tail.tail.map(col => first(col).alias(col) ):_*) 
+   
+    topPredictionsForEachRow.select("rowid", "predictedLabel").collect().map(row => {
+      classificationCache(row.getString(0)) = mimir.parser.ExpressionParser.expr( row.getString(1) ).asInstanceOf[PrimitiveValue]
+    })
+    db.models.persist(this)   
+  }
 }
 
 
