@@ -111,7 +111,7 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
   }
   
   def classify(idx:Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) : PrimitiveValue = {
-    //val classifier = classifierModel match {
+    val classifier = classifierModel match {
       case None => train(useClassifier.get)
       case Some(clsfymodel) => clsfymodel
     }
