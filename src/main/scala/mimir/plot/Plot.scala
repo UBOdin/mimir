@@ -8,10 +8,6 @@ import scala.language.postfixOps
 import scala.collection.JavaConverters._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-import org.sameersingh.scalaplot._
-import org.sameersingh.scalaplot.Style._
-import org.sameersingh.scalaplot.Implicits._
-
 import mimir._
 import mimir.algebra._
 import mimir.exec._
@@ -28,15 +24,6 @@ import mimir.util._
 object Plot
   extends LazyLogging
 {
-
-  val defaultFormats = Seq(
-    PlotConfig( Color.Red,       PointType(1) ),
-    PlotConfig( Color.DarkGreen, PointType(6) ),
-    PlotConfig( Color.SteelBlue, PointType(2) ),
-    PlotConfig( Color.Purple,    PointType(9) )
-  )
-
-
 
   def value: (PrimitiveValue => Object) = {
     case NullPrimitive() => 0:java.lang.Long
@@ -115,10 +102,10 @@ object Plot
       val results = resultsRaw.toSeq
 
       //get the defaultSaveName to pass to the python code for any naming defaults
-     var defaultName= StringPrimitive(QueryNamer(dataQuery))
-     var nameToWrite="(DEFAULTSAVENAME, "+defaultName+")\n";
-     //define the processIO to feed data to the process
-     var io=new ProcessIO(
+      var defaultName= StringPrimitive(QueryNamer(dataQuery))
+      var nameToWrite="(DEFAULTSAVENAME,"+defaultName+")\n";
+      //define the processIO to feed data to the process
+      var io=new ProcessIO(
          in=>{
              globalSettings.foreach{data=>in.write((data+"\n").getBytes)};
              in.write(nameToWrite.getBytes);
@@ -128,8 +115,8 @@ object Plot
              results.foreach{data=>in.write((data+"\n").getBytes)};
              in.close();
             },
-         out=>{ for(l <- Source.fromInputStream(out).getLines()){ logger.info(l) }; out.close() },
-         err=>{ for(l <- Source.fromInputStream(err).getLines()){ logger.error(l) }; err.close() }
+         out=>{ for(l <- Source.fromInputStream(out).getLines()){ console.printRaw(l.getBytes);console.print("\n"); }; out.close() },
+         err=>{ for(l <- Source.fromInputStream(err).getLines()){ logger.trace(l) }; err.close() }
         )
 
         //run the python process using the ProcessIO
@@ -139,11 +126,34 @@ object Plot
         if(exit != 0){ logger.error("Plot was unsuccessful.") }
         //fin
     }
-
   }
-}
 
-case class PlotConfig(color: Color.Value, pointType: PointType.Value)
-{
-  override def toString: String = s" { color : $color, pt : $pointType }"
+  def openPlot(f: File)
+  {
+    try {
+      Process(s"open ${f}")!!
+    } catch {
+      case e:Exception => logger.debug(s"Can't open: ${e.getMessage}")
+    }
+  }
+
+  def inlinePlot(f: File, console: OutputFormat)
+  {
+    console.printRaw(
+      Array[Byte](
+        '\u001b',
+        ']',
+        '1', '3', '3', '7', ';',
+        'F', 'i', 'l', 'e', '='
+      ) ++ f.getName.getBytes ++
+      Array[Byte](
+        ';','i','n','l','i','n','e','=','1',';',':'
+      ) ++ mimir.util.SerializationUtils.b64encode(f).getBytes ++
+      Array[Byte](
+        '\n','\u0007'
+      )
+    )
+    console.print("\n")
+  }
+
 }

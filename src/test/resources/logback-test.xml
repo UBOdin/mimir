@@ -49,7 +49,7 @@
   <logger name="mimir.optimizer.InlineProjections$"             level="WARN"/>
 
   <!--+++++++++++++++++++++++  PLOT  ++++++++++++++++++++++++++-->
-  <logger name="mimir.optimizer.Plot$"                          level="WARN"/>
+  <logger name="mimir.plot.Plot$"                               level="DEBUG"/>
 
   <!--+++++++++++++++++++++  Provenance  ++++++++++++++++++++++-->
   <logger name="mimir.provenance.Provenance$"                   level="WARN"/>
