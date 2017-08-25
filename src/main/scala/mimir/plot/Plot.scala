@@ -2,6 +2,7 @@ package mimir.plot;
 
 import java.io.File
 import scala.io._
+import play.api.libs.json._
 
 import scala.sys.process._
 import scala.language.postfixOps
@@ -13,6 +14,7 @@ import mimir.algebra._
 import mimir.exec._
 import mimir.exec.result._
 import mimir.util._
+import mimir.util.JsonUtils.primitiveValueWrites
 
 /**
  * Plotting using Sameer Sing's ScalaPlot/Gnuplot
@@ -96,10 +98,19 @@ object Plot
         }
       }
 
-    logger.info(s"QUERY: $dataQuery")
+    logger.trace(s"QUERY: $dataQuery")
 
     db.query(dataQuery) { resultsRaw =>
-      val results = resultsRaw.toSeq
+      val results = resultsRaw.toIndexedSeq
+
+      val globalSettingsJson = Json.toJson(
+        globalSettings ++ 
+        Map("DEFAULTSAVENAME" -> StringPrimitive(QueryNamer(dataQuery)))
+      )
+
+      val linesJson = Json.toJson(
+        lines.map { case (x, y, config) => Json.arr(Json.toJson(x), Json.toJson(y), Json.toJson(config)) }
+      )
 
       //get the defaultSaveName to pass to the python code for any naming defaults
       var defaultName= StringPrimitive(QueryNamer(dataQuery))
@@ -107,16 +118,18 @@ object Plot
       //define the processIO to feed data to the process
       var io=new ProcessIO(
          in=>{
-             globalSettings.foreach{data=>in.write((data+"\n").getBytes)};
-             in.write(nameToWrite.getBytes);
-             in.write("--\n".getBytes);
-             lines.foreach{data=>in.write((data+"\n").getBytes)};
-             in.write("--\n".getBytes);
-             results.foreach{data=>in.write((data+"\n").getBytes)};
-             in.close();
-            },
+            val data = Json.obj(
+              "GLOBAL" -> globalSettingsJson,
+              "LINES" -> linesJson,
+              "RESULTS" -> Json.toJson(
+                dataQuery.columnNames.map { col => col -> results.map { _(col) } }.toMap
+              )
+            )
+            in.write(data.toString.getBytes)
+            in.close();
+         },
          out=>{ for(l <- Source.fromInputStream(out).getLines()){ console.printRaw(l.getBytes);console.print("\n"); }; out.close() },
-         err=>{ for(l <- Source.fromInputStream(err).getLines()){ logger.trace(l) }; err.close() }
+         err=>{ for(l <- Source.fromInputStream(err).getLines()){ logger.debug(l) }; err.close() }
         )
 
         //run the python process using the ProcessIO
@@ -126,34 +139,6 @@ object Plot
         if(exit != 0){ logger.error("Plot was unsuccessful.") }
         //fin
     }
-  }
-
-  def openPlot(f: File)
-  {
-    try {
-      Process(s"open ${f}")!!
-    } catch {
-      case e:Exception => logger.debug(s"Can't open: ${e.getMessage}")
-    }
-  }
-
-  def inlinePlot(f: File, console: OutputFormat)
-  {
-    console.printRaw(
-      Array[Byte](
-        '\u001b',
-        ']',
-        '1', '3', '3', '7', ';',
-        'F', 'i', 'l', 'e', '='
-      ) ++ f.getName.getBytes ++
-      Array[Byte](
-        ';','i','n','l','i','n','e','=','1',';',':'
-      ) ++ mimir.util.SerializationUtils.b64encode(f).getBytes ++
-      Array[Byte](
-        '\n','\u0007'
-      )
-    )
-    console.print("\n")
   }
 
 }

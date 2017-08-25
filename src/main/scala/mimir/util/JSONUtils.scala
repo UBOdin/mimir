@@ -3,6 +3,7 @@ package mimir.util;
 import play.api.libs.json._
 import mimir.algebra._
 
+
 object JsonUtils {
 
   def parsePrimitive(t: Type, jv: JsValue): PrimitiveValue =
@@ -64,5 +65,11 @@ object JsonUtils {
     }
   }
 
-
+  implicit val primitiveValueWrites = new Writes[PrimitiveValue] {
+    def writes(p: PrimitiveValue): JsValue = 
+    {
+      JsonUtils.toJson(p)
+    }
+  }
 }
+

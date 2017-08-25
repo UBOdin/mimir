@@ -4,6 +4,7 @@ import random
 import sys
 import os
 from base64 import b64encode
+import json
 
 #
 #FUNCTIONS TO BE USED LATER:
@@ -74,20 +75,20 @@ def drawPlot(lineSettings,globalSettings):
 
         if(plottype=='line'):
             colorStyle=line[2]['COLOR']+line[2]['STYLE']
-            sys.stderr.write("line")
+            # sys.stderr.write("line\n")
             plt.plot(xpoints,ypoints,colorStyle,linewidth=line[2]['WEIGHT'])
             plt.axis([(globalSettings['XMIN']),(globalSettings['XMAX']),(globalSettings['YMIN']),(globalSettings['YMAX'])])
-            sys.stderr.write("finished line")
+            sys.stderr.write("finished line\n")
         else:
             if(plottype=='scatter'):
                 colorStyle=line[2]['COLOR']+line[2]['STYLE']
-                sys.stderr.write("scatter")
+                sys.stderr.write("scatter\n")
                 plt.plot(xpoints,ypoints,colorStyle,markersize=line[2]['WEIGHT'])
                 plt.axis([(globalSettings['XMIN']),(globalSettings['XMAX']),(globalSettings['YMIN']),(globalSettings['YMAX'])])
             else:
                 if(plottype=='bar'):
                     width=0.8/len(lineSettings)
-                    sys.stderr.write("bar")
+                    sys.stderr.write("bar\n")
                     #if BARORIENT is horizontal, plot a horizontal bar graph
                     if globalSettings['BARORIENT']=='horizontal':
                             #xpoints are numeric, ypoints are strings
@@ -101,11 +102,11 @@ def drawPlot(lineSettings,globalSettings):
                     #otherwise plot a vertical bar plot
                     else:
                             #xpoints are strings
-                            sys.stderr.write('--------POOT---------')
-                            sys.stderr.write(str(globalSettings['YMAX']))
-                            sys.stderr.write(str(globalSettings['YMIN']))
-                            sys.stderr.write(str(line[0]))
-                            sys.stderr.write(str(line[1]))
+                            sys.stderr.write('--------POOT---------\n')
+                            sys.stderr.write(str(globalSettings['YMAX'])+"\n")
+                            sys.stderr.write(str(globalSettings['YMIN'])+"\n")
+                            sys.stderr.write(str(line[0])+"\n")
+                            sys.stderr.write(str(line[1])+"\n")
                             words = np.arange(len(xpoints))
                             plt.bar(words+(width*barNo), ypoints,width=width, align='center', alpha=0.5,color=line[2]['COLOR'])
                             plt.xticks(words,xpoints)
@@ -114,11 +115,11 @@ def drawPlot(lineSettings,globalSettings):
     if showLegend:
         location=cleanLegendLoc(globalSettings['LEGENDLOC'])
         plt.legend(legendLabels,loc=location)
-    sys.stderr.write("setting labels")
+    sys.stderr.write("setting labels\n")
     plt.xlabel(globalSettings['XLABEL'])
     plt.ylabel(globalSettings['YLABEL'])
     plt.title(globalSettings['PLOTNAME'])
-    sys.stderr.write("saving to file")
+    sys.stderr.write("saving to file\n")
     if globalSettings['SAVENAME'] == '-':
         plt.show()
     else:
@@ -132,7 +133,7 @@ def drawPlot(lineSettings,globalSettings):
             else:
                 os.system("open '"+fileName+"'");
 
-    sys.stderr.write("saved!")
+    sys.stderr.write("saved!\n")
     return 0
 
 
@@ -144,7 +145,7 @@ def getMax(val1,val2):
     if(val1>=val2):
         return val1
     else:
-        sys.stderr.write(str(val2))
+        # sys.stderr.write(str(val2))
         return val2
 
 
@@ -379,54 +380,11 @@ def run(args = []):
     #
     #
     #
-    globSet={}
-    lineSet=[]
-    finishedData={}
-    split=0
-    #Split=0 indicates that the data being read are globalSettings
-    #Split=1 indicates that the data being read are line settings
-    #split=2 indicates that the data being read is data
 
-
-    for line in sys.stdin:
-        line=line.replace("\n","")
-        if(line[0]=="-"):
-            split=split+1
-        else:
-            if(split==2):
-                lineStr=""
-                line=line.replace("<","").replace(">","").split(',')
-                for data in line:
-                    data=data.split(':')
-                    data[0]=data[0].replace(" ","")
-                    if data[0] not in finishedData:
-                        finishedData[data[0]]=[data[1]]
-                    else:
-                        finishedData[data[0]].append(data[1])
-
-
-            if(split==1):
-                #Split on commas
-                line=line.split(',')
-                #strip the ( from the first division
-                line[0]=line[0].replace("(","")
-                settings={}
-                #create a dictionary of all the settings assocaited with that line
-                #(everything in 'line' after the names of the x and y columns)
-                #This involves removing many extraneous characters
-                sys.stderr.write(str(line))
-                for i in range (2,len(line)):
-                    line[i]=line[i].replace("Map(","").replace("))","").replace("->","-").split('-')
-                    if len(line[i]) > 1:
-                        settings[line[i][0].replace(" ","")]=line[i][1].replace("'","").replace(" ","")
-                while(len(line)>3):
-                    line.pop(3)
-                line[2]=settings
-                lineSet.append(line)
-
-            if(split==0):
-                line=line.replace("(","").replace(")","").replace("'","").split(',')
-                globSet[line[0]]=line[1]
+    config = json.load(sys.stdin)
+    globSet = config["GLOBAL"]
+    lineSet = config["LINES"]
+    finishedData = config["RESULTS"]
 
     #
     # At this point, all data is read into its proper data structures
@@ -463,7 +421,7 @@ def run(args = []):
         if 'FILTER' in line[2]:
             #pointsData will contain the name of the column to filter based on, and the value from said column to filter on
             pointsData=line[2]['FILTER'].replace(" ","").split('=')
-            sys.stderr.write(str(pointsData))
+            # sys.stderr.write(str(pointsData))
             #gather the x and y values to filter, the column off which filtering will be based, and the filter value
             xToFilter=finishedData[line[0].replace("'","")]
             yToFilter=finishedData[line[1].replace("'","")]
@@ -548,17 +506,17 @@ def run(args = []):
                 ymax=getMax(ymax,lineYmax)
                 xmin=getMin(xmin,lineXmin)
                 ymin=getMin(ymin,lineYmin)
-            sys.stderr.write('======MAX & MIN======')
-            sys.stderr.write("xmax: "+str(xmax))
-            sys.stderr.write("ymax: "+str(ymax))
-            sys.stderr.write("xmin: "+str(xmin))
-            sys.stderr.write("ymin: "+str(ymin))
-            sys.stderr.write('--------------------')
+            sys.stderr.write('======MAX & MIN======\n')
+            sys.stderr.write("xmax: "+str(xmax)+"\n")
+            sys.stderr.write("ymax: "+str(ymax)+"\n")
+            sys.stderr.write("xmin: "+str(xmin)+"\n")
+            sys.stderr.write("ymin: "+str(ymin)+"\n")
+            sys.stderr.write('--------------------\n')
 
 
     lineSet=[x for x in lineSet if dataCheck(x)]
-    for line in lineSet:
-        sys.stderr.write(str(line))
+    # for line in lineSet:
+        # sys.stderr.write(str(line))
     #get all the global defaults filled in (need the graph format to determine usable style points)
     if (len(lineSet)==0):
         globSet=addDefaultGlobalValues(globSet,0,0,0,0)
