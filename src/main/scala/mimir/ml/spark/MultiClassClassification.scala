@@ -42,6 +42,7 @@ import org.apache.spark.sql.DataFrame
 import org.apache.spark.ml.feature.VectorAssembler
 
 
+
 case class LabeledRecord(id: String, topic: String, text: String)
 case class ReverseIndexRecord(prediction: Double)
 
@@ -59,8 +60,10 @@ object MultiClassClassification {
       val conf = new SparkConf().setMaster("local[2]").setAppName("MultiClassClassification")
       sc match {
         case None => {
-          sc = Some(new SparkContext(conf))
-          sc.get
+          val sparkCtx = new SparkContext(conf)
+          sparkCtx.setLogLevel("ERROR")
+          sc = Some(sparkCtx)
+          sparkCtx
         }
         case Some(session) => session
       }

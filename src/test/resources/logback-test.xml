@@ -74,8 +74,12 @@
   <!--+++++++++++++++++++++++  Views  +++++++++++++++++++++++++-->
   <logger name="mimir.views.ViewManager"                        level="WARN"/>
 
- 
-  <root level="TRACE">
+  <!--+++++++++++++++++++++++  Spark  +++++++++++++++++++++++++-->
+  <logger name="log4j.logger.org.apache.spark" level="ERROR"/>
+  <logger name="log4j.logger.Remoting" level="ERROR"/>
+  <logger name="log4j.logger.org.eclipse.jetty" level="ERROR"/>
+  
+  <root level="ERROR">
     <appender-ref ref="STDOUT" />
   </root>
  
