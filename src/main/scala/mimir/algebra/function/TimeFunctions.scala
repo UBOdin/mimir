@@ -10,70 +10,92 @@ object TimeFunctions
   {
 
 
-    fr.registerNative("YEAR_PART", 
+    fr.register("YEAR_PART", 
       { 
-        case Seq(TimestampPrimitive()) => 
-        case Seq(DatePrimitive()) => 
-        case Seq(IntervalPrimitive()) => 
-        case x => throw new Exception(s"Invalid Time Primitive '$x'")
-      }
+        case Seq(TimestampPrimitive(y, _, _, _, _, _, _)) => IntPrimitive(y)
+        case Seq(DatePrimitive(y, _, _)) => IntPrimitive(y)
+        case Seq(IntervalPrimitive(p)) => IntPrimitive(p.getYears())
+        case Seq(x) => throw new Exception(s"Invalid Time Primitive '$x'")
+        case Seq() => throw new Exception(s"EXTRACT needs an argument")
+        case _ => throw new Exception("Too many arguments to EXTRACT")
+      },
+      { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
     )
-    fr.registerNative("MONTH_PART", 
+    fr.register("MONTH_PART", 
       { 
-        case Seq(TimestampPrimitive()) => 
-        case Seq(DatePrimitive()) => 
-        case Seq(IntervalPrimitive()) => 
-        case x => throw new Exception(s"Invalid Time Primitive '$x'")
-      }
+        case Seq(TimestampPrimitive(_, m, _, _, _, _, _)) => IntPrimitive(m)
+        case Seq(DatePrimitive(_, m, _)) => IntPrimitive( m)
+        case Seq(IntervalPrimitive(p)) => IntPrimitive(p.getYears() * 12 + p.getMonths())
+        case Seq(x) => throw new Exception(s"Invalid Time Primitive '$x'")
+        case Seq() => throw new Exception(s"EXTRACT needs an argument")
+        case _ => throw new Exception("Too many arguments to EXTRACT")
+      },
+      { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
     )
-    fr.registerNative("DAY_PART", 
+    fr.register("WEEK_PART", 
       { 
-        case Seq(TimestampPrimitive()) => 
-        case Seq(DatePrimitive()) => 
-        case Seq(IntervalPrimitive()) => 
-        case x => throw new Exception(s"Invalid Time Primitive '$x'")
-      }
+        case Seq(IntervalPrimitive(p)) => IntPrimitive(p.toStandardWeeks().getWeeks())
+        case Seq(x) => throw new Exception(s"Invalid Time Primitive '$x'")
+        case Seq() => throw new Exception(s"EXTRACT needs an argument")
+        case _ => throw new Exception("Too many arguments to EXTRACT")
+      },
+      { case Seq(TInterval()) => TInt() }
     )
-    fr.registerNative("HOUR_PART", 
+    fr.register("DAY_PART", 
       { 
-        case Seq(TimestampPrimitive()) => 
-        case Seq(DatePrimitive()) => 
-        case Seq(IntervalPrimitive()) => 
-        case x => throw new Exception(s"Invalid Time Primitive '$x'")
-      }
+        case Seq(TimestampPrimitive(_, _, d, _, _, _, _)) => IntPrimitive(d)
+        case Seq(DatePrimitive(_, _, d)) => IntPrimitive(d)
+        case Seq(IntervalPrimitive(p)) => IntPrimitive(p.toStandardDays().getDays())
+        case Seq(x) => throw new Exception(s"Invalid Time Primitive '$x'")
+        case Seq() => throw new Exception(s"EXTRACT needs an argument")
+        case _ => throw new Exception("Too many arguments to EXTRACT")
+      },
+      { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
     )
-    fr.registerNative("MINUTE_PART", 
+    fr.register("HOUR_PART", 
       { 
-        case Seq(TimestampPrimitive()) => 
-        case Seq(DatePrimitive()) => 
-        case Seq(IntervalPrimitive()) => 
-        case x => throw new Exception(s"Invalid Time Primitive '$x'")
-      }
+        case Seq(TimestampPrimitive(_, _, _, hh, _, _, _)) => IntPrimitive(hh)
+        case Seq(DatePrimitive(_, _, _)) => IntPrimitive(0)
+        case Seq(IntervalPrimitive(p)) => IntPrimitive(p.toStandardHours().getHours())
+        case Seq(x) => throw new Exception(s"Invalid Time Primitive '$x'")
+        case Seq() => throw new Exception(s"EXTRACT needs an argument")
+        case _ => throw new Exception("Too many arguments to EXTRACT")
+      },
+      { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
     )
-    fr.registerNative("SECOND_PART", 
+    fr.register("MINUTE_PART", 
       { 
-        case Seq(TimestampPrimitive()) => 
-        case Seq(DatePrimitive()) => 
-        case Seq(IntervalPrimitive()) => 
-        case x => throw new Exception(s"Invalid Time Primitive '$x'")
-      }
+        case Seq(TimestampPrimitive(_, _, _, _, mm, _, _)) => IntPrimitive(mm)
+        case Seq(DatePrimitive(_, _, _)) => IntPrimitive(0)
+        case Seq(IntervalPrimitive(p)) => IntPrimitive(p.toStandardMinutes().getMinutes())
+        case Seq(x) => throw new Exception(s"Invalid Time Primitive '$x'")
+        case Seq() => throw new Exception(s"EXTRACT needs an argument")
+        case _ => throw new Exception("Too many arguments to EXTRACT")
+      },
+      { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
     )
-    fr.registerNative("MILLISECOND_PART", 
+    fr.register("SECOND_PART", 
       { 
-        case Seq(TimestampPrimitive()) => 
-        case Seq(DatePrimitive()) => 
-        case Seq(IntervalPrimitive()) => 
-        case x => throw new Exception(s"Invalid Time Primitive '$x'")
-      }
+        case Seq(TimestampPrimitive(_, _, _, _, _, ss, _)) => IntPrimitive(ss)
+        case Seq(DatePrimitive(_, _, _)) => IntPrimitive(0)
+        case Seq(IntervalPrimitive(p)) => IntPrimitive(p.toStandardSeconds().getSeconds())
+        case Seq(x) => throw new Exception(s"Invalid Time Primitive '$x'")
+        case Seq() => throw new Exception(s"EXTRACT needs an argument")
+        case _ => throw new Exception("Too many arguments to EXTRACT")
+      },
+      { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
     )
-
-
-    fr.registerExpr("DISTANCE", List("A", "B"), 
-      Function("SQRT", List(
-        Arithmetic(Arith.Add,
-          Arithmetic(Arith.Mult, Var("A"), Var("A")),
-          Arithmetic(Arith.Mult, Var("B"), Var("B"))
-      ))))
+    fr.register("MILLISECOND_PART", 
+      { 
+        case Seq(TimestampPrimitive(_, _, _, _, _, _, ms)) => IntPrimitive(ms)
+        case Seq(DatePrimitive(_, _, _)) => IntPrimitive(0)
+        case Seq(IntervalPrimitive(p)) => IntPrimitive(p.toStandardSeconds().getSeconds() * 1000)
+        case Seq(x) => throw new Exception(s"Invalid Time Primitive '$x'")
+        case Seq() => throw new Exception(s"EXTRACT needs an argument")
+        case _ => throw new Exception("Too many arguments to EXTRACT")
+      },
+      { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
+    )
 
   }
 }

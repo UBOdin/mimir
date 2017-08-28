@@ -480,7 +480,7 @@ object Json
       case BoolPrimitive(b) => JsBoolean(b)
       case DatePrimitive(y,m,d) => JsString(f"$y%04d-$m%02d-$d%02d")
       case TimestampPrimitive(y,m,d,hr,min,sec,ms) => JsString(f"$y%04d-$m%02d-$d%02d $hr%02d:$min%02d:$sec%02d.$ms%04d")
-      case IntervalPrimitive(y,m,w,d,hh,mm,ss,ms) => JsString(f"P$y%dY$m%dM$w%dW$d%dDT$hh%dD$mm%dM$ss%d.$ms%03dS")
+      case IntervalPrimitive(p) => JsString(p.toString())
       case RowIdPrimitive(r) => JsString(r)
       case TypePrimitive(t) => JsString(t.toString)
     }

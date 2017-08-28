@@ -213,30 +213,26 @@ object Eval
         BoolPrimitive(a.asBool || b.asBool)
 
       case (Arith.Add, TInterval()) =>
-	val p = a.asInterval.plus(b.asInterval);
-	IntervalPrimitive(p.getYears,p.getMonths,p.getWeeks,p.getDays,p.getHours,p.getMinutes,p.getSeconds,p.getMillis)
-
+      	IntervalPrimitive(a.asInterval.plus(b.asInterval))
 
       case (Arith.Sub, TInterval()) =>
-	(a.getType, b.getType) match {
-		case (TInterval(),TInterval()) =>
-			val p = a.asInterval.minus(b.asInterval);
-			IntervalPrimitive(p.getYears,p.getMonths,p.getWeeks,p.getDays,p.getHours,p.getMinutes,p.getSeconds,p.getMillis)
-
-		case (TDate() | TTimestamp(),TDate() | TTimestamp()) =>
-			val p = new org.joda.time.Period(b.asDateTime, a.asDateTime)
-			IntervalPrimitive(p.getYears,p.getMonths,p.getWeeks,p.getDays,p.getHours,p.getMinutes,p.getSeconds,p.getMillis)
-		case (_, _) =>
-			throw new RAException(s"Invalid Arithmetic $a $op $b")
-	}
+      	(a.getType, b.getType) match {
+      		case (TInterval(),TInterval()) =>
+      			IntervalPrimitive(a.asInterval.minus(b.asInterval))
+      		case (TDate() | TTimestamp(),TDate() | TTimestamp()) =>
+      			IntervalPrimitive(new org.joda.time.Period(b.asDateTime, a.asDateTime))
+      		case (_, _) =>
+      			throw new RAException(s"Invalid Arithmetic $a $op $b")
+      	}
 
 
       case (Arith.Add, TTimestamp()) =>
-	val d = a.asDateTime.plus(b.asInterval)
-	TimestampPrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth,d.getHourOfDay,d.getMinuteOfHour,d.getSecondOfMinute,d. getMillisOfSecond)
+      	val d = a.asDateTime.plus(b.asInterval)
+      	TimestampPrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth,d.getHourOfDay,d.getMinuteOfHour,d.getSecondOfMinute,d. getMillisOfSecond)
+
       case (Arith.Sub, TTimestamp()) =>
-	val d = a.asDateTime.minus(b.asInterval)
-	TimestampPrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth,d.getHourOfDay,d.getMinuteOfHour,d.getSecondOfMinute,d. getMillisOfSecond)	
+      	val d = a.asDateTime.minus(b.asInterval)
+      	TimestampPrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth,d.getHourOfDay,d.getMinuteOfHour,d.getSecondOfMinute,d. getMillisOfSecond)	
 
       case (_, _) => 
         throw new RAException(s"Invalid Arithmetic $a $op $b")

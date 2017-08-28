@@ -16,16 +16,16 @@ object IntervalSpec extends Specification with RASimplify {
 
   "The Interval" should {
       "INTERVAL" >> {
-	simplify("INTERVAL('P1Y2M3W4DT5H6M7.008S')") must be equalTo(IntervalPrimitive(1,2,3,4,5,6,7,8))
+	simplify("INTERVAL('P1Y2M3W4DT5H6M7.008S')") must be equalTo(IntervalPrimitive(new org.joda.time.Period(1,2,3,4,5,6,7,8)))
       }
 
 
       "INTERVALPLUSINTERVAL" >> {
-        simplify("INTERVAL('P1Y2M3W4DT5H6M7.008S')+INTERVAL('P0Y1M1W1DT0H0M0S')") must be equalTo(IntervalPrimitive(1,3,4,5,5,6,7,8))
+        simplify("INTERVAL('P1Y2M3W4DT5H6M7.008S')+INTERVAL('P0Y1M1W1DT0H0M0S')") must be equalTo(IntervalPrimitive(new org.joda.time.Period(1,3,4,5,5,6,7,8)))
       }
 
       "INTERVALSUBINTERVAL" >> {
-        simplify("INTERVAL('P1Y3M4W5DT5H6M7.008S')-INTERVAL('P0Y1M1W1DT0H0M0S')") must be equalTo(IntervalPrimitive(1,2,3,4,5,6,7,8))
+        simplify("INTERVAL('P1Y3M4W5DT5H6M7.008S')-INTERVAL('P0Y1M1W1DT0H0M0S')") must be equalTo(IntervalPrimitive(new org.joda.time.Period(1,2,3,4,5,6,7,8)))
       }
 
       "DATEPLUSINTERVAL" >> {
@@ -37,7 +37,7 @@ object IntervalSpec extends Specification with RASimplify {
       }
 
       "DATESUBDATE" >> {
-        simplify("DATE('2017-05-01')-DATE('2017-01-01')") must be equalTo(IntervalPrimitive(0,4,0,0,0,0,0,0))
+        simplify("DATE('2017-05-01')-DATE('2017-01-01')") must be equalTo(IntervalPrimitive(new org.joda.time.Period(0,4,0,0,0,0,0,0)))
       }
 
 

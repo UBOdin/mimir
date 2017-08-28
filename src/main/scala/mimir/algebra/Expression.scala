@@ -549,17 +549,17 @@ case class NullPrimitive()
   * Boxed Representation of Interval
   */
 @SerialVersionUID(100L)
-case class IntervalPrimitive(y: Int, m: Int, w: Int, d: Int, hh: Int, mm: Int, ss: Int, ms: Int)
+case class IntervalPrimitive(p: Period)
   extends PrimitiveValue(TInterval())
 {
   override def toString() = s"INTERVAL '${asString}'"
   def asLong: Long = throw new TypeException(TInterval(), TInt(), "Hard Cast");
   def asDouble: Double = throw new TypeException(TInterval(), TFloat(), "Hard Cast");
   def asBool: Boolean = throw new TypeException(TInterval(), TBool(), "Hard Cast")
-  def asString: String = f"P$y%dY$m%dM$w%dW$d%dDT$hh%dD$mm%dM$ss%d.$ms%03dS"
-  def payload: Object = (y, m, d).asInstanceOf[Object];
-  def asDateTime: DateTime =  throw new TypeException(TInterval(), TDate(), "Hard Cast")
-  def asInterval: Period = new Period(y,m,w,d,hh,mm,ss,ms);
+  def asString: String = p.toString
+  def payload: Object = p;
+  def asDateTime: DateTime = throw new TypeException(TInterval(), TDate(), "Hard Cast")
+  def asInterval: Period = p
 }
 
 /////////////// Special Expression Types ///////////////
