@@ -141,8 +141,4 @@ object Plot
         //fin
     }
   }
-
-case class PlotConfig(color: Color.Value, pointType: PointType.Value)
-{
-  override def toString: String = s" { color : $color, pt : $pointType }"
 }
