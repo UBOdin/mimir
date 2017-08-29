@@ -28,6 +28,7 @@ scalacOptions in Test ++= Seq("-Yrangepos")
 parallelExecution in Test := false
 testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
 envVars in Test := Map(("LD_PRELOAD",System.getProperty("java.home")+"/lib/"+System.getProperty("os.arch")+"/libjsig.so"))
+mainClass in Compile := Some("mimir.Mimir")
 
 //if you want to debug tests uncomment this
 //javaOptions in (Test) += "-Xdebug"
@@ -40,65 +41,68 @@ resolvers ++= Seq("snapshots", "releases").map(Resolver.sonatypeRepo)
 
 libraryDependencies ++= Seq(
   ////////////////////// Command-Line Interface Utilities //////////////////////
-  "org.rogach"                    %%  "scallop"               % "0.9.5",
-  "org.jline"                     %   "jline"                 % "3.2.0",
-  "info.mimirdb"                  %   "jsqlparser"            % "1.0.2",
+  "org.rogach"                    %%  "scallop"                  % "0.9.5",
+  "org.jline"                     %   "jline"                    % "3.2.0",
+  "info.mimirdb"                  %   "jsqlparser"               % "1.0.2",
 
   ////////////////////// Dev Tools -- Logging, Testing, etc... //////////////////////
-  "com.typesafe.scala-logging"    %%  "scala-logging-slf4j"   % "2.1.2",
-  "ch.qos.logback"                %   "logback-classic"       % "1.1.7",
-  "org.specs2"                    %%  "specs2-core"           % "3.8.4" % "test",
-  "org.specs2"                    %%  "specs2-matcher-extra"  % "3.8.4" % "test",
-  "org.specs2"                    %%  "specs2-junit"          % "3.8.4" % "test",
+  "com.typesafe.scala-logging"    %%  "scala-logging-slf4j"      % "2.1.2",
+  "ch.qos.logback"                %   "logback-classic"          % "1.1.7",
+  "org.specs2"                    %%  "specs2-core"              % "3.8.4" % "test",
+  "org.specs2"                    %%  "specs2-matcher-extra"     % "3.8.4" % "test",
+  "org.specs2"                    %%  "specs2-junit"             % "3.8.4" % "test",
 
   //////////////////////// Data Munging Tools //////////////////////
-  "com.github.nscala-time"        %%  "nscala-time"           % "1.2.0",
-  "org.apache.lucene"             %   "lucene-spellchecker"   % "3.6.2",
+  "com.github.nscala-time"        %%  "nscala-time"              % "1.2.0",
+  "org.apache.lucene"             %   "lucene-spellchecker"      % "3.6.2",
   "org.apache.servicemix.bundles" %   "org.apache.servicemix.bundles.collections-generic" 
-                                                              % "4.01_1",
-  "org.apache.commons"            %   "commons-csv"           % "1.4",
-  "commons-io"                    %   "commons-io"            % "2.5",
-  "com.github.wnameless"          %   "json-flattener"        % "0.2.2",
-  "com.typesafe.play"             %%  "play-json"             % "2.4.11",
+                                                                 % "4.01_1",
+  "org.scala-lang.modules"        %%  "scala-parser-combinators" % "1.0.6",
+  "org.apache.commons"            %   "commons-csv"              % "1.4",
+  "commons-io"                    %   "commons-io"               % "2.5",
+  "com.github.wnameless"          %   "json-flattener"           % "0.2.2",
+  "com.typesafe.play"             %%  "play-json"                % "2.4.11",
 
   //////////////////////// Lens Libraries //////////////////////
   // WEKA - General-purpose Classifier Training/Deployment Library
   // Used by the imputation lens
-  ("nz.ac.waikato.cms.weka"       %   "weka-stable"           % "3.8.1").
+  ("nz.ac.waikato.cms.weka"       %   "weka-stable"              % "3.8.1").
     exclude("nz.ac.waikato.cms.weka",  "weka-dev").
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
-  ("nz.ac.waikato.cms.moa"        %   "moa"                   % "2014.11").
+  ("nz.ac.waikato.cms.moa"        %   "moa"                      % "2014.11").
     exclude("nz.ac.waikato.cms.weka",  "weka-dev").
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
  
   //////////////////////// Jung ////////////////////////
   // General purpose graph manipulation library
   // Used to detect and analyze Functional Dependencies
-  "net.sf.jung"                   %   "jung-graph-impl"       % "2.0.1",
-  "net.sf.jung"                   %   "jung-algorithms"       % "2.0.1",
-  "net.sf.jung"                   %   "jung-visualization"    % "2.0.1",
-  "jgraph"                        %   "jgraph"                % "5.13.0.0",
-  "javax.media" 		  %   "jai_core"              % "1.1.3",  
+  "net.sf.jung"                   %   "jung-graph-impl"          % "2.0.1",
+  "net.sf.jung"                   %   "jung-algorithms"          % "2.0.1",
+  "net.sf.jung"                   %   "jung-visualization"       % "2.0.1",
+  "jgraph"                        %   "jgraph"                   % "5.13.0.0",
+  "javax.media" 		              %   "jai_core"                 % "1.1.3",  
   //
 
   //////////////////////// Geotools ////////////////////////
   // Geospatial data transformations, Used by the CURE scenario
-  "org.geotools"                  %   "gt-referencing"        % "16.2",
-  "org.geotools"                  %   "gt-referencing"        % "16.2",
-  "org.geotools"                  %   "gt-epsg-hsql"          % "16.2",
+  "org.geotools"                  %   "gt-referencing"           % "16.2",
+  "org.geotools"                  %   "gt-referencing"           % "16.2",
+  "org.geotools"                  %   "gt-epsg-hsql"             % "16.2",
 
   //////////////////////// JDBC Backends //////////////////////
-  "org.xerial"                    %   "sqlite-jdbc"           % "3.16.1",
+  "org.xerial"                    %   "sqlite-jdbc"              % "3.16.1",
 
 
   ///////////////////  GProM/Native Integration //////////////
-  "net.java.dev.jna"              %    "jna"                  % "4.2.2",
-  "net.java.dev.jna"              %    "jna-platform"         % "4.2.2",
-  "log4j"                         %    "log4j"                % "1.2.17",
+  "net.java.dev.jna"              %    "jna"                     % "4.2.2",
+  "net.java.dev.jna"              %    "jna-platform"            % "4.2.2",
+  "log4j"                         %    "log4j"                   % "1.2.17"
   
-  //////////////////////// Visualization ////////////////////////
-  "org.vegas-viz"                 %%  "vegas"                 % "0.3.9",
-  "org.sameersingh.scalaplot"     % "scalaplot"               % "0.0.4"
+  //////////////////////// Visualization //////////////////////
+  // For now, all of this happens in python with matplotlib
+  // and so we don't need any external dependencies.
+  //"org.vegas-viz"                 %%  "vegas"                  % "0.3.9",
+  //"org.sameersingh.scalaplot"     % "scalaplot"                % "0.0.4"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")

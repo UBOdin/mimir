@@ -2,8 +2,17 @@ package mimir.util;
 
 import play.api.libs.json._
 import mimir.algebra._
+import mimir.serialization.Json
+
 
 object JsonUtils {
+
+  implicit val primitiveValueWrites = new Writes[PrimitiveValue] {
+    def writes(p: PrimitiveValue): JsValue = 
+    {
+      Json.ofPrimitive(p)
+    }
+  }
 
   val dotPrefix = "\\.([^.\\[]+)".r
   val bracketPrefix = "\\[([0-9]+)\\]".r
