@@ -3,6 +3,7 @@
 *.swp
 *.db
 *.bak
+.DS_Store
 
 # sbt specific
 .cache/
@@ -48,3 +49,6 @@ tpch-dbgen
 *.pdf
 *.gpl
 /bin/
+
+# Python
+*.pyc
