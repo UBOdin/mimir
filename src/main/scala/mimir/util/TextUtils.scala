@@ -53,7 +53,7 @@ object TextUtils {
     s match {
       case intervalRegexp(y, m, w, d, hh, mm, se) => 
         val seconds = se.toDouble
-        IntervalPrimitive(y.toInt, m.toInt, w.toInt, d.toInt, hh.toInt, mm.toInt, seconds.toInt, (seconds*1000).toInt % 1000)
+        IntervalPrimitive(new org.joda.time.Period(y.toInt, m.toInt, w.toInt, d.toInt, hh.toInt, mm.toInt, seconds.toInt, (seconds * 1000).toInt % 1000))
       case _ => NullPrimitive()
     }
   }

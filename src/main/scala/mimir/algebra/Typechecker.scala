@@ -277,6 +277,7 @@ object Typechecker
 		(a,b) match {
 			case (TDate() | TTimestamp(), TDate() | TTimestamp())  => Some(TInterval())
 			case (TDate() | TTimestamp(), TInterval())  => Some(TTimestamp())
+			case (TInt(), TInterval()) | (TInterval(), TInt())  => Some(TInterval())
 			case _ if a.equals(b)         => Some(a)
 			case (TUser(name),_)          => escalateLeft(TypeRegistry.baseType(name),b)
 			case (TAny(),_)               => Some(b)
