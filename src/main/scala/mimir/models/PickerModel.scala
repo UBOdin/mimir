@@ -122,18 +122,9 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
       case None => train(useClassifier.get)
       case Some(clsfymodel) => clsfymodel
     }
-    val predictions = MultiClassClassification.classify(classifier, pickFromCols, List(args))
+    val predictions = MultiClassClassification.classify(classifier, pickFromCols.zip(colTypes), List(args))
     //predictions.show()
-    val sqlContext = MultiClassClassification.getSparkSqlContext()
-    import sqlContext.implicits._  
-    val sortedPredictionProbabilitLabels = predictions.select("probability").rdd.map(r => r(0)).collect().map { item =>
-        item.asInstanceOf[org.apache.spark.ml.linalg.DenseVector].toArray.zipWithIndex
-          .sortBy(_._1).reverse.slice(0, 1)
-          .map { case(probability, index) =>
-         val predictionProbability = ReverseIndexRecord(index.toDouble) :: Nil
-         ( classifier.stages(classifier.stages.length-1).transform(predictionProbability.toDF()).select("predictedLabel").rdd.map { x => x(0) }.collect()(0).toString(), probability ) 
-      }}.head
-    val prediction = mimir.parser.ExpressionParser.expr( sortedPredictionProbabilitLabels(0)._1).asInstanceOf[PrimitiveValue]
+    val prediction = MultiClassClassification.extractTopPrediction(classifier, predictions)
     classificationCache(args(0).asString) = prediction
     prediction
   }
@@ -147,7 +138,7 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
     val tuples = db.query(classifyAllQuery, mimir.exec.mode.BestGuess)(results => {
       results.toList.map(row => (row.provenance :: row.tuple.toList).toSeq)
     })
-    val predictions = MultiClassClassification.classify(classifier, pickFromCols, tuples)
+    val predictions = MultiClassClassification.classify(classifier, pickFromCols.zip(colTypes), tuples)
     val sqlContext = MultiClassClassification.getSparkSqlContext()
     import sqlContext.implicits._  
     

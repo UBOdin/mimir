@@ -61,7 +61,7 @@ object PickerLens {
     val useClassifier = args.foldLeft(None:Option[MultiClassClassification.ClassifierModelGenerator])((init, expr) => init match { 
       case None => expr match {
         case Function("UEXPRS", exprs) => None
-        case _ => Some(MultiClassClassification.NaiveBayesMulticlassModel _)
+        case _ => Some(MultiClassClassification.DecisionTreeMulticlassModel() _)
       }
       case s@Some(modelGen) => s
     })
