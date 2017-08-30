@@ -30,7 +30,7 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
   
   @transient var db: Database = null
   
-  
+    
   def argTypes(idx: Int) = {
       Seq(TRowId()).union(colTypes)
   }
@@ -49,7 +49,15 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
               case None => {
                 if(classifyUpFrontAndCache){
                   classifyAll()
-                  classificationCache(rowid)
+                  classificationCache.get(rowid) match {
+                    case None => {
+                      pickFromCols.zipWithIndex.foldLeft(NullPrimitive():PrimitiveValue)( (init, elem) => init match {
+                        case NullPrimitive() => args(elem._2+1)
+                        case x => x
+                      })
+                    }
+                    case Some(v) => v
+                  }
                 }
                 else
                   classify(idx, args, hints)
@@ -111,7 +119,7 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
   }
   
   def train(modelGen:MultiClassClassification.ClassifierModelGenerator) : MultiClassClassification.ClassifierModel = {
-    val trainingQuery = Limit(0, Some(TRAINING_LIMIT), Project(pickFromCols.map(col => ProjectArg(col, Var(col))), source))
+    val trainingQuery = Limit(0, Some(TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)), Project(pickFromCols.map(col => ProjectArg(col, Var(col))), source)))
     classifierModel = Some(modelGen(trainingQuery, db, pickFromCols.head))
     db.models.persist(this)
     classifierModel.get
@@ -122,11 +130,22 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
       case None => train(useClassifier.get)
       case Some(clsfymodel) => clsfymodel
     }
-    val predictions = MultiClassClassification.classify(classifier, pickFromCols.zip(colTypes), List(args))
+    val predictions = MultiClassClassification.extractPredictions(classifier, MultiClassClassification.classify(classifier, pickFromCols.zip(colTypes), List(args)))
     //predictions.show()
-    val prediction = MultiClassClassification.extractTopPrediction(classifier, predictions)
-    classificationCache(args(0).asString) = prediction
-    prediction
+    predictions match {
+      case Seq() => {
+        pickFromCols.zipWithIndex.foldLeft(NullPrimitive():PrimitiveValue)( (init, elem) => init match {
+          case NullPrimitive() => args(elem._2+1)
+          case x => x
+        })
+      }
+      case x => {
+        val prediction = mimir.parser.ExpressionParser.expr( x.head.head._1 ).asInstanceOf[PrimitiveValue]
+        classificationCache(args(0).asString) = prediction
+        prediction
+      }
+    }
+    
   }
   
   def classifyAll() : Unit = {

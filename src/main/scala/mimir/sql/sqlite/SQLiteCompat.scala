@@ -38,7 +38,6 @@ object SQLiteCompat extends LazyLogging{
     org.sqlite.Function.create(conn, "MAX", Max)
     org.sqlite.Function.create(conn, "WEB", Web)
     org.sqlite.Function.create(conn, "WEBJSON", WebJson)
-    org.sqlite.Function.create(conn, "WEBJSONPATH", WebJsonPath)
     org.sqlite.Function.create(conn, "WEBGEOCODEDISTANCE",WebGeocodeDistance)
     org.sqlite.Function.create(conn, "METOLOCDST",MeToLocationDistance)
   }
@@ -181,24 +180,13 @@ object Web extends org.sqlite.Function with LazyLogging {
 
 object WebJson extends org.sqlite.Function with LazyLogging {
   override def xFunc(): Unit = {
-    if (args != 1) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR WEBJSON, EXPECTED 1") }
-    val url = value_text(0) 
-    try {
-        val content = HTTPUtils.getJson(url)
-        result(content.toString())
-    } catch {
-        case ioe: Exception =>  result()
-    }
-  }
-}
-
-object WebJsonPath extends org.sqlite.Function with LazyLogging {
-  override def xFunc(): Unit = {
-    if (args != 2) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR WEBJSONPATH, EXPECTED 2") }
+    if (args != 2 && args != 1) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR WEBJSON, EXPECTED 1 or 2") }
     val url = value_text(0)
-    val path = value_text(1) 
     try {
-        val content = HTTPUtils.getJsonSeekPath(url,path)
+        val content = args match {
+          case 1 => HTTPUtils.getJson(url)
+          case 2 => HTTPUtils.getJson(url, Some(value_text(1)) )
+        }
         result(content.toString())
     } catch {
         case ioe: Exception =>  result()

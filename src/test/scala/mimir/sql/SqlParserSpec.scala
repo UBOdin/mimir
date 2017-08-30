@@ -514,9 +514,9 @@ object SqlParserSpec
 			 					 	 	 Conditional(
 			 					 	 	 	Comparison(Cmp.Eq,
 				 					 	 	 	VGTerm("SANER:META:B", 0, Seq(), Seq()),
-			 					 	 	 		StringPrimitive("WEKA")
+			 					 	 	 		StringPrimitive("SPARK")
 			 					 	 	 	),
-			 					 	 	 	VGTerm("SANER:WEKA:B", 0, Seq(RowIdVar()), Seq(Var("A"), Var("B"), Var("C"))),
+			 					 	 	 	VGTerm("SANER:SPARK:B", 0, Seq(RowIdVar()), Seq(Var("A"), Var("B"), Var("C"))),
 			 					 	 	  NullPrimitive()
 			 					 	 	 ),
 			 					 	 	 Var("B")

@@ -72,7 +72,7 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
   {
     this.db = db
     TimeUtils.monitor(s"Train $name.$colName", WekaModel.logger.info(_)){
-      val trainingQuery = Limit(0, Some(SparkClassifierModel.TRAINING_LIMIT), Project(Seq(ProjectArg(colName, Var(colName))), query))
+      val trainingQuery = Limit(0, Some(SparkClassifierModel.TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)), Project(Seq(ProjectArg(colName, Var(colName))), query)))
       learner = Some(MultiClassClassification.NaiveBayesMulticlassModel(MultiClassClassification.prepareValueStr _, MultiClassClassification.getSparkTypeStr _)(trainingQuery, db, colName))
     }
   }
@@ -127,7 +127,7 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
     val topPredictionsForEachRow = predictions.sort($"rowid", $"probability".desc).groupBy($"rowid").agg(first(predictions.columns.tail.head).alias(predictions.columns.tail.head), predictions.columns.tail.tail.map(col => first(col).alias(col) ):_*) 
    
     topPredictionsForEachRow.select("rowid", "predictedLabel").collect().map(row => {
-      classificationCache(row.getString(0)) = mimir.parser.ExpressionParser.expr( row.getString(1) ).asInstanceOf[PrimitiveValue]
+      classificationCache(row.getString(0)) = classToPrimitive( row.getString(1) )
     })
     db.models.persist(this)   
   }

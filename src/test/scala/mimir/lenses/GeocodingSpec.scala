@@ -30,7 +30,7 @@ object GeocodingSpec
     "Be able to sucessfully make web requests" >> {
       
       val result = query("""
-        SELECT WEBJSONPATH('http://api.geonames.org/timezoneJSON?lat=42.80&lng=-78.89&username=ubodintestcase', '.time') AS NOW_TIME FROM ADDR
+        SELECT WEBJSON('http://api.geonames.org/timezoneJSON?lat=42.80&lng=-78.89&username=ubodintestcase', '.time') AS NOW_TIME FROM ADDR
       """){ _.map { row => 
         
          row("NOW_TIME").asString

@@ -131,19 +131,6 @@ object MultiClassClassification {
     }
   }
   
-  def extractTopPrediction(model : PipelineModel, predictions:DataFrame) : PrimitiveValue = {
-    val sqlContext = getSparkSqlContext()
-    import sqlContext.implicits._  
-    val sortedPredictionProbabilitLabels = predictions.select("probability").rdd.map(r => r(0)).collect().map { item =>
-        item.asInstanceOf[org.apache.spark.ml.linalg.DenseVector].toArray.zipWithIndex
-          .sortBy(_._1).reverse.slice(0, 1)
-          .map { case(probability, index) =>
-         val predictionProbability = ReverseIndexRecord(index.toDouble) :: Nil
-         ( model.stages(model.stages.length-1).transform(predictionProbability.toDF()).select("predictedLabel").rdd.map { x => x(0) }.collect()(0).toString(),probability ) 
-      }}.head
-    mimir.parser.ExpressionParser.expr( sortedPredictionProbabilitLabels(0)._1).asInstanceOf[PrimitiveValue]
-  }
-  
   def extractPredictions(model : PipelineModel, predictions:DataFrame) : Seq[Seq[(String, Double)]] = {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._  
@@ -158,10 +145,10 @@ object MultiClassClassification {
   } 
   
   def NaiveBayesMulticlassModel(valuePreparer:PrimitiveValue => Any = prepareValue, sparkTyper:Type => DataType = getSparkType)(query:Operator, db:Database, predictionCol:String) : PipelineModel = {
-    val training = prepareData(query, db, valuePreparer, sparkTyper)//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+    val training = prepareData(query, db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     //training.show()
     val indexer = new StringIndexer().setInputCol(predictionCol).setOutputCol("label").setHandleInvalid("skip")
-    val indexerModel = indexer.fit(training);  
+    val labels = indexer.fit(training).labels
     val cols = training.schema.fields.tail
     val (tokenizers, hashingTFs) = cols.flatMap(col => {
       col.dataType match {
@@ -177,19 +164,19 @@ object MultiClassClassification {
       col.dataType match {
         case StringType => Some(s"${col.name}_features")
         case IntegerType | LongType | DoubleType => Some(col.name)
-        case _ => println("-------------------------flsdjkfajsadkfjhasdk"); None
+        case _ => None
       }
     })
     val assembler = new VectorAssembler().setInputCols(assmblerCols.toArray).setOutputCol("features")
     val classifier = new NaiveBayes().setLabelCol("label").setFeaturesCol("features")//.setModelType("multinomial")
-    val labelConverter = new IndexToString().setInputCol(classifier.getPredictionCol).setOutputCol("predictedLabel").setLabels(indexerModel.labels)
+    val labelConverter = new IndexToString().setInputCol(classifier.getPredictionCol).setOutputCol("predictedLabel").setLabels(labels)
     val stages = indexer :: tokenizers ++: hashingTFs ++: (assembler :: classifier :: labelConverter :: Nil)
     val pipeline = new Pipeline().setStages(stages.toArray)
     pipeline.fit(training)
   }
    
   def RandomForestMulticlassModel(valuePreparer:PrimitiveValue => Any = prepareValue, sparkTyper:Type => DataType = getSparkType)( query:Operator, db:Database, predictionCol:String): PipelineModel = {
-    val training = prepareData(query, db, valuePreparer, sparkTyper)//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+    val training = prepareData(query, db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     //training.show()
     val indexer = new StringIndexer().setInputCol(predictionCol).setOutputCol("label").setHandleInvalid("skip")
     val indexerModel = indexer.fit(training);  
@@ -220,7 +207,7 @@ object MultiClassClassification {
   }
   
   def DecisionTreeMulticlassModel(valuePreparer:PrimitiveValue => Any = prepareValue, sparkTyper:Type => DataType = getSparkType)( query:Operator, db:Database, predictionCol:String): PipelineModel = {
-    val training = prepareData(query, db, valuePreparer, sparkTyper)//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+    val training = prepareData(query, db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     //training.show()
     val indexer = new StringIndexer().setInputCol(predictionCol).setOutputCol("label").setHandleInvalid("skip")
     val indexerModel = indexer.fit(training);  
@@ -251,7 +238,7 @@ object MultiClassClassification {
   }
   
   def GradientBoostedTreeMulticlassModel(valuePreparer:PrimitiveValue => Any = prepareValue, sparkTyper:Type => DataType = getSparkType)( query:Operator, db:Database, predictionCol:String): PipelineModel = {
-    val training = prepareData(query, db, valuePreparer, sparkTyper)//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+    val training = prepareData(query, db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     //training.show()
     val indexer = new StringIndexer().setInputCol(predictionCol).setOutputCol("label").setHandleInvalid("skip")
     val indexerModel = indexer.fit(training);  

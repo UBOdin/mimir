@@ -36,7 +36,6 @@ object NumericFunctions
     
     fr.register("AVG",(_) => ???, (_) => TInt())
     fr.register("STDDEV",(_) => ???, (_) => TFloat())
-
   }
 
 }

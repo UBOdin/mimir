@@ -392,7 +392,7 @@ object MimirVizier {
   
   def getAvailableViztoolUsers() : String = {
     var userIDs = Seq[String]()
-    val ret = db.query(parseQuery("SELECT USER_ID, FIRST_NAME, LAST_NAME FROM USERS"))(results => {
+    val ret = db.query(Project(Seq(ProjectArg("USER_ID",Var("USER_ID")),ProjectArg("FIRST_NAME",Var("FIRST_NAME")),ProjectArg("LAST_NAME",Var("LAST_NAME"))), db.table("USERS")))(results => {
     while(results.hasNext) {
       val row = results.next()
       userIDs = userIDs:+s"${row(0)}- ${row(1).asString} ${row(2).asString}"
@@ -405,7 +405,7 @@ object MimirVizier {
   
   def getAvailableViztoolDeployTypes() : String = {
     var types = Seq[String]("GIS", "DATA")
-    val ret = db.query(parseQuery("SELECT TYPE FROM CLEANING_JOBS"))(results => {
+    val ret = db.query(Project(Seq(ProjectArg("TYPE",Var("TYPE"))), db.table("CLEANING_JOBS")))(results => {
     while(results.hasNext) {
       val row = results.next()
      types = types:+s"${row(0).asString}"
@@ -496,7 +496,7 @@ object MimirVizier {
   }
  
  def isWorkflowDeployed(hash:String) : Boolean = {
-   db.query(parseQuery(s"SELECT CLEANING_JOB_ID from CLEANING_JOBS WHERE HASH = '$hash'"))( resIter => resIter.hasNext())
+   db.query(Project(Seq(ProjectArg("CLEANING_JOB_ID",Var("CLEANING_JOB_ID"))) , mimir.algebra.Select( Comparison(Cmp.Eq, Var("HASH"), StringPrimitive(hash)), db.table("CLEANING_JOBS"))))( resIter => resIter.hasNext())
  }
                                                                                               //by default we'll start now and end when the galaxy class Enterprise launches
  def deployWorkflowToViztool(hash:String, input:String, query : String, name:String, dataType:String, users:Seq[String], latlonFields:Seq[String] = Seq("LATITUDE","LONGITUDE"), addrFields: Seq[String] = Seq("STRNUMBER", "STRNAME", "CITY", "STATE"), startTime:String = "2017-08-13 00:00:00", endTime:String = "2363-01-01 00:00:00") : Unit = {

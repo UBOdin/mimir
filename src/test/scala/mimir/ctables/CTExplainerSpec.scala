@@ -26,22 +26,22 @@ object CTExplainerSpec
       val resultSets = explainEverything("SELECT * FROM MV")
       
       resultSets.map( _.model.name ) must contain(eachOf(
-         "MV:WEKA:B", "MV:WEKA:C", "TI"
+         "MV:SPARK:B", "MV:SPARK:C", "TI"
       ))
 
       resultSets.map {
         set => (set.model.name -> set.size(db)) 
       }.toMap must contain(eachOf(
-        ("MV:WEKA:B" -> 1l),
-        ("MV:WEKA:C" -> 1l),
+        ("MV:SPARK:B" -> 1l),
+        ("MV:SPARK:C" -> 1l),
         ("TI" -> 1l)
       ))
 
       resultSets.map { 
         set => (set.model.name -> set.allArgs(db).map(_._1.toList).toList)
       }.toMap must contain(eachOf(
-        ("MV:WEKA:B" -> List(List[PrimitiveValue](RowIdPrimitive("2")))),
-        ("MV:WEKA:C" -> List(List[PrimitiveValue](RowIdPrimitive("3")))),
+        ("MV:SPARK:B" -> List(List[PrimitiveValue](RowIdPrimitive("2")))),
+        ("MV:SPARK:C" -> List(List[PrimitiveValue](RowIdPrimitive("3")))),
         ("TI" -> List(List()))
       ))
     }

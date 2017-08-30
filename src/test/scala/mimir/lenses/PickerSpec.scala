@@ -16,7 +16,7 @@ object PickerSpec
     update("CREATE TABLE R(A integer, B integer)")
     update("INSERT INTO R (A, B) VALUES(1, 1)")
     update("INSERT INTO R (A, B) VALUES(1, 2)")
-    update("INSERT INTO R (A, B) VALUES(3, 3)")
+    update("INSERT INTO R (A, B) VALUES(NULL, 3)")
     update("INSERT INTO R (A, B) VALUES(4, 4)")
     
   }

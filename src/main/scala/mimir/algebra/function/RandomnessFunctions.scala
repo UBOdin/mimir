@@ -14,6 +14,8 @@ object RandomnessFunctions
       (args: Seq[PrimitiveValue]) => IntPrimitive(prng.nextLong),
       (types: Seq[Type]) => { TInt() }
     )
+    
+    fr.registerPassthrough("random",(_) => ???, (_) => TInt())
 
     fr.register("POSSION", 
       {

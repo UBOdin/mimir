@@ -33,13 +33,7 @@ object UtilityFunctions
     fr.register("WEBJSON", 
       {  
         case Seq(StringPrimitive(url)) => StringPrimitive(mimir.util.HTTPUtils.getJson(url).toString())
-      },
-      (x: Seq[Type]) => TString()
-    )
-    
-    fr.register("WEBJSONPATH", 
-      {  
-        case Seq(StringPrimitive(url), StringPrimitive(path)) => StringPrimitive(mimir.util.HTTPUtils.getJsonSeekPath(url, path).toString())
+        case Seq(StringPrimitive(url), StringPrimitive(path)) => StringPrimitive(mimir.util.HTTPUtils.getJson(url, Some(path)).toString())
       },
       (x: Seq[Type]) => TString()
     )

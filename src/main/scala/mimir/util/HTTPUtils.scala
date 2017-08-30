@@ -21,17 +21,13 @@ object HTTPUtils {
       content
   }
   
-  def getJson(url:String,
+  def getJson(url:String, path: Option[String] = None,
           connectTimeout: Int = 5000,
           readTimeout: Int = 5000,
           requestMethod: String = "GET"): JsValue = {
-    play.api.libs.json.Json.parse(get(url, connectTimeout, readTimeout, requestMethod))
-  }
-  
-  def getJsonSeekPath(url:String, path: String,
-          connectTimeout: Int = 5000,
-          readTimeout: Int = 5000,
-          requestMethod: String = "GET"): JsValue = {
-    JsonUtils.seekPath(getJson(url, connectTimeout, readTimeout, requestMethod), path)
+    path match {
+      case None => play.api.libs.json.Json.parse(get(url, connectTimeout, readTimeout, requestMethod))
+      case Some(path) => JsonUtils.seekPath(play.api.libs.json.Json.parse(get(url, connectTimeout, readTimeout, requestMethod)), path)
+    }
   }
 }
