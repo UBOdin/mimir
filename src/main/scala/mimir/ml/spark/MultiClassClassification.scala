@@ -6,25 +6,18 @@ import mimir.Database
 
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkContext, SparkConf}
-import org.apache.spark.sql.types.{DataType, DoubleType, LongType, IntegerType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{DataType, DoubleType, LongType, BooleanType, IntegerType, StringType, StructField, StructType}
 import java.io.StringReader
 import scala.collection.mutable.ArrayBuffer;
 //import org.apache.lucene.util.Version
 //import org.apache.lucene.analysis.en.EnglishAnalyzer
 //import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
 import scala.io.Source
-import org.apache.spark.ml.feature.{HashingTF, Tokenizer} 
-//import org.apache.spark.mllib.classification.{NaiveBayes, NaiveBayesModel}
+import org.apache.spark.ml.feature.{HashingTF, Tokenizer}
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.PipelineModel
 import org.apache.spark.ml.feature.{StringIndexer, IndexToString, VectorIndexer}
 import org.apache.spark.ml.classification.{RandomForestClassifier, NaiveBayes, DecisionTreeClassifier, GBTClassifier}
-import org.apache.spark.mllib.regression.LabeledPoint
-import org.apache.spark.ml.feature.StringIndexer
-import org.apache.spark.mllib.tree.RandomForest
-import org.apache.spark.mllib.tree.model.RandomForestModel
-import org.apache.spark.mllib.linalg.{Vectors, Vector}
-import org.apache.spark.mllib.evaluation.MulticlassMetrics
 import org.apache.spark.sql.Row
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLImplicits
@@ -38,16 +31,10 @@ import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.sql.types.AnyDataType
 
 
-case class LabeledRecord(id: String, topic: String, text: String)
-case class ReverseIndexRecord(prediction: Double)
-
 object MultiClassClassification {
   type ClassifierModel = PipelineModel
   type ClassifierModelGenerator = (Operator,Database,String) => PipelineModel
   sealed trait Category
-  case object Scientific extends Category
-  case object NonScientific extends Category
-  case class LabeledText(id: Double, category: Category, text: String)
   var sc: Option[SparkContext] = None
   var sqlCtx : Option[SQLContext] = None
   
@@ -73,52 +60,76 @@ object MultiClassClassification {
     }
   }
   
-  def classifydb(model : PipelineModel, query : Operator, db:Database, valuePreparer:PrimitiveValue => Any = prepareValue, sparkTyper:Type => DataType = getSparkType) : DataFrame = {
+  def classifydb(model : PipelineModel, query : Operator, db:Database, valuePreparer:ValuePreparer = prepareValue, sparkTyper:Type => DataType = getSparkType) : DataFrame = {
     val data = db.query(query, mimir.exec.mode.BestGuess)(results => {
       results.toList.map(row => row.provenance +: row.tuple)
     })
-    classify(model, db.bestGuessSchema(query), data, valuePreparer, sparkTyper)
+    classify(model, ("rowid", TString()) +:db.bestGuessSchema(query), data, valuePreparer, sparkTyper)
   }
   
-  def classify( model : PipelineModel, cols:Seq[(String, Type)], testData : List[Seq[PrimitiveValue]], valuePreparer:PrimitiveValue => Any = prepareValue, sparkTyper:Type => DataType = getSparkType): DataFrame = {
-    val schema = cols.toMap
+  def classify( model : PipelineModel, cols:Seq[(String, Type)], testData : List[Seq[PrimitiveValue]], valuePreparer:ValuePreparer = prepareValue, sparkTyper:Type => DataType = getSparkType): DataFrame = {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._
     model.transform(sqlContext.createDataFrame(
       getSparkSession().parallelize(testData.map( row => {
-        Row(row.map(value => valuePreparer(value)):_*)
-      })), StructType(StructField("rowid", StringType, false) :: cols.map(_._1).toList.map(col => StructField(col, sparkTyper(schema(col)), true)))))
+        Row(row.zip(cols).map(value => valuePreparer(value._1, value._2._2)):_*)
+      })), StructType(cols.toList.map(col => StructField(col._1, sparkTyper(col._2), true)))))
   } 
   
-  def prepareData(query : Operator, db:Database, valuePreparer:PrimitiveValue => Any = prepareValue, sparkTyper:Type => DataType = getSparkType) : DataFrame = {
-    val schema = db.bestGuessSchema(query).toMap
+  def prepareData(query : Operator, db:Database, valuePreparer: ValuePreparer = prepareValue, sparkTyper:Type => DataType = getSparkType) : DataFrame = {
+    val schema = db.bestGuessSchema(query).toList
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._
     sqlContext.createDataFrame(
       getSparkSession().parallelize(db.query(query, mimir.exec.mode.BestGuess)(results => {
-        results.toList.map(row => Row((valuePreparer(row.provenance) +: row.tuple.map(value => valuePreparer(value))):_*))
-      })), StructType(StructField("rowid", StringType, false) :: query.columnNames.toList.map(col => StructField(col, sparkTyper(schema(col)), true))))
+        results.toList.map(row => Row((valuePreparer(row.provenance, TString() ) +: row.tuple.zip(schema).map(value => valuePreparer(value._1, value._2._2))):_*))
+      })), StructType(StructField("rowid", StringType, false) :: schema.map(col => StructField(col._1, sparkTyper(col._2), true))))
   }
   
-  private def prepareValue(value:PrimitiveValue): Any = {
+  type ValuePreparer = (PrimitiveValue, Type) => Any
+  
+  private def prepareValue(value:PrimitiveValue, t:Type): Any = {
     value match {
-      case NullPrimitive() => null
+      case NullPrimitive() => t match {
+        case TInt() => 0L
+        case TFloat() => 0.0
+        case TDate() => ""
+        case TString() => ""
+        case TBool() => false
+        case TRowId() => ""
+        case TType() => ""
+        case TAny() => ""
+        case TTimestamp() => ""
+        case TInterval() => ""
+        case TUser(name) => prepareValue(value, mimir.algebra.TypeRegistry.registeredTypes(name)._2)
+        case x => ""
+      }
+      case RowIdPrimitive(s) => s
+      case StringPrimitive(s) => s
       case IntPrimitive(i) => i
       case FloatPrimitive(f) => f
-      case x => x.asString
+      case x =>  x.asString 
     }
   }
   
-  private def getSparkType(t:Type) = {
+  private def getSparkType(t:Type) : DataType = {
     t match {
-      case TString() => StringType
       case TInt() => LongType
       case TFloat() => DoubleType
+      case TDate() => StringType
+      case TString() => StringType
+      case TBool() => BooleanType
+      case TRowId() => StringType
+      case TType() => StringType
+      case TAny() => StringType
+      case TTimestamp() => StringType
+      case TInterval() => StringType
+      case TUser(name) => getSparkType(mimir.algebra.TypeRegistry.registeredTypes(name)._2)
       case _ => StringType
     }
   }
   
-  def prepareValueStr(value:PrimitiveValue): Any = {
+  def prepareValueStr(value:PrimitiveValue, t:Type): Any = {
     value match {
       case NullPrimitive() => ""
       case x => x.asString
@@ -131,25 +142,28 @@ object MultiClassClassification {
     }
   }
   
-  def extractPredictions(model : PipelineModel, predictions:DataFrame) : Seq[Seq[(String, Double)]] = {
+  def extractPredictions(model : PipelineModel, predictions:DataFrame, maxPredictions:Int = 5) : Seq[(String, (String, Double))] = {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._  
-    predictions.select("probability").rdd.map(r => r(0)).collect().map { item =>
-        item.asInstanceOf[org.apache.spark.ml.linalg.DenseVector].toArray.zipWithIndex
-          .sortBy(_._1).reverse
-          .map { case(probability, index) => 
-         val predictionProbability = ReverseIndexRecord(index.toDouble) :: Nil
-         ( model.stages(model.stages.length-1).transform(predictionProbability.toDF()).select("predictedLabel").rdd.map { x => x(0) }.collect()(0).toString(), probability ) 
-          }.toSeq}.toSeq
-     
-  } 
+    val (rowidsProbabilities, idxs) = predictions.select("rowid","probability").rdd.map(r => (r.getString(0), r.getAs[org.apache.spark.ml.linalg.DenseVector](1))).collect().map { item =>
+        item._2.toArray.zipWithIndex.sortBy(_._1).reverse.slice(0, maxPredictions).map(probIdx => ((item._1, probIdx._1), probIdx._2))}.flatten.toSeq.unzip
+    model.stages(model.stages.length-1).transform(idxs.toDF("prediction")).select("predictedLabel").rdd.zip(getSparkSession().parallelize(rowidsProbabilities)).map { x => (x._2._1, (x._1.getString(0), x._2._2)) }.collect()       
+  }
   
-  def NaiveBayesMulticlassModel(valuePreparer:PrimitiveValue => Any = prepareValue, sparkTyper:Type => DataType = getSparkType)(query:Operator, db:Database, predictionCol:String) : PipelineModel = {
+  def extractPredictionsForRow(model : PipelineModel, predictions:DataFrame, rowid:String, maxPredictions:Int = 5) : Seq[(String, Double)] = {
+    val sqlContext = getSparkSqlContext()
+    import sqlContext.implicits._  
+    val (probabilities, idxs) = predictions.where($"rowid" === rowid).select("probability").rdd.map(r => r.getAs[org.apache.spark.ml.linalg.DenseVector](0)).collect().map { item =>
+        item.toArray.zipWithIndex.sortBy(_._1).reverse.slice(0, maxPredictions).map(probIdx =>  probIdx)}.flatten.toSeq.unzip
+    model.stages(model.stages.length-1).transform(idxs.toDF("prediction")).select("predictedLabel").rdd.zip(getSparkSession().parallelize(probabilities)).map { x => (x._1.getString(0), x._2) }.collect()  
+  }
+  
+  def NaiveBayesMulticlassModel(valuePreparer:ValuePreparer = prepareValue, sparkTyper:Type => DataType = getSparkType)(query:Operator, db:Database, predictionCol:String) : PipelineModel = {
     val training = prepareData(query, db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+    val cols = training.schema.fields.tail
     //training.show()
     val indexer = new StringIndexer().setInputCol(predictionCol).setOutputCol("label").setHandleInvalid("skip")
     val labels = indexer.fit(training).labels
-    val cols = training.schema.fields.tail
     val (tokenizers, hashingTFs) = cols.flatMap(col => {
       col.dataType match {
         case StringType => {
@@ -175,7 +189,7 @@ object MultiClassClassification {
     pipeline.fit(training)
   }
    
-  def RandomForestMulticlassModel(valuePreparer:PrimitiveValue => Any = prepareValue, sparkTyper:Type => DataType = getSparkType)( query:Operator, db:Database, predictionCol:String): PipelineModel = {
+  def RandomForestMulticlassModel(valuePreparer:ValuePreparer = prepareValue, sparkTyper:Type => DataType = getSparkType)( query:Operator, db:Database, predictionCol:String): PipelineModel = {
     val training = prepareData(query, db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     //training.show()
     val indexer = new StringIndexer().setInputCol(predictionCol).setOutputCol("label").setHandleInvalid("skip")
@@ -206,7 +220,7 @@ object MultiClassClassification {
     pipeline.fit(training)
   }
   
-  def DecisionTreeMulticlassModel(valuePreparer:PrimitiveValue => Any = prepareValue, sparkTyper:Type => DataType = getSparkType)( query:Operator, db:Database, predictionCol:String): PipelineModel = {
+  def DecisionTreeMulticlassModel(valuePreparer:ValuePreparer = prepareValue, sparkTyper:Type => DataType = getSparkType)( query:Operator, db:Database, predictionCol:String): PipelineModel = {
     val training = prepareData(query, db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     //training.show()
     val indexer = new StringIndexer().setInputCol(predictionCol).setOutputCol("label").setHandleInvalid("skip")
@@ -237,7 +251,7 @@ object MultiClassClassification {
     pipeline.fit(training)
   }
   
-  def GradientBoostedTreeMulticlassModel(valuePreparer:PrimitiveValue => Any = prepareValue, sparkTyper:Type => DataType = getSparkType)( query:Operator, db:Database, predictionCol:String): PipelineModel = {
+  def GradientBoostedTreeMulticlassModel(valuePreparer:ValuePreparer = prepareValue, sparkTyper:Type => DataType = getSparkType)( query:Operator, db:Database, predictionCol:String): PipelineModel = {
     val training = prepareData(query, db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     //training.show()
     val indexer = new StringIndexer().setInputCol(predictionCol).setOutputCol("label").setHandleInvalid("skip")

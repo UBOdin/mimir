@@ -76,7 +76,7 @@ class SimplifyExpressions(interpreter: Eval, functionRegistry: FunctionRegistry)
       //////////////////// Function-Likes ////////////////////
       // If all args are present, and we have a registry, try to evaluate the function
       case Function(name, args) if args.forall { _.isInstanceOf[PrimitiveValue]} 
-        && !functionRegistry.get(name).isInstanceOf[PassThroughNativeFunction]  =>
+        && !(functionRegistry.get(name) match { case NativeFunction(_,_,_,pt) => pt; case _ => false })  =>
           interpreter.applyFunction(name, args.map { _.asInstanceOf[PrimitiveValue] })
 
       // A few function patterns are effectively no-ops and can be trivially removed
