@@ -27,10 +27,40 @@ cancelable in Global := true
 scalacOptions in Test ++= Seq("-Yrangepos")
 parallelExecution in Test := false
 testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
-envVars in Test := Map(("LD_PRELOAD",System.getProperty("java.home")+"/lib/"+System.getProperty("os.arch")+"/libjsig.so"))
+
+//for tests that need to run in their own jvm because they need specific envArgs or otherwise
+testGrouping in Test := {
+	val testsToForkSeperately = Seq("mimir.gprom.algebra.OperatorTranslationSpec")
+	val seperateForkedEnvArgs = Map(("mimir.gprom.algebra.OperatorTranslationSpec", sys.props.get("os.name") match {
+	  	case Some(osname) if osname.startsWith("Mac OS X") => Map(("DYLD_INSERT_LIBRARIES",System.getProperty("java.home")+"/lib/libjsig.dylib"))
+	  	case Some(otherosname) => Map(("LD_PRELOAD",System.getProperty("java.home")+"/lib/"+System.getProperty("os.arch")+"/libjsig.so"))
+	  	case None => envVars .value
+	  }))
+	val (forkedTests, otherTests) = (definedTests in Test).value.partition { test => testsToForkSeperately.contains(test.name) }
+    Seq(Tests.Group(name = "Single JVM tests", tests = otherTests, runPolicy = Tests.SubProcess(
+	    ForkOptions(
+	      javaHome.value,
+	      outputStrategy.value,
+	      Nil,
+	      Some(baseDirectory.value),
+	      javaOptions.value,
+	      connectInput.value,
+	      envVars.value
+	    )))) ++ forkedTests.map { test =>
+	  Tests.Group(name = test.name, tests = Seq(test), runPolicy = Tests.SubProcess(
+	    ForkOptions(
+	      javaHome.value,
+	      outputStrategy.value,
+	      Nil,
+	      Some(baseDirectory.value),
+	      javaOptions.value,
+	      connectInput.value,
+	      seperateForkedEnvArgs.getOrElse(test.name, envVars.value)
+	    )))
+	}
+}
 
 //if you want to debug tests uncomment this
-//javaOptions in (Test) += "-Xdebug"
 //javaOptions in (Test) += "-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005"
 
 resolvers += "MimirDB" at "http://maven.mimirdb.info/"
