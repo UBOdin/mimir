@@ -1,3 +1,5 @@
+import scala.sys.process._
+
 name := "Mimir-Core"
 version := "0.2"
 organization := "info.mimirdb"
