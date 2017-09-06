@@ -14,7 +14,7 @@ import mimir.models._
 import scala.collection.JavaConversions._
 import scala.util._
 
-import mimir.ml.spark.MultiClassClassification
+import mimir.ml.spark.{SparkML, MultiClassClassification}
   
 
 object PickerLens {
@@ -58,10 +58,14 @@ object PickerLens {
       case Seq(BoolPrimitive(b)) => b
     }
     
-    val useClassifier = args.foldLeft(None:Option[MultiClassClassification.ClassifierModelGenerator])((init, expr) => init match { 
+    def sparkMLInst() : SparkML = {
+      MultiClassClassification
+    }
+    
+    val useClassifier = args.foldLeft(None:Option[(() => SparkML,SparkML.SparkModelGenerator)])((init, expr) => init match { 
       case None => expr match {
         case Function("UEXPRS", exprs) => None
-        case _ => Some(MultiClassClassification.DecisionTreeMulticlassModel() _)
+        case _ => Some((sparkMLInst _, MultiClassClassification.DecisionTreeMulticlassModel() _))
       }
       case s@Some(modelGen) => s
     })

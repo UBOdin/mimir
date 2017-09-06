@@ -12,7 +12,7 @@ import mimir.{Analysis, Database}
 
 import mimir.models._
 
-import mimir.ml.spark.MultiClassClassification
+import mimir.ml.spark.{SparkML, MultiClassClassification, Regression}
 
 import scala.util._
 import org.apache.spark.sql.types.StringType
@@ -22,7 +22,8 @@ object SparkClassifierModel
   val logger = Logger(org.slf4j.LoggerFactory.getLogger(getClass.getName))
   val TRAINING_LIMIT = 10000
   val TOKEN_LIMIT = 100
-
+  val availableSparkModels = Map("MultiClassClassification" -> (MultiClassClassification, MultiClassClassification.NaiveBayesMulticlassModel()_), "Regression" -> (Regression, Regression.GeneralizedLinearRegressorModel()_))
+  
   def train(db: Database, name: String, cols: Seq[String], query:Operator): Map[String,(Model,Int,Seq[Expression])] = 
   {
     cols.map( (col) => {
@@ -61,10 +62,14 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
   val colIdx:Int = query.columnNames.indexOf(colName)
   val classifyUpFrontAndCache = true
   var classifyAllPredictions:Option[Map[String, Seq[(String, Double)]]] = None
-  var learner: Option[MultiClassClassification.ClassifierModel] = None
+  var learner: Option[SparkML.SparkModel] = None
+  
+  val sparkMLInstanceType = "MultiClassClassification" 
   
   @transient var db: Database = null
-
+  
+  def sparkMLInstance = SparkClassifierModel.availableSparkModels.getOrElse(sparkMLInstanceType, (MultiClassClassification, MultiClassClassification.NaiveBayesMulticlassModel()_))._1
+  def sparkMLModelGenerator = SparkClassifierModel.availableSparkModels.getOrElse(sparkMLInstanceType, (MultiClassClassification, MultiClassClassification.NaiveBayesMulticlassModel()_))._2
   
   /**
    * When the model is created, learn associations from the existing data.
@@ -74,7 +79,7 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
     this.db = db
     TimeUtils.monitor(s"Train $name.$colName", WekaModel.logger.info(_)){
       val trainingQuery = Limit(0, Some(SparkClassifierModel.TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)), Project(Seq(ProjectArg(colName, Var(colName))), query)))
-      learner = Some(MultiClassClassification.NaiveBayesMulticlassModel()(trainingQuery, db, colName))
+      learner = Some(sparkMLModelGenerator(trainingQuery, db, colName))
     }
   }
 
@@ -91,15 +96,15 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
   
   private def classify(rowid: RowIdPrimitive, rowValueHints: Seq[PrimitiveValue]): Seq[(String,Double)] = {
      {if(rowValueHints.isEmpty){
-       MultiClassClassification.extractPredictions(learner.get, MultiClassClassification.classifydb(learner.get, 
+       sparkMLInstance.extractPredictions(learner.get, sparkMLInstance.applyModelDB(learner.get, 
                 Project(Seq(ProjectArg(colName, Var(colName))),
                   Select(
                     Comparison(Cmp.Eq, RowIdVar(), rowid),
                     query)
                 ), db)) 
      } else { 
-       MultiClassClassification.extractPredictions(learner.get,
-           MultiClassClassification.classify(learner.get,  ("rowid", TString()) +: db.bestGuessSchema(query).filter(_._1.equals(colName)), List(List(rowid, rowValueHints(colIdx)))))
+       sparkMLInstance.extractPredictions(learner.get,
+           sparkMLInstance.applyModel(learner.get,  ("rowid", TString()) +: db.bestGuessSchema(query).filter(_._1.equals(colName)), List(List(rowid, rowValueHints(colIdx)))))
      }} match {
          case Seq() => Seq()
          case x => x.unzip._2
@@ -109,7 +114,7 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
   def classifyAll() : Unit = {
     val classifier = learner.get
     val classifyAllQuery = Project(Seq(ProjectArg(colName, Var(colName))), query)
-    val predictions = MultiClassClassification.classifydb(classifier, classifyAllQuery, db)
+    val predictions = sparkMLInstance.applyModelDB(classifier, classifyAllQuery, db)
     //val sqlContext = MultiClassClassification.getSparkSqlContext()
     //import sqlContext.implicits._  
     
@@ -129,7 +134,7 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
     })*/
     
     //method 3: manually
-    val predictionMap = MultiClassClassification.extractPredictions(classifier, predictions).groupBy(_._1).map { case (k,v) => (k,v.map(_._2))}
+    val predictionMap = sparkMLInstance.extractPredictions(classifier, predictions).groupBy(_._1).map { case (k,v) => (k,v.map(_._2))}
     classifyAllPredictions = Some(predictionMap)
     
     predictionMap.map(mapEntry => {
