@@ -63,6 +63,7 @@ object Mimir extends LazyLogging {
       db.loadTable(conf.loadTable(), conf.loadTable()+".csv");
     } else {
       var source: Reader = null;
+      var prompt: (() => Unit) = { () =>  }
 
       conf.precache.foreach( (opt) => opt.split(",").foreach( (table) => { 
         output.print(s"Precaching... $table")
@@ -74,8 +75,14 @@ object Mimir extends LazyLogging {
       }
 
       if(conf.file.get == None || conf.file() == "-"){
-        source = new LineReaderInputSource(terminal)
-        output = new PrettyOutputFormat(terminal)
+        if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
+          source = new LineReaderInputSource(terminal)
+          output = new PrettyOutputFormat(terminal)
+        } else {
+          source = new InputStreamReader(System.in)
+          output = DefaultOutputFormat
+          prompt = () => { System.out.print("\nmimir> "); System.out.flush(); }
+        }
       } else {
         source = new FileReader(conf.file())
         output = DefaultOutputFormat
@@ -84,20 +91,20 @@ object Mimir extends LazyLogging {
       if(!conf.quiet()){
         output.print("   ... ready")
       }
-      eventLoop(source)
+      eventLoop(source, prompt)
     }
 
     db.backend.close()
     if(!conf.quiet()) { output.print("\n\nDone.  Exiting."); }
   }
 
-  def eventLoop(source: Reader): Unit =
+  def eventLoop(source: Reader, prompt: (() => Unit)): Unit =
   {
     var parser = new MimirJSqlParser(source);
     var done = false;
     do {
       try {
-
+        prompt()
         val stmt: Statement = parser.Statement();
 
         stmt match {
