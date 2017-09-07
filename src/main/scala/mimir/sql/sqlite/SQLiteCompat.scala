@@ -37,12 +37,12 @@ object SQLiteCompat extends LazyLogging{
     org.sqlite.Function.create(conn, "STDDEV", StdDev)
     org.sqlite.Function.create(conn, "MAX", Max)
   }
-  
+
   def getTableSchema(conn:java.sql.Connection, table: String): Option[Seq[(String, Type)]] =
   {
     // Hardcoded table schemas:
     table.toUpperCase match {
-      case "SQLITE_MASTER" => 
+      case "SQLITE_MASTER" =>
         return Some(Seq(
             ("NAME", TString()),
             ("TYPE", TString())
@@ -53,19 +53,19 @@ object SQLiteCompat extends LazyLogging{
     val stmt = conn.createStatement()
     val ret = stmt.executeQuery(s"PRAGMA table_info('$table')")
     stmt.closeOnCompletion()
-    val result = JDBCUtils.extractAllRows(ret).map( (x) => { 
+    val result = JDBCUtils.extractAllRows(ret).map( (x) => {
       val name = x(1).asString.toUpperCase.trim
       val rawType = x(2).asString.trim
       val baseType = rawType.split("\\(")(0).trim
       val inferredType = try {
         Type.fromString(baseType)
       } catch {
-        case e:RAException => 
+        case e:RAException =>
           logger.warn(s"While getting schema for table '$table': ${e.getMessage}")
-          TAny()          
+          TAny()
       }
-      
-      // println(s"$name -> $rawType -> $baseType -> $inferredType"); 
+
+      // println(s"$name -> $rawType -> $baseType -> $inferredType");
 
       (name, inferredType)
     })
@@ -89,11 +89,11 @@ object Possion extends org.sqlite.Function with LazyLogging {
   }
   override def xFunc(): Unit = {
     if (args != 1) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR POSSION, EXPECTED 1") }
-    val m = value_double(0) 
+    val m = value_double(0)
     result(poisson_helper(m))
   }
-  
-  
+
+
  }
 
 
@@ -152,12 +152,12 @@ object Gamma extends org.sqlite.Function with LazyLogging {
 
   override def xFunc(): Unit = {
     if (args != 2) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR GAMMA, EXPECTED 2") }
-    val k = value_double(0) 
+    val k = value_double(0)
     val theta = value_double(1)
      result(sampleGamma(k, theta))
   }
-  
-   
+
+
   }
 
 object Minus extends org.sqlite.Function with LazyLogging {
@@ -188,14 +188,18 @@ object Speed extends org.sqlite.Function with LazyLogging {
     val endingDateText: String = value_text(2)
 
     val startingDate: DateTime = DateTime.parse(startingDateText)
+    //val endingDate: DateTime = DateTime.parse(endingDateText)
     var endingDate: DateTime = new DateTime
     if(endingDateText != null) {
       endingDate = DateTime.parse(endingDateText)
     }
+    else {
+      endingDate = startingDate.plusDays(1)
+    }
 
     val numberOfHours: Long = Math.abs(endingDate.getMillis - startingDate.getMillis) / 1000 / 60 / 60
 
-    result(distance / 1000 / numberOfHours) // kmph
+    result(distance / 1000.0 / numberOfHours) // kmph
   }
 }
 
@@ -209,7 +213,7 @@ object Sqrt extends org.sqlite.Function with LazyLogging {
 object MimirMakeRowId extends org.sqlite.Function {
 
   @Override
-  def xFunc(): Unit = { 
+  def xFunc(): Unit = {
     result(
       Provenance.joinRowIds(
         (0 until args) map { i => RowIdPrimitive(value_text(i)) }
@@ -381,9 +385,9 @@ object FirstInt extends org.sqlite.Function.Aggregate {
 
   @Override
   def xStep(): Unit = {
-    if(empty){ 
+    if(empty){
       if(value_type(0) != SQLiteCompat.NULL) {
-        firstVal = value_int(0) 
+        firstVal = value_int(0)
         empty = false
       }
     }
@@ -399,10 +403,10 @@ object FirstFloat extends org.sqlite.Function.Aggregate {
 
   @Override
   def xStep(): Unit = {
-    if(empty){ 
+    if(empty){
       if(value_type(0) != SQLiteCompat.NULL) {
-        firstVal = value_double(0) 
-        empty = false 
+        firstVal = value_double(0)
+        empty = false
       }
     }
   }
@@ -442,7 +446,7 @@ object StdDev extends org.sqlite.Function.Aggregate {
    }
 
    override def xFinal(): Unit ={
-       //println(s"sdev - xfinal: $k, $s, $m") 
+       //println(s"sdev - xfinal: $k, $s, $m")
        if(k >= 3)
             result(math.sqrt(s / (k-2)))
         else
@@ -459,12 +463,11 @@ object Max extends org.sqlite.Function.Aggregate {
   def xStep(): Unit = {
     if(value_type(0) != SQLiteCompat.NULL) {
       if(theVal < value_double(0) )
-        theVal = value_double(0) 
-      empty = false 
+        theVal = value_double(0)
+      empty = false
     }
   }
   def xFinal(): Unit = {
     if(empty){ result() } else { result(theVal) }
   }
 }
-
