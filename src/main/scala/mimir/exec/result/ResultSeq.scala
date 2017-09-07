@@ -30,4 +30,5 @@ class ResultSeq(
   def column(idx: Int): Seq[PrimitiveValue] =
     data.map { _(idx) }
 
+  def tuples = map { _.tuple }
 }
