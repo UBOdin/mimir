@@ -12,7 +12,8 @@ import mimir.{Analysis, Database}
 
 import mimir.models._
 
-import mimir.ml.spark.{SparkML, MultiClassClassification, Regression}
+import mimir.ml.spark.{SparkML, Classification, Regression}
+import mimir.ml.spark.SparkML.{SparkModelGeneratorParams => ModelParams }
 
 import scala.util._
 import org.apache.spark.sql.types.StringType
@@ -22,7 +23,7 @@ object SparkClassifierModel
   val logger = Logger(org.slf4j.LoggerFactory.getLogger(getClass.getName))
   val TRAINING_LIMIT = 10000
   val TOKEN_LIMIT = 100
-  val availableSparkModels = Map("MultiClassClassification" -> (MultiClassClassification, MultiClassClassification.NaiveBayesMulticlassModel()_), "Regression" -> (Regression, Regression.GeneralizedLinearRegressorModel()_))
+  val availableSparkModels = Map("Classification" -> (Classification, Classification.NaiveBayesMulticlassModel()), "Regression" -> (Regression, Regression.GeneralizedLinearRegressorModel()))
   
   def train(db: Database, name: String, cols: Seq[String], query:Operator): Map[String,(Model,Int,Seq[Expression])] = 
   {
@@ -64,12 +65,12 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
   var classifyAllPredictions:Option[Map[String, Seq[(String, Double)]]] = None
   var learner: Option[SparkML.SparkModel] = None
   
-  val sparkMLInstanceType = "MultiClassClassification" 
+  var sparkMLInstanceType = "Classification" 
   
   @transient var db: Database = null
   
-  def sparkMLInstance = SparkClassifierModel.availableSparkModels.getOrElse(sparkMLInstanceType, (MultiClassClassification, MultiClassClassification.NaiveBayesMulticlassModel()_))._1
-  def sparkMLModelGenerator = SparkClassifierModel.availableSparkModels.getOrElse(sparkMLInstanceType, (MultiClassClassification, MultiClassClassification.NaiveBayesMulticlassModel()_))._2
+  def sparkMLInstance = SparkClassifierModel.availableSparkModels.getOrElse(sparkMLInstanceType, (Classification, Classification.NaiveBayesMulticlassModel()))._1
+  def sparkMLModelGenerator = SparkClassifierModel.availableSparkModels.getOrElse(sparkMLInstanceType, (Classification, Classification.NaiveBayesMulticlassModel()))._2
   
   /**
    * When the model is created, learn associations from the existing data.
@@ -77,12 +78,21 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
   def train(db:Database)
   {
     this.db = db
+    sparkMLInstanceType = guessSparkModelType(guessInputType) 
     TimeUtils.monitor(s"Train $name.$colName", WekaModel.logger.info(_)){
       val trainingQuery = Limit(0, Some(SparkClassifierModel.TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)), Project(Seq(ProjectArg(colName, Var(colName))), query)))
-      learner = Some(sparkMLModelGenerator(trainingQuery, db, colName))
+      learner = Some(sparkMLModelGenerator(ModelParams(trainingQuery, db, colName)))
     }
   }
-
+ 
+  def guessSparkModelType(t:Type) : String = {
+    t match {
+      case TFloat() => "Regression"
+      case TInt() | TDate() | TString() | TBool() | TRowId() | TType() | TAny() | TTimestamp() | TInterval() => "Classification"
+      case TUser(name) => guessSparkModelType(mimir.algebra.TypeRegistry.registeredTypes(name)._2)
+      case x => "Classification"
+    }
+  }
   
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
   {
@@ -146,8 +156,12 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
 
   private def classToPrimitive(value:String): PrimitiveValue = 
   {
-    //mimir.parser.ExpressionParser.expr( value).asInstanceOf[PrimitiveValue]
-    TextUtils.parsePrimitive(guessInputType, value)
+    try {
+      //mimir.parser.ExpressionParser.expr( value).asInstanceOf[PrimitiveValue]
+      TextUtils.parsePrimitive(guessInputType, value)
+    } catch {
+      case t: Throwable => throw new Exception(s"${t.getClass.getName} while parsing primitive: $value of type: $guessInputType")
+    }
   }
 
   def guessInputType: Type =

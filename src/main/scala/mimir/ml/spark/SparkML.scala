@@ -6,11 +6,13 @@ import mimir.Database
 import org.apache.spark.sql.{SQLContext, DataFrame, Row}
 import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.ml.PipelineModel
-import org.apache.spark.sql.types.{DataType, DoubleType, LongType, BooleanType, IntegerType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{DataType, DoubleType, LongType, FloatType, BooleanType, IntegerType, StringType, StructField, StructType}
+import org.apache.spark.ml.feature.Imputer
 
 object SparkML {
   type SparkModel = PipelineModel
-  type SparkModelGenerator = (Operator,Database,String) => PipelineModel
+  case class SparkModelGeneratorParams(query:Operator, db:Database, predictionCol:String)
+  type SparkModelGenerator = SparkModelGeneratorParams => PipelineModel
   var sc: Option[SparkContext] = None
   var sqlCtx : Option[SQLContext] = None
 }
@@ -46,6 +48,22 @@ abstract class SparkML {
   
   protected def getSparkType(t:Type) : DataType 
   
+  type DataFrameTransformer = (DataFrame) => DataFrame
+  
+  protected def nullValueReplacement(df:DataFrame): DataFrame = {
+    import org.apache.spark.sql.functions.mean
+    val imputerCols = df.schema.fields.flatMap(col => {
+      if(df.filter(df(col.name).isNull).count > 0)
+        col.dataType match {
+          case IntegerType | LongType | DoubleType | FloatType => Some(col.name)
+          case StringType => None
+          case _ => None
+        }
+      else None
+    }).toArray
+    new Imputer().setInputCols(imputerCols) .setOutputCols(imputerCols).fit(df).transform(df)
+  }
+  
   def prepareData(query : Operator, db:Database, valuePreparer: ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType) : DataFrame = {
     val schema = db.bestGuessSchema(query).toList
     val sqlContext = getSparkSqlContext()
@@ -56,20 +74,21 @@ abstract class SparkML {
       })), StructType(StructField("rowid", StringType, false) :: schema.map(col => StructField(col._1, sparkTyper(col._2), true))))
   }
   
-  def applyModelDB(model : PipelineModel, query : Operator, db:Database, valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType) : DataFrame = {
+  def applyModelDB(model : PipelineModel, query : Operator, db:Database, valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType, dfTransformer:Option[DataFrameTransformer] = Some(nullValueReplacement)) : DataFrame = {
     val data = db.query(query, mimir.exec.mode.BestGuess)(results => {
       results.toList.map(row => row.provenance +: row.tuple)
     })
-    applyModel(model, ("rowid", TString()) +:db.bestGuessSchema(query), data, valuePreparer, sparkTyper)
+    applyModel(model, ("rowid", TString()) +:db.bestGuessSchema(query), data, valuePreparer, sparkTyper, dfTransformer)
   }
   
-  def applyModel( model : PipelineModel, cols:Seq[(String, Type)], testData : List[Seq[PrimitiveValue]], valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType): DataFrame = {
+  def applyModel( model : PipelineModel, cols:Seq[(String, Type)], testData : List[Seq[PrimitiveValue]], valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType, dfTransformer:Option[DataFrameTransformer] = Some(nullValueReplacement)): DataFrame = {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._
-    model.transform(sqlContext.createDataFrame(
+    val modDF = dfTransformer.getOrElse((df:DataFrame) => df)
+    model.transform(modDF(sqlContext.createDataFrame(
       getSparkSession().parallelize(testData.map( row => {
         Row(row.zip(cols).map(value => valuePreparer(value._1, value._2._2)):_*)
-      })), StructType(cols.toList.map(col => StructField(col._1, sparkTyper(col._2), true)))))
+      })), StructType(cols.toList.map(col => StructField(col._1, sparkTyper(col._2), true))))))
   }
   
   def extractPredictions(model : PipelineModel, predictions:DataFrame, maxPredictions:Int = 5) : Seq[(String, (String, Double))]  

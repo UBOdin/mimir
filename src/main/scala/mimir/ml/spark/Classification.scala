@@ -17,21 +17,17 @@ import org.apache.spark.ml.feature.{HashingTF, Tokenizer}
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.PipelineModel
 import org.apache.spark.ml.feature.{StringIndexer, IndexToString, VectorIndexer}
-import org.apache.spark.ml.classification.{RandomForestClassifier, NaiveBayes, DecisionTreeClassifier, GBTClassifier}
+import org.apache.spark.ml.classification.{RandomForestClassifier, NaiveBayes, DecisionTreeClassifier, GBTClassifier, LogisticRegression, OneVsRest, LinearSVC, MultilayerPerceptronClassifier}
 import org.apache.spark.sql.Row
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLImplicits
 import org.apache.spark.sql.functions.udf
 import org.apache.spark.ml.feature.RegexTokenizer
-import org.apache.spark.ml.classification.LogisticRegression
-import org.apache.spark.ml.Pipeline
-import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.ml.feature.VectorAssembler
-import org.apache.spark.sql.types.AnyDataType
 
 
-object MultiClassClassification extends SparkML {
+object Classification extends SparkML {
   
   
   def classifydb(model : PipelineModel, query : Operator, db:Database, valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType) : DataFrame = {
@@ -110,24 +106,44 @@ object MultiClassClassification extends SparkML {
   override def extractPredictions(model : PipelineModel, predictions:DataFrame, maxPredictions:Int = 5) : Seq[(String, (String, Double))] = {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._  
-    val (rowidsProbabilities, idxs) = predictions.select("rowid","probability").rdd.map(r => (r.getString(0), r.getAs[org.apache.spark.ml.linalg.DenseVector](1))).collect().map { item =>
-        item._2.toArray.zipWithIndex.sortBy(_._1).reverse.slice(0, maxPredictions).map(probIdx => ((item._1, probIdx._1), probIdx._2))}.flatten.toSeq.unzip
-    model.stages(model.stages.length-1).transform(idxs.toDF("prediction")).select("predictedLabel").rdd.zip(getSparkSession().parallelize(rowidsProbabilities)).map { x => (x._2._1, (x._1.getString(0), x._2._2)) }.collect()       
+    if(predictions.columns.contains("probability")){
+      val (rowidsProbabilities, idxs) = predictions.select("rowid","probability").rdd.map(r => (r.getString(0), r.getAs[org.apache.spark.ml.linalg.DenseVector](1))).collect().map { item =>
+          item._2.toArray.zipWithIndex.sortBy(_._1).reverse.slice(0, maxPredictions).map(probIdx => ((item._1, probIdx._1), probIdx._2))}.flatten.toSeq.unzip
+      model.stages(model.stages.length-1).transform(idxs.toDF("prediction")).select("predictedLabel").rdd.zip(getSparkSession().parallelize(rowidsProbabilities)).map { x => (x._2._1, (x._1.getString(0), x._2._2)) }.collect()
+    }
+    else extractPredictionsNoProb(model, predictions, maxPredictions)
   }
   
   override def extractPredictionsForRow(model : PipelineModel, predictions:DataFrame, rowid:String, maxPredictions:Int = 5) : Seq[(String, Double)] = {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._  
-    val (probabilities, idxs) = predictions.where($"rowid" === rowid).select("probability").rdd.map(r => r.getAs[org.apache.spark.ml.linalg.DenseVector](0)).collect().map { item =>
-        item.toArray.zipWithIndex.sortBy(_._1).reverse.slice(0, maxPredictions).map(probIdx =>  probIdx)}.flatten.toSeq.unzip
-    model.stages(model.stages.length-1).transform(idxs.toDF("prediction")).select("predictedLabel").rdd.zip(getSparkSession().parallelize(probabilities)).map { x => (x._1.getString(0), x._2) }.collect()  
+    if(predictions.columns.contains("probability")){
+      val (probabilities, idxs) = predictions.where($"rowid" === rowid).select("probability").rdd.map(r => r.getAs[org.apache.spark.ml.linalg.DenseVector](0)).collect().map { item =>
+          item.toArray.zipWithIndex.sortBy(_._1).reverse.slice(0, maxPredictions).map(probIdx =>  probIdx)}.flatten.toSeq.unzip
+      model.stages(model.stages.length-1).transform(idxs.toDF("prediction")).select("predictedLabel").rdd.zip(getSparkSession().parallelize(probabilities)).map { x => (x._1.getString(0), x._2) }.collect()
+    }
+    else extractPredictionsForRowNoProb(model, predictions, rowid, maxPredictions)
   }
   
-  def NaiveBayesMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType)(query:Operator, db:Database, predictionCol:String) : PipelineModel = {
-    val training = prepareData(query, db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def extractPredictionsNoProb(model : PipelineModel, predictions:DataFrame, maxPredictions:Int = 5) : Seq[(String, (String, Double))] = {
+    val sqlContext = getSparkSqlContext()
+    import sqlContext.implicits._  
+    predictions.select("rowid","prediction").rdd.map(r => (r.getString(0), r.getDouble(1))).collect().map{ item =>
+        (item._1, (item._2.toString(), 1.0))}.toSeq
+  }
+  
+  def extractPredictionsForRowNoProb(model : PipelineModel, predictions:DataFrame, rowid:String, maxPredictions:Int = 5) : Seq[(String, Double)] = {
+    val sqlContext = getSparkSqlContext()
+    import sqlContext.implicits._  
+    predictions.where($"rowid" === rowid).select("prediction").rdd.map(r => r.getDouble(1)).collect().map { item =>
+        (item.toString(), 1.0)}.toSeq    
+  }
+  
+  def NaiveBayesMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
+    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     val cols = training.schema.fields.tail
     //training.show()
-    val indexer = new StringIndexer().setInputCol(predictionCol).setOutputCol("label").setHandleInvalid("skip")
+    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid("skip")
     val labels = indexer.fit(training).labels
     val (tokenizers, hashingTFs) = cols.flatMap(col => {
       col.dataType match {
@@ -154,10 +170,10 @@ object MultiClassClassification extends SparkML {
     pipeline.fit(training)
   }
    
-  def RandomForestMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType)( query:Operator, db:Database, predictionCol:String): PipelineModel = {
-    val training = prepareData(query, db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def RandomForestMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
+    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     //training.show()
-    val indexer = new StringIndexer().setInputCol(predictionCol).setOutputCol("label").setHandleInvalid("skip")
+    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid("skip")
     val indexerModel = indexer.fit(training);  
     val cols = training.schema.fields.tail
     val (tokenizers, hashingTFs) = cols.flatMap(col => {
@@ -185,10 +201,10 @@ object MultiClassClassification extends SparkML {
     pipeline.fit(training)
   }
   
-  def DecisionTreeMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType)( query:Operator, db:Database, predictionCol:String): PipelineModel = {
-    val training = prepareData(query, db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def DecisionTreeMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
+    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     //training.show()
-    val indexer = new StringIndexer().setInputCol(predictionCol).setOutputCol("label").setHandleInvalid("skip")
+    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid("skip")
     val indexerModel = indexer.fit(training);  
     val cols = training.schema.fields.tail
     val (tokenizers, hashingTFs) = cols.flatMap(col => {
@@ -216,10 +232,10 @@ object MultiClassClassification extends SparkML {
     pipeline.fit(training)
   }
   
-  def GradientBoostedTreeMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType)( query:Operator, db:Database, predictionCol:String): PipelineModel = {
-    val training = prepareData(query, db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def GradientBoostedTreeBinaryclassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
+    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     //training.show()
-    val indexer = new StringIndexer().setInputCol(predictionCol).setOutputCol("label").setHandleInvalid("skip")
+    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid("skip")
     val indexerModel = indexer.fit(training);  
     val cols = training.schema.fields.tail
     val (tokenizers, hashingTFs) = cols.flatMap(col => {
@@ -244,6 +260,137 @@ object MultiClassClassification extends SparkML {
     val classifier = new GBTClassifier().setLabelCol("label").setFeaturesCol("features").setMaxIter(10)
     val labelConverter = new IndexToString().setInputCol(classifier.getPredictionCol).setOutputCol("predictedLabel").setLabels(indexerModel.labels)
     val stages = indexer :: tokenizers ++: hashingTFs ++: (assembler :: featureIndexer :: classifier :: labelConverter :: Nil)
+    val pipeline = new Pipeline().setStages(stages.toArray)
+    pipeline.fit(training)
+  }
+  
+  def LogisticRegressionMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
+    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+    val cols = training.schema.fields.tail
+    //training.show()
+    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid("skip")
+    val labels = indexer.fit(training).labels
+    val (tokenizers, hashingTFs) = cols.flatMap(col => {
+      col.dataType match {
+        case StringType => {
+          val tokenizer = new RegexTokenizer().setInputCol(col.name).setOutputCol(s"${col.name}_words")
+          val hashingTF = new HashingTF().setInputCol(tokenizer.getOutputCol).setOutputCol(s"${col.name}_features").setNumFeatures(20)
+          Some((tokenizer, hashingTF))
+        }
+        case _ => None
+      }
+    }).unzip
+    val assmblerCols = cols.flatMap(col => {
+      col.dataType match {
+        case StringType => Some(s"${col.name}_features")
+        case IntegerType | LongType | DoubleType => Some(col.name)
+        case _ => None
+      }
+    })
+    val assembler = new VectorAssembler().setInputCols(assmblerCols.toArray).setOutputCol("features")
+    val classifier = new LogisticRegression().setMaxIter(10).setTol(1E-6).setFitIntercept(true).setLabelCol("label").setFeaturesCol("features")
+    val labelConverter = new IndexToString().setInputCol(classifier.getPredictionCol).setOutputCol("predictedLabel").setLabels(labels)
+    val stages = indexer :: tokenizers ++: hashingTFs ++: (assembler :: classifier :: labelConverter :: Nil)
+    val pipeline = new Pipeline().setStages(stages.toArray)
+    pipeline.fit(training)
+  }
+  
+  def OneVsRestMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
+    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+    val cols = training.schema.fields.tail
+    //training.show()
+    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid("skip")
+    val labels = indexer.fit(training).labels
+    val (tokenizers, hashingTFs) = cols.flatMap(col => {
+      col.dataType match {
+        case StringType => {
+          val tokenizer = new RegexTokenizer().setInputCol(col.name).setOutputCol(s"${col.name}_words")
+          val hashingTF = new HashingTF().setInputCol(tokenizer.getOutputCol).setOutputCol(s"${col.name}_features").setNumFeatures(20)
+          Some((tokenizer, hashingTF))
+        }
+        case _ => None
+      }
+    }).unzip
+    val assmblerCols = cols.flatMap(col => {
+      col.dataType match {
+        case StringType => Some(s"${col.name}_features")
+        case IntegerType | LongType | DoubleType => Some(col.name)
+        case _ => None
+      }
+    })
+    val assembler = new VectorAssembler().setInputCols(assmblerCols.toArray).setOutputCol("features")
+    val classifier = new LogisticRegression().setMaxIter(10).setTol(1E-6).setFitIntercept(true).setLabelCol("label").setFeaturesCol("features")
+    val ovr = new OneVsRest().setClassifier(classifier)
+    val labelConverter = new IndexToString().setInputCol(classifier.getPredictionCol).setOutputCol("predictedLabel").setLabels(labels)
+    val stages = indexer :: tokenizers ++: hashingTFs ++: (assembler :: ovr :: labelConverter :: Nil)
+    val pipeline = new Pipeline().setStages(stages.toArray)
+    pipeline.fit(training)
+  }
+  
+  def LinearSupportVectorMachineBinaryclassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
+    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+    val cols = training.schema.fields.tail
+    //training.show()
+    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid("skip")
+    val labels = indexer.fit(training).labels
+    val (tokenizers, hashingTFs) = cols.flatMap(col => {
+      col.dataType match {
+        case StringType => {
+          val tokenizer = new RegexTokenizer().setInputCol(col.name).setOutputCol(s"${col.name}_words")
+          val hashingTF = new HashingTF().setInputCol(tokenizer.getOutputCol).setOutputCol(s"${col.name}_features").setNumFeatures(20)
+          Some((tokenizer, hashingTF))
+        }
+        case _ => None
+      }
+    }).unzip
+    val assmblerCols = cols.flatMap(col => {
+      col.dataType match {
+        case StringType => Some(s"${col.name}_features")
+        case IntegerType | LongType | DoubleType => Some(col.name)
+        case _ => None
+      }
+    })
+    val assembler = new VectorAssembler().setInputCols(assmblerCols.toArray).setOutputCol("features")
+    val classifier = new LinearSVC().setMaxIter(10).setRegParam(0.1).setLabelCol("label").setFeaturesCol("features")
+    val labelConverter = new IndexToString().setInputCol(classifier.getPredictionCol).setOutputCol("predictedLabel").setLabels(labels)
+    val stages = indexer :: tokenizers ++: hashingTFs ++: (assembler :: classifier :: labelConverter :: Nil)
+    val pipeline = new Pipeline().setStages(stages.toArray)
+    pipeline.fit(training)
+  }
+  
+  def MultilayerPerceptronMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
+    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+    val cols = training.schema.fields.tail
+    //training.show()
+    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid("skip")
+    val labels = indexer.fit(training).labels
+    val (tokenizers, hashingTFs) = cols.flatMap(col => {
+      col.dataType match {
+        case StringType => {
+          val tokenizer = new RegexTokenizer().setInputCol(col.name).setOutputCol(s"${col.name}_words")
+          val hashingTF = new HashingTF().setInputCol(tokenizer.getOutputCol).setOutputCol(s"${col.name}_features").setNumFeatures(20)
+          Some((tokenizer, hashingTF))
+        }
+        case _ => None
+      }
+    }).unzip
+    val assmblerCols = cols.flatMap(col => {
+      col.dataType match {
+        case StringType => Some(s"${col.name}_features")
+        case IntegerType | LongType | DoubleType => Some(col.name)
+        case _ => None
+      }
+    })
+    val assembler = new VectorAssembler().setInputCols(assmblerCols.toArray).setOutputCol("features")
+    
+    import org.apache.spark.sql.functions.countDistinct
+    import org.apache.spark.sql.functions.col
+    val classCount = training.select(countDistinct(col(params.predictionCol))).head.getLong(0)
+    val layers = Array[Int](assmblerCols.length, 8, 4, classCount.toInt)
+    val classifier = new MultilayerPerceptronClassifier()
+      .setLayers(layers).setBlockSize(128).setSeed(1234L).setMaxIter(100).setLabelCol("label").setFeaturesCol("features")
+    val labelConverter = new IndexToString().setInputCol(classifier.getPredictionCol).setOutputCol("predictedLabel").setLabels(labels)
+    val stages = indexer :: tokenizers ++: hashingTFs ++: (assembler :: classifier :: labelConverter :: Nil)
     val pipeline = new Pipeline().setStages(stages.toArray)
     pipeline.fit(training)
   }

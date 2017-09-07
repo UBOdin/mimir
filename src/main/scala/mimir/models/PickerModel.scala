@@ -7,6 +7,7 @@ import mimir.util._
 import mimir.Database
 import mimir.ml.spark.SparkML
 import mimir.util.TextUtils.Levenshtein
+import mimir.ml.spark.SparkML.{SparkModelGeneratorParams => ModelParams }
 
 /**
  * A model representing a key-repair choice.
@@ -157,7 +158,7 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
   def train(sparkMLInstModelGen:(() => SparkML,SparkML.SparkModelGenerator)) : (SparkML, SparkML.SparkModel) = {
     val (sparkMLInst, modelGen) = sparkMLInstModelGen
     val trainingQuery = Limit(0, Some(TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)), Project(pickFromCols.map(col => ProjectArg(col, Var(col))), source)))
-    classifierModel = Some(modelGen(trainingQuery, db, pickFromCols.head))
+    classifierModel = Some(modelGen(ModelParams(trainingQuery, db, pickFromCols.head)))
     sparkMLInstance = Some(sparkMLInst)
     db.models.persist(this)
     (sparkMLInst(), classifierModel.get)
@@ -183,24 +184,6 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
       results.toList.map(row => (row.provenance :: row.tuple.toList).toSeq)
     })
     val predictions = sparkMLInst.applyModel(classifier, ("rowid", TString()) +: (pickFromCols.zip(colTypes)), tuples)
-    //val sqlContext = MultiClassClassification.getSparkSqlContext()
-    //import sqlContext.implicits._  
-    
-    //method 1: window, rank, and drop
-    /*import org.apache.spark.sql.functions.row_number
-    import org.apache.spark.sql.expressions.Window
-    val w = Window.partitionBy($"rowid").orderBy($"probability".desc)
-    val topPredictionsForEachRow = predictions.withColumn("rn", row_number.over(w)).where($"rn" === 1).drop("rn")*/
-    
-    //method 2: group and first
-    /*import org.apache.spark.sql.functions.first
-    val topPredictionsForEachRow = predictions.sort($"rowid", $"probability".desc).groupBy($"rowid").agg(first(predictions.columns.tail.head).alias(predictions.columns.tail.head), predictions.columns.tail.tail.map(col => first(col).alias(col) ):_*) 
-   
-    topPredictionsForEachRow.select("rowid", "predictedLabel").collect().map(row => {
-      classificationCache(row.getString(0)) = mimir.parser.ExpressionParser.expr( row.getString(1) ).asInstanceOf[PrimitiveValue]
-    })*/
-    
-    //method 3: manually
     val predictionMap = sparkMLInst.extractPredictions(classifier, predictions).groupBy(_._1).map { case (k,v) => (k,v.map(_._2))}
     classifyAllPredictions = Some(predictionMap)
     

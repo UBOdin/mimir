@@ -11,7 +11,7 @@ import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.evaluation.RegressionEvaluator
 import org.apache.spark.ml.feature.VectorIndexer
 import org.apache.spark.ml.feature.VectorAssembler
-import org.apache.spark.ml.regression.{RandomForestRegressionModel, RandomForestRegressor, GBTRegressor, DecisionTreeRegressor, LinearRegression, GeneralizedLinearRegression}
+import org.apache.spark.ml.regression.{RandomForestRegressionModel, RandomForestRegressor, GBTRegressor, DecisionTreeRegressor, LinearRegression, GeneralizedLinearRegression, IsotonicRegression}
 
 
 object Regression extends SparkML {
@@ -38,8 +38,8 @@ object Regression extends SparkML {
   override def prepareValueApply(value:PrimitiveValue, t:Type): Any = {
     value match {
       case NullPrimitive() => t match {
-        case TInt() => 0L
-        case TFloat() => 0.0
+        case TInt() => null
+        case TFloat() => null
         case TDate() => ""
         case TString() => ""
         case TBool() => false
@@ -90,8 +90,8 @@ object Regression extends SparkML {
         (item.toString(), 1.0)}.toSeq    
   }
   
-  def RandomForestRegressorModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType)( query:Operator, db:Database, predictionCol:String): PipelineModel = {
-    val training = prepareData(query, db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def RandomForestRegressorModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
+    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     val cols = training.schema.fields.tail
     val assmblerCols = cols.flatMap(col => {
       col.dataType match {
@@ -108,7 +108,7 @@ object Regression extends SparkML {
     
     // Train a RandomForest model.
     val rf = new RandomForestRegressor()
-      .setLabelCol(predictionCol)
+      .setLabelCol(params.predictionCol)
       .setFeaturesCol("indexedFeatures")
      
     // Chain indexer and forest in a Pipeline.
@@ -118,8 +118,8 @@ object Regression extends SparkML {
     pipeline.fit(training)
   }
   
-  def GradientBoostedTreeRegressorModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType)( query:Operator, db:Database, predictionCol:String): PipelineModel = {
-    val training = prepareData(query, db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def GradientBoostedTreeRegressorModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
+    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     val cols = training.schema.fields.tail
     val assmblerCols = cols.flatMap(col => {
       col.dataType match {
@@ -135,7 +135,7 @@ object Regression extends SparkML {
     
     // Train a  model.
     val rf = new GBTRegressor()
-      .setLabelCol(predictionCol)
+      .setLabelCol(params.predictionCol)
       .setFeaturesCol("indexedFeatures")
       .setMaxIter(10)
       
@@ -147,8 +147,8 @@ object Regression extends SparkML {
   }
   
   
-  def DecisionTreeRegressorModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType)( query:Operator, db:Database, predictionCol:String): PipelineModel = {
-    val training = prepareData(query, db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def DecisionTreeRegressorModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
+    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     val cols = training.schema.fields.tail
     val assmblerCols = cols.flatMap(col => {
       col.dataType match {
@@ -164,7 +164,7 @@ object Regression extends SparkML {
     
     // Train a  model.
     val rf = new DecisionTreeRegressor()
-      .setLabelCol(predictionCol)
+      .setLabelCol(params.predictionCol)
       .setFeaturesCol("indexedFeatures")
       
     // Chain indexer and forest in a Pipeline.
@@ -174,8 +174,8 @@ object Regression extends SparkML {
     pipeline.fit(training)
   }
   
-  def LinearRegressorModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType)( query:Operator, db:Database, predictionCol:String): PipelineModel = {
-    val training = prepareData(query, db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def LinearRegressorModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
+    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     val cols = training.schema.fields.tail
     val assmblerCols = cols.flatMap(col => {
       col.dataType match {
@@ -190,7 +190,7 @@ object Regression extends SparkML {
       .setMaxIter(10)
       .setRegParam(0.3)
       .setElasticNetParam(0.8)
-      .setLabelCol(predictionCol)
+      .setLabelCol(params.predictionCol)
       .setFeaturesCol("features")
       
     // Chain indexer and forest in a Pipeline.
@@ -200,8 +200,8 @@ object Regression extends SparkML {
     pipeline.fit(training)
   }
   
-  def GeneralizedLinearRegressorModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType)( query:Operator, db:Database, predictionCol:String): PipelineModel = {
-    val training = prepareData(query, db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def GeneralizedLinearRegressorModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
+    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     val cols = training.schema.fields.tail
     val assmblerCols = cols.flatMap(col => {
       col.dataType match {
@@ -217,8 +217,29 @@ object Regression extends SparkML {
       .setLink("identity")
       .setMaxIter(10)
       .setRegParam(0.3)
-      .setLabelCol(predictionCol)
+      .setLabelCol(params.predictionCol)
       .setFeaturesCol("features")
+      
+    // Chain indexer and forest in a Pipeline.
+    val pipeline = new Pipeline()
+      .setStages(Array(assembler, rf))
+   
+    pipeline.fit(training)
+  }
+  
+  def IsotonicRegressorModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
+    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+    val cols = training.schema.fields.tail
+    val assmblerCols = cols.flatMap(col => {
+      col.dataType match {
+        case IntegerType | LongType | DoubleType => Some(col.name)
+        case _ => None
+      }
+    })
+    val assembler = new VectorAssembler().setInputCols(assmblerCols.toArray).setOutputCol("features")
+   
+    // Train a  model.
+    val rf = new IsotonicRegression().setLabelCol(params.predictionCol).setFeaturesCol("features")
       
     // Chain indexer and forest in a Pipeline.
     val pipeline = new Pipeline()
