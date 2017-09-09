@@ -341,8 +341,8 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
 
     if (!edgeTable.isEmpty) {
       for((a1, a2, strength) <- edgeTable) {
-        if(a1 == 25 || a2 == 25) {
-          println(s"($a1,$a2)")
+        if(a2 == 25) {
+          println(s"($a1,$a2):$strength")
         }
         if(!fdGraph.containsEdge((a2,a1))) {
           fdGraph.addEdge((a1,a2), a1.toInt, a2.toInt, EdgeType.DIRECTED)

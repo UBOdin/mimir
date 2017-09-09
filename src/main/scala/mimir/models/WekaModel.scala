@@ -419,6 +419,7 @@ class FuncDepModel(name: String, colName: String, query: Operator)
     val fd = new FuncDep()
     fd.buildEntities(db, query, QueryNamer(query))
     //  use egde strength for choosing incoming edges
+    println(s"colidx: $colIdx")
 
   }
 
