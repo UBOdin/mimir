@@ -50,6 +50,9 @@
   <logger name="mimir.optimizer.operator.PartitionUncertainJoins$" level="WARN"/>
   <logger name="mimir.optimizer.operator.InlineProjections$"       level="WARN"/>
 
+  <!--+++++++++++++++++++++++  PLOT  ++++++++++++++++++++++++++-->
+  <logger name="mimir.plot.Plot$"                                  level="WARN"/>
+
   <!--+++++++++++++++++++++  Provenance  ++++++++++++++++++++++-->
   <logger name="mimir.provenance.Provenance$"                      level="WARN"/>
 
@@ -67,12 +70,15 @@
   <logger name="mimir.statistics.SystemCatalog"                    level="WARN"/>
 
   <!--+++++++++++++++++++++++  Util  ++++++++++++++++++++++++++-->
-  <logger name="mimir.util.LoadCSV$"                            level="INFO"/> <!-- Use INFO to track stats -->
-  <logger name="mimir.util.NonStrictCSVParser"                  level="INFO"/> <!-- Use INFO to track stats -->
-  <logger name="mimir.util.LineReaderInputSource"               level="WARN"/>
+  <logger name="mimir.util.LoadCSV$"                               level="INFO"/> <!-- Use INFO to track stats -->
+  <logger name="mimir.util.NonStrictCSVParser"                     level="INFO"/> <!-- Use INFO to track stats -->
+  <logger name="mimir.util.LineReaderInputSource"                  level="WARN"/>
+  <logger name="mimir.util.PythonProcess$"                         level="WARN"/>
+  <logger name="mimir.util.TextUtils$"                             level="WARN"/>
+
 
   <!--+++++++++++++++++++++++  Views  +++++++++++++++++++++++++-->
-  <logger name="mimir.views.ViewManager"                        level="WARN"/>
+  <logger name="mimir.views.ViewManager"                           level="WARN"/>
 
  
   <root level="TRACE">

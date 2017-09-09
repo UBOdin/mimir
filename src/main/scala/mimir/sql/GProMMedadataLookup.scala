@@ -121,7 +121,7 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
         case TFloat() => FloatPrimitive(0.0)
         case TDate() => DatePrimitive(0,0,0)
         case TTimestamp() => TimestampPrimitive(0,0,0,0,0,0,0)
-        case TInterval() => IntervalPrimitive(0,0,0,0,0,0,0,0)
+        case TInterval() => IntervalPrimitive(org.joda.time.Period.ZERO)
         case TString() => StringPrimitive("")
         case TBool() => BoolPrimitive(false)
         case TRowId() => RowIdPrimitive("1")

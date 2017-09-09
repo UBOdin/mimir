@@ -30,10 +30,14 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
     update("INSERT INTO T (C, D) VALUES(2, 3)")
     update("INSERT INTO T (C, D) VALUES(3, 2)")
     update("INSERT INTO T (C, D) VALUES(4, 1)")
+    memctx = GProMWrapper.inst.gpromCreateMemContext()
+    qmemctx = GProMWrapper.inst.createMemContextName("QUERY_MEM_CONTEXT")
+    
   }
   
   def afterAll = {
-  
+    GProMWrapper.inst.gpromFreeMemContext(qmemctx)
+    GProMWrapper.inst.gpromFreeMemContext(memctx)
   }
   
 
@@ -80,38 +84,36 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
         (s"Queries for Aliased Tables with Aggregates with Expressions of Aggregates with Aliased Attributes Containing Expressions - run $i",
             "SELECT SUM(RB.A + RB.B) + SUM(RB.A + RB.B) AS SAB, COUNT(RB.B) AS CB FROM R RB")
         ).zipWithIndex){
-        daq =>  org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized { 
-            {createGProMMemoryContext(daq)}
+        daq =>  { 
+            //{createGProMMemoryContext(daq)}
             {translateOperatorsFromMimirToGProM(daq)}
             {translateOperatorsFromGProMToMimir(daq)}
             {translateOperatorsFromMimirToGProMToMimir(daq)}
             {translateOperatorsFromGProMToMimirToGProM(daq)}
             {translateOperatorsFromMimirToGProMForRewriteFasterThanThroughSQL(daq)}
-            {freeGProMMemoryContext(daq)}
+            //{freeGProMMemoryContext(daq)}
         }
       }
     }
   }
   
   def createGProMMemoryContext(descAndQuery : ((String, String), Int)) = s"Create GProM Memory Context for: ${descAndQuery._2} ${descAndQuery._1._1}" >> {
-    //org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized{
-      memctx = GProMWrapper.inst.gpromCreateMemContext()
-      qmemctx = GProMWrapper.inst.createMemContextName("QUERY_MEM_CONTEXT")
-      (qmemctx != null) must be equalTo true
-    //}
+    memctx = GProMWrapper.inst.gpromCreateMemContext()
+    qmemctx = GProMWrapper.inst.createMemContextName("QUERY_MEM_CONTEXT")
+    (qmemctx != null) must be equalTo true
+    
   }
   
   def freeGProMMemoryContext(descAndQuery : ((String, String), Int)) = s"Free GProM Memory Context for: ${descAndQuery._2} ${descAndQuery._1._1}" >> {
-    //org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized{
-      GProMWrapper.inst.gpromFreeMemContext(qmemctx)
+    GProMWrapper.inst.gpromFreeMemContext(qmemctx)
       GProMWrapper.inst.gpromFreeMemContext(memctx)
       memctx = null
       qmemctx = null
-    //}
     memctx must be equalTo null
   }
   
   def translateOperatorsFromMimirToGProM(descAndQuery : ((String, String), Int)) =  s"Translate Operators from Mimir to GProM for: ${descAndQuery._2} ${descAndQuery._1._1}" >> {
+      org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized {
          val queryStr = descAndQuery._1._2 
          val statements = db.parse(queryStr)
          val testOper = db.sql.convert(statements.head.asInstanceOf[Select])
@@ -131,9 +133,11 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
              getQueryResults(resQuery) must be equalTo getQueryResults(queryStr)
            }
          ret
+      }
     }
   
   def translateOperatorsFromGProMToMimir(descAndQuery : ((String, String), Int)) =  s"Translate Operators from GProM to Mimir for: ${descAndQuery._2} ${descAndQuery._1._1}" >> {
+       org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized {
          val queryStr = descAndQuery._1._2 
          val statements = db.parse(queryStr)
          val testOper2 = db.sql.convert(statements.head.asInstanceOf[Select])
@@ -153,9 +157,11 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
                getQueryResults(testOper) must be equalTo getQueryResults(queryStr)
              }
            ret
+       }
     }
     
     def translateOperatorsFromMimirToGProMToMimir(descAndQuery : ((String, String), Int)) =  s"Translate Operators from Mimir to GProM to Mimir for: ${descAndQuery._2} ${descAndQuery._1._1}" >> {
+         org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized {
            val queryStr = descAndQuery._1._2
            val statements = db.parse(queryStr)
            val testOper = db.sql.convert(statements.head.asInstanceOf[Select])
@@ -176,9 +182,11 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
                  getQueryResults(testOper) must be equalTo getQueryResults(queryStr)
                }
              ret
+         }
     }
     
     def translateOperatorsFromGProMToMimirToGProM(descAndQuery : ((String, String), Int)) =  s"Translate Operators from GProM to Mimir To GProM for: ${descAndQuery._2} ${descAndQuery._1._1}" >> {
+       org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized {
          val queryStr = descAndQuery._1._2 
          //val memctx = GProMWrapper.inst.gpromCreateMemContext() 
          val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel(queryStr+";")
@@ -198,10 +206,12 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
              getQueryResults(resQuery) must be equalTo getQueryResults(queryStr)
            } 
          ret
+       }
     }
 
     
     def translateOperatorsFromMimirToGProMForRewriteFasterThanThroughSQL(descAndQuery : ((String, String), Int)) =  s"Translate Operators Faster-ish Than Rewriting SQL for: ${descAndQuery._2} ${descAndQuery._1._1}" >> {
+       org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized {
          val queryStr = descAndQuery._1._2 
          val statements = db.parse(queryStr)
          val testOper = db.sql.convert(statements.head.asInstanceOf[Select])
@@ -228,6 +238,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
          //timeForRewriteThroughOperatorTranslation._1 must be equalTo timeForRewriteThroughSQL._1
          val ret = (timeForRewriteThroughOperatorTranslation._2 should be lessThan timeForRewriteThroughSQL._2) or (timeForRewriteThroughOperatorTranslation._2 should be lessThan (timeForRewriteThroughSQL._2*2))
          ret
+       }
     }
     
     def time[F](anonFunc: => F): (F, Long) = {  

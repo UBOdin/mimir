@@ -35,6 +35,11 @@ class Eval(
    * Evaluate the specified expression and cast the result to a Boolean
    */
   def evalBool(e: Expression, bindings: Map[String, PrimitiveValue] = Map[String, PrimitiveValue]()): Boolean =
+    evalBool(e, bindings.get(_))
+  /**
+   * Evaluate the specified expression and cast the result to a Boolean
+   */
+  def evalBool(e: Expression, bindings: (String => Option[PrimitiveValue])): Boolean =
     eval(e, bindings) match {
       case BoolPrimitive(v) => v
 
@@ -56,10 +61,19 @@ class Eval(
   def eval(e: Expression, 
            bindings: Map[String, PrimitiveValue]
   ): PrimitiveValue = 
+    eval(e, bindings.get(_))
+
+  /**
+   * Evaluate the specified expression given a set of Var/Value bindings
+   * and return the primitive value of the result
+   */
+  def eval(e: Expression, 
+           bindings: (String => Option[PrimitiveValue])
+  ): PrimitiveValue = 
   {
     e match {
       case p : PrimitiveValue => p
-      case Var(v) => bindings.get(v) match {
+      case Var(v) => bindings(v) match {
         case None => throw new RAException("Variable Out Of Scope: "+v+" (in "+bindings+")");
         case Some(s) => s
       }
@@ -213,30 +227,35 @@ object Eval
         BoolPrimitive(a.asBool || b.asBool)
 
       case (Arith.Add, TInterval()) =>
-	val p = a.asInterval.plus(b.asInterval);
-	IntervalPrimitive(p.getYears,p.getMonths,p.getWeeks,p.getDays,p.getHours,p.getMinutes,p.getSeconds,p.getMillis)
-
+      	IntervalPrimitive(a.asInterval.plus(b.asInterval))
 
       case (Arith.Sub, TInterval()) =>
-	(a.getType, b.getType) match {
-		case (TInterval(),TInterval()) =>
-			val p = a.asInterval.minus(b.asInterval);
-			IntervalPrimitive(p.getYears,p.getMonths,p.getWeeks,p.getDays,p.getHours,p.getMinutes,p.getSeconds,p.getMillis)
+      	(a.getType, b.getType) match {
+      		case (TInterval(),TInterval()) =>
+      			IntervalPrimitive(a.asInterval.minus(b.asInterval))
+      		case (TDate() | TTimestamp(),TDate() | TTimestamp()) =>
+      			IntervalPrimitive(new org.joda.time.Period(b.asDateTime, a.asDateTime))
+      		case (_, _) =>
+      			throw new RAException(s"Invalid Arithmetic $a $op $b")
+      	}
 
-		case (TDate() | TTimestamp(),TDate() | TTimestamp()) =>
-			val p = new org.joda.time.Period(b.asDateTime, a.asDateTime)
-			IntervalPrimitive(p.getYears,p.getMonths,p.getWeeks,p.getDays,p.getHours,p.getMinutes,p.getSeconds,p.getMillis)
-		case (_, _) =>
-			throw new RAException(s"Invalid Arithmetic $a $op $b")
-	}
-
+      case (Arith.Mult, TInterval()) =>
+        (a.getType, b.getType) match {
+          case (TInt(), TInterval()) =>
+            IntervalPrimitive(b.asInterval.multipliedBy(a.asInt))
+          case (TInterval(), TInt()) =>
+            IntervalPrimitive(a.asInterval.multipliedBy(b.asInt))
+          case (_, _) =>
+            throw new RAException(s"Invalid Arithmetic $a $op $b")
+        }
 
       case (Arith.Add, TTimestamp()) =>
-	val d = a.asDateTime.plus(b.asInterval)
-	TimestampPrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth,d.getHourOfDay,d.getMinuteOfHour,d.getSecondOfMinute,d. getMillisOfSecond)
+      	val d = a.asDateTime.plus(b.asInterval)
+      	TimestampPrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth,d.getHourOfDay,d.getMinuteOfHour,d.getSecondOfMinute,d. getMillisOfSecond)
+
       case (Arith.Sub, TTimestamp()) =>
-	val d = a.asDateTime.minus(b.asInterval)
-	TimestampPrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth,d.getHourOfDay,d.getMinuteOfHour,d.getSecondOfMinute,d. getMillisOfSecond)	
+      	val d = a.asDateTime.minus(b.asInterval)
+      	TimestampPrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth,d.getHourOfDay,d.getMinuteOfHour,d.getSecondOfMinute,d. getMillisOfSecond)	
 
       case (_, _) => 
         throw new RAException(s"Invalid Arithmetic $a $op $b")

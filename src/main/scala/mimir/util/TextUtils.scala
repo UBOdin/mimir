@@ -1,8 +1,9 @@
 package mimir.util
 
+import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
 
-object TextUtils {
+object TextUtils extends LazyLogging {
 
   def parsePrimitive(t: Type, s: String): PrimitiveValue = 
   {
@@ -31,8 +32,10 @@ object TextUtils {
 
   def parseDate(s: String): PrimitiveValue =
   {
+    logger.trace(s"Parse Date: '$s'")
     s match {
       case dateRegexp(y, m, d) => 
+        logger.trace(s"   -> $y-$m-$d  -> ${DatePrimitive(y.toInt, m.toInt, d.toInt)}")
         DatePrimitive(y.toInt, m.toInt, d.toInt)
       case _ => NullPrimitive()
     }
@@ -40,6 +43,7 @@ object TextUtils {
 
   def parseTimestamp(s: String): PrimitiveValue =
   {
+    logger.trace(s"Parse Timestamp: '$s'")
     s match {
       case timestampRegexp(yr, mo, da, hr, mi, se) => 
         val seconds = se.toDouble
@@ -50,10 +54,11 @@ object TextUtils {
 
   def parseInterval(s: String): PrimitiveValue =
   {
+    logger.trace(s"Parse Interval: '$s'")
     s match {
       case intervalRegexp(y, m, w, d, hh, mm, se) => 
         val seconds = se.toDouble
-        IntervalPrimitive(y.toInt, m.toInt, w.toInt, d.toInt, hh.toInt, mm.toInt, seconds.toInt, (seconds*1000).toInt % 1000)
+        IntervalPrimitive(new org.joda.time.Period(y.toInt, m.toInt, w.toInt, d.toInt, hh.toInt, mm.toInt, seconds.toInt, (seconds * 1000).toInt % 1000))
       case _ => NullPrimitive()
     }
   }

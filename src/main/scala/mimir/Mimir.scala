@@ -6,8 +6,9 @@ import java.sql.SQLException
 import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
-import mimir.util.{TimeUtils,ExperimentalOptions,LineReaderInputSource}
+import mimir.util.{TimeUtils,ExperimentalOptions,LineReaderInputSource,PythonProcess}
 import mimir.algebra._
+import mimir.statistics.DetectSeries
 import mimir.plot.Plot
 import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
 import net.sf.jsqlparser.statement.Statement
@@ -62,6 +63,7 @@ object Mimir extends LazyLogging {
       db.loadTable(conf.loadTable(), conf.loadTable()+".csv");
     } else {
       var source: Reader = null;
+      var prompt: (() => Unit) = { () =>  }
 
       conf.precache.foreach( (opt) => opt.split(",").foreach( (table) => {
         output.print(s"Precaching... $table")
@@ -73,8 +75,14 @@ object Mimir extends LazyLogging {
       }
 
       if(conf.file.get == None || conf.file() == "-"){
-        source = new LineReaderInputSource(terminal)
-        output = new PrettyOutputFormat(terminal)
+        if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
+          source = new LineReaderInputSource(terminal)
+          output = new PrettyOutputFormat(terminal)
+        } else {
+          source = new InputStreamReader(System.in)
+          output = DefaultOutputFormat
+          prompt = () => { System.out.print("\nmimir> "); System.out.flush(); }
+        }
       } else {
         source = new FileReader(conf.file())
         output = DefaultOutputFormat
@@ -83,20 +91,20 @@ object Mimir extends LazyLogging {
       if(!conf.quiet()){
         output.print("   ... ready")
       }
-      eventLoop(source)
+      eventLoop(source, prompt)
     }
 
     db.backend.close()
     if(!conf.quiet()) { output.print("\n\nDone.  Exiting."); }
   }
 
-  def eventLoop(source: Reader): Unit =
+  def eventLoop(source: Reader, prompt: (() => Unit)): Unit =
   {
     var parser = new MimirJSqlParser(source);
     var done = false;
     do {
       try {
-
+        prompt()
         val stmt: Statement = parser.Statement();
 
         stmt match {
@@ -263,6 +271,10 @@ object Mimir extends LazyLogging {
         })
       case Function("LOG", _) =>
         output.print("Syntax: LOG('logger') | LOG('logger', TRACE|DEBUG|INFO|WARN|ERROR)");
+
+      case Function("TEST_PYTHON", args) =>
+        val p = PythonProcess(s"test ${args.map { _.toString }.mkString(" ")}")
+        output.print(s"Python Exited: ${p.exitValue()}")
 
     }
 

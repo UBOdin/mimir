@@ -28,4 +28,6 @@ trait ResultIterator
     new ResultSeq(super.toIndexedSeq, tupleSchema, annotationSchema)
   override def toList: List[Row] = 
     this.toIndexedSeq.toList
+
+  def tuples = map { _.tuple }.toIndexedSeq
 }
