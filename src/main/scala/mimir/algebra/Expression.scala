@@ -100,7 +100,8 @@ object Arith extends Enumeration {
   /**
    * Convert from the operator's Arith.Op representation to a string
    */
-  def opString(v: Op): String = {
+  def opString(v: Op): String = 
+  {
     v match {
       case Add => "+"
       case Sub => "-"
@@ -117,7 +118,8 @@ object Arith extends Enumeration {
   /**
    * Is this binary operation a boolean operator (AND/OR)
    */
-  def isBool(v: Op): Boolean = {
+  def isBool(v: Op): Boolean = 
+  {
     v match {
       case And | Or => true
       case _ => false
@@ -138,7 +140,8 @@ object Cmp extends Enumeration {
   type Op = Value
   val Eq, Neq, Gt, Lt, Gte, Lte, Like, NotLike = Value
   
-  def negate(v: Op): Op = {
+  def negate(v: Op): Op = 
+  {
     v match {
       case Eq => Neq
       case Neq => Eq
@@ -150,8 +153,23 @@ object Cmp extends Enumeration {
       case NotLike => Like
     }
   }
+
+  def flip(v: Op): Option[Op] = 
+  {
+    v match {
+      case Eq      => Some(Eq)
+      case Neq     => Some(Neq)
+      case Gt      => Some(Lt)
+      case Gte     => Some(Lte)
+      case Lt      => Some(Gt)
+      case Lte     => Some(Gte)
+      case Like    => None
+      case NotLike => None
+    }
+  }
   
-  def opString(v: Op): String = {
+  def opString(v: Op): String = 
+  {
     v match {
       case Eq => "="
       case Neq => "<>"
@@ -445,7 +463,7 @@ case class FloatPrimitive(v: Double)
  */
 @SerialVersionUID(100L)
 case class DatePrimitive(y: Int, m: Int, d: Int)
-  extends PrimitiveValue(TDate())
+  extends PrimitiveValue(TDate()) with Comparable[DatePrimitive]
 {
   override def toString() = s"DATE '${asString}'"
   def asLong: Long = throw new TypeException(TDate(), TInt(), "Hard Cast");
@@ -454,7 +472,7 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
   def asString: String = f"$y%04d-$m%02d-$d%02d"
   def asInterval: Period = throw new TypeException(TDate(), TInterval(), "Hard Cast")
   def payload: Object = (y, m, d).asInstanceOf[Object];
-  final def compare(c: DatePrimitive): Integer = {
+  final def compareTo(c: DatePrimitive): Int = {
     if(c.y < y){ -1 }
     else if(c.y > y) { 1 }
     else if(c.m < m) { -1 }
@@ -464,10 +482,10 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
     else { 0 }
   }
 
-  def >(c:DatePrimitive): Boolean = compare(c) > 0
-  def >=(c:DatePrimitive): Boolean = compare(c) >= 0
-  def <(c:DatePrimitive): Boolean = compare(c) < 0
-  def <=(c:DatePrimitive): Boolean = compare(c) <= 0
+  def >(c:DatePrimitive): Boolean = compareTo(c) > 0
+  def >=(c:DatePrimitive): Boolean = compareTo(c) >= 0
+  def <(c:DatePrimitive): Boolean = compareTo(c) < 0
+  def <=(c:DatePrimitive): Boolean = compareTo(c) <= 0
 
   def asDateTime: DateTime = new DateTime(y, m, d, 0, 0)
 }
@@ -478,7 +496,7 @@ case class DatePrimitive(y: Int, m: Int, d: Int)
   */
 @SerialVersionUID(100L)
 case class TimestampPrimitive(y: Int, m: Int, d: Int, hh: Int, mm: Int, ss: Int, ms: Int)
-  extends PrimitiveValue(TTimestamp())
+  extends PrimitiveValue(TTimestamp()) with Comparable[TimestampPrimitive]
 {
   override def toString() = s"DATE '${asString}'"
   def asLong: Long = throw new TypeException(TDate(), TInt(), "Hard Cast");
@@ -487,7 +505,7 @@ case class TimestampPrimitive(y: Int, m: Int, d: Int, hh: Int, mm: Int, ss: Int,
   def asString: String = f"$y%04d-$m%02d-$d%02d $hh%02d:$mm%02d:$ss%02d.$ms%04d"
   def asInterval: Period = throw new TypeException(TDate(), TInterval(), "Hard Cast")
   def payload: Object = (y, m, d).asInstanceOf[Object];
-  final def compare(c: TimestampPrimitive): Integer = {
+  final def compareTo(c: TimestampPrimitive): Int = {
     if(c.y < y){ -1 }
     else if(c.y > y) { 1 }
     else if(c.m < m) { -1 }
@@ -503,10 +521,10 @@ case class TimestampPrimitive(y: Int, m: Int, d: Int, hh: Int, mm: Int, ss: Int,
     else { 0 }
   }
 
-  def >(c:TimestampPrimitive): Boolean = compare(c) > 0
-  def >=(c:TimestampPrimitive): Boolean = compare(c) >= 0
-  def <(c:TimestampPrimitive): Boolean = compare(c) < 0
-  def <=(c:TimestampPrimitive): Boolean = compare(c) <= 0
+  def >(c:TimestampPrimitive): Boolean = compareTo(c) > 0
+  def >=(c:TimestampPrimitive): Boolean = compareTo(c) >= 0
+  def <(c:TimestampPrimitive): Boolean = compareTo(c) < 0
+  def <=(c:TimestampPrimitive): Boolean = compareTo(c) <= 0
 
   def asDateTime: DateTime = new DateTime(y, m, d, hh, mm, ss, ms)
 }

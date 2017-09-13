@@ -195,7 +195,7 @@ object Eval
             a: PrimitiveValue, b: PrimitiveValue
   ): PrimitiveValue = {
     (op, Typechecker.escalate(
-      a.getType, b.getType, "Evaluate Arithmetic", Arithmetic(op, a, b)
+      a.getType, b.getType, op, "Evaluate Arithmetic", Arithmetic(op, a, b)
     )) match { 
       case (Arith.Add, TInt()) => 
         IntPrimitive(a.asLong + b.asLong)
@@ -262,6 +262,26 @@ object Eval
     }
   }
 
+  private final def cmpScaffold(a: PrimitiveValue, b: PrimitiveValue, op: Cmp.Op)(intOp: ((Long, Long) => Boolean))(floatOp: ((Double, Double) => Boolean))(cmpOp: (Int => Boolean)): BoolPrimitive =
+  {
+    BoolPrimitive(
+      Typechecker.leastUpperBound(a.getType, b.getType) match {
+        case Some(TInt()) => intOp(a.asLong, b.asLong)
+        case Some(TFloat()) => floatOp(a.asDouble, b.asDouble)
+        case Some(TDate()) =>
+          cmpOp(
+            a.asInstanceOf[DatePrimitive].
+             compareTo(b.asInstanceOf[DatePrimitive])
+          )
+        case Some(TTimestamp()) =>
+          cmpOp(
+            a.asInstanceOf[TimestampPrimitive].
+             compareTo(b.asInstanceOf[TimestampPrimitive])
+          )
+        case _ => throw new RAException(s"Invalid Comparison $a ${Cmp.opString(op)} $b")
+      }
+    )
+  }
   /**
    * Perform a comparison on two primitive values.
    */
@@ -278,49 +298,13 @@ object Eval
         case Cmp.Neq => 
           BoolPrimitive(!a.payload.equals(b.payload))
         case Cmp.Gt => 
-          Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
-            case TInt() => BoolPrimitive(a.asLong > b.asLong)
-            case TFloat() => BoolPrimitive(a.asDouble > b.asDouble)
-            case TDate() =>
-              BoolPrimitive(
-                a.asInstanceOf[DatePrimitive].
-                 compare(b.asInstanceOf[DatePrimitive])<0
-              )
-            case _ => throw new RAException("Invalid Comparison $a $op $b")
-          }
+          cmpScaffold(a, b, op){ _ > _ }{ _ > _ }{ _ < 0 }
         case Cmp.Gte => 
-          Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
-            case TInt() => BoolPrimitive(a.asLong >= b.asLong)
-            case TFloat() => BoolPrimitive(a.asDouble >= b.asDouble)
-            case TDate() =>
-              BoolPrimitive(
-                a.asInstanceOf[DatePrimitive].
-                 compare(b.asInstanceOf[DatePrimitive])<=0
-              )
-            case _ => throw new RAException("Invalid Comparison $a $op $b")
-          }
+          cmpScaffold(a, b, op){ _ >= _ }{ _ >= _ }{ _ <= 0 }
         case Cmp.Lt => 
-          Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
-            case TInt() => BoolPrimitive(a.asLong < b.asLong)
-            case TFloat() => BoolPrimitive(a.asDouble < b.asDouble)
-            case TDate() =>
-              BoolPrimitive(
-                a.asInstanceOf[DatePrimitive].
-                 compare(b.asInstanceOf[DatePrimitive])>0
-              )
-            case _ => throw new RAException("Invalid Comparison $a $op $b")
-          }
+          cmpScaffold(a, b, op){ _ < _ }{ _ < _ }{ _ > 0 }
         case Cmp.Lte => 
-          Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
-            case TInt() => BoolPrimitive(a.asLong <= b.asLong)
-            case TFloat() => BoolPrimitive(a.asDouble <= b.asDouble)
-            case TDate() =>
-              BoolPrimitive(
-                a.asInstanceOf[DatePrimitive].
-                 compare(b.asInstanceOf[DatePrimitive])>=0
-              )
-            case _ => throw new RAException("Invalid Comparison $a $op $b")
-          }
+          cmpScaffold(a, b, op){ _ <= _ }{ _ <= _ }{ _ >= 0 }
       }
     }
   }

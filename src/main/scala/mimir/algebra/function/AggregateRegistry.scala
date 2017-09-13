@@ -62,7 +62,7 @@ class AggregateRegistry
           throw new RAException("Invalid arg list ["+aggName+"]: "+argTypes.mkString(", "))
         }
         if(
-          t.zip(argTypes).exists { t => Typechecker.escalate(t._1, t._2) == None }
+          t.zip(argTypes).exists { t => Typechecker.leastUpperBound(t._1, t._2) == None }
         ){ 
           throw new RAException("Invalid arg list ["+aggName+"]: "+argTypes.mkString(", "))
         }
