@@ -48,6 +48,44 @@ object GeoFunctions
       },
       (_) => TFloat()
     )
+    fr.register("WEBGEOCODEDISTANCE", 
+      {  
+        case Seq(lat:PrimitiveValue, lon:PrimitiveValue,StringPrimitive(houseNumber), StringPrimitive(streetName),StringPrimitive(city),StringPrimitive(state),StringPrimitive(geocoder)) => {
+          val (url, latPath, lonPath) = geocoder match {
+            case "GOOGLE" => (s"https://maps.googleapis.com/maps/api/geocode/json?address=${s"${houseNumber.toDouble.toInt}+${streetName.replaceAll(" ", "+")},+${city.replaceAll(" ", "+")},+$state".replaceAll("\\+\\+", "+")}&key=AIzaSyAKc9sTF-pVezJY8-Dkuvw07v1tdYIKGHk", ".results[0].geometry.location.lat", ".results[0].geometry.location.lng")
+            case "OSM" | _ => (s"http://52.0.26.255/?format=json&street=${houseNumber.toDouble.toInt} $streetName&city=$city&state=$state".replaceAll("\\s", "%20"), "[0].lat", "[0].lon")
+          }
+          try {
+              val geoRes = mimir.util.HTTPUtils.getJson(url)
+              val glat = mimir.util.JsonUtils.seekPath( geoRes, latPath).toString().replaceAll("\"", "").toDouble
+              val glon = mimir.util.JsonUtils.seekPath( geoRes, lonPath).toString().replaceAll("\"", "").toDouble
+              FloatPrimitive(org.geotools.referencing.datum.DefaultEllipsoid.WGS84.orthodromicDistance(lon.asDouble, lat.asDouble, glon, glat))
+          } catch {
+              case ioe: Exception =>  {
+                println(ioe.toString())
+                NullPrimitive()
+              }
+          }
+        }
+      },
+      (x: Seq[Type]) => TFloat()
+    )
+    fr.register("METOLOCDST", 
+      {  
+        (args) => {
+          FloatPrimitive(DefaultEllipsoid.WGS84.orthodromicDistance(
+            mimir.sql.sqlite.MeToLocationDistance.myLon.get, //lon1
+            mimir.sql.sqlite.MeToLocationDistance.myLat.get, //lat1
+            args(1).asDouble, //lon2
+            args(0).asDouble  //lat2
+          ))
+        }
+      },
+      (args) => {
+        (0 until 2).foreach { i => Typechecker.assertNumeric(args(i), Function("METOLOCDST", List())) }; 
+        TFloat()
+      }
+    )
+  
   }
-
 }

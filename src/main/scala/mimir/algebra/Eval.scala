@@ -135,7 +135,7 @@ class Eval(
   def applyFunction(name: String, args: Seq[PrimitiveValue]): PrimitiveValue =
   {
     functions.flatMap { _.getOption(name) } match {
-      case Some(NativeFunction(_, op, _)) => 
+      case Some(NativeFunction(_, op, _, _)) => 
         op(args)
       case Some(ExpressionFunction(_, argNames, expr)) => 
         eval(expr, argNames.zip(args).toMap)

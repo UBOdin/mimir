@@ -151,7 +151,7 @@ class Typechecker(
 	def returnTypeOfFunction(name: String, args: Seq[Type]): Type = {
     try {
       functions.flatMap { _.getOption(name) } match {
-        case Some(NativeFunction(_, _, getType)) => 
+        case Some(NativeFunction(_, _, getType, _)) => 
           getType(args)
         case Some(ExpressionFunction(_, argNames, expr)) => 
           typeOf(expr, scope = argNames.zip(args).toMap)
