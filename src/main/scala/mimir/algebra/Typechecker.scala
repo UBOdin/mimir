@@ -334,42 +334,48 @@ object Typechecker
 	}
 	def escalate(a: Type, b: Type, op: Arith.Op): Option[Type] = 
 	{
-
 		// Start with special case overrides
 		(a, b, op) match {
+
+      // Interval Arithmetic
 			case (TDate() | TTimestamp(), 
 						TDate() | TTimestamp(), 
 						Arith.Sub)                => return Some(TInterval())
-			case (TDate() | TTimestamp(), 
+			case (TDate() | TTimestamp() | TInterval(), 
 						TInterval(), 
 						Arith.Sub | Arith.Add)    => return Some(a)
-			case (TInt(), TInterval(), Arith.Mult) | 
-					 (TInterval(), TInt(), Arith.Mult | Arith.Div)  
+			case (TInt() | TFloat(), TInterval(), Arith.Mult) | 
+					 (TInterval(), TInt() | TFloat(), Arith.Mult | Arith.Div)  
 					                            => return Some(TInterval())
+
+      // TAny() cases
+      case (TAny(), TAny(), _)        => return Some(TAny())
+      case (TAny(), TDate() | TTimestamp(), 
+            Arith.Sub)                => Some(TInterval())
+      case (TDate() | TTimestamp(), TAny(), 
+            Arith.Sub)                => Some(TAny()) // Either TInterval or TDate, depending
 			case _ => ()
 		}
 
 		(op) match {
 			case (Arith.Add | Arith.Sub | Arith.Mult | Arith.Div) => 
-				if(Type.isNumeric(a) && Type.isNumeric(b)){
+				if(Type.isNumeric(a, treatTAnyAsNumeric = true) && Type.isNumeric(b, treatTAnyAsNumeric = true)){
 					leastUpperBound(a, b)
 				} else {
-					throw new RAException(s"Invalid Arithmetic: $a ${Arith.opString(op)} $b (Not Numeric)")
+          None
 				}
 
       case (Arith.BitAnd | Arith.BitOr | Arith.ShiftLeft | Arith.ShiftRight) =>
-      	if(Type.rootType(a) == TInt() && Type.rootType(a) == TInt()){
-	      	Some(TInt())
-      	} else {
-					throw new RAException(s"Invalid Arithmetic: $a ${Arith.opString(op)} $b (Not Integer)")
-      	}
+        (Type.rootType(a), Type.rootType(b)) match {
+          case (TInt() | TAny(), TInt() | TAny()) => Some(TInt())
+          case _ => None
+        }
 
       case (Arith.And | Arith.Or) =>
-      	if(Type.rootType(a) == TBool() && Type.rootType(a) == TBool()){
-	      	Some(TBool())
-      	} else {
-					throw new RAException(s"Invalid Arithmetic: $a ${Arith.opString(op)} $b (Not Boolean)")
-      	}
+        (Type.rootType(a), Type.rootType(b)) match {
+          case (TBool() | TAny(), TBool() | TAny()) => Some(TBool())
+          case _ => None
+        }
 		}
 	}
 	def escalate(a: Option[Type], b: Option[Type], op: Arith.Op): Option[Type] =
