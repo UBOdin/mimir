@@ -120,7 +120,7 @@ libraryDependencies ++= Seq(
   ///////////////////  GProM/Native Integration //////////////
   "net.java.dev.jna"              %    "jna"                     % "4.2.2",
   "net.java.dev.jna"              %    "jna-platform"            % "4.2.2",
-  "log4j"                         %    "log4j"                   % "1.2.17"
+  "log4j"                         %    "log4j"                   % "1.2.17",
   
   ///////////////////// Viztrails Integration ///////////////////
   
