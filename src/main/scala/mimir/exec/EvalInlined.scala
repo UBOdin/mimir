@@ -256,6 +256,11 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
     }
   }
 
+  /**
+   * Hack for incomplete implementations.  
+   * 
+   * Implement some super basic functionality and fall back to classic Eval if it fails.
+   */
   final def compilePassthrough[R](e: Expression, rcr: Expression => Compiled[R], prim: PrimitiveValue => R): Compiled[R] =
   {
     e match {
@@ -267,7 +272,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
         val l = compileFunction(name, args); (t) => prim(l(t))
       }
       case Conditional(c, t, e) => compileConditional(c, t, e, rcr)
-      case _ => throw new RAException(s"Invalid Passthrough Expression: $e")
+      case _ => { (t) => prim(db.interpreter.eval(e, scope.get(_).map { _._2(t) })) }
     }
   }
 

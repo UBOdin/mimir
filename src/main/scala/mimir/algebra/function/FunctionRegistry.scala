@@ -40,7 +40,7 @@ class FunctionRegistry {
     TypeFunctions.register(this)
     UtilityFunctions.register(this)
     RandomnessFunctions.register(this)
-
+    TimeFunctions.register(this)
 	}
 
   def register(
