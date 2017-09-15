@@ -40,7 +40,7 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
       case Some(v) => v.productElement(idx).asInstanceOf[PrimitiveValue]
       case None => {
         geocache.get(rowid.asString) match {
-          case Some(v) => v.productElement(idx).asInstanceOf[PrimitiveValue]
+          case Some(v) => v.productElement(idx).asInstanceOf[FloatPrimitive]
           case None => {
             val houseNumber = args(1).asString
             val streetName = args(2).asString
@@ -57,7 +57,7 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
                 val glon = JsonUtils.seekPath( geoRes, lonPath).toString().replaceAll("\"", "").toDouble
                 val geocacheEntry = (FloatPrimitive(glat), FloatPrimitive(glon))
                 geocache(rowid.asString) = geocacheEntry
-                geocacheEntry.productElement(idx).asInstanceOf[PrimitiveValue]                
+                geocacheEntry.productElement(idx).asInstanceOf[FloatPrimitive]                
             } catch {
                 case ioe: Exception =>  {
                   println(ioe.toString())

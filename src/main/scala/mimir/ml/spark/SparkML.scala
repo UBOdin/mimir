@@ -19,7 +19,7 @@ object SparkML {
 
 abstract class SparkML {
   def getSparkSession() : SparkContext = {
-      val conf = new SparkConf().setMaster("local[2]").setAppName("MultiClassClassification")
+      val conf = new SparkConf().setMaster("local[*]").setAppName("MultiClassClassification")
       SparkML.sc match {
         case None => {
           val sparkCtx = new SparkContext(conf)

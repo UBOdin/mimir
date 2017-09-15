@@ -76,8 +76,8 @@ object GeoFunctions
           FloatPrimitive(DefaultEllipsoid.WGS84.orthodromicDistance(
             mimir.sql.sqlite.MeToLocationDistance.myLon.get, //lon1
             mimir.sql.sqlite.MeToLocationDistance.myLat.get, //lat1
-            args(0).asDouble, //lon2
-            args(1).asDouble  //lat2
+            args(1).asDouble, //lon2
+            args(0).asDouble  //lat2
           ))
         }
       },
