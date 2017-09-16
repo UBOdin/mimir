@@ -42,7 +42,7 @@ import scala.collection.mutable.ListBuffer
 
 
  /**
-  * The central dispatcher for Mimir.  Most Mimir functionality makes use of the Relational 
+  * The central dispatcher for Mimir.  Most Mimir functionality makes use of the Relational
   * Algebra and Expression ASTs in mimir.algebra.{Operator,Expression}, but individual components
   * may make use of SQL or other query representations.  The Database class acts as a bridge
   * between these components, and provides a single, central way to access all of Mimir's resources.
@@ -55,7 +55,7 @@ import scala.collection.mutable.ListBuffer
   * === Parsing ===
   * * mimir.sql.SqlToRA (sql)
   *    Responsible for translating JSqlParser AST elements into corresponding AST elements from
-  *    mimir.algebra._  
+  *    mimir.algebra._
   * * mimir.sql.RAToSql (ra)
   *    Responsible for translating mimir.algebra._ AST elements back to JSqlParser's AST.  This is
   *    typically only required for compatibility with JDBC.
@@ -80,9 +80,9 @@ import scala.collection.mutable.ListBuffer
   * * mimir.lenses.LensManager (lenses)
   *    Responsible for creating, serializing, and deserializing lenses and virtual views.
   * * mimir.exec.Compiler (compiler)
-  *    Responsible for query execution.  Acts as a wrapper around the logic in mimir.ctables._, 
+  *    Responsible for query execution.  Acts as a wrapper around the logic in mimir.ctables._,
   *    mimir.lenses._, and mimir.exec._ that prepares non-deterministic queries to be evaluated
-  *    on the backend database.  
+  *    on the backend database.
   * * mimir.statistics.SystemCatalog (catalog)
   *    Responsible for managing the system catalog tables/views
   * * mimir.explainer.CTExplainer (explainer)
@@ -108,13 +108,13 @@ case class Database(backend: Backend)
   val explainer       = new mimir.ctables.CTExplainer(this)
   val catalog         = new mimir.statistics.SystemCatalog(this)
   val typechecker     = new mimir.algebra.Typechecker(
-                                  functions = Some(functions), 
+                                  functions = Some(functions),
                                   aggregates = Some(aggregates),
                                   models = Some(models)
                                 )
   val interpreter     = new mimir.algebra.Eval(
                                   functions = Some(functions)
-                                )  
+                                )
 
   /**
    * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
@@ -130,13 +130,13 @@ case class Database(backend: Backend)
       // The iterator we pass to the handler is only valid within this block.
       // It is incredibly easy to accidentally have the handler return the
       // iterator as-is.  For example:
-      // > 
+      // >
       // > query(...) { _.map { ... } }
       // >
       // In this above example, the return value of the block becomes invalid,
       // since a map of an iterator doesn't drain the iterator, but simply applies
-      // a continuation to it.  
-      // 
+      // a continuation to it.
+      //
       if(ret.isInstanceOf[Iterator[_]]){
         logger.warn("Returning a sequence from Database.query may lead to the Scala compiler's optimizations closing the ResultIterator before it's fully drained")
       }
@@ -147,14 +147,14 @@ case class Database(backend: Backend)
   }
 
   /**
-   * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
+   * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific
    * optimizations and rewrites the query to properly account for Virtual Tables.
    */
   final def query[T, R <:ResultIterator](stmt: net.sf.jsqlparser.statement.select.Select, mode: CompileMode[R])(handler: R => T): T =
     query(sql.convert(stmt), mode)(handler)
 
   /**
-   * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
+   * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific
    * optimizations and rewrites the query to properly account for Virtual Tables.
    */
   final def query[T, R <:ResultIterator](stmt: String, mode: CompileMode[R])(handler: R => T): T =
@@ -168,17 +168,17 @@ case class Database(backend: Backend)
     query(oper, BestGuess)(handler)
 
   /**
-   * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
+   * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific
    * optimizations and rewrites the query to properly account for Virtual Tables.
    */
-  final def query[T](stmt: net.sf.jsqlparser.statement.select.Select)(handler: ResultIterator => T): T = 
+  final def query[T](stmt: net.sf.jsqlparser.statement.select.Select)(handler: ResultIterator => T): T =
     query(stmt, BestGuess)(handler)
 
   /**
-   * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific 
+   * Translate, optimize and evaluate the specified query.  Applies all Mimir-specific
    * optimizations and rewrites the query to properly account for Virtual Tables.
    */
-  final def query[T](stmt: String)(handler: ResultIterator => T): T = 
+  final def query[T](stmt: String)(handler: ResultIterator => T): T =
     query(select(stmt), BestGuess)(handler)
 
 
@@ -198,6 +198,7 @@ case class Database(backend: Backend)
    */
   def parse(queryString: String): List[Statement] =
   {
+
     val parser = new MimirJSqlParser(new StringReader(queryString))
 
     var stmt:Statement = parser.Statement()
@@ -221,7 +222,7 @@ case class Database(backend: Backend)
     explainer.explainCell(query, token, column)
 
   /**
-   * Get all availale table names 
+   * Get all availale table names
    */
   def getAllTables(): Set[String] =
   {
@@ -243,7 +244,7 @@ case class Database(backend: Backend)
    */
   def tableSchema(name: String): Option[Seq[(String,Type)]] = {
     logger.debug(s"Table schema for $name")
-    views.get(name) match { 
+    views.get(name) match {
       case Some(viewDefinition) => Some(viewDefinition.schema)
       case None => backend.getTableSchema(name)
     }
@@ -263,7 +264,7 @@ case class Database(backend: Backend)
           case None => throw new SQLException(s"No such table or view '$tableName'")
         },
         Nil
-      ) 
+      )
     )
   }
 
@@ -275,6 +276,8 @@ case class Database(backend: Backend)
    */
   def update(stmt: Statement)
   {
+
+
     stmt match {
       /********** QUERY STATEMENTS **********/
       case _: Select   => throw new SQLException("Can't evaluate SELECT as an update")
@@ -289,7 +292,7 @@ case class Database(backend: Backend)
         val args = feedback.getArgs().map(sql.convert(_))
         val v = sql.convert(feedback.getValue())
 
-        val model = models.get(name) 
+        val model = models.get(name)
         model.feedback(idx, args, v)
         models.persist(model)
       }
@@ -326,15 +329,15 @@ case class Database(backend: Backend)
       /********** LOAD STATEMENTS **********/
       case load: Load => {
         // Assign a default table name if needed
-        val (target, force) = 
-          load.getTable() match { 
+        val (target, force) =
+          load.getTable() match {
             case null => (load.getFile.getName.replaceAll("\\..*", "").toUpperCase, false)
             case s => (s, true)
           }
 
         loadTable(
-          target, 
-          load.getFile, 
+          target,
+          load.getFile,
           force = force,
           (load.getFormat, load.getFormatArgs.asScala.toSeq.map { sql.convert(_) })
         )
@@ -364,13 +367,13 @@ case class Database(backend: Backend)
           views.dematerialize(alter.getTarget.toUpperCase)
         } else {
           views.materialize(alter.getTarget.toUpperCase)
-        } 
+        }
       }
 
       case _                => backend.update(stmt.toString())
     }
   }
-  
+
   /**
    * Prepare a database for use with Mimir.
    */
@@ -406,9 +409,9 @@ case class Database(backend: Backend)
    * supplies an appropriate header.
    */
   def loadTable(
-    targetTable: String, 
-    sourceFile: File, 
-    force:Boolean = true, 
+    targetTable: String,
+    sourceFile: File,
+    force:Boolean = true,
     format:(String, Seq[PrimitiveValue]) = ("CSV", Seq(StringPrimitive(",")))
   ){
     (format._1 match {
@@ -427,20 +430,20 @@ case class Database(backend: Backend)
           if(tableExists(targetRaw) && !force){
             throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' INTO tableName`; to append to existing data.")
           }
-          LoadCSV.handleLoadTable(this, targetRaw, sourceFile, 
+          LoadCSV.handleLoadTable(this, targetRaw, sourceFile,
             Map("DELIMITER" -> delim)
           )
           if(!tableExists(targetTable.toUpperCase)){
             val oper = table(targetRaw)
             val l = List(new FloatPrimitive(.5))
-            lenses.create("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)       
+            lenses.create("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)
           }
         }
       case fmt =>
         throw new SQLException(s"Unknown load format '$fmt'")
     }
   }
-  
+
   def loadTable(targetTable: String, sourceFile: String){
     loadTable(targetTable, new File(sourceFile))
   }
@@ -465,11 +468,11 @@ case class Database(backend: Backend)
     query(sourceQuery) { result =>
       backend.fastUpdateBatch(
         insertCmd,
-        result.map( _.tuple ) 
+        result.map( _.tuple )
       )
     }
   }
-  
+
 
   def selectInto(targetTable: String, tableName: String): Unit =
   {
@@ -501,7 +504,7 @@ case class Database(backend: Backend)
       backend.update(insertCmd, result.tuple)
     })
   }
-  def select(s: String) = 
+  def select(s: String) =
   {
     this.sql.convert(stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select])
   }
@@ -521,8 +524,8 @@ case class Database(backend: Backend)
     val typeMap = schema.map { x => (x._1.toUpperCase -> x._2) }.toMap
     backend.getTableSchema(name) match {
       case None => {
-        val schemaElements = 
-          schema.map { case (name, t) => s"$name $t" } ++ 
+        val schemaElements =
+          schema.map { case (name, t) => s"$name $t" } ++
           (if(primaryKey.isEmpty) { Seq() } else {
             Seq(s"PRIMARY KEY (${primaryKey.get})")
           })

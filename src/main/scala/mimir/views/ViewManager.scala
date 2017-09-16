@@ -16,20 +16,20 @@ import mimir.sql.JDBCBackend
 
 
 class ViewManager(db:Database) extends LazyLogging {
-  
+
   val viewTable = "MIMIR_VIEWS"
 
   /**
-   * Initialize the view manager: 
+   * Initialize the view manager:
    *   - Create a system catalog table to store information about views
    */
-  def init(): Unit = 
+  def init(): Unit =
   {
     db.requireTable(viewTable, Seq(
         ("NAME", TString()),
         ("QUERY", TString()),
         ("METADATA", TInt())
-      ), 
+      ),
       primaryKey = Some("NAME")
     )
   }
@@ -46,9 +46,9 @@ class ViewManager(db:Database) extends LazyLogging {
     if(db.tableExists(name)){
       throw new SQLException(s"View '$name' already exists")
     }
-    db.backend.update(s"INSERT INTO $viewTable(NAME, QUERY, METADATA) VALUES (?,?,0)", 
+    db.backend.update(s"INSERT INTO $viewTable(NAME, QUERY, METADATA) VALUES (?,?,0)",
       Seq(
-        StringPrimitive(name), 
+        StringPrimitive(name),
         StringPrimitive(Json.ofOperator(query).toString)
       ))
     // updateMaterialization(name)
@@ -63,11 +63,11 @@ class ViewManager(db:Database) extends LazyLogging {
   def alter(name: String, query: Operator): Unit =
   {
     val properties = apply(name)
-    db.backend.update(s"UPDATE $viewTable SET QUERY=? WHERE NAME=?", 
+    db.backend.update(s"UPDATE $viewTable SET QUERY=? WHERE NAME=?",
       Seq(
         StringPrimitive(Json.ofOperator(query).toString),
         StringPrimitive(name)
-      )) 
+      ))
     if(properties.isMaterialized){
       db.backend.update("DROP TABLE ${name}")
       materialize(name)
@@ -82,7 +82,7 @@ class ViewManager(db:Database) extends LazyLogging {
   def drop(name: String): Unit =
   {
     val properties = apply(name)
-    db.backend.update(s"DELETE FROM $viewTable WHERE NAME=?", 
+    db.backend.update(s"DELETE FROM $viewTable WHERE NAME=?",
       Seq(StringPrimitive(name))
     )
     if(properties.isMaterialized){
@@ -97,17 +97,18 @@ class ViewManager(db:Database) extends LazyLogging {
    */
   def get(name: String): Option[ViewMetadata] =
   {
-    val results = 
-      db.backend.resultRows(s"SELECT QUERY, METADATA FROM $viewTable WHERE name = ?", 
+    val results =
+      db.backend.resultRows(s"SELECT QUERY, METADATA FROM $viewTable WHERE name = ?",
         Seq(StringPrimitive(name))
       )
-    results.take(1).headOption.map(_.toSeq).map( 
-      { 
+    
+    results.take(1).headOption.map(_.toSeq).map(
+      {
         case Seq(StringPrimitive(s), IntPrimitive(meta)) => {
           val query = Json.toOperator(Json.parse(s))
-          val isMaterialized = 
+          val isMaterialized =
             meta != 0
-          
+
           new ViewMetadata(name, query, isMaterialized, db)
         }
       }
@@ -123,7 +124,7 @@ class ViewManager(db:Database) extends LazyLogging {
   def apply(name: String): ViewMetadata =
   {
     get(name) match {
-      case None => 
+      case None =>
         throw new SQLException(s"Unknown View '$name'")
       case Some(properties) =>
         properties
@@ -141,7 +142,7 @@ class ViewManager(db:Database) extends LazyLogging {
     }
     val properties = apply(name)
     val (
-      query, 
+      query,
       baseSchema,
       columnTaint,
       rowTaint,
@@ -151,7 +152,7 @@ class ViewManager(db:Database) extends LazyLogging {
     val columns:Seq[String] = baseSchema.map(_._1)
     logger.debug(s"SCHEMA: $columns; $rowTaint; $columnTaint; $provenance")
 
-    val completeQuery = 
+    val completeQuery =
       Project(
         columns.map { col => ProjectArg(col, Var(col)) } ++
         Seq(
@@ -170,7 +171,7 @@ class ViewManager(db:Database) extends LazyLogging {
     logger.debug(s"MATERIALIZE: $name(${completeQuery.columnNames.mkString(",")})")
 
     val (inlinedSQL:SelectBody, _) = db.compiler.sqlForBackend(completeQuery)
-        
+
     logger.debug(s"QUERY: $inlinedSQL")
 
     db.backend.selectInto(name, inlinedSQL.toString)
@@ -219,7 +220,7 @@ class ViewManager(db:Database) extends LazyLogging {
    * Used mainly by Mimir's system catalog
    * @return    A query that returns a list of all known views when executed
    */
-  def listViewsQuery: Operator = 
+  def listViewsQuery: Operator =
   {
     Project(
       Seq(
@@ -234,11 +235,11 @@ class ViewManager(db:Database) extends LazyLogging {
    * Used mainly by Mimir's system catalog
    * (presently unimplemented)
    */
-  def listAttrsQuery: Operator = 
+  def listAttrsQuery: Operator =
   {
     logger.warn("Constructing lens attribute list not implemented yet")
     EmptyTable(Seq(
-      ("TABLE_NAME", TString()), 
+      ("TABLE_NAME", TString()),
       ("ATTR_NAME", TString()),
       ("ATTR_TYPE", TString()),
       ("IS_KEY", TBool())
@@ -249,7 +250,7 @@ class ViewManager(db:Database) extends LazyLogging {
    * Resolve views: The final step in query rewriting.
    *
    * For each view in the provided query, decide whether the view can be resolved to
-   * a materialized view table, or whether it needs to be executed directly.  
+   * a materialized view table, or whether it needs to be executed directly.
    * @param op    The operator to resolve views in
    * @return      A version of the tree for `op` with no View nodes.
    */
@@ -277,7 +278,7 @@ class ViewManager(db:Database) extends LazyLogging {
         logger.debug(s"Using materialized view: Materialized '$name' with { ${wantAnnotations.mkString(", ")} } <- ${metadata.table}")
 
         Project(
-          metadata.schemaWith(wantAnnotations).map { col => 
+          metadata.schemaWith(wantAnnotations).map { col =>
             ProjectArg(col._1, Var(col._1))
           },
           metadata.table
