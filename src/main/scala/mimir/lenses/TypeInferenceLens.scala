@@ -11,19 +11,19 @@ import mimir.models._
 object TypeInferenceLens extends LazyLogging
 {
   def create(
-    db:Database, 
-    name:String, 
-    query:Operator, 
+    db:Database,
+    name:String,
+    query:Operator,
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
   {
-    val modelColumns = 
+    val modelColumns =
       db.bestGuessSchema(query).map({
         case (col, (TString() | TAny())) => Some(col)
         case _ => None
       }).flatten.toIndexedSeq
 
-    if(modelColumns.isEmpty){ 
+    if(modelColumns.isEmpty){
       logger.warn("Type inference lens created on table with no string attributes")
       return (query, List())
     }
@@ -32,23 +32,23 @@ object TypeInferenceLens extends LazyLogging
       throw new ModelException("Type inference lens requires a single parameter")
     }
 
-    val model = 
+    val model =
       new TypeInferenceModel(
         name,
         modelColumns,
         db.interpreter.evalFloat(args(0))
       )
 
-    val columnIndexes = 
+    val columnIndexes =
       modelColumns.zipWithIndex.toMap
 
     logger.debug(s"Training $model.name on $query")
     model.train(db, query)
 
-    val repairs = 
+    val repairs =
       query.columnNames.map( col => {
         if(columnIndexes contains col){
-          ProjectArg(col, 
+          ProjectArg(col,
             Function("CAST", Seq(
               Var(col),
               VGTerm(model.name, columnIndexes(col), Seq(), Seq())

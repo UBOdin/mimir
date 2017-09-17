@@ -277,7 +277,6 @@ case class Database(backend: Backend)
   def update(stmt: Statement)
   {
 
-
     stmt match {
       /********** QUERY STATEMENTS **********/
       case _: Select   => throw new SQLException("Can't evaluate SELECT as an update")
@@ -436,6 +435,7 @@ case class Database(backend: Backend)
           if(!tableExists(targetTable.toUpperCase)){
             val oper = table(targetRaw)
             val l = List(new FloatPrimitive(.5))
+            
             lenses.create("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)
           }
         }

@@ -31,7 +31,7 @@ object LoadCSV extends StrictLogging {
     val in2 = new FileReader(sourceFile)
     /* Check if header present in CSV*/
     val par = new NonStrictCSVParser(in2, options);
-    val assumeHeader = check_header(par.take(10))
+    val assumeHeader = check_header(par.take(5))
 
     //val assumeHeader = options.getOrElse("HEADER", "YES").equals("YES")
 

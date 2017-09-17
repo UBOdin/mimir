@@ -46,16 +46,15 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
   with FiniteDiscreteDomain
 {
   var sampleLimit = 1000
-  var totalVotes = 
+  var totalVotes =
     { val v = new scala.collection.mutable.ArraySeq[Double](columns.length)
       for(col <- (0 until columns.size)){ v.update(col, 0.0) }
       v
     }
-  val votes = 
+  val votes =
     columns.map(
       _ => scala.collection.mutable.Map[Type, Double]()
     )
-
   def train(db: Database, query: Operator) =
   {
     TimeUtils.monitor(s"Train $name", TypeInferenceModel.logger.info(_)){
@@ -71,12 +70,13 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
 
   final def learn(row: Seq[PrimitiveValue]):Unit =
   {
+
     row.zipWithIndex.foreach({ case (v, idx) => learn(idx, v) })
   }
 
   final def learn(idx: Int, p: PrimitiveValue):Unit =
   {
-    p match { 
+    p match {
       case null            => ()
       case NullPrimitive() => ()
       case _               => learn(idx, p.asString)
@@ -90,23 +90,23 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
     TypeInferenceModel.logger.trace(s"Guesses for '$v': $candidates")
     val votesForCurrentIdx = votes(idx)
     for(t <- candidates){
-      votesForCurrentIdx(t) = votesForCurrentIdx.getOrElse(t, 0.0) + 1.0 
+      votesForCurrentIdx(t) = votesForCurrentIdx.getOrElse(t, 0.0) + 1.0
     }
   }
 
-  private final def voteList(idx: Int) = 
+  private final def voteList(idx: Int) =
     (TString(), defaultFrac * totalVotes(idx)) :: votes(idx).toList
 
   private final def rankFn(x:(Type, Double)) =
     (x._2, TypeInferenceModel.priority(x._1) )
 
   def varType(idx: Int, argTypes: Seq[Type]) = TType()
-  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
     TypePrimitive(
       RandUtils.pickFromWeightedList(randomness, voteList(idx))
     )
 
-  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
+  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
   {
     choices.get(idx) match {
       case None => {
@@ -134,7 +134,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
               s"not more than $defaultPct% of the data fit anything else"
             case _ if (guessPct >= 100) =>
               "all of the data fit"
-            case _ => 
+            case _ =>
               s"around $guessPct% of the data fit"
           }
         s"I guessed that $name.${columns(idx)} was of type $typeStr because $reason"
