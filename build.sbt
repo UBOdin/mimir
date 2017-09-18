@@ -11,7 +11,7 @@ dependencyOverrides += "org.scala-lang" % "scala-library" % scalaVersion.value
 // in Travis with `sudo: false`.
 // See https://github.com/sbt/sbt/issues/653
 // and https://github.com/travis-ci/travis-ci/issues/3775
-javaOptions += "-Xmx2G"
+javaOptions ++= Seq("-Xmx2G", "-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK") 
 
 scalacOptions ++= Seq(
   "-feature"
@@ -92,6 +92,10 @@ libraryDependencies ++= Seq(
   ("nz.ac.waikato.cms.moa"        %   "moa"                      % "2014.11").
     exclude("nz.ac.waikato.cms.weka",  "weka-dev").
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
+    
+  //spark ml
+  "org.apache.spark" 			  %   "spark-sql_2.11" 		  % "2.2.0" % "provided",
+  "org.apache.spark" 			  %   "spark-mllib_2.11" 	  % "2.2.0" % "provided",
  
   //////////////////////// Jung ////////////////////////
   // General purpose graph manipulation library
@@ -116,7 +120,11 @@ libraryDependencies ++= Seq(
   ///////////////////  GProM/Native Integration //////////////
   "net.java.dev.jna"              %    "jna"                     % "4.2.2",
   "net.java.dev.jna"              %    "jna-platform"            % "4.2.2",
-  "log4j"                         %    "log4j"                   % "1.2.17"
+  "log4j"                         %    "log4j"                   % "1.2.17",
+  
+  ///////////////////// Viztrails Integration ///////////////////
+  
+  "net.sf.py4j" 				  %	   "py4j" 				  % "0.10.4",
   
   //////////////////////// Visualization //////////////////////
   // For now, all of this happens in python with matplotlib

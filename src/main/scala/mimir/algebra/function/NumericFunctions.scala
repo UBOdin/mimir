@@ -36,7 +36,18 @@ object NumericFunctions
     
     fr.register("AVG",(_) => ???, (_) => TInt())
     fr.register("STDDEV",(_) => ???, (_) => TFloat())
-
+    
+    fr.register("ROUND",
+      {
+        case Seq(FloatPrimitive(number),IntPrimitive(decimalPlaces)) => {
+          FloatPrimitive(s"%.${decimalPlaces}f".format(number).toDouble)
+        }
+        case Seq(FloatPrimitive(number)) => {
+          FloatPrimitive(Math.round(number).toDouble)
+        }
+      },
+      (x: Seq[Type]) => TFloat()
+    )
   }
 
 }

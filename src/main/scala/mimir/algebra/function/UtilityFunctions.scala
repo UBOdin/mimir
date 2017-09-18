@@ -23,6 +23,21 @@ object UtilityFunctions
     
     fr.register("STRFTIME",(_) => ???, (_) => TInt())
     
+    fr.register("WEB", 
+      {  
+        case Seq(StringPrimitive(url)) => StringPrimitive(mimir.util.HTTPUtils.get(url))
+      },
+      (x: Seq[Type]) => TString()
+    )
+    
+    fr.register("WEBJSON", 
+      {  
+        case Seq(StringPrimitive(url)) => StringPrimitive(mimir.util.HTTPUtils.getJson(url).toString())
+        case Seq(StringPrimitive(url), StringPrimitive(path)) => StringPrimitive(mimir.util.HTTPUtils.getJson(url, Some(path)).toString())
+      },
+      (x: Seq[Type]) => TString()
+    )
+    
   }
 
 }

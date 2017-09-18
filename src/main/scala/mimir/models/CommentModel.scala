@@ -25,7 +25,7 @@ class CommentModel(override val name: String, cols:Seq[String], colTypes:Seq[Typ
   def varType(idx: Int, args: Seq[Type]) = colTypes(idx)
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ) = {
     val rowid = RowIdPrimitive(args(0).asString)
-    feedback.get(rowid.asString) match {
+    feedback.get(s"${rowid.asString}:$idx") match {
       case Some(v) => v
       case None => {
         hints(0)
@@ -34,9 +34,9 @@ class CommentModel(override val name: String, cols:Seq[String], colTypes:Seq[Typ
   }
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = hints(0)
   def reason(idx: Int, args: Seq[PrimitiveValue],hints: Seq[PrimitiveValue]): String = {
-    println("CommentModel:reason: " + idx + " [ " + args.mkString(",") + " ] [ " + hints.mkString(",") + " ]" );
+    //println("CommentModel:reason: " + idx + " [ " + args.mkString(",") + " ] [ " + hints.mkString(",") + " ]" );
     val rowid = RowIdPrimitive(args(0).asString)
-    val rval = feedback.get(rowid.asString) match {
+    val rval = feedback.get(s"${rowid.asString}:$idx") match {
       case Some(v) => s"You told me that $v is valid for row $rowid"
       case None => s" ${comments(idx)}"
       case _ => throw new SQLException("This is impossible...")
@@ -45,9 +45,9 @@ class CommentModel(override val name: String, cols:Seq[String], colTypes:Seq[Typ
   }
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = { 
     val rowid = args(0).asString
-    feedback(rowid) = v
+    feedback(s"$rowid:$idx") = v
   }
-  def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = feedback contains(args(0).asString)
+  def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = feedback contains(s"${args(0).asString}:$idx")
   def hintTypes(idx: Int): Seq[mimir.algebra.Type] = colTypes
   //def getDomain(idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = Seq((hints(0), 0.0))
   
