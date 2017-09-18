@@ -28,11 +28,11 @@ object IntervalSpec extends Specification with RASimplify {
       }
 
       "Date + Interval" >> {
-        simplify("DATE('2017-01-01')+INTERVAL('P0Y1M1W1DT0H0M0S')") must be equalTo(TimestampPrimitive(2017,2,9,0,0,0,0))
+        simplify("DATE('2017-01-01')+INTERVAL('P0Y1M1W1DT0H0M0S')") must be equalTo(DatePrimitive(2017,2,9))
       }
 
       "Date - Interval" >> {
-        simplify("DATE('2017-02-09')-INTERVAL('P0Y1M1W1DT0H0M0S')") must be equalTo(TimestampPrimitive(2017,1,1,0,0,0,0))
+        simplify("DATE('2017-02-09')-INTERVAL('P0Y1M1W1DT0H0M0S')") must be equalTo(DatePrimitive(2017,1,1))
       }
 
       "Date - Date" >> {

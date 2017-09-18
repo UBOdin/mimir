@@ -18,6 +18,7 @@
   <logger name="mimir.algebra.ExpressionChecker"                   level="WARN"/>
   <logger name="mimir.algebra.OperatorUtils"                       level="WARN"/>
   <logger name="mimir.algebra.Typechecker"                         level="WARN"/>
+  <logger name="mimir.algebra.Typechecker$"                        level="WARN"/>
 
   <!--+++++++++++++++++++++++  CTables  +++++++++++++++++++++++-->
   <logger name="mimir.ctables.CTPercolator"                        level="WARN"/>

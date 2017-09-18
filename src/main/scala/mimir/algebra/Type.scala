@@ -104,10 +104,11 @@ object Type {
       case t2 => t2
     }
 
-  def isNumeric(t: Type): Boolean =
+  def isNumeric(t: Type, treatTAnyAsNumeric: Boolean = false): Boolean =
   {
     rootType(t) match {
       case TInt() | TFloat() => true
+      case TAny() => treatTAnyAsNumeric
       case _ => false
     }
   }
