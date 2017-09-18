@@ -11,7 +11,7 @@ dependencyOverrides += "org.scala-lang" % "scala-library" % scalaVersion.value
 // in Travis with `sudo: false`.
 // See https://github.com/sbt/sbt/issues/653
 // and https://github.com/travis-ci/travis-ci/issues/3775
-javaOptions += "-Xmx2G"
+javaOptions ++= Seq("-Xmx2G", "-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK") 
 
 scalacOptions ++= Seq(
   "-feature"
