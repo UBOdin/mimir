@@ -1,6 +1,7 @@
 package mimir.util
 
 import com.typesafe.scalalogging.slf4j.StrictLogging
+import util.control.Breaks._
 
 import java.io.{File, FileReader, BufferedReader}
 import java.io._
@@ -8,6 +9,8 @@ import java.nio.charset.StandardCharsets
 import java.sql.SQLException
 import java.util
 
+import mimir.parser._
+import net.sf.jsqlparser.statement.Statement
 import mimir.Database
 import mimir.algebra.Type
 import org.apache.commons.csv.{CSVFormat, CSVParser}
@@ -21,7 +24,7 @@ import scala.util.control.Breaks._
 
 object LoadCSV extends StrictLogging {
 
-  def SAMPLE_SIZE = 5
+  def SAMPLE_SIZE = 1000
 
   // def handleLoadTable(db: Database, targetTable: String, sourceFile: File): Unit =
   //   handleLoadTable(db, targetTable, sourceFile, Map())
@@ -29,9 +32,11 @@ object LoadCSV extends StrictLogging {
   def handleLoadTable(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
     val input = new FileReader(sourceFile)
     val in2 = new FileReader(sourceFile)
+
     /* Check if header present in CSV*/
     val par = new NonStrictCSVParser(in2, options);
     val assumeHeader = check_header(par.take(5))
+
 
     //val assumeHeader = options.getOrElse("HEADER", "YES").equals("YES")
 
@@ -101,7 +106,47 @@ object LoadCSV extends StrictLogging {
 
     populateTable(db, samples.view++parser, targetTable, sourceFile, targetSchema)
     input.close()
-  }
+
+      if (!assumeHeader){
+
+        var len = 0;
+        var arrs : Seq[mimir.algebra.PrimitiveValue] = null
+
+        var str=""
+        db.query("SELECT * FROM " + targetTable + " limit 1 ;")(_.foreach{result =>
+          arrs =  result.tuple
+        })
+        len = arrs.length
+        var flag = 0;
+
+        for(i<- 0 until len){
+          val res = arrs(i)
+          var ch =  res.toString()(1)
+          if(ch.toByte >= '0' && ch.toByte <= '9'){
+            str ++= s"""COLUMN_$i AS COL_$i ,""";
+          }
+          else{
+            str ++= s"""COLUMN_$i AS $res ,""";
+          }
+        }
+
+        var query = ""
+        println(str)
+
+        str = str.slice(0,(str.length()-2));
+        str = str.replaceAll("\\'","");
+        query = "CREATE VIEW "+ targetTable +"_Header AS SELECT " +str +" from "+ targetTable + " limit 1,1000000000000"
+
+        println(query)
+        val stream = new ByteArrayInputStream(query.getBytes)
+        var parser2 = new MimirJSqlParser(stream);
+        val stmt: Statement = parser2.Statement();
+        db.update(stmt);
+      }
+
+
+    }
+
 
   def check_header(sample: Iterator[MimirCSVRecord]): Boolean ={
     if (sample.hasNext){
@@ -150,10 +195,10 @@ object LoadCSV extends StrictLogging {
       var hasHeader = 0
       for (c<-columnType.keySet){
         if(columnType(c)!="true"){
-          if (header(c).length != columnType(c).toInt) {
-              hasHeader=hasHeader+1;
-          } else {
+          if (header(c).length == columnType(c).toInt) {
               hasHeader=hasHeader-1;
+          } else {
+              hasHeader=hasHeader+1;
           }
 
         }else {

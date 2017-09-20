@@ -10,7 +10,7 @@ import mimir.lenses._
 import mimir.models._
 import mimir.statistics.FuncDep
 
-object DiscalaAbadiNormalizer
+object CheckHeader
   extends Multilens
   with LazyLogging
 {
@@ -231,33 +231,6 @@ object DiscalaAbadiNormalizer
           )
         )
       }
-    }
-  }
-}
-
-
-@SerialVersionUID(1001L)
-class DAFDRepairModel(
-  name: String,
-  context: String,
-  source: Operator,
-  keys: Seq[(String, Type)],
-  target: String,
-  targetType: Type,
-  scoreCol: Option[String],
-  attrLookup: Map[Long,String]
-) extends RepairKeyModel(name, context, source, keys, target, targetType, scoreCol)
-{
-  override def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String =
-  {
-    choices.get(args.toList) match {
-      case None => {
-        val possibilities = getDomain(idx, args, hints).sortBy(-_._2).map { _._1.asLong }
-        val best = possibilities.head
-        s"${attrLookup(args(0).asLong)} could be organized under any of ${possibilities.map { x =>  attrLookup(x)+" ("+x+")" }.mkString(", ")}; I chose ${attrLookup(best) }"
-      }
-      case Some(choice) =>
-        s"You told me to organize ${attrLookup(args(0).asLong)} under ${attrLookup(choice.asLong)}"
     }
   }
 }

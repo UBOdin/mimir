@@ -5,6 +5,7 @@ import java.io.StringReader
 import java.sql.SQLException
 import java.sql.ResultSet
 
+
 import mimir.algebra._
 import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, RowExplanation, InlineVGTerms}
 import mimir.models.Model
@@ -311,7 +312,6 @@ case class Database(backend: Backend)
         val viewName = view.getTable().getName().toUpperCase
         val baseQuery = sql.convert(view.getSelectBody())
         val optQuery = compiler.optimize(baseQuery)
-
         views.create(viewName, optQuery);
       }
 
@@ -434,9 +434,10 @@ case class Database(backend: Backend)
           )
           if(!tableExists(targetTable.toUpperCase)){
             val oper = table(targetRaw)
+            val oper2 =  table(targetRaw+"_HEADER")
             val l = List(new FloatPrimitive(.5))
-            
             lenses.create("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)
+            lenses.create("TYPE_INFERENCE", targetTable.toUpperCase+"_HEADER", oper2, l)
           }
         }
       case fmt =>
