@@ -107,9 +107,9 @@ object Classification extends SparkML {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._  
     if(predictions.columns.contains("probability")){
-      val (rowidsProbabilities, idxs) = predictions.select("rowid","probability").rdd.map(r => (r.getString(0), r.getAs[org.apache.spark.ml.linalg.DenseVector](1))).collect().map { item =>
-          item._2.toArray.zipWithIndex.sortBy(_._1).reverse.slice(0, maxPredictions).map(probIdx => ((item._1, probIdx._1), probIdx._2))}.flatten.toSeq.unzip
-      model.stages(model.stages.length-1).transform(idxs.toDF("prediction")).select("predictedLabel").rdd.zip(getSparkSession().parallelize(rowidsProbabilities)).map { x => (x._2._1, (x._1.getString(0), x._2._2)) }.collect()
+      val rowidsProbabilitiesIdxs = predictions.select("rowid","probability").rdd.map(r => (r.getString(0), r.getAs[org.apache.spark.ml.linalg.DenseVector](1))).collect().map { item =>
+          item._2.toArray.zipWithIndex.sortBy(_._1).reverse.slice(0, maxPredictions).map(probIdx => (item._1, probIdx._1, probIdx._2))}.flatten.toSeq
+      model.stages(model.stages.length-1).transform(rowidsProbabilitiesIdxs.toDF("rowid","probability","prediction")).select("rowid","probability","predictedLabel").map { x => (x.getString(0), (x.getString(2),x.getDouble(1))) }.collect()
     }
     else extractPredictionsNoProb(model, predictions, maxPredictions)
   }
@@ -118,9 +118,9 @@ object Classification extends SparkML {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._  
     if(predictions.columns.contains("probability")){
-      val (probabilities, idxs) = predictions.where($"rowid" === rowid).select("probability").rdd.map(r => r.getAs[org.apache.spark.ml.linalg.DenseVector](0)).collect().map { item =>
-          item.toArray.zipWithIndex.sortBy(_._1).reverse.slice(0, maxPredictions).map(probIdx =>  probIdx)}.flatten.toSeq.unzip
-      model.stages(model.stages.length-1).transform(idxs.toDF("prediction")).select("predictedLabel").rdd.zip(getSparkSession().parallelize(probabilities)).map { x => (x._1.getString(0), x._2) }.collect()
+      val probabilitiesIdxs = predictions.where($"rowid" === rowid).select("probability").rdd.map(r => r.getAs[org.apache.spark.ml.linalg.DenseVector](0)).collect().map { item =>
+          item.toArray.zipWithIndex.sortBy(_._1).reverse.slice(0, maxPredictions).map(probIdx =>  probIdx)}.flatten.toSeq
+      model.stages(model.stages.length-1).transform(probabilitiesIdxs.toDF("probability","prediction")).select("probability","predictedLabel").map { x => (x.getString(1), x.getDouble(0)) }.collect()
     }
     else extractPredictionsForRowNoProb(model, predictions, rowid, maxPredictions)
   }
