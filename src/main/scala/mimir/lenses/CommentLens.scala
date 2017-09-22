@@ -32,7 +32,7 @@ object CommentLens {
         + Math.abs(colComments.mkString("_").hashCode())
   
     val resultCols = args.flatMap {
-      case Function("RESULT_COLUMNS", cols:Seq[Var]) => Some( cols.map(_.name) )
+      case Function("RESULT_COLUMNS", cols:(Seq[Var] @unchecked)) => Some( cols.map(_.name) )
       case _ => None
     }.flatten
     

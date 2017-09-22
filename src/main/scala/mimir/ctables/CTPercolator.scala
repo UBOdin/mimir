@@ -530,6 +530,23 @@ object CTPercolator
           Var(mimirRowDeterministicColumnName)
         )
       }
+      case v @ AdaptiveView(model, name, query, metadata) => { 
+        val (newQuery, colDeterminism, rowDeterminism) = percolateLite(query, models)
+        val columns = query.columnNames
+
+        val inlinedQuery = 
+          Project(
+            columns.map { col => ProjectArg(col, Var(col)) } ++
+            columns.map { col => ProjectArg(mimirColDeterministicColumnPrefix+col, colDeterminism(col)) } ++
+            Seq( ProjectArg(mimirRowDeterministicColumnName, rowDeterminism) ),
+            newQuery
+          )
+        (
+          AdaptiveView(model, name, inlinedQuery, metadata + ViewAnnotation.TAINT),
+          columns.map { col => (col -> Var(mimirColDeterministicColumnPrefix+col)) }.toMap,
+          Var(mimirRowDeterministicColumnName)
+        )
+      }
       case EmptyTable(sch) => {
         return (oper, 
           // All columns are deterministic
