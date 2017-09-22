@@ -68,7 +68,7 @@ object EditDistanceMatchModel
   }
 }
 
-@SerialVersionUID(1000L)
+@SerialVersionUID(1001L)
 class EditDistanceMatchModel(
   name: String,
   metricName: String,
@@ -117,7 +117,7 @@ class EditDistanceMatchModel(
   }
 
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = {
-    choices.get(idx) match {
+    choices(idx) match {
       case None => {
         val sourceName = colMapping.maxBy(_._2)._1
         val targetName = target._1
@@ -140,7 +140,7 @@ class EditDistanceMatchModel(
 
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
   {
-    choices.get(idx) match { 
+    choices(idx) match { 
       case None => {
         if(colMapping.isEmpty){
           NullPrimitive()

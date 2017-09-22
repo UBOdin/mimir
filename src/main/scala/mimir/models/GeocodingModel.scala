@@ -13,22 +13,28 @@ import mimir.Database
  * The one argument is a value for the key.  
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
-@SerialVersionUID(1000L)
+@SerialVersionUID(1001L)
 class GeocodingModel(override val name: String, addrCols:Seq[Expression], source: Operator) 
   extends Model(name) 
   with Serializable
   with NeedsReconnectToDatabase
-  with FiniteDiscreteDomain
+  with ModelCache
+  with SourcedFeedback
 {
   
-  val feedback = scala.collection.mutable.Map[String,(PrimitiveValue,PrimitiveValue)]()
-  val geocache = scala.collection.mutable.Map[String,(PrimitiveValue,PrimitiveValue)]()
- 
+  
   val latlonLabel = Seq("Latitude", "Longitude")
   val geogoderLabel = Map("GOOGLE" -> "Google", "OSM" -> "Open Streets")
   
   @transient var db: Database = null
   
+  def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : String = {
+    args(0).asString
+  }
+  
+   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = {
+     s"${idx}_${args(0).asString}"
+   }
   
   def argTypes(idx: Int) = {
       Seq(TRowId()).union(addrCols.map(_ => TString()))
@@ -36,11 +42,11 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
   def varType(idx: Int, args: Seq[Type]) = TFloat()
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ) = {
     val rowid = RowIdPrimitive(args(0).asString)
-    feedback.get(rowid.asString) match {
-      case Some(v) => v.productElement(idx).asInstanceOf[PrimitiveValue]
+    getFeedback(idx, args) match {
+      case Some(v) => v.asInstanceOf[PrimitiveValue]
       case None => {
-        geocache.get(rowid.asString) match {
-          case Some(v) => v.productElement(idx).asInstanceOf[FloatPrimitive]
+        getCache(idx, args, hints) match {
+          case Some(v) => v.asInstanceOf[FloatPrimitive]
           case None => {
             val houseNumber = args(1).asString
             val streetName = args(2).asString
@@ -56,7 +62,8 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
                 val glat = JsonUtils.seekPath( geoRes, latPath).toString().replaceAll("\"", "").toDouble
                 val glon = JsonUtils.seekPath( geoRes, lonPath).toString().replaceAll("\"", "").toDouble
                 val geocacheEntry = (FloatPrimitive(glat), FloatPrimitive(glon))
-                geocache(rowid.asString) = geocacheEntry
+                setCache(0, args, hints, geocacheEntry._1)
+                setCache(1, args, hints, geocacheEntry._2)
                 geocacheEntry.productElement(idx).asInstanceOf[FloatPrimitive]                
             } catch {
                 case ioe: Exception =>  {
@@ -80,41 +87,26 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
     val city = args(3).asString
     val state = args(4).asString
     val geocoder = args(5).asString
-    feedback.get(rowid.asString) match {
+    getFeedback(idx, args) match {
       case Some(v) =>
-        s"You told me that $houseNumber $streetName, $city, $state has ${latlonLabel(idx)} = ${v.productElement(idx).asInstanceOf[PrimitiveValue]} on row $rowid"
+        s"You told me that $houseNumber $streetName, $city, $state has ${latlonLabel(idx)} = ${v.asInstanceOf[PrimitiveValue]} on row $rowid"
       case None => 
-        geocache.get(rowid.asString) match {
+        getCache(idx, args, hints) match {
           case Some(v) =>
-            s"I used a geocoder (${geogoderLabel(geocoder)}) to determine that $houseNumber $streetName, $city, $state has ${latlonLabel(idx)} = ${v.productElement(idx).asInstanceOf[PrimitiveValue]} on row $rowid "
+            s"I used a geocoder (${geogoderLabel(geocoder)}) to determine that $houseNumber $streetName, $city, $state has ${latlonLabel(idx)} = ${v.asInstanceOf[PrimitiveValue]} on row $rowid "
           case x =>
             s"The location of (${geogoderLabel(geocoder)}) to determine that $houseNumber $streetName, $city, $state is unknown"
         }
       }
   }
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = { 
-    val rowid = args(0).asString
-    feedback.get(rowid) match {
-      case Some(ev) =>
-        if(idx == 0)
-          feedback(rowid) = (v, ev._2)
-        else
-          feedback(rowid) = (ev._1, v)
-      case None => 
-        if(idx == 0)
-          feedback(rowid) = (v, NullPrimitive())
-        else
-          feedback(rowid) = (NullPrimitive(), v)
-    }
+    setFeedback(idx, args, v)
   }
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = {
-    feedback.contains(args(0).asString) && feedback(args(0).asString)._1 != NullPrimitive() && feedback(args(0).asString)._2 != NullPrimitive()
+    hasFeedback(idx, args)
   }
   def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq(TAny())
    
-  
-  def getDomain(idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = Seq()
-  
   def reconnectToDatabase(db: Database) = { 
     this.db = db 
   }

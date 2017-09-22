@@ -250,7 +250,7 @@ class DAFDRepairModel(
 {
   override def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String =
   {
-    choices.get(args.toList) match {
+    getFeedback(idx, args) match {
       case None => {
         val possibilities = getDomain(idx, args, hints).sortBy(-_._2).map { _._1.asLong }
         val best = possibilities.head

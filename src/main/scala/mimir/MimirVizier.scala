@@ -247,7 +247,7 @@ object MimirVizier extends LazyLogging {
         logger.debug(s"vistrailsDeployWorkflowToViztool: workflow already deployed: $hash: $name")
       }
       else{
-        val fieldsRegex = "\\s*(?:[a-zA-Z0-9_.]+\\s*(?:AS\\s+[a-zA-Z0-9_]+)?\\s*,\\s*)+[a-zA-Z0-9_.]+\\s*".r
+        val fieldsRegex = "\\s*(?:[a-zA-Z0-9_.]+\\s*(?:AS\\s+[a-zA-Z0-9_]+)?\\s*,\\s*)+[a-zA-Z0-9_.]+\\s*(?:AS\\s+[a-zA-Z0-9_]+)?\\s*".r
         val fieldRegex = "\\s*[a-zA-Z0-9_.]+\\s*(?:AS\\s+[a-zA-Z0-9_]+)?\\s*".r
         val fieldStr = fields.toUpperCase() match {
           case "" => "*"
