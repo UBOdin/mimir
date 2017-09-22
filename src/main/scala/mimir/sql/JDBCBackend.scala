@@ -308,6 +308,10 @@ class JDBCBackend(val backend: String, val filename: String)
             case _ =>
               stmt.setTimestamp(i, JDBCUtils.convertTimestamp(t))
           }
+        case t:IntervalPrimitive  => 
+          backend match {
+            case _ => throw new SQLException(s"$backend does not support intervals in prepared statements")
+          }
         case r:RowIdPrimitive     => stmt.setString(i,r.v)
         case t:TypePrimitive      => stmt.setString(i, t.t.toString) 
         case BoolPrimitive(true)  => stmt.setInt(i, 1)

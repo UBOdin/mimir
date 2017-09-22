@@ -1248,9 +1248,12 @@ object OperatorTranslation {
 			  list.length += 1 
 			  list
 			}
-			case View(name, query, meta) => {
+			case View(_, query, _) => {
 			  mimirOperatorToGProMList(query)
 			}
+      case AdaptiveView(_, _, query, _) => {
+        mimirOperatorToGProMList(query)
+      }
 			case EmptyTable(sch)=> {
 			   throw new Exception("Operator Translation not implemented '"+mimirOperator+"'")
 			}

@@ -462,14 +462,14 @@ case class View(name: String, query: Operator, annotations: Set[ViewAnnotation.T
  * an appropriate materialized form of the view ready.
  */
 @SerialVersionUID(100L)
-case class AdaptiveView(model: String, name: String, query: Operator, annotations: Set[ViewAnnotation.T] = Set())
+case class AdaptiveView(schema: String, name: String, query: Operator, annotations: Set[ViewAnnotation.T] = Set())
   extends Operator
 {
   def children: Seq[Operator] = Seq(query)
   def expressions: Seq[Expression] = Seq()
-  def rebuild(c: Seq[Operator]): Operator = AdaptiveView(model, name, c(0), annotations)
+  def rebuild(c: Seq[Operator]): Operator = AdaptiveView(schema, name, c(0), annotations)
   def rebuildExpressions(x: Seq[Expression]): Operator = this
   def toString(prefix: String): String = 
-    s"$prefix$model.$name[${annotations.mkString(", ")}] := (\n${query.toString(prefix+"   ")}\n$prefix)"
+    s"$prefix$schema.$name[${annotations.mkString(", ")}] := (\n${query.toString(prefix+"   ")}\n$prefix)"
   def columnNames = query.columnNames
 }

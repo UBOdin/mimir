@@ -109,6 +109,8 @@ object Tracer {
 
       case View(_, query, _) => 
         trace(query, targetRowId)
+      case AdaptiveView(_, _, query, _) => 
+        trace(query, targetRowId)
 
       case Table(name, alias, schema, meta) =>
         val targetFilter = 

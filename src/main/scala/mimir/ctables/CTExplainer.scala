@@ -451,14 +451,14 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 				// Source 2: There might be uncertainty on the table.  Use SYS_TABLES to dig these annotations up.
 				val tableReasons = explainEverything(
-					multilens.tableCatalogFor(db, config).filter( Var("TABLE").eq(name) )
+					multilens.tableCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name) )
 				)
 				// alternative: Use SYS_TABLES directly
 				//    db.table("SYS_TABLES").where( Var("SCHEMA").eq(StringPrimitive(model)).and( Var("TABLE").eq(StringPrimitive(name)) ) )
 
 				// Source 3: Check for uncertainty in one of the attributes of interest
 				val attrReasons = explainEverything(
-					multilens.attrCatalogFor(db, config).filter( Var("TABLE").eq(name).and( Var("ATTR").in( wantCol.toSeq.map { StringPrimitive(_) } ) ) )
+					multilens.attrCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name).and( Var("ATTR_NAME").in( wantCol.toSeq.map { StringPrimitive(_) } ) ) )
 				)
 				// alternative: Use SYS_ATTRS directly
 				//    db.table("SYS_TABLES").where( Var("SCHEMA").eq(StringPrimitive(model)).and( Var("TABLE").eq(StringPrimitive(name)) ).and( Var("ATTR").in(wantCol.map(StringPrimitive(_))) ) )

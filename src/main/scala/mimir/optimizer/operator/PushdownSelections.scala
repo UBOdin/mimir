@@ -53,10 +53,10 @@ object PushdownSelections extends OperatorOptimization {
 				val dualSchema = lhsSchema ++ rhsSchema
 
 				if(! (lhsSchema & rhsSchema).isEmpty ){
-					throw new SQLException("Pushdown into overlapping schema ("+(lhsSchema&rhsSchema)+"): "+o)
+					throw new SQLException(s"Pushdown into overlapping schema (${lhsSchema&rhsSchema}): $o")
 				}
 				if(! (ExpressionUtils.getColumns(cond) &~ dualSchema).isEmpty ){
-					throw new SQLException("Pushdown into unsafe schema")
+					throw new SQLException(s"Pushdown into unsafe schema: ${ExpressionUtils.getColumns(cond)} -> ${lhsSchema union rhsSchema}:\n $o")
 				}
 
 				// Generic clauses have no variable references.  In principle, 

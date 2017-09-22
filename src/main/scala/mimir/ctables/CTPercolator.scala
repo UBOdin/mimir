@@ -531,6 +531,18 @@ object CTPercolator
         )
       }
       case v @ AdaptiveView(model, name, query, metadata) => { 
+        // Oliver:
+        //   I'm on the fence about whether we want to treat this case as being different from default views.
+        //   In principle, we want to decide whether any of the attributes or the table itself are NonDet and
+        //   to tag the relevant columns/rows here.  However, this has the side effect of tagging *every* row 
+        //   with non-determinsm.  However, as described in issue #165
+        //    > https://github.com/UBOdin/mimir/issues/165
+        //   this may not be the interface that we're looking for.  Table-wide annotations should *really* 
+        //   be added through some other vector (e.g., labeling column headers or somesuch)
+        //
+        //   For now, I'm just going to leave adaptive views to operate like they would otherwise operate.
+        //   As soon as it becomes appropriate to start tagging things... then see 
+        //   CTExplainer.explainSubsetWithoutOptimizing for an idea of how to implement this correctly.
         val (newQuery, colDeterminism, rowDeterminism) = percolateLite(query, models)
         val columns = query.columnNames
 
@@ -547,6 +559,7 @@ object CTPercolator
           Var(mimirRowDeterministicColumnName)
         )
       }
+
       case EmptyTable(sch) => {
         return (oper, 
           // All columns are deterministic

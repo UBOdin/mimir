@@ -128,8 +128,19 @@ class AdaptiveSchemaManager(db: Database)
 
   def viewFor(schema: String, table: String): Option[Operator] =
   {
-    get(schema).flatMap { case (lens, config) =>
-      lens.viewFor(db, config, table)
+    get(schema) match {
+      case None => None
+      case Some((lens, config)) => {
+        lens.viewFor(db, config, table) match {
+          case None => None
+          case Some(viewQuery) => 
+            Some(AdaptiveView(
+              schema,
+              table, 
+              viewQuery
+            ))
+        }
+      }
     }
   }
 }
