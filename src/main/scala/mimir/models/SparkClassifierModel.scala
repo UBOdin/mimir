@@ -57,9 +57,9 @@ object SparkClassifierModel
 class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
   extends Model(name) 
   with NeedsReconnectToDatabase 
+  with SourcedFeedback
+  with ModelCache
 {
-  val feedback = scala.collection.mutable.Map[String,PrimitiveValue]()
-  val classificationCache = scala.collection.mutable.Map[String,PrimitiveValue]()
   val colIdx:Int = query.columnNames.indexOf(colName)
   val classifyUpFrontAndCache = true
   var classifyAllPredictions:Option[Map[String, Seq[(String, Double)]]] = None
@@ -72,6 +72,9 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
   def sparkMLInstance = SparkClassifierModel.availableSparkModels.getOrElse(sparkMLInstanceType, (Classification, Classification.NaiveBayesMulticlassModel()))._1
   def sparkMLModelGenerator = SparkClassifierModel.availableSparkModels.getOrElse(sparkMLInstanceType, (Classification, Classification.NaiveBayesMulticlassModel()))._2
   
+  def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : String = args(0).asString
+  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = args(0).asString
+
   /**
    * When the model is created, learn associations from the existing data.
    */
@@ -96,12 +99,11 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
   
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
   {
-    val rowid = args(0).asString
-    feedback(rowid) = v
+    setFeedback(idx, args, v)
   }
 
   def isAcknowledged(idx: Int, args: Seq[PrimitiveValue]): Boolean =
-    feedback contains(args(0).asString)
+    hasFeedback(idx, args)
 
   
   private def classify(rowid: RowIdPrimitive, rowValueHints: Seq[PrimitiveValue]): Seq[(String,Double)] = {
@@ -148,7 +150,7 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
     classifyAllPredictions = Some(predictionMap)
     
     predictionMap.map(mapEntry => {
-      classificationCache(mapEntry._1) = classToPrimitive( mapEntry._2(0)._1)
+      setCache(0,Seq(RowIdPrimitive(mapEntry._1)), null, classToPrimitive( mapEntry._2(0)._1))
     })
     
     db.models.persist(this)   
@@ -176,14 +178,14 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
   {
     val rowidstr = args(0).asString
     val rowid = RowIdPrimitive(rowidstr)
-    feedback.get(rowid.asString) match {
+    getFeedback(idx, args) match {
       case Some(v) => v
       case None => {
-        classificationCache.get(rowidstr) match {
+        getCache(idx, args, hints) match {
           case None => {
-            if(classifyUpFrontAndCache && classificationCache.isEmpty ){
+            if(classifyUpFrontAndCache && cache.isEmpty ){
               classifyAll()
-              classificationCache.getOrElse(rowidstr, classToPrimitive("0"))
+              getCache(idx, args, hints).getOrElse(classToPrimitive("0"))
             }
             else if(classifyUpFrontAndCache)
               classToPrimitive("0")
@@ -226,15 +228,15 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
   { 
     val rowidstr = args(0).asString
     val rowid = RowIdPrimitive(rowidstr)
-    feedback.get(rowidstr) match {
+    getFeedback(idx, args) match {
       case Some(v) =>
         s"You told me that $name.$colName = $v on row $rowid"
       case None => 
-        val selem = classificationCache.get(rowidstr) match {
+        val selem = getCache(idx, args, hints) match {
           case None => {
-            if(classifyUpFrontAndCache && classificationCache.isEmpty ){
+            if(classifyUpFrontAndCache && cache.isEmpty ){
               classifyAll()
-              classificationCache.get(rowidstr)
+              getCache(idx, args, hints)
             }
             else if(classifyUpFrontAndCache)
               None

@@ -20,12 +20,12 @@ class DefaultMetaModel(name: String, context: String, models: Seq[String])
 {
   def varType(idx: Int, args: Seq[Type]): Type = TString()
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
-    choices.getOrElse(idx, StringPrimitive(models.head))
+    choices(idx).getOrElse( StringPrimitive(models.head))
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
     StringPrimitive(RandUtils.pickFromList(randomness, models))
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String =
   {
-    choices.get(idx) match {
+    choices(idx) match {
       case None => {
         val bestChoice = models.head
         val modelString = models.mkString(", ")

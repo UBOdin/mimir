@@ -22,10 +22,10 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
   with Serializable
   with NeedsReconnectToDatabase
   with FiniteDiscreteDomain
+  with SourcedFeedback
+  with ModelCache
 {
   
-  val feedback = scala.collection.mutable.Map[String,PrimitiveValue]()
-  val classificationCache = scala.collection.mutable.Map[String,PrimitiveValue]()
   val TRAINING_LIMIT = 10000
   var classifierModel: Option[SparkML.SparkModel] = None
   var sparkMLInstance: Option[() => SparkML] = None
@@ -33,6 +33,9 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
   
   @transient var db: Database = null
   
+  def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : String = args(0).asString
+  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = args(0).asString
+ 
   private def classToPrimitive(value:String): PrimitiveValue = 
   {
     TextUtils.parsePrimitive(colTypes(0), value)
@@ -70,7 +73,7 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
   def varType(idx: Int, args: Seq[Type]) = colTypes(idx)
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ) = {
     val rowid = args(0).asString
-    feedback.get(rowid) match {
+    getFeedback(idx, args) match {
       case Some(v) => v
       case None => {
         val arg1 = args(1)
@@ -78,18 +81,18 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
         useClassifier match { //use result of case expression
           case None => hints(0)
           case Some((sparmMLInst, modelGen)) => 
-            classificationCache.get(rowid) match {
+            getCache(idx, args, hints) match {
               case None => {
                 if(classifyUpFrontAndCache){
                   classifyAll()
-                  pickFromArgs(args, classificationCache.get(rowid)) 
+                  pickFromArgs(args, getCache(idx, args, hints)) 
                 }
                 else
                   classify(idx, args, hints) match {
                     case Seq() => pickFromArgs(args) 
                     case x => {
                       val prediction = classToPrimitive( x.head._1 )
-                      classificationCache(rowid) = prediction
+                      setCache(idx, args, hints, prediction)
                       pickFromArgs(args, Some(prediction))
                     }
                   }
@@ -128,7 +131,7 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
   }
   def reason(idx: Int, args: Seq[PrimitiveValue],hints: Seq[PrimitiveValue]): String = {
     val rowid = RowIdPrimitive(args(0).asString)
-    feedback.get(rowid.asString) match {
+    getFeedback(idx, args) match {
       case Some(v) =>
         s"You told me that $resultColumn = $v on row $rowid"
       case None => {
@@ -141,10 +144,10 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
   }
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = { 
     val rowid = args(0).asString
-    feedback(rowid) = v
+    setFeedback(idx, args, v)
   }
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = {
-    feedback contains(args(0).asString)
+    hasFeedback(idx, args)
   }
   def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq(TAny())
    
@@ -188,7 +191,7 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
     classifyAllPredictions = Some(predictionMap)
     
     predictionMap.map(mapEntry => {
-      classificationCache(mapEntry._1) = classToPrimitive( mapEntry._2(0)._1)
+      setCache(0, Seq(RowIdPrimitive(mapEntry._1)), null, classToPrimitive( mapEntry._2(0)._1))
     })
     
     db.models.persist(this)   
