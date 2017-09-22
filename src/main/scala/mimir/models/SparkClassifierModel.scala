@@ -53,7 +53,7 @@ object SparkClassifierModel
   
 }
 
-@SerialVersionUID(1000L)
+@SerialVersionUID(1001L)
 class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
   extends Model(name) 
   with NeedsReconnectToDatabase 

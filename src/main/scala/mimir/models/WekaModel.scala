@@ -77,7 +77,7 @@ object WekaModel
   }
 }
 
-@SerialVersionUID(1000L)
+@SerialVersionUID(1001L)
 class SimpleWekaModel(name: String, colName: String, query: Operator)
   extends Model(name) 
   with NeedsReconnectToDatabase 

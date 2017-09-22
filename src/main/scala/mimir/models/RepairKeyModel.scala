@@ -16,7 +16,7 @@ import mimir.Database
  * The one argument is a value for the key.  
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
-@SerialVersionUID(1001L)
+@SerialVersionUID(1002L)
 class RepairKeyModel(
   name: String, 
   context: String, 

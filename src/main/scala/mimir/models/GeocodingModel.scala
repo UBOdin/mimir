@@ -13,7 +13,7 @@ import mimir.Database
  * The one argument is a value for the key.  
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
-@SerialVersionUID(1000L)
+@SerialVersionUID(1001L)
 class GeocodingModel(override val name: String, addrCols:Seq[Expression], source: Operator) 
   extends Model(name) 
   with Serializable

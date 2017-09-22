@@ -11,7 +11,7 @@ import mimir.util._
  * This meta model always ignores VG arguments and picks the first model
  * in the list.
  */
-@SerialVersionUID(1000L)
+@SerialVersionUID(1001L)
 class DefaultMetaModel(name: String, context: String, models: Seq[String]) 
   extends Model(name) 
   with DataIndependentFeedback 

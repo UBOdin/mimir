@@ -12,7 +12,7 @@ import mimir.util._
  * The one argument is a value for the key.  
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
-@SerialVersionUID(1000L)
+@SerialVersionUID(1001L)
 class MissingKeyModel(override val name: String, keys:Seq[String], colTypes:Seq[Type]) 
   extends Model(name) 
   with Serializable

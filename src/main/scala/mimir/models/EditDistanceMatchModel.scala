@@ -68,7 +68,7 @@ object EditDistanceMatchModel
   }
 }
 
-@SerialVersionUID(1000L)
+@SerialVersionUID(1001L)
 class EditDistanceMatchModel(
   name: String,
   metricName: String,

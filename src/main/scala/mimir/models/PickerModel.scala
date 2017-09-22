@@ -16,7 +16,7 @@ import mimir.ml.spark.SparkML.{SparkModelGeneratorParams => ModelParams }
  * The one argument is a value for the key.  
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
-@SerialVersionUID(1000L)
+@SerialVersionUID(1001L)
 class PickerModel(override val name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[Type], useClassifier:Option[(() => SparkML, SparkML.SparkModelGenerator)], classifyUpFrontAndCache:Boolean, source: Operator) 
   extends Model(name) 
   with Serializable

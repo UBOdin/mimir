@@ -38,7 +38,7 @@ object TypeInferenceModel
   }
 }
 
-@SerialVersionUID(1000L)
+@SerialVersionUID(1001L)
 class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac: Double)
   extends Model(name)
   with DataIndependentFeedback
