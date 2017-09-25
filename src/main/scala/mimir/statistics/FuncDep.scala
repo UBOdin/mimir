@@ -118,6 +118,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
   var entityPairList:ArrayList[(Integer,Integer)] = null
   var nodeTable: ArrayList[Integer] = new ArrayList[Integer]() // contains a list of all the nodes
   var onetoone: mutable.ListBuffer[(Int,Int)] = new mutable.ListBuffer[(Int,Int)] // one-to-one pairs that get deleted from the graph
+  var edgeTable: mutable.Buffer[(Int, Int, Double)] = null
 
   // timers
   var startTime:Long = 0
@@ -213,7 +214,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
 
     // Initalize tables
     // double is the strength for that edge
-    var edgeTable: mutable.Buffer[(Int, Int, Double)] = mutable.Buffer[(Int, Int, Double)]() // contains the node numbers for the dependency graph, the names are numbers from the schema 0 to sch.length are the possibilities
+    edgeTable = mutable.Buffer[(Int, Int, Double)]() // contains the node numbers for the dependency graph, the names are numbers from the schema 0 to sch.length are the possibilities
     var maxTable:mutable.IndexedSeq[PrimitiveValue] =
       mutable.IndexedSeq.fill(countTable.size){ NullPrimitive() } // contains the max values for each column, used for phase1 formula
     parentTable = mutable.Map()
@@ -341,9 +342,6 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
 
     if (!edgeTable.isEmpty) {
       for((a1, a2, strength) <- edgeTable) {
-        if(a2 == 25) {
-          println(s"($a1,$a2):$strength")
-        }
         if(!fdGraph.containsEdge((a2,a1))) {
           fdGraph.addEdge((a1,a2), a1.toInt, a2.toInt, EdgeType.DIRECTED)
         } else {
