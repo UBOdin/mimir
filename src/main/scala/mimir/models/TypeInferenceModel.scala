@@ -141,7 +141,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
       }
       case Some(t) =>
         val typeStr = Cast(TType(), t).toString.toUpperCase
-        s"You told me that $name.${columns(idx)} was of type $typeStr"
+        s"${getReasonWho()} told me that $name.${columns(idx)} was of type $typeStr"
     }
   }
 

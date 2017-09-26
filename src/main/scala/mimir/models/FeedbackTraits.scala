@@ -2,8 +2,16 @@ package mimir.models
 
 import mimir.algebra._
 
+case class FeedbackSourceIdentifier(id:String = "", name:String = "Ground Source")
+
 object FeedbackSource {
-  var feedbackSource:String = ""
+  val groundSource = FeedbackSourceIdentifier()
+  var feedbackSource = FeedbackSourceIdentifier()
+  var feedbackRequestSource = FeedbackSourceIdentifier()
+  def setSource(src:FeedbackSourceIdentifier) : Unit = {
+    feedbackSource = src
+    feedbackRequestSource = src
+  }
 }
 
 trait DataIndependentFeedback extends SourcedFeedbackT[Int] {
@@ -21,13 +29,16 @@ trait DataIndependentFeedback extends SourcedFeedbackT[Int] {
 trait SourcedFeedback extends SourcedFeedbackT[String] 
 
 trait SourcedFeedbackT[T] {
-  val feedbackSources = scala.collection.mutable.Set[String]()
-  val feedback = scala.collection.mutable.Map[T,scala.collection.mutable.Map[String, PrimitiveValue]]()
+  val feedbackSources = scala.collection.mutable.Set[FeedbackSourceIdentifier]()
+  val feedback = scala.collection.mutable.Map[T,scala.collection.mutable.Map[FeedbackSourceIdentifier, PrimitiveValue]]()
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) : T
   def getFeedback(idx: Int, args: Seq[PrimitiveValue]) : Option[PrimitiveValue] = {
     feedback.get(getFeedbackKey(idx,args)) match {
       case None => None
-      case Some(sourceMap) => sourceMap.get(FeedbackSource.feedbackSource) 
+      case Some(sourceMap) => sourceMap.get(FeedbackSource.groundSource) match {
+        case None => sourceMap.get(FeedbackSource.feedbackSource) 
+        case fb@Some(_) => fb
+      }
     }
   }
   def setFeedback(idx: Int, args: Seq[PrimitiveValue], value:PrimitiveValue) : Unit = {
@@ -42,9 +53,18 @@ trait SourcedFeedbackT[T] {
     feedback.get(getFeedbackKey(idx,args)) match {
       case None => false
       case Some(sourceMap) => sourceMap.get(FeedbackSource.feedbackSource) match {
-        case None => false
+        case None => sourceMap.get(FeedbackSource.groundSource) match {
+          case None => false
+          case Some(value) => true
+        }
         case Some(value) => true
       }
     }
+  }
+  def getReasonWho() : String = {
+    if(FeedbackSource.feedbackSource.equals(FeedbackSource.feedbackRequestSource))
+      "You"
+    else
+      FeedbackSource.feedbackSource.name
   }
 }
