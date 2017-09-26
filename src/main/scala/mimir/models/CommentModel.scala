@@ -37,7 +37,7 @@ class CommentModel(override val name: String, cols:Seq[String], colTypes:Seq[Typ
     //println("CommentModel:reason: " + idx + " [ " + args.mkString(",") + " ] [ " + hints.mkString(",") + " ]" );
     val rowid = RowIdPrimitive(args(0).asString)
     val rval = getFeedback(idx, args) match {
-      case Some(v) => s"${getReasonWho()} told me that $v is valid for row $rowid"
+      case Some(v) => s"${getReasonWho(idx,args)} told me that $v is valid for row $rowid"
       case None => s" ${comments(idx)}"
       case _ => throw new SQLException("This is impossible...")
     }

@@ -41,10 +41,10 @@ class MissingKeyModel(override val name: String, keys:Seq[String], colTypes:Seq[
     getFeedback(idx, args) match {
       case Some(v) => v match {
           case NullPrimitive() => {
-            s"${getReasonWho()} told me that the row of this cell was missing and that the value of this cell is unknown so I have made it NULL."
+            s"${getReasonWho(idx,args)} told me that the row of this cell was missing and that the value of this cell is unknown so I have made it NULL."
           }
           case i => {
-            s"${getReasonWho()} told me that this key was missing because it was in a sequence but not in the query results: $i" 
+            s"${getReasonWho(idx,args)} told me that this key was missing because it was in a sequence but not in the query results: $i" 
           }
       }
       case None => hints(0) match {

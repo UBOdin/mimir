@@ -23,25 +23,15 @@ includeFilter in (Compile, unmanagedResourceDirectories):= ".dylib,.dll,.so"
 unmanagedClasspath in Runtime += baseDirectory.value / "conf"
 unmanagedResourceDirectories in Test += baseDirectory.value / "conf"
 
+fork := true
+outputStrategy in run := Some(StdoutOutput)
+connectInput in run := true
 cancelable in Global := true
-javaOptions ++= Seq("-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK", "-classpath", Path.makeString((fullClasspath in Compile).value map { _.data }) ) 
+javaOptions ++= Seq("-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK")
 scalacOptions in Test ++= Seq("-Yrangepos")
 parallelExecution in Test := false
 testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
 mainClass in Compile := Some("mimir.Mimir")
-
-run := {
-  val args = sbt.complete.Parsers.spaceDelimited("[main args]").parsed
-  val classpath = (fullClasspath in Compile).value
-  val classpathString = Path.makeString(classpath map { _.data })
-  val jvmArgs = Seq("-Xmx4g", "-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK")
-  val (jh, os, bj, bd, jo, ci, ev) = (javaHome.value, Some(StdoutOutput), Vector[java.io.File](), 
-		Some(baseDirectory.value), (jvmArgs ++ Seq("-classpath", classpathString)).toVector, true, envVars.value)
-  Fork.java(
-    ForkOptions(jh, os, bj, bd, jo, ci, ev),
-    "mimir.Mimir" +: args
-  )
-}
 
 lazy val runMimirVizier = inputKey[Unit]("run MimirVizier")
 runMimirVizier := {
@@ -120,8 +110,8 @@ libraryDependencies ++= Seq(
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
     
   //spark ml
-  "org.apache.spark" 			  %   "spark-sql_2.11" 		  % "2.2.0" % "provided",
-  "org.apache.spark" 			  %   "spark-mllib_2.11" 	  % "2.2.0" % "provided",
+  "org.apache.spark" 			  %   "spark-sql_2.11" 		  % "2.2.0",
+  "org.apache.spark" 			  %   "spark-mllib_2.11" 	  % "2.2.0",
  
   //////////////////////// Jung ////////////////////////
   // General purpose graph manipulation library

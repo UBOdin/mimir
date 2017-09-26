@@ -2,7 +2,7 @@ package mimir.models
 
 import mimir.algebra._
 
-case class FeedbackSourceIdentifier(id:String = "", name:String = "Ground Source")
+case class FeedbackSourceIdentifier(id:String = "", name:String = "My Master")
 
 object FeedbackSource {
   val groundSource = FeedbackSourceIdentifier()
@@ -61,10 +61,31 @@ trait SourcedFeedbackT[T] {
       }
     }
   }
-  def getReasonWho() : String = {
-    if(FeedbackSource.feedbackSource.equals(FeedbackSource.feedbackRequestSource))
-      "You"
-    else
-      FeedbackSource.feedbackSource.name
+  def getReasonWho(idx: Int, args: Seq[PrimitiveValue]) : String = {
+    feedback.get(getFeedbackKey(idx,args)) match {
+      case None => "Nobody"
+      case Some(sourceMap) => sourceMap.get(FeedbackSource.groundSource) match {
+        case None => sourceMap.get(FeedbackSource.feedbackRequestSource) match {
+          case None => FeedbackSource.feedbackSource.name
+          case Some(value) => "You"
+        }
+        case Some(value) => if(FeedbackSource.feedbackRequestSource.equals(FeedbackSource.groundSource)) {
+          "You"
+        }
+        else{
+          FeedbackSource.groundSource.name
+        }
+          
+      }
+    }
+  }
+  def hasGroundFeedback(idx: Int, args: Seq[PrimitiveValue]): Boolean = {
+    feedback.get(getFeedbackKey(idx,args)) match {
+      case None => false
+      case Some(sourceMap) => sourceMap.get(FeedbackSource.groundSource) match {
+        case None => false
+        case Some(value) => true
+      }
+    }
   }
 }

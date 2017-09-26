@@ -133,7 +133,7 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
     val rowid = RowIdPrimitive(args(0).asString)
     getFeedback(idx, args) match {
       case Some(v) =>
-        s"${getReasonWho()} told me that $resultColumn = $v on row $rowid"
+        s"${getReasonWho(idx,args)} told me that $resultColumn = $v on row $rowid"
       case None => {
         useClassifier match { //use result of case expression
           case None => s"I used an expressions to pick a value for $resultColumn from columns: ${pickFromCols.mkString(",")}"
