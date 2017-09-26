@@ -127,13 +127,13 @@ class EditDistanceMatchModel(
 
       case Some(NullPrimitive()) => {
         val targetName = target._1
-        s"${getReasonWho()} told me that nothing maps to $targetName"
+        s"${getReasonWho(idx,args)} told me that nothing maps to $targetName"
       }
 
       case Some(choicePrim) => {
         val targetName = target._1
         val choiceStr = choicePrim.asString
-        s"${getReasonWho()} told me that $choiceStr maps to $targetName"
+        s"${getReasonWho(idx,args)} told me that $choiceStr maps to $targetName"
       }
     }
   }

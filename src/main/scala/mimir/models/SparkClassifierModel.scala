@@ -230,7 +230,7 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
     val rowid = RowIdPrimitive(rowidstr)
     getFeedback(idx, args) match {
       case Some(v) =>
-        s"${getReasonWho()} told me that $name.$colName = $v on row $rowid"
+        s"${getReasonWho(idx,args)} told me that $name.$colName = $v on row $rowid"
       case None => 
         val selem = getCache(idx, args, hints) match {
           case None => {
