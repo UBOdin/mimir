@@ -188,6 +188,20 @@ object Eval
       case _ => e.recur(inline(_, bindings))
     }
   }
+
+  /**
+   * Apply a given variable binding to the specified expression, and then
+   * thoroughly inline it, recursively applying simplify() at all levels,
+   * to all subtrees of the expression
+   */
+  def inline(e: Expression)(bindings: (String => Expression)):
+    Expression = 
+  {
+    e match {
+      case Var(v) => bindings(v)
+      case _ => e.recur(inline(_)(bindings))
+    }
+  }
   
   /**
    * Perform arithmetic on two primitive values.

@@ -9,9 +9,11 @@ import mimir.ctables._
 import mimir.util.RandUtils
 import mimir.{Analysis, Database}
 import mimir.models._
+import mimir.parser.ExpressionParser
 
 import scala.collection.JavaConversions._
 import scala.util._
+
 
 object MissingValueLens {
 
@@ -22,16 +24,71 @@ object MissingValueLens {
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
   {
-    val targetColumns:List[String] = args.map(db.interpreter.evalString(_).toUpperCase).toSet.toList
-    val schema:Set[String] = query.columnNames.toSet
-    val missingColumns = targetColumns.toSet -- schema
 
+    // Preprocess the lens arguments...
+    // Semantics are as follows:
+    // 
+    // - 'columnName' means that we should replace missing values of columnName
+    // - columnName   means that we should replace missing values of columnName
+    // - REQUIRE(column > ...) or a similar constraint means that we should replace 
+    //   missing values and values that don't satisfy the constraint
+    // - REQUIRE(column, column > ...) is similar, but allows you to define constraints
+    //   over multiple columns
+
+    val targetColumnsAndTests:Map[String, Expression] = 
+      args.map {
+        case Var(v)             => (v.toUpperCase, Var(v.toUpperCase).isNull.not)
+        case StringPrimitive(v) => (v.toUpperCase, Var(v.toUpperCase).isNull.not)
+        case e@Function(f, args)  => {
+          (f.toUpperCase, args) match {
+            case ("REQUIRE", Seq(Var(v), constraint:Expression)) => (v.toUpperCase, constraint)
+            case ("REQUIRE", Seq(StringPrimitive(s))) => {
+              val constraint = ExpressionParser.expr(s);
+              ExpressionUtils.getColumns(constraint).toSeq match {
+                case Seq(v) => (v.toUpperCase, Eval.inline(constraint) { x => Var(x.toUpperCase) })
+                case Seq() => throw new RAException(s"Invalid REQUIRE Constraint $e (need a variable in require)")
+                case _ => throw new RAException(s"Invalid REQUIRE Constraint $e (one variable per require)")
+              }
+            }
+            case ("REQUIRE", Seq(constraint: Expression)) => 
+              ExpressionUtils.getColumns(constraint).toSeq match {
+                case Seq(v) => (v.toUpperCase, Eval.inline(constraint) { x => Var(x.toUpperCase) })
+                case Seq() => throw new RAException(s"Invalid REQUIRE Constraint $e (need a variable in require)")
+                case _ => throw new RAException(s"Invalid REQUIRE Constraint $e (one variable per require)")
+              }
+            case ("REQUIRE", _) => 
+             throw new RAException(s"Invalid REQUIRE Constraint $e (too many arguments)") 
+          }
+        }
+        case e => 
+          throw new RAException(s"Invalid Constraint $e (unknown type)") 
+      }.toMap
+
+    // Sanity check.  Require that all columns that we fix and all columns referenced in the 
+    // constraints are defined in the original query.
+    val schema = query.columnNames
+    val requiredColumns = targetColumnsAndTests.values.flatMap { ExpressionUtils.getColumns(_) }
+    val missingColumns = (targetColumnsAndTests.keySet ++ requiredColumns) -- schema.toSet
     if(!missingColumns.isEmpty){
       throw new SQLException(
         "Invalid missing value lens: ["+missingColumns.mkString(", ")+
         "] not part of ["+schema.mkString(", ")+"]"
       )
     }
+
+    // Create a query where all values that dont satisfy their constraints are removed
+    // (used for training the models)
+    val noErroneousValuesQuery =
+      query.map(
+        schema.
+          map { col => 
+            targetColumnsAndTests.get(col) match {
+              case Some(IsNullExpression(v)) if col.equals(v) => (col, Var(col))
+              case Some(test)                                 => (col, test.thenElse { Var(col) } { NullPrimitive() })
+              case None                                       => (col, Var(col))
+            }
+          }:_*
+      )
 
     val modelsByType: Seq[(String, Seq[(String, (Model, Int, Seq[Expression]))])] =
       ModelRegistry.imputations.toSeq.map {
@@ -43,8 +100,8 @@ object MissingValueLens {
             constructor(
               db, 
               s"$name:$modelCategory", 
-              targetColumns, 
-              query
+              targetColumnsAndTests.keySet.toSeq, 
+              noErroneousValuesQuery
             ).toSeq
           
           (modelCategory, modelsByTypeAndColumn)
@@ -58,7 +115,7 @@ object MissingValueLens {
       LensUtils.extractModelsByColumn(modelsByType)
 
     // Sanity check...
-    targetColumns.foreach( target => {
+    targetColumnsAndTests.keySet.foreach( target => {
       if(!candidateModels.contains(target)){ 
         throw new SQLException("No valid imputation model for column '"+target+"' in lens '"+name+"'");
       }
@@ -95,9 +152,9 @@ object MissingValueLens {
           case Some(replacementExpr) => 
             ProjectArg(col,
               Conditional(
-                IsNullExpression(Var(col)),
-                replacementExpr,
-                Var(col)
+                targetColumnsAndTests(col),
+                Var(col),
+                replacementExpr
               ))
         })
 

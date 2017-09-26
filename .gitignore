@@ -51,3 +51,4 @@ tpch-dbgen
 
 # Python
 *.pyc
+.classpath
