@@ -11,7 +11,8 @@ dependencyOverrides += "org.scala-lang" % "scala-library" % scalaVersion.value
 // in Travis with `sudo: false`.
 // See https://github.com/sbt/sbt/issues/653
 // and https://github.com/travis-ci/travis-ci/issues/3775
-javaOptions ++= Seq("-Xmx2G", "-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK") 
+//javaOptions ++= Seq("-Xmx2G" )
+
 
 scalacOptions ++= Seq(
   "-feature"
@@ -22,14 +23,29 @@ includeFilter in (Compile, unmanagedResourceDirectories):= ".dylib,.dll,.so"
 unmanagedClasspath in Runtime += baseDirectory.value / "conf"
 unmanagedResourceDirectories in Test += baseDirectory.value / "conf"
 
-fork := true 
-connectInput in run := true
+fork := true
 outputStrategy in run := Some(StdoutOutput)
+connectInput in run := true
 cancelable in Global := true
+javaOptions ++= Seq("-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK")
 scalacOptions in Test ++= Seq("-Yrangepos")
 parallelExecution in Test := false
 testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
 mainClass in Compile := Some("mimir.Mimir")
+
+lazy val runMimirVizier = inputKey[Unit]("run MimirVizier")
+runMimirVizier := {
+  val args = sbt.complete.Parsers.spaceDelimited("[main args]").parsed
+  val classpath = (fullClasspath in Compile).value
+  val classpathString = Path.makeString(classpath map { _.data })
+  val jvmArgs = Seq("-Xmx4g", "-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK")
+  val (jh, os, bj, bd, jo, ci, ev) = (javaHome.value, outputStrategy.value, Vector[java.io.File](), 
+		Some(baseDirectory.value), (jvmArgs ++ Seq("-classpath", classpathString)).toVector, connectInput.value, envVars.value)
+  Fork.java(
+    ForkOptions(jh, os, bj, bd, jo, ci, ev),
+    "mimir.MimirVizier" +: args
+  )
+}
 
 //for tests that need to run in their own jvm because they need specific envArgs or otherwise
 testGrouping in Test := {
@@ -94,8 +110,8 @@ libraryDependencies ++= Seq(
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
     
   //spark ml
-  "org.apache.spark" 			  %   "spark-sql_2.11" 		  % "2.2.0" % "provided",
-  "org.apache.spark" 			  %   "spark-mllib_2.11" 	  % "2.2.0" % "provided",
+  "org.apache.spark" 			  %   "spark-sql_2.11" 		  % "2.2.0",
+  "org.apache.spark" 			  %   "spark-mllib_2.11" 	  % "2.2.0",
  
   //////////////////////// Jung ////////////////////////
   // General purpose graph manipulation library

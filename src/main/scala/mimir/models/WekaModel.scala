@@ -279,7 +279,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
     val rowid = RowIdPrimitive(args(0).asString)
     getFeedback(idx, args) match {
       case Some(v) =>
-        s"You told me that $name.$colName = $v on row $rowid"
+        s"${getReasonWho(idx,args)} told me that $name.$colName = $v on row $rowid"
       case None => 
         val classes = classify(rowid.asInstanceOf[RowIdPrimitive], hints)
         val total:Double = classes.map(_._1).fold(0.0)(_+_)

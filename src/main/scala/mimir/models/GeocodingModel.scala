@@ -89,7 +89,7 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
     val geocoder = args(5).asString
     getFeedback(idx, args) match {
       case Some(v) =>
-        s"You told me that $houseNumber $streetName, $city, $state has ${latlonLabel(idx)} = ${v.asInstanceOf[PrimitiveValue]} on row $rowid"
+        s"${getReasonWho(idx,args)} told me that $houseNumber $streetName, $city, $state has ${latlonLabel(idx)} = ${v.asInstanceOf[PrimitiveValue]} on row $rowid"
       case None => 
         getCache(idx, args, hints) match {
           case Some(v) =>

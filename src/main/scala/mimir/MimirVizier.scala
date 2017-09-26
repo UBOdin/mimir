@@ -407,28 +407,37 @@ object MimirVizier extends LazyLogging {
   
   def getAvailableViztoolUsers() : String = {
     var userIDs = Seq[String]()
-    val ret = db.query(Project(Seq(ProjectArg("USER_ID",Var("USER_ID")),ProjectArg("FIRST_NAME",Var("FIRST_NAME")),ProjectArg("LAST_NAME",Var("LAST_NAME"))), db.table("USERS")))(results => {
-    while(results.hasNext) {
-      val row = results.next()
-      userIDs = userIDs:+s"${row(0)}- ${row(1).asString} ${row(2).asString}"
+    try{
+      val ret = db.query(Project(Seq(ProjectArg("USER_ID",Var("USER_ID")),ProjectArg("FIRST_NAME",Var("FIRST_NAME")),ProjectArg("LAST_NAME",Var("LAST_NAME"))), db.table("USERS")))(results => {
+      while(results.hasNext) {
+        val row = results.next()
+        userIDs = userIDs:+s"${row(0)}- ${row(1).asString} ${row(2).asString}"
+      }
+      userIDs.mkString(",") 
+      })
+      logger.debug(s"getAvailableViztoolUsers: From Viztrails: $ret")
+      ret
+    }catch {
+      case t: Throwable => userIDs.mkString(",")
     }
-    userIDs.mkString(",") 
-    })
-    logger.debug(s"getAvailableViztoolUsers: From Viztrails: $ret")
-    ret
   }
   
   def getAvailableViztoolDeployTypes() : String = {
     var types = Seq[String]("GIS", "DATA")
-    val ret = db.query(Project(Seq(ProjectArg("TYPE",Var("TYPE"))), db.table("CLEANING_JOBS")))(results => {
-    while(results.hasNext) {
-      val row = results.next()
-     types = types:+s"${row(0).asString}"
+    try {
+      val ret = db.query(Project(Seq(ProjectArg("TYPE",Var("TYPE"))), db.table("CLEANING_JOBS")))(results => {
+      while(results.hasNext) {
+        val row = results.next()
+       types = types:+s"${row(0).asString}"
+      }
+      types.distinct.mkString(",")
+      })
+      logger.debug(s"getAvailableViztoolDeployTypes: From Viztrails: $ret")
+      ret
+    }catch {
+      case t: Throwable => types.mkString(",")
     }
-    types.distinct.mkString(",")
-    })
-    logger.debug(s"getAvailableViztoolDeployTypes: From Viztrails: $ret")
-    ret
+    
   }
   
   def getTuple(oper: mimir.algebra.Operator) : Map[String,PrimitiveValue] = {

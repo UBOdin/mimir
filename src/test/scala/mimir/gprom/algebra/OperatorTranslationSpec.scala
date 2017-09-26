@@ -38,6 +38,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
   def afterAll = {
     GProMWrapper.inst.gpromFreeMemContext(qmemctx)
     GProMWrapper.inst.gpromFreeMemContext(memctx)
+    GProMWrapper.inst.shutdown()
   }
   
 
