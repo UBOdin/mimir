@@ -5,9 +5,11 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
+import mimir.util._
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody} 
 import net.sf.jsqlparser.statement.drop.Drop
+import org.joda.time.{DateTime, Seconds, Days, Period}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection._
@@ -17,16 +19,16 @@ import scala.collection._
 //case class SeriesColumnItem(columnName: String, reason: CellExplanation)
 case class SeriesColumnItem(columnName: String, reason: String, score: Double)
 
-/* DetectSeries
+/** 
+ *  DetectSeries
  * DetectSeries is a series in a dataset where, when you sort on a given column
  * (call it the order column), adjacent rows will be related.
- * There are various methods to detect series:
- * 	-> Checking Types (Date and TimeStamp)
- *  -> Linear Regression
- *  -> Column Names
- *  -> Markov Predictor
+ * 
+ * 
+ * 
  */
-class DetectSeries(db: Database, threshold: Double) { 
+class DetectSeries(db: Database, threshold: Double)
+{ 
   
   //Stores the list of series corresponding to each table
   val tabSeqMap = collection.mutable.Map[String, Seq[SeriesColumnItem]]()
@@ -76,5 +78,50 @@ class DetectSeries(db: Database, threshold: Double) {
     })
     series
   }
+  
+  
+  def bestMatchSeriesColumn(colName: String, colType: Type, query: Operator): String = {
+
+    val seriesColumnList = this.detectSeriesOf(query)
+    
+    val seriesColumnListFiltered = seriesColumnList.filter(col => col.columnName != colName )
+    
+    val seriesMatchlist = seriesColumnListFiltered.map{ seriesCol =>
+      val projectQuery = query.project(colName, seriesCol.columnName).sort((seriesCol.columnName,true)).filter(Not((Var(seriesCol.columnName).isNull)))
+      var diffAdj: Seq[Double] = Seq()
+      
+      db.query(projectQuery) { result =>
+        val rowWindow = result.sliding(2)
+        
+        while(rowWindow.hasNext){
+          val rowPair = rowWindow.next
+          if(!db.interpreter.evalBool(rowPair(1).tuple(0).isNull.or(rowPair(0).tuple(0).isNull))){
+            val currDiff = { colType match {
+              case TInt()|TFloat() => Math.abs(rowPair(1).tuple(0).asDouble - rowPair(0).tuple(0).asDouble)
+              case TDate() => TimeUtils.getDaysBetween(rowPair(1).tuple(0), rowPair(0).tuple(0))
+              case TTimestamp() => TimeUtils.getSecondsBetween(rowPair(1).tuple(0), rowPair(0).tuple(0))
+//!!change TypeException 2nd param from TInt() to TInt()|TFloat()|TTimestamp()|TDate()
+              case _ => {throw new Exception("Column " + colName + " is "+colType+" type, does not follow a series"); -1.0} }
+            }
+            diffAdj = diffAdj :+ (currDiff)
+          }
+        }
+      }
+      val sum = diffAdj.sum
+      val count = diffAdj.length
+      val mean = Math.floor((sum/count)*10000)/10000
+      val stdDev = Math.floor(Math.sqrt((diffAdj.map(x => (x-mean)*(x-mean)).sum)/count)*10000)/10000
+      val stdError = stdDev/Math.sqrt(count)
+      (seriesCol.columnName, stdError)
+    }
+    
+    
+    if(seriesMatchlist.isEmpty)
+      null
+    else
+      seriesMatchlist.sortBy(_._2).head._1
+  }
+
+
 
 }
