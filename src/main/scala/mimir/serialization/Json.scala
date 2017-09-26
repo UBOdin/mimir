@@ -100,6 +100,15 @@ object Json
           "annotations" -> JsArray(annotations.toSeq.map { _.toString }.map { JsString(_) })
         ))
 
+      case AdaptiveView(model, name, query, annotations) => 
+        JsObject(Map[String,JsValue](
+          "type" -> JsString("table_adaptive"),
+          "model" -> JsString(model),
+          "name" -> JsString(name),
+          "query" -> ofOperator(query),
+          "annotations" -> JsArray(annotations.toSeq.map { _.toString }.map { JsString(_) })
+        ))
+
       case Limit(offset, count, source) => 
         JsObject(Map[String, JsValue](
           "type" -> JsString("limit"),
@@ -262,6 +271,15 @@ object Json
         )
       case "table_view" =>
         View(
+          elems("name").as[JsString].value,
+          toOperator(elems("query")),
+          elems("annotations").as[JsArray].value.map { annot =>
+            ViewAnnotation.withName(annot.as[JsString].value)
+          }.toSet
+        )
+      case "table_adaptive" =>
+        AdaptiveView(
+          elems("model").as[JsString].value,
           elems("name").as[JsString].value,
           toOperator(elems("query")),
           elems("annotations").as[JsArray].value.map { annot =>
