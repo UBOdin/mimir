@@ -15,6 +15,7 @@ class LensManager(db: Database) {
   val lensTypes = Map[String,((Database,String,Operator,Seq[Expression]) => 
                               (Operator,TraversableOnce[Model]))](
     "MISSING_VALUE"     -> MissingValueLens.create _,
+    "DOMAIN"            -> MissingValueLens.create _,
     "SCHEMA_MATCHING"   -> SchemaMatchingLens.create _,
     "TYPE_INFERENCE"    -> TypeInferenceLens.create _,
     "KEY_REPAIR"        -> RepairKeyLens.create _,
