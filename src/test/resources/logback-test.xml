@@ -44,7 +44,7 @@
   <logger name="mimir.models.EditDistanceMatchModel"               level="INFO"/> <!-- Use INFO to track stats -->
   <logger name="mimir.models.TypeInferenceModel"                   level="INFO"/> <!-- Use INFO to track stats -->
   <logger name="mimir.models.WekaModel$"                           level="INFO"/> <!-- Use INFO to track stats -->
-  <logger name="mimir.models.SeriesMissingValueModel"              level="TRACE"/> <!-- Use INFO to track stats -->
+  <logger name="mimir.models.SeriesMissingValueModel"              level="INFO"/>
 
   <!--+++++++++++++++++++++  Optimizer  +++++++++++++++++++++++-->
   <logger name="mimir.optimizer.Optimizer$"                        level="WARN"/>
