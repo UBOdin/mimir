@@ -9,7 +9,7 @@ import mimir.util._
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody} 
 import net.sf.jsqlparser.statement.drop.Drop
-import org.joda.time.{DateTime, Seconds, Days, Period}
+import org.joda.time.{DateTime, Seconds, Days, Period, Duration}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection._
@@ -94,6 +94,63 @@ object DetectSeries
       }
     series
   }
+
+  def ratio(low: PrimitiveValue, mid: PrimitiveValue, high: PrimitiveValue): Double =
+  {
+    (low.getType, mid.getType, high.getType) match {
+      case ( (TInt() | TFloat()), (TInt() | TFloat()), (TInt() | TFloat()) ) => {
+        val l = low.asDouble
+        val m = mid.asDouble
+        val h = high.asDouble
+        return (m - l) / (h - l)
+      }
+      case ( (TDate() | TTimestamp()),  (TDate() | TTimestamp()),  (TDate() | TTimestamp())) => {
+        val l = low.asDateTime
+        val m = mid.asDateTime
+        val h = high.asDateTime
+        return new Duration(l, h).getMillis().toDouble / new Duration(l, m).getMillis().toDouble
+      }
+      case ( lt, mt, ht ) =>
+        throw new RAException(s"Can't get ratio for [ $lt - $mt - $ht ]")
+    }
+  }
+  def interpolate(low: PrimitiveValue, mid: Double, high: PrimitiveValue): PrimitiveValue =
+  {
+    (low.getType, high.getType) match {
+      case ( TInt(), TInt() ) => {
+        val l = low.asLong
+        val h = high.asLong
+        return IntPrimitive( ((h - l) * mid + l).toLong )
+      }
+      case ( (TInt() | TFloat()), (TInt() | TFloat()) ) => {
+        val l = low.asDouble
+        val h = high.asDouble
+        return FloatPrimitive( (h - l) * mid + l )
+      }
+      case ( TDate(), TDate() ) => {
+        val l = low.asDateTime
+        val h = high.asDateTime
+        val ret = l.plus(new Duration(l, h).dividedBy( (1/mid).toLong ))
+        DatePrimitive(ret.getYear, ret.getMonthOfYear, ret.getDayOfMonth)
+      }
+      case ( (TDate() | TTimestamp()), (TDate() | TTimestamp())) => {
+        val l = low.asDateTime
+        val h = high.asDateTime
+        val ret = l.plus(new Duration(l, h).dividedBy( (1/mid).toLong ))
+        TimestampPrimitive(
+          ret.getYear,
+          ret.getMonthOfYear,
+          ret.getDayOfMonth,
+          ret.getHourOfDay,
+          ret.getMinuteOfHour,
+          ret.getSecondOfMinute,
+          ret.getMillisOfSecond
+        )
+      }
+      case ( lt, ht ) =>
+        throw new RAException(s"Can't interpolate [ $lt - $ht ]")
+    }
+  }
   
   
   def bestMatchSeriesColumn(db: Database, colName: String, colType: Type, query: Operator): Seq[(String,Double)] = 
@@ -128,18 +185,12 @@ object DetectSeries
               val key_test = triple(1)(0); val v_test = triple(1)(1)
               val key_high = triple(2)(0); val v_high = triple(2)(1)
 
-              val key_offset     = Eval.applyArith(Arith.Sub, key_test, key_low)
-              val key_max_offset = Eval.applyArith(Arith.Sub, key_high, key_low)
-              val scale          = Eval.applyArith(Arith.Div, key_offset, key_max_offset)
-              val v_offset       = Eval.applyArith(Arith.Sub, v_test, v_low)
-              val v_scaled       = Eval.applyArith(Arith.Mult, v_offset, scale)
-              val v_predicted    = Eval.applyArith(Arith.Add, v_low, v_scaled)
-
-              Eval.applyAbs(
-                Eval.applyArith(Arith.Sub, v_test, v_predicted)  
-              ) match { 
-                case NullPrimitive() => None // ignore
-                case v_error         => Some(v_test, v_error)
+              if( triple.flatten.contains(NullPrimitive()) ){
+                None
+              } else {
+                val scale = ratio(key_low, key_test, key_high)
+                val v_predicted = interpolate(v_low, scale, v_high)
+                Some(v_test, Eval.applyAbs(Eval.applyArith(Arith.Sub, v_test, v_predicted)))
               }
             }.toSeq.unzip
 
@@ -154,7 +205,7 @@ object DetectSeries
 
             Eval.applyArith(Arith.Div, errorSum, actualSum) match {
               case NullPrimitive() => None
-              case n:NumericPrimitive => Some((colName, n.asDouble))
+              case n:NumericPrimitive => Some((seriesCol.columnName, n.asDouble))
               case _ => throw new RAException("Eval should return a numeric on series detection")
             }
           }

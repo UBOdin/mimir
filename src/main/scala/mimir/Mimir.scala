@@ -6,7 +6,7 @@ import java.sql.SQLException
 import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
-import mimir.util.{TimeUtils,ExperimentalOptions,LineReaderInputSource,PythonProcess}
+import mimir.util.{Timer,ExperimentalOptions,LineReaderInputSource,PythonProcess}
 import mimir.algebra._
 import mimir.statistics.DetectSeries
 import mimir.plot.Plot
@@ -150,7 +150,7 @@ object Mimir extends LazyLogging {
 
   def handleQuery(raw:Operator) = 
   {
-    TimeUtils.monitor("QUERY", output.print(_)) {
+    Timer.monitor("QUERY", output.print(_)) {
       db.query(raw) { output.print(_) }
     }
   }

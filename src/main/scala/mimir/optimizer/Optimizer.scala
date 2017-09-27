@@ -17,7 +17,7 @@ object Optimizer
     var oper = rawOper
     // Repeatedly apply optimizations up to a fixed point or an arbitrary cutoff of 10 iterations
     var startTime = DateTime.now
-    TimeUtils.monitor("OPTIMIZE", logger.info(_)){
+    Timer.monitor("OPTIMIZE", logger.info(_)){
       for( i <- (0 until 4) ){
         logger.debug(s"Optimizing, cycle $i: \n$oper")
         // Try to optimize

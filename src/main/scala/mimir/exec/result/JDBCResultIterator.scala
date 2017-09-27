@@ -33,7 +33,7 @@ class JDBCResultIterator(
   lazy val source = 
   {
     // Deploy to the backend
-    TimeUtils.monitor(s"EXECUTE", logger.info(_)){
+    Timer.monitor(s"EXECUTE", logger.info(_)){
       backend.execute(query)
     }
   }

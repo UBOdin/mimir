@@ -24,11 +24,11 @@ import mimir.statistics.DetectSeries
 
 object SeriesMissingValueModel
 {
-  val logger = Logger(org.slf4j.LoggerFactory.getLogger(getClass.getName))
-  val TRAINING_LIMIT = 10000
+  val logger = Logger(org.slf4j.LoggerFactory.getLogger("mimir.models.SeriesMissingValueModel"))
 
   def train(db: Database, name: String, columns: Seq[String], query:Operator): Map[String,(Model,Int,Seq[Expression])] = 
   {
+    logger.debug(s"Train on: $query")
     val model = new SimpleSeriesModel(name, columns, query)
     val usefulColumns = model.train(db)
     columns.zip(usefulColumns)
@@ -81,6 +81,7 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
         )
       }
 
+    SeriesMissingValueModel.logger.debug(s"Trained: $predictions")
     predictions.map { !_.isEmpty }
   }
 
@@ -131,19 +132,9 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
       case (Some((_, low_v)), None)  => low_v
       case (None, Some((_, high_v))) => high_v
       case (Some((low_k, low_v)), Some((high_k, high_v))) => {
-        val max_offset_k = 
-          Eval.applyArith(Arith.Sub, high_k, low_k)
-        val offset_k = 
-          Eval.applyArith(Arith.Sub, key, low_k)
-        val scale = 
-          Eval.applyArith(Arith.Div, offset_k, max_offset_k)
-        val max_offset_v = 
-          Eval.applyArith(Arith.Sub, high_v, low_v)
-        val offset_v =
-          Eval.applyArith(Arith.Mult, max_offset_v, scale)
-        val predicted_v = 
-          Eval.applyArith(Arith.Add, offset_v, low_v)
-        predicted_v
+        val ratio = DetectSeries.ratio(low_k, key, high_k)
+
+        DetectSeries.interpolate(low_v, ratio, high_v)
       }
     }
   }
@@ -191,10 +182,10 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
       case Some((value, true)) =>
         s"You told me that $name.${colNames(idx)} = ${value} on row $rowid"
       case Some((value, false)) =>
-        s"I used weighted averaging on the series to guess that $name.${colNames(idx)} = ${value} on row $rowid"
+        s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSequence(idx)} to get $value for row $rowid"
       case None => 
         val value = bestGuess(idx, args, hints)
-        s"I used weighted averaging on the series to guess that $name.${colNames(idx)} = ${value} on row $rowid"
+        s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSequence(idx)} to get $value for row $rowid"
     }
   }
   

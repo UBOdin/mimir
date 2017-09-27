@@ -23,8 +23,7 @@ object DetectSeriesSpec
 	
 	sequential
 	
-	val testDS = new DetectSeries(db, 0.1)
-	def testDetectSeriesof(oper: Operator) = testDS.detectSeriesOf(oper)
+	def testDetectSeriesof(oper: Operator) = DetectSeries.seriesOf(db, oper, 0.1)
 	
 	
 	"The DetectSeriesSpec" should {

@@ -143,7 +143,7 @@ object LoadCSV extends StrictLogging {
     val cmd = "INSERT INTO " + targetTable + "(" + keys + ") VALUES (" + sch.map(x=>"?").mkString(",") + ")"
 
     logger.trace("BEGIN IMPORT")
-    TimeUtils.monitor(s"Import CSV: $targetTable <- $sourceFile", logger.info(_)){
+    Timer.monitor(s"Import CSV: $targetTable <- $sourceFile", logger.info(_)){
       db.backend.fastUpdateBatch(cmd, rows.view.map({ record => 
         if(record.recordNumber % 100000 == 0){
           logger.info(s"Loaded ${record.recordNumber} records...")

@@ -347,7 +347,9 @@ object Typechecker
 						Arith.Sub | Arith.Add)    => return Some(a)
 			case (TInt() | TFloat(), TInterval(), Arith.Mult) | 
 					 (TInterval(), TInt() | TFloat(), Arith.Mult | Arith.Div)  
-					                            => return Some(TInterval())
+					                              => return Some(TInterval())
+			case (TInterval(), TInterval(), Arith.Div)
+			                                      => return Some(TFloat())
 
       // TAny() cases
       case (TAny(), TAny(), _)        => return Some(TAny())

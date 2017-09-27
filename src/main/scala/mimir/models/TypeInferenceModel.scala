@@ -58,7 +58,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
 
   def train(db: Database, query: Operator) =
   {
-    TimeUtils.monitor(s"Train $name", TypeInferenceModel.logger.info(_)){
+    Timer.monitor(s"Train $name", TypeInferenceModel.logger.info(_)){
       db.query(
         Limit(0, Some(sampleLimit), Project(
           columns.map( c => ProjectArg(c, Var(c)) ),

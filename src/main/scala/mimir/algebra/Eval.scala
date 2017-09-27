@@ -234,6 +234,11 @@ object Eval
         FloatPrimitive(a.asDouble * b.asDouble)
       case (Arith.Div, _, _, TInt()) => 
         IntPrimitive(a.asLong / b.asLong)
+      case (Arith.Div, TInterval(), TInterval(), _) => 
+        FloatPrimitive(
+          a.asInterval.toStandardSeconds.getSeconds().toDouble 
+          / b.asInterval.toStandardSeconds.getSeconds().toDouble
+        )
       case (Arith.Div, _, _, TFloat()) => 
         FloatPrimitive(a.asDouble / b.asDouble)
       case (Arith.BitAnd, _, _, TInt()) =>
