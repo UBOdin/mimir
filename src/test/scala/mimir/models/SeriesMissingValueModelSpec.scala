@@ -47,32 +47,25 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
 
 		"Make reasonable predictions" >> {
 		  queryOneColumn("SELECT ROWID() FROM DETECTSERIESTEST3 WHERE AGE IS NULL"){ result =>
-			val rowids = result.toSeq
-			val predictions = 
-			  rowids.map {
-				rowid => {
-				val a = predict("AGE", rowid.asString)
-				val b = trueValue("AGE", rowid.asString)
-				println(s"${rowid.asString}->$a,$b")
-				( a, b
-				)}
-			  }
+  			val rowids = result.toIndexedSeq
+  			val (predicted, correct) = 
+  			  rowids.map { rowid => 
+    				val a = predict("AGE", rowid.asString)
+    				val b = trueValue("AGE", rowid.asString)
+    				println(s"${rowid.asString}->$a,$b")
+    				( (rowid -> a), (rowid -> b) )
+  			  }.unzip
 			
-			val successes = 
-			  predictions.
-				map( x => if(x._1.equals(x._2)){ 1 } else { 0 } ).
-				fold(0)( _+_ )
-			successes must be equalTo(rowids.size)
-		  }
+  			predicted.toMap must be equalTo(correct.toMap)
+      }
 		}
-	}
 	
     "Produce reasonable explanations" >> {
 
       // explain("AGE", "1") must contain("I'm not able to guess based on weighted mean SERIESREPAIR:AGE.AGE, so defaulting using the upper and lower bound values")
-      explain("AGE", "3") must contain("I used weighted averaging on the series to guess that SERIESREPAIR:AGE.AGE = 23 on row '3'")
+      explain("AGE", "3") must contain("I interpolated SERIESREPAIR.AGE, ordered by SERIESREPAIR.DOB to get 23 for row '3'")
     }
-	
+  }
 }	
 	
 	

@@ -108,8 +108,8 @@ object DetectSeries
         val l = low.asDateTime
         val m = mid.asDateTime
         val h = high.asDateTime
-        return new Duration(l, h).getMillis().toDouble / new Duration(l, m).getMillis().toDouble
-      }
+        return new Duration(l, m).getMillis().toDouble / new Duration(l, h).getMillis().toDouble
+      } 
       case ( lt, mt, ht ) =>
         throw new RAException(s"Can't get ratio for [ $lt - $mt - $ht ]")
     }

@@ -111,7 +111,7 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
     val low = 
       db.query(
         query
-          .filter(Var(series).lt(key).and(Var(colNames(idx)).isNull.not))
+          .filter(Var(series).lte(key).and(Var(colNames(idx)).isNull.not).and(RowIdVar().neq(rowid)))
           .sort(series -> false)
           .limit(1)
           .project(series, colNames(idx))
@@ -119,7 +119,7 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
     val high = 
       db.query(
         query
-          .filter(Var(series).gt(key).and(Var(colNames(idx)).isNull.not))
+          .filter(Var(series).gte(key).and(Var(colNames(idx)).isNull.not.and(RowIdVar().neq(rowid))))
           .sort(series -> true)
           .limit(1)
           .project(series, colNames(idx))
@@ -133,6 +133,8 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
       case (None, Some((_, high_v))) => high_v
       case (Some((low_k, low_v)), Some((high_k, high_v))) => {
         val ratio = DetectSeries.ratio(low_k, key, high_k)
+        SeriesMissingValueModel.logger.debug(s"   -> ratio = $ratio")
+
 
         DetectSeries.interpolate(low_v, ratio, high_v)
       }
