@@ -49,6 +49,8 @@ class Eval(
 
       case v => throw new TypeException(TBool(), v.getType, "Cast")
     }
+  def apply(e: Expression): PrimitiveValue = 
+    eval(e)
   /**
    * Evaluate the specified expression and return the primitive value
    */
@@ -209,6 +211,8 @@ object Eval
   def applyArith(op: Arith.Op, 
             a: PrimitiveValue, b: PrimitiveValue
   ): PrimitiveValue = {
+    if(a.equals(NullPrimitive()) || b.equals(NullPrimitive())) { return NullPrimitive() }
+
     val aRoot = Type.rootType(a.getType)
     val bRoot = Type.rootType(b.getType)
 
@@ -330,4 +334,13 @@ object Eval
       }
     }
   }
+
+  def applyAbs(v: PrimitiveValue):PrimitiveValue =
+    v match { 
+      case IntPrimitive(n) => IntPrimitive(Math.abs(n))
+      case FloatPrimitive(n) => FloatPrimitive(Math.abs(n))
+      case IntervalPrimitive(p) if p.toStandardSeconds.getSeconds > 0 => IntervalPrimitive(p)
+      case IntervalPrimitive(p)  => IntervalPrimitive(p.negated())
+      case NullPrimitive() => NullPrimitive()
+    }
 }

@@ -29,34 +29,16 @@ object SeriesMissingValueModel
 
   def train(db: Database, name: String, columns: Seq[String], query:Operator): Map[String,(Model,Int,Seq[Expression])] = 
   {
-    columns.map((column) => {
-      val modelName = s"$name:$column"
-      var hintColumn: String = null
-      val model = 
-        db.models.getOption(modelName) match {
-          case Some(model) => model
-          case None => {
-            val model = new SimpleSeriesModel(modelName, column, query)
-            model.train(db)
-            db.models.persist(model)
-            hintColumn = model.getSeriesColumn
-            logger.trace(s"$column picked $hintColumn to guess ${model.assumptionFeedback}")
-            model
-          }
+    val model = new SimpleSeriesModel(name, columns, query)
+    val usefulColumns = model.train(db)
+    columns.zip(usefulColumns)
+      .zipWithIndex
+      .filter(_._1._2)
+      .map { case ((column, _), idx) => 
+        (column -> (model, idx, Seq(RowIdVar())))
       }
-      column -> (model, 0, Seq(Var(hintColumn)))
-    }).toMap
+      .toMap
   }
-  
-  def isTypeCompatible(columnType: Type): Boolean = 
-  {
-    val columnBase = Type.rootType(columnType)
-    columnBase match{
-      case TInt() | TFloat() | TTimestamp() | TDate() | TInterval() => true
-      case _ => false
-    }
-  }
-
 }
 /** 
  * A model performs estimation of missing value column based on the column that follows a series.
@@ -68,197 +50,166 @@ object SeriesMissingValueModel
  *  */
 
 @SerialVersionUID(1000L)
-class SimpleSeriesModel(name: String, colName: String, query: Operator) 
+class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator) 
   extends Model(name) 
+  with NeedsReconnectToDatabase 
 {
-  val assumptionFeedback = scala.collection.mutable.Map[String,(PrimitiveValue, PrimitiveValue, PrimitiveValue, Boolean)]()
-
   @transient var db: Database = null
-  
-  var colType: Type = null 
-  var seriesColType: Type = null
-  var seriesColumnName: String = null
-  val colIdx:Int = query.columnNames.indexOf(colName)
-  
-  val rangeData = new Array[PrimitiveValue](2)
 
-  def train(db: Database){
+  val cache = 
+    colNames.map { _ => scala.collection.mutable.Map[RowIdPrimitive, (PrimitiveValue, Boolean)]() }
+  var predictions = 
+    colNames.map { _ => Seq[(String,Double)]() }
+  var querySchema:Seq[Type] = 
+    colNames.map { _ => TAny() }
+
+  def train(db: Database): Seq[Boolean] = 
+  {
     this.db = db
 
-    val querySchema = db.bestGuessSchema(query)
-    colType = querySchema(colIdx)._2
+    querySchema = db.bestGuessSchema(query).map { _._2 }
     
-    val findingSeries = new DetectSeries(db, 0.1)
-    val seriesColumn = findingSeries.bestMatchSeriesColumn(colName, colType, query) match {
-      case null => throw new ModelException("Query doesn't have a series Column, So this model is Invalid")        
-      case i: String => i
-    }
-    seriesColumnName = seriesColumn
-    
-    
-    seriesColType = querySchema(query.columnNames.indexOf(seriesColumn))._2
-
-    
-    val seriesColProjection = query.project(seriesColumn, colName).addColumn(("ROWID", RowIdVar().toExpression)).sort((seriesColumn, true)).filter(Not(Var(seriesColumn).isNull))
-    val trainingQuery = seriesColProjection//Limit(0, Some(SeriesMissingValueModel.TRAINING_LIMIT), seriesColProjection)
-    
-    db.query(trainingQuery){ result => 
-
-      var nullList: Seq[(PrimitiveValue, PrimitiveValue)] = Seq()
-      var hasNullOperation = false
-      var lowerBound: (PrimitiveValue, PrimitiveValue) = (NullPrimitive(), NullPrimitive())
-      var upperBound: (PrimitiveValue, PrimitiveValue) = (NullPrimitive(), NullPrimitive())
-      
-      for(row <- result){
-
-
-        if(row.tuple(1) != NullPrimitive()){
-          if(rangeData(0) == null)
-            rangeData(0) = row.tuple(1)
-          else{
-            if(Eval.applyCmp(Cmp.Lt, row.tuple(1), rangeData(0)).asBool) {rangeData(0) = row.tuple(1)}
-          }
-          if(rangeData(1) == null)
-            rangeData(1) = row.tuple(1)
-          else{
-            if(Eval.applyCmp(Cmp.Gt, row.tuple(1), rangeData(1)).asBool) {rangeData(1) = row.tuple(1)}
-          }
-        }      
-        
-          
-        row.tuple(1) match{
-          case NullPrimitive() => { nullList = nullList :+ (row.tuple(0),row.tuple(2)) }
-          case _ => { 
-            if(nullList.isEmpty) {
-              lowerBound = (row.tuple(0),row.tuple(1))
-            }
-            else{
-              upperBound = (row.tuple(0), row.tuple(1))
-              if(lowerBound._2 == NullPrimitive()) { lowerBound = (row.tuple(0), row.tuple(1)) }
-              while(!nullList.isEmpty){
-                 val nullHead = nullList.head
-                 val weightedIncRatio = getPrimitiveRatio(lowerBound._1, upperBound._1, nullHead._1)
-                 val guessValue = getRatioPrimitive(lowerBound._2, upperBound._2, weightedIncRatio)
-                 val rowid = nullHead._2.asString
-                 assumptionFeedback(rowid) = (guessValue, lowerBound._2, upperBound._2, false)
-                 nullList = nullList.tail
-              }
-              lowerBound = (row.tuple(0),row.tuple(1))
-            }
-              
-          }
-        }
-      }
-      if(!nullList.isEmpty){
-        nullList.foreach(x => 
-          assumptionFeedback(x._2.asString) = (lowerBound._2, lowerBound._2, lowerBound._2, false)
+    val potentialSeries = DetectSeries.seriesOf(db, query, 0.1)
+    predictions = 
+      colNames.zipWithIndex.map { case (col, idx) => 
+        DetectSeries.bestMatchSeriesColumn(
+          db,
+          col, 
+          querySchema(idx), 
+          query, 
+          potentialSeries
         )
-        nullList = Seq()
+      }
+
+    predictions.map { !_.isEmpty }
+  }
+
+  def validFor: Set[String] =
+  {
+    colNames
+      .zip(predictions)
+      .flatMap { 
+        case (col, Seq()) => None
+        case (col, _) => Some(col)
+      }
+      .toSet
+  }
+  
+  def reconnectToDatabase(db: Database): Unit = {
+    this.db = db
+  }
+
+  def interpolate(idx: Int, rowid:RowIdPrimitive, series: String): PrimitiveValue =
+  {
+    val key = 
+      db.query(
+        query.filter(RowIdVar().eq(rowid)).project(series)
+      ) { results => if(results.hasNext){ val t = results.next; t(0) } else { NullPrimitive() } }
+    SeriesMissingValueModel.logger.debug(s"Interpolate $rowid with key $key")
+    if(key.equals(NullPrimitive())){ return NullPrimitive(); }
+    val low = 
+      db.query(
+        query
+          .filter(Var(series).lt(key).and(Var(colNames(idx)).isNull.not))
+          .sort(series -> false)
+          .limit(1)
+          .project(series, colNames(idx))
+      ) { results => if(results.hasNext){ val t = results.next.tuple; Some((t(0), t(1))) } else { None } }
+    val high = 
+      db.query(
+        query
+          .filter(Var(series).gt(key).and(Var(colNames(idx)).isNull.not))
+          .sort(series -> true)
+          .limit(1)
+          .project(series, colNames(idx))
+      ) { results => if(results.hasNext){ val t = results.next.tuple; Some((t(0), t(1))) } else { None } }
+
+    SeriesMissingValueModel.logger.debug(s"   -> low = $low; high = $high")
+
+    (low, high) match {
+      case (None, None) => NullPrimitive()
+      case (Some((_, low_v)), None)  => low_v
+      case (None, Some((_, high_v))) => high_v
+      case (Some((low_k, low_v)), Some((high_k, high_v))) => {
+        val max_offset_k = 
+          Eval.applyArith(Arith.Sub, high_k, low_k)
+        val offset_k = 
+          Eval.applyArith(Arith.Sub, key, low_k)
+        val scale = 
+          Eval.applyArith(Arith.Div, offset_k, max_offset_k)
+        val max_offset_v = 
+          Eval.applyArith(Arith.Sub, high_v, low_v)
+        val offset_v =
+          Eval.applyArith(Arith.Mult, max_offset_v, scale)
+        val predicted_v = 
+          Eval.applyArith(Arith.Add, offset_v, low_v)
+        predicted_v
       }
     }
   }
-  
+
+  def bestSequence(idx: Int): String = 
+    predictions(idx).sortBy(_._2).head._1
+
   def argTypes(idx: Int) = Seq(TRowId())
 
-  def varType(idx: Int, args: Seq[Type]): Type = colType 
-
+  def varType(idx: Int, args: Seq[Type]): Type = querySchema(idx) 
   
-  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ) = {
+  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ): PrimitiveValue = 
+  {
 
-    val rowid = RowIdPrimitive(args(0).asString)
-
-    assumptionFeedback.get(rowid.asString) match {
-      case Some(v) => v._1
+    val rowid = args(0).asInstanceOf[RowIdPrimitive]
+    cache(idx).get(rowid) match {
+      case Some((value, isFeedback)) => value
       case None => { 
-        colType match{
-          case TDate() => NullPrimitive()// mid of date value
-          case TTimestamp() => NullPrimitive()// mid of timestamp value
-          case TInt() | TFloat() => db.interpreter.eval(((rangeData(1).add(rangeData(0))).div(IntPrimitive(2))))
-          case _ => throw new ModelException("Column " + colName + " is "+colType+" type, does not follow a series")
-        }
+        val ret = interpolate(idx, rowid, bestSequence(idx))
+        cache(idx).put(rowid, (ret, false))
+        ret
       }
     }
   }
   
-  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = {
-
-    val rowid = RowIdPrimitive(args(0).asString)
-    
-    val rangeValue = new Array[PrimitiveValue](2)
-
-    assumptionFeedback.get(rowid.asString) match {
-      case Some(v) => {
-        rangeValue(0) = v._2; rangeValue(1) = v._3
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
+  {
+    val rowid = args(0).asInstanceOf[RowIdPrimitive]
+    cache(idx).get(rowid) match {
+      case Some((ret, true)) => return ret
+      case _ => {
+        // this should probably be scaled by variance.  For now... just pick entirely at random
+        val series = RandUtils.pickFromList(randomness, predictions(idx).map { _._1 })
+        return interpolate(idx, rowid, series)
       }
-      case None => {rangeValue(0) = rangeData(0); rangeValue(1) = rangeData(1)}
-    }
-    colType match {
-          case TDate() => NullPrimitive()// random date value(rangeValue)
-          case TTimestamp() => NullPrimitive()// random timestamp value(rangeValue)
-          case TInt() => {
-            val inc = if((rangeValue(1).asInt-rangeValue(0).asInt)/100 < 1) 1 else ((rangeValue(1).asInt-rangeValue(0).asInt)/100).toInt
-            new IntPrimitive(RandUtils.pickFromList(
-                                            randomness,
-                                            Seq.range(rangeValue(0).asInt, rangeValue(1).asInt+inc, inc)
-                                          )) 
-          }
-          case TFloat() => {
-            val inc = if((rangeValue(1).asDouble - rangeValue(0).asDouble)/100 == 0) 1.0 else (rangeValue(1).asDouble - rangeValue(0).asDouble)/100
-            new FloatPrimitive(RandUtils.pickFromList(
-                                            randomness,
-                                            (rangeValue(0).asDouble to rangeValue(1).asDouble by inc).toList.toSeq)
-                                          )  
-          }
-          case _ => throw new ModelException("Column " + colName + " is "+colType+" type, does not follow a series")
     }
   }
 
   def reason(idx: Int, args: Seq[PrimitiveValue],hints: Seq[PrimitiveValue]): String = {
-    val rowid = RowIdPrimitive(args(0).asString)
-    assumptionFeedback.get(rowid.asString) match {
-      case Some(v) => {
-          if(v._4) s"You told me that $name.$colName = ${v._1} on row $rowid"
-        else s"I used weighted averaging on the series to guess that $name.$colName = ${v._1} on row $rowid"
-      }
-      case None => s"I'm not able to guess based on weighted mean $name.$colName, so defaulting using the upper and lower bound values"
+    val rowid = args(0).asInstanceOf[RowIdPrimitive]
+
+    SeriesMissingValueModel.logger.debug(s"Best guess for $rowid -> Cache = ${cache(idx).get(rowid)}")
+
+    cache(idx).get(rowid) match {
+      case Some((value, true)) =>
+        s"You told me that $name.${colNames(idx)} = ${value} on row $rowid"
+      case Some((value, false)) =>
+        s"I used weighted averaging on the series to guess that $name.${colNames(idx)} = ${value} on row $rowid"
+      case None => 
+        val value = bestGuess(idx, args, hints)
+        s"I used weighted averaging on the series to guess that $name.${colNames(idx)} = ${value} on row $rowid"
     }
   }
   
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = { 
-    val rowid = RowIdPrimitive(args(0).asString)
-    val currentValue = assumptionFeedback.getOrElse(rowid.asString, (NullPrimitive(), NullPrimitive(), NullPrimitive(), false))
-    assumptionFeedback(rowid.asString) = (v, currentValue._2, currentValue._3, true)
+    cache(idx).put(args(0).asInstanceOf[RowIdPrimitive], (v, true))
   }
 
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = {
-    val rowid = RowIdPrimitive(args(0).asString)
-    assumptionFeedback.get(rowid.asString) match {
-      case Some(v) => v._4
-      case None => false
+    cache(idx).get(args(0).asInstanceOf[RowIdPrimitive]) match {
+      case Some((_, true)) => true
+      case _ => false
     }
   }
   
-  def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq(TAny())
+  def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq()
   
-  def getPrimitiveRatio(lower: PrimitiveValue, upper: PrimitiveValue, midVal: PrimitiveValue): PrimitiveValue = {
-    if(lower == upper) return FloatPrimitive(0.0)
-    seriesColType match{ // can be passed as an argument!!
-        case TDate() => db.interpreter.eval(IntPrimitive(TimeUtils.getDaysBetween(lower, midVal)).div(FloatPrimitive(TimeUtils.getDaysBetween(lower, upper).toDouble)))
-        case TTimestamp() => db.interpreter.eval(IntPrimitive(TimeUtils.getSecondsBetween(lower, midVal)).div(FloatPrimitive(TimeUtils.getSecondsBetween(lower, upper).toDouble))) 
-        case TInt() | TFloat() => FloatPrimitive(db.interpreter.evalFloat(((midVal.sub(lower)).mult(FloatPrimitive(1))).div(upper.sub(lower))))
-        case _ => throw new ModelException("Column " + colName + " is "+colType+" type, is not compactible with series prediction")
-      }
-  }
-  def getRatioPrimitive(lower: PrimitiveValue, upper: PrimitiveValue, ratio: PrimitiveValue): PrimitiveValue = {
-    colType match{
-        case TDate() => db.interpreter.eval(lower.add(IntervalPrimitive(Period.days((TimeUtils.getDaysBetween(lower, upper)*ratio.asDouble).toInt))))
-        case TTimestamp() => db.interpreter.eval(lower.add(IntervalPrimitive(Period.seconds((TimeUtils.getSecondsBetween(lower, upper)*ratio.asDouble).toInt)))) 
-        case TInt() => IntPrimitive(db.interpreter.evalFloat(lower.add((upper.sub(lower)).mult(ratio))).round)
-        case TFloat() => db.interpreter.eval( lower.add((upper.sub(lower)).mult(ratio)))
-        case _ => throw new ModelException("Column " + colName + " is "+colType+" type, is not compactible with series prediction")
-      }
-  }
-
-  def getSeriesColumn() = seriesColumnName
 
 }

@@ -16,6 +16,7 @@
   <logger name="log4j.logger.org.eclipse.jetty" level="ERROR"/>
   <logger name="mimir.util.PythonProcess$" level="ERROR"/>
   <logger name="mimir.plot.Plot$" level="WARN"/>
+  <logger name="mimir.models.SeriesMissingValueModel$" level="TRACE"/>
 
   <root level="WARN">
     <appender-ref ref="STDOUT" />

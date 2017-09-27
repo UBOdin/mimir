@@ -27,21 +27,14 @@ case class SeriesColumnItem(columnName: String, reason: String, score: Double)
  * 
  * 
  */
-class DetectSeries(db: Database, threshold: Double)
+object DetectSeries
 { 
-  
-  //Stores the list of series corresponding to each table
-  val tabSeqMap = collection.mutable.Map[String, Seq[SeriesColumnItem]]()
-  
-  def detectSeriesOf(sel: Select): Seq[SeriesColumnItem] = {
-    
-    val queryOperator = db.sql.convert(sel)
-    detectSeriesOf(queryOperator)
-  }
-  def detectSeriesOf(oper: Operator): Seq[SeriesColumnItem] = {
+  def seriesOf(db: Database, query: Operator, threshold: Double): Seq[SeriesColumnItem] = {
 
-    val queryColumns = db.bestGuessSchema(oper)
+    // Hack for Type Inference lens
+    val queryColumns = db.bestGuessSchema(query)
     
+    // Date columns are automatically series
     val seriesColumnDate = queryColumns.flatMap( tup => 
       tup._2 match{
         case TDate() | TTimestamp() =>  Some(SeriesColumnItem(tup._1, "The column is a "+tup._2.toString()+" datatype.", 1.0))
@@ -51,75 +44,123 @@ class DetectSeries(db: Database, threshold: Double)
 
     var series = seriesColumnDate.toSeq
     
+    // Numeric columns *might* be series
+    // Currently test for the case where the inter-query spacing is (mostly) constant.
+    // i.e., 1, 2, 3, 4, 5.1, 5.9, ...
     val seriesColumnNumeric: Seq[(String, Type)] = queryColumns.filter(tup => Seq(TInt(),TFloat()).contains(tup._2)).toSeq
     
-    val queryList = seriesColumnNumeric.map(x => oper.sort((x._1, true)).project(x._1))
+    // For each column A generate a query of the form:
+    // SELECT A FROM Q(...) ORDER BY A
     
-    queryList.zipWithIndex.foreach(x => db.query(x._1) {result =>
-      val rowWindow = result.sliding(2)
-      var diffAdj: Seq[Double] = Seq()
-      var sum: Double = 0
-      var count = 0
+    seriesColumnNumeric
+      .map { x => query.sort((x._1, true)).project(x._1) }
+      .zipWithIndex
+      .foreach { case (testQuery, idx) => 
 
-      while(rowWindow.hasNext){
-        val rowPair = rowWindow.next
-        if(!db.interpreter.evalBool(rowPair(1).tuple(0).isNull.or(rowPair(0).tuple(0).isNull))){
-          val currDiff = rowPair(1).tuple(0).asDouble - rowPair(0).tuple(0).asDouble
-          sum += currDiff
-          diffAdj = diffAdj :+ (currDiff)
-          count += 1
+        var diffAdj: Seq[Double] = Seq()
+        var sum: Double = 0
+        var count = 0
+
+        // Run the query
+        db.query(testQuery) { result =>
+
+          val rowWindow = 
+            result
+              .map { _(0) } // Only one attribute in each row.  Pick it out
+              .sliding(2)   // Get a 2-element sliding window over the result
+          for( rowPair <- rowWindow ){
+            val a = rowPair(0)
+            val b = rowPair(1)
+            if(!a.equals(NullPrimitive()) && !b.equals(NullPrimitive())){
+              val currDiff = a.asDouble - b.asDouble
+              sum += currDiff
+              diffAdj = diffAdj :+ (currDiff)
+              count += 1
+            }
+          }
+        }
+        val mean = Math.floor((sum/count)*10000)/10000
+        val stdDev = Math.floor(Math.sqrt((diffAdj.map(x => (x-mean)*(x-mean)).sum)/count)*10000)/10000
+        val relativeStdDev = Math.abs(stdDev/mean)
+        if(relativeStdDev < threshold) {
+          series = series :+ (
+            SeriesColumnItem(
+              seriesColumnNumeric(idx)._1, 
+              "The column is a Numeric ("+seriesColumnNumeric(idx)._2.toString()+") datatype with an effective increasing pattern.", 
+              if((1-relativeStdDev)<0){ 0 } else { 1-relativeStdDev }
+            )
+          )
         }
       }
-      val mean = Math.floor((sum/count)*10000)/10000
-      val stdDev = Math.floor(Math.sqrt((diffAdj.map(x => (x-mean)*(x-mean)).sum)/count)*10000)/10000
-      val relativeStdDev = Math.abs(stdDev/mean)
-      if(relativeStdDev < threshold)
-        series = series :+ (SeriesColumnItem(seriesColumnNumeric(x._2)._1, "The column is a Numeric("+seriesColumnNumeric(x._2)._2.toString()+") datatype with an effective increasing pattern.", if((1-relativeStdDev)<0) 0 else 1-relativeStdDev))
-    })
     series
   }
   
   
-  def bestMatchSeriesColumn(colName: String, colType: Type, query: Operator): String = {
-
-    val seriesColumnList = this.detectSeriesOf(query)
+  def bestMatchSeriesColumn(db: Database, colName: String, colType: Type, query: Operator): Seq[(String,Double)] = 
+    bestMatchSeriesColumn(db, colName, colType, query, seriesOf(db, query, 0.2))
+  def bestMatchSeriesColumn(db: Database, colName: String, colType: Type, query: Operator, seriesColumnList: Seq[SeriesColumnItem]): Seq[(String,Double)] = {
     
-    val seriesColumnListFiltered = seriesColumnList.filter(col => col.columnName != colName )
-    
-    val seriesMatchlist = seriesColumnListFiltered.map{ seriesCol =>
-      val projectQuery = query.project(colName, seriesCol.columnName).sort((seriesCol.columnName,true)).filter(Not((Var(seriesCol.columnName).isNull)))
-      var diffAdj: Seq[Double] = Seq()
-      
-      db.query(projectQuery) { result =>
-        val rowWindow = result.sliding(2)
+    seriesColumnList
+      .filter( seriesCol => seriesCol.columnName != colName ) // Make sure we don't match the column itself
+      .flatMap { seriesCol => 
+        // To test out a particular column, we use a query of the form
+        // SELECT colName FROM Q(...) ORDER BY seriesCol
+        // We're expecting to see a relatively good interpolation
+        val projectQuery = 
+          query
+            .sort((seriesCol.columnName,true))
+            .filter( Var(seriesCol.columnName).isNull.not )
+            .project(seriesCol.columnName, colName)
         
-        while(rowWindow.hasNext){
-          val rowPair = rowWindow.next
-          if(!db.interpreter.evalBool(rowPair(1).tuple(0).isNull.or(rowPair(0).tuple(0).isNull))){
-            val currDiff = { colType match {
-              case TInt()|TFloat() => Math.abs(rowPair(1).tuple(0).asDouble - rowPair(0).tuple(0).asDouble)
-              case TDate() => TimeUtils.getDaysBetween(rowPair(1).tuple(0), rowPair(0).tuple(0))
-              case TTimestamp() => TimeUtils.getSecondsBetween(rowPair(1).tuple(0), rowPair(0).tuple(0))
-//!!change TypeException 2nd param from TInt() to TInt()|TFloat()|TTimestamp()|TDate()
-              case _ => {throw new Exception("Column " + colName + " is "+colType+" type, does not follow a series"); -1.0} }
+        db.query(projectQuery) { result =>
+          val rowWindow = 
+            result
+              .map { _.tuple }
+              .sliding(3)
+
+          var sumError:Double   = 0.0
+          var sumErrorSq:Double = 0.0
+          var sumTot:Double     = 0.0
+          
+          val (actual, error) =
+            rowWindow.flatMap { triple =>
+              val key_low  = triple(0)(0); val v_low  = triple(0)(1)
+              val key_test = triple(1)(0); val v_test = triple(1)(1)
+              val key_high = triple(2)(0); val v_high = triple(2)(1)
+
+              val key_offset     = Eval.applyArith(Arith.Sub, key_test, key_low)
+              val key_max_offset = Eval.applyArith(Arith.Sub, key_high, key_low)
+              val scale          = Eval.applyArith(Arith.Div, key_offset, key_max_offset)
+              val v_offset       = Eval.applyArith(Arith.Sub, v_test, v_low)
+              val v_scaled       = Eval.applyArith(Arith.Mult, v_offset, scale)
+              val v_predicted    = Eval.applyArith(Arith.Add, v_low, v_scaled)
+
+              Eval.applyAbs(
+                Eval.applyArith(Arith.Sub, v_test, v_predicted)  
+              ) match { 
+                case NullPrimitive() => None // ignore
+                case v_error         => Some(v_test, v_error)
+              }
+            }.toSeq.unzip
+
+          if(actual.isEmpty){
+            None     // If we have nothing to base a decision on... this can't be a particularly good predictor
+          } else {
+            // Otherwise, average everything out...
+            val actualSum = 
+              actual.tail.fold(actual.head)(Eval.applyArith(Arith.Add, _, _))
+            val errorSum = 
+              error.tail.fold(error.head)(Eval.applyArith(Arith.Add, _, _))
+
+            Eval.applyArith(Arith.Div, errorSum, actualSum) match {
+              case NullPrimitive() => None
+              case n:NumericPrimitive => Some((colName, n.asDouble))
+              case _ => throw new RAException("Eval should return a numeric on series detection")
             }
-            diffAdj = diffAdj :+ (currDiff)
           }
         }
       }
-      val sum = diffAdj.sum
-      val count = diffAdj.length
-      val mean = Math.floor((sum/count)*10000)/10000
-      val stdDev = Math.floor(Math.sqrt((diffAdj.map(x => (x-mean)*(x-mean)).sum)/count)*10000)/10000
-      val stdError = stdDev/Math.sqrt(count)
-      (seriesCol.columnName, stdError)
-    }
-    
-    
-    if(seriesMatchlist.isEmpty)
-      null
-    else
-      seriesMatchlist.sortBy(_._2).head._1
+
   }
 
 
