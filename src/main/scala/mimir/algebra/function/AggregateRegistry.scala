@@ -5,7 +5,8 @@ import mimir.algebra._
 
 case class RegisteredAggregate(
   aggName: String,
-  typechecker: (Seq[Type] => Type)
+  typechecker: (Seq[Type] => Type),
+  defaultValue: PrimitiveValue
 ){
   def typecheck(args: Seq[Type]) = typechecker(args)
 }
@@ -16,47 +17,53 @@ class AggregateRegistry
     scala.collection.mutable.Map.empty;
 
   {
-    registerStatistic("SUM")
-    registerStatistic("MAX")
-    registerStatistic("MIN")
-    registerStatistic("STDDEV")
-    register("COUNT", (t) => TInt())
-    register("AVG", List(TFloat()), TFloat())
-    register("GROUP_AND", List(TBool()), TBool())
-    register("GROUP_OR", List(TBool()), TBool())
-    register("GROUP_BITWISE_AND", List(TInt()), TInt())
-    register("GROUP_BITWISE_OR", List(TInt()), TInt())
-    register("JSON_GROUP_ARRAY", (t) => TString())
-    register("FIRST", (t:Seq[Type]) => t.head)
-    register("FIRST_FLOAT", (t:Seq[Type]) => t.head)
-    register("FIRST_INT", (t:Seq[Type]) => t.head)
+    registerStatistic("SUM", NullPrimitive())
+    registerStatistic("MAX", NullPrimitive())
+    registerStatistic("MIN", NullPrimitive())
+    registerStatistic("STDDEV", NullPrimitive())
+    register("COUNT", (t) => TInt(), IntPrimitive(0))
+    register("AVG", List(TFloat()), TFloat(), NullPrimitive())
+    register("GROUP_AND", List(TBool()), TBool(), BoolPrimitive(true))
+    register("GROUP_OR", List(TBool()), TBool(), BoolPrimitive(false))
+    register("GROUP_BITWISE_AND", List(TInt()), TInt(), IntPrimitive(Long.MaxValue))
+    register("GROUP_BITWISE_OR", List(TInt()), TInt(), IntPrimitive(0))
+    register("JSON_GROUP_ARRAY", (t) => TString(), StringPrimitive("[]"))
+    register("FIRST", (t:Seq[Type]) => t.head, NullPrimitive())
+    register("FIRST_FLOAT", (t:Seq[Type]) => t.head, NullPrimitive())
+    register("FIRST_INT", (t:Seq[Type]) => t.head, NullPrimitive())
   }
 
   def register(
     aggName: String, 
-    typechecker: Seq[Type] => Type
+    typechecker: Seq[Type] => Type, 
+    defaultValue: PrimitiveValue
   ): Unit = {
-    prototypes.put(aggName, RegisteredAggregate(aggName, typechecker))
+    prototypes.put(aggName, RegisteredAggregate(aggName, typechecker, defaultValue))
   }
 
   def registerStatistic(
-    aggName: String
+    aggName: String, 
+    defaultValue: PrimitiveValue
   ): Unit = {
-    register(aggName, 
+    register(
+      aggName, 
       (t) => { 
         if(t.isEmpty){
           throw new RAException(s"Invalid Call To $aggName(); No Args")
         }
-        Typechecker.assertNumeric(t.head, Function(aggName, List())); t.head }
+        Typechecker.assertNumeric(t.head, Function(aggName, List())); t.head },
+      defaultValue
     )
   }
 
   def register(
     aggName: String,
     argTypes: Seq[Type],
-    retType: Type
+    retType: Type, 
+    defaultValue: PrimitiveValue
   ): Unit = {
-    register(aggName, 
+    register(
+      aggName, 
       t => { 
         if(t.length != argTypes.length){
           throw new RAException("Invalid arg list ["+aggName+"]: "+argTypes.mkString(", "))
@@ -66,8 +73,9 @@ class AggregateRegistry
         ){ 
           throw new RAException("Invalid arg list ["+aggName+"]: "+argTypes.mkString(", "))
         }
-        retType 
-      }
+        retType
+      },
+      defaultValue
     )
   }
 
@@ -76,5 +84,8 @@ class AggregateRegistry
 
   def isAggregate(aggName: String): Boolean =
     prototypes.keySet.contains(aggName)
+
+  def defaultValue(aggName: String): PrimitiveValue =
+    prototypes(aggName).defaultValue
 
 }

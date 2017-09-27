@@ -37,7 +37,7 @@ object Plot
   def plot(spec: mimir.sql.DrawPlot, db: Database, console: OutputFormat)
   {
     val convertConfig = (in:java.util.Map[String,net.sf.jsqlparser.expression.PrimitiveValue]) => {
-      in.asScala.mapValues { db.sql.convert(_) }.toMap
+      in.asScala.map { field => (field._1.toUpperCase -> db.sql.convert(field._2)) }.toMap
     }
 
     var dataQuery = spec.getSource match {
@@ -109,6 +109,7 @@ object Plot
         }
       }
 
+
     logger.trace(s"QUERY: $dataQuery")
 
     db.query(dataQuery) { resultsRaw =>
@@ -125,6 +126,26 @@ object Plot
         lines.map { case (x, y, config) => Json.arr(Json.toJson(x), Json.toJson(y), Json.toJson(config)) }
       )
 
+      val warningLines: JsValue = 
+        globalSettings.getOrElse("WARNINGS", StringPrimitive("POINTS")).asString.toUpperCase match { 
+          case "OFF" => JsNull
+          case _ => {
+            Json.toJson(
+              lines.flatMap { case (x, y, _) =>
+                results
+                  .filter { row => 
+                    (    (!row.isDeterministic()) 
+                      || (!row.isColDeterministic(x))
+                      || (!row.isColDeterministic(y))
+                    )
+                  }
+                  .map { row => Json.arr(row(x), row(y)) }
+              }
+              .toSet
+            )
+          }
+        }
+
       //define the processIO to feed data to the process
       var io=new ProcessIO(
          in=>{
@@ -133,6 +154,9 @@ object Plot
               "LINES" -> linesJson,
               "RESULTS" -> Json.toJson(
                 dataQuery.columnNames.map { col => col -> results.map { _(col) } }.toMap
+              ),
+              "WARNINGS" -> Json.toJson(
+                warningLines
               )
             )
             in.write(data.toString.getBytes)

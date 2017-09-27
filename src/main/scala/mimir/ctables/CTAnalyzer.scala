@@ -107,12 +107,15 @@ object CTAnalyzer {
 
         val conditionCausality = compileCausality(condition, inputCondition)
 
-        val thenElseCondition = 
+        val thenCondition = 
           ExpressionUtils.makeAnd(inputCondition, condition)
+
+        val elseCondition =
+          ExpressionUtils.makeAnd(inputCondition, ExpressionUtils.makeNot(condition))
           
         conditionCausality ++ 
-          compileCausality(thenClause, thenElseCondition) ++
-          compileCausality(elseClause, ExpressionUtils.makeNot(thenElseCondition))
+          compileCausality(thenClause, thenCondition) ++
+          compileCausality(elseClause, elseCondition)
       }
       //TODO: We should come up with a more complete way to compile causality
       //        for And and Or

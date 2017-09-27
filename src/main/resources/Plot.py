@@ -112,7 +112,7 @@ def drawPlot(lineSettings,globalSettings):
                     #otherwise plot a vertical bar plot
                     else:
                             #xpoints are strings
-                            sys.stderr.write('--------POOT---------\n')
+                            sys.stderr.write('--------PLOT STATS---------\n')
                             sys.stderr.write(str(globalSettings['YMAX'])+"\n")
                             sys.stderr.write(str(globalSettings['YMIN'])+"\n")
                             sys.stderr.write(str(line[0])+"\n")
@@ -122,6 +122,15 @@ def drawPlot(lineSettings,globalSettings):
                             plt.xticks(words,xpoints)
                             plt.ylim(globalSettings['YMIN'],globalSettings['YMAX'])
                             barNo=barNo+1
+    if globalSettings['WARNINGS'] != None and len(globalSettings['WARNINGS']) > 0:
+        plt.plot(
+            [ x[0] for x in globalSettings['WARNINGS'] ],
+            [ x[1] for x in globalSettings['WARNINGS'] ],
+            color = '#ff0000',
+            linestyle = '',
+            marker = 'o'
+        )
+        legendLabels.append('DATA WARNINGS')
     if showLegend:
         location=cleanLegendLoc(globalSettings['LEGENDLOC'])
         plt.legend(legendLabels,loc=location)
@@ -421,6 +430,7 @@ def run(args = []):
     globSet = config["GLOBAL"]
     lineSet = config["LINES"]
     finishedData = config["RESULTS"]
+    warnings = config["WARNINGS"]
 
     #
     # At this point, all data is read into its proper data structures
@@ -599,7 +609,6 @@ def run(args = []):
         if 'LINENAME' not in line[2]:
             line[2]['LINENAME']=line[3]+', '+line[4]
 
-
-
+    globSet['WARNINGS'] = warnings
 
     drawPlot(lineSet,globSet)

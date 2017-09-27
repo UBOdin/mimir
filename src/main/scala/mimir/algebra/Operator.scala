@@ -336,7 +336,7 @@ case class Table(name: String,
 case class EmptyTable(sch: Seq[(String, Type)])
   extends Operator
 {
-    def toString(prefix: String) =
+  def toString(prefix: String) =
     prefix + "!!EMPTY!!(" + (
       sch.map( { case (v,t) => v+":"+t } ).mkString(", ") 
     )+")" 
@@ -346,6 +346,29 @@ case class EmptyTable(sch: Seq[(String, Type)])
   def rebuildExpressions(x: Seq[Expression]) = this
   def columnNames = sch.map(_._1)
 }
+
+/**
+ * A table with exactly one row --- Corresponds roughly to a
+ * SELECT ... 
+ * That is, a SELECT with no FROM clause, or in Oracle:
+ * SELECT ... FROM dual
+ * 
+ * Not really used, just a placeholder for intermediate optimization.
+ */
+@SerialVersionUID(100L)
+case class SingletonTable(tuple: Seq[(String, PrimitiveValue)])
+  extends Operator
+{
+  def toString(prefix: String) =
+    prefix + "< " + ( tuple.map { case (name, v) => name+": "+v.toString }.mkString(", ") ) + " >"
+  def children: Seq[Operator] = Seq()
+  def rebuild(x: Seq[Operator]) = this
+  def expressions = List()
+  def rebuildExpressions(x: Seq[Expression]) = this
+  def columnNames = tuple.map(_._1)
+}
+
+
 
 /**
  * A single sort directive

@@ -255,6 +255,8 @@ class Typechecker(
 
 			case EmptyTable(sch) => sch
 
+			case SingletonTable(tuple) => tuple.map { case (name, v) => (name, v.getType) }
+
 			case Limit(_, _, src) => schemaOf(src)
 
 			case Sort(_, src) => schemaOf(src)

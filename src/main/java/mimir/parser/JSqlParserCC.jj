@@ -389,10 +389,12 @@ Analyze Analyze():
 		SelectBody selectBody = null;
 		String col = null;
     PrimitiveValue rowid = null;
+    DrawPlot plot = null;
+    FromItem from = null;
 	}
 {
 	<K_ANALYZE> 
-  [ 
+  [ LOOKAHEAD(4)
     [
       col = RelObjectName() 
       <K_OF>
@@ -400,7 +402,20 @@ Analyze Analyze():
     rowid = Literal()
     <K_IN>
   ]
-  selectBody = SelectBody()
+  ( 
+      ( selectBody = SelectBody() )
+    | ( ( 
+          plot = Plot() { from = plot.getSource(); }
+        ) | ( 
+          from = Table() 
+        ) 
+      ) {
+        PlainSelect ps = new PlainSelect();
+        ps.setFromItem(from);
+        ps.setSelectItems(Arrays.asList(new AllColumns()));
+        selectBody = ps;
+      }
+  )
 	{ 
     return new Analyze(selectBody, rowid, col);
   }

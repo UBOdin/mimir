@@ -110,10 +110,6 @@ class RAToSql(db: Database)
         return union
       }
 
-      case EmptyTable(_) => {
-        throw new SQLException(s"Error, can't compile an empty table!\n$oper")
-      }
-
       case _ => 
         return makePlainSelect(oper)
     }
@@ -421,6 +417,41 @@ class RAToSql(db: Database)
           // If they're not equivalent, revert to old behavior
           (BoolPrimitive(true), Seq(makeSubSelect(standardizeTables(oper))))
         }
+
+      case SingletonTable(tuple) => {
+        val singleton = new SubSelect()
+        val body = new SingletonSelect()
+        singleton.setSelectBody(body)
+        singleton.setAlias("SINGLETON")
+        body.setSelectItems(
+          tuple.map { case (name, v) =>
+            val sei = new SelectExpressionItem()
+            sei.setAlias(name)
+            sei.setExpression(convert(v))
+            sei
+          }.toList
+        )
+        // might need to do something to play nice with oracle here like setFromItem(new Table(null, "dual"))
+        (BoolPrimitive(true), Seq(singleton))
+      }
+
+      case EmptyTable(schema) => {
+        val singleton = new SubSelect()
+        val body = new SingletonSelect()
+        singleton.setSelectBody(body)
+        singleton.setAlias("SINGLETON")
+        body.setSelectItems(
+          schema.map { case (name, t) =>
+            val sei = new SelectExpressionItem()
+            sei.setAlias(name)
+            sei.setExpression(convert(mimir.algebra.Function("CAST", Seq(NullPrimitive(), TypePrimitive(t)))))
+            sei
+          }.toList
+        )
+        body.setWhere(convert(BoolPrimitive(false)))
+        // might need to do something to play nice with oracle here like setFromItem(new Table(null, "dual"))
+        (BoolPrimitive(true), Seq(singleton))
+      }
 
       case View(name, query, annotations) => 
         logger.warn("Inlined view when constructing SQL: RAToSQL will not use materialized views")

@@ -24,7 +24,9 @@ object Optimizer
         val newOper = 
           opts.foldLeft(oper) { (o, fn) =>
             logger.trace(s"Applying: $fn")
-            fn(o)
+            val ret = fn(o)
+            logger.trace(s"  -> Result:\n$ret")
+            ret
           }
           
 

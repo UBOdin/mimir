@@ -131,7 +131,7 @@ object MissingValueLens {
             //TODO: Replace Default Model
             val metaModel = new DefaultMetaModel(
                 s"$name:META:$column", 
-                s"picking a value for column '$column'",
+                s"picking values for $name.$column",
                 models.map(_._4)
               )
             val metaExpr = LensUtils.buildMetaModel(
