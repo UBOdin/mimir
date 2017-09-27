@@ -16,13 +16,6 @@ import mimir.exec.result._
 import mimir.util._
 import mimir.util.JsonUtils.primitiveValueWrites
 
-/**
- * Plotting using Sameer Sing's ScalaPlot/Gnuplot
- *
- * Includes Gnuplot configuration material inspired by
- * Brighten Godfrey's blog post:
- * http://youinfinitesnake.blogspot.com/2011/02/attractive-scientific-plots-with.html
- */
 object Plot
   extends LazyLogging
 {
@@ -53,25 +46,42 @@ object Plot
       case q:net.sf.jsqlparser.schema.Table => 
         db.table(SqlUtils.canonicalizeIdentifier(q.getName()))
     }
-    val globalSettings = convertConfig(spec.getConfig())
+    var globalSettings = convertConfig(spec.getConfig())
 
     val lines: Seq[(String, String, Map[String, PrimitiveValue])] =
       if(spec.getLines.isEmpty){
           //if no lines are specified, try to find the best ones
-        val columns = db.bestGuessSchema(dataQuery).
-          filter { case (_, TFloat()) | (_, TInt()) => true; case _ => false }.
-          map(_._1)
+        val columns = db.bestGuessSchema(dataQuery).toMap
+        val numericColumns =
+          columns.toSeq
+            .filter { t => Type.isNumeric(t._2) }
+            .map { _._1 }
           //if that comes up with nothing either, then throw an exception
-        if(columns.isEmpty){
+        if(numericColumns.isEmpty){
           throw new RAException(s"No valid columns for plotting: ${db.bestGuessSchema(dataQuery).map { x => x._1+":"+x._2 }.mkString(",")}")
         }
-        val x = columns.head
-        if(columns.tail.isEmpty){
+        val x = numericColumns.head
+        if(numericColumns.tail.isEmpty){
           dataQuery = Sort(Seq(SortColumn(Var(x), true)), dataQuery)
-          Seq( ("MIMIR_PLOT_CDF", x, Map("TITLE" -> StringPrimitive(x))) )
+          globalSettings = Map(
+            "XLABEL" -> StringPrimitive(x),
+            "YLABEL" -> StringPrimitive("CDF")
+          ) ++ globalSettings
+          Seq( (x, "MIMIR_PLOT_CDF", Map("TITLE" -> StringPrimitive(x))) )
         } else {
-          logger.info(s"No explicit columns given, implicitly using X = $x, Y = [${columns.tail.mkString(", ")}]")
-          columns.tail.map { y =>
+          // TODO: Plug DetectSeries in here.
+          logger.info(s"No explicit columns given, implicitly using X = $x, Y = [${numericColumns.tail.mkString(", ")}]")
+          val commonType = 
+            Typechecker.leastUpperBound(numericColumns.tail.map { y => columns(y) })
+          globalSettings = Map(
+            "XLABEL" -> StringPrimitive(x)
+          ) ++ (commonType match { 
+            case Some(TUser(utype)) => Map("YLABEL" -> StringPrimitive(utype))
+            case Some(TDate()     ) => Map("YLABEL" -> StringPrimitive("Date"))
+            case Some(TTimestamp()) => Map("YLABEL" -> StringPrimitive("Time"))
+            case _                  => Map()
+          }) ++ globalSettings
+          numericColumns.tail.map { y =>
             (x, y, Map("TITLE" -> StringPrimitive(y)))
           }
         }
@@ -104,18 +114,17 @@ object Plot
     db.query(dataQuery) { resultsRaw =>
       val results = resultsRaw.toIndexedSeq
 
+      val simplifiedQuery = db.compiler.optimize(dataQuery)
+      logger.trace(s"QUERY: $simplifiedQuery")
       val globalSettingsJson = Json.toJson(
         globalSettings ++ 
-        Map("DEFAULTSAVENAME" -> StringPrimitive(QueryNamer(dataQuery)))
+        Map("DEFAULTSAVENAME" -> StringPrimitive(QueryNamer(simplifiedQuery)))
       )
 
       val linesJson = Json.toJson(
         lines.map { case (x, y, config) => Json.arr(Json.toJson(x), Json.toJson(y), Json.toJson(config)) }
       )
 
-      //get the defaultSaveName to pass to the python code for any naming defaults
-      var defaultName= StringPrimitive(QueryNamer(dataQuery))
-      var nameToWrite="(DEFAULTSAVENAME,"+defaultName+")\n";
       //define the processIO to feed data to the process
       var io=new ProcessIO(
          in=>{
