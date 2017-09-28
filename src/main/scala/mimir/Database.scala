@@ -286,7 +286,7 @@ case class Database(backend: Backend)
       case feedback: Feedback => {
         val name = feedback.getModel().toUpperCase()
         val idx = feedback.getIdx()
-        val args = feedback.getArgs().map(sql.convert(_))
+        val args = feedback.getArgs().map { sql.convert(_) }.map { _.asString }.map { RowIdPrimitive(_) }
         val v = sql.convert(feedback.getValue())
 
         val model = models.get(name) 

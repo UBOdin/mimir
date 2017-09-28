@@ -53,15 +53,18 @@ object SeriesMissingValueModel
 class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator) 
   extends Model(name) 
   with NeedsReconnectToDatabase 
+  with SourcedFeedback
+  with ModelCache
 {
   @transient var db: Database = null
 
-  val cache = 
-    colNames.map { _ => scala.collection.mutable.Map[RowIdPrimitive, (PrimitiveValue, Boolean)]() }
   var predictions = 
     colNames.map { _ => Seq[(String,Double)]() }
   var querySchema:Seq[Type] = 
     colNames.map { _ => TAny() }
+
+  def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : String = args(0).asString
+  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = args(0).asString
 
   def train(db: Database): Seq[Boolean] = 
   {
@@ -100,6 +103,8 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
     this.db = db
   }
 
+  def interpolate(idx: Int, args:Seq[PrimitiveValue], series: String): PrimitiveValue =
+    interpolate(idx, args(0).asInstanceOf[RowIdPrimitive], series)
   def interpolate(idx: Int, rowid:RowIdPrimitive, series: String): PrimitiveValue =
   {
     val key = 
@@ -150,57 +155,56 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
   
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ): PrimitiveValue = 
   {
-
-    val rowid = args(0).asInstanceOf[RowIdPrimitive]
-    cache(idx).get(rowid) match {
-      case Some((value, isFeedback)) => value
-      case None => { 
-        val ret = interpolate(idx, rowid, bestSequence(idx))
-        cache(idx).put(rowid, (ret, false))
-        ret
+    getFeedback(idx, args) match {
+      case Some(v) => v
+      case None => {
+        getCache(idx, args, hints) match {
+          case Some(v) => v
+          case None => {
+            val v = interpolate(idx, args, bestSequence(idx))
+            setCache(idx, args, hints, v)
+            v
+          }
+        }
       }
     }
   }
   
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
   {
-    val rowid = args(0).asInstanceOf[RowIdPrimitive]
-    cache(idx).get(rowid) match {
-      case Some((ret, true)) => return ret
-      case _ => {
+    getFeedback(idx, args) match {
+      case Some(v) => v
+      case None => {
         // this should probably be scaled by variance.  For now... just pick entirely at random
         val series = RandUtils.pickFromList(randomness, predictions(idx).map { _._1 })
-        return interpolate(idx, rowid, series)
+        return interpolate(idx, args, series)
       }
     }
   }
 
-  def reason(idx: Int, args: Seq[PrimitiveValue],hints: Seq[PrimitiveValue]): String = {
-    val rowid = args(0).asInstanceOf[RowIdPrimitive]
-
-    SeriesMissingValueModel.logger.debug(s"Best guess for $rowid -> Cache = ${cache(idx).get(rowid)}")
-
-    cache(idx).get(rowid) match {
-      case Some((value, true)) =>
-        s"You told me that $name.${colNames(idx)} = ${value} on row $rowid"
-      case Some((value, false)) =>
-        s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSequence(idx)} to get $value for row $rowid"
-      case None => 
-        val value = bestGuess(idx, args, hints)
-        s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSequence(idx)} to get $value for row $rowid"
+  def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = {
+    getFeedback(idx, args) match {
+      case Some(value) =>
+        s"You told me that $name.${colNames(idx)} = ${value} on row ${args(0)} (${args(0).getType})"
+      case None => {
+        getCache(idx, args, hints) match {
+          case Some(value) => 
+            s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSequence(idx)} to get $value for row ${args(0)}"
+          case None =>
+            s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSequence(idx)} row ${args(0)}"
+        }
+      }
     }
   }
   
-  def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = { 
-    cache(idx).put(args(0).asInstanceOf[RowIdPrimitive], (v, true))
+  def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = 
+  {
+    SeriesMissingValueModel.logger.debug(s"Feedback: $idx / $args (${args(0).getType}) <- $v")
+    setFeedback(idx, args, v)
+    SeriesMissingValueModel.logger.debug(s"Now: ${getFeedback(idx, args)}")
   }
-
-  def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = {
-    cache(idx).get(args(0).asInstanceOf[RowIdPrimitive]) match {
-      case Some((_, true)) => true
-      case _ => false
-    }
-  }
+  def isAcknowledged(idx: Int, args: Seq[PrimitiveValue]): Boolean =
+    hasFeedback(idx, args)
   
   def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq()
   

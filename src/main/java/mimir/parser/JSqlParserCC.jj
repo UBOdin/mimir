@@ -1640,6 +1640,8 @@ PrimitiveValue Literal():
 
   |   "{ts" token=<S_CHAR_LITERAL> "}" { retval = new TimestampValue(token.image); }
 
+  | <K_NULL> { retval = new NullValue(); }
+
   ) { return retval; }
 
 }

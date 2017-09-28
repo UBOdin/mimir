@@ -302,6 +302,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     }
     jj_consume_token(K_IS);
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
+    case K_NULL:
     case S_DOUBLE:
     case S_INTEGER:
     case S_CHAR_LITERAL:
@@ -2957,6 +2958,10 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
         jj_consume_token(122);
                                          retval = new TimestampValue(token.image);
         break;
+      case K_NULL:
+        jj_consume_token(K_NULL);
+               retval = new NullValue();
+        break;
       default:
         jj_la1[142] = jj_gen;
         jj_consume_token(-1);
@@ -3794,6 +3799,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       case 100:
         jj_consume_token(100);
         switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
+        case K_NULL:
         case S_DOUBLE:
         case S_INTEGER:
         case S_CHAR_LITERAL:
@@ -4223,22 +4229,27 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     finally { jj_save(34, xla); }
   }
 
-  private boolean jj_3R_184() {
-    if (jj_3R_189()) return true;
+  private boolean jj_3R_185() {
+    if (jj_3R_190()) return true;
     return false;
   }
 
   private boolean jj_3R_68() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_113()) {
+    if (jj_3R_114()) {
     jj_scanpos = xsp;
-    if (jj_3R_114()) return true;
+    if (jj_3R_115()) return true;
     }
     while (true) {
       xsp = jj_scanpos;
       if (jj_3_26()) { jj_scanpos = xsp; break; }
     }
+    return false;
+  }
+
+  private boolean jj_3R_183() {
+    if (jj_3R_238()) return true;
     return false;
   }
 
@@ -4252,27 +4263,22 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_180() {
-    if (jj_3R_235()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_280() {
+  private boolean jj_3R_281() {
     if (jj_scan_token(S_INTEGER)) return true;
     return false;
   }
 
-  private boolean jj_3R_269() {
+  private boolean jj_3R_270() {
     if (jj_3R_54()) return true;
     return false;
   }
 
-  private boolean jj_3R_242() {
+  private boolean jj_3R_243() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_269()) {
+    if (jj_3R_270()) {
     jj_scanpos = xsp;
-    if (jj_3R_270()) return true;
+    if (jj_3R_271()) return true;
     }
     return false;
   }
@@ -4282,56 +4288,56 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_178() {
-    if (jj_3R_233()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_267() {
-    if (jj_scan_token(K_ALL)) return true;
-    return false;
-  }
-
-  private boolean jj_3R_229() {
-    if (jj_scan_token(K_DISTINCT)) return true;
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_252()) jj_scanpos = xsp;
-    return false;
-  }
-
-  private boolean jj_3R_266() {
-    if (jj_scan_token(106)) return true;
-    return false;
-  }
-
-  private boolean jj_3R_254() {
-    if (jj_scan_token(106)) return true;
-    return false;
-  }
-
-  private boolean jj_3R_176() {
-    if (jj_3R_230()) return true;
+  private boolean jj_3R_179() {
+    if (jj_3R_234()) return true;
     return false;
   }
 
   private boolean jj_3R_268() {
+    if (jj_scan_token(K_ALL)) return true;
+    return false;
+  }
+
+  private boolean jj_3R_230() {
+    if (jj_scan_token(K_DISTINCT)) return true;
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_253()) jj_scanpos = xsp;
+    return false;
+  }
+
+  private boolean jj_3R_267() {
+    if (jj_scan_token(106)) return true;
+    return false;
+  }
+
+  private boolean jj_3R_255() {
+    if (jj_scan_token(106)) return true;
+    return false;
+  }
+
+  private boolean jj_3R_177() {
+    if (jj_3R_231()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_269() {
     if (jj_scan_token(K_OFFSET)) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_280()) {
+    if (jj_3R_281()) {
     jj_scanpos = xsp;
-    if (jj_3R_281()) return true;
+    if (jj_3R_282()) return true;
     }
     return false;
   }
 
-  private boolean jj_3R_265() {
+  private boolean jj_3R_266() {
     if (jj_scan_token(S_INTEGER)) return true;
     return false;
   }
 
-  private boolean jj_3R_253() {
+  private boolean jj_3R_254() {
     if (jj_scan_token(S_INTEGER)) return true;
     return false;
   }
@@ -4346,12 +4352,12 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_175() {
+  private boolean jj_3R_176() {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_scan_token(30)) {
     jj_scanpos = xsp;
-    if (jj_3R_229()) return true;
+    if (jj_3R_230()) return true;
     }
     return false;
   }
@@ -4377,53 +4383,51 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_241() {
+  private boolean jj_3R_242() {
     if (jj_scan_token(K_LIMIT)) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_265()) {
-    jj_scanpos = xsp;
     if (jj_3R_266()) {
     jj_scanpos = xsp;
-    if (jj_3R_267()) return true;
+    if (jj_3R_267()) {
+    jj_scanpos = xsp;
+    if (jj_3R_268()) return true;
     }
     }
     xsp = jj_scanpos;
-    if (jj_3R_268()) jj_scanpos = xsp;
+    if (jj_3R_269()) jj_scanpos = xsp;
     return false;
   }
 
-  private boolean jj_3R_230() {
+  private boolean jj_3R_231() {
     if (jj_scan_token(K_TOP)) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_253()) {
+    if (jj_3R_254()) {
     jj_scanpos = xsp;
-    if (jj_3R_254()) return true;
+    if (jj_3R_255()) return true;
     }
     return false;
   }
 
-  private boolean jj_3R_263() {
+  private boolean jj_3R_264() {
     if (jj_scan_token(S_INTEGER)) return true;
     return false;
   }
 
-  private boolean jj_3R_135() {
+  private boolean jj_3R_136() {
     if (jj_scan_token(K_SELECT)) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_175()) jj_scanpos = xsp;
-    xsp = jj_scanpos;
     if (jj_3R_176()) jj_scanpos = xsp;
-    if (jj_3R_177()) return true;
     xsp = jj_scanpos;
-    if (jj_3R_178()) jj_scanpos = xsp;
+    if (jj_3R_177()) jj_scanpos = xsp;
+    if (jj_3R_178()) return true;
+    xsp = jj_scanpos;
+    if (jj_3R_179()) jj_scanpos = xsp;
     if (jj_scan_token(K_FROM)) return true;
-    if (jj_3R_93()) return true;
-    if (jj_3R_179()) return true;
-    xsp = jj_scanpos;
-    if (jj_3R_180()) jj_scanpos = xsp;
+    if (jj_3R_94()) return true;
+    if (jj_3R_180()) return true;
     xsp = jj_scanpos;
     if (jj_3R_181()) jj_scanpos = xsp;
     xsp = jj_scanpos;
@@ -4432,10 +4436,12 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     if (jj_3R_183()) jj_scanpos = xsp;
     xsp = jj_scanpos;
     if (jj_3R_184()) jj_scanpos = xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_185()) jj_scanpos = xsp;
     return false;
   }
 
-  private boolean jj_3R_112() {
+  private boolean jj_3R_113() {
     if (jj_3R_68()) return true;
     Token xsp;
     while (true) {
@@ -4450,43 +4456,43 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_261() {
+  private boolean jj_3R_262() {
     if (jj_scan_token(S_INTEGER)) return true;
     return false;
   }
 
-  private boolean jj_3R_240() {
+  private boolean jj_3R_241() {
     if (jj_scan_token(K_OFFSET)) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_263()) {
+    if (jj_3R_264()) {
     jj_scanpos = xsp;
-    if (jj_3R_264()) return true;
+    if (jj_3R_265()) return true;
     }
     return false;
   }
 
-  private boolean jj_3R_158() {
+  private boolean jj_3R_159() {
     if (jj_3R_49()) return true;
     return false;
   }
 
-  private boolean jj_3R_159() {
-    if (jj_3R_135()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_224() {
+  private boolean jj_3R_225() {
     if (jj_scan_token(105)) return true;
     return false;
   }
 
-  private boolean jj_3R_111() {
+  private boolean jj_3R_160() {
+    if (jj_3R_136()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_112() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_158()) {
+    if (jj_3R_159()) {
     jj_scanpos = xsp;
-    if (jj_3R_159()) return true;
+    if (jj_3R_160()) return true;
     }
     return false;
   }
@@ -4512,9 +4518,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     }
     if (jj_scan_token(101)) return true;
     xsp = jj_scanpos;
-    if (jj_3R_261()) {
+    if (jj_3R_262()) {
     jj_scanpos = xsp;
-    if (jj_3R_262()) return true;
+    if (jj_3R_263()) return true;
     }
     return false;
   }
@@ -4534,26 +4540,26 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_189() {
+  private boolean jj_3R_190() {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_3_10()) {
     jj_scanpos = xsp;
-    if (jj_3R_240()) {
+    if (jj_3R_241()) {
     jj_scanpos = xsp;
-    if (jj_3R_241()) return true;
+    if (jj_3R_242()) return true;
     }
     }
     return false;
   }
 
-  private boolean jj_3R_160() {
+  private boolean jj_3R_161() {
     if (jj_scan_token(114)) return true;
-    if (jj_3R_112()) return true;
+    if (jj_3R_113()) return true;
     return false;
   }
 
-  private boolean jj_3R_279() {
+  private boolean jj_3R_280() {
     if (jj_scan_token(K_DESC)) return true;
     return false;
   }
@@ -4563,52 +4569,52 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_142() {
+  private boolean jj_3R_143() {
     if (jj_3R_48()) return true;
     return false;
   }
 
   private boolean jj_3R_65() {
-    if (jj_3R_112()) return true;
+    if (jj_3R_113()) return true;
     Token xsp;
     while (true) {
       xsp = jj_scanpos;
-      if (jj_3R_160()) { jj_scanpos = xsp; break; }
+      if (jj_3R_161()) { jj_scanpos = xsp; break; }
     }
     return false;
   }
 
-  private boolean jj_3R_223() {
-    if (jj_3R_157()) return true;
+  private boolean jj_3R_224() {
+    if (jj_3R_158()) return true;
     return false;
   }
 
-  private boolean jj_3R_156() {
+  private boolean jj_3R_157() {
     if (jj_scan_token(100)) return true;
     if (jj_3R_62()) return true;
     if (jj_scan_token(102)) return true;
     return false;
   }
 
-  private boolean jj_3R_238() {
-    if (jj_3R_104()) return true;
+  private boolean jj_3R_239() {
+    if (jj_3R_105()) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_260()) jj_scanpos = xsp;
+    if (jj_3R_261()) jj_scanpos = xsp;
     return false;
   }
 
-  private boolean jj_3R_260() {
+  private boolean jj_3R_261() {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_scan_token(36)) {
     jj_scanpos = xsp;
-    if (jj_3R_279()) return true;
+    if (jj_3R_280()) return true;
     }
     return false;
   }
 
-  private boolean jj_3R_155() {
+  private boolean jj_3R_156() {
     if (jj_3R_62()) return true;
     return false;
   }
@@ -4620,57 +4626,62 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_92() {
+  private boolean jj_3R_93() {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_3_5()) {
     jj_scanpos = xsp;
-    if (jj_3R_142()) return true;
+    if (jj_3R_143()) return true;
     }
     return false;
   }
 
-  private boolean jj_3R_277() {
+  private boolean jj_3R_278() {
     if (jj_scan_token(104)) return true;
     if (jj_3R_48()) return true;
     return false;
   }
 
-  private boolean jj_3R_239() {
+  private boolean jj_3R_240() {
     if (jj_scan_token(101)) return true;
-    if (jj_3R_238()) return true;
+    if (jj_3R_239()) return true;
     return false;
   }
 
-  private boolean jj_3R_218() {
+  private boolean jj_3R_219() {
     if (jj_scan_token(101)) return true;
-    if (jj_3R_104()) return true;
+    if (jj_3R_105()) return true;
     return false;
   }
 
-  private boolean jj_3R_104() {
+  private boolean jj_3R_105() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_155()) {
+    if (jj_3R_156()) {
     jj_scanpos = xsp;
-    if (jj_3R_156()) return true;
+    if (jj_3R_157()) return true;
     }
     return false;
   }
 
-  private boolean jj_3R_188() {
+  private boolean jj_3R_189() {
     if (jj_scan_token(K_ORDER)) return true;
     if (jj_scan_token(K_BY)) return true;
-    if (jj_3R_238()) return true;
+    if (jj_3R_239()) return true;
     Token xsp;
     while (true) {
       xsp = jj_scanpos;
-      if (jj_3R_239()) { jj_scanpos = xsp; break; }
+      if (jj_3R_240()) { jj_scanpos = xsp; break; }
     }
     return false;
   }
 
-  private boolean jj_3R_272() {
+  private boolean jj_3R_61() {
+    if (jj_3R_112()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_273() {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_scan_token(32)) {
@@ -4683,14 +4694,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_61() {
-    if (jj_3R_111()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_237() {
+  private boolean jj_3R_238() {
     if (jj_scan_token(K_HAVING)) return true;
-    if (jj_3R_242()) return true;
+    if (jj_3R_243()) return true;
     return false;
   }
 
@@ -4704,33 +4710,43 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_120() {
+  private boolean jj_3R_222() {
+    if (jj_scan_token(104)) return true;
+    if (jj_3R_48()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_121() {
     if (jj_scan_token(104)) return true;
     if (jj_3R_48()) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_277()) jj_scanpos = xsp;
+    if (jj_3R_278()) jj_scanpos = xsp;
     return false;
   }
 
   private boolean jj_3R_221() {
-    if (jj_scan_token(104)) return true;
-    if (jj_3R_48()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_259() {
-    if (jj_scan_token(101)) return true;
-    if (jj_3R_104()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_220() {
     if (jj_scan_token(S_CHAR_LITERAL)) return true;
     return false;
   }
 
-  private boolean jj_3R_271() {
+  private boolean jj_3R_252() {
+    if (jj_scan_token(K_ALL)) return true;
+    return false;
+  }
+
+  private boolean jj_3R_220() {
+    if (jj_scan_token(S_IDENTIFIER)) return true;
+    return false;
+  }
+
+  private boolean jj_3R_260() {
+    if (jj_scan_token(101)) return true;
+    if (jj_3R_105()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_272() {
     if (jj_scan_token(K_ALL)) return true;
     if (jj_scan_token(100)) return true;
     if (jj_3R_61()) return true;
@@ -4738,30 +4754,20 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_251() {
-    if (jj_scan_token(K_ALL)) return true;
-    return false;
-  }
-
-  private boolean jj_3R_219() {
-    if (jj_scan_token(S_IDENTIFIER)) return true;
-    return false;
-  }
-
-  private boolean jj_3R_236() {
+  private boolean jj_3R_237() {
     if (jj_scan_token(K_GROUP)) return true;
     if (jj_scan_token(K_BY)) return true;
-    if (jj_3R_104()) return true;
+    if (jj_3R_105()) return true;
     Token xsp;
     while (true) {
       xsp = jj_scanpos;
-      if (jj_3R_259()) { jj_scanpos = xsp; break; }
+      if (jj_3R_260()) { jj_scanpos = xsp; break; }
     }
     return false;
   }
 
-  private boolean jj_3R_162() {
-    if (jj_3R_104()) return true;
+  private boolean jj_3R_163() {
+    if (jj_3R_105()) return true;
     Token xsp;
     xsp = jj_scanpos;
     if (jj_scan_token(5)) {
@@ -4769,21 +4775,26 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     if (jj_scan_token(101)) return true;
     }
     xsp = jj_scanpos;
-    if (jj_3R_219()) {
+    if (jj_3R_220()) {
     jj_scanpos = xsp;
-    if (jj_3R_220()) return true;
+    if (jj_3R_221()) return true;
     }
     return false;
   }
 
-  private boolean jj_3R_243() {
+  private boolean jj_3R_244() {
     if (jj_scan_token(101)) return true;
     if (jj_3R_47()) return true;
     return false;
   }
 
+  private boolean jj_3R_248() {
+    if (jj_3R_105()) return true;
+    return false;
+  }
+
   private boolean jj_3R_247() {
-    if (jj_3R_104()) return true;
+    if (jj_3R_273()) return true;
     return false;
   }
 
@@ -4792,27 +4803,22 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_245() {
-    if (jj_3R_271()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_208() {
+  private boolean jj_3R_209() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_245()) {
-    jj_scanpos = xsp;
     if (jj_3R_246()) {
     jj_scanpos = xsp;
-    if (jj_3R_247()) return true;
+    if (jj_3R_247()) {
+    jj_scanpos = xsp;
+    if (jj_3R_248()) return true;
     }
     }
     return false;
   }
 
-  private boolean jj_3R_235() {
+  private boolean jj_3R_236() {
     if (jj_scan_token(K_WHERE)) return true;
-    if (jj_3R_242()) return true;
+    if (jj_3R_243()) return true;
     return false;
   }
 
@@ -4820,152 +4826,157 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     if (jj_3R_48()) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_120()) jj_scanpos = xsp;
+    if (jj_3R_121()) jj_scanpos = xsp;
     return false;
   }
 
-  private boolean jj_3R_148() {
+  private boolean jj_3R_149() {
     if (jj_scan_token(101)) return true;
     return false;
   }
 
-  private boolean jj_3R_203() {
+  private boolean jj_3R_204() {
     if (jj_scan_token(K_USING)) return true;
     if (jj_scan_token(100)) return true;
     if (jj_3R_47()) return true;
     Token xsp;
     while (true) {
       xsp = jj_scanpos;
-      if (jj_3R_243()) { jj_scanpos = xsp; break; }
+      if (jj_3R_244()) { jj_scanpos = xsp; break; }
     }
     if (jj_scan_token(102)) return true;
     return false;
   }
 
-  private boolean jj_3R_157() {
-    if (jj_3R_104()) return true;
+  private boolean jj_3R_158() {
+    if (jj_3R_105()) return true;
     Token xsp;
     while (true) {
       xsp = jj_scanpos;
-      if (jj_3R_218()) { jj_scanpos = xsp; break; }
+      if (jj_3R_219()) { jj_scanpos = xsp; break; }
     }
     return false;
   }
 
-  private boolean jj_3R_107() {
-    if (jj_3R_157()) return true;
+  private boolean jj_3R_108() {
+    if (jj_3R_158()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_203() {
+    if (jj_scan_token(K_ON)) return true;
+    if (jj_3R_243()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_150() {
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_203()) {
+    jj_scanpos = xsp;
+    if (jj_3R_204()) return true;
+    }
     return false;
   }
 
   private boolean jj_3R_202() {
-    if (jj_scan_token(K_ON)) return true;
-    if (jj_3R_242()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_149() {
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_202()) {
-    jj_scanpos = xsp;
-    if (jj_3R_203()) return true;
-    }
-    return false;
-  }
-
-  private boolean jj_3R_201() {
     if (jj_scan_token(K_INNER)) return true;
     return false;
   }
 
-  private boolean jj_3R_200() {
+  private boolean jj_3R_201() {
     if (jj_scan_token(K_OUTER)) return true;
     return false;
   }
 
-  private boolean jj_3R_199() {
+  private boolean jj_3R_162() {
+    if (jj_scan_token(S_IDENTIFIER)) return true;
+    if (jj_scan_token(K_FROM)) return true;
+    if (jj_3R_105()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_200() {
     if (jj_scan_token(K_NATURAL)) return true;
     return false;
   }
 
-  private boolean jj_3R_161() {
-    if (jj_scan_token(S_IDENTIFIER)) return true;
-    if (jj_scan_token(K_FROM)) return true;
-    if (jj_3R_104()) return true;
+  private boolean jj_3R_199() {
+    if (jj_scan_token(K_FULL)) return true;
+    return false;
+  }
+
+  private boolean jj_3R_148() {
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_201()) {
+    jj_scanpos = xsp;
+    if (jj_3R_202()) return true;
+    }
     return false;
   }
 
   private boolean jj_3R_198() {
-    if (jj_scan_token(K_FULL)) return true;
+    if (jj_scan_token(K_RIGHT)) return true;
+    return false;
+  }
+
+  private boolean jj_3R_251() {
+    if (jj_scan_token(K_DISTINCT)) return true;
+    return false;
+  }
+
+  private boolean jj_3R_223() {
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_251()) {
+    jj_scanpos = xsp;
+    if (jj_3R_252()) return true;
+    }
+    return false;
+  }
+
+  private boolean jj_3R_197() {
+    if (jj_scan_token(K_LEFT)) return true;
+    return false;
+  }
+
+  private boolean jj_3R_168() {
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_223()) jj_scanpos = xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_224()) {
+    jj_scanpos = xsp;
+    if (jj_3R_225()) return true;
+    }
+    return false;
+  }
+
+  private boolean jj_3R_167() {
+    if (jj_scan_token(104)) return true;
+    if (jj_3R_48()) return true;
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_222()) jj_scanpos = xsp;
+    return false;
+  }
+
+  private boolean jj_3R_166() {
+    if (jj_scan_token(K_REPLACE)) return true;
     return false;
   }
 
   private boolean jj_3R_147() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_200()) {
-    jj_scanpos = xsp;
-    if (jj_3R_201()) return true;
-    }
-    return false;
-  }
-
-  private boolean jj_3R_197() {
-    if (jj_scan_token(K_RIGHT)) return true;
-    return false;
-  }
-
-  private boolean jj_3R_196() {
-    if (jj_scan_token(K_LEFT)) return true;
-    return false;
-  }
-
-  private boolean jj_3R_250() {
-    if (jj_scan_token(K_DISTINCT)) return true;
-    return false;
-  }
-
-  private boolean jj_3R_222() {
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_250()) {
-    jj_scanpos = xsp;
-    if (jj_3R_251()) return true;
-    }
-    return false;
-  }
-
-  private boolean jj_3R_167() {
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_222()) jj_scanpos = xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_223()) {
-    jj_scanpos = xsp;
-    if (jj_3R_224()) return true;
-    }
-    return false;
-  }
-
-  private boolean jj_3R_166() {
-    if (jj_scan_token(104)) return true;
-    if (jj_3R_48()) return true;
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_221()) jj_scanpos = xsp;
-    return false;
-  }
-
-  private boolean jj_3R_146() {
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_196()) {
-    jj_scanpos = xsp;
     if (jj_3R_197()) {
     jj_scanpos = xsp;
     if (jj_3R_198()) {
     jj_scanpos = xsp;
-    if (jj_3R_199()) return true;
+    if (jj_3R_199()) {
+    jj_scanpos = xsp;
+    if (jj_3R_200()) return true;
     }
     }
     }
@@ -4973,7 +4984,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_165() {
-    if (jj_scan_token(K_REPLACE)) return true;
+    if (jj_3R_48()) return true;
     return false;
   }
 
@@ -4982,25 +4993,67 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_94() {
+  private boolean jj_3R_95() {
     Token xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_146()) jj_scanpos = xsp;
     xsp = jj_scanpos;
     if (jj_3R_147()) jj_scanpos = xsp;
     xsp = jj_scanpos;
+    if (jj_3R_148()) jj_scanpos = xsp;
+    xsp = jj_scanpos;
     if (jj_scan_token(44)) {
     jj_scanpos = xsp;
-    if (jj_3R_148()) return true;
+    if (jj_3R_149()) return true;
     }
-    if (jj_3R_93()) return true;
+    if (jj_3R_94()) return true;
     xsp = jj_scanpos;
-    if (jj_3R_149()) jj_scanpos = xsp;
+    if (jj_3R_150()) jj_scanpos = xsp;
+    return false;
+  }
+
+  private boolean jj_3R_111() {
+    if (jj_scan_token(K_NOT)) return true;
+    return false;
+  }
+
+  private boolean jj_3R_60() {
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_111()) jj_scanpos = xsp;
+    if (jj_scan_token(K_EXISTS)) return true;
+    if (jj_3R_105()) return true;
     return false;
   }
 
   private boolean jj_3R_164() {
-    if (jj_3R_48()) return true;
+    if (jj_scan_token(125)) return true;
+    return false;
+  }
+
+  private boolean jj_3R_119() {
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_164()) jj_scanpos = xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_165()) {
+    jj_scanpos = xsp;
+    if (jj_3R_166()) return true;
+    }
+    xsp = jj_scanpos;
+    if (jj_3R_167()) jj_scanpos = xsp;
+    if (jj_scan_token(100)) return true;
+    xsp = jj_scanpos;
+    if (jj_3R_168()) jj_scanpos = xsp;
+    if (jj_scan_token(102)) return true;
+    xsp = jj_scanpos;
+    if (jj_scan_token(122)) jj_scanpos = xsp;
+    return false;
+  }
+
+  private boolean jj_3R_118() {
+    if (jj_scan_token(K_CAST)) return true;
+    if (jj_scan_token(100)) return true;
+    if (jj_3R_163()) return true;
+    if (jj_scan_token(102)) return true;
     return false;
   }
 
@@ -5009,73 +5062,39 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_60() {
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_110()) jj_scanpos = xsp;
-    if (jj_scan_token(K_EXISTS)) return true;
-    if (jj_3R_104()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_163() {
-    if (jj_scan_token(125)) return true;
-    return false;
-  }
-
-  private boolean jj_3R_118() {
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_163()) jj_scanpos = xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_164()) {
-    jj_scanpos = xsp;
-    if (jj_3R_165()) return true;
-    }
-    xsp = jj_scanpos;
-    if (jj_3R_166()) jj_scanpos = xsp;
-    if (jj_scan_token(100)) return true;
-    xsp = jj_scanpos;
-    if (jj_3R_167()) jj_scanpos = xsp;
-    if (jj_scan_token(102)) return true;
-    xsp = jj_scanpos;
-    if (jj_scan_token(122)) jj_scanpos = xsp;
-    return false;
-  }
-
-  private boolean jj_3R_109() {
-    if (jj_scan_token(K_NOT)) return true;
+  private boolean jj_3_21() {
+    if (jj_3R_61()) return true;
     return false;
   }
 
   private boolean jj_3R_117() {
-    if (jj_scan_token(K_CAST)) return true;
+    if (jj_scan_token(K_EXTRACT)) return true;
     if (jj_scan_token(100)) return true;
     if (jj_3R_162()) return true;
     if (jj_scan_token(102)) return true;
     return false;
   }
 
-  private boolean jj_3_21() {
-    if (jj_3R_61()) return true;
-    return false;
-  }
-
   private boolean jj_3R_59() {
-    if (jj_3R_104()) return true;
+    if (jj_3R_105()) return true;
     if (jj_scan_token(K_IS)) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_109()) jj_scanpos = xsp;
+    if (jj_3R_110()) jj_scanpos = xsp;
     if (jj_scan_token(K_NULL)) return true;
     return false;
   }
 
-  private boolean jj_3R_116() {
-    if (jj_scan_token(K_EXTRACT)) return true;
-    if (jj_scan_token(100)) return true;
-    if (jj_3R_161()) return true;
-    if (jj_scan_token(102)) return true;
+  private boolean jj_3R_75() {
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_117()) {
+    jj_scanpos = xsp;
+    if (jj_3R_118()) {
+    jj_scanpos = xsp;
+    if (jj_3R_119()) return true;
+    }
+    }
     return false;
   }
 
@@ -5085,29 +5104,16 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_234() {
-    if (jj_3R_94()) return true;
+  private boolean jj_3R_235() {
+    if (jj_3R_95()) return true;
     return false;
   }
 
-  private boolean jj_3R_75() {
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_116()) {
-    jj_scanpos = xsp;
-    if (jj_3R_117()) {
-    jj_scanpos = xsp;
-    if (jj_3R_118()) return true;
-    }
-    }
-    return false;
-  }
-
-  private boolean jj_3R_179() {
+  private boolean jj_3R_180() {
     Token xsp;
     while (true) {
       xsp = jj_scanpos;
-      if (jj_3R_234()) { jj_scanpos = xsp; break; }
+      if (jj_3R_235()) { jj_scanpos = xsp; break; }
     }
     return false;
   }
@@ -5117,60 +5123,60 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_106() {
+  private boolean jj_3R_107() {
+    if (jj_3R_61()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_284() {
+    if (jj_scan_token(K_WHEN)) return true;
+    if (jj_3R_80()) return true;
+    if (jj_scan_token(K_THEN)) return true;
+    if (jj_3R_105()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_195() {
     if (jj_3R_61()) return true;
     return false;
   }
 
   private boolean jj_3R_194() {
-    if (jj_3R_61()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_283() {
-    if (jj_scan_token(K_WHEN)) return true;
-    if (jj_3R_80()) return true;
-    if (jj_scan_token(K_THEN)) return true;
-    if (jj_3R_104()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_193() {
     if (jj_3R_51()) return true;
     return false;
   }
 
-  private boolean jj_3R_154() {
-    if (jj_3R_104()) return true;
+  private boolean jj_3R_155() {
+    if (jj_3R_105()) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_216()) jj_scanpos = xsp;
-    if (jj_scan_token(K_LIKE)) return true;
-    if (jj_3R_104()) return true;
-    xsp = jj_scanpos;
     if (jj_3R_217()) jj_scanpos = xsp;
+    if (jj_scan_token(K_LIKE)) return true;
+    if (jj_3R_105()) return true;
+    xsp = jj_scanpos;
+    if (jj_3R_218()) jj_scanpos = xsp;
     return false;
   }
 
   private boolean jj_3R_51() {
-    if (jj_3R_93()) return true;
     if (jj_3R_94()) return true;
+    if (jj_3R_95()) return true;
     return false;
   }
 
-  private boolean jj_3R_217() {
+  private boolean jj_3R_218() {
     if (jj_scan_token(K_ESCAPE)) return true;
     if (jj_scan_token(S_CHAR_LITERAL)) return true;
     return false;
   }
 
-  private boolean jj_3R_216() {
+  private boolean jj_3R_217() {
     if (jj_scan_token(K_NOT)) return true;
     return false;
   }
 
-  private boolean jj_3R_144() {
-    if (jj_3R_92()) return true;
+  private boolean jj_3R_145() {
+    if (jj_3R_93()) return true;
     return false;
   }
 
@@ -5180,45 +5186,79 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_145() {
-    if (jj_3R_195()) return true;
+  private boolean jj_3R_283() {
+    if (jj_scan_token(K_WHEN)) return true;
+    if (jj_3R_243()) return true;
+    if (jj_scan_token(K_THEN)) return true;
+    if (jj_3R_105()) return true;
     return false;
   }
 
-  private boolean jj_3R_108() {
+  private boolean jj_3R_146() {
+    if (jj_3R_196()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_109() {
     if (jj_scan_token(K_NOT)) return true;
     return false;
   }
 
-  private boolean jj_3R_282() {
-    if (jj_scan_token(K_WHEN)) return true;
-    if (jj_3R_242()) return true;
-    if (jj_scan_token(K_THEN)) return true;
-    if (jj_3R_104()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_143() {
+  private boolean jj_3R_144() {
     if (jj_scan_token(100)) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_193()) {
+    if (jj_3R_194()) {
     jj_scanpos = xsp;
-    if (jj_3R_194()) return true;
+    if (jj_3R_195()) return true;
     }
     if (jj_scan_token(102)) return true;
     return false;
   }
 
   private boolean jj_3R_58() {
-    if (jj_3R_104()) return true;
+    if (jj_3R_105()) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_108()) jj_scanpos = xsp;
+    if (jj_3R_109()) jj_scanpos = xsp;
     if (jj_scan_token(K_BETWEEN)) return true;
-    if (jj_3R_104()) return true;
+    if (jj_3R_105()) return true;
     if (jj_scan_token(K_AND)) return true;
-    if (jj_3R_104()) return true;
+    if (jj_3R_105()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_250() {
+    if (jj_3R_80()) return true;
+    Token xsp;
+    while (true) {
+      xsp = jj_scanpos;
+      if (jj_3R_276()) { jj_scanpos = xsp; break; }
+    }
+    xsp = jj_scanpos;
+    if (jj_3R_277()) jj_scanpos = xsp;
+    return false;
+  }
+
+  private boolean jj_3R_175() {
+    if (jj_scan_token(118)) return true;
+    return false;
+  }
+
+  private boolean jj_3R_277() {
+    if (jj_scan_token(K_ELSE)) return true;
+    if (jj_3R_80()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_276() {
+    if (jj_3R_284()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_259() {
+    if (jj_scan_token(101)) return true;
+    if (jj_3R_93()) return true;
     return false;
   }
 
@@ -5227,37 +5267,48 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_249() {
-    if (jj_3R_80()) return true;
+  private boolean jj_3R_135() {
     Token xsp;
-    while (true) {
-      xsp = jj_scanpos;
-      if (jj_3R_275()) { jj_scanpos = xsp; break; }
-    }
     xsp = jj_scanpos;
-    if (jj_3R_276()) jj_scanpos = xsp;
+    if (jj_scan_token(117)) {
+    jj_scanpos = xsp;
+    if (jj_3R_175()) return true;
+    }
     return false;
   }
 
-  private boolean jj_3R_258() {
-    if (jj_scan_token(101)) return true;
-    if (jj_3R_92()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_173() {
-    if (jj_scan_token(118)) return true;
-    return false;
-  }
-
-  private boolean jj_3R_276() {
+  private boolean jj_3R_275() {
     if (jj_scan_token(K_ELSE)) return true;
     if (jj_3R_80()) return true;
     return false;
   }
 
-  private boolean jj_3R_275() {
+  private boolean jj_3R_94() {
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_144()) {
+    jj_scanpos = xsp;
+    if (jj_3R_145()) return true;
+    }
+    xsp = jj_scanpos;
+    if (jj_3R_146()) jj_scanpos = xsp;
+    return false;
+  }
+
+  private boolean jj_3R_274() {
     if (jj_3R_283()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_249() {
+    Token xsp;
+    if (jj_3R_274()) return true;
+    while (true) {
+      xsp = jj_scanpos;
+      if (jj_3R_274()) { jj_scanpos = xsp; break; }
+    }
+    xsp = jj_scanpos;
+    if (jj_3R_275()) jj_scanpos = xsp;
     return false;
   }
 
@@ -5271,70 +5322,37 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_93() {
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_143()) {
-    jj_scanpos = xsp;
-    if (jj_3R_144()) return true;
-    }
-    xsp = jj_scanpos;
-    if (jj_3R_145()) jj_scanpos = xsp;
-    return false;
-  }
-
-  private boolean jj_3R_274() {
-    if (jj_scan_token(K_ELSE)) return true;
-    if (jj_3R_80()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_273() {
-    if (jj_3R_282()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_133() {
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_scan_token(117)) {
-    jj_scanpos = xsp;
-    if (jj_3R_173()) return true;
-    }
-    return false;
-  }
-
-  private boolean jj_3R_248() {
-    Token xsp;
-    if (jj_3R_273()) return true;
-    while (true) {
-      xsp = jj_scanpos;
-      if (jj_3R_273()) { jj_scanpos = xsp; break; }
-    }
-    xsp = jj_scanpos;
-    if (jj_3R_274()) jj_scanpos = xsp;
-    return false;
-  }
-
-  private boolean jj_3R_232() {
+  private boolean jj_3R_233() {
     if (jj_scan_token(101)) return true;
-    if (jj_3R_231()) return true;
+    if (jj_3R_232()) return true;
     return false;
   }
 
   private boolean jj_3R_57() {
-    if (jj_3R_104()) return true;
+    if (jj_3R_105()) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_105()) jj_scanpos = xsp;
+    if (jj_3R_106()) jj_scanpos = xsp;
     if (jj_scan_token(K_IN)) return true;
     if (jj_scan_token(100)) return true;
     xsp = jj_scanpos;
-    if (jj_3R_106()) {
+    if (jj_3R_107()) {
     jj_scanpos = xsp;
-    if (jj_3R_107()) return true;
+    if (jj_3R_108()) return true;
     }
     if (jj_scan_token(102)) return true;
+    return false;
+  }
+
+  private boolean jj_3R_169() {
+    if (jj_scan_token(K_CASE)) return true;
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_249()) {
+    jj_scanpos = xsp;
+    if (jj_3R_250()) return true;
+    }
+    if (jj_scan_token(K_END)) return true;
     return false;
   }
 
@@ -5348,25 +5366,13 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_105() {
+  private boolean jj_3R_106() {
     if (jj_scan_token(K_NOT)) return true;
     return false;
   }
 
-  private boolean jj_3R_227() {
+  private boolean jj_3R_228() {
     if (jj_scan_token(118)) return true;
-    return false;
-  }
-
-  private boolean jj_3R_168() {
-    if (jj_scan_token(K_CASE)) return true;
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_248()) {
-    jj_scanpos = xsp;
-    if (jj_3R_249()) return true;
-    }
-    if (jj_scan_token(K_END)) return true;
     return false;
   }
 
@@ -5375,13 +5381,13 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_233() {
+  private boolean jj_3R_234() {
     if (jj_scan_token(K_INTO)) return true;
-    if (jj_3R_92()) return true;
+    if (jj_3R_93()) return true;
     Token xsp;
     while (true) {
       xsp = jj_scanpos;
-      if (jj_3R_258()) { jj_scanpos = xsp; break; }
+      if (jj_3R_259()) { jj_scanpos = xsp; break; }
     }
     return false;
   }
@@ -5391,11 +5397,75 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_195() {
+  private boolean jj_3R_196() {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_scan_token(5)) jj_scanpos = xsp;
     if (jj_3R_48()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_172() {
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_scan_token(117)) {
+    jj_scanpos = xsp;
+    if (jj_3R_228()) return true;
+    }
+    return false;
+  }
+
+  private boolean jj_3R_104() {
+    if (jj_3R_155()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_103() {
+    if (jj_3R_60()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_102() {
+    if (jj_3R_59()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_279() {
+    if (jj_3R_196()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_227() {
+    if (jj_scan_token(118)) return true;
+    return false;
+  }
+
+  private boolean jj_3R_101() {
+    if (jj_3R_58()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_100() {
+    if (jj_3R_57()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_56() {
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_100()) {
+    jj_scanpos = xsp;
+    if (jj_3R_101()) {
+    jj_scanpos = xsp;
+    if (jj_3R_102()) {
+    jj_scanpos = xsp;
+    if (jj_3R_103()) {
+    jj_scanpos = xsp;
+    if (jj_3R_104()) return true;
+    }
+    }
+    }
+    }
     return false;
   }
 
@@ -5405,70 +5475,6 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     if (jj_scan_token(117)) {
     jj_scanpos = xsp;
     if (jj_3R_227()) return true;
-    }
-    return false;
-  }
-
-  private boolean jj_3R_103() {
-    if (jj_3R_154()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_102() {
-    if (jj_3R_60()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_101() {
-    if (jj_3R_59()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_278() {
-    if (jj_3R_195()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_226() {
-    if (jj_scan_token(118)) return true;
-    return false;
-  }
-
-  private boolean jj_3R_100() {
-    if (jj_3R_58()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_99() {
-    if (jj_3R_57()) return true;
-    return false;
-  }
-
-  private boolean jj_3R_56() {
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_99()) {
-    jj_scanpos = xsp;
-    if (jj_3R_100()) {
-    jj_scanpos = xsp;
-    if (jj_3R_101()) {
-    jj_scanpos = xsp;
-    if (jj_3R_102()) {
-    jj_scanpos = xsp;
-    if (jj_3R_103()) return true;
-    }
-    }
-    }
-    }
-    return false;
-  }
-
-  private boolean jj_3R_170() {
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_scan_token(117)) {
-    jj_scanpos = xsp;
-    if (jj_3R_226()) return true;
     }
     return false;
   }
@@ -5484,7 +5490,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   }
 
   private boolean jj_3R_50() {
-    if (jj_3R_92()) return true;
+    if (jj_3R_93()) return true;
     if (jj_scan_token(104)) return true;
     if (jj_scan_token(105)) return true;
     return false;
@@ -5515,6 +5521,11 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
+  private boolean jj_3R_90() {
+    if (jj_scan_token(K_NULL)) return true;
+    return false;
+  }
+
   private boolean jj_3_33() {
     Token xsp;
     xsp = jj_scanpos;
@@ -5530,7 +5541,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_225() {
+  private boolean jj_3R_226() {
     if (jj_scan_token(118)) return true;
     return false;
   }
@@ -5552,33 +5563,33 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_191() {
+  private boolean jj_3R_192() {
     if (jj_scan_token(K_DISTINCT)) return true;
     return false;
   }
 
-  private boolean jj_3R_169() {
+  private boolean jj_3R_170() {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_scan_token(117)) {
     jj_scanpos = xsp;
-    if (jj_3R_225()) return true;
+    if (jj_3R_226()) return true;
     }
     return false;
   }
 
-  private boolean jj_3R_257() {
-    if (jj_3R_104()) return true;
+  private boolean jj_3R_258() {
+    if (jj_3R_105()) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_278()) jj_scanpos = xsp;
+    if (jj_3R_279()) jj_scanpos = xsp;
     return false;
   }
 
   private boolean jj_3R_85() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_134()) jj_scanpos = xsp;
+    if (jj_3R_135()) jj_scanpos = xsp;
     if (jj_scan_token(S_INTEGER)) return true;
     return false;
   }
@@ -5586,17 +5597,17 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   private boolean jj_3R_84() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_133()) jj_scanpos = xsp;
+    if (jj_3R_134()) jj_scanpos = xsp;
     if (jj_scan_token(S_DOUBLE)) return true;
     return false;
   }
 
-  private boolean jj_3R_256() {
+  private boolean jj_3R_257() {
     if (jj_3R_50()) return true;
     return false;
   }
 
-  private boolean jj_3R_215() {
+  private boolean jj_3R_216() {
     if (jj_scan_token(113)) return true;
     return false;
   }
@@ -5614,7 +5625,10 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     jj_scanpos = xsp;
     if (jj_3R_88()) {
     jj_scanpos = xsp;
-    if (jj_3R_89()) return true;
+    if (jj_3R_89()) {
+    jj_scanpos = xsp;
+    if (jj_3R_90()) return true;
+    }
     }
     }
     }
@@ -5623,7 +5637,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_214() {
+  private boolean jj_3R_215() {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_scan_token(111)) {
@@ -5633,67 +5647,67 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_213() {
+  private boolean jj_3R_214() {
     if (jj_scan_token(110)) return true;
     return false;
   }
 
-  private boolean jj_3R_121() {
+  private boolean jj_3R_122() {
     if (jj_scan_token(118)) return true;
     return false;
   }
 
-  private boolean jj_3R_255() {
+  private boolean jj_3R_256() {
     if (jj_scan_token(105)) return true;
     return false;
   }
 
-  private boolean jj_3R_212() {
+  private boolean jj_3R_213() {
     if (jj_scan_token(109)) return true;
     return false;
   }
 
-  private boolean jj_3R_186() {
+  private boolean jj_3R_187() {
     if (jj_scan_token(K_DISTINCT)) return true;
     return false;
   }
 
-  private boolean jj_3R_119() {
+  private boolean jj_3R_120() {
     if (jj_scan_token(118)) return true;
     return false;
   }
 
-  private boolean jj_3R_231() {
+  private boolean jj_3R_232() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_255()) {
-    jj_scanpos = xsp;
     if (jj_3R_256()) {
     jj_scanpos = xsp;
-    if (jj_3R_257()) return true;
+    if (jj_3R_257()) {
+    jj_scanpos = xsp;
+    if (jj_3R_258()) return true;
     }
     }
     return false;
   }
 
-  private boolean jj_3R_211() {
+  private boolean jj_3R_212() {
     if (jj_scan_token(103)) return true;
     return false;
   }
 
-  private boolean jj_3R_210() {
+  private boolean jj_3R_211() {
     if (jj_scan_token(108)) return true;
     return false;
   }
 
-  private boolean jj_3R_132() {
+  private boolean jj_3R_133() {
     if (jj_scan_token(124)) return true;
     if (jj_scan_token(S_CHAR_LITERAL)) return true;
     if (jj_scan_token(122)) return true;
     return false;
   }
 
-  private boolean jj_3R_209() {
+  private boolean jj_3R_210() {
     if (jj_scan_token(107)) return true;
     return false;
   }
@@ -5703,7 +5717,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     xsp = jj_scanpos;
     if (jj_scan_token(117)) {
     jj_scanpos = xsp;
-    if (jj_3R_121()) return true;
+    if (jj_3R_122()) return true;
     }
     return false;
   }
@@ -5713,43 +5727,41 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     xsp = jj_scanpos;
     if (jj_scan_token(117)) {
     jj_scanpos = xsp;
-    if (jj_3R_119()) return true;
+    if (jj_3R_120()) return true;
     }
     return false;
   }
 
-  private boolean jj_3R_131() {
+  private boolean jj_3R_132() {
     if (jj_scan_token(123)) return true;
     if (jj_scan_token(S_CHAR_LITERAL)) return true;
     if (jj_scan_token(122)) return true;
     return false;
   }
 
-  private boolean jj_3R_207() {
+  private boolean jj_3R_208() {
     if (jj_scan_token(K_NOT)) return true;
     return false;
   }
 
-  private boolean jj_3R_228() {
+  private boolean jj_3R_229() {
     if (jj_scan_token(118)) return true;
     return false;
   }
 
-  private boolean jj_3R_130() {
+  private boolean jj_3R_131() {
     if (jj_scan_token(121)) return true;
     if (jj_scan_token(S_CHAR_LITERAL)) return true;
     if (jj_scan_token(122)) return true;
     return false;
   }
 
-  private boolean jj_3R_153() {
+  private boolean jj_3R_154() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_207()) jj_scanpos = xsp;
-    if (jj_3R_208()) return true;
+    if (jj_3R_208()) jj_scanpos = xsp;
+    if (jj_3R_209()) return true;
     xsp = jj_scanpos;
-    if (jj_3R_209()) {
-    jj_scanpos = xsp;
     if (jj_3R_210()) {
     jj_scanpos = xsp;
     if (jj_3R_211()) {
@@ -5760,14 +5772,16 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     jj_scanpos = xsp;
     if (jj_3R_214()) {
     jj_scanpos = xsp;
-    if (jj_3R_215()) return true;
+    if (jj_3R_215()) {
+    jj_scanpos = xsp;
+    if (jj_3R_216()) return true;
     }
     }
     }
     }
     }
     }
-    if (jj_3R_208()) return true;
+    if (jj_3R_209()) return true;
     return false;
   }
 
@@ -5796,12 +5810,12 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_172() {
+  private boolean jj_3R_173() {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_scan_token(117)) {
     jj_scanpos = xsp;
-    if (jj_3R_228()) return true;
+    if (jj_3R_229()) return true;
     }
     return false;
   }
@@ -5832,10 +5846,10 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_129() {
+  private boolean jj_3R_130() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_172()) jj_scanpos = xsp;
+    if (jj_3R_173()) jj_scanpos = xsp;
     if (jj_scan_token(100)) return true;
     if (jj_3R_61()) return true;
     if (jj_scan_token(102)) return true;
@@ -5850,17 +5864,17 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_128() {
+  private boolean jj_3R_129() {
     if (jj_scan_token(S_CHAR_LITERAL)) return true;
     return false;
   }
 
-  private boolean jj_3R_177() {
-    if (jj_3R_231()) return true;
+  private boolean jj_3R_178() {
+    if (jj_3R_232()) return true;
     Token xsp;
     while (true) {
       xsp = jj_scanpos;
-      if (jj_3R_232()) { jj_scanpos = xsp; break; }
+      if (jj_3R_233()) { jj_scanpos = xsp; break; }
     }
     return false;
   }
@@ -5875,8 +5889,8 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_98() {
-    if (jj_3R_153()) return true;
+  private boolean jj_3R_99() {
+    if (jj_3R_154()) return true;
     return false;
   }
 
@@ -5888,7 +5902,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_192() {
+  private boolean jj_3R_193() {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_scan_token(30)) {
@@ -5898,7 +5912,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_97() {
+  private boolean jj_3R_98() {
     if (jj_3R_56()) return true;
     return false;
   }
@@ -5906,10 +5920,38 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   private boolean jj_3R_55() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_97()) {
+    if (jj_3R_98()) {
     jj_scanpos = xsp;
-    if (jj_3R_98()) return true;
+    if (jj_3R_99()) return true;
     }
+    return false;
+  }
+
+  private boolean jj_3R_128() {
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_172()) jj_scanpos = xsp;
+    if (jj_scan_token(S_INTEGER)) return true;
+    return false;
+  }
+
+  private boolean jj_3R_191() {
+    if (jj_scan_token(K_ALL)) return true;
+    return false;
+  }
+
+  private boolean jj_3R_141() {
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_191()) {
+    jj_scanpos = xsp;
+    if (jj_3R_192()) return true;
+    }
+    return false;
+  }
+
+  private boolean jj_3R_124() {
+    if (jj_3R_169()) return true;
     return false;
   }
 
@@ -5917,27 +5959,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_3R_171()) jj_scanpos = xsp;
-    if (jj_scan_token(S_INTEGER)) return true;
-    return false;
-  }
-
-  private boolean jj_3R_190() {
-    if (jj_scan_token(K_ALL)) return true;
-    return false;
-  }
-
-  private boolean jj_3R_140() {
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_190()) {
-    jj_scanpos = xsp;
-    if (jj_3R_191()) return true;
-    }
-    return false;
-  }
-
-  private boolean jj_3R_123() {
-    if (jj_3R_168()) return true;
+    if (jj_scan_token(S_DOUBLE)) return true;
     return false;
   }
 
@@ -5945,24 +5967,16 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_3R_170()) jj_scanpos = xsp;
-    if (jj_scan_token(S_DOUBLE)) return true;
-    return false;
-  }
-
-  private boolean jj_3R_125() {
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_169()) jj_scanpos = xsp;
     if (jj_3R_75()) return true;
     return false;
   }
 
-  private boolean jj_3R_124() {
+  private boolean jj_3R_125() {
     if (jj_scan_token(106)) return true;
     return false;
   }
 
-  private boolean jj_3R_187() {
+  private boolean jj_3R_188() {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_scan_token(30)) {
@@ -5982,42 +5996,42 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_244() {
+  private boolean jj_3R_245() {
     if (jj_scan_token(K_NOT)) return true;
     return false;
   }
 
-  private boolean jj_3R_185() {
+  private boolean jj_3R_186() {
     if (jj_scan_token(K_ALL)) return true;
     return false;
   }
 
-  private boolean jj_3R_136() {
+  private boolean jj_3R_137() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_185()) {
+    if (jj_3R_186()) {
     jj_scanpos = xsp;
-    if (jj_3R_186()) return true;
+    if (jj_3R_187()) return true;
     }
     return false;
   }
 
-  private boolean jj_3R_206() {
+  private boolean jj_3R_207() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_244()) jj_scanpos = xsp;
+    if (jj_3R_245()) jj_scanpos = xsp;
     if (jj_scan_token(100)) return true;
     if (jj_3R_54()) return true;
     if (jj_scan_token(102)) return true;
     return false;
   }
 
-  private boolean jj_3R_141() {
+  private boolean jj_3R_142() {
     if (jj_scan_token(K_UNION)) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_192()) jj_scanpos = xsp;
-    if (jj_3R_135()) return true;
+    if (jj_3R_193()) jj_scanpos = xsp;
+    if (jj_3R_136()) return true;
     return false;
   }
 
@@ -6026,25 +6040,20 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_281() {
+  private boolean jj_3R_282() {
     if (jj_scan_token(106)) return true;
     return false;
   }
 
-  private boolean jj_3R_122() {
+  private boolean jj_3R_123() {
     if (jj_scan_token(K_NULL)) return true;
     return false;
   }
 
   private boolean jj_3R_73() {
     if (jj_scan_token(100)) return true;
-    if (jj_3R_112()) return true;
+    if (jj_3R_113()) return true;
     if (jj_scan_token(102)) return true;
-    return false;
-  }
-
-  private boolean jj_3R_205() {
-    if (jj_3R_55()) return true;
     return false;
   }
 
@@ -6058,24 +6067,29 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_137() {
+  private boolean jj_3R_206() {
+    if (jj_3R_55()) return true;
+    return false;
+  }
+
+  private boolean jj_3R_138() {
     if (jj_scan_token(K_UNION)) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_187()) jj_scanpos = xsp;
+    if (jj_3R_188()) jj_scanpos = xsp;
     if (jj_scan_token(100)) return true;
-    if (jj_3R_135()) return true;
+    if (jj_3R_136()) return true;
     if (jj_scan_token(102)) return true;
     return false;
   }
 
-  private boolean jj_3R_152() {
+  private boolean jj_3R_153() {
     if (jj_scan_token(K_AND)) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_205()) {
+    if (jj_3R_206()) {
     jj_scanpos = xsp;
-    if (jj_3R_206()) return true;
+    if (jj_3R_207()) return true;
     }
     return false;
   }
@@ -6083,8 +6097,6 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   private boolean jj_3R_80() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_122()) {
-    jj_scanpos = xsp;
     if (jj_3R_123()) {
     jj_scanpos = xsp;
     if (jj_3R_124()) {
@@ -6095,11 +6107,11 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     jj_scanpos = xsp;
     if (jj_3R_127()) {
     jj_scanpos = xsp;
+    if (jj_3R_128()) {
+    jj_scanpos = xsp;
     if (jj_3_31()) {
     jj_scanpos = xsp;
     if (jj_3_32()) {
-    jj_scanpos = xsp;
-    if (jj_3R_128()) {
     jj_scanpos = xsp;
     if (jj_3R_129()) {
     jj_scanpos = xsp;
@@ -6107,7 +6119,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     jj_scanpos = xsp;
     if (jj_3R_131()) {
     jj_scanpos = xsp;
-    if (jj_3R_132()) return true;
+    if (jj_3R_132()) {
+    jj_scanpos = xsp;
+    if (jj_3R_133()) return true;
     }
     }
     }
@@ -6120,6 +6134,11 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     }
     }
     }
+    return false;
+  }
+
+  private boolean jj_3R_140() {
+    if (jj_3R_190()) return true;
     return false;
   }
 
@@ -6128,31 +6147,26 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_138() {
-    if (jj_3R_188()) return true;
-    return false;
-  }
-
   private boolean jj_3_27() {
     if (jj_3R_69()) return true;
     return false;
   }
 
-  private boolean jj_3R_91() {
-    if (jj_3R_135()) return true;
+  private boolean jj_3R_92() {
+    if (jj_3R_136()) return true;
     if (jj_scan_token(K_UNION)) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_140()) jj_scanpos = xsp;
-    if (jj_3R_135()) return true;
+    if (jj_3R_141()) jj_scanpos = xsp;
+    if (jj_3R_136()) return true;
     while (true) {
       xsp = jj_scanpos;
-      if (jj_3R_141()) { jj_scanpos = xsp; break; }
+      if (jj_3R_142()) { jj_scanpos = xsp; break; }
     }
     return false;
   }
 
-  private boolean jj_3R_264() {
+  private boolean jj_3R_265() {
     if (jj_scan_token(106)) return true;
     return false;
   }
@@ -6162,18 +6176,8 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_204() {
+  private boolean jj_3R_205() {
     if (jj_scan_token(K_NOT)) return true;
-    return false;
-  }
-
-  private boolean jj_3R_151() {
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_204()) jj_scanpos = xsp;
-    if (jj_scan_token(100)) return true;
-    if (jj_3R_54()) return true;
-    if (jj_scan_token(102)) return true;
     return false;
   }
 
@@ -6188,12 +6192,22 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_262() {
+  private boolean jj_3R_152() {
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_205()) jj_scanpos = xsp;
+    if (jj_scan_token(100)) return true;
+    if (jj_3R_54()) return true;
+    if (jj_scan_token(102)) return true;
+    return false;
+  }
+
+  private boolean jj_3R_263() {
     if (jj_scan_token(106)) return true;
     return false;
   }
 
-  private boolean jj_3R_115() {
+  private boolean jj_3R_116() {
     if (jj_scan_token(120)) return true;
     if (jj_3R_80()) return true;
     return false;
@@ -6204,25 +6218,25 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_90() {
+  private boolean jj_3R_91() {
     if (jj_scan_token(100)) return true;
-    if (jj_3R_135()) return true;
+    if (jj_3R_136()) return true;
     if (jj_scan_token(102)) return true;
     if (jj_scan_token(K_UNION)) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_136()) jj_scanpos = xsp;
+    if (jj_3R_137()) jj_scanpos = xsp;
     if (jj_scan_token(100)) return true;
-    if (jj_3R_135()) return true;
+    if (jj_3R_136()) return true;
     if (jj_scan_token(102)) return true;
     while (true) {
       xsp = jj_scanpos;
-      if (jj_3R_137()) { jj_scanpos = xsp; break; }
+      if (jj_3R_138()) { jj_scanpos = xsp; break; }
     }
     xsp = jj_scanpos;
-    if (jj_3R_138()) jj_scanpos = xsp;
-    xsp = jj_scanpos;
     if (jj_3R_139()) jj_scanpos = xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_140()) jj_scanpos = xsp;
     return false;
   }
 
@@ -6231,21 +6245,21 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_150() {
+  private boolean jj_3R_151() {
     if (jj_3R_55()) return true;
     return false;
   }
 
-  private boolean jj_3R_95() {
+  private boolean jj_3R_96() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_150()) {
+    if (jj_3R_151()) {
     jj_scanpos = xsp;
-    if (jj_3R_151()) return true;
+    if (jj_3R_152()) return true;
     }
     while (true) {
       xsp = jj_scanpos;
-      if (jj_3R_152()) { jj_scanpos = xsp; break; }
+      if (jj_3R_153()) { jj_scanpos = xsp; break; }
     }
     return false;
   }
@@ -6255,7 +6269,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     Token xsp;
     while (true) {
       xsp = jj_scanpos;
-      if (jj_3R_115()) { jj_scanpos = xsp; break; }
+      if (jj_3R_116()) { jj_scanpos = xsp; break; }
     }
     return false;
   }
@@ -6268,9 +6282,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
   private boolean jj_3R_49() {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_90()) {
+    if (jj_3R_91()) {
     jj_scanpos = xsp;
-    if (jj_3R_91()) return true;
+    if (jj_3R_92()) return true;
     }
     return false;
   }
@@ -6295,9 +6309,9 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_96() {
+  private boolean jj_3R_97() {
     if (jj_scan_token(K_OR)) return true;
-    if (jj_3R_95()) return true;
+    if (jj_3R_96()) return true;
     return false;
   }
 
@@ -6321,39 +6335,39 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_114() {
+  private boolean jj_3R_115() {
     if (jj_scan_token(100)) return true;
-    if (jj_3R_112()) return true;
+    if (jj_3R_113()) return true;
     if (jj_scan_token(102)) return true;
     return false;
   }
 
-  private boolean jj_3R_252() {
+  private boolean jj_3R_253() {
     if (jj_scan_token(K_ON)) return true;
     if (jj_scan_token(100)) return true;
-    if (jj_3R_177()) return true;
+    if (jj_3R_178()) return true;
     if (jj_scan_token(102)) return true;
     return false;
   }
 
-  private boolean jj_3R_183() {
-    if (jj_3R_188()) return true;
+  private boolean jj_3R_184() {
+    if (jj_3R_189()) return true;
     return false;
   }
 
   private boolean jj_3R_54() {
-    if (jj_3R_95()) return true;
+    if (jj_3R_96()) return true;
     Token xsp;
     while (true) {
       xsp = jj_scanpos;
-      if (jj_3R_96()) { jj_scanpos = xsp; break; }
+      if (jj_3R_97()) { jj_scanpos = xsp; break; }
     }
     return false;
   }
 
-  private boolean jj_3R_270() {
+  private boolean jj_3R_271() {
     if (jj_scan_token(100)) return true;
-    if (jj_3R_242()) return true;
+    if (jj_3R_243()) return true;
     if (jj_scan_token(102)) return true;
     return false;
   }
@@ -6363,7 +6377,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     return false;
   }
 
-  private boolean jj_3R_113() {
+  private boolean jj_3R_114() {
     if (jj_3R_69()) return true;
     return false;
   }
@@ -6394,7 +6408,7 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
       jj_la1_0 = new int[] {0x138180,0x1,0x138181,0x8001c00,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x10000,0x10000,0x0,0x0,0x200,0x200,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x20,0x0,0x0,0x0,0x0,0x20000000,0x40000000,0x40000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40000000,0x40000000,0x0,0x40000000,0x40000000,0x0,0x0,0x40000000,0x40000000,0x0,0x40000000,0x40000000,0x0,0x0,0x0,0x0,0x20,0x0,0x0,0x20,0x0,0x0,0x0,0x20,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x20000000,0x20000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x40000000,0x40000000,0x0,0x40000000,0x0,0x0,0x20,0x0,0x8000000,0x0,0x1000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0xc00,0x0,0x0,0x0,0x0,0x20,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,};
    }
    private static void jj_la1_init_1() {
-      jj_la1_1 = new int[] {0x400800,0x0,0x400800,0x800206,0x0,0x0,0x0,0x0,0x0,0x1000000,0x0,0x0,0x0,0x0,0x10200,0x0,0x0,0x0,0x10200,0x100,0x0,0x0,0x0,0x0,0x8,0x100,0x0,0x0,0x0,0x0,0x4000,0x1000000,0x0,0x0,0x0,0x0,0x0,0x0,0x400000,0x0,0x0,0x0,0x0,0x20,0x100,0x1000000,0x8000000,0x0,0x0,0x80000000,0x0,0x0,0x4000000,0x0,0x0,0x0,0x80000000,0x0,0x0,0x4000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x10200,0x0,0x0,0x0,0x0,0x0,0x40203000,0x202000,0x202000,0x40000000,0x40000000,0x1000,0x0,0x2000000,0x2000000,0x0,0x0,0x90,0x90,0x0,0x0,0x0,0x0,0x0,0x0,0x80000000,0x0,0x0,0x4,0x4,0x4,0x4,0x110205,0x4,0x0,0x0,0x10200,0x4,0x10200,0x4,0x4,0x0,0x4,0x4,0x0,0x0,0x110201,0x100001,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x10200,0x0,0x0,0x0,0x0,0x0,0x0,0x20000,0x80000,0x20000,0x80000,0x30200,0x0,0x0,0x0,0x0,0x0,0x0,0x10200,0x10200,0x0,0x0,0x0,0x0,0x0,0x206,0x0,0x206,0x0,0x206,0x20000002,0x206,0x0,0x0,0x0,0x0,0x206,0x0,0x0,0x0,0x0,0x20800000,0x0,0x0,0x0,0x0,0x0,0x100,0x800,0x0,0x0,0x400000,0x0,0x2000000,0x0,};
+      jj_la1_1 = new int[] {0x400800,0x0,0x400800,0x800206,0x0,0x0,0x0,0x200,0x0,0x1000000,0x0,0x0,0x0,0x0,0x10200,0x0,0x0,0x0,0x10200,0x100,0x0,0x0,0x0,0x0,0x8,0x100,0x0,0x0,0x0,0x0,0x4000,0x1000000,0x0,0x0,0x0,0x0,0x0,0x0,0x400000,0x0,0x0,0x0,0x0,0x20,0x100,0x1000000,0x8000000,0x0,0x0,0x80000000,0x0,0x0,0x4000000,0x0,0x0,0x0,0x80000000,0x0,0x0,0x4000000,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x10200,0x0,0x0,0x0,0x0,0x0,0x40203000,0x202000,0x202000,0x40000000,0x40000000,0x1000,0x0,0x2000000,0x2000000,0x0,0x0,0x90,0x90,0x0,0x0,0x0,0x0,0x0,0x0,0x80000000,0x0,0x0,0x4,0x4,0x4,0x4,0x110205,0x4,0x0,0x0,0x10200,0x4,0x10200,0x4,0x4,0x0,0x4,0x4,0x0,0x0,0x110201,0x100001,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x10200,0x0,0x0,0x0,0x0,0x0,0x200,0x20000,0x80000,0x20000,0x80000,0x30200,0x0,0x0,0x0,0x0,0x0,0x0,0x10200,0x10200,0x0,0x0,0x0,0x0,0x0,0x206,0x0,0x206,0x0,0x206,0x20000002,0x206,0x0,0x0,0x0,0x0,0x206,0x0,0x0,0x0,0x0,0x20800000,0x0,0x0,0x200,0x0,0x0,0x100,0x800,0x0,0x0,0x400000,0x0,0x2000000,0x0,};
    }
    private static void jj_la1_init_2() {
       jj_la1_2 = new int[] {0x4a18b8,0x0,0x4a18b8,0x23008000,0x0,0x0,0x0,0x23000000,0x0,0x0,0x20000000,0x20000000,0x20000020,0x0,0x23820040,0x0,0x0,0x0,0x23820040,0x0,0x0,0x0,0x0,0x2020,0x2020,0x0,0x0,0x0,0x0,0x2020,0x0,0x0,0x0,0x0,0x20000000,0x20000000,0x20000000,0x0,0x0,0x20,0x0,0x100000,0x100000,0x0,0x0,0x0,0x0,0x400,0x2,0x100,0x100000,0x100000,0x0,0x100000,0x100000,0x2,0x100,0x100000,0x100000,0x0,0x100000,0x100000,0x20,0x0,0x0,0x0,0x20000000,0x0,0x23820040,0x0,0x0,0x20,0x20000000,0x20000000,0x10005,0x10004,0x10004,0x1,0x1,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x2000000,0x2000000,0x2000000,0x2000000,0x2000000,0x100,0x100,0x2000000,0x0,0x0,0x0,0x0,0x0,0x23820040,0x0,0x0,0x0,0x23820040,0x0,0x23820040,0x0,0x0,0x4000,0x0,0x0,0x0,0x0,0x23820040,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x23820040,0x0,0x20020000,0x0,0x0,0x100000,0x100000,0x23820040,0x23920040,0x0,0x20820040,0x0,0x20000000,0x0,0x23008000,0x0,0x23008000,0x0,0x23008000,0x20008000,0x23008000,0x0,0x2000000,0x2000000,0x0,0x23008000,0x23000000,0x23000000,0x0,0x0,0x20000000,0x20000000,0x0,0x3000000,0x0,0x0,0x0,0x0,0x20000000,0x20000000,0x0,0x0,0x0,0x20000000,};
