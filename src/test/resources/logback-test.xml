@@ -26,7 +26,7 @@
   <logger name="mimir.ctables.ReasonSet$"                          level="WARN"/>
 
   <!--++++++++++++++++++++++++  Exec  +++++++++++++++++++++++++-->
-  <logger name="mimir.exec.Compiler"                               level="WARN"/>
+  <logger name="mimir.exec.Compiler"                               level="TRACE"/>
   <logger name="mimir.exec.mode.BestGuess$"                        level="WARN"/>
   <logger name="mimir.exec.mode.TupleBundle"                       level="WARN"/>
   <logger name="mimir.exec.mode.WorldBits$"                        level="WARN"/>

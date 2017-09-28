@@ -6,17 +6,17 @@ import java.sql.SQLException
 import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
-import mimir.util.{Timer,ExperimentalOptions,LineReaderInputSource,PythonProcess}
+import mimir.util.{Timer,ExperimentalOptions,LineReaderInputSource,PythonProcess,SqlUtils}
 import mimir.algebra._
 import mimir.statistics.DetectSeries
 import mimir.plot.Plot
 import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
+import mimir.exec.result.JDBCResultIterator
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody} 
 import net.sf.jsqlparser.statement.drop.Drop
 import org.jline.terminal.{Terminal,TerminalBuilder}
 import org.slf4j.{LoggerFactory}
-import ch.qos.logback.classic.{Level, Logger}
 import org.rogach.scallop._
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
@@ -114,6 +114,7 @@ object Mimir extends LazyLogging {
           case pragma: Pragma   => handlePragma(pragma)
           case analyze: Analyze => handleAnalyze(analyze)
           case plot: DrawPlot   => Plot.plot(plot, db, output)
+          case dir: DirectQuery => handleDirectQuery(dir)
           case _                => db.update(stmt)
         }
 
@@ -152,6 +153,25 @@ object Mimir extends LazyLogging {
   {
     Timer.monitor("QUERY", output.print(_)) {
       db.query(raw) { output.print(_) }
+    }
+  }
+
+  def handleDirectQuery(direct: DirectQuery) =
+  {
+    direct.getStatement match {
+      case sel: Select => {
+        val iter = new JDBCResultIterator(
+          SqlUtils.getSchema(sel.getSelectBody, db).map { (_, TString()) },
+          sel.getSelectBody,
+          db.backend,
+          TString()
+        )
+        output.print(iter)
+        iter.close()
+      }
+      case update => {
+        db.backend.update(update.toString);
+      }
     }
   }
 
@@ -251,14 +271,7 @@ object Mimir extends LazyLogging {
         setLogLevel(loggerName)
 
       case Function("LOG", Seq(StringPrimitive(loggerName), Var(level))) => 
-        setLogLevel(loggerName, level.toUpperCase match {
-          case "TRACE" => Level.TRACE
-          case "DEBUG" => Level.DEBUG
-          case "INFO"  => Level.INFO
-          case "WARN"  => Level.WARN
-          case "ERROR" => Level.ERROR
-          case _ => throw new SQLException(s"Invalid log level: $level");
-        })
+        setLogLevel(loggerName, level)
       case Function("LOG", _) =>
         output.print("Syntax: LOG('logger') | LOG('logger', TRACE|DEBUG|INFO|WARN|ERROR)");
 
@@ -270,13 +283,33 @@ object Mimir extends LazyLogging {
 
   }
 
-  def setLogLevel(loggerName: String, level: Level = Level.DEBUG)
+  def setLogLevel(loggerName: String, levelString: String = "DEBUG")
   {
-    LoggerFactory.getLogger(loggerName) match {
-      case logger: Logger => 
+    val newLevel = internalSetLogLevel(LoggerFactory.getLogger(loggerName), levelString);
+    output.print(s"$loggerName <- $newLevel")
+  }
+
+  private def internalSetLogLevel(genericLogger: Object, levelString: String): String =
+  {
+    genericLogger match {
+      case logger: ch.qos.logback.classic.Logger => 
+        // base logger instance.  Set the logger
+        val level = levelString.toUpperCase match {
+          case "TRACE" => ch.qos.logback.classic.Level.TRACE
+          case "DEBUG" => ch.qos.logback.classic.Level.DEBUG
+          case "INFO"  => ch.qos.logback.classic.Level.INFO
+          case "WARN"  => ch.qos.logback.classic.Level.WARN
+          case "ERROR" => ch.qos.logback.classic.Level.ERROR
+          case _ => throw new SQLException(s"Invalid log level: $levelString");
+        }
         logger.setLevel(level)
-        output.print(s"$loggerName <- $level")
-      case _ => throw new SQLException(s"Invalid Logger: '$loggerName'")
+        return level.toString
+
+      case logger: com.typesafe.scalalogging.slf4j.Logger =>
+        // SLF4J wraps existing loggers.  Recur to get the real logger 
+        return internalSetLogLevel(logger.underlying, levelString)
+
+      case _ => throw new SQLException(s"Don't know how to handle logger ${logger.getClass().toString}")
     }
   }
 

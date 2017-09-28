@@ -51,7 +51,7 @@ object PythonProcess
   def apply(operation: String, io: ProcessIO = null): Process =
   {
     val cmd = s"python2.7 ${scriptPath} ${operation}"
-    logger.debug("Running: $cmd")
+    logger.debug(s"Running: $cmd")
     if(io == null){
       cmd.run()
     } else {

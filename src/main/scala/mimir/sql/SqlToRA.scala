@@ -94,7 +94,12 @@ class SqlToRA(db: Database)
 
     // JSqlParser makes a distinction between the first FromItem, and items 
     // subsequently joined to it.  Start by extracting the first FromItem
-    var (ret, currBindings, sourceAlias) = convert(ps.getFromItem)
+    var (ret, currBindings, sourceAlias) = 
+      if(ps.getFromItem() == null){
+        (SingletonTable(Seq()), Seq(), "SINGLETON");
+      } else {
+        convert(ps.getFromItem)
+      }
     sources += ( (sourceAlias, currBindings.map(_._2).toList) )
     bindings.putAll(currBindings.toMap[String,String])
     reverseBindings.putAll(

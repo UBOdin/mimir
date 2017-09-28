@@ -132,7 +132,7 @@ object Plot
           case "OFF" => JsNull
           case _ => {
             Json.toJson(
-              lines.flatMap { case (x, y, _) =>
+              lines.flatMap { case (x, y, config) =>
                 results
                   .filter { row => 
                     (    (!row.isDeterministic()) 
@@ -140,7 +140,10 @@ object Plot
                       || (!row.isColDeterministic(y))
                     )
                   }
-                  .map { row => Json.arr(row(x), row(y)) }
+                  .map { row => 
+                    logger.trace(s"${config("TITLE")} @ ${row(x)} - ${row(y)} -> row: ${row.isDeterministic()}, $x: ${row.isColDeterministic(x)} $y: ${row.isColDeterministic(y)}")
+                    Json.arr(row(x), row(y)) 
+                  }
               }
               .toSet
             )

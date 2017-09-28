@@ -379,10 +379,13 @@ class GroupAnd extends org.sqlite.Function.Aggregate {
 
   @Override
   def xStep(): Unit = {
+    // println(s"GROUP_AND($agg, ${value_text(0)})")
     agg = agg && (value_int(0) != 0)
+    // println(s"    -> $agg")
   }
 
   def xFinal(): Unit = {
+    // println(s"RESULT (OR) -> $agg")
     result(if(agg){ 1 } else { 0 })
   }
 }
@@ -392,10 +395,13 @@ class GroupOr extends org.sqlite.Function.Aggregate {
 
   @Override
   def xStep(): Unit = {
+    // println(s"GROUP_OR($agg, ${value_text(0)})")
     agg = agg || (value_int(0) != 0)
+    // println(s"    -> $agg")
   }
 
   def xFinal(): Unit = {
+    // println(s"RESULT (OR) -> $agg")
     result(if(agg){ 1 } else { 0 })
   }
 }

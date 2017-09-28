@@ -41,25 +41,34 @@ object CTAnalyzer {
         } else {
           ExpressionUtils.makeAnd(
             recur(condition), 
-            Conditional(condition, recur(thenClause), recur(elseClause))
+            Conditional(condition, thenDeterministic, elseDeterministic)
           )
         }
       }
 
-      case Arithmetic(Arith.And, l, r) =>
-        ExpressionUtils.makeOr(
+      case Arithmetic(Arith.And, l, r) => {
+        val lDeterministic = recur(l)
+        val rDeterministic = recur(r)
+        ExpressionUtils.makeOr(Seq(
           ExpressionUtils.makeAnd(
-            recur(l),
+            lDeterministic,
             ExpressionUtils.makeNot(l)
           ),
           ExpressionUtils.makeAnd(
-            recur(r),
+            rDeterministic,
             ExpressionUtils.makeNot(r)
+          ),
+          ExpressionUtils.makeAnd(
+            lDeterministic,
+            rDeterministic
           )
-        )
+        ))
+      }
       
-      case Arithmetic(Arith.Or, l, r) =>
-        ExpressionUtils.makeOr(
+      case Arithmetic(Arith.Or, l, r) => {
+        val lDeterministic = recur(l)
+        val rDeterministic = recur(r)
+        ExpressionUtils.makeOr(Seq(
           ExpressionUtils.makeAnd(
             recur(l),
             l
@@ -67,8 +76,13 @@ object CTAnalyzer {
           ExpressionUtils.makeAnd(
             recur(r),
             r
+          ),
+          ExpressionUtils.makeAnd(
+            lDeterministic,
+            rDeterministic
           )
-        )
+        ))
+      }
 
       case v: VGTerm =>
         if(v.args.isEmpty){
