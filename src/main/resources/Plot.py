@@ -147,7 +147,7 @@ def drawPlot(lineSettings,globalSettings):
                             plt.xticks(words,xpoints)
                             plt.ylim(globalSettings['YMIN'],globalSettings['YMAX'])
                             barNo=barNo+1
-    if globalSettings['WARNINGS'] != None and len(globalSettings['WARNINGS']) > 0:
+    if globalSettings['WARNINGS'] != None and len(globalSettings['WARNINGS']) > 0 and plottype != 'bar':
         plt.plot(
             [ x[0] for x in globalSettings['WARNINGS'] ],
             [ x[1] for x in globalSettings['WARNINGS'] ],
