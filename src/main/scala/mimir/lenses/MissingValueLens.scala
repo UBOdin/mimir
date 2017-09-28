@@ -45,7 +45,11 @@ object MissingValueLens {
             case ("REQUIRE", Seq(StringPrimitive(s))) => {
               val constraint = ExpressionParser.expr(s);
               ExpressionUtils.getColumns(constraint).toSeq match {
-                case Seq(v) => (v.toUpperCase, Eval.inline(constraint) { x => Var(x.toUpperCase) })
+                case Seq(v) => (v.toUpperCase, 
+                    Var(v.toUpperCase).isNull.not.and(
+                      Eval.inline(constraint) { x => Var(x.toUpperCase) }
+                    )
+                  )
                 case Seq() => throw new RAException(s"Invalid REQUIRE Constraint $e (need a variable in require)")
                 case _ => throw new RAException(s"Invalid REQUIRE Constraint $e (one variable per require)")
               }

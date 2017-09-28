@@ -51,7 +51,8 @@ object Plot
     val lines: Seq[(String, String, Map[String, PrimitiveValue])] =
       if(spec.getLines.isEmpty){
           //if no lines are specified, try to find the best ones
-        val columns = db.bestGuessSchema(dataQuery).toMap
+        val columns = db.bestGuessSchema(dataQuery)
+        val columnMap = columns.toMap
         val numericColumns =
           columns.toSeq
             .filter { t => Type.isNumeric(t._2) }
@@ -72,7 +73,7 @@ object Plot
           // TODO: Plug DetectSeries in here.
           logger.info(s"No explicit columns given, implicitly using X = $x, Y = [${numericColumns.tail.mkString(", ")}]")
           val commonType = 
-            Typechecker.leastUpperBound(numericColumns.tail.map { y => columns(y) })
+            Typechecker.leastUpperBound(numericColumns.tail.map { y => columnMap(y) })
           globalSettings = Map(
             "XLABEL" -> StringPrimitive(x)
           ) ++ (commonType match { 
