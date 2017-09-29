@@ -92,8 +92,19 @@ def drawPlot(lineSettings,globalSettings):
         else:
             if(plottype=='scatter'):
                 colorStyle=line[2]['COLOR']+line[2]['STYLE']
+                # sys.stderr.write("line\n")
+                plt.rc('axes', edgecolor = "#808080")
+                lineStyle = "".join([ i for i in line[2]['STYLE'] if i in ['-', '.', ':'] ])
+                marker    = "".join([ i for i in line[2]['STYLE'] if i in ['o', '^', 's'] ])
                 sys.stderr.write("scatter\n")
-                plt.plot(xpoints,ypoints,colorStyle,markersize=line[2]['WEIGHT'])
+                plt.plot(
+                    xpoints,
+                    ypoints,
+                    color = line[2]['COLOR'],
+                    linestyle = lineStyle,
+                    marker = marker,
+                    markersize=line[2]['WEIGHT']
+                )
                 plt.axis([(globalSettings['XMIN']),(globalSettings['XMAX']),(globalSettings['YMIN']),(globalSettings['YMAX'])])
             else:
                 if(plottype=='bar'):
@@ -104,7 +115,14 @@ def drawPlot(lineSettings,globalSettings):
                             #xpoints are numeric, ypoints are strings
                             ypoints=list(reversed(ypoints))
                             words = np.arange(len(ypoints))
-                            plt.barh(words+(barNo*width), xpoints,width, align='center', alpha=0.5,color=line[2]['COLOR'])
+                            plt.barh(
+                                words+(barNo*width), 
+                                xpoints,
+                                width, 
+                                align='center', 
+                                alpha=0.5,
+                                color=line[2]['COLOR']
+                            )
                             plt.yticks(words,ypoints)
                             plt.xlim(globalSettings['XMIN'],globalSettings['XMAX'])
                             barNo=barNo+1
@@ -118,11 +136,18 @@ def drawPlot(lineSettings,globalSettings):
                             sys.stderr.write(str(line[0])+"\n")
                             sys.stderr.write(str(line[1])+"\n")
                             words = np.arange(len(xpoints))
-                            plt.bar(words+(width*barNo), ypoints,width=width, align='center', alpha=0.5,color=line[2]['COLOR'])
+                            plt.bar(
+                                words+(width*barNo), 
+                                ypoints,
+                                width=width, 
+                                align='center', 
+                                alpha=0.5,
+                                color=line[2]['COLOR']
+                            )
                             plt.xticks(words,xpoints)
                             plt.ylim(globalSettings['YMIN'],globalSettings['YMAX'])
                             barNo=barNo+1
-    if globalSettings['WARNINGS'] != None and len(globalSettings['WARNINGS']) > 0:
+    if globalSettings['WARNINGS'] != None and len(globalSettings['WARNINGS']) > 0 and plottype != 'bar':
         plt.plot(
             [ x[0] for x in globalSettings['WARNINGS'] ],
             [ x[1] for x in globalSettings['WARNINGS'] ],
