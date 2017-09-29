@@ -72,7 +72,16 @@ object MimirVizier extends LazyLogging {
       LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) match {
           case logger: Logger => {
             logger.setLevel(Level.ERROR)
-            logger.debug("root rogger set to level: ERROR"); 
+            logger.debug("root logger set to level: ERROR"); 
+          }
+        }
+    }
+    
+    if(ExperimentalOptions.isEnabled("LOG")){
+      LoggerFactory.getLogger(this.getClass.getName) match {
+          case logger: Logger => {
+            logger.setLevel(Level.DEBUG)
+            logger.debug(this.getClass.getName +" logger set to level: DEBUG"); 
           }
         }
     }
@@ -563,6 +572,8 @@ object MimirVizier extends LazyLogging {
          Seq(IntPrimitive(dataID),StringPrimitive("MAP_CLUSTERER"),StringPrimitive("Cluster Markers"),StringPrimitive("CLUSTER"),StringPrimitive("{}"))  
        )
      }
+     case "DATA" => {}
+     case x => {}
    }
  }
  

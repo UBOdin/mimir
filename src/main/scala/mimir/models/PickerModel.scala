@@ -53,6 +53,14 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
           case (NullPrimitive(), NullPrimitive(), _) => init
           case (NullPrimitive(), _, _) => args(elem._2+1)
           case (_, NullPrimitive(), _) => init
+          case (e1, e2, _) if e1.equals(e2) => {
+            val fbh = FeedbackSource.feedbackSource
+            FeedbackSource.feedbackSource = FeedbackSource.groundSource
+            if(!hasFeedback(0, args))
+              setFeedback(0, args, e1)
+            FeedbackSource.feedbackSource = fbh
+            e1
+          }
           case (p1@IntPrimitive(l1), p2@IntPrimitive(l2), IntPrimitive(l3)) => if(Math.abs(l1-l3)<Math.abs(l2-l3)) p1 else p2
           case (p1@FloatPrimitive(f1), p2@FloatPrimitive(f2), FloatPrimitive(f3)) => if(Math.abs(f1-f3)<Math.abs(f2-f3)) p1 else p2
           case (p1@StringPrimitive(s1), p2@StringPrimitive(s2), StringPrimitive(s3)) => if(Levenshtein.distance(s1, s3)<Levenshtein.distance(s2, s3)) p1 else p2
@@ -63,7 +71,10 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
           case (p1@RowIdPrimitive(s1), p2@RowIdPrimitive(s2), RowIdPrimitive(s3)) => if(s1.equals(s3)) p1 else p2
           case (p1@TypePrimitive(t1), p2@TypePrimitive(t2), TypePrimitive(t3)) => if(t1.equals(t3)) p1 else p2 
           case _ => throw new RAException("Something really wrong is going on")
-        })
+        }) match {
+          case NullPrimitive() => v
+          case x => x
+        }
     }
   }
 
@@ -149,10 +160,17 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = {
     hasFeedback(idx, args)
   }
-  def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq(TAny())
+  def hintTypes(idx: Int): Seq[mimir.algebra.Type] = useClassifier match {
+    case None => Seq(TAny())
+    case Some(x) => Seq() 
+  }
    
   
-  def getDomain(idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = Seq((hints(0), 0.0))
+  def getDomain(idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =  useClassifier match {
+    case Some(x) => Seq()//pickFromCols.zipWithIndex.map(colIdx => (args(colIdx._2), 1.0/pickFromCols.length.toDouble))
+    case None => Seq((hints(0), 0.0))//pickFromCols.zipWithIndex.map(colIdx => (args(colIdx._2), 1.0/(pickFromCols.length+1).toDouble)) ++ Seq((hints(0), 1.0/(pickFromCols.length+1).toDouble))
+  }
+
   
   def reconnectToDatabase(db: Database) = { 
     this.db = db 
