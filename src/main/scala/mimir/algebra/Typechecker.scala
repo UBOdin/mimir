@@ -268,6 +268,7 @@ object Typechecker
   extends LazyLogging
 {
 
+	val trivialTypechecker = new Typechecker()
 
 	def assertNumeric(t: Type, e: Expression): Type =
  	{
@@ -401,5 +402,3 @@ object Typechecker
 		l.fold(TAny())(escalate(_,_,op,msg,e))
 	}
 }
-
-object Typechecker extends Typechecker();

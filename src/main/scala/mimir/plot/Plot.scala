@@ -20,6 +20,9 @@ object Plot
   extends LazyLogging
 {
 
+  type Config = Map[String, PrimitiveValue]
+  type Line = (String, String, Config)
+
   def value: (PrimitiveValue => Object) = {
     case NullPrimitive() => 0:java.lang.Long
     case IntPrimitive(l) => l:java.lang.Long
@@ -48,68 +51,43 @@ object Plot
     }
     var globalSettings = convertConfig(spec.getConfig())
 
-    val lines: Seq[(String, String, Map[String, PrimitiveValue])] =
-      if(spec.getLines.isEmpty){
-          //if no lines are specified, try to find the best ones
-        val columns = db.bestGuessSchema(dataQuery)
-        val columnMap = columns.toMap
-        val numericColumns =
-          columns.toSeq
-            .filter { t => Type.isNumeric(t._2) }
-            .map { _._1 }
-          //if that comes up with nothing either, then throw an exception
-        if(numericColumns.isEmpty){
-          throw new RAException(s"No valid columns for plotting: ${db.bestGuessSchema(dataQuery).map { x => x._1+":"+x._2 }.mkString(",")}")
-        }
-        val x = numericColumns.head
-        if(numericColumns.tail.isEmpty){
-          dataQuery = Sort(Seq(SortColumn(Var(x), true)), dataQuery)
-          globalSettings = Map(
-            "XLABEL" -> StringPrimitive(x),
-            "YLABEL" -> StringPrimitive("CDF")
-          ) ++ globalSettings
-          Seq( (x, "MIMIR_PLOT_CDF", Map("TITLE" -> StringPrimitive(x))) )
-        } else {
-          // TODO: Plug DetectSeries in here.
-          logger.info(s"No explicit columns given, implicitly using X = $x, Y = [${numericColumns.tail.mkString(", ")}]")
-          val commonType = 
-            Typechecker.leastUpperBound(numericColumns.tail.map { y => columnMap(y) })
-          globalSettings = Map(
-            "XLABEL" -> StringPrimitive(x)
-          ) ++ (commonType match { 
-            case Some(TUser(utype)) => Map("YLABEL" -> StringPrimitive(utype))
-            case Some(TDate()     ) => Map("YLABEL" -> StringPrimitive("Date"))
-            case Some(TTimestamp()) => Map("YLABEL" -> StringPrimitive("Time"))
-            case _                  => Map()
-          }) ++ globalSettings
-          numericColumns.tail.map { y =>
-            (x, y, Map("TITLE" -> StringPrimitive(y)))
-          }
-        }
-      } else {
-        val sch = db.typechecker.schemaOf(dataQuery)
-        var extraColumnCounter = 0;
+    val lines: Seq[(String, String, Config)] =
+      Heuristics.applyLineDefaults(
+        if(spec.getLines.isEmpty){
+          val (newDataQuery, chosenLines, newGlobalSettings) = 
+            Heuristics.pickDefaultLines(dataQuery, globalSettings, db)
 
-        val convertExpression = (raw: net.sf.jsqlparser.expression.Expression) => {
-          db.sql.convert(raw, { x => x }) match {
-            case Var(vn) => vn
-            case expr => {
-              extraColumnCounter += 1
-              val column = s"PLOT_EXPRESSION_$extraColumnCounter"
-              dataQuery = dataQuery.addColumn( column -> expr )
-              column
+          dataQuery = newDataQuery
+          globalSettings = newGlobalSettings
+
+          // return the actual lines generated
+          chosenLines
+        } else {
+          val sch = db.typechecker.schemaOf(dataQuery)
+          var extraColumnCounter = 0;
+
+          val convertExpression = (raw: net.sf.jsqlparser.expression.Expression) => {
+            db.sql.convert(raw, { x => x }) match {
+              case Var(vn) => vn
+              case expr => {
+                extraColumnCounter += 1
+                val column = s"PLOT_EXPRESSION_$extraColumnCounter"
+                dataQuery = dataQuery.addColumn( column -> expr )
+                column
+              }
             }
           }
-        }
 
-        spec.getLines.asScala.map { line =>
-          val x = convertExpression(line.getX())
-          val y = convertExpression(line.getY())
-          val args = convertConfig(line.getConfig())
-          (x, y, args)
-        }
-      }
-
+          spec.getLines.asScala.map { line =>
+            val x = convertExpression(line.getX())
+            val y = convertExpression(line.getY())
+            val args = convertConfig(line.getConfig())
+            (x, y, args)
+          }
+        },
+        globalSettings,
+        db
+      )
 
     logger.trace(s"QUERY: $dataQuery")
 

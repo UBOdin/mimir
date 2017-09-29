@@ -17,18 +17,22 @@ import scala.util._
 
 object MissingValueLens {
 
-  def getConstraint(arg: PrimitiveValue): Seq[(String, Expression)] =
+  def getConstraint(arg: Expression): Seq[(String, Expression)] =
   {
     arg match {
-      case Var(v) => (v.toUpperCase, Var(v.toUpperCase).isNull.not)
+      case Var(v) => Seq( (v.toUpperCase, Var(v.toUpperCase).isNull.not) )
       case StringPrimitive(exprString) => {
-        getConstraint(ExpressionParser.parse(exprString))
+        getConstraint(ExpressionParser.expr(exprString))
       }
-      case e if Typechecker.typeOf(e, (_:String) => TAny() ).equals(TBool()) => {
-        ExpressionUtils.getColumns(constraint).toSeq match {
-          case Seq(v) => (v.toUpperCase, 
-              Var(v.toUpperCase).isNull.not.and(
-                Eval.inline(constraint) { x => Var(x.toUpperCase) }
+      case e if Typechecker.trivialTypechecker.typeOf(e, (_:String) => TAny() ).equals(TBool()) => {
+        ExpressionUtils.getColumns(arg).toSeq match {
+          case Seq(v) => 
+            Seq( 
+              (
+                v.toUpperCase, 
+                Var(v.toUpperCase).isNull.not.and(
+                  Eval.inline(arg) { x => Var(x.toUpperCase) }
+                )
               )
             )
           case Seq() => throw new RAException(s"Invalid Constraint $e (need a variable in require)")
@@ -59,38 +63,7 @@ object MissingValueLens {
     // - REQUIRE(column, column > ...) is similar, but allows you to define constraints
     //   over multiple columns
 
-    val targetColumnsAndTests:Map[String, Expression] = 
-      args.map {
-        case Var(v)             => (v.toUpperCase, Var(v.toUpperCase).isNull.not)
-        case StringPrimitive(v) => (v.toUpperCase, Var(v.toUpperCase).isNull.not)
-        case e@Function(f, args)  => {
-          (f.toUpperCase, args) match {
-            case ("REQUIRE", Seq(Var(v), constraint:Expression)) => (v.toUpperCase, constraint)
-            case ("REQUIRE", Seq(StringPrimitive(s))) => {
-              val constraint = ExpressionParser.expr(s);
-              ExpressionUtils.getColumns(constraint).toSeq match {
-                case Seq(v) => (v.toUpperCase, 
-                    Var(v.toUpperCase).isNull.not.and(
-                      Eval.inline(constraint) { x => Var(x.toUpperCase) }
-                    )
-                  )
-                case Seq() => throw new RAException(s"Invalid REQUIRE Constraint $e (need a variable in require)")
-                case _ => throw new RAException(s"Invalid REQUIRE Constraint $e (one variable per require)")
-              }
-            }
-            case ("REQUIRE", Seq(constraint: Expression)) => 
-              ExpressionUtils.getColumns(constraint).toSeq match {
-                case Seq(v) => (v.toUpperCase, Eval.inline(constraint) { x => Var(x.toUpperCase) })
-                case Seq() => throw new RAException(s"Invalid REQUIRE Constraint $e (need a variable in require)")
-                case _ => throw new RAException(s"Invalid REQUIRE Constraint $e (one variable per require)")
-              }
-            case ("REQUIRE", _) => 
-             throw new RAException(s"Invalid REQUIRE Constraint $e (too many arguments)") 
-          }
-        }
-        case e => 
-          throw new RAException(s"Invalid Constraint $e (unknown type)") 
-      }.toMap
+    val targetColumnsAndTests:Map[String, Expression] = args.flatMap { getConstraint(_) }.toMap
 
     // Sanity check.  Require that all columns that we fix and all columns referenced in the 
     // constraints are defined in the original query.
