@@ -17,6 +17,30 @@ import scala.util._
 
 object MissingValueLens {
 
+  def getConstraint(arg: PrimitiveValue): Seq[(String, Expression)] =
+  {
+    arg match {
+      case Var(v) => (v.toUpperCase, Var(v.toUpperCase).isNull.not)
+      case StringPrimitive(exprString) => {
+        getConstraint(ExpressionParser.parse(exprString))
+      }
+      case e if Typechecker.typeOf(e, (_:String) => TAny() ).equals(TBool()) => {
+        ExpressionUtils.getColumns(constraint).toSeq match {
+          case Seq(v) => (v.toUpperCase, 
+              Var(v.toUpperCase).isNull.not.and(
+                Eval.inline(constraint) { x => Var(x.toUpperCase) }
+              )
+            )
+          case Seq() => throw new RAException(s"Invalid Constraint $e (need a variable in require)")
+          case _ => throw new RAException(s"Invalid Constraint $e (one variable per require)")
+        }
+      }
+      case e =>
+        throw new RAException("Invalid constraint $e (Not a Boolean Expression)")
+    }
+  }
+
+
   def create(
     db: Database, 
     name: String, 

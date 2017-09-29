@@ -401,3 +401,5 @@ object Typechecker
 		l.fold(TAny())(escalate(_,_,op,msg,e))
 	}
 }
+
+object Typechecker extends Typechecker();
