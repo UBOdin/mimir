@@ -14,6 +14,10 @@ object DiscalaAbadiNormalizer
   extends Multilens
   with LazyLogging
 {
+  def checkheader(db: Database, config: MultilensConfig): Boolean = {
+    //Method not needed for this adaptive schema
+    return true
+  }
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model] =
   {
     logger.debug(s"Creating DiscalaAbadiNormalizer: $config")

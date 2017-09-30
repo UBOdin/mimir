@@ -12,6 +12,7 @@ import java.util
 import mimir.parser._
 import net.sf.jsqlparser.statement.Statement
 import mimir.Database
+import mimir.Mimir
 import mimir.algebra.Type
 import org.apache.commons.csv.{CSVFormat, CSVParser}
 import org.apache.commons.io.IOUtils
@@ -35,8 +36,8 @@ object LoadCSV extends StrictLogging {
 
     /* Check if header present in CSV*/
     val par = new NonStrictCSVParser(in2, options);
-    val assumeHeader = check_header(par.take(5))
-
+    var assumeHeader = check_header(par.take(5))
+    assumeHeader = false;
 
     //val assumeHeader = options.getOrElse("HEADER", "YES").equals("YES")
 
@@ -107,45 +108,68 @@ object LoadCSV extends StrictLogging {
     populateTable(db, samples.view++parser, targetTable, sourceFile, targetSchema)
     input.close()
 
-      if (!assumeHeader){
+  /*  if (!assumeHeader){
 
-        var len = 0;
-        var arrs : Seq[mimir.algebra.PrimitiveValue] = null
+      var len = 0;
+      var arrs : Seq[mimir.algebra.PrimitiveValue] = null
 
-        var str=""
-        db.query("SELECT * FROM " + targetTable + " limit 1 ;")(_.foreach{result =>
-          arrs =  result.tuple
-        })
-        len = arrs.length
-        var flag = 0;
+      var str=""
+      db.query("SELECT * FROM " + targetTable + " limit 1 ;")(_.foreach{result =>
+        arrs =  result.tuple
+      })
+      len = arrs.length
 
-        for(i<- 0 until len){
-          val res = arrs(i)
-          var ch =  res.toString()(1)
-          if(ch.toByte >= '0' && ch.toByte <= '9'){
-            str ++= s"""COLUMN_$i AS COL_$i ,""";
-          }
-          else{
-            str ++= s"""COLUMN_$i AS $res ,""";
-          }
+      for(i<- 0 until len){
+        val res = arrs(i)
+        var ch =  res.toString()(1)
+        if(ch.toByte >= '0' && ch.toByte <= '9'){
+          str ++= s"""COLUMN_$i AS COL_$i ,""";
         }
-
-        var query = ""
-        println(str)
-
-        str = str.slice(0,(str.length()-2));
-        str = str.replaceAll("\\'","");
-        query = "CREATE VIEW "+ targetTable +"_Header AS SELECT " +str +" from "+ targetTable + " limit 1,1000000000000"
-
-        println(query)
-        val stream = new ByteArrayInputStream(query.getBytes)
-        var parser2 = new MimirJSqlParser(stream);
-        val stmt: Statement = parser2.Statement();
-        db.update(stmt);
+        else{
+          str ++= s"""COLUMN_$i AS $res ,""";
+        }
       }
 
+      var query = ""
 
-    }
+      str = str.slice(0,(str.length()-2));
+      str = str.replaceAll("\\'","");
+      query = "CREATE VIEW "+ targetTable +"_Header AS SELECT " +str +" from "+ targetTable + " limit 1,1000000000000"
+      db.backend.update(query)
+    }else{
+      var arr: Option[Seq[(String, mimir.algebra.Type)]] = null;
+      arr = db.tableSchema(targetTable)
+      var x : Seq[String] = Seq.empty[String]
+      arr match{
+        case None => ""
+        case Some(list) => for (s <- list){
+          x :+= s._1
+        }
+
+      }
+
+      var len = x.length
+      var str=""
+      var qu=""
+      for(i<- 0 until len){
+        val res = x(i)
+        str ++= s"""$res AS COLUMN_$i ,""";
+      }
+      for(i<- 0 until header.length){
+        val res = header(i)
+        qu ++= s"""'$res' ,""";
+      }
+      str = str.slice(0,(str.length()-2));
+      qu = qu.slice(0,(qu.length()-2));
+      var query = "INSERT INTO "+targetTable+" VALUES("+qu+")"
+      db.backend.update(query);
+      query = "CREATE VIEW "+ targetTable +"_Header AS SELECT " +str +" from "+ targetTable
+      db.backend.update(query);
+
+  }*/
+
+
+}
 
 
   def check_header(sample: Iterator[MimirCSVRecord]): Boolean ={
@@ -205,6 +229,7 @@ object LoadCSV extends StrictLogging {
           try{
             header(c).toFloat
             hasHeader=hasHeader - 1;
+            return false;
           } catch {
               case e: Exception =>{
                 hasHeader=hasHeader+1;

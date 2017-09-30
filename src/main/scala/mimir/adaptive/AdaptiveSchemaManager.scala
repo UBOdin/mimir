@@ -31,22 +31,28 @@ class AdaptiveSchemaManager(db: Database)
   {
     val constructor = MultilensRegistry.multilenses(mlensType)
     val config = MultilensConfig(schema, query, args);
-    val models = constructor.initSchema(db, config);
+    if(mlensType == "DETECT_HEADER"){
+      val models1 = constructor.checkheader(db, config);
+    }
+    else{
+      var models = constructor.initSchema(db, config);
 
-    db.backend.update(s"""
-      INSERT INTO $dataTable(NAME, MLENS, QUERY, ARGS) VALUES (?,?,?,?)
-    """, Seq(
-      StringPrimitive(schema),
-      StringPrimitive(mlensType),
-      StringPrimitive(Json.ofOperator(query).toString),
-      StringPrimitive(Json.ofExpressionList(args).toString)
-    ))
 
-    // Persist the associated models
-    for(model <- models){
-      if(model.isInstanceOf[mimir.models.NeedsReconnectToDatabase])
-        model.asInstanceOf[mimir.models.NeedsReconnectToDatabase].reconnectToDatabase(db)
-      db.models.persist(model, s"MULTILENS:$schema")
+      db.backend.update(s"""
+        INSERT INTO $dataTable(NAME, MLENS, QUERY, ARGS) VALUES (?,?,?,?)
+      """, Seq(
+        StringPrimitive(schema),
+        StringPrimitive(mlensType),
+        StringPrimitive(Json.ofOperator(query).toString),
+        StringPrimitive(Json.ofExpressionList(args).toString)
+      ))
+
+      // Persist the associated models
+      for(model <- models){
+        if(model.isInstanceOf[mimir.models.NeedsReconnectToDatabase])
+          model.asInstanceOf[mimir.models.NeedsReconnectToDatabase].reconnectToDatabase(db)
+        db.models.persist(model, s"MULTILENS:$schema")
+      }
     }
   }
 

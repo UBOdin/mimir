@@ -14,6 +14,114 @@ object CheckHeader
   extends Multilens
   with LazyLogging
 {
+  def checkheader(db: Database, config: MultilensConfig): Boolean = {
+    val col = config.query.expressions(0);
+    val tablename = col.toString.split("_")(0);
+    db.query(config.query)(_.foreach{result =>
+      println( result.tuple)
+    })
+    var detect  = detect_header(db, tablename);
+
+    var len = 0;
+    var arrs : Seq[mimir.algebra.PrimitiveValue] = null
+
+    var str=""
+    db.query("SELECT * FROM " + tablename + "_RAW limit 1 ;")(_.foreach{result =>
+      arrs =  result.tuple
+    })
+    len = arrs.length
+
+    for(i<- 0 until len){
+      val res = arrs(i)
+      var ch =  res.toString()(1)
+      if(ch.toByte >= '0' && ch.toByte <= '9'){
+        str ++= s"""COLUMN_$i AS COL_$i ,""";
+      }
+      else{
+        str ++= s"""COLUMN_$i AS $res ,""";
+      }
+    }
+
+    var query = ""
+
+    str = str.slice(0,(str.length()-2));
+    str = str.replaceAll("\\'","");
+    query = "CREATE VIEW "+ tablename +"_Header AS SELECT " +str +" from "+ tablename + "_RAW limit 1,1000000000000"
+    db.backend.update(query)
+    return detect;
+  }
+
+  def detect_header(db: Database, table: String): Boolean = {
+    var header : Seq[mimir.algebra.PrimitiveValue] = null;
+    var arrs : Seq[Seq[mimir.algebra.PrimitiveValue]] = Seq.empty[Seq[mimir.algebra.PrimitiveValue]];
+    db.query("SELECT * FROM " + table + "_RAW limit 1;")(_.foreach{result =>
+      header =  result.tuple
+    })
+
+    db.query("SELECT * FROM " + table + "_RAW limit 5 offset 1;")(_.foreach{result =>
+      arrs:+= result.tuple
+    })
+    val sample  = arrs.iterator
+    val columnLength = header.size;
+    var columnType =  scala.collection.mutable.Map[Int, String]()
+    for(i <- 0 until columnLength ){
+      columnType+= (i -> null)
+    }
+
+    var flag = 0;
+    while(sample.hasNext){
+      flag = 1;
+      val row = sample.next
+
+      for (col <- columnType.keySet){
+        if(row(col) != NullPrimitive()){
+          var i  = Cast.apply(TFloat(),row(col))
+          if(i==NullPrimitive()){
+            i = Cast.apply(TDate(),row(col))
+          }
+          if(i != NullPrimitive()){
+            if(columnType(col) != "true"){
+              if(columnType(col) == null){
+                columnType(col) = "true"
+              }
+              else{
+                columnType -= col
+              }
+            }
+          }
+          else{
+              columnType(col)  = (row(col).toString().length()-2).toString();
+          }
+        }
+      }
+    }
+    if (flag == 0){
+      return false;
+    }
+    var hasHeader = 0
+    for (c<-columnType.keySet){
+      if(columnType(c)!="true"){
+        if (header(c).toString.length()-2 == columnType(c).toInt) {
+            hasHeader=hasHeader-1;
+        } else {
+            hasHeader=hasHeader+1;
+        }
+      }else {
+          var i  = Cast.apply(TFloat(),header(c))
+          if(i==NullPrimitive()){
+            i = Cast.apply(TDate(),header(c))
+          }
+          if( i == NullPrimitive()){
+            hasHeader = hasHeader+1
+          }else{
+            hasHeader=hasHeader - 1;
+            return false;
+          }
+        }
+      }
+    return hasHeader > 0
+  }
+
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model] =
   {
     logger.debug(s"Creating DiscalaAbadiNormalizer: $config")

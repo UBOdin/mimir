@@ -434,10 +434,10 @@ case class Database(backend: Backend)
           )
           if(!tableExists(targetTable.toUpperCase)){
             val oper = table(targetRaw)
-            val oper2 =  table(targetRaw+"_HEADER")
+            //val oper2 =  table(targetRaw+"_HEADER")
             val l = List(new FloatPrimitive(.5))
             lenses.create("TYPE_INFERENCE", targetTable.toUpperCase, oper, l)
-            lenses.create("TYPE_INFERENCE", targetTable.toUpperCase+"_HEADER", oper2, l)
+            //lenses.create("TYPE_INFERENCE", targetTable.toUpperCase+"_HEADER", oper2, l)
           }
         }
       case fmt =>

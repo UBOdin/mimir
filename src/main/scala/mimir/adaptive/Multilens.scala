@@ -16,5 +16,5 @@ trait Multilens
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator
   def attrCatalogFor(db: Database, config: MultilensConfig): Operator
   def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator]
+  def checkheader(db: Database, config: MultilensConfig): Boolean
 }
-
