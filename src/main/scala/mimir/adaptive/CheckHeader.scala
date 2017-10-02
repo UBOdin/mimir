@@ -17,9 +17,7 @@ object CheckHeader
   def checkheader(db: Database, config: MultilensConfig): Boolean = {
     val col = config.query.expressions(0);
     val tablename = col.toString.split("_")(0);
-    db.query(config.query)(_.foreach{result =>
-      println( result.tuple)
-    })
+    
     var detect  = detect_header(db, tablename);
 
     var len = 0;
