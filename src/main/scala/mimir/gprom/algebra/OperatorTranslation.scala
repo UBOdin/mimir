@@ -277,6 +277,8 @@ object OperatorTranslation {
     }
   }
   
+  val FN_VGTERM_GP_ENCODED = "UNCERT"
+  
   def translateGProMStructureToMimirExpression(gpromStruct : GProMStructure, intermSchema : Seq[MimirToGProMIntermediateSchemaInfo]) : Expression = {
     gpromStruct match {
       case operator : GProMOperator => {
@@ -343,7 +345,7 @@ object OperatorTranslation {
             //arg
             Function("CAST", Seq(arg,TypePrimitive(TString())))
           }
-          case CTables.FN_TEMP_ENCODED => {
+          case FN_VGTERM_GP_ENCODED => {
             val fargs = OperatorTranslation.gpromListToScalaList(functionCall.args).map(arg => translateGProMExpressionToMimirExpression(new GProMNode(arg.getPointer), intermSchema))
             val model = db.models.get(fargs(0).toString().replaceAll("'", ""))
             val idx = fargs(1).asInstanceOf[IntPrimitive].v.toInt;
@@ -1376,7 +1378,7 @@ object OperatorTranslation {
       }
       case VGTerm(name, idx, args, hints) => {
         val gpromExprList = translateMimirExpressionsToGProMList(schema, Seq(StringPrimitive(name), IntPrimitive(idx)).union(args.union(hints)))
-        val gpromFunc = new GProMFunctionCall.ByValue(GProM_JNA.GProMNodeTag.GProM_T_FunctionCall, CTables.FN_TEMP_ENCODED, gpromExprList, 0)
+        val gpromFunc = new GProMFunctionCall.ByValue(GProM_JNA.GProMNodeTag.GProM_T_FunctionCall, FN_VGTERM_GP_ENCODED, gpromExprList, 0)
         gpromFunc
       }
       case IsNullExpression(expr) => {
@@ -2024,10 +2026,62 @@ object OperatorTranslation {
     }
   }
    
+  def compileTaintWithGProM(oper:Operator) : (Operator, Seq[String])  = {
+    println("------------------Prep-------------------------")
+      org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized{
+        toQoSchms.clear()
+      db.backend.asInstanceOf[mimir.sql.GProMBackend].metadataLookupPlugin.setOper(oper)
+        println("------------------Rewriting-------------------------")
+        
+        //val memctx = GProMWrapper.inst.gpromCreateMemContext()
+        //val memctxq = GProMWrapper.inst.createMemContextName("QUERY_CONTEXT")
+        val gpromNode = mimirOperatorToGProMList(oper)
+        gpromNode.write()
+        val gpNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
+        println("------------------------------------------------")
+        println(gpNodeStr)
+        println("------------------------------------------------")
+        val provGpromNode = gpromNode//GProMWrapper.inst.taintRewriteOperator(gpromNode.head.data.ptr_value)
+        //val optimizedGpromNode = GProMWrapper.inst.optimizeOperatorModel(provGpromNode.getPointer)
+        println("------------------Rewritten----------------------")
+        
+        val provNodeStr = GProMWrapper.inst.gpromNodeToString(provGpromNode.getPointer())
+        println("------------------mimir-------------------------")
+        println(oper)
+        println("------------------gprom-------------------------")
+        println(provNodeStr)
+        println("------------------------------------------------")
+        
+        var opOut = gpromStructureToMimirOperator(0, provGpromNode, null)
+        /*println("--------------mimir pre recover-----------------")
+        println(opOut)
+        println("------------------------------------------------")
+        */
+        //GProMWrapper.inst.gpromFreeMemContext(memctxq)
+        //GProMWrapper.inst.gpromFreeMemContext(memctx)
+        val (opRet, provCols) = taintFromRecover(recoverForDet(opOut))
+        /*println("--------------mimir post recover----------------")
+        println(opRet)
+        println("------------------------------------------------")*/
+        //println(mimir.serialization.Json.ofOperator(opRet).toString)
+        //release lock for JNA objs to gc
+        (opRet, provCols)
+    }
+  }
+   
   def recoverForRowId(oper:Operator) : Operator = {
     oper match {
       case Recover(subj,invisScm) => {
         Recover(subj, invisScm.filter(_._2.annotationType == ViewAnnotation.PROVENANCE))
+      }
+      case x => throw new Exception("Recover Op required, not: "+x.toString())
+    }
+  }
+  
+  def recoverForDet(oper:Operator) : Operator = {
+    oper match {
+      case Recover(subj,invisScm) => {
+        Recover(subj, invisScm.filter(_._2.annotationType == ViewAnnotation.TAINT))
       }
       case x => throw new Exception("Recover Op required, not: "+x.toString())
     }
@@ -2170,6 +2224,10 @@ object OperatorTranslation {
       }
       case x => x
     }
+  }
+  
+  def taintFromRecover(oper:Operator) : (Operator, Seq[String]) = {
+    (oper, Seq())
   }
    
    def getQueryResults(query:String) : String =  {

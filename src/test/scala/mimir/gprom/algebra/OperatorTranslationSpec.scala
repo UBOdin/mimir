@@ -30,6 +30,13 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
     update("INSERT INTO T (C, D) VALUES(2, 3)")
     update("INSERT INTO T (C, D) VALUES(3, 2)")
     update("INSERT INTO T (C, D) VALUES(4, 1)")
+    
+    update("CREATE TABLE Q(E integer, F integer)")
+    update("INSERT INTO Q (E, F) VALUES(1, 4)")
+    update("INSERT INTO Q (E, F) VALUES(2, 1)")
+    update("INSERT INTO Q (E, F) VALUES(3, 2)")
+    update("INSERT INTO Q (E, F) VALUES(4, 1)")
+    
     memctx = GProMWrapper.inst.gpromCreateMemContext()
     qmemctx = GProMWrapper.inst.createMemContextName("QUERY_MEM_CONTEXT")
     
@@ -39,6 +46,21 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
     GProMWrapper.inst.gpromFreeMemContext(qmemctx)
     GProMWrapper.inst.gpromFreeMemContext(memctx)
     GProMWrapper.inst.shutdown()
+  }
+
+  sequential 
+  "The GProM - Mimir Operator Translator" should {
+    "Compile Determinism" >> {
+      println("Create Lens")
+      update("""
+          CREATE LENS CQ
+            AS SELECT * FROM Q
+          WITH COMMENT(COMMENT(F,'The values are uncertain'))
+        """);
+      println("Create Lens Complete")
+      val (oper, cols) = OperatorTranslation.compileTaintWithGProM(db.table("CQ")) 
+      cols.length must be equalTo 2
+    }
   }
   
 

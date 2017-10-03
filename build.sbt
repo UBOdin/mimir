@@ -33,6 +33,9 @@ parallelExecution in Test := false
 testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
 mainClass in Compile := Some("mimir.Mimir")
 
+//if you want to debug tests uncomment this
+//javaOptions += "-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005"
+
 lazy val runMimirVizier = inputKey[Unit]("run MimirVizier")
 runMimirVizier := {
   val args = sbt.complete.Parsers.spaceDelimited("[main args]").parsed
@@ -67,8 +70,6 @@ testGrouping in Test := {
 	}
 }
 
-//if you want to debug tests uncomment this
-//javaOptions in (Test) += "-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005"
 
 resolvers += "MimirDB" at "http://maven.mimirdb.info/"
 resolvers += "osgeo" at "http://download.osgeo.org/webdav/geotools/"
