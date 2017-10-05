@@ -50,16 +50,22 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
 
   sequential 
   "The GProM - Mimir Operator Translator" should {
-    "Compile Determinism" >> {
-      println("Create Lens")
+    "Compile Determinism for Projections" >> {
       update("""
           CREATE LENS CQ
             AS SELECT * FROM Q
           WITH COMMENT(COMMENT(F,'The values are uncertain'))
         """);
-      println("Create Lens Complete")
-      val (oper, cols) = OperatorTranslation.compileTaintWithGProM(db.table("CQ")) 
-      cols.length must be equalTo 2
+      val table = db.table("CQ")
+      val (oper, colDet, rowDet) = OperatorTranslation.compileTaintWithGProM(table) 
+      colDet.toSeq.length must be equalTo 3
+    }
+    
+    "Compile Determinism for Aggregates" >> {
+      val statements = db.parse("select sum(COMMENT_ARG_0) from CQ")
+      val testOper = db.sql.convert(statements.head.asInstanceOf[Select])
+      val (oper, colDet, rowDet) = OperatorTranslation.compileTaintWithGProM(testOper) 
+      colDet.toSeq.length must be equalTo 1
     }
   }
   
@@ -153,7 +159,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
          val ret = translatedNodeStr must be equalTo actualNodeStr or 
            {
              val resQuery = GProMWrapper.inst.gpromOperatorModelToQuery(gpromNode.getPointer)
-             getQueryResults(resQuery) must be equalTo getQueryResults(queryStr)
+             getQueryResultsBackend(resQuery) must be equalTo getQueryResultsBackend(queryStr)
            }
          ret
       }
@@ -177,7 +183,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
              operStr must be equalTo operStr2
            } or 
              {
-               getQueryResults(testOper) must be equalTo getQueryResults(queryStr)
+               getQueryResultsBackend(testOper) must be equalTo getQueryResultsBackend(queryStr)
              }
            ret
        }
@@ -202,7 +208,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
                operStr must be equalTo operStr2
              } or 
                {
-                 getQueryResults(testOper) must be equalTo getQueryResults(queryStr)
+                 getQueryResultsBackend(testOper) must be equalTo getQueryResultsBackend(queryStr)
                }
              ret
          }
@@ -226,7 +232,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
          val ret = translatedNodeStr must be equalTo actualNodeStr or 
            {
              val resQuery = GProMWrapper.inst.gpromOperatorModelToQuery(gpromNode.getPointer).replaceAll("(AS\\s+[a-zA-Z]+)\\(([a-zA-Z0-9,\\s]+)\\)", "$1_$2")
-             getQueryResults(resQuery) must be equalTo getQueryResults(queryStr)
+             getQueryResultsBackend(resQuery) must be equalTo getQueryResultsBackend(queryStr)
            } 
          ret
        }
@@ -271,11 +277,11 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
       (anonFuncRet, tEnd-tStart)
     }
     
-    def getQueryResults(oper : mimir.algebra.Operator) : String =  {
-      getQueryResults(db.ra.convert(oper).toString())
+    def getQueryResultsBackend(oper : mimir.algebra.Operator) : String =  {
+      getQueryResultsBackend(db.ra.convert(oper).toString())
     }
     
-    def getQueryResults(query:String) : String =  {
+    def getQueryResultsBackend(query:String) : String =  {
       val ress = db.backend.execute(query)
       val resmd = ress.getMetaData();
       var i = 1;
@@ -291,6 +297,10 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
         resStr += row + "\n"
       }
       resStr
+    }
+    
+    def getQueryResults(oper: Operator) : String = {
+      db.query(oper)( resIter => resIter.schema.map(f => f._1).mkString("", ",", "\n") + resIter.toList.map(row => row.tuple.map(cell => cell.toString()).mkString( "," )).mkString("\n"))
     }
     
     def totallyOptimize(oper : mimir.algebra.Operator) : mimir.algebra.Operator = {
