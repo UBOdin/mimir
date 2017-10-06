@@ -149,14 +149,6 @@ class SimpleFuncDepModel(name: String, colName: String, query: Operator)
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
   {
     val rowid = RowIdPrimitive(args(0).asString)
-    //val classes = classify(rowid, hints)
-    /*val res = if (classes.isEmpty) { 0 }
-              else {
-                RandUtils.pickFromWeightedList(
-                  randomness,
-                  classes.map(x => (x._2,x._1))
-                )
-              }*/
     if(weightedList.isEmpty){
       NullPrimitive()
     }
@@ -214,4 +206,5 @@ class SimpleFuncDepModel(name: String, colName: String, query: Operator)
       }
     }
   }
+
 }
