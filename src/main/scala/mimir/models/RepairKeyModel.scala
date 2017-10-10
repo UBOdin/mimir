@@ -16,7 +16,7 @@ import mimir.Database
  * The one argument is a value for the key.
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
-@SerialVersionUID(1001L)
+@SerialVersionUID(1002L)
 class RepairKeyModel(
   name: String,
   context: String,
@@ -27,18 +27,21 @@ class RepairKeyModel(
   scoreCol: Option[String]
 )
   extends Model(name)
-  with FiniteDiscreteDomain
-  with NeedsReconnectToDatabase
+  with FiniteDiscreteDomain 
+  with NeedsReconnectToDatabase 
+  with SourcedFeedbackT[List[PrimitiveValue]]
 {
-  val choices = scala.collection.mutable.Map[List[PrimitiveValue], PrimitiveValue]();
+  
   @transient var db:Database = null
 
+  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) : List[PrimitiveValue] = args.toList
+  
   def varType(idx: Int, args: Seq[Type]): Type = targetType
   def argTypes(idx: Int) = keys.map(_._2)
   def hintTypes(idx: Int) = Seq(TString(), TString())
 
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
-    choices.get(args.toList) match {
+    getFeedback(idx, args) match {
       case Some(choice) => choice
       case None => {
         getDomain(idx, args, hints).sortBy(-_._2).head._1
@@ -50,20 +53,20 @@ class RepairKeyModel(
 
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String =
   {
-    choices.get(args.toList) match {
+    getFeedback(idx, args) match {
       case None => {
         val possibilities = getDomain(idx, args, hints)
         s"In $context, there were ${possibilities.length} options for $target on the row identified by <${args.map(_.toString).mkString(", ")}>, and I arbitrarilly picked ${possibilities.sortBy(-_._2).head._1}"
       }
-      case Some(choice) =>
-        s"In $context, you told me to use ${choice.toString} for $target on the identified by <${args.map(_.toString).mkString(", ")}>"
+      case Some(choice) => 
+        s"In $context, ${getReasonWho(idx,args)} told me to use ${choice.toString} for $target on the identified by <${args.map(_.toString).mkString(", ")}>"
     }
   }
 
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
-    choices(args.toList) = v
+    setFeedback(idx, args, v)
   def isAcknowledged(idx: Int, args: Seq[PrimitiveValue]): Boolean =
-    choices contains args.toList
+    hasFeedback(idx, args)
 
 
   final def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =

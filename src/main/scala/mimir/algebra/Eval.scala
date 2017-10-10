@@ -6,6 +6,7 @@ import mimir.Database
 import mimir.algebra.function._
 import mimir.provenance.Provenance
 import mimir.ctables.CTables
+import org.joda.time.Period
 
 class EvalTypeException(msg: String, e: Expression, v: PrimitiveValue) extends Exception
 
@@ -135,7 +136,7 @@ class Eval(
   def applyFunction(name: String, args: Seq[PrimitiveValue]): PrimitiveValue =
   {
     functions.flatMap { _.getOption(name) } match {
-      case Some(NativeFunction(_, op, _)) => 
+      case Some(NativeFunction(_, op, _, _)) => 
         op(args)
       case Some(ExpressionFunction(_, argNames, expr)) => 
         eval(expr, argNames.zip(args).toMap)
@@ -194,74 +195,101 @@ object Eval
   def applyArith(op: Arith.Op, 
             a: PrimitiveValue, b: PrimitiveValue
   ): PrimitiveValue = {
-    (op, Typechecker.escalate(
-      a.getType, b.getType, "Evaluate Arithmetic", Arithmetic(op, a, b)
+    val aRoot = Type.rootType(a.getType)
+    val bRoot = Type.rootType(b.getType)
+
+    (op, aRoot, bRoot,
+      Typechecker.escalate(
+      aRoot, bRoot, op, "Evaluate Arithmetic", Arithmetic(op, a, b)
     )) match { 
-      case (Arith.Add, TInt()) => 
+      case (Arith.Add, _, _, TInt()) => 
         IntPrimitive(a.asLong + b.asLong)
-      case (Arith.Add, TFloat()) => 
+      case (Arith.Add, _, _, TFloat()) => 
         FloatPrimitive(a.asDouble + b.asDouble)
-      case (Arith.Sub, TInt()) => 
+      case (Arith.Sub, _, _, TInt()) => 
         IntPrimitive(a.asLong - b.asLong)
-      case (Arith.Sub, TFloat()) => 
+      case (Arith.Sub, _, _, TFloat()) => 
         FloatPrimitive(a.asDouble - b.asDouble)
-      case (Arith.Mult, TInt()) => 
+      case (Arith.Mult, _, _, TInt()) => 
         IntPrimitive(a.asLong * b.asLong)
-      case (Arith.Mult, TFloat()) => 
+      case (Arith.Mult, _, _, TFloat()) => 
         FloatPrimitive(a.asDouble * b.asDouble)
-      case (Arith.Div, (TInt()|TInt())) => 
+      case (Arith.Div, _, _, TInt()) => 
         IntPrimitive(a.asLong / b.asLong)
-      case (Arith.Div, (TFloat()|TInt())) => 
+      case (Arith.Div, _, _, TFloat()) => 
         FloatPrimitive(a.asDouble / b.asDouble)
-      case (Arith.BitAnd, TInt()) =>
+      case (Arith.BitAnd, _, _, TInt()) =>
         IntPrimitive(a.asLong & b.asLong)
-      case (Arith.BitOr, TInt()) =>
+      case (Arith.BitOr, _, _, TInt()) =>
         IntPrimitive(a.asLong | b.asLong)
-      case (Arith.ShiftLeft, TInt()) =>
+      case (Arith.ShiftLeft, _, _, TInt()) =>
         IntPrimitive(a.asLong << b.asLong)
-      case (Arith.ShiftRight, TInt()) =>
+      case (Arith.ShiftRight, _, _, TInt()) =>
         IntPrimitive(a.asLong >> b.asLong)
-      case (Arith.And, TBool()) =>
+      case (Arith.And, _, _, TBool()) =>
         BoolPrimitive(a.asBool && b.asBool)
-      case (Arith.Or, TBool()) =>
+      case (Arith.Or, _, _, TBool()) =>
         BoolPrimitive(a.asBool || b.asBool)
 
-      case (Arith.Add, TInterval()) =>
-      	IntervalPrimitive(a.asInterval.plus(b.asInterval))
+      case (Arith.Add, TInterval(), TInterval(), _) =>
+        IntervalPrimitive(a.asInterval.plus(b.asInterval))
+      case (Arith.Sub, TInterval(), TInterval(), _) =>
+        IntervalPrimitive(a.asInterval.minus(b.asInterval))
+      case (Arith.Sub, TDate() | TTimestamp(), TDate() | TTimestamp(), _) =>
+        IntervalPrimitive(new Period(b.asDateTime, a.asDateTime))
 
-      case (Arith.Sub, TInterval()) =>
-      	(a.getType, b.getType) match {
-      		case (TInterval(),TInterval()) =>
-      			IntervalPrimitive(a.asInterval.minus(b.asInterval))
-      		case (TDate() | TTimestamp(),TDate() | TTimestamp()) =>
-      			IntervalPrimitive(new org.joda.time.Period(b.asDateTime, a.asDateTime))
-      		case (_, _) =>
-      			throw new RAException(s"Invalid Arithmetic $a $op $b")
-      	}
+      case (Arith.Add, TDate(), TInterval(), _) =>
+        val d = a.asDateTime.plus(b.asInterval)
+        DatePrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth)
+      case (Arith.Add, TInterval(), TDate(), _) =>
+        val d = b.asDateTime.plus(a.asInterval)
+        DatePrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth)
+      case (Arith.Sub, TDate(), TInterval(), _) =>
+        val d = a.asDateTime.minus(b.asInterval)
+        DatePrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth)
 
-      case (Arith.Mult, TInterval()) =>
-        (a.getType, b.getType) match {
-          case (TInt(), TInterval()) =>
-            IntervalPrimitive(b.asInterval.multipliedBy(a.asInt))
-          case (TInterval(), TInt()) =>
-            IntervalPrimitive(a.asInterval.multipliedBy(b.asInt))
-          case (_, _) =>
-            throw new RAException(s"Invalid Arithmetic $a $op $b")
-        }
+      case (Arith.Add, TTimestamp(), TInterval(), _) =>
+        val d = a.asDateTime.plus(b.asInterval)
+        TimestampPrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth,d.getHourOfDay,d.getMinuteOfHour,d.getSecondOfMinute,d. getMillisOfSecond)
+      case (Arith.Add, TInterval(), TTimestamp(), _) =>
+        val d = b.asDateTime.plus(a.asInterval)
+        TimestampPrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth,d.getHourOfDay,d.getMinuteOfHour,d.getSecondOfMinute,d. getMillisOfSecond)
+      case (Arith.Sub, TTimestamp(), TInterval(), _) =>
+        val d = a.asDateTime.minus(b.asInterval)
+        TimestampPrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth,d.getHourOfDay,d.getMinuteOfHour,d.getSecondOfMinute,d. getMillisOfSecond)
 
-      case (Arith.Add, TTimestamp()) =>
-      	val d = a.asDateTime.plus(b.asInterval)
-      	TimestampPrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth,d.getHourOfDay,d.getMinuteOfHour,d.getSecondOfMinute,d. getMillisOfSecond)
+      case (Arith.Mult, TInterval(), TInt() | TFloat(), _) =>
+        IntervalPrimitive(a.asInterval.multipliedBy(b.asInt))
+      case (Arith.Mult, TInt() | TFloat(), TInterval(), _) =>
+        IntervalPrimitive(b.asInterval.multipliedBy(a.asInt))
+      case (Arith.Div, TInterval(), TInt() | TFloat(), _) => 
+        throw new RAException("Division not quite yet supported")
 
-      case (Arith.Sub, TTimestamp()) =>
-      	val d = a.asDateTime.minus(b.asInterval)
-      	TimestampPrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth,d.getHourOfDay,d.getMinuteOfHour,d.getSecondOfMinute,d. getMillisOfSecond)	
-
-      case (_, _) => 
-        throw new RAException(s"Invalid Arithmetic $a $op $b")
+      case _ => 
+        throw new RAException(s"Invalid Arithmetic $a ${Arith.opString(op)} $b")
     }
   }
 
+  private final def cmpScaffold(a: PrimitiveValue, b: PrimitiveValue, op: Cmp.Op)(intOp: ((Long, Long) => Boolean))(floatOp: ((Double, Double) => Boolean))(cmpOp: (Int => Boolean)): BoolPrimitive =
+  {
+    BoolPrimitive(
+      Typechecker.leastUpperBound(a.getType, b.getType) match {
+        case Some(TInt()) => intOp(a.asLong, b.asLong)
+        case Some(TFloat()) => floatOp(a.asDouble, b.asDouble)
+        case Some(TDate()) =>
+          cmpOp(
+            a.asInstanceOf[DatePrimitive].
+             compareTo(b.asInstanceOf[DatePrimitive])
+          )
+        case Some(TTimestamp()) =>
+          cmpOp(
+            a.asInstanceOf[TimestampPrimitive].
+             compareTo(b.asInstanceOf[TimestampPrimitive])
+          )
+        case _ => throw new RAException(s"Invalid Comparison $a ${Cmp.opString(op)} $b")
+      }
+    )
+  }
   /**
    * Perform a comparison on two primitive values.
    */
@@ -278,49 +306,13 @@ object Eval
         case Cmp.Neq => 
           BoolPrimitive(!a.payload.equals(b.payload))
         case Cmp.Gt => 
-          Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
-            case TInt() => BoolPrimitive(a.asLong > b.asLong)
-            case TFloat() => BoolPrimitive(a.asDouble > b.asDouble)
-            case TDate() =>
-              BoolPrimitive(
-                a.asInstanceOf[DatePrimitive].
-                 compare(b.asInstanceOf[DatePrimitive])<0
-              )
-            case _ => throw new RAException("Invalid Comparison $a $op $b")
-          }
+          cmpScaffold(a, b, op){ _ > _ }{ _ > _ }{ _ < 0 }
         case Cmp.Gte => 
-          Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
-            case TInt() => BoolPrimitive(a.asLong >= b.asLong)
-            case TFloat() => BoolPrimitive(a.asDouble >= b.asDouble)
-            case TDate() =>
-              BoolPrimitive(
-                a.asInstanceOf[DatePrimitive].
-                 compare(b.asInstanceOf[DatePrimitive])<=0
-              )
-            case _ => throw new RAException("Invalid Comparison $a $op $b")
-          }
+          cmpScaffold(a, b, op){ _ >= _ }{ _ >= _ }{ _ <= 0 }
         case Cmp.Lt => 
-          Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
-            case TInt() => BoolPrimitive(a.asLong < b.asLong)
-            case TFloat() => BoolPrimitive(a.asDouble < b.asDouble)
-            case TDate() =>
-              BoolPrimitive(
-                a.asInstanceOf[DatePrimitive].
-                 compare(b.asInstanceOf[DatePrimitive])>0
-              )
-            case _ => throw new RAException("Invalid Comparison $a $op $b")
-          }
+          cmpScaffold(a, b, op){ _ < _ }{ _ < _ }{ _ > 0 }
         case Cmp.Lte => 
-          Typechecker.escalate(a.getType, b.getType, "Eval", Comparison(op, a, b)) match {
-            case TInt() => BoolPrimitive(a.asLong <= b.asLong)
-            case TFloat() => BoolPrimitive(a.asDouble <= b.asDouble)
-            case TDate() =>
-              BoolPrimitive(
-                a.asInstanceOf[DatePrimitive].
-                 compare(b.asInstanceOf[DatePrimitive])>=0
-              )
-            case _ => throw new RAException("Invalid Comparison $a $op $b")
-          }
+          cmpScaffold(a, b, op){ _ <= _ }{ _ <= _ }{ _ >= 0 }
       }
     }
   }

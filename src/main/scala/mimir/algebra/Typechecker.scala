@@ -58,7 +58,8 @@ class Typechecker(
 	/* Assert that the expressions claimed type is its type */
 	def assert(e: Expression, t: Type, scope: (String => Type), context: Option[Operator] = None, msg: String = "Typechecker"): Unit = {
 		val eType = typeOf(e, scope);
-		if(Typechecker.escalate(eType, t, msg, e) != t){
+		if(!Typechecker.canCoerce(eType, t)){
+			logger.trace(s"LUB: ${Typechecker.leastUpperBound(eType, t)}")
 			throw new TypeException(eType, t, msg, Some(e))
 		}
 	}
@@ -80,24 +81,23 @@ class Typechecker(
 			case p: PrimitiveValue => p.getType;
 			case Not(child) => assert(child, TBool(), scope, context, "NOT"); TBool()
 			case p: Proc => p.getType(p.children.map(recur(_)))
-			case Arithmetic(op, lhs, rhs) => {
-				op match {
-					case (Add | Sub | Mult | Div | BitAnd | BitOr | ShiftLeft | ShiftRight) => 
-					  Typechecker.assertNumeric(Typechecker.escalate(recur(lhs), recur(rhs), op.toString, e), e);
-					case (And | Or) => 
-						assert(lhs, TBool(), scope, context, "BoolOp");
-						assert(rhs, TBool(), scope, context, "BoolOp");
-						TBool()
-				}
-			}
+			case Arithmetic(op, lhs, rhs) => 
+				Typechecker.escalate(recur(lhs), recur(rhs), op, "Arithmetic", e)
 			case Comparison(op, lhs, rhs) => {
 				op match {
 					case (Eq | Neq) => 
-						Typechecker.escalate(recur(lhs), recur(rhs), "Comparison", e);
+						Typechecker.assertLeastUpperBound(recur(lhs), recur(rhs), "Comparison", e)
 					case (Gt | Gte | Lt | Lte) => 
-						if(recur(lhs) != TDate() && recur(rhs) != TDate()) {
-							Typechecker.assertNumeric(Typechecker.escalate(recur(lhs), recur(rhs), "Comparison", e), e)
-						}
+						Typechecker.assertOneOf(
+							Typechecker.assertLeastUpperBound(
+								recur(lhs), 
+								recur(rhs), 
+								"Comparison", 
+								e
+							),
+							Set(TDate(), TInterval(), TTimestamp(), TInt(), TFloat()),
+							e
+						)
 					case (Like | NotLike) =>
 						assert(lhs, TString(), scope, context, "LIKE")
 						assert(rhs, TString(), scope, context, "LIKE")
@@ -120,7 +120,7 @@ class Typechecker(
 					case p:PrimitiveValue => { p match {
               case StringPrimitive(s) => Type.toSQLiteType(Integer.parseInt(s))
               case IntPrimitive(i)  =>  Type.toSQLiteType(i.toInt)
-      	      case _ => throw new SQLException("Invalid CAST to '"+p+"' of type: "+recur(p))
+      	      case _ => throw new RAException("Invalid CAST to '"+p+"' of type: "+recur(p))
             }
 					}
 					case _ => TAny()
@@ -130,10 +130,11 @@ class Typechecker(
 
 			case Conditional(condition, thenClause, elseClause) => 
 				assert(condition, TBool(), scope, context, "WHEN")
-				Typechecker.escalate(
+				Typechecker.assertLeastUpperBound(
 					recur(elseClause),
 					recur(thenClause),
-					"IF, ELSE CLAUSE", e
+					"CASE-WHEN",
+					e
 				)
 			case IsNullExpression(child) =>
 				recur(child);
@@ -151,7 +152,7 @@ class Typechecker(
 	def returnTypeOfFunction(name: String, args: Seq[Type]): Type = {
     try {
       functions.flatMap { _.getOption(name) } match {
-        case Some(NativeFunction(_, _, getType)) => 
+        case Some(NativeFunction(_, _, getType, _)) => 
           getType(args)
         case Some(ExpressionFunction(_, argNames, expr)) => 
           typeOf(expr, scope = argNames.zip(args).toMap)
@@ -231,7 +232,7 @@ class Typechecker(
 
 				val overlap = lSchema.map(_._1).toSet & rSchema.map(_._1).toSet
 				if(!(overlap.isEmpty)){
-					throw new SQLException("Ambiguous Keys ('"+overlap+"') in Cross Product\n"+o);
+					throw new RAException("Ambiguous Keys ('"+overlap+"') in Cross Product\n"+o);
 				}
 				lSchema ++ rSchema
 
@@ -243,13 +244,14 @@ class Typechecker(
 				val rSchema = schemaOf(rhs);
 
 				if(!(lSchema.map(_._1).toSet.equals(rSchema.map(_._1).toSet))){
-					throw new SQLException("Schema Mismatch in Union\n"+o);
+					throw new RAException("Schema Mismatch in Union\n"+o);
 				}
 				lSchema
 
 			case Table(_, _, sch, meta) => (sch ++ meta.map( x => (x._1, x._3) ))
 
 			case View(_, query, _) => schemaOf(query)
+			case AdaptiveView(_, _, query, _) => schemaOf(query)
 
 			case EmptyTable(sch) => sch
 
@@ -261,6 +263,7 @@ class Typechecker(
 }
 
 object Typechecker 
+  extends LazyLogging
 {
 
 
@@ -272,53 +275,125 @@ object Typechecker
  		t;
  	}
 
- 	def escalateLeft(a: Type, b: Type): Option[Type] =
+ 	def canCoerce(from: Type, to: Type): Boolean =
  	{
-		(a,b) match {
-			case (TDate() | TTimestamp(), TDate() | TTimestamp())  => Some(TInterval())
-			case (TDate() | TTimestamp(), TInterval())  => Some(TTimestamp())
-			case (TInt(), TInterval()) | (TInterval(), TInt())  => Some(TInterval())
-			case _ if a.equals(b)         => Some(a)
-			case (TUser(name),_)          => escalateLeft(TypeRegistry.baseType(name),b)
-			case (TAny(),_)               => Some(b)
-			case (_,TAny())               => Some(a)
-			case (TInt(),TFloat())        => Some(TFloat())
-			case (TRowId(),TString())     => Some(b)
-			case _                        => None
+ 		logger.debug("Coerce from $from to $to")
+ 		leastUpperBound(from, to) match {
+ 			case Some(lub) => lub.equals(to)
+ 			case None => false
 		}
  	}
 
-	def escalate(a: Type, b: Type, msg: String, e: Expression): Type = 
-		escalate(a, b, msg, Some(e))
-	def escalate(a: Type, b: Type, msg: String, e: Option[Expression]): Type = 
-	{
-		escalate(a, b) match {
+ 	def leastUpperBound(a: Type, b: Type): Option[Type] =
+ 	{
+ 		if(a.equals(b)){ return Some(a); }
+ 		(a, b) match {
+ 			case (TAny(), _) => Some(b)
+			case (_, TAny()) => Some(a)
+			case (TInt(), TFloat()) => Some(TFloat())
+			case (TFloat(), TInt()) => Some(TFloat())
+			case (TDate(), TTimestamp()) => Some(TTimestamp())
+			case (TTimestamp(), TDate()) => Some(TTimestamp())
+			case (TUser(name), _) => leastUpperBound(TypeRegistry.baseType(name), b)
+			case (_, TUser(name)) => leastUpperBound(a, TypeRegistry.baseType(name))
+			case _ => return None
+ 		}
+ 	}
+
+ 	def leastUpperBound(tl: TraversableOnce[Type]): Option[Type] =
+ 	{
+ 		tl.map { Some(_) }.fold(Some(TAny()):Option[Type]) { case (Some(a), Some(b)) => leastUpperBound(a, b) case _ => None }
+ 	}
+
+ 	def assertLeastUpperBound(a: Type, b: Type, msg: String, e: Expression): Type =
+ 	{
+ 		leastUpperBound(a, b) match {
+ 			case Some(t) => t
+ 			case None => throw new TypeException(a, b, msg, Some(e))
+ 		}
+ 	}
+ 	def assertLeastUpperBound(tl: TraversableOnce[Type], msg: String, e: Expression): Type =
+ 	{
+ 		tl.fold(TAny()) { assertLeastUpperBound(_, _, msg, e) }
+ 	}
+
+ 	def assertOneOf(a: Type, candidates: TraversableOnce[Type], e: Expression): Type =
+ 	{
+		candidates.flatMap { leastUpperBound(a, _) }.collectFirst { case x => x } match {
 			case Some(t) => t
-			case None => throw new TypeException(a, b, msg, e);
+			case None => 
+				throw new TypeException(a, TAny(), s"Not one of $candidates", Some(e))
 		}
-	}
-	def escalate(a: Type, b: Type): Option[Type] = 
+ 	}
+
+	def escalate(a: Type, b: Type, op: Arith.Op, msg: String, e: Expression): Type = 
 	{
-		escalateLeft(a, b) match {
-			case s@Some(_) => s
-			case None   => escalateLeft(b, a)
+		escalate(a, b, op) match {
+			case Some(t) => t
+			case None => throw new TypeException(a, b, msg, Some(e));
 		}
 	}
-	def escalate(a: Option[Type], b: Option[Type]): Option[Type] =
+	def escalate(a: Type, b: Type, op: Arith.Op): Option[Type] = 
+	{
+		// Start with special case overrides
+		(a, b, op) match {
+
+      // Interval Arithmetic
+			case (TDate() | TTimestamp(), 
+						TDate() | TTimestamp(), 
+						Arith.Sub)                => return Some(TInterval())
+			case (TDate() | TTimestamp() | TInterval(), 
+						TInterval(), 
+						Arith.Sub | Arith.Add)    => return Some(a)
+			case (TInt() | TFloat(), TInterval(), Arith.Mult) | 
+					 (TInterval(), TInt() | TFloat(), Arith.Mult | Arith.Div)  
+					                            => return Some(TInterval())
+
+      // TAny() cases
+      case (TAny(), TAny(), _)        => return Some(TAny())
+      case (TAny(), TDate() | TTimestamp(), 
+            Arith.Sub)                => Some(TInterval())
+      case (TDate() | TTimestamp(), TAny(), 
+            Arith.Sub)                => Some(TAny()) // Either TInterval or TDate, depending
+			case _ => ()
+		}
+
+		(op) match {
+			case (Arith.Add | Arith.Sub | Arith.Mult | Arith.Div) => 
+				if(Type.isNumeric(a, treatTAnyAsNumeric = true) && Type.isNumeric(b, treatTAnyAsNumeric = true)){
+					leastUpperBound(a, b)
+				} else {
+          None
+				}
+
+      case (Arith.BitAnd | Arith.BitOr | Arith.ShiftLeft | Arith.ShiftRight) =>
+        (Type.rootType(a), Type.rootType(b)) match {
+          case (TInt() | TAny(), TInt() | TAny()) => Some(TInt())
+          case _ => None
+        }
+
+      case (Arith.And | Arith.Or) =>
+        (Type.rootType(a), Type.rootType(b)) match {
+          case (TBool() | TAny(), TBool() | TAny()) => Some(TBool())
+          case _ => None
+        }
+		}
+	}
+	def escalate(a: Option[Type], b: Option[Type], op: Arith.Op): Option[Type] =
 	{
 		(a, b) match {
 			case (None,_) => b
 			case (_,None) => a
-			case (Some(at), Some(bt)) => escalate(at, bt)
+			case (Some(at), Some(bt)) => escalate(at, bt, op)
 		}
 	}
 
-	def escalate(l: TraversableOnce[Type]): Option[Type] =
+	def escalate(l: TraversableOnce[Type], op: Arith.Op): Option[Type] =
 	{
-		l.map(Some(_)).fold(None)(escalate(_,_))
+		l.map(Some(_)).fold(None)(escalate(_,_,op))
 	}
-	def escalate(l: TraversableOnce[Type], msg: String, e: Expression): Type =
+	def escalate(l: TraversableOnce[Type], op: Arith.Op, msg: String, e: Expression): Type =
 	{
-		l.fold(TAny())(escalate(_,_,msg,e))
+		l.fold(TAny())(escalate(_,_,op,msg,e))
 	}
 }

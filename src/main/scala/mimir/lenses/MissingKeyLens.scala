@@ -21,7 +21,7 @@ object MissingKeyLens {
     val schema = db.bestGuessSchema(query)
     val schemaMap = schema.toMap
     var missingOnly = false;
-    var sortCols = Seq[SortColumn]()
+    var sortCols = Seq[(String, Boolean)]()
     val keys: Seq[(String, Type)] = args.flatMap {
       case Var(col) => {
         if(schemaMap contains col){ Some((col, schemaMap(col))) }
@@ -41,7 +41,7 @@ object MissingKeyLens {
           case col:Var => 
             if(!schemaMap.contains(col.name))
               throw new RAException(s"Invalid sort column: $col in KeyRepairLens $name (not a column in the input)")
-            SortColumn(col, true) 
+            (col.name, true) 
           case col => 
             throw new RAException(s"Invalid sort column: $col in KeyRepairLens $name (not a column reference)")
         }
@@ -144,7 +144,7 @@ object MissingKeyLens {
     }
     val oper = {
       if(sortCols.isEmpty) allOrMissingOper;
-      else Sort(sortCols, allOrMissingOper);
+      else allOrMissingOper.sort(sortCols:_*);
     }
     (
       oper,

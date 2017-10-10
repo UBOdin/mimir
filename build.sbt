@@ -11,7 +11,8 @@ dependencyOverrides += "org.scala-lang" % "scala-library" % scalaVersion.value
 // in Travis with `sudo: false`.
 // See https://github.com/sbt/sbt/issues/653
 // and https://github.com/travis-ci/travis-ci/issues/3775
-javaOptions += "-Xmx2G"
+//javaOptions ++= Seq("-Xmx2G" )
+
 
 scalacOptions ++= Seq(
   "-feature"
@@ -22,14 +23,32 @@ includeFilter in (Compile, unmanagedResourceDirectories):= ".dylib,.dll,.so"
 unmanagedClasspath in Runtime += baseDirectory.value / "conf"
 unmanagedResourceDirectories in Test += baseDirectory.value / "conf"
 
-fork := true 
-connectInput in run := true
+fork := true
 outputStrategy in run := Some(StdoutOutput)
+connectInput in run := true
 cancelable in Global := true
+javaOptions ++= Seq("-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK")
 scalacOptions in Test ++= Seq("-Yrangepos")
 parallelExecution in Test := false
 testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )
 mainClass in Compile := Some("mimir.Mimir")
+
+//if you want to debug tests uncomment this
+//javaOptions += "-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005"
+
+lazy val runMimirVizier = inputKey[Unit]("run MimirVizier")
+runMimirVizier := {
+  val args = sbt.complete.Parsers.spaceDelimited("[main args]").parsed
+  val classpath = (fullClasspath in Compile).value
+  val classpathString = Path.makeString(classpath map { _.data })
+  val jvmArgs = Seq("-Xmx4g", "-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK")
+  val (jh, os, bj, bd, jo, ci, ev) = (javaHome.value, outputStrategy.value, Vector[java.io.File](), 
+		Some(baseDirectory.value), (jvmArgs ++ Seq("-classpath", classpathString)).toVector, connectInput.value, envVars.value)
+  Fork.java(
+    ForkOptions(jh, os, bj, bd, jo, ci, ev),
+    "mimir.MimirVizier" +: args
+  )
+}
 
 //for tests that need to run in their own jvm because they need specific envArgs or otherwise
 testGrouping in Test := {
@@ -51,8 +70,6 @@ testGrouping in Test := {
 	}
 }
 
-//if you want to debug tests uncomment this
-//javaOptions in (Test) += "-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005"
 
 resolvers += "MimirDB" at "http://maven.mimirdb.info/"
 resolvers += "osgeo" at "http://download.osgeo.org/webdav/geotools/"
@@ -92,7 +109,11 @@ libraryDependencies ++= Seq(
   ("nz.ac.waikato.cms.moa"        %   "moa"                      % "2014.11").
     exclude("nz.ac.waikato.cms.weka",  "weka-dev").
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
-
+    
+  //spark ml
+  "org.apache.spark" 			  %   "spark-sql_2.11" 		  % "2.2.0",
+  "org.apache.spark" 			  %   "spark-mllib_2.11" 	  % "2.2.0",
+ 
   //////////////////////// Jung ////////////////////////
   // General purpose graph manipulation library
   // Used to detect and analyze Functional Dependencies
@@ -114,11 +135,16 @@ libraryDependencies ++= Seq(
 
 
   ///////////////////  GProM/Native Integration //////////////
-  "net.java.dev.jna"              %    "jna"                  % "4.2.2",
-  "net.java.dev.jna"              %    "jna-platform"         % "4.2.2",
-  "log4j"                         %    "log4j"                % "1.2.17",
-
-  //////////////////////// Visualization ////////////////////////
+  "net.java.dev.jna"              %    "jna"                     % "4.2.2",
+  "net.java.dev.jna"              %    "jna-platform"            % "4.2.2",
+  "org.apache.logging.log4j" 	  %    "log4j-api" 				 % "2.8.2",
+  "org.apache.logging.log4j" 	  %    "log4j-core" 			 % "2.8.2",
+  
+  ///////////////////// Viztrails Integration ///////////////////
+  
+  "net.sf.py4j" 				  %	   "py4j" 				  % "0.10.4",
+  
+  //////////////////////// Visualization //////////////////////
   // For now, all of this happens in python with matplotlib
   // and so we don't need any external dependencies.
   //"org.vegas-viz"                 %%  "vegas"                 % "0.3.9",
@@ -162,6 +188,32 @@ parser := {
 test in assembly := {}
 assemblyJarName in assembly := "Mimir.jar"
 mainClass in assembly := Some("mimir.Mimir")
+assemblyMergeStrategy in assembly := {
+  case PathList("org","aopalliance", xs @ _*) => MergeStrategy.last
+  case PathList("javax", "inject", xs @ _*) => MergeStrategy.last
+  case PathList("javax", "servlet", xs @ _*) => MergeStrategy.last
+  case PathList("javax", "activation", xs @ _*) => MergeStrategy.last
+  case PathList("org", "apache", xs @ _*) => MergeStrategy.last
+  case PathList("com", "google", xs @ _*) => MergeStrategy.last
+  case PathList("com", "esotericsoftware", xs @ _*) => MergeStrategy.last
+  case PathList("com", "codahale", xs @ _*) => MergeStrategy.last
+  case PathList("com", "yammer", xs @ _*) => MergeStrategy.last
+  case PathList("ch", "qos", xs @ _*) => MergeStrategy.last
+  case PathList("org", "slf4j", xs @ _*) => MergeStrategy.last
+  case PathList("org", "codehaus", xs @ _*) => MergeStrategy.last
+  case PathList("com", "googlecode", xs @ _*) => MergeStrategy.last
+  case "overview.html" => MergeStrategy.rename
+  case "about.html" => MergeStrategy.rename
+  case "META-INF/ECLIPSEF.RSA" => MergeStrategy.last
+  case "META-INF/mailcap" => MergeStrategy.last
+  case "META-INF/mimetypes.default" => MergeStrategy.last
+  case "plugin.properties" => MergeStrategy.last
+  case "log4j.properties" => MergeStrategy.last
+  case x =>
+    val oldStrategy = (assemblyMergeStrategy in assembly).value
+    oldStrategy(x)
+}
+
 
 ////// Publishing Metadata //////
 // use `sbt publish make-pom` to generate

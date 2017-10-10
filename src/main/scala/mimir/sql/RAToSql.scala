@@ -426,6 +426,10 @@ class RAToSql(db: Database)
         logger.warn("Inlined view when constructing SQL: RAToSQL will not use materialized views")
         extractSelectsAndJoins(query)
 
+      case AdaptiveView(schema, name, query, annotations) => 
+        logger.warn("Inlined view when constructing SQL: RAToSQL will not use materialized views")
+        extractSelectsAndJoins(query)
+
       case _ => (BoolPrimitive(true), Seq(makeSubSelect(oper)))
     }
   }

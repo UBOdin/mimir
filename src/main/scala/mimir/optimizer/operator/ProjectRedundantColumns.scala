@@ -128,6 +128,7 @@ object ProjectRedundantColumns extends OperatorOptimization {
       }
 
       case view: View => view
+      case view: AdaptiveView => view
       case table: Table => table
       case table: EmptyTable => table
 

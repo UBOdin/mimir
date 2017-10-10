@@ -37,7 +37,31 @@ class BestGuessVGTerm(db:Database)
       case e:Throwable => {
         println(e)
         e.printStackTrace
-        throw new SQLException("ERROR IN BEST_GUESS_VGTERM()", e)
+        var paramsStr: String = "";
+        try{
+          val modelName = value_text(0).toUpperCase
+          paramsStr += modelName
+          val idx = value_int(1)
+          paramsStr += ", " + idx 
+          val model = db.models.get(modelName)
+
+          val argTyps = model.argTypes(idx)
+          
+          paramsStr += "/*args*/" 
+          argTyps.
+              zipWithIndex.
+              map( arg => paramsStr +=  ", " + value_mimir(arg._2+2, arg._1) )
+          
+          paramsStr += "/*hints*/" 
+          model.hintTypes(idx).
+              zipWithIndex.
+              map( arg => paramsStr += ", " + value_mimir(arg._2+argTyps.length+2, arg._1) )
+        }catch {
+          case e:Throwable => {
+            paramsStr += ", ...error"
+          }
+        }
+        throw new SQLException(s"ERROR IN BEST_GUESS_VGTERM($paramsStr) ", e)
       }
     }
   }

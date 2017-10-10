@@ -142,6 +142,10 @@ object Provenance extends LazyLogging {
         val (newQuery, rowIds) = compile(query)
         ( View(name, newQuery, meta + ViewAnnotation.PROVENANCE), rowIds)
 
+      case AdaptiveView(model, name, query, meta) => 
+        val (newQuery, rowIds) = compile(query)
+        ( AdaptiveView(model, name, newQuery, meta + ViewAnnotation.PROVENANCE), rowIds)
+
       case Table(name, alias, schema, meta) =>
         (
           Table(name, alias, schema, meta ++ List((rowidColnameBase, Var("ROWID"), TRowId()))),
@@ -302,6 +306,8 @@ object Provenance extends LazyLogging {
       // We don't handle materializing the entire history of a given value
       // for now... drop the view and focus on the query itself.
       case View(_, query, _) => 
+        doFilterForToken(query, rowIds, db)
+      case AdaptiveView(_, _, query, _) => 
         doFilterForToken(query, rowIds, db)
 
       case Table(_,_, _, meta) =>

@@ -216,6 +216,14 @@ object DiscalaAbadiSpec
       ){ _.toSeq must contain(StringPrimitive("1")) }
     }
 
+    "Generate legitimate explanations on query results" >> {
+      explainEverything("""
+        SELECT QUANTITY FROM SHIPPING.BILL_OF_LADING_NBR
+      """).flatMap(_.all(db)).map(_.reason) must contain(
+        "QUANTITY could be organized under any of BILL_OF_LADING_NBR (19), ROOT (-1); I chose BILL_OF_LADING_NBR"
+      )
+    }
+
   }
 
 

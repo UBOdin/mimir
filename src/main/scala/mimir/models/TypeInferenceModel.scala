@@ -38,7 +38,7 @@ object TypeInferenceModel
   }
 }
 
-@SerialVersionUID(1000L)
+@SerialVersionUID(1001L)
 class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac: Double)
   extends Model(name)
   with DataIndependentFeedback
@@ -108,7 +108,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
 
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
   {
-    choices.get(idx) match {
+    choices(idx) match {
       case None => {
         val guess = voteList(idx).maxBy( rankFn _ )._1
         TypePrimitive(guess)
@@ -122,7 +122,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
 
 
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = {
-    choices.get(idx) match {
+    choices(idx) match {
       case None => {
         val (guess, guessVotes) = voteList(idx).maxBy( rankFn _ )
         val defaultPct = (defaultFrac * 100).toInt
@@ -141,7 +141,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
       }
       case Some(t) =>
         val typeStr = Cast(TType(), t).toString.toUpperCase
-        s"You told me that $name.${columns(idx)} was of type $typeStr"
+        s"${getReasonWho(idx,args)} told me that $name.${columns(idx)} was of type $typeStr"
     }
   }
 

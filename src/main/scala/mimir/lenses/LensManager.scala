@@ -21,7 +21,8 @@ class LensManager(db: Database) {
     "REPAIR_KEY"        -> RepairKeyLens.create _,
     "COMMENT"           -> CommentLens.create _,
     "MISSING_KEY"       -> MissingKeyLens.create _,
-    "PICKER"            -> PickerLens.create _
+    "PICKER"            -> PickerLens.create _,
+    "GEOCODE"           -> GeocodingLens.create _
   )
 
   def init(): Unit =

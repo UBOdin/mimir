@@ -98,8 +98,8 @@ object ModelRegistry
    * to add new models here.
    */
   val imputations = Map[String,ImputationConstructor](
-    "FUNCDEP" -> (FuncDepModel.train _),
-    "WEKA" -> (WekaModel.train _)
+    //"WEKA" -> (WekaModel.train _)
+      "SPARK" -> (SparkClassifierModel.train _)
   )
 
   /**
