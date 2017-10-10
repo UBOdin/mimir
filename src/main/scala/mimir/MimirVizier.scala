@@ -11,6 +11,7 @@ import mimir.sql._
 import mimir.util.ExperimentalOptions
 //import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
 import net.sf.jsqlparser.statement.select.Select
+import net.sf.jsqlparser.statement.update.Update
 import py4j.GatewayServer
 import mimir.exec.Compiler
 import mimir.gprom.algebra.OperatorTranslation
@@ -19,6 +20,7 @@ import mimir.ctables.Reason
 import org.slf4j.{LoggerFactory}
 import ch.qos.logback.classic.{Level, Logger}
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import net.sf.jsqlparser.statement.Statement
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -46,8 +48,7 @@ object MimirVizier extends LazyLogging {
 
     // Prepare experiments
     ExperimentalOptions.enable(conf.experimental())
-    
-    if(true){
+    if(!ExperimentalOptions.isEnabled("GPROM-BACKEND")){
       // Set up the database connection(s)
       db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
       db.backend.open()
@@ -59,10 +60,9 @@ object MimirVizier extends LazyLogging {
       db.backend.open()
       gp.metadataLookupPlugin.db = db;
     }
-    
     db.initializeDBForMimir();
-
-    if(ExperimentalOptions.isEnabled("INLINE-VG")){
+    
+    if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
         db.backend.asInstanceOf[InlinableBackend].enableInlining(db)
       }
     
@@ -95,8 +95,26 @@ object MimirVizier extends LazyLogging {
     
   }
   
+  private var mainThread : Thread = null
+  private var pythonGatewayRunning : Boolean = true 
+  def shutdown() : Unit = {
+    this.synchronized{
+      pythonGatewayRunning = false
+      pythonCallThread = null
+      mainThread.interrupt()
+      mainThread = null
+    }
+  }
+  
+  def isPythonGatewayRunning() : Boolean = {
+    this.synchronized{
+      pythonGatewayRunning
+    }
+  }
+  
   def runServerForViztrails() : Unit = {
-    val server = new GatewayServer(this, 33388)
+     mainThread = Thread.currentThread()
+     val server = new GatewayServer(this, 33388)
      server.addListener(new py4j.GatewayServerListener(){
         def connectionError(connExept : java.lang.Exception) = {
           logger.debug("Python GatewayServer connectionError: " + connExept)
@@ -132,7 +150,7 @@ object MimirVizier extends LazyLogging {
      })
      server.start()
      
-     while(true){
+     while(isPythonGatewayRunning()){
        Thread.sleep(90000)
        if(pythonCallThread != null){
          //logger.debug("Python Call Thread Stack Trace: ---------v ")
@@ -143,7 +161,8 @@ object MimirVizier extends LazyLogging {
           //logger.debug(listener.callToPython("knock knock, jvm here"))
          })
      }
-     
+     Thread.sleep(1000)
+     server.shutdown()
     
   }
   
@@ -236,13 +255,27 @@ object MimirVizier extends LazyLogging {
   def vistrailsQueryMimir(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : PythonCSVContainer = {
     val timeRes = time {
       logger.debug("vistrailsQueryMimir: " + query)
-      val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
-      if(includeUncertainty && includeReasons)
-        operCSVResultsDeterminismAndExplanation(oper)
-      else if(includeUncertainty)
-        operCSVResultsDeterminism(oper)
-      else 
-        operCSVResults(oper)
+      val jsqlStmnt = db.parse(query).head
+      jsqlStmnt match {
+        case select:Select => {
+          val oper = db.sql.convert(select)
+          if(includeUncertainty && includeReasons)
+            operCSVResultsDeterminismAndExplanation(oper)
+          else if(includeUncertainty)
+            operCSVResultsDeterminism(oper)
+          else 
+            operCSVResults(oper)
+        }
+        case update:Update => {
+          db.backend.update(query)
+          new PythonCSVContainer("SUCCESS\n1", Array(Array()), Array(), Array(), Array())
+        }
+        case stmt:Statement => {
+          db.update(stmt)
+          new PythonCSVContainer("SUCCESS\n1", Array(Array()), Array(), Array(), Array())
+        }
+      }
+      
     }
     logger.debug(s"vistrailsQueryMimir Took: ${timeRes._2}")
     timeRes._1

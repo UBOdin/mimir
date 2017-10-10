@@ -21,7 +21,7 @@ scalacOptions ++= Seq(
 unmanagedResourceDirectories in Compile += baseDirectory.value / "lib_extra"
 includeFilter in (Compile, unmanagedResourceDirectories):= ".dylib,.dll,.so"
 unmanagedClasspath in Runtime += baseDirectory.value / "conf"
-unmanagedResourceDirectories in Test += baseDirectory.value / "conf"
+unmanagedResourceDirectories in Compile += baseDirectory.value / "conf"
 
 fork := true
 outputStrategy in run := Some(StdoutOutput)
@@ -41,9 +41,14 @@ runMimirVizier := {
   val args = sbt.complete.Parsers.spaceDelimited("[main args]").parsed
   val classpath = (fullClasspath in Compile).value
   val classpathString = Path.makeString(classpath map { _.data })
-  val jvmArgs = Seq("-Xmx4g", "-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK")
+  val debugTestJVMArgs = Seq()//Seq("-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005")
+  val jvmArgs = debugTestJVMArgs ++ Seq("-Xmx4g", "-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK")
   val (jh, os, bj, bd, jo, ci, ev) = (javaHome.value, outputStrategy.value, Vector[java.io.File](), 
-		Some(baseDirectory.value), (jvmArgs ++ Seq("-classpath", classpathString)).toVector, connectInput.value, envVars.value)
+		Some(baseDirectory.value), (jvmArgs ++ Seq("-classpath", classpathString)).toVector, connectInput.value, sys.props.get("os.name") match {
+	  	case Some(osname) if osname.startsWith("Mac OS X") => Map(("DYLD_INSERT_LIBRARIES",System.getProperty("java.home")+"/lib/libjsig.dylib"))
+	  	case Some(otherosname) => Map(("LD_PRELOAD",System.getProperty("java.home")+"/lib/"+System.getProperty("os.arch")+"/libjsig.so"))
+	  	case None => envVars.value
+	  })
   Fork.java(
     ForkOptions(jh, os, bj, bd, jo, ci, ev),
     "mimir.MimirVizier" +: args
