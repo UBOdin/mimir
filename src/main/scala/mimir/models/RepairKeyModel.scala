@@ -27,15 +27,15 @@ class RepairKeyModel(
   scoreCol: Option[String]
 )
   extends Model(name)
-  with FiniteDiscreteDomain 
-  with NeedsReconnectToDatabase 
+  with FiniteDiscreteDomain
+  with NeedsReconnectToDatabase
   with SourcedFeedbackT[List[PrimitiveValue]]
 {
-  
+
   @transient var db:Database = null
 
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) : List[PrimitiveValue] = args.toList
-  
+
   def varType(idx: Int, args: Seq[Type]): Type = targetType
   def argTypes(idx: Int) = keys.map(_._2)
   def hintTypes(idx: Int) = Seq(TString(), TString())
@@ -58,7 +58,7 @@ class RepairKeyModel(
         val possibilities = getDomain(idx, args, hints)
         s"In $context, there were ${possibilities.length} options for $target on the row identified by <${args.map(_.toString).mkString(", ")}>, and I arbitrarilly picked ${possibilities.sortBy(-_._2).head._1}"
       }
-      case Some(choice) => 
+      case Some(choice) =>
         s"In $context, ${getReasonWho(idx,args)} told me to use ${choice.toString} for $target on the identified by <${args.map(_.toString).mkString(", ")}>"
     }
   }
@@ -128,7 +128,7 @@ class RepairKeyModel(
   }
 
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Double = {
-    choices.get(args.toList) match {
+    getFeedback(idx,args) match {
       case Some(choice) => 1.0
       case None => getDomain(idx, args, hints).sortBy(-_._2).head._1.asDouble / getDomain(idx, args, hints).map(_._2).sum
     }

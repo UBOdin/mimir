@@ -52,8 +52,8 @@ object GeoFunctions
       },
       (_) => TFloat()
     )
-    fr.register("WEBGEOCODEDISTANCE", 
-      {  
+    fr.register("WEBGEOCODEDISTANCE",
+      {
         case Seq(lat:PrimitiveValue, lon:PrimitiveValue,StringPrimitive(houseNumber), StringPrimitive(streetName),StringPrimitive(city),StringPrimitive(state),StringPrimitive(geocoder)) => {
           val (url, latPath, lonPath) = geocoder match {
             case "GOOGLE" => (s"https://maps.googleapis.com/maps/api/geocode/json?address=${s"${houseNumber.toDouble.toInt}+${streetName.replaceAll(" ", "+")},+${city.replaceAll(" ", "+")},+$state".replaceAll("\\+\\+", "+")}&key=AIzaSyAKc9sTF-pVezJY8-Dkuvw07v1tdYIKGHk", ".results[0].geometry.location.lat", ".results[0].geometry.location.lng")
@@ -74,8 +74,8 @@ object GeoFunctions
       },
       (x: Seq[Type]) => TFloat()
     )
-    fr.register("METOLOCDST", 
-      {  
+    fr.register("METOLOCDST",
+      {
         (args) => {
           FloatPrimitive(DefaultEllipsoid.WGS84.orthodromicDistance(
             mimir.sql.sqlite.MeToLocationDistance.myLon.get, //lon1
@@ -86,15 +86,10 @@ object GeoFunctions
         }
       },
       (args) => {
-        (0 until 2).foreach { i => Typechecker.assertNumeric(args(i), Function("METOLOCDST", List())) }; 
+        (0 until 2).foreach { i => Typechecker.assertNumeric(args(i), Function("METOLOCDST", List())) };
         TFloat()
       }
     )
-  
-  }
-<<<<<<< HEAD
 
+  }
 }
-=======
-}
->>>>>>> master

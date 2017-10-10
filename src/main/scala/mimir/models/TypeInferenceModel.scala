@@ -149,7 +149,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
     votes(idx).toList.map( x => (TypePrimitive(x._1), x._2)) ++ Seq( (TypePrimitive(TString()), defaultFrac) )
 
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = {
-    choices.get(idx) match {
+    choices(idx) match {
       case None => {
         val (guess, guessVotes) = voteList(idx).maxBy( rankFn _ )
         val defaultPct = (defaultFrac * 100).toInt

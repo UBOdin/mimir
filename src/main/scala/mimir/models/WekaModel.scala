@@ -79,15 +79,15 @@ object WekaModel
 
 @SerialVersionUID(1001L)
 class SimpleWekaModel(name: String, colName: String, query: Operator)
-  extends Model(name) 
-  with NeedsReconnectToDatabase 
+  extends Model(name)
+  with NeedsReconnectToDatabase
   with SourcedFeedback
 {
   var numSamples = 0
   var numCorrect = 0
   val colIdx:Int = query.columnNames.indexOf(colName)
   var attributeMeta: java.util.ArrayList[Attribute] = null
-  
+
   /**
    * The actual Weka model itself.  @SimpleWekaModel is just a wrapper around a
    * Weka @Classifier object.  Due to silliness in Weka, @Classifier itself is not
@@ -116,7 +116,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
   @transient var db: Database = null
 
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = args(0).asString
- 
+
   def rowToInstance(row: Seq[PrimitiveValue], dataset: Instances): DenseInstance =
   {
     val instance = new DenseInstance(row.size)
@@ -280,7 +280,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
     getFeedback(idx, args) match {
       case Some(v) =>
         s"${getReasonWho(idx,args)} told me that $name.$colName = $v on row $rowid"
-      case None => 
+      case None =>
         val classes = classify(rowid.asInstanceOf[RowIdPrimitive], hints)
         val total:Double = classes.map(_._1).fold(0.0)(_+_)
         if (classes.isEmpty) {
@@ -321,7 +321,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
 
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = {
     val rowid = RowIdPrimitive(args(0).asString)
-    feedback.get(rowid.asString) match {
+    getFeedback(idx,args) match {
       case Some(v) => 1.0
       case None =>
         val classes = classify(rowid, hints)

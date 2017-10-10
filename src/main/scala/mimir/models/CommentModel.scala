@@ -14,14 +14,14 @@ import java.sql.SQLException
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1001L)
-class CommentModel(override val name: String, cols:Seq[String], colTypes:Seq[Type], comments:Seq[String]) 
-  extends Model(name) 
+class CommentModel(override val name: String, cols:Seq[String], colTypes:Seq[Type], comments:Seq[String])
+  extends Model(name)
   with Serializable
   with SourcedFeedback
 {
-  
+
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = s"${args(0).asString}:$idx"
-  
+
   def argTypes(idx: Int) = Seq(TRowId())
   def varType(idx: Int, args: Seq[Type]) = colTypes(idx)
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ) = {
@@ -53,7 +53,7 @@ class CommentModel(override val name: String, cols:Seq[String], colTypes:Seq[Typ
 
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Double = {
     val rowid = RowIdPrimitive(args(0).asString)
-    feedback.get(rowid.asString) match {
+    getFeedback(idx,args) match {
       case Some(v) => {
         1.0
       }

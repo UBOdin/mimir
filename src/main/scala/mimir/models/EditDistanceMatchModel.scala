@@ -140,7 +140,7 @@ class EditDistanceMatchModel(
 
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
   {
-    choices(idx) match { 
+    choices(idx) match {
       case None => {
         if(colMapping.isEmpty){
           NullPrimitive()
@@ -158,7 +158,7 @@ class EditDistanceMatchModel(
     List((NullPrimitive(), 0.0)) ++ colMapping.map( x => (StringPrimitive(x._1), x._2))
 
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Double  = {
-    choices.get(idx) match {
+    choices(idx) match {
       case None => {
         if(colMapping.isEmpty){
           0.0
