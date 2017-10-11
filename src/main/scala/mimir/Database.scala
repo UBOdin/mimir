@@ -25,7 +25,8 @@ import mimir.sql.{
     AlterViewMaterialize
   }
 import mimir.optimizer.operator.OptimizeExpressions
-import mimir.util.{LoadCSV,ExperimentalOptions}
+import mimir.util.ExperimentalOptions
+import mimir.load.{LoadCSV,LoadLog}
 import mimir.parser.MimirJSqlParser
 import mimir.statistics.FuncDep
 

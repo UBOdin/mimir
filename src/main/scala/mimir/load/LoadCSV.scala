@@ -1,4 +1,4 @@
-package mimir.util
+package mimir.load
 
 import com.typesafe.scalalogging.slf4j.StrictLogging
 
@@ -8,13 +8,16 @@ import java.nio.charset.StandardCharsets
 import java.sql.SQLException
 import java.util
 
-import mimir.Database
-import mimir.algebra.Type
 import org.apache.commons.csv.{CSVFormat, CSVParser}
 import org.apache.commons.io.IOUtils
 import org.apache.commons.io.input.ReaderInputStream
 import scala.collection.JavaConverters._
+
+import mimir.Database
+import mimir.algebra.Type
 import mimir.algebra._
+import mimir.util.{Timer,TextUtils}
+
 
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.util.control.Breaks._

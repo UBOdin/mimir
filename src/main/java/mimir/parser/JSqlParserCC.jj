@@ -2078,7 +2078,9 @@ Load Load():
   PrimitiveValue arg = null;
 }
 {
-  <K_LOAD> file=<S_CHAR_LITERAL> { load = new Load(StringValue.parseEscaped(file.image).getValue()); }
+  <K_LOAD> 
+  [ format = <S_IDENTIFIER> { load.setFormat(format.image); }]
+  file=<S_CHAR_LITERAL> { load = new Load(StringValue.parseEscaped(file.image).getValue()); }
   [ <K_AS> format=<S_IDENTIFIER> { load.setFormat(format.image); }
     [ "(" 
         [ arg = Literal() { load.addFormatArg(arg); } 
