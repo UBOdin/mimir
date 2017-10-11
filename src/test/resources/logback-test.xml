@@ -40,6 +40,11 @@
   <logger name="mimir.lenses.TypeInferenceLens$"                   level="WARN"/>
   <logger name="mimir.lenses.RepairKeyLens$"                       level="WARN"/>
 
+  <!--+++++++++++++++++++++++  Load  ++++++++++++++++++++++++-->
+  <logger name="mimir.load.LoadCSV$"                               level="INFO"/> <!-- Use INFO to track stats -->
+  <logger name="mimir.load.LoadLog$"                               level="WARN"/>
+  <logger name="mimir.load.FileFormat$"                            level="TRACE"/>
+
   <!--+++++++++++++++++++++++  Models  ++++++++++++++++++++++++-->
   <logger name="mimir.models.ModelManager"                         level="WARN"/>
   <logger name="mimir.models.EditDistanceMatchModel"               level="INFO"/> <!-- Use INFO to track stats -->
@@ -74,7 +79,6 @@
   <logger name="mimir.statistics.SystemCatalog"                    level="WARN"/>
 
   <!--+++++++++++++++++++++++  Util  ++++++++++++++++++++++++++-->
-  <logger name="mimir.util.LoadCSV$"                               level="INFO"/> <!-- Use INFO to track stats -->
   <logger name="mimir.util.NonStrictCSVParser"                     level="INFO"/> <!-- Use INFO to track stats -->
   <logger name="mimir.util.LineReaderInputSource"                  level="WARN"/>
   <logger name="mimir.util.PythonProcess$"                         level="WARN"/>

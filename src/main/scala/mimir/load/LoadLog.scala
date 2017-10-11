@@ -15,7 +15,8 @@ object LoadLog
     options: Map[String,String] = Map(), 
     metadata: Seq[(String,PrimitiveValue)] = Seq()
   ) {
-    val source = Source.fromFile(sourceFile)
+    val source = 
+      Source.fromFile(sourceFile)
 
     val fields = Seq(
       ("LINE", TInt()),
