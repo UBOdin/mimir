@@ -96,6 +96,7 @@ class SimpleFuncDepModel(name: String, colName: String, query: Operator)
                       .filterNot(row => row(1).isInstanceOf[NullPrimitive]).sortBy(_(2).asInt)
     dependencyMap = results.map(arr => arr(0) -> arr(1)).toMap
     weightedList = results.map(row => (row(1),row(2).asDouble))
+    this.db = db
     inEdge
   }
 
