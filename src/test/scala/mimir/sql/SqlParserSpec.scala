@@ -15,6 +15,7 @@ import mimir._
 import mimir.parser._
 import mimir.algebra._
 import mimir.sql._
+import mimir.load._
 import mimir.util._
 import mimir.test._
 import mimir.ctables._
@@ -66,7 +67,7 @@ object SqlParserSpec
 			}
 			testData.foreach ( _ match { case ( tableName, tableData, tableCols ) => 
 				d.backend.update("CREATE TABLE "+tableName+"("+tableCols.mkString(", ")+");")
-				LoadCSV.handleLoadTable(d, tableName, tableData, Map("HEADER" -> "NO"))
+				LoadCSV.load(d, tableName, tableData, Map("HEADER" -> "NO"))
 			})
 			d
 		} catch {

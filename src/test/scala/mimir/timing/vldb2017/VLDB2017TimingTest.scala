@@ -10,6 +10,7 @@ import scala.concurrent.duration._
 
 
 import mimir.test.{SQLTestSpecification, PDBench, TestTimer}
+import mimir.load._
 import mimir.util._
 import mimir.algebra._
 import mimir.exec.mode._
@@ -42,7 +43,7 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
             PRIMARY KEY (TID, WORLD_ID, VAR_ID)
           )
         """)
-        LoadCSV.handleLoadTable(db, 
+        LoadCSV.load(db, 
           baseTable, 
           new File(s"test/pdbench/${baseTable}.tbl"), 
           Map(

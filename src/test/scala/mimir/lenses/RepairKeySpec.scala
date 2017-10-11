@@ -4,6 +4,7 @@ import java.io._
 import org.specs2.specification._
 
 import mimir.algebra._
+import mimir.load._
 import mimir.util._
 import mimir.exec.DefaultOutputFormat
 import mimir.ctables.InlineVGTerms
@@ -192,7 +193,7 @@ object RepairKeySpec
             acctbal float
           )
         """)
-        LoadCSV.handleLoadTable(db, 
+        LoadCSV.load(db, 
           "CUST_ACCTBAL_WITHDUPS", 
           new File("test/pdbench/cust_c_acctbal.tbl"), 
           Map(

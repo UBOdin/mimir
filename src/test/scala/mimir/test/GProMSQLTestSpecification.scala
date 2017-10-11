@@ -9,6 +9,7 @@ import mimir._
 import mimir.parser._
 import mimir.sql._
 import mimir.algebra._
+import mimir.load._
 import mimir.util._
 import mimir.exec._
 import mimir.exec.result.ResultIterator
@@ -113,5 +114,5 @@ abstract class GProMSQLTestSpecification(val tempDBName:String, config: Map[Stri
   def update(s: String) = 
     db.update(stmt(s))
   def loadCSV(table: String, file: File) =
-    LoadCSV.handleLoadTable(db, table, file)
+    LoadCSV.load(db, table, file)
 }

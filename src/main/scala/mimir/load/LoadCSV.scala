@@ -14,7 +14,6 @@ import org.apache.commons.io.input.ReaderInputStream
 import scala.collection.JavaConverters._
 
 import mimir.Database
-import mimir.algebra.Type
 import mimir.algebra._
 import mimir.util.{Timer,TextUtils}
 
@@ -26,10 +25,7 @@ object LoadCSV extends StrictLogging {
 
   def SAMPLE_SIZE = 10000
 
-  // def handleLoadTable(db: Database, targetTable: String, sourceFile: File): Unit =
-  //   handleLoadTable(db, targetTable, sourceFile, Map())
-
-  def handleLoadTable(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
+  def load(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
     val input = new FileReader(sourceFile)
     val assumeHeader = options.getOrElse("HEADER", "YES").equals("YES")
 

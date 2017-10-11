@@ -4,6 +4,7 @@ import java.io._
 import org.specs2.specification._
 
 import mimir.algebra._
+import mimir.load._
 import mimir.util._
 import mimir.ctables.InlineVGTerms
 import mimir.optimizer.operator.InlineProjections
@@ -62,7 +63,7 @@ object MCDBTimingSpec
       s"Create table: $baseTable" >> {
         if(!db.tableExists(baseTable)){
           update(ddl)
-          LoadCSV.handleLoadTable(db, 
+          LoadCSV.load(db, 
             baseTable, 
             new File(s"test/mcdb/${baseTable}.tbl"), 
             Map(

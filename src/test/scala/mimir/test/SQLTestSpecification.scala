@@ -9,6 +9,7 @@ import mimir._
 import mimir.parser._
 import mimir.sql._
 import mimir.algebra._
+import mimir.load._
 import mimir.util._
 import mimir.exec._
 import mimir.exec.result._
@@ -123,7 +124,7 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   def update(s: String) = 
     db.update(stmt(s))
   def loadCSV(table: String, file: File) =
-    LoadCSV.handleLoadTable(db, table, file)
+    LoadCSV.load(db, table, file)
  
   def modelLookup(model: String) = db.models.get(model)
   def schemaLookup(table: String) = db.tableSchema(table).get
