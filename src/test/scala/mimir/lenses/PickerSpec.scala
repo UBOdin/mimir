@@ -43,13 +43,13 @@ object PickerSpec
       
       
       result(0)._1 must be equalTo IntPrimitive(1)
-      result(0)._2 must be equalTo false
+      result(0)._2 must be equalTo true
       result(1)._1 must be equalTo IntPrimitive(1)
       result(1)._2 must be equalTo false
       result(2)._1 must be equalTo IntPrimitive(3)
       result(2)._2 must be equalTo false
       result(3)._1 must be equalTo IntPrimitive(4)
-      result(3)._2 must be equalTo false
+      result(3)._2 must be equalTo true
       
     }
 

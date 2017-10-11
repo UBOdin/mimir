@@ -593,4 +593,9 @@ object CTPercolator
         throw new RAException("Don't know how to percolate a left-outer-join")
     }
   }
+  
+  def percolateGProM(oper: Operator): (Operator, Map[String,Expression], Expression) =
+  {
+    mimir.gprom.algebra.OperatorTranslation.compileTaintWithGProM(oper)
+  }
 }

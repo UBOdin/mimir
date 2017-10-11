@@ -62,7 +62,10 @@ object BestGuess
 
 
     // Tag rows/columns with provenance metadata
-    val tagging = CTPercolator.percolateLite(oper, db.models.get(_))
+    val tagging = if(ExperimentalOptions.isEnabled("GPROM-DETERMINISM")
+        && db.backend.isInstanceOf[mimir.sql.GProMBackend])
+      { CTPercolator.percolateGProM(oper) }
+      else { CTPercolator.percolateLite(oper, db.models.get(_)) } 
     oper               = tagging._1
     val colDeterminism = tagging._2.filter( col => rawColumns(col._1) )
     val rowDeterminism = tagging._3
