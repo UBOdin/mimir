@@ -216,7 +216,7 @@ assemblyMergeStrategy in assembly := {
 
 
 ////// Publishing Metadata //////
-// use `sbt publish make-pom` to generate
+// use `sbt publish make-pom` to generate 
 // a publishable jar artifact and its POM metadata
 
 publishMavenStyle := true
@@ -235,6 +235,6 @@ pomExtra := <url>http://mimirdb.info</url>
   </scm>
 
 /////// Publishing Options ////////
-// use `sbt publish` to update the package in
+// use `sbt publish` to update the package in 
 // your own local ivy cache
 publishTo := Some(Resolver.file("file",  new File(Path.userHome.absolutePath+"/.m2/repository")))
