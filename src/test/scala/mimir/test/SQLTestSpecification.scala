@@ -124,7 +124,7 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   def update(s: String) = 
     db.update(stmt(s))
   def loadCSV(table: String, file: File) =
-    LoadCSV.load(db, table, file)
+    LoadCSV(db, table, file)
  
   def modelLookup(model: String) = db.models.get(model)
   def schemaLookup(table: String) = db.tableSchema(table).get

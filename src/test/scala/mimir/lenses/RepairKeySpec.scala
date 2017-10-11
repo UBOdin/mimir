@@ -193,7 +193,7 @@ object RepairKeySpec
             acctbal float
           )
         """)
-        LoadCSV.load(db, 
+        LoadCSV(db, 
           "CUST_ACCTBAL_WITHDUPS", 
           new File("test/pdbench/cust_c_acctbal.tbl"), 
           Map(

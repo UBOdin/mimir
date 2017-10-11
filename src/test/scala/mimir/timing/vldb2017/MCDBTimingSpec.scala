@@ -63,7 +63,7 @@ object MCDBTimingSpec
       s"Create table: $baseTable" >> {
         if(!db.tableExists(baseTable)){
           update(ddl)
-          LoadCSV.load(db, 
+          LoadCSV(db, 
             baseTable, 
             new File(s"test/mcdb/${baseTable}.tbl"), 
             Map(

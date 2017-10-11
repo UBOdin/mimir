@@ -428,7 +428,7 @@ case class Database(backend: Backend)
           if(tableExists(targetRaw) && !force){
             throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' INTO tableName`; to append to existing data.")
           }
-          LoadCSV.load(this, targetRaw, sourceFile, 
+          LoadCSV(this, targetRaw, sourceFile, 
             Map("DELIMITER" -> delim)
           )
           if(!tableExists(targetTable.toUpperCase)){
@@ -438,7 +438,7 @@ case class Database(backend: Backend)
           }
         }
       case "LOG" => {
-        LoadLog.load(this, targetTable, sourceFile);
+        LoadLog(this, targetTable, sourceFile);
       }
       case fmt =>
         throw new SQLException(s"Unknown load format '$fmt'")

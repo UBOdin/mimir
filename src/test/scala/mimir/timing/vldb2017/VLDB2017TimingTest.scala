@@ -43,7 +43,7 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
             PRIMARY KEY (TID, WORLD_ID, VAR_ID)
           )
         """)
-        LoadCSV.load(db, 
+        LoadCSV(db, 
           baseTable, 
           new File(s"test/pdbench/${baseTable}.tbl"), 
           Map(

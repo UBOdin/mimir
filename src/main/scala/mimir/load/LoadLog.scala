@@ -8,7 +8,7 @@ import mimir.algebra._
 
 object LoadLog 
 {
-  def load(
+  def apply(
     db: Database, 
     targetTable: String, 
     sourceFile: File, 
@@ -38,7 +38,7 @@ object LoadLog
         .zipWithIndex
         .map { case (data, idx) => 
           Seq( 
-            IntPrimitive(idx),
+            IntPrimitive(idx+1),
             StringPrimitive(data)
           ) ++ metadata.map { _._2 } 
         }

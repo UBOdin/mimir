@@ -25,7 +25,7 @@ object LoadCSV extends StrictLogging {
 
   def SAMPLE_SIZE = 10000
 
-  def load(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
+  def apply(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
     val input = new FileReader(sourceFile)
     val assumeHeader = options.getOrElse("HEADER", "YES").equals("YES")
 

@@ -114,5 +114,5 @@ abstract class GProMSQLTestSpecification(val tempDBName:String, config: Map[Stri
   def update(s: String) = 
     db.update(stmt(s))
   def loadCSV(table: String, file: File) =
-    LoadCSV.load(db, table, file)
+    LoadCSV(db, table, file)
 }
