@@ -20,14 +20,14 @@ public class Analyze implements Statement{
 		this.assign = assign;
 	}
 
-	public SelectBody getSelectBody()
+	public SelectBody getSelectBody() 
 	{
 		return selectBody;
 	}
 	public void setSelectBody(SelectBody selectBody) {
 		this.selectBody = selectBody;
 	}
-
+	
 	public String getColumn()
 	{
 		return column;
@@ -61,5 +61,5 @@ public class Analyze implements Statement{
 		sel.setSelectBody(selectBody);
 		statementVisitor.visit(sel);
 	}
-
+	
 }
