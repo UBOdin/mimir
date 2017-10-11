@@ -42,19 +42,16 @@ object FuncDepModel
         }
         val sourceColName=query.columnNames(sourceCol)
         val tableName = QueryNamer(query)
-        //println(db.query(s"SELECT $sourceColName FROM $tableName;"){_.tuples})
       col -> (
         model,                         // The model for the column
         0,                             // The model index of the column's replacement variable
-        db.query(s"SELECT $sourceColName FROM $tableName;"){_.tuples}.flatten
-        //db.query(ProjectArg(query.columnNames(sourceCol),Var(query.columnNames(sourceCol))),query)
-        //ArrayBuffer(Var(query.columnNames(sourceCol)))  // 'Hints' for the model -- All of the remaining column values
+        db.query(s"SELECT $sourceColName FROM $tableName;"){_.tuples}.flatten  // 'Hints' for the model -- The dependent column values
       )
     }).toMap
   }
 }
 
-@SerialVersionUID(1000L)
+@SerialVersionUID(1001L)
 class SimpleFuncDepModel(name: String, colName: String, query: Operator)
   extends Model(name)
   with NeedsReconnectToDatabase
@@ -80,7 +77,6 @@ class SimpleFuncDepModel(name: String, colName: String, query: Operator)
     val fd = new FuncDep()
     fd.buildEntities(db, query, tableName)
     //  use egde strength to choose incoming edges
-    //println(s"colIdx: $colIdx")
     var inedgeArr0 : Array[(Int,Int)] = new Array[(Int,Int)](0)
     val inedgeArr = fd.fdGraph.getInEdges(colIdx).toArray(inedgeArr0)
     val edgeMap = fd.edgeTable.map{case (a,b,c)=> (a,b)->c}.toMap
@@ -101,14 +97,7 @@ class SimpleFuncDepModel(name: String, colName: String, query: Operator)
     dependencyMap = results.map(arr => arr(0) -> arr(1)).toMap
     weightedList = results.map(row => (row(1),row(2).asDouble))
     inEdge
-    //val tuples = db.query(s"SELECT $inEdgeCol FROM $tableName WHERE ROWID()=ROWID(13);"){_.tuples}
   }
-
-  /*def hackToPreventGUILaunch(){
-    val f = classOf[java.awt.GraphicsEnvironment].getDeclaredField("headless");
-    f.setAccessible(true);
-    f.set(null, true);
-  }*/
 
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
   {
@@ -132,9 +121,6 @@ class SimpleFuncDepModel(name: String, colName: String, query: Operator)
     val rowid = RowIdPrimitive(args(0).asString)
     val rowN = args(0).asInt-1
     val inVal = hints(rowN)
-    //println(rowN+" "+inVal)
-    //val tuples = db.query(s"SELECT $colName FROM $tableName WHERE $inEdgeCol=$inVal;"){_.tuples}.flatten
-    //println(tuples)
     feedback.get(rowid.asString) match {
       case Some(v) => v
       case None =>
@@ -182,7 +168,7 @@ class SimpleFuncDepModel(name: String, colName: String, query: Operator)
   /**
    * Re-populate transient fields after being woken up from serialization
    */
-  def reconnectToDatabase(db: Database): Unit = {
+  def reconnectToDatabase(db: Database) = {
     this.db = db
   }
 
