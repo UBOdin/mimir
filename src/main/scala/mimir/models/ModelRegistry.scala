@@ -4,7 +4,7 @@ import mimir.Database
 import mimir.algebra._
 
 /**
- * The Model Registry is a central point for organizing Models that
+ * The Model Registry is a central point for organizing Models that 
  * fulfil specific roles.  As of right now, we consider three basic
  * categories of model:
  *  - Imputation: Models that 'fill in' missing or erroneous values
@@ -15,11 +15,11 @@ object ModelRegistry
 {
   /**
    * Factory method type for Imputation model constructors
-   *
+   * 
    * Given a relation and a list of column names, an imputation model
    * is expected to be able to produce replacement values for cells in
-   * the specified columns of the specified relation.
-   *
+   * the specified columns of the specified relation. 
+   * 
    * Inputs:
    *    Database        -> The database to train on
    *    String          -> The name prefix for the model
@@ -32,25 +32,25 @@ object ModelRegistry
    *
    * Note that although we request models for a set of columns in a
    * single pass, the constructor is not required to respond with a
-   * model for all, or even any of the columns it's given.
-   *   - If the model in question is not applicable to the query, it
+   * model for all, or even any of the columns it's given.  
+   *   - If the model in question is not applicable to the query, it 
    *     should return an empty map.
-   *   - If the model in question is not applicable to one or more
+   *   - If the model in question is not applicable to one or more 
    *     columns, these columns need not be in the result map.
-   *
-   * Imputation models are expected to take a single variable,
-   * identifying the ROWID of the specified row.  In other words,
+   * 
+   * Imputation models are expected to take a single variable, 
+   * identifying the ROWID of the specified row.  In other words, 
    * it should support VGTerms of the form {{ TABLE;x[ROWID] }}.  The
-   * domain of the variable should be the same as the type of the
+   * domain of the variable should be the same as the type of the 
    * specified column.
-   *
+   * 
    * Note that the constructor is NOT responsible for registering the
    * model with the manager.
    *
    * The original row may be constructed from the provided relation
    * operator: Select[ROWID = rowid](oper)
    */
-  type ImputationConstructor =
+  type ImputationConstructor = 
     ((Database, String, List[String], Operator) => Map[String, (Model,Int,Seq[Expression])])
 
   /**
@@ -66,27 +66,27 @@ object ModelRegistry
    *    Operator | Schema  -> The target query or schema (to map to)
    *
    * Outputs:
-   *    Map[...]           -> A map from a target column name to a
-   *                          Model/Idx pair defining a way to map the
+   *    Map[...]           -> A map from a target column name to a 
+   *                          Model/Idx pair defining a way to map the 
    *                          specified target.
    *
    * Note that the constructor is not required to respond with a model
    * for all, or even any of the columns in the target schema
-   *   - If the model in question is not applicable to the query, it
+   *   - If the model in question is not applicable to the query, it 
    *     should return an empty map.
-   *   - If the model in question is not applicable to one or more
+   *   - If the model in question is not applicable to one or more 
    *     columns, these columns need not be in the result map.
-   *
+   * 
    * SchemaMatch models take no variables.  Each Model/Index pair
    * dictates how one target column is to be matched.  The return value
    * of the model is a string with the name of the attribute that the
    * target column should be matched to.
    */
   type SchemaMatchConstructor =
-    ((Database,
-      String,
+    ((Database, 
+      String, 
       Either[Operator,List[(String,Type)]],
-      Either[Operator,List[(String,Type)]]) =>
+      Either[Operator,List[(String,Type)]]) => 
         Map[String,(Model,Int)])
 
   /////////////////// PREDEFINED CONSTRUCTORS ///////////////////

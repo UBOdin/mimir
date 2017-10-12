@@ -210,7 +210,7 @@ object Mimir extends LazyLogging {
       } else {
       output.print("==== Explain Cell ====")
         val explanation = 
-          db.explainer.explainCell(query, token, column)
+          db.explainer.explainCell(query, token, column) 
         printReasons(explanation.reasons)
         output.print("--------")
         output.print("Examples: "+explanation.examples.map(_.toString).mkString(", "))

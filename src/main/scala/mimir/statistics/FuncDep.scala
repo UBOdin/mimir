@@ -62,7 +62,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
   /**
    * The threshold that determines if there is a functional dependency between two columns
    */
-  val threshhold:Double =
+  val threshhold:Double = 
     config.getOrElse("THRESHOLD", FloatPrimitive(0.99)).asDouble
 
   /**
@@ -80,25 +80,25 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
   /**
    * true if you want the entity graphs to be output
    */
-  val outputEntityGraphs:Boolean =
+  val outputEntityGraphs:Boolean = 
       config.getOrElse("OUTPUT_ENTITY_GRAPHS", BoolPrimitive(false)).asInstanceOf[BoolPrimitive].v
 
   /**
    * if false then each entity will have it's own graph
    */
-  val combineEntityGraphs : Boolean =
+  val combineEntityGraphs : Boolean = 
       config.getOrElse("COMBINE_ENTITIES", BoolPrimitive(true)).asInstanceOf[BoolPrimitive].v
 
   /**
    * if you want the Functional Dependency Graph to be shown
    */
-  val showFDGraph : Boolean =
+  val showFDGraph : Boolean = 
       config.getOrElse("SHOW_FD_GRAPH", BoolPrimitive(false)).asInstanceOf[BoolPrimitive].v
 
   /**
    * minimum percentage of non-null columns to be included in the calculations
    */
-  val blackListThreshold =
+  val blackListThreshold = 
     config.getOrElse("THRESHOLD", FloatPrimitive(0.05)).asDouble
 
   // tables containing data for computations
@@ -148,27 +148,27 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
    * inside this program so it has a high upfront ram cost, this can be changed on implementation to have each column call the database and in parallel collect this information
    * The data collected is a count of each unique value per column and the total number of nulls
    */
-  def preprocessFDG(db: Database, query: Operator): Unit =
+  def preprocessFDG(db: Database, query: Operator): Unit = 
   {
     densityTable = mutable.IndexedSeq.fill(sch.length){ 0l };
     countTable = mutable.IndexedSeq.fill(sch.length) { mutable.Map[PrimitiveValue, Long]() } ;
     table = mutable.IndexedSeq.fill(sch.length) { mutable.Buffer[PrimitiveValue]() }
     var rowCount = 0;
 
-    // Oliver says:
+    // Oliver says: 
     // A lot of this computation seems like it could be pushed
-    // into the backend.  This following bit is effectively a set of
+    // into the backend.  This following bit is effectively a set of 
     // aggregates, for example.  Why not just run it as a query?
-    //
-    // As a side effect, pushing all of the computation into the backend
+    // 
+    // As a side effect, pushing all of the computation into the backend 
     // would make it unnecessary to have the tables object stored in memory
     db.query(query) { result =>
       for(row <- result){
         for((v, i) <- row.tuple.zipWithIndex) {
           table(i).append(v)
-          if(!v.isInstanceOf[NullPrimitive]){
-            densityTable(i) += 1
-            countTable(i)(v) = countTable(i).getOrElse(v, 0l)
+          if(!v.isInstanceOf[NullPrimitive]){ 
+            densityTable(i) += 1 
+            countTable(i)(v) = countTable(i).getOrElse(v, 0l) 
           }
         }
         rowCount += 1;
@@ -215,7 +215,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
     // Initalize tables
     // double is the strength for that edge
     edgeTable = mutable.Buffer[(Int, Int, Double)]() // contains the node numbers for the dependency graph, the names are numbers from the schema 0 to sch.length are the possibilities
-    var maxTable:mutable.IndexedSeq[PrimitiveValue] =
+    var maxTable:mutable.IndexedSeq[PrimitiveValue] = 
       mutable.IndexedSeq.fill(countTable.size){ NullPrimitive() } // contains the max values for each column, used for phase1 formula
     parentTable = mutable.Map()
 
@@ -223,7 +223,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
     // Finds the maxKey for each column, this is the most occurring value for each column and puts them into maxTable
     for( (keyCounts, columnLocation) <- countTable.zipWithIndex ){
       if(keyCounts.isEmpty){
-        blackList.add(columnLocation)
+        blackList.add(columnLocation)        
       } else {
         val (maxKey, maxValue) = keyCounts.maxBy(_._2)
         maxTable(columnLocation) = maxKey
@@ -231,7 +231,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
     }
 
     // when done nodeTable will contain all column numbers that are involved in the FD graph, and edge table will contain all edges between the columns
-    table.zipWithIndex.par.map({ case (leftColumn, leftColumnNumber) =>
+    table.zipWithIndex.par.map({ case (leftColumn, leftColumnNumber) => 
 
       // left and right are respective ways to keep track of comparing every column
       // Initalize values and tables needed for the left column
@@ -241,7 +241,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
       val leftDensity = densityTable(leftColumnNumber).toFloat / leftColumn.size.toFloat
 
       // right column would be the column that is being compared to left column pairwise, could be thought of as column1 and column2
-      table.zipWithIndex.map({ case (rightColumn, rightColumnNumber) =>
+      table.zipWithIndex.map({ case (rightColumn, rightColumnNumber) => 
         // Initalize tables and values
         // val rightColumnNumber = rightColumn.get(rightColumn.size()-1).asString.toInt
         // logger.trace(s"Comparing $leftColumnNumber <-> $rightColumnNumber")
@@ -253,7 +253,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
           if(leftDensity >= rightDensity) { // no point in doing this computation since we won't use it if leftDen is less than rightDen
             // the size of this will be the unique number of a1,a2 pairs
             var pairSet:mutable.Set[(PrimitiveValue, PrimitiveValue)] = mutable.Set()
-
+            
             // how many unique pairings there are where the rightCol value is its maxValue; Part of the formula
             var rightMaxOccurrenceCount = countTable(rightColumnNumber)(maxTable(rightColumnNumber))
 
@@ -281,7 +281,6 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
             // compute the strength from the formula
             if (!pairSet.isEmpty) {
               val strengthNumerator: Double = (countTable(leftColumnNumber).size.toFloat - rightMaxOccurrenceCount.toFloat)
-              //val strengthNumerator: Double = (leftset.size.toFloat - rightMaxOccurrenceCount.toFloat)
               val strengthDenominator: Double = (pairSet.size.toFloat - rightMaxOccurrenceCount.toFloat)
               val strength: Double = strengthNumerator / strengthDenominator
 /*
@@ -337,9 +336,9 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
         fdGraph.addEdge((-1, value), -1, value, EdgeType.DIRECTED)
       }
     }
+    
     var removedCount = 0 // used to track how many collisions there are
     // now connect nodes with func dependencies
-
     if (!edgeTable.isEmpty) {
       for((a1, a2, strength) <- edgeTable) {
         if(!fdGraph.containsEdge((a2,a1))) {
@@ -901,7 +900,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
     frame.setVisible(true)
   }
 
-  def serialize(): Array[Byte] =
+  def serialize(): Array[Byte] = 
   {
     val byteBucket = new ByteArrayOutputStream()
     val out = new ObjectOutputStream(byteBucket);
@@ -913,7 +912,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
   {
     FuncDep.initBackstore(db)
     db.backend.update(
-      "INSERT OR REPLACE INTO "+FuncDep.BACKSTORE_TABLE_NAME+"(name, data) VALUES (?,?)",
+      "INSERT OR REPLACE INTO "+FuncDep.BACKSTORE_TABLE_NAME+"(name, data) VALUES (?,?)", 
       List(StringPrimitive(name), StringPrimitive(SerializationUtils.b64encode(serialize())))
     )
   }
@@ -1010,7 +1009,7 @@ object FuncDep {
       )
     }
   }
-  def deserialize(data: Array[Byte]): FuncDep =
+  def deserialize(data: Array[Byte]): FuncDep = 
   {
     val in = new ObjectInputStream(new ByteArrayInputStream(data))
     val obj = in.readObject()
@@ -1018,9 +1017,9 @@ object FuncDep {
   }
   def deserialize(db: mimir.Database, name: String): FuncDep =
   {
-    val blob =
+    val blob = 
       db.backend.resultValue(
-        "SELECT data FROM "+BACKSTORE_TABLE_NAME+" WHERE name=?",
+        "SELECT data FROM "+BACKSTORE_TABLE_NAME+" WHERE name=?", 
         List(StringPrimitive(name))
       ).asString
     deserialize(SerializationUtils.b64decode(blob))

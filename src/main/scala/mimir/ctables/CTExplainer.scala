@@ -1,5 +1,5 @@
 package mimir.ctables;
-
+ 
 import java.util.Random;
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
@@ -395,8 +395,8 @@ class CTExplainer(db: Database) extends LazyLogging {
 						multipleReasons.head.model, 
 						multipleReasons.head.idx, 
 						if(allReasonLookups.isEmpty){ None }
-						else {
-							val jointQuery =
+						else { 
+							val jointQuery = 
 								OperatorUtils.makeUnion(
 									allReasonLookups
 								)

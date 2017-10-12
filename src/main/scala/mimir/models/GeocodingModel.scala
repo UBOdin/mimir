@@ -8,30 +8,30 @@ import mimir.Database
 
 /**
  * A model representing a key-repair choice.
- *
+ * 
  * The index is ignored.
- * The one argument is a value for the key.
+ * The one argument is a value for the key. 
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1001L)
-class GeocodingModel(override val name: String, addrCols:Seq[Expression], source: Operator)
-  extends Model(name)
+class GeocodingModel(override val name: String, addrCols:Seq[Expression], source: Operator) 
+  extends Model(name) 
   with Serializable
   with NeedsReconnectToDatabase
   with ModelCache
   with SourcedFeedback
 {
-
-
+  
+  
   val latlonLabel = Seq("Latitude", "Longitude")
   val geogoderLabel = Map("GOOGLE" -> "Google", "OSM" -> "Open Streets")
-
+  
   @transient var db: Database = null
-
+  
   def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : String = {
     args(0).asString
   }
-
+  
    def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = {
      s"${idx}_${args(0).asString}"
    }
@@ -64,7 +64,7 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
                 val geocacheEntry = (FloatPrimitive(glat), FloatPrimitive(glon))
                 setCache(0, args, hints, geocacheEntry._1)
                 setCache(1, args, hints, geocacheEntry._2)
-                geocacheEntry.productElement(idx).asInstanceOf[FloatPrimitive]
+                geocacheEntry.productElement(idx).asInstanceOf[FloatPrimitive]  
             } catch {
                 case ioe: Exception =>  {
                   println(ioe.toString())
@@ -74,7 +74,7 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
           }
         }
       }
-
+      
     }
   }
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = {
@@ -90,7 +90,7 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
     getFeedback(idx, args) match {
       case Some(v) =>
         s"${getReasonWho(idx,args)} told me that $houseNumber $streetName, $city, $state has ${latlonLabel(idx)} = ${v.asInstanceOf[PrimitiveValue]} on row $rowid"
-      case None =>
+      case None => 
         getCache(idx, args, hints) match {
           case Some(v) =>
             s"I used a geocoder (${geogoderLabel(geocoder)}) to determine that $houseNumber $streetName, $city, $state has ${latlonLabel(idx)} = ${v.asInstanceOf[PrimitiveValue]} on row $rowid "
@@ -99,16 +99,16 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
         }
       }
   }
-  def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = {
+  def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = { 
     setFeedback(idx, args, v)
   }
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = {
     hasFeedback(idx, args)
   }
   def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq(TAny())
-
-  def reconnectToDatabase(db: Database) = {
-    this.db = db
+  
+  def reconnectToDatabase(db: Database) = { 
+    this.db = db 
   }
 
   def confidence(idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Double = {
