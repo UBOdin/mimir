@@ -128,7 +128,7 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
     val classifyAllQuery = Project(Seq(ProjectArg(colName, Var(colName))), query)
     val predictions = sparkMLInstance.applyModelDB(classifier, classifyAllQuery, db)
     //val sqlContext = MultiClassClassification.getSparkSqlContext()
-    //import sqlContext.implicits._ 
+    //import sqlContext.implicits._  
     
     //method 1: window, rank, and drop
     /*import org.apache.spark.sql.functions.row_number
@@ -140,7 +140,7 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
     //method 2: group and first
     /*import org.apache.spark.sql.functions.first
     val topPredictionsForEachRow = predictions.sort($"rowid", $"probability".desc).groupBy($"rowid").agg(first(predictions.columns.tail.head).alias(predictions.columns.tail.head), predictions.columns.tail.tail.map(col => first(col).alias(col) ):_*) 
-    
+   
     topPredictionsForEachRow.select("rowid", "predictedLabel").collect().map(row => {
       classificationCache(row.getString(0)) = classToPrimitive( row.getString(1) )
     })*/
@@ -153,7 +153,7 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
       setCache(0,Seq(RowIdPrimitive(mapEntry._1)), null, classToPrimitive( mapEntry._2(0)._1))
     })
     
-    db.models.persist(this) 
+    db.models.persist(this)   
   }
 
   private def classToPrimitive(value:String): PrimitiveValue = 
@@ -224,7 +224,7 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
       case classes => classToPrimitive(RandUtils.pickFromWeightedList(randomness, classes))
     }   
   }
-  def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String =
+  def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = 
   { 
     val rowidstr = args(0).asString
     val rowid = RowIdPrimitive(rowidstr)

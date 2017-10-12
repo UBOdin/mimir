@@ -36,14 +36,14 @@ object CureScenario
   def time[A](description: String): ( => A) => A =
     TimeUtils.monitor(description)
 
-  sequential
+  sequential 
 
   "The CURE Scenario" should {
     Fragment.foreach(dataFiles){ table => {
       val basename = table.getName().replace(".csv", "").toUpperCase
       s"Load '$table'" >> {
         time(s"Load '$table'") {
-          update(s"LOAD '$table';")
+          update(s"LOAD '$table';") 
         }
         time(s"Materialize '$basename'"){
           update(s"ALTER VIEW $basename MATERIALIZE;")
@@ -55,7 +55,7 @@ object CureScenario
     }}
 
     "Select from the source table" >> {
-      time("Type Inference Query"){
+      time("Type Inference Query"){ 
         query("""
           SELECT * FROM cureSource;
         """){ _.foreach { row => {} } }
@@ -66,8 +66,8 @@ object CureScenario
     "Create the source MV Lens" >> {
       time("Source MV Lens"){
         update("""
-          CREATE LENS MV1
-          AS SELECT * FROM cureSource
+          CREATE LENS MV1 
+          AS SELECT * FROM cureSource 
           WITH MISSING_VALUE('IMO_CODE');
         """)
       }
@@ -77,8 +77,8 @@ object CureScenario
     "Create the locations MV Lens" >> {
       time("Locations MV Lens"){
         update("""
-          CREATE LENS MV2
-          AS SELECT * FROM cureLocations
+          CREATE LENS MV2 
+          AS SELECT * FROM cureLocations 
           WITH MISSING_VALUE('IMO_CODE');
         """)
       }

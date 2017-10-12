@@ -13,7 +13,7 @@ import mimir.Database
  * A model representing a key-repair choice.
  * 
  * The index is ignored.
- * The one argument is a value for the key. 
+ * The one argument is a value for the key.  
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1002L)
@@ -120,7 +120,7 @@ class RepairKeyModel(
 
     }
   }
-
+  
   def reconnectToDatabase(db: Database) = { 
     this.db = db 
   }

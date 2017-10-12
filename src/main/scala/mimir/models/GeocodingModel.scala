@@ -10,7 +10,7 @@ import mimir.Database
  * A model representing a key-repair choice.
  * 
  * The index is ignored.
- * The one argument is a value for the key. 
+ * The one argument is a value for the key.  
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1001L)
@@ -35,7 +35,7 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
    def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = {
      s"${idx}_${args(0).asString}"
    }
-
+  
   def argTypes(idx: Int) = {
       Seq(TRowId()).union(addrCols.map(_ => TString()))
   }
@@ -64,7 +64,7 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
                 val geocacheEntry = (FloatPrimitive(glat), FloatPrimitive(glon))
                 setCache(0, args, hints, geocacheEntry._1)
                 setCache(1, args, hints, geocacheEntry._2)
-                geocacheEntry.productElement(idx).asInstanceOf[FloatPrimitive]  
+                geocacheEntry.productElement(idx).asInstanceOf[FloatPrimitive]                
             } catch {
                 case ioe: Exception =>  {
                   println(ioe.toString())
@@ -106,7 +106,7 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
     hasFeedback(idx, args)
   }
   def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq(TAny())
-  
+   
   def reconnectToDatabase(db: Database) = { 
     this.db = db 
   }

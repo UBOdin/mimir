@@ -103,7 +103,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
    * when the model is serialized in serialize(), we serialize Classifier into this
    * byte array.  Second, when the @NeedsReconnectToDatabase trait fires --- that is,
    * when the model is re-linked to the database, we take the opportunity to deserialize
-   * this field. 
+   * this field.  
    * 
    * To save space, serializedLearner is kept null, except when the object is being
    * serialized.

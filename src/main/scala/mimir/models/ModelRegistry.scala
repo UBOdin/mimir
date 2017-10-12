@@ -18,7 +18,7 @@ object ModelRegistry
    * 
    * Given a relation and a list of column names, an imputation model
    * is expected to be able to produce replacement values for cells in
-   * the specified columns of the specified relation. 
+   * the specified columns of the specified relation.  
    * 
    * Inputs:
    *    Database        -> The database to train on
@@ -99,8 +99,8 @@ object ModelRegistry
    */
   val imputations = Map[String,ImputationConstructor](
     //"WEKA" -> (WekaModel.train _)
-    //"SPARK" -> (SparkClassifierModel.train _)
-    "FUNCDEP" -> (FuncDepModel.train _)
+    "SPARK" -> (SparkClassifierModel.train _)
+    //"FUNCDEP" -> (FuncDepModel.train _)
   )
 
   /**

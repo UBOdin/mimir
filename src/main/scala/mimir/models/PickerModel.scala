@@ -13,7 +13,7 @@ import mimir.ml.spark.SparkML.{SparkModelGeneratorParams => ModelParams }
  * A model representing a key-repair choice.
  * 
  * The index is ignored.
- * The one argument is a value for the key. 
+ * The one argument is a value for the key.  
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1001L)
@@ -164,8 +164,8 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
     case None => Seq(TAny())
     case Some(x) => Seq() 
   }
+
   
- 
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =  useClassifier match {
     case Some(x) => Seq()//pickFromCols.zipWithIndex.map(colIdx => (args(colIdx._2), 1.0/pickFromCols.length.toDouble))
     case None => Seq((hints(0), 0.0))//pickFromCols.zipWithIndex.map(colIdx => (args(colIdx._2), 1.0/(pickFromCols.length+1).toDouble)) ++ Seq((hints(0), 1.0/(pickFromCols.length+1).toDouble))

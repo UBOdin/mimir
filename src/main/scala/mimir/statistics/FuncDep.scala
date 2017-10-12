@@ -336,7 +336,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
         fdGraph.addEdge((-1, value), -1, value, EdgeType.DIRECTED)
       }
     }
-    
+
     var removedCount = 0 // used to track how many collisions there are
     // now connect nodes with func dependencies
     if (!edgeTable.isEmpty) {
