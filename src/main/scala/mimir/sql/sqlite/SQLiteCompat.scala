@@ -17,10 +17,10 @@ object SQLiteCompat extends LazyLogging{
   val NULL    = 5
 
   def registerFunctions(conn:java.sql.Connection):Unit = {
-    org.sqlite.Function.create(conn,"MIMIRCAST", MimirCast)
-    org.sqlite.Function.create(conn,"MIMIR_MAKE_ROWID", MimirMakeRowId)
-    org.sqlite.Function.create(conn,"OTHERTEST", OtherTest)
-    org.sqlite.Function.create(conn,"AGGTEST", new AggTest())
+    org.sqlite.Function.create(conn, "MIMIRCAST", MimirCast)
+    org.sqlite.Function.create(conn, "MIMIR_MAKE_ROWID", MimirMakeRowId)
+    org.sqlite.Function.create(conn, "OTHERTEST", OtherTest)
+    org.sqlite.Function.create(conn, "AGGTEST", new AggTest())
     org.sqlite.Function.create(conn, "SQRT", Sqrt)
     org.sqlite.Function.create(conn, "DST", Distance)
     org.sqlite.Function.create(conn, "SPEED", Speed)
@@ -38,8 +38,9 @@ object SQLiteCompat extends LazyLogging{
     org.sqlite.Function.create(conn, "MAX", new Max())
     org.sqlite.Function.create(conn, "WEB", Web)
     org.sqlite.Function.create(conn, "WEBJSON", WebJson)
-    org.sqlite.Function.create(conn, "WEBGEOCODEDISTANCE",WebGeocodeDistance)
-    org.sqlite.Function.create(conn, "METOLOCDST",MeToLocationDistance)
+    org.sqlite.Function.create(conn, "WEBGEOCODEDISTANCE", WebGeocodeDistance)
+    org.sqlite.Function.create(conn, "METOLOCDST", MeToLocationDistance)
+    org.sqlite.Function.create(conn, "RE_EXTRACT", ReExtract)
   }
   
   def getTableSchema(conn:java.sql.Connection, table: String): Option[Seq[(String, Type)]] =
@@ -547,3 +548,12 @@ class Max extends org.sqlite.Function.Aggregate {
   }
 }
 
+class ReExtract extends org.sqlite.Function {
+  @Override
+  def xFunc(): Unit = {
+    (value_string(0).r findFirstIn value_string(1)) match {
+      case Some(m) => result(m)
+      case None => result()
+    }
+  }
+}

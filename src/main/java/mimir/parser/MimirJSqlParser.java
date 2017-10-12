@@ -3807,14 +3807,14 @@ public class MimirJSqlParser implements MimirJSqlParserConstants {
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
     case S_IDENTIFIER:
       format = jj_consume_token(S_IDENTIFIER);
-                              load.setFormat(format.image);
       break;
     default:
       jj_la1[179] = jj_gen;
       ;
     }
     file = jj_consume_token(S_CHAR_LITERAL);
-                          load = new Load(StringValue.parseEscaped(file.image).getValue());
+      load = new Load(StringValue.parseEscaped(file.image).getValue());
+      if(format != null){ load.setFormat(format.image); }
     switch ((jj_ntk==-1)?jj_ntk():jj_ntk) {
     case K_AS:
       jj_consume_token(K_AS);
