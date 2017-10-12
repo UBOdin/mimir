@@ -1,6 +1,7 @@
 package mimir.sql.sqlite
 
 import mimir.algebra._
+import mimir.algebra.function.StringFunctions
 import mimir.provenance._
 import mimir.util.{JDBCUtils, HTTPUtils, JsonUtils}
 import com.typesafe.scalalogging.slf4j.LazyLogging
@@ -548,10 +549,10 @@ class Max extends org.sqlite.Function.Aggregate {
   }
 }
 
-class ReExtract extends org.sqlite.Function {
+object ReExtract extends org.sqlite.Function {
   @Override
   def xFunc(): Unit = {
-    (value_string(0).r findFirstIn value_string(1)) match {
+    StringFunctions.re_extract(value_text(0), value_text(1)) match {
       case Some(m) => result(m)
       case None => result()
     }

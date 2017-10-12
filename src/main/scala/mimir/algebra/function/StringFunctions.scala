@@ -19,7 +19,7 @@ object StringFunctions
 
     fr.register("RE_EXTRACT",
       (params: Seq[PrimitiveValue]) => {
-        (params(0).asString.r findFirstIn params(1).asString)
+        re_extract(params(0).asString, params(1).asString)
           .map { StringPrimitive(_) }
           .getOrElse { NullPrimitive() }
       },
@@ -28,5 +28,17 @@ object StringFunctions
         case _ => throw new RAException("RE_EXTRACT(needle, haystack)")
       }
     )
+  }
+
+  def re_extract(needle: String, haystack: String): Option[String] =
+  {
+    (needle.r findFirstMatchIn haystack) match {
+      case Some(m) => 
+        if(m.groupCount > 0){ Some(m.group(1)) }
+        else { Some(m.matched) }
+      case None => 
+        None
+    }
+
   }
 }

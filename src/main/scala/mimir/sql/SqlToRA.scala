@@ -511,7 +511,7 @@ class SqlToRA(db: Database)
         if(params.size() != 2){
           throw new SQLException(s"Invalid CAST: $cast")
         }
-        val target = convert(params(0))
+        val target = convert(params(0), bindings)
         val t = params(1) match {
           case s: StringValue => Type.fromString(s.toRawString)
           case c: Column => Type.fromString(c.getColumnName)
