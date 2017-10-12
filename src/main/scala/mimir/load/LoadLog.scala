@@ -16,7 +16,7 @@ object LoadLog
     metadata: Seq[(String,PrimitiveValue)] = Seq()
   ) {
     val source = 
-      Source.fromFile(sourceFile)
+      FileFormat.formatAwareSource(sourceFile)
 
     val fields = Seq(
       ("LINE", TInt()),

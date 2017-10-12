@@ -43,7 +43,7 @@
   <!--+++++++++++++++++++++++  Load  ++++++++++++++++++++++++-->
   <logger name="mimir.load.LoadCSV$"                               level="INFO"/> <!-- Use INFO to track stats -->
   <logger name="mimir.load.LoadLog$"                               level="WARN"/>
-  <logger name="mimir.load.FileFormat$"                            level="TRACE"/>
+  <logger name="mimir.load.FileFormat$"                            level="WARN"/>
 
   <!--+++++++++++++++++++++++  Models  ++++++++++++++++++++++++-->
   <logger name="mimir.models.ModelManager"                         level="WARN"/>
