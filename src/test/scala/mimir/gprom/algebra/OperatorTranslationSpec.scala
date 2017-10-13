@@ -31,7 +31,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
     update("INSERT INTO T (C, D) VALUES(3, 2)")
     update("INSERT INTO T (C, D) VALUES(4, 1)")
     
-    update("CREATE TABLE Q(E integer, F integer)")
+    update("CREATE TABLE Q(E varchar, F varchar)")
     update("INSERT INTO Q (E, F) VALUES(1, 4)")
     update("INSERT INTO Q (E, F) VALUES(2, 1)")
     update("INSERT INTO Q (E, F) VALUES(3, 2)")
@@ -52,8 +52,13 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
   "The GProM - Mimir Operator Translator" should {
     "Compile Determinism for Projections" >> {
       update("""
-          CREATE LENS CQ
+          CREATE LENS TIQ
             AS SELECT * FROM Q
+          WITH TYPE_INFERENCE(.7)
+        """);
+      update("""
+          CREATE LENS CQ
+            AS SELECT * FROM TIQ
           WITH COMMENT(COMMENT(F,'The values are uncertain'))
         """);
       val table = db.table("CQ")
@@ -62,7 +67,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
     }
     
     "Compile Determinism for Aggregates" >> {
-      val statements = db.parse("select sum(COMMENT_ARG_0) from CQ")
+      val statements = db.parse("select COUNT(COMMENT_ARG_0) from CQ")
       val testOper = db.sql.convert(statements.head.asInstanceOf[Select])
       val (oper, colDet, rowDet) = OperatorTranslation.compileTaintWithGProM(testOper) 
       colDet.toSeq.length must be equalTo 1

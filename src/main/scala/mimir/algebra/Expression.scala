@@ -387,7 +387,12 @@ case class IntPrimitive(v: Long)
   override def toString() = v.toString
   def asLong: Long = v;
   def asDouble: Double = v.toDouble;
-  def asBool: Boolean = throw new TypeException(TInt(), TBool(), "Hard Cast")
+  def asBool: Boolean = v match {
+    case  1 => true
+    case  0 => false 
+    case -1 => false
+    case  _ => throw new TypeException(TInt(), TBool(), "Hard Cast")
+  }
   def asDateTime: DateTime = throw new TypeException(TInt(), TDate(), "Hard Cast")
   def asString: String = v.toString;
   def asInterval: Period = throw new TypeException(TInt(), TInterval(), "Hard Cast")

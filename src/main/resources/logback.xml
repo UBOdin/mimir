@@ -11,9 +11,6 @@
   <logger name="mimir.views.ViewManager" level="ERROR"/>
   <logger name="mimir.Mimir$" level="ERROR"/>
   
-  <logger name="log4j.logger.org.apache.spark" level="ERROR"/>
-  <logger name="log4j.logger.Remoting" level="ERROR"/>
-  <logger name="log4j.logger.org.eclipse.jetty" level="ERROR"/>
   <logger name="mimir.util.PythonProcess$" level="ERROR"/>
   <logger name="mimir.plot.Plot$" level="WARN"/>
 

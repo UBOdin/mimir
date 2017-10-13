@@ -66,7 +66,7 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
                 setCache(1, args, hints, geocacheEntry._2)
                 geocacheEntry.productElement(idx).asInstanceOf[FloatPrimitive]                
             } catch {
-                case ioe: Exception =>  {
+                case ioe: Throwable =>  {
                   println(ioe.toString())
                   NullPrimitive()
                 }
@@ -105,7 +105,7 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = {
     hasFeedback(idx, args)
   }
-  def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq(TAny())
+  def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq()
    
   def reconnectToDatabase(db: Database) = { 
     this.db = db 

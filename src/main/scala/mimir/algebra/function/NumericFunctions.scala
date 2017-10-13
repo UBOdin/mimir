@@ -36,6 +36,13 @@ object NumericFunctions
     
     fr.register("AVG",(_) => ???, (_) => TInt())
     fr.register("STDDEV",(_) => ???, (_) => TFloat())
+    fr.register("min",
+        {
+          case ints:Seq[IntPrimitive] => IntPrimitive(ints.foldLeft(ints.head.v)( (init, intval) => Math.min(init, intval.v)))
+        }, (_) => TInt())
+    fr.register("max",{
+          case ints:Seq[IntPrimitive] => IntPrimitive(ints.foldLeft(ints.head.v)( (init, intval) => Math.max(init, intval.v)))
+        }, (_) => TInt())
     
     fr.register("ROUND",
       {

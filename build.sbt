@@ -41,7 +41,7 @@ runMimirVizier := {
   val args = sbt.complete.Parsers.spaceDelimited("[main args]").parsed
   val classpath = (fullClasspath in Compile).value
   val classpathString = Path.makeString(classpath map { _.data })
-  val debugTestJVMArgs = Seq()//Seq("-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005")
+  val debugTestJVMArgs = Seq("-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005")
   val jvmArgs = debugTestJVMArgs ++ Seq("-Xmx4g", "-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK")
   val (jh, os, bj, bd, jo, ci, ev) = (javaHome.value, outputStrategy.value, Vector[java.io.File](), 
 		Some(baseDirectory.value), (jvmArgs ++ Seq("-classpath", classpathString)).toVector, connectInput.value, sys.props.get("os.name") match {
@@ -144,6 +144,7 @@ libraryDependencies ++= Seq(
   "net.java.dev.jna"              %    "jna-platform"            % "4.2.2",
   "org.apache.logging.log4j" 	  %    "log4j-api" 				 % "2.8.2",
   "org.apache.logging.log4j" 	  %    "log4j-core" 			 % "2.8.2",
+  "org.apache.logging.log4j" 	  %%   "log4j-api-scala"         % "2.8.2",
   
   ///////////////////// Viztrails Integration ///////////////////
   

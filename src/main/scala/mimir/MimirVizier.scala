@@ -44,6 +44,7 @@ object MimirVizier extends LazyLogging {
   var pythonMimirCallListeners = Seq[PythonMimirCallInterface]()
 
   def main(args: Array[String]) {
+    Thread.currentThread().setUncaughtExceptionHandler(MimirVizierUncaughtExceptionHandler)
     conf = new MimirConfig(args);
 
     // Prepare experiments
@@ -55,7 +56,7 @@ object MimirVizier extends LazyLogging {
     }
     else {
       //Use GProM Backend
-      gp = new GProMBackend(conf.backend(), conf.dbname(), 1)
+      gp = new GProMBackend(conf.backend(), conf.dbname(), 2)
       db = new Database(gp)    
       db.backend.open()
       gp.metadataLookupPlugin.db = db;
@@ -86,6 +87,9 @@ object MimirVizier extends LazyLogging {
         }
     }
     
+    val res = vistrailsQueryMimir("SELECT * FROM LENS_PICKER1667259158", true, false)
+    println(res.csvStr +"\n" + res.colsDet.toSeq.map(_.mkString(",")).mkString("\n"))
+    
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
       runServerForViztrails()
       db.backend.close()
@@ -93,6 +97,21 @@ object MimirVizier extends LazyLogging {
     }
     
     
+  }
+  
+  object MimirVizierUncaughtExceptionHandler extends java.lang.Thread.UncaughtExceptionHandler {
+    override def uncaughtException(t:Thread , e:Throwable) {
+      val errorMessage = "Exception in Thread: " +t.getName +": " + e.toString()
+      LoggerFactory.getLogger(MimirVizier.getClass.getName) match {
+          case logger: Logger => {
+            logger.error(errorMessage);
+          }
+          case _ => {
+            println(errorMessage)
+          }
+        }
+      e.printStackTrace()
+    }
   }
   
   private var mainThread : Thread = null
@@ -520,24 +539,18 @@ object MimirVizier extends LazyLogging {
   }
   
  def operCSVResultsDeterminism(oper : mimir.algebra.Operator) : PythonCSVContainer =  {
-     val results = new Vector[Row]()
-     var cols : Seq[String] = null
-     var colsIndexes : Seq[Int] = null
-     
-     db.query(oper)( resIter => {
-         cols = resIter.schema.map(f => f._1)
-         colsIndexes = resIter.schema.zipWithIndex.map( _._2)
-         while(resIter.hasNext())
-           results.add(resIter.next)
+    db.query(oper)( resIter => {
+         val cols = resIter.schema.map(f => f._1)
+         val colsIndexes = resIter.schema.zipWithIndex.map( _._2)
+         val resCSV = resIter.toList.map(row => {
+           val truples = colsIndexes.map( (i) => {
+             (row(i).toString, row.isColDeterministic(i)) 
+           }).unzip
+           (truples._1.mkString(", "), truples._2.toArray, (row.isDeterministic(), row.provenance.asString))
+         }).unzip3
+         val rowDetAndProv = resCSV._3.unzip
+         new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), resCSV._2.toArray, rowDetAndProv._1.toArray, Array[Array[String]](), rowDetAndProv._2.toArray)
      })
-     val resCSV = results.toArray[Row](Array()).seq.map(row => {
-       val truples = colsIndexes.map( (i) => {
-         (row(i).toString, row.isColDeterministic(i)) 
-       }).unzip
-       (truples._1.mkString(", "), truples._2.toArray, (row.isDeterministic(), row.provenance.asString))
-     }).unzip3
-     val rowDetAndProv = resCSV._3.unzip
-     new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), resCSV._2.toArray, rowDetAndProv._1.toArray, Array[Array[String]](), rowDetAndProv._2.toArray)
   }
  
  def operCSVResultsDeterminismAndExplanation(oper : mimir.algebra.Operator) : PythonCSVContainer =  {

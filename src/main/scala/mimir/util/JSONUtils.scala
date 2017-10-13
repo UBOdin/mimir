@@ -24,12 +24,12 @@ object JsonUtils {
       case "" => return jv;
 
       case dotPrefix(arg) => {
-        val jo:JsObject = jv.as[JsObject]
+        val jo:JsObject = jv.asInstanceOf[JsObject]
         seekPath(jo.value(arg), path.substring(arg.length + 1))
       }
 
       case bracketPrefix(arg) => {
-        val ja:JsArray = jv.as[JsArray]
+        val ja:JsArray = jv.asInstanceOf[JsArray]
         seekPath(ja.value(Integer.parseInt(arg)), path.substring(arg.length + 2))
       }
 

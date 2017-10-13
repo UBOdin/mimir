@@ -8,6 +8,7 @@ import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.ml.PipelineModel
 import org.apache.spark.sql.types.{DataType, DoubleType, LongType, FloatType, BooleanType, IntegerType, StringType, StructField, StructType}
 import org.apache.spark.ml.feature.Imputer
+import mimir.util.ExperimentalOptions
 
 object SparkML {
   type SparkModel = PipelineModel
@@ -20,9 +21,17 @@ object SparkML {
 abstract class SparkML {
   def getSparkSession() : SparkContext = {
       val conf = new SparkConf().setMaster("local[*]").setAppName("MultiClassClassification")
+      if(ExperimentalOptions.isEnabled("GPROM-BACKEND")){
+        sys.props.get("os.name") match {
+    	  	case Some(osname) if osname.startsWith("Mac OS X") => conf.set("spark.executorEnv.DYLD_INSERT_LIBRARIES",System.getProperty("java.home")+"/lib/libjsig.dylib")
+    	  	case Some(otherosname) => conf.set("spark.executorEnv.LD_PRELOAD",System.getProperty("java.home")+"/lib/"+System.getProperty("os.arch")+"/libjsig.so")
+    	  	case None => println("No os name so no preload!")
+        }
+      }
       SparkML.sc match {
         case None => {
           val sparkCtx = new SparkContext(conf)
+          println(s"apache spark: ${sparkCtx.version}")
           SparkML.sc = Some(sparkCtx)
           sparkCtx
         }
