@@ -87,8 +87,10 @@ object MimirVizier extends LazyLogging {
         }
     }
     
-    val res = vistrailsQueryMimir("SELECT * FROM LENS_PICKER1667259158", true, false)
-    println(res.csvStr +"\n" + res.colsDet.toSeq.map(_.mkString(",")).mkString("\n"))
+    //loadCSV("test/data/pick.csv")
+    //createLens("PICK_RAW", Seq("PICK_FROM(A,B)"), "PICKER", false, false)
+    //val res = vistrailsQueryMimir("SELECT * FROM LENS_PICKER1667259158", true, false)
+    //println(res.csvStr +"\n" + res.colsDet.toSeq.map(_.mkString(",")).mkString("\n"))
     
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
       runServerForViztrails()
