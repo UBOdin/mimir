@@ -32,7 +32,7 @@ class AdaptiveSchemaManager(db: Database)
     val constructor = MultilensRegistry.multilenses(mlensType)
     val config = MultilensConfig(schema, query, args);
     if(mlensType == "DETECT_HEADER"){
-      val models1 = constructor.checkheader(db, config);
+      val models1 = constructor.initSchema(db, config);
     }
     else{
       var models = constructor.initSchema(db, config);

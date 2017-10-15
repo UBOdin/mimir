@@ -16,9 +16,9 @@ import scala.util._
 object MissingValueLens {
 
   def create(
-    db: Database, 
-    name: String, 
-    query: Operator, 
+    db: Database,
+    name: String,
+    query: Operator,
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
   {
@@ -35,18 +35,18 @@ object MissingValueLens {
 
     val modelsByType: Seq[(String, Seq[(String, (Model, Int, Seq[Expression]))])] =
       ModelRegistry.imputations.toSeq.map {
-        case ( 
-          modelCategory: String, 
+        case (
+          modelCategory: String,
           constructor: ModelRegistry.ImputationConstructor
         ) => {
-          val modelsByTypeAndColumn: Seq[(String, (Model, Int, Seq[Expression]))] = 
+          val modelsByTypeAndColumn: Seq[(String, (Model, Int, Seq[Expression]))] =
             constructor(
-              db, 
-              s"$name:$modelCategory", 
-              targetColumns, 
+              db,
+              s"$name:$modelCategory",
+              targetColumns,
               query
             ).toSeq
-          
+
           (modelCategory, modelsByTypeAndColumn)
         }
       }
@@ -54,26 +54,26 @@ object MissingValueLens {
     val (
       candidateModels: Map[String,Seq[(String,Int,Seq[Expression],String)]],
       modelEntities: Seq[Model]
-    ) = 
+    ) =
       LensUtils.extractModelsByColumn(modelsByType)
 
     // Sanity check...
     targetColumns.foreach( target => {
-      if(!candidateModels.contains(target)){ 
+      if(!candidateModels.contains(target)){
         throw new SQLException("No valid imputation model for column '"+target+"' in lens '"+name+"'");
       }
     })
 
     val (
-      replacementExprsList: Seq[(String,Expression)], 
+      replacementExprsList: Seq[(String,Expression)],
       metaModels: Seq[Model]
     ) =
       candidateModels.
-        map({ 
+        map({
           case (column, models) => {
             //TODO: Replace Default Model
             val metaModel = new DefaultMetaModel(
-                s"$name:META:$column", 
+                s"$name:META:$column",
                 s"picking a value for column '$column'",
                 models.map(_._4)
               )
@@ -88,11 +88,12 @@ object MissingValueLens {
         unzip
 
     val replacementExprs = replacementExprsList.toMap
-    val projectArgs = 
+    println(replacementExprs)
+    val projectArgs =
       query.columnNames.
         map( col => replacementExprs.get(col) match {
           case None => ProjectArg(col, Var(col))
-          case Some(replacementExpr) => 
+          case Some(replacementExpr) =>
             ProjectArg(col,
               Conditional(
                 IsNullExpression(Var(col)),
@@ -108,4 +109,3 @@ object MissingValueLens {
   }
 
 }
-

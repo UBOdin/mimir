@@ -17,8 +17,8 @@ object CheckHeader
   def checkheader(db: Database, config: MultilensConfig): Boolean = {
     val col = config.query.expressions(0);
     val tablename = col.toString.split("_")(0);
-    val detectmodel = new DetectHeaderModel();
-    var detect = detectmodel.detect_header(db,config.query);
+    //val detectmodel = new DetectHeaderModel();
+    //var detect = detectmodel.detect_header(db,config.query);
     //var detect  = detect_header(db, config.query);
     var len = 0;
     var arrs : Seq[mimir.algebra.PrimitiveValue] = null
@@ -48,100 +48,61 @@ object CheckHeader
     //Project(str,config.query);
     query = "CREATE VIEW "+ config.schema +" AS SELECT " +str +" from "+ tablename+"_RAW limit 1,1000000000000"
     db.backend.update(query);
-    return detect;
+    return false;
   }
 
 
 
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model] =
   {
-    logger.debug(s"Creating DiscalaAbadiNormalizer: $config")
+    val col = config.query.expressions(0);
+    val tablename = col.toString.split("_")(0);
+    var view_name = "";
+    val detectmodel = new DetectHeaderModel(
+      config.schema,
+      view_name
+    );
+    detectmodel.detect_header(db,config.query);
+    //var detect  = detect_header(db, config.query);
+    var len = 0;
+    var arrs : Seq[mimir.algebra.PrimitiveValue] = null
+    var str=""
+    db.query(Limit(0,Some(1),config.query))(_.foreach{result =>
+      arrs =  result.tuple
+    })
+    len = arrs.length
+    var projectArgs =
+      config.query.columnNames.
+        map( col => ProjectArg(col, Var(col)))
+    println(projectArgs)
+    var repl : Seq[String] = null
+    for(i<- 0 until len){
+      val res = arrs(i)
+      var ch =  res.toString()(0)
+      if(ch.toByte >= '0' && ch.toByte <= '9'){
+        str ++= s"""COLUMN_$i AS COL_$i ,""";
+      }
+      else{
+        repl+:res.toString()
 
-    logger.debug("Creating FD Graph")
-      val fd = new FuncDep()
-      fd.buildEntities(db, config.query, config.schema)
+        //projectArgs+=ProjectArg("COLUMN_$i", Var(res.toString()))
+        str ++= s"""COLUMN_$i AS $res ,""";
+      }
+    }
+projectArgs = config.query.columnNames.map( col => ProjectArg(col, repl))
+    //projectArgs +=1
+println(projectArgs)
+    var query = ""
 
-    logger.debug("Dumping Base Schema")
-      val schTable = s"MIMIR_DA_SCH_${config.schema}"
-      val fullSchema = Seq((("ROOT", TRowId()), -1)) ++ fd.sch.zipWithIndex
-
-      db.backend.update(s"""
-        CREATE TABLE $schTable (ATTR_NAME string, ATTR_NODE int, ATTR_TYPE string);
-      """)
-      db.backend.fastUpdateBatch(s"""
-        INSERT INTO $schTable (ATTR_NAME, ATTR_NODE, ATTR_TYPE) VALUES (?, ?, ?);
-      """,
-        fullSchema.map { case ((attr, t), idx) =>
-          Seq(StringPrimitive(attr), IntPrimitive(idx), TypePrimitive(t))
-        }
-      )
-
-    logger.debug("Dumping FD Graph")
-      val fdTable = s"MIMIR_DA_FDG_${config.schema}"
-      db.backend.update(s"""
-        CREATE TABLE $fdTable (MIMIR_FD_PARENT int, MIMIR_FD_CHILD int, MIMIR_FD_PATH_LENGTH int);
-      """)
-      db.backend.fastUpdateBatch(s"""
-        INSERT INTO $fdTable (MIMIR_FD_PARENT, MIMIR_FD_CHILD, MIMIR_FD_PATH_LENGTH) VALUES (?, ?, ?);
-      """,
-        // Add the basic edges
-        fd.fdGraph.getEdges.asScala.map { case (edgeParent, edgeChild) =>
-          Seq(
-            IntPrimitive(edgeParent),
-            IntPrimitive(edgeChild),
-            if(fd.parentTable.getOrElse(edgeParent, Set[Int]()) contains edgeChild){ IntPrimitive(2) }
-              else { IntPrimitive(1) }
-          )
-        } ++
-        // And add in each blacklisted node as an edge off of the root
-        (
-          (0 until fd.sch.size).toSet[Int] -- fd.nodeTable.asScala.map(_.toInt).toSet
-        ).map { col =>
-          Seq(
-            IntPrimitive(-1),
-            IntPrimitive(col),
-            IntPrimitive(2)
-          )
-        }
-      )
-
-    val groupingModel =
-      new DAFDRepairModel(
-        s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_FD_PARENT",
-        config.schema,
-        db.table(fdTable),
-        Seq(("MIMIR_FD_CHILD", TInt())),
-        "MIMIR_FD_PARENT",
-        TInt(),
-        Some("MIMIR_FD_PATH_LENGTH"),
-        fullSchema.map { x => (x._2.toLong -> x._1._1) }.toMap
-      )
-    groupingModel.reconnectToDatabase(db)
-    val schemaLookup =
-      fullSchema.map( x => (x._2 -> x._1) ).toMap
-
-    // for every possible parent/child relationship except for ROOT
-    val parentKeyRepairs =
-      fd.fdGraph.getEdges.asScala.
-        filter( _._1 != -1 ).
-        map { case (edgeParent, edgeChild) =>
-          val (parent, parentType) = schemaLookup(edgeParent)
-          val (child, childType) = schemaLookup(edgeChild)
-          val model =
-            new RepairKeyModel(
-              s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_NORM:$parent:$child",
-              s"$child in $parent",
-              config.query,
-              Seq((parent, parentType)),
-              child,
-              childType,
-              None
-            )
-          groupingModel.reconnectToDatabase(db)
-          logger.trace(s"INSTALLING: $parent -> $child: ${model.name}")
-          model
-        }
-    return Seq(groupingModel)++parentKeyRepairs
+    str = str.slice(0,(str.length()-2));
+    str = str.replaceAll("\\'","");
+    //ProjectArg(str,str.toExpression);
+    //Project(str,config.query);
+    query = "CREATE VIEW "+ detectmodel.view_name +" AS SELECT " +str +" from "+ tablename+"_RAW limit 1,1000000000000"
+    println(query)
+    db.backend.update(query);
+    var ret : TraversableOnce[Model] = null
+    return ret
   }
 
   final def spanningTreeLens(db: Database, config: MultilensConfig): Operator =
@@ -273,10 +234,14 @@ object CheckHeader
     }
   }
 }
-
-class DetectHeaderModel
+@SerialVersionUID(1001L)
+class DetectHeaderModel(
+  name: String,
+  var view_name: String
+)
 {
-  def detect_header(db: Database, query: Operator): Boolean = {
+  def detect_header(db: Database, query: Operator): Unit = {
+    var detect = false;
     var header : Seq[mimir.algebra.PrimitiveValue] = null;
     var arrs : Seq[Seq[mimir.algebra.PrimitiveValue]] = Seq.empty[Seq[mimir.algebra.PrimitiveValue]];
     db.query(Limit(0,Some(1),query))(_.foreach{result =>
@@ -320,7 +285,7 @@ class DetectHeaderModel
       }
     }
     if (flag == 0){
-      return false;
+      detect =  false;
     }
     var hasHeader = 0
     for (c<-columnType.keySet){
@@ -339,10 +304,15 @@ class DetectHeaderModel
             hasHeader = hasHeader+1
           }else{
             hasHeader=hasHeader - 1;
-            return false;
+            detect =  false;
           }
         }
       }
-    return hasHeader > 0
+    detect = hasHeader > 0
+    if(detect ==true){
+      view_name = name+"_HEADER"
+    }else{
+      view_name = name+"_HEADER_CORRECTION"
+    }
   }
 }
