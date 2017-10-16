@@ -3,58 +3,24 @@ package mimir.adaptive
 import java.io._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 
 import mimir.Database
 import mimir.algebra._
 import mimir.lenses._
 import mimir.models._
+import mimir.views._
 import mimir.statistics.FuncDep
 
 object CheckHeader
   extends Multilens
   with LazyLogging
 {
-  def checkheader(db: Database, config: MultilensConfig): Boolean = {
-    val col = config.query.expressions(0);
-    val tablename = col.toString.split("_")(0);
-    //val detectmodel = new DetectHeaderModel();
-    //var detect = detectmodel.detect_header(db,config.query);
-    //var detect  = detect_header(db, config.query);
-    var len = 0;
-    var arrs : Seq[mimir.algebra.PrimitiveValue] = null
-
-    var str=""
-    db.query(Limit(0,Some(1),config.query))(_.foreach{result =>
-      arrs =  result.tuple
-    })
-    len = arrs.length
-
-    for(i<- 0 until len){
-      val res = arrs(i)
-      var ch =  res.toString()(0)
-      if(ch.toByte >= '0' && ch.toByte <= '9'){
-        str ++= s"""COLUMN_$i AS COL_$i ,""";
-      }
-      else{
-        str ++= s"""COLUMN_$i AS $res ,""";
-      }
-    }
-
-    var query = ""
-
-    str = str.slice(0,(str.length()-2));
-    str = str.replaceAll("\\'","");
-    //ProjectArg(str,str.toExpression);
-    //Project(str,config.query);
-    query = "CREATE VIEW "+ config.schema +" AS SELECT " +str +" from "+ tablename+"_RAW limit 1,1000000000000"
-    db.backend.update(query);
-    return false;
-  }
-
-
 
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model] =
   {
+    val views  = new mimir.views.ViewManager(db);
+    val lenses = new mimir.lenses.LensManager(db);
     val col = config.query.expressions(0);
     val tablename = col.toString.split("_")(0);
     var view_name = "";
@@ -74,35 +40,31 @@ object CheckHeader
     var projectArgs =
       config.query.columnNames.
         map( col => ProjectArg(col, Var(col)))
-    println(projectArgs)
-    var repl : Seq[String] = null
+    var repl = new ListBuffer[String]()
     for(i<- 0 until len){
-      val res = arrs(i)
+      var res = arrs(i).toString()
+      res = res.replaceAll("\\'","");
       var ch =  res.toString()(0)
-      if(ch.toByte >= '0' && ch.toByte <= '9'){
-        str ++= s"""COLUMN_$i AS COL_$i ,""";
-      }
-      else{
-        repl+:res.toString()
 
-        //projectArgs+=ProjectArg("COLUMN_$i", Var(res.toString()))
-        str ++= s"""COLUMN_$i AS $res ,""";
+      if(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z'){
+        repl += res.toString()
       }
     }
-projectArgs = config.query.columnNames.map( col => ProjectArg(col, repl))
-    //projectArgs +=1
-println(projectArgs)
-    var query = ""
+    if(repl.size>0){
+      var querymapping = config.query.columnNames zip (repl)
+      projectArgs = querymapping.map{
+        case (a,b) => ProjectArg(b,Var(a))
+      }
+    }
 
-    str = str.slice(0,(str.length()-2));
-    str = str.replaceAll("\\'","");
-    //ProjectArg(str,str.toExpression);
-    //Project(str,config.query);
-    query = "CREATE VIEW "+ detectmodel.view_name +" AS SELECT " +str +" from "+ tablename+"_RAW limit 1,1000000000000"
-    println(query)
-    db.backend.update(query);
+    views.create(detectmodel.view_name+"_RAW", Limit(1,Some(1000000000),Project(projectArgs,config.query)));
+
+    val oper = db.table(detectmodel.view_name+"_RAW")
+    val l = List(new FloatPrimitive(.5))
+    lenses.create("TYPE_INFERENCE", detectmodel.view_name.toUpperCase, oper, l)
+
     var ret : TraversableOnce[Model] = null
-    return ret
+    return Seq(detectmodel)
   }
 
   final def spanningTreeLens(db: Database, config: MultilensConfig): Operator =
@@ -231,88 +193,6 @@ println(projectArgs)
           )
         )
       }
-    }
-  }
-}
-@SerialVersionUID(1001L)
-class DetectHeaderModel(
-  name: String,
-  var view_name: String
-)
-{
-  def detect_header(db: Database, query: Operator): Unit = {
-    var detect = false;
-    var header : Seq[mimir.algebra.PrimitiveValue] = null;
-    var arrs : Seq[Seq[mimir.algebra.PrimitiveValue]] = Seq.empty[Seq[mimir.algebra.PrimitiveValue]];
-    db.query(Limit(0,Some(1),query))(_.foreach{result =>
-      header =  result.tuple
-    })
-    db.query(Limit(1,Some(5),query))(_.foreach{result =>
-      arrs:+= result.tuple
-    })
-    val sample  = arrs.iterator
-    val columnLength = header.size;
-    var columnType =  scala.collection.mutable.Map[Int, String]()
-    for(i <- 0 until columnLength ){
-      columnType+= (i -> null)
-    }
-
-    var flag = 0;
-    while(sample.hasNext){
-      flag = 1;
-      val row = sample.next
-
-      for (col <- columnType.keySet){
-        if(row(col) != NullPrimitive()){
-          var i  = Cast.apply(TFloat(),row(col))
-          if(i==NullPrimitive()){
-            i = Cast.apply(TDate(),row(col))
-          }
-          if(i != NullPrimitive()){
-            if(columnType(col) != "true"){
-              if(columnType(col) == null){
-                columnType(col) = "true"
-              }
-              else{
-                columnType -= col
-              }
-            }
-          }
-          else{
-              columnType(col)  = (row(col).toString().length()-2).toString();
-          }
-        }
-      }
-    }
-    if (flag == 0){
-      detect =  false;
-    }
-    var hasHeader = 0
-    for (c<-columnType.keySet){
-      if(columnType(c)!="true"){
-        if (header(c).toString.length()-2 == columnType(c).toInt) {
-            hasHeader=hasHeader-1;
-        } else {
-            hasHeader=hasHeader+1;
-        }
-      }else {
-          var i  = Cast.apply(TFloat(),header(c))
-          if(i==NullPrimitive()){
-            i = Cast.apply(TDate(),header(c))
-          }
-          if( i == NullPrimitive()){
-            hasHeader = hasHeader+1
-          }else{
-            hasHeader=hasHeader - 1;
-            detect =  false;
-          }
-        }
-      }
-    detect = hasHeader > 0
-    if(detect ==true){
-      view_name = name+"_HEADER"
-    }else{
-      view_name = name+"_HEADER_CORRECTION"
     }
   }
 }
