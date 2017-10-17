@@ -16,7 +16,7 @@ object CheckHeader
   extends Multilens
   with LazyLogging
 {
-
+  var viewName = ""
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model] =
   {
     val views  = new mimir.views.ViewManager(db);
@@ -56,22 +56,24 @@ object CheckHeader
         case (a,b) => ProjectArg(b,Var(a))
       }
     }
-
+    viewName= detectmodel.view_name
+    println(viewName)
     views.create(detectmodel.view_name+"_RAW", Limit(1,Some(1000000000),Project(projectArgs,config.query)));
 
     val oper = db.table(detectmodel.view_name+"_RAW")
     val l = List(new FloatPrimitive(.5))
     lenses.create("TYPE_INFERENCE", detectmodel.view_name.toUpperCase, oper, l)
 
-    var ret : TraversableOnce[Model] = null
+    
     return Seq(detectmodel)
   }
 
   final def spanningTreeLens(db: Database, config: MultilensConfig): Operator =
   {
-    val model = db.models.get(s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_FD_PARENT")
+
+    val model = db.models.get(config.schema)
     RepairKeyLens.assemble(
-      db.table(s"MIMIR_DA_FDG_${config.schema}"),
+      db.table(viewName),
       Seq("MIMIR_FD_CHILD"),
       Seq(("MIMIR_FD_PARENT", model)),
       Some("MIMIR_FD_PATH_LENGTH")
@@ -99,7 +101,7 @@ object CheckHeader
       },
       Select(Comparison(Cmp.Eq, Var(nodeCol), Var("ATTR_NODE")),
         Join(
-          db.table(s"MIMIR_DA_SCH_${config.schema}"),
+          db.table(viewName),
           query
         )
       )
@@ -181,7 +183,7 @@ object CheckHeader
           map { attr =>
             (
               attr,
-              db.models.get(s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_NORM:$table:$attr")
+              db.models.get(config.schema)
             )
           }
         Some(
