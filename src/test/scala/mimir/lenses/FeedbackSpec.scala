@@ -70,7 +70,7 @@ object FeedbackSpec
   "The Weka Model" should {
 
     "Support direct feedback" >> {
-      val model = db.models.get("MV:SPARK:B")
+      val model = db.models.get("MV:SPARKML:B")
       val nullRow = querySingleton("SELECT ROWID() FROM R WHERE B IS NULL")
 
       model.bestGuess(0, List(nullRow), List()) must not be equalTo(50)
@@ -80,7 +80,7 @@ object FeedbackSpec
     }
 
     "Support SQL feedback" >> {
-      val model = db.models.get("MV:SPARK:C")
+      val model = db.models.get("MV:SPARKML:C")
       val nullRow = querySingleton("SELECT ROWID() FROM R WHERE C IS NULL")
 
       val originalGuess = model.bestGuess(0, List(nullRow), List()).asLong
@@ -89,7 +89,7 @@ object FeedbackSpec
       """) must be equalTo(IntPrimitive(originalGuess))
       originalGuess must not be equalTo(800)
 
-      update(s"FEEDBACK MV:SPARK:C 0 ($nullRow) IS 800")
+      update(s"FEEDBACK MV:SPARKML:C 0 ($nullRow) IS 800")
       querySingleton(s"""
         SELECT C FROM MV WHERE ROWID() = ROWID($nullRow)
       """) must be equalTo(IntPrimitive(800))

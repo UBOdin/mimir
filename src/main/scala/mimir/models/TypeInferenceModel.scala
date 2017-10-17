@@ -19,7 +19,7 @@ object TypeInferenceModel
     case TBool()      => 10
     case TDate()      => 10
     case TTimestamp() => 10
-    case TInterval() => 10
+    case TInterval()  => 10
     case TType()      => 10
     case TFloat()     => 5
     case TString()    => 0
@@ -58,7 +58,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
 
   def train(db: Database, query: Operator) =
   {
-    TimeUtils.monitor(s"Train $name", TypeInferenceModel.logger.info(_)){
+    Timer.monitor(s"Train $name", TypeInferenceModel.logger.info(_)){
       db.query(
         Limit(0, Some(sampleLimit), Project(
           columns.map( c => ProjectArg(c, Var(c)) ),
@@ -148,4 +148,13 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
     votes(idx).toList.map( x => (TypePrimitive(x._1), x._2)) ++ Seq( (TypePrimitive(TString()), defaultFrac) )
 
+  def isPerfectGuess(idx: Int): Boolean =
+  {
+    voteList(idx).map( _._2 ).max >= totalVotes(idx)
+  }
+
+  override def isAcknowledged(idx: Int, args: Seq[PrimitiveValue]): Boolean =
+  {
+    super.isAcknowledged(idx, args) || isPerfectGuess(idx)
+  }
 }

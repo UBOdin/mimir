@@ -9,7 +9,7 @@
   
   <!--+++++++++++++++++++++  Mimir Root  ++++++++++++++++++++++-->
   <logger name="mimir.Database"                                    level="WARN"/>
-  <logger name="mimir.Mimir$"                                      level="WARN"/>
+  <logger name="mimir.Mimir$"                                      level="TRACE"/>
 
   <!--++++++++++++++++++  Adaptive Schemas  +++++++++++++++++++-->
   <logger name="mimir.adaptive.DiscalaAbadiNormalizer$"            level="WARN"/>
@@ -23,6 +23,7 @@
   <!--+++++++++++++++++++++++  CTables  +++++++++++++++++++++++-->
   <logger name="mimir.ctables.CTPercolator"                        level="WARN"/>
   <logger name="mimir.ctables.CTExplainer"                         level="WARN"/>
+  <logger name="mimir.ctables.ReasonSet$"                          level="WARN"/>
 
   <!--++++++++++++++++++++++++  Exec  +++++++++++++++++++++++++-->
   <logger name="mimir.exec.Compiler"                               level="WARN"/>
@@ -44,12 +45,14 @@
   <logger name="mimir.models.EditDistanceMatchModel"               level="INFO"/> <!-- Use INFO to track stats -->
   <logger name="mimir.models.TypeInferenceModel"                   level="INFO"/> <!-- Use INFO to track stats -->
   <logger name="mimir.models.WekaModel$"                           level="INFO"/> <!-- Use INFO to track stats -->
+  <logger name="mimir.models.SeriesMissingValueModel"              level="WARN"/>
 
   <!--+++++++++++++++++++++  Optimizer  +++++++++++++++++++++++-->
   <logger name="mimir.optimizer.Optimizer$"                        level="WARN"/>
   <logger name="mimir.optimizer.operator.PropagateConditions$"     level="WARN"/>
   <logger name="mimir.optimizer.operator.PartitionUncertainJoins$" level="WARN"/>
   <logger name="mimir.optimizer.operator.InlineProjections$"       level="WARN"/>
+  <logger name="mimir.optimizer.operator.PullUpUnions"             level="WARN"/>
 
   <!--+++++++++++++++++++++++  PLOT  ++++++++++++++++++++++++++-->
   <logger name="mimir.plot.Plot$"                                  level="WARN"/>

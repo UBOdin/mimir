@@ -99,6 +99,7 @@ import mimir.sql.AlterViewMaterialize;
 import mimir.sql.ProvenanceStatement;
 import mimir.sql.DrawPlot;
 import mimir.sql.CastOperation;
+import mimir.sql.DirectQuery;
 import net.sf.jsqlparser.statement.create.table.Index;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.drop.Drop;
@@ -146,6 +147,7 @@ SKIP:
 TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 {
     <K_AS:"AS">
+|   <K_DIRECT:"DIRECT">
 |   <K_UNCERTAIN:"UNCERTAIN">
 |   <K_ANALYZE:"ANALYZE">
 |   <K_EXPLAIN:"EXPLAIN">
@@ -298,6 +300,8 @@ Statement Statement() :
     stm = Alter()
     |
     stm = Plot()
+    | 
+    stm = DirectQuery()
     )
     (";" | <EOF>)    
     { return stm; }
@@ -389,10 +393,12 @@ Analyze Analyze():
 		SelectBody selectBody = null;
 		String col = null;
     PrimitiveValue rowid = null;
+    DrawPlot plot = null;
+    FromItem from = null;
 	}
 {
 	<K_ANALYZE> 
-  [ 
+  [ LOOKAHEAD(4)
     [
       col = RelObjectName() 
       <K_OF>
@@ -400,7 +406,20 @@ Analyze Analyze():
     rowid = Literal()
     <K_IN>
   ]
-  selectBody = SelectBody()
+  ( 
+      ( selectBody = SelectBody() )
+    | ( ( 
+          plot = Plot() { from = plot.getSource(); }
+        ) | ( 
+          from = Table() 
+        ) 
+      ) {
+        PlainSelect ps = new PlainSelect();
+        ps.setFromItem(from);
+        ps.setSelectItems(Arrays.asList(new AllColumns()));
+        selectBody = ps;
+      }
+  )
 	{ 
     return new Analyze(selectBody, rowid, col);
   }
@@ -702,7 +721,7 @@ PlainSelect PlainSelect():
 	PlainSelect plainSelect = new PlainSelect(); 
 	List selectItems = null;
 	FromItem fromItem = null;
-	List joins = null;
+	List joins = new ArrayList();
 	List distinctOn = null;
 	Expression where = null;
 	List orderByElements;
@@ -731,9 +750,8 @@ PlainSelect PlainSelect():
     
      // TODO
     [IntoClause()]
-    <K_FROM>
-    fromItem=FromItem()
-    joins=JoinsList()
+    
+    [ LOOKAHEAD(FromClause()) fromItem=FromClause() joins=JoinsList() ]
     [ where=WhereClause() { plainSelect.setWhere(where); }]
     [ groupByColumnReferences=GroupByColumnReferences() { plainSelect.setGroupByColumnReferences(groupByColumnReferences); }]
     [ having=Having() { plainSelect.setHaving(having); }]
@@ -876,6 +894,14 @@ void IntoClause():
 {}
 {
    <K_INTO> Table() ("," Table())*
+}
+
+FromItem FromClause():
+{
+  FromItem fromItem = null;
+}
+{
+  <K_FROM> fromItem = FromItem() { return fromItem; }
 }
 
 FromItem FromItem():
@@ -1625,6 +1651,8 @@ PrimitiveValue Literal():
 
   |   "{ts" token=<S_CHAR_LITERAL> "}" { retval = new TimestampValue(token.image); }
 
+  | <K_NULL> { retval = new NullValue(); }
+
   ) { return retval; }
 
 }
@@ -2131,4 +2159,12 @@ DrawPlot.LineSpec PlotLineSpec():
     return spec;
   }
 
+}
+
+Statement DirectQuery():
+{
+  Statement stmt;
+}
+{
+  <K_DIRECT> "(" stmt = Statement() ")" { return new DirectQuery(stmt); }
 }

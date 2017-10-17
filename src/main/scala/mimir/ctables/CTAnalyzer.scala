@@ -41,34 +41,48 @@ object CTAnalyzer {
         } else {
           ExpressionUtils.makeAnd(
             recur(condition), 
-            Conditional(condition, recur(thenClause), recur(elseClause))
+            Conditional(condition, thenDeterministic, elseDeterministic)
           )
         }
       }
 
-      case Arithmetic(Arith.And, l, r) =>
-        ExpressionUtils.makeOr(
+      case Arithmetic(Arith.And, l, r) => {
+        val lDeterministic = recur(l)
+        val rDeterministic = recur(r)
+        ExpressionUtils.makeOr(Seq(
           ExpressionUtils.makeAnd(
-            recur(l),
+            lDeterministic,
             ExpressionUtils.makeNot(l)
           ),
           ExpressionUtils.makeAnd(
-            recur(r),
+            rDeterministic,
             ExpressionUtils.makeNot(r)
-          )
-        )
-      
-      case Arithmetic(Arith.Or, l, r) =>
-        ExpressionUtils.makeOr(
+          ),
           ExpressionUtils.makeAnd(
-            recur(l),
+            lDeterministic,
+            rDeterministic
+          )
+        ))
+      }
+      
+      case Arithmetic(Arith.Or, l, r) => {
+        val lDeterministic = recur(l)
+        val rDeterministic = recur(r)
+        ExpressionUtils.makeOr(Seq(
+          ExpressionUtils.makeAnd(
+            lDeterministic,
             l
           ),
           ExpressionUtils.makeAnd(
-            recur(r),
+            rDeterministic,
             r
+          ),
+          ExpressionUtils.makeAnd(
+            lDeterministic,
+            rDeterministic
           )
-        )
+        ))
+      }
 
       case v: VGTerm =>
         if(v.args.isEmpty){
@@ -107,12 +121,15 @@ object CTAnalyzer {
 
         val conditionCausality = compileCausality(condition, inputCondition)
 
-        val thenElseCondition = 
+        val thenCondition = 
           ExpressionUtils.makeAnd(inputCondition, condition)
+
+        val elseCondition =
+          ExpressionUtils.makeAnd(inputCondition, ExpressionUtils.makeNot(condition))
           
         conditionCausality ++ 
-          compileCausality(thenClause, thenElseCondition) ++
-          compileCausality(elseClause, ExpressionUtils.makeNot(thenElseCondition))
+          compileCausality(thenClause, thenCondition) ++
+          compileCausality(elseClause, elseCondition)
       }
       //TODO: We should come up with a more complete way to compile causality
       //        for And and Or

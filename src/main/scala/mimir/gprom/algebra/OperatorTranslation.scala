@@ -1263,6 +1263,9 @@ object OperatorTranslation {
 			case EmptyTable(sch)=> {
 			   throw new Exception("Operator Translation not implemented '"+mimirOperator+"'")
 			}
+      case SingletonTable(tuple)=> {
+         throw new Exception("Operator Translation not implemented '"+mimirOperator+"'")
+      }
 			case Sort(sortCols, src) => {
 			  val schTable = getSchemaForGProM(mimirOperator)
         val toQoScm = translateMimirSchemaToGProMSchema("ORDER", schTable)

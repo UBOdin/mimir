@@ -7,7 +7,7 @@ import com.typesafe.scalalogging.slf4j.Logger
 
 import mimir.algebra._
 import mimir.ctables._
-import mimir.util.{RandUtils,TextUtils,TimeUtils}
+import mimir.util.{RandUtils,TextUtils,Timer}
 import mimir.{Analysis, Database}
 
 import mimir.models._
@@ -82,7 +82,7 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
   {
     this.db = db
     sparkMLInstanceType = guessSparkModelType(guessInputType) 
-    TimeUtils.monitor(s"Train $name.$colName", WekaModel.logger.info(_)){
+    Timer.monitor(s"Train $name.$colName", WekaModel.logger.info(_)){
       val trainingQuery = Limit(0, Some(SparkClassifierModel.TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)), Project(Seq(ProjectArg(colName, Var(colName))), query)))
       learner = Some(sparkMLModelGenerator(ModelParams(trainingQuery, db, colName)))
     }
