@@ -44,18 +44,18 @@ trait OperatorConstructors
   def mapImpl(cols: Seq[(String, Expression)], noInline:Boolean = false): Operator =
   {
     val (oldProjections, strippedOperator) =
-      if(noInline) {
+      if(noInline) { 
         (toOperator.columnNames.map { x => ProjectArg(x, Var(x)) }, toOperator)
       } else {
         OperatorUtils.extractProjections(toOperator)
       }
-    val lookupMap: Map[String,Expression] =
+    val lookupMap: Map[String,Expression] = 
       oldProjections
         .map { _.toBinding }
         .toMap
 
     Project(
-      cols.map { case (col, expr) =>
+      cols.map { case (col, expr) => 
         ProjectArg(col, Eval.inline(expr, lookupMap))
       },
       strippedOperator
@@ -65,8 +65,8 @@ trait OperatorConstructors
   def rename(targets: (String, String)*): Operator =
   {
     val renamings = targets.toMap
-    map(toOperator.columnNames.map {
-      case name if targets contains name => (name, Var(renamings(name)))
+    map(toOperator.columnNames.map { 
+      case name if targets contains name => (name, Var(renamings(name))) 
       case name => (name, Var(name))
     }:_*)
   }
@@ -104,8 +104,8 @@ trait OperatorConstructors
   def count(distinct: Boolean = false, alias: String = "COUNT"): Operator =
   {
     Aggregate(
-      Seq(),
-      Seq(AggFunction("COUNT", distinct, Seq(), alias)),
+      Seq(), 
+      Seq(AggFunction("COUNT", distinct, Seq(), alias)), 
       toOperator
     )
   }
