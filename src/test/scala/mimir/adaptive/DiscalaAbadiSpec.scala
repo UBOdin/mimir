@@ -130,6 +130,12 @@ object DiscalaAbadiSpec
       }
     }
 
+    "Start off with no feedback" >> {
+      db.models
+        .get("MIMIR_DA_CHOSEN_SHIPPING:MIMIR_FD_PARENT")
+        .isAcknowledged(0, Seq(StringPrimitive("FOREIGN_DESTINATION"))) must beFalse
+    }
+
     "Allow native SQL queries over the catalog tables" >> {
       LoggerUtils.debug(
         // "mimir.exec.Compiler"
@@ -156,7 +162,8 @@ object DiscalaAbadiSpec
       }
 
       LoggerUtils.debug(
-        // "mimir.exec.Compiler"
+        // "mimir.exec.Compiler",
+        // "mimir.exec.mode.BestGuess$"
       ) {
         query("""
           SELECT ATTR_NAME FROM MIMIR_SYS_ATTRS
