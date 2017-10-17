@@ -6,16 +6,16 @@ import mimir.views.ViewAnnotation
 /**
  * Abstract parent class of all relational algebra operators
  */
-sealed abstract class Operator
+sealed abstract class Operator 
   extends Serializable
   with OperatorConstructors
-{
+{ 
   /**
    * Convert the operator into a string.  Because operators are
-   * nested recursively, and can span multiple lines, Every line
+   * nested recursively, and can span multiple lines, Every line 
    * of output should be prefixed with the specified string.
    */
-  def toString(prefix: String): String;
+  def toString(prefix: String): String; 
   /**
    * The starting point for stringification is to have no indentation
    */
@@ -23,7 +23,7 @@ sealed abstract class Operator
 
   /**
    * Return Self.
-   *
+   * 
    * This mainly exists in support of OperatorConstructors
    */
   def toOperator = this
@@ -33,14 +33,14 @@ sealed abstract class Operator
    */
   def children: Seq[Operator];
   /**
-   * Return a new instance of the same object, but with the
+   * Return a new instance of the same object, but with the 
    * children replaced with the provided list.  The list must
    * be of the same size returned by children.  This is mostly
    * to facilitate recur, below
    */
   def rebuild(c: Seq[Operator]): Operator;
   /**
-   * Perform a recursive rewrite.
+   * Perform a recursive rewrite.  
    * The following pattern is pretty common throughout Mimir:
    * def replaceFooWithBar(e:Expression): Expression =
    *   e match {
@@ -48,14 +48,14 @@ sealed abstract class Operator
    *     case _ => e.recur(replaceFooWithBar(_))
    *   }
    * Note how specific rewrites are applied to specific patterns
-   * in the tree, and recur is used to ignore/descend through
+   * in the tree, and recur is used to ignore/descend through 
    * every other class of object
    */
   def recur(f: Operator => Operator) =
     rebuild(children.map(f))
 
   /**
-   * Get the names of the columns produced by this operator.
+   * Get the names of the columns produced by this operator.  
    * If you need the types of the columns, use db.typechecker
    */
   def columnNames: Seq[String]
@@ -65,10 +65,10 @@ sealed abstract class Operator
    */
   def expressions: Seq[Expression]
 
-  /**
-   * Replace all of the expressions in this operator.  Like
+  /** 
+   * Replace all of the expressions in this operator.  Like 
    * rebuild, this method expects expressions to arrive in
-   * the same order as they're returned by the expressions
+   * the same order as they're returned by the expressions 
    * method
    */
   def rebuildExpressions(x: Seq[Expression]): Operator
@@ -84,7 +84,7 @@ sealed abstract class Operator
 /**
  * A single column output by a projection
  */
-case class ProjectArg(name: String, expression: Expression)
+case class ProjectArg(name: String, expression: Expression) 
   extends Serializable
 {
   override def toString = (name.toString + " <= " + expression.toString)
@@ -95,17 +95,17 @@ case class ProjectArg(name: String, expression: Expression)
  * Generalized relational algebra projection
  */
 @SerialVersionUID(100L)
-case class Project(columns: Seq[ProjectArg], source: Operator) extends Operator
+case class Project(columns: Seq[ProjectArg], source: Operator) extends Operator 
 {
   def toString(prefix: String) =
-    prefix + "PROJECT[" +
+    prefix + "PROJECT[" + 
       columns.map( _.toString ).mkString(", ") +
-    "](\n" + source.toString(prefix + "  ") +
+    "](\n" + source.toString(prefix + "  ") + 
       "\n" + prefix + ")"
 
   def children() = List(source);
   def rebuild(x: Seq[Operator]) = Project(columns, x.head)
-  def get(v: String): Option[Expression] =
+  def get(v: String): Option[Expression] = 
     columns.find( (_.name == v) ).map ( _.expression )
   def bindings: Map[String, Expression] =
     columns.map( _.toBinding ).toMap
@@ -138,8 +138,8 @@ case class AggFunction(function: String, distinct: Boolean, args: Seq[Expression
 case class Aggregate(groupby: Seq[Var], aggregates: Seq[AggFunction], source: Operator) extends Operator
 {
   def toString(prefix: String) =
-    prefix + "AGGREGATE[" +
-      (groupby ++ aggregates).mkString(", ") +
+    prefix + "AGGREGATE[" + 
+      (groupby ++ aggregates).mkString(", ") + 
       "](\n" +
       source.toString(prefix + "  ") + "\n" + prefix + ")"
 
@@ -148,20 +148,20 @@ case class Aggregate(groupby: Seq[Var], aggregates: Seq[AggFunction], source: Op
   def expressions = groupby ++ aggregates.flatMap(_.args)
   def rebuildExpressions(x: Seq[Expression]) = {
     val remainingExpressions = x.iterator
-    val newGroupBy =
+    val newGroupBy = 
       ListUtils.headN(remainingExpressions, groupby.length).
         map(_.asInstanceOf[Var])
 
-    val newAggregates =
+    val newAggregates = 
       aggregates.
         map(curr => {
-          val newArgs =
+          val newArgs = 
             ListUtils.headN(remainingExpressions, curr.args.size)
           AggFunction(curr.function, curr.distinct, newArgs, curr.alias)
         })
     Aggregate(newGroupBy, newAggregates, source)
   }
-  override def columnNames: Seq[String] =
+  override def columnNames: Seq[String] = 
     groupby.map { _.name } ++ aggregates.map { _.alias }
 }
 
@@ -172,7 +172,7 @@ case class Aggregate(groupby: Seq[Var], aggregates: Seq[AggFunction], source: Op
 case class Select(condition: Expression, source: Operator) extends Operator
 {
   def toString(prefix: String) =
-    prefix + "SELECT[" + condition.toString + "](\n" + source.toString(prefix+"  ") +
+    prefix + "SELECT[" + condition.toString + "](\n" + source.toString(prefix+"  ") + 
                   "\n" + prefix + ")"
 
   def children() = List(source)
@@ -194,9 +194,9 @@ case class Annotate(source: Operator,
   extends Operator
 {
   def toString(prefix: String) =
-    prefix + "ANNOTATE(" +
-      ("\n" + source.toString(prefix+"  ") +"\n" + prefix
-      )+")" +
+    prefix + "ANNOTATE(" + 
+      ("\n" + source.toString(prefix+"  ") +"\n" + prefix 
+      )+")" + 
        ( if(invisSch.size > 0)
              { " // "+invisSch.map( { case (an,AnnotateArg(at, n, t, e)) => an + "->" +n + ":"+t } ).mkString(", ") }
         else { "" })
@@ -205,7 +205,7 @@ case class Annotate(source: Operator,
   def invisible_schema = invisSch.map( x => (x._2.name, x._2.typ) )
   def expressions = invisSch.map(invsCol => invsCol._2.expr )
   def rebuildExpressions(x: Seq[Expression]) = Annotate(source,
-    invisSch.zip(x).map({ case ((an,AnnotateArg(at, name, typ, _)), expr) =>(an,AnnotateArg(at, name, typ, expr))})
+    invisSch.zip(x).map({ case ((an,AnnotateArg(at, name, typ, _)), expr) =>(an,AnnotateArg(at, name, typ, expr))})   
   )
   def columnNames = source.columnNames
 }
@@ -218,8 +218,8 @@ case class Recover(source: Operator,
 {
   def toString(prefix: String) =
     // prefix + "Join of\n" + left.toString(prefix+"  ") + "\n" + prefix + "and\n" + right.toString(prefix+"  ")
-    prefix + "RECOVER(\n" + source.toString(prefix+"  ") +
-                  "\n" + prefix + ")" +
+    prefix + "RECOVER(\n" + source.toString(prefix+"  ") + 
+                  "\n" + prefix + ")" + 
        ( if(invisSch.size > 0)
              { " // "+invisSch.map( { case (an,AnnotateArg(at, n, t, e)) => an + "->" +n + ":"+t } ).mkString(", ") }
         else { "" })
@@ -227,7 +227,7 @@ case class Recover(source: Operator,
   def rebuild(x: Seq[Operator]) = Recover(x.head, invisSch)
   def expressions = invisSch.map(invsCol => invsCol._2.expr )
   def rebuildExpressions(x: Seq[Expression]) = Recover(source,
-    invisSch.zip(x).map({ case ((an,AnnotateArg(at, name, typ, _)), expr) => (an,AnnotateArg(at, name, typ, expr))})
+    invisSch.zip(x).map({ case ((an,AnnotateArg(at, name, typ, _)), expr) => (an,AnnotateArg(at, name, typ, expr))})   
   )
   def columnNames = source.columnNames.union(invisSch.map(_._2.name))
 }
@@ -239,7 +239,7 @@ case class ProvenanceOf(source: Operator) extends Operator
 {
   def toString(prefix: String) =
     // prefix + "Join of\n" + left.toString(prefix+"  ") + "\n" + prefix + "and\n" + right.toString(prefix+"  ")
-    prefix + "PROVENANCE(\n" + source.toString(prefix+"  ") +
+    prefix + "PROVENANCE(\n" + source.toString(prefix+"  ") + 
                   "\n" + prefix + ")"
   def children() = List(source);
   def rebuild(x: Seq[Operator]) = ProvenanceOf(x(0))
@@ -256,7 +256,7 @@ case class Join(left: Operator, right: Operator) extends Operator
 {
   def toString(prefix: String) =
     // prefix + "Join of\n" + left.toString(prefix+"  ") + "\n" + prefix + "and\n" + right.toString(prefix+"  ")
-    prefix + "JOIN(\n" + left.toString(prefix+"  ") + ",\n" + right.toString(prefix+"  ") +
+    prefix + "JOIN(\n" + left.toString(prefix+"  ") + ",\n" + right.toString(prefix+"  ") + 
                   "\n" + prefix + ")"
   def children() = List(left, right);
   def rebuild(x: Seq[Operator]) = Join(x(0), x(1))
@@ -273,8 +273,8 @@ case class Union(left: Operator, right: Operator) extends Operator
 {
   def toString(prefix: String) =
     prefix + "UNION(\n" +
-        left.toString(prefix+"  ") + ",\n" +
-        right.toString(prefix+"  ") + "\n" +
+        left.toString(prefix+"  ") + ",\n" + 
+        right.toString(prefix+"  ") + "\n" + 
     prefix + ")";
 
   def children() = List(left, right)
@@ -287,25 +287,25 @@ case class Union(left: Operator, right: Operator) extends Operator
 /**
  * A base relation (Table).
  *
- * Note that schema information is required to make Typechecking self-contained
+ * Note that schema information is required to make Typechecking self-contained 
  * and database-independent
  *
- * Metadata columns are special implicit attributes used by many database
+ * Metadata columns are special implicit attributes used by many database 
  * backends.  They are specified as follows:
  *   (output, input, type)
  * Where:
- *   output: The name that the implicit attribute will be referenced by in the
+ *   output: The name that the implicit attribute will be referenced by in the 
  *           output relation
  *   input:  An expression to extract the implicit attribute
  *   type:   The type of the implicit attribute.
- * For example:
+ * For example: 
  *   ("MIMIR_ROWID", Var("ROWID"), Type.TRowId())
- * will extract SQL's implicit ROWID attribute into the new column "MIMIR_ROWID"
+ * will extract SQL's implicit ROWID attribute into the new column "MIMIR_ROWID" 
  * with the rowid type.
  */
 @SerialVersionUID(100L)
-case class Table(name: String,
-                 alias: String,
+case class Table(name: String, 
+                 alias: String, 
                  sch: Seq[(String,Type)],
                  metadata: Seq[(String,Expression,Type)])
   extends Operator
@@ -317,7 +317,7 @@ case class Table(name: String,
              { " // "+metadata.map( { case (v,e,t) => v+":"+t+" <- "+e } ).mkString(", ") }
         else { "" }
       )
-    )+")"
+    )+")" 
   def children: List[Operator] = List()
   def rebuild(x: Seq[Operator]) = Table(name, alias, sch, metadata)
   def metadata_schema = metadata.map( x => (x._1, x._3) )
@@ -329,7 +329,7 @@ case class Table(name: String,
 /**
  * A blank table --- Corresponds roughly to a
  * SELECT ... FROM ... WHERE FALSE.
- *
+ * 
  * Not really used, just a placeholder for intermediate optimization.
  */
 @SerialVersionUID(100L)
@@ -338,8 +338,8 @@ case class EmptyTable(sch: Seq[(String, Type)])
 {
     def toString(prefix: String) =
     prefix + "!!EMPTY!!(" + (
-      sch.map( { case (v,t) => v+":"+t } ).mkString(", ")
-    )+")"
+      sch.map( { case (v,t) => v+":"+t } ).mkString(", ") 
+    )+")" 
   def children: List[Operator] = List()
   def rebuild(x: Seq[Operator]) = this
   def expressions = List()
@@ -350,7 +350,7 @@ case class EmptyTable(sch: Seq[(String, Type)])
 /**
  * A single sort directive
  *
- * Consists of a column name, as well as a binary "ascending"
+ * Consists of a column name, as well as a binary "ascending" 
  * or "descending"
  *
  * (e.g., as in SELECT * FROM FOO ORDER BY bar ASC)
@@ -358,7 +358,7 @@ case class EmptyTable(sch: Seq[(String, Type)])
 @SerialVersionUID(100L)
 case class SortColumn(expression: Expression, ascending:Boolean)
 {
-  override def toString() =
+  override def toString() = 
     (expression + " " + (if(ascending){"ASC"}else{"DESC"}))
 }
 /**
@@ -370,7 +370,7 @@ case class Sort(sorts:Seq[SortColumn], source: Operator) extends Operator
 {
   def toString(prefix: String) =
   {
-    prefix + "SORT[" +
+    prefix + "SORT[" + 
         sorts.map(_.toString).mkString(", ") +
       "](\n" +
         source.toString(prefix+"  ") +
@@ -379,7 +379,7 @@ case class Sort(sorts:Seq[SortColumn], source: Operator) extends Operator
   def children: List[Operator] = List(source)
   def rebuild(x: Seq[Operator]) = Sort(sorts, x(0))
   def expressions = sorts.map(_.expression)
-  def rebuildExpressions(x: Seq[Expression]) =
+  def rebuildExpressions(x: Seq[Expression]) = 
     Sort(x.zip(sorts).map { col => SortColumn(col._1, col._2.ascending) }, source)
   def columnNames = source.columnNames
 }
@@ -410,7 +410,7 @@ case class Limit(offset: Long, count: Option[Long], source: Operator) extends Op
  * A left outer join
  */
 @SerialVersionUID(100L)
-case class LeftOuterJoin(left: Operator,
+case class LeftOuterJoin(left: Operator, 
                          right: Operator,
                          condition: Expression)
   extends Operator
@@ -421,7 +421,7 @@ case class LeftOuterJoin(left: Operator,
       right.toString(prefix+"   ")+"\n"+
     prefix+")"
 
-  def children: List[Operator] =
+  def children: List[Operator] = 
     List(left, right)
   def rebuild(c: Seq[Operator]): Operator =
     LeftOuterJoin(c(0), c(1), condition)
@@ -433,9 +433,9 @@ case class LeftOuterJoin(left: Operator,
 /**
  * A materialized view
  *
- * When initialized by RAToSql, the query field will contain the raw unmodified
+ * When initialized by RAToSql, the query field will contain the raw unmodified 
  * query that the view was instantiated with.  As the view goes through compilation,
- * the nested query will be modified; The metadata field tracks which forms of
+ * the nested query will be modified; The metadata field tracks which forms of 
  * compilation have been applied to it, so that the system can decide whether it has
  * an appropriate materialized form of the view ready.
  */
@@ -447,7 +447,7 @@ case class View(name: String, query: Operator, annotations: Set[ViewAnnotation.T
   def expressions: Seq[Expression] = Seq()
   def rebuild(c: Seq[Operator]): Operator = View(name, c(0), annotations)
   def rebuildExpressions(x: Seq[Expression]): Operator = this
-  def toString(prefix: String): String =
+  def toString(prefix: String): String = 
     s"$prefix$name[${annotations.mkString(", ")}] := (\n${query.toString(prefix+"   ")}\n$prefix)"
   def columnNames = query.columnNames
 }
