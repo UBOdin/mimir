@@ -165,7 +165,7 @@ object DiscalaAbadiSpec
         """) { results =>
           val attrStrings = results.map { row => (row("ATTR_NAME").asString, row.isDeterministic) }.toSeq 
           attrStrings must contain(
-            ("FOREIGN_DESTINATION", false)
+            ("FOREIGN_DESTINATION", true)
           )
         }
       }

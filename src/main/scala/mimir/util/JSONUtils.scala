@@ -35,7 +35,7 @@ object JsonUtils {
       case bracketPrefix(arg) => {
         val ja:JsArray = jv.as[JsArray]
         val idx = Integer.parseInt(arg)
-        if(ja.value.size < idx){
+        if(ja.value.size > idx){
           seekPath(ja.value(idx), path.substring(arg.length + 2))
         } else {
           JsNull

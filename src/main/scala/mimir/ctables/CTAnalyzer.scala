@@ -70,11 +70,11 @@ object CTAnalyzer {
         val rDeterministic = recur(r)
         ExpressionUtils.makeOr(Seq(
           ExpressionUtils.makeAnd(
-            recur(l),
+            lDeterministic,
             l
           ),
           ExpressionUtils.makeAnd(
-            recur(r),
+            rDeterministic,
             r
           ),
           ExpressionUtils.makeAnd(
