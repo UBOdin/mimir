@@ -31,8 +31,8 @@ object DiscalaAbadiNormalizer
       """)
       db.backend.fastUpdateBatch(s"""
         INSERT INTO $schTable (ATTR_NAME, ATTR_NODE, ATTR_TYPE) VALUES (?, ?, ?);
-      """, 
-        fullSchema.map { case ((attr, t), idx) => 
+      """,
+        fullSchema.map { case ((attr, t), idx) =>
           Seq(StringPrimitive(attr), IntPrimitive(idx), TypePrimitive(t))
         }
       )
@@ -44,20 +44,20 @@ object DiscalaAbadiNormalizer
       """)
       db.backend.fastUpdateBatch(s"""
         INSERT INTO $fdTable (MIMIR_FD_PARENT, MIMIR_FD_CHILD, MIMIR_FD_PATH_LENGTH) VALUES (?, ?, ?);
-      """, 
+      """,
         // Add the basic edges
         fd.fdGraph.getEdges.asScala.map { case (edgeParent, edgeChild) =>
           Seq(
-            IntPrimitive(edgeParent), 
+            IntPrimitive(edgeParent),
             IntPrimitive(edgeChild),
-            if(fd.parentTable.getOrElse(edgeParent, Set[Int]()) contains edgeChild){ IntPrimitive(2) } 
+            if(fd.parentTable.getOrElse(edgeParent, Set[Int]()) contains edgeChild){ IntPrimitive(2) }
               else { IntPrimitive(1) }
           )
         } ++
         // And add in each blacklisted node as an edge off of the root
-        ( 
+        (
           (0 until fd.sch.size).toSet[Int] -- fd.nodeTable.asScala.map(_.toInt).toSet
-        ).map { col => 
+        ).map { col =>
           Seq(
             IntPrimitive(-1),
             IntPrimitive(col),
@@ -66,7 +66,7 @@ object DiscalaAbadiNormalizer
         }
       )
 
-    val groupingModel = 
+    val groupingModel =
       new DAFDRepairModel(
         s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_FD_PARENT",
         config.schema,
@@ -82,15 +82,15 @@ object DiscalaAbadiNormalizer
       fullSchema.map( x => (x._2 -> x._1) ).toMap
 
     // for every possible parent/child relationship except for ROOT
-    val parentKeyRepairs = 
+    val parentKeyRepairs =
       fd.fdGraph.getEdges.asScala.
         filter( _._1 != -1 ).
         map { case (edgeParent, edgeChild) =>
           val (parent, parentType) = schemaLookup(edgeParent)
           val (child, childType) = schemaLookup(edgeChild)
-          val model = 
+          val model =
             new RepairKeyModel(
-              s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_NORM:$parent:$child", 
+              s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_NORM:$parent:$child",
               s"$child in $parent",
               config.query,
               Seq((parent, parentType)),
@@ -100,7 +100,7 @@ object DiscalaAbadiNormalizer
             )
           groupingModel.reconnectToDatabase(db)
           logger.trace(s"INSTALLING: $parent -> $child: ${model.name}")
-          model 
+          model
         }
     return Seq(groupingModel)++parentKeyRepairs
   }
@@ -110,33 +110,33 @@ object DiscalaAbadiNormalizer
     val model = db.models.get(s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_FD_PARENT")
     RepairKeyLens.assemble(
       db.table(s"MIMIR_DA_FDG_${config.schema}"),
-      Seq("MIMIR_FD_CHILD"), 
+      Seq("MIMIR_FD_CHILD"),
       Seq(("MIMIR_FD_PARENT", model)),
       Some("MIMIR_FD_PATH_LENGTH")
     )
   }
 
   final def convertNodesToNamesInQuery(
-    db: Database, 
-    config: MultilensConfig, 
-    nodeCol: String, 
-    labelCol: String, 
+    db: Database,
+    config: MultilensConfig,
+    nodeCol: String,
+    labelCol: String,
     typeCol: Option[String],
     query: Operator
-  ): Operator = 
+  ): Operator =
   {
     Project(
-      query.columnNames.map { col => 
-        if(col.equals(nodeCol)){ 
-          ProjectArg(labelCol, Var("ATTR_NAME")) 
-        } else { 
+      query.columnNames.map { col =>
+        if(col.equals(nodeCol)){
+          ProjectArg(labelCol, Var("ATTR_NAME"))
+        } else {
           ProjectArg(col, Var(col))
-        } 
+        }
       } ++ typeCol.map { col =>
         ProjectArg(col, Var("ATTR_TYPE"))
       },
       Select(Comparison(Cmp.Eq, Var(nodeCol), Var("ATTR_NODE")),
-        Join(      
+        Join(
           db.table(s"MIMIR_DA_SCH_${config.schema}"),
           query
         )
@@ -149,7 +149,7 @@ object DiscalaAbadiNormalizer
   {
     val spanningTree = spanningTreeLens(db, config)
     logger.trace(s"Table Catalog Spanning Tree: \n$spanningTree")
-    val tableQuery = 
+    val tableQuery =
       convertNodesToNamesInQuery(db, config, "TABLE_NODE", "TABLE_NAME", None,
         spanningTree
           .map( "TABLE_NODE" -> Var("MIMIR_FD_PARENT") )
@@ -177,7 +177,7 @@ object DiscalaAbadiNormalizer
           ProjectArg("IS_KEY", BoolPrimitive(true))
         ),
         convertNodesToNamesInQuery(db, config, "TABLE_NODE", "TABLE_NAME", Some("ATTR_TYPE"),
-          // SQLite does something stupid with FIRST that prevents it from figuring out that 
+          // SQLite does something stupid with FIRST that prevents it from figuring out that
           // -1 is an integer.  Add 1 to force it to realize that it's dealing with a number
           spanningTree
             .map( "TABLE_NODE" -> Var("MIMIR_FD_PARENT") )
@@ -190,7 +190,7 @@ object DiscalaAbadiNormalizer
     logger.trace(s"Attr Catalog Query: \n$jointQuery")
     return jointQuery
   }
-  def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] = 
+  def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
   {
     db.query(
       Project(
@@ -200,8 +200,8 @@ object DiscalaAbadiNormalizer
           attrCatalogFor(db, config)
         )
       )
-    ) { results => 
-      val attrs:Seq[String] = results.map { row => row(0).asString }.toSeq 
+    ) { results =>
+      val attrs:Seq[String] = results.map { row => row(0).asString }.toSeq
 
       if(attrs.isEmpty){ return None; }
 
@@ -216,16 +216,16 @@ object DiscalaAbadiNormalizer
       } else {
         val repairModels = attrs.
           filter { !_.equals(table) }.
-          map { attr => 
+          map { attr =>
             (
-              attr, 
+              attr,
               db.models.get(s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_NORM:$table:$attr")
             )
           }
         Some(
           RepairKeyLens.assemble(
             baseQuery,
-            Seq(table), 
+            Seq(table),
             repairModels,
             None
           )
@@ -238,10 +238,10 @@ object DiscalaAbadiNormalizer
 
 @SerialVersionUID(1001L)
 class DAFDRepairModel(
-  name: String, 
-  context: String, 
-  source: Operator, 
-  keys: Seq[(String, Type)], 
+  name: String,
+  context: String,
+  source: Operator,
+  keys: Seq[(String, Type)],
   target: String,
   targetType: Type,
   scoreCol: Option[String],
@@ -256,7 +256,7 @@ class DAFDRepairModel(
         val best = possibilities.head
         s"${attrLookup(args(0).asLong)} could be organized under any of ${possibilities.map { x =>  attrLookup(x)+" ("+x+")" }.mkString(", ")}; I chose ${attrLookup(best) }"
       }
-      case Some(choice) => 
+      case Some(choice) =>
         s"You told me to organize ${attrLookup(args(0).asLong)} under ${attrLookup(choice.asLong)}"
     }
   }

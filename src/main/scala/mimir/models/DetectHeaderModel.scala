@@ -13,12 +13,11 @@ import mimir.views._
 
 
 @SerialVersionUID(1001L)
-class DetectHeaderModel(override val name: String, var view_name: String)
+class DetectHeaderModel(override val name: String, var view_name: String,var detect:Boolean)
 extends Model(name)
 with Serializable
 {
   def detect_header(db: Database, query: Operator): Unit = {
-    var detect = false;
     var header : Seq[mimir.algebra.PrimitiveValue] = null;
     var arrs : Seq[Seq[mimir.algebra.PrimitiveValue]] = Seq.empty[Seq[mimir.algebra.PrimitiveValue]];
     db.query(Limit(0,Some(1),query))(_.foreach{result =>
