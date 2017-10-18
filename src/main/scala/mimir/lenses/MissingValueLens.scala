@@ -9,11 +9,41 @@ import mimir.ctables._
 import mimir.util.RandUtils
 import mimir.{Analysis, Database}
 import mimir.models._
+import mimir.parser.ExpressionParser
 
 import scala.collection.JavaConversions._
 import scala.util._
 
+
 object MissingValueLens {
+
+  def getConstraint(arg: Expression): Seq[(String, Expression)] =
+  {
+    arg match {
+      case Var(v) => Seq( (v.toUpperCase, Var(v.toUpperCase).isNull.not) )
+      case StringPrimitive(exprString) => {
+        getConstraint(ExpressionParser.expr(exprString))
+      }
+      case e if Typechecker.trivialTypechecker.typeOf(e, (_:String) => TAny() ).equals(TBool()) => {
+        ExpressionUtils.getColumns(arg).toSeq match {
+          case Seq(v) => 
+            Seq( 
+              (
+                v.toUpperCase, 
+                Var(v.toUpperCase).isNull.not.and(
+                  Eval.inline(arg) { x => Var(x.toUpperCase) }
+                )
+              )
+            )
+          case Seq() => throw new RAException(s"Invalid Constraint $e (need a variable in require)")
+          case _ => throw new RAException(s"Invalid Constraint $e (one variable per require)")
+        }
+      }
+      case e =>
+        throw new RAException("Invalid constraint $e (Not a Boolean Expression)")
+    }
+  }
+
 
   def create(
     db: Database, 
@@ -22,16 +52,44 @@ object MissingValueLens {
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
   {
-    val targetColumns:List[String] = args.map(db.interpreter.evalString(_).toUpperCase).toSet.toList
-    val schema:Set[String] = query.columnNames.toSet
-    val missingColumns = targetColumns.toSet -- schema
 
+    // Preprocess the lens arguments...
+    // Semantics are as follows:
+    // 
+    // - 'columnName' means that we should replace missing values of columnName
+    // - columnName   means that we should replace missing values of columnName
+    // - REQUIRE(column > ...) or a similar constraint means that we should replace 
+    //   missing values and values that don't satisfy the constraint
+    // - REQUIRE(column, column > ...) is similar, but allows you to define constraints
+    //   over multiple columns
+
+    val targetColumnsAndTests:Map[String, Expression] = args.flatMap { getConstraint(_) }.toMap
+
+    // Sanity check.  Require that all columns that we fix and all columns referenced in the 
+    // constraints are defined in the original query.
+    val schema = query.columnNames
+    val requiredColumns = targetColumnsAndTests.values.flatMap { ExpressionUtils.getColumns(_) }
+    val missingColumns = (targetColumnsAndTests.keySet ++ requiredColumns) -- schema.toSet
     if(!missingColumns.isEmpty){
       throw new SQLException(
         "Invalid missing value lens: ["+missingColumns.mkString(", ")+
         "] not part of ["+schema.mkString(", ")+"]"
       )
     }
+
+    // Create a query where all values that dont satisfy their constraints are removed
+    // (used for training the models)
+    val noErroneousValuesQuery =
+      query.map(
+        schema.
+          map { col => 
+            targetColumnsAndTests.get(col) match {
+              case Some(IsNullExpression(v)) if col.equals(v) => (col, Var(col))
+              case Some(test)                                 => (col, test.thenElse { Var(col) } { NullPrimitive() })
+              case None                                       => (col, Var(col))
+            }
+          }:_*
+      )
 
     val modelsByType: Seq[(String, Seq[(String, (Model, Int, Seq[Expression]))])] =
       ModelRegistry.imputations.toSeq.map {
@@ -43,8 +101,8 @@ object MissingValueLens {
             constructor(
               db, 
               s"$name:$modelCategory", 
-              targetColumns, 
-              query
+              targetColumnsAndTests.keySet.toSeq, 
+              noErroneousValuesQuery
             ).toSeq
           
           (modelCategory, modelsByTypeAndColumn)
@@ -58,7 +116,7 @@ object MissingValueLens {
       LensUtils.extractModelsByColumn(modelsByType)
 
     // Sanity check...
-    targetColumns.foreach( target => {
+    targetColumnsAndTests.keySet.foreach( target => {
       if(!candidateModels.contains(target)){ 
         throw new SQLException("No valid imputation model for column '"+target+"' in lens '"+name+"'");
       }
@@ -74,7 +132,7 @@ object MissingValueLens {
             //TODO: Replace Default Model
             val metaModel = new DefaultMetaModel(
                 s"$name:META:$column", 
-                s"picking a value for column '$column'",
+                s"picking values for $name.$column",
                 models.map(_._4)
               )
             val metaExpr = LensUtils.buildMetaModel(
@@ -95,9 +153,9 @@ object MissingValueLens {
           case Some(replacementExpr) => 
             ProjectArg(col,
               Conditional(
-                IsNullExpression(Var(col)),
-                replacementExpr,
-                Var(col)
+                targetColumnsAndTests(col),
+                Var(col),
+                replacementExpr
               ))
         })
 

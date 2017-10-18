@@ -55,6 +55,14 @@ object NumericFunctions
       },
       (x: Seq[Type]) => TFloat()
     )
+
+    fr.register("ABS", 
+      { args => Eval.applyAbs(args(0)) },
+      {
+        case x @ Seq(TInt() | TFloat() | TInterval()) => x(0)
+        case x => throw new RAException(s"Invalid ABS($x)")
+      }
+    )
   }
 
 }

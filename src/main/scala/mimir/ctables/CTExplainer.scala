@@ -304,7 +304,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 	def filterByProvenance(rawOper: Operator, token: RowIdPrimitive): Operator =
 	{
-		val oper = new PropagateEmptyViews(db.typechecker)(rawOper)
+		val oper = new PropagateEmptyViews(db.typechecker, db.aggregates)(rawOper)
 		logger.debug(s"RESOLVED: \n$oper")
 		val (provQuery, rowIdCols) = Provenance.compile(oper)
 		val filteredQuery =
@@ -434,6 +434,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 		logger.trace(s"Explain Subset (${wantCol.mkString(", ")}; $wantRow; $wantSort): \n$oper")
 		oper match {
 			case Table(_,_,_,_) => Seq()
+			case SingletonTable(_) => Seq()
 			case View(_,query,_) => 
 				explainSubsetWithoutOptimizing(query, wantCol, wantRow, wantSort)
 

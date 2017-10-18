@@ -12,7 +12,8 @@
   <logger name="mimir.Mimir$" level="ERROR"/>
   
   <logger name="mimir.util.PythonProcess$" level="ERROR"/>
-  <logger name="mimir.plot.Plot$" level="WARN"/>
+  <logger name="mimir.plot.Plot$" level="ERROR"/>
+  <logger name="mimir.models.SeriesMissingValueModel$" level="ERROR"/>
 
   <root level="WARN">
     <appender-ref ref="STDOUT" />

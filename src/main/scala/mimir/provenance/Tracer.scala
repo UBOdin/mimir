@@ -128,6 +128,22 @@ object Tracer {
           BoolPrimitive(true)
         )
 
+      case SingletonTable(tuple) => {
+        val tupleMap = tuple.toMap
+        val rowIdKeys = tupleMap.keySet & targetRowId.keySet
+        (
+          if(rowIdKeys.forall { key => 
+            tupleMap(key).equals(targetRowId(key))
+          }) {
+            SingletonTable(tuple)
+          } else {
+            EmptyTable(tuple.map { case (name, v) => (name, v.getType) })
+          },
+          tuple.map { case (name, _) => (name, Var(name)) }.toMap,
+          BoolPrimitive(true)
+        )
+      }
+
       case EmptyTable(schema) => 
         ( 
           EmptyTable(schema),
