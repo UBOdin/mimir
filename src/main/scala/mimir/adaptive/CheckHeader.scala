@@ -37,8 +37,11 @@ object CheckHeader
 
     viewName= detectmodel.view_name
     detect = detectmodel.detect
-
-    var projectArgs =config.query.columnNames.map( col => ProjectArg(col, Var(col)))
+    var cols : Seq[String] = Nil;
+    var projectArgs =config.query.columnNames.map{
+     col => ProjectArg(col, Var(col))
+     cols :+= col
+    }
     var queryAttr:Operator = null
     var len = 0;
     var arrs : Seq[mimir.algebra.PrimitiveValue] = null
@@ -58,23 +61,45 @@ object CheckHeader
       }
     }
     if(repl.size>0){
+      cols = Nil
       var querymapping = config.query.columnNames zip (repl)
       projectArgs = querymapping.map{
         case (a,b) => ProjectArg(b,Var(a))
+        cols :+= b
       }
     }
-    views.create(viewName+"_RAW",Limit(1,Some(1000000000),Project(projectArgs,config.query)));
+    var tableCatalog = viewName+"_Table"
+    db.backend.update(s"""
+      CREATE TABLE $tableCatalog (TABLE_NAME string)""")
+    db.backend.fastUpdateBatch(s"""
+      INSERT INTO $tableCatalog (TABLE_NAME) VALUES (?);
+    """,
+     Seq(viewName).map{ str =>
+       Seq(StringPrimitive(str))
+    })
+
+    var attrCatalog = viewName+"_Attributes"
+    db.backend.update(s"""
+      CREATE TABLE $attrCatalog (TABLE_NAME string, ATTR_NAME string,ATTR_TYPE string,IS_KEY bool)""")
+    db.backend.fastUpdateBatch(s"""
+      INSERT INTO $attrCatalog (TABLE_NAME,ATTR_NAME,ATTR_TYPE,IS_KEY) VALUES (?,?,?,?);""",
+      cols.map { col_name =>
+        Seq(StringPrimitive(viewName), StringPrimitive(col_name), TypePrimitive(Type.fromString("varchar")), BoolPrimitive(false))
+    })
+
+
+    /*views.create(viewName+"_RAW",Limit(1,Some(1000000000),Project(projectArgs,config.query)));
     val oper = db.table(viewName+"_RAW")
     val l = List(new FloatPrimitive(.5))
     lenses.create("TYPE_INFERENCE", viewName.toUpperCase, oper, l)
-
+    */
 
     return Seq(detectmodel)
   }
 
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    val queryString = "select * from "+viewName;
+    val queryString = "select TABLE_NAME from "+viewName+"_Table";
     var parser = new MimirJSqlParser(new ByteArrayInputStream(queryString.getBytes));
     val stmt: Statement = parser.Statement();
     val tableQuery = db.sql.convert(stmt.asInstanceOf[net.sf.jsqlparser.statement.select.Select])
