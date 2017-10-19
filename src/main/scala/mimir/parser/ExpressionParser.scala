@@ -18,15 +18,21 @@ object ExpressionParser extends RegexParsers {
 	def expr(s: String): Expression = 
 		parseAll(exprBase, s) match {
 			case Success(ret, _) => ret
-			case x => throw new SQLException(x.toString)
+			case x => throw new RAException(x.toString)
 		}
 	def exprList(s: String): List[Expression] = 
 		if(s == "") { List[Expression]() } else {
 			parseAll(exprListBase, s) match {
 				case Success(ret, _) => ret
-				case x => throw new SQLException(x.toString)
+				case x => throw new RAException(x.toString)
 			}
 		}
+	def function(s: String): Function =
+		parseAll(functionClause, s) match {
+			case Success(ret: Function, _) => ret
+			case x => throw new RAException(x.toString)
+		}
+
 	
 	def exprBase : Parser[Expression] = 
 		boolExpr
@@ -78,7 +84,7 @@ object ExpressionParser extends RegexParsers {
 
 	def leaf = 
 		parens | floatLeaf | intLeaf | boolLeaf | stringLeaf | typeLeaf | 
-		ifStmt | function | vgterm | varLeaf
+		ifStmt | functionClause | vgterm | varLeaf
 
 	def intLeaf = cint ^^ { IntPrimitive(_) }
 	def floatLeaf = cflt ^^ { FloatPrimitive(_) }
@@ -99,7 +105,7 @@ object ExpressionParser extends RegexParsers {
 
 	def arithSym = Arith.matchRegex ^^ { Arith.fromString(_) }
 
-	def function: Parser[Expression] = id ~ ("(" ~> opt(exprList) <~ ")") ^^ { 
+	def functionClause: Parser[Expression] = id ~ ("(" ~> opt(exprList) <~ ")") ^^ { 
 		case "NOT" ~ Some(List(arg)) => Not(arg)
 		case fname ~ args => 
 			Function(fname, args.getOrElse(List()))
