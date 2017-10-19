@@ -34,7 +34,7 @@ object CureScenario
     ;"""
 
   def time[A](description: String): ( => A) => A =
-    TimeUtils.monitor(description)
+    Timer.monitor(description)
 
   sequential 
 

@@ -158,6 +158,12 @@ object Provenance extends LazyLogging {
           List()
         )
 
+      case SingletonTable(tuple) =>
+        (
+          SingletonTable(tuple ++ Seq( (rowidColnameBase, RowIdPrimitive("singleton")) )),
+          List(rowidColnameBase)
+        )
+
       case Aggregate(groupBy, args, child) =>
         //val newargs = (new AggregateArg(ROWID_KEY, List(Var(ROWID_KEY)), ROWID_KEY)) :: args
         ( 
@@ -325,6 +331,18 @@ object Provenance extends LazyLogging {
           case None => 
             throw new ProvenanceError("Operator not compiled for provenance: "+operator)
         }
+
+      case SingletonTable(tuple) => {
+        val tupleMap = tuple.toMap
+        val rowIdKeys = tupleMap.keySet & rowIds.keySet
+        if(rowIdKeys.forall { key => 
+          tupleMap(key).equals(rowIds(key))
+        }) {
+          Some(SingletonTable(tuple))
+        } else {
+          None
+        }
+      }
 
       case EmptyTable(sch) => None 
 

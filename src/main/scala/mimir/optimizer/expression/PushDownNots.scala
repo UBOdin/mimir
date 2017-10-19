@@ -9,6 +9,7 @@ object PushDownNots extends TopDownExpressionOptimizerRule {
   {
     e match {
       case Not(x) => ExpressionUtils.makeNot(x)
+      case Conditional(Not(i), t, e) => Conditional(i, e, t)
       case _ => e
     }
       

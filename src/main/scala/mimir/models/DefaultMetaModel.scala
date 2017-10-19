@@ -32,7 +32,7 @@ class DefaultMetaModel(name: String, context: String, models: Seq[String])
         s"I defaulted to guessing with '$bestChoice' (out of $modelString) for $context"
       }
       case Some(choiceStr) => 
-        s"${getReasonWho(idx,args)} told me to use the $choiceStr model for $context"
+        s"${getReasonWho(idx,args)} told me to use $choiceStr for $context"
     }
   }
   def validateChoice(idx: Int, v: PrimitiveValue) = models.contains(v.asString)

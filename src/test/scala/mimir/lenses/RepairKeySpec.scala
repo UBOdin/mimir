@@ -128,7 +128,7 @@ object RepairKeySpec
 
     "Update for large data" >> {
 
-      TimeUtils.monitor("CREATE") {
+      Timer.monitor("CREATE") {
         update(
         """
           CREATE LENS FD_UPDATE
@@ -137,7 +137,7 @@ object RepairKeySpec
         """);
       }
 
-      TimeUtils.monitor("QUERY") {
+      Timer.monitor("QUERY") {
         val result = query("""
           SELECT ATTR, PARENT FROM FD_UPDATE
         """){ _.map { row =>
@@ -145,13 +145,13 @@ object RepairKeySpec
         }.toMap[Int, Int] }
       }
 
-      TimeUtils.monitor("UPDATE") {
+      Timer.monitor("UPDATE") {
         update("""FEEDBACK FD_UPDATE:PARENT 0('1') IS '-1';""")
       }
 
       println("For CureSource")
 
-      TimeUtils.monitor("CREATE") {
+      Timer.monitor("CREATE") {
         update(
           """
         CREATE LENS FD_CURE
@@ -160,7 +160,7 @@ object RepairKeySpec
           """);
       }
 
-      TimeUtils.monitor("QUERY") {
+      Timer.monitor("QUERY") {
         val result = query("""
           SELECT ATTR, PARENT FROM FD_CURE
         """){ _.map { row =>
@@ -168,7 +168,7 @@ object RepairKeySpec
         }.toMap[Int, Int] }
       }
 
-      TimeUtils.monitor("UPDATE"){
+      Timer.monitor("UPDATE"){
         update("""FEEDBACK FD_CURE:PARENT 0('1') IS '-1';""")
       }
 
@@ -205,7 +205,7 @@ object RepairKeySpec
           AS SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_WITHDUPS
           WITH KEY_REPAIR(TUPLE_ID)
         """)
-        TimeUtils.monitor("CREATE_FASTPATH") {
+        Timer.monitor("CREATE_FASTPATH") {
           update("""
             CREATE LENS CUST_ACCTBAL_FASTPATH
             AS SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_WITHDUPS
@@ -260,13 +260,13 @@ object RepairKeySpec
     "Produce the same results" >> {
       if(PDBench.isDownloaded){
         val classic = 
-          TimeUtils.monitor("QUERY_CLASSIC"){
+          Timer.monitor("QUERY_CLASSIC"){
             query("""
               SELECT TUPLE_ID, ACCTBAL FROM CUST_ACCTBAL_CLASSIC
             """){ _.map { row => (row("TUPLE_ID").asLong, row("ACCTBAL").asDouble) }.toIndexedSeq }
           }
         val fastpath =
-          TimeUtils.monitor("QUERY_FASTPATH"){
+          Timer.monitor("QUERY_FASTPATH"){
             query("""
               SELECT TUPLE_ID, ACCTBAL FROM CUST_ACCTBAL_FASTPATH
             """){ _.map { row => (row("TUPLE_ID").asLong, row("ACCTBAL").asDouble) }.toIndexedSeq }
@@ -285,13 +285,13 @@ object RepairKeySpec
           WHERE WORLD_ID = 1 and acctbal < 0
         """).asLong must be equalTo(13721l)
 
-        TimeUtils.monitor("QUERY_FASTPATH"){
+        Timer.monitor("QUERY_FASTPATH"){
           queryOneColumn("""
             SELECT TUPLE_ID FROM CUST_ACCTBAL_FASTPATH WHERE acctbal < 0
           """){ _.toSeq.size must be between(13721, 13721+579) }
         }  
 
-        TimeUtils.monitor("QUERY_CLASSIC"){
+        Timer.monitor("QUERY_CLASSIC"){
           queryOneColumn("""
             SELECT TUPLE_ID FROM CUST_ACCTBAL_CLASSIC WHERE acctbal < 0
           """){ _.toSeq.size must be between(13721, 13721+579) }

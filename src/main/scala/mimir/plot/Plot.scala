@@ -16,16 +16,12 @@ import mimir.exec.result._
 import mimir.util._
 import mimir.util.JsonUtils.primitiveValueWrites
 
-/**
- * Plotting using Sameer Sing's ScalaPlot/Gnuplot
- *
- * Includes Gnuplot configuration material inspired by
- * Brighten Godfrey's blog post:
- * http://youinfinitesnake.blogspot.com/2011/02/attractive-scientific-plots-with.html
- */
 object Plot
   extends LazyLogging
 {
+
+  type Config = Map[String, PrimitiveValue]
+  type Line = (String, String, Config)
 
   def value: (PrimitiveValue => Object) = {
     case NullPrimitive() => 0:java.lang.Long
@@ -44,7 +40,7 @@ object Plot
   def plot(spec: mimir.sql.DrawPlot, db: Database, console: OutputFormat)
   {
     val convertConfig = (in:java.util.Map[String,net.sf.jsqlparser.expression.PrimitiveValue]) => {
-      in.asScala.mapValues { db.sql.convert(_) }.toMap
+      in.asScala.map { field => (field._1.toUpperCase -> db.sql.convert(field._2)) }.toMap
     }
 
     var dataQuery = spec.getSource match {
@@ -53,69 +49,85 @@ object Plot
       case q:net.sf.jsqlparser.schema.Table => 
         db.table(SqlUtils.canonicalizeIdentifier(q.getName()))
     }
-    val globalSettings = convertConfig(spec.getConfig())
+    var globalSettings = convertConfig(spec.getConfig())
 
-    val lines: Seq[(String, String, Map[String, PrimitiveValue])] =
-      if(spec.getLines.isEmpty){
-          //if no lines are specified, try to find the best ones
-        val columns = db.bestGuessSchema(dataQuery).
-          filter { case (_, TFloat()) | (_, TInt()) => true; case _ => false }.
-          map(_._1)
-          //if that comes up with nothing either, then throw an exception
-        if(columns.isEmpty){
-          throw new RAException(s"No valid columns for plotting: ${db.bestGuessSchema(dataQuery).map { x => x._1+":"+x._2 }.mkString(",")}")
-        }
-        val x = columns.head
-        if(columns.tail.isEmpty){
-          dataQuery = Sort(Seq(SortColumn(Var(x), true)), dataQuery)
-          Seq( ("MIMIR_PLOT_CDF", x, Map("TITLE" -> StringPrimitive(x))) )
+    val lines: Seq[(String, String, Config)] =
+      Heuristics.applyLineDefaults(
+        if(spec.getLines.isEmpty){
+          val (newDataQuery, chosenLines, newGlobalSettings) = 
+            Heuristics.pickDefaultLines(dataQuery, globalSettings, db)
+
+          dataQuery = newDataQuery
+          globalSettings = newGlobalSettings
+
+          // return the actual lines generated
+          chosenLines
         } else {
-          logger.info(s"No explicit columns given, implicitly using X = $x, Y = [${columns.tail.mkString(", ")}]")
-          columns.tail.map { y =>
-            (x, y, Map("TITLE" -> StringPrimitive(y)))
-          }
-        }
-      } else {
-        val sch = db.typechecker.schemaOf(dataQuery)
-        var extraColumnCounter = 0;
+          val sch = db.typechecker.schemaOf(dataQuery)
+          var extraColumnCounter = 0;
 
-        val convertExpression = (raw: net.sf.jsqlparser.expression.Expression) => {
-          db.sql.convert(raw, { x => x }) match {
-            case Var(vn) => vn
-            case expr => {
-              extraColumnCounter += 1
-              val column = s"PLOT_EXPRESSION_$extraColumnCounter"
-              dataQuery = dataQuery.addColumn( column -> expr )
-              column
+          val convertExpression = (raw: net.sf.jsqlparser.expression.Expression) => {
+            db.sql.convert(raw, { x => x }) match {
+              case Var(vn) => vn
+              case expr => {
+                extraColumnCounter += 1
+                val column = s"PLOT_EXPRESSION_$extraColumnCounter"
+                dataQuery = dataQuery.addColumn( column -> expr )
+                column
+              }
             }
           }
-        }
 
-        spec.getLines.asScala.map { line =>
-          val x = convertExpression(line.getX())
-          val y = convertExpression(line.getY())
-          val args = convertConfig(line.getConfig())
-          (x, y, args)
-        }
-      }
+          spec.getLines.asScala.map { line =>
+            val x = convertExpression(line.getX())
+            val y = convertExpression(line.getY())
+            val args = convertConfig(line.getConfig())
+            (x, y, args)
+          }
+        },
+        globalSettings,
+        db
+      )
 
     logger.trace(s"QUERY: $dataQuery")
 
     db.query(dataQuery) { resultsRaw =>
       val results = resultsRaw.toIndexedSeq
 
+      val simplifiedQuery = db.compiler.optimize(dataQuery)
+      logger.trace(s"QUERY: $simplifiedQuery")
       val globalSettingsJson = Json.toJson(
         globalSettings ++ 
-        Map("DEFAULTSAVENAME" -> StringPrimitive(QueryNamer(dataQuery)))
+        Map("DEFAULTSAVENAME" -> StringPrimitive(QueryNamer(simplifiedQuery)))
       )
 
       val linesJson = Json.toJson(
         lines.map { case (x, y, config) => Json.arr(Json.toJson(x), Json.toJson(y), Json.toJson(config)) }
       )
 
-      //get the defaultSaveName to pass to the python code for any naming defaults
-      var defaultName= StringPrimitive(QueryNamer(dataQuery))
-      var nameToWrite="(DEFAULTSAVENAME,"+defaultName+")\n";
+      val warningLines: JsValue = 
+        globalSettings.getOrElse("WARNINGS", StringPrimitive("POINTS")).asString.toUpperCase match { 
+          case "OFF" => JsNull
+          case _ => {
+            Json.toJson(
+              lines.flatMap { case (x, y, config) =>
+                results
+                  .filter { row => 
+                    (    (!row.isDeterministic()) 
+                      || (!row.isColDeterministic(x))
+                      || (!row.isColDeterministic(y))
+                    )
+                  }
+                  .map { row => 
+                    logger.trace(s"${config("TITLE")} @ ${row(x)} - ${row(y)} -> row: ${row.isDeterministic()}, $x: ${row.isColDeterministic(x)} $y: ${row.isColDeterministic(y)}")
+                    Json.arr(row(x), row(y)) 
+                  }
+              }
+              .toSet
+            )
+          }
+        }
+
       //define the processIO to feed data to the process
       var io=new ProcessIO(
          in=>{
@@ -124,6 +136,9 @@ object Plot
               "LINES" -> linesJson,
               "RESULTS" -> Json.toJson(
                 dataQuery.columnNames.map { col => col -> results.map { _(col) } }.toMap
+              ),
+              "WARNINGS" -> Json.toJson(
+                warningLines
               )
             )
             in.write(data.toString.getBytes)

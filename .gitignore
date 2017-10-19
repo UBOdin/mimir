@@ -4,6 +4,7 @@
 *.db
 *.bak
 .DS_Store
+/*.jar
 
 # sbt specific
 .cache/
@@ -51,3 +52,4 @@ tpch-dbgen
 
 # Python
 *.pyc
+.classpath

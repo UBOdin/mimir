@@ -20,22 +20,22 @@ object SQLiteCompat extends LazyLogging{
     org.sqlite.Function.create(conn,"MIMIRCAST", MimirCast)
     org.sqlite.Function.create(conn,"MIMIR_MAKE_ROWID", MimirMakeRowId)
     org.sqlite.Function.create(conn,"OTHERTEST", OtherTest)
-    org.sqlite.Function.create(conn,"AGGTEST", AggTest)
+    org.sqlite.Function.create(conn,"AGGTEST", new AggTest())
     org.sqlite.Function.create(conn, "SQRT", Sqrt)
     org.sqlite.Function.create(conn, "DST", Distance)
     org.sqlite.Function.create(conn, "SPEED", Speed)
     org.sqlite.Function.create(conn, "MINUS", Minus)
-    org.sqlite.Function.create(conn, "GROUP_AND", GroupAnd)
-    org.sqlite.Function.create(conn, "GROUP_OR", GroupOr)
-    org.sqlite.Function.create(conn, "GROUP_BITWISE_AND", GroupBitwiseAnd)
-    org.sqlite.Function.create(conn, "GROUP_BITWISE_OR", GroupBitwiseOr)
-    org.sqlite.Function.create(conn, "FIRST", First)
-    org.sqlite.Function.create(conn, "FIRST_INT", FirstInt)
-    org.sqlite.Function.create(conn, "FIRST_FLOAT", FirstFloat)
+    org.sqlite.Function.create(conn, "GROUP_AND", new GroupAnd())
+    org.sqlite.Function.create(conn, "GROUP_OR", new GroupOr())
+    org.sqlite.Function.create(conn, "GROUP_BITWISE_AND", new GroupBitwiseAnd())
+    org.sqlite.Function.create(conn, "GROUP_BITWISE_OR", new GroupBitwiseOr())
+    org.sqlite.Function.create(conn, "FIRST", new First())
+    org.sqlite.Function.create(conn, "FIRST_INT", new FirstInt())
+    org.sqlite.Function.create(conn, "FIRST_FLOAT", new FirstFloat())
     org.sqlite.Function.create(conn, "POSSION", Possion)
     org.sqlite.Function.create(conn, "GAMMA", Gamma)
-    org.sqlite.Function.create(conn, "STDDEV", StdDev)
-    org.sqlite.Function.create(conn, "MAX", Max)
+    org.sqlite.Function.create(conn, "STDDEV", new StdDev())
+    org.sqlite.Function.create(conn, "MAX", new Max())
     org.sqlite.Function.create(conn, "WEB", Web)
     org.sqlite.Function.create(conn, "WEBJSON", WebJson)
     org.sqlite.Function.create(conn, "WEBGEOCODEDISTANCE",WebGeocodeDistance)
@@ -378,33 +378,39 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
     }
 }
 
-object GroupAnd extends org.sqlite.Function.Aggregate {
+class GroupAnd extends org.sqlite.Function.Aggregate {
   var agg = true
 
   @Override
   def xStep(): Unit = {
+    // println(s"GROUP_AND($agg, ${value_text(0)})")
     agg = agg && (value_int(0) != 0)
+    // println(s"    -> $agg")
   }
 
   def xFinal(): Unit = {
+    // println(s"RESULT (OR) -> $agg")
     result(if(agg){ 1 } else { 0 })
   }
 }
 
-object GroupOr extends org.sqlite.Function.Aggregate {
+class GroupOr extends org.sqlite.Function.Aggregate {
   var agg = false
 
   @Override
   def xStep(): Unit = {
+    // println(s"GROUP_OR($agg, ${value_text(0)})")
     agg = agg || (value_int(0) != 0)
+    // println(s"    -> $agg")
   }
 
   def xFinal(): Unit = {
+    // println(s"RESULT (OR) -> $agg")
     result(if(agg){ 1 } else { 0 })
   }
 }
 
-object GroupBitwiseAnd extends org.sqlite.Function.Aggregate {
+class GroupBitwiseAnd extends org.sqlite.Function.Aggregate {
   var agg:Long = 0xffffffffffffffffl
 
   @Override
@@ -417,7 +423,7 @@ object GroupBitwiseAnd extends org.sqlite.Function.Aggregate {
   }
 }
 
-object GroupBitwiseOr extends org.sqlite.Function.Aggregate {
+class GroupBitwiseOr extends org.sqlite.Function.Aggregate {
   var agg:Long = 0
 
   @Override
@@ -441,7 +447,7 @@ object OtherTest extends org.sqlite.Function {
   }
 }
 
-object First extends org.sqlite.Function.Aggregate {
+class First extends org.sqlite.Function.Aggregate {
   var firstVal: String = null;
   @Override
   def xStep(): Unit = {
@@ -452,7 +458,7 @@ object First extends org.sqlite.Function.Aggregate {
   }
 }
 
-object FirstInt extends org.sqlite.Function.Aggregate {
+class FirstInt extends org.sqlite.Function.Aggregate {
   var firstVal: Int = 0
   var empty = true
 
@@ -470,7 +476,7 @@ object FirstInt extends org.sqlite.Function.Aggregate {
   }
 }
 
-object FirstFloat extends org.sqlite.Function.Aggregate {
+class FirstFloat extends org.sqlite.Function.Aggregate {
   var firstVal: Double = 0.0
   var empty = true
 
@@ -488,7 +494,7 @@ object FirstFloat extends org.sqlite.Function.Aggregate {
   }
 }
 
-object AggTest extends org.sqlite.Function.Aggregate {
+class AggTest extends org.sqlite.Function.Aggregate {
 
   var total = 0
   @Override
@@ -501,7 +507,7 @@ object AggTest extends org.sqlite.Function.Aggregate {
   }
 }
 
-object StdDev extends org.sqlite.Function.Aggregate {
+class StdDev extends org.sqlite.Function.Aggregate {
 
    var m = 0.0
    var s = 0.0
@@ -527,7 +533,7 @@ object StdDev extends org.sqlite.Function.Aggregate {
     }
 }
 
-object Max extends org.sqlite.Function.Aggregate {
+class Max extends org.sqlite.Function.Aggregate {
 
   var theVal: Double = 0.0
   var empty = true

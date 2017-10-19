@@ -255,6 +255,8 @@ class Typechecker(
 
 			case EmptyTable(sch) => sch
 
+			case SingletonTable(tuple) => tuple.map { case (name, v) => (name, v.getType) }
+
 			case Limit(_, _, src) => schemaOf(src)
 
 			case Sort(_, src) => schemaOf(src)
@@ -266,6 +268,7 @@ object Typechecker
   extends LazyLogging
 {
 
+	val trivialTypechecker = new Typechecker()
 
 	def assertNumeric(t: Type, e: Expression): Type =
  	{
@@ -347,7 +350,9 @@ object Typechecker
 						Arith.Sub | Arith.Add)    => return Some(a)
 			case (TInt() | TFloat(), TInterval(), Arith.Mult) | 
 					 (TInterval(), TInt() | TFloat(), Arith.Mult | Arith.Div)  
-					                            => return Some(TInterval())
+					                              => return Some(TInterval())
+			case (TInterval(), TInterval(), Arith.Div)
+			                                      => return Some(TFloat())
 
       // TAny() cases
       case (TAny(), TAny(), _)        => return Some(TAny())
