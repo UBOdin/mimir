@@ -263,13 +263,9 @@ object Speed extends org.sqlite.Function with LazyLogging {
     val endingDateText: String = value_text(2)
 
     val startingDate: DateTime = DateTime.parse(startingDateText)
-    //val endingDate: DateTime = DateTime.parse(endingDateText)
     var endingDate: DateTime = new DateTime
     if(endingDateText != null) {
       endingDate = DateTime.parse(endingDateText)
-    }
-    else {
-      endingDate = startingDate.plusDays(1)
     }
 
     val numberOfHours: Long = Math.abs(endingDate.getMillis - startingDate.getMillis) / 1000 / 60 / 60

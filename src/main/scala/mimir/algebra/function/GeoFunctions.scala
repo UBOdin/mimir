@@ -2,7 +2,6 @@ package mimir.algebra.function;
 
 import org.geotools.referencing.datum.DefaultEllipsoid
 import org.joda.time.DateTime
-import org.joda.time.Duration
 import mimir.algebra._
 
 object GeoFunctions
@@ -37,12 +36,9 @@ object GeoFunctions
       (args) => {
         val distance: Double = args(0).asDouble
         val startingDate: DateTime = args(1).asDateTime
-        //val endingDate: DateTime = args(2).asDateTime
-        //val period: Duration = new Duration(args(1).asDateTime.getMillis,args(2).asDateTime.getMillis)
-
         val endingDate: DateTime =
           args(2) match {
-            case NullPrimitive() => args(1).asDateTime.plusDays(1)
+            case NullPrimitive() => new DateTime()
             case x => x.asDateTime
           }
 

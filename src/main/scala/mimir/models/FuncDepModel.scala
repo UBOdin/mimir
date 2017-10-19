@@ -45,7 +45,7 @@ object FuncDepModel
       col -> (
         model,                         // The model for the column
         0,                             // The model index of the column's replacement variable
-        db.query(s"SELECT $sourceColName FROM $tableName;"){_.tuples}.flatten  // 'Hints' for the model -- The dependent column values
+        db.query(query.project(sourceColName)){_.tuples}.flatten  // 'Hints' for the model -- The dependent column values
       )
     }).toMap
   }
@@ -92,7 +92,7 @@ class SimpleFuncDepModel(name: String, colName: String, query: Operator)
       }
     }
     inEdgeCol = query.columnNames(inEdge)
-    val results = db.query(s"SELECT $inEdgeCol,$colName,COUNT(*) FROM $tableName GROUP BY $inEdgeCol,$colName;"){_.tuples}
+    val results = db.query(Aggregate(Seq(Var(inEdgeCol),Var(colName)),Seq(AggFunction("COUNT", false, Seq(), "count1")),query).project(inEdgeCol,colName,"count1")){_.tuples}
                       .filterNot(row => row(1).isInstanceOf[NullPrimitive]).sortBy(_(2).asInt)
     dependencyMap = results.map(arr => arr(0) -> arr(1)).toMap
     weightedList = results.map(row => (row(1),row(2).asDouble))
