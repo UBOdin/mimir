@@ -28,8 +28,8 @@ object LoadCSV extends StrictLogging {
 
   def handleLoadTable(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
     val input = new FileReader(sourceFile)
-    var assumeHeader = options.getOrElse("HEADER", "YES").equals("YES")
-    assumeHeader = false;
+    val assumeHeader = false
+
     // Allocate the parser, and make its iterator scala-friendly
     val parser = new NonStrictCSVParser(input, options)
 
