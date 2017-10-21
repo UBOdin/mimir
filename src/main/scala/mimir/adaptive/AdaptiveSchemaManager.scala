@@ -12,12 +12,12 @@ class AdaptiveSchemaManager(db: Database)
 {
   val dataTable = "MIMIR_ADAPTIVE_SCHEMAS"
 
-  def init(): Unit =
+  def init(): Unit = 
   {
     if(db.backend.getTableSchema(dataTable).isEmpty){
       db.backend.update(s"""
         CREATE TABLE $dataTable(
-          NAME varchar(100),
+          NAME varchar(100), 
           MLENS varchar(100),
           QUERY text,
           ARGS text,
@@ -27,12 +27,12 @@ class AdaptiveSchemaManager(db: Database)
     }
   }
 
-  def create(schema: String, mlensType: String, query: Operator, args: Seq[Expression]) =
+  def create(schema: String, mlensType: String, query: Operator, args: Seq[Expression]) = 
   {
     val constructor = MultilensRegistry.multilenses(mlensType)
     val config = MultilensConfig(schema, query, args);
     val models = constructor.initSchema(db, config);
-
+    
     db.backend.update(s"""
       INSERT INTO $dataTable(NAME, MLENS, QUERY, ARGS) VALUES (?,?,?,?)
     """, Seq(
@@ -54,21 +54,21 @@ class AdaptiveSchemaManager(db: Database)
   {
     db.query(
       Project(
-        Seq(ProjectArg("NAME", Var("NAME")),
-            ProjectArg("MLENS", Var("MLENS")),
+        Seq(ProjectArg("NAME", Var("NAME")), 
+            ProjectArg("MLENS", Var("MLENS")), 
             ProjectArg("QUERY", Var("QUERY")),
             ProjectArg("ARGS", Var("ARGS"))),
         db.table(dataTable)
       )
-    ){ _.map { row =>
+    ){ _.map { row => 
       val name = row(0).asString
       val mlensType = row(1).asString
       val query = Json.toOperator(Json.parse(row(2).asString))
-      val args:Seq[Expression] =
+      val args:Seq[Expression] = 
         Json.toExpressionList(Json.parse(row(3).asString))
-
-      (
-        MultilensRegistry.multilenses(mlensType),
+ 
+      ( 
+        MultilensRegistry.multilenses(mlensType), 
         MultilensConfig(name, query, args)
       )
     }.toIndexedSeq }
@@ -76,7 +76,7 @@ class AdaptiveSchemaManager(db: Database)
 
   def tableCatalogs: Seq[Operator] =
   {
-    all.map { case(mlens, config) =>
+    all.map { case(mlens, config) => 
 
       val tableBaseSchemaColumns =
         SystemCatalog.tableCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 )
@@ -90,12 +90,12 @@ class AdaptiveSchemaManager(db: Database)
 
   def attrCatalogs: Seq[Operator] =
   {
-    all.map { case(mlens, config) =>
+    all.map { case(mlens, config) => 
 
       val attrBaseSchemaColumns =
         SystemCatalog.attrCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 )
 
-      mlens.attrCatalogFor(db, config)
+      mlens.attrCatalogFor(db, config)         
         .project( attrBaseSchemaColumns:_* )
         .addColumn( "SCHEMA_NAME" -> StringPrimitive(config.schema) )
 
@@ -115,11 +115,11 @@ class AdaptiveSchemaManager(db: Database)
         val name = row(0).asString
         val mlensType = row(1).asString
         val query = Json.toOperator(Json.parse(row(2).asString))
-        val args:Seq[Expression] =
+        val args:Seq[Expression] = 
           Json.toExpressionList(Json.parse(row(3).asString))
-
-        Some((
-          MultilensRegistry.multilenses(mlensType),
+   
+        Some(( 
+          MultilensRegistry.multilenses(mlensType), 
           MultilensConfig(name, query, args)
         ))
       } else { None }
@@ -128,8 +128,19 @@ class AdaptiveSchemaManager(db: Database)
 
   def viewFor(schema: String, table: String): Option[Operator] =
   {
-    get(schema).flatMap { case (lens, config) =>
-      lens.viewFor(db, config, table)
+    get(schema) match {
+      case None => None
+      case Some((lens, config)) => {
+        lens.viewFor(db, config, table) match {
+          case None => None
+          case Some(viewQuery) => 
+            Some(AdaptiveView(
+              schema,
+              table, 
+              viewQuery
+            ))
+        }
+      }
     }
   }
 }
