@@ -68,7 +68,7 @@ object CheckHeader
         cols :+= b
       }
     }
-    var tableCatalog = viewName+"_Table"
+    var tableCatalog = config.schema+"_Table"
     db.backend.update(s"""
       CREATE TABLE $tableCatalog (TABLE_NAME string)""")
     db.backend.fastUpdateBatch(s"""
@@ -78,7 +78,7 @@ object CheckHeader
        Seq(StringPrimitive(str))
     })
 
-    var attrCatalog = viewName+"_Attributes"
+    var attrCatalog = config.schema+"_Attributes"
     db.backend.update(s"""
       CREATE TABLE $attrCatalog (TABLE_NAME string, ATTR_NAME string,ATTR_TYPE string,IS_KEY bool)""")
     db.backend.fastUpdateBatch(s"""
@@ -86,20 +86,12 @@ object CheckHeader
       cols.map { col_name =>
         Seq(StringPrimitive(viewName), StringPrimitive(col_name), TypePrimitive(Type.fromString("varchar")), BoolPrimitive(false))
     })
-
-
-    /*views.create(viewName+"_RAW",Limit(1,Some(1000000000),Project(projectArgs,config.query)));
-    val oper = db.table(viewName+"_RAW")
-    val l = List(new FloatPrimitive(.5))
-    lenses.create("TYPE_INFERENCE", viewName.toUpperCase, oper, l)
-    */
-
     return Seq(detectmodel)
   }
 
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    val queryString = "select TABLE_NAME from "+viewName+"_Table";
+    val queryString = "select TABLE_NAME from "+config.schema+"_Table";
     var parser = new MimirJSqlParser(new ByteArrayInputStream(queryString.getBytes));
     val stmt: Statement = parser.Statement();
     val tableQuery = db.sql.convert(stmt.asInstanceOf[net.sf.jsqlparser.statement.select.Select])
@@ -107,44 +99,23 @@ object CheckHeader
   }
   def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    println("here")
-    var projectArgs =config.query.columnNames.map( col => ProjectArg(col, Var(col)))
-    var queryAttr:Operator = null
-    if(detect){
-      var len = 0;
-      var arrs : Seq[mimir.algebra.PrimitiveValue] = null
-      var str=""
-      db.query(Limit(0,Some(1),config.query))(_.foreach{result =>
-        arrs =  result.tuple
-      })
-      len = arrs.length
-      var repl = new ListBuffer[String]()
-      for(i<- 0 until len){
-        var res = arrs(i).toString()
-        res = res.replaceAll("\\'","");
-        var ch =  res.toString()(0)
-
-        if(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z'){
-          repl += res.toString()
-        }
-      }
-      if(repl.size>0){
-        var querymapping = config.query.columnNames zip (repl)
-        projectArgs = querymapping.map{
-          case (a,b) => ProjectArg(b,Var(a))
-        }
-      }
-      queryAttr = Limit(1,Some(1000000000),Project(projectArgs,config.query));
-    }else{
-      queryAttr = Project(projectArgs,config.query);
-    }
-    query = queryAttr
-
-    return queryAttr
+    val queryString = "select * from "+config.schema+"_Attributes";
+    var parser = new MimirJSqlParser(new ByteArrayInputStream(queryString.getBytes));
+    val stmt: Statement = parser.Statement();
+    val attributeQuery = db.sql.convert(stmt.asInstanceOf[net.sf.jsqlparser.statement.select.Select])
+    return attributeQuery
   }
   def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
   {
-    return None
+    var attr : Seq[mimir.algebra.PrimitiveValue]= Nil;
+    db.query("select ATTR_NAME from "+config.schema+"_Attributes")(_.foreach{result =>
+      attr :+= result.tuple(0)
+    })
+    var querymapping = config.query.columnNames zip (attr)
+    var projectArgs = querymapping.map{
+      case (a,b) => ProjectArg(b.toString(),Var(a))
+    }
+    return Some(Limit(1,Some(1000000000),Project(projectArgs,config.query)))
 
   }
 
