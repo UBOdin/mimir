@@ -28,36 +28,36 @@ object LoadCSV extends StrictLogging {
 
   def handleLoadTable(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
     val input = new FileReader(sourceFile)
-    val assumeHeader = options.getOrElse("HEADER", "YES").equals("YES")
+    val assumeHeader = false
 
     // Allocate the parser, and make its iterator scala-friendly
     val parser = new NonStrictCSVParser(input, options)
 
     // Pull out the header if appropriate
-    val header: Seq[String] = 
+    val header: Seq[String] =
       if(assumeHeader && parser.hasNext){ parser.decrementRecordCount; parser.next.fields }
       else { Nil }
 
-    // Grab some sample data for testing 
+    // Grab some sample data for testing
     //(note the toSeq being used to materialize the samples)
     val samples = parser.take(SAMPLE_SIZE).toSeq
 
     // Produce a schema --- either one already exists, or we need
     // to generate one.
-    val targetSchema = 
+    val targetSchema =
       db.tableSchema(targetTable) match {
         case Some(sch) => sch
         case None => {
 
-          val idxToCol: Map[Int, String] = 
-            header.zipWithIndex.map { x => 
+          val idxToCol: Map[Int, String] =
+            header.zipWithIndex.map { x =>
               if(x._1.equals("")){ (x._2, s"COLUMN_${x._2}")}
               else { (x._2, x._1) }
             }.toMap
 
           logger.debug(s"HEADER_MAP: $idxToCol")
 
-          val columnCount = 
+          val columnCount =
             (samples.map( _.fields.size ) ++ List(0)).max
 
           val columnNames =
@@ -84,7 +84,7 @@ object LoadCSV extends StrictLogging {
       filter( x => (x.fields.size > targetSchema.size) ).
       map( _.lineNumber ).
       toList match {
-        case Nil          => // All's well! 
+        case Nil          => // All's well!
         case a::Nil       => logger.warn(s"Too many fields on line $a of $sourceFile")
         case a::b::Nil    => logger.warn(s"Too many fields on lines $a and $b of $sourceFile")
         case a::b::c::Nil => logger.warn(s"Too many fields on lines $a, $b, and $c of $sourceFile")
@@ -107,7 +107,7 @@ object LoadCSV extends StrictLogging {
   }
 
   def makeColumnNamesUnique(columnNames: Iterable[String]): List[String] = {
-    val dupColumns = 
+    val dupColumns =
       columnNames.
         toList.
         groupBy( x => x ).
@@ -144,7 +144,7 @@ object LoadCSV extends StrictLogging {
 
     logger.trace("BEGIN IMPORT")
     TimeUtils.monitor(s"Import CSV: $targetTable <- $sourceFile", logger.info(_)){
-      db.backend.fastUpdateBatch(cmd, rows.view.map({ record => 
+      db.backend.fastUpdateBatch(cmd, rows.view.map({ record =>
         if(record.recordNumber % 100000 == 0){
           logger.info(s"Loaded ${record.recordNumber} records...")
         }
@@ -182,11 +182,11 @@ case class MimirCSVRecord(var fields: Seq[String], lineNumber: Long, recordNumbe
  *
  * Recovery is, at present, rather dumb.  CSVParser begins parsing the record anew
  * from the point where the malformed data appeared.
- * 
+ *
  * It would be nice if we could retain the record prefix that has already been parsed
  * (as well as offsetting data).  Unfortunately, these changes all require changes to
- * CSVParser.getNextRecord(), which relies on private access to Token and Lexer.  
- * 
+ * CSVParser.getNextRecord(), which relies on private access to Token and Lexer.
+ *
  * Suggested approaches:
  *  - Submit a push request to commons with a "Recovery" callback
  *  - Swap out CSVParser with a different off-the-shelf parser (e.g., Spark has a few)
@@ -209,11 +209,11 @@ class NonStrictCSVParser(in:Reader, options: Map[String,String] = Map())
   var record: Option[(Seq[String], Option[String])] = None
   var recordOffset = 0;
 
-  def bufferNextRecord(): Unit = 
+  def bufferNextRecord(): Unit =
   {
     while(record == None){
       try {
-        // iter.hasNext needs to take place inside the try/catch block, 
+        // iter.hasNext needs to take place inside the try/catch block,
         // since it pre-buffers another line of data.
         if(!iter.hasNext){ return; }
 
@@ -221,7 +221,7 @@ class NonStrictCSVParser(in:Reader, options: Map[String,String] = Map())
         val curr = iter.next
 
         // There's a comment field
-        val comment = 
+        val comment =
           curr.getComment match { case null => None; case x => Some(x) }
 
         // And pull out the record itself
@@ -229,9 +229,9 @@ class NonStrictCSVParser(in:Reader, options: Map[String,String] = Map())
       } catch {
         case e: RuntimeException => {
           e.getCause() match {
-            case t: IOException => 
+            case t: IOException =>
               logger.warn(s"Parse Error: ${t.getMessage}")
-            case _ => 
+            case _ =>
               throw new IOException("Parsing error", e)
           }
         }
@@ -254,7 +254,7 @@ class NonStrictCSVParser(in:Reader, options: Map[String,String] = Map())
     return MimirCSVRecord(fields, parser.getCurrentLineNumber, parser.getRecordNumber + recordOffset, comment)
   }
 
-  def decrementRecordCount(): Unit = 
+  def decrementRecordCount(): Unit =
     { recordOffset -= 1; }
 
 }
