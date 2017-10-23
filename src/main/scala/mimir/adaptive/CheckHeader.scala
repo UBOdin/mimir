@@ -18,9 +18,7 @@ object CheckHeader
   extends Multilens
   with LazyLogging
 {
-  var viewName = ""
-  var detect:Boolean=false
-  var query:Operator = null
+
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model] =
   {
     val lenses          = new mimir.lenses.LensManager(db)
@@ -35,8 +33,7 @@ object CheckHeader
     );
     detectmodel.detect_header(db,config.query);
 
-    viewName= detectmodel.view_name
-    detect = detectmodel.detect
+    var viewName= detectmodel.view_name
     var cols : Seq[String] = Nil;
     var projectArgs =config.query.columnNames.map{
      col => ProjectArg(col, Var(col))
