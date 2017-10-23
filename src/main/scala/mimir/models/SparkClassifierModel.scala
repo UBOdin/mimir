@@ -267,33 +267,16 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
     val rowid = RowIdPrimitive(args(0).asString)
     getFeedback(idx,args) match {
       case Some(v) => 1.0
-      case None =>
-      val selem = getCache(idx, args, hints) match {
-        case None => {
-          if(classifyUpFrontAndCache && cache.isEmpty ){
-            classifyAll()
-            getCache(idx, args, hints)
-          }
-          else if(classifyUpFrontAndCache)
-            None
-          else{
-            val classes = classify(rowid, hints)
-            if (classes.isEmpty) {
-              None
-            }
-            else {
-              Some(classToPrimitive(classes.head._1))
-            }
-          }
+      case None => {
+        val classes = classify(rowid, hints)
+        if (classes.isEmpty) {
+          0.0
         }
-        case somev@Some(v) => somev
-      }
-      selem match {
-        case None => 0.0
-        case Some(elem) => 0.5 //TODO
+        else {
+          classes.head._2/classes.maxBy(_._2)._2
+        }
       }
     }
   }
-
 
 }
