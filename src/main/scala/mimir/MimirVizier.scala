@@ -21,6 +21,7 @@ import org.slf4j.{LoggerFactory}
 import ch.qos.logback.classic.{Level, Logger}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import net.sf.jsqlparser.statement.Statement
+import mimir.exec.mode.TupleBundle
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -44,6 +45,7 @@ object MimirVizier extends LazyLogging {
   var pythonMimirCallListeners = Seq[PythonMimirCallInterface]()
 
   def main(args: Array[String]) {
+    Thread.currentThread().setUncaughtExceptionHandler(MimirVizierUncaughtExceptionHandler)
     conf = new MimirConfig(args);
 
     // Prepare experiments
@@ -55,7 +57,7 @@ object MimirVizier extends LazyLogging {
     }
     else {
       //Use GProM Backend
-      gp = new GProMBackend(conf.backend(), conf.dbname(), 1)
+      gp = new GProMBackend(conf.backend(), conf.dbname(), 2)
       db = new Database(gp)    
       db.backend.open()
       gp.metadataLookupPlugin.db = db;
@@ -86,6 +88,50 @@ object MimirVizier extends LazyLogging {
         }
     }
     
+    /*for(i <- 1 to 10){
+      println(s"---------------------- run: $i -------------------------")
+      loadCSV("test/data/pick.csv")
+      db.update(db.parse("delete from PICK_RAW").head)
+      db.update(db.parse(s"INSERT INTO PICK_RAW VALUES('1', '4.5', NULL)").head)
+      db.update(db.parse(s"INSERT INTO PICK_RAW VALUES('2', '6.5', '$i.0')").head)
+      db.update(db.parse(s"INSERT INTO PICK_RAW VALUES('3', '4.0', '$i.5')").head)
+      db.update(db.parse(s"INSERT INTO PICK_RAW VALUES('4', '4.5', '$i.5')").head)
+      val tiLensName = createLens("PICK_RAW", Seq(".6"), "TYPE_INFERENCE", false, false)
+      val mvLensName = createLens(tiLensName, Seq("'B'"), "MISSING_VALUE", false, false)
+      val res = vistrailsQueryMimir(s"SELECT * FROM $mvLensName", true, false)
+      println(res.csvStr +"\n" + res.colsDet.toSeq.map(_.mkString(",")).mkString("\n"))
+      db.lenses.drop(mvLensName)
+      db.lenses.drop(tiLensName)
+    }*/
+    //Thread.sleep(30000)
+    
+    /*val tableName = loadCSV("test/r_test/r.csv")
+    
+    val queryString = s"select COLUMN_1, SUM(COLUMN_2) from $tableName GROUP BY COLUMN_1"
+    val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel(s"$queryString;")
+    val mimirOp = db.sql.convert(db.parse(queryString).head.asInstanceOf[Select])
+    val nodeStr2 = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
+    println(nodeStr2) 
+    println(mimirOp)    
+    
+    
+    val lensName = createLens(tableName, Seq("COLUMN_1"), "REPAIR_KEY", false, false)
+    val res = vistrailsQueryMimir(s"SELECT * FROM $lensName", true, false)
+    println(res.csvStr +"\n" + res.colsDet.toSeq.map(_.mkString(",")).mkString("\n"))*/
+    
+    val rand = new scala.util.Random(42)
+  val numSamples = 10
+  val bundler = new TupleBundle((0 until numSamples).map { _ => rand.nextLong })
+  db.query("select COLUMN_996_01_02 from orders", bundler)(resIter => {
+   val cols = resIter.schema.map(f => f._1)
+   val colsIndexes = resIter.schema.zipWithIndex.map( _._2)
+   val resCSV = resIter.toList.map(row => row.tuple.mkString(", "))
+   println(cols.mkString("",", ","\n") + resCSV.mkString("\n"))
+   })
+   println("-------------------------------------------------------")
+   val res = vistrailsQueryMimir("select COLUMN_996_01_02 from orders", true, false)
+   println(res.csvStr)
+    
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
       runServerForViztrails()
       db.backend.close()
@@ -93,6 +139,21 @@ object MimirVizier extends LazyLogging {
     }
     
     
+  }
+  
+  object MimirVizierUncaughtExceptionHandler extends java.lang.Thread.UncaughtExceptionHandler {
+    override def uncaughtException(t:Thread , e:Throwable) {
+      val errorMessage = "Exception in Thread: " +t.getName +": " + e.toString()
+      LoggerFactory.getLogger(MimirVizier.getClass.getName) match {
+          case logger: Logger => {
+            logger.error(errorMessage);
+          }
+          case _ => {
+            println(errorMessage)
+          }
+        }
+      e.printStackTrace()
+    }
   }
   
   private var mainThread : Thread = null
@@ -520,24 +581,18 @@ object MimirVizier extends LazyLogging {
   }
   
  def operCSVResultsDeterminism(oper : mimir.algebra.Operator) : PythonCSVContainer =  {
-     val results = new Vector[Row]()
-     var cols : Seq[String] = null
-     var colsIndexes : Seq[Int] = null
-     
-     db.query(oper)( resIter => {
-         cols = resIter.schema.map(f => f._1)
-         colsIndexes = resIter.schema.zipWithIndex.map( _._2)
-         while(resIter.hasNext())
-           results.add(resIter.next)
+    db.query(oper)( resIter => {
+         val cols = resIter.schema.map(f => f._1)
+         val colsIndexes = resIter.schema.zipWithIndex.map( _._2)
+         val resCSV = resIter.toList.map(row => {
+           val truples = colsIndexes.map( (i) => {
+             (row(i).toString, row.isColDeterministic(i)) 
+           }).unzip
+           (truples._1.mkString(", "), truples._2.toArray, (row.isDeterministic(), row.provenance.asString))
+         }).unzip3
+         val rowDetAndProv = resCSV._3.unzip
+         new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), resCSV._2.toArray, rowDetAndProv._1.toArray, Array[Array[String]](), rowDetAndProv._2.toArray)
      })
-     val resCSV = results.toArray[Row](Array()).seq.map(row => {
-       val truples = colsIndexes.map( (i) => {
-         (row(i).toString, row.isColDeterministic(i)) 
-       }).unzip
-       (truples._1.mkString(", "), truples._2.toArray, (row.isDeterministic(), row.provenance.asString))
-     }).unzip3
-     val rowDetAndProv = resCSV._3.unzip
-     new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), resCSV._2.toArray, rowDetAndProv._1.toArray, Array[Array[String]](), rowDetAndProv._2.toArray)
   }
  
  def operCSVResultsDeterminismAndExplanation(oper : mimir.algebra.Operator) : PythonCSVContainer =  {
