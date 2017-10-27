@@ -119,18 +119,18 @@ object MimirVizier extends LazyLogging {
     val res = vistrailsQueryMimir(s"SELECT * FROM $lensName", true, false)
     println(res.csvStr +"\n" + res.colsDet.toSeq.map(_.mkString(",")).mkString("\n"))*/
     
-    val rand = new scala.util.Random(42)
-  val numSamples = 10
-  val bundler = new TupleBundle((0 until numSamples).map { _ => rand.nextLong })
-  db.query("select COLUMN_996_01_02 from orders", bundler)(resIter => {
-   val cols = resIter.schema.map(f => f._1)
-   val colsIndexes = resIter.schema.zipWithIndex.map( _._2)
-   val resCSV = resIter.toList.map(row => row.tuple.mkString(", "))
-   println(cols.mkString("",", ","\n") + resCSV.mkString("\n"))
-   })
-   println("-------------------------------------------------------")
-   val res = vistrailsQueryMimir("select COLUMN_996_01_02 from orders", true, false)
-   println(res.csvStr)
+    /*val rand = new scala.util.Random(42)
+    val numSamples = 10
+    val bundler = new TupleBundle((0 until numSamples).map { _ => rand.nextLong })
+    db.query("select COLUMN_996_01_02 from orders", bundler)(resIter => {
+     val cols = resIter.schema.map(f => f._1)
+     val colsIndexes = resIter.schema.zipWithIndex.map( _._2)
+     val resCSV = resIter.toList.map(row => row.tuple.mkString(", "))
+     println(cols.mkString("",", ","\n") + resCSV.mkString("\n"))
+     })
+     println("-------------------------------------------------------")
+     val res = vistrailsQueryMimir("select COLUMN_996_01_02 from orders", true, false)
+     println(res.csvStr)*/
     
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
       runServerForViztrails()

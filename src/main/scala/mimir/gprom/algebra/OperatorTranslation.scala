@@ -811,12 +811,7 @@ object OperatorTranslation {
             (None:Option[AggFunction], Some((srcAttrs(provAndTaintAttrs.indexOf(i)), AnnotateArg(matchAnnotateArgNameToAnnotationType(aggSchema(i).attrName), aggSchema(i).attrName, aggSchema(i).attrType, Var(aggSchema(i).attrMimirName)))))
           }
         }).toSeq.unzip
-        val thething = (aggFuncs.flatten, anno.flatten)
-        println("---------------------------")
-          println(thething._1)
-          println(thething._2)
-          
-        thething
+        (aggFuncs.flatten, anno.flatten)
       }
     }
   }
