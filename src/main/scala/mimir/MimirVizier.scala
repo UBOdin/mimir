@@ -132,6 +132,25 @@ object MimirVizier extends LazyLogging {
      val res = vistrailsQueryMimir("select COLUMN_996_01_02 from orders", true, false)
      println(res.csvStr)*/
     
+    //test tuple bundle
+    /*loadCSV("/Users/michaelbrachmann/source/tpch/ref_data/100/lineitem.tbl.1", ("CSV", Seq(StringPrimitive("|"))))
+    val rand = new scala.util.Random(42)
+    val numSamples = 10
+    val bundler = new TupleBundle((0 until numSamples).map { _ => rand.nextLong })
+    val mvLensName = createLens("LINEITEM", Seq("'l_shipdate'"), "MISSING_VALUE", false, false)
+    
+    val res = vistrailsQueryMimir("select * from LINEITEM", true, false)
+    println(res.csvStr)
+     
+    db.query(s"select * from $mvLensName", bundler)(resIter => {
+     val cols = resIter.schema.map(f => f._1)
+     val colsIndexes = resIter.schema.zipWithIndex.map( _._2)
+     val resCSV = resIter.toList.map(row => row.tuple.mkString(", "))
+     println(cols.mkString("",", ","\n") + resCSV.mkString("\n"))
+     })
+     println("-------------------------------------------------------")
+     */
+    
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
       runServerForViztrails()
       db.backend.close()
@@ -231,17 +250,18 @@ object MimirVizier extends LazyLogging {
   //Python package defs
   ///////////////////////////////////////////////
   var pythonCallThread : Thread = null
-  def loadCSV(file : String) : String = {
+  def loadCSV(file : String, format:(String, Seq[PrimitiveValue]) = ("CSV", Seq(StringPrimitive(",")))) : String = {
     pythonCallThread = Thread.currentThread()
     val timeRes = time {
       logger.debug("loadCSV: From Vistrails: [" + file + "]") ;
       val csvFile = new File(file)
-      val tableName = (csvFile.getName().split("\\.")(0) + "_RAW").toUpperCase
+      val nameFromFile = csvFile.getName().split("\\.")(0)
+      val tableName = (nameFromFile + "_RAW").toUpperCase
       if(db.getAllTables().contains(tableName)){
         logger.debug("loadCSV: From Vistrails: Table Already Exists: " + tableName)
       }
       else{
-        db.loadTable(csvFile)
+        db.loadTable( nameFromFile, csvFile,  true, format)
       }
       tableName 
     }
