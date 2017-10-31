@@ -268,11 +268,11 @@ object MimirVizier extends LazyLogging {
         }
         case update:Update => {
           db.backend.update(query)
-          new PythonCSVContainer("SUCCESS\n1", Array(Array()), Array(), Array(), Array())
+          new PythonCSVContainer("SUCCESS\n1", Array(Array()), Array(), Array(), Array(), Map())
         }
         case stmt:Statement => {
           db.update(stmt)
-          new PythonCSVContainer("SUCCESS\n1", Array(Array()), Array(), Array(), Array())
+          new PythonCSVContainer("SUCCESS\n1", Array(Array()), Array(), Array(), Array(), Map())
         }
       }
       
@@ -515,7 +515,7 @@ object MimirVizier extends LazyLogging {
        prov.add(row.provenance.asString)
     }
     val resCSV = cols.mkString(", ") + "\n" + rows.toString()
-    new PythonCSVContainer(resCSV, Array[Array[Boolean]](), Array[Boolean](), Array[Array[String]](), prov.toArray[String](Array()))
+    new PythonCSVContainer(resCSV, Array[Array[Boolean]](), Array[Boolean](), Array[Array[String]](), prov.toArray[String](Array()), results.schema.map(f => (f._1, f._2.toString())).toMap)
     })
   }
   
@@ -523,8 +523,10 @@ object MimirVizier extends LazyLogging {
      val results = new Vector[Row]()
      var cols : Seq[String] = null
      var colsIndexes : Seq[Int] = null
+     var schViz : Map[String, String] = null
      
      db.query(oper)( resIter => {
+         schViz = resIter.schema.map(f => (f._1, f._2.toString())).toMap
          cols = resIter.schema.map(f => f._1)
          colsIndexes = resIter.schema.zipWithIndex.map( _._2)
          while(resIter.hasNext())
@@ -537,15 +539,17 @@ object MimirVizier extends LazyLogging {
        (truples._1.mkString(", "), truples._2.toArray, (row.isDeterministic(), row.provenance.asString))
      }).unzip3
      val rowDetAndProv = resCSV._3.unzip
-     new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), resCSV._2.toArray, rowDetAndProv._1.toArray, Array[Array[String]](), rowDetAndProv._2.toArray)
+     new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), resCSV._2.toArray, rowDetAndProv._1.toArray, Array[Array[String]](), rowDetAndProv._2.toArray, schViz)
   }
  
  def operCSVResultsDeterminismAndExplanation(oper : mimir.algebra.Operator) : PythonCSVContainer =  {
      val results = new Vector[Row]()
      var cols : Seq[String] = null
      var colsIndexes : Seq[Int] = null
+     var schViz : Map[String, String] = null
      
      db.query(oper)( resIter => {
+         schViz = resIter.schema.map(f => (f._1, f._2.toString())).toMap
          cols = resIter.schema.map(f => f._1)
          colsIndexes = resIter.schema.zipWithIndex.map( _._2)
          while(resIter.hasNext())
@@ -558,7 +562,7 @@ object MimirVizier extends LazyLogging {
        (truples._1.mkString(", "), (truples._2.toArray, row.isDeterministic(), row.provenance.asString), truples._3.toArray)
      }).unzip3
      val detListsAndProv = resCSV._2.unzip3
-     new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), detListsAndProv._1.toArray, detListsAndProv._2.toArray, resCSV._3.toArray, detListsAndProv._3.toArray)
+     new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), detListsAndProv._1.toArray, detListsAndProv._2.toArray, resCSV._3.toArray, detListsAndProv._3.toArray, schViz)
   }
  
  def isWorkflowDeployed(hash:String) : Boolean = {
@@ -635,5 +639,5 @@ trait PythonMimirCallInterface {
 	def callToPython(callStr : String) : String
 }
 
-class PythonCSVContainer(val csvStr: String, val colsDet: Array[Array[Boolean]], val rowsDet: Array[Boolean], val celReasons:Array[Array[String]], val prov: Array[String]){}
+class PythonCSVContainer(val csvStr: String, val colsDet: Array[Array[Boolean]], val rowsDet: Array[Boolean], val celReasons:Array[Array[String]], val prov: Array[String], val schema:Map[String, String]){}
 
