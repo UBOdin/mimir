@@ -127,6 +127,8 @@ object PushdownSelections extends OperatorOptimization {
 			
 			case Select(cond, EmptyTable(sch)) => EmptyTable(sch)
 
+			case Select(_, (_:SingletonTable)) => o
+			
 			case Select(cond, View(name, query, annotations)) => 
 				Select(cond, View(name, apply(query), annotations))
 
