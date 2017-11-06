@@ -53,7 +53,7 @@ object JDBCUtils {
     }
 
     t match {
-      case TAny() =>        throw new SQLException("Can't extract TAny")
+      case TAny() =>        (r) => checkNull(r, { StringPrimitive(r.getString(field)) })
       case TFloat() =>      (r) => checkNull(r, { FloatPrimitive(r.getDouble(field)) })
       case TInt() =>        (r) => checkNull(r, { IntPrimitive(r.getLong(field)) })
       case TString() =>     (r) => checkNull(r, { StringPrimitive(r.getString(field)) })

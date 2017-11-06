@@ -32,6 +32,30 @@ object JsonFunctions
     StringPrimitive(extract(args).toString)
   }
 
+  def jsonClusterProject(args: Seq[PrimitiveValue]): PrimitiveValue =
+  {
+    if(args(0) != null){
+      val jsonString: String = args(0).toString
+      var jsonLeafKeySet: Set[String] = null
+
+      try {
+        val jsonMap: java.util.Map[String,AnyRef] = JsonFlattener.flattenAsMap(jsonString) // create a flat map of the json object
+        jsonLeafKeySet = jsonMap.keySet()
+      }
+      catch{
+        case e: Exception => {
+          //              println(s"Not of JSON format in Json_Explorer_Project, so null returned: $jsonString")
+          NullPrimitive()
+        } // is not a proper json format so return null since there's nothing we can do about this right now
+      } // end try catch
+
+      StringPrimitive(jsonLeafKeySet.toString)
+    }
+    else{
+      NullPrimitive()
+    }
+  }
+
   def jsonExplorerProject(args: Seq[PrimitiveValue]): PrimitiveValue =
   {
 
@@ -108,6 +132,7 @@ object JsonFunctions
   {
     fr.register("JSON_EXTRACT", extractAny(_), (_) => TString())
     fr.register("JSON_EXPLORER_PROJECT"   , jsonExplorerProject(_), (_) => TString())
+    fr.register("JSON_CLUSTER_PROJECT"   , jsonExplorerProject(_), (_) => TString())
     fr.register("JSON_EXTRACT_INT", extract(_, TInt()), (_) => TInt())
     fr.register("JSON_EXTRACT_FLOAT", extract(_, TFloat()), (_) => TFloat())
     fr.register("JSON_EXTRACT_STR", extract(_, TString()), (_) => TString())

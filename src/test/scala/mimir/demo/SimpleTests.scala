@@ -25,13 +25,9 @@ object SimpleTests
   // automatically parallelizing testing.
   sequential
 
-  val jsonDB = new Database(new JDBCBackend("sqlite", "test/json.db"))
-  jsonDB.backend.open()
-  jsonDB.initializeDBForMimir();
-
-  val debugDB = new Database(new JDBCBackend("sqlite", "databases/debug.db"))
-  debugDB.backend.open()
-  debugDB.initializeDBForMimir();
+//  val jsonDB = new Database(new JDBCBackend("sqlite", "test/json.db"))
+//  jsonDB.backend.open()
+//  jsonDB.initializeDBForMimir();
 
   val productDataFile = new File("test/data/Product.sql");
   val reviewDataFiles = List(
@@ -73,16 +69,21 @@ object SimpleTests
       }
 */
 /*
-      query("SELECT * FROM JSONTEST4;"){
+      query("SELECT JSONCOLUMN FROM TWITTERFULL;"){
         _.foreach(println(_))
       }
+
+      time("Query Time") {
+        query("SELECT JSON_CLUSTER_PROJECT(JSONCOLUMN) FROM TWITTERFULL;") {
+          _.foreach(println(_))
+        }
+      }
+      println("Done")
 */
 
     time("Query Time") {
-      query("SELECT JSON_EXPLORER_MERGE(JSON_EXPLORER_PROJECT(JSONCOLUMN)) FROM TWITTERFULL;") {
-        _.map {
-          _ (0)
-        }
+      query("SELECT JSON_CLUSTER_AGG(JSON_CLUSTER_PROJECT(JSONCOLUMN)) FROM TWITTERFULL;") {
+        _.foreach(println(_))
       }
     }
 

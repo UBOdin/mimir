@@ -1,5 +1,6 @@
 package mimir.sql.sqlite
 
+import java.util
 import java.util.Set
 
 import com.github.wnameless.json.flattener.JsonFlattener
@@ -49,6 +50,8 @@ object SQLiteCompat extends LazyLogging{
     org.sqlite.Function.create(conn, "MAX", Max)
     org.sqlite.Function.create(conn, "JSON_EXPLORER_MERGE", JsonExplorerMerge)
     org.sqlite.Function.create(conn, "JSON_EXPLORER_PROJECT", JsonExplorerProject)
+    org.sqlite.Function.create(conn, "JSON_CLUSTER_PROJECT", JsonClusterProject)
+    org.sqlite.Function.create(conn, "JSON_CLUSTER_AGG", new JsonClusterAGG())
   }
   
   def getTableSchema(conn:java.sql.Connection, table: String): Option[Seq[(String, Type)]] =
@@ -794,6 +797,87 @@ object JsonExplorerMerge extends org.sqlite.Function.Aggregate {
 
     println(Json.prettyPrint(output))
     result(Json.stringify(output))
+  }
+
+}
+
+object JsonClusterProject extends org.sqlite.Function with LazyLogging {
+
+  override def xFunc(): Unit = {
+    val combineArrays: Boolean = true // if true, then arrays will be treated as one path
+
+    value_type(0) match {
+      case SQLiteCompat.TEXT => {
+        val jsonString: String = value_text(0)
+        var jsonLeafKeySet: Set[String] = null
+
+        try {
+          val jsonMap: java.util.Map[String,AnyRef] = JsonFlattener.flattenAsMap(jsonString) // create a flat map of the json object
+          if(combineArrays)
+            jsonLeafKeySet = combineArr(jsonMap.keySet())
+          else
+            jsonLeafKeySet = jsonMap.keySet()
+        }
+        catch{
+          case e: Exception => {
+            //              println(s"Not of JSON format in Json_Explorer_Project, so null returned: $jsonString")
+            result()
+          } // is not a proper json format so return null since there's nothing we can do about this right now
+        } // end try catch
+
+        val res: String = jsonLeafKeySet.toString
+        result(res.substring(1,res.length - 1)) // remove the set brackets before returning
+      }
+      case _ => result() // else return null
+    }
+  }
+
+  def combineArr(paths: Set[String]): Set[String] = {
+    var ret: Set[String] = new util.HashSet[String]()
+    val pathIterator = paths.iterator()
+    while(pathIterator.hasNext){
+      val path: String = pathIterator.next()
+      if(path.contains("[")) { // is an array
+        // this unreadible line of code will first remove everything between square brackets, then it will replace all multiple periods with a single period for sanity
+        ret.add(path.replaceAll("\\[.*\\]", "").replaceAll("\\.{2,}", "\\."))
+      }
+      else
+        ret.add(path) // not an array
+    }
+    ret
+  }
+
+}
+
+
+class JsonClusterAGG extends org.sqlite.Function.Aggregate {
+
+  val rowHolder: ListBuffer[ListBuffer[Int]] = ListBuffer[ListBuffer[Int]]() // Seq of feature vectors
+  var totalSchema: ListBuffer[String] = ListBuffer[String]() // the total schema, used to determine the feature vector
+
+  @Override
+  def xStep(): Unit = {
+    if(value_type(0) != SQLiteCompat.NULL) { // the value is not null, so merge the JSON objects
+      val schema: List[String] = value_text(0).replace("\u0020","").split(",").toList
+      val featureVector: ListBuffer[Int] = ListBuffer[Int]()
+      schema.foreach((v: String) => {
+        if(!totalSchema.contains(v))
+          totalSchema += v
+      })
+      totalSchema.foreach((v) => {
+        if(schema.contains(v))
+          featureVector += 1
+        else
+          featureVector += 0
+      })
+      rowHolder += featureVector
+    } // end value is not null section
+  }
+
+  def xFinal(): Unit = {
+    // rowHolder holds the feature vectors for each row, iterate through this
+    // total Schema is the maximum schema for the json dataset, this contains an order with all known paths
+    result("DONE")
   }
 
 }
