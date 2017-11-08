@@ -86,6 +86,10 @@ object MimirVizier extends LazyLogging {
         }
     }
     
+    db.update(db.parse("LOAD '/Users/michaelbrachmann/source/mimir/test/data/mk.csv';").head)
+    val res = vistrailsQueryMimir("SELECT * FROM MK", true, false)
+    println(res.csvStr)
+    
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
       runServerForViztrails()
       db.backend.close()

@@ -13,6 +13,7 @@ import mimir.lenses._
 import mimir.models._
 import mimir.views._
 import mimir.statistics.FuncDep
+import mimir.provenance.Provenance
 
 object CheckHeader
   extends Multilens
@@ -21,61 +22,20 @@ object CheckHeader
 
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model] =
   {
-    val lenses          = new mimir.lenses.LensManager(db)
-    val views           = new mimir.views.ViewManager(db)
-    val col = config.query.expressions(0);
-    val tablename = col.toString.split("_")(0);
-    var view_name = "";
-    val detectmodel = new DetectHeaderModel(
-      config.schema,
-      view_name,
-      false
-    );
-    detectmodel.detect_header(db,config.query);
+    val viewName = config.schema
+    val modelName = "MIMIR_CH_" + viewName
+    val detectmodel = new DetectHeaderModel(modelName);
+    val detectResult = detectmodel.detect_header(db,config.query);
 
-    var viewName= detectmodel.view_name
-    var cols : Seq[String] = Nil;
-    var projectArgs =config.query.columnNames.map{
-     col => ProjectArg(col, Var(col))
-     cols :+= col
-    }
-    var queryAttr:Operator = null
-    var len = 0;
-    var arrs : Seq[mimir.algebra.PrimitiveValue] = null
-    var str=""
-    db.query(Limit(0,Some(1),config.query))(_.foreach{result =>
-      arrs =  result.tuple
-    })
-    len = arrs.length
-    var repl = new ListBuffer[String]()
-    for(i<- 0 until len){
-      var res = arrs(i).toString()
-      res = res.replaceAll("\\'","");
-      var ch =  res.toString()(0)
-
-      if(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z'){
-        repl += res.toString()
-      }
-    }
-    if(repl.size>0){
-      cols = Nil
-      var querymapping = config.query.columnNames zip (repl)
-      projectArgs = querymapping.map{
-        case (a,b) => ProjectArg(b,Var(a))
-        cols :+= b
-      }
-    }
-    var tableCatalog = config.schema+"_Table"
+    val cols = detectResult._2.toSeq.sortBy(_._1).unzip._2
+    
+    val tableCatalog = "MIMIR_DH_TABLE_"+config.schema
     db.backend.update(s"""
       CREATE TABLE $tableCatalog (TABLE_NAME string)""")
     db.backend.fastUpdateBatch(s"""
-      INSERT INTO $tableCatalog (TABLE_NAME) VALUES (?);
-    """,
-     Seq(viewName).map{ str =>
-       Seq(StringPrimitive(str))
-    })
+      INSERT INTO $tableCatalog (TABLE_NAME) VALUES (?)""", Seq(Seq(StringPrimitive(viewName))))
 
-    var attrCatalog = config.schema+"_Attributes"
+    val attrCatalog = "MIMIR_DH_ATTR_"+config.schema
     db.backend.update(s"""
       CREATE TABLE $attrCatalog (TABLE_NAME string, ATTR_NAME string,ATTR_TYPE string,IS_KEY bool)""")
     db.backend.fastUpdateBatch(s"""
@@ -83,37 +43,23 @@ object CheckHeader
       cols.map { col_name =>
         Seq(StringPrimitive(viewName), StringPrimitive(col_name), TypePrimitive(Type.fromString("varchar")), BoolPrimitive(false))
     })
-    return Seq(detectmodel)
+    Seq(detectmodel)
   }
 
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    val queryString = "select TABLE_NAME from "+config.schema+"_Table";
-    var parser = new MimirJSqlParser(new ByteArrayInputStream(queryString.getBytes));
-    val stmt: Statement = parser.Statement();
-    val tableQuery = db.sql.convert(stmt.asInstanceOf[net.sf.jsqlparser.statement.select.Select])
-    return tableQuery
+    db.table("MIMIR_DH_TABLE_"+config.schema).project("TABLE_NAME")
   }
   def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    val queryString = "select * from "+config.schema+"_Attributes";
-    var parser = new MimirJSqlParser(new ByteArrayInputStream(queryString.getBytes));
-    val stmt: Statement = parser.Statement();
-    val attributeQuery = db.sql.convert(stmt.asInstanceOf[net.sf.jsqlparser.statement.select.Select])
-    return attributeQuery
+    db.table("MIMIR_DH_ATTR_"+config.schema)
   }
   def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
   {
-    var attr : Seq[mimir.algebra.PrimitiveValue]= Nil;
-    db.query("select ATTR_NAME from "+config.schema+"_Attributes")(_.foreach{result =>
-      attr :+= result.tuple(0)
-    })
-    var querymapping = config.query.columnNames zip (attr)
-    var projectArgs = querymapping.map{
-      case (a,b) => ProjectArg(b.toString(),Var(a))
-    }
-    return Some(Limit(1,Some(1000000000),Project(projectArgs,config.query)))
-
+    val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
+    Some(Limit(if(model.headerDetected) 1 else 0,Some(10000000),Project(config.query.columnNames.zip(db.query(db.table("MIMIR_DH_ATTR_"+config.schema).project("ATTR_NAME"))(result => result.toList.map(row => row.tuple(0).asString))).map{
+      case (a,b) => ProjectArg(b,Var(a))
+    },config.query)))
   }
 
 

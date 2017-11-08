@@ -29,7 +29,7 @@ object Regression extends SparkML {
       case NullPrimitive() => null
       case RowIdPrimitive(s) => s
       case StringPrimitive(s) => s
-      case IntPrimitive(i) => i
+      case IntPrimitive(i) => i.toDouble
       case FloatPrimitive(f) => f
       case x =>  x.asString 
     }
@@ -53,7 +53,7 @@ object Regression extends SparkML {
       }
       case RowIdPrimitive(s) => s
       case StringPrimitive(s) => s
-      case IntPrimitive(i) => i
+      case IntPrimitive(i) => i.toDouble
       case FloatPrimitive(f) => f
       case x =>  x.asString 
     }
@@ -61,7 +61,7 @@ object Regression extends SparkML {
   
   override def getSparkType(t:Type) : DataType = {
     t match {
-      case TInt() => LongType
+      case TInt() => DoubleType
       case TFloat() => DoubleType
       case TDate() => StringType
       case TString() => StringType
