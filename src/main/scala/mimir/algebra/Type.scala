@@ -15,6 +15,8 @@ sealed trait Type
 }
 
 object Type {
+  val rootTypes = Seq(TInt(), TFloat(), TDate(), TTimestamp(), TString(), TBool(), TInterval())
+  
   def toString(t:Type) = t match {
     case TInt() => "int"
     case TFloat() => "real"
