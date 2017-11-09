@@ -285,6 +285,8 @@ object SimpleDemoScript
 				)
 			}
 			
+			
+			
 			val explain0 = 
 				LoggerUtils.trace(
 					// "mimir.ctables.CTExplainer"
@@ -298,8 +300,8 @@ object SimpleDemoScript
 						""", "3|1|4", "RATING")
 				}
 			explain0.reasons.map(_.model.name.replaceAll(":.*", "")) must contain(eachOf(
-				"RATINGS2FINAL",
-				"RATINGS2"
+				"RATINGS2FINAL"//,
+				//"RATINGS2"
 			))
 
 			query("""

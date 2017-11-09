@@ -27,10 +27,11 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
     "Produce reasonable views" >> {
       db.loadTable("CPUSPEED", new File("test/data/CPUSpeed.csv"))
       val resolved1 = InlineProjections(db.views.resolve(db.table("CPUSPEED")))
-      resolved1 must beAnInstanceOf[Project]
-      val resolved2 = resolved1.asInstanceOf[Project]
+      resolved1 must beAnInstanceOf[AdaptiveView]
+      resolved1.children.head must beAnInstanceOf[Project]
+      val resolved2 = resolved1.children.head.asInstanceOf[Project]
       val coresColumnId = db.table("CPUSPEED").columnNames.indexOf("CORES")
-      val coresModel = db.models.get("CPUSPEED")
+      val coresModel = db.models.get("MIMIR_TI_ATTR_CPUSPEED_TI_RK:ATTR_TYPE")
 
       // Make sure the model name is right.
       // Changes to the way the type inference lens assigns names will need to
@@ -39,10 +40,10 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       coresModel must not be empty
 
       resolved2.get("CORES") must be equalTo(Some(
-        Function("CAST", List(Var("CORES"), VGTerm(coresModel.name, coresColumnId, List(), List())))
+        Function("CAST", List(Var("CORES"), TypePrimitive(TInt())))//VGTerm(coresModel.name, coresColumnId, List(), List())))
       ))
 
-      coresModel.reason(coresColumnId, List(), List()) must contain("was of type INT")
+      coresModel.reason(coresColumnId, List(), List()) must contain("In MIMIR_TI_ATTR_CPUSPEED_TI_RK, there were 224 options for ATTR_TYPE on the row identified by <>, and I picked int because it had the highest score and priority")
 
       val coresGuess1 = coresModel.bestGuess(coresColumnId, List(), List())
       coresGuess1 must be equalTo(TypePrimitive(TInt()))

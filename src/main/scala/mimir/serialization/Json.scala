@@ -274,7 +274,7 @@ object Json
               toPrimitive(toType(field("type")), field("value"))
           }
         )
-
+        
       case "table_normal" =>
         Table(
           elems("table").asInstanceOf[JsString].value, 

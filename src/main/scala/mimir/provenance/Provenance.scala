@@ -142,13 +142,6 @@ object Provenance extends LazyLogging {
         val (newQuery, rowIds) = compile(query)
         ( View(name, newQuery, meta + ViewAnnotation.PROVENANCE), rowIds)
 
-      //this was a hack for detect header adaptive schemas for offsetting rowid when there was a header detected  
-      /*case av@AdaptiveView(model, name, limit@Limit(1,_,query), meta) if model.endsWith("_DH") => 
-        val (newQuery, rowIds) = compile(limit)
-        val newAdaptiveQuery = AdaptiveView(model, name, newQuery, meta + ViewAnnotation.PROVENANCE)
-        val rowIDSubQuery = Project( av.columnNames.map(col => ProjectArg(col, Var(col))) ++ rowIds.map(rid => ProjectArg(rid, Arithmetic(Arith.Sub, Function("CAST", Seq(Var(rid), TypePrimitive(TInt()))), IntPrimitive(1) ))), newAdaptiveQuery)
-        ( rowIDSubQuery, rowIds)*/
-        
       case AdaptiveView(model, name, query, meta) => 
         val (newQuery, rowIds) = compile(query)
         ( AdaptiveView(model, name, newQuery, meta + ViewAnnotation.PROVENANCE), rowIds)
@@ -275,7 +268,6 @@ object Provenance extends LazyLogging {
           rowIds.keys.map( col => 
             p.get(col) match {
               case Some(Var(v)) => (Some((col, v)), None)
-              //case Some(arith@Arithmetic(Arith.Sub, Function("CAST", Seq(Var(v), TypePrimitive(TInt()))), IntPrimitive(i) )) => (Some((col, v)), None)
               case Some(RowIdPrimitive(v)) => (None, Some((col, v)))
               case unknownExpr => 
                 throw new ProvenanceError("Operator not properly compiled for provenance: Projection Column "+col+" has expression "+unknownExpr)

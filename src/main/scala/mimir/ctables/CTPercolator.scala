@@ -568,7 +568,7 @@ object CTPercolator
           BoolPrimitive(true)
         )
       }
-
+ 
       case SingletonTable(tuple) => {
         return (oper, 
           tuple.map { case (name, _) => (name, BoolPrimitive(true)) }.toMap, 
