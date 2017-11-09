@@ -469,8 +469,6 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 			case EmptyTable(_) => Seq()
 
-			case SingletonTable(_, _) => Seq()
-
 			case Project(args, child) => {
 				val relevantArgs =
 					args.filter { col => wantCol(col.name) }

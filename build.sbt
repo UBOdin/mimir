@@ -34,7 +34,7 @@ testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console
 mainClass in Compile := Some("mimir.Mimir")
 
 //if you want to debug tests uncomment this
-//javaOptions += "-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005"
+javaOptions += "-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005"
 
 lazy val runMimirVizier = inputKey[Unit]("run MimirVizier")
 runMimirVizier := {

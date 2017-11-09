@@ -347,19 +347,6 @@ case class EmptyTable(sch: Seq[(String, Type)])
   def columnNames = sch.map(_._1)
 }
 
-@SerialVersionUID(100L)
-case class SingletonTable(sch: Seq[(String, Type)], data: Seq[PrimitiveValue])
-  extends Operator
-{
-  def toString(prefix: String) =
-    prefix + "SINGLETON[" + data.mkString(", ") + "]"
-  def children: List[Operator] = List()
-  def rebuild(x: Seq[Operator]) = this
-  def expressions = data
-  def rebuildExpressions(x: Seq[Expression]) = SingletonTable(sch, data.map { _.asInstanceOf[PrimitiveValue] })
-  def columnNames = sch.map(_._1)
-}
-
 /**
  * A table with exactly one row --- Corresponds roughly to a
  * SELECT ... 

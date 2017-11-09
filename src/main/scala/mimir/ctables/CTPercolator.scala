@@ -568,15 +568,7 @@ object CTPercolator
           BoolPrimitive(true)
         )
       }
-      case SingletonTable(sch, _) => {
-        return (oper, 
-          // All columns are deterministic
-          sch.map(_._1).map((_, BoolPrimitive(true)) ).toMap,
-          // All rows are deterministic
-          BoolPrimitive(true)
-        )
-      }
-
+ 
       case SingletonTable(tuple) => {
         return (oper, 
           tuple.map { case (name, _) => (name, BoolPrimitive(true)) }.toMap, 

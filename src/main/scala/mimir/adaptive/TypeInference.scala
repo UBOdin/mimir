@@ -12,8 +12,7 @@ object TypeInference
     with LazyLogging
 {
 
-  val TYPED_TABLE_NAME = "TYPED"
-
+  
   def detectType(v: String): Iterable[Type] = {
     Type.tests.flatMap({ case (t, regexp) =>
       regexp.findFirstMatchIn(v).map(_ => t)
@@ -26,7 +25,8 @@ object TypeInference
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model] =
   {
     logger.debug(s"Creating TypeInference: $config")
-
+    val viewName = config.schema
+    
     val stringDefaultScore: Double = 
       config.args match {
         case Seq() => 0.5
@@ -41,19 +41,14 @@ object TypeInference
         case _ => None
       }.toIndexedSeq
 
-    var totalVotes: scala.collection.mutable.ArraySeq[Double] = 
-      { val v = new scala.collection.mutable.ArraySeq[Double](modelColumns.length)
-        for(col <- (0 until modelColumns.size)){ v.update(col, 0.0) }
-        v
-      }
+    val totalVotes = collection.mutable.IndexedSeq[Double](modelColumns.map(_ => 0.0):_*)
 
-    var votes: IndexedSeq[scala.collection.mutable.Map[Type, Double]] = 
-      modelColumns.map(_ => {
-        val temp = scala.collection.mutable.Map[Type, Double]()
-        (Type.tests ++ TypeRegistry.registeredTypes).map((tup) => {
-          temp.put(Type.fromString(tup._1.toString),0.0)
-        })
-        temp
+    val votes = 
+      modelColumns.map(col=> {
+        collection.mutable.Map(
+        ((Type.tests ++ TypeRegistry.registeredTypes).map(tup => {
+          (Type.fromString(tup._1.toString):Type, 0.0)
+        })).toSeq:_*)  
       })
 
     // Scan through each record to find each column's type.
@@ -63,9 +58,9 @@ object TypeInference
         config.query
       )
     ) { results => 
-      for(row <- results){
-        for((v,idx) <- row.tuple.zipWithIndex){
-          v match {
+      results.toSeq.map( row => {
+        row.tuple.zipWithIndex.map{
+          case (v, idx) =>  v match {
             case null            => ()
             case NullPrimitive() => ()
             case _               => {
@@ -73,121 +68,177 @@ object TypeInference
               val candidates = detectType(v.asString)
               logger.debug(s"Guesses for '$v': $candidates")
               val votesForCurrentIdx = votes(idx)
-              for(t <- candidates){
+              candidates.map(t => {
                 votesForCurrentIdx(t) = votesForCurrentIdx.getOrElse(t, 0.0) + 1.0
-              }
+              })
             }
           }
-
         }
-      }
+      })
     }
 
     logger.debug("Creating Backend Table for Type Inference")
-    val schTable = s"MIMIR_TI_SCH_${config.schema}"
-
     // Create backend table that contains all the
+    
+    val attrCatalog = "MIMIR_TI_ATTR_"+config.schema
     db.backend.update(s"""
-        CREATE TABLE $schTable (ATTR_NAME TEXT, ATTR_TYPE TEXT, SCORE REAL);
-      """)
+      CREATE TABLE $attrCatalog (TABLE_NAME string, ATTR_NAME string,ATTR_TYPE string, IDX int, IS_KEY bool, SCORE real)""")
 
     logger.debug("Filling Type Inference backend table")
-
-    for( ((votesByTypeForCol, col), idx) <- ((votes zip modelColumns).zipWithIndex)){
-      // update the map of each column that tracks the type counts
-      val totalVotesForCol = totalVotes(idx)
-
-      for( (typ, score) <- votesByTypeForCol ){
-        // loop over types
-
-        val normalizedScore = 
-          if(totalVotesForCol > 0.0){ score.toDouble / totalVotesForCol }
-          else { 0.0 }
-          assert(score <= 1.0)
-
+    ((votes zip modelColumns).zipWithIndex).map{
+      case ((votesByTypeForCol, col), idx) => {
+        // update the map of each column that tracks the type counts
+        val totalVotesForCol = totalVotes(idx)
+        votesByTypeForCol.toIndexedSeq.map {
+          case (typ, score) => {
+            val normalizedScore = 
+              if(totalVotesForCol > 0.0){ score.toDouble / totalVotesForCol }
+              else { 0.0 }
+              assert(normalizedScore <= 1.0)
+            db.backend.update(s"""
+              INSERT INTO $attrCatalog(TABLE_NAME, ATTR_NAME, ATTR_TYPE, IDX, IS_KEY, SCORE) VALUES (?, ?, ?, ?, ?, ?)
+            """, Seq(
+              StringPrimitive(viewName),
+              StringPrimitive(col),
+              StringPrimitive(typ.toString),
+              IntPrimitive(idx),
+              BoolPrimitive(false),
+              FloatPrimitive(normalizedScore)
+            )) // update the table for the RK lens
+          }
+        }
         db.backend.update(s"""
-          INSERT INTO $schTable(ATTR_NAME, ATTR_TYPE, SCORE) VALUES (?, ?, ?)
+          INSERT INTO $attrCatalog(TABLE_NAME, ATTR_NAME, ATTR_TYPE, IDX, IS_KEY, SCORE) VALUES (?, ?, 'string', ?, ?, ?)
         """, Seq(
+          StringPrimitive(viewName),
           StringPrimitive(col),
-          StringPrimitive(typ.toString),
-          FloatPrimitive(normalizedScore)
+          IntPrimitive(idx),
+          BoolPrimitive(false),
+          FloatPrimitive(stringDefaultScore)
         )) // update the table for the RK lens
       }
-      db.backend.update(s"""
-        INSERT INTO $schTable(ATTR_NAME, ATTR_TYPE, SCORE) VALUES (?, 'string', ?)
-      """, Seq(
-        StringPrimitive(col),
-        FloatPrimitive(stringDefaultScore)
-      )) // update the table for the RK lens
     }
 
     // Create the model used by Type Inference: (Name, Context, Query Operator, Collapsed Columns, Distinct Column, Type, ScoreBy)
     // keys are the distinct values
-
-    val repairKeyName = schTable + "_RK"
-    val repairKeyOp = db.table(schTable)
-    val repairKeyArgs:Seq[Expression] = Seq(Var("ATTR_NAME"),Function("SCORE_BY",Seq(Var("SCORE")))) // args for the RK lens
-    val (_, repairKeyModels) = RepairKeyLens.create(db,repairKeyName,repairKeyOp,repairKeyArgs)
-
-    return repairKeyModels
+    val name = attrCatalog + "_RK"
+    val attrQuery = db.table(attrCatalog)
+    db.bestGuessSchema(attrQuery).
+      filterNot( Seq("IDX", "SCORE") contains _._1 ).
+      map { case (col, t) => 
+        val model =
+          new TIRepairModel(
+            s"$name:$col", 
+            name, 
+            attrQuery, 
+            Seq(("IDX", TInt())), 
+            col, t,
+            Some("SCORE")
+          )
+        model.reconnectToDatabase(db)
+        model 
+      }
   }
 
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    SingletonTable(
-      Seq( ("TABLE_NAME", TString()) ),
-      Seq( StringPrimitive(TYPED_TABLE_NAME) )
-    )
+    SingletonTable(Seq(("TABLE_NAME",StringPrimitive("MIMIR_TI_TABLE_"+config.schema))))
   }
 
   def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    inferredTypesView(db, config)
-      .addColumn( 
-        "TABLE_NAME" -> StringPrimitive(TYPED_TABLE_NAME),
-        "IS_KEY" -> BoolPrimitive(false)
-      )
+    inferredTypesView(db, config.schema, db.table("MIMIR_TI_ATTR_"+config.schema).sort(("IDX",false)))
   }
 
   def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
   {
-    table.toUpperCase match {
-      case TYPED_TABLE_NAME => 
+    Some(Project(
         db.query(
-          inferredTypesView(db, config)
-            .filter(Var("TABLE_NAME").eq(StringPrimitive(TYPED_TABLE_NAME)))
-            .project("ATTR_NAME", "ATTR_TYPE")
-        ) { results =>
-
-          val remappedColumns =
-            results.map { row =>
-              val colName = row(0).asString
+          attrCatalogFor(db, config)
+            .project("IDX", "ATTR_TYPE")
+        ) { results => {
+            val cols = db.typechecker.schemaOf(config.query).unzip._1
+            results.toSeq.map { row =>
+              val colName = cols(row(0).asInt)
               val colType = row(1).asString
-
               ProjectArg(
                 colName,
                 Function("CAST", Seq(Var(colName), TypePrimitive(Type.fromString(colType))))
               )
-            }.toIndexedSeq
-
-          Some(Project(remappedColumns, config.query))
-        }
-
-      case _ => None
-
-    }
+            }.toIndexedSeq}
+    }, config.query))  
   }
 
-  final def inferredTypesView(db: Database, config: MultilensConfig): Operator =
+  final def inferredTypesView(db: Database, schema:String, query:Operator): Operator =
   {
-    val typeGuessModel: Model = db.models.get(s"MIMIR_TI_SCH_${config.schema}_RK:ATTR_TYPE")
-
+    val typeGuessModel: Model = db.models.get(s"MIMIR_TI_ATTR_${schema}_RK:ATTR_TYPE")
     RepairKeyLens.assemble(
-      config.query,
-      Seq("ATTR_NAME"),
+      query,
+      Seq("IDX"),
       Seq(("ATTR_TYPE", typeGuessModel)),
       Some("SCORE")
     )
   }
+}
 
+
+@SerialVersionUID(1000L)
+class TIRepairModel(
+  name: String, 
+  context: String, 
+  source: Operator, 
+  keys: Seq[(String, Type)], 
+  target: String,
+  targetType: Type,
+  scoreCol: Option[String]
+) extends RepairKeyModel(name, context, source, keys, target, targetType, scoreCol)
+{
+  def priority: Type => Int =
+  {
+    case TUser(_)     => 20
+    case TInt()       => 10
+    case TBool()      => 10
+    case TDate()      => 10
+    case TTimestamp() => 10
+    case TInterval()  => 10
+    case TType()      => 10
+    case TFloat()     => 5
+    case TString()    => 0
+    case TRowId()     => -5
+    case TAny()       => -10
+  }
+  
+  override def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
+    getFeedback(idx, args) match {
+      case Some(choice) => choice
+      case None => getTopPick(idx, args, hints)
+    }
+  
+  private final def getTopPick(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) : TypePrimitive = {
+    getTopPick(getDomain(idx, args, hints))
+  }
+  private final def getTopPick(domain:Seq[(PrimitiveValue, Double)]) : TypePrimitive = {
+    val sortedPossibilities = domain.sortBy(-_._2)
+    sortedPossibilities.filter(_._2 ==  sortedPossibilities.head._2) match {
+      case Seq(topPick) => TypePrimitive(Type.fromString(topPick._1.asString))
+      case topPicks:Seq[(PrimitiveValue, Double)] => TypePrimitive(Type.fromString(topPicks.sortBy(rankFn).head._1.asString))
+    }
+  }
+  private final def rankMapFn(x:(PrimitiveValue, Double)) =
+    (x._1, x._2*priority(Type.fromString(x._1.asString)).toDouble )
+  
+  private final def rankFn(x:(PrimitiveValue, Double)) =
+    (x._2, -1*priority(Type.fromString(x._1.asString)) )
+    
+  override def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String =
+  {
+    getFeedback(idx, args) match {
+      case None => {
+        val possibilities = getDomain(idx, args, hints)
+        s"In $context, there were ${possibilities.length} options for $target on the row identified by <${args.map(_.toString).mkString(", ")}>, and I picked ${getTopPick(possibilities)} because it had the highest score and priority"
+      }
+      case Some(choice) => 
+        s"In $context, ${getReasonWho(idx,args)} told me to use ${choice.toString} for $target on the identified by <${args.map(_.toString).mkString(", ")}>"
+    }
+  }
 }

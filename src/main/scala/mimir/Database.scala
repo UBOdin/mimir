@@ -439,11 +439,14 @@ case class Database(backend: Backend)
               adaptiveSchemas.create( targetTable.toUpperCase+"_DH", "DETECT_HEADER", oper, Seq())
             //create TI lens
             if(typeinference){
-              val l = List(new FloatPrimitive(.5))
-              lenses.create("TYPE_INFERENCE", targetTable.toUpperCase, adaptiveSchemas.viewFor(targetTable.toUpperCase+ "_DH", targetRaw).getOrElse(oper), l)       
+              adaptiveSchemas.create( targetTable.toUpperCase+"_TI", "TYPE_INFERENCE", adaptiveSchemas.viewFor(targetTable.toUpperCase+ "_DH", targetRaw).getOrElse(oper), Seq(FloatPrimitive(.5))) 
+              views.create(targetTable.toUpperCase, adaptiveSchemas.viewFor(targetTable.toUpperCase+ "_TI", targetRaw).get)
             }
             else if(adaptive){
               views.create(targetTable.toUpperCase, adaptiveSchemas.viewFor(targetTable.toUpperCase+ "_DH", targetRaw).getOrElse(oper))
+            }
+            else {
+              views.create(targetTable.toUpperCase, oper)
             }
           } else LoadCSV.handleLoadTableRaw(this, targetTable.toUpperCase, sourceFile,  Map("DELIMITER" -> delim) )
         }

@@ -266,8 +266,15 @@ object Json
       case "table_empty" =>
         EmptyTable(toSchema(elems("schema")))
 
-==== BASE ====
-==== BASE ====
+      case "table_singleton" =>
+        SingletonTable(
+          elems("tuple").as[JsArray].value.map { fieldJs =>
+            val field = fieldJs.as[JsObject].value
+            field("name").as[JsString].value ->
+              toPrimitive(toType(field("type")), field("value"))
+          }
+        )
+        
       case "table_normal" =>
         Table(
           elems("table").asInstanceOf[JsString].value, 
