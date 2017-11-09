@@ -33,6 +33,8 @@ import mimir.algebra.TDate
 import mimir.algebra.TType
 import mimir.algebra.TTimestamp
 import mimir.algebra.TimestampPrimitive
+import mimir.algebra.TInterval
+import mimir.algebra.IntervalPrimitive
 import mimir.algebra.StringPrimitive
 import mimir.algebra.BoolPrimitive
 import mimir.algebra.RowIdPrimitive
@@ -60,35 +62,45 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
   }
   override def getFuncReturnType( fName:String, args: GProMList,
 		  numArgs:Int) : String = {
-		try {
-		  val argSeq = OperatorTranslation.gpromListToScalaList(args).map(arg => {
-        OperatorTranslation.translateGProMExpressionToMimirExpression(new GProMNode.ByReference(arg.getPointer), gpischm)
-      })
-      
-      //println(s"Metadata lookup: function: $fName(${argSeq.mkString(",")})")
-      val tp = fName match {
-		    case "SUM" => TInt()
-		    case "COUNT" => TInt()
-		    case "&" => TInt()
-		    case "MIMIR_MAKE_ROWID" => TRowId()
-		    case "sys_op_map_nonnull" => db.typechecker.typeOf(argSeq(0), operator) 
-		    case _ => {
-		      val fc = mimir.algebra.Function(fName,argSeq) 
-          vgtFunctionType(fc);
-		    }
-		  }
-      
-      val gpt = getGProMDataTypeStringFromMimirType(tp)
-      //println(s"Metadata lookup: $tp -> $gpt")
-      gpt
-    } catch {
-      case t: Throwable => {
-        println(s"Metadata lookup: Exception: for function: $fName")
-        println(t.toString())
-        t.printStackTrace()
-        "DT_STRING"// TODO: handle error
+		org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized{
+      //println(s"Metadata lookup: $fName ( ${args.length} args )")
+		  try {
+  		  fName match{
+  		    case "SUM" => "DT_INT"
+  		    case "COUNT" => "DT_INT"
+  		    case "&" => "DT_INT"
+  		    case "MIMIR_MAKE_ROWID" => "DT_STRING"
+  		    case _ => {
+  		      val argSeq = OperatorTranslation.gpromListToScalaList(args).map(arg => {
+              OperatorTranslation.translateGProMExpressionToMimirExpression(new GProMNode.ByReference(arg.getPointer), gpischm)
+            })
+            
+            //println(s"Metadata lookup: function: $fName(${argSeq.mkString(",")})")
+            val tp = fName match {
+      		    
+      		    case "sys_op_map_nonnull" => db.typechecker.typeOf(argSeq(0), operator) 
+      		    case _ => {
+      		      val fc = mimir.algebra.Function(fName,argSeq) 
+                vgtFunctionType(fc);
+      		      //db.typechecker.returnTypeOfFunction(fName,argSeq)
+      		    }
+      		  }
+            
+            val gpt = getGProMDataTypeStringFromMimirType(tp)
+            //println(s"Metadata lookup: $tp -> $gpt")
+            gpt
+		        
+  		    }
+  		  }
+      } catch {
+        case t: Throwable => {
+          println(s"Metadata lookup: Exception: for function: $fName")
+          println(t.toString())
+          t.printStackTrace()
+          "DT_STRING"// TODO: handle error
+        }
       }
-    }
+		}
 	}
   
   def getGProMDataTypeStringFromMimirType(mimirType : Type) : String = {
@@ -110,6 +122,7 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
         case TFloat() => FloatPrimitive(0.0)
         case TDate() => DatePrimitive(0,0,0)
         case TTimestamp() => TimestampPrimitive(0,0,0,0,0,0,0)
+        case TInterval() => IntervalPrimitive(org.joda.time.Period.ZERO)
         case TString() => StringPrimitive("")
         case TBool() => BoolPrimitive(false)
         case TRowId() => RowIdPrimitive("1")

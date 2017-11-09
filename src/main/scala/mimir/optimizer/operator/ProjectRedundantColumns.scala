@@ -128,9 +128,11 @@ object ProjectRedundantColumns extends OperatorOptimization {
       }
 
       case view: View => view
+      case view: AdaptiveView => view
       case table: Table => table
       case table: EmptyTable => table
-      case table: SingletonTable => table
+      case SingletonTable(tuple) => 
+        SingletonTable(tuple.filter { case (name, _) => dependencies contains name })
 
       case LeftOuterJoin(lhs, rhs, condition) => {
         val childDependencies = 

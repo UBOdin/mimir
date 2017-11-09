@@ -142,6 +142,17 @@ object Provenance extends LazyLogging {
         val (newQuery, rowIds) = compile(query)
         ( View(name, newQuery, meta + ViewAnnotation.PROVENANCE), rowIds)
 
+      //this was a hack for detect header adaptive schemas for offsetting rowid when there was a header detected  
+      /*case av@AdaptiveView(model, name, limit@Limit(1,_,query), meta) if model.endsWith("_DH") => 
+        val (newQuery, rowIds) = compile(limit)
+        val newAdaptiveQuery = AdaptiveView(model, name, newQuery, meta + ViewAnnotation.PROVENANCE)
+        val rowIDSubQuery = Project( av.columnNames.map(col => ProjectArg(col, Var(col))) ++ rowIds.map(rid => ProjectArg(rid, Arithmetic(Arith.Sub, Function("CAST", Seq(Var(rid), TypePrimitive(TInt()))), IntPrimitive(1) ))), newAdaptiveQuery)
+        ( rowIDSubQuery, rowIds)*/
+        
+      case AdaptiveView(model, name, query, meta) => 
+        val (newQuery, rowIds) = compile(query)
+        ( AdaptiveView(model, name, newQuery, meta + ViewAnnotation.PROVENANCE), rowIds)
+
       case Table(name, alias, schema, meta) =>
         (
           Table(name, alias, schema, meta ++ List((rowidColnameBase, Var("ROWID"), TRowId()))),
@@ -154,10 +165,10 @@ object Provenance extends LazyLogging {
           List()
         )
 
-      case SingletonTable(schema, data) =>
+      case SingletonTable(tuple) =>
         (
-          SingletonTable(schema, data),
-          List()
+          SingletonTable(tuple ++ Seq( (rowidColnameBase, RowIdPrimitive("singleton")) )),
+          List(rowidColnameBase)
         )
 
       case Aggregate(groupBy, args, child) =>
@@ -264,6 +275,7 @@ object Provenance extends LazyLogging {
           rowIds.keys.map( col => 
             p.get(col) match {
               case Some(Var(v)) => (Some((col, v)), None)
+              //case Some(arith@Arithmetic(Arith.Sub, Function("CAST", Seq(Var(v), TypePrimitive(TInt()))), IntPrimitive(i) )) => (Some((col, v)), None)
               case Some(RowIdPrimitive(v)) => (None, Some((col, v)))
               case unknownExpr => 
                 throw new ProvenanceError("Operator not properly compiled for provenance: Projection Column "+col+" has expression "+unknownExpr)
@@ -309,6 +321,8 @@ object Provenance extends LazyLogging {
       // for now... drop the view and focus on the query itself.
       case View(_, query, _) => 
         doFilterForToken(query, rowIds, db)
+      case AdaptiveView(_, _, query, _) => 
+        doFilterForToken(query, rowIds, db)
 
       case Table(_,_, _, meta) =>
         meta.find( _._2.equals(Var("ROWID")) ) match {
@@ -325,6 +339,18 @@ object Provenance extends LazyLogging {
           case None => 
             throw new ProvenanceError("Operator not compiled for provenance: "+operator)
         }
+
+      case SingletonTable(tuple) => {
+        val tupleMap = tuple.toMap
+        val rowIdKeys = tupleMap.keySet & rowIds.keySet
+        if(rowIdKeys.forall { key => 
+          tupleMap(key).equals(rowIds(key))
+        }) {
+          Some(SingletonTable(tuple))
+        } else {
+          None
+        }
+      }
 
       case EmptyTable(sch) => None 
 

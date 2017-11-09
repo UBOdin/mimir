@@ -25,7 +25,7 @@ object SampleFunctions
         val debugExpr = Function("BEST_SAMPLE", types.map(TypePrimitive(_)))
 
         Typechecker.assertNumeric(types.head, debugExpr)
-        Typechecker.escalate(
+        Typechecker.assertLeastUpperBound(
           types.tail.grouped(2).
             map { t => 
               Typechecker.assertNumeric(t(0),debugExpr)

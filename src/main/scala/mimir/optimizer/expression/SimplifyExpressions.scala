@@ -18,29 +18,34 @@ class SimplifyExpressions(interpreter: Eval, functionRegistry: FunctionRegistry)
       case _:PrimitiveValue | _:Var | _:VGTerm | _:JDBCVar | _:RowIdVar => return originalExpression
 
       //////////////////// Arithmetic ////////////////////
-      // Apply Arithmetic if possible
-      case Arithmetic(op, lhs: PrimitiveValue, rhs: PrimitiveValue) => 
-        Eval.applyArith(op, lhs, rhs)
 
       // Special case simplifications for AND operations
       case Arithmetic(And, BoolPrimitive(false), _) =>
-        BoolPrimitive(false)
+        return BoolPrimitive(false)
       case Arithmetic(And, _, BoolPrimitive(false)) =>
-        BoolPrimitive(false)
+        return BoolPrimitive(false)
       case Arithmetic(And, BoolPrimitive(true), rhs) =>
-        rhs
+        return rhs
       case Arithmetic(And, lhs, BoolPrimitive(true)) =>
-        lhs
+        return lhs
 
       // Special case simplifications for OR operations
       case Arithmetic(Or, BoolPrimitive(true), _) =>
-        BoolPrimitive(true)
+        return BoolPrimitive(true)
       case Arithmetic(Or, _, BoolPrimitive(true)) =>
-        BoolPrimitive(true)
+        return BoolPrimitive(true)
       case Arithmetic(Or, BoolPrimitive(false), rhs) =>
-        rhs
+        return rhs
       case Arithmetic(Or, lhs, BoolPrimitive(false)) =>
-        lhs
+        return lhs
+
+      // Null Values
+      case Arithmetic(_,NullPrimitive(),_) => return NullPrimitive()
+      case Arithmetic(_,_,NullPrimitive()) => return NullPrimitive()
+
+      // Apply Arithmetic if possible
+      case Arithmetic(op, lhs: PrimitiveValue, rhs: PrimitiveValue) => 
+        return Eval.applyArith(op, lhs, rhs)
 
       // All other forms of Arithmetic fall through
       case Arithmetic(_,_,_) => return originalExpression
@@ -75,8 +80,9 @@ class SimplifyExpressions(interpreter: Eval, functionRegistry: FunctionRegistry)
 
       //////////////////// Function-Likes ////////////////////
       // If all args are present, and we have a registry, try to evaluate the function
-      case Function(name, args) if args.forall { _.isInstanceOf[PrimitiveValue]}  =>
-        interpreter.applyFunction(name, args.map { _.asInstanceOf[PrimitiveValue] })
+      case Function(name, args) if args.forall { _.isInstanceOf[PrimitiveValue]} 
+        && !(functionRegistry.get(name) match { case NativeFunction(_,_,_,pt) => pt; case _ => false })  =>
+          interpreter.applyFunction(name, args.map { _.asInstanceOf[PrimitiveValue] })
 
       // A few function patterns are effectively no-ops and can be trivially removed
       case Function("MIMIR_MAKE_ROWID", Seq(x))            => x

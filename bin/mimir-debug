@@ -1,0 +1,8 @@
+#!/bin/bash
+
+ME=$(dirname $0)/..
+SCALA_VERSION=2.11
+CLASSES=$ME/src/test/resources:$ME/src/main/resources:`cat $ME/.classpath`
+CMD="java -cp $CLASSES mimir.Mimir"
+
+$CMD $*

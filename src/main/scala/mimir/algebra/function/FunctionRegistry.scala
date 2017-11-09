@@ -8,11 +8,11 @@ import mimir.Database
 
 sealed abstract class RegisteredFunction { val name: String }
 
-
 case class NativeFunction(
 	name: String, 
 	evaluator: Seq[PrimitiveValue] => PrimitiveValue, 
-	typechecker: Seq[Type] => Type
+	typechecker: Seq[Type] => Type,
+	passthrough:Boolean = false
 ) extends RegisteredFunction
 
 case class ExpressionFunction(
@@ -40,6 +40,7 @@ class FunctionRegistry {
     TypeFunctions.register(this)
     UtilityFunctions.register(this)
     RandomnessFunctions.register(this)
+    TimeFunctions.register(this)
 	}
 
   def register(
@@ -48,6 +49,13 @@ class FunctionRegistry {
     typechecker: Seq[Type] => Type
   ): Unit =
     register(new NativeFunction(fname, eval, typechecker))
+    
+  def registerPassthrough(
+    fname:String,
+    eval:Seq[PrimitiveValue] => PrimitiveValue, 
+    typechecker: Seq[Type] => Type
+  ): Unit =
+    register(new NativeFunction(fname, eval, typechecker, true))
 
   def registerExpr(fname:String, args:Seq[String], expr:String): Unit =
     registerExpr(fname, args, ExpressionParser.expr(expr))

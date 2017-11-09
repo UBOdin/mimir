@@ -58,7 +58,7 @@ object MimirGProM {
     }
     else {
       //Use GProM Backend
-      gp = new GProMBackend(conf.backend(), conf.dbname(), 1)
+      gp = new GProMBackend(conf.backend(), conf.dbname(), -1)
       db = new Database(gp)    
       db.backend.open()
       gp.metadataLookupPlugin.db = db;
@@ -81,8 +81,28 @@ object MimirGProM {
   
   def testing() : Unit = {
     //testDebug = true
-    //runTests(80) 
-    //runTests(1) 
+    //testError = true
+    //runTests(3) 
+    runTests(6) 
+    
+    //val sql = "SELECT R.A + R.B AS Z FROM R WHERE R.A = R.B"
+    //translateOperatorsFromGProMToMimirToGProM(("testQ",sql))
+    
+    //val sql = "SELECT R.A, R.B FROM R WHERE R.A = R.B"
+    //translateOperatorsFromGProMToMimirToGProM(("testQ",sql))
+    
+    //val sql = "SELECT SUM(INT_COL_B), COUNT(INT_COL_B) FROM TEST_B_RAW"
+    //translateOperatorsFromMimirToGProM(("testQ",sql))
+    
+    /*val sql = "SELECT S.A AS P, U.C AS Q FROM R AS S JOIN T AS U ON S.A = U.C"
+    var oper = db.sql.convert(db.parse(sql).head.asInstanceOf[Select])
+    oper = Provenance.compile(oper)._1
+    val sch = db.bestGuessSchema(oper)  
+    println(oper)*/
+    //translateOperatorsFromGProMToMimir(("testQ",sql))
+    
+    //val sql = "SELECT SUM(INT_COL_B), COUNT(INT_COL_B) FROM TEST_B_RAW"
+    //translateOperatorsFromMimirToGProM(("testQ",sql))
     
     /*val query = "SELECT * FROM LENS_PICKER2009618197"; //airbus eng err repaired data
     val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
@@ -97,12 +117,12 @@ object MimirGProM {
     query = GProMWrapper.inst.gpromRewriteQuery(query+";")       
     println(getQueryResults(query))*/
     
-    println(explainCell("SELECT * FROM LENS_PICKER2009618197", 1, "1420266763").mkString("\n"))
-    println("\n\n")
+    //println(explainCell("SELECT * FROM LENS_PICKER2009618197", 1, "1420266763").mkString("\n"))
+    //println("\n\n")
     
-    println(explainCell("SELECT * FROM LENS_MISSING_VALUE1133189369", 1, "4").mkString("\n"))
-    println("\n\n")
-    println(explainCell("SELECT * FROM LENS_MISSING_VALUE1133189369", 1, "2").mkString("\n"))
+    //println(explainCell("SELECT * FROM LENS_MISSING_VALUE1914014057", 1, "3").mkString("\n"))
+    //println("\n\n")
+    //println(explainCell("SELECT * FROM LENS_MISSING_VALUE1914014057", 1, "2").mkString("\n"))
     
     
   }
@@ -196,6 +216,7 @@ object MimirGProM {
   }
 
   var testDebug = false
+  var testError = false
   def runTests(runLoops : Int) = {
     val ConsoleOutputColorMap = Map(true -> (scala.Console.GREEN + "+"), false -> (scala.Console.RED + "-"))
     for(i <- 1 to runLoops ){
@@ -242,6 +263,7 @@ object MimirGProM {
           daq =>  {
             org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized{
               val memctx = GProMWrapper.inst.gpromCreateMemContext() 
+              val qmemctx = GProMWrapper.inst.createMemContextName("QUERY_MEM_CONTEXT")
               print(ConsoleOutputColorMap(translateOperatorsFromMimirToGProM(daq._1))); println(scala.Console.BLACK + " translateOperatorsFromMimirToGProM for " + daq._1._1 + " - " + (daq._2+1) + " of " + testSeq.length)
               print(ConsoleOutputColorMap(translateOperatorsFromGProMToMimir(daq._1))); println(scala.Console.BLACK + " translateOperatorsFromGProMToMimir for " + daq._1._1 + " - " + (daq._2+1) + " of " + testSeq.length)
               print(ConsoleOutputColorMap(translateOperatorsFromMimirToGProMToMimir(daq._1))); println(scala.Console.BLACK + " translateOperatorsFromMimirToGProMToMimir for " + daq._1._1 + " - " + (daq._2+1) + " of " + testSeq.length)
@@ -249,7 +271,8 @@ object MimirGProM {
               print(ConsoleOutputColorMap(translateOperatorsFromMimirToGProMForRewriteFasterThanThroughSQL(daq._1))); println(scala.Console.BLACK + " translateOperatorsFromMimirToGProMForRewriteFasterThanThroughSQL for " + daq._1._1 + " - " + (daq._2+1) + " of " + testSeq.length)
             //print(ConsoleOutputColorMap(mimirMemTest(daq))); println(scala.Console.BLACK + " mimirMemTest for " + daq._1 )
             //print(ConsoleOutputColorMap(gpromMemTest(daq))); println(scala.Console.BLACK + " gpromMemTest for " + daq._1 )
-            GProMWrapper.inst.gpromFreeMemContext(memctx)
+              GProMWrapper.inst.gpromFreeMemContext(qmemctx)
+              GProMWrapper.inst.gpromFreeMemContext(memctx)
             }
           }
           }
@@ -291,7 +314,7 @@ object MimirGProM {
              success = getQueryResults(resQuery).equals(getQueryResults(queryStr))
              println("\t-------------v-- Operators are different but the results are the same --v-------------")
            }
-           if(!success || testDebug){
+           if((!success && testError) || testDebug){
              println("-------------v Mimir Oper v-------------")
              println(testOper)
              println("-------v Translated GProM Oper v--------")
@@ -342,7 +365,7 @@ object MimirGProM {
              success = getQueryResults(testOper).equals(getQueryResults(queryStr))
              println("\t-------------v-- Operators are different but the results are the same --v-------------")
            }
-           if(!success || testDebug){
+           if((!success && testError) || testDebug){
              println("---------v Actual GProM Oper v----------")
              println(nodeStr)
              println("-------v Translated Mimir Oper v--------")
@@ -394,7 +417,7 @@ object MimirGProM {
              success = getQueryResults(testOper2).equals(getQueryResults(queryStr))
              println("\t-------------v-- Operators are different but the results are the same --v-------------")
            }
-           if(!success || testDebug){
+           if((!success && testError) || testDebug){
              println("---------v Actual Mimir Oper v----------")
              println(operStr)
              println("-------v Translated GProM Oper v--------")
@@ -438,11 +461,21 @@ object MimirGProM {
            //GProMWrapper.inst.gpromFreeMemContext(memctx2)
            var success = nodeStr.replaceAll("0x[a-zA-Z0-9]+", "").equals(nodeStr2.replaceAll("0x[a-zA-Z0-9]+", ""))
            if(!success){
-             val resQuery = GProMWrapper.inst.gpromOperatorModelToQuery(gpromNode2.getPointer)
-             success = getQueryResults(resQuery).equals(getQueryResults(queryStr))
-             println("\t-------------v-- Operators are different but the results are the same --v-------------")
+             val resQuery = GProMWrapper.inst.gpromOperatorModelToQuery(gpromNode2.getPointer).replaceAll("(AS\\s+[a-zA-Z]+)\\(([a-zA-Z0-9,\\s]+)\\)", "$1_$2")
+             val resMimir = getQueryResults(queryStr)
+             val resGProM = getQueryResults(resQuery)
+             success = resGProM.equals(resMimir)
+             if((!success && testError) ){
+               println("\t-------------v-- Operators are different and the results are different --v-------------")
+               println("----------v GProM Results v-----------")
+               println(resGProM)
+               println("----------v Mimir Results v-----------")
+               println(resMimir)
+             }
+             else if(testDebug)
+               println("\t-------------v-- Operators are different but the results are the same --v-------------")
            }
-           if(!success || testDebug){
+           if((!success && testError) || testDebug){
              println("---------v Actual GProM Oper v----------")
              println(nodeStr)
              println("-------v Translated Mimir Oper v--------")
@@ -503,8 +536,8 @@ object MimirGProM {
            }
            val operStr = timeForRewriteThroughOperatorTranslation._1
            val operStr2 = timeForRewriteThroughSQL._1
-           val success = /*operStr.equals(operStr2) &&*/  (timeForRewriteThroughOperatorTranslation._2 < timeForRewriteThroughSQL._2) 
-           if(!success || testDebug){
+           val success = /*operStr.equals(operStr2) &&*/  (timeForRewriteThroughOperatorTranslation._2 < (timeForRewriteThroughSQL._2*2)) 
+           if((!success && testError) || testDebug){
              println("-----------v Translated Mimir Oper v-----------")
              println(operStr)
              println("Time: " + timeForRewriteThroughOperatorTranslation._2)

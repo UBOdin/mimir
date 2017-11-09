@@ -3,6 +3,8 @@
 *.swp
 *.db
 *.bak
+.DS_Store
+/*.jar
 
 # sbt specific
 .cache/
@@ -14,7 +16,6 @@ lib_managed/
 src_managed/
 project/boot/
 project/plugins/project/
-project/build.properties
 
 # Scala-IDE specific
 .scala_dependencies
@@ -48,3 +49,7 @@ tpch-dbgen
 *.pdf
 *.gpl
 /bin/
+
+# Python
+*.pyc
+.classpath

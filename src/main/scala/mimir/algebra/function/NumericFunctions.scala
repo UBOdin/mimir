@@ -36,7 +36,33 @@ object NumericFunctions
     
     fr.register("AVG",(_) => ???, (_) => TInt())
     fr.register("STDDEV",(_) => ???, (_) => TFloat())
+    fr.register("min",
+        {
+          case ints:Seq[IntPrimitive] => IntPrimitive(ints.foldLeft(ints.head.v)( (init, intval) => Math.min(init, intval.v)))
+        }, (_) => TInt())
+    fr.register("max",{
+          case ints:Seq[IntPrimitive] => IntPrimitive(ints.foldLeft(ints.head.v)( (init, intval) => Math.max(init, intval.v)))
+        }, (_) => TInt())
+    
+    fr.register("ROUND",
+      {
+        case Seq(FloatPrimitive(number),IntPrimitive(decimalPlaces)) => {
+          FloatPrimitive(s"%.${decimalPlaces}f".format(number).toDouble)
+        }
+        case Seq(FloatPrimitive(number)) => {
+          FloatPrimitive(Math.round(number).toDouble)
+        }
+      },
+      (x: Seq[Type]) => TFloat()
+    )
 
+    fr.register("ABS", 
+      { args => Eval.applyAbs(args(0)) },
+      {
+        case x @ Seq(TInt() | TFloat() | TInterval()) => x(0)
+        case x => throw new RAException(s"Invalid ABS($x)")
+      }
+    )
   }
 
 }

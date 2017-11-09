@@ -4,9 +4,24 @@ trait ExpressionConstructors
 {
   def toExpression: Expression
 
+  def eq(other: String): Expression =
+    eq(StringPrimitive(other))
+  def eq(other: Int): Expression =
+    eq(IntPrimitive(other))
+  def eq(other: Double): Expression =
+    eq(FloatPrimitive(other))
   def eq(other: Expression): Expression =
     Comparison(Cmp.Eq, toExpression, other)
 
+  def in(other: Seq[Expression]): Expression =
+    ExpressionUtils.makeInTest(toExpression, other)
+
+  def neq(other: String): Expression =
+    neq(StringPrimitive(other))
+  def neq(other: Int): Expression =
+    neq(IntPrimitive(other))
+  def neq(other: Double): Expression =
+    neq(FloatPrimitive(other))
   def neq(other: Expression): Expression =
     Comparison(Cmp.Neq, toExpression, other)
 
@@ -66,4 +81,6 @@ trait ExpressionConstructors
   def thenElse(thenClause: Expression)(elseClause: Expression): Expression =
     Conditional(toExpression, thenClause, elseClause)
 
+  def not: Expression =
+    ExpressionUtils.makeNot(toExpression)
 }

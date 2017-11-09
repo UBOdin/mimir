@@ -16,9 +16,9 @@ import mimir.exec.result.Row
 
 object GProMDBTestInstances
 {
-  private var databases = scala.collection.mutable.Map[String, Database]()
-
-  def get(tempDBName: String, config: Map[String,String]): Database =
+  private var databases = scala.collection.mutable.Map[String, (Database, GProMBackend)]()
+  
+  def get(tempDBName: String, config: Map[String,String]): (Database, GProMBackend) =
   {
     this.synchronized { 
       databases.get(tempDBName) match { 
@@ -33,7 +33,7 @@ object GProMDBTestInstances
             case "NO" => false; case "YES" => true
           }
           val oldDBExists = dbFile.exists();
-          val backend = new GProMBackend(jdbcBackendMode, tempDBName+".db", -1)
+          val backend = new GProMBackend(jdbcBackendMode, tempDBName+".db", 1)
           val tmpDB = new Database(backend);
           if(shouldResetDB){
             if(dbFile.exists()){ dbFile.delete(); }
@@ -53,8 +53,9 @@ object GProMDBTestInstances
           if(shouldEnableInlining){
             backend.enableInlining(tmpDB)
           }
-          databases.put(tempDBName, tmpDB)
-          tmpDB
+          mimir.gprom.algebra.OperatorTranslation.db = tmpDB
+          databases.put(tempDBName, (tmpDB, backend))
+          (tmpDB, backend)
         }
       }
     }
@@ -74,8 +75,12 @@ abstract class GProMSQLTestSpecification(val tempDBName:String, config: Map[Stri
   args.execute(threadsNb = 1)
   def dbFile = new File(tempDBName+".db")
 
-  def db = GProMDBTestInstances.get(tempDBName, config)
-
+  private def dbgp = GProMDBTestInstances.get(tempDBName, config)
+  
+  def db = dbgp._1
+  
+  def gp = dbgp._2
+  
   def select(s: String) = {
     db.sql.convert(
       stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]

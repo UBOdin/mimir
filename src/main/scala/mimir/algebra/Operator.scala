@@ -361,6 +361,29 @@ case class SingletonTable(sch: Seq[(String, Type)], data: Seq[PrimitiveValue])
 }
 
 /**
+ * A table with exactly one row --- Corresponds roughly to a
+ * SELECT ... 
+ * That is, a SELECT with no FROM clause, or in Oracle:
+ * SELECT ... FROM dual
+ * 
+ * Not really used, just a placeholder for intermediate optimization.
+ */
+@SerialVersionUID(100L)
+case class SingletonTable(tuple: Seq[(String, PrimitiveValue)])
+  extends Operator
+{
+  def toString(prefix: String) =
+    prefix + "< " + ( tuple.map { case (name, v) => name+": "+v.toString }.mkString(", ") ) + " >"
+  def children: Seq[Operator] = Seq()
+  def rebuild(x: Seq[Operator]) = this
+  def expressions = List()
+  def rebuildExpressions(x: Seq[Expression]) = this
+  def columnNames = tuple.map(_._1)
+}
+
+
+
+/**
  * A single sort directive
  *
  * Consists of a column name, as well as a binary "ascending" 
@@ -444,7 +467,7 @@ case class LeftOuterJoin(left: Operator,
 }
 
 /**
- * A materialized view
+ * A (maybe materialized) view
  *
  * When initialized by RAToSql, the query field will contain the raw unmodified 
  * query that the view was instantiated with.  As the view goes through compilation,
@@ -462,5 +485,27 @@ case class View(name: String, query: Operator, annotations: Set[ViewAnnotation.T
   def rebuildExpressions(x: Seq[Expression]): Operator = this
   def toString(prefix: String): String = 
     s"$prefix$name[${annotations.mkString(", ")}] := (\n${query.toString(prefix+"   ")}\n$prefix)"
+  def columnNames = query.columnNames
+}
+
+/**
+ * A view defined by an adaptive schema
+ *
+ * When initialized by RAToSql, the query field will contain the raw unmodified 
+ * query that the view was instantiated with.  As the view goes through compilation,
+ * the nested query will be modified; The metadata field tracks which forms of 
+ * compilation have been applied to it, so that the system can decide whether it has
+ * an appropriate materialized form of the view ready.
+ */
+@SerialVersionUID(100L)
+case class AdaptiveView(schema: String, name: String, query: Operator, annotations: Set[ViewAnnotation.T] = Set())
+  extends Operator
+{
+  def children: Seq[Operator] = Seq(query)
+  def expressions: Seq[Expression] = Seq()
+  def rebuild(c: Seq[Operator]): Operator = AdaptiveView(schema, name, c(0), annotations)
+  def rebuildExpressions(x: Seq[Expression]): Operator = this
+  def toString(prefix: String): String = 
+    s"$prefix$schema.$name[${annotations.mkString(", ")}] := (\n${query.toString(prefix+"   ")}\n$prefix)"
   def columnNames = query.columnNames
 }

@@ -49,6 +49,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
           case TType()      => val v = compileForType(e);   checkNull { (t:T) => TypePrimitive(v(t))   }
           case TDate()      => checkNull { compileForDate(e) }
           case TTimestamp() => checkNull { compileForTimestamp(e) }
+          case TInterval() => checkNull { compileForInterval(e) }
           case TRowId()     => checkNull { compileForRowId(e) }
           case TUser(ut)    => checkNull { compile(e, TypeRegistry.baseType(ut)) }
         }
@@ -64,7 +65,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
   def compileFunction(func: String, argExprs: Seq[Expression]): Compiled[PrimitiveValue] =
   {
     db.functions.get(func) match {
-      case NativeFunction(_, eval, _) => {
+      case NativeFunction(_, eval, _, _) => {
         val args = argExprs.map { compile(_) };
         { (t:T) => throwOnNull(eval(args.map { _(t) })) }
       }
@@ -255,6 +256,11 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
     }
   }
 
+  /**
+   * Hack for incomplete implementations.  
+   * 
+   * Implement some super basic functionality and fall back to classic Eval if it fails.
+   */
   final def compilePassthrough[R](e: Expression, rcr: Expression => Compiled[R], prim: PrimitiveValue => R): Compiled[R] =
   {
     e match {
@@ -266,7 +272,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
         val l = compileFunction(name, args); (t) => prim(l(t))
       }
       case Conditional(c, t, e) => compileConditional(c, t, e, rcr)
-      case _ => throw new RAException(s"Invalid Passthrough Expression: $e")
+      case _ => { (t) => prim(db.interpreter.eval(e, scope.get(_).map { _._2(t) })) }
     }
   }
 
@@ -278,6 +284,8 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
     compilePassthrough(e, compileForDate, _.asInstanceOf[DatePrimitive])    
   def compileForTimestamp(e: Expression): Compiled[TimestampPrimitive] = 
     compilePassthrough(e, compileForTimestamp, _.asInstanceOf[TimestampPrimitive])    
+  def compileForInterval(e: Expression): Compiled[IntervalPrimitive] = 
+    compilePassthrough(e, compileForInterval, _.asInstanceOf[IntervalPrimitive])    
   def compileForRowId(e: Expression): Compiled[RowIdPrimitive] = 
     compilePassthrough(e, compileForRowId, _.asInstanceOf[RowIdPrimitive])    
   def and(a: Compiled[Boolean], b: Compiled[Boolean]): Compiled[Boolean] =

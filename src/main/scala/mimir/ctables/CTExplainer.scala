@@ -304,7 +304,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 	def filterByProvenance(rawOper: Operator, token: RowIdPrimitive): Operator =
 	{
-		val oper = new PropagateEmptyViews(db.typechecker)(rawOper)
+		val oper = new PropagateEmptyViews(db.typechecker, db.aggregates)(rawOper)
 		logger.debug(s"RESOLVED: \n$oper")
 		val (provQuery, rowIdCols) = Provenance.compile(oper)
 		val filteredQuery =
@@ -434,8 +434,38 @@ class CTExplainer(db: Database) extends LazyLogging {
 		logger.trace(s"Explain Subset (${wantCol.mkString(", ")}; $wantRow; $wantSort): \n$oper")
 		oper match {
 			case Table(_,_,_,_) => Seq()
+			case SingletonTable(_) => Seq()
 			case View(_,query,_) => 
 				explainSubsetWithoutOptimizing(query, wantCol, wantRow, wantSort)
+
+			case AdaptiveView(model, name, query, _) => {
+				// Source 1: Recur:  
+				val sourceReasons = 
+					explainSubsetWithoutOptimizing(query, wantCol, wantRow, wantSort)
+
+				// Model details
+				val (multilens, config) = 
+						db.adaptiveSchemas.get(model) match {
+							case Some(cfg) => cfg
+							case None => throw new RAException(s"Unknown adaptive schema '$model'")
+						}
+
+				// Source 2: There might be uncertainty on the table.  Use SYS_TABLES to dig these annotations up.
+				val tableReasons = explainEverything(
+					multilens.tableCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name) )
+				)
+				// alternative: Use SYS_TABLES directly
+				//    db.table("SYS_TABLES").where( Var("SCHEMA").eq(StringPrimitive(model)).and( Var("TABLE").eq(StringPrimitive(name)) ) )
+
+				// Source 3: Check for uncertainty in one of the attributes of interest
+				val attrReasons = explainEverything(
+					multilens.attrCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name).and( Var("ATTR_NAME").in( wantCol.toSeq.map { StringPrimitive(_) } ) ) )
+				)
+				// alternative: Use SYS_ATTRS directly
+				//    db.table("SYS_TABLES").where( Var("SCHEMA").eq(StringPrimitive(model)).and( Var("TABLE").eq(StringPrimitive(name)) ).and( Var("ATTR").in(wantCol.map(StringPrimitive(_))) ) )
+				sourceReasons ++ tableReasons ++ attrReasons
+			}
+
 
 			case EmptyTable(_) => Seq()
 

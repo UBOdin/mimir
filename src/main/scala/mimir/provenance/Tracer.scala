@@ -16,8 +16,10 @@ object Tracer {
           targetRowId.flatMap({ case (rowIdColKey, rowIdColValue) => 
             p.get(rowIdColKey) match {
               case Some(Var(newColName)) => Some((newColName, rowIdColValue))
+              //case Some(arith@Arithmetic(Arith.Sub, Function("CAST", Seq(Var(newColName), TypePrimitive(TInt()))), IntPrimitive(i) )) => Some((newColName, RowIdPrimitive((rowIdColValue.asLong+i).toString())))
               case Some(rowid:RowIdPrimitive) => 
                 if(rowid.equals(rowIdColValue)) { None }
+                //else if(RowIdPrimitive((rowid.asLong+1).toString()).equals(rowIdColValue)) { None }
                 else { throw new TracerInvalidPath() }
               case _ => throw new SQLException("BUG: Expecting traced expression to have a rowId column that it doesn't have")
             }
@@ -109,6 +111,8 @@ object Tracer {
 
       case View(_, query, _) => 
         trace(query, targetRowId)
+      case AdaptiveView(_, _, query, _) => 
+        trace(query, targetRowId)
 
       case Table(name, alias, schema, meta) =>
         val targetFilter = 
@@ -126,6 +130,22 @@ object Tracer {
           BoolPrimitive(true)
         )
 
+      case SingletonTable(tuple) => {
+        val tupleMap = tuple.toMap
+        val rowIdKeys = tupleMap.keySet & targetRowId.keySet
+        (
+          if(rowIdKeys.forall { key => 
+            tupleMap(key).equals(targetRowId(key))
+          }) {
+            SingletonTable(tuple)
+          } else {
+            EmptyTable(tuple.map { case (name, v) => (name, v.getType) })
+          },
+          tuple.map { case (name, _) => (name, Var(name)) }.toMap,
+          BoolPrimitive(true)
+        )
+      }
+
       case EmptyTable(schema) => 
         ( 
           EmptyTable(schema),
@@ -135,17 +155,8 @@ object Tracer {
           BoolPrimitive(true)
         )
 
-      case SingletonTable(schema, data) => 
-        ( 
-          SingletonTable(schema, data),
-          schema.map(_._1).map(
-            col => (col, Var(col))
-          ).toMap,
-          BoolPrimitive(true)
-        )
-
-      case Sort(_, src) => return trace(oper, targetRowId)
-      case Limit(_, _, src) => return trace(oper, targetRowId)
+      case Sort(_, src) => return trace(src, targetRowId)
+      case Limit(_, _, src) => return trace(src, targetRowId)
 
       case _:LeftOuterJoin => 
         throw new RAException("Tracer can't handle left outer joins")

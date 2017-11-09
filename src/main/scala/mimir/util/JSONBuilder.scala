@@ -1,6 +1,6 @@
 package mimir.util;
 
-import mimir.algebra.{PrimitiveValue,StringPrimitive};
+import mimir.algebra.{PrimitiveValue,StringPrimitive,TypePrimitive};
 
 object JSONBuilder {
 	
@@ -30,6 +30,7 @@ object JSONBuilder {
 	def prim(content: PrimitiveValue) = {
 		content match {
 			case StringPrimitive(s) => string(s)
+			case TypePrimitive(t) => string(t.toString())
 			case _ => content.toString()
 		}
 	}

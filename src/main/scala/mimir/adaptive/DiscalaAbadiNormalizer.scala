@@ -105,6 +105,11 @@ object DiscalaAbadiNormalizer
     return Seq(groupingModel)++parentKeyRepairs
   }
 
+  /**
+   * Use repair-key to construct a spanning tree out of the Functional Dependency Graph
+   *
+   * Returns a query that constructs the spanning tree table.
+   */
   final def spanningTreeLens(db: Database, config: MultilensConfig): Operator =
   {
     val model = db.models.get(s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_FD_PARENT")
@@ -116,6 +121,11 @@ object DiscalaAbadiNormalizer
     )
   }
 
+  /**
+   * Assuming that 'query.labelCol' is the name of a column with a spanning tree node ID, 
+   * return a version of query with 'labelCol' replaced by the name of the attribute rather 
+   * than its ID.  Optionally add the type of the attribute in 'typeCol'.
+   */
   final def convertNodesToNamesInQuery(
     db: Database, 
     config: MultilensConfig, 
@@ -162,6 +172,17 @@ object DiscalaAbadiNormalizer
   {
     val spanningTree = spanningTreeLens(db, config)
     logger.trace(s"Attr Catalog Spanning Tree: \n$spanningTree")
+
+    // We want to figure out which nodes belong to which table.
+    // 
+    // All non-leaf nodes in the spanning tree define a table consisting of 
+    //   - The non-leaf node itself
+    //   - All of the non-leaf node's children
+
+    // First compute all of teh non-leaf node's children.
+    // We start with the spanning tree, which is given in terms of Parent/Child NodeIDs
+    //  - All of the children define the attribute name
+    //  - All of the parents define the table that the attribute belongs to
     val childAttributeQuery =
       convertNodesToNamesInQuery(db, config, "MIMIR_FD_CHILD", "ATTR_NAME", Some("ATTR_TYPE"),
         convertNodesToNamesInQuery(db, config, "MIMIR_FD_PARENT", "TABLE_NAME", None,
@@ -169,6 +190,8 @@ object DiscalaAbadiNormalizer
         )
       ).addColumn("IS_KEY" -> BoolPrimitive(false))
 
+    // The parent node is also part of the table, so figure out which are the non-leaf nodes
+    // and make them part of the table they define.
     val parentAttributeQuery =
       Project(Seq(
           ProjectArg("TABLE_NAME", Var("TABLE_NAME")),
@@ -185,6 +208,7 @@ object DiscalaAbadiNormalizer
             .filter( Comparison(Cmp.Gt, Arithmetic(Arith.Add, Var("TABLE_NODE"), IntPrimitive(1)), IntPrimitive(0)) )
         )
       )
+
     val jointQuery =
       Union(childAttributeQuery, parentAttributeQuery)
     logger.trace(s"Attr Catalog Query: \n$jointQuery")
@@ -250,7 +274,7 @@ class DAFDRepairModel(
 {
   override def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String =
   {
-    choices.get(args.toList) match {
+    getFeedback(idx, args) match {
       case None => {
         val possibilities = getDomain(idx, args, hints).sortBy(-_._2).map { _._1.asLong }
         val best = possibilities.head

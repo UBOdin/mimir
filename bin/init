@@ -1,0 +1,9 @@
+#!/bin/bash
+
+ME=$(dirname $0)/..
+
+cd $ME
+sbt 'export runtime:fullClasspath' | tee temp | grep 'error' 
+cat temp | tail -n 1 > .classpath
+rm temp
+echo `cat .classpath | tr ':' '\n' | wc -l` "CLASSPATH entries extracted"
