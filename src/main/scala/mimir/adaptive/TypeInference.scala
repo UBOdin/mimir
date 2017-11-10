@@ -237,7 +237,7 @@ class TIRepairModel(
         s"In $context, there were ${possibilities.length} options for $target on the column identified by <index:$idx name:${tiCols(idx)}>, and I picked <${getTopPick(possibilities)}> because it had the highest score and priority"
       }
       case Some(choice) => 
-        s"In $context, ${getReasonWho(idx,args)} told me to use ${choice.toString} for $target on the identified by <${args.map(_.toString).mkString(", ")}>"
+        s"In $context, ${getReasonWho(idx,args)} told me to use ${choice.toString} for $target on the column identified by <index:$idx name:${tiCols(idx)}>"
     }
   }
 }
