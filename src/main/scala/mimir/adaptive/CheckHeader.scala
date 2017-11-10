@@ -56,9 +56,12 @@ object CheckHeader
   def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
   {
     val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
-    Some(Limit(if(model.headerDetected) 1 else 0,Some(1000000000),
+    Some(
         Project( model.query.columnNames.zipWithIndex.map( col => 
           ProjectArg(model.bestGuess(col._2, Seq(), Seq()).asString,Var(col._1)) )
-          , config.query)))
+          , config.query) match {
+          case proj if model.headerDetected => proj.limit(1000000000, 1)
+          case proj => proj
+        })
   }
 }
