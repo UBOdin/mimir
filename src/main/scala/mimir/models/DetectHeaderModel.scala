@@ -26,12 +26,15 @@ object DetectHeader {
   }
 }
 
-@SerialVersionUID(1001L)
-class DetectHeaderModel(override val name: String)
+@SerialVersionUID(1002L)
+class DetectHeaderModel(override val name: String, val targetName:String, val query:Operator)
 extends Model(name)
 with Serializable
+with SourcedFeedback
+with NeedsDatabase
 {
   var headerDetected = false
+  var initialHeaders: Map[Int, String] = Map()
   
   private def sanitizeColumnName(name: String): String =
   {
@@ -42,7 +45,7 @@ with Serializable
       toUpperCase                          // Capitalize
   }
   
-  def detect_header(db: Database, query: Operator): (Boolean, Map[Int, String]) = {
+  def detect_header(): (Boolean, Map[Int, String]) = {
     val top6 = db.query(Limit(0,Some(6),query))(_.toList.map(_.tuple)).toSeq
     val (header, topRecords) = (top6.head.map(col => sanitizeColumnName(col match {
         case NullPrimitive() => "NULL" 
@@ -73,7 +76,7 @@ with Serializable
     val conflictOrNullCols = query.columnNames.zipWithIndex.unzip._2.toSet -- topRecordsAnalysis.keySet 
     val goodHeaderCols = DetectHeader.isHeader(header) 
     val badHeaderCols = (top6.head.zipWithIndex.unzip._2.toSet -- goodHeaderCols.toSet).toSeq  
-    badHeaderCols.flatMap(badCol => {
+    val detectResult = badHeaderCols.flatMap(badCol => {
       top6.head(badCol) match {
         case NullPrimitive() => None
         case StringPrimitive("") => None
@@ -82,8 +85,7 @@ with Serializable
     }) match {
       case Seq() => {
         if(!conflictOrNullCols.isEmpty) DetectHeader.logger.warn(s"There are some type conflicts or nulls in cols: ${conflictOrNullCols.map(query.columnNames(_))}") 
-        headerDetected = true
-        (headerDetected, top6.head.zipWithIndex.map(colIdx => (colIdx._2, colIdx._1 match {
+        (true, top6.head.zipWithIndex.map(colIdx => (colIdx._2, colIdx._1 match {
           case NullPrimitive() =>  s"COLUMN_${colIdx._2}"
           case StringPrimitive("") => s"COLUMN_${colIdx._2}"
           case x => {
@@ -98,45 +100,44 @@ with Serializable
           }
         })).toMap)
       }
-      case x => {
-        headerDetected = false
-      (headerDetected, header.zipWithIndex.map { x => (x._2, s"COLUMN_${x._2}") }.toMap)
-      }
+      case x => (false, header.zipWithIndex.map { x => (x._2, s"COLUMN_${x._2}") }.toMap)
     }
+    headerDetected = detectResult._1
+    initialHeaders = detectResult._2
+    detectResult
   }
 
   
   def argTypes(idx: Int) = {
-    println(s"DetectHeaderModel: argTypes: idx: ${idx}")
-      Seq(TRowId())
+    Seq()
   }
   def varType(idx: Int, args: Seq[Type]) = {
-    println(s"DetectHeaderModel: varType: idx: ${idx}, args: ${args.mkString(",")}")
-    TType()
+    TString()
   }
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ) = {
-    println(s"DetectHeaderModel: bestGuess: idx: ${idx}, args: ${args.mkString(",")}, hints: ${hints.mkString(",")}")
-    hints(0)
+    getFeedback(idx, args).getOrElse(StringPrimitive(initialHeaders(idx)))
   }
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = {
-    println(s"DetectHeaderModel: sample: idx: ${idx}, args: ${args.mkString(",")}, hints: ${hints.mkString(",")}")
-    hints(0)
+    bestGuess(idx, args, hints)
   }
   def reason(idx: Int, args: Seq[PrimitiveValue],hints: Seq[PrimitiveValue]): String = {
-    println(s"DetectHeaderModel: reason: idx: ${idx}, args: ${args.mkString(",")}, hints: ${hints.mkString(",")}")
-    return ""
+    getFeedback(idx, args) match {
+      case Some(colName) => s"${getReasonWho(idx, args)} told me that $colName is a valid column header for column with index: $idx"
+      case None if headerDetected => s"I used an analysis on the first several rows and there appears to be column headers in the first row.  For column with index: $idx, the detected header is ${initialHeaders(idx)}"
+      case None =>s"I used an analysis on the first several rows and there appears NOT to be column headers in the first row.  For the column with index: $idx, I used the default value of ${initialHeaders(idx)}"
+    }
   }
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = {
-    println(s"DetectHeaderModel: feedback: idx: ${idx}, args: ${args.mkString(",")}, v: ${v.toString}")
-    
+    setFeedback(idx, args, v)
   }
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = {
-    println(s"DetectHeaderModel: isAcknowledged: idx: ${idx}, args: ${args.mkString(",")}")
-    return true
+    hasFeedback(idx, args)
   }
   def hintTypes(idx: Int): Seq[mimir.algebra.Type] = {
-    println(s"DetectHeaderModel: argTypes: idx: ${idx}")
-    Seq(TAny())
+    Seq()
+  }
+  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) = {
+    s"$idx"
   }
 
 }

@@ -24,43 +24,41 @@ object CheckHeader
   {
     val viewName = config.schema
     val modelName = "MIMIR_CH_" + viewName
-    val detectmodel = new DetectHeaderModel(modelName);
-    val detectResult = detectmodel.detect_header(db,config.query);
-
-    val cols = detectResult._2.toSeq.sortBy(_._1).unzip._2
-    
-    val tableCatalog = "MIMIR_DH_TABLE_"+config.schema
-    db.backend.update(s"""
-      CREATE TABLE $tableCatalog (TABLE_NAME string)""")
-    db.backend.fastUpdateBatch(s"""
-      INSERT INTO $tableCatalog (TABLE_NAME) VALUES (?)""", Seq(Seq(StringPrimitive(viewName))))
-
-    val attrCatalog = "MIMIR_DH_ATTR_"+config.schema
-    db.backend.update(s"""
-      CREATE TABLE $attrCatalog (TABLE_NAME string, ATTR_NAME string,ATTR_TYPE string,IS_KEY bool)""")
-    db.backend.fastUpdateBatch(s"""
-      INSERT INTO $attrCatalog (TABLE_NAME,ATTR_NAME,ATTR_TYPE,IS_KEY) VALUES (?,?,?,?);""",
-      cols.map { col_name =>
-        Seq(StringPrimitive(viewName), StringPrimitive(col_name), TypePrimitive(Type.fromString("varchar")), BoolPrimitive(false))
-    })
+    val detectmodel = new DetectHeaderModel(modelName, viewName, config.query)
+    detectmodel.reconnectToDatabase(db)
+    detectmodel.detect_header()
     Seq(detectmodel)
   }
 
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    db.table("MIMIR_DH_TABLE_"+config.schema).project("TABLE_NAME")
+    val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
+    SingletonTable(Seq(("TABLE_NAME",StringPrimitive(model.targetName))))
   }
+  
   def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    db.table("MIMIR_DH_ATTR_"+config.schema)
+    val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
+    model.query.columnNames.zipWithIndex.map(col => 
+      SingletonTable(Seq(("TABLE_NAME" , StringPrimitive(model.targetName)), ("ATTR_NAME" , model.bestGuess(col._2, Seq(), Seq())),("ATTR_TYPE", TypePrimitive(TString())),("IS_KEY", BoolPrimitive(false))))
+     ) match {
+      case Seq() => EmptyTable(Seq(("TABLE_NAME", TString()), ("ATTR_NAME", TString()), ("ATTR_TYPE", TType()), ("IS_KEY", TBool())))
+      case Seq(sng@SingletonTable(_)) => sng
+      case sngs:Seq[SingletonTable] => {
+        val revsngs = sngs.reverse
+        revsngs.tail.tail.foldLeft(Union(revsngs.tail.head, revsngs.head))((union, sng) => {
+          Union(sng, union)
+        })
+      }
+    }
   }
+  
   def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
   {
     val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
-    Some(Limit(if(model.headerDetected) 1 else 0,Some(10000000),Project(config.query.columnNames.zip(db.query(db.table("MIMIR_DH_ATTR_"+config.schema).project("ATTR_NAME"))(result => result.toList.map(row => row.tuple(0).asString))).map{
-      case (a,b) => ProjectArg(b,Var(a))
-    },config.query)))
+    Some(Limit(if(model.headerDetected) 1 else 0,Some(1000000000),
+        Project( model.query.columnNames.zipWithIndex.map( col => 
+          ProjectArg(model.bestGuess(col._2, Seq(), Seq()).asString,Var(col._1)) )
+          , config.query)))
   }
-
-
 }
