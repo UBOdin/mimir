@@ -437,15 +437,17 @@ case class Database(backend: Backend)
             //detect headers and create adaptive schema
             if(adaptive)
               adaptiveSchemas.create( targetTable.toUpperCase+"_DH", "DETECT_HEADER", oper, Seq())
-            //create TI lens
+            //create TI adaptive schema - also create a view with the target name 
             if(typeinference){
               adaptiveSchemas.create( targetTable.toUpperCase+"_TI", "TYPE_INFERENCE", adaptiveSchemas.viewFor(targetTable.toUpperCase+ "_DH", targetRaw).getOrElse(oper), Seq(FloatPrimitive(.5))) 
               views.create(targetTable.toUpperCase, adaptiveSchemas.viewFor(targetTable.toUpperCase+ "_TI", targetRaw).get)
             }
             else if(adaptive){
+              //if there is no ti then make a view with the target name of the detect header adaptive schema view 
               views.create(targetTable.toUpperCase, adaptiveSchemas.viewFor(targetTable.toUpperCase+ "_DH", targetRaw).getOrElse(oper))
             }
             else {
+              //if there is no ti or detect headers then make a view with the target name of the raw table
               views.create(targetTable.toUpperCase, oper)
             }
           } else LoadCSV.handleLoadTableRaw(this, targetTable.toUpperCase, sourceFile,  Map("DELIMITER" -> delim) )

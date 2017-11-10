@@ -104,7 +104,7 @@ object TypeInference
               IntPrimitive(idx),
               BoolPrimitive(false),
               FloatPrimitive(normalizedScore)
-            )) // update the table for the RK lens
+            )) // update the table for repair key
           }
         }
         db.backend.update(s"""
@@ -115,12 +115,10 @@ object TypeInference
           IntPrimitive(idx),
           BoolPrimitive(false),
           FloatPrimitive(stringDefaultScore)
-        )) // update the table for the RK lens
+        )) // update the table for repair key
       }
     }
 
-    // Create the model used by Type Inference: (Name, Context, Query Operator, Collapsed Columns, Distinct Column, Type, ScoreBy)
-    // keys are the distinct values
     val name = attrCatalog + "_RK"
     val attrQuery = db.table(attrCatalog)
     db.bestGuessSchema(attrQuery).
@@ -133,7 +131,8 @@ object TypeInference
             attrQuery, 
             Seq(("IDX", TInt())), 
             col, t,
-            Some("SCORE")
+            Some("SCORE"),
+            modelColumns
           )
         model.reconnectToDatabase(db)
         model 
@@ -182,7 +181,7 @@ object TypeInference
 }
 
 
-@SerialVersionUID(1000L)
+@SerialVersionUID(1001L)
 class TIRepairModel(
   name: String, 
   context: String, 
@@ -190,7 +189,8 @@ class TIRepairModel(
   keys: Seq[(String, Type)], 
   target: String,
   targetType: Type,
-  scoreCol: Option[String]
+  scoreCol: Option[String],
+  tiCols:IndexedSeq[String]
 ) extends RepairKeyModel(name, context, source, keys, target, targetType, scoreCol)
 {
   def priority: Type => Int =
@@ -217,6 +217,7 @@ class TIRepairModel(
   private final def getTopPick(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) : TypePrimitive = {
     getTopPick(getDomain(idx, args, hints))
   }
+  
   private final def getTopPick(domain:Seq[(PrimitiveValue, Double)]) : TypePrimitive = {
     val sortedPossibilities = domain.sortBy(-_._2)
     sortedPossibilities.filter(_._2 ==  sortedPossibilities.head._2) match {
@@ -224,8 +225,6 @@ class TIRepairModel(
       case topPicks:Seq[(PrimitiveValue, Double)] => TypePrimitive(Type.fromString(topPicks.sortBy(rankFn).head._1.asString))
     }
   }
-  private final def rankMapFn(x:(PrimitiveValue, Double)) =
-    (x._1, x._2*priority(Type.fromString(x._1.asString)).toDouble )
   
   private final def rankFn(x:(PrimitiveValue, Double)) =
     (x._2, -1*priority(Type.fromString(x._1.asString)) )
@@ -235,7 +234,7 @@ class TIRepairModel(
     getFeedback(idx, args) match {
       case None => {
         val possibilities = getDomain(idx, args, hints)
-        s"In $context, there were ${possibilities.length} options for $target on the row identified by <${args.map(_.toString).mkString(", ")}>, and I picked ${getTopPick(possibilities)} because it had the highest score and priority"
+        s"In $context, there were ${possibilities.length} options for $target on the column identified by <index:$idx name:${tiCols(idx)}>, and I picked <${getTopPick(possibilities)}> because it had the highest score and priority"
       }
       case Some(choice) => 
         s"In $context, ${getReasonWho(idx,args)} told me to use ${choice.toString} for $target on the identified by <${args.map(_.toString).mkString(", ")}>"
