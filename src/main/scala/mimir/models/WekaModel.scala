@@ -7,7 +7,7 @@ import com.typesafe.scalalogging.slf4j.Logger
 
 import mimir.algebra._
 import mimir.ctables._
-import mimir.util.{RandUtils,TextUtils,TimeUtils}
+import mimir.util.{RandUtils,TextUtils,Timer}
 import mimir.{Analysis, Database}
 import moa.core.InstancesHeader
 import weka.core.{Attribute, DenseInstance, Instance, Instances}
@@ -155,7 +155,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
   def train(db:Database)
   {
     this.db = db
-    TimeUtils.monitor(s"Train $name.$colName", WekaModel.logger.info(_)){
+    Timer.monitor(s"Train $name.$colName", WekaModel.logger.info(_)){
       val trainingQuery = Limit(0, Some(WekaModel.TRAINING_LIMIT), query)
       WekaModel.logger.debug(s"TRAINING ON: \n$trainingQuery")
       db.query(trainingQuery) { iterator => 

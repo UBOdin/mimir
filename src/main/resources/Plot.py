@@ -71,19 +71,40 @@ def drawPlot(lineSettings,globalSettings):
         ypoints=line[1]
         #if there will be a legend, add a legend label for the current line
         if(showLegend):
-            legendLabels.append(line[2]['LINENAME'])
+            legendLabels.append(line[2]['TITLE'])
 
         if(plottype=='line'):
             colorStyle=line[2]['COLOR']+line[2]['STYLE']
             # sys.stderr.write("line\n")
-            plt.plot(xpoints,ypoints,colorStyle,linewidth=line[2]['WEIGHT'])
+            plt.rc('axes', edgecolor = "#808080")
+            lineStyle = "".join([ i for i in line[2]['STYLE'] if i in ['-', '.', ':'] ])
+            marker    = "".join([ i for i in line[2]['STYLE'] if i in ['o', '^', 's'] ])
+            plt.plot(
+                xpoints,
+                ypoints,
+                color = line[2]['COLOR'],
+                linestyle = lineStyle,
+                marker = marker,
+                linewidth = line[2]['WEIGHT']
+            )
             plt.axis([(globalSettings['XMIN']),(globalSettings['XMAX']),(globalSettings['YMIN']),(globalSettings['YMAX'])])
             sys.stderr.write("finished line\n")
         else:
             if(plottype=='scatter'):
                 colorStyle=line[2]['COLOR']+line[2]['STYLE']
+                # sys.stderr.write("line\n")
+                plt.rc('axes', edgecolor = "#808080")
+                lineStyle = "".join([ i for i in line[2]['STYLE'] if i in ['-', '.', ':'] ])
+                marker    = "".join([ i for i in line[2]['STYLE'] if i in ['o', '^', 's'] ])
                 sys.stderr.write("scatter\n")
-                plt.plot(xpoints,ypoints,colorStyle,markersize=line[2]['WEIGHT'])
+                plt.plot(
+                    xpoints,
+                    ypoints,
+                    color = line[2]['COLOR'],
+                    linestyle = lineStyle,
+                    marker = marker,
+                    markersize=line[2]['WEIGHT']
+                )
                 plt.axis([(globalSettings['XMIN']),(globalSettings['XMAX']),(globalSettings['YMIN']),(globalSettings['YMAX'])])
             else:
                 if(plottype=='bar'):
@@ -94,7 +115,14 @@ def drawPlot(lineSettings,globalSettings):
                             #xpoints are numeric, ypoints are strings
                             ypoints=list(reversed(ypoints))
                             words = np.arange(len(ypoints))
-                            plt.barh(words+(barNo*width), xpoints,width, align='center', alpha=0.5,color=line[2]['COLOR'])
+                            plt.barh(
+                                words+(barNo*width), 
+                                xpoints,
+                                width, 
+                                align='center', 
+                                alpha=0.5,
+                                color=line[2]['COLOR']
+                            )
                             plt.yticks(words,ypoints)
                             plt.xlim(globalSettings['XMIN'],globalSettings['XMAX'])
                             barNo=barNo+1
@@ -102,16 +130,32 @@ def drawPlot(lineSettings,globalSettings):
                     #otherwise plot a vertical bar plot
                     else:
                             #xpoints are strings
-                            sys.stderr.write('--------POOT---------\n')
+                            sys.stderr.write('--------PLOT STATS---------\n')
                             sys.stderr.write(str(globalSettings['YMAX'])+"\n")
                             sys.stderr.write(str(globalSettings['YMIN'])+"\n")
                             sys.stderr.write(str(line[0])+"\n")
                             sys.stderr.write(str(line[1])+"\n")
                             words = np.arange(len(xpoints))
-                            plt.bar(words+(width*barNo), ypoints,width=width, align='center', alpha=0.5,color=line[2]['COLOR'])
+                            plt.bar(
+                                words+(width*barNo), 
+                                ypoints,
+                                width=width, 
+                                align='center', 
+                                alpha=0.5,
+                                color=line[2]['COLOR']
+                            )
                             plt.xticks(words,xpoints)
                             plt.ylim(globalSettings['YMIN'],globalSettings['YMAX'])
                             barNo=barNo+1
+    if globalSettings['WARNINGS'] != None and len(globalSettings['WARNINGS']) > 0 and plottype != 'bar':
+        plt.plot(
+            [ x[0] for x in globalSettings['WARNINGS'] ],
+            [ x[1] for x in globalSettings['WARNINGS'] ],
+            color = '#ff0000',
+            linestyle = '',
+            marker = 'o'
+        )
+        legendLabels.append('DATA WARNINGS')
     if showLegend:
         location=cleanLegendLoc(globalSettings['LEGENDLOC'])
         plt.legend(legendLabels,loc=location)
@@ -207,7 +251,33 @@ def castAndCleanBarData(xvals,yvals,orientation):
 
 #fill in any missing color or style values based on what has already been used
 def getUnusedColorandStyle(usedColorStyles, definedColorStyle, graphFormat):
-    colorList=['k','b','r','g','y']
+    # this set of colors based on Brighten Godfrey's blog post:
+    # http://youinfinitesnake.blogspot.com/2011/02/attractive-scientific-plots-with.html
+    # colorList=['k','b','r','g','y']
+    # colorList = [
+    #     '#A00000',
+    #     '#5060D0',
+    #     '#F25900',
+    #     '#00A000',
+    #     'b',
+    #     'r',
+    #     'g',
+    #     'y',
+    #     'k'
+    # ]
+    # This set based on notes from Paul Tol: https://personal.sron.nl/~pault/
+    colorList = [
+      '#332288',
+      '#88CCEE',
+      '#44AA99',
+      '#117733',
+      '#999933',
+      '#DDCC77',
+      '#CC6677',
+      '#882255',
+      '#AA4499'
+    ]
+
     #bargraphs only get colors
     if(graphFormat=='bar'):
         #find a color that hasn't been used yet
@@ -226,8 +296,8 @@ def getUnusedColorandStyle(usedColorStyles, definedColorStyle, graphFormat):
             styles= ['o','^','s']
         #if there is no color or style defined
         if(definedColorStyle==''):
-            for color in colorList:
-                for style in styles:
+            for style in styles:
+                for color in colorList:
                     colorStyle=color+style
                     if colorStyle not in usedColorStyles:
                         usedColorStyles.append(colorStyle)
@@ -246,7 +316,7 @@ def getUnusedColorandStyle(usedColorStyles, definedColorStyle, graphFormat):
                         return [usedColorStyles,color,definedColorStyle]
                 #if all the colors have been used for that style, pick one randomly to reapeat
                 randIndex=random.randint(0,len(colorList)-1)
-                usedColorStyles.append(colorList[randIndex]+definedColorStyle)
+                usedColorStyles.append( (colorList[randIndex], definedColorStyle) )
                 return [usedColorStyles,colorList[randIndex],definedColorStyle]
 
             else:
@@ -258,7 +328,7 @@ def getUnusedColorandStyle(usedColorStyles, definedColorStyle, graphFormat):
                         return [usedColorStyles,definedColorStyle,style]
                 #if all styles have been used for that color, pick on randomly to repeat
                 randIndex=random.randint(0,len(styles)-1)
-                usedColorStyles.append(definedColorStyle+styles[randIndex])
+                usedColorStyles.append( (definedColorStyle, styles[randIndex]) )
                 return [usedColorStyles,definedColorStyle,styles[randIndex]]
 
 
@@ -385,6 +455,7 @@ def run(args = []):
     globSet = config["GLOBAL"]
     lineSet = config["LINES"]
     finishedData = config["RESULTS"]
+    warnings = config["WARNINGS"]
 
     #
     # At this point, all data is read into its proper data structures
@@ -563,7 +634,6 @@ def run(args = []):
         if 'LINENAME' not in line[2]:
             line[2]['LINENAME']=line[3]+', '+line[4]
 
-
-
+    globSet['WARNINGS'] = warnings
 
     drawPlot(lineSet,globSet)

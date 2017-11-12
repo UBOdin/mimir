@@ -128,6 +128,22 @@ object Tracer {
           BoolPrimitive(true)
         )
 
+      case SingletonTable(tuple) => {
+        val tupleMap = tuple.toMap
+        val rowIdKeys = tupleMap.keySet & targetRowId.keySet
+        (
+          if(rowIdKeys.forall { key => 
+            tupleMap(key).equals(targetRowId(key))
+          }) {
+            SingletonTable(tuple)
+          } else {
+            EmptyTable(tuple.map { case (name, v) => (name, v.getType) })
+          },
+          tuple.map { case (name, _) => (name, Var(name)) }.toMap,
+          BoolPrimitive(true)
+        )
+      }
+
       case EmptyTable(schema) => 
         ( 
           EmptyTable(schema),
@@ -137,8 +153,8 @@ object Tracer {
           BoolPrimitive(true)
         )
 
-      case Sort(_, src) => return trace(oper, targetRowId)
-      case Limit(_, _, src) => return trace(oper, targetRowId)
+      case Sort(_, src) => return trace(src, targetRowId)
+      case Limit(_, _, src) => return trace(src, targetRowId)
 
       case _:LeftOuterJoin => 
         throw new RAException("Tracer can't handle left outer joins")

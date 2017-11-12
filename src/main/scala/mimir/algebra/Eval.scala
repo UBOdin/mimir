@@ -49,6 +49,8 @@ class Eval(
 
       case v => throw new TypeException(TBool(), v.getType, "Cast")
     }
+  def apply(e: Expression): PrimitiveValue = 
+    eval(e)
   /**
    * Evaluate the specified expression and return the primitive value
    */
@@ -188,6 +190,20 @@ object Eval
       case _ => e.recur(inline(_, bindings))
     }
   }
+
+  /**
+   * Apply a given variable binding to the specified expression, and then
+   * thoroughly inline it, recursively applying simplify() at all levels,
+   * to all subtrees of the expression
+   */
+  def inline(e: Expression)(bindings: (String => Expression)):
+    Expression = 
+  {
+    e match {
+      case Var(v) => bindings(v)
+      case _ => e.recur(inline(_)(bindings))
+    }
+  }
   
   /**
    * Perform arithmetic on two primitive values.
@@ -195,6 +211,8 @@ object Eval
   def applyArith(op: Arith.Op, 
             a: PrimitiveValue, b: PrimitiveValue
   ): PrimitiveValue = {
+    if(a.equals(NullPrimitive()) || b.equals(NullPrimitive())) { return NullPrimitive() }
+
     val aRoot = Type.rootType(a.getType)
     val bRoot = Type.rootType(b.getType)
 
@@ -216,6 +234,11 @@ object Eval
         FloatPrimitive(a.asDouble * b.asDouble)
       case (Arith.Div, _, _, TInt()) => 
         IntPrimitive(a.asLong / b.asLong)
+      case (Arith.Div, TInterval(), TInterval(), _) => 
+        FloatPrimitive(
+          a.asInterval.toStandardSeconds.getSeconds().toDouble 
+          / b.asInterval.toStandardSeconds.getSeconds().toDouble
+        )
       case (Arith.Div, _, _, TFloat()) => 
         FloatPrimitive(a.asDouble / b.asDouble)
       case (Arith.BitAnd, _, _, TInt()) =>
@@ -316,4 +339,13 @@ object Eval
       }
     }
   }
+
+  def applyAbs(v: PrimitiveValue):PrimitiveValue =
+    v match { 
+      case IntPrimitive(n) => IntPrimitive(Math.abs(n))
+      case FloatPrimitive(n) => FloatPrimitive(Math.abs(n))
+      case IntervalPrimitive(p) if p.toStandardSeconds.getSeconds > 0 => IntervalPrimitive(p)
+      case IntervalPrimitive(p)  => IntervalPrimitive(p.negated())
+      case NullPrimitive() => NullPrimitive()
+    }
 }

@@ -15,6 +15,8 @@ sealed trait Type
 }
 
 object Type {
+  val rootTypes = Seq(TInt(), TFloat(), TDate(), TTimestamp(), TString(), TBool(), TInterval())
+  
   def toString(t:Type) = t match {
     case TInt() => "int"
     case TFloat() => "real"
@@ -111,6 +113,22 @@ object Type {
       case TAny() => treatTAnyAsNumeric
       case _ => false
     }
+  }
+
+  def getType(s:String): Type = {
+    var t: Type = TString() // default
+
+    if(s.matches("^(\\+|-)?([0-9]*(\\.[0-9]+)?)$")) // float
+      t = TFloat()
+    else if(s.matches("^(\\+|-)?([0-9]+)$")) // Int
+      t = TInt()
+    else if(s.matches("^(?i:true|false)$")) // Bool
+      t = TBool()
+    else if(s.matches("^[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}$"))
+      t = TDate()
+    else if(s.matches("^[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}\\ \\[0-9]{2}\\:[0-9]{2}\\:[0-9]{2}"))
+      t = TTimestamp()
+    t
   }
 
 }

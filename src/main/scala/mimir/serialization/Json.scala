@@ -92,6 +92,18 @@ object Json
           "schema" -> ofSchema(schema)
         ))
 
+      case SingletonTable(tuple) => 
+        JsObject(Map[String, JsValue](
+          "type" -> JsString("table_singleton"),
+          "tuple" -> JsArray(tuple.map { case (name, v) =>
+            JsObject(Map[String, JsValue](
+              "name" -> JsString(name),
+              "type" -> ofType(v.getType),
+              "value" -> ofExpression(v)
+            ))
+          })
+        ))
+
       case View(name, query, annotations) => 
         JsObject(Map[String,JsValue](
           "type" -> JsString("table_view"),
@@ -254,6 +266,15 @@ object Json
       case "table_empty" =>
         EmptyTable(toSchema(elems("schema")))
 
+      case "table_singleton" =>
+        SingletonTable(
+          elems("tuple").as[JsArray].value.map { fieldJs =>
+            val field = fieldJs.as[JsObject].value
+            field("name").as[JsString].value ->
+              toPrimitive(toType(field("type")), field("value"))
+          }
+        )
+        
       case "table_normal" =>
         Table(
           elems("table").asInstanceOf[JsString].value, 

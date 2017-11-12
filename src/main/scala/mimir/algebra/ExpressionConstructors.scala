@@ -81,4 +81,6 @@ trait ExpressionConstructors
   def thenElse(thenClause: Expression)(elseClause: Expression): Expression =
     Conditional(toExpression, thenClause, elseClause)
 
+  def not: Expression =
+    ExpressionUtils.makeNot(toExpression)
 }

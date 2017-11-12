@@ -30,9 +30,29 @@ trait Row
   def provenance: RowIdPrimitive = RowIdPrimitive(annotation( Provenance.rowidColnameBase).asString)
 
   def isDeterministic(): Boolean = 
-    annotation(CTPercolator.mimirRowDeterministicColumnName).asInstanceOf[BoolPrimitive].v
+    annotation(CTPercolator.mimirRowDeterministicColumnName) match {
+      case NullPrimitive() => false
+      case BoolPrimitive(t) => t
+      case IntPrimitive(i) => i match {
+        case  1 => true
+        case  0 => false 
+        case -1 => false
+        case _ => throw new RAException("Error getting determinism")
+      }
+      case _ => throw new RAException("Error getting determinism")
+    }
   def isColDeterministic(col: String): Boolean = 
-    annotation(CTPercolator.mimirColDeterministicColumnPrefix + col).asInstanceOf[BoolPrimitive].v
+    annotation(CTPercolator.mimirColDeterministicColumnPrefix + col) match {
+      case NullPrimitive() => false
+      case BoolPrimitive(t) => t
+      case IntPrimitive(i) => i match {
+        case  1 => true
+        case  0 => false 
+        case -1 => false
+        case _ => throw new RAException("Error getting determinism")
+      }
+      case _ => throw new RAException("Error getting determinism")      
+    }
   def isColDeterministic(idx: Int): Boolean =
     isColDeterministic(tupleSchema(idx)._1)
 

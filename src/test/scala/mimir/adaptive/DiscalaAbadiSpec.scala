@@ -15,7 +15,7 @@ object DiscalaAbadiSpec
 {
   def beforeAll =
   {
-    loadCSV("SHIPPING", new File("test/data/cureSource.csv"))
+    db.loadTable("SHIPPING", new File("test/data/cureSource.csv"), true, ("CSV", Seq(StringPrimitive(","), BoolPrimitive(false), BoolPrimitive(true))))
   }
 
   sequential
@@ -32,12 +32,16 @@ object DiscalaAbadiSpec
       querySingleton("""
         SELECT COUNT(*) FROM MIMIR_DA_FDG_SHIPPING
       """).asLong must be greaterThan(20l)
-      querySingleton("""
+      query("""
         SELECT NAME FROM MIMIR_ADAPTIVE_SCHEMAS
-      """) must be equalTo(StringPrimitive("SHIPPING"))
-      querySingleton("""
+      """) {
+        _.toSeq.map( m => m.tuple(0)) must contain(StringPrimitive("SHIPPING"))
+      }
+      query("""
         SELECT NAME FROM MIMIR_MODELS
-      """) must be equalTo(StringPrimitive("MIMIR_DA_CHOSEN_SHIPPING:MIMIR_FD_PARENT"))
+      """) {
+        _.toSeq.map( m => m.tuple(0)) must contain(StringPrimitive("MIMIR_DA_CHOSEN_SHIPPING:MIMIR_FD_PARENT"))
+      }
     }
 
     "Create a sane root attribute" >> {
@@ -78,10 +82,10 @@ object DiscalaAbadiSpec
     "Create a schema that can be queried" >> {
       db.query(
 
-        OperatorUtils.makeUnion(db.adaptiveSchemas.tableCatalogs)
+        OperatorUtils.makeUnion(db.adaptiveSchemas.tableCatalogs("DISCALA_ABADI"))
           .project( "TABLE_NAME", "SCHEMA_NAME" )
 
-      ) { _.map { row => 
+      ) { _.toSeq.map { row => 
           (
             row("TABLE_NAME").asString, 
             row("SCHEMA_NAME").asString,
@@ -95,7 +99,7 @@ object DiscalaAbadiSpec
 
       db.query(
 
-        OperatorUtils.makeUnion( db.adaptiveSchemas.attrCatalogs )
+        OperatorUtils.makeUnion( db.adaptiveSchemas.attrCatalogs("DISCALA_ABADI") )
           .project( "TABLE_NAME", "ATTR_NAME", "IS_KEY" )
           .sort( "TABLE_NAME" -> true, "IS_KEY" -> false )
 
@@ -118,7 +122,7 @@ object DiscalaAbadiSpec
     "Allocate all attributes to some relation" >> {
       db.query(
 
-        OperatorUtils.makeUnion( db.adaptiveSchemas.attrCatalogs )
+        OperatorUtils.makeUnion( db.adaptiveSchemas.attrCatalogs("DISCALA_ABADI") )
           .project( "TABLE_NAME", "ATTR_NAME", "IS_KEY" )
           .sort( "TABLE_NAME" -> true, "IS_KEY" -> false )
 
@@ -128,6 +132,12 @@ object DiscalaAbadiSpec
           db.table("SHIPPING").columnNames.toSet
         )
       }
+    }
+
+    "Start off with no feedback" >> {
+      db.models
+        .get("MIMIR_DA_CHOSEN_SHIPPING:MIMIR_FD_PARENT")
+        .isAcknowledged(0, Seq(StringPrimitive("FOREIGN_DESTINATION"))) must beFalse
     }
 
     "Allow native SQL queries over the catalog tables" >> {
@@ -141,7 +151,7 @@ object DiscalaAbadiSpec
 
           tables must contain( ("ROOT", "SHIPPING") )
           tables must contain( ("MIMIR_VIEWS", "BACKEND") )
-          tables must contain( ("SHIPPING", "BACKEND") )
+          tables must contain( ("SHIPPING_RAW", "BACKEND") )
         }
       } 
 
@@ -156,7 +166,8 @@ object DiscalaAbadiSpec
       }
 
       LoggerUtils.debug(
-        // "mimir.exec.Compiler"
+        // "mimir.exec.Compiler",
+        // "mimir.exec.mode.BestGuess$"
       ) {
         query("""
           SELECT ATTR_NAME FROM MIMIR_SYS_ATTRS
@@ -165,7 +176,7 @@ object DiscalaAbadiSpec
         """) { results =>
           val attrStrings = results.map { row => (row("ATTR_NAME").asString, row.isDeterministic) }.toSeq 
           attrStrings must contain(
-            ("FOREIGN_DESTINATION", false)
+            ("FOREIGN_DESTINATION", true)
           )
         }
       }

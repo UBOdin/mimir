@@ -43,6 +43,8 @@ object QueryNamer
 				nameQuery(src)+"_BY_"+cols.flatMap(col => ExpressionUtils.getColumns(col.expression)).mkString("_")
 			case EmptyTable(_) => 
 				"EMPTY_QUERY"
+			case SingletonTable(_) => 
+				"SINGLETON"
 			case Annotate(src, _) => nameQuery(src)
 			case Recover(src, _) => nameQuery(src)
 			case ProvenanceOf(src) => nameQuery(src)

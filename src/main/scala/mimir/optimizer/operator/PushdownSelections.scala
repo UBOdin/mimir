@@ -127,8 +127,13 @@ object PushdownSelections extends OperatorOptimization {
 			
 			case Select(cond, EmptyTable(sch)) => EmptyTable(sch)
 
+			case Select(_, (_:SingletonTable)) => o
+			
 			case Select(cond, View(name, query, annotations)) => 
 				Select(cond, View(name, apply(query), annotations))
+				
+			case Select(cond, AdaptiveView(schema, name, query, annotations)) => 
+				Select(cond, AdaptiveView(schema, name, apply(query), annotations))
 
 			case Select(cond, Sort(order, src)) => 
 				Sort(order, Select(cond, src))

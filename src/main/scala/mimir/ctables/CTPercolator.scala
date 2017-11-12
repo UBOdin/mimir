@@ -568,6 +568,13 @@ object CTPercolator
           BoolPrimitive(true)
         )
       }
+ 
+      case SingletonTable(tuple) => {
+        return (oper, 
+          tuple.map { case (name, _) => (name, BoolPrimitive(true)) }.toMap, 
+          BoolPrimitive(true)
+        )
+      }
 
       // This is a bit hackish... Sort alone doesn't affect determinism
       // metadata, and Limit doesn't either, but combine the two and you get some

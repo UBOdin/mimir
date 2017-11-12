@@ -16,10 +16,10 @@ object TypeInferenceSpec
       db.loadTable("CPUSPEED", new File("test/data/CPUSpeed.csv"))
 
       val baseTypes = db.bestGuessSchema(db.table("CPUSPEED_RAW")).toMap
-      baseTypes.keys must contain(eachOf("CORES", "FAMILY", "TECH_MICRON"))
-      baseTypes must contain("CORES" -> TString())
-      baseTypes must contain("FAMILY" -> TString())
-      baseTypes must contain("TECH_MICRON" -> TString())
+      baseTypes.keys must contain(eachOf("COLUMN_7", "COLUMN_1", "COLUMN_2"))
+      baseTypes must contain("COLUMN_7" -> TString())
+      baseTypes must contain("COLUMN_1" -> TString())
+      baseTypes must contain("COLUMN_2" -> TString())
 
 
       val lensTypes = db.bestGuessSchema(db.table("CPUSPEED")).toMap

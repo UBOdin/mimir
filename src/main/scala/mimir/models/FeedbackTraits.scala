@@ -2,7 +2,7 @@ package mimir.models
 
 import mimir.algebra._
 
-case class FeedbackSourceIdentifier(id:String = "", name:String = "My Master")
+case class FeedbackSourceIdentifier(id:String = "", name:String = "truth")
 
 object FeedbackSource {
   val groundSource = FeedbackSourceIdentifier()
@@ -43,11 +43,18 @@ trait SourcedFeedbackT[T] {
   }
   def setFeedback(idx: Int, args: Seq[PrimitiveValue], value:PrimitiveValue) : Unit = {
     val fbKey = getFeedbackKey(idx,args)
-    feedback.get(fbKey) match {
-      case None => feedback(fbKey) = scala.collection.mutable.Map(FeedbackSource.feedbackSource -> value)
-      case Some(sourceMap) => sourceMap(FeedbackSource.feedbackSource) = value
-    }
-    feedbackSources.add(FeedbackSource.feedbackSource)    
+    if(value.equals(NullPrimitive())){
+      feedback.get(fbKey) match {
+        case None => ()
+        case Some(sourceMap) => sourceMap.remove(FeedbackSource.feedbackSource)
+      }
+    } else {
+      feedback.get(fbKey) match {
+        case None => feedback(fbKey) = scala.collection.mutable.Map(FeedbackSource.feedbackSource -> value)
+        case Some(sourceMap) => sourceMap(FeedbackSource.feedbackSource) = value
+      }
+      feedbackSources.add(FeedbackSource.feedbackSource)
+    } 
   }
   def hasFeedback(idx: Int, args: Seq[PrimitiveValue]) : Boolean = {
     feedback.get(getFeedbackKey(idx,args)) match {

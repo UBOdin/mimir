@@ -232,7 +232,7 @@ object OperatorUtils extends LazyLogging {
         findRenamingConflicts(name, lhs) ++ findRenamingConflicts(name, rhs)
       case Join(lhs, rhs) => 
         findRenamingConflicts(name, lhs) ++ findRenamingConflicts(name, rhs)
-      case EmptyTable(_) | Table(_,_,_,_) | View(_,_,_) | AdaptiveView(_,_,_,_) => 
+      case EmptyTable(_) | Table(_,_,_,_) | View(_,_,_) | AdaptiveView(_,_,_,_) | SingletonTable(_) => 
         oper.columnNames.toSet
       case Sort(_, src) =>
         findRenamingConflicts(name, src)
@@ -326,6 +326,13 @@ object OperatorUtils extends LazyLogging {
       case EmptyTable(sch) => {
         EmptyTable(
           sch.map { col => if(col._1.equals(target)) { (replacement, col._2) } else { col } }
+        )
+      }
+      case SingletonTable(tuple) => {
+        SingletonTable(
+          tuple.map { case (col, v) => 
+            if(col.equals(target)) { (replacement, v) } else { (col, v) }
+          }
         )
       }
       case View(_, _, _) | AdaptiveView(_, _, _, _) => {

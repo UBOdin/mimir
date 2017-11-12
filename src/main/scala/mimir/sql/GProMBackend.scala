@@ -34,37 +34,29 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int)
   val tableSchemas: scala.collection.mutable.Map[String, Seq[(String, Type)]] = mutable.Map()
 
   def setGProMLogLevel(level : Int) : Unit = {
-    gpromLogLevel = level
-    if(gpromLogLevel == -1)
-      GProMWrapper.inst.setSilenceLogger(true)
-    else
-      GProMWrapper.inst.setSilenceLogger(false)
-    if(conn != null){
-      conn.asInstanceOf[GProMConnection].getW().setLogLevel(level)
-    }
+    GProMWrapper.inst.setLogLevel(level)
   }
 
   def open() = {
     this.synchronized({
+      System.setProperty("jna.protected","true")
       Native.setProtected(true)
       println(s"GProM Library running in protected mode: ${Native.isProtected()}")
       assert(openConnections >= 0)
       if (openConnections == 0) {
         conn = backend match {
           case "sqlite" =>
-            Class.forName("org.gprom.jdbc.driver.GProMDriver")
+            GProMWrapper.inst.setInitialLogLevel(gpromLogLevel)
+			      Class.forName("org.gprom.jdbc.driver.GProMDriver")
             Class.forName("org.sqlite.JDBC")
             val path = java.nio.file.Paths.get(filename).toString
             val info = new Properties()
-            if(gpromLogLevel == -1){
-              GProMWrapper.inst.setSilenceLogger(true)
-            }
-			      info.setProperty(GProMDriverProperties.JDBC_METADATA_LOOKUP, "TRUE")
+            info.setProperty(GProMDriverProperties.JDBC_METADATA_LOOKUP, "TRUE")
             info.setProperty("plugin.analyzer","sqlite")
             info.setProperty("plugin.translator","sqlite")
             info.setProperty("log.active","false")
             var c = java.sql.DriverManager.getConnection("jdbc:gprom:sqlite:" + path, info)
-            c.asInstanceOf[GProMConnection].getW().setLogLevel(gpromLogLevel)
+            //GProMWrapper.inst.setLogLevel(gpromLogLevel)
             //gpromMetadataPlugin = new MimirGProMMetadataPlugin()
             unwrappedConn = c.unwrap[org.sqlite.SQLiteConnection]( classOf[org.sqlite.SQLiteConnection])
             SQLiteCompat.registerFunctions( unwrappedConn )
