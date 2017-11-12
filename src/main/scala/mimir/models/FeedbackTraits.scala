@@ -88,30 +88,4 @@ trait SourcedFeedbackT[T] {
       }
     }
   }
-  def confidence(idx: Int, args: Seq[PrimitiveValue], sourceId: FeedbackSourceIdentifier) : Double = {
-    var total : Double = 0.0
-    var correct : Double = 0.0
-    for((fbKey,sourceMap) <- feedback) {
-      sourceMap.get(sourceId) match {
-        case Some(value) => {
-          // Compare with ground source feedback
-          val groundTruth = sourceMap.getOrElse(FeedbackSource.groundSource,null)
-          if (groundTruth!=null && value.equals(groundTruth)) {
-            correct+=1
-            total+=1
-          }
-          else if (groundTruth!=null) {
-            total+=1
-          }
-        }
-        case None => {
-          // Do nothing
-        }
-      }
-    }
-    if (total == 0) 
-      0.5
-    else
-      correct/total
-  }
 }
