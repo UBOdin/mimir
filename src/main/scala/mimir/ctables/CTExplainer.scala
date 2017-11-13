@@ -434,7 +434,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 		logger.trace(s"Explain Subset (${wantCol.mkString(", ")}; $wantRow; $wantSort): \n$oper")
 		oper match {
 			case Table(_,_,_,_) => Seq()
-			case SingletonTable(_) => Seq()
+			case HardTable(_,_) => Seq()
 			case View(_,query,_) => 
 				explainSubsetWithoutOptimizing(query, wantCol, wantRow, wantSort)
 
@@ -466,8 +466,6 @@ class CTExplainer(db: Database) extends LazyLogging {
 				sourceReasons ++ tableReasons ++ attrReasons
 			}
 
-
-			case EmptyTable(_) => Seq()
 
 			case Project(args, child) => {
 				val relevantArgs =

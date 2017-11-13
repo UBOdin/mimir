@@ -96,7 +96,7 @@ class SqlToRA(db: Database)
     // subsequently joined to it.  Start by extracting the first FromItem
     var (ret, currBindings, sourceAlias) = 
       if(ps.getFromItem() == null){
-        (SingletonTable(Seq()), Seq(), "SINGLETON");
+        (HardTable(Seq(),Seq()), Seq(), "SINGLETON");
       } else {
         convert(ps.getFromItem)
       }

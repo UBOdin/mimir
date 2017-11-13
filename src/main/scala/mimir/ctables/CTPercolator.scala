@@ -560,7 +560,7 @@ object CTPercolator
         )
       }
 
-      case EmptyTable(sch) => {
+      case HardTable(sch,_) => {
         return (oper, 
           // All columns are deterministic
           sch.map(_._1).map((_, BoolPrimitive(true)) ).toMap,
@@ -569,12 +569,6 @@ object CTPercolator
         )
       }
  
-      case SingletonTable(tuple) => {
-        return (oper, 
-          tuple.map { case (name, _) => (name, BoolPrimitive(true)) }.toMap, 
-          BoolPrimitive(true)
-        )
-      }
 
       // This is a bit hackish... Sort alone doesn't affect determinism
       // metadata, and Limit doesn't either, but combine the two and you get some

@@ -86,22 +86,11 @@ object Json
             })
         ))
 
-      case EmptyTable(schema) => 
+      case HardTable(schema,data) => 
         JsObject(Map[String, JsValue](
-          "type" -> JsString("table_empty"),
-          "schema" -> ofSchema(schema)
-        ))
-
-      case SingletonTable(tuple) => 
-        JsObject(Map[String, JsValue](
-          "type" -> JsString("table_singleton"),
-          "tuple" -> JsArray(tuple.map { case (name, v) =>
-            JsObject(Map[String, JsValue](
-              "name" -> JsString(name),
-              "type" -> ofType(v.getType),
-              "value" -> ofExpression(v)
-            ))
-          })
+          "type" -> JsString("table_hardocded"),
+          "schema" -> ofSchema(schema),
+          "data" -> JsArray(data.map( row => JsArray( row.map( hv => ofExpression(hv)))))
         ))
 
       case View(name, query, annotations) => 
@@ -263,15 +252,12 @@ object Json
           toExpression(elems("condition")),
           toOperator(elems("source"))
         )
-      case "table_empty" =>
-        EmptyTable(toSchema(elems("schema")))
-
-      case "table_singleton" =>
-        SingletonTable(
-          elems("tuple").as[JsArray].value.map { fieldJs =>
-            val field = fieldJs.as[JsObject].value
-            field("name").as[JsString].value ->
-              toPrimitive(toType(field("type")), field("value"))
+      case "table_hardcoded" =>
+        val schema = toSchema(elems("schema"))
+        HardTable(
+          schema,
+          elems("data").as[JsArray].value.map { rowJS =>
+            rowJS.as[JsArray].value.zipWithIndex.map { vJS => toPrimitive(schema(vJS._2)._2, vJS._1) }
           }
         )
         

@@ -141,7 +141,7 @@ object TypeInference
 
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    SingletonTable(Seq(("TABLE_NAME",StringPrimitive("MIMIR_TI_TABLE_"+config.schema))))
+    HardTable(Seq(("TABLE_NAME",TString())),Seq(Seq(StringPrimitive("MIMIR_TI_TABLE_"+config.schema))))
   }
 
   def attrCatalogFor(db: Database, config: MultilensConfig): Operator =

@@ -1360,10 +1360,7 @@ object OperatorTranslation {
       case AdaptiveView(_, _, query, _) => {
         mimirOperatorToGProMList(query)
       }
-			case EmptyTable(sch)=> {
-			   throw new Exception("Operator Translation not implemented '"+mimirOperator+"'")
-			}
-      case SingletonTable(tuple)=> {
+      case HardTable(_,_)=> {
          throw new Exception("Operator Translation not implemented '"+mimirOperator+"'")
       }
 			case Sort(sortCols, src) => {

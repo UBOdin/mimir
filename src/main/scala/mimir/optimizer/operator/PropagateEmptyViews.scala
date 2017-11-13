@@ -9,24 +9,23 @@ class PropagateEmptyViews(typechecker: Typechecker, aggregates: AggregateRegistr
   def apply(o: Operator): Operator =
   {
     o.recur(apply(_)) match { 
-      case Union(EmptyTable(_), x)          => x
-      case Union(x, EmptyTable(_))          => x
+      case Union(HardTable(sch,Seq()), x)          => x
+      case Union(x, HardTable(sch,Seq()))          => x
 
-      case Join(EmptyTable(_), _)           => EmptyTable(typechecker.schemaOf(o))
-      case Join(_, EmptyTable(_))           => EmptyTable(typechecker.schemaOf(o))
+      case Join(HardTable(sch,Seq()), _)           => HardTable(typechecker.schemaOf(o),Seq())
+      case Join(_, HardTable(sch,Seq()))           => HardTable(typechecker.schemaOf(o),Seq())
 
-      case Select(BoolPrimitive(false), _)  => EmptyTable(typechecker.schemaOf(o))
-      case Select(_, EmptyTable(sch))       => EmptyTable(sch)
-      case Project(_, EmptyTable(sch))      => EmptyTable(typechecker.schemaOf(o))
-      case Sort(_, EmptyTable(sch))         => EmptyTable(sch)
-      case Limit(_, _, EmptyTable(sch))     => EmptyTable(sch)
+      case Select(BoolPrimitive(false), _)  => HardTable(typechecker.schemaOf(o),Seq())
+      case Select(_, HardTable(sch,Seq()))       => HardTable(sch,Seq())
+      case Project(_, HardTable(sch,Seq()))      => HardTable(typechecker.schemaOf(o),Seq())
+      case Sort(_, HardTable(sch,Seq()))         => HardTable(sch,Seq())
+      case Limit(_, _, HardTable(sch,Seq()))     => HardTable(sch,Seq())
 
-      case Aggregate(Seq(), agg, EmptyTable(sch)) => {
-        SingletonTable(
-          agg.map { case AggFunction(function, _, _, alias) => (alias, aggregates.defaultValue(function)) }
-        )
+      case Aggregate(Seq(), agg, HardTable(sch,Seq())) => {
+        val (nsch,data) = agg.map { case AggFunction(function, _, args, alias) => ((alias,aggregates.typecheck(alias, args.map(expr => typechecker.typeOf(expr)))), Seq(aggregates.defaultValue(function))) }.unzip
+        HardTable(  nsch, data )
       }
-      case Aggregate(_, _, EmptyTable(sch)) => EmptyTable(typechecker.schemaOf(o))
+      case Aggregate(_, _, HardTable(sch,Seq())) => HardTable(typechecker.schemaOf(o),Seq())
 
       case x => x
     }
