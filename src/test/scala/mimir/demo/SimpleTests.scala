@@ -80,12 +80,18 @@ object SimpleTests
       }
       println("Done")
 */
-
+/*
     time("Query Time") {
       query("SELECT JSON_CLUSTER_AGG(JSON_CLUSTER_PROJECT(JSONCOLUMN)) FROM TWITTERFULL;") {
         _.foreach(println(_))
       }
     }
+*/
+      time("Query Time") {
+        query("SELECT CLUSTER_TEST(JSONCOLUMN) FROM TWITTERFULL;") {
+          _.foreach(println(_))
+        }
+      }
 
       /*
             // Test Create Type Inference

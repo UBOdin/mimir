@@ -1,5 +1,6 @@
 package mimir.sql.sqlite
 
+import java.io.{BufferedWriter, FileWriter}
 import java.util
 import java.util.Set
 
@@ -13,6 +14,7 @@ import org.joda.time.DateTime
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import play.api.libs.json._
 import mimir.util.JsonPlay._
+import pattern_mixture_summarization.ClusteringResult
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
@@ -52,6 +54,8 @@ object SQLiteCompat extends LazyLogging{
     org.sqlite.Function.create(conn, "JSON_EXPLORER_PROJECT", JsonExplorerProject)
     org.sqlite.Function.create(conn, "JSON_CLUSTER_PROJECT", JsonClusterProject)
     org.sqlite.Function.create(conn, "JSON_CLUSTER_AGG", new JsonClusterAGG())
+    org.sqlite.Function.create(conn, "CLUSTER_TEST", new ClusteringPlayground())
+
   }
   
   def getTableSchema(conn:java.sql.Connection, table: String): Option[Seq[(String, Type)]] =
@@ -878,6 +882,134 @@ class JsonClusterAGG extends org.sqlite.Function.Aggregate {
     // rowHolder holds the feature vectors for each row, iterate through this
     // total Schema is the maximum schema for the json dataset, this contains an order with all known paths
     result("DONE")
+  }
+
+}
+
+class ClusteringPlayground extends org.sqlite.Function.Aggregate {
+
+  val combineArrays: Boolean = true
+  val failSilently: Boolean = false
+  val shapeVectorOutputPath: String = "fvoutput.txt"
+  val shapeMultiplicityOutputPath: String = "multoutput.txt"
+
+//  val rowHolder: ListBuffer[ListBuffer[Int]] = ListBuffer[ListBuffer[Int]]() // Seq of feature vectors
+  var totalSchema: ListBuffer[String] = ListBuffer[String]() // the total schema, used to determine the feature vector
+
+  var jsonShapeFormat: Map[ListBuffer[Int],Int] = Map[ListBuffer[Int],Int]() // holds the feature vector based on the json shape as the key and the multiplicity as the value
+//  val jsonDataFormat: ListBuffer[ListBuffer[(String,Type)]]
+
+  @Override
+  def xStep(): Unit = {
+    if(value_type(0) != SQLiteCompat.NULL) { // the value is not null, so merge the JSON objects
+      val jsonString: String = value_text(0)
+      var jsonLeafKeySet: Set[String] = null
+
+      try {
+        val jsonMap: java.util.Map[String,AnyRef] = JsonFlattener.flattenAsMap(jsonString) // create a flat map of the json object
+        if(combineArrays)
+          jsonLeafKeySet = combineArr(jsonMap.keySet())
+        else
+          jsonLeafKeySet = jsonMap.keySet()
+
+        val featureVector: ListBuffer[Int] = ListBuffer[Int]()
+
+        // update total schema based on new row
+        jsonLeafKeySet.asScala.foreach((v: String) => {
+          if(!totalSchema.contains(v))
+            totalSchema += v
+        })
+        // run through schema and update the feature vector so it matches it
+        totalSchema.foreach((v) => {
+          if(jsonLeafKeySet.contains(v))
+            featureVector += 1
+          else
+            featureVector += 0
+        })
+
+        val norm = removeTailZeros(featureVector) // this normalizes the feature vector for map insertion
+        jsonShapeFormat.get(norm) match {
+          case Some(i) => jsonShapeFormat += (norm -> (i+1))
+          case None => jsonShapeFormat += (norm -> 1)
+        }
+
+
+      }
+      catch{
+        case e: Exception => {
+          if(failSilently)
+            result()
+          else
+            println(s"Not of JSON format in Json_Explorer_Project, so null returned: $jsonString")
+        } // is not a proper json format so return null since there's nothing we can do about this right now
+      } // end try catch
+    } // end value is not null section
+  }
+
+  def xFinal(): Unit = {
+
+    try { // try to write output
+      val shapeVectorWriter: BufferedWriter = new BufferedWriter(new FileWriter(shapeVectorOutputPath))
+      val shapeMultWriter: BufferedWriter = new BufferedWriter(new FileWriter(shapeMultiplicityOutputPath))
+
+      jsonShapeFormat.foreach((v) => {
+        val featureVector: ListBuffer[Int] = v._1
+        val multiplicity: Int = v._2
+
+        var vectorOutput: String = ""
+        var oneCount: Int = 0   // count of how many 1's occur
+        featureVector.zipWithIndex.foreach((i) => {
+          val loc = i._2
+
+          if(i._1 != 0){
+            oneCount += 1
+            vectorOutput += s" $loc:1" // prepare the output
+          }
+        })
+        val output: String = oneCount + vectorOutput
+        shapeVectorWriter.write(output + '\n')
+        shapeMultWriter.write(multiplicity.toString + '\n')
+      })
+
+      shapeVectorWriter.close()
+      shapeMultWriter.close()
+
+    } catch {
+      case e: Exception => throw e
+    }
+
+    result("DONE")
+  }
+
+  def combineArr(paths: Set[String]): Set[String] = {
+    val ret: Set[String] = new util.HashSet[String]()
+    val pathIterator = paths.iterator()
+    while(pathIterator.hasNext){
+      val path: String = pathIterator.next()
+      if(path.contains("[")) { // is an array
+        // this unreadible line of code will first remove everything between square brackets, then it will replace all multiple periods with a single period for sanity
+        ret.add(path.replaceAll("\\[.*\\]", "").replaceAll("\\.{2,}", "\\."))
+      }
+      else
+        ret.add(path) // not an array
+    }
+    ret
+  }
+
+  def removeTailZeros(l: ListBuffer[Int]): ListBuffer[Int] = {
+    // removes tailing zeros from a list to normalize it
+    var ret: ListBuffer[Int] = ListBuffer[Int]()
+    val temp: ListBuffer[Int] = ListBuffer[Int]()
+    l.foreach((v)=> {
+      if(v == 0)
+        temp += 0
+      else {
+        temp += 1
+        ret = ret ++ temp
+        temp.clear()
+      }
+    })
+    ret
   }
 
 }
