@@ -967,8 +967,10 @@ class ClusteringPlayground extends org.sqlite.Function.Aggregate {
           }
         })
         val output: String = oneCount + vectorOutput
-        shapeVectorWriter.write(output + '\n')
-        shapeMultWriter.write(multiplicity.toString + '\n')
+//        if(multiplicity > 100) {
+          shapeVectorWriter.write(output + '\n')
+          shapeMultWriter.write(multiplicity.toString + '\n')
+//        }
       })
 
       shapeVectorWriter.close()

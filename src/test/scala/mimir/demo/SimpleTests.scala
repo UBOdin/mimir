@@ -10,6 +10,8 @@ import mimir.test._
 import mimir.lenses.JsonExplorerLens
 import mimir.sql.JDBCBackend
 import mimir.util.TimeUtils
+import pattern_mixture_summarization.ClusteringResult
+
 
 object SimpleTests
   extends SQLTestSpecification("tempDBDemoScript")
@@ -87,11 +89,24 @@ object SimpleTests
       }
     }
 */
+
+/*
       time("Query Time") {
         query("SELECT CLUSTER_TEST(JSONCOLUMN) FROM TWITTERFULL;") {
           _.foreach(println(_))
         }
       }
+*/
+      // verb = how many patterns
+      // error = tightness of cluster, correlations not captured
+
+      val cr: ClusteringResult = new ClusteringResult("C:\\Users\\Will\\Documents\\GitHub\\mimir\\fvoutput.txt","C:\\Users\\Will\\Documents\\GitHub\\mimir\\multoutput.txt","C:\\Users\\Will\\Documents\\GitHub\\mimir\\cluster.txt")
+      val c = cr.getClusters
+      val n1 = c.get(0).getNaiveSummary
+      val ne1 = c.get(0).getError
+      val n2 = c.get(1).getNaiveSummary
+      val ne2 = c.get(1).getError
+      println(c.toString)
 
       /*
             // Test Create Type Inference
@@ -131,6 +146,12 @@ object SimpleTests
       */
       true
     }
+
+    // quality score for structure
+    // "Your data is great! vs your data is baadddd
+    // twitter would be worse than csv for example
+    // relationship between children of shape, path suffix check
+    // sub-schemas may be repeated multiple times, user field may over-lap with mentions, finding sub-schemas that are repeated, can use suffixes
 
   }
 }
