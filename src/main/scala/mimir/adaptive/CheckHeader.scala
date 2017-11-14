@@ -53,7 +53,7 @@ object CheckHeader
         Project( model.query.columnNames.zipWithIndex.map( col => 
           ProjectArg(model.bestGuess(col._2, Seq(), Seq()).asString,Var(col._1)) )
           , config.query) match {
-          case proj if model.headerDetected => proj.limit(1000000000, 1)
+          case proj if model.headerDetected => proj.limit(-1, 1)
           case proj => proj
         })
   }
