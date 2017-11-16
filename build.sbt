@@ -45,8 +45,17 @@ runMimirVizier := {
   val jvmArgs = debugTestJVMArgs ++ Seq("-Xmx4g", "-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK")
   val (jh, os, bj, bd, jo, ci, ev) = (javaHome.value, outputStrategy.value, Vector[java.io.File](), 
 		Some(baseDirectory.value), (jvmArgs ++ Seq("-classpath", classpathString)).toVector, connectInput.value, sys.props.get("os.name") match {
-	  	case Some(osname) if osname.startsWith("Mac OS X") => Map(("DYLD_INSERT_LIBRARIES",System.getProperty("java.home")+"/lib/libjsig.dylib"))
-	  	case Some(otherosname) => Map(("LD_PRELOAD",System.getProperty("java.home")+"/lib/"+System.getProperty("os.arch")+"/libjsig.so"))
+	  	//case Some(osname) if osname.startsWith("Mac OS X") =>  Map(("DYLD_INSERT_LIBRARIES",System.getProperty("java.home")+"/lib/libjsig.dylib"))
+	  	case Some(osname) if osname.startsWith("Mac OS X") => sys.props.get("os.arch") match {
+	  		case Some(osarch) if osarch.endsWith("64") => Map(("LD_PRELOAD_64",System.getProperty("java.home")+"/lib/libjsig.dylib"))
+	  		case Some(osarch) => Map(("LD_PRELOAD",System.getProperty("java.home")+"/lib/libjsig.dylib"))
+	  		case None => envVars.value
+	  	}
+	  	case Some(otherosname) => sys.props.get("os.arch") match {
+	  		case Some(osarch) if osarch.endsWith("64") => Map(("LD_PRELOAD_64",System.getProperty("java.home")+"/lib/"+System.getProperty("os.arch")+"/libjsig.so"))
+	  		case Some(osarch) => Map(("LD_PRELOAD",System.getProperty("java.home")+"/lib/"+System.getProperty("os.arch")+"/libjsig.so")) 
+	  		case None => envVars.value
+	  	}
 	  	case None => envVars.value
 	  })
   Fork.java(
@@ -85,7 +94,7 @@ libraryDependencies ++= Seq(
   ////////////////////// Command-Line Interface Utilities //////////////////////
   "org.rogach"                    %%  "scallop"                  % "0.9.5",
   "org.jline"                     %   "jline"                    % "3.2.0",
-  "info.mimirdb"                  %   "jsqlparser"               % "1.0.2",
+  "info.mimirdb"                  %   "jsqlparser"               % "1.0.3",
 
   ////////////////////// Dev Tools -- Logging, Testing, etc... //////////////////////
   "com.typesafe.scala-logging"    %%  "scala-logging-slf4j"      % "2.1.2",
@@ -116,8 +125,8 @@ libraryDependencies ++= Seq(
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
     
   //spark ml
-  "org.apache.spark" 			  %   "spark-sql_2.11" 		  % "2.2.0",
-  "org.apache.spark" 			  %   "spark-mllib_2.11" 	  % "2.2.0",
+  "org.apache.spark" 			  %   "spark-sql_2.11" 		  % "2.2.0" exclude("org.slf4j", "slf4j-log4j12"),
+  "org.apache.spark" 			  %   "spark-mllib_2.11" 	  % "2.2.0" exclude("org.slf4j", "slf4j-log4j12"),
  
   //////////////////////// Jung ////////////////////////
   // General purpose graph manipulation library
@@ -144,6 +153,7 @@ libraryDependencies ++= Seq(
   "net.java.dev.jna"              %    "jna-platform"            % "4.2.2",
   "org.apache.logging.log4j" 	  %    "log4j-api" 				 % "2.8.2",
   "org.apache.logging.log4j" 	  %    "log4j-core" 			 % "2.8.2",
+  "org.apache.logging.log4j" 	  %%   "log4j-api-scala"         % "2.8.2",
   
   ///////////////////// Viztrails Integration ///////////////////
   
@@ -199,8 +209,8 @@ assemblyMergeStrategy in assembly := {
   case PathList("com", "esotericsoftware", xs @ _*) => MergeStrategy.last
   case PathList("com", "codahale", xs @ _*) => MergeStrategy.last
   case PathList("com", "yammer", xs @ _*) => MergeStrategy.last
-  case PathList("ch", "qos", xs @ _*) => MergeStrategy.last
-  case PathList("org", "slf4j", xs @ _*) => MergeStrategy.last
+  case PathList("ch", "qos", xs @ _*) => MergeStrategy.first
+  case PathList("org", "slf4j", xs @ _*) => MergeStrategy.first
   case PathList("org", "codehaus", xs @ _*) => MergeStrategy.last
   case PathList("com", "googlecode", xs @ _*) => MergeStrategy.last
   case "overview.html" => MergeStrategy.rename

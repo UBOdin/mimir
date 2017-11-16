@@ -342,12 +342,12 @@ class JDBCBackend(val backend: String, val filename: String)
     backend match {
       case "sqlite" => {
         logger.warn("SQLITE has no programatic way to access attributes in SQL")
-        EmptyTable(Seq(
+        HardTable(Seq(
           ("TABLE_NAME", TString()), 
           ("ATTR_NAME", TString()),
           ("ATTR_TYPE", TString()),
           ("IS_KEY", TBool())
-        ));
+        ),Seq());
       }
 
       case "oracle" => ???

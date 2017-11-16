@@ -2,7 +2,7 @@ package mimir.models
 
 import mimir.algebra._
 
-case class FeedbackSourceIdentifier(id:String = "", name:String = "My Master")
+case class FeedbackSourceIdentifier(id:String = "", name:String = "truth")
 
 object FeedbackSource {
   val groundSource = FeedbackSourceIdentifier()

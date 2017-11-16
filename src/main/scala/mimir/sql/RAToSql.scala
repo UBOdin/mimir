@@ -110,6 +110,19 @@ class RAToSql(db: Database)
         return union
       }
 
+      case HardTable(_,Seq()) => return makePlainSelect(oper) 
+      case HardTable(schema,Seq(tuple:Seq[PrimitiveValue])) => return makePlainSelect(oper)
+      
+      case HardTable(schema,data) => {
+        var union = new net.sf.jsqlparser.statement.select.Union()
+        union.setAll(true);
+        union.setDistinct(false);
+        union.setPlainSelects(
+          data.map(row => makePlainSelect(HardTable(schema,Seq(row))))
+        )
+        return union
+      }
+      
       case _ => 
         return makePlainSelect(oper)
     }
@@ -418,24 +431,7 @@ class RAToSql(db: Database)
           (BoolPrimitive(true), Seq(makeSubSelect(standardizeTables(oper))))
         }
 
-      case SingletonTable(tuple) => {
-        val singleton = new SubSelect()
-        val body = new SingletonSelect()
-        singleton.setSelectBody(body)
-        singleton.setAlias("SINGLETON")
-        body.setSelectItems(
-          tuple.map { case (name, v) =>
-            val sei = new SelectExpressionItem()
-            sei.setAlias(name)
-            sei.setExpression(convert(v))
-            sei
-          }.toList
-        )
-        // might need to do something to play nice with oracle here like setFromItem(new Table(null, "dual"))
-        (BoolPrimitive(true), Seq(singleton))
-      }
-
-      case EmptyTable(schema) => {
+        case HardTable(schema,Seq()) => { //EmptyTable
         val singleton = new SubSelect()
         val body = new SingletonSelect()
         singleton.setSelectBody(body)
@@ -449,6 +445,23 @@ class RAToSql(db: Database)
           }.toList
         )
         body.setWhere(convert(BoolPrimitive(false)))
+        // might need to do something to play nice with oracle here like setFromItem(new Table(null, "dual"))
+        (BoolPrimitive(true), Seq(singleton))
+      }
+        
+      case HardTable(schema,Seq(tuple:Seq[PrimitiveValue])) => {
+        val singleton = new SubSelect()
+        val body = new SingletonSelect()
+        singleton.setSelectBody(body)
+        singleton.setAlias("SINGLETON")
+        body.setSelectItems(
+          schema.unzip._1.zip(tuple).map { case (name, v) =>
+            val sei = new SelectExpressionItem()
+            sei.setAlias(name)
+            sei.setExpression(convert(v))
+            sei
+          }.toList
+        )
         // might need to do something to play nice with oracle here like setFromItem(new Table(null, "dual"))
         (BoolPrimitive(true), Seq(singleton))
       }
@@ -550,6 +563,7 @@ class RAToSql(db: Database)
       case StringPrimitive(v) => new StringValue(v)
       case FloatPrimitive(v) => new DoubleValue(""+v)
       case RowIdPrimitive(v) => new StringValue(v)
+      case TypePrimitive(t) => new StringValue(t.toString())
       case BoolPrimitive(true) =>
         bin(new EqualsTo(), IntPrimitive(1), IntPrimitive(1))
       case BoolPrimitive(false) =>

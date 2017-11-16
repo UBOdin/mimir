@@ -88,7 +88,7 @@ class RepairKeyModel(
               case Some(_) => row(1).asDouble
             }
           )
-        }.toSeq
+        }.toIndexedSeq
       }
     } else {
       val possibilities = 

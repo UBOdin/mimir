@@ -237,12 +237,12 @@ class ViewManager(db:Database) extends LazyLogging {
   def listAttrsQuery: Operator = 
   {
     logger.warn("Constructing lens attribute list not implemented yet")
-    EmptyTable(Seq(
+    HardTable(Seq(
       ("TABLE_NAME", TString()), 
       ("ATTR_NAME", TString()),
       ("ATTR_TYPE", TString()),
       ("IS_KEY", TBool())
-    ))
+    ),Seq())
   }
 
   /**

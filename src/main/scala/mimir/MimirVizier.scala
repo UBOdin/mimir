@@ -175,7 +175,7 @@ object MimirVizier extends LazyLogging {
     val timeRes = time {
       logger.debug("loadCSV: From Vistrails: [" + file + "]") ;
       val csvFile = new File(file)
-      val tableName = (csvFile.getName().split("\\.")(0) + "_RAW").toUpperCase
+      val tableName = (csvFile.getName().split("\\.")(0) ).toUpperCase
       if(db.getAllTables().contains(tableName)){
         logger.debug("loadCSV: From Vistrails: Table Already Exists: " + tableName)
       }
