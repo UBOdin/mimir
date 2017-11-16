@@ -139,5 +139,12 @@ with NeedsDatabase
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) = {
     s"$idx"
   }
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = {
+    getFeedback(idx, args) match {
+      case Some(colName) => 1.0
+      case None if headerDetected => 1.0
+      case None => 0.5
+    }
+  }
 
 }
