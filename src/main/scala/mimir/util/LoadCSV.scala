@@ -18,29 +18,40 @@ import mimir.algebra._
 
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.util.control.Breaks._
+import mimir.models.DetectHeader
 
 object LoadCSV extends StrictLogging {
 
   def SAMPLE_SIZE = 10000
 
+  def handleLoadTable(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
+    db.loadTable(targetTable, sourceFile, true, ("CSV", options.toSeq.flatMap{
+      case ("DELIMITER", delim) => Some(StringPrimitive(delim))
+      case _ => None
+    }))
+  }
+  
   // def handleLoadTable(db: Database, targetTable: String, sourceFile: File): Unit =
   //   handleLoadTable(db, targetTable, sourceFile, Map())
 
-  def handleLoadTable(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
+  def handleLoadTableRaw(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
     val input = new FileReader(sourceFile)
-    val assumeHeader = options.getOrElse("HEADER", "YES").equals("YES")
-
+    
     // Allocate the parser, and make its iterator scala-friendly
     val parser = new NonStrictCSVParser(input, options)
-
-    // Pull out the header if appropriate
-    val header: Seq[String] = 
-      if(assumeHeader && parser.hasNext){ parser.decrementRecordCount; parser.next.fields }
-      else { Nil }
-
+ 
     // Grab some sample data for testing 
     //(note the toSeq being used to materialize the samples)
-    val samples = parser.take(SAMPLE_SIZE).toSeq
+    val (header:Seq[String], samples) = {
+      val headerSample = parser.take(SAMPLE_SIZE).toSeq
+      // If the Table already exists, check if csv has header and skip it.
+      //  TODO: improve the way the header detection happens here; 
+      //        perhaps move it to the check header adaptive schema
+      if(db.tableExists(targetTable) && headerSample.length > 0){
+        if(DetectHeader.isHeader(headerSample.head.fields).length == headerSample.head.fields.length){ parser.decrementRecordCount; (Nil, headerSample.tail) }
+        else (Nil, headerSample)
+      } else (Nil, headerSample)
+    }
 
     // Produce a schema --- either one already exists, or we need
     // to generate one.

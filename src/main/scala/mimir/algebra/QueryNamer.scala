@@ -41,10 +41,10 @@ object QueryNamer
 				nameQuery(src)
 			case Sort(cols, src) =>
 				nameQuery(src)+"_BY_"+cols.flatMap(col => ExpressionUtils.getColumns(col.expression)).mkString("_")
-			case EmptyTable(_) => 
+			case HardTable(_,Seq()) => 
 				"EMPTY_QUERY"
-			case SingletonTable(_) => 
-				"SINGLETON"
+			case HardTable(_,_) => 
+				"HARDCODED"
 			case Annotate(src, _) => nameQuery(src)
 			case Recover(src, _) => nameQuery(src)
 			case ProvenanceOf(src) => nameQuery(src)

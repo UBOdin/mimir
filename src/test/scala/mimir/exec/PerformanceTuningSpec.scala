@@ -52,7 +52,7 @@ object PerformanceTuningSpec
         println(f"Total time: $queryRunTime%1.3f s run; $queryFetchTime%1.3f s fetch")
         println(f"Overhead: ${perTupleOverhead*1000000}%1.3f µs/tuple; ${percentOverhead*100}%3.1f${"%"} of total runtime")
         // Limit overhead to no more than 1µs per tuple
-        queryFetchTime / inputSize should be lessThan (0.0000031)
+        queryFetchTime / inputSize should be lessThan (0.0000033)
       }
     }
 

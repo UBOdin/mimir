@@ -29,7 +29,7 @@ class AdaptiveSchemaManager(db: Database)
 
   def create(schema: String, mlensType: String, query: Operator, args: Seq[Expression]) = 
   {
-    val constructor = MultilensRegistry.multilenses(mlensType)
+    val constructor:Multilens = MultilensRegistry.multilenses(mlensType)
     val config = MultilensConfig(schema, query, args);
     val models = constructor.initSchema(db, config);
     
@@ -73,6 +73,30 @@ class AdaptiveSchemaManager(db: Database)
       )
     }.toIndexedSeq }
   }
+  
+  def some(mlensType:String): TraversableOnce[(Multilens, MultilensConfig)] =
+  {
+    db.query(
+      Select(Comparison(Cmp.Eq, Var("MLENS"), StringPrimitive(mlensType)), Project(
+        Seq(ProjectArg("NAME", Var("NAME")), 
+            ProjectArg("MLENS", Var("MLENS")), 
+            ProjectArg("QUERY", Var("QUERY")),
+            ProjectArg("ARGS", Var("ARGS"))),
+        db.table(dataTable)
+      ))
+    ){ _.map { row => 
+      val name = row(0).asString
+      val mlensType = row(1).asString
+      val query = Json.toOperator(Json.parse(row(2).asString))
+      val args:Seq[Expression] = 
+        Json.toExpressionList(Json.parse(row(3).asString))
+ 
+      ( 
+        MultilensRegistry.multilenses(mlensType), 
+        MultilensConfig(name, query, args)
+      )
+    }.toIndexedSeq }
+  }
 
   def tableCatalogs: Seq[Operator] =
   {
@@ -88,9 +112,37 @@ class AdaptiveSchemaManager(db: Database)
     }.toSeq
   }
 
+  def tableCatalogs(mlensType:String): Seq[Operator] =
+  {
+    some(mlensType).map { case(mlens, config) => 
+
+      val tableBaseSchemaColumns =
+        SystemCatalog.tableCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 )
+
+      mlens.tableCatalogFor(db, config)
+        .project( tableBaseSchemaColumns:_* )
+        .addColumn( "SCHEMA_NAME" -> StringPrimitive(config.schema) )
+
+    }.toSeq
+  }
+  
   def attrCatalogs: Seq[Operator] =
   {
     all.map { case(mlens, config) => 
+
+      val attrBaseSchemaColumns =
+        SystemCatalog.attrCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 )
+
+      mlens.attrCatalogFor(db, config)         
+        .project( attrBaseSchemaColumns:_* )
+        .addColumn( "SCHEMA_NAME" -> StringPrimitive(config.schema) )
+
+    }.toSeq
+  }
+  
+  def attrCatalogs(mlensType:String): Seq[Operator] =
+  {
+    some(mlensType).map { case(mlens, config) => 
 
       val attrBaseSchemaColumns =
         SystemCatalog.attrCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 )

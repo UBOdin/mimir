@@ -37,7 +37,7 @@ class PullUpUnions(typechecker: Typechecker) extends OperatorOptimization with L
       }
       case t: Table => Seq(t)
       case v: View => Seq(v)
-      case _: EmptyTable => Seq()
+      case HardTable(_,Seq()) => Seq()
       case _ => 
         Seq(o.recur(apply(_)))
     }
@@ -50,7 +50,7 @@ class PullUpUnions(typechecker: Typechecker) extends OperatorOptimization with L
     if(!pulled.isEmpty){
       OperatorUtils.makeUnion(pulled)
     } else {
-      EmptyTable(typechecker.schemaOf(o))
+      HardTable(typechecker.schemaOf(o),Seq())
     }
   }
 }
