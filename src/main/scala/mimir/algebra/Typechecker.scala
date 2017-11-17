@@ -338,7 +338,9 @@ object Typechecker
 	{
 		// Start with special case overrides
 		(a, b, op) match {
-
+		  case (TDate() | TTimestamp(), 
+						TDate() | TTimestamp(), 
+						Arith.Add)                => return Some(TDate())
       // Interval Arithmetic
 			case (TDate() | TTimestamp(), 
 						TDate() | TTimestamp(), 

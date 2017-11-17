@@ -202,11 +202,18 @@ object DetectSeries
               actual.tail.fold(actual.head)(Eval.applyArith(Arith.Add, _, _))
             val errorSum = 
               error.tail.fold(error.head)(Eval.applyArith(Arith.Add, _, _))
-
-            Eval.applyArith(Arith.Div, errorSum, actualSum) match {
-              case NullPrimitive() => None
-              case n:NumericPrimitive => Some((seriesCol.columnName, n.asDouble))
-              case _ => throw new RAException("Eval should return a numeric on series detection")
+           
+            (errorSum, actualSum) match {
+              case (_, IntervalPrimitive(_)) => None
+              case (_, DatePrimitive(_,_,_)) => None
+              case (IntervalPrimitive(_), _) => None
+              case (DatePrimitive(_,_,_), _) => None // because in Eval: case (Arith.Div, TInterval(), _, _) => 
+                                                                          //throw new RAException("Division not quite yet supported")
+              case _ => Eval.applyArith(Arith.Div, errorSum, actualSum) match {
+                case NullPrimitive() => None
+                case n:NumericPrimitive => Some((seriesCol.columnName, n.asDouble))
+                case _ => throw new RAException("Eval should return a numeric on series detection")
+              }
             }
           }
         }

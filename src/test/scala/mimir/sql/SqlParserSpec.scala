@@ -427,13 +427,11 @@ object SqlParserSpec
 			db.compiler.optimize(convert("""
 				SELECT AVG(A) AS A FROM R GROUP BY C HAVING AVG(B)>70000; 
 			""")) must be equalTo
-				db.table("R")
+				Project(Seq(ProjectArg("A", Var("MIMIR_AGG_A"))), db.table("R")
 					.groupByParsed("C")( 
-						"A" -> "AVG(A)",
+						"MIMIR_AGG_A" -> "AVG(A)",
 						"MIMIR_HAVING_0" -> "AVG(B)"
-					)
-					.filterParsed("MIMIR_HAVING_0 > 70000")
-					.project("A")
+					).filterParsed("MIMIR_HAVING_0 > 70000"))
 
 		}
 
