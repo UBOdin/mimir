@@ -170,17 +170,18 @@ object MimirVizier extends LazyLogging {
   //Python package defs
   ///////////////////////////////////////////////
   var pythonCallThread : Thread = null
-  def loadCSV(file : String) : String = {
+  def loadCSV(file : String, format:(String, Seq[PrimitiveValue]) = ("CSV", Seq(StringPrimitive(",")))) : String = {
     pythonCallThread = Thread.currentThread()
     val timeRes = time {
       logger.debug("loadCSV: From Vistrails: [" + file + "]") ;
       val csvFile = new File(file)
+      val nameFromFile = csvFile.getName().split("\\.")(0)
       val tableName = (csvFile.getName().split("\\.")(0) ).toUpperCase
       if(db.getAllTables().contains(tableName)){
         logger.debug("loadCSV: From Vistrails: Table Already Exists: " + tableName)
       }
       else{
-        db.loadTable(csvFile)
+        db.loadTable( nameFromFile, csvFile,  true, format)
       }
       tableName 
     }

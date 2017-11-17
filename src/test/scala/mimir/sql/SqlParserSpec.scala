@@ -423,6 +423,18 @@ object SqlParserSpec
 
 		}
 
+		"Parse queries with HAVING clauses" >> {
+			db.compiler.optimize(convert("""
+				SELECT AVG(A) AS A FROM R GROUP BY C HAVING AVG(B)>70000; 
+			""")) must be equalTo
+				Project(Seq(ProjectArg("A", Var("MIMIR_AGG_A"))), db.table("R")
+					.groupByParsed("C")( 
+						"MIMIR_AGG_A" -> "AVG(A)",
+						"MIMIR_HAVING_0" -> "AVG(B)"
+					).filterParsed("MIMIR_HAVING_0 > 70000"))
+
+		}
+
 		"Get the types right in aggregates" >> {
 			db.backend.update(stmts("test/data/Product_Inventory.sql").map(_.toString))
 			
