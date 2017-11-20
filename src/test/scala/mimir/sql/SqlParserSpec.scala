@@ -235,7 +235,7 @@ object SqlParserSpec
 			db.compiler.optimize(convert("SELECT first(A) FROM R GROUP BY B")) must be equalTo
 				db.table("R")
 					.groupByParsed("B")( "MIMIR_AGG_FIRST" -> "FIRST(A)" )
-					.rename("FIRST" -> "MIMIR_AGG_FIRST")
+					.rename( "MIMIR_AGG_FIRST" -> "FIRST" )
 					.project("FIRST")
 		}
 

@@ -66,7 +66,7 @@ trait OperatorConstructors
   {
     val renamings = targets.toMap
     map(toOperator.columnNames.map { 
-      case name if targets contains name => (name, Var(renamings(name))) 
+      case name if renamings contains name => (renamings(name), Var(name)) 
       case name => (name, Var(name))
     }:_*)
   }
