@@ -18,7 +18,7 @@ object LoadJSON {
   def loadJson(db: Database, tableName: String, sourceFile: File, columnName: String = "JSONCOLUMN"): Unit = {
     // create the table
     var nonJsonCount = 0
-    val rowLimit = 10000 // 0 is off
+    val rowLimit = 0 // 0 is off
     var rowCount = 0
 
     createJsonTable(db,tableName,columnName)
@@ -28,7 +28,7 @@ object LoadJSON {
     val input = new BufferedReader(new FileReader(sourceFile))
     var line:String = input.readLine()
 
-    while(line != null && ((rowCount < rowLimit) || rowLimit == 0)){
+    while(line != null && ((rowCount < rowLimit) || rowLimit < 1)){ // first try the case where every line is a json object
       if(!line.equals("")) {
         try {
           while (line.charAt(0) != '{' || line.charAt(line.size - 1) != '}') { // give it the best shot at being in json format
@@ -62,7 +62,7 @@ object LoadJSON {
       createJsonTable(db,tableName,columnName)
       println(s"time to kick the Json Loader into... MAXIMUM OVERDRIVE!!! for table $tableName")
 
-      var indent = 0 // this tracks how far indented in a object you are, if it is at 1 then it is done
+      var indent = 0 // this tracks how far indented in a object you are, if it is at 0 then it is done
       val input2 = new BufferedReader(new FileReader(sourceFile))
       var line: String = input2.readLine()
       var jsonObj: String = "" // holds the json object
@@ -105,6 +105,38 @@ object LoadJSON {
               } // end iterator
               line = input2.readLine()
             }
+
+          case '{' => { // json without new line formatting
+            indent += 1 // indent in
+            while(line != null) {
+              val charIter = line.iterator
+              while(charIter.hasNext){
+                val c = charIter.next()
+                c match {
+                  case '{' =>
+                    indent += 1
+                    jsonObj += c
+                  case '}' =>
+                    jsonObj += c
+                    indent -= 1
+                    if (indent == 0) {
+                      rows += StringPrimitive(jsonObj)
+                      jsonObj = ""
+                      rowCount += 1
+                      if (rowCount >= 10000) {
+                        db.backend.fastUpdateBatch(updateStatement, rows.map((x) => Seq(x)))
+                        rows = new ListBuffer[PrimitiveValue]()
+                        rowCount = 0
+                      }
+                    }
+                  case _ =>
+                    if (indent > 0)
+                      jsonObj += c
+                }
+              } // end iterator
+              line = input2.readLine()
+            }
+          }
 
           case _ => throw new EOFException("End of file")
         }

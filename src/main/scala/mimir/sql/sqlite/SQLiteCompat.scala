@@ -890,8 +890,11 @@ class ClusteringPlayground extends org.sqlite.Function.Aggregate {
 
   val combineArrays: Boolean = true
   val failSilently: Boolean = false
-  val shapeVectorOutputPath: String = "fvoutput.txt"
-  val shapeMultiplicityOutputPath: String = "multoutput.txt"
+
+  val dir: String = "cluster/medicine"
+  val shapeVectorOutputPath: String = s"$dir/fvoutput.txt"
+  val shapeMultiplicityOutputPath: String = s"$dir/multoutput.txt"
+  val schemaOutputPath: String = s"$dir/schema.txt"
 
 //  val rowHolder: ListBuffer[ListBuffer[Int]] = ListBuffer[ListBuffer[Int]]() // Seq of feature vectors
   var totalSchema: ListBuffer[String] = ListBuffer[String]() // the total schema, used to determine the feature vector
@@ -951,6 +954,7 @@ class ClusteringPlayground extends org.sqlite.Function.Aggregate {
     try { // try to write output
       val shapeVectorWriter: BufferedWriter = new BufferedWriter(new FileWriter(shapeVectorOutputPath))
       val shapeMultWriter: BufferedWriter = new BufferedWriter(new FileWriter(shapeMultiplicityOutputPath))
+      val schemaWriter: BufferedWriter = new BufferedWriter(new FileWriter(schemaOutputPath))
 
       jsonShapeFormat.foreach((v) => {
         val featureVector: ListBuffer[Int] = v._1
@@ -975,6 +979,11 @@ class ClusteringPlayground extends org.sqlite.Function.Aggregate {
 
       shapeVectorWriter.close()
       shapeMultWriter.close()
+
+      var schema = ""
+      totalSchema.foreach((s) => schema = schema + s + ",")
+      schemaWriter.write(schema.substring(0,schema.size-1))
+      schemaWriter.close()
 
     } catch {
       case e: Exception => throw e

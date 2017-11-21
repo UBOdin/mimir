@@ -1,6 +1,6 @@
 package mimir.demo
 
-import java.io.File
+import java.io.{BufferedReader, File, FileReader}
 
 import mimir.Database
 import mimir.Mimir.{conf, db}
@@ -10,7 +10,10 @@ import mimir.test._
 import mimir.lenses.JsonExplorerLens
 import mimir.sql.JDBCBackend
 import mimir.util.TimeUtils
-import pattern_mixture_summarization.ClusteringResult
+import pattern_mixture_summarization.{Cluster, ClusteringResult, NaiveSummary, NaiveSummaryEntry}
+
+import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 
 
 object SimpleTests
@@ -50,8 +53,9 @@ object SimpleTests
 //      db.loadTable("TWITTER",new File("test/data/twitter10kRows.txt"),false,("JSON",Seq(new StringPrimitive(""))))
 //      db.loadTable("JSONTEST",new File("test/data/jsonTest.csv"),false,("JSON",Seq(new StringPrimitive(""))))
 //      db.loadTable("JSONTEST2",new File("test/data/meteorite.json"),false,("JSON",Seq(new StringPrimitive(""))))
-      db.loadTable("TWITTERFULL",new File("test/data/dump-30.txt"),false,("JSON",Seq(new StringPrimitive(""))))
+      //db.loadTable("TWITTERFULL",new File("test/data/dump-30.txt"),false,("JSON",Seq(new StringPrimitive(""))))
 //      db.loadTable("JSONTEST3",new File("test/data/nasa.json"),false,("JSON",Seq(new StringPrimitive(""))))
+//      db.loadTable("JSONTEST6",new File("test/data/medicine.json"),false,("JSON",Seq(new StringPrimitive(""))))
 //      db.loadTable("JSONTEST4",new File("test/data/jeopardy.json"),false,("JSON",Seq(new StringPrimitive(""))))
 //      db.loadTable("JSONTEST5",new File("test/data/billionaires.json"),false,("JSON",Seq(new StringPrimitive(""))))
 
@@ -99,14 +103,64 @@ object SimpleTests
 */
       // verb = how many patterns
       // error = tightness of cluster, correlations not captured
+      // use margin for feature shading and error for cluster shading
 
-      val cr: ClusteringResult = new ClusteringResult("C:\\Users\\Will\\Documents\\GitHub\\mimir\\fvoutput.txt","C:\\Users\\Will\\Documents\\GitHub\\mimir\\multoutput.txt","C:\\Users\\Will\\Documents\\GitHub\\mimir\\cluster.txt")
-      val c = cr.getClusters
-      val n1 = c.get(0).getNaiveSummary
-      val ne1 = c.get(0).getError
-      val n2 = c.get(1).getNaiveSummary
-      val ne2 = c.get(1).getError
-      println(c.toString)
+//      val o1 = query("SELECT * FROM JSONTEST2"){        _.foreach(println(_))      }
+//      val o2 = query("SELECT CLUSTER_TEST(JSONCOLUMN) FROM JSONTEST3"){        _.foreach(println(_))      }
+//      val o3 = query("SELECT CLUSTER_TEST(JSONCOLUMN) FROM TWITTERFULL"){        _.foreach(println(_))      }
+//        val o4 = query("SELECT CLUSTER_TEST(JSONCOLUMN) FROM JSONTEST6"){        _.foreach(println(_))      }
+//      val o5 = query("SELECT COUNT(JSONCOLUMN) FROM JSONTEST6"){        _.foreach(println(_))      }
+
+/*
+      val dir: String = "cluster\\companies"
+      val path: String = s"C:\\Users\\Will\\Documents\\GitHub\\mimir\\$dir"
+      val reader = new BufferedReader(new FileReader(new File(s"$dir/schema.txt")))
+
+      val schema: List[String] = reader.readLine().split(",").toList
+      val clusterResult: ClusteringResult = new ClusteringResult(s"$path\\fvoutput.txt",s"$path\\multoutput.txt",s"$path\\hamming_labels.txt")
+      val clusterList = clusterResult.getClusters.asScala.toList
+      val clusterHierarchy = clusterResult.getNaiveSummaryHierarchy
+
+      val hResult: List[(Int,Double,scala.collection.mutable.Buffer[(String,Int,Double)])] = clusterList.map((x) => {
+        val clusterNumber: Int = x._1
+        val clusterObject: Cluster = x._2
+        val clusterError: Double = clusterObject.getError
+        val clusterNaiveSummaryList: scala.collection.mutable.Buffer[(String,Int,Double)] = clusterObject.getNaiveSummary.getContent.asScala.map((ns) => {Tuple3(schema(ns.featureID),ns.occurrence,ns.marginal)})
+        (clusterNumber,clusterError,clusterNaiveSummaryList)
+      })
+
+      val intersect = hResult(0)._3.intersect(hResult(1)._3)
+
+      val result: List[(Int,Double,scala.collection.mutable.Buffer[(String,Int,Double)])] = clusterList.map((x) => {
+        val clusterNumber: Int = x._1
+        val clusterObject: Cluster = x._2
+        val clusterError: Double = clusterObject.getError
+        val clusterNaiveSummaryList: scala.collection.mutable.Buffer[(String,Int,Double)] = clusterObject.getNaiveSummary.getContent.asScala.map((ns) => {Tuple3(schema(ns.featureID),ns.occurrence,ns.marginal)})
+        (clusterNumber,clusterError,clusterNaiveSummaryList)
+      })
+*/
+      // make cluster tree instead of multiple JPanels
+      // turning optional fields into required fields in union types and in lower levels
+      // either for mutually exclusive columns
+      // max, average
+      // highest entropy distribution for a set of features
+      // outline, what is the concrete problem being solved, how to break down into pieces
+/*
+      val res: List[(Integer,Double,NaiveSummary)] = clusterList.map((x)=> {
+        val c: Cluster = x._2
+        val err: Double = c.getError
+        val ns = c.getNaiveSummary
+        (x._1,err,ns)
+      })
+*/
+//      val sorted = result.sortBy(_._2) // sort by error
+
+      // List[List[(ColumnName,Marginal)]]
+
+      val b = new mimir.util.VisualizeHTML("cluster\\companies")
+
+
+      println("Done")
 
       /*
             // Test Create Type Inference
