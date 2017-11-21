@@ -745,10 +745,11 @@ class SqlToRA(db: Database)
       case Var(x) => (Var(x), Set(x), List())
 
       case mimir.algebra.Function(fnBase, args) => {
-        val fnIsDistinct = (fnBase.toUpperCase.startsWith("DISTINCT_"))
+        val fnUpper = fnBase.toUpperCase
+        val fnIsDistinct = (fnUpper.startsWith("DISTINCT_"))
         val fn = 
-          if(fnIsDistinct){ fnBase.substring("DISTINCT_".length) }
-          else { fnBase }
+          if(fnIsDistinct){ fnUpper.substring("DISTINCT_".length) }
+          else { fnUpper }
 
         if(db.aggregates.isAggregate(fn)){
           (Var(alias), Set(), List( (fn, fnIsDistinct, args, alias) ))

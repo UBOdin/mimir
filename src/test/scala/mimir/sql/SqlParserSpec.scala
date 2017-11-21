@@ -219,6 +219,25 @@ object SqlParserSpec
 
 		}
 
+		"Parse Mixed-Case Aggregate Queries" in {
+			db.compiler.optimize(convert("SELECT Sum(A) FROM R")) must be equalTo
+				db.table("R")
+					.aggregateParsed( "SUM" -> "SUM(A)" )
+
+			db.compiler.optimize(convert("SELECT sum(A) FROM R")) must be equalTo
+				db.table("R")
+					.aggregateParsed( "SUM" -> "SUM(A)" )
+
+			db.compiler.optimize(convert("SELECT first(A) FROM R")) must be equalTo
+				db.table("R")
+					.aggregateParsed( "FIRST" -> "FIRST(A)" )
+
+			db.compiler.optimize(convert("SELECT first(A) FROM R GROUP BY B")) must be equalTo
+				db.table("R")
+					.groupByParsed("B")( "MIMIR_AGG_FIRST" -> "FIRST(A)" )
+					.rename( "MIMIR_AGG_FIRST" -> "FIRST" )
+					.project("FIRST")
+		}
 
 		"Parse simple aggregate-group by queries" in {
 			db.compiler.optimize(convert("SELECT A, SUM(B) FROM R GROUP BY A")) must be equalTo
