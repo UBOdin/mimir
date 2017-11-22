@@ -1,6 +1,6 @@
 package mimir.sql.sqlite
 
-import java.io.{BufferedWriter, FileWriter}
+import java.io._
 import java.util
 import java.util.Set
 
@@ -891,11 +891,6 @@ class ClusteringPlayground extends org.sqlite.Function.Aggregate {
   val combineArrays: Boolean = true
   val failSilently: Boolean = false
 
-  val dir: String = "cluster/medicine"
-  val shapeVectorOutputPath: String = s"$dir/fvoutput.txt"
-  val shapeMultiplicityOutputPath: String = s"$dir/multoutput.txt"
-  val schemaOutputPath: String = s"$dir/schema.txt"
-
 //  val rowHolder: ListBuffer[ListBuffer[Int]] = ListBuffer[ListBuffer[Int]]() // Seq of feature vectors
   var totalSchema: ListBuffer[String] = ListBuffer[String]() // the total schema, used to determine the feature vector
 
@@ -952,6 +947,15 @@ class ClusteringPlayground extends org.sqlite.Function.Aggregate {
   def xFinal(): Unit = {
 
     try { // try to write output
+
+      // read in output directory
+      val reader = new BufferedReader(new FileReader(new File("clusterOptions.txt")))
+      val dir: String = reader.readLine()
+
+      val shapeVectorOutputPath: String = s"$dir\\fvoutput.txt"
+      val shapeMultiplicityOutputPath: String = s"$dir\\multoutput.txt"
+      val schemaOutputPath: String = s"$dir\\schema.txt"
+
       val shapeVectorWriter: BufferedWriter = new BufferedWriter(new FileWriter(shapeVectorOutputPath))
       val shapeMultWriter: BufferedWriter = new BufferedWriter(new FileWriter(shapeMultiplicityOutputPath))
       val schemaWriter: BufferedWriter = new BufferedWriter(new FileWriter(schemaOutputPath))
