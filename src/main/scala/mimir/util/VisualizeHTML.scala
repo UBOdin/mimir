@@ -10,6 +10,7 @@ import scala.collection.mutable.ListBuffer
 class VisualizeHTML (dir: String){
 
   var counter = 0
+  var globalCounter = 0 // used as a unique id for collapse id's
 
   val path: String = s"C:\\Users\\Will\\Documents\\GitHub\\mimir\\$dir"
   val schemaReader = new BufferedReader(new FileReader(new File(s"$dir\\schema.txt")))
@@ -32,7 +33,7 @@ class VisualizeHTML (dir: String){
 
   val output: String = htmlHeader + htmlVisualization + htmlTail
   try { // try to write output
-    val htmlWriter: BufferedWriter = new BufferedWriter(new FileWriter("output.html"))
+    val htmlWriter: BufferedWriter = new BufferedWriter(new FileWriter("twitter" + "output.html"))
     htmlWriter.write(output)
     htmlWriter.close()
   }
@@ -92,35 +93,34 @@ class VisualizeHTML (dir: String){
   // generates the html used for display, the basic form is to recursively call this function which will output nested collapse-able tags for each NaiveSummary
   def GenerateHTML(nsList: List[NaiveSummary], schema: List[String]): String = {
     var retHTML: String = "<div class=\"panel-group\">\n<div class=\"panel panel-default\">\n"
-    val constantHeader: String = "<h4 class=\"list-group-item\">Shared</h4>"
-    retHTML = retHTML + constantHeader
+    val constantHeader: String = "<h2 class=\"list-group-item\">Common Features</h2>"
+    val listHead: String = "<ul class=\"list-group\">\n"
+    val listTail: String = "</ul>\n"
+    retHTML = retHTML + listHead + constantHeader
     val constants: List[NaiveSummaryEntry] = NaiveSummaryIntersect(nsList)
-    retHTML = retHTML + NaiveSummaryEntryToHTML(constants, schema, List[Int]())
+    retHTML = retHTML + pathPanel(constants, schema, List[Int]())
     nsList.foreach((ns) => {
       val ret = GenerateHTML(ns, schema, constants.map(_.featureID))
       if(!ret.equals("")) // should generate a list of panel groups
         retHTML = retHTML + ret
     })
-    retHTML + "</div>\n</div>\n"
+    retHTML + listTail + "</div>\n</div>\n"
   }
 
   def GenerateHTML(ns: NaiveSummary, schema: List[String], usedColumns: List[Int]): String = {
     var constantsHTML: String = ""
-    val constantHeader: String = "<h4 class=\"list-group-item\">Shared</h4>"
-    val childrenHeader: String = "<h4 class=\"list-group-item\">Children</h4>"
-    val featureHeader: String = "<h4 class=\"list-group-item\">Features</h4>"
+    val constantHeader: String = "<h2 class=\"list-group-item\">Common Features</h2>"
+    val childrenHeader: String = "<h2 class=\"list-group-item\">Children</h2>"
+    val featureHeader: String = "<h2 class=\"list-group-item\">Features</h2>"
     var childHTML = ""
-    var clusterTitle: String = "test" + counter.toString
-    counter += 1
-    val panelHeader: String = ("<div class=\"panel-heading\">\n<h2 class=\"panel-title\">\n<a data-toggle=\"collapse\" href=\"#" + clusterTitle + "\">" + clusterTitle + "</a>\n</h2>\n</div>\n"
-      + "<div id=\"" + clusterTitle + "\" class=\"panel-collapse collapse\">")
-    val panelFooter: String = "</div>\n"
+    var clusterError: Double = ns.Error
+
     var usedColumnsUpdated = usedColumns
     if(ns.children.size > 0) { // The NaiveSummary has children
       // deal with constants
       val constants: List[NaiveSummaryEntry] = RemoveUsedColumns(NaiveSummaryIntersect(ns),usedColumnsUpdated)
       if(constants.size > 0) {
-        constantsHTML = NaiveSummaryEntryToHTML(constants, schema, usedColumnsUpdated)
+        constantsHTML = pathPanel(constants, schema, usedColumnsUpdated)
         usedColumnsUpdated = usedColumnsUpdated ++ constants.map(_.featureID)
       }
       // used columns is now updated
@@ -134,11 +134,15 @@ class VisualizeHTML (dir: String){
         if(!returnedHTML.equals(""))
           childHTML = childHTML + returnedHTML
       })
-//      retHTML += "</div>\n"
     }
     var output: String = ""
-    val featureHTML: String = NaiveSummaryEntryToHTML(ns.entries.toArray.toList.asInstanceOf[List[NaiveSummaryEntry]], schema, usedColumnsUpdated)
+    val featureHTML: String = pathPanel(ns.entries.toArray.toList.asInstanceOf[List[NaiveSummaryEntry]], schema, usedColumnsUpdated)
     if(!featureHTML.equals("")) {
+      var clusterTitle: String = "Summary_" + counter.toString
+      counter += 1
+      val panelHeader: String = ("<div class=\"panel-heading\">\n<h2 class=\"panel-title\">\n<a data-toggle=\"collapse\" href=\"#" + clusterTitle + "\">" + clusterTitle + "   Error: " + clusterError.toString + "</a>\n</h2>\n</div>\n"
+        + "<div id=\"" + clusterTitle + "\" class=\"panel-collapse collapse\">\n")
+      val panelFooter: String = "</div>\n"
       output = output + panelHeader
       if (!constantsHTML.equals(""))
         output = output + constantHeader + constantsHTML
@@ -152,11 +156,17 @@ class VisualizeHTML (dir: String){
 
   // helper method, converts NaiveSummaryEntry to html, this will create a tag for each element with shading and applies the name from schema
   def NaiveSummaryEntryToHTML(nseList: List[NaiveSummaryEntry], schema: List[String], usedColumns: List[Int]): String = {
-    var retHTML: String = "<u1 class=\"list-group\">\n"
+    var featureList: String = ""
     nseList.foreach((nse) => {
-      retHTML = retHTML + NaiveSummaryEntryToHTML(nse,schema, usedColumns)
+      featureList = featureList + NaiveSummaryEntryToHTML(nse,schema, usedColumns)
     })
-    retHTML + "</u1>\n"
+    val listHead: String = "<ul class=\"list-group\">\n"
+    val listTail: String = "</ul>\n"
+    //style= "padding-left: 50px;"
+    if(!featureList.equals(""))
+      listHead + featureList + listTail
+    else
+      ""
   }
 
   def NaiveSummaryEntryToHTML(nse: NaiveSummaryEntry, schema: List[String], usedColumns: List[Int]): String = {
@@ -180,5 +190,52 @@ class VisualizeHTML (dir: String){
         ret += nse
     })
     ret.toList
+  }
+
+  def pathPanel(nseList: List[NaiveSummaryEntry], schema: List[String], usedColumns: List[Int]): String = {
+    var groupMap: scala.collection.mutable.Map[String,ListBuffer[NaiveSummaryEntry]] = scala.collection.mutable.Map[String,ListBuffer[NaiveSummaryEntry]]()
+    nseList.foreach((nse) => {
+      val name: String = schema(nse.featureID)
+      val key: String = name.split("\\.")(0)
+      groupMap.get(key) match {
+        case Some(map) =>
+          map += nse
+          groupMap.put(key, map)
+        case None =>
+          groupMap.put(key, ListBuffer[NaiveSummaryEntry](nse))
+      }
+    })
+    var middleHTML: String = ""
+    groupMap.foreach((f) => {
+      val path = f._1
+      val list = f._2
+      if(list.size > 1) { // collapse panel
+        val panelMiddle: String = NaiveSummaryEntryToHTML(list.toList,schema,usedColumns)
+        if(!panelMiddle.equals("")) {
+          val listGroupHeader: String = "<li class=\"list-group-item\">\n"
+          val listGroupTail: String = "</li>\n"
+          val panelHeader: String = ("<div class=\"panel-heading\">\n<h2 class=\"panel-title\" style= \"color: blue;\">\n<a data-toggle=\"collapse\" href=\"#" + globalCounter.toString + "\">" + path + "</a>\n</h2>\n</div>\n"
+            + "<div id=\"" + globalCounter.toString + "\" class=\"panel-collapse collapse\">\n")
+          globalCounter += 1
+          val panelFooter: String = "</div>\n"
+          middleHTML = middleHTML + listGroupHeader + panelHeader + panelMiddle + panelFooter + listGroupTail
+        }
+        else
+          "" // do nothing
+      }
+      else if (list.size == 1) { // regular line
+        middleHTML = middleHTML + NaiveSummaryEntryToHTML(list(0),schema,usedColumns)
+      }
+      else {
+        // for sanity
+      }
+    })
+    val listHead: String = "<ul class=\"list-group\">\n"
+    val listTail: String = "</ul>\n"
+    //style= "padding-left: 50px;"
+    if(!middleHTML.equals(""))
+      listHead + middleHTML + listTail
+    else
+      ""
   }
 }

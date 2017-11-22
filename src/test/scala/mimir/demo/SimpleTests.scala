@@ -157,7 +157,7 @@ object SimpleTests
 
       // List[List[(ColumnName,Marginal)]]
 
-      val b = new mimir.util.VisualizeHTML("cluster\\companies")
+      val b = new mimir.util.VisualizeHTML("cluster\\twitterFull")
 
 
       println("Done")
