@@ -6,7 +6,7 @@ import java.sql.SQLException
 import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
-import mimir.util.{Timer,ExperimentalOptions,LineReaderInputSource,PythonProcess,SqlUtils}
+import mimir.util.{Timer,ExperimentalOptions,LineReaderInputSource,PythonProcess,SqlUtils,FileType}
 import mimir.algebra._
 import mimir.statistics.DetectSeries
 import mimir.plot.Plot
@@ -18,7 +18,7 @@ import net.sf.jsqlparser.statement.drop.Drop
 import org.jline.terminal.{Terminal,TerminalBuilder}
 import org.slf4j.{LoggerFactory}
 import org.rogach.scallop._
-
+import org.apache.commons.io.FilenameUtils
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import scala.collection.JavaConverters._
@@ -41,6 +41,9 @@ object Mimir extends LazyLogging {
   var db: Database = null;
   lazy val terminal: Terminal = TerminalBuilder.terminal()
   var output: OutputFormat = DefaultOutputFormat
+  val defaultPrompt: (() => Unit) = { () =>  }
+
+  var backend: Backend = null
 
   def main(args: Array[String]) = 
   {
@@ -49,51 +52,87 @@ object Mimir extends LazyLogging {
     // Prepare experiments
     ExperimentalOptions.enable(conf.experimental())
 
-    // Set up the database connection(s)
-    db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
-    if(!conf.quiet()){
-      output.print("Connecting to " + conf.backend() + "://" + conf.dbname() + "...")
+    // Annotate files in the arg list with types, and split it into 
+    // -> database files (which we need now to initialize the db)
+    // -> other files (which we need to iterate through later)
+    val (dbFiles, dataFiles) = conf.files.partition { FileType.detect(_) == SQLiteDB }
+
+    // If we didn't get any db file, use the defaults
+    // If we did get one db file, load that
+    // If we got more than one db file, throw an error
+    dbFiles.size match {
+      case 0 => {  backend = new JDBCBackend(conf.backend(), conf.dbname())  }
+      case 1 => {  backend = new JDBCBackend(conf.backend(), dbFiles(0)._1)  }
+      case _ => handleArgError("Can't open more than one database at a time.")
     }
+
+    // Actually set up the database connection(s), with any relevant configuration
+    // or experimental parameters
+    db = new Database(backend)
+    if(!conf.quiet()){ output.print(s"Connecting to $backend...") }
     db.backend.open()
-
     db.initializeDBForMimir();
-
-    // Check for one-off commands
-    if(conf.loadTable.get != None){
-      db.loadTable(conf.loadTable(), conf.loadTable()+".csv");
-    } else {
-      var source: Reader = null;
-      var prompt: (() => Unit) = { () =>  }
-
-      conf.precache.foreach( (opt) => opt.split(",").foreach( (table) => { 
-        output.print(s"Precaching... $table")
-        db.models.prefetchForOwner(table.toUpperCase)
-      }))
-
-      if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
-        db.backend.asInstanceOf[JDBCBackend].enableInlining(db)
-      }
-
-      if(conf.file.get == None || conf.file() == "-"){
-        if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
-          source = new LineReaderInputSource(terminal)
-          output = new PrettyOutputFormat(terminal)
-        } else {
-          source = new InputStreamReader(System.in)
-          output = DefaultOutputFormat
-          prompt = () => { System.out.print("\nmimir> "); System.out.flush(); }
-        }
-      } else {
-        source = new FileReader(conf.file())
-        output = DefaultOutputFormat
-      }
-
-      if(!conf.quiet()){
-        output.print("   ... ready")
-      }
-      eventLoop(source, prompt)
+    if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
+      db.backend.asInstanceOf[JDBCBackend].enableInlining(db)
     }
 
+    // A configuration option allows us to pre-load models into the cache.  
+    conf.precache.foreach( (opt) => opt.split(",").foreach( (table) => { 
+      output.print(s"Precaching... $table")
+      db.models.prefetchForOwner(table.toUpperCase)
+    }))
+
+    // Let the user know that we're ready to go
+    if(!conf.quiet()){  output.print("   ... ready")  }
+
+    // Prep for the event loop.  First, figure out if we got any sql files on
+    // the command line.  If we didn't, we need to add a default file of "-", 
+    // so that we get into interactive mode
+    val weGotAtLeastOneSQLFile = conf.files.exists( FileType.detect(_) == SQLFile )
+    val allFileTodos = dataFiles ++ if(weGotAtLeastOneSQLFile){ Some("-") } else { None }
+
+    // Start processing to-dos one at a time
+    allFileTodos.foreach { file => 
+
+      // Handle special-case file names
+      file match {
+        case "-" => { // Read from STDIN
+          // Check to see if the user asked for a simple terminal
+          if(ExperimentalOptions.isEnabled("SIMPLE-TERM")){
+            output = DefaultOutputFormat
+            eventLoop(
+              new InputStreamReader(System.in),
+              defaultPrompt
+            )
+          } else {
+            output = new PrettyOutputFormat(terminal)
+            eventLoop(
+              new LineReaderInputSource(terminal),
+              () => { System.out.print("\nmimir> "); System.out.flush(); }
+            )
+          }
+        }
+
+        case _ => { // None of the special file names
+          FileType.detect(file) match {
+            case SQLiteDB => assert(false); // these should have been filtered out earlier
+            case SQLFile => {
+              output = DefaultOutputFormat
+              eventLoop(              
+                source = new FileReader(conf.file()),
+                defaultPrompt
+              )
+            }
+
+            case CSVFile => {
+              
+            }
+          }
+        }
+
+    }
+
+    // Shut down cleanly
     db.backend.close()
     if(!conf.quiet()) { output.print("\n\nDone.  Exiting."); }
   }
@@ -313,6 +352,12 @@ object Mimir extends LazyLogging {
     }
   }
 
+  def handleArgError(msg: String)
+  {
+    output.print(s"Error: $msg")
+    scallop.printHelp()
+    System.exit(-1)
+  }
 
 }
 
@@ -325,14 +370,13 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   //   val summarize = toggle("summary-create", default = Some(false))
   //   val cleanSummary = toggle("summary-clean", default = Some(false))
   //   val sampleCount = opt[Int]("samples", noshort = true, default = None)
-  val loadTable = opt[String]("loadTable", descr = "Don't do anything, just load a CSV file")
   val dbname = opt[String]("db", descr = "Connect to the database with the specified name",
-    default = Some("debug.db"))
+    default = Some("mimir.db"))
   val backend = opt[String]("driver", descr = "Which backend database to use? ([sqlite],oracle)",
     default = Some("sqlite"))
   val precache = opt[String]("precache", descr = "Precache one or more lenses")
   val rebuildBestGuess = opt[String]("rebuild-bestguess")  
   val quiet  = toggle("quiet", default = Some(false))
-  val file = trailArg[String](required = false)
+  val files = trailArg[List[String]](required = false)
   val experimental = opt[List[String]]("X", default = Some(List[String]()))
 }
