@@ -82,9 +82,9 @@ object RepairKeyLens extends LazyLogging {
     val lensQuery = 
       fastPath match {
         case None => 
-          assembleView(db, query, keys, values, scoreCol, "MIMIR_KR_SOURCE_"+name)
+          assembleView(db, query, keys, values.map { case (col, model) => (col, model.name) }, scoreCol, "MIMIR_KR_SOURCE_"+name)
         case Some(fastPathTable) => 
-          assembleFastPath(db, query, keys, values, scoreCol, fastPathTable)
+          assembleFastPath(db, query, keys, values.map { case (col, model) => (col, model.name) }, scoreCol, fastPathTable)
       }
 
     ( lensQuery, values.map(_._2) )
@@ -110,7 +110,7 @@ object RepairKeyLens extends LazyLogging {
   def assemble(
     query: Operator,
     keys: Seq[String],
-    values: Seq[(String, Model)],
+    values: Seq[(String, String)],
     scoreCol: Option[String],
     forceGuess: Boolean = false
   ): Operator =
@@ -121,7 +121,7 @@ object RepairKeyLens extends LazyLogging {
       keys.map { col => ProjectArg(col, Var(col))} ++
       values.map { case (col, model) => 
         val vgTerm = 
-          VGTerm(model.name, 0, keys.map(Var(_)), 
+          VGTerm(model, 0, keys.map(Var(_)), 
             Seq(
               Var(s"MIMIR_KR_HINT_COL_$col"),
               scoreCol.
@@ -160,7 +160,7 @@ object RepairKeyLens extends LazyLogging {
     db: Database,
     query: Operator,
     keys: Seq[String],
-    values: Seq[(String, Model)],
+    values: Seq[(String, String)],
     scoreCol: Option[String],
     view: String,
     forceGuess: Boolean = false,
@@ -190,7 +190,7 @@ object RepairKeyLens extends LazyLogging {
         keys.map { col => ProjectArg(col, Var(col))} ++
         values.map { case (col, model) => 
           val vgTerm = 
-            VGTerm(model.name, 0, keys.map(Var(_)), 
+            VGTerm(model, 0, keys.map(Var(_)), 
               Seq(
                 Var(s"MIMIR_KR_HINT_COL_$col"),
                 scoreCol.
@@ -246,7 +246,7 @@ object RepairKeyLens extends LazyLogging {
     db: Database,
     query: Operator,
     keys: Seq[String],
-    values: Seq[(String, Model)],
+    values: Seq[(String, String)],
     scoreCol: Option[String], 
     fastPathTable: String
   ): Operator =

@@ -17,7 +17,8 @@ object DiscalaAbadiSpec
   {
     loadCSV("test/data/cureSource.csv", 
       table = "SHIPPING", 
-      detectHeaders = true
+      detectHeaders = true,
+      typeInference = true
     )
   }
 
@@ -145,7 +146,8 @@ object DiscalaAbadiSpec
 
     "Allow native SQL queries over the catalog tables" >> {
       LoggerUtils.debug(
-        // "mimir.exec.Compiler"
+        // "mimir.exec.Compiler",
+        // "mimir.exec.mode.BestGuess$"
       ) {
         query("""
           SELECT TABLE_NAME, SCHEMA_NAME FROM MIMIR_SYS_TABLES
@@ -160,12 +162,17 @@ object DiscalaAbadiSpec
 
 
       
-      query("""
-        SELECT TABLE_NAME, ATTR_NAME FROM MIMIR_SYS_ATTRS
-      """) { results =>
-        val attrs = results.map { row => (row("TABLE_NAME").asString, row("ATTR_NAME").asString) }.toSeq 
-        attrs must contain( ("ROOT", "MONTH") )
-        attrs must contain( ("BILL_OF_LADING_NBR", "QUANTITY") )
+      LoggerUtils.debug(
+        // "mimir.exec.Compiler",
+        // "mimir.exec.mode.BestGuess$"
+      ) {
+        query("""
+          SELECT TABLE_NAME, ATTR_NAME FROM MIMIR_SYS_ATTRS
+        """) { results =>
+          val attrs = results.map { row => (row("TABLE_NAME").asString, row("ATTR_NAME").asString) }.toSeq 
+          attrs must contain( ("ROOT", "MONTH") )
+          attrs must contain( ("BILL_OF_LADING_NBR", "QUANTITY") )
+        }
       }
 
       LoggerUtils.debug(
@@ -227,7 +234,7 @@ object DiscalaAbadiSpec
     "Create queriable relations" >> {
       queryOneColumn("""
         SELECT QUANTITY FROM SHIPPING.BILL_OF_LADING_NBR"""
-      ){ _.toSeq must contain(StringPrimitive("1")) }
+      ){ _.toSeq must contain(IntPrimitive(1)) }
     }
 
     "Generate legitimate explanations on query results" >> {

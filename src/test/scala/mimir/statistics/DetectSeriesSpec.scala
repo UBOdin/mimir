@@ -29,7 +29,7 @@ object DetectSeriesSpec
 	"The DetectSeriesSpec" should {
 
 		"Be able to load DetectSeriesTest1" >> {
-			loadCSV("test/data/DetectSeriesTest1.csv", typeInference = true)
+			loadCSV("test/data/DetectSeriesTest1.csv", typeInference = true, detectHeaders = true)
 			ok
 		}
 		
@@ -51,7 +51,7 @@ object DetectSeriesSpec
 		}
 
 		"Be able to load DetectSeriesTest2" >> {
-			loadCSV("test/data/DetectSeriesTest2.csv", typeInference = true)
+			loadCSV("test/data/DetectSeriesTest2.csv", typeInference = true, detectHeaders = true)
 			ok
 		}
 

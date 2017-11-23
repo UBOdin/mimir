@@ -116,7 +116,7 @@ object DiscalaAbadiNormalizer
     RepairKeyLens.assemble(
       db.table(s"MIMIR_DA_FDG_${config.schema}"),
       Seq("MIMIR_FD_CHILD"), 
-      Seq(("MIMIR_FD_PARENT", model)),
+      Seq(("MIMIR_FD_PARENT", model.name)),
       Some("MIMIR_FD_PATH_LENGTH")
     )
   }
@@ -243,7 +243,7 @@ object DiscalaAbadiNormalizer
           map { attr => 
             (
               attr, 
-              db.models.get(s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_NORM:$table:$attr")
+              s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_NORM:$table:$attr"
             )
           }
         Some(

@@ -452,7 +452,7 @@ case class Database(backend: Backend)
             //layer on the TI adaptive schema
             if(typeinference){
               adaptiveSchemas.create( targetTableCleaned.toUpperCase+"_TI", "TYPE_INFERENCE", oper, Seq(FloatPrimitive(.5))) 
-              oper = adaptiveSchemas.viewFor(targetTableCleaned.toUpperCase+ "_TI", targetRaw).get
+              oper = adaptiveSchemas.viewFor(targetTableCleaned.toUpperCase+ "_TI", "FIXED").get
             }
             //fix whichever series of tables got created.
             views.create(targetTableCleaned, oper)

@@ -7,6 +7,11 @@ import mimir.lenses._
 import mimir.models._
 import mimir.util.SqlUtils
 
+
+// Oliver: Is there a reason this isn't using the classical type inference models?
+//         Repair-Key seems like overkill for this, and is going to make re-training 
+//         a lot harder.
+
 object TypeInference
   extends Multilens
     with LazyLogging
@@ -174,7 +179,8 @@ object TypeInference
     RepairKeyLens.assemble(
       query,
       Seq("IDX"),
-      Seq(("ATTR_TYPE", typeGuessModel)),
+      Seq("ATTR_TYPE", "ATTR_NAME", "TABLE_NAME", "IS_KEY")
+        .map { x => (x, s"MIMIR_TI_ATTR_${schema}_RK:${x}")},
       Some("SCORE")
     )
   }

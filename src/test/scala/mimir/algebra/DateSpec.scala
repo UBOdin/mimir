@@ -15,7 +15,7 @@ object DateSpec
 {
 
   def beforeAll() {
-    loadCSV("test/data/DetectSeriesTest2.csv")
+    loadCSV("test/data/DetectSeriesTest2.csv", typeInference = true, detectHeaders = true)
   }
 
   "Dates on SQLite" should {

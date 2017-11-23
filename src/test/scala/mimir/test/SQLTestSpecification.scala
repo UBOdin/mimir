@@ -123,7 +123,7 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   def update(s: String) = 
     db.update(stmt(s))
 
-  def loadCSV(file: String, table: String = null, delim:String = ",", allowAppend: Boolean = false, typeInference: Boolean = false, detectHeaders: Boolean = false) =
+  def loadCSV(file: String, table: String = null, delim:String = ",", allowAppend: Boolean = false, typeInference: Boolean = true, detectHeaders: Boolean = true) =
   {
     if(table == null){
       db.loadTable(

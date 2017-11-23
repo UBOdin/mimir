@@ -39,11 +39,13 @@ object BestGuess
     var oper = operRaw
     val rawColumns = operRaw.columnNames.toSet
 
+    logger.debug(s"Best Guess of Query: $oper")
+
     // We'll need the pristine pre-manipulation schema down the line
     // As a side effect, this also forces the typechecker to run, 
     // acting as a sanity check on the query before we do any serious
     // work.
-    val outputSchema = db.bestGuessSchema(oper)
+    val outputSchema = db.typechecker.schemaOf(oper)
       
     // The names that the provenance compilation step assigns will
     // be different depending on the structure of the query.  As a 
