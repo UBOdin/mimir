@@ -13,7 +13,11 @@ object TypeInferenceAdaptiveSpec
 
     "Be able to create and query type inference adaptive schemas" >> {
  
-      db.loadTable("CPUSPEED", new File("test/data/CPUSpeed.csv"), true, ("CSV", Seq(StringPrimitive(","), BoolPrimitive(false))))
+      db.loadTable(
+        new File("test/data/CPUSpeed.csv"), 
+        targetTable = "CPUSPEED", 
+        format = ("CSV", Seq(StringPrimitive(","), BoolPrimitive(false)))
+      )
 
       db.adaptiveSchemas.create( "CPUSPEED_TI", "TYPE_INFERENCE", db.table("CPUSPEED"), Seq())
       

@@ -42,13 +42,11 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
             PRIMARY KEY (TID, WORLD_ID, VAR_ID)
           )
         """)
-        LoadCSV.handleLoadTable(db, 
-          baseTable, 
-          new File(s"test/pdbench/${baseTable}.tbl"), 
-          Map(
-            "HEADER" -> "NO",
-            "DELIMITER" -> "|"
-          )
+        db.loadTable(
+          new File(s"test/mcdb/${baseTable}.tbl"), 
+          targetTable = baseTable,
+          allowAppend = true,
+          format = ("CSV", Seq(StringPrimitive("|")))
         )
       }
       db.tableExists(baseTable) must beTrue

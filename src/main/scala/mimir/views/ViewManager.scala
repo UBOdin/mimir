@@ -284,6 +284,11 @@ class ViewManager(db:Database) extends LazyLogging {
         )
       }
 
+      case AdaptiveView(schema, name, query, annotations) => {
+        // No support for materialized adaptive views (yet)
+        resolve(query)
+      }
+
       case _ =>
         op.recur(resolve(_))
     }

@@ -48,7 +48,7 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
           NOTES string
         )
       """)
-      loadCSV("CPUSPEED", new File("test/data/CPUSpeed.csv"))
+      loadCSV("test/data/CPUSpeed.csv", allowAppend = true, typeInference = true)
       models = models ++ SparkClassifierModel.train(db, "CPUSPEEDREPAIR", List(
         "BUSSPEEDINMHZ"
       ), db.table("CPUSPEED"))
@@ -92,7 +92,7 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
 
   "When combined with a TI Lens, the SparkClassifier Model" should {
     "Be trainable" >> {
-      db.loadTable("RATINGS1", new File("test/data/ratings1.csv"))
+      loadCSV("test/data/ratings1.csv", typeInference = true)
       val (model, idx, hints) = SparkClassifierModel.train(db,
         "RATINGS1REPAIRED", 
         List("RATING"), 

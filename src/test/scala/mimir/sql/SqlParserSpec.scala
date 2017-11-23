@@ -66,7 +66,11 @@ object SqlParserSpec
 			}
 			testData.foreach ( _ match { case ( tableName, tableData, tableCols ) => 
 				d.backend.update("CREATE TABLE "+tableName+"("+tableCols.mkString(", ")+");")
-				LoadCSV.handleLoadTable(d, tableName, tableData, Map("HEADER" -> "NO"))
+				d.loadTable(
+					tableData,
+					targetTable = tableName,
+					allowAppend = true
+				)
 			})
 			d
 		} catch {

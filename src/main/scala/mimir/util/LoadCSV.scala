@@ -24,17 +24,7 @@ object LoadCSV extends StrictLogging {
 
   def SAMPLE_SIZE = 10000
 
-  def handleLoadTable(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
-    db.loadTable(targetTable, sourceFile, true, ("CSV", options.toSeq.flatMap{
-      case ("DELIMITER", delim) => Some(StringPrimitive(delim))
-      case _ => None
-    }))
-  }
-  
-  // def handleLoadTable(db: Database, targetTable: String, sourceFile: File): Unit =
-  //   handleLoadTable(db, targetTable, sourceFile, Map())
-
-  def handleLoadTableRaw(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
+  def loadIntoTable(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
     val input = new FileReader(sourceFile)
     
     // Allocate the parser, and make its iterator scala-friendly

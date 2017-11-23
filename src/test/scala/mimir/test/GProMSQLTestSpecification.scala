@@ -112,6 +112,21 @@ abstract class GProMSQLTestSpecification(val tempDBName:String, config: Map[Stri
     db.update(s)
   def update(s: String) = 
     db.update(stmt(s))
-  def loadCSV(table: String, file: File) =
-    LoadCSV.handleLoadTable(db, table, file)
+  def loadCSV(file: String, table: String = null, delim:String = ",", allowAppend: Boolean = false, typeInference: Boolean = false, adaptiveSchema: Boolean = false) =
+  {
+    if(table == null){
+      db.loadTable(
+        new File(file),
+        allowAppend = allowAppend,
+        format = ("CSV", Seq(StringPrimitive(delim), BoolPrimitive(typeInference), BoolPrimitive(adaptiveSchema)))
+      )
+    } else {
+      db.loadTable(
+        new File(file),
+        targetTable = table,
+        allowAppend = allowAppend,
+        format = ("CSV", Seq(StringPrimitive(delim), BoolPrimitive(typeInference), BoolPrimitive(adaptiveSchema)))
+      )
+    }
+  }
 }

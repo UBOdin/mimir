@@ -11,7 +11,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
   "LoadCSV" should {
 
     "Load CSV files with headers" >> {
-      db.loadTable("RATINGS1", new File("test/data/ratings1.csv"))
+      db.loadTable(new File("test/data/ratings1.csv"))
       queryOneColumn("SELECT PID FROM RATINGS1"){
         _.toSeq must contain(
           str("P123"), str("P2345"), str("P124"), str("P325")
@@ -20,7 +20,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
     }
 
     "Load CSV files without headers" >> {
-      db.loadTable( "U", new File("test/r_test/u.csv"))
+      db.loadTable(new File("test/r_test/u.csv"))
       val col1: String = db.tableSchema("U").get.head._1
       queryOneColumn(s"SELECT $col1 FROM U"){
         _.toSeq must contain(
@@ -37,7 +37,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
           NUM_RATINGS float
         );
       """)
-      db.loadTable( "RATINGS2", new File("test/data/ratings2.csv"))
+      db.loadTable(new File("test/data/ratings2.csv"), allowAppend = true)
       queryOneColumn(s"SELECT PID FROM RATINGS2"){ 
         _.toSeq must contain(
           str("P125"), str("P34234"), str("P34235")
@@ -58,7 +58,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
           C int
         );
       """)
-      db.loadTable( "U2", new File("test/r_test/u.csv"))
+      db.loadTable(new File("test/r_test/u.csv"), targetTable = "U2", allowAppend = true)
       val col1: String = db.tableSchema("U2").get.head._1
       queryOneColumn(s"SELECT $col1 FROM U2"){
         _.toSeq must contain(
@@ -77,7 +77,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
       """)
       // Disable warnings for type errors
       LoggerUtils.error("mimir.util.LoadCSV$"){
-        db.loadTable( "RATINGS1WITHTYPES", new File("test/data/ratings1.csv"))
+        db.loadTable( new File("test/data/ratings1.csv"), "RATINGS1WITHTYPES", allowAppend = true )
       }
       queryOneColumn("SELECT PID FROM RATINGS1WITHTYPES"){ 
         _.toSeq must contain(
@@ -97,7 +97,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
     }
 
     "Load CSV files with missing values" >> {
-      db.loadTable( "R", new File("test/r_test/r.csv"))
+      db.loadTable( new File("test/r_test/r.csv") )
       val colNames: Seq[String] = db.tableSchema("R").get.map(_._1)
       val b = colNames(1)
       val c = colNames(2)
@@ -107,7 +107,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
 
     "Load CSV files with garbled data" >> {
       LoggerUtils.error("mimir.util.NonStrictCSVParser") {
-        db.loadTable( "GARBLED", new File("test/data/garbledRatings.csv"))
+        db.loadTable( new File("test/data/garbledRatings.csv"), targetTable = "GARBLED" )
       }
       queryOneColumn("SELECT PID FROM GARBLED"){
         _.toSeq must contain(
@@ -130,7 +130,11 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
         )
       """)
       LoggerUtils.error("mimir.util.NonStrictCSVParser") {
-        db.loadTable( "EMPLOYEE", new File("test/data/Employee.csv"))
+        db.loadTable( 
+          new File("test/data/Employee.csv"), 
+          targetTable = "EMPLOYEE", 
+          allowAppend = true
+        )
       }
       db.backend.resultRows("""
         SELECT cast(JOINDATE as varchar) FROM EMPLOYEE

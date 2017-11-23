@@ -1,10 +1,13 @@
 package mimir.util
 
+import org.apache.commons.io.FilenameUtils
+
 object FileType extends Enumeration
 {
   type T = Value
   val SQLiteDB, 
       CSVFile, 
+      TSVFile,
       TextFile,
       SQLFile = Value
 
@@ -13,8 +16,10 @@ object FileType extends Enumeration
     FilenameUtils.getExtension(file).toLowerCase match {
       case "db" | "sqlite" => SQLiteDB
       case "sql"           => SQLFile
-      case "csv" | "tsv"   => CSVFile
+      case "csv"           => CSVFile
+      case "tsv"           => TSVFile
       case _               => TextFile
+    }
   }
 
 }

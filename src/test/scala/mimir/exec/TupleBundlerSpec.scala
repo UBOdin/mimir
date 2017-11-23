@@ -21,7 +21,7 @@ object TupleBundleSpec
   def beforeAll = 
   {
     update("CREATE TABLE R(A int, B int, C int)")
-    loadCSV("R", new File("test/r_test/r.csv"))
+    loadCSV("test/r_test/r.csv", allowAppend = true)
     update("CREATE LENS R_CLASSIC AS SELECT * FROM R WITH KEY_REPAIR(A)")
     // update("CREATE LENS R_FASTPATH AS SELECT * FROM R WITH KEY_REPAIR(A, ENABLE(FAST_PATH))")
   }

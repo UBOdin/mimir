@@ -48,7 +48,7 @@ object WekaModelSpec extends SQLTestSpecification("WekaTest")
           NOTES string
         )
       """)
-      loadCSV("CPUSPEED", new File("test/data/CPUSpeed.csv"))
+      loadCSV("test/data/CPUSpeed.csv", allowAppend = true, typeInference = true)
       models = models ++ WekaModel.train(db, "CPUSPEEDREPAIR", List(
         "BUSSPEEDINMHZ"
       ), db.table("CPUSPEED"))
@@ -92,7 +92,7 @@ object WekaModelSpec extends SQLTestSpecification("WekaTest")
 
   "When combined with a TI Lens, the Weka Model" should {
     "Be trainable" >> {
-      db.loadTable("RATINGS1", new File("test/data/ratings1.csv"))
+      loadCSV("test/data/ratings1.csv", allowAppend = true, typeInference = true)
       val (model, idx, hints) = WekaModel.train(db,
         "RATINGS1REPAIRED", 
         List("RATING"), 

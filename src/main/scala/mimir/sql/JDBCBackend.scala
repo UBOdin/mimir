@@ -25,7 +25,7 @@ class JDBCBackend(val backend: String, val filename: String)
 
   val tableSchemas: scala.collection.mutable.Map[String, Seq[(String, Type)]] = mutable.Map()
 
-  def toString = s"$backend://$filename"
+  override def toString = s"$backend://$filename"
 
   def open() = 
   {

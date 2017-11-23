@@ -18,7 +18,6 @@ import net.sf.jsqlparser.statement.drop.Drop
 import org.jline.terminal.{Terminal,TerminalBuilder}
 import org.slf4j.{LoggerFactory}
 import org.rogach.scallop._
-import org.apache.commons.io.FilenameUtils
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import scala.collection.JavaConverters._
@@ -55,14 +54,14 @@ object Mimir extends LazyLogging {
     // Annotate files in the arg list with types, and split it into 
     // -> database files (which we need now to initialize the db)
     // -> other files (which we need to iterate through later)
-    val (dbFiles, dataFiles) = conf.files.partition { FileType.detect(_) == SQLiteDB }
+    val (dbFiles: Seq[String], dataFiles: Seq[String]) = conf.files().partition { FileType.detect(_) == FileType.SQLiteDB }
 
     // If we didn't get any db file, use the defaults
     // If we did get one db file, load that
     // If we got more than one db file, throw an error
     dbFiles.size match {
       case 0 => {  backend = new JDBCBackend(conf.backend(), conf.dbname())  }
-      case 1 => {  backend = new JDBCBackend(conf.backend(), dbFiles(0)._1)  }
+      case 1 => {  backend = new JDBCBackend(conf.backend(), dbFiles(0))  }
       case _ => handleArgError("Can't open more than one database at a time.")
     }
 
@@ -88,8 +87,8 @@ object Mimir extends LazyLogging {
     // Prep for the event loop.  First, figure out if we got any sql files on
     // the command line.  If we didn't, we need to add a default file of "-", 
     // so that we get into interactive mode
-    val weGotAtLeastOneSQLFile = conf.files.exists( FileType.detect(_) == SQLFile )
-    val allFileTodos = dataFiles ++ if(weGotAtLeastOneSQLFile){ Some("-") } else { None }
+    val weGotAtLeastOneSQLFile = dataFiles.exists( FileType.detect(_) == FileType.SQLFile )
+    val allFileTodos = dataFiles ++ (if(weGotAtLeastOneSQLFile){ Seq("-") } else { Seq() })
 
     // Start processing to-dos one at a time
     allFileTodos.foreach { file => 
@@ -115,21 +114,24 @@ object Mimir extends LazyLogging {
 
         case _ => { // None of the special file names
           FileType.detect(file) match {
-            case SQLiteDB => assert(false); // these should have been filtered out earlier
-            case SQLFile => {
+            case FileType.SQLiteDB => assert(false); // these should have been filtered out earlier
+
+            // Process SQLFiles as normal input
+            case FileType.SQLFile => {
               output = DefaultOutputFormat
               eventLoop(              
-                source = new FileReader(conf.file()),
+                source = new FileReader(file),
                 defaultPrompt
               )
             }
 
-            case CSVFile => {
-              
-            }
+            // Process Data files using implicit LOAD commands
+            case FileType.CSVFile  => db.loadTable( new File(file), format = ("CSV", Seq()) )
+            case FileType.TSVFile  => db.loadTable( new File(file), format = ("CSV", Seq(StringPrimitive("\t"))) )
+            case FileType.TextFile => db.loadTable( new File(file), format = ("TEXT", Seq()) )
           }
         }
-
+      }
     }
 
     // Shut down cleanly
@@ -355,7 +357,7 @@ object Mimir extends LazyLogging {
   def handleArgError(msg: String)
   {
     output.print(s"Error: $msg")
-    scallop.printHelp()
+    conf.printHelp()
     System.exit(-1)
   }
 

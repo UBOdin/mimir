@@ -21,12 +21,12 @@ object RepairKeySpec
   def beforeAll = 
   {
     update("CREATE TABLE R(A int, B int, C int)")
-    loadCSV("R", new File("test/r_test/r.csv"))
+    loadCSV("test/r_test/r.csv", allowAppend = true)
     update("CREATE TABLE U(A int, B int, C int)")
-    loadCSV("U", new File("test/r_test/u.csv"))
-    loadCSV("FD_DAG", new File("test/repair_key/fd_dag.csv"))
-    loadCSV("twitter100Cols10kRowsWithScore", new File("test/r_test/twitter100Cols10kRowsWithScore.csv"))
-    loadCSV("cureSourceWithScore", new File("test/r_test/cureSourceWithScore.csv"))
+    loadCSV("test/r_test/u.csv", allowAppend = true)
+    loadCSV("test/repair_key/fd_dag.csv")
+    loadCSV("test/r_test/twitter100Cols10kRowsWithScore.csv")
+    loadCSV("test/r_test/cureSourceWithScore.csv")
   }
 
   "The Key Repair Lens" should {
@@ -192,13 +192,11 @@ object RepairKeySpec
             acctbal float
           )
         """)
-        LoadCSV.handleLoadTable(db, 
-          "CUST_ACCTBAL_WITHDUPS", 
-          new File("test/pdbench/cust_c_acctbal.tbl"), 
-          Map(
-            "HEADER" -> "NO",
-            "DELIMITER" -> "|"
-          )
+        loadCSV(
+          "test/pdbench/cust_c_acctbal.tbl",
+          table = "CUST_ACCTBAL_WITHDUPS", 
+          allowAppend = true,
+          delim = "|"
         )
         update("""
           CREATE LENS CUST_ACCTBAL_CLASSIC

@@ -11,12 +11,13 @@ object PlantScenario
   "The Plant Scenario" should {
 
     "Be able to load Barnes" >> {
-      db.loadTable("test/plants/Barnes.csv"); ok
+      loadCSV("test/plants/Barnes.csv")
+      ok
     }
     "Be able to load GBIF (which has garbled data)" >> {
       // disable data import warnings
       LoggerUtils.error("mimir.util.NonStrictCSVParser"){
-        db.loadTable("test/plants/GBIF.csv"); 
+        loadCSV("test/plants/GBIF.csv") 
       }
 
       // Lines 469 and 1212 of the file GBIF.csv have some garbling.
@@ -41,7 +42,8 @@ object PlantScenario
       """) must be equalTo f(-82.74)
     }
     "Be able to load EDD" >> {
-      db.loadTable("test/plants/EDD.csv"); ok
+      loadCSV("test/plants/EDD.csv")
+      ok
     }
 
   } 

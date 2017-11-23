@@ -62,13 +62,11 @@ object MCDBTimingSpec
       s"Create table: $baseTable" >> {
         if(!db.tableExists(baseTable)){
           update(ddl)
-          LoadCSV.handleLoadTable(db, 
-            baseTable, 
+          db.loadTable(
             new File(s"test/mcdb/${baseTable}.tbl"), 
-            Map(
-              "HEADER" -> "NO",
-              "DELIMITER" -> "|"
-            )
+            targetTable = baseTable,
+            allowAppend = true,
+            format = ("CSV", Seq(StringPrimitive("|")))
           )
         }
         db.tableExists(baseTable) must beTrue

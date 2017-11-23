@@ -29,7 +29,8 @@ object DetectSeriesSpec
 	"The DetectSeriesSpec" should {
 
 		"Be able to load DetectSeriesTest1" >> {
-			db.loadTable("test/data/DetectSeriesTest1.csv"); ok
+			loadCSV("test/data/DetectSeriesTest1.csv", typeInference = true)
+			ok
 		}
 		
 		"Be able to detect Date and Timestamp type" >> {
@@ -50,7 +51,8 @@ object DetectSeriesSpec
 		}
 
 		"Be able to load DetectSeriesTest2" >> {
-			db.loadTable("test/data/DetectSeriesTest2.csv"); ok
+			loadCSV("test/data/DetectSeriesTest2.csv", typeInference = true)
+			ok
 		}
 
 		"Be able to detect Date, Timestamp and increasing-decreasing Numeric type" >> {

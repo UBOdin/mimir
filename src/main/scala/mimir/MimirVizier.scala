@@ -181,7 +181,7 @@ object MimirVizier extends LazyLogging {
         logger.debug("loadCSV: From Vistrails: Table Already Exists: " + tableName)
       }
       else{
-        db.loadTable( nameFromFile, csvFile,  true, format)
+        db.loadTable( csvFile, targetTable = nameFromFile, allowAppend = true, format = format)
       }
       tableName 
     }

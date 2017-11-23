@@ -15,7 +15,7 @@ object FeedbackSpec
   def beforeAll = 
   {
     update("CREATE TABLE R(A string, B int, C int)")
-    loadCSV("R", new File("test/r_test/r.csv"))
+    loadCSV("test/r_test/r.csv", allowAppend = true)
     update("CREATE LENS MATCH AS SELECT * FROM R WITH SCHEMA_MATCHING('B int', 'CX int')")
     update("CREATE LENS TI AS SELECT * FROM R WITH TYPE_INFERENCE(0.5)")
     update("CREATE LENS MV AS SELECT * FROM R WITH MISSING_VALUE('B', 'C')")

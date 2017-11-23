@@ -4,6 +4,8 @@ import java.io.File
 import java.io.StringReader
 import java.sql.SQLException
 import java.sql.ResultSet
+import scala.io.Source
+import org.apache.commons.io.FilenameUtils
 
 import mimir.algebra._
 import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, RowExplanation, InlineVGTerms}
@@ -326,17 +328,17 @@ case class Database(backend: Backend)
       /********** LOAD STATEMENTS **********/
       case load: Load => {
         // Assign a default table name if needed
-        val (target, force) = 
+        val (target, append) = 
           load.getTable() match { 
             case null => (load.getFile.getName.replaceAll("\\..*", "").toUpperCase, false)
             case s => (s, true)
           }
 
         loadTable(
-          target, 
           load.getFile, 
-          force = force,
-          (load.getFormat, load.getFormatArgs.asScala.toSeq.map { sql.convert(_) })
+          targetTable = target, 
+          allowAppend = append,
+          format = (load.getFormat, load.getFormatArgs.asScala.toSeq.map { sql.convert(_) })
         )
       }
 
@@ -406,17 +408,26 @@ case class Database(backend: Backend)
    * supplies an appropriate header.
    */
   def loadTable(
-    targetTable: String, 
     sourceFile: File, 
-    force:Boolean = true, 
+    targetTable: String = null,
+    allowAppend:Boolean = false, 
     format:(String, Seq[PrimitiveValue]) = ("CSV", Seq(StringPrimitive(",")))
   ){
+    val targetTableCleaned =
+      if(targetTable == null){
+        FilenameUtils.getBaseName(sourceFile.toString)
+          .replaceAll("[^A-Za-z0-9]+", "_")
+          .replace("(^[0-9]+)", "DATA_\\1")
+          .toUpperCase
+      } else {
+        targetTable.toUpperCase
+      }
     (format._1 match {
            case null => "CSV"
            case x => x.toUpperCase
      }) match {
       case "CSV" => {
-        val (delim, typeinference, adaptive) =
+        val (delim, typeinference, detectHeaders) =
           format._2 match {
             case Seq(StringPrimitive(delim)) => (delim, true, true)
             case Seq(StringPrimitive(delim),BoolPrimitive(typeinference)) => (delim, typeinference, true)
@@ -425,63 +436,65 @@ case class Database(backend: Backend)
             case _ => throw new SQLException("The CSV format expects a single string argument (CSV('delim'))")
           }
 
-          val targetRaw = targetTable.toUpperCase + "_RAW"
-          if(tableExists(targetRaw) && !force){
-            throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' INTO tableName`; to append to existing data.")
-          }
-          if(!tableExists(targetTable.toUpperCase)){
-            LoadCSV.handleLoadTableRaw(this, targetRaw, sourceFile, 
+          if(!tableExists(targetTableCleaned)){
+            val targetRaw = targetTableCleaned + "_RAW"
+            LoadCSV.loadIntoTable(this, targetRaw, sourceFile, 
               Map("DELIMITER" -> delim)
             )
-            val oper = table(targetRaw)
+
+            var oper = table(targetRaw)
+
             //detect headers and create adaptive schema
-            if(adaptive)
-              adaptiveSchemas.create( targetTable.toUpperCase+"_DH", "DETECT_HEADER", oper, Seq())
-            //create TI adaptive schema - also create a view with the target name 
+            if(detectHeaders) {
+              adaptiveSchemas.create( targetTableCleaned.toUpperCase+"_DH", "DETECT_HEADER", oper, Seq())
+              oper = adaptiveSchemas.viewFor(targetTableCleaned.toUpperCase+ "_DH", targetRaw).get
+            }
+            //layer on the TI adaptive schema
             if(typeinference){
-              adaptiveSchemas.create( targetTable.toUpperCase+"_TI", "TYPE_INFERENCE", adaptiveSchemas.viewFor(targetTable.toUpperCase+ "_DH", targetRaw).getOrElse(oper), Seq(FloatPrimitive(.5))) 
-              views.create(targetTable.toUpperCase, adaptiveSchemas.viewFor(targetTable.toUpperCase+ "_TI", targetRaw).get)
+              adaptiveSchemas.create( targetTableCleaned.toUpperCase+"_TI", "TYPE_INFERENCE", oper, Seq(FloatPrimitive(.5))) 
+              oper = adaptiveSchemas.viewFor(targetTableCleaned.toUpperCase+ "_TI", targetRaw).get
             }
-            else if(adaptive){
-              //if there is no ti then make a view with the target name of the detect header adaptive schema view 
-              views.create(targetTable.toUpperCase, adaptiveSchemas.viewFor(targetTable.toUpperCase+ "_DH", targetRaw).getOrElse(oper))
+            //fix whichever series of tables got created.
+            views.create(targetTableCleaned, oper)
+
+          } else {
+            if(!allowAppend){
+              throw new SQLException(s"Target table $targetTableCleaned already exists; Use `LOAD 'file' INTO tableName`; to append to existing data.")
             }
-            else {
-              //if there is no ti or detect headers then make a view with the target name of the raw table
-              views.create(targetTable.toUpperCase, oper)
-            }
-          } else LoadCSV.handleLoadTableRaw(this, targetTable.toUpperCase, sourceFile,  Map("DELIMITER" -> delim) )
+            LoadCSV.loadIntoTable(this, targetTableCleaned.toUpperCase, sourceFile,  Map("DELIMITER" -> delim) )
+          }
         }
+
+      case "LOG" | "TEXT" => {
+          val column = if(format._2 == null){ "DATA" } else { format._2.head.asString.toUpperCase }
+
+          tableSchema(targetTableCleaned) match {
+            case None => {
+              backend.update("CREATE TABLE $targetTableCleaned($column string)");            
+            }
+
+            case Some( schema ) => {
+              if(!allowAppend){
+                throw new SQLException(s"Target table $targetTableCleaned already exists; Use `LOAD 'file' INTO tableName`; to append to existing data.")
+              } else {
+                if(schema.exists{ _._1.equals(column) }) { 
+                  throw new SQLException(s"Can't insert into column $column of $targetTableCleaned(${schema.map(_._1).mkString(", ")})")
+                }
+              }
+            }
+
+          }
+
+          backend.fastUpdateBatch(
+            s"INSERT INTO $targetTableCleaned($column) VALUES(?)", 
+            Source.fromFile(sourceFile).getLines.map { l => Seq(StringPrimitive(l)) }
+          )
+        }
+
+
       case fmt =>
         throw new SQLException(s"Unknown load format '$fmt'")
     }
-  }
-
-  def loadTableNoTI(targetTable: String, sourceFile: File, force:Boolean = true): Unit ={
-    if(tableExists(targetTable) && !force){
-      throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' AS tableName`; to override.")
-    }
-    LoadCSV.handleLoadTable(this, targetTable, sourceFile)
-  }
-
-  def loadTableNoTI(targetTable: String, sourceFile: String){
-    loadTableNoTI(targetTable, new File(sourceFile))
-  }
-  def loadTableNoTI(sourceFile: String){
-    loadTableNoTI(new File(sourceFile))
-  }
-  def loadTableNoTI(sourceFile: File){
-    loadTableNoTI(sourceFile.getName().split("\\.")(0), sourceFile)
-  }
-  
-  def loadTable(targetTable: String, sourceFile: String){
-    loadTable(targetTable, new File(sourceFile))
-  }
-  def loadTable(sourceFile: String){
-    loadTable(new File(sourceFile))
-  }
-  def loadTable(sourceFile: File){
-    loadTable(sourceFile.getName().split("\\.")(0), sourceFile)
   }
 
   /**

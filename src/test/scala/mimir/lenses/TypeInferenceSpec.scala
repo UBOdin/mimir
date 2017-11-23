@@ -13,16 +13,16 @@ object TypeInferenceSpec
 
     "Be able to create and query type inference lenses" >> {
  
-      db.loadTable("CPUSPEED", new File("test/data/CPUSpeed.csv"))
+      loadCSV("test/data/CPUSpeed.csv", typeInference = true, detectHeaders = true)
 
-      val baseTypes = db.bestGuessSchema(db.table("CPUSPEED_RAW")).toMap
+      val baseTypes = db.typechecker.schemaOf(db.table("CPUSPEED_RAW")).toMap
       baseTypes.keys must contain(eachOf("COLUMN_7", "COLUMN_1", "COLUMN_2"))
       baseTypes must contain("COLUMN_7" -> TString())
       baseTypes must contain("COLUMN_1" -> TString())
       baseTypes must contain("COLUMN_2" -> TString())
 
 
-      val lensTypes = db.bestGuessSchema(db.table("CPUSPEED")).toMap
+      val lensTypes = db.typechecker.schemaOf(db.table("CPUSPEED")).toMap
       lensTypes.keys must contain(eachOf("CORES", "FAMILY", "TECH_MICRON"))
       lensTypes must contain("CORES" -> TInt())
       lensTypes must contain("FAMILY" -> TString())
@@ -36,10 +36,10 @@ object TypeInferenceSpec
       Type.matches(TTimestamp(), "2013-10-07 08:23:19.120") must beTrue
 
 
-      db.loadTable("DETECTSERIESTEST1", new File("test/data/DetectSeriesTest1.csv"))
+      loadCSV("test/data/DetectSeriesTest1.csv", typeInference = true, detectHeaders = true)
 
       val sch = 
-        db.bestGuessSchema(
+        db.typechecker.schemaOf(
           db.table("DETECTSERIESTEST1")
         ).toMap
 

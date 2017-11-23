@@ -15,8 +15,8 @@ object ProvenanceRegressions
   {
     update("CREATE TABLE R(A int, B int, C int)")
     update("CREATE TABLE S(B int, D int)")
-    loadCSV("R", new File("test/r_test/r.csv"))
-    loadCSV("S", new File("test/r_test/s.csv"))
+    loadCSV("test/r_test/r.csv", allowAppend = true)
+    loadCSV("test/r_test/s.csv", allowAppend = true)
   }
 
   "Multiple Rowid Columns" should {

@@ -15,7 +15,10 @@ object DiscalaAbadiSpec
 {
   def beforeAll =
   {
-    db.loadTable("SHIPPING", new File("test/data/cureSource.csv"), true, ("CSV", Seq(StringPrimitive(","), BoolPrimitive(false), BoolPrimitive(true))))
+    loadCSV("test/data/cureSource.csv", 
+      table = "SHIPPING", 
+      detectHeaders = true
+    )
   }
 
   sequential

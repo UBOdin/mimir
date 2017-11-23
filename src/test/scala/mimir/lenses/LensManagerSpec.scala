@@ -18,14 +18,14 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
 
     "Be able to create and query missing value lenses" >> {
       update("CREATE TABLE R(A int, B int, C int);")
-      loadCSV("R", new File("test/r_test/r.csv"))
+      loadCSV("test/r_test/r.csv", allowAppend = true)
       queryOneColumn("SELECT B FROM R"){ _.toSeq should contain(NullPrimitive()) }
       update("CREATE LENS SANER AS SELECT * FROM R WITH MISSING_VALUE('B')")
       queryOneColumn("SELECT B FROM SANER"){ _.toSeq should not contain(NullPrimitive()) }
     }
 
     "Produce reasonable views" >> {
-      db.loadTable("CPUSPEED", new File("test/data/CPUSpeed.csv"))
+      loadCSV("test/data/CPUSpeed.csv", typeInference = true, detectHeaders = true)
       val resolved1 = InlineProjections(db.views.resolve(db.table("CPUSPEED")))
       resolved1 must beAnInstanceOf[AdaptiveView]
       resolved1.children.head must beAnInstanceOf[Project]
