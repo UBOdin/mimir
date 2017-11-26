@@ -49,12 +49,14 @@ object SimpleTests
     "Load CSV Files" >> {
 
       // load all tables without TI lens
-
+/*
       db.loadTable("ENRON",new File("test/data/enron.json"),false,("JSON",Seq(new StringPrimitive(""))))
       db.loadTable("COMPANIES",new File("test/data/companies.json"),false,("JSON",Seq(new StringPrimitive(""))))
       db.loadTable("METEORITE",new File("test/data/meteorite.json"),false,("JSON",Seq(new StringPrimitive(""))))
+*/
+      time("Load Time"){db.loadTable("TWITTERFULL",new File("test/data/dump-30.txt"),false,("JSON",Seq(new StringPrimitive(""))))}
 
-      println("DATA LOADED")
+//      println("DATA LOADED")
 
 
       // generate files for clustering
@@ -75,14 +77,20 @@ object SimpleTests
       query("SELECT CLUSTER_TEST(JSONCOLUMN) FROM METEORITE"){        _.foreach(println(_))      }
 */
 
-      var reader = new BufferedReader(new FileReader(new File("clusterOptions.txt")))
-      val dir: String = reader.readLine()
-      reader.close()
+      var writer: BufferedWriter = new BufferedWriter(new FileWriter("clusterOptions.txt"))
+      writer.write("cluster/twitterFull2")
+      writer.close()
+      time("TWITTERFULL"){query("SELECT CLUSTER_TEST(JSONCOLUMN) FROM TWITTERFULL"){        _.foreach(println(_))      }}
+      query("SELECT COUNT(JSONCOLUMN) FROM TWITTERFULL"){        _.foreach(println(_))      }
 
-      val path: String = s"C:\\Users\\Will\\Documents\\GitHub\\mimir\\$dir"
-      reader = new BufferedReader(new FileReader(new File(s"$dir/schema.txt")))
+//      var reader = new BufferedReader(new FileReader(new File("clusterOptions.txt")))
+//      val dir: String = reader.readLine()
+//      reader.close()
 
-      new mimir.util.VisualizeHTML(dir)
+//      val path: String = s"C:\\Users\\Will\\Documents\\GitHub\\mimir\\$dir"
+//      reader = new BufferedReader(new FileReader(new File(s"$dir/schema.txt")))
+
+//      new mimir.util.VisualizeHTML(dir)
 
       println("Done")
 

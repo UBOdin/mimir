@@ -861,7 +861,7 @@ class JsonClusterAGG extends org.sqlite.Function.Aggregate {
 
   @Override
   def xStep(): Unit = {
-    if(value_type(0) != SQLiteCompat.NULL) { // the value is not null, so merge the JSON objects
+    if(value_type(0) == SQLiteCompat.NULL) { // the value is not null, so merge the JSON objects
       val schema: List[String] = value_text(0).replace("\u0020","").split(",").toList
       val featureVector: ListBuffer[Int] = ListBuffer[Int]()
       schema.foreach((v: String) => {
@@ -886,20 +886,26 @@ class JsonClusterAGG extends org.sqlite.Function.Aggregate {
 
 }
 
+/*
+*   Output: Schema text file containing the final full schema, feature vector file with unique feature vector for each unique schema, multiplicity file that corresponds to the feature vector file
+*   Steps to convert json:
+*   1.) shred json object (incoming row) into a list of paths found within the object
+*
+ */
+
 class ClusteringPlayground extends org.sqlite.Function.Aggregate {
 
-  val combineArrays: Boolean = true
-  val failSilently: Boolean = false
+  val combineArrays: Boolean = true // flatten arrays into one parent object
+  val failSilently: Boolean = false // won't throw an error for malformed json if true
+  val filterNulls: Boolean = false // check values for null, if null then don't count it, this might improve clustering but will take way longer
 
-//  val rowHolder: ListBuffer[ListBuffer[Int]] = ListBuffer[ListBuffer[Int]]() // Seq of feature vectors
-  var totalSchema: ListBuffer[String] = ListBuffer[String]() // the total schema, used to determine the feature vector
-
+  var totalSchema: scala.collection.mutable.ListBuffer[String] = scala.collection.mutable.ListBuffer[String]() // the total schema, used to determine the feature vector
+  var totalSchemaCheck: scala.collection.mutable.HashSet[String] = scala.collection.mutable.HashSet[String]()
   var jsonShapeFormat: Map[ListBuffer[Int],Int] = Map[ListBuffer[Int],Int]() // holds the feature vector based on the json shape as the key and the multiplicity as the value
-//  val jsonDataFormat: ListBuffer[ListBuffer[(String,Type)]]
 
   @Override
   def xStep(): Unit = {
-    if(value_type(0) != SQLiteCompat.NULL) { // the value is not null, so merge the JSON objects
+    if(value_type(0) == SQLiteCompat.TEXT) { // the value is not null, so merge the JSON objects
       val jsonString: String = value_text(0)
       var jsonLeafKeySet: Set[String] = null
 
@@ -910,34 +916,37 @@ class ClusteringPlayground extends org.sqlite.Function.Aggregate {
         else
           jsonLeafKeySet = jsonMap.keySet()
 
-        val featureVector: ListBuffer[Int] = ListBuffer[Int]()
-
         // update total schema based on new row
         jsonLeafKeySet.asScala.foreach((v: String) => {
-          if(!totalSchema.contains(v))
-            totalSchema += v
-        })
-        // run through schema and update the feature vector so it matches it
-        totalSchema.foreach((v) => {
-          if(jsonLeafKeySet.contains(v))
-            featureVector += 1
-          else
-            featureVector += 0
+          if(!totalSchemaCheck.contains(v)) {
+            totalSchemaCheck.add(v)
+            totalSchema.append(v)
+          }
         })
 
+        val featureVector: ListBuffer[Int] = ListBuffer[Int]()
+
+        totalSchema.foreach((v) => {
+          if(jsonLeafKeySet.contains(v))
+            featureVector.append(1)
+          else
+            featureVector.append(0)
+        })
+/*
+        val featureVector: Array[Int] = scala.Array.fill[Int](totalSchema.size)(0) // initialize an empty feature, then fill with 1's
+        jsonLeafKeySet.asScala.foreach((v: String) => {
+          totalSchema.index
+        })
+*/
         val norm = removeTailZeros(featureVector) // this normalizes the feature vector for map insertion
         jsonShapeFormat.get(norm) match {
           case Some(i) => jsonShapeFormat += (norm -> (i+1))
           case None => jsonShapeFormat += (norm -> 1)
         }
 
-
-      }
-      catch{
+      } catch{ // try catch for shredder
         case e: Exception => {
-          if(failSilently)
-            result()
-          else
+          if(!failSilently)
             println(s"Not of JSON format in Json_Explorer_Project, so null returned: $jsonString")
         } // is not a proper json format so return null since there's nothing we can do about this right now
       } // end try catch
