@@ -55,6 +55,8 @@ class ModelManager(db:Database)
         )
       """)
     }
+    //Begin the thread to progressively update
+    progressivelyUpdate()
   }
 
   /**
@@ -62,6 +64,7 @@ class ModelManager(db:Database)
    */
   def persist(model:Model): Unit =
   {
+    this.synchronized{
     val (serialized,decoder) = model.serialize
 
     db.backend.update(s"""
@@ -73,6 +76,7 @@ class ModelManager(db:Database)
       StringPrimitive(decoder.toUpperCase)
     ))
     cache.put(model.name, model)
+    }
   }
 
   /**
@@ -244,6 +248,14 @@ class ModelManager(db:Database)
       ret.asInstanceOf[NeedsReconnectToDatabase].reconnectToDatabase(db)
     }
     return ret
+  }
+  
+  /**
+   * Progressively update models that have the appropriate trait
+   */
+  private def progressivelyUpdate() = {
+    val thread = new Thread(new mimir.util.ModelConcurrency(this,db))
+    thread.start()
   }
 }
 

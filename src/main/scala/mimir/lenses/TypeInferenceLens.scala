@@ -36,9 +36,11 @@ object TypeInferenceLens extends LazyLogging
       new TypeInferenceModel(
         name,
         modelColumns,
-        db.interpreter.evalFloat(args(0))
+        db.interpreter.evalFloat(args(0)),
+        1000,
+        query
       )
-
+    
     val columnIndexes = 
       modelColumns.zipWithIndex.toMap
 
@@ -63,5 +65,7 @@ object TypeInferenceLens extends LazyLogging
       Project(repairs, query),
       List(model)
     )
+    
   }
+  
 }

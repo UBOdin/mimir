@@ -1,6 +1,7 @@
 package mimir.models
 
 import java.io._
+import org.specs2.specification._
 
 import org.specs2.mutable._
 import mimir.algebra._
@@ -8,11 +9,21 @@ import mimir.util._
 import mimir.test._
 
 object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
+with BeforeAll
 {
-
+  sequential
+  
+  def beforeAll = 
+  {
+    loadCSV("Dummy_data", new File("test/repair_key/fd_dag.csv"))
+    
+    
+  }
+  
   def train(elems: List[String]): TypeInferenceModel = 
   {
-    val model = new TypeInferenceModel("TEST_MODEL", Array("TEST_COLUMN"), 0.5)
+    val operator = db.table("Dummy_data")
+    val model = new TypeInferenceModel("TEST_MODEL", Array("TEST_COLUMN"), 0.5, 1000, operator)
     elems.foreach( model.learn(0, _) )
     return model
   }
@@ -30,7 +41,6 @@ object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
 
 
   "The Type Inference Model" should {
-
     "Recognize Integers" >> {
       guess(List("1", "2", "3", "500", "29", "50")) must be equalTo(TInt())
     }
@@ -48,13 +58,42 @@ object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
 
     "Recognize CPU Cores" >> {
       loadCSV("CPUSPEED", new File("test/data/CPUSpeed.csv"))
-      val model = new TypeInferenceModel("CPUSPEED:CORES", Array("CORES"), 0.5)
+      val model = new TypeInferenceModel("CPUSPEED:CORES", Array("CORES"), 0.5, 1000, db.table("CPUSPEED"))
       LoggerUtils.debug(
         //"mimir.models.TypeInferenceModel"
       ){
         model.train(db, table("CPUSPEED"))
         guess(model) must be equalTo(TInt())
       }
+    }
+    
+    "Update itself" >> {
+      loadCSV("Progressive_update", new File("test/data/InferenceModelProgressive.csv"))
+      val model = new TypeInferenceModel("PROGRESSIVE_UPDATE:CATEGORY3",Array("CATEGORY3"),0.5,1000,db.table("Progressive_update"))
+      db.models.persist(model)
+      //LoggerUtils.debug(){
+      model.train(db, table("PROGRESSIVE_UPDATE"))
+      Thread.sleep(30000)
+      db.models.get("PROGRESSIVE_UPDATE:CATEGORY3").asInstanceOf[ProgressiveUpdate].getNextSample() must be greaterThan(2000) 
+      //} 
+    }
+    
+    "Complete updating" >> {
+      val model = new TypeInferenceModel("PROGRESSIVE_UPDATE:CATEGORY2", Array("CATEGORY2"),0.5,1000,db.table("Progressive_update"))
+      db.models.persist(model)
+      //LoggerUtils.debug(){
+        model.train(db, table("PROGRESSIVE_UPDATE"))
+        Thread.sleep(30000)
+      //}
+      model.asInstanceOf[ProgressiveUpdate].isCompleted() must be equalTo(true)
+    }
+    
+    "Successfully determine type from large datasets" >> {
+     val model = new TypeInferenceModel("PROGRESSIVE_UPDATE:CATEGORY3",Array("CATEGORY3"),0.5,1000,db.table("Progressive_update"))
+     db.models.persist(model)
+     model.train(db,table("PROGRESSIVE_UPDATE"))
+     Thread.sleep(30000)
+     guess(model) must be equalTo(TFloat())
     }
 
   }

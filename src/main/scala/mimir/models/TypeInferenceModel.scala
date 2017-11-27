@@ -39,13 +39,14 @@ object TypeInferenceModel
 }
 
 @SerialVersionUID(1000L)
-class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac: Double)
+class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac: Double, sampleArg: Int, query: Operator)
   extends Model(name)
   with DataIndependentFeedback
   with NoArgModel
   with FiniteDiscreteDomain
+  with ProgressiveUpdate
 {
-  var sampleLimit = 1000
+  var sampleLimit = sampleArg
   var totalVotes = 
     { val v = new scala.collection.mutable.ArraySeq[Double](columns.length)
       for(col <- (0 until columns.size)){ v.update(col, 0.0) }
@@ -147,5 +148,35 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
 
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
     votes(idx).toList.map( x => (TypePrimitive(x._1), x._2)) ++ Seq( (TypePrimitive(TString()), defaultFrac) )
-
+  
+  //This progressive training iterates itself upon every ping of a thread, creating a new model to associate
+  //in the model manager.
+  var startSample = 1000
+  var nextSample = 2000
+  var total = 0
+  var completed = false
+  def progressiveTrain(db: Database, query:Operator) : Unit = {
+    if (total == 0) {total =  db.query(query.count(false, "countedData")) {results => results.toList.head(0).asInt}}
+    TimeUtils.monitor(s"Train $name progressively", TypeInferenceModel.logger.info(_)){
+      db.query(
+        Limit(startSample, Some(nextSample), Project(
+          columns.map( c => ProjectArg(c, Var(c)) ),
+          query
+        ))
+      ) { _.foreach { row => learn(row.tuple)  } }
+    }
+    TypeInferenceModel.logger.debug(s"VOTES(after a progressive iteration):${columns.zip(votes).map { col => "\n   "+col._1+": "+col._2.map { vote => "\n      "+vote._1+"->"+vote._2 }}}")
+    startSample = nextSample
+    nextSample = nextSample + 1000
+    if(startSample > total) {completed = true}
+    db.models.persist(this)
+  }
+   
+  def isCompleted(): Boolean = {
+    return completed == true
+  }
+  
+  def getQuery(): Operator = {query}
+  
+  def getNextSample(): Int = {nextSample}
 }
