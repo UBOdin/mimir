@@ -142,16 +142,26 @@ object Provenance extends LazyLogging {
         val (newQuery, rowIds) = compile(query)
         ( View(name, newQuery, meta + ViewAnnotation.PROVENANCE), rowIds)
 
+      case AdaptiveView(model, name, query, meta) => 
+        val (newQuery, rowIds) = compile(query)
+        ( AdaptiveView(model, name, newQuery, meta + ViewAnnotation.PROVENANCE), rowIds)
+
       case Table(name, alias, schema, meta) =>
         (
           Table(name, alias, schema, meta ++ List((rowidColnameBase, Var("ROWID"), TRowId()))),
           List(rowidColnameBase)
         )
 
-      case EmptyTable(schema) =>
+      case empty@HardTable(schema,Seq()) =>
         (
-          EmptyTable(schema),
+          empty,
           List()
+        )
+
+      case HardTable(sch,data) =>
+        (
+          HardTable(sch:+(rowidColnameBase,TRowId()), data.zipWithIndex.map(row => row._1:+ RowIdPrimitive(s"hardcoded${row._2}"))),
+          List(rowidColnameBase)
         )
 
       case Aggregate(groupBy, args, child) =>
@@ -303,6 +313,8 @@ object Provenance extends LazyLogging {
       // for now... drop the view and focus on the query itself.
       case View(_, query, _) => 
         doFilterForToken(query, rowIds, db)
+      case AdaptiveView(_, _, query, _) => 
+        doFilterForToken(query, rowIds, db)
 
       case Table(_,_, _, meta) =>
         meta.find( _._2.equals(Var("ROWID")) ) match {
@@ -320,8 +332,20 @@ object Provenance extends LazyLogging {
             throw new ProvenanceError("Operator not compiled for provenance: "+operator)
         }
 
-      case EmptyTable(sch) => None 
-
+      case HardTable(sch,Seq()) => None 
+  
+      case HardTable(sch,data) => {
+        val tupleMap = sch.toMap
+        val rowIdKeys = tupleMap.keySet & rowIds.keySet
+        if(rowIdKeys.forall { key => 
+          tupleMap(key).equals(rowIds(key))
+        }) {
+          Some(HardTable(sch, data))
+        } else {
+          None
+        }
+      }
+      
       case Aggregate(gbCols, aggCols, src) =>
         val sch = db.typechecker.schemaOf(src).toMap
 

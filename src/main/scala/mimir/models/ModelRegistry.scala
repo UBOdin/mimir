@@ -51,7 +51,7 @@ object ModelRegistry
    * operator: Select[ROWID = rowid](oper)
    */
   type ImputationConstructor = 
-    ((Database, String, List[String], Operator) => Map[String, (Model,Int,Seq[Expression])])
+    ((Database, String, Seq[String], Operator) => Map[String, (Model,Int,Seq[Expression])])
 
   /**
    * Factory method type for SchemaMatch model constructors
@@ -85,8 +85,8 @@ object ModelRegistry
   type SchemaMatchConstructor =
     ((Database, 
       String, 
-      Either[Operator,List[(String,Type)]],
-      Either[Operator,List[(String,Type)]]) => 
+      Either[Operator,Seq[(String,Type)]],
+      Either[Operator,Seq[(String,Type)]]) => 
         Map[String,(Model,Int)])
 
   /////////////////// PREDEFINED CONSTRUCTORS ///////////////////
@@ -98,7 +98,8 @@ object ModelRegistry
    * to add new models here.
    */
   val imputations = Map[String,ImputationConstructor](
-    "WEKA" -> (WekaModel.train _)
+    ("SPARKML" -> (SparkClassifierModel.train _)),
+    ("INTERPOLATE" -> (SeriesMissingValueModel.train _))
   )
 
   /**

@@ -14,6 +14,9 @@ class SampleResultIterator(
   extends ResultIterator
   with LazyLogging
 {
+  def annotationSchema = src.annotationSchema
+  override def schema = tupleSchema.filter(!annotationSchema.contains(_))
+  val rowidregex = "MIMIR_ROWID.*".r
   val lookup:Seq[Seq[(Int, Double)]] = 
     schema.map { case (name, t) =>
       if(nonDet(name)) {
@@ -21,12 +24,11 @@ class SampleResultIterator(
           src.schema.indexWhere(_._1.equals(s"MIMIR_SAMPLE_${i}_$name"))
         }.map { colIdx => (colIdx, 1.0 / numSamples) }
       } else {
-        Seq( (src.schema.indexWhere(_._1.equals(name)), 1.0) )
+        Seq( (src.schema.indexWhere(_._1.equals(name)), 1.0) ) 
       }
     }
   val worldBitsColumnIdx = src.schema.indexWhere(_._1.equals("MIMIR_WORLD_BITS"))
 
-  def annotationSchema = src.annotationSchema
 
   def close() = src.close()
   def hasNext() = src.hasNext()
@@ -41,7 +43,9 @@ case class SampleRow(input: Row, source: SampleResultIterator) extends Row
 
 
   private def values(v: Int): Seq[(PrimitiveValue, Double)] =
-    source.lookup(v).map { case (i, p) => (input(i), p) }
+    source.lookup(v).flatMap {
+      case (i, p) => Some((input(i), p))                         
+    }
 
   def tuple: Seq[PrimitiveValue] = 
     (0 until source.lookup.size).map { i => apply(i) }
@@ -50,7 +54,10 @@ case class SampleRow(input: Row, source: SampleResultIterator) extends Row
    * Return the most common value as the "default"
    */
   def apply(v: Int): PrimitiveValue = 
-    possibilities(v).toSeq.maxBy(_._2)._1
+    possibilities(v).toSeq match {
+      //case Seq() => NullPrimitive()
+      case x => x.maxBy(_._2)._1
+    }
 
   def deterministicCol(v: Int): Boolean = (source.lookup(v).size > 1)
   def deterministicRow(): Boolean = confidence() >= 1.0

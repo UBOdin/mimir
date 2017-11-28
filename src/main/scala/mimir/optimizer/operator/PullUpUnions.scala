@@ -4,7 +4,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
 import mimir.optimizer.OperatorOptimization
 
-object PullUpUnions extends OperatorOptimization with LazyLogging
+class PullUpUnions(typechecker: Typechecker) extends OperatorOptimization with LazyLogging
 {
   def decomposeAggregate(agg: AggFunction): Option[DecomposedAggregate] =
   {
@@ -37,7 +37,7 @@ object PullUpUnions extends OperatorOptimization with LazyLogging
       }
       case t: Table => Seq(t)
       case v: View => Seq(v)
-      case _: EmptyTable => Seq()
+      case HardTable(_,Seq()) => Seq()
       case _ => 
         Seq(o.recur(apply(_)))
     }
@@ -45,6 +45,12 @@ object PullUpUnions extends OperatorOptimization with LazyLogging
 
   def apply(o: Operator): Operator =
   {
-    OperatorUtils.makeUnion(pullOutUnions(o))
+    val pulled = pullOutUnions(o)
+    logger.trace(s"Apply: \n$o\n->\n$pulled")
+    if(!pulled.isEmpty){
+      OperatorUtils.makeUnion(pulled)
+    } else {
+      HardTable(typechecker.schemaOf(o),Seq())
+    }
   }
 }

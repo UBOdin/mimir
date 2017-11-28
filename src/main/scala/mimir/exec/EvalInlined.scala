@@ -65,7 +65,7 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
   def compileFunction(func: String, argExprs: Seq[Expression]): Compiled[PrimitiveValue] =
   {
     db.functions.get(func) match {
-      case NativeFunction(_, eval, _) => {
+      case NativeFunction(_, eval, _, _) => {
         val args = argExprs.map { compile(_) };
         { (t:T) => throwOnNull(eval(args.map { _(t) })) }
       }

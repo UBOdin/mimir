@@ -40,7 +40,7 @@ object TypeInferenceLens extends LazyLogging
         1000,
         query
       )
-    
+
     val columnIndexes = 
       modelColumns.zipWithIndex.toMap
 
@@ -65,7 +65,5 @@ object TypeInferenceLens extends LazyLogging
       Project(repairs, query),
       List(model)
     )
-    
   }
-  
 }

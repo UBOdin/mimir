@@ -179,6 +179,21 @@ class ModelManager(db:Database)
       StringPrimitive(owner)
     )).map(_(0).asString)
   }
+  
+  /**
+   * A get owner presently associated with a given model.
+   */
+  def modelOwner(model: String): Option[String] =
+  {
+    db.backend.resultRows(s"""
+      SELECT owner FROM $ownerTable WHERE model = ?
+    """, List(
+      StringPrimitive(model)
+    )).map(_(0).asString) match {
+      case Seq() => None
+      case seq:Seq[String] => Some(seq.head)
+    }
+  }
 
   /**
    * Prefetch a given model

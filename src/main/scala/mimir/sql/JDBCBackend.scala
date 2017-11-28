@@ -308,6 +308,10 @@ class JDBCBackend(val backend: String, val filename: String)
             case _ =>
               stmt.setTimestamp(i, JDBCUtils.convertTimestamp(t))
           }
+        case t:IntervalPrimitive  => 
+          backend match {
+            case _ => throw new SQLException(s"$backend does not support intervals in prepared statements")
+          }
         case r:RowIdPrimitive     => stmt.setString(i,r.v)
         case t:TypePrimitive      => stmt.setString(i, t.t.toString) 
         case BoolPrimitive(true)  => stmt.setInt(i, 1)
@@ -338,16 +342,45 @@ class JDBCBackend(val backend: String, val filename: String)
     backend match {
       case "sqlite" => {
         logger.warn("SQLITE has no programatic way to access attributes in SQL")
-        EmptyTable(Seq(
+        HardTable(Seq(
           ("TABLE_NAME", TString()), 
           ("ATTR_NAME", TString()),
           ("ATTR_TYPE", TString()),
           ("IS_KEY", TBool())
-        ));
+        ),Seq());
       }
 
       case "oracle" => ???
     }
+  }
+  
+  def insertAndReturnKey(insertSql:String,  args: Seq[PrimitiveValue]) : Long = {
+    try {
+        this.synchronized({
+          if(conn == null) 
+            throw new SQLException("Trying to use unopened connection!")
+          val stmt = conn.prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS);
+          setArgs(stmt, args)                             
+          val affectedRows = stmt.executeUpdate();
+          if (affectedRows == 0) 
+              throw new SQLException("Insert did not generate any rows.");
+          val generatedKey = try{
+            val generatedKeys = stmt.getGeneratedKeys() 
+            if (generatedKeys.next())
+                generatedKeys.getLong(1)
+            else 
+                throw new SQLException("No Key Returned.");
+          } catch { 
+            case e: SQLException => println(e.toString+"during\n"+insertSql+" <- "+args)
+            throw new SQLException("Error", e)
+          }
+          stmt.close()
+          generatedKey
+        })
+    } catch { 
+        case e: SQLException => println(e.toString+"during\n"+insertSql+" <- "+args)
+          throw new SQLException("Error", e)
+      }
   }
   
 }

@@ -38,7 +38,7 @@ object TypeInferenceModel
   }
 }
 
-@SerialVersionUID(1000L)
+@SerialVersionUID(1001L)
 class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac: Double, sampleArg: Int, query: Operator)
   extends Model(name)
   with DataIndependentFeedback
@@ -59,7 +59,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
 
   def train(db: Database, query: Operator) =
   {
-    TimeUtils.monitor(s"Train $name", TypeInferenceModel.logger.info(_)){
+    Timer.monitor(s"Train $name", TypeInferenceModel.logger.info(_)){
       db.query(
         Limit(0, Some(sampleLimit), Project(
           columns.map( c => ProjectArg(c, Var(c)) ),
@@ -109,7 +109,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
 
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
   {
-    choices.get(idx) match {
+    choices(idx) match {
       case None => {
         val guess = voteList(idx).maxBy( rankFn _ )._1
         TypePrimitive(guess)
@@ -123,7 +123,7 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
 
 
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = {
-    choices.get(idx) match {
+    choices(idx) match {
       case None => {
         val (guess, guessVotes) = voteList(idx).maxBy( rankFn _ )
         val defaultPct = (defaultFrac * 100).toInt
@@ -142,12 +142,22 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
       }
       case Some(t) =>
         val typeStr = Cast(TType(), t).toString.toUpperCase
-        s"You told me that $name.${columns(idx)} was of type $typeStr"
+        s"${getReasonWho(idx,args)} told me that $name.${columns(idx)} was of type $typeStr"
     }
   }
 
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
     votes(idx).toList.map( x => (TypePrimitive(x._1), x._2)) ++ Seq( (TypePrimitive(TString()), defaultFrac) )
+  def isPerfectGuess(idx: Int): Boolean =
+  {
+    voteList(idx).map( _._2 ).max >= totalVotes(idx)
+  }
+
+  override def isAcknowledged(idx: Int, args: Seq[PrimitiveValue]): Boolean =
+  {
+    super.isAcknowledged(idx, args) || isPerfectGuess(idx)
+  }
+  
   
   //This progressive training iterates itself upon every ping of a thread, creating a new model to associate
   //in the model manager.

@@ -1,5 +1,7 @@
 package mimir.ctables
 
+import com.typesafe.scalalogging.slf4j.LazyLogging
+
 import mimir.Database
 import mimir.algebra._
 import mimir.models._
@@ -77,9 +79,11 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
 }
 
 object ReasonSet
+  extends LazyLogging
 {
   def make(vgterm: VGTerm, db: Database, input: Operator): ReasonSet =
   {
+    logger.debug(s"Make ReasonSet for $vgterm from\n$input")
     if(vgterm.args.isEmpty){
       return new ReasonSet(
         db.models.get(vgterm.name),
@@ -98,5 +102,4 @@ object ReasonSet
       )
     }
   }
-
 }

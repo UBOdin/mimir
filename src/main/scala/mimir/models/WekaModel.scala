@@ -7,7 +7,7 @@ import com.typesafe.scalalogging.slf4j.Logger
 
 import mimir.algebra._
 import mimir.ctables._
-import mimir.util.{RandUtils,TextUtils,TimeUtils}
+import mimir.util.{RandUtils,TextUtils,Timer}
 import mimir.{Analysis, Database}
 import moa.core.InstancesHeader
 import weka.core.{Attribute, DenseInstance, Instance, Instances}
@@ -77,17 +77,17 @@ object WekaModel
   }
 }
 
-@SerialVersionUID(1000L)
+@SerialVersionUID(1001L)
 class SimpleWekaModel(name: String, colName: String, query: Operator)
   extends Model(name) 
   with NeedsReconnectToDatabase 
+  with SourcedFeedback
 {
   var numSamples = 0
   var numCorrect = 0
   val colIdx:Int = query.columnNames.indexOf(colName)
   var attributeMeta: java.util.ArrayList[Attribute] = null
-  val feedback = scala.collection.mutable.Map[String,PrimitiveValue]()
-
+  
   /**
    * The actual Weka model itself.  @SimpleWekaModel is just a wrapper around a 
    * Weka @Classifier object.  Due to silliness in Weka, @Classifier itself is not
@@ -115,6 +115,8 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
    */
   @transient var db: Database = null
 
+  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = args(0).asString
+ 
   def rowToInstance(row: Seq[PrimitiveValue], dataset: Instances): DenseInstance =
   {
     val instance = new DenseInstance(row.size)
@@ -153,7 +155,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
   def train(db:Database)
   {
     this.db = db
-    TimeUtils.monitor(s"Train $name.$colName", WekaModel.logger.info(_)){
+    Timer.monitor(s"Train $name.$colName", WekaModel.logger.info(_)){
       val trainingQuery = Limit(0, Some(WekaModel.TRAINING_LIMIT), query)
       WekaModel.logger.debug(s"TRAINING ON: \n$trainingQuery")
       db.query(trainingQuery) { iterator => 
@@ -184,12 +186,11 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
   
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
   {
-    val rowid = args(0).asString
-    feedback(rowid) = v
+    setFeedback(idx, args, v)
   }
 
   def isAcknowledged(idx: Int, args: Seq[PrimitiveValue]): Boolean =
-    feedback contains(args(0).asString)
+    hasFeedback(idx, args)
 
   /**
    * Improve the model with one single data point
@@ -251,7 +252,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
   {
     val rowid = RowIdPrimitive(args(0).asString)
-    feedback.get(rowid.asString) match {
+    getFeedback(idx, args) match {
       case Some(v) => v
       case None => 
         val classes = classify(rowid, hints)
@@ -276,9 +277,9 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = 
   {
     val rowid = RowIdPrimitive(args(0).asString)
-    feedback.get(rowid.asString) match {
+    getFeedback(idx, args) match {
       case Some(v) =>
-        s"You told me that $name.$colName = $v on row $rowid"
+        s"${getReasonWho(idx,args)} told me that $name.$colName = $v on row $rowid"
       case None => 
         val classes = classify(rowid.asInstanceOf[RowIdPrimitive], hints)
         val total:Double = classes.map(_._1).fold(0.0)(_+_)

@@ -530,7 +530,37 @@ object CTPercolator
           Var(mimirRowDeterministicColumnName)
         )
       }
-      case EmptyTable(sch) => {
+      case v @ AdaptiveView(model, name, query, metadata) => { 
+        // Oliver:
+        //   I'm on the fence about whether we want to treat this case as being different from default views.
+        //   In principle, we want to decide whether any of the attributes or the table itself are NonDet and
+        //   to tag the relevant columns/rows here.  However, this has the side effect of tagging *every* row 
+        //   with non-determinsm.  However, as described in issue #165
+        //    > https://github.com/UBOdin/mimir/issues/165
+        //   this may not be the interface that we're looking for.  Table-wide annotations should *really* 
+        //   be added through some other vector (e.g., labeling column headers or somesuch)
+        //
+        //   For now, I'm just going to leave adaptive views to operate like they would otherwise operate.
+        //   As soon as it becomes appropriate to start tagging things... then see 
+        //   CTExplainer.explainSubsetWithoutOptimizing for an idea of how to implement this correctly.
+        val (newQuery, colDeterminism, rowDeterminism) = percolateLite(query, models)
+        val columns = query.columnNames
+
+        val inlinedQuery = 
+          Project(
+            columns.map { col => ProjectArg(col, Var(col)) } ++
+            columns.map { col => ProjectArg(mimirColDeterministicColumnPrefix+col, colDeterminism(col)) } ++
+            Seq( ProjectArg(mimirRowDeterministicColumnName, rowDeterminism) ),
+            newQuery
+          )
+        (
+          AdaptiveView(model, name, inlinedQuery, metadata + ViewAnnotation.TAINT),
+          columns.map { col => (col -> Var(mimirColDeterministicColumnPrefix+col)) }.toMap,
+          Var(mimirRowDeterministicColumnName)
+        )
+      }
+
+      case HardTable(sch,_) => {
         return (oper, 
           // All columns are deterministic
           sch.map(_._1).map((_, BoolPrimitive(true)) ).toMap,
@@ -538,6 +568,7 @@ object CTPercolator
           BoolPrimitive(true)
         )
       }
+ 
 
       // This is a bit hackish... Sort alone doesn't affect determinism
       // metadata, and Limit doesn't either, but combine the two and you get some
@@ -555,5 +586,10 @@ object CTPercolator
       case _:LeftOuterJoin =>
         throw new RAException("Don't know how to percolate a left-outer-join")
     }
+  }
+  
+  def percolateGProM(oper: Operator): (Operator, Map[String,Expression], Expression) =
+  {
+    mimir.gprom.algebra.OperatorTranslation.compileTaintWithGProM(oper)
   }
 }

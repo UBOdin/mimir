@@ -47,8 +47,8 @@ object DecomposeAggregates extends LazyLogging
     o match {
       case Aggregate(gbCols, aggFns, src) => 
       {
-        PullUpUnions.pullOutUnions(src) match {
-          case Seq() => return EmptyTable(typechecker.schemaOf(o))
+        (new PullUpUnions(typechecker)).pullOutUnions(src) match {
+          case Seq() => return HardTable(typechecker.schemaOf(o),Seq())
           case Seq(noUnions) => 
             // No unions... just a single sub node.  Return the aggregate as-is
             Aggregate(gbCols, aggFns, noUnions)

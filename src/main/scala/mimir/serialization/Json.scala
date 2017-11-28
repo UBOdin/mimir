@@ -86,15 +86,25 @@ object Json
             })
         ))
 
-      case EmptyTable(schema) => 
+      case HardTable(schema,data) => 
         JsObject(Map[String, JsValue](
-          "type" -> JsString("table_empty"),
-          "schema" -> ofSchema(schema)
+          "type" -> JsString("table_hardocded"),
+          "schema" -> ofSchema(schema),
+          "data" -> JsArray(data.map( row => JsArray( row.map( hv => ofExpression(hv)))))
         ))
 
       case View(name, query, annotations) => 
         JsObject(Map[String,JsValue](
           "type" -> JsString("table_view"),
+          "name" -> JsString(name),
+          "query" -> ofOperator(query),
+          "annotations" -> JsArray(annotations.toSeq.map { _.toString }.map { JsString(_) })
+        ))
+
+      case AdaptiveView(model, name, query, annotations) => 
+        JsObject(Map[String,JsValue](
+          "type" -> JsString("table_adaptive"),
+          "model" -> JsString(model),
           "name" -> JsString(name),
           "query" -> ofOperator(query),
           "annotations" -> JsArray(annotations.toSeq.map { _.toString }.map { JsString(_) })
@@ -163,19 +173,19 @@ object Json
   }
   def toOperator(json: JsValue): Operator = 
   {
-    val elems = json.as[JsObject].value
-    elems("type").as[JsString].value match {
+    val elems = json.asInstanceOf[JsObject].value// .asInstanceOf[JsObject].value
+    elems("type").asInstanceOf[JsString].value match {
       case "aggregate" =>
         Aggregate(
-          elems("gb_columns").as[JsArray].value.map { toExpression(_).asInstanceOf[Var] },
-          elems("agg_columns").as[JsArray].value.map { fieldJson => 
-            val fields = fieldJson.as[JsObject].value
+          elems("gb_columns").asInstanceOf[JsArray].value.map { toExpression(_).asInstanceOf[Var] },
+          elems("agg_columns").asInstanceOf[JsArray].value.map { fieldJson => 
+            val fields = fieldJson.asInstanceOf[JsObject].value
 
             AggFunction(
-              fields("function").as[JsString].value,
-              fields("distinct").as[JsBoolean].value,
-              fields("args").as[JsArray].value.map { toExpression(_) },
-              fields("alias").as[JsString].value
+              fields("function").asInstanceOf[JsString].value,
+              fields("distinct").asInstanceOf[JsBoolean].value,
+              fields("args").asInstanceOf[JsArray].value.map { toExpression(_) },
+              fields("alias").asInstanceOf[JsString].value
             )
           },
           toOperator(elems("source"))
@@ -183,9 +193,9 @@ object Json
       case "annotate" =>
         Annotate(
           toOperator(elems("source")),
-          elems("annotations").as[JsArray].value.map( annot => {
-            val nameAnnot = annot.as[JsObject].value
-            ( nameAnnot("name").as[JsString].value, toAnnotation( nameAnnot("annotation").as[JsObject]) ) 
+          elems("annotations").asInstanceOf[JsArray].value.map( annot => {
+            val nameAnnot = annot.asInstanceOf[JsObject].value
+            ( nameAnnot("name").asInstanceOf[JsString].value, toAnnotation( nameAnnot("annotation").asInstanceOf[JsObject]) ) 
             })
         )
       case "join" =>
@@ -215,11 +225,11 @@ object Json
         )
       case "project" =>
         Project(
-          elems("columns").as[JsArray].value.map { fieldJson =>
-            val fields = fieldJson.as[JsObject].value
+          elems("columns").asInstanceOf[JsArray].value.map { fieldJson =>
+            val fields = fieldJson.asInstanceOf[JsObject].value
 
             ProjectArg(
-              fields("name").as[JsString].value,
+              fields("name").asInstanceOf[JsString].value,
               toExpression(fields("expression"))
             )
           },
@@ -227,12 +237,12 @@ object Json
         )
       case "sort" =>
         Sort(
-          elems("sort_by").as[JsArray].value.map { fieldJson =>
-            val fields = fieldJson.as[JsObject].value
+          elems("sort_by").asInstanceOf[JsArray].value.map { fieldJson =>
+            val fields = fieldJson.asInstanceOf[JsObject].value
 
             SortColumn(
               toExpression(fields("sort_by")),
-              fields("ascending").as[JsBoolean].value
+              fields("ascending").asInstanceOf[JsBoolean].value
             )
           },
           toOperator(elems("source"))
@@ -242,19 +252,25 @@ object Json
           toExpression(elems("condition")),
           toOperator(elems("source"))
         )
-      case "table_empty" =>
-        EmptyTable(toSchema(elems("schema")))
-
+      case "table_hardcoded" =>
+        val schema = toSchema(elems("schema"))
+        HardTable(
+          schema,
+          elems("data").as[JsArray].value.map { rowJS =>
+            rowJS.as[JsArray].value.zipWithIndex.map { vJS => toPrimitive(schema(vJS._2)._2, vJS._1) }
+          }
+        )
+        
       case "table_normal" =>
         Table(
-          elems("table").as[JsString].value, 
-          elems("alias").as[JsString].value,
+          elems("table").asInstanceOf[JsString].value, 
+          elems("alias").asInstanceOf[JsString].value,
           toSchema(elems("schema")),
-          elems("metadata").as[JsArray].value.map { metaJson =>
-            val meta = metaJson.as[JsObject].value
+          elems("metadata").asInstanceOf[JsArray].value.map { metaJson =>
+            val meta = metaJson.asInstanceOf[JsObject].value
 
             (
-              meta("alias").as[JsString].value,
+              meta("alias").asInstanceOf[JsString].value,
               toExpression(meta("value")),
               toType(meta("type"))
             )
@@ -262,10 +278,19 @@ object Json
         )
       case "table_view" =>
         View(
-          elems("name").as[JsString].value,
+          elems("name").asInstanceOf[JsString].value,
           toOperator(elems("query")),
-          elems("annotations").as[JsArray].value.map { annot =>
-            ViewAnnotation.withName(annot.as[JsString].value)
+          elems("annotations").asInstanceOf[JsArray].value.map { annot =>
+            ViewAnnotation.withName(annot.asInstanceOf[JsString].value)
+          }.toSet
+        )
+      case "table_adaptive" =>
+        AdaptiveView(
+          elems("model").asInstanceOf[JsString].value,
+          elems("name").asInstanceOf[JsString].value,
+          toOperator(elems("query")),
+          elems("annotations").asInstanceOf[JsArray].value.map { annot =>
+            ViewAnnotation.withName(annot.asInstanceOf[JsString].value)
           }.toSet
         )
       case "union" =>
@@ -286,10 +311,10 @@ object Json
     ))
   def toAnnotation(json: JsValue): AnnotateArg = 
   {
-    val fields = json.as[JsObject].value
+    val fields = json.asInstanceOf[JsObject].value
     AnnotateArg(
       toAnnotationType(fields("annotation_type")),
-      fields("name").as[JsString].value,
+      fields("name").asInstanceOf[JsString].value,
       toType(fields("type")),
       toExpression(fields("expression"))
     )
@@ -380,19 +405,19 @@ object Json
   }
   def toExpression(json: JsValue): Expression = 
   {
-    val fields = json.as[JsObject].value
-    fields("type").as[JsString].value match {
+    val fields = json.asInstanceOf[JsObject].value
+    fields("type").asInstanceOf[JsString].value match {
 
       case "arithmetic" => 
         Arithmetic(
-          Arith.withName(fields("op").as[JsString].value),
+          Arith.withName(fields("op").asInstanceOf[JsString].value),
           toExpression(fields("left")),
           toExpression(fields("right"))
         )
 
       case "comparison" => 
         Comparison(
-          Cmp.withName(fields("op").as[JsString].value),
+          Cmp.withName(fields("op").asInstanceOf[JsString].value),
           toExpression(fields("left")),
           toExpression(fields("right"))
         )
@@ -406,7 +431,7 @@ object Json
 
       case "function" => 
         Function(
-          fields("name").as[JsString].value,
+          fields("name").asInstanceOf[JsString].value,
           toExpressionList(fields("args"))
         )
 
@@ -420,15 +445,15 @@ object Json
         JDBCVar(toType(fields("var_type")))
       
       case "var" =>
-        Var(fields("name").as[JsString].value)
+        Var(fields("name").asInstanceOf[JsString].value)
 
       case "rowid_var" =>
         RowIdVar()
 
       case "vgterm" =>
         VGTerm(
-          fields("model").as[JsString].value,
-          fields("var_index").as[JsNumber].value.toLong.toInt,
+          fields("model").asInstanceOf[JsString].value,
+          fields("var_index").asInstanceOf[JsNumber].value.toLong.toInt,
           toExpressionList(fields("arguments")),
           toExpressionList(fields("hints"))
         )
@@ -443,17 +468,17 @@ object Json
   def ofExpressionList(e: Seq[Expression]): JsArray = 
     JsArray(e.map { ofExpression(_) })
   def toExpressionList(json: JsValue): Seq[Expression] = 
-    json.as[JsArray].value.map { toExpression(_) }
+    json.asInstanceOf[JsArray].value.map { toExpression(_) }
 
   def ofSchema(schema: Seq[(String,Type)]): JsArray = 
     JsArray(schema.map { case (name, t) =>
       JsObject(Map("name" -> JsString(name), "type" -> ofType(t)))
     })
   def toSchema(json: JsValue): Seq[(String,Type)] = 
-    json.as[JsArray].value.map { elem => 
-      val fields = elem.as[JsObject].value
+    json.asInstanceOf[JsArray].value.map { elem => 
+      val fields = elem.asInstanceOf[JsObject].value
       (
-        fields("name").as[JsString].value,
+        fields("name").asInstanceOf[JsString].value,
         toType(fields("type"))
       )
     }
@@ -462,13 +487,13 @@ object Json
     JsString(at.toString())
 
   def toAnnotationType(json: JsValue): ViewAnnotation.T = 
-    ViewAnnotation.withName(json.as[JsString].value)
+    ViewAnnotation.withName(json.asInstanceOf[JsString].value)
     
   def ofType(t: Type): JsValue = 
     JsString(Type.toString(t))
 
   def toType(json: JsValue): Type = 
-    Type.fromString(json.as[JsString].value)
+    Type.fromString(json.asInstanceOf[JsString].value)
 
   def ofPrimitive(p: PrimitiveValue): JsValue =
   {

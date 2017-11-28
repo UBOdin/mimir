@@ -29,11 +29,11 @@ class Compiler(db: Database) extends LazyLogging {
       ProjectRedundantColumns,
       InlineProjections,
       PushdownSelections,
-      new PropagateEmptyViews(db.typechecker),
+      new PropagateEmptyViews(db.typechecker, db.aggregates),
       PropagateConditions,
       new OptimizeExpressions(optimize(_:Expression)),
       PartitionUncertainJoins,
-      PullUpUnions
+      new PullUpUnions(db.typechecker)
     )
 
   def expressionOptimizations: Seq[ExpressionOptimizerRule] =
@@ -68,7 +68,7 @@ class Compiler(db: Database) extends LazyLogging {
 
     // Run a final typecheck to check the sanitity of the rewrite rules
     val schema = db.typechecker.schemaOf(oper)
-    logger.debug(s"SCHEMA: $schema.mkString(", ")")
+    logger.debug(s"SCHEMA: ${schema.mkString(", ")}")
 
     // Strip off the final projection operator
     val extracted = OperatorUtils.extractProjections(oper)

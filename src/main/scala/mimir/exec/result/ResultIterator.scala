@@ -14,6 +14,8 @@ trait ResultIterator
   lazy val annotationsLookup: Map[String, (Int, Type)] = 
     annotationSchema.zipWithIndex.map { case ((name, t), idx) => (name -> (idx, t)) }.toMap
 
+  def hasAnnotation(annotation: String): Boolean = annotationsLookup contains annotation;
+
   def getTupleIdx(name: String): Int = schemaLookup(name)._1
   def getAnnotationIdx(name: String): Int = annotationsLookup(name)._1
 
@@ -28,4 +30,6 @@ trait ResultIterator
     new ResultSeq(super.toIndexedSeq, tupleSchema, annotationSchema)
   override def toList: List[Row] = 
     this.toIndexedSeq.toList
+
+  def tuples = map { _.tuple }.toIndexedSeq
 }

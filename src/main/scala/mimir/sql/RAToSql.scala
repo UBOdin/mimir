@@ -110,10 +110,19 @@ class RAToSql(db: Database)
         return union
       }
 
-      case EmptyTable(_) => {
-        throw new SQLException(s"Error, can't compile an empty table!\n$oper")
+      case HardTable(_,Seq()) => return makePlainSelect(oper) 
+      case HardTable(schema,Seq(tuple:Seq[PrimitiveValue])) => return makePlainSelect(oper)
+      
+      case HardTable(schema,data) => {
+        var union = new net.sf.jsqlparser.statement.select.Union()
+        union.setAll(true);
+        union.setDistinct(false);
+        union.setPlainSelects(
+          data.map(row => makePlainSelect(HardTable(schema,Seq(row))))
+        )
+        return union
       }
-
+      
       case _ => 
         return makePlainSelect(oper)
     }
@@ -422,7 +431,46 @@ class RAToSql(db: Database)
           (BoolPrimitive(true), Seq(makeSubSelect(standardizeTables(oper))))
         }
 
+        case HardTable(schema,Seq()) => { //EmptyTable
+        val singleton = new SubSelect()
+        val body = new SingletonSelect()
+        singleton.setSelectBody(body)
+        singleton.setAlias("SINGLETON")
+        body.setSelectItems(
+          schema.map { case (name, t) =>
+            val sei = new SelectExpressionItem()
+            sei.setAlias(name)
+            sei.setExpression(convert(mimir.algebra.Function("CAST", Seq(NullPrimitive(), TypePrimitive(t)))))
+            sei
+          }.toList
+        )
+        body.setWhere(convert(BoolPrimitive(false)))
+        // might need to do something to play nice with oracle here like setFromItem(new Table(null, "dual"))
+        (BoolPrimitive(true), Seq(singleton))
+      }
+        
+      case HardTable(schema,Seq(tuple:Seq[PrimitiveValue])) => {
+        val singleton = new SubSelect()
+        val body = new SingletonSelect()
+        singleton.setSelectBody(body)
+        singleton.setAlias("SINGLETON")
+        body.setSelectItems(
+          schema.unzip._1.zip(tuple).map { case (name, v) =>
+            val sei = new SelectExpressionItem()
+            sei.setAlias(name)
+            sei.setExpression(convert(v))
+            sei
+          }.toList
+        )
+        // might need to do something to play nice with oracle here like setFromItem(new Table(null, "dual"))
+        (BoolPrimitive(true), Seq(singleton))
+      }
+
       case View(name, query, annotations) => 
+        logger.warn("Inlined view when constructing SQL: RAToSQL will not use materialized views")
+        extractSelectsAndJoins(query)
+
+      case AdaptiveView(schema, name, query, annotations) => 
         logger.warn("Inlined view when constructing SQL: RAToSQL will not use materialized views")
         extractSelectsAndJoins(query)
 
@@ -515,6 +563,7 @@ class RAToSql(db: Database)
       case StringPrimitive(v) => new StringValue(v)
       case FloatPrimitive(v) => new DoubleValue(""+v)
       case RowIdPrimitive(v) => new StringValue(v)
+      case TypePrimitive(t) => new StringValue(t.toString())
       case BoolPrimitive(true) =>
         bin(new EqualsTo(), IntPrimitive(1), IntPrimitive(1))
       case BoolPrimitive(false) =>

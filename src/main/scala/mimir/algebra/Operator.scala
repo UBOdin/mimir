@@ -326,26 +326,28 @@ case class Table(name: String,
   def columnNames = sch.map(_._1) ++ metadata.map(_._1)
 }
 
+
 /**
- * A blank table --- Corresponds roughly to a
- * SELECT ... FROM ... WHERE FALSE.
+ * A table with exactly one row --- Corresponds roughly to a
+ * SELECT ... 
+ * That is, a SELECT with no FROM clause, or in Oracle:
+ * SELECT ... FROM dual
  * 
  * Not really used, just a placeholder for intermediate optimization.
  */
 @SerialVersionUID(100L)
-case class EmptyTable(sch: Seq[(String, Type)])
+case class HardTable(schema: Seq[(String, Type)], data: Seq[Seq[PrimitiveValue]])
   extends Operator
 {
-    def toString(prefix: String) =
-    prefix + "!!EMPTY!!(" + (
-      sch.map( { case (v,t) => v+":"+t } ).mkString(", ") 
-    )+")" 
-  def children: List[Operator] = List()
+  def toString(prefix: String) =
+    prefix + "< " + ( schema.map { case (name, v) => name+": "+v.toString }.mkString(", ") ) + " >"
+  def children: Seq[Operator] = Seq()
   def rebuild(x: Seq[Operator]) = this
   def expressions = List()
   def rebuildExpressions(x: Seq[Expression]) = this
-  def columnNames = sch.map(_._1)
+  def columnNames = schema.map(_._1)
 }
+
 
 /**
  * A single sort directive
@@ -431,7 +433,7 @@ case class LeftOuterJoin(left: Operator,
 }
 
 /**
- * A materialized view
+ * A (maybe materialized) view
  *
  * When initialized by RAToSql, the query field will contain the raw unmodified 
  * query that the view was instantiated with.  As the view goes through compilation,
@@ -449,5 +451,27 @@ case class View(name: String, query: Operator, annotations: Set[ViewAnnotation.T
   def rebuildExpressions(x: Seq[Expression]): Operator = this
   def toString(prefix: String): String = 
     s"$prefix$name[${annotations.mkString(", ")}] := (\n${query.toString(prefix+"   ")}\n$prefix)"
+  def columnNames = query.columnNames
+}
+
+/**
+ * A view defined by an adaptive schema
+ *
+ * When initialized by RAToSql, the query field will contain the raw unmodified 
+ * query that the view was instantiated with.  As the view goes through compilation,
+ * the nested query will be modified; The metadata field tracks which forms of 
+ * compilation have been applied to it, so that the system can decide whether it has
+ * an appropriate materialized form of the view ready.
+ */
+@SerialVersionUID(100L)
+case class AdaptiveView(schema: String, name: String, query: Operator, annotations: Set[ViewAnnotation.T] = Set())
+  extends Operator
+{
+  def children: Seq[Operator] = Seq(query)
+  def expressions: Seq[Expression] = Seq()
+  def rebuild(c: Seq[Operator]): Operator = AdaptiveView(schema, name, c(0), annotations)
+  def rebuildExpressions(x: Seq[Expression]): Operator = this
+  def toString(prefix: String): String = 
+    s"$prefix$schema.$name[${annotations.mkString(", ")}] := (\n${query.toString(prefix+"   ")}\n$prefix)"
   def columnNames = query.columnNames
 }

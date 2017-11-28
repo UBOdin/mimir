@@ -1,6 +1,7 @@
 package mimir.util;
 
-import java.sql._;
+import java.io.{FileReader, Reader, StringReader}
+import java.sql._
 
 import net.sf.jsqlparser.statement.select._
 import net.sf.jsqlparser.schema._
@@ -9,11 +10,29 @@ import net.sf.jsqlparser.expression.operators.conditional._
 import net.sf.jsqlparser.expression.operators.relational._
 
 import scala.collection.JavaConversions._
-
 import mimir.context._
 import mimir.Database
+import mimir.Mimir.db
+import mimir.algebra.Operator
+import mimir.parser.MimirJSqlParser
+import net.sf.jsqlparser.statement.Statement
 
 object SqlUtils {
+
+  // Converts a string that is plainSelect
+  def plainSelectStringtoOperator(db:Database, s:String): Operator = {
+    val source: Reader = new StringReader(s)
+    var parser = new MimirJSqlParser(source);
+    val stmt: Statement = parser.Statement();
+
+    var sel:Select = null
+    stmt match {
+      case s:  Select     => sel = s
+      case _ => throw new Exception("Not of type PlainSelect")
+    }
+
+    db.sql.convert(sel)
+  }
 
   def canonicalizeIdentifier(id: String): String =
   {

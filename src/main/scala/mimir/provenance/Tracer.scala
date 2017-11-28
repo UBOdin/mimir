@@ -109,6 +109,8 @@ object Tracer {
 
       case View(_, query, _) => 
         trace(query, targetRowId)
+      case AdaptiveView(_, _, query, _) => 
+        trace(query, targetRowId)
 
       case Table(name, alias, schema, meta) =>
         val targetFilter = 
@@ -126,17 +128,33 @@ object Tracer {
           BoolPrimitive(true)
         )
 
-      case EmptyTable(schema) => 
+      case ht@HardTable(schema,Seq()) => 
         ( 
-          EmptyTable(schema),
+          ht,
           schema.map(_._1).map(
             col => (col, Var(col))
           ).toMap,
           BoolPrimitive(true)
         )
+        
+      case HardTable(schema, data) => {
+        val tupleMap = schema.toMap
+        val rowIdKeys = tupleMap.keySet & targetRowId.keySet
+        (
+          if(rowIdKeys.forall { key => 
+            tupleMap(key).equals(targetRowId(key))
+          }) {
+            HardTable(schema, data)
+          } else {
+            HardTable(schema, Seq())
+          },
+          schema.map { case (name, _) => (name, Var(name)) }.toMap,
+          BoolPrimitive(true)
+        )
+      }
 
-      case Sort(_, src) => return trace(oper, targetRowId)
-      case Limit(_, _, src) => return trace(oper, targetRowId)
+      case Sort(_, src) => return trace(src, targetRowId)
+      case Limit(_, _, src) => return trace(src, targetRowId)
 
       case _:LeftOuterJoin => 
         throw new RAException("Tracer can't handle left outer joins")

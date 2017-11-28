@@ -66,7 +66,7 @@ trait OperatorConstructors
   {
     val renamings = targets.toMap
     map(toOperator.columnNames.map { 
-      case name if targets contains name => (name, Var(renamings(name))) 
+      case name if renamings contains name => (renamings(name), Var(name)) 
       case name => (name, Var(name))
     }:_*)
   }
@@ -100,6 +100,25 @@ trait OperatorConstructors
       base
     )
   }
+
+  def aggregateParsed(agg: (String, String)*): Operator =
+    groupByParsed()(agg:_*)
+
+  def aggregate(agg: AggFunction*): Operator =
+    groupBy()(agg:_*)
+
+  def groupByParsed(gb: String*)(agg: (String, String)*): Operator =
+    groupBy(gb.map { Var(_) }:_*)(
+      agg.map { case (alias, fnExpr) => 
+        val fn = ExpressionParser.function(fnExpr)
+        AggFunction(fn.op, false, fn.params, alias)
+      }:_*)
+
+  def groupBy(gb: Var*)(agg: AggFunction*): Operator =
+  {
+    Aggregate(gb, agg, toOperator)
+  }
+
 
   def count(distinct: Boolean = false, alias: String = "COUNT"): Operator =
   {

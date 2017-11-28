@@ -37,6 +37,7 @@ object JDBCUtils {
       case TAny()       => java.sql.Types.VARCHAR
       case TBool()      => java.sql.Types.INTEGER
       case TType()      => java.sql.Types.VARCHAR
+      case TInterval()  => java.sql.Types.VARCHAR
       case TUser(t)     => convertMimirType(TypeRegistry.baseType(t))
     }
   }
@@ -53,7 +54,7 @@ object JDBCUtils {
     }
 
     t match {
-      case TAny() =>        throw new SQLException("Can't extract TAny")
+      case TAny() =>        throw new SQLException(s"Can't extract TAny: $field")
       case TFloat() =>      (r) => checkNull(r, { FloatPrimitive(r.getDouble(field)) })
       case TInt() =>        (r) => checkNull(r, { IntPrimitive(r.getLong(field)) })
       case TString() =>     (r) => checkNull(r, { StringPrimitive(r.getString(field)) })
@@ -66,13 +67,7 @@ object JDBCUtils {
           case TString() => (r) => { 
               val d = r.getString(field)
               if(d == null){ NullPrimitive() } 
-              else { 
-                try {
-                  convertDate(Date.valueOf(d))
-                } catch { 
-                  case _:IllegalArgumentException => NullPrimitive()
-                }
-              }
+              else { TextUtils.parseDate(d) }
             }
           case _ =>         throw new SQLException(s"Can't extract TDate as $dateType")
         }
@@ -86,17 +81,12 @@ object JDBCUtils {
           case TString() => (r) => {
               val t = r.getString(field)
               if(t == null){ NullPrimitive() }
-              else {
-                try {
-                  convertTimestamp(Timestamp.valueOf(t))
-                } catch { 
-                  case _:IllegalArgumentException => NullPrimitive()
-                }
-              }
+              else { TextUtils.parseTimestamp(t) }
             }
           case _ =>         throw new SQLException(s"Can't extract TTimestamp as $dateType")
 
         }
+      case TInterval() => (r) => { TextUtils.parseInterval(r.getString(field)) }
       case TUser(t) => convertFunction(TypeRegistry.baseType(t), field, dateType)
     }
   }

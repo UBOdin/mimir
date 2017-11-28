@@ -61,3 +61,10 @@ case class RepairByType(t: Type)
     s"< ${tString} >"
   }
 }
+
+case class ModerationRepair(userRepairedValue:String) 
+  extends Repair 
+{
+  def toJSON: String = JSONBuilder.dict(Map( "value" -> userRepairedValue))
+  def exampleString: String = s"< $userRepairedValue >"
+}

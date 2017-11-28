@@ -9,7 +9,7 @@
   
   <!--+++++++++++++++++++++  Mimir Root  ++++++++++++++++++++++-->
   <logger name="mimir.Database"                                    level="WARN"/>
-  <logger name="mimir.Mimir$"                                      level="WARN"/>
+  <logger name="mimir.Mimir$"                                      level="TRACE"/>
 
   <!--++++++++++++++++++  Adaptive Schemas  +++++++++++++++++++-->
   <logger name="mimir.adaptive.DiscalaAbadiNormalizer$"            level="WARN"/>
@@ -18,10 +18,12 @@
   <logger name="mimir.algebra.ExpressionChecker"                   level="WARN"/>
   <logger name="mimir.algebra.OperatorUtils"                       level="WARN"/>
   <logger name="mimir.algebra.Typechecker"                         level="WARN"/>
+  <logger name="mimir.algebra.Typechecker$"                        level="WARN"/>
 
   <!--+++++++++++++++++++++++  CTables  +++++++++++++++++++++++-->
   <logger name="mimir.ctables.CTPercolator"                        level="WARN"/>
   <logger name="mimir.ctables.CTExplainer"                         level="WARN"/>
+  <logger name="mimir.ctables.ReasonSet$"                          level="WARN"/>
 
   <!--++++++++++++++++++++++++  Exec  +++++++++++++++++++++++++-->
   <logger name="mimir.exec.Compiler"                               level="WARN"/>
@@ -43,15 +45,17 @@
   <logger name="mimir.models.EditDistanceMatchModel"               level="INFO"/> <!-- Use INFO to track stats -->
   <logger name="mimir.models.TypeInferenceModel"                   level="INFO"/> <!-- Use INFO to track stats -->
   <logger name="mimir.models.WekaModel$"                           level="INFO"/> <!-- Use INFO to track stats -->
+  <logger name="mimir.models.SeriesMissingValueModel"              level="WARN"/>
 
   <!--+++++++++++++++++++++  Optimizer  +++++++++++++++++++++++-->
   <logger name="mimir.optimizer.Optimizer$"                        level="WARN"/>
   <logger name="mimir.optimizer.operator.PropagateConditions$"     level="WARN"/>
   <logger name="mimir.optimizer.operator.PartitionUncertainJoins$" level="WARN"/>
   <logger name="mimir.optimizer.operator.InlineProjections$"       level="WARN"/>
+  <logger name="mimir.optimizer.operator.PullUpUnions"             level="WARN"/>
 
   <!--+++++++++++++++++++++++  PLOT  ++++++++++++++++++++++++++-->
-  <logger name="mimir.plot.Plot$"                               level="WARN"/>
+  <logger name="mimir.plot.Plot$"                                  level="WARN"/>
 
   <!--+++++++++++++++++++++  Provenance  ++++++++++++++++++++++-->
   <logger name="mimir.provenance.Provenance$"                      level="WARN"/>
@@ -70,17 +74,21 @@
   <logger name="mimir.statistics.SystemCatalog"                    level="WARN"/>
 
   <!--+++++++++++++++++++++++  Util  ++++++++++++++++++++++++++-->
-  <logger name="mimir.util.LoadCSV$"                            level="INFO"/> <!-- Use INFO to track stats -->
-  <logger name="mimir.util.NonStrictCSVParser"                  level="INFO"/> <!-- Use INFO to track stats -->
-  <logger name="mimir.util.LineReaderInputSource"               level="WARN"/>
-  <logger name="mimir.util.PythonProcess$"                      level="WARN"/>
-
+  <logger name="mimir.util.LoadCSV$"                               level="INFO"/> <!-- Use INFO to track stats -->
+  <logger name="mimir.util.NonStrictCSVParser"                     level="INFO"/> <!-- Use INFO to track stats -->
+  <logger name="mimir.util.LineReaderInputSource"                  level="WARN"/>
+  <logger name="mimir.util.PythonProcess$"                         level="WARN"/>
+  <logger name="mimir.util.TextUtils$"                             level="WARN"/>
 
   <!--+++++++++++++++++++++++  Views  +++++++++++++++++++++++++-->
-  <logger name="mimir.views.ViewManager"                        level="WARN"/>
+  <logger name="mimir.views.ViewManager"                           level="WARN"/>
 
- 
-  <root level="TRACE">
+  <!--+++++++++++++++++++++++  Spark  +++++++++++++++++++++++++-->
+  <logger name="log4j.logger.org.apache.spark"                     level="ERROR"/>
+  <logger name="log4j.logger.Remoting"                             level="ERROR"/>
+  <logger name="log4j.logger.org.eclipse.jetty"                    level="ERROR"/>
+  
+  <root level="ERROR">
     <appender-ref ref="STDOUT" />
   </root>
  

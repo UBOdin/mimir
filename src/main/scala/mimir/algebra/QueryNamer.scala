@@ -9,6 +9,7 @@ object QueryNamer
 		op match { 
 			case Table(name,alias, _, _) => name
 			case View(name, _, _) => name
+			case AdaptiveView(model, name, _, _) => (model+"_"+name)
 			case Project(cols, src) => 
 				cols.length match {
 					case 1 => cols(0).name+"_FROM_"+nameQuery(src)
@@ -40,8 +41,10 @@ object QueryNamer
 				nameQuery(src)
 			case Sort(cols, src) =>
 				nameQuery(src)+"_BY_"+cols.flatMap(col => ExpressionUtils.getColumns(col.expression)).mkString("_")
-			case EmptyTable(_) => 
+			case HardTable(_,Seq()) => 
 				"EMPTY_QUERY"
+			case HardTable(_,_) => 
+				"HARDCODED"
 			case Annotate(src, _) => nameQuery(src)
 			case Recover(src, _) => nameQuery(src)
 			case ProvenanceOf(src) => nameQuery(src)
