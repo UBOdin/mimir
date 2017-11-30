@@ -33,16 +33,16 @@ object CheckHeader
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
     val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
-    HardTable(Seq(("TABLE_NAME",TString())),Seq(Seq(StringPrimitive(model.targetName))))
+    HardTable(Seq(("TABLE_NAME",TString()), ("SCHEMA_NAME",TString())),Seq(Seq(StringPrimitive(model.targetName),StringPrimitive("MIMIR"))))
   }
   
   def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
     val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
     HardTable(
-      Seq(("TABLE_NAME" , TString()), ("ATTR_NAME" , TString()),("ATTR_TYPE", TType()),("IS_KEY", TBool())),
+      Seq(("TABLE_NAME" , TString()), ("ATTR_NAME" , TString()),("ATTR_TYPE", TType()),("IS_KEY", TBool()), ("SCHEMA_NAME", TString())),
       model.query.columnNames.zipWithIndex.map(col => 
-        Seq(StringPrimitive(model.targetName), model.bestGuess(col._2, Seq(), Seq()),TypePrimitive(TString()),BoolPrimitive(false))
+        Seq(StringPrimitive(model.targetName), model.bestGuess(col._2, Seq(), Seq()),TypePrimitive(TString()),BoolPrimitive(false),StringPrimitive("MIMIR"))
      ))
   }
   

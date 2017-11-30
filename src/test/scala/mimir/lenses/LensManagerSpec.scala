@@ -31,7 +31,7 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       resolved1.children.head must beAnInstanceOf[Project]
       val resolved2 = resolved1.children.head.asInstanceOf[Project]
       val coresColumnId = db.table("CPUSPEED").columnNames.indexOf("CORES")
-      val coresModel = db.models.get("MIMIR_TI_ATTR_CPUSPEED_TI_RK:ATTR_TYPE")
+      val coresModel = db.models.get("MIMIR_TI_ATTR_CPUSPEED_TI")
 
       // Make sure the model name is right.
       // Changes to the way the type inference lens assigns names will need to
@@ -43,7 +43,7 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
         Function("CAST", List(Var("CORES"), TypePrimitive(TInt())))//VGTerm(coresModel.name, coresColumnId, List(), List())))
       ))
 
-      coresModel.reason(coresColumnId, List(), List()) must contain("In MIMIR_TI_ATTR_CPUSPEED_TI_RK, there were 224 options for ATTR_TYPE on the column identified by <index:7 name:CORES>, and I picked <int> because it had the highest score and priority")
+      coresModel.reason(coresColumnId, List(), List()) must contain("I guessed that MIMIR_TI_ATTR_CPUSPEED_TI.CORES was of type INT because all of the data fit")
 
       val coresGuess1 = coresModel.bestGuess(coresColumnId, List(), List())
       coresGuess1 must be equalTo(TypePrimitive(TInt()))

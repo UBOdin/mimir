@@ -39,7 +39,7 @@ object TypeInferenceModel
 }
 
 @SerialVersionUID(1001L)
-class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac: Double)
+class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultFrac: Double)
   extends Model(name)
   with DataIndependentFeedback
   with NoArgModel
