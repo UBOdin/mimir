@@ -36,9 +36,12 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
   def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : String = args(0).asString
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = args(0).asString
  
-  private def classToPrimitive(value:String): PrimitiveValue = 
-  {
-    TextUtils.parsePrimitive(colTypes(0), value)
+  private def classToPrimitive(value:String): PrimitiveValue = {
+    try {
+      TextUtils.parsePrimitive(colTypes(0), value)
+    } catch {
+      case t: Throwable => throw new Exception(s"${t.getClass.getName} while parsing primitive: $value of type: ${colTypes(0)}")
+    }
   }
   
   private def pickFromArgs(args: Seq[PrimitiveValue], value:Option[PrimitiveValue] = None) : PrimitiveValue = {
@@ -165,21 +168,27 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
     case Some(x) => Seq() 
   }
    
-  
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =  useClassifier match {
     case Some(x) => Seq()//pickFromCols.zipWithIndex.map(colIdx => (args(colIdx._2), 1.0/pickFromCols.length.toDouble))
     case None => Seq((hints(0), 0.0))//pickFromCols.zipWithIndex.map(colIdx => (args(colIdx._2), 1.0/(pickFromCols.length+1).toDouble)) ++ Seq((hints(0), 1.0/(pickFromCols.length+1).toDouble))
   }
-
-  
+ 
   def reconnectToDatabase(db: Database) = { 
     this.db = db 
   }
   
   def train(sparkMLInstModelGen:(() => SparkML,SparkML.SparkModelGenerator)) : (SparkML, SparkML.SparkModel) = {
     val (sparkMLInst, modelGen) = sparkMLInstModelGen
-    val trainingQuery = Limit(0, Some(TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)), Project(pickFromCols.map(col => ProjectArg(col, Var(col))), source)))
-    classifierModel = Some(modelGen(ModelParams(trainingQuery, db, pickFromCols.head)))
+    /*val trainBaseOper = pickFromCols.tail.foldLeft(source.filter(Not(IsNullExpression(Var(pickFromCols.head)))))((init, col) => {
+      init.union(Project(Seq(ProjectArg(pickFromCols.head, Var(col)),
+        ProjectArg(col, Var(pickFromCols.head))) ++
+        pickFromCols.tail.flatMap(otherCol => otherCol match{
+          case `col` => None
+          case _ => Some(ProjectArg(otherCol, Var(otherCol)))
+        }), source.filter(Not(IsNullExpression(Var(col))))))
+    })*/
+    val trainingQuery = Limit(0, Some(TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)), Project(pickFromCols.map(col => ProjectArg(col, Var(col))), source.filter(Not(IsNullExpression(Var(pickFromCols.head)))) )))
+    classifierModel = Some(modelGen(ModelParams(trainingQuery, db, pickFromCols.head, "skip")))
     sparkMLInstance = Some(sparkMLInst)
     db.models.persist(this)
     (sparkMLInst(), classifierModel.get)
@@ -205,6 +214,7 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
       results.toList.map(row => (row.provenance :: row.tuple.toList).toSeq)
     })
     val predictions = sparkMLInst.applyModel(classifier, ("rowid", TString()) +: (pickFromCols.zip(colTypes)), tuples)
+    //predictions.show()
     val predictionMap = sparkMLInst.extractPredictions(classifier, predictions).groupBy(_._1).map { case (k,v) => (k,v.map(_._2))}
     classifyAllPredictions = Some(predictionMap)
     

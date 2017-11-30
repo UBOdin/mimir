@@ -14,7 +14,7 @@ object CTExplainerSpec
   def beforeAll = 
   {
     update("CREATE TABLE R(A string, B int, C int)")
-    db.loadTable("R", new File("test/r_test/r.csv"), true, ("CSV", Seq(StringPrimitive(","), BoolPrimitive(false), BoolPrimitive(true))))
+    db.loadTable("R", new File("test/r_test/r.csv"), true, ("CSV", Seq(StringPrimitive(","), BoolPrimitive(false), BoolPrimitive(false))))
     update("CREATE LENS TI AS SELECT * FROM R WITH TYPE_INFERENCE(0.5)")
     update("CREATE LENS MV AS SELECT * FROM TI WITH MISSING_VALUE('B', 'C')")
   }

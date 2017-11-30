@@ -170,7 +170,8 @@ object MimirVizier extends LazyLogging {
   //Python package defs
   ///////////////////////////////////////////////
   var pythonCallThread : Thread = null
-  def loadCSV(file : String, format:(String, Seq[PrimitiveValue]) = ("CSV", Seq(StringPrimitive(",")))) : String = {
+  def loadCSV(file : String) : String = loadCSV(file, ("CSV", Seq(StringPrimitive(","))))
+  def loadCSV(file : String, format:(String, Seq[PrimitiveValue])) : String = {
     pythonCallThread = Thread.currentThread()
     val timeRes = time {
       logger.debug("loadCSV: From Vistrails: [" + file + "]") ;
@@ -466,7 +467,7 @@ object MimirVizier extends LazyLogging {
   }
   
   def getAvailableViztoolDeployTypes() : String = {
-    var types = Seq[String]("GIS", "DATA")
+    var types = Seq[String]("GIS", "DATA","INTERACTIVE")
     try {
       val ret = db.query(Project(Seq(ProjectArg("TYPE",Var("TYPE"))), db.table("CLEANING_JOBS")))(results => {
       while(results.hasNext) {
