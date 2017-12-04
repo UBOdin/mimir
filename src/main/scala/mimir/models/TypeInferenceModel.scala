@@ -101,16 +101,25 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
     (x._2, TypeInferenceModel.priority(x._1) )
 
   def varType(idx: Int, argTypes: Seq[Type]) = TType()
-  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
+  def sample(idxi: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = {
+    val idx = args match {
+      case Seq(IntPrimitive(i)) => i.toInt
+      case _ => idxi
+    }
     TypePrimitive(
       RandUtils.pickFromWeightedList(randomness, voteList(idx))
     )
+  }
 
-  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
+  def bestGuess(idxi: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
   {
+    val idx = args match {
+      case Seq(IntPrimitive(i)) => i.toInt
+      case _ => idxi
+    }
     choices(idx) match {
       case None => {
-        val guess = voteList(idx).maxBy( rankFn _ )._1
+        val guess =  voteList(idx).maxBy( rankFn _ )._1
         TypePrimitive(guess)
       }
       case Some(s) => Cast(TType(), s)
@@ -121,7 +130,11 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
     try { Cast(TType(), v); true } catch { case _:RAException => false }
 
 
-  def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = {
+  def reason(idxi: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = {
+    val idx = args match {
+      case Seq(IntPrimitive(i)) => i.toInt
+      case _ => idxi
+    }
     choices(idx) match {
       case None => {
         val (guess, guessVotes) = voteList(idx).maxBy( rankFn _ )
@@ -145,16 +158,25 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
     }
   }
 
-  def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
+  def getDomain(idxi: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = {
+    val idx = args match {
+      case Seq(IntPrimitive(i)) => i.toInt
+      case _ => idxi
+    }
     votes(idx).toList.map( x => (TypePrimitive(x._1), x._2)) ++ Seq( (TypePrimitive(TString()), defaultFrac) )
+  }
 
   def isPerfectGuess(idx: Int): Boolean =
   {
     voteList(idx).map( _._2 ).max >= totalVotes(idx)
   }
 
-  override def isAcknowledged(idx: Int, args: Seq[PrimitiveValue]): Boolean =
+  override def isAcknowledged(idxi: Int, args: Seq[PrimitiveValue]): Boolean =
   {
+    val idx = args match {
+      case Seq(IntPrimitive(i)) => i.toInt
+      case _ => idxi
+    }
     super.isAcknowledged(idx, args) || isPerfectGuess(idx)
   }
 }
