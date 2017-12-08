@@ -162,8 +162,12 @@ libraryDependencies ++= Seq(
   //////////////////////// Visualization //////////////////////
   // For now, all of this happens in python with matplotlib
   // and so we don't need any external dependencies.
-  //"org.vegas-viz"                 %%  "vegas"                  % "0.3.9",
-  //"org.sameersingh.scalaplot"     % "scalaplot"                % "0.0.4"
+  //"org.vegas-viz"                 %%  "vegas"                 % "0.3.9",
+  //"org.sameersingh.scalaplot"     % "scalaplot"               % "0.0.4",
+
+  //////////////////////// Linear Solver /////////////////////////
+  "com.github.vagmcs"             %% "optimus"                % "2.0.0",
+  "com.github.vagmcs"             %% "optimus-solver-oj"      % "2.0.0"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")

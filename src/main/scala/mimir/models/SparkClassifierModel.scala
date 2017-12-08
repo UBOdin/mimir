@@ -50,9 +50,9 @@ object SparkClassifierModel
     }).toMap
   }
 
-  
 
-  
+
+
 }
 
 @SerialVersionUID(1001L)
@@ -281,5 +281,20 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
     this.db = db
   }
 
-  
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Double = {
+    val rowid = RowIdPrimitive(args(0).asString)
+    getFeedback(idx,args) match {
+      case Some(v) => 1.0
+      case None => {
+        val classes = classify(rowid, hints)
+        if (classes.isEmpty) {
+          0.0
+        }
+        else {
+          classes.head._2/classes.maxBy(_._2)._2
+        }
+      }
+    }
+  }
+
 }

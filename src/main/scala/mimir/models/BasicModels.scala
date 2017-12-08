@@ -40,6 +40,9 @@ object UniformDistribution extends Model("UNIFORM") with Serializable {
 
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean =
     false
+
+  // Random, so...
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Double = 0.5
 }
 
 case class NoOpModel(override val name: String, reasonText:String) 
@@ -56,4 +59,5 @@ case class NoOpModel(override val name: String, reasonText:String)
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = reasonText
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = { acked = true }
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = acked
+  def confidence(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Double = 0.5 // Random, so...
 }

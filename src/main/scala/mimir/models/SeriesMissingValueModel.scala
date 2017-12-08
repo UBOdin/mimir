@@ -208,5 +208,8 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
   
   def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq()
   
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = {
+    predictions(idx).sortBy(_._2).head._2
+  }
 
 }

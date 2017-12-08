@@ -198,6 +198,7 @@ object Mimir extends LazyLogging {
   {
     val rowId = analyze.getRowId()
     val column = analyze.getColumn()
+    val assign = analyze.getAssign()
     val query = db.sql.convert(analyze.getSelectBody())
 
     if(rowId == null){
@@ -211,6 +212,9 @@ object Mimir extends LazyLogging {
           output.print(s"... and ${count - reasons.size} more like the last")
         }
       }
+      if(assign == true) {
+        CTPrioritizer.prioritize(reasonSets.flatMap(x=>x.all(db)))
+      }
     } else {
       val token = RowIdPrimitive(db.sql.convert(rowId).asString)
       if(column == null){ 
@@ -220,13 +224,19 @@ object Mimir extends LazyLogging {
         printReasons(explanation.reasons)
         output.print("--------")
         output.print("Row Probability: "+explanation.probability)
-      } else { 
+        if(assign == true) {
+          CTPrioritizer.prioritize(explanation.reasons)
+        }
+      } else {
       output.print("==== Explain Cell ====")
         val explanation = 
           db.explainer.explainCell(query, token, column) 
         printReasons(explanation.reasons)
         output.print("--------")
         output.print("Examples: "+explanation.examples.map(_.toString).mkString(", "))
+        if(assign == true) {
+          CTPrioritizer.prioritize(explanation.reasons)
+        }
       }
     }
   }

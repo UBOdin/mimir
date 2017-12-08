@@ -156,4 +156,17 @@ class EditDistanceMatchModel(
 
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
     List((NullPrimitive(), 0.0)) ++ colMapping.map( x => (StringPrimitive(x._1), x._2))
+
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Double  = {
+    choices(idx) match {
+      case None => {
+        if(colMapping.isEmpty){
+          0.0
+        } else {
+          colMapping.maxBy(_._2)._2/colMapping.map(_._2).sum
+        }
+      }
+      case Some(s) => 1.0
+    }
+  }
 }

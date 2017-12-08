@@ -179,4 +179,21 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
     }
     super.isAcknowledged(idx, args) || isPerfectGuess(idx)
   }
+
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = {
+    choices(idx) match {
+      case None => {
+        val (guess, guessVotes) = voteList(idx).maxBy( rankFn _ )
+        val defaultPct = (defaultFrac * 100).toInt
+        val guessPct = ((guessVotes / totalVotes(idx))*100).toInt
+        val typeStr = Type.toString(guess).toUpperCase
+        if (guessPct > defaultPct)
+          guessVotes / totalVotes(idx)
+        else
+          defaultFrac
+        }
+      case Some(t) => 1.0
+    }
+  }
+  
 }
