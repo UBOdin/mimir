@@ -899,9 +899,9 @@ class ClusteringPlayground extends org.sqlite.Function.Aggregate {
   val failSilently: Boolean = false // won't throw an error for malformed json if true
   val filterNulls: Boolean = false // check values for null, if null then don't count it, this might improve clustering but will take way longer
 
-  var totalSchema: scala.collection.mutable.ListBuffer[String] = scala.collection.mutable.ListBuffer[String]() // the total schema, used to determine the feature vector
-  var totalSchemaCheck: scala.collection.mutable.HashSet[String] = scala.collection.mutable.HashSet[String]()
-  var jsonShapeFormat: Map[ListBuffer[Int],Int] = Map[ListBuffer[Int],Int]() // holds the feature vector based on the json shape as the key and the multiplicity as the value
+  var totalSchemaMap: scala.collection.mutable.HashMap[String,Int] = scala.collection.mutable.HashMap[String,Int]() // the total schema, used to determine the feature vector
+  var jsonShapeFormat: scala.collection.mutable.Map[ListBuffer[Int],Int] = scala.collection.mutable.Map[ListBuffer[Int],Int]() // holds the feature vector based on the json shape as the key and the multiplicity as the value
+  var schemaSize: Int = 0
 
   @Override
   def xStep(): Unit = {
@@ -916,21 +916,19 @@ class ClusteringPlayground extends org.sqlite.Function.Aggregate {
         else
           jsonLeafKeySet = jsonMap.keySet()
 
+
         // update total schema based on new row
         jsonLeafKeySet.asScala.foreach((v: String) => {
-          if(!totalSchemaCheck.contains(v)) {
-            totalSchemaCheck.add(v)
-            totalSchema.append(v)
+          if(!totalSchemaMap.contains(v)) {
+            totalSchemaMap.put(v, schemaSize)
+            schemaSize += 1
           }
         })
 
-        val featureVector: ListBuffer[Int] = ListBuffer[Int]()
+        val featureVector: scala.collection.mutable.ArrayBuffer[Int] = scala.collection.mutable.ArrayBuffer.fill[Int](schemaSize+1)(0)
 
-        totalSchema.foreach((v) => {
-          if(jsonLeafKeySet.contains(v))
-            featureVector.append(1)
-          else
-            featureVector.append(0)
+        jsonLeafKeySet.asScala.foreach((v) => {
+          featureVector(totalSchemaMap.get(v).get) = 1
         })
 /*
         val featureVector: Array[Int] = scala.Array.fill[Int](totalSchema.size)(0) // initialize an empty feature, then fill with 1's
@@ -938,7 +936,7 @@ class ClusteringPlayground extends org.sqlite.Function.Aggregate {
           totalSchema.index
         })
 */
-        val norm = removeTailZeros(featureVector) // this normalizes the feature vector for map insertion
+        val norm = removeTailZeros(featureVector.toList) // this normalizes the feature vector for map insertion
         jsonShapeFormat.get(norm) match {
           case Some(i) => jsonShapeFormat += (norm -> (i+1))
           case None => jsonShapeFormat += (norm -> 1)
@@ -994,15 +992,21 @@ class ClusteringPlayground extends org.sqlite.Function.Aggregate {
       shapeMultWriter.close()
 
       var schema = ""
-      totalSchema.foreach((s) => schema = schema + s + ",")
+      totalSchemaMap.foreach((s) => schema = schema + s._1 + ",")
       schemaWriter.write(schema.substring(0,schema.size-1))
       schemaWriter.close()
 
     } catch {
       case e: Exception => throw e
     }
-
+    cleanUp() // clean up containers
     result("DONE")
+  }
+
+  def cleanUp(): Unit = { // apparently you need to clean up agg functions in 2017 even though it's a class :(
+    totalSchemaMap.clear()
+    jsonShapeFormat.clear()
+    schemaSize = 0
   }
 
   def combineArr(paths: Set[String]): Set[String] = {
@@ -1020,7 +1024,7 @@ class ClusteringPlayground extends org.sqlite.Function.Aggregate {
     ret
   }
 
-  def removeTailZeros(l: ListBuffer[Int]): ListBuffer[Int] = {
+  def removeTailZeros(l: List[Int]): ListBuffer[Int] = {
     // removes tailing zeros from a list to normalize it
     var ret: ListBuffer[Int] = ListBuffer[Int]()
     val temp: ListBuffer[Int] = ListBuffer[Int]()

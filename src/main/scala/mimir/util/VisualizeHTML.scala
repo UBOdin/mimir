@@ -25,11 +25,11 @@ class VisualizeHTML (dir: String){
 
   val htmlHeader: String = ("<!DOCTYPE HTML>\n<html>\n<head>\n"
   + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css\">\n<script src=\"https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js\"></script>\n<script src=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js\">"
-  + "</script>\n</head>\n<body>\n<div class=\"container\">\n<h2>" + dir + "</h2>\n")
+  + "</script>\n</head>\n<body>\n<h2>" + dir + "</h2>\n")
 
   val htmlVisualization: String = GenerateHTML(clusterHierarchy, schema)
 
-  val htmlTail: String = "\n</div>\n</body>\n</html>"
+  val htmlTail: String = "\n</body>\n</html>"
 
   val output: String = htmlHeader + htmlVisualization + htmlTail
   try { // try to write output
@@ -76,10 +76,10 @@ class VisualizeHTML (dir: String){
 
   // generates the html used for display, the basic form is to recursively call this function which will output nested collapse-able tags for each NaiveSummary
   def GenerateHTML(nsList: List[NaiveSummary], schema: List[String]): String = {
-    var retHTML: String = "<div class=\"panel-group\">\n<div class=\"panel panel-default\">\n"
+    var retHTML: String = ""
     val constantHeader: String = "<h2 class=\"list-group-item\">Common Features</h2>"
-    val listHead: String = "<ol class=\"list-group\">\n"
-    val listTail: String = "</ol>\n"
+    val listHead: String = "<ol class=\"list-group\"> <!-- Main List Open -->\n"
+    val listTail: String = "</ol> <!-- Main List Close -->\n"
     retHTML = retHTML + listHead + constantHeader
     val constants: List[NaiveSummaryEntry] = NaiveSummaryIntersect(nsList)
     retHTML = retHTML + pathPanel(constants, schema, List[Int]())
@@ -88,7 +88,7 @@ class VisualizeHTML (dir: String){
       if(!ret.equals("")) // should generate a list of panel groups
         retHTML = retHTML + ret
     })
-    retHTML + listTail + "</div>\n</div>\n"
+    retHTML + listTail
   }
 
   def GenerateHTML(ns: NaiveSummary, schema: List[String], usedColumns: List[Int]): String = {
@@ -96,6 +96,8 @@ class VisualizeHTML (dir: String){
     val constantHeader: String = "<h2 class=\"list-group-item\">Common Features</h2>"
     val childrenHeader: String = "<h2 class=\"list-group-item\">Children</h2>"
     val featureHeader: String = "<h2 class=\"list-group-item\">Features</h2>"
+    val listGroupHeader: String = "<li class=\"list-group-item\"> <!-- GenerateHTML Open -->\n"
+    val listGroupTail: String = "</li> <!-- GenerateHTML Close -->\n"
     var childHTML = ""
     var clusterError: Double = ns.Error
 
@@ -119,17 +121,16 @@ class VisualizeHTML (dir: String){
     if(!featureHTML.equals("")) {
       var clusterTitle: String = "Summary_" + counter.toString
       counter += 1
-      val listGroupHeader: String = "<li class=\"list-group-item\">\n"
-      val listGroupTail: String = "</li>\n"
-      val panelHeader: String = ("<div class=\"panel-heading\">\n<h2 class=\"panel-title\" style= \"color: blue;\">\n<a data-toggle=\"collapse\" href=\"#" + clusterTitle + "\">" + clusterTitle + " &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Error: " + truncDouble(clusterError) + "</a>\n</h2>\n</div>\n"
-        + "<div id=\"" + clusterTitle + "\" class=\"panel-collapse collapse\">\n")
-      val panelFooter: String = "</div>\n"
+
+      val panelHeader: String = (listGroupHeader + "<details> <summary>"+ clusterTitle + " &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Error: " + truncDouble(clusterError) + "</summary>\n")
+      globalCounter += 1
+      val panelFooter: String = "</details> <!-- From Summary "+ (counter-1).toString +" -->\n"
       output = output  + panelHeader
       if (!constantsHTML.equals(""))
         output = output + constantHeader + constantsHTML
       if (!childHTML.equals(""))
         output = output + childrenHeader + childHTML
-      output = output + featureHeader + featureHTML + panelFooter
+      output = output + featureHeader + featureHTML + panelFooter + listGroupTail
     }
     output
   }
@@ -141,8 +142,8 @@ class VisualizeHTML (dir: String){
     nseList.foreach((nse) => {
       featureList = featureList + NaiveSummaryEntryToHTML(nse,schema, usedColumns)
     })
-    val listHead: String = "<ol class=\"list-group\">\n"
-    val listTail: String = "</ol>\n"
+    val listHead: String = "<ol class=\"list-group\"> <!-- From NaiveSummaryEntry Open -->\n"
+    val listTail: String = "</ol> <!-- From NaiveSummaryEntry Close -->\n"
     //style= "padding-left: 50px;"
     if(!featureList.equals(""))
       listHead + featureList + listTail
@@ -172,7 +173,7 @@ class VisualizeHTML (dir: String){
     ret.toList
   }
 
-  def pathPanel(nseList: List[NaiveSummaryEntry], schema: List[String], usedColumns: List[Int]): String = {
+  def pathPanel(nseList: List[NaiveSummaryEntry], schema: List[String], usedColumns: List[Int]): String = { // creates groupings of features
     var groupMap: scala.collection.mutable.Map[String,ListBuffer[NaiveSummaryEntry]] = scala.collection.mutable.Map[String,ListBuffer[NaiveSummaryEntry]]()
     nseList.foreach((nse) => {
       val name: String = schema(nse.featureID)
@@ -195,11 +196,11 @@ class VisualizeHTML (dir: String){
         if(!panelMiddle.equals("")) {
           val listGroupHeader: String = "<li class=\"list-group-item\">\n"
           val listGroupTail: String = "</li>\n"
-          val panelHeader: String = ("<div class=\"panel-heading\">\n<h2 class=\"panel-title\" style= \"color: blue;\">\n<a data-toggle=\"collapse\" href=\"#" + globalCounter.toString + "\">" + path + " &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Average Marginal: " + truncDouble(avgMarginal) + " &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Max: " + truncDouble(GetMax(list.toList,usedColumns)) + " &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Min: " + truncDouble(GetMin(list.toList,usedColumns)) + "</a>\n</h2>\n</div>\n"
-            + "<div id=\"" + globalCounter.toString + "\" class=\"panel-collapse collapse\">\n")
+
+          val panelHeader: String = (listGroupHeader + "<details> <summary>"+ path + " &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Average Marginal: " + truncDouble(avgMarginal) + " &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Max: " + truncDouble(GetMax(list.toList,usedColumns)) + " &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Min: " + truncDouble(GetMin(list.toList,usedColumns)) + "</summary>\n")
           globalCounter += 1
-          val panelFooter: String = "</div>\n"
-          middleHTML = middleHTML + listGroupHeader + panelHeader + panelMiddle + panelFooter + listGroupTail
+          val panelFooter: String = "</details>\n"
+          middleHTML = middleHTML + panelHeader + panelMiddle + panelFooter + listGroupTail
         }
         else
           "" // do nothing
@@ -211,8 +212,8 @@ class VisualizeHTML (dir: String){
         // for sanity
       }
     })
-    val listHead: String = "<ol class=\"list-group\">\n"
-    val listTail: String = "</ol>\n"
+    val listHead: String = "<ol class=\"list-group\"> <!-- From PathPanel Open -->\n"
+    val listTail: String = "</ol> <!-- From PathPanel Close -->\n"
     //style= "padding-left: 50px;"
     if(!middleHTML.equals(""))
       listHead + middleHTML + listTail
