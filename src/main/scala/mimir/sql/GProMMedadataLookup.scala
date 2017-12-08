@@ -9,7 +9,7 @@ import java.sql.SQLException
 import java.util.ArrayList
 import mimir.algebra.Typechecker
 import org.gprom.jdbc.jna.GProMList
-import mimir.gprom.algebra.OperatorTranslation
+import mimir.algebra.gprom.OperatorTranslation
 import org.gprom.jdbc.jna.GProMNode
 import mimir.algebra.TInt
 import mimir.algebra.TFloat

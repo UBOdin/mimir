@@ -13,7 +13,7 @@ import mimir.util.TimeUtils
 import net.sf.jsqlparser.statement.Statement
 //import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
 import net.sf.jsqlparser.statement.select.Select
-import mimir.gprom.algebra.OperatorTranslation
+import mimir.algebra.gprom.OperatorTranslation
 import org.gprom.jdbc.jna.GProMWrapper
 import scala.util.control.Exception.Catch
 import org.gprom.jdbc.jna.GProMNode

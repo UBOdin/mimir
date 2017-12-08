@@ -4,7 +4,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import com.github.nscala_time.time.Imports._
 import mimir.algebra._
 import mimir.util._
-import mimir.gprom.algebra.OperatorTranslation
+import mimir.algebra.gprom.OperatorTranslation
 
 object Optimizer
   extends LazyLogging

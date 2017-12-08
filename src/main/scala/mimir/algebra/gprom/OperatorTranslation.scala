@@ -1,4 +1,4 @@
-package mimir.gprom.algebra
+package mimir.algebra.gprom
 
 import org.gprom.jdbc.jna._
 

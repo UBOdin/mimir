@@ -3,12 +3,13 @@ package mimir.ml.spark
 import mimir.algebra._
 import mimir.Database
 
-import org.apache.spark.sql.{SQLContext, DataFrame, Row}
+import org.apache.spark.sql.{SQLContext, DataFrame, Row, Dataset}
 import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.ml.PipelineModel
 import org.apache.spark.sql.types.{DataType, DoubleType, LongType, FloatType, BooleanType, IntegerType, StringType, StructField, StructType}
 import org.apache.spark.ml.feature.Imputer
 import mimir.util.ExperimentalOptions
+import mimir.algebra.spark.OperatorTranslation
 
 object SparkML {
   type SparkModel = PipelineModel
@@ -73,9 +74,13 @@ abstract class SparkML {
     new Imputer().setInputCols(imputerCols) .setOutputCols(imputerCols).fit(df).transform(df)
   }
   
+  
+  
   def prepareData(query : Operator, db:Database, valuePreparer: ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType) : DataFrame = {
     val schema = db.bestGuessSchema(query).toList
     val sqlContext = getSparkSqlContext()
+    //OperatorTranslation.db = db
+    //OperatorTranslation.mimirOpToDF(sqlContext, query)
     import sqlContext.implicits._
     sqlContext.createDataFrame(
       getSparkSession().parallelize(db.query(query)(results => {

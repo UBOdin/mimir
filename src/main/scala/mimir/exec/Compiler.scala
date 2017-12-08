@@ -20,7 +20,7 @@ import mimir.exec.mode._
 import mimir.exec.uncertainty._
 import mimir.util._
 import net.sf.jsqlparser.statement.select._
-import mimir.gprom.algebra.OperatorTranslation
+import mimir.algebra.gprom.OperatorTranslation
 
 class Compiler(db: Database) extends LazyLogging {
 
