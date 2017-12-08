@@ -47,7 +47,10 @@ object CureScenario
           update(s"LOAD '$table';") 
         }
         time(s"Materialize '$basename'"){
-          update(s"ALTER VIEW $basename MATERIALIZE;")
+          //XXX: there is a problem with materialized views and MV lens
+          //       that needs to be fixed - something with the col det bit vector
+          //     -Mike
+          //update(s"ALTER VIEW $basename MATERIALIZE;")
         }
         //explainEverything(s"SELECT * FROM $basename") must not beEmpty;
         //explainEverything(s"SELECT * FROM $basename").flatMap { _.all(db) } must not beEmpty;

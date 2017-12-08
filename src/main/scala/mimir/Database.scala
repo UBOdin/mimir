@@ -418,9 +418,9 @@ case class Database(backend: Backend)
       case "CSV" => {
         val (delim, typeinference, adaptive) =
           format._2 match {
-            case Seq(StringPrimitive(delim)) => (delim, true, true)
-            case Seq(StringPrimitive(delim),BoolPrimitive(typeinference)) => (delim, typeinference, true)
-            case Seq(StringPrimitive(delim),BoolPrimitive(typeinference),BoolPrimitive(adaptive)) => (delim, typeinference, adaptive)
+            case Seq(StringPrimitive(delim_)) => (delim_, true, true)
+            case Seq(StringPrimitive(delim_),BoolPrimitive(typeinference_)) => (delim_, typeinference_, true)
+            case Seq(StringPrimitive(delim_),BoolPrimitive(typeinference_),BoolPrimitive(adaptive_)) => (delim_, typeinference_, adaptive_)
             case Seq() | null => (",", true, true)
             case _ => throw new SQLException("The CSV format expects a single string argument (CSV('delim'))")
           }

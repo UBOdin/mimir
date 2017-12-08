@@ -14,6 +14,8 @@ class SampleResultIterator(
   extends ResultIterator
   with LazyLogging
 {
+  def annotationSchema = src.annotationSchema
+  override def schema = tupleSchema.filter(!annotationSchema.contains(_))
   val rowidregex = "MIMIR_ROWID.*".r
   val lookup:Seq[Seq[(Int, Double)]] = 
     schema.map { case (name, t) =>
@@ -27,7 +29,6 @@ class SampleResultIterator(
     }
   val worldBitsColumnIdx = src.schema.indexWhere(_._1.equals("MIMIR_WORLD_BITS"))
 
-  def annotationSchema = src.annotationSchema
 
   def close() = src.close()
   def hasNext() = src.hasNext()
@@ -43,7 +44,6 @@ case class SampleRow(input: Row, source: SampleResultIterator) extends Row
 
   private def values(v: Int): Seq[(PrimitiveValue, Double)] =
     source.lookup(v).flatMap {
-      //case (i, p) if i == -1 => None
       case (i, p) => Some((input(i), p))                         
     }
 

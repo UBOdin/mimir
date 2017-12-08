@@ -23,6 +23,26 @@ object ProjectRedundantColumns extends OperatorOptimization {
   def apply(o: Operator, dependencies: Set[String]): Operator =
   {
     o match {
+      case proj@Project(args, Select(condition, source)) => {
+        val newArgs = 
+          args.filter( arg => dependencies contains arg.name )
+
+        val childDependencies = 
+          newArgs.map( _.expression ).
+            flatMap( ExpressionUtils.getColumns(_) ).
+            toSet
+        
+        val nextChildDependencies = 
+          ExpressionUtils.getColumns( condition ) ++ childDependencies
+            
+        val projRedunDependencies = source.columnNames.toSet
+       
+        if(childDependencies.subsetOf(projRedunDependencies))
+          proj    
+        else
+          Project( newArgs, Select(condition, apply(source, nextChildDependencies)) )
+      }
+      
       case Project(args, source) => {
         val newArgs = 
           args.filter( arg => dependencies contains arg.name )
