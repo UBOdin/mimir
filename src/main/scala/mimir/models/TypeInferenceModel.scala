@@ -177,7 +177,7 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
       case Seq(IntPrimitive(i)) => i.toInt
       case _ => idxi
     }
-    super.isAcknowledged(idx, args) || isPerfectGuess(idx)
+    super.isAcknowledged(idx, args) //|| isPerfectGuess(idx)
   }
 
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = {

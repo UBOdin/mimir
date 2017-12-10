@@ -205,6 +205,7 @@ object Mimir extends LazyLogging {
       output.print("==== Explain Table ====")
       val reasonSets = db.explainer.explainEverything(query)
       for(reasonSet <- reasonSets){
+        logger.debug(s"Expanding $reasonSet")
         val count = reasonSet.size(db);
         val reasons = reasonSet.take(db, 5);
         printReasons(reasons);
