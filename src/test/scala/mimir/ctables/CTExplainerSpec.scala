@@ -42,7 +42,8 @@ object CTExplainerSpec
       }.toMap must contain(eachOf(
         ("MV:SPARKML:B" -> List(List[PrimitiveValue](RowIdPrimitive("3")))),
         ("MV:SPARKML:C" -> List(List[PrimitiveValue](RowIdPrimitive("4")))),
-        ("TI" -> List(List()))
+        ("TI",List(List(IntPrimitive(0)), List(IntPrimitive(0)), List(IntPrimitive(0)), 
+            List(IntPrimitive(0)), List(IntPrimitive(0)), List(IntPrimitive(0)), List(IntPrimitive(0))))
       ))
     }
 

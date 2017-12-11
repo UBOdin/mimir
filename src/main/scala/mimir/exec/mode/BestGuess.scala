@@ -90,16 +90,17 @@ object BestGuess
 
     logger.debug(s"INLINED: $oper")
 
-    // Clean things up a little... make the query prettier, tighter, and 
-    // faster
-    oper = db.compiler.optimize(oper)
-
-    logger.debug(s"OPTIMIZED: $oper")
 
     // Replace VG-Terms with their "Best Guess values"
     oper = bestGuessQuery(db, oper)
 
     logger.debug(s"GUESSED: $oper")
+
+    // Clean things up a little... make the query prettier, tighter, and 
+    // faster
+    oper = db.compiler.optimize(oper)
+
+    logger.debug(s"OPTIMIZED: $oper")
 
     return (
       oper, 

@@ -24,7 +24,7 @@ object TypeInferenceAdaptiveSpec
       baseTypes must contain("COLUMN_2" -> TString())
 
 
-      val lensTypes = db.bestGuessSchema( db.adaptiveSchemas.viewFor("CPUSPEED_TI", "CPUSPEED_TI").get).toMap
+      val lensTypes = db.bestGuessSchema( db.adaptiveSchemas.viewFor("CPUSPEED_TI", "DATA").get).toMap
       lensTypes.keys must contain(eachOf("CORES", "FAMILY", "TECH_MICRON"))
       lensTypes must contain("CORES" -> TInt())
       lensTypes must contain("FAMILY" -> TString())
