@@ -65,7 +65,7 @@ object TypeInference
       ),
       Seq(
         Seq(
-          StringPrimitive(config.schema)
+          StringPrimitive("DATA")
         )
       )
     )
@@ -86,7 +86,7 @@ object TypeInference
       ),
       config.query.columnNames.map(col => 
         Seq(
-          StringPrimitive(config.schema), 
+          StringPrimitive("DATA"), 
           StringPrimitive(col), 
           BoolPrimitive(false),
           IntPrimitive(columnIndexes.getOrElse(col, -1).toLong),
@@ -108,22 +108,24 @@ object TypeInference
         
   def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
   {
-    val model = db.models.get(s"MIMIR_TI_ATTR_${config.schema}").asInstanceOf[TypeInferenceModel]
-    val columnIndexes = model.columns.zipWithIndex.toMap
-    Some(Project(
-      config.query.columnNames.map { colName =>
-        ProjectArg(colName, 
-          if(columnIndexes contains colName){ 
-            Function("CAST", Seq(
-              Var(colName),
-              model.bestGuess(0, Seq(IntPrimitive(columnIndexes(colName))), Seq())
-            ))
-          } else {
-            Var(colName)
-          }
-        )
-      }, config.query
-    ))  
+    if(table.equals("DATA")){
+      val model = db.models.get(s"MIMIR_TI_ATTR_${config.schema}").asInstanceOf[TypeInferenceModel]
+      val columnIndexes = model.columns.zipWithIndex.toMap
+      Some(Project(
+        config.query.columnNames.map { colName =>
+          ProjectArg(colName, 
+            if(columnIndexes contains colName){ 
+              Function("CAST", Seq(
+                Var(colName),
+                model.bestGuess(0, Seq(IntPrimitive(columnIndexes(colName))), Seq())
+              ))
+            } else {
+              Var(colName)
+            }
+          )
+        }, config.query
+      ))  
+    } else { None }
   }
 
   

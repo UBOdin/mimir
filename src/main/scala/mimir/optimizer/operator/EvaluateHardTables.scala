@@ -1,10 +1,13 @@
 package mimir.optimizer.operator
 
+import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.optimizer.OperatorOptimization
 import mimir.algebra._
 import mimir.algebra.function._
 
-class EvaluateHardTables(typechecker: Typechecker, interpreter: Eval) extends OperatorOptimization
+class EvaluateHardTables(typechecker: Typechecker, interpreter: Eval) 
+  extends OperatorOptimization
+  with LazyLogging
 {
   def safeToEval(expr: Expression): Boolean =
   {
@@ -17,7 +20,6 @@ class EvaluateHardTables(typechecker: Typechecker, interpreter: Eval) extends Op
 
   def apply(o: Operator): Operator =
   {
-
     o.recur(apply(_)) match { 
       case Union(
         HardTable(sch,lhs),
@@ -33,12 +35,15 @@ class EvaluateHardTables(typechecker: Typechecker, interpreter: Eval) extends Op
         if safeToEval(cond) => 
       {
         val colNames = sch.map{ _._1 }
-        HardTable(
-          sch,
-          data.filter { row => 
-            interpreter.evalBool(cond, colNames.zip(row).toMap)
-          }
-        )
+        val newData =           data.filter { row => 
+          val bindings = colNames.zip(row).toMap
+          val ret = interpreter.evalBool(cond, bindings)
+          logger.trace(s"$bindings ::> $ret")
+          ret
+        }
+        logger.debug(s"SELECT WHERE $cond : ${data.size} -> ${newData.size} rows")
+
+        HardTable(sch, newData)
       }
 
       case Project(exprs, HardTable(sch, data)) 

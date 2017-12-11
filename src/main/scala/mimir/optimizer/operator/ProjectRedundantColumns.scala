@@ -150,9 +150,20 @@ object ProjectRedundantColumns extends OperatorOptimization {
       case view: View => view
       case view: AdaptiveView => view
       case table: Table => table
-      case table@ HardTable(_,Seq()) => table //EmptyTable
       case HardTable(sch,data) => 
-        HardTable(sch.filter { case (name, _) => dependencies contains name }, data)
+      {
+        val colNamesWithIndices = 
+          sch.map { _._1 }.zipWithIndex
+        val columnIndicesToKeep = 
+          colNamesWithIndices
+            .filter { case (col, _) => dependencies contains col }
+            .map { _._2 }
+
+        HardTable(
+          columnIndicesToKeep.map { sch(_) },
+          data.map { row => columnIndicesToKeep.map { row(_) } }
+        )
+      }
 
       case LeftOuterJoin(lhs, rhs, condition) => {
         val childDependencies = 

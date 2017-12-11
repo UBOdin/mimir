@@ -38,7 +38,7 @@ object CheckHeader
       ),
       Seq(
         Seq(
-          StringPrimitive(config.schema)
+          StringPrimitive("DATA")
         )
       )
     )
@@ -55,7 +55,7 @@ object CheckHeader
       ),
       (0 until config.query.columnNames.size).map { col =>
         Seq(
-          StringPrimitive(config.schema),
+          StringPrimitive("DATA"),
           TypePrimitive(TString()),
           BoolPrimitive(false),
           IntPrimitive(col)
@@ -68,13 +68,15 @@ object CheckHeader
   
   def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
   {
-    val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
-    Some(
-        Project( model.query.columnNames.zipWithIndex.map( col => 
-          ProjectArg(model.bestGuess(0, Seq(IntPrimitive(col._2)), Seq()).asString,Var(col._1)) )
-          , config.query) match {
-          case proj if model.headerDetected => proj.limit(-1, 1)
-          case proj => proj
-        })
+    if(table.equals("DATA")){
+      val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
+      Some(
+          Project( model.query.columnNames.zipWithIndex.map( col => 
+            ProjectArg(model.bestGuess(0, Seq(IntPrimitive(col._2)), Seq()).asString,Var(col._1)) )
+            , config.query) match {
+            case proj if model.headerDetected => proj.limit(-1, 1)
+            case proj => proj
+          })
+    } else { None }
   }
 }

@@ -210,7 +210,7 @@ object Mimir extends LazyLogging {
         logger.debug(s"Expanding $reasonSet")
         // Workaround for a bug: SQLite crashes if a UDA is run on an empty input
         if(!reasonSet.isEmpty(db)){
-          logger.debug(s"Not Empty")
+          logger.debug(s"Not Empty: \n${reasonSet.argLookup}")
           val count = reasonSet.size(db);
           logger.debug(s"Size = $count")
           val reasons = reasonSet.take(db, 5);
