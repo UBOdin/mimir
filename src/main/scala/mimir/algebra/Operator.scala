@@ -138,7 +138,7 @@ case class AggFunction(function: String, distinct: Boolean, args: Seq[Expression
 case class Aggregate(groupby: Seq[Var], aggregates: Seq[AggFunction], source: Operator) extends Operator
 {
   def toString(prefix: String) =
-    prefix + "AGGREGATE[" + 
+    prefix + (if(aggregates.isEmpty){ "DISTINCT" } else { "AGGREGATE" })+"[" + 
       (groupby ++ aggregates).mkString(", ") + 
       "](\n" +
       source.toString(prefix + "  ") + "\n" + prefix + ")"

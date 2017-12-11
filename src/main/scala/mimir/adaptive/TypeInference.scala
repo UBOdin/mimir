@@ -82,7 +82,7 @@ object TypeInference
         ("ATTR_NAME" , TString()),
         ("IS_KEY", TBool()), 
         ("IDX", TInt()),
-        ("DEFAULT_TYPE", TType())
+        ("HARD_TYPE", TType())
       ),
       config.query.columnNames.map(col => 
         Seq(
@@ -96,14 +96,14 @@ object TypeInference
       )
     ).addColumn(
       "ATTR_TYPE" -> 
-        Var("IDX")
-          .gte(IntPrimitive(0))
+        Var("HARD_TYPE")
+          .isNull
           .thenElse {
             VGTerm(s"MIMIR_TI_ATTR_${config.schema}", 0, Seq(Var("IDX")), Seq())
           } {
-            Var("DEFAULT_TYPE")
+            Var("HARD_TYPE")
           }
-    ).removeColumns("IDX", "DEFAULT_TYPE")
+    ).removeColumns("IDX", "HARD_TYPE")
   }
         
   def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =

@@ -5,9 +5,22 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.Database
 import mimir.algebra._
 import mimir.models._
+import mimir.exec.mode.UnannotatedBestGuess
 
 class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator, Seq[Expression], Seq[Expression])])
 {
+  def isEmpty(db: Database): Boolean =
+  {
+    argLookup match {
+      case Some((query, argExprs, hintExprs)) => 
+        db.query(
+          query.count( alias = "COUNT" ), 
+          UnannotatedBestGuess
+        ) { _.next.tuple(0).asLong > 0 }
+      case None => 
+        false
+    }    
+  }
   def size(db: Database): Long =
   {
     argLookup match {

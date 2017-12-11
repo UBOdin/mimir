@@ -77,7 +77,7 @@ class Eval(
     e match {
       case p : PrimitiveValue => p
       case Var(v) => bindings(v) match {
-        case None => throw new RAException("Variable Out Of Scope: "+v+" (in "+bindings+")");
+        case None => throw new RAException("Variable Out Of Scope: "+v);
         case Some(s) => s
       }
       case RowIdVar() => throw new RAException("Evaluating RowIds in the Interpreter Unsupported")

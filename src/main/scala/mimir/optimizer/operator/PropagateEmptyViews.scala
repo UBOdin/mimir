@@ -22,8 +22,23 @@ class PropagateEmptyViews(typechecker: Typechecker, aggregates: AggregateRegistr
       case Limit(_, _, HardTable(sch,Seq()))     => HardTable(sch,Seq())
 
       case Aggregate(Seq(), agg, HardTable(sch,Seq())) => {
-        val (nsch,data) = agg.map { case AggFunction(function, _, args, alias) => ((alias,aggregates.typecheck(alias, args.map(expr => typechecker.typeOf(expr)))), Seq(aggregates.defaultValue(function))) }.unzip
-        HardTable(  nsch, data )
+        val schMap = sch.toMap
+        val (nsch,data) = agg.map { 
+          case AggFunction(function, _, args, alias) => 
+            (
+              (
+                alias,
+                aggregates.typecheck(
+                  function, 
+                  args.map { expr => 
+                    typechecker.typeOf(expr,schMap)
+                  }
+                )
+              ), 
+              aggregates.defaultValue(function)
+            ) 
+          }.unzip
+        HardTable(nsch, Seq(data))
       }
       case Aggregate(_, _, HardTable(sch,Seq())) => HardTable(typechecker.schemaOf(o),Seq())
 

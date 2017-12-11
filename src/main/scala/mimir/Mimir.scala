@@ -203,14 +203,22 @@ object Mimir extends LazyLogging {
 
     if(rowId == null){
       output.print("==== Explain Table ====")
+      logger.debug("Starting to Explain Table")
       val reasonSets = db.explainer.explainEverything(query)
+      logger.debug("Done Explaining Table")
       for(reasonSet <- reasonSets){
         logger.debug(s"Expanding $reasonSet")
-        val count = reasonSet.size(db);
-        val reasons = reasonSet.take(db, 5);
-        printReasons(reasons);
-        if(count > reasons.size){
-          output.print(s"... and ${count - reasons.size} more like the last")
+        // Workaround for a bug: SQLite crashes if a UDA is run on an empty input
+        if(!reasonSet.isEmpty(db)){
+          logger.debug(s"Not Empty")
+          val count = reasonSet.size(db);
+          logger.debug(s"Size = $count")
+          val reasons = reasonSet.take(db, 5);
+          logger.debug(s"Got ${reasons.size} reasons")
+          printReasons(reasons);
+          if(count > reasons.size){
+            output.print(s"... and ${count - reasons.size} more like the last")
+          }
         }
       }
       if(assign == true) {

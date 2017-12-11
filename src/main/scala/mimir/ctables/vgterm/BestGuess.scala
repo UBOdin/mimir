@@ -10,7 +10,7 @@ case class BestGuess(
   vgArgs: Seq[Expression],
   vgHints: Seq[Expression]
 ) extends Proc(vgArgs++vgHints) {
-  override def toString() = "{{ "+model.name+";"+idx+"["+vgArgs.mkString(", ")+"]["+vgHints.mkString(", ")+"] }}"
+  override def toString() = "{{ BEST GUESS: "+model.name+";"+idx+"["+vgArgs.mkString(", ")+"]["+vgHints.mkString(", ")+"] }}"
   override def getType(bindings: Seq[Type]):Type = model.varType(idx, bindings)
   override def children: Seq[Expression] = vgArgs ++ vgHints
   override def rebuild(x: Seq[Expression]) = {
