@@ -55,13 +55,13 @@ object FeedbackSpec
 
       // Base assumptions.  These may change, but the feedback tests 
       // below should be updated accordingly
-      model.bestGuess(0, List(), List()) must be equalTo(TypePrimitive(TInt()))
+      model.bestGuess(0, List(IntPrimitive(0)), List()) must be equalTo(TypePrimitive(TInt()))
       db.bestGuessSchema(table("TI")).
         find(_._1.equals("A")).get._2 must be equalTo(TInt())
 
-      model.feedback(0, List(), TypePrimitive(TFloat()))
+      model.feedback(0, List(IntPrimitive(0)), TypePrimitive(TFloat()))
 
-      model.bestGuess(0, List(), List()) must be equalTo(TypePrimitive(TFloat()))
+      model.bestGuess(0, List(IntPrimitive(0)), List()) must be equalTo(TypePrimitive(TFloat()))
       db.bestGuessSchema(table("TI")).
         find(_._1.equals("A")).get._2 must be equalTo(TFloat())
     }

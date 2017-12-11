@@ -51,7 +51,7 @@ object TypeInferenceLens extends LazyLogging
           ProjectArg(col, 
             Function("CAST", Seq(
               Var(col),
-              VGTerm(model.name, columnIndexes(col), Seq(), Seq())
+              VGTerm(model.name, 0, Seq(IntPrimitive(columnIndexes(col))), Seq())
             ))
           )
         } else {
