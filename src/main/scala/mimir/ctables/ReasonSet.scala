@@ -16,7 +16,7 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
         db.query(
           query.count( alias = "COUNT" ), 
           UnannotatedBestGuess
-        ) { _.next.tuple(0).asLong > 0 }
+        ) { _.next.tuple(0).asLong <= 0 }
       case None => 
         false
     }    
