@@ -46,6 +46,17 @@ class EvaluateHardTables(typechecker: Typechecker, interpreter: Eval)
         HardTable(sch, newData)
       }
 
+      case Project(exprs, HardTable(Seq(), Seq())) 
+        if exprs.forall { col => safeToEval(col.expression) } =>
+      {
+        HardTable(
+          exprs.map { col => (col.name, typechecker.typeOf(col.expression, o)) },
+          Seq(exprs.map { col =>
+            interpreter.eval(col.expression)
+          })
+        )
+      }
+      
       case Project(exprs, HardTable(sch, data)) 
         if exprs.forall { col => safeToEval(col.expression) } =>
       {
