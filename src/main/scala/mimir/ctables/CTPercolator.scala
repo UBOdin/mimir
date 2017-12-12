@@ -544,8 +544,11 @@ object CTPercolator
         //   As soon as it becomes appropriate to start tagging things... then see 
         //   CTExplainer.explainSubsetWithoutOptimizing for an idea of how to implement this correctly.
         val (newQuery, colDeterminism, rowDeterminism) = percolateLite(query, models)
-        val columns = query.columnNames
-
+        val columns = query match {
+          case Table(_,_,sch,_) => sch.map(_._1)
+          case _ => query.columnNames
+        }
+        
         val inlinedQuery = 
           Project(
             columns.map { col => ProjectArg(col, Var(col)) } ++
