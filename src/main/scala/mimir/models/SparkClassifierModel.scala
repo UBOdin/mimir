@@ -117,7 +117,7 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
                 , db)) 
      } else { 
        sparkMLInstance.extractPredictions(learner.get,
-           sparkMLInstance.applyModel(learner.get,  ("rowid", TString()) +: db.bestGuessSchema(query), List(List(rowid, rowValueHints(colIdx)))))
+           sparkMLInstance.applyModel(learner.get,  ("rowid", TString()) +: db.bestGuessSchema(query).filterNot(_._1.equalsIgnoreCase("rowid")), List(List(rowid, rowValueHints(colIdx)))))
      }} match {
          case Seq() => Seq()
          case x => x.unzip._2

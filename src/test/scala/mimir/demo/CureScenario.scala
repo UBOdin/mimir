@@ -49,6 +49,8 @@ object CureScenario
         time(s"Materialize '$basename'"){
           //XXX: there is a problem with materialized views and MV lens
           //       that needs to be fixed - something with the col det bit vector
+          //      it looks like MIMIR_COL_DET_MIMIR_ROWID_0 is in the non-materialized VIEW's TAINT metadata
+          //      but not in the materialized version of the same view
           //     -Mike
           //update(s"ALTER VIEW $basename MATERIALIZE;")
         }

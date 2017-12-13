@@ -171,6 +171,8 @@ object MimirVizier extends LazyLogging {
   ///////////////////////////////////////////////
   var pythonCallThread : Thread = null
   def loadCSV(file : String) : String = loadCSV(file, ("CSV", Seq(StringPrimitive(","))))
+  def loadCSV(file : String, delimeter:String, inferTypes:Boolean, detectHeaders:Boolean) : String = 
+    loadCSV(file, ("CSV", Seq(StringPrimitive(delimeter), BoolPrimitive(inferTypes), BoolPrimitive(detectHeaders))))
   def loadCSV(file : String, format:(String, Seq[PrimitiveValue])) : String = {
     pythonCallThread = Thread.currentThread()
     val timeRes = time {
@@ -334,15 +336,19 @@ object MimirVizier extends LazyLogging {
     explainCell(oper, col, row)
   }
   
-  def explainCell(oper: Operator, col:Int, row:String) : Seq[mimir.ctables.Reason] = {
+  def explainCell(oper: Operator, colIdx:Int, row:String) : Seq[mimir.ctables.Reason] = {
+    val cols = oper.columnNames
+    explainCell(oper, cols(colIdx), RowIdPrimitive(row))  
+  }
+  
+  def explainCell(oper: Operator, col:String, row:RowIdPrimitive) : Seq[mimir.ctables.Reason] = {
     val timeRes = time {
       try {
       logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + oper + "]"  ) ;
-      val cols = oper.columnNames
-      val provFilteredOper = db.explainer.filterByProvenance(oper,RowIdPrimitive(row))
+      val provFilteredOper = db.explainer.filterByProvenance(oper,row)
       val subsetReasons = db.explainer.explainSubset(
               provFilteredOper, 
-              Seq(cols(col)).toSet, false, false)
+              Seq(col).toSet, false, false)
       db.explainer.getFocusedReasons(subsetReasons)
       } catch {
           case t: Throwable => {
@@ -350,7 +356,6 @@ object MimirVizier extends LazyLogging {
             Seq[Reason]()
           }
         }
-      
     }
     logger.debug(s"explainCell Took: ${timeRes._2}")
     timeRes._1
@@ -559,7 +564,7 @@ object MimirVizier extends LazyLogging {
      })
      val resCSV = results.toArray[Row](Array()).seq.map(row => {
        val truples = colsIndexes.map( (i) => {
-         (row(i).toString, row.isColDeterministic(i), if(!row.isColDeterministic(i))db.explainCell(oper, row.provenance, cols(i)).reasons.mkString(",")else"") 
+         (row(i).toString, row.isColDeterministic(i), if(!row.isColDeterministic(i))explainCell(oper, cols(i), row.provenance).mkString(",")else"") 
        }).unzip3
        (truples._1.mkString(", "), (truples._2.toArray, row.isDeterministic(), row.provenance.asString), truples._3.toArray)
      }).unzip3
