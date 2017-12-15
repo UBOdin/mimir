@@ -81,8 +81,6 @@ object BestGuess
       provenanceCols.toSet ++
       (colDeterminism.map(_._2) ++ Seq(rowDeterminism)).flatMap( ExpressionUtils.getColumns(_) ).toSet
 
-    //related to CureScenario materialized view causing test to fail
-    //oper = oper.removeColumn(provenanceCols.map(col => CTPercolator.mimirColDeterministicColumnPrefix + col):_*)
     oper = ProjectRedundantColumns(oper, minimalSchema)
 
     logger.debug(s"PRE-OPTIMIZED: $oper")

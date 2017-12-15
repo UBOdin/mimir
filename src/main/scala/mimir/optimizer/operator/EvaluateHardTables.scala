@@ -49,8 +49,9 @@ class EvaluateHardTables(typechecker: Typechecker, interpreter: Eval)
       case Project(exprs, HardTable(Seq(), Seq())) 
         if exprs.forall { col => safeToEval(col.expression) } =>
       {
+        val sch = typechecker.schemaOf(o).toMap
         HardTable(
-          exprs.map { col => (col.name, typechecker.typeOf(col.expression, o)) },
+          exprs.map { col => (col.name, sch(col.name))},
           Seq(exprs.map { col =>
             interpreter.eval(col.expression)
           })
