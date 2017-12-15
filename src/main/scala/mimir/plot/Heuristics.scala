@@ -15,7 +15,7 @@ object Heuristics
   ): (Operator, Seq[Plot.Line], Plot.Config) = 
   {
     //if no lines are specified, try to find the best ones
-    val columns = db.bestGuessSchema(dataQuery)
+    val columns = db.schemaOf(dataQuery)
     val columnMap = columns.toMap
     val numericColumns =
       columns.toSeq
@@ -23,7 +23,7 @@ object Heuristics
         .map { _._1 }
       //if that comes up with nothing either, then throw an exception
     if(numericColumns.isEmpty){
-      throw new RAException(s"No valid columns for plotting: ${db.bestGuessSchema(dataQuery).map { x => x._1+":"+x._2 }.mkString(",")}")
+      throw new RAException(s"No valid columns for plotting: ${db.schemaOf(dataQuery).map { x => x._1+":"+x._2 }.mkString(",")}")
     }
     val x = numericColumns.head
     if(numericColumns.tail.isEmpty){

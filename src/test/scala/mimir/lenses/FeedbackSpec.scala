@@ -17,8 +17,8 @@ object FeedbackSpec
     update("CREATE TABLE R(A string, B int, C int)")
     loadCSV("R", new File("test/r_test/r.csv"))
     update("CREATE LENS MATCH AS SELECT * FROM R WITH SCHEMA_MATCHING('B int', 'CX int')")
-    update("CREATE LENS TI AS SELECT * FROM R WITH TYPE_INFERENCE(0.5)")
-    update("CREATE LENS MV AS SELECT * FROM R WITH MISSING_VALUE('B', 'C')")
+    db.adaptiveSchemas.create("R_TI", "TYPE_INFERENCE", db.table("R"), Seq(FloatPrimitive(.5))) 
+		update("CREATE LENS MV AS SELECT * FROM R WITH MISSING_VALUE('B', 'C')")
   }
 
   "The Edit Distance Match Model" should {
@@ -51,18 +51,18 @@ object FeedbackSpec
   "The Type Inference Model" should {
 
     "Support direct feedback" >> {
-      val model = db.models.get("TI")
+      val model = db.models.get("MIMIR_TI_ATTR_R_TI")
 
       // Base assumptions.  These may change, but the feedback tests 
       // below should be updated accordingly
       model.bestGuess(0, List(IntPrimitive(0)), List()) must be equalTo(TypePrimitive(TInt()))
-      db.bestGuessSchema(table("TI")).
+      db.schemaOf(db.adaptiveSchemas.viewFor("R_TI", "DATA").get).
         find(_._1.equals("A")).get._2 must be equalTo(TInt())
 
       model.feedback(0, List(IntPrimitive(0)), TypePrimitive(TFloat()))
-
+      db.models.persist(model)
       model.bestGuess(0, List(IntPrimitive(0)), List()) must be equalTo(TypePrimitive(TFloat()))
-      db.bestGuessSchema(table("TI")).
+      db.schemaOf(db.adaptiveSchemas.viewFor("R_TI", "DATA").get).
         find(_._1.equals("A")).get._2 must be equalTo(TFloat())
     }
   }

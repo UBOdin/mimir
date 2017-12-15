@@ -14,7 +14,7 @@ import net.sf.jsqlparser.statement.select.Select
 import net.sf.jsqlparser.statement.update.Update
 import py4j.GatewayServer
 import mimir.exec.Compiler
-import mimir.gprom.algebra.OperatorTranslation
+import mimir.algebra.gprom.OperatorTranslation
 import org.gprom.jdbc.jna.GProMWrapper
 import mimir.ctables.Reason
 import org.slf4j.{LoggerFactory}

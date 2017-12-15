@@ -9,7 +9,7 @@ import java.sql.SQLException
 import java.util.ArrayList
 import mimir.algebra.Typechecker
 import org.gprom.jdbc.jna.GProMList
-import mimir.gprom.algebra.OperatorTranslation
+import mimir.algebra.gprom.OperatorTranslation
 import org.gprom.jdbc.jna.GProMNode
 import mimir.algebra.TInt
 import mimir.algebra.TFloat
@@ -58,7 +58,7 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
     gpischm = OperatorTranslation.getSchemaForGProM(operator).map(si => {
       new OperatorTranslation.MimirToGProMIntermediateSchemaInfo(si.name, si.alias, si.attrName, si.attrName, si.attrProjectedName, si.attrType, si.attrPosition, si.attrFromClausePosition)
     })
-    fakeTuple = generateFakeRow(db.bestGuessSchema(operator))
+    fakeTuple = generateFakeRow(db.schemaOf(operator))
   }
   override def getFuncReturnType( fName:String, args: GProMList,
 		  numArgs:Int) : String = {

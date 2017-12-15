@@ -60,7 +60,7 @@ class ViewMetadata(
   def schema: Seq[(String, Type)] =
   {
     //XXX: HACK!  Type Inference really really really needs to become an adaptive schema
-    db.bestGuessSchema(query)
+    db.schemaOf(query)
   }
 
   def schemaWith(requiredAnnotations:Set[ViewAnnotation.T]) =

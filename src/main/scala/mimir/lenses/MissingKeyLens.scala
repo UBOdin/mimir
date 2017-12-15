@@ -18,7 +18,7 @@ object MissingKeyLens {
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
   {
-    val schema = db.bestGuessSchema(query)
+    val schema = db.schemaOf(query)
     val schemaMap = schema.toMap
     var missingOnly = false;
     var sortCols = Seq[(String, Boolean)]()

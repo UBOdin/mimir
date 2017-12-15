@@ -606,6 +606,6 @@ object CTPercolator
   
   def percolateGProM(oper: Operator): (Operator, Map[String,Expression], Expression) =
   {
-    mimir.gprom.algebra.OperatorTranslation.compileTaintWithGProM(oper)
+    mimir.algebra.gprom.OperatorTranslation.compileTaintWithGProM(oper)
   }
 }

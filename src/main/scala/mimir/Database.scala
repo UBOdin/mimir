@@ -182,7 +182,7 @@ case class Database(backend: Backend)
     query(select(stmt), BestGuess)(handler)
 
 
-  /**
+  /*/**
    * Make an educated guess about what the query's schema should be
    * XXX: Only required because the TypeInference lens is a little punk birch that needs to
    *      be converted into an adaptive schema (#193).
@@ -191,6 +191,17 @@ case class Database(backend: Backend)
   {
     val Inline = new OptimizeExpressions(compiler.optimize(_))
     typechecker.schemaOf(Inline(InlineVGTerms(oper, this)))
+  }*/
+  
+  /**
+   * Shortcut to get the schema of an operator.  This will 
+   * produce incorrent result if there is a type inference lens
+   * in the operator.  It will be save to use once we kill TI 
+   * lens. 
+   */
+  def schemaOf(oper: Operator): Seq[(String, Type)] =
+  {
+    typechecker.schemaOf(oper)
   }
 
   /**

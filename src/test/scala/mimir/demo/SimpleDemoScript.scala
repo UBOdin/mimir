@@ -63,7 +63,7 @@ object SimpleDemoScript
 			db.typechecker.typeOf(Var("NUM_RATINGS"), oper) must be oneOf(TInt(), TFloat(), TAny())
 		}
 
-    "Create and Query Type Inference Lens with NULL values" >> {
+    "Create and Query Type Inference Adaptive Schema with NULL values" >> {
       update("""
 				CREATE LENS null_test
 				  AS SELECT * FROM RATINGS3
@@ -84,19 +84,16 @@ object SimpleDemoScript
     }
 
 
-		"Create and Query Type Inference Lenses" >> {
-			update("""
-				CREATE LENS new_types
-				  AS SELECT * FROM USERTYPES
-				  WITH Type_Inference(.9)
-					 			""")
-			query("SELECT * FROM new_types;"){ _.toSeq must have size(3) }
+		"Create and Query Type Inference Adaptive Schemas" >> {
+			db.adaptiveSchemas.create("NEW_TYPES_TI", "TYPE_INFERENCE", db.table("USERTYPES"), Seq(FloatPrimitive(.9))) 
+			db.views.create("NEW_TYPES", db.adaptiveSchemas.viewFor("NEW_TYPES_TI", "DATA").get)
+      query("SELECT * FROM new_types;"){ _.toSeq must have size(3) }
 			query("SELECT * FROM RATINGS1;"){ _.toSeq must have size(4) }
 			query("SELECT RATING FROM RATINGS1;"){ _.map { _(0) }.toSeq must contain(eachOf(f(4.5), f(4.0), f(6.4), NullPrimitive())) }
 			query("SELECT * FROM RATINGS1 WHERE RATING IS NULL"){ _.toSeq must have size(1) }
 			query("SELECT * FROM RATINGS1 WHERE RATING > 4;"){ _.toSeq must have size(2) }
 			query("SELECT * FROM RATINGS2;"){ _.toSeq must have size(3) }
-			db.bestGuessSchema(select("SELECT * FROM RATINGS2;")).
+			db.schemaOf(select("SELECT * FROM RATINGS2;")).
 				map(_._2).map(Type.rootType _) must be equalTo List(TString(), TFloat(), TFloat())
 		}
 

@@ -242,7 +242,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
   }
 
   def guessInputType: Type =
-    db.bestGuessSchema(query)(colIdx)._2
+    db.schemaOf(query)(colIdx)._2
 
   def argTypes(idx: Int): Seq[Type] = List(TRowId())
   def hintTypes(idx: Int) = db.typechecker.schemaOf(query).map(_._2)
