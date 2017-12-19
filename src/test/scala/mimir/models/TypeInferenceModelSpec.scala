@@ -12,18 +12,16 @@ object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
 with BeforeAll
 {
   sequential
-  
   def beforeAll = 
   {
-    loadCSV("Dummy_data", new File("test/repair_key/fd_dag.csv"))
-    
-    
+    update("CREATE TABLE Dummy_data(ATTR int, PARENT int, strength float)")
+    loadCSV("Dummy_data", new File("test/repair_key/fd_Dag.csv"))
   }
+
   
   def train(elems: List[String]): TypeInferenceModel = 
   {
-    val operator = db.table("Dummy_data")
-    val model = new TypeInferenceModel("TEST_MODEL", Array("TEST_COLUMN"), 0.5, 1000, operator)
+    val model = new TypeInferenceModel("TEST_MODEL", Array("TEST_COLUMN"), 0.5, 1000, db.table("Dummy_data"))
     elems.foreach( model.learn(0, _) )
     return model
   }
@@ -68,6 +66,7 @@ with BeforeAll
     }
     
     "Update itself" >> {
+      update("CREATE TABLE Progressive_update(Category1 int, Category2 string, Category3 float)")
       loadCSV("Progressive_update", new File("test/data/InferenceModelProgressive.csv"))
       val model = new TypeInferenceModel("PROGRESSIVE_UPDATE:CATEGORY3",Array("CATEGORY3"),0.5,1000,db.table("Progressive_update"))
       db.models.persist(model)
@@ -95,6 +94,7 @@ with BeforeAll
      Thread.sleep(30000)
      guess(model) must be equalTo(TFloat())
     }
-
+    
+    
   }
 }

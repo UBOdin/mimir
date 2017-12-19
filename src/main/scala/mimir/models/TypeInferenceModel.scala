@@ -167,14 +167,14 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
   var completed = false
   def progressiveTrain(db: Database, query:Operator) : Unit = {
     if (total == 0) {total =  db.query(query.count(false, "countedData")) {results => results.toList.head(0).asInt}}
-    TimeUtils.monitor(s"Train $name progressively", TypeInferenceModel.logger.info(_)){
+    //TimeUtils.monitor(s"Train $name progressively", TypeInferenceModel.logger.info(_)){
       db.query(
         Limit(startSample, Some(nextSample), Project(
           columns.map( c => ProjectArg(c, Var(c)) ),
           query
         ))
       ) { _.foreach { row => learn(row.tuple)  } }
-    }
+    //}
     TypeInferenceModel.logger.debug(s"VOTES(after a progressive iteration):${columns.zip(votes).map { col => "\n   "+col._1+": "+col._2.map { vote => "\n      "+vote._1+"->"+vote._2 }}}")
     startSample = nextSample
     nextSample = nextSample + 1000
