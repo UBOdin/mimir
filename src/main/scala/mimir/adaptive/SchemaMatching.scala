@@ -148,8 +148,6 @@ case class SchemaMatchingProxyModel(override val name: String, val targetSchema:
   with Serializable 
   with NeedsDatabase
 {
-  var acked = false
-
   def argTypes(idx: Int) = List(TInt())
   def hintTypes(idx: Int) = Seq()
   def varType(idx: Int, args: Seq[Type]) = TString()
