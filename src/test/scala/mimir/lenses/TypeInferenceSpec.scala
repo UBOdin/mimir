@@ -11,7 +11,7 @@ object TypeInferenceSpec
 
   "The Type Inference Lens" should {
 
-    "Be able to create and query type inference lenses" >> {
+    "Be able to create and query type inference adaptive schemas" >> {
  
       db.loadTable("CPUSPEED", new File("test/data/CPUSpeed.csv"))
 

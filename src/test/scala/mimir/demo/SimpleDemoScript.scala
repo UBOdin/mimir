@@ -146,27 +146,28 @@ object SimpleDemoScript
 
 		"Create and Query Schema Matching Lenses" >> {
 			update("""
-				CREATE LENS RATINGS2FINAL 
+				CREATE ADAPTIVE SCHEMA RATINGS2FINAL_SM 
 				  AS SELECT * FROM RATINGS2 
 				  WITH SCHEMA_MATCHING('PID string', 'RATING float', 'REVIEW_CT float')
 			""")
+			db.views.create("RATINGS2FINAL", db.adaptiveSchemas.viewFor("RATINGS2FINAL_SM", "DATA").get)
 			query("SELECT RATING FROM RATINGS2FINAL") { result =>
 				val result1 = result.toList.map { _(0).asDouble }.toSeq 
 				result1 must have size(3)
 				result1 must contain(eachOf( 121.0, 5.0, 4.0 ) )
 			}
-		}
+	  }
 
 		"Obtain Row Explanations for Simple Queries" >> {
 			val expl = 
 				LoggerUtils.trace(
 						// "mimir.ctables.CTExplainer"
 				) {
-					explainRow("""
+			    val oper = select("""
 							SELECT * FROM RATINGS2FINAL WHERE RATING > 3
-						""", "2")
+						""")
+					db.explainer.explainEverything( oper).flatMap(_.all(db))
 				}
-
 			expl.toString must contain("I assumed that NUM_RATINGS maps to RATING")		
 		}
 
@@ -288,16 +289,17 @@ object SimpleDemoScript
 				LoggerUtils.trace(
 					// "mimir.ctables.CTExplainer"
 				){ 
-					explainCell("""
+					val oper = select("""
 						SELECT p.name, r.rating FROM (
 							SELECT * FROM RATINGS1FINAL 
 								UNION ALL 
 							SELECT * FROM RATINGS2FINAL
 						) r, Product p
-						""", "3|1|4", "RATING")
+						Where ROWID() = '3|1|4'""")
+					db.explainer.explainEverything(oper).flatMap(_.all(db))
 				}
-			explain0.reasons.map(_.model.name.replaceAll(":.*", "")) must contain(eachOf(
-				"RATINGS2FINAL"//,
+			explain0.map(_.model.name.replaceAll(":.*", "")) must contain(eachOf(
+				"RATINGS2FINAL_SM"//,
 				//"RATINGS2"
 			))
 

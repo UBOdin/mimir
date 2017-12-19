@@ -120,9 +120,6 @@ object CureScenario
 
 //    true
     "Explain the CURE Query" >> {
-      // The type inference lens strikes again...
-      //    we should be able to use schemaOf, but instead we need schemaOf
-      // db.typechecker.schemaOf(select(cureQuery))
       db.schemaOf(select(cureQuery))
       ok
     }

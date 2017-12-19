@@ -16,7 +16,7 @@ object FeedbackSpec
   {
     update("CREATE TABLE R(A string, B int, C int)")
     loadCSV("R", new File("test/r_test/r.csv"))
-    update("CREATE LENS MATCH AS SELECT * FROM R WITH SCHEMA_MATCHING('B int', 'CX int')")
+    update("CREATE ADAPTIVE SCHEMA MATCH AS SELECT * FROM R WITH SCHEMA_MATCHING('B int', 'CX int')")
     db.adaptiveSchemas.create("R_TI", "TYPE_INFERENCE", db.table("R"), Seq(FloatPrimitive(.5))) 
 		update("CREATE LENS MV AS SELECT * FROM R WITH MISSING_VALUE('B', 'C')")
   }

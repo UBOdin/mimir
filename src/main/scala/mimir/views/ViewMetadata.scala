@@ -59,7 +59,7 @@ class ViewMetadata(
 
   def schema: Seq[(String, Type)] =
   {
-    //XXX: HACK!  Type Inference really really really needs to become an adaptive schema
+    //XXX: No More HACK!  Type Inference has become an adaptive schema
     db.schemaOf(query)
   }
 
