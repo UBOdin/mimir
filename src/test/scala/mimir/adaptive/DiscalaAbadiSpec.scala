@@ -228,9 +228,9 @@ object DiscalaAbadiSpec
     }
 
     "Generate legitimate explanations on query results" >> {
-      explainEverything("""
+      db.explainer.explainEverything(db.sql.convert(stmt("""
         SELECT QUANTITY FROM SHIPPING.BILL_OF_LADING_NBR
-      """).flatMap(_.all(db)).map(_.reason) must contain(
+      """).asInstanceOf[net.sf.jsqlparser.statement.select.Select])).flatMap(_.all(db)).map(_.reason) must contain(
         "QUANTITY could be organized under any of BILL_OF_LADING_NBR (19), ROOT (-1); I chose BILL_OF_LADING_NBR"
       )
     }

@@ -137,11 +137,23 @@ object ProjectRedundantColumns extends OperatorOptimization {
           groupby.flatMap( ExpressionUtils.getColumns(_) ).
             toSet
 
+        val allDownwardDependencies = computedDependencies ++ groupbyDependencies
+
+        // It is possible for an Aggregate column to want to project away ALL columns
+        // While this isn't a problem for us, it makes it VERY difficult to convert the resulting
+        // expression to SQL.  Preseve a single (arbitrary) column for safety in this case.
+        val safeDownwardDependencies =
+          if(allDownwardDependencies.isEmpty){
+            Set(source.columnNames.head)
+          } else {
+            allDownwardDependencies
+          }
+
         val aggregate = 
           Aggregate(
             groupby,
             computed.filter( (column) => dependencies contains column.alias ),
-            apply(source, computedDependencies ++ groupbyDependencies)
+            apply(source, safeDownwardDependencies)
           )
 
         projectIfNeeded(aggregate, dependencies)
@@ -150,9 +162,20 @@ object ProjectRedundantColumns extends OperatorOptimization {
       case view: View => view
       case view: AdaptiveView => view
       case table: Table => table
-      case table@ HardTable(_,Seq()) => table //EmptyTable
       case HardTable(sch,data) => 
-        HardTable(sch.filter { case (name, _) => dependencies contains name }, data)
+      {
+        val colNamesWithIndices = 
+          sch.map { _._1 }.zipWithIndex
+        val columnIndicesToKeep = 
+          colNamesWithIndices
+            .filter { case (col, _) => dependencies contains col }
+            .map { _._2 }
+
+        HardTable(
+          columnIndicesToKeep.map { sch(_) },
+          data.map { row => columnIndicesToKeep.map { row(_) } }
+        )
+      }
 
       case LeftOuterJoin(lhs, rhs, condition) => {
         val childDependencies = 

@@ -88,9 +88,9 @@ object Json
 
       case HardTable(schema,data) => 
         JsObject(Map[String, JsValue](
-          "type" -> JsString("table_hardocded"),
+          "type" -> JsString("table_hardcoded"),
           "schema" -> ofSchema(schema),
-          "data" -> JsArray(data.map( row => JsArray( row.map( hv => ofExpression(hv)))))
+          "data" -> JsArray(data.map( row => JsArray( row.map( hv => ofPrimitive(hv)))))
         ))
 
       case View(name, query, annotations) => 

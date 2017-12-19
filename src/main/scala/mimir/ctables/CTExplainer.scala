@@ -412,8 +412,10 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 	def explainEverything(oper: Operator): Seq[ReasonSet] = 
 	{
-		logger.debug("Explain Everything: \n"+oper)
-		mergeReasons(explainSubset(oper, oper.columnNames.toSet, true, true))
+		logger.debug(s"Explain Everything: \n$oper")
+		val ret = mergeReasons(explainSubset(oper, oper.columnNames.toSet, true, true))
+		logger.trace(s"Done Explaining Everything in: \n$oper")
+		return ret
 	}
 
 	def explainSubset(
@@ -440,6 +442,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 			case AdaptiveView(model, name, query, _) => {
 				// Source 1: Recur:  
+				logger.debug(s"Explain Adaptive View Source 1: Recursion into $model.$name")
 				val sourceReasons = 
 					explainSubsetWithoutOptimizing(query, wantCol, wantRow, wantSort)
 
@@ -451,6 +454,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 						}
 
 				// Source 2: There might be uncertainty on the table.  Use SYS_TABLES to dig these annotations up.
+				logger.debug(s"Explain Adaptive View Source 2: $model.$name")
 				val tableReasons = explainEverything(
 					multilens.tableCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name) )
 				)
@@ -458,9 +462,11 @@ class CTExplainer(db: Database) extends LazyLogging {
 				//    db.table("SYS_TABLES").where( Var("SCHEMA").eq(StringPrimitive(model)).and( Var("TABLE").eq(StringPrimitive(name)) ) )
 
 				// Source 3: Check for uncertainty in one of the attributes of interest
+				logger.debug(s"Explain Adaptive View Source 3: $model.$name attributes")
 				val attrReasons = explainEverything(
 					multilens.attrCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name).and( Var("ATTR_NAME").in( wantCol.toSeq.map { StringPrimitive(_) } ) ) )
 				)
+				logger.debug(s"Explain Adaptive View Done: $model.$name")
 				// alternative: Use SYS_ATTRS directly
 				//    db.table("SYS_TABLES").where( Var("SCHEMA").eq(StringPrimitive(model)).and( Var("TABLE").eq(StringPrimitive(name)) ).and( Var("ATTR").in(wantCol.map(StringPrimitive(_))) ) )
 				sourceReasons ++ tableReasons ++ attrReasons

@@ -100,6 +100,7 @@ object ModelRegistry
   val imputations = Map[String,ImputationConstructor](
     ("SPARKML" -> (SparkClassifierModel.train _)),
     ("INTERPOLATE" -> (SeriesMissingValueModel.train _))
+    //("FUNCDEP" -> (FuncDepModel.train _))
   )
 
   /**

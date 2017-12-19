@@ -26,6 +26,7 @@ class Compiler(db: Database) extends LazyLogging {
 
   def operatorOptimizations: Seq[OperatorOptimization] =
     Seq(
+      new EvaluateHardTables(db.typechecker, db.interpreter),
       ProjectRedundantColumns,
       InlineProjections,
       PushdownSelections,

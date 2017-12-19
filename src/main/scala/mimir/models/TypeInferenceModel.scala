@@ -39,10 +39,13 @@ object TypeInferenceModel
 }
 
 @SerialVersionUID(1001L)
+<<<<<<< HEAD
 class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac: Double, sampleArg: Int, query: Operator)
+=======
+class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultFrac: Double)
+>>>>>>> 6693f819d54853f5ca4349b941bedf58f8f380ba
   extends Model(name)
-  with DataIndependentFeedback
-  with NoArgModel
+  with SourcedFeedback
   with FiniteDiscreteDomain
   with ProgressiveUpdate
 {
@@ -102,16 +105,19 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
     (x._2, TypeInferenceModel.priority(x._1) )
 
   def varType(idx: Int, argTypes: Seq[Type]) = TType()
-  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = {
+    val column = args(0).asInt
     TypePrimitive(
-      RandUtils.pickFromWeightedList(randomness, voteList(idx))
+      RandUtils.pickFromWeightedList(randomness, voteList(column))
     )
+  }
 
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
   {
-    choices(idx) match {
+    val column = args(0).asInt
+    getFeedback(idx, args) match {
       case None => {
-        val guess = voteList(idx).maxBy( rankFn _ )._1
+        val guess =  voteList(column).maxBy( rankFn _ )._1
         TypePrimitive(guess)
       }
       case Some(s) => Cast(TType(), s)
@@ -123,11 +129,12 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
 
 
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = {
-    choices(idx) match {
+    val column = args(0).asInt
+    getFeedback(idx, args) match {
       case None => {
-        val (guess, guessVotes) = voteList(idx).maxBy( rankFn _ )
+        val (guess, guessVotes) = voteList(column).maxBy( rankFn _ )
         val defaultPct = (defaultFrac * 100).toInt
-        val guessPct = ((guessVotes / totalVotes(idx))*100).toInt
+        val guessPct = ((guessVotes / totalVotes(column))*100).toInt
         val typeStr = Type.toString(guess).toUpperCase
         val reason =
           guess match {
@@ -138,26 +145,65 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
             case _ => 
               s"around $guessPct% of the data fit"
           }
-        s"I guessed that $name.${columns(idx)} was of type $typeStr because $reason"
+        s"I guessed that $name.${columns(column)} was of type $typeStr because $reason"
       }
       case Some(t) =>
         val typeStr = Cast(TType(), t).toString.toUpperCase
-        s"${getReasonWho(idx,args)} told me that $name.${columns(idx)} was of type $typeStr"
+        s"${getReasonWho(column,args)} told me that $name.${columns(column)} was of type $typeStr"
     }
   }
 
+<<<<<<< HEAD
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
     votes(idx).toList.map( x => (TypePrimitive(x._1), x._2)) ++ Seq( (TypePrimitive(TString()), defaultFrac) )
   def isPerfectGuess(idx: Int): Boolean =
+=======
+  def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = 
+>>>>>>> 6693f819d54853f5ca4349b941bedf58f8f380ba
   {
-    voteList(idx).map( _._2 ).max >= totalVotes(idx)
+    val column = args(0).asInt
+    votes(column).toList.map( x => (TypePrimitive(x._1), x._2)) ++ Seq( (TypePrimitive(TString()), defaultFrac) )
   }
 
-  override def isAcknowledged(idx: Int, args: Seq[PrimitiveValue]): Boolean =
+  def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
   {
-    super.isAcknowledged(idx, args) || isPerfectGuess(idx)
+    if(v.isInstanceOf[TypePrimitive]){
+      setFeedback(idx, args, v)
+    } else {
+      throw new ModelException(s"Invalid choice for $name: $v")
+    }
+  }
+
+  def isAcknowledged(idx: Int,args: Seq[mimir.algebra.PrimitiveValue]): Boolean =
+    isPerfectGuess(args(0).asInt) || (getFeedback(idx, args) != None)
+  def isPerfectGuess(column: Int): Boolean =
+    voteList(column).map( _._2 ).max >= totalVotes(column)
+  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]): String = 
+    args(0).asString
+  def argTypes(idx: Int): Seq[Type] = 
+    Seq(TInt())
+  def hintTypes(idx: Int): Seq[Type] = 
+    Seq()
+
+
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = {
+    val column = args(0).asInt
+    getFeedback(idx, args) match {
+      case None => {
+        val (guess, guessVotes) = voteList(column).maxBy( rankFn _ )
+        val defaultPct = (defaultFrac * 100).toInt
+        val guessPct = ((guessVotes / totalVotes(column))*100).toInt
+        val typeStr = Type.toString(guess).toUpperCase
+        if (guessPct > defaultPct)
+          guessVotes / totalVotes(column)
+        else
+          defaultFrac
+        }
+      case Some(t) => 1.0
+    }
   }
   
+<<<<<<< HEAD
   
   //This progressive training iterates itself upon every ping of a thread, creating a new model to associate
   //in the model manager.
@@ -189,4 +235,6 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
   def getQuery(): Operator = {query}
   
   def getNextSample(): Int = {nextSample}
+=======
+>>>>>>> 6693f819d54853f5ca4349b941bedf58f8f380ba
 }

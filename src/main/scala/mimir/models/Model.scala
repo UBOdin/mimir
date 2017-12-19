@@ -122,6 +122,14 @@ abstract class Model(val name: String) extends Serializable {
     (SerializationUtils.serialize(this), "JAVA")
 
   /**
+    * Return confidence on a scale of 0 to 1
+    * @param idx   The index of the variable family to record feedback for
+    * @param args  The skolem identifier for the specific variable to record feedback for
+    * @return The confidence value
+    */
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Double
+
+  /**
    * A string representation of this model
    */
   override def toString: String = name

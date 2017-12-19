@@ -546,4 +546,3 @@ class Max extends org.sqlite.Function.Aggregate {
     if(empty){ result() } else { result(theVal) }
   }
 }
-
