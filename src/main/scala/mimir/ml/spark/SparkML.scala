@@ -12,7 +12,7 @@ import mimir.util.ExperimentalOptions
 
 object SparkML {
   type SparkModel = PipelineModel
-  case class SparkModelGeneratorParams(query:Operator, db:Database, predictionCol:String)
+  case class SparkModelGeneratorParams(query:Operator, db:Database, predictionCol:String, handleInvalid:String /*keep, skip, error*/) 
   type SparkModelGenerator = SparkModelGeneratorParams => PipelineModel
   var sc: Option[SparkContext] = None
   var sqlCtx : Option[SQLContext] = None
@@ -78,19 +78,20 @@ abstract class SparkML {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._
     sqlContext.createDataFrame(
-      getSparkSession().parallelize(db.query(query, mimir.exec.mode.BestGuess)(results => {
+      getSparkSession().parallelize(db.query(query)(results => {
         results.toList.map(row => Row((valuePreparer(row.provenance, TString() ) +: row.tuple.zip(schema).map(value => valuePreparer(value._1, value._2._2))):_*))
-      })), StructType(StructField("rowid", StringType, false) :: schema.map(col => StructField(col._1, sparkTyper(col._2), true))))
+      })), StructType(StructField("rowid", StringType, false) :: schema.filterNot(_._1.equalsIgnoreCase("rowid")).map(col => StructField(col._1, sparkTyper(col._2), true))))
   }
   
-  def applyModelDB(model : PipelineModel, query : Operator, db:Database, valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType, dfTransformer:Option[DataFrameTransformer] = Some(nullValueReplacement)) : DataFrame = {
-    val data = db.query(query, mimir.exec.mode.BestGuess)(results => {
-      results.toList.map(row => row.provenance +: row.tuple)
+  def applyModelDB(model : PipelineModel, query : Operator, db:Database, valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType, dfTransformer:Option[DataFrameTransformer] = None) : DataFrame = {
+    val data = db.query(query)(results => {
+      results.toList.map(row => row.provenance +: row.tupleSchema.zip(row.tuple).filterNot(_._1._1.equalsIgnoreCase("rowid")).unzip._2)
     })
-    applyModel(model, ("rowid", TString()) +:db.bestGuessSchema(query), data, valuePreparer, sparkTyper, dfTransformer)
+    val bgs = db.bestGuessSchema(query)
+    applyModel(model, ("rowid", TString()) +:db.bestGuessSchema(query).filterNot(_._1.equalsIgnoreCase("rowid")), data, valuePreparer, sparkTyper, dfTransformer)
   }
   
-  def applyModel( model : PipelineModel, cols:Seq[(String, Type)], testData : List[Seq[PrimitiveValue]], valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType, dfTransformer:Option[DataFrameTransformer] = Some(nullValueReplacement)): DataFrame = {
+  def applyModel( model : PipelineModel, cols:Seq[(String, Type)], testData : List[Seq[PrimitiveValue]], valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType, dfTransformer:Option[DataFrameTransformer] = None): DataFrame = {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._
     val modDF = dfTransformer.getOrElse((df:DataFrame) => df)

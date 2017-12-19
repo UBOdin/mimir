@@ -18,6 +18,7 @@ object PickerSpec
     update("INSERT INTO R (A, B) VALUES(1, 2)")
     update("INSERT INTO R (A, B) VALUES(NULL, 3)")
     update("INSERT INTO R (A, B) VALUES(4, 4)")
+    update("INSERT INTO R (A, B) VALUES(2, 2)")
   }
   
   "The Picker Lens" should {

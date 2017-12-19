@@ -49,7 +49,7 @@ object SimpleDemoScript
 		"Load CSV Files" >> {
 			reviewDataFiles.foreach( db.loadTable(_) )
 			query("SELECT * FROM RATINGS1;") { _.toSeq must have size(4) }
-			db.query(db.adaptiveSchemas.viewFor("RATINGS1_DH", "RATINGS1").get.project("RATING")) { 
+			db.query(db.adaptiveSchemas.viewFor("RATINGS1_DH", "DATA").get.project("RATING")) { 
 				_.map { _(0) }.toSeq must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
 			}
 			query("SELECT * FROM RATINGS2;") { _.toSeq must have size(3) }

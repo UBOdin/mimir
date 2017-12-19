@@ -50,6 +50,17 @@ class CommentModel(override val name: String, cols:Seq[String], colTypes:Seq[Typ
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = hasFeedback(idx, args)
   def hintTypes(idx: Int): Seq[mimir.algebra.Type] = colTypes
   //def getDomain(idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = Seq((hints(0), 0.0))
-  
-     
+
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Double = {
+    val rowid = RowIdPrimitive(args(0).asString)
+    getFeedback(idx,args) match {
+      case Some(v) => {
+        1.0
+      }
+      case None => {
+        0.0
+      }
+    }
+  }
+
 }

@@ -238,11 +238,23 @@ class ViewManager(db:Database) extends LazyLogging {
   {
     logger.warn("Constructing lens attribute list not implemented yet")
     HardTable(Seq(
-      ("TABLE_NAME", TString()), 
-      ("ATTR_NAME", TString()),
-      ("ATTR_TYPE", TString()),
-      ("IS_KEY", TBool())
-    ),Seq())
+        ("TABLE_NAME", TString()), 
+        ("ATTR_NAME", TString()),
+        ("ATTR_TYPE", TString()),
+        ("IS_KEY", TBool())
+      ),
+      list().flatMap { view => 
+        db.typechecker.schemaOf(get(view).get.query).map { case (col, t) =>
+          Seq(
+            StringPrimitive(view),
+            StringPrimitive(col),
+            TypePrimitive(t),
+            BoolPrimitive(false)
+          )
+        }
+
+      }
+    )
   }
 
   /**
@@ -282,6 +294,9 @@ class ViewManager(db:Database) extends LazyLogging {
           },
           metadata.table
         )
+      }
+      case AdaptiveView(schema, name, query, wantAnnotations) => {
+        return resolve(query)
       }
 
       case _ =>

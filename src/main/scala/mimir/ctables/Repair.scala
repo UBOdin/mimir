@@ -56,9 +56,10 @@ case class RepairByType(t: Type)
     val tString =
       t match {
         case TUser(ut) => ut
+        case TString() => "any string"
         case _ => t.toString
       }
-    s"< ${tString} >"
+    s"<${tString}>"
   }
 }
 
