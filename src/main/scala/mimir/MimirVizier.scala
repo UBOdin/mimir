@@ -21,6 +21,7 @@ import org.slf4j.{LoggerFactory}
 import ch.qos.logback.classic.{Level, Logger}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import net.sf.jsqlparser.statement.Statement
+import mimir.serialization.Json
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -424,6 +425,46 @@ object MimirVizier extends LazyLogging {
     logger.debug(s"explainSubset Took: ${timeRes._2}")
     timeRes._1
   }
+  
+  def explainSubsetWithoutSchema(query: String, rows:Seq[String], cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
+    val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
+    explainSubsetWithoutSchema(oper, rows, cols)  
+  } 
+  def explainSubsetWithoutSchema(oper: Operator, rows:Seq[String], cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
+    val timeRes = time {
+      logger.debug("explainSubsetWithoutSchema: From Vistrails: [ "+ rows +" ] [" + oper + "]"  ) ;
+      val explCols = cols match {
+        case Seq() => oper.columnNames
+        case _ => cols
+      }
+      rows.map(row => {
+        db.explainer.explainSubsetWithoutOptimizing(
+          db.explainer.filterByProvenance(db.compiler.optimize(oper),RowIdPrimitive(row)), 
+          explCols.toSet, true, false, false)
+      }).flatten
+    }
+    logger.debug(s"explainSubsetWithoutSchema Took: ${timeRes._2}")
+    timeRes._1
+  }
+  
+  def explainSchema(query: String, cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
+    val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
+    explainSchema(oper, cols)  
+  }  
+  def explainSchema(oper: Operator, cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
+    val timeRes = time {
+      logger.debug("explainSchema: From Vistrails: [ "+ cols.mkString(",") +" ] [" + oper + "]"  ) ;
+      val explCols = cols match {
+        case Seq() => oper.columnNames
+        case _ => cols
+      }
+      db.explainer.explainAdaptiveSchema(
+          db.compiler.optimize(oper), 
+          explCols.toSet, true)
+    }
+    logger.debug(s"explainSchema Took: ${timeRes._2}")
+    timeRes._1
+  }
 
   def explainEverything(query: String) : Seq[mimir.ctables.ReasonSet] = {
     logger.debug("explainEverything: From Vistrails: [" + query + "]"  ) ;
@@ -613,7 +654,7 @@ object MimirVizier extends LazyLogging {
      )
    val dataID = backend.insertAndReturnKey(
        "INSERT INTO CLEANING_JOB_DATA ( CLEANING_JOB_ID, NAME, [QUERY] ) VALUES ( ?, ?, ? )",
-       Seq(IntPrimitive(jobID),StringPrimitive(name),StringPrimitive(query))  
+       Seq(IntPrimitive(jobID),StringPrimitive(name),StringPrimitive(Json.ofOperator(parseQuery(query)).toString()))  
      )
    val datetimeprim = mimir.util.TextUtils.parseTimestamp(_)
    users.map(userID => {

@@ -49,21 +49,10 @@ import mimir.ctables.CTables
 class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_lookup.sqlite.SQLiteMetadataLookup(conn)
 {
   var db: Database = null
-  var operator:mimir.algebra.Operator=null
-  var fakeTuple: Map[String, PrimitiveValue] = null
-  var gpischm : Seq[OperatorTranslation.MimirToGProMIntermediateSchemaInfo] = null
-  def setOper(oper:mimir.algebra.Operator) : Unit = {
-    operator = oper
-    //gpischm = OperatorTranslation.extractTableSchemaForGProM(operator).map(si => {
-    gpischm = OperatorTranslation.getSchemaForGProM(operator).map(si => {
-      new OperatorTranslation.MimirToGProMIntermediateSchemaInfo(si.name, si.alias, si.attrName, si.attrName, si.attrProjectedName, si.attrType, si.attrPosition, si.attrFromClausePosition)
-    })
-    fakeTuple = generateFakeRow(db.bestGuessSchema(operator))
-  }
-  override def getFuncReturnType( fName:String, args: GProMList,
+  override def getFuncReturnType( fName:String, args: Array[String],
 		  numArgs:Int) : String = {
 		org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized{
-      //println(s"Metadata lookup: $fName ( ${args.length} args )")
+      println(s"Metadata lookup: $fName ( ${args.length} args )")
 		  try {
   		  fName match{
   		    case "SUM" => "DT_INT"
@@ -71,25 +60,14 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
   		    case "&" => "DT_INT"
   		    case "MIMIR_MAKE_ROWID" => "DT_STRING"
   		    case _ => {
-  		      val argSeq = OperatorTranslation.gpromListToScalaList(args).map(arg => {
-              OperatorTranslation.translateGProMExpressionToMimirExpression(new GProMNode.ByReference(arg.getPointer), gpischm)
-            })
-            
+  		      val argTypes = args.map(arg => getMimirTypeFromGProMDataTypeString(arg)) 
             //println(s"Metadata lookup: function: $fName(${argSeq.mkString(",")})")
-            val tp = fName match {
-      		    
-      		    case "sys_op_map_nonnull" => db.typechecker.typeOf(argSeq(0), operator) 
+            getGProMDataTypeStringFromMimirType( fName match {
+      		    case "sys_op_map_nonnull" => argTypes(0) 
       		    case _ => {
-      		      val fc = mimir.algebra.Function(fName,argSeq) 
-                vgtFunctionType(fc);
-      		      //db.typechecker.returnTypeOfFunction(fName,argSeq)
+      		      db.typechecker.returnTypeOfFunction(fName,argTypes)
       		    }
-      		  }
-            
-            val gpt = getGProMDataTypeStringFromMimirType(tp)
-            //println(s"Metadata lookup: $tp -> $gpt")
-            gpt
-		        
+      		  })
   		    }
   		  }
       } catch {
@@ -102,7 +80,19 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
       }
 		}
 	}
-  
+
+	def getMimirTypeFromGProMDataTypeString(gpromTypeString : String) : Type = {
+    gpromTypeString match {
+        case "DT_VARCHAR2" => new TString()
+        case "DT_BOOL" => new TBool()
+        case "DT_FLOAT" => new TFloat()
+        case "DT_INT" => new TInt()
+        case "DT_LONG" => new TInt()
+        case "DT_STRING" => new TString()
+        case _ => new TAny()
+      }
+  }
+
   def getGProMDataTypeStringFromMimirType(mimirType : Type) : String = {
     mimirType match {
         case TString() => "DT_STRING"
@@ -113,123 +103,5 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
         case TAny() => "DT_STRING"
         case _ => "DT_STRING"
       }
-  }
-  
-  def generateFakeRow(schema:Seq[(String, Type)]) : Map[String, PrimitiveValue] = {
-    schema.map( se => {
-      (se._1, se._2 match {
-        case TInt() => IntPrimitive(0)
-        case TFloat() => FloatPrimitive(0.0)
-        case TDate() => DatePrimitive(0,0,0)
-        case TTimestamp() => TimestampPrimitive(0,0,0,0,0,0,0)
-        case TInterval() => IntervalPrimitive(org.joda.time.Period.ZERO)
-        case TString() => StringPrimitive("")
-        case TBool() => BoolPrimitive(false)
-        case TRowId() => RowIdPrimitive("1")
-        case TType() => TypePrimitive(TAny())
-        case TAny() => NullPrimitive()
-        case TUser(name) => StringPrimitive(name)
-      })
-    }).toMap
-  }
-  
-  def vgtFunctionType(func: Expression) : Type = {
-    replaceExpression(replaceVGTerms(func)) match {
-      case TypePrimitive(t) => t
-      case prim:PrimitiveValue => prim.getType
-      case mimir.algebra.Function("CAST", args) => {
-        args match {
-          case x :: StringPrimitive(s) :: Nil => Type.toSQLiteType(Integer.parseInt(args(1).toString()))
-          case x :: IntPrimitive(i) :: Nil   =>  Type.toSQLiteType(i.toInt)
-  	      case x :: TypePrimitive(t)    :: Nil => t
-        }
-      }
-      case mimir.algebra.Function("JSON_GROUP_ARRAY", args) => TString()
-      case mimir.algebra.Function("FIRST", Seq(expr)) => db.typechecker.typeOf(expr,operator)  
-      case mimir.algebra.Function("DISTINCT", Seq(expr)) => db.typechecker.typeOf(expr,operator)  
-      case mimir.algebra.Function("DENSE_RANK", args) => { println(args.mkString(",")); TInt() } 
-      case mimir.algebra.Function("ROW_NUMBER", args) => { println(args.mkString(",")); TInt() } 
-      case expr => db.typechecker.typeOf(expr,operator)  
-      
-     }
-  }
-  
-  def replaceExpression(expr:Expression) : Expression = {
-    expr match {
-      /*case mimir.algebra.Function("CAST", args) => {
-        args match {
-          case x :: StringPrimitive(s) :: Nil => TypePrimitive(Type.toSQLiteType(Integer.parseInt(args(1).toString())))
-          case x :: IntPrimitive(i) :: Nil   =>  TypePrimitive(Type.toSQLiteType(i.toInt))
-  	      case x :: TypePrimitive(t)    :: Nil => TypePrimitive(t)
-        }
-      }*/
-      case Var("MIMIR_ROWID" | "MIMIR_ROWID_0") => RowIdPrimitive("1")
-      case mimir.algebra.Function("MIMIR_MAKE_ROWID", args) => RowIdPrimitive("1")
-      case x => x.recur(replaceExpression(_))
-    }  
-  }
-  
-   def replaceVGTerms(expr: Expression): Expression =
-  {
-    expr match {
-      case mimir.algebra.Function(CTables.FN_BEST_GUESS | CTables.FN_IS_ACKED, _) => {
-        replaceVGTermArg(expr)
-      }
-      case VGTerm(model, idx, args, hints) => 
-        replaceVGTermArg(expr)
-      case _ => 
-        expr.recur(replaceVGTerms(_))
-    }
-  }
-  
-  def replaceVGTermArg(arg : Expression) : PrimitiveValue = {
-    arg match {
-      case mimir.algebra.Function("BEST_GUESS_VGTERM", fargs) => {
-				// Special case BEST_GUESS_VGTERM
-        val model = db.models.get(fargs(0).toString().replaceAll("'", ""))
-        val idx = fargs(1).asInstanceOf[IntPrimitive].v.toInt;
-       
-        val vgtArgs =
-          model.argTypes(idx).
-            zipWithIndex.
-            map( arg => replaceVGTermArg(fargs(arg._2+2)))
-        val vgtHints = 
-          model.hintTypes(idx).
-            zipWithIndex.
-            map( arg => replaceVGTermArg(fargs(arg._2+vgtArgs.length+2)))
-        
-        val bg = model.bestGuess(idx, vgtArgs, vgtHints)
-        bg match {
-          case NullPrimitive() => {
-            val varType = model.varType(idx, model.argTypes(idx))
-            TypePrimitive(varType)
-          }
-          case _ => bg
-        }
-        
-        /*val varType = model.varType(idx, model.argTypes(idx))
-        TypePrimitive(varType)*/
-      }
-      case VGTerm(name,idx,vgtArgs, vgtHints) => {
-        val model = db.models.get(name)
-        val bg = model.bestGuess(idx, vgtArgs.map(vgarg => replaceVGTermArg(vgarg)), vgtHints.map(vghint => replaceVGTermArg(vghint)))
-        bg match {
-          case NullPrimitive() => {
-            val varType = model.varType(idx, model.argTypes(idx))
-            TypePrimitive(varType)
-          }
-          case _ => bg
-        }
-        //val varType = model.varType(idx, model.argTypes(idx))
-        //TypePrimitive(varType)
-      }
-      case mimir.algebra.Function("ACKNOWLEDGED_VGTERM", fargs) => {
-        TypePrimitive(TBool())
-      }
-      case Var("MIMIR_ROWID" | "MIMIR_ROWID_0") => RowIdPrimitive("1")
-      case RowIdVar() => RowIdPrimitive("1")
-      case mimir.algebra.Function("MIMIR_MAKE_ROWID",_) => RowIdPrimitive("1")
-      case _ => db.interpreter.eval(arg, fakeTuple)
-    }
   }
 }

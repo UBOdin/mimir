@@ -300,7 +300,7 @@ object MimirGProM {
          try{
            val statements = db.parse(queryStr)
            val testOper = db.sql.convert(statements.head.asInstanceOf[Select])
-           gp.metadataLookupPlugin.setOper(testOper)
+           //gp.metadataLookupPlugin.setOper(testOper)
            val gpromNode = OperatorTranslation.mimirOperatorToGProMList(testOper)
            gpromNode.write()
            //val memctx = GProMWrapper.inst.gpromCreateMemContext() 
@@ -345,13 +345,13 @@ object MimirGProM {
          try{
            val statements = db.parse(queryStr)
            val testOper2 = db.sql.convert(statements.head.asInstanceOf[Select])
-           gp.metadataLookupPlugin.setOper(testOper2)
+           //gp.metadataLookupPlugin.setOper(testOper2)
            var operStr2 = testOper2.toString()
            //val memctx = GProMWrapper.inst.gpromCreateMemContext()
            val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel(queryStr+";")
            val nodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
            val testOper = OperatorTranslation.gpromStructureToMimirOperator(0, gpromNode, null)
-           gp.metadataLookupPlugin.setOper(testOper)
+           //gp.metadataLookupPlugin.setOper(testOper)
            
            var operStr = testOper.toString()
            //GProMWrapper.inst.gpromFreeMemContext(memctx)
@@ -398,7 +398,7 @@ object MimirGProM {
          try{
            val statements = db.parse(queryStr)
            val testOper = db.sql.convert(statements.head.asInstanceOf[Select])
-           gp.metadataLookupPlugin.setOper(testOper)
+           //gp.metadataLookupPlugin.setOper(testOper)
            var operStr = testOper.toString()
            val gpromNode = OperatorTranslation.mimirOperatorToGProMList(testOper)
            gpromNode.write()
@@ -449,7 +449,7 @@ object MimirGProM {
            //val memctx = GProMWrapper.inst.gpromCreateMemContext() 
            val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel(queryStr+";")
            val testOper = totallyOptimize(OperatorTranslation.gpromStructureToMimirOperator(0, gpromNode, null))
-           gp.metadataLookupPlugin.setOper(testOper)
+           //gp.metadataLookupPlugin.setOper(testOper)
            val nodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
            //val statements = db.parse(convert(testOper.toString()))
            //val testOper2 = db.sql.convert(statements.head.asInstanceOf[Select])

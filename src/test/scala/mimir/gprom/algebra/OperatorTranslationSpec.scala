@@ -72,8 +72,23 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
       val (oper, colDet, rowDet) = OperatorTranslation.compileTaintWithGProM(testOper) 
       colDet.toSeq.length must be equalTo 1
     }
+    
+    "Compile Provenance for Projections" >> {
+      val table = db.table("CQ")
+      val (oper, provCols) = OperatorTranslation.compileProvenanceWithGProM(table) 
+      println(provCols)
+      provCols.toSeq.length must be equalTo 1
+    }
+    
+    "Compile Provenance for Aggregates" >> {
+      val statements = db.parse("select COUNT(COMMENT_ARG_0) from CQ")
+      val testOper = db.sql.convert(statements.head.asInstanceOf[Select])
+      val (oper, provCols) = OperatorTranslation.compileProvenanceWithGProM(testOper) 
+      println(provCols)
+      provCols.toSeq.length must be equalTo 1
+    }
   }
-  
+  /*
 
   "The GProM - Mimir Operator Translator" should {
     sequential
@@ -129,7 +144,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
         }
       }
     }
-  }
+  }*/
   
   def createGProMMemoryContext(descAndQuery : ((String, String), Int)) = s"Create GProM Memory Context for: ${descAndQuery._2} ${descAndQuery._1._1}" >> {
     memctx = GProMWrapper.inst.gpromCreateMemContext()
@@ -151,7 +166,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
          val queryStr = descAndQuery._1._2 
          val statements = db.parse(queryStr)
          val testOper = db.sql.convert(statements.head.asInstanceOf[Select])
-         gp.metadataLookupPlugin.setOper(testOper)
+         //gp.metadataLookupPlugin.setOper(testOper)
          val gpromNode = OperatorTranslation.mimirOperatorToGProMList(testOper)
          gpromNode.write()
          //val memctx = GProMWrapper.inst.gpromCreateMemContext() 

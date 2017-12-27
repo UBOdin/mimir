@@ -84,7 +84,11 @@ object OperatorTranslation {
         val sortCols = translateGProMExpressionToMimirExpressionList(new GProMNode(gpOrderExprs.getPointer), orderSchema).map( expr => {
           SortColumn(expr, true)
         })
-        val (visibleProjArgs, invisibleSchema) = getTaintFromGProMQueryOperator(orderOperator.op)
+        val (visibleProjArgsTaint, invisibleSchemaTaint) = getTaintFromGProMQueryOperator(orderOperator.op)
+        val (visibleProjArgsProv, invisibleSchemaProv) = getProvenanceFromGProMQueryOperator(orderOperator.op)
+        val viz = visibleProjArgsTaint.toSet.intersect(visibleProjArgsProv.toSet)
+        val visibleProjArgs = visibleProjArgsTaint.filter(elem => viz.contains(elem))
+        val invisibleSchema = invisibleSchemaTaint ++ invisibleSchemaProv
         invisibleSchema match {
           case Seq() => Sort(sortCols, sourceChild)
           case _ if depth == 0 => Recover(new Project(visibleProjArgs, Sort(sortCols, sourceChild)), invisibleSchema)
@@ -664,6 +668,18 @@ object OperatorTranslation {
     }).unzip
   }
   
+  def getProvenanceFromGProMQueryOperator(op : GProMQueryOperator) : (Seq[ProjectArg], Seq[(String, AnnotateArg)]) = {
+    val setSchema = getIntermediateSchemaFromGProMSchema(null,op.schema)
+    val attrDefs = gpromListToScalaList(op.schema.attrDefs)
+    val provAttrs = gpromIntPointerListToScalaList(op.provAttrs)
+    val provAttrNamesAndType = provAttrs.map(pt => attrDefs(pt) match {
+      case attrDef:GProMAttributeDef => (attrDef.attrName, attrDef.dataType)
+    })
+    provAttrNamesAndType.map(provAndType => {
+      (ProjectArg(provAndType._1, Var(provAndType._1)),
+      (provAndType._1, AnnotateArg(matchAnnotateArgNameToAnnotationType(provAndType._1),provAndType._1, getMimirTypeFromGProMDataType(provAndType._2), Var(provAndType._1))))
+    }).unzip
+  }
   
   def getProjectionColumnsFromGProMProjectionOperator(gpromProjOp : GProMProjectionOperator) : (Seq[ProjectArg], Seq[(String, AnnotateArg)]) = {
     val projExprs = gpromProjOp.projExprs;
@@ -680,6 +696,11 @@ object OperatorTranslation {
 
     val projExprsS = gpromListToScalaList(projExprs) 
     val provAndTaintAttrs = gpromIntPointerListToScalaList(gpromProjOp.op.provAttrs) ++ taintAttrs //++ projOpProps 
+    val attrDefs = gpromListToScalaList(gpromProjOp.op.schema.attrDefs)
+    val provAndTaintAttrNames = provAndTaintAttrs.map(pt => attrDefs(pt) match {
+      case attrDef:GProMAttributeDef => attrDef.attrName
+      case _ => throw new Exception("Attribute Def should Exist")
+    })
     val (proj, anno) = projExprsS.zipWithIndex.map( expr => {
       val projExpr = new GProMNode(expr._1.getPointer)
       val i = expr._2 
@@ -692,7 +713,7 @@ object OperatorTranslation {
         (Some(ProjectArg(projSchema(i).attrProjectedName, mimirExpr)), None:Option[(String, AnnotateArg)])
       }
       else {
-        (None:Option[ProjectArg], Some((srcAttrs(provAndTaintAttrs.indexOf(i)), AnnotateArg(matchAnnotateArgNameToAnnotationType(projSchema(i).attrName),projSchema(i).attrProjectedName, projSchema(i).attrType, mimirExpr))))
+        (None:Option[ProjectArg], Some((provAndTaintAttrNames(provAndTaintAttrs.indexOf(i)), AnnotateArg(matchAnnotateArgNameToAnnotationType(projSchema(i).attrName),projSchema(i).attrProjectedName, projSchema(i).attrType, mimirExpr))))
       } 
     }).toSeq.unzip
     (proj.flatten, anno.flatten)
@@ -733,12 +754,12 @@ object OperatorTranslation {
           val i = expr._2 + offIdx-1
           val groupByExpr = new GProMNode(expr._1.getPointer)
           val mimirExpr = translateGProMExpressionToMimirExpression(groupByExpr, arrgIntermSch )
-          //if(!provAndTaintAttrNames.contains(mimirExpr.toString())){//!provAndTaintAttrs.contains(i)){
+          if(!provAndTaintAttrNames.contains(mimirExpr.toString())){//!provAndTaintAttrs.contains(i)){
             (Some(mimirExpr.asInstanceOf[Var]), None:Option[(String, AnnotateArg)])  
-          //}
-          //else{
-          //  (None:Option[Var], Some((srcAttrs(provAndTaintAttrs.indexOf(i)), AnnotateArg(matchAnnotateArgNameToAnnotationType(aggSchema(i).attrName), aggSchema(i).attrName, aggSchema(i).attrType, Var(aggSchema(i).attrName)))))
-          //}
+          }
+          else{
+            (None:Option[Var], Some((provAndTaintAttrNames(provAndTaintAttrs.indexOf(i)), AnnotateArg(matchAnnotateArgNameToAnnotationType(aggSchema(i).attrName), aggSchema(i).attrName, aggSchema(i).attrType, Var(aggSchema(i).attrName)))))
+          }
           //val ar = mimirExpr.asInstanceOf[Var]
           //val anoName = mimir.ctables.CTPercolator.mimirColDeterministicColumnPrefix + ar.name
           //(Some(ar), Some((ar.name, AnnotateArg(ViewAnnotation.TAINT, anoName, TInt(), Var(anoName)))))  
@@ -782,6 +803,10 @@ object OperatorTranslation {
         }*/
         val provAttrs = gpromIntPointerListToScalaList(gpromAggOp.op.provAttrs).map(i => (gpAggSchema(i)._1, i))
         val provAndTaintAttrs = provAttrs.map(provEl => aggSchema.indexWhere(el => el.attrName.equalsIgnoreCase(provEl._1))) ++ taintAttrs.map(taintEl => aggSchema.indexWhere(el => el.attrName.equalsIgnoreCase(taintEl._1)))
+        val attrDefs = gpromListToScalaList(gpromAggOp.op.schema.attrDefs)
+        val provAndTaintAttrNames = provAndTaintAttrs.map(pt => attrDefs(pt) match {
+          case attrDef:GProMAttributeDef => attrDef.attrName
+        })
         val aggrsS = gpromListToScalaList(aggrs)
         val (aggFuncs, anno) = aggrsS.zipWithIndex.map(expr => {
           val i = expr._2
@@ -808,7 +833,7 @@ object OperatorTranslation {
             (Some(AggFunction(aggr.functionname, distinct, mimirAggrArgs, aggSchema(i).attrMimirName)), None:Option[(String, AnnotateArg)])    
           }
           else {
-            (None:Option[AggFunction], Some((srcAttrs(provAndTaintAttrs.indexOf(i)), AnnotateArg(matchAnnotateArgNameToAnnotationType(aggSchema(i).attrName), aggSchema(i).attrName, aggSchema(i).attrType, Var(aggSchema(i).attrMimirName)))))
+            (None:Option[AggFunction], Some((provAndTaintAttrNames(provAndTaintAttrs.indexOf(i)), AnnotateArg(matchAnnotateArgNameToAnnotationType(aggSchema(i).attrName), aggSchema(i).attrName, aggSchema(i).attrType, Var(aggSchema(i).attrMimirName)))))
           }
         }).toSeq.unzip
         (aggFuncs.flatten, anno.flatten)
@@ -1780,6 +1805,19 @@ object OperatorTranslation {
       case View(name, query, annotations) => {
         db.bestGuessSchema(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, if(sch._1._1.startsWith(name + "_")) sch._1._1.replaceFirst((name + "_"), "") else sch._1._1, if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
       }
+      case AdaptiveView(schema, name, query, annotations) => {
+        val (mlens, config) = db.adaptiveSchemas.get(schema).get
+        db.query(
+          mlens.attrCatalogFor(db, config).project("ATTR_NAME", "ATTR_TYPE") 
+        ){ result =>
+          if(result.hasNext){
+            result.toList.map(row => (row(0).asString, row(1).asInstanceOf[TypePrimitive].t)).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, if(sch._1._1.startsWith(name + "_")) sch._1._1.replaceFirst((name + "_"), "") else sch._1._1, if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
+          }
+          else{
+            db.bestGuessSchema(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, if(sch._1._1.startsWith(name + "_")) sch._1._1.replaceFirst((name + "_"), "") else sch._1._1, if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
+          }
+        }
+      }
       case x => {
         throw new Exception("Can Not extract schema '"+x+"'")
       }
@@ -1815,6 +1853,19 @@ object OperatorTranslation {
       }
       case View(name, query, annotations) => {
         db.bestGuessSchema(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, if(sch._1._1.startsWith(name + "_")) sch._1._1.replaceFirst((name + "_"), "") else sch._1._1, if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
+      }
+      case AdaptiveView(schema, name, query, annotations) => {
+        val (mlens, config) = db.adaptiveSchemas.get(schema).get
+        db.query(
+          mlens.attrCatalogFor(db, config).project("ATTR_NAME", "ATTR_TYPE") 
+        ){ result =>
+          if(result.hasNext){
+            result.toList.map(row => (row(0).asString, row(1).asInstanceOf[TypePrimitive].t)).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, if(sch._1._1.startsWith(name + "_")) sch._1._1.replaceFirst((name + "_"), "") else sch._1._1, if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
+          }
+          else{
+            db.bestGuessSchema(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, if(sch._1._1.startsWith(name + "_")) sch._1._1.replaceFirst((name + "_"), "") else sch._1._1, if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
+          }
+        }
       }
       case x => {
         throw new Exception("Can Not extract schema "+x.getClass.toString()+": '"+x+"'")
@@ -2136,7 +2187,7 @@ object OperatorTranslation {
   
    def optimizeWithGProM(oper:Operator) : Operator = {
     org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized{
-      db.backend.asInstanceOf[mimir.sql.GProMBackend].metadataLookupPlugin.setOper(oper)
+      //db.backend.asInstanceOf[mimir.sql.GProMBackend].metadataLookupPlugin.setOper(oper)
         val memctx = GProMWrapper.inst.gpromCreateMemContext()
         //val memctxq = GProMWrapper.inst.createMemContextName("QUERY_CONTEXT")
         val gpromNode = mimirOperatorToGProMList(oper)
@@ -2162,7 +2213,7 @@ object OperatorTranslation {
    def compileProvenanceWithGProM(oper:Operator) : (Operator, Seq[String])  = {
     org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized{
       toQoSchms.clear()
-      db.backend.asInstanceOf[mimir.sql.GProMBackend].metadataLookupPlugin.setOper(oper)
+      //db.backend.asInstanceOf[mimir.sql.GProMBackend].metadataLookupPlugin.setOper(oper)
         val memctx = GProMWrapper.inst.gpromCreateMemContext()
         //val memctxq = GProMWrapper.inst.createMemContextName("QUERY_CONTEXT")
         val gpromNode = mimirOperatorToGProMList(ProvenanceOf(oper))
@@ -2174,12 +2225,12 @@ object OperatorTranslation {
         val provGpromNode = GProMWrapper.inst.provRewriteOperator(gpromNode.getPointer)
         //val optimizedGpromNode = GProMWrapper.inst.optimizeOperatorModel(provGpromNode.getPointer)
         val provNodeStr = GProMWrapper.inst.gpromNodeToString(provGpromNode.getPointer())
-        /*println("------------------mimir-------------------------")
+        println("------------------mimir-------------------------")
         println(oper)
         println("------------------gprom-------------------------")
         println(provNodeStr)
         println("------------------------------------------------")
-        */
+        
         var opOut = gpromStructureToMimirOperator(0, provGpromNode, null)
         /*println("--------------mimir pre recover-----------------")
         println(opOut)
@@ -2201,7 +2252,7 @@ object OperatorTranslation {
     //Thread.sleep(60000)
     org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized{
         toQoSchms.clear()
-        db.backend.asInstanceOf[mimir.sql.GProMBackend].metadataLookupPlugin.setOper(oper)
+        //db.backend.asInstanceOf[mimir.sql.GProMBackend].metadataLookupPlugin.setOper(oper)
         val memctx = GProMWrapper.inst.gpromCreateMemContext()
         //val memctxq = GProMWrapper.inst.createMemContextName("QUERY_CONTEXT")
         val gpromNode = mimirOperatorToGProMList(oper)
