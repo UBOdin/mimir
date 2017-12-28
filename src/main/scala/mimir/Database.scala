@@ -181,17 +181,6 @@ case class Database(backend: Backend)
   final def query[T](stmt: String)(handler: ResultIterator => T): T = 
     query(select(stmt), BestGuess)(handler)
 
-
-  /**
-   * Shortcut to get the schema of an operator.  The TypeInference and
-   *  SchemaMatching lenses have been killed and now can exist only as 
-   *  adaptive schemas so no more bestGuessSchema!  
-   */
-  def schemaOf(oper: Operator): Seq[(String, Type)] =
-  {
-    typechecker.schemaOf(oper)
-  }
-
   /**
    * Parse raw SQL data
    */

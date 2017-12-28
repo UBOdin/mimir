@@ -128,7 +128,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
   // buildEntities calls all the functions required for ER creation, optionally each function could be called if only part of the computation is required
 
   def buildEntities(db: Database, query: Operator, tableName : String): Unit = {
-    initializeTables(db.schemaOf(query), tableName)
+    initializeTables(db.typechecker.schemaOf(query), tableName)
     preprocessFDG(db, query)
     constructFDG()
     // updateEntityGraph()

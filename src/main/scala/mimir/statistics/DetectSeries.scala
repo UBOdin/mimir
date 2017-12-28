@@ -32,7 +32,7 @@ object DetectSeries
   def seriesOf(db: Database, query: Operator, threshold: Double): Seq[SeriesColumnItem] = {
 
     // Hack for Type Inference lens
-    val queryColumns = db.schemaOf(query)
+    val queryColumns = db.typechecker.schemaOf(query)
     
     // Date columns are automatically series
     val seriesColumnDate = queryColumns.flatMap( tup => 

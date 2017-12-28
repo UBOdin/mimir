@@ -35,10 +35,10 @@ object EditDistanceMatchModel
   ): Map[String,(Model,Int)] = 
   {
     val sourceSch: Seq[(String,Type)] = source match {
-        case Left(oper) => db.schemaOf(oper)
+        case Left(oper) => db.typechecker.schemaOf(oper)
         case Right(sch) => sch }
     val targetSch: Seq[(String,Type)] = target match {
-        case Left(oper) => db.schemaOf(oper)
+        case Left(oper) => db.typechecker.schemaOf(oper)
         case Right(sch) => sch }
 
     targetSch.map({ case (targetCol,targetType) =>

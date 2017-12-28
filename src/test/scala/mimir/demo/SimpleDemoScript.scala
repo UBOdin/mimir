@@ -93,7 +93,7 @@ object SimpleDemoScript
 			query("SELECT * FROM RATINGS1 WHERE RATING IS NULL"){ _.toSeq must have size(1) }
 			query("SELECT * FROM RATINGS1 WHERE RATING > 4;"){ _.toSeq must have size(2) }
 			query("SELECT * FROM RATINGS2;"){ _.toSeq must have size(3) }
-			db.schemaOf(select("SELECT * FROM RATINGS2;")).
+			db.typechecker.schemaOf(select("SELECT * FROM RATINGS2;")).
 				map(_._2).map(Type.rootType _) must be equalTo List(TString(), TFloat(), TFloat())
 		}
 

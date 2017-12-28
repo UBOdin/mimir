@@ -17,7 +17,7 @@ object RepairKeyLens extends LazyLogging {
   ): (Operator, Seq[Model]) =
   {
 
-    var schema = db.schemaOf(query)
+    var schema = db.typechecker.schemaOf(query)
     val schemaMap = schema.toMap
     var scoreCol:Option[String] = None
     var fastPath:Option[String] = None

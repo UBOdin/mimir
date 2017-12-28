@@ -110,7 +110,7 @@ class SimpleFuncDepModel(name: String, colName: String, query: Operator)
     feedback contains(args(0).asString)
 
   def guessInputType: Type =
-    db.schemaOf(query)(colIdx)._2
+    db.typechecker.schemaOf(query)(colIdx)._2
 
   def argTypes(idx: Int): Seq[Type] = List(TRowId())
   def hintTypes(idx: Int) = db.typechecker.schemaOf(query).map(_._2)

@@ -56,13 +56,13 @@ object FeedbackSpec
       // Base assumptions.  These may change, but the feedback tests 
       // below should be updated accordingly
       model.bestGuess(0, List(IntPrimitive(0)), List()) must be equalTo(TypePrimitive(TInt()))
-      db.schemaOf(db.adaptiveSchemas.viewFor("R_TI", "DATA").get).
+      db.typechecker.schemaOf(db.adaptiveSchemas.viewFor("R_TI", "DATA").get).
         find(_._1.equals("A")).get._2 must be equalTo(TInt())
 
       model.feedback(0, List(IntPrimitive(0)), TypePrimitive(TFloat()))
       db.models.persist(model)
       model.bestGuess(0, List(IntPrimitive(0)), List()) must be equalTo(TypePrimitive(TFloat()))
-      db.schemaOf(db.adaptiveSchemas.viewFor("R_TI", "DATA").get).
+      db.typechecker.schemaOf(db.adaptiveSchemas.viewFor("R_TI", "DATA").get).
         find(_._1.equals("A")).get._2 must be equalTo(TFloat())
     }
   }

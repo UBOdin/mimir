@@ -66,32 +66,8 @@ object SchemaMatching
     })
 
 
-    val (
-      schemaChoice:List[(String,Expression)], 
-      metaModels:List[Model]
-    ) =
-      candidateModels.
-        toList.
-        map({ 
-          case (column, models) => {
-            //TODO: Replace Default Model
-            val metaModel = new DefaultMetaModel(
-                s"$viewName:META:$column", 
-                s"picking a source for column '$column'",
-                models.map(_._4)
-              )
-            val metaExpr = LensUtils.buildMetaModel(
-              metaModel.name, 0, Seq[Expression](), Seq[Expression](),
-              models, Seq[Expression]()
-            )
-
-            ( (column, metaExpr), metaModel )
-          }
-        }).
-        unzip
-
     val proxyModel = SchemaMatchingProxyModel(s"$viewName:PROXY:SCHEMA_MATCHING", targetSchema, targetSchema.map(sche => modelEntities(modelEntities.indexWhere(_.name.endsWith(s":${sche._1}")) ).name ))   
-    modelEntities ++ metaModels :+ proxyModel
+    modelEntities :+ proxyModel
   }
 
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator =

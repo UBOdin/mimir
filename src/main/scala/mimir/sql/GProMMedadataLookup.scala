@@ -58,7 +58,7 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
     gpischm = OperatorTranslation.getSchemaForGProM(operator).map(si => {
       new OperatorTranslation.MimirToGProMIntermediateSchemaInfo(si.name, si.alias, si.attrName, si.attrName, si.attrProjectedName, si.attrType, si.attrPosition, si.attrFromClausePosition)
     })
-    fakeTuple = generateFakeRow(db.schemaOf(operator))
+    fakeTuple = generateFakeRow(db.typechecker.schemaOf(operator))
   }
   override def getFuncReturnType( fName:String, args: GProMList,
 		  numArgs:Int) : String = {

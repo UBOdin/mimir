@@ -520,21 +520,14 @@ object CTPercolator
         val inlinedQuery = 
           Project(
             columns.map { col => ProjectArg(col, Var(col)) } ++
-            // Mike:
-            //   I filter out the prov cols here and below because it is causing an 
-            //   issue with materialized views (remove the filter here and run CureScenario 
-            //   test to see the issue).  I need to consult Oliver about this issue;
-            //   it fixes the failing test but this is not the correct solution.
-            columns.filterNot(_.startsWith(mimir.provenance.Provenance.rowidColnameBase))
-              .map { col => {
+            columns.map { col => {
                 ProjectArg(mimirColDeterministicColumnPrefix+col, colDeterminism(col)) } } ++
             Seq( ProjectArg(mimirRowDeterministicColumnName, rowDeterminism) ),
             newQuery
           )
         (
           View(name, inlinedQuery, metadata + ViewAnnotation.TAINT),
-          columns.filterNot(_.startsWith(mimir.provenance.Provenance.rowidColnameBase))
-            .map { col => 
+          columns.map { col => 
               (col -> Var(mimirColDeterministicColumnPrefix+col)) }.toMap,
           Var(mimirRowDeterministicColumnName)
         )

@@ -43,7 +43,7 @@ object BestGuess
     // As a side effect, this also forces the typechecker to run, 
     // acting as a sanity check on the query before we do any serious
     // work.
-    val outputSchema = db.schemaOf(oper)
+    val outputSchema = db.typechecker.schemaOf(oper)
       
     // The names that the provenance compilation step assigns will
     // be different depending on the structure of the query.  As a 

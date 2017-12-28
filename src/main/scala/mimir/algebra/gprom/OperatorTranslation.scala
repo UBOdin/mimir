@@ -32,7 +32,6 @@ object OperatorTranslation {
           case _ if depth == 0 => Recover(new Project(visibleAggrs, Aggregate(groupby, aggregates, source)), invisibleSchema)
           case _ => Project(visibleAggrs, new Annotate(Aggregate(groupby, aggregates, source), invisibleSchema))
         }
-        //val retSchema = db.schemaOf(retOp)
         retOp
       }
       case attributeDef : GProMAttributeDef => { 
@@ -1723,7 +1722,7 @@ object OperatorTranslation {
         val pargsOut = args.map(pa => pa.name)
         val pargsIn = args.map(pa => pa.expression.toString)
         val gpargsIn = args.map(pa =>  translateMimirExpressionToStringForGProM(pa.expression, tableSchema))
-        val operSchema = db.schemaOf(oper)       
+        val operSchema = db.typechecker.schemaOf(oper)       
         pargsOut.zipWithIndex.map( index_argOut => {
           val fse = tableSchema(0)
           val index = index_argOut._2
@@ -1741,7 +1740,7 @@ object OperatorTranslation {
       case Aggregate(groupBy, agggregates, source) => {
         //TODO: fix this hack for matching to gprom AGGR_{N} names to mimir MIMIR_AGG_{attrAlias}
         val tableSchema = extractTableSchemaForGProM(source)
-        var aggrSchema = db.schemaOf(oper)
+        var aggrSchema = db.typechecker.schemaOf(oper)
         val aggrsAndGroupBy = {
           if(groupBy.length == 0 && !aggrSchema.contains(("USER_PROV", TInt()))){
             aggrSchema = Seq(("USER_PROV", TInt())).union(aggrSchema)
@@ -1775,10 +1774,10 @@ object OperatorTranslation {
         getSchemaForGProM(query)
       }
       case Table(name, alias, tgtSch, metadata) => {
-         db.schemaOf(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, alias,  if(sch._1._1.startsWith(alias + "_")) sch._1._1.replaceFirst((alias + "_"), "") else sch._1._1, if(sch._1._1.startsWith(alias + "_")) sch._1._1 else alias + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
+         db.typechecker.schemaOf(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, alias,  if(sch._1._1.startsWith(alias + "_")) sch._1._1.replaceFirst((alias + "_"), "") else sch._1._1, if(sch._1._1.startsWith(alias + "_")) sch._1._1 else alias + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
       }
       case View(name, query, annotations) => {
-        db.schemaOf(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, if(sch._1._1.startsWith(name + "_")) sch._1._1.replaceFirst((name + "_"), "") else sch._1._1, if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
+        db.typechecker.schemaOf(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, if(sch._1._1.startsWith(name + "_")) sch._1._1.replaceFirst((name + "_"), "") else sch._1._1, if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
       }
       case x => {
         throw new Exception("Can Not extract schema '"+x+"'")
@@ -1811,10 +1810,10 @@ object OperatorTranslation {
         extractTableSchemaForGProM(query)
       }
       case Table(name, alias, tgtSch, metadata) => {
-        db.schemaOf(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, alias, if(sch._1._1.startsWith(alias + "_")) sch._1._1.replaceFirst((alias + "_"), "") else sch._1._1, if(sch._1._1.startsWith(alias + "_")) sch._1._1 else alias + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
+        db.typechecker.schemaOf(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, alias, if(sch._1._1.startsWith(alias + "_")) sch._1._1.replaceFirst((alias + "_"), "") else sch._1._1, if(sch._1._1.startsWith(alias + "_")) sch._1._1 else alias + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
       }
       case View(name, query, annotations) => {
-        db.schemaOf(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, if(sch._1._1.startsWith(name + "_")) sch._1._1.replaceFirst((name + "_"), "") else sch._1._1, if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
+        db.typechecker.schemaOf(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, if(sch._1._1.startsWith(name + "_")) sch._1._1.replaceFirst((name + "_"), "") else sch._1._1, if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
       }
       case x => {
         throw new Exception("Can Not extract schema "+x.getClass.toString()+": '"+x+"'")
@@ -1867,7 +1866,7 @@ object OperatorTranslation {
     var listTail : GProMListCell.ByReference = null
     var i = 0;
     
-    val schema = db.schemaOf(oper)
+    val schema = db.typechecker.schemaOf(oper)
     for(schemaTup : (String, Type) <- schema.reverse){
       val attrName = schemaTup._1
           
