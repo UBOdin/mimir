@@ -126,9 +126,9 @@ object SchemaMatching
           .bestGuess(0, Seq(), Seq()).asString}:${targetSchema.head._1}", 0, Seq(), Seq()), Var("SRC_ATTR_NAME")),
         Join(
           HardTable( Seq(("ATTR_NAME" , TString()), ("ATTR_TYPE", TType())), 
-              sourceSchema.map(col => Seq( StringPrimitive(col._1), TypePrimitive(col._2)))),
+              Seq(Seq( StringPrimitive(targetSchema.head._1), TypePrimitive(targetSchema.head._2)))),
           HardTable( Seq(("SRC_ATTR_NAME" , TString()), ("SRC_ATTR_TYPE", TType())), 
-              targetSchema.map(col => Seq( StringPrimitive(col._1), TypePrimitive(col._2))))
+              sourceSchema.map(scol => Seq( StringPrimitive(scol._1), TypePrimitive(scol._2))))
         )
       ):Operator)((init, col) => {
         Union(init, 
@@ -136,9 +136,9 @@ object SchemaMatching
             .bestGuess(0, Seq(), Seq()).asString}:${col._1}", 0, Seq(), Seq()), Var("SRC_ATTR_NAME")),
             Join(
               HardTable( Seq(("ATTR_NAME" , TString()), ("ATTR_TYPE", TType())), 
-                  sourceSchema.map(col => Seq( StringPrimitive(col._1), TypePrimitive(col._2)))),
+                  Seq(Seq( StringPrimitive(col._1), TypePrimitive(col._2)))),
               HardTable( Seq(("SRC_ATTR_NAME" , TString()), ("SRC_ATTR_TYPE", TType())), 
-                  targetSchema.map(col => Seq( StringPrimitive(col._1), TypePrimitive(col._2))))
+                  sourceSchema.map(scol => Seq( StringPrimitive(scol._1), TypePrimitive(scol._2))))
             )
         ))
     }).addColumn("TABLE_NAME" -> StringPrimitive("DATA")).addColumn("IS_KEY" -> BoolPrimitive(false))
