@@ -21,7 +21,7 @@ class ViewMetadata(
   def table: Operator = {
     Project(
       schema.map { case (col, _) => ProjectArg(col, Var(col)) } ++ 
-      schema.zipWithIndex.map { case ((col, _), idx) => 
+      schemaWith(Set(ViewAnnotation.PROVENANCE)).zipWithIndex.map { case ((col, _), idx) => 
         ProjectArg(
           CTPercolator.mimirColDeterministicColumnPrefix+col,
           Comparison(Cmp.Eq,
@@ -59,17 +59,18 @@ class ViewMetadata(
 
   def schema: Seq[(String, Type)] =
   {
-    //XXX: HACK!  Type Inference really really really needs to become an adaptive schema
-    db.bestGuessSchema(query)
+    //XXX: No More HACK!  Type Inference has become an adaptive schema
+    db.typechecker.schemaOf(query)
   }
 
   def schemaWith(requiredAnnotations:Set[ViewAnnotation.T]) =
   {
     val sch = schema
-
+    val prov = Provenance.compile(query)._2.map { (_, TRowId()) }
+    
     sch ++ (
       if(requiredAnnotations(ViewAnnotation.TAINT)) {
-        sch.map { col => 
+        (sch++prov).map { col => 
           (CTPercolator.mimirColDeterministicColumnPrefix + col._1, TBool())
         }++
         Seq((CTPercolator.mimirRowDeterministicColumnName, TBool()))
@@ -80,7 +81,7 @@ class ViewMetadata(
       } else { None }
     ) ++ (
       if(requiredAnnotations(ViewAnnotation.PROVENANCE)) {
-        Provenance.compile(query)._2.map { (_, TRowId()) }
+        prov
       } else { None }
     )
   }
