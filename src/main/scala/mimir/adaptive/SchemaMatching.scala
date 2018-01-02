@@ -64,10 +64,33 @@ object SchemaMatching
         throw new Exception("No valid schema matching model for column '"+target+"' in lens '"+viewName+"'");
       }
     })
+    
+    val (
+      schemaChoice:List[(String,Expression)], 
+      metaModels:List[Model]
+    ) =
+      candidateModels.
+        toList.
+        map({ 
+          case (column, models) => {
+            //TODO: Replace Default Model
+            val metaModel = new DefaultMetaModel(
+                s"$viewName:META:$column", 
+                s"picking a source for column '$column'",
+                models.map(_._4)
+              )
+            val metaExpr = LensUtils.buildMetaModel(
+              metaModel.name, 0, Seq[Expression](), Seq[Expression](),
+              models, Seq[Expression]()
+            )
 
+            ( (column, metaExpr), metaModel )
+          }
+        }).
+        unzip
 
-    val proxyModel = SchemaMatchingProxyModel(s"$viewName:PROXY:SCHEMA_MATCHING", targetSchema, targetSchema.map(sche => modelEntities(modelEntities.indexWhere(_.name.endsWith(s":${sche._1}")) ).name ))   
-    modelEntities :+ proxyModel
+        
+    modelEntities ++ metaModels
   }
 
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator =
@@ -86,60 +109,66 @@ object SchemaMatching
   
   def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    HardTable(
-      Seq(
-        ("TABLE_NAME" , TString()), 
-        ("ATTR_TYPE", TType()),
-        ("IS_KEY", TBool()),
-        ("COLUMN_ID", TInt())
-      ),
-      (0 until config.args.size).map { col =>
-        Seq(
-          StringPrimitive("DATA"),
-          TypePrimitive(TString()),
-          BoolPrimitive(false),
-          IntPrimitive(col)
+    val sourceSchema = db.typechecker.schemaOf(config.query)
+    val targetSchema =
+      config.args.
+        map(field => {
+          val split = db.interpreter.evalString(field).split(" +")
+          val varName  = split(0).toUpperCase
+          val typeName = split(1)
+          (
+            varName.toString.toUpperCase -> 
+              Type.fromString(typeName.toString)
+          )
+        }).toList
+    targetSchema.tail.foldLeft(
+      Select(Comparison(Cmp.Eq, VGTerm(s"${config.schema}:${db.models.get(s"${config.schema}:META:${targetSchema.head._1}")
+          .bestGuess(0, Seq(), Seq()).asString}:${targetSchema.head._1}", 0, Seq(), Seq()), Var("SRC_ATTR_NAME")),
+        Join(
+          HardTable( Seq(("ATTR_NAME" , TString()), ("ATTR_TYPE", TType())), 
+              sourceSchema.map(col => Seq( StringPrimitive(col._1), TypePrimitive(col._2)))),
+          HardTable( Seq(("SRC_ATTR_NAME" , TString()), ("SRC_ATTR_TYPE", TType())), 
+              targetSchema.map(col => Seq( StringPrimitive(col._1), TypePrimitive(col._2))))
         )
-      }
-    ).addColumn(
-      "ATTR_NAME" -> VGTerm(s"${config.schema}:PROXY:SCHEMA_MATCHING" , 1, Seq(Var("COLUMN_ID")), Seq())
-    ).removeColumn("COLUMN_ID")
+      ):Operator)((init, col) => {
+        Union(init, 
+          Select(Comparison(Cmp.Eq, VGTerm(s"${config.schema}:${db.models.get(s"${config.schema}:META:${col._1}")
+            .bestGuess(0, Seq(), Seq()).asString}:${col._1}", 0, Seq(), Seq()), Var("SRC_ATTR_NAME")),
+            Join(
+              HardTable( Seq(("ATTR_NAME" , TString()), ("ATTR_TYPE", TType())), 
+                  sourceSchema.map(col => Seq( StringPrimitive(col._1), TypePrimitive(col._2)))),
+              HardTable( Seq(("SRC_ATTR_NAME" , TString()), ("SRC_ATTR_TYPE", TType())), 
+                  targetSchema.map(col => Seq( StringPrimitive(col._1), TypePrimitive(col._2))))
+            )
+        ))
+    }).addColumn("TABLE_NAME" -> StringPrimitive("DATA")).addColumn("IS_KEY" -> BoolPrimitive(false))
+    .removeColumns("SRC_ATTR_NAME", "SRC_ATTR_TYPE")
   }
         
   def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
   {
     if(table.equals("DATA")){
-      val model = db.models.get(s"${config.schema}:PROXY:SCHEMA_MATCHING").asInstanceOf[SchemaMatchingProxyModel]
+      val targetSchema =
+      config.args.
+        map(field => {
+          val split = db.interpreter.evalString(field).split(" +")
+          val varName  = split(0).toUpperCase
+          val typeName = split(1)
+          (
+            varName.toString.toUpperCase -> 
+              Type.fromString(typeName.toString)
+          )
+        }).toList
       Some(Project(
-        model.targetSchema.zipWithIndex.map { case ((colName, colType), colIdx) => 
-          ProjectArg(colName,  Var(model.bestGuess(0, Seq(IntPrimitive(colIdx)), Seq()).asString) )
-        }, config.query
+        targetSchema.map { case (colName, colType)  => { 
+          val metaModel = db.models.get(s"${config.schema}:META:$colName")
+          val model = db.models.get(s"${config.schema}:${metaModel
+            .bestGuess(0, Seq(), Seq()).asString}:$colName")
+          ProjectArg(colName,  Var(model.bestGuess(0, Seq(), Seq()).asString) )
+        }}, config.query
       ))  
     } else { None }
   } 
 }
 
-case class SchemaMatchingProxyModel(override val name: String, val targetSchema: Seq[(String, Type)], models:Seq[String]) 
-  extends Model(name) 
-  with Serializable 
-  with NeedsDatabase
-{
-  def argTypes(idx: Int) = List(TInt())
-  def hintTypes(idx: Int) = Seq()
-  def varType(idx: Int, args: Seq[Type]) = TString()
-  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = idx match {
-    case 0 => db.models.get(models(args(0).asInt)).bestGuess(idx, args.tail, hints)
-    case 1 => StringPrimitive(targetSchema(args(0).asInt)._1)
-  }
-  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = 
-    db.models.get(models(args(0).asInt)).sample(idx, randomness, args.tail, hints)
-  def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = 
-    db.models.get(models(args(0).asInt)).reason(idx, args.tail, hints)
-  def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = 
-    db.models.get(models(args(0).asInt)).feedback(idx, args.tail, v)
-  def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = 
-    db.models.get(models(args(0).asInt)).isAcknowledged(idx, args.tail)
-  def confidence(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Double = 
-    db.models.get(models(args(0).asInt)).confidence(idx, args.tail, hints)
-}
 
