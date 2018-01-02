@@ -138,7 +138,7 @@ case class AggFunction(function: String, distinct: Boolean, args: Seq[Expression
 case class Aggregate(groupby: Seq[Var], aggregates: Seq[AggFunction], source: Operator) extends Operator
 {
   def toString(prefix: String) =
-    prefix + "AGGREGATE[" + 
+    prefix + (if(aggregates.isEmpty){ "DISTINCT" } else { "AGGREGATE" })+"[" + 
       (groupby ++ aggregates).mkString(", ") + 
       "](\n" +
       source.toString(prefix + "  ") + "\n" + prefix + ")"
@@ -326,26 +326,6 @@ case class Table(name: String,
   def columnNames = sch.map(_._1) ++ metadata.map(_._1)
 }
 
-/**
- * A blank table --- Corresponds roughly to a
- * SELECT ... FROM ... WHERE FALSE.
- * 
- * Not really used, just a placeholder for intermediate optimization.
- */
-@SerialVersionUID(100L)
-case class EmptyTable(sch: Seq[(String, Type)])
-  extends Operator
-{
-  def toString(prefix: String) =
-    prefix + "!!EMPTY!!(" + (
-      sch.map( { case (v,t) => v+":"+t } ).mkString(", ") 
-    )+")" 
-  def children: List[Operator] = List()
-  def rebuild(x: Seq[Operator]) = this
-  def expressions = List()
-  def rebuildExpressions(x: Seq[Expression]) = this
-  def columnNames = sch.map(_._1)
-}
 
 /**
  * A table with exactly one row --- Corresponds roughly to a
@@ -356,18 +336,18 @@ case class EmptyTable(sch: Seq[(String, Type)])
  * Not really used, just a placeholder for intermediate optimization.
  */
 @SerialVersionUID(100L)
-case class SingletonTable(tuple: Seq[(String, PrimitiveValue)])
+case class HardTable(schema: Seq[(String, Type)], data: Seq[Seq[PrimitiveValue]])
   extends Operator
 {
   def toString(prefix: String) =
-    prefix + "< " + ( tuple.map { case (name, v) => name+": "+v.toString }.mkString(", ") ) + " >"
+    prefix + "< " + ( schema.map { case (name, v) => name+": "+v.toString }.mkString(", ") ) + " >" +
+    data.take(3).map { "\n"+prefix+"< "+_.mkString(", ")+" >"}.mkString("")
   def children: Seq[Operator] = Seq()
   def rebuild(x: Seq[Operator]) = this
   def expressions = List()
   def rebuildExpressions(x: Seq[Expression]) = this
-  def columnNames = tuple.map(_._1)
+  def columnNames = schema.map(_._1)
 }
-
 
 
 /**

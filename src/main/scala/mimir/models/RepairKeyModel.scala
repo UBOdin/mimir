@@ -125,4 +125,11 @@ class RepairKeyModel(
     this.db = db 
   }
 
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Double = {
+    getFeedback(idx,args) match {
+      case Some(choice) => 1.0
+      case None => getDomain(idx, args, hints).sortBy(-_._2).head._1.asDouble / getDomain(idx, args, hints).map(_._2).sum
+    }
+  }
+
 }

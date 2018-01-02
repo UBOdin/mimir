@@ -96,7 +96,7 @@ class SqlToRA(db: Database)
     // subsequently joined to it.  Start by extracting the first FromItem
     var (ret, currBindings, sourceAlias) = 
       if(ps.getFromItem() == null){
-        (SingletonTable(Seq()), Seq(), "SINGLETON");
+        (HardTable(Seq(),Seq()), Seq(), "SINGLETON");
       } else {
         convert(ps.getFromItem)
       }
@@ -268,14 +268,9 @@ class SqlToRA(db: Database)
     val hasHavingClause =
       (ps.getHaving() != null)
 
-    val allReferencedFunctions =
-      targets.flatMap( tgt => ExpressionUtils.getFunctions(tgt._3) ).
-        map( tgt => if(tgt.startsWith("DISTINCT_")) {tgt.substring("DISTINCT_".length)} 
-                    else { tgt })
-
     val isAggSelect =
       hasGroupByRefs || hasHavingClause || 
-      allReferencedFunctions.exists( db.aggregates.isAggregate(_) )
+      targets.map { _._3 }.exists { expressionContainsAggregate(_) }
 
     if(!isAggSelect){
       // NOT an aggregate select.  
@@ -314,12 +309,12 @@ class SqlToRA(db: Database)
         fragmentedTargets.unzip3
 
       // The full set of referenced group by variables 
-      val referencedGBVars: Set[String] = perTargetGBVars.flatten.toSet
+      var referencedGBVars: Set[String] = perTargetGBVars.flatten.toSet
 
       // The full list of aggregate expressions we need to compute
-      val allAggFunctions = 
-        perTargetAggExprs.flatten.
-          map({ case (aggName, distinct, args, alias) =>
+      var allAggFunctions = 
+        perTargetAggExprs.flatten
+          .map({ case (aggName, distinct, args, alias) =>
             AggFunction(aggName, distinct, args, alias)
           })
 
@@ -333,6 +328,77 @@ class SqlToRA(db: Database)
             map(convertColumn(_, bindings.toMap))
         }
 
+      // Column names in the output schema
+      val targetNames = targets.map( _._2 )
+
+      // The having clause.  "Some" if there is one, "None" if not.
+      // The Boolean is TRUE if the having expression is applied to the
+      // post-aggregate schema and FALSE if applied to the pre-aggregate schema
+      val havingExprAndIsPostAgg: Option[(Expression, Boolean)] = 
+        if(ps.getHaving != null){
+          // SQL is Ugh...
+          // HAVING can be interpreted in one of two ways: Either it applies
+          // to the output of the SELECT (i.e., referencing variables in the
+          // output schema of the aggregate), or it can define new aggregate
+          // values.  Worse, the signaling about which is which is fairly weak
+          //
+          // We adopt a pragmatic approach: If you use an aggregate function
+          // in the HAVING clause, we assume it uses the pre-aggregate schema.
+          // Otherwise it's the post-aggregate schema.
+
+          val postAggregateBindings =
+            targetNames.map( tgt => (tgt, tgt) ) ++
+            declaredGBVars.map { v => (
+              reverseBindings(v.name),
+              v.name
+            )}
+
+          // Our first attempt at conversion: A post-aggregate
+          val postAggregateHavingExpr: Option[Expression] =
+            // Notably... the conversion could also fail due to missing
+            // bindings.  This is our backup signal to fail over.
+            ///
+            // TODO: It might be useful if we had a function to do the 
+            // AggFunction test prior to conversion.  That is, if we
+            // had a version of expressionContainsAggregate that worked
+            // on JSQLParser Expressions.
+            try {
+              val firstConversionAttempt = convert(ps.getHaving, postAggregateBindings.toMap)
+              if(expressionContainsAggregate(firstConversionAttempt)){ None }
+              else { Some(firstConversionAttempt) }
+            } catch { case e: SQLException => None }
+
+          // At this point, if `postAggregateHavingExpr` has something, then
+          // it's safe to convert it directly.  Otherwise, we need to do some 
+          // finagling to create temporary attributes in the aggregate.
+          postAggregateHavingExpr match {
+            case Some(havingExpr) => Some( (havingExpr, true) )
+
+            case None => {
+              // If we're here, it means that we're dealing with a pre-aggregate
+              // HAVING expression.  Use the original bindings to convert the
+              // expression.  If this fails, the SQL actually does have an error.
+              val secondConversionAttempt = convert(ps.getHaving, bindings)
+
+              val (havingPostExpression, havingGBVars, havingAggExprs) =
+                fragmentAggregateExpression(secondConversionAttempt, "MIMIR_HAVING")
+
+              // Tack on the newly generated aggregate expressions
+              referencedGBVars = referencedGBVars ++ havingGBVars
+              allAggFunctions = allAggFunctions ++ 
+                havingAggExprs.map({ case (aggName, distinct, args, alias) =>
+                  AggFunction(aggName, distinct, args, alias)
+                })
+
+              // And then the PostExpression is what we want to use in the
+              // Select() that gets attached to the query.
+              /* return */ Some( (havingPostExpression, false) )
+            }
+          }
+
+
+        } else { None }
+
       // Sanity Check: We should not be referencing a variable that's not in the GB list.
       val referencedNonGBVars = referencedGBVars -- declaredGBVars.map(_.name)
       if(!referencedNonGBVars.isEmpty){
@@ -343,29 +409,31 @@ class SqlToRA(db: Database)
       ret = Aggregate(declaredGBVars, allAggFunctions, ret)
 
       // Generate the post-processing projection targets
-      val targetNames = targets.map( _._2 )
       val postProcTargets = 
         targetNames.zip(targetPostProcExprs).
           map( tgt => ProjectArg(tgt._1, tgt._2) )
 
+      // If the having clause is applied to the pre-aggregate schema,
+      // then we need to apply it before projecting down to the post-aggregate
+      // schema.
+      havingExprAndIsPostAgg match {
+        case Some( (havingExpr, false) ) => {
+          ret = Select(havingExpr, ret)
+        }
+        case _ => ()
+      }
+
       // Assemble the post-processing Project
       ret = Project(postProcTargets, ret)
 
-      // Check for a having clause
-      if(ps.getHaving() != null){
-        // The having clause, as a post-processing step, uses a different set of
-        // bindings.  These include:
-        //  - The group by variable bindings
-        //  - The newly defined aggregate value bindings
-
-        val havingBindings =
-          targetNames.map( tgt => (tgt, tgt) ) ++
-          declaredGBVars.map( v => (v.name, bindings(v.name)) )
-
-        val havingExpr =
-          convert(ps.getHaving, havingBindings.toMap)
-
-        ret = Select(havingExpr, ret)
+      // If the having clause is applied to the post-aggregate schema,
+      // then we need to apply it after projecting down to the post-aggregate
+      // schema.
+      havingExprAndIsPostAgg match {
+        case Some( (havingExpr, true) ) => {
+          ret = Select(havingExpr, ret)
+        }
+        case _ => ()
       }
 
       // Apply sort and limit if necessary
@@ -384,6 +452,15 @@ class SqlToRA(db: Database)
     // The operator should now be fully assembled.  Return it and
     // its bindings
     return (ret, returnedBindings)
+  }
+
+  def expressionContainsAggregate(tgt: Expression): Boolean =
+  {
+    val allReferencedFunctions =
+        ExpressionUtils.getFunctions(tgt)
+          .map( tgt => if(tgt.startsWith("DISTINCT_")) {tgt.substring("DISTINCT_".length)} 
+                       else { tgt })
+    allReferencedFunctions.exists( db.aggregates.isAggregate(_) )
   }
 
   def convert(union: net.sf.jsqlparser.statement.select.Union, alias: String): (Operator, Seq[(String,String)]) =
@@ -609,7 +686,7 @@ class SqlToRA(db: Database)
             bindings(name);
           } catch {
             case _:NoSuchElementException => 
-              throw new SQLException("Unknown Variable: "+name+" in "+bindings.toString)        
+              throw new SQLException(s"Unknown Variable: $name in $bindings")
           }
         return Var(binding)
       case table => 
@@ -668,10 +745,11 @@ class SqlToRA(db: Database)
       case Var(x) => (Var(x), Set(x), List())
 
       case mimir.algebra.Function(fnBase, args) => {
-        val fnIsDistinct = (fnBase.toUpperCase.startsWith("DISTINCT_"))
+        val fnUpper = fnBase.toUpperCase
+        val fnIsDistinct = (fnUpper.startsWith("DISTINCT_"))
         val fn = 
-          if(fnIsDistinct){ fnBase.substring("DISTINCT_".length) }
-          else { fnBase }
+          if(fnIsDistinct){ fnUpper.substring("DISTINCT_".length) }
+          else { fnUpper }
 
         if(db.aggregates.isAggregate(fn)){
           (Var(alias), Set(), List( (fn, fnIsDistinct, args, alias) ))

@@ -219,6 +219,25 @@ object SqlParserSpec
 
 		}
 
+		"Parse Mixed-Case Aggregate Queries" in {
+			db.compiler.optimize(convert("SELECT Sum(A) FROM R")) must be equalTo
+				db.table("R")
+					.aggregateParsed( "SUM" -> "SUM(A)" )
+
+			db.compiler.optimize(convert("SELECT sum(A) FROM R")) must be equalTo
+				db.table("R")
+					.aggregateParsed( "SUM" -> "SUM(A)" )
+
+			db.compiler.optimize(convert("SELECT first(A) FROM R")) must be equalTo
+				db.table("R")
+					.aggregateParsed( "FIRST" -> "FIRST(A)" )
+
+			db.compiler.optimize(convert("SELECT first(A) FROM R GROUP BY B")) must be equalTo
+				db.table("R")
+					.groupByParsed("B")( "MIMIR_AGG_FIRST" -> "FIRST(A)" )
+					.rename( "MIMIR_AGG_FIRST" -> "FIRST" )
+					.project("FIRST")
+		}
 
 		"Parse simple aggregate-group by queries" in {
 			db.compiler.optimize(convert("SELECT A, SUM(B) FROM R GROUP BY A")) must be equalTo
@@ -420,6 +439,18 @@ object SqlParserSpec
 								Table("R","R", Map(("A", TInt()), ("B", TInt()), ("C", TInt())).toList, List()),
 								Table("S","S", Map(("B_0", TInt()), ("D", TInt())).toList, List()))),
 							Table("T","T", Map(("D_0", TInt()), ("E", TInt())).toList, List()))))
+
+		}
+
+		"Parse queries with HAVING clauses" >> {
+			db.compiler.optimize(convert("""
+				SELECT AVG(A) AS A FROM R GROUP BY C HAVING AVG(B)>70000; 
+			""")) must be equalTo
+				Project(Seq(ProjectArg("A", Var("MIMIR_AGG_A"))), db.table("R")
+					.groupByParsed("C")( 
+						"MIMIR_AGG_A" -> "AVG(A)",
+						"MIMIR_HAVING_0" -> "AVG(B)"
+					).filterParsed("MIMIR_HAVING_0 > 70000"))
 
 		}
 

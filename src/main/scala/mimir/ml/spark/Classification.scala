@@ -41,8 +41,8 @@ object Classification extends SparkML {
   override def prepareValueTrain(value:PrimitiveValue, t:Type): Any = {
     value match {
       case NullPrimitive() => t match {
-        case TInt() => 0L
-        case TFloat() => 0.0
+        case TInt() => ""
+        case TFloat() => ""
         case TDate() => ""
         case TString() => ""
         case TBool() => false
@@ -56,8 +56,8 @@ object Classification extends SparkML {
       }
       case RowIdPrimitive(s) => s
       case StringPrimitive(s) => s
-      case IntPrimitive(i) => i
-      case FloatPrimitive(f) => f
+      case IntPrimitive(i) => i.toString
+      case FloatPrimitive(f) => f.toString
       case x =>  x.asString 
     }
   }
@@ -65,8 +65,8 @@ object Classification extends SparkML {
   override def prepareValueApply(value:PrimitiveValue, t:Type): Any = {
     value match {
       case NullPrimitive() => t match {
-        case TInt() => 0L
-        case TFloat() => 0.0
+        case TInt() => ""
+        case TFloat() => ""
         case TDate() => ""
         case TString() => ""
         case TBool() => false
@@ -80,16 +80,16 @@ object Classification extends SparkML {
       }
       case RowIdPrimitive(s) => s
       case StringPrimitive(s) => s
-      case IntPrimitive(i) => i
-      case FloatPrimitive(f) => f
+      case IntPrimitive(i) => i.toString
+      case FloatPrimitive(f) => f.toString
       case x =>  x.asString 
     }
   }
   
   override def getSparkType(t:Type) : DataType = {
     t match {
-      case TInt() => LongType
-      case TFloat() => DoubleType
+      case TInt() => StringType
+      case TFloat() => StringType
       case TDate() => StringType
       case TString() => StringType
       case TBool() => BooleanType
@@ -105,11 +105,11 @@ object Classification extends SparkML {
     
   override def extractPredictions(model : PipelineModel, predictions:DataFrame, maxPredictions:Int = 5) : Seq[(String, (String, Double))] = {
     val sqlContext = getSparkSqlContext()
-    import sqlContext.implicits._  
+    import sqlContext.implicits._ 
     if(predictions.columns.contains("probability")){
       val rowidsProbabilitiesIdxs = predictions.select("rowid","probability").rdd.map(r => (r.getString(0), r.getAs[org.apache.spark.ml.linalg.DenseVector](1))).collect().map { item =>
           item._2.toArray.zipWithIndex.sortBy(_._1).reverse.slice(0, maxPredictions).map(probIdx => (item._1, probIdx._1, probIdx._2))}.flatten.toSeq
-      model.stages(model.stages.length-1).transform(rowidsProbabilitiesIdxs.toDF("rowid","probability","prediction")).select("rowid","probability","predictedLabel").map { x => (x.getString(0), (x.getString(2),x.getDouble(1))) }.collect()
+      model.stages(model.stages.length-1).transform(rowidsProbabilitiesIdxs.toDF("rowid","probability","prediction")).select("rowid","probability","predictedLabel").sort($"probability".desc,$"predictedLabel").map { x => (x.getString(0), (x.getString(2),x.getDouble(1))) }.collect()
     }
     else extractPredictionsNoProb(model, predictions, maxPredictions)
   }
@@ -120,7 +120,7 @@ object Classification extends SparkML {
     if(predictions.columns.contains("probability")){
       val probabilitiesIdxs = predictions.where($"rowid" === rowid).select("probability").rdd.map(r => r.getAs[org.apache.spark.ml.linalg.DenseVector](0)).collect().map { item =>
           item.toArray.zipWithIndex.sortBy(_._1).reverse.slice(0, maxPredictions).map(probIdx =>  probIdx)}.flatten.toSeq
-      model.stages(model.stages.length-1).transform(probabilitiesIdxs.toDF("probability","prediction")).select("probability","predictedLabel").map { x => (x.getString(1), x.getDouble(0)) }.collect()
+      model.stages(model.stages.length-1).transform(probabilitiesIdxs.toDF("probability","prediction")).select("probability","predictedLabel").sort($"probability".desc,$"predictedLabel").map { x => (x.getString(1), x.getDouble(0)) }.collect()
     }
     else extractPredictionsForRowNoProb(model, predictions, rowid, maxPredictions)
   }
@@ -143,7 +143,7 @@ object Classification extends SparkML {
     val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     val cols = training.schema.fields.tail
     //training.show()
-    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid("skip")
+    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
     val labels = indexer.fit(training).labels
     val (tokenizers, hashingTFs) = cols.flatMap(col => {
       col.dataType match {
@@ -173,7 +173,7 @@ object Classification extends SparkML {
   def RandomForestMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
     val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     //training.show()
-    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid("skip")
+    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
     val indexerModel = indexer.fit(training);  
     val cols = training.schema.fields.tail
     val (tokenizers, hashingTFs) = cols.flatMap(col => {
@@ -204,7 +204,7 @@ object Classification extends SparkML {
   def DecisionTreeMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
     val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     //training.show()
-    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid("skip")
+    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
     val indexerModel = indexer.fit(training);  
     val cols = training.schema.fields.tail
     val (tokenizers, hashingTFs) = cols.flatMap(col => {
@@ -235,7 +235,7 @@ object Classification extends SparkML {
   def GradientBoostedTreeBinaryclassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
     val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     //training.show()
-    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid("skip")
+    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
     val indexerModel = indexer.fit(training);  
     val cols = training.schema.fields.tail
     val (tokenizers, hashingTFs) = cols.flatMap(col => {
@@ -268,7 +268,7 @@ object Classification extends SparkML {
     val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     val cols = training.schema.fields.tail
     //training.show()
-    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid("skip")
+    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
     val labels = indexer.fit(training).labels
     val (tokenizers, hashingTFs) = cols.flatMap(col => {
       col.dataType match {
@@ -299,7 +299,7 @@ object Classification extends SparkML {
     val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     val cols = training.schema.fields.tail
     //training.show()
-    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid("skip")
+    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
     val labels = indexer.fit(training).labels
     val (tokenizers, hashingTFs) = cols.flatMap(col => {
       col.dataType match {
@@ -331,7 +331,7 @@ object Classification extends SparkML {
     val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     val cols = training.schema.fields.tail
     //training.show()
-    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid("skip")
+    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
     val labels = indexer.fit(training).labels
     val (tokenizers, hashingTFs) = cols.flatMap(col => {
       col.dataType match {
@@ -362,7 +362,7 @@ object Classification extends SparkML {
     val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
     val cols = training.schema.fields.tail
     //training.show()
-    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid("skip")
+    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
     val labels = indexer.fit(training).labels
     val (tokenizers, hashingTFs) = cols.flatMap(col => {
       col.dataType match {

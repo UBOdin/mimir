@@ -32,36 +32,51 @@ object CheckHeader
 
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
-    SingletonTable(Seq(("TABLE_NAME",StringPrimitive(model.targetName))))
+    HardTable(
+      Seq(
+        ("TABLE_NAME",TString())
+      ),
+      Seq(
+        Seq(
+          StringPrimitive("DATA")
+        )
+      )
+    )
   }
   
   def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
-    model.query.columnNames.zipWithIndex.map(col => 
-      SingletonTable(Seq(("TABLE_NAME" , StringPrimitive(model.targetName)), ("ATTR_NAME" , model.bestGuess(col._2, Seq(), Seq())),("ATTR_TYPE", TypePrimitive(TString())),("IS_KEY", BoolPrimitive(false))))
-     ) match {
-      case Seq() => EmptyTable(Seq(("TABLE_NAME", TString()), ("ATTR_NAME", TString()), ("ATTR_TYPE", TType()), ("IS_KEY", TBool())))
-      case Seq(sng@SingletonTable(_)) => sng
-      case sngs:Seq[SingletonTable] => {
-        val revsngs = sngs.reverse
-        revsngs.tail.tail.foldLeft(Union(revsngs.tail.head, revsngs.head))((union, sng) => {
-          Union(sng, union)
-        })
+    HardTable(
+      Seq(
+        ("TABLE_NAME" , TString()), 
+        ("ATTR_TYPE", TType()),
+        ("IS_KEY", TBool()),
+        ("COLUMN_ID", TInt())
+      ),
+      (0 until config.query.columnNames.size).map { col =>
+        Seq(
+          StringPrimitive("DATA"),
+          TypePrimitive(TString()),
+          BoolPrimitive(false),
+          IntPrimitive(col)
+        )
       }
-    }
+    ).addColumn(
+      "ATTR_NAME" -> VGTerm("MIMIR_CH_" + config.schema, 0, Seq(Var("COLUMN_ID")), Seq())
+    ).removeColumn("COLUMN_ID")
   }
   
   def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
   {
-    val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
-    Some(
-        Project( model.query.columnNames.zipWithIndex.map( col => 
-          ProjectArg(model.bestGuess(col._2, Seq(), Seq()).asString,Var(col._1)) )
-          , config.query) match {
-          case proj if model.headerDetected => proj.limit(1000000000, 1)
-          case proj => proj
-        })
+    if(table.equals("DATA")){
+      val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
+      Some(
+          Project( model.query.columnNames.zipWithIndex.map( col => 
+            ProjectArg(model.bestGuess(0, Seq(IntPrimitive(col._2)), Seq()).asString,Var(col._1)) )
+            , config.query) match {
+            case proj if model.headerDetected => proj.limit(-1, 1)
+            case proj => proj
+          })
+    } else { None }
   }
 }

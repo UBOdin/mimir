@@ -43,7 +43,7 @@ object BestGuess
     // As a side effect, this also forces the typechecker to run, 
     // acting as a sanity check on the query before we do any serious
     // work.
-    val outputSchema = db.bestGuessSchema(oper)
+    val outputSchema = db.typechecker.schemaOf(oper)
       
     // The names that the provenance compilation step assigns will
     // be different depending on the structure of the query.  As a 
@@ -81,7 +81,6 @@ object BestGuess
       provenanceCols.toSet ++
       (colDeterminism.map(_._2) ++ Seq(rowDeterminism)).flatMap( ExpressionUtils.getColumns(_) ).toSet
 
-
     oper = ProjectRedundantColumns(oper, minimalSchema)
 
     logger.debug(s"PRE-OPTIMIZED: $oper")
@@ -90,16 +89,17 @@ object BestGuess
 
     logger.debug(s"INLINED: $oper")
 
-    // Clean things up a little... make the query prettier, tighter, and 
-    // faster
-    oper = db.compiler.optimize(oper)
-
-    logger.debug(s"OPTIMIZED: $oper")
 
     // Replace VG-Terms with their "Best Guess values"
     oper = bestGuessQuery(db, oper)
 
     logger.debug(s"GUESSED: $oper")
+
+    // Clean things up a little... make the query prettier, tighter, and 
+    // faster
+    oper = db.compiler.optimize(oper)
+
+    logger.debug(s"OPTIMIZED: $oper")
 
     return (
       oper, 

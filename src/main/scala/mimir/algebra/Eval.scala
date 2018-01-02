@@ -77,7 +77,7 @@ class Eval(
     e match {
       case p : PrimitiveValue => p
       case Var(v) => bindings(v) match {
-        case None => throw new RAException("Variable Out Of Scope: "+v+" (in "+bindings+")");
+        case None => throw new RAException("Variable Out Of Scope: "+v);
         case Some(s) => s
       }
       case RowIdVar() => throw new RAException("Evaluating RowIds in the Interpreter Unsupported")
@@ -260,7 +260,10 @@ object Eval
         IntervalPrimitive(a.asInterval.minus(b.asInterval))
       case (Arith.Sub, TDate() | TTimestamp(), TDate() | TTimestamp(), _) =>
         IntervalPrimitive(new Period(b.asDateTime, a.asDateTime))
-
+      case (Arith.Add, TDate() | TTimestamp(), TDate() | TTimestamp(), _) =>
+        val d = b.asDateTime.plus(a.asDateTime.getMillis)
+        DatePrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth) 
+        
       case (Arith.Add, TDate(), TInterval(), _) =>
         val d = a.asDateTime.plus(b.asInterval)
         DatePrimitive(d.getYear,d.getMonthOfYear,d.getDayOfMonth)
@@ -344,7 +347,7 @@ object Eval
     v match { 
       case IntPrimitive(n) => IntPrimitive(Math.abs(n))
       case FloatPrimitive(n) => FloatPrimitive(Math.abs(n))
-      case IntervalPrimitive(p) if p.toStandardSeconds.getSeconds > 0 => IntervalPrimitive(p)
+      case IntervalPrimitive(p) if p.size() > 0 => IntervalPrimitive(p)
       case IntervalPrimitive(p)  => IntervalPrimitive(p.negated())
       case NullPrimitive() => NullPrimitive()
     }

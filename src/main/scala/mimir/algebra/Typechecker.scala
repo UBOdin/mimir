@@ -253,9 +253,7 @@ class Typechecker(
 			case View(_, query, _) => schemaOf(query)
 			case AdaptiveView(_, _, query, _) => schemaOf(query)
 
-			case EmptyTable(sch) => sch
-
-			case SingletonTable(tuple) => tuple.map { case (name, v) => (name, v.getType) }
+			case HardTable(sch,_) => sch
 
 			case Limit(_, _, src) => schemaOf(src)
 
@@ -340,7 +338,9 @@ object Typechecker
 	{
 		// Start with special case overrides
 		(a, b, op) match {
-
+		  case (TDate() | TTimestamp(), 
+						TDate() | TTimestamp(), 
+						Arith.Add)                => return Some(TDate())
       // Interval Arithmetic
 			case (TDate() | TTimestamp(), 
 						TDate() | TTimestamp(), 

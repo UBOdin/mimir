@@ -181,18 +181,6 @@ case class Database(backend: Backend)
   final def query[T](stmt: String)(handler: ResultIterator => T): T = 
     query(select(stmt), BestGuess)(handler)
 
-
-  /**
-   * Make an educated guess about what the query's schema should be
-   * XXX: Only required because the TypeInference lens is a little punk birch that needs to
-   *      be converted into an adaptive schema (#193).
-   */
-  def bestGuessSchema(oper: Operator): Seq[(String, Type)] =
-  {
-    val Inline = new OptimizeExpressions(compiler.optimize(_))
-    typechecker.schemaOf(Inline(InlineVGTerms(oper, this)))
-  }
-
   /**
    * Parse raw SQL data
    */
@@ -416,11 +404,11 @@ case class Database(backend: Backend)
            case x => x.toUpperCase
      }) match {
       case "CSV" => {
-        val (delim, typeinference, adaptive) =
+        val (delim, typeinference, detectHeaders) =
           format._2 match {
-            case Seq(StringPrimitive(delim)) => (delim, true, true)
-            case Seq(StringPrimitive(delim),BoolPrimitive(typeinference)) => (delim, typeinference, true)
-            case Seq(StringPrimitive(delim),BoolPrimitive(typeinference),BoolPrimitive(adaptive)) => (delim, typeinference, adaptive)
+            case Seq(StringPrimitive(delim_)) => (delim_, true, true)
+            case Seq(StringPrimitive(delim_),BoolPrimitive(typeinference_)) => (delim_, typeinference_, true)
+            case Seq(StringPrimitive(delim_),BoolPrimitive(typeinference_),BoolPrimitive(adaptive_)) => (delim_, typeinference_, adaptive_)
             case Seq() | null => (",", true, true)
             case _ => throw new SQLException("The CSV format expects a single string argument (CSV('delim'))")
           }
@@ -433,24 +421,24 @@ case class Database(backend: Backend)
             LoadCSV.handleLoadTableRaw(this, targetRaw, sourceFile, 
               Map("DELIMITER" -> delim)
             )
-            val oper = table(targetRaw)
-            //detect headers and create adaptive schema
-            if(adaptive)
-              adaptiveSchemas.create( targetTable.toUpperCase+"_DH", "DETECT_HEADER", oper, Seq())
-            //create TI adaptive schema - also create a view with the target name 
+            var oper = table(targetRaw)
+            //detect headers 
+            if(detectHeaders) {
+              val dhSchemaName = targetTable.toUpperCase+"_DH"
+              adaptiveSchemas.create(dhSchemaName, "DETECT_HEADER", oper, Seq())
+              oper = adaptiveSchemas.viewFor(dhSchemaName, "DATA").get
+            }
+            //type inference
             if(typeinference){
-              adaptiveSchemas.create( targetTable.toUpperCase+"_TI", "TYPE_INFERENCE", adaptiveSchemas.viewFor(targetTable.toUpperCase+ "_DH", targetRaw).getOrElse(oper), Seq(FloatPrimitive(.5))) 
-              views.create(targetTable.toUpperCase, adaptiveSchemas.viewFor(targetTable.toUpperCase+ "_TI", targetRaw).get)
+              val tiSchemaName = targetTable.toUpperCase+"_TI"
+              adaptiveSchemas.create(tiSchemaName, "TYPE_INFERENCE", oper, Seq(FloatPrimitive(.5))) 
+              oper = adaptiveSchemas.viewFor(tiSchemaName, "DATA").get
             }
-            else if(adaptive){
-              //if there is no ti then make a view with the target name of the detect header adaptive schema view 
-              views.create(targetTable.toUpperCase, adaptiveSchemas.viewFor(targetTable.toUpperCase+ "_DH", targetRaw).getOrElse(oper))
-            }
-            else {
-              //if there is no ti or detect headers then make a view with the target name of the raw table
-              views.create(targetTable.toUpperCase, oper)
-            }
-          } else LoadCSV.handleLoadTableRaw(this, targetTable.toUpperCase, sourceFile,  Map("DELIMITER" -> delim) )
+            //finally create a view for the data
+            views.create(targetTable.toUpperCase, oper)
+          } else {
+            LoadCSV.handleLoadTableRaw(this, targetTable.toUpperCase, sourceFile,  Map("DELIMITER" -> delim) )
+          }
         }
       case fmt =>
         throw new SQLException(s"Unknown load format '$fmt'")

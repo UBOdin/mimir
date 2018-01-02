@@ -515,18 +515,20 @@ object CTPercolator
       }
       case v @ View(name, query, metadata) => {
         val (newQuery, colDeterminism, rowDeterminism) = percolateLite(query, models)
-        val columns = query.columnNames
-
+        val columns = columnNames(query)
+        
         val inlinedQuery = 
           Project(
             columns.map { col => ProjectArg(col, Var(col)) } ++
-            columns.map { col => ProjectArg(mimirColDeterministicColumnPrefix+col, colDeterminism(col)) } ++
+            columns.map { col => {
+                ProjectArg(mimirColDeterministicColumnPrefix+col, colDeterminism(col)) } } ++
             Seq( ProjectArg(mimirRowDeterministicColumnName, rowDeterminism) ),
             newQuery
           )
         (
           View(name, inlinedQuery, metadata + ViewAnnotation.TAINT),
-          columns.map { col => (col -> Var(mimirColDeterministicColumnPrefix+col)) }.toMap,
+          columns.map { col => 
+              (col -> Var(mimirColDeterministicColumnPrefix+col)) }.toMap,
           Var(mimirRowDeterministicColumnName)
         )
       }
@@ -544,8 +546,8 @@ object CTPercolator
         //   As soon as it becomes appropriate to start tagging things... then see 
         //   CTExplainer.explainSubsetWithoutOptimizing for an idea of how to implement this correctly.
         val (newQuery, colDeterminism, rowDeterminism) = percolateLite(query, models)
-        val columns = query.columnNames
-
+        val columns = columnNames(query)
+        
         val inlinedQuery = 
           Project(
             columns.map { col => ProjectArg(col, Var(col)) } ++
@@ -560,7 +562,7 @@ object CTPercolator
         )
       }
 
-      case EmptyTable(sch) => {
+      case HardTable(sch,_) => {
         return (oper, 
           // All columns are deterministic
           sch.map(_._1).map((_, BoolPrimitive(true)) ).toMap,
@@ -569,12 +571,6 @@ object CTPercolator
         )
       }
  
-      case SingletonTable(tuple) => {
-        return (oper, 
-          tuple.map { case (name, _) => (name, BoolPrimitive(true)) }.toMap, 
-          BoolPrimitive(true)
-        )
-      }
 
       // This is a bit hackish... Sort alone doesn't affect determinism
       // metadata, and Limit doesn't either, but combine the two and you get some
@@ -594,8 +590,15 @@ object CTPercolator
     }
   }
   
+  def columnNames(oper:Operator) : Seq[String] = {
+    oper match {
+      case Table(_,_,sch,_) => sch.map(_._1)
+      case _ => oper.columnNames
+    }
+  }
+  
   def percolateGProM(oper: Operator): (Operator, Map[String,Expression], Expression) =
   {
-    mimir.gprom.algebra.OperatorTranslation.compileTaintWithGProM(oper)
+    mimir.algebra.gprom.OperatorTranslation.compileTaintWithGProM(oper)
   }
 }

@@ -125,9 +125,9 @@ object PushdownSelections extends OperatorOptimization {
 				Select(cond, apply(agg))
 			}
 			
-			case Select(cond, EmptyTable(sch)) => EmptyTable(sch)
+			case Select(cond, ht@HardTable(sch,Seq())) => ht
 
-			case Select(_, (_:SingletonTable)) => o
+			case Select(_, (_:HardTable)) => o
 			
 			case Select(cond, View(name, query, annotations)) => 
 				Select(cond, View(name, apply(query), annotations))

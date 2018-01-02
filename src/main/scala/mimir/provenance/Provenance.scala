@@ -8,7 +8,7 @@ import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
 import mimir.views.ViewAnnotation
-import mimir.gprom.algebra.OperatorTranslation
+import mimir.algebra.gprom.OperatorTranslation
 
 class ProvenanceError(e:String) extends Exception(e) {}
 
@@ -152,15 +152,15 @@ object Provenance extends LazyLogging {
           List(rowidColnameBase)
         )
 
-      case EmptyTable(schema) =>
+      case empty@HardTable(schema,Seq()) =>
         (
-          EmptyTable(schema),
+          empty,
           List()
         )
 
-      case SingletonTable(tuple) =>
+      case HardTable(sch,data) =>
         (
-          SingletonTable(tuple ++ Seq( (rowidColnameBase, RowIdPrimitive("singleton")) )),
+          HardTable(sch:+(rowidColnameBase,TRowId()), data.zipWithIndex.map(row => row._1:+ RowIdPrimitive(s"hardcoded${row._2}"))),
           List(rowidColnameBase)
         )
 
@@ -332,20 +332,20 @@ object Provenance extends LazyLogging {
             throw new ProvenanceError("Operator not compiled for provenance: "+operator)
         }
 
-      case SingletonTable(tuple) => {
-        val tupleMap = tuple.toMap
+      case HardTable(sch,Seq()) => None 
+  
+      case HardTable(sch,data) => {
+        val tupleMap = sch.toMap
         val rowIdKeys = tupleMap.keySet & rowIds.keySet
         if(rowIdKeys.forall { key => 
           tupleMap(key).equals(rowIds(key))
         }) {
-          Some(SingletonTable(tuple))
+          Some(HardTable(sch, data))
         } else {
           None
         }
       }
-
-      case EmptyTable(sch) => None 
-
+      
       case Aggregate(gbCols, aggCols, src) =>
         val sch = db.typechecker.schemaOf(src).toMap
 

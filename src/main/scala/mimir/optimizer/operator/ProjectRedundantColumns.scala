@@ -23,6 +23,26 @@ object ProjectRedundantColumns extends OperatorOptimization {
   def apply(o: Operator, dependencies: Set[String]): Operator =
   {
     o match {
+      case proj@Project(args, Select(condition, source)) => {
+        val newArgs = 
+          args.filter( arg => dependencies contains arg.name )
+
+        val childDependencies = 
+          newArgs.map( _.expression ).
+            flatMap( ExpressionUtils.getColumns(_) ).
+            toSet
+        
+        val nextChildDependencies = 
+          ExpressionUtils.getColumns( condition ) ++ childDependencies
+            
+        val projRedunDependencies = source.columnNames.toSet
+       
+        if(childDependencies.subsetOf(projRedunDependencies))
+          proj    
+        else
+          Project( newArgs, Select(condition, apply(source, nextChildDependencies)) )
+      }
+      
       case Project(args, source) => {
         val newArgs = 
           args.filter( arg => dependencies contains arg.name )
@@ -117,11 +137,23 @@ object ProjectRedundantColumns extends OperatorOptimization {
           groupby.flatMap( ExpressionUtils.getColumns(_) ).
             toSet
 
+        val allDownwardDependencies = computedDependencies ++ groupbyDependencies
+
+        // It is possible for an Aggregate column to want to project away ALL columns
+        // While this isn't a problem for us, it makes it VERY difficult to convert the resulting
+        // expression to SQL.  Preseve a single (arbitrary) column for safety in this case.
+        val safeDownwardDependencies =
+          if(allDownwardDependencies.isEmpty){
+            Set(source.columnNames.head)
+          } else {
+            allDownwardDependencies
+          }
+
         val aggregate = 
           Aggregate(
             groupby,
             computed.filter( (column) => dependencies contains column.alias ),
-            apply(source, computedDependencies ++ groupbyDependencies)
+            apply(source, safeDownwardDependencies)
           )
 
         projectIfNeeded(aggregate, dependencies)
@@ -130,9 +162,20 @@ object ProjectRedundantColumns extends OperatorOptimization {
       case view: View => view
       case view: AdaptiveView => view
       case table: Table => table
-      case table: EmptyTable => table
-      case SingletonTable(tuple) => 
-        SingletonTable(tuple.filter { case (name, _) => dependencies contains name })
+      case HardTable(sch,data) => 
+      {
+        val colNamesWithIndices = 
+          sch.map { _._1 }.zipWithIndex
+        val columnIndicesToKeep = 
+          colNamesWithIndices
+            .filter { case (col, _) => dependencies contains col }
+            .map { _._2 }
+
+        HardTable(
+          columnIndicesToKeep.map { sch(_) },
+          data.map { row => columnIndicesToKeep.map { row(_) } }
+        )
+      }
 
       case LeftOuterJoin(lhs, rhs, condition) => {
         val childDependencies = 

@@ -128,30 +128,30 @@ object Tracer {
           BoolPrimitive(true)
         )
 
-      case SingletonTable(tuple) => {
-        val tupleMap = tuple.toMap
-        val rowIdKeys = tupleMap.keySet & targetRowId.keySet
-        (
-          if(rowIdKeys.forall { key => 
-            tupleMap(key).equals(targetRowId(key))
-          }) {
-            SingletonTable(tuple)
-          } else {
-            EmptyTable(tuple.map { case (name, v) => (name, v.getType) })
-          },
-          tuple.map { case (name, _) => (name, Var(name)) }.toMap,
-          BoolPrimitive(true)
-        )
-      }
-
-      case EmptyTable(schema) => 
+      case ht@HardTable(schema,Seq()) => 
         ( 
-          EmptyTable(schema),
+          ht,
           schema.map(_._1).map(
             col => (col, Var(col))
           ).toMap,
           BoolPrimitive(true)
         )
+        
+      case HardTable(schema, data) => {
+        val tupleMap = schema.toMap
+        val rowIdKeys = tupleMap.keySet & targetRowId.keySet
+        (
+          if(rowIdKeys.forall { key => 
+            tupleMap(key).equals(targetRowId(key))
+          }) {
+            HardTable(schema, data)
+          } else {
+            HardTable(schema, Seq())
+          },
+          schema.map { case (name, _) => (name, Var(name)) }.toMap,
+          BoolPrimitive(true)
+        )
+      }
 
       case Sort(_, src) => return trace(src, targetRowId)
       case Limit(_, _, src) => return trace(src, targetRowId)

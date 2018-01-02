@@ -74,7 +74,7 @@ object SpecializeForSQLite {
 
         Aggregate(
           gb,
-          agg.map( apply(_:AggFunction, db.typechecker.typeOf(_, o)) ),
+          agg.map( apply(_:AggFunction, db.typechecker.typeOf(_, source)) ),
           apply(source, db)
         )
       }
