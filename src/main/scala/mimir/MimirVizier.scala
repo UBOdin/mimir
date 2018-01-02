@@ -256,6 +256,29 @@ object MimirVizier extends LazyLogging {
     timeRes._1
   }
   
+  def createAdaptiveSchema(input : Any, params : Seq[String], _type : String) : String = {
+    pythonCallThread = Thread.currentThread()
+    val timeRes = time {
+      logger.debug("createAdaptiveSchema: From Vistrails: [" + input + "] [" + params.mkString(",") + "]"  ) ;
+      val paramExprs = params.map(param => 
+        mimir.parser.ExpressionParser.expr( param.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString)) )
+      val paramsStr = paramExprs.mkString(",")
+      val adaptiveSchemaName = "ADAPTIVE_SCHEMA_" + _type + ((input.toString() + _type + paramsStr).hashCode().toString().replace("-", "") )
+      db.getView(adaptiveSchemaName) match {
+        case None => {
+          db.adaptiveSchemas.create(adaptiveSchemaName, _type, db.table(input.toString), paramExprs)
+          db.views.create("VIEW_"+adaptiveSchemaName, db.adaptiveSchemas.viewFor(adaptiveSchemaName, "DATA").get)
+        }
+        case Some(_) => {
+          logger.debug("createAdaptiveSchema: From Vistrails: Adaptive Schema already exists: " + adaptiveSchemaName)
+        }
+      }
+      "VIEW_"+adaptiveSchemaName
+    }
+    logger.debug(s"createView Took: ${timeRes._2}")
+    timeRes._1
+  }
+  
   def vistrailsQueryMimir(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : PythonCSVContainer = {
     val timeRes = time {
       logger.debug("vistrailsQueryMimir: " + query)
@@ -451,6 +474,12 @@ object MimirVizier extends LazyLogging {
   def getAvailableLenses() : String = {
     val ret = db.lenses.lensTypes.keySet.toSeq.mkString(",")
     logger.debug(s"getAvailableLenses: From Viztrails: $ret")
+    ret
+  }
+  
+  def getAvailableAdaptiveSchemas() : String = {
+    val ret = mimir.adaptive.MultilensRegistry.multilenses.keySet.toSeq.mkString(",")
+    logger.debug(s"getAvailableAdaptiveSchemas: From Viztrails: $ret")
     ret
   }
   
