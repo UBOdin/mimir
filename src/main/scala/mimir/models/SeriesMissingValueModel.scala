@@ -70,7 +70,7 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
   {
     this.db = db
 
-    querySchema = db.bestGuessSchema(query).map { _._2 }
+    querySchema = db.typechecker.schemaOf(query).map { _._2 }
     
     val potentialSeries = DetectSeries.seriesOf(db, query, 0.1)
     predictions = 

@@ -16,8 +16,6 @@ class LensManager(db: Database) {
                               (Operator,TraversableOnce[Model]))](
     "MISSING_VALUE"     -> MissingValueLens.create _,
     "DOMAIN"            -> MissingValueLens.create _,
-    "SCHEMA_MATCHING"   -> SchemaMatchingLens.create _,
-    "TYPE_INFERENCE"    -> TypeInferenceLens.create _,
     "KEY_REPAIR"        -> RepairKeyLens.create _,
     "REPAIR_KEY"        -> RepairKeyLens.create _,
     "COMMENT"           -> CommentLens.create _,

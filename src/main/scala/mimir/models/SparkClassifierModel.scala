@@ -92,7 +92,7 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
  
   def guessSparkModelType(t:Type) : String = {
     t match {
-      case TFloat() if db.bestGuessSchema(query).length == 1 => "Regression"
+      case TFloat() if query.columnNames.length == 1 => "Regression"
       case TInt() | TDate() | TString() | TBool() | TRowId() | TType() | TAny() | TTimestamp() | TInterval() => "Classification"
       case TUser(name) => guessSparkModelType(mimir.algebra.TypeRegistry.registeredTypes(name)._2)
       case x => "Classification"
@@ -117,7 +117,7 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
                 , db)) 
      } else { 
        sparkMLInstance.extractPredictions(learner.get,
-           sparkMLInstance.applyModel(learner.get,  ("rowid", TString()) +: db.bestGuessSchema(query).filterNot(_._1.equalsIgnoreCase("rowid")), List(List(rowid, rowValueHints(colIdx)))))
+           sparkMLInstance.applyModel(learner.get,  ("rowid", TString()) +: db.typechecker.schemaOf(query).filterNot(_._1.equalsIgnoreCase("rowid")), List(List(rowid, rowValueHints(colIdx)))))
      }} match {
          case Seq() => Seq()
          case x => x.unzip._2
@@ -170,7 +170,7 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
   }
 
   def guessInputType: Type =
-    db.bestGuessSchema(query)(colIdx)._2
+    db.typechecker.schemaOf(query)(colIdx)._2
 
   def argTypes(idx: Int): Seq[Type] = List(TRowId())
   def hintTypes(idx: Int) = db.typechecker.schemaOf(query).map(_._2)

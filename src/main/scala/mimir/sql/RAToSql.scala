@@ -636,9 +636,6 @@ class RAToSql(db: Database)
       case Not(subexp) => {
         new InverseExpression(convert(subexp, sources))
       }
-      case mimir.algebra.Function("CAST", body_arg :: TypePrimitive(t) :: Nil) => {
-        return new CastOperation(convert(body_arg, sources), t.toString);
-      }
       case mimir.algebra.Function("CAST", Seq(body_arg, TypePrimitive(t))) => {
         return new CastOperation(convert(body_arg, sources), t.toString);
       }

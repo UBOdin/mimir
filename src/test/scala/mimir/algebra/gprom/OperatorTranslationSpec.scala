@@ -1,4 +1,4 @@
-package mimir.gprom.algebra
+package mimir.algebra.gprom
 
 import org.gprom.jdbc.jna.GProMWrapper
 import org.specs2.specification._
@@ -33,7 +33,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
     
     update("CREATE TABLE Q(E varchar, F varchar)")
     update("INSERT INTO Q (E, F) VALUES(1, 4)")
-    update("INSERT INTO Q (E, F) VALUES(2, 1)")
+    update("INSERT INTO Q (E, F) VALUES(NULL, 1)")
     update("INSERT INTO Q (E, F) VALUES(3, 2)")
     update("INSERT INTO Q (E, F) VALUES(4, 1)")
     
@@ -54,7 +54,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
       update("""
           CREATE LENS TIQ
             AS SELECT * FROM Q
-          WITH TYPE_INFERENCE(.7)
+          WITH MISSING_VALUE(E)
         """);
       update("""
           CREATE LENS CQ

@@ -47,15 +47,6 @@ object CureScenario
           update(s"LOAD '$table';") 
         }
         time(s"Materialize '$basename'"){
-          //XXX: there is a problem with materialized views and MV lens
-          //      that needs to be addressed more thoroughly - 
-          //      something with col det bit vector and taint cols
-          //      it looks like taint cols for prov (MIMIR_COL_DET_MIMIR_ROWID_X) 
-          //      are in the non-materialized VIEW's TAINT metadata
-          //      but not in the materialized version of the same view.
-          //      I added a hack in CTPercolator (see line 530)
-          //      but is likely the wrong solution
-          //     -Mike
           update(s"ALTER VIEW $basename MATERIALIZE;")
         }
         db.explainer.explainEverything(
@@ -120,10 +111,7 @@ object CureScenario
 
 //    true
     "Explain the CURE Query" >> {
-      // The type inference lens strikes again...
-      //    we should be able to use schemaOf, but instead we need bestGuessSchema
-      // db.typechecker.schemaOf(select(cureQuery))
-      db.bestGuessSchema(select(cureQuery))
+      db.typechecker.schemaOf(select(cureQuery))
       ok
     }
      "Run the CURE Query" >> {

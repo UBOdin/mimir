@@ -8,7 +8,7 @@ import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
 import mimir.views.ViewAnnotation
-import mimir.gprom.algebra.OperatorTranslation
+import mimir.algebra.gprom.OperatorTranslation
 
 class ProvenanceError(e:String) extends Exception(e) {}
 

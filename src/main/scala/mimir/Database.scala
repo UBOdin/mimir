@@ -181,18 +181,6 @@ case class Database(backend: Backend)
   final def query[T](stmt: String)(handler: ResultIterator => T): T = 
     query(select(stmt), BestGuess)(handler)
 
-
-  /**
-   * Make an educated guess about what the query's schema should be
-   * XXX: Only required because the TypeInference lens is a little punk birch that needs to
-   *      be converted into an adaptive schema (#193).
-   */
-  def bestGuessSchema(oper: Operator): Seq[(String, Type)] =
-  {
-    val Inline = new OptimizeExpressions(compiler.optimize(_))
-    typechecker.schemaOf(Inline(InlineVGTerms(oper, this)))
-  }
-
   /**
    * Parse raw SQL data
    */
