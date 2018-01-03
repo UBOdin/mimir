@@ -6,6 +6,9 @@ import org.specs2.mutable._
 
 import mimir.algebra._
 import mimir.test._
+import mimir.models.FeedbackSource
+import mimir.models.FeedbackSourceIdentifier
+import mimir.statistics.FeedbackStats
 
 object FeedbackSpec 
   extends SQLTestSpecification("FeedbackTests")
@@ -67,7 +70,7 @@ object FeedbackSpec
     }
   }
 
-  "The Weka Model" should {
+  "The SparkML Model" should {
 
     "Support direct feedback" >> {
       val model = db.models.get("MV:SPARKML:B")
@@ -97,6 +100,24 @@ object FeedbackSpec
 
 
     }
-
+  }
+  
+  "Feedback Stats" should {
+    "Compute feedback source confidence" >> {
+      val model = db.models.get("MV:SPARKML:B")
+      val nullRow = querySingleton("SELECT ROWID() FROM R WHERE B IS NULL")
+      val feedbackConfidence = ((for(i <- 0 to 4) yield {
+        val fbSource = FeedbackSourceIdentifier(i.toString(), s"source$i")
+        FeedbackSource.setSource(fbSource)
+        model.feedback(0, List(nullRow), IntPrimitive(50+i))
+        FeedbackSource.setSource(FeedbackSourceIdentifier())
+        (fbSource -> {if((50+i) == 50) 1.0 else 0.0})
+      }) :+ (FeedbackSourceIdentifier("","truth") -> 1.0)).toSet
+      //set ground truth  
+      model.feedback(0, List(nullRow), IntPrimitive(50))
+      val fbs = new FeedbackStats(db)
+      fbs.calcConfidence()
+      fbs.fbConfidence.toSet must be equalTo(feedbackConfidence)
+    }
   }
 }
