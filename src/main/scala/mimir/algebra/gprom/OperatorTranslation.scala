@@ -1813,9 +1813,13 @@ object OperatorTranslation {
             result.toList.map(row => (row(0).asString, row(1).asInstanceOf[TypePrimitive].t)).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, if(sch._1._1.startsWith(name + "_")) sch._1._1.replaceFirst((name + "_"), "") else sch._1._1, if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
           }
           else{
-            db.bestGuessSchema(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, if(sch._1._1.startsWith(name + "_")) sch._1._1.replaceFirst((name + "_"), "") else sch._1._1, if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
+            db.typechecker.schemaOf(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, if(sch._1._1.startsWith(name + "_")) sch._1._1.replaceFirst((name + "_"), "") else sch._1._1, if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
           }
         }
+      }
+      case HardTable(schema, data) => {
+        val htName = s"HARD_TABLE_${schema.hashCode()}"
+        schema.zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(htName, htName, sch._1._1, sch._1._1, "", sch._1._2, sch._2, 0))
       }
       case x => {
         throw new Exception("Can Not extract schema '"+x+"'")
@@ -1862,9 +1866,13 @@ object OperatorTranslation {
             result.toList.map(row => (row(0).asString, row(1).asInstanceOf[TypePrimitive].t)).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, if(sch._1._1.startsWith(name + "_")) sch._1._1.replaceFirst((name + "_"), "") else sch._1._1, if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
           }
           else{
-            db.bestGuessSchema(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, if(sch._1._1.startsWith(name + "_")) sch._1._1.replaceFirst((name + "_"), "") else sch._1._1, if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
+            db.typechecker.schemaOf(oper).zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(name, name, if(sch._1._1.startsWith(name + "_")) sch._1._1.replaceFirst((name + "_"), "") else sch._1._1, if(sch._1._1.startsWith(name + "_")) sch._1._1 else name + "_"+sch._1._1, "", sch._1._2, sch._2, 0))
           }
         }
+      }
+      case HardTable(schema, data) => {
+        val htName = s"HARD_TABLE_${schema.hashCode()}"
+        schema.zipWithIndex.map(sch => new MimirToGProMIntermediateSchemaInfo(htName, htName, sch._1._1, sch._1._1, "", sch._1._2, sch._2, 0))
       }
       case x => {
         throw new Exception("Can Not extract schema "+x.getClass.toString()+": '"+x+"'")
