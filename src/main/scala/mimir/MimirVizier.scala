@@ -14,7 +14,7 @@ import net.sf.jsqlparser.statement.select.Select
 import net.sf.jsqlparser.statement.update.Update
 import py4j.GatewayServer
 import mimir.exec.Compiler
-import mimir.gprom.algebra.OperatorTranslation
+import mimir.algebra.gprom.OperatorTranslation
 import org.gprom.jdbc.jna.GProMWrapper
 import mimir.ctables.Reason
 import org.slf4j.{LoggerFactory}
@@ -170,7 +170,10 @@ object MimirVizier extends LazyLogging {
   //Python package defs
   ///////////////////////////////////////////////
   var pythonCallThread : Thread = null
-  def loadCSV(file : String, format:(String, Seq[PrimitiveValue]) = ("CSV", Seq(StringPrimitive(",")))) : String = {
+  def loadCSV(file : String) : String = loadCSV(file, ("CSV", Seq(StringPrimitive(","))))
+  def loadCSV(file : String, delimeter:String, inferTypes:Boolean, detectHeaders:Boolean) : String = 
+    loadCSV(file, ("CSV", Seq(StringPrimitive(delimeter), BoolPrimitive(inferTypes), BoolPrimitive(detectHeaders))))
+  def loadCSV(file : String, format:(String, Seq[PrimitiveValue])) : String = {
     pythonCallThread = Thread.currentThread()
     val timeRes = time {
       logger.debug("loadCSV: From Vistrails: [" + file + "]") ;
@@ -248,6 +251,29 @@ object MimirVizier extends LazyLogging {
         }
       }
       viewName
+    }
+    logger.debug(s"createView Took: ${timeRes._2}")
+    timeRes._1
+  }
+  
+  def createAdaptiveSchema(input : Any, params : Seq[String], _type : String) : String = {
+    pythonCallThread = Thread.currentThread()
+    val timeRes = time {
+      logger.debug("createAdaptiveSchema: From Vistrails: [" + input + "] [" + params.mkString(",") + "]"  ) ;
+      val paramExprs = params.map(param => 
+        mimir.parser.ExpressionParser.expr( param.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString)) )
+      val paramsStr = paramExprs.mkString(",")
+      val adaptiveSchemaName = "ADAPTIVE_SCHEMA_" + _type + ((input.toString() + _type + paramsStr).hashCode().toString().replace("-", "") )
+      db.getView(adaptiveSchemaName) match {
+        case None => {
+          db.adaptiveSchemas.create(adaptiveSchemaName, _type, db.table(input.toString), paramExprs)
+          db.views.create("VIEW_"+adaptiveSchemaName, db.adaptiveSchemas.viewFor(adaptiveSchemaName, "DATA").get)
+        }
+        case Some(_) => {
+          logger.debug("createAdaptiveSchema: From Vistrails: Adaptive Schema already exists: " + adaptiveSchemaName)
+        }
+      }
+      "VIEW_"+adaptiveSchemaName
     }
     logger.debug(s"createView Took: ${timeRes._2}")
     timeRes._1
@@ -333,15 +359,19 @@ object MimirVizier extends LazyLogging {
     explainCell(oper, col, row)
   }
   
-  def explainCell(oper: Operator, col:Int, row:String) : Seq[mimir.ctables.Reason] = {
+  def explainCell(oper: Operator, colIdx:Int, row:String) : Seq[mimir.ctables.Reason] = {
+    val cols = oper.columnNames
+    explainCell(oper, cols(colIdx), RowIdPrimitive(row))  
+  }
+  
+  def explainCell(oper: Operator, col:String, row:RowIdPrimitive) : Seq[mimir.ctables.Reason] = {
     val timeRes = time {
       try {
       logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + oper + "]"  ) ;
-      val cols = oper.columnNames
-      val provFilteredOper = db.explainer.filterByProvenance(oper,RowIdPrimitive(row))
+      val provFilteredOper = db.explainer.filterByProvenance(oper,row)
       val subsetReasons = db.explainer.explainSubset(
               provFilteredOper, 
-              Seq(cols(col)).toSet, false, false)
+              Seq(col).toSet, false, false)
       db.explainer.getFocusedReasons(subsetReasons)
       } catch {
           case t: Throwable => {
@@ -349,7 +379,6 @@ object MimirVizier extends LazyLogging {
             Seq[Reason]()
           }
         }
-      
     }
     logger.debug(s"explainCell Took: ${timeRes._2}")
     timeRes._1
@@ -448,6 +477,12 @@ object MimirVizier extends LazyLogging {
     ret
   }
   
+  def getAvailableAdaptiveSchemas() : String = {
+    val ret = mimir.adaptive.MultilensRegistry.multilenses.keySet.toSeq.mkString(",")
+    logger.debug(s"getAvailableAdaptiveSchemas: From Viztrails: $ret")
+    ret
+  }
+  
   def getAvailableViztoolUsers() : String = {
     var userIDs = Seq[String]()
     try{
@@ -466,7 +501,7 @@ object MimirVizier extends LazyLogging {
   }
   
   def getAvailableViztoolDeployTypes() : String = {
-    var types = Seq[String]("GIS", "DATA")
+    var types = Seq[String]("GIS", "DATA","INTERACTIVE")
     try {
       val ret = db.query(Project(Seq(ProjectArg("TYPE",Var("TYPE"))), db.table("CLEANING_JOBS")))(results => {
       while(results.hasNext) {
@@ -558,7 +593,7 @@ object MimirVizier extends LazyLogging {
      })
      val resCSV = results.toArray[Row](Array()).seq.map(row => {
        val truples = colsIndexes.map( (i) => {
-         (row(i).toString, row.isColDeterministic(i), if(!row.isColDeterministic(i))db.explainCell(oper, row.provenance, cols(i)).reasons.mkString(",")else"") 
+         (row(i).toString, row.isColDeterministic(i), if(!row.isColDeterministic(i))explainCell(oper, cols(i), row.provenance).mkString(",")else"") 
        }).unzip3
        (truples._1.mkString(", "), (truples._2.toArray, row.isDeterministic(), row.provenance.asString), truples._3.toArray)
      }).unzip3

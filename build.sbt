@@ -68,8 +68,8 @@ runMimirVizier := {
 testGrouping in Test := {
 	val (jh, os, bj, bd, jo, ci, ev) = (javaHome.value, outputStrategy.value, Vector[java.io.File](), 
 		baseDirectory.value, javaOptions.value.toVector, connectInput.value, envVars.value)
-	val testsToForkSeperately = Seq("mimir.gprom.algebra.OperatorTranslationSpec")
-	val seperateForkedEnvArgs = Map(("mimir.gprom.algebra.OperatorTranslationSpec", sys.props.get("os.name") match {
+	val testsToForkSeperately = Seq("mimir.algebra.gprom.OperatorTranslationSpec")
+	val seperateForkedEnvArgs = Map(("mimir.algebra.gprom.OperatorTranslationSpec", sys.props.get("os.name") match {
 	  	case Some(osname) if osname.startsWith("Mac OS X") => Map(("DYLD_INSERT_LIBRARIES",System.getProperty("java.home")+"/lib/libjsig.dylib"))
 	  	case Some(otherosname) => Map(("LD_PRELOAD",System.getProperty("java.home")+"/lib/"+System.getProperty("os.arch")+"/libjsig.so"))
 	  	case None => envVars.value
@@ -162,8 +162,12 @@ libraryDependencies ++= Seq(
   //////////////////////// Visualization //////////////////////
   // For now, all of this happens in python with matplotlib
   // and so we don't need any external dependencies.
-  //"org.vegas-viz"                 %%  "vegas"                  % "0.3.9",
-  //"org.sameersingh.scalaplot"     % "scalaplot"                % "0.0.4"
+  //"org.vegas-viz"                 %%  "vegas"                 % "0.3.9",
+  //"org.sameersingh.scalaplot"     % "scalaplot"               % "0.0.4",
+
+  //////////////////////// Linear Solver /////////////////////////
+  "com.github.vagmcs"             %% "optimus"                % "2.0.0",
+  "com.github.vagmcs"             %% "optimus-solver-oj"      % "2.0.0"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")

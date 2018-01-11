@@ -109,6 +109,13 @@ class ModelManager(db:Database)
     if(!cache.contains(name)){ prefetch(name) }
     return cache.get(name)
   }
+  
+  def getAllModels() : Seq[Model] =
+  {
+    db.backend.resultRows(s"""
+      SELECT name FROM $modelTable
+    """).map( row => get(row(0).asString))
+  }
 
   /**
    * Declare (and cache) a new Name -> Model association, and 

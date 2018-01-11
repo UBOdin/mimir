@@ -17,14 +17,14 @@ object TypeInferenceAdaptiveSpec
 
       db.adaptiveSchemas.create( "CPUSPEED_TI", "TYPE_INFERENCE", db.table("CPUSPEED"), Seq())
       
-      val baseTypes = db.bestGuessSchema(db.table("CPUSPEED_RAW")).toMap
+      val baseTypes = db.typechecker.schemaOf(db.table("CPUSPEED_RAW")).toMap
       baseTypes.keys must contain(eachOf("COLUMN_7", "COLUMN_1", "COLUMN_2"))
       baseTypes must contain("COLUMN_7" -> TString())
       baseTypes must contain("COLUMN_1" -> TString())
       baseTypes must contain("COLUMN_2" -> TString())
 
 
-      val lensTypes = db.bestGuessSchema( db.adaptiveSchemas.viewFor("CPUSPEED_TI", "CPUSPEED_TI").get).toMap
+      val lensTypes = db.typechecker.schemaOf( db.adaptiveSchemas.viewFor("CPUSPEED_TI", "DATA").get).toMap
       lensTypes.keys must contain(eachOf("CORES", "FAMILY", "TECH_MICRON"))
       lensTypes must contain("CORES" -> TInt())
       lensTypes must contain("FAMILY" -> TString())

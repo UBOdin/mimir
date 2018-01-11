@@ -109,22 +109,25 @@ with NeedsDatabase
 
   
   def argTypes(idx: Int) = {
-    Seq()
+    Seq(TInt())
   }
   def varType(idx: Int, args: Seq[Type]) = {
     TString()
   }
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ) = {
-    getFeedback(idx, args).getOrElse(StringPrimitive(initialHeaders(idx)))
+    getFeedback(idx, args).getOrElse(StringPrimitive(initialHeaders(args(0).asInt)))
   }
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = {
     bestGuess(idx, args, hints)
   }
   def reason(idx: Int, args: Seq[PrimitiveValue],hints: Seq[PrimitiveValue]): String = {
     getFeedback(idx, args) match {
-      case Some(colName) => s"${getReasonWho(idx, args)} told me that $colName is a valid column header for column with index: $idx"
-      case None if headerDetected => s"I used an analysis on the first several rows and there appears to be column headers in the first row.  For column with index: $idx, the detected header is ${initialHeaders(idx)}"
-      case None =>s"I used an analysis on the first several rows and there appears NOT to be column headers in the first row.  For the column with index: $idx, I used the default value of ${initialHeaders(idx)}"
+      case Some(colName) => 
+        s"${getReasonWho(idx, args)} told me that $targetName.$colName is a valid column name for column number ${args(0)}"
+      case None if headerDetected => 
+        s"I analyzed the first several rows of $targetName and there appear to be column headers in the first row.  For column with index: ${args(0)}, the detected header is ${initialHeaders(args(0).asInt)}"
+      case None =>
+        s"I analyzed the first several rows of $targetName and there do NOT appear to be column headers in the first row.  For the column with index: ${args(0)}, I used the default value of ${initialHeaders(args(0).asInt)}"
     }
   }
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = {
@@ -137,7 +140,14 @@ with NeedsDatabase
     Seq()
   }
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) = {
-    s"$idx"
+    s"${args(0)}"
+  }
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = {
+    getFeedback(idx, args) match {
+      case Some(colName) => 1.0
+      case None if headerDetected => 1.0
+      case None => 0.5
+    }
   }
 
 }

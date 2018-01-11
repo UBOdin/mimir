@@ -32,29 +32,51 @@ object CheckHeader
 
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
-    HardTable(Seq(("TABLE_NAME",TString())),Seq(Seq(StringPrimitive(model.targetName))))
+    HardTable(
+      Seq(
+        ("TABLE_NAME",TString())
+      ),
+      Seq(
+        Seq(
+          StringPrimitive("DATA")
+        )
+      )
+    )
   }
   
   def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
     HardTable(
-      Seq(("TABLE_NAME" , TString()), ("ATTR_NAME" , TString()),("ATTR_TYPE", TType()),("IS_KEY", TBool())),
-      model.query.columnNames.zipWithIndex.map(col => 
-        Seq(StringPrimitive(model.targetName), model.bestGuess(col._2, Seq(), Seq()),TypePrimitive(TString()),BoolPrimitive(false))
-     ))
+      Seq(
+        ("TABLE_NAME" , TString()), 
+        ("ATTR_TYPE", TType()),
+        ("IS_KEY", TBool()),
+        ("COLUMN_ID", TInt())
+      ),
+      (0 until config.query.columnNames.size).map { col =>
+        Seq(
+          StringPrimitive("DATA"),
+          TypePrimitive(TString()),
+          BoolPrimitive(false),
+          IntPrimitive(col)
+        )
+      }
+    ).addColumn(
+      "ATTR_NAME" -> VGTerm("MIMIR_CH_" + config.schema, 0, Seq(Var("COLUMN_ID")), Seq())
+    ).removeColumn("COLUMN_ID")
   }
   
   def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
   {
-    val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
-    Some(
-        Project( model.query.columnNames.zipWithIndex.map( col => 
-          ProjectArg(model.bestGuess(col._2, Seq(), Seq()).asString,Var(col._1)) )
-          , config.query) match {
-          case proj if model.headerDetected => proj.limit(-1, 1)
-          case proj => proj
-        })
+    if(table.equals("DATA")){
+      val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
+      Some(
+          Project( model.query.columnNames.zipWithIndex.map( col => 
+            ProjectArg(model.bestGuess(0, Seq(IntPrimitive(col._2)), Seq()).asString,Var(col._1)) )
+            , config.query) match {
+            case proj if model.headerDetected => proj.limit(-1, 1)
+            case proj => proj
+          })
+    } else { None }
   }
 }

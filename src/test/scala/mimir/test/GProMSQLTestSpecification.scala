@@ -53,7 +53,7 @@ object GProMDBTestInstances
           if(shouldEnableInlining){
             backend.enableInlining(tmpDB)
           }
-          mimir.gprom.algebra.OperatorTranslation.db = tmpDB
+          mimir.algebra.gprom.OperatorTranslation.db = tmpDB
           databases.put(tempDBName, (tmpDB, backend))
           (tmpDB, backend)
         }

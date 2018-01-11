@@ -117,6 +117,8 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
   var singleEntityGraph : DelegateTree[Integer, String] = null
   var entityPairList:ArrayList[(Integer,Integer)] = null
   var nodeTable: ArrayList[Integer] = new ArrayList[Integer]() // contains a list of all the nodes
+  var onetoone: mutable.ListBuffer[(Int,Int)] = new mutable.ListBuffer[(Int,Int)] // one-to-one pairs that get deleted from the graph
+  var edgeTable: mutable.Buffer[(Int, Int, Double)] = null
 
   // timers
   var startTime:Long = 0
@@ -126,7 +128,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
   // buildEntities calls all the functions required for ER creation, optionally each function could be called if only part of the computation is required
 
   def buildEntities(db: Database, query: Operator, tableName : String): Unit = {
-    initializeTables(db.bestGuessSchema(query), tableName)
+    initializeTables(db.typechecker.schemaOf(query), tableName)
     preprocessFDG(db, query)
     constructFDG()
     // updateEntityGraph()
@@ -212,7 +214,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
 
     // Initalize tables
     // double is the strength for that edge
-    var edgeTable: mutable.Buffer[(Int, Int, Double)] = mutable.Buffer[(Int, Int, Double)]() // contains the node numbers for the dependency graph, the names are numbers from the schema 0 to sch.length are the possibilities
+    edgeTable = mutable.Buffer[(Int, Int, Double)]() // contains the node numbers for the dependency graph, the names are numbers from the schema 0 to sch.length are the possibilities
     var maxTable:mutable.IndexedSeq[PrimitiveValue] = 
       mutable.IndexedSeq.fill(countTable.size){ NullPrimitive() } // contains the max values for each column, used for phase1 formula
     parentTable = mutable.Map()
@@ -256,10 +258,24 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
             var rightMaxOccurrenceCount = countTable(rightColumnNumber)(maxTable(rightColumnNumber))
 
             // fills the pairMap with all pairings of leftColumn and rightColumn
+            var leftNullSet : mutable.Set[PrimitiveValue] = mutable.Set()
+            var leftNonNullSet : mutable.Set[PrimitiveValue] = mutable.Set()
             for( (leftVal, rightVal) <- leftColumn.zip(rightColumn) ){
               if (!leftVal.isInstanceOf[NullPrimitive]){
-                pairSet.add((leftVal, rightVal))
+                if (rightVal.isInstanceOf[NullPrimitive]) {
+                  leftNullSet.add(leftVal)
+                }
+                else {
+                  leftNonNullSet.add(leftVal)
+                  pairSet.add((leftVal, rightVal))
+                }
               }
+            }
+
+            val addSet = leftNullSet &~ leftNonNullSet
+
+            for (leftVal <- addSet) {
+              pairSet.add((leftVal,NullPrimitive()))
             }
 
             // compute the strength from the formula
@@ -330,6 +346,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
         } else {
           removedCount += 1
           fdGraph.removeEdge((a2, a1))
+          onetoone+=((a1,a2))
           fdGraph.addEdge((a1, a2), a1.toInt, a2.toInt, EdgeType.DIRECTED)
         }
       }

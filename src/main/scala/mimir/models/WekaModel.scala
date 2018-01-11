@@ -242,7 +242,7 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
   }
 
   def guessInputType: Type =
-    db.bestGuessSchema(query)(colIdx)._2
+    db.typechecker.schemaOf(query)(colIdx)._2
 
   def argTypes(idx: Int): Seq[Type] = List(TRowId())
   def hintTypes(idx: Int) = db.typechecker.schemaOf(query).map(_._2)
@@ -317,5 +317,16 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
     val ret = super.serialize()
     serializedLearner = null
     return ret
+  }
+
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = {
+    val rowid = RowIdPrimitive(args(0).asString)
+    getFeedback(idx,args) match {
+      case Some(v) => 1.0
+      case None =>
+        val classes = classify(rowid, hints)
+        if (classes.isEmpty) { 0.0 }
+        else { classes.maxBy(_._1)._1/classes.map(_._1).sum }
+    }
   }
 }

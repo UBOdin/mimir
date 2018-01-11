@@ -110,5 +110,16 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
   def reconnectToDatabase(db: Database) = { 
     this.db = db 
   }
-  
+
+  def confidence(idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Double = {
+    getFeedback(idx, args) match {
+      case Some(v) => 1.0
+      case None =>
+        getCache(idx, args, hints) match {
+          case Some(v) => 1.0
+          case None => 0.0
+        }
+    }
+  }
+
 }

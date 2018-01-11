@@ -35,209 +35,99 @@ object TypeInference
       }
 
     // Initialize the vote counters
-    val modelColumns =
-      db.typechecker.schemaOf(config.query).flatMap { 
+    val modelColumns = 
+      db.typechecker.schemaOf(config.query).flatMap({
         case (col, (TString() | TAny())) => Some(col)
         case _ => None
-      }.toIndexedSeq
+      }).toIndexedSeq
 
-    val totalVotes = collection.mutable.IndexedSeq[Double](modelColumns.map(_ => 0.0):_*)
-
-    val votes = 
-      modelColumns.map(col=> {
-        collection.mutable.Map(
-        ((Type.tests ++ TypeRegistry.registeredTypes).map(tup => {
-          (Type.fromString(tup._1.toString):Type, 0.0)
-        })).toSeq:_*)  
-      })
-
-    // Scan through each record to find each column's type.
-    db.query(
-      Project(
-        modelColumns.map( c => ProjectArg(c, Var(c)) ),
-        config.query
+    val model = 
+      new TypeInferenceModel(
+        s"MIMIR_TI_ATTR_${viewName}",
+        modelColumns,
+        stringDefaultScore
       )
-    ) { results => 
-      results.toSeq.map( row => {
-        row.tuple.zipWithIndex.map{
-          case (v, idx) =>  v match {
-            case null            => ()
-            case NullPrimitive() => ()
-            case _               => {
-              totalVotes(idx) += 1.0
-              val candidates = detectType(v.asString)
-              logger.debug(s"Guesses for '$v': $candidates")
-              val votesForCurrentIdx = votes(idx)
-              candidates.map(t => {
-                votesForCurrentIdx(t) = votesForCurrentIdx.getOrElse(t, 0.0) + 1.0
-              })
-            }
-          }
-        }
-      })
-    }
 
-    logger.debug("Creating Backend Table for Type Inference")
-    // Create backend table that contains all the
+    val columnIndexes = 
+      modelColumns.zipWithIndex.toMap
+
+    logger.debug(s"Training $model.name on ${config.query}")
+    model.train(db, config.query)
     
-    val attrCatalog = "MIMIR_TI_ATTR_"+config.schema
-    db.backend.update(s"""
-      CREATE TABLE $attrCatalog (TABLE_NAME string, ATTR_NAME string,ATTR_TYPE string, IDX int, IS_KEY bool, SCORE real)""")
-
-    logger.debug("Filling Type Inference backend table")
-    ((votes zip modelColumns).zipWithIndex).map{
-      case ((votesByTypeForCol, col), idx) => {
-        // update the map of each column that tracks the type counts
-        val totalVotesForCol = totalVotes(idx)
-        votesByTypeForCol.toIndexedSeq.map {
-          case (typ, score) => {
-            val normalizedScore = 
-              if(totalVotesForCol > 0.0){ score.toDouble / totalVotesForCol }
-              else { 0.0 }
-              assert(normalizedScore <= 1.0)
-            db.backend.update(s"""
-              INSERT INTO $attrCatalog(TABLE_NAME, ATTR_NAME, ATTR_TYPE, IDX, IS_KEY, SCORE) VALUES (?, ?, ?, ?, ?, ?)
-            """, Seq(
-              StringPrimitive(viewName),
-              StringPrimitive(col),
-              StringPrimitive(typ.toString),
-              IntPrimitive(idx),
-              BoolPrimitive(false),
-              FloatPrimitive(normalizedScore)
-            )) // update the table for repair key
-          }
-        }
-        db.backend.update(s"""
-          INSERT INTO $attrCatalog(TABLE_NAME, ATTR_NAME, ATTR_TYPE, IDX, IS_KEY, SCORE) VALUES (?, ?, 'string', ?, ?, ?)
-        """, Seq(
-          StringPrimitive(viewName),
-          StringPrimitive(col),
-          IntPrimitive(idx),
-          BoolPrimitive(false),
-          FloatPrimitive(stringDefaultScore)
-        )) // update the table for repair key
-      }
-    }
-
-    val name = attrCatalog + "_RK"
-    val attrQuery = db.table(attrCatalog)
-    db.bestGuessSchema(attrQuery).
-      filterNot( Seq("IDX", "SCORE") contains _._1 ).
-      map { case (col, t) => 
-        val model =
-          new TIRepairModel(
-            s"$name:$col", 
-            name, 
-            attrQuery, 
-            Seq(("IDX", TInt())), 
-            col, t,
-            Some("SCORE"),
-            modelColumns
-          )
-        model.reconnectToDatabase(db)
-        model 
-      }
+    Seq(model)
   }
 
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    HardTable(Seq(("TABLE_NAME",TString())),Seq(Seq(StringPrimitive("MIMIR_TI_TABLE_"+config.schema))))
-  }
-
-  def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
-  {
-    inferredTypesView(db, config.schema, db.table("MIMIR_TI_ATTR_"+config.schema).sort(("IDX",false)))
-  }
-
-  def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
-  {
-    Some(Project(
-        db.query(
-          attrCatalogFor(db, config)
-            .project("IDX", "ATTR_TYPE")
-        ) { results => {
-            val cols = db.typechecker.schemaOf(config.query).unzip._1
-            results.toSeq.map { row =>
-              val colName = cols(row(0).asInt)
-              val colType = row(1).asString
-              ProjectArg(
-                colName,
-                Function("CAST", Seq(Var(colName), TypePrimitive(Type.fromString(colType))))
-              )
-            }.toIndexedSeq}
-    }, config.query))  
-  }
-
-  final def inferredTypesView(db: Database, schema:String, query:Operator): Operator =
-  {
-    val typeGuessModel: Model = db.models.get(s"MIMIR_TI_ATTR_${schema}_RK:ATTR_TYPE")
-    RepairKeyLens.assemble(
-      query,
-      Seq("IDX"),
-      Seq(("ATTR_TYPE", typeGuessModel)),
-      Some("SCORE")
+    HardTable(
+      Seq(
+        ("TABLE_NAME",TString())
+      ),
+      Seq(
+        Seq(
+          StringPrimitive("DATA")
+        )
+      )
     )
   }
+  
+  def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
+  {
+    val model = db.models.get(s"MIMIR_TI_ATTR_${config.schema}").asInstanceOf[TypeInferenceModel]
+    val columnIndexes = model.columns.zipWithIndex.toMap
+    lazy val qSchema = db.typechecker.schemaOf(config.query).toMap
+    HardTable(
+      Seq(
+        ("TABLE_NAME" , TString()), 
+        ("ATTR_NAME" , TString()),
+        ("IS_KEY", TBool()), 
+        ("IDX", TInt()),
+        ("HARD_TYPE", TType())
+      ),
+      config.query.columnNames.map(col => 
+        Seq(
+          StringPrimitive("DATA"), 
+          StringPrimitive(col), 
+          BoolPrimitive(false),
+          IntPrimitive(columnIndexes.getOrElse(col, -1).toLong),
+          if(columnIndexes contains col){ NullPrimitive() } 
+            else { TypePrimitive(qSchema(col)) }
+        )
+      )
+    ).addColumn(
+      "ATTR_TYPE" -> 
+        Var("HARD_TYPE")
+          .isNull
+          .thenElse {
+            VGTerm(s"MIMIR_TI_ATTR_${config.schema}", 0, Seq(Var("IDX")), Seq())
+          } {
+            Var("HARD_TYPE")
+          }
+    ).removeColumns("IDX", "HARD_TYPE")
+  }
+        
+  def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
+  {
+    if(table.equals("DATA")){
+      val model = db.models.get(s"MIMIR_TI_ATTR_${config.schema}").asInstanceOf[TypeInferenceModel]
+      val columnIndexes = model.columns.zipWithIndex.toMap
+      Some(Project(
+        config.query.columnNames.map { colName =>
+          ProjectArg(colName, 
+            if(columnIndexes contains colName){ 
+              Function("CAST", Seq(
+                Var(colName),
+                model.bestGuess(0, Seq(IntPrimitive(columnIndexes(colName))), Seq())
+              ))
+            } else {
+              Var(colName)
+            }
+          )
+        }, config.query
+      ))  
+    } else { None }
+  }
+
+  
 }
 
-
-@SerialVersionUID(1001L)
-class TIRepairModel(
-  name: String, 
-  context: String, 
-  source: Operator, 
-  keys: Seq[(String, Type)], 
-  target: String,
-  targetType: Type,
-  scoreCol: Option[String],
-  tiCols:IndexedSeq[String]
-) extends RepairKeyModel(name, context, source, keys, target, targetType, scoreCol)
-{
-  def priority: Type => Int =
-  {
-    case TUser(_)     => 20
-    case TInt()       => 10
-    case TBool()      => 10
-    case TDate()      => 10
-    case TTimestamp() => 10
-    case TInterval()  => 10
-    case TType()      => 10
-    case TFloat()     => 5
-    case TString()    => 0
-    case TRowId()     => -5
-    case TAny()       => -10
-  }
-  
-  override def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
-    getFeedback(idx, args) match {
-      case Some(choice) => choice
-      case None => getTopPick(idx, args, hints)
-    }
-  
-  private final def getTopPick(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) : TypePrimitive = {
-    getTopPick(getDomain(idx, args, hints))
-  }
-  
-  private final def getTopPick(domain:Seq[(PrimitiveValue, Double)]) : TypePrimitive = {
-    val sortedPossibilities = domain.sortBy(-_._2)
-    sortedPossibilities.filter(_._2 ==  sortedPossibilities.head._2) match {
-      case Seq(topPick) => TypePrimitive(Type.fromString(topPick._1.asString))
-      case topPicks:Seq[(PrimitiveValue, Double)] => TypePrimitive(Type.fromString(topPicks.sortBy(rankFn).head._1.asString))
-    }
-  }
-  
-  private final def rankFn(x:(PrimitiveValue, Double)) =
-    (x._2, -1*priority(Type.fromString(x._1.asString)) )
-    
-  override def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String =
-  {
-    getFeedback(idx, args) match {
-      case None => {
-        val possibilities = getDomain(idx, args, hints)
-        s"In $context, there were ${possibilities.length} options for $target on the column identified by <index:$idx name:${tiCols(idx)}>, and I picked <${getTopPick(possibilities)}> because it had the highest score and priority"
-      }
-      case Some(choice) => 
-        s"In $context, ${getReasonWho(idx,args)} told me to use ${choice.toString} for $target on the column identified by <index:$idx name:${tiCols(idx)}>"
-    }
-  }
-}

@@ -37,6 +37,11 @@ object PickerLens {
       case _ => None
     }.toSeq.flatten.unzip
     
+    pickerColTypes.foldLeft(pickerColTypes.head)((init, element) => element match {
+      case `init` => init
+      case x => throw new RAException(s"Invalid PICK_FROM argument Type: $x in PickerLens $name (PICK_FROM columns must be of same type)")
+    })
+    
     val pickToCol = args.flatMap {
       case Function("PICK_AS", Seq(Var(col))) => Some( col )
       case _ => None

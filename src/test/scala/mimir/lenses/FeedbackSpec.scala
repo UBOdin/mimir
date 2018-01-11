@@ -6,6 +6,9 @@ import org.specs2.mutable._
 
 import mimir.algebra._
 import mimir.test._
+import mimir.models.FeedbackSource
+import mimir.models.FeedbackSourceIdentifier
+import mimir.statistics.FeedbackStats
 
 object FeedbackSpec 
   extends SQLTestSpecification("FeedbackTests")
@@ -16,9 +19,9 @@ object FeedbackSpec
   {
     update("CREATE TABLE R(A string, B int, C int)")
     loadCSV("R", new File("test/r_test/r.csv"))
-    update("CREATE LENS MATCH AS SELECT * FROM R WITH SCHEMA_MATCHING('B int', 'CX int')")
-    update("CREATE LENS TI AS SELECT * FROM R WITH TYPE_INFERENCE(0.5)")
-    update("CREATE LENS MV AS SELECT * FROM R WITH MISSING_VALUE('B', 'C')")
+    update("CREATE ADAPTIVE SCHEMA MATCH AS SELECT * FROM R WITH SCHEMA_MATCHING('B int', 'CX int')")
+    db.adaptiveSchemas.create("R_TI", "TYPE_INFERENCE", db.table("R"), Seq(FloatPrimitive(.5))) 
+		update("CREATE LENS MV AS SELECT * FROM R WITH MISSING_VALUE('B', 'C')")
   }
 
   "The Edit Distance Match Model" should {
@@ -51,23 +54,23 @@ object FeedbackSpec
   "The Type Inference Model" should {
 
     "Support direct feedback" >> {
-      val model = db.models.get("TI")
+      val model = db.models.get("MIMIR_TI_ATTR_R_TI")
 
       // Base assumptions.  These may change, but the feedback tests 
       // below should be updated accordingly
-      model.bestGuess(0, List(), List()) must be equalTo(TypePrimitive(TInt()))
-      db.bestGuessSchema(table("TI")).
+      model.bestGuess(0, List(IntPrimitive(0)), List()) must be equalTo(TypePrimitive(TInt()))
+      db.typechecker.schemaOf(db.adaptiveSchemas.viewFor("R_TI", "DATA").get).
         find(_._1.equals("A")).get._2 must be equalTo(TInt())
 
-      model.feedback(0, List(), TypePrimitive(TFloat()))
-
-      model.bestGuess(0, List(), List()) must be equalTo(TypePrimitive(TFloat()))
-      db.bestGuessSchema(table("TI")).
+      model.feedback(0, List(IntPrimitive(0)), TypePrimitive(TFloat()))
+      db.models.persist(model)
+      model.bestGuess(0, List(IntPrimitive(0)), List()) must be equalTo(TypePrimitive(TFloat()))
+      db.typechecker.schemaOf(db.adaptiveSchemas.viewFor("R_TI", "DATA").get).
         find(_._1.equals("A")).get._2 must be equalTo(TFloat())
     }
   }
 
-  "The Weka Model" should {
+  "The SparkML Model" should {
 
     "Support direct feedback" >> {
       val model = db.models.get("MV:SPARKML:B")
@@ -97,6 +100,24 @@ object FeedbackSpec
 
 
     }
-
+  }
+  
+  "Feedback Stats" should {
+    "Compute feedback source confidence" >> {
+      val model = db.models.get("MV:SPARKML:B")
+      val nullRow = querySingleton("SELECT ROWID() FROM R WHERE B IS NULL")
+      val feedbackConfidence = ((for(i <- 0 to 4) yield {
+        val fbSource = FeedbackSourceIdentifier(i.toString(), s"source$i")
+        FeedbackSource.setSource(fbSource)
+        model.feedback(0, List(nullRow), IntPrimitive(50+i))
+        FeedbackSource.setSource(FeedbackSourceIdentifier())
+        (fbSource -> {if((50+i) == 50) 1.0 else 0.0})
+      }) :+ (FeedbackSourceIdentifier("","truth") -> 1.0)).toSet
+      //set ground truth  
+      model.feedback(0, List(nullRow), IntPrimitive(50))
+      val fbs = new FeedbackStats(db)
+      fbs.calcConfidence()
+      fbs.fbConfidence.toSet must be equalTo(feedbackConfidence)
+    }
   }
 }

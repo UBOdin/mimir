@@ -49,7 +49,7 @@ object SimpleDemoScript
 		"Load CSV Files" >> {
 			reviewDataFiles.foreach( db.loadTable(_) )
 			query("SELECT * FROM RATINGS1;") { _.toSeq must have size(4) }
-			db.query(db.adaptiveSchemas.viewFor("RATINGS1_DH", "RATINGS1").get.project("RATING")) { 
+			db.query(db.adaptiveSchemas.viewFor("RATINGS1_DH", "DATA").get.project("RATING")) { 
 				_.map { _(0) }.toSeq must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
 			}
 			query("SELECT * FROM RATINGS2;") { _.toSeq must have size(3) }
@@ -63,7 +63,7 @@ object SimpleDemoScript
 			db.typechecker.typeOf(Var("NUM_RATINGS"), oper) must be oneOf(TInt(), TFloat(), TAny())
 		}
 
-    "Create and Query Type Inference Lens with NULL values" >> {
+    "Create and Query Type Inference Adaptive Schema with NULL values" >> {
       update("""
 				CREATE LENS null_test
 				  AS SELECT * FROM RATINGS3
@@ -84,19 +84,16 @@ object SimpleDemoScript
     }
 
 
-		"Create and Query Type Inference Lenses" >> {
-			update("""
-				CREATE LENS new_types
-				  AS SELECT * FROM USERTYPES
-				  WITH Type_Inference(.9)
-					 			""")
-			query("SELECT * FROM new_types;"){ _.toSeq must have size(3) }
+		"Create and Query Type Inference Adaptive Schemas" >> {
+			db.adaptiveSchemas.create("NEW_TYPES_TI", "TYPE_INFERENCE", db.table("USERTYPES"), Seq(FloatPrimitive(.9))) 
+			db.views.create("NEW_TYPES", db.adaptiveSchemas.viewFor("NEW_TYPES_TI", "DATA").get)
+      query("SELECT * FROM new_types;"){ _.toSeq must have size(3) }
 			query("SELECT * FROM RATINGS1;"){ _.toSeq must have size(4) }
 			query("SELECT RATING FROM RATINGS1;"){ _.map { _(0) }.toSeq must contain(eachOf(f(4.5), f(4.0), f(6.4), NullPrimitive())) }
 			query("SELECT * FROM RATINGS1 WHERE RATING IS NULL"){ _.toSeq must have size(1) }
 			query("SELECT * FROM RATINGS1 WHERE RATING > 4;"){ _.toSeq must have size(2) }
 			query("SELECT * FROM RATINGS2;"){ _.toSeq must have size(3) }
-			db.bestGuessSchema(select("SELECT * FROM RATINGS2;")).
+			db.typechecker.schemaOf(select("SELECT * FROM RATINGS2;")).
 				map(_._2).map(Type.rootType _) must be equalTo List(TString(), TFloat(), TFloat())
 		}
 
@@ -149,27 +146,28 @@ object SimpleDemoScript
 
 		"Create and Query Schema Matching Lenses" >> {
 			update("""
-				CREATE LENS RATINGS2FINAL 
+				CREATE ADAPTIVE SCHEMA RATINGS2FINAL_SM 
 				  AS SELECT * FROM RATINGS2 
 				  WITH SCHEMA_MATCHING('PID string', 'RATING float', 'REVIEW_CT float')
 			""")
+			db.views.create("RATINGS2FINAL", db.adaptiveSchemas.viewFor("RATINGS2FINAL_SM", "DATA").get)
 			query("SELECT RATING FROM RATINGS2FINAL") { result =>
 				val result1 = result.toList.map { _(0).asDouble }.toSeq 
 				result1 must have size(3)
 				result1 must contain(eachOf( 121.0, 5.0, 4.0 ) )
 			}
-		}
+	  }
 
 		"Obtain Row Explanations for Simple Queries" >> {
 			val expl = 
 				LoggerUtils.trace(
 						// "mimir.ctables.CTExplainer"
 				) {
-					explainRow("""
+			    val oper = select("""
 							SELECT * FROM RATINGS2FINAL WHERE RATING > 3
-						""", "2")
+						""")
+					db.explainer.explainEverything( oper).flatMap(_.all(db))
 				}
-
 			expl.toString must contain("I assumed that NUM_RATINGS maps to RATING")		
 		}
 
@@ -291,16 +289,17 @@ object SimpleDemoScript
 				LoggerUtils.trace(
 					// "mimir.ctables.CTExplainer"
 				){ 
-					explainCell("""
+					val oper = select("""
 						SELECT p.name, r.rating FROM (
 							SELECT * FROM RATINGS1FINAL 
 								UNION ALL 
 							SELECT * FROM RATINGS2FINAL
 						) r, Product p
-						""", "3|1|4", "RATING")
+						Where ROWID() = '3|1|4'""")
+					db.explainer.explainEverything(oper).flatMap(_.all(db))
 				}
-			explain0.reasons.map(_.model.name.replaceAll(":.*", "")) must contain(eachOf(
-				"RATINGS2FINAL"//,
+			explain0.map(_.model.name.replaceAll(":.*", "")) must contain(eachOf(
+				"RATINGS2FINAL_SM"//,
 				//"RATINGS2"
 			))
 
