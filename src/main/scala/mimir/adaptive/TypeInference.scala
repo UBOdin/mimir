@@ -36,7 +36,7 @@ object TypeInference
 
     // Initialize the vote counters
     val modelColumns = 
-      db.bestGuessSchema(config.query).flatMap({
+      db.typechecker.schemaOf(config.query).flatMap({
         case (col, (TString() | TAny())) => Some(col)
         case _ => None
       }).toIndexedSeq
