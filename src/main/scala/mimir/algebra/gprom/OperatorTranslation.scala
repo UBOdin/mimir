@@ -40,32 +40,12 @@ object OperatorTranslation {
         throw new Exception("Translation Not Yet Implemented '"+attributeDef+"'") 
         }
       case constantRelationOperator : GProMConstRelOperator => { 
-        //extract from prop hack
-        /*val tableIntermSchema = extractTableSchemaGProMOperator(constantRelationOperator)
-        val tableSchema = tableIntermSchema.map(tis => (tis.getAttrPrefix()+tis.attrName, tis.attrType))
-        val firstRow = gpromListToScalaList(constantRelationOperator.values).map( cell => {
-          translateGProMExpressionToMimirExpression(new GProMNode(cell.getPointer), tableIntermSchema).asInstanceOf[PrimitiveValue]
-        }) 
-        val data = firstRow +: extractHardTableHackFromConstRelPropHashmap(GProMWrapper.inst.castGProMNode(constantRelationOperator.op.properties).asInstanceOf[GProMHashMap], tableIntermSchema)
-        HardTable(tableSchema, data)*/
-        
         val tableIntermSchema = extractTableSchemaGProMOperator(constantRelationOperator)
         val tableSchema = tableIntermSchema.map(tis => (tis.getAttrPrefix()+tis.attrName, tis.attrType))
         val data = gpromListToScalaList(constantRelationOperator.values).map(row => gpromListToScalaList(row.asInstanceOf[GProMList]).map( cell => {
           translateGProMExpressionToMimirExpression(new GProMNode(cell.getPointer), tableIntermSchema).asInstanceOf[PrimitiveValue]
         }))
         val newOp =  HardTable(tableSchema, data)
-        /*tableSchema.filter(_._1.equals("ROWID")) match {
-          case Seq() => newOp
-          case x => {
-            val invisibleSchema = x.map(sche => ("MIMIR_ROWID", AnnotateArg(ViewAnnotation.PROVENANCE, "MIMIR_ROWID", TRowId(), Var(sche._1))))
-            val visibleProjArgs = tableSchema.filterNot(_._1.equals("ROWID")).map(sche => ProjectArg(sche._1, Var(sche._1)))
-            if(depth == 0){
-              Recover(new Project(visibleProjArgs,newOp), invisibleSchema)
-            }
-            else Project(visibleProjArgs, new Annotate(newOp, invisibleSchema))
-          }
-        }*/
         newOp
       }
       case constant : GProMConstant => { 
@@ -1380,26 +1360,6 @@ object OperatorTranslation {
     gphashmap
   }
   
-  /*def createDefaultHardTableHackPropertiesMap(tableName:String, rows:Seq[Seq[GProMStructure]]) : GProMHashMap = {
-    val hasProvMapElemKey  = translateMimirPrimitiveExpressionToGProMConstant(StringPrimitive("HAS_PROVENANCE") ) 
-    val hasProvMapElemValue = translateMimirPrimitiveExpressionToGProMConstant(BoolPrimitive(true) )  
-    val provRelMapElemKey  = translateMimirPrimitiveExpressionToGProMConstant(StringPrimitive("PROVENANCE_REL_NAME") ) 
-    val provRelMapElemValue = translateMimirPrimitiveExpressionToGProMConstant(StringPrimitive(tableName) ) 
-    val provAttrMapElemKey  = translateMimirPrimitiveExpressionToGProMConstant(StringPrimitive("USER_PROV_ATTRS") ) 
-    val provAttrMapElemValue = translateMimirExpressionsToGProMList(Seq(), Seq(StringPrimitive("ROWID"))) 
-    val htMapElemKey  = translateMimirPrimitiveExpressionToGProMConstant(StringPrimitive("HARD_TABLE_DATA") ) 
-    val htMapElemValue = scalaListToGProMList(rows.map(el => scalaListToGProMList(el)))
-    htMapElemValue.write()
-    provAttrMapElemValue.write()
-    
-    var gphashmap = GProMWrapper.inst.gpromAddToMap(null, htMapElemKey.getPointer, htMapElemValue.getPointer)
-    gphashmap = GProMWrapper.inst.gpromAddToMap(gphashmap.getPointer, htMapElemKey.getPointer, htMapElemValue.getPointer)
-    gphashmap = GProMWrapper.inst.gpromAddToMap(gphashmap.getPointer, htMapElemKey.getPointer, htMapElemValue.getPointer)
-    gphashmap = GProMWrapper.inst.gpromAddToMap(gphashmap.getPointer, provRelMapElemKey.getPointer, provRelMapElemValue.getPointer)
-    gphashmap = GProMWrapper.inst.gpromAddToMap(gphashmap.getPointer, provAttrMapElemKey.getPointer, provAttrMapElemValue.getPointer)
-    gphashmap
-  }*/
-  
   var toQoSchms : java.util.Vector[GProMSchema.ByReference] = new java.util.Vector[GProMSchema.ByReference]()
   def mimirOperatorToGProMList( mimirOperator :  Operator) : GProMList.ByReference = {
     synchronized { val list = new GProMList.ByReference()
@@ -1594,57 +1554,6 @@ object OperatorTranslation {
         mimirOperatorToGProMList(query)
       }
       case HardTable(schema, data) => {
-        //as union of inline projections
-        /*val inlineProjs = data.zipWithIndex.map(row => 
-          Project( schema.zip(row._1).map(cell => ProjectArg(cell._1._1, cell._2)) :+ ProjectArg("MIMIR_ROWID", RowIdPrimitive(s"${row._2}") ), Table("HARD_TABLE", "HARD_TABLE",schema,Seq())) )
-        mimirOperatorToGProMList(inlineProjs.tail.foldLeft(inlineProjs.head:Operator)((init, elem) => Union(init, elem)))
-        */
-        
-        //as json table
-        /*var schTable = getSchemaForGProM(mimirOperator)
-			  val toQoScm = translateMimirSchemaToGProMSchema("", schTable)
-        val gqo = new GProMQueryOperator.ByValue(GProM_JNA.GProMNodeTag.GProM_T_JsonTableOperator, null, toQoScm, null, null, null)
-			  val columnList = translateMimirSchemaToJsonColInfoGProMList(schema)
-        val gpjsontableop = new GProMJsonTableOperator.ByValue(gqo, columnList, Json.ofOperator(mimirOperator).toString(), null, schema.hashCode().toString, null)
-			  list.head = createGProMListCell(gpjsontableop)
-			  list.length += 1 
-			  list*/
-        
-        //as union of constant rel ops
-        /*var schTable = getSchemaForGProM(mimirOperator) 
-        schTable = schTable :+ new MimirToGProMIntermediateSchemaInfo("", "", RowIdVar().toString(), "ROWID", "ROWID", db.backend.rowIdType, schTable.length, 0)
-			  val toQoScm = translateMimirSchemaToGProMSchema("", schTable)
-			  val gqoProps = createDefaultGProMTablePropertiesMap("HARD_TABLE")
-        val gqo = new GProMQueryOperator.ByValue(GProM_JNA.GProMNodeTag.GProM_T_ConstRelOperator, null, toQoScm, null, null, new GProMNode.ByReference(gqoProps.getPointer))
-			  val gpconstrelop = new GProMConstRelOperator.ByValue(gqo, translateMimirExpressionsToGProMList(schTable, data.head:+RowIdPrimitive("0")))
-        val resOp = data.tail.zipWithIndex.foldLeft(gpconstrelop:GProMStructure)((init, row) => {
-          val toQoScm = translateMimirSchemaToGProMSchema("UNION", schTable)
-          val gqoPropsin = createDefaultGProMTablePropertiesMap("HARD_TABLE")
-          val gqoin = new GProMQueryOperator.ByValue(GProM_JNA.GProMNodeTag.GProM_T_ConstRelOperator, null, toQoScm, null, null, new GProMNode.ByReference(gqoPropsin.getPointer))
-			    val gpconstrelopun = new GProMConstRelOperator.ByValue(gqoin, translateMimirExpressionsToGProMList(schTable, row._1:+RowIdPrimitive((row._2+1).toString())))
-          val unionInputsList = scalaListToGProMList(Seq(init, gpconstrelopun))
-  			  val gqo = new GProMQueryOperator.ByValue(GProM_JNA.GProMNodeTag.GProM_T_SetOperator, unionInputsList, toQoScm, null, null, null)
-  			  val gpjoinop = new GProMSetOperator.ByValue(gqo, GProM_JNA.GProMSetOpType.GProM_SETOP_UNION)
-  			  setGProMQueryOperatorParentsList(unionInputsList,gpjoinop)
-  			  gpjoinop
-        })
-        //val gpconstrelop = new GProMConstRelOperator.ByValue(gqo, scalaListToGProMList(data.map(row => translateMimirExpressionsToGProMList(schTable, row))))
-			  list.head = createGProMListCell(resOp)
-			  list.length += 1 
-			  list*/
-        
-        //as constant rel ops with prop hack
-        /*var schTable = getSchemaForGProM(mimirOperator) 
-        schTable = schTable :+ new MimirToGProMIntermediateSchemaInfo("", "", RowIdVar().toString(), "ROWID", "ROWID", db.backend.rowIdType, schTable.length, 0)
-			  val toQoScm = translateMimirSchemaToGProMSchema("", schTable)
-			  val gqoProps = createDefaultHardTableHackPropertiesMap("HARD_TABLE", data.tail.zipWithIndex.map(row => (row._1:+RowIdPrimitive((row._2+1).toString())).map(cell => translateMimirExpressionToGProMStructure(cell, schTable))))
-        val gqo = new GProMQueryOperator.ByValue(GProM_JNA.GProMNodeTag.GProM_T_ConstRelOperator, null, toQoScm, null, null, new GProMNode.ByReference(gqoProps.getPointer))
-			  val gpconstrelop = new GProMConstRelOperator.ByValue(gqo, translateMimirExpressionsToGProMList(schTable, data.head:+RowIdPrimitive("0")))
-        list.head = createGProMListCell(gpconstrelop)
-			  list.length += 1 
-			  list*/
-			  
-			  //as constant rel op properly
         var schTable = getSchemaForGProM(mimirOperator) 
         schTable = schTable :+ new MimirToGProMIntermediateSchemaInfo("", "", RowIdVar().toString(), "MIMIR_ROWID", "MIMIR_ROWID", db.backend.rowIdType, schTable.length, 0)
 			  val toQoScm = translateMimirSchemaToGProMSchema("HARD_TABLE", schTable)
