@@ -70,7 +70,7 @@ object DetectSeries
               .sliding(2)   // Get a 2-element sliding window over the result
           for( rowPair <- rowWindow ){
             val a = rowPair(0)
-            val b = rowPair(1)
+            val b = if(rowPair.length > 1) rowPair(1) else NullPrimitive()
             if(!a.equals(NullPrimitive()) && !b.equals(NullPrimitive())){
               val currDiff = a.asDouble - b.asDouble
               sum += currDiff

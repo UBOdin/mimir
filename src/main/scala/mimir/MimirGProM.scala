@@ -83,7 +83,7 @@ object MimirGProM {
     //testDebug = true
     //testError = true
     //runTests(3) 
-    runTests(6) 
+    //runTests(6) 
     
     //val sql = "SELECT R.A + R.B AS Z FROM R WHERE R.A = R.B"
     //translateOperatorsFromGProMToMimirToGProM(("testQ",sql))
@@ -124,6 +124,11 @@ object MimirGProM {
     //println("\n\n")
     //println(explainCell("SELECT * FROM LENS_MISSING_VALUE1914014057", 1, "2").mkString("\n"))
     
+    val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel("SELECT * FROM R LIMIT 10 OFFSET 1;")       
+    val gpNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
+    println("------------------------------------------------")
+    println(gpNodeStr)
+    println("------------------------------------------------")
     
   }
   

@@ -244,7 +244,7 @@ class Typechecker(
 				val rSchema = schemaOf(rhs);
 
 				if(!(lSchema.map(_._1).toSet.equals(rSchema.map(_._1).toSet))){
-					throw new RAException("Schema Mismatch in Union\n"+o);
+					throw new RAException("Schema Mismatch in Union\n"+o+s"$lSchema <> $rSchema");
 				}
 				lSchema
 
@@ -295,6 +295,8 @@ object Typechecker
 			case (TFloat(), TInt()) => Some(TFloat())
 			case (TDate(), TTimestamp()) => Some(TTimestamp())
 			case (TTimestamp(), TDate()) => Some(TTimestamp())
+			case (TRowId(), TString()) => Some(TRowId())
+			case (TString(), TRowId()) => Some(TRowId())
 			case (TUser(name), _) => leastUpperBound(TypeRegistry.baseType(name), b)
 			case (_, TUser(name)) => leastUpperBound(a, TypeRegistry.baseType(name))
 			case _ => return None

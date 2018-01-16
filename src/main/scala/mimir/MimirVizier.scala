@@ -87,6 +87,10 @@ object MimirVizier extends LazyLogging {
         }
     }
     
+    //vistrailsQueryMimir("SELECT * FROM LENS_REPAIR_KEY1915024710", true, false)
+    //explainCell("SELECT * FROM LENS_REPAIR_KEY1915024710", 1, "2" )
+    //explainEverything("SELECT * FROM LENS_REPAIR_KEY1915024710")
+    
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
       runServerForViztrails()
       db.backend.close()
