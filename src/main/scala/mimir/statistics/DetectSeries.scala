@@ -53,44 +53,21 @@ object DetectSeries
     // SELECT A FROM Q(...) ORDER BY A
     
     seriesColumnNumeric
-      .map { x => query.sort((x._1, true)).project(x._1) }
       .zipWithIndex
-      .foreach { case (testQuery, idx) => 
+      .foreach { case (candidateColumn, idx) => 
 
-        var diffAdj: Seq[Double] = Seq()
-        var sum: Double = 0
-        var count = 0
+        val score = StatsPlugins.combinedScore(db, candidateColumn._1, query)
 
-        // Run the query
-        db.query(testQuery) { result =>
-
-          val rowWindow = 
-            result
-              .map { _(0) } // Only one attribute in each row.  Pick it out
-              .sliding(2)   // Get a 2-element sliding window over the result
-          for( rowPair <- rowWindow ){
-            val a = rowPair(0)
-            val b = rowPair(1)
-            if(!a.equals(NullPrimitive()) && !b.equals(NullPrimitive())){
-              val currDiff = a.asDouble - b.asDouble
-              sum += currDiff
-              diffAdj = diffAdj :+ (currDiff)
-              count += 1
-            }
-          }
-        }
-        val mean = Math.floor((sum/count)*10000)/10000
-        val stdDev = Math.floor(Math.sqrt((diffAdj.map(x => (x-mean)*(x-mean)).sum)/count)*10000)/10000
-        val relativeStdDev = Math.abs(stdDev/mean)
-        if(relativeStdDev < threshold) {
+        if(score > threshold) {
           series = series :+ (
             SeriesColumnItem(
               seriesColumnNumeric(idx)._1, 
               "The column is a Numeric ("+seriesColumnNumeric(idx)._2.toString()+") datatype with an effective increasing pattern.", 
-              if((1-relativeStdDev)<0){ 0 } else { 1-relativeStdDev }
+              if(score<0){ 0 } else { if(score>1){ 1 } else score }
             )
           )
         }
+
       }
     series
   }

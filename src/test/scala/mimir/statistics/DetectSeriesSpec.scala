@@ -23,7 +23,7 @@ object DetectSeriesSpec
 	
 	sequential
 	
-	def testDetectSeriesof(oper: Operator) = DetectSeries.seriesOf(db, oper, 0.1)
+	def testDetectSeriesof(oper: Operator) = DetectSeries.seriesOf(db, oper, 0.5)
 	
 	
 	"The DetectSeriesSpec" should {
@@ -32,7 +32,7 @@ object DetectSeriesSpec
 			db.loadTable("test/data/DetectSeriesTest1.csv"); ok
 		}
 		
-		"Be able to detect Date and Timestamp type" >> {
+		"Be able to detect Date and Timestamp type as series column" >> {
 			val queryOper = select("SELECT * FROM DetectSeriesTest1")
 			val colSeq: Seq[String] = testDetectSeriesof(queryOper).map{_.columnName.toString}
 			
@@ -40,7 +40,7 @@ object DetectSeriesSpec
 			colSeq must contain("TRAN_TS","EXP_DT", "JOIN_DT", "DOB")
 		}
 
-		"Be able to create a new schema and detect Date and Timestamp type" >> {
+		"Be able to create a new schema and detect Date and Timestamp type as series column" >> {
 			update("CREATE TABLE DetectSeriesTest3(JN_DT date, JN_TS datetime)")
 			val queryOper = select("SELECT * FROM DetectSeriesTest3")
 			val colSeq: Seq[String] = testDetectSeriesof(queryOper).map{_.columnName.toString}
@@ -49,16 +49,16 @@ object DetectSeriesSpec
 			colSeq must contain("JN_DT", "JN_TS")
 		}
 
-		"Be able to load DetectSeriesTest2" >> {
-			db.loadTable("test/data/DetectSeriesTest2.csv"); ok
+		"Be able to load Home" >> {
+			db.loadTable("test/data/home.csv"); ok
 		}
 
-		"Be able to detect Date, Timestamp and increasing-decreasing Numeric type" >> {
-			val queryOper = select("SELECT * FROM DetectSeriesTest2")
+		"Be able to detect time-series as series column" >> {
+			val queryOper = select("SELECT * FROM home")
 			val colSeq: Seq[String] = testDetectSeriesof(queryOper).map{_.columnName.toString}
 			
-			colSeq must have size(6)
-			colSeq must contain("TRAN_TS","EXP_DT", "JOIN_DT", "DOB", "ROW_ID", "QUALITY")
+			colSeq must have size(1)
+			colSeq must contain("TIME")
 		}
 		
 	}	
