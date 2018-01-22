@@ -90,6 +90,11 @@ object MimirVizier extends LazyLogging {
     //vistrailsQueryMimir("SELECT * FROM LENS_REPAIR_KEY1915024710", true, false)
     //explainCell("SELECT * FROM LENS_REPAIR_KEY1915024710", 1, "2" )
     //explainEverything("SELECT * FROM LENS_REPAIR_KEY1915024710")
+    //OperatorTranslation.compileProvenanceWithGProM(db.table("R_RAW").project("COLUMN_0"))
+    /*val oper = db.sql.convert(db.parse("SELECT * FROM LENS_REPAIR_KEY1915024710").head.asInstanceOf[Select])
+    val (provOp, provCols) = OperatorTranslation.compileProvenanceWithGProM(oper)
+    val (provTaintOp, colTaintExprs, rowTaintExpr) = OperatorTranslation.compileTaintWithGProM(provOp)*/
+    //OperatorTranslation.compileProvenanceAndTaintWithGProM(oper)
     
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
       runServerForViztrails()
