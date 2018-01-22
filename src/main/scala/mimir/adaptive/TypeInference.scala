@@ -45,7 +45,9 @@ object TypeInference
       new TypeInferenceModel(
         s"MIMIR_TI_ATTR_${viewName}",
         modelColumns,
-        stringDefaultScore
+        stringDefaultScore,
+        1000,
+        config.query
       )
 
     val columnIndexes = 

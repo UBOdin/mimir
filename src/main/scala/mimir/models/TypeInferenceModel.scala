@@ -39,13 +39,13 @@ object TypeInferenceModel
 }
 
 @SerialVersionUID(1001L)
-class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac: Double, sampleArg: Int, query: Operator)
+class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultFrac: Double, sampleArg: Int, query: Operator)
   extends Model(name)
-  with DataIndependentFeedback
-  with NoArgModel
+  with SourcedFeedback
   with FiniteDiscreteDomain
   with ProgressiveUpdate
 {
+  
   var sampleLimit = sampleArg
   var totalVotes = 
     { val v = new scala.collection.mutable.ArraySeq[Double](columns.length)
@@ -109,7 +109,8 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
 
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
   {
-    choices(idx) match {
+    val column = args(0).asInt
+    getFeedback(idx, args) match {
       case None => {
         val guess = voteList(idx).maxBy( rankFn _ )._1
         TypePrimitive(guess)
@@ -123,7 +124,8 @@ class TypeInferenceModel(name: String, columns: IndexedSeq[String], defaultFrac:
 
 
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = {
-    choices(idx) match {
+    val column = args(0).asInt
+    getFeedback(idx,args) match {
       case None => {
         val (guess, guessVotes) = voteList(idx).maxBy( rankFn _ )
         val defaultPct = (defaultFrac * 100).toInt
