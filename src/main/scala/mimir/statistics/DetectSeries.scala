@@ -189,7 +189,7 @@ object DetectSeries
               val key_test = row1(0); val v_test = row1(1)
               val key_high = row2(0); val v_high = row2(1)
 
-              if( triple.flatten.contains(NullPrimitive()) ){
+              if( Seq(row0,row1,row2).flatten.contains(NullPrimitive())  ){
                 None
               } else {
                 val scale = ratio(key_low, key_test, key_high)
