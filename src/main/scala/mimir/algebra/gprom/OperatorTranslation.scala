@@ -38,7 +38,7 @@ object OperatorTranslation {
       case queryOpNode: GProMQueryOperatorNode => gpromStructureToMimirOperator(queryOpNode) 
     }) match {
       case proj@Project(projArgs, Annotate(op, invisSch)) => {
-        Recover(proj, invisSch)
+        Recover(Project(projArgs, proj), invisSch)
       }
       case x => x
     }
@@ -48,7 +48,7 @@ object OperatorTranslation {
     val gpChildren = gpromListToScalaList(gpromQueryOp.op.inputs)
                       .map(input => input.asInstanceOf[GProMQueryOperatorNode])
     val mimirChildren = gpChildren.map(gpromStructureToMimirOperator)
-    val mimirOpSchema = translateGProMSchemaToMimirSchema(gpromQueryOp.op.schema)
+    val mimirOpSchema = translateGProMSchemaToMimirSchema(gpromQueryOp)
     val taint = extractTaintFromGProMHashMap(gpromQueryOp.op.properties, gpChildren)
     val prov = extractProvFromGProMQueryOperatorNode(gpromQueryOp, mimirOpSchema, gpChildren)
     var dontAnnotate = false
@@ -56,15 +56,15 @@ object OperatorTranslation {
       case aggregationOperator : GProMAggregationOperator => { 
         val aggrs = gpromListToScalaList(aggregationOperator.aggrs).map(aggr => translateGProMExpressionToMimirExpression(gpChildren, aggr))
         val gb = gpromListToScalaList(aggregationOperator.groupBy).map(gbv => translateGProMExpressionToMimirExpression(gpChildren, gbv)) 
-        val aggrsSchema = gb match {
-          case Seq() => mimirOpSchema 
+        val aggrsSch = gb match {
+          case Seq() => mimirOpSchema
           case _ => mimirOpSchema.tail
         }
-        val aggregates = aggrsSchema.unzip._1.zip(aggrs).map(nameAggr => nameAggr._2 match { 
+        val aggregates = aggrsSch.unzip._1.zip(aggrs).map(nameAggr => nameAggr._2 match { 
           case Function("DISTINCT", Seq(Function(name, args))) => AggFunction(name, true, args, nameAggr._1)
           case Function(name, args) => AggFunction(name, false, args, nameAggr._1)
         })
-        val projArgs = gb.map(gbe => ProjectArg("PROV_AGG_"+gbe.asInstanceOf[Var].name.replaceAll("_", "__"), gbe.asInstanceOf[Var]))++aggrsSchema.map(se=>ProjectArg(se._1,Var(se._1)))
+        val projArgs = gb.map(gbe => ProjectArg("PROV_AGG_"+gbe.asInstanceOf[Var].name.replaceAll("_", "__"), gbe.asInstanceOf[Var]))++aggrsSch.map(se=>ProjectArg(se._1,Var(se._1)))
         val provTaint = prov++taint  
         
         dontAnnotate = true
@@ -122,8 +122,19 @@ object OperatorTranslation {
         else throw new Exception("Translation Not Yet Implemented '"+setOperator+"'") 
       }
       case tableAccessOperator : GProMTableAccessOperator => { 
-        val tableSchema = mimirOpSchema.filterNot(sche => sche._1.equals("ROWID"))
-        Table(tableAccessOperator.tableName, tableAccessOperator.tableName, tableSchema, Seq((Provenance.rowidColnameBase, Var("ROWID"), TRowId())) )
+        val tableSchema = mimirOpSchema.filterNot(sche => sche._1.equals("ROWID") || sche._1.equals("MIMIR_ROWID"))
+        val tableOp = Table(tableAccessOperator.tableName, tableAccessOperator.tableName, tableSchema, Seq((Provenance.rowidColnameBase, Var("ROWID"), TRowId())) )
+        dontAnnotate = true
+        prov ++ taint match {
+          case Seq() => tableOp
+          case provTaint => {
+           Project(tableSchema.filter(schEl => provTaint.find(_._2.name.equals(schEl._1)) match {
+              case Some(el) => false
+              case None => true
+            }).map(schEl => ProjectArg(schEl._1, Var(schEl._1))),
+            Annotate(tableOp, provTaint))
+          }
+        }
       }
     }
     prov ++ taint match {
@@ -171,7 +182,7 @@ object OperatorTranslation {
         }    
        }
        case attributeReference : GProMAttributeReference => {
-         val childSchemas = ctxOpers.map(oper => translateGProMSchemaToMimirSchema(oper.op.schema))
+         val childSchemas = ctxOpers.map(oper => translateGProMSchemaToMimirSchema(oper))
          val attrMimirName = childSchemas.flatMap(_.find( _._1.equals(attributeReference.name))) match {
           case Seq() => {
             if(attributeReference.name.equals(Provenance.rowidColnameBase))
@@ -179,7 +190,15 @@ object OperatorTranslation {
                 case Seq() => throw new Exception("Missing Attribute Reference: " + attributeReference.name + " : \n" + ctxOpers)
                 case x => x.head._1
             }
-            else throw new Exception("Missing Attribute Reference: " + attributeReference.name + " : \n" + ctxOpers)
+            else if(attributeReference.name.matches("^PROV_AGG_.+"))
+              childSchemas.flatMap(_.find( _._1.equals(attributeReference.name.replaceAll("PROV_AGG_", "").replaceAll("__", "_")))) match {
+                case Seq() => throw new Exception("Missing Attribute Reference: " + attributeReference.name + " : \n" + ctxOpers)
+                case x => x.head._1
+            }
+            else childSchemas.flatMap(_.find( _._1.equals("PROV_AGG_" + attributeReference.name.replaceAll("_", "__")))) match {
+                case Seq() => throw new Exception("Missing Attribute Reference: " + attributeReference.name + " : \n" + ctxOpers)
+                case x => x.head._1
+            }
           }
           case x => x.head._1
         }
@@ -252,7 +271,6 @@ object OperatorTranslation {
             val fargs = gpromListToScalaList(functionCall.args).map(arg => {
               val mimirArg = translateGProMExpressionToMimirExpression(ctxOpers, arg)
               mimirArg match {
-                //case Var("PROV_AGG_COLUMN__0") => Var("MIMIR_KR_HINT_COL_COLUMN_2") //TODO:  Super hack to fix.  somehow var arg in vg term converting incorrectly for projection over aggregate
                 case x => x
               }
             })
@@ -292,7 +310,7 @@ object OperatorTranslation {
       }
       case rowNumExpr : GProMRowNumExpr => {
       	/*Var(Provenance.rowidColnameBase)*///RowIdVar()
-        ctxOpers.map(oper => extractProvFromGProMQueryOperatorNode(oper, translateGProMSchemaToMimirSchema(oper.op.schema),gpromListToScalaList(oper.op.inputs).map(_.asInstanceOf[GProMQueryOperatorNode]))) match {
+        ctxOpers.map(oper => extractProvFromGProMQueryOperatorNode(oper, translateGProMSchemaToMimirSchema(oper),gpromListToScalaList(oper.op.inputs).map(_.asInstanceOf[GProMQueryOperatorNode]))) match {
           case Seq() => throw new Exception("Error: no rowid in context:")
           case x => x.head.head._2.expr
         }
@@ -385,20 +403,20 @@ object OperatorTranslation {
     gpQOp.op.provAttrs match {
       case null => extractProvVarsFromAggPropHashmap(gpQOp.op.properties, opSchema, ctxOpers)
       case x => gpromIntPointerListToScalaList(x).map(attrIdx => {
-        val mimirChildOpSchemas = ctxOpers.map(childOp => translateGProMSchemaToMimirSchema(childOp.op.schema).map { 
+        val mimirChildOpSchemas = ctxOpers.map(childOp => translateGProMSchemaToMimirSchema(childOp).map { 
           case ("ROWID", TString()) if childOp.op.`type` == GProM_JNA.GProMNodeTag.GProM_T_TableAccessOperator => (Provenance.rowidColnameBase, TRowId())
           case x => x
         } )
         val attr = opSchema(attrIdx)
-        val provExpr = gpQOp match {
-          case constantRelationOperator : GProMConstRelOperator => Var("MIMIR_ROWID")
+        val (attrName, provExpr) = gpQOp match {
+          case constantRelationOperator : GProMConstRelOperator => (attr._1, Var(Provenance.rowidColnameBase))
           //case projectionOperator : GProMProjectionOperator => 
           //  translateGProMExpressionToMimirExpression(ctxOpers, gpromListToScalaList(projectionOperator.projExprs)(attrIdx))
-          case tableAccessOperator : GProMTableAccessOperator => Var("ROWID")
+          case tableAccessOperator : GProMTableAccessOperator => (Provenance.rowidColnameBase, Var(Provenance.rowidColnameBase))
           //case aggregationOperator : GProMAggregationOperator => Var(mimirChildOpSchemas.head(attrIdx)._1)
-          case _ => Var(attr._1)
+          case _ => (attr._1, Var(attr._1))
         }
-        (attr._1, AnnotateArg(ViewAnnotation.PROVENANCE, attr._1, attr._2, provExpr)) 
+        (attrName, AnnotateArg(ViewAnnotation.PROVENANCE, attrName, attr._2, provExpr)) 
       })
     }
   }
@@ -411,7 +429,7 @@ object OperatorTranslation {
   }
   
   def extractProvVarsFromAggPropHashmap(hashMap: GProMHashMap, opSchema:Seq[(String, Type)], ctxOpers:Seq[GProMQueryOperatorNode]) : Seq[(String, AnnotateArg)] = {
-    val mimirChildOpSchemas = ctxOpers.map(childOp => translateGProMSchemaToMimirSchema(childOp.op.schema))
+    val mimirChildOpSchemas = ctxOpers.map(childOp => translateGProMSchemaToMimirSchema(childOp))
     hashMap match {
       case null => Seq()
       case _ => (GProMWrapper.inst.gpromGetMapString(hashMap.getPointer, "USER_PROV_ATTRS") match{
@@ -431,7 +449,11 @@ object OperatorTranslation {
             }
           }
         }
-       (attr._1, AnnotateArg(ViewAnnotation.PROVENANCE, attr._1, attr._2, expr))         
+        val (attrName, pexpr) = ctxOpers match {
+          case Seq() => (Provenance.rowidColnameBase, Var(Provenance.rowidColnameBase))
+          case _ => (attr._1, expr)
+        }
+       (attrName, AnnotateArg(ViewAnnotation.PROVENANCE, attrName, attr._2, pexpr))         
       })
     }
   }
@@ -477,8 +499,25 @@ object OperatorTranslation {
 			case Recover(subj,invisScm) => {
         throw new Exception("Operator Translation not implemented '"+mimirOperator+"'")
       }
+			case Aggregate(groupBy, agggregates, Project(projArgs, source)) if (projArgs.indexWhere(_.name.matches("^PROV_AGG_.+")) >= 0 && groupBy.indexWhere(_.name.matches("^PROV_AGG_.+")) >= 0) => {
+			  val newProjArgs = projArgs.map(pa => {
+			    if(pa.name.matches("^PROV_AGG_.+"))
+			      ProjectArg(pa.name.replaceAll("PROV_AGG_", "").replaceAll("__","_"), pa.expression)
+			    else pa
+			  })
+			  val newGroupBy = groupBy.map(gb => { 
+			    if(gb.name.matches("^PROV_AGG_.+"))
+			      Var(gb.name.replaceAll("PROV_AGG_", "").replaceAll("__","_"))
+			    else gb
+			  })
+			  mimirOperatorToGProMOperator(Aggregate(newGroupBy, agggregates, Project(newProjArgs, source)))
+			}
 			case Aggregate(groupBy, agggregates, source) => {
-			  val toQoScm = translateMimirSchemaToGProMSchema("AGG", mimirOpSchema)
+			  val transSchema = groupBy match {
+			    case Seq() => mimirOpSchema
+			    case _ => mimirOpSchema.tail :+ mimirOpSchema.head
+			  }
+			  val toQoScm = translateMimirSchemaToGProMSchema("AGG", transSchema)
         val gqoProps = createDefaultGProMAggrPropertiesMap("AGG", groupBy.map(_.name))
 			  val gpromAggrs = scalaListToGProMList(agggregates.map(aggr => translateMimirExpressionToGProMStructure(mimirOperator.children, 
 			      if(aggr.distinct)Function("DISTINCT", Seq(Function(aggr.function, aggr.args)))
@@ -612,10 +651,16 @@ object OperatorTranslation {
       case primitive : PrimitiveValue => translateMimirPrimitiveExpressionToGProMConstant(primitive)
       case Var(v) => {
        val schemas = ctxOpers.map(ctxOper => db.typechecker.schemaOf(ctxOper))
-       val (schIdx, schElIdx) = schemas.zipWithIndex.map(schema => (schema._2, schema._1.indexWhere(_._1.equals(v)))) match {
+       val (schIdx, schElIdxNonAgg) = schemas.zipWithIndex.map(schema => (schema._2, schema._1.indexWhere(_._1.equals(v)))) match {
          case Seq() => throw new Exception(s"Error Translating: column $v not found in context")
          case Seq(idxs) => idxs
          case x => x.head
+       }
+       val schElIdx = ctxOpers(schIdx) match {
+        case View(_, Aggregate(gb,_,_), _) if !gb.isEmpty => if(schElIdxNonAgg == 0) schemas(schIdx).length-1 else schElIdxNonAgg - 1
+        case AdaptiveView(_, _, Aggregate(gb,_,_), _) if !gb.isEmpty => if(schElIdxNonAgg == 0) schemas(schIdx).length-1 else schElIdxNonAgg - 1
+        case Aggregate(gb,_,_) if !gb.isEmpty => if(schElIdxNonAgg == 0) schemas(schIdx).length-1 else schElIdxNonAgg - 1
+        case _ => schElIdxNonAgg
        }
         val attrRef = new GProMAttributeReference.ByValue(GProM_JNA.GProMNodeTag.GProM_T_AttributeReference, v, 0, schElIdx, 0, getGProMDataTypeFromMimirType(schemas(schIdx)(schElIdx)._2 ))
         attrRef
@@ -822,10 +867,10 @@ object OperatorTranslation {
         //val memctxq = GProMWrapper.inst.createMemContextName("QUERY_CONTEXT")
         val gpromNode = scalaListToGProMList(Seq(mimirOperatorToGProMOperator(oper)))
         gpromNode.write()
-        /*val gpNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
+        val gpNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
         println("------------------------------------------------")
         println(gpNodeStr)
-        println("------------------------------------------------")*/
+        println("------------------------------------------------")
         val provGpromNode = GProMWrapper.inst.taintRewriteOperator(gpromNode.head.data.ptr_value)
         //val optimizedGpromNode = GProMWrapper.inst.optimizeOperatorModel(provGpromNode.getPointer)
         val provNodeStr = GProMWrapper.inst.gpromNodeToString(provGpromNode.getPointer())
@@ -916,12 +961,12 @@ object OperatorTranslation {
   
   def applyRecover(oper:Operator): Operator = {
     oper match {
-      case Recover(subj, invisScm) => {
+      case Recover(Project(projArgs, subj), invisScm) => {
         Project( subj.columnNames.map(col => ProjectArg(col, Var(col))) ++ invisScm.map(invisEl => ProjectArg(invisEl._2.name, Var(invisEl._2.name))), applyRecover(subj) )
       }
       case proj@Project(projArgs, Annotate(subj, invisScm)) => {
-        //Project( projArgs ++ invisScm.map(invisEl => ProjectArg(invisEl._2.name, Var(invisEl._2.name))), applyRecover(subj) )
-        applyRecover(subj).removeColumns(subj.columnNames.filter(col => proj.columns.contains(col) || invisScm.map(_._1).contains(col) ):_* )
+        Project( projArgs ++ invisScm.map(invisEl => ProjectArg(invisEl._2.name, Var(invisEl._2.name))), applyRecover(subj) )
+        //applyRecover(subj).removeColumns(subj.columnNames.filter(col => proj.columns.contains(col) || invisScm.map(_._1).contains(col) ):_* )
       }
       case x => x.recur(applyRecover) 
     }

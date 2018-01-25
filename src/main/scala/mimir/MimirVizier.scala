@@ -87,6 +87,9 @@ object MimirVizier extends LazyLogging {
         }
     }
     
+    //val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel("SELECT SUM(COLUMN_0) AS FCOL_2, SUM(COLUMN_2) FROM R_RAW GROUP BY COLUMN_1;")
+    //val gpNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
+    //println(gpNodeStr)
     //vistrailsQueryMimir("SELECT * FROM LENS_REPAIR_KEY1915024710", true, false)
     //explainCell("SELECT * FROM LENS_REPAIR_KEY1915024710", 1, "2" )
     //explainEverything("SELECT * FROM LENS_REPAIR_KEY1915024710")
@@ -95,6 +98,7 @@ object MimirVizier extends LazyLogging {
     val (provOp, provCols) = OperatorTranslation.compileProvenanceWithGProM(oper)
     val (provTaintOp, colTaintExprs, rowTaintExpr) = OperatorTranslation.compileTaintWithGProM(provOp)*/
     //OperatorTranslation.compileProvenanceAndTaintWithGProM(oper)
+    
     
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
       runServerForViztrails()

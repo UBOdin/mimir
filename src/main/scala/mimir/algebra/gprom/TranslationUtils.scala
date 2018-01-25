@@ -156,7 +156,24 @@ object TranslationUtils {
     scmByRef
   }
   
-  def translateGProMSchemaToMimirSchema(gpromSchema:GProMSchema.ByReference): Seq[(String, Type)] = {
+  def translateGProMSchemaToMimirSchema(oper: GProMQueryOperatorNode): Seq[(String, Type)] = {
+    oper.op.`type` match {
+           case GProM_JNA.GProMNodeTag.GProM_T_AggregationOperator => {
+             GProMWrapper.inst.castGProMNode(new GProMNode(oper.getPointer)) match {
+               case aggregate : GProMAggregationOperator => {
+                 if(aggregate.groupBy != null && aggregate.groupBy.length > 0){
+                   val transSch = translateGProMSchemaToMimirSchema(oper.op.schema)
+                   transSch.reverse.head +: transSch.reverse.tail.reverse 
+                 }
+                 else translateGProMSchemaToMimirSchema(oper.op.schema)
+               }
+             }
+           }
+           case _ => translateGProMSchemaToMimirSchema(oper.op.schema)
+         }
+  }
+  
+  private def translateGProMSchemaToMimirSchema(gpromSchema:GProMSchema.ByReference): Seq[(String, Type)] = {
     gpromListToScalaList(gpromSchema.attrDefs).map(attrDef =>  new GProMAttributeDef(attrDef.getPointer))
     .map(attrDef => (attrDef.attrName, getMimirTypeFromGProMDataType(attrDef.dataType)) )
   }
