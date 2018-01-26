@@ -40,9 +40,14 @@ with BeforeAll
     //TODO: Add test that cycles and take progress, outputs the sequence
     "Determine the subsequent values" >> 
     {
-      val model = new TypeInferenceModel("PROGRESSIVE_UPDATE:CATEGORY1",Array("CATEGORY1"),0.5,1000,db.table("Progressive_update"))
+      var progressiveModelResults = Seq( Seq( (Int, Seq( (TypePrimitive, Double) ) ) ) )
+      val model = new TypeInferenceModel("PROGRESSIVE_UPDATE:CATEGORY2",Array("CATEGORY2"),0.5,1000,db.table("Progressive_update"))
       db.models.persist(model)
-      
+      while(model.isCompleted() == false){
+        progressiveModelResults:+Seq(model.getNextSample(), model.getDomain(0, Seq(IntPrimitive(0L)), Seq()))
+        Thread.sleep(3000)
+      }
+      progressiveModelResults.foreach(println(_))
       guess(model) must be equalTo(TString())
     }
   }
