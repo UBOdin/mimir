@@ -2,8 +2,9 @@ package mimir.algebra.gprom
 
 import org.gprom.jdbc.jna._
 import mimir.algebra._
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
-object TranslationUtils {
+object TranslationUtils extends LazyLogging {
   def scalaListToGProMList(gpStructures: Seq[GProMStructure]) : GProMList.ByReference = {
     if(gpStructures.isEmpty)
       return null;
@@ -62,7 +63,12 @@ object TranslationUtils {
       while(listCell != null){
         val projInput = GProMWrapper.inst.castGProMNode(new GProMNode(listCell.data.ptr_value))
         if(projInput == null){
-          println("WTF... there is some issue this should not be null")
+          logger.error("WTF... there is some issue this should not be null")
+          //TODO: not sure why, but sometimes one or two project args are null for det cols 
+          //     -this is a temp hack until i figure it out 
+          val intPtr = new com.sun.jna.Memory(com.sun.jna.Native.getNativeSize(classOf[Int]))
+          intPtr.setInt(0, 1);
+          scList = scList :+ new org.gprom.jdbc.jna.GProMConstant.ByValue(GProM_JNA.GProMNodeTag.GProM_T_Constant, GProM_JNA.GProMDataType.GProM_DT_INT,intPtr,0)
         }
         else{
           scList = scList :+ projInput

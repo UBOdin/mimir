@@ -45,6 +45,7 @@ import mimir.algebra.PrimitiveValue
 import mimir.algebra.RowIdVar
 import mimir.algebra.Var
 import mimir.ctables.CTables
+import mimir.sql.sqlite.VGTermFunctions
 
 class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_lookup.sqlite.SQLiteMetadataLookup(conn)
 {
@@ -63,7 +64,10 @@ class GProMMedadataLookup(conn:Connection) extends org.gprom.jdbc.metadata_looku
   		      val argTypes = args.map(arg => getMimirTypeFromGProMDataTypeString(arg)) 
             //println(s"Metadata lookup: function: $fName(${argSeq.mkString(",")})")
             getGProMDataTypeStringFromMimirType( fName match {
-      		    case "sys_op_map_nonnull" => argTypes(0) 
+      		    case "sys_op_map_nonnull" => argTypes(0)
+      		    case "MIMIR_ENCODED_VGTERM" => db.typechecker.returnTypeOfFunction(VGTermFunctions.bestGuessVGTermFn,argTypes)
+      		    case "UNCERT" => argTypes(0)
+      		    case "LEAST" => db.typechecker.returnTypeOfFunction("MIN",argTypes) 
       		    case _ => {
       		      db.typechecker.returnTypeOfFunction(fName,argTypes)
       		    }

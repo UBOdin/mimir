@@ -69,8 +69,8 @@ object DetectSeries
               .map { _(0) } // Only one attribute in each row.  Pick it out
               .sliding(2)   // Get a 2-element sliding window over the result
           for( rowPair <- rowWindow ){
-            val a = rowPair(0)
-            val b = rowPair(1)
+            val a = rowPair.headOption.getOrElse(NullPrimitive())
+            val b = rowPair.tail.headOption.getOrElse(NullPrimitive())
             if(!a.equals(NullPrimitive()) && !b.equals(NullPrimitive())){
               val currDiff = a.asDouble - b.asDouble
               sum += currDiff
