@@ -65,3 +65,7 @@ abstract class Backend {
 trait InlinableBackend {
 	def enableInlining(db: Database) : Unit
 }
+
+trait InsertReturnKeyBackend {
+  def insertAndReturnKey(insertSql:String,  args: Seq[PrimitiveValue]) : Long
+}

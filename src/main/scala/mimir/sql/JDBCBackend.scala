@@ -16,6 +16,7 @@ class JDBCBackend(val backend: String, val filename: String)
   extends Backend
   with LazyLogging
   with InlinableBackend
+  with InsertReturnKeyBackend
 {
   var conn: Connection = null
   var openConnections = 0

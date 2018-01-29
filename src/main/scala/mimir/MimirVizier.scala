@@ -697,7 +697,7 @@ object MimirVizier extends LazyLogging {
  }
                                                                                               //by default we'll start now and end when the galaxy class Enterprise launches
  def deployWorkflowToViztool(hash:String, input:String, query : String, name:String, dataType:String, users:Seq[String], latlonFields:Seq[String] = Seq("LATITUDE","LONGITUDE"), addrFields: Seq[String] = Seq("STRNUMBER", "STRNAME", "CITY", "STATE"), startTime:String = "2017-08-13 00:00:00", endTime:String = "2363-01-01 00:00:00") : Unit = {
-   val backend = db.backend.asInstanceOf[JDBCBackend]
+   val backend = db.backend.asInstanceOf[InsertReturnKeyBackend]
    val jobID = backend.insertAndReturnKey(
        "INSERT INTO CLEANING_JOBS ( CLEANING_JOB_NAME, TYPE, IMAGE, HASH) VALUES ( ?, ?, ?, ? )", 
        Seq(StringPrimitive(name),StringPrimitive(dataType),StringPrimitive(s"app/images/$dataType.png"),StringPrimitive(hash))  

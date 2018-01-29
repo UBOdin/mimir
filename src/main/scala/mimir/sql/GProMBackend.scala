@@ -21,6 +21,7 @@ import com.sun.jna.Native
 class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) 
   extends Backend
   with InlinableBackend
+  with InsertReturnKeyBackend
 {
   var conn: Connection = null
   var unwrappedConn: org.sqlite.SQLiteConnection = null
@@ -409,4 +410,34 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int)
   def dateType: mimir.algebra.Type = TDate()
   def invalidateCache(): Unit = {}
   def rowIdType: mimir.algebra.Type = TRowId()
+  
+  def insertAndReturnKey(insertSql:String,  args: Seq[PrimitiveValue]) : Long = {
+    try {
+        this.synchronized({
+          if(conn == null) 
+            throw new SQLException("Trying to use unopened connection!")
+          val stmt = unwrappedConn.prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS);
+          setArgs(stmt, args)                             
+          val affectedRows = stmt.executeUpdate();
+          if (affectedRows == 0) 
+              throw new SQLException("Insert did not generate any rows.");
+          val generatedKey = try{
+            val generatedKeys = stmt.getGeneratedKeys() 
+            if (generatedKeys.next())
+                generatedKeys.getLong(1)
+            else 
+                throw new SQLException("No Key Returned.");
+          } catch { 
+            case e: SQLException => println(e.toString+"during\n"+insertSql+" <- "+args)
+            throw new SQLException("Error", e)
+          }
+          stmt.close()
+          generatedKey
+        })
+    } catch { 
+        case e: SQLException => println(e.toString+"during\n"+insertSql+" <- "+args)
+          throw new SQLException("Error", e)
+      }
+  }
+  
 }

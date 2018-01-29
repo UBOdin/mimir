@@ -65,12 +65,6 @@ object OperatorTranslation extends LazyLogging {
           case Function("DISTINCT", Seq(Function(name, args))) => AggFunction(name, true, args, nameAggr._1)
           case Function(name, args) => AggFunction(name, false, args, nameAggr._1)
         })
-        /*val projArgs = gb.map(gbe => ProjectArg("PROV_AGG_"+gbe.asInstanceOf[Var].name.replaceAll("_", "__"), gbe.asInstanceOf[Var]))++aggrsSch.map(se=>ProjectArg(se._1,Var(se._1)))
-        val provTaint = prov++taint  
-        
-        dontAnnotate = true
-        Aggregate(gb.map(gbe => Var("PROV_AGG_"+gbe.asInstanceOf[Var].name.replaceAll("_", "__"))), aggregates, mimirChildren.head.rename(gb.map(gbe =>(gbe.asInstanceOf[Var].name,"PROV_AGG_"+gbe.asInstanceOf[Var].name.replaceAll("_", "__"))):_*)) 
-        */
         Aggregate(gb.map(gbe => gbe.asInstanceOf[Var]), aggregates, mimirChildren.head)
       }
       case constantRelationOperator : GProMConstRelOperator => { 
@@ -133,17 +127,6 @@ object OperatorTranslation extends LazyLogging {
       case tableAccessOperator : GProMTableAccessOperator => { 
         val tableSchema = mimirOpSchema.filterNot(sche => sche._1.equals("ROWID") || sche._1.equals(Provenance.rowidColnameBase))
         val tableOp = Table(tableAccessOperator.tableName, tableAccessOperator.tableName, tableSchema, Seq((Provenance.rowidColnameBase, Var("ROWID"), TRowId())) )
-        /*dontAnnotate = true
-        prov ++ taint match {
-          case Seq() => tableOp
-          case provTaint => {
-           Project(tableSchema.filter(schEl => provTaint.find(_._2.name.equals(schEl._1)) match {
-              case Some(el) => false
-              case None => true
-            }).map(schEl => ProjectArg(schEl._1, Var(schEl._1))),
-            Annotate(tableOp, provTaint))
-          }
-        }*/
         tableOp
       }
       case x => throw new Exception("Translation Not Yet Implemented '"+x+"'")  
@@ -160,8 +143,6 @@ object OperatorTranslation extends LazyLogging {
       }
     }
   }
-  
-  
   
   def translateGProMExpressionToMimirExpression(ctxOpers:Seq[GProMQueryOperatorNode], gpromExpr : GProMStructure) : Expression = {
     translateGProMExpressionToMimirExpression(ctxOpers, new GProMNode(gpromExpr.getPointer))
@@ -194,51 +175,10 @@ object OperatorTranslation extends LazyLogging {
        }
        case attributeReference : GProMAttributeReference => {
          val childSchemas = ctxOpers.map(oper => translateGProMSchemaToMimirSchema(oper))
-         val attrMimirName = childSchemas.flatMap(_.find( _._1.equals(attributeReference.name))) match {
-          case Seq() => {
-            /*if(attributeReference.name.equals(Provenance.rowidColnameBase))
-              childSchemas.flatMap(_.find( _._1.equals("ROWID"))) match {
-                case Seq() => throw new Exception("Missing Attribute Reference: " + attributeReference.name + " : \n" + ctxOpers)
-                case x => x.head._1
-            }*/
-            /*if(attributeReference.name.matches(".*ROWID")){
-              ctxOpers.map(oper => extractProvFromGProMQueryOperatorNode(oper, translateGProMSchemaToMimirSchema(oper),gpromListToScalaList(oper.op.inputs).map(_.asInstanceOf[GProMQueryOperatorNode]))).flatten.toSeq match {
-                case Seq() => {
-                  childSchemas.flatMap(_.find(el =>  el._1.matches(".*ROWID"))) match {
-                    case Seq() => throw new Exception("Missing Attribute Reference: " + attributeReference.name + " : \n" + ctxOpers)
-                    case x => x.head._1
-                  }
-                }
-                case x => x.head._1
-              }
-            }*/
-            /*else if(attributeReference.name.matches("^PROV_AGG_.+"))
-              childSchemas.flatMap(_.find( _._1.equals(attributeReference.name.replaceAll("PROV_AGG_", "").replaceAll("__", "_")))) match {
-                case Seq() => throw new Exception("Missing Attribute Reference: " + attributeReference.name + " : \n" + ctxOpers)
-                case x => x.head._1
-            }*/
-            /*else childSchemas.flatMap(_.find( _._1.equals("PROV_AGG_" + attributeReference.name.replaceAll("_", "__")))) match {
-                case Seq() => throw new Exception("Missing Attribute Reference: " + attributeReference.name + " : \n" + ctxOpers)
-                case x => x.head._1
-            }*/
-            /*else*/ throw new Exception("Missing Attribute Reference: " + attributeReference.name + " : \n" + ctxOpers)
-          }
+         Var(childSchemas.flatMap(_.find( _._1.equals(attributeReference.name))) match {
+          case Seq() => throw new Exception("Missing Attribute Reference: " + attributeReference.name + " : \n" + ctxOpers)
           case x => x.head._1
-        }
-        val attrRet = attrMimirName match {
-          //case "ROWID" if ctxOpers.isEmpty || ctxOpers.head.op.`type` == GProM_JNA.GProMNodeTag.GProM_T_TableAccessOperator => Var(Provenance.rowidColnameBase)
-          case _ => new Var(attrMimirName)
-        }
-        if(!attributeReference.name.equals(attrRet.name)){
-          logger.debug("----------------------------------------------------------------------------------------------------------------")
-          logger.debug("----------------------------------------------------------------------------------------------------------------")
-          logger.debug("----------------------------------------------------------------------------------------------------------------")
-          logger.debug(s"-----------------Attribute Ref Changed (GP->Mimir) : ${attributeReference.name} => $attrRet --------------------")
-          logger.debug("----------------------------------------------------------------------------------------------------------------")
-          logger.debug("----------------------------------------------------------------------------------------------------------------")
-          logger.debug("----------------------------------------------------------------------------------------------------------------")
-        }
-        attrRet
+        })
       }
       case constant : GProMConstant => {
       	if(constant.isNull == 1)
@@ -271,7 +211,6 @@ object OperatorTranslation extends LazyLogging {
       	    ExpressionUtils.makeCaseExpression(testExpr, whenThenClauses, elseClause)
       	  }
       	}
-        
       }
       case caseWhen : GProMCaseWhen => {
       	throw new Exception("Something went wrong: this case should be handled above by: GProMCaseExpr: '"+caseWhen+"'")
@@ -288,7 +227,6 @@ object OperatorTranslation extends LazyLogging {
           }
           case "sys_op_map_nonnull" => {
             val arg = translateGProMExpressionToMimirExpression(ctxOpers, new GProMNode(functionCall.args.head.data.ptr_value))
-            //arg
             Function("CAST", Seq(arg,TypePrimitive(TString())))
           }
           case "LEAST" => {
@@ -402,7 +340,7 @@ object OperatorTranslation extends LazyLogging {
           val key = new GProMNode(mapElem.key)
           val value = new GProMNode(mapElem.data)
           if(key == null || value == null)
-            logger.debug("WTF... there is some issue this should not be null")
+            logger.error("WTF... there is some issue this should not be null")
           else{
             val annotateArg = 
             GProMWrapper.inst.castGProMNode(value) match {
@@ -435,19 +373,9 @@ object OperatorTranslation extends LazyLogging {
     gpQOp.op.provAttrs match {
       case null => extractProvVarsFromAggPropHashmap(gpQOp.op.properties, opSchema, ctxOpers)
       case x => gpromIntPointerListToScalaList(x).map(attrIdx => {
-        val mimirChildOpSchemas = ctxOpers.map(childOp => translateGProMSchemaToMimirSchema(childOp).map { 
-          //case ("ROWID", TString()) if childOp.op.`type` == GProM_JNA.GProMNodeTag.GProM_T_TableAccessOperator => (Provenance.rowidColnameBase, TRowId())
-          case x => x
-        } )
+        val mimirChildOpSchemas = ctxOpers.map(childOp => translateGProMSchemaToMimirSchema(childOp))
         val attr = opSchema(attrIdx)
-        val (attrName, provExpr) = gpQOp match {
-          //case constantRelationOperator : GProMConstRelOperator => (attr._1, Var(Provenance.rowidColnameBase))
-          //case projectionOperator : GProMProjectionOperator => 
-          //  translateGProMExpressionToMimirExpression(ctxOpers, gpromListToScalaList(projectionOperator.projExprs)(attrIdx))
-          //case tableAccessOperator : GProMTableAccessOperator => (Provenance.rowidColnameBase, Var(Provenance.rowidColnameBase))
-          //case aggregationOperator : GProMAggregationOperator => Var(mimirChildOpSchemas.head(attrIdx)._1)
-          case _ => (attr._1, Var(attr._1))
-        }
+        val (attrName, provExpr) = (attr._1, Var(attr._1))
         (attrName, AnnotateArg(ViewAnnotation.PROVENANCE, attrName, attr._2, provExpr)) 
       })
     }
@@ -481,10 +409,7 @@ object OperatorTranslation extends LazyLogging {
             }
           }
         }
-        val (attrName, pexpr) = ctxOpers match {
-          //case Seq() => (Provenance.rowidColnameBase, Var(Provenance.rowidColnameBase))
-          case _ => (attr._1, expr)
-        }
+        val (attrName, pexpr) = (attr._1, expr)
        (attrName, AnnotateArg(ViewAnnotation.PROVENANCE, attrName, attr._2, pexpr))         
       })
     }
@@ -531,19 +456,6 @@ object OperatorTranslation extends LazyLogging {
 			case Recover(subj,invisScm) => {
         throw new Exception("Operator Translation not implemented '"+mimirOperator+"'")
       }
-			/*case Aggregate(groupBy, agggregates, Project(projArgs, source)) if (projArgs.indexWhere(_.name.matches("^PROV_AGG_.+")) >= 0 && groupBy.indexWhere(_.name.matches("^PROV_AGG_.+")) >= 0) => {
-			  val newProjArgs = projArgs.map(pa => {
-			    if(pa.name.matches("^PROV_AGG_.+"))
-			      ProjectArg(pa.name.replaceAll("PROV_AGG_", "").replaceAll("__","_"), pa.expression)
-			    else pa
-			  })
-			  val newGroupBy = groupBy.map(gb => { 
-			    if(gb.name.matches("^PROV_AGG_.+"))
-			      Var(gb.name.replaceAll("PROV_AGG_", "").replaceAll("__","_"))
-			    else gb
-			  })
-			  mimirOperatorToGProMOperator(Aggregate(newGroupBy, agggregates, Project(newProjArgs, source)))
-			}*/
 			case Aggregate(groupBy, agggregates, source) => {
 			  val transSchema = groupBy match {
 			    case Seq() => mimirOpSchema
@@ -695,10 +607,6 @@ object OperatorTranslation extends LazyLogging {
          new GProMCaseExpr.ByValue(GProM_JNA.GProMNodeTag.GProM_T_CaseExpr,null, list, new GProMNode.ByReference(translateMimirExpressionToGProMStructure(ctxOpers, elseClause).getPointer))
       }
       case primitive : PrimitiveValue => translateMimirPrimitiveExpressionToGProMConstant(primitive)
-      /*case Var(Provenance.rowidColnameBase) => {
-        val ridexpr = new GProMRowNumExpr.ByValue(GProM_JNA.GProMNodeTag.GProM_T_RowNumExpr)
-        ridexpr
-      }*/
       case Var(v) => {
        val schemas = ctxOpers.map(ctxOper => db.typechecker.schemaOf(ctxOper))
        val (schIdx, schElIdxNonAgg) = schemas.zipWithIndex.map(schema => (schema._2, schema._1.indexWhere(_._1.equals(v)))) match {
@@ -715,11 +623,7 @@ object OperatorTranslation extends LazyLogging {
         val attrRef = new GProMAttributeReference.ByValue(GProM_JNA.GProMNodeTag.GProM_T_AttributeReference, v, 0, schElIdx, 0, getGProMDataTypeFromMimirType(schemas(schIdx)(schElIdx)._2 ))
         if(!attrRef.name.equals(v)){
           logger.debug("----------------------------------------------------------------------------------------------------------------")
-          logger.debug("----------------------------------------------------------------------------------------------------------------")
-          logger.debug("----------------------------------------------------------------------------------------------------------------")
           logger.debug(s"--------------------------Attribute Ref Changed (Mimir->GP): $v => ${attrRef.name}-----------------------------")
-          logger.debug("----------------------------------------------------------------------------------------------------------------")
-          logger.debug("----------------------------------------------------------------------------------------------------------------")
           logger.debug("----------------------------------------------------------------------------------------------------------------")
         }
         attrRef
@@ -729,16 +633,6 @@ object OperatorTranslation extends LazyLogging {
         val ridexpr = new GProMRowNumExpr.ByValue(GProM_JNA.GProMNodeTag.GProM_T_RowNumExpr)
         ridexpr
       }
-      /*case Function("CAST", params) => {
-        val paramnew = params match {
-          case x :: StringPrimitive(s) :: Nil => Seq[Expression](x, TypePrimitive(Type.toSQLiteType(Integer.parseInt(params(1).toString()))) )
-          case x :: IntPrimitive(i) :: Nil   =>  Seq[Expression](x, TypePrimitive(Type.toSQLiteType(i.toInt)) )
-  	      case x :: TypePrimitive(t)    :: Nil => Seq[Expression](x, TypePrimitive(t)  )
-        }
-        val gpromExprList = translateMimirExpressionsToGProMList(schema, paramnew)
-        val gpromFunc = new GProMFunctionCall.ByValue(GProM_JNA.GProMNodeTag.GProM_T_FunctionCall, "CAST", gpromExprList, 0)
-        gpromFunc
-      }*/
       case Function(op, params) => {
         val gpromExprList = scalaListToGProMList(params.map(translateMimirExpressionToGProMStructure(ctxOpers, _)))
         val gpromFunc = new GProMFunctionCall.ByValue(GProM_JNA.GProMNodeTag.GProM_T_FunctionCall, op, gpromExprList, 0)
@@ -864,16 +758,16 @@ object OperatorTranslation extends LazyLogging {
         val gpromNode = scalaListToGProMList(Seq(mimirOperatorToGProMOperator(oper)))
         gpromNode.write()
         val gpromNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
-        /*logger.debug("------------------------------------------------")
+        logger.debug("------------------------------------------------")
         logger.debug(gpromNodeStr)
-        logger.debug("------------------------------------------------")*/
+        logger.debug("------------------------------------------------")
         val optimizedGpromNode = GProMWrapper.inst.optimizeOperatorModel(gpromNode.getPointer)
         val optNodeStr = GProMWrapper.inst.gpromNodeToString(optimizedGpromNode.getPointer())
-        /*logger.debug("------------------------------------------------")
-        logger.debug(oper)
+        logger.debug("------------------------------------------------")
+        logger.debug(oper.toString())
         logger.debug("------------------------------------------------")
         logger.debug(optNodeStr)
-        logger.debug("------------------------------------------------")*/
+        logger.debug("------------------------------------------------")
         //Thread.sleep(500)
         val opOut = gpromStructureToMimirOperator(0, optimizedGpromNode, null)
         GProMWrapper.inst.gpromFreeMemContext(memctx)
@@ -1032,22 +926,6 @@ object OperatorTranslation extends LazyLogging {
       case x => x.recur(fixProvAgg(_))
     }
   }
-  
-  /*def fixJoinRowDet(oper:Operator):Operator = {
-    oper match {
-      case Project(projArgs, Annotate(join@LeftOuterJoin(lhs, rhs, cond), invisScm)) => {
-        val newLhs = applyRecover(lhs) 
-        val newRhs = applyRecover(rhs) 
-        val newOp = if(newLhs.columnNames.contains("MIMIR_COL_DET_R") && newRhs.columnNames.contains("MIMIR_COL_DET_R")){
-          val fixOp = LeftOuterJoin(newLhs.rename(("MIMIR_COL_DET_R", "MIMIR_COL_DET_R_0")), newRhs.rename(("MIMIR_COL_DET_R", "MIMIR_COL_DET_R_1")), cond)
-          Project(fixOp.columnNames.filterNot(col => col.equals("MIMIR_COL_DET_R_0") || col.equals("MIMIR_COL_DET_R_1")).map(col => ProjectArg(col, Var(col))) :+ ProjectArg("MIMIR_COL_DET_R", ExpressionUtils.makeAnd(Var("MIMIR_COL_DET_R_0"), Var("MIMIR_COL_DET_R_1"))), fixOp)
-        }
-        else LeftOuterJoin(newLhs, newRhs, cond)
-        Project( projArgs ++ invisScm.map(invisEl => ProjectArg(invisEl._2.name, Var(invisEl._2.name))), newOp)
-      }
-      case _ => oper
-    }
-  }*/
   
   def applyRecover(oper:Operator): Operator = {
     oper match {
