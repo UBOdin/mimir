@@ -181,6 +181,6 @@ object TranslationUtils extends LazyLogging {
   
   private def translateGProMSchemaToMimirSchema(gpromSchema:GProMSchema.ByReference): Seq[(String, Type)] = {
     gpromListToScalaList(gpromSchema.attrDefs).map(attrDef =>  new GProMAttributeDef(attrDef.getPointer))
-    .map(attrDef => (attrDef.attrName, getMimirTypeFromGProMDataType(attrDef.dataType)) )
+    .map(attrDef => (attrDef.attrName.replace("(", "_").replace(")",""), getMimirTypeFromGProMDataType(attrDef.dataType)) )
   }
 }

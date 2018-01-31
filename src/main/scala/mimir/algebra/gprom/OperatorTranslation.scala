@@ -15,6 +15,16 @@ import mimir.serialization.Json
 import mimir.algebra.gprom.TranslationUtils._
 import com.sun.javafx.binding.SelectBinding.AsString
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import mimir.optimizer.OperatorOptimization
+import mimir.optimizer.operator.ProjectRedundantColumns
+import mimir.optimizer.operator.InlineProjections
+import mimir.optimizer.operator.PushdownSelections
+import mimir.optimizer.operator.PropagateEmptyViews
+import mimir.optimizer.operator.PropagateConditions
+import mimir.optimizer.operator.OptimizeExpressions
+import mimir.optimizer.operator.PartitionUncertainJoins
+import mimir.optimizer.operator.PullUpUnions
+import mimir.optimizer.Optimizer
 
 object ProjectionArgVisibility extends Enumeration {
    val Visible = Value("Visible")
@@ -65,7 +75,17 @@ object OperatorTranslation extends LazyLogging {
           case Function("DISTINCT", Seq(Function(name, args))) => AggFunction(name, true, args, nameAggr._1)
           case Function(name, args) => AggFunction(name, false, args, nameAggr._1)
         })
-        Aggregate(gb.map(gbe => gbe.asInstanceOf[Var]), aggregates, mimirChildren.head)
+        
+        //TODO: there appears to be a bug in gprom where it is adding some extra schema elements to a aggregate 
+        //      this is a hack to work around it for now, but we need to get this fixed in gprom or figure out WTF
+        //      -It is related to the todo below in the project case
+        val aggrSchLen = gb.length + aggrs.length
+        if(aggrSchLen != mimirOpSchema.length){
+          Project(mimirOpSchema.map(_._1).zipWithIndex.foldLeft(Seq[ProjectArg]())((init, colIdx) => {
+            if(colIdx._2 < aggrSchLen) init :+ ProjectArg(colIdx._1, Var(colIdx._1)) else init :+ ProjectArg(colIdx._1, gb.head.asInstanceOf[Var])
+          }), Aggregate(gb.map(gbe => gbe.asInstanceOf[Var]), aggregates, mimirChildren.head))
+        }
+        else Aggregate(gb.map(gbe => gbe.asInstanceOf[Var]), aggregates, mimirChildren.head)
       }
       case constantRelationOperator : GProMConstRelOperator => { 
         val data = gpromListToScalaList(constantRelationOperator.values).map(row => gpromListToScalaList(row.asInstanceOf[GProMList]).map( cell => {
@@ -79,10 +99,13 @@ object OperatorTranslation extends LazyLogging {
       case joinOperator : GProMJoinOperator => { 
         joinOperator.cond match {
           case null => joinOperator.joinType match {
+            //case GProM_JNA.GProMJoinType.GProM_JOIN_INNER => OperatorUtils.makeSafeJoin(mimirChildren.head, mimirChildren.tail.head)._1
             case GProM_JNA.GProMJoinType.GProM_JOIN_INNER => Join(mimirChildren.head, mimirChildren.tail.head)
             case _ => throw new Exception("Translation Not Yet Implemented '"+joinOperator+"'") 
           }
           case x => joinOperator.joinType match {
+            //case GProM_JNA.GProMJoinType.GProM_JOIN_INNER => Select(translateGProMExpressionToMimirExpression(gpChildren, x), OperatorUtils.makeSafeJoin(mimirChildren.head, mimirChildren.tail.head)._1)
+            //case GProM_JNA.GProMJoinType.GProM_JOIN_LEFT_OUTER => OperatorUtils.makeSafeLeftOuterJoin(mimirChildren.head, mimirChildren.tail.head, translateGProMExpressionToMimirExpression(gpChildren, x))._1
             case GProM_JNA.GProMJoinType.GProM_JOIN_INNER => Select(translateGProMExpressionToMimirExpression(gpChildren, x), Join(mimirChildren.head, mimirChildren.tail.head))
             case GProM_JNA.GProMJoinType.GProM_JOIN_LEFT_OUTER => LeftOuterJoin(mimirChildren.head, mimirChildren.tail.head, translateGProMExpressionToMimirExpression(gpChildren, x))
             case _ => throw new Exception("Translation Not Yet Implemented '"+joinOperator+"'") 
@@ -100,7 +123,15 @@ object OperatorTranslation extends LazyLogging {
       }
       case projectionOperator : GProMProjectionOperator => {
         val projExpressions = gpromListToScalaList(projectionOperator.projExprs).map(projExpr => translateGProMExpressionToMimirExpression(gpChildren, projExpr))
-        Project(mimirOpSchema.unzip._1.zip(projExpressions).map(nameExpr => ProjectArg(nameExpr._1,nameExpr._2)), mimirChildren.head)
+        //TODO: there appears to be a bug in gprom where it is adding an extra schema element to a projection on top of an aggregate
+        //      this is a hack to work around it for now, but we need to get this fixed in gprom
+        val newProjExprsHack = if(mimirOpSchema.length != projExpressions.length){
+          val badidx = mimirOpSchema.indexWhere(_._1.matches("MIMIR_COL_DET_MIMIR_COL_DET.+"))
+          projExpressions.zipWithIndex.foldLeft(Seq[Expression]())((init, peIdx) => {
+            if(peIdx._2 == badidx) init :+ IntPrimitive(1) :+ peIdx._1 else init :+ peIdx._1 
+          })
+        } else projExpressions
+        Project(mimirOpSchema.unzip._1.zip(newProjExprsHack).map(nameExpr => ProjectArg(nameExpr._1,nameExpr._2)), mimirChildren.head)
       }
       case provenanceComputation : GProMProvenanceComputation => { 
         ProvenanceOf(mimirChildren.head) 
@@ -280,9 +311,12 @@ object OperatorTranslation extends LazyLogging {
       	translateGProMExpressionToMimirExpression(ctxOpers, orderExpr.expr)
       }
       case rowNumExpr : GProMRowNumExpr => {
-        ctxOpers.map(oper => extractProvFromGProMQueryOperatorNode(oper, translateGProMSchemaToMimirSchema(oper),gpromListToScalaList(oper.op.inputs).map(_.asInstanceOf[GProMQueryOperatorNode]))) match {
-          case Seq() => throw new Exception("Error: no rowid in context:")
-          case x => x.head.head._2.expr
+        ctxOpers.map(oper => extractProvFromGProMQueryOperatorNode(oper, translateGProMSchemaToMimirSchema(oper),gpromListToScalaList(oper.op.inputs).map(_.asInstanceOf[GProMQueryOperatorNode]))).flatten match {
+          case Seq() => {
+            logger.error(s"Error: no rowid in context: ${ctxOpers.mkString("\n----------------\n")}")
+            Var(Provenance.rowidColnameBase)
+          }
+          case x => x.head._2.expr
         }
       }
       case sQLParameter : GProMSQLParameter => {
@@ -466,16 +500,33 @@ object OperatorTranslation extends LazyLogging {
 			    case Seq() => null
 			    case x => new GProMNode.ByReference(createDefaultGProMAggrPropertiesMap("AGG", groupBy.map(_.name)).getPointer)
 			  }
-			  val gpromAggrs = scalaListToGProMList(agggregates.map(aggr => translateMimirExpressionToGProMStructure(mimirOperator.children, 
-			      if(aggr.distinct)Function("DISTINCT", Seq(Function(aggr.function, aggr.args)))
-			      else Function(aggr.function, aggr.args)) match {
-			    case gpFunc:GProMFunctionCall => {
-			      gpFunc.isAgg = 1
-			      gpFunc.write()
-			      gpFunc
-			    }
-			    case x => x
-			  } ))
+			  val gpromAggrs = scalaListToGProMList(agggregates.map(aggr => 
+			    if(aggr.distinct){
+			      val gpromExprList = scalaListToGProMList(Seq(
+		          translateMimirExpressionToGProMStructure(mimirOperator.children, 
+    			      Function(aggr.function, aggr.args)) match {
+        			    case gpFunc:GProMFunctionCall => {
+        			      gpFunc.isAgg = 1
+        			      gpFunc.write()
+        			      gpFunc
+        			    }
+        			    case x => x
+        			  }))
+            val gpromFunc = new GProMFunctionCall.ByValue(GProM_JNA.GProMNodeTag.GProM_T_FunctionCall, "DISTINCT", gpromExprList, 1)
+            gpromFunc
+  			  }
+  			  else{
+  			    translateMimirExpressionToGProMStructure(mimirOperator.children, 
+  			      Function(aggr.function, aggr.args)) match {
+      			    case gpFunc:GProMFunctionCall => {
+      			      gpFunc.isAgg = 1
+      			      gpFunc.write()
+      			      gpFunc
+      			    }
+      			    case x => x
+      			  }
+  			  }
+			   ))
 			  val gpromGroupBy = scalaListToGProMList(groupBy.map(groupByCol => translateMimirExpressionToGProMStructure(mimirOperator.children, groupByCol)))
         val gqo = buildGProMOp(GProM_JNA.GProMNodeTag.GProM_T_AggregationOperator, gpChildren, toQoScm, Seq(), Seq(), gqoPropsNode)
 			  val aggOp = new GProMAggregationOperator.ByValue(gqo, gpromAggrs, gpromGroupBy)
@@ -539,10 +590,14 @@ object OperatorTranslation extends LazyLogging {
        gpChildren.head
       }
       case HardTable(schema, data) => {
-        val toQoScm = translateMimirSchemaToGProMSchema("HARD_TABLE", mimirOpSchema)
+        val htSchema = mimirOpSchema.filterNot(sche => sche._1.equals("ROWID") || sche._1.equals(Provenance.rowidColnameBase)) :+(Provenance.rowidColnameBase, TRowId())
+        val htData = if(mimirOpSchema.map(_._1).contains(Provenance.rowidColnameBase)) {
+          data.zipWithIndex.map(row => scalaListToGProMList(row._1.map(cell => translateMimirExpressionToGProMStructure(mimirOperator.children,cell))))
+        } else data.zipWithIndex.map(row => scalaListToGProMList(row._1.map(cell => translateMimirExpressionToGProMStructure(mimirOperator.children,cell)):+translateMimirExpressionToGProMStructure(mimirOperator.children,RowIdPrimitive((row._2).toString()))))
+        val toQoScm = translateMimirSchemaToGProMSchema("HARD_TABLE", htSchema)
 			  //val gqoProps = createDefaultGProMTablePropertiesMap("HARD_TABLE", Seq(Provenance.rowidColnameBase))
         val gqo = buildGProMOp(GProM_JNA.GProMNodeTag.GProM_T_ConstRelOperator, gpChildren, toQoScm, Seq(), Seq(), null)//new GProMNode.ByReference(gqoProps.getPointer))
-			  new GProMConstRelOperator.ByValue(gqo, scalaListToGProMList(data.zipWithIndex.map(row => scalaListToGProMList(row._1.map(cell => translateMimirExpressionToGProMStructure(mimirOperator.children,cell)):+translateMimirExpressionToGProMStructure(mimirOperator.children,RowIdPrimitive((row._2).toString()))))))
+			  new GProMConstRelOperator.ByValue(gqo, scalaListToGProMList(htData))
       }
 			case Sort(sortCols, src) => {
 			  val toQoScm = translateMimirSchemaToGProMSchema("ORDER", mimirOpSchema)
@@ -750,6 +805,18 @@ object OperatorTranslation extends LazyLogging {
     gphashmap
   }
   
+  def operatorOptimizations: Seq[OperatorOptimization] =
+    Seq(
+      ProjectRedundantColumns,
+      InlineProjections,
+      PushdownSelections,
+      new PropagateEmptyViews(db.typechecker, db.aggregates),
+      PropagateConditions,
+      new OptimizeExpressions(db.compiler.optimize(_:Expression)),
+      PartitionUncertainJoins,
+      new PullUpUnions(db.typechecker)
+    )
+  
    def optimizeWithGProM(oper:Operator) : Operator = {
     org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized{
       //db.backend.asInstanceOf[mimir.sql.GProMBackend].metadataLookupPlugin.setOper(oper)
@@ -778,13 +845,13 @@ object OperatorTranslation extends LazyLogging {
    def compileProvenanceWithGProM(oper:Operator) : (Operator, Seq[String])  = {
     org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized{
       //db.backend.asInstanceOf[mimir.sql.GProMBackend].metadataLookupPlugin.setOper(oper)
-        val opOp = db.compiler.optimize(oper)
+        val opOp = /*Optimizer.optimize(oper, operatorOptimizations)*/db.compiler.optimize(oper)
         val memctx = GProMWrapper.inst.gpromCreateMemContext()
         //val memctxq = GProMWrapper.inst.createMemContextName("QUERY_CONTEXT")
         val gpromNode = scalaListToGProMList(Seq(mimirOperatorToGProMOperator(ProvenanceOf(opOp))))
         gpromNode.write()
         val gpNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
-        logger.debug("------------------------------------------------")
+        logger.debug("---------------gprom pre-prov-------------------")
         logger.debug(gpNodeStr)
         logger.debug("------------------------------------------------")
         val provGpromNode = GProMWrapper.inst.provRewriteOperator(gpromNode.getPointer)
@@ -804,7 +871,7 @@ object OperatorTranslation extends LazyLogging {
         //GProMWrapper.inst.gpromFreeMemContext(memctxq)
         GProMWrapper.inst.gpromFreeMemContext(memctx)
         val (opRet, provCols) = provenanceFromRecover(opOut)
-        opOut = db.compiler.optimize(opRet)
+        opOut = /*Optimizer.optimize(opRet, operatorOptimizations)*/db.compiler.optimize(opRet)
         logger.debug("--------------mimir post recover prov----------------")
         logger.debug(opRet.toString())
         logger.debug("-----------------------------------------------------")
@@ -821,10 +888,11 @@ object OperatorTranslation extends LazyLogging {
         //db.backend.asInstanceOf[mimir.sql.GProMBackend].metadataLookupPlugin.setOper(oper)
         val memctx = GProMWrapper.inst.gpromCreateMemContext()
         //val memctxq = GProMWrapper.inst.createMemContextName("QUERY_CONTEXT")
+        //val opOp = /*Optimizer.optimize(oper, operatorOptimizations)*/db.compiler.optimize(oper)
         val gpromNode = scalaListToGProMList(Seq(mimirOperatorToGProMOperator(oper)))
         gpromNode.write()
         val gpNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
-        logger.debug("------------------------------------------------")
+        logger.debug("---------------gprom pre-taint------------------")
         logger.debug(gpNodeStr)
         logger.debug("------------------------------------------------")
         //val optimizedGpromNode = GProMWrapper.inst.optimizeOperatorModel(gpromNode.getPointer)
@@ -845,8 +913,10 @@ object OperatorTranslation extends LazyLogging {
         GProMWrapper.inst.gpromFreeMemContext(memctx)
         val (opRet, colTaint, rowTaint) = taintFromRecover(opOut)
         //opOut = db.compiler.optimize(opRet)
-        opOut = db.compiler.optimize(opRet)
-        
+        logger.debug("--------mimir post recover taint pre-opt--------")
+        logger.debug(opRet.toString())
+        opOut = /*Optimizer.optimize(opRet, operatorOptimizations)*/db.compiler.optimize(opRet)
+        opOut = fixJoins(opOut)
         logger.debug("------------mimir post recover taint------------")
         logger.debug(opOut.toString())
         logger.debug("--------------------taint-----------------------")
@@ -859,7 +929,7 @@ object OperatorTranslation extends LazyLogging {
     }
   }
   
-   
+  //doesn't work 
   /** combine gprom provenance and taint compilation into one method.
   * combining these steps saves a back and forth translation 
   * of the operator tree to/from gprom
@@ -924,6 +994,22 @@ object OperatorTranslation extends LazyLogging {
         (gbe.name, Var("PROV_AGG_" + gbe.name.replaceAll("_", "__")))
       }):_*)
       case x => x.recur(fixProvAgg(_))
+    }
+  }
+  
+  def fixJoins(oper:Operator):Operator = {
+    oper match {
+      case loj@LeftOuterJoin(lhs, rhs, cond) => {
+        if(lhs.columnNames.contains("MIMIR_COL_DET_R") && rhs.columnNames.contains("MIMIR_COL_DET_R"))
+          LeftOuterJoin(lhs.rename(("MIMIR_COL_DET_R","MIMIR_COL_DET_R2")), rhs, cond)
+        else loj
+      }
+      case join@Join(lhs, rhs) => {
+        if(lhs.columnNames.contains("MIMIR_COL_DET_R") && rhs.columnNames.contains("MIMIR_COL_DET_R"))
+          Join(lhs.rename(("MIMIR_COL_DET_R","MIMIR_COL_DET_R2")), rhs)
+        else join
+      }
+      case _ => oper.recur(fixJoins)
     }
   }
   

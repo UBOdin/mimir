@@ -22,6 +22,7 @@ import ch.qos.logback.classic.{Level, Logger}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import net.sf.jsqlparser.statement.Statement
 import mimir.serialization.Json
+import mimir.util.LoggerUtils
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -126,14 +127,15 @@ object MimirVizier extends LazyLogging {
     vistrailsQueryMimir("SELECT * FROM LENS_REPAIR_KEY1915024710", true, false) 
     vistrailsQueryMimir("SELECT * FROM LENS_COMMENT2063309830", true, false) 
     vistrailsQueryMimir("SELECT * FROM LENS_MISSING_KEY731940496", true, false) 
-    vistrailsQueryMimir("SELECT * FROM LENS_PICKER502036449", true, false) 
-    vistrailsQueryMimir("SELECT * FROM LENS_GEOCODE97197618", true, false) */
+    vistrailsQueryMimir("SELECT * FROM LENS_PICKER502036449", true, false) */
+    //vistrailsQueryMimir("SELECT * FROM LENS_GEOCODE97197618", true, false) 
     
-    //explainCell("SELECT * FROM LENS_MISSING_VALUE1225222496", 1, "3" )
-    //explainCell("SELECT * FROM LENS_REPAIR_KEY1915024710", 1, "2" ) 
-    /*explainCell("SELECT * FROM LENS_COMMENT2063309830", 3, "2" ) 
-    explainCell("SELECT * FROM LENS_PICKER502036449", 3, "3" ) 
-    explainCell("SELECT * FROM LENS_GEOCODE97197618", 4, "4" ) */
+    /*explainCell("SELECT * FROM LENS_MISSING_VALUE1225222496", 1, "3" )
+    explainCell("SELECT * FROM LENS_REPAIR_KEY1915024710", 1, "2" ) 
+    explainCell("SELECT * FROM LENS_COMMENT2063309830", 3, "2" ) 
+    explainCell("SELECT * FROM LENS_PICKER502036449", 3, "3" ) */
+    //explainCell("SELECT * FROM LENS_GEOCODE97197618", 4, "4" ) 
+    //explainCell("SELECT * FROM LENS_REPAIR_KEY1915024710", 1, "1" ) 
      
     
     
