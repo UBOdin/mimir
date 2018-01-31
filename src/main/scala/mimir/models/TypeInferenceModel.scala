@@ -150,19 +150,49 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
 
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
     votes(idx).toList.map( x => (TypePrimitive(x._1), x._2)) ++ Seq( (TypePrimitive(TString()), defaultFrac) )
+  
+  def feedback(idx: Int, args:Seq[PrimitiveValue], v: PrimitiveValue): Unit =
+  {
+    if(v.isInstanceOf[TypePrimitive]){
+      setFeedback(idx, args, v)
+    } else{
+      throw new ModelException(s"Invalid vhoice for $name: $v")
+    }
+  }
+  
+  def isAcknowledged(idx: Int, args: Seq[mimir.algebra.PrimitiveValue]): Boolean =
+    isPerfectGuess(args(0).asInt) || (getFeedback(idx, args)!= None)
   def isPerfectGuess(idx: Int): Boolean =
   {
     voteList(idx).map( _._2 ).max >= totalVotes(idx)
   }
-
-  override def isAcknowledged(idx: Int, args: Seq[PrimitiveValue]): Boolean =
-  {
-    super.isAcknowledged(idx, args) || isPerfectGuess(idx)
+  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]): String =
+    args(0).asString
+  def argTypes(idx: Int): Seq[Type] =
+    Seq(TInt())
+  def hintTypes(idx: Int): Seq[Type] =
+    Seq()
+    
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Double = {
+    val column = args(0).asInt
+    getFeedback(idx, args) match {
+      case None => {
+        val (guess, guessVotes) = voteList(column).maxBy(rankFn _ )
+        val defaultPct = (defaultFrac * 100).toInt
+        val guessPct = ((guessVotes / totalVotes(column))*100).toInt
+        if (guessPct > defaultPct)
+          guessVotes / totalVotes(column)
+        else
+          defaultFrac
+      }
+      case Some(t) => 1.0
+    }
   }
   
-  
-  //This progressive training iterates itself upon every ping of a thread, creating a new model to associate
-  //in the model manager.
+  /*
+  * This progressive training iterates itself based on execution operated by a separate thread spun from ModelManager,
+  * creating a new model to associate in the Model Manager.
+  */
   var startSample = 1000
   var nextSample = 2000
   var total = 0
