@@ -29,7 +29,7 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
   @transient var db: Database = null
   
   def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : String = {
-    args(0).asString
+    s"${idx}_${args(0).asString}"
   }
   
    def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = {
@@ -54,14 +54,14 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
             val state = args(4).asString
             val geocoder = args(5).asString
             val (url, latPath, lonPath) = geocoder match {
-              case "GOOGLE" => (s"https://maps.googleapis.com/maps/api/geocode/json?address=${s"$houseNumber+${streetName.replaceAll(" ", "+")},+${city.replaceAll(" ", "+")},+$state".replaceAll("\\+\\+", "+")}&key=AIzaSyAKc9sTF-pVezJY8-Dkuvw07v1tdYIKGHk", ".results[0].geometry.location.lat", ".results[0].geometry.location.lng")
+              case "GOOGLE" => (s"https://maps.googleapis.com/maps/api/geocode/json?address=${s"${houseNumber.replaceAll(" ", "+")}+${streetName.replaceAll(" ", "+")},+${city.replaceAll(" ", "+")},+$state".replaceAll("\\+\\+", "+")}&key=AIzaSyAKc9sTF-pVezJY8-Dkuvw07v1tdYIKGHk", ".results[0].geometry.location.lat", ".results[0].geometry.location.lng")
               case "OSM" | _ => (s"http://52.0.26.255/?format=json&street=$houseNumber $streetName&city=$city&state=$state", "[0].lat", "[0].lon")
             }
             try {
                 val geoRes = HTTPUtils.getJson(url)
-                val glat = JsonUtils.seekPath( geoRes, latPath).toString().replaceAll("\"", "").toDouble
-                val glon = JsonUtils.seekPath( geoRes, lonPath).toString().replaceAll("\"", "").toDouble
-                val geocacheEntry = (FloatPrimitive(glat), FloatPrimitive(glon))
+                val glat = "%.7f".format(JsonUtils.seekPath( geoRes, latPath).toString().replaceAll("\"", "").toDouble)
+                val glon = "%.7f".format(JsonUtils.seekPath( geoRes, lonPath).toString().replaceAll("\"", "").toDouble)
+                val geocacheEntry = (FloatPrimitive(glat.toDouble), FloatPrimitive(glon.toDouble))
                 setCache(0, args, hints, geocacheEntry._1)
                 setCache(1, args, hints, geocacheEntry._2)
                 geocacheEntry.productElement(idx).asInstanceOf[FloatPrimitive]                
