@@ -9,6 +9,7 @@ import mimir.ctables._
 import net.sf.jsqlparser.statement.select.Select
 import mimir.exec.result.Row
 import mimir.util.JDBCUtils
+import mimir.sql.RAToSql
 
 object MissingKeyLens {
   def create(
@@ -50,14 +51,7 @@ object MissingKeyLens {
       case somethingElse => throw new RAException(s"Invalid argument ($somethingElse) for MissingKeyLens $name")
     }
     val rSch = schema.filter(p => !keys.contains(p))
-    val seriesTableName = name.toUpperCase()+"_SERIES"
-    val keysTableName = name.toUpperCase()+"_KEYS"
-    val missingKeysTableName = name.toUpperCase()+"_MISSING_KEYS"
-    val allTables = db.getAllTables()
-    if(!allTables.contains(seriesTableName)){
-      val createSeriesTableSql = s"CREATE TABLE $seriesTableName(${keys.map(kt => kt._1 +" "+ kt._2.toString()).mkString(",")})"
-      db.update(db.stmt(createSeriesTableSql))
-      val seriesTableMinMaxOper = Project(
+    val allKeysHT = db.query(Project(
         keys.map { col => Seq(
             ProjectArg("MIN", Var(col._1+"_MIN")), 
             ProjectArg("MAX", Var(col._1+"_MAX")))
@@ -69,75 +63,45 @@ object MissingKeyLens {
             }.flatten,
           query
         )
-       )
-      db.query(seriesTableMinMaxOper)(minMaxForSeries => {
+       ))(minMaxForSeries => {
         val row = minMaxForSeries.next()
         val minMax = (
           row(0).asDouble.toLong,
           row(1).asDouble.toLong
         )
-        db.backend.fastUpdateBatch(s"INSERT INTO $seriesTableName VALUES(?)", (minMax._1 to minMax._2).toSeq.map( i => Seq(IntPrimitive(i))))
+        HardTable(keys.map(key => (s"${key._1}",key._2)), (minMax._1 to minMax._2).toSeq.map( i => Seq(IntPrimitive(i))))
       })
-    }
-    if(!allTables.contains(keysTableName)){
-      val projArgsKeys =  
-        keys.map(_._1).map( col => {
-            ProjectArg(col, Var(col))
-        })
-      var keysOper : Operator = Project(projArgsKeys, query)             
-      println(keysOper)
-
-      val createKeysTableSql = s"CREATE TABLE $keysTableName(${keys.map(kt => kt._1 +" "+ kt._2.toString()).mkString(",")})"
-      db.update(db.stmt(createKeysTableSql))
-      val results = 
-        db.query(keysOper) { _.map { _.tuple }.toIndexedSeq }
-     
-      db.backend.fastUpdateBatch(s"INSERT INTO $keysTableName VALUES(${keys.map(kt => "?").mkString(",")})", results)
-    }
-    if(!allTables.contains(missingKeysTableName)){
-      val lTalebName = seriesTableName
-      val rTalebName = keysTableName
-      val projArgsLeft =  
-        keys.map(_._1).map( col => {
-            ProjectArg("lft_"+col, Var(col))
-        })
-      val projArgsRight =  
-        keys.map(_._1).map( col => {
-            ProjectArg("rght_"+col, Var(col))
-        })
-      var missingKeysOper : Operator = mimir.algebra.Select( IsNullExpression(Var("rght_"+keys.head._1)),
-                  LeftOuterJoin(
-                    Project(projArgsLeft, Table(lTalebName,"lft",keys,List())),
-                    Project(projArgsRight, Table(rTalebName,"rght",keys,List())), 
-                    Comparison(Cmp.Eq, Var("rght_"+keys.head._1), Var("lft_"+keys.head._1))
-                  ))
-      val sql = db.ra.convert(missingKeysOper)
-      val results = {
-        val resSet = db.backend.execute(sql)
-        var theResults = Seq[Seq[PrimitiveValue]]()
-          while(resSet.next()){
-              theResults = theResults.union( Seq(keys.zipWithIndex.map( key => {
-                JDBCUtils.convertField(key._1._2, resSet, key._2+1)
-              })))
-          }
-        theResults.iterator
-      }
-      val createMissingKeysTableSql = s"CREATE TABLE $missingKeysTableName(${keys.map(kt => kt._1 +" "+ kt._2.toString()).mkString(",")})"
-      db.update(db.stmt(createMissingKeysTableSql))
-      db.backend.fastUpdateBatch(s"INSERT INTO $missingKeysTableName VALUES(${keys.map(kt => "?").mkString(",")})", results)
     
+    val projKeys = Project(keys.map(key => (s"rght_${key._1}",key._1)).map( col => {
+            ProjectArg(col._1, Var(col._2))
+        }), query)             
+      
+
+    val missingKeysLookup = mimir.algebra.Select( IsNullExpression(Var("rght_"+keys.head._1)),
+                  LeftOuterJoin(
+                    allKeysHT,
+                    projKeys,
+                    Comparison(Cmp.Eq, Var("rght_"+keys.head._1), Var(s"${keys.head._1}"))
+                  ))
+    val rs = db.backend.execute(db.ra.convert(missingKeysLookup))
+    var htData = Seq[Seq[PrimitiveValue]]()
+    while(rs.next){
+      htData = htData :+ keys.zipWithIndex.map(col => IntPrimitive(rs.getInt(col._2+1))) 
     }
+    
+    val missingKeys = HardTable(keys, htData)
+    
     val colsTypes = keys.unzip
     val model = new MissingKeyModel(name+":"+ keys.unzip._1.mkString("_"),colsTypes._1, colsTypes._2.union(rSch.map(sche => sche._2)))
     
     val projArgs =  
         keys.map(_._1).zipWithIndex.map( col => {
             ProjectArg(col._1, VGTerm(model.name, col._2, Seq(RowIdVar()), Seq(Var(col._1))))
-        }).union(rSch.map(_._1).zipWithIndex.map( col => {
+        }).union(rSch.map(_._1).zipWithIndex.map( col => {             
             ProjectArg(col._1,  VGTerm(model.name, keys.length+col._2, Seq(RowIdVar()), Seq(NullPrimitive())))
         }))
     
-    val missingKeysOper = Project(projArgs, Table(missingKeysTableName,missingKeysTableName,keys,List()))
+    val missingKeysOper = Project(projArgs, missingKeys)
     val allOrMissingOper = missingOnly match {
       case true => missingKeysOper
       case _ => Union( missingKeysOper,  query )
