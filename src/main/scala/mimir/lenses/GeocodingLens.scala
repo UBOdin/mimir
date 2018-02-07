@@ -129,10 +129,11 @@ object GeocodingLens {
     }
     
     val inCols = Seq(houseNumColumn, streetColumn, cityColumn, stateColumn, geocoder)
-    val (inVars, inExprs) = inCols.map(entry => entry match {
+    val varsExprs = inCols.map(entry => entry match {
       case v@Var(_) => Seq((Some(v), None) )
       case x => Seq((None, Some(x)))
     }).flatten.unzip
+    val (inVars, inExprs) = (varsExprs._1.flatMap(el => el), varsExprs._2.flatMap(el => el))
     
     val inColsExprs = s"${inVars.mkString("_")}_${inExprs.mkString.hashCode()}"
     

@@ -384,7 +384,7 @@ object MimirVizier extends LazyLogging {
           case latLonFieldsRegex(latField, lonField) => Seq(latField, lonField)  
           case x => throw new Exception("bad fields format: should be latField, lonField")
         }
-        val orderFieldsRegex = "\\s*(?:[a-zA-Z0-9_.]+\\s*,\\s*)+[a-zA-Z0-9_.]+\\s*(?:DESC)?\\s*".r
+        val orderFieldsRegex = "\\s*(?:[a-zA-Z0-9_.]+\\s*,\\s*)?+[a-zA-Z0-9_.]+\\s*(?:DESC)?\\s*".r
         val orderBy = orderByFields.toUpperCase() match {
           case orderFieldsRegex() => "ORDER BY " + orderByFields.toUpperCase()  
           case x => ""
