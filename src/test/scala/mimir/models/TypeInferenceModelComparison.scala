@@ -15,7 +15,7 @@ with BeforeAll
   sequential
   def beforeAll = 
   {
-    update("CREATE TABLE Progressive_update(Category1 float, Category2 string)")
+    update("CREATE TABLE Progressive_update(Category1 string, Category2 string)")
     loadCSV("Progressive_update", new File("test/data/InferenceModelProgressiveSanity.csv"))
   }
 
@@ -45,24 +45,26 @@ with BeforeAll
       val model = new TypeInferenceModel("PROGRESSIVE_UPDATE:CATEGORY1",Array("CATEGORY1"), 0.5, 1000, db.table("Progressive_update"))
       model.train(db,table("PROGRESSIVE_UPDATE"))
       println("Original method completion time: " + Calendar.getInstance.getTime + "\n" + "And guessed: " + model.getDomain(0, Seq(IntPrimitive(0)), Seq()))
-      guess(model) must be equalTo(TFloat())
+      guess(model) must be equalTo(TInt())
     }
     
     //TODO: Add test that cycles and take progress, outputs the sequence
     "Determine the subsequent values" >>
     {
-      //var progressiveModelResults = Seq( Seq( (Int, Seq( (TypePrimitive, Double) ), Calendar.DATE ) ) )
+      var progressiveModelResults = Seq( Seq[Any]() )
       var testerSeq = Seq[String]()
-      val model = new TypeInferenceModel("PROGRESSIVE_UPDATE:CATEGORY2",Array("CATEGORY2"),0.5,1000,db.table("Progressive_update"))
+      val model = new TypeInferenceModel("PROGRESSIVE_UPDATE:CATEGORY1",Array("CATEGORY1"),0.5,1000,db.table("Progressive_update"))
       db.models.persist(model)
       while(model.isCompleted() == false){
-        //progressiveModelResults:+Seq(model.getNextSample(), model.getDomain(0, Seq(IntPrimitive(0L)), Seq()),Calendar.getInstance.getTime)
+        progressiveModelResults=  progressiveModelResults:+Seq(model.getNextSample(), model.getDomain(0, Seq(IntPrimitive(0L)), Seq()),Calendar.getInstance.getTime)
         testerSeq = testerSeq:+"String"
         Thread.sleep(3000)
       }
       //progressiveModelResults.foreach(println)
-      for(stringer <- testerSeq) println(stringer)
-      guess(model) must be equalTo(TString())
+      //lsdkfjdlsk
+      //for(stringer <- testerSeq) println(stringer)
+      for(item <- progressiveModelResults) println(item)
+      guess(model) must be equalTo(TFloat())
     }
   }
   
