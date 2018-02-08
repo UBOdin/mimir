@@ -13,7 +13,6 @@ import mimir.views.ViewAnnotation
 import mimir.ctables.CTPercolator
 import mimir.serialization.Json
 import mimir.algebra.gprom.TranslationUtils._
-import com.sun.javafx.binding.SelectBinding.AsString
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.optimizer.OperatorOptimization
 import mimir.optimizer.operator.ProjectRedundantColumns
@@ -313,7 +312,7 @@ object OperatorTranslation extends LazyLogging {
       case rowNumExpr : GProMRowNumExpr => {
         ctxOpers.map(oper => extractProvFromGProMQueryOperatorNode(oper, translateGProMSchemaToMimirSchema(oper),gpromListToScalaList(oper.op.inputs).map(_.asInstanceOf[GProMQueryOperatorNode]))).flatten match {
           case Seq() => {
-            logger.error(s"Error: no rowid in context: ${ctxOpers.mkString("\n----------------\n")}")
+            logger.debug(s"Error: no rowid in context: ${ctxOpers.mkString("\n----------------\n")}")
             Var(Provenance.rowidColnameBase)
           }
           case x => x.head._2.expr
