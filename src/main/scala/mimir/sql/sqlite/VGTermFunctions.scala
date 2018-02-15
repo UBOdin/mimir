@@ -6,6 +6,10 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
 import mimir.ctables.vgterm._
 import mimir.Database
+import mimir.ctables.RepairFromList
+import mimir.models.Model
+import mimir.models.FiniteDiscreteDomain
+import mimir.ctables.RepairByType
 
 class BestGuessVGTerm(db:Database)
   extends MimirFunction
@@ -132,6 +136,48 @@ class AcknowledgedVGTerm(db:Database)
   }
 }
 
+class DomainVGTerm(db:Database)
+  extends MimirFunction
+  with LazyLogging
+{
+  override def xFunc(): Unit = 
+  {
+    try {
+      val modelName = value_text(0).toUpperCase
+      val idx = value_int(1)
+      val seed = value_int(2)
+
+      val model = db.models.get(modelName)
+
+      val argList =
+        model.argTypes(idx).
+          zipWithIndex.
+          map( arg => value_mimir(arg._2+3, arg._1) )
+      val hintList = 
+        model.hintTypes(idx).
+          zipWithIndex.
+          map( arg => value_mimir(arg._2+argList.length+3, arg._1) )
+
+      val domain = model match {
+        case finite:( Model with FiniteDiscreteDomain ) =>
+          RepairFromList(finite.getDomain(idx, argList, hintList))
+        case _ => 
+          RepairByType(model.varType(idx, argList.map(_.getType)))
+      }
+
+      logger.trace(s"$modelName;$idx: $argList -> $domain")
+
+      return_mimir(StringPrimitive(domain.toJSON))
+    } catch {
+      case e:Throwable => {
+        println(e)
+        e.printStackTrace
+        throw new SQLException("ERROR IN DOMAIN_VGTERM()", e)
+      }
+    }
+  }
+}
+
 object VGTermFunctions 
   extends LazyLogging
 {
@@ -139,6 +185,7 @@ object VGTermFunctions
   def bestGuessVGTermFn = "BEST_GUESS_VGTERM"
   def sampleVGTermFn = "SAMPLE_VGTERM"
   def acknowledgedVGTermFn = "ACKNOWLEDGED_VGTERM"
+  def domainVGTermFn = "DOMAIN_VGTERM"
 
   def register(db: Database, conn: java.sql.Connection): Unit =
   {
@@ -159,6 +206,12 @@ object VGTermFunctions
       acknowledgedVGTermFn, 
       (args) => { throw new RAException(s"Mimir Cannot Execute VGTerm Functions Internally: $acknowledgedVGTermFn:$args") },
       (_) => TBool()
+    )
+    org.sqlite.Function.create(conn, domainVGTermFn, new DomainVGTerm(db))
+    db.functions.register(
+      domainVGTermFn, 
+      (args) => { throw new RAException(s"Mimir Cannot Execute VGTerm Functions Internally: $domainVGTermFn:$args") },
+      (_) => TAny()
     )
   }
 
@@ -192,7 +245,13 @@ object VGTermFunctions
             )++
             args.map(specialize(_))
         )
-
+      case DomainDump(model, idx, args, hints) => 
+        Function(
+          domainVGTermFn,
+          Seq(StringPrimitive(model.name), IntPrimitive(idx))++
+            args.map(specialize(_))++
+            hints.map(specialize(_))
+        )
       case _ => e.recur(specialize(_))
     }
   }

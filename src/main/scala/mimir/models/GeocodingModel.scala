@@ -5,6 +5,8 @@ import scala.util.Random
 import mimir.algebra._
 import mimir.util._
 import mimir.Database
+import play.api.libs.json.JsObject
+import play.api.libs.json.JsArray
 
 /**
  * A model representing a key-repair choice.
@@ -13,17 +15,19 @@ import mimir.Database
  * The one argument is a value for the key.  
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
-@SerialVersionUID(1001L)
-class GeocodingModel(override val name: String, addrCols:Seq[Expression], source: Operator) 
+@SerialVersionUID(1002L)
+class GeocodingModel(override val name: String, addrCols:Seq[Expression], geocoder:String, source: Operator) 
   extends Model(name) 
   with Serializable
   with NeedsReconnectToDatabase
   with ModelCache
   with SourcedFeedback
+  with FiniteDiscreteDomain
 {
   
   
   val latlonLabel = Seq("Latitude", "Longitude")
+  val (bestGuessResultPathLat, bestGuessResultPathLon) = Map("GOOGLE" -> (".results[0].geometry.location.lat", ".results[0].geometry.location.lng"), "OSM" -> ("[0].lat", "[0].lon")).get(geocoder).get
   val geogoderLabel = Map("GOOGLE" -> "Google", "OSM" -> "Open Streets")
   
   @transient var db: Database = null
@@ -45,34 +49,38 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
     getFeedback(idx, args) match {
       case Some(v) => v.asInstanceOf[PrimitiveValue]
       case None => {
-        getCache(idx, args, hints) match {
-          case Some(v) => v.asInstanceOf[FloatPrimitive]
+        (getCache(idx, args, hints) match {
+          case Some(StringPrimitive(v)) => {
+            Some(v)
+          }
+          case Some(x) => None
           case None => {
             val houseNumber = args(1).asString
             val streetName = args(2).asString
             val city = args(3).asString
             val state = args(4).asString
-            val geocoder = args(5).asString
-            val (url, latPath, lonPath) = geocoder match {
-              case "GOOGLE" => (s"https://maps.googleapis.com/maps/api/geocode/json?address=${s"$houseNumber+${streetName.replaceAll(" ", "+")},+${city.replaceAll(" ", "+")},+$state".replaceAll("\\+\\+", "+")}&key=AIzaSyAKc9sTF-pVezJY8-Dkuvw07v1tdYIKGHk", ".results[0].geometry.location.lat", ".results[0].geometry.location.lng")
-              case "OSM" | _ => (s"http://52.0.26.255/?format=json&street=$houseNumber $streetName&city=$city&state=$state", "[0].lat", "[0].lon")
+            val url = geocoder match {
+              case "GOOGLE" => (s"https://maps.googleapis.com/maps/api/geocode/json?address=${s"$houseNumber+${streetName.replaceAll(" ", "+")},+${city.replaceAll(" ", "+")},+$state".replaceAll("\\+\\+", "+")}&key=AIzaSyAKc9sTF-pVezJY8-Dkuvw07v1tdYIKGHk")
+              case "OSM" | _ => (s"http://52.0.26.255/?format=json&street=$houseNumber $streetName&city=$city&state=$state")
             }
             try {
-                val geoRes = HTTPUtils.getJson(url)
-                val glat = JsonUtils.seekPath( geoRes, latPath).toString().replaceAll("\"", "").toDouble
-                val glon = JsonUtils.seekPath( geoRes, lonPath).toString().replaceAll("\"", "").toDouble
-                val geocacheEntry = (FloatPrimitive(glat), FloatPrimitive(glon))
-                setCache(0, args, hints, geocacheEntry._1)
-                setCache(1, args, hints, geocacheEntry._2)
-                geocacheEntry.productElement(idx).asInstanceOf[FloatPrimitive]                
+              val geoRes = HTTPUtils.get(url) 
+              setCache(0, args, hints, StringPrimitive(geoRes))
+              Some(geoRes)
             } catch {
                 case ioe: Throwable =>  {
                   println(ioe.toString())
-                  NullPrimitive()
+                  None
                 }
             }
           }
+        }) match {
+          case Some(jsonStr) => jsonToPrimitiveValue(idx, jsonStr)
+          case None => NullPrimitive()
         }
+        
+          
+        
       }
       
     }
@@ -92,8 +100,10 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
         s"${getReasonWho(idx,args)} told me that $houseNumber $streetName, $city, $state has ${latlonLabel(idx)} = ${v.asInstanceOf[PrimitiveValue]} on row $rowid"
       case None => 
         getCache(idx, args, hints) match {
-          case Some(v) =>
+          case Some(StringPrimitive(jsonStr)) => {
+            val v = jsonToPrimitiveValue(idx, jsonStr)
             s"I used a geocoder (${geogoderLabel(geocoder)}) to determine that $houseNumber $streetName, $city, $state has ${latlonLabel(idx)} = ${v.asInstanceOf[PrimitiveValue]} on row $rowid "
+          }
           case x =>
             s"The location of (${geogoderLabel(geocoder)}) to determine that $houseNumber $streetName, $city, $state is unknown"
         }
@@ -107,6 +117,29 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
   }
   def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq()
    
+  def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = 
+  {
+    getCache(idx, args, hints) match {
+          case Some(StringPrimitive(jsonStr)) => {
+            val geoJson = play.api.libs.json.Json.parse(jsonStr)
+            geocoder match {
+              case "GOOGLE" => {
+                val jsonresults = geoJson.as[JsObject].value("results").asInstanceOf[JsArray]
+                jsonresults.value.map(geoEntry => (
+                    FloatPrimitive(JsonUtils.seekPath( geoEntry, ".geometry.location."+(if(idx==0)"lat"else"lng")).toString().replaceAll("\"", "").toDouble), 
+                    1.0) )
+              }
+              case "OSM" => {
+                val jsonresults = geoJson.as[JsObject].value("results").asInstanceOf[JsArray]
+                jsonresults.value.map(geoEntry => (
+                    FloatPrimitive(JsonUtils.seekPath( geoEntry, if(idx==0)".lat"else".lon").toString().replaceAll("\"", "").toDouble), 
+                    JsonUtils.seekPath( geoEntry, "importance").toString().replaceAll("\"", "").toDouble) )
+              }
+            }
+          }
+    }
+  }
+  
   def reconnectToDatabase(db: Database) = { 
     this.db = db 
   }
@@ -122,4 +155,19 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], source
     }
   }
 
+  private def jsonToPrimitiveValue(idx:Int, jsonStr:String) : PrimitiveValue = {
+    try {
+      val geoJson = play.api.libs.json.Json.parse(jsonStr)
+      FloatPrimitive(idx match {
+        case 1 => JsonUtils.seekPath( geoJson, bestGuessResultPathLat).toString().replaceAll("\"", "").toDouble
+        case 2 => JsonUtils.seekPath( geoJson, bestGuessResultPathLon).toString().replaceAll("\"", "").toDouble
+        case x => throw new Exception(s"idx: $x is not valid for this geocoding model.")
+      })
+    }catch {
+        case ioe: Throwable =>  {
+          println(ioe.toString())
+          NullPrimitive()
+        }
+    }
+  }
 }
