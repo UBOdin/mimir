@@ -65,6 +65,12 @@ $> sbt assembly
 ...
 $> ./bin/mimir
 ```
+OR
+ [Install Docker](https://docs.docker.com/install/) and use the docker image:
+```
+$> docker run -i -t docker.mimirdb.info/mimir-core
+...
+```
 
 ## Hacking on Mimir
 
