@@ -270,7 +270,7 @@ dockerfile in docker := {
 			s"""curl -sL "https://github.com/sbt/sbt/releases/download/v0.13.15/sbt-0.13.15.tgz" | gunzip | tar -x -C ${userDataVolMountPoint}""",
 			s"chmod 0755 ${sbtPath}",
 			s"git clone https://github.com/UBOdin/mimir.git ${userDataVolMountPoint}mimir",
-			s"(cd ${userDataVolMountPoint}mimir; git checkout -b FixGProMMetadataLookup origin/FixGProMMetadataLookup; ${sbtPath} compile; ${sbtPath} compile)",
+			s"(cd ${userDataVolMountPoint}mimir; ${sbtPath} compile; ${sbtPath} compile)",
 			s"touch ${userDataVolMountPoint}initComplete",
 			"echo 'initialization complete...'",
 			s"(cd ${userDataVolMountPoint}mimir; git pull; ${sbtPath} run)",
