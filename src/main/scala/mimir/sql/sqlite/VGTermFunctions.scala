@@ -245,7 +245,7 @@ object VGTermFunctions
             )++
             args.map(specialize(_))
         )
-      case DomainDump(model, idx, args, hints) => 
+      case DomainDumper(model, idx, args, hints) => 
         Function(
           domainVGTermFn,
           Seq(StringPrimitive(model.name), IntPrimitive(idx))++

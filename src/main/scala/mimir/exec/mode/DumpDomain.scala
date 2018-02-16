@@ -11,6 +11,9 @@ import mimir.optimizer.operator._
 import mimir.exec._
 import mimir.exec.result._
 import mimir.util.ExperimentalOptions
+import mimir.ctables.vgterm.DomainDumper
+import mimir.models.Model
+import mimir.models.FiniteDiscreteDomain
 
 object DumpDomain
   extends CompileMode[ResultIterator]
@@ -144,11 +147,11 @@ object DumpDomain
     // In other words, best guesses that don't depend on which row we're
     // looking at (like the Type Inference or Schema Matching lenses)
     val mostlyDeterministicOper =
-      InlineVGTerms(oper, db)
+      DomainInlineVGTerms(oper, db)
 
     // Deal with the remaining VG-Terms.  
     if(db.backend.canHandleVGTerms){
-      // The best way to do this would be a database-specific "BestGuess" 
+      // The best way to do this would be a database-specific "DomainDump" 
       // UDF if it's available.
       return mostlyDeterministicOper
     } else {
@@ -158,4 +161,55 @@ object DumpDomain
 
   def wrap(db: Database, results: ResultIterator, query: Operator, meta: MetadataT): ResultIterator =
     results
+}
+
+object DomainInlineVGTerms {
+
+	def inline(e: Expression, db: Database): Expression =
+	{
+
+		e match {
+			case v @ VGTerm(model, idx, args, hints) => {
+				val simplifiedChildren = v.children.map(apply(_, db))
+				val ret = v.rebuild(simplifiedChildren)
+
+				if(
+					ret.args.forall(_.isInstanceOf[PrimitiveValue])
+					&& ret.hints.forall(_.isInstanceOf[PrimitiveValue])
+				) { 
+					val model = db.models.get(v.name)
+					val args = ret.args.map { _.asInstanceOf[PrimitiveValue] }
+					val hints = ret.args.map { _.asInstanceOf[PrimitiveValue] }
+
+					val domain = model match {
+            case finite:( Model with FiniteDiscreteDomain ) =>
+              RepairFromList(finite.getDomain(idx, args, hints))
+            case _ => 
+              RepairByType(model.varType(idx, args.map(_.getType)))
+          }
+          StringPrimitive(domain.toJSON)
+				} else { 
+					DomainDumper(
+						db.models.get(ret.name),
+						ret.idx,
+						ret.args,
+						ret.hints
+					)
+				}
+			}
+
+			case _ => e.recur(inline(_, db))
+		}
+	}
+
+	def apply(e: Expression, db: Database): Expression =
+	{
+		inline(e, db)
+	}
+
+	def apply(o: Operator, db: Database): Operator = 
+	{
+		o.recurExpressions(apply(_, db)).recur(apply(_, db))
+	}
+
 }
