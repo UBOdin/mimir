@@ -140,6 +140,7 @@ libraryDependencies ++= Seq(
   //////////////////////// Geotools ////////////////////////
   // Geospatial data transformations, Used by the CURE scenario
   "org.geotools"                  %   "gt-referencing"           % "16.2" exclude("javax.media", "jai_core"),
+  "org.geotools"                  %   "gt-referencing"           % "16.2" exclude("javax.media", "jai_core"),
   "org.geotools"                  %   "gt-epsg-hsql"             % "16.2" exclude("javax.media", "jai_core"),
 
   //////////////////////// JDBC Backends //////////////////////
