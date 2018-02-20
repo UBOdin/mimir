@@ -135,14 +135,12 @@ libraryDependencies ++= Seq(
   "net.sf.jung"                   %   "jung-algorithms"          % "2.0.1",
   "net.sf.jung"                   %   "jung-visualization"       % "2.0.1",
   "jgraph"                        %   "jgraph"                   % "5.13.0.0",
-  "javax.media" 		              %   "jai_core"                 % "1.1.3",  
-  //
+  
 
   //////////////////////// Geotools ////////////////////////
   // Geospatial data transformations, Used by the CURE scenario
-  "org.geotools"                  %   "gt-referencing"           % "16.2",
-  "org.geotools"                  %   "gt-referencing"           % "16.2",
-  "org.geotools"                  %   "gt-epsg-hsql"             % "16.2",
+  "org.geotools"                  %   "gt-referencing"           % "16.2" exclude("javax.media", "jai_core"),
+  "org.geotools"                  %   "gt-epsg-hsql"             % "16.2" exclude("javax.media", "jai_core"),
 
   //////////////////////// JDBC Backends //////////////////////
   "org.xerial"                    %   "sqlite-jdbc"              % "3.16.1",
