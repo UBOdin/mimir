@@ -91,6 +91,8 @@ resolvers += "Boundless" at "http://repo.boundlessgeo.com/main"
 resolvers += "MVNRepository" at "http://mvnrepository.com/artifact/"
 resolvers ++= Seq("snapshots", "releases").map(Resolver.sonatypeRepo)
 
+updateOptions := updateOptions.value.withGigahorse(false)
+
 libraryDependencies ++= Seq(
   ////////////////////// Command-Line Interface Utilities //////////////////////
   "org.rogach"                    %%  "scallop"                  % "0.9.5",
