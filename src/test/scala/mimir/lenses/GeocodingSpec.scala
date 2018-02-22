@@ -8,6 +8,9 @@ import mimir.test._
 import org.specs2.specification._
 import org.joda.time.DateTime
 import java.util.Locale
+import mimir.exec.mode.DumpDomain
+import play.api.libs.json.JsArray
+import play.api.libs.json.JsObject
 
 object GeocodingSpec 
   extends SQLTestSpecification("GeocodingTest") 
@@ -26,7 +29,7 @@ object GeocodingSpec
   }
   
   "The Geocoding Lens" should {
-
+     
     "Be able to sucessfully make web requests" >> {
       
       val result = query("""
@@ -110,6 +113,30 @@ object GeocodingSpec
       result(5)._4 must be equalTo false
       result(6)._3 must be equalTo false
       result(6)._4 must be equalTo false
+    }
+    
+    "Dump Domain" >> {
+      update("""
+        CREATE LENS GEO_LENS_DOMAIN_DUMP 
+          AS SELECT * FROM ADDR
+        WITH GEOCODE(HOUSE_NUMBER(STRNUMBER),STREET(STRNAME),CITY(CITY),STATE(STATE),GEOCODER(OSM))
+      """);
+      
+      val result = db.query(select("SELECT json_extract(LATITUDE,'$.values') AS DOMAIN, LATITUDE, LONGITUDE FROM GEO_LENS_DOMAIN_DUMP"), 
+          DumpDomain){ _.map { row => 
+        (
+          row("DOMAIN"), 
+          row("LATITUDE"), 
+          row("LONGITUDE"), 
+          row.isColDeterministic("LATITUDE"),
+          row.isColDeterministic("LONGITUDE"),
+          row.isDeterministic()
+        )
+      }.toList }.toList
+      
+      val json = play.api.libs.json.Json.parse(result(0)._1.asString)
+      val domainForRow = json.as[JsArray].value.map(jsVal => (jsVal.as[JsObject].value("choice").as[String], jsVal.as[JsObject].value("weight").as[Double]))
+      domainForRow must contain(("40.067628",0.1), ("41.9697061",0.1), ("41.9653349",0.1), ("42.070064",0.1), ("42.0146135",0.1), ("41.9666509",0.1), ("43.733105",0.1), ("43.786123",0.1), ("38.763583",0.1), ("43.773287",0.1))
     }
 
   }

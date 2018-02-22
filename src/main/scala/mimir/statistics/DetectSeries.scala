@@ -175,17 +175,21 @@ object DetectSeries
               .map { _.tuple }
               .sliding(3)
 
+              
           var sumError:Double   = 0.0
           var sumErrorSq:Double = 0.0
           var sumTot:Double     = 0.0
           
           val (actual, error) =
             rowWindow.flatMap { triple =>
-              val key_low  = triple(0)(0); val v_low  = triple(0)(1)
-              val key_test = triple(1)(0); val v_test = triple(1)(1)
-              val key_high = triple(2)(0); val v_high = triple(2)(1)
+              val row0 = triple.headOption.getOrElse(Seq(NullPrimitive(),NullPrimitive()))
+              val row1 = triple.tail.headOption.getOrElse(Seq(NullPrimitive(),NullPrimitive()))
+              val row2 = triple.tail.tail.headOption.getOrElse(Seq(NullPrimitive(),NullPrimitive()))
+              val key_low  = row0(0); val v_low  = row0(1)
+              val key_test = row1(0); val v_test = row1(1)
+              val key_high = row2(0); val v_high = row2(1)
 
-              if( triple.flatten.contains(NullPrimitive()) ){
+              if( Seq(row0,row1,row2).flatten.contains(NullPrimitive())  ){
                 None
               } else {
                 val scale = ratio(key_low, key_test, key_high)
