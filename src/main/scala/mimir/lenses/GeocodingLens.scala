@@ -29,11 +29,7 @@ object GeocodingLens {
     val houseNumColumn = args.flatMap {
       case Function("HOUSE_NUMBER", cols ) => 
         Some( cols.map { case col:Var => col 
-                         case sp@StringPrimitive(manVal) => try {
-                             ExpressionParser.expr(manVal) 
-                           } catch {
-                             case t: Throwable => sp
-                           }  
+                         case manVal:StringPrimitive => manVal 
                          case col => throw new RAException(s"Invalid House Number col argument: $col in GeocodingLens $name (not a column reference)")
                        } )
       case _ => None
@@ -47,11 +43,7 @@ object GeocodingLens {
     val streetColumn = args.flatMap {
       case Function("STREET", cols ) => 
         Some( cols.map { case col:Var => col 
-                         case sp@StringPrimitive(manVal) => try {
-                             ExpressionParser.expr(manVal) 
-                           } catch {
-                             case t: Throwable => sp
-                           } 
+                         case manVal:StringPrimitive => manVal 
                          case col => throw new RAException(s"Invalid street argument: $col in GeocodingLens $name (not a column reference or string value)")
                        } )
       case _ => None
@@ -65,11 +57,7 @@ object GeocodingLens {
     val cityColumn = args.flatMap {
       case Function("CITY", cols ) => 
         Some( cols.map { case col:Var => col 
-                         case sp@StringPrimitive(manVal) => try {
-                             ExpressionParser.expr(manVal) 
-                           } catch {
-                             case t: Throwable => sp
-                           } 
+                         case manVal:StringPrimitive => manVal  
                          case col => throw new RAException(s"Invalid City Col argument: $col in GeocodingLens $name (not a column reference)")
                        } )
       case _ => None
@@ -83,11 +71,7 @@ object GeocodingLens {
     val stateColumn = args.flatMap {
       case Function("STATE", cols ) => 
         Some( cols.map { case col:Var => col  
-                         case sp@StringPrimitive(manVal) => try {
-                             ExpressionParser.expr(manVal) 
-                           } catch {
-                             case t: Throwable => sp
-                           } 
+                         case manVal:StringPrimitive => manVal 
                          case col => throw new RAException(s"Invalid State Col argument: $col in GeocodingLens $name (not a column reference)")
                        } )
       case _ => None
@@ -111,6 +95,18 @@ object GeocodingLens {
       case x => throw new RAException(s"Invalid geocoder argument: $x in GeocodingLens $name (bad type)")
     }
     
+    val defaultAPIKey = "AIzaSyAKc9sTF-pVezJY8-Dkuvw07v1tdYIKGHk"
+    val apiKey = args.flatMap {
+      case Function("API_KEY", cols ) => cols match { 
+        case Seq(StringPrimitive(key)) => Some(key)
+        case x => None
+      } 
+      case _ => None
+    }.toSeq match {
+      case Seq(x) => x
+      case Seq() => defaultAPIKey
+      case x => throw new RAException(s"Invalid api key argument: $x in GeocodingLens $name (bad type)")
+    }
     
     val resultCols = args.flatMap {
       case Function("RESULT_COLUMNS", cols:Seq[Var] @unchecked) => Some( cols.map(_.name) )
@@ -128,16 +124,16 @@ object GeocodingLens {
       case x => Seq(resultCols(0), resultCols(1))
     }
     
-    val inCols = Seq(houseNumColumn, streetColumn, cityColumn, stateColumn, geocoder)
-    val varsExprs = inCols.map(entry => entry match {
-      case v@Var(_) => Seq((Some(v), None) )
-      case x => Seq((None, Some(x)))
-    }).flatten.unzip
-    val (inVars, inExprs) = (varsExprs._1.flatMap(el => el), varsExprs._2.flatMap(el => el))
+    val inCols = Seq(houseNumColumn, streetColumn, cityColumn, stateColumn)
+    val inColsStr = inCols.map(entry => entry match {
+      case StringPrimitive(x) => x
+      case Var(x) => x
+      case x => ???
+    }).mkString("_")
     
-    val inColsExprs = s"${inVars.mkString("_")}_${inExprs.mkString.hashCode()}"
     
-    val geocodingModel = new GeocodingModel(s"${name}_GEOCODING_MODEL:$inColsExprs", inCols, query) 
+    
+    val geocodingModel = new GeocodingModel(name+"_GEOCODING_MODEL:"+inColsStr, inCols, geocoder.asString, apiKey, query) 
     geocodingModel.reconnectToDatabase(db)
     
     val projectArgs = 
