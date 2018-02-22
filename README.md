@@ -31,6 +31,13 @@ This is a self-contained jar.  Run it with
 $> java -jar Mimir.jar
 ```
 
+#### Run with Docker 
+[Install Docker](https://docs.docker.com/install/) and run the docker image:
+```
+$> docker run -i -t docker.mimirdb.info/mimir-core
+...
+```
+
 #### Link with SBT (or Maven)
 
 Add the following to your build.sbt
@@ -64,6 +71,12 @@ OR
 $> sbt assembly
 ...
 $> ./bin/mimir
+```
+OR
+ [Install Docker](https://docs.docker.com/install/) and use the docker image:
+```
+$> docker run -i -t docker.mimirdb.info/mimir-core
+...
 ```
 
 ## Hacking on Mimir
