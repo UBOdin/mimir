@@ -48,22 +48,18 @@ with BeforeAll
       guess(model) must be equalTo(TInt())
     }
     
-    //TODO: Add test that cycles and take progress, outputs the sequence
     "Determine the subsequent values" >>
     {
-      var progressiveModelResults = Seq( Seq[Any]() )
+      //var progressiveModelResults = Seq( Seq[Any]() ) FOR PRODUCING DATA FOR GRAPHS
       var testerSeq = Seq[String]()
       val model = new TypeInferenceModel("PROGRESSIVE_UPDATE:CATEGORY1",Array("CATEGORY1"),0.5,1000,db.table("Progressive_update"))
       db.models.persist(model)
       while(model.isCompleted() == false){
-        progressiveModelResults=  progressiveModelResults:+Seq(model.getNextSample(), model.getDomain(0, Seq(IntPrimitive(0L)), Seq()),Calendar.getInstance.getTime)
+        //progressiveModelResults=  progressiveModelResults:+Seq(model.getNextSample(), model.getDomain(0, Seq(IntPrimitive(0L)), Seq()),Calendar.getInstance.getTime)
         testerSeq = testerSeq:+"String"
         Thread.sleep(3000)
       }
-      //progressiveModelResults.foreach(println)
-      //lsdkfjdlsk
-      //for(stringer <- testerSeq) println(stringer)
-      for(item <- progressiveModelResults) println(item)
+      //for(item <- progressiveModelResults) println(item)
       guess(model) must be equalTo(TFloat())
     }
   }
