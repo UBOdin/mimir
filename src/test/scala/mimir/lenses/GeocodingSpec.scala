@@ -115,28 +115,58 @@ object GeocodingSpec
       result(6)._4 must be equalTo false
     }
     
-    "Dump Domain" >> {
+    "Dump Domain OSM" >> {
       update("""
-        CREATE LENS GEO_LENS_DOMAIN_DUMP 
+        CREATE LENS GEO_LENS_DOMAIN_DUMP_OSM 
           AS SELECT * FROM ADDR
         WITH GEOCODE(HOUSE_NUMBER(STRNUMBER),STREET(STRNAME),CITY(CITY),STATE(STATE),GEOCODER(OSM))
       """);
       
-      val result = db.query(select("SELECT json_extract(LATITUDE,'$.values') AS DOMAIN, LATITUDE, LONGITUDE FROM GEO_LENS_DOMAIN_DUMP"), 
+      val result = db.query(select("SELECT json_extract(LATITUDE,'$.values') AS DOMAIN_LAT, json_extract(LONGITUDE,'$.values') AS DOMAIN_LON FROM GEO_LENS_DOMAIN_DUMP_OSM"), 
           DumpDomain){ _.map { row => 
         (
-          row("DOMAIN"), 
-          row("LATITUDE"), 
-          row("LONGITUDE"), 
-          row.isColDeterministic("LATITUDE"),
-          row.isColDeterministic("LONGITUDE"),
-          row.isDeterministic()
+          row("DOMAIN_LAT"), 
+          row("DOMAIN_LON")
         )
       }.toList }.toList
       
-      val json = play.api.libs.json.Json.parse(result(0)._1.asString)
-      val domainForRow = json.as[JsArray].value.map(jsVal => (jsVal.as[JsObject].value("choice").as[String], jsVal.as[JsObject].value("weight").as[Double]))
-      domainForRow must contain(("40.067628",0.1), ("41.9697061",0.1), ("41.9653349",0.1), ("42.070064",0.1), ("42.0146135",0.1), ("41.9666509",0.1), ("43.733105",0.1), ("43.786123",0.1), ("38.763583",0.1), ("43.773287",0.1))
+      val jsonLat = play.api.libs.json.Json.parse(result(0)._1.asString)
+      val domainLatForRow = jsonLat.as[JsArray].value.map(jsVal => (jsVal.as[JsObject].value("choice").as[String], jsVal.as[JsObject].value("weight").as[Double]))
+      
+      val jsonLon = play.api.libs.json.Json.parse(result(0)._2.asString)
+      val domainLonForRow = jsonLon.as[JsArray].value.map(jsVal => (jsVal.as[JsObject].value("choice").as[String], jsVal.as[JsObject].value("weight").as[Double]))
+      
+      domainLatForRow.length must be equalTo domainLonForRow.length
+      domainLatForRow must contain(("40.067628",0.1), ("41.9697061",0.1), ("41.9653349",0.1), ("42.070064",0.1), ("42.0146135",0.1), ("41.9666509",0.1), ("43.733105",0.1), ("43.786123",0.1), ("38.763583",0.1), ("43.773287",0.1))
+      domainLonForRow must contain(("-74.1679029",0.1), ("-89.7976899",0.1), ("-89.7688991",0.1), ("-89.9381948",0.1), ("-89.8901924",0.1), ("-89.7725182",0.1), ("-70.2101979",0.1), ("-70.1749189",0.1), ("-75.2718879",0.1), ("-70.1911629",0.1))
+      
+    }
+    
+    "Dump Domain GOOGLE" >> {
+      update("""
+        CREATE LENS GEO_LENS_DOMAIN_DUMP_GOOGLE 
+          AS SELECT * FROM ADDR
+        WITH GEOCODE(HOUSE_NUMBER(STRNUMBER),STREET(STRNAME),CITY(CITY),STATE(STATE),GEOCODER(GOOGLE),API_KEY('AIzaSyAKc9sTF-pVezJY8-Dkuvw07v1tdYIKGHk'))
+      """);
+      
+      val result = db.query(select("SELECT json_extract(LATITUDE,'$.values') AS DOMAIN_LAT, json_extract(LONGITUDE,'$.values') AS DOMAIN_LON FROM GEO_LENS_DOMAIN_DUMP_GOOGLE"), 
+          DumpDomain){ _.map { row => 
+        (
+          row("DOMAIN_LAT"), 
+          row("DOMAIN_LON")
+        )
+      }.toList }.toList
+      
+      val jsonLat = play.api.libs.json.Json.parse(result(0)._1.asString)
+      val domainLatForRow = jsonLat.as[JsArray].value.map(jsVal => (jsVal.as[JsObject].value("choice").as[String], jsVal.as[JsObject].value("weight").as[Double]))
+      
+      val jsonLon = play.api.libs.json.Json.parse(result(0)._2.asString)
+      val domainLonForRow = jsonLon.as[JsArray].value.map(jsVal => (jsVal.as[JsObject].value("choice").as[String], jsVal.as[JsObject].value("weight").as[Double]))
+      
+      domainLatForRow.length must be equalTo domainLonForRow.length
+      domainLatForRow must contain(("42.94740609999999",1.0))
+      domainLonForRow must contain(("-78.8260315",1.0))
+      
     }
 
   }
