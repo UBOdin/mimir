@@ -97,7 +97,7 @@ object MimirGProM {
     /*val sql = "SELECT S.A AS P, U.C AS Q FROM R AS S JOIN T AS U ON S.A = U.C"
     var oper = db.sql.convert(db.parse(sql).head.asInstanceOf[Select])
     oper = Provenance.compile(oper)._1
-    val sch = db.bestGuessSchema(oper)  
+    val sch = db.typechecker.schemaOf(oper)  
     println(oper)*/
     //translateOperatorsFromGProMToMimir(("testQ",sql))
     

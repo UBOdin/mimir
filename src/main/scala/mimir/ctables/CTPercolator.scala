@@ -515,18 +515,20 @@ object CTPercolator
       }
       case v @ View(name, query, metadata) => {
         val (newQuery, colDeterminism, rowDeterminism) = percolateLite(query, models)
-        val columns = query.columnNames
-
+        val columns = columnNames(query)
+        
         val inlinedQuery = 
           Project(
             columns.map { col => ProjectArg(col, Var(col)) } ++
-            columns.map { col => ProjectArg(mimirColDeterministicColumnPrefix+col, colDeterminism(col)) } ++
+            columns.map { col => {
+                ProjectArg(mimirColDeterministicColumnPrefix+col, colDeterminism(col)) } } ++
             Seq( ProjectArg(mimirRowDeterministicColumnName, rowDeterminism) ),
             newQuery
           )
         (
           View(name, inlinedQuery, metadata + ViewAnnotation.TAINT),
-          columns.map { col => (col -> Var(mimirColDeterministicColumnPrefix+col)) }.toMap,
+          columns.map { col => 
+              (col -> Var(mimirColDeterministicColumnPrefix+col)) }.toMap,
           Var(mimirRowDeterministicColumnName)
         )
       }
@@ -544,8 +546,8 @@ object CTPercolator
         //   As soon as it becomes appropriate to start tagging things... then see 
         //   CTExplainer.explainSubsetWithoutOptimizing for an idea of how to implement this correctly.
         val (newQuery, colDeterminism, rowDeterminism) = percolateLite(query, models)
-        val columns = query.columnNames
-
+        val columns = columnNames(query)
+        
         val inlinedQuery = 
           Project(
             columns.map { col => ProjectArg(col, Var(col)) } ++
@@ -585,6 +587,13 @@ object CTPercolator
 
       case _:LeftOuterJoin =>
         throw new RAException("Don't know how to percolate a left-outer-join")
+    }
+  }
+  
+  def columnNames(oper:Operator) : Seq[String] = {
+    oper match {
+      case Table(_,_,sch,_) => sch.map(_._1)
+      case _ => oper.columnNames
     }
   }
   

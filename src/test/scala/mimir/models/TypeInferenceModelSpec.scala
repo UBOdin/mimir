@@ -22,7 +22,7 @@ object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
 
   def guess(model: Model): Type =
   {
-    model.bestGuess(0, List[PrimitiveValue](), List()) match {
+    model.bestGuess(0, List[PrimitiveValue](IntPrimitive(0)), List()) match {
       case TypePrimitive(t) => t
       case x => throw new RAException(s"Type inference model guessed a non-type primitive: $x")
     }

@@ -71,6 +71,8 @@ trait OperatorConstructors
     }:_*)
   }
 
+  def removeColumns(targets: String*): Operator =
+    removeColumn(targets:_*)
   def removeColumn(targets: String*): Operator =
   {
     val isTarget = targets.toSet

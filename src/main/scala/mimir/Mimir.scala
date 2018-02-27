@@ -198,18 +198,31 @@ object Mimir extends LazyLogging {
   {
     val rowId = analyze.getRowId()
     val column = analyze.getColumn()
+    val assign = analyze.getAssign()
     val query = db.sql.convert(analyze.getSelectBody())
 
     if(rowId == null){
       output.print("==== Explain Table ====")
+      logger.debug("Starting to Explain Table")
       val reasonSets = db.explainer.explainEverything(query)
+      logger.debug("Done Explaining Table")
       for(reasonSet <- reasonSets){
-        val count = reasonSet.size(db);
-        val reasons = reasonSet.take(db, 5);
-        printReasons(reasons);
-        if(count > reasons.size){
-          output.print(s"... and ${count - reasons.size} more like the last")
+        logger.debug(s"Expanding $reasonSet")
+        // Workaround for a bug: SQLite crashes if a UDA is run on an empty input
+        if(!reasonSet.isEmpty(db)){
+          logger.debug(s"Not Empty: \n${reasonSet.argLookup}")
+          val count = reasonSet.size(db);
+          logger.debug(s"Size = $count")
+          val reasons = reasonSet.take(db, 5);
+          logger.debug(s"Got ${reasons.size} reasons")
+          printReasons(reasons);
+          if(count > reasons.size){
+            output.print(s"... and ${count - reasons.size} more like the last")
+          }
         }
+      }
+      if(assign == true) {
+        CTPrioritizer.prioritize(reasonSets.flatMap(x=>x.all(db)))
       }
     } else {
       val token = RowIdPrimitive(db.sql.convert(rowId).asString)
@@ -220,13 +233,19 @@ object Mimir extends LazyLogging {
         printReasons(explanation.reasons)
         output.print("--------")
         output.print("Row Probability: "+explanation.probability)
-      } else { 
+        if(assign == true) {
+          CTPrioritizer.prioritize(explanation.reasons)
+        }
+      } else {
       output.print("==== Explain Cell ====")
         val explanation = 
           db.explainer.explainCell(query, token, column) 
         printReasons(explanation.reasons)
         output.print("--------")
         output.print("Examples: "+explanation.examples.map(_.toString).mkString(", "))
+        if(assign == true) {
+          CTPrioritizer.prioritize(explanation.reasons)
+        }
       }
     }
   }

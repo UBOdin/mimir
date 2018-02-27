@@ -36,7 +36,7 @@ object TypeInference
 
     // Initialize the vote counters
     val modelColumns = 
-      db.bestGuessSchema(config.query).flatMap({
+      db.typechecker.schemaOf(config.query).flatMap({
         case (col, (TString() | TAny())) => Some(col)
         case _ => None
       }).toIndexedSeq
@@ -59,43 +59,73 @@ object TypeInference
 
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    HardTable(Seq(("TABLE_NAME",TString()),("SCHEMA_NAME",TString())),Seq(Seq(StringPrimitive(config.schema),StringPrimitive("MIMIR"))))
+    HardTable(
+      Seq(
+        ("TABLE_NAME",TString())
+      ),
+      Seq(
+        Seq(
+          StringPrimitive("DATA")
+        )
+      )
+    )
   }
   
   def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-   val model = db.models.get(s"MIMIR_TI_ATTR_${config.schema}").asInstanceOf[TypeInferenceModel]
-   val table = HardTable(
-      Seq(("TABLE_NAME" , TString()), ("ATTR_NAME" , TString()),("ATTR_TYPE", TType()),("IS_KEY", TBool()), ("SCHEMA_NAME", TString()), ("IDX", TInt())),
-      model.columns.zipWithIndex.map(col => 
-        Seq(StringPrimitive(config.schema), StringPrimitive(col._1), model.bestGuess(col._2, Seq(), Seq()) ,BoolPrimitive(false),StringPrimitive("MIMIR"),IntPrimitive(col._2))
-     )) 
-   val oper = Project( table.schema.map {
-     case ("ATTR_TYPE", _) => ProjectArg("ATTR_TYPE", VGTerm(model.name, 0, Seq(Var("IDX")), Seq(Var("ATTR_TYPE"))))
-     case (col, _) => ProjectArg(col, Var(col))
-   }, table)
-   oper
+    val model = db.models.get(s"MIMIR_TI_ATTR_${config.schema}").asInstanceOf[TypeInferenceModel]
+    val columnIndexes = model.columns.zipWithIndex.toMap
+    lazy val qSchema = db.typechecker.schemaOf(config.query).toMap
+    HardTable(
+      Seq(
+        ("TABLE_NAME" , TString()), 
+        ("ATTR_NAME" , TString()),
+        ("IS_KEY", TBool()), 
+        ("IDX", TInt()),
+        ("HARD_TYPE", TType())
+      ),
+      config.query.columnNames.map(col => 
+        Seq(
+          StringPrimitive("DATA"), 
+          StringPrimitive(col), 
+          BoolPrimitive(false),
+          IntPrimitive(columnIndexes.getOrElse(col, -1).toLong),
+          if(columnIndexes contains col){ NullPrimitive() } 
+            else { TypePrimitive(qSchema(col)) }
+        )
+      )
+    ).addColumn(
+      "ATTR_TYPE" -> 
+        Var("HARD_TYPE")
+          .isNull
+          .thenElse {
+            VGTerm(s"MIMIR_TI_ATTR_${config.schema}", 0, Seq(Var("IDX")), Seq())
+          } {
+            Var("HARD_TYPE")
+          }
+    ).removeColumns("IDX", "HARD_TYPE")
   }
         
   def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
   {
-    val model = db.models.get(s"MIMIR_TI_ATTR_${config.schema}").asInstanceOf[TypeInferenceModel]
-    Some(Project(
-        db.query(
-          attrCatalogFor(db, config)
-        ) { results => {
-            val cols = model.columns
-            results.toSeq.map { row =>
-              val colIdx = row(5).asInt
-              val colName = cols(colIdx)
-              val colType = row(2).asString
-              val schemaTupStr = s"($colName, $colType)"
-              ProjectArg(
-                colName,
-                Function("CAST", Seq(Var(colName), TypePrimitive(Type.fromString(colType))))
-              )
-            }.toIndexedSeq}
-    }, config.query))  
+    if(table.equals("DATA")){
+      val model = db.models.get(s"MIMIR_TI_ATTR_${config.schema}").asInstanceOf[TypeInferenceModel]
+      val columnIndexes = model.columns.zipWithIndex.toMap
+      Some(Project(
+        config.query.columnNames.map { colName =>
+          ProjectArg(colName, 
+            if(columnIndexes contains colName){ 
+              Function("CAST", Seq(
+                Var(colName),
+                model.bestGuess(0, Seq(IntPrimitive(columnIndexes(colName))), Seq())
+              ))
+            } else {
+              Var(colName)
+            }
+          )
+        }, config.query
+      ))  
+    } else { None }
   }
 
   

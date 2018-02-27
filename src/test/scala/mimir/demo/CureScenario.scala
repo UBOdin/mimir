@@ -7,6 +7,7 @@ import org.specs2.specification.core.{Fragment,Fragments}
 import mimir.test._
 import mimir.util._
 import LoggerUtils.trace
+import mimir.ctables._
 
 object CureScenario
   extends SQLTestSpecification("CureScenario",  Map("reset" -> "YES"))
@@ -17,6 +18,21 @@ object CureScenario
     new File("test/data/cureLocations.csv"),
     new File("test/data/curePorts.csv")
   )
+
+  val cureQuery = """
+    SELECT BILL_OF_LADING_NBR,
+           SRC.IMO_CODE           AS "SRC_IMO",
+           LOC.LAT                AS "VESSEL_LAT",
+           LOC.LON                AS "VESSEL_LON",
+           PORTS.LAT              AS "PORT_LAT",
+           PORTS.LON              AS "PORT_LON",
+           DATE(SRC.DATE)          AS "SRC_DATE",
+           DST(LOC.LON, LOC.LAT, PORTS.LON, PORTS.LAT) AS "DISTANCE",  SPEED(DST(LOC.LON, LOC.LAT, PORTS.LON, PORTS.LAT), SRC.DATE, DATE('2016-09-03')) AS "SPEED"
+    FROM CURESOURCE AS SRC
+      JOIN CURELOCATIONS AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
+        LEFT OUTER JOIN CUREPORTS AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
+        WHERE SPEED(DST(LOC.LON, LOC.LAT, PORTS.LON, PORTS.LAT),SRC.DATE, DATE('2016-09-03')) > 100;
+    ;"""
 
   def time[A](description: String): ( => A) => A =
     Timer.monitor(description)
@@ -31,11 +47,17 @@ object CureScenario
           update(s"LOAD '$table';") 
         }
         time(s"Materialize '$basename'"){
-          //XXX: there is a problem with materialized views and MV lens
-          //       that needs to be fixed - something with the col det bit vector
-          //     -Mike
-          //update(s"ALTER VIEW $basename MATERIALIZE;")
+          update(s"ALTER VIEW $basename MATERIALIZE;")
         }
+        db.explainer.explainEverything(
+          db.sql.convert(stmt(s"SELECT * FROM $basename")
+            .asInstanceOf[net.sf.jsqlparser.statement.select.Select])) must not beEmpty;
+        //this still blows up - something with getColumns on vgterm during lookup query 
+        /*db.explainer.explainEverything(
+          db.sql.convert(stmt(s"SELECT * FROM $basename")
+            .asInstanceOf[net.sf.jsqlparser.statement.select.Select]))
+              .flatMap( rs => rs.all(db)) must not beEmpty;*/
+        
         db.tableExists(basename) must beTrue
       }
     }}
@@ -88,28 +110,53 @@ object CureScenario
 */
 
 //    true
+    "Explain the CURE Query" >> {
+      db.typechecker.schemaOf(select(cureQuery))
+      ok
+    }
      "Run the CURE Query" >> {
        time("CURE Query"){
-         query("""
-           SELECT
-                   BILL_OF_LADING_NBR,
-                   SRC.IMO_CODE           AS "SRC_IMO",
-                   LOC.LAT                AS "VESSEL_LAT",
-                   LOC.LON                AS "VESSEL_LON",
-                   PORTS.LAT              AS "PORT_LAT",
-                   PORTS.LON              AS "PORT_LON",
-                   DATE(SRC.DATE)          AS "SRC_DATE",
-                   DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON) AS "DISTANCE",  SPEED(DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON), SRC.DATE, NULL) AS "SPEED"
-                 FROM CURESOURCE AS SRC
-                  JOIN CURELOCATIONS AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
-                   LEFT OUTER JOIN CUREPORTS AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
-                 ;
-         """){ _.foreach { row => {} } }
+         query(cureQuery){ _.foreach { row => {} } }
        }
 //         failed type detection --> run type inferencing
 //         --> repair with repairing tool
        ok
      }
+
+     /*"Test Prioritizer" >> {
+
+
+       update("CREATE TABLE R(A string, B int, C int)")
+       loadCSV("R", new File("test/r_test/r.csv"))
+       update("CREATE LENS TI AS SELECT * FROM R WITH TYPE_INFERENCE(0.5)")
+       update("CREATE LENS MV AS SELECT * FROM TI WITH MISSING_VALUE('B', 'C')")
+       val reasonsets1 = explainEverything("SELECT * FROM MV").flatMap(x=>x.all(db))
+
+       reasonsets1 must not beEmpty;
+
+       //CTPrioritizer.prioritize(reasonsets1)
+
+       val reasonsets2 = explainEverything("""
+         SELECT
+                 BILL_OF_LADING_NBR,
+                 SRC.IMO_CODE           AS "SRC_IMO",
+                 LOC.LAT                AS "VESSEL_LAT",
+                 LOC.LON                AS "VESSEL_LON",
+                 PORTS.LAT              AS "PORT_LAT",
+                 PORTS.LON              AS "PORT_LON",
+                 DATE(SRC.DATE)          AS "SRC_DATE",
+                 DST(LOC.LON, LOC.LAT, PORTS.LON, PORTS.LAT) AS "DISTANCE",  SPEED(DST(LOC.LON, LOC.LAT, PORTS.LON, PORTS.LAT), SRC.DATE, NULL) AS "SPEED"
+               FROM CURESOURCE AS SRC
+                JOIN CURELOCATIONS AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
+                 LEFT OUTER JOIN CUREPORTS AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
+                 WHERE SPEED(DST(LOC.LON, LOC.LAT, PORTS.LON, PORTS.LAT),SRC.DATE, NULL) > 100;
+       """).flatMap(x=>x.all(db))
+
+       reasonsets2 must not beEmpty;
+
+       CTPrioritizer.prioritize(reasonsets2)
+       ok
+     }*/
 
     /*
 SELECT

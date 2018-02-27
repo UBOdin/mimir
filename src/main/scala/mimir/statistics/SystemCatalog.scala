@@ -65,15 +65,15 @@ object SystemCatalog
 {
   val tableCatalogSchema = 
     Seq( 
-      ("TABLE_NAME", TString()),
-      ("SCHEMA_NAME", TString()) 
+      ("SCHEMA_NAME", TString()),
+      ("TABLE_NAME", TString())
     )
   val attrCatalogSchema =
     Seq( 
+      ("SCHEMA_NAME", TString()),
       ("TABLE_NAME", TString()), 
       ("ATTR_NAME", TString()),
       ("ATTR_TYPE", TString()),
-      ("IS_KEY", TBool()),
-      ("SCHEMA_NAME", TString()) 
+      ("IS_KEY", TBool())
     )
 }

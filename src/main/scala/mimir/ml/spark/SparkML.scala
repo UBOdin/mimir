@@ -77,7 +77,7 @@ abstract class SparkML {
   
   
   def prepareData(query : Operator, db:Database, valuePreparer: ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType) : DataFrame = {
-    val schema = db.bestGuessSchema(query).toList
+    val schema = db.typechecker.schemaOf(query).toList
     val sqlContext = getSparkSqlContext()
     //OperatorTranslation.db = db
     //OperatorTranslation.mimirOpToDF(sqlContext, query)
@@ -85,15 +85,14 @@ abstract class SparkML {
     sqlContext.createDataFrame(
       getSparkSession().parallelize(db.query(query)(results => {
         results.toList.map(row => Row((valuePreparer(row.provenance, TString() ) +: row.tuple.zip(schema).map(value => valuePreparer(value._1, value._2._2))):_*))
-      })), StructType(StructField("rowid", StringType, false) :: schema.map(col => StructField(col._1, sparkTyper(col._2), true))))
+      })), StructType(StructField("rowid", StringType, false) :: schema.filterNot(_._1.equalsIgnoreCase("rowid")).map(col => StructField(col._1, sparkTyper(col._2), true))))
   }
   
   def applyModelDB(model : PipelineModel, query : Operator, db:Database, valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType, dfTransformer:Option[DataFrameTransformer] = None) : DataFrame = {
     val data = db.query(query)(results => {
-      results.toList.map(row => row.provenance +: row.tuple)
+      results.toList.map(row => row.provenance +: row.tupleSchema.zip(row.tuple).filterNot(_._1._1.equalsIgnoreCase("rowid")).unzip._2)
     })
-    val bgs = db.bestGuessSchema(query)
-    applyModel(model, ("rowid", TString()) +:db.bestGuessSchema(query), data, valuePreparer, sparkTyper, dfTransformer)
+    applyModel(model, ("rowid", TString()) +:db.typechecker.schemaOf(query).filterNot(_._1.equalsIgnoreCase("rowid")), data, valuePreparer, sparkTyper, dfTransformer)
   }
   
   def applyModel( model : PipelineModel, cols:Seq[(String, Type)], testData : List[Seq[PrimitiveValue]], valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType, dfTransformer:Option[DataFrameTransformer] = None): DataFrame = {

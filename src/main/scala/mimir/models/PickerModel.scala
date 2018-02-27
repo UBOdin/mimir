@@ -214,17 +214,21 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
       results.toList.map(row => (row.provenance :: row.tuple.toList).toSeq)
     })
     val predictions = sparkMLInst.applyModel(classifier, ("rowid", TString()) +: (pickFromCols.zip(colTypes)), tuples)
-    //predictions.show()
     val predictionMap = sparkMLInst.extractPredictions(classifier, predictions).groupBy(_._1).map { case (k,v) => (k,v.map(_._2))}
     classifyAllPredictions = Some(predictionMap)
     
     predictionMap.map(mapEntry => {
       setCache(0, Seq(RowIdPrimitive(mapEntry._1)), null, classToPrimitive( mapEntry._2(0)._1))
     })
-    
-    db.models.persist(this)   
+
+    db.models.persist(this)
+  }
+
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Double = {
+    val rowid = RowIdPrimitive(args(0).asString)
+    getFeedback(idx,args) match {
+    case Some(v) => 1.0
+    case None => 0.0
+    }
   }
 }
-
-
-

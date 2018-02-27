@@ -68,8 +68,8 @@ runMimirVizier := {
 testGrouping in Test := {
 	val (jh, os, bj, bd, jo, ci, ev) = (javaHome.value, outputStrategy.value, Vector[java.io.File](), 
 		baseDirectory.value, javaOptions.value.toVector, connectInput.value, envVars.value)
-	val testsToForkSeperately = Seq("mimir.gprom.algebra.OperatorTranslationSpec")
-	val seperateForkedEnvArgs = Map(("mimir.gprom.algebra.OperatorTranslationSpec", sys.props.get("os.name") match {
+	val testsToForkSeperately = Seq("mimir.algebra.gprom.OperatorTranslationSpec")
+	val seperateForkedEnvArgs = Map(("mimir.algebra.gprom.OperatorTranslationSpec", sys.props.get("os.name") match {
 	  	case Some(osname) if osname.startsWith("Mac OS X") => Map(("DYLD_INSERT_LIBRARIES",System.getProperty("java.home")+"/lib/libjsig.dylib"))
 	  	case Some(otherosname) => Map(("LD_PRELOAD",System.getProperty("java.home")+"/lib/"+System.getProperty("os.arch")+"/libjsig.so"))
 	  	case None => envVars.value
@@ -87,8 +87,11 @@ testGrouping in Test := {
 
 resolvers += "MimirDB" at "http://maven.mimirdb.info/"
 resolvers += "osgeo" at "http://download.osgeo.org/webdav/geotools/"
+resolvers += "Boundless" at "http://repo.boundlessgeo.com/main"
 resolvers += "MVNRepository" at "http://mvnrepository.com/artifact/"
 resolvers ++= Seq("snapshots", "releases").map(Resolver.sonatypeRepo)
+
+updateOptions := updateOptions.value.withGigahorse(false)
 
 libraryDependencies ++= Seq(
   ////////////////////// Command-Line Interface Utilities //////////////////////
@@ -135,14 +138,13 @@ libraryDependencies ++= Seq(
   "net.sf.jung"                   %   "jung-algorithms"          % "2.0.1",
   "net.sf.jung"                   %   "jung-visualization"       % "2.0.1",
   "jgraph"                        %   "jgraph"                   % "5.13.0.0",
-  "javax.media" 		              %   "jai_core"                 % "1.1.3",  
+  "javax.media" 		          %   "jai_core"                 % "1.1.3" from "http://download.osgeo.org/webdav/geotools/javax/media/jai_core/1.1.3/jai_core-1.1.3.jar",  
   //
 
   //////////////////////// Geotools ////////////////////////
   // Geospatial data transformations, Used by the CURE scenario
-  "org.geotools"                  %   "gt-referencing"           % "16.2",
-  "org.geotools"                  %   "gt-referencing"           % "16.2",
-  "org.geotools"                  %   "gt-epsg-hsql"             % "16.2",
+  "org.geotools"                  %   "gt-referencing"           % "16.2" exclude("javax.media", "jai_core"),
+  "org.geotools"                  %   "gt-epsg-hsql"             % "16.2" exclude("javax.media", "jai_core"),
 
   //////////////////////// JDBC Backends //////////////////////
   "org.xerial"                    %   "sqlite-jdbc"              % "3.16.1",
@@ -162,8 +164,12 @@ libraryDependencies ++= Seq(
   //////////////////////// Visualization //////////////////////
   // For now, all of this happens in python with matplotlib
   // and so we don't need any external dependencies.
-  //"org.vegas-viz"                 %%  "vegas"                  % "0.3.9",
-  //"org.sameersingh.scalaplot"     % "scalaplot"                % "0.0.4"
+  //"org.vegas-viz"                 %%  "vegas"                 % "0.3.9",
+  //"org.sameersingh.scalaplot"     % "scalaplot"               % "0.0.4",
+
+  //////////////////////// Linear Solver /////////////////////////
+  "com.github.vagmcs"             %% "optimus"                % "2.0.0",
+  "com.github.vagmcs"             %% "optimus-solver-oj"      % "2.0.0"
 )
 
 lazy val parser = taskKey[Unit]("Builds the SQL Parser")

@@ -65,6 +65,13 @@ class MissingKeyModel(override val name: String, keys:Seq[String], colTypes:Seq[
   }
   def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq(TAny())
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = Seq((hints(0), 0.0))
-  
-     
+
+  def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = {
+    val rowid = RowIdPrimitive(args(0).asString)
+    getFeedback(idx,args) match {
+      case Some(v) => 1.0
+      case None => 0.0
+    }
+  }
+
 }

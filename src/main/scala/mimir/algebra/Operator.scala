@@ -138,7 +138,7 @@ case class AggFunction(function: String, distinct: Boolean, args: Seq[Expression
 case class Aggregate(groupby: Seq[Var], aggregates: Seq[AggFunction], source: Operator) extends Operator
 {
   def toString(prefix: String) =
-    prefix + "AGGREGATE[" + 
+    prefix + (if(aggregates.isEmpty){ "DISTINCT" } else { "AGGREGATE" })+"[" + 
       (groupby ++ aggregates).mkString(", ") + 
       "](\n" +
       source.toString(prefix + "  ") + "\n" + prefix + ")"
@@ -340,7 +340,8 @@ case class HardTable(schema: Seq[(String, Type)], data: Seq[Seq[PrimitiveValue]]
   extends Operator
 {
   def toString(prefix: String) =
-    prefix + "< " + ( schema.map { case (name, v) => name+": "+v.toString }.mkString(", ") ) + " >"
+    prefix + "< " + ( schema.map { case (name, v) => name+": "+v.toString }.mkString(", ") ) + " >" +
+    data.take(3).map { "\n"+prefix+"< "+_.mkString(", ")+" >"}.mkString("")
   def children: Seq[Operator] = Seq()
   def rebuild(x: Seq[Operator]) = this
   def expressions = List()

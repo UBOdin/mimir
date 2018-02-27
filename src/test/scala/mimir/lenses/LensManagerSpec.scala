@@ -27,9 +27,9 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
     "Produce reasonable views" >> {
       db.loadTable("CPUSPEED", new File("test/data/CPUSpeed.csv"))
       val resolved1 = InlineProjections(db.views.resolve(db.table("CPUSPEED")))
-      resolved1 must beAnInstanceOf[AdaptiveView]
-      resolved1.children.head must beAnInstanceOf[Project]
-      val resolved2 = resolved1.children.head.asInstanceOf[Project]
+      resolved1 must beAnInstanceOf[Project]
+      resolved1.children.head must beAnInstanceOf[Limit]
+      val resolved2 = resolved1.asInstanceOf[Project]
       val coresColumnId = db.table("CPUSPEED").columnNames.indexOf("CORES")
       val coresModel = db.models.get("MIMIR_TI_ATTR_CPUSPEED_TI")
 
@@ -40,15 +40,15 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       coresModel must not be empty
 
       resolved2.get("CORES") must be equalTo(Some(
-        Function("CAST", List(Var("CORES"), TypePrimitive(TInt())))//VGTerm(coresModel.name, coresColumnId, List(), List())))
+        Function("CAST", List(Var("COLUMN_7"), TypePrimitive(TInt())))//VGTerm(coresModel.name, coresColumnId, List(), List())))
       ))
 
-      coresModel.reason(coresColumnId, List(), List()) must contain("I guessed that MIMIR_TI_ATTR_CPUSPEED_TI.CORES was of type INT because all of the data fit")
+      coresModel.reason(0, List(IntPrimitive(coresColumnId)), List()) must contain("I guessed that MIMIR_TI_ATTR_CPUSPEED_TI.CORES was of type INT because all of the data fit")
 
-      val coresGuess1 = coresModel.bestGuess(coresColumnId, List(), List())
+      val coresGuess1 = coresModel.bestGuess(0, List(IntPrimitive(coresColumnId)), List())
       coresGuess1 must be equalTo(TypePrimitive(TInt()))
 
-      val coresGuess2 = InlineVGTerms(VGTerm(coresModel.name, coresColumnId, List(), List()), db)
+      val coresGuess2 = InlineVGTerms(VGTerm(coresModel.name, 0, List(IntPrimitive(coresColumnId)), List()), db)
       coresGuess2 must be equalTo(TypePrimitive(TInt()))
 
 
