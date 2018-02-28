@@ -19,8 +19,7 @@ import org.gprom.jdbc.jna.GProMWrapper
 import com.sun.jna.Native
 
 class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) 
-  extends Backend
-  with InlinableBackend
+  extends RABackend
 {
   var conn: Connection = null
   var unwrappedConn: org.sqlite.SQLiteConnection = null
@@ -103,6 +102,9 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int)
       if (openConnections == 0) assert(conn == null)
     })
   }
+  
+  def execute(compiledOp: Operator): DataFrame = null
+  def execute(compiledOp: Operator, args: Seq[PrimitiveValue]): DataFrame = null
 
   def execute(sel: String): ResultSet =
   {

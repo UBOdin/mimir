@@ -10,6 +10,7 @@ import org.apache.spark.sql.types.{DataType, DoubleType, LongType, FloatType, Bo
 import org.apache.spark.ml.feature.Imputer
 import mimir.util.ExperimentalOptions
 import mimir.algebra.spark.OperatorTranslation
+import org.apache.spark.sql.SparkSession
 
 object SparkML {
   type SparkModel = PipelineModel
@@ -21,7 +22,7 @@ object SparkML {
 
 abstract class SparkML {
   def getSparkSession() : SparkContext = {
-      val conf = new SparkConf().setMaster("local[*]").setAppName("MultiClassClassification")
+      val conf = new SparkConf().setMaster("spark://localhost:7077").setAppName("Mimir")//("local[*]").setAppName("MultiClassClassification")
       if(ExperimentalOptions.isEnabled("GPROM-BACKEND")){
         sys.props.get("os.name") match {
     	  	case Some(osname) if osname.startsWith("Mac OS X") => conf.set("spark.executorEnv.DYLD_INSERT_LIBRARIES",System.getProperty("java.home")+"/lib/libjsig.dylib")
@@ -31,7 +32,8 @@ abstract class SparkML {
       }
       SparkML.sc match {
         case None => {
-          val sparkCtx = new SparkContext(conf)
+          val sparkCtx = SparkContext.getOrCreate(conf)//new SparkContext(conf)
+          sparkCtx.addJar("https://maven.mimirdb.info/info/mimirdb/mimir-core_2.11/0.2/mimir-core_2.11-0.2.jar")
           println(s"apache spark: ${sparkCtx.version}")
           SparkML.sc = Some(sparkCtx)
           sparkCtx
@@ -73,8 +75,6 @@ abstract class SparkML {
     }).toArray
     new Imputer().setInputCols(imputerCols) .setOutputCols(imputerCols).fit(df).transform(df)
   }
-  
-  
   
   def prepareData(query : Operator, db:Database, valuePreparer: ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType) : DataFrame = {
     val schema = db.typechecker.schemaOf(query).toList

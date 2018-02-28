@@ -12,7 +12,7 @@ import mimir.exec.Compiler
 import mimir.exec.mode.{CompileMode, BestGuess}
 import mimir.exec.result.{ResultIterator,SampleResultIterator,Row}
 import mimir.lenses.{LensManager}
-import mimir.sql.{SqlToRA,RAToSql,Backend}
+import mimir.sql.{SqlToRA,RAToSql,RABackend,MetadataBackend}
 import mimir.sql.{
     CreateLens,
     CreateView,
@@ -88,7 +88,7 @@ import scala.collection.mutable.ListBuffer
   * * mimir.explainer.CTExplainer (explainer)
   *    Responsible for creating explanation objects.
   */
-case class Database(backend: Backend)
+case class Database(backend: RABackend, metadataBackend: MetadataBackend)
   extends LazyLogging
 {
   //// Persistence

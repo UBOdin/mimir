@@ -83,12 +83,12 @@ object OperatorTranslation {
 			  //LogicalRelation(baseRelation, table)
 			}
 			case View(name, query, annotations) => {
-			  val schema = db.bestGuessSchema(query)
+			  val schema = db.typechecker.schemaOf(query)
 			  val table = CatalogTable(
           TableIdentifier(name),
           CatalogTableType.VIEW,
           CatalogStorageFormat.empty,
-          StructType(schema.map(col => StructField(col._1, getSparkType(col._2), true))) )
+          mimirSchemaToStructType(schema) )
 			  org.apache.spark.sql.catalyst.plans.logical.View( table,
           schema.map(col => {
             AttributeReference(col._1, getSparkType(col._2), true, Metadata.empty)( )
@@ -96,12 +96,12 @@ object OperatorTranslation {
           mimirOpToSparkOp(query))
 			}
       case av@AdaptiveView(schemaName, name, query, annotations) => {
-        val schema = db.bestGuessSchema(av)
+        val schema = db.typechecker.schemaOf(av)
         val table = CatalogTable(
           TableIdentifier(name),
           CatalogTableType.VIEW,
           CatalogStorageFormat.empty,
-          StructType(schema.map(col => StructField(col._1, getSparkType(col._2), true))) )
+          mimirSchemaToStructType(schema))
 			  org.apache.spark.sql.catalyst.plans.logical.View( table,
           schema.map(col => {
             AttributeReference(col._1, getSparkType(col._2), true, Metadata.empty)( )
@@ -265,6 +265,10 @@ object OperatorTranslation {
     }
   }
   
+  def mimirSchemaToStructType(schema:Seq[(String, Type)]) = {
+    StructType(schema.map(col => StructField(col._1, getSparkType(col._2), true)))  
+  }
+  
   def getSparkType(t:Type) : DataType = {
     t match {
       case TInt() => StringType
@@ -282,6 +286,16 @@ object OperatorTranslation {
     }
   }
   
+  def getMimirType(dataType: DataType): Type = {
+    dataType match {
+      case IntegerType => TInt()
+      case DoubleType => TFloat()
+      case FloatType => TFloat()
+      case LongType => TFloat()
+      case _ => TString()
+    }
+  }
+  
   def extractTables(oper: Operator): Seq[String] = 
   {
     oper match {
@@ -290,7 +304,7 @@ object OperatorTranslation {
     }
   }
   
-  def mimirOpToDF(sqlContext:SQLContext, oper:Operator) : DataFrame = {
+  /*def mimirOpToDF(sqlContext:SQLContext, oper:Operator) : DataFrame = {
     val sparkOper = OperatorTranslation.mimirOpToSparkOp(oper)
     println("---------------------------- Mimir Oper -----------------------------")
     println(oper)
@@ -326,6 +340,6 @@ object OperatorTranslation {
         userSpecifiedSchema = None,
         className = "jdbc",
         options = Map("url" -> "jdbc:sqlite:debug.db") ).resolveRelation())*/
-  }
+  }*/
   
 }

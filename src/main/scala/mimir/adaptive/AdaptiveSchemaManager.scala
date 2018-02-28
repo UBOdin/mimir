@@ -15,7 +15,7 @@ class AdaptiveSchemaManager(db: Database)
   def init(): Unit = 
   {
     if(db.backend.getTableSchema(dataTable).isEmpty){
-      db.backend.update(s"""
+      db.metadataBackend.update(s"""
         CREATE TABLE $dataTable(
           NAME varchar(100), 
           MLENS varchar(100),
@@ -33,7 +33,7 @@ class AdaptiveSchemaManager(db: Database)
     val config = MultilensConfig(schema, query, args);
     val models = constructor.initSchema(db, config);
     
-    db.backend.update(s"""
+    db.metadataBackend.update(s"""
       INSERT INTO $dataTable(NAME, MLENS, QUERY, ARGS) VALUES (?,?,?,?)
     """, Seq(
       StringPrimitive(schema),

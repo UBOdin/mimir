@@ -1,4 +1,4 @@
-package mimir.sql;
+package mimir.sql
 
 import java.sql._
 
@@ -7,7 +7,8 @@ import mimir.algebra._
 import mimir.util.JDBCUtils
 import net.sf.jsqlparser.statement.select.{Select, SelectBody};
 
-abstract class Backend {
+abstract class MetadataBackend {
+
   def open(): Unit
 
   def execute(sel: String): ResultSet
@@ -60,8 +61,4 @@ abstract class Backend {
   def listTablesQuery: Operator
   def listAttrsQuery: Operator
 
-}
-
-trait InlinableBackend {
-	def enableInlining(db: Database) : Unit
 }

@@ -12,10 +12,9 @@ import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-class JDBCBackend(val backend: String, val filename: String) 
-  extends Backend
+class JDBCMetadataBackend(val backend: String, val filename: String)
+  extends MetadataBackend
   with LazyLogging
-  with InlinableBackend
 {
   var conn: Connection = null
   var openConnections = 0
