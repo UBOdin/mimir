@@ -39,6 +39,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
+import mimir.exec.result.JDBCResultIterator
 
 
  /**
@@ -254,6 +255,68 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
       ) 
     )
   }
+  
+  
+  
+  /**
+   * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
+   * and rewrites the query to properly account for Virtual Tables.
+   */
+  final def queryMetadata[T](oper: Operator)(handler: ResultIterator => T): T = {
+    handler(new JDBCResultIterator(
+          typechecker.schemaOf(oper),
+          ra.convert(oper), metadataBackend,
+          metadataBackend.dateType
+        )) 
+  }
+    
+    
+  /**
+   * get all metadata tables
+   */
+  def getAllMatadataTables(): Set[String] =
+  {
+    (
+      metadataBackend.getAllTables() ++ views.list()
+    ).toSet[String];
+  }
+
+  /**
+   * Determine whether the specified table exists
+   */
+  def matadataTableExists(name: String): Boolean =
+  {
+    matadataTableSchema(name) != None
+  }
+
+  /**
+   * Look up the schema for the table with the provided name.
+   */
+  def matadataTableSchema(name: String): Option[Seq[(String,Type)]] = {
+    logger.debug(s"Table schema for $name")
+    views.get(name) match { 
+      case Some(viewDefinition) => Some(viewDefinition.schema)
+      case None => metadataBackend.getTableSchema(name)
+    }
+  }
+
+  /**
+   * Build a Table operator for the table with the provided name.
+   */
+  def matadataTable(tableName: String) : Operator = matadataTable(tableName, tableName)
+  def matadataTable(tableName: String, alias:String): Operator =
+  {
+    getView(tableName).getOrElse(
+      Table(
+        tableName, alias,
+        metadataBackend.getTableSchema(tableName) match {
+          case Some(x) => x
+          case None => throw new SQLException(s"No such table or view '$tableName'")
+        },
+        Nil
+      ) 
+    )
+  }
 
   /**
    * Evaluate a statement that does not produce results.
@@ -332,8 +395,8 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
       case drop: Drop     => {
         drop.getType().toUpperCase match {
           case "TABLE" | "INDEX" =>
-            backend.update(drop.toString());
-            backend.invalidateCache();
+            metadataBackend.update(drop.toString());
+            metadataBackend.invalidateCache();
 
           case "VIEW" =>
             views.drop(drop.getName().toUpperCase);
@@ -355,7 +418,7 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
         } 
       }
 
-      case _                => backend.update(stmt.toString())
+      case _                => metadataBackend.update(stmt.toString())
     }
   }
   
@@ -476,51 +539,13 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
     * Materialize a view into the database
     */
   def selectInto(targetTable: String, sourceQuery: Operator){
-    val tableSchema = typechecker.schemaOf(sourceQuery)
-    val tableDef = tableSchema.map( x => x._1+" "+Type.toString(x._2) ).mkString(",")
-    val tableCols = tableSchema.map( _._1 ).mkString(",")
-    val colFillIns = tableSchema.map( _ => "?").mkString(",")
-    backend.update(  s"CREATE TABLE $targetTable ( $tableDef );"  )
-    val insertCmd = s"INSERT INTO $targetTable( $tableCols ) VALUES ($colFillIns);"
-    println(insertCmd)
-    query(sourceQuery) { result =>
-      backend.fastUpdateBatch(
-        insertCmd,
-        result.map( _.tuple ) 
-      )
-    }
+    backend.createTable(targetTable, sourceQuery)
   }
   
 
   def selectInto(targetTable: String, tableName: String): Unit =
   {
-/*    val v:Option[Operator] = getView(tableName)
-    val mod:Model = models.getModel(tableName)
-    mod.bestGuess()
-    v match {
-      case Some(o) => println("Schema: " + o.schema.toString())
-      case None => println("Not a View")
-    }
-*/
-    val tableS = this.tableSchema(tableName)
-    var tableDef = ""
-    var tableCols = ""
-    var colFillIns = ""
-    tableS match {
-      case Some(sch) => {
-        tableDef = sch.map( x => x._1+" "+Type.toString(x._2) ).mkString(",")
-        tableCols = sch.map( _._1 ).mkString(",")
-        colFillIns = sch.map( _ => "?").mkString(",")
-      }
-      case None => throw new SQLException
-    }
-    println(  s"CREATE TABLE $targetTable ( $tableDef );"  )
-    backend.update(  s"CREATE TABLE $targetTable ( $tableDef );"  )
-    val insertCmd = s"INSERT INTO $targetTable( $tableCols ) VALUES ($colFillIns);"
-    println(insertCmd)
-    query("SELECT * FROM " + tableName + ";")(_.foreach { result =>
-      backend.update(insertCmd, result.tuple)
-    })
+    selectInto(targetTable, table(tableName))
   }
   def select(s: String) = 
   {
@@ -537,7 +562,7 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
    * If the table does exist, non-existant columns will be created.
    * If the table does exist and a column has a different type, an error will be thrown.
    */
-  def requireTable(name: String, schema: Seq[(String, Type)], primaryKey: Option[String] = None)
+  def requireMetadataTable(name: String, schema: Seq[(String, Type)], primaryKey: Option[String] = None)
   {
     val typeMap = schema.map { x => (x._1.toUpperCase -> x._2) }.toMap
     backend.getTableSchema(name) match {
@@ -553,7 +578,7 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
           )
         """
         logger.debug(s"CREATE: $createCmd")
-        backend.update(createCmd);
+        metadataBackend.update(createCmd);
       }
       case Some(oldSch) => {
         val currentColumns = oldSch.map { _._1 }.toSet
@@ -561,7 +586,7 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
           if(typeMap contains column){
             if(!(currentColumns contains column)){
               logger.debug("Need to add $column to $name(${typemap.keys.mkString(", ")})")
-              backend.update(s"ALTER TABLE $name ADD COLUMN $column ${typeMap(column)}")
+              metadataBackend.update(s"ALTER TABLE $name ADD COLUMN $column ${typeMap(column)}")
             }
           }
         }

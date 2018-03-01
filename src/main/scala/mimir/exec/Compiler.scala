@@ -137,17 +137,18 @@ class Compiler(db: Database) extends LazyLogging {
       // Make the set of columns we're interested in explicitly part of the query
       oper = oper.project( requiredColumns.toSeq:_* )
 
-      val (sql, sqlSchema) = sqlForBackend(oper)
-
+      //val (sql, sqlSchema) = sqlForBackend(oper)
+      val schema = db.typechecker.schemaOf(oper)
+      
       logger.info(s"PROJECTIONS: $projections")
 
       new ProjectionResultIterator(
         outputCols.map( projections(_) ),
         annotationCols.map( projections(_) ).toSeq,
-        sqlSchema,
-        new JDBCResultIterator(
-          sqlSchema,
-          sql, db.backend,
+        schema,
+        new SparkResultIterator(
+          schema,
+          oper, db.backend,
           db.backend.dateType
         ),
         db

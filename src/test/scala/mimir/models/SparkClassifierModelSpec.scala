@@ -21,10 +21,9 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
   }
   def trueValue(col:String, row:String): PrimitiveValue = {
     val t = db.tableSchema("CPUSPEED").get.find(_._1.equals(col)).get._2
-    JDBCUtils.extractAllRows(
-      db.backend.execute(s"SELECT $col FROM CPUSPEED WHERE ROWID=$row"),
-      List(t)
-    ).next.head
+    db.query(s"SELECT $col FROM CPUSPEED WHERE ROWID=$row")(
+      result => result.toList.head(0)
+    )
   }
 
   "The SparkClassifier Model" should {

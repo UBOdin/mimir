@@ -43,7 +43,7 @@ object SimpleDemoScript
 
 		"Run the Load Product Data Script" >> {
 			stmts(productDataFile).map( update(_) )
-			db.backend.resultRows("SELECT * FROM PRODUCT;") must have size(6)
+			db.query("SELECT * FROM PRODUCT;")(result => result.toList ) must have size(6)
 		}
 
 		"Load CSV Files" >> {

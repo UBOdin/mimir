@@ -2517,21 +2517,5 @@ object OperatorTranslation {
     }
   }
    
-   def getQueryResults(query:String) : String =  {
-    val ress = db.backend.execute(query)
-    val resmd = ress.getMetaData();
-    var i = 1;
-    var row = ""
-    var resStr = ""
-    while(ress.next()){
-      i = 1;
-      row = ""
-      while(i<=resmd.getColumnCount()){
-        row += ress.getString(i) + ", ";
-        i+=1;
-      }
-      resStr += row + "\n"
-    }
-    resStr
-  }
+   
 }

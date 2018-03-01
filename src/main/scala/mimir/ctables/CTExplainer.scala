@@ -341,14 +341,14 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 		val finalSchema = db.typechecker.schemaOf(optQuery)
 
-		val sqlQuery = db.ra.convert(optQuery)
+		//val sqlQuery = db.ra.convert(optQuery)
 
-		logger.debug(s"SQL: $sqlQuery")
+		//logger.debug(s"SQL: $sqlQuery")
 
-		val results = db.backend.execute(sqlQuery)
+		val results = db.backend.execute(optQuery)//sqlQuery)
 
 		val baseData = 
-			JDBCUtils.extractAllRows(results, finalSchema.map(_._2)).flush
+			SparkUtils.extractAllRows(results, finalSchema.map(_._2)).flush
 
 		if(baseData.isEmpty){
 			val resultRowString = baseData.map( _.mkString(", ") ).mkString("\n")

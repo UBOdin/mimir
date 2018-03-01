@@ -83,10 +83,10 @@ object MissingKeyLens {
                     projKeys,
                     Comparison(Cmp.Eq, Var("rght_"+keys.head._1), Var(s"${keys.head._1}"))
                   ))
-    val rs = db.backend.execute(db.ra.convert(missingKeysLookup))
+    val df = db.backend.execute(missingKeysLookup).rdd.toLocalIterator
     var htData = Seq[Seq[PrimitiveValue]]()
-    while(rs.next){
-      htData = htData :+ keys.zipWithIndex.map(col => IntPrimitive(rs.getInt(col._2+1))) 
+    while(df.hasNext){
+      htData = htData :+ keys.zipWithIndex.map(col => IntPrimitive(df.next.getInt(col._2+1))) 
     }
     
     val missingKeys = HardTable(keys, htData)

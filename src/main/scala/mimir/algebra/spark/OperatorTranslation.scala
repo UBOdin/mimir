@@ -5,7 +5,7 @@ import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.sql.types.{Metadata, DataType, DoubleType, LongType, FloatType, BooleanType, IntegerType, StringType, StructField, StructType}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.catalyst.expressions.{NamedExpression, AttributeReference,Alias,SortOrder,Ascending,Descending,GreaterThanOrEqual,Literal, Add, Subtract, Multiply, Divide, BitwiseAnd, BitwiseOr, And, Or, LessThan, LessThanOrEqual, GreaterThan, EqualTo, IsNull, Like, If, ScalaUDF, Rand, Randn}
+import org.apache.spark.sql.catalyst.expressions.{MonotonicallyIncreasingID, NamedExpression, AttributeReference,Alias,SortOrder,Ascending,Descending,GreaterThanOrEqual,Literal, Add, Subtract, Multiply, Divide, BitwiseAnd, BitwiseOr, And, Or, LessThan, LessThanOrEqual, GreaterThan, EqualTo, IsNull, Like, If, ScalaUDF, Rand, Randn}
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.analysis.UnresolvedFunction
 import org.apache.spark.sql.catalyst.{TableIdentifier}
@@ -14,11 +14,14 @@ import org.apache.spark.sql.catalyst.analysis.{UnresolvedRelation, UnresolvedInl
 import org.apache.spark.sql.catalyst.plans.{JoinType, Inner,LeftOuter}
 import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression,AggregateFunction,AggregateMode,Complete,Count,Average,Sum,First,Max,Min}
 
+
 import org.apache.spark.sql.execution.datasources.{DataSource, FailureSafeParser}
 
 
 import mimir.algebra._
 import mimir.Database
+import org.apache.spark.sql.types._
+import mimir.provenance.Provenance
 
 object OperatorTranslation {
   var db:Database = null
@@ -170,6 +173,9 @@ object OperatorTranslation {
       case cnd@Conditional(condition,thenClause,elseClause) => {
         mimirConditionalToSparkConditional(cnd)
       }
+      case Var(name@Provenance.rowidColnameBase) => {
+        org.apache.spark.sql.catalyst.expressions.Cast(Alias(MonotonicallyIncreasingID(),name)(),getSparkType(db.backend.rowIdType),None)
+      }
       case Var(v) => {
         UnresolvedAttribute(v)
       }
@@ -265,8 +271,49 @@ object OperatorTranslation {
     }
   }
   
-  def mimirSchemaToStructType(schema:Seq[(String, Type)]) = {
+  def dataTypeFromString(dataTypeString:String): DataType = {
+   dataTypeString match {
+      case "BinaryType" => BinaryType
+      case "BooleanType" => BooleanType
+      case "ByteType" => ByteType
+      case "CalendarIntervalType" => CalendarIntervalType
+      case "DateType" => DateType
+      case "DoubleType" => DoubleType
+      case "FloatType" => FloatType
+      case "IntegerType" => IntegerType
+      case "LongType" => LongType
+      case "NullType" => NullType
+      case "ShortType" => ShortType
+      case "StringType" => StringType
+      case "TimestampType" => TimestampType
+   }
+  }
+  
+  def dataTypeFromHiveDataTypeString(hiveType:String): DataType = {
+    hiveType.toUpperCase() match {
+      case "TINYINT" => ShortType
+      case "SMALLINT" => IntegerType
+      case "INT" => IntegerType
+      case "BIGINT" => LongType 
+      case "FLOAT" => FloatType 
+      case "DOUBLE" => DoubleType
+      case "DECIMAL" => DoubleType
+      case "TIMESTAMP" => TimestampType
+      case "DATE" => DateType
+      case "STRING" => StringType
+      case "VARCHAR" => StringType
+      case "CHAR" => StringType
+      case "BOOLEAN" => BooleanType 
+      case "BINARY" => BinaryType
+    }
+  }
+  
+  def mimirSchemaToStructType(schema:Seq[(String, Type)]):StructType = {
     StructType(schema.map(col => StructField(col._1, getSparkType(col._2), true)))  
+  }
+  
+  def structTypeToMimirSchema(schema:StructType): Seq[(String, Type)] = {
+    schema.fields.map(col => (col.name, getMimirType(col.dataType)))  
   }
   
   def getSparkType(t:Type) : DataType = {

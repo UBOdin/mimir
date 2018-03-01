@@ -78,18 +78,18 @@ object ViewsSpec
 
       update("ALTER VIEW MATTEST MATERIALIZE")
       val results = 
-        db.backend.resultRows(s"""
+        db.query(s"""
           SELECT A, B, 
             ${ViewAnnotation.taintBitVectorColumn}, 
             MIMIR_ROWID_0
            FROM MATTEST
-        """).map { row => 
+        """)(result => result.toList.map(_.tuple)).map { row => 
           ( row(0).asLong, row(1).asLong, row(2).asLong, row(3).asLong ) 
         }
 
       results must contain(eachOf(
-        (1l, 3l, 7l, db.backend.resultValue("SELECT ROWID FROM R WHERE A = 1 AND B = 3 AND C = 1").asLong),
-        (2l, 2l, 7l, db.backend.resultValue("SELECT ROWID FROM R WHERE A = 2 AND B = 2 AND C = 1").asLong)
+        (1l, 3l, 7l, db.query("SELECT ROWID FROM R WHERE A = 1 AND B = 3 AND C = 1")(_.toList.head(0).asLong)),
+        (2l, 2l, 7l, db.query("SELECT ROWID FROM R WHERE A = 2 AND B = 2 AND C = 1")(_.toList.head(0).asLong))
       ))
 
     }

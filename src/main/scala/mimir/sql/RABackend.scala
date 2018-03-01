@@ -2,10 +2,12 @@ package mimir.sql
 
 import mimir.algebra._
 import org.apache.spark.sql.DataFrame
+import mimir.Database
 
 abstract class RABackend {
   def open(): Unit
 
+  def createTable(tableName:String, oper:Operator): Unit
   def execute(compiledOp: Operator): DataFrame
   
 

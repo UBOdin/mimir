@@ -9,13 +9,18 @@ import mimir.algebra._
 import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import mimir.algebra.spark.OperatorTranslation
+import org.apache.spark.sql.DataFrame
+import mimir.Database
+import org.apache.spark.sql.types.DataType
 
 class SparkBackend extends RABackend{
   var sparkSql : SQLContext = null
+  val remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
   def open(): Unit = {
     sparkSql = sparkSql match {
       case null => {
-        val conf = if(ExperimentalOptions.isEnabled("remoteSpark")){
+        val conf = if(remoteSpark){
           new SparkConf().setMaster("spark://localhost:7077").setAppName("Mimir")//("local[*]").setAppName("MultiClassClassification")
         }
         else{
@@ -29,7 +34,7 @@ class SparkBackend extends RABackend{
           }
         }
         val sparkCtx = SparkContext.getOrCreate(conf)//new SparkContext(conf)
-        if(ExperimentalOptions.isEnabled("remoteSpark"))
+        if(remoteSpark)
           sparkCtx.addJar("https://maven.mimirdb.info/info/mimirdb/mimir-core_2.11/0.2/mimir-core_2.11-0.2.jar")
         println(s"apache spark: ${sparkCtx.version}")
         new SQLContext(sparkCtx)
@@ -38,6 +43,11 @@ class SparkBackend extends RABackend{
     }
   }
 
+  def createTable(tableName:String, oper:Operator) = {
+    val df = execute(oper)
+    df.persist().createOrReplaceTempView(tableName)
+  }
+  
   def execute(compiledOp: Operator): DataFrame = {
     if(sparkSql == null) throw new Exception("There is no spark context")
     val sparkOper = OperatorTranslation.mimirOpToSparkOp(compiledOp)
@@ -62,11 +72,22 @@ class SparkBackend extends RABackend{
   }
   
   
-  def getTableSchema(table: String): Option[Seq[(String, Type)]]
+  def getTableSchema(table: String): Option[Seq[(String, Type)]] = {
+    if(sparkSql == null) throw new Exception("There is no spark context")
+    if(sparkSql.sparkSession.catalog.tableExists(table))
+      Some(sparkSql.sparkSession.catalog.listColumns(table).collect.map(col => (col.name, OperatorTranslation.getMimirType( OperatorTranslation.dataTypeFromHiveDataTypeString(col.dataType)))))
+    else None
+  }
   
   
-  def getAllTables(): Seq[String]
-  def invalidateCache();
+  def getAllTables(): Seq[String] = {
+    if(sparkSql == null) throw new Exception("There is no spark context")
+    sparkSql.sparkSession.catalog.listTables().collect().map(table => table.name)
+  }
+  def invalidateCache() = {
+    if(sparkSql == null) throw new Exception("There is no spark context")
+    sparkSql.sparkSession.catalog.clearCache()
+  }
 
   def close() = {
     if(sparkSql == null) throw new Exception("There is no spark context")
@@ -77,8 +98,34 @@ class SparkBackend extends RABackend{
   def canHandleVGTerms: Boolean = true
   def rowIdType: Type = TString()
   def dateType: Type = TString()
-  def specializeQuery(q: Operator, db: Database): Operator
+  def specializeQuery(q: Operator, db: Database): Operator = {
+    ???
+  }
 
-  def listTablesQuery: Operator
-  def listAttrsQuery: Operator
+  def listTablesQuery: Operator = {
+    HardTable(
+      Seq(("TABLE_NAME", TString())),
+      getAllTables().map(table => Seq(StringPrimitive(table)))
+    )  
+  }
+  
+  def listAttrsQuery: Operator = {
+    HardTable(Seq(
+          ("TABLE_NAME", TString()), 
+          ("ATTR_NAME", TString()),
+          ("ATTR_TYPE", TString()),
+          ("IS_KEY", TBool())
+        ),
+        getAllTables().flatMap { table =>
+          getTableSchema(table).get.map { case (col, t) =>
+            Seq(
+              StringPrimitive(table),
+              StringPrimitive(col),
+              TypePrimitive(t),
+              BoolPrimitive(false)
+            )
+          }
+        }
+      )  
+  }
 }

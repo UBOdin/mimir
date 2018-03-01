@@ -17,6 +17,7 @@ import mimir.gprom.MimirGProMMetadataPlugin
 import org.gprom.jdbc.driver.GProMConnection
 import org.gprom.jdbc.jna.GProMWrapper
 import com.sun.jna.Native
+import org.apache.spark.sql.DataFrame
 
 class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) 
   extends RABackend
@@ -103,8 +104,10 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int)
     })
   }
   
-  def execute(compiledOp: Operator): DataFrame = null
-  def execute(compiledOp: Operator, args: Seq[PrimitiveValue]): DataFrame = null
+  def execute(compiledOp: Operator): DataFrame = ???
+  def execute(compiledOp: Operator, args: Seq[PrimitiveValue]): DataFrame = ???
+  def createTable(tableName: String,oper: mimir.algebra.Operator): Unit = ???
+  def readDataSource(name: String,format: String,options: Map[String,String],schema: Option[Seq[(String, mimir.algebra.Type)]],load: Option[String]): Unit = ???
 
   def execute(sel: String): ResultSet =
   {

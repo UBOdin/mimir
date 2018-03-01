@@ -248,10 +248,10 @@ object RepairKeySpec
           WHERE num_instances = 1
         """).asLong must be equalTo(148494l)
 
-        db.backend.resultValue("""
+        db.query("""
           SELECT COUNT(*) FROM CUST_ACCTBAL_WITHDUPS
           WHERE WORLD_ID = 1
-        """).asLong must be equalTo(150000l)
+        """)( result => result.toList.head(0).asLong) must be equalTo(150000l)
       } else {
         skipped("Skipping FastPath tests (Run `sbt datasets` to download required data)"); ko
       }
@@ -280,10 +280,10 @@ object RepairKeySpec
 
     "Produce the same results under selection" >> {
       if(PDBench.isDownloaded){
-        db.backend.resultValue("""
+        db.query("""
           SELECT COUNT(*) FROM CUST_ACCTBAL_WITHDUPS
           WHERE WORLD_ID = 1 and acctbal < 0
-        """).asLong must be equalTo(13721l)
+        """)( result => result.toList.head(0).asLong) must be equalTo(13721l)
 
         Timer.monitor("QUERY_FASTPATH"){
           queryOneColumn("""

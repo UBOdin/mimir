@@ -49,7 +49,7 @@ class RAToSql(db: Database)
   {
     oper match {
       case Table(name, alias, tgtSch, tgtMetadata) => {
-        val realSch = db.backend.getTableSchema(name) match {
+        val realSch = db.metadataBackend.getTableSchema(name) match {
           case Some(realSch) => realSch
           case None => throw new SQLException("Unknown Table '"+name+"'");
         }
@@ -403,7 +403,7 @@ class RAToSql(db: Database)
         )
 
       case Table(name, alias, tgtSch, metadata) =>
-        val realSch = db.tableSchema(name) match {
+        val realSch = db.matadataTableSchema(name) match {
           case Some(realSch) => realSch
           case None => throw new SQLException("Unknown Table '"+name+"'");
         }
@@ -571,8 +571,8 @@ class RAToSql(db: Database)
       case NullPrimitive() => new NullValue()
       case DatePrimitive(y,m,d) => {
         val f = new Function()
-        if(db.backend.isInstanceOf[JDBCBackend]
-          && db.backend.asInstanceOf[JDBCBackend].driver().equalsIgnoreCase("oracle")
+        /*if(db.backend.isInstanceOf[JDBCMetadataBackend]
+          && db.backend.asInstanceOf[JDBCMetadataBackend].driver().equalsIgnoreCase("oracle")
         ) {
           f.setName("TO_DATE")
           f.setParameters(new ExpressionList(
@@ -582,13 +582,13 @@ class RAToSql(db: Database)
             )
           ))
           f
-        } else {
+        } else {*/
           f.setName("DATE")
           f.setParameters(new ExpressionList(
             List[net.sf.jsqlparser.expression.Expression](new StringValue(""+y+"-%02d".format(m)+"-%02d".format(d)))
           ))
           f
-        }
+       // }
       }
       case Comparison(Cmp.Eq, l, r)  => bin(new EqualsTo(), l, r, sources)
       case Comparison(Cmp.Neq, l, r) => bin(new NotEqualsTo(), l, r, sources)

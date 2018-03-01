@@ -14,7 +14,7 @@ object PerformanceTuningSpec
   def inputSize = 1000000
 
   def beforeAll = {
-    db.backend.update(s"""
+    /*db.backend.update(s"""
       CREATE TEMPORARY TABLE TEST_SEQUENCE AS
         WITH RECURSIVE generate_series(value) AS (
           SELECT 1 UNION ALL 
@@ -23,7 +23,7 @@ object PerformanceTuningSpec
             WHERE value+1 <= $inputSize
         )
         SELECT cast(value as int) as value FROM generate_series;
-    """)
+    """)*/
   }
 
   "ProjectionResultIterator" should {

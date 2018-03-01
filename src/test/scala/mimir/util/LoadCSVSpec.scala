@@ -132,9 +132,9 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
       LoggerUtils.error("mimir.util.NonStrictCSVParser") {
         db.loadTable( "EMPLOYEE", new File("test/data/Employee.csv"))
       }
-      db.backend.resultRows("""
+      db.query("""
         SELECT cast(JOINDATE as varchar) FROM EMPLOYEE
-      """).map{ _(0).asString } must contain(
+      """)(result => result.toList.map(_.tuple)).map{ _(0).asString } must contain(
         "2011-08-01",
         "2014-06-19",
         "2007-11-11",

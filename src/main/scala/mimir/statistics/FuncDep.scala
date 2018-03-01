@@ -911,7 +911,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
   def serializeTo(db: mimir.Database, name: String): Unit =
   {
     FuncDep.initBackstore(db)
-    db.backend.update(
+    db.metadataBackend.update(
       "INSERT OR REPLACE INTO "+FuncDep.BACKSTORE_TABLE_NAME+"(name, data) VALUES (?,?)", 
       List(StringPrimitive(name), StringPrimitive(SerializationUtils.b64encode(serialize())))
     )
@@ -1004,7 +1004,7 @@ object FuncDep {
   def initBackstore(db: mimir.Database)
   {
     if(!db.tableExists(FuncDep.BACKSTORE_TABLE_NAME)){
-      db.backend.update(
+      db.metadataBackend.update(
         "CREATE TABLE "+FuncDep.BACKSTORE_TABLE_NAME+"(name varchar(40), data blob, PRIMARY KEY(name))"
       )
     }
@@ -1018,7 +1018,7 @@ object FuncDep {
   def deserialize(db: mimir.Database, name: String): FuncDep =
   {
     val blob = 
-      db.backend.resultValue(
+      db.metadataBackend.resultValue(
         "SELECT data FROM "+BACKSTORE_TABLE_NAME+" WHERE name=?", 
         List(StringPrimitive(name))
       ).asString

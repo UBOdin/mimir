@@ -288,16 +288,18 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
     }
     
     def getQueryResultsBackend(query:String) : String =  {
-      val ress = db.backend.execute(query)
-      val resmd = ress.getMetaData();
+      val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
+      val ress = db.backend.execute(oper)
+      val resmd = ress.rdd.toLocalIterator
       var i = 1;
       var row = ""
       var resStr = ""
-      while(ress.next()){
+      while(resmd.hasNext){
         i = 1;
         row = ""
-        while(i<=resmd.getColumnCount()){
-          row += ress.getString(i) + ", ";
+        val sparkRow = resmd.next
+        while(i<=row.length){
+          row += sparkRow.getString(i) + ", ";
           i+=1;
         }
         resStr += row + "\n"

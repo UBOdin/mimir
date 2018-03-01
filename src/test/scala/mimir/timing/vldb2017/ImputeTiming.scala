@@ -182,7 +182,7 @@ object ImputeTiming
         ){ createMissingValueLens(_, s"_RUN_$i") }
 
         // // INDEXES
-        if(useMaterialized){
+        /*if(useMaterialized){
           Fragments.foreach( relevantIndexes ) {
             case (baseTable, indices) => 
               val viewTable = s"${baseTable}_RUN_$i"
@@ -195,7 +195,7 @@ object ImputeTiming
                 }
               }
           }
-        } else { "No Need To Create Indexes" >> ok }
+        } else { "No Need To Create Indexes" >> ok }*/
 
         // QUERIES
         if(runBestGuessQueries){

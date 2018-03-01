@@ -34,7 +34,7 @@ object GProMDBTestInstances
           }
           val oldDBExists = dbFile.exists();
           val backend = new GProMBackend(jdbcBackendMode, tempDBName+".db", 1)
-          val tmpDB = new Database(backend);
+          val tmpDB = new Database(backend, new JDBCMetadataBackend(jdbcBackendMode, tempDBName+".db"));
           if(shouldResetDB){
             if(dbFile.exists()){ dbFile.delete(); }
           }
@@ -45,6 +45,7 @@ object GProMDBTestInstances
           if(shouldResetDB){    
             dbFile.deleteOnExit();
           }
+          tmpDB.metadataBackend.open()
           tmpDB.backend.open();
           backend.metadataLookupPlugin.db = tmpDB;
           if(shouldResetDB || !oldDBExists || !config.contains("initial_db")){

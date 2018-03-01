@@ -16,7 +16,7 @@ object DiscalaAbadiNormalizer
 {
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model] =
   {
-    logger.debug(s"Creating DiscalaAbadiNormalizer: $config")
+    /*logger.debug(s"Creating DiscalaAbadiNormalizer: $config")
 
     logger.debug("Creating FD Graph")
       val fd = new FuncDep()
@@ -102,7 +102,7 @@ object DiscalaAbadiNormalizer
           logger.trace(s"INSTALLING: $parent -> $child: ${model.name}")
           model 
         }
-    return Seq(groupingModel)++parentKeyRepairs
+    return Seq(groupingModel)++parentKeyRepairs*/Seq()
   }
 
   /**

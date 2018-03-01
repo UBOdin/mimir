@@ -12,7 +12,6 @@ import mimir.exec._
 import mimir.exec.mode._
 import mimir.serialization._
 import com.typesafe.scalalogging.slf4j.LazyLogging
-import mimir.sql.JDBCBackend
 
 
 class ViewManager(db:Database) extends LazyLogging {
@@ -25,7 +24,7 @@ class ViewManager(db:Database) extends LazyLogging {
    */
   def init(): Unit = 
   {
-    db.requireTable(viewTable, Seq(
+    db.requireMetadataTable(viewTable, Seq(
         ("NAME", TString()),
         ("QUERY", TString()),
         ("METADATA", TInt())

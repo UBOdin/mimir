@@ -50,21 +50,23 @@ object MimirVizier extends LazyLogging {
     ExperimentalOptions.enable(conf.experimental())
     if(!ExperimentalOptions.isEnabled("GPROM-BACKEND")){
       // Set up the database connection(s)
-      db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
+      db = new Database(new SparkBackend(), new JDBCMetadataBackend(conf.backend(), conf.dbname()))
+      db.metadataBackend.open()
       db.backend.open()
     }
     else {
       //Use GProM Backend
       gp = new GProMBackend(conf.backend(), conf.dbname(), 1)
-      db = new Database(gp)    
+      db = new Database(gp, new JDBCMetadataBackend(conf.backend(), conf.dbname()))    
+      db.metadataBackend.open()
       db.backend.open()
       gp.metadataLookupPlugin.db = db;
     }
     db.initializeDBForMimir();
     
-    if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
+    /*if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
         db.backend.asInstanceOf[InlinableBackend].enableInlining(db)
-      }
+      }*/
     
     OperatorTranslation.db = db       
     
@@ -294,7 +296,7 @@ object MimirVizier extends LazyLogging {
             operCSVResults(oper)
         }
         case update:Update => {
-          db.backend.update(query)
+          //db.backend.update(query)
           new PythonCSVContainer("SUCCESS\n1", Array(Array()), Array(), Array(), Array(), Map())
         }
         case stmt:Statement => {
@@ -308,7 +310,7 @@ object MimirVizier extends LazyLogging {
     timeRes._1
   }
   
-  def vistrailsDeployWorkflowToViztool(input : Any, name:String, dataType:String, users:Seq[String], startTime:String, endTime:String, fields:String, latlonFields:String, houseNumberField:String, streetField:String, cityField:String, stateField:String, orderByFields:String) : String = {
+  /*def vistrailsDeployWorkflowToViztool(input : Any, name:String, dataType:String, users:Seq[String], startTime:String, endTime:String, fields:String, latlonFields:String, houseNumberField:String, streetField:String, cityField:String, stateField:String, orderByFields:String) : String = {
     val timeRes = time {
       val inputTable = input.toString()
       val hash = ((inputTable + dataType + users.mkString("") + name + startTime + endTime).hashCode().toString().replace("-", "") )
@@ -351,7 +353,7 @@ object MimirVizier extends LazyLogging {
     }
     logger.debug(s"vistrailsDeployWorkflowToViztool Took: ${timeRes._2}")
     timeRes._1
-  }
+  }*/
   
   def explainCell(query: String, col:Int, row:String) : Seq[mimir.ctables.Reason] = {
     logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
@@ -601,7 +603,7 @@ object MimirVizier extends LazyLogging {
      new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), detListsAndProv._1.toArray, detListsAndProv._2.toArray, resCSV._3.toArray, detListsAndProv._3.toArray, schViz)
   }
  
- def isWorkflowDeployed(hash:String) : Boolean = {
+ /*def isWorkflowDeployed(hash:String) : Boolean = {
    db.query(Project(Seq(ProjectArg("CLEANING_JOB_ID",Var("CLEANING_JOB_ID"))) , mimir.algebra.Select( Comparison(Cmp.Eq, Var("HASH"), StringPrimitive(hash)), db.table("CLEANING_JOBS"))))( resIter => resIter.hasNext())
  }
                                                                                               //by default we'll start now and end when the galaxy class Enterprise launches
@@ -648,7 +650,7 @@ object MimirVizier extends LazyLogging {
      case "DATA" => {}
      case x => {}
    }
- }
+ }*/
  
  def time[F](anonFunc: => F): (F, Long) = {  
       val tStart = System.nanoTime()

@@ -22,6 +22,7 @@ import org.rogach.scallop._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import scala.collection.JavaConverters._
+import mimir.algebra.spark.OperatorTranslation
 
 /**
  * The primary interface to Mimir.  Responsible for:
@@ -49,13 +50,16 @@ object Mimir extends LazyLogging {
     // Prepare experiments
     ExperimentalOptions.enable(conf.experimental())
 
+   
     // Set up the database connection(s)
-    db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
+    db = new Database(new SparkBackend(), new JDBCMetadataBackend(conf.backend(), conf.dbname()))
     if(!conf.quiet()){
       output.print("Connecting to " + conf.backend() + "://" + conf.dbname() + "...")
     }
+    db.metadataBackend.open()
     db.backend.open()
-
+    OperatorTranslation.db = db
+    
     db.initializeDBForMimir();
 
     // Check for one-off commands
@@ -70,9 +74,9 @@ object Mimir extends LazyLogging {
         db.models.prefetchForOwner(table.toUpperCase)
       }))
 
-      if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
+      /*if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
         db.backend.asInstanceOf[JDBCBackend].enableInlining(db)
-      }
+      }*/
 
       if(conf.file.get == None || conf.file() == "-"){
         if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
@@ -158,7 +162,7 @@ object Mimir extends LazyLogging {
 
   def handleDirectQuery(direct: DirectQuery) =
   {
-    direct.getStatement match {
+    /*direct.getStatement match {
       case sel: Select => {
         val iter = new JDBCResultIterator(
           SqlUtils.getSchema(sel.getSelectBody, db).map { (_, TString()) },
@@ -172,7 +176,7 @@ object Mimir extends LazyLogging {
       case update => {
         db.backend.update(update.toString);
       }
-    }
+    }*/
   }
 
   def handleExplain(explain: Explain): Unit = 

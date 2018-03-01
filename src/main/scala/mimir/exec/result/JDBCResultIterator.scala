@@ -5,13 +5,13 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
 import mimir.util._
 import mimir.exec._
-import mimir.sql.Backend
+import mimir.sql.MetadataBackend
 import net.sf.jsqlparser.statement.select.SelectBody
 
 class JDBCResultIterator(
   inputSchema: Seq[(String,Type)],
   query: SelectBody,
-  backend: Backend,
+  backend: MetadataBackend,
   dateType: (Type)
 )
   extends ResultIterator
