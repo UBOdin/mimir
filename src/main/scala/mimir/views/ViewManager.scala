@@ -168,11 +168,12 @@ class ViewManager(db:Database) extends LazyLogging {
     logger.debug(s"RAW: $completeQuery")
     logger.debug(s"MATERIALIZE: $name(${completeQuery.columnNames.mkString(",")})")
 
-    val (inlinedSQL:SelectBody, _) = db.compiler.sqlForBackend(completeQuery)
+    //val (inlinedSQL:SelectBody, _) = db.compiler.sqlForBackend(completeQuery)
         
-    logger.debug(s"QUERY: $inlinedSQL")
+    //logger.debug(s"QUERY: $inlinedSQL")
 
-    db.metadataBackend.selectInto(name, inlinedSQL.toString)
+    //db.metadataBackend.selectInto(name, inlinedSQL.toString)
+    db.backend.createTable(name, completeQuery)
 
     db.metadataBackend.update(s"""
       UPDATE $viewTable SET METADATA = 1 WHERE NAME = ?

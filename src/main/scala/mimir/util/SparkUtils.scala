@@ -14,19 +14,38 @@ object SparkUtils {
   {
     val checkNull: ((Row, => PrimitiveValue) => PrimitiveValue) = {
       (r, call) => {
-        val ret = call
         if(r.isNullAt(field)){ NullPrimitive() }
-        else { ret }
+        else { call }
       }
     }
-
+    
     t match {
       case TAny() =>        throw new SQLException(s"Can't extract TAny: $field")
-      case TFloat() =>      (r) => checkNull(r, { FloatPrimitive(r.getDouble(field)) })
-      case TInt() =>        (r) => checkNull(r, { IntPrimitive(r.getLong(field)) })
+      case TFloat() =>      (r) => checkNull(r, { try {
+          FloatPrimitive(r.getDouble(field))
+        } catch {
+          case t: Throwable => {
+            FloatPrimitive(r.getString(field).toFloat) 
+          }
+        }  })
+      case TInt() =>        (r) => checkNull(r, { 
+        try {
+          IntPrimitive(r.getLong(field)) 
+        } catch {
+          case t: Throwable => {
+            IntPrimitive(r.getString(field).toLong) 
+          }
+        } })
       case TString() =>     (r) => checkNull(r, { StringPrimitive(r.getString(field)) })
       case TRowId() =>      (r) => checkNull(r, { RowIdPrimitive(r.getString(field)) })
-      case TBool() =>       (r) => checkNull(r, { BoolPrimitive(r.getInt(field) != 0) })
+      case TBool() =>       (r) => checkNull(r, { 
+        try {
+          BoolPrimitive(r.getInt(field) != 0)
+        } catch {
+          case t: Throwable => {
+            BoolPrimitive(r.getString(field).equalsIgnoreCase("true")) 
+          }
+        } })
       case TType() =>       (r) => checkNull(r, { TypePrimitive(Type.fromString(r.getString(field))) })
       case TDate() =>
         dateType match {

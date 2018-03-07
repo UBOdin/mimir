@@ -14,6 +14,7 @@ import mimir.exec._
 import mimir.exec.result._
 import mimir.optimizer._
 import mimir.algebra.spark.OperatorTranslation
+import mimir.ml.spark.SparkML
 
 object DBTestInstances
 {
@@ -42,12 +43,14 @@ object DBTestInstances
           val oldDBExists = dbFile.exists();
           // println("Exists: "+oldDBExists)
           val backend = new JDBCMetadataBackend(jdbcBackendMode, tempDBName+".db")
-          val tmpDB = new Database(new SparkBackend(), backend);
+          val sback = new SparkBackend()
+          val tmpDB = new Database(sback, backend);
           if(shouldCleanupDB){    
             dbFile.deleteOnExit();
           }
           tmpDB.metadataBackend.open()
           tmpDB.backend.open();
+          SparkML(sback.sparkSql)
           OperatorTranslation.db = tmpDB
           if(shouldResetDB || !oldDBExists){
             config.get("initial_db") match {

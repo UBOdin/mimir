@@ -18,25 +18,17 @@ object SparkML {
   type SparkModelGenerator = SparkModelGeneratorParams => PipelineModel
   var sc: Option[SparkContext] = None
   var sqlCtx : Option[SQLContext] = None
+  def apply(spark:SQLContext) = {
+    sc = Some(spark.sparkSession.sparkContext)
+    sqlCtx = Some(spark)
+  }
 }
 
 abstract class SparkML {
   def getSparkSession() : SparkContext = {
-      val conf = new SparkConf().setMaster("spark://localhost:7077").setAppName("Mimir")//("local[*]").setAppName("MultiClassClassification")
-      if(ExperimentalOptions.isEnabled("GPROM-BACKEND")){
-        sys.props.get("os.name") match {
-    	  	case Some(osname) if osname.startsWith("Mac OS X") => conf.set("spark.executorEnv.DYLD_INSERT_LIBRARIES",System.getProperty("java.home")+"/lib/libjsig.dylib")
-    	  	case Some(otherosname) => conf.set("spark.executorEnv.LD_PRELOAD",System.getProperty("java.home")+"/lib/"+System.getProperty("os.arch")+"/libjsig.so")
-    	  	case None => println("No os name so no preload!")
-        }
-      }
       SparkML.sc match {
         case None => {
-          val sparkCtx = SparkContext.getOrCreate(conf)//new SparkContext(conf)
-          sparkCtx.addJar("https://maven.mimirdb.info/info/mimirdb/mimir-core_2.11/0.2/mimir-core_2.11-0.2.jar")
-          println(s"apache spark: ${sparkCtx.version}")
-          SparkML.sc = Some(sparkCtx)
-          sparkCtx
+          throw new Exception("No Spark Context")
         }
         case Some(session) => session
       }
@@ -45,8 +37,7 @@ abstract class SparkML {
   def getSparkSqlContext() : SQLContext = {
     SparkML.sqlCtx match {
       case None => {
-        SparkML.sqlCtx = Some(new SQLContext(getSparkSession()))
-        SparkML.sqlCtx.get
+        throw new Exception("No Spark Context")
       }
       case Some(ctx) => ctx
     }
@@ -77,7 +68,8 @@ abstract class SparkML {
   }
   
   def prepareData(query : Operator, db:Database, valuePreparer: ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType) : DataFrame = {
-    val schema = db.typechecker.schemaOf(query).toList
+    db.backend.execute(query)
+    /*val schema = db.typechecker.schemaOf(query).toList
     val sqlContext = getSparkSqlContext()
     //OperatorTranslation.db = db
     //OperatorTranslation.mimirOpToDF(sqlContext, query)
@@ -86,7 +78,7 @@ abstract class SparkML {
       getSparkSession().parallelize(db.query(query)(results => {
         results.toList.map(row => Row((valuePreparer(row.provenance, TString() ) +: row.tuple.zip(schema).map(value => valuePreparer(value._1, value._2._2))):_*))
       })), StructType(StructField("rowid", StringType, false) :: schema.filterNot(_._1.equalsIgnoreCase("rowid")).map(col => StructField(col._1, sparkTyper(col._2), true))))
-  }
+  */}
   
   def applyModelDB(model : PipelineModel, query : Operator, db:Database, valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType, dfTransformer:Option[DataFrameTransformer] = None) : DataFrame = {
     val data = db.query(query)(results => {

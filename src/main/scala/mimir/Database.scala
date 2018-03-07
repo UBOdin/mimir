@@ -418,7 +418,9 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
         } 
       }
 
-      case _                => metadataBackend.update(stmt.toString())
+      case _                => {
+        metadataBackend.update(stmt.toString())
+      }
     }
   }
   
@@ -482,7 +484,7 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
           }
           if(!tableExists(targetTable.toUpperCase)){
             LoadCSV.handleLoadTableRaw(this, targetRaw, sourceFile, 
-              Map("DELIMITER" -> delim)
+              Map("DELIMITER" -> delim, "mode" -> "DROPMALFORMED", "header" -> "false")
             )
             var oper = table(targetRaw)
             //detect headers 
@@ -500,7 +502,7 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
             //finally create a view for the data
             views.create(targetTable.toUpperCase, oper)
           } else {
-            LoadCSV.handleLoadTableRaw(this, targetTable.toUpperCase, sourceFile,  Map("DELIMITER" -> delim) )
+            LoadCSV.handleLoadTableRaw(this, targetTable.toUpperCase, sourceFile,  Map("DELIMITER" -> delim, "mode" -> "DROPMALFORMED", "header" -> "false") )
           }
         }
       case fmt =>

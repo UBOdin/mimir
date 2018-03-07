@@ -5,7 +5,7 @@ import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.sql.types.{Metadata, DataType, DoubleType, LongType, FloatType, BooleanType, IntegerType, StringType, StructField, StructType}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.catalyst.expressions.{MonotonicallyIncreasingID, NamedExpression, AttributeReference,Alias,SortOrder,Ascending,Descending,GreaterThanOrEqual,Literal, Add, Subtract, Multiply, Divide, BitwiseAnd, BitwiseOr, And, Or, LessThan, LessThanOrEqual, GreaterThan, EqualTo, IsNull, Like, If, ScalaUDF, Rand, Randn}
+import org.apache.spark.sql.catalyst.expressions.{RowNumber, MonotonicallyIncreasingID, NamedExpression, AttributeReference,Alias,SortOrder,Ascending,Descending,GreaterThanOrEqual,Literal, Add, Subtract, Multiply, Divide, BitwiseAnd, BitwiseOr, And, Or, ShiftLeft, ShiftRight, LessThan, LessThanOrEqual, GreaterThan, EqualTo, IsNull, Like, If, ScalaUDF, Rand, Randn}
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.analysis.UnresolvedFunction
 import org.apache.spark.sql.catalyst.{TableIdentifier}
@@ -22,8 +22,12 @@ import mimir.algebra._
 import mimir.Database
 import org.apache.spark.sql.types._
 import mimir.provenance.Provenance
+import org.apache.spark.sql.expressions.Window
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
-object OperatorTranslation {
+object OperatorTranslation
+  extends LazyLogging
+{
   var db:Database = null
   
   def mimirOpToSparkOp(oper:Operator) : LogicalPlan = {
@@ -62,12 +66,18 @@ object OperatorTranslation {
 			  org.apache.spark.sql.catalyst.plans.logical.Union(mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs))
 			}
 			case Limit(offset, limit, query) => {
-			  limit match {
+			  val limitOp = limit match {
 			    case Some(limitI) => org.apache.spark.sql.catalyst.plans.logical.GlobalLimit(
 			      Literal(limitI.toInt), 
 			      mimirOpToSparkOp(query))
 			    case None => mimirOpToSparkOp(query)
 			  }
+			  if(offset > 0){
+			    logger.debug("------------------------------>Hacky Offset<-------------------------------------")
+			    org.apache.spark.sql.catalyst.plans.logical.Filter(GreaterThanOrEqual(MonotonicallyIncreasingID(),Literal(offset)), limitOp)
+			  }
+			  else
+			    limitOp
 			}
 			case Table(name, alias, sch, meta) => {
 			  /*val table = CatalogTable(
@@ -179,8 +189,9 @@ object OperatorTranslation {
       case Var(v) => {
         UnresolvedAttribute(v)
       }
-      case RowIdVar() => {
-        UnresolvedAttribute("ROWID")
+      case rid@RowIdVar() => {
+        //UnresolvedAttribute("ROWID")
+        org.apache.spark.sql.catalyst.expressions.Cast(Alias(MonotonicallyIncreasingID(),rid.toString())(),getSparkType(db.backend.rowIdType),None)
       }
       case func@Function(_,_) => {
         mimirFunctionToSparkFunction(func)
@@ -242,6 +253,8 @@ object OperatorTranslation {
       case  Arith.BitOr => BitwiseOr(mimirExprToSparkExpr(arith.lhs),mimirExprToSparkExpr(arith.rhs))  
       case  Arith.And => And(mimirExprToSparkExpr(arith.lhs),mimirExprToSparkExpr(arith.rhs))   
       case  Arith.Or => Or(mimirExprToSparkExpr(arith.lhs),mimirExprToSparkExpr(arith.rhs))   
+      case  Arith.ShiftLeft => ShiftLeft(mimirExprToSparkExpr(arith.lhs),mimirExprToSparkExpr(arith.rhs))
+      case  Arith.ShiftRight => ShiftRight(mimirExprToSparkExpr(arith.lhs),mimirExprToSparkExpr(arith.rhs))  
       case x => throw new Exception("Invalid operand '"+x+"'")
     }
   }

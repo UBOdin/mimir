@@ -99,7 +99,7 @@ class SparkBackend extends RABackend{
   def rowIdType: Type = TString()
   def dateType: Type = TString()
   def specializeQuery(q: Operator, db: Database): Operator = {
-    ???
+    q
   }
 
   def listTablesQuery: Operator = {
