@@ -21,6 +21,7 @@ import org.slf4j.{LoggerFactory}
 import ch.qos.logback.classic.{Level, Logger}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import net.sf.jsqlparser.statement.Statement
+import mimir.util.JSONBuilder
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -308,6 +309,39 @@ object MimirVizier extends LazyLogging {
     timeRes._1
   }
   
+  def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
+    val timeRes = time {
+      logger.debug("vistrailsQueryMimir: " + query)
+      val jsqlStmnt = db.parse(query).head
+      jsqlStmnt match {
+        case select:Select => {
+          val oper = db.sql.convert(select)
+          if(includeUncertainty && includeReasons)
+            operCSVResultsDeterminismAndExplanationJson(oper)
+          else if(includeUncertainty)
+            operCSVResultsDeterminismJson(oper)
+          else 
+            operCSVResultsJson(oper)
+        }
+        case update:Update => {
+          db.backend.update(query)
+          JSONBuilder.dict(Map(
+            "success" -> JSONBuilder.int(1)
+          ))
+        }
+        case stmt:Statement => {
+          db.update(stmt)
+          JSONBuilder.dict(Map(
+            "success" -> JSONBuilder.int(1)
+          ))
+        }
+      }
+      
+    }
+    logger.debug(s"vistrailsQueryMimir Took: ${timeRes._2}")
+    timeRes._1
+  }
+  
   def vistrailsDeployWorkflowToViztool(input : Any, name:String, dataType:String, users:Seq[String], startTime:String, endTime:String, fields:String, latlonFields:String, houseNumberField:String, streetField:String, cityField:String, stateField:String, orderByFields:String) : String = {
     val timeRes = time {
       val inputTable = input.toString()
@@ -351,6 +385,17 @@ object MimirVizier extends LazyLogging {
     }
     logger.debug(s"vistrailsDeployWorkflowToViztool Took: ${timeRes._2}")
     timeRes._1
+  }
+  
+  def explainCellJson(query: String, col:String, row:String) : String = {
+    logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
+    val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+    JSONBuilder.list(explainCell(oper, col, RowIdPrimitive(row)).map(_.toJSON))
+  }
+  
+  def getSchema(query:String) : String = {
+    val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+    JSONBuilder.list( db.typechecker.schemaOf(oper).map( schel => JSONBuilder.dict( Map( "name" -> JSONBuilder.string(schel._1), "type" -> JSONBuilder.string(schel._2.toString()), "base_type" -> JSONBuilder.string(Type.rootType(schel._2).toString())))))
   }
   
   def explainCell(query: String, col:Int, row:String) : Seq[mimir.ctables.Reason] = {
@@ -600,6 +645,56 @@ object MimirVizier extends LazyLogging {
      val detListsAndProv = resCSV._2.unzip3
      new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), detListsAndProv._1.toArray, detListsAndProv._2.toArray, resCSV._3.toArray, detListsAndProv._3.toArray, schViz)
   }
+ 
+ 
+ def operCSVResultsJson(oper : mimir.algebra.Operator) : String =  {
+    db.query(oper)(results => {
+      val resultList = results.toList 
+      val (resultsStrs, prov) = results.toList.map(row => (JSONBuilder.list(row.tuple.map(cell => JSONBuilder.prim(cell))), JSONBuilder.string(row.provenance.asString))).unzip
+      JSONBuilder.dict(Map(
+        "schema" -> JSONBuilder.list( results.schema.map( schel => JSONBuilder.dict( Map( "name" -> JSONBuilder.string(schel._1), "type" -> JSONBuilder.string(schel._2.toString()), "base_type" -> JSONBuilder.string(Type.rootType(schel._2).toString()))))),
+        "data" -> JSONBuilder.list(resultsStrs),
+        "prov" -> JSONBuilder.list(prov)
+      ))
+    })
+  }
+  
+ def operCSVResultsDeterminismJson(oper : mimir.algebra.Operator) : String =  {
+    db.query(oper)(results => {
+      val colsIndexes = results.schema.zipWithIndex.map( _._2)
+      val resultList = results.toList 
+      val (resultsStrsColTaint, provRowTaint) = results.toList.map(row => ((JSONBuilder.list(row.tuple.map(cell => JSONBuilder.prim(cell))), JSONBuilder.list(colsIndexes.map(idx => JSONBuilder.string(row.isColDeterministic(idx).toString())))), (JSONBuilder.string(row.provenance.asString), JSONBuilder.string(row.isDeterministic().toString())))).unzip
+      val (resultsStrs, colTaint) = resultsStrsColTaint.unzip
+      val (prov, rowTaint) = provRowTaint.unzip
+      JSONBuilder.dict(Map(
+        "schema" -> JSONBuilder.list( results.schema.map( schel => JSONBuilder.dict( Map( "name" -> JSONBuilder.string(schel._1), "type" -> JSONBuilder.string(schel._2.toString()), "base_type" -> JSONBuilder.string(Type.rootType(schel._2).toString()))))),
+        "data" -> JSONBuilder.list(resultsStrs),
+        "prov" -> JSONBuilder.list(prov),
+        "col_taint" -> JSONBuilder.list(colTaint),
+        "row_taint" -> JSONBuilder.list(rowTaint)
+      ))
+    }) 
+ }
+ 
+ def operCSVResultsDeterminismAndExplanationJson(oper : mimir.algebra.Operator) : String =  {
+     db.query(oper)(results => {
+      val colsIndexes = results.schema.zipWithIndex.map( _._2)
+      val resultList = results.toList 
+      val (resultsStrsColTaint, provRowTaint) = results.toList.map(row => ((JSONBuilder.list(row.tuple.map(cell => JSONBuilder.prim(cell))), JSONBuilder.list(colsIndexes.map(idx => JSONBuilder.string(row.isColDeterministic(idx).toString())))), (JSONBuilder.string(row.provenance.asString), JSONBuilder.string(row.isDeterministic().toString())))).unzip
+      val (resultsStrs, colTaint) = resultsStrsColTaint.unzip
+      val (prov, rowTaint) = provRowTaint.unzip
+      val reasons = explainEverything(oper).map(reasonSet => JSONBuilder.list(reasonSet.all(db).toSeq.map(_.toJSON)))
+      JSONBuilder.dict(Map(
+        "schema" -> JSONBuilder.list( results.schema.map( schel => JSONBuilder.dict( Map( "name" -> JSONBuilder.string(schel._1), "type" -> JSONBuilder.string(schel._2.toString()), "base_type" -> JSONBuilder.string(Type.rootType(schel._2).toString()))))),
+        "data" -> JSONBuilder.list(resultsStrs),
+        "prov" -> JSONBuilder.list(prov),
+        "col_taint" -> JSONBuilder.list(colTaint),
+        "row_taint" -> JSONBuilder.list(rowTaint),
+        "reasons" -> JSONBuilder.list(reasons)
+      ))
+    }) 
+    
+ }
  
  def isWorkflowDeployed(hash:String) : Boolean = {
    db.query(Project(Seq(ProjectArg("CLEANING_JOB_ID",Var("CLEANING_JOB_ID"))) , mimir.algebra.Select( Comparison(Cmp.Eq, Var("HASH"), StringPrimitive(hash)), db.table("CLEANING_JOBS"))))( resIter => resIter.hasNext())
