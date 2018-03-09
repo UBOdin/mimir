@@ -10,6 +10,8 @@ import org.apache.spark.sql.DataFrame
 import mimir.algebra.spark.OperatorTranslation
 
 object SparkUtils {
+  //TODO:there are a bunch of hacks in this conversion function because type conversion in operator translator
+  //  needs to be done correctly
   def convertFunction(t: Type, field: Integer, dateType: Type = TDate()): (Row => PrimitiveValue) =
   {
     val checkNull: ((Row, => PrimitiveValue) => PrimitiveValue) = {
@@ -22,7 +24,7 @@ object SparkUtils {
     t match {
       case TAny() =>        throw new SQLException(s"Can't extract TAny: $field")
       case TFloat() =>      (r) => checkNull(r, { try {
-          FloatPrimitive(r.getDouble(field))
+          FloatPrimitive(r.getFloat(field))
         } catch {
           case t: Throwable => {
             FloatPrimitive(r.getString(field).toFloat) 
@@ -33,7 +35,11 @@ object SparkUtils {
           IntPrimitive(r.getLong(field)) 
         } catch {
           case t: Throwable => {
-            IntPrimitive(r.getString(field).toLong) 
+            val sval = r.getString(field)
+            //TODO: this is a super hack: somehow only '-' is in 
+            //  there sometimes for negative values
+            if(sval.equalsIgnoreCase("-")) IntPrimitive(-1L) 
+            else IntPrimitive(r.getString(field).toLong) 
           }
         } })
       case TString() =>     (r) => checkNull(r, { StringPrimitive(r.getString(field)) })
@@ -43,7 +49,13 @@ object SparkUtils {
           BoolPrimitive(r.getInt(field) != 0)
         } catch {
           case t: Throwable => {
-            BoolPrimitive(r.getString(field).equalsIgnoreCase("true")) 
+            try {
+              BoolPrimitive(r.getBoolean(field))
+            } catch {
+              case t: Throwable => {
+                BoolPrimitive(r.getString(field).equalsIgnoreCase("true")) 
+              }
+            } 
           }
         } })
       case TType() =>       (r) => checkNull(r, { TypePrimitive(Type.fromString(r.getString(field))) })

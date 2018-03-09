@@ -101,6 +101,16 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     query(s){ _.next }
   def table(t: String) =
     db.table(t)
+  def queryMetadata[T](s: String)(handler: ResultIterator => T): T =
+    db.queryMetadata(s)(handler)
+  def queryOneColumnMetadata[T](s: String)(handler: Iterator[PrimitiveValue] => T): T = 
+    queryMetadata(s){ result => handler(result.map(_(0))) }
+  def querySingletonMetadata(s: String): PrimitiveValue =
+    queryOneColumnMetadata(s){ _.next }
+  def queryOneRowMetadata(s: String): Row =
+    queryMetadata(s){ _.next }
+  def metadataTable(t: String) =
+    db.metadataTable(t)
   def resolveViews(q: Operator) =
     db.views.resolve(q)
   def explainRow(s: String, t: String) = 
@@ -128,9 +138,13 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     db.update(s)
   def update(s: String) = 
     db.update(stmt(s))
-  def loadCSV(table: String, file: File) =
+  def loadCSV(table: String, file: File) : Unit =
     LoadCSV.handleLoadTable(db, table, file)
- 
+  def loadCSV(table: String, schema:Seq[(String,String)], file: File) : Unit =
+    loadCSVSchema(table, schema.map(el => (el._1, Type.fromString(el._2))), file)
+  private def loadCSVSchema(table: String, schema:Seq[(String,Type)], file: File) : Unit =
+    LoadCSV.handleLoadTableRaw(db, table, schema, file, Map())
+    
   def modelLookup(model: String) = db.models.get(model)
   def schemaLookup(table: String) = db.tableSchema(table).get
  }

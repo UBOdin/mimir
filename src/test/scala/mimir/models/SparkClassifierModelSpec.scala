@@ -87,7 +87,6 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
     }
 
     "Produce reasonable explanations" >> {
-
       explain("BUSSPEEDINMHZ", "3") must not contain("The classifier isn't willing to make a guess")
       explain("TECHINMICRONS", "22") must not contain("The classifier isn't willing to make a guess")
       explain("CORES", "20") must not contain("The classifier isn't willing to make a guess")

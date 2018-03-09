@@ -25,9 +25,8 @@ object OperatorTranslationSpec
       val result = query("""
         SELECT * FROM R
       """)(_.toList.map(_.tuple))
-      println(result)
       
-      result must contain (
+      result must be equalTo List(
        List(i(1), i(2), i(3)), 
        List(i(1), i(3), i(1)), 
        List(i(2), NullPrimitive(), i(1)), 
@@ -40,8 +39,8 @@ object OperatorTranslationSpec
     
     "Do ROWIDs" >> {
       val result = db.query(db.table("R").addColumn(("ROWID", RowIdVar())).project("ROWID"))(_.toList.map(_.tuple))
-      println(result)
-      result must contain (
+      
+      result must be equalTo List(
        List(RowIdPrimitive("0")), 
        List(RowIdPrimitive("1")), 
        List(RowIdPrimitive("2")), 
@@ -58,13 +57,16 @@ object OperatorTranslationSpec
 				  AS SELECT * FROM R
 				  WITH MISSING_VALUE('COLUMN_2')
  			""")
-      val result = query("""
-        SELECT * FROM MV_R
-      """)(_.toList.map(_.tuple))
+ 			val query = db.table("MV_R")
+      val result = db.query(query)(_.toList.map(_.tuple))
       
-      result must contain (
+      //mimir.MimirVizier.db = db
+      //println( mimir.MimirVizier.explainEverything(query).map(_.all(db).map(_.reason)) )
+      
+      result must be equalTo List(
+       List(i(1), i(2), i(3)), 
        List(i(1), i(3), i(1)), 
-       List(i(2), i(2), i(1)), 
+       List(i(2), NullPrimitive(), i(1)), 
        List(i(1), i(2), i(1)), 
        List(i(1), i(4), i(2)), 
        List(i(2), i(2), i(1)), 

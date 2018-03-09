@@ -49,8 +49,14 @@ class SparkBackend extends RABackend{
   }
   
   def execute(compiledOp: Operator): DataFrame = {
+    /*println("------------------------ mimir op --------------------------")
+    println(compiledOp)
+    println("------------------------------------------------------------")*/
     if(sparkSql == null) throw new Exception("There is no spark context")
     val sparkOper = OperatorTranslation.mimirOpToSparkOp(compiledOp)
+    /*println("------------------------ spark op --------------------------")
+    println(sparkOper)
+    println("------------------------------------------------------------")*/
     val qe = sparkSql.sparkSession.sessionState.executePlan(sparkOper)
     qe.assertAnalyzed()
     new Dataset[Row](sparkSql.sparkSession, sparkOper, RowEncoder(qe.analyzed.schema)).toDF()

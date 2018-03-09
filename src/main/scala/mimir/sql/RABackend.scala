@@ -29,7 +29,7 @@ abstract class RABackend {
   def resultValue(sel:SelectBody):PrimitiveValue =
     resultRows(sel).head.head*/
   
-  def readDataSource(name:String, format:String, options:Map[String, String], schema:Option[Seq[(String, Type)]], load:Option[String])
+  def readDataSource(name:String, format:String, options:Map[String, String], schema:Option[Seq[(String, Type)]], load:Option[String]) : Unit
   
   
   def getTableSchema(table: String): Option[Seq[(String, Type)]]

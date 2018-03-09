@@ -53,12 +53,13 @@ class Compiler(db: Database) extends LazyLogging {
    * Perform a full end-end compilation pass producing best guess results.  
    * Return an iterator over the result set.  
    */
-  def compile[R <:ResultIterator](query: Operator, mode: CompileMode[R]): R =
-    mode(db, query)
+  def compile[R <:ResultIterator](query: Operator, mode: CompileMode[R], rootIteratorGen:(Operator)=>(Seq[(String,Type)],ResultIterator) ): R =
+    mode(db, query, rootIteratorGen)
 
   def deploy(
     compiledOper: Operator, 
-    outputCols: Seq[String]
+    outputCols: Seq[String],
+    rootIteratorGen:(Operator)=>(Seq[(String,Type)],ResultIterator)
   ): ResultIterator =
   {
     var oper = compiledOper
@@ -109,7 +110,7 @@ class Compiler(db: Database) extends LazyLogging {
       val sourceColumnTypes = db.typechecker.schemaOf(unionClauses(0)).toMap
 
 
-      val nested = unionClauses.map { deploy(_, requiredColumnsInOrder) }
+      val nested = unionClauses.map { deploy(_, requiredColumnsInOrder, rootIteratorGen) }
       val jointIterator = new UnionResultIterator(nested.iterator)
 
       val aggregateIterator =
@@ -137,23 +138,36 @@ class Compiler(db: Database) extends LazyLogging {
       // Make the set of columns we're interested in explicitly part of the query
       oper = oper.project( requiredColumns.toSeq:_* )
 
-      //val (sql, sqlSchema) = sqlForBackend(oper)
-      val schema = db.typechecker.schemaOf(oper)
-      
+      val (schema, rootIterator) = rootIteratorGen(oper)
+        
       logger.info(s"PROJECTIONS: $projections")
 
       new ProjectionResultIterator(
         outputCols.map( projections(_) ),
         annotationCols.map( projections(_) ).toSeq,
         schema,
-        new SparkResultIterator(
-          schema,
-          oper, db.backend,
-          db.backend.dateType
-        ),
+        rootIterator,
         db
       )
     }
+  }
+  
+  def sparkBackendRootIterator(oper:Operator) : (Seq[(String, Type)], ResultIterator) = {
+    val schema = db.typechecker.schemaOf(oper) 
+    (schema, new SparkResultIterator(
+          schema,
+          oper, db.backend,
+          db.backend.dateType
+        ))
+  }
+  
+  def metadataBackendRootIterator(oper:Operator) : (Seq[(String, Type)], ResultIterator) = {
+    val (sql, sqlSchema) = sqlForBackend(oper)
+    (sqlSchema, new JDBCResultIterator(
+          sqlSchema,
+          sql, db.metadataBackend,
+          db.backend.dateType
+        ))
   }
 
   def sqlForBackend(

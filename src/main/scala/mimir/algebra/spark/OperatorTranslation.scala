@@ -24,6 +24,24 @@ import org.apache.spark.sql.types._
 import mimir.provenance.Provenance
 import org.apache.spark.sql.expressions.Window
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import org.apache.spark.sql.catalyst.expressions.aggregate.DeclarativeAggregate
+import org.apache.spark.sql.catalyst.util.TypeUtils
+import org.apache.spark.sql.catalyst.analysis.TypeCheckResult
+import org.apache.spark.sql.catalyst.plans.logical.LocalRelation
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.unsafe.types.UTF8String
+import mimir.sql.sqlite.VGTermFunctions
+import mimir.sql.sqlite.BestGuessVGTerm
+import mimir.ctables.vgterm.BestGuess
+import mimir.ctables.vgterm.IsAcknowledged
+import org.apache.spark.sql.catalyst.expressions.Concat
+import mimir.models.Model
+import org.apache.spark.sql.catalyst.expressions.Substring
+import org.apache.spark.sql.catalyst.expressions.SubstringIndex
+import org.apache.spark.sql.catalyst.expressions.StringTrim
+import org.apache.spark.sql.catalyst.expressions.StringTrimLeft
+import org.apache.spark.sql.catalyst.expressions.StartsWith
+import org.apache.spark.sql.catalyst.expressions.Contains
 
 object OperatorTranslation
   extends LazyLogging
@@ -49,7 +67,7 @@ object OperatorTranslation
 			case Aggregate(groupBy, aggregates, source) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Aggregate(
           groupBy.map(mimirExprToSparkExpr(_)),
-          aggregates.map(mimirAggFunctionToSparkNamedExpr(_)),
+          groupBy.map( gb => Alias( UnresolvedAttribute(gb.name), gb.name)()) ++ aggregates.map( mimirAggFunctionToSparkNamedExpr(_)),
           mimirOpToSparkOp(source))
 			}
 			case Select(cond, src) => {
@@ -122,7 +140,9 @@ object OperatorTranslation
           mimirOpToSparkOp(query))
       }
       case HardTable(schema, data)=> {
-        UnresolvedInlineTable( schema.unzip._1, data.map(row => row.map(mimirExprToSparkExpr(_))))
+        //UnresolvedInlineTable( schema.unzip._1, data.map(row => row.map(mimirExprToSparkExpr(_))))
+        LocalRelation(mimirSchemaToStructType(schema).map(f => AttributeReference(f.name, f.dataType, f.nullable, f.metadata)()), 
+            data.map(row => InternalRow(row.map(mimirPrimitiveToSparkInternalRowValue(_)):_*)))
       }
 			case Sort(sortCols, src) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Sort(
@@ -160,6 +180,15 @@ object OperatorTranslation
          case AggFunction("MIN", _, args, _) => {
            Min(mimirExprToSparkExpr(args.head))
          }
+         case AggFunction("GROUP_AND", _, args, _) => {
+           GroupAnd(mimirExprToSparkExpr(args.head))
+         }
+         case AggFunction("GROUP_OR", _, args, _) => {
+           GroupOr(mimirExprToSparkExpr(args.head))
+         }
+         case AggFunction("JSON_GROUP_ARRAY", _, args, _) => {
+           JsonGroupArray(mimirExprToSparkExpr(args.head))
+         }
          case AggFunction(function, distinct, args, alias) => {
            throw new Exception("Aggregate Function Translation not implemented '"+function+"'")
          } 
@@ -196,13 +225,29 @@ object OperatorTranslation
       case func@Function(_,_) => {
         mimirFunctionToSparkFunction(func)
       }
-      case VGTerm(name, idx, args, hints) => {
+      case BestGuess(model, idx, args, hints) => {
+        val name = model.name
+        println(s"-------------------Translate BestGuess VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
+       BestGuessUDF(model, idx, args, hints).getUDF
+        //UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(StringPrimitive(name)) +: mimirExprToSparkExpr(IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(_)) ++ hints.map(mimirExprToSparkExpr(_))), true )
+      }
+      case IsAcknowledged(model, idx, args) => {
+        val name = model.name
+        println(s"-------------------Translate IsAcknoledged VGTerm($name, $idx, (${args.mkString(",")}))")
+        AckedUDF(model, idx, args).getUDF
+        //UnresolvedFunction(mimir.ctables.CTables.FN_IS_ACKED, mimirExprToSparkExpr(StringPrimitive(name)) +: mimirExprToSparkExpr(IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(_)) ), true )
+      }
+      case VGTerm(name, idx, args, hints) => { //default to best guess
+        println(s"-------------------Translate VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
         val model = db.models.get(name)
-        /*ScalaUDF(
-          model.bestGuess(idx,Seq(),Seq()),
-          getSparkType(model.varType(idx, model.argTypes(idx))),
-          args.map(mimirExprToSparkExpr(_)),
-          model.hintTypes(idx).map(getSparkType(_)),
+        /*val sparkVarType = getSparkType(model.varType(idx, model.argTypes(idx)))
+        val sparkArgs = (Literal(idx) +: (args.map(arg => mimirExprToSparkExpr(arg)) ++ hints.map(hint => mimirExprToSparkExpr(hint)))).toSeq
+        val sparkArgTypes = (IntegerType +: (model.argTypes(idx).map(arg => getSparkType(arg)) ++ model.hintTypes(idx).map(hint => getSparkType(hint)))).toSeq
+        ScalaUDF(
+          model.bestGuess _,
+          sparkVarType,
+          sparkArgs,
+          sparkArgTypes,
           Some(name))*/
         UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(StringPrimitive(name)) +: mimirExprToSparkExpr(IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(_)) ++ hints.map(mimirExprToSparkExpr(_))), true )
       }
@@ -213,7 +258,7 @@ object OperatorTranslation
         org.apache.spark.sql.catalyst.expressions.Not(mimirExprToSparkExpr(nexpr))
       }
       case x => {
-        throw new Exception("Expression Translation not implemented '"+x+"'")
+        throw new Exception(s"Expression Translation not implemented ${x.getClass}: '$x'")
       }
     }
   }
@@ -225,7 +270,20 @@ object OperatorTranslation
       case StringPrimitive(s) => Literal(s)
       case IntPrimitive(i) => Literal(i)
       case FloatPrimitive(f) => Literal(f)
+      case BoolPrimitive(b) => Literal(b)
       case x =>  Literal(x.asString)
+    }
+  }
+  
+  def mimirPrimitiveToSparkInternalRowValue(primitive : PrimitiveValue) : Any = {
+    primitive match {
+      case NullPrimitive() => null
+      case RowIdPrimitive(s) => UTF8String.fromString(s)
+      case StringPrimitive(s) => UTF8String.fromString(s)
+      //case IntPrimitive(i) => i
+      case FloatPrimitive(f) => f
+      case BoolPrimitive(b) => b
+      case x =>  UTF8String.fromString(x.asString)
     }
   }
   
@@ -268,6 +326,7 @@ object OperatorTranslation
   }
   
   def mimirFunctionToSparkFunction(func:Function) : org.apache.spark.sql.catalyst.expressions.Expression = {
+    val vgtBGFunc = VGTermFunctions.bestGuessVGTermFn
     func match {
       case Function("CAST", params) => {
         org.apache.spark.sql.catalyst.expressions.Cast(mimirExprToSparkExpr(params.head), getSparkType(params.tail.head.asInstanceOf[TypePrimitive].t), None)
@@ -277,6 +336,9 @@ object OperatorTranslation
       }
       case Function("random", params) => {
         Randn(1L)
+      }
+      case Function(`vgtBGFunc`, params) => {
+        throw new Exception(s"Function Translation not implemented $vgtBGFunc${params.mkString(",")}")
       }
       case Function(name, params) => {
         throw new Exception(s"Function Translation not implemented $name${params.mkString(",")}")
@@ -331,8 +393,8 @@ object OperatorTranslation
   
   def getSparkType(t:Type) : DataType = {
     t match {
-      case TInt() => StringType
-      case TFloat() => StringType
+      //case TInt() => LongType
+      case TFloat() => FloatType
       case TDate() => StringType
       case TString() => StringType
       case TBool() => BooleanType
@@ -348,10 +410,11 @@ object OperatorTranslation
   
   def getMimirType(dataType: DataType): Type = {
     dataType match {
-      case IntegerType => TInt()
+      //case IntegerType => TInt()
       case DoubleType => TFloat()
       case FloatType => TFloat()
-      case LongType => TFloat()
+      //case LongType => TInt()
+      case BooleanType => TBool()
       case _ => TString()
     }
   }
@@ -402,4 +465,182 @@ object OperatorTranslation
         options = Map("url" -> "jdbc:sqlite:debug.db") ).resolveRelation())*/
   }*/
   
+}
+
+class VGTermUDF {
+  def getPrimitive(t:Type, value:Any) = t match {
+    case TInt() => IntPrimitive(value.asInstanceOf[String].toLong)
+    case TFloat() => FloatPrimitive(value.asInstanceOf[Double])
+    //case TDate() => DatePrimitive.(value.asInstanceOf[Long])
+    //case TTimestamp() => Primitive(value.asInstanceOf[Long])
+    case TString() => StringPrimitive(value.asInstanceOf[String])
+    case TBool() => BoolPrimitive(value.asInstanceOf[Boolean])
+    case TRowId() => RowIdPrimitive(value.asInstanceOf[String])
+    case TType() => TypePrimitive(Type.fromString(value.asInstanceOf[String]))
+    //case TAny() => NullPrimitive()
+    //case TUser(name) => name.toLowerCase
+    //case TInterval() => Primitive(value.asInstanceOf[Long])
+    case _ => StringPrimitive(value.asInstanceOf[String])
+  }
+  def getNative(primitive : PrimitiveValue) : AnyRef = 
+    primitive match {
+      case NullPrimitive() => null
+      case RowIdPrimitive(s) => s
+      case StringPrimitive(s) => s
+      //case IntPrimitive(i) => i
+      case FloatPrimitive(f) => new java.lang.Float(f)
+      case BoolPrimitive(b) => new java.lang.Boolean(b)
+      case x =>  x.asString
+    }
+}
+
+case class BestGuessUDF(model:Model, idx:Int, args:Seq[Expression], hints:Seq[Expression]) extends VGTermUDF {
+  val sparkVarType = OperatorTranslation.getSparkType(model.varType(idx, model.argTypes(idx)))
+  val sparkArgs = (args.map(arg => OperatorTranslation.mimirExprToSparkExpr(arg)) ++ hints.map(hint => OperatorTranslation.mimirExprToSparkExpr(hint))).toList.toSeq
+  val sparkArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg)) ++ model.hintTypes(idx).map(hint => OperatorTranslation.getSparkType(hint))).toList.toSeq
+  
+  def extractArgsAndHints(args:Seq[Any]) : (Seq[PrimitiveValue],Seq[PrimitiveValue]) ={
+    val argList =
+    model.argTypes(idx).
+      zipWithIndex.
+      map( arg => getPrimitive(arg._1, args(arg._2)))
+    val hintList = 
+      model.hintTypes(idx).
+        zipWithIndex.
+        map( arg => getPrimitive(arg._1, args(argList.length+arg._2)))
+    (argList,hintList)  
+  }
+  def getUDF = 
+    ScalaUDF(
+      sparkArgs.length match { 
+        case 0 => {
+          getNative(model.bestGuess(idx, Seq(), Seq()))
+        }
+        case 1 => (arg0:Any) => {
+          val (argList, hintList) = extractArgsAndHints(Seq(arg0))
+          getNative(model.bestGuess(idx, argList, hintList))
+        }
+        case 2 => (arg0:Any, arg1:Any) => {
+          val (argList, hintList) = extractArgsAndHints(Seq(arg0, arg1))
+          getNative(model.bestGuess(idx, argList, hintList))
+        }
+        case 3 => (arg0:Any, arg1:Any, arg2:Any) => {
+          val (argList, hintList) = extractArgsAndHints(Seq(arg0, arg1, arg2))
+          getNative(model.bestGuess(idx, argList, hintList))
+        }
+        case 4 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any) => {
+          val (argList, hintList) = extractArgsAndHints(Seq(arg0, arg1, arg2, arg3))
+          getNative(model.bestGuess(idx, argList, hintList))
+        }
+      },
+      sparkVarType,
+      sparkArgs,
+      sparkArgTypes,
+      Some(model.name))
+}
+
+case class AckedUDF(model:Model, idx:Int, args:Seq[Expression]) extends VGTermUDF {
+  val sparkArgs = (args.map(arg => OperatorTranslation.mimirExprToSparkExpr(arg))).toList.toSeq
+  val sparkArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg))).toList.toSeq
+  def extractArgs(args:Seq[Any]) : Seq[PrimitiveValue] = {
+    model.argTypes(idx).
+      zipWithIndex.
+      map( arg => getPrimitive(arg._1, args(arg._2)))
+  }
+  def getUDF = 
+    ScalaUDF(
+      sparkArgs.length match { 
+        case 0 => {
+          new java.lang.Boolean(model.isAcknowledged(idx, Seq()))
+        }
+        case 1 => (arg0:Any) => {
+          val argList = extractArgs(Seq(arg0))
+          model.isAcknowledged(idx, argList)
+        }
+        case 2 => (arg0:Any, arg1:Any) => {
+          val argList = extractArgs(Seq(arg0, arg1))
+          model.isAcknowledged(idx, argList)
+        }
+        case 3 => (arg0:Any, arg1:Any, arg2:Any) => {
+          val argList = extractArgs(Seq(arg0, arg1, arg2))
+          model.isAcknowledged(idx, argList)
+        }
+        case 4 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any) => {
+          val argList = extractArgs(Seq(arg0, arg1, arg2, arg3))
+          model.isAcknowledged(idx, argList)
+        }
+      },
+      BooleanType,
+      sparkArgs,
+      sparkArgTypes,
+      Some(model.name))
+}
+
+case class GroupAnd(child: org.apache.spark.sql.catalyst.expressions.Expression) extends DeclarativeAggregate {
+  override def children: Seq[org.apache.spark.sql.catalyst.expressions.Expression] = child :: Nil
+  override def nullable: Boolean = false
+  // Return data type.
+  override def dataType: DataType = child.dataType
+  override def checkInputDataTypes(): TypeCheckResult =
+    TypeUtils.checkForOrderingExpr(child.dataType, "function group_and")
+  private lazy val group_and = AttributeReference("group_and", child.dataType)()
+  override lazy val aggBufferAttributes: Seq[AttributeReference] = group_and :: Nil
+  override lazy val initialValues: Seq[Literal] = Seq(
+    Literal.create(true, child.dataType)
+  )
+  override lazy val updateExpressions: Seq[ org.apache.spark.sql.catalyst.expressions.Expression] = Seq(
+    And(group_and, child)
+  )
+  override lazy val mergeExpressions: Seq[org.apache.spark.sql.catalyst.expressions.Expression] = {
+    Seq(
+      And(group_and.left, group_and.right)
+    )
+  }
+  override lazy val evaluateExpression: AttributeReference = group_and
+}
+
+case class GroupOr(child: org.apache.spark.sql.catalyst.expressions.Expression) extends DeclarativeAggregate {
+  override def children: Seq[org.apache.spark.sql.catalyst.expressions.Expression] = child :: Nil
+  override def nullable: Boolean = false
+  // Return data type.
+  override def dataType: DataType = child.dataType
+  override def checkInputDataTypes(): TypeCheckResult =
+    TypeUtils.checkForOrderingExpr(child.dataType, "function group_or")
+  private lazy val group_or = AttributeReference("group_or", child.dataType)()
+  override lazy val aggBufferAttributes: Seq[AttributeReference] = group_or :: Nil
+  override lazy val initialValues: Seq[Literal] = Seq(
+    Literal.create(false, child.dataType)
+  )
+  override lazy val updateExpressions: Seq[ org.apache.spark.sql.catalyst.expressions.Expression] = Seq(
+    Or(group_or, child)
+  )
+  override lazy val mergeExpressions: Seq[org.apache.spark.sql.catalyst.expressions.Expression] = {
+    Seq(
+      Or(group_or.left, group_or.right)
+    )
+  }
+  override lazy val evaluateExpression: AttributeReference = group_or
+}
+
+case class JsonGroupArray(child: org.apache.spark.sql.catalyst.expressions.Expression) extends DeclarativeAggregate {
+  override def children: Seq[org.apache.spark.sql.catalyst.expressions.Expression] = child :: Nil
+  override def nullable: Boolean = false
+  // Return data type.
+  override def dataType: DataType = StringType
+  override def checkInputDataTypes(): TypeCheckResult =
+    TypeUtils.checkForOrderingExpr(child.dataType, "function json_group_array")
+  private lazy val json_group_array = AttributeReference("json_group_array", StringType)()
+  override lazy val aggBufferAttributes: Seq[AttributeReference] = json_group_array :: Nil
+  override lazy val initialValues: Seq[Literal] = Seq(
+    Literal.create("", StringType)
+  )
+  override lazy val updateExpressions: Seq[ org.apache.spark.sql.catalyst.expressions.Expression] = Seq(
+    Concat(Seq(json_group_array, Literal(","), child))
+  )
+  override lazy val mergeExpressions: Seq[org.apache.spark.sql.catalyst.expressions.Expression] = {
+    Seq(
+      Concat(Seq(json_group_array.left, json_group_array.right))
+    )
+  }
+  override lazy val evaluateExpression = Concat(Seq(Literal("["), If(StartsWith(json_group_array,Literal(",")),Substring(json_group_array,Literal(2),Literal(Integer.MAX_VALUE)),json_group_array), Literal("]")))
 }

@@ -403,7 +403,7 @@ class RAToSql(db: Database)
         )
 
       case Table(name, alias, tgtSch, metadata) =>
-        val realSch = db.matadataTableSchema(name) match {
+        val realSch = db.metadataTableSchema(name) match {
           case Some(realSch) => realSch
           case None => throw new SQLException("Unknown Table '"+name+"'");
         }

@@ -132,4 +132,19 @@ class RepairKeyModel(
     }
   }
 
+  
+  def getPrimitive(t:Type, value:Any) = t match {
+    case TInt() => IntPrimitive(value.asInstanceOf[String].toLong)
+    case TFloat() => FloatPrimitive(value.asInstanceOf[Double])
+    //case TDate() => DatePrimitive.(value.asInstanceOf[Long])
+    //case TTimestamp() => Primitive(value.asInstanceOf[Long])
+    case TString() => StringPrimitive(value.asInstanceOf[String])
+    case TBool() => BoolPrimitive(value.asInstanceOf[Boolean])
+    case TRowId() => RowIdPrimitive(value.asInstanceOf[String])
+    case TType() => TypePrimitive(Type.fromString(value.asInstanceOf[String]))
+    //case TAny() => NullPrimitive()
+    //case TUser(name) => name.toLowerCase
+    //case TInterval() => Primitive(value.asInstanceOf[Long])
+    case _ => StringPrimitive(value.asInstanceOf[String])
+  }
 }

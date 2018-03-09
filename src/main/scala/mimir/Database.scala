@@ -40,6 +40,7 @@ import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import mimir.exec.result.JDBCResultIterator
+import net.sf.jsqlparser.statement.update.Update
 
 
  /**
@@ -116,14 +117,14 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
   val interpreter     = new mimir.algebra.Eval(
                                   functions = Some(functions)
                                 )  
-
+  val metadataTables = Seq("MIMIR_ADAPTIVE_SCHEMAS", "MIMIR_MODEL_OWNERS", "MIMIR_MODELS", "MIMIR_VIEWS", "MIMIR_SYS_TABLES", "MIMIR_SYS_ATTRS")
   /**
    * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
    * and rewrites the query to properly account for Virtual Tables.
    */
   final def query[T, R <:ResultIterator](oper: Operator, mode: CompileMode[R])(handler: R => T): T =
   {
-    val iterator = mode(this, oper)
+    val iterator = mode(this, oper, compiler.sparkBackendRootIterator)
     try {
       val ret = handler(iterator)
 
@@ -257,19 +258,38 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
   }
   
   
+  /**
+   * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
+   * and rewrites the query to properly account for Virtual Tables.
+   */
+  final def queryMetadata[T, R <:ResultIterator](oper: Operator, mode: CompileMode[R])(handler: R => T): T =
+  {
+    val iterator = mode(this, oper, compiler.metadataBackendRootIterator)
+    try {
+      val ret = handler(iterator)
+      if(ret.isInstanceOf[Iterator[_]]){
+        logger.warn("Returning a sequence from Database.query may lead to the Scala compiler's optimizations closing the ResultIterator before it's fully drained")
+      }
+      return ret
+    } finally {
+      iterator.close()
+    }
+  }
   
   /**
    * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
    * and rewrites the query to properly account for Virtual Tables.
    */
   final def queryMetadata[T](oper: Operator)(handler: ResultIterator => T): T = {
-    handler(new JDBCResultIterator(
-          typechecker.schemaOf(oper),
-          ra.convert(oper), metadataBackend,
-          metadataBackend.dateType
-        )) 
+    queryMetadata(oper, BestGuess)(handler)
   }
-    
+  
+  /**
+   * Translate, optimize and evaluate the specified metadata query.  Applies all Mimir-specific 
+   * optimizations and rewrites the query to properly account for Virtual Tables.
+   */
+  final def queryMetadata[T](stmt: String)(handler: ResultIterator => T): T = 
+    queryMetadata(select(stmt))(handler)
     
   /**
    * get all metadata tables
@@ -284,15 +304,15 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
   /**
    * Determine whether the specified table exists
    */
-  def matadataTableExists(name: String): Boolean =
+  def metadataTableExists(name: String): Boolean =
   {
-    matadataTableSchema(name) != None
+    metadataTableSchema(name) != None
   }
 
   /**
    * Look up the schema for the table with the provided name.
    */
-  def matadataTableSchema(name: String): Option[Seq[(String,Type)]] = {
+  def metadataTableSchema(name: String): Option[Seq[(String,Type)]] = {
     logger.debug(s"Table schema for $name")
     views.get(name) match { 
       case Some(viewDefinition) => Some(viewDefinition.schema)
@@ -303,8 +323,8 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
   /**
    * Build a Table operator for the table with the provided name.
    */
-  def matadataTable(tableName: String) : Operator = matadataTable(tableName, tableName)
-  def matadataTable(tableName: String, alias:String): Operator =
+  def metadataTable(tableName: String) : Operator = metadataTable(tableName, tableName)
+  def metadataTable(tableName: String, alias:String): Operator =
   {
     getView(tableName).getOrElse(
       Table(
@@ -418,9 +438,14 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
         } 
       }
 
-      case _                => {
-        metadataBackend.update(stmt.toString())
+      /********** Update Metadata **********/
+      case updateMetadata: Update => {
+        if(metadataTables.contains(updateMetadata.getTable.getName.toUpperCase))
+          metadataBackend.update(stmt.toString())
+        else
+          throw new SQLException("Invalid Table for update '"+updateMetadata.getTable.getName.toUpperCase+"'")
       }
+      
     }
   }
   

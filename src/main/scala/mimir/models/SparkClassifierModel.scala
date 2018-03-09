@@ -179,6 +179,9 @@ class SimpleSparkClassifierModel(name: String, colName: String, query: Operator)
   
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
   {
+    /*println(s"-----------------------Spark Classifier Model bestGuess(idx:$idx, args:${args.mkString("(",",",")")}, hints:${hints.mkString("(",",",")")})")
+    Thread.currentThread().getStackTrace.foreach(ste => println(ste.toString()))
+    println("^---------------------------------- stackTrace ------------------------------------^")*/
     val rowidstr = args(0).asString
     val rowid = RowIdPrimitive(rowidstr)
     getFeedback(idx, args) match {

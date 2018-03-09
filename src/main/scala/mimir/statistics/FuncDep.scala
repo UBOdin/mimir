@@ -1003,7 +1003,7 @@ object FuncDep {
 
   def initBackstore(db: mimir.Database)
   {
-    if(!db.tableExists(FuncDep.BACKSTORE_TABLE_NAME)){
+    if(!db.metadataTableExists(FuncDep.BACKSTORE_TABLE_NAME)){
       db.metadataBackend.update(
         "CREATE TABLE "+FuncDep.BACKSTORE_TABLE_NAME+"(name varchar(40), data blob, PRIMARY KEY(name))"
       )

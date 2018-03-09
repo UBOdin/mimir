@@ -58,7 +58,7 @@ class AdaptiveSchemaManager(db: Database)
             ProjectArg("MLENS", Var("MLENS")), 
             ProjectArg("QUERY", Var("QUERY")),
             ProjectArg("ARGS", Var("ARGS"))),
-        db.matadataTable(dataTable)
+        db.metadataTable(dataTable)
       )
     ){ _.map { row => 
       val name = row(0).asString
@@ -82,7 +82,7 @@ class AdaptiveSchemaManager(db: Database)
             ProjectArg("MLENS", Var("MLENS")), 
             ProjectArg("QUERY", Var("QUERY")),
             ProjectArg("ARGS", Var("ARGS"))),
-        db.matadataTable(dataTable)
+        db.metadataTable(dataTable)
       ))
     ){ _.map { row => 
       val name = row(0).asString
@@ -159,7 +159,7 @@ class AdaptiveSchemaManager(db: Database)
     db.queryMetadata(
       Select(
         Comparison(Cmp.Eq, Var("NAME"), StringPrimitive(schema)),
-        db.matadataTable(dataTable)
+        db.metadataTable(dataTable)
       )
     ){ result =>
       if(result.hasNext){

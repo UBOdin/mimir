@@ -225,7 +225,7 @@ class ViewManager(db:Database) extends LazyLogging {
       Seq(
         ProjectArg("TABLE_NAME", Var("NAME"))
       ),
-      db.table(viewTable)
+      db.metadataTable(viewTable)
     )
   }
 

@@ -501,7 +501,8 @@ class SqlToRA(db: Database)
       else { alias = alias.toUpperCase }
 
       if(fi.asInstanceOf[net.sf.jsqlparser.schema.Table].getSchemaName == null){
-        val tableOp = db.table(name, alias)
+        val tableOp = if(db.metadataTables.contains(name) || name.startsWith("MIMIR_DA_FDG_") || name.startsWith("MIMIR_DA_SCH_")) 
+          db.metadataTable(name, alias) else db.table(name, alias)
         val newBindings = tableOp.columnNames.map { x => (x, alias+"_"+x) }
         return (
           Project(

@@ -16,7 +16,7 @@ object DiscalaAbadiNormalizer
 {
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model] =
   {
-    /*logger.debug(s"Creating DiscalaAbadiNormalizer: $config")
+    logger.debug(s"Creating DiscalaAbadiNormalizer: $config")
 
     logger.debug("Creating FD Graph")
       val fd = new FuncDep()
@@ -26,51 +26,47 @@ object DiscalaAbadiNormalizer
       val schTable = s"MIMIR_DA_SCH_${config.schema}"
       val fullSchema = Seq((("ROOT", TRowId()), -1)) ++ fd.sch.zipWithIndex
 
-      db.backend.update(s"""
-        CREATE TABLE $schTable (ATTR_NAME string, ATTR_NODE int, ATTR_TYPE string);
-      """)
-      db.backend.fastUpdateBatch(s"""
-        INSERT INTO $schTable (ATTR_NAME, ATTR_NODE, ATTR_TYPE) VALUES (?, ?, ?);
-      """, 
-        fullSchema.map { case ((attr, t), idx) => 
-          Seq(StringPrimitive(attr), IntPrimitive(idx), TypePrimitive(t))
-        }
-      )
-
-    logger.debug("Dumping FD Graph")
+      val htSch = 
+        HardTable(
+            Seq(("ATTR_NAME", TString()), ("ATTR_NODE", TInt()), ("ATTR_TYPE", TString())),
+            fullSchema.map { case ((attr, t), idx) => 
+            Seq(StringPrimitive(attr), IntPrimitive(idx), TypePrimitive(t))
+          }
+        )
+      db.views.create(schTable, htSch)
+      
+      logger.debug("Dumping FD Graph")
       val fdTable = s"MIMIR_DA_FDG_${config.schema}"
-      db.backend.update(s"""
-        CREATE TABLE $fdTable (MIMIR_FD_PARENT int, MIMIR_FD_CHILD int, MIMIR_FD_PATH_LENGTH int);
-      """)
-      db.backend.fastUpdateBatch(s"""
-        INSERT INTO $fdTable (MIMIR_FD_PARENT, MIMIR_FD_CHILD, MIMIR_FD_PATH_LENGTH) VALUES (?, ?, ?);
-      """, 
-        // Add the basic edges
-        fd.fdGraph.getEdges.asScala.map { case (edgeParent, edgeChild) =>
-          Seq(
-            IntPrimitive(edgeParent), 
-            IntPrimitive(edgeChild),
-            if(fd.parentTable.getOrElse(edgeParent, Set[Int]()) contains edgeChild){ IntPrimitive(2) } 
-              else { IntPrimitive(1) }
-          )
-        } ++
-        // And add in each blacklisted node as an edge off of the root
-        ( 
-          (0 until fd.sch.size).toSet[Int] -- fd.nodeTable.asScala.map(_.toInt).toSet
-        ).map { col => 
-          Seq(
-            IntPrimitive(-1),
-            IntPrimitive(col),
-            IntPrimitive(2)
-          )
-        }
-      )
+      val htFd = 
+        HardTable(
+            Seq(("MIMIR_FD_PARENT", TInt()), ("MIMIR_FD_CHILD", TInt()), ("MIMIR_FD_PATH_LENGTH", TInt())),
+            // Add the basic edges
+            (fd.fdGraph.getEdges.asScala.map { case (edgeParent, edgeChild) =>
+              Seq(
+                IntPrimitive(edgeParent), 
+                IntPrimitive(edgeChild),
+                if(fd.parentTable.getOrElse(edgeParent, Set[Int]()) contains edgeChild){ IntPrimitive(2) } 
+                  else { IntPrimitive(1) }
+              )
+            }).toSeq ++
+            // And add in each blacklisted node as an edge off of the root
+            (( 
+              (0 until fd.sch.size).toSet[Int] -- fd.nodeTable.asScala.map(_.toInt).toSet
+            ).map { col => 
+              Seq(
+                IntPrimitive(-1),
+                IntPrimitive(col),
+                IntPrimitive(2)
+              )
+            } )
+        )
+    db.views.create(fdTable, htFd)
 
     val groupingModel = 
       new DAFDRepairModel(
         s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_FD_PARENT",
         config.schema,
-        db.table(fdTable),
+        db.metadataTable(fdTable),
         Seq(("MIMIR_FD_CHILD", TInt())),
         "MIMIR_FD_PARENT",
         TInt(),
@@ -102,7 +98,7 @@ object DiscalaAbadiNormalizer
           logger.trace(s"INSTALLING: $parent -> $child: ${model.name}")
           model 
         }
-    return Seq(groupingModel)++parentKeyRepairs*/Seq()
+    return Seq(groupingModel)++parentKeyRepairs
   }
 
   /**
@@ -114,7 +110,7 @@ object DiscalaAbadiNormalizer
   {
     val model = db.models.get(s"MIMIR_DA_CHOSEN_${config.schema}:MIMIR_FD_PARENT")
     RepairKeyLens.assemble(
-      db.table(s"MIMIR_DA_FDG_${config.schema}"),
+      db.metadataTable(s"MIMIR_DA_FDG_${config.schema}"),
       Seq("MIMIR_FD_CHILD"), 
       Seq(("MIMIR_FD_PARENT", model)),
       Some("MIMIR_FD_PATH_LENGTH")
@@ -147,7 +143,7 @@ object DiscalaAbadiNormalizer
       },
       Select(Comparison(Cmp.Eq, Var(nodeCol), Var("ATTR_NODE")),
         Join(      
-          db.table(s"MIMIR_DA_SCH_${config.schema}"),
+          db.metadataTable(s"MIMIR_DA_SCH_${config.schema}"),
           query
         )
       )
@@ -216,7 +212,7 @@ object DiscalaAbadiNormalizer
   }
   def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] = 
   {
-    db.query(
+    db.queryMetadata(
       Project(
         Seq(ProjectArg("ATTR_NAME", Var("ATTR_NAME"))),
         Select(
