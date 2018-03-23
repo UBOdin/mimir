@@ -10,7 +10,7 @@ import mimir.test._
 import mimir.util._
 
 object DiscalaAbadiSpec
-  extends SQLTestSpecification("DiscalaAbadi")
+  extends SQLTestSpecification("DiscalaAbadi",Map("cleanup" -> "NO"))
   with BeforeAll
 {
   def beforeAll =
@@ -150,8 +150,8 @@ object DiscalaAbadiSpec
           val tables = results.map { row => (row("TABLE_NAME").asString, row("SCHEMA_NAME").asString) }.toSeq 
 
           tables must contain( ("ROOT", "SHIPPING") )
-          tables must contain( ("MIMIR_VIEWS", "BACKEND") )
-          tables must contain( ("SHIPPING_RAW", "BACKEND") )
+          //tables must contain( ("MIMIR_VIEWS", "BACKEND") )
+          tables must contain( ("shipping_raw", "BACKEND") )
         }
       } 
 

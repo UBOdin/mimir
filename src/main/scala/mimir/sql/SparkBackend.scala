@@ -13,6 +13,8 @@ import mimir.algebra.spark.OperatorTranslation
 import org.apache.spark.sql.DataFrame
 import mimir.Database
 import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.execution.SparkPlan
 
 class SparkBackend extends RABackend{
   var sparkSql : SQLContext = null
@@ -49,17 +51,28 @@ class SparkBackend extends RABackend{
   }
   
   def execute(compiledOp: Operator): DataFrame = {
-    /*println("------------------------ mimir op --------------------------")
-    println(compiledOp)
-    println("------------------------------------------------------------")*/
-    if(sparkSql == null) throw new Exception("There is no spark context")
-    val sparkOper = OperatorTranslation.mimirOpToSparkOp(compiledOp)
-    /*println("------------------------ spark op --------------------------")
-    println(sparkOper)
-    println("------------------------------------------------------------")*/
-    val qe = sparkSql.sparkSession.sessionState.executePlan(sparkOper)
-    qe.assertAnalyzed()
-    new Dataset[Row](sparkSql.sparkSession, sparkOper, RowEncoder(qe.analyzed.schema)).toDF()
+    var sparkOper:LogicalPlan = null
+    try {
+      /*println("------------------------ mimir op --------------------------")
+      println(compiledOp)
+      println("------------------------------------------------------------")*/
+      if(sparkSql == null) throw new Exception("There is no spark context")
+      sparkOper = OperatorTranslation.mimirOpToSparkOp(compiledOp)
+      /*println("------------------------ spark op --------------------------")
+      println(sparkOper)
+      println("------------------------------------------------------------")*/
+      val qe = sparkSql.sparkSession.sessionState.executePlan(sparkOper)
+      qe.assertAnalyzed()
+      new Dataset[Row](sparkSql.sparkSession, sparkOper, RowEncoder(qe.analyzed.schema)).toDF()
+    } catch {
+      case t: Throwable => {
+        println("-------------------------> Exception Executing Spark Op: ")
+        println("------------------------ spark op --------------------------")
+        println(sparkOper)
+        println("------------------------------------------------------------")
+        throw t
+      }
+    }
   }
   
   

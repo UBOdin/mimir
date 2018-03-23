@@ -190,7 +190,7 @@ class Compiler(db: Database) extends LazyLogging {
     // The final stage is to apply any database-specific rewrites to adapt
     // the query to the quirks of each specific target database.  Each
     // backend defines a specializeQuery method that handles this
-    val specialized = db.backend.specializeQuery(optimized, db)
+    val specialized = db.metadataBackend.specializeQuery(optimized, db)
 
     logger.info(s"SPECIALIZED: $specialized")
 

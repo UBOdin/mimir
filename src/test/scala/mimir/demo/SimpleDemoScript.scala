@@ -27,7 +27,6 @@ object SimpleDemoScript
 	// automatically parallelizing testing.
 	sequential
 
-	val productDataFile = new File("test/data/Product.sql");
 	val reviewDataFiles = List(
 			new File("test/data/ratings1.csv"),
 			new File("test/data/ratings2.csv"),
@@ -42,17 +41,18 @@ object SimpleDemoScript
 		}
 
 		"Run the Load Product Data Script" >> {
-			stmts(productDataFile).map( update(_) )
-			db.query("SELECT * FROM PRODUCT;")(result => result.toList ) must have size(6)
+		  loadCSV("PRODUCT", Seq(("ID", "string"), ("NAME", "string"), ("BRAND", "string"), ("CATEGORY", "string")), new File("test/data/product.csv"))
+			//println(db.query("SELECT * FROM PRODUCT;")(result => { result.toList.map(row => row.tuple.map(_.toString()).mkString(",")).mkString("\n")} ))
+			db.query("SELECT * FROM PRODUCT;")(result => { result.toList } ) must have size(6) 
 		}
 
 		"Load CSV Files" >> {
 			reviewDataFiles.foreach( db.loadTable(_) )
 			query("SELECT * FROM RATINGS1;") { _.toSeq must have size(4) }
-			/*db.query(db.adaptiveSchemas.viewFor("RATINGS1_DH", "DATA").get.project("RATING")) { 
+			db.query(db.adaptiveSchemas.viewFor("RATINGS1_DH", "DATA").get.project("RATING")) { 
 				_.map { _(0) }.toSeq must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
-			}*/
-			query("SELECT * FROM RATINGS1;") { _.toSeq } must contain( str("4.5"), str("A3"), str("4.0"), str("6.4"))
+			}
+			query("SELECT * FROM RATINGS1;") { _.toSeq.map { _(1) } must contain( f(4.5), NullPrimitive(), f(4.0), f(6.4) ) }
 			query("SELECT * FROM RATINGS2;") { _.toSeq must have size(3) }
 			query("SELECT PID FROM RATINGS2;") { _.map { _(0) } must contain((_:PrimitiveValue).isInstanceOf[StringPrimitive]).forall }
 		}

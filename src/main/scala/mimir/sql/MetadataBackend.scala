@@ -62,3 +62,7 @@ abstract class MetadataBackend {
   def listAttrsQuery: Operator
 
 }
+
+trait InlinableBackend {
+	def enableInlining(db: Database) : Unit
+}

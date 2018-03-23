@@ -7,7 +7,7 @@ import org.joda.time.Period;
 /**
  * Base type for expression trees.  Represents a single node in the tree.
  */
-abstract sealed class Expression extends ExpressionConstructors { 
+abstract sealed class Expression extends Serializable with ExpressionConstructors { 
   /**
    * Return all of the children of the current tree node
    */

@@ -134,6 +134,13 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     ))
     db.explainer.explainEverything(query)
   }
+  def explainAdaptiveSchema(s: String) =
+  {
+    val query = resolveViews(db.sql.convert(
+      stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
+    ))
+    db.explainer.explainAdaptiveSchema(query, query.columnNames.toSet, true)
+  }  
   def update(s: Statement) = 
     db.update(s)
   def update(s: String) = 
@@ -141,9 +148,7 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   def loadCSV(table: String, file: File) : Unit =
     LoadCSV.handleLoadTable(db, table, file)
   def loadCSV(table: String, schema:Seq[(String,String)], file: File) : Unit =
-    loadCSVSchema(table, schema.map(el => (el._1, Type.fromString(el._2))), file)
-  private def loadCSVSchema(table: String, schema:Seq[(String,Type)], file: File) : Unit =
-    LoadCSV.handleLoadTableRaw(db, table, schema, file, Map())
+    db.loadTable(table, schema, file ) 
     
   def modelLookup(model: String) = db.models.get(model)
   def schemaLookup(table: String) = db.tableSchema(table).get

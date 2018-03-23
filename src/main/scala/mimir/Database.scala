@@ -485,9 +485,18 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
    */
   def loadTable(
     targetTable: String, 
+    targetSchema: Seq[(String, String)],
+    sourceFile: File
+  ) : Unit  = loadTable(targetTable, sourceFile, true, 
+      ("CSV", Seq(StringPrimitive(","))), 
+      Some(targetSchema.map(el => (el._1, Type.fromString(el._2)))))
+  
+  def loadTable(
+    targetTable: String, 
     sourceFile: File, 
     force:Boolean = true, 
-    format:(String, Seq[PrimitiveValue]) = ("CSV", Seq(StringPrimitive(",")))
+    format:(String, Seq[PrimitiveValue]) = ("CSV", Seq(StringPrimitive(","))),
+    targetSchema: Option[Seq[(String, Type)]] = None
   ){
     (format._1 match {
            case null => "CSV"
@@ -527,7 +536,11 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
             //finally create a view for the data
             views.create(targetTable.toUpperCase, oper)
           } else {
-            LoadCSV.handleLoadTableRaw(this, targetTable.toUpperCase, sourceFile,  Map("DELIMITER" -> delim, "mode" -> "DROPMALFORMED", "header" -> "false") )
+            val schema = targetSchema match {
+              case None => tableSchema(targetTable)
+              case _ => targetSchema
+            }
+            LoadCSV.handleLoadTableRaw(this, targetTable.toUpperCase, schema, sourceFile,  Map("DELIMITER" -> delim, "mode" -> "DROPMALFORMED", "header" -> "false") )
           }
         }
       case fmt =>

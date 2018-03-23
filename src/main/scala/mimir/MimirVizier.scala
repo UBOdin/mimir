@@ -62,11 +62,11 @@ object MimirVizier extends LazyLogging {
       db.backend.open()
       gp.metadataLookupPlugin.db = db;
     }
-    db.initializeDBForMimir();
+    //db.initializeDBForMimir();
     
-    /*if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
-        db.backend.asInstanceOf[InlinableBackend].enableInlining(db)
-      }*/
+    if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
+        db.metadataBackend.asInstanceOf[InlinableBackend].enableInlining(db)
+    }
     
     OperatorTranslation.db = db       
     
@@ -354,6 +354,48 @@ object MimirVizier extends LazyLogging {
     logger.debug(s"vistrailsDeployWorkflowToViztool Took: ${timeRes._2}")
     timeRes._1
   }*/
+  
+    
+  def explainSubsetWithoutSchema(query: String, rows:Seq[String], cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
+    val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
+    explainSubsetWithoutSchema(oper, rows, cols)  
+  } 
+  def explainSubsetWithoutSchema(oper: Operator, rows:Seq[String], cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
+    val timeRes = time {
+      logger.debug("explainSubsetWithoutSchema: From Vistrails: [ "+ rows +" ] [" + oper + "]"  ) ;
+      val explCols = cols match {
+        case Seq() => oper.columnNames
+        case _ => cols
+      }
+      rows.map(row => {
+        db.explainer.explainSubsetWithoutOptimizing(
+          db.explainer.filterByProvenance(db.compiler.optimize(oper),RowIdPrimitive(row)), 
+          explCols.toSet, true, false, false)
+      }).flatten
+    }
+    logger.debug(s"explainSubsetWithoutSchema Took: ${timeRes._2}")
+    timeRes._1
+  }
+  
+  def explainSchema(query: String, cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
+    val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
+    explainSchema(oper, cols)  
+  }  
+  def explainSchema(oper: Operator, cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
+    val timeRes = time {
+      logger.debug("explainSchema: From Vistrails: [ "+ cols.mkString(",") +" ] [" + oper + "]"  ) ;
+      val explCols = cols match {
+        case Seq() => oper.columnNames
+        case _ => cols
+      }
+      db.explainer.explainAdaptiveSchema(
+          db.compiler.optimize(oper), 
+          explCols.toSet, true)
+    }
+    logger.debug(s"explainSchema Took: ${timeRes._2}")
+    timeRes._1
+  }
+
   
   def explainCell(query: String, col:Int, row:String) : Seq[mimir.ctables.Reason] = {
     logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;

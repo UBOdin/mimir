@@ -38,8 +38,15 @@ object SparkUtils {
             val sval = r.getString(field)
             //TODO: this is a super hack: somehow only '-' is in 
             //  there sometimes for negative values
-            if(sval.equalsIgnoreCase("-")) IntPrimitive(-1L) 
-            else IntPrimitive(r.getString(field).toLong) 
+            try {
+              if(sval.equalsIgnoreCase("-")) IntPrimitive(-1L) 
+              else IntPrimitive(r.getString(field).toLong) 
+            }
+            catch {
+              case t: Throwable => {
+                NullPrimitive()
+              }
+            } 
           }
         } })
       case TString() =>     (r) => checkNull(r, { StringPrimitive(r.getString(field)) })

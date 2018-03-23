@@ -1,6 +1,7 @@
 package mimir.algebra.spark
 
-import org.apache.spark.sql.{SQLContext, DataFrame, Row, Dataset}
+import org.apache.spark.sql.{SQLContext, DataFrame, Row}
+import org.apache.spark.sql.Dataset
 import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.sql.types.{Metadata, DataType, DoubleType, LongType, FloatType, BooleanType, IntegerType, StringType, StructField, StructType}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
@@ -42,6 +43,15 @@ import org.apache.spark.sql.catalyst.expressions.StringTrim
 import org.apache.spark.sql.catalyst.expressions.StringTrimLeft
 import org.apache.spark.sql.catalyst.expressions.StartsWith
 import org.apache.spark.sql.catalyst.expressions.Contains
+import mimir.algebra.function.FunctionRegistry
+import mimir.algebra.function.NativeFunction
+
+import mimir.sql.SparkBackend
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
+import org.apache.spark.sql.Column
+import org.apache.spark.sql.catalyst.expressions.CreateStruct
+import org.apache.spark.sql.catalyst.expressions.GetStructField
+import org.apache.spark.sql.catalyst.plans.UsingJoin
 
 object OperatorTranslation
   extends LazyLogging
@@ -52,7 +62,7 @@ object OperatorTranslation
     oper match {
       case Project(cols, src) => {
   			org.apache.spark.sql.catalyst.plans.logical.Project(cols.map(col => {
-          mimirExprToSparkNamedExpr(col.name, col.expression)
+          mimirExprToSparkNamedExpr(oper, col.name, col.expression)
         }), mimirOpToSparkOp(src))
 			}
 			case ProvenanceOf(psel) => {
@@ -66,19 +76,24 @@ object OperatorTranslation
       }
 			case Aggregate(groupBy, aggregates, source) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Aggregate(
-          groupBy.map(mimirExprToSparkExpr(_)),
-          groupBy.map( gb => Alias( UnresolvedAttribute(gb.name), gb.name)()) ++ aggregates.map( mimirAggFunctionToSparkNamedExpr(_)),
+          groupBy.map(mimirExprToSparkExpr(oper,_)),
+          groupBy.map( gb => Alias( UnresolvedAttribute(gb.name), gb.name)()) ++ aggregates.map( mimirAggFunctionToSparkNamedExpr(oper,_)),
           mimirOpToSparkOp(source))
+			}
+			case Select(condition, Join(lhs, rhs)) => {
+			  makeSparkJoin(lhs, rhs, Some(mimirExprToSparkExpr(oper,condition)), Inner) 
 			}
 			case Select(cond, src) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Filter(
-			      mimirExprToSparkExpr(cond), mimirOpToSparkOp(src))
+			      mimirExprToSparkExpr(oper,cond), mimirOpToSparkOp(src))
 			}
 			case LeftOuterJoin(lhs, rhs, condition) => {
-			  org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), LeftOuter, Some(mimirExprToSparkExpr(condition)))
+			  //org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), LeftOuter, Some(mimirExprToSparkExpr(oper,condition)))
+			  makeSparkJoin(lhs, rhs, Some(mimirExprToSparkExpr(oper,condition)), LeftOuter) 
 			}
 			case Join(lhs, rhs) => {
-			  org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), Inner, None)
+			  //org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), Inner, None)
+			  makeSparkJoin(lhs, rhs, None, Inner) 
 			}
 			case Union(lhs, rhs) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Union(mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs))
@@ -140,13 +155,13 @@ object OperatorTranslation
           mimirOpToSparkOp(query))
       }
       case HardTable(schema, data)=> {
-        //UnresolvedInlineTable( schema.unzip._1, data.map(row => row.map(mimirExprToSparkExpr(_))))
+        //UnresolvedInlineTable( schema.unzip._1, data.map(row => row.map(mimirExprToSparkExpr(oper,_))))
         LocalRelation(mimirSchemaToStructType(schema).map(f => AttributeReference(f.name, f.dataType, f.nullable, f.metadata)()), 
             data.map(row => InternalRow(row.map(mimirPrimitiveToSparkInternalRowValue(_)):_*)))
       }
 			case Sort(sortCols, src) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Sort(
-          sortCols.map(sortCol => SortOrder(mimirExprToSparkExpr(sortCol.expression),if(sortCol.ascending) Ascending else Descending)),
+          sortCols.map(sortCol => SortOrder(mimirExprToSparkExpr(oper,sortCol.expression),if(sortCol.ascending) Ascending else Descending)),
           true,
           mimirOpToSparkOp(src))
 			}
@@ -156,38 +171,224 @@ object OperatorTranslation
     }
   }
   
-  def mimirExprToSparkNamedExpr(name:String, expr:Expression) : NamedExpression = {
-    Alias(mimirExprToSparkExpr(expr),name)()
+  def queryExecution(plan:LogicalPlan ) = {
+   db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.executePlan(plan) 
   }
   
-  def mimirAggFunctionToSparkNamedExpr(aggr:AggFunction) : NamedExpression = {
+  def dataset(plan:LogicalPlan) = {
+    val qe = queryExecution(plan)
+    qe.assertAnalyzed()
+    new Dataset[Row](db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession, plan, RowEncoder(qe.analyzed.schema)) 
+  }
+  
+  def makeInitSparkJoin(left: LogicalPlan, right: LogicalPlan, usingColumns: Seq[String], joinType: JoinType): LogicalPlan = {
+    // Analyze the self join. The assumption is that the analyzer will disambiguate left vs right
+    // by creating a new instance for one of the branch.
+    val joined = db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.executePlan(
+       org.apache.spark.sql.catalyst.plans.logical.Join(left, right, joinType = joinType, None))
+      .analyzed.asInstanceOf[org.apache.spark.sql.catalyst.plans.logical.Join]
+
+    org.apache.spark.sql.catalyst.plans.logical.Join(
+        joined.left,
+        joined.right,
+        UsingJoin(joinType, usingColumns),
+        None)
+    
+  }
+  
+  def makeSparkJoin(lhs:Operator, rhs:Operator, condition:Option[org.apache.spark.sql.catalyst.expressions.Expression], joinType:JoinType): LogicalPlan = {
+    val (lplan, rplan) = ( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs))
+	  val (lqe, rqe) = (dataset(lplan), dataset(rplan))
+	  
+	  val columnAmbiguities = lqe.schema.intersect(rqe.schema)
+	  
+	  val joined:org.apache.spark.sql.catalyst.plans.logical.Join = if(!columnAmbiguities.isEmpty){
+      val tjoin = makeInitSparkJoin(lplan, rplan, columnAmbiguities.map(_.name), joinType).asInstanceOf[org.apache.spark.sql.catalyst.plans.logical.Join]
+      val cond = condition.map { _.transform {
+        case org.apache.spark.sql.catalyst.expressions.EqualTo(a: AttributeReference, b: AttributeReference)
+            if a.sameRef(b) =>
+          org.apache.spark.sql.catalyst.expressions.EqualTo(
+            tjoin.left.resolve(Seq(a.name), db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.analyzer.resolver).get,//p(withPlan(logicalPlan.left))('resolve)(a.name).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression],
+            tjoin.right.resolve(Seq(b.name), db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.analyzer.resolver).get)//p(withPlan(logicalPlan.right))('resolve)(b.name).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
+      }}
+      tjoin.copy(condition = cond)
+	  }
+	  else   
+  	  // Creates a Join node and resolve it first, to get join condition resolved, self-join resolved,
+      // etc.
+      //val joined = db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.executePlan(
+        org.apache.spark.sql.catalyst.plans.logical.Join(
+          lplan,
+          rplan,
+          joinType,
+          condition)//).analyzed.asInstanceOf[org.apache.spark.sql.catalyst.plans.logical.Join]
+  
+    // For both join side, combine all outputs into a single column and alias it with "_1" or "_2",
+    // to match the schema for the encoder of the join result.
+    // Note that we do this before joining them, to enable the join operator to return null for one
+    // side, in cases like outer-join.
+    val left = {
+      val combined = if (getPrivateMamber[ExpressionEncoder[Row]](dataset(lplan),"exprEnc").flat) {
+        assert(joined.left.output.length == 1)
+        Alias(joined.left.output.head, "_1")()
+      } else {
+        Alias(CreateStruct(joined.left.output), "_1")()
+      }
+      org.apache.spark.sql.catalyst.plans.logical.Project(combined :: Nil, joined.left)
+    }
+
+    val right = {
+      val combined = if (getPrivateMamber[ExpressionEncoder[Row]](dataset(rplan),"exprEnc").flat) {
+        assert(joined.right.output.length == 1)
+        Alias(joined.right.output.head, "_2")()
+      } else {
+        Alias(CreateStruct(joined.right.output), "_2")()
+      }
+      org.apache.spark.sql.catalyst.plans.logical.Project(combined :: Nil, joined.right)
+    }
+
+    // Rewrites the join condition to make the attribute point to correct column/field, after we
+    // combine the outputs of each join side.
+    val conditionExpr = joined.condition.get transformUp {
+      case a: org.apache.spark.sql.catalyst.expressions.Attribute if joined.left.outputSet.contains(a) =>
+        if (getPrivateMamber[ExpressionEncoder[Row]](dataset(lplan),"exprEnc").flat) {
+          left.output.head
+        } else {
+          val index = joined.left.output.indexWhere(_.exprId == a.exprId)
+          GetStructField(left.output.head, index)
+        }
+      case a: org.apache.spark.sql.catalyst.expressions.Attribute if joined.right.outputSet.contains(a) =>
+        if (getPrivateMamber[ExpressionEncoder[Row]](dataset(rplan),"exprEnc").flat) {
+          right.output.head
+        } else {
+          val index = joined.right.output.indexWhere(_.exprId == a.exprId)
+          GetStructField(right.output.head, index)
+        }
+    }
+
+    org.apache.spark.sql.catalyst.plans.logical.Join(left, right, joined.joinType, Some(conditionExpr))
+  }
+  
+  /*def makeSparkJoin(lhs:Operator, rhs:Operator, condition:Option[org.apache.spark.sql.catalyst.expressions.Expression], joinType:JoinType) : LogicalPlan = {
+    val (lplan, rplan) = ( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs))
+	  val logicalPlan:org.apache.spark.sql.catalyst.plans.logical.Join = org.apache.spark.sql.catalyst.plans.logical.Join(lplan, rplan, joinType, condition)
+	  // If left/right have no output set intersection, return the plan.
+    
+	  val lanalyzed = queryExecution(lplan).analyzed //withPlan(lplan).queryExecution.analyzed
+    val ranalyzed = queryExecution(rplan).analyzed//withPlan(rplan).queryExecution.analyzed
+    if (lanalyzed.outputSet.intersect(ranalyzed.outputSet).isEmpty) {
+      return logicalPlan
+    }
+
+    // Otherwise, find the trivially true predicates and automatically resolves them to both sides.
+    // By the time we get here, since we have already run analysis, all attributes should've been
+    // resolved and become AttributeReference.
+	  val cond = logicalPlan.condition.map { _.transform {
+      case org.apache.spark.sql.catalyst.expressions.EqualTo(a: AttributeReference, b: AttributeReference)
+          if a.sameRef(b) =>
+        org.apache.spark.sql.catalyst.expressions.EqualTo(
+          logicalPlan.left.resolve(Seq(a.name), db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.analyzer.resolver).get,//p(withPlan(logicalPlan.left))('resolve)(a.name).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression],
+          logicalPlan.right.resolve(Seq(b.name), db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.analyzer.resolver).get)//p(withPlan(logicalPlan.right))('resolve)(b.name).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
+    }}
+
+    logicalPlan.copy(condition = cond)
+  }*/
+  
+  def getPrivateMamber[T](inst:AnyRef, fieldName:String) : T = {
+    def _parents: Stream[Class[_]] = Stream(inst.getClass) #::: _parents.map(_.getSuperclass)
+    val parents = _parents.takeWhile(_ != null).toList
+    val fields = parents.flatMap(_.getDeclaredFields())
+    val field = fields.find(_.getName == fieldName).getOrElse(throw new IllegalArgumentException("Field " + fieldName + " not found"))
+    field.setAccessible(true)
+    field.get(inst).asInstanceOf[T]
+  }
+  
+  //some stuff for calling spark internals
+  class PrivateMethodCaller(x: AnyRef, methodName: String) {
+    def apply(_args: Any*): Any = {
+      val args = _args.map(_.asInstanceOf[AnyRef])
+      def _parents: Stream[Class[_]] = Stream(x.getClass) #::: _parents.map(_.getSuperclass)
+      val parents = _parents.takeWhile(_ != null).toList
+      val methods = parents.flatMap(_.getDeclaredMethods)
+      val method = methods.find(_.getName == methodName).getOrElse(throw new IllegalArgumentException("Method " + methodName + " not found"))
+      method.setAccessible(true)
+      println("=======================================")
+      println(method)
+      println(x)
+      println(args)
+      println("=======================================")
+      method.invoke(x, args : _*)
+    }
+  }
+  
+  class PrivateMethodExposer(x: AnyRef) {
+    def apply(method: scala.Symbol): PrivateMethodCaller = new PrivateMethodCaller(x, method.name)
+  }
+
+  def p(x: AnyRef): PrivateMethodExposer = new PrivateMethodExposer(x)
+  
+  def companionObj[T](name:String)(implicit man: scala.reflect.Manifest[T]) = { 
+    val c = Class.forName(name + "$")
+    c.getField("MODULE$").get(c)
+  }
+  
+  private def withPlan(logicalPlan: LogicalPlan): DataFrame = {
+    try{
+      val runtimeMirror = scala.reflect.runtime.universe.runtimeMirror(getClass.getClassLoader)
+      val module = runtimeMirror.staticModule("org.apache.spark.sql.Dataset")
+      val obj = runtimeMirror.reflectModule(module)
+      val someTrait = obj.instance.asInstanceOf[AnyRef]
+      
+      //val someTrait = companionObj[org.apache.spark.sql.Dataset[Row]]("org.apache.spark.sql.Dataset")
+      println(someTrait)
+      p(someTrait)('ofRows)(db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession, logicalPlan).asInstanceOf[DataFrame]
+    
+      //new Dataset[Row](db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession, logicalPlan, RowEncoder(logicalPlan.schema)).toDF()
+    }
+    catch {
+      case t: Throwable => {
+        println("-------------------------> Exception Executing Spark Op: ")
+        println("------------------------ spark op --------------------------")
+        println(logicalPlan)
+        println("------------------------------------------------------------")
+        throw t
+      }
+    }
+  }
+ 
+  
+  def mimirExprToSparkNamedExpr(oper:Operator, name:String, expr:Expression) : NamedExpression = {
+    Alias(mimirExprToSparkExpr(oper,expr),name)()
+  }
+  
+  def mimirAggFunctionToSparkNamedExpr(oper:Operator, aggr:AggFunction) : NamedExpression = {
      Alias(AggregateExpression(aggr match {
          case AggFunction("COUNT", _, args, _) => {
-           Count(args.map(mimirExprToSparkExpr(_)))
+           Count(args.map(mimirExprToSparkExpr(oper,_)))
          }
          case AggFunction("AVG", _, args, _) => {
-           Average(mimirExprToSparkExpr(args.head))
+           Average(mimirExprToSparkExpr(oper,args.head))
          }
          case AggFunction("SUM", _, args, _) => {
-           Sum(mimirExprToSparkExpr(args.head))
+           Sum(mimirExprToSparkExpr(oper,args.head))
          }
          case AggFunction("FIRST", _, args, _) => {
-           First(mimirExprToSparkExpr(args.head),mimirExprToSparkExpr(BoolPrimitive(false)))
+           First(mimirExprToSparkExpr(oper,args.head),mimirExprToSparkExpr(oper,BoolPrimitive(false)))
          }
          case AggFunction("MAX", _, args, _) => {
-           Max(mimirExprToSparkExpr(args.head))
+           Max(mimirExprToSparkExpr(oper,args.head))
          }
          case AggFunction("MIN", _, args, _) => {
-           Min(mimirExprToSparkExpr(args.head))
+           Min(mimirExprToSparkExpr(oper,args.head))
          }
          case AggFunction("GROUP_AND", _, args, _) => {
-           GroupAnd(mimirExprToSparkExpr(args.head))
+           GroupAnd(mimirExprToSparkExpr(oper,args.head))
          }
          case AggFunction("GROUP_OR", _, args, _) => {
-           GroupOr(mimirExprToSparkExpr(args.head))
+           GroupOr(mimirExprToSparkExpr(oper,args.head))
          }
          case AggFunction("JSON_GROUP_ARRAY", _, args, _) => {
-           JsonGroupArray(mimirExprToSparkExpr(args.head))
+           JsonGroupArray(mimirExprToSparkExpr(oper,args.head))
          }
          case AggFunction(function, distinct, args, alias) => {
            throw new Exception("Aggregate Function Translation not implemented '"+function+"'")
@@ -198,19 +399,19 @@ object OperatorTranslation
      ), aggr.alias)()
   }
   
-  def mimirExprToSparkExpr(expr:Expression) : org.apache.spark.sql.catalyst.expressions.Expression = {
+  def mimirExprToSparkExpr(oper:Operator, expr:Expression) : org.apache.spark.sql.catalyst.expressions.Expression = {
     expr match {
       case primitive : PrimitiveValue => {
         mimirPrimitiveToSparkPrimitive(primitive)
       }
       case cmp@Comparison(op,lhs,rhs) => {
-        mimirComparisonToSparkComparison(cmp)
+        mimirComparisonToSparkComparison(oper, cmp)
       }
       case arith@Arithmetic(op,lhs,rhs) => {
-        mimirArithmeticToSparkArithmetic(arith)
+        mimirArithmeticToSparkArithmetic(oper, arith)
       }
       case cnd@Conditional(condition,thenClause,elseClause) => {
-        mimirConditionalToSparkConditional(cnd)
+        mimirConditionalToSparkConditional(oper, cnd)
       }
       case Var(name@Provenance.rowidColnameBase) => {
         org.apache.spark.sql.catalyst.expressions.Cast(Alias(MonotonicallyIncreasingID(),name)(),getSparkType(db.backend.rowIdType),None)
@@ -223,25 +424,25 @@ object OperatorTranslation
         org.apache.spark.sql.catalyst.expressions.Cast(Alias(MonotonicallyIncreasingID(),rid.toString())(),getSparkType(db.backend.rowIdType),None)
       }
       case func@Function(_,_) => {
-        mimirFunctionToSparkFunction(func)
+        mimirFunctionToSparkFunction(oper, func)
       }
       case BestGuess(model, idx, args, hints) => {
         val name = model.name
-        println(s"-------------------Translate BestGuess VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
-       BestGuessUDF(model, idx, args, hints).getUDF
-        //UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(StringPrimitive(name)) +: mimirExprToSparkExpr(IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(_)) ++ hints.map(mimirExprToSparkExpr(_))), true )
+        //println(s"-------------------Translate BestGuess VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
+       BestGuessUDF(oper, model, idx, args, hints).getUDF
+        //UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ++ hints.map(mimirExprToSparkExpr(oper,_))), true )
       }
       case IsAcknowledged(model, idx, args) => {
         val name = model.name
-        println(s"-------------------Translate IsAcknoledged VGTerm($name, $idx, (${args.mkString(",")}))")
-        AckedUDF(model, idx, args).getUDF
-        //UnresolvedFunction(mimir.ctables.CTables.FN_IS_ACKED, mimirExprToSparkExpr(StringPrimitive(name)) +: mimirExprToSparkExpr(IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(_)) ), true )
+        //println(s"-------------------Translate IsAcknoledged VGTerm($name, $idx, (${args.mkString(",")}))")
+        AckedUDF(oper, model, idx, args).getUDF
+        //UnresolvedFunction(mimir.ctables.CTables.FN_IS_ACKED, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ), true )
       }
       case VGTerm(name, idx, args, hints) => { //default to best guess
-        println(s"-------------------Translate VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
+        //println(s"-------------------Translate VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
         val model = db.models.get(name)
         /*val sparkVarType = getSparkType(model.varType(idx, model.argTypes(idx)))
-        val sparkArgs = (Literal(idx) +: (args.map(arg => mimirExprToSparkExpr(arg)) ++ hints.map(hint => mimirExprToSparkExpr(hint)))).toSeq
+        val sparkArgs = (Literal(idx) +: (args.map(arg => mimirExprToSparkExpr(oper,arg)) ++ hints.map(hint => mimirExprToSparkExpr(oper,hint)))).toSeq
         val sparkArgTypes = (IntegerType +: (model.argTypes(idx).map(arg => getSparkType(arg)) ++ model.hintTypes(idx).map(hint => getSparkType(hint)))).toSeq
         ScalaUDF(
           model.bestGuess _,
@@ -249,13 +450,13 @@ object OperatorTranslation
           sparkArgs,
           sparkArgTypes,
           Some(name))*/
-        UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(StringPrimitive(name)) +: mimirExprToSparkExpr(IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(_)) ++ hints.map(mimirExprToSparkExpr(_))), true )
+        UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ++ hints.map(mimirExprToSparkExpr(oper,_))), true )
       }
       case IsNullExpression(iexpr) => {
-        IsNull(mimirExprToSparkExpr(iexpr))
+        IsNull(mimirExprToSparkExpr(oper,iexpr))
       }
       case Not(nexpr) => {
-        org.apache.spark.sql.catalyst.expressions.Not(mimirExprToSparkExpr(nexpr))
+        org.apache.spark.sql.catalyst.expressions.Not(mimirExprToSparkExpr(oper,nexpr))
       }
       case x => {
         throw new Exception(s"Expression Translation not implemented ${x.getClass}: '$x'")
@@ -287,49 +488,49 @@ object OperatorTranslation
     }
   }
   
-  def mimirComparisonToSparkComparison(cmp:Comparison) : org.apache.spark.sql.catalyst.expressions.Expression = {
+  def mimirComparisonToSparkComparison(oper:Operator, cmp:Comparison) : org.apache.spark.sql.catalyst.expressions.Expression = {
     cmp.op match {
-      case  Cmp.Eq => EqualTo(mimirExprToSparkExpr(cmp.lhs), mimirExprToSparkExpr(cmp.rhs))
-      case  Cmp.Neq  => org.apache.spark.sql.catalyst.expressions.Not(EqualTo(mimirExprToSparkExpr(cmp.lhs), mimirExprToSparkExpr(cmp.rhs))) 
-      case  Cmp.Gt  => GreaterThan(mimirExprToSparkExpr(cmp.lhs), mimirExprToSparkExpr(cmp.rhs))
-      case  Cmp.Gte  => GreaterThanOrEqual(mimirExprToSparkExpr(cmp.lhs), mimirExprToSparkExpr(cmp.rhs))
-      case  Cmp.Lt  => LessThan(mimirExprToSparkExpr(cmp.lhs), mimirExprToSparkExpr(cmp.rhs))
-      case  Cmp.Lte  => LessThanOrEqual(mimirExprToSparkExpr(cmp.lhs), mimirExprToSparkExpr(cmp.rhs))
-      case  Cmp.Like  => Like(mimirExprToSparkExpr(cmp.lhs), mimirExprToSparkExpr(cmp.rhs)) 
-      case  Cmp.NotLike => org.apache.spark.sql.catalyst.expressions.Not(Like(mimirExprToSparkExpr(cmp.lhs), mimirExprToSparkExpr(cmp.rhs)))
+      case  Cmp.Eq => EqualTo(mimirExprToSparkExpr(oper,cmp.lhs), mimirExprToSparkExpr(oper,cmp.rhs))
+      case  Cmp.Neq  => org.apache.spark.sql.catalyst.expressions.Not(EqualTo(mimirExprToSparkExpr(oper,cmp.lhs), mimirExprToSparkExpr(oper,cmp.rhs))) 
+      case  Cmp.Gt  => GreaterThan(mimirExprToSparkExpr(oper,cmp.lhs), mimirExprToSparkExpr(oper,cmp.rhs))
+      case  Cmp.Gte  => GreaterThanOrEqual(mimirExprToSparkExpr(oper,cmp.lhs), mimirExprToSparkExpr(oper,cmp.rhs))
+      case  Cmp.Lt  => LessThan(mimirExprToSparkExpr(oper,cmp.lhs), mimirExprToSparkExpr(oper,cmp.rhs))
+      case  Cmp.Lte  => LessThanOrEqual(mimirExprToSparkExpr(oper,cmp.lhs), mimirExprToSparkExpr(oper,cmp.rhs))
+      case  Cmp.Like  => Like(mimirExprToSparkExpr(oper,cmp.lhs), mimirExprToSparkExpr(oper,cmp.rhs)) 
+      case  Cmp.NotLike => org.apache.spark.sql.catalyst.expressions.Not(Like(mimirExprToSparkExpr(oper,cmp.lhs), mimirExprToSparkExpr(oper,cmp.rhs)))
       case x => throw new Exception("Invalid operand '"+x+"'")
     }
   }
   
-  def mimirArithmeticToSparkArithmetic(arith:Arithmetic) : org.apache.spark.sql.catalyst.expressions.Expression = {
+  def mimirArithmeticToSparkArithmetic(oper:Operator, arith:Arithmetic) : org.apache.spark.sql.catalyst.expressions.Expression = {
     arith.op match {
-      case  Arith.Add => Add(mimirExprToSparkExpr(arith.lhs),mimirExprToSparkExpr(arith.rhs)) 
-      case  Arith.Sub => Subtract(mimirExprToSparkExpr(arith.lhs),mimirExprToSparkExpr(arith.rhs)) 
-      case  Arith.Mult => Multiply(mimirExprToSparkExpr(arith.lhs),mimirExprToSparkExpr(arith.rhs)) 
-      case  Arith.Div => Divide(mimirExprToSparkExpr(arith.lhs),mimirExprToSparkExpr(arith.rhs))  
-      case  Arith.BitAnd => BitwiseAnd(mimirExprToSparkExpr(arith.lhs),mimirExprToSparkExpr(arith.rhs))  
-      case  Arith.BitOr => BitwiseOr(mimirExprToSparkExpr(arith.lhs),mimirExprToSparkExpr(arith.rhs))  
-      case  Arith.And => And(mimirExprToSparkExpr(arith.lhs),mimirExprToSparkExpr(arith.rhs))   
-      case  Arith.Or => Or(mimirExprToSparkExpr(arith.lhs),mimirExprToSparkExpr(arith.rhs))   
-      case  Arith.ShiftLeft => ShiftLeft(mimirExprToSparkExpr(arith.lhs),mimirExprToSparkExpr(arith.rhs))
-      case  Arith.ShiftRight => ShiftRight(mimirExprToSparkExpr(arith.lhs),mimirExprToSparkExpr(arith.rhs))  
+      case  Arith.Add => Add(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs)) 
+      case  Arith.Sub => Subtract(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs)) 
+      case  Arith.Mult => Multiply(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs)) 
+      case  Arith.Div => Divide(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs))  
+      case  Arith.BitAnd => BitwiseAnd(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs))  
+      case  Arith.BitOr => BitwiseOr(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs))  
+      case  Arith.And => And(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs))   
+      case  Arith.Or => Or(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs))   
+      case  Arith.ShiftLeft => ShiftLeft(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs))
+      case  Arith.ShiftRight => ShiftRight(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs))  
       case x => throw new Exception("Invalid operand '"+x+"'")
     }
   }
   
-  def mimirConditionalToSparkConditional(cnd:Conditional) : org.apache.spark.sql.catalyst.expressions.Expression = {
+  def mimirConditionalToSparkConditional(oper:Operator, cnd:Conditional) : org.apache.spark.sql.catalyst.expressions.Expression = {
     cnd match {
       case Conditional(cond, thenClause, elseClause) => {
-        If(mimirExprToSparkExpr(cond),mimirExprToSparkExpr(thenClause),mimirExprToSparkExpr(elseClause))
+        If(mimirExprToSparkExpr(oper,cond),mimirExprToSparkExpr(oper,thenClause),mimirExprToSparkExpr(oper,elseClause))
       }
     }
   }
   
-  def mimirFunctionToSparkFunction(func:Function) : org.apache.spark.sql.catalyst.expressions.Expression = {
+  def mimirFunctionToSparkFunction(oper:Operator, func:Function) : org.apache.spark.sql.catalyst.expressions.Expression = {
     val vgtBGFunc = VGTermFunctions.bestGuessVGTermFn
     func match {
       case Function("CAST", params) => {
-        org.apache.spark.sql.catalyst.expressions.Cast(mimirExprToSparkExpr(params.head), getSparkType(params.tail.head.asInstanceOf[TypePrimitive].t), None)
+        org.apache.spark.sql.catalyst.expressions.Cast(mimirExprToSparkExpr(oper,params.head), getSparkType(params.tail.head.asInstanceOf[TypePrimitive].t), None)
       }
       case Function("MIMIR_CAST", params) => {
         throw new Exception(s"Function Translation not implemented MIMIR_CAST${params.mkString(",")}")
@@ -338,10 +539,11 @@ object OperatorTranslation
         Randn(1L)
       }
       case Function(`vgtBGFunc`, params) => {
-        throw new Exception(s"Function Translation not implemented $vgtBGFunc${params.mkString(",")}")
+        throw new Exception(s"Function Translation not implemented $vgtBGFunc(${params.mkString(",")})")
       }
       case Function(name, params) => {
-        throw new Exception(s"Function Translation not implemented $name${params.mkString(",")}")
+        FunctionUDF(db, oper, name, params).getUDF
+        //throw new Exception(s"Function Translation not implemented $name(${params.mkString(",")})")
       }
     }
   }
@@ -494,9 +696,9 @@ class VGTermUDF {
     }
 }
 
-case class BestGuessUDF(model:Model, idx:Int, args:Seq[Expression], hints:Seq[Expression]) extends VGTermUDF {
+case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression], hints:Seq[Expression]) extends VGTermUDF {
   val sparkVarType = OperatorTranslation.getSparkType(model.varType(idx, model.argTypes(idx)))
-  val sparkArgs = (args.map(arg => OperatorTranslation.mimirExprToSparkExpr(arg)) ++ hints.map(hint => OperatorTranslation.mimirExprToSparkExpr(hint))).toList.toSeq
+  val sparkArgs = (args.map(arg => OperatorTranslation.mimirExprToSparkExpr(oper,arg)) ++ hints.map(hint => OperatorTranslation.mimirExprToSparkExpr(oper,hint))).toList.toSeq
   val sparkArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg)) ++ model.hintTypes(idx).map(hint => OperatorTranslation.getSparkType(hint))).toList.toSeq
   
   def extractArgsAndHints(args:Seq[Any]) : (Seq[PrimitiveValue],Seq[PrimitiveValue]) ={
@@ -532,6 +734,14 @@ case class BestGuessUDF(model:Model, idx:Int, args:Seq[Expression], hints:Seq[Ex
           val (argList, hintList) = extractArgsAndHints(Seq(arg0, arg1, arg2, arg3))
           getNative(model.bestGuess(idx, argList, hintList))
         }
+        case 5 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any) => {
+          val (argList, hintList) = extractArgsAndHints(Seq(arg0, arg1, arg2, arg3, arg4))
+          getNative(model.bestGuess(idx, argList, hintList))
+        }
+        case 6 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any) => {
+          val (argList, hintList) = extractArgsAndHints(Seq(arg0, arg1, arg2, arg3, arg4, arg5))
+          getNative(model.bestGuess(idx, argList, hintList))
+        }
       },
       sparkVarType,
       sparkArgs,
@@ -539,8 +749,8 @@ case class BestGuessUDF(model:Model, idx:Int, args:Seq[Expression], hints:Seq[Ex
       Some(model.name))
 }
 
-case class AckedUDF(model:Model, idx:Int, args:Seq[Expression]) extends VGTermUDF {
-  val sparkArgs = (args.map(arg => OperatorTranslation.mimirExprToSparkExpr(arg))).toList.toSeq
+case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression]) extends VGTermUDF {
+  val sparkArgs = (args.map(arg => OperatorTranslation.mimirExprToSparkExpr(oper,arg))).toList.toSeq
   val sparkArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg))).toList.toSeq
   def extractArgs(args:Seq[Any]) : Seq[PrimitiveValue] = {
     model.argTypes(idx).
@@ -569,11 +779,68 @@ case class AckedUDF(model:Model, idx:Int, args:Seq[Expression]) extends VGTermUD
           val argList = extractArgs(Seq(arg0, arg1, arg2, arg3))
           model.isAcknowledged(idx, argList)
         }
+        case 5 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any) => {
+          val argList = extractArgs(Seq(arg0, arg1, arg2, arg3, arg4))
+          model.isAcknowledged(idx, argList)
+        }
+        case 6 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any) => {
+          val argList = extractArgs(Seq(arg0, arg1, arg2, arg3, arg4, arg5))
+          model.isAcknowledged(idx, argList)
+        }
       },
       BooleanType,
       sparkArgs,
       sparkArgTypes,
       Some(model.name))
+}
+
+case class FunctionUDF(db:Database, oper:Operator, name:String, params:Seq[Expression]) extends VGTermUDF {
+  val sparkArgs = (params.map(arg => OperatorTranslation.mimirExprToSparkExpr(oper,arg))).toList.toSeq
+  val argTypes = params.map(arg => db.typechecker.typeOf(arg, oper)) 
+  val sparkArgTypes = argTypes.map(argT => OperatorTranslation.getSparkType(argT)).toList.toSeq
+  def extractArgs(args:Seq[Any]) : Seq[PrimitiveValue] = {
+    argTypes.
+      zipWithIndex.
+      map( arg => getPrimitive(arg._1, args(arg._2)))
+  }
+  def getUDF = 
+    ScalaUDF(
+      db.functions.get(name) match {
+        case NativeFunction(_, evaluator, _, _) => 
+          sparkArgs.length match { 
+            case 0 => {
+              evaluator(Seq())
+            }
+            case 1 => (arg0:Any) => {
+              val argList = extractArgs(Seq(arg0))
+              evaluator(argList)
+            }
+            case 2 => (arg0:Any, arg1:Any) => {
+              val argList = extractArgs(Seq(arg0, arg1))
+              evaluator(argList)
+            }
+            case 3 => (arg0:Any, arg1:Any, arg2:Any) => {
+              val argList = extractArgs(Seq(arg0, arg1, arg2))
+              evaluator(argList)
+            }
+            case 4 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any) => {
+              val argList = extractArgs(Seq(arg0, arg1, arg2, arg3))
+              evaluator(argList)
+            }
+            case 5 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any) => {
+              val argList = extractArgs(Seq(arg0, arg1, arg2, arg3, arg4))
+              evaluator(argList)
+            }
+            case 6 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any) => {
+              val argList = extractArgs(Seq(arg0, arg1, arg2, arg3, arg4, arg5))
+              evaluator(argList)
+            }
+          }
+      },
+      BooleanType,
+      sparkArgs,
+      sparkArgTypes,
+      Some(name))
 }
 
 case class GroupAnd(child: org.apache.spark.sql.catalyst.expressions.Expression) extends DeclarativeAggregate {

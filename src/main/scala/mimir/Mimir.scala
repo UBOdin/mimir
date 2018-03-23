@@ -74,9 +74,9 @@ object Mimir extends LazyLogging {
         db.models.prefetchForOwner(table.toUpperCase)
       }))
 
-      /*if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
-        db.backend.asInstanceOf[JDBCBackend].enableInlining(db)
-      }*/
+      if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
+        db.metadataBackend.asInstanceOf[InlinableBackend].enableInlining(db)
+      }
 
       if(conf.file.get == None || conf.file() == "-"){
         if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){

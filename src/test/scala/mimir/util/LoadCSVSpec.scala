@@ -30,14 +30,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
     }
 
     "Load CSV files with headers given an existing schema" >> {
-      update("""
-        CREATE TABLE RATINGS2(
-          PID string,
-          EVALUATION float,
-          NUM_RATINGS float
-        );
-      """)
-      db.loadTable( "RATINGS2", new File("test/data/ratings2.csv"))
+      loadCSV("RATINGS2", Seq(("PID","string"), ("EVALUATION","float"), ("NUM_RATINGS","float")), new File("test/data/ratings2.csv"))
       queryOneColumn(s"SELECT PID FROM RATINGS2"){ 
         _.toSeq must contain(
           str("P125"), str("P34234"), str("P34235")
@@ -51,14 +44,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
     }
 
     "Load CSV files without headers given an existing schema" >> {
-      update("""
-        CREATE TABLE U2(
-          A int,
-          B int,
-          C int
-        );
-      """)
-      db.loadTable( "U2", new File("test/r_test/u.csv"))
+      loadCSV( "U2", Seq(("A","int"), ("B","int"), ("C","int")), new File("test/r_test/u.csv"))
       val col1: String = db.tableSchema("U2").get.head._1
       queryOneColumn(s"SELECT $col1 FROM U2"){
         _.toSeq must contain(
@@ -68,16 +54,9 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
     }
 
     "Load CSV files that have type errors" >> {
-      update("""
-        CREATE TABLE RATINGS1WITHTYPES(
-          PID string,
-          RATING float,
-          REVIEW_CT float
-        );
-      """)
       // Disable warnings for type errors
       LoggerUtils.error("mimir.util.LoadCSV$"){
-        db.loadTable( "RATINGS1WITHTYPES", new File("test/data/ratings1.csv"))
+        loadCSV( "RATINGS1WITHTYPES", Seq(("PID","string"),("RATING","float"),("REVIEW_CT","float")), new File("test/data/ratings1.csv"))
       }
       queryOneColumn("SELECT PID FROM RATINGS1WITHTYPES"){ 
         _.toSeq must contain(
@@ -120,17 +99,8 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
     }
 
     "Load Dates Properly" >> {
-      update("""
-        CREATE TABLE EMPLOYEE(
-          Name string, 
-          Age int,
-          JoinDate date,
-          Salary float,
-          Married bool
-        )
-      """)
       LoggerUtils.error("mimir.util.NonStrictCSVParser") {
-        db.loadTable( "EMPLOYEE", new File("test/data/Employee.csv"))
+        loadCSV( "EMPLOYEE", Seq(("Name","string"),("Age","int"),("JoinDate","date"),("Salary","float"),("Married","bool")), new File("test/data/Employee.csv"))
       }
       db.query("""
         SELECT cast(JOINDATE as varchar) FROM EMPLOYEE

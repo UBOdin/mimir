@@ -430,7 +430,8 @@ class CTExplainer(db: Database) extends LazyLogging {
 		oper: Operator, 
 		wantCol: Set[String], 
 		wantRow:Boolean, 
-		wantSort:Boolean
+		wantSort:Boolean,
+		wantSchema:Boolean = true
 	): Seq[ReasonSet] =
 	{
 		logger.trace(s"Explain Subset (${wantCol.mkString(", ")}; $wantRow; $wantSort): \n$oper")
@@ -438,34 +439,37 @@ class CTExplainer(db: Database) extends LazyLogging {
 			case Table(_,_,_,_) => Seq()
 			case HardTable(_,_) => Seq()
 			case View(_,query,_) => 
-				explainSubsetWithoutOptimizing(query, wantCol, wantRow, wantSort)
+				explainSubsetWithoutOptimizing(query, wantCol, wantRow, wantSort, wantSchema)
 
 			case AdaptiveView(model, name, query, _) => {
 				// Source 1: Recur:  
 				logger.debug(s"Explain Adaptive View Source 1: Recursion into $model.$name")
 				val sourceReasons = 
-					explainSubsetWithoutOptimizing(query, wantCol, wantRow, wantSort)
-
-				// Model details
-				val (multilens, config) = 
-						db.adaptiveSchemas.get(model) match {
-							case Some(cfg) => cfg
-							case None => throw new RAException(s"Unknown adaptive schema '$model'")
-						}
-
-				// Source 2: There might be uncertainty on the table.  Use SYS_TABLES to dig these annotations up.
-				logger.debug(s"Explain Adaptive View Source 2: $model.$name")
-				val tableReasons = explainEverything(
-					multilens.tableCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name) )
-				)
-				// alternative: Use SYS_TABLES directly
-				//    db.table("SYS_TABLES").where( Var("SCHEMA").eq(StringPrimitive(model)).and( Var("TABLE").eq(StringPrimitive(name)) ) )
-
-				// Source 3: Check for uncertainty in one of the attributes of interest
-				logger.debug(s"Explain Adaptive View Source 3: $model.$name attributes")
-				val attrReasons = explainEverything(
-					multilens.attrCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name).and( Var("ATTR_NAME").in( wantCol.toSeq.map { StringPrimitive(_) } ) ) )
-				)
+					explainSubsetWithoutOptimizing(query, wantCol, wantRow, wantSort, wantSchema)
+					
+				val (tableReasons, attrReasons) = if(wantSchema){
+  				// Model details
+  				val (multilens, config) = 
+  						db.adaptiveSchemas.get(model) match {
+  							case Some(cfg) => cfg
+  							case None => throw new RAException(s"Unknown adaptive schema '$model'")
+  						}
+  
+  				// Source 2: There might be uncertainty on the table.  Use SYS_TABLES to dig these annotations up.
+  				logger.debug(s"Explain Adaptive View Source 2: $model.$name")
+  				val tableReasons = explainEverything(
+  					multilens.tableCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name) )
+  				)
+  				// alternative: Use SYS_TABLES directly
+  				//    db.table("SYS_TABLES").where( Var("SCHEMA").eq(StringPrimitive(model)).and( Var("TABLE").eq(StringPrimitive(name)) ) )
+  
+  				// Source 3: Check for uncertainty in one of the attributes of interest
+  				logger.debug(s"Explain Adaptive View Source 3: $model.$name attributes")
+  				val attrReasons = explainEverything(
+  					multilens.attrCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name).and( Var("ATTR_NAME").in( wantCol.toSeq.map { StringPrimitive(_) } ) ) )
+  				)
+  				(tableReasons, attrReasons)
+				} else (Seq(), Seq())
 				logger.debug(s"Explain Adaptive View Done: $model.$name")
 				// alternative: Use SYS_ATTRS directly
 				//    db.table("SYS_TABLES").where( Var("SCHEMA").eq(StringPrimitive(model)).and( Var("TABLE").eq(StringPrimitive(name)) ).and( Var("ATTR").in(wantCol.map(StringPrimitive(_))) ) )
@@ -495,12 +499,12 @@ class CTExplainer(db: Database) extends LazyLogging {
 							col => ExpressionUtils.getColumns(col.expression)
 						}.toSet
 
-				argReasons ++ explainSubsetWithoutOptimizing(child, argDependencies, wantRow, wantSort)
+				argReasons ++ explainSubsetWithoutOptimizing(child, argDependencies, wantRow, wantSort, wantSchema)
 			}
 
 			// Keep views unless we can push selections down into them
 			case Select(cond, View(_,query,_)) => 
-				explainSubsetWithoutOptimizing(Select(cond, query), wantCol, wantRow, wantSort)
+				explainSubsetWithoutOptimizing(Select(cond, query), wantCol, wantRow, wantSort, wantSchema)
 
 			case Select(cond, child) => {
 				val (condReasons:Seq[ReasonSet], condDependencies:Set[String]) =
@@ -516,7 +520,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 						)
 					} else { ( Seq(), Set() ) }
 
-				condReasons ++ explainSubsetWithoutOptimizing(child, wantCol ++ condDependencies, wantRow, wantSort)
+				condReasons ++ explainSubsetWithoutOptimizing(child, wantCol ++ condDependencies, wantRow, wantSort, wantSchema)
 			}
 
 			case Aggregate(gbs, aggs, child) => {
@@ -544,20 +548,20 @@ class CTExplainer(db: Database) extends LazyLogging {
 					// If there are any agg dependencies, input row reasons are also relevant
 					wantRow || !aggDependencies.isEmpty,
 					// Sort is never relevant for aggregates
-					false
+					false, wantSchema
 				)
 			}
 
 			case Join(lhs, rhs) => {
-				explainSubsetWithoutOptimizing(lhs, lhs.columnNames.filter(wantCol(_)).toSet, wantRow, wantSort) ++ 
-				explainSubsetWithoutOptimizing(rhs, rhs.columnNames.filter(wantCol(_)).toSet, wantRow, wantSort)
+				explainSubsetWithoutOptimizing(lhs, lhs.columnNames.filter(wantCol(_)).toSet, wantRow, wantSort, wantSchema) ++ 
+				explainSubsetWithoutOptimizing(rhs, rhs.columnNames.filter(wantCol(_)).toSet, wantRow, wantSort, wantSchema)
 			}
 
 			case LeftOuterJoin(left, right, cond) => 
         throw new RAException("Don't know how to explain a left-outer-join")
 
       case Limit(_, _, child) => 
-      	explainSubsetWithoutOptimizing(child, wantCol, wantRow, wantSort || wantRow)
+      	explainSubsetWithoutOptimizing(child, wantCol, wantRow, wantSort || wantRow, wantSchema)
 
      	case Sort(args, child) => {
 				val (argReasons, argDependencies) =
@@ -574,20 +578,56 @@ class CTExplainer(db: Database) extends LazyLogging {
 						)
 					} else { (Seq(),Set()) }
 
-				argReasons ++ explainSubsetWithoutOptimizing(child,argDependencies.toSet ++ wantCol,wantRow,wantSort)
+				argReasons ++ explainSubsetWithoutOptimizing(child,argDependencies.toSet ++ wantCol,wantRow,wantSort, wantSchema)
 			}
 
 			case Union(lhs, rhs) => {
-				explainSubsetWithoutOptimizing(lhs,wantCol,wantRow,wantSort) ++ 
-				explainSubsetWithoutOptimizing(rhs,wantCol,wantRow,wantSort)
+				explainSubsetWithoutOptimizing(lhs,wantCol,wantRow,wantSort, wantSchema) ++ 
+				explainSubsetWithoutOptimizing(rhs,wantCol,wantRow,wantSort, wantSchema)
 			}
 
 			case Annotate(src, _) => 
-				explainSubsetWithoutOptimizing(src,wantCol,wantRow,wantSort)
+				explainSubsetWithoutOptimizing(src,wantCol,wantRow,wantSort, wantSchema)
 
 			case ProvenanceOf(_) => ???
 
 			case Recover(_, _) => ???
 		}
+	}
+		
+	def explainAdaptiveSchema(oper: Operator, 
+		wantCol: Set[String], 
+		wantTable:Boolean
+	): Seq[ReasonSet] =
+	{
+		logger.trace(s"Explain AdaptiveSchema (${wantCol.mkString(", ")}; $wantTable): \n$oper")
+		val recur = explainAdaptiveSchema(_:Operator, wantCol, wantTable)
+		oper match {
+			case AdaptiveView(model, name, query, _) => {
+				val sourceReasons = 
+					explainAdaptiveSchema(query, wantCol, wantTable)
+					
+			  val (multilens, config) = 
+						db.adaptiveSchemas.get(model) match {
+							case Some(cfg) => cfg
+							case None => throw new RAException(s"Unknown adaptive schema '$model'")
+						}
+
+				// Source 1: There might be uncertainty on the table.  Use SYS_TABLES to dig these annotations up.
+				logger.debug(s"Explain Adaptive View Source 1: $model.$name")
+				val tableReasons = if(wantTable) explainEverything(
+					multilens.tableCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name) )
+				) else Seq()
+				
+				// Source 2: Check for uncertainty in one of the attributes of interest
+				logger.debug(s"Explain Adaptive View Source 2: $model.$name attributes")
+				val attrReasons = explainEverything(
+					multilens.attrCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name).and( Var("ATTR_NAME").in( wantCol.toSeq.map { StringPrimitive(_) } ) ) )
+				)
+				logger.debug(s"Explain Adaptive View Done: $model.$name")
+				sourceReasons ++ tableReasons ++ attrReasons
+			}
+			case _ => oper.children.flatMap(recur(_))
+	  }
 	}
 }

@@ -8,6 +8,7 @@ import mimir.test._
 import mimir.util._
 import LoggerUtils.trace
 import mimir.ctables._
+import mimir.algebra.NullPrimitive
 
 object CureScenario
   extends SQLTestSpecification("CureScenario",  Map("reset" -> "YES"))
@@ -64,9 +65,9 @@ object CureScenario
 
     "Select from the source table" >> {
       time("Type Inference Query"){ 
-        query("""
+      query("""
           SELECT * FROM cureSource;
-        """){ _.foreach { row => {} } }
+        """){ _.foreach { row => { }}}
       }
       ok
     }
