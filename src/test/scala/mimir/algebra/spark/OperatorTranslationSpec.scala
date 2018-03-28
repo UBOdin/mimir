@@ -41,13 +41,13 @@ object OperatorTranslationSpec
       val result = db.query(db.table("R").addColumn(("ROWID", RowIdVar())).project("ROWID"))(_.toList.map(_.tuple))
       
       result must be equalTo List(
-       List(RowIdPrimitive("0")), 
        List(RowIdPrimitive("1")), 
        List(RowIdPrimitive("2")), 
        List(RowIdPrimitive("3")), 
        List(RowIdPrimitive("4")), 
        List(RowIdPrimitive("5")), 
-       List(RowIdPrimitive("6"))   
+       List(RowIdPrimitive("6")),
+       List(RowIdPrimitive("7"))
       )
     }
     

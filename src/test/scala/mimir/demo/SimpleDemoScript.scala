@@ -174,7 +174,7 @@ object SimpleDemoScript
 
 		
 		"Obtain Cell Explanations for Simple Queries" >> {
-			val expl1 = explainCell("""
+		  val expl1 = explainCell("""
 					SELECT * FROM RATINGS1FINAL
 				""", "3", "RATING")
 			expl1.toString must contain("I used a classifier to guess that RATINGS1FINAL.RATING =")		
@@ -245,7 +245,7 @@ object SimpleDemoScript
 		  LoggerUtils.debug(
 				// "mimir.exec.Compiler"
 			) {
-				query("""
+		    query("""
 					SELECT p.name, r.rating FROM (
 						SELECT * FROM RATINGS1FINAL
 							UNION ALL

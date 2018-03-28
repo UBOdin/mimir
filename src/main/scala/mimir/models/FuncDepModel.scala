@@ -34,8 +34,8 @@ object FuncDepModel
         db.models.getOption(modelName) match {
           case Some(model) => model
           case None => {
-            val model = new SimpleFuncDepModel(modelName, col, query)
-            sourceCol = model.train(db)
+            val model = new SimpleFuncDepModel(modelName, QueryNamer(query), col, db.typechecker.schemaOf(query))
+            sourceCol = trainModel(db, query, model)
             db.models.persist(model)
             model
           }
@@ -49,36 +49,14 @@ object FuncDepModel
       )
     }).toMap
   }
-}
-
-@SerialVersionUID(1001L)
-class SimpleFuncDepModel(name: String, colName: String, query: Operator)
-  extends Model(name)
-  with NeedsReconnectToDatabase
-{
-  val colIdx:Int = query.columnNames.indexOf(colName)
-  val feedback = scala.collection.mutable.Map[String,PrimitiveValue]()
-  var inEdgeCol = ""
-  val tableName = QueryNamer(query)
-  var maxStrength = 0.0
-  var dependencyMap = scala.collection.immutable.Map[PrimitiveValue,PrimitiveValue]() //inEdge->col
-  var weightedList = IndexedSeq[(PrimitiveValue,Double)]()
-  /**
-   * The database is marked transient.  We use the @NeedsReconnectToDatabase trait to
-   * ask the deserializer to re-link us.
-   */
-  @transient var db: Database = null
-
-  /**
-   * When the model is created, learn associations from the existing data.
-   */
-  def train(db:Database) : Int =
+  
+  def trainModel(db:Database, query:Operator, model:SimpleFuncDepModel) : Int =
   {
     val fd = new FuncDep()
-    fd.buildEntities(db, query, tableName)
+    fd.buildEntities(db, query, model.tableName)
     //  use egde strength to choose incoming edges
     var inedgeArr0 : Array[(Int,Int)] = new Array[(Int,Int)](0)
-    val inedgeArr = fd.fdGraph.getInEdges(colIdx).toArray(inedgeArr0)
+    val inedgeArr = fd.fdGraph.getInEdges(model.colIdx).toArray(inedgeArr0)
     val edgeMap = fd.edgeTable.map{case (a,b,c)=> (a,b)->c}.toMap
     var inEdge = 0
     for((a,b)<-inedgeArr) {
@@ -86,19 +64,37 @@ class SimpleFuncDepModel(name: String, colName: String, query: Operator)
         case Some(v) => v
         case None => -1
       }
-      if(str>=maxStrength && a!=(-1)) {
-        maxStrength = str
+      if(str>=model.maxStrength && a!=(-1)) {
+        model.maxStrength = str
         inEdge = a
       }
     }
-    inEdgeCol = query.columnNames(inEdge)
-    val results = db.query(Aggregate(Seq(Var(inEdgeCol),Var(colName)),Seq(AggFunction("COUNT", false, Seq(), "count1")),query).project(inEdgeCol,colName,"count1")){_.tuples}
+    val columns = model.schema.map{_._1}
+    model.inEdgeCol = columns(inEdge)
+    val results = db.query(Aggregate(Seq(Var(model.inEdgeCol),Var(model.colName)),Seq(AggFunction("COUNT", false, Seq(), "count1")),query).project(model.inEdgeCol,model.colName,"count1")){_.tuples}
                       .filterNot(row => row(1).isInstanceOf[NullPrimitive]).sortBy(_(2).asInt)
-    dependencyMap = results.map(arr => arr(0) -> arr(1)).toMap
-    weightedList = results.map(row => (row(1),row(2).asDouble))
-    this.db = db
+    model.dependencyMap = results.map(arr => arr(0) -> arr(1)).toMap
+    model.weightedList = results.map(row => (row(1),row(2).asDouble))
     inEdge
   }
+  
+}
+
+@SerialVersionUID(1001L)
+class SimpleFuncDepModel(name: String, val tableName:String, val colName: String, val schema:Seq[(String,Type)])
+  extends Model(name)
+{
+  val colIdx:Int = schema.map{_._1}.indexOf(colName)
+  val feedback = scala.collection.mutable.Map[String,PrimitiveValue]()
+  var inEdgeCol = ""
+  var maxStrength = 0.0
+  var dependencyMap = scala.collection.immutable.Map[PrimitiveValue,PrimitiveValue]() //inEdge->col
+  var weightedList = IndexedSeq[(PrimitiveValue,Double)]()
+  /**
+   * The database is marked transient.  We use the @NeedsReconnectToDatabase trait to
+   * ask the deserializer to re-link us.
+   */
+  
 
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
   {
@@ -110,10 +106,10 @@ class SimpleFuncDepModel(name: String, colName: String, query: Operator)
     feedback contains(args(0).asString)
 
   def guessInputType: Type =
-    db.typechecker.schemaOf(query)(colIdx)._2
+    schema(colIdx)._2
 
   def argTypes(idx: Int): Seq[Type] = List(TRowId())
-  def hintTypes(idx: Int) = db.typechecker.schemaOf(query).map(_._2)
+  def hintTypes(idx: Int) = schema.map(_._2)
 
   def varType(idx: Int, args: Seq[Type]): Type = guessInputType
 
@@ -166,12 +162,7 @@ class SimpleFuncDepModel(name: String, colName: String, query: Operator)
     }
   }
 
-  /**
-   * Re-populate transient fields after being woken up from serialization
-   */
-  def reconnectToDatabase(db: Database) = {
-    this.db = db
-  }
+  
 
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = {
     val rowid = RowIdPrimitive(args(0).asString)

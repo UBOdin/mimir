@@ -11,6 +11,8 @@ import org.apache.spark.ml.feature.Imputer
 import mimir.util.ExperimentalOptions
 import mimir.algebra.spark.OperatorTranslation
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
 
 object SparkML {
   type SparkModel = PipelineModel
@@ -95,6 +97,15 @@ abstract class SparkML {
       getSparkSession().parallelize(testData.map( row => {
         Row(row.zip(cols).map(value => valuePreparer(value._1, value._2._2)):_*)
       })), StructType(cols.toList.map(col => StructField(col._1, sparkTyper(col._2), true))))))
+  }
+  
+  def applyModel( model : PipelineModel, inputDF:DataFrame): DataFrame = {//inputPlan:LogicalPlan): DataFrame = {
+    /*val sqlContext = getSparkSqlContext()
+    import sqlContext.implicits._
+    val qe = sqlContext.sparkSession.sessionState.executePlan(inputPlan)
+    qe.assertAnalyzed()
+    val dfToTf = new Dataset[Row](sqlContext.sparkSession, inputPlan, RowEncoder(qe.analyzed.schema)).toDF()*/
+    model.transform(inputDF)
   }
   
   def extractPredictions(model : PipelineModel, predictions:DataFrame, maxPredictions:Int = 5) : Seq[(String, (String, Double))]  

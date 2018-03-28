@@ -488,7 +488,7 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
     targetSchema: Seq[(String, String)],
     sourceFile: File
   ) : Unit  = loadTable(targetTable, sourceFile, true, 
-      ("CSV", Seq(StringPrimitive(","))), 
+      ("CSV", Seq(StringPrimitive(","),BoolPrimitive(false),BoolPrimitive(false))), 
       Some(targetSchema.map(el => (el._1, Type.fromString(el._2)))))
   
   def loadTable(
@@ -517,8 +517,8 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
             throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' INTO tableName`; to append to existing data.")
           }
           if(!tableExists(targetTable.toUpperCase)){
-            LoadCSV.handleLoadTableRaw(this, targetRaw, sourceFile, 
-              Map("DELIMITER" -> delim, "mode" -> "DROPMALFORMED", "header" -> "false")
+            LoadCSV.handleLoadTableRaw(this, targetRaw, targetSchema, sourceFile, 
+              Map("DELIMITER" -> delim, "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false")
             )
             var oper = table(targetRaw)
             //detect headers 
@@ -540,7 +540,7 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
               case None => tableSchema(targetTable)
               case _ => targetSchema
             }
-            LoadCSV.handleLoadTableRaw(this, targetTable.toUpperCase, schema, sourceFile,  Map("DELIMITER" -> delim, "mode" -> "DROPMALFORMED", "header" -> "false") )
+            LoadCSV.handleLoadTableRaw(this, targetTable.toUpperCase, schema, sourceFile,  Map("DELIMITER" -> delim, "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false") )
           }
         }
       case fmt =>

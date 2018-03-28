@@ -52,6 +52,7 @@ import org.apache.spark.sql.Column
 import org.apache.spark.sql.catalyst.expressions.CreateStruct
 import org.apache.spark.sql.catalyst.expressions.GetStructField
 import org.apache.spark.sql.catalyst.plans.UsingJoin
+import mimir.algebra.function.RegisteredFunction
 
 object OperatorTranslation
   extends LazyLogging
@@ -125,7 +126,14 @@ object OperatorTranslation
         } else {
           plan
         }
-			  baseRelation
+			  meta match {
+			    case Seq() => baseRelation
+			    case _ => {
+			      org.apache.spark.sql.catalyst.plans.logical.Project(sch.map(col => {
+              mimirExprToSparkNamedExpr(oper, col._1, Var(col._1))
+            }) ++ meta.map(metaEl => mimirExprToSparkNamedExpr(oper, metaEl._1, metaEl._2)) ,baseRelation)
+			    }
+			  } 
 			  //LogicalRelation(baseRelation, table)
 			}
 			case View(name, query, annotations) => {
@@ -413,15 +421,18 @@ object OperatorTranslation
       case cnd@Conditional(condition,thenClause,elseClause) => {
         mimirConditionalToSparkConditional(oper, cnd)
       }
-      case Var(name@Provenance.rowidColnameBase) => {
-        org.apache.spark.sql.catalyst.expressions.Cast(Alias(MonotonicallyIncreasingID(),name)(),getSparkType(db.backend.rowIdType),None)
+      case Var("ROWID") => {
+        org.apache.spark.sql.catalyst.expressions.Cast(Alias(Add(MonotonicallyIncreasingID(), Literal(1)),"ROWID")(),getSparkType(db.backend.rowIdType),None)
       }
+      /*case Var(name@Provenance.rowidColnameBase) => {
+        org.apache.spark.sql.catalyst.expressions.Cast(Alias(Add(MonotonicallyIncreasingID(), Literal(1)),name)(),getSparkType(db.backend.rowIdType),None)
+      }*/
       case Var(v) => {
         UnresolvedAttribute(v)
       }
       case rid@RowIdVar() => {
         //UnresolvedAttribute("ROWID")
-        org.apache.spark.sql.catalyst.expressions.Cast(Alias(MonotonicallyIncreasingID(),rid.toString())(),getSparkType(db.backend.rowIdType),None)
+        org.apache.spark.sql.catalyst.expressions.Cast(Alias(Add(MonotonicallyIncreasingID(), Literal(1)),rid.toString())(),getSparkType(db.backend.rowIdType),None)
       }
       case func@Function(_,_) => {
         mimirFunctionToSparkFunction(oper, func)
@@ -481,7 +492,7 @@ object OperatorTranslation
       case NullPrimitive() => null
       case RowIdPrimitive(s) => UTF8String.fromString(s)
       case StringPrimitive(s) => UTF8String.fromString(s)
-      //case IntPrimitive(i) => i
+      case IntPrimitive(i) => i
       case FloatPrimitive(f) => f
       case BoolPrimitive(b) => b
       case x =>  UTF8String.fromString(x.asString)
@@ -542,7 +553,7 @@ object OperatorTranslation
         throw new Exception(s"Function Translation not implemented $vgtBGFunc(${params.mkString(",")})")
       }
       case Function(name, params) => {
-        FunctionUDF(db, oper, name, params).getUDF
+        FunctionUDF(oper, name, db.functions.get(name), params, params.map(arg => db.typechecker.typeOf(arg, oper))).getUDF
         //throw new Exception(s"Function Translation not implemented $name(${params.mkString(",")})")
       }
     }
@@ -570,7 +581,7 @@ object OperatorTranslation
     hiveType.toUpperCase() match {
       case "TINYINT" => ShortType
       case "SMALLINT" => IntegerType
-      case "INT" => IntegerType
+      case "INT" => LongType
       case "BIGINT" => LongType 
       case "FLOAT" => FloatType 
       case "DOUBLE" => DoubleType
@@ -595,7 +606,7 @@ object OperatorTranslation
   
   def getSparkType(t:Type) : DataType = {
     t match {
-      //case TInt() => LongType
+      case TInt() => LongType
       case TFloat() => FloatType
       case TDate() => StringType
       case TString() => StringType
@@ -612,10 +623,10 @@ object OperatorTranslation
   
   def getMimirType(dataType: DataType): Type = {
     dataType match {
-      //case IntegerType => TInt()
+      case IntegerType => TInt()
       case DoubleType => TFloat()
       case FloatType => TFloat()
-      //case LongType => TInt()
+      case LongType => TInt()
       case BooleanType => TBool()
       case _ => TString()
     }
@@ -670,26 +681,29 @@ object OperatorTranslation
 }
 
 class VGTermUDF {
-  def getPrimitive(t:Type, value:Any) = t match {
-    case TInt() => IntPrimitive(value.asInstanceOf[String].toLong)
-    case TFloat() => FloatPrimitive(value.asInstanceOf[Double])
-    //case TDate() => DatePrimitive.(value.asInstanceOf[Long])
-    //case TTimestamp() => Primitive(value.asInstanceOf[Long])
-    case TString() => StringPrimitive(value.asInstanceOf[String])
-    case TBool() => BoolPrimitive(value.asInstanceOf[Boolean])
-    case TRowId() => RowIdPrimitive(value.asInstanceOf[String])
-    case TType() => TypePrimitive(Type.fromString(value.asInstanceOf[String]))
-    //case TAny() => NullPrimitive()
-    //case TUser(name) => name.toLowerCase
-    //case TInterval() => Primitive(value.asInstanceOf[Long])
-    case _ => StringPrimitive(value.asInstanceOf[String])
+  def getPrimitive(t:Type, value:Any) = value match {
+    case null => NullPrimitive()
+    case _ => t match {
+      case TInt() => IntPrimitive(value.asInstanceOf[String].toLong)
+      case TFloat() => FloatPrimitive(value.asInstanceOf[Float].toDouble)
+      //case TDate() => DatePrimitive.(value.asInstanceOf[Long])
+      //case TTimestamp() => Primitive(value.asInstanceOf[Long])
+      case TString() => StringPrimitive(value.asInstanceOf[String])
+      case TBool() => BoolPrimitive(value.asInstanceOf[Boolean])
+      case TRowId() => RowIdPrimitive(value.asInstanceOf[String])
+      case TType() => TypePrimitive(Type.fromString(value.asInstanceOf[String]))
+      //case TAny() => NullPrimitive()
+      //case TUser(name) => name.toLowerCase
+      //case TInterval() => Primitive(value.asInstanceOf[Long])
+      case _ => StringPrimitive(value.asInstanceOf[String])
+    }
   }
   def getNative(primitive : PrimitiveValue) : AnyRef = 
     primitive match {
       case NullPrimitive() => null
       case RowIdPrimitive(s) => s
       case StringPrimitive(s) => s
-      //case IntPrimitive(i) => i
+      case IntPrimitive(i) => new java.lang.Long(i)
       case FloatPrimitive(f) => new java.lang.Float(f)
       case BoolPrimitive(b) => new java.lang.Boolean(b)
       case x =>  x.asString
@@ -794,9 +808,8 @@ case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression]) e
       Some(model.name))
 }
 
-case class FunctionUDF(db:Database, oper:Operator, name:String, params:Seq[Expression]) extends VGTermUDF {
+case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, params:Seq[Expression], argTypes:Seq[Type]) extends VGTermUDF {
   val sparkArgs = (params.map(arg => OperatorTranslation.mimirExprToSparkExpr(oper,arg))).toList.toSeq
-  val argTypes = params.map(arg => db.typechecker.typeOf(arg, oper)) 
   val sparkArgTypes = argTypes.map(argT => OperatorTranslation.getSparkType(argT)).toList.toSeq
   def extractArgs(args:Seq[Any]) : Seq[PrimitiveValue] = {
     argTypes.
@@ -805,7 +818,7 @@ case class FunctionUDF(db:Database, oper:Operator, name:String, params:Seq[Expre
   }
   def getUDF = 
     ScalaUDF(
-      db.functions.get(name) match {
+      function match {
         case NativeFunction(_, evaluator, _, _) => 
           sparkArgs.length match { 
             case 0 => {

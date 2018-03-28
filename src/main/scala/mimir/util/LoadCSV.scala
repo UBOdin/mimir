@@ -37,8 +37,12 @@ object LoadCSV extends StrictLogging {
   }
 
   def handleLoadTableRaw(db: Database, targetTable: String, targetSchema:Option[Seq[(String,Type)]], sourceFile: File, options: Map[String,String]){
+    val schema = targetSchema match {
+      case None => db.tableSchema(targetTable)
+      case _ => targetSchema
+    }
     //we need to handle making csv publicly accessible here and adding it to spark for remote connections
-    db.backend.readDataSource(targetTable, "csv", options, targetSchema, Some(sourceFile.getAbsolutePath)) 
+    db.backend.readDataSource(targetTable, "csv", options, schema, Some(sourceFile.getAbsolutePath)) 
   }
 
 }

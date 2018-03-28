@@ -35,18 +35,24 @@ object SparkUtils {
           IntPrimitive(r.getLong(field)) 
         } catch {
           case t: Throwable => {
-            val sval = r.getString(field)
-            //TODO: this is a super hack: somehow only '-' is in 
-            //  there sometimes for negative values
             try {
-              if(sval.equalsIgnoreCase("-")) IntPrimitive(-1L) 
-              else IntPrimitive(r.getString(field).toLong) 
-            }
-            catch {
+              IntPrimitive(r.getInt(field)) 
+            } catch {
               case t: Throwable => {
-                NullPrimitive()
+                val sval = r.getString(field)
+                //TODO: this is a super hack: somehow only '-' is in 
+                //  there sometimes for negative values
+                try {
+                  if(sval.equalsIgnoreCase("-")) IntPrimitive(-1L) 
+                  else IntPrimitive(r.getString(field).toLong) 
+                }
+                catch {
+                  case t: Throwable => {
+                    NullPrimitive()
+                  }
+                } 
               }
-            } 
+            }
           }
         } })
       case TString() =>     (r) => checkNull(r, { StringPrimitive(r.getString(field)) })
@@ -146,7 +152,7 @@ object SparkUtils {
 
   def extractAllRows(results: DataFrame, schema: Seq[Type]): SparkDataFrameIterable =
   {
-    new SparkDataFrameIterable(results.rdd.toLocalIterator, schema)
+    new SparkDataFrameIterable(results.collect().iterator, schema)
   }
 }
 
@@ -163,8 +169,11 @@ class SparkDataFrameIterable(results: Iterator[Row], schema: Seq[Type])
   }
 
   def hasNext(): Boolean = results.hasNext
-  def close(): Unit = { }
-
+  def close(): Unit = {  }
+  override def toList() = results.toList.map(row => schema.
+          zipWithIndex.
+          map(t => SparkUtils.convertField(t._1, row, t._2)))
+  
   def flush: Seq[Seq[PrimitiveValue]] = 
   { 
     val ret = toList

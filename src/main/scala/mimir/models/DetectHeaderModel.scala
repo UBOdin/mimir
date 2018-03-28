@@ -27,11 +27,10 @@ object DetectHeader {
 }
 
 @SerialVersionUID(1002L)
-class DetectHeaderModel(override val name: String, val targetName:String, val query:Operator)
+class DetectHeaderModel(override val name: String, val targetName:String, val columns:Seq[String], val trainingData:Seq[Seq[PrimitiveValue]])
 extends Model(name)
 with Serializable
 with SourcedFeedback
-with NeedsDatabase
 {
   var headerDetected = false
   var initialHeaders: Map[Int, String] = Map()
@@ -46,7 +45,7 @@ with NeedsDatabase
   }
   
   def detect_header(): (Boolean, Map[Int, String]) = {
-    val top6 = db.query(Limit(0,Some(6),query))(_.toList.map(_.tuple)).toSeq
+    val top6 = trainingData
     val (header, topRecords) = (top6.head.map(col => sanitizeColumnName(col match {
         case NullPrimitive() => "NULL" 
         case x => x.asString.toUpperCase()
@@ -73,7 +72,7 @@ with NeedsDatabase
       }).flatten.toMap
     })
     val dups = collection.mutable.Map( (header.groupBy(identity).collect { case (x, Seq(_,_,_*)) => (x -> 1) }).toSeq: _*)
-    val conflictOrNullCols = query.columnNames.zipWithIndex.unzip._2.toSet -- topRecordsAnalysis.keySet 
+    val conflictOrNullCols = columns.zipWithIndex.unzip._2.toSet -- topRecordsAnalysis.keySet 
     val goodHeaderCols = DetectHeader.isHeader(header) 
     val badHeaderCols = (top6.head.zipWithIndex.unzip._2.toSet -- goodHeaderCols.toSet).toSeq  
     val detectResult = badHeaderCols.flatMap(badCol => {
@@ -84,7 +83,7 @@ with NeedsDatabase
       }
     }) match {
       case Seq() => {
-        if(!conflictOrNullCols.isEmpty) DetectHeader.logger.warn(s"There are some type conflicts or nulls in cols: ${conflictOrNullCols.map(query.columnNames(_))}") 
+        if(!conflictOrNullCols.isEmpty) DetectHeader.logger.warn(s"There are some type conflicts or nulls in cols: ${conflictOrNullCols.map(columns(_))}") 
         (true, top6.head.zipWithIndex.map(colIdx => (colIdx._2, colIdx._1 match {
           case NullPrimitive() =>  s"COLUMN_${colIdx._2}"
           case StringPrimitive("") => s"COLUMN_${colIdx._2}"

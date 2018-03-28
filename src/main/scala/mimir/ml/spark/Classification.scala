@@ -109,9 +109,9 @@ object Classification extends SparkML {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._ 
     if(predictions.columns.contains("probability")){
-      val rowidsProbabilitiesIdxs = predictions.select("rowid","probability").rdd.map(r => (r.getString(0), r.getAs[org.apache.spark.ml.linalg.DenseVector](1))).collect().map { item =>
+      val rowidsProbabilitiesIdxs = predictions.select("MIMIR_ROWID","probability").rdd.map(r => (r.getString(0), r.getAs[org.apache.spark.ml.linalg.DenseVector](1))).collect().map { item =>
           item._2.toArray.zipWithIndex.sortBy(_._1).reverse.slice(0, maxPredictions).map(probIdx => (item._1, probIdx._1, probIdx._2))}.flatten.toSeq
-      model.stages(model.stages.length-1).transform(rowidsProbabilitiesIdxs.toDF("rowid","probability","prediction")).select("rowid","probability","predictedLabel").sort($"probability".desc,$"predictedLabel").map { x => (x.getString(0), (x.getString(2),x.getDouble(1))) }.collect()
+      model.stages(model.stages.length-1).transform(rowidsProbabilitiesIdxs.toDF("MIMIR_ROWID","probability","prediction")).select("MIMIR_ROWID","probability","predictedLabel").sort($"probability".desc,$"predictedLabel").map { x => (x.getString(0), (x.getString(2),x.getDouble(1))) }.collect()
     }
     else extractPredictionsNoProb(model, predictions, maxPredictions)
   }
@@ -120,7 +120,7 @@ object Classification extends SparkML {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._  
     if(predictions.columns.contains("probability")){
-      val probabilitiesIdxs = predictions.where($"rowid" === rowid).select("probability").rdd.map(r => r.getAs[org.apache.spark.ml.linalg.DenseVector](0)).collect().map { item =>
+      val probabilitiesIdxs = predictions.where($"MIMIR_ROWID" === rowid).select("probability").rdd.map(r => r.getAs[org.apache.spark.ml.linalg.DenseVector](0)).collect().map { item =>
           item.toArray.zipWithIndex.sortBy(_._1).reverse.slice(0, maxPredictions).map(probIdx =>  probIdx)}.flatten.toSeq
       model.stages(model.stages.length-1).transform(probabilitiesIdxs.toDF("probability","prediction")).select("probability","predictedLabel").sort($"probability".desc,$"predictedLabel").map { x => (x.getString(1), x.getDouble(0)) }.collect()
     }
@@ -130,19 +130,19 @@ object Classification extends SparkML {
   def extractPredictionsNoProb(model : PipelineModel, predictions:DataFrame, maxPredictions:Int = 5) : Seq[(String, (String, Double))] = {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._  
-    predictions.select("rowid","prediction").rdd.map(r => (r.getString(0), r.getDouble(1))).collect().map{ item =>
+    predictions.select("MIMIR_ROWID","prediction").rdd.map(r => (r.getString(0), r.getDouble(1))).collect().map{ item =>
         (item._1, (item._2.toString(), 1.0))}.toSeq
   }
   
   def extractPredictionsForRowNoProb(model : PipelineModel, predictions:DataFrame, rowid:String, maxPredictions:Int = 5) : Seq[(String, Double)] = {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._  
-    predictions.where($"rowid" === rowid).select("prediction").rdd.map(r => r.getDouble(1)).collect().map { item =>
+    predictions.where($"MIMIR_ROWID" === rowid).select("prediction").rdd.map(r => r.getDouble(1)).collect().map { item =>
         (item.toString(), 1.0)}.toSeq    
   }
   
   def NaiveBayesMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
-    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.fill("")
+    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.fill("").na.fill(Double.NaN)
     val cols = training.schema.fields.tail
     //training.show()
     val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)

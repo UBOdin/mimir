@@ -24,8 +24,7 @@ object CheckHeader
   {
     val viewName = config.schema
     val modelName = "MIMIR_CH_" + viewName
-    val detectmodel = new DetectHeaderModel(modelName, viewName, config.query)
-    detectmodel.reconnectToDatabase(db)
+    val detectmodel = new DetectHeaderModel(modelName, viewName, config.query.columnNames, db.query(Limit(0,Some(6),config.query))(_.toList.map(_.tuple)).toSeq)
     detectmodel.detect_header()
     Seq(detectmodel)
   }
@@ -71,7 +70,7 @@ object CheckHeader
     if(table.equals("DATA")){
       val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
       Some(
-          Project( model.query.columnNames.zipWithIndex.map( col => 
+          Project( model.columns.zipWithIndex.map( col => 
             ProjectArg(model.bestGuess(0, Seq(IntPrimitive(col._2)), Seq()).asString,Var(col._1)) )
             , config.query) match {
             case proj if model.headerDetected => proj.limit(-1, 1)
