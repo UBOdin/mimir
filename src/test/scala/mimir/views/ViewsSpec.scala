@@ -7,6 +7,7 @@ import mimir.util._
 import mimir.test._
 import mimir.ctables._
 import mimir.provenance._
+import java.io.File
 
 object ViewsSpec 
   extends SQLTestSpecification("ViewsTest")
@@ -14,26 +15,14 @@ object ViewsSpec
 {
 
   def beforeAll = {
-    update("CREATE TABLE R(A int, B int, C int)")
-    update("INSERT INTO R(A,B,C) VALUES (1,2,3)")
-    update("INSERT INTO R(A,B,C) VALUES (1,3,1)")
-    update("INSERT INTO R(A,B,C) VALUES (1,4,2)")
-    update("INSERT INTO R(A,B,C) VALUES (2,2,1)")
-    update("INSERT INTO R(A,B,C) VALUES (4,2,4)")
+    loadCSV("R",Seq(("A", "int"), ("B", "int"), ("C", "int")), new File("test/data/views_r.csv"))
   }
 
   sequential
 
   "The View Manager" should {
-    "Not interfere with table creation and inserts" >> {
-
-      update("CREATE TABLE S(C int, D int)")
-      update("INSERT INTO S(C,D) VALUES (1,2)")
-      update("INSERT INTO S(C,D) VALUES (1,3)")
-      update("INSERT INTO S(C,D) VALUES (1,2)")
-      update("INSERT INTO S(C,D) VALUES (1,4)")
-      update("INSERT INTO S(C,D) VALUES (2,2)")
-      update("INSERT INTO S(C,D) VALUES (4,2)")
+    "Not interfere with CSV Imports" >> {
+      loadCSV("S",Seq(("C", "int"), ("D", "int")), new File("test/data/views_s.csv"))
       true
     }
 

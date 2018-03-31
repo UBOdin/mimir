@@ -15,6 +15,7 @@ import mimir.exec.result._
 import mimir.optimizer._
 import mimir.algebra.spark.OperatorTranslation
 import mimir.ml.spark.SparkML
+import org.specs2.specification.AfterAll
 
 object DBTestInstances
 {
@@ -79,8 +80,16 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   extends Specification
   with SQLParsers
   with RAParsers
+  with AfterAll
 {
 
+  def afterAll = {
+    //hack for spark to delete all chahed tables 
+    // and temp views that may have shared names between tests
+    db.backend.close()
+    db.backend.open()
+  }
+  
   def dbFile = new File(tempDBName+".db")
 
   def db = DBTestInstances.get(tempDBName, config)

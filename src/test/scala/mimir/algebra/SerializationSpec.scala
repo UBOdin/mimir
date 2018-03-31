@@ -1,6 +1,5 @@
 package mimir.algebra;
 
-import java.util._
 import java.io._
 import org.specs2.mutable._
 
@@ -22,10 +21,13 @@ object SerializationSpec extends SQLTestSpecification("SerializationTest") {
 
   def reset() =
   {
-    db.getAllTables()
+    db.getAllMatadataTables()
       .filter( !_.startsWith("MIMIR_") )
       .filter( !_.equals("SQLITE_MASTER") )
       .foreach( (x) => db.metadataBackend.update(s"DROP TABLE $x;") );
+    LoadCSV.handleLoadTableRaw(db, "R", Some(Seq(("A", TInt()), ("B", TInt()))), new File("test/data/serial_r.csv"), Map() );
+    LoadCSV.handleLoadTableRaw(db, "S", Some(Seq(("B", TInt()), ("C", TInt()))), new File("test/data/serial_s.csv"), Map() );
+    LoadCSV.handleLoadTableRaw(db, "T", Some(Seq(("C", TInt()), ("D", TInt()))), new File("test/data/serial_t.csv"), Map() );
   }
 
   "The Algebra Serializer" should {

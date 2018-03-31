@@ -1,3 +1,1 @@
-CREATE TABLE R (A int, B int);
-
 SELECT A FROM R;
