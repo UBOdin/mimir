@@ -358,4 +358,8 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   val quiet  = toggle("quiet", default = Some(false))
   val file = trailArg[String](required = false)
   val experimental = opt[List[String]]("X", default = Some(List[String]()))
+  val sparkHost = opt[String]("sparkHost", descr = "The IP or hostname of the spark master",
+    default = Some("localhost"))
+  val sparkPort = opt[String]("sparkPort", descr = "The port of the spark master",
+    default = Some("7077"))
 }
