@@ -653,6 +653,7 @@ object MimirVizier extends LazyLogging {
 			case dt@DatePrimitive(y,m,d) => JSONBuilder.string(dt.asString)
 			case ts@TimestampPrimitive(y,m,d,hh,mm,ss,ms) => JSONBuilder.string(ts.asString)
 			case NullPrimitive() => "null"
+			case BoolPrimitive(b) => b.toString()
 			case _ => content.toString()
 		}).replaceAll("\\R", "\\\\n")
 	}
@@ -673,7 +674,7 @@ object MimirVizier extends LazyLogging {
     db.query(oper)(results => {
       val colsIndexes = results.schema.zipWithIndex.map( _._2)
       val resultList = results.toList 
-      val (resultsStrsColTaint, provRowTaint) = resultList.map(row => ((JSONBuilder.list(row.tuple.map(cell => jsonPrim(cell))), JSONBuilder.list(colsIndexes.map(idx => JSONBuilder.string(row.isColDeterministic(idx).toString())))), (JSONBuilder.string(row.provenance.asString), JSONBuilder.string(row.isDeterministic().toString())))).unzip
+      val (resultsStrsColTaint, provRowTaint) = resultList.map(row => ((JSONBuilder.list(row.tuple.map(cell => jsonPrim(cell))), JSONBuilder.list(colsIndexes.map(idx => row.isColDeterministic(idx).toString()))), (JSONBuilder.string(row.provenance.asString), row.isDeterministic().toString()))).unzip
       val (resultsStrs, colTaint) = resultsStrsColTaint.unzip
       val (prov, rowTaint) = provRowTaint.unzip
       JSONBuilder.dict(Map(
@@ -690,7 +691,7 @@ object MimirVizier extends LazyLogging {
      db.query(oper)(results => {
       val colsIndexes = results.schema.zipWithIndex.map( _._2)
       val resultList = results.toList 
-      val (resultsStrsColTaint, provRowTaint) = resultList.map(row => ((JSONBuilder.list(row.tuple.map(cell => jsonPrim(cell))), JSONBuilder.list(colsIndexes.map(idx => JSONBuilder.string(row.isColDeterministic(idx).toString())))), (JSONBuilder.string(row.provenance.asString), JSONBuilder.string(row.isDeterministic().toString())))).unzip
+      val (resultsStrsColTaint, provRowTaint) = resultList.map(row => ((JSONBuilder.list(row.tuple.map(cell => jsonPrim(cell))), JSONBuilder.list(colsIndexes.map(idx => row.isColDeterministic(idx).toString()))), (JSONBuilder.string(row.provenance.asString), row.isDeterministic().toString()))).unzip
       val (resultsStrs, colTaint) = resultsStrsColTaint.unzip
       val (prov, rowTaint) = provRowTaint.unzip
       val reasons = explainEverything(oper).map(reasonSet => JSONBuilder.list(reasonSet.all(db).toSeq.map(_.toJSON)))
