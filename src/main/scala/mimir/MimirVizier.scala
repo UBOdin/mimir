@@ -647,12 +647,14 @@ object MimirVizier extends LazyLogging {
   }
  
  def jsonPrim(content: PrimitiveValue) = {
-		content match {
+		(content match {
 			case StringPrimitive(s) => JSONBuilder.string(s)
 			case TypePrimitive(t) => JSONBuilder.string(t.toString())
+			case dt@DatePrimitive(y,m,d) => JSONBuilder.string(dt.asString)
+			case ts@TimestampPrimitive(y,m,d,hh,mm,ss,ms) => JSONBuilder.string(ts.asString)
 			case NullPrimitive() => "null"
 			case _ => content.toString()
-		}
+		}).replaceAll("\\R", "\\\\n")
 	}
  
  def operCSVResultsJson(oper : mimir.algebra.Operator) : String =  {
