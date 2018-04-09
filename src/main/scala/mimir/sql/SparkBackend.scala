@@ -24,7 +24,7 @@ import mimir.Mimir
 
 class SparkBackend extends RABackend{
   var sparkSql : SQLContext = null
-  ExperimentalOptions.enable("remoteSpark")
+  //ExperimentalOptions.enable("remoteSpark")
   val (sparkHost, sparkPort, hdfsPort) = Mimir.conf match {
     case null => ("128.205.71.102", "7077", "8020")
     case x => (x.sparkHost, x.sparkPort, "8020")
@@ -86,7 +86,7 @@ class SparkBackend extends RABackend{
       new Dataset[Row](sparkSql.sparkSession, sparkOper, RowEncoder(qe.analyzed.schema)).toDF()
     } catch {
       case t: Throwable => {
-        println("-------------------------> Exception Executing Spark Op: ")
+        println("-------------------------> Exception Executing Spark Op: " + t.toString() + "\n" + t.getStackTrace.mkString("\n"))
         println("------------------------ spark op --------------------------")
         println(sparkOper)
         println("------------------------------------------------------------")
@@ -99,7 +99,7 @@ class SparkBackend extends RABackend{
   
   def readDataSource(name:String, format:String, options:Map[String, String], schema:Option[Seq[(String, Type)]], load:Option[String]) = {
     if(sparkSql == null) throw new Exception("There is no spark context")
-    val dsFormat = sparkSql.read.format("csv")
+    val dsFormat = sparkSql.read.format(format)
     val dsOptions = options.toSeq.foldLeft(dsFormat)( (ds, opt) => ds.option(opt._1, opt._2))
     val dsSchema = schema match {
       case None => dsOptions

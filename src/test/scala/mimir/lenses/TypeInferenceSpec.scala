@@ -16,10 +16,10 @@ object TypeInferenceSpec
       db.loadTable("CPUSPEED", new File("test/data/CPUSpeed.csv"))
 
       val baseTypes = db.typechecker.schemaOf(db.table("CPUSPEED_RAW")).toMap
-      baseTypes.keys must contain(eachOf("COLUMN_7", "COLUMN_1", "COLUMN_2"))
-      baseTypes must contain("COLUMN_7" -> TString())
-      baseTypes must contain("COLUMN_1" -> TString())
-      baseTypes must contain("COLUMN_2" -> TString())
+      baseTypes.keys must contain(eachOf("_c7", "_c1", "_c2"))
+      baseTypes must contain("_c7" -> TString())
+      baseTypes must contain("_c1" -> TString())
+      baseTypes must contain("_c2" -> TString())
 
 
       val lensTypes = db.typechecker.schemaOf(db.table("CPUSPEED")).toMap

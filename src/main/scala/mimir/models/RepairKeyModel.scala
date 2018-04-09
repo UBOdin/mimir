@@ -28,12 +28,11 @@ class RepairKeyModel(
 ) 
   extends Model(name)
   with FiniteDiscreteDomain 
-  with NeedsReconnectToDatabase 
   with SourcedFeedbackT[List[PrimitiveValue]]
 {
   
-  @transient var db:Database = null
-
+  var domainCache = Seq[(PrimitiveValue, Double)]()
+  
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) : List[PrimitiveValue] = args.toList
   
   def varType(idx: Int, args: Seq[Type]): Type = targetType
@@ -66,15 +65,12 @@ class RepairKeyModel(
   def isAcknowledged(idx: Int, args: Seq[PrimitiveValue]): Boolean =
     hasFeedback(idx, args)
 
-
-  final def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
-  {
-    if(hints.isEmpty){
-      db.query(
+  def trainDomain(db:Database) = {
+    domainCache = db.query(
         OperatorUtils.projectColumns(List(target) ++ scoreCol, 
           Select(
             ExpressionUtils.makeAnd(
-              keys.map(_._1).zip(args).map { 
+              keys.map(col => (col._1,Var(col._1))).map { 
                 case (k,v) => Comparison(Cmp.Eq, Var(k), v)
               }
             ),
@@ -90,6 +86,12 @@ class RepairKeyModel(
           )
         }.toIndexedSeq
       }
+  }
+    
+  final def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
+  {
+    if(hints.isEmpty){
+      domainCache
     } else {
       val possibilities = 
         Json.parse(hints(0).asString) match {
@@ -121,10 +123,6 @@ class RepairKeyModel(
     }
   }
   
-  def reconnectToDatabase(db: Database) = { 
-    this.db = db 
-  }
-
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Double = {
     getFeedback(idx,args) match {
       case Some(choice) => 1.0

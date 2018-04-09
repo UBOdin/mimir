@@ -3,7 +3,7 @@ package mimir.algebra.spark
 import org.apache.spark.sql.{SQLContext, DataFrame, Row}
 import org.apache.spark.sql.Dataset
 import org.apache.spark.{SparkContext, SparkConf}
-import org.apache.spark.sql.types.{Metadata, DataType, DoubleType, LongType, FloatType, BooleanType, IntegerType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, Metadata, DataType, DoubleType, LongType, FloatType, BooleanType, IntegerType, StringType, StructField, StructType}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.catalyst.expressions.{RowNumber, MonotonicallyIncreasingID, NamedExpression, AttributeReference,Alias,SortOrder,Ascending,Descending,GreaterThanOrEqual,Literal, Add, Subtract, Multiply, Divide, BitwiseAnd, BitwiseOr, And, Or, ShiftLeft, ShiftRight, LessThan, LessThanOrEqual, GreaterThan, EqualTo, IsNull, Like, If, ScalaUDF, Rand, Randn}
@@ -53,6 +53,7 @@ import org.apache.spark.sql.catalyst.expressions.CreateStruct
 import org.apache.spark.sql.catalyst.expressions.GetStructField
 import org.apache.spark.sql.catalyst.plans.UsingJoin
 import mimir.algebra.function.RegisteredFunction
+import org.apache.spark.sql.catalyst.expressions.ConcatWs
 
 object OperatorTranslation
   extends LazyLogging
@@ -81,9 +82,9 @@ object OperatorTranslation
           groupBy.map( gb => Alias( UnresolvedAttribute(gb.name), gb.name)()) ++ aggregates.map( mimirAggFunctionToSparkNamedExpr(oper,_)),
           mimirOpToSparkOp(source))
 			}
-			case Select(condition, Join(lhs, rhs)) => {
+			/*case Select(condition, Join(lhs, rhs)) => {
 			  makeSparkJoin(lhs, rhs, Some(mimirExprToSparkExpr(oper,condition)), Inner) 
-			}
+			}*/
 			case Select(cond, src) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Filter(
 			      mimirExprToSparkExpr(oper,cond), mimirOpToSparkOp(src))
@@ -164,8 +165,10 @@ object OperatorTranslation
       }
       case HardTable(schema, data)=> {
         //UnresolvedInlineTable( schema.unzip._1, data.map(row => row.map(mimirExprToSparkExpr(oper,_))))
-        LocalRelation(mimirSchemaToStructType(schema).map(f => AttributeReference(f.name, f.dataType, f.nullable, f.metadata)()), 
-            data.map(row => InternalRow(row.map(mimirPrimitiveToSparkInternalRowValue(_)):_*)))
+        /*LocalRelation(mimirSchemaToStructType(schema).map(f => AttributeReference(f.name, f.dataType, f.nullable, f.metadata)()), 
+            data.map(row => InternalRow(row.map(mimirPrimitiveToSparkInternalRowValue(_)):_*)))*/
+        LocalRelation.fromExternalRows(mimirSchemaToStructType(schema).map(f => AttributeReference(f.name, f.dataType, f.nullable, f.metadata)()), 
+            data.map(row => Row(row.map(mimirPrimitiveToSparkExternalRowValue(_)):_*)))     
       }
 			case Sort(sortCols, src) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Sort(
@@ -257,24 +260,34 @@ object OperatorTranslation
 
     // Rewrites the join condition to make the attribute point to correct column/field, after we
     // combine the outputs of each join side.
-    val conditionExpr = joined.condition.get transformUp {
-      case a: org.apache.spark.sql.catalyst.expressions.Attribute if joined.left.outputSet.contains(a) =>
-        if (getPrivateMamber[ExpressionEncoder[Row]](dataset(lplan),"exprEnc").flat) {
-          left.output.head
-        } else {
-          val index = joined.left.output.indexWhere(_.exprId == a.exprId)
-          GetStructField(left.output.head, index)
-        }
-      case a: org.apache.spark.sql.catalyst.expressions.Attribute if joined.right.outputSet.contains(a) =>
-        if (getPrivateMamber[ExpressionEncoder[Row]](dataset(rplan),"exprEnc").flat) {
-          right.output.head
-        } else {
-          val index = joined.right.output.indexWhere(_.exprId == a.exprId)
-          GetStructField(right.output.head, index)
-        }
+   /* val conditionExpr = joined.condition match { 
+      case Some(c) => Some(c transformUp {
+        case a: org.apache.spark.sql.catalyst.expressions.Attribute if joined.left.outputSet.contains(a) =>
+          if (getPrivateMamber[ExpressionEncoder[Row]](dataset(lplan),"exprEnc").flat) {
+            left.output.head
+          } else {
+            val index = joined.left.output.indexWhere(_.exprId == a.exprId)
+            GetStructField(left.output.head, index)
+          }
+        case a: org.apache.spark.sql.catalyst.expressions.Attribute if joined.right.outputSet.contains(a) =>
+          if (getPrivateMamber[ExpressionEncoder[Row]](dataset(rplan),"exprEnc").flat) {
+            right.output.head
+          } else {
+            val index = joined.right.output.indexWhere(b => {
+              if(!b.resolved){
+                println(s"--------> output attr not resolved: ${b.name}")
+                println(joined.right)
+                joined.right.resolve(Seq(b.name), db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.analyzer.resolver).get
+              }
+              b.exprId == a.exprId
+            })
+            GetStructField(right.output.head, index)
+          }
+      })
+      case None => None
     }
 
-    org.apache.spark.sql.catalyst.plans.logical.Join(left, right, joined.joinType, Some(conditionExpr))
+    org.apache.spark.sql.catalyst.plans.logical.Join(left, right, joined.joinType, conditionExpr)*/ joined
   }
   
   /*def makeSparkJoin(lhs:Operator, rhs:Operator, condition:Option[org.apache.spark.sql.catalyst.expressions.Expression], joinType:JoinType) : LogicalPlan = {
@@ -355,7 +368,7 @@ object OperatorTranslation
     }
     catch {
       case t: Throwable => {
-        println("-------------------------> Exception Executing Spark Op: ")
+        println("-------------------------> Exception Executing Spark Op withPlan: ")
         println("------------------------ spark op --------------------------")
         println(logicalPlan)
         println("------------------------------------------------------------")
@@ -496,6 +509,18 @@ object OperatorTranslation
       case FloatPrimitive(f) => f
       case BoolPrimitive(b) => b
       case x =>  UTF8String.fromString(x.asString)
+    }
+  }
+  
+  def mimirPrimitiveToSparkExternalRowValue(primitive : PrimitiveValue) : Any = {
+    primitive match {
+      case NullPrimitive() => null
+      case RowIdPrimitive(s) => s
+      case StringPrimitive(s) => s
+      case IntPrimitive(i) => i
+      case FloatPrimitive(f) => f
+      case BoolPrimitive(b) => b
+      case x =>  x.asString
     }
   }
   
@@ -684,7 +709,8 @@ class VGTermUDF {
   def getPrimitive(t:Type, value:Any) = value match {
     case null => NullPrimitive()
     case _ => t match {
-      case TInt() => IntPrimitive(value.asInstanceOf[String].toLong)
+      //case TInt() => IntPrimitive(value.asInstanceOf[Long])
+      case TInt() => IntPrimitive(value.asInstanceOf[Long])
       case TFloat() => FloatPrimitive(value.asInstanceOf[Float].toDouble)
       //case TDate() => DatePrimitive.(value.asInstanceOf[Long])
       //case TTimestamp() => Primitive(value.asInstanceOf[Long])
@@ -860,13 +886,13 @@ case class GroupAnd(child: org.apache.spark.sql.catalyst.expressions.Expression)
   override def children: Seq[org.apache.spark.sql.catalyst.expressions.Expression] = child :: Nil
   override def nullable: Boolean = false
   // Return data type.
-  override def dataType: DataType = child.dataType
+  override def dataType: DataType = BooleanType
   override def checkInputDataTypes(): TypeCheckResult =
     TypeUtils.checkForOrderingExpr(child.dataType, "function group_and")
-  private lazy val group_and = AttributeReference("group_and", child.dataType)()
+  private lazy val group_and = AttributeReference("group_and", BooleanType)()
   override lazy val aggBufferAttributes: Seq[AttributeReference] = group_and :: Nil
   override lazy val initialValues: Seq[Literal] = Seq(
-    Literal.create(true, child.dataType)
+    Literal.create(true, BooleanType)
   )
   override lazy val updateExpressions: Seq[ org.apache.spark.sql.catalyst.expressions.Expression] = Seq(
     And(group_and, child)
@@ -883,13 +909,13 @@ case class GroupOr(child: org.apache.spark.sql.catalyst.expressions.Expression) 
   override def children: Seq[org.apache.spark.sql.catalyst.expressions.Expression] = child :: Nil
   override def nullable: Boolean = false
   // Return data type.
-  override def dataType: DataType = child.dataType
+  override def dataType: DataType = BooleanType
   override def checkInputDataTypes(): TypeCheckResult =
     TypeUtils.checkForOrderingExpr(child.dataType, "function group_or")
-  private lazy val group_or = AttributeReference("group_or", child.dataType)()
+  private lazy val group_or = AttributeReference("group_or", BooleanType)()
   override lazy val aggBufferAttributes: Seq[AttributeReference] = group_or :: Nil
   override lazy val initialValues: Seq[Literal] = Seq(
-    Literal.create(false, child.dataType)
+    Literal.create(false, BooleanType)
   )
   override lazy val updateExpressions: Seq[ org.apache.spark.sql.catalyst.expressions.Expression] = Seq(
     Or(group_or, child)
@@ -915,7 +941,9 @@ case class JsonGroupArray(child: org.apache.spark.sql.catalyst.expressions.Expre
     Literal.create("", StringType)
   )
   override lazy val updateExpressions: Seq[ org.apache.spark.sql.catalyst.expressions.Expression] = Seq(
-    Concat(Seq(json_group_array, Literal(","), child))
+    If(IsNull(child),
+      json_group_array,
+      Concat(Seq(json_group_array, Literal(","), org.apache.spark.sql.catalyst.expressions.Cast(child,StringType,None))))
   )
   override lazy val mergeExpressions: Seq[org.apache.spark.sql.catalyst.expressions.Expression] = {
     Seq(

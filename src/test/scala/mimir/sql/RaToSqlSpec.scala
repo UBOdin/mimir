@@ -9,6 +9,7 @@ import mimir.parser._
 import mimir.algebra._
 import mimir.sql._
 import mimir.test._
+import java.io.File
 
 object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
 
@@ -29,14 +30,14 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
 
   def beforeAll =
   {
-    update("CREATE TABLE R(A int, B int)")
+    loadCSV("R", Seq(("A","string"),("B","int")), new File("test/data/serial_r.csv"))
   }
 
   "The RA to SQL converter" should {
 
     "Produce Flat Queries for Tables" >> {
       convert(
-        table("R")()
+        db.table("R")
       ) must be equalTo 
         "SELECT * FROM R AS R"
     }

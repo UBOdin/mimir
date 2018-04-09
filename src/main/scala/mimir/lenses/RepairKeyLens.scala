@@ -60,7 +60,7 @@ object RepairKeyLens extends LazyLogging {
             col, t,
             scoreCol
           )
-        model.reconnectToDatabase(db)
+        model.trainDomain(db)//.reconnectToDatabase(db)
         ( col, model )
       }
 

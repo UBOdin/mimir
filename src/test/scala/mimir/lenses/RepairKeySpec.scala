@@ -20,10 +20,8 @@ object RepairKeySpec
 
   def beforeAll = 
   {
-    update("CREATE TABLE R(A int, B int, C int)")
-    loadCSV("R", new File("test/r_test/r.csv"))
-    update("CREATE TABLE U(A int, B int, C int)")
-    loadCSV("U", new File("test/r_test/u.csv"))
+    loadCSV("R",Seq(("A","int"),("B","int"),("C","int")), new File("test/r_test/r.csv"))
+    loadCSV("U",Seq(("A","int"),("B","int"),("C","int")), new File("test/r_test/u.csv"))
     loadCSV("FD_DAG", new File("test/repair_key/fd_dag.csv"))
     loadCSV("twitter100Cols10kRowsWithScore", new File("test/r_test/twitter100Cols10kRowsWithScore.csv"))
     loadCSV("cureSourceWithScore", new File("test/r_test/cureSourceWithScore.csv"))

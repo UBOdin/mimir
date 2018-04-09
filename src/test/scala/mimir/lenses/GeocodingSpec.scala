@@ -18,14 +18,7 @@ object GeocodingSpec
 {
 
   def beforeAll = {
-    update("CREATE TABLE ADDR(STRNUMBER varchar, STRNAME varchar, CITY varchar, STATE varchar)")
-    update("INSERT INTO ADDR (STRNUMBER, STRNAME, CITY, STATE) VALUES('88', 'Minnessota', 'Buffalo', 'NY' )")
-    update("INSERT INTO ADDR (STRNUMBER, STRNAME, CITY, STATE) VALUES('24', 'Custer', 'Buffalo', 'NY' )")
-    update("INSERT INTO ADDR (STRNUMBER, STRNAME, CITY, STATE) VALUES('311', 'Bullis', 'West Seneca', 'NY' )")
-    update("INSERT INTO ADDR (STRNUMBER, STRNAME, CITY, STATE) VALUES('25', 'Inwood', 'Buffalo', 'NY' )")
-    update("INSERT INTO ADDR (STRNUMBER, STRNAME, CITY, STATE) VALUES('74', 'Days', 'Buffalo', 'NY' )")
-    update("INSERT INTO ADDR (STRNUMBER, STRNAME, CITY, STATE) VALUES('368', 'Bryant', 'Buffalo', 'NY' )")
-    update("INSERT INTO ADDR (STRNUMBER, STRNAME, CITY, STATE) VALUES('10856', 'Wyandale', 'Springville', 'NY' )")
+    loadCSV("ADDR", new File("test/data/geo.csv"))
   }
   
   "The Geocoding Lens" should {
