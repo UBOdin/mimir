@@ -23,18 +23,18 @@ abstract class Explanation(
 
 	override def toString(): String = { 
 		(fields ++ List( 
-			("Reasons", reasons.map("\n    "+_.toString).mkString("")),
-			("Token", JSONBuilder.string(token.v))
+			("Reasons", reasons),
+			("Token", token.v)
 		)).map((x) => x._1+": "+x._2).mkString("\n")
 	}
 
 	def toJSON(): String = {
 		JSONBuilder.dict(
-			fields.map( { case (k, v) => (k, JSONBuilder.prim(v)) } ) ++ 
+			fields ++ 
 			List(
 				("reasons", 
-					JSONBuilder.list(reasons.map( _.toJSON ) )),
-				("token", JSONBuilder.string(token.v))
+					reasons.map( _.toJSON ) ),
+				("token", token.v)
 		))
 	}
 }

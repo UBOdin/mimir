@@ -131,10 +131,10 @@ object GeocodingSpec
       }.toList }.toList
       
       val jsonLat = play.api.libs.json.Json.parse(result(0)._1.asString)
-      val domainLatForRow = jsonLat.as[JsArray].value.map(jsVal => (jsVal.as[JsObject].value("choice").as[String], jsVal.as[JsObject].value("weight").as[Double]))
+      val domainLatForRow = jsonLat.as[JsArray].value.map(jsVal => (s"${jsVal.as[JsObject].value("choice")}", jsVal.as[JsObject].value("weight").as[Double]))
       
       val jsonLon = play.api.libs.json.Json.parse(result(0)._2.asString)
-      val domainLonForRow = jsonLon.as[JsArray].value.map(jsVal => (jsVal.as[JsObject].value("choice").as[String], jsVal.as[JsObject].value("weight").as[Double]))
+      val domainLonForRow = jsonLon.as[JsArray].value.map(jsVal => (s"${jsVal.as[JsObject].value("choice")}", jsVal.as[JsObject].value("weight").as[Double]))
       
       domainLatForRow.length must be equalTo domainLonForRow.length
       domainLatForRow must contain(("40.067628",0.1), ("41.9697061",0.1), ("41.9653349",0.1), ("42.070064",0.1), ("42.0146135",0.1), ("41.9666509",0.1), ("43.733105",0.1), ("43.786123",0.1), ("38.763583",0.1), ("43.773287",0.1))
@@ -158,10 +158,10 @@ object GeocodingSpec
       }.toList }.toList
       
       val jsonLat = play.api.libs.json.Json.parse(result(0)._1.asString)
-      val domainLatForRow = jsonLat.as[JsArray].value.map(jsVal => (jsVal.as[JsObject].value("choice").as[String], jsVal.as[JsObject].value("weight").as[Double]))
+      val domainLatForRow = jsonLat.as[JsArray].value.map(jsVal => (s"${jsVal.as[JsObject].value("choice")}", jsVal.as[JsObject].value("weight").as[Double]))
       
       val jsonLon = play.api.libs.json.Json.parse(result(0)._2.asString)
-      val domainLonForRow = jsonLon.as[JsArray].value.map(jsVal => (jsVal.as[JsObject].value("choice").as[String], jsVal.as[JsObject].value("weight").as[Double]))
+      val domainLonForRow = jsonLon.as[JsArray].value.map(jsVal => (s"${jsVal.as[JsObject].value("choice")}", jsVal.as[JsObject].value("weight").as[Double]))
       
       domainLatForRow.length must be equalTo domainLonForRow.length
       domainLatForRow must contain(("42.94740609999999",1.0))

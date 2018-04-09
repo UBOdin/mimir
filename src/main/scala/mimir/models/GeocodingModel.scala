@@ -152,6 +152,7 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], geocod
     } catch {
         case ioe: Throwable =>  {
           println(ioe.toString())
+          ioe.printStackTrace()
           None
         }
     }       

@@ -326,13 +326,13 @@ object MimirVizier extends LazyLogging {
         case update:Update => {
           db.backend.update(query)
           JSONBuilder.dict(Map(
-            "success" -> JSONBuilder.int(1)
+            "success" -> 1
           ))
         }
         case stmt:Statement => {
           db.update(stmt)
           JSONBuilder.dict(Map(
-            "success" -> JSONBuilder.int(1)
+            "success" -> 1
           ))
         }
       }
@@ -395,7 +395,7 @@ object MimirVizier extends LazyLogging {
   
   def getSchema(query:String) : String = {
     val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
-    JSONBuilder.list( db.typechecker.schemaOf(oper).map( schel => JSONBuilder.dict( Map( "name" -> JSONBuilder.string(schel._1), "type" -> JSONBuilder.string(schel._2.toString()), "base_type" -> JSONBuilder.string(Type.rootType(schel._2).toString())))))
+    JSONBuilder.list( db.typechecker.schemaOf(oper).map( schel =>  Map( "name" -> schel._1, "type" -> schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())))
   }
   
   def explainCell(query: String, col:Int, row:String) : Seq[mimir.ctables.Reason] = {
@@ -646,26 +646,15 @@ object MimirVizier extends LazyLogging {
      new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), detListsAndProv._1.toArray, detListsAndProv._2.toArray, resCSV._3.toArray, detListsAndProv._3.toArray, schViz)
   }
  
- def jsonPrim(content: PrimitiveValue) = {
-		(content match {
-			case StringPrimitive(s) => JSONBuilder.string(s)
-			case TypePrimitive(t) => JSONBuilder.string(t.toString())
-			case dt@DatePrimitive(y,m,d) => JSONBuilder.string(dt.asString)
-			case ts@TimestampPrimitive(y,m,d,hh,mm,ss,ms) => JSONBuilder.string(ts.asString)
-			case NullPrimitive() => "null"
-			case BoolPrimitive(b) => b.toString()
-			case _ => content.toString()
-		}).replaceAll("\\R", "\\\\n")
-	}
  
  def operCSVResultsJson(oper : mimir.algebra.Operator) : String =  {
     db.query(oper)(results => {
       val resultList = results.toList 
-      val (resultsStrs, prov) = resultList.map(row => (JSONBuilder.list(row.tuple.map(cell => jsonPrim(cell))), JSONBuilder.string(row.provenance.asString))).unzip
+      val (resultsStrs, prov) = resultList.map(row => (row.tuple.map(cell => cell), row.provenance.asString)).unzip
       JSONBuilder.dict(Map(
-        "schema" -> JSONBuilder.list( results.schema.map( schel => JSONBuilder.dict( Map( "name" -> JSONBuilder.string(schel._1), "type" -> JSONBuilder.string(schel._2.toString()), "base_type" -> JSONBuilder.string(Type.rootType(schel._2).toString()))))),
-        "data" -> JSONBuilder.list(resultsStrs),
-        "prov" -> JSONBuilder.list(prov)
+        "schema" -> results.schema.map( schel =>  Map( "name" -> schel._1, "type" ->schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())),
+        "data" -> resultsStrs,
+        "prov" -> prov
       ))
     })
   }
@@ -674,15 +663,15 @@ object MimirVizier extends LazyLogging {
     db.query(oper)(results => {
       val colsIndexes = results.schema.zipWithIndex.map( _._2)
       val resultList = results.toList 
-      val (resultsStrsColTaint, provRowTaint) = resultList.map(row => ((JSONBuilder.list(row.tuple.map(cell => jsonPrim(cell))), JSONBuilder.list(colsIndexes.map(idx => row.isColDeterministic(idx).toString()))), (JSONBuilder.string(row.provenance.asString), row.isDeterministic().toString()))).unzip
+      val (resultsStrsColTaint, provRowTaint) = resultList.map(row => ((row.tuple.map(cell => cell), colsIndexes.map(idx => row.isColDeterministic(idx).toString())), (row.provenance.asString, row.isDeterministic().toString()))).unzip
       val (resultsStrs, colTaint) = resultsStrsColTaint.unzip
       val (prov, rowTaint) = provRowTaint.unzip
       JSONBuilder.dict(Map(
-        "schema" -> JSONBuilder.list( results.schema.map( schel => JSONBuilder.dict( Map( "name" -> JSONBuilder.string(schel._1), "type" -> JSONBuilder.string(schel._2.toString()), "base_type" -> JSONBuilder.string(Type.rootType(schel._2).toString()))))),
-        "data" -> JSONBuilder.list(resultsStrs),
-        "prov" -> JSONBuilder.list(prov),
-        "col_taint" -> JSONBuilder.list(colTaint),
-        "row_taint" -> JSONBuilder.list(rowTaint)
+        "schema" -> results.schema.map( schel =>  Map( "name" -> schel._1, "type" ->schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())),
+        "data" -> resultsStrs,
+        "prov" -> prov,
+        "col_taint" -> colTaint,
+        "row_taint" -> rowTaint
       ))
     }) 
  }
@@ -691,17 +680,17 @@ object MimirVizier extends LazyLogging {
      db.query(oper)(results => {
       val colsIndexes = results.schema.zipWithIndex.map( _._2)
       val resultList = results.toList 
-      val (resultsStrsColTaint, provRowTaint) = resultList.map(row => ((JSONBuilder.list(row.tuple.map(cell => jsonPrim(cell))), JSONBuilder.list(colsIndexes.map(idx => row.isColDeterministic(idx).toString()))), (JSONBuilder.string(row.provenance.asString), row.isDeterministic().toString()))).unzip
+      val (resultsStrsColTaint, provRowTaint) = resultList.map(row => ((row.tuple.map(cell => cell), colsIndexes.map(idx => row.isColDeterministic(idx).toString())), (row.provenance.asString, row.isDeterministic().toString()))).unzip
       val (resultsStrs, colTaint) = resultsStrsColTaint.unzip
       val (prov, rowTaint) = provRowTaint.unzip
-      val reasons = explainEverything(oper).map(reasonSet => JSONBuilder.list(reasonSet.all(db).toSeq.map(_.toJSON)))
+      val reasons = explainEverything(oper).map(reasonSet => reasonSet.all(db).toSeq.map(_.toJSON))
       JSONBuilder.dict(Map(
-        "schema" -> JSONBuilder.list( results.schema.map( schel => JSONBuilder.dict( Map( "name" -> JSONBuilder.string(schel._1), "type" -> JSONBuilder.string(schel._2.toString()), "base_type" -> JSONBuilder.string(Type.rootType(schel._2).toString()))))),
-        "data" -> JSONBuilder.list(resultsStrs),
-        "prov" -> JSONBuilder.list(prov),
-        "col_taint" -> JSONBuilder.list(colTaint),
-        "row_taint" -> JSONBuilder.list(rowTaint),
-        "reasons" -> JSONBuilder.list(reasons)
+        "schema" -> results.schema.map( schel =>  Map( "name" -> schel._1, "type" ->schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())),
+        "data" -> resultsStrs,
+        "prov" -> prov,
+        "col_taint" -> colTaint,
+        "row_taint" -> rowTaint,
+        "reasons" -> reasons
       ))
     }) 
     
