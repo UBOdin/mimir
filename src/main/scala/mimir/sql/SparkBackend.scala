@@ -55,7 +55,9 @@ class SparkBackend extends RABackend{
         if(remoteSpark){
           sparkCtx.hadoopConfiguration.set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
           sparkCtx.hadoopConfiguration.set("dfs.client.use.datanode.hostname","true")
-          sparkCtx.addJar("https://maven.mimirdb.info/info/mimirdb/mimir-core_2.11/0.2/mimir-core_2.11-0.2.jar")
+          //sparkCtx.addJar("https://maven.mimirdb.info/info/mimirdb/mimir-core_2.11/0.2/mimir-core_2.11-0.2.jar")
+          sparkCtx.addJar("https://odin.cse.buffalo.edu/assets/mimir-core_2.11-0.2.jar")
+          //sparkCtx.addJar("http://central.maven.org/maven2/mysql/mysql-connector-java/5.1.6/mysql-connector-java-5.1.6.jar")
           sparkCtx.hadoopConfiguration.set("fs.defaultFS", s"hdfs://$sparkHost:$hdfsPort")
         }
         println(s"apache spark: ${sparkCtx.version}  remote: $remoteSpark deployMode: $dmode")
@@ -111,7 +113,7 @@ class SparkBackend extends RABackend{
         if(remoteSpark){
           val fileName = ldf.split(File.separator).last
           val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkSql.sparkSession.sparkContext)
-          println("HDFS Home: " +hdfsHome)
+          println("Copy File To HDFS: " +hdfsHome+File.separator+fileName)
           //if(!HadoopUtils.fileExistsHDFS(sparkSql.sparkSession.sparkContext, fileName))
           HadoopUtils.writeToHDFS(sparkSql.sparkSession.sparkContext, fileName, new File(ldf), true)
           dsSchema.load(s"$hdfsHome/$fileName")

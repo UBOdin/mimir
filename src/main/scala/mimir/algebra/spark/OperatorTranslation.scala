@@ -12,7 +12,7 @@ import org.apache.spark.sql.catalyst.analysis.UnresolvedFunction
 import org.apache.spark.sql.catalyst.{TableIdentifier}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, CatalogStorageFormat}
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedRelation, UnresolvedInlineTable, UnresolvedAttribute}
-import org.apache.spark.sql.catalyst.plans.{JoinType, Inner,LeftOuter}
+import org.apache.spark.sql.catalyst.plans.{JoinType, Inner,LeftOuter, Cross}
 import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression,AggregateFunction,AggregateMode,Complete,Count,Average,Sum,First,Max,Min}
 
 
@@ -54,6 +54,7 @@ import org.apache.spark.sql.catalyst.expressions.GetStructField
 import org.apache.spark.sql.catalyst.plans.UsingJoin
 import mimir.algebra.function.RegisteredFunction
 import org.apache.spark.sql.catalyst.expressions.ConcatWs
+import org.apache.spark.sql.catalyst.expressions.aggregate.CollectList
 
 object OperatorTranslation
   extends LazyLogging
@@ -95,7 +96,7 @@ object OperatorTranslation
 			}
 			case Join(lhs, rhs) => {
 			  //org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), Inner, None)
-			  makeSparkJoin(lhs, rhs, None, Inner) 
+			  makeSparkJoin(lhs, rhs, None, Cross) 
 			}
 			case Union(lhs, rhs) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Union(mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs))
@@ -132,7 +133,7 @@ object OperatorTranslation
 			    case _ => {
 			      org.apache.spark.sql.catalyst.plans.logical.Project(sch.map(col => {
               mimirExprToSparkNamedExpr(oper, col._1, Var(col._1))
-            }) ++ meta.map(metaEl => mimirExprToSparkNamedExpr(oper, metaEl._1, metaEl._2)) ,baseRelation)
+            }) ++ meta.filterNot(el => sch.unzip._1.contains(el._1)).distinct.map(metaEl => mimirExprToSparkNamedExpr(oper, metaEl._1, metaEl._2)) ,baseRelation)
 			    }
 			  } 
 			  //LogicalRelation(baseRelation, table)
@@ -394,7 +395,7 @@ object OperatorTranslation
            Sum(mimirExprToSparkExpr(oper,args.head))
          }
          case AggFunction("FIRST", _, args, _) => {
-           First(mimirExprToSparkExpr(oper,args.head),mimirExprToSparkExpr(oper,BoolPrimitive(false)))
+           First(mimirExprToSparkExpr(oper,args.head),mimirExprToSparkExpr(oper,BoolPrimitive(true)))
          }
          case AggFunction("MAX", _, args, _) => {
            Max(mimirExprToSparkExpr(oper,args.head))
@@ -410,6 +411,8 @@ object OperatorTranslation
          }
          case AggFunction("JSON_GROUP_ARRAY", _, args, _) => {
            JsonGroupArray(mimirExprToSparkExpr(oper,args.head))
+           //TODO: when we add TArray() type we can use this
+           //CollectList(mimirExprToSparkExpr(oper,args.head))
          }
          case AggFunction(function, distinct, args, alias) => {
            throw new Exception("Aggregate Function Translation not implemented '"+function+"'")
@@ -465,15 +468,6 @@ object OperatorTranslation
       case VGTerm(name, idx, args, hints) => { //default to best guess
         //println(s"-------------------Translate VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
         val model = db.models.get(name)
-        /*val sparkVarType = getSparkType(model.varType(idx, model.argTypes(idx)))
-        val sparkArgs = (Literal(idx) +: (args.map(arg => mimirExprToSparkExpr(oper,arg)) ++ hints.map(hint => mimirExprToSparkExpr(oper,hint)))).toSeq
-        val sparkArgTypes = (IntegerType +: (model.argTypes(idx).map(arg => getSparkType(arg)) ++ model.hintTypes(idx).map(hint => getSparkType(hint)))).toSeq
-        ScalaUDF(
-          model.bestGuess _,
-          sparkVarType,
-          sparkArgs,
-          sparkArgTypes,
-          Some(name))*/
         UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ++ hints.map(mimirExprToSparkExpr(oper,_))), true )
       }
       case IsNullExpression(iexpr) => {
@@ -579,7 +573,6 @@ object OperatorTranslation
       }
       case Function(name, params) => {
         FunctionUDF(oper, name, db.functions.get(name), params, params.map(arg => db.typechecker.typeOf(arg, oper))).getUDF
-        //throw new Exception(s"Function Translation not implemented $name(${params.mkString(",")})")
       }
     }
   }
@@ -942,8 +935,8 @@ case class JsonGroupArray(child: org.apache.spark.sql.catalyst.expressions.Expre
   )
   override lazy val updateExpressions: Seq[ org.apache.spark.sql.catalyst.expressions.Expression] = Seq(
     If(IsNull(child),
-      json_group_array,
-      Concat(Seq(json_group_array, Literal(","), org.apache.spark.sql.catalyst.expressions.Cast(child,StringType,None))))
+      Concat(Seq(json_group_array, Literal(","), Literal("null"))),
+      Concat(Seq(json_group_array, Literal(","), org.apache.spark.sql.catalyst.expressions.Cast(child,StringType,None)))) 
   )
   override lazy val mergeExpressions: Seq[org.apache.spark.sql.catalyst.expressions.Expression] = {
     Seq(

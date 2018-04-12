@@ -334,11 +334,13 @@ object Provenance extends LazyLogging {
 
       case HardTable(sch,Seq()) => None 
   
-      case HardTable(sch,data) => {
+      case ht@HardTable(sch,data) => {
+        println(ht)
         val tupleMap = sch.toMap
         val rowIdKeys = tupleMap.keySet & rowIds.keySet
         if(rowIdKeys.forall { key => 
           tupleMap(key).equals(rowIds(key))
+          //data.map(tup => tup(sch.unzip._1.indexOf(key))).contains(rowIds(key))
         }) {
           Some(HardTable(sch, data))
         } else {

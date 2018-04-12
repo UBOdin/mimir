@@ -11,6 +11,7 @@ import mimir.algebra.TInt
 import java.io.File
 import mimir.algebra.Function
 import mimir.algebra.AggFunction
+import mimir.util.LoadJDBC
 
 object OperatorTranslationSpec 
   extends SQLTestSpecification("SparkOperatorTranslationSpec",Map("cleanup" -> "NO"))
@@ -24,7 +25,7 @@ object OperatorTranslationSpec
   
   "Spark" should {
     sequential
-    /*"Be able to query imported CSV" >> {
+    /*"Be able to query from a CSV source" >> {
       val result = query("""
         SELECT * FROM R
       """)(_.toList.map(_.tuple))
@@ -87,7 +88,7 @@ object OperatorTranslationSpec
       result must be equalTo List(str("[1,1,2,1,1,2,4]"))
     }*/
     
-    "Be Able to do RepairKey" >> {
+    /*"Be Able to do RepairKey" >> {
       loadCSV("S",Seq(("A","int"),("B","int"),("C","int")), new File("test/r_test/r.csv"))
       update("""
         CREATE LENS S_UNIQUE_A 
@@ -131,6 +132,61 @@ object OperatorTranslationSpec
       // There are two populated values for <A:2>[C], but they're both identical
       result(2)._2 must be equalTo 1
       result(2)._5 must be equalTo true
+    }*/
+    
+    "Be able to query from a mysql source" >> {
+      LoadJDBC.handleLoadTableRaw(db, "M", 
+        Map("url" -> "jdbc:mysql://128.205.71.102:3306/mimirdb", 
+          "driver" -> "com.mysql.jdbc.Driver", 
+          "dbtable" -> "mimir_spark", 
+          "user" -> "mimir", 
+          "password" -> "mimir01"))
+          
+      val result = query("""
+        SELECT * FROM M
+      """)(_.toList.map(_.tuple.toList)).toList
+      
+      result must be equalTo List(
+          List(i(1), NullPrimitive(), i(100)), 
+          List(i(2), i(4), i(104)), 
+          List(i(3), i(4), i(118)), 
+          List(i(4), i(5), NullPrimitive()), 
+          List(i(5), i(4), i(50)))
+      
+      update("""
+				CREATE LENS MV_M
+				  AS SELECT * FROM M
+				  WITH MISSING_VALUE('B')
+ 			""")
+ 			val querymv = db.table("MV_M")
+      val resultmv = db.query(querymv)(_.toList.map(_.tuple.toList)).toList
+      
+      resultmv must be equalTo List(
+          List(i(1), i(4), i(100)), 
+          List(i(2), i(4), i(104)), 
+          List(i(3), i(4), i(118)), 
+          List(i(4), i(5), NullPrimitive()), 
+          List(i(5), i(4), i(50)))
+    }
+    
+    "Be able to query from a postgres source" >> {
+      LoadJDBC.handleLoadTableRaw(db, "P", 
+        Map("url" -> "jdbc:postgresql://128.205.71.102:5432/mimirdb", 
+          "driver" -> "org.postgresql.Driver", 
+          "dbtable" -> "mimir_spark", 
+          "user" -> "mimir", 
+          "password" -> "mimir01"))
+          
+      val result = query("""
+        SELECT * FROM P
+      """)(_.toList.map(_.tuple.toList)).toList
+      
+      result must be equalTo List(
+          List(i(1), NullPrimitive(), i(100)), 
+          List(i(2), i(4), i(104)), 
+          List(i(3), i(4), i(118)), 
+          List(i(4), i(5), NullPrimitive()), 
+          List(i(5), i(4), i(50)))
     }
   }
 }

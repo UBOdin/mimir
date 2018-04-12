@@ -91,6 +91,7 @@ class RepairKeyModel(
   final def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
   {
     if(hints.isEmpty){
+      throw new Exception("you fucking blow")
       domainCache
     } else {
       val possibilities = 
@@ -98,7 +99,7 @@ class RepairKeyModel(
           case JsArray(values) => values.map { Json.toPrimitive(targetType, _)  }
           case _ => throw ModelException(s"Invalid Value Hint in Repair Model $name: ${hints(0).asString}")
         }
-
+      
       val possibilitiesWithProbabilities =
         if(hints.size > 1 && !hints(1).isInstanceOf[NullPrimitive]){
           possibilities.zip(
@@ -129,7 +130,6 @@ class RepairKeyModel(
       case None => getDomain(idx, args, hints).sortBy(-_._2).head._1.asDouble / getDomain(idx, args, hints).map(_._2).sum
     }
   }
-
   
   def getPrimitive(t:Type, value:Any) = t match {
     case TInt() => IntPrimitive(value.asInstanceOf[String].toLong)

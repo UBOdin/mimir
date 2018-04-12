@@ -9,7 +9,7 @@ import mimir.algebra._
 object LoadCSVSpec extends SQLTestSpecification("LoadCSV",Map("cleanup" -> "NO"))
 {
   "LoadCSV" should {
-
+    sequential
     "Load CSV files with headers" >> {
       db.loadTable("RATINGS1", new File("test/data/ratings1.csv"))
       queryOneColumn("SELECT PID FROM RATINGS1"){

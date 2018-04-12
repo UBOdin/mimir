@@ -138,7 +138,14 @@ class Compiler(db: Database) extends LazyLogging {
       // Make the set of columns we're interested in explicitly part of the query
       oper = oper.project( requiredColumns.toSeq:_* )
 
-      val (schema, rootIterator) = rootIteratorGen(oper)
+      val (schema, rootIterator) = rootIteratorGen({ 
+        if(ExperimentalOptions.isEnabled("GPROM-OPTIMIZE")
+          && db.backend.isInstanceOf[mimir.sql.GProMBackend] ) {
+          OperatorTranslation.optimizeWithGProM(oper)
+        } else { 
+          optimize(oper)
+        }
+      })
         
       logger.info(s"PROJECTIONS: $projections")
 

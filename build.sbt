@@ -148,7 +148,8 @@ libraryDependencies ++= Seq(
 
   //////////////////////// JDBC Backends //////////////////////
   "org.xerial"                    %   "sqlite-jdbc"              % "3.16.1",
-
+  "mysql" 						  %   "mysql-connector-java" 	 % "5.1.6",
+  "org.postgresql" 				  %   "postgresql" 				 % "9.4-1201-jdbc41",
 
   ///////////////////  GProM/Native Integration //////////////
   "net.java.dev.jna"              %    "jna"                     % "4.2.2",

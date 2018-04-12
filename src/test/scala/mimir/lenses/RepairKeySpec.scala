@@ -47,7 +47,7 @@ object RepairKeySpec
           row.isColDeterministic("C"),
           row.isDeterministic()
         )
-      }.toMap[Int, (Int,Int, Boolean, Boolean, Boolean, Boolean)] }
+      }.toMap[Int, (Int ,Int, Boolean, Boolean, Boolean, Boolean)] }
 
       result.keys must contain(eachOf(1, 2, 4))
       result must have size(3)
