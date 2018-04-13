@@ -55,6 +55,7 @@ import org.apache.spark.sql.catalyst.plans.UsingJoin
 import mimir.algebra.function.RegisteredFunction
 import org.apache.spark.sql.catalyst.expressions.ConcatWs
 import org.apache.spark.sql.catalyst.expressions.aggregate.CollectList
+import mimir.ctables.vgterm.Sampler
 
 object OperatorTranslation
   extends LazyLogging
@@ -215,6 +216,7 @@ object OperatorTranslation
 	  val columnAmbiguities = lqe.schema.intersect(rqe.schema)
 	  
 	  val joined:org.apache.spark.sql.catalyst.plans.logical.Join = if(!columnAmbiguities.isEmpty){
+	    println("***********************$$$$$$$$$$$$$$$$$$$$$$$$&&&&&&&&&&&&&&&&***************************")
       val tjoin = makeInitSparkJoin(lplan, rplan, columnAmbiguities.map(_.name), joinType).asInstanceOf[org.apache.spark.sql.catalyst.plans.logical.Join]
       val cond = condition.map { _.transform {
         case org.apache.spark.sql.catalyst.expressions.EqualTo(a: AttributeReference, b: AttributeReference)
@@ -465,6 +467,9 @@ object OperatorTranslation
         AckedUDF(oper, model, idx, args).getUDF
         //UnresolvedFunction(mimir.ctables.CTables.FN_IS_ACKED, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ), true )
       }
+      case Sampler(model, idx, args, hints, seed) => {
+        SampleUDF(oper, model, idx, seed, args, hints).getUDF
+      }
       case VGTerm(name, idx, args, hints) => { //default to best guess
         //println(s"-------------------Translate VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
         val model = db.models.get(name)
@@ -698,7 +703,7 @@ object OperatorTranslation
   
 }
 
-class VGTermUDF {
+class MimirUDF {
   def getPrimitive(t:Type, value:Any) = value match {
     case null => NullPrimitive()
     case _ => t match {
@@ -729,7 +734,8 @@ class VGTermUDF {
     }
 }
 
-case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression], hints:Seq[Expression]) extends VGTermUDF {
+
+case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression], hints:Seq[Expression]) extends MimirUDF {
   val sparkVarType = OperatorTranslation.getSparkType(model.varType(idx, model.argTypes(idx)))
   val sparkArgs = (args.map(arg => OperatorTranslation.mimirExprToSparkExpr(oper,arg)) ++ hints.map(hint => OperatorTranslation.mimirExprToSparkExpr(oper,hint))).toList.toSeq
   val sparkArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg)) ++ model.hintTypes(idx).map(hint => OperatorTranslation.getSparkType(hint))).toList.toSeq
@@ -782,7 +788,58 @@ case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression
       Some(model.name))
 }
 
-case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression]) extends VGTermUDF {
+case class SampleUDF(oper:Operator, model:Model, idx:Int, seed:Expression, args:Seq[Expression], hints:Seq[Expression]) extends MimirUDF {
+  val sparkVarType = OperatorTranslation.getSparkType(model.varType(idx, model.argTypes(idx)))
+  val sparkArgs = (args.map(arg => OperatorTranslation.mimirExprToSparkExpr(oper,arg)) ++ hints.map(hint => OperatorTranslation.mimirExprToSparkExpr(oper,hint))).toList.toSeq
+  val sparkArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg)) ++ model.hintTypes(idx).map(hint => OperatorTranslation.getSparkType(hint))).toList.toSeq
+  
+  def extractArgsAndHintsSeed(args:Seq[Any]) : (Int, Seq[PrimitiveValue],Seq[PrimitiveValue]) ={
+    val seed = getPrimitive(TString(), args(0)).asString.toInt
+    val argList =
+    model.argTypes(idx).
+      zipWithIndex.
+      map( arg => getPrimitive(arg._1, args(arg._2+1)))
+    val hintList = 
+      model.hintTypes(idx).
+        zipWithIndex.
+        map( arg => getPrimitive(arg._1, args(argList.length+arg._2+1)))
+    (seed, argList,hintList)  
+  }
+  def getUDF = 
+    ScalaUDF(
+      sparkArgs.length match { 
+        case 1 => (arg0:Any) => {
+          val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0))
+          getNative(model.sample(idx, seedi, argList, hintList))
+        }
+        case 2 => (arg0:Any, arg1:Any) => {
+          val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0, arg1))
+          getNative(model.sample(idx, seedi, argList, hintList))
+        }
+        case 3 => (arg0:Any, arg1:Any, arg2:Any) => {
+          val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0, arg1, arg2))
+          getNative(model.sample(idx, seedi, argList, hintList))
+        }
+        case 4 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any) => {
+          val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0, arg1, arg2, arg3))
+          getNative(model.sample(idx, seedi, argList, hintList))
+        }
+        case 5 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any) => {
+          val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0, arg1, arg2, arg3, arg4))
+          getNative(model.sample(idx, seedi, argList, hintList))
+        }
+        case 6 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any) => {
+          val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0, arg1, arg2, arg3, arg4, arg5))
+          getNative(model.sample(idx, seedi, argList, hintList))
+        }
+      },
+      sparkVarType,
+      sparkArgs,
+      sparkArgTypes,
+      Some(model.name))
+}
+
+case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression]) extends MimirUDF {
   val sparkArgs = (args.map(arg => OperatorTranslation.mimirExprToSparkExpr(oper,arg))).toList.toSeq
   val sparkArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg))).toList.toSeq
   def extractArgs(args:Seq[Any]) : Seq[PrimitiveValue] = {
@@ -827,9 +884,10 @@ case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression]) e
       Some(model.name))
 }
 
-case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, params:Seq[Expression], argTypes:Seq[Type]) extends VGTermUDF {
+case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, params:Seq[Expression], argTypes:Seq[Type]) extends MimirUDF {
   val sparkArgs = (params.map(arg => OperatorTranslation.mimirExprToSparkExpr(oper,arg))).toList.toSeq
   val sparkArgTypes = argTypes.map(argT => OperatorTranslation.getSparkType(argT)).toList.toSeq
+  val dataType = function match { case NativeFunction(_, _, tc, _) => OperatorTranslation.getSparkType(tc(argTypes)) }
   def extractArgs(args:Seq[Any]) : Seq[PrimitiveValue] = {
     argTypes.
       zipWithIndex.
@@ -838,38 +896,38 @@ case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, 
   def getUDF = 
     ScalaUDF(
       function match {
-        case NativeFunction(_, evaluator, _, _) => 
+        case NativeFunction(_, evaluator, typechecker, _) => 
           sparkArgs.length match { 
             case 0 => {
-              evaluator(Seq())
+              getNative(evaluator(Seq()))
             }
             case 1 => (arg0:Any) => {
               val argList = extractArgs(Seq(arg0))
-              evaluator(argList)
+              getNative(evaluator(argList))
             }
             case 2 => (arg0:Any, arg1:Any) => {
               val argList = extractArgs(Seq(arg0, arg1))
-              evaluator(argList)
+              getNative(evaluator(argList))
             }
             case 3 => (arg0:Any, arg1:Any, arg2:Any) => {
               val argList = extractArgs(Seq(arg0, arg1, arg2))
-              evaluator(argList)
+              getNative(evaluator(argList))
             }
             case 4 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any) => {
               val argList = extractArgs(Seq(arg0, arg1, arg2, arg3))
-              evaluator(argList)
+              getNative(evaluator(argList))
             }
             case 5 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any) => {
               val argList = extractArgs(Seq(arg0, arg1, arg2, arg3, arg4))
-              evaluator(argList)
+              getNative(evaluator(argList))
             }
             case 6 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any) => {
               val argList = extractArgs(Seq(arg0, arg1, arg2, arg3, arg4, arg5))
-              evaluator(argList)
+              getNative(evaluator(argList))
             }
           }
       },
-      BooleanType,
+      dataType,
       sparkArgs,
       sparkArgTypes,
       Some(name))

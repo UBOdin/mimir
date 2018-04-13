@@ -16,15 +16,18 @@ object MCDBTimingSpec
   with BeforeAll
 {
 
+  val skipMCDBTimingTest = true
   sequential
 
   args(skipAll = !MCDBWorkload.isDownloaded)
 
   def beforeAll =
   {
-     update("DELETE FROM MIMIR_MODEL_OWNERS")
-     update("DELETE FROM MIMIR_MODELS")
-     update("DELETE FROM MIMIR_VIEWS")
+     if(!skipMCDBTimingTest){
+       update("DELETE FROM MIMIR_MODEL_OWNERS")
+       update("DELETE FROM MIMIR_MODELS")
+       update("DELETE FROM MIMIR_VIEWS")
+     }
   }
 
   val relevantTables = Set(
@@ -38,7 +41,7 @@ object MCDBTimingSpec
      "region"  
   )
 
-  if(true){ "Skipping MCDB Workload Test" >> ok } else {
+  if(skipMCDBTimingTest){ "Skipping MCDB Workload Test" >> ok } else {
     "The MCDB Workload Timing" should {
 
       sequential

@@ -158,10 +158,10 @@ object Provenance extends LazyLogging {
           List()
         )
 
-      case HardTable(sch,data) =>
+      case ht@HardTable(sch,data) =>
         (
-          HardTable(sch:+(rowidColnameBase,TRowId()), data.zipWithIndex.map(row => row._1:+ RowIdPrimitive(s"hardcoded${row._2}"))),
-          List(rowidColnameBase)
+          HardTable(sch:+(rowidColnameBase+"_HT",TRowId()), data.zipWithIndex.map(row => row._1:+ RowIdPrimitive(s"hardcoded${row._2}"))),
+          List(rowidColnameBase+"_HT")
         )
 
       case Aggregate(groupBy, args, child) =>
@@ -334,17 +334,17 @@ object Provenance extends LazyLogging {
 
       case HardTable(sch,Seq()) => None 
   
-      case ht@HardTable(sch,data) => {
-        println(ht)
-        val tupleMap = sch.toMap
-        val rowIdKeys = tupleMap.keySet & rowIds.keySet
-        if(rowIdKeys.forall { key => 
-          tupleMap(key).equals(rowIds(key))
-          //data.map(tup => tup(sch.unzip._1.indexOf(key))).contains(rowIds(key))
-        }) {
-          Some(HardTable(sch, data))
-        } else {
-          None
+      case HardTable(sch,data) => {
+        val cols = sch.unzip._1
+        val tupleMap = data.map(row => cols.zip(row).toMap)
+        val rowIdKeys = cols.toSet & rowIds.keySet
+        tupleMap.foldLeft(Seq[Seq[PrimitiveValue]]())((init, row) => {
+            if(rowIdKeys.forall { key =>  row(key).equals(rowIds(key))}){
+              init :+ row.toSeq.unzip._2
+            } else init
+          }) match {
+            case Seq() => None
+            case newData => Some(HardTable(sch, newData))
         }
       }
       

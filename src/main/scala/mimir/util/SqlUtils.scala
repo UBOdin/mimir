@@ -196,8 +196,12 @@ object SqlUtils {
       case table: net.sf.jsqlparser.schema.Table =>
         List(
           ( table.getAlias(), 
-            db.metadataBackend.getTableSchema(table.getName()).
-              get.map(_._1).toList++List("ROWID")
+            (db.metadataBackend.getTableSchema(table.getName()) match {
+            case Some(tblSchmd) => tblSchmd
+            case None => db.backend.getTableSchema(table.getName()) match {
+              case Some(tblSch) => tblSch
+            }
+          }).map(_._1).toList++List("ROWID")
           )
         )
       case join: SubJoin =>
@@ -207,51 +211,6 @@ object SqlUtils {
   }   
   
   
- /* def getSchemaMetadata(source: SelectBody, db: Database): List[String] =
-  {
-    source match {
-      case plainselect: PlainSelect => 
-        plainselect.getSelectItems().flatMap({
-          case sei:SelectExpressionItem =>
-            List(sei.getAlias())
-          case _:AllColumns => {
-            val fromSchemas = getSchemasMetadata(plainselect.getFromItem, db).flatMap(_._2)
-            val joinSchemas = 
-              if(plainselect.getJoins != null){
-                plainselect.getJoins.asInstanceOf[java.util.List[Join]].flatMap( (join:Join) => 
-                  getSchemasMetadata(join.getRightItem(), db).flatMap(_._2)
-                )
-              } else {
-                List()
-              }
-            fromSchemas ++ joinSchemas
-          }
-        }).toList
-      case union: net.sf.jsqlparser.statement.select.Union =>
-        getSchemaMetadata(union.getPlainSelects().get(0), db)
-    }
-  } 
-  
-  /**
-   * Extract source schemas from a FromItem
-   */
-  def getSchemasMetadata(source: FromItem, db: Database): List[(String, List[String])] =
-  {
-    source match {
-      case subselect: SubSelect =>
-        List((subselect.getAlias(), getSchemaMetadata(subselect.getSelectBody(), db) ))
-      case table: net.sf.jsqlparser.schema.Table =>
-        List(
-          ( table.getAlias(), 
-            db.metadataBackend.getTableSchema(table.getName()).
-              get.map(_._1).toList++List("ROWID")
-          )
-        )
-      case join: SubJoin =>
-        getSchemasMetadata(join.getLeft(), db) ++
-          getSchemasMetadata(join.getJoin().getRightItem(), db)
-    }
-  } */  
 }
 
 

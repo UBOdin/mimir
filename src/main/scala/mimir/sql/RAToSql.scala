@@ -50,8 +50,11 @@ class RAToSql(db: Database)
     oper match {
       case Table(name, alias, tgtSch, tgtMetadata) => {
         val realSch = db.metadataBackend.getTableSchema(name) match {
-          case Some(realSch) => realSch
-          case None => throw new SQLException("Unknown Table '"+name+"'");
+          case Some(realSchmd) => realSchmd
+          case None => db.backend.getTableSchema(name) match {
+            case Some(realSch) => realSch
+            case None => throw new SQLException("Unknown Table '"+name+"'");
+          }
         }
         val schMap = tgtSch.map(_._1).zip(realSch.map(_._1)).map ( 
           { case (tgt, real)  => ProjectArg(tgt, Var(real)) }
@@ -404,8 +407,11 @@ class RAToSql(db: Database)
 
       case Table(name, alias, tgtSch, metadata) =>
         val realSch = db.metadataTableSchema(name) match {
-          case Some(realSch) => realSch
-          case None => throw new SQLException("Unknown Table '"+name+"'");
+          case Some(realSchmd) => realSchmd
+          case None => db.tableSchema(name) match {
+            case Some(realSch) => realSch
+            case None => throw new SQLException("Unknown Table '"+name+"'");
+          }
         }
         // Since Mimir's RA tree structure has no real notion of aliasing,
         // it's only really safe to inline tables directly into a query
