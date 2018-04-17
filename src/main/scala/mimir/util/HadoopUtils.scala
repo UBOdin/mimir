@@ -19,7 +19,7 @@ object HadoopUtils {
     val fs = FileSystem.get(sparkCtx.hadoopConfiguration)
     //fs.copyFromLocalFile(false, new Path(localFile.toURI()), new Path(hdfsTargetFile))
     val hdfsPath = new Path(hdfsTargetFile)
-    val exists = fs.exists(hdfsPath)
+    /*val exists = fs.exists(hdfsPath)
     val output = if(!exists){
       fs.create(hdfsPath)
     }
@@ -29,13 +29,22 @@ object HadoopUtils {
         fs.create(hdfsPath)
       }
       else throw new Exception("HDFS File already exists: " + hdfsTargetFile)
-    }
+    }*/
+    val output = fs.create(hdfsPath, true)
     val writer = new BufferedOutputStream(output)
     try {
         writer.write(Files.readAllBytes(Paths.get(localFile.getAbsolutePath))) 
     }
+    catch {
+      case t: Throwable => t.printStackTrace() // TODO: handle error
+    }
     finally {
-        writer.close()
+         try {
+           writer.close()
+         }
+         catch {
+           case t: Throwable => t.printStackTrace() // TODO: handle error
+         }
     }
   }
   

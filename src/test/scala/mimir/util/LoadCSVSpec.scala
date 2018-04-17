@@ -8,10 +8,10 @@ import mimir.algebra._
 
 object LoadCSVSpec extends SQLTestSpecification("LoadCSV",Map("cleanup" -> "NO"))
 {
+  
   "LoadCSV" should {
-    sequential
     "Load CSV files with headers" >> {
-      db.loadTable("RATINGS1", new File("test/data/ratings1.csv"))
+      loadCSV("RATINGS1", new File("test/data/ratings1.csv"))
       queryOneColumn("SELECT PID FROM RATINGS1"){
         _.toSeq must contain(
           str("P123"), str("P2345"), str("P124"), str("P325")
@@ -20,7 +20,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV",Map("cleanup" -> "NO")
     }
 
     "Load CSV files without headers" >> {
-      db.loadTable( "U", new File("test/r_test/u.csv"))
+      loadCSV( "U", new File("test/r_test/u.csv"))
       val col1: String = db.tableSchema("U").get.head._1
       queryOneColumn(s"SELECT $col1 FROM U"){
         _.toSeq must contain(
@@ -47,7 +47,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV",Map("cleanup" -> "NO")
       loadCSV( "U2", Seq(("A","int"), ("B","int"), ("C","int")), new File("test/r_test/u.csv"))
       val col1: String = db.tableSchema("U2").get.head._1
       queryOneColumn(s"SELECT $col1 FROM U2"){
-        _.toSeq must contain(
+        _.toList must contain(
           i(1), i(2), i(3), i(4), i(5)
         )
       }
@@ -104,12 +104,14 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV",Map("cleanup" -> "NO")
       }
     }
 
+    //TODO: translate dates correctly in spark operator translator
     "Load Dates Properly" >> {
       LoggerUtils.error("mimir.util.NonStrictCSVParser") {
-        loadCSV( "EMPLOYEE", Seq(("Name","string"),("Age","int"),("JoinDate","date"),("Salary","float"),("Married","bool")), new File("test/data/Employee.csv"))
+       loadCSV( "EMPLOYEE", Seq(("Name","string"),("Age","int"),("JOINDATE","date"),("Salary","float"),("Married","bool")), new File("test/data/Employee1.csv"))
       }
+      
       db.query("""
-        SELECT cast(JOINDATE as varchar) FROM EMPLOYEE
+        SELECT JOINDATE FROM EMPLOYEE
       """)(result => result.toList.map(_.tuple)).map{ _(0).asString } must contain(
         "2011-08-01",
         "2014-06-19",

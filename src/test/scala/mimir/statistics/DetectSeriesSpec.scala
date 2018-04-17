@@ -41,7 +41,7 @@ object DetectSeriesSpec
 		}
 
 		"Be able to create a new schema and detect Date and Timestamp type" >> {
-			update("CREATE TABLE DetectSeriesTest3(JN_DT date, JN_TS datetime)")
+			db.backend.createTable("DetectSeriesTest3", HardTable(Seq(("JN_DT", TDate()), ("JN_TS", TTimestamp())), Seq() ))
 			val queryOper = select("SELECT * FROM DetectSeriesTest3")
 			val colSeq: Seq[String] = testDetectSeriesof(queryOper).map{_.columnName.toString}
 			

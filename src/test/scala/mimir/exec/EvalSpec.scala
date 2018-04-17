@@ -14,10 +14,12 @@ object EvalSpec
   with BeforeAll
 {
 
-  val inventoryDataFile = new File("test/data/Product_Inventory.sql")
+  val inventoryDataFile = new File("test/data/Product_Inventory.csv")
 
   def beforeAll = {
-    stmts(inventoryDataFile).map( update(_) )
+    LoadCSV.handleLoadTableRaw(db, "PRODUCT_INVENTORY",
+				    Some(Seq(("ID",TString()),("COMPANY",TString()),("QUANTITY",TInt()),("PRICE",TFloat()))), 
+				    inventoryDataFile, Map("DELIMITER" -> ",", "mode" ->"DROPMALFORMED", "header" -> "false"))
   }
 
   "The query evaluator" should {

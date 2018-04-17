@@ -27,7 +27,13 @@ object SparkUtils {
           FloatPrimitive(r.getFloat(field))
         } catch {
           case t: Throwable => {
-            FloatPrimitive(r.getString(field).toFloat) 
+            try {
+              FloatPrimitive(r.getDouble(field))
+            } catch {
+                case t: Throwable => {
+                  FloatPrimitive(r.getString(field).toFloat) 
+                }
+            }  
           }
         }  })
       case TInt() =>        (r) => checkNull(r, { 

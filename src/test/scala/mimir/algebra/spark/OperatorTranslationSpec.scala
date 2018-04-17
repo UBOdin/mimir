@@ -12,6 +12,7 @@ import java.io.File
 import mimir.algebra.Function
 import mimir.algebra.AggFunction
 import mimir.util.LoadJDBC
+import mimir.algebra.BoolPrimitive
 
 object OperatorTranslationSpec 
   extends SQLTestSpecification("SparkOperatorTranslationSpec",Map("cleanup" -> "NO"))
@@ -109,7 +110,7 @@ object OperatorTranslationSpec
         )
       }.toMap[Int, (Int,Int, Boolean, Boolean, Boolean, Boolean)] }
 
-      result.keys must contain(eachOf(1, 2, 4))
+      result.keys must contain(eachOf(1, i("2"), 4))
       result must have size(3)
 
       // The input is deterministic, so the key column "A" should also be deterministic
@@ -122,8 +123,8 @@ object OperatorTranslationSpec
 
       // The chosen values for <A:1> in columns B and C are arbitrary, but selected
       // from a finite set of possibilities based on what's in R.
-      result(1)._1 must be oneOf(2, 3, 4)
-      result(1)._2 must be oneOf(1, 2, 3)
+      result(1)._1 must be oneOf(2, i("3"), 4)
+      result(1)._2 must be oneOf(1, i("2"), 3)
 
       // There is only one populated value for <A:2>[B], the other is null
       result(2)._1 must be equalTo 2
@@ -134,7 +135,7 @@ object OperatorTranslationSpec
       result(2)._5 must be equalTo true
     }*/
     
-    "Be able to query from a mysql source" >> {
+    /*"Be able to query from a mysql source" >> {
       LoadJDBC.handleLoadTableRaw(db, "M", 
         Map("url" -> "jdbc:mysql://128.205.71.102:3306/mimirdb", 
           "driver" -> "com.mysql.jdbc.Driver", 
@@ -187,6 +188,19 @@ object OperatorTranslationSpec
           List(i(3), i(4), i(118)), 
           List(i(4), i(5), NullPrimitive()), 
           List(i(5), i(4), i(50)))
+    }*/
+    
+    "Be able to query from a json source" >> {
+      db.backend.readDataSource("J", "json", Map(), None, Some("test/data/jsonsample.txt")) 
+          
+      val result = query("""
+        SELECT * FROM J
+      """)(_.toList.map(_.tuple.toList)).toList
+      
+      result must be equalTo List(
+          List(BoolPrimitive(true), str("jerome@saunders.tm"), f(14.7048), str("Vanessa Nguyen"), i(1), i(56), i(40), str("Gary"), str("Conner")), 
+          List(BoolPrimitive(false), str("annette@hernandez.bw"), f(11.214), str("Leo Green"), i(2), i(57), i(44), str("Neal"), str("Davies")), 
+          List(BoolPrimitive(true), str("troy@mcneill.bt"), f(14.0792), str("Peter Schultz"), i(3), i(58), i(26), str("Christopher"), str("Brantley")))
     }
   }
 }

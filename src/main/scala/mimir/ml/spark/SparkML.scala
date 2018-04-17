@@ -111,5 +111,30 @@ abstract class SparkML {
   def extractPredictions(model : PipelineModel, predictions:DataFrame, maxPredictions:Int = 5) : Seq[(String, (String, Double))]  
   
   def extractPredictionsForRow(model : PipelineModel, predictions:DataFrame, rowid:String, maxPredictions:Int = 5) : Seq[(String, Double)]
-    
+   
+  def getNative(value:PrimitiveValue, t:Type): Any = {
+    value match {
+      case NullPrimitive() => t match {
+        case TInt() => 0L
+        case TFloat() => new java.lang.Float(0.0)
+        case TDate() => ""
+        case TString() => ""
+        case TBool() => new java.lang.Boolean(false)
+        case TRowId() => ""
+        case TType() => ""
+        case TAny() => ""
+        case TTimestamp() => ""
+        case TInterval() => ""
+        case TUser(name) => getNative(value, mimir.algebra.TypeRegistry.registeredTypes(name)._2)
+        case x => ""
+      }
+      case RowIdPrimitive(s) => s
+      case StringPrimitive(s) => s
+      case IntPrimitive(i) => i
+      case FloatPrimitive(f) => new java.lang.Float(f)
+      case BoolPrimitive(b) => new java.lang.Boolean(b)
+      case x =>  x.asString
+    }
+  }
+  
 }

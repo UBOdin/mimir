@@ -75,7 +75,7 @@ object PickerLens {
       case s@Some(modelGen) => s
     })
     val pickerModel = new PickerModel(name+"_PICKER_MODEL:"+pickFromColumns.mkString("_"), pickToCol, pickFromColumns, pickerColTypes, useClassifier, classifyUpFront, query) 
-    pickerModel.reconnectToDatabase(db)
+    pickerModel.classifyAll(db)
     
     lazy val expressionSubstitutions : (Expression) => Expression = (expr) => {
     expr match {

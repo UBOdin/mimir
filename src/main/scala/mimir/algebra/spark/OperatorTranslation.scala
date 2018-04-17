@@ -96,7 +96,7 @@ object OperatorTranslation
 			  makeSparkJoin(lhs, rhs, Some(mimirExprToSparkExpr(oper,condition)), LeftOuter) 
 			}
 			case Join(lhs, rhs) => {
-			  //org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), Inner, None)
+			  //org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), Cross, None)
 			  makeSparkJoin(lhs, rhs, None, Cross) 
 			}
 			case Union(lhs, rhs) => {
@@ -216,8 +216,7 @@ object OperatorTranslation
 	  val columnAmbiguities = lqe.schema.intersect(rqe.schema)
 	  
 	  val joined:org.apache.spark.sql.catalyst.plans.logical.Join = if(!columnAmbiguities.isEmpty){
-	    println("***********************$$$$$$$$$$$$$$$$$$$$$$$$&&&&&&&&&&&&&&&&***************************")
-      val tjoin = makeInitSparkJoin(lplan, rplan, columnAmbiguities.map(_.name), joinType).asInstanceOf[org.apache.spark.sql.catalyst.plans.logical.Join]
+	    val tjoin = makeInitSparkJoin(lplan, rplan, columnAmbiguities.map(_.name), joinType).asInstanceOf[org.apache.spark.sql.catalyst.plans.logical.Join]
       val cond = condition.map { _.transform {
         case org.apache.spark.sql.catalyst.expressions.EqualTo(a: AttributeReference, b: AttributeReference)
             if a.sameRef(b) =>
@@ -410,6 +409,12 @@ object OperatorTranslation
          }
          case AggFunction("GROUP_OR", _, args, _) => {
            GroupOr(mimirExprToSparkExpr(oper,args.head))
+         }
+         case AggFunction("GROUP_BITWISE_OR", _, args, _) => {
+           GroupBitwiseOr(mimirExprToSparkExpr(oper,args.head))
+         }
+         case AggFunction("GROUP_BITWISE_AND", _, args, _) => {
+           GroupBitwiseAnd(mimirExprToSparkExpr(oper,args.head))
          }
          case AggFunction("JSON_GROUP_ARRAY", _, args, _) => {
            JsonGroupArray(mimirExprToSparkExpr(oper,args.head))
@@ -793,17 +798,17 @@ case class SampleUDF(oper:Operator, model:Model, idx:Int, seed:Expression, args:
   val sparkArgs = (args.map(arg => OperatorTranslation.mimirExprToSparkExpr(oper,arg)) ++ hints.map(hint => OperatorTranslation.mimirExprToSparkExpr(oper,hint))).toList.toSeq
   val sparkArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg)) ++ model.hintTypes(idx).map(hint => OperatorTranslation.getSparkType(hint))).toList.toSeq
   
-  def extractArgsAndHintsSeed(args:Seq[Any]) : (Int, Seq[PrimitiveValue],Seq[PrimitiveValue]) ={
-    val seed = getPrimitive(TString(), args(0)).asString.toInt
+  def extractArgsAndHintsSeed(args:Seq[Any]) : (Long, Seq[PrimitiveValue],Seq[PrimitiveValue]) ={
+    val seedp = seed.toString().toLong
     val argList =
     model.argTypes(idx).
       zipWithIndex.
-      map( arg => getPrimitive(arg._1, args(arg._2+1)))
+      map( arg => getPrimitive(arg._1, args(arg._2)))
     val hintList = 
       model.hintTypes(idx).
         zipWithIndex.
-        map( arg => getPrimitive(arg._1, args(argList.length+arg._2+1)))
-    (seed, argList,hintList)  
+        map( arg => getPrimitive(arg._1, args(argList.length+arg._2)))
+   (seedp, argList,hintList)  
   }
   def getUDF = 
     ScalaUDF(
@@ -977,6 +982,52 @@ case class GroupOr(child: org.apache.spark.sql.catalyst.expressions.Expression) 
     )
   }
   override lazy val evaluateExpression: AttributeReference = group_or
+}
+
+case class GroupBitwiseAnd(child: org.apache.spark.sql.catalyst.expressions.Expression) extends DeclarativeAggregate {
+  override def children: Seq[org.apache.spark.sql.catalyst.expressions.Expression] = child :: Nil
+  override def nullable: Boolean = false
+  // Return data type.
+  override def dataType: DataType = LongType
+  override def checkInputDataTypes(): TypeCheckResult =
+    TypeUtils.checkForOrderingExpr(child.dataType, "function group_bitwise_and")
+  private lazy val group_bitwise_and = AttributeReference("group_bitwise_and", LongType)()
+  override lazy val aggBufferAttributes: Seq[AttributeReference] = group_bitwise_and :: Nil
+  override lazy val initialValues: Seq[Literal] = Seq(
+    Literal.create(0xffffffffffffffffl, LongType)
+  )
+  override lazy val updateExpressions: Seq[ org.apache.spark.sql.catalyst.expressions.Expression] = Seq(
+    BitwiseAnd(group_bitwise_and, child)
+  )
+  override lazy val mergeExpressions: Seq[org.apache.spark.sql.catalyst.expressions.Expression] = {
+    Seq(
+      BitwiseAnd(group_bitwise_and.left, group_bitwise_and.right)
+    )
+  }
+  override lazy val evaluateExpression: AttributeReference = group_bitwise_and
+}
+
+case class GroupBitwiseOr(child: org.apache.spark.sql.catalyst.expressions.Expression) extends DeclarativeAggregate {
+  override def children: Seq[org.apache.spark.sql.catalyst.expressions.Expression] = child :: Nil
+  override def nullable: Boolean = false
+  // Return data type.
+  override def dataType: DataType = LongType
+  override def checkInputDataTypes(): TypeCheckResult =
+    TypeUtils.checkForOrderingExpr(child.dataType, "function group_bitwise_or")
+  private lazy val group_bitwise_or = AttributeReference("group_bitwise_or", LongType)()
+  override lazy val aggBufferAttributes: Seq[AttributeReference] = group_bitwise_or :: Nil
+  override lazy val initialValues: Seq[Literal] = Seq(
+    Literal.create(0, LongType)
+  )
+  override lazy val updateExpressions: Seq[ org.apache.spark.sql.catalyst.expressions.Expression] = Seq(
+    BitwiseOr(group_bitwise_or, child)
+  )
+  override lazy val mergeExpressions: Seq[org.apache.spark.sql.catalyst.expressions.Expression] = {
+    Seq(
+      BitwiseOr(group_bitwise_or.left, group_bitwise_or.right)
+    )
+  }
+  override lazy val evaluateExpression: AttributeReference = group_bitwise_or
 }
 
 case class JsonGroupArray(child: org.apache.spark.sql.catalyst.expressions.Expression) extends DeclarativeAggregate {

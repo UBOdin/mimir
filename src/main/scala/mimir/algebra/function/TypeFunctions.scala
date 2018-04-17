@@ -7,10 +7,15 @@ import mimir.util._
 object TypeFunctions
 {
 
+  def joinRowIds(rowids: Seq[PrimitiveValue]): RowIdPrimitive =
+  {
+    RowIdPrimitive(rowids.map(_.asString).mkString("|"))
+  }
+  
   def register(fr: FunctionRegistry)
   {
     fr.register("MIMIR_MAKE_ROWID", 
-      Provenance.joinRowIds(_: Seq[PrimitiveValue]),
+      joinRowIds(_: Seq[PrimitiveValue]),
       ((args: Seq[Type]) => TRowId())
     )
 

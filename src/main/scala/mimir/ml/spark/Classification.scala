@@ -25,6 +25,9 @@ import org.apache.spark.sql.functions.udf
 import org.apache.spark.ml.feature.RegexTokenizer
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.ml.feature.VectorAssembler
+import org.apache.spark.sql.types.FloatType
+import org.apache.spark.sql.types.NumericType
+import org.apache.spark.sql.types.NumericType
 
 
 object Classification extends SparkML {
@@ -222,7 +225,7 @@ object Classification extends SparkML {
     val assmblerCols = cols.flatMap(col => {
       col.dataType match {
         case StringType => Some(s"${col.name}_features")
-        case IntegerType | LongType | DoubleType => Some(col.name)
+        case IntegerType | LongType | DoubleType | FloatType => Some(col.name)
         case _ => None
       }
     })
