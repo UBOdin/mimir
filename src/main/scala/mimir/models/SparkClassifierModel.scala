@@ -30,12 +30,14 @@ import mimir.provenance.Provenance
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.types.StructField
+import org.apache.spark.ml.PipelineModel
 
 object SparkClassifierModel
 {
   val logger = Logger(org.slf4j.LoggerFactory.getLogger(getClass.getName))
   val TRAINING_LIMIT = 10000
   val TOKEN_LIMIT = 100
+  
   val availableSparkModels = Map("Classification" -> (Classification, Classification.NaiveBayesMulticlassModel()), "Regression" -> (Regression, Regression.GeneralizedLinearRegressorModel()))
   
   def train(db: Database, name: String, cols: Seq[String], query:Operator): Map[String,(Model,Int,Seq[Expression])] = 
@@ -73,9 +75,12 @@ object SparkClassifierModel
   def trainModel(db:Database, query:Operator, model:SimpleSparkClassifierModel)
   {
     model.sparkMLInstanceType = model.guessSparkModelType(model.guessInputType) 
+    val sparkMLInstance = availableSparkModels.getOrElse(model.sparkMLInstanceType, (Classification, Classification.NaiveBayesMulticlassModel()))._1
+    def sparkMLModelGenerator = availableSparkModels.getOrElse(model.sparkMLInstanceType, (Classification, Classification.NaiveBayesMulticlassModel()))._2
     Timer.monitor(s"Train ${model.name}.${model.colName}", SparkClassifierModel.logger.info(_)){
       val trainingQuery = Limit(0, Some(SparkClassifierModel.TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)),  query.filter(Not(IsNullExpression(Var(model.colName))))))
-      model.learner = Some(model.sparkMLModelGenerator(ModelParams(trainingQuery, db, model.colName, "keep")))
+      model.learner = Some(sparkMLModelGenerator(ModelParams(trainingQuery, db, model.colName, "keep")))
+      model.classifyAll(sparkMLInstance)
     }
   }
 
@@ -93,13 +98,10 @@ class SimpleSparkClassifierModel(name: String, val colName:String, val schema:Se
   val colIdx:Int = columns.indexOf(colName)
   val classifyUpFrontAndCache = true
   var classifyAllPredictions:Option[Map[String, Seq[(String, Double)]]] = None
-  var learner: Option[SparkML.SparkModel] = None
+  var learner: Option[PipelineModel] = None
   
   var sparkMLInstanceType = "Classification" 
   
-  
-  def sparkMLInstance = SparkClassifierModel.availableSparkModels.getOrElse(sparkMLInstanceType, (Classification, Classification.NaiveBayesMulticlassModel()))._1
-  def sparkMLModelGenerator = SparkClassifierModel.availableSparkModels.getOrElse(sparkMLInstanceType, (Classification, Classification.NaiveBayesMulticlassModel()))._2
   
   def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : String = args(0).asString
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = args(0).asString
@@ -143,7 +145,7 @@ class SimpleSparkClassifierModel(name: String, val colName:String, val schema:Se
   
   
   
-  def classifyAll() : Unit = {
+  def classifyAll(sparkMLInstance:SparkML) : Unit = {
     val classifier = learner.get
     val classifyAllQuery = sparkMLInstance.getSparkSqlContext().createDataFrame(
       sparkMLInstance.getSparkSession().parallelize(trainingData.map( row => {
@@ -210,7 +212,6 @@ class SimpleSparkClassifierModel(name: String, val colName:String, val schema:Se
         getCache(idx, args, hints) match {
           case None => {
             if(classifyUpFrontAndCache && classifyAllPredictions.isEmpty ){
-              classifyAll()
               getCache(idx, args, hints).getOrElse(classify(rowid, hints) match {
                 case Seq() => classToPrimitive("0")
                 case x => classToPrimitive(x.head._1)
@@ -242,7 +243,6 @@ class SimpleSparkClassifierModel(name: String, val colName:String, val schema:Se
     (if(classifyUpFrontAndCache){
       val predictions = classifyAllPredictions match {
         case None => {
-          classifyAll()
           classifyAllPredictions.get
         }
         case Some(p) => p
@@ -270,7 +270,6 @@ class SimpleSparkClassifierModel(name: String, val colName:String, val schema:Se
         val selem = getCache(idx, args, hints) match {
           case None => {
             if(classifyUpFrontAndCache && cache.isEmpty ){
-              classifyAll()
               getCache(idx, args, hints)
             }
             else if(classifyUpFrontAndCache)
