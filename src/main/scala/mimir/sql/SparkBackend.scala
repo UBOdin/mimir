@@ -26,7 +26,7 @@ class SparkBackend extends RABackend{
   var sparkSql : SQLContext = null
   ExperimentalOptions.enable("remoteSpark")
   val (sparkHost, sparkPort, hdfsPort) = Mimir.conf match {
-    case null => ("128.205.71.102", "7077", "8020")
+    case null => (/*"128.205.71.102"*/"127.0.0.1", "7077", "8020")
     case x => (x.sparkHost, x.sparkPort, "8020")
   }
   val remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
