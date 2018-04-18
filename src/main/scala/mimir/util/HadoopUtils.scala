@@ -15,7 +15,7 @@ import org.apache.spark.SparkContext
 */
 object HadoopUtils {
 
-  def writeToHDFS(sparkCtx:SparkContext, hdfsTargetFile:String, localFile:File, force:Boolean = false) {
+  def writeToHDFS(sparkCtx:SparkContext, hdfsTargetFile:String, localFile:File, overwrite:Boolean = false) {
     val fs = FileSystem.get(sparkCtx.hadoopConfiguration)
     //fs.copyFromLocalFile(false, new Path(localFile.toURI()), new Path(hdfsTargetFile))
     val hdfsPath = new Path(hdfsTargetFile)
@@ -30,7 +30,7 @@ object HadoopUtils {
       }
       else throw new Exception("HDFS File already exists: " + hdfsTargetFile)
     }*/
-    val output = fs.create(hdfsPath, true)
+    val output = fs.create(hdfsPath, overwrite)
     val writer = new BufferedOutputStream(output)
     try {
         writer.write(Files.readAllBytes(Paths.get(localFile.getAbsolutePath))) 

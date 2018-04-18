@@ -153,7 +153,7 @@ class SparkBackend extends RABackend{
 
   def canHandleVGTerms: Boolean = true
   def rowIdType: Type = TString()
-  def dateType: Type = TString()
+  def dateType: Type = TDate()
   def specializeQuery(q: Operator, db: Database): Operator = {
     q
   }

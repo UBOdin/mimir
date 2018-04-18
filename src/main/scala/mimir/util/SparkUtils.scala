@@ -121,7 +121,7 @@ object SparkUtils {
   }
   
   def convertDate(c: Calendar): DatePrimitive =
-    DatePrimitive(c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DATE))
+    DatePrimitive(c.get(Calendar.YEAR), c.get(Calendar.MONTH)+1, c.get(Calendar.DATE))
   def convertDate(d: Date): DatePrimitive =
   {
     val cal = Calendar.getInstance();
@@ -135,7 +135,7 @@ object SparkUtils {
     new Date(cal.getTime().getTime());
   }
   def convertTimestamp(c: Calendar): TimestampPrimitive =
-    TimestampPrimitive(c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DATE),
+    TimestampPrimitive(c.get(Calendar.YEAR), c.get(Calendar.MONTH)+1, c.get(Calendar.DATE),
                         c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), c.get(Calendar.SECOND), 
                         c.get(Calendar.MILLISECOND))
   def convertTimestamp(ts: Timestamp): TimestampPrimitive =

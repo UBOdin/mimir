@@ -56,6 +56,9 @@ import mimir.algebra.function.RegisteredFunction
 import org.apache.spark.sql.catalyst.expressions.ConcatWs
 import org.apache.spark.sql.catalyst.expressions.aggregate.CollectList
 import mimir.ctables.vgterm.Sampler
+import java.sql.Date
+import java.sql.Timestamp
+import mimir.util.SparkUtils
 
 object OperatorTranslation
   extends LazyLogging
@@ -500,6 +503,8 @@ object OperatorTranslation
       case IntPrimitive(i) => Literal(i)
       case FloatPrimitive(f) => Literal(f)
       case BoolPrimitive(b) => Literal(b)
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => Literal(SparkUtils.convertTimestamp(ts))
+      case dt@DatePrimitive(y,m,d) => Literal(SparkUtils.convertDate(dt))
       case x =>  Literal(x.asString)
     }
   }
@@ -512,6 +517,8 @@ object OperatorTranslation
       case IntPrimitive(i) => i
       case FloatPrimitive(f) => f
       case BoolPrimitive(b) => b
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
+      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
       case x =>  UTF8String.fromString(x.asString)
     }
   }
@@ -524,6 +531,8 @@ object OperatorTranslation
       case IntPrimitive(i) => i
       case FloatPrimitive(f) => f
       case BoolPrimitive(b) => b
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
+      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
       case x =>  x.asString
     }
   }
@@ -636,13 +645,13 @@ object OperatorTranslation
     t match {
       case TInt() => LongType
       case TFloat() => FloatType
-      case TDate() => StringType
+      case TDate() => DateType
       case TString() => StringType
       case TBool() => BooleanType
       case TRowId() => StringType
       case TType() => StringType
       case TAny() => StringType
-      case TTimestamp() => StringType
+      case TTimestamp() => TimestampType
       case TInterval() => StringType
       case TUser(name) => getSparkType(mimir.algebra.TypeRegistry.registeredTypes(name)._2)
       case _ => StringType
@@ -656,6 +665,8 @@ object OperatorTranslation
       case FloatType => TFloat()
       case LongType => TInt()
       case BooleanType => TBool()
+      case DateType => TDate()
+      case TimestampType => TTimestamp()
       case _ => TString()
     }
   }
@@ -715,8 +726,8 @@ class MimirUDF {
       //case TInt() => IntPrimitive(value.asInstanceOf[Long])
       case TInt() => IntPrimitive(value.asInstanceOf[Long])
       case TFloat() => FloatPrimitive(value.asInstanceOf[Float].toDouble)
-      //case TDate() => DatePrimitive.(value.asInstanceOf[Long])
-      //case TTimestamp() => Primitive(value.asInstanceOf[Long])
+      case TDate() => SparkUtils.convertDate(value.asInstanceOf[Date])
+      case TTimestamp() => SparkUtils.convertTimestamp(value.asInstanceOf[Timestamp])
       case TString() => StringPrimitive(value.asInstanceOf[String])
       case TBool() => BoolPrimitive(value.asInstanceOf[Boolean])
       case TRowId() => RowIdPrimitive(value.asInstanceOf[String])
@@ -735,6 +746,8 @@ class MimirUDF {
       case IntPrimitive(i) => new java.lang.Long(i)
       case FloatPrimitive(f) => new java.lang.Float(f)
       case BoolPrimitive(b) => new java.lang.Boolean(b)
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
+      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
       case x =>  x.asString
     }
 }

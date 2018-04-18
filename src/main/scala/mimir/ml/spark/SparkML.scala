@@ -13,6 +13,9 @@ import mimir.algebra.spark.OperatorTranslation
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import java.sql.Timestamp
+import java.sql.Date
+import mimir.util.SparkUtils
 
 object SparkML {
   type SparkModel = PipelineModel
@@ -133,6 +136,8 @@ abstract class SparkML {
       case IntPrimitive(i) => i
       case FloatPrimitive(f) => new java.lang.Float(f)
       case BoolPrimitive(b) => new java.lang.Boolean(b)
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
+      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
       case x =>  x.asString
     }
   }

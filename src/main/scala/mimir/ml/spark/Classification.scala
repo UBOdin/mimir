@@ -28,6 +28,8 @@ import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.sql.types.FloatType
 import org.apache.spark.sql.types.NumericType
 import org.apache.spark.sql.types.NumericType
+import java.sql.Timestamp
+import java.sql.Date
 
 
 object Classification extends SparkML {
@@ -62,6 +64,8 @@ object Classification extends SparkML {
       case IntPrimitive(i) => i.toString
       case FloatPrimitive(f) => f.toString
       case BoolPrimitive(b) => b
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
+      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
       case x =>  x.asString 
     }
   }
@@ -87,6 +91,8 @@ object Classification extends SparkML {
       case IntPrimitive(i) => i.toString
       case FloatPrimitive(f) => f.toString
       case BoolPrimitive(b) => b
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
+      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
       case x =>  x.asString 
     }
   }
