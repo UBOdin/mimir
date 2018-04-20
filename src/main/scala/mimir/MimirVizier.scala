@@ -517,7 +517,9 @@ object MimirVizier extends LazyLogging {
   }
   
   def getAvailableLenses() : String = {
-    val ret = db.lenses.lensTypes.keySet.toSeq.mkString(",")
+    val distinctLenseIdxs = db.lenses.lensTypes.toSeq.map(_._2).zipWithIndex.distinct.unzip._2
+    val distinctLenses = db.lenses.lensTypes.toSeq.zipWithIndex.filter(el => distinctLenseIdxs.contains(el._2)).unzip._1.toMap
+    val ret = distinctLenses.keySet.toSeq.mkString(",")
     logger.debug(s"getAvailableLenses: From Viztrails: $ret")
     ret
   }

@@ -59,7 +59,7 @@ object JDBCUtils {
       case TInt() =>        (r) => checkNull(r, { IntPrimitive(r.getLong(field)) })
       case TString() =>     (r) => checkNull(r, { StringPrimitive(r.getString(field)) })
       case TRowId() =>      (r) => checkNull(r, { RowIdPrimitive(r.getString(field)) })
-      case TBool() =>       (r) => checkNull(r, { BoolPrimitive(r.getInt(field) != 0) })
+      case TBool() =>       (r) => checkNull(r, { BoolPrimitive(java.lang.Boolean.valueOf(r.getString(field).toLowerCase())) })
       case TType() =>       (r) => checkNull(r, { TypePrimitive(Type.fromString(r.getString(field))) })
       case TDate() =>
         dateType match {

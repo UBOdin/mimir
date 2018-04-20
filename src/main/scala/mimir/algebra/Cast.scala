@@ -28,7 +28,7 @@ object Cast
           }
         case TRowId()           => RowIdPrimitive(x.asString)
         case TAny()             => x
-        case TBool()            => BoolPrimitive(x.asLong != 0)
+        case TBool()            => BoolPrimitive(java.lang.Boolean.valueOf(x.asString.toLowerCase()))
         case TType()            => TypePrimitive(Type.fromString(x.asString))
         case TUser(name) => {
           val (typeRegexp, baseT) = TypeRegistry.registeredTypes(name)
