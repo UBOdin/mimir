@@ -4,7 +4,7 @@ import org.apache.spark.sql.Row
 import mimir.algebra._
 import java.sql.SQLException
 import java.util.Calendar
-import java.util.Date
+import java.sql.Date
 import java.sql.Timestamp
 import org.apache.spark.sql.DataFrame
 import mimir.algebra.spark.OperatorTranslation

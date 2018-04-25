@@ -503,8 +503,8 @@ object OperatorTranslation
       case IntPrimitive(i) => Literal(i)
       case FloatPrimitive(f) => Literal(f)
       case BoolPrimitive(b) => Literal(b)
-      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => Literal(SparkUtils.convertTimestamp(ts))
-      case dt@DatePrimitive(y,m,d) => Literal(SparkUtils.convertDate(dt))
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => Literal.create(SparkUtils.convertTimestamp(ts), TimestampType)
+      case dt@DatePrimitive(y,m,d) => Literal.create(SparkUtils.convertDate(dt), DateType)
       case x =>  Literal(x.asString)
     }
   }
@@ -517,8 +517,8 @@ object OperatorTranslation
       case IntPrimitive(i) => i
       case FloatPrimitive(f) => f
       case BoolPrimitive(b) => b
-      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
-      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)//DateTimeUtils.fromJavaTimestamp(SparkUtils.convertTimestamp(ts))
+      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)//DateTimeUtils.fromJavaDate(SparkUtils.convertDate(dt))
       case x =>  UTF8String.fromString(x.asString)
     }
   }
