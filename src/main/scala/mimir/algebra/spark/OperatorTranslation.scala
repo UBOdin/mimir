@@ -69,7 +69,7 @@ object OperatorTranslation
     oper match {
       case Project(cols, src) => {
   			org.apache.spark.sql.catalyst.plans.logical.Project(cols.map(col => {
-          mimirExprToSparkNamedExpr(oper, col.name, col.expression)
+          mimirExprToSparkNamedExpr(src, col.name, col.expression)
         }), mimirOpToSparkOp(src))
 			}
 			case ProvenanceOf(psel) => {
@@ -83,8 +83,8 @@ object OperatorTranslation
       }
 			case Aggregate(groupBy, aggregates, source) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Aggregate(
-          groupBy.map(mimirExprToSparkExpr(oper,_)),
-          groupBy.map( gb => Alias( UnresolvedAttribute(gb.name), gb.name)()) ++ aggregates.map( mimirAggFunctionToSparkNamedExpr(oper,_)),
+          groupBy.map(mimirExprToSparkExpr(source,_)),
+          groupBy.map( gb => Alias( UnresolvedAttribute(gb.name), gb.name)()) ++ aggregates.map( mimirAggFunctionToSparkNamedExpr(source,_)),
           mimirOpToSparkOp(source))
 			}
 			/*case Select(condition, Join(lhs, rhs)) => {

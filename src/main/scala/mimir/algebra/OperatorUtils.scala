@@ -318,9 +318,20 @@ object OperatorUtils extends LazyLogging {
         }
       }
       case Table(name, alias, sch, meta) => {
-        Table(name, alias, 
+        /*Table(name, alias, 
           sch.map { col => if(col._1.equals(target)) { (replacement, col._2) } else { col } },
           meta.map { col => if(col._1.equals(target)) { (replacement, col._2, col._3) } else { col } }
+        )*/
+        //TODO:  I changed this from above to below because spark didn't like it.  
+        //  I need to verify that this is legit. -Mike
+        Project(
+          oper.columnNames.map { col =>
+            if(col.equals(target)){ ProjectArg(replacement, Var(target)) }
+            else { ProjectArg(col, Var(col)) }
+          },
+          Table(name, alias, sch,
+            meta.map { col => if(col._1.equals(target)) { (replacement, col._2, col._3) } else { col } }
+          )
         )
       }
       case HardTable(sch,data) => {

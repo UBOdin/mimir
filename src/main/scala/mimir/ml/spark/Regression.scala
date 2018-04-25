@@ -12,6 +12,10 @@ import org.apache.spark.ml.evaluation.RegressionEvaluator
 import org.apache.spark.ml.feature.VectorIndexer
 import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.ml.regression.{RandomForestRegressionModel, RandomForestRegressor, GBTRegressor, DecisionTreeRegressor, LinearRegression, GeneralizedLinearRegression, IsotonicRegression}
+import mimir.util.SparkUtils
+import org.apache.spark.sql.types.TimestampType
+import org.apache.spark.sql.types.DateType
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
 
 
 object Regression extends SparkML {
@@ -31,6 +35,8 @@ object Regression extends SparkML {
       case StringPrimitive(s) => s
       case IntPrimitive(i) => i.toDouble
       case FloatPrimitive(f) => f
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
+      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
       case x =>  x.asString 
     }
   }
@@ -40,13 +46,13 @@ object Regression extends SparkML {
       case NullPrimitive() => t match {
         case TInt() => null
         case TFloat() => null
-        case TDate() => ""
+        case TDate() => DateTimeUtils.toJavaDate(0)
         case TString() => ""
         case TBool() => false
         case TRowId() => ""
         case TType() => ""
         case TAny() => ""
-        case TTimestamp() => ""
+        case TTimestamp() => DateTimeUtils.toJavaTimestamp(0L)
         case TInterval() => ""
         case TUser(name) => prepareValueApply(value, mimir.algebra.TypeRegistry.registeredTypes(name)._2)
         case x => ""
@@ -55,6 +61,8 @@ object Regression extends SparkML {
       case StringPrimitive(s) => s
       case IntPrimitive(i) => i.toDouble
       case FloatPrimitive(f) => f
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
+      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
       case x =>  x.asString 
     }
   }
@@ -63,13 +71,13 @@ object Regression extends SparkML {
     t match {
       case TInt() => DoubleType
       case TFloat() => DoubleType
-      case TDate() => StringType
+      case TDate() => DateType
       case TString() => StringType
       case TBool() => BooleanType
       case TRowId() => StringType
       case TType() => StringType
       case TAny() => StringType
-      case TTimestamp() => StringType
+      case TTimestamp() => TimestampType
       case TInterval() => StringType
       case TUser(name) => getSparkType(mimir.algebra.TypeRegistry.registeredTypes(name)._2)
       case _ => StringType

@@ -16,6 +16,7 @@ import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import java.sql.Timestamp
 import java.sql.Date
 import mimir.util.SparkUtils
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
 
 object SparkML {
   type SparkModel = PipelineModel
@@ -120,13 +121,13 @@ abstract class SparkML {
       case NullPrimitive() => t match {
         case TInt() => 0L
         case TFloat() => new java.lang.Float(0.0)
-        case TDate() => ""
+        case TDate() => DateTimeUtils.toJavaDate(0)
         case TString() => ""
         case TBool() => new java.lang.Boolean(false)
         case TRowId() => ""
         case TType() => ""
         case TAny() => ""
-        case TTimestamp() => ""
+        case TTimestamp() => DateTimeUtils.toJavaTimestamp(0L)
         case TInterval() => ""
         case TUser(name) => getNative(value, mimir.algebra.TypeRegistry.registeredTypes(name)._2)
         case x => ""
