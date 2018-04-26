@@ -59,6 +59,8 @@ import mimir.ctables.vgterm.Sampler
 import java.sql.Date
 import java.sql.Timestamp
 import mimir.util.SparkUtils
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import org.apache.spark.sql.catalyst.analysis.UnresolvedStar
 
 object OperatorTranslation
   extends LazyLogging
@@ -87,8 +89,9 @@ object OperatorTranslation
           groupBy.map( gb => Alias( UnresolvedAttribute(gb.name), gb.name)()) ++ aggregates.map( mimirAggFunctionToSparkNamedExpr(source,_)),
           mimirOpToSparkOp(source))
 			}
-			/*case Select(condition, Join(lhs, rhs)) => {
-			  makeSparkJoin(lhs, rhs, Some(mimirExprToSparkExpr(oper,condition)), Inner) 
+			/*case Select(condition, join@Join(lhs, rhs)) => {
+			  org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), Inner, Some(mimirExprToSparkExpr(join,condition)))
+			  //makeSparkJoin(lhs, rhs, Some(mimirExprToSparkExpr(oper,condition)), Inner) 
 			}*/
 			case Select(cond, src) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Filter(
@@ -99,8 +102,8 @@ object OperatorTranslation
 			  makeSparkJoin(lhs, rhs, Some(mimirExprToSparkExpr(oper,condition)), LeftOuter) 
 			}
 			case Join(lhs, rhs) => {
-			  //org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), Cross, None)
-			  makeSparkJoin(lhs, rhs, None, Cross) 
+			  org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), Cross, None)
+			  //makeSparkJoin(lhs, rhs, None, Cross) 
 			}
 			case Union(lhs, rhs) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Union(mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs))
@@ -132,14 +135,43 @@ object OperatorTranslation
         } else {
           plan
         }
-			  meta match {
-			    case Seq() => baseRelation
-			    case _ => {
-			      org.apache.spark.sql.catalyst.plans.logical.Project(sch.map(col => {
-              mimirExprToSparkNamedExpr(oper, col._1, Var(col._1))
-            }) ++ meta.filterNot(el => sch.unzip._1.contains(el._1)).distinct.map(metaEl => mimirExprToSparkNamedExpr(oper, metaEl._1, metaEl._2)) ,baseRelation)
+			  
+			  //here we check if the real table schema matches the table op schema 
+			  // because the table op schema may have been rewritten by deepRenameColumn
+			  // - like when there is a join with conflicts
+			  val realSchema = db.backend.getTableSchema(name).get
+			  val requireProjection = 
+			  sch.zip(realSchema).flatMap {
+			    case (tableSchEl, realSchEl) => {
+			      if(tableSchEl._1.equals(realSchEl._1))
+			        None
+			      else
+			        Some((tableSchEl._1,realSchEl._1))
 			    }
-			  } 
+			  }.toMap
+			  
+			  
+			  //if there were no table op schema rewrites then just return the table
+			  // otherwise add a projection that renames  
+			  if(requireProjection.isEmpty) 
+			    meta match {
+  			    case Seq() => baseRelation
+  			    case _ => {
+  			      org.apache.spark.sql.catalyst.plans.logical.Project(sch.map(col => {
+                mimirExprToSparkNamedExpr(oper, col._1, Var(col._1))
+              }) ++ meta.filterNot(el => sch.unzip._1.contains(el._1)).distinct.map(metaEl => mimirExprToSparkNamedExpr(oper, metaEl._1, metaEl._2)) ,baseRelation)
+  			    }
+  			  }
+			  else
+  			  org.apache.spark.sql.catalyst.plans.logical.Project(
+            oper.columnNames.filterNot(el => meta.unzip3._1.contains(el)).map { col =>
+              requireProjection.get(col) match {  
+                case Some(target) => mimirExprToSparkNamedExpr(oper, col, Var(target)) 
+                case None => mimirExprToSparkNamedExpr(oper, col, Var(col)) 
+                }
+            } ++ meta.filterNot(el => sch.unzip._1.contains(el._1)).filterNot(el => realSchema.unzip._1.contains(el._1)).distinct.map(metaEl => mimirExprToSparkNamedExpr(oper, metaEl._1, metaEl._2)),
+            baseRelation
+          )
 			  //LogicalRelation(baseRelation, table)
 			}
 			case View(name, query, annotations) => {
@@ -390,7 +422,11 @@ object OperatorTranslation
   def mimirAggFunctionToSparkNamedExpr(oper:Operator, aggr:AggFunction) : NamedExpression = {
      Alias(AggregateExpression(aggr match {
          case AggFunction("COUNT", _, args, _) => {
-           Count(args.map(mimirExprToSparkExpr(oper,_)))
+           args match {
+             case Seq() => Count(Seq(Literal(1)))
+             case _ => Count(args.map(mimirExprToSparkExpr(oper,_)))
+           }
+           
          }
          case AggFunction("AVG", _, args, _) => {
            Average(mimirExprToSparkExpr(oper,args.head))
@@ -495,6 +531,8 @@ object OperatorTranslation
     }
   }
   
+  val defaultDate = DateTimeUtils.toJavaDate(0)
+  val defaultTimestamp = DateTimeUtils.toJavaTimestamp(0L)
   def mimirPrimitiveToSparkPrimitive(primitive : PrimitiveValue) : Literal = {
     primitive match {
       case NullPrimitive() => Literal(null)
@@ -644,7 +682,7 @@ object OperatorTranslation
   def getSparkType(t:Type) : DataType = {
     t match {
       case TInt() => LongType
-      case TFloat() => FloatType
+      case TFloat() => DoubleType
       case TDate() => DateType
       case TString() => StringType
       case TBool() => BooleanType
@@ -725,7 +763,7 @@ class MimirUDF {
     case _ => t match {
       //case TInt() => IntPrimitive(value.asInstanceOf[Long])
       case TInt() => IntPrimitive(value.asInstanceOf[Long])
-      case TFloat() => FloatPrimitive(value.asInstanceOf[Float].toDouble)
+      case TFloat() => FloatPrimitive(value.asInstanceOf[Double])
       case TDate() => SparkUtils.convertDate(value.asInstanceOf[Date])
       case TTimestamp() => SparkUtils.convertTimestamp(value.asInstanceOf[Timestamp])
       case TString() => StringPrimitive(value.asInstanceOf[String])
@@ -744,7 +782,7 @@ class MimirUDF {
       case RowIdPrimitive(s) => s
       case StringPrimitive(s) => s
       case IntPrimitive(i) => new java.lang.Long(i)
-      case FloatPrimitive(f) => new java.lang.Float(f)
+      case FloatPrimitive(f) => new java.lang.Double(f)
       case BoolPrimitive(b) => new java.lang.Boolean(b)
       case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
       case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)

@@ -24,14 +24,14 @@ object SparkUtils {
     t match {
       case TAny() =>        throw new SQLException(s"Can't extract TAny: $field")
       case TFloat() =>      (r) => checkNull(r, { try {
-          FloatPrimitive(r.getFloat(field))
+          FloatPrimitive(r.getFloat(field).toDouble)
         } catch {
           case t: Throwable => {
             try {
               FloatPrimitive(r.getDouble(field))
             } catch {
                 case t: Throwable => {
-                  FloatPrimitive(r.getString(field).toFloat) 
+                  FloatPrimitive(r.getString(field).toDouble) 
                 }
             }  
           }

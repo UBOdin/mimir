@@ -16,6 +16,7 @@ import mimir.util.SparkUtils
 import org.apache.spark.sql.types.TimestampType
 import org.apache.spark.sql.types.DateType
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import mimir.algebra.spark.OperatorTranslation
 
 
 object Regression extends SparkML {
@@ -46,13 +47,13 @@ object Regression extends SparkML {
       case NullPrimitive() => t match {
         case TInt() => null
         case TFloat() => null
-        case TDate() => DateTimeUtils.toJavaDate(0)
+        case TDate() => OperatorTranslation.defaultDate
         case TString() => ""
         case TBool() => false
         case TRowId() => ""
         case TType() => ""
         case TAny() => ""
-        case TTimestamp() => DateTimeUtils.toJavaTimestamp(0L)
+        case TTimestamp() => OperatorTranslation.defaultTimestamp
         case TInterval() => ""
         case TUser(name) => prepareValueApply(value, mimir.algebra.TypeRegistry.registeredTypes(name)._2)
         case x => ""

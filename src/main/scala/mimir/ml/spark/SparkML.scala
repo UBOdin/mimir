@@ -120,14 +120,14 @@ abstract class SparkML {
     value match {
       case NullPrimitive() => t match {
         case TInt() => 0L
-        case TFloat() => new java.lang.Float(0.0)
-        case TDate() => DateTimeUtils.toJavaDate(0)
+        case TFloat() => new java.lang.Double(0.0)
+        case TDate() => OperatorTranslation.defaultDate
         case TString() => ""
         case TBool() => new java.lang.Boolean(false)
         case TRowId() => ""
         case TType() => ""
         case TAny() => ""
-        case TTimestamp() => DateTimeUtils.toJavaTimestamp(0L)
+        case TTimestamp() => OperatorTranslation.defaultTimestamp
         case TInterval() => ""
         case TUser(name) => getNative(value, mimir.algebra.TypeRegistry.registeredTypes(name)._2)
         case x => ""
@@ -135,12 +135,11 @@ abstract class SparkML {
       case RowIdPrimitive(s) => s
       case StringPrimitive(s) => s
       case IntPrimitive(i) => i
-      case FloatPrimitive(f) => new java.lang.Float(f)
+      case FloatPrimitive(f) => new java.lang.Double(f)
       case BoolPrimitive(b) => new java.lang.Boolean(b)
       case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
       case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
       case x =>  x.asString
     }
   }
-  
 }

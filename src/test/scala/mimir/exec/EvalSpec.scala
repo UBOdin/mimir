@@ -19,7 +19,7 @@ object EvalSpec
   def beforeAll = {
     LoadCSV.handleLoadTableRaw(db, "PRODUCT_INVENTORY",
 				    Some(Seq(("ID",TString()),("COMPANY",TString()),("QUANTITY",TInt()),("PRICE",TFloat()))), 
-				    inventoryDataFile, Map("DELIMITER" -> ",", "mode" ->"DROPMALFORMED", "header" -> "false"))
+				    inventoryDataFile, Map("ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true","DELIMITER" -> ",", "mode" ->"DROPMALFORMED", "header" -> "false"))
   }
 
   "The query evaluator" should {

@@ -33,6 +33,7 @@ import java.sql.Date
 import org.apache.spark.sql.types.TimestampType
 import org.apache.spark.sql.types.DateType
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import mimir.algebra.spark.OperatorTranslation
 
 
 object Classification extends SparkML {
@@ -51,13 +52,13 @@ object Classification extends SparkML {
       case NullPrimitive() => t match {
         case TInt() => ""
         case TFloat() => ""
-        case TDate() => DateTimeUtils.toJavaDate(0)
+        case TDate() => OperatorTranslation.defaultDate
         case TString() => ""
         case TBool() => false
         case TRowId() => ""
         case TType() => ""
         case TAny() => ""
-        case TTimestamp() => DateTimeUtils.toJavaTimestamp(0L)
+        case TTimestamp() => OperatorTranslation.defaultTimestamp
         case TInterval() => ""
         case TUser(name) => prepareValueApply(value, mimir.algebra.TypeRegistry.registeredTypes(name)._2)
         case x => ""
@@ -78,13 +79,13 @@ object Classification extends SparkML {
       case NullPrimitive() => t match {
         case TInt() => ""
         case TFloat() => ""
-        case TDate() => DateTimeUtils.toJavaDate(0)
+        case TDate() => OperatorTranslation.defaultDate
         case TString() => ""
         case TBool() => false
         case TRowId() => ""
         case TType() => ""
         case TAny() => ""
-        case TTimestamp() => DateTimeUtils.toJavaTimestamp(0L)
+        case TTimestamp() => OperatorTranslation.defaultTimestamp
         case TInterval() => ""
         case TUser(name) => prepareValueApply(value, mimir.algebra.TypeRegistry.registeredTypes(name)._2)
         case x => ""
@@ -154,8 +155,12 @@ object Classification extends SparkML {
   }
   
   def NaiveBayesMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
-    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.fill("").na.fill(Double.NaN)
+    val trainingp = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.fill("").na.fill(new java.lang.Double(0.0))
+    import org.apache.spark.sql.functions.abs
+    
+    val training = trainingp.schema.fields.tail.filter(col => Seq(IntegerType, LongType, DoubleType).contains(col.dataType)).foldLeft(trainingp)((init, cur) => init.withColumn(cur.name,abs(init(cur.name))) )
     val cols = training.schema.fields.tail
+    
     //training.show()
     val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
     val labels = indexer.fit(training).labels

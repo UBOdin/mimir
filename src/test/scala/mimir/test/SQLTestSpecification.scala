@@ -87,8 +87,12 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     //TODO: There is likely a better way to do this:
     // hack for spark to delete all cached tables 
     // and temp views that may have shared names between tests
-    db.backend.close()
-    db.backend.open()
+    try{
+      db.backend.close()
+      db.backend.open()
+    }catch {
+      case t: Throwable => {}
+    }
   }
   
   def dbFile = new File(tempDBName+".db")

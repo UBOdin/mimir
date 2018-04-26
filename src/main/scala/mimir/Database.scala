@@ -496,7 +496,8 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
     sourceFile: File, 
     force:Boolean = true, 
     format:(String, Seq[PrimitiveValue]) = ("CSV", Seq(StringPrimitive(","))),
-    targetSchema: Option[Seq[(String, Type)]] = None
+    targetSchema: Option[Seq[(String, Type)]] = None,
+    defaultSparkOpts:Map[String, String] = Map("ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true", "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false")
   ){
     (format._1 match {
            case null => "CSV"
@@ -518,7 +519,7 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
           }
           if(!tableExists(targetTable.toUpperCase)){
             LoadCSV.handleLoadTableRaw(this, targetRaw, targetSchema, sourceFile, 
-              Map("DELIMITER" -> delim, "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false")
+              Map("DELIMITER" -> delim)++defaultSparkOpts
             )
             var oper = table(targetRaw)
             //detect headers 
@@ -540,7 +541,7 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
               case None => tableSchema(targetTable)
               case _ => targetSchema
             }
-            LoadCSV.handleLoadTableRaw(this, targetTable.toUpperCase, schema, sourceFile,  Map("DELIMITER" -> delim, "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false") )
+            LoadCSV.handleLoadTableRaw(this, targetTable.toUpperCase, schema, sourceFile,  Map("DELIMITER" -> delim)++defaultSparkOpts )
           }
         }
       case fmt =>
