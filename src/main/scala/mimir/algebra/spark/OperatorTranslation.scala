@@ -61,6 +61,7 @@ import java.sql.Timestamp
 import mimir.util.SparkUtils
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.catalyst.analysis.UnresolvedStar
+import mimir.sql.GProMBackend
 
 object OperatorTranslation
   extends LazyLogging
@@ -99,7 +100,11 @@ object OperatorTranslation
 			}
 			case LeftOuterJoin(lhs, rhs, condition) => {
 			  //org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), LeftOuter, Some(mimirExprToSparkExpr(oper,condition)))
-			  makeSparkJoin(lhs, rhs, Some(mimirExprToSparkExpr(oper,condition)), LeftOuter) 
+			  val joinType = condition match {
+			    case BoolPrimitive(true) => Cross
+			    case _ => LeftOuter
+			  }
+			  makeSparkJoin(lhs, rhs, Some(mimirExprToSparkExpr(oper,condition)), joinType) 
 			}
 			case Join(lhs, rhs) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), Cross, None)
@@ -220,13 +225,22 @@ object OperatorTranslation
   }
   
   def queryExecution(plan:LogicalPlan ) = {
-   db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.executePlan(plan) 
+   db.backend match {
+     case sparkBackend:SparkBackend => sparkBackend.sparkSql.sparkSession.sessionState.executePlan(plan) 
+     case gpromBackend:GProMBackend => gpromBackend.sparkBackend.sparkSql.sparkSession.sessionState.executePlan(plan) 
+     case x => throw new Exception("Cant get Query Execution From backend of type: " + x.getClass.getName) 
+   }
   }
   
   def dataset(plan:LogicalPlan) = {
     val qe = queryExecution(plan)
     qe.assertAnalyzed()
-    new Dataset[Row](db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession, plan, RowEncoder(qe.analyzed.schema)) 
+    val sparkSession = db.backend match {
+     case sparkBackend:SparkBackend => sparkBackend.sparkSql.sparkSession 
+     case gpromBackend:GProMBackend => gpromBackend.sparkBackend.sparkSql.sparkSession 
+     case x => throw new Exception("Cant get Dataset From backend of type: " + x.getClass.getName) 
+   }
+    new Dataset[Row](sparkSession, plan, RowEncoder(qe.analyzed.schema)) 
   }
   
   def makeInitSparkJoin(left: LogicalPlan, right: LogicalPlan, usingColumns: Seq[String], joinType: JoinType): LogicalPlan = {

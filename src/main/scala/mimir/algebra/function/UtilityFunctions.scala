@@ -38,6 +38,13 @@ object UtilityFunctions
       (x: Seq[Type]) => TString()
     )
     
+    fr.register(
+      "monotonically_increasing_id",
+      (_) => ???,
+      (_) => TRowId()
+    )
+    
+    
   }
 
 }

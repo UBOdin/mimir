@@ -21,6 +21,8 @@ import org.slf4j.{LoggerFactory}
 import ch.qos.logback.classic.{Level, Logger}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import net.sf.jsqlparser.statement.Statement
+import mimir.serialization.Json
+import mimir.util.LoggerUtils
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -87,6 +89,57 @@ object MimirVizier extends LazyLogging {
           }
         }
     }
+    
+    if(ExperimentalOptions.isEnabled("LOG-TRANSLATOR")){
+      LoggerFactory.getLogger(OperatorTranslation.getClass.getName) match {
+          case logger: Logger => {
+            logger.setLevel(Level.DEBUG)
+            logger.debug(OperatorTranslation.getClass.getName +" logger set to level: DEBUG"); 
+          }
+        }
+    }
+    
+    //val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel("SELECT SUM(COLUMN_0) AS FCOL_2, SUM(COLUMN_2) FROM R_RAW GROUP BY COLUMN_1;")
+    //val gpNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
+    //println(gpNodeStr)
+    //vistrailsQueryMimir("SELECT * FROM LENS_REPAIR_KEY1915024710", true, false)
+    //vistrailsQueryMimir("SELECT * FROM LENS_COMMENT2063309830", true, false)
+    //explainCell("SELECT * FROM LENS_REPAIR_KEY1915024710", 1, "2" )
+    //explainEverything("SELECT * FROM LENS_REPAIR_KEY1915024710")
+    //OperatorTranslation.compileProvenanceWithGProM(db.table("R_RAW").project("COLUMN_0"))
+    /*val oper = db.sql.convert(db.parse("SELECT * FROM LENS_REPAIR_KEY1915024710").head.asInstanceOf[Select])
+    val (provOp, provCols) = OperatorTranslation.compileProvenanceWithGProM(oper)
+    val (provTaintOp, colTaintExprs, rowTaintExpr) = OperatorTranslation.compileTaintWithGProM(provOp)*/
+    //OperatorTranslation.compileProvenanceAndTaintWithGProM(oper)
+    //explainCell("SELECT * FROM LENS_COMMENT2063309830", 3, "5")
+    /*val oper = db.sql.convert(db.parse("SELECT * FROM LENS_REPAIR_KEY1915024710").head.asInstanceOf[Select])
+    OperatorTranslation.compileProvenanceAndTaintWithGProM(oper)*/
+    //loadCSV("test/r_test/r.csv")
+    
+    /*val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel("PROVENANCE OF (SELECT SUM(COLUMN_0) AS FCOL_2, SUM(COLUMN_2) FROM R_RAW GROUP BY COLUMN_1);")
+    val provGpromNode = GProMWrapper.inst.provRewriteOperator(gpromNode.getPointer)
+    //val provNodeStr = GProMWrapper.inst.gpromNodeToString(provGpromNode.getPointer())
+    //println(provNodeStr)
+    var opOut = OperatorTranslation.gpromStructureToMimirOperator(0, provGpromNode, null)
+    println(opOut)*/
+    
+    
+    //mimir lens examples
+    /*vistrailsQueryMimir("SELECT * FROM LENS_MISSING_VALUE1225222496", true, false)  
+    vistrailsQueryMimir("SELECT * FROM LENS_REPAIR_KEY1915024710", true, false) 
+    vistrailsQueryMimir("SELECT * FROM LENS_COMMENT2063309830", true, false) 
+    vistrailsQueryMimir("SELECT * FROM LENS_MISSING_KEY731940496", true, false) 
+    vistrailsQueryMimir("SELECT * FROM LENS_PICKER502036449", true, false) */
+    //vistrailsQueryMimir("SELECT * FROM LENS_GEOCODE97197618", true, false) 
+    
+    /*explainCell("SELECT * FROM LENS_MISSING_VALUE1225222496", 1, "3" )
+    explainCell("SELECT * FROM LENS_REPAIR_KEY1915024710", 1, "2" ) 
+    explainCell("SELECT * FROM LENS_COMMENT2063309830", 3, "2" ) 
+    explainCell("SELECT * FROM LENS_PICKER502036449", 3, "3" ) */
+    //explainCell("SELECT * FROM LENS_GEOCODE97197618", 4, "4" ) 
+    //explainCell("SELECT * FROM LENS_REPAIR_KEY1915024710", 1, "1" ) 
+     
+    
     
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
       runServerForViztrails()
@@ -333,7 +386,7 @@ object MimirVizier extends LazyLogging {
           case latLonFieldsRegex(latField, lonField) => Seq(latField, lonField)  
           case x => throw new Exception("bad fields format: should be latField, lonField")
         }
-        val orderFieldsRegex = "\\s*(?:[a-zA-Z0-9_.]+\\s*,\\s*)+[a-zA-Z0-9_.]+\\s*(?:DESC)?\\s*".r
+        val orderFieldsRegex = "\\s*(?:[a-zA-Z0-9_.]+\\s*,\\s*)?+[a-zA-Z0-9_.]+\\s*(?:DESC)?\\s*".r
         val orderBy = orderByFields.toUpperCase() match {
           case orderFieldsRegex() => "ORDER BY " + orderByFields.toUpperCase()  
           case x => ""
@@ -468,6 +521,8 @@ object MimirVizier extends LazyLogging {
     logger.debug(s"explainSubset Took: ${timeRes._2}")
     timeRes._1
   }
+  
+ 
 
   def explainEverything(query: String) : Seq[mimir.ctables.ReasonSet] = {
     logger.debug("explainEverything: From Vistrails: [" + query + "]"  ) ;
@@ -650,14 +705,14 @@ object MimirVizier extends LazyLogging {
  }
                                                                                               //by default we'll start now and end when the galaxy class Enterprise launches
  def deployWorkflowToViztool(hash:String, input:String, query : String, name:String, dataType:String, users:Seq[String], latlonFields:Seq[String] = Seq("LATITUDE","LONGITUDE"), addrFields: Seq[String] = Seq("STRNUMBER", "STRNAME", "CITY", "STATE"), startTime:String = "2017-08-13 00:00:00", endTime:String = "2363-01-01 00:00:00") : Unit = {
-   val backend = db.backend.asInstanceOf[JDBCBackend]
+   val backend = db.backend.asInstanceOf[InsertReturnKeyBackend]
    val jobID = backend.insertAndReturnKey(
        "INSERT INTO CLEANING_JOBS ( CLEANING_JOB_NAME, TYPE, IMAGE, HASH) VALUES ( ?, ?, ?, ? )", 
        Seq(StringPrimitive(name),StringPrimitive(dataType),StringPrimitive(s"app/images/$dataType.png"),StringPrimitive(hash))  
      )
    val dataID = backend.insertAndReturnKey(
        "INSERT INTO CLEANING_JOB_DATA ( CLEANING_JOB_ID, NAME, [QUERY] ) VALUES ( ?, ?, ? )",
-       Seq(IntPrimitive(jobID),StringPrimitive(name),StringPrimitive(query))  
+       Seq(IntPrimitive(jobID),StringPrimitive(name),StringPrimitive(Json.ofOperator(parseQuery(query)).toString()))  
      )
    val datetimeprim = mimir.util.TextUtils.parseTimestamp(_)
    users.map(userID => {

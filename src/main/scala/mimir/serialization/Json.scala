@@ -241,7 +241,7 @@ object Json
             val fields = fieldJson.asInstanceOf[JsObject].value
 
             SortColumn(
-              toExpression(fields("sort_by")),
+              toExpression(fields("expression")),
               fields("ascending").asInstanceOf[JsBoolean].value
             )
           },

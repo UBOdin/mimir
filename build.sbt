@@ -256,3 +256,39 @@ pomExtra := <url>http://mimirdb.info</url>
 // use `sbt publish` to update the package in 
 // your own local ivy cache
 publishTo := Some(Resolver.file("file",  new File(Path.userHome.absolutePath+"/.m2/repository")))
+
+/////// Docker Image Creation Options ////////
+// use `sbt docker` to generate docker image
+import sbtdocker._
+enablePlugins(DockerPlugin)
+dockerfile in docker := {
+    val userDataVolMountPoint = "/usr/local/source/"
+    val sbtPath = s"${userDataVolMountPoint}sbt/bin/sbt"
+	val initContainer = Seq(
+		s"if [ -e ${userDataVolMountPoint}initComplete ]",
+		"then", 
+		    "echo 'already initialized...'",
+			s"(cd ${userDataVolMountPoint}mimir; git pull; ${sbtPath} run)",
+		"else",
+			s"""curl -sL "https://github.com/sbt/sbt/releases/download/v0.13.15/sbt-0.13.15.tgz" | gunzip | tar -x -C ${userDataVolMountPoint}""",
+			s"chmod 0755 ${sbtPath}",
+			s"git clone https://github.com/UBOdin/mimir.git ${userDataVolMountPoint}mimir",
+			s"(cd ${userDataVolMountPoint}mimir; ${sbtPath} compile; ${sbtPath} compile)",
+			s"touch ${userDataVolMountPoint}initComplete",
+			"echo 'initialization complete...'",
+			s"(cd ${userDataVolMountPoint}mimir; git pull; ${sbtPath} run)",
+		"fi"
+		)
+		
+	val instructions = Seq(
+	  sbtdocker.Instructions.From("frolvlad/alpine-oraclejdk8"),
+	  sbtdocker.Instructions.Volume(Seq(s"type=volume,source=mimir-vol,target=${userDataVolMountPoint}")),
+	  sbtdocker.Instructions.Run.exec(Seq("apk", "add", "--no-cache", "bash")),
+	  sbtdocker.Instructions.Run.exec(Seq("apk", "add", "--no-cache", "curl")),
+	  sbtdocker.Instructions.Run.exec(Seq("apk", "add", "--no-cache", "git")),
+	  sbtdocker.Instructions.Run.exec(Seq("mkdir", s"${userDataVolMountPoint}")),
+	  sbtdocker.Instructions.Run(s"""( ${initContainer.map(el => s"""echo "$el" >> ${userDataVolMountPoint}initContainer.sh; """).mkString("") } chmod 0755 ${userDataVolMountPoint}initContainer.sh)"""),
+	  sbtdocker.Instructions.EntryPoint.exec(Seq("/bin/bash", "-c", s"${userDataVolMountPoint}initContainer.sh"))
+	)
+	Dockerfile(instructions)
+}

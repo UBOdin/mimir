@@ -47,14 +47,18 @@ object GProMDBTestInstances
           }
           tmpDB.metadataBackend.open()
           tmpDB.backend.open();
-          backend.metadataLookupPlugin.db = tmpDB;
+          backend.metadataLookupPlugin.db = tmpDB
           if(shouldResetDB || !oldDBExists || !config.contains("initial_db")){
             tmpDB.initializeDBForMimir();
           }
           if(shouldEnableInlining){
             backend.enableInlining(tmpDB)
           }
+          ExperimentalOptions.enable("GPROM-BACKEND")
+          ExperimentalOptions.enable("GPROM-PROVENANCE")
+          ExperimentalOptions.enable("GPROM-DETERMINISM")
           mimir.algebra.gprom.OperatorTranslation.db = tmpDB
+          mimir.algebra.spark.OperatorTranslation.db = tmpDB
           databases.put(tempDBName, (tmpDB, backend))
           (tmpDB, backend)
         }
@@ -73,6 +77,7 @@ abstract class GProMSQLTestSpecification(val tempDBName:String, config: Map[Stri
   with SQLParsers
   with RAParsers
 {
+  sequential
   args.execute(threadsNb = 1)
   def dbFile = new File(tempDBName+".db")
 
@@ -87,6 +92,8 @@ abstract class GProMSQLTestSpecification(val tempDBName:String, config: Map[Stri
       stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
     )
   }
+  def query[T](oper: Operator)(handler: ResultIterator => T): T =
+    db.query(oper)(handler)
   def query[T](s: String)(handler: ResultIterator => T): T =
     db.query(s)(handler)
   def queryOneColumn[T](s: String)(handler: Iterator[PrimitiveValue] => T): T = 
@@ -113,6 +120,8 @@ abstract class GProMSQLTestSpecification(val tempDBName:String, config: Map[Stri
     db.update(s)
   def update(s: String) = 
     db.update(stmt(s))
-  def loadCSV(table: String, file: File) =
+  def loadCSV(table: String, file: File) : Unit =
     LoadCSV.handleLoadTable(db, table, file)
+  def loadCSV(table: String, schema:Seq[(String,String)], file: File) : Unit =
+    db.loadTable(table, schema, file ) 
 }
