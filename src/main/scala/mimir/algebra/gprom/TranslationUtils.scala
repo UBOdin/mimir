@@ -63,7 +63,8 @@ object TranslationUtils extends LazyLogging {
       while(listCell != null){
         val projInput = GProMWrapper.inst.castGProMNode(new GProMNode(listCell.data.ptr_value))
         if(projInput == null){
-          logger.error("WTF... there is some issue this should not be null")
+          val intVal = listCell.data.int_value
+          logger.debug(s"WTF... there is some issue this should not be null: intVal: $intVal \n\t[${scList.mkString("\n\t")}]")
           //TODO: not sure why, but sometimes one or two project args are null for det cols 
           //     -this is a temp hack until i figure it out 
           val intPtr = new com.sun.jna.Memory(com.sun.jna.Native.getNativeSize(classOf[Int]))

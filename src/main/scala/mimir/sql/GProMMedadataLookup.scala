@@ -67,7 +67,7 @@ with LazyLogging
   override def getFuncReturnType( fName:String, args: Array[String],
 		  numArgs:Int) : String = {
 		org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized{
-      println(s"Metadata lookup: $fName ( ${args.length} args )")
+      logger.debug(s"Metadata lookup: $fName ( ${args.length} args )")
 		  try {
   		  fName match{
   		    case "SUM" => "DT_INT"
@@ -76,7 +76,7 @@ with LazyLogging
   		    case "MIMIR_MAKE_ROWID" => "DT_STRING"
   		    case _ => {
   		      val argTypes = args.map(arg => getMimirTypeFromGProMDataTypeString(arg)) 
-            //println(s"Metadata lookup: function: $fName(${argSeq.mkString(",")})")
+            //logger.debug(s"Metadata lookup: function: $fName(${argSeq.mkString(",")})")
             getGProMDataTypeStringFromMimirType( fName match {
       		    case "sys_op_map_nonnull" => argTypes(0)
       		    case "MIMIR_ENCODED_VGTERM" => db.typechecker.returnTypeOfFunction(VGTermFunctions.bestGuessVGTermFn,argTypes)
@@ -90,8 +90,8 @@ with LazyLogging
   		  }
       } catch {
         case t: Throwable => {
-          println(s"Metadata lookup: Exception: for function: $fName")
-          println(t.toString())
+          logger.debug(s"Metadata lookup: Exception: for function: $fName")
+          logger.debug(t.toString())
           t.printStackTrace()
           "DT_STRING"// TODO: handle error
         }

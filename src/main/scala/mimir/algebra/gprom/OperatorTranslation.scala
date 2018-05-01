@@ -208,9 +208,9 @@ object OperatorTranslation extends LazyLogging {
          Var(childSchemas.flatMap(_.find( _._1.equals(attributeReference.name))) match {
           case Seq() => {
             //TODO: remove this hack for rowid added to projection above a table op (for gprom translation and spark backend)
-            if(attributeReference.name.contains("ROWID"))
+            /*if(attributeReference.name.contains("ROWID"))
               childSchemas.flatMap(el => el.find(sel => sel._1.contains("ROWID")).headOption).head._1
-            else throw new Exception("Missing Attribute Reference: " + attributeReference.name + " : \n" + ctxOpers + s" \n ${childSchemas.map(_.mkString(",")).mkString("\n")}")
+            else*/ throw new Exception("Missing Attribute Reference: " + attributeReference.name + " : \n" + ctxOpers + s" \n ${childSchemas.map(_.mkString(",")).mkString("\n")}")
           }
           case x => x.head._1
         })
@@ -321,8 +321,10 @@ object OperatorTranslation extends LazyLogging {
       case rowNumExpr : GProMRowNumExpr => {
         ctxOpers.map(oper => extractProvFromGProMQueryOperatorNode(oper, translateGProMSchemaToMimirSchema(oper),gpromListToScalaList(oper.op.inputs).map(_.asInstanceOf[GProMQueryOperatorNode]))).flatten match {
           case Seq() => {
+            //TODO: Fix this
             logger.debug(s"Error: no rowid in context: ${ctxOpers.mkString("\n----------------\n")}")
             Var(Provenance.rowidColnameBase)
+            //throw new Exception(s"Error: no rowid in context: ${ctxOpers.map(op => translateGProMSchemaToMimirSchema(op).mkString(",")).mkString("\n")}")
           }
           case x => x.head._2.expr
         }
@@ -475,10 +477,10 @@ object OperatorTranslation extends LazyLogging {
     scalaListToGProMList(Seq(mimirOperatorToGProMOperator(mimirOperator)))
   }
   
-  def mimirOperatorToGProMOperator( mimirOperator :  Operator) : GProMQueryOperatorNode = {
+  def mimirOperatorToGProMOperator( mimirOperator :  Operator, userProv:Option[(String,Expression,Type)] = None) : GProMQueryOperatorNode = {
     synchronized { 
       try{
-    val gpChildren = mimirOperator.children.map(mimirOperatorToGProMOperator)
+    val gpChildren = mimirOperator.children.map(mimirOperatorToGProMOperator(_,userProv))
     val mimirOpSchema = db.typechecker.schemaOf(mimirOperator)
     mimirOperator match {
 			case Project(cols, src) => {
@@ -585,8 +587,11 @@ object OperatorTranslation extends LazyLogging {
 			  gpChildren.map(setGProMQueryOperatorParentsList(_, gpselop))
 			  gpselop
 			}
-			case Table(name, alias, sch, meta) => {
-			  val realSchema = db.backend.getTableSchema(name).get
+			case Table(name, alias, sch, inmeta) => {
+			  val realSchema = db.backend.getTableSchema(name) match {
+			    case Some(rsch) => rsch
+			    case None => throw new Exception(s"Cant get schema for table operator: table: $name alias: $alias")
+			  }
 			  val requireProjection = 
 			  sch.zip(realSchema).flatMap {
 			    case (tableSchEl, realSchEl) => {
@@ -606,40 +611,69 @@ object OperatorTranslation extends LazyLogging {
   			  val gqo = buildGProMOp(GProM_JNA.GProMNodeTag.GProM_T_TableAccessOperator,gpChildren,toQoScm,Seq(),Seq(),null)//new GProMNode.ByReference(gqoProps.getPointer))
     			new GProMTableAccessOperator.ByValue(gqo,name,null)
 			  }
+			  val meta = inmeta ++ (userProv match {
+			    case None => Seq()
+			    case Some(userProvMeta) => Seq(userProvMeta)
+			  })
 			  if(requireProjection.isEmpty) 
 		    {
-		      val gpproj = Project(sch.filterNot(sche => sche._1.equals("ROWID") || sche._1.equals(Provenance.rowidColnameBase)).map(col => {
+			    val projSch = meta match {
+			      case Seq() => sch
+			      case _ => sch.filterNot(el => meta.map(_._1).contains(el._1 ))
+			    }
+			    val (properties, provMeta) = meta.find(_._1.equals(Provenance.rowidColnameBase)) match {
+		        case None => (null, Seq())
+		        case Some(pm) => (new GProMNode.ByReference(createDefaultGProMTablePropertiesMap(alias, Seq(pm._1)).getPointer),
+		            Seq((pm._1, Function("monotonically_increasing_id",Seq()))))
+		      }
+		      val gpproj = Project(projSch.map(col => {
             ProjectArg(col._1, Var(col._1))
-          }) ++ meta.filterNot(sche => sche._1.equals("ROWID") || sche._1.equals(Provenance.rowidColnameBase)).filterNot(el => sch.unzip._1.contains(el._1)).distinct.map(metaEl => ProjectArg(metaEl._1, metaEl._2 )) 
-          :+ ProjectArg(Provenance.rowidColnameBase, Function("monotonically_increasing_id",Seq())),
+          }) ++ meta.filterNot(_._1.equals(Provenance.rowidColnameBase)).map(metaEl => ProjectArg(metaEl._1, metaEl._2 )) 
+          ++ provMeta.map(metaEl => ProjectArg(metaEl._1, metaEl._2 )), 
           Table(name, alias, sch, Seq()))
           
-          val properties = new GProMNode.ByReference(createDefaultGProMTablePropertiesMap(alias, Seq(Provenance.rowidColnameBase)).getPointer)
-          val toQoScm = translateMimirSchemaToGProMSchema("PROJECTION", db.typechecker.schemaOf(gpproj))
-    			val gqo = buildGProMOp(GProM_JNA.GProMNodeTag.GProM_T_ProjectionOperator,Seq(tableOp),toQoScm,Seq(),Seq(),properties)
+          
+          try{
+          val outSchema = db.typechecker.schemaOf(gpproj)
+          val toQoScm = translateMimirSchemaToGProMSchema("PROJECTION", outSchema)
+    			val gqo = buildGProMOp(GProM_JNA.GProMNodeTag.GProM_T_ProjectionOperator,Seq(tableOp),toQoScm,Seq(),/*provMeta.map(pm => outSchema.map(_._1).indexOf(pm._1))*/Seq(),properties)
     			val gProjOp = new GProMProjectionOperator.ByValue(gqo, scalaListToGProMList(gpproj.columns.map(col => translateMimirExpressionToGProMStructure(gpproj.children, col.expression))))
     			gpChildren.map(setGProMQueryOperatorParentsList(_, gProjOp))
     			gProjOp
+          }catch {
+            case t: Throwable => throw new Exception(s"WTF-------------pr------------------->\n$gpproj\n$projSch\nprovMeta", t)
+          }
 			  }
 			  else{
-  			  val gpproj = Project(
-            mimirOperator.columnNames.filterNot(el => meta.unzip3._1.contains(el)).filterNot(col => col.equals("ROWID") || col.equals(Provenance.rowidColnameBase)).map { col =>
+  			  val projSch = meta match {
+			      case Seq() => mimirOperator.columnNames
+			      case _ => mimirOperator.columnNames.filterNot(el => meta.map(_._1).contains(el))
+			    }
+  			  val (properties, provMeta) = meta.find(_._1.equals(Provenance.rowidColnameBase)) match {
+		        case None => (null, Seq())
+		        case Some(pm) => (new GProMNode.ByReference(createDefaultGProMTablePropertiesMap(alias, Seq(pm._1)).getPointer),
+		            Seq((pm._1, Function("monotonically_increasing_id",Seq()))))
+		      }
+		      val gpproj = Project(
+            projSch.map { col =>
               requireProjection.get(col) match {  
                 case Some(target) => ProjectArg( col, Var(target)) 
                 case None => ProjectArg( col, Var(col)) 
                 }
-            } ++ meta.filterNot(sche => sche._1.equals("ROWID") || sche._1.equals(Provenance.rowidColnameBase)).filterNot(el => sch.unzip._1.contains(el._1)).filterNot(el => realSchema.unzip._1.contains(el._1)).distinct.map(metaEl => ProjectArg(metaEl._1, metaEl._2 )) 
-            :+ ProjectArg(Provenance.rowidColnameBase, Function("monotonically_increasing_id",Seq())),
+            } ++ meta.filterNot(_._1.equals(Provenance.rowidColnameBase)).map(metaEl => ProjectArg(metaEl._1, metaEl._2 )) 
+            ++ provMeta.map(metaEl => ProjectArg(metaEl._1, metaEl._2 )),
             Table(name, alias, sch, Seq())
           )
-			   
-          val properties = new GProMNode.ByReference(createDefaultGProMTablePropertiesMap(alias, Seq(Provenance.rowidColnameBase)).getPointer)
-          val toQoScm = translateMimirSchemaToGProMSchema("PROJECTION", db.typechecker.schemaOf(gpproj))
-    			val gqo = buildGProMOp(GProM_JNA.GProMNodeTag.GProM_T_ProjectionOperator,Seq(tableOp),toQoScm,Seq(),Seq(),properties)
+			   try{
+          val outSchema = db.typechecker.schemaOf(gpproj)
+          val toQoScm = translateMimirSchemaToGProMSchema("PROJECTION", outSchema)
+    			val gqo = buildGProMOp(GProM_JNA.GProMNodeTag.GProM_T_ProjectionOperator,Seq(tableOp),toQoScm,Seq(),/*provMeta.map(pm => outSchema.map(_._1).indexOf(pm._1))*/Seq(),properties)
     			val gProjOp = new GProMProjectionOperator.ByValue(gqo, scalaListToGProMList(gpproj.columns.map(col => translateMimirExpressionToGProMStructure(gpproj.children, col.expression))))
     			gpChildren.map(setGProMQueryOperatorParentsList(_, gProjOp))
     			gProjOp
-          
+          }catch {
+            case t: Throwable => throw new Exception(s"WTF-------------npr------------------->\n$gpproj\n$projSch\nprovMeta", t)
+          }
 			  }
           
 			  /*val tableSchema = mimirOpSchema.filterNot(sche => sche._1.equals("ROWID") || sche._1.equals(Provenance.rowidColnameBase)) :+(Provenance.rowidColnameBase, TRowId())//:+(RowIdVar().toString(), TRowId())
@@ -925,7 +959,8 @@ object OperatorTranslation extends LazyLogging {
         val opOp = /*Optimizer.optimize(oper, operatorOptimizations)*/db.compiler.optimize(oper)
         val memctx = GProMWrapper.inst.gpromCreateMemContext()
         //val memctxq = GProMWrapper.inst.createMemContextName("QUERY_CONTEXT")
-        val gpromNode = scalaListToGProMList(Seq(mimirOperatorToGProMOperator(ProvenanceOf(opOp))))
+        val gpromNode = scalaListToGProMList(Seq(mimirOperatorToGProMOperator(ProvenanceOf(opOp),
+            Some((Provenance.rowidColnameBase,Function("monotonically_increasing_id",Seq()),TRowId())))))
         gpromNode.write()
         val gpNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
         logger.debug("---------------gprom pre-prov-------------------")

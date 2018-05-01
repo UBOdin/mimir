@@ -15,14 +15,16 @@ object ViewsSpec
 {
 
   def beforeAll = {
-    loadCSV("R",Seq(("A", "int"), ("B", "int"), ("C", "int")), new File("test/data/views_r.csv"))
+    //loadCSV("R",Seq(("A", "int"), ("B", "int"), ("C", "int")), new File("test/data/views_r.csv"))
+    LoadCSV.handleLoadTableRaw(db, "R", Some(Seq(("A", TInt()), ("B", TInt()), ("C", TInt()))), new File("test/data/views_r.csv"),  Map("DELIMITER" -> ",","ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true", "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false") )
   }
 
   sequential
 
   "The View Manager" should {
     "Not interfere with CSV Imports" >> {
-      loadCSV("S",Seq(("C", "int"), ("D", "int")), new File("test/data/views_s.csv"))
+      //loadCSV("S",Seq(("C", "int"), ("D", "int")), new File("test/data/views_s.csv"))
+      LoadCSV.handleLoadTableRaw(db, "S", Some(Seq(("C", TInt()), ("D", TInt()))), new File("test/data/views_s.csv"),  Map("DELIMITER" -> ",","ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true", "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false") )
       true
     }
 
@@ -75,10 +77,11 @@ object ViewsSpec
         """)(result => result.toList.map(_.tuple)).map { row => 
           ( row(0).asLong, row(1).asLong, row(2).asLong, row(3).asLong ) 
         }
-
+        
+      //TODO: There is a problem with rowids for materialized views
       results must contain(eachOf(
-        (1l, 3l, 7l, db.query("SELECT ROWID FROM R WHERE A = 1 AND B = 3 AND C = 1")(_.toList.head(0).asLong)),
-        (2l, 2l, 7l, db.query("SELECT ROWID FROM R WHERE A = 2 AND B = 2 AND C = 1")(_.toList.head(0).asLong))
+        (1l, 3l, 7l, db.query("SELECT ROWID() FROM R WHERE A = 1 AND B = 3 AND C = 1")(_.toList.head(0).asLong)),
+        (2l, 2l, 7l, db.query("SELECT ROWID() FROM R WHERE A = 2 AND B = 2 AND C = 1")(_.toList.head(0).asLong))
       ))
 
     }

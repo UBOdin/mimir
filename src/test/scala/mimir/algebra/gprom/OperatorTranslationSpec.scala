@@ -12,6 +12,8 @@ import net.sf.jsqlparser.statement.select.Select
 import mimir.exec.Compiler
 import mimir.util.LoggerUtils
 import java.io.File
+import mimir.util.LoadCSV
+import mimir.provenance.Provenance
 
 object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorTranslation") with BeforeAll with AfterAll {
 
@@ -23,9 +25,13 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
   
   def beforeAll =
   {
-    loadCSV("R",Seq(("A", "int"), ("B", "int")), new File("test/data/gprom_r.csv"))
-    loadCSV("T",Seq(("C", "int"), ("D", "int")), new File("test/data/gprom_t.csv"))
-    loadCSV("Q",Seq(("E", "varchar"), ("F", "varchar")), new File("test/data/gprom_q.csv"))
+    
+    LoadCSV.handleLoadTableRaw(db, "R", Some(Seq(("A", TInt()), ("B", TInt()))), new File("test/data/gprom_r.csv"),  Map("DELIMITER" -> ",","ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true", "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false") )
+    LoadCSV.handleLoadTableRaw(db, "T", Some(Seq(("C", TInt()), ("D", TInt()))), new File("test/data/gprom_t.csv"),  Map("DELIMITER" -> ",","ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true", "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false") )
+    LoadCSV.handleLoadTableRaw(db, "Q", Some(Seq(("E", TString()), ("F", TString()))), new File("test/data/gprom_q.csv"),  Map("DELIMITER" -> ",","ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true", "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false") )
+    //loadCSV("R",Seq(("A", "int"), ("B", "int")), new File("test/data/gprom_r.csv"))
+    //loadCSV("T",Seq(("C", "int"), ("D", "int")), new File("test/data/gprom_t.csv"))
+    //loadCSV("Q",Seq(("E", "varchar"), ("F", "varchar")), new File("test/data/gprom_q.csv"))
     
     //println(Seq("R","T","Q").map( table => query(db.table(table)){ res => res.toList.map( _.tuple.mkString(",") ).mkString(res.schema.unzip._1.mkString(table+"\n", ",", "\n"),"\n","\n") } ).mkString("--------------------------------------\n"))
     
@@ -42,21 +48,21 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
             AS SELECT * FROM MVQ
           WITH COMMENT(COMMENT(F,'The values are uncertain'))
         """);
-    
   }
   
   def afterAll = {
-    GProMWrapper.inst.gpromFreeMemContext(qmemctx)
-    GProMWrapper.inst.gpromFreeMemContext(memctx)
-    GProMWrapper.inst.shutdown()
+    //GProMWrapper.inst.gpromFreeMemContext(qmemctx)
+    //GProMWrapper.inst.gpromFreeMemContext(memctx)
+    //GProMWrapper.inst.shutdown()
   }
 
   sequential 
   "The GProM - Mimir Operator Translator" should {
+    sequential 
     "Compile Provenance for Projections" >> {
-      LoggerUtils.debug(
+      /*LoggerUtils.debug(
 				"mimir.algebra.gprom.OperatorTranslation"
-			){
+			){*/
         val table = db.table("CQ")
         val (oper, provCols) = OperatorTranslation.compileProvenanceWithGProM(table) 
         provOp = oper;
@@ -68,8 +74,8 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
   					"4"
   				)
   			}
-        provCols must contain("PROV_Q__RAW_MIMIR__ROWID")
-      }
+        provCols must contain("PROV_Q_MIMIR__ROWID")
+      //}
     }
     
     "Compile Determinism for Projections" >> { 
@@ -90,7 +96,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
           ("E",Var("MIMIR_COL_DET_E")), 
           ("F",Var("MIMIR_COL_DET_F")), 
           ("COMMENT_ARG_0", Var("MIMIR_COL_DET_COMMENT_ARG_0")), 
-          ("PROV_Q__RAW_MIMIR__ROWID", Var("MIMIR_COL_DET_PROV_Q__RAW_MIMIR__ROWID"))  
+          ("PROV_Q_MIMIR__ROWID", Var("MIMIR_COL_DET_PROV_Q_MIMIR__ROWID"))  
         )
       
       rowDet must be equalTo Var("MIMIR_COL_DET_R")
@@ -105,7 +111,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
         val (oper, provCols) = OperatorTranslation.compileProvenanceWithGProM(testOper) 
         provOp = oper;
         
-        provCols must contain("PROV_Q__RAW_MIMIR__ROWID")
+        provCols must contain("PROV_Q_MIMIR__ROWID")
         
         query(testOper){ 
   				_.toSeq.map { _.provenance.asString } must contain(
@@ -135,16 +141,13 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
       
       colDet must contain(
           ("COUNT",Var("MIMIR_COL_DET_COUNT")), 
-          ("PROV_Q__RAW_MIMIR__ROWID",Var("MIMIR_COL_DET_PROV_Q__RAW_MIMIR__ROWID"))
+          ("PROV_Q_MIMIR__ROWID",Var("MIMIR_COL_DET_PROV_Q_MIMIR__ROWID"))
         )
       
       rowDet must be equalTo Var("MIMIR_COL_DET_R")
     }
 
-  }
-  
-
-  "The GProM - Mimir Operator Translator" should {
+  "Translate for Simple Queries" >> {
     sequential
     //isolated
     Fragments.foreach(1 to 1){ i => 
@@ -177,9 +180,9 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
         /*(s"Queries for Aliased Tables with Joins with Aliased Attributes - run $i", //failing
             "SELECT S.A AS P, U.C AS Q FROM R AS S JOIN T AS U ON S.A = U.C"),*/
         (s"Queries for Tables with Aggregates - run $i",
-            "SELECT SUM(R.B), COUNT(R.B) FROM R"),
+            "SELECT SUM(R.B) AS SUM_B, COUNT(R.B) AS COUNT_B FROM R"),
         (s"Queries for Aliased Tables with Aggregates - run $i",
-            "SELECT SUM(RB.B), COUNT(RB.B) FROM R RB"),
+            "SELECT SUM(RB.B) AS SUM_B, COUNT(RB.B) AS COUNT_B FROM R RB"),
         (s"Queries for Aliased Tables with Aggregates with Aliased Attributes - run $i",
             "SELECT SUM(RB.B) AS SB, COUNT(RB.B) AS CB FROM R RB"),
         (s"Queries for Aliased Tables with Aggregates with Aliased Attributes Containing Expressions - run $i",
@@ -198,6 +201,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
         }
       }
     }
+  }
   }
   
   def createGProMMemoryContext(descAndQuery : ((String, String), Int)) = s"Create GProM Memory Context for: ${descAndQuery._2} ${descAndQuery._1._1}" >> {
@@ -218,8 +222,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
   def translateOperatorsFromMimirToGProM(descAndQuery : ((String, String), Int)) =  s"Translate Operators from Mimir to GProM for: ${descAndQuery._2} ${descAndQuery._1._1}" >> {
       org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized {
          val queryStr = descAndQuery._1._2 
-         val statements = db.parse(queryStr)
-         val testOper = db.sql.convert(statements.head.asInstanceOf[Select])
+         val testOper = db.select(queryStr)
          //gp.metadataLookupPlugin.setOper(testOper)
          val gpromNode = OperatorTranslation.mimirOperatorToGProMList(testOper)
          gpromNode.write()
@@ -232,7 +235,8 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
          val actualNodeStr = nodeStr2.replaceAll("0x[a-zA-Z0-9]+", "")
          val ret = translatedNodeStr must be equalTo actualNodeStr or 
            {
-             val resQuery = GProMWrapper.inst.gpromOperatorModelToQuery(gpromNode.getPointer)
+             val optOper = GProMWrapper.inst.optimizeOperatorModel(gpromNode.getPointer)
+             val resQuery = GProMWrapper.inst.gpromOperatorModelToQuery(optOper.getPointer)
              getQueryResultsBackend(resQuery) must be equalTo getQueryResultsBackend(queryStr)
            }
          ret
@@ -242,8 +246,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
   def translateOperatorsFromGProMToMimir(descAndQuery : ((String, String), Int)) =  s"Translate Operators from GProM to Mimir for: ${descAndQuery._2} ${descAndQuery._1._1}" >> {
        org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized {
          val queryStr = descAndQuery._1._2 
-         val statements = db.parse(queryStr)
-         val testOper2 = db.sql.convert(statements.head.asInstanceOf[Select])
+         val testOper2 = db.select(queryStr)
          var operStr2 = testOper2.toString()
          //val memctx = GProMWrapper.inst.gpromCreateMemContext()
          val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel(queryStr+";")
@@ -257,7 +260,9 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
              operStr must be equalTo operStr2
            } or 
              {
-               getQueryResultsBackend(testOper) must be equalTo getQueryResultsBackend(queryStr)
+               val optOper = GProMWrapper.inst.optimizeOperatorModel(gpromNode.getPointer)
+               val resOp = OperatorTranslation.gpromStructureToMimirOperator(0, optOper, null)
+               getQueryResultsBackend(resOp.removeColumn(Provenance.rowidColnameBase)) must be equalTo getQueryResultsBackend(queryStr)
              }
            ret
        }
@@ -266,8 +271,7 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
     def translateOperatorsFromMimirToGProMToMimir(descAndQuery : ((String, String), Int)) =  s"Translate Operators from Mimir to GProM to Mimir for: ${descAndQuery._2} ${descAndQuery._1._1}" >> {
          org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized {
            val queryStr = descAndQuery._1._2
-           val statements = db.parse(queryStr)
-           val testOper = db.sql.convert(statements.head.asInstanceOf[Select])
+           val testOper = db.select(queryStr)
            var operStr = testOper.toString()
            val gpromNode = OperatorTranslation.mimirOperatorToGProMList(testOper)
            gpromNode.write()
@@ -282,7 +286,9 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
                operStr must be equalTo operStr2
              } or 
                {
-                 getQueryResultsBackend(testOper) must be equalTo getQueryResultsBackend(queryStr)
+                 val optOper = GProMWrapper.inst.optimizeOperatorModel(gpromNode.getPointer)
+                 val resOp = OperatorTranslation.gpromStructureToMimirOperator(0, optOper, null)
+                 getQueryResultsBackend(resOp.removeColumn(Provenance.rowidColnameBase)) must be equalTo getQueryResultsBackend(queryStr)
                }
              ret
          }
@@ -305,7 +311,8 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
          val actualNodeStr = nodeStr.replaceAll("0x[a-zA-Z0-9]+", "")
          val ret = translatedNodeStr must be equalTo actualNodeStr or 
            {
-             val resQuery = GProMWrapper.inst.gpromOperatorModelToQuery(gpromNode.getPointer).replaceAll("(AS\\s+[a-zA-Z]+)\\(([a-zA-Z0-9,\\s]+)\\)", "$1_$2")
+             val optOper = GProMWrapper.inst.optimizeOperatorModel(gpromNode.getPointer)
+             val resQuery = GProMWrapper.inst.gpromOperatorModelToQuery(optOper.getPointer).replaceAll("(AS\\s+[a-zA-Z]+)\\(([a-zA-Z0-9,\\s]+)\\)", "$1_$2")
              getQueryResultsBackend(resQuery) must be equalTo getQueryResultsBackend(queryStr)
            } 
          ret
@@ -316,9 +323,8 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
     def translateOperatorsFromMimirToGProMForRewriteFasterThanThroughSQL(descAndQuery : ((String, String), Int)) =  s"Translate Operators not an order of magnitude slower Than Rewriting SQL for: ${descAndQuery._2} ${descAndQuery._1._1}" >> {
        org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized {
          val queryStr = descAndQuery._1._2 
-         val statements = db.parse(queryStr)
-         val testOper = db.sql.convert(statements.head.asInstanceOf[Select])
-         
+         val testOper = db.select(queryStr)
+          
          val timeForRewriteThroughOperatorTranslation = time {
            val gpromNode = OperatorTranslation.mimirOperatorToGProMList(testOper)
            gpromNode.write()
@@ -353,27 +359,20 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
     }
     
     def getQueryResultsBackend(oper : mimir.algebra.Operator) : String =  {
-      getQueryResultsBackend(db.ra.convert(oper).toString())
+      try{
+        db.query(oper)(results => {
+          results.toList.map(row => {
+            row.tuple.mkString(",")
+          }).mkString( results.schema.map(_._1).mkString("",",","\n"), "\n", "")
+        })
+      }catch {
+        case t: Throwable => throw new Exception(s"Error getting query results: query: \n$oper", t)
+      }
     }
     
     def getQueryResultsBackend(query:String) : String =  {
-      val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
-      val ress = db.backend.execute(oper)
-      val resmd = ress.rdd.toLocalIterator
-      var i = 1;
-      var row = ""
-      var resStr = ""
-      while(resmd.hasNext){
-        i = 1;
-        row = ""
-        val sparkRow = resmd.next
-        while(i<=row.length){
-          row += sparkRow.getString(i) + ", ";
-          i+=1;
-        }
-        resStr += row + "\n"
-      }
-      resStr
+      val oper = db.select(query)
+      getQueryResultsBackend(oper)
     }
     
     def getQueryResults(oper: Operator) : String = {

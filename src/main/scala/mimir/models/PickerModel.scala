@@ -184,9 +184,9 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
           case _ => Some(ProjectArg(otherCol, Var(otherCol)))
         }), source.filter(Not(IsNullExpression(Var(col))))))
     })*/
-    val trainingQuery = Limit(0, Some(TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)), Project(pickFromCols.map(col => ProjectArg(col, Var(col))), source.filter(Not(IsNullExpression(Var(pickFromCols.head)))) ))).addColumn((Provenance.rowidColnameBase,RowIdVar()))
-    schema = db.typechecker.schemaOf(trainingQuery)
-    trainingData = db.query(trainingQuery)(res => res.toList.map(_.tuple))
+    val trainingQuery = Limit(0, Some(TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)), Project(pickFromCols.map(col => ProjectArg(col, Var(col))), source.filter(Not(IsNullExpression(Var(pickFromCols.head)))) )))
+    schema = db.typechecker.schemaOf(trainingQuery) :+ (Provenance.rowidColnameBase, TRowId())
+    trainingData = db.query(trainingQuery)(res => res.toList.map(row => row.tuple :+ row.provenance))
     classifierModel = Some(modelGen(ModelParams(trainingQuery, db, pickFromCols.head, "skip")))
     sparkMLInstance = Some(sparkMLInst)
     (sparkMLInst(), classifierModel.get)
@@ -197,7 +197,7 @@ class PickerModel(override val name: String, resultColumn:String, pickFromCols:S
       case None => throw new Exception("Model not trained")//train(useClassifier.get)
       case Some(clsfymodel) => (sparkMLInstance.get(), clsfymodel)
     }
-    val predictions = sparkMLInst.extractPredictions(classifier, sparkMLInst.applyModel(classifier, ("rowid", TString()) +: pickFromCols.zip(colTypes), List(args)))
+    val predictions = sparkMLInst.extractPredictions(classifier, sparkMLInst.applyModel(classifier,pickFromCols.zip(colTypes) :+ (Provenance.rowidColnameBase, TString()), List(args)))
     //predictions.show()
     predictions.unzip._2
   }

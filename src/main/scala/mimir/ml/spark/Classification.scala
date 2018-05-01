@@ -34,6 +34,7 @@ import org.apache.spark.sql.types.TimestampType
 import org.apache.spark.sql.types.DateType
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import mimir.algebra.spark.OperatorTranslation
+import mimir.provenance.Provenance
 
 
 object Classification extends SparkML {
@@ -122,9 +123,9 @@ object Classification extends SparkML {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._ 
     if(predictions.columns.contains("probability")){
-      val rowidsProbabilitiesIdxs = predictions.select("MIMIR_ROWID","probability").rdd.map(r => (r.getString(0), r.getAs[org.apache.spark.ml.linalg.DenseVector](1))).collect().map { item =>
+      val rowidsProbabilitiesIdxs = predictions.select(Provenance.rowidColnameBase,"probability").rdd.map(r => (r.getString(0), r.getAs[org.apache.spark.ml.linalg.DenseVector](1))).collect().map { item =>
           item._2.toArray.zipWithIndex.sortBy(_._1).reverse.slice(0, maxPredictions).map(probIdx => (item._1, probIdx._1, probIdx._2))}.flatten.toSeq
-      model.stages(model.stages.length-1).transform(rowidsProbabilitiesIdxs.toDF("MIMIR_ROWID","probability","prediction")).select("MIMIR_ROWID","probability","predictedLabel").sort($"probability".desc,$"predictedLabel").map { x => (x.getString(0), (x.getString(2),x.getDouble(1))) }.collect()
+      model.stages(model.stages.length-1).transform(rowidsProbabilitiesIdxs.toDF(Provenance.mergeRowIdFunction,"probability","prediction")).select(Provenance.mergeRowIdFunction,"probability","predictedLabel").sort($"probability".desc,$"predictedLabel").map { x => (x.getString(0), (x.getString(2),x.getDouble(1))) }.collect()
     }
     else extractPredictionsNoProb(model, predictions, maxPredictions)
   }
@@ -133,7 +134,7 @@ object Classification extends SparkML {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._  
     if(predictions.columns.contains("probability")){
-      val probabilitiesIdxs = predictions.where($"MIMIR_ROWID" === rowid).select("probability").rdd.map(r => r.getAs[org.apache.spark.ml.linalg.DenseVector](0)).collect().map { item =>
+      val probabilitiesIdxs = predictions.where(predictions(Provenance.rowidColnameBase) === rowid).select("probability").rdd.map(r => r.getAs[org.apache.spark.ml.linalg.DenseVector](0)).collect().map { item =>
           item.toArray.zipWithIndex.sortBy(_._1).reverse.slice(0, maxPredictions).map(probIdx =>  probIdx)}.flatten.toSeq
       model.stages(model.stages.length-1).transform(probabilitiesIdxs.toDF("probability","prediction")).select("probability","predictedLabel").sort($"probability".desc,$"predictedLabel").map { x => (x.getString(1), x.getDouble(0)) }.collect()
     }
@@ -143,14 +144,15 @@ object Classification extends SparkML {
   def extractPredictionsNoProb(model : PipelineModel, predictions:DataFrame, maxPredictions:Int = 5) : Seq[(String, (String, Double))] = {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._  
-    predictions.select("MIMIR_ROWID","prediction").rdd.map(r => (r.getString(0), r.getDouble(1))).collect().map{ item =>
+    predictions.select(Provenance.rowidColnameBase,"prediction").rdd.map(r => (r.getString(0), r.getDouble(1))).collect().map{ item =>
         (item._1, (item._2.toString(), 1.0))}.toSeq
   }
   
   def extractPredictionsForRowNoProb(model : PipelineModel, predictions:DataFrame, rowid:String, maxPredictions:Int = 5) : Seq[(String, Double)] = {
     val sqlContext = getSparkSqlContext()
+    //import org.apache.spark.sql.functions.monotonicallyIncreasingId 
     import sqlContext.implicits._  
-    predictions.where($"MIMIR_ROWID" === rowid).select("prediction").rdd.map(r => r.getDouble(1)).collect().map { item =>
+    predictions.where(predictions(Provenance.rowidColnameBase) === rowid).select("prediction").rdd.map(r => r.getDouble(1)).collect().map { item =>
         (item.toString(), 1.0)}.toSeq    
   }
   

@@ -14,6 +14,8 @@ import mimir.exec.Compiler
 import mimir.util.LoggerUtils
 import mimir.algebra.gprom.OperatorTranslation
 import mimir.algebra.gprom.TranslationUtils
+import java.io.File
+import mimir.util.LoadCSV
 
 object MimirGProMDemo extends GProMSQLTestSpecification("MimirGProMDemo") 
   with BeforeAll 
@@ -24,12 +26,7 @@ object MimirGProMDemo extends GProMSQLTestSpecification("MimirGProMDemo")
   def beforeAll =
   {
     
-    update("CREATE TABLE Q(E varchar, F varchar)")
-    update("INSERT INTO Q (E, F) VALUES(1, 4)")
-    update("INSERT INTO Q (E, F) VALUES(NULL, 1)")
-    update("INSERT INTO Q (E, F) VALUES(3, 2)")
-    update("INSERT INTO Q (E, F) VALUES(4, 1)")
-    
+    LoadCSV.handleLoadTableRaw(db, "Q", Some(Seq(("E", TString()), ("F", TString()))), new File("test/data/gprom_q.csv"),  Map("DELIMITER" -> ",","ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true", "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false") )
     
     update("""
           CREATE LENS MVQ
@@ -103,19 +100,19 @@ object MimirGProMDemo extends GProMSQLTestSpecification("MimirGProMDemo")
   def transMOpPrint(oper:Operator) : String = {
     org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized{
       val memctx = GProMWrapper.inst.gpromCreateMemContext()
-      println("--------------mimir Op--------------------")
+      /*println("--------------mimir Op--------------------")
       println(oper.toString())
       println("------------mimir Op Json-----------------")
       println(mimir.serialization.Json.ofOperator(oper).toString)
-      println("------------------------------------------")
+      println("------------------------------------------")*/
       val gpromNode = TranslationUtils.scalaListToGProMList(Seq(OperatorTranslation.mimirOperatorToGProMOperator(oper)))
       gpromNode.write()
       val gpNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
       .replaceAll("ADDRESS: '[a-z0-9]+'", "ADDRESS: ''")
       .replaceAll("parents: \\[[a-z0-9\\w\\s']+\\]", "parents: []")
-      println("---------------gprom Op-------------------")
+      /*println("---------------gprom Op-------------------")
       println(gpNodeStr)
-      println("------------------------------------------")
+      println("------------------------------------------")*/
       GProMWrapper.inst.gpromFreeMemContext(memctx)
       gpNodeStr
     }
@@ -129,401 +126,28 @@ object MimirGProMDemo extends GProMSQLTestSpecification("MimirGProMDemo")
       val gpNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
       .replaceAll("ADDRESS: '[a-z0-9]+'", "ADDRESS: ''")
       .replaceAll("parents: \\[[a-z0-9\\w\\s']+\\]", "parents: []")
-      println("---------------gprom Op-------------------")
+      /*println("---------------gprom Op-------------------")
       println(gpNodeStr)
-      println("------------------------------------------")
+      println("------------------------------------------")*/
       val opOut = OperatorTranslation.gpromStructureToMimirOperator(0, gpromNode, null)
-      println("--------------mimir Op--------------------")
+      /*println("--------------mimir Op--------------------")
       println(opOut.toString())
       println("------------mimir Op Json-----------------")
       println(mimir.serialization.Json.ofOperator(opOut).toString)
-      println("------------------------------------------")
+      println("------------------------------------------")*/
       GProMWrapper.inst.gpromFreeMemContext(memctx)
       opOut.toString()
     }
   }
   
-  val gpromOpStr = """[
-  
-  {
-    type: 'PROJECTION_OPERATOR',
-    ADDRESS: '',
-    parents: [],
-    schema: 
-    {
-      type: 'SCHEMA',
-      name: "PROJECTION",
-      attrDefs: [
-        
-        {
-          type: 'ATTRIBUTE_DEF',
-          dataType: 'DT_STRING - 2',
-          attrName: "E"
-        }, 
-        {
-          type: 'ATTRIBUTE_DEF',
-          dataType: 'DT_STRING - 2',
-          attrName: "F"
-        }
-      ]
-    },
-    provAttrs: null,
-    properties: null,
-    inputs: [
-      
-      {
-        type: 'PROJECTION_OPERATOR',
-        ADDRESS: '',
-        parents: [],
-        schema: 
-        {
-          type: 'SCHEMA',
-          name: "PROJECTION",
-          attrDefs: [
-            
-            {
-              type: 'ATTRIBUTE_DEF',
-              dataType: 'DT_STRING - 2',
-              attrName: "E"
-            }, 
-            {
-              type: 'ATTRIBUTE_DEF',
-              dataType: 'DT_STRING - 2',
-              attrName: "F"
-            }
-          ]
-        },
-        provAttrs: null,
-        properties: null,
-        inputs: [
-          
-          {
-            type: 'PROJECTION_OPERATOR',
-            ADDRESS: '',
-            parents: [],
-            schema: 
-            {
-              type: 'SCHEMA',
-              name: "PROJECTION",
-              attrDefs: [
-                
-                {
-                  type: 'ATTRIBUTE_DEF',
-                  dataType: 'DT_STRING - 2',
-                  attrName: "Q_E"
-                }, 
-                {
-                  type: 'ATTRIBUTE_DEF',
-                  dataType: 'DT_STRING - 2',
-                  attrName: "Q_F"
-                }
-              ]
-            },
-            provAttrs: null,
-            properties: null,
-            inputs: [
-              
-              {
-                type: 'TABLE_ACCESS_OPERATOR',
-                ADDRESS: '',
-                parents: [],
-                schema: 
-                {
-                  type: 'SCHEMA',
-                  name: "Q",
-                  attrDefs: [
-                    
-                    {
-                      type: 'ATTRIBUTE_DEF',
-                      dataType: 'DT_STRING - 2',
-                      attrName: "E"
-                    }, 
-                    {
-                      type: 'ATTRIBUTE_DEF',
-                      dataType: 'DT_STRING - 2',
-                      attrName: "F"
-                    }, 
-                    {
-                      type: 'ATTRIBUTE_DEF',
-                      dataType: 'DT_STRING - 2',
-                      attrName: "MIMIR_ROWID"
-                    }
-                  ]
-                },
-                provAttrs: null,
-                properties: 
-                {
-                  map: [
-                    
-                    {
-                      key: 
-                      {
-                        type: 'CONSTANT',
-                        constType: 'DT_STRING - 2',
-                        value:  'HAS_PROVENANCE',
-                        isNull: false
-                      },
-                      value: 
-                      {
-                        type: 'CONSTANT',
-                        constType: 'DT_BOOL - 4',
-                        value:  true,
-                        isNull: false
-                      }
-                    }, 
-                    {
-                      key: 
-                      {
-                        type: 'CONSTANT',
-                        constType: 'DT_STRING - 2',
-                        value:  'PROVENANCE_REL_NAME',
-                        isNull: false
-                      },
-                      value: 
-                      {
-                        type: 'CONSTANT',
-                        constType: 'DT_STRING - 2',
-                        value:  'Q',
-                        isNull: false
-                      }
-                    }, 
-                    {
-                      key: 
-                      {
-                        type: 'CONSTANT',
-                        constType: 'DT_STRING - 2',
-                        value:  'USER_PROV_ATTRS',
-                        isNull: false
-                      },
-                      value: [
-                        
-                        {
-                          type: 'CONSTANT',
-                          constType: 'DT_STRING - 2',
-                          value:  'MIMIR_ROWID',
-                          isNull: false
-                        }
-                      ]
-                    }
-                  ]
-                },
-                inputs: null,
-                asOf: null,
-                tableName: "Q"
-              }
-            ],
-            projExprs: [
-              
-              {
-                type: 'ATTRIBUTE_REFERENCE',
-                name: "E",
-                fromClauseItem: 0,
-                attrPosition: 0,
-                outerLevelsUp: 0,
-                attrType: 'DT_STRING - 2'
-              }, 
-              {
-                type: 'ATTRIBUTE_REFERENCE',
-                name: "F",
-                fromClauseItem: 0,
-                attrPosition: 1,
-                outerLevelsUp: 0,
-                attrType: 'DT_STRING - 2'
-              }
-            ]
-          }
-        ],
-        projExprs: [
-          
-          {
-            type: 'ATTRIBUTE_REFERENCE',
-            name: "Q_E",
-            fromClauseItem: 0,
-            attrPosition: 0,
-            outerLevelsUp: 0,
-            attrType: 'DT_STRING - 2'
-          }, 
-          {
-            type: 'ATTRIBUTE_REFERENCE',
-            name: "Q_F",
-            fromClauseItem: 0,
-            attrPosition: 1,
-            outerLevelsUp: 0,
-            attrType: 'DT_STRING - 2'
-          }
-        ]
-      }
-    ],
-    projExprs: [
-      
-      {
-        type: 'CASE_EXPR',
-        expr: null,
-        whenClauses: [
-          
-          {
-            type: 'CASE_WHEN',
-            when: 
-            {
-              type: 'FUNCTIONCALL',
-              functionname: "NOT",
-              args: [
-                
-                {
-                  type: 'IS_NULL_EXPR',
-                  expr: 
-                  {
-                    type: 'ATTRIBUTE_REFERENCE',
-                    name: "E",
-                    fromClauseItem: 0,
-                    attrPosition: 0,
-                    outerLevelsUp: 0,
-                    attrType: 'DT_STRING - 2'
-                  }
-                }
-              ],
-              isAgg: false
-            },
-            then: 
-            {
-              type: 'ATTRIBUTE_REFERENCE',
-              name: "E",
-              fromClauseItem: 0,
-              attrPosition: 0,
-              outerLevelsUp: 0,
-              attrType: 'DT_STRING - 2'
-            }
-          }
-        ],
-        elseRes: 
-        {
-          type: 'CASE_EXPR',
-          expr: null,
-          whenClauses: [
-            
-            {
-              type: 'CASE_WHEN',
-              when: 
-              {
-                type: 'OPERATOR',
-                name: "=",
-                args: [
-                  
-                  {
-                    type: 'FUNCTIONCALL',
-                    functionname: "UNCERT",
-                    args: [
-                      
-                      {
-                        type: 'FUNCTIONCALL',
-                        functionname: "MIMIR_ENCODED_VGTERM",
-                        args: [
-                          
-                          {
-                            type: 'CONSTANT',
-                            constType: 'DT_STRING - 2',
-                            value:  'MVQ:META:E',
-                            isNull: false
-                          }, 
-                          {
-                            type: 'CONSTANT',
-                            constType: 'DT_INT - 0',
-                            value:  0,
-                            isNull: false
-                          }
-                        ],
-                        isAgg: false
-                      }
-                    ],
-                    isAgg: false
-                  }, 
-                  {
-                    type: 'CONSTANT',
-                    constType: 'DT_STRING - 2',
-                    value:  'SPARKML',
-                    isNull: false
-                  }
-                ]
-              },
-              then: 
-              {
-                type: 'FUNCTIONCALL',
-                functionname: "UNCERT",
-                args: [
-                  
-                  {
-                    type: 'FUNCTIONCALL',
-                    functionname: "MIMIR_ENCODED_VGTERM",
-                    args: [
-                      
-                      {
-                        type: 'CONSTANT',
-                        constType: 'DT_STRING - 2',
-                        value:  'MVQ:SPARKML:E',
-                        isNull: false
-                      }, 
-                      {
-                        type: 'CONSTANT',
-                        constType: 'DT_INT - 0',
-                        value:  0,
-                        isNull: false
-                      }, 
-                      {
-                        type: 'ROWNUMEXPR'
-                      }, 
-                      {
-                        type: 'ATTRIBUTE_REFERENCE',
-                        name: "E",
-                        fromClauseItem: 0,
-                        attrPosition: 0,
-                        outerLevelsUp: 0,
-                        attrType: 'DT_STRING - 2'
-                      }, 
-                      {
-                        type: 'ATTRIBUTE_REFERENCE',
-                        name: "F",
-                        fromClauseItem: 0,
-                        attrPosition: 1,
-                        outerLevelsUp: 0,
-                        attrType: 'DT_STRING - 2'
-                      }
-                    ],
-                    isAgg: false
-                  }
-                ],
-                isAgg: false
-              }
-            }
-          ],
-          elseRes: 
-          {
-            type: 'CONSTANT',
-            constType: 'DT_INT - 0',
-            value:  null,
-            isNull: true
-          }
-        }
-      }, 
-      {
-        type: 'ATTRIBUTE_REFERENCE',
-        name: "F",
-        fromClauseItem: 0,
-        attrPosition: 1,
-        outerLevelsUp: 0,
-        attrType: 'DT_STRING - 2'
-      }
-    ]
-  }
-]"""
+  val gpromOpStr = """[{type:'PROJECTION_OPERATOR',ADDRESS:'',parents:[],schema:{type:'SCHEMA',name:"PROJECTION",attrDefs:[{type:'ATTRIBUTE_DEF',dataType:'DT_STRING-2',attrName:"E"},{type:'ATTRIBUTE_DEF',dataType:'DT_STRING-2',attrName:"F"}]},provAttrs:null,properties:null,inputs:[{type:'PROJECTION_OPERATOR',ADDRESS:'',parents:[],schema:{type:'SCHEMA',name:"PROJECTION",attrDefs:[{type:'ATTRIBUTE_DEF',dataType:'DT_STRING-2',attrName:"E"},{type:'ATTRIBUTE_DEF',dataType:'DT_STRING-2',attrName:"F"}]},provAttrs:null,properties:null,inputs:[{type:'PROJECTION_OPERATOR',ADDRESS:'',parents:[],schema:{type:'SCHEMA',name:"PROJECTION",attrDefs:[{type:'ATTRIBUTE_DEF',dataType:'DT_STRING-2',attrName:"Q_E"},{type:'ATTRIBUTE_DEF',dataType:'DT_STRING-2',attrName:"Q_F"}]},provAttrs:null,properties:null,inputs:[{type:'PROJECTION_OPERATOR',ADDRESS:'',parents:[],schema:{type:'SCHEMA',name:"PROJECTION",attrDefs:[{type:'ATTRIBUTE_DEF',dataType:'DT_STRING-2',attrName:"E"},{type:'ATTRIBUTE_DEF',dataType:'DT_STRING-2',attrName:"F"}]},provAttrs:null,properties:null,inputs:[{type:'TABLE_ACCESS_OPERATOR',ADDRESS:'',parents:[],schema:{type:'SCHEMA',name:"Q",attrDefs:[{type:'ATTRIBUTE_DEF',dataType:'DT_STRING-2',attrName:"E"},{type:'ATTRIBUTE_DEF',dataType:'DT_STRING-2',attrName:"F"}]},provAttrs:null,properties:null,inputs:null,asOf:null,tableName:"Q"}],projExprs:[{type:'ATTRIBUTE_REFERENCE',name:"E",fromClauseItem:0,attrPosition:0,outerLevelsUp:0,attrType:'DT_STRING-2'},{type:'ATTRIBUTE_REFERENCE',name:"F",fromClauseItem:0,attrPosition:1,outerLevelsUp:0,attrType:'DT_STRING-2'}]}],projExprs:[{type:'ATTRIBUTE_REFERENCE',name:"E",fromClauseItem:0,attrPosition:0,outerLevelsUp:0,attrType:'DT_STRING-2'},{type:'ATTRIBUTE_REFERENCE',name:"F",fromClauseItem:0,attrPosition:1,outerLevelsUp:0,attrType:'DT_STRING-2'}]}],projExprs:[{type:'ATTRIBUTE_REFERENCE',name:"Q_E",fromClauseItem:0,attrPosition:0,outerLevelsUp:0,attrType:'DT_STRING-2'},{type:'ATTRIBUTE_REFERENCE',name:"Q_F",fromClauseItem:0,attrPosition:1,outerLevelsUp:0,attrType:'DT_STRING-2'}]}],projExprs:[{type:'CASE_EXPR',expr:null,whenClauses:[{type:'CASE_WHEN',when:{type:'FUNCTIONCALL',functionname:"NOT",args:[{type:'IS_NULL_EXPR',expr:{type:'ATTRIBUTE_REFERENCE',name:"E",fromClauseItem:0,attrPosition:0,outerLevelsUp:0,attrType:'DT_STRING-2'}}],isAgg:false},then:{type:'ATTRIBUTE_REFERENCE',name:"E",fromClauseItem:0,attrPosition:0,outerLevelsUp:0,attrType:'DT_STRING-2'}}],elseRes:{type:'CASE_EXPR',expr:null,whenClauses:[{type:'CASE_WHEN',when:{type:'OPERATOR',name:"=",args:[{type:'FUNCTIONCALL',functionname:"UNCERT",args:[{type:'FUNCTIONCALL',functionname:"MIMIR_ENCODED_VGTERM",args:[{type:'CONSTANT',constType:'DT_STRING-2',value:'MVQ:META:E',isNull:false},{type:'CONSTANT',constType:'DT_INT-0',value:0,isNull:false}],isAgg:false}],isAgg:false},{type:'CONSTANT',constType:'DT_STRING-2',value:'SPARKML',isNull:false}]},then:{type:'FUNCTIONCALL',functionname:"UNCERT",args:[{type:'FUNCTIONCALL',functionname:"MIMIR_ENCODED_VGTERM",args:[{type:'CONSTANT',constType:'DT_STRING-2',value:'MVQ:SPARKML:E',isNull:false},{type:'CONSTANT',constType:'DT_INT-0',value:0,isNull:false},{type:'ROWNUMEXPR'},{type:'ATTRIBUTE_REFERENCE',name:"E",fromClauseItem:0,attrPosition:0,outerLevelsUp:0,attrType:'DT_STRING-2'},{type:'ATTRIBUTE_REFERENCE',name:"F",fromClauseItem:0,attrPosition:1,outerLevelsUp:0,attrType:'DT_STRING-2'}],isAgg:false}],isAgg:false}}],elseRes:{type:'CONSTANT',constType:'DT_INT-0',value:null,isNull:true}}},{type:'ATTRIBUTE_REFERENCE',name:"F",fromClauseItem:0,attrPosition:1,outerLevelsUp:0,attrType:'DT_STRING-2'}]}]"""
   
   
 val mimirOpStr = """PROJECT[E <= IF NOT(E IS NULL) THEN E ELSE IF  ({{ MVQ:META:E;0[][] }}='SPARKML')  THEN {{ MVQ:SPARKML:E;0[MIMIR_ROWID][E, F] }} ELSE NULL END END, F <= F](
   PROJECT[E <= Q_E, F <= Q_F](
     PROJECT[Q_E <= E, Q_F <= F](
       PROJECT[E <= E, F <= F](
-        ANNOTATE(
-          Q(E:varchar, F:varchar // MIMIR_ROWID:rowid <- ROWID)
-        ) // MIMIR_ROWID->MIMIR_ROWID:varchar
+        Q(E:varchar, F:varchar // MIMIR_ROWID:rowid <- ROWID)
       )
     )
   )

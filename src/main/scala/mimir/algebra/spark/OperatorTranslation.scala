@@ -155,7 +155,13 @@ object OperatorTranslation
 			    }
 			  }.toMap
 			  
-			  
+			  //TODO: just ignore the prov meta here instead of all of it
+			  /*val meta = db.views.get(name) match {
+			    case Some(vmeta) if vmeta.isMaterialized => {
+			     Seq(("MIMIR_ROWID",Var("MIMIR_ROWID_0"),TRowId()))
+			    }
+			    case _ => metain  
+			  }*/
 			  //if there were no table op schema rewrites then just return the table
 			  // otherwise add a projection that renames  
 			  if(requireProjection.isEmpty) 
@@ -186,7 +192,7 @@ object OperatorTranslation
           CatalogTableType.VIEW,
           CatalogStorageFormat.empty,
           mimirSchemaToStructType(schema) )
-			  org.apache.spark.sql.catalyst.plans.logical.View( table,
+        org.apache.spark.sql.catalyst.plans.logical.View( table,
           schema.map(col => {
             AttributeReference(col._1, getSparkType(col._2), true, Metadata.empty)( )
           }),
@@ -811,15 +817,19 @@ case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression
   val sparkArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg)) ++ model.hintTypes(idx).map(hint => OperatorTranslation.getSparkType(hint))).toList.toSeq
   
   def extractArgsAndHints(args:Seq[Any]) : (Seq[PrimitiveValue],Seq[PrimitiveValue]) ={
-    val argList =
-    model.argTypes(idx).
-      zipWithIndex.
-      map( arg => getPrimitive(arg._1, args(arg._2)))
-    val hintList = 
-      model.hintTypes(idx).
+    try{
+      val argList =
+      model.argTypes(idx).
         zipWithIndex.
-        map( arg => getPrimitive(arg._1, args(argList.length+arg._2)))
-    (argList,hintList)  
+        map( arg => getPrimitive(arg._1, args(arg._2)))
+      val hintList = 
+        model.hintTypes(idx).
+          zipWithIndex.
+          map( arg => getPrimitive(arg._1, args(argList.length+arg._2)))
+      (argList,hintList)  
+    }catch {
+      case t: Throwable => throw new Exception(s"BestGuessUDF Error Extracting Args and Hints: \n\tModel: ${model.name} \n\tArgs: [${args.mkString(",")}] \n\tSparkArgs: [${sparkArgs.mkString(",")}]", t)
+    }
   }
   def getUDF = 
     ScalaUDF(
@@ -864,16 +874,20 @@ case class SampleUDF(oper:Operator, model:Model, idx:Int, seed:Expression, args:
   val sparkArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg)) ++ model.hintTypes(idx).map(hint => OperatorTranslation.getSparkType(hint))).toList.toSeq
   
   def extractArgsAndHintsSeed(args:Seq[Any]) : (Long, Seq[PrimitiveValue],Seq[PrimitiveValue]) ={
-    val seedp = seed.toString().toLong
-    val argList =
-    model.argTypes(idx).
-      zipWithIndex.
-      map( arg => getPrimitive(arg._1, args(arg._2)))
-    val hintList = 
-      model.hintTypes(idx).
+    try{
+      val seedp = seed.toString().toLong
+      val argList =
+      model.argTypes(idx).
         zipWithIndex.
-        map( arg => getPrimitive(arg._1, args(argList.length+arg._2)))
-   (seedp, argList,hintList)  
+        map( arg => getPrimitive(arg._1, args(arg._2)))
+      val hintList = 
+        model.hintTypes(idx).
+          zipWithIndex.
+          map( arg => getPrimitive(arg._1, args(argList.length+arg._2)))
+     (seedp, argList,hintList)
+   }catch {
+      case t: Throwable => throw new Exception(s"SampleUDF Error Extracting Args and Hints: \n\tModel: ${model.name} \n\tArgs: [${args.mkString(",")}] \n\tSparkArgs: [${sparkArgs.mkString(",")}]", t)
+    }
   }
   def getUDF = 
     ScalaUDF(
@@ -913,9 +927,13 @@ case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression]) e
   val sparkArgs = (args.map(arg => OperatorTranslation.mimirExprToSparkExpr(oper,arg))).toList.toSeq
   val sparkArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg))).toList.toSeq
   def extractArgs(args:Seq[Any]) : Seq[PrimitiveValue] = {
-    model.argTypes(idx).
-      zipWithIndex.
-      map( arg => getPrimitive(arg._1, args(arg._2)))
+    try{
+      model.argTypes(idx).
+        zipWithIndex.
+        map( arg => getPrimitive(arg._1, args(arg._2)))
+    }catch {
+      case t: Throwable => throw new Exception(s"AckedUDF Error Extracting Args: \n\tModel: ${model.name} \n\tArgs: [${args.mkString(",")}] \n\tSparkArgs: [${sparkArgs.mkString(",")}]", t)
+    }
   }
   def getUDF = 
     ScalaUDF(
@@ -959,9 +977,13 @@ case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, 
   val sparkArgTypes = argTypes.map(argT => OperatorTranslation.getSparkType(argT)).toList.toSeq
   val dataType = function match { case NativeFunction(_, _, tc, _) => OperatorTranslation.getSparkType(tc(argTypes)) }
   def extractArgs(args:Seq[Any]) : Seq[PrimitiveValue] = {
-    argTypes.
-      zipWithIndex.
-      map( arg => getPrimitive(arg._1, args(arg._2)))
+    try{
+      argTypes.
+        zipWithIndex.
+        map( arg => getPrimitive(arg._1, args(arg._2)))
+    }catch {
+      case t: Throwable => throw new Exception(s"FunctionUDF Error Extracting Args: \n\tModel: ${name} \n\tArgs: [${args.mkString(",")}] \n\tSparkArgs: [${sparkArgs.mkString(",")}]", t)
+    }
   }
   def getUDF = 
     ScalaUDF(

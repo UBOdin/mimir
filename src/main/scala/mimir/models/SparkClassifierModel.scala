@@ -43,19 +43,18 @@ object SparkClassifierModel
   def train(db: Database, name: String, cols: Seq[String], query:Operator): Map[String,(Model,Int,Seq[Expression])] = 
   {
     cols.map( (col) => {
-      val newQuery = query.addColumn((Provenance.rowidColnameBase,RowIdVar()))
       val modelName = s"$name:$col"
       val model = 
         db.models.getOption(modelName) match {
           case Some(model) => model
           case None => {
-            val modelHT = db.query(newQuery)(results => {
-              val schema = results.schema
+            val modelHT = db.query(query)(results => {
+              val schema = results.schema :+ (Provenance.rowidColnameBase,TRowId())
               val reslist = results.toList
-              (schema, reslist.map( row => row.tuple).toSeq)
+              (schema, reslist.map( row => row.tuple :+ row.provenance).toSeq )
             })
             val model = new SimpleSparkClassifierModel(modelName, col, modelHT._1, modelHT._2)
-            trainModel(db, newQuery, model)
+            trainModel(db, query, model)
             //db.models.persist(model)
             model
           }
@@ -64,7 +63,7 @@ object SparkClassifierModel
       col -> (
         model,                         // The model for the column
         0,                             // The model index of the column's replacement variable
-        newQuery.columnNames.map(Var(_))  // 'Hints' for the model -- All of the remaining column values
+        query.columnNames.map(Var(_))  // 'Hints' for the model -- All of the remaining column values
       )
     }).toMap
   }
@@ -195,7 +194,7 @@ class SimpleSparkClassifierModel(name: String, val colName:String, val schema:Se
     schema(colIdx)._2
 
   def argTypes(idx: Int): Seq[Type] = List(TRowId())
-  def hintTypes(idx: Int) = schema.map(_._2)
+  def hintTypes(idx: Int) = schema.reverse.tail.reverse.map(_._2)
 
   def varType(idx: Int, args: Seq[Type]): Type = guessInputType
   

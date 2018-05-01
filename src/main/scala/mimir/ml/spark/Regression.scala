@@ -17,6 +17,7 @@ import org.apache.spark.sql.types.TimestampType
 import org.apache.spark.sql.types.DateType
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import mimir.algebra.spark.OperatorTranslation
+import mimir.provenance.Provenance
 
 
 object Regression extends SparkML {
@@ -88,14 +89,14 @@ object Regression extends SparkML {
   override def extractPredictions(model : PipelineModel, predictions:DataFrame, maxPredictions:Int = 5) : Seq[(String, (String, Double))] = {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._  
-    predictions.select("rowid","prediction").rdd.map(r => (r.getString(0), r.getDouble(1))).collect().map{ item =>
+    predictions.select(Provenance.rowidColnameBase,"prediction").rdd.map(r => (r.getString(0), r.getDouble(1))).collect().map{ item =>
         (item._1, (item._2.toString(), 1.0))}.toSeq
   }
   
   override def extractPredictionsForRow(model : PipelineModel, predictions:DataFrame, rowid:String, maxPredictions:Int = 5) : Seq[(String, Double)] = {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._  
-    predictions.where($"rowid" === rowid).select("prediction").rdd.map(r => r.getDouble(1)).collect().map { item =>
+    predictions.where(predictions(Provenance.rowidColnameBase) === rowid).select("prediction").rdd.map(r => r.getDouble(1)).collect().map { item =>
         (item.toString(), 1.0)}.toSeq    
   }
   
