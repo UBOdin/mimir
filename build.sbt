@@ -257,7 +257,7 @@ pomExtra := <url>http://mimirdb.info</url>
 // your own local ivy cache
 publishTo := Some(Resolver.file("file",  new File(Path.userHome.absolutePath+"/.m2/repository")))
 
-/////// Docker Image Creation Options ////////
+/*/////// Docker Image Creation Options ////////
 // use `sbt docker` to generate docker image
 import sbtdocker._
 enablePlugins(DockerPlugin)
@@ -291,4 +291,4 @@ dockerfile in docker := {
 	  sbtdocker.Instructions.EntryPoint.exec(Seq("/bin/bash", "-c", s"${userDataVolMountPoint}initContainer.sh"))
 	)
 	Dockerfile(instructions)
-}
+}*/
