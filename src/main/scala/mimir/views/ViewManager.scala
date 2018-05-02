@@ -174,6 +174,7 @@ class ViewManager(db:Database) extends LazyLogging {
 
     //db.metadataBackend.selectInto(name, inlinedSQL.toString)
     db.backend.createTable(name, completeQuery)
+    db.backend.materializeView(name)
 
     db.metadataBackend.update(s"""
       UPDATE $viewTable SET METADATA = 1 WHERE NAME = ?

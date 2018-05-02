@@ -54,8 +54,8 @@ class ViewMetadata(
     )
   }
   
-  def sqlTable: Operator =  {
-    Project(materializedSchema.map {col => ProjectArg(col._1, Var(col._1))} ++ provenanceCols.map { col => ProjectArg(col, Var(col)) },  
+  def materializedOperator: Operator =  {
+    Project(materializedSchema.map {col => ProjectArg(col._1, Var(col._1))},  
         Table(name, name, materializedSchema, Seq()))
   }
 

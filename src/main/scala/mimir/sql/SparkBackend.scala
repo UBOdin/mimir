@@ -70,6 +70,11 @@ class SparkBackend extends RABackend{
     }
   }
 
+  def materializeView(name:String): Unit = {
+    if(sparkSql == null) throw new Exception("There is no spark context")
+    sparkSql.table(name).persist().count()
+  }
+  
   def createTable(tableName:String, oper:Operator) = {
     val df = execute(oper)
     df.persist().createOrReplaceTempView(tableName)

@@ -7,6 +7,7 @@ import mimir.Database
 abstract class RABackend {
   def open(): Unit
 
+  def materializeView(name:String): Unit
   def createTable(tableName:String, oper:Operator): Unit
   def execute(compiledOp: Operator): DataFrame
   

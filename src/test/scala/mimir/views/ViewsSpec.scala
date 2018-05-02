@@ -68,13 +68,14 @@ object ViewsSpec
         )
 
       update("ALTER VIEW MATTEST MATERIALIZE")
+      val matOp = db.views.get("MATTEST").get.materializedOperator
       val results = 
-        db.query(s"""
+        db.query(/*s"""
           SELECT A, B, 
             ${ViewAnnotation.taintBitVectorColumn}, 
             MIMIR_ROWID_0
            FROM MATTEST
-        """)(result => result.toList.map(_.tuple)).map { row => 
+        """*/matOp)(result => result.toList.map(_.tuple)).map { row => 
           ( row(0).asLong, row(1).asLong, row(2).asLong, row(3).asLong ) 
         }
         

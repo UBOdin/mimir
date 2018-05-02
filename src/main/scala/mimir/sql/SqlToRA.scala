@@ -502,13 +502,13 @@ class SqlToRA(db: Database)
 
       if(fi.asInstanceOf[net.sf.jsqlparser.schema.Table].getSchemaName == null){
         val tableOp = if(db.metadataTables.contains(name) || name.startsWith("MIMIR_DA_FDG_") || name.startsWith("MIMIR_DA_SCH_")) 
-          db.metadataTable(name, alias) else db.views.get(name) match {
+          db.metadataTable(name, alias) else db.table(name, alias)/*db.views.get(name) match {
               case None => db.table(name, alias)
               case Some(vmeta) => if(vmeta.isMaterialized) 
-                  vmeta.sqlTable//Table(name, name, vmeta.materializedSchema, Seq())
+                  vmeta.materializedOperator//Table(name, name, vmeta.materializedSchema, Seq())
                 else
                   vmeta.operator
-            }
+            }*/
         val newBindings = tableOp.columnNames.map { x => (x, alias+"_"+x) }
         return (
           Project(
