@@ -555,7 +555,7 @@ object SqlParserSpec
 				 					 	 	 	VGTerm("SANER:META:B", 0, Seq(), Seq()),
 			 					 	 	 		StringPrimitive("SPARKML")
 			 					 	 	 	),
-			 					 	 	 	VGTerm("SANER:SPARKML:B", 0, Seq(RowIdVar()), Seq(Var("A"), Var("B"), Var("C"), Var("MIMIR_ROWID"))),
+			 					 	 	 	VGTerm("SANER:SPARKML:B", 0, Seq(RowIdVar()), Seq(Var("A"), Var("B"), Var("C"))),
 			 					 	 	  NullPrimitive()
 			 					 	 	 ),
 			 					 	 	 Var("B")

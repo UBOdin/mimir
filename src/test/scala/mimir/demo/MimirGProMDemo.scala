@@ -38,7 +38,7 @@ object MimirGProMDemo extends GProMSQLTestSpecification("MimirGProMDemo")
   }
   
   def afterAll = {
-    GProMWrapper.inst.shutdown()
+    //GProMWrapper.inst.shutdown()
   }
 
   sequential 
