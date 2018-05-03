@@ -33,6 +33,27 @@ abstract class Reason
       "args"    -> args,
       "repair"  -> repair.toJSON
     ))
+    
+  def toJSONWithFeedback : String = {
+    val argString = 
+        if(!this.args.isEmpty){
+          " (" + this.args.mkString(",") + ")"
+        } else { "" }
+    val feedback =  if(!this.confirmed){
+        Map(("repair_with", s"`FEEDBACK ${this.model.name} ${this.idx}$argString IS ${ this.repair.exampleString }`"),
+        ("confirm_with", s"`FEEDBACK ${this.model.name} ${this.idx}$argString IS ${ this.guess }`"))
+      } else {
+        Map(("ammend_with", s"`FEEDBACK ${this.model.name} ${this.idx}$argString IS ${ this.repair.exampleString }`"))
+      } 
+    JSONBuilder.dict(Map(
+      "english" -> reason,
+      "source"  -> model.name,
+      "varid"   -> idx,
+      "args"    -> args,
+      "repair"  -> repair.toJSON,
+      "feedback"-> feedback
+    ))
+  }
 }
 
 class ModelReason(

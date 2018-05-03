@@ -685,7 +685,7 @@ object MimirVizier extends LazyLogging {
       val (resultsStrsColTaint, provRowTaint) = resultList.map(row => ((row.tuple.map(cell => cell), colsIndexes.map(idx => row.isColDeterministic(idx).toString())), (row.provenance.asString, row.isDeterministic().toString()))).unzip
       val (resultsStrs, colTaint) = resultsStrsColTaint.unzip
       val (prov, rowTaint) = provRowTaint.unzip
-      val reasons = explainEverything(oper).map(reasonSet => reasonSet.all(db).toSeq.map(_.toJSON))
+      val reasons = explainEverything(oper).map(reasonSet => reasonSet.all(db).toSeq.map(_.toJSONWithFeedback))
       JSONBuilder.dict(Map(
         "schema" -> results.schema.map( schel =>  Map( "name" -> schel._1, "type" ->schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())),
         "data" -> resultsStrs,
