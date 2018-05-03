@@ -60,6 +60,7 @@ class SparkBackend extends RABackend{
           sparkCtx.addJar("https://odin.cse.buffalo.edu/assets/scala-logging-slf4j_2.11-2.1.2.jar")
           sparkCtx.addJar("https://odin.cse.buffalo.edu/assets/scala-logging-api_2.11-2.1.2.jar")
           sparkCtx.addJar("https://odin.cse.buffalo.edu/assets/play-json_2.11-2.5.0-M2.jar")
+          sparkCtx.addJar("https://odin.cse.buffalo.edu/assets/gt-referencing-16.2.jar")
           //sparkCtx.addJar("http://central.maven.org/maven2/mysql/mysql-connector-java/5.1.6/mysql-connector-java-5.1.6.jar")
           sparkCtx.hadoopConfiguration.set("fs.defaultFS", s"hdfs://$sparkHost:$hdfsPort")
         }
