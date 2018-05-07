@@ -457,6 +457,8 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
     views.init()
     lenses.init()
     adaptiveSchemas.init()
+    mimir.algebra.gprom.OperatorTranslation(this) 
+    mimir.algebra.spark.OperatorTranslation(this)
   }
 
   /**

@@ -66,7 +66,10 @@ import mimir.sql.GProMBackend
 object OperatorTranslation
   extends LazyLogging
 {
-  var db:Database = null
+  var db: mimir.Database = null
+  def apply(db: mimir.Database) = {
+    this.db = db
+  }
   
   def mimirOpToSparkOp(oper:Operator) : LogicalPlan = {
     oper match {

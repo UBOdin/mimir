@@ -69,6 +69,7 @@ class SparkBackend extends RABackend{
       }
       case sparkSqlCtx => sparkSqlCtx
     }
+    mimir.ml.spark.SparkML(sparkSql)
   }
 
   def materializeView(name:String): Unit = {

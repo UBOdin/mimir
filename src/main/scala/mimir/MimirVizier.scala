@@ -23,6 +23,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import net.sf.jsqlparser.statement.Statement
 import mimir.serialization.Json
 import mimir.util.LoggerUtils
+import mimir.ml.spark.SparkML
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -52,7 +53,8 @@ object MimirVizier extends LazyLogging {
     ExperimentalOptions.enable(conf.experimental())
     if(!ExperimentalOptions.isEnabled("GPROM-BACKEND")){
       // Set up the database connection(s)
-      db = new Database(new SparkBackend(), new JDBCMetadataBackend(conf.backend(), conf.dbname()))
+      val sback = new SparkBackend()
+      db = new Database(sback, new JDBCMetadataBackend(conf.backend(), conf.dbname()))
       db.metadataBackend.open()
       db.backend.open()
     }
@@ -64,13 +66,11 @@ object MimirVizier extends LazyLogging {
       db.backend.open()
       gp.metadataLookupPlugin.db = db;
     }
-    //db.initializeDBForMimir();
+    db.initializeDBForMimir();
     
     if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
         db.metadataBackend.asInstanceOf[InlinableBackend].enableInlining(db)
     }
-    
-    OperatorTranslation.db = db       
     
    if(ExperimentalOptions.isEnabled("QUIET-LOG")){
       LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) match {

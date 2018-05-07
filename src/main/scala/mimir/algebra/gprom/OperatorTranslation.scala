@@ -31,7 +31,11 @@ object ProjectionArgVisibility extends Enumeration {
 } 
 
 object OperatorTranslation extends LazyLogging {
+  
   var db: mimir.Database = null
+  def apply(db: mimir.Database) = {
+    this.db = db
+  }
   
   def gpromStructureToMimirOperator(depth : Int, gpromStruct: GProMStructure, gpromParentStruct: GProMStructure ) : Operator = {
     (gpromStruct match {

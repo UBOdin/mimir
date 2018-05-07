@@ -65,7 +65,6 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int)
             GProMWrapper.inst.setupPlugins(c, metadataLookupPlugin.getPlugin) 
             sparkBackend = new SparkBackend()
             sparkBackend.open()
-            SparkML(sparkBackend.sparkSql)
             
             //GProMWrapper.inst.setBoolOption("pi_cs_use_composable", true)
            // GProMWrapper.inst.setBoolOption("pi_cs_rewrite_agg_window", false)
