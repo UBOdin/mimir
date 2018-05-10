@@ -62,6 +62,7 @@ import mimir.util.SparkUtils
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.catalyst.analysis.UnresolvedStar
 import mimir.sql.GProMBackend
+import org.apache.spark.sql.catalyst.expressions.aggregate.StddevSamp
 
 object OperatorTranslation
   extends LazyLogging
@@ -457,6 +458,9 @@ object OperatorTranslation
          case AggFunction("SUM", _, args, _) => {
            Sum(mimirExprToSparkExpr(oper,args.head))
          }
+         case AggFunction("STDDEV", _, args, _) => {
+           StddevSamp(mimirExprToSparkExpr(oper,args.head))
+         }
          case AggFunction("FIRST", _, args, _) => {
            First(mimirExprToSparkExpr(oper,args.head),mimirExprToSparkExpr(oper,BoolPrimitive(true)))
          }
@@ -647,6 +651,12 @@ object OperatorTranslation
       }
       case Function("random", params) => {
         Randn(1L)
+      }
+      case Function("YEAR", params) => {
+        org.apache.spark.sql.catalyst.expressions.Year(mimirExprToSparkExpr(oper,params.head))
+      }
+      case Function("SECOND", params) => {
+        org.apache.spark.sql.catalyst.expressions.Second(mimirExprToSparkExpr(oper,params.head))
       }
       case Function(`vgtBGFunc`, params) => {
         throw new Exception(s"Function Translation not implemented $vgtBGFunc(${params.mkString(",")})")

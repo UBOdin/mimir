@@ -37,7 +37,7 @@ class ModelManager(db:Database)
    */
   def init(): Unit =
   {
-    if(db.backend.getTableSchema(modelTable).isEmpty){
+    if(db.metadataBackend.getTableSchema(modelTable).isEmpty){
       db.metadataBackend.update(s"""
         CREATE TABLE $modelTable(
           name varchar(100), 
@@ -47,7 +47,7 @@ class ModelManager(db:Database)
         )
       """)
     }
-    if(db.backend.getTableSchema(ownerTable).isEmpty){
+    if(db.metadataBackend.getTableSchema(ownerTable).isEmpty){
       db.metadataBackend.update(s"""
         CREATE TABLE $ownerTable(
           model varchar(100), 

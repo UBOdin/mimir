@@ -608,7 +608,7 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
   def requireMetadataTable(name: String, schema: Seq[(String, Type)], primaryKey: Option[String] = None)
   {
     val typeMap = schema.map { x => (x._1.toUpperCase -> x._2) }.toMap
-    backend.getTableSchema(name) match {
+    metadataBackend.getTableSchema(name) match {
       case None => {
         val schemaElements = 
           schema.map { case (name, t) => s"$name $t" } ++ 
