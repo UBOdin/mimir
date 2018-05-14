@@ -25,9 +25,9 @@ import mimir.Mimir
 class SparkBackend extends RABackend{
   var sparkSql : SQLContext = null
   ExperimentalOptions.enable("remoteSpark")
-  val (sparkHost, sparkPort, hdfsPort) = Mimir.conf match {
-    case null => (/*"128.205.71.102"*/"spark-master.local", "7077", "8020")
-    case x => (x.sparkHost, x.sparkPort, "8020")
+  val (sparkHost, sparkPort, hdfsPort, useHDFSHostnames) = Mimir.conf match {
+    case null => (/*"128.205.71.102"*/"spark-master.local", "7077", "8020", "false")
+    case x => (x.sparkHost, x.sparkPort, "8020", "false")
   }
   val remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
   def open(): Unit = {
@@ -54,7 +54,7 @@ class SparkBackend extends RABackend{
         val dmode = sparkCtx.deployMode
         if(remoteSpark){
           sparkCtx.hadoopConfiguration.set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
-          sparkCtx.hadoopConfiguration.set("dfs.client.use.datanode.hostname","true")
+          sparkCtx.hadoopConfiguration.set("dfs.client.use.datanode.hostname",useHDFSHostnames)
           //sparkCtx.addJar("https://maven.mimirdb.info/info/mimirdb/mimir-core_2.11/0.2/mimir-core_2.11-0.2.jar")
           sparkCtx.addJar("https://odin.cse.buffalo.edu/assets/mimir-core_2.11-0.2.jar")
           sparkCtx.addJar("https://odin.cse.buffalo.edu/assets/scala-logging-slf4j_2.11-2.1.2.jar")
