@@ -24,7 +24,7 @@ object PDBenchTiming
 
   args(skipAll = !PDBench.isDownloaded)
 
-  val fullReset = false
+  val fullReset = true
   val runBestGuessQueries = false
   val runTupleBundleQueries = false
   val runSamplerQueries = true
@@ -71,7 +71,7 @@ object PDBenchTiming
     "supp_s_suppkey"
   )
 
-  if(true){ "Skipping TPCH Inpute Test" >> ok } else {
+  if(false){ "Skipping TPCH Inpute Test" >> ok } else {
     "PDBench" should {
 
       sequential

@@ -13,15 +13,17 @@ import mimir.algebra.Function
 import mimir.algebra.AggFunction
 import mimir.util.LoadJDBC
 import mimir.algebra.BoolPrimitive
+import mimir.test.TestTimer
 
 object OperatorTranslationSpec 
   extends SQLTestSpecification("SparkOperatorTranslationSpec",Map("cleanup" -> "NO"))
   with BeforeAll
+  with TestTimer
 {
 
   def beforeAll = 
   {
-    db.loadTable("test/r_test/r.csv")
+    //db.loadTable("test/r_test/r.csv")
   }
   
   "Spark" should {
@@ -190,7 +192,7 @@ object OperatorTranslationSpec
           List(i(5), i(4), i(50)))
     }*/
     
-    "Be able to query from a json source" >> {
+    /*"Be able to query from a json source" >> {
       db.backend.readDataSource("J", "json", Map(), None, Some("test/data/jsonsample.txt")) 
           
       val result = query("""
@@ -201,6 +203,28 @@ object OperatorTranslationSpec
           List(BoolPrimitive(true), str("jerome@saunders.tm"), f(14.7048), str("Vanessa Nguyen"), i(1), i(56), i(40), str("Gary"), str("Conner")), 
           List(BoolPrimitive(false), str("annette@hernandez.bw"), f(11.214), str("Leo Green"), i(2), i(57), i(44), str("Neal"), str("Davies")), 
           List(BoolPrimitive(true), str("troy@mcneill.bt"), f(14.0792), str("Peter Schultz"), i(3), i(58), i(26), str("Christopher"), str("Brantley")))
+    }*/
+    
+    "Be able create and query missing value lens" >> {
+      db.loadTable("test/data/mockData.csv")
+      val timeForCreate = time { 
+        update("""
+  				CREATE LENS MV_R
+  				  AS SELECT * FROM MOCKDATA
+  				  WITH MISSING_VALUE('AGE')
+   			""")
+      }
+   		val timeForQuery = time {
+   		  val query = db.table("MV_R")
+        val result = db.query(query)(_.length)
+        
+        //mimir.MimirVizier.db = db
+        //println( mimir.MimirVizier.explainEverything(query).map(_.all(db).map(_.reason)) )
+        
+        result must be equalTo 250000
+      }
+      println(s"Create Time:${timeForCreate._2} seconds, Query Time: ${timeForQuery._2} seconds <- MissingValueLens")
+      timeForQuery._1   
     }
   }
 }

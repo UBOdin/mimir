@@ -20,7 +20,8 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
   with TestTimer
   with AroundTimeout
 {
-
+  sequential
+  args.execute(threadsNb = 1)
   val timeout: Duration
   val useMaterialized: Boolean
   val random = new Random(42)
@@ -28,28 +29,24 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
   val sampler     = new SampleRows( (0 until 10).map { _ => random.nextLong })
 
 
-  def loadTable(tableFields:(String, String, Type, Double)) =
+  def loadTable(tableFields:(String, String, Type, Double), run:Int=1) =
   {
+    println(s"VLDB2017TimingTest.loadTable(${tableFields})")
     val (baseTable, columnName, columnType, timeout) = tableFields
+    val dbTableName = baseTable.toUpperCase() 
     s"Load Table: $baseTable" >> {
-      if(!db.tableExists(baseTable)){
-        update(s"""
-          CREATE TABLE $baseTable(
-            VAR_ID int,
-            WORLD_ID int,
-            TID int,
-            $columnName $columnType,
-            PRIMARY KEY (TID, WORLD_ID, VAR_ID)
-          )
-        """)
-        LoadCSV.handleLoadTable(db, 
-          baseTable, 
-          new File(s"test/pdbench/${baseTable}.tbl"), 
-          Map(
-            "HEADER" -> "NO",
-            "DELIMITER" -> "|"
-          )
-        )
+      if(!db.tableExists(dbTableName)){
+        val schema = Seq(("VAR_ID", TInt()),
+            ("WORLD_ID", TInt()),
+            ("TID", TInt()),
+            (columnName.toUpperCase(), columnType))
+        LoadCSV.handleLoadTableRaw(db, 
+              dbTableName, 
+              Some(schema),  new File(s"test/pdbench/${baseTable}.tbl"),  
+              Map("DELIMITER" -> "|","ignoreLeadingWhiteSpace"->"true",
+                  "ignoreTrailingWhiteSpace"->"true", 
+                  "mode" -> "PERMISSIVE", 
+                  "header" -> "false") )
       }
       db.tableExists(baseTable) must beTrue
     }
@@ -59,7 +56,6 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
   {
     val (baseTable, columnName, columnType, timeout) = tableFields
     val testTable = (baseTable+tableSuffix).toUpperCase
-
     s"Create Key Repair Lens for table: $testTable" >> {
       if(db.views.get(testTable).isEmpty){
         if(db.tableExists(testTable)){
@@ -74,7 +70,7 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
         val timeForQuery = time {
         update(s"""
           CREATE LENS ${testTable}
-            AS SELECT TID, ${columnName} FROM ${baseTable}
+            AS SELECT TID, ${columnName.toUpperCase()} FROM ${baseTable}
           WITH KEY_REPAIR(TID, ENABLE(FAST_PATH))
         """);
           //val materializeQuery = s"SELECT * FROM ${tableAndKeyColumn._1}_UNMAT"
@@ -117,7 +113,6 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
   {
     val (baseTable, nullables) = tableFields
     val testTable = (baseTable+tableSuffix).toUpperCase
-
     s"Create Missing Value Imputation Lens for table: $testTable" >> {
       // if(db.tableExists(testTable)){
       //   update(s"DROP LENS $testTable")

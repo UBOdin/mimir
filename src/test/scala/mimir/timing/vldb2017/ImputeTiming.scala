@@ -28,7 +28,7 @@ object ImputeTiming
   val runSamplerQueries = true
   val useMaterialized = false
   val useFastPathCache = true
-  val skipImputeTests = true
+  val skipImputeTests = false
   
   val timeout = 15.minute
 
@@ -177,6 +177,7 @@ object ImputeTiming
 
         sequential
 
+        
         // CREATE LENSES
         Fragments.foreach(
           relevantTables.toSeq
