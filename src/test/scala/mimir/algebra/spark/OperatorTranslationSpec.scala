@@ -221,7 +221,7 @@ object OperatorTranslationSpec
         //mimir.MimirVizier.db = db
         //println( mimir.MimirVizier.explainEverything(query).map(_.all(db).map(_.reason)) )
         
-        result must be equalTo 250000
+        result must be equalTo 401000
       }
       println(s"Create Time:${timeForCreate._2} seconds, Query Time: ${timeForQuery._2} seconds <- MissingValueLens")
       timeForQuery._1   
