@@ -206,16 +206,16 @@ object OperatorTranslationSpec
     }*/
     
     "Be able create and query missing value lens" >> {
-      db.loadTable("test/data/mockData.csv")
+      loadCSV("MOCKDATA", new File("test/data/mockData.csv"))
       val timeForCreate = time { 
         update("""
-  				CREATE LENS MV_R
+  				CREATE LENS MV_MOCKDATA
   				  AS SELECT * FROM MOCKDATA
   				  WITH MISSING_VALUE('AGE')
    			""")
       }
    		val timeForQuery = time {
-   		  val query = db.table("MV_R")
+   		  val query = db.table("MV_MOCKDATA")
         val result = db.query(query)(_.length)
         
         //mimir.MimirVizier.db = db
