@@ -23,44 +23,8 @@ object SparkUtils {
     
     t match {
       case TAny() =>        throw new SQLException(s"Can't extract TAny: $field")
-      case TFloat() =>      (r) => checkNull(r, { try {
-          FloatPrimitive(r.getFloat(field).toDouble)
-        } catch {
-          case t: Throwable => {
-            try {
-              FloatPrimitive(r.getDouble(field))
-            } catch {
-                case t: Throwable => {
-                  FloatPrimitive(r.getString(field).toDouble) 
-                }
-            }  
-          }
-        }  })
-      case TInt() =>        (r) => checkNull(r, { 
-        try {
-          IntPrimitive(r.getLong(field)) 
-        } catch {
-          case t: Throwable => {
-            try {
-              IntPrimitive(r.getInt(field)) 
-            } catch {
-              case t: Throwable => {
-                val sval = r.getString(field)
-                //TODO: this is a super hack: somehow only '-' is in 
-                //  there sometimes for negative values
-                try {
-                  if(sval.equalsIgnoreCase("-")) IntPrimitive(-1L) 
-                  else IntPrimitive(r.getString(field).toLong) 
-                }
-                catch {
-                  case t: Throwable => {
-                    NullPrimitive()
-                  }
-                } 
-              }
-            }
-          }
-        } })
+      case TFloat() =>      (r) => checkNull(r, FloatPrimitive(r.getDouble(field)))
+      case TInt() =>        (r) => checkNull(r, IntPrimitive(r.getLong(field)))
       case TString() =>     (r) => checkNull(r, { StringPrimitive(r.getString(field)) })
       case TRowId() =>      (r) => checkNull(r, { RowIdPrimitive(r.getString(field)) })
       case TBool() =>       (r) => checkNull(r, { 

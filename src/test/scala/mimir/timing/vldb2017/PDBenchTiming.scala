@@ -71,7 +71,7 @@ object PDBenchTiming
     "supp_s_suppkey"
   )
 
-  if(false){ "Skipping TPCH Inpute Test" >> ok } else {
+  if(true){ "Skipping TPCH Inpute Test" >> ok } else {
     "PDBench" should {
 
       sequential

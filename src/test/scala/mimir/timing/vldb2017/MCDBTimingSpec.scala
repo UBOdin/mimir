@@ -16,7 +16,7 @@ object MCDBTimingSpec
   with BeforeAll
 {
 
-  val skipMCDBTimingTest = false
+  val skipMCDBTimingTest = true
   sequential
 
   args(skipAll = !MCDBWorkload.isDownloaded)

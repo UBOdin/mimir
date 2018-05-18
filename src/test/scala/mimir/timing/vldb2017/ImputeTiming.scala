@@ -28,7 +28,7 @@ object ImputeTiming
   val runSamplerQueries = true
   val useMaterialized = false
   val useFastPathCache = true
-  val skipImputeTests = false
+  val skipImputeTests = true
   
   val timeout = 15.minute
 

@@ -64,6 +64,22 @@ runMimirVizier := {
   )
 }
 
+lazy val runTestResults = inputKey[Unit]("run runTestResults")
+runTestResults := {
+  val args = sbt.complete.Parsers.spaceDelimited("[main args]").parsed
+  val classpath = (fullClasspath in Compile).value
+  val classpathString = Path.makeString(classpath map { _.data })
+  val debugTestJVMArgs = Seq()//Seq("-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005")
+  val jvmArgs = debugTestJVMArgs ++ Seq("-Xmx4g", "-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK")
+  val (jh, os, bj, bd, jo, ci, ev) = (javaHome.value, outputStrategy.value, Vector[java.io.File](), 
+		Some(baseDirectory.value), (jvmArgs ++ Seq("-classpath", classpathString)).toVector, 
+		connectInput.value, envVars.value)
+  Fork.java(
+    ForkOptions(jh, os, bj, bd, jo, ci, ev),
+    "mimir.util.TestResults" +: args
+  )
+}
+
 //for tests that need to run in their own jvm because they need specific envArgs or otherwise
 testGrouping in Test := {
 	val (jh, os, bj, bd, jo, ci, ev) = (javaHome.value, outputStrategy.value, Vector[java.io.File](), 
