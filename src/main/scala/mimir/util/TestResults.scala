@@ -6,19 +6,17 @@ import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
 import java.io.ByteArrayOutputStream
 import java.io.PrintWriter
+import org.rogach.scallop.ScallopConf
 
 object TestResults {
   def main(args: Array[String]) {
+    val config = new TestResultConfig(args)
     println("running tests....")
-    parseTestResults(args.headOption)
+    parseTestResults(config.sbtPath(),config.sbtCmd())
   }
   
-  def parseTestResults(test:Option[String] = None) = {
-    val sbtCmd = test match {
-      case None => "test"
-      case Some(x) => s"testOnly $x"
-    }
-    val procOutput = runCommand(Seq("/opt/local/bin/sbt",sbtCmd))._2.replaceAll("""\x1b\[[0-9;]*[a-zA-Z]""", "")
+  def parseTestResults(sbtPath:String = "/opt/local/bin/sbt", sbtCmd:String = "test") = {
+    val procOutput = runCommand(Seq(sbtPath,sbtCmd))._2.replaceAll("""\x1b\[[0-9;]*[a-zA-Z]""", "")
     
     val pattern = """(?m)^.*\[info\] Total.*$|^.*\[info\] Finished.*$|^.*\[info\] [\d]+ examp.*$""".r
     
@@ -63,4 +61,19 @@ object TestResults {
     stderrWriter.close()
     (exitValue, stdoutStream.toString, stderrStream.toString)
   }
+  
+  
+}
+
+class TestResultConfig(arguments: Seq[String]) extends ScallopConf(arguments)
+{
+  val experimental = opt[List[String]]("X", default = Some(List[String]()))
+  val sparkHost = opt[String]("sparkHost", descr = "The IP or hostname of the spark master",
+    default = Some("spark-master.local"))
+  val sparkPort = opt[String]("sparkPort", descr = "The port of the spark master",
+    default = Some("7077"))
+  val sbtPath = opt[String]("sbtPath", descr = "The path to sbt binary",
+    default = Some("/opt/local/bin/sbt"))
+  val sbtCmd = opt[String]("sbtCmd", descr = "The sbt command to run",
+    default = Some("test"))
 }
