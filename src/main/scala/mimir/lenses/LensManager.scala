@@ -1,6 +1,9 @@
 package mimir.lenses;
 
-import java.sql._
+import java.sql._;
+import scala.collection.concurrent.TrieMap;
+import scala.concurrent.Future;
+import scala.concurrent.ExecutionContext.Implicits.global;
 
 import mimir.Database
 import mimir.algebra._
@@ -11,8 +14,7 @@ import mimir.util.JDBCUtils
 import mimir.util.ExperimentalOptions
 
 class LensManager(db: Database) {
-
-  val lensTypes = Map[String,((Database,String,Operator,Seq[Expression]) => 
+  val lensTypes = TrieMap[String,((Database,String,Operator,Seq[Expression]) => 
                               (Operator,TraversableOnce[Model]))](
     "MISSING_VALUE"     -> MissingValueLens.create _,
     "DOMAIN"            -> MissingValueLens.create _,
@@ -53,12 +55,23 @@ class LensManager(db: Database) {
     for(model <- models){
       db.models.persist(model, s"LENS:$saneName")
     }
+    
+    val updateModels = Future
+    {
+      this.updateModels()
+    }
+    
   }
 
   def drop(name: String): Unit =
   {
     db.views.drop(name)
     db.models.dropOwner(s"LENS:$name")
+  }
+  
+  def updateModels() : Unit = 
+  {
+    
   }
 
 }
