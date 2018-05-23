@@ -21,13 +21,14 @@ import mimir.util.HadoopUtils
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.hadoop.fs.Path
 import mimir.Mimir
+import mimir.util.SparkUtils
 
 class SparkBackend extends RABackend{
   var sparkSql : SQLContext = null
-  ExperimentalOptions.enable("remoteSpark")
-  val (sparkHost, sparkPort, hdfsPort, useHDFSHostnames) = Mimir.conf match {
-    case null => (/*"128.205.71.102"*/"spark-master.local", "7077", "8020", "false")
-    case x => (x.sparkHost, x.sparkPort, "8020", "false")
+  //ExperimentalOptions.enable("remoteSpark")
+  val (sparkHost, sparkPort, hdfsPort, useHDFSHostnames, overwriteHDFSFiles) = Mimir.conf match {
+    case null => (/*"128.205.71.102"*/"spark-master.local", "7077", "8020", "false", false)
+    case x => (x.sparkHost, x.sparkPort, "8020", "false", false)
   }
   val remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
   def open(): Unit = {
@@ -39,9 +40,14 @@ class SparkBackend extends RABackend{
             .set("spark.submit.deployMode","client")
             .set("spark.ui.port","4041")
             .setAppName("Mimir")
+            .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+            .registerKryoClasses(SparkUtils.getSparkKryoClasses())
         }
         else{
-          new SparkConf().setMaster("local[*]").setAppName("Mimir")
+          new SparkConf().setMaster("local[*]")
+            .setAppName("Mimir")
+            .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+            .registerKryoClasses(SparkUtils.getSparkKryoClasses())
         }
         if(ExperimentalOptions.isEnabled("GPROM-BACKEND")){
           sys.props.get("os.name") match {
@@ -95,7 +101,7 @@ class SparkBackend extends RABackend{
       println("------------------------------------------------------------")*/
       val qe = sparkSql.sparkSession.sessionState.executePlan(sparkOper)
       qe.assertAnalyzed()
-      new Dataset[Row](sparkSql.sparkSession, sparkOper, RowEncoder(qe.analyzed.schema)).toDF()
+      new Dataset[Row](sparkSql.sparkSession, sparkOper, RowEncoder(qe.analyzed.schema))
     } catch {
       case t: Throwable => {
         println("-------------------------> Exception Executing Spark Op: " + t.toString() + "\n" + t.getStackTrace.mkString("\n"))
@@ -125,13 +131,13 @@ class SparkBackend extends RABackend{
           val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkSql.sparkSession.sparkContext)
           println("Copy File To HDFS: " +hdfsHome+File.separator+fileName)
           //if(!HadoopUtils.fileExistsHDFS(sparkSql.sparkSession.sparkContext, fileName))
-          HadoopUtils.writeToHDFS(sparkSql.sparkSession.sparkContext, fileName, new File(ldf), true)
+          HadoopUtils.writeToHDFS(sparkSql.sparkSession.sparkContext, fileName, new File(ldf), overwriteHDFSFiles)
           dsSchema.load(s"$hdfsHome/$fileName")
         }
         else dsSchema.load(ldf)
         
       }
-    }).persist().createOrReplaceTempView(name)
+    })/*.toDF(df.columns.map(_.toUpperCase): _*)*/.persist().createOrReplaceTempView(name)
   }
   
   

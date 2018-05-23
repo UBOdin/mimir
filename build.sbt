@@ -11,7 +11,7 @@ dependencyOverrides += "org.scala-lang" % "scala-library" % scalaVersion.value
 // in Travis with `sudo: false`.
 // See https://github.com/sbt/sbt/issues/653
 // and https://github.com/travis-ci/travis-ci/issues/3775
-//javaOptions ++= Seq("-Xmx2G" )
+javaOptions ++= Seq("-Xmx8G" )
 
 
 scalacOptions ++= Seq(
@@ -122,6 +122,7 @@ libraryDependencies ++= Seq(
   "org.specs2"                    %%  "specs2-core"              % "3.8.4" % "test",
   "org.specs2"                    %%  "specs2-matcher-extra"     % "3.8.4" % "test",
   "org.specs2"                    %%  "specs2-junit"             % "3.8.4" % "test",
+  "org.clapper"                   %%  "classutil" 				 % "1.1.2",
 
   //////////////////////// Data Munging Tools //////////////////////
   "com.github.nscala-time"        %%  "nscala-time"              % "1.2.0",

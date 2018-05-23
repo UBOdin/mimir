@@ -182,22 +182,12 @@ object RepairKeySpec
   "RepairKey-FastPath" should {
     "Load Customer Account Balances" >> {
       if(PDBench.isDownloaded){
-        update("""
-          CREATE TABLE CUST_ACCTBAL_WITHDUPS(
-            TUPLE_ID int,
-            WORLD_ID int,
-            VAR_ID int,
-            acctbal float
-          )
-        """)
-        LoadCSV.handleLoadTable(db, 
-          "CUST_ACCTBAL_WITHDUPS", 
-          new File("test/pdbench/cust_c_acctbal.tbl"), 
-          Map(
-            "HEADER" -> "NO",
-            "DELIMITER" -> "|"
-          )
-        )
+        LoadCSV.handleLoadTableRaw(db, "CUST_ACCTBAL_WITHDUPS",
+            Some(Seq(("TUPLE_ID", TInt()), ("WORLD_ID", TInt()), ("VAR_ID", TInt()), ("ACCTBAL",TFloat()))), 
+            new File("test/pdbench/cust_c_acctbal.tbl"),  
+            Map("DELIMITER" -> "|","ignoreLeadingWhiteSpace"->"true",
+                "ignoreTrailingWhiteSpace"->"true", "mode" -> "DROPMALFORMED", "header" -> "false") )
+        
         update("""
           CREATE LENS CUST_ACCTBAL_CLASSIC
           AS SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_WITHDUPS

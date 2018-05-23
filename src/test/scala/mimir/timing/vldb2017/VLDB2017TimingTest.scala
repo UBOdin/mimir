@@ -48,7 +48,7 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
                   "mode" -> "PERMISSIVE", 
                   "header" -> "false") )
       }
-      db.tableExists(baseTable) must beTrue
+      db.tableExists(dbTableName) must beTrue
     }
   }
 
