@@ -1,4 +1,4 @@
-package mimir.models
+/*package mimir.models
 
 import java.io._
 import mimir.algebra._
@@ -99,4 +99,4 @@ object WekaModelSpec extends SQLTestSpecification("WekaTest")
     }
  
   }
-}
+}*/

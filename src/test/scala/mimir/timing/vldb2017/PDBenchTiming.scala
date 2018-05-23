@@ -29,7 +29,7 @@ object PDBenchTiming
   val runTupleBundleQueries = false
   val runSamplerQueries = true
   val runPartitionQueries = false
-  val useMaterialized = false
+  override val useMaterialized = false
 
   val timeout = 10.minute
 
