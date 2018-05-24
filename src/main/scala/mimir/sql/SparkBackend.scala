@@ -40,6 +40,9 @@ class SparkBackend extends RABackend{
             .set("spark.submit.deployMode","client")
             .set("spark.ui.port","4041")
             .setAppName("Mimir")
+            .set("spark.driver.cores","4")
+            .set("spark.driver.memory","4g")
+            .set("spark.executor.memory","8g")
             .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
             .registerKryoClasses(SparkUtils.getSparkKryoClasses())
         }
