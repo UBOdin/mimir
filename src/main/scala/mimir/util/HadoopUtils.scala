@@ -19,8 +19,11 @@ object HadoopUtils {
     val fs = FileSystem.get(sparkCtx.hadoopConfiguration)
     //fs.copyFromLocalFile(false, new Path(localFile.toURI()), new Path(hdfsTargetFile))
     val hdfsPath = new Path(hdfsTargetFile)
-    /*val exists = fs.exists(hdfsPath)
-    val output = if(!exists){
+    val exists = fs.exists(hdfsPath)
+    if(exists && !overwrite){
+      return
+    }
+    /*val output = if(!exists){
       fs.create(hdfsPath)
     }
     else {
