@@ -22,7 +22,6 @@ import org.apache.spark.launcher.SparkLauncher
 import org.apache.hadoop.fs.Path
 import mimir.Mimir
 import mimir.util.SparkUtils
-import org.apache.spark.storage.StorageLevel
 
 class SparkBackend extends RABackend{
   var sparkSql : SQLContext = null
@@ -90,12 +89,12 @@ class SparkBackend extends RABackend{
 
   def materializeView(name:String): Unit = {
     if(sparkSql == null) throw new Exception("There is no spark context")
-    sparkSql.table(name).persist(StorageLevel.MEMORY_ONLY).count()
+    sparkSql.table(name).persist().count()
   }
   
   def createTable(tableName:String, oper:Operator) = {
     val df = execute(oper)
-    df.persist(StorageLevel.MEMORY_ONLY).createOrReplaceTempView(tableName)
+    df/*.persist()*/.createOrReplaceTempView(tableName)
   }
   
   def execute(compiledOp: Operator): DataFrame = {
@@ -111,7 +110,7 @@ class SparkBackend extends RABackend{
       println("------------------------------------------------------------")*/
       val qe = sparkSql.sparkSession.sessionState.executePlan(sparkOper)
       qe.assertAnalyzed()
-      new Dataset[Row](sparkSql.sparkSession, sparkOper, RowEncoder(qe.analyzed.schema)).persist(StorageLevel.MEMORY_ONLY)
+      new Dataset[Row](sparkSql.sparkSession, sparkOper, RowEncoder(qe.analyzed.schema))
     } catch {
       case t: Throwable => {
         println("-------------------------> Exception Executing Spark Op: " + t.toString() + "\n" + t.getStackTrace.mkString("\n"))
@@ -147,7 +146,7 @@ class SparkBackend extends RABackend{
         else dsSchema.load(ldf)
         
       }
-    })/*.toDF(df.columns.map(_.toUpperCase): _*)*/.persist(StorageLevel.MEMORY_ONLY).createOrReplaceTempView(name)
+    })/*.toDF(df.columns.map(_.toUpperCase): _*)*//*.persist()*/.createOrReplaceTempView(name)
   }
   
   
