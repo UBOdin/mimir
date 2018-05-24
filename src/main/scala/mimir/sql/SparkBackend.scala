@@ -22,6 +22,7 @@ import org.apache.spark.launcher.SparkLauncher
 import org.apache.hadoop.fs.Path
 import mimir.Mimir
 import mimir.util.SparkUtils
+import org.apache.spark.storage.StorageLevel
 
 class SparkBackend extends RABackend{
   var sparkSql : SQLContext = null
@@ -41,7 +42,7 @@ class SparkBackend extends RABackend{
             .set("spark.ui.port","4041")
             .setAppName("Mimir")
             .set("spark.driver.cores","4")
-            .set("spark.driver.memory","4g")
+            .set("spark.driver.memory","8g")
             .set("spark.executor.memory","8g")
             .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
             .registerKryoClasses(SparkUtils.getSparkKryoClasses())
@@ -62,8 +63,8 @@ class SparkBackend extends RABackend{
         val sparkCtx = SparkContext.getOrCreate(conf)//new SparkContext(conf)
         val dmode = sparkCtx.deployMode
         if(remoteSpark){
-          sparkCtx.hadoopConfiguration.set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
           sparkCtx.hadoopConfiguration.set("dfs.client.use.datanode.hostname",useHDFSHostnames)
+          sparkCtx.hadoopConfiguration.set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
           sparkCtx.hadoopConfiguration.set("fs.defaultFS", s"hdfs://$sparkHost:$hdfsPort")
           val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkCtx)
           HadoopUtils.writeToHDFS(sparkCtx, "mimir-core_2.11-0.2.jar", new File(s"${System.getProperty("user.home")}/.m2/repository/info/mimirdb/mimir-core_2.11/0.2/mimir-core_2.11-0.2.jar"), false)
@@ -89,12 +90,12 @@ class SparkBackend extends RABackend{
 
   def materializeView(name:String): Unit = {
     if(sparkSql == null) throw new Exception("There is no spark context")
-    sparkSql.table(name).persist().count()
+    sparkSql.table(name).persist(StorageLevel.MEMORY_ONLY).count()
   }
   
   def createTable(tableName:String, oper:Operator) = {
     val df = execute(oper)
-    df.persist().createOrReplaceTempView(tableName)
+    df.persist(StorageLevel.MEMORY_ONLY).createOrReplaceTempView(tableName)
   }
   
   def execute(compiledOp: Operator): DataFrame = {
@@ -110,7 +111,7 @@ class SparkBackend extends RABackend{
       println("------------------------------------------------------------")*/
       val qe = sparkSql.sparkSession.sessionState.executePlan(sparkOper)
       qe.assertAnalyzed()
-      new Dataset[Row](sparkSql.sparkSession, sparkOper, RowEncoder(qe.analyzed.schema))
+      new Dataset[Row](sparkSql.sparkSession, sparkOper, RowEncoder(qe.analyzed.schema)).persist(StorageLevel.MEMORY_ONLY)
     } catch {
       case t: Throwable => {
         println("-------------------------> Exception Executing Spark Op: " + t.toString() + "\n" + t.getStackTrace.mkString("\n"))
@@ -146,7 +147,7 @@ class SparkBackend extends RABackend{
         else dsSchema.load(ldf)
         
       }
-    })/*.toDF(df.columns.map(_.toUpperCase): _*)*/.persist().createOrReplaceTempView(name)
+    })/*.toDF(df.columns.map(_.toUpperCase): _*)*/.persist(StorageLevel.MEMORY_ONLY).createOrReplaceTempView(name)
   }
   
   
