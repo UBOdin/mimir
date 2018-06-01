@@ -496,6 +496,7 @@ object OperatorTranslation
      ), aggr.alias)()
   }
   
+  
   def mimirExprToSparkExpr(oper:Operator, expr:Expression) : org.apache.spark.sql.catalyst.expressions.Expression = {
     expr match {
       case primitive : PrimitiveValue => {
@@ -521,7 +522,7 @@ object OperatorTranslation
       }
       case rid@RowIdVar() => {
         //UnresolvedAttribute("ROWID")
-        org.apache.spark.sql.catalyst.expressions.Cast(Alias(Add(MonotonicallyIncreasingID(), Literal(1)),rid.toString())(),getSparkType(db.backend.rowIdType),None)
+        org.apache.spark.sql.catalyst.expressions.Cast(Alias(Add(MonotonicallyIncreasingID(), Literal(1)),RowIdVar().toString())(),getSparkType(db.backend.rowIdType),None)
       }
       case func@Function(_,_) => {
         mimirFunctionToSparkFunction(oper, func)

@@ -19,6 +19,13 @@ import mimir.{Analysis, Database}
 import mimir.models._
 import mimir.util._
 import mimir.statistics.DetectSeries
+import org.apache.spark.sql.Dataset
+
+import org.apache.spark.sql.functions.{col, monotonically_increasing_id, lit, not, isnull,asc,desc}  
+import org.apache.spark.sql.DataFrame
+import mimir.algebra.spark.OperatorTranslation
+import org.apache.spark.sql.Column
+import org.apache.spark.sql.Row
 
 //Upgrade: Move the series column detection to SeriesMissingValueModel
 
@@ -40,6 +47,9 @@ object SeriesMissingValueModel
       .toMap
   }
 }
+
+case class SeriesColumnItem(columnName: String, reason: String, score: Double)
+
 /** 
  * A model performs estimation of missing value column based on the column that follows a series.
  * Best Guess : Performs the best guess based on the weighted-average of upper and lower bound values.
@@ -56,8 +66,11 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
   with ModelCache
 {
   
-  var predictions = 
-    colNames.map { _ => Seq[(String,Double)]() }
+  var predictions:Seq[Dataset[(String, Double)]] = Seq()
+  var queryDf: DataFrame = null
+  var rowIdType:Type = TString()
+  var rowIdVar:Column = null
+    //colNames.map { _ => Seq[(String,Double)]() }
   var querySchema:Seq[Type] = 
     colNames.map { _ => TAny() }
 
@@ -67,22 +80,22 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
   def train(db: Database): Seq[Boolean] = 
   {
     querySchema = db.typechecker.schemaOf(query).map { _._2 }
+    queryDf = db.backend.execute(query)
+    rowIdType = db.backend.rowIdType
+    rowIdVar = (monotonically_increasing_id()+1).alias(RowIdVar().toString()).cast(OperatorTranslation.getSparkType(rowIdType))
     
-    val potentialSeries = DetectSeries.seriesOf(db, query, 0.1)
     predictions = 
       colNames.zipWithIndex.map { case (col, idx) => 
         DetectSeries.bestMatchSeriesColumn(
           db,
           col, 
           querySchema(idx), 
-          query, 
-          potentialSeries
+          query
         )
       }
 
     SeriesMissingValueModel.logger.debug(s"Trained: $predictions")
-    interpolateAll(db)
-    predictions.map(!_.isEmpty)
+    predictions.map(!_.limit(1).collect().isEmpty)
   }
 
   def validFor: Set[String] =
@@ -97,62 +110,51 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
   }
  
   
-  def interpolateAll(db:Database): Unit  =
+  def interpolate(idx: Int, args:Seq[PrimitiveValue], series: String): PrimitiveValue =
+    interpolate(idx, args(0).asInstanceOf[RowIdPrimitive], series)
+  def interpolate(idx: Int, rowid:RowIdPrimitive, series: String): PrimitiveValue =
   {
-    db.query(
-        query
-      ) { results => {
-        val resultsSeq = results.toList
-        val resCols = results.schema.unzip._1
-        val resColToIdx = resCols.zipWithIndex.toMap
-        predictions.zipWithIndex.map(predictionIdx => {
-          val idx = predictionIdx._2
-          predictionIdx._1.map(prediction => {
-            val series = prediction._1
-            resultsSeq.map(row => {
-              val key = row(resColToIdx(series))
-              if(key.isInstanceOf[NullPrimitive]){ 
-                setCache(idx, Seq(row.provenance), Seq(StringPrimitive(series)),key)
-              }
-              else {
-                val lto  = new Ordering[PrimitiveValue]{ def compare(x: PrimitiveValue, y: PrimitiveValue) = if(Eval.applyCmp(Cmp.Gt, x, y).asBool) -1 else if(Eval.applyCmp(Cmp.Lt, x, y).asBool) 1 else 0 }
-                val low = resultsSeq.filterNot(fr => fr(resColToIdx(colNames(idx))).isInstanceOf[NullPrimitive])
-                  .filterNot(fr => fr(resColToIdx(series)).isInstanceOf[NullPrimitive])
-                  .filterNot(fr => fr.provenance.equals(row.provenance))
-                  .filter(fr => Eval.applyCmp(Cmp.Lte, fr(resColToIdx(series)), key).asBool )
-                  .sortBy(sr => sr(resColToIdx(series)))(lto).headOption match {
-                  case Some(fr) => Some(fr(resColToIdx(series)),fr(resColToIdx(colNames(idx)))) 
-                  case None => None
-                }
-                val gto  = new Ordering[PrimitiveValue]{ def compare(x: PrimitiveValue, y: PrimitiveValue) = if(Eval.applyCmp(Cmp.Lt, x, y).asBool) -1 else if(Eval.applyCmp(Cmp.Gt, x, y).asBool) 1 else 0 }
-                val high = resultsSeq.filterNot(fr => fr(resColToIdx(colNames(idx))).isInstanceOf[NullPrimitive])
-                  .filterNot(fr => fr(resColToIdx(series)).isInstanceOf[NullPrimitive])
-                  .filterNot(fr => fr.provenance.equals(row.provenance))
-                  .filter(fr => Eval.applyCmp(Cmp.Gte, fr(resColToIdx(series)), key).asBool )
-                  .sortBy(sr => sr(resColToIdx(series)))(gto).headOption match {
-                  case Some(fr) => Some(fr(resColToIdx(series)),fr(resColToIdx(colNames(idx)))) 
-                  case None => None
-                }
-                (low, high) match {
-                  case (None, None) => setCache(idx, Seq(row.provenance), Seq(StringPrimitive(series)),NullPrimitive())
-                  case (Some((_, low_v)), None)  => setCache(idx, Seq(row.provenance), Seq(StringPrimitive(series)),low_v)
-                  case (None, Some((_, high_v))) => setCache(idx, Seq(row.provenance), Seq(StringPrimitive(series)),high_v)
-                  case (Some((low_k, low_v)), Some((high_k, high_v))) => {
-                    val ratio = DetectSeries.ratio(low_k, key, high_k)
-                    SeriesMissingValueModel.logger.debug(s"   -> ratio = $ratio")
-                    setCache(idx, Seq(row.provenance), Seq(StringPrimitive(series)),DetectSeries.interpolate(low_v, ratio, high_v))
-                  }
-                }
-              }
-            }) 
-          })
-        })
+    val sp2m : (String, Row) => PrimitiveValue = (colName, row) => SparkUtils.convertField(colNames.zip(querySchema).toMap.get(colName).get, row, colNames.indexOf(colName), rowIdType)
+    val m2sp : PrimitiveValue => Any = prim => OperatorTranslation.mimirPrimitiveToSparkExternalRowValue(prim)
+    val sprowid = m2sp(rowid)
+    val key = Option(sp2m(series,queryDf.filter(rowIdVar === sprowid ).select(series).head)).getOrElse(NullPrimitive())
+    SeriesMissingValueModel.logger.debug(s"Interpolate $rowid with key $key")
+    if(key == NullPrimitive()){ return NullPrimitive(); }
+    val low = 
+      queryDf.filter((col(series) <= lit(m2sp(key))).and(not(isnull(col(colNames(idx))))).and(rowIdVar =!= sprowid))
+          .sort(asc(series))
+          .limit(1)
+          .select(series, colNames(idx)).collect().map( row => (sp2m(series,row), sp2m(colNames(idx),row)) ).toSeq
+    val high = 
+      queryDf.filter((col(series) >= lit(m2sp(key))).and(not(isnull(col(colNames(idx))))).and(rowIdVar =!= sprowid))
+          .sort(asc(series))
+          .limit(1)
+          .select(series, colNames(idx)).collect().map( row => (sp2m(series,row), sp2m(colNames(idx),row)) ).toSeq
+
+    SeriesMissingValueModel.logger.debug(s"   -> low = $low; high = $high")
+   println(low)
+   println(high)
+    val result = (low, high) match {
+      case (Seq(), Seq()) => NullPrimitive()
+      case (Seq((_, low_v)), Seq())  => low_v
+      case (Seq(), Seq((_, high_v))) => high_v
+      case (Seq((low_k, low_v)), Seq((high_k, high_v))) => {
+        val ratio = DetectSeries.ratio(low_k, key, high_k)
+        SeriesMissingValueModel.logger.debug(s"   -> ratio = $ratio")
+        DetectSeries.interpolate(low_v, ratio, high_v)
       }
     }
+    setCache(idx, Seq(rowid), Seq(StringPrimitive(series)),result)
+    result
   }
 
-  def bestSequence(idx: Int): String = 
-    predictions(idx).sortBy(_._2).head._1
+  def bestSequence(idx: Int): String = {
+    val df = predictions(idx)
+    val dfr = df.sort(desc(df.columns(1)))
+    println(s"bestSequence: $idx ${colNames(idx)} [${df.columns.mkString(",")}]")
+    dfr.show()
+    dfr.limit(1).head._1
+  }
 
   def argTypes(idx: Int) = Seq(TRowId())
 
@@ -167,7 +169,8 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
         getCache(idx, args, Seq(StringPrimitive(bestSeries))) match {
           case Some(v) => v
           case None => {
-            throw new Exception(s"The Model is not trained: ${this.name}: idx: $idx  args: [${args.mkString(",")}] series: $bestSeries" )
+            //throw new Exception(s"The Model is not trained: ${this.name}: idx: $idx  args: [${args.mkString(",")}] series: $bestSeries" )
+            interpolate(idx, args, bestSequence(idx))
           }
         }
       }
@@ -180,11 +183,14 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
       case Some(v) => v
       case None => {
         //TODO: this should probably be scaled by variance.  For now... just pick entirely at random
-        val series = RandUtils.pickFromList(randomness, predictions(idx).map { _._1 })
+        //val df = predictions(idx)
+        val series = predictions(idx).sample(false, 0.1, randomness.nextInt()).limit(1).head()._1
         getCache(idx, args, Seq(StringPrimitive(series))) match {
           case Some(v) => v
           case None => {
-            throw new Exception(s"The Model is not trained: ${this.name}: idx: $idx  args: [${args.mkString(",")}] series: $series" )
+            //throw new Exception(s"The Model is not trained: ${this.name}: idx: $idx  args: [${args.mkString(",")}] series: $series" )
+            val series = predictions(idx).sample(false, 0.1, randomness.nextInt()).limit(1).head()._1
+            interpolate(idx, args, series)
           }
         }
         
@@ -201,8 +207,11 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
         getCache(idx, args, Seq(StringPrimitive(bestSeries))) match {
           case Some(value) => 
             s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSequence(idx)} to get $value for row ${args(0)}"
-          case None =>
-            s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSequence(idx)} row ${args(0)}"
+          case None =>{
+            //s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSequence(idx)} row ${args(0)}"
+            val bestSeries = bestSequence(idx)
+            s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSeries} to get ${interpolate(idx, args, bestSeries)} for row ${args(0)}"
+          }
         }
       }
     }
@@ -220,7 +229,8 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
   def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq()
   
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = {
-    predictions(idx).sortBy(_._2).head._2
+    val df = predictions(idx)
+    df.sort(desc(df.columns(1))).limit(1).head._2
   }
 
 }

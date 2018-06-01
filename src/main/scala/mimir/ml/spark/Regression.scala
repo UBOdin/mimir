@@ -22,68 +22,12 @@ import mimir.provenance.Provenance
 
 object Regression extends SparkML {
   
-  def regressDB(model : PipelineModel, query : Operator, db:Database, valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType) : DataFrame = {
-    applyModelDB(model, query, db, valuePreparer, sparkTyper)
+  def regressDB(model : PipelineModel, query : Operator, db:Database) : DataFrame = {
+    applyModelDB(model, query, db)
   }
   
-  def regress( model : PipelineModel, cols:Seq[(String, Type)], testData : List[Seq[PrimitiveValue]], valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType): DataFrame = {
-    applyModel(model, cols, testData, valuePreparer, sparkTyper)
-  }
-  
-  override def prepareValueTrain(value:PrimitiveValue, t:Type): Any = {
-    value match {
-      case NullPrimitive() => null
-      case RowIdPrimitive(s) => s
-      case StringPrimitive(s) => s
-      case IntPrimitive(i) => i.toDouble
-      case FloatPrimitive(f) => f
-      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
-      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
-      case x =>  x.asString 
-    }
-  }
-  
-  override def prepareValueApply(value:PrimitiveValue, t:Type): Any = {
-    value match {
-      case NullPrimitive() => t match {
-        case TInt() => null
-        case TFloat() => null
-        case TDate() => OperatorTranslation.defaultDate
-        case TString() => ""
-        case TBool() => false
-        case TRowId() => ""
-        case TType() => ""
-        case TAny() => ""
-        case TTimestamp() => OperatorTranslation.defaultTimestamp
-        case TInterval() => ""
-        case TUser(name) => prepareValueApply(value, mimir.algebra.TypeRegistry.registeredTypes(name)._2)
-        case x => ""
-      }
-      case RowIdPrimitive(s) => s
-      case StringPrimitive(s) => s
-      case IntPrimitive(i) => i.toDouble
-      case FloatPrimitive(f) => f
-      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
-      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
-      case x =>  x.asString 
-    }
-  }
-  
-  override def getSparkType(t:Type) : DataType = {
-    t match {
-      case TInt() => DoubleType
-      case TFloat() => DoubleType
-      case TDate() => DateType
-      case TString() => StringType
-      case TBool() => BooleanType
-      case TRowId() => StringType
-      case TType() => StringType
-      case TAny() => StringType
-      case TTimestamp() => TimestampType
-      case TInterval() => StringType
-      case TUser(name) => getSparkType(mimir.algebra.TypeRegistry.registeredTypes(name)._2)
-      case _ => StringType
-    }
+  def regress( model : PipelineModel, cols:Seq[(String, Type)], testData : List[Seq[PrimitiveValue]]): DataFrame = {
+    applyModel(model, cols, testData)
   }
   
   override def extractPredictions(model : PipelineModel, predictions:DataFrame, maxPredictions:Int = 5) : Seq[(String, (String, Double))] = {
@@ -100,8 +44,8 @@ object Regression extends SparkML {
         (item.toString(), 1.0)}.toSeq    
   }
   
-  def RandomForestRegressorModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
-    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def RandomForestRegressorModel(trainingData:DataFrame):SparkML.SparkModelGenerator = params => {
+    val training = trainingData
     val cols = training.schema.fields.tail
     val assmblerCols = cols.flatMap(col => {
       col.dataType match {
@@ -128,8 +72,8 @@ object Regression extends SparkML {
     pipeline.fit(training)
   }
   
-  def GradientBoostedTreeRegressorModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
-    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def GradientBoostedTreeRegressorModel(trainingData:DataFrame):SparkML.SparkModelGenerator = params => {
+    val training = trainingData.transform(fillNullValues)
     val cols = training.schema.fields.tail
     val assmblerCols = cols.flatMap(col => {
       col.dataType match {
@@ -157,8 +101,8 @@ object Regression extends SparkML {
   }
   
   
-  def DecisionTreeRegressorModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
-    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def DecisionTreeRegressorModel(trainingData:DataFrame):SparkML.SparkModelGenerator = params => {
+    val training = trainingData.transform(fillNullValues)
     val cols = training.schema.fields.tail
     val assmblerCols = cols.flatMap(col => {
       col.dataType match {
@@ -184,8 +128,8 @@ object Regression extends SparkML {
     pipeline.fit(training)
   }
   
-  def LinearRegressorModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
-    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def LinearRegressorModel(trainingData:DataFrame):SparkML.SparkModelGenerator = params => {
+    val training = trainingData.transform(fillNullValues)
     val cols = training.schema.fields.tail
     val assmblerCols = cols.flatMap(col => {
       col.dataType match {
@@ -210,8 +154,8 @@ object Regression extends SparkML {
     pipeline.fit(training)
   }
   
-  def GeneralizedLinearRegressorModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
-    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def GeneralizedLinearRegressorModel(trainingData:DataFrame):SparkML.SparkModelGenerator = params => {
+    val training = trainingData.transform(fillNullValues)
     val cols = training.schema.fields.tail
     val assmblerCols = cols.flatMap(col => {
       col.dataType match {
@@ -237,8 +181,8 @@ object Regression extends SparkML {
     pipeline.fit(training)
   }
   
-  def IsotonicRegressorModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
-    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def IsotonicRegressorModel(trainingData:DataFrame):SparkML.SparkModelGenerator = params => {
+    val training = trainingData.transform(fillNullValues)
     val cols = training.schema.fields.tail
     val assmblerCols = cols.flatMap(col => {
       col.dataType match {

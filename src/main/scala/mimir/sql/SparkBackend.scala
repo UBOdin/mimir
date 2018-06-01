@@ -25,7 +25,7 @@ import mimir.util.SparkUtils
 
 class SparkBackend extends RABackend{
   var sparkSql : SQLContext = null
-  ExperimentalOptions.enable("remoteSpark")
+  //ExperimentalOptions.enable("remoteSpark")
   val (sparkHost, sparkPort, hdfsPort, useHDFSHostnames, overwriteHDFSFiles) = Mimir.conf match {
     case null => (/*"128.205.71.102"*/"spark-master.local", "7077", "8020", "false", false)
     case x => (x.sparkHost, x.sparkPort, "8020", "false", false)
@@ -94,7 +94,7 @@ class SparkBackend extends RABackend{
   
   def createTable(tableName:String, oper:Operator) = {
     val df = execute(oper)
-    df/*.persist()*/.createOrReplaceTempView(tableName)
+    df.persist().createOrReplaceTempView(tableName)
   }
   
   def execute(compiledOp: Operator): DataFrame = {
@@ -146,7 +146,7 @@ class SparkBackend extends RABackend{
         else dsSchema.load(ldf)
         
       }
-    })/*.toDF(df.columns.map(_.toUpperCase): _*)*//*.persist()*/.createOrReplaceTempView(name)
+    })/*.toDF(df.columns.map(_.toUpperCase): _*)*/.persist().createOrReplaceTempView(name)
   }
   
   

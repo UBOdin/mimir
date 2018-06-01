@@ -35,88 +35,18 @@ import org.apache.spark.sql.types.DateType
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import mimir.algebra.spark.OperatorTranslation
 import mimir.provenance.Provenance
+import org.apache.spark.sql.types.ShortType
 
 
 object Classification extends SparkML {
   
   
-  def classifydb(model : PipelineModel, query : Operator, db:Database, valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType) : DataFrame = {
-    applyModelDB(model, query, db, valuePreparer, sparkTyper)
+  def classifydb(model : PipelineModel, query : Operator, db:Database) : DataFrame = {
+    applyModelDB(model, query, db)
   }
   
-  def classify( model : PipelineModel, cols:Seq[(String, Type)], testData : List[Seq[PrimitiveValue]], valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType): DataFrame = {
-    applyModel(model, cols, testData, valuePreparer, sparkTyper)
-  }
-  
-  override def prepareValueTrain(value:PrimitiveValue, t:Type): Any = {
-    value match {
-      case NullPrimitive() => t match {
-        case TInt() => ""
-        case TFloat() => ""
-        case TDate() => OperatorTranslation.defaultDate
-        case TString() => ""
-        case TBool() => false
-        case TRowId() => ""
-        case TType() => ""
-        case TAny() => ""
-        case TTimestamp() => OperatorTranslation.defaultTimestamp
-        case TInterval() => ""
-        case TUser(name) => prepareValueApply(value, mimir.algebra.TypeRegistry.registeredTypes(name)._2)
-        case x => ""
-      }
-      case RowIdPrimitive(s) => s
-      case StringPrimitive(s) => s
-      case IntPrimitive(i) => i.toString
-      case FloatPrimitive(f) => f.toString
-      case BoolPrimitive(b) => b
-      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
-      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
-      case x =>  x.asString 
-    }
-  }
-  
-  override def prepareValueApply(value:PrimitiveValue, t:Type): Any = {
-    value match {
-      case NullPrimitive() => t match {
-        case TInt() => ""
-        case TFloat() => ""
-        case TDate() => OperatorTranslation.defaultDate
-        case TString() => ""
-        case TBool() => false
-        case TRowId() => ""
-        case TType() => ""
-        case TAny() => ""
-        case TTimestamp() => OperatorTranslation.defaultTimestamp
-        case TInterval() => ""
-        case TUser(name) => prepareValueApply(value, mimir.algebra.TypeRegistry.registeredTypes(name)._2)
-        case x => ""
-      }
-      case RowIdPrimitive(s) => s
-      case StringPrimitive(s) => s
-      case IntPrimitive(i) => i.toString
-      case FloatPrimitive(f) => f.toString
-      case BoolPrimitive(b) => b
-      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
-      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
-      case x =>  x.asString 
-    }
-  }
-  
-  override def getSparkType(t:Type) : DataType = {
-    t match {
-      case TInt() => StringType
-      case TFloat() => StringType
-      case TDate() => DateType
-      case TString() => StringType
-      case TBool() => BooleanType
-      case TRowId() => StringType
-      case TType() => StringType
-      case TAny() => StringType
-      case TTimestamp() => TimestampType
-      case TInterval() => StringType
-      case TUser(name) => getSparkType(mimir.algebra.TypeRegistry.registeredTypes(name)._2)
-      case _ => StringType
-    }
+  def classify( model : PipelineModel, cols:Seq[(String, Type)], testData : List[Seq[PrimitiveValue]]): DataFrame = {
+    applyModel(model, cols, testData)
   }
     
   override def extractPredictions(model : PipelineModel, predictions:DataFrame, maxPredictions:Int = 5) : Seq[(String, (String, Double))] = {
@@ -160,12 +90,11 @@ object Classification extends SparkML {
         (item.toString(), 1.0)}.toSeq    
   }
   
-  def NaiveBayesMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
-    val trainingp = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.fill("").na.fill(new java.lang.Double(0.0))
+  def NaiveBayesMulticlassModel(trainingData:DataFrame):SparkML.SparkModelGenerator = params => {
     import org.apache.spark.sql.functions.abs
-    
-    val training = trainingp.schema.fields.tail.filter(col => Seq(IntegerType, LongType, DoubleType).contains(col.dataType)).foldLeft(trainingp)((init, cur) => init.withColumn(cur.name,abs(init(cur.name))) )
-    val cols = training.schema.fields.tail
+    val trainingp = trainingData.transform(fillNullValues)
+    val training = trainingp.schema.fields.filter(col => Seq(IntegerType, LongType, DoubleType).contains(col.dataType)).foldLeft(trainingp)((init, cur) => init.withColumn(cur.name,abs(init(cur.name))) )
+    val cols = training.schema.fields
     
     //training.show()
     val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
@@ -195,8 +124,8 @@ object Classification extends SparkML {
     pipeline.fit(training)
   }
    
-  def RandomForestMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
-    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def RandomForestMulticlassModel(trainingData:DataFrame):SparkML.SparkModelGenerator = params => {
+    val training = trainingData.transform(fillNullValues)
     //training.show()
     val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
     val indexerModel = indexer.fit(training);  
@@ -226,8 +155,8 @@ object Classification extends SparkML {
     pipeline.fit(training)
   }
   
-  def DecisionTreeMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
-    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def DecisionTreeMulticlassModel(trainingData:DataFrame):SparkML.SparkModelGenerator = params => {
+    val training = trainingData.transform(fillNullValues)
     //training.show()
     val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
     val indexerModel = indexer.fit(training);  
@@ -257,8 +186,8 @@ object Classification extends SparkML {
     pipeline.fit(training)
   }
   
-  def GradientBoostedTreeBinaryclassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
-    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def GradientBoostedTreeBinaryclassModel(trainingData:DataFrame):SparkML.SparkModelGenerator = params => {
+    val training = trainingData.transform(fillNullValues)
     //training.show()
     val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
     val indexerModel = indexer.fit(training);  
@@ -289,8 +218,8 @@ object Classification extends SparkML {
     pipeline.fit(training)
   }
   
-  def LogisticRegressionMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
-    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def LogisticRegressionMulticlassModel(trainingData:DataFrame):SparkML.SparkModelGenerator = params => {
+    val training = trainingData.transform(fillNullValues)
     val cols = training.schema.fields.tail
     //training.show()
     val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
@@ -320,8 +249,8 @@ object Classification extends SparkML {
     pipeline.fit(training)
   }
   
-  def OneVsRestMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
-    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def OneVsRestMulticlassModel(trainingData:DataFrame):SparkML.SparkModelGenerator = params => {
+    val training = trainingData.transform(fillNullValues)
     val cols = training.schema.fields.tail
     //training.show()
     val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
@@ -352,8 +281,8 @@ object Classification extends SparkML {
     pipeline.fit(training)
   }
   
-  def LinearSupportVectorMachineBinaryclassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
-    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def LinearSupportVectorMachineBinaryclassModel(trainingData:DataFrame):SparkML.SparkModelGenerator = params => {
+    val training = trainingData.transform(fillNullValues)
     val cols = training.schema.fields.tail
     //training.show()
     val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
@@ -383,8 +312,8 @@ object Classification extends SparkML {
     pipeline.fit(training)
   }
   
-  def MultilayerPerceptronMulticlassModel(valuePreparer:ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType):SparkML.SparkModelGenerator = params => {
-    val training = prepareData(params.query, params.db, valuePreparer, sparkTyper).na.drop()//.withColumn("label", toLabel($"topic".like("sci%"))).cache
+  def MultilayerPerceptronMulticlassModel(trainingData:DataFrame):SparkML.SparkModelGenerator = params => {
+    val training = trainingData.transform(fillNullValues)
     val cols = training.schema.fields.tail
     //training.show()
     val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)

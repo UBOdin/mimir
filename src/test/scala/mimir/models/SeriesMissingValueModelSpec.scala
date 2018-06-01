@@ -21,8 +21,7 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
   }
 
   def trueValue(col:String, row:String): PrimitiveValue = {
-	  val rowid = row.toLong - 1
-    val queryOper = select(s"SELECT $col FROM ORG_DETECTSERIESTEST3 WHERE ROWID=$rowid")
+	  val queryOper = select(s"SELECT $col FROM ORG_DETECTSERIESTEST3 WHERE ROWID=$row")
   	db.query(queryOper){ result =>
   		result.next.tuple(0)
   	}
@@ -64,7 +63,7 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
     "Produce reasonable explanations" >> {
 
       // explain("AGE", "1") must contain("I'm not able to guess based on weighted mean SERIESREPAIR:AGE.AGE, so defaulting using the upper and lower bound values")
-      explain("AGE", "4") must contain("I interpolated SERIESREPAIR.AGE, ordered by SERIESREPAIR.DOB to get 23 for row '4'")
+      explain("AGE", "3") must contain("I interpolated SERIESREPAIR.AGE, ordered by SERIESREPAIR.DOB to get 23 for row '3'")
     }
   }
 }	

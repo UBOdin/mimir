@@ -17,16 +17,32 @@ import java.sql.Timestamp
 import java.sql.Date
 import mimir.util.SparkUtils
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import mimir.provenance.Provenance
+import org.apache.spark.sql.types.ShortType
+import org.apache.spark.sql.types.DateType
+import org.apache.spark.sql.types.TimestampType
 
 object SparkML {
   type SparkModel = PipelineModel
-  case class SparkModelGeneratorParams(query:Operator, db:Database, predictionCol:String, handleInvalid:String /*keep, skip, error*/) 
+  case class SparkModelGeneratorParams(db:Database, predictionCol:String, handleInvalid:String /*keep, skip, error*/) 
   type SparkModelGenerator = SparkModelGeneratorParams => PipelineModel
   var sc: Option[SparkContext] = None
   var sqlCtx : Option[SQLContext] = None
   def apply(spark:SQLContext) = {
     sc = Some(spark.sparkSession.sparkContext)
     sqlCtx = Some(spark)
+  }
+  def getDataFrameWithProvFromQuery(db:Database, query:Operator) : (Seq[(String, Type)], DataFrame) = {
+    val prov = if(ExperimentalOptions.isEnabled("GPROM-PROVENANCE")
+        && ExperimentalOptions.isEnabled("GPROM-BACKEND"))
+      { Provenance.compileGProM(query) }
+      else { Provenance.compile(query) }
+    val oper           = prov._1
+    val provenanceCols = prov._2
+    val operWProv = Project(query.columnNames.map { name => ProjectArg(name, Var(name)) } :+
+        ProjectArg(Provenance.rowidColnameBase, 
+            Function(Provenance.mergeRowIdFunction, provenanceCols.map( Var(_) ) )), oper )
+    (db.typechecker.schemaOf(operWProv), db.backend.execute(operWProv))
   }
 }
 
@@ -49,14 +65,6 @@ abstract class SparkML {
     }
   }
   
-  type ValuePreparer = (PrimitiveValue, Type) => Any
-  
-  protected def prepareValueTrain(value:PrimitiveValue, t:Type): Any 
-  
-  protected def prepareValueApply(value:PrimitiveValue, t:Type): Any 
-  
-  protected def getSparkType(t:Type) : DataType 
-  
   type DataFrameTransformer = (DataFrame) => DataFrame
   
   protected def nullValueReplacement(df:DataFrame): DataFrame = {
@@ -73,42 +81,40 @@ abstract class SparkML {
     new Imputer().setInputCols(imputerCols) .setOutputCols(imputerCols).fit(df).transform(df)
   }
   
-  def prepareData(query : Operator, db:Database, valuePreparer: ValuePreparer = prepareValueTrain, sparkTyper:Type => DataType = getSparkType) : DataFrame = {
-    db.backend.execute(query)
-    /*val schema = db.typechecker.schemaOf(query).toList
-    val sqlContext = getSparkSqlContext()
-    //OperatorTranslation.db = db
-    //OperatorTranslation.mimirOpToDF(sqlContext, query)
-    import sqlContext.implicits._
-    sqlContext.createDataFrame(
-      getSparkSession().parallelize(db.query(query)(results => {
-        results.toList.map(row => Row((valuePreparer(row.provenance, TString() ) +: row.tuple.zip(schema).map(value => valuePreparer(value._1, value._2._2))):_*))
-      })), StructType(StructField("rowid", StringType, false) :: schema.filterNot(_._1.equalsIgnoreCase("rowid")).map(col => StructField(col._1, sparkTyper(col._2), true))))
-  */}
+  def fillNullValues(df:DataFrame) : DataFrame = {
+    df.schema.fields.foldLeft(df)((init, curr) => {
+      curr.dataType match {
+        case LongType => init.na.fill(0L, Seq(curr.name))
+        case IntegerType => init.na.fill(0L, Seq(curr.name))
+        case FloatType => init.na.fill(0.0, Seq(curr.name))
+        case DoubleType => init.na.fill(0.0, Seq(curr.name))
+        case ShortType => init.na.fill(0.0, Seq(curr.name))
+        case DateType => init.na.fill(0, Seq(curr.name))
+        case BooleanType => init.na.fill(0, Seq(curr.name))
+        case TimestampType => init.na.fill(0L, Seq(curr.name))
+        case x => init.na.fill("", Seq(curr.name))
+      }
+    })
+  }
   
-  def applyModelDB(model : PipelineModel, query : Operator, db:Database, valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType, dfTransformer:Option[DataFrameTransformer] = None) : DataFrame = {
+  def applyModelDB(model : PipelineModel, query : Operator, db:Database, dfTransformer:Option[DataFrameTransformer] = None) : DataFrame = {
     val data = db.query(query)(results => {
       results.toList.map(row => row.provenance +: row.tupleSchema.zip(row.tuple).filterNot(_._1._1.equalsIgnoreCase("rowid")).unzip._2)
     })
-    applyModel(model, ("rowid", TString()) +:db.typechecker.schemaOf(query).filterNot(_._1.equalsIgnoreCase("rowid")), data, valuePreparer, sparkTyper, dfTransformer)
+    applyModel(model, ("rowid", TString()) +:db.typechecker.schemaOf(query).filterNot(_._1.equalsIgnoreCase("rowid")), data, dfTransformer)
   }
   
-  def applyModel( model : PipelineModel, cols:Seq[(String, Type)], testData : List[Seq[PrimitiveValue]], valuePreparer:ValuePreparer = prepareValueApply, sparkTyper:Type => DataType = getSparkType, dfTransformer:Option[DataFrameTransformer] = None): DataFrame = {
+  def applyModel( model : PipelineModel, cols:Seq[(String, Type)], testData : List[Seq[PrimitiveValue]], dfTransformer:Option[DataFrameTransformer] = None): DataFrame = {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._
     val modDF = dfTransformer.getOrElse((df:DataFrame) => df)
     model.transform(modDF(sqlContext.createDataFrame(
       getSparkSession().parallelize(testData.map( row => {
-        Row(row.zip(cols).map(value => valuePreparer(value._1, value._2._2)):_*)
-      })), StructType(cols.toList.map(col => StructField(col._1, sparkTyper(col._2), true))))))
+        Row(row.zip(cols).map(value => OperatorTranslation.mimirExprToSparkExpr(null, value._1)):_*)
+      })), StructType(cols.toList.map(col => StructField(col._1, OperatorTranslation.getSparkType(col._2), true))))))
   }
   
   def applyModel( model : PipelineModel, inputDF:DataFrame): DataFrame = {//inputPlan:LogicalPlan): DataFrame = {
-    /*val sqlContext = getSparkSqlContext()
-    import sqlContext.implicits._
-    val qe = sqlContext.sparkSession.sessionState.executePlan(inputPlan)
-    qe.assertAnalyzed()
-    val dfToTf = new Dataset[Row](sqlContext.sparkSession, inputPlan, RowEncoder(qe.analyzed.schema)).toDF()*/
     model.transform(inputDF)
   }
   

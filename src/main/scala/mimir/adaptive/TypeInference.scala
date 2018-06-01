@@ -6,6 +6,7 @@ import mimir.algebra._
 import mimir.lenses._
 import mimir.models._
 import mimir.util.SqlUtils
+import mimir.sql.SparkBackend
 
 object TypeInference
   extends Multilens
@@ -45,14 +46,16 @@ object TypeInference
       new TypeInferenceModel(
         s"MIMIR_TI_ATTR_${viewName}",
         modelColumns,
-        stringDefaultScore
+        stringDefaultScore,
+        db.backend.asInstanceOf[SparkBackend].sparkSql,
+        Some(db.backend.execute(config.query))
       )
 
     val columnIndexes = 
       modelColumns.zipWithIndex.toMap
 
     logger.debug(s"Training $model.name on ${config.query}")
-    model.train(db, config.query)
+    //model.train(db.backend.execute(config.query))
     
     Seq(model)
   }

@@ -41,7 +41,7 @@ object SparkClassifierModel
   val TRAINING_LIMIT = 10000
   val TOKEN_LIMIT = 100
   
-  val availableSparkModels = Map("Classification" -> (Classification, Classification.NaiveBayesMulticlassModel()), "Regression" -> (Regression, Regression.GeneralizedLinearRegressorModel()))
+  def availableSparkModels(trainingData:DataFrame) = Map("Classification" -> (Classification, Classification.NaiveBayesMulticlassModel(trainingData)), "Regression" -> (Regression, Regression.GeneralizedLinearRegressorModel(trainingData)))
   
   def train(db: Database, name: String, cols: Seq[String], query:Operator): Map[String,(Model,Int,Seq[Expression])] = 
   {
@@ -51,17 +51,8 @@ object SparkClassifierModel
         db.models.getOption(modelName) match {
           case Some(model) => model
           case None => {
-            val prov = if(ExperimentalOptions.isEnabled("GPROM-PROVENANCE")
-                && ExperimentalOptions.isEnabled("GPROM-BACKEND"))
-              { Provenance.compileGProM(query) }
-              else { Provenance.compile(query) }
-            val oper           = prov._1
-            val provenanceCols = prov._2
-            val operWProv = Project(query.columnNames.map { name => ProjectArg(name, Var(name)) } :+
-                ProjectArg(Provenance.rowidColnameBase, 
-                    Function(Provenance.mergeRowIdFunction, provenanceCols.map( Var(_) ) )), oper )
-            val modelHT = db.backend.execute(operWProv)
-            val model = new SimpleSparkClassifierModel(modelName, col, db.typechecker.schemaOf(operWProv), modelHT)
+            val (schemaWProv, modelHT) = SparkML.getDataFrameWithProvFromQuery(db, query)
+            val model = new SimpleSparkClassifierModel(modelName, col, schemaWProv, modelHT)
             trainModel(db, query, model)
             model
           }
@@ -81,21 +72,18 @@ object SparkClassifierModel
   def trainModel(db:Database, query:Operator, model:SimpleSparkClassifierModel)
   {
     model.sparkMLInstanceType = model.guessSparkModelType(model.guessInputType) 
-    val sparkMLInstance = availableSparkModels.getOrElse(model.sparkMLInstanceType, (Classification, Classification.NaiveBayesMulticlassModel()))._1
-    def sparkMLModelGenerator = availableSparkModels.getOrElse(model.sparkMLInstanceType, (Classification, Classification.NaiveBayesMulticlassModel()))._2
+    val trainingQuery = Limit(0, Some(SparkClassifierModel.TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)),  query.filter(Not(IsNullExpression(Var(model.colName))))))
+    val trainingData = db.backend.execute(trainingQuery)
+    val (sparkMLInstance, sparkMLModelGenerator) = availableSparkModels(trainingData).getOrElse(model.sparkMLInstanceType, (Classification, Classification.NaiveBayesMulticlassModel(trainingData)))
     Timer.monitor(s"Train ${model.name}.${model.colName}", SparkClassifierModel.logger.info(_)){
-      val trainingQuery = Limit(0, Some(SparkClassifierModel.TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)),  query.filter(Not(IsNullExpression(Var(model.colName))))))
-      model.learner = Some(sparkMLModelGenerator(ModelParams(trainingQuery, db, model.colName, "keep")))
+      model.learner = Some(sparkMLModelGenerator(ModelParams(db, model.colName, "keep")))
       model.classifyAll(sparkMLInstance)
     }
   }
-
-
-
 }
 
 @SerialVersionUID(1001L)
-class SimpleSparkClassifierModel(name: String, val colName:String, val schema:Seq[(String, Type)], val trainingData:DataFrame)
+class SimpleSparkClassifierModel(name: String, val colName:String, val schema:Seq[(String, Type)], val data:DataFrame)
   extends Model(name) 
   with SourcedFeedback
   with ModelCache
@@ -131,26 +119,9 @@ class SimpleSparkClassifierModel(name: String, val colName:String, val schema:Se
     hasFeedback(idx, args)
 
   
-  
-  
-  
-  
-  
   def classifyAll(sparkMLInstance:SparkML) : Unit = {
     val classifier = learner.get
-    val classifyAllQuery = trainingData.schema.fields.foldLeft(trainingData)((init, curr) => {
-      curr.dataType match {
-        case LongType => init.na.fill(0L, Seq(curr.name))
-        case IntegerType => init.na.fill(0L, Seq(curr.name))
-        case FloatType => init.na.fill(0.0, Seq(curr.name))
-        case DoubleType => init.na.fill(0.0, Seq(curr.name))
-        case ShortType => init.na.fill(0.0, Seq(curr.name))
-        case DateType => init.na.fill(0, Seq(curr.name))
-        case BooleanType => init.na.fill(0, Seq(curr.name))
-        case TimestampType => init.na.fill(0L, Seq(curr.name))
-        case x => init.na.fill("", Seq(curr.name))
-      }
-    })/*sparkMLInstance.getSparkSqlContext().createDataFrame(
+    val classifyAllQuery = data.transform(sparkMLInstance.fillNullValues)/*sparkMLInstance.getSparkSqlContext().createDataFrame(
       sparkMLInstance.getSparkSession().parallelize(trainingData.map( row => {
         Row(row.zip(schema).map(value => sparkMLInstance.getNative(value._1, value._2._2) ):_*)
       })), StructType(schema.map(col => StructField(col._1, OperatorTranslation.getSparkType(col._2), true))))//Project(Seq(ProjectArg(colName, Var(colName))), query)

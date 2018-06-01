@@ -8,6 +8,8 @@ import mimir.algebra._
 import mimir.util._
 import mimir.serialization.Json
 import mimir.Database
+import org.apache.spark.sql.Dataset
+import org.apache.spark.sql.Encoders
 
 /**
  * A model representing a key-repair choice.
@@ -31,7 +33,7 @@ class RepairKeyModel(
   with SourcedFeedbackT[List[PrimitiveValue]]
 {
   
-  var domainCache = Seq[(PrimitiveValue, Double)]()
+  var domainCache: Dataset[(PrimitiveValue, Double)] = null
   
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) : List[PrimitiveValue] = args.toList
   
@@ -66,8 +68,7 @@ class RepairKeyModel(
     hasFeedback(idx, args)
 
   def trainDomain(db:Database) = {
-    domainCache = db.query(
-        OperatorUtils.projectColumns(List(target) ++ scoreCol, 
+    val mop = OperatorUtils.projectColumns(List(target) ++ scoreCol, 
           Select(
             ExpressionUtils.makeAnd(
               keys.map(col => (col._1,Var(col._1))).map { 
@@ -77,22 +78,21 @@ class RepairKeyModel(
             source
           )
         )
-      ){ _.map { row => 
-          ( row(0), 
+     val mopSchema = db.typechecker.schemaOf(mop)
+    domainCache = db.backend.execute(mop).map( row => {
+          ( SparkUtils.convertField(mopSchema(0)._2, row, 0, TString()), 
             scoreCol match { 
               case None => 1.0; 
-              case Some(_) => row(1).asDouble
+              case Some(_) => row.getDouble(1)
             }
           )
-        }.toIndexedSeq
-      }
+        })(org.apache.spark.sql.Encoders.kryo[(PrimitiveValue,Double)])
   }
     
   final def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
   {
     if(hints.isEmpty){
-      throw new Exception("you fucking blow")
-      domainCache
+      domainCache.collect().toIndexedSeq
     } else {
       val possibilities = 
         Json.parse(hints(0).asString) match {

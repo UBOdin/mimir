@@ -23,7 +23,7 @@ object DetectSeriesSpec
 	
 	sequential
 	
-	def testDetectSeriesof(oper: Operator) = DetectSeries.seriesOf(db, oper, 0.1)
+	def testDetectSeriesof(oper: Operator) = DetectSeries.seriesOf(db, oper, 0.1).collect().toSeq
 	
 	
 	"The DetectSeriesSpec" should {
