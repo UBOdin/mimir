@@ -15,10 +15,12 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection._
 import org.apache.spark.sql.expressions.Window
 import mimir.algebra.spark.OperatorTranslation
-import org.apache.spark.sql.functions.{sum, mean, stddev, col, lead, lag, abs, lit, isnull, not, desc, unix_timestamp}       
+import org.apache.spark.sql.functions.{sum, mean, stddev, col, lead, lag, abs, lit, isnull, not, desc, unix_timestamp, datediff, floor}       
 import org.apache.spark.sql.Encoders
 import mimir.models.SeriesColumnItem
 import org.apache.spark.sql.Dataset
+import org.apache.spark.sql.types.LongType
+import org.apache.spark.sql.types.DoubleType
 
 
 
@@ -63,9 +65,7 @@ object DetectSeries
         val rowWindowSpec = Window.orderBy(dataframe.columns(0))  
         val rowWindowDf = dataframe.withColumn("next", lag(dataframe.columns(0), 1).over(rowWindowSpec))
         val diffDf = rowWindowDf.withColumn("diff", rowWindowDf.col(rowWindowDf.columns(0))-rowWindowDf.col(rowWindowDf.columns(1)))
-        //diffDf.show()
         val meanStdDevRelStddevDf = diffDf.agg(mean("diff").alias("mean"), stddev("diff").alias("stddev")).withColumn("relstddev", col("stddev") / col("mean"))
-        //meanStdDevRelStddevDf.show()
         init.union( meanStdDevRelStddevDf.flatMap( dfrow => {
           val relativeStdDev = dfrow.getDouble(2)
           if(relativeStdDev < thresh) {
@@ -95,7 +95,6 @@ object DetectSeries
         val l = low.asDateTime
         val m = mid.asDateTime
         val h = high.asDateTime
-        println("-----------------------------------------------ratio date")
         return new Duration(l, m).getMillis().toDouble / new Duration(l, h).getMillis().toDouble
       } 
       case ( lt, mt, ht ) =>
@@ -119,16 +118,12 @@ object DetectSeries
         val l = low.asDateTime
         val h = high.asDateTime
         val ret = l.plus(new Duration(l, h).dividedBy( (1/mid).toLong ))
-        println("-----------------------------------------------interp date")
-        
         DatePrimitive(ret.getYear, ret.getMonthOfYear, ret.getDayOfMonth)
       }
       case ( (TDate() | TTimestamp()), (TDate() | TTimestamp())) => {
         val l = low.asDateTime
         val h = high.asDateTime
         val ret = l.plus(new Duration(l, h).dividedBy( (1/mid).toLong ))
-        println("-----------------------------------------------interp ts")
-        
         TimestampPrimitive(
           ret.getYear,
           ret.getMonthOfYear,
@@ -173,80 +168,40 @@ object DetectSeries
           .select(col("timestamp"))
           .withColumnRenamed("timestamp", df.columns(0)) 
       }}
-      val retdf = (dataframes.zipWithIndex.foldLeft(db.backend.asInstanceOf[SparkBackend].sparkSql.createDataset(Seq())(Encoders.product[(String,Double)]))( (init, curr) => {
+      (dataframes.zipWithIndex.foldLeft(db.backend.asInstanceOf[SparkBackend].sparkSql.createDataset(Seq())(Encoders.product[(String,Double)]))( (init, curr) => {
         val (dataframe, idx) = curr
-        val rowWindowSpec = Window.orderBy(dataframe.columns(0))  
-        val rowWindowDf = dataframe.withColumn("next", lag(dataframe.columns(0), 1).over(rowWindowSpec)).na.drop
-        val diffDf = rowWindowDf.withColumn("diff", rowWindowDf.col(rowWindowDf.columns(0))-rowWindowDf.col(rowWindowDf.columns(1)))
-        //diffDf.show()
-        val meanStdDevRelStddevDf = diffDf.agg(mean("diff").alias("mean"), stddev("diff").alias("stddev")).withColumn("relstddev", col("stddev").divide( col("mean")))
-        //meanStdDevRelStddevDf.show()
-        val dfrow = meanStdDevRelStddevDf.head
-        val relativeStdDev = dfrow.getDouble(2)
         val columnName = scnf(idx)._1
-        if(relativeStdDev < thresh && columnName != colName /*Make sure we don't match the column itself*/) {
+        val curTypes = (queryColumns.toMap.getOrElse(columnName,TString()), colType)
+        val rowWindowSpec = Window.orderBy(dataframe.columns(0))  
+        val rowWindowDf = dataframe.withColumn("next", lead(dataframe.columns(0), 1).over(rowWindowSpec)).na.drop
+        val diffDf = rowWindowDf.withColumn("diff", rowWindowDf.col(rowWindowDf.columns(0))-rowWindowDf.col(rowWindowDf.columns(1)))
+        val meanStdDevRelStddevDf = diffDf.agg(mean("diff").alias("mean"), stddev("diff").alias("stddev")).withColumn("relstddev", abs(col("stddev").divide( col("mean"))))
+        val dfrow = meanStdDevRelStddevDf.head
+        val relativeStdDev = dfrow.getDouble(dfrow.fieldIndex("relstddev"))
+        if((relativeStdDev < thresh || curTypes._1.isInstanceOf[TDate] || curTypes._1.isInstanceOf[TTimestamp] ) && columnName != colName /*Make sure we don't match the column itself*/) {
           val rowWindowSpeci = Window.orderBy(queryDf.col(columnName))  
           val rowWindowDfi = queryDf.sort(desc(columnName)).filter(not(isnull(col(columnName)))).select(col(columnName), col(colName))
-                                  .withColumn("prev0", lag(col(columnName), 1).over(rowWindowSpeci))
-                                  .withColumn("next0", lead(col(columnName), 1).over(rowWindowSpeci))
-                                  .withColumn("prev1", lag(col(colName), 1).over(rowWindowSpeci))
-                                  .withColumn("next1", lead(col(colName), 1).over(rowWindowSpeci))
-                                  rowWindowDfi.show()
-          val outDfi = rowWindowDfi.na.drop.withColumn("ratio", (col(columnName) - col("prev0")) / (col("next0") - col("prev0")))    
-                                  .withColumn("interpolate", (col("next0") - col("prev0")) * col("ratio") + col("prev0"))
-                                  .withColumn("actual", col(colName))
-                                  .withColumn("error", abs((col(colName) - col("interpolate"))))
-                                  .agg(sum("error").alias("error_sum"), sum("actual").alias("actual_sum"))
-                                  .withColumn("result", col("error_sum").divide(col("actual_sum")))
-                                  .select("result")
-                                  .withColumn("sname", lit(colName))
+                              .withColumn("prev0", lag(col(columnName), 1).over(rowWindowSpeci))
+                              .withColumn("next0", lead(col(columnName), 1).over(rowWindowSpeci))
+                              .withColumn("prev1", lag(col(colName), 1).over(rowWindowSpeci))
+                              .withColumn("next1", lead(col(colName), 1).over(rowWindowSpeci))
+          val scaleDf = curTypes match {
+            case (TDate() | TTimestamp(), _) => rowWindowDfi.na.drop.withColumn("ratio", datediff(col("prev0"), col(columnName)) / datediff(col("prev0"), col("next0")))
+            case _ => rowWindowDfi.na.drop.withColumn("ratio", (col(columnName) - col("prev0")) / (col("next0") - col("prev0")))
+          } 
+          val predictedDf = curTypes match {
+            case (_, TDate() | TTimestamp()) => scaleDf.withColumn("interpolate", datediff(col("prev1"), col("next1")) / (lit(1.0)/col("ratio")))
+            case _ => scaleDf.withColumn("interpolate", (col("next1") - col("prev1")) * col("ratio") + col("prev1"))                     
+          }
+          val outDfi = predictedDf.withColumn("actual", col(colName))
+                          .withColumn("error", abs((col(colName) - col("interpolate"))))
+                          .agg(sum("error").alias("error_sum"), sum("actual").alias("actual_sum"))               
+                          .withColumn("result", (col("error_sum") / col("actual_sum")))
+                          .select("result")
+                          .withColumn("sname", lit(columnName))
           init.union( outDfi.map(row => (row.getString(1), row.getDouble(0)))(Encoders.product[(String,Double)]))  
         }
-        else {
-          println(s"skipped: $columnName == $colName || $relativeStdDev >= $thresh ")
-          init
-        }
-      }))
-      //retdf.show()
-      retdf
-      
+        else init
+      }))    
   }
-  
-  /*def bestMatchSeriesColumn(db: Database, colName: String, colType: Type, query: Operator, seriesColumnList: Seq[SeriesColumnItem]): Dataset[(String,Double)] = {
-    
-    val dataframes = seriesColumnList
-      .filter( seriesCol => seriesCol.columnName != colName ) // Make sure we don't match the column itself
-      .map(seriesCol => {
-        // To test out a particular column, we use a query of the form
-        // SELECT colName FROM Q(...) ORDER BY seriesCol
-        // We're expecting to see a relatively good interpolation
-        val projectQuery = 
-          query
-            .sort((seriesCol.columnName,true))
-            .filter( Var(seriesCol.columnName).isNull.not )
-            .project(seriesCol.columnName, colName)
-        
-        db.backend.execute(projectQuery) 
-      })
-      dataframes.foldLeft(db.backend.asInstanceOf[SparkBackend].sparkSql.createDataset(Seq())(Encoders.product[(String, Double)]))( (init, dataframe) => {
-        val rowWindowSpec = Window.orderBy(dataframe.col(colName))  
-        val rowWindowDf = dataframe.withColumn("prev0", lag(dataframe.columns(0), 1).over(rowWindowSpec))
-                                   .withColumn("next0", lead(dataframe.columns(0), 1).over(rowWindowSpec))
-                                   .withColumn("prev1", lag(dataframe.columns(1), 1).over(rowWindowSpec))
-                                   .withColumn("next1", lead(dataframe.columns(1), 1).over(rowWindowSpec))
-        val outDf = rowWindowDf.na.drop.withColumn("ratio", (col(rowWindowDf.columns(0)) - col("prev0")) / (col("next0") - col("prev0")))    
-                                    .withColumn("interpolate", (col("next0") - col("prev0")) * col("ratio") + col("prev0"))
-                                    .withColumn("actual", col(rowWindowDf.columns(1)))
-                                    .withColumn("error", abs((col(rowWindowDf.columns(1)) - col("interpolate"))))
-                                    .agg((sum("error")/sum("actual")).alias("result"))
-                                    .select("result")
-                                    .withColumn("sname", lit(colName))
-       init.union(outDf.map(row => (row.getString(1), row.getDouble(0)))(Encoders.product[(String, Double)]))
-        
-      })
-
-  }*/
-
-
-
 }

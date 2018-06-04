@@ -101,7 +101,7 @@ object SparkUtils {
     }
   }
   
-  def convertField(t: Type, results: Row, field: Integer, rowIdType: Type = TString()): PrimitiveValue =
+  def convertField(t: Type, results: Row, field: Integer, dateType: Type = TString()): PrimitiveValue =
   {
     convertFunction(
       t match {
@@ -109,7 +109,7 @@ object SparkUtils {
         case _ => t
       }, 
       field, 
-      rowIdType
+      dateType
     )(results)
   }
   

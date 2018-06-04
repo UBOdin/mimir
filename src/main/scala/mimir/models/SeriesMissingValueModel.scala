@@ -69,19 +69,23 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
   var predictions:Seq[Dataset[(String, Double)]] = Seq()
   var queryDf: DataFrame = null
   var rowIdType:Type = TString()
+  var dateType:Type = TDate()
   var rowIdVar:Column = null
     //colNames.map { _ => Seq[(String,Double)]() }
-  var querySchema:Seq[Type] = 
-    colNames.map { _ => TAny() }
+  var queryCols:Seq[String] = colNames
+  var querySchema:Seq[(String,Type)] = 
+    colNames.map { x => (x, TAny()) }
 
   def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : String = s"${idx}_${args(0).asString}_${hints(0).asString}"
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = s"${idx}_${args(0).asString}"
 
   def train(db: Database): Seq[Boolean] = 
   {
-    querySchema = db.typechecker.schemaOf(query).map { _._2 }
+    querySchema = db.typechecker.schemaOf(query)
+    queryCols = querySchema.unzip._1
     queryDf = db.backend.execute(query)
     rowIdType = db.backend.rowIdType
+    dateType = db.backend.dateType
     rowIdVar = (monotonically_increasing_id()+1).alias(RowIdVar().toString()).cast(OperatorTranslation.getSparkType(rowIdType))
     
     predictions = 
@@ -89,7 +93,7 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
         DetectSeries.bestMatchSeriesColumn(
           db,
           col, 
-          querySchema(idx), 
+          querySchema(idx)._2, 
           query
         )
       }
@@ -114,26 +118,26 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
     interpolate(idx, args(0).asInstanceOf[RowIdPrimitive], series)
   def interpolate(idx: Int, rowid:RowIdPrimitive, series: String): PrimitiveValue =
   {
-    val sp2m : (String, Row) => PrimitiveValue = (colName, row) => SparkUtils.convertField(colNames.zip(querySchema).toMap.get(colName).get, row, colNames.indexOf(colName), rowIdType)
+    val sp2m : (String, Row) => PrimitiveValue = (colName, row) => SparkUtils.convertField(querySchema.toMap.get(colName).get, row, row.fieldIndex(colName), dateType)
     val m2sp : PrimitiveValue => Any = prim => OperatorTranslation.mimirPrimitiveToSparkExternalRowValue(prim)
     val sprowid = m2sp(rowid)
-    val key = Option(sp2m(series,queryDf.filter(rowIdVar === sprowid ).select(series).head)).getOrElse(NullPrimitive())
+    val key = sp2m(series,queryDf.filter(rowIdVar === sprowid ).select(series).limit(1).collect().headOption.getOrElse(null))
     SeriesMissingValueModel.logger.debug(s"Interpolate $rowid with key $key")
     if(key == NullPrimitive()){ return NullPrimitive(); }
     val low = 
       queryDf.filter((col(series) <= lit(m2sp(key))).and(not(isnull(col(colNames(idx))))).and(rowIdVar =!= sprowid))
-          .sort(asc(series))
+          .sort(desc(series))
           .limit(1)
           .select(series, colNames(idx)).collect().map( row => (sp2m(series,row), sp2m(colNames(idx),row)) ).toSeq
     val high = 
       queryDf.filter((col(series) >= lit(m2sp(key))).and(not(isnull(col(colNames(idx))))).and(rowIdVar =!= sprowid))
-          .sort(asc(series))
+          .sort(desc(series))
           .limit(1)
           .select(series, colNames(idx)).collect().map( row => (sp2m(series,row), sp2m(colNames(idx),row)) ).toSeq
 
     SeriesMissingValueModel.logger.debug(s"   -> low = $low; high = $high")
-   println(low)
-   println(high)
+   //println(low)
+   //println(high)
     val result = (low, high) match {
       case (Seq(), Seq()) => NullPrimitive()
       case (Seq((_, low_v)), Seq())  => low_v
@@ -150,15 +154,12 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
 
   def bestSequence(idx: Int): String = {
     val df = predictions(idx)
-    val dfr = df.sort(desc(df.columns(1)))
-    println(s"bestSequence: $idx ${colNames(idx)} [${df.columns.mkString(",")}]")
-    dfr.show()
-    dfr.limit(1).head._1
+    df.sort(asc(df.columns(1))).limit(1).head._1
   }
 
   def argTypes(idx: Int) = Seq(TRowId())
 
-  def varType(idx: Int, args: Seq[Type]): Type = querySchema(idx) 
+  def varType(idx: Int, args: Seq[Type]): Type = querySchema(idx)._2 
   
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ): PrimitiveValue = 
   {
@@ -170,7 +171,7 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
           case Some(v) => v
           case None => {
             //throw new Exception(s"The Model is not trained: ${this.name}: idx: $idx  args: [${args.mkString(",")}] series: $bestSeries" )
-            interpolate(idx, args, bestSequence(idx))
+            interpolate(idx, args, bestSeries)
           }
         }
       }
@@ -189,7 +190,6 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
           case Some(v) => v
           case None => {
             //throw new Exception(s"The Model is not trained: ${this.name}: idx: $idx  args: [${args.mkString(",")}] series: $series" )
-            val series = predictions(idx).sample(false, 0.1, randomness.nextInt()).limit(1).head()._1
             interpolate(idx, args, series)
           }
         }
@@ -209,7 +209,6 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
             s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSequence(idx)} to get $value for row ${args(0)}"
           case None =>{
             //s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSequence(idx)} row ${args(0)}"
-            val bestSeries = bestSequence(idx)
             s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSeries} to get ${interpolate(idx, args, bestSeries)} for row ${args(0)}"
           }
         }
@@ -230,7 +229,7 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
   
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = {
     val df = predictions(idx)
-    df.sort(desc(df.columns(1))).limit(1).head._2
+    df.sort(asc(df.columns(1))).limit(1).head._2
   }
 
 }
