@@ -45,7 +45,8 @@ object CureScenario
       val basename = table.getName().replace(".csv", "").toUpperCase
       s"Load '$table'" >> {
         time(s"Load '$table'") {
-          update(s"LOAD '$table';") 
+          //update(s"LOAD '$table';") 
+          loadCSV(basename, table)
         }
         time(s"Materialize '$basename'"){
           update(s"ALTER VIEW $basename MATERIALIZE;")

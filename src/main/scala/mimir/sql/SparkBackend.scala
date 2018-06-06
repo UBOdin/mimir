@@ -25,10 +25,10 @@ import mimir.util.SparkUtils
 
 class SparkBackend extends RABackend with BackendWithSparkContext{
   var sparkSql : SQLContext = null
-  ExperimentalOptions.enable("remoteSpark")
-  val (sparkHost, sparkPort, hdfsPort, useHDFSHostnames, overwriteHDFSFiles) = Mimir.conf match {
-    case null => (/*"128.205.71.102"*/"spark-master.local", "7077", "8020", "false", false)
-    case x => (x.sparkHost, x.sparkPort, "8020", "false", false)
+  //ExperimentalOptions.enable("remoteSpark")
+  val (sparkHost, sparkPort, hdfsPort, useHDFSHostnames, overwriteHDFSFiles, overwriteJars, numPartitions) = Mimir.conf match {
+    case null => (/*"128.205.71.102"*/"spark-master.local", "7077", "8020", "false", false, false, 8)
+    case x => (x.sparkHost(), x.sparkPort(), "8020", "false", false, false, 8)
   }
   val remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
   def open(): Unit = {
@@ -43,6 +43,7 @@ class SparkBackend extends RABackend with BackendWithSparkContext{
             .set("spark.driver.cores","4")
             .set("spark.driver.memory","8g")
             .set("spark.executor.memory","8g")
+            .set("spark.sql.shuffle.partitions", s"$numPartitions")//TODO: make this the number of workers
             .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
             .registerKryoClasses(SparkUtils.getSparkKryoClasses())
         }
@@ -66,17 +67,28 @@ class SparkBackend extends RABackend with BackendWithSparkContext{
           sparkCtx.hadoopConfiguration.set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
           sparkCtx.hadoopConfiguration.set("fs.defaultFS", s"hdfs://$sparkHost:$hdfsPort")
           val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkCtx)
-          HadoopUtils.writeToHDFS(sparkCtx, "mimir-core_2.11-0.2.jar", new File(s"${System.getProperty("user.home")}/.m2/repository/info/mimirdb/mimir-core_2.11/0.2/mimir-core_2.11-0.2.jar"), false)
-          HadoopUtils.writeToHDFS(sparkCtx, "scala-logging-slf4j_2.11-2.1.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.scala-logging/scala-logging-api_2.11/jars/scala-logging-api_2.11-2.1.2.jar"), false)
-          HadoopUtils.writeToHDFS(sparkCtx, "scala-logging-api_2.11-2.1.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.scala-logging/scala-logging-slf4j_2.11/jars/scala-logging-slf4j_2.11-2.1.2.jar"), false)
-          HadoopUtils.writeToHDFS(sparkCtx, "play-json_2.11-2.5.0-M2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.play/play-json_2.11/jars/play-json_2.11-2.5.0-M2.jar"), false)
-          HadoopUtils.writeToHDFS(sparkCtx, "gt-referencing-16.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.geotools/gt-referencing/jars/gt-referencing-16.2.jar"), false)
+          HadoopUtils.writeToHDFS(sparkCtx, "mimir-core_2.11-0.2.jar", new File(s"${System.getProperty("user.home")}/.m2/repository/info/mimirdb/mimir-core_2.11/0.2/mimir-core_2.11-0.2.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, "scala-logging-slf4j_2.11-2.1.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.scala-logging/scala-logging-api_2.11/jars/scala-logging-api_2.11-2.1.2.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, "scala-logging-api_2.11-2.1.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.scala-logging/scala-logging-slf4j_2.11/jars/scala-logging-slf4j_2.11-2.1.2.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, "play-json_2.11-2.5.0-M2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.play/play-json_2.11/jars/play-json_2.11-2.5.0-M2.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, "jsr-275-0.9.1.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/javax.measure/jsr-275/jars/jsr-275-0.9.1.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, "GeographicLib-Java-1.44.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/net.sf.geographiclib/GeographicLib-Java/jars/GeographicLib-Java-1.44.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, "jai_core-1.1.3.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/javax.media/jai_core/jars/jai_core-1.1.3.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, "gt-opengis-16.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.geotools/gt-opengis/jars/gt-opengis-16.2.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, "gt-metadata-16.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.geotools/gt-metadata/jars/gt-metadata-16.2.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, "gt-referencing-16.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.geotools/gt-referencing/jars/gt-referencing-16.2.jar"), overwriteJars)
           //sparkCtx.addJar("https://maven.mimirdb.info/info/mimirdb/mimir-core_2.11/0.2/mimir-core_2.11-0.2.jar")
           sparkCtx.addJar(s"$hdfsHome/mimir-core_2.11-0.2.jar")
-          sparkCtx.addJar(s"$hdfsHome/scala-logging-slf4j_2.11-2.1.2.jar")
-          sparkCtx.addJar(s"$hdfsHome/scala-logging-api_2.11-2.1.2.jar")
-          sparkCtx.addJar(s"$hdfsHome/play-json_2.11-2.5.0-M2.jar")
+          sparkCtx.addJar(s"$hdfsHome/scala-logging-slf4j_2.11-2.1.2.jar")                                                         
+          sparkCtx.addJar(s"$hdfsHome/scala-logging-api_2.11-2.1.2.jar")       
+          sparkCtx.addJar(s"$hdfsHome/play-json_2.11-2.5.0-M2.jar")  
+          sparkCtx.addJar(s"$hdfsHome/jsr-275-0.9.1.jar")                                     
+          sparkCtx.addJar(s"$hdfsHome/jai_core-1.1.3.jar")
+          sparkCtx.addJar(s"$hdfsHome/GeographicLib-Java-1.44.jar")
+          sparkCtx.addJar(s"$hdfsHome/gt-opengis-16.2.jar")
+          sparkCtx.addJar(s"$hdfsHome/gt-metadata-16.2.jar")
           sparkCtx.addJar(s"$hdfsHome/gt-referencing-16.2.jar")
+
           //sparkCtx.addJar("http://central.maven.org/maven2/mysql/mysql-connector-java/5.1.6/mysql-connector-java-5.1.6.jar")
         }
         println(s"apache spark: ${sparkCtx.version}  remote: $remoteSpark deployMode: $dmode")

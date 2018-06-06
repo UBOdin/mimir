@@ -155,64 +155,14 @@ object SparkUtils {
   }
   
   def getSparkKryoClasses() = { 
-     /*val m = runtimeMirror(classOf[mimir.models.Model].getClassLoader)
-     val mm = m.staticPackage("mimir.models")
-     val ma = m.staticPackage("mimir.algebra")
-    
-     (mm.typeSignature.decls.collect {
-        case c: scala.reflect.runtime.universe.ClassSymbol  =>
-          Class.forName(c.fullName)
-      } ++
-     ma.typeSignature.decls.collect {
-        case c: scala.reflect.runtime.universe.ClassSymbol  =>
-          Class.forName(c.fullName)
-      } ).map(clazz => {
-       println(clazz.getName)
-       clazz
-     }).toArray*/
-     
-     
-     /*val loader = classOf[mimir.models.Model].getClassLoader//Thread.currentThread().getContextClassLoader()
-     val classes = ClassPath.from(loader).getTopLevelClasses().toArray().asInstanceOf[Array[ClassPath.ClassInfo]]
-     
-     println("---------------------------------------------------")
-     println(classes)
-     
-     classes.flatMap { info => 
-      if (info.getName().startsWith("mimir.models") || info.getName().startsWith("mimir.algebra")) {
-        println(info.getName)
-        Some(Class.forName(info.getName)):Option[Class[_]]
-      } else None
-    }*/
-    
-    /*def knownSubclasses(baseClass:scala.reflect.runtime.universe.ClassSymbol): Set[scala.reflect.runtime.universe.ClassSymbol] = {
-      val baseClasses = baseClass.knownDirectSubclasses.map(_.asClass)
-      baseClasses ++ baseClasses.flatMap(cls => knownSubclasses(cls.asClass)) 
-    }
-    
-    println("---------------------------------------------------")
-    val tpe = scala.reflect.runtime.universe.typeOf[mimir.models.Model]
-    val clazz = tpe.typeSymbol.asClass
-    println(tpe.typeSymbol)
-    val tpeo = scala.reflect.runtime.universe.typeOf[mimir.algebra.Operator]
-    val clazzo = tpeo.typeSymbol.asClass
-    val tpee = scala.reflect.runtime.universe.typeOf[mimir.algebra.Expression]
-    val clazze = tpee.typeSymbol.asClass
-    val mimirClassSymbols = (knownSubclasses(clazz) ++ knownSubclasses(clazzo) ++ knownSubclasses(clazze))
-    println(mimirClassSymbols)
-    mimirClassSymbols.map(clazzes => {
-      println(clazzes.asClass.fullName)
-      Class.forName(clazzes.asClass.fullName)
-    }).toArray*/
-    
-    
     val finder = ClassFinder(List(new File(".")))
     val classes = finder.getClasses  // classes is an Iterator[ClassInfo]
     val classMap = ClassFinder.classInfoMap(classes) // runs iterator out, once
     val models = ClassFinder.concreteSubclasses("mimir.models.Model", classMap).map(clazz => Class.forName(clazz.name)).toSeq
     val operators = ClassFinder.concreteSubclasses("mimir.algebra.Operator", classMap).map(clazz => Class.forName(clazz.name)).toSeq
     val expressions = ClassFinder.concreteSubclasses("mimir.algebra.Expression", classMap).map(clazz => Class.forName(clazz.name)).toSeq
-    (models ++ operators ++ expressions).toArray
+    val miscClasses = Seq(Class.forName("org.opengis.referencing.datum.Ellipsoid"),Class.forName("org.geotools.referencing.datum.DefaultEllipsoid"))
+    (models ++ operators ++ expressions ++ miscClasses).toArray
   }
 }
 

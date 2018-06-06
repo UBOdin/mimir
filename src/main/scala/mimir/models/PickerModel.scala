@@ -50,7 +50,7 @@ object PickerModel
  * The one argument is a value for the key.  
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
-@SerialVersionUID(1001L)
+@SerialVersionUID(1002L)
 class SimplePickerModel(override val name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[Type], useClassifier:Option[String], classifyUpFrontAndCache:Boolean, source: Operator) 
   extends Model(name) 
   with Serializable
@@ -127,7 +127,6 @@ class SimplePickerModel(override val name: String, resultColumn:String, pickFrom
         useClassifier match { //use result of case expression
           case None => hints(0)
           case Some(sparkModelType) =>
-            //val (sparmMLInst, modelGen) = availableSparkModels(trainingData).getOrElse(sparkModelType, (Classification, Classification.DecisionTreeMulticlassModel(trainingData)))
             getCache(idx, args, hints) match {
               case None => {
                 //if(classifyUpFrontAndCache){

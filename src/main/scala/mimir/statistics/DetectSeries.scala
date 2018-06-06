@@ -62,7 +62,7 @@ object DetectSeries
       .map { testQuery =>  db.backend.execute(testQuery) }
       (dataframes.zipWithIndex.foldLeft(db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().createDataset(seriesColumnDate.toSeq)(org.apache.spark.sql.Encoders.kryo[SeriesColumnItem]))( (init, curr) => {
         val (dataframe, idx) = curr
-        val rowWindowSpec = Window.orderBy(dataframe.columns(0))  
+        val rowWindowSpec = Window.partitionBy(lit(0)).orderBy(dataframe.columns(0))  
         val rowWindowDf = dataframe.withColumn("next", lag(dataframe.columns(0), 1).over(rowWindowSpec))
         val diffDf = rowWindowDf.withColumn("diff", rowWindowDf.col(rowWindowDf.columns(0))-rowWindowDf.col(rowWindowDf.columns(1)))
         val meanStdDevRelStddevDf = diffDf.agg(mean("diff").alias("mean"), stddev("diff").alias("stddev")).withColumn("relstddev", col("stddev") / col("mean"))
@@ -172,7 +172,7 @@ object DetectSeries
         val (dataframe, idx) = curr
         val columnName = scnf(idx)._1
         val curTypes = (queryColumns.toMap.getOrElse(columnName,TString()), colType)
-        val rowWindowSpec = Window.orderBy(dataframe.columns(0))  
+        val rowWindowSpec = Window.partitionBy(lit(0)).orderBy(dataframe.columns(0))  
         val rowWindowDf = dataframe.withColumn("next", lead(dataframe.columns(0), 1).over(rowWindowSpec)).na.drop
         val diffDf = rowWindowDf.withColumn("diff", rowWindowDf.col(rowWindowDf.columns(0))-rowWindowDf.col(rowWindowDf.columns(1)))
         val meanStdDevRelStddevDf = diffDf.agg(mean("diff").alias("mean"), stddev("diff").alias("stddev")).withColumn("relstddev", abs(col("stddev").divide( col("mean"))))
@@ -180,7 +180,7 @@ object DetectSeries
         val relStdDevIdx = dfrow.fieldIndex("relstddev")
         val relativeStdDev = if(dfrow.isNullAt(relStdDevIdx)) Double.MaxValue else dfrow.getDouble(relStdDevIdx)
         if((relativeStdDev < thresh || curTypes._1.isInstanceOf[TDate] || curTypes._1.isInstanceOf[TTimestamp] ) && columnName != colName /*Make sure we don't match the column itself*/) {
-          val rowWindowSpeci = Window.orderBy(queryDf.col(columnName))  
+          val rowWindowSpeci = Window.partitionBy(lit(0)).orderBy(queryDf.col(columnName))  
           val rowWindowDfi = queryDf.sort(desc(columnName)).filter(not(isnull(col(columnName)))).select(col(columnName), col(colName))
                               .withColumn("prev0", lag(col(columnName), 1).over(rowWindowSpeci))
                               .withColumn("next0", lead(col(columnName), 1).over(rowWindowSpeci))
