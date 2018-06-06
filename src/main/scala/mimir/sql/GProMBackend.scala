@@ -19,9 +19,10 @@ import org.gprom.jdbc.jna.GProMWrapper
 import com.sun.jna.Native
 import org.apache.spark.sql.DataFrame
 import mimir.ml.spark.SparkML
+import org.apache.spark.sql.SQLContext
 
 class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) 
-  extends RABackend
+  extends RABackend with BackendWithSparkContext
 {
   var conn: Connection = null
   var unwrappedConn: org.sqlite.SQLiteConnection = null
@@ -129,4 +130,5 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int)
   
   def listAttrsQuery: Operator = sparkBackend.listAttrsQuery
   
+  def getSparkContext():SQLContext = sparkBackend.sparkSql
 }

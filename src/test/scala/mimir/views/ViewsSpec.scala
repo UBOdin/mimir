@@ -8,9 +8,10 @@ import mimir.test._
 import mimir.ctables._
 import mimir.provenance._
 import java.io.File
+import org.apache.spark.sql.Encoders
 
 object ViewsSpec 
-  extends SQLTestSpecification("ViewsTest")
+  extends SQLTestSpecification("ViewsTest", Map("cleanup" -> "NO"))
   with BeforeAll
 {
 
@@ -68,18 +69,16 @@ object ViewsSpec
         )
 
       update("ALTER VIEW MATTEST MATERIALIZE")
-      val matOp = db.views.get("MATTEST").get.materializedOperator
+      //could also do this
+      //val sparkOp = db.backend.execute(db.views.get("MATTEST").get.materializedOperator)
+      //instead of
+      val sparkOp = db.backend.execute(Table("MATTEST", "MATTEST", Seq(("A", TInt()), ("B", TInt()), 
+            (ViewAnnotation.taintBitVectorColumn, TInt()), ("MIMIR_ROWID_0", TRowId())), Seq()))
       val results = 
-        db.query(/*s"""
-          SELECT A, B, 
-            ${ViewAnnotation.taintBitVectorColumn}, 
-            MIMIR_ROWID_0
-           FROM MATTEST
-        """*/matOp)(result => result.toList.map(_.tuple)).map { row => 
-          ( row(0).asLong, row(1).asLong, row(2).asLong, row(3).asLong ) 
-        }
+        sparkOp.collect().toList.map( row => {
+          ( row.getLong(0), row.getLong(1), row.getLong(2), row.getString(3).toLong ) 
+        })
         
-      //TODO: There is a problem with rowids for materialized views
       results must contain(eachOf(
         (1l, 3l, 7l, db.query("SELECT ROWID() FROM R WHERE A = 1 AND B = 3 AND C = 1")(_.toList.head(0).asLong)),
         (2l, 2l, 7l, db.query("SELECT ROWID() FROM R WHERE A = 2 AND B = 2 AND C = 1")(_.toList.head(0).asLong))

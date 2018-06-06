@@ -7,13 +7,14 @@ import mimir.algebra._
 import mimir.util._
 import mimir.test._
 import mimir.sql.SparkBackend
+import mimir.sql.BackendWithSparkContext
 
 object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
 {
 
   def train(elems: List[String]): TypeInferenceModel = 
   {
-    val model = new TypeInferenceModel("TEST_MODEL", Array("TEST_COLUMN"), 0.5, db.backend.asInstanceOf[SparkBackend].sparkSql,None)
+    val model = new TypeInferenceModel("TEST_MODEL", Array("TEST_COLUMN"), 0.5, db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(),None)
     elems.foreach( model.learn(0, _) )
     return model
   }
@@ -52,7 +53,7 @@ object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
       LoggerUtils.debug(
         "mimir.models.TypeInferenceModel"
       ){
-        val model = new TypeInferenceModel("CPUSPEED:CORES", Array("CORES"), 0.5, db.backend.asInstanceOf[SparkBackend].sparkSql, Some(db.backend.execute(table("CPUSPEED"))))
+        val model = new TypeInferenceModel("CPUSPEED:CORES", Array("CORES"), 0.5, db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(), Some(db.backend.execute(table("CPUSPEED"))))
         //model.train(db.backend.execute(table("CPUSPEED")))
         guess(model) must be equalTo(TInt())
       }

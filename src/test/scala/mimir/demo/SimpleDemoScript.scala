@@ -88,7 +88,7 @@ object SimpleDemoScript
 		"Create and Query Type Inference Adaptive Schemas" >> {
 			db.adaptiveSchemas.create("NEW_TYPES_TI", "TYPE_INFERENCE", db.table("USERTYPES"), Seq(FloatPrimitive(.9))) 
 			db.views.create("NEW_TYPES", db.adaptiveSchemas.viewFor("NEW_TYPES_TI", "DATA").get)
-      query("SELECT * FROM new_types;"){ _.toSeq must have size(3) }
+      query("SELECT * FROM NEW_TYPES;"){ _.toSeq must have size(3) }
 			query("SELECT * FROM RATINGS1;"){ _.toSeq must have size(4) }
 			query("SELECT RATING FROM RATINGS1;"){ _.map { _(0) }.toSeq must contain(eachOf(f(4.5), f(4.0), f(6.4), NullPrimitive())) }
 			query("SELECT * FROM RATINGS1 WHERE RATING IS NULL"){ _.toSeq must have size(1) }

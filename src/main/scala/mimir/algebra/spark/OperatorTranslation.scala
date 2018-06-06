@@ -63,6 +63,7 @@ import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.catalyst.analysis.UnresolvedStar
 import mimir.sql.GProMBackend
 import org.apache.spark.sql.catalyst.expressions.aggregate.StddevSamp
+import mimir.sql.BackendWithSparkContext
 
 object OperatorTranslation
   extends LazyLogging
@@ -256,7 +257,7 @@ object OperatorTranslation
   def makeInitSparkJoin(left: LogicalPlan, right: LogicalPlan, usingColumns: Seq[String], joinType: JoinType): LogicalPlan = {
     // Analyze the self join. The assumption is that the analyzer will disambiguate left vs right
     // by creating a new instance for one of the branch.
-    val joined = db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.executePlan(
+    val joined = db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession.sessionState.executePlan(
        org.apache.spark.sql.catalyst.plans.logical.Join(left, right, joinType = joinType, None))
       .analyzed.asInstanceOf[org.apache.spark.sql.catalyst.plans.logical.Join]
 
@@ -280,15 +281,15 @@ object OperatorTranslation
         case org.apache.spark.sql.catalyst.expressions.EqualTo(a: AttributeReference, b: AttributeReference)
             if a.sameRef(b) =>
           org.apache.spark.sql.catalyst.expressions.EqualTo(
-            tjoin.left.resolve(Seq(a.name), db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.analyzer.resolver).get,//p(withPlan(logicalPlan.left))('resolve)(a.name).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression],
-            tjoin.right.resolve(Seq(b.name), db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.analyzer.resolver).get)//p(withPlan(logicalPlan.right))('resolve)(b.name).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
+            tjoin.left.resolve(Seq(a.name), db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession.sessionState.analyzer.resolver).get,//p(withPlan(logicalPlan.left))('resolve)(a.name).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression],
+            tjoin.right.resolve(Seq(b.name), db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession.sessionState.analyzer.resolver).get)//p(withPlan(logicalPlan.right))('resolve)(b.name).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
       }}
       tjoin.copy(condition = cond)
 	  }
 	  else   
   	  // Creates a Join node and resolve it first, to get join condition resolved, self-join resolved,
       // etc.
-      //val joined = db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.executePlan(
+      //val joined = db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession.sessionState.executePlan(
         org.apache.spark.sql.catalyst.plans.logical.Join(
           lplan,
           rplan,
@@ -338,7 +339,7 @@ object OperatorTranslation
               if(!b.resolved){
                 println(s"--------> output attr not resolved: ${b.name}")
                 println(joined.right)
-                joined.right.resolve(Seq(b.name), db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.analyzer.resolver).get
+                joined.right.resolve(Seq(b.name), db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession.sessionState.analyzer.resolver).get
               }
               b.exprId == a.exprId
             })
@@ -369,8 +370,8 @@ object OperatorTranslation
       case org.apache.spark.sql.catalyst.expressions.EqualTo(a: AttributeReference, b: AttributeReference)
           if a.sameRef(b) =>
         org.apache.spark.sql.catalyst.expressions.EqualTo(
-          logicalPlan.left.resolve(Seq(a.name), db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.analyzer.resolver).get,//p(withPlan(logicalPlan.left))('resolve)(a.name).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression],
-          logicalPlan.right.resolve(Seq(b.name), db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.analyzer.resolver).get)//p(withPlan(logicalPlan.right))('resolve)(b.name).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
+          logicalPlan.left.resolve(Seq(a.name), db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession.sessionState.analyzer.resolver).get,//p(withPlan(logicalPlan.left))('resolve)(a.name).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression],
+          logicalPlan.right.resolve(Seq(b.name), db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession.sessionState.analyzer.resolver).get)//p(withPlan(logicalPlan.right))('resolve)(b.name).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
     }}
 
     logicalPlan.copy(condition = cond)
@@ -423,9 +424,9 @@ object OperatorTranslation
       
       //val someTrait = companionObj[org.apache.spark.sql.Dataset[Row]]("org.apache.spark.sql.Dataset")
       println(someTrait)
-      p(someTrait)('ofRows)(db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession, logicalPlan).asInstanceOf[DataFrame]
+      p(someTrait)('ofRows)(db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession, logicalPlan).asInstanceOf[DataFrame]
     
-      //new Dataset[Row](db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession, logicalPlan, RowEncoder(logicalPlan.schema)).toDF()
+      //new Dataset[Row](db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession, logicalPlan, RowEncoder(logicalPlan.schema)).toDF()
     }
     catch {
       case t: Throwable => {

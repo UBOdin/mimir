@@ -11,7 +11,7 @@ import mimir.ml.spark.SparkML
 import org.apache.spark.sql.expressions.Aggregator
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
-
+import org.apache.spark.sql.functions.{col}
 
 object TypeInferenceModel
 {
@@ -94,7 +94,7 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
   private def train(df:DataFrame) =
   {
     import sparkSql.implicits._
-    df.limit(sampleLimit).select(columns.head,columns.tail:_*).map(row => {
+    df.limit(sampleLimit).select(columns.map(col(_)):_*).map(row => {
       TIVotes(row.schema.fields.zipWithIndex.map(se => TypeInferenceModel.detectType(
          if(row.isNullAt(se._2)) None else Some(s"${row(se._2)}")
        ).toSeq.map(_.toString())))

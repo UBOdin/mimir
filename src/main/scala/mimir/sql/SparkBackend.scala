@@ -23,9 +23,9 @@ import org.apache.hadoop.fs.Path
 import mimir.Mimir
 import mimir.util.SparkUtils
 
-class SparkBackend extends RABackend{
+class SparkBackend extends RABackend with BackendWithSparkContext{
   var sparkSql : SQLContext = null
-  //ExperimentalOptions.enable("remoteSpark")
+  ExperimentalOptions.enable("remoteSpark")
   val (sparkHost, sparkPort, hdfsPort, useHDFSHostnames, overwriteHDFSFiles) = Mimir.conf match {
     case null => (/*"128.205.71.102"*/"spark-master.local", "7077", "8020", "false", false)
     case x => (x.sparkHost, x.sparkPort, "8020", "false", false)
@@ -206,4 +206,10 @@ class SparkBackend extends RABackend{
         }
       )  
   }
+  
+  def getSparkContext():SQLContext = sparkSql
+}
+
+trait BackendWithSparkContext {
+  def getSparkContext():SQLContext
 }

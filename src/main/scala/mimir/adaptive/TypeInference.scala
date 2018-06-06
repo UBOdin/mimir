@@ -7,6 +7,7 @@ import mimir.lenses._
 import mimir.models._
 import mimir.util.SqlUtils
 import mimir.sql.SparkBackend
+import mimir.sql.BackendWithSparkContext
 
 object TypeInference
   extends Multilens
@@ -47,7 +48,7 @@ object TypeInference
         s"MIMIR_TI_ATTR_${viewName}",
         modelColumns,
         stringDefaultScore,
-        db.backend.asInstanceOf[SparkBackend].sparkSql,
+        db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(),
         Some(db.backend.execute(config.query))
       )
 

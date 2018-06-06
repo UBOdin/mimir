@@ -138,10 +138,9 @@ object Provenance extends LazyLogging {
         )
       }
 
-      case View(name, query, meta) => 
-        val (newQuery, rowIds) = compile(query)
+      case View(name, query, meta) => val (newQuery, rowIds) = compile(query)
         ( View(name, newQuery, meta + ViewAnnotation.PROVENANCE), rowIds)
-
+      
       case AdaptiveView(model, name, query, meta) => 
         val (newQuery, rowIds) = compile(query)
         ( AdaptiveView(model, name, newQuery, meta + ViewAnnotation.PROVENANCE), rowIds)
