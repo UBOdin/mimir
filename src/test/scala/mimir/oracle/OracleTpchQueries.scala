@@ -19,9 +19,9 @@ object OracleTpchQueries extends Specification {
   val q5 = "5.sql"
   val q9 = "9.sql"
 
-  val dbName = "osmall.db"
+  val dbName = "osmall"
   val backend = "oracle"
-  val db = new Database(new SparkBackend(),new JDBCMetadataBackend(backend, dbName))
+  val db = new Database(new SparkBackend(dbName),new JDBCMetadataBackend(backend, dbName+".db"))
 
   "Mimir" should  {
     "Run tpch query 5 on Oracle" >> {

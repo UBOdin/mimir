@@ -57,7 +57,7 @@ object SqlParserSpec
 			val j = new JDBCMetadataBackend("sqlite",
 									if(tempDB == null){ "testdb" } else { tempDB.toString }
 							)
-			val sback = new SparkBackend()
+			val sback = new SparkBackend(if(tempDB == null){ "testdb" } else { tempDB.toString.split("[\\\\/]").last.replaceAll("\\..*", "") })
 			val d = new Database(sback, j)
 	    try {
 	      d.metadataBackend.open()

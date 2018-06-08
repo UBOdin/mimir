@@ -107,10 +107,10 @@ class SparkBackend(override val database:String) extends RABackend(database) wit
     if(!dbs.map(_.name).contains(database))
       CreateDatabaseCommand(database, true, None, None, Map()).run(sparkSql.sparkSession)
     SetDatabaseCommand(database).run(sparkSql.sparkSession)
-    dbs.map(sdb => { 
+    /*dbs.map(sdb => { 
       println(s"db: ${sdb.name}")
       sparkSql.sparkSession.catalog.listTables(sdb.name).show()
-    })
+    })*/
     mimir.ml.spark.SparkML(sparkSql)
   }
 
