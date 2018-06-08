@@ -27,6 +27,9 @@ import org.apache.spark.sql.execution.command.PersistedView
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.execution.command.SetDatabaseCommand
 import org.apache.spark.sql.execution.command.CreateDatabaseCommand
+import org.apache.spark.sql.execution.command.DropDatabaseCommand
+import org.apache.spark.sql.SaveMode
+
 
 class SparkBackend(override val database:String) extends RABackend(database) with BackendWithSparkContext{
   var sparkSql : SQLContext = null
@@ -103,8 +106,8 @@ class SparkBackend(override val database:String) extends RABackend(database) wit
       }
       case sparkSqlCtx => sparkSqlCtx
     }
-    val dbs = sparkSql.sparkSession.catalog.listDatabases().collect()
-    if(!dbs.map(_.name).contains(database))
+    //val dbs = sparkSql.sparkSession.catalog.listDatabases().collect()
+    if(!sparkSql.sparkSession.catalog.databaseExists(database))//!dbs.map(_.name).contains(database))
       CreateDatabaseCommand(database, true, None, None, Map()).run(sparkSql.sparkSession)
     SetDatabaseCommand(database).run(sparkSql.sparkSession)
     /*dbs.map(sdb => { 
@@ -121,7 +124,7 @@ class SparkBackend(override val database:String) extends RABackend(database) wit
   
   def createTable(tableName:String, oper:Operator) = {
     val df = execute(oper)
-    df.write.saveAsTable(tableName)//.persist().createOrReplaceTempView(tableName)
+    df.write.mode(SaveMode.Overwrite).saveAsTable(tableName)//.persist().createOrReplaceTempView(tableName)
   }
   
   def execute(compiledOp: Operator): DataFrame = {
@@ -149,7 +152,11 @@ class SparkBackend(override val database:String) extends RABackend(database) wit
     }
   }
   
-  
+  def dropDB():Unit = {
+    
+    DropDatabaseCommand(database, true, true).run(sparkSql.sparkSession)
+  }
+
   
   def readDataSource(name:String, format:String, options:Map[String, String], schema:Option[Seq[(String, Type)]], load:Option[String]) = {
     if(sparkSql == null) throw new Exception("There is no spark context")
@@ -175,7 +182,7 @@ class SparkBackend(override val database:String) extends RABackend(database) wit
         
       }
     })/*.toDF(df.columns.map(_.toUpperCase): _*)*/
-    df.write.saveAsTable(name) //persist().createOrReplaceTempView(name)
+    df.write.mode(SaveMode.Overwrite).saveAsTable(name) //persist().createOrReplaceTempView(name)
     /*val tableIdentifier = try {
       sparkSql.sparkSession.sessionState.sqlParser.parseTableIdentifier(name)
     } catch {
@@ -213,6 +220,8 @@ class SparkBackend(override val database:String) extends RABackend(database) wit
 
   def close() = {
     if(sparkSql == null) throw new Exception("There is no spark context")
+    val path = new File("metastore_db/dbex.lck")
+    path.delete()
     sparkSql.sparkSession.close()
     sparkSql = null
   }

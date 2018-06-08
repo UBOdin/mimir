@@ -10,7 +10,7 @@ abstract class RABackend(val database:String) {
   def materializeView(name:String): Unit
   def createTable(tableName:String, oper:Operator): Unit
   def execute(compiledOp: Operator): DataFrame
-  
+  def dropDB():Unit
 
   /*def resultRows(sel: String):Seq[Seq[PrimitiveValue]] = 
     JDBCUtils.extractAllRows(execute(sel)).flush

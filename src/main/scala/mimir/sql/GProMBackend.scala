@@ -111,6 +111,7 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int)
   }
   
   def execute(compiledOp: Operator): DataFrame = sparkBackend.execute(compiledOp)
+  def dropDB():Unit = sparkBackend.dropDB() 
   def materializeView(name:String): Unit = sparkBackend.materializeView(name)
   def createTable(tableName: String,oper: mimir.algebra.Operator): Unit = sparkBackend.createTable(tableName, oper)
   def readDataSource(name: String,format: String,options: Map[String,String],schema: Option[Seq[(String, mimir.algebra.Type)]],load: Option[String]): Unit = sparkBackend.readDataSource(name, format, options, schema, load)

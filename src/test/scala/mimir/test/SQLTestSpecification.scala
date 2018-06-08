@@ -88,6 +88,9 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     // hack for spark to delete all cached tables 
     // and temp views that may have shared names between tests
     try{
+      if(config.getOrElse("cleanup", config.getOrElse("reset", "YES")) match { 
+            case "NO" => false; case "YES" => true
+          }) db.backend.dropDB()
       db.backend.close()
       db.backend.open()
     }catch {
