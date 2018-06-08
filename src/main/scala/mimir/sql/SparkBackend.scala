@@ -51,6 +51,7 @@ class SparkBackend(override val database:String) extends RABackend(database) wit
             .set("spark.driver.cores","4")
             .set("spark.driver.memory","8g")
             .set("spark.executor.memory","8g")
+            .set("spark.sql.catalogImplementation", "hive")
             .set("spark.sql.shuffle.partitions", s"$numPartitions")//TODO: make this the number of workers
             .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
             .registerKryoClasses(SparkUtils.getSparkKryoClasses())
