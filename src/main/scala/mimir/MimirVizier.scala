@@ -53,7 +53,8 @@ object MimirVizier extends LazyLogging {
     ExperimentalOptions.enable(conf.experimental())
     if(!ExperimentalOptions.isEnabled("GPROM-BACKEND")){
       // Set up the database connection(s)
-      val sback = new SparkBackend()
+      val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
+      val sback = new SparkBackend(database)
       db = new Database(sback, new JDBCMetadataBackend(conf.backend(), conf.dbname()))
       db.metadataBackend.open()
       db.backend.open()
@@ -767,6 +768,7 @@ object MimirVizier extends LazyLogging {
   }
  
 }
+
 
 //----------------------------------------------------------
 

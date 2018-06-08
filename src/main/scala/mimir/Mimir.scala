@@ -52,7 +52,8 @@ object Mimir extends LazyLogging {
 
    
     // Set up the database connection(s)
-    db = new Database(new SparkBackend(), new JDBCMetadataBackend(conf.backend(), conf.dbname()))
+    val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
+    db = new Database(new SparkBackend(database), new JDBCMetadataBackend(conf.backend(), conf.dbname()))
     if(!conf.quiet()){
       output.print("Connecting to " + conf.backend() + "://" + conf.dbname() + "...")
     }

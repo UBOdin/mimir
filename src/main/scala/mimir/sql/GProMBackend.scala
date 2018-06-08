@@ -22,7 +22,7 @@ import mimir.ml.spark.SparkML
 import org.apache.spark.sql.SQLContext
 
 class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int) 
-  extends RABackend with BackendWithSparkContext
+  extends RABackend(filename.split("[\\\\/]").last.replaceAll("\\..*", "")) with BackendWithSparkContext
 {
   var conn: Connection = null
   var unwrappedConn: org.sqlite.SQLiteConnection = null
@@ -32,7 +32,7 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int)
   var metadataLookupPlugin : GProMMedadataLookup = null
   var sparkBackend:SparkBackend = null
   def driver() = backend
-
+  
   val tableSchemas: scala.collection.mutable.Map[String, Seq[(String, Type)]] = mutable.Map()
 
   def setGProMLogLevel(level : Int) : Unit = {
@@ -64,7 +64,7 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int)
             SQLiteCompat.registerFunctions( unwrappedConn )
             metadataLookupPlugin = new GProMMedadataLookup(c)
             GProMWrapper.inst.setupPlugins(c, metadataLookupPlugin.getPlugin) 
-            sparkBackend = new SparkBackend()
+            sparkBackend = new SparkBackend(database)
             sparkBackend.open()
             
             //GProMWrapper.inst.setBoolOption("pi_cs_use_composable", true)

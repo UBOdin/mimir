@@ -119,7 +119,7 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
         })).toList
     
   
-  def totalVotes(idx:Int) = trainingData.agg(new VoteCount(idx).toColumn).head().getLong(0)
+  def totalVotes(idx:Int) = trainingData.agg(new VoteCount(idx).toColumn).limit(1).collect().map(_.getLong(0)).headOption.getOrElse(0L)
     
   
   private final def rankFn(x:(Type, Double)) =

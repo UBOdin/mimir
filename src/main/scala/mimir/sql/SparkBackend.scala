@@ -22,8 +22,13 @@ import org.apache.spark.launcher.SparkLauncher
 import org.apache.hadoop.fs.Path
 import mimir.Mimir
 import mimir.util.SparkUtils
+import org.apache.spark.sql.execution.command.CreateViewCommand
+import org.apache.spark.sql.execution.command.PersistedView
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.execution.command.SetDatabaseCommand
+import org.apache.spark.sql.execution.command.CreateDatabaseCommand
 
-class SparkBackend extends RABackend with BackendWithSparkContext{
+class SparkBackend(override val database:String) extends RABackend(database) with BackendWithSparkContext{
   var sparkSql : SQLContext = null
   //ExperimentalOptions.enable("remoteSpark")
   val (sparkHost, sparkPort, hdfsPort, useHDFSHostnames, overwriteHDFSFiles, overwriteJars, numPartitions) = Mimir.conf match {
@@ -50,8 +55,10 @@ class SparkBackend extends RABackend with BackendWithSparkContext{
         else{
           new SparkConf().setMaster("local[*]")
             .setAppName("Mimir")
+            .set("spark.sql.catalogImplementation", "hive")
             .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
             .registerKryoClasses(SparkUtils.getSparkKryoClasses())
+            
         }
         if(ExperimentalOptions.isEnabled("GPROM-BACKEND")){
           sys.props.get("os.name") match {
@@ -88,7 +95,7 @@ class SparkBackend extends RABackend with BackendWithSparkContext{
           sparkCtx.addJar(s"$hdfsHome/gt-opengis-16.2.jar")
           sparkCtx.addJar(s"$hdfsHome/gt-metadata-16.2.jar")
           sparkCtx.addJar(s"$hdfsHome/gt-referencing-16.2.jar")
-
+          
           //sparkCtx.addJar("http://central.maven.org/maven2/mysql/mysql-connector-java/5.1.6/mysql-connector-java-5.1.6.jar")
         }
         println(s"apache spark: ${sparkCtx.version}  remote: $remoteSpark deployMode: $dmode")
@@ -96,6 +103,14 @@ class SparkBackend extends RABackend with BackendWithSparkContext{
       }
       case sparkSqlCtx => sparkSqlCtx
     }
+    val dbs = sparkSql.sparkSession.catalog.listDatabases().collect()
+    if(!dbs.map(_.name).contains(database))
+      CreateDatabaseCommand(database, true, None, None, Map()).run(sparkSql.sparkSession)
+    SetDatabaseCommand(database).run(sparkSql.sparkSession)
+    dbs.map(sdb => { 
+      println(s"db: ${sdb.name}")
+      sparkSql.sparkSession.catalog.listTables(sdb.name).show()
+    })
     mimir.ml.spark.SparkML(sparkSql)
   }
 
@@ -106,7 +121,7 @@ class SparkBackend extends RABackend with BackendWithSparkContext{
   
   def createTable(tableName:String, oper:Operator) = {
     val df = execute(oper)
-    df.persist().createOrReplaceTempView(tableName)
+    df.write.saveAsTable(tableName)//.persist().createOrReplaceTempView(tableName)
   }
   
   def execute(compiledOp: Operator): DataFrame = {
@@ -144,21 +159,38 @@ class SparkBackend extends RABackend with BackendWithSparkContext{
       case None => dsOptions
       case Some(customSchema) => dsOptions.schema(OperatorTranslation.mimirSchemaToStructType(customSchema))
     }
-    (load match {
+    val df = (load match {
       case None => dsSchema.load
       case Some(ldf) => {
         if(remoteSpark){
           val fileName = ldf.split(File.separator).last
           val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkSql.sparkSession.sparkContext)
-          println("Copy File To HDFS: " +hdfsHome+File.separator+fileName)
+          print("Copy File To HDFS: " +hdfsHome+File.separator+fileName)
           //if(!HadoopUtils.fileExistsHDFS(sparkSql.sparkSession.sparkContext, fileName))
           HadoopUtils.writeToHDFS(sparkSql.sparkSession.sparkContext, fileName, new File(ldf), overwriteHDFSFiles)
+          print("... done\n")
           dsSchema.load(s"$hdfsHome/$fileName")
         }
         else dsSchema.load(ldf)
         
       }
-    })/*.toDF(df.columns.map(_.toUpperCase): _*)*/.persist().createOrReplaceTempView(name)
+    })/*.toDF(df.columns.map(_.toUpperCase): _*)*/
+    df.write.saveAsTable(name) //persist().createOrReplaceTempView(name)
+    /*val tableIdentifier = try {
+      sparkSql.sparkSession.sessionState.sqlParser.parseTableIdentifier(name)
+    } catch {
+      case _: Exception => throw new RAException(s"Invalid view name: name")
+    }
+    CreateViewCommand(
+      name = tableIdentifier,
+      userSpecifiedColumns = Nil,
+      comment = None,
+      properties = Map.empty,
+      originalText = Option(s"CREATE VIEW $name AS SELECT * FROM $name"),
+      child = df.queryExecution.logical,
+      allowExisting = false,
+      replace = true,
+      viewType = PersistedView).run(sparkSql.sparkSession)*/
   }
   
   

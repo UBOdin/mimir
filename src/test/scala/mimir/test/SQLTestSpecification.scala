@@ -44,7 +44,7 @@ object DBTestInstances
           val oldDBExists = dbFile.exists();
           // println("Exists: "+oldDBExists)
           val backend = new JDBCMetadataBackend(jdbcBackendMode, tempDBName+".db")
-          val sback = new SparkBackend()
+          val sback = new SparkBackend(tempDBName)
           val tmpDB = new Database(sback, backend);
           if(shouldCleanupDB){    
             dbFile.deleteOnExit();

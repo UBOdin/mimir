@@ -148,6 +148,7 @@ libraryDependencies ++= Seq(
   //spark ml
   "org.apache.spark" 			  %   "spark-sql_2.11" 		  % "2.2.0" exclude("org.slf4j", "slf4j-log4j12"),
   "org.apache.spark" 			  %   "spark-mllib_2.11" 	  % "2.2.0" exclude("org.slf4j", "slf4j-log4j12"),
+  "org.apache.spark" 			  %   "spark-hive_2.11" 	  % "2.2.0" exclude("org.slf4j", "slf4j-log4j12"),
  
   //////////////////////// Jung ////////////////////////
   // General purpose graph manipulation library

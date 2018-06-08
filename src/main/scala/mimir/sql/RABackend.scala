@@ -4,7 +4,7 @@ import mimir.algebra._
 import org.apache.spark.sql.DataFrame
 import mimir.Database
 
-abstract class RABackend {
+abstract class RABackend(val database:String) {
   def open(): Unit
 
   def materializeView(name:String): Unit
