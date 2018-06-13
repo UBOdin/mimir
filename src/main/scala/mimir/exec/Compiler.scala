@@ -53,8 +53,8 @@ class Compiler(db: Database) extends LazyLogging {
    * Perform a full end-end compilation pass producing best guess results.  
    * Return an iterator over the result set.  
    */
-  def compile[R <:ResultIterator](query: Operator, mode: CompileMode[R]): R =
-    mode(db, query)
+  def compile[R <:ResultIterator](query: Operator, mode: CompileMode[R]): R = 
+    mode(db, db.views.rebuildAdaptiveViews(query))
 
   def deploy(
     compiledOper: Operator, 

@@ -105,7 +105,8 @@ libraryDependencies ++= Seq(
   "org.specs2"                    %%  "specs2-core"              % "3.8.4" % "test",
   "org.specs2"                    %%  "specs2-matcher-extra"     % "3.8.4" % "test",
   "org.specs2"                    %%  "specs2-junit"             % "3.8.4" % "test",
-
+  "org.dispatchhttp"       		  %% "dispatch-core"   			 % "0.14.0",
+  
   //////////////////////// Data Munging Tools //////////////////////
   "com.github.nscala-time"        %%  "nscala-time"              % "1.2.0",
   "org.apache.lucene"             %   "lucene-spellchecker"      % "3.6.2",

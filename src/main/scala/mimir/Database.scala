@@ -122,7 +122,7 @@ case class Database(backend: Backend)
    */
   final def query[T, R <:ResultIterator](oper: Operator, mode: CompileMode[R])(handler: R => T): T =
   {
-    val iterator = mode(this, oper)
+    val iterator = mode(this, views.rebuildAdaptiveViews(oper))
     try {
       val ret = handler(iterator)
 

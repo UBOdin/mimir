@@ -69,20 +69,33 @@ object MimirVizier extends LazyLogging {
     
     OperatorTranslation.db = db       
     
-   if(ExperimentalOptions.isEnabled("QUIET-LOG")){
+    if(ExperimentalOptions.isEnabled("WEB-LOG")){
       LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) match {
           case logger: Logger => {
-            logger.setLevel(Level.ERROR)
-            logger.debug("root logger set to level: ERROR"); 
+            logger.addAppender(new mimir.util.WebLogAppender()) 
           }
         }
     }
     
     if(ExperimentalOptions.isEnabled("LOG")){
+      val logLevel = 
+        if(ExperimentalOptions.isEnabled("LOGD")) Level.DEBUG
+        else if(ExperimentalOptions.isEnabled("LOGW")) Level.WARN
+        else if(ExperimentalOptions.isEnabled("LOGE")) Level.ERROR
+        else if(ExperimentalOptions.isEnabled("LOGI")) Level.INFO
+        else if(ExperimentalOptions.isEnabled("LOGO")) Level.OFF
+        else Level.DEBUG
+        
       LoggerFactory.getLogger(this.getClass.getName) match {
           case logger: Logger => {
-            logger.setLevel(Level.DEBUG)
-            logger.debug(this.getClass.getName +" logger set to level: DEBUG"); 
+            logger.setLevel(logLevel)
+            logger.debug(this.getClass.getName +" logger set to level: " + logLevel); 
+          }
+        }
+      LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) match {
+          case logger: Logger => {
+            logger.setLevel(logLevel)
+            logger.debug("root logger set to level: " + logLevel); 
           }
         }
     }
@@ -175,340 +188,480 @@ object MimirVizier extends LazyLogging {
   def loadCSV(file : String, delimeter:String, inferTypes:Boolean, detectHeaders:Boolean) : String = 
     loadCSV(file, ("CSV", Seq(StringPrimitive(delimeter), BoolPrimitive(inferTypes), BoolPrimitive(detectHeaders))))
   def loadCSV(file : String, format:(String, Seq[PrimitiveValue])) : String = {
-    pythonCallThread = Thread.currentThread()
-    val timeRes = time {
-      logger.debug("loadCSV: From Vistrails: [" + file + "]") ;
-      val csvFile = new File(file)
-      val nameFromFile = csvFile.getName().split("\\.")(0)
-      val tableName = (csvFile.getName().split("\\.")(0) ).toUpperCase
-      if(db.getAllTables().contains(tableName)){
-        logger.debug("loadCSV: From Vistrails: Table Already Exists: " + tableName)
+    try{
+      pythonCallThread = Thread.currentThread()
+      val timeRes = time {
+        logger.debug("loadCSV: From Vistrails: [" + file + "]") ;
+        val csvFile = new File(file)
+        val nameFromFile = csvFile.getName().split("\\.")(0)
+        val tableName = (csvFile.getName().split("\\.")(0) ).toUpperCase
+        if(db.getAllTables().contains(tableName)){
+          logger.debug("loadCSV: From Vistrails: Table Already Exists: " + tableName)
+        }
+        else{
+          db.loadTable( nameFromFile, csvFile,  true, format)
+        }
+        tableName 
       }
-      else{
-        db.loadTable( nameFromFile, csvFile,  true, format)
+      logger.debug(s"loadCSV Took: ${timeRes._2}")
+      timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error(s"Error Loading Data: $file", t)
+        throw t
       }
-      tableName 
     }
-    logger.debug(s"loadCSV Took: ${timeRes._2}")
-    timeRes._1
   }
   
   def createLens(input : Any, params : Seq[String], _type : String, make_input_certain:Boolean, materialize:Boolean) : String = {
-    pythonCallThread = Thread.currentThread()
-    val timeRes = time {
-      logger.debug("createLens: From Vistrails: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]"  ) ;
-      val paramsStr = params.mkString(",").replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
-      val lenseName = "LENS_" + _type + ((input.toString() + _type + paramsStr + make_input_certain + materialize).hashCode().toString().replace("-", "") )
-      var query:String = null
-      db.getView(lenseName) match {
-        case None => {
-          if(make_input_certain){
-            val materializedInput = "MATERIALIZED_"+input
-            query = s"CREATE LENS ${lenseName} AS SELECT * FROM ${materializedInput} WITH ${_type}(${paramsStr})"  
-            if(db.getAllTables().contains(materializedInput)){
-                logger.debug("createLens: From Vistrails: Materialized Input Already Exists: " + materializedInput)
+    try{
+      pythonCallThread = Thread.currentThread()
+      val timeRes = time {
+        logger.debug("createLens: From Vistrails: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]"  ) ;
+        val paramsStr = params.mkString(",").replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
+        val lenseName = "LENS_" + _type + ((input.toString() + _type + paramsStr + make_input_certain + materialize).hashCode().toString().replace("-", "") )
+        var query:String = null
+        db.getView(lenseName) match {
+          case None => {
+            if(make_input_certain){
+              val materializedInput = "MATERIALIZED_"+input
+              query = s"CREATE LENS ${lenseName} AS SELECT * FROM ${materializedInput} WITH ${_type}(${paramsStr})"  
+              if(db.getAllTables().contains(materializedInput)){
+                  logger.debug("createLens: From Vistrails: Materialized Input Already Exists: " + materializedInput)
+              }
+              else{  
+                val inputQuery = s"SELECT * FROM ${input}"
+                val oper = db.sql.convert(db.parse(inputQuery).head.asInstanceOf[Select])
+                db.selectInto(materializedInput, oper)
+              }
             }
-            else{  
+            else{
               val inputQuery = s"SELECT * FROM ${input}"
-              val oper = db.sql.convert(db.parse(inputQuery).head.asInstanceOf[Select])
-              db.selectInto(materializedInput, oper)
+              query = s"CREATE LENS ${lenseName} AS $inputQuery WITH ${_type}(${paramsStr})"  
             }
+            logger.debug("createLens: query: " + query)
+            db.update(db.parse(query).head) 
           }
-          else{
-            val inputQuery = s"SELECT * FROM ${input}"
-            query = s"CREATE LENS ${lenseName} AS $inputQuery WITH ${_type}(${paramsStr})"  
+          case Some(_) => {
+            logger.debug("createLens: From Vistrails: Lens already exists: " + lenseName)
           }
-          logger.debug("createLens: query: " + query)
-          db.update(db.parse(query).head) 
         }
-        case Some(_) => {
-          logger.debug("createLens: From Vistrails: Lens already exists: " + lenseName)
+        if(materialize){
+          if(!db.views(lenseName).isMaterialized)
+            db.update(db.parse(s"ALTER VIEW ${lenseName} MATERIALIZE").head)
         }
+        lenseName
       }
-      if(materialize){
-        if(!db.views(lenseName).isMaterialized)
-          db.update(db.parse(s"ALTER VIEW ${lenseName} MATERIALIZE").head)
+      logger.debug(s"createLens ${_type} Took: ${timeRes._2}")
+      timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Creating Lens: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]", t)
+        throw t
       }
-      lenseName
     }
-    logger.debug(s"createLens ${_type} Took: ${timeRes._2}")
-    timeRes._1
   }
   
   def createView(input : Any, query : String) : String = {
-    pythonCallThread = Thread.currentThread()
-    val timeRes = time {
-      logger.debug("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
-      val inputSubstitutionQuery = query.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
-      val viewName = "VIEW_" + ((input.toString() + query).hashCode().toString().replace("-", "") )
-      db.getView(viewName) match {
-        case None => {
-          val viewQuery = s"CREATE VIEW $viewName AS $inputSubstitutionQuery"  
-          logger.debug("createView: query: " + viewQuery)
-          db.update(db.parse(viewQuery).head)
+    try{
+      pythonCallThread = Thread.currentThread()
+      val timeRes = time {
+        logger.debug("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
+        val inputSubstitutionQuery = query.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
+        val viewName = "VIEW_" + ((input.toString() + query).hashCode().toString().replace("-", "") )
+        db.getView(viewName) match {
+          case None => {
+            val viewQuery = s"CREATE VIEW $viewName AS $inputSubstitutionQuery"  
+            logger.debug("createView: query: " + viewQuery)
+            db.update(db.parse(viewQuery).head)
+          }
+          case Some(_) => {
+            logger.debug("createView: From Vistrails: View already exists: " + viewName)
+          }
         }
-        case Some(_) => {
-          logger.debug("createView: From Vistrails: View already exists: " + viewName)
-        }
+        viewName
       }
-      viewName
+      logger.debug(s"createView Took: ${timeRes._2}")
+      timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Creating View: [" + input + "] [" + query + "]", t)
+        throw t
+      }
     }
-    logger.debug(s"createView Took: ${timeRes._2}")
-    timeRes._1
   }
   
   def createAdaptiveSchema(input : Any, params : Seq[String], _type : String) : String = {
-    pythonCallThread = Thread.currentThread()
-    val timeRes = time {
-      logger.debug("createAdaptiveSchema: From Vistrails: [" + input + "] [" + params.mkString(",") + "]"  ) ;
-      val paramExprs = params.map(param => 
-        mimir.parser.ExpressionParser.expr( param.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString)) )
-      val paramsStr = paramExprs.mkString(",")
-      val adaptiveSchemaName = "ADAPTIVE_SCHEMA_" + _type + ((input.toString() + _type + paramsStr).hashCode().toString().replace("-", "") )
-      db.getView(adaptiveSchemaName) match {
-        case None => {
-          db.adaptiveSchemas.create(adaptiveSchemaName, _type, db.table(input.toString), paramExprs)
-          db.views.create("VIEW_"+adaptiveSchemaName, db.adaptiveSchemas.viewFor(adaptiveSchemaName, "DATA").get)
+    try {
+      pythonCallThread = Thread.currentThread()
+      val timeRes = time {
+        logger.debug("createAdaptiveSchema: From Vistrails: [" + input + "] [" + params.mkString(",") + "]"  ) ;
+        val paramExprs = params.map(param => 
+          mimir.parser.ExpressionParser.expr( param.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString)) )
+        val paramsStr = paramExprs.mkString(",")
+        val adaptiveSchemaName = "ADAPTIVE_SCHEMA_" + _type + ((input.toString() + _type + paramsStr).hashCode().toString().replace("-", "") )
+        db.getView(adaptiveSchemaName) match {
+          case None => {
+            db.adaptiveSchemas.create(adaptiveSchemaName, _type, db.table(input.toString), paramExprs)
+            db.views.create("VIEW_"+adaptiveSchemaName, db.adaptiveSchemas.viewFor(adaptiveSchemaName, "DATA").get)
+          }
+          case Some(_) => {
+            logger.debug("createAdaptiveSchema: From Vistrails: Adaptive Schema already exists: " + adaptiveSchemaName)
+          }
         }
-        case Some(_) => {
-          logger.debug("createAdaptiveSchema: From Vistrails: Adaptive Schema already exists: " + adaptiveSchemaName)
-        }
+        "VIEW_"+adaptiveSchemaName
       }
-      "VIEW_"+adaptiveSchemaName
+      logger.debug(s"createView Took: ${timeRes._2}")
+      timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Creating Adaptive Schema: [" + input + "] [" + params.mkString(",") + "]", t)
+        throw t
+      }
     }
-    logger.debug(s"createView Took: ${timeRes._2}")
-    timeRes._1
   }
   
   def vistrailsQueryMimir(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : PythonCSVContainer = {
-    val timeRes = time {
-      logger.debug("vistrailsQueryMimir: " + query)
-      val jsqlStmnt = db.parse(query).head
-      jsqlStmnt match {
-        case select:Select => {
-          val oper = db.sql.convert(select)
-          if(includeUncertainty && includeReasons)
-            operCSVResultsDeterminismAndExplanation(oper)
-          else if(includeUncertainty)
-            operCSVResultsDeterminism(oper)
-          else 
-            operCSVResults(oper)
+    try{
+      val timeRes = time {
+        logger.debug("vistrailsQueryMimir: " + query)
+        val jsqlStmnt = db.parse(query).head
+        jsqlStmnt match {
+          case select:Select => {
+            val oper = db.sql.convert(select)
+            if(includeUncertainty && includeReasons)
+              operCSVResultsDeterminismAndExplanation(oper)
+            else if(includeUncertainty)
+              operCSVResultsDeterminism(oper)
+            else 
+              operCSVResults(oper)
+          }
+          case update:Update => {
+            db.backend.update(query)
+            new PythonCSVContainer("SUCCESS\n1", Array(Array()), Array(), Array(), Array(), Map())
+          }
+          case stmt:Statement => {
+            db.update(stmt)
+            new PythonCSVContainer("SUCCESS\n1", Array(Array()), Array(), Array(), Array(), Map())
+          }
         }
-        case update:Update => {
-          db.backend.update(query)
-          new PythonCSVContainer("SUCCESS\n1", Array(Array()), Array(), Array(), Array(), Map())
-        }
-        case stmt:Statement => {
-          db.update(stmt)
-          new PythonCSVContainer("SUCCESS\n1", Array(Array()), Array(), Array(), Array(), Map())
-        }
+        
       }
-      
+      logger.debug(s"vistrailsQueryMimir Took: ${timeRes._2}")
+      timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error(s"Error Querying Mimir -> CSV: $query", t)
+        throw t
+      }
     }
-    logger.debug(s"vistrailsQueryMimir Took: ${timeRes._2}")
-    timeRes._1
   }
   
   def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
-    val timeRes = time {
-      logger.debug("vistrailsQueryMimirJson: " + query)
-      val jsqlStmnt = db.parse(query).head
-      jsqlStmnt match {
-        case select:Select => {
-          val oper = db.sql.convert(select)
-          if(includeUncertainty && includeReasons)
-            operCSVResultsDeterminismAndExplanationJson(oper)
-          else if(includeUncertainty)
-            operCSVResultsDeterminismJson(oper)
-          else 
-            operCSVResultsJson(oper)
+    try{
+      val timeRes = time {
+        logger.debug("vistrailsQueryMimirJson: " + query)
+        val jsqlStmnt = db.parse(query).head
+        jsqlStmnt match {
+          case select:Select => {
+            val oper = db.sql.convert(select)
+            if(includeUncertainty && includeReasons)
+              operCSVResultsDeterminismAndExplanationJson(oper)
+            else if(includeUncertainty)
+              operCSVResultsDeterminismJson(oper)
+            else 
+              operCSVResultsJson(oper)
+          }
+          case update:Update => {
+            db.backend.update(query)
+            JSONBuilder.dict(Map(
+              "success" -> 1
+            ))
+          }
+          case stmt:Statement => {
+            db.update(stmt)
+            JSONBuilder.dict(Map(
+              "success" -> 1
+            ))
+          }
         }
-        case update:Update => {
-          db.backend.update(query)
-          JSONBuilder.dict(Map(
-            "success" -> 1
-          ))
-        }
-        case stmt:Statement => {
-          db.update(stmt)
-          JSONBuilder.dict(Map(
-            "success" -> 1
-          ))
-        }
+        
       }
-      
+      logger.debug(s"vistrailsQueryMimir Took: ${timeRes._2}")
+      timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error(s"Error Querying Mimir -> JSON: $query", t)
+        throw t
+      }
     }
-    logger.debug(s"vistrailsQueryMimir Took: ${timeRes._2}")
-    timeRes._1
   }
   
   def vistrailsDeployWorkflowToViztool(input : Any, name:String, dataType:String, users:Seq[String], startTime:String, endTime:String, fields:String, latlonFields:String, houseNumberField:String, streetField:String, cityField:String, stateField:String, orderByFields:String) : String = {
-    val timeRes = time {
-      val inputTable = input.toString()
-      val hash = ((inputTable + dataType + users.mkString("") + name + startTime + endTime).hashCode().toString().replace("-", "") )
-      if(isWorkflowDeployed(hash)){
-        logger.debug(s"vistrailsDeployWorkflowToViztool: workflow already deployed: $hash: $name")
+    try{
+      val timeRes = time {
+        val inputTable = input.toString()
+        val hash = ((inputTable + dataType + users.mkString("") + name + startTime + endTime).hashCode().toString().replace("-", "") )
+        if(isWorkflowDeployed(hash)){
+          logger.debug(s"vistrailsDeployWorkflowToViztool: workflow already deployed: $hash: $name")
+        }
+        else{
+          val fieldsRegex = "\\s*(?:[a-zA-Z0-9_.]+\\s*(?:AS\\s+[a-zA-Z0-9_]+)?\\s*,\\s*)+[a-zA-Z0-9_.]+\\s*(?:AS\\s+[a-zA-Z0-9_]+)?\\s*".r
+          val fieldRegex = "\\s*[a-zA-Z0-9_.]+\\s*(?:AS\\s+[a-zA-Z0-9_]+)?\\s*".r
+          val fieldStr = fields.toUpperCase() match {
+            case "" => "*"
+            case "*" => "*"
+            case fieldsRegex() => fields.toUpperCase()  
+            case fieldRegex() => fields.toUpperCase()
+            case x => throw new Exception("bad fields format: should be field, field")
+          }
+          val latLonFieldsRegex = "\\s*([a-zA-Z0-9_.]+)\\s*,\\s*([a-zA-Z0-9_.]+)\\s*".r
+          val latlonFieldsSeq = latlonFields.toUpperCase() match {
+            case "" | null => Seq("LATITUDE","LONGITUDE")
+            case latLonFieldsRegex(latField, lonField) => Seq(latField, lonField)  
+            case x => throw new Exception("bad fields format: should be latField, lonField")
+          }
+          val orderFieldsRegex = "\\s*(?:[a-zA-Z0-9_.]+\\s*,\\s*)+[a-zA-Z0-9_.]+\\s*(?:DESC)?\\s*".r
+          val orderBy = orderByFields.toUpperCase() match {
+            case orderFieldsRegex() => "ORDER BY " + orderByFields.toUpperCase()  
+            case x => ""
+          }
+          val query = s"SELECT $fieldStr FROM ${input} $orderBy"
+          logger.debug("vistrailsDeployWorkflowToViztool: " + query + " users:" + users.mkString(","))
+          if(startTime.matches("") && endTime.matches(""))
+            deployWorkflowToViztool(hash, inputTable, query, name, dataType, users, latlonFieldsSeq, Seq(houseNumberField, streetField, cityField, stateField))
+          else if(!startTime.matches(""))
+            deployWorkflowToViztool(hash, inputTable, query, name, dataType, users, latlonFieldsSeq, Seq(houseNumberField, streetField, cityField, stateField), startTime)
+          else if(!endTime.matches(""))
+            deployWorkflowToViztool(hash, inputTable, query, name, dataType, users, latlonFieldsSeq, Seq(houseNumberField, streetField, cityField, stateField), endTime = endTime)
+          else
+            deployWorkflowToViztool(hash, inputTable, query, name, dataType, users, latlonFieldsSeq, Seq(houseNumberField, streetField, cityField, stateField), startTime, endTime)
+        }
+        input.toString()
       }
-      else{
-        val fieldsRegex = "\\s*(?:[a-zA-Z0-9_.]+\\s*(?:AS\\s+[a-zA-Z0-9_]+)?\\s*,\\s*)+[a-zA-Z0-9_.]+\\s*(?:AS\\s+[a-zA-Z0-9_]+)?\\s*".r
-        val fieldRegex = "\\s*[a-zA-Z0-9_.]+\\s*(?:AS\\s+[a-zA-Z0-9_]+)?\\s*".r
-        val fieldStr = fields.toUpperCase() match {
-          case "" => "*"
-          case "*" => "*"
-          case fieldsRegex() => fields.toUpperCase()  
-          case fieldRegex() => fields.toUpperCase()
-          case x => throw new Exception("bad fields format: should be field, field")
-        }
-        val latLonFieldsRegex = "\\s*([a-zA-Z0-9_.]+)\\s*,\\s*([a-zA-Z0-9_.]+)\\s*".r
-        val latlonFieldsSeq = latlonFields.toUpperCase() match {
-          case "" | null => Seq("LATITUDE","LONGITUDE")
-          case latLonFieldsRegex(latField, lonField) => Seq(latField, lonField)  
-          case x => throw new Exception("bad fields format: should be latField, lonField")
-        }
-        val orderFieldsRegex = "\\s*(?:[a-zA-Z0-9_.]+\\s*,\\s*)+[a-zA-Z0-9_.]+\\s*(?:DESC)?\\s*".r
-        val orderBy = orderByFields.toUpperCase() match {
-          case orderFieldsRegex() => "ORDER BY " + orderByFields.toUpperCase()  
-          case x => ""
-        }
-        val query = s"SELECT $fieldStr FROM ${input} $orderBy"
-        logger.debug("vistrailsDeployWorkflowToViztool: " + query + " users:" + users.mkString(","))
-        if(startTime.matches("") && endTime.matches(""))
-          deployWorkflowToViztool(hash, inputTable, query, name, dataType, users, latlonFieldsSeq, Seq(houseNumberField, streetField, cityField, stateField))
-        else if(!startTime.matches(""))
-          deployWorkflowToViztool(hash, inputTable, query, name, dataType, users, latlonFieldsSeq, Seq(houseNumberField, streetField, cityField, stateField), startTime)
-        else if(!endTime.matches(""))
-          deployWorkflowToViztool(hash, inputTable, query, name, dataType, users, latlonFieldsSeq, Seq(houseNumberField, streetField, cityField, stateField), endTime = endTime)
-        else
-          deployWorkflowToViztool(hash, inputTable, query, name, dataType, users, latlonFieldsSeq, Seq(houseNumberField, streetField, cityField, stateField), startTime, endTime)
+      logger.debug(s"vistrailsDeployWorkflowToViztool Took: ${timeRes._2}")
+      timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error(s"Error Deploying Workflow To CC: $name", t)
+        throw t
       }
-      input.toString()
     }
-    logger.debug(s"vistrailsDeployWorkflowToViztool Took: ${timeRes._2}")
-    timeRes._1
   }
   
   def explainCellJson(query: String, col:String, row:String) : String = {
-    logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
-    val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
-    JSONBuilder.list(explainCell(oper, col, RowIdPrimitive(row)).map(_.toJSON))
+    try{
+      logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
+      val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+      JSONBuilder.list(explainCell(oper, col, RowIdPrimitive(row)).map(_.toJSON))
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Cell: [" + col + "] [ "+ row +" ] [" + query + "]", t)
+        throw t
+      }
+    }
   }
   
   def getSchema(query:String) : String = {
-    val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
-    JSONBuilder.list( db.typechecker.schemaOf(oper).map( schel =>  Map( "name" -> schel._1, "type" -> schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())))
+    try{
+      val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+      JSONBuilder.list( db.typechecker.schemaOf(oper).map( schel =>  Map( "name" -> schel._1, "type" -> schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())))
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Getting Schema: [" + query + "]", t)
+        throw t
+      }
+    } 
   }
   
   def explainCell(query: String, col:Int, row:String) : Seq[mimir.ctables.Reason] = {
-    logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
-    val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
-    explainCell(oper, col, row)
+    try{
+      logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
+      val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+      explainCell(oper, col, row)
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Cell: [" + col + "] [ "+ row +" ] [" + query + "]", t)
+        throw t
+      }
+    }
   }
   
   def explainCell(oper: Operator, colIdx:Int, row:String) : Seq[mimir.ctables.Reason] = {
-    val cols = oper.columnNames
-    explainCell(oper, cols(colIdx), RowIdPrimitive(row))  
+    try{
+      val cols = oper.columnNames
+      explainCell(oper, cols(colIdx), RowIdPrimitive(row))  
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Cell: [" + colIdx + "] [ "+ row +" ] [" + oper + "]", t)
+        throw t
+      }
+    }
   }
   
   def explainCell(oper: Operator, col:String, row:RowIdPrimitive) : Seq[mimir.ctables.Reason] = {
-    val timeRes = time {
-      try {
-      logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + oper + "]"  ) ;
-      val provFilteredOper = db.explainer.filterByProvenance(oper,row)
-      val subsetReasons = db.explainer.explainSubset(
-              provFilteredOper, 
-              Seq(col).toSet, false, false)
-      db.explainer.getFocusedReasons(subsetReasons)
-      } catch {
-          case t: Throwable => {
-            t.printStackTrace() // TODO: handle error
-            Seq[Reason]()
+    try{
+      val timeRes = time {
+        try {
+        logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + oper + "]"  ) ;
+        val provFilteredOper = db.explainer.filterByProvenance(oper,row)
+        val subsetReasons = db.explainer.explainSubset(
+                provFilteredOper, 
+                Seq(col).toSet, false, false)
+        db.explainer.getFocusedReasons(subsetReasons)
+        } catch {
+            case t: Throwable => {
+              t.printStackTrace() // TODO: handle error
+              Seq[Reason]()
+            }
           }
-        }
+      }
+      logger.debug(s"explainCell Took: ${timeRes._2}")
+      timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Cell: [" + col + "] [ "+ row +" ] [" + oper + "]", t)
+        throw t
+      }
     }
-    logger.debug(s"explainCell Took: ${timeRes._2}")
-    timeRes._1
   }
   
   def explainRow(query: String, row:String) : Seq[mimir.ctables.Reason] = {
-    logger.debug("explainRow: From Vistrails: [ "+ row +" ] [" + query + "]"  ) ;
-    val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
-    explainRow(oper, row)  
+    try{
+      logger.debug("explainRow: From Vistrails: [ "+ row +" ] [" + query + "]"  ) ;
+      val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+      explainRow(oper, row)  
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Row: [ "+ row +" ] [" + query + "]", t)
+        throw t
+      }
+    }
   }
   
   def explainRow(oper: Operator, row:String) : Seq[mimir.ctables.Reason] = {
-    val timeRes = time {
-      logger.debug("explainRow: From Vistrails: [ "+ row +" ] [" + oper + "]"  ) ;
-      val cols = oper.columnNames
-      db.explainer.getFocusedReasons(db.explainer.explainSubset(
-              db.explainer.filterByProvenance(oper,RowIdPrimitive(row)), 
-              Seq().toSet, true, false))
+    try{
+      val timeRes = time {
+        logger.debug("explainRow: From Vistrails: [ "+ row +" ] [" + oper + "]"  ) ;
+        val cols = oper.columnNames
+        db.explainer.getFocusedReasons(db.explainer.explainSubset(
+                db.explainer.filterByProvenance(oper,RowIdPrimitive(row)), 
+                Seq().toSet, true, false))
+      }
+      logger.debug(s"explainRow Took: ${timeRes._2}")
+      timeRes._1.distinct
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Row: [ "+ row +" ] [" + oper + "]", t)
+        throw t
+      }
     }
-    logger.debug(s"explainRow Took: ${timeRes._2}")
-    timeRes._1.distinct
   }
   
   def explainSubset(query: String, rows:Seq[String], cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
-    logger.debug("explainSubset: From Vistrails: [ "+ rows +" ] [" + query + "]"  ) ;
-    val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
-    explainSubset(oper, rows, cols)  
+    try{
+      logger.debug("explainSubset: From Vistrails: [ "+ rows +" ] [" + query + "]"  ) ;
+      val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
+      explainSubset(oper, rows, cols)  
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Subset: [" + cols + "] [ "+ rows +" ] [" + query + "]", t)
+        throw t
+      }
+    }  
   }
   
   def explainSubset(oper: Operator, rows:Seq[String], cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
-    val timeRes = time {
-      logger.debug("explainSubset: From Vistrails: [ "+ rows +" ] [" + oper + "]"  ) ;
-      val explCols = cols match {
-        case Seq() => oper.columnNames
-        case _ => cols
+    try{
+      val timeRes = time {
+        logger.debug("explainSubset: From Vistrails: [ "+ rows +" ] [" + oper + "]"  ) ;
+        val explCols = cols match {
+          case Seq() => oper.columnNames
+          case _ => cols
+        }
+        rows.map(row => {
+          db.explainer.explainSubset(
+            db.explainer.filterByProvenance(oper,RowIdPrimitive(row)), 
+            explCols.toSet, true, false)
+        }).flatten
       }
-      rows.map(row => {
-        db.explainer.explainSubset(
-          db.explainer.filterByProvenance(oper,RowIdPrimitive(row)), 
-          explCols.toSet, true, false)
-      }).flatten
-    }
-    logger.debug(s"explainSubset Took: ${timeRes._2}")
-    timeRes._1
+      logger.debug(s"explainSubset Took: ${timeRes._2}")
+      timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Subset: [" + cols + "] [ "+ rows +" ] [" + oper + "]", t)
+        throw t
+      }
+    }    
   }
 
   def explainEverything(query: String) : Seq[mimir.ctables.ReasonSet] = {
-    logger.debug("explainEverything: From Vistrails: [" + query + "]"  ) ;
-    val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
-    explainEverything(oper)   
+    try{
+      logger.debug("explainEverything: From Vistrails: [" + query + "]"  ) ;
+      val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
+      explainEverything(oper)   
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Everything: [" + query + "]", t)
+        throw t
+      }
+    }  
   }
   
   def explainEverything(oper: Operator) : Seq[mimir.ctables.ReasonSet] = {
-    val timeRes = time {
-      logger.debug("explainEverything: From Vistrails: [" + oper + "]"  ) ;
-      val cols = oper.columnNames
-      db.explainer.explainEverything( oper)
-    }
-    logger.debug(s"explainEverything Took: ${timeRes._2}")
-    timeRes._1
+    try{
+      val timeRes = time {
+        logger.debug("explainEverything: From Vistrails: [" + oper + "]"  ) ;
+        val cols = oper.columnNames
+        db.explainer.explainEverything( oper)
+      }
+      logger.debug(s"explainEverything Took: ${timeRes._2}")
+      timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Everything: [" + oper + "]", t)
+        throw t
+      }
+    }    
   }
   
   def repairReason(reasons: Seq[mimir.ctables.Reason], idx:Int) : mimir.ctables.Repair = {
-    val timeRes = time {
-      logger.debug("repairReason: From Vistrails: [" + idx + "] [ " + reasons(idx) + " ]" ) ;
-      reasons(idx).repair
-    }
-    logger.debug(s"repairReason Took: ${timeRes._2}")
-    timeRes._1
+    try{
+      val timeRes = time {
+        logger.debug("repairReason: From Vistrails: [" + idx + "] [ " + reasons(idx) + " ]" ) ;
+        reasons(idx).repair
+      }
+      logger.debug(s"repairReason Took: ${timeRes._2}")
+      timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Repairing: [" + idx + "] [ " + reasons(idx) + " ]", t)
+        throw t
+      }
+    }  
   }
   
   def feedback(reasons: Seq[mimir.ctables.Reason], idx:Int, ack: Boolean, repairStr: String) : Unit = {
-    val timeRes = time {
-      logger.debug("feedback: From Vistrails: [" + idx + "] [ " + reasons(idx) + " ] [ " + ack + " ] [ " +repairStr+" ]" ) ;
-      val reason = reasons(idx) 
-      val argString = 
-          if(!reason.args.isEmpty){
-            " (" + reason.args.mkString(",") + ")"
-          } else { "" }
-      if(ack)
-        db.update(db.parse(s"FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.guess }").head)
-      else 
-        db.update(db.parse(s"FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ repairStr }").head)
-    }
-    logger.debug(s"feedback Took: ${timeRes._2}")
+    try{
+      val timeRes = time {
+        logger.debug("feedback: From Vistrails: [" + idx + "] [ " + reasons(idx) + " ] [ " + ack + " ] [ " +repairStr+" ]" ) ;
+        val reason = reasons(idx) 
+        val argString = 
+            if(!reason.args.isEmpty){
+              " (" + reason.args.mkString(",") + ")"
+            } else { "" }
+        if(ack)
+          db.update(db.parse(s"FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.guess }").head)
+        else 
+          db.update(db.parse(s"FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ repairStr }").head)
+      }
+      logger.debug(s"feedback Took: ${timeRes._2}")
+    } catch {
+      case t: Throwable => {
+        logger.error("Error with Feedback: [" + idx + "] [ " + reasons(idx) + " ] [ " + ack + " ] [ " +repairStr+" ]", t)
+        throw t
+      }
+    }    
   }
   
   def registerPythonMimirCallListener(listener : PythonMimirCallInterface) = {
@@ -562,6 +715,8 @@ object MimirVizier extends LazyLogging {
     }
     
   }
+  // End vistrails package defs
+  //----------------------------------------------------------------------------------------------------
   
   def getTuple(oper: mimir.algebra.Operator) : Map[String,PrimitiveValue] = {
     db.query(oper)(results => {
