@@ -13,6 +13,8 @@ import mimir.algebra.RowIdPrimitive
 import mimir.algebra.IntPrimitive
 import mimir.algebra.FloatPrimitive
 import mimir.algebra.BoolPrimitive
+import mimir.algebra.TimestampPrimitive
+import mimir.algebra.DatePrimitive
 
 
 object JSONBuilder {
@@ -57,7 +59,9 @@ object JSONBuilder {
       case IntPrimitive(i) => JsNumber(i)
       case FloatPrimitive(f) => JsNumber(f)
       case BoolPrimitive(b) => JsBoolean(b)
-			case _ =>  JsString(content.toString())
+      case TimestampPrimitive(_,_,_,_,_,_,_) => JsString(content.asString)
+      case DatePrimitive(_,_,_) => JsString(content.asString)
+      case _ =>  JsString(content.toString())
 		}
 	}
 	
