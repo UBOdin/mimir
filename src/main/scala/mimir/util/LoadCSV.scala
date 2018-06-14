@@ -35,7 +35,8 @@ object LoadCSV extends StrictLogging {
   //   handleLoadTable(db, targetTable, sourceFile, Map())
 
   def handleLoadTableRaw(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
-    val input = new FileReader(sourceFile)
+    val url = if(sourceFile.getPath.contains(":/")) new java.net.URL(sourceFile.getPath.replaceFirst(":/", "://")) else sourceFile.toURI().toURL()
+    val input = new BufferedReader(new InputStreamReader(url.openStream))
     
     // Allocate the parser, and make its iterator scala-friendly
     val parser = new NonStrictCSVParser(input, options)
