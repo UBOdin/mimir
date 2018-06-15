@@ -45,65 +45,73 @@ with SourcedFeedback
   }
   
   def detect_header(): (Boolean, Map[Int, String]) = {
-    val top6 = trainingData
-    val (header, topRecords) = (top6.head.map(col => sanitizeColumnName(col match {
-        case NullPrimitive() => "NULL" 
-        case x => x.asString.toUpperCase()
-      })), top6.tail)
-    val topRecordsAnalysis = topRecords.foldLeft(Map[Int,Type]())((init, row) => {
-      row.zipWithIndex.map(pv => {
-         (pv._1 match {
-           case NullPrimitive() => TAny()
-           case x => {
-             Type.rootTypes.foldLeft(TAny():Type)((tinit, ttype) => {
-               Cast.apply(ttype,x) match {
-                 case NullPrimitive() => tinit
-                 case x => ttype
-               }
-             })
-           }
-         }) match {
-           case TAny() => None
-           case x => init.get(pv._2) match {
-             case Some(typ) => Some((pv._2 -> x))
-             case None => Some((pv._2 -> x))
-           }
-         }
-      }).flatten.toMap
-    })
-    val dups = collection.mutable.Map( (header.groupBy(identity).collect { case (x, Seq(_,_,_*)) => (x -> 1) }).toSeq: _*)
-    val conflictOrNullCols = columns.zipWithIndex.unzip._2.toSet -- topRecordsAnalysis.keySet 
-    val goodHeaderCols = DetectHeader.isHeader(header) 
-    val badHeaderCols = (top6.head.zipWithIndex.unzip._2.toSet -- goodHeaderCols.toSet).toSeq  
-    val detectResult = badHeaderCols.flatMap(badCol => {
-      top6.head(badCol) match {
-        case NullPrimitive() => None
-        case StringPrimitive("") => None
-        case x => Some(x)
-      }
-    }) match {
-      case Seq() => {
-        if(!conflictOrNullCols.isEmpty) DetectHeader.logger.warn(s"There are some type conflicts or nulls in cols: ${conflictOrNullCols.map(columns(_))}") 
-        (true, top6.head.zipWithIndex.map(colIdx => (colIdx._2, colIdx._1 match {
-          case NullPrimitive() =>  s"COLUMN_${colIdx._2}"
-          case StringPrimitive("") => s"COLUMN_${colIdx._2}"
-          case x => {
-            val head = sanitizeColumnName(x.asString.toUpperCase())
-            dups.get(head) match {
-              case Some(dupCnt) => {
-                dups(head) = dupCnt+1
-                s"${head}_${dupCnt}"
-              }
-              case None => head
-            }
-          }
-        })).toMap)
-      }
-      case x => (false, header.zipWithIndex.map { x => (x._2, s"COLUMN_${x._2}") }.toMap)
+    if(trainingData.isEmpty){
+      headerDetected = false
+      initialHeaders = columns.zipWithIndex.map(el => (el._2 , el._1)).toMap
+      (headerDetected,initialHeaders)
     }
-    headerDetected = detectResult._1
-    initialHeaders = detectResult._2
-    detectResult
+    else
+    {
+      val top6 = trainingData
+      val (header, topRecords) = (top6.head.map(col => sanitizeColumnName(col match {
+          case NullPrimitive() => "NULL" 
+          case x => x.asString.toUpperCase()
+        })), top6.tail)
+      val topRecordsAnalysis = topRecords.foldLeft(Map[Int,Type]())((init, row) => {
+        row.zipWithIndex.map(pv => {
+           (pv._1 match {
+             case NullPrimitive() => TAny()
+             case x => {
+               Type.rootTypes.foldLeft(TAny():Type)((tinit, ttype) => {
+                 Cast.apply(ttype,x) match {
+                   case NullPrimitive() => tinit
+                   case x => ttype
+                 }
+               })
+             }
+           }) match {
+             case TAny() => None
+             case x => init.get(pv._2) match {
+               case Some(typ) => Some((pv._2 -> x))
+               case None => Some((pv._2 -> x))
+             }
+           }
+        }).flatten.toMap
+      })
+      val dups = collection.mutable.Map( (header.groupBy(identity).collect { case (x, Seq(_,_,_*)) => (x -> 1) }).toSeq: _*)
+      val conflictOrNullCols = columns.zipWithIndex.unzip._2.toSet -- topRecordsAnalysis.keySet 
+      val goodHeaderCols = DetectHeader.isHeader(header) 
+      val badHeaderCols = (top6.head.zipWithIndex.unzip._2.toSet -- goodHeaderCols.toSet).toSeq  
+      val detectResult = badHeaderCols.flatMap(badCol => {
+        top6.head(badCol) match {
+          case NullPrimitive() => None
+          case StringPrimitive("") => None
+          case x => Some(x)
+        }
+      }) match {
+        case Seq() => {
+          if(!conflictOrNullCols.isEmpty) DetectHeader.logger.warn(s"There are some type conflicts or nulls in cols: ${conflictOrNullCols.map(columns(_))}") 
+          (true, top6.head.zipWithIndex.map(colIdx => (colIdx._2, colIdx._1 match {
+            case NullPrimitive() =>  s"COLUMN_${colIdx._2}"
+            case StringPrimitive("") => s"COLUMN_${colIdx._2}"
+            case x => {
+              val head = sanitizeColumnName(x.asString.toUpperCase())
+              dups.get(head) match {
+                case Some(dupCnt) => {
+                  dups(head) = dupCnt+1
+                  s"${head}_${dupCnt}"
+                }
+                case None => head
+              }
+            }
+          })).toMap)
+        }
+        case x => (false, header.zipWithIndex.map { x => (x._2, s"COLUMN_${x._2}") }.toMap)
+      }
+      headerDetected = detectResult._1
+      initialHeaders = detectResult._2
+      detectResult
+    }
   }
 
   

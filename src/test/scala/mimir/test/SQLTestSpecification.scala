@@ -82,7 +82,7 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   with RAParsers
   with AfterAll
 {
-  sequential
+  //sequential
   def afterAll = {
     //TODO: There is likely a better way to do this:
     // hack for spark to delete all cached tables 

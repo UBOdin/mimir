@@ -77,7 +77,7 @@ abstract class GProMSQLTestSpecification(val tempDBName:String, config: Map[Stri
   with SQLParsers
   with RAParsers
 {
-  sequential
+  //sequential
   args.execute(threadsNb = 1)
   def dbFile = new File(tempDBName+".db")
 

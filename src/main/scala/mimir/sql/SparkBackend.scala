@@ -29,6 +29,7 @@ import org.apache.spark.sql.execution.command.SetDatabaseCommand
 import org.apache.spark.sql.execution.command.CreateDatabaseCommand
 import org.apache.spark.sql.execution.command.DropDatabaseCommand
 import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.hive.HiveContext
 
 
 class SparkBackend(override val database:String) extends RABackend(database) with BackendWithSparkContext{
@@ -78,6 +79,8 @@ class SparkBackend(override val database:String) extends RABackend(database) wit
           sparkCtx.hadoopConfiguration.set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
           sparkCtx.hadoopConfiguration.set("fs.defaultFS", s"hdfs://$sparkHost:$hdfsPort")
           val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkCtx)
+          sparkCtx.hadoopConfiguration.set("spark.sql.warehouse.dir",s"${hdfsHome}/metastore_db")
+          sparkCtx.hadoopConfiguration.set("hive.metastore.warehouse.dir",s"${hdfsHome}/metastore_db")
           HadoopUtils.writeToHDFS(sparkCtx, "mimir-core_2.11-0.2.jar", new File(s"${System.getProperty("user.home")}/.m2/repository/info/mimirdb/mimir-core_2.11/0.2/mimir-core_2.11-0.2.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, "scala-logging-slf4j_2.11-2.1.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.scala-logging/scala-logging-api_2.11/jars/scala-logging-api_2.11-2.1.2.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, "scala-logging-api_2.11-2.1.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.scala-logging/scala-logging-slf4j_2.11/jars/scala-logging-slf4j_2.11-2.1.2.jar"), overwriteJars)
@@ -161,7 +164,8 @@ class SparkBackend(override val database:String) extends RABackend(database) wit
   
   def readDataSource(name:String, format:String, options:Map[String, String], schema:Option[Seq[(String, Type)]], load:Option[String]) = {
     if(sparkSql == null) throw new Exception("There is no spark context")
-    val dsFormat = sparkSql.read.format(format)
+    var  pathIfCSV = "("
+    val dsFormat = sparkSql.read.format(format) 
     val dsOptions = options.toSeq.foldLeft(dsFormat)( (ds, opt) => ds.option(opt._1, opt._2))
     val dsSchema = schema match {
       case None => dsOptions
@@ -177,14 +181,25 @@ class SparkBackend(override val database:String) extends RABackend(database) wit
           //if(!HadoopUtils.fileExistsHDFS(sparkSql.sparkSession.sparkContext, fileName))
           HadoopUtils.writeToHDFS(sparkSql.sparkSession.sparkContext, fileName, new File(ldf), overwriteHDFSFiles)
           print("... done\n")
+          pathIfCSV = s"""(path "$hdfsHome/$fileName", """
           dsSchema.load(s"$hdfsHome/$fileName")
         }
         else dsSchema.load(ldf)
         
       }
-    })/*.toDF(df.columns.map(_.toUpperCase): _*)*/
-    df.write.mode(SaveMode.Overwrite).saveAsTable(name) //persist().createOrReplaceTempView(name)
-    /*val tableIdentifier = try {
+    })/*.toDF(df.columns.map(_.toUpperCase): _*)*/  //.persist().createOrReplaceTempView(name)
+    
+    // attempt 1 ---------------------
+    //try using builtin save funcionality to create persistent table
+    df.persist().createOrReplaceTempView(name) 
+    df.write.mode(SaveMode.ErrorIfExists).saveAsTable(name) // but resulting table ends up being empty
+   
+    
+    // attempt 2 ---------------------
+    //try makting temp view then create a persistent view of it
+    /*df.persist().createOrReplaceTempView(name)                          
+    //sparkSql.sparkSession.table(name)                              
+    val tableIdentifier = try {
       sparkSql.sparkSession.sessionState.sqlParser.parseTableIdentifier(name)
     } catch {
       case _: Exception => throw new RAException(s"Invalid view name: name")
@@ -198,7 +213,39 @@ class SparkBackend(override val database:String) extends RABackend(database) wit
       child = df.queryExecution.logical,
       allowExisting = false,
       replace = true,
-      viewType = PersistedView).run(sparkSql.sparkSession)*/
+      viewType = PersistedView).run(sparkSql.sparkSession)
+    */
+     
+    // attempt 3 ---------------------
+    //try creating the table from the csv file then creating a persistent view
+    /*val createSql = s"CREATE TABLE ${name}_tmp (${df.schema.fields.map(schee => s"${schee.name} ${schee.dataType.sql}").mkString(",")}) USING $format OPTIONS ${options.map(opt => s"""${opt._1} "${opt._2}" """).mkString(pathIfCSV, ",", ")")}"
+    sparkSql.sql(createSql)
+    val tableIdentifier = try {                                                                             
+      sparkSql.sparkSession.sessionState.sqlParser.parseTableIdentifier(name)     
+    } catch {                                                                                                                      
+      case _: Exception => throw new RAException(s"Invalid view name: name")                                                  
+    }                     
+    CreateViewCommand(                                                                        
+      name = tableIdentifier,                                 
+      userSpecifiedColumns = df.schema.fields.map(schee => (s"${schee.name}", None)),
+      comment = None,                                                             
+      properties = Map.empty,                                     
+      originalText = Option(s"CREATE VIEW $name AS SELECT * FROM ${name}_tmp"),                                
+      child = df.queryExecution.logical,                                                             
+      allowExisting = false,                                                             
+      replace = true,                                                   
+      viewType = PersistedView).run(sparkSql.sparkSession) 
+    */  
+      
+   
+    // attempt 4 ---------------------
+    //this is the workaround in the docs @ https://www.cloudera.com/documentation/enterprise/release-notes/topics/cdh_rn_spark_ki.html#ki_sparksql_dataframe_saveastable
+    /*df.persist().createOrReplaceTempView(s"${name}_tmp")                         
+    val createSql = s"CREATE TABLE ${name} (${df.schema.fields.map(schee => s"${schee.name} ${schee.dataType.sql}").mkString(",")}) STORED AS parquet"
+    sparkSql.sql(createSql)
+    sparkSql.sql(s"INSERT INTO TABLE $name SELECT * FROM ${name}_tmp")
+    //sparkSql.sparkSession.table(name).show() //this is empty - wtf 
+    */
   }
   
   
