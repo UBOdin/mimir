@@ -72,7 +72,8 @@ class WebLogAppender extends ch.qos.logback.core.Appender[ILoggingEvent] {
 
   private def processEvent(loggingEvent: ILoggingEvent): Unit = {
     if (loggingEvent != null) {
-      val attachments = Seq(Attachment(loggingEvent.getMessage.toString(), loggingEvent.getLevel match {
+      val messageAttachment = s"${loggingEvent.getMessage.toString()}\n${loggingEvent.getThrowableProxy.getStackTraceElementProxyArray.mkString("\n")}"
+      val attachments = Seq(Attachment(messageAttachment, loggingEvent.getLevel match {
         case Level.ERROR => Color.Red
         case Level.WARN => Color.Yellow
         case Level.INFO => Color.Gray
@@ -103,29 +104,6 @@ class WebLogAppender extends ch.qos.logback.core.Appender[ILoggingEvent] {
   def requiresLayout(): Boolean = //to an external source
     false
 
-  /*override def activateOptions(): Unit = {
-    try {
-      LogLog.debug("Getting web service properties.")
-      if (hookUrl != null) {
-        //use the property
-      }
-
-      if (token != null) {}
-
-      if (property3 != null) {}
-
-      //if we can use persistent conn to rocket set it up here
-      LogLog.debug("Web Service created.")
-    } catch {
-      case ex: Exception =>
-        LogLog.error(
-          "Error while activating options for WebServiceAppender [" +
-            name +
-            "].",
-          ex)
-
-    }
-  }*/
   
   // Members declared in ch.qos.logback.core.Appender
    override def doAppend(event: ch.qos.logback.classic.spi.ILoggingEvent): Unit = loggingEventQueue.add(event)

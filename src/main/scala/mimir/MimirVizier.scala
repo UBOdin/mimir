@@ -256,7 +256,7 @@ object MimirVizier extends LazyLogging {
       timeRes._1
     } catch {
       case t: Throwable => {
-        logger.error("Error Creating Lens: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]", t)
+        logger.error(s"Error Creating Lens: [ $input ] [ ${params.mkString(",")} ] [ ${_type }]", t)
         throw t
       }
     }
