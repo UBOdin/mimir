@@ -157,8 +157,9 @@ class SparkBackend(override val database:String) extends RABackend(database) wit
   }
   
   def dropDB():Unit = {
-    
     DropDatabaseCommand(database, true, true).run(sparkSql.sparkSession)
+    val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkSql.sparkSession.sparkContext)
+    HadoopUtils.deleteFromHDFS( sparkSql.sparkSession.sparkContext, s"${hdfsHome}/metastore_db/database")
   }
 
   

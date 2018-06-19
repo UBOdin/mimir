@@ -51,6 +51,16 @@ object HadoopUtils {
     }
   }
   
+  def deleteFromHDFS(sparkCtx:SparkContext, hdfsTargetFile:String) {
+    val fs = FileSystem.get(sparkCtx.hadoopConfiguration)
+    //fs.copyFromLocalFile(false, new Path(localFile.toURI()), new Path(hdfsTargetFile))
+    val hdfsPath = new Path(hdfsTargetFile)
+    val exists = fs.exists(hdfsPath)
+    if(exists){
+      fs.delete(hdfsPath, true)
+    }
+  }
+  
   def fileExistsHDFS(sparkCtx:SparkContext, hdfsTargetFile:String) : Boolean = {
     val fs = FileSystem.get(sparkCtx.hadoopConfiguration)
     val hdfsPath = new Path(hdfsTargetFile)
