@@ -72,7 +72,7 @@ class WebLogAppender extends ch.qos.logback.core.Appender[ILoggingEvent] {
 
   private def processEvent(loggingEvent: ILoggingEvent): Unit = {
     if (loggingEvent != null) {
-      val messageAttachment = s"${loggingEvent.getMessage.toString()}\n${loggingEvent.getThrowableProxy.getStackTraceElementProxyArray.mkString("\n")}"
+      val messageAttachment = s"${loggingEvent.getMessage.toString()}\n${loggingEvent.getThrowableProxy.getStackTraceElementProxyArray.mkString("\n").replaceAll("\\$", "")}"
       val attachments = Seq(Attachment(messageAttachment, loggingEvent.getLevel match {
         case Level.ERROR => Color.Red
         case Level.WARN => Color.Yellow
