@@ -177,7 +177,7 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = 
   {
     val column = args(0).asInt
-    trainingData.agg(new VoteList(column).toColumn).head().getMap[Type, Double](0).toSeq.map( x => (TypePrimitive(x._1), x._2)) ++ Seq( (TypePrimitive(TString()), defaultFrac) )
+    trainingData.agg(new VoteList(column).toColumn).head().getMap[String, Double](0).toSeq.map( x => (TypePrimitive(Type.fromString(x._1)), x._2)) ++ Seq( (TypePrimitive(TString()), defaultFrac) )
   }
 
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =

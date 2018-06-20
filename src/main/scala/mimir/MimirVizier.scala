@@ -24,6 +24,7 @@ import net.sf.jsqlparser.statement.Statement
 import mimir.serialization.Json
 import mimir.util.LoggerUtils
 import mimir.ml.spark.SparkML
+import mimir.util.JSONBuilder
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -364,6 +365,46 @@ object MimirVizier extends LazyLogging {
     timeRes._1
   }
   
+def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
+    try{
+      val timeRes = time {
+        logger.debug("vistrailsQueryMimirJson: " + query)
+        val jsqlStmnt = db.parse(query).head
+        jsqlStmnt match {
+          case select:Select => {
+            val oper = db.sql.convert(select)
+            if(includeUncertainty && includeReasons)
+              operCSVResultsDeterminismAndExplanationJson(oper)
+            else if(includeUncertainty)
+              operCSVResultsDeterminismJson(oper)
+            else 
+              operCSVResultsJson(oper)
+          }
+          case update:Update => {
+            //db.backend.update(query)
+            JSONBuilder.dict(Map(
+              "success" -> 0
+            ))
+          }
+          case stmt:Statement => {
+            db.update(stmt)
+            JSONBuilder.dict(Map(
+              "success" -> 1
+            ))
+          }
+        }
+        
+      }
+      logger.debug(s"vistrailsQueryMimir Took: ${timeRes._2}")
+      timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error(s"Error Querying Mimir -> JSON: $query", t)
+        throw t
+      }
+    }
+  }
+  
   /*def vistrailsDeployWorkflowToViztool(input : Any, name:String, dataType:String, users:Seq[String], startTime:String, endTime:String, fields:String, latlonFields:String, houseNumberField:String, streetField:String, cityField:String, stateField:String, orderByFields:String) : String = {
     val timeRes = time {
       val inputTable = input.toString()
@@ -429,8 +470,8 @@ object MimirVizier extends LazyLogging {
     }
     logger.debug(s"explainSubsetWithoutSchema Took: ${timeRes._2}")
     timeRes._1
-  }
-  
+  }  
+
   def explainSchema(query: String, cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
     val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
     explainSchema(oper, cols)  
@@ -451,6 +492,31 @@ object MimirVizier extends LazyLogging {
   }
 
   
+  def explainCellJson(query: String, col:String, row:String) : String = {
+    try{
+      logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
+      val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+      JSONBuilder.list(explainCell(oper, col, RowIdPrimitive(row)).map(_.toJSON))
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Cell: [" + col + "] [ "+ row +" ] [" + query + "]", t)
+        throw t
+      }
+    }
+  }
+  
+  def getSchema(query:String) : String = {
+    try{
+      val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+      JSONBuilder.list( db.typechecker.schemaOf(oper).map( schel =>  Map( "name" -> schel._1, "type" -> schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())))
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Getting Schema: [" + query + "]", t)
+        throw t
+      }
+    } 
+  }
+
   def explainCell(query: String, col:Int, row:String) : Seq[mimir.ctables.Reason] = {
     logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
     val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
@@ -572,7 +638,9 @@ object MimirVizier extends LazyLogging {
   }
   
   def getAvailableLenses() : String = {
-    val ret = db.lenses.lensTypes.keySet.toSeq.mkString(",")
+    val distinctLenseIdxs = db.lenses.lensTypes.toSeq.map(_._2).zipWithIndex.distinct.unzip._2
+    val distinctLenses = db.lenses.lensTypes.toSeq.zipWithIndex.filter(el => distinctLenseIdxs.contains(el._2)).unzip._1.toMap
+    val ret = distinctLenses.keySet.toSeq.mkString(",")
     logger.debug(s"getAvailableLenses: From Viztrails: $ret")
     ret
   }
@@ -700,7 +768,57 @@ object MimirVizier extends LazyLogging {
      val detListsAndProv = resCSV._2.unzip3
      new PythonCSVContainer(resCSV._1.mkString(cols.mkString(", ") + "\n", "\n", ""), detListsAndProv._1.toArray, detListsAndProv._2.toArray, resCSV._3.toArray, detListsAndProv._3.toArray, schViz)
   }
+
+
+  def operCSVResultsJson(oper : mimir.algebra.Operator) : String =  {
+    db.query(oper)(results => {
+      val resultList = results.toList 
+      val (resultsStrs, prov) = resultList.map(row => (row.tuple.map(cell => cell), row.provenance.asString)).unzip
+      JSONBuilder.dict(Map(
+        "schema" -> results.schema.map( schel =>  Map( "name" -> schel._1, "type" ->schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())),
+        "data" -> resultsStrs,
+        "prov" -> prov
+      ))
+    })
+  }
+  
+ def operCSVResultsDeterminismJson(oper : mimir.algebra.Operator) : String =  {
+    db.query(oper)(results => {
+      val colsIndexes = results.schema.zipWithIndex.map( _._2)
+      val resultList = results.toList 
+      val (resultsStrsColTaint, provRowTaint) = resultList.map(row => ((row.tuple.map(cell => cell), colsIndexes.map(idx => row.isColDeterministic(idx).toString())), (row.provenance.asString, row.isDeterministic().toString()))).unzip
+      val (resultsStrs, colTaint) = resultsStrsColTaint.unzip
+      val (prov, rowTaint) = provRowTaint.unzip
+      JSONBuilder.dict(Map(
+        "schema" -> results.schema.map( schel =>  Map( "name" -> schel._1, "type" ->schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())),
+        "data" -> resultsStrs,
+        "prov" -> prov,
+        "col_taint" -> colTaint,
+        "row_taint" -> rowTaint
+      ))
+    }) 
+ }
  
+ def operCSVResultsDeterminismAndExplanationJson(oper : mimir.algebra.Operator) : String =  {
+     db.query(oper)(results => {
+      val colsIndexes = results.schema.zipWithIndex.map( _._2)
+      val resultList = results.toList 
+      val (resultsStrsColTaint, provRowTaint) = resultList.map(row => ((row.tuple.map(cell => cell), colsIndexes.map(idx => row.isColDeterministic(idx).toString())), (row.provenance.asString, row.isDeterministic().toString()))).unzip
+      val (resultsStrs, colTaint) = resultsStrsColTaint.unzip
+      val (prov, rowTaint) = provRowTaint.unzip
+      val reasons = explainEverything(oper).map(reasonSet => reasonSet.all(db).toSeq.map(_.toJSONWithFeedback))
+      JSONBuilder.dict(Map(
+        "schema" -> results.schema.map( schel =>  Map( "name" -> schel._1, "type" ->schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())),
+        "data" -> resultsStrs,
+        "prov" -> prov,
+        "col_taint" -> colTaint,
+        "row_taint" -> rowTaint,
+        "reasons" -> reasons
+      ))
+    }) 
+    
+ } 
+
  /*def isWorkflowDeployed(hash:String) : Boolean = {
    db.query(Project(Seq(ProjectArg("CLEANING_JOB_ID",Var("CLEANING_JOB_ID"))) , mimir.algebra.Select( Comparison(Cmp.Eq, Var("HASH"), StringPrimitive(hash)), db.table("CLEANING_JOBS"))))( resIter => resIter.hasNext())
  }
