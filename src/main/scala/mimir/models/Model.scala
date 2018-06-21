@@ -124,6 +124,7 @@ abstract class Model(val name: String) extends Serializable {
     case t: Throwable => {
       println("------------------------------------ Serialization Error --------------------------------------")
       println( t.getMessage )
+      t.printStackTrace()
       println("------------------------------------")
       throw t;
     }

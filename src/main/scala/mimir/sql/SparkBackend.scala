@@ -30,9 +30,14 @@ import org.apache.spark.sql.execution.command.CreateDatabaseCommand
 import org.apache.spark.sql.execution.command.DropDatabaseCommand
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hive.HiveContext
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 
-class SparkBackend(override val database:String) extends RABackend(database) with BackendWithSparkContext{
+class SparkBackend(override val database:String) extends RABackend(database) 
+  with BackendWithSparkContext
+  with LazyLogging
+{
+  
   var sparkSql : SQLContext = null
   //ExperimentalOptions.enable("remoteSpark")
   val (sparkHost, sparkPort, hdfsPort, useHDFSHostnames, overwriteHDFSFiles, overwriteJars, numPartitions) = Mimir.conf match {
@@ -69,7 +74,7 @@ class SparkBackend(override val database:String) extends RABackend(database) wit
           sys.props.get("os.name") match {
       	  	case Some(osname) if osname.startsWith("Mac OS X") => conf.set("spark.executorEnv.DYLD_INSERT_LIBRARIES",System.getProperty("java.home")+"/lib/libjsig.dylib")
       	  	case Some(otherosname) => conf.set("spark.executorEnv.LD_PRELOAD",System.getProperty("java.home")+"/lib/"+System.getProperty("os.arch")+"/libjsig.so")
-      	  	case None => println("No os name so no preload!")
+      	  	case None => logger.debug("No os name so no preload!")
           }
         }
         val sparkCtx = SparkContext.getOrCreate(conf)//new SparkContext(conf)
@@ -105,7 +110,7 @@ class SparkBackend(override val database:String) extends RABackend(database) wit
           
           //sparkCtx.addJar("http://central.maven.org/maven2/mysql/mysql-connector-java/5.1.6/mysql-connector-java-5.1.6.jar")
         }
-        println(s"apache spark: ${sparkCtx.version}  remote: $remoteSpark deployMode: $dmode")
+        logger.debug(s"apache spark: ${sparkCtx.version}  remote: $remoteSpark deployMode: $dmode")
         new SQLContext(sparkCtx)
       }
       case sparkSqlCtx => sparkSqlCtx
@@ -115,7 +120,7 @@ class SparkBackend(override val database:String) extends RABackend(database) wit
       CreateDatabaseCommand(database, true, None, None, Map()).run(sparkSql.sparkSession)
     SetDatabaseCommand(database).run(sparkSql.sparkSession)
     /*dbs.map(sdb => { 
-      println(s"db: ${sdb.name}")
+      logger.debug(s"db: ${sdb.name}")
       sparkSql.sparkSession.catalog.listTables(sdb.name).show()
     })*/
     mimir.ml.spark.SparkML(sparkSql)
@@ -134,23 +139,23 @@ class SparkBackend(override val database:String) extends RABackend(database) wit
   def execute(compiledOp: Operator): DataFrame = {
     var sparkOper:LogicalPlan = null
     try {
-      /*println("------------------------ mimir op --------------------------")
-      println(compiledOp)
-      println("------------------------------------------------------------")*/
+      logger.trace("------------------------ mimir op --------------------------")
+      logger.trace(s"$compiledOp")
+      logger.trace("------------------------------------------------------------")
       if(sparkSql == null) throw new Exception("There is no spark context")
       sparkOper = OperatorTranslation.mimirOpToSparkOp(compiledOp)
-      /*println("------------------------ spark op --------------------------")
-      println(sparkOper)
-      println("------------------------------------------------------------")*/
+      logger.trace("------------------------ spark op --------------------------")
+      logger.trace(s"$sparkOper")
+      logger.trace("------------------------------------------------------------")
       val qe = sparkSql.sparkSession.sessionState.executePlan(sparkOper)
       qe.assertAnalyzed()
       new Dataset[Row](sparkSql.sparkSession, sparkOper, RowEncoder(qe.analyzed.schema))
     } catch {
       case t: Throwable => {
-        println("-------------------------> Exception Executing Spark Op: " + t.toString() + "\n" + t.getStackTrace.mkString("\n"))
-        println("------------------------ spark op --------------------------")
-        println(sparkOper)
-        println("------------------------------------------------------------")
+        logger.error("-------------------------> Exception Executing Spark Op: " + t.toString() + "\n" + t.getStackTrace.mkString("\n"))
+        logger.error("------------------------ spark op --------------------------")
+        logger.error(s"$sparkOper")
+        logger.error("------------------------------------------------------------")
         throw t
       }
     }
@@ -178,10 +183,10 @@ class SparkBackend(override val database:String) extends RABackend(database) wit
         if(remoteSpark){
           val fileName = ldf.split(File.separator).last
           val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkSql.sparkSession.sparkContext)
-          print("Copy File To HDFS: " +hdfsHome+File.separator+fileName)
+          logger.debug("Copy File To HDFS: " +hdfsHome+File.separator+fileName)
           //if(!HadoopUtils.fileExistsHDFS(sparkSql.sparkSession.sparkContext, fileName))
           HadoopUtils.writeToHDFS(sparkSql.sparkSession.sparkContext, fileName, new File(ldf), overwriteHDFSFiles)
-          print("... done\n")
+          logger.debug("... done\n")
           pathIfCSV = s"""(path "$hdfsHome/$fileName", """
           dsSchema.load(s"$hdfsHome/$fileName")
         }

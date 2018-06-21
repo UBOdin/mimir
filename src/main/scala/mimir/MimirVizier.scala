@@ -84,19 +84,24 @@ object MimirVizier extends LazyLogging {
     }
     
     if(ExperimentalOptions.isEnabled("LOG")){
+      val logLevel = 
+        if(ExperimentalOptions.isEnabled("LOGD")) Level.DEBUG
+        else if(ExperimentalOptions.isEnabled("LOGW")) Level.WARN
+        else if(ExperimentalOptions.isEnabled("LOGE")) Level.ERROR
+        else if(ExperimentalOptions.isEnabled("LOGI")) Level.INFO
+        else if(ExperimentalOptions.isEnabled("LOGO")) Level.OFF
+        else Level.DEBUG
+        
       LoggerFactory.getLogger(this.getClass.getName) match {
           case logger: Logger => {
-            logger.setLevel(Level.DEBUG)
-            logger.debug(this.getClass.getName +" logger set to level: DEBUG"); 
+            logger.setLevel(logLevel)
+            logger.debug(this.getClass.getName +" logger set to level: " + logLevel); 
           }
         }
-    }
-    
-    if(ExperimentalOptions.isEnabled("LOG-TRANSLATOR")){
-      LoggerFactory.getLogger(OperatorTranslation.getClass.getName) match {
+      LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) match {
           case logger: Logger => {
-            logger.setLevel(Level.DEBUG)
-            logger.debug(OperatorTranslation.getClass.getName +" logger set to level: DEBUG"); 
+            logger.setLevel(logLevel)
+            logger.debug("root logger set to level: " + logLevel); 
           }
         }
     }
@@ -231,6 +236,7 @@ object MimirVizier extends LazyLogging {
   def loadCSV(file : String, delimeter:String, inferTypes:Boolean, detectHeaders:Boolean) : String = 
     loadCSV(file, ("CSV", Seq(StringPrimitive(delimeter), BoolPrimitive(inferTypes), BoolPrimitive(detectHeaders))))
   def loadCSV(file : String, format:(String, Seq[PrimitiveValue])) : String = {
+    try{
     pythonCallThread = Thread.currentThread()
     val timeRes = time {
       logger.debug("loadCSV: From Vistrails: [" + file + "]") ;
@@ -247,9 +253,16 @@ object MimirVizier extends LazyLogging {
     }
     logger.debug(s"loadCSV Took: ${timeRes._2}")
     timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error(s"Error Loading Data: $file", t)
+        throw t
+      }
+    }
   }
   
   def createLens(input : Any, params : Seq[String], _type : String, make_input_certain:Boolean, materialize:Boolean) : String = {
+    try{
     pythonCallThread = Thread.currentThread()
     val timeRes = time {
       logger.debug("createLens: From Vistrails: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]"  ) ;
@@ -289,9 +302,16 @@ object MimirVizier extends LazyLogging {
     }
     logger.debug(s"createLens ${_type} Took: ${timeRes._2}")
     timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error(s"Error Creating Lens: [ $input ] [ ${params.mkString(",")} ] [ ${_type }]", t)
+        throw t
+      }
+    }
   }
   
   def createView(input : Any, query : String) : String = {
+    try{
     pythonCallThread = Thread.currentThread()
     val timeRes = time {
       logger.debug("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
@@ -311,9 +331,16 @@ object MimirVizier extends LazyLogging {
     }
     logger.debug(s"createView Took: ${timeRes._2}")
     timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Creating View: [" + input + "] [" + query + "]", t)
+        throw t
+      }
+    }
   }
   
   def createAdaptiveSchema(input : Any, params : Seq[String], _type : String) : String = {
+    try {
     pythonCallThread = Thread.currentThread()
     val timeRes = time {
       logger.debug("createAdaptiveSchema: From Vistrails: [" + input + "] [" + params.mkString(",") + "]"  ) ;
@@ -334,9 +361,16 @@ object MimirVizier extends LazyLogging {
     }
     logger.debug(s"createView Took: ${timeRes._2}")
     timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Creating Adaptive Schema: [" + input + "] [" + params.mkString(",") + "]", t)
+        throw t
+      }
+    }
   }
   
   def vistrailsQueryMimir(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : PythonCSVContainer = {
+    try{
     val timeRes = time {
       logger.debug("vistrailsQueryMimir: " + query)
       val jsqlStmnt = db.parse(query).head
@@ -363,6 +397,12 @@ object MimirVizier extends LazyLogging {
     }
     logger.debug(s"vistrailsQueryMimir Took: ${timeRes._2}")
     timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error(s"Error Querying Mimir -> CSV: $query", t)
+        throw t
+      }
+    }
   }
   
 def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
@@ -518,17 +558,32 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   }
 
   def explainCell(query: String, col:Int, row:String) : Seq[mimir.ctables.Reason] = {
+    try{
     logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
     val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
     explainCell(oper, col, row)
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Cell: [" + col + "] [ "+ row +" ] [" + query + "]", t)
+        throw t
+      }
+    }
   }
   
   def explainCell(oper: Operator, colIdx:Int, row:String) : Seq[mimir.ctables.Reason] = {
+    try{
     val cols = oper.columnNames
     explainCell(oper, cols(colIdx), RowIdPrimitive(row))  
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Cell: [" + colIdx + "] [ "+ row +" ] [" + oper + "]", t)
+        throw t
+      }
+    }
   }
   
   def explainCell(oper: Operator, col:String, row:RowIdPrimitive) : Seq[mimir.ctables.Reason] = {
+    try{
     val timeRes = time {
       try {
       logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + oper + "]"  ) ;
@@ -546,15 +601,29 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }
     logger.debug(s"explainCell Took: ${timeRes._2}")
     timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Cell: [" + col + "] [ "+ row +" ] [" + oper + "]", t)
+        throw t
+      }
+    }
   }
   
   def explainRow(query: String, row:String) : Seq[mimir.ctables.Reason] = {
+    try{
     logger.debug("explainRow: From Vistrails: [ "+ row +" ] [" + query + "]"  ) ;
     val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
     explainRow(oper, row)  
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Row: [ "+ row +" ] [" + query + "]", t)
+        throw t
+      }
+    }
   }
   
   def explainRow(oper: Operator, row:String) : Seq[mimir.ctables.Reason] = {
+    try{
     val timeRes = time {
       logger.debug("explainRow: From Vistrails: [ "+ row +" ] [" + oper + "]"  ) ;
       val cols = oper.columnNames
@@ -564,15 +633,29 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }
     logger.debug(s"explainRow Took: ${timeRes._2}")
     timeRes._1.distinct
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Row: [ "+ row +" ] [" + oper + "]", t)
+        throw t
+      }
+    }
   }
   
   def explainSubset(query: String, rows:Seq[String], cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
+    try{
     logger.debug("explainSubset: From Vistrails: [ "+ rows +" ] [" + query + "]"  ) ;
     val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
     explainSubset(oper, rows, cols)  
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Subset: [" + cols + "] [ "+ rows +" ] [" + query + "]", t)
+        throw t
+      }
+    }  
   }
   
   def explainSubset(oper: Operator, rows:Seq[String], cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
+    try{
     val timeRes = time {
       logger.debug("explainSubset: From Vistrails: [ "+ rows +" ] [" + oper + "]"  ) ;
       val explCols = cols match {
@@ -587,17 +670,29 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }
     logger.debug(s"explainSubset Took: ${timeRes._2}")
     timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Subset: [" + cols + "] [ "+ rows +" ] [" + oper + "]", t)
+        throw t
   }
-  
- 
+    }    
+  }
 
   def explainEverything(query: String) : Seq[mimir.ctables.ReasonSet] = {
+    try{
     logger.debug("explainEverything: From Vistrails: [" + query + "]"  ) ;
     val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
     explainEverything(oper)   
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Everything: [" + query + "]", t)
+        throw t
+      }
+    }  
   }
   
   def explainEverything(oper: Operator) : Seq[mimir.ctables.ReasonSet] = {
+    try{
     val timeRes = time {
       logger.debug("explainEverything: From Vistrails: [" + oper + "]"  ) ;
       val cols = oper.columnNames
@@ -605,18 +700,32 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }
     logger.debug(s"explainEverything Took: ${timeRes._2}")
     timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Everything: [" + oper + "]", t)
+        throw t
+      }
+    }    
   }
   
   def repairReason(reasons: Seq[mimir.ctables.Reason], idx:Int) : mimir.ctables.Repair = {
+    try{
     val timeRes = time {
       logger.debug("repairReason: From Vistrails: [" + idx + "] [ " + reasons(idx) + " ]" ) ;
       reasons(idx).repair
     }
     logger.debug(s"repairReason Took: ${timeRes._2}")
     timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Repairing: [" + idx + "] [ " + reasons(idx) + " ]", t)
+        throw t
+      }
+    }  
   }
   
   def feedback(reasons: Seq[mimir.ctables.Reason], idx:Int, ack: Boolean, repairStr: String) : Unit = {
+    try{
     val timeRes = time {
       logger.debug("feedback: From Vistrails: [" + idx + "] [ " + reasons(idx) + " ] [ " + ack + " ] [ " +repairStr+" ]" ) ;
       val reason = reasons(idx) 
@@ -630,6 +739,12 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
         db.update(db.parse(s"FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ repairStr }").head)
     }
     logger.debug(s"feedback Took: ${timeRes._2}")
+    } catch {
+      case t: Throwable => {
+        logger.error("Error with Feedback: [" + idx + "] [ " + reasons(idx) + " ] [ " + ack + " ] [ " +repairStr+" ]", t)
+        throw t
+      }
+    }    
   }
   
   def registerPythonMimirCallListener(listener : PythonMimirCallInterface) = {
@@ -685,6 +800,8 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }
     
   }
+  // End vistrails package defs
+  //----------------------------------------------------------------------------------------------------
   
   def getTuple(oper: mimir.algebra.Operator) : Map[String,PrimitiveValue] = {
     db.query(oper)(results => {
