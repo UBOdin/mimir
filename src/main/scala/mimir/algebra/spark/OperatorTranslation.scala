@@ -546,7 +546,8 @@ object OperatorTranslation
       case VGTerm(name, idx, args, hints) => { //default to best guess
         //println(s"-------------------Translate VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
         val model = db.models.get(name)
-        UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ++ hints.map(mimirExprToSparkExpr(oper,_))), true )
+        BestGuessUDF(oper, model, idx, args, hints).getUDF
+        //UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ++ hints.map(mimirExprToSparkExpr(oper,_))), true )
       }
       case IsNullExpression(iexpr) => {
         IsNull(mimirExprToSparkExpr(oper,iexpr))

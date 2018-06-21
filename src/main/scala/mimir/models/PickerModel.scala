@@ -130,7 +130,8 @@ class SimplePickerModel(override val name: String, resultColumn:String, pickFrom
             getCache(idx, args, hints) match {
               case None => {
                 //if(classifyUpFrontAndCache){
-                  throw new Exception("Model Not trained") 
+                NullPrimitive()
+                //throw new Exception(s"Model Not trained: ($idx $args $hints) -> $cache") 
                 //}
                 /*else
                   classify(idx, args, hints) match {
