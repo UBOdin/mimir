@@ -41,7 +41,7 @@ class SparkBackend(override val database:String) extends RABackend(database)
   var sparkSql : SQLContext = null
   //ExperimentalOptions.enable("remoteSpark")
   val (sparkHost, sparkPort, hdfsPort, useHDFSHostnames, overwriteHDFSFiles, overwriteJars, numPartitions) = Mimir.conf match {
-    case null => (/*"128.205.71.102"*/"spark-master.local", "7077", "8020", "false", false, false, 8)
+    case null => (/*"128.205.71.41"*/"spark-master.local", "7077", "8020", "false", false, false, 8)
     case x => (x.sparkHost(), x.sparkPort(), "8020", "false", false, false, 8)
   }
   val remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
@@ -133,7 +133,8 @@ class SparkBackend(override val database:String) extends RABackend(database)
   
   def createTable(tableName:String, oper:Operator) = {
     val df = execute(oper)
-    df.write.mode(SaveMode.Overwrite).saveAsTable(tableName)//.persist().createOrReplaceTempView(tableName)
+    df.persist().createOrReplaceTempView(tableName)
+    df.write.mode(SaveMode.Overwrite).saveAsTable(tableName)
   }
   
   def execute(compiledOp: Operator): DataFrame = {

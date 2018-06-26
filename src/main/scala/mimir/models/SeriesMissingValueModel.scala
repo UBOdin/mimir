@@ -70,7 +70,6 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
   var queryDf: DataFrame = null
   var rowIdType:Type = TString()
   var dateType:Type = TDate()
-  var rowIdVar:Column = null
     //colNames.map { _ => Seq[(String,Double)]() }
   var queryCols:Seq[String] = colNames
   var querySchema:Seq[(String,Type)] = 
@@ -86,7 +85,7 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
     queryDf = db.backend.execute(query)
     rowIdType = db.backend.rowIdType
     dateType = db.backend.dateType
-    rowIdVar = (monotonically_increasing_id()+1).alias(RowIdVar().toString()).cast(OperatorTranslation.getSparkType(rowIdType))
+    val rowIdVar = (monotonically_increasing_id()+1).alias(RowIdVar().toString()).cast(OperatorTranslation.getSparkType(rowIdType))
     
     predictions = 
       colNames.zipWithIndex.map { case (col, idx) => 
@@ -121,6 +120,7 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
     val sp2m : (String, Row) => PrimitiveValue = (colName, row) => SparkUtils.convertField(querySchema.toMap.get(colName).get, row, row.fieldIndex(colName), dateType)
     val m2sp : PrimitiveValue => Any = prim => OperatorTranslation.mimirPrimitiveToSparkExternalRowValue(prim)
     val sprowid = m2sp(rowid)
+    val rowIdVar = (monotonically_increasing_id()+1).alias(RowIdVar().toString()).cast(OperatorTranslation.getSparkType(rowIdType))
     val key = sp2m(series,queryDf.filter(rowIdVar === sprowid ).select(series).limit(1).collect().headOption.getOrElse(null))
     SeriesMissingValueModel.logger.debug(s"Interpolate $rowid with key $key")
     if(key == NullPrimitive()){ return NullPrimitive(); }
