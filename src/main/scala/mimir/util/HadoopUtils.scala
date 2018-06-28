@@ -9,6 +9,7 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.io.BufferedOutputStream
 import org.apache.spark.SparkContext
+import java.io.BufferedInputStream
 
 /**
 * @author ${user.name}
@@ -36,7 +37,13 @@ object HadoopUtils {
     val output = fs.create(hdfsPath, overwrite)
     val writer = new BufferedOutputStream(output)
     try {
-        writer.write(Files.readAllBytes(Paths.get(localFile.getAbsolutePath))) 
+      val srcUrl = if(localFile.getPath.contains(":/")) new java.net.URL(localFile.getPath.replaceFirst(":/", "://")) else localFile.toURI().toURL()
+      val input = new BufferedInputStream(srcUrl.openStream)
+      val bytes = new Array[Byte](1024) //1024 bytes - Buffer size
+      Iterator
+      .continually (input.read(bytes))
+      .takeWhile (_ != -1)
+      .foreach (read=>writer.write(bytes,0,read))  
     }
     catch {
       case t: Throwable => t.printStackTrace() // TODO: handle error

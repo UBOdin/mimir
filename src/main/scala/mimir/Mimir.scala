@@ -363,4 +363,19 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
     default = Some("spark-master.local"))
   val sparkPort = opt[String]("sparkPort", descr = "The port of the spark master",
     default = Some("7077"))
+  val hdfsPort = opt[String]("hdfsPort", descr = "The port for hdfs",
+    default = Some("8020"))
+  val useHDFSHostnames = toggle("useHDFSHostnames", default = Some(false),
+      descrYes = "use the hostnames for hdfs nodes",
+      descrNo = "use ip addresses for hdfs nodes")
+  val overwriteStagedFiles = toggle("overwriteStagedFiles", default = Some(false),
+      descrYes = "overwrites files sent to staging area (hdfs or s3)",
+      descrNo = "do not overwrites files sent to staging area (hdfs or s3)")
+  val overwriteJars = toggle("overwriteJars", default = Some(false),
+      descrYes = "overwrites jar files sent to hdfs",
+      descrNo = "do not overwrites jar files sent to hdfs")
+  val numPartitions = opt[Int]("numPartitions", descr = "number of partitions to use",
+    default = Some(8))
+  val dataStagingType = opt[String]("dataStagingType", descr = "where to stage data for spark: hdfs or s3",
+    default = Some("hdfs"))
 }

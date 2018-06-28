@@ -31,6 +31,7 @@ import org.apache.spark.sql.execution.command.DropDatabaseCommand
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hive.HiveContext
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import mimir.util.S3Utils
 
 
 class SparkBackend(override val database:String) extends RABackend(database) 
@@ -40,12 +41,13 @@ class SparkBackend(override val database:String) extends RABackend(database)
   
   var sparkSql : SQLContext = null
   //ExperimentalOptions.enable("remoteSpark")
-  val (sparkHost, sparkPort, hdfsPort, useHDFSHostnames, overwriteHDFSFiles, overwriteJars, numPartitions) = Mimir.conf match {
-    case null => (/*"128.205.71.41"*/"spark-master.local", "7077", "8020", "false", false, false, 8)
-    case x => (x.sparkHost(), x.sparkPort(), "8020", "false", false, false, 8)
+  val (sparkHost, sparkPort, hdfsPort, useHDFSHostnames, overwriteStagedFiles, overwriteJars, numPartitions, dataStagingType) = Mimir.conf match {
+    case null => (/*"128.205.71.41"*/"spark-master.local", "7077", "8020", false, false, false, 8, "s3")
+    case x => (x.sparkHost(), x.sparkPort(), x.hdfsPort(), x.useHDFSHostnames(), x.overwriteStagedFiles(), x.overwriteJars(), x.numPartitions(), x.dataStagingType())
   }
   val remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
   def open(): Unit = {
+    logger.warn(s"Open SparkBackend: sparkHost:$sparkHost, sparkPort:$sparkPort, hdfsPort:$hdfsPort, useHDFSHostnames:$useHDFSHostnames, overwriteStagedFiles:$overwriteStagedFiles, overwriteJars:$overwriteJars, numPartitions:$numPartitions, dataStagingType:$dataStagingType")
     sparkSql = sparkSql match {
       case null => {
         val conf = if(remoteSpark){
@@ -60,6 +62,7 @@ class SparkBackend(override val database:String) extends RABackend(database)
             .set("spark.sql.catalogImplementation", "hive")
             .set("spark.sql.shuffle.partitions", s"$numPartitions")//TODO: make this the number of workers
             .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+            .set("spark.kryoserializer.buffer.max", "256m")
             .registerKryoClasses(SparkUtils.getSparkKryoClasses())
         }
         else{
@@ -80,7 +83,7 @@ class SparkBackend(override val database:String) extends RABackend(database)
         val sparkCtx = SparkContext.getOrCreate(conf)//new SparkContext(conf)
         val dmode = sparkCtx.deployMode
         if(remoteSpark){
-          sparkCtx.hadoopConfiguration.set("dfs.client.use.datanode.hostname",useHDFSHostnames)
+          sparkCtx.hadoopConfiguration.set("dfs.client.use.datanode.hostname",useHDFSHostnames.toString())
           sparkCtx.hadoopConfiguration.set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
           sparkCtx.hadoopConfiguration.set("fs.defaultFS", s"hdfs://$sparkHost:$hdfsPort")
           val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkCtx)
@@ -96,6 +99,9 @@ class SparkBackend(override val database:String) extends RABackend(database)
           HadoopUtils.writeToHDFS(sparkCtx, "gt-opengis-16.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.geotools/gt-opengis/jars/gt-opengis-16.2.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, "gt-metadata-16.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.geotools/gt-metadata/jars/gt-metadata-16.2.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, "gt-referencing-16.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.geotools/gt-referencing/jars/gt-referencing-16.2.jar"), overwriteJars)
+          //HadoopUtils.writeToHDFS(sparkCtx, "aws-java-sdk-s3-1.11.355.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.amazonaws/aws-java-sdk-s3/jars/aws-java-sdk-s3-1.11.355.jar"), overwriteJars)
+          //HadoopUtils.writeToHDFS(sparkCtx, "hadoop-aws-2.7.6.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.apache.hadoop/hadoop-aws/jars/hadoop-aws-2.7.6.jar"), overwriteJars)
+          
           //sparkCtx.addJar("https://maven.mimirdb.info/info/mimirdb/mimir-core_2.11/0.2/mimir-core_2.11-0.2.jar")
           sparkCtx.addJar(s"$hdfsHome/mimir-core_2.11-0.2.jar")
           sparkCtx.addJar(s"$hdfsHome/scala-logging-slf4j_2.11-2.1.2.jar")                                                         
@@ -107,10 +113,18 @@ class SparkBackend(override val database:String) extends RABackend(database)
           sparkCtx.addJar(s"$hdfsHome/gt-opengis-16.2.jar")
           sparkCtx.addJar(s"$hdfsHome/gt-metadata-16.2.jar")
           sparkCtx.addJar(s"$hdfsHome/gt-referencing-16.2.jar")
+          //sparkCtx.addJar(s"$hdfsHome/aws-java-sdk-s3-1.11.355.jar")
+          //sparkCtx.addJar(s"$hdfsHome/hadoop-aws-2.7.6.jar")
           
           //sparkCtx.addJar("http://central.maven.org/maven2/mysql/mysql-connector-java/5.1.6/mysql-connector-java-5.1.6.jar")
         }
         logger.debug(s"apache spark: ${sparkCtx.version}  remote: $remoteSpark deployMode: $dmode")
+        //TODO: we need to do this in a more secure way (especially vizier has python scripts that could expose this)
+        val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
+        val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY")
+        sparkCtx.hadoopConfiguration.set("fs.s3n.awsAccessKeyId", accessKeyId)
+        sparkCtx.hadoopConfiguration.set("fs.s3n.awsSecretAccessKey", secretAccessKey)
+        sparkCtx.hadoopConfiguration.set("fs.s3.impl", "org.apache.hadoop.fs.s3native.NativeS3FileSystem")
         new SQLContext(sparkCtx)
       }
       case sparkSqlCtx => sparkSqlCtx
@@ -171,6 +185,18 @@ class SparkBackend(override val database:String) extends RABackend(database)
   
   def readDataSource(name:String, format:String, options:Map[String, String], schema:Option[Seq[(String, Type)]], load:Option[String]) = {
     if(sparkSql == null) throw new Exception("There is no spark context")
+    def copyToS3(file:String): String = {
+      val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
+      val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY")
+      val s3client = S3Utils.authenticate(accessKeyId, secretAccessKey, "us-east-1")
+      val relPath = file.replace(new File("").getAbsolutePath + File.separator, "")
+      logger.debug(s"upload to s3: $file -> $relPath")
+      //this is slower but will work with URLs and local files
+      S3Utils.copyToS3("mimir-test-data", file, relPath, s3client, overwriteStagedFiles)
+      //this is faster but does not work with URLs - only local files
+      //S3Utils.uploadFile("mimir-test-data", file, relPath, s3client, overwriteStagedFiles)
+      relPath
+    }
     var  pathIfCSV = "("
     val dsFormat = sparkSql.read.format(format) 
     val dsOptions = options.toSeq.foldLeft(dsFormat)( (ds, opt) => ds.option(opt._1, opt._2))
@@ -183,15 +209,32 @@ class SparkBackend(override val database:String) extends RABackend(database)
       case Some(ldf) => {
         if(remoteSpark){
           val fileName = ldf.split(File.separator).last
-          val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkSql.sparkSession.sparkContext)
-          logger.debug("Copy File To HDFS: " +hdfsHome+File.separator+fileName)
-          //if(!HadoopUtils.fileExistsHDFS(sparkSql.sparkSession.sparkContext, fileName))
-          HadoopUtils.writeToHDFS(sparkSql.sparkSession.sparkContext, fileName, new File(ldf), overwriteHDFSFiles)
-          logger.debug("... done\n")
-          pathIfCSV = s"""(path "$hdfsHome/$fileName", """
-          dsSchema.load(s"$hdfsHome/$fileName")
+          if(ldf.startsWith("s3n:/")){
+            dsSchema.load(ldf)
+          }
+          else{
+            if(dataStagingType.equalsIgnoreCase("s3")){
+              dsSchema.load("s3n://mimir-test-data/"+copyToS3(ldf))
+            }
+            else{
+              val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkSql.sparkSession.sparkContext)
+              logger.debug("Copy File To HDFS: " +hdfsHome+File.separator+fileName)
+              //if(!HadoopUtils.fileExistsHDFS(sparkSql.sparkSession.sparkContext, fileName))
+              HadoopUtils.writeToHDFS(sparkSql.sparkSession.sparkContext, fileName, new File(ldf), overwriteStagedFiles)
+              logger.debug("... done\n")
+              pathIfCSV = s"""(path "$hdfsHome/$fileName", """
+              dsSchema.load(s"$hdfsHome/$fileName")
+            }
+          }
         }
-        else dsSchema.load(ldf)
+        else {
+          if(ldf.startsWith("s3n:/") || !dataStagingType.equalsIgnoreCase("s3")){
+            dsSchema.load(ldf)
+          }
+          else {
+            dsSchema.load("s3n://mimir-test-data/"+copyToS3(ldf))
+          }
+        }
         
       }
     })/*.toDF(df.columns.map(_.toUpperCase): _*)*/  //.persist().createOrReplaceTempView(name)

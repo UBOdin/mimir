@@ -41,29 +41,28 @@ import mimir.util.JSONBuilder
  */
 object MimirVizier extends LazyLogging {
 
-  var conf: MimirConfig = null;
   var db: Database = null;
   var gp: GProMBackend = null
   var usePrompt = true;
   var pythonMimirCallListeners = Seq[PythonMimirCallInterface]()
 
   def main(args: Array[String]) {
-    conf = new MimirConfig(args);
+    Mimir.conf = new MimirConfig(args);
 
     // Prepare experiments
-    ExperimentalOptions.enable(conf.experimental())
+    ExperimentalOptions.enable(Mimir.conf.experimental())
     if(!ExperimentalOptions.isEnabled("GPROM-BACKEND")){
       // Set up the database connection(s)
-      val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
+      val database = Mimir.conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
       val sback = new SparkBackend(database)
-      db = new Database(sback, new JDBCMetadataBackend(conf.backend(), conf.dbname()))
+      db = new Database(sback, new JDBCMetadataBackend(Mimir.conf.backend(), Mimir.conf.dbname()))
       db.metadataBackend.open()
       db.backend.open()
     }
     else {
       //Use GProM Backend
-      gp = new GProMBackend(conf.backend(), conf.dbname(), 1)
-      db = new Database(gp, new JDBCMetadataBackend(conf.backend(), conf.dbname()))    
+      gp = new GProMBackend(Mimir.conf.backend(), Mimir.conf.dbname(), 1)
+      db = new Database(gp, new JDBCMetadataBackend(Mimir.conf.backend(), Mimir.conf.dbname()))    
       db.metadataBackend.open()
       db.backend.open()
       gp.metadataLookupPlugin.db = db;
@@ -74,11 +73,12 @@ object MimirVizier extends LazyLogging {
         db.metadataBackend.asInstanceOf[InlinableBackend].enableInlining(db)
     }
     
-   if(ExperimentalOptions.isEnabled("QUIET-LOG")){
+   if(ExperimentalOptions.isEnabled("WEB-LOG")){
       LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) match {
           case logger: Logger => {
-            logger.setLevel(Level.ERROR)
-            logger.debug("root logger set to level: ERROR"); 
+            val hookUrl = System.getenv("LOG_HOOK_URL")
+            val token = System.getenv("LOG_HOOK_TOKEN")
+            logger.addAppender(new mimir.util.WebLogAppender(hookUrl,token)) 
           }
         }
     }
@@ -151,7 +151,7 @@ object MimirVizier extends LazyLogging {
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
       runServerForViztrails()
       db.backend.close()
-      if(!conf.quiet()) { logger.debug("\n\nDone.  Exiting."); }
+      if(!Mimir.conf.quiet()) { logger.debug("\n\nDone.  Exiting."); }
     }
     
     

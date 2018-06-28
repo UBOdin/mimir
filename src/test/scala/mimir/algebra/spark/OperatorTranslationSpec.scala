@@ -16,7 +16,7 @@ import mimir.algebra.BoolPrimitive
 import mimir.test.TestTimer
 
 object OperatorTranslationSpec 
-  extends SQLTestSpecification("SparkOperatorTranslationSpec",Map("cleanup" -> "NO"))
+  extends SQLTestSpecification("SparkOperatorTranslationSpec",Map("cleanup" -> "YES"))
   with BeforeAll
   with TestTimer
 {
@@ -205,7 +205,47 @@ object OperatorTranslationSpec
           List(BoolPrimitive(true), str("troy@mcneill.bt"), f(14.0792), str("Peter Schultz"), i(3), i(58), i(26), str("Christopher"), str("Brantley")))
     }*/
     
-    "Be able create and query missing value lens" >> {
+    
+    "Be able to stage a file to s3 and query from it" >> {
+      db.loadTable("STAGETOS3CSV", "test/r_test/r.csv")
+      
+      val result = query("""
+        SELECT * FROM STAGETOS3CSV
+      """)(_.toList.map(_.tuple.toList)).toList
+      
+      result must be equalTo List(
+       List(i(1), i(2), i(3)), 
+       List(i(1), i(3), i(1)), 
+       List(i(2), NullPrimitive(), i(1)), 
+       List(i(1), i(2), NullPrimitive()), 
+       List(i(1), i(4), i(2)), 
+       List(i(2), i(2), i(1)), 
+       List(i(4), i(2), i(4))   
+      )
+      
+    }
+    
+    
+    "Be able to query from a csv source already in s3" >> {
+      db.loadTable("S3CSV", "s3n://mimir-test-data/test/r_test/r.csv")
+      
+      val result = query("""
+        SELECT * FROM S3CSV
+      """)(_.toList.map(_.tuple.toList)).toList
+      
+      result must be equalTo List(
+       List(i(1), i(2), i(3)), 
+       List(i(1), i(3), i(1)), 
+       List(i(2), NullPrimitive(), i(1)), 
+       List(i(1), i(2), NullPrimitive()), 
+       List(i(1), i(4), i(2)), 
+       List(i(2), i(2), i(1)), 
+       List(i(4), i(2), i(4))   
+      )
+      
+    }
+    
+    /*"Be able create and query missing value lens" >> {
       loadCSV("MOCKDATA", new File("test/data/mockData.csv"))
       val timeForCreate = time { 
         update("""
@@ -225,6 +265,8 @@ object OperatorTranslationSpec
       }
       println(s"Create Time:${timeForCreate._2} seconds, Query Time: ${timeForQuery._2} seconds <- MissingValueLens")
       timeForQuery._1   
-    }
+    }*/
+    
+    
   }
 }
