@@ -78,5 +78,18 @@ object HadoopUtils {
     val fs = FileSystem.get(sparkCtx.hadoopConfiguration)
     fs.getHomeDirectory.toString()
   }
+  
+  def readFromHDFS(sparkCtx:SparkContext, hdfsSrcFile:String, localFile:File) {
+    val fs = FileSystem.get(sparkCtx.hadoopConfiguration)
+    //fs.copyFromLocalFile(false, new Path(localFile.toURI()), new Path(hdfsTargetFile))
+    val hdfsPath = new Path(hdfsSrcFile)
+    val exists = fs.exists(hdfsPath)
+    if(exists){
+      throw new Exception("file does not exist in hdfs: " + hdfsSrcFile )
+    }
+    
+    fs.copyToLocalFile(hdfsPath, new Path(localFile.toURI()))
+    
+  }
 
 }

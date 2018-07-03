@@ -850,7 +850,7 @@ case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression
   def getUDF = 
     ScalaUDF(
       sparkArgs.length match { 
-        case 0 => {
+        case 0 => () => {
           getNative(model.bestGuess(idx, Seq(), Seq()))
         }
         case 1 => (arg0:Any) => {
@@ -908,6 +908,9 @@ case class SampleUDF(oper:Operator, model:Model, idx:Int, seed:Expression, args:
   def getUDF = 
     ScalaUDF(
       sparkArgs.length match { 
+        case 0 => () => {
+          getNative(model.sample(idx, 0, Seq(), Seq()))
+        }
         case 1 => (arg0:Any) => {
           val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0))
           getNative(model.sample(idx, seedi, argList, hintList))
@@ -954,7 +957,7 @@ case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression]) e
   def getUDF = 
     ScalaUDF(
       sparkArgs.length match { 
-        case 0 => {
+        case 0 => () => {
           new java.lang.Boolean(model.isAcknowledged(idx, Seq()))
         }
         case 1 => (arg0:Any) => {
@@ -1006,7 +1009,7 @@ case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, 
       function match {
         case NativeFunction(_, evaluator, typechecker, _) => 
           sparkArgs.length match { 
-            case 0 => {
+            case 0 => () => {
               getNative(evaluator(Seq()))
             }
             case 1 => (arg0:Any) => {

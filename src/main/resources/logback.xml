@@ -7,7 +7,7 @@
     </encoder>
   </appender>
 
-  <logger name="mimir.sql.JDBCBackend" level="ERROR"/>
+  <logger name="mimir.sql.SparkBackend" level="DEBUG"/>
   <logger name="mimir.views.ViewManager" level="ERROR"/>
   <logger name="mimir.Mimir$" level="ERROR"/>
   

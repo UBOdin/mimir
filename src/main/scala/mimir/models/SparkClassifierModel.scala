@@ -185,7 +185,7 @@ class SimpleSparkClassifierModel(name: String, val colName:String, val schema:Se
       case Some(v) => v
       case None => {
         getCache(idx, args, hints) match {
-          case None => throw new Exception(s"Model: $name is not trained")
+          case None => NullPrimitive()//throw new Exception(s"Model: $name is not trained")
           case Some(v) => v
         }
       }

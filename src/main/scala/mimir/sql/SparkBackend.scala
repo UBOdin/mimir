@@ -11,7 +11,6 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import mimir.algebra.spark.OperatorTranslation
 import org.apache.spark.sql.DataFrame
-import mimir.Database
 import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.SparkPlan
@@ -179,7 +178,7 @@ class SparkBackend(override val database:String) extends RABackend(database)
   def dropDB():Unit = {
     DropDatabaseCommand(database, true, true).run(sparkSql.sparkSession)
     val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkSql.sparkSession.sparkContext)
-    HadoopUtils.deleteFromHDFS( sparkSql.sparkSession.sparkContext, s"${hdfsHome}/metastore_db/database")
+    HadoopUtils.deleteFromHDFS( sparkSql.sparkSession.sparkContext, s"${hdfsHome}/metastore_db/$database")
   }
 
   
@@ -327,7 +326,7 @@ class SparkBackend(override val database:String) extends RABackend(database)
   def canHandleVGTerms: Boolean = true
   def rowIdType: Type = TString()
   def dateType: Type = TDate()
-  def specializeQuery(q: Operator, db: Database): Operator = {
+  def specializeQuery(q: Operator, db: mimir.Database): Operator = {
     q
   }
 

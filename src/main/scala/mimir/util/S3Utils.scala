@@ -26,6 +26,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.BufferedOutputStream
 import java.io.BufferedInputStream
+import com.amazonaws.services.s3.model.GetObjectRequest
 
 object S3Utils {
   private val PATH_SEP: String = "/"
@@ -222,5 +223,43 @@ object S3Utils {
       out.close()
       connection.getResponseCode
     }
+  }
+  
+  def copyToS3Stream(bucketName: String, input:InputStream, targetFile: String, s3client: AmazonS3, overwrite:Boolean = false) = {
+    if(!objectExists(bucketName, targetFile, s3client) || overwrite){
+      // Set the pre-signed URL to expire after one hour.
+      val expiration: java.util.Date = new java.util.Date()
+      var expTimeMillis: Long = expiration.getTime
+      expTimeMillis += 1000 * 60 * 60
+      expiration.setTime(expTimeMillis)
+      // Generate the pre-signed URL.
+      val generatePresignedUrlRequest: GeneratePresignedUrlRequest =
+        new GeneratePresignedUrlRequest(bucketName, targetFile)
+          .withMethod(HttpMethod.PUT)
+          .withExpiration(expiration)
+      val url: URL = s3client.generatePresignedUrl(generatePresignedUrlRequest)
+      // Create the connection and use it to upload the new object using the pre-signed URL.
+      val connection: HttpURLConnection =
+        url.openConnection().asInstanceOf[HttpURLConnection]
+      connection.setDoOutput(true)
+      connection.setRequestMethod("PUT")
+      val out = new BufferedOutputStream(connection.getOutputStream)
+      
+      val bytes = new Array[Byte](1024) //1024 bytes - Buffer size
+      Iterator
+      .continually (input.read(bytes))
+      .takeWhile (_ != -1L)
+      .foreach (read=>out.write(bytes,0,read))
+      
+      out.flush()
+      out.close()
+      connection.getResponseCode
+    }
+  }
+  
+  def readFromS3(bucketName: String, key: String, s3client: AmazonS3): InputStream = {
+    val s3object =
+      s3client.getObject(new GetObjectRequest(bucketName, key))
+    s3object.getObjectContent
   }
 }

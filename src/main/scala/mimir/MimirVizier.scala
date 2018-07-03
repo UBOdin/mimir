@@ -91,7 +91,13 @@ object MimirVizier extends LazyLogging {
         else if(ExperimentalOptions.isEnabled("LOGI")) Level.INFO
         else if(ExperimentalOptions.isEnabled("LOGO")) Level.OFF
         else Level.DEBUG
-        
+       
+      LoggerFactory.getLogger("mimir.sql.SparkBackend") match {
+          case logger: Logger => {
+            logger.setLevel(logLevel)
+            logger.debug("mimir.sql.SparkBackend logger set to level: " + logLevel); 
+          }
+        }
       LoggerFactory.getLogger(this.getClass.getName) match {
           case logger: Logger => {
             logger.setLevel(logLevel)
@@ -99,10 +105,11 @@ object MimirVizier extends LazyLogging {
           }
         }
       LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) match {
-          case logger: Logger => {
+          case logger : Logger if(!ExperimentalOptions.isEnabled("LOGM")) => {
             logger.setLevel(logLevel)
             logger.debug("root logger set to level: " + logLevel); 
           }
+          case _ => logger.debug("logging settings from logback.xml");
         }
     }
     
@@ -146,6 +153,9 @@ object MimirVizier extends LazyLogging {
     //explainCell("SELECT * FROM LENS_GEOCODE97197618", 4, "4" ) 
     //explainCell("SELECT * FROM LENS_REPAIR_KEY1915024710", 1, "1" ) 
      
+    val pname = loadCSV("/Users/michaelbrachmann/source/mimir/test/data/pick.csv")
+    val mvlname = createLens(pname, Seq("B"), "MISSING_VALUE", false, false)
+    createLens(mvlname, Seq("A"), "MISSING_VALUE", false, false)
     
     
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
