@@ -877,6 +877,42 @@ case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression
           val (argList, hintList) = extractArgsAndHints(Seq(arg0, arg1, arg2, arg3, arg4, arg5))
           getNative(model.bestGuess(idx, argList, hintList))
         }
+        case 7 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any) => {
+          val (argList, hintList) = extractArgsAndHints(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6))
+          getNative(model.bestGuess(idx, argList, hintList))
+        }
+        case 8 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any) => {
+          val (argList, hintList) = extractArgsAndHints(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7))
+          getNative(model.bestGuess(idx, argList, hintList))
+        }
+        case 9 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any) => {
+          val (argList, hintList) = extractArgsAndHints(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8))
+          getNative(model.bestGuess(idx, argList, hintList))
+        }
+        case 10 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any, arg9:Any) => {
+          val (argList, hintList) = extractArgsAndHints(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9))
+          getNative(model.bestGuess(idx, argList, hintList))
+        }
+        case 11 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any, arg9:Any, arg10:Any) => {
+          val (argList, hintList) = extractArgsAndHints(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10))
+          getNative(model.bestGuess(idx, argList, hintList))
+        }
+        case 12 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any, arg9:Any, arg10:Any, arg11:Any) => {
+          val (argList, hintList) = extractArgsAndHints(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11 ))
+          getNative(model.bestGuess(idx, argList, hintList))
+        }
+        case 13 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any, arg9:Any, arg10:Any, arg11:Any, arg12:Any) => {
+          val (argList, hintList) = extractArgsAndHints(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12))
+          getNative(model.bestGuess(idx, argList, hintList))
+        }
+        case 14 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any, arg9:Any, arg10:Any, arg11:Any, arg12:Any, arg13:Any) => {
+          val (argList, hintList) = extractArgsAndHints(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13))
+          getNative(model.bestGuess(idx, argList, hintList))
+        }
+        case 15 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any, arg9:Any, arg10:Any, arg11:Any, arg12:Any, arg13:Any, arg14:Any) => {
+          val (argList, hintList) = extractArgsAndHints(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14))
+          getNative(model.bestGuess(idx, argList, hintList))
+        }
       },
       sparkVarType,
       sparkArgs,
@@ -935,6 +971,42 @@ case class SampleUDF(oper:Operator, model:Model, idx:Int, seed:Expression, args:
           val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0, arg1, arg2, arg3, arg4, arg5))
           getNative(model.sample(idx, seedi, argList, hintList))
         }
+        case 7 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any) => {
+          val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6))
+          getNative(model.sample(idx, seedi, argList, hintList))
+        }
+        case 8 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any) => {
+          val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7))
+          getNative(model.sample(idx, seedi, argList, hintList))
+        }
+        case 9 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any) => {
+          val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8))
+          getNative(model.sample(idx, seedi, argList, hintList))
+        }
+        case 10 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any, arg9:Any) => {
+          val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9))
+          getNative(model.sample(idx, seedi, argList, hintList))
+        }
+        case 11 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any, arg9:Any, arg10:Any) => {
+          val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10))
+          getNative(model.sample(idx, seedi, argList, hintList))
+        }
+        case 12 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any, arg9:Any, arg10:Any, arg11:Any) => {
+          val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11 ))
+          getNative(model.sample(idx, seedi, argList, hintList))
+        }
+        case 13 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any, arg9:Any, arg10:Any, arg11:Any, arg12:Any) => {
+          val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12))
+          getNative(model.sample(idx, seedi, argList, hintList))
+        }
+        case 14 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any, arg9:Any, arg10:Any, arg11:Any, arg12:Any, arg13:Any) => {
+          val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13))
+          getNative(model.sample(idx, seedi, argList, hintList))
+        }
+        case 15 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any, arg9:Any, arg10:Any, arg11:Any, arg12:Any, arg13:Any, arg14:Any) => {
+          val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14))
+          getNative(model.sample(idx, seedi, argList, hintList))
+        }
       },
       sparkVarType,
       sparkArgs,
@@ -982,6 +1054,22 @@ case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression]) e
         }
         case 6 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any) => {
           val argList = extractArgs(Seq(arg0, arg1, arg2, arg3, arg4, arg5))
+          model.isAcknowledged(idx, argList)
+        }
+        case 7 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any) => {
+          val argList = extractArgs(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6))
+          model.isAcknowledged(idx, argList)
+        }
+        case 8 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any) => {
+          val argList = extractArgs(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7))
+          model.isAcknowledged(idx, argList)
+        }
+        case 9 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any) => {
+          val argList = extractArgs(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8))
+          model.isAcknowledged(idx, argList)
+        }
+        case 10 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any, arg9:Any) => {
+          val argList= extractArgs(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9))
           model.isAcknowledged(idx, argList)
         }
       },
@@ -1034,6 +1122,22 @@ case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, 
             }
             case 6 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any) => {
               val argList = extractArgs(Seq(arg0, arg1, arg2, arg3, arg4, arg5))
+              getNative(evaluator(argList))
+            }
+            case 7 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any) => {
+              val argList = extractArgs(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6))
+              getNative(evaluator(argList))
+            }
+            case 8 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any) => {
+              val argList = extractArgs(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7))
+              getNative(evaluator(argList))
+            }
+            case 9 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any) => {
+              val argList = extractArgs(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8))
+              getNative(evaluator(argList))
+            }
+            case 10 => (arg0:Any, arg1:Any, arg2:Any, arg3:Any, arg4:Any, arg5:Any, arg6:Any, arg7:Any, arg8:Any, arg9:Any) => {
+              val argList= extractArgs(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9))
               getNative(evaluator(argList))
             }
           }
