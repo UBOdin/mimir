@@ -153,9 +153,9 @@ object MimirVizier extends LazyLogging {
     //explainCell("SELECT * FROM LENS_GEOCODE97197618", 4, "4" ) 
     //explainCell("SELECT * FROM LENS_REPAIR_KEY1915024710", 1, "1" ) 
      
-    val pname = loadCSV("/Users/michaelbrachmann/source/mimir/test/data/pick.csv")
+    /*val pname = loadCSV("/Users/michaelbrachmann/source/mimir/test/data/pick.csv")
     val mvlname = createLens(pname, Seq("B"), "MISSING_VALUE", false, false)
-    createLens(mvlname, Seq("A"), "MISSING_VALUE", false, false)
+    createLens(mvlname, Seq("A"), "MISSING_VALUE", false, false)*/
     
     
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
