@@ -14,6 +14,7 @@ import java.io.File
 object BackupUtils {
   def main(args: Array[String]) {
     val config = new BackupConfig(args)
+    if(config.backup() && config.restore()) throw new Exception("CANNOT backup and restore at once")
     Mimir.conf = new MimirConfig(args);
 
     ExperimentalOptions.enable(Mimir.conf.experimental())
@@ -92,5 +93,4 @@ class BackupConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   val restore = toggle("restore", default = Some(false),
       descrYes = "restore data for mimir from s3",
       descrNo = "restore data for mimir from s3")
-  if(backup() && restore()) throw new Exception("CANNOT backup and restore at once")
 }
