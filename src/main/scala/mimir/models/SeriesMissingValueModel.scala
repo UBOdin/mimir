@@ -42,7 +42,7 @@ object SeriesMissingValueModel
       .zipWithIndex
       .filter(_._1._2)
       .map { case ((column, _), idx) => 
-        (column -> (model, idx, Seq(RowIdVar())))
+        (column -> (model, idx, Seq()))
       }
       .toMap
   }
@@ -85,7 +85,6 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
     queryDf = db.backend.execute(query)
     rowIdType = db.backend.rowIdType
     dateType = db.backend.dateType
-    val rowIdVar = (monotonically_increasing_id()+1).alias(RowIdVar().toString()).cast(OperatorTranslation.getSparkType(rowIdType))
     
     predictions = 
       colNames.zipWithIndex.map { case (col, idx) => 

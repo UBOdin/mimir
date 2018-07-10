@@ -156,7 +156,10 @@ object MimirVizier extends LazyLogging {
     /*val pname = loadCSV("/Users/michaelbrachmann/source/mimir/test/data/pick.csv")
     val mvlname = createLens(pname, Seq("B"), "MISSING_VALUE", false, false)
     createLens(mvlname, Seq("A"), "MISSING_VALUE", false, false)*/
-    
+    /*val table = loadCSV("/Users/michaelbrachmann/Downloads/home2.csv")
+    val mv1 = createLens(table, Seq("'DEN > 0'"), "MISSING_VALUE", false, false)
+    val mv2 = createLens(mv1, Seq("'OFFICE > 0'"), "MISSING_VALUE", false, false)
+    println(vistrailsQueryMimir(s"SELECT * FROM $mv2", true, false).csvStr)*/
     
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
       runServerForViztrails()
