@@ -72,7 +72,9 @@ object MimirVizier extends LazyLogging {
     if(ExperimentalOptions.isEnabled("WEB-LOG")){
       LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) match {
           case logger: Logger => {
-            logger.addAppender(new mimir.util.WebLogAppender()) 
+            val hookUrl = System.getenv("LOG_HOOK_URL")
+            val token = System.getenv("LOG_HOOK_TOKEN")
+            logger.addAppender(new mimir.util.WebLogAppender(hookUrl,token)) 
           }
         }
     }
@@ -93,10 +95,11 @@ object MimirVizier extends LazyLogging {
           }
         }
       LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) match {
-          case logger: Logger => {
+          case logger : Logger if(!ExperimentalOptions.isEnabled("LOGM")) => {
             logger.setLevel(logLevel)
             logger.debug("root logger set to level: " + logLevel); 
           }
+          case _ => logger.debug("logging settings from logback.xml");
         }
     }
     
@@ -191,7 +194,7 @@ object MimirVizier extends LazyLogging {
     try{
       pythonCallThread = Thread.currentThread()
       val timeRes = time {
-        logger.debug("loadCSV: From Vistrails: [" + file + "]") ;
+        logger.debug(s"loadCSV: From Vistrails: [ $file ] format: ${format._1} -> [ ${format._2.mkString(",")} ]") ;
         val csvFile = new File(file)
         val nameFromFile = csvFile.getName().split("\\.")(0)
         val tableName = (csvFile.getName().split("\\.")(0) ).toUpperCase
@@ -321,6 +324,11 @@ object MimirVizier extends LazyLogging {
     }
   }
   
+  def vistrailsQueryMimir(input:Any, query : String, includeUncertainty:Boolean, includeReasons:Boolean) : PythonCSVContainer = {
+    val inputSubstitutionQuery = query.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
+    vistrailsQueryMimir(inputSubstitutionQuery, includeUncertainty, includeReasons)
+  }
+   
   def vistrailsQueryMimir(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : PythonCSVContainer = {
     try{
       val timeRes = time {
@@ -357,6 +365,11 @@ object MimirVizier extends LazyLogging {
     }
   }
   
+  def vistrailsQueryMimirJson(input:Any, query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
+    val inputSubstitutionQuery = query.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
+    vistrailsQueryMimirJson(inputSubstitutionQuery, includeUncertainty, includeReasons)
+  }
+
   def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
     try{
       val timeRes = time {
