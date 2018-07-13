@@ -252,7 +252,7 @@ object MimirVizier extends LazyLogging {
     try{
     pythonCallThread = Thread.currentThread()
     val timeRes = time {
-      logger.debug("loadCSV: From Vistrails: [" + file + "]") ;
+      logger.debug(s"loadCSV: From Vistrails: [ $file ] format: ${format._1} -> [ ${format._2.mkString(",")} ]") ;
       val csvFile = new File(file)
       val nameFromFile = csvFile.getName().split("\\.")(0)
       val tableName = (csvFile.getName().split("\\.")(0) ).toUpperCase
@@ -382,6 +382,11 @@ object MimirVizier extends LazyLogging {
     }
   }
   
+  def vistrailsQueryMimir(input:Any, query : String, includeUncertainty:Boolean, includeReasons:Boolean) : PythonCSVContainer = {
+    val inputSubstitutionQuery = query.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
+    vistrailsQueryMimir(inputSubstitutionQuery, includeUncertainty, includeReasons)
+  }
+  
   def vistrailsQueryMimir(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : PythonCSVContainer = {
     try{
     val timeRes = time {
@@ -418,6 +423,11 @@ object MimirVizier extends LazyLogging {
     }
   }
   
+def vistrailsQueryMimirJson(input:Any, query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
+    val inputSubstitutionQuery = query.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
+    vistrailsQueryMimirJson(inputSubstitutionQuery, includeUncertainty, includeReasons)
+  }
+
 def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
     try{
       val timeRes = time {

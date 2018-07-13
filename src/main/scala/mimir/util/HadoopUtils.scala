@@ -84,7 +84,7 @@ object HadoopUtils {
     //fs.copyFromLocalFile(false, new Path(localFile.toURI()), new Path(hdfsTargetFile))
     val hdfsPath = new Path(hdfsSrcFile)
     val exists = fs.exists(hdfsPath)
-    if(exists){
+    if(!exists){
       throw new Exception("file does not exist in hdfs: " + hdfsSrcFile )
     }
     
