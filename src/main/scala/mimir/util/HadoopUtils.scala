@@ -79,6 +79,12 @@ object HadoopUtils {
     fs.getHomeDirectory.toString()
   }
   
+  def writeDirToHDFS(sparkCtx:SparkContext, hdfsTargetFile:String, localFile:File, overwrite:Boolean = false) : Unit = {
+    val fs = FileSystem.get(sparkCtx.hadoopConfiguration)
+    val hdfsPath = new Path(hdfsTargetFile)
+    fs.copyFromLocalFile(false, overwrite, new Path(localFile.getAbsolutePath), hdfsPath)
+  }
+  
   def readFromHDFS(sparkCtx:SparkContext, hdfsSrcFile:String, localFile:File) {
     val fs = FileSystem.get(sparkCtx.hadoopConfiguration)
     //fs.copyFromLocalFile(false, new Path(localFile.toURI()), new Path(hdfsTargetFile))

@@ -51,15 +51,14 @@ object BackupUtils {
     if(sparkMetastoreFile.exists())
       deleteFile(sparkMetastoreFile)
     untarFromS3(s3Bucket, backupDir+"/metastore.tar", sparkMetastoreFile.getPath)
-    HadoopUtils.deleteFromHDFS(sparkCtx, s"${hdfsHome}/metastore_db")
-    HadoopUtils.writeToHDFS(sparkCtx, s"${hdfsHome}/metastore_db", sparkMetastoreFile, true)
+    HadoopUtils.writeDirToHDFS(sparkCtx, s"${hdfsHome}/metastore_db", sparkMetastoreFile, true)
   }
   
   
   def tarDirToS3(s3Bucket:String, srcDir:String, targetFile:String) = {
     import sys.process._
     //tar up vizier data
-    val tarCmd = Seq("tar", "-cC", new File(srcDir).getParent, srcDir)
+    val tarCmd = Seq("tar", "-cC", Option(new File(srcDir).getParent).getOrElse("/"), srcDir)
     val stdoutStream = new ByteArrayOutputStream
     val errorLog = new StringBuilder()
     val exitCode = tarCmd #> stdoutStream !< ProcessLogger(s => (errorLog.append(s+"\n")))
@@ -80,8 +79,8 @@ object BackupUtils {
     val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
     val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY")
     val s3client = S3Utils.authenticate(accessKeyId, secretAccessKey, "us-east-1")
-    val tarCmd = Seq("tar", "-xpvC", new File(targetDir).getParent)
-    val stdoutStream = new ByteArrayOutputStream
+    val tarCmd = Seq("tar", "-xpvC", Option(new File(targetDir).getParent).getOrElse("/"))
+    val stdoutStream = new ByteArrayOutputStream()
     val errorLog = new StringBuilder()
     val exitCode = tarCmd #< S3Utils.readFromS3(s3Bucket, srcFile, s3client) #> stdoutStream !< ProcessLogger(s => (errorLog.append(s+"\n")))
     if (exitCode == 0) {
