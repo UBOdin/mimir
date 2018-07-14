@@ -92,6 +92,13 @@ object Mimir extends LazyLogging {
 
   def eventLoop(source: Reader): Unit =
   {
+    //util.LoadJson2ElectricBoogaloo.loadJson(db,"Twitter",new File("test/data/dump-30.txt"), rowLimit = 0, naive = true)
+    util.LoadJson2ElectricBoogaloo.loadJson(db,"Yelp",new File("test/data/yelp_dataset"), rowLimit = 0, naive = true)
+    //util.LoadJson2ElectricBoogaloo.loadJson(db,"Carl-Data",new File("test/data/carlDataSample.out"), rowLimit = 0)
+    //util.LoadJson2ElectricBoogaloo.loadJson(db,"Medicine",new File("test/data/medicine.json"), rowLimit = 0, naive = true)
+    //util.LoadJson2ElectricBoogaloo.loadJson(db,"Enron",new File("test/data/enron.json"), rowLimit = 0, naive = true)
+    //util.LoadJson2ElectricBoogaloo.loadJson(db,"Meteorite",new File("test/data/meteorite.json"), rowLimit = 0, naive = false)
+    return null
     var parser = new MimirJSqlParser(source);
     var done = false;
     do {

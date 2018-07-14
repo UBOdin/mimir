@@ -15,7 +15,7 @@ import mimir.lenses.LensManager
 import mimir.sql.{Backend, RAToSql, SqlToRA}
 import mimir.sql.{AlterViewMaterialize, Analyze, CreateAdaptiveSchema, CreateLens, CreateView, Explain, Feedback, Load, Pragma}
 import mimir.optimizer.operator.OptimizeExpressions
-import mimir.util.{ExperimentalOptions, LoadCSV, LoadJSON}
+import mimir.util.{ExperimentalOptions, LoadCSV, LoadJSON, LoadJson2ElectricBoogaloo}
 import mimir.parser.MimirJSqlParser
 import mimir.statistics.FuncDep
 import net.sf.jsqlparser.statement.Statement
@@ -397,7 +397,8 @@ case class Database(backend: Backend)
     targetTable: String, 
     sourceFile: File, 
     force:Boolean = true, 
-    format:(String, Seq[PrimitiveValue]) = ("CSV", Seq(StringPrimitive(",")))
+    format:(String, Seq[PrimitiveValue]) = ("CSV", Seq(StringPrimitive(","))),
+    columnName: String = "JSONCOLUMN", addToDB: Boolean = false, rowLimit: Int = 0, escaped: Boolean = false, naive:Boolean = true, rowed: Boolean = true
   ){
     (format._1 match {
            case null => "CSV"
@@ -428,7 +429,7 @@ case class Database(backend: Backend)
         if(tableExists(targetTable) && !force){
           throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' AS tableName`; to override.")
         }
-        LoadJSON.loadJson(this, targetTable, sourceFile)
+        LoadJson2ElectricBoogaloo.loadJson(this, targetTable, sourceFile, columnName, addToDB, rowLimit, escaped, naive, rowed)
       }
       case fmt =>
         throw new SQLException(s"Unknown load format '$fmt'")

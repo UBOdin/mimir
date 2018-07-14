@@ -14,12 +14,9 @@ import org.joda.time.DateTime
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import play.api.libs.json._
 import mimir.util.JsonPlay._
-import pattern_mixture_summarization.ClusteringResult
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
-import scala.util.parsing.json._
-import scala.xml.Utility._
 
 
 object SQLiteCompat extends LazyLogging{
@@ -982,10 +979,10 @@ class ClusteringPlayground extends org.sqlite.Function.Aggregate {
           }
         })
         val output: String = oneCount + vectorOutput
-//        if(multiplicity > 100) {
+        if(multiplicity > 10) {
           shapeVectorWriter.write(output + '\n')
           shapeMultWriter.write(multiplicity.toString + '\n')
-//        }
+        }
       })
 
       shapeVectorWriter.close()

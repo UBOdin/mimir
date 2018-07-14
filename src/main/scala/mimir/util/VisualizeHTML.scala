@@ -3,16 +3,16 @@ package mimir.util
 import java.io._
 
 import scala.collection.JavaConverters._
-import pattern_mixture_summarization.{Cluster, ClusteringResult, NaiveSummary, NaiveSummaryEntry}
+//import pattern_mixture_summarization.{Cluster, ClusteringResult, NaiveSummary, NaiveSummaryEntry}
 
 import scala.collection.mutable.ListBuffer
 
 class VisualizeHTML (dir: String){
-
+/*
   var counter = 0
   var globalCounter = 0 // used as a unique id for collapse id's
 
-  val path: String = s"C:\\Users\\Will\\Documents\\GitHub\\mimir\\$dir"
+  val path: String = s"C:\\Users\\Will\\Documents\\GitHub\\mimirClustering\\$dir"
   val schemaReader = new BufferedReader(new FileReader(new File(s"$dir\\schema.txt")))
 
   val schema: List[String] = schemaReader.readLine().split(",").toList
@@ -241,5 +241,5 @@ class VisualizeHTML (dir: String){
         "0.01"
     else
       dList(0) + "." + dList(1).substring(0,size)
-  }
+  }*/
 }
