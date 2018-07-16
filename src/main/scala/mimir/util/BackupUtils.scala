@@ -22,7 +22,7 @@ object BackupUtils {
 
     ExperimentalOptions.enable(Mimir.conf.experimental())
     val database = Mimir.conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
-    val sback = new SparkBackend(database)
+    val sback = new SparkBackend(database, true)
     sback.open()
    
     println("backing up data....")
@@ -37,30 +37,30 @@ object BackupUtils {
   def doBackup(sparkCtx:SparkContext, s3Bucket:String, backupDir:String, dataDir:String) = {
     tarDirToS3(s3Bucket,dataDir,backupDir+"/vizier-data.tar")
     val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkCtx)
-    val sparkMetastoreFile = new File("metadtore_db")
+    val sparkMetastoreFile = new File("metastore_db")
     if(sparkMetastoreFile.exists())
       deleteFile(sparkMetastoreFile)
-    HadoopUtils.readFromHDFS(sparkCtx, s"${hdfsHome}/metastore_db", sparkMetastoreFile)
+    HadoopUtils.readFromHDFS(sparkCtx, s"${hdfsHome}/metastore_db", sparkMetastoreFile.getParentFile)
     tarDirToS3(s3Bucket,sparkMetastoreFile.getAbsolutePath,backupDir+"/metastore.tar")
   }
   
   def doRestore(sparkCtx:SparkContext, s3Bucket:String, backupDir:String, dataDir:String) = {
     untarFromS3(s3Bucket, backupDir+"/vizier-data.tar", dataDir)
     val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkCtx)
-    val sparkMetastoreFile = new File("metadtore_db")
+    val sparkMetastoreFile = new File("metastore_db")
     if(sparkMetastoreFile.exists())
       deleteFile(sparkMetastoreFile)
     untarFromS3(s3Bucket, backupDir+"/metastore.tar", sparkMetastoreFile.getAbsolutePath)
-    HadoopUtils.writeDirToHDFS(sparkCtx, s"${hdfsHome}/metastore_db", sparkMetastoreFile, true)
+    HadoopUtils.writeDirToHDFS(sparkCtx, s"${hdfsHome}/", sparkMetastoreFile, true)
   }
   
   
   def tarDirToS3(s3Bucket:String, srcDir:String, targetFile:String) = {
     import sys.process._
     //tar up vizier data
-    val parentDir = Option(new File(srcDir).getParent + File.separator).getOrElse("/")
-    val folder = srcDir.replace(parentDir, "")
-    val tarCmd = Seq("tar", "-c", "-C", parentDir, folder)
+    //val parentDir = Option(new File(srcDir).getParent + File.separator).getOrElse("/")
+    //val folder = srcDir.replace(parentDir, "")
+    val tarCmd = Seq("tar", "-c", "-C", srcDir, ".")
     val stdoutStream = new ByteArrayOutputStream
     val errorLog = new StringBuilder()
     val exitCode = tarCmd #> stdoutStream !< ProcessLogger(s => (errorLog.append(s+"\n")))
@@ -81,7 +81,7 @@ object BackupUtils {
     val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
     val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY")
     val s3client = S3Utils.authenticate(accessKeyId, secretAccessKey, "us-east-1")
-    val tarCmd = Seq("tar", "-xpv", "-C", Option(new File(targetDir).getParent).getOrElse("/"))
+    val tarCmd = Seq("tar", "-xpv", "-C", targetDir)
     val stdoutStream = new ByteArrayOutputStream()
     val errorLog = new StringBuilder()
     val exitCode = tarCmd #< S3Utils.readFromS3(s3Bucket, srcFile, s3client) #> stdoutStream !< ProcessLogger(s => (errorLog.append(s+"\n")))

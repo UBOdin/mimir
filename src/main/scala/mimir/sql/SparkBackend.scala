@@ -33,7 +33,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.util.S3Utils
 
 
-class SparkBackend(override val database:String) extends RABackend(database) 
+class SparkBackend(override val database:String, maintenance:Boolean = false) extends RABackend(database) 
   with BackendWithSparkContext
   with LazyLogging
 {
@@ -129,9 +129,11 @@ class SparkBackend(override val database:String) extends RABackend(database)
       case sparkSqlCtx => sparkSqlCtx
     }
     //val dbs = sparkSql.sparkSession.catalog.listDatabases().collect()
-    if(!sparkSql.sparkSession.catalog.databaseExists(database))//!dbs.map(_.name).contains(database))
-      CreateDatabaseCommand(database, true, None, None, Map()).run(sparkSql.sparkSession)
-    SetDatabaseCommand(database).run(sparkSql.sparkSession)
+    if(!maintenance){
+      if(!sparkSql.sparkSession.catalog.databaseExists(database))//!dbs.map(_.name).contains(database))
+        CreateDatabaseCommand(database, true, None, None, Map()).run(sparkSql.sparkSession)
+      SetDatabaseCommand(database).run(sparkSql.sparkSession)
+    }
     /*dbs.map(sdb => { 
       logger.debug(s"db: ${sdb.name}")
       sparkSql.sparkSession.catalog.listTables(sdb.name).show()
