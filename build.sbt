@@ -36,6 +36,7 @@ libraryDependencies ++= Seq(
   "org.rogach"                    %%  "scallop"               % "0.9.5",
   "org.jline"                     %   "jline"                 % "3.2.0",
   "info.mimirdb"                  %   "jsqlparser"            % "1.0.2",
+  "org.scalafx" %% "scalafx" % "8.0.144-R12",
 
   ////////////////////// Dev Tools -- Logging, Testing, etc... //////////////////////
   "com.typesafe.scala-logging"    %%  "scala-logging-slf4j"   % "2.1.2",
@@ -73,7 +74,8 @@ libraryDependencies ++= Seq(
   "net.sf.jung"                   %   "jung-algorithms"       % "2.0.1",
   "net.sf.jung"                   %   "jung-visualization"    % "2.0.1",
   "jgraph"                        %   "jgraph"                % "5.13.0.0",
-  "javax.media" 		  %   "jai_core"              % "1.1.3",  
+  "javax.media" 		  %   "jai_core"              % "1.1.3",
+  "com.google.code.gson" % "gson" % "2.8.5",
   //
 
   //////////////////////// Geotools ////////////////////////

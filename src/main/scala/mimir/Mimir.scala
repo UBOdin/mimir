@@ -6,18 +6,17 @@ import java.sql.SQLException
 import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
-import mimir.util.{TimeUtils,ExperimentalOptions,LineReaderInputSource}
+import mimir.util.{ExperimentalOptions, LineReaderInputSource, NaiveTypeCount2, TimeUtils}
 import mimir.algebra._
 import mimir.plot.Plot
-import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
+import mimir.exec.{DefaultOutputFormat, OutputFormat, PrettyOutputFormat}
 import net.sf.jsqlparser.statement.Statement
-import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody} 
+import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody}
 import net.sf.jsqlparser.statement.drop.Drop
-import org.jline.terminal.{Terminal,TerminalBuilder}
-import org.slf4j.{LoggerFactory}
+import org.jline.terminal.{Terminal, TerminalBuilder}
+import org.slf4j.LoggerFactory
 import ch.qos.logback.classic.{Level, Logger}
 import org.rogach.scallop._
-
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import scala.collection.JavaConverters._
@@ -93,12 +92,13 @@ object Mimir extends LazyLogging {
   def eventLoop(source: Reader): Unit =
   {
     //util.LoadJson2ElectricBoogaloo.loadJson(db,"Twitter",new File("test/data/dump-30.txt"), rowLimit = 0, naive = true)
-    util.LoadJson2ElectricBoogaloo.loadJson(db,"Yelp",new File("test/data/yelp_dataset"), rowLimit = 0, naive = true)
+    //val loadJson = new NaiveTypeCount2(new File("test/data/yelp_dataset"), rowLimit = 0, naive = true)
+
     //util.LoadJson2ElectricBoogaloo.loadJson(db,"Carl-Data",new File("test/data/carlDataSample.out"), rowLimit = 0)
     //util.LoadJson2ElectricBoogaloo.loadJson(db,"Medicine",new File("test/data/medicine.json"), rowLimit = 0, naive = true)
     //util.LoadJson2ElectricBoogaloo.loadJson(db,"Enron",new File("test/data/enron.json"), rowLimit = 0, naive = true)
     //util.LoadJson2ElectricBoogaloo.loadJson(db,"Meteorite",new File("test/data/meteorite.json"), rowLimit = 0, naive = false)
-    return null
+
     var parser = new MimirJSqlParser(source);
     var done = false;
     do {

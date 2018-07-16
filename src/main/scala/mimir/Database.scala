@@ -429,7 +429,7 @@ case class Database(backend: Backend)
         if(tableExists(targetTable) && !force){
           throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' AS tableName`; to override.")
         }
-        LoadJson2ElectricBoogaloo.loadJson(this, targetTable, sourceFile, columnName, addToDB, rowLimit, escaped, naive, rowed)
+        //LoadJson2ElectricBoogaloo.loadJson(this, targetTable, sourceFile, columnName, addToDB, rowLimit, escaped, naive, rowed)
       }
       case fmt =>
         throw new SQLException(s"Unknown load format '$fmt'")
