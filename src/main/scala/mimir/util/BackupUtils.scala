@@ -58,7 +58,9 @@ object BackupUtils {
   def tarDirToS3(s3Bucket:String, srcDir:String, targetFile:String) = {
     import sys.process._
     //tar up vizier data
-    val tarCmd = Seq("tar", "-cC", Option(new File(srcDir).getParent).getOrElse("/"), srcDir)
+    val parentDir = Option(new File(srcDir).getParent + File.separator).getOrElse("/")
+    val folder = srcDir.replace(parentDir, "")
+    val tarCmd = Seq("tar", "-c", "-C", parentDir, folder)
     val stdoutStream = new ByteArrayOutputStream
     val errorLog = new StringBuilder()
     val exitCode = tarCmd #> stdoutStream !< ProcessLogger(s => (errorLog.append(s+"\n")))
@@ -79,7 +81,7 @@ object BackupUtils {
     val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
     val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY")
     val s3client = S3Utils.authenticate(accessKeyId, secretAccessKey, "us-east-1")
-    val tarCmd = Seq("tar", "-xpvC", Option(new File(targetDir).getParent).getOrElse("/"))
+    val tarCmd = Seq("tar", "-xpv", "-C", Option(new File(targetDir).getParent).getOrElse("/"))
     val stdoutStream = new ByteArrayOutputStream()
     val errorLog = new StringBuilder()
     val exitCode = tarCmd #< S3Utils.readFromS3(s3Bucket, srcFile, s3client) #> stdoutStream !< ProcessLogger(s => (errorLog.append(s+"\n")))
