@@ -50,7 +50,7 @@ object BackupUtils {
     val sparkMetastoreFile = new File("metadtore_db")
     if(sparkMetastoreFile.exists())
       deleteFile(sparkMetastoreFile)
-    untarFromS3(s3Bucket, backupDir+"/metastore.tar", sparkMetastoreFile.getPath)
+    untarFromS3(s3Bucket, backupDir+"/metastore.tar", sparkMetastoreFile.getAbsolutePath)
     HadoopUtils.writeDirToHDFS(sparkCtx, s"${hdfsHome}/metastore_db", sparkMetastoreFile, true)
   }
   
