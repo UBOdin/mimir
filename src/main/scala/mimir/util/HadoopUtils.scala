@@ -10,6 +10,7 @@ import java.nio.file.Paths
 import java.io.BufferedOutputStream
 import org.apache.spark.SparkContext
 import java.io.BufferedInputStream
+import org.apache.hadoop.fs.permission.FsPermission
 
 /**
 * @author ${user.name}
@@ -79,10 +80,33 @@ object HadoopUtils {
     fs.getHomeDirectory.toString()
   }
   
+  def writeFilesInDirToHDFS(sparkCtx:SparkContext, destDirPath:String, srcDir:File, overwrite:Boolean = false) = {
+    val fs = FileSystem.get(sparkCtx.hadoopConfiguration)
+    val files: Array[File] = srcDir.listFiles()
+    if (files != null && files.length > 0) {
+      for (file <- files) {
+        fs.copyFromLocalFile(false, overwrite, new Path(file.getPath()),
+                new Path(destDirPath, file.getName()));
+      }
+    }
+  }
+  
   def writeDirToHDFS(sparkCtx:SparkContext, hdfsTargetFile:String, localFile:File, overwrite:Boolean = false) : Unit = {
     val fs = FileSystem.get(sparkCtx.hadoopConfiguration)
     val hdfsPath = new Path(hdfsTargetFile)
     fs.copyFromLocalFile(false, overwrite, new Path(localFile.getAbsolutePath), hdfsPath)
+  }
+  
+  def setOwnerHDFS(sparkCtx:SparkContext, hdfsTargetFile:String, user:String, group:String) : Unit = {
+    val fs = FileSystem.get(sparkCtx.hadoopConfiguration)
+    val hdfsPath = new Path(hdfsTargetFile)
+    fs.setOwner(hdfsPath, user, group)
+  }
+  
+  def setPermissionsHDFS(sparkCtx:SparkContext, hdfsTargetFile:String, permission:Short) : Unit = {
+    val fs = FileSystem.get(sparkCtx.hadoopConfiguration)
+    val hdfsPath = new Path(hdfsTargetFile)
+    fs.setPermission(hdfsPath, FsPermission.createImmutable(permission)) 
   }
   
   def readFromHDFS(sparkCtx:SparkContext, hdfsSrcFile:String, localFile:File) {

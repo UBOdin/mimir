@@ -9,9 +9,11 @@ import mimir.sql.SparkBackend
 import java.io.ByteArrayInputStream
 import org.apache.spark.SparkContext
 import java.io.File
+import org.apache.spark.sql.execution.command.SetDatabaseCommand
   
 
 object BackupUtils {
+  var sback:SparkBackend = null;
   def main(args: Array[String]) {
     val bakupParams = classOf[BackupConfig].getDeclaredFields.map("--"+_.getName).toSet
     val mimirParams = classOf[MimirConfig].getDeclaredFields.map("--"+_.getName).toSet
@@ -22,7 +24,7 @@ object BackupUtils {
 
     ExperimentalOptions.enable(Mimir.conf.experimental())
     val database = Mimir.conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
-    val sback = new SparkBackend(database, true)
+    sback = new SparkBackend(database, true)
     sback.open()
    
     println("backing up data....")
@@ -37,30 +39,93 @@ object BackupUtils {
   def doBackup(sparkCtx:SparkContext, s3Bucket:String, backupDir:String, dataDir:String) = {
     tarDirToS3(s3Bucket,dataDir,backupDir+"/vizier-data.tar")
     val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkCtx)
-    val sparkMetastoreFile = new File("metastore_db")
+    /*val sparkMetastoreFile = new File("hmetastore_db")
     if(sparkMetastoreFile.exists())
       deleteFile(sparkMetastoreFile)
-    HadoopUtils.readFromHDFS(sparkCtx, s"${hdfsHome}/metastore_db", sparkMetastoreFile.getParentFile)
-    tarDirToS3(s3Bucket,sparkMetastoreFile.getAbsolutePath,backupDir+"/metastore.tar")
+    val localMetastoreFile = new File(s"${sparkMetastoreFile.getAbsolutePath}/metastore_db")
+    HadoopUtils.readFromHDFS(sparkCtx, s"${hdfsHome}/metastore_db", localMetastoreFile)
+    tarDirToS3(s3Bucket,localMetastoreFile.getAbsolutePath,backupDir+"/hmetastore.tar")*/
+    
+    val derbyMetastoreFile = new File("metastore_db")
+    tarDirToS3(s3Bucket,derbyMetastoreFile.getAbsolutePath,backupDir+"/metastore.tar")
+    
+    val sparkDataFile = new File("user_data")
+    if(sparkDataFile.exists())
+      deleteFile(sparkDataFile)
+    HadoopUtils.readFromHDFS(sparkCtx, s"${hdfsHome}/", sparkDataFile)
+    tarDirToS3(s3Bucket,sparkDataFile.getAbsolutePath,backupDir+"/userdata.tar")
+    
+    /*val sparkTablesFile = new File("tables")
+    if(sparkTablesFile.exists())
+      deleteFile(sparkTablesFile)
+    exportSparkTables(sparkTablesFile.getAbsolutePath, s"${hdfsHome}/tables/")
+    tarDirToS3(s3Bucket,sparkTablesFile.getAbsolutePath,backupDir+"/sparktables.tar")*/
   }
   
   def doRestore(sparkCtx:SparkContext, s3Bucket:String, backupDir:String, dataDir:String) = {
     untarFromS3(s3Bucket, backupDir+"/vizier-data.tar", dataDir)
     val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkCtx)
-    val sparkMetastoreFile = new File("metastore_db")
+    /*val sparkMetastoreFile = new File("hmetastore_db")
     if(sparkMetastoreFile.exists())
       deleteFile(sparkMetastoreFile)
-    untarFromS3(s3Bucket, backupDir+"/metastore.tar", sparkMetastoreFile.getAbsolutePath)
-    HadoopUtils.writeDirToHDFS(sparkCtx, s"${hdfsHome}/", sparkMetastoreFile, true)
+    sparkMetastoreFile.mkdir()
+    val localMetastoreFile = new File(s"${sparkMetastoreFile.getAbsolutePath}/metastore_db")
+    untarFromS3(s3Bucket, backupDir+"/hmetastore.tar", localMetastoreFile.getAbsolutePath)
+    HadoopUtils.deleteFromHDFS(sparkCtx, s"${hdfsHome}/metastore_db", true)
+    HadoopUtils.writeDirToHDFS(sparkCtx, s"${hdfsHome}/", localMetastoreFile, true)
+    deleteFile(sparkMetastoreFile)*/
+    
+    val derbyMetastoreFile = new File("metastore_db")
+    if(derbyMetastoreFile.exists())
+      deleteFile(derbyMetastoreFile)
+    untarFromS3(s3Bucket, backupDir+"/metastore.tar", derbyMetastoreFile.getAbsolutePath)
+      
+    val sparkDataFile = new File("user_data")
+    if(sparkDataFile.exists())
+      deleteFile(sparkDataFile)
+    untarFromS3(s3Bucket, backupDir+"/userdata.tar", new File(".").getAbsolutePath)
+    HadoopUtils.writeFilesInDirToHDFS(sparkCtx, s"${hdfsHome}/", sparkDataFile, true)
+    //HadoopUtils.setPermissionsHDFS(sparkCtx, s"${hdfsHome}/", 0x309:Short)
+    deleteFile(sparkDataFile)
+    
+    /*val sparkTablesFile = new File("tables")
+    if(sparkTablesFile.exists())
+      deleteFile(sparkTablesFile)
+    untarFromS3(s3Bucket, backupDir+"/sparktables.tar", new File(".").getAbsolutePath)
+    importSparkTables(sparkTablesFile.getAbsolutePath, s"${hdfsHome}/tables/")
+    deleteFile(sparkTablesFile)*/
   }
   
+  def exportSparkTables(localPath:String, hdfsExportPath:String) = {
+    val dbs = sback.getSparkContext().sparkSession.catalog.listDatabases().collect()
+    dbs.map(sdb => { 
+      SetDatabaseCommand(sdb.name).run(sback.getSparkContext().sparkSession)
+      val tables = sback.getSparkContext().sparkSession.catalog.listTables(sdb.name).collect()
+      tables.map(table => {
+        val hdfsFile = s"${hdfsExportPath}${table.name}"
+        sback.getSparkContext().sql(s"export table ${table.name} to '$hdfsFile'") 
+        HadoopUtils.readFromHDFS(sback.getSparkContext().sparkSession.sparkContext, hdfsFile, new File(s"$localPath/${table.name}"))
+      })
+    })
+  }
+  
+  def importSparkTables(localPath:String, hdfsImportPath:String) = {
+    val files: Array[File] = new File(localPath).listFiles()
+    if (files != null && files.length > 0) {
+      for (file <- files) {
+        val hdfsFile = s"${hdfsImportPath}${file.getName()}"
+        HadoopUtils.writeToHDFS(sback.getSparkContext().sparkSession.sparkContext, hdfsFile, file, true)  
+        sback.getSparkContext().sql(s"import from '$hdfsFile'")
+      }
+    }
+  }
   
   def tarDirToS3(s3Bucket:String, srcDir:String, targetFile:String) = {
     import sys.process._
     //tar up vizier data
-    //val parentDir = Option(new File(srcDir).getParent + File.separator).getOrElse("/")
-    //val folder = srcDir.replace(parentDir, "")
-    val tarCmd = Seq("tar", "-c", "-C", srcDir, ".")
+    val parentDir = Option(new File(srcDir).getParent + File.separator).getOrElse("/")
+    val folder = srcDir.replace(parentDir, "")
+    val tarCmd = Seq("tar", "-c", "-C", parentDir, folder)
     val stdoutStream = new ByteArrayOutputStream
     val errorLog = new StringBuilder()
     val exitCode = tarCmd #> stdoutStream !< ProcessLogger(s => (errorLog.append(s+"\n")))
@@ -78,10 +143,11 @@ object BackupUtils {
   def untarFromS3(s3Bucket:String, srcFile:String, targetDir:String) = {
     import sys.process._
     //tar up vizier data
+    val parentDir = Option(new File(targetDir).getParent + File.separator).getOrElse("/")
     val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
     val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY")
     val s3client = S3Utils.authenticate(accessKeyId, secretAccessKey, "us-east-1")
-    val tarCmd = Seq("tar", "-xpv", "-C", targetDir)
+    val tarCmd = Seq("tar", "-xpv", "-C", parentDir)
     val stdoutStream = new ByteArrayOutputStream()
     val errorLog = new StringBuilder()
     val exitCode = tarCmd #< S3Utils.readFromS3(s3Bucket, srcFile, s3client) #> stdoutStream !< ProcessLogger(s => (errorLog.append(s+"\n")))

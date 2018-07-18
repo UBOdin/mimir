@@ -149,7 +149,7 @@ object OperatorTranslation
 			  //here we check if the real table schema matches the table op schema 
 			  // because the table op schema may have been rewritten by deepRenameColumn
 			  // - like when there is a join with conflicts
-			  val realSchema = db.backend.getTableSchema(name).get
+			  val realSchema = db.backend.getTableSchema(name).getOrElse(throw new Exception(s"Cannot get schema for table: $name" ))
 			  val requireProjection = 
 			  sch.zip(realSchema).flatMap {
 			    case (tableSchEl, realSchEl) => {
