@@ -10,12 +10,14 @@ import scalafx.scene.Scene
 import scalafx.scene.control.{Button, ListView, TabPane}
 import scalafx.scene.layout.{FlowPane, Priority}
 
+import vegas._
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
 
 
-class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, naive: Boolean = false, IncludeNulls: Boolean = false, Sample: Boolean = false, SampleLimit: Int = 10, OnlyLeafValues: Boolean = true){
+class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, IncludeNulls: Boolean = false, naive: Boolean = false, Sample: Boolean = false, SampleLimit: Int = 10, OnlyLeafValues: Boolean = true){
 
   val StringClass = classOf[String]
   val DoubleClass = classOf[java.lang.Double]
@@ -27,6 +29,7 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, n
 
   val GlobalTypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]]()
   val SampleMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]]() // a list of samples for each attribute
+  val CountMap: scala.collection.mutable.HashMap[String,Int] = scala.collection.mutable.HashMap[String,Int]() // map that contains the number of times an attribute occurred
   val rejectedRows: ListBuffer[String] = scala.collection.mutable.ListBuffer[String]()
 
   var loadJson: LoadJson2ElectricBoogaloo = new LoadJson2ElectricBoogaloo(inputFile, naive=naive)
@@ -42,11 +45,20 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, n
 
   createSchema()
 
-  if(Sample) {
+  if(Sample && false) {
     visualizeUnknownObjects()
     //visualizeTuples()
   }
 
+  if(Sample) {
+    Vegas("Country Pop").
+      withData(
+        countMapForVegas()
+      ).
+      encodeX("Name", Nom).
+      encodeY("Count", Quant).
+      mark(Bar).show
+  }
 
   private def createSchema() = {
     var line: String = loadJson.getNext()
@@ -93,23 +105,29 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, n
       val attributeName = prefix + attribute._1.replace(",",";").replace(":",";")
       val attributeValue = attribute._2
       if(Sample){
-        SampleMap.get(attributeName) match {
-          case Some(c) =>
-            if (c.size < SampleLimit){
-              if(attributeValue != null) {
-                if(!attributeValue.toString().equals("") && !attributeValue.toString().equals("{}") && !attributeValue.toString().equals("[]")) {
-                  c += attributeValue.toString()
-                  SampleMap.update(attributeName, c)
-                }
+        CountMap.get(attributeName) match {
+          case Some(count) =>
+            CountMap.update(attributeName, count + 1)
+            if(attributeValue != null) {
+              if (count < SampleLimit) {
+                val tm = SampleMap.get(attributeName).get
+                tm += attributeValue.toString
+                SampleMap.update(attributeName, tm)
+              }
+            } else {
+              if (count < SampleLimit) {
+                val tm = SampleMap.get(attributeName).get
+                tm += "null"
+                SampleMap.update(attributeName, tm)
               }
             }
+
           case None =>
-            var c = new scala.collection.mutable.ListBuffer[String]()
+            CountMap.update(attributeName, 1) // count nulls
             if(attributeValue != null) {
-              if(!attributeValue.toString().equals("") && !attributeValue.toString().equals("{}") && !attributeValue.toString().equals("[]")) {
-                c += attributeValue.toString()
-                SampleMap.update(attributeName, c)
-              }
+              SampleMap.update(attributeName, scala.collection.mutable.ListBuffer[String](attributeValue.toString))
+            } else {
+              SampleMap.update(attributeName, scala.collection.mutable.ListBuffer[String]("null"))
             }
         }
       }
@@ -199,12 +217,16 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, n
     GlobalTypeMap.foreach((x) => {
       val xAttributeName = x._1
       val xTypeMap = x._2
+      val objectNameHolder = scala.collection.mutable.ListBuffer[String]()
       var isArray = false
       var isObject = false
       var hypothesisType: String = null
       var hypothesisSize: Int = -1
       var variableSize = false
       var multipleType = false
+//      println(xAttributeName)
+//      println(xTypeMap)
+//      println(calculateEntropy(xTypeMap))
       xTypeMap.foreach((y) => {
         val yTypeName = y._1
         val yTypeCount = y._2
@@ -217,11 +239,22 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, n
               else if (hypothesisSize != 0)
                 variableSize = true
             } else {
+              val nameList = yTypeName.substring(1, yTypeName.size - 1).split(',').map(x => x.split(':')(0))
               val typeList = yTypeName.substring(1, yTypeName.size - 1).split(',').map(x => x.split(':')(1))
-              if (hypothesisSize == -1)
-                hypothesisSize = typeList.size
-              else if (hypothesisSize != typeList.size)
-                variableSize = true
+              if (hypothesisSize == -1) {
+                hypothesisSize = nameList.size
+                nameList.foreach(objectNameHolder += _)
+              }
+              else {
+                val sameSize = objectNameHolder.foldLeft(true){(same,s)=> {
+                  if(same)
+                    nameList.contains(s)
+                  else
+                    false
+                }} && nameList.size == objectNameHolder.size
+                if(!sameSize)
+                  variableSize = true
+              }
               typeList.foreach(t => {
                 if(hypothesisType == null)
                   hypothesisType = t
@@ -253,7 +286,6 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, n
         }
       })
       //if(xAttributeName.equals("batch") || xAttributeName.equals("SignalStrength"))
-      //  println(xTypeMap)
       if(isArray && isObject) // has both array and object types
         ArrayAndObject += xAttributeName
       else if(isArray && !multipleType)
@@ -337,6 +369,22 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, n
     fp.getChildren.addAll(button,v)
     tab.setContent(fp)
     return tab
+  }
+
+  def countMapForVegas(): Seq[Map[String,Any]] = {
+    return CountMap.map(x => Map("Name" -> x._1, "Count" -> x._2)).toSeq
+  }
+
+  def calculateEntropy(m:scala.collection.mutable.Map[String,Int]): Double = {
+    val total: Int = m.foldLeft(0){(count,x) => count + x._2}
+    val entropy: Double = m.foldLeft(0.0){(ent,x) => {
+      val p: Double = x._2.toDouble/total
+      ent + (p*scala.math.log(p))
+    }}
+    if(entropy == 0.0)
+      return entropy
+    else
+      return -1.0 * entropy
   }
 
 }

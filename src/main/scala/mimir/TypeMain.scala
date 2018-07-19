@@ -13,18 +13,32 @@ import scalafx.scene.Scene
 import scalafx.scene.control.ScrollPane.ScrollBarPolicy
 import scalafx.scene.control.{Button, ListView, ScrollPane, TabPane}
 import scalafx.scene.layout.FlowPane
+import vegas._
 
 object TypeMain {
 
   // name -> fileName, naive
   val dataList = Map[String,(String,Boolean)](("twitter"->("test/data/dump-30.txt",true)),("yelp"->("test/data/yelp_dataset",true)),("nasa"->("test/data/nasa.json",false)),
-    ("phonelab"->("test/data/carlDataSample.out",false)),("enron"->("test/data/enron.json",true)),("medicine"->("test/data/medicine.json",true)),("meteorite"->("test/data/meteorite.json",false)))
+    ("phonelab"->("test/data/carlDataSample.out",false)),("enron"->("test/data/enron.json",true)),("medicine"->("test/data/medicine.json",true)),("meteorite"->("test/data/meteorite.json",false)),("test"->("test/data/testTypes.json",true)))
   def main(args: Array[String]) = {
 
-    val dataset: String = "phonelab"
-    val rowLimit = 0
+    val dataset: String = "test"
+    val rowLimit = 10 // 0 means all rows
     val sampleData = true
 
+    /*
+    val plot = Vegas("Country Pop").
+      withData(
+        Seq(
+          Map("country" -> "USA", "population" -> 314),
+          Map("country" -> "UK", "population" -> 64),
+          Map("country" -> "DK", "population" -> 80)
+        )
+      ).
+      encodeX("country", Nom).
+      encodeY("population", Quant).
+      mark(Bar).show
+     */
 /*
     val app = new JFXApp {
       stage = new application.JFXApp.PrimaryStage{
@@ -50,6 +64,10 @@ object TypeMain {
     }
     app.main(args)
 */
+
+    // what is the goal, what are the constraints, what makes a good approximation, linear optimizer?
+    // bazeezee paper
+    // write up type
     val loadJson = new NaiveTypeCount2(dataset,new File(dataList.get(dataset).get._1), rowLimit, dataList.get(dataset).get._2,Sample=sampleData)
   }
 }
