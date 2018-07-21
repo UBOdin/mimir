@@ -1,6 +1,6 @@
 package mimir.util
 
-import java.io.File
+import java.io.{BufferedWriter, File, FileWriter}
 
 import com.google.gson.Gson
 import scalafx.scene.control.Tab
@@ -9,7 +9,6 @@ import scalafx.application.JFXApp
 import scalafx.scene.Scene
 import scalafx.scene.control.{Button, ListView, TabPane}
 import scalafx.scene.layout.{FlowPane, Priority}
-
 import vegas._
 
 import scala.collection.JavaConverters._
@@ -41,7 +40,9 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, I
   val ConfirmedAsObject: ListBuffer[String] = ListBuffer[String]() // confirmed more likely to be an object
   val TupleType: ListBuffer[String] = ListBuffer[String]() // could be better represented as a tuple
   val ArrayTupleType: ListBuffer[String] = ListBuffer[String]() // could be better represented as a tuple
-
+  val TypeEntropyFile = new BufferedWriter(new FileWriter("typeEntropy.json"))
+  val KeyEntropyFile = new BufferedWriter(new FileWriter("keyEntropy.json"))
+  val KeyEntropyList = new ListBuffer[(Double,String)]()
 
   createSchema()
 
@@ -49,7 +50,7 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, I
     visualizeUnknownObjects()
     //visualizeTuples()
   }
-
+/*
   if(Sample) {
     Vegas("Country Pop").
       withData(
@@ -59,7 +60,7 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, I
       encodeY("Count", Quant).
       mark(Bar).show
   }
-
+*/
   private def createSchema() = {
     var line: String = loadJson.getNext()
     var rowCount: Int = 0
@@ -214,19 +215,58 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, I
   def buildPlan() = {
 
     // iterate through the map and find all { for objects and [ for all
-    GlobalTypeMap.foreach((x) => {
-      val xAttributeName = x._1
-      val xTypeMap = x._2
+    GlobalTypeMap.foreach((everyAttribute) => {
+      val attributeName = everyAttribute._1
+      val keySpace = everyAttribute._2
       val objectNameHolder = scala.collection.mutable.ListBuffer[String]()
-      var isArray = false
-      var isObject = false
+      val isArray = keySpace.foldLeft(false){(arrFound,t) => {
+        if(!arrFound) {
+          t._1.charAt(0) == '['
+        }
+        else
+          arrFound
+      }}
+      val isObject = keySpace.foldLeft(false){(arrFound,t) => {
+        if(!arrFound)
+          (t._1.charAt(0) == '{')
+        else
+          arrFound
+      }}
+      if(isArray && isObject){
+        System.err.println(s"$attributeName contains both arrays and objects")
+      } else if(isArray || isObject){
+        val keySpaceEntropy = keySpaceEntropy(keySpace)
+        val xValue = keySpace.map("\""+_._1+"\"")
+        val yValue = keySpace.map(_._2)
+        val objType: String = {
+          if(isArray)
+            "Array"
+          else if(isObject)
+            "Object"
+          else
+            "Unknown"
+          }
+        val typeEntropy = keySpace.foldLeft(0.0){(acc,y) =>
+          val typeName = y._1
+          val typeCount = y._2
+          var localTypeEntropy: Double = 0.0
+          if(!typeName.equals("[]") && !typeName.equals("{}")){
+            localTypeEntropy = typeEntropy(typeName)
+          } // else empty array/object so 0.0 for entropy
+          acc + localTypeEntropy
+        }
+        val jsonOutput: String = s"""{"title":"${attributeName}","keySpaceEntropy":$keySpaceEntropy,"typeEntropy":$typeEntropy,"type":"$objType","x":[${xValue.mkString(",")}],"y":[${yValue.mkString(",")}]}"""
+        KeyEntropyList += Tuple2(keySpaceEntropy,jsonOutput)
+
+      } else {
+        // is a primitive Type i.e String, numeric, boolean
+      }
+/*
       var hypothesisType: String = null
       var hypothesisSize: Int = -1
       var variableSize = false
       var multipleType = false
-//      println(xAttributeName)
-//      println(xTypeMap)
-//      println(calculateEntropy(xTypeMap))
+
       xTypeMap.foreach((y) => {
         val yTypeName = y._1
         val yTypeCount = y._2
@@ -300,7 +340,10 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, I
         TupleType += xAttributeName
       else if(isArray && multipleType && !variableSize) // could be better represented as a tuple potentionally
         ArrayTupleType += xAttributeName
+*/
     })
+    KeyEntropyList.sortBy(_._1)(Ordering[Double].reverse).foreach(t=>KeyEntropyFile.write(t._2+'\n'))
+    KeyEntropyFile.close()
     println("Confirmed Arrays: "+ConfirmedAsArray.mkString(","))
     println("Confirmed Objects: "+ConfirmedAsObject.mkString(","))
     println("Arrays to Objects: "+ArrayToObject.mkString(","))
@@ -375,11 +418,39 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, I
     return CountMap.map(x => Map("Name" -> x._1, "Count" -> x._2)).toSeq
   }
 
-  def calculateEntropy(m:scala.collection.mutable.Map[String,Int]): Double = {
+  def typeEntropy(unpackedTypeList: String): Double = {
+    val m: scala.collection.mutable.Map[String,Int] = scala.collection.mutable.Map[String,Int]()
+    unpackedTypeList.split(",").map(_.split(":")(1)).foreach(x => {
+      m.get(x) match {
+        case Some(c) => m.update(x,c+1)
+        case None => m.update(x,1)
+      }
+    })
     val total: Int = m.foldLeft(0){(count,x) => count + x._2}
     val entropy: Double = m.foldLeft(0.0){(ent,x) => {
       val p: Double = x._2.toDouble/total
       ent + (p*scala.math.log(p))
+    }}
+    if(entropy == 0.0)
+      return entropy
+    else
+      return -1.0 * entropy
+  }
+
+  def keySpaceEntropy(m:scala.collection.mutable.Map[String,Int]): Double = {
+    val total: Int = m.foldLeft(0){(count,x) => {
+      if(!x._1.equals("{}") && !x._1.equals("[]"))
+        count + x._2
+      else
+        count
+    }}
+    val entropy: Double = m.foldLeft(0.0){(ent,x) => {
+      if(!x._1.equals("{}") && !x._1.equals("[]")) {
+        val p: Double = x._2.toDouble / total
+        ent + (p * scala.math.log(p))
+      }
+      else
+        ent
     }}
     if(entropy == 0.0)
       return entropy

@@ -22,8 +22,8 @@ object TypeMain {
     ("phonelab"->("test/data/carlDataSample.out",false)),("enron"->("test/data/enron.json",true)),("medicine"->("test/data/medicine.json",true)),("meteorite"->("test/data/meteorite.json",false)),("test"->("test/data/testTypes.json",true)))
   def main(args: Array[String]) = {
 
-    val dataset: String = "test"
-    val rowLimit = 10 // 0 means all rows
+    val dataset: String = "twitter"
+    val rowLimit = 10000 // 0 means all rows
     val sampleData = true
 
     /*
