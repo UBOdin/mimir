@@ -37,6 +37,7 @@ libraryDependencies ++= Seq(
   "org.jline"                     %   "jline"                 % "3.2.0",
   "info.mimirdb"                  %   "jsqlparser"            % "1.0.2",
   "org.scalafx" %% "scalafx" % "8.0.144-R12",
+  "org.vegas-viz" %% "vegas" % "0.3.11",
 
   ////////////////////// Dev Tools -- Logging, Testing, etc... //////////////////////
   "com.typesafe.scala-logging"    %%  "scala-logging-slf4j"   % "2.1.2",

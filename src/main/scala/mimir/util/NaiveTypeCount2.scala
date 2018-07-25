@@ -1,22 +1,22 @@
 package mimir.util
 
-import java.io.{BufferedWriter, File, FileWriter}
+import java.io._
+import java.util
 
-import com.google.gson.Gson
+import com.google.gson.{Gson, GsonBuilder}
 import scalafx.scene.control.Tab
 import scalafx.application
 import scalafx.application.JFXApp
 import scalafx.scene.Scene
 import scalafx.scene.control.{Button, ListView, TabPane}
 import scalafx.scene.layout.{FlowPane, Priority}
-import vegas._
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
 
 
-class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, IncludeNulls: Boolean = false, naive: Boolean = false, Sample: Boolean = false, SampleLimit: Int = 10, OnlyLeafValues: Boolean = true){
+class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, Verbose: Boolean = false, IncludeNulls: Boolean = false, naive: Boolean = false, Sample: Boolean = false, SampleLimit: Int = 10, Stash: Boolean = false, Unstash: Boolean = true){
 
   val StringClass = classOf[String]
   val DoubleClass = classOf[java.lang.Double]
@@ -40,27 +40,17 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, I
   val ConfirmedAsObject: ListBuffer[String] = ListBuffer[String]() // confirmed more likely to be an object
   val TupleType: ListBuffer[String] = ListBuffer[String]() // could be better represented as a tuple
   val ArrayTupleType: ListBuffer[String] = ListBuffer[String]() // could be better represented as a tuple
-  val TypeEntropyFile = new BufferedWriter(new FileWriter("typeEntropy.json"))
   val KeyEntropyFile = new BufferedWriter(new FileWriter("keyEntropy.json"))
   val KeyEntropyList = new ListBuffer[(Double,String)]()
 
-  createSchema()
+  if(Unstash)
+    unstash()
+  else
+    createSchema()
+  if(Stash)
+    stash()
 
-  if(Sample && false) {
-    visualizeUnknownObjects()
-    //visualizeTuples()
-  }
-/*
-  if(Sample) {
-    Vegas("Country Pop").
-      withData(
-        countMapForVegas()
-      ).
-      encodeX("Name", Nom).
-      encodeY("Count", Quant).
-      mark(Bar).show
-  }
-*/
+
   private def createSchema() = {
     var line: String = loadJson.getNext()
     var rowCount: Int = 0
@@ -74,17 +64,15 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, I
         nonJsonRowCount += 1
         rejectedRows += line
       }
-      if((rowCount%100000 == 0) && added)
+      if((rowCount%100000 == 0) && added && Verbose)
         println(s"$rowCount rows added, $nonJsonRowCount rows rejected so far")
       line = loadJson.getNext()
     }
     println(s"$rowCount rows added, $nonJsonRowCount rows rejected")
-    println("Generating Schema")
     buildPlan()
   }
 
   // AttributeName -> (Type, Count)
-
   def add(row: String): Boolean = {
     try {
       if(row == null)
@@ -106,6 +94,9 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, I
       val attributeName = prefix + attribute._1.replace(",",";").replace(":",";")
       val attributeValue = attribute._2
       if(Sample){
+        //if(attributeName.equals("attributes.HairSpecializesIn"))
+          //if(attributeValue != null)
+            //println(attributeValue.toString)
         CountMap.get(attributeName) match {
           case Some(count) =>
             CountMap.update(attributeName, count + 1)
@@ -132,7 +123,7 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, I
             }
         }
       }
-      var attributeClass: Class[_ <: Object]  = null
+      var attributeClass: Class[_ <: Object] = null
       try {
         attributeClass = attribute._2.getClass
       } catch {
@@ -140,15 +131,15 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, I
       }
       attributeClass match {
         case(StringClass) =>
-          update2(attributeName, "String")
+          update(attributeName, "String")
           returnType += s"$attributeName:String,"
 
         case(DoubleClass) =>
-          update2(attributeName,"Double")
+          update(attributeName,"Double")
           returnType += s"$attributeName:Double,"
 
         case(BooleanClass) =>
-          update2(attributeName, "Boolean")
+          update(attributeName, "Boolean")
           returnType += s"$attributeName:Boolean,"
 
         case(ArrayClass) =>
@@ -161,21 +152,21 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, I
           })
           if(!arrayType.equals(""))
             arrayType = arrayType.substring(0, arrayType.size - 1)
-          update2(attributeName, s"[$arrayType]")
+          update(attributeName, s"[$arrayType]")
           returnType += s"$attributeName:Array,"
 
         case(ObjectClass) =>
           val t = mapInsertType(attributeName + ".", Gson.fromJson(Gson.toJson(attributeValue), MapType))
-          update2(attributeName, s"{${toObjectType(t)}}") // this is done because order shouldn't matter
+          update(attributeName, s"{${toObjectType(t)}}") // this is done because order shouldn't matter
           returnType += s"$attributeName:Object,"
 
         case(null) =>
           if(IncludeNulls) {
-            update2(attributeName, "Null")
+            update(attributeName, "Null")
             returnType += s"$attributeName:Null,"
           }
         case _ =>
-          update2(attributeName,"UnknownType")
+          update(attributeName,"UnknownType")
           returnType += s"$attributeName:UnknownType,"
       }
     })
@@ -191,7 +182,7 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, I
     return sorted.mkString(",")
   }
 
-  def update2(attributeName: String, attributeType: String) = {
+  def update(attributeName: String, attributeType: String) = {
     GlobalTypeMap.get(attributeName) match {
       case Some(typeMap) =>
         typeMap.get(attributeType) match {
@@ -235,7 +226,7 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, I
       if(isArray && isObject){
         System.err.println(s"$attributeName contains both arrays and objects")
       } else if(isArray || isObject){
-        val keySpaceEntropy = keySpaceEntropy(keySpace)
+        val ksEntropy: Double = keySpaceEntropy(keySpace)
         val xValue = keySpace.map("\""+_._1+"\"")
         val yValue = keySpace.map(_._2)
         val objType: String = {
@@ -246,178 +237,38 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, I
           else
             "Unknown"
           }
-        val typeEntropy = keySpace.foldLeft(0.0){(acc,y) =>
+        val tEntropy: Double = keySpace.foldLeft(0.0){(acc,y) =>
           val typeName = y._1
           val typeCount = y._2
           var localTypeEntropy: Double = 0.0
           if(!typeName.equals("[]") && !typeName.equals("{}")){
-            localTypeEntropy = typeEntropy(typeName)
+            localTypeEntropy = typeEntropy(typeName.substring(1,typeName.size-1))
           } // else empty array/object so 0.0 for entropy
           acc + localTypeEntropy
         }
-        val jsonOutput: String = s"""{"title":"${attributeName}","keySpaceEntropy":$keySpaceEntropy,"typeEntropy":$typeEntropy,"type":"$objType","x":[${xValue.mkString(",")}],"y":[${yValue.mkString(",")}]}"""
-        KeyEntropyList += Tuple2(keySpaceEntropy,jsonOutput)
+        val score: Double = ksEntropy/(1.0+tEntropy)
+        val jsonOutput: String = s"""{"title":"${attributeName}","keySpaceEntropy":$ksEntropy,"typeEntropy":$tEntropy,"entropyScore":$score,"type":"$objType","x":[${xValue.mkString(",")}],"y":[${yValue.mkString(",")}]}"""
+        KeyEntropyList += Tuple2(score,jsonOutput)
 
       } else {
         // is a primitive Type i.e String, numeric, boolean
       }
-/*
-      var hypothesisType: String = null
-      var hypothesisSize: Int = -1
-      var variableSize = false
-      var multipleType = false
-
-      xTypeMap.foreach((y) => {
-        val yTypeName = y._1
-        val yTypeCount = y._2
-        yTypeName.charAt(0) match {
-          case ('{') => // is an object type
-            isObject = true
-            if(yTypeName.equals("{}")) { // is an empty array
-              if(hypothesisSize == -1)
-                hypothesisSize = 0
-              else if (hypothesisSize != 0)
-                variableSize = true
-            } else {
-              val nameList = yTypeName.substring(1, yTypeName.size - 1).split(',').map(x => x.split(':')(0))
-              val typeList = yTypeName.substring(1, yTypeName.size - 1).split(',').map(x => x.split(':')(1))
-              if (hypothesisSize == -1) {
-                hypothesisSize = nameList.size
-                nameList.foreach(objectNameHolder += _)
-              }
-              else {
-                val sameSize = objectNameHolder.foldLeft(true){(same,s)=> {
-                  if(same)
-                    nameList.contains(s)
-                  else
-                    false
-                }} && nameList.size == objectNameHolder.size
-                if(!sameSize)
-                  variableSize = true
-              }
-              typeList.foreach(t => {
-                if(hypothesisType == null)
-                  hypothesisType = t
-                else if (!hypothesisType.equals(t))
-                  multipleType = true
-              })
-            }
-          case ('[') => // is an array type
-            isArray = true
-            if(yTypeName.equals("[]")) { // is an empty array
-              if(hypothesisSize == -1)
-                hypothesisSize = 0
-              else if (hypothesisSize != 0)
-                variableSize = true
-            } else {
-              val typeList = yTypeName.substring(1, yTypeName.size - 1).split(',').map(x => x.split(':')(1))
-              if(hypothesisSize == -1)
-                hypothesisSize = typeList.size
-              else if(hypothesisSize != typeList.size)
-                variableSize = true
-              typeList.foreach(t => {
-                if(hypothesisType == null)
-                  hypothesisType = t
-                else if(!hypothesisType.equals(t))
-                  multipleType = true
-              })
-            }
-          case _ => // is a leaf type, string, bool, numeric
-        }
-      })
-      //if(xAttributeName.equals("batch") || xAttributeName.equals("SignalStrength"))
-      if(isArray && isObject) // has both array and object types
-        ArrayAndObject += xAttributeName
-      else if(isArray && !multipleType)
-        ConfirmedAsArray += xAttributeName
-      else if(isArray && multipleType && variableSize) // it's children should be kept
-        ArrayToObject += xAttributeName
-      else if(isObject && !multipleType && variableSize) // should be an array
-        ObjectToArray += xAttributeName
-      else if(isObject && multipleType && variableSize)
-        ConfirmedAsObject += xAttributeName
-      else if(isObject && multipleType && !variableSize) // could be better represented as a tuple potentionally
-        TupleType += xAttributeName
-      else if(isArray && multipleType && !variableSize) // could be better represented as a tuple potentionally
-        ArrayTupleType += xAttributeName
-*/
     })
-    KeyEntropyList.sortBy(_._1)(Ordering[Double].reverse).foreach(t=>KeyEntropyFile.write(t._2+'\n'))
-    KeyEntropyFile.close()
-    println("Confirmed Arrays: "+ConfirmedAsArray.mkString(","))
-    println("Confirmed Objects: "+ConfirmedAsObject.mkString(","))
-    println("Arrays to Objects: "+ArrayToObject.mkString(","))
-    println("Objects to Arrays: "+ObjectToArray.mkString(",")) // retweeted_status.entities, entities, quoted_status.entities, retweeted_status.quoted_status.entities
-    println("Tuples: "+TupleType.mkString(","))
-    println("Array Tuples: "+ArrayTupleType.mkString(","))
-    println("Had both Arrays and Objects: "+ArrayAndObject.mkString(","))
-    println("Done")
-  }
-
-  // Now build the maximal schema for the parser
-  def visualizeUnknownObjects() = {
-    val app = new JFXApp {
-      stage = new application.JFXApp.PrimaryStage{
-        title = datasetName + " array like objects"
-        scene = new Scene(400,600){
-          val tabPane = new TabPane()
-          val tabList: ListBuffer[Tab] = ObjectToArray.map(makeTab(_))
-          tabPane.tabs = tabList
-          root = tabPane
-        }
-      }
+    //KeyEntropyList.sortBy(_._1)(Ordering[Double].reverse).foreach(t=>KeyEntropyFile.write(t._2+'\n'))
+    //KeyEntropyFile.close()
+    if(Verbose) {
+      println("Confirmed Arrays: " + ConfirmedAsArray.mkString(","))
+      println("Confirmed Objects: " + ConfirmedAsObject.mkString(","))
+      println("Arrays to Objects: " + ArrayToObject.mkString(","))
+      println("Objects to Arrays: " + ObjectToArray.mkString(",")) // retweeted_status.entities, entities, quoted_status.entities, retweeted_status.quoted_status.entities
+      println("Tuples: " + TupleType.mkString(","))
+      println("Array Tuples: " + ArrayTupleType.mkString(","))
+      println("Had both Arrays and Objects: " + ArrayAndObject.mkString(","))
+      println("Done")
     }
-    app.main(Array[String]())
   }
 
-  def visualizeTuples() ={
-    val app = new JFXApp {
-      stage = new application.JFXApp.PrimaryStage{
-        title = datasetName + " tuples"
-        scene = new Scene(400,600){
-          val tabPane = new TabPane()
-          val tabList: ListBuffer[Tab] = TupleType.map(makeTabTuple(_))
-          tabPane.tabs = tabList
-          root = tabPane
-        }
-      }
-    }
-    app.main(Array[String]())
-  }
-
-  def makeTab(attributeName: String): Tab = {
-    val tab = new Tab
-    tab.text = attributeName
-    val fp = new FlowPane()
-    val button = new Button("Add Object to Schema")
-    val button2 = new Button("Collapse Object as an Array")
-    val items = SampleMap.get(attributeName).get
-    val v = new ListView(items)
-    v.prefHeight = 500
-    v.prefWidth = 7000
-    fp.getChildren.addAll(button,button2,v)
-    tab.setContent(fp)
-    return tab
-  }
-
-  def makeTabTuple(attributeName: String): Tab = {
-    val tab = new Tab
-    tab.text = attributeName
-    val fp = new FlowPane()
-    val button = new Button("Is a Tuple")
-    val items = SampleMap.get(attributeName).get
-    val v = new ListView(items)
-    v.prefHeight = 500
-    v.prefWidth = 7000
-    fp.getChildren.addAll(button,v)
-    tab.setContent(fp)
-    return tab
-  }
-
-  def countMapForVegas(): Seq[Map[String,Any]] = {
-    return CountMap.map(x => Map("Name" -> x._1, "Count" -> x._2)).toSeq
-  }
-
+  // computes the type entropy
   def typeEntropy(unpackedTypeList: String): Double = {
     val m: scala.collection.mutable.Map[String,Int] = scala.collection.mutable.Map[String,Int]()
     unpackedTypeList.split(",").map(_.split(":")(1)).foreach(x => {
@@ -437,6 +288,7 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, I
       return -1.0 * entropy
   }
 
+  // computes the keyspace entropy
   def keySpaceEntropy(m:scala.collection.mutable.Map[String,Int]): Double = {
     val total: Int = m.foldLeft(0){(count,x) => {
       if(!x._1.equals("{}") && !x._1.equals("[]"))
@@ -456,6 +308,97 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, I
       return entropy
     else
       return -1.0 * entropy
+  }
+
+  // retrieves the data that was stashed
+  // loads KeyEntropyList, GlobalTypeMap, and SampleMap
+  def unstash() = {
+    val sampleInput: BufferedReader = new BufferedReader(new FileReader(s"cache/${datasetName}Sample.json"))
+    val typeInput: BufferedReader = new BufferedReader(new FileReader(s"cache/${datasetName}Types.json"))
+    val entropyInput: BufferedReader = new BufferedReader(new FileReader(s"cache/${datasetName}Entropy.json"))
+
+    var sampleLine: String = sampleInput.readLine()
+    while(sampleLine != null){
+      val m: java.util.HashMap[String, Object] = Gson.fromJson(sampleLine, MapType)
+      SampleMap += Tuple2(m.get("title").toString(),m.get("payload").asInstanceOf[java.util.ArrayList[String]].asScala.to[ListBuffer])
+      sampleLine = sampleInput.readLine()
+    }
+    sampleInput.close()
+
+    val typeLine = typeInput.readLine()
+    val m = Gson.fromJson(typeLine,MapType)
+    m.asScala.foreach(x => {
+      val localMap = scala.collection.mutable.HashMap[String,Int]()
+      x._2.asInstanceOf[com.google.gson.internal.LinkedTreeMap[String,Double]].asScala.foreach((y)=> localMap.update(y._1,y._2.toInt))
+      GlobalTypeMap.update(x._1, localMap)
+    })
+    typeInput.close()
+
+    var entropyLine: String = entropyInput.readLine()
+    while(entropyLine != null){
+      val split: Int = entropyLine.indexOf(',')
+      KeyEntropyList += Tuple2(entropyLine.substring(0,split).toDouble,entropyLine.substring(split+1))
+      entropyLine = entropyInput.readLine()
+    }
+    entropyInput.close()
+
+  }
+
+  // stashes the data structures that are the result of the computation, this is so re-running will be faster for future tests and development
+  def stash() = {
+    val sampleWriter = new BufferedWriter(new FileWriter(s"cache/${datasetName}Sample.json"))
+    val typeWriter = new BufferedWriter(new FileWriter(s"cache/${datasetName}Types.json"))
+    val entropyWriter = new BufferedWriter(new FileWriter(s"cache/${datasetName}Entropy.json"))
+
+    if(Sample){
+      SampleMap.foreach(x => sampleWriter.write(s"""{"title":"${x._1}","payload":[${x._2.map(Gson.toJson(_)).mkString(",")}]}\n"""))
+      sampleWriter.flush()
+      sampleWriter.close()
+    }
+
+    typeWriter.write("{"+GlobalTypeMap.map(x => {
+      val localJsonTypeMap = "{"+x._2.map(y => s""""${y._1}":${y._2}""").mkString(",")+"}"
+      s""""${x._1}":${localJsonTypeMap}"""
+    }).mkString(",")+"}")
+    typeWriter.flush()
+    typeWriter.close()
+
+    KeyEntropyList.foreach(x => entropyWriter.write(s"""${x._1},${x._2}\n"""))
+    entropyWriter.flush()
+    entropyWriter.close()
+  }
+
+  // visualization stuff
+
+  def visualizeList() = {
+    val app = new JFXApp {
+      stage = new application.JFXApp.PrimaryStage{
+        title = datasetName + " array like objects"
+        scene = new Scene(400,600){
+          val tabPane = new TabPane()
+          val tabList: ListBuffer[Tab] = KeyEntropyList.sortBy(_._1)(Ordering[Double].reverse).map(x => makeTab(x._2))
+          tabPane.tabs = tabList
+          root = tabPane
+        }
+      }
+    }
+    app.main(Array[String]())
+  }
+
+  def makeTab(attributeJson: String): Tab = {
+    val tab = new Tab
+    val m: java.util.HashMap[String, Object] = Gson.fromJson(attributeJson, MapType)
+    tab.text = m.get("title").toString()
+    val fp = new FlowPane()
+    val button = new Button("Add Object to Schema")
+    val button2 = new Button("Collapse Object as an Array")
+    val items: ListBuffer[String] = SampleMap.get(m.get("title").toString()).get
+    val v = new ListView(items)
+    v.prefHeight = 500
+    v.prefWidth = 7000
+    fp.getChildren.addAll(button,button2,v)
+    tab.setContent(fp)
+    return tab
   }
 
 }
