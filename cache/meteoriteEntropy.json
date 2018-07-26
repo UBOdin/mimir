@@ -1,0 +1,2 @@
+0.0,{"title":"geolocation","keySpaceEntropy":0.0,"typeEntropy":0.6931471805599453,"entropyScore":0.0,"type":"Object","x":["{geolocation.coordinates:Array,geolocation.type:String}"],"y":[988]}
+0.0,{"title":"geolocation.coordinates","keySpaceEntropy":0.0,"typeEntropy":0.0,"entropyScore":0.0,"type":"Array","x":["[geolocation.coordinates[0]:Double,geolocation.coordinates[1]:Double]"],"y":[988]}

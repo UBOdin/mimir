@@ -1,0 +1,16 @@
+{"title":";@computed_region_nnqa_25f4","payload":["429","1723","2697","774","3134","602","1989","2373","495","662"]}
+{"title":"geolocation","payload":["{type\u003dPoint, coordinates\u003d[6.08333, 50.775]}","{type\u003dPoint, coordinates\u003d[10.23333, 56.18333]}","{type\u003dPoint, coordinates\u003d[-113.0, 54.21667]}","{type\u003dPoint, coordinates\u003d[-99.9, 16.88333]}","{type\u003dPoint, coordinates\u003d[-64.95, -33.16667]}","{type\u003dPoint, coordinates\u003d[71.8, 32.1]}","{type\u003dPoint, coordinates\u003d[95.16667, 44.83333]}","{type\u003dPoint, coordinates\u003d[0.61667, 44.21667]}","{type\u003dPoint, coordinates\u003d[-65.23333, -31.6]}","{type\u003dPoint, coordinates\u003d[-64.55, -30.86667]}"]}
+{"title":"mass","payload":["21","720","107000","1914","780","4239","910","30000","1620","1440"]}
+{"title":"geolocation.coordinates[1]","payload":["50.775","56.18333","54.21667","16.88333","-33.16667","32.1","44.83333","44.21667","-31.6","-30.86667"]}
+{"title":"reclat","payload":["50.775000","56.183330","54.216670","16.883330","-33.166670","32.100000","44.833330","44.216670","-31.600000","-30.866670"]}
+{"title":"geolocation.type","payload":["Point","Point","Point","Point","Point","Point","Point","Point","Point","Point"]}
+{"title":"reclong","payload":["6.083330","10.233330","-113.000000","-99.900000","-64.950000","71.800000","95.166670","0.616670","-65.233330","-64.550000"]}
+{"title":"geolocation.coordinates","payload":["[6.08333, 50.775]","[10.23333, 56.18333]","[-113.0, 54.21667]","[-99.9, 16.88333]","[-64.95, -33.16667]","[71.8, 32.1]","[95.16667, 44.83333]","[0.61667, 44.21667]","[-65.23333, -31.6]","[-64.55, -30.86667]"]}
+{"title":"geolocation.coordinates[0]","payload":["6.08333","10.23333","-113.0","-99.9","-64.95","71.8","95.16667","0.61667","-65.23333","-64.55"]}
+{"title":"year","payload":["1880-01-01T00:00:00.000","1951-01-01T00:00:00.000","1952-01-01T00:00:00.000","1976-01-01T00:00:00.000","1902-01-01T00:00:00.000","1919-01-01T00:00:00.000","1949-01-01T00:00:00.000","1814-01-01T00:00:00.000","1930-01-01T00:00:00.000","1920-01-01T00:00:00.000"]}
+{"title":"name","payload":["Aachen","Aarhus","Abee","Acapulco","Achiras","Adhi Kot","Adzhi-Bogdo (stone)","Agen","Aguada","Aguila Blanca"]}
+{"title":"fall","payload":["Fell","Fell","Fell","Fell","Fell","Fell","Fell","Fell","Fell","Fell"]}
+{"title":"nametype","payload":["Valid","Valid","Valid","Valid","Valid","Valid","Valid","Valid","Valid","Valid"]}
+{"title":"recclass","payload":["L5","H6","EH4","Acapulcoite","L6","EH4","LL3-6","H5","L6","L"]}
+{"title":";@computed_region_cbhk_fwbd","payload":["50","49","18","23","29","20","11","37","32","21"]}
+{"title":"id","payload":["1","2","6","10","370","379","390","392","398","417"]}
