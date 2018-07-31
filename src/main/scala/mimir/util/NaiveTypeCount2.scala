@@ -4,11 +4,12 @@ import java.io._
 import java.util
 
 import com.google.gson.{Gson, GsonBuilder}
-import scalafx.scene.control.Tab
+import scalafx.Includes._
+import scalafx.scene.control._
 import scalafx.application
 import scalafx.application.JFXApp
+import scalafx.event.ActionEvent
 import scalafx.scene.Scene
-import scalafx.scene.control.{Button, ListView, TabPane}
 import scalafx.scene.layout.{FlowPane, Priority}
 
 import scala.collection.JavaConverters._
@@ -16,7 +17,14 @@ import scala.collection.mutable.ListBuffer
 
 
 
-class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, Verbose: Boolean = false, IncludeNulls: Boolean = false, naive: Boolean = false, Sample: Boolean = false, SampleLimit: Int = 10, Stash: Boolean = false, Unstash: Boolean = true){
+class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, Verbose: Boolean = false, IncludeNulls: Boolean = false, naive: Boolean = false, Sample: Boolean = false, SampleLimit: Int = 10, Stash: Boolean = false, Unstash: Boolean = true, Visualize: Boolean = true){
+
+  var thisTabPane: TabPane = null
+  var thisApp: application.JFXApp = null
+  var excludeAttributes: ListBuffer[String] = ListBuffer[String]()
+  val objectAttributes: ListBuffer[String] = ListBuffer[String]()
+  val tupleAttributes: ListBuffer[String] = ListBuffer[String]()
+  val arrayAttributes: ListBuffer[String] = ListBuffer[String]()
 
   val StringClass = classOf[String]
   val DoubleClass = classOf[java.lang.Double]
@@ -49,6 +57,23 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
     createSchema()
   if(Stash)
     stash()
+  val schemaCandidates = KeyEntropyList.sortBy(_._1)(Ordering[Double].reverse).map(x => {
+    val m: java.util.HashMap[String, Object] = Gson.fromJson(x._2, MapType)
+    Tuple4(m.get("title").toString(),m.get("type").toString(),m.get("keySpaceEntropy").toString.toDouble,m.get("typeEntropy").toString.toDouble)
+  })
+  if(Visualize)
+    visualizeList()
+  else {
+    schemaCandidates.foreach((theGoods) => {
+      if (theGoods._2.equals("Array"))
+        arrayAttributes += theGoods._1
+      else
+        tupleAttributes += theGoods._1
+    })
+  }
+  excludeAttributes = arrayAttributes ++ tupleAttributes
+  val schema: ListBuffer[String] = generateSchema()
+  println(s"schema: ${schema.mkString(",")}")
 
 
   private def createSchema() = {
@@ -268,6 +293,40 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
     }
   }
 
+  def generateSchema(): ListBuffer[String] = {
+    val schema: ListBuffer[String] = ListBuffer[String]()
+    var reducedAsArray = 0
+    var reducedAsTuple = 0
+    GlobalTypeMap.map(x =>{
+      val excludeAsArray: Boolean = arrayAttributes.foldLeft(false){(acc,y) => {
+        if(!acc)
+          isAChildOrEqual(y,x._1)
+        else
+          acc
+      }}
+      val excludeAsTuple: Boolean = tupleAttributes.foldLeft(false){(acc,y) => {
+        if(!acc)
+          isAChildOrEqual(y,x._1)
+        else
+          acc
+      }}
+      if(excludeAsArray)
+        reducedAsArray += 1
+      else if(excludeAsTuple)
+        reducedAsTuple += 1
+      else
+        schema += x._1
+    })
+    println(s"$reducedAsArray attributes were reduced as an array")
+    println(s"$reducedAsTuple attributes were reduced as tuples")
+    return schema
+  }
+
+  def generateFeatureVectors(schema: ListBuffer[String]) = {
+    ???
+  }
+
+
   // computes the type entropy
   def typeEntropy(unpackedTypeList: String): Double = {
     val m: scala.collection.mutable.Map[String,Int] = scala.collection.mutable.Map[String,Int]()
@@ -308,6 +367,28 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
       return entropy
     else
       return -1.0 * entropy
+  }
+
+  def isAChildOrEqual(parentAttribute: String, childAttribute: String): Boolean = {
+    val parentList: List[String] = parentAttribute.split("\\.").toList
+    val childList: List[String] = childAttribute.split("\\.").toList
+    if(parentList.size == 0 || childList.size == 0 || parentAttribute.equals("") || childAttribute.equals(""))
+      throw new Exception(s"Something went wrong with either $parentAttribute or $childAttribute in function isAChild()")
+    if(childList.size < parentList.size)
+      return false
+    else if(childList.size == parentList.size){
+      val left = childAttribute.lastIndexOf('[')
+      val right = childAttribute.lastIndexOf(']')
+      if(left != -1 && right != -1)
+        return parentAttribute.equals(childAttribute.substring(0,left))
+      else
+        return false
+    } else
+      parentList.zipWithIndex.foreach(x => {
+        if(!x._1.equals(childList(x._2)))
+          return false
+      })
+    return true
   }
 
   // retrieves the data that was stashed
@@ -370,33 +451,63 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
 
   // visualization stuff
 
+
   def visualizeList() = {
     val app = new JFXApp {
       stage = new application.JFXApp.PrimaryStage{
         title = datasetName + " array like objects"
         scene = new Scene(400,600){
           val tabPane = new TabPane()
-          val tabList: ListBuffer[Tab] = KeyEntropyList.sortBy(_._1)(Ordering[Double].reverse).map(x => makeTab(x._2))
+          val tabList: ListBuffer[Tab] = schemaCandidates.map(makeTab(_))
           tabPane.tabs = tabList
           root = tabPane
+          thisTabPane = tabPane
         }
       }
     }
+    thisApp = app
     app.main(Array[String]())
   }
 
-  def makeTab(attributeJson: String): Tab = {
+  def makeTab(theGoods:(String,String,Double,Double)): Tab = {
     val tab = new Tab
-    val m: java.util.HashMap[String, Object] = Gson.fromJson(attributeJson, MapType)
-    tab.text = m.get("title").toString()
+    val attributeName = theGoods._1
+    tab.text = attributeName
     val fp = new FlowPane()
-    val button = new Button("Add Object to Schema")
-    val button2 = new Button("Collapse Object as an Array")
-    val items: ListBuffer[String] = SampleMap.get(m.get("title").toString()).get
+    val infoLabel = new Label(s"Attribute Name: $attributeName, Type: ${theGoods._2}\nKey-Space Entropy: ${theGoods._3}, Type Entropy: ${theGoods._4}\n")
+    infoLabel.prefWidth = 7000
+
+    val objectButton = new Button("Keep as Object")
+    objectButton.onAction  = (event: ActionEvent) =>  {
+      objectAttributes += attributeName
+      thisTabPane.tabs.remove(thisTabPane.tabs.map(_.getText).indexOf(attributeName))
+      if(thisTabPane.tabs.size == 0)
+        thisApp.stage.close()
+    }
+    val tupleButton = new Button("Collapse as Tuple")
+    tupleButton.onAction  = (event: ActionEvent) =>  {
+      tupleAttributes += attributeName
+      thisTabPane.tabs.remove(thisTabPane.tabs.map(_.getText).indexOf(attributeName))
+      if(thisTabPane.tabs.size == 0)
+        thisApp.stage.close()
+    }
+    val arrayButton = new Button("Collapse as Array")
+    arrayButton.onAction  = (event: ActionEvent) =>  {
+      arrayAttributes += attributeName
+      thisTabPane.tabs.remove(thisTabPane.tabs.map(_.getText).indexOf(attributeName))
+      if(thisTabPane.tabs.size == 0)
+        thisApp.stage.close()
+    }
+
+    val items: ListBuffer[String] = SampleMap.get(attributeName).get
     val v = new ListView(items)
-    v.prefHeight = 500
-    v.prefWidth = 7000
-    fp.getChildren.addAll(button,button2,v)
+    val scroll = new ScrollPane()
+    scroll.content = v
+    //v.prefHeight = 500
+    v.prefWidth = 1000
+    //scroll.prefHeight = 500
+    scroll.prefWidth = 7000
+    fp.getChildren.addAll(infoLabel,objectButton,tupleButton,arrayButton,scroll)
     tab.setContent(fp)
     return tab
   }
