@@ -16,18 +16,54 @@ object BackupUtils {
   var sback:SparkBackend = null;
   def main(args: Array[String]) {
     val bakupParams = classOf[BackupConfig].getDeclaredFields.map("--"+_.getName).toSet
-    val mimirParams = classOf[MimirConfig].getDeclaredFields.map("--"+_.getName).toSet
+    val mimirParams = classOf[MimirConfig].getDeclaredFields.map("--"+_.getName).toSet 
     
-    val config = new BackupConfig(args.filterNot((mimirParams&~bakupParams).contains(_)))
+    var addNext = false
+    val backupArgs = args.foldLeft(Array[String]())((init, curr) => {
+      if(addNext) {
+        addNext = false
+        init :+ curr
+      }
+      else if(curr.equals("-X") || init.mkString(" ").matches(".*-X[a-zA-Z0-9 ]*$")){
+        init :+ curr
+      }
+      else if(!bakupParams.contains(curr)){
+        init
+      }
+      else {
+        if(classOf[BackupConfig].getDeclaredField(curr.replaceAll("^-+", "")).getGenericType.getTypeName.equals("org.rogach.scallop.ScallopOption<java.lang.String>"))
+          addNext = true
+        init :+ curr
+      }
+    })
+    addNext = false
+    val mimirArgs = args.foldLeft(Array[String]())((init, curr) => {
+      if(addNext) {
+        addNext = false
+        init :+ curr
+      }
+      else if(curr.equals("-X") || init.mkString(" ").matches(".*-X[a-zA-Z0-9 ]*$")){
+        init :+ curr
+      }
+      else if(!mimirParams.contains(curr)){
+        init 
+      }
+      else {
+        if(classOf[MimirConfig].getDeclaredField(curr.replaceAll("^-+", "")).getGenericType.getTypeName.equals("org.rogach.scallop.ScallopOption<java.lang.String>"))
+          addNext = true
+        init :+ curr
+      }
+    })
+    
+    val config = new BackupConfig(backupArgs)
     if(config.backup() && config.restore()) throw new Exception("CANNOT backup and restore at once")
-    Mimir.conf = new MimirConfig(args.filterNot((bakupParams&~mimirParams).contains(_)));
+    Mimir.conf = new MimirConfig(mimirArgs);
 
     ExperimentalOptions.enable(Mimir.conf.experimental())
     val database = Mimir.conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
     sback = new SparkBackend(database, true)
     sback.open()
    
-    println("backing up data....")
     println(config.summary)
     println(Mimir.conf.summary)
     if(config.backup())
