@@ -3,22 +3,33 @@ package mimir
 import java.io.File
 
 import mimir.util.NaiveTypeCount2
+import mimir.util.YelpGT
 
 object TypeMain {
 
   // name -> fileName, naive
   val dataList = Map[String,(String,Boolean)](("twitter"->("test/data/dump-30.txt",true)),("yelp"->("test/data/yelp_dataset",true)),("nasa"->("test/data/nasa.json",false)),
-    ("phonelab"->("test/data/carlDataSample.out",false)),("enron"->("test/data/enron.json",true)),("medicine"->("test/data/medicine.json",true)),("meteorite"->("test/data/meteorite.json",false)),("test"->("test/data/testTypes.json",true)))
+    ("phonelab"->("test/data/carlDataSample.out",false)),("enron"->("test/data/enron.json",true)),("medicine"->("test/data/medicine.json",true)),("meteorite"->("test/data/meteorite.json",false)),("test"->("test/data/testTypes.json",true))
+  ,("citi"->("cleanJsonOutput/citiStations.json",true)))
   def main(args: Array[String]) = {
 
-    val dataset: String = "yelp"
+    val dataset: String = "citi"
     val rowLimit = 0 // 0 means all rows
     val sampleData = true
     val stash = false
-    val unstash = true
+    val unstash = !true
     val visualize = true
+    val hasSchema = false
 
-    val loadJson = new NaiveTypeCount2(datasetName=dataset, inputFile=new File(dataList.get(dataset).get._1), rowLimit=rowLimit, naive=dataList.get(dataset).get._2, Sample=sampleData, Stash=stash, Unstash=unstash, Visualize = visualize)
+    val loadJson = new NaiveTypeCount2(datasetName=dataset, inputFile=new File(dataList.get(dataset).get._1), rowLimit=rowLimit, naive=dataList.get(dataset).get._2, Sample=sampleData, Stash=stash, Unstash=unstash, Visualize = visualize, hasSchema = hasSchema)
+
+    //val gt = new YelpGT(new File(dataList.get("yelp").get._1))
+    //gt.run()
+
+    //val fjf = new mimir.util.FormatJsonFile(new File("rawJsonInput/stations.json"),"citiStations.json")
+    //fjf.cleanCitiStations()
+
+
 
     // what is the goal, what are the constraints, what makes a good approximation, linear optimizer?
     // bazeezee paper

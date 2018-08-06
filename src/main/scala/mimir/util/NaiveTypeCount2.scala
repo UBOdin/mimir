@@ -13,18 +13,21 @@ import scalafx.scene.Scene
 import scalafx.scene.layout.{FlowPane, Priority}
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 
 
-class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, Verbose: Boolean = false, IncludeNulls: Boolean = false, naive: Boolean = false, Sample: Boolean = false, SampleLimit: Int = 10, Stash: Boolean = false, Unstash: Boolean = true, Visualize: Boolean = true){
+class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, Verbose: Boolean = false, IncludeNulls: Boolean = false, naive: Boolean = false, Sample: Boolean = false, SampleLimit: Int = 10, Stash: Boolean = false, Unstash: Boolean = true, Visualize: Boolean = true, hasSchema: Boolean = false){
 
   var thisTabPane: TabPane = null
   var thisApp: application.JFXApp = null
+  var schemaCandidates: ListBuffer[(String,String,Double,Double)] = ListBuffer[(String,String,Double,Double)]()
   var excludeAttributes: ListBuffer[String] = ListBuffer[String]()
   val objectAttributes: ListBuffer[String] = ListBuffer[String]()
   val tupleAttributes: ListBuffer[String] = ListBuffer[String]()
   val arrayAttributes: ListBuffer[String] = ListBuffer[String]()
+
 
   val StringClass = classOf[String]
   val DoubleClass = classOf[java.lang.Double]
@@ -51,29 +54,43 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
   val KeyEntropyFile = new BufferedWriter(new FileWriter("keyEntropy.json"))
   val KeyEntropyList = new ListBuffer[(Double,String)]()
 
-  if(Unstash)
-    unstash()
-  else
-    createSchema()
-  if(Stash)
-    stash()
-  val schemaCandidates = KeyEntropyList.sortBy(_._1)(Ordering[Double].reverse).map(x => {
-    val m: java.util.HashMap[String, Object] = Gson.fromJson(x._2, MapType)
-    Tuple4(m.get("title").toString(),m.get("type").toString(),m.get("keySpaceEntropy").toString.toDouble,m.get("typeEntropy").toString.toDouble)
-  })
-  if(Visualize)
-    visualizeList()
-  else {
-    schemaCandidates.foreach((theGoods) => {
-      if (theGoods._2.equals("Array"))
-        arrayAttributes += theGoods._1
-      else
-        tupleAttributes += theGoods._1
+
+  var schema: mutable.HashSet[(String,Int)] = mutable.HashSet[(String,Int)]()
+  // outer is row inner is feature vector
+  val fvMap: scala.collection.mutable.HashMap[String,Int] = scala.collection.mutable.HashMap[String,Int]()
+
+  if(!hasSchema) {
+    if (Unstash)
+      unstash()
+    else
+      createSchema()
+    if (Stash)
+      stash()
+    schemaCandidates = KeyEntropyList.sortBy(_._1)(Ordering[Double].reverse).map(x => {
+      val m: java.util.HashMap[String, Object] = Gson.fromJson(x._2, MapType)
+      Tuple4(m.get("title").toString(), m.get("type").toString(), m.get("keySpaceEntropy").toString.toDouble, m.get("typeEntropy").toString.toDouble)
     })
+    if (Visualize)
+      visualizeList()
+    else {
+      schemaCandidates.foreach((theGoods) => {
+        if (theGoods._2.equals("Array"))
+          arrayAttributes += theGoods._1
+        else
+          tupleAttributes += theGoods._1
+      })
+    }
+    excludeAttributes = arrayAttributes ++ tupleAttributes
+    schema = (mutable.HashSet[String]() ++ generateSchema()).zipWithIndex
+    val schemaWriter = new BufferedWriter(new FileWriter(s"cache/$datasetName.schema"))
+    schemaWriter.write(schema.mkString(","))
+    schemaWriter.close()
+  } else {
+    val schemaReader: BufferedReader = new BufferedReader(new FileReader(s"cache/${datasetName}.schema"))
+    schema = (mutable.HashSet[String]() ++ schemaReader.readLine().split(",").to[ListBuffer]).zipWithIndex
+    schemaReader.close()
   }
-  excludeAttributes = arrayAttributes ++ tupleAttributes
-  val schema: ListBuffer[String] = generateSchema()
-  println(s"schema: ${schema.mkString(",")}")
+  generateFeatureVectors()
 
 
   private def createSchema() = {
@@ -93,6 +110,7 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
         println(s"$rowCount rows added, $nonJsonRowCount rows rejected so far")
       line = loadJson.getNext()
     }
+    loadJson.reset()
     println(s"$rowCount rows added, $nonJsonRowCount rows rejected")
     buildPlan()
   }
@@ -322,8 +340,88 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
     return schema
   }
 
-  def generateFeatureVectors(schema: ListBuffer[String]) = {
-    ???
+  def generateFeatureVectors() = {
+    var line: String = loadJson.getNext()
+    var rowCount: Int = 0
+    var nonJsonRowCount: Int = 0
+
+    while((line != null) && ((rowCount < rowLimit) || (rowLimit < 1))){
+      try {
+        val m: java.util.HashMap[String, Object] = Gson.fromJson(line, MapType)
+        val fv = getFeatureVector("",m,ArrayBuffer.fill(schema.size)(0.0)).mkString(",")
+        fvMap.get(fv) match {
+          case Some(c) => fvMap.update(fv,c+1)
+          case None => fvMap.update(fv,1)
+        }
+        if(rowCount % 100000 == 0)
+          println(s"Row Count: $rowCount")
+        rowCount += 1
+      } catch {
+        case e: com.google.gson.JsonSyntaxException =>
+          nonJsonRowCount += 1
+      }
+      line = loadJson.getNext()
+    }
+    loadJson.close()
+    val fvWriter = new BufferedWriter(new FileWriter(s"cache/fvoutput.txt"))
+    val multWriter = new BufferedWriter(new FileWriter(s"cache/multoutput.txt"))
+    val schemaWriter = new BufferedWriter(new FileWriter(s"cache/schema.txt"))
+    fvMap.foreach(x => {
+      val r = x._1.split(",").zipWithIndex.map(y => s"${y._2}:${y._1}")
+      fvWriter.write(s"${r.size} ${r.mkString(" ")}\n")
+      multWriter.write(s"${x._2}\n")
+    })
+    schemaWriter.write(schema.toList.sortBy(_._2).map(_._1).mkString(","))
+    fvWriter.close()
+    multWriter.close()
+    schemaWriter.close()
+  }
+
+  def getFeatureVector(prefix: String, m: java.util.HashMap[String,Object], fv:ArrayBuffer[Double]): ArrayBuffer[Double] = {
+    m.asScala.foreach(attribute => {
+      val attributeName = prefix + attribute._1.replace(",",";").replace(":",";")
+      val attributeValue = attribute._2
+      var attributeClass: Class[_ <: Object] = null
+      try {
+        attributeClass = attribute._2.getClass
+      } catch {
+        case e: java.lang.NullPointerException => // do nothing
+      }
+      attributeClass match {
+        case(StringClass) | (DoubleClass) | (BooleanClass) =>
+          schema.find(_._1.equals(attributeName)) match {
+            case Some(x) =>
+              fv(x._2) = 1.0
+            case None =>
+          }
+
+        case(ArrayClass) =>
+          // need to inspect children for objects
+          schema.find(_._1.equals(attributeName)) match {
+            case Some(x) =>
+              fv(x._2) = 1.0
+            case None =>
+          }
+
+        case(ObjectClass) =>
+          schema.find(_._1.equals(attributeName)) match {
+            case Some(x) =>
+              fv(x._2) = 1.0
+              getFeatureVector(attributeName+".",Gson.fromJson(Gson.toJson(attributeValue), MapType),fv)
+            case None =>
+          }
+
+        case(null) =>
+          schema.find(_._1.equals(attributeName)) match {
+            case Some(x) =>
+              fv(x._2) = 1.0
+            case None =>
+          }
+        case _ =>
+          throw new Exception("Unknown Type in FV Creation.")
+      }
+    })
+    return fv
   }
 
 
@@ -448,6 +546,7 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
     entropyWriter.flush()
     entropyWriter.close()
   }
+
 
   // visualization stuff
 
