@@ -25,6 +25,7 @@ import mimir.serialization.Json
 import mimir.util.LoggerUtils
 import mimir.ml.spark.SparkML
 import mimir.util.JSONBuilder
+import java.util.UUID
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -1024,7 +1025,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
    val anonFuncRet = anonFunc  
    val tEnd = System.nanoTime()
    val fw = new FileWriter("/usr/local/source/timing.log", true) ; 
-   fw.write(s"mimir, ${name}, duration, ${(tEnd-tStart)/1000000}\n") ; 
+   fw.write(s"mimir, ${name}, ${UUID.randomUUID().toString}, duration, ${(tEnd-tStart)/1000000}\n") ; 
    fw.close()
    (anonFuncRet, tEnd-tStart)   
  }
