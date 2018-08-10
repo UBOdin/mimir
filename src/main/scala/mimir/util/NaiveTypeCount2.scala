@@ -18,16 +18,7 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 
 
-class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, Verbose: Boolean = false, IncludeNulls: Boolean = false, naive: Boolean = false, Sample: Boolean = false, SampleLimit: Int = 10, Stash: Boolean = false, Unstash: Boolean = true, Visualize: Boolean = true, hasSchema: Boolean = false){
-
-  var thisTabPane: TabPane = null
-  var thisApp: application.JFXApp = null
-  var schemaCandidates: ListBuffer[(String,String,Double,Double)] = ListBuffer[(String,String,Double,Double)]()
-  var excludeAttributes: ListBuffer[String] = ListBuffer[String]()
-  val objectAttributes: ListBuffer[String] = ListBuffer[String]()
-  val tupleAttributes: ListBuffer[String] = ListBuffer[String]()
-  val arrayAttributes: ListBuffer[String] = ListBuffer[String]()
-
+class NaiveTypeCount2 {
 
   val StringClass = classOf[String]
   val DoubleClass = classOf[java.lang.Double]
@@ -37,93 +28,105 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
   val Gson = new Gson()
   val MapType = new java.util.HashMap[String,Object]().getClass
 
-  val GlobalTypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]]()
-  val SampleMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]]() // a list of samples for each attribute
-  val CountMap: scala.collection.mutable.HashMap[String,Int] = scala.collection.mutable.HashMap[String,Int]() // map that contains the number of times an attribute occurred
-  val rejectedRows: ListBuffer[String] = scala.collection.mutable.ListBuffer[String]()
-
-  var loadJson: LoadJson2ElectricBoogaloo = new LoadJson2ElectricBoogaloo(inputFile, naive=naive)
-
-  val ArrayToObject: ListBuffer[String] = ListBuffer[String]()
-  val ObjectToArray: ListBuffer[String] = ListBuffer[String]()
-  val ArrayAndObject: ListBuffer[String] = ListBuffer[String]() // contains both array and object types
-  val ConfirmedAsArray: ListBuffer[String] = ListBuffer[String]() // confirmed more likely to be an array
-  val ConfirmedAsObject: ListBuffer[String] = ListBuffer[String]() // confirmed more likely to be an object
-  val TupleType: ListBuffer[String] = ListBuffer[String]() // could be better represented as a tuple
-  val ArrayTupleType: ListBuffer[String] = ListBuffer[String]() // could be better represented as a tuple
-  val KeyEntropyFile = new BufferedWriter(new FileWriter("keyEntropy.json"))
-  val KeyEntropyList = new ListBuffer[(Double,String)]()
-
-
-  var schema: mutable.HashSet[(String,Int)] = mutable.HashSet[(String,Int)]()
-  // outer is row inner is feature vector
-  val fvMap: scala.collection.mutable.HashMap[String,Int] = scala.collection.mutable.HashMap[String,Int]()
-
-  if(!hasSchema) {
-    if (Unstash)
-      unstash()
-    else
-      createSchema()
-    if (Stash)
-      stash()
-    schemaCandidates = KeyEntropyList.sortBy(_._1)(Ordering[Double].reverse).map(x => {
-      val m: java.util.HashMap[String, Object] = Gson.fromJson(x._2, MapType)
-      Tuple4(m.get("title").toString(), m.get("type").toString(), m.get("keySpaceEntropy").toString.toDouble, m.get("typeEntropy").toString.toDouble)
-    })
-    if (Visualize)
-      visualizeList()
-    else {
-      schemaCandidates.foreach((theGoods) => {
-        if (theGoods._2.equals("Array"))
-          arrayAttributes += theGoods._1
-        else
-          tupleAttributes += theGoods._1
-      })
+  /**
+    * Handles building and running the system from building all the maps to computing entropy and visualizations
+    *
+    * @param datasetName Dataset name, used for cacheing and uncacheing as well as in visualizations
+    * @param inputFile the inputFile that contains the json records
+    * @param RowLimit read only this many rows, 0 for the entire file
+    * @param Naive
+    * @param Verbose
+    * @param Sample
+    * @param SampleLimit
+    * @param Stash
+    * @param Unstash
+    * @param Visualize
+    * @param hasSchema
+    */
+  def run(datasetName: String, inputFile: File, RowLimit: Int = 0, Naive: Boolean = false, Verbose: Boolean = false, Sample: Boolean = false, SampleLimit: Int = 10, Stash: Boolean = false, Unstash: Boolean = true, Visualize: Boolean = true, hasSchema: Boolean = false): Unit = {
+    var TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]]()
+    var SampleMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]]() // a list of samples for each attribute
+    var KeyEntropyList: ListBuffer[(Double,String)] = ListBuffer[(Double,String)]()
+    if(Unstash) {
+      val x = unstash(datasetName)
+      TypeMap = x._1
+      SampleMap = x._2
+      KeyEntropyList = x._3
+    } else{
+      val x = buildMaps(inputFile, RowLimit, Naive, Sample, SampleLimit, Verbose) // builds typeMap, sampleMap
+      TypeMap = x._1
+      SampleMap = x._2
+      KeyEntropyList = calculateEntropy(TypeMap)
     }
-    excludeAttributes = arrayAttributes ++ tupleAttributes
-    schema = (mutable.HashSet[String]() ++ generateSchema()).zipWithIndex
-    val schemaWriter = new BufferedWriter(new FileWriter(s"cache/$datasetName.schema"))
-    schemaWriter.write(schema.mkString(","))
-    schemaWriter.close()
-  } else {
-    val schemaReader: BufferedReader = new BufferedReader(new FileReader(s"cache/${datasetName}.schema"))
-    schema = (mutable.HashSet[String]() ++ schemaReader.readLine().split(",").to[ListBuffer]).zipWithIndex
-    schemaReader.close()
+    if(Stash)
+      stash(datasetName,TypeMap,SampleMap,KeyEntropyList,Sample)
+    val (arrayList,tupleList, dictList) = detectComplexTypes(KeyEntropyList,1.0, 1.0)
+    println("Done")
   }
-  generateFeatureVectors()
 
 
-  private def createSchema() = {
+    /** Builds a TypeMap and SampleMap for the input file
+      * - TypeMap is a map of the attribute names pointing to a map of its unique schemas and respective counts
+      * - SampleMap is a list of data samples for each attribute, used for inspection and visualizations to gain insight
+      *
+      * @param inputFile the inputFile that contains the json records
+      * @param rowLimit read only this many rows, 0 for the entire file
+      * @param naive import style, if true then readline if false then take the substring that is the fist { and last } for each row
+      * @param sample if true then create and fill SampleMap
+      * @param sampleLimit the maximum number of samples for each attribute in SampleMap
+      * @param verbose print various debugging information
+      * @return the result of squaring d
+    */
+  private def buildMaps(inputFile: File, rowLimit: Int = 0, naive: Boolean, sample: Boolean, sampleLimit: Int, verbose: Boolean): (scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]], scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]]) = {
+    val loadJson: LoadJson2ElectricBoogaloo = new LoadJson2ElectricBoogaloo(inputFile, naive=naive)
+    val TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]]()
+    val SampleMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]]() // a list of samples for each attribute
+    val rejectedRows: ListBuffer[String] = scala.collection.mutable.ListBuffer[String]()
+
     var line: String = loadJson.getNext()
     var rowCount: Int = 0
     var nonJsonRowCount: Int = 0
 
     while((line != null) && ((rowCount < rowLimit) || (rowLimit < 1))){
-      val added = add(line)
+      val added = add(line, TypeMap, SampleMap, sample, sampleLimit, verbose)
       if(added)
         rowCount += 1
       else if(!added && !line.equals("")){
         nonJsonRowCount += 1
         rejectedRows += line
       }
-      if((rowCount%100000 == 0) && added && Verbose)
-        println(s"$rowCount rows added, $nonJsonRowCount rows rejected so far")
+      if((rowCount % 100000 == 0) && added && verbose)
+        System.err.println(s"$rowCount rows added, $nonJsonRowCount rows rejected so far")
       line = loadJson.getNext()
     }
-    loadJson.reset()
-    println(s"$rowCount rows added, $nonJsonRowCount rows rejected")
-    buildPlan()
+    loadJson.close()
+    if(verbose)
+      System.err.println(s"$rowCount rows added, $nonJsonRowCount rows rejected")
+
+    return Tuple2(TypeMap,SampleMap)
   }
 
-  // AttributeName -> (Type, Count)
-  def add(row: String): Boolean = {
+  private def combineTypeMap(parentMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]], childMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]]): Unit = {
+    childMap.foreach((x) => {
+      x._2.foreach(y => {
+        updateMap(x._1,y._1,parentMap)
+      })
+    })
+  }
+
+  /** adds the rows type
+    *
+    * @return returns true if the json row was added, false if a problem occurred
+  */
+  private def add(row: String, typeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]], sampleMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]], sample: Boolean, sampleLimit: Int, verbose: Boolean): Boolean = {
     try {
-      if(row == null)
-        return false
       if(row.equals(""))
         return false
       val m: java.util.HashMap[String, Object] = Gson.fromJson(row, MapType)
-      mapInsertType("", m)
+      val rowTypeMap = scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]]()
+      val rowSampleMap = scala.collection.mutable.HashMap[String,String]()
+      mapGetType("", m, rowTypeMap, rowSampleMap)
+      combineTypeMap(typeMap,rowTypeMap)
     } catch {
       case e: com.google.gson.JsonSyntaxException =>
         return false
@@ -131,41 +134,23 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
     return true
   }
 
-  def mapInsertType(prefix: String, m: java.util.HashMap[String,Object]): String = {
+  /**
+    * Inserts every attributes type in TypeMap and its attribute sample into SampleMap
+    * Will return simple type names but will update objects and arrays in the map to be one layer deeper such as {a:String, b:Int}
+    *
+    * @param prefix prefix string to be prepended to the
+    * @param jsonMap input map that was created from Json
+    * @param TypeMap passes map for recurrsion as a structure
+    * @param SampleMap passes map for recurrsion as a structure
+    * @return returns a string that is the type for objects
+    */
+  private def mapGetType(prefix: String, jsonMap: java.util.HashMap[String,Object], TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]], SampleMap: scala.collection.mutable.HashMap[String,String]): String = {
     var returnType: String = ""
-    m.asScala.foreach(attribute => {
+    jsonMap.asScala.foreach(attribute => {
       val attributeName = prefix + attribute._1.replace(",",";").replace(":",";")
       val attributeValue = attribute._2
-      if(Sample){
-        //if(attributeName.equals("attributes.HairSpecializesIn"))
-          //if(attributeValue != null)
-            //println(attributeValue.toString)
-        CountMap.get(attributeName) match {
-          case Some(count) =>
-            CountMap.update(attributeName, count + 1)
-            if(attributeValue != null) {
-              if (count < SampleLimit) {
-                val tm = SampleMap.get(attributeName).get
-                tm += attributeValue.toString
-                SampleMap.update(attributeName, tm)
-              }
-            } else {
-              if (count < SampleLimit) {
-                val tm = SampleMap.get(attributeName).get
-                tm += "null"
-                SampleMap.update(attributeName, tm)
-              }
-            }
+      //SampleMap.update(attributeName,attributeValue.toString)
 
-          case None =>
-            CountMap.update(attributeName, 1) // count nulls
-            if(attributeValue != null) {
-              SampleMap.update(attributeName, scala.collection.mutable.ListBuffer[String](attributeValue.toString))
-            } else {
-              SampleMap.update(attributeName, scala.collection.mutable.ListBuffer[String]("null"))
-            }
-        }
-      }
       var attributeClass: Class[_ <: Object] = null
       try {
         attributeClass = attribute._2.getClass
@@ -174,15 +159,15 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
       }
       attributeClass match {
         case(StringClass) =>
-          update(attributeName, "String")
+          updateMap(attributeName, "String", TypeMap)
           returnType += s"$attributeName:String,"
 
         case(DoubleClass) =>
-          update(attributeName,"Double")
+          updateMap(attributeName,"Double", TypeMap)
           returnType += s"$attributeName:Double,"
 
         case(BooleanClass) =>
-          update(attributeName, "Boolean")
+          updateMap(attributeName, "Boolean", TypeMap)
           returnType += s"$attributeName:Boolean,"
 
         case(ArrayClass) =>
@@ -191,25 +176,23 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
           attributeList.zipWithIndex.foreach(x => {
             val arrayMap: java.util.HashMap[String, java.lang.Object] = new java.util.HashMap[String, java.lang.Object]()
             arrayMap.put(s"[${x._2}]", x._1)
-            arrayType += mapInsertType(attributeName, arrayMap) + ","
+            arrayType += mapGetType(attributeName, arrayMap, TypeMap, SampleMap) + ","
           })
           if(!arrayType.equals(""))
             arrayType = arrayType.substring(0, arrayType.size - 1)
-          update(attributeName, s"[$arrayType]")
+          updateMap(attributeName, s"[$arrayType]", TypeMap)
           returnType += s"$attributeName:Array,"
 
         case(ObjectClass) =>
-          val t = mapInsertType(attributeName + ".", Gson.fromJson(Gson.toJson(attributeValue), MapType))
-          update(attributeName, s"{${toObjectType(t)}}") // this is done because order shouldn't matter
+          val t = mapGetType(attributeName + ".", Gson.fromJson(Gson.toJson(attributeValue), MapType), TypeMap, SampleMap)
+          updateMap(attributeName, s"{${sortObject(t)}}", TypeMap) // this is done because order shouldn't matter
           returnType += s"$attributeName:Object,"
 
         case(null) =>
-          if(IncludeNulls) {
-            update(attributeName, "Null")
+          updateMap(attributeName, "Null", TypeMap)
             returnType += s"$attributeName:Null,"
-          }
         case _ =>
-          update(attributeName,"UnknownType")
+          updateMap(attributeName,"UnknownType", TypeMap)
           returnType += s"$attributeName:UnknownType,"
       }
     })
@@ -219,23 +202,34 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
       return returnType.substring(0,returnType.size-1) // remove the last comma for split
   }
 
-  def toObjectType(typeString:String): String= {
+  /**
+    * @param typeString a comma separated list that's a string, this will sort on attribute name for easier future comparison
+    * @return returns a string that is the input string but sorted
+    */
+  private def sortObject(typeString:String): String= {
     val typeArray = typeString.split(",")
     val sorted = typeArray.sortBy(f => f.split(":")(0))
     return sorted.mkString(",")
   }
 
-  def update(attributeName: String, attributeType: String) = {
-    GlobalTypeMap.get(attributeName) match {
+  /**
+    * updates map so that the outer keys inner keys count is incremented by 1 if it occurs or is added
+    *
+    * @param outerKey attribute name
+    * @param innerKey type name
+    * @param map increments the inner key count or initializes it to 1 for the outer key
+    */
+  def updateMap(outerKey: String, innerKey: String, map: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]]): Unit = {
+    map.get(outerKey) match {
       case Some(typeMap) =>
-        typeMap.get(attributeType) match {
+        typeMap.get(innerKey) match {
           case Some(count) =>
-            typeMap.update(attributeType, count + 1)
+            typeMap.update(innerKey, count + 1)
           case None =>
-            typeMap.update(attributeType,1)
+            typeMap.update(innerKey,1)
         }
-        GlobalTypeMap.update(attributeName,typeMap)
-      case None => GlobalTypeMap.update(attributeName, scala.collection.mutable.HashMap(attributeType -> 1))
+        map.update(outerKey,typeMap)
+      case None => map.update(outerKey, scala.collection.mutable.HashMap(innerKey -> 1))
     }
   }
 
@@ -246,10 +240,17 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
   // - need to find all attributes of the array or object at the same path level and determine if all their counts are equal
 
   // with this then generate a schema and loop back over the dataset with the schema and create the feature vectors
-  def buildPlan() = {
+  /**
+    * calculates the key-space and type entropy for each attribute
+    *
+    * @param TypeMap
+    * @return returns a list of tuples, (score, json) the json value is a represnetation of the attribute and it's scores and values
+    */
+  def calculateEntropy(TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]]): scala.collection.mutable.ListBuffer[(Double,String)] = {
 
+    val KeyEntropyList = new ListBuffer[(Double,String)]()
     // iterate through the map and find all { for objects and [ for all
-    GlobalTypeMap.foreach((everyAttribute) => {
+    TypeMap.foreach((everyAttribute) => {
       val attributeName = everyAttribute._1
       val keySpace = everyAttribute._2
       val objectNameHolder = scala.collection.mutable.ListBuffer[String]()
@@ -284,7 +285,7 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
           val typeName = y._1
           val typeCount = y._2
           var localTypeEntropy: Double = 0.0
-          if(!typeName.equals("[]") && !typeName.equals("{}")){
+          if(!typeName.equals("[]") && !typeName.equals("{}") && !typeName.equals("Null")){
             localTypeEntropy = typeEntropy(typeName.substring(1,typeName.size-1))
           } // else empty array/object so 0.0 for entropy
           acc + localTypeEntropy
@@ -297,25 +298,109 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
         // is a primitive Type i.e String, numeric, boolean
       }
     })
-    //KeyEntropyList.sortBy(_._1)(Ordering[Double].reverse).foreach(t=>KeyEntropyFile.write(t._2+'\n'))
-    //KeyEntropyFile.close()
-    if(Verbose) {
-      println("Confirmed Arrays: " + ConfirmedAsArray.mkString(","))
-      println("Confirmed Objects: " + ConfirmedAsObject.mkString(","))
-      println("Arrays to Objects: " + ArrayToObject.mkString(","))
-      println("Objects to Arrays: " + ObjectToArray.mkString(",")) // retweeted_status.entities, entities, quoted_status.entities, retweeted_status.quoted_status.entities
-      println("Tuples: " + TupleType.mkString(","))
-      println("Array Tuples: " + ArrayTupleType.mkString(","))
-      println("Had both Arrays and Objects: " + ArrayAndObject.mkString(","))
-      println("Done")
-    }
+
+    return KeyEntropyList.sortBy(_._1)(Ordering[Double].reverse)//.foreach(t=>KeyEntropyFile.write(t._2+'\n'))
   }
 
-  def generateSchema(): ListBuffer[String] = {
+
+  /**
+    * computes type entropy for an object/ array
+    *
+    * @param unpackedTypeList
+    * @return
+    */
+  def typeEntropy(unpackedTypeList: String): Double = {
+    val m: scala.collection.mutable.Map[String,Int] = scala.collection.mutable.Map[String,Int]()
+    unpackedTypeList.split(",").map(_.split(":")(1)).foreach(x => {
+      m.get(x) match {
+        case Some(c) => m.update(x,c+1)
+        case None => m.update(x,1)
+      }
+    })
+    val total: Int = m.foldLeft(0){(count,x) => count + x._2}
+    val entropy: Double = m.foldLeft(0.0){(ent,x) => {
+      val p: Double = x._2.toDouble/total
+      ent + (p*scala.math.log(p))
+    }}
+    if(entropy == 0.0)
+      return entropy
+    else
+      return -1.0 * entropy
+  }
+
+  /**
+    * computes the keyspace entropy for an object/ array
+    *
+    * @param m
+    * @return
+    */
+  def keySpaceEntropy(m:scala.collection.mutable.Map[String,Int]): Double = {
+    val total: Int = m.foldLeft(0){(count,x) => {
+      if(!x._1.equals("{}") && !x._1.equals("[]"))
+        count + x._2
+      else
+        count
+    }}
+    val entropy: Double = m.foldLeft(0.0){(ent,x) => {
+      if(!x._1.equals("{}") && !x._1.equals("[]")) {
+        val p: Double = x._2.toDouble / total
+        ent + (p * scala.math.log(p))
+      }
+      else
+        ent
+    }}
+    if(entropy == 0.0)
+      return entropy
+    else
+      return -1.0 * entropy
+  }
+
+
+  private def detectComplexTypes(KeyEntropyList: ListBuffer[(Double,String)], arrayThreshold: Double, objectThreshold: Double):(ListBuffer[String],ListBuffer[String],ListBuffer[String]) = {
+    val arrayAttributes: ListBuffer[String] = ListBuffer[String]()
+    val tupleAttributes: ListBuffer[String] = ListBuffer[String]()
+    val dictAttributes: ListBuffer[String] = ListBuffer[String]()
+
+    KeyEntropyList.foreach(x => {
+      val score: Double = x._1
+      val json: String = x._2
+      val jsonMap = Gson.fromJson(json,MapType)
+      val attributeName: String = jsonMap.get("title").toString
+      val structureType: String = jsonMap.get("type").toString
+      val keySpaceEntropy: Double = jsonMap.get("keySpaceEntropy").toString.toDouble
+      val typeEntropy: Double = jsonMap.get("typeEntropy").toString.toDouble
+
+      //if(attributeName.equals("entities.hashtags[0]"))
+      //  println(attributeName)
+
+      if(structureType.equals("Array")){
+        if(typeEntropy == 0.0)
+          arrayAttributes += attributeName
+        if(typeEntropy > 0.0) {
+          System.err.println(s"$attributeName is an array with multiple types")
+          System.err.println(jsonMap.get("x"))
+        }
+
+      } else if(structureType.equals("Object")){
+          if(keySpaceEntropy < objectThreshold) // dictionary
+            tupleAttributes += attributeName
+          else // tuple
+            dictAttributes += attributeName
+
+      } else { // unknown
+        System.err.println("Unknown type found in detectComplexTypes")
+      }
+
+    })
+
+    return (arrayAttributes, tupleAttributes, dictAttributes)
+  }
+
+  def generateSchema(TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]], arrayAttributes: ListBuffer[String], tupleAttributes: ListBuffer[String], verbose: Boolean): ListBuffer[String] = {
     val schema: ListBuffer[String] = ListBuffer[String]()
     var reducedAsArray = 0
     var reducedAsTuple = 0
-    GlobalTypeMap.map(x =>{
+    TypeMap.map(x =>{
       val excludeAsArray: Boolean = arrayAttributes.foldLeft(false){(acc,y) => {
         if(!acc)
           isAChildOrEqual(y,x._1)
@@ -335,12 +420,16 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
       else
         schema += x._1
     })
-    println(s"$reducedAsArray attributes were reduced as an array")
-    println(s"$reducedAsTuple attributes were reduced as tuples")
+    if(verbose) {
+      println(s"$reducedAsArray attributes were reduced as an array")
+      println(s"$reducedAsTuple attributes were reduced as tuples")
+    }
     return schema
   }
 
-  def generateFeatureVectors() = {
+
+  def generateFeatureVectors(inputFile: File, naive: Boolean, rowLimit: Int, schema: mutable.HashSet[(String,Int)], fvMap: scala.collection.mutable.HashMap[String,Int]) = {
+    val loadJson: LoadJson2ElectricBoogaloo = new LoadJson2ElectricBoogaloo(inputFile, naive=naive)
     var line: String = loadJson.getNext()
     var rowCount: Int = 0
     var nonJsonRowCount: Int = 0
@@ -348,7 +437,7 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
     while((line != null) && ((rowCount < rowLimit) || (rowLimit < 1))){
       try {
         val m: java.util.HashMap[String, Object] = Gson.fromJson(line, MapType)
-        val fv = getFeatureVector("",m,ArrayBuffer.fill(schema.size)(0.0)).mkString(",")
+        val fv = getFeatureVector("",m,ArrayBuffer.fill(schema.size)(0.0), schema).mkString(",")
         fvMap.get(fv) match {
           case Some(c) => fvMap.update(fv,c+1)
           case None => fvMap.update(fv,1)
@@ -377,7 +466,7 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
     schemaWriter.close()
   }
 
-  def getFeatureVector(prefix: String, m: java.util.HashMap[String,Object], fv:ArrayBuffer[Double]): ArrayBuffer[Double] = {
+  def getFeatureVector(prefix: String, m: java.util.HashMap[String,Object], fv:ArrayBuffer[Double], schema: mutable.HashSet[(String,Int)]): ArrayBuffer[Double] = {
     m.asScala.foreach(attribute => {
       val attributeName = prefix + attribute._1.replace(",",";").replace(":",";")
       val attributeValue = attribute._2
@@ -407,7 +496,7 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
           schema.find(_._1.equals(attributeName)) match {
             case Some(x) =>
               fv(x._2) = 1.0
-              getFeatureVector(attributeName+".",Gson.fromJson(Gson.toJson(attributeValue), MapType),fv)
+              getFeatureVector(attributeName+".",Gson.fromJson(Gson.toJson(attributeValue), MapType),fv, schema)
             case None =>
           }
 
@@ -422,49 +511,6 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
       }
     })
     return fv
-  }
-
-
-  // computes the type entropy
-  def typeEntropy(unpackedTypeList: String): Double = {
-    val m: scala.collection.mutable.Map[String,Int] = scala.collection.mutable.Map[String,Int]()
-    unpackedTypeList.split(",").map(_.split(":")(1)).foreach(x => {
-      m.get(x) match {
-        case Some(c) => m.update(x,c+1)
-        case None => m.update(x,1)
-      }
-    })
-    val total: Int = m.foldLeft(0){(count,x) => count + x._2}
-    val entropy: Double = m.foldLeft(0.0){(ent,x) => {
-      val p: Double = x._2.toDouble/total
-      ent + (p*scala.math.log(p))
-    }}
-    if(entropy == 0.0)
-      return entropy
-    else
-      return -1.0 * entropy
-  }
-
-  // computes the keyspace entropy
-  def keySpaceEntropy(m:scala.collection.mutable.Map[String,Int]): Double = {
-    val total: Int = m.foldLeft(0){(count,x) => {
-      if(!x._1.equals("{}") && !x._1.equals("[]"))
-        count + x._2
-      else
-        count
-    }}
-    val entropy: Double = m.foldLeft(0.0){(ent,x) => {
-      if(!x._1.equals("{}") && !x._1.equals("[]")) {
-        val p: Double = x._2.toDouble / total
-        ent + (p * scala.math.log(p))
-      }
-      else
-        ent
-    }}
-    if(entropy == 0.0)
-      return entropy
-    else
-      return -1.0 * entropy
   }
 
   def isAChildOrEqual(parentAttribute: String, childAttribute: String): Boolean = {
@@ -491,10 +537,14 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
 
   // retrieves the data that was stashed
   // loads KeyEntropyList, GlobalTypeMap, and SampleMap
-  def unstash() = {
-    val sampleInput: BufferedReader = new BufferedReader(new FileReader(s"cache/${datasetName}Sample.json"))
-    val typeInput: BufferedReader = new BufferedReader(new FileReader(s"cache/${datasetName}Types.json"))
-    val entropyInput: BufferedReader = new BufferedReader(new FileReader(s"cache/${datasetName}Entropy.json"))
+  def unstash(datasetName: String): (scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]], scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]], ListBuffer[(Double,String)]) = {
+    val sampleInput: BufferedReader = new BufferedReader(new FileReader(s"cacheOld/${datasetName}Sample.json"))
+    val typeInput: BufferedReader = new BufferedReader(new FileReader(s"cacheOld/${datasetName}Types.json"))
+    val entropyInput: BufferedReader = new BufferedReader(new FileReader(s"cacheOld/${datasetName}Entropy.json"))
+
+    val TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]]()
+    val SampleMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]]() // a list of samples for each attribute
+    val KeyEntropyList: ListBuffer[(Double,String)] = ListBuffer[(Double,String)]()
 
     var sampleLine: String = sampleInput.readLine()
     while(sampleLine != null){
@@ -509,7 +559,7 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
     m.asScala.foreach(x => {
       val localMap = scala.collection.mutable.HashMap[String,Int]()
       x._2.asInstanceOf[com.google.gson.internal.LinkedTreeMap[String,Double]].asScala.foreach((y)=> localMap.update(y._1,y._2.toInt))
-      GlobalTypeMap.update(x._1, localMap)
+      TypeMap.update(x._1, localMap)
     })
     typeInput.close()
 
@@ -520,22 +570,22 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
       entropyLine = entropyInput.readLine()
     }
     entropyInput.close()
-
+    return Tuple3(TypeMap, SampleMap, KeyEntropyList)
   }
 
   // stashes the data structures that are the result of the computation, this is so re-running will be faster for future tests and development
-  def stash() = {
+  def stash(datasetName: String, TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]], SampleMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]], KeyEntropyList: ListBuffer[(Double,String)], sample: Boolean) = {
     val sampleWriter = new BufferedWriter(new FileWriter(s"cache/${datasetName}Sample.json"))
     val typeWriter = new BufferedWriter(new FileWriter(s"cache/${datasetName}Types.json"))
     val entropyWriter = new BufferedWriter(new FileWriter(s"cache/${datasetName}Entropy.json"))
 
-    if(Sample){
+    if(sample){
       SampleMap.foreach(x => sampleWriter.write(s"""{"title":"${x._1}","payload":[${x._2.map(Gson.toJson(_)).mkString(",")}]}\n"""))
       sampleWriter.flush()
       sampleWriter.close()
     }
 
-    typeWriter.write("{"+GlobalTypeMap.map(x => {
+    typeWriter.write("{"+TypeMap.map(x => {
       val localJsonTypeMap = "{"+x._2.map(y => s""""${y._1}":${y._2}""").mkString(",")+"}"
       s""""${x._1}":${localJsonTypeMap}"""
     }).mkString(",")+"}")
@@ -545,70 +595,6 @@ class NaiveTypeCount2(datasetName: String, inputFile: File, rowLimit: Int = 0, V
     KeyEntropyList.foreach(x => entropyWriter.write(s"""${x._1},${x._2}\n"""))
     entropyWriter.flush()
     entropyWriter.close()
-  }
-
-
-  // visualization stuff
-
-
-  def visualizeList() = {
-    val app = new JFXApp {
-      stage = new application.JFXApp.PrimaryStage{
-        title = datasetName + " array like objects"
-        scene = new Scene(400,600){
-          val tabPane = new TabPane()
-          val tabList: ListBuffer[Tab] = schemaCandidates.map(makeTab(_))
-          tabPane.tabs = tabList
-          root = tabPane
-          thisTabPane = tabPane
-        }
-      }
-    }
-    thisApp = app
-    app.main(Array[String]())
-  }
-
-  def makeTab(theGoods:(String,String,Double,Double)): Tab = {
-    val tab = new Tab
-    val attributeName = theGoods._1
-    tab.text = attributeName
-    val fp = new FlowPane()
-    val infoLabel = new Label(s"Attribute Name: $attributeName, Type: ${theGoods._2}\nKey-Space Entropy: ${theGoods._3}, Type Entropy: ${theGoods._4}\n")
-    infoLabel.prefWidth = 7000
-
-    val objectButton = new Button("Keep as Object")
-    objectButton.onAction  = (event: ActionEvent) =>  {
-      objectAttributes += attributeName
-      thisTabPane.tabs.remove(thisTabPane.tabs.map(_.getText).indexOf(attributeName))
-      if(thisTabPane.tabs.size == 0)
-        thisApp.stage.close()
-    }
-    val tupleButton = new Button("Collapse as Tuple")
-    tupleButton.onAction  = (event: ActionEvent) =>  {
-      tupleAttributes += attributeName
-      thisTabPane.tabs.remove(thisTabPane.tabs.map(_.getText).indexOf(attributeName))
-      if(thisTabPane.tabs.size == 0)
-        thisApp.stage.close()
-    }
-    val arrayButton = new Button("Collapse as Array")
-    arrayButton.onAction  = (event: ActionEvent) =>  {
-      arrayAttributes += attributeName
-      thisTabPane.tabs.remove(thisTabPane.tabs.map(_.getText).indexOf(attributeName))
-      if(thisTabPane.tabs.size == 0)
-        thisApp.stage.close()
-    }
-
-    val items: ListBuffer[String] = SampleMap.get(attributeName).get
-    val v = new ListView(items)
-    val scroll = new ScrollPane()
-    scroll.content = v
-    //v.prefHeight = 500
-    v.prefWidth = 1000
-    //scroll.prefHeight = 500
-    scroll.prefWidth = 7000
-    fp.getChildren.addAll(infoLabel,objectButton,tupleButton,arrayButton,scroll)
-    tab.setContent(fp)
-    return tab
   }
 
 }

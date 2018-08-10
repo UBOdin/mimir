@@ -13,15 +13,19 @@ object TypeMain {
   ,("citi"->("cleanJsonOutput/citiStations.json",true)))
   def main(args: Array[String]) = {
 
-    val dataset: String = "citi"
+    val dataset: String = "twitter"
     val rowLimit = 0 // 0 means all rows
     val sampleData = true
     val stash = false
-    val unstash = !true
+    val unstash = true
     val visualize = true
     val hasSchema = false
+    val verbose = true
 
-    val loadJson = new NaiveTypeCount2(datasetName=dataset, inputFile=new File(dataList.get(dataset).get._1), rowLimit=rowLimit, naive=dataList.get(dataset).get._2, Sample=sampleData, Stash=stash, Unstash=unstash, Visualize = visualize, hasSchema = hasSchema)
+    //val loadJson = new NaiveTypeCount2(datasetName=dataset, inputFile=new File(dataList.get(dataset).get._1), rowLimit=rowLimit, naive=dataList.get(dataset).get._2, Sample=sampleData, Stash=stash, Unstash=unstash, Visualize = visualize, hasSchema = hasSchema)
+    val loadJson = new NaiveTypeCount2()
+    loadJson.run(datasetName=dataset, inputFile=new File(dataList.get(dataset).get._1), Verbose = verbose, RowLimit=rowLimit, Naive=dataList.get(dataset).get._2, Sample=sampleData, Stash=stash, Unstash=unstash, Visualize = visualize, hasSchema = hasSchema)
+
 
     //val gt = new YelpGT(new File(dataList.get("yelp").get._1))
     //gt.run()
