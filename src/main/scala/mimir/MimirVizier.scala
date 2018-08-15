@@ -26,6 +26,8 @@ import mimir.util.LoggerUtils
 import mimir.ml.spark.SparkML
 import mimir.util.JSONBuilder
 import java.util.UUID
+import py4j.GatewayServer.GatewayServerBuilder
+import java.net.InetAddress
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -190,7 +192,7 @@ object MimirVizier extends LazyLogging {
   
   def runServerForViztrails() : Unit = {
      mainThread = Thread.currentThread()
-     val server = new GatewayServer(this, 33388)
+     val server = new GatewayServerBuilder().entryPoint(this).javaPort(33388).javaAddress( InetAddress.getByName("0.0.0.0")).build()
      server.addListener(new py4j.GatewayServerListener(){
         def connectionError(connExept : java.lang.Exception) = {
           logger.debug("Python GatewayServer connectionError: " + connExept)
