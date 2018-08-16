@@ -264,8 +264,11 @@ object MimirVizier extends LazyLogging {
       else{
         new File(file)
       }
-      val nameFromFile = csvFile.getName().split("\\.")(0)
-      val tableName = (csvFile.getName().split("\\.")(0) ).toUpperCase
+      val fileName = csvFile.getName().split("\\.")(0)
+      //table names cant start with digits - the sql parser does not like it
+      //to if the filename starts with a digit, prepend a "t"
+      val nameFromFile = if(fileName.matches("^\\d.*")) s"t$fileName" else fileName
+      val tableName = nameFromFile.toUpperCase
       if(db.getAllTables().contains(tableName)){
         logger.debug("loadCSV: From Vistrails: Table Already Exists: " + tableName)
       }
@@ -583,15 +586,18 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   }
   
   def getSchema(query:String) : String = {
-    try{
-      val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
-      JSONBuilder.list( db.typechecker.schemaOf(oper).map( schel =>  Map( "name" -> schel._1, "type" -> schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())))
-    } catch {
-      case t: Throwable => {
-        logger.error("Error Getting Schema: [" + query + "]", t)
-        throw t
-      }
-    } 
+    val timeRes = logTime("getSchema") {
+      try{
+        val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+        JSONBuilder.list( db.typechecker.schemaOf(oper).map( schel =>  Map( "name" -> schel._1, "type" -> schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())))
+      } catch {
+        case t: Throwable => {
+          logger.error("Error Getting Schema: [" + query + "]", t)
+          throw t
+        }
+      } 
+    }
+    timeRes._1
   }
 
   def explainCell(query: String, col:Int, row:String) : Seq[mimir.ctables.Reason] = {
