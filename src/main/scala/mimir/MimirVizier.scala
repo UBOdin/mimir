@@ -256,7 +256,14 @@ object MimirVizier extends LazyLogging {
     pythonCallThread = Thread.currentThread()
     val timeRes = logTime("loadCSV") {
       logger.debug(s"loadCSV: From Vistrails: [ $file ] format: ${format._1} -> [ ${format._2.mkString(",")} ]") ;
-      val csvFile = new File(file)
+      val vizierFSPath = "/usr/local/source/web-api/vizier/../.vizierdb/"
+      val csvFile = if(file.startsWith(vizierFSPath)){
+        //hack for loading file from s3 - because it is already there for production version
+        new File(file.replace(vizierFSPath, "s3n://vizier-data/"))
+      }
+      else{
+        new File(file)
+      }
       val nameFromFile = csvFile.getName().split("\\.")(0)
       val tableName = (csvFile.getName().split("\\.")(0) ).toUpperCase
       if(db.getAllTables().contains(tableName)){
