@@ -10,7 +10,7 @@ object TypeMain {
   // name -> fileName, naive
   val dataList = Map[String,(String,Boolean)](("twitter"->("test/data/dump-30.txt",true)),("yelp"->("test/data/yelp_dataset",true)),("nasa"->("test/data/nasa.json",false)),
     ("phonelab"->("test/data/carlDataSample.out",false)),("enron"->("test/data/enron.json",true)),("medicine"->("test/data/medicine.json",true)),("meteorite"->("test/data/meteorite.json",false)),("test"->("test/data/testTypes.json",true))
-  ,("citi"->("cleanJsonOutput/citiStations.json",true)))
+  ,("citi"->("cleanJsonOutput/citiStations.json",true)),("weatherUG"->("cleanJsonOutput/WUG.json",true)))
   def main(args: Array[String]) = {
 
     val dataset: String = "twitter"
@@ -30,8 +30,8 @@ object TypeMain {
     //val gt = new YelpGT(new File(dataList.get("yelp").get._1))
     //gt.run()
 
-    //val fjf = new mimir.util.FormatJsonFile(new File("rawJsonInput/stations.json"),"citiStations.json")
-    //fjf.cleanCitiStations()
+    //val fjf = new mimir.util.FormatJsonFile(new File("rawJsonInput/Amherst.json"),"WUG.json")
+    //fjf.cleanWeatherUG()
 
 
 

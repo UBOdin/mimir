@@ -281,15 +281,20 @@ class NaiveTypeCount2 {
           else
             "Unknown"
           }
-        val tEntropy: Double = keySpace.foldLeft(0.0){(acc,y) =>
+        val typeData: (Double, Int) = keySpace.foldLeft((0.0,0)){(acc,y) =>
           val typeName = y._1
           val typeCount = y._2
+          var inc = 0
           var localTypeEntropy: Double = 0.0
           if(!typeName.equals("[]") && !typeName.equals("{}") && !typeName.equals("Null")){
             localTypeEntropy = typeEntropy(typeName.substring(1,typeName.size-1))
+            inc += 1
           } // else empty array/object so 0.0 for entropy
-          acc + localTypeEntropy
+          (acc._1 + localTypeEntropy,acc._2 + inc)
         }
+        var tEntropy: Double = 0.0
+          if (typeData._2 != 0)
+            tEntropy = (typeData._1 / typeData._2.toDouble)
         val score: Double = ksEntropy/(1.0+tEntropy)
         val jsonOutput: String = s"""{"title":"${attributeName}","keySpaceEntropy":$ksEntropy,"typeEntropy":$tEntropy,"entropyScore":$score,"type":"$objType","x":[${xValue.mkString(",")}],"y":[${yValue.mkString(",")}]}"""
         KeyEntropyList += Tuple2(score,jsonOutput)
@@ -355,11 +360,20 @@ class NaiveTypeCount2 {
       return -1.0 * entropy
   }
 
+  // would return "a":[{b,c},{b,d}] => "a":{b,c}
+  // makes sense for twitter, but does it generalize?
+  // maybe something where all objects in arrays
+  // if you pull out all objects in an array there may be a natural join that is the array index, can add that field
+  private def Abadi(): Unit = {
+
+  }
+
 
   private def detectComplexTypes(KeyEntropyList: ListBuffer[(Double,String)], arrayThreshold: Double, objectThreshold: Double):(ListBuffer[String],ListBuffer[String],ListBuffer[String]) = {
     val arrayAttributes: ListBuffer[String] = ListBuffer[String]()
     val tupleAttributes: ListBuffer[String] = ListBuffer[String]()
     val dictAttributes: ListBuffer[String] = ListBuffer[String]()
+    val arraysWithObjects: ListBuffer[String] = ListBuffer[String]()
 
     KeyEntropyList.foreach(x => {
       val score: Double = x._1
@@ -370,18 +384,30 @@ class NaiveTypeCount2 {
       val keySpaceEntropy: Double = jsonMap.get("keySpaceEntropy").toString.toDouble
       val typeEntropy: Double = jsonMap.get("typeEntropy").toString.toDouble
 
-      //if(attributeName.equals("entities.hashtags[0]"))
-      //  println(attributeName)
 
       if(structureType.equals("Array")){
+        if(score < 1.0)
+          println(attributeName)
         if(typeEntropy == 0.0)
           arrayAttributes += attributeName
         if(typeEntropy > 0.0) {
           System.err.println(s"$attributeName is an array with multiple types")
           System.err.println(jsonMap.get("x"))
         }
+        jsonMap.get("x").asInstanceOf[java.util.ArrayList[Object]].asScala.foreach( z => {
+          z.toString.substring(1,z.toString.length-1).split(",").foreach( y => {
+            if(!y.equals("")) {
+              val childName = y.toString.split(":")(0)
+              val childType = y.toString.split(":")(1)
+              if (childType.equals("Object"))
+                arraysWithObjects += childName
+            }
+          })
+        })
 
       } else if(structureType.equals("Object")){
+          //if(score > 1.0)
+            //println(attributeName)
           if(keySpaceEntropy < objectThreshold) // dictionary
             tupleAttributes += attributeName
           else // tuple
@@ -538,9 +564,9 @@ class NaiveTypeCount2 {
   // retrieves the data that was stashed
   // loads KeyEntropyList, GlobalTypeMap, and SampleMap
   def unstash(datasetName: String): (scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]], scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]], ListBuffer[(Double,String)]) = {
-    val sampleInput: BufferedReader = new BufferedReader(new FileReader(s"cacheOld/${datasetName}Sample.json"))
-    val typeInput: BufferedReader = new BufferedReader(new FileReader(s"cacheOld/${datasetName}Types.json"))
-    val entropyInput: BufferedReader = new BufferedReader(new FileReader(s"cacheOld/${datasetName}Entropy.json"))
+    val sampleInput: BufferedReader = new BufferedReader(new FileReader(s"cache/${datasetName}Sample.json"))
+    val typeInput: BufferedReader = new BufferedReader(new FileReader(s"cache/${datasetName}Types.json"))
+    val entropyInput: BufferedReader = new BufferedReader(new FileReader(s"cache/${datasetName}Entropy.json"))
 
     val TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]]()
     val SampleMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]]() // a list of samples for each attribute
@@ -573,7 +599,16 @@ class NaiveTypeCount2 {
     return Tuple3(TypeMap, SampleMap, KeyEntropyList)
   }
 
-  // stashes the data structures that are the result of the computation, this is so re-running will be faster for future tests and development
+
+  /**
+    * Stores these maps for unstash to reload. Stored in the cache directory
+    *
+    * @param datasetName used for the file name/ path
+    * @param TypeMap
+    * @param SampleMap
+    * @param KeyEntropyList
+    * @param sample
+    */
   def stash(datasetName: String, TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]], SampleMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]], KeyEntropyList: ListBuffer[(Double,String)], sample: Boolean) = {
     val sampleWriter = new BufferedWriter(new FileWriter(s"cache/${datasetName}Sample.json"))
     val typeWriter = new BufferedWriter(new FileWriter(s"cache/${datasetName}Types.json"))
