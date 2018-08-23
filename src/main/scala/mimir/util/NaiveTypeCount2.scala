@@ -46,21 +46,22 @@ class NaiveTypeCount2 {
   def run(datasetName: String, inputFile: File, RowLimit: Int = 0, Naive: Boolean = false, Verbose: Boolean = false, Sample: Boolean = false, SampleLimit: Int = 10, Stash: Boolean = false, Unstash: Boolean = true, Visualize: Boolean = true, hasSchema: Boolean = false): Unit = {
     var TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]]()
     var SampleMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]]() // a list of samples for each attribute
-    var KeyEntropyList: ListBuffer[(Double,String)] = ListBuffer[(Double,String)]()
+    var AttributeList: ListBuffer[Attribute] = ListBuffer[Attribute]()
     if(Unstash) {
       val x = unstash(datasetName)
       TypeMap = x._1
       SampleMap = x._2
-      KeyEntropyList = x._3
+      AttributeList = x._3
     } else{
       val x = buildMaps(inputFile, RowLimit, Naive, Sample, SampleLimit, Verbose) // builds typeMap, sampleMap
       TypeMap = x._1
       SampleMap = x._2
-      KeyEntropyList = calculateEntropy(TypeMap)
+      AttributeList = calculateEntropy(TypeMap)
     }
     if(Stash)
-      stash(datasetName,TypeMap,SampleMap,KeyEntropyList,Sample)
-    val (arrayList,tupleList, dictList) = detectComplexTypes(KeyEntropyList,1.0, 1.0)
+      stash(datasetName,TypeMap,SampleMap,AttributeList,Sample)
+    //val (arrayList,tupleList, dictList) = detectComplexTypes(KeyEntropyList,1.0, 1.0)
+    //generateAbadiSchema(AttributeList)
     println("Done")
   }
 
@@ -246,9 +247,9 @@ class NaiveTypeCount2 {
     * @param TypeMap
     * @return returns a list of tuples, (score, json) the json value is a represnetation of the attribute and it's scores and values
     */
-  def calculateEntropy(TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]]): scala.collection.mutable.ListBuffer[(Double,String)] = {
+  def calculateEntropy(TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]]): scala.collection.mutable.ListBuffer[Attribute] = {
 
-    val KeyEntropyList = new ListBuffer[(Double,String)]()
+    val AttributeList = new ListBuffer[Attribute]()
     // iterate through the map and find all { for objects and [ for all
     TypeMap.foreach((everyAttribute) => {
       val attributeName = everyAttribute._1
@@ -297,14 +298,14 @@ class NaiveTypeCount2 {
             tEntropy = (typeData._1 / typeData._2.toDouble)
         val score: Double = ksEntropy/(1.0+tEntropy)
         val jsonOutput: String = s"""{"title":"${attributeName}","keySpaceEntropy":$ksEntropy,"typeEntropy":$tEntropy,"entropyScore":$score,"type":"$objType","x":[${xValue.mkString(",")}],"y":[${yValue.mkString(",")}]}"""
-        KeyEntropyList += Tuple2(score,jsonOutput)
-
+        //KeyEntropyList += Tuple2(score,jsonOutput)
+        AttributeList += Attribute(attributeName,objType,tEntropy,ksEntropy,score,keySpace)
       } else {
-        // is a primitive Type i.e String, numeric, boolean
+        AttributeList += Attribute(attributeName,"Leaf",0.0,0.0,-1.0,keySpace)
       }
     })
 
-    return KeyEntropyList.sortBy(_._1)(Ordering[Double].reverse)//.foreach(t=>KeyEntropyFile.write(t._2+'\n'))
+    return AttributeList.sortBy(_.score)(Ordering[Double].reverse)
   }
 
 
@@ -561,16 +562,80 @@ class NaiveTypeCount2 {
     return true
   }
 
+
+  /**
+    * Generates a usable schema from the type information collected.
+    * Here we can apply various heuristics such as collapsing arrays, marking structures for human review, and separating out arrays of Objects
+    *
+    */
+  def generateAbadiSchema(AttributeList: ListBuffer[Attribute]): scala.collection.mutable.HashMap[String,Attribute] = {
+    val schema: ListBuffer[Attribute] = ListBuffer[Attribute]()
+    AttributeList.foreach(x => {
+      x.objType match {
+        case "Array" =>
+          if(x.keySpaceEntropy >= 1.0){ // this is an arbitrary number,
+
+          } else if(x.keySpaceEntropy == 0.0){
+            if(isArrayOfObjects(x))
+              println(x.name)
+            // is of static size, might be useful
+          } else { // fairly static array
+            if(isArrayOfObjects(x))
+              println(x.name)
+
+          }
+        case "Object" =>
+        case "Leaf" =>
+        case "Unknown" =>
+      }
+    })
+    ???
+  }
+
+  def isArrayOfObjects(attr: Attribute): Boolean = {
+    if(attr.types.size == 1){ // edge case where only contains []
+      if(attr.types.toList(0)._1.equals("[]"))
+        return false
+    }
+    return attr.types.foldLeft(true)((acc,x) => {
+      if (x._1.equals("[]"))
+        return acc
+      else {
+        arrayStringToArray(x._1).foreach(x => {
+          if(!x.split(":")(1).equals("Object"))
+            return false
+        })
+      }
+      acc
+    })
+  }
+
+  // converts an array that is a string to an array using GSON
+  def arrayStringToArray(s: String): ListBuffer[String]= {
+    return s.substring(1,s.length-1).split(",").toList.to[mutable.ListBuffer]
+  }
+
+/*
+  def KELToAttribute(KEL: ListBuffer[(Double, String)]): ListBuffer[Attribute] = {
+    KEL.map((x) => {
+      val jsonMap = Gson.fromJson(x._2,MapType)
+      val typeMap = jsonMap.get("x").asInstanceOf[java.util.ArrayList[String]].asScala.to[ListBuffer].zip(jsonMap.get("y").asInstanceOf[java.util.ArrayList[Int]].asScala.to[ListBuffer]).toMap
+      Attribute(jsonMap.get("title").toString, jsonMap.get("typeEntropy").toString.toDouble, jsonMap.get("keySpaceEntropy").toString.toDouble, jsonMap.get("entropyScore").toString.toDouble, typeMap)
+    }).asInstanceOf[ListBuffer[Attribute]]
+  }
+*/
+  case class Attribute(name: String, objType: String, typeEntropy: Double, keySpaceEntropy: Double, score: Double, types: scala.collection.mutable.Map[String,Int])
+
   // retrieves the data that was stashed
   // loads KeyEntropyList, GlobalTypeMap, and SampleMap
-  def unstash(datasetName: String): (scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]], scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]], ListBuffer[(Double,String)]) = {
+  def unstash(datasetName: String): (scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]], scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]], ListBuffer[Attribute]) = {
     val sampleInput: BufferedReader = new BufferedReader(new FileReader(s"cache/${datasetName}Sample.json"))
     val typeInput: BufferedReader = new BufferedReader(new FileReader(s"cache/${datasetName}Types.json"))
     val entropyInput: BufferedReader = new BufferedReader(new FileReader(s"cache/${datasetName}Entropy.json"))
 
     val TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]]()
     val SampleMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]]() // a list of samples for each attribute
-    val KeyEntropyList: ListBuffer[(Double,String)] = ListBuffer[(Double,String)]()
+    val AttributeList: ListBuffer[Attribute] = ListBuffer[Attribute]()
 
     var sampleLine: String = sampleInput.readLine()
     while(sampleLine != null){
@@ -591,14 +656,20 @@ class NaiveTypeCount2 {
 
     var entropyLine: String = entropyInput.readLine()
     while(entropyLine != null){
-      val split: Int = entropyLine.indexOf(',')
-      KeyEntropyList += Tuple2(entropyLine.substring(0,split).toDouble,entropyLine.substring(split+1))
+      val json = Gson.fromJson(entropyLine,MapType)
+      val localMap = scala.collection.mutable.HashMap[String,Int]()
+      json.get("typeMap").asInstanceOf[com.google.gson.internal.LinkedTreeMap[String,Double]].asScala.foreach((y)=> localMap.update(y._1,y._2.toInt))
+      AttributeList += Attribute(json.get("name").toString,json.get("type").toString,json.get("typeEntropy").toString.toDouble,json.get("keySpaceEntropy").toString.toDouble,json.get("score").toString.toDouble,localMap)
       entropyLine = entropyInput.readLine()
     }
     entropyInput.close()
-    return Tuple3(TypeMap, SampleMap, KeyEntropyList)
+    return Tuple3(TypeMap, SampleMap, AttributeList)
   }
 
+  def AttributeToJson(att: Attribute): String = {
+    val localJsonTypeMap = "{"+att.types.map(y => s""""${y._1}":${y._2}""").mkString(",")+"}"
+    s"""{"name":"${att.name}","type":"${att.objType}","score":${att.score},"typeEntropy":${att.typeEntropy},"keySpaceEntropy":${att.keySpaceEntropy},"typeMap":${localJsonTypeMap}}"""
+  }
 
   /**
     * Stores these maps for unstash to reload. Stored in the cache directory
@@ -609,7 +680,7 @@ class NaiveTypeCount2 {
     * @param KeyEntropyList
     * @param sample
     */
-  def stash(datasetName: String, TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]], SampleMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]], KeyEntropyList: ListBuffer[(Double,String)], sample: Boolean) = {
+  def stash(datasetName: String, TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]], SampleMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]], KeyEntropyList: ListBuffer[Attribute], sample: Boolean) = {
     val sampleWriter = new BufferedWriter(new FileWriter(s"cache/${datasetName}Sample.json"))
     val typeWriter = new BufferedWriter(new FileWriter(s"cache/${datasetName}Types.json"))
     val entropyWriter = new BufferedWriter(new FileWriter(s"cache/${datasetName}Entropy.json"))
@@ -627,7 +698,7 @@ class NaiveTypeCount2 {
     typeWriter.flush()
     typeWriter.close()
 
-    KeyEntropyList.foreach(x => entropyWriter.write(s"""${x._1},${x._2}\n"""))
+    KeyEntropyList.foreach(x => entropyWriter.write(s"""${AttributeToJson(x)}\n"""))
     entropyWriter.flush()
     entropyWriter.close()
   }

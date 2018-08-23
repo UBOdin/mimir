@@ -16,8 +16,8 @@ object TypeMain {
     val dataset: String = "twitter"
     val rowLimit = 0 // 0 means all rows
     val sampleData = true
-    val stash = false
-    val unstash = true
+    val stash = true
+    val unstash = false
     val visualize = true
     val hasSchema = false
     val verbose = true
