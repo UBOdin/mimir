@@ -10,14 +10,14 @@ object TypeMain {
   // name -> fileName, naive
   val dataList = Map[String,(String,Boolean)](("twitter"->("test/data/dump-30.txt",true)),("yelp"->("test/data/yelp_dataset",true)),("nasa"->("test/data/nasa.json",false)),
     ("phonelab"->("test/data/carlDataSample.out",false)),("enron"->("test/data/enron.json",true)),("medicine"->("test/data/medicine.json",true)),("meteorite"->("test/data/meteorite.json",false)),("test"->("test/data/testTypes.json",true))
-  ,("citi"->("cleanJsonOutput/citiStations.json",true)),("weatherUG"->("cleanJsonOutput/WUG.json",true)))
+  ,("citi"->("cleanJsonOutput/citiStations.json",true)),("weatherUG"->("cleanJsonOutput/WUG.json",true)),("github"->("jsonDatasets/github.json",true)))
   def main(args: Array[String]) = {
 
-    val dataset: String = "twitter"
+    val dataset: String = "phonelab"
     val rowLimit = 0 // 0 means all rows
     val sampleData = true
-    val stash = true
-    val unstash = false
+    val stash = !true
+    val unstash = !stash
     val visualize = true
     val hasSchema = false
     val verbose = true

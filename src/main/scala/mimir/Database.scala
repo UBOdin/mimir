@@ -15,7 +15,7 @@ import mimir.lenses.LensManager
 import mimir.sql.{Backend, RAToSql, SqlToRA}
 import mimir.sql.{AlterViewMaterialize, Analyze, CreateAdaptiveSchema, CreateLens, CreateView, Explain, Feedback, Load, Pragma}
 import mimir.optimizer.operator.OptimizeExpressions
-import mimir.util.{ExperimentalOptions, LoadCSV, LoadJSON, LoadJson2ElectricBoogaloo}
+import mimir.util.{ExperimentalOptions, LoadCSV, LoadJSON, JsonRowIterator}
 import mimir.parser.MimirJSqlParser
 import mimir.statistics.FuncDep
 import net.sf.jsqlparser.statement.Statement

@@ -7,7 +7,7 @@ import java.io.{BufferedReader, File, FileReader}
   * @param naive if true then naively call readLine if false then take the substring that is the fist { and last }
   */
 
-class LoadJson2ElectricBoogaloo(sourceFile: File, naive: Boolean = false){
+class JsonRowIterator(sourceFile: File, naive: Boolean = false) extends JsonLoader {
 
   var input: BufferedReader = new BufferedReader(new FileReader(sourceFile))
 
@@ -31,6 +31,10 @@ class LoadJson2ElectricBoogaloo(sourceFile: File, naive: Boolean = false){
         case e: java.lang.StringIndexOutOfBoundsException => return getNext()
       }
     }
+  }
+
+  def reset(): Unit = {
+    input.reset()
   }
 
   /**

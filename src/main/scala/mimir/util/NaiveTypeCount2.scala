@@ -61,7 +61,9 @@ class NaiveTypeCount2 {
     if(Stash)
       stash(datasetName,TypeMap,SampleMap,AttributeList,Sample)
     //val (arrayList,tupleList, dictList) = detectComplexTypes(KeyEntropyList,1.0, 1.0)
-    //generateAbadiSchema(AttributeList)
+    val schema = generateAbadiSchema(AttributeList)
+    val samp: mutable.HashMap[String,ListBuffer[String]] = mutable.HashMap[String,ListBuffer[String]]()
+    schema.map(x => samp.update(x._1,SampleMap.get(x._1).get))
     println("Done")
   }
 
@@ -79,7 +81,7 @@ class NaiveTypeCount2 {
       * @return the result of squaring d
     */
   private def buildMaps(inputFile: File, rowLimit: Int = 0, naive: Boolean, sample: Boolean, sampleLimit: Int, verbose: Boolean): (scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]], scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]]) = {
-    val loadJson: LoadJson2ElectricBoogaloo = new LoadJson2ElectricBoogaloo(inputFile, naive=naive)
+    val loadJson: JsonRowIterator = new JsonRowIterator(inputFile, naive=naive)
     val TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]]()
     val SampleMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]] = scala.collection.mutable.HashMap[String,scala.collection.mutable.ListBuffer[String]]() // a list of samples for each attribute
     val rejectedRows: ListBuffer[String] = scala.collection.mutable.ListBuffer[String]()
@@ -125,8 +127,7 @@ class NaiveTypeCount2 {
         return false
       val m: java.util.HashMap[String, Object] = Gson.fromJson(row, MapType)
       val rowTypeMap = scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]]()
-      val rowSampleMap = scala.collection.mutable.HashMap[String,String]()
-      mapGetType("", m, rowTypeMap, rowSampleMap)
+      mapGetType("", m, rowTypeMap, sampleMap)
       combineTypeMap(typeMap,rowTypeMap)
     } catch {
       case e: com.google.gson.JsonSyntaxException =>
@@ -145,12 +146,12 @@ class NaiveTypeCount2 {
     * @param SampleMap passes map for recurrsion as a structure
     * @return returns a string that is the type for objects
     */
-  private def mapGetType(prefix: String, jsonMap: java.util.HashMap[String,Object], TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]], SampleMap: scala.collection.mutable.HashMap[String,String]): String = {
+  private def mapGetType(prefix: String, jsonMap: java.util.HashMap[String,Object], TypeMap: scala.collection.mutable.HashMap[String,scala.collection.mutable.HashMap[String,Int]], SampleMap: scala.collection.mutable.HashMap[String,ListBuffer[String]]): String = {
     var returnType: String = ""
     jsonMap.asScala.foreach(attribute => {
       val attributeName = prefix + attribute._1.replace(",",";").replace(":",";")
       val attributeValue = attribute._2
-      //SampleMap.update(attributeName,attributeValue.toString)
+      updateSampleMap(attributeName,attributeValue,SampleMap)
 
       var attributeClass: Class[_ <: Object] = null
       try {
@@ -232,6 +233,22 @@ class NaiveTypeCount2 {
         map.update(outerKey,typeMap)
       case None => map.update(outerKey, scala.collection.mutable.HashMap(innerKey -> 1))
     }
+  }
+
+  def updateSampleMap(outerKey: String, innerKey: Object, map: scala.collection.mutable.HashMap[String,ListBuffer[String]], sampleLimit: Int = 10): Unit = {
+    if(innerKey!= null){
+      val v: String = innerKey.toString
+      map.get(outerKey) match {
+        case Some(samples) =>
+          if(samples.length < sampleLimit){
+            if(!v.equals("") && !v.equals("{}") && !v.equals("[]"))
+              if(!samples.contains(v))
+                samples.append(v)
+          }
+        case None => map.update(outerKey, scala.collection.mutable.ListBuffer[String](v))
+      }
+    }
+
   }
 
   // takes the global map that is filled with AttributeNames -> Map(Types,Count)
@@ -456,7 +473,7 @@ class NaiveTypeCount2 {
 
 
   def generateFeatureVectors(inputFile: File, naive: Boolean, rowLimit: Int, schema: mutable.HashSet[(String,Int)], fvMap: scala.collection.mutable.HashMap[String,Int]) = {
-    val loadJson: LoadJson2ElectricBoogaloo = new LoadJson2ElectricBoogaloo(inputFile, naive=naive)
+    val loadJson: JsonRowIterator = new JsonRowIterator(inputFile, naive=naive)
     var line: String = loadJson.getNext()
     var rowCount: Int = 0
     var nonJsonRowCount: Int = 0
@@ -574,31 +591,56 @@ class NaiveTypeCount2 {
       x.objType match {
         case "Array" =>
           if(x.keySpaceEntropy >= 1.0){ // this is an arbitrary number,
-
+            if(isArrayOfObjects(x)) {
+              println("Array of Objects: " + x.name)
+              schema.append(x)
+            }
           } else if(x.keySpaceEntropy == 0.0){
-            if(isArrayOfObjects(x))
-              println(x.name)
+            if(isArrayOfObjects(x)) {
+              println("Static Array of Objects: " + x.name)
+              schema.append(x)
+            }
             // is of static size, might be useful
           } else { // fairly static array
-            if(isArrayOfObjects(x))
-              println(x.name)
-
+            if(isArrayOfObjects(x)) {
+              println("Static-ish Array of Objects: " + x.name)
+              schema.append(x)
+            }
           }
         case "Object" =>
+          if(x.keySpaceEntropy >= 1.0){ // this is an arbitrary number,
+            if(isArrayOfObjects(x)) {
+              println("Map of Objects: " + x.name)
+              schema.append(x)
+            }
+          } else if(x.keySpaceEntropy == 0.0){
+            if(isArrayOfObjects(x)) {
+              println("Static Map of Objects: " + x.name)
+              schema.append(x)
+            }
+            // is of static size, might be useful
+          } else { // fairly static array
+            if(isArrayOfObjects(x)) {
+              println("Static-ish Map of Objects: " + x.name)
+              schema.append(x)
+            }
+          }
         case "Leaf" =>
         case "Unknown" =>
       }
     })
-    ???
+    val s = mutable.HashMap[String,Attribute]()
+    schema.foreach(x => s.update(x.name,x))
+    return s
   }
 
   def isArrayOfObjects(attr: Attribute): Boolean = {
     if(attr.types.size == 1){ // edge case where only contains []
-      if(attr.types.toList(0)._1.equals("[]"))
+      if(attr.types.toList(0)._1.equals("[]") || attr.types.toList(0)._1.equals("{}"))
         return false
     }
     return attr.types.foldLeft(true)((acc,x) => {
-      if (x._1.equals("[]"))
+      if (x._1.equals("[]") || x._1.equals("{}"))
         return acc
       else {
         arrayStringToArray(x._1).foreach(x => {
