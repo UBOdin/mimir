@@ -259,7 +259,8 @@ object MimirVizier extends LazyLogging {
       val vizierFSPath = "/usr/local/source/web-api/vizier/../.vizierdb/"
       val csvFile = if(file.startsWith(vizierFSPath)){
         //hack for loading file from s3 - because it is already there for production version
-        new File(file.replace(vizierFSPath, "s3n://vizier-data/"))
+        val vizierDataS3Bucket = System.getenv("S3_BUCKET_NAME")
+        new File(file.replace(vizierFSPath, s"s3n://$vizierDataS3Bucket/"))
       }
       else{
         new File(file)
