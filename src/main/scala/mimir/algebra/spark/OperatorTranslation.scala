@@ -119,18 +119,23 @@ object OperatorTranslation
 			  org.apache.spark.sql.catalyst.plans.logical.Union(mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs))
 			}
 			case Limit(offset, limit, query) => {
-			  val limitOp = limit match {
+			  //TODO: Need a better way to do offsets in spark. This way will break pretty easily because of the way 
+			  //      that MonotonicallyIncreasingID behaves. The current implementation
+        //      puts the partition ID in the upper 31 bits, and the lower 33 bits represent the record number
+        //      within each partition - so pretty much this will only work with one partition - obviously unacceptable
+			  val offsetOp = if(offset > 0){
+			    logger.debug("------------------------------>Hacky Offset<-------------------------------------")
+			    org.apache.spark.sql.catalyst.plans.logical.Filter(GreaterThanOrEqual(MonotonicallyIncreasingID(),Literal(offset)), mimirOpToSparkOp(query))
+			  } else {
+                            mimirOpToSparkOp(query)
+                          }
+
+        limit match {
 			    case Some(limitI) => org.apache.spark.sql.catalyst.plans.logical.GlobalLimit(
 			      Literal(limitI.toInt), 
-			      mimirOpToSparkOp(query))
-			    case None => mimirOpToSparkOp(query)
+			      offsetOp)
+			    case None => offsetOp
 			  }
-			  if(offset > 0){
-			    logger.debug("------------------------------>Hacky Offset<-------------------------------------")
-			    org.apache.spark.sql.catalyst.plans.logical.Filter(GreaterThanOrEqual(MonotonicallyIncreasingID(),Literal(offset)), limitOp)
-			  }
-			  else
-			    limitOp
 			}
 			case Table(name, alias, sch, meta) => {
 			  /*val table = CatalogTable(

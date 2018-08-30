@@ -52,7 +52,6 @@ object MimirVizier extends LazyLogging {
   def main(args: Array[String]) {
     Mimir.conf = new MimirConfig(args);
 
-    // Prepare experiments
     ExperimentalOptions.enable(Mimir.conf.experimental())
     if(!ExperimentalOptions.isEnabled("GPROM-BACKEND")){
       // Set up the database connection(s)
@@ -346,8 +345,19 @@ object MimirVizier extends LazyLogging {
     pythonCallThread = Thread.currentThread()
     val timeRes = logTime("createLens") {
       logger.debug("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
-      val inputSubstitutionQuery = query.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
-      val viewName = "VIEW_" + ((input.toString() + query).hashCode().toString().replace("-", "") )
+      val (viewNameSuffix, inputSubstitutionQuery) = input match {
+        case inputs:Seq[String] => {
+          (inputs.mkString(""),inputs.zipWithIndex.foldLeft(query)((init, curr) => {
+            query.replaceAll(s"\\{\\{\\s*input_${curr._2}\s*\\}\\}", curr._1) 
+          })) 
+        }
+        case _:String => {
+          (input.toString(), query.replaceAll("\\{\\{\\s*input[_0]*\\s*\\}\\}", input.toString)) 
+        }
+        case x => throw new Exception(s"Parameter type ${x.getClass()} is invalid for createView input" )
+      }
+      
+      val viewName = "VIEW_" + ((viewNameSuffix + query).hashCode().toString().replace("-", "") )
       db.getView(viewName) match {
         case None => {
           val viewQuery = s"CREATE VIEW $viewName AS $inputSubstitutionQuery"  
@@ -442,7 +452,17 @@ object MimirVizier extends LazyLogging {
   }
   
 def vistrailsQueryMimirJson(input:Any, query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
-    val inputSubstitutionQuery = query.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
+    val inputSubstitutionQuery = input match {
+        case inputs:Seq[String] => {
+          inputs.zipWithIndex.foldLeft(query)((init, curr) => {
+            query.replaceAll(s"\\{\\{\\s*input_${curr._2}\s*\\}\\}", curr._1) 
+          })
+        }
+        case _:String => {
+          query.replaceAll("\\{\\{\\s*input[_0]*\\s*\\}\\}", input.toString)
+        }
+        case x => throw new Exception(s"Parameter type ${x.getClass()} is invalid for vistrailsQueryMimirJson input" )
+      }
     vistrailsQueryMimirJson(inputSubstitutionQuery, includeUncertainty, includeReasons)
   }
 
@@ -557,6 +577,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     val oper = db.sql.convert(db.parse(query).head.asInstanceOf[Select])
     explainSchema(oper, cols)  
   }  
+  
   def explainSchema(oper: Operator, cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
     val timeRes = logTime("explainSchema") {
       logger.debug("explainSchema: From Vistrails: [ "+ cols.mkString(",") +" ] [" + oper + "]"  ) ;
@@ -572,7 +593,6 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     timeRes._1
   }
 
-  
   def explainCellJson(query: String, col:String, row:String) : String = {
     try{
       logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
@@ -589,6 +609,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   def getSchema(query:String) : String = {
     val timeRes = logTime("getSchema") {
       try{
+        logger.debug("getSchema: From Vistrails: [" + query + "]"  ) ;
         val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
         JSONBuilder.list( db.typechecker.schemaOf(oper).map( schel =>  Map( "name" -> schel._1, "type" -> schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())))
       } catch {
