@@ -348,7 +348,7 @@ object MimirVizier extends LazyLogging {
       val (viewNameSuffix, inputSubstitutionQuery) = input match {
         case inputs:Seq[String] => {
           (inputs.mkString(""),inputs.zipWithIndex.foldLeft(query)((init, curr) => {
-            query.replaceAll(s"\\{\\{\\s*input_${curr._2}\\s*\\}\\}", curr._1) 
+            init.replaceAll(s"\\{\\{\\s*input_${curr._2}\\s*\\}\\}", curr._1) 
           })) 
         }
         case _:String => {
@@ -455,7 +455,7 @@ def vistrailsQueryMimirJson(input:Any, query : String, includeUncertainty:Boolea
     val inputSubstitutionQuery = input match {
         case inputs:Seq[String] => {
           inputs.zipWithIndex.foldLeft(query)((init, curr) => {
-            query.replaceAll(s"\\{\\{\\s*input_${curr._2}\\s*\\}\\}", curr._1) 
+            init.replaceAll(s"\\{\\{\\s*input_${curr._2}\\s*\\}\\}", curr._1) 
           })
         }
         case _:String => {
