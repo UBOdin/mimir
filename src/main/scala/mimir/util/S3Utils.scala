@@ -27,6 +27,7 @@ import java.io.InputStreamReader
 import java.io.BufferedOutputStream
 import java.io.BufferedInputStream
 import com.amazonaws.services.s3.model.GetObjectRequest
+import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
 
 object S3Utils {
   private val PATH_SEP: String = "/"
@@ -37,7 +38,7 @@ object S3Utils {
    * @param clientRegion
    * @return
    */
-  def authenticate(accessKeyID: String, secretAccessKey: String, clientRegion: String): AmazonS3 = {
+  def authenticate(accessKeyID: String, secretAccessKey: String, clientRegion: String, endpoint:Option[String] = None): AmazonS3 = {
     // credentials object identifying user for authentication
     // user must have AWSConnector and AmazonS3FullAccess for
     // credentials object identifying user for authentication
@@ -47,9 +48,17 @@ object S3Utils {
       new BasicAWSCredentials(accessKeyID, secretAccessKey)
     // create a client connection based on credentials
     //new AmazonS3Client(credentials)
-    AmazonS3ClientBuilder.standard()
+        
+    val clientBuilder = AmazonS3ClientBuilder.standard()
       .withCredentials(new AWSStaticCredentialsProvider(credentials)) //new ProfileCredentialsProvider())
       .withRegion(clientRegion)
+    
+      endpoint.flatMap(ep => {
+        val endpointConfiguration = new EndpointConfiguration(ep, clientRegion);
+        clientBuilder.setEndpointConfiguration(endpointConfiguration)
+        Some(clientBuilder)
+      })
+      .getOrElse(clientBuilder)
       .build();
   }
 

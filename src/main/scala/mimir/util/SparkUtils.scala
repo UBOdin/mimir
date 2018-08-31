@@ -26,7 +26,7 @@ object SparkUtils {
     }
     
     t match {
-      case TAny() =>        throw new SQLException(s"Can't extract TAny: $field")
+      case TAny() =>        if(ExperimentalOptions.isEnabled("XNULL")) (r) => NullPrimitive() else throw new SQLException(s"Can't extract TAny: $field")
       case TFloat() =>      (r) => checkNull(r, FloatPrimitive(r.getDouble(field)))
       case TInt() =>        (r) => checkNull(r, { 
         try {

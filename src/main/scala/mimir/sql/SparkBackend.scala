@@ -121,6 +121,8 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
         //TODO: we need to do this in a more secure way (especially vizier has python scripts that could expose this)
         val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
         val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY")
+        val endpoint = Option(System.getenv("S3_ENDPOINT"))
+        sparkCtx.hadoopConfiguration.set("fs.s3a.endpoint", endpoint.getOrElse(null));
         sparkCtx.hadoopConfiguration.set("fs.s3n.awsAccessKeyId", accessKeyId)
         sparkCtx.hadoopConfiguration.set("fs.s3n.awsSecretAccessKey", secretAccessKey)
         sparkCtx.hadoopConfiguration.set("fs.s3.impl", "org.apache.hadoop.fs.s3native.NativeS3FileSystem")
@@ -189,7 +191,8 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
     def copyToS3(file:String): String = {
       val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
       val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY")
-      val s3client = S3Utils.authenticate(accessKeyId, secretAccessKey, "us-east-1")
+      val endpoint = Option(System.getenv("S3_ENDPOINT"))
+      val s3client = S3Utils.authenticate(accessKeyId, secretAccessKey, "us-east-1", endpoint)
       var relPath = file.replace(new File("").getAbsolutePath + File.separator, "")
       while(relPath.startsWith(File.separator))
         relPath = relPath.replaceFirst(File.separator, "")
