@@ -122,7 +122,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
         val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
         val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY")
         val endpoint = Option(System.getenv("S3_ENDPOINT"))
-        sparkCtx.hadoopConfiguration.set("fs.s3a.endpoint", endpoint.getOrElse(null));
+        endpoint.flatMap(ep => {sparkCtx.hadoopConfiguration.set("fs.s3a.endpoint", ep); None})
         sparkCtx.hadoopConfiguration.set("fs.s3n.awsAccessKeyId", accessKeyId)
         sparkCtx.hadoopConfiguration.set("fs.s3n.awsSecretAccessKey", secretAccessKey)
         sparkCtx.hadoopConfiguration.set("fs.s3.impl", "org.apache.hadoop.fs.s3native.NativeS3FileSystem")
