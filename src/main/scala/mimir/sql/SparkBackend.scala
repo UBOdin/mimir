@@ -31,6 +31,8 @@ import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hive.HiveContext
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.util.S3Utils
+import org.apache.spark.sql.execution.command.DropTableCommand
+import org.apache.spark.sql.catalyst.TableIdentifier
 
 
 class SparkBackend(override val database:String, maintenance:Boolean = false) extends RABackend(database) 
@@ -44,7 +46,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
     case null => (/*"128.205.71.41"*/"spark-master.local", "7077", "8020", false, false, false, 8, "s3")
     case x => (x.sparkHost(), x.sparkPort(), x.hdfsPort(), x.useHDFSHostnames(), x.overwriteStagedFiles(), x.overwriteJars(), x.numPartitions(), x.dataStagingType())
   }
-  val remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
+  val remoteSpark = false//ExperimentalOptions.isEnabled("remoteSpark")
   def open(): Unit = {
     logger.warn(s"Open SparkBackend: sparkHost:$sparkHost, sparkPort:$sparkPort, hdfsPort:$hdfsPort, useHDFSHostnames:$useHDFSHostnames, overwriteStagedFiles:$overwriteStagedFiles, overwriteJars:$overwriteJars, numPartitions:$numPartitions, dataStagingType:$dataStagingType")
     sparkSql = sparkSql match {
@@ -177,6 +179,10 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
         throw t
       }
     }
+  }
+  
+  def dropTable(table:String): Unit = {
+    DropTableCommand(TableIdentifier(table, Option(database)), true, false, true).run(sparkSql.sparkSession)
   }
   
   def dropDB():Unit = {

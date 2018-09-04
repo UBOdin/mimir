@@ -297,6 +297,8 @@ object Typechecker
 			case (TTimestamp(), TDate()) => Some(TTimestamp())
 			case (TRowId(), TString()) => Some(TRowId())
 			case (TString(), TRowId()) => Some(TRowId())
+			case (TRowId(), TInt()) => Some(TInt())
+			case (TInt(), TRowId()) => Some(TInt())
 			case (TUser(name), _) => leastUpperBound(TypeRegistry.baseType(name), b)
 			case (_, TUser(name)) => leastUpperBound(a, TypeRegistry.baseType(name))
 			case _ => return None

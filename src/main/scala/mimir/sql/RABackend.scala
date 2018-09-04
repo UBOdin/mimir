@@ -38,6 +38,7 @@ abstract class RABackend(val database:String) {
   
   def getAllTables(): Seq[String]
   def invalidateCache();
+  def dropTable(table:String)
 
   def close()
 

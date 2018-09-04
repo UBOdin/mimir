@@ -71,7 +71,8 @@ object SqlParserSpec
 
 			}
 			testData.foreach ( _ match { case ( tableName, tableData, tableCols ) => 
-				LoadCSV.handleLoadTableRaw(d, tableName, 
+				d.backend.dropTable(tableName)
+			  LoadCSV.handleLoadTableRaw(d, tableName, 
 				    Some(tableCols.map(el => (el._1, Type.fromString(el._2)))), tableData, Map())
 			})
 			d
@@ -461,7 +462,8 @@ object SqlParserSpec
 		}
 
 		"Get the types right in aggregates" >> {
-			LoadCSV.handleLoadTableRaw(db, "PRODUCT_INVENTORY",
+			db.backend.dropTable("PRODUCT_INVENTORY")
+		  LoadCSV.handleLoadTableRaw(db, "PRODUCT_INVENTORY",
 				    Some(Seq(("ID",TString()),("COMPANY",TString()),("QUANTITY",TInt()),("PRICE",TFloat()))), 
 				    new File("test/data/Product_Inventory.csv"), Map())
 			
