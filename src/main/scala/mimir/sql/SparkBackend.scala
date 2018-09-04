@@ -46,7 +46,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
     case null => (/*"128.205.71.41"*/"spark-master.local", "7077", "8020", false, false, false, 8, "s3")
     case x => (x.sparkHost(), x.sparkPort(), x.hdfsPort(), x.useHDFSHostnames(), x.overwriteStagedFiles(), x.overwriteJars(), x.numPartitions(), x.dataStagingType())
   }
-  val remoteSpark = false//ExperimentalOptions.isEnabled("remoteSpark")
+  val remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
   def open(): Unit = {
     logger.warn(s"Open SparkBackend: sparkHost:$sparkHost, sparkPort:$sparkPort, hdfsPort:$hdfsPort, useHDFSHostnames:$useHDFSHostnames, overwriteStagedFiles:$overwriteStagedFiles, overwriteJars:$overwriteJars, numPartitions:$numPartitions, dataStagingType:$dataStagingType")
     sparkSql = sparkSql match {
