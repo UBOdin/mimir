@@ -123,8 +123,12 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
         //TODO: we need to do this in a more secure way (especially vizier has python scripts that could expose this)
         val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
         val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY")
-        val endpoint = Option(System.getenv("S3_ENDPOINT"))
+        val endpoint = Option(System.getenv("S3A_ENDPOINT"))
         endpoint.flatMap(ep => {sparkCtx.hadoopConfiguration.set("fs.s3a.endpoint", ep); None})
+        sparkCtx.hadoopConfiguration.set("fs.s3a.access.key",accessKeyId)
+        sparkCtx.hadoopConfiguration.set("fs.s3a.secret.key",secretAccessKey)
+        sparkCtx.hadoopConfiguration.set("fs.s3a.path.style.access","true")
+        sparkCtx.hadoopConfiguration.set("fs.s3a.impl","org.apache.hadoop.fs.s3a.S3AFileSystem")
         sparkCtx.hadoopConfiguration.set("fs.s3n.awsAccessKeyId", accessKeyId)
         sparkCtx.hadoopConfiguration.set("fs.s3n.awsSecretAccessKey", secretAccessKey)
         sparkCtx.hadoopConfiguration.set("fs.s3.impl", "org.apache.hadoop.fs.s3native.NativeS3FileSystem")
@@ -221,7 +225,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
       case Some(ldf) => {
         if(remoteSpark){
           val fileName = ldf.split(File.separator).last
-          if(ldf.startsWith("s3n:/")){
+          if(ldf.startsWith("s3n:/") || ldf.startsWith("s3a:/")){
             dsSchema.load(ldf)
           }
           else{
@@ -240,7 +244,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
           }
         }
         else {
-          if(ldf.startsWith("s3n:/") || !dataStagingType.equalsIgnoreCase("s3")){
+          if(ldf.startsWith("s3n:/") || ldf.startsWith("s3a:/") || !dataStagingType.equalsIgnoreCase("s3")){
             dsSchema.load(ldf)
           }
           else {
