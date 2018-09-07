@@ -139,7 +139,7 @@ libraryDependencies ++= Seq(
   "org.specs2"                    %%  "specs2-matcher-extra"     % "3.8.4" % "test",
   "org.specs2"                    %%  "specs2-junit"             % "3.8.4" % "test",
   "org.clapper"                   %%  "classutil" 				 % "1.1.2",
-  "com.amazonaws" 				  %   "aws-java-sdk-s3" 		 % "1.11.355",
+  "com.amazonaws" 				  %   "aws-java-sdk" 		 % "1.7.4",
   
   //////////////////////// Data Munging Tools //////////////////////
   "com.github.nscala-time"        %%  "nscala-time"              % "1.2.0",
@@ -163,10 +163,10 @@ libraryDependencies ++= Seq(
     exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
     
   //spark ml
-  "org.apache.spark" 			  %   "spark-sql_2.11" 		  % "2.2.0" exclude("org.slf4j", "slf4j-log4j12"),
-  "org.apache.spark" 			  %   "spark-mllib_2.11" 	  % "2.2.0" exclude("org.slf4j", "slf4j-log4j12"),
-  "org.apache.spark" 			  %   "spark-hive_2.11" 	  % "2.2.0" exclude("org.slf4j", "slf4j-log4j12"),
-  "org.apache.hadoop" 			  %   "hadoop-aws" 			  % "2.7.6" exclude("org.slf4j", "slf4j-log4j12"),
+  "org.apache.spark" 			  %   "spark-sql_2.11" 		  % "2.2.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12")),
+  "org.apache.spark" 			  %   "spark-mllib_2.11" 	  % "2.2.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12")),
+  "org.apache.spark" 			  %   "spark-hive_2.11" 	  % "2.2.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12")),
+  "org.apache.hadoop" 			  %   "hadoop-aws" 			  % "2.7.3" exclude("org.slf4j", "slf4j-log4j12"),
  
   //////////////////////// Jung ////////////////////////
   // General purpose graph manipulation library

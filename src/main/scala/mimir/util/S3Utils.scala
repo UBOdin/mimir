@@ -4,20 +4,20 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
 import java.util.List
-import com.amazonaws.HttpMethod;
-import com.amazonaws.auth.AWSCredentials
-import com.amazonaws.auth.BasicAWSCredentials
-import com.amazonaws.auth.AWSStaticCredentialsProvider
-import com.amazonaws.auth.profile.ProfileCredentialsProvider
-import com.amazonaws.services.s3.AmazonS3
-import com.amazonaws.services.s3.AmazonS3Client
-import com.amazonaws.services.s3.model.Bucket
-import com.amazonaws.services.s3.model.CannedAccessControlList
-import com.amazonaws.services.s3.model.ObjectMetadata
-import com.amazonaws.services.s3.model.PutObjectRequest
-import com.amazonaws.services.s3.model.S3ObjectSummary
-import com.amazonaws.services.s3.AmazonS3ClientBuilder
-import com.amazonaws.services.s3.model.GeneratePresignedUrlRequest
+import my.com.amazonaws.HttpMethod;
+import my.com.amazonaws.auth.AWSCredentials
+import my.com.amazonaws.auth.BasicAWSCredentials
+import my.com.amazonaws.auth.AWSStaticCredentialsProvider
+import my.com.amazonaws.auth.profile.ProfileCredentialsProvider
+import my.com.amazonaws.services.s3.AmazonS3
+import my.com.amazonaws.services.s3.AmazonS3Client
+import my.com.amazonaws.services.s3.model.Bucket
+import my.com.amazonaws.services.s3.model.CannedAccessControlList
+import my.com.amazonaws.services.s3.model.ObjectMetadata
+import my.com.amazonaws.services.s3.model.PutObjectRequest
+import my.com.amazonaws.services.s3.model.S3ObjectSummary
+import my.com.amazonaws.services.s3.AmazonS3ClientBuilder
+import my.com.amazonaws.services.s3.model.GeneratePresignedUrlRequest
 import scala.collection.JavaConversions._
 import java.net.HttpURLConnection
 import java.io.OutputStreamWriter
@@ -26,8 +26,8 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.BufferedOutputStream
 import java.io.BufferedInputStream
-import com.amazonaws.services.s3.model.GetObjectRequest
-import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
+import my.com.amazonaws.services.s3.model.GetObjectRequest
+import my.com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
 
 object S3Utils {
   private val PATH_SEP: String = "/"
