@@ -51,10 +51,10 @@ object S3Utils {
         
     val clientBuilder = AmazonS3ClientBuilder.standard()
       .withCredentials(new AWSStaticCredentialsProvider(credentials)) //new ProfileCredentialsProvider())
-      //.withRegion(clientRegion)
+      .withRegion(clientRegion)
     
       endpoint.flatMap(ep => {
-        val endpointConfiguration = new EndpointConfiguration(ep, clientRegion);
+        val endpointConfiguration = new EndpointConfiguration(ep, null);
         clientBuilder.setEndpointConfiguration(endpointConfiguration)
         Some(clientBuilder)
       })

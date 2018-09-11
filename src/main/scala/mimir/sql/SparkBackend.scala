@@ -206,7 +206,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
       val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY")
       val endpoint = Option(System.getenv("S3_ENDPOINT"))
       val s3client = S3Utils.authenticate(accessKeyId, secretAccessKey, "us-east-1", endpoint)
-      var relPath = file.replace(new File("").getAbsolutePath + File.separator, "")
+      var relPath = file.replaceFirst("https?://", "").replace(new File("").getAbsolutePath + File.separator, "")
       while(relPath.startsWith(File.separator))
         relPath = relPath.replaceFirst(File.separator, "")
       logger.debug(s"upload to s3: $file -> $relPath")
