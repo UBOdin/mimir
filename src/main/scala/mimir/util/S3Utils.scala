@@ -49,17 +49,18 @@ object S3Utils {
     // create a client connection based on credentials
     //new AmazonS3Client(credentials)
         
-    val clientBuilder = AmazonS3ClientBuilder.standard()
-      .withCredentials(new AWSStaticCredentialsProvider(credentials)) //new ProfileCredentialsProvider())
-      .withRegion(clientRegion)
-    
-      endpoint.flatMap(ep => {
-        val endpointConfiguration = new EndpointConfiguration(ep, null);
-        clientBuilder.setEndpointConfiguration(endpointConfiguration)
-        Some(clientBuilder)
-      })
-      .getOrElse(clientBuilder)
-      .build();
+    (endpoint match {
+      case None => AmazonS3ClientBuilder.standard()
+        .withCredentials(new AWSStaticCredentialsProvider(credentials)) //new ProfileCredentialsProvider())
+        .withRegion(clientRegion)
+      case Some(ep) => {
+        val cb = AmazonS3ClientBuilder.standard()
+          .withCredentials(new AWSStaticCredentialsProvider(credentials)) //new ProfileCredentialsProvider())
+        val endpointConfiguration = new EndpointConfiguration(ep, clientRegion);
+        cb.setEndpointConfiguration(endpointConfiguration)
+        cb
+      }
+    }).build();
   }
 
   /**
