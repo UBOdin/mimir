@@ -204,7 +204,11 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
     def copyToS3(file:String): String = {
       val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
       val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY")
-      val endpoint = Option(System.getenv("S3_ENDPOINT"))
+      val endpoint = System.getenv("S3_ENDPOINT") match {
+        case null => None
+        case "" => None
+        case x => Some(x)
+      }
       val s3client = S3Utils.authenticate(accessKeyId, secretAccessKey, "us-east-1", endpoint)
       var relPath = file.replaceFirst("https?://", "").replace(new File("").getAbsolutePath + File.separator, "")
       while(relPath.startsWith(File.separator))
