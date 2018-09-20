@@ -205,6 +205,15 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
           case (Cmp.Eq, TDate(), TDate())           => compileBinary(lhs, rhs, compileForDate) { _.equals(_) }
           case (Cmp.Eq, TTimestamp(), TTimestamp()) => compileBinary(lhs, rhs, compileForTimestamp) { _.equals(_) }
           case (Cmp.Eq, TRowId(), TRowId())         => compileBinary(lhs, rhs, compileForRowId) { _.equals(_) }
+          //TODO: remove this temporary hack to handle the way vizier is comparing rowids in views (and fix vizier)
+          case (Cmp.Eq, TString(), TRowId())        => compileBinary(lhs match {
+            case StringPrimitive(str) => RowIdPrimitive(str)
+            case _ => throw new RAException(s"Invalid comparison: $e")
+          }, rhs, compileForRowId) { _.equals(_) }
+          case (Cmp.Eq, TRowId(), TString())        => compileBinary(lhs, rhs match {
+            case StringPrimitive(str) => RowIdPrimitive(str)
+            case _ => throw new RAException(s"Invalid comparison: $e")
+          }, compileForRowId) { _.equals(_) }
           case (Cmp.Eq, _, _) 
               => throw new RAException(s"Invalid comparison: $e")
           case (Cmp.Neq, _, _)                      => compileForBool(Not(Comparison(Cmp.Eq, lhs, rhs)))

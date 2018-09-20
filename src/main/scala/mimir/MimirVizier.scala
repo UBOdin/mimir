@@ -28,6 +28,7 @@ import mimir.util.JSONBuilder
 import java.util.UUID
 import py4j.GatewayServer.GatewayServerBuilder
 import java.net.InetAddress
+import scala.collection.convert.Wrappers.JMapWrapper
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -346,6 +347,10 @@ object MimirVizier extends LazyLogging {
     val timeRes = logTime("createLens") {
       logger.debug("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
       val (viewNameSuffix, inputSubstitutionQuery) = input match {
+        case aliases:JMapWrapper[String,String] => {
+          aliases.map{ case (vizierName, mimirName) => db.sql.registerVizierNameMapping(vizierName.toUpperCase(), mimirName) } 
+          (aliases.unzip._2.mkString(""), query)
+        }
         case inputs:Seq[String] => {
           (inputs.mkString(""),inputs.zipWithIndex.foldLeft(query)((init, curr) => {
             init.replaceAll(s"\\{\\{\\s*input_${curr._2}\\s*\\}\\}", curr._1) 
@@ -453,6 +458,10 @@ object MimirVizier extends LazyLogging {
   
 def vistrailsQueryMimirJson(input:Any, query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
     val inputSubstitutionQuery = input match {
+        case aliases:JMapWrapper[String,String] => {
+          aliases.map{ case (vizierName, mimirName) => db.sql.registerVizierNameMapping(vizierName.toUpperCase(), mimirName) } 
+          query
+        }
         case inputs:Seq[String] => {
           inputs.zipWithIndex.foldLeft(query)((init, curr) => {
             init.replaceAll(s"\\{\\{\\s*input_${curr._2}\\s*\\}\\}", curr._1) 
