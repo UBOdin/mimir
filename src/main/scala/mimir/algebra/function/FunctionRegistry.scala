@@ -5,6 +5,7 @@ import java.sql.SQLException
 import mimir.parser.ExpressionParser
 import mimir.algebra._
 import mimir.Database
+import mimir.algebra.spark.function.SparkFunctions
 
 sealed abstract class RegisteredFunction { val name: String }
 
@@ -41,6 +42,8 @@ class FunctionRegistry {
     UtilityFunctions.register(this)
     RandomnessFunctions.register(this)
     TimeFunctions.register(this)
+    //it's to early to do this here.  Spark is not open yet. 
+    //SparkFunctions.register(this)
 	}
 
   def register(

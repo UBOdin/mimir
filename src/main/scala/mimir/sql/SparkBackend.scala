@@ -14,6 +14,7 @@ import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.SparkFiles
 import java.io.File
 import mimir.util.HadoopUtils
@@ -33,6 +34,18 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.util.S3Utils
 import org.apache.spark.sql.execution.command.DropTableCommand
 import org.apache.spark.sql.catalyst.TableIdentifier
+import mimir.algebra.spark.function.SparkFunctions
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.types.LongType
+import org.apache.spark.sql.types.IntegerType
+import org.apache.spark.sql.types.FloatType
+import org.apache.spark.sql.types.DoubleType
+import org.apache.spark.sql.types.ShortType
+import org.apache.spark.sql.types.DateType
+import org.apache.spark.sql.types.BooleanType
+import org.apache.spark.sql.types.TimestampType
+import mimir.algebra.function.FunctionRegistry
+import mimir.algebra.function.AggregateRegistry
 
 
 class SparkBackend(override val database:String, maintenance:Boolean = false) extends RABackend(database) 
@@ -150,8 +163,68 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
       sparkSql.sparkSession.catalog.listTables(sdb.name).show()
     })*/
     mimir.ml.spark.SparkML(sparkSql)
+    
   }
 
+  def registerSparkFunctions(excludedFunctions:Seq[String], fr:FunctionRegistry) = {
+    val sparkFunctions = sparkSql.sparkSession.sessionState.catalog
+        .listFunctions(database, "*")
+    sparkFunctions.filterNot(fid => excludedFunctions.contains(fid._1.funcName.toUpperCase())).foreach{ case (fidentifier, fname) => {
+          val fi = sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier)
+          if(!fi.getClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
+            SparkFunctions.addSparkFunction(fidentifier.funcName.toUpperCase(), (inputs) => {
+              val sparkInputs = inputs.map(inp => Literal(OperatorTranslation.mimirPrimitiveToSparkExternalRowValue(inp)))
+              val sparkRow = InternalRow(inputs.map(inp => OperatorTranslation.mimirPrimitiveToSparkInternalRowValue(inp)):_*)
+              val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
+              val sparkFunc = Class.forName(fi.getClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
+                                .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression]
+              val sparkRes = sparkFunc.eval(sparkRow)
+              sparkFunc.dataType match {
+                  case LongType => IntPrimitive(sparkRes.asInstanceOf[Long])
+                  case IntegerType => IntPrimitive(sparkRes.asInstanceOf[Int].toLong)
+                  case FloatType => FloatPrimitive(sparkRes.asInstanceOf[Float])
+                  case DoubleType => FloatPrimitive(sparkRes.asInstanceOf[Double])
+                  case ShortType => IntPrimitive(sparkRes.asInstanceOf[Short].toLong)
+                  case DateType => SparkUtils.convertDate(sparkRes.asInstanceOf[java.sql.Date])
+                  case BooleanType => BoolPrimitive(sparkRes.asInstanceOf[Boolean])
+                  case TimestampType => SparkUtils.convertTimestamp(sparkRes.asInstanceOf[java.sql.Timestamp])
+                  case x => StringPrimitive(sparkRes.toString())
+                } 
+            }, 
+            (inputTypes) => {
+              val inputs = inputTypes.map(inp => Literal(OperatorTranslation.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
+              val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
+              OperatorTranslation.getMimirType( Class.forName(fi.getClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(inputs:_*)
+              .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression].dataType)
+            })
+          } 
+      } }
+    SparkFunctions.register(fr)
+  }
+  
+  def registerSparkAggregates(excludedFunctions:Seq[String], ar:AggregateRegistry) = {
+    val sparkFunctions = sparkSql.sparkSession.sessionState.catalog
+        .listFunctions(database, "*")
+    sparkFunctions.filterNot(fid => excludedFunctions.contains(fid._1.funcName.toUpperCase())).flatMap{ case (fidentifier, fname) => {
+          val fi = sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier)
+          if(fi.getClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
+            Some((fidentifier.funcName.toUpperCase(), 
+            (inputTypes:Seq[Type]) => {
+              val inputs = inputTypes.map(inp => Literal(OperatorTranslation.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
+              val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
+              val dt = OperatorTranslation.getMimirType( Class.forName(fi.getClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(inputs:_*)
+              .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression].dataType)
+              dt
+            },
+            NullPrimitive()
+            ))
+          } else None 
+      } }.foreach(sa => {
+        logger.debug("registering spark aggregate: " + sa._1)
+        ar.register(sa._1, sa._2,sa._3)
+       })    
+  }
+  
   def materializeView(name:String): Unit = {
     if(sparkSql == null) throw new Exception("There is no spark context")
     sparkSql.table(name).persist().count()

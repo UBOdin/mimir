@@ -64,6 +64,7 @@ import org.apache.spark.sql.catalyst.analysis.UnresolvedStar
 import mimir.sql.GProMBackend
 import org.apache.spark.sql.catalyst.expressions.aggregate.StddevSamp
 import mimir.sql.BackendWithSparkContext
+import org.apache.spark.sql.catalyst.FunctionIdentifier
 
 object OperatorTranslation
   extends LazyLogging
@@ -493,8 +494,13 @@ object OperatorTranslation
            //TODO: when we add TArray() type we can use this
            //CollectList(mimirExprToSparkExpr(oper,args.head))
          }
-         case AggFunction(function, distinct, args, alias) => {
-           throw new Exception("Aggregate Function Translation not implemented '"+function+"'")
+         case AggFunction(function, _, args, _) => {
+           val fi = db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(FunctionIdentifier(function.toLowerCase()))
+           val sparkInputs = args.map(inp => mimirExprToSparkExpr(oper, inp))
+           val constructorTypes = args.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
+           Class.forName(fi.getClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
+                            .asInstanceOf[org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction]
+           //throw new Exception("Aggregate Function Translation not implemented '"+function+"'")
          } 
        },
        Complete,
@@ -747,6 +753,33 @@ object OperatorTranslation
       case DateType => TDate()
       case TimestampType => TTimestamp()
       case _ => TString()
+    }
+  }
+  
+  def getNative(value:PrimitiveValue, t:Type): Any = {
+    value match {
+      case NullPrimitive() => t match {
+        case TInt() => 0L
+        case TFloat() => new java.lang.Double(0.0)
+        case TDate() => OperatorTranslation.defaultDate
+        case TString() => ""
+        case TBool() => new java.lang.Boolean(false)
+        case TRowId() => ""
+        case TType() => ""
+        case TAny() => ""
+        case TTimestamp() => OperatorTranslation.defaultTimestamp
+        case TInterval() => ""
+        case TUser(name) => getNative(value, mimir.algebra.TypeRegistry.registeredTypes(name)._2)
+        case x => ""
+      }
+      case RowIdPrimitive(s) => s
+      case StringPrimitive(s) => s
+      case IntPrimitive(i) => i
+      case FloatPrimitive(f) => new java.lang.Double(f)
+      case BoolPrimitive(b) => new java.lang.Boolean(b)
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
+      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
+      case x =>  x.asString
     }
   }
   

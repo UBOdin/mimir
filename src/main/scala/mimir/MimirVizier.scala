@@ -29,6 +29,7 @@ import java.util.UUID
 import py4j.GatewayServer.GatewayServerBuilder
 import java.net.InetAddress
 import scala.collection.convert.Wrappers.JMapWrapper
+import mimir.algebra.spark.function.SparkFunctions
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -61,6 +62,8 @@ object MimirVizier extends LazyLogging {
       db = new Database(sback, new JDBCMetadataBackend(Mimir.conf.backend(), Mimir.conf.dbname()))
       db.metadataBackend.open()
       db.backend.open()
+      sback.registerSparkFunctions(db.functions.functionPrototypes.map(el => el._1).toSeq, db.functions)
+      sback.registerSparkAggregates(db.aggregates.prototypes.map(el => el._1).toSeq, db.aggregates)
     }
     else {
       //Use GProM Backend
@@ -163,6 +166,10 @@ object MimirVizier extends LazyLogging {
     val mv1 = createLens(table, Seq("'DEN > 0'"), "MISSING_VALUE", false, false)
     val mv2 = createLens(mv1, Seq("'OFFICE > 0'"), "MISSING_VALUE", false, false)
     println(vistrailsQueryMimir(s"SELECT * FROM $mv2", true, false).csvStr)*/
+    
+    //println(vistrailsQueryMimir("SELECT * FROM DEMO_TIMING_RAW", true, false).csvStr)
+    
+    //println(vistrailsQueryMimir("SELECT  hex(LAYER)  FROM DEMO_TIMING", true, false).csvStr)
     
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
       runServerForViztrails()

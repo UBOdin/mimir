@@ -53,14 +53,17 @@ object Mimir extends LazyLogging {
    
     // Set up the database connection(s)
     val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
-    db = new Database(new SparkBackend(database), new JDBCMetadataBackend(conf.backend(), conf.dbname()))
+    val sback = new SparkBackend(database)
+    db = new Database(sback, new JDBCMetadataBackend(conf.backend(), conf.dbname()))
     if(!conf.quiet()){
       output.print("Connecting to " + conf.backend() + "://" + conf.dbname() + "...")
     }
     db.metadataBackend.open()
     db.backend.open()
     OperatorTranslation.db = db
-    
+    sback.registerSparkFunctions(db.functions.functionPrototypes.map(el => el._1).toSeq, db.functions)
+    sback.registerSparkAggregates(db.aggregates.prototypes.map(el => el._1).toSeq, db.aggregates)
+      
     db.initializeDBForMimir();
 
     // Check for one-off commands
