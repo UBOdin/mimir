@@ -616,6 +616,20 @@ object OperatorTranslation
     }
   }
   
+  def mimirPrimitiveToSparkInternalInlineFuncParam(primitive : PrimitiveValue) : Any = {
+    primitive match {
+      case IntPrimitive(i) => i.toInt
+      case x =>  mimirPrimitiveToSparkInternalRowValue(x)
+    }
+  }
+  
+  def mimirPrimitiveToSparkExternalInlineFuncParam(primitive : PrimitiveValue) : Any = {
+    primitive match {
+      case IntPrimitive(i) => i.toInt
+      case x =>  mimirPrimitiveToSparkExternalRowValue(x)
+    }
+  }
+  
   def mimirComparisonToSparkComparison(oper:Operator, cmp:Comparison) : org.apache.spark.sql.catalyst.expressions.Expression = {
     cmp.op match {
       case  Cmp.Eq => EqualTo(mimirExprToSparkExpr(oper,cmp.lhs), mimirExprToSparkExpr(oper,cmp.rhs))

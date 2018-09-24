@@ -173,8 +173,9 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
           val fi = sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier)
           if(!fi.getClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
             SparkFunctions.addSparkFunction(fidentifier.funcName.toUpperCase(), (inputs) => {
-              val sparkInputs = inputs.map(inp => Literal(OperatorTranslation.mimirPrimitiveToSparkExternalRowValue(inp)))
-              val sparkRow = InternalRow(inputs.map(inp => OperatorTranslation.mimirPrimitiveToSparkInternalRowValue(inp)):_*)
+              val sparkInputs = inputs.map(inp => Literal(OperatorTranslation.mimirPrimitiveToSparkExternalInlineFuncParam(inp)))
+              val sparkInternal = inputs.map(inp => OperatorTranslation.mimirPrimitiveToSparkInternalInlineFuncParam(inp))
+              val sparkRow = InternalRow(sparkInternal:_*)
               val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
               val sparkFunc = Class.forName(fi.getClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
                                 .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression]
