@@ -170,14 +170,14 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
     val sparkFunctions = sparkSql.sparkSession.sessionState.catalog
         .listFunctions(database, "*")
     sparkFunctions.filterNot(fid => excludedFunctions.contains(fid._1.funcName.toUpperCase())).foreach{ case (fidentifier, fname) => {
-          val fi = sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier)
-          if(!fi.getClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
+          val fClassName = sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
+          if(!fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
             SparkFunctions.addSparkFunction(fidentifier.funcName.toUpperCase(), (inputs) => {
               val sparkInputs = inputs.map(inp => Literal(OperatorTranslation.mimirPrimitiveToSparkExternalInlineFuncParam(inp)))
               val sparkInternal = inputs.map(inp => OperatorTranslation.mimirPrimitiveToSparkInternalInlineFuncParam(inp))
               val sparkRow = InternalRow(sparkInternal:_*)
               val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
-              val sparkFunc = Class.forName(fi.getClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
+              val sparkFunc = Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
                                 .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression]
               val sparkRes = sparkFunc.eval(sparkRow)
               sparkFunc.dataType match {
@@ -195,7 +195,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
             (inputTypes) => {
               val inputs = inputTypes.map(inp => Literal(OperatorTranslation.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
               val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
-              OperatorTranslation.getMimirType( Class.forName(fi.getClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(inputs:_*)
+              OperatorTranslation.getMimirType( Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(inputs:_*)
               .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression].dataType)
             })
           } 
@@ -207,13 +207,13 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
     val sparkFunctions = sparkSql.sparkSession.sessionState.catalog
         .listFunctions(database, "*")
     sparkFunctions.filterNot(fid => excludedFunctions.contains(fid._1.funcName.toUpperCase())).flatMap{ case (fidentifier, fname) => {
-          val fi = sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier)
-          if(fi.getClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
+          val fClassName = sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
+          if(fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
             Some((fidentifier.funcName.toUpperCase(), 
             (inputTypes:Seq[Type]) => {
               val inputs = inputTypes.map(inp => Literal(OperatorTranslation.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
               val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
-              val dt = OperatorTranslation.getMimirType( Class.forName(fi.getClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(inputs:_*)
+              val dt = OperatorTranslation.getMimirType( Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(inputs:_*)
               .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression].dataType)
               dt
             },

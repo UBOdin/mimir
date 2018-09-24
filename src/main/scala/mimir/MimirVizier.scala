@@ -30,6 +30,7 @@ import py4j.GatewayServer.GatewayServerBuilder
 import java.net.InetAddress
 import scala.collection.convert.Wrappers.JMapWrapper
 import mimir.algebra.spark.function.SparkFunctions
+import java.net.URLDecoder
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -264,18 +265,17 @@ object MimirVizier extends LazyLogging {
     val timeRes = logTime("loadCSV") {
       logger.debug(s"loadCSV: From Vistrails: [ $file ] format: ${format._1} -> [ ${format._2.mkString(",")} ]") ;
       val vizierFSPath = "/usr/local/source/web-api/.vizierdb/"
-      val csvFile = if(file.startsWith(vizierFSPath)){
+      val saferFile = URLDecoder.decode(file, "utf-8")
+      val csvFile = if(saferFile.startsWith(vizierFSPath)){
         //hack for loading file from s3 - because it is already there for production version
         val vizierDataS3Bucket = System.getenv("S3_BUCKET_NAME")
-        new File(file.replace(vizierFSPath, s"s3n://$vizierDataS3Bucket/"))
+        new File(saferFile.replace(vizierFSPath, s"s3n://$vizierDataS3Bucket/"))
       }
       else{
-        new File(file)
+        new File(saferFile)
       }
       val fileName = csvFile.getName().split("\\.")(0)
-      //table names cant start with digits - the sql parser does not like it
-      //to if the filename starts with a digit, prepend a "t"
-      val nameFromFile = if(fileName.matches("^\\d.*")) s"t$fileName" else fileName
+      val nameFromFile = sanitizeTableName(fileName)
       val tableName = nameFromFile.toUpperCase
       if(db.getAllTables().contains(tableName)){
         logger.debug("loadCSV: From Vistrails: Table Already Exists: " + tableName)
@@ -293,6 +293,14 @@ object MimirVizier extends LazyLogging {
         throw t
       }
     }
+  }
+  
+  private def sanitizeTableName(tableName:String) : String = {
+    //table names cant start with digits - the sql parser does not like it
+    //to if the filename starts with a digit, prepend a "t"
+    (if(tableName.matches("^\\d.*")) s"t$tableName" else tableName)
+      //also replace characters that cant be in table name with _
+      .replaceAll("[\\%\\^\\&\\(\\{\\}\\+\\-\\/ \\]\\[\\']", "_")
   }
   
   def createLens(input : Any, params : java.util.ArrayList[String], _type : String, make_input_certain:Boolean, materialize:Boolean) : String = {
