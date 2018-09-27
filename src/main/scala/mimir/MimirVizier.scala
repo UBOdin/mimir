@@ -32,6 +32,12 @@ import scala.collection.convert.Wrappers.JMapWrapper
 import mimir.algebra.spark.function.SparkFunctions
 import java.net.URLDecoder
 
+import scala.reflect.runtime.currentMirror
+import scala.tools.reflect.ToolBox
+import java.io.File
+import mimir.exec.result.ResultIterator
+import org.apache.spark.sql.SparkSession
+
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
  * - Parsing and processing command line arguments.
@@ -65,6 +71,7 @@ object MimirVizier extends LazyLogging {
       db.backend.open()
       sback.registerSparkFunctions(db.functions.functionPrototypes.map(el => el._1).toSeq, db.functions)
       sback.registerSparkAggregates(db.aggregates.prototypes.map(el => el._1).toSeq, db.aggregates)
+      vizierdb.sparkSession = sback.sparkSql.sparkSession
     }
     else {
       //Use GProM Backend
@@ -251,11 +258,65 @@ object MimirVizier extends LazyLogging {
      server.shutdown()
     
   }
+
+  object Eval {
+  
+    def apply[A](string: String): A = {
+      val toolbox = currentMirror.mkToolBox()
+      val tree = toolbox.parse(string)
+      toolbox.eval(tree).asInstanceOf[A]
+    }
+  
+    def fromFile[A](file: File): A =
+      apply(scala.io.Source.fromFile(file).mkString(""))
+  
+    def fromFileName[A](file: String): A =
+      fromFile(new File(file))
+  
+  }
+  
+  object vizierdb {
+    
+    var sparkSession:SparkSession = null;
+    
+    def withDataset[T](dsname:String, handler: ResultIterator => T ) : T = {
+     val mimirName:String = db.sql.getVizierNameMapping(dsname.toUpperCase()) match {
+       case Some(mname) => mname
+       case None => throw new Exception(s"No such table or view '$dsname'")
+     }
+     val oper = db.table(mimirName)
+     db.query(oper)(handler)
+    }
+        
+    def outputAnnotations(dsname:String) : String = {
+      val mimirName:String = db.sql.getVizierNameMapping(dsname.toUpperCase()) match {
+       case Some(mname) => mname
+       case None => throw new Exception(s"No such table or view '$dsname'")
+     }
+     val oper = db.table(mimirName)
+     explainEverything(oper).mkString("<br><br>")
+    }
+  }
   
   //-------------------------------------------------
   //Python package defs
   ///////////////////////////////////////////////
   var pythonCallThread : Thread = null
+  def evalScala(source : String) : String = {
+    try {
+      val timeRes = logTime("evalScala") {
+        Eval("import mimir.MimirVizier.vizierdb\n"+source) : String
+      }
+      logger.debug(s"evalScala Took: ${timeRes._2}")
+      timeRes._1
+    } catch {
+      case t: Throwable => {
+        logger.error(s"Error Evaluating Scala Source", t)
+        s"Error Evaluating Scala Source: ${t.getStackTrace.mkString("<br>")}"
+      }
+    }
+  }
+  
   def loadCSV(file : String) : String = loadCSV(file, ("CSV", Seq(StringPrimitive(","))))
   def loadCSV(file : String, delimeter:String, inferTypes:Boolean, detectHeaders:Boolean) : String = 
     loadCSV(file, ("CSV", Seq(StringPrimitive(delimeter), BoolPrimitive(inferTypes), BoolPrimitive(detectHeaders))))
@@ -351,6 +412,17 @@ object MimirVizier extends LazyLogging {
     } catch {
       case t: Throwable => {
         logger.error(s"Error Creating Lens: [ $input ] [ ${params.mkString(",")} ] [ ${_type }]", t)
+        throw t
+      }
+    }
+  }
+  
+  def registerNameMappings(nameMappings:JMapWrapper[String,String]) : Unit = {
+    try{
+      nameMappings.map{ case (vizierName, mimirName) => db.sql.registerVizierNameMapping(vizierName.toUpperCase(), mimirName) }
+     } catch {
+      case t: Throwable => {
+        logger.error("Failed To Register Name Mappings: [" + nameMappings.mkString(",") + "]", t)
         throw t
       }
     }

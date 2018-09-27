@@ -34,6 +34,8 @@ class SqlToRA(db: Database)
   def registerVizierNameMapping(vizierName:String,mimirName:String) : Unit = {
     vizierNameMap.put(vizierName, mimirName)
   }
+  
+  def getVizierNameMapping(vizierName:String) : Option[String] =  vizierNameMap.get(vizierName)
 
   def unhandled(feature : String) = {
     println("ERROR: Unhandled Feature: " + feature)

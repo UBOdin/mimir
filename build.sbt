@@ -140,6 +140,7 @@ libraryDependencies ++= Seq(
   "org.specs2"                    %%  "specs2-junit"             % "3.8.4" % "test",
   "org.clapper"                   %%  "classutil" 				 % "1.1.2",
   "com.amazonaws" 				  %   "aws-java-sdk-s3" 		 % "1.11.234",
+  "ch.cern.sparkmeasure" 		  %%  "spark-measure" 			 % "0.13",
   
   //////////////////////// Data Munging Tools //////////////////////
   "com.github.nscala-time"        %%  "nscala-time"              % "1.2.0",
