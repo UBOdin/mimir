@@ -302,17 +302,17 @@ object MimirVizier extends LazyLogging {
   //Python package defs
   ///////////////////////////////////////////////
   var pythonCallThread : Thread = null
-  def evalScala(source : String) : String = {
+  def evalScala(source : String) : PythonScalaEvalResponse = {
     try {
       val timeRes = logTime("evalScala") {
         Eval("import mimir.MimirVizier.vizierdb\n"+source) : String
       }
       logger.debug(s"evalScala Took: ${timeRes._2}")
-      timeRes._1
+      new PythonScalaEvalResponse(timeRes._1,"")
     } catch {
       case t: Throwable => {
         logger.error(s"Error Evaluating Scala Source", t)
-        s"Error Evaluating Scala Source: ${t.getStackTrace.mkString("<br>")}"
+        new PythonScalaEvalResponse("",s"Error Evaluating Scala Source: \n${t.getMessage()}\n${t.getStackTrace.mkString("\n")}")
       }
     }
   }
@@ -1186,3 +1186,4 @@ trait PythonMimirCallInterface {
 
 class PythonCSVContainer(val csvStr: String, val colsDet: Array[Array[Boolean]], val rowsDet: Array[Boolean], val celReasons:Array[Array[String]], val prov: Array[String], val schema:Map[String, String]){}
 
+class PythonScalaEvalResponse(val stdout: String, val stderr: String ){}
