@@ -510,14 +510,10 @@ class SqlToRA(db: Database)
       if(fi.asInstanceOf[net.sf.jsqlparser.schema.Table].getSchemaName == null){
         val tableOp = if(db.metadataTables.contains(name) || name.startsWith("MIMIR_DA_FDG_") || name.startsWith("MIMIR_DA_SCH_")) 
           db.metadataTable(name, alias) else {
-            if(db.tableExists(name))
-              db.table(name, alias)
-            else{
-              val mimirName = vizierNameMap.getOrElse(name, {throw new SQLException(s"No such table or view '$name'")}) 
-              if(name.equals(alias))
-                db.table(mimirName, mimirName)
-              else
-                db.table(mimirName, alias)
+            vizierNameMap.get(name) match {
+              case Some(mimirName) if name.equals(alias) => db.table(mimirName, mimirName)
+              case Some(mimirName) => db.table(mimirName, alias)
+              case None => db.table(name, alias)
             }
           }
         val newBindings = tableOp.columnNames.map { x => (x, alias+"_"+x) }

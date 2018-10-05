@@ -359,9 +359,9 @@ object MimirVizier extends LazyLogging {
   private def sanitizeTableName(tableName:String) : String = {
     //table names cant start with digits - the sql parser does not like it
     //to if the filename starts with a digit, prepend a "t"
-    (if(tableName.matches("^\\d.*")) s"t$tableName" else tableName)
+    ((if(tableName.matches("^\\d.*")) s"t$tableName" else tableName) + UUID.randomUUID().toString())
       //also replace characters that cant be in table name with _
-      .replaceAll("[\\%\\^\\&\\(\\{\\}\\+\\-\\/ \\]\\[\\']", "_")
+      .replaceAll("[\\%\\^\\&\\(\\{\\}\\+\\-\\/ \\]\\[\\']", "_") 
   }
   
   def createLens(input : Any, params : java.util.ArrayList[String], _type : String, make_input_certain:Boolean, materialize:Boolean) : String = {
@@ -457,7 +457,7 @@ object MimirVizier extends LazyLogging {
           db.update(db.parse(viewQuery).head)
         }
         case Some(_) => {
-          logger.debug("createView: From Vistrails: View already exists: " + viewName)
+          logger.warn("createView: From Vistrails: View already exists: " + viewName)
         }
       }
       viewName
@@ -716,6 +716,19 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
       } 
     }
     timeRes._1
+  }
+  
+  def explainCell(query: String, col:String, row:String) : Seq[mimir.ctables.Reason] = {
+    try{
+    logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
+    val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+    explainCell(oper, col, RowIdPrimitive(row))
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Cell: [" + col + "] [ "+ row +" ] [" + query + "]", t)
+        throw t
+      }
+    }
   }
 
   def explainCell(query: String, col:Int, row:String) : Seq[mimir.ctables.Reason] = {
@@ -1159,7 +1172,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
    val tEnd = System.nanoTime()
    if(ExperimentalOptions.isEnabled("LOGM")){
      val fw = new FileWriter("/usr/local/source/web-api/.vizierdb/logs/timing.log", true) ; 
-     fw.write(s"mimir, ${name}, ${UUID.randomUUID().toString}, duration, ${(tEnd-tStart)/1000000}\n") ; 
+     fw.write(s"mimir, ${name}, ${UUID.randomUUID().toString}, duration, ${(tEnd-tStart)/1000000.0}\n") ; 
      fw.close()
    }
    (anonFuncRet, tEnd-tStart)   

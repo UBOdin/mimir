@@ -76,7 +76,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
             .set("spark.sql.catalogImplementation", "hive")
             .set("spark.sql.shuffle.partitions", s"$numPartitions")//TODO: make this the number of workers
             .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-            .set("spark.kryoserializer.buffer.max", "256m")
+            .set("spark.kryoserializer.buffer.max", "1536m")
             .registerKryoClasses(SparkUtils.getSparkKryoClasses())
         }
         else{
@@ -307,6 +307,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
         if(remoteSpark){
           val fileName = ldf.split(File.separator).last
           if(ldf.startsWith("s3n:/") || ldf.startsWith("s3a:/")){
+            sparkSql.sparkSession.sharedState.cacheManager.recacheByPath(sparkSql.sparkSession, ldf)
             dsSchema.load(ldf)
           }
           else{
@@ -326,6 +327,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
         }
         else {
           if(ldf.startsWith("s3n:/") || ldf.startsWith("s3a:/") || !dataStagingType.equalsIgnoreCase("s3")){
+            sparkSql.sparkSession.sharedState.cacheManager.recacheByPath(sparkSql.sparkSession, ldf)
             dsSchema.load(ldf)
           }
           else {
