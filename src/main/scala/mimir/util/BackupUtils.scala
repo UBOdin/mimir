@@ -168,7 +168,11 @@ object BackupUtils {
     if (exitCode == 0) {
       val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
       val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY")
-      val endpoint = Option(System.getenv("S3_ENDPOINT"))
+      val endpoint = System.getenv("S3_ENDPOINT") match {
+        case null => None
+        case "" => None
+        case x => Some(x)
+      }
       val s3client = S3Utils.authenticate(accessKeyId, secretAccessKey, "us-east-1", endpoint)
       S3Utils.copyToS3Stream(s3Bucket, new ByteArrayInputStream(stdoutStream.toByteArray()), targetFile, s3client, true) 
     }
@@ -183,7 +187,11 @@ object BackupUtils {
     val parentDir = Option(new File(targetDir).getParent + File.separator).getOrElse("/")
     val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
     val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY")
-    val endpoint = Option(System.getenv("S3_ENDPOINT"))
+    val endpoint = System.getenv("S3_ENDPOINT") match {
+        case null => None
+        case "" => None
+        case x => Some(x)
+      }
     val s3client = S3Utils.authenticate(accessKeyId, secretAccessKey, "us-east-1", endpoint)
     val tarCmd = Seq("tar", "-xpv", "-C", parentDir)
     val stdoutStream = new ByteArrayOutputStream()

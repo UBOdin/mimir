@@ -253,7 +253,9 @@ object S3Utils {
         url.openConnection().asInstanceOf[HttpURLConnection]
       connection.setDoOutput(true)
       connection.setRequestMethod("PUT")
+      connection.setFixedLengthStreamingMode(input.available())
       val out = new BufferedOutputStream(connection.getOutputStream)
+      
       
       val bytes = new Array[Byte](1024) //1024 bytes - Buffer size
       Iterator
