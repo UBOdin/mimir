@@ -6,7 +6,7 @@ import java.util
 import java.util.TreeMap
 import java.util.ArrayList
 import java.util.HashMap
-import javax.swing.{JFrame, JPanel, JScrollPane}
+import javax.swing.{JFrame, JPanel, JScrollPane, WindowConstants}
 import java.awt.{BasicStroke, Color, Dimension, Paint, Rectangle, Stroke}
 import java.sql.ResultSet
 
@@ -857,7 +857,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
 
     //Sets the viewing area size
     var frame: JFrame = new JFrame("Simple Graph View");
-    frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+    frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
     frame.getContentPane().add(vv);
     frame.pack();
     frame.setVisible(true);
