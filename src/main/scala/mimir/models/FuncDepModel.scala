@@ -8,12 +8,12 @@ import com.typesafe.scalalogging.slf4j.Logger
 import mimir.algebra._
 import mimir.ctables._
 import mimir.util.{RandUtils,TextUtils,TimeUtils}
-import mimir.{Analysis, Database}
-import moa.core.InstancesHeader
-import weka.core.{Attribute, DenseInstance, Instance, Instances}
-import weka.experiment.{DatabaseUtils, InstanceQueryAdapter}
-import weka.classifiers.{Classifier, UpdateableClassifier}
-import weka.classifiers.bayes.{NaiveBayesMultinomial,NaiveBayesMultinomialUpdateable,NaiveBayesMultinomialText}
+import mimir.Database
+// import moa.core.InstancesHeader
+// import weka.core.{Attribute, DenseInstance, Instance, Instances}
+// import weka.experiment.{DatabaseUtils, InstanceQueryAdapter}
+// import weka.classifiers.{Classifier, UpdateableClassifier}
+// import weka.classifiers.bayes.{NaiveBayesMultinomial,NaiveBayesMultinomialUpdateable,NaiveBayesMultinomialText}
 import mimir.models._
 import mimir.statistics.FuncDep
 

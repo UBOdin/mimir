@@ -17,7 +17,7 @@
 
   <logger name="org.apache.hadoop.util.Shell" level="OFF"/>
 
-  <root level="WARN">
+  <root level="INFO">
     <appender-ref ref="STDOUT" />
   </root>
  

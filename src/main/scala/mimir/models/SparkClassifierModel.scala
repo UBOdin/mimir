@@ -8,7 +8,7 @@ import com.typesafe.scalalogging.slf4j.Logger
 import mimir.algebra._
 import mimir.ctables._
 import mimir.util.{RandUtils,TextUtils,Timer}
-import mimir.{Analysis, Database}
+import mimir.Database
 
 import mimir.models._
 

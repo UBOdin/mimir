@@ -15,7 +15,7 @@ import com.typesafe.scalalogging.slf4j.Logger
 import mimir.algebra._
 import mimir.ctables._
 import mimir.util.{RandUtils,TextUtils,TimeUtils}
-import mimir.{Analysis, Database}
+import mimir.Database
 import mimir.models._
 import mimir.util._
 import mimir.statistics.DetectSeries
