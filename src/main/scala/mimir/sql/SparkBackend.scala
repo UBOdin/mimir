@@ -172,6 +172,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
     sparkFunctions.filterNot(fid => excludedFunctions.contains(fid._1.funcName.toUpperCase())).foreach{ case (fidentifier, fname) => {
           val fClassName = sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
           if(!fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
+            logger.debug("registering spark function: " + fidentifier.funcName.toUpperCase())
             SparkFunctions.addSparkFunction(fidentifier.funcName.toUpperCase(), (inputs) => {
               val sparkInputs = inputs.map(inp => Literal(OperatorTranslation.mimirPrimitiveToSparkExternalInlineFuncParam(inp)))
               val sparkInternal = inputs.map(inp => OperatorTranslation.mimirPrimitiveToSparkInternalInlineFuncParam(inp))

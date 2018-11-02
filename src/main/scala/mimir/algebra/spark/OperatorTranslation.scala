@@ -65,6 +65,8 @@ import mimir.sql.GProMBackend
 import org.apache.spark.sql.catalyst.expressions.aggregate.StddevSamp
 import mimir.sql.BackendWithSparkContext
 import org.apache.spark.sql.catalyst.FunctionIdentifier
+import org.apache.spark.sql.catalyst.expressions.CreateArray
+import org.apache.spark.sql.types.TypeCollection
 
 object OperatorTranslation
   extends LazyLogging
@@ -106,10 +108,7 @@ object OperatorTranslation
 			}
 			case LeftOuterJoin(lhs, rhs, condition) => {
 			  //org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), LeftOuter, Some(mimirExprToSparkExpr(oper,condition)))
-			  val joinType = condition match {
-			    case BoolPrimitive(true) => Cross
-			    case _ => LeftOuter
-			  }
+			  val joinType = LeftOuter
 			  makeSparkJoin(lhs, rhs, Some(mimirExprToSparkExpr(oper,condition)), joinType) 
 			}
 			case Join(lhs, rhs) => {
@@ -120,21 +119,22 @@ object OperatorTranslation
 			  org.apache.spark.sql.catalyst.plans.logical.Union(mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs))
 			}
 			case Limit(offset, limit, query) => {
-			  //TODO: Need a better way to do offsets in spark. This way will break pretty easily because of the way 
-			  //      that MonotonicallyIncreasingID behaves. The current implementation
-        //      puts the partition ID in the upper 31 bits, and the lower 33 bits represent the record number
-        //      within each partition - so pretty much this will only work with one partition - obviously unacceptable
+			  //TODO: Need a better way to do offsets in spark. This way works without breaking, but it is almost as 
+			  //  expensive as the full query for small datasets and more expensive for large datasets
+			  val sparkChildOp = mimirOpToSparkOp(query)
 			  val offsetOp = if(offset > 0){
-			    logger.debug("------------------------------>Hacky Offset<-------------------------------------")
-			    org.apache.spark.sql.catalyst.plans.logical.Filter(GreaterThanOrEqual(MonotonicallyIncreasingID(),Literal(offset)), mimirOpToSparkOp(query))
+			    //the records to exclude
+			    val offsetExcept = org.apache.spark.sql.catalyst.plans.logical.Limit(
+  			      Literal(offset.toInt), 
+  			      sparkChildOp)
+			    org.apache.spark.sql.catalyst.plans.logical.Except(sparkChildOp, offsetExcept)
 			  } else {
-                            mimirOpToSparkOp(query)
-                          }
-
-        limit match {
-			    case Some(limitI) => org.apache.spark.sql.catalyst.plans.logical.GlobalLimit(
-			      Literal(limitI.toInt), 
-			      offsetOp)
+          sparkChildOp
+        }
+			  limit match {
+			    case Some(limitI) => org.apache.spark.sql.catalyst.plans.logical.Limit(
+  			      Literal(limitI.toInt), 
+  			      offsetOp)
 			    case None => offsetOp
 			  }
 			}
@@ -757,6 +757,19 @@ object OperatorTranslation
     }
   }
   
+  def getInternalSparkType(t:DataType) : DataType = {
+    t match {
+      case IntegerType => IntegerType
+      case DoubleType => DoubleType
+      case FloatType => FloatType
+      case LongType => LongType
+      case BooleanType => BooleanType
+      case DateType => LongType
+      case TimestampType => LongType
+      case _ => StringType
+    }
+  }
+  
   def getMimirType(dataType: DataType): Type = {
     dataType match {
       case IntegerType => TInt()
@@ -876,6 +889,9 @@ class MimirUDF {
       case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
       case x =>  x.asString
     }
+  def getStructType(datatypes:Seq[DataType]): StructType = {
+    StructType(datatypes.map(dti => StructField("", OperatorTranslation.getInternalSparkType(dti), true)))
+  }
 }
 
 
@@ -883,21 +899,34 @@ case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression
   val sparkVarType = OperatorTranslation.getSparkType(model.varType(idx, model.argTypes(idx)))
   val sparkArgs = (args.map(arg => OperatorTranslation.mimirExprToSparkExpr(oper,arg)) ++ hints.map(hint => OperatorTranslation.mimirExprToSparkExpr(oper,hint))).toList.toSeq
   val sparkArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg)) ++ model.hintTypes(idx).map(hint => OperatorTranslation.getSparkType(hint))).toList.toSeq
-  
+    
   def extractArgsAndHints(args:Seq[Any]) : (Seq[PrimitiveValue],Seq[PrimitiveValue]) ={
     try{
+      val getParamPrimitive:(Type, Any) => PrimitiveValue = if(sparkArgs.length > 22) (t, v) => {
+        v match {
+          case null => NullPrimitive()
+          case _ => Cast(t,StringPrimitive(v.asInstanceOf[String]))
+        }
+      }
+      else getPrimitive _
       val argList =
-      model.argTypes(idx).
-        zipWithIndex.
-        map( arg => getPrimitive(arg._1, args(arg._2)))
-      val hintList = 
-        model.hintTypes(idx).
+        model.argTypes(idx).
           zipWithIndex.
-          map( arg => getPrimitive(arg._1, args(argList.length+arg._2)))
-      (argList,hintList)  
+          map( arg => getParamPrimitive(arg._1, args(arg._2)))
+        val hintList = 
+          model.hintTypes(idx).
+            zipWithIndex.
+            map( arg => getParamPrimitive(arg._1, args(argList.length+arg._2)))
+        (argList,hintList)  
     }catch {
       case t: Throwable => throw new Exception(s"BestGuessUDF Error Extracting Args and Hints: \n\tModel: ${model.name} \n\tArgs: [${args.mkString(",")}] \n\tSparkArgs: [${sparkArgs.mkString(",")}]", t)
     }
+  }
+  def varArgs(args:Any*):Any = {
+    //TODO: Handle all params for spark udfs: ref @willsproth
+    val (argList, hintList) = extractArgsAndHints(args)
+    //println(s"-------------------------> UDF Param overflow: args:${argList.mkString("\n")} hints:${hintList.mkString("\n")}")
+    getNative(model.bestGuess(idx, argList, hintList))
   }
   def getUDF = 
     ScalaUDF(
@@ -993,10 +1022,11 @@ case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression
           val (argList, hintList) = extractArgsAndHints(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18, arg19, arg20, arg21))
           getNative(model.bestGuess(idx, argList, hintList))
         }
+        case x => varArgs _
       },
       sparkVarType,
-      sparkArgs,
-      sparkArgTypes,
+      if(sparkArgs.length > 22) Seq(CreateArray(sparkArgs)) else sparkArgs,
+      if(sparkArgs.length > 22) Seq(ArrayType(StringType)) else sparkArgTypes,
       Some(model.name))
 }
 
@@ -1020,6 +1050,11 @@ case class SampleUDF(oper:Operator, model:Model, idx:Int, seed:Expression, args:
    }catch {
       case t: Throwable => throw new Exception(s"SampleUDF Error Extracting Args and Hints: \n\tModel: ${model.name} \n\tArgs: [${args.mkString(",")}] \n\tSparkArgs: [${sparkArgs.mkString(",")}]", t)
     }
+  }
+  def varArgs(args:Any*): Any = {
+    //TODO: Handle all params for spark udfs: ref @willsproth
+    val (seedi, argList, hintList) = extractArgsAndHintsSeed(args)
+    getNative(model.sample(idx, seedi, argList, hintList))
   }
   def getUDF = 
     ScalaUDF(
@@ -1115,10 +1150,11 @@ case class SampleUDF(oper:Operator, model:Model, idx:Int, seed:Expression, args:
           val (seedi, argList, hintList) = extractArgsAndHintsSeed(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18, arg19, arg20, arg21))
           getNative(model.sample(idx, seedi, argList, hintList))
         }
+        case x => varArgs _
       },
       sparkVarType,
-      sparkArgs,
-      sparkArgTypes,
+      if(sparkArgs.length > 22) Seq(CreateStruct(sparkArgs)) else sparkArgs,
+      if(sparkArgs.length > 22) Seq(getStructType(sparkArgTypes)) else sparkArgTypes,
       Some(model.name))
 }
 
@@ -1133,6 +1169,11 @@ case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression]) e
     }catch {
       case t: Throwable => throw new Exception(s"AckedUDF Error Extracting Args: \n\tModel: ${model.name} \n\tArgs: [${args.mkString(",")}] \n\tSparkArgs: [${sparkArgs.mkString(",")}]", t)
     }
+  }
+  def varArgs(args:Any*):Any = {
+    //TODO: Handle all params for spark udfs: ref @willsproth
+    val argList = extractArgs(args.toSeq)
+    model.isAcknowledged(idx, argList)
   }
   def getUDF = 
     ScalaUDF(
@@ -1228,10 +1269,11 @@ case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression]) e
           val argList= extractArgs(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18, arg19, arg20, arg21))
           model.isAcknowledged(idx, argList)
         }
+        case x => varArgs _
       },
       BooleanType,
-      sparkArgs,
-      sparkArgTypes,
+      if(sparkArgs.length > 22) Seq(CreateStruct(sparkArgs)) else sparkArgs,
+      if(sparkArgs.length > 22) Seq(getStructType(sparkArgTypes)) else sparkArgTypes,
       Some(model.name))
 }
 
@@ -1247,6 +1289,11 @@ case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, 
     }catch {
       case t: Throwable => throw new Exception(s"FunctionUDF Error Extracting Args: \n\tModel: ${name} \n\tArgs: [${args.mkString(",")}] \n\tSparkArgs: [${sparkArgs.mkString(",")}]", t)
     }
+  }
+  def varArgs(evaluator:Seq[PrimitiveValue] => PrimitiveValue)(args:Any*):Any = {
+    //TODO: Handle all params for spark udfs: ref @willsproth
+    val argList= extractArgs(args.toSeq)
+    getNative(evaluator(argList))
   }
   def getUDF = 
     ScalaUDF(
@@ -1344,11 +1391,12 @@ case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, 
               val argList= extractArgs(Seq(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18, arg19, arg20, arg21))
               getNative(evaluator(argList))
             }
+            case x => varArgs(evaluator) _ 
           }
       },
       dataType,
-      sparkArgs,
-      sparkArgTypes,
+      if(sparkArgs.length > 22) Seq(CreateStruct(sparkArgs)) else sparkArgs,
+      if(sparkArgs.length > 22) Seq(getStructType(sparkArgTypes)) else sparkArgTypes,
       Some(name))
 }
 
@@ -1468,3 +1516,4 @@ case class JsonGroupArray(child: org.apache.spark.sql.catalyst.expressions.Expre
   }
   override lazy val evaluateExpression = Concat(Seq(Literal("["), If(StartsWith(json_group_array,Literal(",")),Substring(json_group_array,Literal(2),Literal(Integer.MAX_VALUE)),json_group_array), Literal("]")))
 }
+

@@ -17,6 +17,8 @@ object TypeInferenceModel
 {
   val logger = Logger(org.slf4j.LoggerFactory.getLogger("mimir.models.TypeInferenceModel"))
 
+  var sampleLimit = 1000
+  
   def priority: Type => Int =
   {
     case TUser(_)     => 20
@@ -81,7 +83,7 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
   with SourcedFeedback
   with FiniteDiscreteDomain
 {
-  var sampleLimit = 1000
+  
   
   var trainingData:Dataset[TIVotes] = query match {
     case Some(df) => train(df)
@@ -94,7 +96,7 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
   private def train(df:DataFrame) =
   {
     import sparkSql.implicits._
-    df.limit(sampleLimit).select(columns.map(col(_)):_*).map(row => {
+    df.limit(TypeInferenceModel.sampleLimit).select(columns.map(col(_)):_*).map(row => {
       TIVotes(row.schema.fields.zipWithIndex.map(se => TypeInferenceModel.detectType(
          if(row.isNullAt(se._2)) None else Some(s"${row(se._2)}")
        ).toSeq.map(_.toString())))

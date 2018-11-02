@@ -73,7 +73,8 @@ object SparkClassifierModel
   {
     model.sparkMLInstanceType = model.guessSparkModelType(model.guessInputType) 
     val trainingQuery = Limit(0, Some(SparkClassifierModel.TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)),  query.filter(Not(IsNullExpression(Var(model.colName))))))
-    val trainingData = db.backend.execute(trainingQuery)
+    val trainingDataF = db.backend.execute(trainingQuery)
+    val trainingData = trainingDataF.schema.fields.filter(col => Seq(DateType, TimestampType).contains(col.dataType)).foldLeft(trainingDataF)((init, cur) => init.withColumn(cur.name,init(cur.name).cast(LongType)) )
     val (sparkMLInstance, sparkMLModelGenerator) = availableSparkModels(trainingData).getOrElse(model.sparkMLInstanceType, (Classification, Classification.NaiveBayesMulticlassModel(trainingData)))
     Timer.monitor(s"Train ${model.name}.${model.colName}", SparkClassifierModel.logger.info(_)){
       model.learner = Some(sparkMLModelGenerator(ModelParams(db, model.colName, "keep")))

@@ -49,7 +49,7 @@ object TypeInference
         modelColumns,
         stringDefaultScore,
         db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(),
-        Some(db.backend.execute(config.query))
+        Some(db.backend.execute(config.query.limit(TypeInferenceModel.sampleLimit, 0)))
       )
 
     val columnIndexes = 

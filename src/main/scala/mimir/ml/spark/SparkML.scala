@@ -42,7 +42,12 @@ object SparkML {
     val operWProv = Project(query.columnNames.map { name => ProjectArg(name, Var(name)) } :+
         ProjectArg(Provenance.rowidColnameBase, 
             Function(Provenance.mergeRowIdFunction, provenanceCols.map( Var(_) ) )), oper )
-    (db.typechecker.schemaOf(operWProv), db.backend.execute(operWProv))
+    val dfPreOut = db.backend.execute(operWProv)
+    val dfOut = dfPreOut.schema.fields.filter(col => Seq(DateType, TimestampType).contains(col.dataType)).foldLeft(dfPreOut)((init, cur) => init.withColumn(cur.name,init(cur.name).cast(LongType)) )
+    (db.typechecker.schemaOf(operWProv).map(el => el._2 match {
+      case TDate() | TTimestamp() => (el._1, TInt())
+      case _ => el
+    }), dfOut)
   }
 }
 
