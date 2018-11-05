@@ -6,7 +6,7 @@ import org.specs2.matcher.FileMatchers
 import mimir.test._
 import mimir.algebra._
 
-object LoadCSVSpec extends SQLTestSpecification("LoadCSV",Map("cleanup" -> "NO"))
+object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
 {
   
   "LoadCSV" should {

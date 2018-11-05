@@ -158,7 +158,7 @@ object GeocodingSpec
       val domainLonForRow = jsonLon.asInstanceOf[JsArray].value.map(jsVal => (jsVal.asInstanceOf[JsObject].value("choice").toString(), jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble))
       
       domainLatForRow.length must be equalTo domainLonForRow.length
-      domainLatForRow must contain(("42.94740609999999",1.0))
+      domainLatForRow must contain(("42.587554",1.0))
       domainLonForRow must contain(("-78.8260315",1.0))
       
     }

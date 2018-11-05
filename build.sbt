@@ -138,7 +138,7 @@ libraryDependencies ++= Seq(
   "org.specs2"                    %%  "specs2-core"              % "3.8.4" % "test",
   "org.specs2"                    %%  "specs2-matcher-extra"     % "3.8.4" % "test",
   "org.specs2"                    %%  "specs2-junit"             % "3.8.4" % "test",
-  "org.clapper"                   %%  "classutil" 				 % "1.1.2",
+  "org.clapper"                   %%  "classutil" 				 % "1.4.0",
   "com.amazonaws" 				  %   "aws-java-sdk-s3" 		 % "1.11.234",
   "ch.cern.sparkmeasure" 		  %%  "spark-measure" 			 % "0.13",
   
