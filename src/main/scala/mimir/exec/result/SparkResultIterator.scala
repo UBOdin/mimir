@@ -33,7 +33,7 @@ class SparkResultIterator(
   {
     // Deploy to the backend
     Timer.monitor(s"EXECUTE", logger.info(_)){
-      backend.execute(query).rdd.toLocalIterator 
+      backend.execute(query).cache().toLocalIterator()
     }
   }
   

@@ -38,6 +38,7 @@ import java.io.File
 import mimir.exec.result.ResultIterator
 import org.apache.spark.sql.SparkSession
 
+
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
  * - Parsing and processing command line arguments.
@@ -60,7 +61,6 @@ object MimirVizier extends LazyLogging {
 
   def main(args: Array[String]) {
     Mimir.conf = new MimirConfig(args);
-
     ExperimentalOptions.enable(Mimir.conf.experimental())
     if(!ExperimentalOptions.isEnabled("GPROM-BACKEND")){
       // Set up the database connection(s)
@@ -69,7 +69,8 @@ object MimirVizier extends LazyLogging {
       db = new Database(sback, new JDBCMetadataBackend(Mimir.conf.backend(), Mimir.conf.dbname()))
       db.metadataBackend.open()
       db.backend.open()
-      sback.registerSparkFunctions(db.functions.functionPrototypes.map(el => el._1).toSeq, db.functions)
+      val otherExcludeFuncs = Seq("NOT","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^")
+      sback.registerSparkFunctions(db.functions.functionPrototypes.map(el => el._1).toSeq ++ otherExcludeFuncs , db.functions)
       sback.registerSparkAggregates(db.aggregates.prototypes.map(el => el._1).toSeq, db.aggregates)
       vizierdb.sparkSession = sback.sparkSql.sparkSession
     }
@@ -327,7 +328,12 @@ object MimirVizier extends LazyLogging {
       logger.debug(s"loadCSV: From Vistrails: [ $file ] format: ${format._1} -> [ ${format._2.mkString(",")} ]") ;
       val vizierFSPath = "/usr/local/source/web-api/.vizierdb/"
       val saferFile = URLDecoder.decode(file, "utf-8")
-      val csvFile = if(saferFile.startsWith(vizierFSPath)){
+      val useS3Volume = System.getenv("USE_S3_VOLUME") match {
+        case null => false
+        case "true" => true
+        case x => false
+      }
+      val csvFile = if(saferFile.startsWith(vizierFSPath) && useS3Volume){
         //hack for loading file from s3 - because it is already there for production version
         val vizierDataS3Bucket = System.getenv("S3_BUCKET_NAME")
         new File(saferFile.replace(vizierFSPath, s"s3n://$vizierDataS3Bucket/"))

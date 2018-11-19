@@ -11,7 +11,7 @@ import java.io.File
 import org.apache.spark.sql.Encoders
 
 object ViewsSpec 
-  extends SQLTestSpecification("ViewsTest", Map("cleanup" -> "NO"))
+  extends SQLTestSpecification("ViewsTest")
   with BeforeAll
 {
 
