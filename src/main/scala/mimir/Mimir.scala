@@ -366,6 +366,10 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
     default = Some("spark-master.local"))
   val sparkPort = opt[String]("sparkPort", descr = "The port of the spark master",
     default = Some("7077"))
+  val sparkDriverMem = opt[String]("sparkDriverMem", descr = "The memory for spark driver",
+    default = Some("8g"))
+  val sparkExecutorMem = opt[String]("sparkExecutorMem", descr = "The memory for spark executors",
+    default = Some("8g"))
   val hdfsPort = opt[String]("hdfsPort", descr = "The port for hdfs",
     default = Some("8020"))
   val useHDFSHostnames = toggle("useHDFSHostnames", default = Some(false),

@@ -37,6 +37,7 @@ import scala.tools.reflect.ToolBox
 import java.io.File
 import mimir.exec.result.ResultIterator
 import org.apache.spark.sql.SparkSession
+import mimir.ctables.CTExplainer
 
 
 /**
@@ -370,23 +371,23 @@ object MimirVizier extends LazyLogging {
       .replaceAll("[\\%\\^\\&\\(\\{\\}\\+\\-\\/ \\]\\[\\']", "_") 
   }
   
-  def createLens(input : Any, params : java.util.ArrayList[String], _type : String, make_input_certain:Boolean, materialize:Boolean) : String = {
+  def createLens(input : Any, params : java.util.ArrayList[String], _type : String, make_input_certain:Boolean, materialize:Boolean) : PythonScalaLensResponse = {
     createLens(input, params.toArray[String](Array[String]()).toSeq, _type, make_input_certain, materialize)
   }
   
-  def createLens(input : Any, params : Seq[String], _type : String, make_input_certain:Boolean, materialize:Boolean) : String = {
+  def createLens(input : Any, params : Seq[String], _type : String, make_input_certain:Boolean, materialize:Boolean) : PythonScalaLensResponse = {
     try{
     pythonCallThread = Thread.currentThread()
     val timeRes = logTime("createLens") {
       logger.debug("createLens: From Vistrails: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]"  ) ;
       val paramsStr = params.mkString(",").replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
-      val lenseName = "LENS_" + _type + ((input.toString() + _type + paramsStr + make_input_certain + materialize).hashCode().toString().replace("-", "") )
+      val lensName = "LENS_" + _type + ((input.toString() + _type + paramsStr + make_input_certain + materialize).hashCode().toString().replace("-", "") )
       var query:String = null
-      db.getView(lenseName) match {
+      db.getView(lensName) match {
         case None => {
           if(make_input_certain){
             val materializedInput = "MATERIALIZED_"+input
-            query = s"CREATE LENS ${lenseName} AS SELECT * FROM ${materializedInput} WITH ${_type}(${paramsStr})"  
+            query = s"CREATE LENS ${lensName} AS SELECT * FROM ${materializedInput} WITH ${_type}(${paramsStr})"  
             if(db.getAllTables().contains(materializedInput)){
                 logger.debug("createLens: From Vistrails: Materialized Input Already Exists: " + materializedInput)
             }
@@ -398,20 +399,24 @@ object MimirVizier extends LazyLogging {
           }
           else{
             val inputQuery = s"SELECT * FROM ${input}"
-            query = s"CREATE LENS ${lenseName} AS $inputQuery WITH ${_type}(${paramsStr})"  
+            query = s"CREATE LENS ${lensName} AS $inputQuery WITH ${_type}(${paramsStr})"  
           }
           logger.debug("createLens: query: " + query)
           db.update(db.parse(query).head) 
         }
         case Some(_) => {
-          logger.debug("createLens: From Vistrails: Lens already exists: " + lenseName)
+          logger.debug("createLens: From Vistrails: Lens already exists: " + lensName)
         }
       }
       if(materialize){
-        if(!db.views(lenseName).isMaterialized)
-          db.update(db.parse(s"ALTER VIEW ${lenseName} MATERIALIZE").head)
+        if(!db.views(lensName).isMaterialized)
+          db.update(db.parse(s"ALTER VIEW ${lensName} MATERIALIZE").head)
       }
-      lenseName
+      val lensOp = parseQuery(s"SELECT * FROM $lensName LIMIT 200")
+      val lensAnnotations = db.explainer.explainSubsetWithoutOptimizing(lensOp, lensOp.columnNames.toSet, false, false, false, Some(lensName))
+      val lensReasons = lensAnnotations.map(_.all(db).toList).flatten.length.toString//JSONBuilder.list(lensAnnotations.map(_.all(db).toList).flatten.map(_.toJSON))
+      logger.debug(s"createLens reasons for first 200 rows: ${lensReasons}")
+      new PythonScalaLensResponse(lensName, lensReasons)
     }
     logger.debug(s"createLens ${_type} Took: ${timeRes._2}")
     timeRes._1
@@ -1206,3 +1211,5 @@ trait PythonMimirCallInterface {
 class PythonCSVContainer(val csvStr: String, val colsDet: Array[Array[Boolean]], val rowsDet: Array[Boolean], val celReasons:Array[Array[String]], val prov: Array[String], val schema:Map[String, String]){}
 
 class PythonScalaEvalResponse(val stdout: String, val stderr: String ){}
+
+class PythonScalaLensResponse(val lensName: String, val annotations: String )

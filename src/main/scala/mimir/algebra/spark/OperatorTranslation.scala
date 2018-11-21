@@ -132,10 +132,10 @@ object OperatorTranslation
           sparkChildOp
         }
 			  limit match {
-			    case Some(limitI) => org.apache.spark.sql.catalyst.plans.logical.Limit(
+			    case Some(limitI) if limitI > 0 => org.apache.spark.sql.catalyst.plans.logical.Limit(
   			      Literal(limitI.toInt), 
   			      offsetOp)
-			    case None => offsetOp
+			    case _ => offsetOp
 			  }
 			}
 			case Table(name, alias, sch, meta) => {

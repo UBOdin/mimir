@@ -55,9 +55,9 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
   
   var sparkSql : SQLContext = null
   //ExperimentalOptions.enable("remoteSpark")
-  val (sparkHost, sparkPort, hdfsPort, useHDFSHostnames, overwriteStagedFiles, overwriteJars, numPartitions, dataStagingType) = Mimir.conf match {
-    case null => (/*"128.205.71.41"*/"spark-master.local", "7077", "8020", false, false, false, 8, "s3")
-    case x => (x.sparkHost(), x.sparkPort(), x.hdfsPort(), x.useHDFSHostnames(), x.overwriteStagedFiles(), x.overwriteJars(), x.numPartitions(), x.dataStagingType())
+  val (sparkHost, sparkPort, hdfsPort, useHDFSHostnames, overwriteStagedFiles, overwriteJars, numPartitions, dataStagingType, sparkDriverMem, sparkExecutorMem) = Mimir.conf match {
+    case null => (/*"128.205.71.41"*/"spark-master.local", "7077", "8020", false, false, false, 8, "s3", "8g", "8g")
+    case x => (x.sparkHost(), x.sparkPort(), x.hdfsPort(), x.useHDFSHostnames(), x.overwriteStagedFiles(), x.overwriteJars(), x.numPartitions(), x.dataStagingType(), x.sparkDriverMem(), x.sparkExecutorMem())
   }
   val remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
   def open(): Unit = {
@@ -71,8 +71,8 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
             .set("spark.ui.port","4041")
             .setAppName("Mimir")
             .set("spark.driver.cores","4")
-            .set("spark.driver.memory","8g")
-            .set("spark.executor.memory","8g")
+            .set("spark.driver.memory",sparkDriverMem)
+            .set("spark.executor.memory",sparkExecutorMem)
             .set("spark.sql.catalogImplementation", "hive")
             .set("spark.sql.shuffle.partitions", s"$numPartitions")//TODO: make this the number of workers
             .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
