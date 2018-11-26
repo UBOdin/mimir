@@ -55,9 +55,13 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
   
   var sparkSql : SQLContext = null
   //ExperimentalOptions.enable("remoteSpark")
+  val envHasS3Keys = (Option(System.getenv("AWS_ACCESS_KEY_ID")), Option(System.getenv("AWS_SECRET_ACCESS_KEY"))) match {
+    case (Some(_), Some(_)) => true
+    case _ => false
+  }
   val (sparkHost, sparkPort, hdfsPort, useHDFSHostnames, overwriteStagedFiles, overwriteJars, numPartitions, dataStagingType, sparkDriverMem, sparkExecutorMem) = Mimir.conf match {
-    case null => (/*"128.205.71.41"*/"spark-master.local", "7077", "8020", false, false, false, 8, "s3", "8g", "8g")
-    case x => (x.sparkHost(), x.sparkPort(), x.hdfsPort(), x.useHDFSHostnames(), x.overwriteStagedFiles(), x.overwriteJars(), x.numPartitions(), x.dataStagingType(), x.sparkDriverMem(), x.sparkExecutorMem())
+    case null => (/*"128.205.71.41"*/"spark-master.local", "7077", "8020", false, false, false, 8, if(envHasS3Keys) "s3" else "hdfs", "8g", "8g")
+    case x => (x.sparkHost(), x.sparkPort(), x.hdfsPort(), x.useHDFSHostnames(), x.overwriteStagedFiles(), x.overwriteJars(), x.numPartitions(), if(!envHasS3Keys) "hdfs" else x.dataStagingType(), x.sparkDriverMem(), x.sparkExecutorMem())
   }
   val remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
   def open(): Unit = {
@@ -134,20 +138,25 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
         }
         logger.debug(s"apache spark: ${sparkCtx.version}  remote: $remoteSpark deployMode: $dmode")
         //TODO: we need to do this in a more secure way (especially vizier has python scripts that could expose this)
-        val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
-        val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY")
+        val accessKeyIdOpt = Option(System.getenv("AWS_ACCESS_KEY_ID"))
+        val secretAccessKeyOpt = Option(System.getenv("AWS_SECRET_ACCESS_KEY"))
         val endpoint = Option(System.getenv("S3A_ENDPOINT"))
         endpoint.flatMap(ep => {sparkCtx.hadoopConfiguration.set("fs.s3a.endpoint", ep); None})
-        sparkCtx.hadoopConfiguration.set("fs.s3a.access.key",accessKeyId)
-        sparkCtx.hadoopConfiguration.set("fs.s3a.secret.key",secretAccessKey)
-        sparkCtx.hadoopConfiguration.set("fs.s3a.path.style.access","true")
-        sparkCtx.hadoopConfiguration.set("fs.s3a.impl","org.apache.hadoop.fs.s3a.S3AFileSystem")
-        sparkCtx.hadoopConfiguration.set("com.amazonaws.services.s3.disableGetObjectMD5Validation", "true")
-        sparkCtx.hadoopConfiguration.set("com.amazonaws.services.s3.disablePutObjectMD5Validation", "true")
-        sparkCtx.hadoopConfiguration.set("fs.s3a.connection.ssl.enabled", "true")
-        sparkCtx.hadoopConfiguration.set("fs.s3n.awsAccessKeyId", accessKeyId)
-        sparkCtx.hadoopConfiguration.set("fs.s3n.awsSecretAccessKey", secretAccessKey)
-        sparkCtx.hadoopConfiguration.set("fs.s3.impl", "org.apache.hadoop.fs.s3native.NativeS3FileSystem")
+        (accessKeyIdOpt, secretAccessKeyOpt) match {
+          case (Some(accessKeyId), Some(secretAccessKey)) => {
+            sparkCtx.hadoopConfiguration.set("fs.s3a.access.key",accessKeyId)
+            sparkCtx.hadoopConfiguration.set("fs.s3a.secret.key",secretAccessKey)
+            sparkCtx.hadoopConfiguration.set("fs.s3a.path.style.access","true")
+            sparkCtx.hadoopConfiguration.set("fs.s3a.impl","org.apache.hadoop.fs.s3a.S3AFileSystem")
+            sparkCtx.hadoopConfiguration.set("com.amazonaws.services.s3.disableGetObjectMD5Validation", "true")
+            sparkCtx.hadoopConfiguration.set("com.amazonaws.services.s3.disablePutObjectMD5Validation", "true")
+            sparkCtx.hadoopConfiguration.set("fs.s3a.connection.ssl.enabled", "true")
+            sparkCtx.hadoopConfiguration.set("fs.s3n.awsAccessKeyId", accessKeyId)
+            sparkCtx.hadoopConfiguration.set("fs.s3n.awsSecretAccessKey", secretAccessKey)
+            sparkCtx.hadoopConfiguration.set("fs.s3.impl", "org.apache.hadoop.fs.s3native.NativeS3FileSystem")
+          }
+          case _ => logger.debug("No S3 Access Key provided. Not configuring S3")
+        }
         new SQLContext(sparkCtx)
       }
       case sparkSqlCtx => sparkSqlCtx
