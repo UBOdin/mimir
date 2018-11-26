@@ -110,6 +110,7 @@ object Mimir extends LazyLogging {
                     finishByReadingFromConsole = false
                   }
                 case "csv" => {
+                    output.print("Loading "+file+"...")
                     db.loadTable(
                       new File(file).getName().replaceAll("\\..*", "").toUpperCase,
                       new File(file),
