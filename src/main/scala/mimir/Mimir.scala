@@ -234,12 +234,21 @@ object Mimir extends LazyLogging {
     output.print(raw.toString)
     db.typechecker.schemaOf(raw)        // <- discard results, just make sure it typechecks
     val optimized = db.compiler.optimize(raw)
-    output.print("--- Optimized Query ---")
+    output.print("\n--- Optimized Query ---")
     output.print(optimized.toString)
     db.typechecker.schemaOf(optimized)  // <- discard results, just make sure it typechecks
-    output.print("--- SQL ---")
+    output.print("\n-------- SQL --------")
     try {
       output.print(db.ra.convert(optimized).toString)
+    } catch {
+      case e:Throwable =>
+        output.print("Unavailable: "+e.getMessage())
+    }
+    output.print("\n------- Spark -------")
+    try {
+      output.print(
+        mimir.algebra.spark.OperatorTranslation.mimirOpToSparkOp(optimized).toString
+      )
     } catch {
       case e:Throwable =>
         output.print("Unavailable: "+e.getMessage())
