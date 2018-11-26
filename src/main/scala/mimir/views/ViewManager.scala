@@ -206,13 +206,13 @@ class ViewManager(db:Database) extends LazyLogging {
    * List all views known to the view manager
    * @return     A list of all view names
    */
-  def list(): List[String] =
+  def list(): Seq[String] =
   {
     db.metadataBackend.
       resultRows(s"SELECT name FROM $viewTable").
       flatten.
       map( _.asString ).
-      toList
+      toSeq
   }
 
   /**
@@ -222,11 +222,9 @@ class ViewManager(db:Database) extends LazyLogging {
    */
   def listViewsQuery: Operator = 
   {
-    Project(
-      Seq(
-        ProjectArg("TABLE_NAME", Var("NAME"))
-      ),
-      db.metadataTable(viewTable)
+    HardTable(
+      Seq( ("TABLE_NAME", TString()) ),
+      list().map { StringPrimitive(_) }.map { Seq(_) }
     )
   }
 

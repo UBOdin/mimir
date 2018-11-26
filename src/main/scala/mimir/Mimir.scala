@@ -70,8 +70,6 @@ object Mimir extends LazyLogging {
     if(conf.loadTable.get != None){
       db.loadTable(conf.loadTable(), conf.loadTable()+".csv");
     } else {
-      var source: Reader = null;
-      var prompt: (() => Unit) = { () =>  }
 
       conf.precache.foreach( (opt) => opt.split(",").foreach( (table) => { 
         output.print(s"Precaching... $table")
@@ -81,29 +79,74 @@ object Mimir extends LazyLogging {
       if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
         db.metadataBackend.asInstanceOf[InlinableBackend].enableInlining(db)
       }
-
-      if(conf.file.get == None || conf.file() == "-"){
-        if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
-          source = new LineReaderInputSource(terminal)
-          output = new PrettyOutputFormat(terminal)
-        } else {
-          source = new InputStreamReader(System.in)
-          output = DefaultOutputFormat
-          prompt = () => { System.out.print("\nmimir> "); System.out.flush(); }
-        }
-      } else {
-        source = new FileReader(conf.file())
-        output = DefaultOutputFormat
+      if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
+        output = new PrettyOutputFormat(terminal)
       }
-
       if(!conf.quiet()){
         output.print("   ... ready")
       }
-      eventLoop(source, prompt)
+
+      var finishByReadingFromConsole = true
+
+      conf.files.get match {
+        case None => {}
+        case Some(files) => 
+          for(file <- files){
+            if(file == "-"){
+              interactiveEventLoop()
+              finishByReadingFromConsole = false
+            } else {
+              val extensionRegexp = "([^.]+)$".r
+              val extension:String = extensionRegexp.findFirstIn(file) match {
+                case Some(e) => e
+                case None => {
+                  throw new RuntimeException("Error: Unable to determine file format of "+file)
+                }
+              }
+
+              extension.toLowerCase match {
+                case "sql" => {
+                    eventLoop(new FileReader(file), { () =>  })
+                    finishByReadingFromConsole = false
+                  }
+                case "csv" => {
+                    db.loadTable(
+                      new File(file).getName().replaceAll("\\..*", "").toUpperCase,
+                      new File(file),
+                      false
+                    )
+                  }
+                case _ => {
+                  throw new RuntimeException("Error: Unknown file format '"+extension+"' of "+file)
+                }
+              }
+            }
+          }
+      }
+      if(finishByReadingFromConsole){
+        interactiveEventLoop()
+      }
     }
 
     db.backend.close()
     if(!conf.quiet()) { output.print("\n\nDone.  Exiting."); }
+  }
+
+  def interactiveEventLoop(): Unit =
+  {
+    val (source, prompt) = 
+      if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
+        (
+          new LineReaderInputSource(terminal),
+          { () =>  }
+        )
+      } else {
+        (
+          new InputStreamReader(System.in),
+          () => { System.out.print("\nmimir> "); System.out.flush(); }
+        )
+      }
+    eventLoop(source, prompt)
   }
 
   def eventLoop(source: Reader, prompt: (() => Unit)): Unit =
@@ -360,7 +403,7 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   val precache = opt[String]("precache", descr = "Precache one or more lenses")
   val rebuildBestGuess = opt[String]("rebuild-bestguess")  
   val quiet  = toggle("quiet", default = Some(false))
-  val file = trailArg[String](required = false)
+  val files = trailArg[List[String]](required = false)
   val experimental = opt[List[String]]("X", default = Some(List[String]()))
   val sparkHost = opt[String]("sparkHost", descr = "The IP or hostname of the spark master",
     default = Some("spark-master.local"))
