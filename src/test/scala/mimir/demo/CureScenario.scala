@@ -13,7 +13,8 @@ import mimir.algebra.NullPrimitive
 object CureScenario
   extends SQLTestSpecification("CureScenario",  Map("reset" -> "YES"))
 {
-
+  //args(skipAll = true)
+  
   val dataFiles = List(
     new File("test/data/cureSource.csv"),
     new File("test/data/cureLocations.csv"),
@@ -29,8 +30,8 @@ object CureScenario
            PORTS.LON              AS "PORT_LON",
            DATE(SRC.DATE)          AS "SRC_DATE",
            DST(LOC.LON, LOC.LAT, PORTS.LON, PORTS.LAT) AS "DISTANCE",  SPEED(DST(LOC.LON, LOC.LAT, PORTS.LON, PORTS.LAT), SRC.DATE, DATE('2016-09-03')) AS "SPEED"
-    FROM CURESOURCE AS SRC
-      JOIN CURELOCATIONS AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
+    FROM MV1 AS SRC
+      JOIN MV2 AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
         LEFT OUTER JOIN CUREPORTS AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
         WHERE SPEED(DST(LOC.LON, LOC.LAT, PORTS.LON, PORTS.LAT),SRC.DATE, DATE('2016-09-03')) > 100;
     ;"""
@@ -116,12 +117,18 @@ object CureScenario
       db.typechecker.schemaOf(select(cureQuery))
       ok
     }
+    
      "Run the CURE Query" >> {
-       time("CURE Query"){
-         query(cureQuery){ _.foreach { row => {} } }
+       LoggerUtils.trace(
+					"mimir.sql.SparkBackend"
+				){ 
+         time("CURE Query"){
+           val qr = query(cureQuery){ _.toList.map { row => {1} } }.length
+           println(s"-----------------------------qr row cnt: $qr")
+         }
+  //         failed type detection --> run type inferencing
+  //         --> repair with repairing tool
        }
-//         failed type detection --> run type inferencing
-//         --> repair with repairing tool
        ok
      }
 

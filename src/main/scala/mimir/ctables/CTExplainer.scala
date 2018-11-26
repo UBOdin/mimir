@@ -426,14 +426,24 @@ class CTExplainer(db: Database) extends LazyLogging {
 	): Seq[ReasonSet] =
 		explainSubsetWithoutOptimizing(db.compiler.optimize(oper), wantCol, wantRow, wantSort)
 
+  private def compileCausalityForLens(lensName:String)(expr: Expression): Seq[(Expression, VGTerm)] = {
+    val lensModels = db.models.associatedModels(lensName)
+    CTAnalyzer.compileCausality(expr).filter(p => lensModels.contains(p._2.name))
+  }
+		
 	def explainSubsetWithoutOptimizing(
 		oper: Operator, 
 		wantCol: Set[String], 
 		wantRow:Boolean, 
 		wantSort:Boolean,
-		wantSchema:Boolean = true
+		wantSchema:Boolean = true,
+		forLens:Option[String] = None
 	): Seq[ReasonSet] =
 	{
+	  val compileCausality = forLens match {
+	    case None => CTAnalyzer.compileCausality _
+	    case Some(lensName) =>  compileCausalityForLens(lensName) _
+	  }
 		logger.trace(s"Explain Subset (${wantCol.mkString(", ")}; $wantRow; $wantSort): \n$oper")
 		oper match {
 			case Table(_,_,_,_) => Seq()
@@ -485,7 +495,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 					relevantArgs.
 						flatMap {
 						  col => {
-						    val compiledCausalityExpr = CTAnalyzer.compileCausality(col.expression)
+						    val compiledCausalityExpr = compileCausality(col.expression)
 						    compiledCausalityExpr.map {
 						      case (condition, vgterm) => (vgterm.toString, (condition, vgterm))
 						    }.toMap.toSeq.map(_._2)
@@ -510,7 +520,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 				val (condReasons:Seq[ReasonSet], condDependencies:Set[String]) =
 					if(wantRow){
 						(
-							CTAnalyzer.compileCausality(cond).map {
+							compileCausality(cond).map {
 						      case (condition, vgterm) => (vgterm.toString, (condition, vgterm))
 						    }.toMap.toSeq.map(_._2).
 								map { case (condition, vgterm) => 
@@ -525,7 +535,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 			case Aggregate(gbs, aggs, child) => {
 				val aggVGTerms = 
-					aggs.flatMap { agg => agg.args.flatMap( CTAnalyzer.compileCausality(_).map {
+					aggs.flatMap { agg => agg.args.flatMap( compileCausality(_).map {
 						      case (condition, vgterm) => (vgterm.toString, (condition, vgterm))
 						    }.toMap.toSeq.map(_._2) ) }
 				val aggReasons =
@@ -568,7 +578,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 					if(wantSort){
 						(
 							args.flatMap { arg => 
-								CTAnalyzer.compileCausality(arg.expression).map {
+								compileCausality(arg.expression).map {
 						      case (condition, vgterm) => (vgterm.toString, (condition, vgterm))
 						    }.toMap.toSeq.map(_._2)
 							}.map { case (condition, vgterm) => 

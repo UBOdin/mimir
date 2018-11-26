@@ -15,7 +15,7 @@ import mimir.util.LoadCSV
 object DetectHeader {
   val logger = Logger(org.slf4j.LoggerFactory.getLogger(getClass.getName))
   def isHeader(header:Seq[String]) = {
-    val headerRegex =  "[0-9]*[a-zA-Z_ -]+[0-9]*[a-zA-Z_ -]*".r
+    val headerRegex =  """[0-9]*[a-zA-Z_ :\/\\-]+[0-9]*[a-zA-Z0-9_ :\/\\-]*""".r
     header.zipWithIndex.flatMap(el => {
       el._1  match {
         case "NULL" => None
