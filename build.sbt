@@ -156,12 +156,12 @@ libraryDependencies ++= Seq(
   //////////////////////// Lens Libraries //////////////////////
   // WEKA - General-purpose Classifier Training/Deployment Library
   // Used by the imputation lens
-  ("nz.ac.waikato.cms.weka"       %   "weka-stable"              % "3.8.1").
-    exclude("nz.ac.waikato.cms.weka",  "weka-dev").
-    exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
-  ("nz.ac.waikato.cms.moa"        %   "moa"                      % "2014.11").
-    exclude("nz.ac.waikato.cms.weka",  "weka-dev").
-    exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
+  // ("nz.ac.waikato.cms.weka"       %   "weka-stable"              % "3.8.1").
+  //   exclude("nz.ac.waikato.cms.weka",  "weka-dev").
+  //   exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
+  // ("nz.ac.waikato.cms.moa"        %   "moa"                      % "2014.11").
+  //   exclude("nz.ac.waikato.cms.weka",  "weka-dev").
+  //   exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
     
   //spark ml
   "org.apache.spark" 			  %   "spark-sql_2.11" 		  % "2.2.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),

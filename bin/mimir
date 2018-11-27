@@ -4,6 +4,12 @@ ME=$(dirname $0)/..
 MIMIR_VERSION=0.2
 SCALA_VERSION=2.11
 CLASSES=`cat $ME/.classpath`
-CMD="java -cp $CLASSES mimir.Mimir"
+
+JAVA_CMD="java"
+if [ "$JAVA_HOME" ] ; then
+  JAVA_CMD="$JAVA_HOME/bin/java"
+fi
+
+CMD="$JAVA_CMD -cp $CLASSES mimir.Mimir"
 
 $CMD $*

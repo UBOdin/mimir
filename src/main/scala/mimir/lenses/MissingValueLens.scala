@@ -7,7 +7,7 @@ import java.util
 import mimir.algebra._
 import mimir.ctables._
 import mimir.util.RandUtils
-import mimir.{Analysis, Database}
+import mimir.Database
 import mimir.models._
 import mimir.parser.ExpressionParser
 
