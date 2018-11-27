@@ -414,7 +414,7 @@ object MimirVizier extends LazyLogging {
       }
       val lensOp = parseQuery(s"SELECT * FROM $lensName LIMIT 200")
       val lensAnnotations = db.explainer.explainSubsetWithoutOptimizing(lensOp, lensOp.columnNames.toSet, false, false, false, Some(lensName))
-      val lensReasons = lensAnnotations.map(_.all(db).toList).flatten.length.toString//JSONBuilder.list(lensAnnotations.map(_.all(db).toList).flatten.map(_.toJSON))
+      val lensReasons = lensAnnotations.map(_.size(db)).sum.toString//JSONBuilder.list(lensAnnotations.map(_.all(db).toList).flatten.map(_.toJSON))
       logger.debug(s"createLens reasons for first 200 rows: ${lensReasons}")
       new PythonScalaLensResponse(lensName, lensReasons)
     }
