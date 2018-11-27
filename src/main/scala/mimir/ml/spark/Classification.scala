@@ -98,7 +98,6 @@ object Classification extends SparkML {
     //training.show()
     val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
     val labels = indexer.fit(training).labels
-    println(labels.mkString(","))
     val (tokenizers, hashingTFs) = cols.flatMap(col => {
       col.dataType match {
         case StringType => {
