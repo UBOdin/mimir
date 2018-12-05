@@ -117,6 +117,10 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
           HadoopUtils.writeToHDFS(sparkCtx, "gt-opengis-16.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.geotools/gt-opengis/jars/gt-opengis-16.2.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, "gt-metadata-16.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.geotools/gt-metadata/jars/gt-metadata-16.2.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, "gt-referencing-16.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.geotools/gt-referencing/jars/gt-referencing-16.2.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, "gt-referencing-16.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.geotools/gt-referencing/jars/gt-referencing-16.2.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, "mysql-connector-java-5.1.6.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/mysql/mysql-connector-java/jars/mysql-connector-java-5.1.6.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, "postgresql-9.4-1201-jdbc41.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.postgresql/postgresql/jars/postgresql-9.4-1201-jdbc41.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, "sqlite-jdbc-3.16.1.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.xerial/sqlite-jdbc/jars/sqlite-jdbc-3.16.1.jar"), overwriteJars)
           //HadoopUtils.writeToHDFS(sparkCtx, "aws-java-sdk-s3-1.11.355.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.amazonaws/aws-java-sdk-s3/jars/aws-java-sdk-s3-1.11.355.jar"), overwriteJars)
           //HadoopUtils.writeToHDFS(sparkCtx, "hadoop-aws-2.7.6.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.apache.hadoop/hadoop-aws/jars/hadoop-aws-2.7.6.jar"), overwriteJars)
           
@@ -131,6 +135,9 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
           sparkCtx.addJar(s"$hdfsHome/gt-opengis-16.2.jar")
           sparkCtx.addJar(s"$hdfsHome/gt-metadata-16.2.jar")
           sparkCtx.addJar(s"$hdfsHome/gt-referencing-16.2.jar")
+          sparkCtx.addJar(s"$hdfsHome/mysql-connector-java-5.1.6.jar")
+          sparkCtx.addJar(s"$hdfsHome/postgresql-9.4-1201-jdbc41.jar")
+          sparkCtx.addJar(s"$hdfsHome/sqlite-jdbc-3.16.1.jar")
           //sparkCtx.addJar(s"$hdfsHome/aws-java-sdk-s3-1.11.355.jar")
           //sparkCtx.addJar(s"$hdfsHome/hadoop-aws-2.7.6.jar")
           
