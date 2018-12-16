@@ -135,17 +135,20 @@ object Type {
 
 }
 
-case class TInt() extends Type
-case class TFloat() extends Type
-case class TDate() extends Type
-case class TString() extends Type
-case class TBool() extends Type
-case class TRowId() extends Type
-case class TType() extends Type
+sealed trait BaseType extends Type
+
+case class TInt() extends BaseType
+case class TFloat() extends BaseType
+case class TDate() extends BaseType
+case class TString() extends BaseType
+case class TBool() extends BaseType
+case class TRowId() extends BaseType
+case class TType() extends BaseType
+case class TTimestamp() extends BaseType
+case class TInterval() extends BaseType
+
 case class TAny() extends Type
 case class TUser(name:String) extends Type
-case class TTimestamp() extends Type
-case class TInterval() extends Type
 
 
 
