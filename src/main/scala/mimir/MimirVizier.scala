@@ -70,7 +70,7 @@ object MimirVizier extends LazyLogging {
       db = new Database(sback, new JDBCMetadataBackend(Mimir.conf.backend(), Mimir.conf.dbname()))
       db.metadataBackend.open()
       db.backend.open()
-      val otherExcludeFuncs = Seq("NOT","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^")
+      val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^")
       sback.registerSparkFunctions(db.functions.functionPrototypes.map(el => el._1).toSeq ++ otherExcludeFuncs , db.functions)
       sback.registerSparkAggregates(db.aggregates.prototypes.map(el => el._1).toSeq, db.aggregates)
       vizierdb.sparkSession = sback.sparkSql.sparkSession
@@ -863,6 +863,20 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }    
   }
 
+  def explainEverythingJson(query: String) : String = {
+    try{
+      logger.debug("explainCell: From Vistrails: [" + query + "]"  ) ;
+      val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+      JSONBuilder.list(explainEverything(oper).map(_.all(db).toList).flatten.map(_.toJSON))
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Cell: [" + query + "]", t)
+        throw t
+      }
+    }
+  }
+  
+  
   def explainEverything(query: String) : Seq[mimir.ctables.ReasonSet] = {
     try{
     logger.debug("explainEverything: From Vistrails: [" + query + "]"  ) ;
