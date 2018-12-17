@@ -19,11 +19,11 @@ object MissingKeyLens {
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
   {
-    val schema = db.typechecker.schemaOf(query)
+    val schema = db.typechecker.baseSchemaOf(query)
     val schemaMap = schema.toMap
     var missingOnly = false;
     var sortCols = Seq[(String, Boolean)]()
-    val keys: Seq[(String, Type)] = args.flatMap {
+    val keys: Seq[(String, BaseType)] = args.flatMap {
       case Var(col) => {
         if(schemaMap contains col){ Some((col, schemaMap(col))) }
         else {

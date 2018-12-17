@@ -103,7 +103,7 @@ class ViewManager(db:Database) extends LazyLogging {
     results.take(1).headOption.map(_.toSeq).map( 
       { 
         case Seq(StringPrimitive(s), IntPrimitive(meta)) => {
-          val query = Json.toOperator(Json.parse(s))
+          val query = Json.toOperator(Json.parse(s), db.types)
           val isMaterialized = 
             meta != 0
           

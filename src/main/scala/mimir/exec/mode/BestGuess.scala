@@ -50,7 +50,7 @@ object BestGuess
       if(false && ExperimentalOptions.isEnabled("GPROM-DETERMINISM")
         && ExperimentalOptions.isEnabled("GPROM-PROVENANCE")
         && ExperimentalOptions.isEnabled("GPROM-BACKEND")){
-      OperatorTranslation.compileProvenanceAndTaintWithGProM(oper)
+      db.gpromTranslator.compileProvenanceAndTaintWithGProM(oper)
     }
     else {
       // The names that the provenance compilation step assigns will
@@ -60,7 +60,7 @@ object BestGuess
       val provenance = 
       if(ExperimentalOptions.isEnabled("GPROM-PROVENANCE")
           && ExperimentalOptions.isEnabled("GPROM-BACKEND"))
-        { Provenance.compileGProM(oper) }
+        { db.gpromTranslator.compileProvenanceWithGProM(oper) }
         else { Provenance.compile(oper) }
   
       oper               = provenance._1
@@ -72,7 +72,7 @@ object BestGuess
       // Tag rows/columns with provenance metadata
       val tagging = if(ExperimentalOptions.isEnabled("GPROM-DETERMINISM")
           && ExperimentalOptions.isEnabled("GPROM-BACKEND"))
-        { CTPercolator.percolateGProM(oper) }
+        { CTPercolator.percolateGProM(oper, db) }
         else { CTPercolator.percolateLite(oper, db.models.get(_)) } 
       (tagging._1,
       provenanceCols,

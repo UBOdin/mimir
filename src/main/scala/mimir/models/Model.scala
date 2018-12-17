@@ -51,18 +51,18 @@ abstract class Model(val name: String) extends Serializable {
   /**
    * The list of expected arg types (may be TAny)
    */
-  def argTypes       (idx: Int): Seq[Type]
+  def argTypes       (idx: Int): Seq[BaseType]
   /**
    * The list of expected hint types (may be TAny)
    */
-  def hintTypes      (idx: Int): Seq[Type]
+  def hintTypes      (idx: Int): Seq[BaseType]
 
   /**
    * Infer the type of the model from the types of the inputs
    * @param argTypes    The types of the arguments the the VGTerm
    * @return            The type of the value returned by this model
    */
-  def varType        (idx: Int, argTypes: Seq[Type]): Type
+  def varType        (idx: Int, argTypes: Seq[BaseType]): BaseType
 
   /**
    * Generate a best guess for a variable represented by this model.

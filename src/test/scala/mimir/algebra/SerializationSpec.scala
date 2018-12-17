@@ -50,7 +50,7 @@ object SerializationSpec extends SQLTestSpecification("SerializationTest") {
               i = i + 1;
               val query = db.sql.convert(s)
               val serialized = Json.ofOperator(query)
-              val deserialized = Json.toOperator(serialized)
+              val deserialized = Json.toOperator(serialized, db.types)
 
               Some(deserialized must be equalTo query)
             }

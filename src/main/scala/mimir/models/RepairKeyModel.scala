@@ -23,9 +23,9 @@ class RepairKeyModel(
   name: String, 
   context: String, 
   source: Operator, 
-  keys: Seq[(String, Type)], 
+  keys: Seq[(String, BaseType)], 
   target: String,
-  targetType: Type,
+  targetType: BaseType,
   scoreCol: Option[String]
 ) 
   extends Model(name)
@@ -37,7 +37,7 @@ class RepairKeyModel(
   
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) : List[PrimitiveValue] = args.toList
   
-  def varType(idx: Int, args: Seq[Type]): Type = targetType
+  def varType(idx: Int, args: Seq[BaseType]): BaseType = targetType
   def argTypes(idx: Int) = keys.map(_._2)
   def hintTypes(idx: Int) = Seq(TString(), TString())
 
@@ -78,7 +78,7 @@ class RepairKeyModel(
             source
           )
         )
-     val mopSchema = db.typechecker.schemaOf(mop)
+     val mopSchema = db.typechecker.baseSchemaOf(mop)
     domainCache = db.backend.execute(mop).map( row => {
           ( SparkUtils.convertField(mopSchema(0)._2, row, 0, TString()), 
             scoreCol match { 
@@ -139,7 +139,7 @@ class RepairKeyModel(
     case TString() => StringPrimitive(value.asInstanceOf[String])
     case TBool() => BoolPrimitive(value.asInstanceOf[Boolean])
     case TRowId() => RowIdPrimitive(value.asInstanceOf[String])
-    case TType() => TypePrimitive(Type.fromString(value.asInstanceOf[String]))
+    // case TType() => TypePrimitive(BaseType.fromString(value.asInstanceOf[String]))
     //case TAny() => NullPrimitive()
     //case TUser(name) => name.toLowerCase
     //case TInterval() => Primitive(value.asInstanceOf[Long])

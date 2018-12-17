@@ -3,7 +3,6 @@ package mimir.sql.sqlite;
 import java.sql.SQLException
 
 import mimir.algebra._
-import mimir.algebra.Type._
 import mimir.util._
 
 abstract class MimirFunction extends org.sqlite.Function
@@ -11,7 +10,7 @@ abstract class MimirFunction extends org.sqlite.Function
   def value_mimir(idx: Int): PrimitiveValue =
     value_mimir(idx, TAny())
 
-  def value_mimir(idx: Int, t:Type): PrimitiveValue =
+  def value_mimir(idx: Int, t:BaseType): PrimitiveValue =
   {
     if(value_type(idx) == SQLiteCompat.NULL){ NullPrimitive() }
     else { t match {
@@ -40,13 +39,13 @@ abstract class MimirFunction extends org.sqlite.Function
       case RowIdPrimitive(r)    => result(r)
       case t:TimestampPrimitive => result(t.asString)
       case i:IntervalPrimitive => result(i.asString)
-      case TypePrimitive(t)     => result(Type.toString(t))
+      case TypePrimitive(t)     => result(t.toString)
       case NullPrimitive()      => result()
     }
   }
 }
 
-abstract class SimpleMimirFunction(argTypes: List[Type]) extends MimirFunction
+abstract class SimpleMimirFunction(argTypes: List[BaseType]) extends MimirFunction
 {
   def apply(args: List[PrimitiveValue]): PrimitiveValue
 

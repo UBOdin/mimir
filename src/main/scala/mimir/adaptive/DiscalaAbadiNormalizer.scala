@@ -74,8 +74,8 @@ object DiscalaAbadiNormalizer
         fullSchema.map { x => (x._2.toLong -> x._1._1) }.toMap
       )
     groupingModel.trainDomain(db)//.reconnectToDatabase(db)
-    val schemaLookup =
-      fullSchema.map( x => (x._2 -> x._1) ).toMap
+    val schemaLookup:Map[Int,(String,BaseType)] =
+      fullSchema.map( x => (x._2 -> (x._1._1, db.types.rootType(x._1._2))) ).toMap
 
     // for every possible parent/child relationship except for ROOT
     val parentKeyRepairs = 
@@ -261,9 +261,9 @@ class DAFDRepairModel(
   name: String, 
   context: String, 
   source: Operator, 
-  keys: Seq[(String, Type)], 
+  keys: Seq[(String, BaseType)], 
   target: String,
-  targetType: Type,
+  targetType: BaseType,
   scoreCol: Option[String],
   attrLookup: Map[Long,String]
 ) extends RepairKeyModel(name, context, source, keys, target, targetType, scoreCol)

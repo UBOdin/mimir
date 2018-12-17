@@ -56,7 +56,7 @@ object MimirGProMDemo extends GProMSQLTestSpecification("MimirGProMDemo")
 			//	"mimir.algebra.gprom.OperatorTranslation"
 			//){
         val table = db.table("MVQ")
-        val (oper, provCols) = OperatorTranslation.compileProvenanceWithGProM(table) 
+        val (oper, provCols) = db.gpromTranslator.compileProvenanceWithGProM(table) 
         provOp = oper;
         query(table){ 
   				_.toSeq.map { _.provenance.asString } must contain(
@@ -71,7 +71,7 @@ object MimirGProMDemo extends GProMSQLTestSpecification("MimirGProMDemo")
     }
     
     "Compile Determinism for Mimir Operators" >> { 
-      val (oper, colDet, rowDet) = OperatorTranslation.compileTaintWithGProM(provOp) 
+      val (oper, colDet, rowDet) = db.gpromTranslator.compileTaintWithGProM(provOp) 
       val table = db.table("MVQ")
       query(table){ 
 				_.toList.map( row => {
@@ -105,7 +105,7 @@ object MimirGProMDemo extends GProMSQLTestSpecification("MimirGProMDemo")
       println("------------mimir Op Json-----------------")
       println(mimir.serialization.Json.ofOperator(oper).toString)
       println("------------------------------------------")*/
-      val gpromNode = TranslationUtils.scalaListToGProMList(Seq(OperatorTranslation.mimirOperatorToGProMOperator(oper)))
+      val gpromNode = TranslationUtils.scalaListToGProMList(Seq(db.gpromTranslator.mimirOperatorToGProMOperator(oper)))
       gpromNode.write()
       val gpNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
       .replaceAll("ADDRESS: '[a-z0-9]+'", "ADDRESS: ''")
@@ -121,7 +121,7 @@ object MimirGProMDemo extends GProMSQLTestSpecification("MimirGProMDemo")
   def transGOpPrint(oper:Operator) : String = {
     org.gprom.jdbc.jna.GProM_JNA.GC_LOCK.synchronized{
       val memctx = GProMWrapper.inst.gpromCreateMemContext()
-      val gpromNode = TranslationUtils.scalaListToGProMList(Seq(OperatorTranslation.mimirOperatorToGProMOperator(oper)))
+      val gpromNode = TranslationUtils.scalaListToGProMList(Seq(db.gpromTranslator.mimirOperatorToGProMOperator(oper)))
       gpromNode.write()
       val gpNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
       .replaceAll("ADDRESS: '[a-z0-9]+'", "ADDRESS: ''")
@@ -129,7 +129,7 @@ object MimirGProMDemo extends GProMSQLTestSpecification("MimirGProMDemo")
       /*println("---------------gprom Op-------------------")
       println(gpNodeStr)
       println("------------------------------------------")*/
-      val opOut = OperatorTranslation.gpromStructureToMimirOperator(0, gpromNode, null)
+      val opOut = db.gpromTranslator.gpromStructureToMimirOperator(0, gpromNode, null)
       /*println("--------------mimir Op--------------------")
       println(opOut.toString())
       println("------------mimir Op Json-----------------")

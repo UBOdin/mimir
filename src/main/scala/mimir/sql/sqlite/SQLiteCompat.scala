@@ -61,8 +61,8 @@ object SQLiteCompat extends LazyLogging{
       val name = x(1).asString.toUpperCase.trim
       val rawType = x(2).asString.trim
       val baseType = rawType.split("\\(")(0).trim
-      val inferredType = try {
-        Type.fromString(baseType)
+      val inferredType:BaseType = try {
+        BaseType.fromString(baseType).get
       } catch {
         case e:RAException => 
           logger.warn(s"While getting schema for table '$table': ${e.getMessage}")
@@ -300,7 +300,7 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
     def xFunc(): Unit = { 
       if (args != 2) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR MIMIRCAST, EXPECTED 2 IN FORM OF MIMIRCAST(COLUMN,TYPE)") }
       try {
-        val t = Type.toSQLiteType(value_int(1))
+        val t = BaseType.idTypeOrder(value_int(1))
         val v = value_text(0)
         logger.trace(s"Casting $v as $t")
         t match {
@@ -322,45 +322,6 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
             }
           case TString() | TRowId() | TDate() | TTimestamp() =>
             result(value_text(0))
-
-          case TUser(name) =>
-            val v:String = value_text(0)
-            if(v != null) {
-              Type.rootType(t) match {
-                case TRowId() =>
-                  result(value_text(0))
-                case TString() | TDate() | TTimestamp() | TInterval()  =>
-                  val txt = value_text(0)
-                  if(TypeRegistry.matches(name, txt)){
-                    result(value_text(0))
-                  } else {
-                    result()
-                  }
-                case TInt() | TBool() =>
-                  if(TypeRegistry.matches(name, value_text(0))){
-                    result(value_int(0))
-                  } else {
-                    result()
-                  }
-                case TFloat() =>
-                  if(TypeRegistry.matches(name, value_text(0))){
-                    result(value_double(0))
-                  } else {
-                    result()
-                  }
-                case TAny() =>
-                  if(TypeRegistry.matches(name, value_text(0))){
-                    result(value_text(0))
-                  } else {
-                    result()
-                  }
-                case TUser(_) | TType() =>
-                  throw new Exception("In SQLiteCompat expected natural type but got: " + Type.rootType(t).toString())
-              }
-            }
-            else{
-              result()
-            }
 
           case _ =>
             result("I assume that you put something other than a number in, this functions works like, MIMIRCAST(column,type), the types are int values, 1 is int, 2 is double, 3 is string, and 5 is null, so MIMIRCAST(COL,1) is casting column 1 to int")

@@ -43,7 +43,7 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], geocod
   def argTypes(idx: Int) = {
       Seq(TRowId()).union(addrCols.map(_ => TString()))
   }
-  def varType(idx: Int, args: Seq[Type]) = TFloat()
+  def varType(idx: Int, args: Seq[BaseType]) = TFloat()
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ) = {
     val rowid = RowIdPrimitive(args(0).asString)
     getFeedback(idx, args) match {
@@ -91,7 +91,7 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], geocod
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = {
     hasFeedback(idx, args)
   }
-  def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq()
+  def hintTypes(idx: Int): Seq[BaseType] = Seq()
    
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = 
   {

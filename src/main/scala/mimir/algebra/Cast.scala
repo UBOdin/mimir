@@ -4,7 +4,7 @@ import mimir.util._
 
 object Cast 
 {
-  def apply(t: Type, x: PrimitiveValue): PrimitiveValue =
+  def apply(t: BaseType, x: PrimitiveValue): PrimitiveValue =
   {
     try {
       t match {
@@ -27,18 +27,12 @@ object Cast
             case _ => TextUtils.parseInterval(x.asString)
           }
         case TRowId()           => RowIdPrimitive(x.asString)
-        case TAny()             => x
         case TBool()            => BoolPrimitive(x.asLong != 0)
-        case TType()            => TypePrimitive(Type.fromString(x.asString))
-        case TUser(name) => {
-          val (typeRegexp, baseT) = TypeRegistry.registeredTypes(name)
-          val base = apply(baseT, x) 
-          if(typeRegexp.findFirstMatchIn(base.asString).isEmpty){
-            NullPrimitive()
-          } else {
-            base
-          }
-        }
+        case TType()            => TypePrimitive(
+                                      BaseType.fromString(x.asString)
+                                              .getOrElse{ TUser(x.asString) } 
+                                   )
+        case TAny()             => x
       }
     } catch {
       case _:TypeException=> NullPrimitive();
@@ -46,6 +40,6 @@ object Cast
     }
   }
 
-  def apply(t: Type, x: String): PrimitiveValue =
+  def apply(t: BaseType, x: String): PrimitiveValue =
     apply(t, StringPrimitive(x))
 }

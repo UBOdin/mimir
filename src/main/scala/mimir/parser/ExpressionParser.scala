@@ -142,7 +142,7 @@ object ExpressionParser extends RegexParsers {
 
 	def exprType: Parser[Type] = (
 		"int" | "decimal" | "date" | "string" | "rowid" | "type" | "float" | "real" | "varchar" | "any"
-	) ^^ { Type.fromString(_) }
+	) ^^ { BaseType.fromString(_).get }
 
 	def typeLeaf: Parser[Expression] = 
 		exprType ^^ { (t) => TypePrimitive(t) }

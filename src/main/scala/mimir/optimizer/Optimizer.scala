@@ -53,7 +53,4 @@ object Optimizer
     opts.foldLeft(e)( (currE, f) => f(currE) )
   }
 
-  def gpromOptimize(rawOper: Operator): Operator = {
-    OperatorTranslation.optimizeWithGProM(rawOper)
-  }
 }

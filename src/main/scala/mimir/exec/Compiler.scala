@@ -121,7 +121,7 @@ class Compiler(db: Database) extends LazyLogging {
             new AggregateResultIterator(
               gbCols, 
               aggFunctions,
-              requiredColumnsInOrder.map { col => (col, sourceColumnTypes(col)) },
+              requiredColumnsInOrder.map { col => (col, db.types.rootType(sourceColumnTypes(col))) },
               jointIterator,
               db
             )
@@ -141,7 +141,7 @@ class Compiler(db: Database) extends LazyLogging {
       val (schema, rootIterator) = rootIteratorGen({ 
         if(ExperimentalOptions.isEnabled("GPROM-OPTIMIZE")
           && db.backend.isInstanceOf[mimir.sql.GProMBackend] ) {
-          OperatorTranslation.optimizeWithGProM(oper)
+          db.gpromTranslator.optimizeWithGProM(oper)
         } else { 
           optimize(oper)
         }
@@ -152,7 +152,7 @@ class Compiler(db: Database) extends LazyLogging {
       new ProjectionResultIterator(
         outputCols.map( projections(_) ),
         annotationCols.map( projections(_) ).toSeq,
-        schema,
+        schema.map { case (name,t) => (name, db.types.rootType(t)) },
         rootIterator,
         db
       )
@@ -164,6 +164,7 @@ class Compiler(db: Database) extends LazyLogging {
     (schema, new SparkResultIterator(
           schema,
           oper, db.backend,
+          db.types,
           db.backend.dateType
         ))
   }
@@ -173,6 +174,7 @@ class Compiler(db: Database) extends LazyLogging {
     (sqlSchema, new JDBCResultIterator(
           sqlSchema,
           sql, db.metadataBackend,
+          db.types,
           db.backend.dateType
         ))
   }
@@ -185,7 +187,7 @@ class Compiler(db: Database) extends LazyLogging {
     val optimized = { 
       if(ExperimentalOptions.isEnabled("GPROM-OPTIMIZE")
         && db.backend.isInstanceOf[mimir.sql.GProMBackend] ) {
-        OperatorTranslation.optimizeWithGProM(oper)
+        db.gpromTranslator.optimizeWithGProM(oper)
       } else { 
         optimize(oper)
       }

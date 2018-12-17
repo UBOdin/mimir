@@ -14,14 +14,14 @@ object NumericFunctions
         case Seq(NullPrimitive())   => NullPrimitive()
         case x => throw new RAException("Non-numeric parameter to absolute: '"+x+"'")
       },
-      (x: Seq[Type]) => Typechecker.assertNumeric(x(0), Function("ABSOLUTE", List()))
+      (x: Seq[BaseType]) => Typechecker.assertNumeric(x(0), Function("ABSOLUTE", List()))
     )
 
     fr.register("SQRT",
       {
         case Seq(n:NumericPrimitive) => FloatPrimitive(Math.sqrt(n.asDouble))
       },
-      (x: Seq[Type]) => Typechecker.assertNumeric(x(0), Function("SQRT", List()))
+      (x: Seq[BaseType]) => Typechecker.assertNumeric(x(0), Function("SQRT", List()))
     )
 
     fr.register("BITWISE_AND", 
@@ -38,17 +38,17 @@ object NumericFunctions
     fr.register("STDDEV",(_) => ???, (_) => TFloat())
     fr.register("min",
         {
-          case ints:Seq[IntPrimitive] => IntPrimitive(ints.foldLeft(ints.head.v)( (init, intval) => Math.min(init, intval.v)))
+          (ints:Seq[PrimitiveValue]) => IntPrimitive(ints.foldLeft(ints.head.asInt)( (init, intval) => Math.min(init, intval.asInt)))
         }, (_) => TInt())
     fr.register("max",{
-          case ints:Seq[IntPrimitive] => IntPrimitive(ints.foldLeft(ints.head.v)( (init, intval) => Math.max(init, intval.v)))
+          (ints:Seq[PrimitiveValue]) => IntPrimitive(ints.foldLeft(ints.head.asInt)( (init, intval) => Math.max(init, intval.asInt)))
         }, (_) => TInt())
     fr.register("MIN",
         {
-          case ints:Seq[IntPrimitive] => IntPrimitive(ints.foldLeft(ints.head.v)( (init, intval) => Math.min(init, intval.v)))
+          (ints:Seq[PrimitiveValue]) => IntPrimitive(ints.foldLeft(ints.head.asInt)( (init, intval) => Math.min(init, intval.asInt)))
         }, (_) => TInt())
     fr.register("MAX",{
-          case ints:Seq[IntPrimitive] => IntPrimitive(ints.foldLeft(ints.head.v)( (init, intval) => Math.max(init, intval.v)))
+          (ints:Seq[PrimitiveValue]) => IntPrimitive(ints.foldLeft(ints.head.asInt)( (init, intval) => Math.max(init, intval.asInt)))
         }, (_) => TInt())
     
     fr.register("ROUND",
@@ -60,7 +60,7 @@ object NumericFunctions
           FloatPrimitive(Math.round(number).toDouble)
         }
       },
-      (x: Seq[Type]) => TFloat()
+      (x: Seq[BaseType]) => TFloat()
     )
 
     fr.register("ABS", 

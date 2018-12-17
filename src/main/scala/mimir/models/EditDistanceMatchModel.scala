@@ -30,15 +30,15 @@ object EditDistanceMatchModel
   def train(
     db: Database, 
     name: String,
-    source: Either[Operator,Seq[(String,Type)]], 
-    target: Either[Operator,Seq[(String,Type)]]
+    source: Either[Operator,Seq[(String,BaseType)]], 
+    target: Either[Operator,Seq[(String,BaseType)]]
   ): Map[String,(Model,Int)] = 
   {
-    val sourceSch: Seq[(String,Type)] = source match {
-        case Left(oper) => db.typechecker.schemaOf(oper)
+    val sourceSch: Seq[(String,BaseType)] = source match {
+        case Left(oper) => db.typechecker.baseSchemaOf(oper)
         case Right(sch) => sch }
-    val targetSch: Seq[(String,Type)] = target match {
-        case Left(oper) => db.typechecker.schemaOf(oper)
+    val targetSch: Seq[(String,BaseType)] = target match {
+        case Left(oper) => db.typechecker.baseSchemaOf(oper)
         case Right(sch) => sch }
 
     targetSch.map({ case (targetCol,targetType) =>
@@ -47,22 +47,20 @@ object EditDistanceMatchModel
           s"$name:$targetCol",
           defaultMetric,
           (targetCol, targetType),
-          sourceSch.
-            filter((x) => isTypeCompatible(targetType, x._2)).
-            map( _._1 )
+          sourceSch
+            .filter((x) => isTypeCompatible(db.types.rootType(targetType), db.types.rootType(x._2)))
+            .map( _._1 )
         ), 0))
     }).toMap
   }
 
-  def isTypeCompatible(a: Type, b: Type): Boolean = 
+  def isTypeCompatible(a: BaseType, b: BaseType): Boolean = 
   {
-    val aBase = Type.rootType(a)
-    val bBase = Type.rootType(b)
-    (aBase, bBase) match {
+    (a, b) match {
       case ((TInt()|TFloat()),  (TInt()|TFloat())) => true
       case (TAny(), _) => true
       case (_, TAny()) => true
-      case _ => aBase == bBase
+      case _ => a == b
     }
 
   }
@@ -72,7 +70,7 @@ object EditDistanceMatchModel
 class EditDistanceMatchModel(
   name: String,
   metricName: String,
-  target: (String, Type), 
+  target: (String, BaseType), 
   sourceCandidates: Seq[String]
 ) 
   extends Model(name) 
@@ -101,7 +99,7 @@ class EditDistanceMatchModel(
     map({ case (k, v) => (k, v.toDouble) }).
     toIndexedSeq
   } 
-  def varType(idx: Int, t: Seq[Type]) = TString()
+  def varType(idx: Int, t: Seq[BaseType]) = TString()
 
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
   {

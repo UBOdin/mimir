@@ -3,6 +3,7 @@ package mimir.exec.result
 import org.apache.spark.sql.DataFrame
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
+import mimir.algebra.typeregistry.TypeRegistry
 import mimir.sql.RABackend
 import mimir.util.SparkUtils
 import mimir.util.Timer
@@ -11,6 +12,7 @@ class SparkResultIterator(
   inputSchema: Seq[(String,Type)],
   query: Operator,
   backend: RABackend,
+  types: TypeRegistry,
   dateType: (Type)
 ) 
   extends ResultIterator
@@ -24,7 +26,7 @@ class SparkResultIterator(
       zipWithIndex.
       map { case ((name, t), idx) => 
         logger.debug(s"Extracting Raw: $name (@$idx) -> $t")
-        val fn = SparkUtils.convertFunction(t, idx, dateType = dateType)
+        val fn = SparkUtils.convertFunction(types.rootType(t), idx, dateType = dateType)
         () => { fn(row) }
       }
 

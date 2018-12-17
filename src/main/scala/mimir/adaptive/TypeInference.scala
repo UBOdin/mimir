@@ -15,14 +15,14 @@ object TypeInference
 {
 
   
-  def detectType(v: String): Iterable[Type] = {
-    Type.tests.flatMap({ case (t, regexp) =>
-      regexp.findFirstMatchIn(v).map(_ => t)
-    })++
-      TypeRegistry.matchers.flatMap({ case (regexp, name) =>
-        regexp.findFirstMatchIn(v).map(_ => TUser(name))
-      })
-  }
+  // def detectType(v: String, types:TypeRegistry): Iterable[Type] = {
+  //   Type.tests.flatMap({ case (t, regexp) =>
+  //     regexp.findFirstMatchIn(v).map(_ => t)
+  //   })++
+  //     TypeRegistry.matchers.flatMap({ case (regexp, name) =>
+  //       regexp.findFirstMatchIn(v).map(_ => TUser(name))
+  //     })
+  // }
 
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model] =
   {
@@ -49,7 +49,8 @@ object TypeInference
         modelColumns,
         stringDefaultScore,
         db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(),
-        Some(db.backend.execute(config.query.limit(TypeInferenceModel.sampleLimit, 0)))
+        Some(db.backend.execute(config.query.limit(TypeInferenceModel.sampleLimit, 0))),
+        db.types.getSerializable
       )
 
     val columnIndexes = 

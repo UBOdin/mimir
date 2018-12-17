@@ -56,8 +56,8 @@ object RepairKeyLens extends LazyLogging {
             s"$name:$col", 
             name, 
             query, 
-            keys.map { k => (k, schemaMap(k)) }, 
-            col, t,
+            keys.map { k => (k, db.types.rootType(schemaMap(k))) }, 
+            col, db.types.rootType(t),
             scoreCol
           )
         model.trainDomain(db)//.reconnectToDatabase(db)

@@ -3,6 +3,7 @@ package mimir.exec.result
 import java.sql._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
+import mimir.algebra.typeregistry.TypeRegistry
 import mimir.util._
 import mimir.exec._
 import mimir.sql.MetadataBackend
@@ -12,6 +13,7 @@ class JDBCResultIterator(
   inputSchema: Seq[(String,Type)],
   query: SelectBody,
   backend: MetadataBackend,
+  types: TypeRegistry,
   dateType: (Type)
 )
   extends ResultIterator
@@ -26,7 +28,7 @@ class JDBCResultIterator(
       zipWithIndex.
       map { case ((name, t), idx) => 
         logger.debug(s"Extracting Raw: $name (@$idx) -> $t")
-        val fn = JDBCUtils.convertFunction(t, idx+1, dateType = dateType)
+        val fn = JDBCUtils.convertFunction(types.rootType(t), idx+1, dateType = dateType)
         () => { fn(source) }
       }
 

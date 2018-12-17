@@ -4,6 +4,7 @@ import play.api.libs.json._
 
 import mimir.Database
 import mimir.algebra._
+import mimir.algebra.typeregistry.TypeRegistry
 import mimir.util._
 import mimir.views.ViewAnnotation
 
@@ -171,43 +172,43 @@ object Json
 
     }
   }
-  def toOperator(json: JsValue): Operator = 
+  def toOperator(json: JsValue, types:TypeRegistry): Operator = 
   {
     val elems = json.asInstanceOf[JsObject].value// .asInstanceOf[JsObject].value
     elems("type").asInstanceOf[JsString].value match {
       case "aggregate" =>
         Aggregate(
-          elems("gb_columns").asInstanceOf[JsArray].value.map { toExpression(_).asInstanceOf[Var] },
+          elems("gb_columns").asInstanceOf[JsArray].value.map { toExpression(_, types).asInstanceOf[Var] },
           elems("agg_columns").asInstanceOf[JsArray].value.map { fieldJson => 
             val fields = fieldJson.asInstanceOf[JsObject].value
 
             AggFunction(
               fields("function").asInstanceOf[JsString].value,
               fields("distinct").asInstanceOf[JsBoolean].value,
-              fields("args").asInstanceOf[JsArray].value.map { toExpression(_) },
+              fields("args").asInstanceOf[JsArray].value.map { toExpression(_, types) },
               fields("alias").asInstanceOf[JsString].value
             )
           },
-          toOperator(elems("source"))
+          toOperator(elems("source"), types)
         )
       case "annotate" =>
         Annotate(
-          toOperator(elems("source")),
+          toOperator(elems("source"), types),
           elems("annotations").asInstanceOf[JsArray].value.map( annot => {
             val nameAnnot = annot.asInstanceOf[JsObject].value
-            ( nameAnnot("name").asInstanceOf[JsString].value, toAnnotation( nameAnnot("annotation").asInstanceOf[JsObject]) ) 
+            ( nameAnnot("name").asInstanceOf[JsString].value, toAnnotation( nameAnnot("annotation").asInstanceOf[JsObject], types) ) 
             })
         )
       case "join" =>
         Join(
-          toOperator(elems("left")),
-          toOperator(elems("right"))
+          toOperator(elems("left"), types),
+          toOperator(elems("right"), types)
         )
       case "join_left_outer" =>
         LeftOuterJoin(
-          toOperator(elems("left")),
-          toOperator(elems("right")),
-          toExpression(elems("condition"))
+          toOperator(elems("left"), types),
+          toOperator(elems("right"), types),
+          toExpression(elems("condition"), types)
         )
       case "limit" =>
         Limit(
@@ -221,7 +222,7 @@ object Json
             case JsNull => None
             case _ => throw new RAException("Invalid limit clause in JSON")
           },
-          toOperator(elems("source"))
+          toOperator(elems("source"), types)
         )
       case "project" =>
         Project(
@@ -230,10 +231,10 @@ object Json
 
             ProjectArg(
               fields("name").asInstanceOf[JsString].value,
-              toExpression(fields("expression"))
+              toExpression(fields("expression"), types)
             )
           },
-          toOperator(elems("source"))
+          toOperator(elems("source"), types)
         )
       case "sort" =>
         Sort(
@@ -241,23 +242,23 @@ object Json
             val fields = fieldJson.asInstanceOf[JsObject].value
 
             SortColumn(
-              toExpression(fields("expression")),
+              toExpression(fields("expression"), types),
               fields("ascending").asInstanceOf[JsBoolean].value
             )
           },
-          toOperator(elems("source"))
+          toOperator(elems("source"), types)
         )
       case "select" =>
         Select(
-          toExpression(elems("condition")),
-          toOperator(elems("source"))
+          toExpression(elems("condition"), types),
+          toOperator(elems("source"), types)
         )
       case "table_hardcoded" =>
-        val schema = toSchema(elems("schema"))
+        val schema = toSchema(elems("schema"), types)
         HardTable(
           schema,
           elems("data").as[JsArray].value.map { rowJS =>
-            rowJS.as[JsArray].value.zipWithIndex.map { vJS => toPrimitive(schema(vJS._2)._2, vJS._1) }
+            rowJS.as[JsArray].value.zipWithIndex.map { vJS => toPrimitive(types.rootType(schema(vJS._2)._2), vJS._1) }
           }
         )
         
@@ -265,21 +266,21 @@ object Json
         Table(
           elems("table").asInstanceOf[JsString].value, 
           elems("alias").asInstanceOf[JsString].value,
-          toSchema(elems("schema")),
+          toSchema(elems("schema"), types),
           elems("metadata").asInstanceOf[JsArray].value.map { metaJson =>
             val meta = metaJson.asInstanceOf[JsObject].value
 
             (
               meta("alias").asInstanceOf[JsString].value,
-              toExpression(meta("value")),
-              toType(meta("type"))
+              toExpression(meta("value"), types),
+              toType(meta("type"), types)
             )
           }
         )
       case "table_view" =>
         View(
           elems("name").asInstanceOf[JsString].value,
-          toOperator(elems("query")),
+          toOperator(elems("query"), types),
           elems("annotations").asInstanceOf[JsArray].value.map { annot =>
             ViewAnnotation.withName(annot.asInstanceOf[JsString].value)
           }.toSet
@@ -288,15 +289,15 @@ object Json
         AdaptiveView(
           elems("model").asInstanceOf[JsString].value,
           elems("name").asInstanceOf[JsString].value,
-          toOperator(elems("query")),
+          toOperator(elems("query"), types),
           elems("annotations").asInstanceOf[JsArray].value.map { annot =>
             ViewAnnotation.withName(annot.asInstanceOf[JsString].value)
           }.toSet
         )
       case "union" =>
         Union(
-          toOperator(elems("left")),
-          toOperator(elems("right"))
+          toOperator(elems("left"), types),
+          toOperator(elems("right"), types)
         )
     }
 
@@ -309,14 +310,14 @@ object Json
       "type"       -> ofType(annot.typ),
       "expression" -> ofExpression(annot.expr)
     ))
-  def toAnnotation(json: JsValue): AnnotateArg = 
+  def toAnnotation(json: JsValue, types: TypeRegistry): AnnotateArg = 
   {
     val fields = json.asInstanceOf[JsObject].value
     AnnotateArg(
       toAnnotationType(fields("annotation_type")),
       fields("name").asInstanceOf[JsString].value,
-      toType(fields("type")),
-      toExpression(fields("expression"))
+      toType(fields("type"), types),
+      toExpression(fields("expression"), types)
     )
   }
 
@@ -403,7 +404,7 @@ object Json
 
     }
   }
-  def toExpression(json: JsValue): Expression = 
+  def toExpression(json: JsValue, types: TypeRegistry): Expression = 
   {
     val fields = json.asInstanceOf[JsObject].value
     fields("type").asInstanceOf[JsString].value match {
@@ -411,38 +412,38 @@ object Json
       case "arithmetic" => 
         Arithmetic(
           Arith.withName(fields("op").asInstanceOf[JsString].value),
-          toExpression(fields("left")),
-          toExpression(fields("right"))
+          toExpression(fields("left"), types),
+          toExpression(fields("right"), types)
         )
 
       case "comparison" => 
         Comparison(
           Cmp.withName(fields("op").asInstanceOf[JsString].value),
-          toExpression(fields("left")),
-          toExpression(fields("right"))
+          toExpression(fields("left"), types),
+          toExpression(fields("right"), types)
         )
 
       case "conditional" => 
         Conditional(
-          toExpression(fields("if")),
-          toExpression(fields("then")),
-          toExpression(fields("else"))
+          toExpression(fields("if"), types),
+          toExpression(fields("then"), types),
+          toExpression(fields("else"), types)
         )
 
       case "function" => 
         Function(
           fields("name").asInstanceOf[JsString].value,
-          toExpressionList(fields("args"))
+          toExpressionList(fields("args"), types)
         )
 
       case "is_null" =>
-        IsNullExpression(toExpression(fields("arg")))
+        IsNullExpression(toExpression(fields("arg"), types))
 
       case "not" =>
-        Not(toExpression(fields("arg")))
+        Not(toExpression(fields("arg"), types))
       
       case "jdbc_var" =>
-        JDBCVar(toType(fields("var_type")))
+        JDBCVar(toType(fields("var_type"), types))
       
       case "var" =>
         Var(fields("name").asInstanceOf[JsString].value)
@@ -454,32 +455,32 @@ object Json
         VGTerm(
           fields("model").asInstanceOf[JsString].value,
           fields("var_index").asInstanceOf[JsNumber].value.toLong.toInt,
-          toExpressionList(fields("arguments")),
-          toExpressionList(fields("hints"))
+          toExpressionList(fields("arguments"), types),
+          toExpressionList(fields("hints"), types)
         )
 
-      // fall back to treating it as a primitive type
+      // fall back to treating it as a primitive constant
       case t => 
-        toPrimitive(Type.fromString(t), fields("value"))
+        toPrimitive(types.rootType(types.fromString(t)), fields("value"))
 
     }
   }
 
   def ofExpressionList(e: Seq[Expression]): JsArray = 
     JsArray(e.map { ofExpression(_) })
-  def toExpressionList(json: JsValue): Seq[Expression] = 
-    json.asInstanceOf[JsArray].value.map { toExpression(_) }
+  def toExpressionList(json: JsValue, types: TypeRegistry): Seq[Expression] = 
+    json.asInstanceOf[JsArray].value.map { toExpression(_, types) }
 
   def ofSchema(schema: Seq[(String,Type)]): JsArray = 
     JsArray(schema.map { case (name, t) =>
       JsObject(Map("name" -> JsString(name), "type" -> ofType(t)))
     })
-  def toSchema(json: JsValue): Seq[(String,Type)] = 
+  def toSchema(json: JsValue, types: TypeRegistry): Seq[(String,Type)] = 
     json.asInstanceOf[JsArray].value.map { elem => 
       val fields = elem.asInstanceOf[JsObject].value
       (
         fields("name").asInstanceOf[JsString].value,
-        toType(fields("type"))
+        toType(fields("type"), types)
       )
     }
 
@@ -490,10 +491,19 @@ object Json
     ViewAnnotation.withName(json.asInstanceOf[JsString].value)
     
   def ofType(t: Type): JsValue = 
-    JsString(Type.toString(t))
+    JsString(t.toString)
 
-  def toType(json: JsValue): Type = 
-    Type.fromString(json.asInstanceOf[JsString].value)
+  def toType(json: JsValue, types: TypeRegistry): Type = 
+  {
+    val name = json.asInstanceOf[JsString].value
+    BaseType.fromString(name)
+      .getOrElse { 
+        if(types supportsUserType name) { TUser(name) }
+        else {
+          throw new IllegalArgumentException("Invalid Type: "+name)
+        }
+      }
+  }
 
   def ofPrimitive(p: PrimitiveValue): JsValue =
   {
@@ -511,7 +521,7 @@ object Json
     }
   }
 
-  def toPrimitive(t: Type, json: JsValue): PrimitiveValue =
+  def toPrimitive(t: BaseType, json: JsValue): PrimitiveValue =
   {
     (json,t) match {
       case (JsNull, _)              => NullPrimitive()

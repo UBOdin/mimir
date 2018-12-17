@@ -34,7 +34,13 @@ object FuncDepModel
         db.models.getOption(modelName) match {
           case Some(model) => model
           case None => {
-            val model = new SimpleFuncDepModel(modelName, QueryNamer(query), col, db.typechecker.schemaOf(query))
+            val model = new SimpleFuncDepModel(
+                            modelName, 
+                            QueryNamer(query), 
+                            col, 
+                            db.typechecker.schemaOf(query)
+                              .map { case (col, t) => (col, db.types.rootType(t)) }
+                        )
             sourceCol = trainModel(db, query, model)
             db.models.persist(model)
             model
@@ -81,7 +87,7 @@ object FuncDepModel
 }
 
 @SerialVersionUID(1001L)
-class SimpleFuncDepModel(name: String, val tableName:String, val colName: String, val schema:Seq[(String,Type)])
+class SimpleFuncDepModel(name: String, val tableName:String, val colName: String, val schema:Seq[(String,BaseType)])
   extends Model(name)
 {
   val colIdx:Int = schema.map{_._1}.indexOf(colName)
@@ -105,13 +111,13 @@ class SimpleFuncDepModel(name: String, val tableName:String, val colName: String
   def isAcknowledged(idx: Int, args: Seq[PrimitiveValue]): Boolean =
     feedback contains(args(0).asString)
 
-  def guessInputType: Type =
+  def guessInputType: BaseType =
     schema(colIdx)._2
 
-  def argTypes(idx: Int): Seq[Type] = List(TRowId())
+  def argTypes(idx: Int): Seq[BaseType] = List(TRowId())
   def hintTypes(idx: Int) = schema.map(_._2)
 
-  def varType(idx: Int, args: Seq[Type]): Type = guessInputType
+  def varType(idx: Int, args: Seq[BaseType]): BaseType = guessInputType
 
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
   {

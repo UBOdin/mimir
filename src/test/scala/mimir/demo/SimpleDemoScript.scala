@@ -95,7 +95,7 @@ object SimpleDemoScript
 			query("SELECT * FROM RATINGS1 WHERE RATING > 4;"){ _.toSeq must have size(2) }
 			query("SELECT * FROM RATINGS2;"){ _.toSeq must have size(3) }
 			db.typechecker.schemaOf(select("SELECT * FROM RATINGS2;")).
-				map(_._2).map(Type.rootType _) must be equalTo List(TString(), TFloat(), TFloat())
+				map(_._2).map(db.types.rootType _) must be equalTo List(TString(), TFloat(), TFloat())
 		}
 
 		"Create and Query Domain Constraint Repair Lenses" >> {

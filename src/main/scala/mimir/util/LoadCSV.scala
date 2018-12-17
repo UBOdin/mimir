@@ -32,8 +32,6 @@ object LoadCSV extends StrictLogging {
   def handleLoadTableRaw(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()) = 
     LoadData.handleLoadTableRaw(db, targetTable, sourceFile, options)
 
-  def handleLoadTableRaw(db: Database, targetTable: String, targetSchema:Option[Seq[(String,Type)]], sourceFile: File, options: Map[String,String]) =
+  def handleLoadTableRaw(db: Database, targetTable: String, targetSchema:Option[Seq[(String,BaseType)]], sourceFile: File, options: Map[String,String]) =
     LoadData.handleLoadTableRaw(db, targetTable, targetSchema, sourceFile, options, "csv")
 }
-
-

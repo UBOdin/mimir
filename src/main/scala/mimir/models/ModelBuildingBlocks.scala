@@ -4,7 +4,7 @@ import mimir.algebra._
 
 trait NoArgModel
 {
-  def argTypes(x: Int): Seq[Type] = List()
+  def argTypes(x: Int): Seq[BaseType] = List()
   def hintTypes(idx: Int) = Seq()
 }
 

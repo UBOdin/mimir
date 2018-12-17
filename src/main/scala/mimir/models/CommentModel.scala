@@ -14,7 +14,7 @@ import java.sql.SQLException
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1001L)
-class CommentModel(override val name: String, cols:Seq[String], colTypes:Seq[Type], comments:Seq[String]) 
+class CommentModel(override val name: String, cols:Seq[String], colTypes:Seq[BaseType], comments:Seq[String]) 
   extends Model(name) 
   with Serializable
   with SourcedFeedback
@@ -23,7 +23,7 @@ class CommentModel(override val name: String, cols:Seq[String], colTypes:Seq[Typ
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = s"${args(0).asString}:$idx"
   
   def argTypes(idx: Int) = Seq(TRowId())
-  def varType(idx: Int, args: Seq[Type]) = colTypes(idx)
+  def varType(idx: Int, args: Seq[BaseType]) = colTypes(idx)
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ) = {
     getFeedback(idx, args) match {
       case Some(v) => v
@@ -48,7 +48,7 @@ class CommentModel(override val name: String, cols:Seq[String], colTypes:Seq[Typ
     setFeedback(idx, args, v)
   }
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = hasFeedback(idx, args)
-  def hintTypes(idx: Int): Seq[mimir.algebra.Type] = colTypes
+  def hintTypes(idx: Int): Seq[BaseType] = colTypes
   //def getDomain(idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = Seq((hints(0), 0.0))
 
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Double = {

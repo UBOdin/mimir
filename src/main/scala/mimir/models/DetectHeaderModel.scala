@@ -52,6 +52,9 @@ with SourcedFeedback
     }
     else
     {
+      // TODO: COMMENT THIS CODE
+      //   From Oliver 12/16/2018: 
+      //      This code is really hard to follow.  It needs some serious commenting love.
       val top6 = trainingData
       val (header, topRecords) = (top6.head.map(col => sanitizeColumnName(col match {
           case NullPrimitive() => "NULL" 
@@ -62,10 +65,10 @@ with SourcedFeedback
            (pv._1 match {
              case NullPrimitive() => TAny()
              case x => {
-               Type.rootTypes.foldLeft(TAny():Type)((tinit, ttype) => {
-                 Cast.apply(ttype,x) match {
+               BaseType.tests.foldLeft(TAny():Type)((tinit, ttype) => {
+                 Cast(ttype._1,x) match {
                    case NullPrimitive() => tinit
-                   case x => ttype
+                   case x => ttype._1
                  }
                })
              }
@@ -118,7 +121,7 @@ with SourcedFeedback
   def argTypes(idx: Int) = {
     Seq(TInt())
   }
-  def varType(idx: Int, args: Seq[Type]) = {
+  def varType(idx: Int, args: Seq[BaseType]) = {
     TString()
   }
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ) = {
@@ -143,7 +146,7 @@ with SourcedFeedback
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = {
     hasFeedback(idx, args)
   }
-  def hintTypes(idx: Int): Seq[mimir.algebra.Type] = {
+  def hintTypes(idx: Int): Seq[BaseType] = {
     Seq()
   }
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) = {

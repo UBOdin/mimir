@@ -16,10 +16,6 @@ object Provenance extends LazyLogging {
 
   val mergeRowIdFunction = "MIMIR_MAKE_ROWID"
   val rowidColnameBase = "MIMIR_ROWID"
-
-  def compileGProM(oper: Operator): (Operator, Seq[String]) = {
-    OperatorTranslation.compileProvenanceWithGProM(oper)
-  }
   
   
   def compile(oper: Operator): (Operator, Seq[String]) = {
@@ -348,7 +344,7 @@ object Provenance extends LazyLogging {
       }
       
       case Aggregate(gbCols, aggCols, src) =>
-        val sch = db.typechecker.schemaOf(src).toMap
+        val sch = db.typechecker.baseSchemaOf(src).toMap
 
         val castTokenValues = 
           gbCols.map { col => (col.name, Cast(sch(col.name), rowIds(col.name))) }.toMap

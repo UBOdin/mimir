@@ -58,7 +58,7 @@ object MCDBTimingSpec
 
     }
 
-    def createTable(tableInfo:(String, String, Seq[(String, Type)], Double), tableSuffix: String = "_cleaned") =  
+    def createTable(tableInfo:(String, String, Seq[(String, BaseType)], Double), tableSuffix: String = "_cleaned") =  
     {
       val (baseTable, ddl, schema, timeout) = tableInfo
       

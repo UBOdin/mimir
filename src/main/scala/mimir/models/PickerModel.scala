@@ -26,7 +26,7 @@ object PickerModel
   
   def availableSparkModels(trainingDataq:DataFrame) = Map("Classification" -> (Classification, Classification.DecisionTreeMulticlassModel(trainingDataq)), "Regression" -> (Regression, Regression.GeneralizedLinearRegressorModel(trainingDataq)))
   
-  def train(db:Database, name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[Type], useClassifier:Option[String], classifyUpFrontAndCache:Boolean, query: Operator ) : SimplePickerModel = {
+  def train(db:Database, name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[BaseType], useClassifier:Option[String], classifyUpFrontAndCache:Boolean, query: Operator ) : SimplePickerModel = {
     val pickerModel = new SimplePickerModel(name, resultColumn, pickFromCols, colTypes, useClassifier, classifyUpFrontAndCache, query) 
     val trainingQuery = Limit(0, Some(TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)), Project(pickFromCols.map(col => ProjectArg(col, Var(col))), query.filter(Not(IsNullExpression(Var(pickFromCols.head)))) )))
     val (schemao, trainingDatao) = SparkML.getDataFrameWithProvFromQuery(db, trainingQuery)
@@ -51,7 +51,7 @@ object PickerModel
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1002L)
-class SimplePickerModel(override val name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[Type], useClassifier:Option[String], classifyUpFrontAndCache:Boolean, source: Operator) 
+class SimplePickerModel(override val name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[BaseType], useClassifier:Option[String], classifyUpFrontAndCache:Boolean, source: Operator) 
   extends Model(name) 
   with Serializable
   with FiniteDiscreteDomain
@@ -61,7 +61,7 @@ class SimplePickerModel(override val name: String, resultColumn:String, pickFrom
   
   var classifierModel: Option[PipelineModel] = None
   var classifyAllPredictions:Option[Map[String, Seq[(String, Double)]]] = None 
-  var schema:Seq[(String, Type)] = null  
+  var schema:Seq[(String, BaseType)] = null  
   var trainingData:DataFrame = null
   
   
@@ -114,9 +114,9 @@ class SimplePickerModel(override val name: String, resultColumn:String, pickFrom
   }
 
   def argTypes(idx: Int) = {
-      Seq(TRowId()).union(colTypes)
+      Seq(TRowId()) ++ colTypes
   }
-  def varType(idx: Int, args: Seq[Type]) = colTypes(idx)
+  def varType(idx: Int, args: Seq[BaseType]) = colTypes(idx)
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ) = {
     val rowid = args(0).asString
     getFeedback(idx, args) match {
@@ -193,7 +193,7 @@ class SimplePickerModel(override val name: String, resultColumn:String, pickFrom
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = {
     hasFeedback(idx, args)
   }
-  def hintTypes(idx: Int): Seq[mimir.algebra.Type] = useClassifier match {
+  def hintTypes(idx: Int): Seq[BaseType] = useClassifier match {
     case None => Seq(TAny())
     case Some(x) => Seq() 
   }

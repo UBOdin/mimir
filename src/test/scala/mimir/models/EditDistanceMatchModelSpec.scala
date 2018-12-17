@@ -7,7 +7,7 @@ import mimir.algebra._
 object EditDistanceMatchModelSpec extends Specification
 {
   
-  def train(src: Map[String,Type], tgt: Map[String,Type]): Map[String,(Model,Int)] =
+  def train(src: Map[String,BaseType], tgt: Map[String,BaseType]): Map[String,(Model,Int)] =
   {
     EditDistanceMatchModel.train(null, "TEMP",
       Right(src.toList), Right(tgt.toList)

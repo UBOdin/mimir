@@ -26,7 +26,7 @@ object GeoFunctions
           args(3).asDouble  //lat2
         ))
       },
-      (args) => {
+      (args:Seq[BaseType]) => {
         (0 until 4).foreach { i => Typechecker.assertNumeric(args(i), Function("DST", List())) }; 
         TFloat()
       }

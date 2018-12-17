@@ -13,7 +13,7 @@ case class DomainDumper(
   vgHints: Seq[Expression]
 ) extends Proc(vgArgs++vgHints) {
   override def toString() = "{{ DOMAIN DUMP: "+model.name+";"+idx+"["+vgArgs.mkString(", ")+"]["+vgHints.mkString(", ")+"] }}"
-  override def getType(bindings: Seq[Type]):Type = TString()
+  override def getType(bindings: Seq[BaseType]):BaseType = TString()
   override def children: Seq[Expression] = vgArgs ++ vgHints
   override def rebuild(x: Seq[Expression]) = {
     val (a, h) = x.splitAt(vgArgs.length)

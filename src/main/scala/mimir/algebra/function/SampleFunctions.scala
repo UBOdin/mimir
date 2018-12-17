@@ -21,7 +21,7 @@ object SampleFunctions
           case None => NullPrimitive()
         }
       },
-      (types: Seq[Type]) => {
+      (types: Seq[BaseType]) => {
         val debugExpr = Function("BEST_SAMPLE", types.map(TypePrimitive(_)))
 
         Typechecker.assertNumeric(types.head, debugExpr)
@@ -42,7 +42,7 @@ object SampleFunctions
         FloatPrimitive(
           WorldBits.confidence(args(0).asLong, args(0).asLong.toInt)
         ),
-      (types: Seq[Type]) => {
+      (types: Seq[BaseType]) => {
         Typechecker.assertNumeric(types(0), 
           Function("SAMPLE_CONFIDENCE", types.map(TypePrimitive(_))))
         Typechecker.assertNumeric(types(1),

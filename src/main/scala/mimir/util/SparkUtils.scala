@@ -16,7 +16,7 @@ import java.io.File
 object SparkUtils {
   //TODO:there are a bunch of hacks in this conversion function because type conversion in operator translator
   //  needs to be done correctly
-  def convertFunction(t: Type, field: Integer, dateType: Type = TDate()): (Row => PrimitiveValue) =
+  def convertFunction(t: BaseType, field: Integer, dateType: Type = TDate()): (Row => PrimitiveValue) =
   {
     val checkNull: ((Row, => PrimitiveValue) => PrimitiveValue) = {
       (r, call) => {
@@ -70,7 +70,8 @@ object SparkUtils {
             } 
           }
         } })
-      case TType() =>       (r) => checkNull(r, { TypePrimitive(Type.fromString(r.getString(field))) })
+      case TType() =>       (r) => checkNull(r, { val name = r.getString(field)
+                                                  TypePrimitive(BaseType.fromString(name).getOrElse { TUser(name) }) })
       case TDate() =>
         dateType match {
           case TDate() =>   (r) => { val d = r.getDate(field); if(d == null){ NullPrimitive() } else { convertDate(d) } }
@@ -97,11 +98,10 @@ object SparkUtils {
 
         }
       case TInterval() => (r) => { TextUtils.parseInterval(r.getString(field)) }
-      case TUser(t) => convertFunction(TypeRegistry.baseType(t), field, dateType)
     }
   }
   
-  def convertField(t: Type, results: Row, field: Integer, dateType: Type = TString()): PrimitiveValue =
+  def convertField(t: BaseType, results: Row, field: Integer, dateType: Type = TString()): PrimitiveValue =
   {
     convertFunction(
       t match {
@@ -149,7 +149,7 @@ object SparkUtils {
     extractAllRows(results, OperatorTranslation.structTypeToMimirSchema(results.schema).map(_._2))    
   
 
-  def extractAllRows(results: DataFrame, schema: Seq[Type]): SparkDataFrameIterable =
+  def extractAllRows(results: DataFrame, schema: Seq[BaseType]): SparkDataFrameIterable =
   {
     new SparkDataFrameIterable(results.collect().iterator, schema)
   }
@@ -161,12 +161,12 @@ object SparkUtils {
     val models = ClassFinder.concreteSubclasses("mimir.models.Model", classMap).map(clazz => Class.forName(clazz.name)).toSeq
     val operators = ClassFinder.concreteSubclasses("mimir.algebra.Operator", classMap).map(clazz => Class.forName(clazz.name)).toSeq
     val expressions = ClassFinder.concreteSubclasses("mimir.algebra.Expression", classMap).map(clazz => Class.forName(clazz.name)).toSeq
-    val miscClasses = Seq(Class.forName("org.opengis.referencing.datum.Ellipsoid"),Class.forName("org.geotools.referencing.datum.DefaultEllipsoid"))
+    val miscClasses = Seq[Class[_]](Class.forName("org.opengis.referencing.datum.Ellipsoid"),Class.forName("org.geotools.referencing.datum.DefaultEllipsoid"))
     (models ++ operators ++ expressions ++ miscClasses).toArray
   }
 }
 
-class SparkDataFrameIterable(results: Iterator[Row], schema: Seq[Type]) 
+class SparkDataFrameIterable(results: Iterator[Row], schema: Seq[BaseType]) 
   extends Iterator[Seq[PrimitiveValue]]
 {
   def next(): List[PrimitiveValue] = 

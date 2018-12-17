@@ -45,7 +45,7 @@ object CommentLens {
             "COMMENT_ARG_"+index
         (
           ProjectArg(outputCol, VGTerm(modelName, index, Seq(RowIdVar()), Seq(expr))),
-          (outputCol, db.typechecker.typeOf(expr, query)),
+          (outputCol, db.types.rootType(db.typechecker.typeOf(expr, query))),
           comment
         )
       }

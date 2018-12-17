@@ -9,7 +9,7 @@ import java.text.SimpleDateFormat
 
 object JDBCUtils {
 
-  def convertSqlType(t: Int): Type = {
+  def convertSqlType(t: Int): BaseType = {
     t match {
       case (java.sql.Types.FLOAT |
             java.sql.Types.DECIMAL |
@@ -26,7 +26,7 @@ object JDBCUtils {
     }
   }
 
-  def convertMimirType(t: Type): Int = {
+  def convertMimirType(t: BaseType): Int = {
     t match {
       case TInt()       => java.sql.Types.INTEGER
       case TFloat()     => java.sql.Types.DOUBLE
@@ -38,12 +38,11 @@ object JDBCUtils {
       case TBool()      => java.sql.Types.INTEGER
       case TType()      => java.sql.Types.VARCHAR
       case TInterval()  => java.sql.Types.VARCHAR
-      case TUser(t)     => convertMimirType(TypeRegistry.baseType(t))
     }
   }
 
 
-  def convertFunction(t: Type, field: Integer, dateType: Type = TDate()): (ResultSet => PrimitiveValue) =
+  def convertFunction(t: BaseType, field: Integer, dateType: Type = TDate()): (ResultSet => PrimitiveValue) =
   {
     val checkNull: ((ResultSet, => PrimitiveValue) => PrimitiveValue) = {
       (r, call) => {
@@ -60,7 +59,8 @@ object JDBCUtils {
       case TString() =>     (r) => checkNull(r, { StringPrimitive(r.getString(field)) })
       case TRowId() =>      (r) => checkNull(r, { RowIdPrimitive(r.getString(field)) })
       case TBool() =>       (r) => checkNull(r, { BoolPrimitive(r.getInt(field) != 0) })
-      case TType() =>       (r) => checkNull(r, { TypePrimitive(Type.fromString(r.getString(field))) })
+      case TType() =>       (r) => checkNull(r, { val name = r.getString(field)
+                                                  TypePrimitive(BaseType.fromString(name).getOrElse { TUser(name) } ) })
       case TDate() =>
         dateType match {
           case TDate() =>   (r) => { val d = r.getDate(field); if(d == null){ NullPrimitive() } else { convertDate(d) } }
@@ -87,11 +87,10 @@ object JDBCUtils {
 
         }
       case TInterval() => (r) => { TextUtils.parseInterval(r.getString(field)) }
-      case TUser(t) => convertFunction(TypeRegistry.baseType(t), field, dateType)
     }
   }
 
-  def convertField(t: Type, results: ResultSet, field: Integer, rowIdType: Type = TString()): PrimitiveValue =
+  def convertField(t: BaseType, results: ResultSet, field: Integer, rowIdType: Type = TString()): PrimitiveValue =
   {
     convertFunction(
       t match {
@@ -144,13 +143,13 @@ object JDBCUtils {
     extractAllRows(results, schema)    
   }
 
-  def extractAllRows(results: ResultSet, schema: Seq[Type]): JDBCResultSetIterable =
+  def extractAllRows(results: ResultSet, schema: Seq[BaseType]): JDBCResultSetIterable =
   {
     new JDBCResultSetIterable(results, schema)
   }
 }
 
-class JDBCResultSetIterable(results: ResultSet, schema: Seq[Type]) 
+class JDBCResultSetIterable(results: ResultSet, schema: Seq[BaseType]) 
   extends Iterator[Seq[PrimitiveValue]]
 {
   def next(): List[PrimitiveValue] = 

@@ -105,6 +105,8 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
   val ra              = new mimir.sql.RAToSql(this)
   val functions       = new mimir.algebra.function.FunctionRegistry
   val aggregates      = new mimir.algebra.function.AggregateRegistry
+  val types:mimir.algebra.typeregistry.TypeRegistry           
+                      = mimir.algebra.typeregistry.DefaultTypeRegistry
 
   //// Logic
   val compiler        = new mimir.exec.Compiler(this)
@@ -113,11 +115,17 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
   val typechecker     = new mimir.algebra.Typechecker(
                                   functions = Some(functions), 
                                   aggregates = Some(aggregates),
-                                  models = Some(models)
+                                  models = Some(models),
+                                  types = types
                                 )
   val interpreter     = new mimir.algebra.Eval(
                                   functions = Some(functions)
                                 )  
+  //// Translation
+  val gpromTranslator = new mimir.algebra.gprom.OperatorTranslation(this) 
+  val sparkTranslator = new mimir.algebra.spark.OperatorTranslation(this)
+
+
   val metadataTables = Seq("MIMIR_ADAPTIVE_SCHEMAS", "MIMIR_MODEL_OWNERS", "MIMIR_MODELS", "MIMIR_VIEWS", "MIMIR_SYS_TABLES", "MIMIR_SYS_ATTRS")
   /**
    * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
@@ -239,6 +247,11 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
       case None => backend.getTableSchema(name)
     }
   }
+  /**
+   * Look up the raw typed schema for the specified table
+   */
+  def tableBaseSchema(name: String): Option[Seq[(String,BaseType)]] = 
+    tableSchema(name).map { _.map { case (name,t) => (name, types.rootType(t)) } }
 
   /**
    * Build a Table operator for the table with the provided name.
@@ -458,8 +471,6 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
     views.init()
     lenses.init()
     adaptiveSchemas.init()
-    mimir.algebra.gprom.OperatorTranslation(this) 
-    mimir.algebra.spark.OperatorTranslation(this)
   }
 
   /**
@@ -492,7 +503,7 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
     sourceFile: File
   ) : Unit  = loadTable(targetTable, sourceFile, true, 
       ("CSV", Seq(StringPrimitive(","),BoolPrimitive(false),BoolPrimitive(false))), 
-      Some(targetSchema.map(el => (el._1, Type.fromString(el._2)))))
+      Some(targetSchema.map(el => (el._1, types.rootType(types.fromString(el._2))))))
   
   def loadTable(
     targetTable: String, 
@@ -511,7 +522,7 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
     sourceFile: File, 
     force:Boolean, 
     format:(String, Seq[PrimitiveValue]),
-    targetSchema: Option[Seq[(String, Type)]]
+    targetSchema: Option[Seq[(String, BaseType)]]
   ){
     val (delim, typeinference, detectHeaders) = format._1.toUpperCase() match {
       case "CSV" => {
@@ -535,7 +546,7 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
     targetTable: String, 
     sourceFile: File, 
     force:Boolean, 
-    targetSchema: Option[Seq[(String, Type)]] = None,
+    targetSchema: Option[Seq[(String, BaseType)]] = None,
     inferTypes:Boolean = true,
     detectHeaders:Boolean = true,
     backendOptions:Map[String, String] = Map(),
@@ -565,7 +576,7 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
       views.create(targetTable.toUpperCase, oper)
     } else {
       val schema = targetSchema match {
-        case None => tableSchema(targetTable)
+        case None => tableBaseSchema(targetTable)
         case _ => targetSchema
       }
       LoadData.handleLoadTableRaw(this, targetTable.toUpperCase, schema, sourceFile, options, format)

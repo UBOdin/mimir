@@ -18,7 +18,7 @@ class DefaultMetaModel(name: String, context: String, models: Seq[String])
   with NoArgModel
   with FiniteDiscreteDomain
 {
-  def varType(idx: Int, args: Seq[Type]): Type = TString()
+  def varType(idx: Int, args: Seq[BaseType]): BaseType = TString()
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
     choices(idx).getOrElse( StringPrimitive(models.head))
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =

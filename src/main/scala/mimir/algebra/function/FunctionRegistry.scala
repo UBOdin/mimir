@@ -12,7 +12,7 @@ sealed abstract class RegisteredFunction { val name: String }
 case class NativeFunction(
 	name: String, 
 	evaluator: Seq[PrimitiveValue] => PrimitiveValue, 
-	typechecker: Seq[Type] => Type,
+	typechecker: Seq[BaseType] => BaseType,
 	passthrough:Boolean = false
 ) extends RegisteredFunction
 
@@ -49,14 +49,14 @@ class FunctionRegistry {
   def register(
     fname:String,
     eval:Seq[PrimitiveValue] => PrimitiveValue, 
-    typechecker: Seq[Type] => Type
+    typechecker: Seq[BaseType] => BaseType
   ): Unit =
     register(new NativeFunction(fname, eval, typechecker))
     
   def registerPassthrough(
     fname:String,
     eval:Seq[PrimitiveValue] => PrimitiveValue, 
-    typechecker: Seq[Type] => Type
+    typechecker: Seq[BaseType] => BaseType
   ): Unit =
     register(new NativeFunction(fname, eval, typechecker, true))
 

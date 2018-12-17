@@ -213,12 +213,12 @@ object Eval
   ): PrimitiveValue = {
     if(a.equals(NullPrimitive()) || b.equals(NullPrimitive())) { return NullPrimitive() }
 
-    val aRoot = Type.rootType(a.getType)
-    val bRoot = Type.rootType(b.getType)
+    val typeOfA = a.getType
+    val typeOfB = b.getType
 
-    (op, aRoot, bRoot,
+    (op, typeOfA, typeOfB,
       Typechecker.escalate(
-      aRoot, bRoot, op, "Evaluate Arithmetic", Arithmetic(op, a, b)
+      typeOfA, typeOfB, op, "Evaluate Arithmetic", Arithmetic(op, a, b)
     )) match { 
       case (Arith.Add, _, _, TInt()) => 
         IntPrimitive(a.asLong + b.asLong)

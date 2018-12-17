@@ -30,13 +30,8 @@ object ProjectionArgVisibility extends Enumeration {
    val Invisible = Value("Invisible") 
 } 
 
-object OperatorTranslation extends LazyLogging {
-  
-  var db: mimir.Database = null
-  def apply(db: mimir.Database) = {
-    this.db = db
-  }
-  
+class OperatorTranslation(db: mimir.Database) extends LazyLogging {
+    
   def gpromStructureToMimirOperator(depth : Int, gpromStruct: GProMStructure, gpromParentStruct: GProMStructure ) : Operator = {
     (gpromStruct match {
       case list:GProMList => {
@@ -303,7 +298,7 @@ object OperatorTranslation extends LazyLogging {
           case "CAST" => {
             val castArgs = gpromListToScalaList(functionCall.args).map( gpromParam => translateGProMExpressionToMimirExpression(ctxOpers, gpromParam))
           	val fixedType = castArgs.last match {
-              case IntPrimitive(i) => TypePrimitive(Type.toSQLiteType(i.toInt))
+              case IntPrimitive(i) => TypePrimitive(db.types.typeForId(i.toInt))
               case TypePrimitive(t) => TypePrimitive(t)
               case x => x
             }
@@ -882,7 +877,7 @@ object OperatorTranslation extends LazyLogging {
         (GProM_JNA.GProMDataType.GProM_DT_STRING,strPtr,0)
       }
       case TypePrimitive(t) => {
-        val v = Type.id(t)
+        val v = db.types.idForType(t)
         val intPtr = new Memory(Native.getNativeSize(classOf[Int]))
         intPtr.setInt(0, v.asInstanceOf[Int]);
         (GProM_JNA.GProMDataType.GProM_DT_INT,intPtr,0)

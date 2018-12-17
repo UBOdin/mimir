@@ -15,11 +15,11 @@ object Heuristics
   ): (Operator, Seq[Plot.Line], Plot.Config) = 
   {
     //if no lines are specified, try to find the best ones
-    val columns = db.typechecker.schemaOf(dataQuery)
+    val columns = db.typechecker.baseSchemaOf(dataQuery)
     val columnMap = columns.toMap
     val numericColumns =
       columns.toSeq
-        .filter { t => Type.isNumeric(t._2) }
+        .filter { _._2.isNumeric }
         .map { _._1 }
       //if that comes up with nothing either, then throw an exception
     if(numericColumns.isEmpty){
@@ -39,7 +39,9 @@ object Heuristics
       // TODO: Plug DetectSeries in here.
       logger.info(s"No explicit columns given, implicitly using X = $x, Y = [${numericColumns.tail.mkString(", ")}]")
       val commonType = 
-        Typechecker.leastUpperBound(numericColumns.tail.map { y => columnMap(y) })
+        Typechecker.leastUpperBound(
+          numericColumns.tail.map { y => columnMap(y) }:Seq[BaseType]
+        )
       (
         dataQuery,
         numericColumns.tail.map { y =>
@@ -48,7 +50,6 @@ object Heuristics
         Map(
           "XLABEL" -> StringPrimitive(x)
         ) ++ (commonType match { 
-          case Some(TUser(utype)) => Map("YLABEL" -> StringPrimitive(utype))
           case Some(TDate()     ) => Map("YLABEL" -> StringPrimitive("Date"))
           case Some(TTimestamp()) => Map("YLABEL" -> StringPrimitive("Time"))
           case _                  => Map()

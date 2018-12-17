@@ -58,9 +58,9 @@ object Mimir extends LazyLogging {
     if(!conf.quiet()){
       output.print("Connecting to " + conf.backend() + "://" + conf.dbname() + "...")
     }
+    sback.sparkTranslator = db.sparkTranslator
     db.metadataBackend.open()
     db.backend.open()
-    OperatorTranslation.db = db
     sback.registerSparkFunctions(db.functions.functionPrototypes.map(el => el._1).toSeq, db.functions)
     sback.registerSparkAggregates(db.aggregates.prototypes.map(el => el._1).toSeq, db.aggregates)
       
