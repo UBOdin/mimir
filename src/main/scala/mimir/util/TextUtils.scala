@@ -5,7 +5,7 @@ import mimir.algebra._
 
 object TextUtils extends LazyLogging {
 
-  def parsePrimitive(t: Type, s: String, baseType: (String => Type) = (_ => throw new RAException("Unable to cast user-defined type here"))): PrimitiveValue = 
+  def parsePrimitive(t: BaseType, s: String): PrimitiveValue = 
   {
     t match {
       case TInt()    => IntPrimitive(java.lang.Long.parseLong(s))
@@ -20,9 +20,8 @@ object TextUtils extends LazyLogging {
           case "NO"  | "FALSE" | "0" => BoolPrimitive(false)
         }
       case TRowId()  => RowIdPrimitive(s)
-      case TType()   => TypePrimitive(Type.fromString(s))
+      case TType()   => TypePrimitive(BaseType.fromString(s).getOrElse { TUser(s) })
       case TAny()    => throw new RAException("Can't cast string to TAny")
-      case TUser(t)  => parsePrimitive(baseType(t), s)
     }
   }
 

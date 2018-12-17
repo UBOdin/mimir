@@ -339,7 +339,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 		val optQuery = db.compiler.optimize(inlinedQuery)
 
-		val finalSchema = db.typechecker.schemaOf(optQuery)
+		val finalSchema = db.typechecker.baseSchemaOf(optQuery)
 
 		//val sqlQuery = db.ra.convert(optQuery)
 
@@ -348,7 +348,10 @@ class CTExplainer(db: Database) extends LazyLogging {
 		val results = db.backend.execute(optQuery)//sqlQuery)
 
 		val baseData = 
-			SparkUtils.extractAllRows(results, finalSchema.map(_._2)).flush
+			SparkUtils.extractAllRows(
+				results, 
+				finalSchema.map { _._2 }
+			).flush
 
 		if(baseData.isEmpty){
 			val resultRowString = baseData.map( _.mkString(", ") ).mkString("\n")

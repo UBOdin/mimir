@@ -7,7 +7,7 @@ import scala.util._
 object UniformDistribution extends Model("UNIFORM") with Serializable {
   def argTypes(idx: Int) = List(TFloat(), TFloat())
   def hintTypes(idx: Int) = Seq()
-  def varType(idx: Int, argTypes: Seq[Type]) = TFloat()
+  def varType(idx: Int, argTypes: Seq[BaseType]) = TFloat()
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = 
     FloatPrimitive((args(0).asDouble + args(1).asDouble) / 2.0)
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = {
@@ -53,7 +53,7 @@ case class NoOpModel(override val name: String, reasonText:String)
 
   def argTypes(idx: Int) = List(TAny())
   def hintTypes(idx: Int) = Seq()
-  def varType(idx: Int, args: Seq[Type]) = args(0)
+  def varType(idx: Int, args: Seq[BaseType]) = args(0)
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = args(0)
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = args(0)
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = reasonText

@@ -264,6 +264,7 @@ object CTPercolatorClassic {
       case ProvenanceOf(psel) => {
         percolateOne(psel)
       }
+      case _ => ??? // This code is deprecated.  It's only getting called for research use.
     }
   }
   
@@ -284,7 +285,7 @@ object CTPercolatorClassic {
       case Union(_,_) => false
       case Join(_,_) => false
       case Aggregate(_,_,_) => false
-      case (Annotate(_, _) | ProvenanceOf(_) | Recover(_, _)) => ???
+      case _ => ??? // This code is deprecated.  It's only getting called for research use.
     }
   }
   
@@ -382,7 +383,7 @@ object CTPercolatorClassic {
             Table(name, alias, sch, metadata)
           }
           
-        case (Annotate(_, _) | ProvenanceOf(_) | Recover(_, _)) => ???
+        case _ => ??? // This code is deprecated.  It's only getting called for research use.
     }
   }
 

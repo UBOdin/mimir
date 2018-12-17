@@ -14,7 +14,7 @@ case class Sampler(
 ) 
   extends Proc(  (seed :: (vgArgs.toList ++ vgHints.toList))  )
 {
-  def getType(argTypes: Seq[Type]): Type =
+  def getType(argTypes: Seq[BaseType]): BaseType =
     model.varType(idx, argTypes)
   def get(v: Seq[PrimitiveValue]): PrimitiveValue = 
   {

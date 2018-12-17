@@ -115,8 +115,14 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int)
   def dropDB():Unit = sparkBackend.dropDB() 
   def materializeView(name:String): Unit = sparkBackend.materializeView(name)
   def createTable(tableName: String,oper: mimir.algebra.Operator): Unit = sparkBackend.createTable(tableName, oper)
-  def readDataSource(name: String,format: String,options: Map[String,String],schema: Option[Seq[(String, mimir.algebra.Type)]],load: Option[String]): Unit = sparkBackend.readDataSource(name, format, options, schema, load)
-  def getTableSchema(table: String): Option[Seq[(String, Type)]] = sparkBackend.getTableSchema(table)
+  def readDataSource(
+    name: String,
+    format: String,
+    options: Map[String,String],
+    schema: Option[Seq[(String, mimir.algebra.BaseType)]],
+    load: Option[String]
+  ): Unit = sparkBackend.readDataSource(name, format, options, schema, load)
+  def getTableSchema(table: String): Option[Seq[(String, BaseType)]] = sparkBackend.getTableSchema(table)
   
   
   def getAllTables(): Seq[String] = sparkBackend.getAllTables()
@@ -124,8 +130,8 @@ class GProMBackend(backend: String, filename: String, var gpromLogLevel : Int)
 
  
   def canHandleVGTerms: Boolean = sparkBackend.canHandleVGTerms
-  def rowIdType: Type = sparkBackend.rowIdType
-  def dateType: Type = sparkBackend.dateType
+  def rowIdType: BaseType = sparkBackend.rowIdType
+  def dateType: BaseType = sparkBackend.dateType
   def specializeQuery(q: Operator, db: Database): Operator = sparkBackend.specializeQuery(q, db)
 
   def listTablesQuery: Operator = sparkBackend.listTablesQuery

@@ -9,13 +9,13 @@ import mimir.util._
 
 object SpecializeForSQLite {
 
-  def apply(e: Expression): Expression =
+  def apply(e: Expression, db: Database): Expression =
   {
     (e match {
   
       case Function("CAST", Seq(target, TypePrimitive(t))) => 
         {//println("TYPE ID: "+t.id(t))
-          Function("MIMIRCAST", Seq(target, IntPrimitive(Type.id(t))))}
+          Function("MIMIRCAST", Seq(target, IntPrimitive(db.types.idForType(db.types.rootType(t)).toLong)))}
 
       case Function("CAST", _) =>
         throw new SQLException("Invalid CAST: "+e)
@@ -49,7 +49,7 @@ object SpecializeForSQLite {
 
       case _ => e
 
-    }).recur( apply(_:Expression) )
+    }).recur( apply(_:Expression, db) )
   }
 
   def apply(agg: AggFunction, typeOf: Expression => Type): AggFunction =
@@ -68,7 +68,7 @@ object SpecializeForSQLite {
   def apply(o: Operator, db: Database): Operator = 
   {
     o.recurExpressions( 
-      apply(_:Expression) 
+      apply(_:Expression, db) 
     ) match {
       case Aggregate(gb, agg, source) => {
 

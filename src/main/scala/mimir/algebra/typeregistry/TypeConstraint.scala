@@ -34,7 +34,7 @@ case class EnumConstraint(values: Set[String], caseSensitive: Boolean = false) e
   def base = TString()
 }
 
-case class IntExpressionConstraint(constraint: Expression, targetType: Type) extends TypeConstraint
+case class IntExpressionConstraint(constraint: Expression, targetType: BaseType) extends TypeConstraint
 {
   lazy val eval = new Eval()
   

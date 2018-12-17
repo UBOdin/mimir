@@ -101,32 +101,38 @@ class FirstAggregate(arg: Row => PrimitiveValue) extends AggregateValue
 class AggregateResultIterator(
   groupByColumns: Seq[Var],
   aggregates: Seq[AggFunction],
-  inputSchema: Seq[(String,Type)],
+  inputSchema: Seq[(String,BaseType)],
   src: ResultIterator,
   db: Database
 ) 
   extends ResultIterator
   with LazyLogging
 {
-  private val typeOfInputColumn: Map[String, Type] = inputSchema.toMap
+  private val typeOfInputColumn: Map[String, BaseType] = inputSchema.toMap
   private val typeOf = db.typechecker.typeOf(_:Expression, scope = typeOfInputColumn)
 
-  val tupleSchema: Seq[(String,Type)] = 
+  val tupleSchema: Seq[(String,BaseType)] = 
     groupByColumns.map { col => (col.name, typeOfInputColumn(col.name)) } ++ 
     aggregates.map { fn => 
       (
         fn.alias, 
-        db.aggregates.typecheck(fn.function, fn.args.map { typeOf(_) })
+        db.types.rootType(
+          db.aggregates.typecheck(
+            fn.function, 
+            fn.args.map { typeOf(_) }
+                   .map { db.types.rootType(_) }
+          )
+        )
       ) 
     }
-  val annotationSchema: Seq[(String,Type)] = Seq()
+  val annotationSchema: Seq[(String,BaseType)] = Seq()
 
   val aggNames =
     aggregates.map { _.alias }
   val aggTypes =
     aggregates.map { agg => (agg, agg.args.map { typeOf(_) }) }
 
-  private val aggEvalScope: Map[String,(Type, Row => PrimitiveValue)] =
+  private val aggEvalScope: Map[String,(BaseType, Row => PrimitiveValue)] =
     inputSchema.zipWithIndex.map { 
       case ((name, t), idx) => 
         logger.debug(s"For $name ($t) using idx = $idx")

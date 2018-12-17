@@ -12,7 +12,7 @@ case class IsAcknowledged(
 ) 
   extends Proc( vgArgs )
 {
-  def getType(argTypes: Seq[Type]): Type = TBool()
+  def getType(argTypes: Seq[BaseType]): BaseType = TBool()
   def get(v: Seq[PrimitiveValue]): PrimitiveValue = 
   {
     BoolPrimitive(model.isAcknowledged(idx, v))

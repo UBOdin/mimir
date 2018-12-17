@@ -48,8 +48,8 @@ object Classification extends SparkML {
     applyModelDB(model, query, db)
   }
   
-  def classify( model : PipelineModel, cols:Seq[(String, Type)], testData : List[Seq[PrimitiveValue]]): DataFrame = {
-    applyModel(model, cols, testData)
+  def classify( model : PipelineModel, cols:Seq[(String, BaseType)], testData : List[Seq[PrimitiveValue]], sparkTranslator: OperatorTranslation): DataFrame = {
+    applyModel(model, cols, testData, sparkTranslator)
   }
     
   override def extractPredictions(model : PipelineModel, predictions:DataFrame, maxPredictions:Int = 5) : Seq[(String, (String, Double))] = {

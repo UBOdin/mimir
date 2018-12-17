@@ -5,10 +5,10 @@ import mimir.algebra._
 
 case class RegisteredAggregate(
   aggName: String,
-  typechecker: (Seq[Type] => Type),
+  typechecker: (Seq[BaseType] => BaseType),
   defaultValue: PrimitiveValue
 ){
-  def typecheck(args: Seq[Type]) = typechecker(args)
+  def typecheck(args: Seq[BaseType]) = typechecker(args)
 }
 
 class AggregateRegistry
@@ -28,14 +28,14 @@ class AggregateRegistry
     register("GROUP_BITWISE_AND", List(TInt()), TInt(), IntPrimitive(Long.MaxValue))
     register("GROUP_BITWISE_OR", List(TInt()), TInt(), IntPrimitive(0))
     register("JSON_GROUP_ARRAY", (t) => TString(), StringPrimitive("[]"))
-    register("FIRST", (t:Seq[Type]) => t.head, NullPrimitive())
-    register("FIRST_FLOAT", (t:Seq[Type]) => t.head, NullPrimitive())
-    register("FIRST_INT", (t:Seq[Type]) => t.head, NullPrimitive())
+    register("FIRST", (t:Seq[BaseType]) => t.head, NullPrimitive())
+    register("FIRST_FLOAT", (t:Seq[BaseType]) => t.head, NullPrimitive())
+    register("FIRST_INT", (t:Seq[BaseType]) => t.head, NullPrimitive())
   }
 
   def register(
     aggName: String, 
-    typechecker: Seq[Type] => Type, 
+    typechecker: Seq[BaseType] => BaseType, 
     defaultValue: PrimitiveValue
   ): Unit = {
     prototypes.put(aggName, RegisteredAggregate(aggName, typechecker, defaultValue))
@@ -58,8 +58,8 @@ class AggregateRegistry
 
   def register(
     aggName: String,
-    argTypes: Seq[Type],
-    retType: Type, 
+    argTypes: Seq[BaseType],
+    retType: BaseType, 
     defaultValue: PrimitiveValue
   ): Unit = {
     register(
@@ -79,7 +79,7 @@ class AggregateRegistry
     )
   }
 
-  def typecheck(aggName: String, args: Seq[Type]): Type = 
+  def typecheck(aggName: String, args: Seq[BaseType]): BaseType = 
     prototypes(aggName).typecheck(args)
 
   def isAggregate(aggName: String): Boolean =

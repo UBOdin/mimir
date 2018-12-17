@@ -53,6 +53,8 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
   with LazyLogging
 {
   
+  var sparkTranslator: OperatorTranslation = null
+
   var sparkSql : SQLContext = null
   //ExperimentalOptions.enable("remoteSpark")
   val envHasS3Keys = (Option(System.getenv("AWS_ACCESS_KEY_ID")), Option(System.getenv("AWS_SECRET_ACCESS_KEY"))) match {
@@ -220,7 +222,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
           val fClassName = sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
           if(fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
             Some((fidentifier.funcName.toUpperCase(), 
-            (inputTypes:Seq[Type]) => {
+            (inputTypes:Seq[BaseType]) => {
               val inputs = inputTypes.map(inp => Literal(OperatorTranslation.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
               val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
               val dt = OperatorTranslation.getMimirType( Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(inputs:_*)
@@ -254,7 +256,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
       logger.trace(s"$compiledOp")
       logger.trace("------------------------------------------------------------")
       if(sparkSql == null) throw new Exception("There is no spark context")
-      sparkOper = OperatorTranslation.mimirOpToSparkOp(compiledOp)
+      sparkOper = sparkTranslator.mimirOpToSparkOp(compiledOp)
       logger.trace("------------------------ spark op --------------------------")
       logger.trace(s"$sparkOper")
       logger.trace("------------------------------------------------------------")
@@ -283,7 +285,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
   }
 
   
-  def readDataSource(name:String, format:String, options:Map[String, String], schema:Option[Seq[(String, Type)]], load:Option[String]) = {
+  def readDataSource(name:String, format:String, options:Map[String, String], schema:Option[Seq[(String, BaseType)]], load:Option[String]) = {
     if(sparkSql == null) throw new Exception("There is no spark context")
     def copyToS3(file:String): String = {
       val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
@@ -408,7 +410,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
   }
   
   
-  def getTableSchema(table: String): Option[Seq[(String, Type)]] = {
+  def getTableSchema(table: String): Option[Seq[(String, BaseType)]] = {
     if(sparkSql == null) throw new Exception("There is no spark context")
     if(sparkSql.sparkSession.catalog.tableExists(table))
       Some(sparkSql.sparkSession.catalog.listColumns(table).collect.map(col => (col.name, OperatorTranslation.getMimirType( OperatorTranslation.dataTypeFromHiveDataTypeString(col.dataType)))))
@@ -434,8 +436,8 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
   }
 
   def canHandleVGTerms: Boolean = true
-  def rowIdType: Type = TString()
-  def dateType: Type = TDate()
+  def rowIdType: BaseType = TString()
+  def dateType: BaseType = TDate()
   def specializeQuery(q: Operator, db: mimir.Database): Operator = {
     q
   }

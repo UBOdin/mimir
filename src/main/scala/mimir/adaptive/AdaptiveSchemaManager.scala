@@ -63,9 +63,9 @@ class AdaptiveSchemaManager(db: Database)
     ){ _.map { row => 
       val name = row(0).asString
       val mlensType = row(1).asString
-      val query = Json.toOperator(Json.parse(row(2).asString))
+      val query = Json.toOperator(Json.parse(row(2).asString), db.types)
       val args:Seq[Expression] = 
-        Json.toExpressionList(Json.parse(row(3).asString))
+        Json.toExpressionList(Json.parse(row(3).asString), db.types)
  
       ( 
         MultilensRegistry.multilenses(mlensType), 
@@ -87,9 +87,9 @@ class AdaptiveSchemaManager(db: Database)
     ){ _.map { row => 
       val name = row(0).asString
       val mlensType = row(1).asString
-      val query = Json.toOperator(Json.parse(row(2).asString))
+      val query = Json.toOperator(Json.parse(row(2).asString), db.types)
       val args:Seq[Expression] = 
-        Json.toExpressionList(Json.parse(row(3).asString))
+        Json.toExpressionList(Json.parse(row(3).asString), db.types)
  
       ( 
         MultilensRegistry.multilenses(mlensType), 
@@ -166,9 +166,9 @@ class AdaptiveSchemaManager(db: Database)
         val row = result.next
         val name = row(0).asString
         val mlensType = row(1).asString
-        val query = Json.toOperator(Json.parse(row(2).asString))
+        val query = Json.toOperator(Json.parse(row(2).asString), db.types)
         val args:Seq[Expression] = 
-          Json.toExpressionList(Json.parse(row(3).asString))
+          Json.toExpressionList(Json.parse(row(3).asString), db.types)
    
         Some(( 
           MultilensRegistry.multilenses(mlensType), 

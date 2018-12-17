@@ -68,11 +68,11 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
   
   var predictions:Seq[Dataset[(String, Double)]] = Seq()
   var queryDf: DataFrame = null
-  var rowIdType:Type = TString()
-  var dateType:Type = TDate()
+  var rowIdType:BaseType = TString()
+  var dateType:BaseType = TDate()
     //colNames.map { _ => Seq[(String,Double)]() }
   var queryCols:Seq[String] = colNames
-  var querySchema:Seq[(String,Type)] = 
+  var querySchema:Seq[(String,BaseType)] = 
     colNames.map { x => (x, TAny()) }
 
   def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : String = s"${idx}_${args(0).asString}_${hints(0).asString}"
@@ -80,7 +80,7 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
 
   def train(db: Database): Seq[Boolean] = 
   {
-    querySchema = db.typechecker.schemaOf(query)
+    querySchema = db.typechecker.baseSchemaOf(query)
     queryCols = querySchema.unzip._1
     queryDf = db.backend.execute(query)
     rowIdType = db.backend.rowIdType
@@ -158,7 +158,7 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
 
   def argTypes(idx: Int) = Seq(TRowId())
 
-  def varType(idx: Int, args: Seq[Type]): Type = querySchema(idx)._2 
+  def varType(idx: Int, args: Seq[BaseType]): BaseType = querySchema(idx)._2 
   
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ): PrimitiveValue = 
   {
@@ -224,7 +224,7 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
   def isAcknowledged(idx: Int, args: Seq[PrimitiveValue]): Boolean =
     hasFeedback(idx, args)
   
-  def hintTypes(idx: Int): Seq[mimir.algebra.Type] = Seq()
+  def hintTypes(idx: Int): Seq[BaseType] = Seq()
   
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = {
     val df = predictions(idx)

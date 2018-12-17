@@ -603,11 +603,13 @@ class SqlToRA(db: Database)
           throw new SQLException(s"Invalid CAST: $cast")
         }
         val target = convert(params(0))
-        val t = params(1) match {
-          case s: StringValue => Type.fromString(s.toRawString)
-          case c: Column => Type.fromString(c.getColumnName)
-          case _ => throw new SQLException(s"Invalid CAST Type: $cast")
-        }
+        val t = (params(1) match {
+            case s: StringValue => BaseType.fromString(s.toRawString)
+            case c: Column      => BaseType.fromString(c.getColumnName)
+            case _              => None
+          }).getOrElse { 
+            throw new SQLException(s"Invalid CAST Type: $cast")
+          }
 
         return mimir.algebra.Function("CAST", Seq(target, TypePrimitive(t)))
       }

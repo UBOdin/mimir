@@ -31,7 +31,7 @@ object PickerLens {
     
     val (pickFromColumns, pickerColTypes ) = args.flatMap {
       case Function("PICK_FROM", cols ) => 
-        Some( cols.map { case col:Var => (col.name, schemaMap(col.name)) 
+        Some( cols.map { case col:Var => (col.name, db.types.rootType(schemaMap(col.name)))
                          case col => throw new RAException(s"Invalid pick_from argument: $col in PickerLens $name (not a column reference)")
                        } )
       case _ => None

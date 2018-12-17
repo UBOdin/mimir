@@ -14,7 +14,7 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, Ca
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedRelation, UnresolvedInlineTable, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.plans.{JoinType, Inner,LeftOuter, Cross}
 import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression,AggregateFunction,AggregateMode,Complete,Count,Average,Sum,First,Max,Min}
-
+import org.joda.time.Period
 
 import org.apache.spark.sql.execution.datasources.{DataSource, FailureSafeParser}
 
@@ -44,7 +44,7 @@ import org.apache.spark.sql.catalyst.expressions.StringTrimLeft
 import org.apache.spark.sql.catalyst.expressions.StartsWith
 import org.apache.spark.sql.catalyst.expressions.Contains
 import mimir.algebra.function.FunctionRegistry
-import mimir.algebra.function.NativeFunction
+import mimir.algebra.function.{NativeFunction,FoldFunction,ExpressionFunction}
 
 import mimir.sql.SparkBackend
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
@@ -68,13 +68,9 @@ import org.apache.spark.sql.catalyst.FunctionIdentifier
 import org.apache.spark.sql.catalyst.expressions.CreateArray
 import org.apache.spark.sql.types.TypeCollection
 
-object OperatorTranslation
+class OperatorTranslation(db: mimir.Database)
   extends LazyLogging
 {
-  var db: mimir.Database = null
-  def apply(db: mimir.Database) = {
-    this.db = db
-  }
   
   def mimirOpToSparkOp(oper:Operator) : LogicalPlan = {
     oper match {
@@ -197,12 +193,13 @@ object OperatorTranslation
 			  //LogicalRelation(baseRelation, table)
 			}
 			case View(name, query, annotations) => {
-			  val schema = db.typechecker.schemaOf(query)
+			  val schema = db.typechecker.baseSchemaOf(query)
 			  val table = CatalogTable(
           TableIdentifier(name),
           CatalogTableType.VIEW,
           CatalogStorageFormat.empty,
-          mimirSchemaToStructType(schema) )
+          OperatorTranslation.mimirSchemaToStructType(schema) 
+        )
         org.apache.spark.sql.catalyst.plans.logical.View( table,
           schema.map(col => {
             AttributeReference(col._1, getSparkType(col._2), true, Metadata.empty)( )
@@ -210,12 +207,13 @@ object OperatorTranslation
           mimirOpToSparkOp(query))
 			}
       case av@AdaptiveView(schemaName, name, query, annotations) => {
-        val schema = db.typechecker.schemaOf(av)
+        val schema = db.typechecker.baseSchemaOf(av)
         val table = CatalogTable(
           TableIdentifier(name),
           CatalogTableType.VIEW,
           CatalogStorageFormat.empty,
-          mimirSchemaToStructType(schema))
+          OperatorTranslation.mimirSchemaToStructType(schema)
+        )
 			  org.apache.spark.sql.catalyst.plans.logical.View( table,
           schema.map(col => {
             AttributeReference(col._1, getSparkType(col._2), true, Metadata.empty)( )
@@ -226,8 +224,13 @@ object OperatorTranslation
         //UnresolvedInlineTable( schema.unzip._1, data.map(row => row.map(mimirExprToSparkExpr(oper,_))))
         /*LocalRelation(mimirSchemaToStructType(schema).map(f => AttributeReference(f.name, f.dataType, f.nullable, f.metadata)()), 
             data.map(row => InternalRow(row.map(mimirPrimitiveToSparkInternalRowValue(_)):_*)))*/
-        LocalRelation.fromExternalRows(mimirSchemaToStructType(schema).map(f => AttributeReference(f.name, f.dataType, f.nullable, f.metadata)()), 
-            data.map(row => Row(row.map(mimirPrimitiveToSparkExternalRowValue(_)):_*)))     
+        LocalRelation.fromExternalRows(
+            OperatorTranslation.mimirSchemaToStructType(schema.map { case (name, t) => (name, db.types.rootType(t)) })
+              .map{ f => 
+                AttributeReference(f.name, f.dataType, f.nullable, f.metadata)()
+              }, 
+            data.map(row => Row(row.map(OperatorTranslation.mimirPrimitiveToSparkExternalRowValue(_)):_*))
+        )
       }
 			case Sort(sortCols, src) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Sort(
@@ -384,7 +387,7 @@ object OperatorTranslation
   }*/
   
   def getPrivateMamber[T](inst:AnyRef, fieldName:String) : T = {
-    def _parents: Stream[Class[_]] = Stream(inst.getClass) #::: _parents.map(_.getSuperclass)
+    def _parents: Stream[Class[_]] = Stream[Class[_]](inst.getClass) #::: _parents.map(_.getSuperclass)
     val parents = _parents.takeWhile(_ != null).toList
     val fields = parents.flatMap(_.getDeclaredFields())
     val field = fields.find(_.getName == fieldName).getOrElse(throw new IllegalArgumentException("Field " + fieldName + " not found"))
@@ -396,7 +399,7 @@ object OperatorTranslation
   class PrivateMethodCaller(x: AnyRef, methodName: String) {
     def apply(_args: Any*): Any = {
       val args = _args.map(_.asInstanceOf[AnyRef])
-      def _parents: Stream[Class[_]] = Stream(x.getClass) #::: _parents.map(_.getSuperclass)
+      def _parents: Stream[Class[_]] = Stream[Class[_]](x.getClass) #::: _parents.map(_.getSuperclass)
       val parents = _parents.takeWhile(_ != null).toList
       val methods = parents.flatMap(_.getDeclaredMethods)
       val method = methods.find(_.getName == methodName).getOrElse(throw new IllegalArgumentException("Method " + methodName + " not found"))
@@ -512,7 +515,7 @@ object OperatorTranslation
   def mimirExprToSparkExpr(oper:Operator, expr:Expression) : org.apache.spark.sql.catalyst.expressions.Expression = {
     expr match {
       case primitive : PrimitiveValue => {
-        mimirPrimitiveToSparkPrimitive(primitive)
+        OperatorTranslation.mimirPrimitiveToSparkPrimitive(primitive)
       }
       case cmp@Comparison(op,lhs,rhs) => {
         mimirComparisonToSparkComparison(oper, cmp)
@@ -542,22 +545,31 @@ object OperatorTranslation
       case BestGuess(model, idx, args, hints) => {
         val name = model.name
         //println(s"-------------------Translate BestGuess VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
-       BestGuessUDF(oper, model, idx, args, hints).getUDF
+        BestGuessUDF(oper, model, idx,  
+          args.map { mimirExprToSparkExpr(oper, _) }, 
+          hints.map { mimirExprToSparkExpr(oper, _) }
+        ).getUDF
         //UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ++ hints.map(mimirExprToSparkExpr(oper,_))), true )
       }
       case IsAcknowledged(model, idx, args) => {
         val name = model.name
         //println(s"-------------------Translate IsAcknoledged VGTerm($name, $idx, (${args.mkString(",")}))")
-        AckedUDF(oper, model, idx, args).getUDF
+        AckedUDF(oper, model, idx, args.map { mimirExprToSparkExpr(oper, _) }).getUDF
         //UnresolvedFunction(mimir.ctables.CTables.FN_IS_ACKED, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ), true )
       }
       case Sampler(model, idx, args, hints, seed) => {
-        SampleUDF(oper, model, idx, seed, args, hints).getUDF
+        SampleUDF(oper, model, idx, seed, 
+          args.map { mimirExprToSparkExpr(oper, _) }, 
+          hints.map { mimirExprToSparkExpr(oper, _) }
+        ).getUDF
       }
       case VGTerm(name, idx, args, hints) => { //default to best guess
         //println(s"-------------------Translate VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
         val model = db.models.get(name)
-        BestGuessUDF(oper, model, idx, args, hints).getUDF
+        BestGuessUDF(oper, model, idx, 
+          args.map { mimirExprToSparkExpr(oper, _) }, 
+          hints.map { mimirExprToSparkExpr(oper, _) }
+        ).getUDF
         //UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ++ hints.map(mimirExprToSparkExpr(oper,_))), true )
       }
       case IsNullExpression(iexpr) => {
@@ -571,64 +583,7 @@ object OperatorTranslation
       }
     }
   }
-  
-  val defaultDate = DateTimeUtils.toJavaDate(0)
-  val defaultTimestamp = DateTimeUtils.toJavaTimestamp(0L)
-  def mimirPrimitiveToSparkPrimitive(primitive : PrimitiveValue) : Literal = {
-    primitive match {
-      case NullPrimitive() => Literal(null)
-      case RowIdPrimitive(s) => Literal(s)
-      case StringPrimitive(s) => Literal(s)
-      case IntPrimitive(i) => Literal(i)
-      case FloatPrimitive(f) => Literal(f)
-      case BoolPrimitive(b) => Literal(b)
-      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => Literal.create(SparkUtils.convertTimestamp(ts), TimestampType)
-      case dt@DatePrimitive(y,m,d) => Literal.create(SparkUtils.convertDate(dt), DateType)
-      case x =>  Literal(x.asString)
-    }
-  }
-  
-  def mimirPrimitiveToSparkInternalRowValue(primitive : PrimitiveValue) : Any = {
-    primitive match {
-      case NullPrimitive() => null
-      case RowIdPrimitive(s) => UTF8String.fromString(s)
-      case StringPrimitive(s) => UTF8String.fromString(s)
-      case IntPrimitive(i) => i
-      case FloatPrimitive(f) => f
-      case BoolPrimitive(b) => b
-      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)//DateTimeUtils.fromJavaTimestamp(SparkUtils.convertTimestamp(ts))
-      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)//DateTimeUtils.fromJavaDate(SparkUtils.convertDate(dt))
-      case x =>  UTF8String.fromString(x.asString)
-    }
-  }
-  
-  def mimirPrimitiveToSparkExternalRowValue(primitive : PrimitiveValue) : Any = {
-    primitive match {
-      case NullPrimitive() => null
-      case RowIdPrimitive(s) => s
-      case StringPrimitive(s) => s
-      case IntPrimitive(i) => i
-      case FloatPrimitive(f) => f
-      case BoolPrimitive(b) => b
-      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
-      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
-      case x =>  x.asString
-    }
-  }
-  
-  def mimirPrimitiveToSparkInternalInlineFuncParam(primitive : PrimitiveValue) : Any = {
-    primitive match {
-      case IntPrimitive(i) => i.toInt
-      case x =>  mimirPrimitiveToSparkInternalRowValue(x)
-    }
-  }
-  
-  def mimirPrimitiveToSparkExternalInlineFuncParam(primitive : PrimitiveValue) : Any = {
-    primitive match {
-      case IntPrimitive(i) => i.toInt
-      case x =>  mimirPrimitiveToSparkExternalRowValue(x)
-    }
-  }
+
   
   def mimirComparisonToSparkComparison(oper:Operator, cmp:Comparison) : org.apache.spark.sql.catalyst.expressions.Expression = {
     cmp.op match {
@@ -690,10 +645,24 @@ object OperatorTranslation
         throw new Exception(s"Function Translation not implemented $vgtBGFunc(${params.mkString(",")})")
       }
       case Function(name, params) => {
-        FunctionUDF(oper, name, db.functions.get(name), params, params.map(arg => db.typechecker.typeOf(arg, oper))).getUDF
+        FunctionUDF(oper, name, db.functions.get(name), 
+          params.map { mimirExprToSparkExpr(oper, _) }, 
+          params.map { db.typechecker.typeOf(_, oper) }
+                .map { db.types.rootType(_) }
+        ).getUDF
       }
     }
   }
+  
+  def getSparkType(t:Type) : DataType =
+    OperatorTranslation.getSparkType(db.types.rootType(t))
+}
+
+object OperatorTranslation {
+  
+  val defaultDate = DateTimeUtils.toJavaDate(0)
+  val defaultTimestamp = DateTimeUtils.toJavaTimestamp(0L)
+  val defaultInterval = new Period()
   
   def dataTypeFromString(dataTypeString:String): DataType = {
    dataTypeString match {
@@ -732,15 +701,15 @@ object OperatorTranslation
     }
   }
   
-  def mimirSchemaToStructType(schema:Seq[(String, Type)]):StructType = {
+  def mimirSchemaToStructType(schema:Seq[(String, BaseType)]):StructType = {
     StructType(schema.map(col => StructField(col._1, getSparkType(col._2), true)))  
   }
   
-  def structTypeToMimirSchema(schema:StructType): Seq[(String, Type)] = {
-    schema.fields.map(col => (col.name, getMimirType(col.dataType)))  
+  def structTypeToMimirSchema(schema:StructType): Seq[(String, BaseType)] = {
+    schema.fields.map(col => (col.name, OperatorTranslation.getMimirType(col.dataType)))  
   }
-  
-  def getSparkType(t:Type) : DataType = {
+
+  def getSparkType(t:BaseType) : DataType = {
     t match {
       case TInt() => LongType
       case TFloat() => DoubleType
@@ -752,8 +721,6 @@ object OperatorTranslation
       case TAny() => StringType
       case TTimestamp() => TimestampType
       case TInterval() => StringType
-      case TUser(name) => getSparkType(mimir.algebra.TypeRegistry.registeredTypes(name)._2)
-      case _ => StringType
     }
   }
   
@@ -770,7 +737,7 @@ object OperatorTranslation
     }
   }
   
-  def getMimirType(dataType: DataType): Type = {
+  def getMimirType(dataType: DataType): BaseType = {
     dataType match {
       case IntegerType => TInt()
       case DoubleType => TFloat()
@@ -783,7 +750,7 @@ object OperatorTranslation
     }
   }
   
-  def getNative(value:PrimitiveValue, t:Type): Any = {
+  def getNative(value:PrimitiveValue, t:BaseType): Any = {
     value match {
       case NullPrimitive() => t match {
         case TInt() => 0L
@@ -796,7 +763,6 @@ object OperatorTranslation
         case TAny() => ""
         case TTimestamp() => OperatorTranslation.defaultTimestamp
         case TInterval() => ""
-        case TUser(name) => getNative(value, mimir.algebra.TypeRegistry.registeredTypes(name)._2)
         case x => ""
       }
       case RowIdPrimitive(s) => s
@@ -815,6 +781,62 @@ object OperatorTranslation
     oper match {
       case Table(name, alias, tgtSch, tgtMetadata) => Seq(name)
       case _ => oper.children.map(extractTables(_)).flatten
+    }
+  }
+
+    def mimirPrimitiveToSparkPrimitive(primitive : PrimitiveValue) : Literal = {
+    primitive match {
+      case NullPrimitive() => Literal(null)
+      case RowIdPrimitive(s) => Literal(s)
+      case StringPrimitive(s) => Literal(s)
+      case IntPrimitive(i) => Literal(i)
+      case FloatPrimitive(f) => Literal(f)
+      case BoolPrimitive(b) => Literal(b)
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => Literal.create(SparkUtils.convertTimestamp(ts), TimestampType)
+      case dt@DatePrimitive(y,m,d) => Literal.create(SparkUtils.convertDate(dt), DateType)
+      case x =>  Literal(x.asString)
+    }
+  }
+  
+  def mimirPrimitiveToSparkInternalRowValue(primitive : PrimitiveValue) : Any = {
+    primitive match {
+      case NullPrimitive() => null
+      case RowIdPrimitive(s) => UTF8String.fromString(s)
+      case StringPrimitive(s) => UTF8String.fromString(s)
+      case IntPrimitive(i) => i
+      case FloatPrimitive(f) => f
+      case BoolPrimitive(b) => b
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)//DateTimeUtils.fromJavaTimestamp(SparkUtils.convertTimestamp(ts))
+      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)//DateTimeUtils.fromJavaDate(SparkUtils.convertDate(dt))
+      case x =>  UTF8String.fromString(x.asString)
+    }
+  }
+  
+  def mimirPrimitiveToSparkExternalRowValue(primitive : PrimitiveValue) : Any = {
+    primitive match {
+      case NullPrimitive() => null
+      case RowIdPrimitive(s) => s
+      case StringPrimitive(s) => s
+      case IntPrimitive(i) => i
+      case FloatPrimitive(f) => f
+      case BoolPrimitive(b) => b
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
+      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
+      case x =>  x.asString
+    }
+  }
+  
+  def mimirPrimitiveToSparkInternalInlineFuncParam(primitive : PrimitiveValue) : Any = {
+    primitive match {
+      case IntPrimitive(i) => i.toInt
+      case x =>  mimirPrimitiveToSparkInternalRowValue(x)
+    }
+  }
+  
+  def mimirPrimitiveToSparkExternalInlineFuncParam(primitive : PrimitiveValue) : Any = {
+    primitive match {
+      case IntPrimitive(i) => i.toInt
+      case x =>  mimirPrimitiveToSparkExternalRowValue(x)
     }
   }
   
@@ -859,7 +881,7 @@ object OperatorTranslation
 }
 
 class MimirUDF {
-  def getPrimitive(t:Type, value:Any) = value match {
+  def getPrimitive(t:BaseType, value:Any) = value match {
     case null => NullPrimitive()
     case _ => t match {
       //case TInt() => IntPrimitive(value.asInstanceOf[Long])
@@ -870,10 +892,9 @@ class MimirUDF {
       case TString() => StringPrimitive(value.asInstanceOf[String])
       case TBool() => BoolPrimitive(value.asInstanceOf[Boolean])
       case TRowId() => RowIdPrimitive(value.asInstanceOf[String])
-      case TType() => TypePrimitive(Type.fromString(value.asInstanceOf[String]))
-      //case TAny() => NullPrimitive()
-      //case TUser(name) => name.toLowerCase
-      //case TInterval() => Primitive(value.asInstanceOf[Long])
+      case TType() => BaseType.fromString(value.asInstanceOf[String])
+                        .map { TypePrimitive(_) }
+                        .getOrElse { NullPrimitive() }
       case _ => StringPrimitive(value.asInstanceOf[String])
     }
   }
@@ -895,14 +916,14 @@ class MimirUDF {
 }
 
 
-case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression], hints:Seq[Expression]) extends MimirUDF {
+case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[org.apache.spark.sql.catalyst.expressions.Expression], hints:Seq[org.apache.spark.sql.catalyst.expressions.Expression]) extends MimirUDF {
   val sparkVarType = OperatorTranslation.getSparkType(model.varType(idx, model.argTypes(idx)))
-  val sparkArgs = (args.map(arg => OperatorTranslation.mimirExprToSparkExpr(oper,arg)) ++ hints.map(hint => OperatorTranslation.mimirExprToSparkExpr(oper,hint))).toList.toSeq
-  val sparkArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg)) ++ model.hintTypes(idx).map(hint => OperatorTranslation.getSparkType(hint))).toList.toSeq
+  val allArgs = (args ++ hints).toList.toSeq
+  val allArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg)) ++ model.hintTypes(idx).map(hint => OperatorTranslation.getSparkType(hint))).toList.toSeq
     
   def extractArgsAndHints(args:Seq[Any]) : (Seq[PrimitiveValue],Seq[PrimitiveValue]) ={
     try{
-      val getParamPrimitive:(Type, Any) => PrimitiveValue = if(sparkArgs.length > 22) (t, v) => {
+      val getParamPrimitive:(BaseType, Any) => PrimitiveValue = if(allArgs.length > 22) (t, v) => {
         v match {
           case null => NullPrimitive()
           case _ => Cast(t,StringPrimitive(v.asInstanceOf[String]))
@@ -919,7 +940,7 @@ case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression
             map( arg => getParamPrimitive(arg._1, args(argList.length+arg._2)))
         (argList,hintList)  
     }catch {
-      case t: Throwable => throw new Exception(s"BestGuessUDF Error Extracting Args and Hints: \n\tModel: ${model.name} \n\tArgs: [${args.mkString(",")}] \n\tSparkArgs: [${sparkArgs.mkString(",")}]", t)
+      case t: Throwable => throw new Exception(s"BestGuessUDF Error Extracting Args and Hints: \n\tModel: ${model.name} \n\tArgs: [${args.mkString(",")}] \n\tSparkArgs: [${allArgs.mkString(",")}]", t)
     }
   }
   def varArgs(args:Any*):Any = {
@@ -930,7 +951,7 @@ case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression
   }
   def getUDF = 
     ScalaUDF(
-      sparkArgs.length match { 
+      allArgs.length match { 
         case 0 => () => {
           getNative(model.bestGuess(idx, Seq(), Seq()))
         }
@@ -1025,15 +1046,15 @@ case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression
         case x => varArgs _
       },
       sparkVarType,
-      if(sparkArgs.length > 22) Seq(CreateArray(sparkArgs)) else sparkArgs,
-      if(sparkArgs.length > 22) Seq(ArrayType(StringType)) else sparkArgTypes,
+      if(allArgs.length > 22) Seq(CreateArray(allArgs)) else allArgs,
+      if(allArgs.length > 22) Seq(ArrayType(StringType)) else allArgTypes,
       Some(model.name))
 }
 
-case class SampleUDF(oper:Operator, model:Model, idx:Int, seed:Expression, args:Seq[Expression], hints:Seq[Expression]) extends MimirUDF {
+case class SampleUDF(oper:Operator, model:Model, idx:Int, seed:Expression, args:Seq[org.apache.spark.sql.catalyst.expressions.Expression], hints:Seq[org.apache.spark.sql.catalyst.expressions.Expression]) extends MimirUDF {
   val sparkVarType = OperatorTranslation.getSparkType(model.varType(idx, model.argTypes(idx)))
-  val sparkArgs = (args.map(arg => OperatorTranslation.mimirExprToSparkExpr(oper,arg)) ++ hints.map(hint => OperatorTranslation.mimirExprToSparkExpr(oper,hint))).toList.toSeq
-  val sparkArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg)) ++ model.hintTypes(idx).map(hint => OperatorTranslation.getSparkType(hint))).toList.toSeq
+  val allArgs = (args ++ hints).toList.toSeq
+  val allArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg)) ++ model.hintTypes(idx).map(hint => OperatorTranslation.getSparkType(hint))).toList.toSeq
   
   def extractArgsAndHintsSeed(args:Seq[Any]) : (Long, Seq[PrimitiveValue],Seq[PrimitiveValue]) ={
     try{
@@ -1048,7 +1069,7 @@ case class SampleUDF(oper:Operator, model:Model, idx:Int, seed:Expression, args:
           map( arg => getPrimitive(arg._1, args(argList.length+arg._2)))
      (seedp, argList,hintList)
    }catch {
-      case t: Throwable => throw new Exception(s"SampleUDF Error Extracting Args and Hints: \n\tModel: ${model.name} \n\tArgs: [${args.mkString(",")}] \n\tSparkArgs: [${sparkArgs.mkString(",")}]", t)
+      case t: Throwable => throw new Exception(s"SampleUDF Error Extracting Args and Hints: \n\tModel: ${model.name} \n\tArgs: [${args.mkString(",")}] \n\tSparkArgs: [${allArgs.mkString(",")}]", t)
     }
   }
   def varArgs(args:Any*): Any = {
@@ -1058,7 +1079,7 @@ case class SampleUDF(oper:Operator, model:Model, idx:Int, seed:Expression, args:
   }
   def getUDF = 
     ScalaUDF(
-      sparkArgs.length match { 
+      allArgs.length match { 
         case 0 => () => {
           getNative(model.sample(idx, 0, Seq(), Seq()))
         }
@@ -1153,21 +1174,21 @@ case class SampleUDF(oper:Operator, model:Model, idx:Int, seed:Expression, args:
         case x => varArgs _
       },
       sparkVarType,
-      if(sparkArgs.length > 22) Seq(CreateStruct(sparkArgs)) else sparkArgs,
-      if(sparkArgs.length > 22) Seq(getStructType(sparkArgTypes)) else sparkArgTypes,
+      if(allArgs.length > 22) Seq(CreateStruct(allArgs)) else allArgs,
+      if(allArgs.length > 22) Seq(getStructType(allArgTypes)) else allArgTypes,
       Some(model.name))
 }
 
-case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression]) extends MimirUDF {
-  val sparkArgs = (args.map(arg => OperatorTranslation.mimirExprToSparkExpr(oper,arg))).toList.toSeq
-  val sparkArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg))).toList.toSeq
+case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[org.apache.spark.sql.catalyst.expressions.Expression]) extends MimirUDF {
+  val allArgs = args.toList.toSeq
+  val allArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg))).toList.toSeq
   def extractArgs(args:Seq[Any]) : Seq[PrimitiveValue] = {
     try{
       model.argTypes(idx).
         zipWithIndex.
         map( arg => getPrimitive(arg._1, args(arg._2)))
     }catch {
-      case t: Throwable => throw new Exception(s"AckedUDF Error Extracting Args: \n\tModel: ${model.name} \n\tArgs: [${args.mkString(",")}] \n\tSparkArgs: [${sparkArgs.mkString(",")}]", t)
+      case t: Throwable => throw new Exception(s"AckedUDF Error Extracting Args: \n\tModel: ${model.name} \n\tArgs: [${args.mkString(",")}] \n\tSparkArgs: [${allArgs.mkString(",")}]", t)
     }
   }
   def varArgs(args:Any*):Any = {
@@ -1177,7 +1198,7 @@ case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression]) e
   }
   def getUDF = 
     ScalaUDF(
-      sparkArgs.length match { 
+      allArgs.length match { 
         case 0 => () => {
           new java.lang.Boolean(model.isAcknowledged(idx, Seq()))
         }
@@ -1272,22 +1293,26 @@ case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression]) e
         case x => varArgs _
       },
       BooleanType,
-      if(sparkArgs.length > 22) Seq(CreateStruct(sparkArgs)) else sparkArgs,
-      if(sparkArgs.length > 22) Seq(getStructType(sparkArgTypes)) else sparkArgTypes,
+      if(allArgs.length > 22) Seq(CreateStruct(allArgs)) else allArgs,
+      if(allArgs.length > 22) Seq(getStructType(allArgTypes)) else allArgTypes,
       Some(model.name))
 }
 
-case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, params:Seq[Expression], argTypes:Seq[Type]) extends MimirUDF {
-  val sparkArgs = (params.map(arg => OperatorTranslation.mimirExprToSparkExpr(oper,arg))).toList.toSeq
-  val sparkArgTypes = argTypes.map(argT => OperatorTranslation.getSparkType(argT)).toList.toSeq
-  val dataType = function match { case NativeFunction(_, _, tc, _) => OperatorTranslation.getSparkType(tc(argTypes)) }
+case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, params:Seq[org.apache.spark.sql.catalyst.expressions.Expression], argTypes:Seq[BaseType]) extends MimirUDF {
+  val allArgs = params.toList.toSeq
+  val allArgTypes = argTypes.map(argT => OperatorTranslation.getSparkType(argT)).toList.toSeq
+  val dataType = function match { 
+    case NativeFunction(_, _, tc, _) => OperatorTranslation.getSparkType(tc(argTypes)) 
+    case ExpressionFunction(_,_,_) => throw new Exception("Can't create Spark UDF for Expression Functions")
+    case FoldFunction(_,_) => throw new Exception("Can't create Spark UDF for Fold Functions")
+  }
   def extractArgs(args:Seq[Any]) : Seq[PrimitiveValue] = {
     try{
       argTypes.
         zipWithIndex.
         map( arg => getPrimitive(arg._1, args(arg._2)))
     }catch {
-      case t: Throwable => throw new Exception(s"FunctionUDF Error Extracting Args: \n\tModel: ${name} \n\tArgs: [${args.mkString(",")}] \n\tSparkArgs: [${sparkArgs.mkString(",")}]", t)
+      case t: Throwable => throw new Exception(s"FunctionUDF Error Extracting Args: \n\tModel: ${name} \n\tArgs: [${args.mkString(",")}] \n\tSparkArgs: [${allArgs.mkString(",")}]", t)
     }
   }
   def varArgs(evaluator:Seq[PrimitiveValue] => PrimitiveValue)(args:Any*):Any = {
@@ -1298,8 +1323,10 @@ case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, 
   def getUDF = 
     ScalaUDF(
       function match {
+        case ExpressionFunction(_,_,_) => throw new Exception("Can't create Spark UDF for Expression Functions")
+        case FoldFunction(_,_) => throw new Exception("Can't create Spark UDF for Fold Functions")
         case NativeFunction(_, evaluator, typechecker, _) => 
-          sparkArgs.length match { 
+          allArgs.length match { 
             case 0 => () => {
               getNative(evaluator(Seq()))
             }
@@ -1395,8 +1422,8 @@ case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, 
           }
       },
       dataType,
-      if(sparkArgs.length > 22) Seq(CreateStruct(sparkArgs)) else sparkArgs,
-      if(sparkArgs.length > 22) Seq(getStructType(sparkArgTypes)) else sparkArgTypes,
+      if(allArgs.length > 22) Seq(CreateStruct(allArgs)) else allArgs,
+      if(allArgs.length > 22) Seq(getStructType(allArgTypes)) else allArgTypes,
       Some(name))
 }
 

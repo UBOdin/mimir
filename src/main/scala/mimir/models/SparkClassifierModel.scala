@@ -84,7 +84,7 @@ object SparkClassifierModel
 }
 
 @SerialVersionUID(1001L)
-class SimpleSparkClassifierModel(name: String, val colName:String, val schema:Seq[(String, Type)], val data:DataFrame)
+class SimpleSparkClassifierModel(name: String, val colName:String, val schema:Seq[(String, BaseType)], val data:DataFrame)
   extends Model(name) 
   with SourcedFeedback
   with ModelCache
@@ -102,11 +102,10 @@ class SimpleSparkClassifierModel(name: String, val colName:String, val schema:Se
 
   
  
-  def guessSparkModelType(t:Type) : String = {
+  def guessSparkModelType(t:BaseType) : String = {
     t match {
       case TFloat() if columns.length == 1 => "Regression"
       case TInt() | TDate() | TString() | TBool() | TRowId() | TType() | TAny() | TTimestamp() | TInterval() => "Classification"
-      case TUser(name) => guessSparkModelType(mimir.algebra.TypeRegistry.registeredTypes(name)._2)
       case x => "Classification"
     }
   }
@@ -153,13 +152,13 @@ class SimpleSparkClassifierModel(name: String, val colName:String, val schema:Se
     }
   }
 
-  def guessInputType: Type =
+  def guessInputType: BaseType =
     schema(colIdx)._2
 
-  def argTypes(idx: Int): Seq[Type] = List(TRowId())
+  def argTypes(idx: Int): Seq[BaseType] = List(TRowId())
   def hintTypes(idx: Int) = schema.reverse.tail.reverse.map(_._2)
 
-  def varType(idx: Int, args: Seq[Type]): Type = guessInputType
+  def varType(idx: Int, args: Seq[BaseType]): BaseType = guessInputType
   
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
   {

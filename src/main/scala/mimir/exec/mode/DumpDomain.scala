@@ -55,7 +55,7 @@ object DumpDomain
     val provenance = 
     if(ExperimentalOptions.isEnabled("GPROM-PROVENANCE")
         && db.backend.isInstanceOf[mimir.sql.GProMBackend])
-      { Provenance.compileGProM(oper) }
+      { db.gpromTranslator.compileProvenanceWithGProM(oper) }
       else { Provenance.compile(oper) }
 
     oper               = provenance._1
@@ -67,7 +67,7 @@ object DumpDomain
     // Tag rows/columns with provenance metadata
     val tagging = if(ExperimentalOptions.isEnabled("GPROM-DETERMINISM")
         && db.backend.isInstanceOf[mimir.sql.GProMBackend])
-      { CTPercolator.percolateGProM(oper) }
+      { CTPercolator.percolateGProM(oper, db) }
       else { CTPercolator.percolateLite(oper, db.models.get(_)) } 
     oper               = tagging._1
     val colDeterminism = tagging._2.filter( col => rawColumns(col._1) )

@@ -27,7 +27,7 @@ object SchemaMatching
           val typeName = split(1)
           (
             varName.toString.toUpperCase -> 
-              Type.fromString(typeName.toString)
+              db.types.rootType(db.types.fromString(typeName.toString))
           )
         }).
         toList
@@ -118,7 +118,7 @@ object SchemaMatching
           val typeName = split(1)
           (
             varName.toString.toUpperCase -> 
-              Type.fromString(typeName.toString)
+              db.types.fromString(typeName.toString)
           )
         }).toList
     targetSchema.tail.foldLeft(
@@ -149,16 +149,16 @@ object SchemaMatching
   {
     if(table.equals("DATA")){
       val targetSchema =
-      config.args.
-        map(field => {
-          val split = db.interpreter.evalString(field).split(" +")
-          val varName  = split(0).toUpperCase
-          val typeName = split(1)
-          (
-            varName.toString.toUpperCase -> 
-              Type.fromString(typeName.toString)
-          )
-        }).toList
+        config.args.
+          map(field => {
+            val split = db.interpreter.evalString(field).split(" +")
+            val varName  = split(0).toUpperCase
+            val typeName = split(1)
+            (
+              varName.toString.toUpperCase -> 
+                db.types.fromString(typeName.toString)
+            )
+          }).toList
       Some(Project(
         targetSchema.map { case (colName, colType)  => { 
           val metaModel = db.models.get(s"${config.schema}:META:$colName")

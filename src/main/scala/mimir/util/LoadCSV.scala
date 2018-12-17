@@ -34,12 +34,12 @@ object LoadCSV extends StrictLogging {
   def handleLoadTableRaw(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
     //we need to handle making csv publicly accessible here and adding it to spark for remote connections
     val path = if(sourceFile.getPath.contains(":/")) sourceFile.getPath.replaceFirst(":/", "://") else sourceFile.getAbsolutePath
-    db.backend.readDataSource(targetTable, "csv", options, db.tableSchema(targetTable), Some(path)) 
+    db.backend.readDataSource(targetTable, "csv", options, db.tableBaseSchema(targetTable), Some(path)) 
   }
 
-  def handleLoadTableRaw(db: Database, targetTable: String, targetSchema:Option[Seq[(String,Type)]], sourceFile: File, options: Map[String,String]){
+  def handleLoadTableRaw(db: Database, targetTable: String, targetSchema:Option[Seq[(String,BaseType)]], sourceFile: File, options: Map[String,String]){
     val schema = targetSchema match {
-      case None => db.tableSchema(targetTable)
+      case None => db.tableBaseSchema(targetTable)
       case _ => targetSchema
     }
     //we need to handle making csv publicly accessible here and adding it to spark for remote connections

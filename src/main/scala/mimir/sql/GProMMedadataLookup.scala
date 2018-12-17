@@ -75,11 +75,11 @@ with LazyLogging
   		    case "&" => "DT_INT"
   		    case "MIMIR_MAKE_ROWID" => "DT_STRING"
   		    case _ => {
-  		      val argTypes = args.map(arg => getMimirTypeFromGProMDataTypeString(arg)) 
+  		      val argTypes = args.map(arg => getMimirTypeFromGProMDataTypeString(arg)).map { db.types.rootType(_) }
             //logger.debug(s"Metadata lookup: function: $fName(${argSeq.mkString(",")})")
             getGProMDataTypeStringFromMimirType( fName match {
       		    case "sys_op_map_nonnull" => argTypes(0)
-      		    case "MIMIR_ENCODED_VGTERM" => db.typechecker.returnTypeOfFunction(VGTermFunctions.bestGuessVGTermFn,argTypes)
+      		    case "MIMIR_ENCODED_VGTERM" => db.typechecker.returnTypeOfFunction(VGTermFunctions.bestGuessVGTermFn, argTypes)
       		    case "UNCERT" => argTypes(0)
       		    case "LEAST" => db.typechecker.returnTypeOfFunction("MIN",argTypes) 
       		    case _ => {
@@ -199,6 +199,7 @@ with LazyLogging
                             case TBool() => BoolPrimitive(false)
                             case TRowId() => RowIdPrimitive("0")
                             case TType() => TypePrimitive(TInt())
+                            case _ => ??? // This code is not in the active path for now.  Suppressing warning
                           }
                         })
                         oName match {

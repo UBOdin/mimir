@@ -68,6 +68,7 @@ object MimirVizier extends LazyLogging {
       val database = Mimir.conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
       val sback = new SparkBackend(database)
       db = new Database(sback, new JDBCMetadataBackend(Mimir.conf.backend(), Mimir.conf.dbname()))
+      sback.sparkTranslator = db.sparkTranslator
       db.metadataBackend.open()
       db.backend.open()
       val otherExcludeFuncs = Seq("NOT","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^")
@@ -445,11 +446,15 @@ object MimirVizier extends LazyLogging {
     val timeRes = logTime("createLens") {
       logger.debug("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
       val (viewNameSuffix, inputSubstitutionQuery) = input match {
-        case aliases:JMapWrapper[String,String] => {
+        case rawAliases:JMapWrapper[_,_] => {
+          // The following line needed to suppress compiler type erasure warning
+          val aliases = rawAliases.asInstanceOf[JMapWrapper[String,String]]
           aliases.map{ case (vizierName, mimirName) => db.sql.registerVizierNameMapping(vizierName.toUpperCase(), mimirName) } 
           (aliases.unzip._2.mkString(""), query)
         }
-        case inputs:Seq[String] => {
+        case rawInputs:Seq[_] => {
+          // The following line needed to suppress compiler type erasure warning
+          val inputs = rawInputs.asInstanceOf[Seq[String]]
           (inputs.mkString(""),inputs.zipWithIndex.foldLeft(query)((init, curr) => {
             init.replaceAll(s"\\{\\{\\s*input_${curr._2}\\s*\\}\\}", curr._1) 
           })) 
@@ -556,11 +561,15 @@ object MimirVizier extends LazyLogging {
   
 def vistrailsQueryMimirJson(input:Any, query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
     val inputSubstitutionQuery = input match {
-        case aliases:JMapWrapper[String,String] => {
+        case rawAliases:JMapWrapper[_,_] => {
+          // The following line needed to suppress compiler type erasure warning
+          val aliases = rawAliases.asInstanceOf[JMapWrapper[String,String]]
           aliases.map{ case (vizierName, mimirName) => db.sql.registerVizierNameMapping(vizierName.toUpperCase(), mimirName) } 
           query
         }
-        case inputs:Seq[String] => {
+        case rawInputs:Seq[_] => {
+          // The following line needed to suppress compiler type erasure warning
+          val inputs = rawInputs.asInstanceOf[Seq[String]]
           inputs.zipWithIndex.foldLeft(query)((init, curr) => {
             init.replaceAll(s"\\{\\{\\s*input_${curr._2}\\s*\\}\\}", curr._1) 
           })
@@ -718,7 +727,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
       try{
         logger.debug("getSchema: From Vistrails: [" + query + "]"  ) ;
         val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
-        JSONBuilder.list( db.typechecker.schemaOf(oper).map( schel =>  Map( "name" -> schel._1, "type" -> schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())))
+        JSONBuilder.list( db.typechecker.schemaOf(oper).map( schel =>  Map( "name" -> schel._1, "type" -> schel._2.toString(), "base_type" -> db.types.rootType(schel._2).toString())))
       } catch {
         case t: Throwable => {
           logger.error("Error Getting Schema: [" + query + "]", t)
@@ -1077,7 +1086,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
       val resultList = results.toList 
       val (resultsStrs, prov) = resultList.map(row => (row.tuple.map(cell => cell), row.provenance.asString)).unzip
       JSONBuilder.dict(Map(
-        "schema" -> results.schema.map( schel =>  Map( "name" -> schel._1, "type" ->schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())),
+        "schema" -> results.schema.map( schel =>  Map( "name" -> schel._1, "type" ->schel._2.toString(), "base_type" -> db.types.rootType(schel._2).toString())),
         "data" -> resultsStrs,
         "prov" -> prov
       ))
@@ -1092,7 +1101,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
       val (resultsStrs, colTaint) = resultsStrsColTaint.unzip
       val (prov, rowTaint) = provRowTaint.unzip
       JSONBuilder.dict(Map(
-        "schema" -> results.schema.map( schel =>  Map( "name" -> schel._1, "type" ->schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())),
+        "schema" -> results.schema.map( schel =>  Map( "name" -> schel._1, "type" ->schel._2.toString(), "base_type" -> db.types.rootType(schel._2).toString())),
         "data" -> resultsStrs,
         "prov" -> prov,
         "col_taint" -> colTaint,
@@ -1110,7 +1119,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
       val (prov, rowTaint) = provRowTaint.unzip
       val reasons = explainEverything(oper).map(reasonSet => reasonSet.all(db).toSeq.map(_.toJSONWithFeedback))
       JSONBuilder.dict(Map(
-        "schema" -> results.schema.map( schel =>  Map( "name" -> schel._1, "type" ->schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())),
+        "schema" -> results.schema.map( schel =>  Map( "name" -> schel._1, "type" ->schel._2.toString(), "base_type" -> db.types.rootType(schel._2).toString())),
         "data" -> resultsStrs,
         "prov" -> prov,
         "col_taint" -> colTaint,

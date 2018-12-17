@@ -24,7 +24,8 @@ object TypeFunctions
         functionName,
         (params: Seq[PrimitiveValue]) => {
           params match {
-            case Seq(x, TypePrimitive(t)) => Cast(t, x)
+            case Seq(x, TypePrimitive(t:BaseType)) => Cast(t, x)
+            case Seq(x, TypePrimitive(t:TUser)) => throw new RAException("Casting to User-defined types unsupported")
             case _ => throw new RAException("Invalid cast: "+params)
           }
         },

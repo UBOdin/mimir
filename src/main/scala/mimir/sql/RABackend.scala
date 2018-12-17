@@ -30,10 +30,10 @@ abstract class RABackend(val database:String) {
   def resultValue(sel:SelectBody):PrimitiveValue =
     resultRows(sel).head.head*/
   
-  def readDataSource(name:String, format:String, options:Map[String, String], schema:Option[Seq[(String, Type)]], load:Option[String]) : Unit
+  def readDataSource(name:String, format:String, options:Map[String, String], schema:Option[Seq[(String, BaseType)]], load:Option[String]) : Unit
   
   
-  def getTableSchema(table: String): Option[Seq[(String, Type)]]
+  def getTableSchema(table: String): Option[Seq[(String, BaseType)]]
   
   
   def getAllTables(): Seq[String]
@@ -43,8 +43,8 @@ abstract class RABackend(val database:String) {
   def close()
 
   def canHandleVGTerms: Boolean
-  def rowIdType: Type
-  def dateType: Type
+  def rowIdType: BaseType
+  def dateType: BaseType
   def specializeQuery(q: Operator, db: Database): Operator
 
   def listTablesQuery: Operator

@@ -31,7 +31,7 @@ class PropagateEmptyViews(typechecker: Typechecker, aggregates: AggregateRegistr
                 aggregates.typecheck(
                   function, 
                   args.map { expr => 
-                    typechecker.typeOf(expr,schMap)
+                    typechecker.rootType(typechecker.typeOf(expr,schMap))
                   }
                 )
               ), 

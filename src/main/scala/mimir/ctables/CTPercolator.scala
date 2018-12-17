@@ -3,6 +3,7 @@ package mimir.ctables
 import java.sql.SQLException
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
+import mimir.Database
 import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
@@ -597,8 +598,8 @@ object CTPercolator
     }
   }
   
-  def percolateGProM(oper: Operator): (Operator, Map[String,Expression], Expression) =
+  def percolateGProM(oper: Operator, db: Database): (Operator, Map[String,Expression], Expression) =
   {
-    mimir.algebra.gprom.OperatorTranslation.compileTaintWithGProM(oper)
+    db.gpromTranslator.compileTaintWithGProM(oper)
   }
 }

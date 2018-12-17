@@ -14,7 +14,7 @@ object JsonFunctions
     }
   }
 
-  def extract(args: Seq[PrimitiveValue], t: Type): PrimitiveValue =
+  def extract(args: Seq[PrimitiveValue], t: BaseType): PrimitiveValue =
   {
     Json.toPrimitive(t, extract(args))
   }

@@ -1,6 +1,5 @@
 package mimir.algebra;
 
-import mimir.algebra.Type._;
 import org.joda.time.DateTime;
 import org.joda.time.Period;
 
@@ -318,7 +317,7 @@ case class IsNullExpression(child: Expression) extends Expression {
  * Slightly more specific base type for constant terms.  PrimitiveValue
  * also acts as a boxing type for constants in Mimir.
  */
-abstract sealed class PrimitiveValue(t: Type)
+abstract sealed class PrimitiveValue(t: BaseType)
   extends LeafExpression with Serializable
 {
   def getType = t
@@ -375,7 +374,7 @@ abstract sealed class PrimitiveValue(t: Type)
   def payload: Object;
 }
 
-abstract sealed class NumericPrimitive(t: Type) extends PrimitiveValue(t)
+abstract sealed class NumericPrimitive(t: BaseType) extends PrimitiveValue(t)
 
 /**
  * Boxed representation of a long integer
@@ -590,7 +589,7 @@ case class IntervalPrimitive(p: Period)
  */
 abstract class Proc(val args: Seq[Expression]) extends Expression
 {
-  def getType(argTypes: Seq[Type]): Type
+  def getType(argTypes: Seq[BaseType]): BaseType
   def getArgs = args
   def children = args
   def get(v: Seq[PrimitiveValue]): PrimitiveValue

@@ -49,9 +49,9 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
           case TType()      => val v = compileForType(e);   checkNull { (t:T) => TypePrimitive(v(t))   }
           case TDate()      => checkNull { compileForDate(e) }
           case TTimestamp() => checkNull { compileForTimestamp(e) }
-          case TInterval() => checkNull { compileForInterval(e) }
+          case TInterval()  => checkNull { compileForInterval(e) }
           case TRowId()     => checkNull { compileForRowId(e) }
-          case TUser(ut)    => checkNull { compile(e, TypeRegistry.baseType(ut)) }
+          case u:TUser      => checkNull { compile(e, db.types.rootType(u)) }
         }
     }
   }
@@ -191,11 +191,9 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
         }
       }
       case Comparison(op, lhs, rhs)     => {
-        (op, Type.rootType(typeOf(lhs)), Type.rootType(typeOf(rhs))) match {
+        (op, db.types.rootType(typeOf(lhs)), db.types.rootType(typeOf(rhs))) match {
           case (_, TAny(), _) => throw new RAException(s"Invalid comparison on TAny: $e")
           case (_, _, TAny()) => throw new RAException(s"Invalid comparison on TAny: $e")
-          case (_, TUser(n), _) => throw new RAException(s"Internal error in Type.rootType($n): $e")
-          case (_, _, TUser(n)) => throw new RAException(s"Internal error in Type.rootType($n): $e")
           case (Cmp.Eq, TBool(), TBool())           => compileBinary(lhs, rhs, compileForBool) { _ == _ }
           case (Cmp.Eq, TInt(), TInt())             => compileBinary(lhs, rhs, compileForLong) { _ == _ }
           case (Cmp.Eq, ( TInt() | TFloat() ), ( TInt() | TFloat() ) ) 

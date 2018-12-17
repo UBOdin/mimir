@@ -4,7 +4,7 @@ import mimir.algebra._
 
 case class RegisteredType(name:String, constraints:Set[TypeConstraint], basedOn:Type = TString())
 
-object DefaultTypeRegistry extends TypeRegistry 
+object DefaultTypeRegistry extends TypeRegistry with Serializable
 {  
   val types:Seq[RegisteredType] = Seq(
     RegisteredType("credits",       Set(RegexpConstraint("^[0-9]{1,3}(\\.[0-9]{0,2})?$".r))),
@@ -29,45 +29,30 @@ object DefaultTypeRegistry extends TypeRegistry
       case None => throw new RAException(s"Undefined user defined type: $name")
     }
   }
-  def contains(name:String): Boolean =
+  def supportsUserType(name:String): Boolean =
     typesByName contains name
 
-  def baseType(t: Type): Type = 
-    t match { 
-      case TUser(name) => getDefinition(name).basedOn
-      case _ => t
-    }
-  def pickType(possibilities: Set[Type]): Type = 
-  {
-    if(possibilities.isEmpty){ throw new RAException("Can't pick from empty list of types") }
-    val userTypes = 
-      possibilities.map { case x:TUser => Some(x) case _ => None }.flatten
+  def parentOfUserType(t: TUser): Type = 
+    getDefinition(t.name).basedOn
 
-    // User types beat everything else.  Use alpha order arbitrarily
-    if(!userTypes.isEmpty){ return userTypes.toSeq.sortBy(_.name).head }
-    // TInt beats TFloat
-    if(possibilities contains TInt()) { return TInt() }
-    // Otherwise pick arbitrarily
-    return possibilities.toSeq.sortBy(_.toString).head
-  }
-  def testForTypes(value: String): Set[Type] = 
+  def pickUserType(possibilities: Set[TUser]): Type = 
+    possibilities.toSeq.sortBy(_.name).head
+
+  def testForUserTypes(value: String, validBaseTypes:Set[BaseType]): Set[TUser] = 
   {
     // First find base types that match
-    val validBaseTypes = 
-      Type.tests
-          .filter { _._2.findFirstMatchIn(value) != None }
-          .map { _._1 }
-          .toSet
 
     // And then find user-defined types that match
-    validBaseTypes.map { 
-            typesByBaseType(_) 
-              .filter { _.constraints.forall { _.test(value) } }
-              .map { t => TUser(t.name) }
-      } .flatten
-        .toSet ++ validBaseTypes
+    validBaseTypes
+      .map { 
+        typesByBaseType(_) 
+          .filter { _.constraints.forall { _.test(value) } }
+          .map { t => TUser(t.name) }
+      }
+      .flatten
+      .toSet
   }
-  def typeCaster(t: Type, target:Expression): Expression = 
+  def userTypeCaster(t: Type, target:Expression): Expression = 
   {
     val castTarget = Function("CAST", Seq(target, TypePrimitive(rootType(t))))
     t match {
@@ -85,9 +70,7 @@ object DefaultTypeRegistry extends TypeRegistry
       case _ => castTarget
     }
   }
-  def typeFromInt(i: Integer) = TUser(types(i).name)
-  def typeToInt(t: TUser): Integer = indexesByName(t.name)
-
-  def typeFromString(name: String) = TUser(getDefinition(name).name)
-  def typeToString(t: TUser): String = t.name
+  def userTypeForId(i: Integer) = TUser(types(i).name)
+  def idForUserType(t: TUser): Integer = indexesByName(t.name)
+  def getSerializable = this
 }
