@@ -702,7 +702,14 @@ class SqlToRA(db: Database)
             bindings(name);
           } catch {
             case _:NoSuchElementException => 
-              throw new SQLException(s"Unknown Variable: $name in $bindings")
+              //TODO: this is a temporary hack for spark data source loads that have 
+              //  lower case cols.  we need to fix it at the source.
+              try {
+                bindings(name.toLowerCase());
+              } catch {
+                case _:NoSuchElementException => 
+                  throw new SQLException(s"Unknown Variable: $name in $bindings")
+              }
           }
         return Var(binding)
       case table => 

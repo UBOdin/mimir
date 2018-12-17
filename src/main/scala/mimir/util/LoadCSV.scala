@@ -22,7 +22,6 @@ import mimir.models.DetectHeader
 
 object LoadCSV extends StrictLogging {
 
-  
   def handleLoadTable(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
     db.loadTable(targetTable, sourceFile, true, ("CSV", options.toSeq.flatMap{
       case ("DELIMITER", delim) => Some(StringPrimitive(delim))
@@ -30,21 +29,9 @@ object LoadCSV extends StrictLogging {
     }))
   }
  
+  def handleLoadTableRaw(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()) = 
+    LoadData.handleLoadTableRaw(db, targetTable, sourceFile, options)
 
-  def handleLoadTableRaw(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
-    //we need to handle making csv publicly accessible here and adding it to spark for remote connections
-    val path = if(sourceFile.getPath.contains(":/")) sourceFile.getPath.replaceFirst(":/", "://") else sourceFile.getAbsolutePath
-    db.backend.readDataSource(targetTable, "csv", options, db.tableBaseSchema(targetTable), Some(path)) 
-  }
-
-  def handleLoadTableRaw(db: Database, targetTable: String, targetSchema:Option[Seq[(String,BaseType)]], sourceFile: File, options: Map[String,String]){
-    val schema = targetSchema match {
-      case None => db.tableBaseSchema(targetTable)
-      case _ => targetSchema
-    }
-    //we need to handle making csv publicly accessible here and adding it to spark for remote connections
-    val path = if(sourceFile.getPath.contains(":/")) sourceFile.getPath.replaceFirst(":/", "://") else sourceFile.getAbsolutePath
-    db.backend.readDataSource(targetTable, "csv", options, schema, Some(path)) 
-  }
-
+  def handleLoadTableRaw(db: Database, targetTable: String, targetSchema:Option[Seq[(String,BaseType)]], sourceFile: File, options: Map[String,String]) =
+    LoadData.handleLoadTableRaw(db, targetTable, targetSchema, sourceFile, options, "csv")
 }

@@ -71,7 +71,7 @@ object MimirVizier extends LazyLogging {
       sback.sparkTranslator = db.sparkTranslator
       db.metadataBackend.open()
       db.backend.open()
-      val otherExcludeFuncs = Seq("NOT","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^")
+      val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^")
       sback.registerSparkFunctions(db.functions.functionPrototypes.map(el => el._1).toSeq ++ otherExcludeFuncs , db.functions)
       sback.registerSparkAggregates(db.aggregates.prototypes.map(el => el._1).toSeq, db.aggregates)
       vizierdb.sparkSession = sback.sparkSql.sparkSession
@@ -320,14 +320,28 @@ object MimirVizier extends LazyLogging {
     }
   }
   
-  def loadCSV(file : String) : String = loadCSV(file, ("CSV", Seq(StringPrimitive(","))))
-  def loadCSV(file : String, delimeter:String, inferTypes:Boolean, detectHeaders:Boolean) : String = 
-    loadCSV(file, ("CSV", Seq(StringPrimitive(delimeter), BoolPrimitive(inferTypes), BoolPrimitive(detectHeaders))))
-  def loadCSV(file : String, format:(String, Seq[PrimitiveValue])) : String = {
+  def loadCSV(file : String) : String = loadCSV(file, "csv", Seq(("delimeter",",")))
+  def loadCSV(file : String, delimeter:String, detectHeaders:Boolean, inferTypes:Boolean) : String = 
+    loadCSV(file, "csv", Seq(("delimeter",delimeter),("mimir_detect_headers",detectHeaders.toString()),("mimir_infer_types",inferTypes.toString())))
+  def loadCSV(file : String, format:String, options:Seq[(String, String)]) : String = {
+    val detectHeaders = options.filter(_._1.equalsIgnoreCase("mimir_detect_headers")).foldLeft(true)( (init,cur) => init && (!cur._2.equalsIgnoreCase("false")))
+    val inferTypes = options.filter(_._1.equalsIgnoreCase("mimir_infer_types")).foldLeft(true)( (init,cur) => init && (!cur._2.equalsIgnoreCase("false")))
+    val backendOptions = options.filterNot(_._1.equalsIgnoreCase("mimir_detect_headers")).filterNot(_._1.equalsIgnoreCase("mimir_infer_types"))
+    loadCSV(file, format, inferTypes, detectHeaders, backendOptions)
+  }
+  def loadCSV(file : String, format:String, inferTypes:Boolean, detectHeaders:Boolean, backendOptions:Seq[Any]) : String = {
     try{
-    pythonCallThread = Thread.currentThread()
-    val timeRes = logTime("loadCSV") {
-      logger.debug(s"loadCSV: From Vistrails: [ $file ] format: ${format._1} -> [ ${format._2.mkString(",")} ]") ;
+      pythonCallThread = Thread.currentThread()
+      val timeRes = logTime("loadCSV") {
+      logger.debug(s"loadCSV: From Vistrails: [ $file ] inferTypes: $inferTypes detectHeaders: $detectHeaders format: ${format} -> [ ${backendOptions.mkString(",")} ]") ;
+      val bkOpts = backendOptions.map{
+        case (optKey:String, optVal:String) => (optKey, optVal)
+        case hm:java.util.HashMap[_,_] => {
+          val entry = hm.asInstanceOf[java.util.HashMap[String,String]].entrySet().iterator().next()
+          (entry.getKey, entry.getValue)
+        }
+        case _ => throw new Exception("loadCSV: bad options type")
+      }
       val vizierFSPath = "/usr/local/source/web-api/.vizierdb/"
       val saferFile = URLDecoder.decode(file, "utf-8")
       val useS3Volume = System.getenv("USE_S3_VOLUME") match {
@@ -350,7 +364,7 @@ object MimirVizier extends LazyLogging {
         logger.debug("loadCSV: From Vistrails: Table Already Exists: " + tableName)
       }
       else{
-        db.loadTable( nameFromFile, csvFile,  true, format)
+        db.loadTable(nameFromFile, csvFile, true, None, inferTypes, detectHeaders, bkOpts.toMap, format)
       }
       tableName 
     }
@@ -369,7 +383,7 @@ object MimirVizier extends LazyLogging {
     //to if the filename starts with a digit, prepend a "t"
     ((if(tableName.matches("^\\d.*")) s"t$tableName" else tableName) + UUID.randomUUID().toString())
       //also replace characters that cant be in table name with _
-      .replaceAll("[\\%\\^\\&\\(\\{\\}\\+\\-\\/ \\]\\[\\']", "_") 
+      .replaceAll("[\\%\\^\\&\\(\\{\\}\\+\\-\\/ \\]\\[\\'\\?\\=\\!\\`\\~\\\\\\/\\\"\\:\\;\\<\\>\\.\\,\\*\\$\\#\\@]", "_") 
   }
   
   def createLens(input : Any, params : java.util.ArrayList[String], _type : String, make_input_certain:Boolean, materialize:Boolean) : PythonScalaLensResponse = {
@@ -872,6 +886,20 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }    
   }
 
+  def explainEverythingJson(query: String) : String = {
+    try{
+      logger.debug("explainCell: From Vistrails: [" + query + "]"  ) ;
+      val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+      JSONBuilder.list(explainEverything(oper).map(_.all(db).toList).flatten.map(_.toJSON))
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Cell: [" + query + "]", t)
+        throw t
+      }
+    }
+  }
+  
+  
   def explainEverything(query: String) : Seq[mimir.ctables.ReasonSet] = {
     try{
     logger.debug("explainEverything: From Vistrails: [" + query + "]"  ) ;

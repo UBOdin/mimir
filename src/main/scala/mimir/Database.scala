@@ -41,6 +41,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import mimir.exec.result.JDBCResultIterator
 import net.sf.jsqlparser.statement.update.Update
+import mimir.util.LoadData
 
 
  /**
@@ -506,59 +507,79 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
   
   def loadTable(
     targetTable: String, 
+    sourceFile: File) : Unit  = loadTable( targetTable, sourceFile, true, 
+      ("CSV", Seq(StringPrimitive(","))), None )
+  
+  def loadTable(
+    targetTable: String, 
     sourceFile: File, 
-    force:Boolean = true, 
-    format:(String, Seq[PrimitiveValue]) = ("CSV", Seq(StringPrimitive(","))),
-    targetSchema: Option[Seq[(String, BaseType)]] = None,
-    defaultSparkOpts:Map[String, String] = Map("ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true", "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false")
+    force:Boolean, 
+    format:(String, Seq[PrimitiveValue])
+  ) : Unit  = loadTable(targetTable,sourceFile,force,format,None)
+      
+  def loadTable(
+    targetTable: String, 
+    sourceFile: File, 
+    force:Boolean, 
+    format:(String, Seq[PrimitiveValue]),
+    targetSchema: Option[Seq[(String, BaseType)]]
   ){
-    (format._1 match {
-           case null => "CSV"
-           case x => x.toUpperCase
-     }) match {
+    val (delim, typeinference, detectHeaders) = format._1.toUpperCase() match {
       case "CSV" => {
-        val (delim, typeinference, detectHeaders) =
-          format._2 match {
-            case Seq(StringPrimitive(delim_)) => (delim_, true, true)
-            case Seq(StringPrimitive(delim_),BoolPrimitive(typeinference_)) => (delim_, typeinference_, true)
-            case Seq(StringPrimitive(delim_),BoolPrimitive(typeinference_),BoolPrimitive(adaptive_)) => (delim_, typeinference_, adaptive_)
-            case Seq() | null => (",", true, true)
-            case _ => throw new SQLException("The CSV format expects a single string argument (CSV('delim'))")
-          }
-
-          val targetRaw = targetTable.toUpperCase + "_RAW"
-          if(tableExists(targetRaw) && !force){
-            throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' INTO tableName`; to append to existing data.")
-          }
-          if(!tableExists(targetTable.toUpperCase)){
-            LoadCSV.handleLoadTableRaw(this, targetRaw, targetSchema, sourceFile, 
-              Map("DELIMITER" -> delim)++defaultSparkOpts
-            )
-            var oper = table(targetRaw)
-            //detect headers 
-            if(detectHeaders) {
-              val dhSchemaName = targetTable.toUpperCase+"_DH"
-              adaptiveSchemas.create(dhSchemaName, "DETECT_HEADER", oper, Seq())
-              oper = adaptiveSchemas.viewFor(dhSchemaName, "DATA").get
-            }
-            //type inference
-            if(typeinference){
-              val tiSchemaName = targetTable.toUpperCase+"_TI"
-              adaptiveSchemas.create(tiSchemaName, "TYPE_INFERENCE", oper, Seq(FloatPrimitive(.5))) 
-              oper = adaptiveSchemas.viewFor(tiSchemaName, "DATA").get
-            }
-            //finally create a view for the data
-            views.create(targetTable.toUpperCase, oper)
-          } else {
-            val schema = targetSchema match {
-              case None => tableBaseSchema(targetTable)
-              case _ => targetSchema
-            }
-            LoadCSV.handleLoadTableRaw(this, targetTable.toUpperCase, schema, sourceFile,  Map("DELIMITER" -> delim)++defaultSparkOpts )
-          }
+        format._2 match {
+          case Seq(StringPrimitive(delim_)) => (delim_, true, true)
+          case Seq(StringPrimitive(delim_),BoolPrimitive(typeinference_)) => (delim_, typeinference_, true)
+          case Seq(StringPrimitive(delim_),BoolPrimitive(typeinference_),BoolPrimitive(adaptive_)) => (delim_, typeinference_, adaptive_)
+          case Seq() | null => (",", true, true)
+          case _ => throw new SQLException("The CSV format expects a single string argument (CSV('delim'))")
         }
+      }
       case fmt =>
         throw new SQLException(s"Unknown load format '$fmt'")
+    }  
+    this.loadTable(targetTable, sourceFile, force, targetSchema, typeinference, detectHeaders, Map("DELIMITER" -> delim))
+  }
+  
+  private val defaultBackendOptions = Map("ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true", "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false")
+  
+  def loadTable(
+    targetTable: String, 
+    sourceFile: File, 
+    force:Boolean, 
+    targetSchema: Option[Seq[(String, BaseType)]] = None,
+    inferTypes:Boolean = true,
+    detectHeaders:Boolean = true,
+    backendOptions:Map[String, String] = Map(),
+    format:String = "csv"
+  ){
+    val options = (defaultBackendOptions ++ backendOptions).map(entry => (entry._1 -> backendOptions.getOrElse(entry._1, entry._2)))
+    val targetRaw = targetTable.toUpperCase + "_RAW"
+    if(tableExists(targetRaw) && !force){
+      throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' INTO tableName`; to append to existing data.")
+    }
+    if(!tableExists(targetTable.toUpperCase)){
+      LoadData.handleLoadTableRaw(this, targetRaw, targetSchema, sourceFile, options, format)
+      var oper = table(targetRaw)
+      //detect headers 
+      if(detectHeaders) {
+        val dhSchemaName = targetTable.toUpperCase+"_DH"
+        adaptiveSchemas.create(dhSchemaName, "DETECT_HEADER", oper, Seq())
+        oper = adaptiveSchemas.viewFor(dhSchemaName, "DATA").get
+      }
+      //type inference
+      if(inferTypes){
+        val tiSchemaName = targetTable.toUpperCase+"_TI"
+        adaptiveSchemas.create(tiSchemaName, "TYPE_INFERENCE", oper, Seq(FloatPrimitive(.5))) 
+        oper = adaptiveSchemas.viewFor(tiSchemaName, "DATA").get
+      }
+      //finally create a view for the data
+      views.create(targetTable.toUpperCase, oper)
+    } else {
+      val schema = targetSchema match {
+        case None => tableBaseSchema(targetTable)
+        case _ => targetSchema
+      }
+      LoadData.handleLoadTableRaw(this, targetTable.toUpperCase, schema, sourceFile, options, format)
     }
   }
 
