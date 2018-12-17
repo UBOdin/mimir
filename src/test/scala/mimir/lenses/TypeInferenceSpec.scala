@@ -32,8 +32,8 @@ object TypeInferenceSpec
 
     "Detect Timestamps Correctly" >> {
 
-      Type.matches(TTimestamp(), "2014-06-15 08:23:19") must beTrue
-      Type.matches(TTimestamp(), "2013-10-07 08:23:19.120") must beTrue
+      db.types.testForTypes("2014-06-15 08:23:19") must contain(TTimestamp())
+      db.types.testForTypes("2013-10-07 08:23:19.120") must contain(TTimestamp())
 
 
       db.loadTable("DETECTSERIESTEST1", new File("test/data/DetectSeriesTest1.csv"))

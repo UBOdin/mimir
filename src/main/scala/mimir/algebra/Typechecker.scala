@@ -284,7 +284,7 @@ object Typechecker
 
   def assertNumeric(t: BaseType, e: Expression): BaseType =
   {
-    if(t.isNumeric){
+    if(!t.isNumeric){
       throw new TypeException(t, TFloat(), "Numeric", Some(e))
     }
     t;

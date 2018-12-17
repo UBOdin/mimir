@@ -29,7 +29,7 @@ abstract class VLDB2017TimingTest(dbName: String, config: Map[String,String])
   val sampler     = new SampleRows( (0 until 10).map { _ => random.nextLong })
 
 
-  def loadTable(tableFields:(String, String, Type, Double), run:Int=1) =
+  def loadTable(tableFields:(String, String, BaseType, Double), run:Int=1) =
   {
     println(s"VLDB2017TimingTest.loadTable(${tableFields})")
     val (baseTable, columnName, columnType, timeout) = tableFields

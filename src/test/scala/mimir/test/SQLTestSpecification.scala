@@ -46,13 +46,13 @@ object DBTestInstances
           val backend = new JDBCMetadataBackend(jdbcBackendMode, tempDBName+".db")
           val sback = new SparkBackend(tempDBName)
           val tmpDB = new Database(sback, backend);
+          sback.sparkTranslator = tmpDB.sparkTranslator
           if(shouldCleanupDB){    
             dbFile.deleteOnExit();
           }
           tmpDB.metadataBackend.open()
           tmpDB.backend.open();
           SparkML(sback.sparkSql)
-          OperatorTranslation.db = tmpDB
           if(shouldResetDB || !oldDBExists){
             config.get("initial_db") match {
               case None => ()

@@ -35,6 +35,7 @@ object GProMDBTestInstances
           val oldDBExists = dbFile.exists();
           val backend = new GProMBackend(jdbcBackendMode, tempDBName+".db", 1)
           val tmpDB = new Database(backend, new JDBCMetadataBackend(jdbcBackendMode, tempDBName+".db"));
+          backend.sparkBackend.sparkTranslator = tmpDB.sparkTranslator
           if(shouldResetDB){
             if(dbFile.exists()){ dbFile.delete(); }
           }
@@ -57,8 +58,6 @@ object GProMDBTestInstances
           ExperimentalOptions.enable("GPROM-BACKEND")
           ExperimentalOptions.enable("GPROM-PROVENANCE")
           ExperimentalOptions.enable("GPROM-DETERMINISM")
-          mimir.algebra.gprom.OperatorTranslation.db = tmpDB
-          mimir.algebra.spark.OperatorTranslation.db = tmpDB
           databases.put(tempDBName, (tmpDB, backend))
           (tmpDB, backend)
         }

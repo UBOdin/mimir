@@ -7,7 +7,7 @@ object PDBench
 {
   def isDownloaded = new File("test/pdbench").exists()
 
-  val tables = Map[String, (Seq[String], Seq[(String,String,Type,Double)])](
+  val tables = Map[String, (Seq[String], Seq[(String,String,BaseType,Double)])](
     "customer" -> (
       Seq("custkey"),
       Seq(

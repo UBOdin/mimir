@@ -45,7 +45,7 @@ object DefaultTypeRegistry extends TypeRegistry with Serializable
     // And then find user-defined types that match
     validBaseTypes
       .map { 
-        typesByBaseType(_) 
+        typesByBaseType.get(_).toSeq.flatten
           .filter { _.constraints.forall { _.test(value) } }
           .map { t => TUser(t.name) }
       }

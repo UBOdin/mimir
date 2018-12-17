@@ -60,10 +60,10 @@ object SqlParserSpec
 			val sback = new SparkBackend(if(tempDB == null){ "testdb" } else { tempDB.toString.split("[\\\\/]").last.replaceAll("\\..*", "") })
 			val d = new Database(sback, j)
 	    try {
+	      sback.sparkTranslator = d.sparkTranslator
 	      d.metadataBackend.open()
 		    d.backend.open();
 	      SparkML(sback.sparkSql)
-        OperatorTranslation.db = d
 				j.enableInlining(d)
 				d.initializeDBForMimir();
 			} catch {
@@ -73,7 +73,7 @@ object SqlParserSpec
 			testData.foreach ( _ match { case ( tableName, tableData, tableCols ) => 
 				d.backend.dropTable(tableName)
 			  LoadCSV.handleLoadTableRaw(d, tableName, 
-				    Some(tableCols.map(el => (el._1, Type.fromString(el._2)))), tableData, Map())
+				    Some(tableCols.map(el => (el._1, BaseType.fromString(el._2).get))), tableData, Map())
 			})
 			d
 		} catch {
@@ -121,14 +121,14 @@ object SqlParserSpec
 			cast1("string") must be equalTo TString()
 			cast1("date") must be equalTo TDate()
 			cast1("timestamp") must be equalTo TTimestamp()
-			cast1("flibble") must throwA[RAException]
+			cast1("flibble") must throwA[SQLException]
 
 			cast2("int") must be equalTo TInt()
 			cast2("double") must be equalTo TFloat()
 			cast2("string") must be equalTo TString()
 			cast2("date") must be equalTo TDate()
 			cast2("timestamp") must be equalTo TTimestamp()
-			cast2("flibble") must throwA[RAException]
+			cast2("flibble") must throwA[SQLException]
 		}
 
 		"Parse trivial aggregate queries" in {
