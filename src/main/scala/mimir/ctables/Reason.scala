@@ -31,7 +31,11 @@ abstract class Reason
       "source"  -> JSONBuilder.string(model.name),
       "varid"   -> JSONBuilder.int(idx),
       "args"    -> JSONBuilder.list( args.map( x => JSONBuilder.string(x.toString)).toList ),
-      "repair"  -> repair.toJSON
+      "repair"  -> repair.toJSON,
+      "rowidarg"-> JSONBuilder.int(model.argTypes(idx).zipWithIndex.foldLeft(-1)((init, curr) => curr._1 match {
+        case TRowId() => curr._2
+        case _ => init
+      })) 
     ))
     
   def toJSONWithFeedback : String = {

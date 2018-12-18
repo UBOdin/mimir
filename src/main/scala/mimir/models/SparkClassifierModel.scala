@@ -41,7 +41,7 @@ object SparkClassifierModel
   val TRAINING_LIMIT = 10000
   val TOKEN_LIMIT = 100
   
-  def availableSparkModels(trainingData:DataFrame) = Map("Classification" -> (Classification, Classification.NaiveBayesMulticlassModel(trainingData)), "Regression" -> (Regression, Regression.GeneralizedLinearRegressorModel(trainingData)))
+  def availableSparkModels = Map("Classification" -> (Classification, Classification.NaiveBayesMulticlassModel _), "Regression" -> (Regression, Regression.GeneralizedLinearRegressorModel _))
   
   def train(db: Database, name: String, cols: Seq[String], query:Operator): Map[String,(Model,Int,Seq[Expression])] = 
   {
@@ -72,12 +72,12 @@ object SparkClassifierModel
   def trainModel(db:Database, query:Operator, model:SimpleSparkClassifierModel)
   {
     model.sparkMLInstanceType = model.guessSparkModelType(model.guessInputType) 
-    val trainingQuery = Limit(0, Some(SparkClassifierModel.TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)),  query.filter(Not(IsNullExpression(Var(model.colName))))))
+    val trainingQuery = Limit(0, Some(SparkClassifierModel.TRAINING_LIMIT), query.filter(Not(IsNullExpression(Var(model.colName)))))
     val trainingDataF = db.backend.execute(trainingQuery)
     val trainingData = trainingDataF.schema.fields.filter(col => Seq(DateType, TimestampType).contains(col.dataType)).foldLeft(trainingDataF)((init, cur) => init.withColumn(cur.name,init(cur.name).cast(LongType)) )
-    val (sparkMLInstance, sparkMLModelGenerator) = availableSparkModels(trainingData).getOrElse(model.sparkMLInstanceType, (Classification, Classification.NaiveBayesMulticlassModel(trainingData)))
+    val (sparkMLInstance, sparkMLModelGenerator) = availableSparkModels.getOrElse(model.sparkMLInstanceType, (Classification, Classification.NaiveBayesMulticlassModel _))
     Timer.monitor(s"Train ${model.name}.${model.colName}", SparkClassifierModel.logger.info(_)){
-      model.learner = Some(sparkMLModelGenerator(ModelParams(db, model.colName, "keep")))
+      model.learner = Some(sparkMLModelGenerator(trainingData)(ModelParams(db, model.colName, "keep")))
       model.classifyAll(sparkMLInstance)
     }
   }
@@ -122,32 +122,18 @@ class SimpleSparkClassifierModel(name: String, val colName:String, val schema:Se
   
   def classifyAll(sparkMLInstance:SparkML) : Unit = {
     val classifier = learner.get
-    val classifyAllQuery = data.transform(sparkMLInstance.fillNullValues)/*sparkMLInstance.getSparkSqlContext().createDataFrame(
-      sparkMLInstance.getSparkSession().parallelize(trainingData.map( row => {
-        Row(row.zip(schema).map(value => sparkMLInstance.getNative(value._1, value._2._2) ):_*)
-      })), StructType(schema.map(col => StructField(col._1, OperatorTranslation.getSparkType(col._2), true))))//Project(Seq(ProjectArg(colName, Var(colName))), query)
-    */
+    val classifyAllQuery = data.transform(sparkMLInstance.fillNullValues)
     val predictions = sparkMLInstance.applyModel(classifier, classifyAllQuery)
     //predictions.show()
-    //val sqlContext = MultiClassClassification.getSparkSqlContext()
-    //import sqlContext.implicits._  
     
-    //method 1: window, rank, and drop
-    /*import org.apache.spark.sql.functions.row_number
-    import org.apache.spark.sql.expressions.Window
-    val w = Window.partitionBy($"rowid").orderBy($"probability".desc)
-    val topPredictionsForEachRow = predictions.withColumn("rn", row_number.over(w)).where($"rn" === 1).drop("rn")88
-    */
+    //evaluate acuracy
+    /*val evaluator = new MulticlassClassificationEvaluator()
+      .setLabelCol("label")
+      .setPredictionCol("prediction")
+      .setMetricName("accuracy")
+    val accuracy = evaluator.evaluate(predictions)
+    println("Test set accuracy = " + accuracy)*/
     
-    //method 2: group and first
-    /*import org.apache.spark.sql.functions.first
-    val topPredictionsForEachRow = predictions.sort($"rowid", $"probability".desc).groupBy($"rowid").agg(first(predictions.columns.tail.head).alias(predictions.columns.tail.head), predictions.columns.tail.tail.map(col => first(col).alias(col) ):_*) 
-   
-    topPredictionsForEachRow.select("rowid", "predictedLabel").collect().map(row => {
-      classificationCache(row.getString(0)) = classToPrimitive( row.getString(1) )
-    })*/
-       
-    //method 3: manually
     val predictionsExt = sparkMLInstance.extractPredictions(classifier, predictions)
     val predictionMap = predictionsExt.groupBy(_._1).map { case (k,v) => (k,v.map(_._2))}
     classifyAllPredictions = Some(predictionMap)
