@@ -116,14 +116,26 @@ object TypeInference
     if(table.equals("DATA")){
       val model = db.models.get(s"MIMIR_TI_ATTR_${config.schema}").asInstanceOf[TypeInferenceModel]
       val columnIndexes = model.columns.zipWithIndex.toMap
+
       Some(Project(
         config.query.columnNames.map { colName =>
           ProjectArg(colName, 
             if(columnIndexes contains colName){ 
-              Function("CAST", Seq(
+
+              val targetType = 
+                model.bestGuess(0, 
+                  Seq(IntPrimitive(columnIndexes(colName))), 
+                  Seq()
+                ).asInstanceOf[TypePrimitive].t
+
+              val castExpr = db.types.typeCaster(targetType, Var(colName))
+
+              Conditional(
+                IsNullExpression(Var(colName)),
                 Var(colName),
-                model.bestGuess(0, Seq(IntPrimitive(columnIndexes(colName))), Seq())
-              ))
+                castExpr
+              )
+
             } else {
               Var(colName)
             }

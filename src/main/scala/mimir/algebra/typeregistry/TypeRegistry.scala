@@ -9,8 +9,7 @@ abstract class TypeRegistry
   def supportsUserType(name:String): Boolean
 
   def testForUserTypes(record: String, validBaseTypes:Set[BaseType]): Set[TUser]
-  def pickUserType(possibilities: Set[TUser]): Type
-  def userTypeCaster(t:Type, target: Expression): Expression
+  def userTypeCaster(t:TUser, target: Expression, orElse: Expression): Expression
 
   def parentOfUserType(t:TUser): Type
   def rootType(t:Type): BaseType =
@@ -33,18 +32,13 @@ abstract class TypeRegistry
               .toSet
     testForUserTypes(value, validBaseTypes) ++ validBaseTypes
   }
-  def pickType(possibilities: Set[Type]): Type =
+  def typeCaster(t: Type, target: Expression, orElse: Expression = NullPrimitive()): Expression =
   {
-    if(possibilities.isEmpty){ throw new RAException("Can't pick from empty list of types") }
-    val userTypes = 
-      possibilities.map { case x:TUser => Some(x) case _ => None }.flatten
-
-    // User types beat everything else.  Use alpha order arbitrarily
-    if(!userTypes.isEmpty){ return pickUserType(userTypes) }
-    // TInt beats TFloat
-    if(possibilities contains TInt()) { return TInt() }
-    // Otherwise pick arbitrarily
-    return possibilities.toSeq.sortBy(_.toString).head
+    val castTarget = Function("CAST", Seq(target, TypePrimitive(rootType(t))))
+    t match {
+      case u:TUser => userTypeCaster(u, castTarget, orElse)
+      case b:BaseType => castTarget
+    }
   }
 
   def fromString(name:String) = 

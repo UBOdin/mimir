@@ -253,3 +253,30 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
   }
   
 }
+
+class TypeInferenceCastFailedModel(name: String, t: Type)
+  extends Model(name)
+  with SourcedFeedback
+{
+
+  def argTypes(idx: Int): Seq[BaseType] = Seq(TString(), TAny())
+  def hintTypes(idx: Int): Seq[BaseType] = Seq()
+  def varType(idx: Int,argTypes: Seq[BaseType]): BaseType = argTypes(1)
+  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) = args(0).asString
+
+  def bestGuess(idx: Int,args: Seq[PrimitiveValue],hints: Seq[PrimitiveValue]): PrimitiveValue = 
+    getFeedback(idx, args) match { case Some(s) => s; case None => NullPrimitive() }
+  def confidence(idx: Int,args: Seq[PrimitiveValue],hints: Seq[PrimitiveValue]): Double = 
+    if(getFeedback(idx, args) == None) { 0.0 } else { 1.0 }
+  def feedback(idx: Int,args: Seq[PrimitiveValue],v: PrimitiveValue): Unit = 
+    setFeedback(idx, args, v)
+  def isAcknowledged(idx: Int,args: Seq[PrimitiveValue]): Boolean = 
+    (getFeedback(idx, args) != None)
+  def reason(idx: Int,args: Seq[PrimitiveValue],hints: Seq[PrimitiveValue]): String = 
+    s"${args(0)} is not a valid ${t}"
+  def sample(idx: Int,randomness: scala.util.Random,args: Seq[PrimitiveValue],hints: Seq[PrimitiveValue]): PrimitiveValue = 
+    /// TODO: a completely random instance of the selected type would be a better bet.
+    return bestGuess(idx, args, hints)
+
+
+}

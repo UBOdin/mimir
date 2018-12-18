@@ -35,9 +35,6 @@ object DefaultTypeRegistry extends TypeRegistry with Serializable
   def parentOfUserType(t: TUser): Type = 
     getDefinition(t.name).basedOn
 
-  def pickUserType(possibilities: Set[TUser]): Type = 
-    possibilities.toSeq.sortBy(_.name).head
-
   def testForUserTypes(value: String, validBaseTypes:Set[BaseType]): Set[TUser] = 
   {
     // First find base types that match
@@ -52,23 +49,17 @@ object DefaultTypeRegistry extends TypeRegistry with Serializable
       .flatten
       .toSet
   }
-  def userTypeCaster(t: Type, target:Expression): Expression = 
+  def userTypeCaster(t: TUser, target:Expression, orElse: Expression): Expression = 
   {
-    val castTarget = Function("CAST", Seq(target, TypePrimitive(rootType(t))))
-    t match {
-      case TUser(name) => {
-        Conditional(
-          ExpressionUtils.makeAnd(
-            getDefinition(name)
-              .constraints
-              .map { _.tester(castTarget) }
-          ),
-          castTarget,
-          NullPrimitive()
-        )
-      }
-      case _ => castTarget
-    }
+    Conditional(
+      ExpressionUtils.makeAnd(
+        getDefinition(t.name)
+          .constraints
+          .map { _.tester(target) }
+      ),
+      target,
+      orElse
+    )
   }
   def userTypeForId(i: Integer) = TUser(types(i).name)
   def idForUserType(t: TUser): Integer = indexesByName(t.name)
