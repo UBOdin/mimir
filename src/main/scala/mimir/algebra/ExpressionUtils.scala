@@ -259,7 +259,7 @@ object ExpressionUtils {
     e match {
       case BoolPrimitive(false) => List[Expression]()
       case Arithmetic(Arith.Or, a, b) => 
-        getConjuncts(a) ++ getConjuncts(b)
+        getDisjuncts(a) ++ getDisjuncts(b)
       case _ => List(e)
     }
   }

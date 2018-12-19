@@ -42,10 +42,10 @@ object ExpressionParser extends RegexParsers {
 		| arith ~ cmpSym ~ arith ^^ { 
 				case lhs ~ op ~ rhs => Comparison(op, lhs, rhs)
 			}
-		| arith ~ "AND" ~ arith ^^ {
+		| arith ~ "AND" ~ boolExpr ^^ {
 				case lhs ~ _ ~ rhs => Arithmetic(Arith.And, lhs, rhs)
 			}
-		| arith ~ "OR" ~ arith ^^ {
+		| arith ~ "OR" ~ boolExpr ^^ {
 				case lhs ~ _ ~ rhs => Arithmetic(Arith.Or, lhs, rhs)
 			}
 		| "NOT(" ~> arith <~ ")" ^^ { Not(_) }
