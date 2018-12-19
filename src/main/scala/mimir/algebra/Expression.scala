@@ -373,6 +373,11 @@ abstract sealed class PrimitiveValue(t: Type)
    * return the contents of the variable as just an object.
    */
   def payload: Object;
+  /**
+   * Execute the nested expression only if the value is not null.  Otherwise
+   * return null
+   */
+  def ifNotNull(cmd: (PrimitiveValue => PrimitiveValue)) = cmd(this)
 }
 
 abstract sealed class NumericPrimitive(t: Type) extends PrimitiveValue(t)
@@ -559,6 +564,7 @@ case class NullPrimitive()
   def asDateTime: DateTime = throw new NullTypeException(TAny(), TDate(), "Hard Cast")
   def asInterval: Period = throw new TypeException(TAny(), TInterval(), "Hard Cast")
   def payload: Object = null
+  override def ifNotNull(cmd: (PrimitiveValue => PrimitiveValue)) = this
 }
 
 
