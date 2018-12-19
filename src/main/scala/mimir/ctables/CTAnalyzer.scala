@@ -92,6 +92,15 @@ object CTAnalyzer {
         } else {
           IsAcknowledged(models(v.name), v.idx, v.args)
         }
+
+      case w: DataWarning => 
+        if(w.key.isEmpty){
+          BoolPrimitive(
+            models(w.name).isAcknowledged(0, Seq())
+          )
+        } else {
+          IsAcknowledged(models(w.name), 0, w.key)
+        }
       
       case Var(v) => 
         varMap.get(v).getOrElse(BoolPrimitive(true))
@@ -111,10 +120,10 @@ object CTAnalyzer {
    * under which each of those terms affect the result.  Similar to compileDeterministic,
    * but on a term-by-term basis.
    */
-  def compileCausality(expr: Expression): Seq[(Expression, VGTerm)] =
+  def compileCausality(expr: Expression): Seq[(Expression, UncertaintyCausingExpression)] =
     compileCausality(expr, BoolPrimitive(true))
 
-  private def compileCausality(expr: Expression, inputCondition: Expression): Seq[(Expression, VGTerm)] = 
+  private def compileCausality(expr: Expression, inputCondition: Expression): Seq[(Expression, UncertaintyCausingExpression)] = 
   {
     expr match { 
       case Conditional(condition, thenClause, elseClause) => {
@@ -173,7 +182,7 @@ object CTAnalyzer {
         }
       }
       
-      case x: VGTerm => List( (inputCondition, x) )
+      case x: UncertaintyCausingExpression => List( (inputCondition, x) )
 
       case _ => expr.children.flatMap(compileCausality(_, inputCondition))
 

@@ -15,7 +15,7 @@ class SimplifyExpressions(interpreter: Eval, functionRegistry: FunctionRegistry)
   {
     originalExpression match {
       //////////////////// Leaves ////////////////////
-      case _:PrimitiveValue | _:Var | _:VGTerm | _:JDBCVar | _:RowIdVar => return originalExpression
+      case _:PrimitiveValue | _:Var | _:VGTerm | _:JDBCVar | _:RowIdVar | _:DataWarning => return originalExpression
 
       //////////////////// Arithmetic ////////////////////
 

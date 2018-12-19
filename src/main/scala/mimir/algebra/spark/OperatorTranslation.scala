@@ -560,14 +560,17 @@ object OperatorTranslation
         BestGuessUDF(oper, model, idx, args, hints).getUDF
         //UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ++ hints.map(mimirExprToSparkExpr(oper,_))), true )
       }
+      case DataWarning(_, v, _, _) => {
+        mimirExprToSparkExpr(oper, v)
+      }
       case IsNullExpression(iexpr) => {
         IsNull(mimirExprToSparkExpr(oper,iexpr))
       }
       case Not(nexpr) => {
         org.apache.spark.sql.catalyst.expressions.Not(mimirExprToSparkExpr(oper,nexpr))
       }
-      case x => {
-        throw new Exception(s"Expression Translation not implemented ${x.getClass}: '$x'")
+      case (JDBCVar(_) | _:Proc) => {
+        throw new RAException("Spark doesn't support: "+expr)
       }
     }
   }

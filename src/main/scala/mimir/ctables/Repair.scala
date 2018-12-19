@@ -69,3 +69,13 @@ case class ModerationRepair(userRepairedValue:String)
   def toJSON: String = JSONBuilder.dict(Map( "value" -> userRepairedValue))
   def exampleString: String = s"< $userRepairedValue >"
 }
+
+object DataWarningRepair
+  extends Repair
+{
+  def toJSON =
+    JSONBuilder.dict(Map(
+      "selector" -> JSONBuilder.string("warning")
+    ))
+  def exampleString: String = "< Explain why in a string >"
+}

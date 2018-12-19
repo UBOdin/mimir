@@ -403,12 +403,16 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
             case null => (load.getFile.getName.replaceAll("\\..*", "").toUpperCase, false)
             case s => (s, true)
           }
+        val format = 
+          if(load.getFormat == null) { "csv" } 
+          else{ load.getFormat }
+
 
         loadTable(
           target, 
           load.getFile, 
           force = force,
-          (load.getFormat, load.getFormatArgs.asScala.toSeq.map { sql.convert(_) })
+          (format, load.getFormatArgs.asScala.toSeq.map { sql.convert(_) })
         )
       }
 

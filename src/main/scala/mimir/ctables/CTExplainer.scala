@@ -265,13 +265,24 @@ class CTExplainer(db: Database) extends LazyLogging {
 		logger.trace(s"GETTING REASONS: $expr")
 		expr match {
 			case v: VGTerm => Map(v.name -> 
-				Reason.make(
+				new ModelReason(
 					db.models.get(v.name), 
 					v.idx, 
 					v.args.map { arg => 
 						db.interpreter.eval(InlineVGTerms(arg, db),tuple)
 					}, 
 					v.hints.map { arg =>
+						db.interpreter.eval(InlineVGTerms(arg, db),tuple)
+					}
+				)
+			)
+
+			case DataWarning(name, value, message, key) => Map(name -> 
+				new DataWarningReason(
+					db.models.get(name),
+					db.interpreter.eval(InlineVGTerms(value, db), tuple),
+					db.interpreter.eval(InlineVGTerms(value, db), tuple).asString,
+					key.map { arg => 
 						db.interpreter.eval(InlineVGTerms(arg, db),tuple)
 					}
 				)
@@ -404,7 +415,8 @@ class CTExplainer(db: Database) extends LazyLogging {
 								jointQuery.distinct,
 								allReasonArgs.head,
 								allReasonHints.head
-							) ) }
+							) ) },
+						multipleReasons.head.toReason
 					)
 				}
 			}.toSeq
@@ -426,7 +438,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 	): Seq[ReasonSet] =
 		explainSubsetWithoutOptimizing(db.compiler.optimize(oper), wantCol, wantRow, wantSort)
 
-  private def compileCausalityForLens(lensName:String)(expr: Expression): Seq[(Expression, VGTerm)] = {
+  private def compileCausalityForLens(lensName:String)(expr: Expression): Seq[(Expression, UncertaintyCausingExpression)] = {
     val lensModels = db.models.associatedModels(lensName)
     CTAnalyzer.compileCausality(expr).filter(p => lensModels.contains(p._2.name))
   }
@@ -497,11 +509,11 @@ class CTExplainer(db: Database) extends LazyLogging {
 						  col => {
 						    val compiledCausalityExpr = compileCausality(col.expression)
 						    compiledCausalityExpr.map {
-						      case (condition, vgterm) => (vgterm.toString, (condition, vgterm))
+						      case (condition, uncertain) => (uncertain.toString, (condition, uncertain))
 						    }.toMap.toSeq.map(_._2)
 						  }
-						}.map { case (condition, vgterm) => 
-							ReasonSet.make(vgterm, db, Select(condition, child))
+						}.map { case (condition, uncertain) => 
+							ReasonSet.make(uncertain, db, Select(condition, child))
 						}
 				val argDependencies =
 					relevantArgs.
@@ -521,10 +533,10 @@ class CTExplainer(db: Database) extends LazyLogging {
 					if(wantRow){
 						(
 							compileCausality(cond).map {
-						      case (condition, vgterm) => (vgterm.toString, (condition, vgterm))
+						      case (condition, uncertain) => (uncertain.toString, (condition, uncertain))
 						    }.toMap.toSeq.map(_._2).
-								map { case (condition, vgterm) => 
-										ReasonSet.make(vgterm, db, Select(condition, child))
+								map { case (condition, uncertain) => 
+										ReasonSet.make(uncertain, db, Select(condition, child))
 									},
 							ExpressionUtils.getColumns(cond)
 						)
@@ -536,11 +548,11 @@ class CTExplainer(db: Database) extends LazyLogging {
 			case Aggregate(gbs, aggs, child) => {
 				val aggVGTerms = 
 					aggs.flatMap { agg => agg.args.flatMap( compileCausality(_).map {
-						      case (condition, vgterm) => (vgterm.toString, (condition, vgterm))
+						      case (condition, uncertain) => (uncertain.toString, (condition, uncertain))
 						    }.toMap.toSeq.map(_._2) ) }
 				val aggReasons =
-					aggVGTerms.map { case (condition, vgterm) => 
-						ReasonSet.make(vgterm, db, Select(condition, child))
+					aggVGTerms.map { case (condition, uncertain) => 
+						ReasonSet.make(uncertain, db, Select(condition, child))
 					}
 				val gbDependencies =
 					gbs.map( _.name ).filter { gb => wantRow || wantCol(gb) }.toSet
@@ -579,10 +591,10 @@ class CTExplainer(db: Database) extends LazyLogging {
 						(
 							args.flatMap { arg => 
 								compileCausality(arg.expression).map {
-						      case (condition, vgterm) => (vgterm.toString, (condition, vgterm))
+						      case (condition, uncertain) => (uncertain.toString, (condition, uncertain))
 						    }.toMap.toSeq.map(_._2)
-							}.map { case (condition, vgterm) => 
-								ReasonSet.make(vgterm, db, Select(condition, child))
+							}.map { case (condition, uncertain) => 
+								ReasonSet.make(uncertain, db, Select(condition, child))
 							},
 							args.flatMap { arg => ExpressionUtils.getColumns(arg.expression) }
 						)

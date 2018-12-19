@@ -5,12 +5,6 @@ import mimir.algebra._
 import mimir.models._
 import mimir.util.JSONBuilder
 
-object Reason
-{
-  def make(model: Model, idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Reason =
-    new ModelReason(model, idx, args, hints)
-}
-
 abstract class Reason
 {
   def toString: String
@@ -85,6 +79,25 @@ class ModelReason(
 
   override def hashCode: Int = 
     model.hashCode * idx * args.map(_.hashCode).sum
+}
+
+class DataWarningReason(
+  val model: Model,
+  val value: PrimitiveValue,
+  val message: String,
+  val key: Seq[PrimitiveValue]
+)
+  extends Reason
+{
+  override def toString = s" {{ $model[${key.mkString(", ")}] }}"
+
+  def idx: Int = 0
+  def args: Seq[PrimitiveValue] = key
+  def hints: Seq[PrimitiveValue] = Seq()
+
+  def reason: String = message
+  def repair: Repair = DataWarningRepair
+  override def guess: PrimitiveValue = value
 }
 
 class MultiReason(db: Database, reasons: ReasonSet)

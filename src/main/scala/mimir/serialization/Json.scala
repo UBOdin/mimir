@@ -401,6 +401,15 @@ object Json
           "hints" -> ofExpressionList(hints)
         ))
 
+      case DataWarning(name, v, message, key) =>
+        JsObject(Map[String, JsValue](
+          "type" -> JsString("data_warning"),
+          "name" -> JsString(name),
+          "value" -> ofExpression(v),
+          "message" -> ofExpression(message),
+          "key" -> ofExpressionList(key)
+        ))
+
     }
   }
   def toExpression(json: JsValue): Expression = 
@@ -456,6 +465,14 @@ object Json
           fields("var_index").asInstanceOf[JsNumber].value.toLong.toInt,
           toExpressionList(fields("arguments")),
           toExpressionList(fields("hints"))
+        )
+
+      case "data_warning" => 
+        DataWarning(
+          fields("name").asInstanceOf[JsString].value,
+          toExpression(fields("value")),
+          toExpression(fields("message")),
+          toExpressionList(fields("key"))
         )
 
       // fall back to treating it as a primitive type

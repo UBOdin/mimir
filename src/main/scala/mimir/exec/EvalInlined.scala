@@ -388,6 +388,8 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
         throw new RAException("Error: ROWIDVars should have been compiled out")
       case _:VGTerm => 
         throw new RAException("Error: VGTerms should have been compiled out")
+      case _:DataWarning => 
+        throw new RAException("Error: Warnings should have been compiled out")
     }
   }
   

@@ -319,11 +319,18 @@ object Mimir extends LazyLogging {
           " (" + reason.args.mkString(",") + ")"
         } else { "" }
       output.print(reason.reason)
-      if(!reason.confirmed){
-        output.print(s"   ... repair with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.repair.exampleString }`");
-        output.print(s"   ... confirm with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.guess }`");
-      } else {
-        output.print(s"   ... ammend with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.repair.exampleString }`");
+      reason match {
+        case _:DataWarningReason => 
+          if(!reason.confirmed) { 
+            output.print(s"    ... acknowledge with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${reason.repair.exampleString}`")
+          }
+        case _ => 
+          if(!reason.confirmed){
+            output.print(s"   ... repair with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.repair.exampleString }`");
+            output.print(s"   ... confirm with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.guess }`");
+          } else {
+            output.print(s"   ... ammend with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.repair.exampleString }`");
+          }
       }
       output.print("")
     }
