@@ -22,7 +22,7 @@ object MissingValueLens {
     arg match {
       case Var(v) => Seq( (v.toUpperCase, Var(v.toUpperCase).isNull.not) )
       case StringPrimitive(exprString) => {
-        getConstraint(ExpressionParser.expr(exprString))
+        getConstraint(ExpressionParser.expr(exprString.replaceAll("''", "'")))
       }
       case e if Typechecker.trivialTypechecker.typeOf(e, (_:String) => TAny() ).equals(TBool()) => {
         ExpressionUtils.getColumns(arg).toSeq match {

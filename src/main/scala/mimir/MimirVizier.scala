@@ -38,6 +38,7 @@ import java.io.File
 import mimir.exec.result.ResultIterator
 import org.apache.spark.sql.SparkSession
 import mimir.ctables.CTExplainer
+import mimir.parser.ExpressionParser
 
 
 /**
@@ -70,7 +71,7 @@ object MimirVizier extends LazyLogging {
       db = new Database(sback, new JDBCMetadataBackend(Mimir.conf.backend(), Mimir.conf.dbname()))
       db.metadataBackend.open()
       db.backend.open()
-      val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^")
+      val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^","|","OR")
       sback.registerSparkFunctions(db.functions.functionPrototypes.map(el => el._1).toSeq ++ otherExcludeFuncs , db.functions)
       sback.registerSparkAggregates(db.aggregates.prototypes.map(el => el._1).toSeq, db.aggregates)
       vizierdb.sparkSession = sback.sparkSql.sparkSession
@@ -960,6 +961,33 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }    
   }
   
+  def feedback(model:String, idx:Int, argsHints:Seq[String], ack: Boolean, repairStr: String) : Unit = {
+    try{
+    val timeRes = logTime("feedback") {
+      logger.debug("feedback: From Vistrails: [" + idx + "] [ " + model + " ] [ " + argsHints.mkString(",") + " ] [ " + ack + " ] [ " +repairStr+" ]" ) ;
+      val argString = 
+          if(!argsHints.isEmpty){
+            " (" + argsHints.mkString(",") + ")"
+          } else { "" }
+      if(ack){
+        val modelInst = db.models.get(model)
+        val splitIndex = modelInst.argTypes(idx).length
+        val (args, hints) = argsHints.map(arg => ExpressionParser.expr(arg).asInstanceOf[PrimitiveValue]).splitAt(splitIndex)
+        val guess = modelInst.bestGuess(idx, args, hints)
+        db.update(db.parse(s"FEEDBACK ${model} ${idx}$argString IS ${ guess }").head)
+      }
+      else 
+        db.update(db.parse(s"FEEDBACK ${model} ${idx}$argString IS ${ repairStr }").head)
+    }
+    logger.debug(s"feedback Took: ${timeRes._2}")
+    } catch {
+      case t: Throwable => {
+        logger.error("Error with Feedback: [" + idx + "] [ " + model + " ] [ " + argsHints.mkString(",") + " ]  [ " + ack + " ] [ " +repairStr+" ]", t)
+        throw t
+      }
+    }    
+  }
+  
   def registerPythonMimirCallListener(listener : PythonMimirCallInterface) = {
     logger.debug("registerPythonMimirCallListener: From Vistrails: ") ;
     pythonMimirCallListeners = pythonMimirCallListeners.union(Seq(listener))
@@ -1102,7 +1130,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
 
   def operCSVResultsJson(oper : mimir.algebra.Operator) : String =  {
     db.query(oper)(results => {
-      val resultList = results.toList 
+      val resultList = results.toList
       val (resultsStrs, prov) = resultList.map(row => (row.tuple.map(cell => cell), row.provenance.asString)).unzip
       JSONBuilder.dict(Map(
         "schema" -> results.schema.map( schel =>  Map( "name" -> schel._1, "type" ->schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())),

@@ -26,6 +26,7 @@ abstract class Reason
       "varid"   -> JSONBuilder.int(idx),
       "args"    -> JSONBuilder.list( args.map( x => JSONBuilder.string(x.toString)).toList ),
       "repair"  -> repair.toJSON,
+      //TODO:  this is a hack to check if the args
       "rowidarg"-> JSONBuilder.int(model.argTypes(idx).zipWithIndex.foldLeft(-1)((init, curr) => curr._1 match {
         case TRowId() => curr._2
         case _ => init
