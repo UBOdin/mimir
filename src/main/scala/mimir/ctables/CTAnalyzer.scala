@@ -84,23 +84,27 @@ object CTAnalyzer {
         ))
       }
 
-      case v: VGTerm =>
-        if(v.args.isEmpty){
-          BoolPrimitive(
-            models(v.name).isAcknowledged(v.idx, Seq())
-          )
-        } else {
-          IsAcknowledged(models(v.name), v.idx, v.args)
-        }
+      case u : UncertaintyCausingExpression => {
+        u match {
+          case v: VGTerm =>
+            if(v.args.isEmpty){
+              BoolPrimitive(
+                models(v.name).isAcknowledged(v.idx, Seq())
+              )
+            } else {
+              IsAcknowledged(models(v.name), v.idx, v.args)
+            }
 
-      case w: DataWarning => 
-        if(w.key.isEmpty){
-          BoolPrimitive(
-            models(w.name).isAcknowledged(0, Seq())
-          )
-        } else {
-          IsAcknowledged(models(w.name), 0, w.key)
-        }
+          case w: DataWarning => 
+            if(w.key.isEmpty){
+              BoolPrimitive(
+                models(w.name).isAcknowledged(0, Seq())
+              )
+            } else {
+              IsAcknowledged(models(w.name), 0, w.key)
+            }
+        }        
+      }
       
       case Var(v) => 
         varMap.get(v).getOrElse(BoolPrimitive(true))
@@ -193,8 +197,13 @@ object CTAnalyzer {
   {
     val replacement =
       expr match {
-        case VGTerm(name, idx, args, hints) => 
-          Sampler(models(name), idx, args, hints, seed)
+        case u: UncertaintyCausingExpression => 
+          u match { 
+            case VGTerm(name, idx, args, hints) => 
+              Sampler(models(name), idx, args, hints, seed)
+            case DataWarning(_, v, _, _) => 
+              v.recur(compileSample(_, seed, models))
+          }
         case _ => expr
       }
 

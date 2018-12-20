@@ -281,7 +281,10 @@ class CTExplainer(db: Database) extends LazyLogging {
 				new DataWarningReason(
 					db.models.get(name),
 					db.interpreter.eval(InlineVGTerms(value, db), tuple),
-					db.interpreter.eval(InlineVGTerms(value, db), tuple).asString,
+					db.interpreter.eval(InlineVGTerms(value, db), tuple) match {
+						case NullPrimitive() => s"Error reading warning ($name(${key.mkString(",")}))"
+						case message => message.asString
+					},
 					key.map { arg => 
 						db.interpreter.eval(InlineVGTerms(arg, db),tuple)
 					}

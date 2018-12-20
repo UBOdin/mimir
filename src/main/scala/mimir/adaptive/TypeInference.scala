@@ -123,9 +123,9 @@ object TypeInference
       val columnIndexes = model.columns.zipWithIndex.toMap
       Some(Project(
         config.query.columnNames.map { colName => {
-          val bestGuessType = model.bestGuess(0, Seq(IntPrimitive(columnIndexes(colName))), Seq())
           ProjectArg(colName, 
             if(columnIndexes contains colName){ 
+              val bestGuessType = model.bestGuess(0, Seq(IntPrimitive(columnIndexes(colName))), Seq())
               val castExpression = Function("CAST", Seq(
                   Var(colName),
                   bestGuessType

@@ -364,12 +364,28 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
       }
       case Not(ne) => compileForIsNull(ne)
       case Conditional(c, t, e) => {
-        compileForIsNull(
-          Arithmetic(Arith.Or, 
-            Arithmetic(Arith.And, c, t),
-            Arithmetic(Arith.And, ExpressionUtils.makeNot(c), e)
-          )
-        )
+        compileForIsNull(c) match {
+          case Left(true) => Left(true)
+          case Left(false) => 
+            Right(
+              compileForBool(
+                Conditional(c, IsNullExpression(t), IsNullExpression(e))
+              )
+            )
+          case Right(cIsNullWhen) => 
+            Right(
+              or(
+                cIsNullWhen,
+                compileForBool(
+                  Conditional(
+                    c,
+                    IsNullExpression(t),
+                    IsNullExpression(e)
+                  )
+                )
+              )
+            )
+        }
       }
       case f:Function => {
         val v = compile(f);

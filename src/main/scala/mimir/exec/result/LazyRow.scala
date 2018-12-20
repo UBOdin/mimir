@@ -13,7 +13,15 @@ case class LazyRow(
   def tuple: Seq[PrimitiveValue] = 
     tupleDefinition.map { _(input) }
   def apply(idx: Int): PrimitiveValue = 
-    tupleDefinition(idx)(input)
+  {
+    try { tupleDefinition(idx)(input) }
+    catch { case e:Throwable => 
+      throw new RuntimeException(
+        s"Error Decoding ${tupleSchema(idx)._1} (${tupleSchema(idx)._2})",
+        e
+      )
+    }
+  }
   def annotation(name: String): PrimitiveValue = 
     annotation(annotationIndexes(name))
   def annotation(idx: Int): PrimitiveValue = 
