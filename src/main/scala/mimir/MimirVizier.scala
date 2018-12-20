@@ -961,7 +961,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }    
   }
   
-  def feedback(model:String, idx:Int, argsHints:Seq[String], ack: Boolean, repairStr: String) : Unit = {
+  def feedback(model:String, idx:Int, argsHints:Seq[Any], ack: Boolean, repairStr: String) : Unit = {
     try{
     val timeRes = logTime("feedback") {
       logger.debug("feedback: From Vistrails: [" + idx + "] [ " + model + " ] [ " + argsHints.mkString(",") + " ] [ " + ack + " ] [ " +repairStr+" ]" ) ;
@@ -972,7 +972,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
       if(ack){
         val modelInst = db.models.get(model)
         val splitIndex = modelInst.argTypes(idx).length
-        val (args, hints) = argsHints.map(arg => ExpressionParser.expr(arg).asInstanceOf[PrimitiveValue]).splitAt(splitIndex)
+        val (args, hints) = argsHints.map(arg => ExpressionParser.expr(arg.toString()).asInstanceOf[PrimitiveValue]).splitAt(splitIndex)
         val guess = modelInst.bestGuess(idx, args, hints)
         db.update(db.parse(s"FEEDBACK ${model} ${idx}$argString IS ${ guess }").head)
       }
