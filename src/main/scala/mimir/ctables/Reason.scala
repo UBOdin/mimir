@@ -30,7 +30,8 @@ abstract class Reason
       "rowidarg"-> JSONBuilder.int(model.argTypes(idx).zipWithIndex.foldLeft(-1)((init, curr) => curr._1 match {
         case TRowId() => curr._2
         case _ => init
-      })) 
+      })),
+      "confirmed" -> JSONBuilder.boolean(confirmed) 
     ))
     
   def toJSONWithFeedback : String = {

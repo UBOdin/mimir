@@ -147,7 +147,7 @@ with SourcedFeedback
     Seq()
   }
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) = {
-    s"${args(0)}"
+    s"${args(0).asInt}"
   }
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = {
     getFeedback(idx, args) match {

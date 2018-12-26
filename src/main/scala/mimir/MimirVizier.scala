@@ -39,6 +39,7 @@ import mimir.exec.result.ResultIterator
 import org.apache.spark.sql.SparkSession
 import mimir.ctables.CTExplainer
 import mimir.parser.ExpressionParser
+import mimir.ctables.MultiReason
 
 
 /**
@@ -878,11 +879,34 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }    
   }
 
-  def explainEverythingJson(query: String) : String = {
+  def explainEverythingAllJson(query: String) : String = {
     try{
       logger.debug("explainCell: From Vistrails: [" + query + "]"  ) ;
       val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
       JSONBuilder.list(explainEverything(oper).map(_.all(db).toList).flatten.map(_.toJSON))
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Cell: [" + query + "]", t)
+        throw t
+      }
+    }
+  }
+  
+  
+  def explainEverythingJson(query: String) : String = {
+    try{
+      logger.debug("explainCell: From Vistrails: [" + query + "]"  ) ;
+      val oper = totallyOptimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+      JSONBuilder.list(explainEverything(oper).map(rset => {
+        val subReasons = rset.take(db, 4).toSeq
+  			if(subReasons.size > 3){
+  				logger.trace("   -> Too many explanations to fit in one group")
+  				Seq(new MultiReason(db, rset))
+  			} else {
+  				logger.trace(s"   -> Only ${subReasons.size} explanations")
+  				subReasons
+  			}
+        }).flatten.map(_.toJSON))
     } catch {
       case t: Throwable => {
         logger.error("Error Explaining Cell: [" + query + "]", t)
