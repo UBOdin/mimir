@@ -396,13 +396,17 @@ object MimirVizier extends LazyLogging {
     pythonCallThread = Thread.currentThread()
     val timeRes = logTime("createLens") {
       logger.debug("createLens: From Vistrails: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]"  ) ;
-      // val paramsStr = params.mkString(",").replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
-      val lensNameBase = (input.toString() + _type + paramsStr + make_input_certain + materialize).hashCode()
+      val parsedParams = 
+                  // Start by replacing "{{input}}" with the name of the input table.
+            params.map { _.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) }
+                  // Then parse
+                  .map { ExpressionParser.expr(_) }
+
+      val lensNameBase = (input.toString() + _type + parsedParams.mkString(",") + make_input_certain + materialize).hashCode()
       val inputQuery = s"SELECT * FROM ${input}"
 
       val lensName = ("LENS_" + _type + (lensNameBase.toString().replace("-", ""))).toUpperCase()
       val lensType = _type.toUpperCase()
-      val parsedParams = params.map { ExpressionParser.expr(_) }
 
       if(db.tableExists(lensName)) {
         logger.debug("createLens: From Vistrails: Lens (or Table) already exists: " + lensName)
@@ -411,7 +415,7 @@ object MimirVizier extends LazyLogging {
       } else {
         // Need to create the lens if it doesn't already exist.
 
-        val inputSQL = db.parse(s"SELECT * FROM $input").head
+        val inputSQL = db.parse(s"SELECT * FROM $input").head.asInstanceOf[Select]
         // query is a var because we might need to rewrite it below.
         var query:Operator = db.sql.convert(inputSQL)
 
@@ -436,7 +440,7 @@ object MimirVizier extends LazyLogging {
         //            AS $query 
         //          WITH ${_type}( ${params.mkString(",")} )
         // Skip the parser and do what Mimir does internally
-        db.lenses.create(lensType, lensName, query, params)
+        db.lenses.create(lensType, lensName, query, parsedParams)
       }
       if(materialize){
         if(!db.views(lensName).isMaterialized){
