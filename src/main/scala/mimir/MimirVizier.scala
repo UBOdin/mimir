@@ -396,39 +396,58 @@ object MimirVizier extends LazyLogging {
     pythonCallThread = Thread.currentThread()
     val timeRes = logTime("createLens") {
       logger.debug("createLens: From Vistrails: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]"  ) ;
-      val paramsStr = params.mkString(",").replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
-      val lensName = "LENS_" + _type + ((input.toString() + _type + paramsStr + make_input_certain + materialize).hashCode().toString().replace("-", "") )
-      var query:String = null
-      db.getView(lensName) match {
-        case None => {
-          if(make_input_certain){
-            val materializedInput = "MATERIALIZED_"+input
-            query = s"CREATE LENS ${lensName} AS SELECT * FROM ${materializedInput} WITH ${_type}(${paramsStr})"  
-            if(db.getAllTables().contains(materializedInput)){
-                logger.debug("createLens: From Vistrails: Materialized Input Already Exists: " + materializedInput)
-            }
-            else{  
-              val inputQuery = s"SELECT * FROM ${input}"
-              val oper = db.sql.convert(db.parse(inputQuery).head.asInstanceOf[Select])
-              db.selectInto(materializedInput, oper)
-            }
+      val parsedParams = 
+                  // Start by replacing "{{input}}" with the name of the input table.
+            params.map { _.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) }
+                  // Then parse
+                  .map { ExpressionParser.expr(_) }
+
+      val lensNameBase = (input.toString() + _type + parsedParams.mkString(",") + make_input_certain + materialize).hashCode()
+      val inputQuery = s"SELECT * FROM ${input}"
+
+      val lensName = ("LENS_" + _type + (lensNameBase.toString().replace("-", ""))).toUpperCase()
+      val lensType = _type.toUpperCase()
+
+      if(db.tableExists(lensName)) {
+        logger.debug("createLens: From Vistrails: Lens (or Table) already exists: " + lensName)
+        // (Should be) safe to fall through since we might still be getting asked to materialize 
+        // the table.
+      } else {
+        // Need to create the lens if it doesn't already exist.
+
+        val inputSQL = db.parse(s"SELECT * FROM $input").head.asInstanceOf[Select]
+        // query is a var because we might need to rewrite it below.
+        var query:Operator = db.sql.convert(inputSQL)
+
+        // "Make Certain" is implemented by dumping the lens contents into a temporary table
+        if(make_input_certain){
+          val materializedInput = "MATERIALIZED_"+input
+          val querySchema = db.typechecker.schemaOf(query)
+
+          if(db.tableExists(materializedInput)){
+            logger.debug("createLens: From Vistrails: Materialized Input Already Exists: " + materializedInput)
+          } else {
+            // Dump the query into a table if necessary 
+            db.selectInto(materializedInput, query)
           }
-          else{
-            val inputQuery = s"SELECT * FROM ${input}"
-            query = s"CREATE LENS ${lensName} AS $inputQuery WITH ${_type}(${paramsStr})"  
-          }
-          logger.debug("createLens: query: " + query)
-          db.update(db.parse(query).head) 
+
+          // And override the default lens input with the table.
+          query = db.table(materializedInput)
         }
-        case Some(_) => {
-          logger.debug("createLens: From Vistrails: Lens already exists: " + lensName)
-        }
+
+        // Regardless of where we're reading from, next we need to run: 
+        //   CREATE LENS ${lensName} 
+        //            AS $query 
+        //          WITH ${_type}( ${params.mkString(",")} )
+        // Skip the parser and do what Mimir does internally
+        db.lenses.create(lensType, lensName, query, parsedParams)
       }
       if(materialize){
-        if(!db.views(lensName).isMaterialized)
-          db.update(db.parse(s"ALTER VIEW ${lensName} MATERIALIZE").head)
+        if(!db.views(lensName).isMaterialized){
+          db.views.materialize(lensName)
+        }
       }
-      val lensOp = parseQuery(s"SELECT * FROM $lensName LIMIT 200")
+      val lensOp = db.table(lensName).limit(200)
       val lensAnnotations = db.explainer.explainSubsetWithoutOptimizing(lensOp, lensOp.columnNames.toSet, false, false, false, Some(lensName))
       val lensReasons = lensAnnotations.map(_.size(db)).sum.toString//JSONBuilder.list(lensAnnotations.map(_.all(db).toList).flatten.map(_.toJSON))
       logger.debug(s"createLens reasons for first 200 rows: ${lensReasons}")
