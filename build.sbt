@@ -167,6 +167,7 @@ libraryDependencies ++= Seq(
   "org.apache.spark" 			  %   "spark-sql_2.11" 		  % "2.2.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
   "org.apache.spark" 			  %   "spark-mllib_2.11" 	  % "2.2.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
   "org.apache.spark" 			  %   "spark-hive_2.11" 	  % "2.2.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "com.databricks" 				  %   "spark-xml_2.11" 	  	  % "0.5.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
   "org.apache.hadoop" 			  %   "hadoop-client" 		  % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
   "org.apache.hadoop" 			  %   "hadoop-aws" 			  % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
  

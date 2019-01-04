@@ -26,6 +26,7 @@ object MimirGProMDemo extends GProMSQLTestSpecification("MimirGProMDemo")
   def beforeAll =
   {
     
+    db.backend.dropTable("Q")
     LoadCSV.handleLoadTableRaw(db, "Q", Some(Seq(("E", TString()), ("F", TString()))), new File("test/data/gprom_q.csv"),  Map("DELIMITER" -> ",","ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true", "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false") )
     
     update("""

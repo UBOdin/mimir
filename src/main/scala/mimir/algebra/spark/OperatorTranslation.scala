@@ -106,6 +106,9 @@ object OperatorTranslation
 			  org.apache.spark.sql.catalyst.plans.logical.Filter(
 			      mimirExprToSparkExpr(oper,cond), mimirOpToSparkOp(src))
 			}
+			case LeftOuterJoin(lhs, rhs, cond@BoolPrimitive(_)) => {
+			  org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), Cross, Some(mimirExprToSparkExpr(oper,cond)))
+			}
 			case LeftOuterJoin(lhs, rhs, condition) => {
 			  //org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), LeftOuter, Some(mimirExprToSparkExpr(oper,condition)))
 			  val joinType = LeftOuter

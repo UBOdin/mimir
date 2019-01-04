@@ -340,6 +340,10 @@ object Eval
           cmpScaffold(a, b, op){ _ < _ }{ _ < _ }{ _ > 0 }
         case Cmp.Lte => 
           cmpScaffold(a, b, op){ _ <= _ }{ _ <= _ }{ _ >= 0 }
+        case Cmp.Like => 
+          BoolPrimitive(a.toString.matches(b.toString().replaceAll("%", ".*")))
+        case Cmp.NotLike => 
+          BoolPrimitive(!a.toString.matches(b.toString().replaceAll("%", ".*")))
       }
     }
   }

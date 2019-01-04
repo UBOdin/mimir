@@ -25,7 +25,9 @@ object OperatorTranslationSpec extends GProMSQLTestSpecification("GProMOperatorT
   
   def beforeAll =
   {
-    
+    db.backend.dropTable("R")
+    db.backend.dropTable("T")
+    db.backend.dropTable("Q")
     LoadCSV.handleLoadTableRaw(db, "R", Some(Seq(("A", TInt()), ("B", TInt()))), new File("test/data/gprom_r.csv"),  Map("DELIMITER" -> ",","ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true", "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false") )
     LoadCSV.handleLoadTableRaw(db, "T", Some(Seq(("C", TInt()), ("D", TInt()))), new File("test/data/gprom_t.csv"),  Map("DELIMITER" -> ",","ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true", "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false") )
     LoadCSV.handleLoadTableRaw(db, "Q", Some(Seq(("E", TString()), ("F", TString()))), new File("test/data/gprom_q.csv"),  Map("DELIMITER" -> ",","ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true", "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false") )

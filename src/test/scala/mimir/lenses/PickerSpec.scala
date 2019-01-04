@@ -40,11 +40,11 @@ object PickerSpec
       
       result(0)._1 must be equalTo FloatPrimitive(4.0)
       result(0)._2 must be equalTo false
-      result(1)._1 must be equalTo FloatPrimitive(4.0)
+      result(1)._1 must be equalTo FloatPrimitive(6.4)
       result(1)._2 must be equalTo false
       result(2)._1 must be equalTo FloatPrimitive(4.0)
       result(2)._2 must be equalTo false
-      result(3)._1 must be equalTo FloatPrimitive(6.4)
+      result(3)._1 must be equalTo FloatPrimitive(4.0)
       result(3)._2 must be equalTo false
       
     }
