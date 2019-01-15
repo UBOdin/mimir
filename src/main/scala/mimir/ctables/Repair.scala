@@ -29,13 +29,13 @@ case class RepairFromList(choices: Seq[(PrimitiveValue, Double)])
 {
   def toJSON =
     JSONBuilder.dict(Map(
-      "selector" -> JSONBuilder.string("list"),
-      "values"   -> JSONBuilder.list( choices.map({ case (choice, weight) =>
-          JSONBuilder.dict(Map(
-            "choice" -> JSONBuilder.string(choice.toString),
-            "weight" -> JSONBuilder.double(weight)
-          ))
-        }))
+      "selector" -> "list",
+      "values"   -> choices.map({ case (choice, weight) =>
+          Map(
+            "choice" -> choice.toString,
+            "weight" -> weight
+          )
+        })
     ))
 
   def exampleString =
@@ -47,8 +47,8 @@ case class RepairByType(t: Type)
 {
   def toJSON =
     JSONBuilder.dict(Map(
-      "selector" -> JSONBuilder.string("by_type"),
-      "type"     -> JSONBuilder.prim(TypePrimitive(t))
+      "selector" -> "by_type",
+      "type"     -> TypePrimitive(t)
     ))
 
   def exampleString =

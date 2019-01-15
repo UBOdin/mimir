@@ -166,6 +166,10 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     LoadCSV.handleLoadTable(db, table, file)
   def loadCSV(table: String, schema:Seq[(String,String)], file: File) : Unit =
     db.loadTable(table, schema, file ) 
+  def loadCSV(table: String, file: File, inferTypes:Boolean, detectHeaders:Boolean) : Unit =
+    db.loadTable(table, file, true, None, inferTypes, detectHeaders)
+  def loadCSV(table: String, schema:Seq[(String,String)], file: File, inferTypes:Boolean, detectHeaders:Boolean) : Unit =
+    db.loadTable(table, file, true, Some(schema.map(el => (el._1, Type.fromString(el._2)))), inferTypes, detectHeaders)
     
   def modelLookup(model: String) = db.models.get(model)
   def schemaLookup(table: String) = db.tableSchema(table).get

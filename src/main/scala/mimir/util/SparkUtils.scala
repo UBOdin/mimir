@@ -2,6 +2,7 @@ package mimir.util
 
 import org.apache.spark.sql.Row
 import mimir.algebra._
+import mimir.provenance.Provenance
 import java.sql.SQLException
 import java.util.Calendar
 import java.sql.Date
@@ -12,6 +13,10 @@ import scala.reflect.runtime.universe.{ runtimeMirror}
 import org.spark_project.guava.reflect.ClassPath
 import org.clapper.classutil.ClassFinder
 import java.io.File
+import org.apache.spark.sql.types.DateType
+import org.apache.spark.sql.types.TimestampType
+import org.apache.spark.sql.types.LongType
+import org.apache.spark.sql.functions.unix_timestamp
 
 object SparkUtils {
   //TODO:there are a bunch of hacks in this conversion function because type conversion in operator translator
@@ -26,7 +31,7 @@ object SparkUtils {
     }
     
     t match {
-      case TAny() =>        if(ExperimentalOptions.isEnabled("XNULL")) { (r) => NullPrimitive() } else throw new SQLException(s"Can't extract TAny: $field")
+      case TAny() =>        if(!ExperimentalOptions.isEnabled("NXNULL")) { (r) => NullPrimitive() } else throw new SQLException(s"Can't extract TAny: $field")
       case TFloat() =>      (r) => checkNull(r, FloatPrimitive(r.getDouble(field)))
       case TInt() =>        (r) => checkNull(r, { 
         try {
@@ -113,6 +118,12 @@ object SparkUtils {
     )(results)
   }
   
+  def convertDate(time:Long): DatePrimitive =
+  {
+    val cal = Calendar.getInstance();
+    cal.setTime(new Date(time))
+    convertDate(cal)
+  }
   def convertDate(c: Calendar): DatePrimitive =
     DatePrimitive(c.get(Calendar.YEAR), c.get(Calendar.MONTH)+1, c.get(Calendar.DATE))
   def convertDate(d: Date): DatePrimitive =
@@ -126,6 +137,12 @@ object SparkUtils {
     val cal = Calendar.getInstance()
     cal.set(d.y, d.m, d.d);
     new Date(cal.getTime().getTime());
+  }
+  def convertTimestamp(time:Long): TimestampPrimitive =
+  {
+    val cal = Calendar.getInstance();
+    cal.setTime(new Timestamp(time))
+    convertTimestamp(cal)
   }
   def convertTimestamp(c: Calendar): TimestampPrimitive =
     TimestampPrimitive(c.get(Calendar.YEAR), c.get(Calendar.MONTH)+1, c.get(Calendar.DATE),
@@ -144,7 +161,6 @@ object SparkUtils {
     new Timestamp(cal.getTime().getTime());
   }
 
-  
   def extractAllRows(results: DataFrame): SparkDataFrameIterable =
     extractAllRows(results, OperatorTranslation.structTypeToMimirSchema(results.schema).map(_._2))    
   
@@ -163,6 +179,26 @@ object SparkUtils {
     val expressions = ClassFinder.concreteSubclasses("mimir.algebra.Expression", classMap).map(clazz => Class.forName(clazz.name)).toSeq
     val miscClasses = Seq(Class.forName("org.opengis.referencing.datum.Ellipsoid"),Class.forName("org.geotools.referencing.datum.DefaultEllipsoid"))
     (models ++ operators ++ expressions ++ miscClasses).toArray
+  }
+  
+  def getDataFrameWithProvFromQuery(db:mimir.Database, query:Operator) : (Seq[(String, Type)], DataFrame) = {
+    val prov = if(ExperimentalOptions.isEnabled("GPROM-PROVENANCE")
+        && ExperimentalOptions.isEnabled("GPROM-BACKEND"))
+      { Provenance.compileGProM(query) }
+      else { Provenance.compile(query) }
+    val oper           = prov._1
+    val provenanceCols = prov._2
+    val operWProv = Project(query.columnNames.map { name => ProjectArg(name, Var(name)) } :+
+        ProjectArg(Provenance.rowidColnameBase, 
+            Function(Provenance.mergeRowIdFunction, provenanceCols.map( Var(_) ) )), oper )
+    val dfPreOut = db.backend.execute(operWProv)
+    val dfOutDt = dfPreOut.schema.fields.filter(col => Seq(DateType).contains(col.dataType)).foldLeft(dfPreOut)((init, cur) => init.withColumn(cur.name,unix_timestamp(init(cur.name)).cast(LongType)*1000))
+    val dfOut = dfOutDt.schema.fields.filter(col => Seq(TimestampType).contains(col.dataType)).foldLeft(dfOutDt)((init, cur) => init.withColumn(cur.name,init(cur.name).cast(LongType)*1000) )
+    (db.typechecker.schemaOf(operWProv).map(el => el._2 match {
+      //case TDate() => (el._1, TInt())
+      //case TTimestamp() => (el._1, TInt())
+      case _ => el
+    }), dfOut)
   }
 }
 

@@ -36,8 +36,9 @@ object SeriesMissingValueModel
   def train(db: Database, name: String, columns: Seq[String], query:Operator): Map[String,(Model,Int,Seq[Expression])] = 
   {
     logger.debug(s"Train on: $query")
-    val model = new SimpleSeriesModel(name, columns, query)
-    val usefulColumns = model.train(db)
+    val (schemaWProv, modelHT) = SparkUtils.getDataFrameWithProvFromQuery(db, query)
+    val model = new SimpleSeriesModel(name, columns, schemaWProv, db.backend.rowIdType, db.backend.dateType, modelHT)
+    val usefulColumns = trainModel( modelHT, columns, schemaWProv, model)
     columns.zip(usefulColumns)
       .zipWithIndex
       .filter(_._1._2)
@@ -45,6 +46,20 @@ object SeriesMissingValueModel
         (column -> (model, idx, Seq()))
       }
       .toMap
+  }
+  def trainModel(queryDf: DataFrame, columns:Seq[String], schema:Seq[(String, Type)], model:SimpleSeriesModel) =
+  {
+    val predictions = 
+      columns.zipWithIndex.map { case (col, idx) => 
+        DetectSeries.bestMatchSeriesColumn(
+          col, 
+          schema.toMap.get(col).get, 
+          queryDf,
+          schema,
+          0.1
+        )
+      }
+    model.train(predictions)
   }
 }
 
@@ -60,49 +75,30 @@ case class SeriesColumnItem(columnName: String, reason: String, score: Double)
  *  */
 
 @SerialVersionUID(1000L)
-class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator) 
+class SimpleSeriesModel(name: String, val seriesCols:Seq[String], val querySchema: Seq[(String, Type)], rowIdType:Type, dateType:Type, queryDf: DataFrame) 
   extends Model(name) 
   with SourcedFeedback
   with ModelCache
 {
   
   var predictions:Seq[Dataset[(String, Double)]] = Seq()
-  var queryDf: DataFrame = null
-  var rowIdType:Type = TString()
-  var dateType:Type = TDate()
-    //colNames.map { _ => Seq[(String,Double)]() }
-  var queryCols:Seq[String] = colNames
-  var querySchema:Seq[(String,Type)] = 
-    colNames.map { x => (x, TAny()) }
+  
+  
+  val colNames = querySchema.map { x => x._1 }
 
   def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : String = s"${idx}_${args(0).asString}_${hints(0).asString}"
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = s"${idx}_${args(0).asString}"
 
-  def train(db: Database): Seq[Boolean] = 
+  def train(predictionsDs:Seq[Dataset[(String, Double)]] ): Seq[Boolean] = 
   {
-    querySchema = db.typechecker.schemaOf(query)
-    queryCols = querySchema.unzip._1
-    queryDf = db.backend.execute(query)
-    rowIdType = db.backend.rowIdType
-    dateType = db.backend.dateType
-    
-    predictions = 
-      colNames.zipWithIndex.map { case (col, idx) => 
-        DetectSeries.bestMatchSeriesColumn(
-          db,
-          col, 
-          querySchema(idx)._2, 
-          query
-        )
-      }
-
+    predictions = predictionsDs
     SeriesMissingValueModel.logger.debug(s"Trained: $predictions")
     predictions.map(!_.limit(1).collect().isEmpty)
   }
 
   def validFor: Set[String] =
   {
-    colNames
+    seriesCols
       .zip(predictions)
       .flatMap { 
         case (col, Seq()) => None
@@ -116,49 +112,102 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
     interpolate(idx, args(0).asInstanceOf[RowIdPrimitive], series)
   def interpolate(idx: Int, rowid:RowIdPrimitive, series: String): PrimitiveValue =
   {
-    val sp2m : (String, Row) => PrimitiveValue = (colName, row) => SparkUtils.convertField(querySchema.toMap.get(colName).get, row, row.fieldIndex(colName), dateType)
+    val colName = seriesCols(idx)
+    val sp2m : (String, Row) => PrimitiveValue = (colName, row) => {
+      row match {
+        case null => NullPrimitive()
+        case _ => SparkUtils.convertField(
+          querySchema.toMap.get(colName).get match {
+            case TDate() => TInt()
+            case TTimestamp() => TInt()
+            case x => x
+          },
+          row, 
+          row.fieldIndex(colName), 
+          dateType) /*match {
+            case np@NullPrimitive() => np
+            case x => querySchema.toMap.get(colName).get match {
+              case TDate() => SparkUtils.convertDate(x.asLong)
+              case TTimestamp() => SparkUtils.convertTimestamp(x.asLong)
+              case _ => x
+            } 
+          }*/
+      }
+    }
     val m2sp : PrimitiveValue => Any = prim => OperatorTranslation.mimirPrimitiveToSparkExternalRowValue(prim)
     val sprowid = m2sp(rowid)
-    val rowIdVar = (monotonically_increasing_id()+1).alias(RowIdVar().toString()).cast(OperatorTranslation.getSparkType(rowIdType))
-    val key = sp2m(series,queryDf.filter(rowIdVar === sprowid ).select(series).limit(1).collect().headOption.getOrElse(null))
-    SeriesMissingValueModel.logger.debug(s"Interpolate $rowid with key $key")
+    val rowIdVar = col(colNames.last)//(monotonically_increasing_id()+1).alias(RowIdVar().toString()).cast(OperatorTranslation.getSparkType(rowIdType))
+    val rowDF = queryDf.filter(rowIdVar === sprowid )
+    val key = sp2m(series,rowDF.select(series).limit(1).collect().headOption.getOrElse(null))
+    val nkey = querySchema.toMap.get(series).get match {
+      case TDate() => SparkUtils.convertDate(key.asLong)
+      case TTimestamp() => SparkUtils.convertTimestamp(key.asLong)
+      case _ => key
+    }
+    SeriesMissingValueModel.logger.debug(
+     s"Interpolate $rowid with key: $nkey for column: (${colName} -> ${querySchema.toMap.get(colName).get}) with series: ($series -> ${querySchema.toMap.get(series).get})")
     if(key == NullPrimitive()){ return NullPrimitive(); }
     val low = 
-      queryDf.filter((col(series) <= lit(m2sp(key))).and(not(isnull(col(colNames(idx))))).and(rowIdVar =!= sprowid))
+      queryDf.filter((col(series) <= lit(m2sp(key))).and(not(isnull(col(colName)))).and(rowIdVar =!= sprowid))
           .sort(desc(series))
           .limit(1)
-          .select(series, colNames(idx)).collect().map( row => (sp2m(series,row), sp2m(colNames(idx),row)) ).toSeq
+          .select(series, colName).collect().map( row => {
+            (querySchema.toMap.get(series).get match {
+              case TDate() => SparkUtils.convertDate(sp2m(series,row).asLong)
+              case TTimestamp() => SparkUtils.convertTimestamp(sp2m(series,row).asLong)
+              case _ => sp2m(series,row)
+            },
+            querySchema.toMap.get(colName).get match {
+              case TDate() => SparkUtils.convertDate(sp2m(colName,row).asLong)
+              case TTimestamp() => SparkUtils.convertTimestamp(sp2m(colName,row).asLong)
+              case _ => sp2m(colName,row)
+            } )
+          } ).toSeq
     val high = 
-      queryDf.filter((col(series) >= lit(m2sp(key))).and(not(isnull(col(colNames(idx))))).and(rowIdVar =!= sprowid))
-          .sort(desc(series))
+      queryDf.filter((col(series) >= lit(m2sp(key))).and(not(isnull(col(colName)))).and(rowIdVar =!= sprowid))
+          .sort(asc(series))
           .limit(1)
-          .select(series, colNames(idx)).collect().map( row => (sp2m(series,row), sp2m(colNames(idx),row)) ).toSeq
+          .select(series, colName).collect().map( row => {
+            (querySchema.toMap.get(series).get match {
+              case TDate() => SparkUtils.convertDate(sp2m(series,row).asLong)
+              case TTimestamp() => SparkUtils.convertTimestamp(sp2m(series,row).asLong)
+              case _ => sp2m(series,row)
+            },
+            querySchema.toMap.get(colName).get match {
+              case TDate() => SparkUtils.convertDate(sp2m(colName,row).asLong)
+              case TTimestamp() => SparkUtils.convertTimestamp(sp2m(colName,row).asLong)
+              case _ => sp2m(colName,row)
+            } )
+          } ).toSeq
 
+    
     SeriesMissingValueModel.logger.debug(s"   -> low = $low; high = $high")
-   //println(low)
-   //println(high)
+   
     val result = (low, high) match {
       case (Seq(), Seq()) => NullPrimitive()
       case (Seq((_, low_v)), Seq())  => low_v
       case (Seq(), Seq((_, high_v))) => high_v
       case (Seq((low_k, low_v)), Seq((high_k, high_v))) => {
-        val ratio = DetectSeries.ratio(low_k, key, high_k)
+        val ratio = DetectSeries.ratio(low_k, nkey, high_k)
         SeriesMissingValueModel.logger.debug(s"   -> ratio = $ratio")
         DetectSeries.interpolate(low_v, ratio, high_v)
       }
     }
+    SeriesMissingValueModel.logger.debug(s"result = $result; rowid = $rowid")
     setCache(idx, Seq(rowid), Seq(StringPrimitive(series)),result)
     result
   }
 
   def bestSequence(idx: Int): String = {
     val df = predictions(idx)
-    df.sort(asc(df.columns(1))).limit(1).head._1
+    val bestSeq = df.sort(asc(df.columns(1))).limit(1).head._1
+    SeriesMissingValueModel.logger.debug(s"bestSeq for col:${seriesCols(idx)} => $bestSeq") 
+	  bestSeq
   }
 
   def argTypes(idx: Int) = Seq(TRowId())
 
-  def varType(idx: Int, args: Seq[Type]): Type = querySchema(idx)._2 
+  def varType(idx: Int, args: Seq[Type]): Type = querySchema.toMap.get(seriesCols(idx)).get
   
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ): PrimitiveValue = 
   {
@@ -200,15 +249,15 @@ class SimpleSeriesModel(name: String, colNames: Seq[String], query: Operator)
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = {
     getFeedback(idx, args) match {
       case Some(value) =>
-        s"You told me that $name.${colNames(idx)} = ${value} on row ${args(0)} (${args(0).getType})"
+        s"You told me that $name.${seriesCols(idx)} = ${value} on row ${args(0)} (${args(0).getType})"
       case None => {
         val bestSeries = bestSequence(idx)
         getCache(idx, args, Seq(StringPrimitive(bestSeries))) match {
           case Some(value) => 
-            s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSequence(idx)} to get $value for row ${args(0)}"
+            s"I interpolated $name.${seriesCols(idx)}, ordered by $name.${bestSequence(idx)} to get $value for row ${args(0)}"
           case None =>{
             //s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSequence(idx)} row ${args(0)}"
-            s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSeries} to get ${interpolate(idx, args, bestSeries)} for row ${args(0)}"
+            s"I interpolated $name.${seriesCols(idx)}, ordered by $name.${bestSeries} to get ${interpolate(idx, args, bestSeries)} for row ${args(0)}"
           }
         }
       }

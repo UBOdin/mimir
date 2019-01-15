@@ -641,7 +641,7 @@ case class DataWarning(
   message: Expression, 
   key: Seq[Expression]
 ) extends UncertaintyCausingExpression {
-  override def toString() = s"($name(${key.mkString(", ")}))@($value)"
+  override def toString() = s"($name(${(key :+ message).mkString(", ")}))@($value)"
   override def children: Seq[Expression] = Seq(value, message) ++ key
   override def rebuild(x: Seq[Expression]) = {
     DataWarning(name, x(0), x(1), x.tail.tail)

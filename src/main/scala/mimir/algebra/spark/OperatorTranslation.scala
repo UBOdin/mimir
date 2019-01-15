@@ -130,7 +130,11 @@ object OperatorTranslation
 			    val offsetExcept = org.apache.spark.sql.catalyst.plans.logical.Limit(
   			      Literal(offset.toInt), 
   			      sparkChildOp)
-			    org.apache.spark.sql.catalyst.plans.logical.Except(sparkChildOp, offsetExcept)
+  			  //TODO: Except will mess up the order of the Rows in the resulting Dataframe
+  			  //org.apache.spark.sql.catalyst.plans.logical.Sort(
+			      //Seq(SortOrder(UnresolvedAttribute("MIMIR_ROWID"), Ascending)), true,
+			      org.apache.spark.sql.catalyst.plans.logical.Except(sparkChildOp, offsetExcept)
+			    //)
 			  } else {
           sparkChildOp
         }
@@ -610,6 +614,7 @@ object OperatorTranslation
   
   def mimirPrimitiveToSparkExternalRowValue(primitive : PrimitiveValue) : Any = {
     primitive match {
+      case null => null
       case NullPrimitive() => null
       case RowIdPrimitive(s) => s
       case StringPrimitive(s) => s

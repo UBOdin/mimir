@@ -242,8 +242,9 @@ object SimpleDemoScript
 		}
 
 		"Query a Join of a Union of Lenses" >> {
-		  LoggerUtils.debug(
+		  LoggerUtils.trace(
 				// "mimir.exec.Compiler"
+		    //"mimir.sql.SparkBackend"  
 			) {
 		    query("""
 					SELECT p.name, r.rating FROM (

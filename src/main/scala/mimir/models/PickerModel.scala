@@ -29,7 +29,7 @@ object PickerModel
   def train(db:Database, name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[Type], useClassifier:Option[String], classifyUpFrontAndCache:Boolean, query: Operator ) : SimplePickerModel = {
     val pickerModel = new SimplePickerModel(name, resultColumn, pickFromCols, colTypes, useClassifier, classifyUpFrontAndCache, query) 
     val trainingQuery = Limit(0, Some(TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)), Project(pickFromCols.map(col => ProjectArg(col, Var(col))), query.filter(Not(IsNullExpression(Var(pickFromCols.head)))) )))
-    val (schemao, trainingDatao) = SparkML.getDataFrameWithProvFromQuery(db, trainingQuery)
+    val (schemao, trainingDatao) = SparkUtils.getDataFrameWithProvFromQuery(db, trainingQuery)
     pickerModel.schema = schemao
     pickerModel.trainingData = trainingDatao
     val (sparkMLInst, modelGen) = useClassifier match { //use result of case expression

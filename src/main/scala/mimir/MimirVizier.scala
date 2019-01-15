@@ -131,57 +131,6 @@ object MimirVizier extends LazyLogging {
         }
     }
     
-    //val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel("SELECT SUM(COLUMN_0) AS FCOL_2, SUM(COLUMN_2) FROM R_RAW GROUP BY COLUMN_1;")
-    //val gpNodeStr = GProMWrapper.inst.gpromNodeToString(gpromNode.getPointer())
-    //println(gpNodeStr)
-    //vistrailsQueryMimir("SELECT * FROM LENS_REPAIR_KEY1915024710", true, false)
-    //vistrailsQueryMimir("SELECT * FROM LENS_COMMENT2063309830", true, false)
-    //explainCell("SELECT * FROM LENS_REPAIR_KEY1915024710", 1, "2" )
-    //explainEverything("SELECT * FROM LENS_REPAIR_KEY1915024710")
-    //OperatorTranslation.compileProvenanceWithGProM(db.table("R_RAW").project("COLUMN_0"))
-    /*val oper = db.sql.convert(db.parse("SELECT * FROM LENS_REPAIR_KEY1915024710").head.asInstanceOf[Select])
-    val (provOp, provCols) = OperatorTranslation.compileProvenanceWithGProM(oper)
-    val (provTaintOp, colTaintExprs, rowTaintExpr) = OperatorTranslation.compileTaintWithGProM(provOp)*/
-    //OperatorTranslation.compileProvenanceAndTaintWithGProM(oper)
-    //explainCell("SELECT * FROM LENS_COMMENT2063309830", 3, "5")
-    /*val oper = db.sql.convert(db.parse("SELECT * FROM LENS_REPAIR_KEY1915024710").head.asInstanceOf[Select])
-    OperatorTranslation.compileProvenanceAndTaintWithGProM(oper)*/
-    //loadCSV("test/r_test/r.csv")
-    
-    /*val gpromNode = GProMWrapper.inst.rewriteQueryToOperatorModel("PROVENANCE OF (SELECT SUM(COLUMN_0) AS FCOL_2, SUM(COLUMN_2) FROM R_RAW GROUP BY COLUMN_1);")
-    val provGpromNode = GProMWrapper.inst.provRewriteOperator(gpromNode.getPointer)
-    //val provNodeStr = GProMWrapper.inst.gpromNodeToString(provGpromNode.getPointer())
-    //println(provNodeStr)
-    var opOut = OperatorTranslation.gpromStructureToMimirOperator(0, provGpromNode, null)
-    println(opOut)*/
-    
-    
-    //mimir lens examples
-    /*vistrailsQueryMimir("SELECT * FROM LENS_MISSING_VALUE1225222496", true, false)  
-    vistrailsQueryMimir("SELECT * FROM LENS_REPAIR_KEY1915024710", true, false) 
-    vistrailsQueryMimir("SELECT * FROM LENS_COMMENT2063309830", true, false) 
-    vistrailsQueryMimir("SELECT * FROM LENS_MISSING_KEY731940496", true, false) 
-    vistrailsQueryMimir("SELECT * FROM LENS_PICKER502036449", true, false) */
-    //vistrailsQueryMimir("SELECT * FROM LENS_GEOCODE97197618", true, false) 
-    
-    /*explainCell("SELECT * FROM LENS_MISSING_VALUE1225222496", 1, "3" )
-    explainCell("SELECT * FROM LENS_REPAIR_KEY1915024710", 1, "2" ) 
-    explainCell("SELECT * FROM LENS_COMMENT2063309830", 3, "2" ) 
-    explainCell("SELECT * FROM LENS_PICKER502036449", 3, "3" ) */
-    //explainCell("SELECT * FROM LENS_GEOCODE97197618", 4, "4" ) 
-    //explainCell("SELECT * FROM LENS_REPAIR_KEY1915024710", 1, "1" ) 
-     
-    /*val pname = loadCSV("/Users/michaelbrachmann/source/mimir/test/data/pick.csv")
-    val mvlname = createLens(pname, Seq("B"), "MISSING_VALUE", false, false)
-    createLens(mvlname, Seq("A"), "MISSING_VALUE", false, false)*/
-    /*val table = loadCSV("/Users/michaelbrachmann/Downloads/home2.csv")
-    val mv1 = createLens(table, Seq("'DEN > 0'"), "MISSING_VALUE", false, false)
-    val mv2 = createLens(mv1, Seq("'OFFICE > 0'"), "MISSING_VALUE", false, false)
-    println(vistrailsQueryMimir(s"SELECT * FROM $mv2", true, false).csvStr)*/
-    
-    //println(vistrailsQueryMimir("SELECT * FROM DEMO_TIMING_RAW", true, false).csvStr)
-    
-    //println(vistrailsQueryMimir("SELECT  hex(LAYER)  FROM DEMO_TIMING", true, false).csvStr)
     
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
       runServerForViztrails()

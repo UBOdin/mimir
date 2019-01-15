@@ -39,31 +39,40 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
 		}
 
 		"Not choke when training multiple columns" >> {
-			models = models ++ SeriesMissingValueModel.train(db, "SERIESREPAIR", List(
+			mimir.util.LoggerUtils.trace(
+				 //"mimir.models.SeriesMissingValueModel"
+			){
+		  models = models ++ SeriesMissingValueModel.train(db, "SERIESREPAIR", List(
 			"MARKETVAL", "GAMESPLAYED"
 			), db.table("DETECTSERIESTEST3"))
 			models.keys must contain("MARKETVAL", "GAMESPLAYED")
+			}
 		}
 
 		"Make reasonable predictions" >> {
+		   mimir.util.LoggerUtils.trace(
+				 //"mimir.sql.SparkBackend",
+		     //"mimir.models.SeriesMissingValueModel"  
+			) {
 		  queryOneColumn("SELECT ROWID() FROM DETECTSERIESTEST3 WHERE AGE IS NULL"){ result =>
   			val rowids = result.toIndexedSeq
   			val (predicted, correct) = 
   			  rowids.map { rowid => 
     				val a = predict("AGE", rowid.asString)
     				val b = trueValue("AGE", rowid.asString)
-    				println(s"${rowid.asString}->$a,$b")
+    				//println(s"${rowid.asString}->$a,$b")
     				( (rowid -> a), (rowid -> b) )
   			  }.unzip
 			
   			predicted.toMap must be equalTo(correct.toMap)
       }
+		   }
 		}
 	
     "Produce reasonable explanations" >> {
 
       // explain("AGE", "1") must contain("I'm not able to guess based on weighted mean SERIESREPAIR:AGE.AGE, so defaulting using the upper and lower bound values")
-      explain("AGE", "3") must contain("I interpolated SERIESREPAIR.AGE, ordered by SERIESREPAIR.DOB to get 23 for row '3'")
+      explain("AGE", "4") must contain("I interpolated SERIESREPAIR.AGE, ordered by SERIESREPAIR.DOB to get 23 for row '4'")
     }
   }
 }	

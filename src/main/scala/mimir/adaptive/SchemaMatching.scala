@@ -164,7 +164,10 @@ object SchemaMatching
           val metaModel = db.models.get(s"${config.schema}:META:$colName")
           val model = db.models.get(s"${config.schema}:${metaModel
             .bestGuess(0, Seq(), Seq()).asString}:$colName")
-          ProjectArg(colName,  Var(model.bestGuess(0, Seq(), Seq()).asString) )
+          ProjectArg(colName,  model.bestGuess(0, Seq(), Seq()) match {
+            case np@NullPrimitive() => np
+            case x => Var(x.asString)
+          } )  
         }}, config.query
       ))  
     } else { None }

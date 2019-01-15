@@ -257,6 +257,20 @@ class ViewManager(db:Database) extends LazyLogging {
   }
 
   /**
+   * Rebuild Adaptive Views: The first step in query rewriting.
+   *
+   * For each adaptive view in the provided query, rerun viewFor so we get 
+   *  an updated view in case of hard-coded model use in the view creation
+   *  and subsequent feedback.  
+   * @param op    The operator to rebuild adaptive views in
+   * @return      A version of the tree for `op` with refreshed View nodes.
+   */
+   def rebuildAdaptiveViews(op:Operator): Operator = op match {
+     case AdaptiveView(schema, name, oper, anno) => db.adaptiveSchemas.viewFor(schema, name).get
+     case _ => op.recur(rebuildAdaptiveViews(_))
+   }
+  
+  /**
    * Resolve views: The final step in query rewriting.
    *
    * For each view in the provided query, decide whether the view can be resolved to

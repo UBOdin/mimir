@@ -10,7 +10,9 @@ import net.sf.jsqlparser.statement.select.Select
 import mimir.exec.result.Row
 import mimir.util.JDBCUtils
 import mimir.sql.RAToSql
+import mimir.exec.mode.BestGuess
 
+//TODO:  rewrite MissingKeyLens once there is spark support
 object MissingKeyLens {
   def create(
     db: Database, 
@@ -72,9 +74,10 @@ object MissingKeyLens {
         HardTable(keys.map(key => (s"${key._1}",key._2)), (minMax._1 to minMax._2).toSeq.map( i => Seq(IntPrimitive(i))))
       })
     
+    
     val projKeys = Project(keys.map(key => (s"rght_${key._1}",key._1)).map( col => {
             ProjectArg(col._1, Var(col._2))
-        }), query)             
+        }), BestGuess.rewriteRaw(db, query)._1)             
       
 
     val missingKeysLookup = mimir.algebra.Select( IsNullExpression(Var("rght_"+keys.head._1)),

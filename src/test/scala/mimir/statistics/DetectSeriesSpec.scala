@@ -23,7 +23,10 @@ object DetectSeriesSpec
 	
 	sequential
 	
-	def testDetectSeriesof(oper: Operator) = DetectSeries.seriesOf(db, oper, 0.1).collect().toSeq
+	def testDetectSeriesof(oper: Operator) = {
+	  val (schema, df) = SparkUtils.getDataFrameWithProvFromQuery(db, oper)
+    DetectSeries.seriesOf(df, schema, 0.1).collect().toSeq
+	}
 	
 	
 	"The DetectSeriesSpec" should {

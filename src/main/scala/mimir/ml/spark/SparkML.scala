@@ -32,23 +32,7 @@ object SparkML {
     sc = Some(spark.sparkSession.sparkContext)
     sqlCtx = Some(spark)
   }
-  def getDataFrameWithProvFromQuery(db:Database, query:Operator) : (Seq[(String, Type)], DataFrame) = {
-    val prov = if(ExperimentalOptions.isEnabled("GPROM-PROVENANCE")
-        && ExperimentalOptions.isEnabled("GPROM-BACKEND"))
-      { Provenance.compileGProM(query) }
-      else { Provenance.compile(query) }
-    val oper           = prov._1
-    val provenanceCols = prov._2
-    val operWProv = Project(query.columnNames.map { name => ProjectArg(name, Var(name)) } :+
-        ProjectArg(Provenance.rowidColnameBase, 
-            Function(Provenance.mergeRowIdFunction, provenanceCols.map( Var(_) ) )), oper )
-    val dfPreOut = db.backend.execute(operWProv)
-    val dfOut = dfPreOut.schema.fields.filter(col => Seq(DateType, TimestampType).contains(col.dataType)).foldLeft(dfPreOut)((init, cur) => init.withColumn(cur.name,init(cur.name).cast(LongType)) )
-    (db.typechecker.schemaOf(operWProv).map(el => el._2 match {
-      case TDate() | TTimestamp() => (el._1, TInt())
-      case _ => el
-    }), dfOut)
-  }
+  
 }
 
 abstract class SparkML {

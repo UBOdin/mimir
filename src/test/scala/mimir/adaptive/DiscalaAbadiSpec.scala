@@ -10,7 +10,7 @@ import mimir.test._
 import mimir.util._
 
 object DiscalaAbadiSpec
-  extends SQLTestSpecification("DiscalaAbadi",Map("cleanup" -> "NO"))
+  extends SQLTestSpecification("DiscalaAbadi")
   with BeforeAll
 {
   def beforeAll =

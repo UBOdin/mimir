@@ -54,12 +54,12 @@ object JDBCUtils {
     }
 
     t match {
-      case TAny() =>        throw new SQLException(s"Can't extract TAny: $field")
+      case TAny() =>        if(!ExperimentalOptions.isEnabled("NXNULL")) (r) => NullPrimitive() else throw new SQLException(s"Can't extract TAny: $field")
       case TFloat() =>      (r) => checkNull(r, { FloatPrimitive(r.getDouble(field)) })
       case TInt() =>        (r) => checkNull(r, { IntPrimitive(r.getLong(field)) })
       case TString() =>     (r) => checkNull(r, { StringPrimitive(r.getString(field)) })
       case TRowId() =>      (r) => checkNull(r, { RowIdPrimitive(r.getString(field)) })
-      case TBool() =>       (r) => checkNull(r, { BoolPrimitive(r.getInt(field) != 0) })
+      case TBool() =>       (r) => checkNull(r, { convertBool(r.getString(field)) })
       case TType() =>       (r) => checkNull(r, { TypePrimitive(Type.fromString(r.getString(field))) })
       case TDate() =>
         dateType match {
@@ -103,6 +103,17 @@ object JDBCUtils {
     )(results)
   }
 
+  def convertBool(boolStr:String) : PrimitiveValue = {
+    if(boolStr.forall(_.isDigit)){
+      BoolPrimitive(boolStr.toLong != 0)
+    }
+    else boolStr.toLowerCase() match {
+      case "true" => BoolPrimitive( true )
+      case "false" => BoolPrimitive( false )
+      case _ => NullPrimitive()
+    }     
+  }
+  
   def convertDate(c: Calendar): DatePrimitive =
     DatePrimitive(c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DATE))
   def convertDate(d: Date): DatePrimitive =

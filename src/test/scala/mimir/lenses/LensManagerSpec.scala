@@ -38,8 +38,24 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       // to fail.
       coresModel must not be empty
 
+      //IF _c7 IS NULL THEN NULL ELSE IF CAST(_c7, int) IS NULL THEN (MIMIR_TI_WARNING_CPUSPEED_TI('CORES', _c7, 'int'))@(NULL) ELSE CAST(_c7, int) END END
+      val castExpr = Function("CAST", List(Var("_c7"), TypePrimitive(TInt())))
       resolved2.get("CORES") must be equalTo(Some(
-        Function("CAST", List(Var("_c7"), TypePrimitive(TInt())))//VGTerm(coresModel.name, coresColumnId, List(), List())))
+        Conditional(
+            IsNullExpression(Var("_c7")), 
+            NullPrimitive(), 
+            Conditional(
+                IsNullExpression(castExpr), 
+                DataWarning("MIMIR_TI_WARNING_CPUSPEED_TI", 
+                    NullPrimitive(), 
+                    Function("CONCAT", 
+                      List(
+                          StringPrimitive("Couldn't Cast [ "), 
+                          Var("_c7"), 
+                          StringPrimitive(" ] to int on row "),
+                          RowIdVar())), 
+                    Seq(StringPrimitive("CORES"), Var("_c7"), StringPrimitive("int")) ), 
+                castExpr ) )//VGTerm(coresModel.name, coresColumnId, List(), List())))
       ))
 
       coresModel.reason(0, List(IntPrimitive(coresColumnId)), List()) must contain("I guessed that MIMIR_TI_ATTR_CPUSPEED_TI.CORES was of type INT because all of the data fit")
