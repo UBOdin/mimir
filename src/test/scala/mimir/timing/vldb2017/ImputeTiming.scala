@@ -28,12 +28,13 @@ object ImputeTiming
   val runSamplerQueries = true
   val useMaterialized = false
   val useFastPathCache = true
-
+  val skipImputeTests = true
+  
   val timeout = 15.minute
 
   def beforeAll =
   {
-    if(fullReset){
+    if(fullReset && ! skipImputeTests){
       println("DELETING ALL MIMIR METADATA")
       update("DELETE FROM MIMIR_MODEL_OWNERS")
       update("DELETE FROM MIMIR_MODELS")
@@ -76,7 +77,7 @@ object ImputeTiming
       Seq("CUSTKEY")
     ))
   )
-  if(true){ "Skipping TPCH Inpute Test" >> ok } else {
+  if(skipImputeTests){ "Skipping TPCH Inpute Test" >> ok } else {
     "TPCH Impute" should {
 
       sequential
@@ -176,13 +177,14 @@ object ImputeTiming
 
         sequential
 
+        
         // CREATE LENSES
         Fragments.foreach(
           relevantTables.toSeq
         ){ createMissingValueLens(_, s"_RUN_$i") }
 
         // // INDEXES
-        if(useMaterialized){
+        /*if(useMaterialized){
           Fragments.foreach( relevantIndexes ) {
             case (baseTable, indices) => 
               val viewTable = s"${baseTable}_RUN_$i"
@@ -195,7 +197,7 @@ object ImputeTiming
                 }
               }
           }
-        } else { "No Need To Create Indexes" >> ok }
+        } else { "No Need To Create Indexes" >> ok }*/
 
         // QUERIES
         if(runBestGuessQueries){

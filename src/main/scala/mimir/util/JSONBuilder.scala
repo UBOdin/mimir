@@ -45,6 +45,10 @@ object JSONBuilder {
 	def double(content: Double): String = {
 		value(content).toString()
 	}
+	
+	def boolean(content: Boolean): String = {
+		value(content).toString()
+	}
 
 	def prim(content: PrimitiveValue) = {
 		primJs(content).toString()

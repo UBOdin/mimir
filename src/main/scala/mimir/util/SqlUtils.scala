@@ -196,8 +196,12 @@ object SqlUtils {
       case table: net.sf.jsqlparser.schema.Table =>
         List(
           ( table.getAlias(), 
-            db.backend.getTableSchema(table.getName()).
-              get.map(_._1).toList++List("ROWID")
+            (db.metadataBackend.getTableSchema(table.getName()) match {
+            case Some(tblSchmd) => tblSchmd
+            case None => db.backend.getTableSchema(table.getName()) match {
+              case Some(tblSch) => tblSch
+            }
+          }).map(_._1).toList++List("ROWID")
           )
         )
       case join: SubJoin =>
@@ -205,7 +209,10 @@ object SqlUtils {
           getSchemas(join.getJoin().getRightItem(), db)
     }
   }   
+  
+  
 }
+
 
 class ReSourceColumns(s: String) extends ExpressionRewrite {
   override def visit(col: Column): Unit = {

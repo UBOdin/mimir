@@ -26,6 +26,8 @@ object TextUtils extends LazyLogging {
     }
   }
 
+  //val dateRegexp = """(\d+)[\\\/-](\d+)[\\\/-](\d+)""".r
+  //val timestampRegexp = """(\d+)[\\\/-](\d+)[\\\/-](\d+) (\d+):(\d+):(\d+|\d+[.]\d*)""".r
   val dateRegexp = "(\\d+)-(\\d+)-(\\d+)".r
   val timestampRegexp = "(\\d+)-(\\d+)-(\\d+) (\\d+):(\\d+):(\\d+|\\d+[.]\\d*)".r
   val intervalRegexp = "P(\\d+)Y(\\d+)M(\\d+)W(\\d+)DT(\\d+)H(\\d+)M(\\d+|\\d+[.]\\d*)S".r

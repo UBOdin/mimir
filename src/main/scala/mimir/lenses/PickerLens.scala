@@ -63,19 +63,15 @@ object PickerLens {
       case Seq(BoolPrimitive(b)) => b
     }
     
-    def sparkMLInst() : SparkML = {
-      Classification
-    }
     
-    val useClassifier = args.foldLeft(None:Option[(() => SparkML,SparkML.SparkModelGenerator)])((init, expr) => init match { 
+    val useClassifier = args.foldLeft(None:Option[String])((init, expr) => init match { 
       case None => expr match {
         case Function("UEXPRS", exprs) => None
-        case _ => Some((sparkMLInst _, Classification.DecisionTreeMulticlassModel()))
+        case _ => Some("Classification")
       }
       case s@Some(modelGen) => s
     })
-    val pickerModel = new PickerModel(name+"_PICKER_MODEL:"+pickFromColumns.mkString("_"), pickToCol, pickFromColumns, pickerColTypes, useClassifier, classifyUpFront, query) 
-    pickerModel.reconnectToDatabase(db)
+    val pickerModel = PickerModel.train(db, name+"_PICKER_MODEL:"+pickFromColumns.mkString("_"), pickToCol, pickFromColumns, pickerColTypes, useClassifier, classifyUpFront, query) 
     
     lazy val expressionSubstitutions : (Expression) => Expression = (expr) => {
     expr match {

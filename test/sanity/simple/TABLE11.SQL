@@ -1,4 +1,1 @@
-CREATE TABLE R ( A int, B int );
-CREATE TABLE S ( B int, C int );
-
 SELECT * FROM R NATURAL JOIN S;

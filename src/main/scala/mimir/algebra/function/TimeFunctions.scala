@@ -96,6 +96,27 @@ object TimeFunctions
       },
       { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
     )
-
+    fr.register("SECOND", 
+      { 
+        case Seq(TimestampPrimitive(_, _, _, _, _, ss, _)) => ???
+        case Seq(DatePrimitive(_, _, _)) => ???
+        case Seq(IntervalPrimitive(p)) => ???
+        case Seq(x) => ???
+        case Seq() => throw new Exception(s"EXTRACT needs an argument")
+        case _ => throw new Exception("Too many arguments to EXTRACT")
+      },
+      { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
+    )
+    fr.register("YEAR", 
+      { 
+        case Seq(TimestampPrimitive(_, _, _, _, _, ss, _)) => ???
+        case Seq(DatePrimitive(_, _, _)) => ???
+        case Seq(IntervalPrimitive(p)) => ???
+        case Seq(x) => ???
+        case Seq() => throw new Exception(s"EXTRACT needs an argument")
+        case _ => throw new Exception("Too many arguments to EXTRACT")
+      },
+      { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
+    )
   }
 }

@@ -37,8 +37,8 @@ class ModelManager(db:Database)
    */
   def init(): Unit =
   {
-    if(db.backend.getTableSchema(modelTable).isEmpty){
-      db.backend.update(s"""
+    if(db.metadataBackend.getTableSchema(modelTable).isEmpty){
+      db.metadataBackend.update(s"""
         CREATE TABLE $modelTable(
           name varchar(100), 
           encoded text,
@@ -47,8 +47,8 @@ class ModelManager(db:Database)
         )
       """)
     }
-    if(db.backend.getTableSchema(ownerTable).isEmpty){
-      db.backend.update(s"""
+    if(db.metadataBackend.getTableSchema(ownerTable).isEmpty){
+      db.metadataBackend.update(s"""
         CREATE TABLE $ownerTable(
           model varchar(100), 
           owner varchar(100)
@@ -64,7 +64,7 @@ class ModelManager(db:Database)
   {
     val (serialized,decoder) = model.serialize
 
-    db.backend.update(s"""
+    db.metadataBackend.update(s"""
       INSERT OR REPLACE INTO $modelTable(name, encoded, decoder)
              VALUES (?, ?, ?)
     """, List(
@@ -80,7 +80,7 @@ class ModelManager(db:Database)
    */
   def drop(name:String): Unit =
   {
-    db.backend.update(s"""
+    db.metadataBackend.update(s"""
       DELETE FROM $modelTable WHERE name = ?
     """,List(StringPrimitive(name)))
     cache.remove(name)
@@ -108,7 +108,7 @@ class ModelManager(db:Database)
   
   def getAllModels() : Seq[Model] =
   {
-    db.backend.resultRows(s"""
+    db.metadataBackend.resultRows(s"""
       SELECT name FROM $modelTable
     """).map( row => get(row(0).asString))
   }
@@ -128,7 +128,7 @@ class ModelManager(db:Database)
    */
   def associate(model:String, owner:String): Unit =
   {
-    db.backend.update(s"""
+    db.metadataBackend.update(s"""
       INSERT INTO $ownerTable(model, owner) VALUES (?,?)
     """, List(
       StringPrimitive(model),
@@ -142,7 +142,7 @@ class ModelManager(db:Database)
    */
   def disassociate(model:String, owner:String): Unit =
   {
-    db.backend.update(s"""
+    db.metadataBackend.update(s"""
       DELETE FROM $ownerTable WHERE model = ? AND owner = ?
     """, List(
       StringPrimitive(model),
@@ -160,7 +160,7 @@ class ModelManager(db:Database)
     logger.debug(s"Drop Owner: $owner")
     val models = associatedModels(owner)
     logger.debug("Associated: $models")
-    db.backend.update(s"""
+    db.metadataBackend.update(s"""
       DELETE FROM $ownerTable WHERE owner = ?
     """, List(
       StringPrimitive(owner)
@@ -176,7 +176,7 @@ class ModelManager(db:Database)
    */
   def associatedModels(owner: String): Seq[String] =
   {
-    db.backend.resultRows(s"""
+    db.metadataBackend.resultRows(s"""
       SELECT model FROM $ownerTable WHERE owner = ?
     """, List(
       StringPrimitive(owner)
@@ -188,7 +188,7 @@ class ModelManager(db:Database)
    */
   def modelOwner(model: String): Option[String] =
   {
-    db.backend.resultRows(s"""
+    db.metadataBackend.resultRows(s"""
       SELECT owner FROM $ownerTable WHERE model = ?
     """, List(
       StringPrimitive(model)
@@ -204,7 +204,7 @@ class ModelManager(db:Database)
   def prefetch(model: String): Unit =
   {
     prefetchWithRows(
-      db.backend.resultRows(s"""
+      db.metadataBackend.resultRows(s"""
         SELECT decoder, encoded FROM $modelTable WHERE name = ?
       """, List(
         StringPrimitive(model)
@@ -218,7 +218,7 @@ class ModelManager(db:Database)
   def prefetchForOwner(owner:String): Unit =
   {
     prefetchWithRows(
-      db.backend.resultRows(s"""
+      db.metadataBackend.resultRows(s"""
         SELECT m.decoder, m.encoded 
         FROM $modelTable m, $ownerTable o
         WHERE m.name = o.name 
@@ -251,7 +251,7 @@ class ModelManager(db:Database)
   private def garbageCollectIfNeeded(model: String): Unit =
   {
     val otherOwners = 
-      db.backend.resultRows(s"""
+      db.metadataBackend.resultRows(s"""
         SELECT * FROM $ownerTable WHERE model = ?
       """, List(
         StringPrimitive(model)

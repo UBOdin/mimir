@@ -8,6 +8,8 @@ import mimir.algebra._
 import mimir.util._
 import mimir.serialization.Json
 import mimir.Database
+import org.apache.spark.sql.Dataset
+import org.apache.spark.sql.Encoders
 
 /**
  * A model representing a key-repair choice.
@@ -28,12 +30,11 @@ class RepairKeyModel(
 ) 
   extends Model(name)
   with FiniteDiscreteDomain 
-  with NeedsReconnectToDatabase 
   with SourcedFeedbackT[List[PrimitiveValue]]
 {
   
-  @transient var db:Database = null
-
+  var domainCache: Dataset[(PrimitiveValue, Double)] = null
+  
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) : List[PrimitiveValue] = args.toList
   
   def varType(idx: Int, args: Seq[Type]): Type = targetType
@@ -66,37 +67,39 @@ class RepairKeyModel(
   def isAcknowledged(idx: Int, args: Seq[PrimitiveValue]): Boolean =
     hasFeedback(idx, args)
 
-
-  final def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
-  {
-    if(hints.isEmpty){
-      db.query(
-        OperatorUtils.projectColumns(List(target) ++ scoreCol, 
+  def trainDomain(db:Database) = {
+    val mop = OperatorUtils.projectColumns(List(target) ++ scoreCol, 
           Select(
             ExpressionUtils.makeAnd(
-              keys.map(_._1).zip(args).map { 
+              keys.map(col => (col._1,Var(col._1))).map { 
                 case (k,v) => Comparison(Cmp.Eq, Var(k), v)
               }
             ),
             source
           )
         )
-      ){ _.map { row => 
-          ( row(0), 
+     val mopSchema = db.typechecker.schemaOf(mop)
+    domainCache = db.backend.execute(mop).map( row => {
+          ( SparkUtils.convertField(mopSchema(0)._2, row, 0, TString()), 
             scoreCol match { 
               case None => 1.0; 
-              case Some(_) => row(1).asDouble
+              case Some(_) => row.getDouble(1)
             }
           )
-        }.toIndexedSeq
-      }
+        })(org.apache.spark.sql.Encoders.kryo[(PrimitiveValue,Double)])
+  }
+    
+  final def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
+  {
+    if(hints.isEmpty){
+      domainCache.collect().toIndexedSeq
     } else {
       val possibilities = 
         Json.parse(hints(0).asString) match {
           case JsArray(values) => values.map { Json.toPrimitive(targetType, _)  }
           case _ => throw ModelException(s"Invalid Value Hint in Repair Model $name: ${hints(0).asString}")
         }
-
+      
       val possibilitiesWithProbabilities =
         if(hints.size > 1 && !hints(1).isInstanceOf[NullPrimitive]){
           possibilities.zip(
@@ -121,15 +124,25 @@ class RepairKeyModel(
     }
   }
   
-  def reconnectToDatabase(db: Database) = { 
-    this.db = db 
-  }
-
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Double = {
     getFeedback(idx,args) match {
       case Some(choice) => 1.0
       case None => getDomain(idx, args, hints).sortBy(-_._2).head._1.asDouble / getDomain(idx, args, hints).map(_._2).sum
     }
   }
-
+  
+  def getPrimitive(t:Type, value:Any) = t match {
+    case TInt() => IntPrimitive(value.asInstanceOf[String].toLong)
+    case TFloat() => FloatPrimitive(value.asInstanceOf[Double])
+    //case TDate() => DatePrimitive.(value.asInstanceOf[Long])
+    //case TTimestamp() => Primitive(value.asInstanceOf[Long])
+    case TString() => StringPrimitive(value.asInstanceOf[String])
+    case TBool() => BoolPrimitive(value.asInstanceOf[Boolean])
+    case TRowId() => RowIdPrimitive(value.asInstanceOf[String])
+    case TType() => TypePrimitive(Type.fromString(value.asInstanceOf[String]))
+    //case TAny() => NullPrimitive()
+    //case TUser(name) => name.toLowerCase
+    //case TInterval() => Primitive(value.asInstanceOf[Long])
+    case _ => StringPrimitive(value.asInstanceOf[String])
+  }
 }

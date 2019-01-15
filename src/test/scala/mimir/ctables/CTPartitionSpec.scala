@@ -34,7 +34,7 @@ object CTPartitionSpec
 
   val withRowId = Seq(("ROWID", RowIdVar(), TRowId()))
 
-  def db = Database(null);
+  def db = Database(null, null);
   def expr = ExpressionParser.expr _
 
   def partition(x:Operator) = simplify(CTPartition.partition(x))

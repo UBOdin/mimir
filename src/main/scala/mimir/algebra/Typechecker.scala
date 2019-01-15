@@ -146,6 +146,7 @@ class Typechecker(
 						registry.get(model).varType(idx, args.map(recur(_)))
 					case None => throw new RAException("Need Model Manager to typecheck expressions with VGTerms")
 				}
+			case DataWarning(_, v, _, _) => recur(v)
     }
   }
 
@@ -244,7 +245,7 @@ class Typechecker(
 				val rSchema = schemaOf(rhs);
 
 				if(!(lSchema.map(_._1).toSet.equals(rSchema.map(_._1).toSet))){
-					throw new RAException("Schema Mismatch in Union\n"+o);
+					throw new RAException("Schema Mismatch in Union\n"+o+s"$lSchema <> $rSchema");
 				}
 				lSchema
 
@@ -295,6 +296,10 @@ object Typechecker
 			case (TFloat(), TInt()) => Some(TFloat())
 			case (TDate(), TTimestamp()) => Some(TTimestamp())
 			case (TTimestamp(), TDate()) => Some(TTimestamp())
+			case (TRowId(), TString()) => Some(TRowId())
+			case (TString(), TRowId()) => Some(TRowId())
+			case (TRowId(), TInt()) => Some(TInt())
+			case (TInt(), TRowId()) => Some(TInt())
 			case (TUser(name), _) => leastUpperBound(TypeRegistry.baseType(name), b)
 			case (_, TUser(name)) => leastUpperBound(a, TypeRegistry.baseType(name))
 			case _ => return None

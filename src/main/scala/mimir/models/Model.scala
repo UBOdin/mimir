@@ -118,9 +118,17 @@ abstract class Model(val name: String) extends Serializable {
    * @return      A 2-tuple including the serialized encoding, and the name of 
    *              a deserializer to use when decoding the encoding.
    */
-  def serialize(): (Array[Byte], String) =
-    (SerializationUtils.serialize(this), "JAVA")
-
+  def serialize(): (Array[Byte], String) = try {
+      (SerializationUtils.serialize(this), "JAVA")
+  } catch {
+    case t: Throwable => {
+      println("------------------------------------ Serialization Error --------------------------------------")
+      println( t.getMessage )
+      t.printStackTrace()
+      println("------------------------------------")
+      throw t;
+    }
+  }
   /**
     * Return confidence on a scale of 0 to 1
     * @param idx   The index of the variable family to record feedback for

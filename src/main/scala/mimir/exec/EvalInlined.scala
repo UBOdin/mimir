@@ -205,6 +205,15 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
           case (Cmp.Eq, TDate(), TDate())           => compileBinary(lhs, rhs, compileForDate) { _.equals(_) }
           case (Cmp.Eq, TTimestamp(), TTimestamp()) => compileBinary(lhs, rhs, compileForTimestamp) { _.equals(_) }
           case (Cmp.Eq, TRowId(), TRowId())         => compileBinary(lhs, rhs, compileForRowId) { _.equals(_) }
+          //TODO: remove this temporary hack to handle the way vizier is comparing rowids in views (and fix vizier)
+          case (Cmp.Eq, TString(), TRowId())        => compileBinary(lhs match {
+            case StringPrimitive(str) => RowIdPrimitive(str)
+            case _ => throw new RAException(s"Invalid comparison: $e")
+          }, rhs, compileForRowId) { _.equals(_) }
+          case (Cmp.Eq, TRowId(), TString())        => compileBinary(lhs, rhs match {
+            case StringPrimitive(str) => RowIdPrimitive(str)
+            case _ => throw new RAException(s"Invalid comparison: $e")
+          }, compileForRowId) { _.equals(_) }
           case (Cmp.Eq, _, _) 
               => throw new RAException(s"Invalid comparison: $e")
           case (Cmp.Neq, _, _)                      => compileForBool(Not(Comparison(Cmp.Eq, lhs, rhs)))
@@ -355,12 +364,28 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
       }
       case Not(ne) => compileForIsNull(ne)
       case Conditional(c, t, e) => {
-        compileForIsNull(
-          Arithmetic(Arith.Or, 
-            Arithmetic(Arith.And, c, t),
-            Arithmetic(Arith.And, ExpressionUtils.makeNot(c), e)
-          )
-        )
+        compileForIsNull(c) match {
+          case Left(true) => Left(true)
+          case Left(false) => 
+            Right(
+              compileForBool(
+                Conditional(c, IsNullExpression(t), IsNullExpression(e))
+              )
+            )
+          case Right(cIsNullWhen) => 
+            Right(
+              or(
+                cIsNullWhen,
+                compileForBool(
+                  Conditional(
+                    c,
+                    IsNullExpression(t),
+                    IsNullExpression(e)
+                  )
+                )
+              )
+            )
+        }
       }
       case f:Function => {
         val v = compile(f);
@@ -379,6 +404,8 @@ class EvalInlined[T](scope: Map[String, (Type, (T => PrimitiveValue))], db: Data
         throw new RAException("Error: ROWIDVars should have been compiled out")
       case _:VGTerm => 
         throw new RAException("Error: VGTerms should have been compiled out")
+      case _:DataWarning => 
+        throw new RAException("Error: Warnings should have been compiled out")
     }
   }
   

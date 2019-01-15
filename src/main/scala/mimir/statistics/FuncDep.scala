@@ -6,7 +6,7 @@ import java.util
 import java.util.TreeMap
 import java.util.ArrayList
 import java.util.HashMap
-import javax.swing.{JFrame, JPanel, JScrollPane}
+import javax.swing.{JFrame, JPanel, JScrollPane, WindowConstants}
 import java.awt.{BasicStroke, Color, Dimension, Paint, Rectangle, Stroke}
 import java.sql.ResultSet
 
@@ -857,7 +857,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
 
     //Sets the viewing area size
     var frame: JFrame = new JFrame("Simple Graph View");
-    frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+    frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
     frame.getContentPane().add(vv);
     frame.pack();
     frame.setVisible(true);
@@ -911,7 +911,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
   def serializeTo(db: mimir.Database, name: String): Unit =
   {
     FuncDep.initBackstore(db)
-    db.backend.update(
+    db.metadataBackend.update(
       "INSERT OR REPLACE INTO "+FuncDep.BACKSTORE_TABLE_NAME+"(name, data) VALUES (?,?)", 
       List(StringPrimitive(name), StringPrimitive(SerializationUtils.b64encode(serialize())))
     )
@@ -1003,8 +1003,8 @@ object FuncDep {
 
   def initBackstore(db: mimir.Database)
   {
-    if(!db.tableExists(FuncDep.BACKSTORE_TABLE_NAME)){
-      db.backend.update(
+    if(!db.metadataTableExists(FuncDep.BACKSTORE_TABLE_NAME)){
+      db.metadataBackend.update(
         "CREATE TABLE "+FuncDep.BACKSTORE_TABLE_NAME+"(name varchar(40), data blob, PRIMARY KEY(name))"
       )
     }
@@ -1018,7 +1018,7 @@ object FuncDep {
   def deserialize(db: mimir.Database, name: String): FuncDep =
   {
     val blob = 
-      db.backend.resultValue(
+      db.metadataBackend.resultValue(
         "SELECT data FROM "+BACKSTORE_TABLE_NAME+" WHERE name=?", 
         List(StringPrimitive(name))
       ).asString

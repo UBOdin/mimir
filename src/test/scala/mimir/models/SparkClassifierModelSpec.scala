@@ -21,34 +21,38 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
   }
   def trueValue(col:String, row:String): PrimitiveValue = {
     val t = db.tableSchema("CPUSPEED").get.find(_._1.equals(col)).get._2
-    JDBCUtils.extractAllRows(
-      db.backend.execute(s"SELECT $col FROM CPUSPEED WHERE ROWID=$row"),
-      List(t)
-    ).next.head
+    db.query(db.table("CPUSPEED").addColumn(("ROWID", RowIdVar())).project(col, "ROWID").filter(Var("ROWID").eq(mimir.algebra.Cast(TRowId(), StringPrimitive(row)))))(
+      result => result.toList.head(0)
+    )
   }
 
   "The SparkClassifier Model" should {
-
+    /*db.loadTable("CPUSPEED", new File("test/data/CPUSpeed.csv"))
+    val inputOp = db.table("CPUSPEED").rename(
+          ("PROCESSOR_NUMBER","PROCESSORID"), 
+          ("TECH_MICRON","TECHINMICRONS"), 
+          ("CPU_SPEED_GHZ","CPUSPEEDINGHZ"), 
+          ("BUS_SPEED_MHZ","BUSSPEEDINMHZ"), 
+          ("L2_CACHE_SIZE_KB","L2CACHEINKB"), 
+          ("L3_CACHE_SIZE_MB","L3CACHEINMB"))*/
+    
     "Be trainable" >> {
-      update("""
-        CREATE TABLE CPUSPEED(
-          PROCESSORID string,
-          FAMILY string,
-          TECHINMICRONS decimal,
-          CPUSPEEDINGHZ decimal,
-          BUSSPEEDINMHZ string,
-          L2CACHEINKB int,
-          L3CACHEINMB decimal,
-          CORES int,
-          EM64T string,
-          HT string,
-          VT string,
-          XD string,
-          SS string,
-          NOTES string
-        )
-      """)
-      loadCSV("CPUSPEED", new File("test/data/CPUSpeed.csv"))
+      loadCSV("CPUSPEED",  
+      Seq(("PROCESSORID", "string"),
+          ("FAMILY", "string"),
+          ("TECHINMICRONS", "float"),
+          ("CPUSPEEDINGHZ", "float"),
+          ("BUSSPEEDINMHZ", "string"),
+          ("L2CACHEINKB", "int"),
+          ("L3CACHEINMB", "float"),
+          ("CORES", "int"),
+          ("EM64T", "string"),
+          ("HT", "string"),
+          ("VT", "string"),
+          ("XD", "string"),
+          ("SS", "string"),
+          ("NOTES", "string")), new File("test/data/CPUSpeed.csv"))
+     
       models = models ++ SparkClassifierModel.train(db, "CPUSPEEDREPAIR", List(
         "BUSSPEEDINMHZ"
       ), db.table("CPUSPEED"))
@@ -73,6 +77,7 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
               trueValue("CORES", rowid.asString)
             )
           }
+        //println(predictions.toList)
         val successes = 
           predictions.
             map( x => if(x._1.equals(x._2)){ 1 } else { 0 } ).
@@ -82,7 +87,6 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
     }
 
     "Produce reasonable explanations" >> {
-
       explain("BUSSPEEDINMHZ", "3") must not contain("The classifier isn't willing to make a guess")
       explain("TECHINMICRONS", "22") must not contain("The classifier isn't willing to make a guess")
       explain("CORES", "20") must not contain("The classifier isn't willing to make a guess")
@@ -99,6 +103,7 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
         db.table("RATINGS1")
       )("RATING")
       val nullRow = querySingleton("SELECT ROWID() FROM RATINGS1 WHERE RATING IS NULL")
+      //println(nullRow)
       val guess = model.bestGuess(idx, List(nullRow), List()) 
       guess must beAnInstanceOf[FloatPrimitive] 
       guess must not be equalTo(FloatPrimitive(0.0))

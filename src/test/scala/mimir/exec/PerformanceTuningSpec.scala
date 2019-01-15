@@ -4,6 +4,9 @@ import org.specs2.mutable._
 import org.specs2.specification._
 
 import mimir.test._
+import mimir.algebra.HardTable
+import mimir.algebra.TInt
+import mimir.algebra.IntPrimitive
 
 object PerformanceTuningSpec 
   extends SQLTestSpecification("PerformanceTuningSpec")
@@ -14,32 +17,19 @@ object PerformanceTuningSpec
   def inputSize = 1000000
 
   def beforeAll = {
-    db.backend.update(s"""
-      CREATE TEMPORARY TABLE TEST_SEQUENCE AS
-        WITH RECURSIVE generate_series(value) AS (
-          SELECT 1 UNION ALL 
-          SELECT value+1 
-            FROM generate_series 
-            WHERE value+1 <= $inputSize
-        )
-        SELECT cast(value as int) as value FROM generate_series;
-    """)
+    
   }
 
   "ProjectionResultIterator" should {
 
     "Not have absurdly high extraction costs" >> {
       val queryStartTime = getTime
-      db.query("""
-        SELECT 
-          value                                AS A, 
-          value*10                             AS B, 
-          (value+21)*100                       AS C, 
-          random()*value                       AS D, 
-          CASE WHEN (value*value*value) < 100 
-               THEN value*50 ELSE random() END AS E 
-        FROM TEST_SEQUENCE;
-      """) { results =>
+      db.query(
+        HardTable(
+          Seq(("value",TInt())), 
+          Seq((1 to inputSize toSeq).map(IntPrimitive(_)))
+        )
+      ) { results =>
         val queryRunTime = (getTime - queryStartTime)
         var count = 0;
 

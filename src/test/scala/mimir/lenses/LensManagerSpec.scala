@@ -17,8 +17,7 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
   "The Lens Manager" should {
 
     "Be able to create and query missing value lenses" >> {
-      update("CREATE TABLE R(A int, B int, C int);")
-      loadCSV("R", new File("test/r_test/r.csv"))
+      loadCSV("R", Seq(("A", "int"), ("B", "int"), ("C", "int")), new File("test/r_test/r.csv"))
       queryOneColumn("SELECT B FROM R"){ _.toSeq should contain(NullPrimitive()) }
       update("CREATE LENS SANER AS SELECT * FROM R WITH MISSING_VALUE('B')")
       queryOneColumn("SELECT B FROM SANER"){ _.toSeq should not contain(NullPrimitive()) }
@@ -39,8 +38,24 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       // to fail.
       coresModel must not be empty
 
+      //IF _c7 IS NULL THEN NULL ELSE IF CAST(_c7, int) IS NULL THEN (MIMIR_TI_WARNING_CPUSPEED_TI('CORES', _c7, 'int'))@(NULL) ELSE CAST(_c7, int) END END
+      val castExpr = Function("CAST", List(Var("_c7"), TypePrimitive(TInt())))
       resolved2.get("CORES") must be equalTo(Some(
-        Function("CAST", List(Var("COLUMN_7"), TypePrimitive(TInt())))//VGTerm(coresModel.name, coresColumnId, List(), List())))
+        Conditional(
+            IsNullExpression(Var("_c7")), 
+            NullPrimitive(), 
+            Conditional(
+                IsNullExpression(castExpr), 
+                DataWarning("MIMIR_TI_WARNING_CPUSPEED_TI", 
+                    NullPrimitive(), 
+                    Function("CONCAT", 
+                      List(
+                          StringPrimitive("Couldn't Cast [ "), 
+                          Var("_c7"), 
+                          StringPrimitive(" ] to int on row "),
+                          RowIdVar())), 
+                    Seq(StringPrimitive("CORES"), Var("_c7"), StringPrimitive("int")) ), 
+                castExpr ) )//VGTerm(coresModel.name, coresColumnId, List(), List())))
       ))
 
       coresModel.reason(0, List(IntPrimitive(coresColumnId)), List()) must contain("I guessed that MIMIR_TI_ATTR_CPUSPEED_TI.CORES was of type INT because all of the data fit")
@@ -56,7 +71,7 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
 
     "Clean up after a DROP LENS" >> {
 
-      queryOneColumn(s"""
+      queryOneColumnMetadata(s"""
         SELECT model FROM ${db.models.ownerTable}
         WHERE owner = 'LENS:SANER'
       """){ _.toSeq must not beEmpty }
@@ -67,14 +82,14 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       update("DROP LENS SANER");
       table("SANER") must throwA[Exception]
 
-      queryOneColumn(s"""
+      queryOneColumnMetadata(s"""
         SELECT model FROM ${db.models.ownerTable}
         WHERE owner = 'LENS:SANER'
       """){ _.toSeq must beEmpty }
 
       for(model <- modelNames){
         val modelDefn = 
-          queryOneColumn(s"""
+          queryOneColumnMetadata(s"""
             SELECT * FROM ${db.models.modelTable} WHERE name = '$model'
           """){ _.toSeq }
         modelDefn must beEmpty;

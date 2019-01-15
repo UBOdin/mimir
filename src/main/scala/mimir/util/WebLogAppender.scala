@@ -14,8 +14,18 @@ import scala.collection.JavaConversions._
 import ch.qos.logback.classic.Level
 import mimir.util.HttpRocketClient._
 import ch.qos.logback.classic.spi.ILoggingEvent
+import javax.net.ssl.HttpsURLConnection
+import java.net.URL
+import java.io.DataOutputStream
+import java.io.DataInputStream
 
 class WebLogAppender extends ch.qos.logback.core.Appender[ILoggingEvent] {
+  
+  def this(logHookUrl: String, hookToken: String) = {
+    this()
+    hookUrl = logHookUrl
+    token = hookToken
+  }
 
   private val loggingEventQueue: BlockingQueue[ILoggingEvent] =
     new LinkedBlockingQueue[ILoggingEvent]()
@@ -72,7 +82,11 @@ class WebLogAppender extends ch.qos.logback.core.Appender[ILoggingEvent] {
 
   private def processEvent(loggingEvent: ILoggingEvent): Unit = {
     if (loggingEvent != null) {
-      val messageAttachment = s"${loggingEvent.getMessage.toString()}\n${loggingEvent.getThrowableProxy.getStackTraceElementProxyArray.mkString("\n").replaceAll("\\$", "")}"
+      val messageAttachment = s"${loggingEvent.getMessage.toString()}\n${
+        Option(loggingEvent.getThrowableProxy) match {
+          case Some(proxy) =>  proxy.getStackTraceElementProxyArray.mkString("\n").replaceAll("\\$", "")
+          case None => "" 
+        }}"
       val attachments = Seq(Attachment(messageAttachment, loggingEvent.getLevel match {
         case Level.ERROR => Color.Red
         case Level.WARN => Color.Yellow
@@ -191,23 +205,23 @@ object HttpRocketClient {
   }
   
   def apply(hooksUrl:String, token:String, notify: Seq[Notify], msg: String, attachments: Seq[Attachment]) = {
-    import dispatch._
-
-    import scala.concurrent.ExecutionContext.Implicits.global
-
-    val body = PayloadMapper.toBody(notify, msg, attachments)
-
-    println(s"HttpRocketClient: posting log to $hooksUrl$token")
     
-    val response = Http.default(url(hooksUrl + token)
-      .POST
-      .setBody(body)
-      .setContentType(jsonContentType, Charset.defaultCharset)).either
-    response.map {
-      case Left(t) => Left(Error.Exception(t))
-      case Right(r) => if (isResponseSuccess(r.getStatusCode)) Right(())
-                       else Left(Error.UnexpectedStatusCode(r.getStatusCode, r.getResponseBody))
-    }
+    val body = PayloadMapper.toBody(notify, msg, attachments)
+    println(s"HttpRocketClient: posting log to $hooksUrl$token") 
+    val myurl = new URL(hooksUrl+token)
+    val con = myurl.openConnection().asInstanceOf[HttpsURLConnection]
+    con.setRequestMethod("POST")
+    con.setRequestProperty("Content-length", String.valueOf(body.length))
+    con.setRequestProperty("Content-Type", jsonContentType)
+    con.setDoOutput(true)
+    con.setDoInput(true)
+    val output = new DataOutputStream(con.getOutputStream)
+    output.writeBytes(body)
+    output.close()
+    val input = new DataInputStream(con.getInputStream)
+    var c: Int = input.read()
+    while (c != -1) { c = input.read() }
+    input.close()
   }
   
 }

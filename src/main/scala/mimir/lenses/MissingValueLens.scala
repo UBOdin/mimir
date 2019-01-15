@@ -7,7 +7,7 @@ import java.util
 import mimir.algebra._
 import mimir.ctables._
 import mimir.util.RandUtils
-import mimir.{Analysis, Database}
+import mimir.Database
 import mimir.models._
 import mimir.parser.ExpressionParser
 
@@ -22,7 +22,7 @@ object MissingValueLens {
     arg match {
       case Var(v) => Seq( (v.toUpperCase, Var(v.toUpperCase).isNull.not) )
       case StringPrimitive(exprString) => {
-        getConstraint(ExpressionParser.expr(exprString))
+        getConstraint(ExpressionParser.expr(exprString.replaceAll("''", "'")))
       }
       case e if Typechecker.trivialTypechecker.typeOf(e, (_:String) => TAny() ).equals(TBool()) => {
         ExpressionUtils.getColumns(arg).toSeq match {

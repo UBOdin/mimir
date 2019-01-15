@@ -20,10 +20,8 @@ object RepairKeySpec
 
   def beforeAll = 
   {
-    update("CREATE TABLE R(A int, B int, C int)")
-    loadCSV("R", new File("test/r_test/r.csv"))
-    update("CREATE TABLE U(A int, B int, C int)")
-    loadCSV("U", new File("test/r_test/u.csv"))
+    loadCSV("R",Seq(("A","int"),("B","int"),("C","int")), new File("test/r_test/r.csv"))
+    loadCSV("U",Seq(("A","int"),("B","int"),("C","int")), new File("test/r_test/u.csv"))
     loadCSV("FD_DAG", new File("test/repair_key/fd_dag.csv"))
     loadCSV("twitter100Cols10kRowsWithScore", new File("test/r_test/twitter100Cols10kRowsWithScore.csv"))
     loadCSV("cureSourceWithScore", new File("test/r_test/cureSourceWithScore.csv"))
@@ -49,7 +47,7 @@ object RepairKeySpec
           row.isColDeterministic("C"),
           row.isDeterministic()
         )
-      }.toMap[Int, (Int,Int, Boolean, Boolean, Boolean, Boolean)] }
+      }.toMap[Int, (Int ,Int, Boolean, Boolean, Boolean, Boolean)] }
 
       result.keys must contain(eachOf(1, 2, 4))
       result must have size(3)
@@ -184,22 +182,12 @@ object RepairKeySpec
   "RepairKey-FastPath" should {
     "Load Customer Account Balances" >> {
       if(PDBench.isDownloaded){
-        update("""
-          CREATE TABLE CUST_ACCTBAL_WITHDUPS(
-            TUPLE_ID int,
-            WORLD_ID int,
-            VAR_ID int,
-            acctbal float
-          )
-        """)
-        LoadCSV.handleLoadTable(db, 
-          "CUST_ACCTBAL_WITHDUPS", 
-          new File("test/pdbench/cust_c_acctbal.tbl"), 
-          Map(
-            "HEADER" -> "NO",
-            "DELIMITER" -> "|"
-          )
-        )
+        LoadCSV.handleLoadTableRaw(db, "CUST_ACCTBAL_WITHDUPS",
+            Some(Seq(("TUPLE_ID", TInt()), ("WORLD_ID", TInt()), ("VAR_ID", TInt()), ("ACCTBAL",TFloat()))), 
+            new File("test/pdbench/cust_c_acctbal.tbl"),  
+            Map("DELIMITER" -> "|","ignoreLeadingWhiteSpace"->"true",
+                "ignoreTrailingWhiteSpace"->"true", "mode" -> "DROPMALFORMED", "header" -> "false") )
+        
         update("""
           CREATE LENS CUST_ACCTBAL_CLASSIC
           AS SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_WITHDUPS
@@ -248,10 +236,10 @@ object RepairKeySpec
           WHERE num_instances = 1
         """).asLong must be equalTo(148494l)
 
-        db.backend.resultValue("""
+        db.query("""
           SELECT COUNT(*) FROM CUST_ACCTBAL_WITHDUPS
           WHERE WORLD_ID = 1
-        """).asLong must be equalTo(150000l)
+        """)( result => result.toList.head(0).asLong) must be equalTo(150000l)
       } else {
         skipped("Skipping FastPath tests (Run `sbt datasets` to download required data)"); ko
       }
@@ -280,10 +268,10 @@ object RepairKeySpec
 
     "Produce the same results under selection" >> {
       if(PDBench.isDownloaded){
-        db.backend.resultValue("""
+        db.query("""
           SELECT COUNT(*) FROM CUST_ACCTBAL_WITHDUPS
           WHERE WORLD_ID = 1 and acctbal < 0
-        """).asLong must be equalTo(13721l)
+        """)( result => result.toList.head(0).asLong) must be equalTo(13721l)
 
         Timer.monitor("QUERY_FASTPATH"){
           queryOneColumn("""

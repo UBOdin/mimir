@@ -1,27 +1,18 @@
-package mimir.sql;
+package mimir.sql
 
-import java.sql._
-
-import mimir.Database
 import mimir.algebra._
-import mimir.util.JDBCUtils
-import net.sf.jsqlparser.statement.select.{Select, SelectBody};
+import org.apache.spark.sql.DataFrame
+import mimir.Database
 
-abstract class Backend {
+abstract class RABackend(val database:String) {
   def open(): Unit
 
-  def execute(sel: String): ResultSet
-  def execute(sel: String, args: Seq[PrimitiveValue]): ResultSet
-  def execute(sel: Select): ResultSet = {
-    execute(sel.toString());
-  }
-  def execute(selB: SelectBody): ResultSet = {
-    val sel = new Select();
-    sel.setSelectBody(selB);
-    return execute(sel);
-  }
+  def materializeView(name:String): Unit
+  def createTable(tableName:String, oper:Operator): Unit
+  def execute(compiledOp: Operator): DataFrame
+  def dropDB():Unit
 
-  def resultRows(sel: String):Seq[Seq[PrimitiveValue]] = 
+  /*def resultRows(sel: String):Seq[Seq[PrimitiveValue]] = 
     JDBCUtils.extractAllRows(execute(sel)).flush
   def resultRows(sel: String, args: Seq[PrimitiveValue]):Seq[Seq[PrimitiveValue]] =
     JDBCUtils.extractAllRows(execute(sel, args)).flush
@@ -37,18 +28,17 @@ abstract class Backend {
   def resultValue(sel:Select):PrimitiveValue =
     resultRows(sel).head.head
   def resultValue(sel:SelectBody):PrimitiveValue =
-    resultRows(sel).head.head
+    resultRows(sel).head.head*/
+  
+  def readDataSource(name:String, format:String, options:Map[String, String], schema:Option[Seq[(String, Type)]], load:Option[String]) : Unit
+  
   
   def getTableSchema(table: String): Option[Seq[(String, Type)]]
   
-  def update(stmt: String): Unit
-  def update(stmt: TraversableOnce[String]): Unit
-  def update(stmt: String, args: Seq[PrimitiveValue]): Unit
-  def fastUpdateBatch(stmt: String, argArray: TraversableOnce[Seq[PrimitiveValue]]): Unit
-  def selectInto(table: String, query: String): Unit
-
+  
   def getAllTables(): Seq[String]
   def invalidateCache();
+  def dropTable(table:String)
 
   def close()
 
@@ -60,8 +50,4 @@ abstract class Backend {
   def listTablesQuery: Operator
   def listAttrsQuery: Operator
 
-}
-
-trait InlinableBackend {
-	def enableInlining(db: Database) : Unit
 }

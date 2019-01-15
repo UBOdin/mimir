@@ -7,7 +7,7 @@
     </encoder>
   </appender>
 
-  <logger name="mimir.sql.JDBCBackend" level="ERROR"/>
+  <logger name="mimir.sql.SparkBackend" level="WARN"/>
   <logger name="mimir.views.ViewManager" level="ERROR"/>
   <logger name="mimir.Mimir$" level="ERROR"/>
   
@@ -17,7 +17,7 @@
 
   <logger name="org.apache.hadoop.util.Shell" level="OFF"/>
 
-  <root level="WARN">
+  <root level="ERROR">
     <appender-ref ref="STDOUT" />
   </root>
  

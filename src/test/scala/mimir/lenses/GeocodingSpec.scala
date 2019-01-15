@@ -18,18 +18,12 @@ object GeocodingSpec
 {
 
   def beforeAll = {
-    update("CREATE TABLE ADDR(STRNUMBER varchar, STRNAME varchar, CITY varchar, STATE varchar)")
-    update("INSERT INTO ADDR (STRNUMBER, STRNAME, CITY, STATE) VALUES('88', 'Minnessota', 'Buffalo', 'NY' )")
-    update("INSERT INTO ADDR (STRNUMBER, STRNAME, CITY, STATE) VALUES('24', 'Custer', 'Buffalo', 'NY' )")
-    update("INSERT INTO ADDR (STRNUMBER, STRNAME, CITY, STATE) VALUES('311', 'Bullis', 'West Seneca', 'NY' )")
-    update("INSERT INTO ADDR (STRNUMBER, STRNAME, CITY, STATE) VALUES('25', 'Inwood', 'Buffalo', 'NY' )")
-    update("INSERT INTO ADDR (STRNUMBER, STRNAME, CITY, STATE) VALUES('74', 'Days', 'Buffalo', 'NY' )")
-    update("INSERT INTO ADDR (STRNUMBER, STRNAME, CITY, STATE) VALUES('368', 'Bryant', 'Buffalo', 'NY' )")
-    update("INSERT INTO ADDR (STRNUMBER, STRNAME, CITY, STATE) VALUES('10856', 'Wyandale', 'Springville', 'NY' )")
+    loadCSV("ADDR", new File("test/data/geo.csv"), false, true)
   }
   
   "The Geocoding Lens" should {
-     
+    sequential 
+    
     "Be able to sucessfully make web requests" >> {
       
       val result = query("""
@@ -130,15 +124,15 @@ object GeocodingSpec
         )
       }.toList }.toList
       
-      val jsonLat = play.api.libs.json.Json.parse(result(0)._1.asString)
-      val domainLatForRow = jsonLat.as[JsArray].value.map(jsVal => (s"${jsVal.as[JsObject].value("choice")}", jsVal.as[JsObject].value("weight").as[Double]))
+      val jsonLat = play.api.libs.json.Json.parse(result(1)._1.asString)
+      val domainLatForRow = jsonLat.asInstanceOf[JsArray].value.map(jsVal => (jsVal.asInstanceOf[JsObject].value("choice").toString(), jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble))
       
-      val jsonLon = play.api.libs.json.Json.parse(result(0)._2.asString)
-      val domainLonForRow = jsonLon.as[JsArray].value.map(jsVal => (s"${jsVal.as[JsObject].value("choice")}", jsVal.as[JsObject].value("weight").as[Double]))
+      val jsonLon = play.api.libs.json.Json.parse(result(1)._2.asString)
+      val domainLonForRow = jsonLon.asInstanceOf[JsArray].value.map(jsVal => (jsVal.asInstanceOf[JsObject].value("choice").toString(), jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble))
       
       domainLatForRow.length must be equalTo domainLonForRow.length
-      domainLatForRow must contain(("40.067628",0.1), ("41.9697061",0.1), ("41.9653349",0.1), ("42.070064",0.1), ("42.0146135",0.1), ("41.9666509",0.1), ("43.733105",0.1), ("43.786123",0.1), ("38.763583",0.1), ("43.773287",0.1))
-      domainLonForRow must contain(("-74.1679029",0.1), ("-89.7976899",0.1), ("-89.7688991",0.1), ("-89.9381948",0.1), ("-89.8901924",0.1), ("-89.7725182",0.1), ("-70.2101979",0.1), ("-70.1749189",0.1), ("-75.2718879",0.1), ("-70.1911629",0.1))
+      domainLatForRow must contain(("42.9088720526316",0.321))
+      domainLonForRow must contain(("-78.8807727368421", 0.321))
       
     }
     
@@ -157,15 +151,15 @@ object GeocodingSpec
         )
       }.toList }.toList
       
-      val jsonLat = play.api.libs.json.Json.parse(result(0)._1.asString)
-      val domainLatForRow = jsonLat.as[JsArray].value.map(jsVal => (s"${jsVal.as[JsObject].value("choice")}", jsVal.as[JsObject].value("weight").as[Double]))
+      val jsonLat = play.api.libs.json.Json.parse(result(1)._1.asString)
+      val domainLatForRow = jsonLat.asInstanceOf[JsArray].value.map(jsVal => (jsVal.asInstanceOf[JsObject].value("choice").toString(), jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble))
       
-      val jsonLon = play.api.libs.json.Json.parse(result(0)._2.asString)
-      val domainLonForRow = jsonLon.as[JsArray].value.map(jsVal => (s"${jsVal.as[JsObject].value("choice")}", jsVal.as[JsObject].value("weight").as[Double]))
+      val jsonLon = play.api.libs.json.Json.parse(result(1)._2.asString)
+      val domainLonForRow = jsonLon.asInstanceOf[JsArray].value.map(jsVal => (jsVal.asInstanceOf[JsObject].value("choice").toString(), jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble))
       
       domainLatForRow.length must be equalTo domainLonForRow.length
-      domainLatForRow must contain(("42.94740609999999",1.0))
-      domainLonForRow must contain(("-78.8260315",1.0))
+      domainLatForRow must contain(("42.908687",1.0))
+      domainLonForRow must contain(("-78.88065",1.0))
       
     }
 

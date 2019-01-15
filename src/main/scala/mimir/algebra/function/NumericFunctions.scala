@@ -43,6 +43,13 @@ object NumericFunctions
     fr.register("max",{
           case ints:Seq[IntPrimitive] => IntPrimitive(ints.foldLeft(ints.head.v)( (init, intval) => Math.max(init, intval.v)))
         }, (_) => TInt())
+    fr.register("MIN",
+        {
+          case ints:Seq[IntPrimitive] => IntPrimitive(ints.foldLeft(ints.head.v)( (init, intval) => Math.min(init, intval.v)))
+        }, (_) => TInt())
+    fr.register("MAX",{
+          case ints:Seq[IntPrimitive] => IntPrimitive(ints.foldLeft(ints.head.v)( (init, intval) => Math.max(init, intval.v)))
+        }, (_) => TInt())
     
     fr.register("ROUND",
       {

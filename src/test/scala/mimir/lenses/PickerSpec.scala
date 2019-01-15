@@ -13,12 +13,7 @@ object PickerSpec
 {
 
   def beforeAll = {
-    update("CREATE TABLE R(A integer, B integer)")
-    update("INSERT INTO R (A, B) VALUES(1, 1)")
-    update("INSERT INTO R (A, B) VALUES(1, 2)")
-    update("INSERT INTO R (A, B) VALUES(NULL, 3)")
-    update("INSERT INTO R (A, B) VALUES(4, 4)")
-    update("INSERT INTO R (A, B) VALUES(2, 2)")
+    loadCSV("R", new File("test/data/pick.csv"))
   }
   
   "The Picker Lens" should {
@@ -27,11 +22,11 @@ object PickerSpec
  
      update("""
         CREATE LENS PICKER_1 
-          AS SELECT * FROM R
+          AS SELECT A, B FROM R
         WITH PICKER(PICK_FROM(A,B),PICK_AS(DINOSAURS_WERNT_JUST_GIANT_LIZARDS))
       """);
-
-      val result = query("""
+ 
+     val result = query("""
         SELECT DINOSAURS_WERNT_JUST_GIANT_LIZARDS FROM PICKER_1
       """)(results => results.toList.map( row =>  { 
         (
@@ -43,14 +38,14 @@ object PickerSpec
       }))
       
       
-      result(0)._1 must be equalTo IntPrimitive(1)
-      result(0)._2 must be equalTo true
-      result(1)._1 must be equalTo IntPrimitive(1)
+      result(0)._1 must be equalTo FloatPrimitive(4.0)
+      result(0)._2 must be equalTo false
+      result(1)._1 must be equalTo FloatPrimitive(6.4)
       result(1)._2 must be equalTo false
-      result(2)._1 must be equalTo IntPrimitive(3)
+      result(2)._1 must be equalTo FloatPrimitive(4.0)
       result(2)._2 must be equalTo false
-      result(3)._1 must be equalTo IntPrimitive(4)
-      result(3)._2 must be equalTo true
+      result(3)._1 must be equalTo FloatPrimitive(4.0)
+      result(3)._2 must be equalTo false
       
     }
 

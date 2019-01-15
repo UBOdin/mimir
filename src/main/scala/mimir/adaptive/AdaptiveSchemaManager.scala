@@ -14,8 +14,8 @@ class AdaptiveSchemaManager(db: Database)
 
   def init(): Unit = 
   {
-    if(db.backend.getTableSchema(dataTable).isEmpty){
-      db.backend.update(s"""
+    if(db.metadataBackend.getTableSchema(dataTable).isEmpty){
+      db.metadataBackend.update(s"""
         CREATE TABLE $dataTable(
           NAME varchar(100), 
           MLENS varchar(100),
@@ -33,7 +33,7 @@ class AdaptiveSchemaManager(db: Database)
     val config = MultilensConfig(schema, query, args);
     val models = constructor.initSchema(db, config);
     
-    db.backend.update(s"""
+    db.metadataBackend.update(s"""
       INSERT INTO $dataTable(NAME, MLENS, QUERY, ARGS) VALUES (?,?,?,?)
     """, Seq(
       StringPrimitive(schema),
@@ -52,13 +52,13 @@ class AdaptiveSchemaManager(db: Database)
 
   def all: TraversableOnce[(Multilens, MultilensConfig)] =
   {
-    db.query(
+    db.queryMetadata(
       Project(
         Seq(ProjectArg("NAME", Var("NAME")), 
             ProjectArg("MLENS", Var("MLENS")), 
             ProjectArg("QUERY", Var("QUERY")),
             ProjectArg("ARGS", Var("ARGS"))),
-        db.table(dataTable)
+        db.metadataTable(dataTable)
       )
     ){ _.map { row => 
       val name = row(0).asString
@@ -76,13 +76,13 @@ class AdaptiveSchemaManager(db: Database)
   
   def some(mlensType:String): TraversableOnce[(Multilens, MultilensConfig)] =
   {
-    db.query(
+    db.queryMetadata(
       Select(Comparison(Cmp.Eq, Var("MLENS"), StringPrimitive(mlensType)), Project(
         Seq(ProjectArg("NAME", Var("NAME")), 
             ProjectArg("MLENS", Var("MLENS")), 
             ProjectArg("QUERY", Var("QUERY")),
             ProjectArg("ARGS", Var("ARGS"))),
-        db.table(dataTable)
+        db.metadataTable(dataTable)
       ))
     ){ _.map { row => 
       val name = row(0).asString
@@ -156,10 +156,10 @@ class AdaptiveSchemaManager(db: Database)
 
   def get(schema: String): Option[(Multilens, MultilensConfig)] =
   {
-    db.query(
+    db.queryMetadata(
       Select(
         Comparison(Cmp.Eq, Var("NAME"), StringPrimitive(schema)),
-        db.table(dataTable)
+        db.metadataTable(dataTable)
       )
     ){ result =>
       if(result.hasNext){

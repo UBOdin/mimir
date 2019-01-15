@@ -61,3 +61,23 @@ case class NoOpModel(override val name: String, reasonText:String)
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = acked
   def confidence(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Double = 0.5 // Random, so...
 }
+
+case class WarningModel(override val name: String, keyTypes: Seq[Type])
+  extends Model(name)
+  with Serializable
+  with SourcedFeedback
+{
+  def argTypes(idx: Int) = keyTypes
+  def hintTypes(idx: Int) = Seq(TAny(), TString())
+  def varType(idx: Int, args: Seq[Type]) = TString()
+  def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = 
+    StringPrimitive("I have no idea?")
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = args(0)
+    StringPrimitive("You shouldn't be sampling from a model")
+  def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = 
+    hints(1).asString
+  def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = setFeedback(0, args, v)
+  def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = hasFeedback(0, args)
+  def confidence(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Double = 0.0
+  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) = args.map { _.toString }.mkString(":::")
+}

@@ -7,7 +7,7 @@ import org.joda.time.Period;
 /**
  * Base type for expression trees.  Represents a single node in the tree.
  */
-abstract sealed class Expression extends ExpressionConstructors { 
+abstract sealed class Expression extends Serializable with ExpressionConstructors { 
   /**
    * Return all of the children of the current tree node
    */
@@ -373,6 +373,11 @@ abstract sealed class PrimitiveValue(t: Type)
    * return the contents of the variable as just an object.
    */
   def payload: Object;
+  /**
+   * Execute the nested expression only if the value is not null.  Otherwise
+   * return null
+   */
+  def ifNotNull(cmd: (PrimitiveValue => PrimitiveValue)) = cmd(this)
 }
 
 abstract sealed class NumericPrimitive(t: Type) extends PrimitiveValue(t)
@@ -559,6 +564,7 @@ case class NullPrimitive()
   def asDateTime: DateTime = throw new NullTypeException(TAny(), TDate(), "Hard Cast")
   def asInterval: Period = throw new TypeException(TAny(), TInterval(), "Hard Cast")
   def payload: Object = null
+  override def ifNotNull(cmd: (PrimitiveValue => PrimitiveValue)) = this
 }
 
 
@@ -596,12 +602,23 @@ abstract class Proc(val args: Seq[Expression]) extends Expression
   def get(v: Seq[PrimitiveValue]): PrimitiveValue
 }
 
+sealed abstract class UncertaintyCausingExpression extends Expression
+{ 
+  def name: String
+}
+
+/**
+ * VGTerms are the building block of incomplete data in Mimir.  A VGTerm
+ * is linked to a specific model, which defines its behavior.
+ * 
+ * Each distinct value of { name x idx x args } identifies *one* variable.
+ */
 case class VGTerm(
   name: String, 
   idx: Int,
   args: Seq[Expression],
   hints: Seq[Expression]
-) extends Expression {
+) extends UncertaintyCausingExpression {
   override def toString() = "{{ "+name+";"+idx+"["+args.mkString(", ")+"]["+hints.mkString(", ")+"] }}"
   override def children: Seq[Expression] = args ++ hints
   override def rebuild(x: Seq[Expression]) = {
@@ -609,4 +626,24 @@ case class VGTerm(
     VGTerm(name, idx, a, h)
   }
   def isDataDependent: Boolean = args.size > 0
+}
+
+/**
+ * Warnings are a "light" form of VGTerms.  Like VGTerms warnings "flag" 
+ * their output in a way that propagates along with dependencies, but 
+ * unlike VGTerms, a warning has no alternative values associated with it.
+ * It doesn't signify a random decision, but rather uncertainty that the
+ * value that gets passed through is in fact correct.
+ */
+case class DataWarning(
+  name: String,
+  value: Expression,
+  message: Expression, 
+  key: Seq[Expression]
+) extends UncertaintyCausingExpression {
+  override def toString() = s"($name(${(key :+ message).mkString(", ")}))@($value)"
+  override def children: Seq[Expression] = Seq(value, message) ++ key
+  override def rebuild(x: Seq[Expression]) = {
+    DataWarning(name, x(0), x(1), x.tail.tail)
+  }
 }

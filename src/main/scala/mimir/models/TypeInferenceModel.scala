@@ -6,12 +6,20 @@ import com.typesafe.scalalogging.slf4j.Logger
 import mimir.Database
 import mimir.algebra._
 import mimir.util._
-
+import org.apache.spark.sql.{DataFrame, Row, Encoders, Encoder,  Dataset}
+import mimir.ml.spark.SparkML
+import org.apache.spark.sql.expressions.Aggregator
+import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
+import org.apache.spark.sql.functions.{col}
+import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 
 object TypeInferenceModel
 {
   val logger = Logger(org.slf4j.LoggerFactory.getLogger("mimir.models.TypeInferenceModel"))
 
+  var sampleLimit = 1000
+  
   def priority: Type => Int =
   {
     case TUser(_)     => 20
@@ -34,68 +42,97 @@ object TypeInferenceModel
     TypeRegistry.matchers.flatMap({ case (regexp, name) =>
       regexp.findFirstMatchIn(v).map(_ => TUser(name))
     })
-
   }
 }
 
-@SerialVersionUID(1001L)
-class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultFrac: Double)
+ 
+case class TIVotes(votes:Seq[Map[Int,Double]])
+
+case class VoteList() 
+    extends Aggregator[Row,  Seq[(Long,Seq[(Int,Long)])], Seq[(Long,Map[Int,(Long,Double)])]] with Serializable {
+  def zero = Seq[(Long,Seq[(Int, Long)])]()
+  def reduce(acc: Seq[(Long, Seq[(Int, Long)])], x: Row) = {
+     val newacc = x.toSeq.zipWithIndex.map(field => 
+       field match {
+         case (null, idx) => (0L, Seq[(Int, Long)]())
+         case (_, idx) => {
+           if(!x.isNullAt(idx)){
+             val cellVal = x.getString(idx)
+             (1L, TypeInferenceModel.detectType(cellVal).toSeq.map(el => (Type.id(el), 1L)))
+           }
+           else (0L, Seq[(Int, Long)]())
+         }
+       }  
+     )
+    acc match {
+      case Seq() | Seq(0 Seq()) => newacc
+      case _ => {
+        acc.zip(newacc).map(oldNew => {
+          (oldNew._1._1+oldNew._2._1, oldNew._1._2++oldNew._2._2)
+        })
+      }
+    } 
+  }
+  def merge(acc1: Seq[(Long, Seq[(Int, Long)])], acc2: Seq[(Long, Seq[(Int, Long)])]) = acc1 match {
+      case Seq() | Seq(0 Seq()) => acc2
+      case x => acc2 match {
+        case Seq() | Seq(0 Seq()) => acc1
+        case x => {
+          acc1.zip(acc2).map(oldNew => {
+            (oldNew._1._1+oldNew._2._1, oldNew._1._2++oldNew._2._2)
+          })
+        }
+      }
+    }
+    
+  def finish(acc: Seq[(Long, Seq[(Int, Long)])]) = 
+    acc.map(cola => (cola._1, cola._2.groupBy(_._1).mapValues(el => {
+      val votesForType = el.map(_._2).sum.toLong
+      (votesForType, votesForType.toDouble/cola._1)
+    })))
+  def bufferEncoder: Encoder[Seq[(Long, Seq[(Int, Long)])]] = ExpressionEncoder()
+  def outputEncoder: Encoder[Seq[(Long, Map[Int,(Long,Double)])]] = ExpressionEncoder()
+}
+
+
+@SerialVersionUID(1002L)
+class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultFrac: Double, sparkSql:SQLContext, query:Option[DataFrame] )
   extends Model(name)
   with SourcedFeedback
   with FiniteDiscreteDomain
 {
-  var sampleLimit = 1000
-  var totalVotes = 
-    { val v = new scala.collection.mutable.ArraySeq[Double](columns.length)
-      for(col <- (0 until columns.size)){ v.update(col, 0.0) }
-      v
-    }
-  val votes = 
-    columns.map(
-      _ => scala.collection.mutable.Map[Type, Double]()
-    )
-
-  def train(db: Database, query: Operator) =
-  {
-    Timer.monitor(s"Train $name", TypeInferenceModel.logger.info(_)){
-      db.query(
-        Limit(0, Some(sampleLimit), Project(
-          columns.map( c => ProjectArg(c, Var(c)) ),
-          query
-        ))
-      ) { _.foreach { row => learn(row.tuple)  } }
-    }
-    TypeInferenceModel.logger.debug(s"VOTES:${columns.zip(votes).map { col => "\n   "+col._1+": "+col._2.map { vote => "\n      "+vote._1+"->"+vote._2 }}}")
+  var trainingData:Seq[(Long, Map[Int,(Long,Double)])] = query match {
+    case Some(df) => train(df)
+    case None => columns.map(col => (0L,Map[Int,(Long,Double)]()))
   }
-
-  final def learn(row: Seq[PrimitiveValue]):Unit =
+  
+  private def train(df:DataFrame) =
   {
-    row.zipWithIndex.foreach({ case (v, idx) => learn(idx, v) })
-  }
-
-  final def learn(idx: Int, p: PrimitiveValue):Unit =
-  {
-    p match { 
-      case null            => ()
-      case NullPrimitive() => ()
-      case _               => learn(idx, p.asString)
-    }
+    import sparkSql.implicits._
+    df.limit(TypeInferenceModel.sampleLimit).select(columns.map(col(_)):_*)
+      .agg(new VoteList().toColumn)
+      .head()
+      .asInstanceOf[Row].toSeq(0).asInstanceOf[Seq[Row]]
+      .map(el => (el.getLong(0), el.getMap[Int,Row](1).toMap) )
+      .map(el => (el._1, el._2.map(sel => (sel._1 -> (sel._2.getLong(0), sel._2.getDouble(1))))))
   }
 
   final def learn(idx: Int, v: String):Unit =
   {
-    totalVotes(idx) += 1.0
-    val candidates = TypeInferenceModel.detectType(v)
-    TypeInferenceModel.logger.trace(s"Guesses for '$v': $candidates")
-    val votesForCurrentIdx = votes(idx)
-    for(t <- candidates){
-      votesForCurrentIdx(t) = votesForCurrentIdx.getOrElse(t, 0.0) + 1.0 
-    }
+    val newtypes = TypeInferenceModel.detectType(v).toSeq.map(tp => (Type.id(tp), 1L))
+    val oldAcc = trainingData(idx)
+    val (oldTotal, oldTypes) =  (oldAcc._1, oldAcc._2.toSeq.map(el => (el._1, el._2._1)))
+    val newTotalVotes = (1+ oldTotal).toLong
+    trainingData = trainingData.zipWithIndex.map( votesidx => if(votesidx._2 == idx) (newTotalVotes, (newtypes ++ oldTypes).groupBy(_._1).mapValues(el => {
+      val votesForType = el.map(_._2).sum.toLong
+      (votesForType, votesForType.toDouble/newTotalVotes.toDouble)
+    })) else votesidx._1)
   }
 
-  private final def voteList(idx: Int) = 
-    (TString(), defaultFrac * totalVotes(idx)) :: votes(idx).toList
-
+  def voteList(idx:Int) =  (Type.id(TString()) -> ((defaultFrac * totalVotes(idx)).toLong, defaultFrac)) :: (trainingData(idx)._2.map(votedType => (votedType._1 -> (votedType._2._1, votedType._2._2)))).toList 
+    
+  def totalVotes(idx:Int) = trainingData(idx)._1
+     
   private final def rankFn(x:(Type, Double)) =
     (x._2, TypeInferenceModel.priority(x._1) )
 
@@ -103,7 +140,7 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = {
     val column = args(0).asInt
     TypePrimitive(
-      RandUtils.pickFromWeightedList(randomness, voteList(column))
+      Type.toSQLiteType(RandUtils.pickFromWeightedList(randomness, voteList(column).map(el => (el._1, el._2._1.toDouble)).toSeq))
     )
   }
 
@@ -112,7 +149,8 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
     val column = args(0).asInt
     getFeedback(idx, args) match {
       case None => {
-        val guess =  voteList(column).maxBy( rankFn _ )._1
+        val guess =  voteList(column).map(tp => (Type.toSQLiteType(tp._1), tp._2._2)).maxBy( rankFn _ )._1
+        //println(s"bestGuess(idx: $idx, args: ${args.mkString(",")}, hints:${hints.mkString(",")}) => $guess")
         TypePrimitive(guess)
       }
       case Some(s) => Cast(TType(), s)
@@ -122,14 +160,13 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
   def validateChoice(idx: Int, v: PrimitiveValue): Boolean =
     try { Cast(TType(), v); true } catch { case _:RAException => false }
 
-
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = {
     val column = args(0).asInt
     getFeedback(idx, args) match {
       case None => {
-        val (guess, guessVotes) = voteList(column).maxBy( rankFn _ )
+        val (guess, guessFrac) = voteList(column).map(tp => (Type.toSQLiteType(tp._1), tp._2._2)).maxBy( rankFn _ )
         val defaultPct = (defaultFrac * 100).toInt
-        val guessPct = ((guessVotes / totalVotes(column))*100).toInt
+        val guessPct = (guessFrac*100).toInt
         val typeStr = Type.toString(guess).toUpperCase
         val reason =
           guess match {
@@ -151,7 +188,7 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = 
   {
     val column = args(0).asInt
-    votes(column).toList.map( x => (TypePrimitive(x._1), x._2)) ++ Seq( (TypePrimitive(TString()), defaultFrac) )
+    trainingData(idx)._2.map( x => (TypePrimitive(Type.toSQLiteType(x._1)), x._2._2)).toSeq ++ Seq( (TypePrimitive(TString()), defaultFrac) )
   }
 
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
@@ -166,7 +203,7 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
   def isAcknowledged(idx: Int,args: Seq[mimir.algebra.PrimitiveValue]): Boolean =
     isPerfectGuess(args(0).asInt) || (getFeedback(idx, args) != None)
   def isPerfectGuess(column: Int): Boolean =
-    voteList(column).map( _._2 ).max >= totalVotes(column)
+    voteList(column).map( _._2._1 ).max >= totalVotes(column).toDouble
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]): String = 
     args(0).asString
   def argTypes(idx: Int): Seq[Type] = 
@@ -179,12 +216,12 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
     val column = args(0).asInt
     getFeedback(idx, args) match {
       case None => {
-        val (guess, guessVotes) = voteList(column).maxBy( rankFn _ )
+        val (guess, guessFrac) = voteList(column).map(tp => (Type.toSQLiteType(tp._1), tp._2._2)).maxBy( rankFn _ )
         val defaultPct = (defaultFrac * 100).toInt
-        val guessPct = ((guessVotes / totalVotes(column))*100).toInt
+        val guessPct = (guessFrac*100).toInt
         val typeStr = Type.toString(guess).toUpperCase
         if (guessPct > defaultPct)
-          guessVotes / totalVotes(column)
+          guessFrac
         else
           defaultFrac
         }

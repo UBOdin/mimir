@@ -11,7 +11,7 @@ dependencyOverrides += "org.scala-lang" % "scala-library" % scalaVersion.value
 // in Travis with `sudo: false`.
 // See https://github.com/sbt/sbt/issues/653
 // and https://github.com/travis-ci/travis-ci/issues/3775
-//javaOptions ++= Seq("-Xmx2G" )
+javaOptions ++= Seq("-Xmx8G" )
 
 
 scalacOptions ++= Seq(
@@ -64,16 +64,49 @@ runMimirVizier := {
   )
 }
 
+lazy val runTestResults = inputKey[Unit]("run runTestResults")
+runTestResults := {
+  val args = sbt.complete.Parsers.spaceDelimited("[main args]").parsed
+  val classpath = (fullClasspath in Compile).value
+  val classpathString = Path.makeString(classpath map { _.data })
+  val debugTestJVMArgs = Seq()//Seq("-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005")
+  val jvmArgs = debugTestJVMArgs ++ Seq("-Xmx4g", "-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK")
+  val (jh, os, bj, bd, jo, ci, ev) = (javaHome.value, outputStrategy.value, Vector[java.io.File](), 
+		Some(baseDirectory.value), (jvmArgs ++ Seq("-classpath", classpathString)).toVector, 
+		connectInput.value, envVars.value)
+  Fork.java(
+    ForkOptions(jh, os, bj, bd, jo, ci, ev),
+    "mimir.util.TestResults" +: args
+  )
+}
+
+lazy val runBackup = inputKey[Unit]("run runBackup")
+runBackup := {
+  val args = sbt.complete.Parsers.spaceDelimited("[main args]").parsed
+  val classpath = (fullClasspath in Compile).value
+  val classpathString = Path.makeString(classpath map { _.data })
+  val debugTestJVMArgs = Seq()//Seq("-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005")
+  val jvmArgs = debugTestJVMArgs ++ Seq("-Xmx4g", "-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK")
+  val (jh, os, bj, bd, jo, ci, ev) = (javaHome.value, outputStrategy.value, Vector[java.io.File](), 
+		Some(baseDirectory.value), (jvmArgs ++ Seq("-classpath", classpathString)).toVector, 
+		connectInput.value, envVars.value)
+  Fork.java(
+    ForkOptions(jh, os, bj, bd, jo, ci, ev),
+    "mimir.util.BackupUtils" +: args
+  )
+}
+
 //for tests that need to run in their own jvm because they need specific envArgs or otherwise
 testGrouping in Test := {
 	val (jh, os, bj, bd, jo, ci, ev) = (javaHome.value, outputStrategy.value, Vector[java.io.File](), 
 		baseDirectory.value, javaOptions.value.toVector, connectInput.value, envVars.value)
-	val testsToForkSeperately = Seq("mimir.algebra.gprom.OperatorTranslationSpec")
-	val seperateForkedEnvArgs = Map(("mimir.algebra.gprom.OperatorTranslationSpec", sys.props.get("os.name") match {
+	val testsToForkSeperately = Seq("mimir.algebra.gprom.OperatorTranslationSpec","mimir.demo.MimirGProMDemo")
+	val gpromTestsForkEnvArgs = sys.props.get("os.name") match {
 	  	case Some(osname) if osname.startsWith("Mac OS X") => Map(("DYLD_INSERT_LIBRARIES",System.getProperty("java.home")+"/lib/libjsig.dylib"))
 	  	case Some(otherosname) => Map(("LD_PRELOAD",System.getProperty("java.home")+"/lib/"+System.getProperty("os.arch")+"/libjsig.so"))
 	  	case None => envVars.value
-	  }))
+	  }
+	val seperateForkedEnvArgs = Map(("mimir.algebra.gprom.OperatorTranslationSpec", gpromTestsForkEnvArgs), ("mimir.demo.MimirGProMDemo", gpromTestsForkEnvArgs))
 	val (forkedTests, otherTests) = (definedTests in Test).value.partition { test => testsToForkSeperately.contains(test.name) }
     Seq(Tests.Group(name = "Single JVM tests", tests = otherTests, runPolicy = Tests.SubProcess(
 	    ForkOptions( jh, os, bj, Some(bd), jo, ci, ev)
@@ -105,7 +138,9 @@ libraryDependencies ++= Seq(
   "org.specs2"                    %%  "specs2-core"              % "3.8.4" % "test",
   "org.specs2"                    %%  "specs2-matcher-extra"     % "3.8.4" % "test",
   "org.specs2"                    %%  "specs2-junit"             % "3.8.4" % "test",
-  "org.dispatchhttp"       		  %% "dispatch-core"   			 % "0.14.0",
+  "org.clapper"                   %%  "classutil" 				 % "1.4.0",
+  "com.amazonaws" 				  %   "aws-java-sdk-s3" 		 % "1.11.234",
+  "ch.cern.sparkmeasure" 		  %%  "spark-measure" 			 % "0.13",
   
   //////////////////////// Data Munging Tools //////////////////////
   "com.github.nscala-time"        %%  "nscala-time"              % "1.2.0",
@@ -121,16 +156,20 @@ libraryDependencies ++= Seq(
   //////////////////////// Lens Libraries //////////////////////
   // WEKA - General-purpose Classifier Training/Deployment Library
   // Used by the imputation lens
-  ("nz.ac.waikato.cms.weka"       %   "weka-stable"              % "3.8.1").
-    exclude("nz.ac.waikato.cms.weka",  "weka-dev").
-    exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
-  ("nz.ac.waikato.cms.moa"        %   "moa"                      % "2014.11").
-    exclude("nz.ac.waikato.cms.weka",  "weka-dev").
-    exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
+  // ("nz.ac.waikato.cms.weka"       %   "weka-stable"              % "3.8.1").
+  //   exclude("nz.ac.waikato.cms.weka",  "weka-dev").
+  //   exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
+  // ("nz.ac.waikato.cms.moa"        %   "moa"                      % "2014.11").
+  //   exclude("nz.ac.waikato.cms.weka",  "weka-dev").
+  //   exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
     
   //spark ml
-  "org.apache.spark" 			  %   "spark-sql_2.11" 		  % "2.2.0" exclude("org.slf4j", "slf4j-log4j12"),
-  "org.apache.spark" 			  %   "spark-mllib_2.11" 	  % "2.2.0" exclude("org.slf4j", "slf4j-log4j12"),
+  "org.apache.spark" 			  %   "spark-sql_2.11" 		  % "2.2.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "org.apache.spark" 			  %   "spark-mllib_2.11" 	  % "2.2.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "org.apache.spark" 			  %   "spark-hive_2.11" 	  % "2.2.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "com.databricks" 				  %   "spark-xml_2.11" 	  	  % "0.5.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "org.apache.hadoop" 			  %   "hadoop-client" 		  % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
+  "org.apache.hadoop" 			  %   "hadoop-aws" 			  % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
  
   //////////////////////// Jung ////////////////////////
   // General purpose graph manipulation library
@@ -140,7 +179,7 @@ libraryDependencies ++= Seq(
   "net.sf.jung"                   %   "jung-visualization"       % "2.0.1",
   "jgraph"                        %   "jgraph"                   % "5.13.0.0",
   "javax.media" 		          %   "jai_core"                 % "1.1.3" from "http://download.osgeo.org/webdav/geotools/javax/media/jai_core/1.1.3/jai_core-1.1.3.jar",  
-  //
+  "javax.measure" 				  %   "jsr-275" 				 % "0.9.1",
 
   //////////////////////// Geotools ////////////////////////
   // Geospatial data transformations, Used by the CURE scenario
@@ -149,7 +188,8 @@ libraryDependencies ++= Seq(
 
   //////////////////////// JDBC Backends //////////////////////
   "org.xerial"                    %   "sqlite-jdbc"              % "3.16.1",
-
+  "mysql" 						  %   "mysql-connector-java" 	 % "5.1.6",
+  "org.postgresql" 				  %   "postgresql" 				 % "9.4-1201-jdbc41",
 
   ///////////////////  GProM/Native Integration //////////////
   "net.java.dev.jna"              %    "jna"                     % "4.2.2",
@@ -259,3 +299,39 @@ pomExtra := <url>http://mimirdb.info</url>
 // use `sbt publish` to update the package in 
 // your own local ivy cache
 publishTo := Some(Resolver.file("file",  new File(Path.userHome.absolutePath+"/.m2/repository")))
+
+/*/////// Docker Image Creation Options ////////
+// use `sbt docker` to generate docker image
+import sbtdocker._
+enablePlugins(DockerPlugin)
+dockerfile in docker := {
+    val userDataVolMountPoint = "/usr/local/source/"
+    val sbtPath = s"${userDataVolMountPoint}sbt/bin/sbt"
+	val initContainer = Seq(
+		s"if [ -e ${userDataVolMountPoint}initComplete ]",
+		"then", 
+		    "echo 'already initialized...'",
+			s"(cd ${userDataVolMountPoint}mimir; git pull; ${sbtPath} run)",
+		"else",
+			s"""curl -sL "https://github.com/sbt/sbt/releases/download/v0.13.15/sbt-0.13.15.tgz" | gunzip | tar -x -C ${userDataVolMountPoint}""",
+			s"chmod 0755 ${sbtPath}",
+			s"git clone https://github.com/UBOdin/mimir.git ${userDataVolMountPoint}mimir",
+			s"(cd ${userDataVolMountPoint}mimir; ${sbtPath} compile; ${sbtPath} compile)",
+			s"touch ${userDataVolMountPoint}initComplete",
+			"echo 'initialization complete...'",
+			s"(cd ${userDataVolMountPoint}mimir; git pull; ${sbtPath} run)",
+		"fi"
+		)
+		
+	val instructions = Seq(
+	  sbtdocker.Instructions.From("frolvlad/alpine-oraclejdk8"),
+	  sbtdocker.Instructions.Volume(Seq(s"type=volume,source=mimir-vol,target=${userDataVolMountPoint}")),
+	  sbtdocker.Instructions.Run.exec(Seq("apk", "add", "--no-cache", "bash")),
+	  sbtdocker.Instructions.Run.exec(Seq("apk", "add", "--no-cache", "curl")),
+	  sbtdocker.Instructions.Run.exec(Seq("apk", "add", "--no-cache", "git")),
+	  sbtdocker.Instructions.Run.exec(Seq("mkdir", s"${userDataVolMountPoint}")),
+	  sbtdocker.Instructions.Run(s"""( ${initContainer.map(el => s"""echo "$el" >> ${userDataVolMountPoint}initContainer.sh; """).mkString("") } chmod 0755 ${userDataVolMountPoint}initContainer.sh)"""),
+	  sbtdocker.Instructions.EntryPoint.exec(Seq("/bin/bash", "-c", s"${userDataVolMountPoint}initContainer.sh"))
+	)
+	Dockerfile(instructions)
+}*/

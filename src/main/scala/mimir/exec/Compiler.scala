@@ -53,12 +53,13 @@ class Compiler(db: Database) extends LazyLogging {
    * Perform a full end-end compilation pass producing best guess results.  
    * Return an iterator over the result set.  
    */
-  def compile[R <:ResultIterator](query: Operator, mode: CompileMode[R]): R = 
-    mode(db, db.views.rebuildAdaptiveViews(query))
+  def compile[R <:ResultIterator](query: Operator, mode: CompileMode[R], rootIteratorGen:(Operator)=>(Seq[(String,Type)],ResultIterator) ): R =
+    mode(db, query, rootIteratorGen)
 
   def deploy(
     compiledOper: Operator, 
-    outputCols: Seq[String]
+    outputCols: Seq[String],
+    rootIteratorGen:(Operator)=>(Seq[(String,Type)],ResultIterator)
   ): ResultIterator =
   {
     var oper = compiledOper
@@ -109,7 +110,7 @@ class Compiler(db: Database) extends LazyLogging {
       val sourceColumnTypes = db.typechecker.schemaOf(unionClauses(0)).toMap
 
 
-      val nested = unionClauses.map { deploy(_, requiredColumnsInOrder) }
+      val nested = unionClauses.map { deploy(_, requiredColumnsInOrder, rootIteratorGen) }
       val jointIterator = new UnionResultIterator(nested.iterator)
 
       val aggregateIterator =
@@ -137,22 +138,43 @@ class Compiler(db: Database) extends LazyLogging {
       // Make the set of columns we're interested in explicitly part of the query
       oper = oper.project( requiredColumns.toSeq:_* )
 
-      val (sql, sqlSchema) = sqlForBackend(oper)
-
+      val (schema, rootIterator) = rootIteratorGen({ 
+        if(ExperimentalOptions.isEnabled("GPROM-OPTIMIZE")
+          && db.backend.isInstanceOf[mimir.sql.GProMBackend] ) {
+          OperatorTranslation.optimizeWithGProM(oper)
+        } else { 
+          optimize(oper)
+        }
+      })
+        
       logger.info(s"PROJECTIONS: $projections")
 
       new ProjectionResultIterator(
         outputCols.map( projections(_) ),
         annotationCols.map( projections(_) ).toSeq,
-        sqlSchema,
-        new JDBCResultIterator(
-          sqlSchema,
-          sql, db.backend,
-          db.backend.dateType
-        ),
+        schema,
+        rootIterator,
         db
       )
     }
+  }
+  
+  def sparkBackendRootIterator(oper:Operator) : (Seq[(String, Type)], ResultIterator) = {
+    val schema = db.typechecker.schemaOf(oper) 
+    (schema, new SparkResultIterator(
+          schema,
+          oper, db.backend,
+          db.backend.dateType
+        ))
+  }
+  
+  def metadataBackendRootIterator(oper:Operator) : (Seq[(String, Type)], ResultIterator) = {
+    val (sql, sqlSchema) = sqlForBackend(oper)
+    (sqlSchema, new JDBCResultIterator(
+          sqlSchema,
+          sql, db.metadataBackend,
+          db.backend.dateType
+        ))
   }
 
   def sqlForBackend(
@@ -175,7 +197,7 @@ class Compiler(db: Database) extends LazyLogging {
     // The final stage is to apply any database-specific rewrites to adapt
     // the query to the quirks of each specific target database.  Each
     // backend defines a specializeQuery method that handles this
-    val specialized = db.backend.specializeQuery(optimized, db)
+    val specialized = db.metadataBackend.specializeQuery(optimized, db)
 
     logger.info(s"SPECIALIZED: $specialized")
 

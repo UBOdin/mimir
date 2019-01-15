@@ -7,7 +7,7 @@ import mimir.algebra._
 import mimir.models._
 import mimir.exec.mode.UnannotatedBestGuess
 
-class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator, Seq[Expression], Seq[Expression])])
+class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator, Seq[Expression], Seq[Expression])], val toReason: ((Seq[PrimitiveValue], Seq[PrimitiveValue]) => Reason))
 {
   def isEmpty(db: Database): Boolean =
   {
@@ -73,11 +73,11 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
     allArgs(db, Some(count), Some(offset))
 
   def all(db: Database): Iterable[Reason] = 
-    allArgs(db).map { case (args, hints) => new ModelReason(model, idx, args, hints) }
+    allArgs(db).map { case (args, hints) => toReason(args, hints) }
   def take(db: Database, count: Int): Iterable[Reason] = 
-    takeArgs(db, count).map { case (args, hints) => new ModelReason(model, idx, args, hints) }
+    takeArgs(db, count).map { case (args, hints) => toReason(args, hints) }
   def take(db: Database, count: Int, offset:Int): Iterable[Reason] = 
-    takeArgs(db, count, offset).map { case (args, hints) => new ModelReason(model, idx, args, hints) }
+    takeArgs(db, count, offset).map { case (args, hints) => toReason(args, hints) }
 
   
   override def toString: String =
@@ -94,25 +94,32 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
 object ReasonSet
   extends LazyLogging
 {
-  def make(vgterm: VGTerm, db: Database, input: Operator): ReasonSet =
+  def make(uncertain: UncertaintyCausingExpression, db: Database, input: Operator): ReasonSet =
   {
-    logger.debug(s"Make ReasonSet for $vgterm from\n$input")
-    if(vgterm.args.isEmpty){
-      return new ReasonSet(
-        db.models.get(vgterm.name),
-        vgterm.idx,
-        None
-      )
-    } else {
-      return new ReasonSet(
-        db.models.get(vgterm.name),
-        vgterm.idx,
-        Some(
-          input,
-          vgterm.args,
-          vgterm.hints
+    uncertain match {
+      case VGTerm(name, idx, argExprs, hintExprs) => {
+        logger.debug(s"Make ReasonSet for VGTerm $name from\n$input")
+        val model = db.models.get(name)
+        return new ReasonSet(
+          model,
+          idx,
+          ( if(argExprs.isEmpty) { None }
+            else { Some(input, argExprs, hintExprs) } 
+          ),
+          (args, hints) => new ModelReason(model, idx, args, hints)
         )
-      )
+      }
+      case DataWarning(name, valueExpr, messageExpr, keyExprs) => {
+        logger.debug(s"Make ReasonSet for Warning $name from\n$input")
+        val model = db.models.get(name)
+        return new ReasonSet(
+          model,
+          0,
+          Some(input, keyExprs, Seq(valueExpr, messageExpr)),
+          (keys, valueAndMessage) => new DataWarningReason(model, valueAndMessage(0), valueAndMessage(1).asString, keys)
+        )
+      }
+
     }
   }
 }

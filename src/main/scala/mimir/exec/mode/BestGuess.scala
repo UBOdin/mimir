@@ -11,6 +11,7 @@ import mimir.optimizer.operator._
 import mimir.exec._
 import mimir.exec.result._
 import mimir.util.ExperimentalOptions
+import mimir.algebra.gprom.OperatorTranslation
 
 object BestGuess
   extends CompileMode[ResultIterator]
@@ -45,33 +46,43 @@ object BestGuess
     // work.
     val outputSchema = db.typechecker.schemaOf(oper)
       
-    // The names that the provenance compilation step assigns will
-    // be different depending on the structure of the query.  As a 
-    // result it is **critical** that this be the first step in 
-    // compilation.  
-    val provenance = 
-    if(ExperimentalOptions.isEnabled("GPROM-PROVENANCE")
-        && db.backend.isInstanceOf[mimir.sql.GProMBackend])
-      { Provenance.compileGProM(oper) }
-      else { Provenance.compile(oper) }
+    val (opProvTaint, provenanceCols, colDeterminism, rowDeterminism) = 
+      if(false && ExperimentalOptions.isEnabled("GPROM-DETERMINISM")
+        && ExperimentalOptions.isEnabled("GPROM-PROVENANCE")
+        && ExperimentalOptions.isEnabled("GPROM-BACKEND")){
+      OperatorTranslation.compileProvenanceAndTaintWithGProM(oper)
+    }
+    else {
+      // The names that the provenance compilation step assigns will
+      // be different depending on the structure of the query.  As a 
+      // result it is **critical** that this be the first step in 
+      // compilation.  
+      val provenance = 
+      if(ExperimentalOptions.isEnabled("GPROM-PROVENANCE")
+          && ExperimentalOptions.isEnabled("GPROM-BACKEND"))
+        { Provenance.compileGProM(oper) }
+        else { Provenance.compile(oper) }
+  
+      oper               = provenance._1
+      val provenanceCols = provenance._2
+  
+      logger.debug(s"WITH-PROVENANCE (${provenanceCols.mkString(", ")}): $oper")
+  
+  
+      // Tag rows/columns with provenance metadata
+      val tagging = if(ExperimentalOptions.isEnabled("GPROM-DETERMINISM")
+          && ExperimentalOptions.isEnabled("GPROM-BACKEND"))
+        { CTPercolator.percolateGProM(oper) }
+        else { CTPercolator.percolateLite(oper, db.models.get(_)) } 
+      (tagging._1,
+      provenanceCols,
+      tagging._2.filter( col => rawColumns(col._1) ),
+      tagging._3)
 
-    oper               = provenance._1
-    val provenanceCols = provenance._2
-
-    logger.debug(s"WITH-PROVENANCE (${provenanceCols.mkString(", ")}): $oper")
-
-
-    // Tag rows/columns with provenance metadata
-    val tagging = if(ExperimentalOptions.isEnabled("GPROM-DETERMINISM")
-        && db.backend.isInstanceOf[mimir.sql.GProMBackend])
-      { CTPercolator.percolateGProM(oper) }
-      else { CTPercolator.percolateLite(oper, db.models.get(_)) } 
-    oper               = tagging._1
-    val colDeterminism = tagging._2.filter( col => rawColumns(col._1) )
-    val rowDeterminism = tagging._3
-
+    }
+    oper = opProvTaint
     logger.debug(s"PERCOLATED: $oper")
-
+    
     // It's a bit of a hack for now, but provenance
     // adds determinism columns for provenance metadata, since
     // we have no way to explicitly track what's an annotation

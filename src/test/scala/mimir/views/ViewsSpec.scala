@@ -7,6 +7,8 @@ import mimir.util._
 import mimir.test._
 import mimir.ctables._
 import mimir.provenance._
+import java.io.File
+import org.apache.spark.sql.Encoders
 
 object ViewsSpec 
   extends SQLTestSpecification("ViewsTest")
@@ -14,26 +16,16 @@ object ViewsSpec
 {
 
   def beforeAll = {
-    update("CREATE TABLE R(A int, B int, C int)")
-    update("INSERT INTO R(A,B,C) VALUES (1,2,3)")
-    update("INSERT INTO R(A,B,C) VALUES (1,3,1)")
-    update("INSERT INTO R(A,B,C) VALUES (1,4,2)")
-    update("INSERT INTO R(A,B,C) VALUES (2,2,1)")
-    update("INSERT INTO R(A,B,C) VALUES (4,2,4)")
+    //loadCSV("R",Seq(("A", "int"), ("B", "int"), ("C", "int")), new File("test/data/views_r.csv"))
+    LoadCSV.handleLoadTableRaw(db, "R", Some(Seq(("A", TInt()), ("B", TInt()), ("C", TInt()))), new File("test/data/views_r.csv"),  Map("DELIMITER" -> ",","ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true", "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false") )
   }
 
   sequential
 
   "The View Manager" should {
-    "Not interfere with table creation and inserts" >> {
-
-      update("CREATE TABLE S(C int, D int)")
-      update("INSERT INTO S(C,D) VALUES (1,2)")
-      update("INSERT INTO S(C,D) VALUES (1,3)")
-      update("INSERT INTO S(C,D) VALUES (1,2)")
-      update("INSERT INTO S(C,D) VALUES (1,4)")
-      update("INSERT INTO S(C,D) VALUES (2,2)")
-      update("INSERT INTO S(C,D) VALUES (4,2)")
+    "Not interfere with CSV Imports" >> {
+      //loadCSV("S",Seq(("C", "int"), ("D", "int")), new File("test/data/views_s.csv"))
+      LoadCSV.handleLoadTableRaw(db, "S", Some(Seq(("C", TInt()), ("D", TInt()))), new File("test/data/views_s.csv"),  Map("DELIMITER" -> ",","ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true", "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false") )
       true
     }
 
@@ -77,19 +69,19 @@ object ViewsSpec
         )
 
       update("ALTER VIEW MATTEST MATERIALIZE")
+      //could also do this
+      //val sparkOp = db.backend.execute(db.views.get("MATTEST").get.materializedOperator)
+      //instead of
+      val sparkOp = db.backend.execute(Table("MATTEST", "MATTEST", Seq(("A", TInt()), ("B", TInt()), 
+            (ViewAnnotation.taintBitVectorColumn, TInt()), ("MIMIR_ROWID_0", TRowId())), Seq()))
       val results = 
-        db.backend.resultRows(s"""
-          SELECT A, B, 
-            ${ViewAnnotation.taintBitVectorColumn}, 
-            MIMIR_ROWID_0
-           FROM MATTEST
-        """).map { row => 
-          ( row(0).asLong, row(1).asLong, row(2).asLong, row(3).asLong ) 
-        }
-
+        sparkOp.collect().toList.map( row => {
+          ( row.getLong(0), row.getLong(1), row.getLong(2), row.getString(3).toLong ) 
+        })
+        
       results must contain(eachOf(
-        (1l, 3l, 7l, db.backend.resultValue("SELECT ROWID FROM R WHERE A = 1 AND B = 3 AND C = 1").asLong),
-        (2l, 2l, 7l, db.backend.resultValue("SELECT ROWID FROM R WHERE A = 2 AND B = 2 AND C = 1").asLong)
+        (1l, 3l, 7l, db.query("SELECT ROWID() FROM R WHERE A = 1 AND B = 3 AND C = 1")(_.toList.head(0).asLong)),
+        (2l, 2l, 7l, db.query("SELECT ROWID() FROM R WHERE A = 2 AND B = 2 AND C = 1")(_.toList.head(0).asLong))
       ))
 
     }

@@ -53,6 +53,11 @@ class ViewMetadata(
       Table(name, name, materializedSchema, Seq())
     )
   }
+  
+  def materializedOperator: Operator =  {
+    Project(materializedSchema.map {col => ProjectArg(col._1, Var(col._1))},  
+        Table(name, name, materializedSchema, Seq()))
+  }
 
   def provenanceCols: Seq[String] = 
     Provenance.compile(query)._2

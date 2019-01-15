@@ -143,7 +143,7 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], geocod
     val state = args(4).asString
     val url = geocoder match {
       case "GOOGLE" => (s"https://maps.googleapis.com/maps/api/geocode/json?address=${s"$houseNumber+${streetName.replaceAll(" ", "+")},+${city.replaceAll(" ", "+")},+$state".replaceAll("\\+\\+", "+")}&key=$apiKey")
-      case "OSM" | _ => (s"http://52.0.26.255/?format=json&street=$houseNumber $streetName&city=$city&state=$state")
+      case "OSM" | _ => (s"http://52.0.26.255/?format=json&street=$houseNumber%20$streetName&city=$city&state=$state")
     }
     try {
       val geoRes = HTTPUtils.get(url) 

@@ -13,11 +13,11 @@ object CTExplainerSpec
 
   def beforeAll = 
   {
-    update("CREATE TABLE R(A string, B int, C int)")
-    db.loadTable("R", new File("test/r_test/r.csv"), true, ("CSV", Seq(StringPrimitive(","), BoolPrimitive(false), BoolPrimitive(false))))
-    db.adaptiveSchemas.create("R_TI", "TYPE_INFERENCE", db.table("R"), Seq(FloatPrimitive(.5))) 
-		db.views.create("TI", db.adaptiveSchemas.viewFor("R_TI", "DATA").get)
-    update("CREATE LENS MV AS SELECT * FROM TI WITH MISSING_VALUE('B', 'C')")
+    //db.loadTable("R", Seq(("A","string"),("B","int"),("C","int")),new File("test/r_test/r.csv"))
+    db.loadTable("R", new File("test/r_test/r.csv"), true, ("CSV", Seq(StringPrimitive(","),BoolPrimitive(true),BoolPrimitive(false))), Some(Seq(("A",TString()),("B",TInt()),("C",TInt()))))
+    //db.adaptiveSchemas.create("R_TI", "TYPE_INFERENCE", db.table("R"), Seq(FloatPrimitive(.5))) 
+		//db.views.create("TI", db.adaptiveSchemas.viewFor("R_TI", "DATA").get)
+    update("CREATE LENS MV AS SELECT * FROM R WITH MISSING_VALUE('B', 'C')")
   }
 
   "The CTExplainer" should {

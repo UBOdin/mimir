@@ -22,6 +22,7 @@ import org.rogach.scallop._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import scala.collection.JavaConverters._
+import mimir.algebra.spark.OperatorTranslation
 
 /**
  * The primary interface to Mimir.  Responsible for:
@@ -49,21 +50,26 @@ object Mimir extends LazyLogging {
     // Prepare experiments
     ExperimentalOptions.enable(conf.experimental())
 
+   
     // Set up the database connection(s)
-    db = new Database(new JDBCBackend(conf.backend(), conf.dbname()))
+    val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
+    val sback = new SparkBackend(database)
+    db = new Database(sback, new JDBCMetadataBackend(conf.backend(), conf.dbname()))
     if(!conf.quiet()){
       output.print("Connecting to " + conf.backend() + "://" + conf.dbname() + "...")
     }
+    db.metadataBackend.open()
     db.backend.open()
-
+    OperatorTranslation.db = db
+    sback.registerSparkFunctions(db.functions.functionPrototypes.map(el => el._1).toSeq, db.functions)
+    sback.registerSparkAggregates(db.aggregates.prototypes.map(el => el._1).toSeq, db.aggregates)
+      
     db.initializeDBForMimir();
 
     // Check for one-off commands
     if(conf.loadTable.get != None){
       db.loadTable(conf.loadTable(), conf.loadTable()+".csv");
     } else {
-      var source: Reader = null;
-      var prompt: (() => Unit) = { () =>  }
 
       conf.precache.foreach( (opt) => opt.split(",").foreach( (table) => { 
         output.print(s"Precaching... $table")
@@ -71,31 +77,77 @@ object Mimir extends LazyLogging {
       }))
 
       if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
-        db.backend.asInstanceOf[JDBCBackend].enableInlining(db)
+        db.metadataBackend.asInstanceOf[InlinableBackend].enableInlining(db)
       }
-
-      if(conf.file.get == None || conf.file() == "-"){
-        if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
-          source = new LineReaderInputSource(terminal)
-          output = new PrettyOutputFormat(terminal)
-        } else {
-          source = new InputStreamReader(System.in)
-          output = DefaultOutputFormat
-          prompt = () => { System.out.print("\nmimir> "); System.out.flush(); }
-        }
-      } else {
-        source = new FileReader(conf.file())
-        output = DefaultOutputFormat
+      if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
+        output = new PrettyOutputFormat(terminal)
       }
-
       if(!conf.quiet()){
         output.print("   ... ready")
       }
-      eventLoop(source, prompt)
+
+      var finishByReadingFromConsole = true
+
+      conf.files.get match {
+        case None => {}
+        case Some(files) => 
+          for(file <- files){
+            if(file == "-"){
+              interactiveEventLoop()
+              finishByReadingFromConsole = false
+            } else {
+              val extensionRegexp = "([^.]+)$".r
+              val extension:String = extensionRegexp.findFirstIn(file) match {
+                case Some(e) => e
+                case None => {
+                  throw new RuntimeException("Error: Unable to determine file format of "+file)
+                }
+              }
+
+              extension.toLowerCase match {
+                case "sql" => {
+                    eventLoop(new FileReader(file), { () =>  })
+                    finishByReadingFromConsole = false
+                  }
+                case "csv" => {
+                    output.print("Loading "+file+"...")
+                    db.loadTable(
+                      new File(file).getName().replaceAll("\\..*", "").toUpperCase,
+                      new File(file),
+                      false
+                    )
+                  }
+                case _ => {
+                  throw new RuntimeException("Error: Unknown file format '"+extension+"' of "+file)
+                }
+              }
+            }
+          }
+      }
+      if(finishByReadingFromConsole){
+        interactiveEventLoop()
+      }
     }
 
     db.backend.close()
     if(!conf.quiet()) { output.print("\n\nDone.  Exiting."); }
+  }
+
+  def interactiveEventLoop(): Unit =
+  {
+    val (source, prompt) = 
+      if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
+        (
+          new LineReaderInputSource(terminal),
+          { () =>  }
+        )
+      } else {
+        (
+          new InputStreamReader(System.in),
+          () => { System.out.print("\nmimir> "); System.out.flush(); }
+        )
+      }
+    eventLoop(source, prompt)
   }
 
   def eventLoop(source: Reader, prompt: (() => Unit)): Unit =
@@ -158,7 +210,7 @@ object Mimir extends LazyLogging {
 
   def handleDirectQuery(direct: DirectQuery) =
   {
-    direct.getStatement match {
+    /*direct.getStatement match {
       case sel: Select => {
         val iter = new JDBCResultIterator(
           SqlUtils.getSchema(sel.getSelectBody, db).map { (_, TString()) },
@@ -172,7 +224,7 @@ object Mimir extends LazyLogging {
       case update => {
         db.backend.update(update.toString);
       }
-    }
+    }*/
   }
 
   def handleExplain(explain: Explain): Unit = 
@@ -182,12 +234,21 @@ object Mimir extends LazyLogging {
     output.print(raw.toString)
     db.typechecker.schemaOf(raw)        // <- discard results, just make sure it typechecks
     val optimized = db.compiler.optimize(raw)
-    output.print("--- Optimized Query ---")
+    output.print("\n--- Optimized Query ---")
     output.print(optimized.toString)
     db.typechecker.schemaOf(optimized)  // <- discard results, just make sure it typechecks
-    output.print("--- SQL ---")
+    output.print("\n-------- SQL --------")
     try {
       output.print(db.ra.convert(optimized).toString)
+    } catch {
+      case e:Throwable =>
+        output.print("Unavailable: "+e.getMessage())
+    }
+    output.print("\n------- Spark -------")
+    try {
+      output.print(
+        mimir.algebra.spark.OperatorTranslation.mimirOpToSparkOp(optimized).toString
+      )
     } catch {
       case e:Throwable =>
         output.print("Unavailable: "+e.getMessage())
@@ -258,11 +319,18 @@ object Mimir extends LazyLogging {
           " (" + reason.args.mkString(",") + ")"
         } else { "" }
       output.print(reason.reason)
-      if(!reason.confirmed){
-        output.print(s"   ... repair with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.repair.exampleString }`");
-        output.print(s"   ... confirm with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.guess }`");
-      } else {
-        output.print(s"   ... ammend with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.repair.exampleString }`");
+      reason match {
+        case _:DataWarningReason => 
+          if(!reason.confirmed) { 
+            output.print(s"    ... acknowledge with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${reason.repair.exampleString}`")
+          }
+        case _ => 
+          if(!reason.confirmed){
+            output.print(s"   ... repair with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.repair.exampleString }`");
+            output.print(s"   ... confirm with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.guess }`");
+          } else {
+            output.print(s"   ... ammend with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.repair.exampleString }`");
+          }
       }
       output.print("")
     }
@@ -352,6 +420,29 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   val precache = opt[String]("precache", descr = "Precache one or more lenses")
   val rebuildBestGuess = opt[String]("rebuild-bestguess")  
   val quiet  = toggle("quiet", default = Some(false))
-  val file = trailArg[String](required = false)
+  val files = trailArg[List[String]](required = false)
   val experimental = opt[List[String]]("X", default = Some(List[String]()))
+  val sparkHost = opt[String]("sparkHost", descr = "The IP or hostname of the spark master",
+    default = Some("spark-master.local"))
+  val sparkPort = opt[String]("sparkPort", descr = "The port of the spark master",
+    default = Some("7077"))
+  val sparkDriverMem = opt[String]("sparkDriverMem", descr = "The memory for spark driver",
+    default = Some("8g"))
+  val sparkExecutorMem = opt[String]("sparkExecutorMem", descr = "The memory for spark executors",
+    default = Some("8g"))
+  val hdfsPort = opt[String]("hdfsPort", descr = "The port for hdfs",
+    default = Some("8020"))
+  val useHDFSHostnames = toggle("useHDFSHostnames", default = Some(false),
+      descrYes = "use the hostnames for hdfs nodes",
+      descrNo = "use ip addresses for hdfs nodes")
+  val overwriteStagedFiles = toggle("overwriteStagedFiles", default = Some(false),
+      descrYes = "overwrites files sent to staging area (hdfs or s3)",
+      descrNo = "do not overwrites files sent to staging area (hdfs or s3)")
+  val overwriteJars = toggle("overwriteJars", default = Some(false),
+      descrYes = "overwrites jar files sent to hdfs",
+      descrNo = "do not overwrites jar files sent to hdfs")
+  val numPartitions = opt[Int]("numPartitions", descr = "number of partitions to use",
+    default = Some(8))
+  val dataStagingType = opt[String]("dataStagingType", descr = "where to stage data for spark: hdfs or s3",
+    default = Some("hdfs"))
 }

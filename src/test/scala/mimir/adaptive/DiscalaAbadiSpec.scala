@@ -29,15 +29,15 @@ object DiscalaAbadiSpec
           WITH DISCALA_ABADI()
       """)
 
-      querySingleton("""
+      querySingletonMetadata("""
         SELECT COUNT(*) FROM MIMIR_DA_FDG_SHIPPING
       """).asLong must be greaterThan(20l)
-      query("""
+      queryMetadata("""
         SELECT NAME FROM MIMIR_ADAPTIVE_SCHEMAS
       """) {
         _.toSeq.map( m => m.tuple(0)) must contain(StringPrimitive("SHIPPING"))
       }
-      query("""
+      queryMetadata("""
         SELECT NAME FROM MIMIR_MODELS
       """) {
         _.toSeq.map( m => m.tuple(0)) must contain(StringPrimitive("MIMIR_DA_CHOSEN_SHIPPING:MIMIR_FD_PARENT"))
@@ -45,13 +45,13 @@ object DiscalaAbadiSpec
     }
 
     "Create a sane root attribute" >> {
-      query("""
+      queryMetadata("""
         SELECT ATTR_NODE FROM MIMIR_DA_SCH_SHIPPING
         WHERE ATTR_NAME = 'ROOT'
       """){ 
         _.toSeq must haveSize(1)
       }
-      query("""
+      queryMetadata("""
         SELECT ATTR_NODE FROM MIMIR_DA_SCH_SHIPPING
         WHERE ATTR_NAME = 'ROOT'
           AND ATTR_NODE >= 0
@@ -144,20 +144,20 @@ object DiscalaAbadiSpec
       LoggerUtils.debug(
         // "mimir.exec.Compiler"
       ) {
-        query("""
+        queryMetadata("""
           SELECT TABLE_NAME, SCHEMA_NAME FROM MIMIR_SYS_TABLES
         """){ results =>
           val tables = results.map { row => (row("TABLE_NAME").asString, row("SCHEMA_NAME").asString) }.toSeq 
 
           tables must contain( ("ROOT", "SHIPPING") )
-          tables must contain( ("MIMIR_VIEWS", "BACKEND") )
-          tables must contain( ("SHIPPING_RAW", "BACKEND") )
+          //tables must contain( ("MIMIR_VIEWS", "BACKEND") )
+          tables must contain( ("shipping_raw", "BACKEND") )
         }
       } 
 
 
       
-      query("""
+      queryMetadata("""
         SELECT TABLE_NAME, ATTR_NAME FROM MIMIR_SYS_ATTRS
       """) { results =>
         val attrs = results.map { row => (row("TABLE_NAME").asString, row("ATTR_NAME").asString) }.toSeq 
@@ -169,7 +169,7 @@ object DiscalaAbadiSpec
         // "mimir.exec.Compiler",
         // "mimir.exec.mode.BestGuess$"
       ) {
-        query("""
+        queryMetadata("""
           SELECT ATTR_NAME FROM MIMIR_SYS_ATTRS
           WHERE SCHEMA_NAME = 'SHIPPING'
             AND TABLE_NAME = 'ROOT'
@@ -193,7 +193,7 @@ object DiscalaAbadiSpec
       LoggerUtils.debug(
          // "mimir.exec.Compiler"
       ){
-        query(baseQuery){ results =>
+        queryMetadata(baseQuery){ results =>
           val attrStrings = results.map { row => 
             (
               row("ATTR_NAME").asString, 

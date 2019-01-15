@@ -20,6 +20,9 @@ project/plugins/project/
 # Scala-IDE specific
 .scala_dependencies
 .worksheet
+.settings/
+.project
+.cache-*
 
 # Sublime-Text
 Mimir.sublime-workspace
@@ -40,6 +43,7 @@ databases/tpch*.db
 # Large Data Files
 test/pdbench
 test/tpch
+Test/mcdb
 
 # DBGen
 tpch-dbgen
@@ -53,3 +57,6 @@ tpch-dbgen
 # Python
 *.pyc
 .classpath
+
+# Spark
+metastore_db/

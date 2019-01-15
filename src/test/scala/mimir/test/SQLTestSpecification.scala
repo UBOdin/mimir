@@ -13,6 +13,9 @@ import mimir.util._
 import mimir.exec._
 import mimir.exec.result._
 import mimir.optimizer._
+import mimir.algebra.spark.OperatorTranslation
+import mimir.ml.spark.SparkML
+import org.specs2.specification.AfterAll
 
 object DBTestInstances
 {
@@ -40,12 +43,16 @@ object DBTestInstances
           }
           val oldDBExists = dbFile.exists();
           // println("Exists: "+oldDBExists)
-          val backend = new JDBCBackend(jdbcBackendMode, tempDBName+".db")
-          val tmpDB = new Database(backend);
+          val backend = new JDBCMetadataBackend(jdbcBackendMode, tempDBName+".db")
+          val sback = new SparkBackend(tempDBName)
+          val tmpDB = new Database(sback, backend);
           if(shouldCleanupDB){    
             dbFile.deleteOnExit();
           }
+          tmpDB.metadataBackend.open()
           tmpDB.backend.open();
+          SparkML(sback.sparkSql)
+          OperatorTranslation.db = tmpDB
           if(shouldResetDB || !oldDBExists){
             config.get("initial_db") match {
               case None => ()
@@ -73,8 +80,24 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   extends Specification
   with SQLParsers
   with RAParsers
+  with AfterAll
 {
-
+  //sequential
+  def afterAll = {
+    //TODO: There is likely a better way to do this:
+    // hack for spark to delete all cached tables 
+    // and temp views that may have shared names between tests
+    try{
+      if(config.getOrElse("cleanup", config.getOrElse("reset", "YES")) match { 
+            case "NO" => false; case "YES" => true
+          }) db.backend.dropDB()
+      db.backend.close()
+      db.backend.open()
+    }catch {
+      case t: Throwable => {}
+    }
+  }
+  
   def dbFile = new File(tempDBName+".db")
 
   def db = DBTestInstances.get(tempDBName, config)
@@ -95,6 +118,16 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     query(s){ _.next }
   def table(t: String) =
     db.table(t)
+  def queryMetadata[T](s: String)(handler: ResultIterator => T): T =
+    db.queryMetadata(s)(handler)
+  def queryOneColumnMetadata[T](s: String)(handler: Iterator[PrimitiveValue] => T): T = 
+    queryMetadata(s){ result => handler(result.map(_(0))) }
+  def querySingletonMetadata(s: String): PrimitiveValue =
+    queryOneColumnMetadata(s){ _.next }
+  def queryOneRowMetadata(s: String): Row =
+    queryMetadata(s){ _.next }
+  def metadataTable(t: String) =
+    db.metadataTable(t)
   def resolveViews(q: Operator) =
     db.views.resolve(q)
   def explainRow(s: String, t: String) = 
@@ -118,13 +151,26 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     ))
     db.explainer.explainEverything(query)
   }
+  def explainAdaptiveSchema(s: String) =
+  {
+    val query = resolveViews(db.sql.convert(
+      stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
+    ))
+    db.explainer.explainAdaptiveSchema(query, query.columnNames.toSet, true)
+  }  
   def update(s: Statement) = 
     db.update(s)
   def update(s: String) = 
     db.update(stmt(s))
-  def loadCSV(table: String, file: File) =
+  def loadCSV(table: String, file: File) : Unit =
     LoadCSV.handleLoadTable(db, table, file)
- 
+  def loadCSV(table: String, schema:Seq[(String,String)], file: File) : Unit =
+    db.loadTable(table, schema, file ) 
+  def loadCSV(table: String, file: File, inferTypes:Boolean, detectHeaders:Boolean) : Unit =
+    db.loadTable(table, file, true, None, inferTypes, detectHeaders)
+  def loadCSV(table: String, schema:Seq[(String,String)], file: File, inferTypes:Boolean, detectHeaders:Boolean) : Unit =
+    db.loadTable(table, file, true, Some(schema.map(el => (el._1, Type.fromString(el._2)))), inferTypes, detectHeaders)
+    
   def modelLookup(model: String) = db.models.get(model)
   def schemaLookup(table: String) = db.tableSchema(table).get
  }

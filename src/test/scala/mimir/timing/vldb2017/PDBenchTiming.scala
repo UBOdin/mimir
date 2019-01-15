@@ -16,7 +16,7 @@ import mimir.models._
 import mimir.exec.uncertainty._
 
 object PDBenchTiming
-  extends VLDB2017TimingTest("VLDB2017PDBench", Map("reset" -> "NO", "inline" -> "YES"))
+  extends VLDB2017TimingTest("VLDB2017PDBench", Map("reset" -> "NO", "cleanup" -> "NO", "inline" -> "YES"))
   with BeforeAll
 {
 
@@ -24,12 +24,12 @@ object PDBenchTiming
 
   args(skipAll = !PDBench.isDownloaded)
 
-  val fullReset = false
-  val runBestGuessQueries = false
+  val fullReset = true
+  val runBestGuessQueries = true
   val runTupleBundleQueries = false
   val runSamplerQueries = true
   val runPartitionQueries = false
-  val useMaterialized = false
+  override val useMaterialized = false
 
   val timeout = 10.minute
 
@@ -71,7 +71,7 @@ object PDBenchTiming
     "supp_s_suppkey"
   )
 
-  if(true){ "Skipping TPCH Inpute Test" >> ok } else {
+  if(false){ "Skipping TPCH Inpute Test" >> ok } else {
     "PDBench" should {
 
       sequential

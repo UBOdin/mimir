@@ -5,12 +5,6 @@ import mimir.algebra._
 import mimir.models._
 import mimir.util.JSONBuilder
 
-object Reason
-{
-  def make(model: Model, idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Reason =
-    new ModelReason(model, idx, args, hints)
-}
-
 abstract class Reason
 {
   def toString: String
@@ -27,34 +21,41 @@ abstract class Reason
 
   def toJSON: String =
     JSONBuilder.dict(Map(
-      "english" -> reason,
-      "source"  -> model.name,
-      "varid"   -> idx,
-      "args"    -> args,
-      "repair"  -> repair.toJSON
+      "english" -> JSONBuilder.string(reason),
+      "source"  -> JSONBuilder.string(model.name),
+      "varid"   -> JSONBuilder.int(idx),
+      "args"    -> JSONBuilder.list( args.map( x => JSONBuilder.string(x.toString)).toList ),
+      "repair"  -> repair.toJSON,
+      //TODO:  this is a hack to check if the args
+      "rowidarg"-> JSONBuilder.int(model.argTypes(idx).zipWithIndex.foldLeft(-1)((init, curr) => curr._1 match {
+        case TRowId() => curr._2
+        case _ => init
+      })),
+      "confirmed" -> JSONBuilder.boolean(confirmed) 
     ))
     
   def toJSONWithFeedback : String = {
-    val argString = 
-        if(!this.args.isEmpty){
-          " (" + this.args.mkString(",") + ")"
-        } else { "" }
-    val feedback =  if(!this.confirmed){
-        Map(("repair_with", s"`FEEDBACK ${this.model.name} ${this.idx}$argString IS ${ this.repair.exampleString }`"),
-        ("confirm_with", s"`FEEDBACK ${this.model.name} ${this.idx}$argString IS ${ this.guess }`"))
-      } else {
-        Map(("ammend_with", s"`FEEDBACK ${this.model.name} ${this.idx}$argString IS ${ this.repair.exampleString }`"))
-      } 
-    JSONBuilder.dict(Map(
-      "english" -> reason,
-      "source"  -> model.name,
-      "varid"   -> idx,
-      "args"    -> args,
-      "repair"  -> repair.toJSON,
-      "feedback"-> feedback
-    ))
-  }
+      val argString = 
+          if(!this.args.isEmpty){
+            " (" + this.args.mkString(",") + ")"
+          } else { "" }
+      val feedback =  if(!this.confirmed){
+          Map(("repair_with", s"`FEEDBACK ${this.model.name} ${this.idx}$argString IS ${ this.repair.exampleString }`"),
+          ("confirm_with", s"`FEEDBACK ${this.model.name} ${this.idx}$argString IS ${ this.guess }`"))
+        } else {
+          Map(("ammend_with", s"`FEEDBACK ${this.model.name} ${this.idx}$argString IS ${ this.repair.exampleString }`"))
+        } 
+      JSONBuilder.dict(Map(
+        "english" -> reason,
+        "source"  -> model.name,
+        "varid"   -> idx,
+        "args"    -> args,
+        "repair"  -> repair.toJSON,
+        "feedback"-> feedback
+      ))
+    }
 }
+
 
 class ModelReason(
   val model: Model,
@@ -80,6 +81,25 @@ class ModelReason(
 
   override def hashCode: Int = 
     model.hashCode * idx * args.map(_.hashCode).sum
+}
+
+class DataWarningReason(
+  val model: Model,
+  val value: PrimitiveValue,
+  val message: String,
+  val key: Seq[PrimitiveValue]
+)
+  extends Reason
+{
+  override def toString = s" {{ $model[${key.mkString(", ")}] }}"
+
+  def idx: Int = 0
+  def args: Seq[PrimitiveValue] = key
+  def hints: Seq[PrimitiveValue] = Seq()
+
+  def reason: String = message
+  def repair: Repair = DataWarningRepair
+  override def guess: PrimitiveValue = value
 }
 
 class MultiReason(db: Database, reasons: ReasonSet)

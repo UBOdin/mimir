@@ -5,10 +5,11 @@ import java.io.{File, FileReader}
 import mimir.Database
 import mimir.algebra.{Var, ProjectArg, Project}
 import mimir.parser.MimirJSqlParser
-import mimir.sql.JDBCBackend
 import org.specs2.mutable.Specification
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.Select
+import mimir.sql.SparkBackend
+import mimir.sql.JDBCMetadataBackend
 
 object OracleTpchQueries extends Specification {
 
@@ -18,9 +19,9 @@ object OracleTpchQueries extends Specification {
   val q5 = "5.sql"
   val q9 = "9.sql"
 
-  val dbName = "osmall.db"
+  val dbName = "osmall"
   val backend = "oracle"
-  val db = new Database(new JDBCBackend(backend, dbName))
+  val db = new Database(new SparkBackend(dbName),new JDBCMetadataBackend(backend, dbName+".db"))
 
   "Mimir" should  {
     "Run tpch query 5 on Oracle" >> {

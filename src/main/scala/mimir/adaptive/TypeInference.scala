@@ -6,6 +6,8 @@ import mimir.algebra._
 import mimir.lenses._
 import mimir.models._
 import mimir.util.SqlUtils
+import mimir.sql.SparkBackend
+import mimir.sql.BackendWithSparkContext
 
 object TypeInference
   extends Multilens
@@ -41,20 +43,28 @@ object TypeInference
         case _ => None
       }).toIndexedSeq
 
-    val model = 
+    val attributeTypeModel = 
       new TypeInferenceModel(
         s"MIMIR_TI_ATTR_${viewName}",
         modelColumns,
-        stringDefaultScore
+        stringDefaultScore,
+        db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(),
+        Some(db.backend.execute(config.query.limit(TypeInferenceModel.sampleLimit, 0)))
+      )
+
+    val warningModel = 
+      new WarningModel(
+        s"MIMIR_TI_WARNING_${viewName}",
+        Seq(TString(), TString(), TString())
       )
 
     val columnIndexes = 
       modelColumns.zipWithIndex.toMap
 
-    logger.debug(s"Training $model.name on ${config.query}")
-    model.train(db, config.query)
+    logger.debug(s"Training $attributeTypeModel.name on ${config.query}")
+    //model.train(db.backend.execute(config.query))
     
-    Seq(model)
+    Seq(attributeTypeModel, warningModel)
   }
 
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator =
@@ -112,18 +122,38 @@ object TypeInference
       val model = db.models.get(s"MIMIR_TI_ATTR_${config.schema}").asInstanceOf[TypeInferenceModel]
       val columnIndexes = model.columns.zipWithIndex.toMap
       Some(Project(
-        config.query.columnNames.map { colName =>
+        config.query.columnNames.map { colName => {
           ProjectArg(colName, 
             if(columnIndexes contains colName){ 
-              Function("CAST", Seq(
-                Var(colName),
-                model.bestGuess(0, Seq(IntPrimitive(columnIndexes(colName))), Seq())
-              ))
+              val bestGuessType = model.bestGuess(0, Seq(IntPrimitive(columnIndexes(colName))), Seq())
+              val castExpression = Function("CAST", Seq(
+                  Var(colName),
+                  bestGuessType
+                ))
+              Conditional(
+                IsNullExpression(Var(colName)),
+                NullPrimitive(),
+                Conditional(
+                  IsNullExpression(castExpression),
+                  DataWarning(
+                    s"MIMIR_TI_WARNING_${config.schema}",
+                    NullPrimitive(),
+                    Function("CONCAT", Seq(
+                      StringPrimitive("Couldn't Cast [ "),
+                      Var(colName),
+                      StringPrimitive(" ] to "+bestGuessType+" on row "),
+                      RowIdVar()
+                    )),
+                    Seq(StringPrimitive(colName), Var(colName), StringPrimitive(bestGuessType.toString))
+                  ),
+                  castExpression
+                )
+              )
             } else {
               Var(colName)
             }
           )
-        }, config.query
+        }}, config.query
       ))  
     } else { None }
   }

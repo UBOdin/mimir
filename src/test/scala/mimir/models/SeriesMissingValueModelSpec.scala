@@ -21,8 +21,7 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
   }
 
   def trueValue(col:String, row:String): PrimitiveValue = {
-	  val rowid = row.toLong - 1
-    val queryOper = select(s"SELECT $col FROM ORG_DETECTSERIESTEST3 WHERE ROWID=$rowid")
+	  val queryOper = select(s"SELECT $col FROM ORG_DETECTSERIESTEST3 WHERE ROWID=$row")
   	db.query(queryOper){ result =>
   		result.next.tuple(0)
   	}
@@ -40,25 +39,34 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
 		}
 
 		"Not choke when training multiple columns" >> {
-			models = models ++ SeriesMissingValueModel.train(db, "SERIESREPAIR", List(
+			mimir.util.LoggerUtils.trace(
+				 //"mimir.models.SeriesMissingValueModel"
+			){
+		  models = models ++ SeriesMissingValueModel.train(db, "SERIESREPAIR", List(
 			"MARKETVAL", "GAMESPLAYED"
 			), db.table("DETECTSERIESTEST3"))
 			models.keys must contain("MARKETVAL", "GAMESPLAYED")
+			}
 		}
 
 		"Make reasonable predictions" >> {
+		   mimir.util.LoggerUtils.trace(
+				 //"mimir.sql.SparkBackend",
+		     //"mimir.models.SeriesMissingValueModel"  
+			) {
 		  queryOneColumn("SELECT ROWID() FROM DETECTSERIESTEST3 WHERE AGE IS NULL"){ result =>
   			val rowids = result.toIndexedSeq
   			val (predicted, correct) = 
   			  rowids.map { rowid => 
     				val a = predict("AGE", rowid.asString)
     				val b = trueValue("AGE", rowid.asString)
-    				println(s"${rowid.asString}->$a,$b")
+    				//println(s"${rowid.asString}->$a,$b")
     				( (rowid -> a), (rowid -> b) )
   			  }.unzip
 			
   			predicted.toMap must be equalTo(correct.toMap)
       }
+		   }
 		}
 	
     "Produce reasonable explanations" >> {

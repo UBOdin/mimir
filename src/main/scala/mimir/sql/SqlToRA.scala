@@ -29,6 +29,13 @@ import mimir.provenance.Provenance
 class SqlToRA(db: Database) 
   extends LazyLogging
 {
+  private val vizierNameMap = scala.collection.mutable.Map[String, String]()
+  
+  def registerVizierNameMapping(vizierName:String,mimirName:String) : Unit = {
+    vizierNameMap.put(vizierName, mimirName)
+  }
+  
+  def getVizierNameMapping(vizierName:String) : Option[String] =  vizierNameMap.get(vizierName)
 
   def unhandled(feature : String) = {
     println("ERROR: Unhandled Feature: " + feature)
@@ -501,7 +508,14 @@ class SqlToRA(db: Database)
       else { alias = alias.toUpperCase }
 
       if(fi.asInstanceOf[net.sf.jsqlparser.schema.Table].getSchemaName == null){
-        val tableOp = db.table(name, alias)
+        val tableOp = if(db.metadataTables.contains(name) || name.startsWith("MIMIR_DA_FDG_") || name.startsWith("MIMIR_DA_SCH_")) 
+          db.metadataTable(name, alias) else {
+            vizierNameMap.get(name) match {
+              case Some(mimirName) if name.equals(alias) => db.table(mimirName, mimirName)
+              case Some(mimirName) => db.table(mimirName, alias)
+              case None => db.table(name, alias)
+            }
+          }
         val newBindings = tableOp.columnNames.map { x => (x, alias+"_"+x) }
         return (
           Project(
@@ -686,7 +700,14 @@ class SqlToRA(db: Database)
             bindings(name);
           } catch {
             case _:NoSuchElementException => 
-              throw new SQLException(s"Unknown Variable: $name in $bindings")
+              //TODO: this is a temporary hack for spark data source loads that have 
+              //  lower case cols.  we need to fix it at the source.
+              try {
+                bindings(name.toLowerCase());
+              } catch {
+                case _:NoSuchElementException => 
+                  throw new SQLException(s"Unknown Variable: $name in $bindings")
+              }
           }
         return Var(binding)
       case table => 

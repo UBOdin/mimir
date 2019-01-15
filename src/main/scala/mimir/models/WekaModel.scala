@@ -1,4 +1,4 @@
-package mimir.models
+/*package mimir.models
 
 import java.io.File
 import java.sql.SQLException
@@ -329,4 +329,4 @@ class SimpleWekaModel(name: String, colName: String, query: Operator)
         else { classes.maxBy(_._1)._1/classes.map(_._1).sum }
     }
   }
-}
+}*/

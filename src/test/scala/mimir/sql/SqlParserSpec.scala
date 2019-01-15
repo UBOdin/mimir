@@ -18,6 +18,8 @@ import mimir.sql._
 import mimir.util._
 import mimir.test._
 import mimir.ctables._
+import mimir.ml.spark.SparkML
+import mimir.algebra.spark.OperatorTranslation
 
 object SqlParserSpec 
 	extends Specification 
@@ -30,18 +32,18 @@ object SqlParserSpec
 	def expr = ExpressionParser.expr _
 
 	val tempDB:String = "tempDB"
-	val testData = List[ (String, File, List[String]) ](
+	val testData = List[ (String, File, List[(String, String)]) ](
 			(	"R", new File("test/r_test/r.csv"), 
-				List("A int", "B int", "C int")
+				List(("A","int"), ("B", "int"), ("C", "int"))
 			),
 			("S", new File("test/r_test/s.csv"),
-				List("B int", "D int")
+				List(("B","int"), ("D","int"))
 			),
 			("T", new File("test/r_test/t.csv"),
-				List("D int", "E int")
+				List(("D","int"), ("E","int"))
 			),
 			(	"R_REVERSED", new File("test/r_test/r.csv"), 
-				List("C int", "B int", "A int")
+				List(("C","int"), ("B","int"), ("A","int"))
 			)
 		)
 
@@ -52,12 +54,16 @@ object SqlParserSpec
 				if(dbFile.exists()){ dbFile.delete(); }
 				dbFile.deleteOnExit();
 			}
-			val j = new JDBCBackend("sqlite",
+			val j = new JDBCMetadataBackend("sqlite",
 									if(tempDB == null){ "testdb" } else { tempDB.toString }
 							)
-			val d = new Database(j)
+			val sback = new SparkBackend(if(tempDB == null){ "testdb" } else { tempDB.toString.split("[\\\\/]").last.replaceAll("\\..*", "") })
+			val d = new Database(sback, j)
 	    try {
+	      d.metadataBackend.open()
 		    d.backend.open();
+	      SparkML(sback.sparkSql)
+        OperatorTranslation.db = d
 				j.enableInlining(d)
 				d.initializeDBForMimir();
 			} catch {
@@ -65,8 +71,9 @@ object SqlParserSpec
 
 			}
 			testData.foreach ( _ match { case ( tableName, tableData, tableCols ) => 
-				d.backend.update("CREATE TABLE "+tableName+"("+tableCols.mkString(", ")+");")
-				LoadCSV.handleLoadTable(d, tableName, tableData, Map("HEADER" -> "NO"))
+				d.backend.dropTable(tableName)
+			  LoadCSV.handleLoadTableRaw(d, tableName, 
+				    Some(tableCols.map(el => (el._1, Type.fromString(el._2)))), tableData, Map())
 			})
 			d
 		} catch {
@@ -78,7 +85,7 @@ object SqlParserSpec
 
 	"The Sql Parser" should {
 		"Handle trivial queries" in {
-			db.backend.resultRows("SELECT * FROM R;").toList must be equalTo List( 
+			db.query("SELECT * FROM R;")(_.toList.map(_.tuple)) must be equalTo List( 
 				List(IntPrimitive(1),IntPrimitive(2),IntPrimitive(3)),
 				List(IntPrimitive(1),IntPrimitive(3),IntPrimitive(1)),
 				List(IntPrimitive(2),NullPrimitive(),IntPrimitive(1)),
@@ -88,7 +95,7 @@ object SqlParserSpec
 				List(IntPrimitive(4),IntPrimitive(2),IntPrimitive(4))
 			)
 
-			db.backend.resultRows("SELECT A FROM R;").toList must be equalTo List(
+			db.query("SELECT A FROM R;")(_.toList.map(_.tuple)) must be equalTo List(
 				List(IntPrimitive(1)),
 				List(IntPrimitive(1)),
 				List(IntPrimitive(2)),
@@ -100,7 +107,7 @@ object SqlParserSpec
 		}
 
 		"Handle IN queries" in {
-			db.backend.resultRows("SELECT B FROM R WHERE A IN (2,3,4)").toList must not contain(Seq(IntPrimitive(3)))
+			db.query("SELECT B FROM R WHERE R.A IN (2,3,4)")(_.toList.map(_.tuple)) must not contain(Seq(IntPrimitive(3)))
 		}
 
 		"Handle CAST operations" in {
@@ -455,7 +462,10 @@ object SqlParserSpec
 		}
 
 		"Get the types right in aggregates" >> {
-			db.backend.update(stmts("test/data/Product_Inventory.sql").map(_.toString))
+			db.backend.dropTable("PRODUCT_INVENTORY")
+		  LoadCSV.handleLoadTableRaw(db, "PRODUCT_INVENTORY",
+				    Some(Seq(("ID",TString()),("COMPANY",TString()),("QUANTITY",TInt()),("PRICE",TFloat()))), 
+				    new File("test/data/Product_Inventory.csv"), Map())
 			
 			val q = db.compiler.optimize(db.sql.convert(selectStmt("""
 				SELECT COMPANY, SUM(QUANTITY)
