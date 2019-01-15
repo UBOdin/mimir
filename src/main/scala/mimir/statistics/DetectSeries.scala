@@ -103,7 +103,7 @@ object DetectSeries
   }
   def interpolate(low: PrimitiveValue, mid: Double, high: PrimitiveValue): PrimitiveValue =
   {
-    println(s"DetectSeries.interpolate: low: ${low.getClass.getName} mid:$mid high: ${high.getClass.getName}")
+    //println(s"DetectSeries.interpolate: low: ${low.getClass.getName} mid:$mid high: ${high.getClass.getName}")
     (low.getType, high.getType) match {
       case ( TInt(), TInt() ) => {
         val l = low.asLong
@@ -184,7 +184,6 @@ object DetectSeries
           val scaleDf = curTypes match {
             //case (TDate(), _) => rowWindowDfi.na.drop.withColumn("ratio", datediff(col("prev0"), col(seriesColumnName)) / datediff(col("prev0"), col("next0")))
             case (TDate() | TTimestamp(),_) => {
-              println("---------------------Dates1!!!!!!!!!!!!!!!!!")
               rowWindowDfi.na.drop.withColumn("ratio", ( col("prev0") - col(seriesColumnName)) / (col("prev0")- col("next0")))
             }
             case _ => rowWindowDfi.na.drop.withColumn("ratio", (col(seriesColumnName) - col("prev0")) / (col("next0") - col("prev0")))
@@ -192,7 +191,6 @@ object DetectSeries
           val predictedDf = curTypes match {
             //case (_, TDate() | TTimestamp()) => scaleDf.withColumn("interpolate", datediff(col("prev1"), col("next1")) / (lit(1.0)/col("ratio")))
             case (_, TTimestamp() | TDate()) => {
-              println("---------------------Dates2!!!!!!!!!!!!!!!!!")
               scaleDf.withColumn("interpolate", col("prev1") + ((col("prev1")-col("next1")) / (lit(1.0)/col("ratio"))))
             }
             case _ => scaleDf.withColumn("interpolate", (col("next1") - col("prev1")) * col("ratio") + col("prev1"))                     

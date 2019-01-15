@@ -350,8 +350,8 @@ object OperatorTranslation
           } else {
             val index = joined.right.output.indexWhere(b => {
               if(!b.resolved){
-                println(s"--------> output attr not resolved: ${b.name}")
-                println(joined.right)
+                logger.debug(s"--------> output attr not resolved: ${b.name}")
+                logger.debug(joined.right)
                 joined.right.resolve(Seq(b.name), db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession.sessionState.analyzer.resolver).get
               }
               b.exprId == a.exprId
@@ -408,11 +408,11 @@ object OperatorTranslation
       val methods = parents.flatMap(_.getDeclaredMethods)
       val method = methods.find(_.getName == methodName).getOrElse(throw new IllegalArgumentException("Method " + methodName + " not found"))
       method.setAccessible(true)
-      println("=======================================")
-      println(method)
-      println(x)
-      println(args)
-      println("=======================================")
+      logger.debug("=======================================")
+      logger.debug(method)
+      logger.debug(x)
+      logger.debug(args)
+      logger.debug("=======================================")
       method.invoke(x, args : _*)
     }
   }
@@ -436,17 +436,17 @@ object OperatorTranslation
       val someTrait = obj.instance.asInstanceOf[AnyRef]
       
       //val someTrait = companionObj[org.apache.spark.sql.Dataset[Row]]("org.apache.spark.sql.Dataset")
-      println(someTrait)
+      logger.debug(someTrait)
       p(someTrait)('ofRows)(db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession, logicalPlan).asInstanceOf[DataFrame]
     
       //new Dataset[Row](db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession, logicalPlan, RowEncoder(logicalPlan.schema)).toDF()
     }
     catch {
       case t: Throwable => {
-        println("-------------------------> Exception Executing Spark Op withPlan: ")
-        println("------------------------ spark op --------------------------")
-        println(logicalPlan)
-        println("------------------------------------------------------------")
+        logger.debug("-------------------------> Exception Executing Spark Op withPlan: ")
+        logger.debug("------------------------ spark op --------------------------")
+        logger.debug(logicalPlan)
+        logger.debug("------------------------------------------------------------")
         throw t
       }
     }
@@ -548,13 +548,13 @@ object OperatorTranslation
       }
       case BestGuess(model, idx, args, hints) => {
         val name = model.name
-        //println(s"-------------------Translate BestGuess VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
+        //logger.debug(s"-------------------Translate BestGuess VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
        BestGuessUDF(oper, model, idx, args, hints).getUDF
         //UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ++ hints.map(mimirExprToSparkExpr(oper,_))), true )
       }
       case IsAcknowledged(model, idx, args) => {
         val name = model.name
-        //println(s"-------------------Translate IsAcknoledged VGTerm($name, $idx, (${args.mkString(",")}))")
+        //logger.debug(s"-------------------Translate IsAcknoledged VGTerm($name, $idx, (${args.mkString(",")}))")
         AckedUDF(oper, model, idx, args).getUDF
         //UnresolvedFunction(mimir.ctables.CTables.FN_IS_ACKED, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ), true )
       }
@@ -562,7 +562,7 @@ object OperatorTranslation
         SampleUDF(oper, model, idx, seed, args, hints).getUDF
       }
       case VGTerm(name, idx, args, hints) => { //default to best guess
-        //println(s"-------------------Translate VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
+        //logger.debug(s"-------------------Translate VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
         val model = db.models.get(name)
         BestGuessUDF(oper, model, idx, args, hints).getUDF
         //UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ++ hints.map(mimirExprToSparkExpr(oper,_))), true )
@@ -831,16 +831,16 @@ object OperatorTranslation
   
   /*def mimirOpToDF(sqlContext:SQLContext, oper:Operator) : DataFrame = {
     val sparkOper = OperatorTranslation.mimirOpToSparkOp(oper)
-    println("---------------------------- Mimir Oper -----------------------------")
-    println(oper)
-    println("---------------------------- Spark Oper -----------------------------")
-    println(sparkOper)
-    println("---------------------------------------------------------------------")
+    logger.debug("---------------------------- Mimir Oper -----------------------------")
+    logger.debug(oper)
+    logger.debug("---------------------------- Spark Oper -----------------------------")
+    logger.debug(sparkOper)
+    logger.debug("---------------------------------------------------------------------")
     
     val sparkTables = sqlContext.sparkSession.catalog.listTables().collect()
     extractTables(oper).map(t => {
       if(!sparkTables.contains(t)){
-        println(s"loading table into spark: $t")
+        logger.debug(s"loading table into spark: $t")
         sqlContext.read.format("jdbc")
           .options( 
             Map(
@@ -857,7 +857,7 @@ object OperatorTranslation
     
         
     /*val cls = DataSource.lookupDataSource("jdbc")
-    println(cls.getName)
+    logger.debug(cls.getName)
     sqlContext.sparkSession.baseRelationToDataFrame(
       DataSource.apply(
         sqlContext.sparkSession,
@@ -936,7 +936,7 @@ case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression
   def varArgs(args:Any*):Any = {
     //TODO: Handle all params for spark udfs: ref @willsproth
     val (argList, hintList) = extractArgsAndHints(args)
-    //println(s"-------------------------> UDF Param overflow: args:${argList.mkString("\n")} hints:${hintList.mkString("\n")}")
+    //logger.debug(s"-------------------------> UDF Param overflow: args:${argList.mkString("\n")} hints:${hintList.mkString("\n")}")
     getNative(model.bestGuess(idx, argList, hintList))
   }
   def getUDF = 

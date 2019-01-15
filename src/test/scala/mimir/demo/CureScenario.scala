@@ -124,7 +124,6 @@ object CureScenario
 				){ 
          time("CURE Query"){
            val qr = query(cureQuery){ _.toList.map { row => {1} } }.length
-           println(s"-----------------------------qr row cnt: $qr")
          }
   //         failed type detection --> run type inferencing
   //         --> repair with repairing tool

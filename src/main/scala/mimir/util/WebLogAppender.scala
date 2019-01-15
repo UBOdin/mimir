@@ -207,7 +207,7 @@ object HttpRocketClient {
   def apply(hooksUrl:String, token:String, notify: Seq[Notify], msg: String, attachments: Seq[Attachment]) = {
     
     val body = PayloadMapper.toBody(notify, msg, attachments)
-    println(s"HttpRocketClient: posting log to $hooksUrl$token") 
+    //println(s"HttpRocketClient: posting log to $hooksUrl$token") 
     val myurl = new URL(hooksUrl+token)
     val con = myurl.openConnection().asInstanceOf[HttpsURLConnection]
     con.setRequestMethod("POST")
