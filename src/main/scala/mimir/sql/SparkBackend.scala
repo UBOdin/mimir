@@ -122,6 +122,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
           HadoopUtils.writeToHDFS(sparkCtx, "postgresql-9.4-1201-jdbc41.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.postgresql/postgresql/jars/postgresql-9.4-1201-jdbc41.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, "sqlite-jdbc-3.16.1.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.xerial/sqlite-jdbc/jars/sqlite-jdbc-3.16.1.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, "spark-xml_2.11-0.5.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.databricks/spark-xml_2.11/jars/spark-xml_2.11-0.5.0.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, "spark-excel_2.11-0.11.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.crealytics/spark-excel_2.11/jars/spark-excel_2.11-0.11.0.jar"), overwriteJars)
           //HadoopUtils.writeToHDFS(sparkCtx, "aws-java-sdk-s3-1.11.355.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.amazonaws/aws-java-sdk-s3/jars/aws-java-sdk-s3-1.11.355.jar"), overwriteJars)
           //HadoopUtils.writeToHDFS(sparkCtx, "hadoop-aws-2.7.6.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.apache.hadoop/hadoop-aws/jars/hadoop-aws-2.7.6.jar"), overwriteJars)
           
@@ -140,6 +141,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
           sparkCtx.addJar(s"$hdfsHome/postgresql-9.4-1201-jdbc41.jar")
           sparkCtx.addJar(s"$hdfsHome/sqlite-jdbc-3.16.1.jar")
           sparkCtx.addJar(s"$hdfsHome/spark-xml_2.11-0.5.0.jar")
+          sparkCtx.addJar(s"$hdfsHome/spark-excel_2.11-0.11.0.jar")
           //sparkCtx.addJar(s"$hdfsHome/aws-java-sdk-s3-1.11.355.jar")
           //sparkCtx.addJar(s"$hdfsHome/hadoop-aws-2.7.6.jar")
           

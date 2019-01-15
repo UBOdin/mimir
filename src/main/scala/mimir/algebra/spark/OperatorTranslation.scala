@@ -409,9 +409,9 @@ object OperatorTranslation
       val method = methods.find(_.getName == methodName).getOrElse(throw new IllegalArgumentException("Method " + methodName + " not found"))
       method.setAccessible(true)
       logger.debug("=======================================")
-      logger.debug(method)
-      logger.debug(x)
-      logger.debug(args)
+      logger.debug(s"$method")
+      logger.debug(s"$x")
+      logger.debug(s"$args")
       logger.debug("=======================================")
       method.invoke(x, args : _*)
     }
@@ -436,7 +436,7 @@ object OperatorTranslation
       val someTrait = obj.instance.asInstanceOf[AnyRef]
       
       //val someTrait = companionObj[org.apache.spark.sql.Dataset[Row]]("org.apache.spark.sql.Dataset")
-      logger.debug(someTrait)
+      logger.debug(s"$someTrait")
       p(someTrait)('ofRows)(db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession, logicalPlan).asInstanceOf[DataFrame]
     
       //new Dataset[Row](db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession, logicalPlan, RowEncoder(logicalPlan.schema)).toDF()
@@ -445,7 +445,7 @@ object OperatorTranslation
       case t: Throwable => {
         logger.debug("-------------------------> Exception Executing Spark Op withPlan: ")
         logger.debug("------------------------ spark op --------------------------")
-        logger.debug(logicalPlan)
+        logger.debug(s"$logicalPlan")
         logger.debug("------------------------------------------------------------")
         throw t
       }

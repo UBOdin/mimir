@@ -533,7 +533,7 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
     this.loadTable(targetTable, sourceFile, force, targetSchema, typeinference, detectHeaders, Map("DELIMITER" -> delim))
   }
   
-  private val defaultBackendOptions = Map("ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true", "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false")
+  private val defaultBackendCSVOptions = Map("ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true", "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", "header" -> "false")
   
   def loadTable(
     targetTable: String, 
@@ -545,7 +545,10 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
     backendOptions:Map[String, String] = Map(),
     format:String = "csv"
   ){
-    val options = (defaultBackendOptions ++ backendOptions).map(entry => (entry._1 -> backendOptions.getOrElse(entry._1, entry._2)))
+    val options = ((format match { 
+      case "csv" => defaultBackendCSVOptions 
+      case _ => Map()
+      }) ++ backendOptions).map(entry => (entry._1 -> backendOptions.getOrElse(entry._1, entry._2)))
     val targetRaw = targetTable.toUpperCase + "_RAW"
     if(tableExists(targetRaw) && !force){
       throw new SQLException(s"Target table $targetTable already exists; Use `LOAD 'file' INTO tableName`; to append to existing data.")
