@@ -31,7 +31,7 @@ abstract class RABackend(val database:String) {
     resultRows(sel).head.head*/
   
   def readDataSource(name:String, format:String, options:Map[String, String], schema:Option[Seq[(String, Type)]], load:Option[String]) : Unit
-  
+  def writeDataSink(dataframe:DataFrame, format:String, options:Map[String, String], save:Option[String]) : Unit
   
   def getTableSchema(table: String): Option[Seq[(String, Type)]]
   

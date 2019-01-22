@@ -15,6 +15,8 @@ import mimir.algebra.AggFunction
 import mimir.util.LoadJDBC
 import mimir.algebra.BoolPrimitive
 import mimir.test.TestTimer
+import mimir.sql.RABackend
+import mimir.util.BackupUtils
 
 object SparkDataSourcesSpec 
   extends SQLTestSpecification("SparkDataSourcesSpec")
@@ -27,8 +29,8 @@ object SparkDataSourcesSpec
     db.loadTable("test/r_test/r.csv")
   }
   
+ 
   "Spark" should {
-    sequential
     "Be able to query from a CSV source" >> {
       val result = query("""
         SELECT * FROM R
@@ -57,6 +59,16 @@ object SparkDataSourcesSpec
           List(BoolPrimitive(true), str("jerome@saunders.tm"), f(14.7048), str("Vanessa Nguyen"), i(1), i(56), i(40), str("Gary"), str("Conner")), 
           List(BoolPrimitive(false), str("annette@hernandez.bw"), f(11.214), str("Leo Green"), i(2), i(57), i(44), str("Neal"), str("Davies")), 
           List(BoolPrimitive(true), str("troy@mcneill.bt"), f(14.0792), str("Peter Schultz"), i(3), i(58), i(26), str("Christopher"), str("Brantley")))
+    
+      "Be able to output to json" >> {
+        val outputFilename = "jsonsampleout"   
+        val result = db.backend.execute(db.table("J"))
+        db.backend.asInstanceOf[RABackend].writeDataSink(result, "json", Map(), Some(outputFilename))
+        val outfile = new File(outputFilename + "/_SUCCESS")
+        val outputSuccess = outfile.exists() 
+        BackupUtils.deleteFile(new File(outputFilename))
+        outputSuccess must be equalTo true 
+      }
     }
     
     "Be able to query from a xml source" >> {
@@ -69,6 +81,16 @@ object SparkDataSourcesSpec
        
       result.length must be equalTo 12
       result.head.length must be equalTo 7
+      
+      "Be able to output to xml" >> {
+        val outputFilename = "xmlsampleout"   
+        val result = db.backend.execute(db.table("X"))
+        db.backend.asInstanceOf[RABackend].writeDataSink(result, "xml", Map(), Some(outputFilename))
+        val outfile = new File(outputFilename + "/_SUCCESS")
+        val outputSuccess = outfile.exists() 
+        BackupUtils.deleteFile(new File(outputFilename))
+        outputSuccess must be equalTo true 
+      }
     }
     
     "Be able to query from a excel source" >> {
@@ -98,6 +120,19 @@ object SparkDataSourcesSpec
       
       result.length must be equalTo 43
       result.head.length must be equalTo 7
+      
+      
+      "Be able to output to excel" >> {
+        val outputFilename = "xmlsampleout.xlsx"   
+        val result = db.backend.execute(db.table("E"))
+        db.backend.asInstanceOf[RABackend].writeDataSink(result, "com.crealytics.spark.excel", 
+            Map("dataAddress" -> "'SalesOrders'!A1", "useHeader" -> "true"), Some(outputFilename))
+        val outfile = new File(outputFilename)
+        val outputSuccess = outfile.exists() 
+        BackupUtils.deleteFile(outfile)
+        BackupUtils.deleteFile(new File("."+outputFilename+".crc"))
+        outputSuccess must be equalTo true 
+      }
     }
     
     "Be able to query from a mysql source" >> {

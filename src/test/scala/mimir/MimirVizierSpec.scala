@@ -16,7 +16,8 @@ class MimirVizierSpec
 
   def beforeAll = {
     val dbFileName = "MimirVizierSpec.db"
-
+    val dbFile = new File (dbFileName)
+    dbFile.deleteOnExit();
     val args = Seq(
       "--db", dbFileName
     )

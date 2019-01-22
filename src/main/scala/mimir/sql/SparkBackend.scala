@@ -423,6 +423,17 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
     */
   }
   
+  def writeDataSink(dataframe:DataFrame, format:String, options:Map[String, String], save:Option[String]) = {
+    if(sparkSql == null) throw new Exception("There is no spark context")
+    val dsFormat = dataframe.write.format(format) 
+    val dsOptions = options.toSeq.foldLeft(dsFormat)( (ds, opt) => ds.option(opt._1, opt._2))
+    save match {
+      case None => dsOptions.save
+      case Some(outputFile) => {
+        dsOptions.save(outputFile)
+      }
+    }
+  }
   
   def getTableSchema(table: String): Option[Seq[(String, Type)]] = {
     if(sparkSql == null) throw new Exception("There is no spark context")
