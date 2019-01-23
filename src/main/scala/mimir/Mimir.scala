@@ -432,7 +432,7 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
     default = Some("8g"))
   val hdfsPort = opt[String]("hdfsPort", descr = "The port for hdfs",
     default = Some("8020"))
-  val useHDFSHostnames = toggle("useHDFSHostnames", default = Some(false),
+  val useHDFSHostnames = toggle("useHDFSHostnames", default = Some(Option(System.getenv("HDFS_CONF_dfs_client_use_datanode_hostname")).getOrElse("false").toBoolean),
       descrYes = "use the hostnames for hdfs nodes",
       descrNo = "use ip addresses for hdfs nodes")
   val overwriteStagedFiles = toggle("overwriteStagedFiles", default = Some(false),
