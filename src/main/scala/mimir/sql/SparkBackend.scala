@@ -101,7 +101,10 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
         val sparkCtx = SparkContext.getOrCreate(conf)//new SparkContext(conf)
         val dmode = sparkCtx.deployMode
         if(remoteSpark){
+          sparkCtx.hadoopConfiguration.set("spark.driver.port","7001")
+          sparkCtx.hadoopConfiguration.set("spark.blockManager.port","7016")
           sparkCtx.hadoopConfiguration.set("dfs.client.use.datanode.hostname",useHDFSHostnames.toString())
+          sparkCtx.hadoopConfiguration.set("dfs.datanode.use.datanode.hostname",useHDFSHostnames.toString())
           sparkCtx.hadoopConfiguration.set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
           sparkCtx.hadoopConfiguration.set("fs.defaultFS", s"hdfs://$sparkHost:$hdfsPort")
           val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkCtx)

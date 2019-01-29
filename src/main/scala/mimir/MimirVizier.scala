@@ -338,7 +338,11 @@ object MimirVizier extends LazyLogging {
         }
         case _ => throw new Exception("unloadDataSource: bad options type")
       }
-      val df = db.backend.execute(db.table(input))
+      val viewName =  db.sql.getVizierNameMapping(input) match {
+        case Some(mimirName) => mimirName
+        case None => input
+      }
+      val df = db.backend.execute(db.table(viewName))
       db.backend.asInstanceOf[RABackend].writeDataSink(
           df, 
           format, 
