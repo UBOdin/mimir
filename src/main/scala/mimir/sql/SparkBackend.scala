@@ -81,6 +81,8 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
             .set("spark.sql.shuffle.partitions", s"$numPartitions")//TODO: make this the number of workers
             .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
             .set("spark.kryoserializer.buffer.max", "1536m")
+            .set("spark.driver.port","7001")
+            .set("spark.blockManager.port","7016")          
             .registerKryoClasses(SparkUtils.getSparkKryoClasses())
         }
         else{
