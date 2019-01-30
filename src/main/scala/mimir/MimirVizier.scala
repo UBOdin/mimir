@@ -1254,7 +1254,12 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
    val anonFuncRet = anonFunc  
    val tEnd = System.nanoTime()
    if(ExperimentalOptions.isEnabled("LOGM")){
-     val fw = new FileWriter("/usr/local/source/web-api/.vizierdb/logs/timing.log", true) ; 
+     val logFile =  new File("/usr/local/source/web-api/.vizierdb/logs/timing.log")
+     if(!logFile.exists()){
+       logFile.getParentFile().mkdirs()
+       logFile.createNewFile()
+     }
+     val fw = new FileWriter(logFile, true) ; 
      fw.write(s"mimir, ${name}, ${UUID.randomUUID().toString}, duration, ${(tEnd-tStart)/1000000.0}\n") ; 
      fw.close()
    }
