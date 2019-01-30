@@ -422,6 +422,8 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   val quiet  = toggle("quiet", default = Some(false))
   val files = trailArg[List[String]](required = false)
   val experimental = opt[List[String]]("X", default = Some(List[String]()))
+  val mimirHost = opt[String]("mimirHost", descr = "The IP or hostname of mimir",
+    default = Some("vizier-mimir.local"))
   val sparkHost = opt[String]("sparkHost", descr = "The IP or hostname of the spark master",
     default = Some("spark-master.local"))
   val sparkPort = opt[String]("sparkPort", descr = "The port of the spark master",

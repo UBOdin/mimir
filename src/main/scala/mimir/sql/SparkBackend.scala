@@ -59,9 +59,9 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
     case (Some(_), Some(_)) => true
     case _ => false
   }
-  val (sparkHost, sparkPort, hdfsPort, useHDFSHostnames, overwriteStagedFiles, overwriteJars, numPartitions, dataStagingType, sparkDriverMem, sparkExecutorMem) = Mimir.conf match {
-    case null => (/*"128.205.71.41"*/"spark-master.local", "7077", "8020", false, false, false, 8, if(envHasS3Keys) "s3" else "hdfs", "8g", "8g")
-    case x => (x.sparkHost(), x.sparkPort(), x.hdfsPort(), x.useHDFSHostnames(), x.overwriteStagedFiles(), x.overwriteJars(), x.numPartitions(), if(!envHasS3Keys) "hdfs" else x.dataStagingType(), x.sparkDriverMem(), x.sparkExecutorMem())
+  val (mimirHost, sparkHost, sparkPort, hdfsPort, useHDFSHostnames, overwriteStagedFiles, overwriteJars, numPartitions, dataStagingType, sparkDriverMem, sparkExecutorMem) = Mimir.conf match {
+    case null => ("vizier-mimir.local", /*"128.205.71.41"*/"spark-master.local", "7077", "8020", false, false, false, 8, if(envHasS3Keys) "s3" else "hdfs", "8g", "8g")
+    case x => (x.mimirHost(), x.sparkHost(), x.sparkPort(), x.hdfsPort(), x.useHDFSHostnames(), x.overwriteStagedFiles(), x.overwriteJars(), x.numPartitions(), if(!envHasS3Keys) "hdfs" else x.dataStagingType(), x.sparkDriverMem(), x.sparkExecutorMem())
   }
   val remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
   def open(): Unit = {
@@ -78,11 +78,15 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
             .set("spark.driver.memory",sparkDriverMem)
             .set("spark.executor.memory",sparkExecutorMem)
             .set("spark.sql.catalogImplementation", "hive")
-            .set("spark.sql.shuffle.partitions", s"$numPartitions")//TODO: make this the number of workers
+            .set("spark.sql.shuffle.partitions", s"$numPartitions")
             .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
             .set("spark.kryoserializer.buffer.max", "1536m")
             .set("spark.driver.port","7001")
-            .set("spark.blockManager.port","7016")          
+            .set("spark.driver.host",mimirHost)
+            .set("spark.driver.bindAddress","0.0.0.0")
+            .set("spark.blockManager.port","7005")
+            .set("dfs.client.use.datanode.hostname",useHDFSHostnames.toString())
+            .set("dfs.datanode.use.datanode.hostname",useHDFSHostnames.toString())
             .registerKryoClasses(SparkUtils.getSparkKryoClasses())
         }
         else{
@@ -103,8 +107,6 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
         val sparkCtx = SparkContext.getOrCreate(conf)//new SparkContext(conf)
         val dmode = sparkCtx.deployMode
         if(remoteSpark){
-          sparkCtx.hadoopConfiguration.set("spark.driver.port","7001")
-          sparkCtx.hadoopConfiguration.set("spark.blockManager.port","7016")
           sparkCtx.hadoopConfiguration.set("dfs.client.use.datanode.hostname",useHDFSHostnames.toString())
           sparkCtx.hadoopConfiguration.set("dfs.datanode.use.datanode.hostname",useHDFSHostnames.toString())
           sparkCtx.hadoopConfiguration.set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
