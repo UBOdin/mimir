@@ -65,10 +65,11 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
   }
   val remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
   def open(): Unit = {
-    logger.warn(s"Open SparkBackend: sparkHost:$sparkHost, sparkPort:$sparkPort, hdfsPort:$hdfsPort, useHDFSHostnames:$useHDFSHostnames, overwriteStagedFiles:$overwriteStagedFiles, overwriteJars:$overwriteJars, numPartitions:$numPartitions, dataStagingType:$dataStagingType")
+    logger.warn(s"Open SparkBackend: dataDir: $dataDir sparkHost:$sparkHost, sparkPort:$sparkPort, hdfsPort:$hdfsPort, useHDFSHostnames:$useHDFSHostnames, overwriteStagedFiles:$overwriteStagedFiles, overwriteJars:$overwriteJars, numPartitions:$numPartitions, dataStagingType:$dataStagingType")
     sparkSql = sparkSql match {
       case null => {
         val conf = if(remoteSpark){
+          System.setProperty("derby.system.home", dataDir)
           new SparkConf().setMaster(s"spark://$sparkHost:$sparkPort")
             .set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
             .set("spark.submit.deployMode","client")

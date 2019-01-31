@@ -446,7 +446,10 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   val dataStagingType = opt[String]("dataStagingType", descr = "where to stage data for spark: hdfs or s3",
     default = Some("hdfs"))
   val dataDirectory = opt[String]("dataDirectory", descr = "The directory to place data files",
-    default = Some("./"))
-  val dbname = opt[String]("db", descr = "Connect to the database with the specified name",
-    default = Some(this.dataDirectory() + "/debug.db"))
+    default = Some("."))
+  def dbname : ScallopOption[String] = { 
+    opt[String]("db", descr = "Connect to the database with the specified name",
+    default = Some(dataDirectory() + "/debug.db"))
+  }
+
 }
