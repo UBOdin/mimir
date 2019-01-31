@@ -59,9 +59,9 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
     case (Some(_), Some(_)) => true
     case _ => false
   }
-  val (mimirHost, sparkHost, sparkPort, hdfsPort, useHDFSHostnames, overwriteStagedFiles, overwriteJars, numPartitions, dataStagingType, sparkDriverMem, sparkExecutorMem) = Mimir.conf match {
-    case null => ("vizier-mimir.local", /*"128.205.71.41"*/"spark-master.local", "7077", "8020", false, false, false, 8, if(envHasS3Keys) "s3" else "hdfs", "8g", "8g")
-    case x => (x.mimirHost(), x.sparkHost(), x.sparkPort(), x.hdfsPort(), x.useHDFSHostnames(), x.overwriteStagedFiles(), x.overwriteJars(), x.numPartitions(), if(!envHasS3Keys) "hdfs" else x.dataStagingType(), x.sparkDriverMem(), x.sparkExecutorMem())
+  val (dataDir, mimirHost, sparkHost, sparkPort, hdfsPort, useHDFSHostnames, overwriteStagedFiles, overwriteJars, numPartitions, dataStagingType, sparkDriverMem, sparkExecutorMem) = Mimir.conf match {
+    case null => ("./", "vizier-mimir.local", /*"128.205.71.41"*/"spark-master.local", "7077", "8020", false, false, false, 8, if(envHasS3Keys) "s3" else "hdfs", "8g", "8g")
+    case x => (x.dataDirectory(), x.mimirHost(), x.sparkHost(), x.sparkPort(), x.hdfsPort(), x.useHDFSHostnames(), x.overwriteStagedFiles(), x.overwriteJars(), x.numPartitions(), if(!envHasS3Keys) "hdfs" else x.dataStagingType(), x.sparkDriverMem(), x.sparkExecutorMem())
   }
   val remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
   def open(): Unit = {
@@ -87,6 +87,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
             .set("spark.blockManager.port","7005")
             .set("dfs.client.use.datanode.hostname",useHDFSHostnames.toString())
             .set("dfs.datanode.use.datanode.hostname",useHDFSHostnames.toString())
+            .set("spark.driver.extraJavaOptions", s"-Dderby.system.home=$dataDir")
             .registerKryoClasses(SparkUtils.getSparkKryoClasses())
         }
         else{

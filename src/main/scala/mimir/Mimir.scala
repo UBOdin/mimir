@@ -413,8 +413,6 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   //   val cleanSummary = toggle("summary-clean", default = Some(false))
   //   val sampleCount = opt[Int]("samples", noshort = true, default = None)
   val loadTable = opt[String]("loadTable", descr = "Don't do anything, just load a CSV file")
-  val dbname = opt[String]("db", descr = "Connect to the database with the specified name",
-    default = Some("debug.db"))
   val backend = opt[String]("driver", descr = "Which backend database to use? ([sqlite],oracle)",
     default = Some("sqlite"))
   val precache = opt[String]("precache", descr = "Precache one or more lenses")
@@ -447,4 +445,8 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
     default = Some(8))
   val dataStagingType = opt[String]("dataStagingType", descr = "where to stage data for spark: hdfs or s3",
     default = Some("hdfs"))
+  val dataDirectory = opt[String]("dataDirectory", descr = "The directory to place data files",
+    default = Some("./"))
+  val dbname = opt[String]("db", descr = "Connect to the database with the specified name",
+    default = Some(this.dataDirectory() + "/debug.db"))
 }
