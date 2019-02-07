@@ -270,6 +270,38 @@ object MimirVizier extends LazyLogging {
     }
   }
   
+  def setSparkWorkers(count:Int):Unit = {
+    db.backend.asInstanceOf[mimir.sql.SparkBackend].sparkSql.setConf("spark.sql.shuffle.partitions", count.toString())
+  }
+  
+  def executeOnWorkers(oper:Operator, col:String):Unit = {
+    val (compiledOp, cols, metadata) = mimir.exec.mode.BestGuess.rewrite(db, oper)
+    val colidx = cols.indexOf(col)
+    val df = db.backend.asInstanceOf[mimir.sql.SparkBackend].execute(compiledOp)
+    val dfRowFunc: (Iterator[org.apache.spark.sql.Row]) => Unit = (rows) => {
+      rows.map(row => row.get(colidx))                                     
+    }                                  
+    df.foreachPartition(dfRowFunc)                                                                                                  
+  }      
+  
+  /*def executeOnWorkersReturn(oper:Operator, col:String):Int = {
+    import org.apache.spark.sql.functions.sum
+    val (compiledOp, cols, metadata) = mimir.exec.mode.BestGuess.rewrite(db, oper)
+    val colidx = cols.indexOf(col)
+    val df = db.backend.asInstanceOf[mimir.sql.SparkBackend].execute(compiledOp)
+    val newDF = df.mapPartitions((rows:Iterator[org.apache.spark.sql.Row]) => {
+      val result = rows.map(row => {
+          row.get(colidx)
+          1
+        }).toList
+        //return transformed data
+        result.iterator
+        //now convert back to df
+    } , org.apache.spark.sql.Encoders.scalaInt).toDF()
+    newDF.sum(newDF.columns(0)).collect.head.toSeq.head
+  }   */ 
+  
+  
   def loadCSV(file : String) : String = loadDataSource(file, "csv", Seq(("delimeter",",")))
   def loadCSV(file : String, delimeter:String, detectHeaders:Boolean, inferTypes:Boolean) : String = 
     loadDataSource(file, "csv", Seq(("delimeter",delimeter),("mimir_detect_headers",detectHeaders.toString()),("mimir_infer_types",inferTypes.toString())))
