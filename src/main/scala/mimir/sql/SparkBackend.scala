@@ -432,6 +432,19 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
     */
   }
   
+  def executeOnWorkers(compiledOp:Operator, dfRowFunc:(Iterator[org.apache.spark.sql.Row]) => Unit):Unit = {
+    val df = execute(compiledOp)
+    df.foreachPartition(dfRowFunc)                                                                                                  
+  }
+  
+  def mapDatasetToNew(compiledOp:Operator, newDSName:String, mapFunc:(Iterator[org.apache.spark.sql.Row]) => Iterator[org.apache.spark.sql.Row], encoder:org.apache.spark.sql.Encoder[Row]): Unit  = {
+    import org.apache.spark.sql.functions.sum
+    val df = execute(compiledOp)
+    val newDF = df.mapPartitions(mapFunc)(encoder).toDF()
+    newDF.persist().createOrReplaceTempView(newDSName) 
+    newDF.write.mode(SaveMode.ErrorIfExists).saveAsTable(newDSName)
+  }   
+  
   def writeDataSink(dataframe:DataFrame, format:String, options:Map[String, String], save:Option[String]) = {
     if(sparkSql == null) throw new Exception("There is no spark context")
     val dsFormat = dataframe.write.format(format) 

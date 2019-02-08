@@ -277,30 +277,27 @@ object MimirVizier extends LazyLogging {
   def executeOnWorkers(oper:Operator, col:String):Unit = {
     val (compiledOp, cols, metadata) = mimir.exec.mode.BestGuess.rewrite(db, oper)
     val colidx = cols.indexOf(col)
-    val df = db.backend.asInstanceOf[mimir.sql.SparkBackend].execute(compiledOp)
     val dfRowFunc: (Iterator[org.apache.spark.sql.Row]) => Unit = (rows) => {
       rows.map(row => row.get(colidx))                                     
     }                                  
-    df.foreachPartition(dfRowFunc)                                                                                                  
+    db.backend.asInstanceOf[mimir.sql.SparkBackend].executeOnWorkers(compiledOp, dfRowFunc)                                                                                             
   }      
   
-  /*def executeOnWorkersReturn(oper:Operator, col:String):Int = {
+  def executeOnWorkersReturn(oper:Operator, col:String):Int = {
     import org.apache.spark.sql.functions.sum
     val (compiledOp, cols, metadata) = mimir.exec.mode.BestGuess.rewrite(db, oper)
     val colidx = cols.indexOf(col)
     val df = db.backend.asInstanceOf[mimir.sql.SparkBackend].execute(compiledOp)
-    val newDF = df.mapPartitions((rows:Iterator[org.apache.spark.sql.Row]) => {
-      val result = rows.map(row => {
+    val mapFunc: (Iterator[org.apache.spark.sql.Row]) => Iterator[Int] = (rows) => {
+      rows.map(row => {
           row.get(colidx)
           1
-        }).toList
-        //return transformed data
-        result.iterator
-        //now convert back to df
-    } , org.apache.spark.sql.Encoders.scalaInt).toDF()
-    newDF.sum(newDF.columns(0)).collect.head.toSeq.head
-  }   */ 
-  
+        }).toSeq.iterator
+    } 
+    val newDF = df.mapPartitions(mapFunc)(org.apache.spark.sql.Encoders.scalaInt).toDF()
+    newDF.agg(sum(newDF.columns(0))).collect.toSeq.head.getInt(0)
+  }  
+ 
   
   def loadCSV(file : String) : String = loadDataSource(file, "csv", Seq(("delimeter",",")))
   def loadCSV(file : String, delimeter:String, detectHeaders:Boolean, inferTypes:Boolean) : String = 
