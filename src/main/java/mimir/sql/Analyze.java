@@ -11,13 +11,15 @@ public class Analyze implements Statement{
 	private String column;
 	private PrimitiveValue rowId;
 	private Boolean assign;
+	private Boolean features;
 
-	public Analyze(SelectBody selectBody, PrimitiveValue rowId, String column, Boolean assign)
+	public Analyze(SelectBody selectBody, PrimitiveValue rowId, String column, Boolean assign, Boolean features)
 	{
 		this.selectBody = selectBody;
 		this.column = column;
 		this.rowId = rowId;
 		this.assign = assign;
+		this.features = features;
 	}
 
 	public SelectBody getSelectBody() 
@@ -53,6 +55,15 @@ public class Analyze implements Statement{
 	public void setAssign(Boolean assign)
 	{
 		this.assign = assign;
+	}
+
+	public Boolean getFeatures()
+	{
+		return features;
+	}
+	public void setFeatures(Boolean features)
+	{
+		this.features = features;
 	}
 
 	@Override

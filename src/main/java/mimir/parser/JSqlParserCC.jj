@@ -150,6 +150,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_DIRECT:"DIRECT">
 |   <K_UNCERTAIN:"UNCERTAIN">
 |   <K_ANALYZE:"ANALYZE">
+|   <K_FEATURES:"FEATURES">
 |   <K_EXPLAIN:"EXPLAIN">
 |   <K_ASSUME:"ASSUME">
 |   <K_VIEW:"VIEW">
@@ -395,22 +396,27 @@ Analyze Analyze():
 		String col = null;
     PrimitiveValue rowid = null;
     Boolean assign = false;
+    Boolean features = false;
     DrawPlot plot = null;
     FromItem from = null;
 	}
 {
 	<K_ANALYZE>
+  ((
+    <K_FEATURES> <K_IN> { features = true; }
+  )|(
     [
-        <K_WITH><K_ASSIGNMENTS> { assign = true; }
+      <K_WITH><K_ASSIGNMENTS> { assign = true; }
+      ]
+    [ LOOKAHEAD(4)
+      [
+        col = RelObjectName()
+        <K_OF>
+      ]
+      rowid = Literal()
+      <K_IN>
     ]
-  [ LOOKAHEAD(4)
-    [
-      col = RelObjectName()
-      <K_OF>
-    ]
-    rowid = Literal()
-    <K_IN>
-  ]
+  ))
   ( 
       ( selectBody = SelectBody() )
     | ( ( 
@@ -426,7 +432,7 @@ Analyze Analyze():
       }
   )
 	{ 
-    return new Analyze(selectBody, rowid, col, assign);
+    return new Analyze(selectBody, rowid, col, assign, features);
   }
 }
 

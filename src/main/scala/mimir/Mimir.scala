@@ -257,16 +257,21 @@ object Mimir extends LazyLogging {
 
   def handleAnalyze(analyze: Analyze)
   {
-    val rowId = analyze.getRowId()
-    val column = analyze.getColumn()
-    val assign = analyze.getAssign()
+    val rowId = analyze.getRowId()        // The rowid of the row to analyze, or null if table scan
+    val column = analyze.getColumn()      // The column of the cell to analyze, or null if full row or table scan
+    val assign = analyze.getAssign()      // True if the prioritizer should generate task allocations
+    val features = analyze.getFeatures()  // True if this is an ANALYZE FEATURES query
     val query = db.sql.convert(analyze.getSelectBody())
 
-    if(rowId == null){
-      output.print("==== Explain Table ====")
-      logger.debug("Starting to Explain Table")
+    if(analyze){
+      output.print("==== Analyze Features ====")
+
+      output.print("NOT IMPLEMENTED YET!")
+    } else if(rowId == null){
+      output.print("==== Analyze Table ====")
+      logger.debug("Starting to Analyze Table")
       val reasonSets = db.explainer.explainEverything(query)
-      logger.debug("Done Explaining Table")
+      logger.debug("Done Analyzing Table")
       for(reasonSet <- reasonSets){
         logger.debug(s"Expanding $reasonSet")
         // Workaround for a bug: SQLite crashes if a UDA is run on an empty input
@@ -288,7 +293,7 @@ object Mimir extends LazyLogging {
     } else {
       val token = RowIdPrimitive(db.sql.convert(rowId).asString)
       if(column == null){ 
-        output.print("==== Explain Row ====")
+        output.print("==== Analyze Row ====")
         val explanation = 
           db.explainer.explainRow(query, token)
         printReasons(explanation.reasons)
@@ -298,7 +303,7 @@ object Mimir extends LazyLogging {
           CTPrioritizer.prioritize(explanation.reasons)
         }
       } else {
-      output.print("==== Explain Cell ====")
+      output.print("==== Analyze Cell ====")
         val explanation = 
           db.explainer.explainCell(query, token, column) 
         printReasons(explanation.reasons)
