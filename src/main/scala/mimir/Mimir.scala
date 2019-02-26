@@ -3,26 +3,25 @@ package mimir;
 import java.io._
 import java.sql.SQLException
 
+import org.jline.terminal.{Terminal,TerminalBuilder}
+import org.slf4j.{LoggerFactory}
+import org.rogach.scallop._
+import com.typesafe.scalalogging.slf4j.LazyLogging
+import scala.collection.JavaConverters._
+
 import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
 import mimir.util.{Timer,ExperimentalOptions,LineReaderInputSource,PythonProcess,SqlUtils}
 import mimir.algebra._
-import mimir.statistics.DetectSeries
+import mimir.algebra.spark.OperatorTranslation
+import mimir.statistics.{DetectSeries,DatasetShape}
 import mimir.plot.Plot
 import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
 import mimir.exec.result.JDBCResultIterator
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody} 
 import net.sf.jsqlparser.statement.drop.Drop
-import org.jline.terminal.{Terminal,TerminalBuilder}
-import org.slf4j.{LoggerFactory}
-import org.rogach.scallop._
-
-import com.typesafe.scalalogging.slf4j.LazyLogging
-
-import scala.collection.JavaConverters._
-import mimir.algebra.spark.OperatorTranslation
 
 /**
  * The primary interface to Mimir.  Responsible for:
@@ -263,9 +262,11 @@ object Mimir extends LazyLogging {
     val features = analyze.getFeatures()  // True if this is an ANALYZE FEATURES query
     val query = db.sql.convert(analyze.getSelectBody())
 
-    if(analyze){
+    if(features){
       output.print("==== Analyze Features ====")
-
+      for(facet <- DatasetShape.detect(db, query)) {
+        output.print(s"  > ${facet.description}")
+      }
       output.print("NOT IMPLEMENTED YET!")
     } else if(rowId == null){
       output.print("==== Analyze Table ====")
