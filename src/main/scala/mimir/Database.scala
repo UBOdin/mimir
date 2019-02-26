@@ -543,10 +543,12 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
     inferTypes:Boolean = true,
     detectHeaders:Boolean = true,
     backendOptions:Map[String, String] = Map(),
-    format:String = "csv"
+    formati:String = "csv"
   ){
+    val datasourceErrors = backendOptions.get("datasourceErrors").getOrElse("false").equals("true")
+    val format = if(datasourceErrors && formati.equals("csv")) "org.apache.spark.sql.execution.datasources.ubodin.csv" else formati
     val options = ((format match { 
-      case "csv" => defaultBackendCSVOptions 
+      case "csv" | "org.apache.spark.sql.execution.datasources.ubodin.csv" => defaultBackendCSVOptions 
       case _ => Map()
       }) ++ backendOptions).map(entry => (entry._1 -> backendOptions.getOrElse(entry._1, entry._2)))
     val targetRaw = targetTable.toUpperCase + "_RAW"
@@ -557,6 +559,11 @@ case class Database(backend: RABackend, metadataBackend: MetadataBackend)
       LoadData.handleLoadTableRaw(this, targetRaw, targetSchema, sourceFile, options, format)
       var oper = table(targetRaw)
       //detect headers 
+      if(datasourceErrors) {
+        val dseSchemaName = targetTable.toUpperCase+"_DSE"
+        adaptiveSchemas.create(dseSchemaName, "DATASOURCE_ERRORS", oper, Seq())
+        oper = adaptiveSchemas.viewFor(dseSchemaName, "DATA").get
+      }
       if(detectHeaders) {
         val dhSchemaName = targetTable.toUpperCase+"_DH"
         adaptiveSchemas.create(dhSchemaName, "DETECT_HEADER", oper, Seq())

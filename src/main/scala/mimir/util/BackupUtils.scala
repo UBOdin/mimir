@@ -111,7 +111,7 @@ object BackupUtils {
     HadoopUtils.writeDirToHDFS(sparkCtx, s"${hdfsHome}/", localMetastoreFile, true)
     deleteFile(sparkMetastoreFile)*/
     
-    val derbyMetastoreFile = new File("metastore_db")
+    val derbyMetastoreFile = new File(dataDir+"mimir/metastore_db")
     if(derbyMetastoreFile.exists())
       deleteFile(derbyMetastoreFile)
     untarFromS3(s3Bucket, backupDir+"/metastore.tar", derbyMetastoreFile.getAbsolutePath)
@@ -120,6 +120,7 @@ object BackupUtils {
     if(sparkDataFile.exists())
       deleteFile(sparkDataFile)
     untarFromS3(s3Bucket, backupDir+"/userdata.tar", new File(".").getAbsolutePath)
+    HadoopUtils.deleteFromHDFS(sparkCtx, s"${hdfsHome}/", true)
     HadoopUtils.writeFilesInDirToHDFS(sparkCtx, s"${hdfsHome}/", sparkDataFile, true)
     //HadoopUtils.setPermissionsHDFS(sparkCtx, s"${hdfsHome}/", 0x309:Short)
     deleteFile(sparkDataFile)
@@ -162,11 +163,13 @@ object BackupUtils {
     val parentDir = Option(new File(srcDir).getParent + File.separator).getOrElse("/")
     val folder = srcDir.replace(parentDir, "")
     val tarCmd = Seq("tar", "-c", "-C", parentDir, folder)
+    val s3Cmd = Seq("s3cmd", "put", "-", s"s3://$s3Bucket/$targetFile")
     val stdoutStream = new ByteArrayOutputStream
     val errorLog = new StringBuilder()
-    val exitCode = tarCmd #> stdoutStream !< ProcessLogger(s => (errorLog.append(s+"\n")))
+    //val exitCode = tarCmd #> stdoutStream !< ProcessLogger(s => (errorLog.append(s+"\n")))
+    val exitCode = tarCmd #| s3Cmd !< ProcessLogger(s => (errorLog.append(s+"\n")))
     if (exitCode == 0) {
-      val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
+      /*val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
       val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY")
       val endpoint = System.getenv("S3_ENDPOINT") match {
         case null => None
@@ -174,7 +177,7 @@ object BackupUtils {
         case x => Some(x)
       }
       val s3client = S3Utils.authenticate(accessKeyId, secretAccessKey, "us-east-1", endpoint)
-      S3Utils.copyToS3Stream(s3Bucket, new ByteArrayInputStream(stdoutStream.toByteArray()), targetFile, s3client, true) 
+      S3Utils.copyToS3Stream(s3Bucket, new ByteArrayInputStream(stdoutStream.toByteArray()), targetFile, s3client, true) */
     }
     else{
       throw new Exception(s"Failed To tar Directory and send to S3: exitcode: $exitCode\nwith errors:${errorLog.toString()}")
