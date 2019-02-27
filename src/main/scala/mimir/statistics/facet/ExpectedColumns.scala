@@ -1,5 +1,6 @@
 package mimir.statistics.facet
 
+import play.api.libs.json._
 import mimir.Database
 import mimir.algebra._
 
@@ -33,10 +34,30 @@ class ExpectedColumns(expected: Seq[String])
       }
     }
   }
+  def toJson: JsValue = JsObject(Map[String,JsValue](
+    "facet" -> JsString("ExpectedColumns"),
+    "data"  -> JsArray(
+      expected.map { JsString(_) }
+    )
+  ))
 }
 
 object ExpectedColumns
+  extends FacetDetector
 {
   def apply(db:Database, query:Operator): Seq[Facet] = 
     Seq(new ExpectedColumns(query.columnNames))
+  def jsonToFacet(data: JsValue): Option[Facet] = {
+    data match { 
+      case JsObject(fields) if fields.get("facet").equals(Some(JsString("ExpectedColumns"))) => 
+        Some(
+          new ExpectedColumns(
+            fields.asInstanceOf[JsArray]
+                  .value
+                  .map { _.asInstanceOf[JsString].value }
+          )
+        )
+      case _ => None
+    }
+  }
 }
