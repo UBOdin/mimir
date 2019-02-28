@@ -47,8 +47,8 @@ object ExpectedColumns
 {
   def apply(db:Database, query:Operator): Seq[Facet] = 
     Seq(new ExpectedColumns(query.columnNames))
-  def jsonToFacet(data: JsValue): Option[Facet] = {
-    data match { 
+  def jsonToFacet(body: JsValue): Option[Facet] = {
+    body match { 
       case JsObject(fields) if fields.get("facet").equals(Some(JsString("ExpectedColumns"))) => 
         Some(
           new ExpectedColumns(
