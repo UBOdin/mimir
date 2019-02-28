@@ -265,7 +265,7 @@ object MimirVizier extends LazyLogging {
     } catch {
       case t: Throwable => {
         logger.error(s"Error Evaluating Scala Source", t)
-        new PythonScalaEvalResponse("",s"Error Evaluating Scala Source: \n${t.getMessage()}\n${t.getStackTrace.mkString("\n")}")
+        new PythonScalaEvalResponse("",s"Error Evaluating Scala Source: \n${t.getMessage()}\n${t.getStackTrace.mkString("\n")}\n${t.getMessage()}\n${t.getCause.getStackTrace.mkString("\n")}")
       }
     }
   }
@@ -358,27 +358,36 @@ object MimirVizier extends LazyLogging {
   }
   
   def unloadDataSource(input:String, file : String, format:String, backendOptions:Seq[Any]) : Unit = {
-    // try{
-       val bkOpts = backendOptions.map{
-        case (optKey:String, optVal:String) => (optKey, optVal)
-        case hm:java.util.HashMap[_,_] => {
-          val entry = hm.asInstanceOf[java.util.HashMap[String,String]].entrySet().iterator().next()
-          (entry.getKey, entry.getValue)
+    try{
+      val timeRes = logTime("loadDataSource") {
+        logger.debug("unloadDataSource: From Vistrails: [" + input + "] [" + file + "] [" + format + "] [ " + backendOptions.mkString(",") + " ]"  ) ;
+        val bkOpts = backendOptions.map{
+          case (optKey:String, optVal:String) => (optKey, optVal)
+          case hm:java.util.HashMap[String,String] => {
+            val entry = hm.entrySet().iterator().next()
+            (entry.getKey, entry.getValue)
+          }
+          case _ => throw new Exception("unloadDataSource: bad options type")
         }
-        case _ => throw new Exception("unloadDataSource: bad options type")
+        val viewName =  db.sql.getVizierNameMapping(input) match {
+          case Some(mimirName) => mimirName
+          case None => input
+        }
+        val df = db.backend.execute(db.table(viewName))
+        db.backend.asInstanceOf[RABackend].writeDataSink(
+            df, 
+            format, 
+            bkOpts.toMap, 
+            if(file == null || file.isEmpty()) None else Some(file)
+          )
       }
-      val viewName =  db.sql.getVizierNameMapping(input) match {
-        case Some(mimirName) => mimirName
-        case None => input
+      logger.debug(s"unloadDataSource Took: ${timeRes._2}")
+    } catch {
+      case t: Throwable => {
+        logger.error(s"Error Unloading Data: $file", t)
+        throw t
       }
-      val df = db.backend.execute(db.table(viewName))
-      db.backend.asInstanceOf[RABackend].writeDataSink(
-          df, 
-          format, 
-          bkOpts.toMap, 
-          if(file == null || file.isEmpty()) None else Some(file)
-        )
-    // }
+    }
   }
   
   private def sanitizeTableName(tableName:String) : String = {

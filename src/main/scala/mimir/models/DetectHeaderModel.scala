@@ -82,6 +82,7 @@ with SourcedFeedback
       val conflictOrNullCols = columns.zipWithIndex.unzip._2.toSet -- topRecordsAnalysis.keySet 
       val goodHeaderCols = DetectHeader.isHeader(header) 
       val badHeaderCols = (top6.head.zipWithIndex.unzip._2.toSet -- goodHeaderCols.toSet).toSeq  
+      DetectHeader.logger.debug(s"header dups: ${dups.mkString("[",",","]")} conflicts: ${conflictOrNullCols.mkString("[",",","]")} good: ${goodHeaderCols.mkString("[",",","]")} bad: ${badHeaderCols.mkString("[",",","]")}")
       val detectResult = badHeaderCols.flatMap(badCol => {
         top6.head(badCol) match {
           case NullPrimitive() => None
@@ -90,7 +91,9 @@ with SourcedFeedback
         }
       }) match {
         case Seq() => {
-          if(!conflictOrNullCols.isEmpty) DetectHeader.logger.warn(s"There are some type conflicts or nulls in cols: ${conflictOrNullCols.map(columns(_))}") 
+          if(!conflictOrNullCols.isEmpty){ 
+            DetectHeader.logger.warn(s"There are some type conflicts or nulls in cols: ${conflictOrNullCols.map(columns(_))}") 
+          }
           (true, top6.head.zipWithIndex.map(colIdx => (colIdx._2, colIdx._1 match {
             case NullPrimitive() =>  s"COLUMN_${colIdx._2}"
             case StringPrimitive("") => s"COLUMN_${colIdx._2}"
