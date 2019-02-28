@@ -100,6 +100,7 @@ import mimir.sql.ProvenanceStatement;
 import mimir.sql.DrawPlot;
 import mimir.sql.CastOperation;
 import mimir.sql.DirectQuery;
+import mimir.sql.Compare;
 import net.sf.jsqlparser.statement.create.table.Index;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.drop.Drop;
@@ -157,6 +158,7 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_LENS:"LENS">
 |   <K_ADAPTIVE:"ADAPTIVE">
 |   <K_SCHEMA:"SCHEMA">
+|   <K_COMPARE:"COMPARE">
 |   <K_LET:"LET">
 |   <K_LOAD:"LOAD">
 |   <K_PLOT:"PLOT">
@@ -304,6 +306,8 @@ Statement Statement() :
     stm = Plot()
     | 
     stm = DirectQuery()
+    |
+    stm = Compare()
     )
     (";" | <EOF>)
     { return stm; }
@@ -2178,4 +2182,17 @@ Statement DirectQuery():
 }
 {
   <K_DIRECT> "(" stmt = Statement() ")" { return new DirectQuery(stmt); }
+}
+
+Statement Compare():
+{
+  SelectBody target;
+  SelectBody comparison;
+}
+{
+  <K_COMPARE> target = SelectBody() 
+  <K_WITH> comparison = SelectBody()
+  {
+    return new Compare(target, comparison);
+  }
 }

@@ -166,6 +166,7 @@ object Mimir extends LazyLogging {
           case analyze: Analyze => handleAnalyze(analyze)
           case plot: DrawPlot   => Plot.plot(plot, db, output)
           case dir: DirectQuery => handleDirectQuery(dir)
+          case compare: Compare => handleCompare(compare)
           case _                => db.update(stmt)
         }
 
@@ -204,6 +205,24 @@ object Mimir extends LazyLogging {
   {
     Timer.monitor("QUERY", output.print(_)) {
       db.query(raw) { output.print(_) }
+    }
+  }
+
+  def handleCompare(comparison: Compare): Unit =
+  {
+    val target = db.sql.convert(comparison.getTarget)
+    val expected = db.sql.convert(comparison.getExpected)
+
+    val facets = DatasetShape.detect(db, expected)
+    output.print("---- Comparison Dataset Features ----")
+    for(facet <- facets){
+      output.print(" > "+facet.description);
+    }
+    output.print("---- Target Differences ----")
+    for(facet <- facets){
+      for(difference <- facet.test(db, target)){
+        output.print(" > "+difference)
+      }
     }
   }
 

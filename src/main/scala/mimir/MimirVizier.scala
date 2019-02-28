@@ -363,8 +363,8 @@ object MimirVizier extends LazyLogging {
         logger.debug("unloadDataSource: From Vistrails: [" + input + "] [" + file + "] [" + format + "] [ " + backendOptions.mkString(",") + " ]"  ) ;
         val bkOpts = backendOptions.map{
           case (optKey:String, optVal:String) => (optKey, optVal)
-          case hm:java.util.HashMap[String,String] => {
-            val entry = hm.entrySet().iterator().next()
+          case hm:java.util.HashMap[_,_] => {
+            val entry = hm.asInstanceOf[java.util.HashMap[String,String]].entrySet().iterator().next()
             (entry.getKey, entry.getValue)
           }
           case _ => throw new Exception("unloadDataSource: bad options type")
