@@ -7,7 +7,8 @@ object MultilensRegistry
     "DISCALA_ABADI" -> DiscalaAbadiNormalizer,
     "DETECT_HEADER" -> CheckHeader,
     "TYPE_INFERENCE" -> TypeInference,
-    "SCHEMA_MATCHING" -> SchemaMatching
+    "SCHEMA_MATCHING" -> SchemaMatching,
+    "SHAPE_WATCHER" -> ShapeWatcher
   )
 
 }

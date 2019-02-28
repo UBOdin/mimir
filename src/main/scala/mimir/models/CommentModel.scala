@@ -39,7 +39,6 @@ class CommentModel(override val name: String, cols:Seq[String], colTypes:Seq[Typ
     val rval = getFeedback(idx, args) match {
       case Some(v) => s"${getReasonWho(idx,args)} told me that $v is valid for row $rowid"
       case None => s" ${comments(idx)}"
-      case _ => throw new SQLException("This is impossible...")
     }
     rval
   }

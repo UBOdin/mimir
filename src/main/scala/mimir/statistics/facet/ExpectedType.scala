@@ -38,13 +38,14 @@ object ExpectedType
     db.typechecker.schemaOf(query).map { 
       case (column, tExpected) => new ExpectedType(column, tExpected)
     }
-  def jsonToFacet(data: JsValue): Option[Facet] = {
-    data match { 
+  def jsonToFacet(body: JsValue): Option[Facet] = {
+    body match { 
       case JsObject(fields) if fields.get("facet").equals(Some(JsString("ExpectedType"))) => {
+        val data = fields("data").as[JsObject].value
         Some(
           new ExpectedType(
-            fields("column").asInstanceOf[JsString].value,
-            Json.toType(fields("expected"))
+            data("column").asInstanceOf[JsString].value,
+            Json.toType(data("expected"))
           )
         )
       }

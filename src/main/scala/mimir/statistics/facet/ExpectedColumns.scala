@@ -52,7 +52,8 @@ object ExpectedColumns
       case JsObject(fields) if fields.get("facet").equals(Some(JsString("ExpectedColumns"))) => 
         Some(
           new ExpectedColumns(
-            fields.asInstanceOf[JsArray]
+            fields("data")
+                  .asInstanceOf[JsArray]
                   .value
                   .map { _.asInstanceOf[JsString].value }
           )
