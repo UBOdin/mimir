@@ -131,6 +131,38 @@ trait OperatorConstructors
     )
   }
 
+  def countIf(alias: String = "COUNT")(condition: Expression): Operator =
+  {
+    Aggregate(
+      Seq(),
+      Seq(
+        AggFunction(
+          "SUM", 
+          false, 
+          Seq(condition.thenElse { IntPrimitive(1) } { IntPrimitive(0) }),
+          alias
+        )
+      ),
+      toOperator
+    )
+  }
+
+  def pctIf(alias: String = "FRACTION")(condition: Expression): Operator =
+  {
+    Aggregate(
+      Seq(),
+      Seq(
+        AggFunction(
+          "AVG", 
+          false, 
+          Seq(condition.thenElse { FloatPrimitive(1) } { FloatPrimitive(0) }),
+          alias
+        )
+      ),
+      toOperator
+    )
+  }
+
   def sort(sortCols: (String, Boolean)*): Operator =
     Sort( sortCols.map { col => SortColumn(Var(col._1), col._2) }, toOperator )
 

@@ -200,6 +200,7 @@ object SqlUtils {
             case Some(tblSchmd) => tblSchmd
             case None => db.backend.getTableSchema(table.getName()) match {
               case Some(tblSch) => tblSch
+              case None => throw new mimir.algebra.RAException(s"Table doesn't exist: ${table.getName()}")
             }
           }).map(_._1).toList++List("ROWID")
           )

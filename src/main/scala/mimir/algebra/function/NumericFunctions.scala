@@ -38,17 +38,17 @@ object NumericFunctions
     fr.register("STDDEV",(_) => ???, (_) => TFloat())
     fr.register("min",
         {
-          case ints:Seq[IntPrimitive] => IntPrimitive(ints.foldLeft(ints.head.v)( (init, intval) => Math.min(init, intval.v)))
+          case ints:Seq[_] => IntPrimitive(ints.foldLeft(ints.head.asInstanceOf[IntPrimitive].v)( (init, intval) => Math.min(init, intval.asInstanceOf[IntPrimitive].v)))
         }, (_) => TInt())
     fr.register("max",{
-          case ints:Seq[IntPrimitive] => IntPrimitive(ints.foldLeft(ints.head.v)( (init, intval) => Math.max(init, intval.v)))
+          case ints:Seq[_] => IntPrimitive(ints.foldLeft(ints.head.asInstanceOf[IntPrimitive].v)( (init, intval) => Math.max(init, intval.asInstanceOf[IntPrimitive].v)))
         }, (_) => TInt())
     fr.register("MIN",
         {
-          case ints:Seq[IntPrimitive] => IntPrimitive(ints.foldLeft(ints.head.v)( (init, intval) => Math.min(init, intval.v)))
+          case ints:Seq[_] => IntPrimitive(ints.foldLeft(ints.head.asInstanceOf[IntPrimitive].v)( (init, intval) => Math.min(init, intval.asInstanceOf[IntPrimitive].v)))
         }, (_) => TInt())
     fr.register("MAX",{
-          case ints:Seq[IntPrimitive] => IntPrimitive(ints.foldLeft(ints.head.v)( (init, intval) => Math.max(init, intval.v)))
+          case ints:Seq[_] => IntPrimitive(ints.foldLeft(ints.head.asInstanceOf[IntPrimitive].v)( (init, intval) => Math.max(init, intval.asInstanceOf[IntPrimitive].v)))
         }, (_) => TInt())
     
     fr.register("ROUND",

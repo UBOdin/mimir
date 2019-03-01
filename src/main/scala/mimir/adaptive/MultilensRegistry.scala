@@ -8,6 +8,7 @@ object MultilensRegistry
     "DETECT_HEADER" -> CheckHeader,
     "TYPE_INFERENCE" -> TypeInference,
     "SCHEMA_MATCHING" -> SchemaMatching,
+    "SHAPE_WATCHER" -> ShapeWatcher,
     "DATASOURCE_ERRORS" -> DataSourceErrors
   )
 

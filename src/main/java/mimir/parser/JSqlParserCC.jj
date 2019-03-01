@@ -100,6 +100,7 @@ import mimir.sql.ProvenanceStatement;
 import mimir.sql.DrawPlot;
 import mimir.sql.CastOperation;
 import mimir.sql.DirectQuery;
+import mimir.sql.Compare;
 import net.sf.jsqlparser.statement.create.table.Index;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.drop.Drop;
@@ -150,12 +151,14 @@ TOKEN: /* SQL Keywords. prefixed with K_ to avoid name clashes */
 |   <K_DIRECT:"DIRECT">
 |   <K_UNCERTAIN:"UNCERTAIN">
 |   <K_ANALYZE:"ANALYZE">
+|   <K_FEATURES:"FEATURES">
 |   <K_EXPLAIN:"EXPLAIN">
 |   <K_ASSUME:"ASSUME">
 |   <K_VIEW:"VIEW">
 |   <K_LENS:"LENS">
 |   <K_ADAPTIVE:"ADAPTIVE">
 |   <K_SCHEMA:"SCHEMA">
+|   <K_COMPARE:"COMPARE">
 |   <K_LET:"LET">
 |   <K_LOAD:"LOAD">
 |   <K_PLOT:"PLOT">
@@ -303,6 +306,8 @@ Statement Statement() :
     stm = Plot()
     | 
     stm = DirectQuery()
+    |
+    stm = Compare()
     )
     (";" | <EOF>)
     { return stm; }
@@ -395,22 +400,27 @@ Analyze Analyze():
 		String col = null;
     PrimitiveValue rowid = null;
     Boolean assign = false;
+    Boolean features = false;
     DrawPlot plot = null;
     FromItem from = null;
 	}
 {
 	<K_ANALYZE>
+  ((
+    <K_FEATURES> <K_IN> { features = true; }
+  )|(
     [
-        <K_WITH><K_ASSIGNMENTS> { assign = true; }
+      <K_WITH><K_ASSIGNMENTS> { assign = true; }
+      ]
+    [ LOOKAHEAD(4)
+      [
+        col = RelObjectName()
+        <K_OF>
+      ]
+      rowid = Literal()
+      <K_IN>
     ]
-  [ LOOKAHEAD(4)
-    [
-      col = RelObjectName()
-      <K_OF>
-    ]
-    rowid = Literal()
-    <K_IN>
-  ]
+  ))
   ( 
       ( selectBody = SelectBody() )
     | ( ( 
@@ -426,7 +436,7 @@ Analyze Analyze():
       }
   )
 	{ 
-    return new Analyze(selectBody, rowid, col, assign);
+    return new Analyze(selectBody, rowid, col, assign, features);
   }
 }
 
@@ -2172,4 +2182,17 @@ Statement DirectQuery():
 }
 {
   <K_DIRECT> "(" stmt = Statement() ")" { return new DirectQuery(stmt); }
+}
+
+Statement Compare():
+{
+  SelectBody target;
+  SelectBody comparison;
+}
+{
+  <K_COMPARE> target = SelectBody() 
+  <K_WITH> comparison = SelectBody()
+  {
+    return new Compare(target, comparison);
+  }
 }

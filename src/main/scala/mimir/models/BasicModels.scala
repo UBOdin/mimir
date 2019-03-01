@@ -72,8 +72,8 @@ case class WarningModel(override val name: String, keyTypes: Seq[Type])
   def varType(idx: Int, args: Seq[Type]) = TString()
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = 
     StringPrimitive("I have no idea?")
-  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = args(0)
-    StringPrimitive("You shouldn't be sampling from a model")
+  def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = 
+    args(0)
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = 
     hints(1).asString
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = setFeedback(0, args, v)

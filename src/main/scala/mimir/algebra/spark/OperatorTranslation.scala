@@ -17,7 +17,7 @@ import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression,
 
 
 import org.apache.spark.sql.execution.datasources.{DataSource, FailureSafeParser}
-
+import scala.language.existentials
 
 import mimir.algebra._
 import mimir.Database
@@ -44,7 +44,7 @@ import org.apache.spark.sql.catalyst.expressions.StringTrimLeft
 import org.apache.spark.sql.catalyst.expressions.StartsWith
 import org.apache.spark.sql.catalyst.expressions.Contains
 import mimir.algebra.function.FunctionRegistry
-import mimir.algebra.function.NativeFunction
+import mimir.algebra.function.{NativeFunction,ExpressionFunction,FoldFunction}
 
 import mimir.sql.SparkBackend
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
@@ -391,7 +391,7 @@ object OperatorTranslation
   }*/
   
   def getPrivateMamber[T](inst:AnyRef, fieldName:String) : T = {
-    def _parents: Stream[Class[_]] = Stream(inst.getClass) #::: _parents.map(_.getSuperclass)
+    def _parents:scala.collection.immutable.Stream[Class[_]] = Stream(inst.getClass) #::: _parents.map(_.asInstanceOf[Class[_]].getSuperclass)
     val parents = _parents.takeWhile(_ != null).toList
     val fields = parents.flatMap(_.getDeclaredFields())
     val field = fields.find(_.getName == fieldName).getOrElse(throw new IllegalArgumentException("Field " + fieldName + " not found"))
@@ -1300,7 +1300,11 @@ case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression]) e
 case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, params:Seq[Expression], argTypes:Seq[Type]) extends MimirUDF {
   val sparkArgs = (params.map(arg => OperatorTranslation.mimirExprToSparkExpr(oper,arg))).toList.toSeq
   val sparkArgTypes = argTypes.map(argT => OperatorTranslation.getSparkType(argT)).toList.toSeq
-  val dataType = function match { case NativeFunction(_, _, tc, _) => OperatorTranslation.getSparkType(tc(argTypes)) }
+  val dataType = function match { 
+    case NativeFunction(_, _, tc, _) => OperatorTranslation.getSparkType(tc(argTypes)) 
+    case (_:ExpressionFunction | _:FoldFunction) => 
+      throw new Exception(s"Unsupported function for Spark UDF: ${function}")
+  }
   def extractArgs(args:Seq[Any]) : Seq[PrimitiveValue] = {
     try{
       argTypes.
@@ -1317,6 +1321,7 @@ case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, 
   }
   def getUDF = {
     val inFunc = function match {
+      case _:ExpressionFunction | _:FoldFunction => throw new Exception("Unsupported Function Type")
       case NativeFunction(_, evaluator, typechecker, _) => 
         sparkArgs.length match { 
           case 0 => () => {

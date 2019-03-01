@@ -264,6 +264,10 @@ object CTPercolatorClassic {
       case ProvenanceOf(psel) => {
         percolateOne(psel)
       }
+
+      case _ => {
+        throw new Exception("CTPercolator classic is only here for testing and comparison and should be phased out.  Many query types are unsupported.")
+      }
     }
   }
   
@@ -284,7 +288,7 @@ object CTPercolatorClassic {
       case Union(_,_) => false
       case Join(_,_) => false
       case Aggregate(_,_,_) => false
-      case (Annotate(_, _) | ProvenanceOf(_) | Recover(_, _)) => ???
+      case _ => ???
     }
   }
   
@@ -382,7 +386,7 @@ object CTPercolatorClassic {
             Table(name, alias, sch, metadata)
           }
           
-        case (Annotate(_, _) | ProvenanceOf(_) | Recover(_, _)) => ???
+        case _ => ???
     }
   }
 

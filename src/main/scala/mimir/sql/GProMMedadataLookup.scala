@@ -199,6 +199,7 @@ with LazyLogging
                             case TBool() => BoolPrimitive(false)
                             case TRowId() => RowIdPrimitive("0")
                             case TType() => TypePrimitive(TInt())
+                            case _ => ???
                           }
                         })
                         oName match {

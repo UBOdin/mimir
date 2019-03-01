@@ -85,7 +85,7 @@ object JSONBuilder {
       case d:Double => JsNumber(d)
       case b:Boolean => JsBoolean(b)
       case seq:Seq[Any] => listJs(seq)
-      case map:Map[String,Any] => dictJs(map)
+      case map:Map[_,_] => dictJs(map.asInstanceOf[Map[String,Any]])
       case jsval:JsValue => jsval
       case prim:PrimitiveValue => primJs(prim)
 			case _ =>  JsString(content.toString())

@@ -3,26 +3,25 @@ package mimir;
 import java.io._
 import java.sql.SQLException
 
+import org.jline.terminal.{Terminal,TerminalBuilder}
+import org.slf4j.{LoggerFactory}
+import org.rogach.scallop._
+import com.typesafe.scalalogging.slf4j.LazyLogging
+import scala.collection.JavaConverters._
+
 import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
 import mimir.util.{Timer,ExperimentalOptions,LineReaderInputSource,PythonProcess,SqlUtils}
 import mimir.algebra._
-import mimir.statistics.DetectSeries
+import mimir.algebra.spark.OperatorTranslation
+import mimir.statistics.{DetectSeries,DatasetShape}
 import mimir.plot.Plot
 import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
 import mimir.exec.result.JDBCResultIterator
 import net.sf.jsqlparser.statement.Statement
 import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody} 
 import net.sf.jsqlparser.statement.drop.Drop
-import org.jline.terminal.{Terminal,TerminalBuilder}
-import org.slf4j.{LoggerFactory}
-import org.rogach.scallop._
-
-import com.typesafe.scalalogging.slf4j.LazyLogging
-
-import scala.collection.JavaConverters._
-import mimir.algebra.spark.OperatorTranslation
 
 /**
  * The primary interface to Mimir.  Responsible for:
@@ -167,6 +166,7 @@ object Mimir extends LazyLogging {
           case analyze: Analyze => handleAnalyze(analyze)
           case plot: DrawPlot   => Plot.plot(plot, db, output)
           case dir: DirectQuery => handleDirectQuery(dir)
+          case compare: Compare => handleCompare(compare)
           case _                => db.update(stmt)
         }
 
@@ -205,6 +205,24 @@ object Mimir extends LazyLogging {
   {
     Timer.monitor("QUERY", output.print(_)) {
       db.query(raw) { output.print(_) }
+    }
+  }
+
+  def handleCompare(comparison: Compare): Unit =
+  {
+    val target = db.sql.convert(comparison.getTarget)
+    val expected = db.sql.convert(comparison.getExpected)
+
+    val facets = DatasetShape.detect(db, expected)
+    output.print("---- Comparison Dataset Features ----")
+    for(facet <- facets){
+      output.print(" > "+facet.description);
+    }
+    output.print("---- Target Differences ----")
+    for(facet <- facets){
+      for(difference <- facet.test(db, target)){
+        output.print(" > "+difference)
+      }
     }
   }
 
@@ -257,16 +275,23 @@ object Mimir extends LazyLogging {
 
   def handleAnalyze(analyze: Analyze)
   {
-    val rowId = analyze.getRowId()
-    val column = analyze.getColumn()
-    val assign = analyze.getAssign()
+    val rowId = analyze.getRowId()        // The rowid of the row to analyze, or null if table scan
+    val column = analyze.getColumn()      // The column of the cell to analyze, or null if full row or table scan
+    val assign = analyze.getAssign()      // True if the prioritizer should generate task allocations
+    val features = analyze.getFeatures()  // True if this is an ANALYZE FEATURES query
     val query = db.sql.convert(analyze.getSelectBody())
 
-    if(rowId == null){
-      output.print("==== Explain Table ====")
-      logger.debug("Starting to Explain Table")
+    if(features){
+      output.print("==== Analyze Features ====")
+      for(facet <- DatasetShape.detect(db, query)) {
+        output.print(s"  > ${facet.description}")
+      }
+      output.print("NOT IMPLEMENTED YET!")
+    } else if(rowId == null){
+      output.print("==== Analyze Table ====")
+      logger.debug("Starting to Analyze Table")
       val reasonSets = db.explainer.explainEverything(query)
-      logger.debug("Done Explaining Table")
+      logger.debug("Done Analyzing Table")
       for(reasonSet <- reasonSets){
         logger.debug(s"Expanding $reasonSet")
         // Workaround for a bug: SQLite crashes if a UDA is run on an empty input
@@ -288,7 +313,7 @@ object Mimir extends LazyLogging {
     } else {
       val token = RowIdPrimitive(db.sql.convert(rowId).asString)
       if(column == null){ 
-        output.print("==== Explain Row ====")
+        output.print("==== Analyze Row ====")
         val explanation = 
           db.explainer.explainRow(query, token)
         printReasons(explanation.reasons)
@@ -298,7 +323,7 @@ object Mimir extends LazyLogging {
           CTPrioritizer.prioritize(explanation.reasons)
         }
       } else {
-      output.print("==== Explain Cell ====")
+      output.print("==== Analyze Cell ====")
         val explanation = 
           db.explainer.explainCell(query, token, column) 
         printReasons(explanation.reasons)

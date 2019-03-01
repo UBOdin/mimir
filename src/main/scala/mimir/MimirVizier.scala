@@ -315,8 +315,8 @@ object MimirVizier extends LazyLogging {
       logger.debug(s"loadDataSource: From Vistrails: [ $file ] inferTypes: $inferTypes detectHeaders: $detectHeaders format: ${format} -> [ ${backendOptions.mkString(",")} ]") ;
       val bkOpts = backendOptions.map{
         case (optKey:String, optVal:String) => (optKey, optVal)
-        case hm:java.util.HashMap[String,String] => {
-          val entry = hm.entrySet().iterator().next()
+        case hm:java.util.HashMap[_,_] => {
+          val entry = hm.asInstanceOf[java.util.HashMap[String,String]].entrySet().iterator().next()
           (entry.getKey, entry.getValue)
         }
         case _ => throw new Exception("loadDataSource: bad options type")
@@ -363,8 +363,8 @@ object MimirVizier extends LazyLogging {
         logger.debug("unloadDataSource: From Vistrails: [" + input + "] [" + file + "] [" + format + "] [ " + backendOptions.mkString(",") + " ]"  ) ;
         val bkOpts = backendOptions.map{
           case (optKey:String, optVal:String) => (optKey, optVal)
-          case hm:java.util.HashMap[String,String] => {
-            val entry = hm.entrySet().iterator().next()
+          case hm:java.util.HashMap[_,_] => {
+            val entry = hm.asInstanceOf[java.util.HashMap[String,String]].entrySet().iterator().next()
             (entry.getKey, entry.getValue)
           }
           case _ => throw new Exception("unloadDataSource: bad options type")
@@ -491,12 +491,12 @@ object MimirVizier extends LazyLogging {
     val timeRes = logTime("createLens") {
       logger.debug("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
       val (viewNameSuffix, inputSubstitutionQuery) = input match {
-        case aliases:JMapWrapper[String,String] => {
-          aliases.map{ case (vizierName, mimirName) => db.sql.registerVizierNameMapping(vizierName.toUpperCase(), mimirName) } 
-          (aliases.unzip._2.mkString(""), query)
+        case aliases:JMapWrapper[_,_] => {
+          aliases.asInstanceOf[JMapWrapper[String,String]].map{ case (vizierName, mimirName) => db.sql.registerVizierNameMapping(vizierName.toUpperCase(), mimirName) } 
+          (aliases.asInstanceOf[JMapWrapper[String,String]].unzip._2.mkString(""), query)
         }
-        case inputs:Seq[String] => {
-          (inputs.mkString(""),inputs.zipWithIndex.foldLeft(query)((init, curr) => {
+        case inputs:Seq[_] => {
+          (inputs.asInstanceOf[Seq[String]].mkString(""),inputs.asInstanceOf[Seq[String]].zipWithIndex.foldLeft(query)((init, curr) => {
             init.replaceAll(s"\\{\\{\\s*input_${curr._2}\\s*\\}\\}", curr._1) 
           })) 
         }
@@ -602,12 +602,12 @@ object MimirVizier extends LazyLogging {
   
 def vistrailsQueryMimirJson(input:Any, query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
     val inputSubstitutionQuery = input match {
-        case aliases:JMapWrapper[String,String] => {
-          aliases.map{ case (vizierName, mimirName) => db.sql.registerVizierNameMapping(vizierName.toUpperCase(), mimirName) } 
+        case aliases:JMapWrapper[_,_] => {
+          aliases.asInstanceOf[JMapWrapper[String,String]].map{ case (vizierName, mimirName) => db.sql.registerVizierNameMapping(vizierName.toUpperCase(), mimirName) } 
           query
         }
-        case inputs:Seq[String] => {
-          inputs.zipWithIndex.foldLeft(query)((init, curr) => {
+        case inputs:Seq[_] => {
+          inputs.asInstanceOf[Seq[String]].zipWithIndex.foldLeft(query)((init, curr) => {
             init.replaceAll(s"\\{\\{\\s*input_${curr._2}\\s*\\}\\}", curr._1) 
           })
         }
@@ -1131,7 +1131,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
        prov.add(row.provenance.asString)
     }
     val resCSV = cols.mkString(", ") + "\n" + rows.toString()
-    new PythonCSVContainer(resCSV, Array[Array[Boolean]](), Array[Boolean](), Array[Array[String]](), prov.toArray[String](Array()), results.schema.map(f => (f._1, f._2.toString())).toMap)
+    new PythonCSVContainer(resCSV, Array[Array[Boolean]](), Array[Boolean](), Array[Array[String]](), prov.toArray[String](Array[String]()), results.schema.map(f => (f._1, f._2.toString())).toMap)
     })
   }
   
@@ -1148,7 +1148,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
          while(resIter.hasNext())
            results.add(resIter.next)
      })
-     val resCSV = results.toArray[Row](Array()).seq.map(row => {
+     val resCSV = results.toArray[Row](Array[Row]()).seq.map(row => {
        val truples = colsIndexes.map( (i) => {
          (row(i).toString, row.isColDeterministic(i)) 
        }).unzip
@@ -1171,7 +1171,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
          while(resIter.hasNext())
            results.add(resIter.next)
      })
-     val resCSV = results.toArray[Row](Array()).seq.map(row => {
+     val resCSV = results.toArray[Row](Array[Row]()).seq.map(row => {
        val truples = colsIndexes.map( (i) => {
          (row(i).toString, row.isColDeterministic(i), if(!row.isColDeterministic(i))explainCell(oper, cols(i), row.provenance).mkString(",")else"") 
        }).unzip3
