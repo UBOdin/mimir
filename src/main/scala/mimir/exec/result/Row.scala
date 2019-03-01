@@ -27,8 +27,12 @@ trait Row
 
   def tupleSchema: Seq[(String,Type)]
 
-  def provenance: RowIdPrimitive = RowIdPrimitive(annotation( Provenance.rowidColnameBase).asString)
-
+  def provenance: RowIdPrimitive = 
+    annotation( Provenance.rowidColnameBase)  match {
+    case NullPrimitive() => RowIdPrimitive("")
+    case x => RowIdPrimitive(x.asString)
+  }
+  
   def isDeterministic(): Boolean = 
     annotation(CTPercolator.mimirRowDeterministicColumnName) match {
       case NullPrimitive() => false
