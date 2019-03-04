@@ -482,8 +482,8 @@ class CTExplainer(db: Database) extends LazyLogging {
   
   				// Source 2: There might be uncertainty on the table.  Use SYS_TABLES to dig these annotations up.
   				logger.debug(s"Explain Adaptive View Source 2: $model.$name")
-  				val tableReasons = explainEverything(
-  					multilens.tableCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name) )
+  				val tableReasons = explainSubsetWithoutOptimizing(
+  					multilens.tableCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name) ), wantCol, wantRow, wantSort, wantSchema
   				)
   				// alternative: Use SYS_TABLES directly
   				//    db.table("SYS_TABLES").where( Var("SCHEMA").eq(StringPrimitive(model)).and( Var("TABLE").eq(StringPrimitive(name)) ) )

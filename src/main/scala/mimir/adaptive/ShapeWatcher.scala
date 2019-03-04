@@ -10,8 +10,25 @@ object ShapeWatcher
 {
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model] = 
   {
+    val model = config.args match {
+      case Seq() => {
+        createWarningModel(db, config, "MIMIR_SHAPE_"+config.schema)
+      }
+      case Seq(Var(modelName)) => {
+        db.models.getOption(modelName) match {
+          case Some(model) => model
+          case None => createWarningModel(db, config, modelName)
+        }
+      }
+    }
+    
+    return Seq(
+      model
+    )
+  }
+  
+  private def createWarningModel(db: Database, config: MultilensConfig, modelName:String) = {
     val facets = DatasetShape.detect(db, config.query)
-    val modelName = "MIMIR_SHAPE_"+config.schema
     val facetTable = modelName
     val facetTableData = HardTable(
       Seq( "ID" -> TInt(), "FACET" -> TString() ),
@@ -21,14 +38,15 @@ object ShapeWatcher
             }
     )
     db.views.create(facetTable, facetTableData)
-
-    return Seq(
-      WarningModel(modelName, Seq(TInt(), TString()))
-    )
+    WarningModel(modelName, Seq(TInt(), TString()))
   }
+  
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator = 
   {
-    val modelName = "MIMIR_SHAPE_"+config.schema
+    val modelName = config.args match {
+      case Seq() =>  "MIMIR_SHAPE_"+config.schema
+      case Seq(Var(modelN)) => modelN
+    }
     val facetTable = modelName
     var base:Operator = HardTable(
       Seq("TABLE_NAME" -> TString()),
