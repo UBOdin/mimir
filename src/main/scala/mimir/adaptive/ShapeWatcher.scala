@@ -10,16 +10,16 @@ object ShapeWatcher
 {
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model] = 
   {
+    val warningModel = (modelName:String) => db.models.getOption(modelName) match {
+          case Some(model) => model
+          case None => createWarningModel(db, config, modelName)
+        }
     val model = config.args match {
       case Seq() => {
         createWarningModel(db, config, "MIMIR_SHAPE_"+config.schema)
       }
-      case Seq(Var(modelName)) => {
-        db.models.getOption(modelName) match {
-          case Some(model) => model
-          case None => createWarningModel(db, config, modelName)
-        }
-      }
+      case Seq(StringPrimitive(modelName)) => warningModel(modelName)
+      case Seq(Var(modelName)) =>  warningModel(modelName)
     }
     
     return Seq(
