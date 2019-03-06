@@ -538,16 +538,21 @@ object MimirVizier extends LazyLogging {
         mimir.parser.ExpressionParser.expr( param.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString)) )
       val paramsStr = paramExprs.mkString(",")
       val adaptiveSchemaName = "ADAPTIVE_SCHEMA_" + _type + ((input.toString() + _type + paramsStr).hashCode().toString().replace("-", "") )
+      val asViewName = "VIEW_"+adaptiveSchemaName
       db.getView(adaptiveSchemaName) match {
         case None => {
           db.adaptiveSchemas.create(adaptiveSchemaName, _type, db.table(input.toString), paramExprs)
-          db.views.create("VIEW_"+adaptiveSchemaName, db.adaptiveSchemas.viewFor(adaptiveSchemaName, "DATA").get)
+          val asTable = adaptiveSchemaName match {
+            case "SHAPE_WATCHER" => asViewName
+            case _ => "DATA"
+          }
+          db.views.create(asViewName, db.adaptiveSchemas.viewFor(adaptiveSchemaName, asTable).get)
         }
         case Some(_) => {
           logger.debug("createAdaptiveSchema: From Vistrails: Adaptive Schema already exists: " + adaptiveSchemaName)
         }
       }
-      "VIEW_"+adaptiveSchemaName
+      asViewName
     }
     logger.debug(s"createView Took: ${timeRes._2}")
     timeRes._1
