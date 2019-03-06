@@ -46,6 +46,7 @@ object ShapeWatcher
     val modelName = config.args match {
       case Seq() =>  "MIMIR_SHAPE_"+config.schema
       case Seq(Var(modelN)) => modelN
+      case Seq(StringPrimitive(modelN)) => modelN
     }
     val facetTable = modelName
     var base:Operator = HardTable(

@@ -3,7 +3,7 @@ package mimir.statistics
 import org.specs2.mutable._
 import org.specs2.specification._
 import java.io.File
-import mimir.algebra.Var
+import mimir.algebra.{Var, StringPrimitive}
 import mimir.test._
 
 object DatasetShapeSpec
@@ -38,7 +38,7 @@ object DatasetShapeSpec
     
     "Detect and test the basics with Adaptive Schema and work with DataSource Errors" >> {
       //good data
-      db.adaptiveSchemas.create( "Z_SW", "SHAPE_WATCHER", db.table("Z"), Seq(Var("MIMIR_SHAPE_Z")))
+      db.adaptiveSchemas.create( "Z_SW", "SHAPE_WATCHER", db.table("Z"), Seq(StringPrimitive("MIMIR_SHAPE_Z")))
       //bad data
       db.adaptiveSchemas.create( "Z_BAD_SW", "SHAPE_WATCHER", db.table("Z_BAD"), Seq(Var("MIMIR_SHAPE_Z")))
       
