@@ -543,7 +543,7 @@ object MimirVizier extends LazyLogging {
         case None => {
           db.adaptiveSchemas.create(adaptiveSchemaName, _type, db.table(input.toString), paramExprs)
           val asTable = adaptiveSchemaName match {
-            case "SHAPE_WATCHER" => asViewName
+            case "SHAPE_WATCHER" => adaptiveSchemaName
             case _ => "DATA"
           }
           db.views.create(asViewName, db.adaptiveSchemas.viewFor(adaptiveSchemaName, asTable).get)
