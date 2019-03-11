@@ -54,6 +54,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
 {
   
   var sparkSql : SQLContext = null
+  var sheetCred: String = null
   //ExperimentalOptions.enable("remoteSpark")
   val envHasS3Keys = (Option(System.getenv("AWS_ACCESS_KEY_ID")), Option(System.getenv("AWS_SECRET_ACCESS_KEY"))) match {
     case (Some(_), Some(_)) => true
@@ -108,6 +109,8 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
         }
         val sparkCtx = SparkContext.getOrCreate(conf)//new SparkContext(conf)
         val dmode = sparkCtx.deployMode
+        val credname = "api-project-378720062738-5923e0b6125f"
+        sheetCred = s"test/data/$credname"
         if(remoteSpark){
           sparkCtx.hadoopConfiguration.set("dfs.client.use.datanode.hostname",useHDFSHostnames.toString())
           sparkCtx.hadoopConfiguration.set("dfs.datanode.use.datanode.hostname",useHDFSHostnames.toString())
@@ -132,6 +135,8 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
           HadoopUtils.writeToHDFS(sparkCtx, "sqlite-jdbc-3.16.1.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.xerial/sqlite-jdbc/jars/sqlite-jdbc-3.16.1.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, "spark-xml_2.11-0.5.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.databricks/spark-xml_2.11/jars/spark-xml_2.11-0.5.0.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, "spark-excel_2.11-0.11.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.crealytics/spark-excel_2.11/jars/spark-excel_2.11-0.11.0.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, "spark-google-spreadsheets_2.11-0.6.1.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.github.potix2/spark-google-spreadsheets_2.11/jars/spark-google-spreadsheets_2.11-0.6.1.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, s"$credname",new File(s"test/data/$credname"), overwriteJars)
           //HadoopUtils.writeToHDFS(sparkCtx, "aws-java-sdk-s3-1.11.355.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.amazonaws/aws-java-sdk-s3/jars/aws-java-sdk-s3-1.11.355.jar"), overwriteJars)
           //HadoopUtils.writeToHDFS(sparkCtx, "hadoop-aws-2.7.6.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.apache.hadoop/hadoop-aws/jars/hadoop-aws-2.7.6.jar"), overwriteJars)
           
@@ -151,10 +156,13 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
           sparkCtx.addJar(s"$hdfsHome/sqlite-jdbc-3.16.1.jar")
           sparkCtx.addJar(s"$hdfsHome/spark-xml_2.11-0.5.0.jar")
           sparkCtx.addJar(s"$hdfsHome/spark-excel_2.11-0.11.0.jar")
+          sparkCtx.addJar(s"$hdfsHome/spark-google-spreadsheets_2.11-0.6.1.jar")
+          sparkCtx.addFile(s"$hdfsHome/$credname")
           //sparkCtx.addJar(s"$hdfsHome/aws-java-sdk-s3-1.11.355.jar")
           //sparkCtx.addJar(s"$hdfsHome/hadoop-aws-2.7.6.jar")
           
           //sparkCtx.addJar("http://central.maven.org/maven2/mysql/mysql-connector-java/5.1.6/mysql-connector-java-5.1.6.jar")
+          sheetCred = s"$hdfsHome/$credname"
         }
         logger.debug(s"apache spark: ${sparkCtx.version}  remote: $remoteSpark deployMode: $dmode")
         //TODO: we need to do this in a more secure way (especially vizier has python scripts that could expose this)
@@ -361,10 +369,16 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
           }
         }
         else {
-          if(ldf.startsWith("s3n:/") || ldf.startsWith("s3a:/") || !dataStagingType.equalsIgnoreCase("s3")){
+          if(format.equals("com.github.potix2.spark.google.spreadsheets")){
+            val gsldfparts = ldf.split("\\/") 
+            val gsldf = s"${gsldfparts(gsldfparts.length-2)}/${gsldfparts(gsldfparts.length-1)}"
+            sparkSql.sparkSession.sharedState.cacheManager.recacheByPath(sparkSql.sparkSession, gsldf)
+            dsSchema.load(gsldf)
+          }
+          else if(ldf.startsWith("s3n:/") || ldf.startsWith("s3a:/") || !dataStagingType.equalsIgnoreCase("s3")){
             sparkSql.sparkSession.sharedState.cacheManager.recacheByPath(sparkSql.sparkSession, ldf)
             dsSchema.load(ldf)
-          }
+          } 
           else {
             dsSchema.load("s3n://mimir-test-data/"+copyToS3(ldf))
           }
@@ -452,7 +466,14 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
     save match {
       case None => dsOptions.save
       case Some(outputFile) => {
-        dsOptions.save(outputFile)
+        if(format.equals("com.github.potix2.spark.google.spreadsheets")){
+          val gsldfparts = outputFile.split("\\/") 
+          val gsldf = s"${gsldfparts(gsldfparts.length-2)}/${gsldfparts(gsldfparts.length-1)}"
+          dsOptions.save(gsldf)
+        }
+        else{
+          dsOptions.save(outputFile)
+        }
       }
     }
   }

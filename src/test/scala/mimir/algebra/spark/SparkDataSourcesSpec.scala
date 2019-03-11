@@ -71,6 +71,45 @@ object SparkDataSourcesSpec
       }
     }
     
+     
+    "Be able to query from a google sheet source" >> {
+      db.loadTable("G", new File("1-9fKx9f1OV-J2P2LtOM33jKfc5tQt4DJExSU3xaXDwU/Sheet1"), true, None, true, false,
+          Map("serviceAccountId" -> "vizier@api-project-378720062738.iam.gserviceaccount.com",
+                        "credentialPath" -> db.backend.asInstanceOf[mimir.sql.SparkBackend].sheetCred),
+                    "com.github.potix2.spark.google.spreadsheets" ) 
+         
+      val result = query("""
+        SELECT * FROM G
+      """)(_.toList.map(_.tuple.toList)).toList
+      
+      val gschema = db.typechecker.schemaOf(db.table("G")) 
+      
+      gschema must contain( 
+          ("JOBTITLE",TString()), ("ENDYEAR",TFloat()), ("STARTYEAR",TFloat()), ("YEARSEXPERIENCE",TFloat()), ("EMPLOYMENTTYPE",TString()), ("TIMESTAMP",TString()), ("ENDWAGE",TFloat()), ("STARTWAGE",TFloat()), ("WAGEPERIOD",TString()), ("STATE",TString()), ("GENDER",TString()), ("NEARESTLARGECITY",TString()), ("COMPANYSIZE",TFloat()))
+      					
+      
+      result.length must be equalTo 213
+      result.head.length must be equalTo 13
+      
+      /*update("""
+				CREATE LENS G_MV 
+				  AS SELECT * FROM G
+				  WITH MISSING_VALUE('TIMESTAMP','JOBTITLE','YEARSEXPERIENCE','STARTYEAR','STARTWAGE','ENDYEAR','ENDWAGE','NEARESTLARGECITY','STATE','COMPANYSIZE','EMPLOYMENTTYPE','GENDER','WAGEPERIOD')
+			""")
+      
+      //this works but due to limitations in the datasource implementation it cannot overwrite an existing sheet so it will fail the secodn time 
+      "Be able to output to google sheet" >> {
+        val outputFilename = "1-9fKx9f1OV-J2P2LtOM33jKfc5tQt4DJExSU3xaXDwU/Sheet2"   
+        val result = db.backend.execute(db.table("G_MV"))
+        db.backend.asInstanceOf[RABackend].writeDataSink(result, "com.github.potix2.spark.google.spreadsheets", 
+            Map("serviceAccountId" -> "vizier@api-project-378720062738.iam.gserviceaccount.com",
+                "credentialPath" -> db.backend.asInstanceOf[mimir.sql.SparkBackend].sheetCred), Some(outputFilename))
+        
+        val outputSuccess = true
+        outputSuccess must be equalTo true 
+      }*/
+    }
+    
     "Be able to query from a xml source" >> {
       db.loadTable("X", new File("test/data/xmlsample.xml"), true, None, false, false, Map("rowTag" ->	"book"), "xml" ) 
           

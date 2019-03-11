@@ -55,7 +55,7 @@ object TypeInference
     val warningModel = 
       new WarningModel(
         s"MIMIR_TI_WARNING_${viewName}",
-        Seq(TString(), TString(), TString())
+        Seq(TString(), TString(), TString(), TRowId())
       )
 
     val columnIndexes = 
@@ -144,7 +144,7 @@ object TypeInference
                       StringPrimitive(" ] to "+bestGuessType+" on row "),
                       RowIdVar()
                     )),
-                    Seq(StringPrimitive(colName), Var(colName), StringPrimitive(bestGuessType.toString))
+                    Seq(StringPrimitive(colName), Var(colName), StringPrimitive(bestGuessType.toString), RowIdVar())
                   ),
                   castExpression
                 )
