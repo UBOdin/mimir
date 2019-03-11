@@ -192,8 +192,9 @@ libraryDependencies ++= Seq(
 
   //////////////////////// JDBC Backends //////////////////////
   "org.xerial"                    %   "sqlite-jdbc"              % "3.16.1",
-  "mysql" 						  %   "mysql-connector-java" 	 % "5.1.6",
   "org.postgresql" 				  %   "postgresql" 				 % "9.4-1201-jdbc41",
+  /// Explicitly not including MySQL, since it's GPL-licensed.  If you want 
+  /// to use MySQL, you're free to compile your own version of Mimir.
 
   ///////////////////  GProM/Native Integration //////////////
   "net.java.dev.jna"              %    "jna"                     % "4.2.2",
