@@ -10,7 +10,8 @@ object DatasetShape
   val detectors = Seq[FacetDetector](
     ExpectedColumns,
     ExpectedType,
-    Nullable
+    Nullable,
+    Domain
   )
 
   def detect(db: Database, query: Operator): Seq[Facet] =

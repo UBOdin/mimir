@@ -10,6 +10,11 @@ object StringUtils
     } else {
       return "a "+str
     }
-
   }
+
+  def nMore(count: Int, values: Seq[String], sep: String = ", ", conjunction: String = "and") =
+    values.take(count).mkString(sep)+(
+      if(values.size <= count) { "" }
+      else { s"${sep}${conjunction} ${values.size - count} more"}
+    )
 }
