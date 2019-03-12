@@ -177,8 +177,7 @@ object SparkUtils {
     val models = ClassFinder.concreteSubclasses("mimir.models.Model", classMap).map(clazz => Class.forName(clazz.name)).toSeq
     val operators = ClassFinder.concreteSubclasses("mimir.algebra.Operator", classMap).map(clazz => Class.forName(clazz.name)).toSeq
     val expressions = ClassFinder.concreteSubclasses("mimir.algebra.Expression", classMap).map(clazz => Class.forName(clazz.name)).toSeq
-    val miscClasses = Seq[Class[_]](Class.forName("org.opengis.referencing.datum.Ellipsoid"),Class.forName("org.geotools.referencing.datum.DefaultEllipsoid"))
-    (models ++ operators ++ expressions ++ miscClasses).toArray
+    (models ++ operators ++ expressions).toArray
   }
   
   def getDataFrameWithProvFromQuery(db:mimir.Database, query:Operator) : (Seq[(String, Type)], DataFrame) = {

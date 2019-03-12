@@ -2,9 +2,8 @@ package mimir.sql.sqlite
 
 import mimir.algebra._
 import mimir.provenance._
-import mimir.util.{JDBCUtils, HTTPUtils, JsonUtils}
+import mimir.util.{JDBCUtils, HTTPUtils, JsonUtils, GeoUtils}
 import com.typesafe.scalalogging.slf4j.LazyLogging
-import org.geotools.referencing.datum.DefaultEllipsoid
 import org.joda.time.DateTime
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
@@ -212,7 +211,7 @@ object WebGeocodeDistance extends org.sqlite.Function with LazyLogging {
         val geoRes = HTTPUtils.getJson(url)
         val glat = JsonUtils.seekPath( geoRes, latPath).toString().replaceAll("\"", "").toDouble
         val glon = JsonUtils.seekPath( geoRes, lonPath).toString().replaceAll("\"", "").toDouble
-        result(DefaultEllipsoid.WGS84.orthodromicDistance(lon, lat, glon, glat))
+        result(GeoUtils.calculateDistanceInKilometer(lon, lat, glon, glat))
     } catch {
         case ioe: Exception =>  {
           println(ioe.toString())
@@ -231,7 +230,7 @@ object MeToLocationDistance extends org.sqlite.Function with LazyLogging {
     val lon = myLon.get
     val otherLat: Double = value_double(0)
     val otherLon: Double = value_double(1)
-    result(DefaultEllipsoid.WGS84.orthodromicDistance(lon, lat, otherLon, otherLat))
+    result(GeoUtils.calculateDistanceInKilometer(lon, lat, otherLon, otherLat))
   }
 }
 
@@ -250,7 +249,7 @@ object Distance extends org.sqlite.Function with LazyLogging {
     val lon2: Double = value_double(3)
     val lat2: Double = value_double(2)
 
-    result(DefaultEllipsoid.WGS84.orthodromicDistance(lon1, lat1, lon2, lat2))
+    result(GeoUtils.calculateDistanceInKilometer(lon1, lat1, lon2, lat2))
   }
 }
 

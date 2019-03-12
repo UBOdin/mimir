@@ -1,8 +1,8 @@
 package mimir.algebra.function;
 
-import org.geotools.referencing.datum.DefaultEllipsoid
 import org.joda.time.DateTime
 import mimir.algebra._
+import mimir.util.GeoUtils
 
 object GeoFunctions
 {
@@ -19,7 +19,7 @@ object GeoFunctions
     fr.register(
       "DST",
       (args) => {
-        FloatPrimitive(DefaultEllipsoid.WGS84.orthodromicDistance(
+        FloatPrimitive(GeoUtils.calculateDistanceInKilometer(
           args(0).asDouble, //lon1
           args(1).asDouble, //lat1
           args(2).asDouble, //lon2
@@ -59,7 +59,7 @@ object GeoFunctions
               val geoRes = mimir.util.HTTPUtils.getJson(url)
               val glat = mimir.util.JsonUtils.seekPath( geoRes, latPath).toString().replaceAll("\"", "").toDouble
               val glon = mimir.util.JsonUtils.seekPath( geoRes, lonPath).toString().replaceAll("\"", "").toDouble
-              FloatPrimitive(org.geotools.referencing.datum.DefaultEllipsoid.WGS84.orthodromicDistance(lon.asDouble, lat.asDouble, glon, glat))
+              FloatPrimitive(GeoUtils.calculateDistanceInKilometer(lon.asDouble, lat.asDouble, glon, glat))
           } catch {
               case ioe: Exception =>  {
                 println(ioe.toString())
@@ -73,7 +73,7 @@ object GeoFunctions
     fr.register("METOLOCDST", 
       {  
         (args) => {
-          FloatPrimitive(DefaultEllipsoid.WGS84.orthodromicDistance(
+          FloatPrimitive(GeoUtils.calculateDistanceInKilometer(
             mimir.sql.sqlite.MeToLocationDistance.myLon.get, //lon1
             mimir.sql.sqlite.MeToLocationDistance.myLat.get, //lat1
             args(1).asDouble, //lon2

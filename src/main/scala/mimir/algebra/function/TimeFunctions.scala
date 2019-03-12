@@ -1,6 +1,5 @@
 package mimir.algebra.function;
 
-import org.geotools.referencing.datum.DefaultEllipsoid
 import org.joda.time.DateTime
 import mimir.algebra._
 
