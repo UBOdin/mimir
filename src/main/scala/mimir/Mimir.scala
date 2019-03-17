@@ -284,9 +284,8 @@ object Mimir extends LazyLogging {
     if(features){
       output.print("==== Analyze Features ====")
       for(facet <- DatasetShape.detect(db, query)) {
-        output.print(s"  > ${facet.description}")
+        output.print(s" > ${facet.description}")
       }
-      output.print("NOT IMPLEMENTED YET!")
     } else if(rowId == null){
       output.print("==== Analyze Table ====")
       logger.debug("Starting to Analyze Table")
