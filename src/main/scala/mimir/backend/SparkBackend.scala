@@ -1,4 +1,4 @@
-package mimir.sql
+package mimir.backend
 
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkConf

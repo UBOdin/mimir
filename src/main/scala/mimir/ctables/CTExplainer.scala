@@ -3,6 +3,8 @@ package mimir.ctables;
 import java.util.Random;
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
+import sparsity.Name
+
 import mimir._
 import mimir.algebra._
 import mimir.provenance._
@@ -53,7 +55,7 @@ class CellExplanation(
 	val examples: List[PrimitiveValue],
 	override val reasons: List[Reason], 
 	override val token: RowIdPrimitive,
-	val column: String
+	val column: Name
 ) extends Explanation(reasons, token) {
 	def fields = List[(String,PrimitiveValue)](
 		("examples", StringPrimitive(examples.map( _.toString ).mkString(", "))),
@@ -65,7 +67,7 @@ case class GenericCellExplanation (
 	override val examples: List[PrimitiveValue],
 	override val reasons: List[Reason], 
 	override val token: RowIdPrimitive,
-	override val column: String
+	override val column: Name
 ) extends CellExplanation(examples, reasons, token, column) {
 }
 
@@ -75,7 +77,7 @@ case class NumericCellExplanation (
 	override val examples: List[PrimitiveValue],
 	override val reasons: List[Reason], 
 	override val token: RowIdPrimitive,
-	override val column: String
+	override val column: Name
 ) extends CellExplanation(examples, reasons, token, column) {
 	override def fields = 
 		List(
@@ -140,7 +142,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 		)
 	}
 
-	def explainCell(oper: Operator, token: RowIdPrimitive, column: String): CellExplanation =
+	def explainCell(oper: Operator, token: RowIdPrimitive, column: Name): CellExplanation =
 	{
 		logger.debug(s"ExplainCell INPUT: $oper")
 		val (tuple, allExpressions, _) = getProvenance(oper, token)
@@ -202,7 +204,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 	}
 
-	def getStats(expr: Expression, tuple: Map[String,PrimitiveValue], desiredCount: Integer): 
+	def getStats(expr: Expression, tuple: Map[Name,PrimitiveValue], desiredCount: Integer): 
 		(PrimitiveValue, PrimitiveValue) =
 	{
 		val (tot, totSq, realCount) =
@@ -259,8 +261,8 @@ class CTExplainer(db: Database) extends LazyLogging {
 		}
 	}
 
-	def getFocusedReasons(expr: Expression, tuple: Map[String,PrimitiveValue]):
-		Map[String,Reason] =
+	def getFocusedReasons(expr: Expression, tuple: Map[Name,PrimitiveValue]):
+		Map[Name,Reason] =
 	{
 		logger.trace(s"GETTING REASONS: $expr")
 		expr match {
@@ -435,24 +437,24 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 	def explainSubset(
 		oper: Operator, 
-		wantCol: Set[String], 
+		wantCol: Set[Name], 
 		wantRow:Boolean, 
 		wantSort:Boolean
 	): Seq[ReasonSet] =
 		explainSubsetWithoutOptimizing(db.compiler.optimize(oper), wantCol, wantRow, wantSort)
 
-  private def compileCausalityForLens(lensName:String)(expr: Expression): Seq[(Expression, UncertaintyCausingExpression)] = {
+  private def compileCausalityForLens(lensName:Name)(expr: Expression): Seq[(Expression, UncertaintyCausingExpression)] = {
     val lensModels = db.models.associatedModels(lensName)
     CTAnalyzer.compileCausality(expr).filter(p => lensModels.contains(p._2.name))
   }
 		
 	def explainSubsetWithoutOptimizing(
 		oper: Operator, 
-		wantCol: Set[String], 
+		wantCol: Set[Name], 
 		wantRow:Boolean, 
 		wantSort:Boolean,
 		wantSchema:Boolean = true,
-		forLens:Option[String] = None
+		forLens:Option[Name] = None
 	): Seq[ReasonSet] =
 	{
 	  val compileCausality = forLens match {
@@ -621,7 +623,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 	}
 		
 	def explainAdaptiveSchema(oper: Operator, 
-		wantCol: Set[String], 
+		wantCol: Set[Name], 
 		wantTable:Boolean
 	): Seq[ReasonSet] =
 	{

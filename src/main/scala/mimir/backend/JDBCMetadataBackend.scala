@@ -1,4 +1,4 @@
-package mimir.sql;
+package mimir.backend;
 
 import java.sql._
 

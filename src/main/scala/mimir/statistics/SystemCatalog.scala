@@ -49,15 +49,14 @@ class SystemCatalog(db: Database)
     return attrView
   }
 
-  def apply(name: String): Option[Operator] =
-  {
-    name match {
-      case ("MIMIR_SYS_TABLES" | "SYS_TABLES") => Some(tableView)
-      case ("MIMIR_SYS_ATTRS"  | "SYS_ATTRS" ) => Some(attrView)
-      case _ => None
-    }
-  }
+  private val hardcodedTables = Map[Name, Operator](
+    Name("MIMIR_SYS_TABLES") -> tableView,
+    Name("SYS_TABLES")       -> tableView,
+    Name("MIMIR_SYS_ATTRS")  -> attrView,
+    Name("SYS_ATTRS")        -> attrView
+  )
 
+  def apply(name: Name): Option[Operator] = hardcodedTables.get(name)
 
 }
 

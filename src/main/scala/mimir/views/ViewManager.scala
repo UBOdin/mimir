@@ -4,6 +4,7 @@ import java.sql.SQLException;
 
 import net.sf.jsqlparser.statement.select.SelectBody
 
+import sparsity.Name
 import mimir._
 import mimir.algebra._
 import mimir.provenance._
@@ -39,7 +40,7 @@ class ViewManager(db:Database) extends LazyLogging {
    * @param  query          The query to back the view with
    * @throws SQLException   If a view or table with the same name already exists
    */
-  def create(name: String, query: Operator): Unit =
+  def create(name: Name, query: Operator): Unit =
   {
     logger.debug(s"CREATE VIEW $name AS $query")
     if(db.tableExists(name)){
@@ -59,7 +60,7 @@ class ViewManager(db:Database) extends LazyLogging {
    * @param  query          The new query to back the view with
    * @throws SQLException   If a view or table with the same name already exists
    */
-  def alter(name: String, query: Operator): Unit =
+  def alter(name: Name, query: Operator): Unit =
   {
     val properties = apply(name)
     db.metadataBackend.update(s"UPDATE $viewTable SET QUERY=? WHERE NAME=?", 
@@ -78,9 +79,15 @@ class ViewManager(db:Database) extends LazyLogging {
    * @param  name           The name of the view to alter
    * @throws SQLException   If a view or table with the same name already exists
    */
-  def drop(name: String): Unit =
+  def drop(name: Name, ifExists: Boolean = false): Unit =
   {
-    val properties = apply(name)
+    val properties = 
+      get(name) match {
+        case Some(properties) => properties
+        case None => if(ifExists){ return }
+                     else { throw new SQLException(s"Unknown View '$name'") }
+      }
+
     db.metadataBackend.update(s"DELETE FROM $viewTable WHERE NAME=?", 
       Seq(StringPrimitive(name))
     )
@@ -94,7 +101,7 @@ class ViewManager(db:Database) extends LazyLogging {
    * @param name    The name of the view to look up
    * @return        Properties for the specified query or None if the view doesn't exist
    */
-  def get(name: String): Option[ViewMetadata] =
+  def get(name: Name): Option[ViewMetadata] =
   {
     val results = 
       db.metadataBackend.resultRows(s"SELECT QUERY, METADATA FROM $viewTable WHERE name = ?", 
@@ -119,7 +126,7 @@ class ViewManager(db:Database) extends LazyLogging {
    * @return                Properties for the specified query
    * @throws SQLException   If the specified view does not exist
    */
-  def apply(name: String): ViewMetadata =
+  def apply(name: Name): ViewMetadata =
   {
     get(name) match {
       case None => 
@@ -133,7 +140,7 @@ class ViewManager(db:Database) extends LazyLogging {
    * Materialize the specified view
    * @param  name        The name of the view to materialize
    */
-  def materialize(name: String): Unit =
+  def materialize(name: Name): Unit =
   {
     if(db.backend.getTableSchema(name) != None){
       throw new SQLException(s"View '$name' is already materialized")
@@ -187,7 +194,7 @@ class ViewManager(db:Database) extends LazyLogging {
    * Remove the materialization for the specified view
    * @param  name        The name of the view to dematerialize
    */
-  def dematerialize(name: String): Unit = {
+  def dematerialize(name: Name): Unit = {
     if(db.backend.getTableSchema(name) == None){
       throw new SQLException(s"View '$name' is not materialized")
     }
@@ -206,7 +213,7 @@ class ViewManager(db:Database) extends LazyLogging {
    * List all views known to the view manager
    * @return     A list of all view names
    */
-  def list(): Seq[String] =
+  def list(): Seq[Name] =
   {
     db.metadataBackend.
       resultRows(s"SELECT name FROM $viewTable").

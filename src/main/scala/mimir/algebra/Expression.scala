@@ -4,6 +4,8 @@ import mimir.algebra.Type._;
 import org.joda.time.DateTime;
 import org.joda.time.Period;
 
+import sparsity.Name
+
 /**
  * Base type for expression trees.  Represents a single node in the tree.
  */
@@ -250,7 +252,7 @@ case class Function(op: String, params: Seq[Expression]) extends Expression {
  * Expressions.
  */
 @SerialVersionUID(100L)
-case class Var(name: String) extends LeafExpression {
+case class Var(name: Name) extends LeafExpression {
   override def toString = name;
 }
 

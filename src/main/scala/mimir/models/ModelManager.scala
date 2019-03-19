@@ -60,7 +60,7 @@ class ModelManager(db:Database)
   /**
    * Declare (and cache) a new Name -> Model association
    */
-  def persist(model:Model): Unit =
+  def persist(model: Model): Unit =
   {
     val (serialized,decoder) = model.serialize
 
@@ -78,7 +78,7 @@ class ModelManager(db:Database)
   /**
    * Remove an existing Name -> Model association if it exists
    */
-  def drop(name:String): Unit =
+  def drop(name: Name): Unit =
   {
     db.metadataBackend.update(s"""
       DELETE FROM $modelTable WHERE name = ?
@@ -89,7 +89,7 @@ class ModelManager(db:Database)
   /**
    * Retrieve a model by its name
    */
-  def get(name:String): Model =
+  def get(name: Name): Model =
   {
     getOption(name) match {
       case Some(model) => return model
@@ -98,9 +98,25 @@ class ModelManager(db:Database)
   }
 
   /**
+   * Provide model feedback
+   */
+  def feedback(name: Name, idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue) =
+    feedback(model, idx, args, v)
+
+  /**
+   * Provide model feedback
+   */
+  def feedback(name: Model, idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue) =
+  {
+    val model = get(name)
+    model.feedback(idx, args, v)
+    persist(model)
+  }
+
+  /**
    * Retreive a model by its name when it may not be present
    */
-  def getOption(name: String): Option[Model] =
+  def getOption(name: Name): Option[Model] =
   {
     if(!cache.contains(name)){ prefetch(name) }
     return cache.get(name)

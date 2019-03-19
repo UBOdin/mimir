@@ -6,7 +6,7 @@ import mimir.ctables.CTPercolator
 import mimir.provenance.Provenance
 
 class ViewMetadata(
-  val name: String,
+  val name: Name,
   val query: Operator,
   val isMaterialized: Boolean,
   db: Database
@@ -62,7 +62,7 @@ class ViewMetadata(
   def provenanceCols: Seq[String] = 
     Provenance.compile(query)._2
 
-  def schema: Seq[(String, Type)] =
+  def schema: Seq[(Name, Type)] =
   {
     //XXX: No More HACK!  Type Inference has become an adaptive schema
     db.typechecker.schemaOf(query)

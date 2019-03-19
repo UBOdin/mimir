@@ -1,6 +1,7 @@
-package mimir.lenses;
+package mimir.lenses
 
 import java.sql._
+import sparsity.Name
 
 import mimir.Database
 import mimir.algebra._
@@ -30,8 +31,8 @@ class LensManager(db: Database) {
   }
 
   def create(
-    t: String, 
-    name: String, 
+    t: Name, 
+    name: Name, 
     query: Operator, 
     args: Seq[Expression]
   ): Unit =
@@ -55,9 +56,9 @@ class LensManager(db: Database) {
     }
   }
 
-  def drop(name: String): Unit =
+  def drop(name: Name, ifExists: Boolean = false): Unit =
   {
-    db.views.drop(name)
+    db.views.drop(name, ifExists)
     db.models.dropOwner(s"LENS:$name")
   }
 

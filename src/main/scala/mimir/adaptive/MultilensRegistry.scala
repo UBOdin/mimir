@@ -1,15 +1,17 @@
 package mimir.adaptive
 
+import sparsity.Name
+
 object MultilensRegistry
 {
 
-  val multilenses = Map[String,Multilens](
-    "DISCALA_ABADI" -> DiscalaAbadiNormalizer,
-    "DETECT_HEADER" -> CheckHeader,
-    "TYPE_INFERENCE" -> TypeInference,
-    "SCHEMA_MATCHING" -> SchemaMatching,
-    "SHAPE_WATCHER" -> ShapeWatcher,
-    "DATASOURCE_ERRORS" -> DataSourceErrors
+  val multilenses = Map[Name,Multilens](
+    Name("DISCALA_ABADI")     -> DiscalaAbadiNormalizer,
+    Name("DETECT_HEADER")     -> CheckHeader,
+    Name("TYPE_INFERENCE")    -> TypeInference,
+    Name("SCHEMA_MATCHING")   -> SchemaMatching,
+    Name("SHAPE_WATCHER")     -> ShapeWatcher,
+    Name("DATASOURCE_ERRORS") -> DataSourceErrors
   )
 
 }

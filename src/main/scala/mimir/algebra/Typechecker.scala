@@ -4,6 +4,8 @@ import java.sql._;
 import java.util.NoSuchElementException;
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
+import sparsity.Name
+
 import mimir.Database
 import mimir.algebra.function._
 import mimir.models.{Model, ModelManager}
@@ -30,7 +32,7 @@ class TypecheckError(msg: String, e: Throwable, context: Option[Operator] = None
 		}
 }
 
-class MissingVariable(varName: String, e: Throwable, context: Option[Operator] = None)
+class MissingVariable(varName: Name, e: Throwable, context: Option[Operator] = None)
 	extends TypecheckError(varName, e, context);
 
 /**
@@ -170,7 +172,7 @@ class Typechecker(
   }
 
 
-	def schemaOf(o: Operator): Seq[(String, Type)] =
+	def schemaOf(o: Operator): Seq[(Name, Type)] =
 	{
 		o match {
 			case Project(cols, src) =>

@@ -3,19 +3,15 @@ package mimir.sql;
 import java.sql._
 import java.util
 
+import sparsity.Name
+import sparsity.statement.{Statement => SparsityStatement}
+import sparsity.expression.{Expression => SparsityExpression} 
+import sparsity.select._
+
 import mimir.Database
 import mimir.algebra._
 import mimir.ctables.CTPercolator
 import mimir.util._
-import net.sf.jsqlparser.expression
-import net.sf.jsqlparser.expression.operators.arithmetic._
-import net.sf.jsqlparser.expression.operators.conditional._
-import net.sf.jsqlparser.expression.operators.relational._
-import net.sf.jsqlparser.expression.{BinaryExpression, DateValue, DoubleValue, Function, LongValue, NullValue, InverseExpression, StringValue, WhenClause}
-import net.sf.jsqlparser.schema.Column
-import net.sf.jsqlparser.statement.create.table._
-import net.sf.jsqlparser.statement.select.{AllColumns, AllTableColumns, FromItem, PlainSelect, SelectBody, SelectExpressionItem, SubJoin, SubSelect}
-//import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
 import org.joda.time.LocalDate
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
@@ -29,56 +25,40 @@ import mimir.provenance.Provenance
 class SqlToRA(db: Database) 
   extends LazyLogging
 {
-  private val vizierNameMap = scala.collection.mutable.Map[String, String]()
+  private val vizierNameMap = scala.collection.mutable.Map[String, Name]()
   
-  def registerVizierNameMapping(vizierName:String,mimirName:String) : Unit = {
+  def registerVizierNameMapping(vizierName:String,mimirName:Name) : Unit = {
     vizierNameMap.put(vizierName, mimirName)
   }
   
-  def getVizierNameMapping(vizierName:String) : Option[String] =  vizierNameMap.get(vizierName)
+  def getVizierNameMapping(vizierName:String) : Option[Name] =  vizierNameMap.get(vizierName)
 
   def unhandled(feature : String) = {
     println("ERROR: Unhandled Feature: " + feature)
     throw new SQLException("Unhandled Feature: "+feature)
   }
   
-  def convert(t : ColDataType): Type = {
-    t.getDataType.toUpperCase match { 
-      case "INT" => TInt()
-      case "NUMBER" => TInt()
-      case "CHAR" => TString()
-    }
-  }
+  def apply(v: sparsity.statement.Select): Operator = convertSelect(v)._1
+  def apply(v: sparsity.select.SelectBody): Operator = convertSelectBody(v)._1
+  def apply(v: sparsity.expression.PrimitiveValue): PrimitiveValue = convertPrimitive(v)
+  def apply(v: sparsity.expression.Expression): Expression = convertExpression(v)
+  def apply(v: sparsity.expression.Expression,
+            bindings: String => String): Expression = convertExpression(v, bindings)
 
-  def convert(s : ProvenanceStatement) : Operator  = {
-    val psel = new ProvenanceOf(convert(s.getSelect()));
-    psel
-  }
-  
-  
-  def convert(s : net.sf.jsqlparser.statement.select.Select) : Operator = convert(s, null)._1
-  def convert(s : net.sf.jsqlparser.statement.select.Select, alias: String) : (Operator, Seq[(String, String)]) = {
+  def convertSelect(
+    s : sparsity.statement.Select, 
+    alias: Option[String] = None
+  ) : (Operator, Seq[(String, String)]) = {
     convert(s.getSelectBody(), alias)
   }
   
-  def convert(sb : SelectBody) : Operator = 
-    convert(sb, null)._1;
-  
-  /**
-   * Convert a SelectBody into an Operator + A projection map.
-   */
-  def convert(sb : SelectBody, tableAlias: String) : (Operator, Seq[(String, String)]) = 
-  {
-    sb match {
-      case ps: net.sf.jsqlparser.statement.select.PlainSelect => convert(ps, tableAlias)
-      case u: net.sf.jsqlparser.statement.select.Union => convert(u, tableAlias)
-    }
-  }
-
   /**
    * Convert a PlainSelect into an Operator + A projection map.
    */
-  def convert(ps: PlainSelect, tableAlias: String) : (Operator, Seq[(String, String)]) =
+  def convertSelectBody(
+    ps: sparsity.select.SelectBody, 
+    tableAlias: Option[String] = None
+  ) : (Operator, Seq[(String, String)]) =
   {
     // Unlike SQL, Mimir's relational algebra does not use range variables.  Rather,
     // variables are renamed into the form TABLENAME_VAR to prevent name conflicts.
@@ -207,7 +187,7 @@ class SqlToRA(db: Database)
 
     // Start by converting to Mimir expressions and expanding clauses
     // Follows the same pattern as the utility function above
-    val selectItems: Seq[(net.sf.jsqlparser.statement.select.SelectItem, Int)] = 
+    val selectItems: Seq[(sparsity.select.SelectItem, Int)] = 
       ps.getSelectItems().zipWithIndex
 
     val baseTargets: Seq[(String, Expression)] = 
@@ -368,7 +348,7 @@ class SqlToRA(db: Database)
             // TODO: It might be useful if we had a function to do the 
             // AggFunction test prior to conversion.  That is, if we
             // had a version of expressionContainsAggregate that worked
-            // on JSQLParser Expressions.
+            // on SQL Expressions.
             try {
               val firstConversionAttempt = convert(ps.getHaving, postAggregateBindings.toMap)
               if(expressionContainsAggregate(firstConversionAttempt)){ None }
@@ -456,8 +436,18 @@ class SqlToRA(db: Database)
     val returnedBindings =
       targets.map( tgt => (tgt._1, tgt._2) )
 
-    // The operator should now be fully assembled.  Return it and
-    // its bindings
+    // The base operator should now be fully assembled.  Recur into any 
+    // unions if necessary and return.
+    val isAll = (union.isAll() || !union.isDistinct());
+    if(!isAll){ unhandled("UNION DISTINCT") }
+    if(union.getOrderByElements != null){ unhandled("UNION ORDER BY") }
+    if(union.getLimit != null){ unhandled("UNION LIMIT") }
+
+    return union.
+      getPlainSelects().
+      map( convert(_, alias) ).
+      reduce( (a,b) => (Union(a._1,b._1), a._2) )
+
     return (ret, returnedBindings)
   }
 
@@ -470,20 +460,9 @@ class SqlToRA(db: Database)
     allReferencedFunctions.exists( db.aggregates.isAggregate(_) )
   }
 
-  def convert(union: net.sf.jsqlparser.statement.select.Union, alias: String): (Operator, Seq[(String,String)]) =
-  {
-    val isAll = (union.isAll() || !union.isDistinct());
-    if(!isAll){ unhandled("UNION DISTINCT") }
-    if(union.getOrderByElements != null){ unhandled("UNION ORDER BY") }
-    if(union.getLimit != null){ unhandled("UNION LIMIT") }
-
-    return union.
-      getPlainSelects().
-      map( convert(_, alias) ).
-      reduce( (a,b) => (Union(a._1,b._1), a._2) )
-  }
-
-  def convert(fi : FromItem) : (Operator, Seq[(String, String)], String) = {
+  def convertFromElement(
+    fi : FromElement
+  ) : (Operator, Seq[(String, String)], String) = {
     if(fi.isInstanceOf[SubJoin]){
       unhandled("FromItem[SubJoin]")
     }
@@ -549,7 +528,9 @@ class SqlToRA(db: Database)
     unhandled("FromItem["+fi.getClass.toString+"]")
   }
   // 
-  def convert(e : net.sf.jsqlparser.expression.PrimitiveValue) : PrimitiveValue =
+  def convertPrimitive(
+    e : sparsity.expression.PrimitiveValue
+  ) : PrimitiveValue =
   {
     e match { 
       case i: LongValue   => return IntPrimitive(i.getValue())
@@ -563,9 +544,10 @@ class SqlToRA(db: Database)
     }    
   }
 
-  def convert(e : net.sf.jsqlparser.expression.Expression) : Expression = 
-    convert(e, Map[String,String]())
-  def convert(e : net.sf.jsqlparser.expression.Expression, bindings: String => String) : Expression = {
+  def convertExpression(
+    e : sparsity.expression.Expression, 
+    bindings: String => String = Map()
+  ) : Expression = {
     e match {
       case prim: net.sf.jsqlparser.expression.PrimitiveValue => convert(prim)
       case inv: InverseExpression => 
@@ -689,7 +671,7 @@ class SqlToRA(db: Database)
     }
   }
 
-  def convertColumn(c: Column, bindings: String => String): Var =
+  def convertColumn(c: Name, bindings: String => String): Var =
   {
     var name = SqlUtils.canonicalizeIdentifier(c.getColumnName)
 
@@ -740,7 +722,7 @@ class SqlToRA(db: Database)
    * Unique placeholder variables are assigned unique names based
    * on the path through the operator tree.
    */
-  def fragmentAggregateExpression(expr: Expression, alias: String): (
+  def fragmentAggregateExpression(expr: sparsity.expression.Expression, alias: String): (
     Expression,                                   // The wrapper expression
     Set[String],                                  // Referenced Group-By Variables
     Seq[(String,Boolean,Seq[Expression],String)]  // Referenced Expressions (fn, args, alias)

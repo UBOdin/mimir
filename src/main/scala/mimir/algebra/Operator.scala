@@ -2,6 +2,7 @@ package mimir.algebra;
 
 import mimir.util.ListUtils
 import mimir.views.ViewAnnotation
+import sparsity.Name
 
 /**
  * Abstract parent class of all relational algebra operators
@@ -58,7 +59,7 @@ sealed abstract class Operator
    * Get the names of the columns produced by this operator.  
    * If you need the types of the columns, use db.typechecker
    */
-  def columnNames: Seq[String]
+  def columnNames: Seq[Name]
 
   /**
    * Return all expression objects that appear in this node
@@ -84,7 +85,7 @@ sealed abstract class Operator
 /**
  * A single column output by a projection
  */
-case class ProjectArg(name: String, expression: Expression) 
+case class ProjectArg(name: Name, expression: Expression) 
   extends Serializable
 {
   override def toString = (name.toString + " <= " + expression.toString)
@@ -114,7 +115,7 @@ case class Project(columns: Seq[ProjectArg], source: Operator) extends Operator
     columns.zip(x).map({ case (ProjectArg(name,_),expr) => ProjectArg(name, expr)}),
     source
   )
-  override def columnNames: Seq[String] = columns.map { _.name }
+  override def columnNames: Seq[Name] = columns.map { _.name }
 }
 
 /* AggregateArg is a wrapper for the args argument in Aggregate case class where:
@@ -125,7 +126,7 @@ case class Project(columns: Seq[ProjectArg], source: Operator) extends Operator
       getColumnName returns the column name
 */
 @SerialVersionUID(100L)
-case class AggFunction(function: String, distinct: Boolean, args: Seq[Expression], alias: String)
+case class AggFunction(function: String, distinct: Boolean, args: Seq[Expression], alias: Name)
   extends Serializable
 {
   override def toString = (alias + " <= " + function.toString + "(" + (if(distinct){"DISTINCT "}else{""}) + args.map(_.toString).mkString(", ") + ")")
@@ -161,7 +162,7 @@ case class Aggregate(groupby: Seq[Var], aggregates: Seq[AggFunction], source: Op
         })
     Aggregate(newGroupBy, newAggregates, source)
   }
-  override def columnNames: Seq[String] = 
+  override def columnNames: Seq[Name] = 
     groupby.map { _.name } ++ aggregates.map { _.alias }
 }
 
@@ -180,72 +181,6 @@ case class Select(condition: Expression, source: Operator) extends Operator
   def expressions = List(condition)
   def rebuildExpressions(x: Seq[Expression]) = Select(x(0), source)
   override def columnNames: Seq[String] = source.columnNames
-}
-
-
-case class AnnotateArg(annotationType: ViewAnnotation.T, name: String, typ: Type, expr:Expression) {
-  override def toString = (name.toString + " <= " + expr.toString + ":" + typ)
-}
-/**
- * invisify provenance attributes operator -- With Provenance
- */
-case class Annotate(source: Operator,
-                 invisSch: Seq[(String, AnnotateArg)])
-  extends Operator
-{
-  def toString(prefix: String) =
-    prefix + "ANNOTATE(" + 
-      ("\n" + source.toString(prefix+"  ") +"\n" + prefix 
-      )+")" + 
-       ( if(invisSch.size > 0)
-             { " // "+invisSch.map( { case (an,AnnotateArg(at, n, t, e)) => an + "->" +n + ":"+t } ).mkString(", ") }
-        else { "" })
-  def children: List[Operator] = List(source)
-  def rebuild(x: Seq[Operator]) = Annotate(x.head, invisSch)
-  def invisible_schema = invisSch.map( x => (x._2.name, x._2.typ) )
-  def expressions = invisSch.map(invsCol => invsCol._2.expr )
-  def rebuildExpressions(x: Seq[Expression]) = Annotate(source,
-    invisSch.zip(x).map({ case ((an,AnnotateArg(at, name, typ, _)), expr) =>(an,AnnotateArg(at, name, typ, expr))})   
-  )
-  def columnNames = source.columnNames
-}
-
-/**
- * visify provenance attributes operator -- Provenance Of
- */
-case class Recover(source: Operator,
-                 invisSch: Seq[(String, AnnotateArg)]) extends Operator
-{
-  def toString(prefix: String) =
-    // prefix + "Join of\n" + left.toString(prefix+"  ") + "\n" + prefix + "and\n" + right.toString(prefix+"  ")
-    prefix + "RECOVER(\n" + source.toString(prefix+"  ") + 
-                  "\n" + prefix + ")" + 
-       ( if(invisSch.size > 0)
-             { " // "+invisSch.map( { case (an,AnnotateArg(at, n, t, e)) => an + "->" +n + ":"+t } ).mkString(", ") }
-        else { "" })
-  def children() = List(source);
-  def rebuild(x: Seq[Operator]) = Recover(x.head, invisSch)
-  def expressions = invisSch.map(invsCol => invsCol._2.expr )
-  def rebuildExpressions(x: Seq[Expression]) = Recover(source,
-    invisSch.zip(x).map({ case ((an,AnnotateArg(at, name, typ, _)), expr) => (an,AnnotateArg(at, name, typ, expr))})   
-  )
-  def columnNames = source.columnNames.union(invisSch.map(_._2.name))
-}
-
-/**
- * provenance of operator -- Provenance Of
- */
-case class ProvenanceOf(source: Operator) extends Operator
-{
-  def toString(prefix: String) =
-    // prefix + "Join of\n" + left.toString(prefix+"  ") + "\n" + prefix + "and\n" + right.toString(prefix+"  ")
-    prefix + "PROVENANCE(\n" + source.toString(prefix+"  ") + 
-                  "\n" + prefix + ")"
-  def children() = List(source);
-  def rebuild(x: Seq[Operator]) = ProvenanceOf(x(0))
-  def expressions = List()
-  def rebuildExpressions(x: Seq[Expression]) = this
-  def columnNames = source.columnNames
 }
 
 /**
@@ -304,10 +239,10 @@ case class Union(left: Operator, right: Operator) extends Operator
  * with the rowid type.
  */
 @SerialVersionUID(100L)
-case class Table(name: String, 
-                 alias: String, 
-                 sch: Seq[(String,Type)],
-                 metadata: Seq[(String,Expression,Type)])
+case class Table(name: Name, 
+                 alias: Name, 
+                 sch: Seq[(Name,Type)],
+                 metadata: Seq[(Name,Expression,Type)])
   extends Operator
 {
   def toString(prefix: String) =
@@ -336,7 +271,7 @@ case class Table(name: String,
  * Not really used, just a placeholder for intermediate optimization.
  */
 @SerialVersionUID(100L)
-case class HardTable(schema: Seq[(String, Type)], data: Seq[Seq[PrimitiveValue]])
+case class HardTable(schema: Seq[(Name, Type)], data: Seq[Seq[PrimitiveValue]])
   extends Operator
 {
   def toString(prefix: String) =
@@ -443,7 +378,7 @@ case class LeftOuterJoin(left: Operator,
  * an appropriate materialized form of the view ready.
  */
 @SerialVersionUID(100L)
-case class View(name: String, query: Operator, annotations: Set[ViewAnnotation.T] = Set())
+case class View(name: Name, query: Operator, annotations: Set[ViewAnnotation.T] = Set())
   extends Operator
 {
   def children: Seq[Operator] = Seq(query)
@@ -465,7 +400,7 @@ case class View(name: String, query: Operator, annotations: Set[ViewAnnotation.T
  * an appropriate materialized form of the view ready.
  */
 @SerialVersionUID(100L)
-case class AdaptiveView(schema: String, name: String, query: Operator, annotations: Set[ViewAnnotation.T] = Set())
+case class AdaptiveView(schema: Name, name: Name, query: Operator, annotations: Set[ViewAnnotation.T] = Set())
   extends Operator
 {
   def children: Seq[Operator] = Seq(query)

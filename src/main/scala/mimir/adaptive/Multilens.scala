@@ -1,10 +1,12 @@
 package mimir.adaptive
 
+import sparsity.Name
+
 import mimir.Database
 import mimir.algebra._
 import mimir.models._
 
-case class MultilensConfig(schema: String, query: Operator, args: Seq[Expression])
+case class MultilensConfig(schema: Name, query: Operator, args: Seq[Expression])
 {
   override def toString: String =
     s"CONFIG FOR $schema(${args.mkString(", ")})"

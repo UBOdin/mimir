@@ -1,4 +1,4 @@
-package mimir.sql.sqlite
+package mimir.backend.sqlite
 
 import mimir.algebra._
 import mimir.provenance._

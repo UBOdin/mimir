@@ -11,14 +11,7 @@ import mimir.util.SqlUtils
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-import net.sf.jsqlparser.expression.operators.arithmetic._
-import net.sf.jsqlparser.expression.operators.conditional._
-import net.sf.jsqlparser.expression.operators.relational._
-import net.sf.jsqlparser.expression.{BinaryExpression, DoubleValue, Function, LongValue, NullValue, InverseExpression, StringValue, WhenClause, JdbcParameter}
-import net.sf.jsqlparser.{schema, expression}
-import net.sf.jsqlparser.schema.Column
-import net.sf.jsqlparser.statement.select.{SelectBody, PlainSelect, SubSelect, SelectExpressionItem, FromItem, SelectItem, SubJoin}
-//import net.sf.jsqlparser.statement.provenance.ProvenanceSelect
+import sparsity.{Statement, Expression}
 
 import scala.collection.JavaConversions._
 
@@ -71,6 +64,8 @@ class RAToSql(db: Database)
       case _ => oper.rebuild(oper.children.map(standardizeTables(_)))
     }
   }
+
+  def apply(oper: Operator) = convert(oper)
 
   /**
    * [use case] Convert an operator tree into JSQLParser's SelectBody type.

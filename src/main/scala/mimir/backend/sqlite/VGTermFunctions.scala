@@ -1,4 +1,4 @@
-package mimir.sql.sqlite
+package mimir.backend.sqlite
 
 import java.sql.SQLException
 import com.typesafe.scalalogging.slf4j.LazyLogging
