@@ -9,8 +9,8 @@ object RemoveRedundantCasts extends ExpressionOptimizerRule {
   def apply(e: Expression) =
   {
     e match {
-      case Function("CAST", List(Function("CAST", List(target, _)), castType)) =>
-        apply(Function("CAST", List(target, castType)))
+      case Function(ID("cast"), List(Function(ID("cast"), List(target, _)), castType)) =>
+        apply(Function(ID("cast"), List(target, castType)))
       case _ => e.recur(apply(_))
     }
   }

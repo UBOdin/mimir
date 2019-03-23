@@ -13,14 +13,14 @@ import mimir.util._
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1001L)
-class MissingKeyModel(override val name: String, keys:Seq[String], colTypes:Seq[Type]) 
+class MissingKeyModel(override val name: ID, keys:Seq[ID], colTypes:Seq[Type]) 
   extends Model(name) 
   with Serializable
   with FiniteDiscreteDomain
   with SourcedFeedback
 {
   
-  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = s"${args(0).asString}_$idx"
+  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : ID = ID(s"${args(0).asString}_$idx")
   
   def argTypes(idx: Int) = {
       Seq(TRowId())

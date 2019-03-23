@@ -18,7 +18,7 @@ object GeocodingLens {
 
   def create(
     db: Database, 
-    name: String, 
+    name: ID, 
     query: Operator, 
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
@@ -27,7 +27,7 @@ object GeocodingLens {
     val schemaMap = operSchema.toMap
     
     val houseNumColumn = args.flatMap {
-      case Function("HOUSE_NUMBER", cols ) => 
+      case Function(ID("house_number"), cols ) => 
         Some( cols.map { case col:Var => col 
                          case manVal:StringPrimitive => manVal 
                          case col => throw new RAException(s"Invalid House Number col argument: $col in GeocodingLens $name (not a column reference)")
@@ -41,7 +41,7 @@ object GeocodingLens {
     }
     
     val streetColumn = args.flatMap {
-      case Function("STREET", cols ) => 
+      case Function(ID("street"), cols ) => 
         Some( cols.map { case col:Var => col 
                          case manVal:StringPrimitive => manVal 
                          case col => throw new RAException(s"Invalid street argument: $col in GeocodingLens $name (not a column reference or string value)")
@@ -55,7 +55,7 @@ object GeocodingLens {
     }
     
     val cityColumn = args.flatMap {
-      case Function("CITY", cols ) => 
+      case Function(ID("city"), cols ) => 
         Some( cols.map { case col:Var => col 
                          case manVal:StringPrimitive => manVal  
                          case col => throw new RAException(s"Invalid City Col argument: $col in GeocodingLens $name (not a column reference)")
@@ -69,7 +69,7 @@ object GeocodingLens {
     }
     
     val stateColumn = args.flatMap {
-      case Function("STATE", cols ) => 
+      case Function(ID("state"), cols ) => 
         Some( cols.map { case col:Var => col  
                          case manVal:StringPrimitive => manVal 
                          case col => throw new RAException(s"Invalid State Col argument: $col in GeocodingLens $name (not a column reference)")
@@ -83,9 +83,9 @@ object GeocodingLens {
     }
     
     val geocoder = args.flatMap {
-      case Function("GEOCODER", cols ) => 
-        Some( cols match { case Seq(Var("GOOGLE")) | Seq(StringPrimitive("GOOGLE")) => StringPrimitive("GOOGLE")
-                           case Seq(Var("OSM")) | Seq(StringPrimitive("OSM")) => StringPrimitive("OSM")
+      case Function(ID("geocoder"), cols ) => 
+        Some( cols match { case Seq(Var(ID("GOOGLE"))) | Seq(StringPrimitive("GOOGLE")) => StringPrimitive("GOOGLE")
+                           case Seq(Var(ID("OSM"))) | Seq(StringPrimitive("OSM")) => StringPrimitive("OSM")
                            case col => StringPrimitive("OSM")
                        } )
       case _ => None
@@ -97,7 +97,7 @@ object GeocodingLens {
     
     val defaultAPIKey = "AIzaSyAKc9sTF-pVezJY8-Dkuvw07v1tdYIKGHk"
     val apiKey = args.flatMap {
-      case Function("API_KEY", cols ) => cols match { 
+      case Function(ID("api_key"), cols ) => cols match { 
         case Seq(StringPrimitive(key)) => Some(key)
         case x => None
       } 
@@ -109,18 +109,18 @@ object GeocodingLens {
     }
     
     val resultCols = args.flatMap {
-      case Function("RESULT_COLUMNS", cols:Seq[Var] @unchecked) => Some( cols.map(_.name) )
+      case Function(ID("result_columns"), cols:Seq[Var] @unchecked) => Some( cols.map(_.name) )
       case _ => None
     }.flatten
     
     val projectedOutAddrCols = args.flatMap {
-      case Function("HIDE_ADDR_COLUMNS", cols:Seq[Var] @unchecked) => Some( cols.map(_.name) )
+      case Function(ID("hide_addr_columns"), cols:Seq[Var] @unchecked) => Some( cols.map(_.name) )
       case _ => None
     }.flatten
     
     val resultColNames = resultCols.length match {
-      case 0 => Seq("LATITUDE", "LONGITUDE")
-      case 1 => Seq(resultCols.head, "LONGITUDE")
+      case 0 => Seq(ID("LATITUDE"), ID("LONGITUDE"))
+      case 1 => Seq(resultCols.head, ID("LONGITUDE"))
       case x => Seq(resultCols(0), resultCols(1))
     }
     
@@ -133,7 +133,7 @@ object GeocodingLens {
     
     
     
-    val geocodingModel = new GeocodingModel(name+"_GEOCODING_MODEL:"+inColsStr, inCols, geocoder.asString, apiKey, query) 
+    val geocodingModel = new GeocodingModel(ID(name,"_GEOCODING_MODEL:"+inColsStr), inCols, ID(geocoder.asString), apiKey, query) 
     geocodingModel.reconnectToDatabase(db)
     
     val projectArgs = 

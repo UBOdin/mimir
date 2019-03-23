@@ -1,7 +1,6 @@
 package mimir.lenses
 
 import java.sql._
-import sparsity.Name
 
 import mimir.Database
 import mimir.algebra._
@@ -13,16 +12,16 @@ import mimir.util.ExperimentalOptions
 
 class LensManager(db: Database) {
 
-  val lensTypes = Map[String,((Database,String,Operator,Seq[Expression]) => 
+  val lensTypes = Map[ID,((Database,ID,Operator,Seq[Expression]) => 
                               (Operator,TraversableOnce[Model]))](
-    "MISSING_VALUE"     -> MissingValueLens.create _,
-    "DOMAIN"            -> MissingValueLens.create _,
-    "KEY_REPAIR"        -> RepairKeyLens.create _,
-    "REPAIR_KEY"        -> RepairKeyLens.create _,
-    "COMMENT"           -> CommentLens.create _,
-    "MISSING_KEY"       -> MissingKeyLens.create _,
-    "PICKER"            -> PickerLens.create _,
-    "GEOCODE"           -> GeocodingLens.create _
+    ID("MISSING_VALUE")     -> MissingValueLens.create _,
+    ID("DOMAIN")            -> MissingValueLens.create _,
+    ID("KEY_REPAIR")        -> RepairKeyLens.create _,
+    ID("REPAIR_KEY")        -> RepairKeyLens.create _,
+    ID("COMMENT")           -> CommentLens.create _,
+    ID("MISSING_KEY")       -> MissingKeyLens.create _,
+    ID("PICKER")            -> PickerLens.create _,
+    ID("GEOCODE")           -> GeocodingLens.create _
   )
 
   def init(): Unit =
@@ -31,35 +30,34 @@ class LensManager(db: Database) {
   }
 
   def create(
-    t: Name, 
-    name: Name, 
+    t: ID, 
+    name: ID, 
     query: Operator, 
     args: Seq[Expression]
   ): Unit =
   {
-    val saneName = name.toUpperCase
     val constructor =
-      lensTypes.get(t.toUpperCase) match {
+      lensTypes.get(t) match {
         case Some(impl) => impl
-        case None => throw new SQLException("Invalid Lens Type '"+t.toUpperCase+"'")
+        case None => throw new SQLException("Invalid Lens Type '"+t+"'")
       }
 
     // Construct the appropriate lens
-    val (view, models) = constructor(db, saneName, query, args)
+    val (view, models) = constructor(db, name, query, args)
 
     // Create a lens query
-    db.views.create(saneName, view)
+    db.views.create(name, view)
 
     // Persist the associated models
     for(model <- models){
-      db.models.persist(model, s"LENS:$saneName")
+      db.models.persist(model, ID("LENS:",name))
     }
   }
 
-  def drop(name: Name, ifExists: Boolean = false): Unit =
+  def drop(name: ID, ifExists: Boolean = false): Unit =
   {
     db.views.drop(name, ifExists)
-    db.models.dropOwner(s"LENS:$name")
+    db.models.dropOwner(ID("LENS:",name))
   }
 
 }

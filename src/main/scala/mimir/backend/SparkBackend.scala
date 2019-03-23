@@ -1,54 +1,58 @@
 package mimir.backend
 
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkConf
-import mimir.util.ExperimentalOptions
-import mimir.algebra.spark.OperatorTranslation
-import org.apache.spark.sql.SQLContext
-import mimir.algebra._
-import org.apache.spark.sql.Dataset
-import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
-import mimir.algebra.spark.OperatorTranslation
-import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.types.DataType
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.execution.SparkPlan
-import org.apache.spark.sql.catalyst.expressions.Literal
-import org.apache.spark.SparkFiles
 import java.io.File
-import mimir.util.HadoopUtils
-import org.apache.spark.launcher.SparkLauncher
 import org.apache.hadoop.fs.Path
-import mimir.Mimir
-import mimir.util.SparkUtils
-import org.apache.spark.sql.execution.command.CreateViewCommand
-import org.apache.spark.sql.execution.command.PersistedView
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.execution.command.SetDatabaseCommand
-import org.apache.spark.sql.execution.command.CreateDatabaseCommand
-import org.apache.spark.sql.execution.command.DropDatabaseCommand
-import org.apache.spark.sql.SaveMode
-import org.apache.spark.sql.hive.HiveContext
 import com.typesafe.scalalogging.slf4j.LazyLogging
-import mimir.util.S3Utils
+
+import org.apache.spark.{ 
+  SparkContext, 
+  SparkConf,
+  SparkFiles
+}
+import org.apache.spark.sql.{ 
+  SQLContext,
+  Dataset,
+  Row,
+  DataFrame,
+  SparkSession,
+  SaveMode
+}
+import org.apache.spark.sql.types.{
+  DataType,
+  LongType,
+  IntegerType,
+  FloatType,
+  DoubleType,
+  ShortType,
+  DateType,
+  BooleanType,
+  TimestampType
+}
+import org.apache.spark.sql.catalyst.{ TableIdentifier, InternalRow }
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.expressions.Literal
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DropTableCommand
-import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.hive.HiveContext
+import org.apache.spark.launcher.SparkLauncher
+import org.apache.spark.sql.execution.command.{
+  CreateViewCommand,
+  PersistedView,
+  SetDatabaseCommand,
+  CreateDatabaseCommand,
+  DropDatabaseCommand
+}
+import mimir.algebra.spark.OperatorTranslation
 import mimir.algebra.spark.function.SparkFunctions
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.types.LongType
-import org.apache.spark.sql.types.IntegerType
-import org.apache.spark.sql.types.FloatType
-import org.apache.spark.sql.types.DoubleType
-import org.apache.spark.sql.types.ShortType
-import org.apache.spark.sql.types.DateType
-import org.apache.spark.sql.types.BooleanType
-import org.apache.spark.sql.types.TimestampType
-import mimir.algebra.function.FunctionRegistry
-import mimir.algebra.function.AggregateRegistry
+import mimir.algebra._
+import mimir.util.{ HadoopUtils, SparkUtils, ExperimentalOptions, S3Utils } 
+import mimir.Mimir
+import mimir.algebra.function.{ FunctionRegistry, AggregateRegistry }
 
 
-class SparkBackend(override val database:String, maintenance:Boolean = false) extends RABackend(database) 
+class SparkBackend(override val database:String, maintenance:Boolean = false) 
+  extends QueryBackend(database) 
   with BackendWithSparkContext
   with LazyLogging
 {
@@ -203,7 +207,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
     
   }
 
-  def registerSparkFunctions(excludedFunctions:Seq[String], fr:FunctionRegistry) = {
+  def registerSparkFunctions(excludedFunctions:Seq[ID], fr:FunctionRegistry) = {
     val sparkFunctions = sparkSql.sparkSession.sessionState.catalog
         .listFunctions(database, "*")
     sparkFunctions.filterNot(fid => excludedFunctions.contains(fid._1.funcName.toUpperCase())).foreach{ case (fidentifier, fname) => {
@@ -246,7 +250,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
     SparkFunctions.register(fr)
   }
   
-  def registerSparkAggregates(excludedFunctions:Seq[String], ar:AggregateRegistry) = {
+  def registerSparkAggregates(excludedFunctions:Seq[ID], ar:AggregateRegistry) = {
     val sparkFunctions = sparkSql.sparkSession.sessionState.catalog
         .listFunctions(database, "*")
     sparkFunctions.filterNot(fid => excludedFunctions.contains(fid._1.funcName.toUpperCase())).flatMap{ case (fidentifier, fname) => {
@@ -265,19 +269,19 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
           } else None 
       } }.foreach(sa => {
         logger.debug("registering spark aggregate: " + sa._1)
-        ar.register(sa._1, sa._2,sa._3)
+        ar.register(ID(sa._1), sa._2,sa._3)
        })    
   }
   
-  def materializeView(name:String): Unit = {
+  def materializeView(name:ID): Unit = {
     if(sparkSql == null) throw new Exception("There is no spark context")
-    sparkSql.table(name).persist().count()
+    sparkSql.table(name.id).persist().count()
   }
   
-  def createTable(tableName:String, oper:Operator) = {
+  def createTable(tableName:ID, oper:Operator) = {
     val df = execute(oper)
-    df.persist().createOrReplaceTempView(tableName)
-    df.write.mode(SaveMode.Overwrite).saveAsTable(tableName)
+    df.persist().createOrReplaceTempView(tableName.id)
+    df.write.mode(SaveMode.Overwrite).saveAsTable(tableName.id)
   }
   
   def execute(compiledOp: Operator): DataFrame = {
@@ -305,8 +309,8 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
     }
   }
   
-  def dropTable(table:String): Unit = {
-    DropTableCommand(TableIdentifier(table, Option(database)), true, false, true).run(sparkSql.sparkSession)
+  def dropTable(table:ID): Unit = {
+    DropTableCommand(TableIdentifier(table.id, Option(database)), true, false, true).run(sparkSql.sparkSession)
   }
   
   def dropDB():Unit = {
@@ -316,7 +320,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
   }
 
   
-  def readDataSource(name:String, format:String, options:Map[String, String], schema:Option[Seq[(String, Type)]], load:Option[String]) = {
+  def readDataSource(name:String, format:String, options:Map[String, String], schema:Option[Seq[(ID, Type)]], load:Option[String]) = {
     if(sparkSql == null) throw new Exception("There is no spark context")
     def copyToS3(file:String): String = {
       val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
@@ -478,17 +482,27 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
     }
   }
   
-  def getTableSchema(table: String): Option[Seq[(String, Type)]] = {
+  def getTableSchema(table: ID): Option[Seq[(ID, Type)]] = {
     if(sparkSql == null) throw new Exception("There is no spark context")
-    if(sparkSql.sparkSession.catalog.tableExists(table))
-      Some(sparkSql.sparkSession.catalog.listColumns(table).collect.map(col => (col.name, OperatorTranslation.getMimirType( OperatorTranslation.dataTypeFromHiveDataTypeString(col.dataType)))))
+    if(sparkSql.sparkSession.catalog.tableExists(table.id))
+      Some(
+        sparkSql.sparkSession.catalog
+          .listColumns(table.id)
+          .collect
+          .map { col => 
+            ( ID(col.name), 
+              OperatorTranslation.getMimirType( 
+                OperatorTranslation.dataTypeFromHiveDataTypeString(col.dataType))
+            )
+          }
+      )
     else None
   }
   
   
-  def getAllTables(): Seq[String] = {
+  def getAllTables(): Seq[ID] = {
     if(sparkSql == null) throw new Exception("There is no spark context")
-    sparkSql.sparkSession.catalog.listTables().collect().map(table => table.name)
+    sparkSql.sparkSession.catalog.listTables().collect().map(table => ID(table.name))
   }
   def invalidateCache() = {
     if(sparkSql == null) throw new Exception("There is no spark context")
@@ -511,24 +525,23 @@ class SparkBackend(override val database:String, maintenance:Boolean = false) ex
   }
 
   def listTablesQuery: Operator = {
-    HardTable(
-      Seq(("TABLE_NAME", TString())),
-      getAllTables().map(table => Seq(StringPrimitive(table)))
+    HardTable(Seq(ID("TABLE_NAME") -> TString()),
+      getAllTables().map(table => Seq(StringPrimitive(table.id)))
     )  
   }
   
   def listAttrsQuery: Operator = {
     HardTable(Seq(
-          ("TABLE_NAME", TString()), 
-          ("ATTR_NAME", TString()),
-          ("ATTR_TYPE", TString()),
-          ("IS_KEY", TBool())
+          ID("TABLE_NAME") -> TString(), 
+          ID("ATTR_NAME") -> TString(),
+          ID("ATTR_TYPE") -> TString(),
+          ID("IS_KEY") -> TBool()
         ),
         getAllTables().flatMap { table =>
           getTableSchema(table).get.map { case (col, t) =>
             Seq(
-              StringPrimitive(table),
-              StringPrimitive(col),
+              StringPrimitive(table.id),
+              StringPrimitive(col.id),
               TypePrimitive(t),
               BoolPrimitive(false)
             )

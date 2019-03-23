@@ -7,30 +7,30 @@ object UtilityFunctions
 
   def register(fr: FunctionRegistry)
   {
-    fr.registerFold("SEQ_MIN", """
+    fr.registerFold(ID("seq_min"), """
       IF CURR < NEXT THEN CURR ELSE NEXT END
     """)
 
-    fr.registerFold("SEQ_MAX", """
+    fr.registerFold(ID("seq_max"), """
       IF CURR > NEXT THEN CURR ELSE NEXT END
     """)
 
     fr.register(
-      "JULIANDAY",
+      ID("julianday"),
       (args) => ???,
       (_) => TInt()
     )
     
-    fr.register("STRFTIME",(_) => ???, (_) => TInt())
+    fr.register(ID("strftime"),(_) => ???, (_) => TInt())
     
-    fr.register("WEB", 
+    fr.register(ID("web"), 
       {  
         case Seq(StringPrimitive(url)) => StringPrimitive(mimir.util.HTTPUtils.get(url))
       },
       (x: Seq[Type]) => TString()
     )
     
-    fr.register("WEBJSON", 
+    fr.register(ID("webjson"), 
       {  
         case Seq(StringPrimitive(url)) => StringPrimitive(mimir.util.HTTPUtils.getJson(url).toString())
         case Seq(StringPrimitive(url), StringPrimitive(path)) => StringPrimitive(mimir.util.HTTPUtils.getJson(url, Some(path)).toString())
@@ -39,7 +39,7 @@ object UtilityFunctions
     )
     
     fr.register(
-      "monotonically_increasing_id",
+      ID("monotonically_increasing_id"),
       (_) => ???,
       (_) => TRowId()
     )

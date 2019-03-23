@@ -4,7 +4,7 @@ import mimir.Database
 import mimir.algebra._
 
 case class RegisteredAggregate(
-  aggName: String,
+  aggName: ID,
   typechecker: (Seq[Type] => Type),
   defaultValue: PrimitiveValue
 ){
@@ -13,28 +13,28 @@ case class RegisteredAggregate(
 
 class AggregateRegistry
 {
-  var prototypes: scala.collection.mutable.Map[String, RegisteredAggregate] = 
+  var prototypes: scala.collection.mutable.Map[ID, RegisteredAggregate] = 
     scala.collection.mutable.Map.empty;
 
   {
-    registerStatistic("SUM", NullPrimitive())
-    registerStatistic("MAX", NullPrimitive())
-    registerStatistic("MIN", NullPrimitive())
-    registerStatistic("STDDEV", NullPrimitive())
-    register("COUNT", (t) => TInt(), IntPrimitive(0))
-    register("AVG", List(TFloat()), TFloat(), NullPrimitive())
-    register("GROUP_AND", List(TBool()), TBool(), BoolPrimitive(true))
-    register("GROUP_OR", List(TBool()), TBool(), BoolPrimitive(false))
-    register("GROUP_BITWISE_AND", List(TInt()), TInt(), IntPrimitive(Long.MaxValue))
-    register("GROUP_BITWISE_OR", List(TInt()), TInt(), IntPrimitive(0))
-    register("JSON_GROUP_ARRAY", (t) => TString(), StringPrimitive("[]"))
-    register("FIRST", (t:Seq[Type]) => t.head, NullPrimitive())
-    register("FIRST_FLOAT", (t:Seq[Type]) => t.head, NullPrimitive())
-    register("FIRST_INT", (t:Seq[Type]) => t.head, NullPrimitive())
+    registerStatistic(ID("sum"), NullPrimitive())
+    registerStatistic(ID("max"), NullPrimitive())
+    registerStatistic(ID("min"), NullPrimitive())
+    registerStatistic(ID("stddev"), NullPrimitive())
+    register(ID("count"), (t) => TInt(), IntPrimitive(0))
+    register(ID("avg"), List(TFloat()), TFloat(), NullPrimitive())
+    register(ID("group_and"), List(TBool()), TBool(), BoolPrimitive(true))
+    register(ID("group_or"), List(TBool()), TBool(), BoolPrimitive(false))
+    register(ID("group_bitwise_and"), List(TInt()), TInt(), IntPrimitive(Long.MaxValue))
+    register(ID("group_bitwise_or"), List(TInt()), TInt(), IntPrimitive(0))
+    register(ID("json_group_array"), (t) => TString(), StringPrimitive("[]"))
+    register(ID("first"), (t:Seq[Type]) => t.head, NullPrimitive())
+    register(ID("first_float"), (t:Seq[Type]) => t.head, NullPrimitive())
+    register(ID("first_int"), (t:Seq[Type]) => t.head, NullPrimitive())
   }
 
   def register(
-    aggName: String, 
+    aggName: ID, 
     typechecker: Seq[Type] => Type, 
     defaultValue: PrimitiveValue
   ): Unit = {
@@ -42,7 +42,7 @@ class AggregateRegistry
   }
 
   def registerStatistic(
-    aggName: String, 
+    aggName: ID, 
     defaultValue: PrimitiveValue
   ): Unit = {
     register(
@@ -57,7 +57,7 @@ class AggregateRegistry
   }
 
   def register(
-    aggName: String,
+    aggName: ID,
     argTypes: Seq[Type],
     retType: Type, 
     defaultValue: PrimitiveValue
@@ -79,13 +79,13 @@ class AggregateRegistry
     )
   }
 
-  def typecheck(aggName: String, args: Seq[Type]): Type = 
+  def typecheck(aggName: ID, args: Seq[Type]): Type = 
     prototypes(aggName).typecheck(args)
 
-  def isAggregate(aggName: String): Boolean =
+  def isAggregate(aggName: ID): Boolean =
     prototypes.keySet.contains(aggName)
 
-  def defaultValue(aggName: String): PrimitiveValue =
+  def defaultValue(aggName: ID): PrimitiveValue =
     prototypes(aggName).defaultValue
 
 }

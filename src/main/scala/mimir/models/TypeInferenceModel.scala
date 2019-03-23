@@ -96,7 +96,7 @@ case class VoteList()
 
 
 @SerialVersionUID(1002L)
-class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultFrac: Double, sparkSql:SQLContext, query:Option[DataFrame] )
+class TypeInferenceModel(name: ID, val columns: IndexedSeq[ID], defaultFrac: Double, sparkSql:SQLContext, query:Option[DataFrame] )
   extends Model(name)
   with SourcedFeedback
   with FiniteDiscreteDomain
@@ -109,7 +109,7 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
   private def train(df:DataFrame) =
   {
     import sparkSql.implicits._
-    df.limit(TypeInferenceModel.sampleLimit).select(columns.map(col(_)):_*)
+    df.limit(TypeInferenceModel.sampleLimit).select(columns.map{_.id}.map{col(_)}:_*)
       .agg(new VoteList().toColumn)
       .head()
       .asInstanceOf[Row].toSeq(0).asInstanceOf[Seq[Row]]
@@ -204,8 +204,8 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
     isPerfectGuess(args(0).asInt) || (getFeedback(idx, args) != None)
   def isPerfectGuess(column: Int): Boolean =
     voteList(column).map( _._2._1 ).max >= totalVotes(column).toDouble
-  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]): String = 
-    args(0).asString
+  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]): ID = 
+    ID(args(0).asString)
   def argTypes(idx: Int): Seq[Type] = 
     Seq(TInt())
   def hintTypes(idx: Int): Seq[Type] = 

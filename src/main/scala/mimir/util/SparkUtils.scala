@@ -180,11 +180,8 @@ object SparkUtils {
     (models ++ operators ++ expressions).toArray
   }
   
-  def getDataFrameWithProvFromQuery(db:mimir.Database, query:Operator) : (Seq[(String, Type)], DataFrame) = {
-    val prov = if(ExperimentalOptions.isEnabled("GPROM-PROVENANCE")
-        && ExperimentalOptions.isEnabled("GPROM-BACKEND"))
-      { Provenance.compileGProM(query) }
-      else { Provenance.compile(query) }
+  def getDataFrameWithProvFromQuery(db:mimir.Database, query:Operator) : (Seq[(ID, Type)], DataFrame) = {
+    val prov = Provenance.compile(query)
     val oper           = prov._1
     val provenanceCols = prov._2
     val operWProv = Project(query.columnNames.map { name => ProjectArg(name, Var(name)) } :+

@@ -11,13 +11,13 @@ import mimir.parser._
 object CommentLens {
   def create(
     db: Database, 
-    name: String, 
+    name: ID, 
     query: Operator, 
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
   {
     val colComments = args.flatMap {
-      case Function("COMMENT", cols ) => 
+      case Function(ID("comment"), cols ) => 
         Some( cols match {
             case Seq(vcol@Var(col), StringPrimitive(comment)) => (vcol, comment)
             case Seq(expr:Expression, StringPrimitive(comment)) => (expr, comment)
@@ -26,13 +26,14 @@ object CommentLens {
       case _ => None
     }.toSeq 
   
-    val modelName = name + ":"+colComments.map(_._1)
+    val modelName = ID(name + ":"+colComments.map(_._1)
         .mkString("_")
         .replaceAll("[ ,'\"()\\[\\]~!@#$%^&*<>?/\\|{}=;.-]", "")
         + Math.abs(colComments.mkString("_").hashCode())
-  
+      )
+
     val resultCols = args.flatMap {
-      case Function("RESULT_COLUMNS", cols:(Seq[Var] @unchecked)) => Some( cols.map(_.name) )
+      case Function(ID("result_columns"), cols:(Seq[Var] @unchecked)) => Some( cols.map(_.name) )
       case _ => None
     }.flatten
     
@@ -42,7 +43,7 @@ object CommentLens {
           if(resultCols.length > index)
             resultCols(index)
           else
-            "COMMENT_ARG_"+index
+            ID("COMMENT_ARG_"+index)
         (
           ProjectArg(outputCol, VGTerm(modelName, index, Seq(RowIdVar()), Seq(expr))),
           (outputCol, db.typechecker.typeOf(expr, query)),

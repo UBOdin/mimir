@@ -19,9 +19,9 @@ class SystemCatalog(db: Database)
         OperatorUtils.makeUnion(
           Seq(
             db.backend.listTablesQuery
-              .addColumn( "SCHEMA_NAME" -> StringPrimitive("BACKEND") ),
+              .addColumns( "SCHEMA_NAME" -> StringPrimitive("BACKEND") ),
             db.views.listViewsQuery
-              .addColumn( "SCHEMA_NAME" -> StringPrimitive("MIMIR") )
+              .addColumns( "SCHEMA_NAME" -> StringPrimitive("MIMIR") )
           )++db.adaptiveSchemas.tableCatalogs
         )
       )
@@ -39,9 +39,9 @@ class SystemCatalog(db: Database)
         OperatorUtils.makeUnion(
           Seq(
             db.backend.listAttrsQuery
-              .addColumn( "SCHEMA_NAME" -> StringPrimitive("BACKEND") ),
+              .addColumns( "SCHEMA_NAME" -> StringPrimitive("BACKEND") ),
             db.views.listAttrsQuery
-              .addColumn( "SCHEMA_NAME" -> StringPrimitive("MIMIR") )
+              .addColumns( "SCHEMA_NAME" -> StringPrimitive("MIMIR") )
           )++db.adaptiveSchemas.attrCatalogs
         )
       )
@@ -49,30 +49,29 @@ class SystemCatalog(db: Database)
     return attrView
   }
 
-  private val hardcodedTables = Map[Name, Operator](
-    Name("MIMIR_SYS_TABLES") -> tableView,
-    Name("SYS_TABLES")       -> tableView,
-    Name("MIMIR_SYS_ATTRS")  -> attrView,
-    Name("SYS_ATTRS")        -> attrView
+  private val hardcodedTables = Map[ID, Operator](
+    ID("SYS_TABLES")       -> tableView,
+    ID("SYS_ATTRS")        -> attrView
   )
 
-  def apply(name: Name): Option[Operator] = hardcodedTables.get(name)
+  def apply(name: ID): Option[Operator] = hardcodedTables.get(name)
 
+  def list():Seq[ID] = hardcodedTables.keys.toSeq
 }
 
 object SystemCatalog 
 {
   val tableCatalogSchema = 
     Seq( 
-      ("SCHEMA_NAME", TString()),
-      ("TABLE_NAME", TString())
+      ID("SCHEMA_NAME") -> TString(),
+      ID("TABLE_NAME")  -> TString()
     )
   val attrCatalogSchema =
     Seq( 
-      ("SCHEMA_NAME", TString()),
-      ("TABLE_NAME", TString()), 
-      ("ATTR_NAME", TString()),
-      ("ATTR_TYPE", TString()),
-      ("IS_KEY", TBool())
+      ID("SCHEMA_NAME") -> TString(),
+      ID("TABLE_NAME")  -> TString(), 
+      ID("ATTR_NAME")   -> TString(),
+      ID("ATTR_TYPE")   -> TString(),
+      ID("IS_KEY")      -> TBool()
     )
 }

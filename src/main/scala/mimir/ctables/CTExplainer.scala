@@ -3,8 +3,6 @@ package mimir.ctables;
 import java.util.Random;
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-import sparsity.Name
-
 import mimir._
 import mimir.algebra._
 import mimir.provenance._
@@ -55,11 +53,11 @@ class CellExplanation(
 	val examples: List[PrimitiveValue],
 	override val reasons: List[Reason], 
 	override val token: RowIdPrimitive,
-	val column: Name
+	val column: ID
 ) extends Explanation(reasons, token) {
 	def fields = List[(String,PrimitiveValue)](
 		("examples", StringPrimitive(examples.map( _.toString ).mkString(", "))),
-		("column", StringPrimitive(column))
+		("column", StringPrimitive(column.id))
 	)
 }
 
@@ -67,7 +65,7 @@ case class GenericCellExplanation (
 	override val examples: List[PrimitiveValue],
 	override val reasons: List[Reason], 
 	override val token: RowIdPrimitive,
-	override val column: Name
+	override val column: ID
 ) extends CellExplanation(examples, reasons, token, column) {
 }
 
@@ -77,7 +75,7 @@ case class NumericCellExplanation (
 	override val examples: List[PrimitiveValue],
 	override val reasons: List[Reason], 
 	override val token: RowIdPrimitive,
-	override val column: Name
+	override val column: ID
 ) extends CellExplanation(examples, reasons, token, column) {
 	override def fields = 
 		List(
@@ -142,7 +140,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 		)
 	}
 
-	def explainCell(oper: Operator, token: RowIdPrimitive, column: Name): CellExplanation =
+	def explainCell(oper: Operator, token: RowIdPrimitive, column: ID): CellExplanation =
 	{
 		logger.debug(s"ExplainCell INPUT: $oper")
 		val (tuple, allExpressions, _) = getProvenance(oper, token)
@@ -182,7 +180,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 	}
 
 	def sampleExpression[A](
-		expr: Expression, bindings: Map[String,PrimitiveValue], count: Int, 
+		expr: Expression, bindings: Map[ID, PrimitiveValue], count: Int, 
 		init: A, accum: ((A, PrimitiveValue) => A)
 	): A = 
 	{
@@ -204,7 +202,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 	}
 
-	def getStats(expr: Expression, tuple: Map[Name,PrimitiveValue], desiredCount: Integer): 
+	def getStats(expr: Expression, tuple: Map[ID,PrimitiveValue], desiredCount: Integer): 
 		(PrimitiveValue, PrimitiveValue) =
 	{
 		val (tot, totSq, realCount) =
@@ -230,16 +228,16 @@ class CTExplainer(db: Database) extends LazyLogging {
 			val avg = Eval.applyArith(Arith.Div, tot, FloatPrimitive(realCount.toDouble))
 			val stddev =
 				db.interpreter.eval(
-					Function("SQRT", List(					
-						Function("ABSOLUTE", List(
+					Function("SQRT", 					
+						Function("ABSOLUTE", 
 							Arithmetic(Arith.Sub, 
 								Arithmetic(Arith.Div, totSq, FloatPrimitive(realCount.toDouble)),
 								Arithmetic(Arith.Mult, avg, avg)
 							)
-						))
+						)
 					)
 				)
-			)
+			
 			(avg, stddev)
 		} else {
 			(StringPrimitive("n/a"), StringPrimitive("n/a"))
@@ -261,8 +259,8 @@ class CTExplainer(db: Database) extends LazyLogging {
 		}
 	}
 
-	def getFocusedReasons(expr: Expression, tuple: Map[Name,PrimitiveValue]):
-		Map[Name,Reason] =
+	def getFocusedReasons(expr: Expression, tuple: Map[ID,PrimitiveValue]):
+		Map[ID,Reason] =
 	{
 		logger.trace(s"GETTING REASONS: $expr")
 		expr match {
@@ -314,7 +312,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 			case _ => 
 				expr.children.
 					map( getFocusedReasons(_, tuple) ).
-					foldLeft(Map[String,Reason]())(_++_)
+					foldLeft(Map[ID,Reason]())(_++_)
 		}
 	}
 
@@ -334,7 +332,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 	}
 
 	def getProvenance(oper: Operator, token: RowIdPrimitive): 
-		(Map[String,PrimitiveValue], Map[String, Expression], Expression) =
+		(Map[ID, PrimitiveValue], Map[ID, Expression], Expression) =
 	{
 		// Annotate the query to produce a provenance trace
 		val (provQuery, rowIdCols) = Provenance.compile(oper)
@@ -394,12 +392,12 @@ class CTExplainer(db: Database) extends LazyLogging {
 							map { case (query, args, hints) => 
 								(
 									Project(
-										args.zipWithIndex.map { case (expr, i) => ProjectArg("ARG_"+i, expr) }++
-										hints.zipWithIndex.map { case (expr, i) => ProjectArg("HINT_"+i, expr) },
+										args.zipWithIndex.map { case (expr, i) => ProjectArg(ID("ARG_"+i), expr) }++
+										hints.zipWithIndex.map { case (expr, i) => ProjectArg(ID("HINT_"+i), expr) },
 										query
 									),
-									args.zipWithIndex.map("ARG_"+_._2).map(Var(_)),
-									hints.zipWithIndex.map("HINT_"+_._2).map(Var(_))
+									args.zipWithIndex.map  { "ARG_"+_._2  }.map { ID(_) }.map(Var(_)),
+									hints.zipWithIndex.map { "HINT_"+_._2 }.map { ID(_) }.map(Var(_))
 								)
 							}.unzip3
 					logger.debug(s" ... ${allReasonLookups.mkString("\n ... ")}")
@@ -437,24 +435,24 @@ class CTExplainer(db: Database) extends LazyLogging {
 
 	def explainSubset(
 		oper: Operator, 
-		wantCol: Set[Name], 
+		wantCol: Set[ID], 
 		wantRow:Boolean, 
 		wantSort:Boolean
 	): Seq[ReasonSet] =
 		explainSubsetWithoutOptimizing(db.compiler.optimize(oper), wantCol, wantRow, wantSort)
 
-  private def compileCausalityForLens(lensName:Name)(expr: Expression): Seq[(Expression, UncertaintyCausingExpression)] = {
+  private def compileCausalityForLens(lensName:ID)(expr: Expression): Seq[(Expression, UncertaintyCausingExpression)] = {
     val lensModels = db.models.associatedModels(lensName)
     CTAnalyzer.compileCausality(expr).filter(p => lensModels.contains(p._2.name))
   }
 		
 	def explainSubsetWithoutOptimizing(
 		oper: Operator, 
-		wantCol: Set[Name], 
+		wantCol: Set[ID], 
 		wantRow:Boolean, 
 		wantSort:Boolean,
 		wantSchema:Boolean = true,
-		forLens:Option[Name] = None
+		forLens:Option[ID] = None
 	): Seq[ReasonSet] =
 	{
 	  val compileCausality = forLens match {
@@ -485,7 +483,7 @@ class CTExplainer(db: Database) extends LazyLogging {
   				// Source 2: There might be uncertainty on the table.  Use SYS_TABLES to dig these annotations up.
   				logger.debug(s"Explain Adaptive View Source 2: $model.$name")
   				val tableReasons = explainSubsetWithoutOptimizing(
-  					multilens.tableCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name) ), wantCol, wantRow, wantSort, wantSchema
+  					multilens.tableCatalogFor(db, config).filter( Var(ID("TABLE_NAME")).eq(name) ), wantCol, wantRow, wantSort, wantSchema
   				)
   				// alternative: Use SYS_TABLES directly
   				//    db.table("SYS_TABLES").where( Var("SCHEMA").eq(StringPrimitive(model)).and( Var("TABLE").eq(StringPrimitive(name)) ) )
@@ -493,7 +491,14 @@ class CTExplainer(db: Database) extends LazyLogging {
   				// Source 3: Check for uncertainty in one of the attributes of interest
   				logger.debug(s"Explain Adaptive View Source 3: $model.$name attributes")
   				val attrReasons = explainEverything(
-  					multilens.attrCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name).and( Var("ATTR_NAME").in( wantCol.toSeq.map { StringPrimitive(_) } ) ) )
+  					multilens.attrCatalogFor(db, config)
+  									 .filter { Var(ID("TABLE_NAME")).eq(name)
+  									 						.and { Var(ID("ATTR_NAME")).in( 
+  									 											wantCol.toSeq
+  									 														 .map { _.id }
+  									 														 .map { StringPrimitive(_) } 
+  									 									 ) }
+  									 					}
   				)
   				(tableReasons, attrReasons)
 				} else (Seq(), Seq())
@@ -534,7 +539,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 				explainSubsetWithoutOptimizing(Select(cond, query), wantCol, wantRow, wantSort, wantSchema)
 
 			case Select(cond, child) => {
-				val (condReasons:Seq[ReasonSet], condDependencies:Set[String]) =
+				val (condReasons:Seq[ReasonSet], condDependencies:Set[ID]) =
 					if(wantRow){
 						(
 							compileCausality(cond).map {
@@ -612,18 +617,11 @@ class CTExplainer(db: Database) extends LazyLogging {
 				explainSubsetWithoutOptimizing(lhs,wantCol,wantRow,wantSort, wantSchema) ++ 
 				explainSubsetWithoutOptimizing(rhs,wantCol,wantRow,wantSort, wantSchema)
 			}
-
-			case Annotate(src, _) => 
-				explainSubsetWithoutOptimizing(src,wantCol,wantRow,wantSort, wantSchema)
-
-			case ProvenanceOf(_) => ???
-
-			case Recover(_, _) => ???
 		}
 	}
 		
 	def explainAdaptiveSchema(oper: Operator, 
-		wantCol: Set[Name], 
+		wantCol: Set[ID], 
 		wantTable:Boolean
 	): Seq[ReasonSet] =
 	{
@@ -643,13 +641,20 @@ class CTExplainer(db: Database) extends LazyLogging {
 				// Source 1: There might be uncertainty on the table.  Use SYS_TABLES to dig these annotations up.
 				logger.debug(s"Explain Adaptive View Source 1: $model.$name")
 				val tableReasons = if(wantTable) explainEverything(
-					multilens.tableCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name) )
+					multilens.tableCatalogFor(db, config).filter( ID("TABLE_NAME").eq(name) )
 				) else Seq()
 				
 				// Source 2: Check for uncertainty in one of the attributes of interest
 				logger.debug(s"Explain Adaptive View Source 2: $model.$name attributes")
 				val attrReasons = explainEverything(
-					multilens.attrCatalogFor(db, config).filter( Var("TABLE_NAME").eq(name).and( Var("ATTR_NAME").in( wantCol.toSeq.map { StringPrimitive(_) } ) ) )
+					multilens.attrCatalogFor(db, config)
+									 .filter { ID("TABLE_NAME").eq(name)
+									 						.and { ID("ATTR_NAME").in( 
+									 										wantCol.toSeq
+									 													 .map { _.id }
+									 													 .map { StringPrimitive(_) } 
+									 								)}
+									 					}
 				)
 				logger.debug(s"Explain Adaptive View Done: $model.$name")
 				sourceReasons ++ tableReasons ++ attrReasons

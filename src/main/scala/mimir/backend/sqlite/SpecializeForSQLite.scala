@@ -12,41 +12,39 @@ object SpecializeForSQLite {
   def apply(e: Expression): Expression =
   {
     (e match {
-  
-      case Function("CAST", Seq(target, TypePrimitive(t))) => 
-        {//println("TYPE ID: "+t.id(t))
-          Function("MIMIRCAST", Seq(target, IntPrimitive(Type.id(t))))}
+      case Function(ID("cast"), Seq(target, TypePrimitive(t))) => 
+        Function("mimircast", target, IntPrimitive(Type.id(t)))
 
-      case Function("CAST", _) =>
+      case Function(ID("cast"), _) =>
         throw new SQLException("Invalid CAST: "+e)
 
-      case Function("YEAR_PART", Seq(d)) => 
-        Function("CAST", Seq(
-          Function("STRFTIME", Seq(StringPrimitive("%Y"), d)),
+      case Function(ID("year_part"), Seq(d)) => 
+        Function("cast", 
+          Function("strftime", StringPrimitive("%Y"), d),
           TypePrimitive(TInt())
-        ))
+        )
 
-      case Function("MONTH_PART", Seq(d)) => 
-        Function("CAST", Seq(
-          Function("STRFTIME", Seq(StringPrimitive("%m"), d)),
+      case Function(ID("month_part"), Seq(d)) => 
+        Function("cast", 
+          Function("strftime", StringPrimitive("%m"), d),
           TypePrimitive(TInt())
-        ))
+        )
 
-      case Function("DAY_PART", Seq(d)) => 
-        Function("CAST", Seq(
-          Function("STRFTIME", Seq(StringPrimitive("%d"), d)),
+      case Function(ID("day_part"), Seq(d)) => 
+        Function("cast",
+          Function("strftime", 
+            StringPrimitive("%d"), d),
           TypePrimitive(TInt())
-        ))
+        )
 
-      case Function("JSON_EXTRACT_INT", args) => Function("JSON_EXTRACT", args)
-      case Function("JSON_EXTRACT_FLOAT", args) => Function("JSON_EXTRACT", args)
-      case Function("JSON_EXTRACT_STR", args) => Function("JSON_EXTRACT", args)
+      case Function(ID("json_extract_int"), args)   => Function("json_extract", args:_*)
+      case Function(ID("json_extract_float"), args) => Function("json_extract", args:_*)
+      case Function(ID("json_extract_str"), args)   => Function("json_extract", args:_*)
 
-      case Function("CONCAT", args) =>
-        Function("PRINTF", Seq(
+      case Function(ID("concat"), args) =>
+        Function("printf", (Seq(
           StringPrimitive(args.map{ _ => "%s"}.mkString)
-        ) ++ args)
-
+        ) ++ args):_*)
       case _ => e
 
     }).recur( apply(_:Expression) )
@@ -55,11 +53,11 @@ object SpecializeForSQLite {
   def apply(agg: AggFunction, typeOf: Expression => Type): AggFunction =
   {
     agg match {
-      case AggFunction("FIRST", d, args, alias) =>
+      case AggFunction(ID("first"), d, args, alias) =>
         typeOf(args(0)) match {
-          case TInt()   => AggFunction("FIRST_INT", d, args, alias)
-          case TFloat() => AggFunction("FIRST_FLOAT", d, args, alias)
-          case t        => AggFunction("FIRST", d, args, alias)
+          case TInt()   => AggFunction(ID("first_int"), d, args, alias)
+          case TFloat() => AggFunction(ID("first_float"), d, args, alias)
+          case t        => AggFunction(ID("first"), d, args, alias)
         }
       case x => x
     }    

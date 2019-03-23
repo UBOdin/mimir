@@ -4,61 +4,68 @@ object QueryNamer
 {
 	def apply(op: Operator) = nameQuery(op)
 
-	def nameQuery(op: Operator): String = 
+	def nameQuery(op: Operator): ID = 
 	{
 		op match { 
 			case Table(name,alias, _, _) => name
 			case View(name, _, _) => name
-			case AdaptiveView(model, name, _, _) => (model+"_"+name)
+			case AdaptiveView(model, name, _, _) => model+ID("_")+name
 			case Project(cols, src) => 
 				cols.length match {
-					case 1 => cols(0).name+"_FROM_"+nameQuery(src)
+					case 1 => cols(0).name+ID("_FROM_")+nameQuery(src)
 					case 2 => 
-						cols(0).name+"_AND_"+
-						cols(1).name+"_FROM_"+
+						cols(0).name+ID("_AND_")+
+						cols(1).name+ID("_FROM_")+
 						nameQuery(src)
 					case _ => nameQuery(src)
 				}
 			case Select(cond, src) =>
-				nameQuery(src)+"_WHERE_"+nameBoolExpression(cond)
+				nameQuery(src)+ID("_WHERE_")+nameBoolExpression(cond)
 			case Join(lhs, rhs) =>
 				if(hasJoinOrUnion(lhs) || hasJoinOrUnion(rhs)) {
-					(getRelationNames(lhs)++getRelationNames(rhs)).mkString("_")
+					foldIDs(getRelationNames(lhs)++getRelationNames(rhs), "_")
 				} else {
-					nameQuery(lhs)+"_"+nameQuery(rhs)
+					nameQuery(lhs)+ID("_")+nameQuery(rhs)
 				}
 			case LeftOuterJoin(lhs, _, _) =>
 				nameQuery(lhs)
 			case Union(lhs, rhs) =>
 				if(hasJoinOrUnion(lhs) || hasJoinOrUnion(rhs)) {
-					(getRelationNames(lhs)++getRelationNames(rhs)).mkString("_PLUS_")
+					foldIDs(getRelationNames(lhs)++getRelationNames(rhs), "_PLUS_")
 				} else {
-					nameQuery(lhs)+"_PLUS_"+nameQuery(rhs)
+					nameQuery(lhs)+ID("_PLUS_")+nameQuery(rhs)
 				}
 			case Aggregate(_, _, src) =>
-				nameQuery(src)+"_SUMMARIZED"
+				ID(nameQuery(src), "_SUMMARIZED")
 			case Limit(_, _, src) =>
 				nameQuery(src)
 			case Sort(cols, src) =>
-				nameQuery(src)+"_BY_"+cols.flatMap(col => ExpressionUtils.getColumns(col.expression)).mkString("_")
+				nameQuery(src)+ID("_BY_")+foldIDs(
+					cols.flatMap(col => ExpressionUtils.getColumns(col.expression)),
+					"_"
+				)
 			case HardTable(_,Seq()) => 
-				"EMPTY_QUERY"
+				ID("EMPTY_QUERY")
 			case HardTable(_,_) => 
-				"HARDCODED"
-			case Annotate(src, _) => nameQuery(src)
-			case Recover(src, _) => nameQuery(src)
-			case ProvenanceOf(src) => nameQuery(src)
+				ID("HARDCODED")
 		}
 	}
 
-	def nameArithExpression(e: Expression): String =
+
+	def foldIDs(ids: Seq[ID], sep: String): ID =
+		if(ids.isEmpty) { ID("") }
+		else { ids.tail.foldLeft(ids.head) {
+			(old, curr) => old+ID(sep)+curr
+		}}
+
+	def nameArithExpression(e: Expression): ID =
 	{
-		"AN_EXPRESSION"
+		ID("AN_EXPRESSION")
 	}
 
-	def nameBoolExpression(e: Expression): String =
+	def nameBoolExpression(e: Expression): ID =
 	{
-		"A_CONDITION_HOLDS"
+		ID("A_CONDITION_HOLDS")
 	}
 
 	def hasJoinOrUnion(q: Operator): Boolean =
@@ -69,12 +76,11 @@ object QueryNamer
 			case _ => q.children.map( hasJoinOrUnion(_) ).foldLeft(false)( _ || _ )
 		}
 	}
-	def getRelationNames(q: Operator): List[String] =
+	def getRelationNames(q: Operator): Seq[ID] =
 	{
 		q match {
-			case Table(tn, ta, _, _) => List(tn)
-			case _ => q.children.map( getRelationNames(_) ).
-														foldLeft(List[String]())( _ ++ _ )
+			case Table(tn, ta, _, _) => Seq(tn)
+			case _ => q.children.map( getRelationNames(_) ).flatten
 		}
 	}
 

@@ -4,8 +4,6 @@ import mimir.algebra.Type._;
 import org.joda.time.DateTime;
 import org.joda.time.Period;
 
-import sparsity.Name
-
 /**
  * Base type for expression trees.  Represents a single node in the tree.
  */
@@ -72,9 +70,18 @@ case class Not(child: Expression)
  * 
  * Arith.Op is an Enumeration type for binary arithmetic operations
  */
-object Arith extends Enumeration {
-  type Op = Value
-  val Add, Sub, Mult, Div, And, Or, BitAnd, BitOr, ShiftLeft, ShiftRight = Value
+object Arith {
+  type Op = sparsity.expression.Arithmetic.Op
+  val Add        = sparsity.expression.Arithmetic.Add
+  val Sub        = sparsity.expression.Arithmetic.Sub
+  val Mult       = sparsity.expression.Arithmetic.Mult
+  val Div        = sparsity.expression.Arithmetic.Div
+  val And        = sparsity.expression.Arithmetic.And
+  val Or         = sparsity.expression.Arithmetic.Or
+  val BitAnd     = sparsity.expression.Arithmetic.BitAnd
+  val BitOr      = sparsity.expression.Arithmetic.BitOr
+  val ShiftLeft  = sparsity.expression.Arithmetic.ShiftLeft
+  val ShiftRight = sparsity.expression.Arithmetic.ShiftRight
   
   /**
    * Regular expresion to match any and all binary operations
@@ -133,14 +140,22 @@ object Arith extends Enumeration {
    */
   def isNumeric(v: Op): Boolean = !isBool(v)
 
+  def withName(op: String): Op = sparsity.expression.Arithmetic.withName(op)
 }
 
 /**
  * Enumerator for comparison types
  */
-object Cmp extends Enumeration {
-  type Op = Value
-  val Eq, Neq, Gt, Lt, Gte, Lte, Like, NotLike = Value
+object Cmp {
+  type Op = sparsity.expression.Comparison.Op
+  val Eq      = sparsity.expression.Comparison.Eq
+  val Neq     = sparsity.expression.Comparison.Neq
+  val Gt      = sparsity.expression.Comparison.Gt
+  val Lt      = sparsity.expression.Comparison.Lt
+  val Gte     = sparsity.expression.Comparison.Gte
+  val Lte     = sparsity.expression.Comparison.Lte
+  val Like    = sparsity.expression.Comparison.Like
+  val NotLike = sparsity.expression.Comparison.NotLike
   
   def negate(v: Op): Op = 
   {
@@ -183,6 +198,8 @@ object Cmp extends Enumeration {
       case NotLike => " NOT LIKE "
     }
   }
+
+  def withName(op: String): Op = sparsity.expression.Comparison.withName(op)
 }
 
 /**
@@ -228,22 +245,27 @@ case class Comparison(op: Cmp.Op, lhs: Expression,
  *       FunctionRegistry
  */
 @SerialVersionUID(100L)
-case class Function(op: String, params: Seq[Expression]) extends Expression {
-  override def toString() = {
-    op match {
-      // Need to special case COUNT DISTINCT
-      // OK: Is this actually needed?  This should be part of the Aggregate operator, 
-      //     and not Function.
-      case "COUNT" if params.size > 0 => 
-            "COUNT(DISTINCT " + params.map( _.toString ).mkString(", ") + ")"
-      case "COUNT" if params.size == 0 => 
-            "COUNT(*)"
-
-      case _ => op + "(" + params.map( _.toString ).mkString(", ") + ")"
-    }
-  }
+case class Function(op: ID, params: Seq[Expression]) extends Expression 
+{
+  override def toString() = 
+    op.id ++ params.map { _.toString }.mkString(", ")
   def children = params
   def rebuild(c: Seq[Expression]) = Function(op, c)
+}
+object Function
+{
+  def apply(op: String, params:Expression*): Function =
+    Function(ID(op.toLowerCase), params)
+}
+
+
+@SerialVersionUID(100L)
+case class CastExpression(target: Expression, t: Type) extends Expression
+{
+  override def toString() =
+    "CAST("+target.toString+" AS "+t+")"
+  def children = Seq(target)
+  def rebuild(c: Seq[Expression]) = CastExpression(c(0), t)
 }
 
 /**
@@ -252,8 +274,9 @@ case class Function(op: String, params: Seq[Expression]) extends Expression {
  * Expressions.
  */
 @SerialVersionUID(100L)
-case class Var(name: Name) extends LeafExpression {
-  override def toString = name;
+case class Var(name: ID) extends LeafExpression {
+  override def toString = "`"+name.id+"`";
+  def id = name.id
 }
 
 /**
@@ -606,7 +629,7 @@ abstract class Proc(val args: Seq[Expression]) extends Expression
 
 sealed abstract class UncertaintyCausingExpression extends Expression
 { 
-  def name: String
+  def name: ID
 }
 
 /**
@@ -616,7 +639,7 @@ sealed abstract class UncertaintyCausingExpression extends Expression
  * Each distinct value of { name x idx x args } identifies *one* variable.
  */
 case class VGTerm(
-  name: String, 
+  name: ID, 
   idx: Int,
   args: Seq[Expression],
   hints: Seq[Expression]
@@ -638,7 +661,7 @@ case class VGTerm(
  * value that gets passed through is in fact correct.
  */
 case class DataWarning(
-  name: String,
+  name: ID,
   value: Expression,
   message: Expression, 
   key: Seq[Expression]

@@ -44,11 +44,11 @@ object SparkClassifierModel
   
   def availableSparkModels = Map("Classification" -> (Classification, Classification.NaiveBayesMulticlassModel _), "Regression" -> (Regression, Regression.GeneralizedLinearRegressorModel _))
   
-  def train(db: Database, name: String, cols: Seq[String], query:Operator): Map[String,(Model,Int,Seq[Expression])] = 
+  def train(db: Database, name: ID, cols: Seq[ID], query:Operator): Map[ID,(Model,Int,Seq[Expression])] = 
   {
     val (schemaWProv, modelHT) = SparkUtils.getDataFrameWithProvFromQuery(db, query)
     cols.map( (col) => {
-      val modelName = s"$name:$col"
+      val modelName = ID(name,":",col)
       val model = 
         db.models.getOption(modelName) match {
           case Some(model) => model
@@ -100,21 +100,23 @@ object SparkClassifierModel
 }
 
 @SerialVersionUID(1001L)
-class SimpleSparkClassifierModel(name: String, val colName:String, val schema:Seq[(String, Type)])
+class SimpleSparkClassifierModel(name: ID, val colName:ID, val schema:Seq[(ID, Type)])
   extends Model(name) 
   with SourcedFeedback
   with ModelCache
 {
   val columns = schema.map{_._1}
   val colIdx:Int = columns.indexOf(colName)
+
+  // map from ROWID -> (Class, Score)
   var classifyAllPredictions:Option[Map[String, Seq[(String, Double)]]] = None
   var learner: Option[PipelineModel] = None
   
   var sparkMLInstanceType = "Classification" 
   
   
-  def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : String = args(0).asString
-  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = args(0).asString
+  def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : ID = ID(args(0).asString)
+  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : ID = ID(args(0).asString)
 
   
  
@@ -208,7 +210,7 @@ class SimpleSparkClassifierModel(name: String, val colName:String, val schema:Se
       case None => 
         getCache(idx, args, hints) match {
           case None => s"The classifier isn't able to make a guess about $name.$colName, so I'm defaulting to ${classToPrimitive("0")}"
-          case Some(elem) => s"I used a classifier to guess that ${name.split(":")(0)}.$colName = $elem on row $rowid"
+          case Some(elem) => s"I used a classifier to guess that ${name.id.split(":")(0)}.$colName = $elem on row $rowid"
         }
     }
     } catch {

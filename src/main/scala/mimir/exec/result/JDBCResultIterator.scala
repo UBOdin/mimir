@@ -5,11 +5,11 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
 import mimir.util._
 import mimir.exec._
-import mimir.sql.MetadataBackend
-import net.sf.jsqlparser.statement.select.SelectBody
+import mimir.backend.MetadataBackend
+import sparsity.select.SelectBody
 
 class JDBCResultIterator(
-  inputSchema: Seq[(String,Type)],
+  inputSchema: Seq[(ID,Type)],
   query: SelectBody,
   backend: MetadataBackend,
   dateType: (Type)
@@ -18,8 +18,8 @@ class JDBCResultIterator(
   with LazyLogging
 {
 
-  def annotationSchema: Seq[(String, Type)] = Seq()
-  def tupleSchema: Seq[(String, Type)] = inputSchema
+  def annotationSchema: Seq[(ID, Type)] = Seq()
+  def tupleSchema: Seq[(ID, Type)] = inputSchema
 
   val extractInputs: Seq[() => PrimitiveValue] = 
     inputSchema.

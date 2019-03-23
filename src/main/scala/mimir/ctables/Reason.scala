@@ -22,7 +22,7 @@ abstract class Reason
   def toJSON: String =
     JSONBuilder.dict(Map(
       "english" -> JSONBuilder.string(reason),
-      "source"  -> JSONBuilder.string(model.name),
+      "source"  -> JSONBuilder.string(model.name.id),
       "varid"   -> JSONBuilder.int(idx),
       "args"    -> JSONBuilder.list( args.map( x => JSONBuilder.string(x.toString)).toList ),
       "repair"  -> repair.toJSON,

@@ -11,14 +11,13 @@ import mimir.optimizer.operator._
 import mimir.exec._
 import mimir.exec.result._
 import mimir.util.ExperimentalOptions
-import mimir.algebra.gprom.OperatorTranslation
 
 object BestGuess
   extends CompileMode[ResultIterator]
   with LazyLogging
 {
   type MetadataT = (
-    Seq[String]                 // Provenance columns
+    Seq[ID]                 // Provenance columns
   )
 
   /**
@@ -31,10 +30,10 @@ object BestGuess
    */ 
   def rewriteRaw(db: Database, operRaw: Operator): (
     Operator,                   // The compiled query
-    Seq[(String, Type)],        // The base schema
-    Map[String, Expression],    // Column taint annotations
+    Seq[(ID, Type)],        // The base schema
+    Map[ID, Expression],    // Column taint annotations
     Expression,                 // Row taint annotation
-    Seq[String]                 // Provenance columns
+    Seq[ID]                 // Provenance columns
   ) =
   {
     var oper = operRaw
@@ -46,40 +45,24 @@ object BestGuess
     // work.
     val outputSchema = db.typechecker.schemaOf(oper)
       
-    val (opProvTaint, provenanceCols, colDeterminism, rowDeterminism) = 
-      if(false && ExperimentalOptions.isEnabled("GPROM-DETERMINISM")
-        && ExperimentalOptions.isEnabled("GPROM-PROVENANCE")
-        && ExperimentalOptions.isEnabled("GPROM-BACKEND")){
-      OperatorTranslation.compileProvenanceAndTaintWithGProM(oper)
-    }
-    else {
-      // The names that the provenance compilation step assigns will
-      // be different depending on the structure of the query.  As a 
-      // result it is **critical** that this be the first step in 
-      // compilation.  
-      val provenance = 
-      if(ExperimentalOptions.isEnabled("GPROM-PROVENANCE")
-          && ExperimentalOptions.isEnabled("GPROM-BACKEND"))
-        { Provenance.compileGProM(oper) }
-        else { Provenance.compile(oper) }
-  
-      oper               = provenance._1
-      val provenanceCols = provenance._2
-  
-      logger.debug(s"WITH-PROVENANCE (${provenanceCols.mkString(", ")}): $oper")
-  
-  
-      // Tag rows/columns with provenance metadata
-      val tagging = if(ExperimentalOptions.isEnabled("GPROM-DETERMINISM")
-          && ExperimentalOptions.isEnabled("GPROM-BACKEND"))
-        { CTPercolator.percolateGProM(oper) }
-        else { CTPercolator.percolateLite(oper, db.models.get(_)) } 
-      (tagging._1,
-      provenanceCols,
-      tagging._2.filter( col => rawColumns(col._1) ),
-      tagging._3)
+    // The names that the provenance compilation step assigns will
+    // be different depending on the structure of the query.  As a 
+    // result it is **critical** that this be the first step in 
+    // compilation.  
+    val provenance = Provenance.compile(oper)
 
-    }
+    oper                       = provenance._1
+    val provenanceCols:Seq[ID] = provenance._2
+
+    logger.debug(s"WITH-PROVENANCE (${provenanceCols.mkString(", ")}): $oper")
+
+
+    // Tag rows/columns with provenance metadata
+    val (opProvTaint, preFilteredColDeterminism, rowDeterminism) = CTPercolator.percolateLite(oper, db.models.get(_)) 
+    val colDeterminism = 
+      preFilteredColDeterminism
+        .filter { col => rawColumns(col._1) }
+
     oper = opProvTaint
     logger.debug(s"PERCOLATED: $oper")
     
@@ -87,7 +70,7 @@ object BestGuess
     // adds determinism columns for provenance metadata, since
     // we have no way to explicitly track what's an annotation
     // and what's "real".  Remove this metadata now...
-    val minimalSchema: Set[String] = 
+    val minimalSchema: Set[ID] = 
       operRaw.columnNames.toSet ++ 
       provenanceCols.toSet ++
       (colDeterminism.map(_._2) ++ Seq(rowDeterminism)).flatMap( ExpressionUtils.getColumns(_) ).toSet
@@ -121,7 +104,7 @@ object BestGuess
     )
   }
 
-  def rewrite(db: Database, operRaw: Operator): (Operator, Seq[String], MetadataT) =
+  def rewrite(db: Database, operRaw: Operator): (Operator, Seq[ID], MetadataT) =
   {
     val (oper, outputSchema, colDeterminism, rowDeterminism, provenanceCols) =
       rewriteRaw(db, operRaw)
@@ -129,8 +112,12 @@ object BestGuess
     // Finally, fold the annotations back in
     val completeOper =
       Project(
-        operRaw.columnNames.map { name => ProjectArg(name, Var(name)) } ++
-        colDeterminism.map { case (name, expression) => ProjectArg(CTPercolator.mimirColDeterministicColumnPrefix + name, expression) } ++
+        operRaw.columnNames.map { name => 
+          ProjectArg(name, Var(name)) 
+        } ++
+        colDeterminism.map { case (name, expression) => 
+          ProjectArg(ID(CTPercolator.mimirColDeterministicColumnPrefix, name), expression) 
+        } ++
         Seq(
           ProjectArg(CTPercolator.mimirRowDeterministicColumnName, rowDeterminism),
           ProjectArg(Provenance.rowidColnameBase, Function(Provenance.mergeRowIdFunction, provenanceCols.map( Var(_) ) ))

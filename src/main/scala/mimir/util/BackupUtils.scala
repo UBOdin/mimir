@@ -5,7 +5,7 @@ import java.io.PrintWriter
 import org.rogach.scallop.ScallopConf
 import mimir.Mimir
 import mimir.MimirConfig
-import mimir.sql.SparkBackend
+import mimir.backend.SparkBackend
 import java.io.ByteArrayInputStream
 import org.apache.spark.SparkContext
 import java.io.File

@@ -19,8 +19,7 @@ import mimir.exec.result._
 import mimir.exec.mode._
 import mimir.exec.uncertainty._
 import mimir.util._
-import net.sf.jsqlparser.statement.select._
-import mimir.algebra.gprom.OperatorTranslation
+import sparsity.select.SelectBody
 
 class Compiler(db: Database) extends LazyLogging {
 
@@ -53,13 +52,13 @@ class Compiler(db: Database) extends LazyLogging {
    * Perform a full end-end compilation pass producing best guess results.  
    * Return an iterator over the result set.  
    */
-  def compile[R <:ResultIterator](query: Operator, mode: CompileMode[R], rootIteratorGen:(Operator)=>(Seq[(String,Type)],ResultIterator) ): R =
+  def compile[R <:ResultIterator](query: Operator, mode: CompileMode[R], rootIteratorGen:(Operator)=>(Seq[(ID,Type)],ResultIterator) ): R =
     mode(db, query, rootIteratorGen)
 
   def deploy(
     compiledOper: Operator, 
-    outputCols: Seq[String],
-    rootIteratorGen:(Operator)=>(Seq[(String,Type)],ResultIterator)
+    outputCols: Seq[ID],
+    rootIteratorGen:(Operator)=>(Seq[(ID,Type)],ResultIterator)
   ): ResultIterator =
   {
     var oper = compiledOper
@@ -136,16 +135,10 @@ class Compiler(db: Database) extends LazyLogging {
 
     } else {
       // Make the set of columns we're interested in explicitly part of the query
-      oper = oper.project( requiredColumns.toSeq:_* )
+      oper = oper.projectByID( requiredColumns.toSeq:_* )
 
-      val (schema, rootIterator) = rootIteratorGen({ 
-        if(ExperimentalOptions.isEnabled("GPROM-OPTIMIZE")
-          && db.backend.isInstanceOf[mimir.sql.GProMBackend] ) {
-          OperatorTranslation.optimizeWithGProM(oper)
-        } else { 
-          optimize(oper)
-        }
-      })
+      val (schema, rootIterator) = 
+        rootIteratorGen( optimize(oper) )
         
       logger.info(s"PROJECTIONS: $projections")
 
@@ -159,7 +152,7 @@ class Compiler(db: Database) extends LazyLogging {
     }
   }
   
-  def sparkBackendRootIterator(oper:Operator) : (Seq[(String, Type)], ResultIterator) = {
+  def sparkBackendRootIterator(oper:Operator) : (Seq[(ID, Type)], ResultIterator) = {
     val schema = db.typechecker.schemaOf(oper) 
     (schema, new SparkResultIterator(
           schema,
@@ -168,7 +161,7 @@ class Compiler(db: Database) extends LazyLogging {
         ))
   }
   
-  def metadataBackendRootIterator(oper:Operator) : (Seq[(String, Type)], ResultIterator) = {
+  def metadataBackendRootIterator(oper:Operator) : (Seq[(ID, Type)], ResultIterator) = {
     val (sql, sqlSchema) = sqlForBackend(oper)
     (sqlSchema, new JDBCResultIterator(
           sqlSchema,
@@ -180,16 +173,9 @@ class Compiler(db: Database) extends LazyLogging {
   def sqlForBackend(
     oper: Operator
   ): 
-    (SelectBody, Seq[(String,Type)]) =
+    (SelectBody, Seq[(ID,Type)]) =
   {
-    val optimized = { 
-      if(ExperimentalOptions.isEnabled("GPROM-OPTIMIZE")
-        && db.backend.isInstanceOf[mimir.sql.GProMBackend] ) {
-        OperatorTranslation.optimizeWithGProM(oper)
-      } else { 
-        optimize(oper)
-      }
-    }
+    val optimized = optimize(oper)
     //val optimized =  Compiler.optimize(oper, opts)
 
     logger.debug(s"PRE-SPECIALIZED: $oper")
@@ -204,7 +190,7 @@ class Compiler(db: Database) extends LazyLogging {
     logger.info(s"SCHEMA: ${oper.columnNames.mkString(", ")} -> ${optimized.columnNames.mkString(", ")}")
     
     // Generate the SQL
-    val sql = db.ra.convert(specialized)
+    val sql = db.raToSQL(specialized)
 
     logger.info(s"SQL: $sql")
 

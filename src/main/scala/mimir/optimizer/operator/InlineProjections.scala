@@ -123,7 +123,7 @@ object InlineProjections extends OperatorOptimization with LazyLogging {
 			cols: Seq[ProjectArg], 
 			gb: Seq[Var], 
 			aggs: Seq[AggFunction]
-	): Option[Map[String, String]] =
+	): Option[Map[ID, ID]] =
 	{
 		// We're allowed to inline Project(Aggregate(...)) if all of the following hold
 		//  1) The project is a renaming (i.e., all Project expressions are vars)
@@ -164,7 +164,7 @@ object InlineProjections extends OperatorOptimization with LazyLogging {
 
 	}
 
-	def extractRenaming(cols: Seq[ProjectArg]): Option[Seq[(String, String)]] =
+	def extractRenaming(cols: Seq[ProjectArg]): Option[Seq[(ID, ID)]] =
 	{
 		Some(cols.map({
 			case ProjectArg(out, Var(in)) => (in, out)

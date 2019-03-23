@@ -54,8 +54,8 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
             }
           }
 
-        val argCols = argExprs.zipWithIndex.map { arg => ProjectArg("ARG_"+arg._2, arg._1) }
-        val hintCols = hintExprs.zipWithIndex.map { arg => ProjectArg("HINT_"+arg._2, arg._1) }
+        val argCols = argExprs.zipWithIndex.map   { case (arg,idx) => ProjectArg(ID("ARG_"+idx), arg) }
+        val hintCols = hintExprs.zipWithIndex.map { case (arg,idx) => ProjectArg(ID("HINT_"+idx), arg) }
 
         val projectedQuery =
           Project(argCols ++ hintCols, limitedQuery)

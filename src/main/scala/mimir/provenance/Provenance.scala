@@ -8,76 +8,43 @@ import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
 import mimir.views.ViewAnnotation
-import mimir.algebra.gprom.OperatorTranslation
 
 class ProvenanceError(e:String) extends Exception(e) {}
 
 object Provenance extends LazyLogging {
 
-  val mergeRowIdFunction = "MIMIR_MAKE_ROWID"
-  val rowidColnameBase = "MIMIR_ROWID"
-
-  def compileGProM(oper: Operator): (Operator, Seq[String]) = {
-    OperatorTranslation.compileProvenanceWithGProM(oper)
-  }
+  val mergeRowIdFunction = ID("mimir_make_rowid")
+  val rowidColnameBase = ID("MIMIR_ROWID")
+  def rowidColname(x:Int) = ID(rowidColnameBase, "_"+x)
   
-  
-  def compile(oper: Operator): (Operator, Seq[String]) = {
+  def compile(oper: Operator): (Operator, Seq[ID]) = {
     val makeRowIDProjectArgs = 
-      (rowids: Seq[String], offset: Integer, padLen: Integer) => {
+      (rowids: Seq[ID], offset: Integer, padLen: Integer) => {
         rowids.map(Var(_)).
                padTo(padLen, RowIdPrimitive("-")).
                zipWithIndex.map( { case (v, i) => 
-                  val newName = rowidColnameBase + "_" + (i+offset)
+                  val newName = rowidColname(i+offset)
                   (newName, ProjectArg(newName, v))
                }).
                unzip
     }
     oper match {
       case Project(args, src) => {
-        // src match {
-        //   case Annotate(subj,invisScm) => {
-        //     val (newSrc, rowids) = compile(src)
-        //       val newArgs =
-        //         args.map( arg =>
-        //           ProjectArg(arg.name, expandVars(arg.expression, rowids))
-        //         ).union(invisScm.map(invSchEl => ProjectArg( invSchEl.name, invSchEl.expr )))
-        //       val (newRowids, rowIDProjections) = makeRowIDProjectArgs(rowids, 0, 0)
-        //       (
-        //         Project(newArgs ++ rowIDProjections, newSrc),
-        //         newRowids
-        //       )
-        //   }
-        //   case _ => {
-            val (newSrc, rowids) = compile(src)
+            val (newSrc, rowIDCols) = compile(src)
 
-            logger.trace(s"PROJECT: $rowids in \n$oper")
+            logger.trace(s"PROJECT: $rowIDCols in \n$oper")
 
             val newArgs = 
               args.map( arg => 
-                ProjectArg(arg.name, expandVars(arg.expression, rowids))
+                ProjectArg(arg.name, expandVars(arg.expression, rowIDCols))
               )
-            val (newRowids, rowIDProjections) = makeRowIDProjectArgs(rowids, 0, 0)
+            val (newRowids, rowIDProjections) = makeRowIDProjectArgs(rowIDCols, 0, 0)
             (
               Project(newArgs ++ rowIDProjections, newSrc),
               newRowids
             )
           // }
         // }
-      }
-
-      case Annotate(subj,invisScm) => {
-        compile(subj)
-      }
-
-			case Recover(subj,invisScm) => {
-        compile(subj)
-      }
-
-      case ProvenanceOf(psel) => {
-        val provSelCmp = compile(psel)
-        val provCmp = (new ProvenanceOf(provSelCmp._1), provSelCmp._2)
-        provCmp
       }
       
       case Select(cond, src) => {
@@ -124,17 +91,17 @@ object Provenance extends LazyLogging {
         val lhsProjectArgs =
           lhs.columnNames.map(x => ProjectArg(x, Var(x))) ++ 
             lhsIdProjections ++ 
-            List(ProjectArg(rowidColnameBase+"_BRANCH", RowIdPrimitive("0")))
+            Seq(ProjectArg(ID(rowidColnameBase,"_BRANCH"), RowIdPrimitive("0")))
         val rhsProjectArgs = 
           rhs.columnNames.map(x => ProjectArg(x, Var(x))) ++ 
             rhsIdProjections ++ 
-            List(ProjectArg(rowidColnameBase+"_BRANCH", RowIdPrimitive("1")))
+            Seq(ProjectArg(ID(rowidColnameBase,"_BRANCH"), RowIdPrimitive("1")))
         (
           Union(
             Project(lhsProjectArgs, newLhs),
             Project(rhsProjectArgs, newRhs)
           ),
-          newRowids ++ List(rowidColnameBase+"_BRANCH")
+          newRowids ++ Seq(ID(rowidColnameBase,"_BRANCH"))
         )
       }
 
@@ -147,7 +114,7 @@ object Provenance extends LazyLogging {
 
       case Table(name, alias, schema, meta) =>
         (
-          Table(name, alias, schema, meta ++ List((rowidColnameBase, Var("ROWID"), TRowId()))),
+          Table(name, alias, schema, meta ++ List((rowidColnameBase, Var(ID("ROWID")), TRowId()))),
           List(rowidColnameBase)
         )
 
@@ -159,8 +126,10 @@ object Provenance extends LazyLogging {
 
       case ht@HardTable(sch,data) =>
         (
-          HardTable(sch:+(rowidColnameBase+"_HT",TRowId()), data.zipWithIndex.map(row => row._1:+ RowIdPrimitive(s"hardcoded${row._2}"))),
-          List(rowidColnameBase+"_HT")
+          HardTable(
+            sch:+(ID(rowidColnameBase,"_HT"),TRowId()), 
+            data.zipWithIndex.map(row => row._1:+ RowIdPrimitive(s"hardcoded${row._2}"))),
+          List(ID(rowidColnameBase,"_HT"))
         )
 
       case Aggregate(groupBy, args, child) =>
@@ -191,13 +160,13 @@ object Provenance extends LazyLogging {
   def rowIdVal(rowids: Seq[Expression]): Expression =
     Function(mergeRowIdFunction, rowids)    
 
-  def rowIdVar(rowids: Seq[String]): Expression = 
+  def rowIdVar(rowids: Seq[ID]): Expression = 
     rowIdVal(rowids.map(Var(_)))
 
-  def expandVars(expr: Expression, rowids: Seq[String]): Expression = {
+  def expandVars(expr: Expression, rowidFields: Seq[ID]): Expression = {
     expr match {
-      case RowIdVar() => rowIdVar(rowids)
-      case _ => expr.rebuild(expr.children.map(expandVars(_,rowids)))
+      case RowIdVar() => rowIdVar(rowidFields)
+      case _ => expr.rebuild(expr.children.map(expandVars(_,rowidFields)))
     }
   }
 
@@ -217,19 +186,19 @@ object Provenance extends LazyLogging {
   def splitRowIds(token: RowIdPrimitive): Seq[RowIdPrimitive] =
     token.asString.split("\\|").map( RowIdPrimitive(_) ).toList
 
-  def rowIdMap(token: RowIdPrimitive, rowIdFields:Seq[String]):Map[String,RowIdPrimitive] = 
+  def rowIdMap(token: RowIdPrimitive, rowIdFields:Seq[ID]):Map[ID,RowIdPrimitive] = 
     rowIdMap(splitRowIds(token), rowIdFields).toMap
 
-  def rowIdMap(token: Seq[RowIdPrimitive], rowIdFields:Seq[String]):Map[String,RowIdPrimitive] =
+  def rowIdMap(token: Seq[RowIdPrimitive], rowIdFields:Seq[ID]):Map[ID,RowIdPrimitive] =
     rowIdFields.zip(token).toMap
 
-  def filterForToken(operator:Operator, token: RowIdPrimitive, rowIdFields: Seq[String], db: Database): Operator =
+  def filterForToken(operator:Operator, token: RowIdPrimitive, rowIdFields: Seq[ID], db: Database): Operator =
     filterForToken(operator, rowIdMap(token, rowIdFields), db)
 
-  def filterForToken(operator:Operator, token: Seq[RowIdPrimitive], rowIdFields: Seq[String], db: Database): Operator =
+  def filterForToken(operator:Operator, token: Seq[RowIdPrimitive], rowIdFields: Seq[ID], db: Database): Operator =
     filterForToken(operator, rowIdMap(token, rowIdFields), db)
 
-  def filterForToken(operator:Operator, rowIds: Map[String,PrimitiveValue], db: Database): Operator =
+  def filterForToken(operator:Operator, rowIdsByColumn: Map[ID,PrimitiveValue], db: Database): Operator =
   {
     // Distributivity of unions makes this particular rewrite a little
     // tricky.  Specifically, UNION might assign either 'left' or 'right' to one
@@ -245,16 +214,16 @@ object Provenance extends LazyLogging {
     // there's a hardcoded rowid column that doesn't match the target field.
     // At the very end, we strip off the final Option.
 
-    doFilterForToken(operator, rowIds, db) match {
+    doFilterForToken(operator, rowIdsByColumn, db) match {
       case Some(s) => s
       case None => throw new ProvenanceError("No branch matching all union terms")
     }
 
   }
 
-  def doFilterForToken(operator: Operator, rowIds:Map[String,PrimitiveValue], db: Database): Option[Operator] =
+  def doFilterForToken(operator: Operator, rowIdsByColumn:Map[ID,PrimitiveValue], db: Database): Option[Operator] =
   {
-    logger.trace(s"doFilterForToken($rowIds) in \n$operator")
+    logger.trace(s"doFilterForToken($rowIdsByColumn) in \n$operator")
     // println(rowIds.toString+" -> "+operator)
     operator match {
       case p @ Project(args, src) =>
@@ -264,7 +233,7 @@ object Provenance extends LazyLogging {
         // Variable columns are passed through to the recursive step
         // Constant columns are tested -- 
         val (rowIdVars, rowIdConsts) =
-          rowIds.keys.map( col => 
+          rowIdsByColumn.keys.map( col => 
             p.get(col) match {
               case Some(Var(v)) => (Some((col, v)), None)
               case Some(RowIdPrimitive(v)) => (None, Some((col, v)))
@@ -273,11 +242,11 @@ object Provenance extends LazyLogging {
             }).unzip
 
         val newRowIdMap =
-          rowIdVars.flatten.map( x => (x._2, rowIds(x._1) ) ).toMap
+          rowIdVars.flatten.map( x => (x._2, rowIdsByColumn(x._1) ) ).toMap
 
         if(rowIdConsts.flatten.forall({ case (col, v) => 
           // println("COMPARE: "+rowIds(col).asString+" to "+v)
-          rowIds(col).asString.equals(v)
+          rowIdsByColumn(col).asString.equals(v)
         })) {
           doFilterForToken(src, newRowIdMap, db).
             map(Project(args, _))
@@ -288,12 +257,12 @@ object Provenance extends LazyLogging {
       case Select(cond, src) => 
         // technically not necessary... since we're already filtering down to
         // a single tuple.  But keep it here for now.
-        doFilterForToken(src, rowIds, db).map( Select(cond, _) )
+        doFilterForToken(src, rowIdsByColumn, db).map( Select(cond, _) )
 
       case Join(lhs, rhs) => 
         val lhsSchema = lhs.columnNames.toSet
         val (lhsRowIds, rhsRowIds) = 
-          rowIds.toList.partition( x => lhsSchema.contains(x._1) )
+          rowIdsByColumn.toList.partition( x => lhsSchema.contains(x._1) )
         // println("LHS: "+lhsRowIds)
         // println("RHS: "+rhsRowIds)
         ( doFilterForToken(lhs, lhsRowIds.toMap, db), 
@@ -305,26 +274,26 @@ object Provenance extends LazyLogging {
         
 
       case Union(lhs, rhs) => 
-        doFilterForToken(lhs, rowIds, db).
-          orElse(doFilterForToken(rhs, rowIds, db))
+        doFilterForToken(lhs, rowIdsByColumn, db).
+          orElse(doFilterForToken(rhs, rowIdsByColumn, db))
 
       // We don't handle materializing the entire history of a given value
       // for now... drop the view and focus on the query itself.
       case View(_, query, _) => 
-        doFilterForToken(query, rowIds, db)
+        doFilterForToken(query, rowIdsByColumn, db)
       case AdaptiveView(_, _, query, _) => 
-        doFilterForToken(query, rowIds, db)
+        doFilterForToken(query, rowIdsByColumn, db)
 
       case Table(_,_, _, meta) =>
-        meta.find( _._2.equals(Var("ROWID")) ) match {
+        meta.find( _._2.equals(Var(ID("ROWID"))) ) match {
           case Some( (colName, _, _) ) =>
-            var rowIdForTable = rowIds.get(colName) match {
+            var rowIdForTable = rowIdsByColumn.get(colName) match {
               case Some(s) => s
               case None =>
-                throw new ProvenanceError("Token missing for Table: "+colName+" in "+rowIds)
+                throw new ProvenanceError("Token missing for Table: "+colName+" in "+rowIdsByColumn)
             }
             Some(Select( 
-              Comparison(Cmp.Eq, Var(colName), rowIds(colName)), 
+              Comparison(Cmp.Eq, Var(colName), rowIdsByColumn(colName)), 
               operator 
             ))
           case None => 
@@ -336,9 +305,9 @@ object Provenance extends LazyLogging {
       case HardTable(sch,data) => {
         val cols = sch.unzip._1
         val tupleMap = data.map(row => cols.zip(row).toMap)
-        val rowIdKeys = cols.toSet & rowIds.keySet
+        val rowIdKeys = cols.toSet & rowIdsByColumn.keySet
         tupleMap.foldLeft(Seq[Seq[PrimitiveValue]]())((init, row) => {
-            if(rowIdKeys.forall { key =>  row(key).equals(rowIds(key))}){
+            if(rowIdKeys.forall { key =>  row(key).equals(rowIdsByColumn(key))}){
               init :+ row.toSeq.unzip._2
             } else init
           }) match {
@@ -351,7 +320,7 @@ object Provenance extends LazyLogging {
         val sch = db.typechecker.schemaOf(src).toMap
 
         val castTokenValues = 
-          gbCols.map { col => (col.name, Cast(sch(col.name), rowIds(col.name))) }.toMap
+          gbCols.map { col => (col.name, Cast(sch(col.name), rowIdsByColumn(col.name))) }.toMap
 
         val lookupFilter = 
           ExpressionUtils.makeAnd(
@@ -374,21 +343,14 @@ object Provenance extends LazyLogging {
 
       case Sort(_, src) => 
         // Sorts are irrelevant here, drop it
-        return doFilterForToken(src, rowIds, db)
+        return doFilterForToken(src, rowIdsByColumn, db)
 
       case Limit(_, _, src) => 
         // A limit would make this query invalid, drop it
-        return doFilterForToken(src, rowIds, db)
+        return doFilterForToken(src, rowIdsByColumn, db)
 
       case _:LeftOuterJoin => 
         throw new RAException("Provenance can't handle left outer joins")
-
-      case _:ProvenanceOf => 
-        throw new RAException("Provenance can't handle ProvenanceOf")
-      case _:Annotate => 
-        throw new RAException("Provenance can't handle Annotate")
-      case _:Recover => 
-        throw new RAException("Provenance can't handle Recover")
 
     }
   }

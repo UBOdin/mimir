@@ -13,8 +13,9 @@ object CTPercolator
   extends LazyLogging
 {
 
-  val mimirRowDeterministicColumnName = "MIMIR_ROW_DET"
+  val mimirRowDeterministicColumnName = ID("MIMIR_ROW_DET")
   val mimirColDeterministicColumnPrefix = "MIMIR_COL_DET_"
+  def mimirColDeterministicColumn(col:ID):ID = ID(mimirColDeterministicColumnPrefix,col)
 
   private def extractMissingValueVar(expr: Expression): Var = {
     expr match {
@@ -43,14 +44,19 @@ object CTPercolator
   val removeConstraintColumn = (oper: Operator) => {
     oper match {
       case Project(cols, src) =>
-        Project(cols.filterNot((p) => p.name.equalsIgnoreCase(CTables.conditionColumn)), src)
+        Project(
+          cols.filterNot { 
+            p => p.name.equals(CTables.conditionColumn)
+          }, 
+          src
+        )
       case _ =>
         oper
     }
   }
 
   def partition(oper: Project): Operator = {
-    val cond = oper.columns.find(p => p.name.equalsIgnoreCase(CTables.conditionColumn)).head.expression
+    val cond = oper.get(CTables.conditionColumn).get
     var otherClausesOp: Operator = null
     var missingValueClausesOp: Operator = null
     var detExpr: List[Expression] = List()
@@ -97,8 +103,16 @@ object CTPercolator
 
     if(otherClauses.nonEmpty)
       otherClausesOp = Project(
-        oper.columns.filterNot( (p) => p.name.equalsIgnoreCase(CTables.conditionColumn))
-          ++ List(ProjectArg(CTables.conditionColumn, otherClauses.reduce(ExpressionUtils.makeAnd(_, _)))),
+        oper.columns.filterNot { 
+          p => p.name.equals(CTables.conditionColumn)
+        } ++ List(
+          ProjectArg(
+            CTables.conditionColumn, 
+            otherClauses.reduce(
+              ExpressionUtils.makeAnd(_, _)
+            )
+          )
+        ),
         oper.source
       )
 
@@ -120,14 +134,9 @@ object CTPercolator
    */
   def partitionConstraints(oper: Operator): Operator = {
     oper match {
-      case Project(cols, src) =>
-        cols.find(p => p.name.equalsIgnoreCase(CTables.conditionColumn)) match {
-          case Some(arg) =>
-            partition(oper.asInstanceOf[Project])
-
-          case None =>
-            oper
-        }
+      case proj@Project(cols, src) 
+            if cols.exists { _.name.equals(CTables.conditionColumn) }
+          => partition(proj)
 
       case _ =>
         oper
@@ -147,7 +156,7 @@ object CTPercolator
    * for computing the non determinism of all columns, and an expression for
    * computing the non-determinism of all rows.
    */
-  def percolateLite(oper: Operator, models: (String => Model)): (Operator, Map[String,Expression], Expression) =
+  def percolateLite(oper: Operator, models: (ID => Model)): (Operator, Map[ID, Expression], Expression) =
   {
     oper match {
       case Project(columns, src) => {
@@ -178,7 +187,7 @@ object CTPercolator
           ).map( 
             // Then just translate to a list of ProjectArgs
             { case (col, isDeterministic) => 
-              ProjectArg(mimirColDeterministicColumnPrefix+col, isDeterministic) 
+              ProjectArg(ID(mimirColDeterministicColumnPrefix,col), isDeterministic) 
             }
           )
         logger.debug(s"PROJECT-COLS: $computedDeterminismCols")
@@ -191,7 +200,7 @@ object CTPercolator
                 (col, isDeterministic)
               } else {
                 //add entry to map nd col to its determinism decision maker
-                (col, Var(mimirColDeterministicColumnPrefix+col))
+                (col, Var(ID(mimirColDeterministicColumnPrefix, col)))
               }
             }
           )
@@ -226,13 +235,13 @@ object CTPercolator
 
         // Start with the first case.  Come up with an expression to evaluate
         // whether the aggregate input is deterministic.
-        val aggArgDeterminism: Seq[(String, Expression)] =
-          aggregates.map((agg) => {
+        val aggArgDeterminism: Seq[(ID, Expression)] =
+          aggregates.map  { agg => 
             val argDeterminism =
               agg.args.map(CTAnalyzer.compileDeterministic(_, models, colDeterminism))
 
             (agg.alias, ExpressionUtils.makeAnd(argDeterminism))
-          })
+          }
 
         // Now come up with an expression to compute general row-level determinism
         val groupDeterminism: Expression =
@@ -244,7 +253,7 @@ object CTPercolator
           )
 
         // An aggregate is deterministic if the group is fully deterministic
-        val aggFuncDeterminism: Seq[(String, Expression)] =
+        val aggFuncDeterminism: Seq[(ID, Expression)] =
           aggArgDeterminism.map(arg => 
             (arg._1, ExpressionUtils.makeAnd(arg._2, groupDeterminism))
           )
@@ -254,12 +263,12 @@ object CTPercolator
             if(ExpressionUtils.isDataDependent(aggDetExpr)){
               ( 
                 Some(AggFunction(
-                  "GROUP_AND",
+                  ID("group_and"),
                   false,
                   List(aggDetExpr),
-                  "MIMIR_AGG_DET_"+aggName
+                  ID("MIMIR_AGG_DET_",aggName)
                 )), 
-                (aggName, Var("MIMIR_AGG_DET_"+aggName))
+                (aggName, Var(ID("MIMIR_AGG_DET_",aggName)))
               )
             } else {
               (None, (aggName, aggDetExpr))
@@ -270,8 +279,8 @@ object CTPercolator
         val (groupMetaColumn, groupMetaExpression) =
           if(ExpressionUtils.isDataDependent(groupDeterminism)){
             (
-              Some(AggFunction("GROUP_OR", false, List(groupDeterminism), "MIMIR_GROUP_DET")),
-              Var("MIMIR_GROUP_DET")
+              Some(AggFunction(ID("group_or"), false, List(groupDeterminism), ID("MIMIR_GROUP_DET"))),
+              Var(ID("MIMIR_GROUP_DET"))
             )
           } else {
             (None, groupDeterminism)
@@ -312,28 +321,6 @@ object CTPercolator
         )
       }
 
-      
-      case Annotate(subj,invisScm) => {
-        percolateLite(subj, models)
-      }
-      
-			case Recover(subj,invisScm) => {
-        /*val provSelPrc =*/ percolateLite(subj, models)
-        /*val detColsSeq = provSelPrc._2.toSeq
-        val newDetCols = for ((projArg, (name,ctype), tableName) <- invisScm) yield {
-          (name, CTAnalyzer.compileDeterministic(new Var(name), provSelPrc._2))
-        }
-       (oper, detColsSeq.union(newDetCols).toMap, provSelPrc._3)
-          */
-      }
-      
-      case ProvenanceOf(psel) => {
-        val provSelPrc = percolateLite(psel, models)
-        val provPrc = (new ProvenanceOf(provSelPrc._1), provSelPrc._2, provSelPrc._3)
-        //GProMWrapper.inst.gpromRewriteQuery(sql);
-        provPrc
-      }
-      
       case Select(cond, src) => {
         val (rewrittenSrc, colDeterminism, rowDeterminism) = percolateLite(src, models);
 
@@ -384,7 +371,7 @@ object CTPercolator
         // Going to cheat a bit here and just force the projection on.
 
         val mergeNonDeterminism = 
-          (col:String, detCol:String, colLeft:Expression, colRight:Expression) => {
+          (col:ID, detCol:ID, colLeft:Expression, colRight:Expression) => {
           // It's only safe to skip the non-determinism column if both
           // LHS and RHS have exactly the same condition AND that condition
           // is data-independent.
@@ -408,7 +395,7 @@ object CTPercolator
           columnNames.map(
             (col) => 
               mergeNonDeterminism(
-                col, mimirColDeterministicColumnPrefix+col, 
+                col, ID(mimirColDeterministicColumnPrefix,col), 
                 colDetLeft(col), colDetRight(col)
               )
           ).unzip
@@ -474,7 +461,7 @@ object CTPercolator
           schemaLeft.map( (x) => ProjectArg(x, Var(x))) ++ 
           (detColumnLeft.map( 
             (_) => ProjectArg(
-                mimirRowDeterministicColumnName+"_LEFT",
+                ID(mimirRowDeterministicColumnName,"_LEFT"),
                 Var(mimirRowDeterministicColumnName)
               ))
           )
@@ -482,7 +469,7 @@ object CTPercolator
           schemaRight.map( (x) => ProjectArg(x, Var(x))) ++ 
           (detColumnRight.map( 
             (_) => ProjectArg(
-                mimirRowDeterministicColumnName+"_RIGHT",
+                ID(mimirRowDeterministicColumnName,"_RIGHT"),
                 Var(mimirRowDeterministicColumnName)
               ))
           )
@@ -490,10 +477,10 @@ object CTPercolator
         // Map the variables in the determinism columns...
         val mappedRowDetLeft = Eval.inline(rowDetLeft, 
             Map((mimirRowDeterministicColumnName, 
-                 Var(mimirRowDeterministicColumnName+"_LEFT"))))
+                 Var(ID(mimirRowDeterministicColumnName,"_LEFT")))))
         val mappedRowDetRight = Eval.inline(rowDetRight, 
             Map((mimirRowDeterministicColumnName, 
-                 Var(mimirRowDeterministicColumnName+"_RIGHT"))))
+                 Var(ID(mimirRowDeterministicColumnName,"_RIGHT")))))
 
         // And return it.
         return (
@@ -515,20 +502,20 @@ object CTPercolator
       }
       case v @ View(name, query, metadata) => {
         val (newQuery, colDeterminism, rowDeterminism) = percolateLite(query, models)
-        val columns = columnNames(query)
+        val columns:Seq[ID] = columnNames(query)
         
         val inlinedQuery = 
           Project(
             columns.map { col => ProjectArg(col, Var(col)) } ++
             columns.map { col => {
-                ProjectArg(mimirColDeterministicColumnPrefix+col, colDeterminism(col)) } } ++
+                ProjectArg(ID(mimirColDeterministicColumnPrefix,col), colDeterminism(col)) } } ++
             Seq( ProjectArg(mimirRowDeterministicColumnName, rowDeterminism) ),
             newQuery
           )
         (
           View(name, inlinedQuery, metadata + ViewAnnotation.TAINT),
           columns.map { col => 
-              (col -> Var(mimirColDeterministicColumnPrefix+col)) }.toMap,
+              (col -> Var(mimirColDeterministicColumn(col))) }.toMap,
           Var(mimirRowDeterministicColumnName)
         )
       }
@@ -551,13 +538,13 @@ object CTPercolator
         val inlinedQuery = 
           Project(
             columns.map { col => ProjectArg(col, Var(col)) } ++
-            columns.map { col => ProjectArg(mimirColDeterministicColumnPrefix+col, colDeterminism(col)) } ++
+            columns.map { col => ProjectArg(ID(mimirColDeterministicColumnPrefix,col), colDeterminism(col)) } ++
             Seq( ProjectArg(mimirRowDeterministicColumnName, rowDeterminism) ),
             newQuery
           )
         (
           AdaptiveView(model, name, inlinedQuery, metadata + ViewAnnotation.TAINT),
-          columns.map { col => (col -> Var(mimirColDeterministicColumnPrefix+col)) }.toMap,
+          columns.map { col => (col -> Var(mimirColDeterministicColumn(col))) }.toMap,
           Var(mimirRowDeterministicColumnName)
         )
       }
@@ -590,15 +577,10 @@ object CTPercolator
     }
   }
   
-  def columnNames(oper:Operator) : Seq[String] = {
+  def columnNames(oper:Operator) : Seq[ID] = {
     oper match {
       case Table(_,_,sch,_) => sch.map(_._1)
       case _ => oper.columnNames
     }
-  }
-  
-  def percolateGProM(oper: Operator): (Operator, Map[String,Expression], Expression) =
-  {
-    mimir.algebra.gprom.OperatorTranslation.compileTaintWithGProM(oper)
   }
 }

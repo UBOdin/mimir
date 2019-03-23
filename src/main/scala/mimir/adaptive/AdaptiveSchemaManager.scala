@@ -1,7 +1,6 @@
 package mimir.adaptive
 
 import scala.collection.mutable
-import sparsity.Name
 
 import mimir.Database
 import mimir.algebra._
@@ -11,7 +10,7 @@ import mimir.util._
 
 class AdaptiveSchemaManager(db: Database)
 {
-  val dataTable = Name("MIMIR_ADAPTIVE_SCHEMAS")
+  val dataTable = ID("MIMIR_ADAPTIVE_SCHEMAS")
 
   def init(): Unit = 
   {
@@ -28,7 +27,7 @@ class AdaptiveSchemaManager(db: Database)
     }
   }
 
-  def create(schema: Name, mlensType: Name, query: Operator, args: Seq[Expression]) = 
+  def create(schema: ID, mlensType: ID, query: Operator, args: Seq[Expression]) = 
   {
     val constructor:Multilens = MultilensRegistry.multilenses(mlensType)
     val config = MultilensConfig(schema, query, args);
@@ -37,8 +36,8 @@ class AdaptiveSchemaManager(db: Database)
     db.metadataBackend.update(s"""
       INSERT INTO $dataTable(NAME, MLENS, QUERY, ARGS) VALUES (?,?,?,?)
     """, Seq(
-      StringPrimitive(schema.upper),
-      StringPrimitive(mlensType.upper),
+      StringPrimitive(schema.id),
+      StringPrimitive(mlensType.id),
       StringPrimitive(Json.ofOperator(query).toString),
       StringPrimitive(Json.ofExpressionList(args).toString)
     ))
@@ -47,11 +46,11 @@ class AdaptiveSchemaManager(db: Database)
     for(model <- models){
       if(model.isInstanceOf[mimir.models.NeedsReconnectToDatabase])
         model.asInstanceOf[mimir.models.NeedsReconnectToDatabase].reconnectToDatabase(db)
-      db.models.persist(model, s"MULTILENS:$schema")
+      db.models.persist(model, ID("MULTILENS:",schema))
     }
   }
 
-  def drop(schema: Name, ifExists: Boolean = false)
+  def drop(schema: ID, ifExists: Boolean = false)
   {
     ???
   }
@@ -69,17 +68,17 @@ class AdaptiveSchemaManager(db: Database)
         Json.toExpressionList(Json.parse(row(3).asString))
  
       ( 
-        MultilensRegistry.multilenses(Name(mlensType)), 
-        MultilensConfig(Name(name), query, args)
+        MultilensRegistry.multilenses(ID(mlensType)), 
+        MultilensConfig(ID(name), query, args)
       )
     }.toIndexedSeq }
   }
   
-  def some(mlensType:Name): TraversableOnce[(Multilens, MultilensConfig)] =
+  def some(mlensType:ID): TraversableOnce[(Multilens, MultilensConfig)] =
   {
     db.queryMetadata(
       db.metadataTable(dataTable)
-        .filter { Var(Name("MLENS")).eq(StringPrimitive(mlensType.upper)) }
+        .filter { Var(ID("MLENS")).eq(mlensType) }
         .project("NAME", "MLENS", "QUERY", "ARGS")
     ){ _.map { row => 
       val name = row(0).asString
@@ -89,8 +88,8 @@ class AdaptiveSchemaManager(db: Database)
         Json.toExpressionList(Json.parse(row(3).asString))
  
       ( 
-        MultilensRegistry.multilenses(Name(mlensType)), 
-        MultilensConfig(Name(name), query, args)
+        MultilensRegistry.multilenses(ID(mlensType)), 
+        MultilensConfig(ID(name), query, args)
       )
     }.toIndexedSeq }
   }
@@ -103,13 +102,13 @@ class AdaptiveSchemaManager(db: Database)
         SystemCatalog.tableCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 )
 
       mlens.tableCatalogFor(db, config)
-        .project( tableBaseSchemaColumns:_* )
-        .addColumn( "SCHEMA_NAME" -> StringPrimitive(config.schema.upper) )
+        .projectByID( tableBaseSchemaColumns:_* )
+        .addColumns( "SCHEMA_NAME" -> StringPrimitive(config.schema.id) )
 
     }.toSeq
   }
 
-  def tableCatalogs(mlensType:Name): Seq[Operator] =
+  def tableCatalogs(mlensType:ID): Seq[Operator] =
   {
     some(mlensType).map { case(mlens, config) => 
 
@@ -117,8 +116,8 @@ class AdaptiveSchemaManager(db: Database)
         SystemCatalog.tableCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 )
 
       mlens.tableCatalogFor(db, config)
-        .project( tableBaseSchemaColumns:_* )
-        .addColumn( "SCHEMA_NAME" -> StringPrimitive(config.schema.upper) )
+        .projectByID( tableBaseSchemaColumns:_* )
+        .addColumns( "SCHEMA_NAME" -> StringPrimitive(config.schema.id) )
 
     }.toSeq
   }
@@ -131,13 +130,13 @@ class AdaptiveSchemaManager(db: Database)
         SystemCatalog.attrCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 )
 
       mlens.attrCatalogFor(db, config)         
-        .project( attrBaseSchemaColumns:_* )
-        .addColumn( "SCHEMA_NAME" -> StringPrimitive(config.schema) )
+        .projectByID( attrBaseSchemaColumns:_* )
+        .addColumns( "SCHEMA_NAME" -> StringPrimitive(config.schema.id) )
 
     }.toSeq
   }
   
-  def attrCatalogs(mlensType:Name): Seq[Operator] =
+  def attrCatalogs(mlensType:ID): Seq[Operator] =
   {
     some(mlensType).map { case(mlens, config) => 
 
@@ -145,24 +144,24 @@ class AdaptiveSchemaManager(db: Database)
         SystemCatalog.attrCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 )
 
       mlens.attrCatalogFor(db, config)         
-        .project( attrBaseSchemaColumns:_* )
-        .addColumn( "SCHEMA_NAME" -> StringPrimitive(config.schema) )
+        .projectByID( attrBaseSchemaColumns:_* )
+        .addColumns( "SCHEMA_NAME" -> StringPrimitive(config.schema.id) )
 
     }.toSeq
   }
 
-  def get(schema: Name): Option[(Multilens, MultilensConfig)] =
+  def get(schema: ID): Option[(Multilens, MultilensConfig)] =
   {
     db.queryMetadata(
       Select(
-        Comparison(Cmp.Eq, Var("NAME"), StringPrimitive(schema)),
+        Comparison(Cmp.Eq, Var(ID("NAME")), StringPrimitive(schema.id)),
         db.metadataTable(dataTable)
       )
     ){ result =>
       if(result.hasNext){
         val row = result.next
-        val name = row(0).asString
-        val mlensType = row(1).asString
+        val name = ID(row(0).asString)
+        val mlensType = ID(row(1).asString)
         val query = Json.toOperator(Json.parse(row(2).asString))
         val args:Seq[Expression] = 
           Json.toExpressionList(Json.parse(row(3).asString))
@@ -175,7 +174,7 @@ class AdaptiveSchemaManager(db: Database)
     }
   }
 
-  def viewFor(schema: Name, table: Name): Option[Operator] =
+  def viewFor(schema: ID, table: ID): Option[Operator] =
   {
     get(schema) match {
       case None => None

@@ -1,24 +1,23 @@
 package mimir.exec.result
 
-import sparsity.Name
 import mimir.algebra._
 
 trait ResultIterator
   extends Iterator[Row]
 {
-  def tupleSchema: Seq[(Name, Type)]
-  def annotationSchema: Seq[(Name, Type)]
+  def tupleSchema: Seq[(ID, Type)]
+  def annotationSchema: Seq[(ID, Type)]
   def schema = tupleSchema
 
-  lazy val schemaLookup: Map[Name, (Int, Type)] = 
+  lazy val schemaLookup: Map[ID, (Int, Type)] = 
     tupleSchema.zipWithIndex.map { case ((name, t), idx) => (name -> (idx, t)) }.toMap
-  lazy val annotationsLookup: Map[Name, (Int, Type)] = 
+  lazy val annotationsLookup: Map[ID, (Int, Type)] = 
     annotationSchema.zipWithIndex.map { case ((name, t), idx) => (name -> (idx, t)) }.toMap
 
-  def hasAnnotation(annotation: Name): Boolean = annotationsLookup contains annotation;
+  def hasAnnotation(annotation: ID): Boolean = annotationsLookup contains annotation;
 
-  def getTupleIdx(name: Name): Int = schemaLookup(name)._1
-  def getAnnotationIdx(name: Name): Int = annotationsLookup(name)._1
+  def getTupleIdx(name: ID): Int = schemaLookup(name)._1
+  def getAnnotationIdx(name: ID): Int = annotationsLookup(name)._1
 
   def close(): Unit
 

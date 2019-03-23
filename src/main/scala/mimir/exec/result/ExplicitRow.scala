@@ -8,7 +8,7 @@ case class ExplicitRow(val tuple: Seq[PrimitiveValue], val annotations: Seq[Prim
   def apply(idx: Int): PrimitiveValue = tuple(idx)
 
   def annotation(idx: Int): PrimitiveValue = if(idx < annotations.size) { annotations(idx) } else { NullPrimitive() }
-  def annotation(name: String): PrimitiveValue = if(source.hasAnnotation(name)){ annotation(source.getAnnotationIdx(name)) } else { NullPrimitive() }
+  def annotation(name: ID): PrimitiveValue = if(source.hasAnnotation(name)){ annotation(source.getAnnotationIdx(name)) } else { NullPrimitive() }
 
   def tupleSchema = source.schema;
 }

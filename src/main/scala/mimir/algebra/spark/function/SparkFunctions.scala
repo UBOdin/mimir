@@ -2,7 +2,7 @@ package mimir.algebra.spark.function
 
 import mimir.algebra.function.FunctionRegistry
 import mimir.algebra.PrimitiveValue
-import mimir.algebra.Type
+import mimir.algebra.{Type,ID}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 
@@ -19,7 +19,7 @@ object SparkFunctions
   {
     sparkFunctions.foreach(sfunc => {
       logger.debug("registering spark func: " + sfunc._1)
-      fr.registerPassthrough(sfunc._1, sfunc._2._1, sfunc._2._2)
+      fr.registerPassthrough(ID(sfunc._1), sfunc._2._1, sfunc._2._2)
     })
   }
   

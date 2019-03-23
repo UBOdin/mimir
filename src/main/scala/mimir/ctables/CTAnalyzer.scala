@@ -23,12 +23,8 @@ object CTAnalyzer {
    * Everything else (other than CASE) is an AND of whether the 
    * child subexpressions are deterministic
    */
-  def compileDeterministic(expr: Expression, models: (String => Model)): Expression =
-    compileDeterministic(expr, models, Map[String,Expression]())
-
-
-  def compileDeterministic(expr: Expression, models: (String => Model), 
-                           varMap: Map[String,Expression]): Expression =
+  def compileDeterministic(expr: Expression, models: (ID  => Model), 
+                           varMap: Map[ID,Expression] = Map()): Expression =
   {
     val recur = (x:Expression) => compileDeterministic(x, models, varMap)
     expr match { 
@@ -193,7 +189,7 @@ object CTAnalyzer {
     }
   }
 
-  def compileSample(expr: Expression, seed: Expression, models: (String => Model)): Expression =
+  def compileSample(expr: Expression, seed: Expression, models: (ID => Model)): Expression =
   {
     val replacement =
       expr match {

@@ -21,7 +21,7 @@ abstract class CompileMode[IteratorT <: ResultIterator]
   /**
    * Rewrite the specified operator
    */
-  def rewrite(db: Database, oper: Operator): (Operator, Seq[String], MetadataT)
+  def rewrite(db: Database, oper: Operator): (Operator, Seq[ID], MetadataT)
 
   /**
    * Wrap a resultset generated for the specified operator with a 
@@ -30,7 +30,7 @@ abstract class CompileMode[IteratorT <: ResultIterator]
   def wrap(db: Database, results: ResultIterator, query: Operator, meta: MetadataT): IteratorT
 
 
-  def apply(db: Database, oper: Operator, rootIteratorGen:(Operator)=>(Seq[(String,Type)],ResultIterator)): IteratorT =
+  def apply(db: Database, oper: Operator, rootIteratorGen:(Operator)=>(Seq[(ID,Type)],ResultIterator)): IteratorT =
   {
     oper match {
       //TODO: This is a hack to work around an issue with limits over unions not working correctly on spark (prov compiling incorrectly)

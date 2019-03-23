@@ -16,6 +16,7 @@ import scala.io.Source
 import org.apache.spark.ml.feature.{HashingTF, Tokenizer}
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.PipelineModel
+import org.apache.spark.ml.PipelineStage
 import org.apache.spark.ml.feature.{StringIndexer, IndexToString, VectorIndexer}
 import org.apache.spark.ml.classification.{RandomForestClassifier, NaiveBayes, DecisionTreeClassifier, GBTClassifier, LogisticRegression, OneVsRest, LinearSVC, MultilayerPerceptronClassifier}
 import org.apache.spark.sql.Row
@@ -48,7 +49,7 @@ object Classification extends SparkML {
     applyModelDB(model, query, db)
   }
   
-  def classify( model : PipelineModel, cols:Seq[(String, Type)], testData : List[Seq[PrimitiveValue]]): DataFrame = {
+  def classify( model : PipelineModel, cols:Seq[(ID, Type)], testData : List[Seq[PrimitiveValue]]): DataFrame = {
     applyModel(model, cols, testData)
   }
     
@@ -93,10 +94,10 @@ object Classification extends SparkML {
         (item.toString(), 1.0)}.toSeq    
   }
   
-  private def extractFeatures(training:DataFrame, params:SparkModelGeneratorParams) = {
+  private def extractFeatures(training:DataFrame, params:SparkModelGeneratorParams):(Array[String], Seq[PipelineStage]) = {
     val cols = training.schema.fields
     //training.show()
-    val indexer = new StringIndexer().setInputCol(params.predictionCol).setOutputCol("label").setHandleInvalid(params.handleInvalid)
+    val indexer = new StringIndexer().setInputCol(params.predictionCol.id).setOutputCol("label").setHandleInvalid(params.handleInvalid)
     val labels = indexer.fit(training).labels
     val (tokenizers, hashingTFs) = cols.flatMap(col => {
       col.dataType match {
@@ -200,7 +201,7 @@ object Classification extends SparkML {
     val (labels, featurePipelineStages) = extractFeatures(training,params)
     import org.apache.spark.sql.functions.countDistinct
     import org.apache.spark.sql.functions.col
-    val classCount = training.select(countDistinct(col(params.predictionCol))).head.getLong(0)
+    val classCount = training.select(countDistinct(col(params.predictionCol.id))).head.getLong(0)
     val layers = Array[Int](training.columns.length, 8, 4, classCount.toInt)
     val classifier = new MultilayerPerceptronClassifier()
       .setLayers(layers).setBlockSize(128).setSeed(1234L).setMaxIter(100).setLabelCol("label").setFeaturesCol("features")

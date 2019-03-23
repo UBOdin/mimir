@@ -4,8 +4,6 @@ import java.sql._;
 import java.util.NoSuchElementException;
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-import sparsity.Name
-
 import mimir.Database
 import mimir.algebra.function._
 import mimir.models.{Model, ModelManager}
@@ -32,8 +30,8 @@ class TypecheckError(msg: String, e: Throwable, context: Option[Operator] = None
 		}
 }
 
-class MissingVariable(varName: Name, e: Throwable, context: Option[Operator] = None)
-	extends TypecheckError(varName, e, context);
+class MissingVariable(varName: Var, e: Throwable, context: Option[Operator] = None)
+	extends TypecheckError(varName.toString, e, context);
 
 /**
  * ExpressionChecker wraps around a bit of context that makes
@@ -58,7 +56,7 @@ class Typechecker(
 	models: Option[ModelManager] = None
 ) extends LazyLogging {
 	/* Assert that the expressions claimed type is its type */
-	def assert(e: Expression, t: Type, scope: (String => Type), context: Option[Operator] = None, msg: String = "Typechecker"): Unit = {
+	def assert(e: Expression, t: Type, scope: (ID => Type), context: Option[Operator] = None, msg: String = "Typechecker"): Unit = {
 		val eType = typeOf(e, scope);
 		if(!Typechecker.canCoerce(eType, t)){
 			logger.trace(s"LUB: ${Typechecker.leastUpperBound(eType, t)}")
@@ -74,7 +72,7 @@ class Typechecker(
 
 	def typeOf(
 		e: Expression, 
-		scope: (String => Type) = { (_:String) => throw new RAException("Need a scope to typecheck expressions with variables") }, 
+		scope: (ID => Type) = { (_:ID) => throw new RAException("Need a scope to typecheck expressions with variables") }, 
 		context: Option[Operator] = None
 	): Type = {
 		val recur = typeOf(_:Expression, scope, context)
@@ -112,10 +110,10 @@ class Typechecker(
 					logger.debug(s"Type of $name is $t")
 					t
 				} catch {
-					case x:NoSuchElementException => throw new MissingVariable(name, x, context)
+					case x:NoSuchElementException => throw new MissingVariable(Var(name), x, context)
 				}
 			case JDBCVar(t) => t
-			case Function("CAST", fargs) =>
+			case Function(op, fargs) if op.equals("CAST") =>
 				// Special case CAST
 				fargs(1) match {
 					case TypePrimitive(t) => t
@@ -152,7 +150,7 @@ class Typechecker(
     }
   }
 
-	def returnTypeOfFunction(name: String, args: Seq[Type]): Type = {
+	def returnTypeOfFunction(name: ID, args: Seq[Type]): Type = {
     try {
       functions.flatMap { _.getOption(name) } match {
         case Some(NativeFunction(_, _, getType, _)) => 
@@ -161,7 +159,7 @@ class Typechecker(
           typeOf(expr, scope = argNames.zip(args).toMap)
         case Some(FoldFunction(_, expr)) =>
           args.tail.foldLeft(args.head){ case (curr,next) => 
-            typeOf(expr, Map("CURR" -> curr, "NEXT" -> next)) }
+            typeOf(expr, Map(ID("CURR") -> curr, ID("NEXT") -> next)) }
         case None => 
         	throw new RAException(s"Function $name(${args.mkString(",")}) is undefined")
       }
@@ -172,7 +170,7 @@ class Typechecker(
   }
 
 
-	def schemaOf(o: Operator): Seq[(Name, Type)] =
+	def schemaOf(o: Operator): Seq[(ID, Type)] =
 	{
 		o match {
 			case Project(cols, src) =>
@@ -181,18 +179,6 @@ class Typechecker(
 						case ProjectArg(col, expression) =>
 							(col, typeOf(expression, scope = schema(_), context = Some(src)))
 					})
-			
-			case ProvenanceOf(psel) => 
-				// Not 100% sure this is kosher... doesn't ProvenanceOf introduce new columns?
-        schemaOf(psel)
-      
-			case Annotate(subj,invisScm) => {
-        schemaOf(subj)
-      }
-      
-			case Recover(subj,invisScm) => {
-        schemaOf(subj).union(invisScm.map(_._2).map(pasct => (pasct.name,pasct.typ)))
-      }
 			
       case Select(cond, src) => {
 				val srcSchema = schemaOf(src);
@@ -210,10 +196,10 @@ class Typechecker(
 						val chk = typeOf(_:Expression, scope = srcSchema, context = Some(src))
 
 						/* Get Group By Args and verify type */
-						val groupBySchema: Seq[(String, Type)] = gbCols.map(x => (x.toString, chk(x)))
+						val groupBySchema: Seq[(ID, Type)] = gbCols.map(x => (x.name, chk(x)))
 
 						/* Get function name, check for AVG *//* Get function parameters, verify type */
-						val aggSchema: Seq[(String, Type)] = aggCols.map(x => 
+						val aggSchema: Seq[(ID, Type)] = aggCols.map(x => 
 							(
 								x.alias, 
 								registry.typecheck(x.function, x.args.map(chk(_)))

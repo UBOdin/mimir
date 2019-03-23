@@ -17,8 +17,8 @@ object DecomposeAggregates extends LazyLogging
   def decomposeAggregate(agg: AggFunction): Option[DecomposedAggregate] =
   {
     if(agg.distinct){ return None }
-    agg.function match {
-      case "SUM" | "GROUP_AND" | "GROUP_OR" | "FIRST" =>  
+    agg.function.id match {
+      case "sum" | "group_and" | "group_or" | "first" =>  
       {
         Some(DecomposedAggregate(
           ProjectArg(agg.alias, Var(agg.alias)),
@@ -26,11 +26,11 @@ object DecomposeAggregates extends LazyLogging
           Seq(agg)
         ))
       }
-      case "COUNT" => 
+      case "count" => 
       {
         Some(DecomposedAggregate(
           ProjectArg(agg.alias, Var(agg.alias)),
-          Seq(AggFunction("SUM", false, Seq(Var(agg.alias)), agg.alias)),
+          Seq(AggFunction(ID("sum"), false, Seq(Var(agg.alias)), agg.alias)),
           Seq(agg)
         ))
       }

@@ -7,6 +7,8 @@ import org.rogach.scallop._
 
 import sparsity.Name
 import sparsity.statement.CreateView
+import sparsity.parser.SQL
+import fastparse.Parsed
 
 import mimir.algebra._
 import mimir.exec.result.Row
@@ -15,7 +17,6 @@ import mimir.util.ExperimentalOptions
 //import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
 import py4j.GatewayServer
 import mimir.exec.Compiler
-import mimir.algebra.gprom.OperatorTranslation
 import org.gprom.jdbc.jna.GProMWrapper
 import mimir.ctables.Reason
 import org.slf4j.{LoggerFactory}
@@ -72,8 +73,15 @@ object MimirVizier extends LazyLogging {
     db.metadataBackend.open()
     db.backend.open()
     val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^","|","OR")
-    sback.registerSparkFunctions(db.functions.functionPrototypes.map(el => el._1).toSeq ++ otherExcludeFuncs , db.functions)
-    sback.registerSparkAggregates(db.aggregates.prototypes.map(el => el._1).toSeq, db.aggregates)
+    sback.registerSparkFunctions(
+      db.functions.functionPrototypes.map { _._1 }.toSeq
+        ++ otherExcludeFuncs.map { ID(_) }, 
+      db.functions
+    )
+    sback.registerSparkAggregates(
+      db.aggregates.prototypes.map { _._1 }.toSeq,
+      db.aggregates
+    )
     vizierdb.sparkSession = sback.sparkSql.sparkSession
     db.initializeDBForMimir();
     
@@ -223,7 +231,7 @@ object MimirVizier extends LazyLogging {
     var sparkSession:SparkSession = null;
     
     def withDataset[T](dsname:String, handler: ResultIterator => T ) : T = {
-     val mimirName:Name = db.sqlToRA.getVizierNameMapping(dsname.toUpperCase()) match {
+     val mimirName:ID = db.sqlToRA.getVizierNameMapping(dsname.toUpperCase()) match {
        case Some(mname) => mname
        case None => throw new Exception(s"No such table or view '$dsname'")
      }
@@ -232,7 +240,7 @@ object MimirVizier extends LazyLogging {
     }
         
     def outputAnnotations(dsname:String) : String = {
-      val mimirName:Name = db.sqlToRA.getVizierNameMapping(dsname.toUpperCase()) match {
+      val mimirName:ID = db.sqlToRA.getVizierNameMapping(dsname.toUpperCase()) match {
        case Some(mname) => mname
        case None => throw new Exception(s"No such table or view '$dsname'")
      }
@@ -327,8 +335,7 @@ object MimirVizier extends LazyLogging {
         new File(saferFile)
       }
       val fileName = csvFile.getName().split("\\.")(0)
-      val nameFromFile = sanitizeTableName(fileName)
-      val tableName = Name(nameFromFile)
+      val tableName = sanitizeTableName(fileName)
       if(db.getAllTables().contains(tableName)){
         logger.debug("loadDataSource: From Vistrails: Table Already Exists: " + tableName)
       }
@@ -340,8 +347,8 @@ object MimirVizier extends LazyLogging {
           targetSchema = None, 
           inferTypes = Some(inferTypes), 
           detectHeaders = Some(detectHeaders), 
-          backendOptions = bkOpts.toMap, 
-          format = Name(format)
+          loadOptions = bkOpts.toMap, 
+          format = ID(format)
         )
       }
       tableName 
@@ -370,10 +377,10 @@ object MimirVizier extends LazyLogging {
         }
         val viewName =  db.sqlToRA.getVizierNameMapping(input) match {
           case Some(mimirName) => mimirName
-          case None => Name(input)
+          case None => ID(input)
         }
         val df = db.backend.execute(db.table(viewName))
-        db.backend.asInstanceOf[RABackend].writeDataSink(
+        db.backend.asInstanceOf[QueryBackend].writeDataSink(
             df, 
             format, 
             bkOpts.toMap, 
@@ -389,12 +396,14 @@ object MimirVizier extends LazyLogging {
     }
   }
   
-  private def sanitizeTableName(tableName:String) : String = {
+  private def sanitizeTableName(tableName:String) : ID = {
     //table names cant start with digits - the sql parser does not like it
     //to if the filename starts with a digit, prepend a "t"
-    ((if(tableName.matches("^\\d.*")) s"t$tableName" else tableName) + UUID.randomUUID().toString())
-      //also replace characters that cant be in table name with _
-      .replaceAll("[\\%\\^\\&\\(\\{\\}\\+\\-\\/ \\]\\[\\'\\?\\=\\!\\`\\~\\\\\\/\\\"\\:\\;\\<\\>\\.\\,\\*\\$\\#\\@]", "_") 
+    ID.upper(
+      ((if(tableName.matches("^\\d.*")) s"t$tableName" else tableName) + UUID.randomUUID().toString())
+        //also replace characters that cant be in table name with _
+        .replaceAll("[\\%\\^\\&\\(\\{\\}\\+\\-\\/ \\]\\[\\'\\?\\=\\!\\`\\~\\\\\\/\\\"\\:\\;\\<\\>\\.\\,\\*\\$\\#\\@]", "_") 
+    )
   }
   
   def createLens(input : Any, params : java.util.ArrayList[String], _type : String, make_input_certain:Boolean, materialize:Boolean) : PythonScalaLensResponse = {
@@ -415,7 +424,7 @@ object MimirVizier extends LazyLogging {
       val lensNameBase = (input.toString() + _type + parsedParams.mkString(",") + make_input_certain + materialize).hashCode()
       val inputQuery = s"SELECT * FROM ${input}"
 
-      val lensName = Name("LENS_" + _type + (lensNameBase.toString().replace("-", "")))
+      val lensName = "LENS_" + _type + (lensNameBase.toString().replace("-", ""))
       val lensType = _type.toUpperCase()
 
       if(db.tableExists(lensName)) {
@@ -426,11 +435,11 @@ object MimirVizier extends LazyLogging {
         // Need to create the lens if it doesn't already exist.
 
         // query is a var because we might need to rewrite it below.
-        var query:Operator = db.table(Name(input.toString))
+        var query:Operator = db.table(input.toString)
 
         // "Make Certain" is implemented by dumping the lens contents into a temporary table
         if(make_input_certain){
-          val materializedInput = Name("MATERIALIZED_"+input)
+          val materializedInput = ID("MATERIALIZED_"+input)
           val querySchema = db.typechecker.schemaOf(query)
 
           if(db.tableExists(materializedInput)){
@@ -449,15 +458,15 @@ object MimirVizier extends LazyLogging {
         //            AS $query 
         //          WITH ${_type}( ${params.mkString(",")} )
         // Skip the parser and do what Mimir does internally
-        db.lenses.create(Name(lensType), lensName, query, parsedParams)
+        db.lenses.create(ID(lensType), ID(lensName), query, parsedParams)
       }
       if(materialize){
-        if(!db.views(lensName).isMaterialized){
-          db.views.materialize(lensName)
+        if(!db.views(ID(lensName)).isMaterialized){
+          db.views.materialize(ID(lensName))
         }
       }
       val lensOp = db.table(lensName).limit(200)
-      val lensAnnotations = db.explainer.explainSubsetWithoutOptimizing(lensOp, lensOp.columnNames.toSet, false, false, false, Some(lensName))
+      val lensAnnotations = db.explainer.explainSubsetWithoutOptimizing(lensOp, lensOp.columnNames.toSet, false, false, false, Some(ID(lensName)))
       val lensReasons = lensAnnotations.map(_.size(db)).sum.toString//JSONBuilder.list(lensAnnotations.map(_.all(db).toList).flatten.map(_.toJSON))
       logger.debug(s"createLens reasons for first 200 rows: ${lensReasons}")
       new PythonScalaLensResponse(lensName.toString, lensReasons)
@@ -474,7 +483,7 @@ object MimirVizier extends LazyLogging {
   
   def registerNameMappings(nameMappings:JMapWrapper[String,String]) : Unit = {
     try{
-      nameMappings.map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(vizierName.toUpperCase(), Name(mimirName)) }
+      nameMappings.map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(vizierName.toUpperCase(), ID(mimirName)) }
      } catch {
       case t: Throwable => {
         logger.error("Failed To Register Name Mappings: [" + nameMappings.mkString(",") + "]", t)
@@ -490,7 +499,7 @@ object MimirVizier extends LazyLogging {
       logger.debug("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
       val (viewNameSuffix, inputSubstitutionQuery) = input match {
         case aliases:JMapWrapper[_,_] => {
-          aliases.asInstanceOf[JMapWrapper[String,String]].map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(vizierName.toUpperCase(), Name(mimirName)) } 
+          aliases.asInstanceOf[JMapWrapper[String,String]].map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(vizierName.toUpperCase(), ID(mimirName)) } 
           (aliases.asInstanceOf[JMapWrapper[String,String]].unzip._2.mkString(""), query)
         }
         case inputs:Seq[_] => {
@@ -504,12 +513,15 @@ object MimirVizier extends LazyLogging {
         case x => throw new Exception(s"Parameter type ${x.getClass()} is invalid for createView input" )
       }
       
-      val viewName = Name("VIEW_" + ((viewNameSuffix + query).hashCode().toString().replace("-", "") ))
+      val viewName = "VIEW_" + ((viewNameSuffix + query).hashCode().toString().replace("-", "") )
       db.getView(viewName) match {
         case None => {
-          val viewQuery = MimirSQL(inputSubstitutionQuery)
+          val viewQuery = SQL(inputSubstitutionQuery) match {
+            case fastparse.Parsed.Success(sparsity.statement.Select(body, _), _) => body
+            case _ => throw new Exception("Invalid view query : $inputSubstitutionQuery")
+          }
           logger.debug("createView: query: " + viewQuery)
-          db.update(SQLStatement(CreateView(viewName, false, viewQuery)))
+          db.update(SQLStatement(CreateView(Name(viewName, true), false, viewQuery)))
         }
         case Some(_) => {
           logger.warn("createView: From Vistrails: View already exists: " + viewName)
@@ -535,14 +547,14 @@ object MimirVizier extends LazyLogging {
       val paramExprs = params.map(param => 
         mimir.parser.ExpressionParser.expr( param.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString)) )
       val paramsStr = paramExprs.mkString(",")
-      val adaptiveSchemaName = Name("ADAPTIVE_SCHEMA_" + _type + ((input.toString() + _type + paramsStr).hashCode().toString().replace("-", "") ))
-      val asViewName = Name("VIEW_"+adaptiveSchemaName)
+      val adaptiveSchemaName = ID("ADAPTIVE_SCHEMA_" + _type + ((input.toString() + _type + paramsStr).hashCode().toString().replace("-", "") ))
+      val asViewName = ID("VIEW_"+adaptiveSchemaName)
       db.getView(adaptiveSchemaName) match {
         case None => {
-          db.adaptiveSchemas.create(adaptiveSchemaName, Name(_type), db.table(Name(input.toString)), paramExprs)
+          db.adaptiveSchemas.create(adaptiveSchemaName, ID(_type), db.table(ID(input.toString)), paramExprs)
           val asTable = _type match {
             case "SHAPE_WATCHER" => adaptiveSchemaName
-            case _ => Name("DATA")
+            case _ => ID("DATA")
           }
           db.views.create(asViewName, db.adaptiveSchemas.viewFor(adaptiveSchemaName, asTable).get)
         }
@@ -571,7 +583,10 @@ object MimirVizier extends LazyLogging {
     try{
     val timeRes = logTime("vistrailsQueryMimir") {
       logger.debug("vistrailsQueryMimir: " + query)
-      val stmt = MimirSQL(query)
+      val stmt = MimirSQL(query) match {
+        case Parsed.Success(stmt, _) => stmt
+        case f:Parsed.Failure => throw new Exception(s"Parse error: ${f.msg}")
+      }
       stmt match {
         case SQLStatement(select:sparsity.statement.Select) => {
           val oper = db.sqlToRA(select)
@@ -606,7 +621,7 @@ object MimirVizier extends LazyLogging {
 def vistrailsQueryMimirJson(input:Any, query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
     val inputSubstitutionQuery = input match {
         case aliases:JMapWrapper[_,_] => {
-          aliases.asInstanceOf[JMapWrapper[String,String]].map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(vizierName.toUpperCase(), Name(mimirName)) } 
+          aliases.asInstanceOf[JMapWrapper[String,String]].map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(vizierName.toUpperCase(), ID(mimirName)) } 
           query
         }
         case inputs:Seq[_] => {
@@ -626,7 +641,10 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     try{
       val timeRes = logTime("vistrailsQueryMimirJson") {
         logger.debug("vistrailsQueryMimirJson: " + query)
-        val stmt = MimirSQL(query)
+        val stmt = MimirSQL(query) match {
+          case Parsed.Success(stmt, _) => stmt
+          case f:Parsed.Failure => throw new Exception(s"Parse Error: ${f.msg}")
+        }
         stmt match {
           case SQLStatement(select:sparsity.statement.Select) => {
             val oper = db.sqlToRA(select)
@@ -717,7 +735,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
       logger.debug("explainSubsetWithoutSchema: From Vistrails: [ "+ rows +" ] [" + oper + "]"  ) ;
       val explCols = cols match {
         case Seq() => oper.columnNames
-        case _ => cols.map { Name(_) }
+        case _ => cols.map { ID(_) }
       }
       rows.map(row => {
         db.explainer.explainSubsetWithoutOptimizing(
@@ -739,7 +757,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
       logger.debug("explainSchema: From Vistrails: [ "+ cols.mkString(",") +" ] [" + oper + "]"  ) ;
       val explCols = cols match {
         case Seq() => oper.columnNames
-        case _ => cols.map { Name(_) }
+        case _ => cols.map { ID(_) }
       }
       db.explainer.explainAdaptiveSchema(
           db.compiler.optimize(oper), 
@@ -753,7 +771,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     try{
       logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
       val oper = totallyOptimize(db.sqlToRA(MimirSQL.select(query)))
-      JSONBuilder.list(explainCell(oper, Name(col), RowIdPrimitive(row)).map(_.toJSON))
+      JSONBuilder.list(explainCell(oper, ID(col), RowIdPrimitive(row)).map(_.toJSON))
     } catch {
       case t: Throwable => {
         logger.error("Error Explaining Cell: [" + col + "] [ "+ row +" ] [" + query + "]", t)
@@ -778,7 +796,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     timeRes._1
   }
   
-  def explainCell(query: String, col:Name, row:String) : Seq[mimir.ctables.Reason] = {
+  def explainCell(query: String, col:ID, row:String) : Seq[mimir.ctables.Reason] = {
     try{
     logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
     val oper = totallyOptimize(db.sqlToRA(MimirSQL.select(query)))
@@ -816,7 +834,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }
   }
   
-  def explainCell(oper: Operator, col:Name, row:RowIdPrimitive) : Seq[mimir.ctables.Reason] = {
+  def explainCell(oper: Operator, col:ID, row:RowIdPrimitive) : Seq[mimir.ctables.Reason] = {
     try{
     val timeRes = logTime("explainCell") {
       try {
@@ -875,7 +893,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }
   }
   
-  def explainSubset(query: String, rows:Seq[String], cols:Seq[Name]) : Seq[mimir.ctables.ReasonSet] = {
+  def explainSubset(query: String, rows:Seq[String], cols:Seq[ID]) : Seq[mimir.ctables.ReasonSet] = {
     try{
     logger.debug("explainSubset: From Vistrails: [ "+ rows +" ] [" + query + "]"  ) ;
     val oper = db.sqlToRA(MimirSQL.select(query))
@@ -888,7 +906,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }  
   }
   
-  def explainSubset(oper: Operator, rows:Seq[String], cols:Seq[Name]) : Seq[mimir.ctables.ReasonSet] = {
+  def explainSubset(oper: Operator, rows:Seq[String], cols:Seq[ID]) : Seq[mimir.ctables.ReasonSet] = {
     try{
     val timeRes = logTime("explainSubset") {
       logger.debug("explainSubset: From Vistrails: [ "+ rows +" ] [" + oper + "]"  ) ;
@@ -1010,7 +1028,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
         reason.model.name,
         reason.idx, 
         reason.args, 
-        update
+        db.interpreter(update)
       )
     }
     logger.debug(s"feedback Took: ${timeRes._2}")
@@ -1026,7 +1044,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     try{
     val timeRes = logTime("feedback") {
       logger.debug("feedback: From Vistrails: [" + idx + "] [ " + model + " ] [ " + argsHints.mkString(",") + " ] [ " + ack + " ] [ " +repairStr+" ]" ) ;
-      val modelInst = db.models.get(Name(model))
+      val modelInst = db.models.get(ID(model))
       val splitIndex = modelInst.argTypes(idx).length
       val (args, hints) = argsHints.map(arg => ExpressionParser.expr(arg.toString()).asInstanceOf[PrimitiveValue]).splitAt(splitIndex)
       val update = if(ack) { modelInst.bestGuess(idx, args, hints) } else { db.sqlToRA(MimirSQL.expression(repairStr)) }
@@ -1035,7 +1053,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
         modelInst,
         idx, 
         args, 
-        update
+        db.interpreter(update)
       )
     }
     logger.debug(s"feedback Took: ${timeRes._2}")
@@ -1178,7 +1196,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
  
  def operCSVResultsDeterminismAndExplanation(oper : mimir.algebra.Operator) : PythonCSVContainer =  {
     val results = new Vector[Row]()
-    var cols : Seq[Name] = null
+    var cols : Seq[ID] = null
     var colsIndexes : Seq[Int] = null
     var schViz : Map[String, String] = null
     

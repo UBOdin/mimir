@@ -4,11 +4,11 @@ import mimir.algebra._
 import org.apache.spark.sql.DataFrame
 import mimir.Database
 
-abstract class RABackend(val database:String) {
+abstract class QueryBackend(val database:String) {
   def open(): Unit
 
-  def materializeView(name: Name): Unit
-  def createTable(tableName: Name, oper:Operator): Unit
+  def materializeView(name: ID): Unit
+  def createTable(tableName: ID, oper:Operator): Unit
   def execute(compiledOp: Operator): DataFrame
   def dropDB():Unit
 
@@ -30,15 +30,15 @@ abstract class RABackend(val database:String) {
   def resultValue(sel:SelectBody):PrimitiveValue =
     resultRows(sel).head.head*/
   
-  def readDataSource(name:String, format:String, options:Map[String, String], schema:Option[Seq[(String, Type)]], load:Option[String]) : Unit
+  def readDataSource(name:String, format:String, options:Map[String, String], schema:Option[Seq[(ID, Type)]], load:Option[String]) : Unit
   def writeDataSink(dataframe:DataFrame, format:String, options:Map[String, String], save:Option[String]) : Unit
+
+  def getTableSchema(table: ID): Option[Seq[(ID, Type)]]
   
-  def getTableSchema(table: Name): Option[Seq[(Name, Type)]]
   
-  
-  def getAllTables(): Seq[Name]
+  def getAllTables(): Seq[ID]
   def invalidateCache();
-  def dropTable(table:Name)
+  def dropTable(table:ID)
 
   def close()
 

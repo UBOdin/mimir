@@ -21,7 +21,7 @@ object PickerLens {
 
   def create(
     db: Database, 
-    name: String, 
+    name: ID, 
     query: Operator, 
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
@@ -30,7 +30,7 @@ object PickerLens {
     val schemaMap = operSchema.toMap
     
     val (pickFromColumns, pickerColTypes ) = args.flatMap {
-      case Function("PICK_FROM", cols ) => 
+      case Function(ID("pick_from"), cols ) => 
         Some( cols.map { case col:Var => (col.name, schemaMap(col.name)) 
                          case col => throw new RAException(s"Invalid pick_from argument: $col in PickerLens $name (not a column reference)")
                        } )
@@ -43,20 +43,18 @@ object PickerLens {
     })
     
     val pickToCol = args.flatMap {
-      case Function("PICK_AS", Seq(Var(col))) => Some( col )
+      case Function(ID("pick_as"), Seq(Var(col))) => Some( col )
       case _ => None
-    } match {
-      case Seq() => "PICK_ONE_" +pickFromColumns.mkString("_") 
-      case x => x.head
-    }
+    }.headOption
+     .getOrElse( ID("PICK_ONE_", ID(pickFromColumns, "_")) )
     
     val projectedOutPicFromCols = args.flatMap {
-      case Function("HIDE_PICK_FROM", Seq(Var(col))) => Some( col )
+      case Function(ID("hide_pick_from"), Seq(Var(col))) => Some( col )
       case _ => None
     }
     
     val classifyUpFront = args.flatMap {
-      case Function("CLASSIFY_UP_FRONT", Seq(bp@BoolPrimitive(b))) => Some( bp )
+      case Function(ID("classify_up_front"), Seq(bp@BoolPrimitive(b))) => Some( bp )
       case _ => None
     } match {
       case Seq() => true
@@ -64,19 +62,26 @@ object PickerLens {
     }
     
     
-    val useClassifier = args.foldLeft(None:Option[String])((init, expr) => init match { 
-      case None => expr match {
-        case Function("UEXPRS", exprs) => None
-        case _ => Some("Classification")
-      }
-      case s@Some(modelGen) => s
-    })
-    val pickerModel = PickerModel.train(db, name+"_PICKER_MODEL:"+pickFromColumns.mkString("_"), pickToCol, pickFromColumns, pickerColTypes, useClassifier, classifyUpFront, query) 
+    val useClassifier = args.flatMap {
+      case Function(ID("classifier"), Seq(StringPrimitive(classifier))) => Some(ID(classifier))
+      case Function(ID("classifier"), Seq(Var(classifier))) => Some(classifier)
+      case _ => None
+    }.headOption
+
+    val pickerModel = PickerModel.train(db, 
+      ID(name,"_PICKER_MODEL:", ID(pickFromColumns, "_")), 
+      pickToCol, 
+      pickFromColumns, 
+      pickerColTypes, 
+      useClassifier, 
+      classifyUpFront, 
+      query
+    ) 
     
     lazy val expressionSubstitutions : (Expression) => Expression = (expr) => {
     expr match {
-      case Function("AVG", Seq(Var(col))) => {
-        val exprSubQ = Project(Seq(ProjectArg(s"AVG_$col", expr)), query)
+      case Function(ID("avg"), Seq(Var(col))) => {
+        val exprSubQ = Project(Seq(ProjectArg(ID("AVG_",col), expr)), query)
         db.query(exprSubQ)( results => {
         var replacementExpr : Expression = NullPrimitive()
         if(results.hasNext()){
@@ -91,7 +96,7 @@ object PickerLens {
   }
     
     val pickUncertainExprs : List[(Expression, Expression)] = args.flatMap {
-      case Function("UEXPRS", Seq(StringPrimitive(expr), StringPrimitive(resultExpr)) ) => Some( (
+      case Function(ID("uexprs"), Seq(StringPrimitive(expr), StringPrimitive(resultExpr)) ) => Some( (
           ExpressionParser.expr(expr), 
           VGTerm(pickerModel.name, 0,Seq[Expression](RowIdVar()).union(pickFromColumns.map(Var(_))), Seq(expressionSubstitutions(ExpressionParser.expr(resultExpr)))) 
           ) )
@@ -104,7 +109,7 @@ object PickerLens {
     }
     
     val pickCertainExprs : List[(Expression, Expression)] = args.flatMap {
-      case Function("EXPRS", Seq(StringPrimitive(expr), StringPrimitive(resultExpr)) ) => Some( (
+      case Function(ID("exprs"), Seq(StringPrimitive(expr), StringPrimitive(resultExpr)) ) => Some( (
           ExpressionParser.expr(expr), 
           expressionSubstitutions(ExpressionParser.expr(resultExpr))
           ) )

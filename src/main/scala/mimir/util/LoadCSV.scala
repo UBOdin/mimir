@@ -22,18 +22,36 @@ import mimir.models.DetectHeader
 
 object LoadCSV extends StrictLogging {
 
-  def handleLoadTable(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()){
-    db.loadTable(targetTable, sourceFile, true, ("CSV", options.toSeq.flatMap{
-      case ("DELIMITER", delim) => Some(StringPrimitive(delim))
-      case _ => None
-    }))
+  def handleLoadTable(
+    db: Database, 
+    targetTable: ID, 
+    sourceFile: File, 
+    options: Map[String,String] = Map()
+  ){
+    db.loadTable(
+      sourceFile, 
+      targetTable = Some(targetTable), 
+      force = true, 
+      format = ID("csv"),
+      loadOptions = options
+    )
   }
  
-  def handleLoadTableRaw(db: Database, targetTable: String, sourceFile: File, options: Map[String,String] = Map()) = 
-    LoadData.handleLoadTableRaw(db, targetTable, sourceFile, options)
-
-  def handleLoadTableRaw(db: Database, targetTable: String, targetSchema:Option[Seq[(String,Type)]], sourceFile: File, options: Map[String,String]) =
-    LoadData.handleLoadTableRaw(db, targetTable, targetSchema, sourceFile, options, "csv")
+  def handleLoadTableRaw(
+    db: Database, 
+    targetTable: ID, 
+    sourceFile: File, 
+    targetSchema:Option[Seq[(ID,Type)]] = None,
+    options: Map[String,String] = Map()
+  ) = 
+    LoadData.handleLoadTableRaw(
+      db, 
+      targetTable = targetTable, 
+      sourceFile = sourceFile, 
+      targetSchema = targetSchema,
+      options = options,
+      format = ID("csv")
+    )
 }
 
 

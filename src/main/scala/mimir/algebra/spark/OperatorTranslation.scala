@@ -6,7 +6,38 @@ import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.sql.types.{ArrayType, Metadata, DataType, DoubleType, LongType, FloatType, BooleanType, IntegerType, StringType, StructField, StructType}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.catalyst.expressions.{RowNumber, MonotonicallyIncreasingID, NamedExpression, AttributeReference,Alias,SortOrder,Ascending,Descending,GreaterThanOrEqual,Literal, Add, Subtract, Multiply, Divide, BitwiseAnd, BitwiseOr, And, Or, ShiftLeft, ShiftRight, LessThan, LessThanOrEqual, GreaterThan, EqualTo, IsNull, Like, If, ScalaUDF, Rand, Randn}
+import org.apache.spark.sql.catalyst.expressions.{
+  RowNumber,
+  MonotonicallyIncreasingID,
+  NamedExpression,
+  AttributeReference,
+  Alias,
+  SortOrder,
+  Ascending,
+  Descending,
+  GreaterThanOrEqual,
+  Literal,
+  Add,
+  Subtract,
+  Multiply,
+  Divide,
+  BitwiseAnd,
+  BitwiseOr,
+  And,
+  Or,
+  ShiftLeft,
+  ShiftRight,
+  LessThan,
+  LessThanOrEqual,
+  GreaterThan,
+  EqualTo,
+  IsNull,
+  Like,
+  If,
+  ScalaUDF,
+  Rand,
+  Randn
+}
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.analysis.UnresolvedFunction
 import org.apache.spark.sql.catalyst.{TableIdentifier}
@@ -14,7 +45,6 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, Ca
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedRelation, UnresolvedInlineTable, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.plans.{JoinType, Inner,LeftOuter, Cross}
 import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression,AggregateFunction,AggregateMode,Complete,Count,Average,Sum,First,Max,Min}
-
 
 import org.apache.spark.sql.execution.datasources.{DataSource, FailureSafeParser}
 import scala.language.existentials
@@ -31,8 +61,8 @@ import org.apache.spark.sql.catalyst.analysis.TypeCheckResult
 import org.apache.spark.sql.catalyst.plans.logical.LocalRelation
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.unsafe.types.UTF8String
-import mimir.sql.sqlite.VGTermFunctions
-import mimir.sql.sqlite.BestGuessVGTerm
+import mimir.backend.sqlite.VGTermFunctions
+import mimir.backend.sqlite.BestGuessVGTerm
 import mimir.ctables.vgterm.BestGuess
 import mimir.ctables.vgterm.IsAcknowledged
 import org.apache.spark.sql.catalyst.expressions.Concat
@@ -46,7 +76,7 @@ import org.apache.spark.sql.catalyst.expressions.Contains
 import mimir.algebra.function.FunctionRegistry
 import mimir.algebra.function.{NativeFunction,ExpressionFunction,FoldFunction}
 
-import mimir.sql.SparkBackend
+import mimir.backend.SparkBackend
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.Column
 import org.apache.spark.sql.catalyst.expressions.CreateStruct
@@ -61,9 +91,8 @@ import java.sql.Timestamp
 import mimir.util.SparkUtils
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.catalyst.analysis.UnresolvedStar
-import mimir.sql.GProMBackend
 import org.apache.spark.sql.catalyst.expressions.aggregate.StddevSamp
-import mimir.sql.BackendWithSparkContext
+import mimir.backend.BackendWithSparkContext
 import org.apache.spark.sql.catalyst.FunctionIdentifier
 import org.apache.spark.sql.catalyst.expressions.CreateArray
 import org.apache.spark.sql.types.TypeCollection
@@ -83,19 +112,10 @@ object OperatorTranslation
           mimirExprToSparkNamedExpr(src, col.name, col.expression)
         }), mimirOpToSparkOp(src))
 			}
-			case ProvenanceOf(psel) => {
-			  throw new Exception("Operator Translation not implemented '"+oper+"'")
-			}
-			case Annotate(subj,invisScm) => {
-        throw new Exception("Operator Translation not implemented '"+oper+"'")
-      }
-			case Recover(subj,invisScm) => {
-        throw new Exception("Operator Translation not implemented '"+oper+"'")
-      }
 			case Aggregate(groupBy, aggregates, source) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Aggregate(
           groupBy.map(mimirExprToSparkExpr(source,_)),
-          groupBy.map( gb => Alias( UnresolvedAttribute(gb.name), gb.name)()) ++ aggregates.map( mimirAggFunctionToSparkNamedExpr(source,_)),
+          groupBy.map( gb => Alias( UnresolvedAttribute.quoted(gb.id), gb.id)()) ++ aggregates.map( mimirAggFunctionToSparkNamedExpr(source,_)),
           mimirOpToSparkOp(source))
 			}
 			/*case Select(condition, join@Join(lhs, rhs)) => {
@@ -151,10 +171,10 @@ object OperatorTranslation
           CatalogTableType.EXTERNAL,
           CatalogStorageFormat.empty,
           StructType(sch.map(col => StructField(col._1, getSparkType(col._2), true))) )*/
-			  val tableId = TableIdentifier(name)
+			  val tableId = TableIdentifier(name.id)
         val plan = UnresolvedRelation(tableId)
-        val baseRelation  = if (!alias.isEmpty() && !alias.equals(name)) {
-          SubqueryAlias(alias, plan)
+        val baseRelation  = if (!alias.equals(name)) {
+          SubqueryAlias(alias.id, plan)
         } else {
           plan
         }
@@ -206,26 +226,26 @@ object OperatorTranslation
 			case View(name, query, annotations) => {
 			  val schema = db.typechecker.schemaOf(query)
 			  val table = CatalogTable(
-          TableIdentifier(name),
+          TableIdentifier(name.id),
           CatalogTableType.VIEW,
           CatalogStorageFormat.empty,
           mimirSchemaToStructType(schema) )
         org.apache.spark.sql.catalyst.plans.logical.View( table,
           schema.map(col => {
-            AttributeReference(col._1, getSparkType(col._2), true, Metadata.empty)( )
+            AttributeReference(col._1.id, getSparkType(col._2), true, Metadata.empty)( )
           }),
           mimirOpToSparkOp(query))
 			}
       case av@AdaptiveView(schemaName, name, query, annotations) => {
         val schema = db.typechecker.schemaOf(av)
         val table = CatalogTable(
-          TableIdentifier(name),
+          TableIdentifier(name.id),
           CatalogTableType.VIEW,
           CatalogStorageFormat.empty,
           mimirSchemaToStructType(schema))
 			  org.apache.spark.sql.catalyst.plans.logical.View( table,
           schema.map(col => {
-            AttributeReference(col._1, getSparkType(col._2), true, Metadata.empty)( )
+            AttributeReference(col._1.id, getSparkType(col._2), true, Metadata.empty)( )
           }),
           mimirOpToSparkOp(query))
       }
@@ -251,7 +271,6 @@ object OperatorTranslation
   def queryExecution(plan:LogicalPlan ) = {
    db.backend match {
      case sparkBackend:SparkBackend => sparkBackend.sparkSql.sparkSession.sessionState.executePlan(plan) 
-     case gpromBackend:GProMBackend => gpromBackend.sparkBackend.sparkSql.sparkSession.sessionState.executePlan(plan) 
      case x => throw new Exception("Cant get Query Execution From backend of type: " + x.getClass.getName) 
    }
   }
@@ -261,7 +280,6 @@ object OperatorTranslation
     qe.assertAnalyzed()
     val sparkSession = db.backend match {
      case sparkBackend:SparkBackend => sparkBackend.sparkSql.sparkSession 
-     case gpromBackend:GProMBackend => gpromBackend.sparkBackend.sparkSql.sparkSession 
      case x => throw new Exception("Cant get Dataset From backend of type: " + x.getClass.getName) 
    }
     new Dataset[Row](sparkSession, plan, RowEncoder(qe.analyzed.schema)) 
@@ -453,66 +471,65 @@ object OperatorTranslation
   }
  
   
-  def mimirExprToSparkNamedExpr(oper:Operator, name:String, expr:Expression) : NamedExpression = {
-    Alias(mimirExprToSparkExpr(oper,expr),name)()
+  def mimirExprToSparkNamedExpr(oper:Operator, name:ID, expr:Expression) : NamedExpression = {
+    Alias(mimirExprToSparkExpr(oper,expr),name.id)()
   }
   
   def mimirAggFunctionToSparkNamedExpr(oper:Operator, aggr:AggFunction) : NamedExpression = {
-     Alias(AggregateExpression(aggr match {
-         case AggFunction("COUNT", _, args, _) => {
-           args match {
-             case Seq() => Count(Seq(Literal(1)))
-             case _ => Count(args.map(mimirExprToSparkExpr(oper,_)))
-           }
-           
-         }
-         case AggFunction("AVG", _, args, _) => {
-           Average(mimirExprToSparkExpr(oper,args.head))
-         }
-         case AggFunction("SUM", _, args, _) => {
-           Sum(mimirExprToSparkExpr(oper,args.head))
-         }
-         case AggFunction("STDDEV", _, args, _) => {
-           StddevSamp(mimirExprToSparkExpr(oper,args.head))
-         }
-         case AggFunction("FIRST", _, args, _) => {
-           First(mimirExprToSparkExpr(oper,args.head),mimirExprToSparkExpr(oper,BoolPrimitive(true)))
-         }
-         case AggFunction("MAX", _, args, _) => {
-           Max(mimirExprToSparkExpr(oper,args.head))
-         }
-         case AggFunction("MIN", _, args, _) => {
-           Min(mimirExprToSparkExpr(oper,args.head))
-         }
-         case AggFunction("GROUP_AND", _, args, _) => {
-           GroupAnd(mimirExprToSparkExpr(oper,args.head))
-         }
-         case AggFunction("GROUP_OR", _, args, _) => {
-           GroupOr(mimirExprToSparkExpr(oper,args.head))
-         }
-         case AggFunction("GROUP_BITWISE_OR", _, args, _) => {
-           GroupBitwiseOr(mimirExprToSparkExpr(oper,args.head))
-         }
-         case AggFunction("GROUP_BITWISE_AND", _, args, _) => {
-           GroupBitwiseAnd(mimirExprToSparkExpr(oper,args.head))
-         }
-         case AggFunction("JSON_GROUP_ARRAY", _, args, _) => {
-           JsonGroupArray(mimirExprToSparkExpr(oper,args.head))
-           //TODO: when we add TArray() type we can use this
-           //CollectList(mimirExprToSparkExpr(oper,args.head))
-         }
-         case AggFunction(function, _, args, _) => {
-           val fi = db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(FunctionIdentifier(function.toLowerCase()))
-           val sparkInputs = args.map(inp => mimirExprToSparkExpr(oper, inp))
-           val constructorTypes = args.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
-           Class.forName(fi.getClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
-                            .asInstanceOf[org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction]
-           //throw new Exception("Aggregate Function Translation not implemented '"+function+"'")
-         } 
-       },
-       Complete,
-       aggr.distinct
-     ), aggr.alias)()
+    Alias(AggregateExpression(
+      aggr.function.id match {
+        case "count" => 
+          aggr.args match {
+            case Seq() => Count(Seq(Literal(1)))
+            case _ => Count(aggr.args.map(mimirExprToSparkExpr(oper,_)))
+          }
+        case "avg" => {
+          Average(mimirExprToSparkExpr(oper,aggr.args.head))
+        }
+        case "sum" => {
+          Sum(mimirExprToSparkExpr(oper,aggr.args.head))
+        }
+        case "stddev" => {
+          StddevSamp(mimirExprToSparkExpr(oper,aggr.args.head))
+        }
+        case "first" => {
+          First(mimirExprToSparkExpr(oper,aggr.args.head),mimirExprToSparkExpr(oper,BoolPrimitive(true)))
+        }
+        case "max" => {
+          Max(mimirExprToSparkExpr(oper,aggr.args.head))
+        }
+        case "min" => {
+          Min(mimirExprToSparkExpr(oper,aggr.args.head))
+        }
+        case "group_and" => {
+          GroupAnd(mimirExprToSparkExpr(oper,aggr.args.head))
+        }
+        case "group_or" => {
+          GroupOr(mimirExprToSparkExpr(oper,aggr.args.head))
+        }
+        case "group_bitwise_or" => {
+          GroupBitwiseOr(mimirExprToSparkExpr(oper,aggr.args.head))
+        }
+        case "group_bitwise_and" => {
+          GroupBitwiseAnd(mimirExprToSparkExpr(oper,aggr.args.head))
+        }
+        case "json_group_array" => {
+          JsonGroupArray(mimirExprToSparkExpr(oper,aggr.args.head))
+          //TODO: when we add TArray() type we can use this
+          //CollectList(mimirExprToSparkExpr(oper,aggr.args.head))
+        }
+        case function => {
+          val fi = db.backend.asInstanceOf[SparkBackend].sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(FunctionIdentifier(function.toLowerCase()))
+          val sparkInputs = aggr.args.map(inp => mimirExprToSparkExpr(oper, inp))
+          val constructorTypes = aggr.args.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
+          Class.forName(fi.getClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
+                           .asInstanceOf[org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction]
+          //throw new Exception("Aggregate Function Translation not implemented '"+function+"'")
+        } 
+      },
+      Complete,
+      aggr.distinct
+    ), aggr.alias.id)()
   }
   
   
@@ -530,14 +547,14 @@ object OperatorTranslation
       case cnd@Conditional(condition,thenClause,elseClause) => {
         mimirConditionalToSparkConditional(oper, cnd)
       }
-      case Var("ROWID") => {
+      case Var(name) if name.equals("ROWID") => {
         org.apache.spark.sql.catalyst.expressions.Cast(Alias(Add(MonotonicallyIncreasingID(), Literal(1)),"ROWID")(),getSparkType(db.backend.rowIdType),None)
       }
       /*case Var(name@Provenance.rowidColnameBase) => {
         org.apache.spark.sql.catalyst.expressions.Cast(Alias(Add(MonotonicallyIncreasingID(), Literal(1)),name)(),getSparkType(db.backend.rowIdType),None)
       }*/
       case Var(v) => {
-        UnresolvedAttribute(v)
+        UnresolvedAttribute.quoted(v.id)
       }
       case rid@RowIdVar() => {
         //UnresolvedAttribute("ROWID")
@@ -681,27 +698,27 @@ object OperatorTranslation
   
   def mimirFunctionToSparkFunction(oper:Operator, func:Function) : org.apache.spark.sql.catalyst.expressions.Expression = {
     val vgtBGFunc = VGTermFunctions.bestGuessVGTermFn
-    func match {
-      case Function("CAST", params) => {
-        org.apache.spark.sql.catalyst.expressions.Cast(mimirExprToSparkExpr(oper,params.head), getSparkType(params.tail.head.asInstanceOf[TypePrimitive].t), None)
+    func.op match {
+      case ID("cast") => {
+        org.apache.spark.sql.catalyst.expressions.Cast(mimirExprToSparkExpr(oper,func.params.head), getSparkType(func.params.tail.head.asInstanceOf[TypePrimitive].t), None)
       }
-      case Function("MIMIR_CAST", params) => {
-        throw new Exception(s"Function Translation not implemented MIMIR_CAST${params.mkString(",")}")
+      case ID("mimir_cast") => {
+        throw new Exception(s"Function Translation not implemented MIMIR_CAST${func.params.mkString(",")}")
       }
-      case Function("random", params) => {
+      case ID("random") => {
         Randn(1L)
       }
-      case Function("YEAR", params) => {
-        org.apache.spark.sql.catalyst.expressions.Year(mimirExprToSparkExpr(oper,params.head))
+      case ID("year") => {
+        org.apache.spark.sql.catalyst.expressions.Year(mimirExprToSparkExpr(oper,func.params.head))
       }
-      case Function("SECOND", params) => {
-        org.apache.spark.sql.catalyst.expressions.Second(mimirExprToSparkExpr(oper,params.head))
+      case ID("second") => {
+        org.apache.spark.sql.catalyst.expressions.Second(mimirExprToSparkExpr(oper,func.params.head))
       }
-      case Function(`vgtBGFunc`, params) => {
-        throw new Exception(s"Function Translation not implemented $vgtBGFunc(${params.mkString(",")})")
+      case `vgtBGFunc` => {
+        throw new Exception(s"Function Translation not implemented $vgtBGFunc(${func.params.mkString(",")})")
       }
-      case Function(name, params) => {
-        FunctionUDF(oper, name, db.functions.get(name), params, params.map(arg => db.typechecker.typeOf(arg, oper))).getUDF
+      case ID(name) => {
+        FunctionUDF(oper, name, db.functions.get(func.op), func.params, func.params.map(arg => db.typechecker.typeOf(arg, oper))).getUDF
       }
     }
   }
@@ -743,8 +760,8 @@ object OperatorTranslation
     }
   }
   
-  def mimirSchemaToStructType(schema:Seq[(String, Type)]):StructType = {
-    StructType(schema.map(col => StructField(col._1, getSparkType(col._2), true)))  
+  def mimirSchemaToStructType(schema:Seq[(ID, Type)]):StructType = {
+    StructType(schema.map(col => StructField(col._1.id, getSparkType(col._2), true)))  
   }
   
   def structTypeToMimirSchema(schema:StructType): Seq[(String, Type)] = {
@@ -824,7 +841,7 @@ object OperatorTranslation
   def extractTables(oper: Operator): Seq[String] = 
   {
     oper match {
-      case Table(name, alias, tgtSch, tgtMetadata) => Seq(name)
+      case Table(name, alias, tgtSch, tgtMetadata) => Seq(name.id)
       case _ => oper.children.map(extractTables(_)).flatten
     }
   }
@@ -1040,7 +1057,7 @@ case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression
       if(sparkArgs.length > 22) Seq(CreateArray(sparkArgs)) else sparkArgs,
       org.apache.spark.sql.catalyst.ScalaReflection.getParameterTypeNullability(inFunc),
       if(sparkArgs.length > 22) Seq(ArrayType(StringType)) else sparkArgTypes,
-      Some(model.name),true, true)
+      Some(model.name.id),true, true)
   }
 }
 
@@ -1171,7 +1188,7 @@ case class SampleUDF(oper:Operator, model:Model, idx:Int, seed:Expression, args:
       if(sparkArgs.length > 22) Seq(CreateStruct(sparkArgs)) else sparkArgs,
       org.apache.spark.sql.catalyst.ScalaReflection.getParameterTypeNullability(inFunc),
       if(sparkArgs.length > 22) Seq(getStructType(sparkArgTypes)) else sparkArgTypes,
-      Some(model.name), true, true)
+      Some(model.name.id), true, true)
   }
 }
 
@@ -1293,7 +1310,7 @@ case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[Expression]) e
       if(sparkArgs.length > 22) Seq(CreateStruct(sparkArgs)) else sparkArgs,
       org.apache.spark.sql.catalyst.ScalaReflection.getParameterTypeNullability(inFunc),
       if(sparkArgs.length > 22) Seq(getStructType(sparkArgTypes)) else sparkArgTypes,
-      Some(model.name),true,true)
+      Some(model.name.id),true,true)
   }
 }
 

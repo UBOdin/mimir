@@ -29,9 +29,9 @@ object Heuristics
     if(numericColumns.tail.isEmpty){
       (
         Sort(Seq(SortColumn(Var(x), true)), dataQuery),
-        Seq( (x, "MIMIR_PLOT_CDF", Map("TITLE" -> StringPrimitive(x))) ),
+        Seq( (x, ID("MIMIR_PLOT_CDF"), Map("TITLE" -> StringPrimitive(x.id))) ),
         Map(
-          "XLABEL" -> StringPrimitive(x),
+          "XLABEL" -> StringPrimitive(x.id),
           "YLABEL" -> StringPrimitive("CDF")
         ) ++ globalSettings
       )
@@ -43,10 +43,10 @@ object Heuristics
       (
         dataQuery,
         numericColumns.tail.map { y =>
-          (x, y, Map("TITLE" -> StringPrimitive(y)))
+          (x, y, Map("TITLE" -> StringPrimitive(y.id)))
         },
         Map(
-          "XLABEL" -> StringPrimitive(x)
+          "XLABEL" -> StringPrimitive(x.id)
         ) ++ (commonType match { 
           case Some(TUser(utype)) => Map("YLABEL" -> StringPrimitive(utype))
           case Some(TDate()     ) => Map("YLABEL" -> StringPrimitive("Date"))
@@ -70,7 +70,7 @@ object Heuristics
         Map(
           "TITLE" -> StringPrimitive( 
             if(linesHaveThanOneX) { s"($x, $y)" }
-            else { y }
+            else { y.id }
           )
         ) ++ lineConfig
       )

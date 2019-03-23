@@ -1,11 +1,11 @@
 package mimir.backend
 
 import java.sql._
-import sparsity.Name
 import mimir.Database
 import mimir.algebra._
 import mimir.util.JDBCUtils
-import net.sf.jsqlparser.statement.select.{Select, SelectBody};
+import sparsity.statement.{Select => SelectStatement}
+import sparsity.select.SelectBody
 
 abstract class MetadataBackend {
 
@@ -13,20 +13,22 @@ abstract class MetadataBackend {
 
   def execute(sel: String): ResultSet
   def execute(sel: String, args: Seq[PrimitiveValue]): ResultSet
-  def execute(sel: Select): ResultSet = {
+  def execute(sel: SelectStatement): ResultSet = {
     execute(sel.toString());
   }
-  def execute(selB: SelectBody): ResultSet = {
-    val sel = new Select();
-    sel.setSelectBody(selB);
-    return execute(sel);
+  def execute(selB: SelectBody): ResultSet = 
+    execute(SelectStatement(selB));
+  def execute(sel: SelectStatement, args: Seq[PrimitiveValue]): ResultSet = {
+    execute(sel.toString(), args);
   }
+  def execute(selB: SelectBody, args: Seq[PrimitiveValue]): ResultSet = 
+    execute(SelectStatement(selB), args);
 
   def resultRows(sel: String):Seq[Seq[PrimitiveValue]] = 
     JDBCUtils.extractAllRows(execute(sel)).flush
   def resultRows(sel: String, args: Seq[PrimitiveValue]):Seq[Seq[PrimitiveValue]] =
     JDBCUtils.extractAllRows(execute(sel, args)).flush
-  def resultRows(sel: Select):Seq[Seq[PrimitiveValue]] =
+  def resultRows(sel: SelectStatement):Seq[Seq[PrimitiveValue]] =
     JDBCUtils.extractAllRows(execute(sel)).flush
   def resultRows(sel: SelectBody):Seq[Seq[PrimitiveValue]] =
     JDBCUtils.extractAllRows(execute(sel)).flush
@@ -35,20 +37,23 @@ abstract class MetadataBackend {
     resultRows(sel).head.head
   def resultValue(sel:String, args: Seq[PrimitiveValue]):PrimitiveValue =
     resultRows(sel, args).head.head
-  def resultValue(sel:Select):PrimitiveValue =
+  def resultValue(sel:SelectStatement):PrimitiveValue =
     resultRows(sel).head.head
   def resultValue(sel:SelectBody):PrimitiveValue =
     resultRows(sel).head.head
   
-  def getTableSchema(table: Name): Option[Seq[(Name, Type)]]
+  def getTableSchema(table: ID): Option[Seq[(ID, Type)]]
   
+  def update(stmt: sparsity.statement.Statement): Unit = update(stmt.toString)
   def update(stmt: String): Unit
   def update(stmt: TraversableOnce[String]): Unit
+  def update(stmt: sparsity.statement.Statement, args: Seq[PrimitiveValue]): Unit = update(stmt.toString, args)
   def update(stmt: String, args: Seq[PrimitiveValue]): Unit
+  def fastUpdateBatch(stmt: sparsity.statement.Statement, argArray: TraversableOnce[Seq[PrimitiveValue]]): Unit = fastUpdateBatch(stmt.toString, argArray)
   def fastUpdateBatch(stmt: String, argArray: TraversableOnce[Seq[PrimitiveValue]]): Unit
-  def selectInto(table: String, query: String): Unit
+  def selectInto(table: ID, query: String): Unit
 
-  def getAllTables(): Seq[Name]
+  def getAllTables(): Seq[ID]
   def invalidateCache();
 
   def close()

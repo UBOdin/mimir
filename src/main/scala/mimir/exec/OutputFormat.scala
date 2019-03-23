@@ -65,7 +65,12 @@ class PrettyOutputFormat(terminal: Terminal)
 
   def print(output: ResultIterator)
   {
-    val header:Seq[String] = output.schema.map( _._1 ).map { x => if (x == null){ "??" } else { x }}
+    val header:Seq[String] = 
+      output.schema
+            .map( _._1 )
+            .map { x => if (x == null || x.id.equals("")){ "??" } 
+                        else { x.id }
+                }
     var spacing = scala.collection.mutable.Seq[Int]()++header.map(_.length)
     var results:Seq[Row] = output.toSeq
     var haveUncertainLine = false;

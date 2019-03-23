@@ -7,8 +7,8 @@ import mimir.exec.mode.{WorldBits,TupleBundle}
 
 class SampleResultIterator(
   val src: ResultIterator, 
-  val tupleSchema: Seq[(String, Type)],
-  val nonDet: Set[String],
+  val tupleSchema: Seq[(ID, Type)],
+  val nonDet: Set[ID],
   val numSamples: Int
 )
   extends ResultIterator
@@ -37,9 +37,9 @@ class SampleResultIterator(
 
 case class SampleRow(input: Row, source: SampleResultIterator) extends Row
 {
-  def annotation(name: String): PrimitiveValue = input.annotation(name)
+  def annotation(name: ID): PrimitiveValue = input.annotation(name)
   def annotation(idx: Int): PrimitiveValue     = input.annotation(idx)
-  def tupleSchema: Seq[(String, mimir.algebra.Type)] = input.tupleSchema
+  def tupleSchema: Seq[(ID, mimir.algebra.Type)] = input.tupleSchema
 
 
   private def values(v: Int): Seq[(PrimitiveValue, Double)] =

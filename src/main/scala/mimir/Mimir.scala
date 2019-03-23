@@ -11,6 +11,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import scala.collection.JavaConverters._
 
 import sparsity._
+import fastparse.Parsed
 
 import mimir.ctables._
 import mimir.parser._
@@ -61,8 +62,14 @@ object Mimir extends LazyLogging {
     db.metadataBackend.open()
     db.backend.open()
     OperatorTranslation.db = db
-    sback.registerSparkFunctions(db.functions.functionPrototypes.map(el => el._1).toSeq, db.functions)
-    sback.registerSparkAggregates(db.aggregates.prototypes.map(el => el._1).toSeq, db.aggregates)
+    sback.registerSparkFunctions(
+      db.functions.functionPrototypes.map { _._1 }.toSeq,
+      db.functions
+    )
+    sback.registerSparkAggregates(
+      db.aggregates.prototypes.map { _._1 }.toSeq,
+      db.aggregates
+    )
       
     db.initializeDBForMimir();
 
@@ -73,7 +80,7 @@ object Mimir extends LazyLogging {
 
       conf.precache.foreach( (opt) => opt.split(",").foreach( (table) => { 
         output.print(s"Precaching... $table")
-        db.models.prefetchForOwner(table.toUpperCase)
+        db.models.prefetchForOwner(ID.upper(table))
       }))
 
       if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
@@ -154,21 +161,25 @@ object Mimir extends LazyLogging {
     prompt()
     while(parser.hasNext){
       try {
-        val stmt: MimirStatement = parser.next();
+        parser.next() match {
+          case Parsed.Success(stmt, _) => 
+            stmt match {
+              case SQLStatement(sel:  sparsity.statement.Select) => 
+                handleSelect(sel)
+              case SQLStatement(expl: sparsity.statement.Explain)    => 
+                handleExplain(expl)
+              case analyze: Analyze => 
+                handleAnalyze(analyze)
+              case plot: DrawPlot   => 
+                Plot.plot(plot, db, output)
+              case compare: Compare => 
+                handleCompare(compare)
+              case _                => 
+                db.update(stmt)
+            }
 
-        stmt match {
-          case SQLStatement(sel:  sparsity.statement.Select) => 
-            handleSelect(sel)
-          case SQLStatement(expl: sparsity.statement.Explain)    => 
-            handleExplain(expl)
-          case analyze: Analyze => 
-            handleAnalyze(analyze)
-          case plot: DrawPlot   => 
-            Plot.plot(plot, db, output)
-          case compare: Compare => 
-            handleCompare(compare)
-          case _                => 
-            db.update(stmt)
+          case f: Parsed.Failure => 
+            output.print(s"Parse Error: ${f.msg}")
         }
 
       } catch {
@@ -311,7 +322,7 @@ object Mimir extends LazyLogging {
           case Some(column) => {
             output.print("==== Analyze Cell ====")
             val explanation = 
-              db.explainer.explainCell(query, token, column) 
+              db.explainer.explainCell(query, token, ID.upper(column))
             printReasons(explanation.reasons)
             output.print("--------")
             output.print("Examples: "+explanation.examples.map(_.toString).mkString(", "))
@@ -355,7 +366,7 @@ object Mimir extends LazyLogging {
       case Seq("show", "tables") => 
         for(table <- db.getAllTables()){ output.print(table.toString); }
       case Seq("show", name) => 
-        db.tableSchema(Name(name)) match {
+        db.tableSchema(ID.upper(name)) match {
           case None => 
             output.print(s"'$name' is not a table")
           case Some(schema) => 

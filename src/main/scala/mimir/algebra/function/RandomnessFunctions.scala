@@ -10,20 +10,18 @@ object RandomnessFunctions
   def register(fr: FunctionRegistry)
   {
 
-    fr.register("RANDOM",
+    fr.register(ID("random"),
       (args: Seq[PrimitiveValue]) => IntPrimitive(prng.nextLong),
       (types: Seq[Type]) => { TInt() }
     )
     
-    fr.registerPassthrough("random",(_) => ???, (_) => TInt())
-
-    fr.register("POSSION", 
+    fr.register(ID("possion"), 
       {
         case Seq(IntPrimitive(m))   => {
-          IntPrimitive(mimir.sql.sqlite.Possion.poisson_helper(m))
+          IntPrimitive(mimir.backend.sqlite.Possion.poisson_helper(m))
         }
         case Seq(FloatPrimitive(m))   => {
-          IntPrimitive(mimir.sql.sqlite.Possion.poisson_helper(m))
+          IntPrimitive(mimir.backend.sqlite.Possion.poisson_helper(m))
         }
         case Seq(NullPrimitive())   => NullPrimitive()
         case x => throw new RAException("Non-numeric parameter to possion: '"+x+"'")
@@ -31,10 +29,10 @@ object RandomnessFunctions
       ((args: Seq[Type]) => TInt())
     )
 
-    fr.register("GAMMA", 
+    fr.register(ID("gamma"), 
       {
         case Seq(FloatPrimitive(k), FloatPrimitive(theta))   => {
-          FloatPrimitive(mimir.sql.sqlite.Gamma.sampleGamma(k, theta))
+          FloatPrimitive(mimir.backend.sqlite.Gamma.sampleGamma(k, theta))
         }
         case Seq(NullPrimitive(), FloatPrimitive(r))   => NullPrimitive()
         case Seq(FloatPrimitive(r), NullPrimitive())   => NullPrimitive()

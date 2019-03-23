@@ -10,15 +10,15 @@ object ShapeWatcher
 {
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model] = 
   {
-    val warningModel = (modelName:String) => db.models.getOption(modelName) match {
+    val warningModel = (modelName:ID) => db.models.getOption(modelName) match {
           case Some(model) => model
           case None => createWarningModel(db, config, modelName)
         }
     val model = config.args match {
       case Seq() => {
-        createWarningModel(db, config, "MIMIR_SHAPE_"+config.schema)
+        createWarningModel(db, config, ID("MIMIR_SHAPE_", config.schema))
       }
-      case Seq(StringPrimitive(modelName)) => warningModel(modelName)
+      case Seq(StringPrimitive(modelName)) => warningModel(ID(modelName))
       case Seq(Var(modelName)) =>  warningModel(modelName)
     }
     
@@ -27,11 +27,11 @@ object ShapeWatcher
     )
   }
   
-  private def createWarningModel(db: Database, config: MultilensConfig, modelName:String) = {
+  private def createWarningModel(db: Database, config: MultilensConfig, modelName:ID) = {
     val facets = DatasetShape.detect(db, config.query)
     val facetTable = modelName
     val facetTableData = HardTable(
-      Seq( "ID" -> TInt(), "FACET" -> TString() ),
+      Seq( ID("ID") -> TInt(), ID("FACET") -> TString() ),
       facets.zipWithIndex
             .map { case (facet, id) => 
               Seq(IntPrimitive(id), StringPrimitive(facet.toJson.toString))
@@ -43,19 +43,19 @@ object ShapeWatcher
   
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator = 
   {
-    val modelName = config.args match {
-      case Seq() =>  "MIMIR_SHAPE_"+config.schema
+    val modelName:ID = config.args match {
+      case Seq() =>  ID("MIMIR_SHAPE_", config.schema)
       case Seq(Var(modelN)) => modelN
-      case Seq(StringPrimitive(modelN)) => modelN
+      case Seq(StringPrimitive(modelN)) => ID(modelN)
     }
     val facetTable = modelName
     var base:Operator = HardTable(
-      Seq("TABLE_NAME" -> TString()),
-      Seq(Seq(StringPrimitive(config.schema.toUpperCase)))
+      Seq( ID("TABLE_NAME") -> TString()),
+      Seq(Seq(StringPrimitive(config.schema.id)))
     )
     db.query(db.table(facetTable)) { result =>
       for(row <- result){ 
-        val facet = DatasetShape.parse(row("FACET").asString)
+        val facet = DatasetShape.parse(row(ID("FACET")).asString)
 
         // First check if the facet is applicable.
         val warnings = facet.test(db, config.query)
@@ -69,7 +69,7 @@ object ShapeWatcher
               modelName, 
               BoolPrimitive(true), 
               StringPrimitive(warning), 
-              Seq(row("ID"), StringPrimitive(warning))
+              Seq(row(ID("ID")), StringPrimitive(warning))
             )
           }
         }
@@ -81,24 +81,24 @@ object ShapeWatcher
   {
     HardTable(
       Seq( 
-        "TABLE_NAME" -> TString(), 
-        "ATTR_NAME"  -> TString(),
-        "IS_KEY"     -> TBool(),
-        "ATTR_TYPE"  -> TType()
+        ID("TABLE_NAME") -> TString(), 
+        ID("ATTR_NAME")  -> TString(),
+        ID("IS_KEY")     -> TBool(),
+        ID("ATTR_TYPE")  -> TType()
       ),
       db.typechecker.schemaOf(config.query).map { case (col, t) =>
         Seq(
-          StringPrimitive(config.schema),  //Table Name
-          StringPrimitive(col),            //Column Name
-          BoolPrimitive(false),            //Is Key?
-          TypePrimitive(t)                 //Column Type
+          StringPrimitive(config.schema.id),  //Table Name
+          StringPrimitive(col.id),            //Column Name
+          BoolPrimitive(false),               //Is Key?
+          TypePrimitive(t)                    //Column Type
         )
       }
     )
   }
 
-  def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] = 
-    if(table.toLowerCase.equals(config.schema.toLowerCase)){
+  def viewFor(db: Database, config: MultilensConfig, table: ID): Option[Operator] = 
+    if(table.equals(config.schema)){
       Some(config.query)
     } else {
       None

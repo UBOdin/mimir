@@ -49,13 +49,13 @@ case class CreateLens(
 case class PlotLine(
   x: Expression,
   y: Expression,
-  args: Seq[(String -> sparsity.expression.PrimitiveValue)]
-) extends MimirStatement
+  args: Seq[(String, sparsity.expression.PrimitiveValue)]
+)
 
 case class DrawPlot(
   body: FromElement,
   lines: Seq[PlotLine],
-  args: Seq[(String -> sparsity.expression.PrimitiveValue)]
+  args: Seq[(String, sparsity.expression.PrimitiveValue)]
 ) extends MimirStatement
 
 case class Feedback(
@@ -69,7 +69,7 @@ case class Load(
   file: File,
   table: Option[Name],
   format: Option[Name],
-  args: Seq[sparsity.expression.Expression]
+  args: Seq[(String, String)]
 ) extends MimirStatement
 
 case class DropLens(

@@ -6,7 +6,7 @@ import mimir.ctables.CTPercolator
 import mimir.provenance.Provenance
 
 class ViewMetadata(
-  val name: Name,
+  val name: ID,
   val query: Operator,
   val isMaterialized: Boolean,
   db: Database
@@ -23,7 +23,7 @@ class ViewMetadata(
       schema.map { case (col, _) => ProjectArg(col, Var(col)) } ++ 
       schemaWith(Set(ViewAnnotation.PROVENANCE)).zipWithIndex.map { case ((col, _), idx) => 
         ProjectArg(
-          CTPercolator.mimirColDeterministicColumnPrefix+col,
+          CTPercolator.mimirColDeterministicColumn(col),
           Comparison(Cmp.Eq,
             Arithmetic(Arith.BitAnd,
               Var(ViewAnnotation.taintBitVectorColumn),
@@ -59,16 +59,16 @@ class ViewMetadata(
         Table(name, name, materializedSchema, Seq()))
   }
 
-  def provenanceCols: Seq[String] = 
+  def provenanceCols: Seq[ID] = 
     Provenance.compile(query)._2
 
-  def schema: Seq[(Name, Type)] =
+  def schema: Seq[(ID, Type)] =
   {
     //XXX: No More HACK!  Type Inference has become an adaptive schema
     db.typechecker.schemaOf(query)
   }
 
-  def schemaWith(requiredAnnotations:Set[ViewAnnotation.T]) =
+  def schemaWith(requiredAnnotations:Set[ViewAnnotation.T]): Seq[(ID, Type)] =
   {
     val sch = schema
     val prov = Provenance.compile(query)._2.map { (_, TRowId()) }
@@ -76,7 +76,7 @@ class ViewMetadata(
     sch ++ (
       if(requiredAnnotations(ViewAnnotation.TAINT)) {
         (sch++prov).map { col => 
-          (CTPercolator.mimirColDeterministicColumnPrefix + col._1, TBool())
+          (CTPercolator.mimirColDeterministicColumn(col._1), TBool())
         }++
         Seq((CTPercolator.mimirRowDeterministicColumnName, TBool()))
       } else { None }
@@ -104,6 +104,6 @@ object ViewAnnotation
 {
   type T = Value
   val BEST_GUESS, TAINT, TAINT_BITS, PROVENANCE, SAMPLES, OTHER = Value
-  val taintBitVectorColumn = "MIMIR_DET_BIT_VECTOR"
+  val taintBitVectorColumn = ID("MIMIR_DET_BIT_VECTOR")
 }
 

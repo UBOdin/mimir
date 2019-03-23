@@ -10,8 +10,8 @@ trait NoArgModel
 
 trait ModelCache
 {
-  val cache = scala.collection.mutable.Map[String,PrimitiveValue]()
-  def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : String
+  val cache = scala.collection.mutable.Map[ID,PrimitiveValue]()
+  def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : ID
   def getCache(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) : Option[PrimitiveValue] = {
     cache.get(getCacheKey(idx,args,hints))
   }

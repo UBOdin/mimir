@@ -18,7 +18,9 @@ class BestGuessVGTerm(db:Database)
   override def xFunc(): Unit = 
   {
     try {
-      val modelName = value_text(0).toUpperCase
+      // Going to assume that this function is only ever created
+      // by Mimir itself, so we can treat the argument as case sensitive
+      val modelName = ID(value_text(0))
       val idx = value_int(1)
 
       val model = db.models.get(modelName)
@@ -43,7 +45,9 @@ class BestGuessVGTerm(db:Database)
         e.printStackTrace
         var paramsStr: String = "";
         try{
-          val modelName = value_text(0).toUpperCase
+          // Going to assume that this function is only ever created
+          // by Mimir itself, so we can treat the argument as case sensitive
+          val modelName = ID(value_text(0))
           paramsStr += modelName
           val idx = value_int(1)
           paramsStr += ", " + idx 
@@ -78,7 +82,9 @@ class SampleVGTerm(db:Database)
   override def xFunc(): Unit = 
   {
     try {
-      val modelName = value_text(0).toUpperCase
+      // Going to assume that this function is only ever created
+      // by Mimir itself, so we can treat the argument as case sensitive
+      val modelName = ID(value_text(0))
       val idx = value_int(1)
       val seed = value_int(2)
 
@@ -115,7 +121,9 @@ class AcknowledgedVGTerm(db:Database)
   override def xFunc(): Unit = 
   {
     try {
-      val modelName = value_text(0).toUpperCase
+      // Going to assume that this function is only ever created
+      // by Mimir itself, so we can treat the argument as case sensitive
+      val modelName = ID(value_text(0))
       val idx = value_int(1)
 
       val model = db.models.get(modelName)
@@ -143,7 +151,9 @@ class DomainVGTerm(db:Database)
   override def xFunc(): Unit = 
   {
     try {
-      val modelName = value_text(0).toUpperCase
+      // Going to assume that this function is only ever created
+      // by Mimir itself, so we can treat the argument as case sensitive
+      val modelName = ID(value_text(0))
       val idx = value_int(1)
       val seed = value_int(2)
 
@@ -182,32 +192,32 @@ object VGTermFunctions
   extends LazyLogging
 {
 
-  def bestGuessVGTermFn = "BEST_GUESS_VGTERM"
-  def sampleVGTermFn = "SAMPLE_VGTERM"
-  def acknowledgedVGTermFn = "ACKNOWLEDGED_VGTERM"
-  def domainVGTermFn = "DOMAIN_VGTERM"
+  def bestGuessVGTermFn    = ID("best_guess_vgterm")
+  def sampleVGTermFn       = ID("sample_vgterm")
+  def acknowledgedVGTermFn = ID("acknowledged_vgterm")
+  def domainVGTermFn       = ID("domain_vgterm")
 
   def register(db: Database, conn: java.sql.Connection): Unit =
   {
-    org.sqlite.Function.create(conn, bestGuessVGTermFn, new BestGuessVGTerm(db))
+    org.sqlite.Function.create(conn, bestGuessVGTermFn.id, new BestGuessVGTerm(db))
     db.functions.register(
       bestGuessVGTermFn, 
       (args) => { throw new RAException(s"Mimir Cannot Execute VGTerm Functions Internally: $bestGuessVGTermFn:$args") },
       (_) => TAny()
     )
-    org.sqlite.Function.create(conn, sampleVGTermFn, new SampleVGTerm(db))
+    org.sqlite.Function.create(conn, sampleVGTermFn.id, new SampleVGTerm(db))
     db.functions.register(
       sampleVGTermFn, 
       (args) => { throw new RAException(s"Mimir Cannot Execute VGTerm Functions Internally: $sampleVGTermFn:$args") },
       (_) => TAny()
     )
-    org.sqlite.Function.create(conn, acknowledgedVGTermFn, new AcknowledgedVGTerm(db))
+    org.sqlite.Function.create(conn, acknowledgedVGTermFn.id, new AcknowledgedVGTerm(db))
     db.functions.register(
       acknowledgedVGTermFn, 
       (args) => { throw new RAException(s"Mimir Cannot Execute VGTerm Functions Internally: $acknowledgedVGTermFn:$args") },
       (_) => TBool()
     )
-    org.sqlite.Function.create(conn, domainVGTermFn, new DomainVGTerm(db))
+    org.sqlite.Function.create(conn, domainVGTermFn.id, new DomainVGTerm(db))
     db.functions.register(
       domainVGTermFn, 
       (args) => { throw new RAException(s"Mimir Cannot Execute VGTerm Functions Internally: $domainVGTermFn:$args") },
@@ -221,7 +231,7 @@ object VGTermFunctions
       logger.debug(s"Specializing: $model;$idx[${args.mkString(",")}][${hints.mkString(",")}]")
         Function(
           bestGuessVGTermFn, 
-          Seq(StringPrimitive(model.name), IntPrimitive(idx))++
+          Seq(StringPrimitive(model.name.id), IntPrimitive(idx))++
             args.map(specialize(_))++
             hints.map(specialize(_))
         )
@@ -229,7 +239,7 @@ object VGTermFunctions
         Function(
           sampleVGTermFn,
           Seq(
-              StringPrimitive(model.name), 
+              StringPrimitive(model.name.id), 
               IntPrimitive(idx), 
               specialize(seed)
             )++
@@ -240,7 +250,7 @@ object VGTermFunctions
         Function(
           acknowledgedVGTermFn,
           Seq(
-              StringPrimitive(model.name), 
+              StringPrimitive(model.name.id), 
               IntPrimitive(idx)
             )++
             args.map(specialize(_))
@@ -248,7 +258,7 @@ object VGTermFunctions
       case DomainDumper(model, idx, args, hints) => 
         Function(
           domainVGTermFn,
-          Seq(StringPrimitive(model.name), IntPrimitive(idx))++
+          Seq(StringPrimitive(model.name.id), IntPrimitive(idx))++
             args.map(specialize(_))++
             hints.map(specialize(_))
         )

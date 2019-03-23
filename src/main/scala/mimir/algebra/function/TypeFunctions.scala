@@ -14,14 +14,14 @@ object TypeFunctions
   
   def register(fr: FunctionRegistry)
   {
-    fr.register("MIMIR_MAKE_ROWID", 
+    fr.register(ID("mimir_make_rowid"), 
       joinRowIds(_: Seq[PrimitiveValue]),
       ((args: Seq[Type]) => TRowId())
     )
 
-    for(functionName <- Seq("CAST", "MIMIRCAST")){
+    for(functionName <- Seq("cast", "mimircast")){
       fr.register(
-        functionName,
+        ID(functionName),
         (params: Seq[PrimitiveValue]) => {
           params match {
             case Seq(x, TypePrimitive(t)) => Cast(t, x)
@@ -32,9 +32,9 @@ object TypeFunctions
       )
     }
 
-    for(functionName <- Seq("DATE", "TO_DATE")){
+    for(functionName <- Seq("date", "to_date")){
       fr.register(
-        functionName,
+        ID(functionName),
         (params: Seq[PrimitiveValue]) => 
             { TextUtils.parseDate(params.head.asString) },
         _ match {
@@ -44,9 +44,9 @@ object TypeFunctions
       )
     }
 
-    for(functionName <- Seq("INTERVAL", "TO_INTERVAL")){
+    for(functionName <- Seq("interval", "to_interval")){
       fr.register(
-        functionName,
+        ID(functionName),
         (params: Seq[PrimitiveValue]) => 
             { TextUtils.parseInterval(params.head.asString) },
         _ match {

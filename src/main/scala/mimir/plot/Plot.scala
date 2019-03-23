@@ -15,13 +15,14 @@ import mimir.exec._
 import mimir.exec.result._
 import mimir.util._
 import mimir.util.JsonUtils.primitiveValueWrites
+import mimir.parser.DrawPlot
 
 object Plot
   extends LazyLogging
 {
 
   type Config = Map[String, PrimitiveValue]
-  type Line = (String, String, Config)
+  type Line = (ID, ID, Config)
 
   def value: (PrimitiveValue => Object) = {
     case NullPrimitive() => 0:java.lang.Long
@@ -37,23 +38,24 @@ object Plot
     case TypePrimitive(t) => t
   }
 
-  def plot(spec: mimir.sql.DrawPlot, db: Database, console: OutputFormat)
+  def plot(spec: DrawPlot, db: Database, console: OutputFormat)
   {
-    val convertConfig = (in:java.util.Map[String,net.sf.jsqlparser.expression.PrimitiveValue]) => {
-      in.asScala.map { field => (field._1.toUpperCase -> db.sql.convert(field._2)) }.toMap
+    val convertConfig = (in: Seq[(String,sparsity.expression.PrimitiveValue)]) => {
+      in.map { case (arg, value) => (arg.toUpperCase -> db.sqlToRA(value)) }.toMap
     }
 
-    var dataQuery = spec.getSource match {
-      case q:net.sf.jsqlparser.statement.select.SubSelect =>
-        db.sql.convert(q.getSelectBody())
-      case q:net.sf.jsqlparser.schema.Table => 
-        db.table(SqlUtils.canonicalizeIdentifier(q.getName()))
+    var dataQuery = spec.body match {
+      case q:sparsity.select.FromSelect =>
+        db.sqlToRA(q.body)
+      case sparsity.select.FromTable(schema, table, _) => 
+        db.table(ID.upper(table))
+      case q:sparsity.select.FromJoin => ???
     }
-    var globalSettings = convertConfig(spec.getConfig())
+    var globalSettings = convertConfig(spec.args)
 
-    val lines: Seq[(String, String, Config)] =
+    val lines: Seq[(ID, ID, Config)] =
       Heuristics.applyLineDefaults(
-        if(spec.getLines.isEmpty){
+        if(spec.lines.isEmpty){
           val (newDataQuery, chosenLines, newGlobalSettings) = 
             Heuristics.pickDefaultLines(dataQuery, globalSettings, db)
 
@@ -66,22 +68,23 @@ object Plot
           val sch = db.typechecker.schemaOf(dataQuery)
           var extraColumnCounter = 0;
 
-          val convertExpression = (raw: net.sf.jsqlparser.expression.Expression) => {
-            db.sql.convert(raw, { x => x }) match {
+          val convertExpression:(sparsity.expression.Expression => ID) = 
+            (raw: sparsity.expression.Expression) => {
+            db.sqlToRA(raw, db.sqlToRA.literalBindings) match {
               case Var(vn) => vn
               case expr => {
                 extraColumnCounter += 1
-                val column = s"PLOT_EXPRESSION_$extraColumnCounter"
-                dataQuery = dataQuery.addColumn( column -> expr )
+                val column = ID(s"PLOT_EXPRESSION_$extraColumnCounter")
+                dataQuery = dataQuery.addColumnsByID( column -> expr )
                 column
               }
             }
           }
 
-          spec.getLines.asScala.map { line =>
-            val x = convertExpression(line.getX())
-            val y = convertExpression(line.getY())
-            val args = convertConfig(line.getConfig())
+          spec.lines.map { line =>
+            val x = convertExpression(line.x)
+            val y = convertExpression(line.x)
+            val args = convertConfig(line.args)
             (x, y, args)
           }
         },
@@ -98,11 +101,11 @@ object Plot
       logger.trace(s"QUERY: $simplifiedQuery")
       val globalSettingsJson = Json.toJson(
         globalSettings ++ 
-        Map("DEFAULTSAVENAME" -> StringPrimitive(QueryNamer(simplifiedQuery)))
+        Map("DEFAULTSAVENAME" -> StringPrimitive(QueryNamer(simplifiedQuery).id))
       )
 
       val linesJson = Json.toJson(
-        lines.map { case (x, y, config) => Json.arr(Json.toJson(x), Json.toJson(y), Json.toJson(config)) }
+        lines.map { case (x, y, config) => Json.arr(Json.toJson(x.id), Json.toJson(y.id), Json.toJson(config)) }
       )
 
       val warningLines: JsValue = 
@@ -135,7 +138,7 @@ object Plot
               "GLOBAL" -> globalSettingsJson,
               "LINES" -> linesJson,
               "RESULTS" -> Json.toJson(
-                dataQuery.columnNames.map { col => col -> results.map { _(col) } }.toMap
+                dataQuery.columnNames.map { col => col.id -> results.map { _(col) } }.toMap
               ),
               "WARNINGS" -> Json.toJson(
                 warningLines

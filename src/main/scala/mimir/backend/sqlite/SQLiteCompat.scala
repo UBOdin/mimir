@@ -41,14 +41,14 @@ object SQLiteCompat extends LazyLogging{
     org.sqlite.Function.create(conn, "METOLOCDST",MeToLocationDistance)
   }
   
-  def getTableSchema(conn:java.sql.Connection, table: String): Option[Seq[(String, Type)]] =
+  def getTableSchema(conn:java.sql.Connection, table: ID): Option[Seq[(ID, Type)]] =
   {
     // Hardcoded table schemas:
-    table.toUpperCase match {
-      case "SQLITE_MASTER" => 
+    table match {
+      case ID("SQLITE_MASTER") => 
         return Some(Seq(
-            ("NAME", TString()),
-            ("TYPE", TString())
+            (ID("NAME"), TString()),
+            (ID("TYPE"), TString())
           ))
       case _ => ()
     }
@@ -57,7 +57,7 @@ object SQLiteCompat extends LazyLogging{
     val ret = stmt.executeQuery(s"PRAGMA table_info('$table')")
     stmt.closeOnCompletion()
     val result = JDBCUtils.extractAllRows(ret).map( (x) => { 
-      val name = x(1).asString.toUpperCase.trim
+      val name = ID.upper(x(1).asString.trim)
       val rawType = x(2).asString.trim
       val baseType = rawType.split("\\(")(0).trim
       val inferredType = try {
@@ -73,7 +73,7 @@ object SQLiteCompat extends LazyLogging{
       (name, inferredType)
     })
 
-    if(result.hasNext){ Some(result.toList) } else { None }
+    if(result.hasNext){ Some(result.toSeq) } else { None }
   }
 }
 

@@ -8,19 +8,19 @@ import mimir.optimizer.OperatorOptimization
 
 object ProjectRedundantColumns extends OperatorOptimization {
 
-  private def projectIfNeeded(oper: Operator, dependencies: Set[String]) = 
+  private def projectIfNeeded(oper: Operator, dependencies: Set[ID]) = 
   {
     val existingColumns = oper.columnNames
     if(existingColumns.forall( dependencies contains _ )){ oper }
     else {
-      OperatorUtils.projectColumns(dependencies.toList, oper)
+      oper.projectByID( dependencies.toSeq:_* )
     }
   }
 
   def apply(o: Operator): Operator = 
     apply(o, o.columnNames.toSet)
 
-  def apply(o: Operator, dependencies: Set[String]): Operator =
+  def apply(o: Operator, dependencies: Set[ID]): Operator =
   {
     o match {
       case proj@Project(args, Select(condition, source)) => {
@@ -53,22 +53,6 @@ object ProjectRedundantColumns extends OperatorOptimization {
             toSet
 
         Project( newArgs, apply(source, childDependencies) )
-      }
-      
-      case Annotate(subj,invisScm) => {
-        Annotate(apply(subj),invisScm)
-      }
-      
-			case Recover(subj,invisScm) => {
-        val provSelApl = apply(subj)
-        new Recover(provSelApl, invisScm)
-      }
-      
-      
-       case ProvenanceOf(psel) => {
-        val provSelApl = apply(psel)
-        val provApl = new ProvenanceOf(provSelApl)
-        provApl
       }
       
       case Select(condition, source) => {

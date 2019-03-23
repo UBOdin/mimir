@@ -9,7 +9,7 @@ object ExpressionUtils {
 	 * Extract the set of Var() terms (column references) in
 	 * the specified expression
 	 */
-	def getColumns(e: Expression): Set[String] = 
+	def getColumns(e: Expression): Set[ID] = 
   {
 		e match {
 			case Var(id) => Set(id)
@@ -21,7 +21,7 @@ object ExpressionUtils {
    * Extract the set of Function() names referenced in the
    * specified expression
    */
-  def getFunctions(e: Expression): Set[String] = 
+  def getFunctions(e: Expression): Set[ID] = 
   {
     e match {
       case Function(fn, args) => Set(fn) ++ args.flatMap(getFunctions(_)).toSet
@@ -51,7 +51,7 @@ object ExpressionUtils {
 	 * if(A){ X } else { if(B){ Y } else { Z } }
 	 */
 	def makeCaseExpression(
-    whenThenClauses: List[(Expression, Expression)], 
+    whenThenClauses: Seq[(Expression, Expression)], 
 		elseClause: Expression
   ): Expression =
 	{

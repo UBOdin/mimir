@@ -1,5 +1,6 @@
 package mimir.algebra
 
+
 trait ExpressionConstructors
 {
   def toExpression: Expression
@@ -12,6 +13,8 @@ trait ExpressionConstructors
     eq(FloatPrimitive(other))
   def eq(other: Expression): Expression =
     Comparison(Cmp.Eq, toExpression, other)
+  def eq(other: ID): Expression =
+    eq(Var(other))
 
   def in(other: Seq[Expression]): Expression =
     ExpressionUtils.makeInTest(toExpression, other)

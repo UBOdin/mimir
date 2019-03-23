@@ -7,8 +7,8 @@ case class LazyRow(
   input: Row, 
   tupleDefinition: Seq[Row=>PrimitiveValue],
   annotationDefinition: Seq[Row=>PrimitiveValue],
-  val tupleSchema: Seq[(String, Type)],
-  val annotationIndexes: Map[String,Int]
+  val tupleSchema: Seq[(ID, Type)],
+  val annotationIndexes: Map[ID,Int]
 ) extends Row {
   def tuple: Seq[PrimitiveValue] = 
     tupleDefinition.map { _(input) }
@@ -22,7 +22,7 @@ case class LazyRow(
       )
     }
   }
-  def annotation(name: String): PrimitiveValue = 
+  def annotation(name: ID): PrimitiveValue = 
     annotation(annotationIndexes(name))
   def annotation(idx: Int): PrimitiveValue = 
     annotationDefinition(idx)(input)

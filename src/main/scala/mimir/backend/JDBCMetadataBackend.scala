@@ -3,10 +3,9 @@ package mimir.backend;
 import java.sql._
 
 import mimir.Database
-import mimir.Methods
 import mimir.algebra._
 import mimir.util.JDBCUtils
-import mimir.sql.sqlite._
+import mimir.backend.sqlite._
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
@@ -23,7 +22,7 @@ class JDBCMetadataBackend(val backend: String, val filename: String)
 
   def driver() = backend
 
-  val tableSchemas: scala.collection.mutable.Map[String, Seq[(String, Type)]] = mutable.Map()
+  val tableSchemas: scala.collection.mutable.Map[ID, Seq[(ID, Type)]] = mutable.Map()
 
   def open() = 
   {
@@ -37,10 +36,6 @@ class JDBCMetadataBackend(val backend: String, val filename: String)
             var c = java.sql.DriverManager.getConnection("jdbc:sqlite:" + path)
             SQLiteCompat.registerFunctions(c)
             c
-
-
-          case "oracle" =>
-            Methods.getConn()
 
           case x =>
             println("Unsupported backend! Exiting..."); System.exit(-1); null
@@ -186,7 +181,7 @@ class JDBCMetadataBackend(val backend: String, val filename: String)
       }
     })
   }
-  def selectInto(table: String, query: String): Unit =
+  def selectInto(table: ID, query: String): Unit =
   {
     backend match {
       case "sqlite" => 
@@ -194,7 +189,7 @@ class JDBCMetadataBackend(val backend: String, val filename: String)
     }
   }
   
-  def getTableSchema(table: String): Option[Seq[(String, Type)]] =
+  def getTableSchema(table: ID): Option[Seq[(ID, Type)]] =
   {
     this.synchronized({
       if(conn == null) {
@@ -204,10 +199,10 @@ class JDBCMetadataBackend(val backend: String, val filename: String)
       tableSchemas.get(table) match {
         case x: Some[_] => x
         case None =>
-          val tables = this.getAllTables().map{(x) => x.toUpperCase}
-          if(!tables.contains(table.toUpperCase)) return None
+          val tables = this.getAllTables()
+          if(!tables.contains(table)) return None
 
-          val cols: Option[Seq[(String, Type)]] = backend match {
+          val cols: Option[Seq[(ID, Type)]] = backend match {
             case "sqlite" => {
               // SQLite doesn't recognize anything more than the simplest possible types.
               // Type information is persisted but not interpreted, so conn.getMetaData() 
@@ -215,19 +210,6 @@ class JDBCMetadataBackend(val backend: String, val filename: String)
               // SQLite-specific PRAGMA operation.
               SQLiteCompat.getTableSchema(conn, table)
             }
-            case "oracle" => 
-              val columnRet = conn.getMetaData().getColumns(null, "ARINDAMN", table, "%")  // TODO Generalize
-              var ret = List[(String, Type)]()
-              while(columnRet.isBeforeFirst()){ columnRet.next(); }
-              while(!columnRet.isAfterLast()){
-                ret = ret ++ List((
-                  columnRet.getString("COLUMN_NAME").toUpperCase,
-                  JDBCUtils.convertSqlType(columnRet.getInt("DATA_TYPE"))
-                  ))
-                columnRet.next()
-              }
-              columnRet.close()
-              Some(ret)
           }
           
           cols match { case None => (); case Some(s) => tableSchemas += table -> s }
@@ -236,27 +218,24 @@ class JDBCMetadataBackend(val backend: String, val filename: String)
     })
   }
 
-  def getAllTables(): Seq[String] = {
+  def getAllTables(): Seq[ID] = {
     this.synchronized({
       if(conn == null) {
         throw new SQLException("Trying to use unopened connection!")
       }
 
-      val tableNames = new ListBuffer[String]()
+      val tableNames = new ListBuffer[ID]()
       val metadata = conn.getMetaData()
       val tables = backend match {
         case "sqlite" => {
-          tableNames.append("SQLITE_MASTER")
+          tableNames.append(ID("SQLITE_MASTER"))
           metadata.getTables(null, null, "%", null)
-        }
-        case "oracle" => {
-          metadata.getTables(null, "ARINDAMN", "%", null) // TODO Generalize
         }
       }
 
 
       while(tables.next()) {
-        tableNames.append(tables.getString("TABLE_NAME"))
+        tableNames.append(ID(tables.getString("TABLE_NAME")))
       }
 
       tables.close()
@@ -281,7 +260,6 @@ class JDBCMetadataBackend(val backend: String, val filename: String)
       case "sqlite" if inliningAvailable => 
         VGTermFunctions.specialize(SpecializeForSQLite(q, db))
       case "sqlite" => SpecializeForSQLite(q, db)
-      case "oracle" => q
     }
   }
 
@@ -324,17 +302,21 @@ class JDBCMetadataBackend(val backend: String, val filename: String)
   {
     backend match {
       case "sqlite" => 
-        Project(
-          Seq(
-            ProjectArg("TABLE_NAME", Var("NAME"))
-          ),
-          Select(
-            ExpressionUtils.makeInTest(Var("TYPE"), Seq(StringPrimitive("table"), StringPrimitive("view"))),
-            Table("SQLITE_MASTER", "SQLITE_MASTER", Seq(("NAME", TString()), ("TYPE", TString())), Seq())
+        val tableDirectory = 
+          Table(
+            ID("SQLITE_MASTER"), 
+            ID("SQLITE_MASTER"), 
+            Seq(
+              ID("NAME") -> TString(),
+              ID("TYPE") -> TString()
+            ), 
+            Seq()
           )
-        )
+        val t = Var(ID("TYPE"))
 
-      case "oracle" => ???
+        tableDirectory
+          .filter { t.eq("table").or { t.eq("view") } }
+          .map { "TABLE_NAME" -> Var(ID("NAME")) }
     }
   }
   def listAttrsQuery: Operator = 
@@ -342,16 +324,16 @@ class JDBCMetadataBackend(val backend: String, val filename: String)
     backend match {
       case "sqlite" => {
         HardTable(Seq(
-            ("TABLE_NAME", TString()), 
-            ("ATTR_NAME", TString()),
-            ("ATTR_TYPE", TString()),
-            ("IS_KEY", TBool())
+            ID("TABLE_NAME") -> TString(), 
+            ID("ATTR_NAME") -> TString(),
+            ID("ATTR_TYPE") -> TString(),
+            ID("IS_KEY") -> TBool()
           ),
           getAllTables().flatMap { table =>
             getTableSchema(table).get.map { case (col, t) =>
               Seq(
-                StringPrimitive(table),
-                StringPrimitive(col),
+                StringPrimitive(table.id),
+                StringPrimitive(col.id),
                 TypePrimitive(t),
                 BoolPrimitive(false)
               )
@@ -359,8 +341,6 @@ class JDBCMetadataBackend(val backend: String, val filename: String)
           }
         )
       }
-
-      case "oracle" => ???
     }
   }
   

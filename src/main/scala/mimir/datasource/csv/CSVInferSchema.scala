@@ -56,8 +56,8 @@ private[csv] object CSVInferSchema {
     }
 
     val outputSchema = fields ++ Array(
-        StructField(mimir.adaptive.DataSourceErrors.mimirDataSourceErrorColumn, BooleanType, nullable = true), 
-        StructField(mimir.adaptive.DataSourceErrors.mimirDataSourceErrorRowColumn, StringType, nullable = true)) 
+        StructField(mimir.adaptive.DataSourceErrors.mimirDataSourceErrorColumn.id, BooleanType, nullable = true), 
+        StructField(mimir.adaptive.DataSourceErrors.mimirDataSourceErrorRowColumn.id, StringType, nullable = true)) 
     StructType(outputSchema)
   }
 

@@ -9,7 +9,7 @@ import java.sql.SQLException
 import java.util
 
 import mimir.Database
-import mimir.algebra.Type
+import mimir.algebra.{Type,ID}
 import org.apache.commons.csv.{CSVFormat, CSVParser}
 import org.apache.commons.io.IOUtils
 import org.apache.commons.io.input.ReaderInputStream
@@ -18,19 +18,24 @@ import mimir.algebra._
 
 object LoadData extends StrictLogging {
   
-  def handleLoadTableRaw(db: Database, targetTable: Name, sourceFile: URL, options: Map[String,String] = Map(), format:Name = Name("csv")){
-    //we need to handle making data publicly accessible here and adding it to spark for remote connections
-    val path = if(sourceFile.getPath.contains(":/")) sourceFile.getPath.replaceFirst(":/", "://") else sourceFile.getAbsolutePath
-    db.backend.readDataSource(targetTable, format, options, db.tableSchema(targetTable), Some(path)) 
-  }
+  def handleLoadTableRaw(
+    db: Database, 
+    targetTable: ID, 
+    sourceFile: File, 
+    targetSchema:Option[Seq[(ID,Type)]] = None,
+    options: Map[String,String] = Map(), 
+    format:ID = ID("csv")
+  ){
 
-  def handleLoadTableRaw(db: Database, targetTable: Name, targetSchema:Option[Seq[(Name,Type)]], sourceFile: URL, options: Map[String,String], format:Name){
-    val schema = targetSchema match {
+    val schema = (targetSchema match {
       case None => db.tableSchema(targetTable)
       case _ => targetSchema
-    }
+    })
     //we need to handle making data publicly accessible here and adding it to spark for remote connections
-    val path = if(sourceFile.getPath.startsWith("jdbc:")) None else if(sourceFile.getPath.contains(":/")) Some(sourceFile.getPath.replaceFirst(":/", "://")) else Some(sourceFile.getAbsolutePath)
-    db.backend.readDataSource(targetTable, format, options, schema, path) 
+    val path = 
+      if(sourceFile.getPath.startsWith("jdbc:")) { None }
+      else if(sourceFile.getPath.contains(":/")) { Some(sourceFile.getPath.replaceFirst(":/", "://")) }
+      else                                       { Some(sourceFile.getAbsolutePath) }
+    db.backend.readDataSource(targetTable.id, format.id, options, schema , path) 
   }
 }

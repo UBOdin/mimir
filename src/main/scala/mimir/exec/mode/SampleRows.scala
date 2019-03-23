@@ -16,7 +16,7 @@ class StatsQuery(
   val stats: Seq[SampleRows.StatArg],
   source: Operator
 ) extends Project(stats.map { case (alias, stat, args) =>
-    ProjectArg(alias, Function("STAT_"+stat.toString, args))
+    ProjectArg(alias, Function(ID.lower(s"stat_$stat"), args))
   }, source)
 
 class SampleRows(
@@ -25,9 +25,9 @@ class SampleRows(
   extends CompileMode[ResultIterator]
   with LazyLogging
 {
-  type MetadataT = Seq[String]
+  type MetadataT = Seq[ID]
 
-  def rewrite(db: Database, rawQuery: Operator): (Operator, Seq[String], Seq[String]) =
+  def rewrite(db: Database, rawQuery: Operator): (Operator, Seq[ID], Seq[ID]) =
   {
     var query = rawQuery
 
@@ -84,7 +84,7 @@ class SampleRows(
     return (query, baseSchema, provenanceCols)
   }
 
-  def compileForWorld(query: Operator, seed: Long, models:(String => Model)): Operator =
+  def compileForWorld(query: Operator, seed: Long, models:(ID => Model)): Operator =
   {
     (
       query.recurExpressions{ expr:Expression => CTAnalyzer.compileSample(expr, IntPrimitive(seed), models) }.
@@ -98,7 +98,7 @@ class SampleRows(
     }
   }
 
-  def wrap(db: Database, results: ResultIterator, query: Operator, meta: Seq[String]): ResultIterator =
+  def wrap(db: Database, results: ResultIterator, query: Operator, meta: Seq[ID]): ResultIterator =
     results
 }
 
@@ -111,22 +111,22 @@ object SampleRows
     val EXPECTATION, STDDEV, ANYVALUE, CONFIDENCE = Value
   }
 
-  type StatArg = (String, Stat.T, Seq[Expression])
+  type StatArg = (ID, Stat.T, Seq[Expression])
 
-  def defaultStats(schema: Seq[(String, Type)]): Seq[StatArg] =
+  def defaultStats(schema: Seq[(ID, Type)]): Seq[StatArg] =
   {
     schema.flatMap { 
       case (name, (TInt() | TFloat())) => 
         Seq(
-          (name,           Stat.EXPECTATION, Seq(Var(name))),
-          (name+"-STDDEV", Stat.STDDEV,      Seq(Var(name)))
+          (name,               Stat.EXPECTATION, Seq(Var(name))),
+          (ID(name,"_STDDEV"), Stat.STDDEV,      Seq(Var(name)))
         )
       case (name, _) =>
         Seq(
-          (name,           Stat.ANYVALUE,    Seq(Var(name)))
+          (name,               Stat.ANYVALUE,    Seq(Var(name)))
         )
     } ++ Seq(
-          ("CONFIDENCE",   Stat.CONFIDENCE,  Seq())
+          (ID("CONFIDENCE"),   Stat.CONFIDENCE,  Seq())
     )
   }
 
@@ -134,10 +134,10 @@ object SampleRows
   {
     val (alias, stat, args) = fn
     (stat, args) match {
-      case (Stat.EXPECTATION, args) => Seq(AggFunction("AVG",    false, args,  alias))
-      case (Stat.STDDEV,      args) => Seq(AggFunction("STDDEV", false, args,  alias))
-      case (Stat.ANYVALUE,    args) => Seq(AggFunction("FIRST",  false, args,  alias))
-      case (Stat.CONFIDENCE,  _   ) => Seq(AggFunction("COUNT",  false, Seq(), alias))
+      case (Stat.EXPECTATION, args) => Seq(AggFunction(ID("avg"),    false, args,  alias))
+      case (Stat.STDDEV,      args) => Seq(AggFunction(ID("stddev"), false, args,  alias))
+      case (Stat.ANYVALUE,    args) => Seq(AggFunction(ID("first"),  false, args,  alias))
+      case (Stat.CONFIDENCE,  _   ) => Seq(AggFunction(ID("count"),  false, Seq(), alias))
     }
   }
 

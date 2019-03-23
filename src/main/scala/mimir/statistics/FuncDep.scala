@@ -10,6 +10,9 @@ import javax.swing.{JFrame, JPanel, JScrollPane, WindowConstants}
 import java.awt.{BasicStroke, Color, Dimension, Paint, Rectangle, Stroke}
 import java.sql.ResultSet
 
+import sparsity.Name
+import sparsity.statement.{CreateTable, ColumnDefinition, TablePrimaryKey}
+
 import scala.collection.mutable
 
 import com.typesafe.scalalogging.slf4j.Logger
@@ -102,8 +105,8 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
     config.getOrElse("THRESHOLD", FloatPrimitive(0.05)).asDouble
 
   // tables containing data for computations
-  var sch:Seq[(String, Type)] = null // the schema, is a lookup for the type and name
-  var tableName : String = null
+  var sch:Seq[(ID, Type)] = null // the schema, is a lookup for the type and name
+  var tableName : ID = null
   var table:mutable.IndexedSeq[mutable.Buffer[PrimitiveValue]] = null // This table contains the input table
   var countTable:mutable.IndexedSeq[mutable.Map[PrimitiveValue,Long]] = null // contains a count of every occurrence of every value in the column
   var densityTable:mutable.IndexedSeq[Long] = null // gives the density for column, that is percentage of non-null values
@@ -127,7 +130,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
 
   // buildEntities calls all the functions required for ER creation, optionally each function could be called if only part of the computation is required
 
-  def buildEntities(db: Database, query: Operator, tableName : String): Unit = {
+  def buildEntities(db: Database, query: Operator, tableName : ID): Unit = {
     initializeTables(db.typechecker.schemaOf(query), tableName)
     preprocessFDG(db, query)
     constructFDG()
@@ -135,7 +138,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
     // mergeEntities()
   }
 
-  def initializeTables(schema: Seq[(String, Type)],tName : String): Unit =
+  def initializeTables(schema: Seq[(ID, Type)],tName : ID): Unit =
   {
     blackList = mutable.Set[Int]()
     tableName = tName
@@ -999,13 +1002,23 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
 
 object FuncDep {
 
-  val BACKSTORE_TABLE_NAME = "MIMIR_FUNCDEP_BLOBS"
+  val BACKSTORE_TABLE_NAME = ID("MIMIR_FUNCDEP_BLOBS")
 
   def initBackstore(db: mimir.Database)
   {
     if(!db.metadataTableExists(FuncDep.BACKSTORE_TABLE_NAME)){
       db.metadataBackend.update(
-        "CREATE TABLE "+FuncDep.BACKSTORE_TABLE_NAME+"(name varchar(40), data blob, PRIMARY KEY(name))"
+        CreateTable(
+          FuncDep.BACKSTORE_TABLE_NAME.quoted,
+          false, 
+          Seq(
+            ColumnDefinition(Name("name"), Name("varchar(40)"), Seq()),
+            ColumnDefinition(Name("data"), Name("blob"), Seq())
+          ),
+          Seq(
+            TablePrimaryKey(Seq(Name("name")))
+          )
+        )
       )
     }
   }
