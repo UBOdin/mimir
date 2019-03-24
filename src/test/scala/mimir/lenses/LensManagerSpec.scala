@@ -17,20 +17,28 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
   "The Lens Manager" should {
 
     "Be able to create and query missing value lenses" >> {
-      loadCSV("R", Seq(("A", "int"), ("B", "int"), ("C", "int")), new File("test/r_test/r.csv"))
+      loadCSV(
+        "R", 
+        Seq(
+          ("A", "int"), 
+          ("B", "int"), 
+          ("C", "int")
+        ), 
+        "test/r_test/r.csv"
+      )
       queryOneColumn("SELECT B FROM R"){ _.toSeq should contain(NullPrimitive()) }
       update("CREATE LENS SANER AS SELECT * FROM R WITH MISSING_VALUE('B')")
       queryOneColumn("SELECT B FROM SANER"){ _.toSeq should not contain(NullPrimitive()) }
     }
 
     "Produce reasonable views" >> {
-      db.loadTable("CPUSPEED", new File("test/data/CPUSpeed.csv"))
+      db.loadTable(targetTable = Some(ID("CPUSPEED")), sourceFile = "test/data/CPUSpeed.csv")
       val resolved1 = InlineProjections(db.views.resolve(db.table("CPUSPEED")))
       resolved1 must beAnInstanceOf[Project]
       resolved1.children.head must beAnInstanceOf[Limit]
       val resolved2 = resolved1.asInstanceOf[Project]
       val coresColumnId = db.table("CPUSPEED").columnNames.indexOf("CORES")
-      val coresModel = db.models.get("MIMIR_TI_ATTR_CPUSPEED_TI")
+      val coresModel = db.models.get(ID("MIMIR_TI_ATTR_CPUSPEED_TI"))
 
       // Make sure the model name is right.
       // Changes to the way the type inference lens assigns names will need to
@@ -39,22 +47,22 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       coresModel must not be empty
 
       //IF _c7 IS NULL THEN NULL ELSE IF CAST(_c7, int) IS NULL THEN (MIMIR_TI_WARNING_CPUSPEED_TI('CORES', _c7, 'int'))@(NULL) ELSE CAST(_c7, int) END END
-      val castExpr = Function("CAST", List(Var("_c7"), TypePrimitive(TInt())))
-      resolved2.get("CORES") must be equalTo(Some(
+      val castExpr = CastExpression(Var(ID("_c7")), TInt())
+      resolved2.get(ID("CORES")) must be equalTo(Some(
         Conditional(
-            IsNullExpression(Var("_c7")), 
+            IsNullExpression(Var(ID("_c7"))), 
             NullPrimitive(), 
             Conditional(
                 IsNullExpression(castExpr), 
-                DataWarning("MIMIR_TI_WARNING_CPUSPEED_TI", 
+                DataWarning(ID("MIMIR_TI_WARNING_CPUSPEED_TI"), 
                     NullPrimitive(), 
-                    Function("CONCAT", 
+                    Function(ID("concat"), 
                       List(
                           StringPrimitive("Couldn't Cast [ "), 
-                          Var("_c7"), 
+                          Var(ID("_c7")), 
                           StringPrimitive(" ] to int on row "),
                           RowIdVar())), 
-                    Seq(StringPrimitive("CORES"), Var("_c7"), StringPrimitive("int")) ), 
+                    Seq(StringPrimitive("CORES"), Var(ID("_c7")), StringPrimitive("int")) ), 
                 castExpr ) )//VGTerm(coresModel.name, coresColumnId, List(), List())))
       ))
 
@@ -76,7 +84,7 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
         WHERE owner = 'LENS:SANER'
       """){ _.toSeq must not beEmpty }
 
-      val modelNames = db.models.associatedModels("LENS:SANER")
+      val modelNames = db.models.associatedModels(ID("LENS:SANER"))
       modelNames must not beEmpty
 
       update("DROP LENS SANER");

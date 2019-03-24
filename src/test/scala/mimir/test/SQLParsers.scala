@@ -1,38 +1,24 @@
 package mimir.test
 
 import java.io._
-import net.sf.jsqlparser.statement.{Statement}
 import mimir.parser._
+import sparsity.statement.Statement
 
 trait SQLParsers {
 
-  def stmts(f: String): List[Statement] = 
+  def stmts(f: String): Seq[MimirStatement] = 
     stmts(new File(f))
-  def stmts(f: File): List[Statement] = {
-    val p = new MimirJSqlParser(new FileReader(f))
-    var ret = List[Statement]();
-    var s: Statement = null;
+  def stmts(f: File): Seq[MimirStatement] =
+    MimirSQL.Get(new FileReader(f)).toSeq
+  def stmt(s: String) =
+    MimirSQL.Get(s)
 
-    do{
-      s = p.Statement()
-      if(s != null) {
-        ret = s :: ret;
-      }
-    } while(s != null)
-    ret.reverse
-  }
-  def stmt(s: String) = {
-    new MimirJSqlParser(new StringReader(s)).Statement()
-  }
-  def selectStmt(s: String) = {
-    stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-  }
+  def selectStmt(s: String) = 
+    MimirSQL.Select(s)
 
-  def sqlSimpleExpr(s:String) = {
-    new MimirJSqlParser(new StringReader(s)).SimpleExpression()
-  }
-  def sqlBoolExpr(s:String) = {
-    new MimirJSqlParser(new StringReader(s)).Expression()
-  }
+  def sqlSimpleExpr(s:String) = 
+    sparsity.parser.Expression(s)
+  def sqlBoolExpr(s:String) = 
+    sparsity.parser.Expression(s)
 
 }

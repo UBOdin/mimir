@@ -25,7 +25,7 @@ object LoadCSV extends StrictLogging {
   def handleLoadTable(
     db: Database, 
     targetTable: ID, 
-    sourceFile: File, 
+    sourceFile: String, 
     options: Map[String,String] = Map()
   ){
     db.loadTable(
@@ -40,7 +40,7 @@ object LoadCSV extends StrictLogging {
   def handleLoadTableRaw(
     db: Database, 
     targetTable: ID, 
-    sourceFile: File, 
+    sourceFile: String, 
     targetSchema:Option[Seq[(ID,Type)]] = None,
     options: Map[String,String] = Map()
   ) = 

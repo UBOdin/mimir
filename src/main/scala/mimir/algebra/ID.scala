@@ -5,18 +5,49 @@ import scala.language.implicitConversions
 
 /**
  * Generic identifier wrapper for entities in Mimir.  
- * case *sensitive* for now, but decoupling it to make it easier to change 
- * in the future.
  * 
- * - Column / Variable
- * - Table / View / etc...
- * - Mimir Model
- * - Function Names
- * - Aggregate Names
- *
- * In general, we default to using 
- * - UPPERCASE for Columns, Tables, and Models.
- * - lowercase for Functions and Aggregates
+ *************  WARNING WARNING WARNING WARNING **************
+ ****                                                     ****
+ *  READ THIS TEXT COMPLETELY BEFORE DONG ANYTHING WITH IDs  *
+ ****                                                     ****
+ *************  WARNING WARNING WARNING WARNING **************
+ * 
+ ********** BEGIN Message from supreme high leader Oliver ***********
+ * I don't want to see *anywhere* in the code ANY of the following
+ * - [var].id.toUpperCase
+ * - [var].id.toLowerCase
+ * - [var].id.equalsIgnoreCase
+ * or anything along these lines.  In fact, unless you have a 
+ * particularly good reason to do so (several acceptable reasons
+ * listed below), you should NEVER access [var].id.  Acceptable
+ * reasons include:
+ * - You're talking to a backend that is case sensitive (e.g. Spark)
+ * - You're printing debug information.
+ * If you're talking to a mixed-case backend (e.g., GProM), ID
+ * values MUST be treated as quoted.
+ ********** END Message from supreme high leader Oliver ***********
+ * 
+ * In short, ID is an identifier THAT HAS ALREADY BEEN
+ * RESOLVED INTO CASE SENSITIVE FORM.  Broadly, this should be
+ * done with one of the following two methods:
+ * - ID.upper(v)
+ * - ID.lower(v)
+ * Both of these methods work on both String and sparsity.Name
+ * and have the correct behavior for Sparsity Name quoting.
+ * Case-insensitive name resolution methods appear in the following
+ * places:
+ * - Tables: Database.resolveCaseInsensitiveTable
+ * - Columns: Operator.resolveCaseInsensitiveColumn
+ * 
+ * Use ID.upper for the following:
+ * - Column/Variable names
+ * - Table/View names
+ * - Mimir Model names
+ * Use ID.lower for the following:
+ * - Function names
+ * - Aggregate names
+ * 
+ * To convert back to SQL, use [var].quoted.
  */
 
 

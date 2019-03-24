@@ -2,12 +2,13 @@ package mimir.test
 
 import java.io._
 
-import net.sf.jsqlparser.statement.{Statement}
+import sparsity.statement.Statement
 import org.specs2.mutable._
 
 import mimir._
 import mimir.parser._
 import mimir.sql._
+import mimir.backend._
 import mimir.algebra._
 import mimir.util._
 import mimir.exec._
@@ -102,14 +103,10 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
 
   def db = DBTestInstances.get(tempDBName, config)
 
-  def select(s: String) = {
-    stmt(s) match {
-      case sel:net.sf.jsqlparser.statement.select.Select => 
-        db.sql.convert(sel)
-    }
-  }
+  def select(s: String) = 
+    db.sqlToRA(MimirSQL.Select(s))
   def query[T](s: String)(handler: ResultIterator => T): T =
-    db.query(s)(handler)
+    db.query(select(s))(handler)
   def queryOneColumn[T](s: String)(handler: Iterator[PrimitiveValue] => T): T = 
     query(s){ result => handler(result.map(_(0))) }
   def querySingleton(s: String): PrimitiveValue =
@@ -119,7 +116,7 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   def table(t: String) =
     db.table(t)
   def queryMetadata[T](s: String)(handler: ResultIterator => T): T =
-    db.queryMetadata(s)(handler)
+    db.queryMetadata(select(s))(handler)
   def queryOneColumnMetadata[T](s: String)(handler: Iterator[PrimitiveValue] => T): T = 
     queryMetadata(s){ result => handler(result.map(_(0))) }
   def querySingletonMetadata(s: String): PrimitiveValue =
@@ -127,50 +124,59 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   def queryOneRowMetadata(s: String): Row =
     queryMetadata(s){ _.next }
   def metadataTable(t: String) =
-    db.metadataTable(t)
+    db.metadataTable(ID(t))
   def resolveViews(q: Operator) =
     db.views.resolve(q)
   def explainRow(s: String, t: String) = 
   {
-    val query = resolveViews(db.sql.convert(
-      stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-    ))
-    db.explainRow(query, RowIdPrimitive(t))
+    val query = resolveViews(select(s))
+    db.explainer.explainRow(query, RowIdPrimitive(t))
   }
   def explainCell(s: String, t: String, a:String) = 
   {
-    val query = resolveViews(db.sql.convert(
-      stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-    ))
-    db.explainCell(query, RowIdPrimitive(t), a)
+    val query = resolveViews(select(s))
+    db.explainer.explainCell(query, RowIdPrimitive(t), ID(a))
   }
   def explainEverything(s: String) = 
   {
-    val query = resolveViews(db.sql.convert(
-      stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-    ))
+    val query = resolveViews(select(s))
     db.explainer.explainEverything(query)
   }
   def explainAdaptiveSchema(s: String) =
   {
-    val query = resolveViews(db.sql.convert(
-      stmt(s).asInstanceOf[net.sf.jsqlparser.statement.select.Select]
-    ))
+    val query = resolveViews(select(s))
     db.explainer.explainAdaptiveSchema(query, query.columnNames.toSet, true)
   }  
-  def update(s: Statement) = 
+  def update(s: MimirStatement) = 
     db.update(s)
   def update(s: String) = 
     db.update(stmt(s))
-  def loadCSV(table: String, file: File) : Unit =
-    LoadCSV.handleLoadTable(db, table, file)
-  def loadCSV(table: String, schema:Seq[(String,String)], file: File) : Unit =
-    db.loadTable(table, schema, file ) 
-  def loadCSV(table: String, file: File, inferTypes:Boolean, detectHeaders:Boolean) : Unit =
-    db.loadTable(table, file, true, None, inferTypes, detectHeaders)
-  def loadCSV(table: String, schema:Seq[(String,String)], file: File, inferTypes:Boolean, detectHeaders:Boolean) : Unit =
-    db.loadTable(table, file, true, Some(schema.map(el => (el._1, Type.fromString(el._2)))), inferTypes, detectHeaders)
+  def loadCSV(table: String, file: String) : Unit =
+    LoadCSV.handleLoadTable(db, ID(table), file)
+  def loadCSV(table: String, schema:Seq[(String,String)], file: String) : Unit =
+    db.loadTable(
+      targetTable = Some(ID(table)), 
+      targetSchema = Some(schema.map { x => (ID.upper(x._1), Type.fromString(x._2)) }), 
+      sourceFile = file 
+    ) 
+  def loadCSV(table: String, file: String, inferTypes:Boolean, detectHeaders:Boolean) : Unit =
+    db.loadTable(
+      targetTable = Some(ID(table)), 
+      sourceFile = file,
+      force = true,
+      inferTypes = Some(inferTypes),
+      detectHeaders = Some(detectHeaders)
+    )
+  def loadCSV(table: String, schema:Seq[(String,String)], file: String, inferTypes:Boolean, detectHeaders:Boolean) : Unit =
+    db.loadTable(
+      targetTable = Some(ID(table)), 
+      sourceFile = file,
+      targetSchema = Some(schema.map { x => (ID.upper(x._1), Type.fromString(x._2)) }), 
+      force = true,
+      inferTypes = Some(inferTypes),
+      detectHeaders = Some(detectHeaders)
+    )
     
-  def modelLookup(model: String) = db.models.get(model)
+  def modelLookup(model: String) = db.models.get(ID(model))
   def schemaLookup(table: String) = db.tableSchema(table).get
  }

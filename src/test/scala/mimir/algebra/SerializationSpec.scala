@@ -6,6 +6,7 @@ import org.specs2.mutable._
 import mimir.util._
 import mimir.test._
 import mimir.serialization._
+import mimir.parser.SQLStatement
 
 object SqlFilesOnly extends FileFilter {
 
@@ -22,16 +23,43 @@ object SerializationSpec extends SQLTestSpecification("SerializationTest") {
   def reset() =
   {
     db.getAllMatadataTables()
-      .filter( !_.startsWith("MIMIR_") )
-      .filter( !_.equals("SQLITE_MASTER") )
+      .filter( !_.id.startsWith("MIMIR_") )
+      .filter( !_.id.equals("SQLITE_MASTER") )
       .foreach( (x) => db.metadataBackend.update(s"DROP TABLE $x;") );
     Seq("R", "S", "T").map(table => {
       if(db.tableExists(table)) 
-        db.backend.dropTable(table)
+        db.backend.dropTable(ID(table))
     })
-    LoadCSV.handleLoadTableRaw(db, "R", Some(Seq(("A", TInt()), ("B", TInt()))), new File("test/data/serial_r.csv"), Map() );
-    LoadCSV.handleLoadTableRaw(db, "S", Some(Seq(("B", TInt()), ("C", TInt()))), new File("test/data/serial_s.csv"), Map() );
-    LoadCSV.handleLoadTableRaw(db, "T", Some(Seq(("C", TInt()), ("D", TInt()))), new File("test/data/serial_t.csv"), Map() );
+    LoadCSV.handleLoadTableRaw(
+      db, 
+      ID("R"), 
+      "test/data/serial_r.csv", 
+      Some(Seq(
+        ID("A") -> TInt(), 
+        ID("B") -> TInt()
+      )), 
+      Map() 
+    )
+    LoadCSV.handleLoadTableRaw(
+      db, 
+      ID("S"), 
+      "test/data/serial_s.csv", 
+      Some(Seq(
+        ID("B") -> TInt(), 
+        ID("C") -> TInt()
+      )), 
+      Map() 
+    )
+    LoadCSV.handleLoadTableRaw(
+      db, 
+      ID("T"), 
+      "test/data/serial_t.csv", 
+      Some(Seq(
+        ID("C") -> TInt(), 
+        ID("D") -> TInt()
+      )), 
+      Map() 
+    )
   }
 
   "The Algebra Serializer" should {
@@ -46,9 +74,9 @@ object SerializationSpec extends SQLTestSpecification("SerializationTest") {
           val testName = file.getName().split("\\.").head
           var i = 0 
           stmts(file).map({
-            case s:net.sf.jsqlparser.statement.select.Select => {
+            case SQLStatement(s:sparsity.statement.Select) => {
               i = i + 1;
-              val query = db.sql.convert(s)
+              val query = db.sqlToRA(s)
               val serialized = Json.ofOperator(query)
               val deserialized = Json.toOperator(serialized)
 

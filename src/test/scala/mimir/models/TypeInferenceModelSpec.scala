@@ -6,15 +6,15 @@ import org.specs2.mutable._
 import mimir.algebra._
 import mimir.util._
 import mimir.test._
-import mimir.sql.SparkBackend
-import mimir.sql.BackendWithSparkContext
+import mimir.backend.SparkBackend
+import mimir.backend.BackendWithSparkContext
 
 object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
 {
 
   def train(elems: List[String]): TypeInferenceModel = 
   {
-    val model = new TypeInferenceModel("TEST_MODEL", Array("TEST_COLUMN"), 0.5, db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(),None)
+    val model = new TypeInferenceModel(ID("TEST_MODEL"), Array(ID("TEST_COLUMN")), 0.5, db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(),None)
     elems.foreach( model.learn(0, _) )
     return model
   }
@@ -49,11 +49,18 @@ object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
     }
 
     "Recognize CPU Cores" >> {
-      db.loadTable("CPUSPEED", new File("test/data/CPUSpeed.csv"), true, ("CSV", Seq(StringPrimitive(","),BoolPrimitive(false))))//loadCSV("CPUSPEED", new File("test/data/CPUSpeed.csv"))
+      db.loadTable(
+        targetTable = Some(ID("CPUSPEED")), 
+        sourceFile = "test/data/CPUSpeed.csv", 
+        force = true, 
+        inferTypes = Some(false),
+        format = ID("csv")
+        //loadCSV("CPUSPEED", new File("test/data/CPUSpeed.csv"))
+      )
       LoggerUtils.debug(
         "mimir.models.TypeInferenceModel"
       ){
-        val model = new TypeInferenceModel("CPUSPEED:CORES", Array("CORES"), 0.5, db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(), Some(db.backend.execute(table("CPUSPEED"))))
+        val model = new TypeInferenceModel(ID("CPUSPEED:CORES"), Array(ID("CORES")), 0.5, db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(), Some(db.backend.execute(table("CPUSPEED"))))
         //model.train(db.backend.execute(table("CPUSPEED")))
         guess(model) must be equalTo(TInt())
       }

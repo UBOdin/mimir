@@ -75,7 +75,7 @@ object Mimir extends LazyLogging {
 
     // Check for one-off commands
     if(conf.loadTable.get != None){
-      db.loadTable(new File(conf.loadTable()));
+      db.loadTable(conf.loadTable());
     } else {
 
       conf.precache.foreach( (opt) => opt.split(",").foreach( (table) => { 
@@ -118,7 +118,7 @@ object Mimir extends LazyLogging {
                   }
                 case "csv" => {
                     output.print("Loading "+file+"...")
-                    db.loadTable(new File(file))
+                    db.loadTable(file)
                   }
                 case _ => {
                   throw new RuntimeException("Error: Unknown file format '"+extension+"' of "+file)

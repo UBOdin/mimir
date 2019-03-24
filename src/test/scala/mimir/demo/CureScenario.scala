@@ -16,9 +16,9 @@ object CureScenario
   //args(skipAll = true)
   
   val dataFiles = List(
-    new File("test/data/cureSource.csv"),
-    new File("test/data/cureLocations.csv"),
-    new File("test/data/curePorts.csv")
+    "test/data/cureSource.csv",
+    "test/data/cureLocations.csv",
+    "test/data/curePorts.csv"
   )
 
   val cureQuery = """
@@ -43,7 +43,7 @@ object CureScenario
 
   "The CURE Scenario" should {
     Fragment.foreach(dataFiles){ table => {
-      val basename = table.getName().replace(".csv", "").toUpperCase
+      val basename = new File(table).getName().replace(".csv", "").toUpperCase
       s"Load '$table'" >> {
         time(s"Load '$table'") {
           //update(s"LOAD '$table';") 
@@ -53,8 +53,8 @@ object CureScenario
           update(s"ALTER VIEW $basename MATERIALIZE;")
         }
         db.explainer.explainEverything(
-          db.sql.convert(stmt(s"SELECT * FROM $basename")
-            .asInstanceOf[net.sf.jsqlparser.statement.select.Select])) must not beEmpty;
+          db.sqlToRA(stmt(s"SELECT * FROM $basename")
+            .asInstanceOf[sparsity.statement.Select])) must not beEmpty;
         //this still blows up - something with getColumns on vgterm during lookup query 
         /*db.explainer.explainEverything(
           db.sql.convert(stmt(s"SELECT * FROM $basename")

@@ -15,7 +15,14 @@ object DiscalaAbadiSpec
 {
   def beforeAll =
   {
-    db.loadTable("SHIPPING", new File("test/data/cureSource.csv"), true, ("CSV", Seq(StringPrimitive(","), BoolPrimitive(false), BoolPrimitive(true))))
+    db.loadTable(
+      "test/data/cureSource.csv", 
+      targetTable = Some(ID("SHIPPING")), 
+      force = true, 
+      format = ID("csv"), 
+      detectHeaders = Some(true),
+      inferTypes = Some(false)
+    )
   }
 
   sequential
@@ -61,7 +68,7 @@ object DiscalaAbadiSpec
 
       val spanningTree = 
         DiscalaAbadiNormalizer.spanningTreeLens(db, 
-          MultilensConfig("SHIPPING", db.table("SHIPPING"), Seq())
+          MultilensConfig(ID("SHIPPING"), db.table("SHIPPING"), Seq())
         )
       LoggerUtils.debug(
           // "mimir.exec.Compiler"
@@ -69,12 +76,12 @@ object DiscalaAbadiSpec
         db.query(
 
           spanningTree
-            .map("TABLE_NODE" -> Var("MIMIR_FD_PARENT"))
+            .map("TABLE_NODE" -> Var(ID("MIMIR_FD_PARENT")))
             .distinct
-            .filter( Comparison(Cmp.Gt, Arithmetic(Arith.Add, Var("TABLE_NODE"), IntPrimitive(1)), IntPrimitive(0)) )
+            .filter( Comparison(Cmp.Gt, Arithmetic(Arith.Add, Var(ID("TABLE_NODE")), IntPrimitive(1)), IntPrimitive(0)) )
             .project( "TABLE_NODE" )
 
-        ){ _.map { _("TABLE_NODE") }.toSeq must not contain(IntPrimitive(-1)) }
+        ){ _.map { _(ID("TABLE_NODE")) }.toSeq must not contain(IntPrimitive(-1)) }
       }
 
     }
@@ -82,13 +89,13 @@ object DiscalaAbadiSpec
     "Create a schema that can be queried" >> {
       db.query(
 
-        OperatorUtils.makeUnion(db.adaptiveSchemas.tableCatalogs("DISCALA_ABADI"))
+        OperatorUtils.makeUnion(db.adaptiveSchemas.tableCatalogs(ID("DISCALA_ABADI")))
           .project( "TABLE_NAME", "SCHEMA_NAME" )
 
       ) { _.toSeq.map { row => 
           (
-            row("TABLE_NAME").asString, 
-            row("SCHEMA_NAME").asString,
+            row(ID("TABLE_NAME")).asString, 
+            row(ID("SCHEMA_NAME")).asString,
             row.isDeterministic
           )
         } must contain( 
@@ -99,16 +106,16 @@ object DiscalaAbadiSpec
 
       db.query(
 
-        OperatorUtils.makeUnion( db.adaptiveSchemas.attrCatalogs("DISCALA_ABADI") )
+        OperatorUtils.makeUnion( db.adaptiveSchemas.attrCatalogs(ID("DISCALA_ABADI")) )
           .project( "TABLE_NAME", "ATTR_NAME", "IS_KEY" )
           .sort( "TABLE_NAME" -> true, "IS_KEY" -> false )
 
       ){ results =>
         val attrs = results.map { row => 
           (
-            row("TABLE_NAME").asString, 
-            row("ATTR_NAME").asString,
-            row("IS_KEY").asInstanceOf[BoolPrimitive].v
+            row(ID("TABLE_NAME")).asString, 
+            row(ID("ATTR_NAME")).asString,
+            row(ID("IS_KEY")).asInstanceOf[BoolPrimitive].v
           )
         }.toSeq 
         attrs must contain( eachOf( 
@@ -122,21 +129,21 @@ object DiscalaAbadiSpec
     "Allocate all attributes to some relation" >> {
       db.query(
 
-        OperatorUtils.makeUnion( db.adaptiveSchemas.attrCatalogs("DISCALA_ABADI") )
+        OperatorUtils.makeUnion( db.adaptiveSchemas.attrCatalogs(ID("DISCALA_ABADI")) )
           .project( "TABLE_NAME", "ATTR_NAME", "IS_KEY" )
           .sort( "TABLE_NAME" -> true, "IS_KEY" -> false )
 
       ){ _.map { row => 
-          row("ATTR_NAME").asString
+          row(ID("ATTR_NAME")).asString
         }.toSet must be equalTo(
-          db.table("SHIPPING").columnNames.toSet
+          db.table("SHIPPING").columnNames.map { _.id }.toSet
         )
       }
     }
 
     "Start off with no feedback" >> {
       db.models
-        .get("MIMIR_DA_CHOSEN_SHIPPING:MIMIR_FD_PARENT")
+        .get(ID("MIMIR_DA_CHOSEN_SHIPPING:MIMIR_FD_PARENT"))
         .isAcknowledged(0, Seq(StringPrimitive("FOREIGN_DESTINATION"))) must beFalse
     }
 
@@ -147,7 +154,7 @@ object DiscalaAbadiSpec
         queryMetadata("""
           SELECT TABLE_NAME, SCHEMA_NAME FROM MIMIR_SYS_TABLES
         """){ results =>
-          val tables = results.map { row => (row("TABLE_NAME").asString, row("SCHEMA_NAME").asString) }.toSeq 
+          val tables = results.map { row => (row(ID("TABLE_NAME")).asString, row(ID("SCHEMA_NAME")).asString) }.toSeq 
 
           tables must contain( ("ROOT", "SHIPPING") )
           //tables must contain( ("MIMIR_VIEWS", "BACKEND") )
@@ -160,7 +167,7 @@ object DiscalaAbadiSpec
       queryMetadata("""
         SELECT TABLE_NAME, ATTR_NAME FROM MIMIR_SYS_ATTRS
       """) { results =>
-        val attrs = results.map { row => (row("TABLE_NAME").asString, row("ATTR_NAME").asString) }.toSeq 
+        val attrs = results.map { row => (row(ID("TABLE_NAME")).asString, row(ID("ATTR_NAME")).asString) }.toSeq 
         attrs must contain( ("ROOT", "MONTH") )
         attrs must contain( ("BILL_OF_LADING_NBR", "QUANTITY") )
       }
@@ -174,7 +181,7 @@ object DiscalaAbadiSpec
           WHERE SCHEMA_NAME = 'SHIPPING'
             AND TABLE_NAME = 'ROOT'
         """) { results =>
-          val attrStrings = results.map { row => (row("ATTR_NAME").asString, row.isDeterministic) }.toSeq 
+          val attrStrings = results.map { row => (row(ID("ATTR_NAME")).asString, row.isDeterministic) }.toSeq 
           attrStrings must contain(
             ("FOREIGN_DESTINATION", true)
           )
@@ -196,8 +203,8 @@ object DiscalaAbadiSpec
         queryMetadata(baseQuery){ results =>
           val attrStrings = results.map { row => 
             (
-              row("ATTR_NAME").asString, 
-              ( row("ID").asString, 
+              row(ID("ATTR_NAME")).asString, 
+              ( row(ID("ID")).asString, 
                 row.isDeterministic
               )
             ) 
@@ -216,7 +223,7 @@ object DiscalaAbadiSpec
           )
         }
       }
-
+      ok
 
     }
 
@@ -228,9 +235,9 @@ object DiscalaAbadiSpec
     }
 
     "Generate legitimate explanations on query results" >> {
-      db.explainer.explainEverything(db.sql.convert(stmt("""
+      db.explainer.explainEverything(db.sqlToRA(stmt("""
         SELECT QUANTITY FROM SHIPPING.BILL_OF_LADING_NBR
-      """).asInstanceOf[net.sf.jsqlparser.statement.select.Select])).flatMap(_.all(db)).map(_.reason) must contain(
+      """).asInstanceOf[sparsity.statement.Select])).flatMap(_.all(db)).map(_.reason) must contain(
         "QUANTITY could be organized under any of BILL_OF_LADING_NBR (19), ROOT (-1); I chose BILL_OF_LADING_NBR"
       )
     }

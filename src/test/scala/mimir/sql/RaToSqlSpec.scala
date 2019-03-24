@@ -1,6 +1,5 @@
 package mimir.sql;
 
-import mimir.parser.{MimirJSqlParser}
 import org.specs2.mutable._
 import org.specs2.specification._
 
@@ -11,6 +10,7 @@ import mimir.sql._
 import mimir.test._
 import java.io.File
 import mimir.util.LoadCSV
+import sparsity.Name
 
 object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
 
@@ -18,20 +18,29 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
   {
     if(cols.isEmpty){
       name match {
-        case "R" => Table(name, name, Seq(("A", TInt()), ("B", TInt())), Seq())
+        case "R" => Table(ID(name), ID(name), Seq(ID("A") -> TInt(), ID("B") -> TInt()), Seq())
       }
     } else {
-      Table(name, name, cols.map { (_, TInt()) }, Seq())      
+      Table(ID(name), ID(name), cols.map { ID.upper(_) }.map { (_, TInt()) }, Seq())      
     }
   }
 
   def expr(x: String) = ExpressionParser.expr(x)
-  def convert(x: Operator) = db.ra.convert(x).toString
-  def convert(x: Expression) = db.ra.convert(x, List(("R", List("R_A", "R_B")))).toString
+  def convert(x: Operator) = db.raToSQL(x).toString
+  def convert(x: Expression) = db.raToSQL(x, List((Name("R"), List(Name("R_A"), Name("R_B"))))).toString
 
   def beforeAll =
   {
-    LoadCSV.handleLoadTableRaw(db, "R", Some(Seq(("A",TInt()),("B",TInt()))), new File("test/data/serial_r.csv"),  Map("DELIMITER" -> ",", "mode" -> "DROPMALFORMED", "header" -> "false") )
+    LoadCSV.handleLoadTableRaw(
+      db, 
+      ID("R"), 
+      "test/data/serial_r.csv",
+      Some(Seq(
+        (ID("A"),TInt()),
+        (ID("B"),TInt())
+      )), 
+      Map("DELIMITER" -> ",", "mode" -> "DROPMALFORMED", "header" -> "false") 
+    )
   }
   sequential
   "The RA to SQL converter" should {
@@ -104,15 +113,10 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
     }
 
     "Parenthesize correctly" >> {
-      new net.sf.jsqlparser.expression.operators.conditional.AndExpression(
-        new net.sf.jsqlparser.schema.Column(
-          new  net.sf.jsqlparser.schema.Table(null, null),
-          "R_A"
-        ),
-        new net.sf.jsqlparser.schema.Column(
-          new  net.sf.jsqlparser.schema.Table(null, null),
-          "R_B"
-        )
+      sparsity.expression.Arithmetic(
+        sparsity.expression.Column(Name("R_A")),
+        sparsity.expression.Arithmetic.And,
+        sparsity.expression.Column(Name("R_B"))
       ).toString must be equalTo
         "(R_A AND R_B)"
 

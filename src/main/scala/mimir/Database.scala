@@ -404,14 +404,18 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
       /********** LOAD STATEMENTS **********/
       case load: Load => {
         // Assign a default table name if needed
-        val format = load.format.getOrElse(sparsity.Name("csv"))
-
         loadTable(
           load.file, 
           targetTable = load.table.map { ID.upper(_) },
           force = (load.table != None),
-          format = ID.lower(format),
-          loadOptions = load.args.toMap
+          format = ID.lower(
+                      load.format
+                          .getOrElse { sparsity.Name("csv") }
+                   ),
+          loadOptions = load.args
+                            .toMap
+                            .mapValues { sqlToRA(_) }
+                            .mapValues { _.asString }
         )
       }
 
@@ -474,13 +478,13 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
    * header or not is unimplemented. So its assumed every CSV file
    * supplies an appropriate header.
    */
-  def fileToTableName(file: File): ID =
-    ID(file.getName.replaceAll("\\..*", ""))
+  def fileToTableName(file: String): ID =
+    ID(new File(file).getName.replaceAll("\\..*", ""))
   
   private val defaultLoadCSVOptions = Map(
-    "ignoreLeadingWhiteSpace"->"true",
-    "ignoreTrailingWhiteSpace"->"true", 
-    "mode" -> /*"PERMISSIVE"*/"DROPMALFORMED", 
+    "ignoreLeadingWhiteSpace"-> "true",
+    "ignoreTrailingWhiteSpace"-> "true", 
+    "mode" -> "DROPMALFORMED", 
     "header" -> "false"
   )
   private val CSV = ID("csv")
@@ -491,7 +495,7 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
   )
 
   def loadTable(
-    sourceFile: File, 
+    sourceFile: String, 
     targetTable: Option[ID] = None, 
     force:Boolean = false, 
     targetSchema: Option[Seq[(ID, Type)]] = None,

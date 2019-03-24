@@ -16,7 +16,6 @@ import mimir.exec._
 import mimir.util._
 import mimir.test._
 import mimir.statistics._
-import net.sf.jsqlparser.statement.Statement
 
 object DetectSeriesSpec 
 	extends SQLTestSpecification("DetectSeriesTest"){
@@ -44,7 +43,10 @@ object DetectSeriesSpec
 		}
 
 		"Be able to create a new schema and detect Date and Timestamp type" >> {
-			db.backend.createTable("DetectSeriesTest3", HardTable(Seq(("JN_DT", TDate()), ("JN_TS", TTimestamp())), Seq() ))
+			db.backend.createTable(ID("DetectSeriesTest3"), HardTable(Seq(
+				ID("JN_DT") -> TDate(), 
+				ID("JN_TS") -> TTimestamp()
+			), Seq() ))
 			val queryOper = select("SELECT * FROM DetectSeriesTest3")
 			val colSeq: Seq[String] = testDetectSeriesof(queryOper).map{_.columnName.toString}
 			

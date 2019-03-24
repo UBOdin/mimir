@@ -15,7 +15,6 @@ import mimir.ctables._
 import mimir.exec._
 import mimir.util._
 import mimir.test._
-import net.sf.jsqlparser.statement.Statement
 
 
 object SimpleDemoScript
@@ -28,10 +27,10 @@ object SimpleDemoScript
 	sequential
 
 	val reviewDataFiles = List(
-			new File("test/data/ratings1.csv"),
-			new File("test/data/ratings2.csv"),
-			new File("test/data/ratings3.csv"),
-			new File("test/data/userTypes.csv")
+			"test/data/ratings1.csv",
+			"test/data/ratings2.csv",
+			"test/data/ratings3.csv",
+			"test/data/userTypes.csv"
 		)
 
 	"The Basic Demo" should {
@@ -41,15 +40,19 @@ object SimpleDemoScript
 		}
 
 		"Run the Load Product Data Script" >> {
-		  loadCSV("PRODUCT", Seq(("ID", "string"), ("NAME", "string"), ("BRAND", "string"), ("CATEGORY", "string")), new File("test/data/product.csv"))
+		  loadCSV("PRODUCT", Seq(("ID", "string"), ("NAME", "string"), ("BRAND", "string"), ("CATEGORY", "string")), "test/data/product.csv")
 			//println(db.query("SELECT * FROM PRODUCT;")(result => { result.toList.map(row => row.tuple.map(_.toString()).mkString(",")).mkString("\n")} ))
-			db.query("SELECT * FROM PRODUCT;")(result => { result.toList } ) must have size(6) 
+			db.query(
+				db.sqlToRA(
+					MimirSQL.Select("SELECT * FROM PRODUCT;")
+				)
+			) { _.toList } must have size(6) 
 		}
 
 		"Load CSV Files" >> {
 			reviewDataFiles.foreach( db.loadTable(_) )
 			query("SELECT * FROM RATINGS1;") { _.toSeq must have size(4) }
-			db.query(db.adaptiveSchemas.viewFor("RATINGS1_DH", "DATA").get.project("RATING")) { 
+			db.query(db.adaptiveSchemas.viewFor(ID("RATINGS1_DH"), ID("DATA")).get.project("RATING")) { 
 				_.map { _(0) }.toSeq must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
 			}
 			query("SELECT * FROM RATINGS1;") { _.toSeq.map { _(1) } must contain( f(4.5), NullPrimitive(), f(4.0), f(6.4) ) }
@@ -61,7 +64,7 @@ object SimpleDemoScript
 
 		"Use Sane Types in Lenses" >> {
 			var oper = select("SELECT * FROM RATINGS2")
-			db.typechecker.typeOf(Var("NUM_RATINGS"), oper) must be oneOf(TInt(), TFloat(), TAny())
+			db.typechecker.typeOf(Var(ID("NUM_RATINGS")), oper) must be oneOf(TInt(), TFloat(), TAny())
 		}
 
     "Create and Query Type Inference Adaptive Schema with NULL values" >> {
@@ -86,8 +89,8 @@ object SimpleDemoScript
 
 
 		"Create and Query Type Inference Adaptive Schemas" >> {
-			db.adaptiveSchemas.create("NEW_TYPES_TI", "TYPE_INFERENCE", db.table("USERTYPES"), Seq(FloatPrimitive(.9))) 
-			db.views.create("NEW_TYPES", db.adaptiveSchemas.viewFor("NEW_TYPES_TI", "DATA").get)
+			db.adaptiveSchemas.create(ID("NEW_TYPES_TI"), ID("TYPE_INFERENCE"), db.table("USERTYPES"), Seq(FloatPrimitive(.9))) 
+			db.views.create(ID("NEW_TYPES"), db.adaptiveSchemas.viewFor(ID("NEW_TYPES_TI"), ID("DATA")).get)
       query("SELECT * FROM NEW_TYPES;"){ _.toSeq must have size(3) }
 			query("SELECT * FROM RATINGS1;"){ _.toSeq must have size(4) }
 			query("SELECT RATING FROM RATINGS1;"){ _.map { _(0) }.toSeq must contain(eachOf(f(4.5), f(4.0), f(6.4), NullPrimitive())) }
@@ -127,7 +130,7 @@ object SimpleDemoScript
 			
 			query("SELECT ID, BRAND FROM PRODUCT_REPAIRED") { result =>
 				result.toSeq.map { r => 
-					(r("ID").asString, r.isColDeterministic("BRAND")) 
+					(r(ID("ID")).asString, r.isColDeterministic(ID("BRAND"))) 
 				} must contain(
 					("P123", false), 
 					("P125", true), 
@@ -137,7 +140,7 @@ object SimpleDemoScript
 
 			query("SELECT ID, BRAND FROM PRODUCT_REPAIRED WHERE BRAND='HP'") { result =>
 				result.toSeq.map { r => 
-					(r("ID").asString, r.isColDeterministic("BRAND"), r.isDeterministic) 
+					(r(ID("ID")).asString, r.isColDeterministic(ID("BRAND")), r.isDeterministic) 
 				} must contain( 
 					("P34235", true, true) 
 				)
@@ -151,7 +154,7 @@ object SimpleDemoScript
 				  AS SELECT * FROM RATINGS2 
 				  WITH SCHEMA_MATCHING('PID string', 'RATING float', 'REVIEW_CT float')
 			""")
-			db.views.create("RATINGS2FINAL", db.adaptiveSchemas.viewFor("RATINGS2FINAL_SM", "DATA").get)
+			db.views.create(ID("RATINGS2FINAL"), db.adaptiveSchemas.viewFor(ID("RATINGS2FINAL_SM"), ID("DATA")).get)
 			query("SELECT RATING FROM RATINGS2FINAL") { result =>
 				val result1 = result.toList.map { _(0).asDouble }.toSeq 
 				result1 must have size(3)
@@ -300,7 +303,7 @@ object SimpleDemoScript
 						Where ROWID() = '3|1|4'""")
 					db.explainer.explainEverything(oper).flatMap(_.all(db))
 				}
-			explain0.map(_.model.name.replaceAll(":.*", "")) must contain(eachOf(
+			explain0.map(_.model.name.id.replaceAll(":.*", "")) must contain(eachOf(
 				"RATINGS2FINAL_SM"//,
 				//"RATINGS2"
 			))

@@ -13,7 +13,7 @@ object PickerSpec
 {
 
   def beforeAll = {
-    loadCSV("R", new File("test/data/pick.csv"))
+    loadCSV("R", "test/data/pick.csv")
   }
   
   "The Picker Lens" should {
@@ -30,8 +30,8 @@ object PickerSpec
         SELECT DINOSAURS_WERNT_JUST_GIANT_LIZARDS FROM PICKER_1
       """)(results => results.toList.map( row =>  { 
         (
-          row("DINOSAURS_WERNT_JUST_GIANT_LIZARDS"), 
-          row.isColDeterministic("DINOSAURS_WERNT_JUST_GIANT_LIZARDS"),
+          row(ID("DINOSAURS_WERNT_JUST_GIANT_LIZARDS")), 
+          row.isColDeterministic(ID("DINOSAURS_WERNT_JUST_GIANT_LIZARDS")),
           row.isDeterministic(),
           row.provenance.asString
         )

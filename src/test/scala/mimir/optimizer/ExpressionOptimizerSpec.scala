@@ -2,7 +2,6 @@ package mimir.optimizer;
 
 import java.io.{StringReader,FileReader}
 
-import mimir.parser.{MimirJSqlParser}
 import org.specs2.mutable._
 
 import mimir._

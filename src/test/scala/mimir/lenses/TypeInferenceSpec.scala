@@ -13,20 +13,18 @@ object TypeInferenceSpec
 
     "Be able to create and query type inference adaptive schemas" >> {
  
-      db.loadTable("CPUSPEED", new File("test/data/CPUSpeed.csv"))
+      db.loadTable(targetTable = Some(ID("CPUSPEED")), sourceFile = "test/data/CPUSpeed.csv")
 
       val baseTypes = db.typechecker.schemaOf(db.table("CPUSPEED_RAW")).toMap
-      baseTypes.keys must contain(eachOf("_c7", "_c1", "_c2"))
-      baseTypes must contain("_c7" -> TString())
-      baseTypes must contain("_c1" -> TString())
-      baseTypes must contain("_c2" -> TString())
+      baseTypes must contain(ID("_c7") -> TString())
+      baseTypes must contain(ID("_c1") -> TString())
+      baseTypes must contain(ID("_c2") -> TString())
 
 
       val lensTypes = db.typechecker.schemaOf(db.table("CPUSPEED")).toMap
-      lensTypes.keys must contain(eachOf("CORES", "FAMILY", "TECH_MICRON"))
-      lensTypes must contain("CORES" -> TInt())
-      lensTypes must contain("FAMILY" -> TString())
-      lensTypes must contain("TECH_MICRON" -> TFloat())
+      lensTypes must contain(ID("CORES") -> TInt())
+      lensTypes must contain(ID("FAMILY") -> TString())
+      lensTypes must contain(ID("TECH_MICRON") -> TFloat())
 
     }
 
@@ -36,7 +34,7 @@ object TypeInferenceSpec
       Type.matches(TTimestamp(), "2013-10-07 08:23:19.120") must beTrue
 
 
-      db.loadTable("DETECTSERIESTEST1", new File("test/data/DetectSeriesTest1.csv"))
+      db.loadTable(targetTable = Some(ID("DETECTSERIESTEST1")), sourceFile = "test/data/DetectSeriesTest1.csv")
 
       val sch = 
         db.typechecker.schemaOf(

@@ -2,7 +2,6 @@ package mimir.ctables;
 
 import java.io.{StringReader,FileReader}
 
-import mimir.parser.{MimirJSqlParser}
 import org.specs2.mutable._
 
 import mimir._
@@ -22,21 +21,21 @@ object CTPercolatorSpec
   with RAParsers
 {
   
-  val schema = Map[String,Seq[(String,Type)]](
+  val schema = Map[String,Seq[(ID,Type)]](
     ("R", Seq( 
-      ("A", TInt()),
-      ("B", TInt())
+      ID("A") -> TInt(),
+      ID("B") -> TInt()
     )),
     ("S", Seq( 
-      ("C", TInt()),
-      ("D", TFloat())
+      ID("C") -> TInt(),
+      ID("D") -> TFloat()
     ))
   )
 
-  def table(name: String) =
-    Table(name, name, schema(name), Seq())
+  def table(name: String): Operator =
+    Table(ID(name), ID(name), schema(name), Seq())
 
-  def modelLookup(model: String) = UniformDistribution
+  def modelLookup(model: ID) = UniformDistribution
   def schemaLookup(table: String) = schema(table).toList
   def ack(
     idx: Int = 1, 
@@ -44,7 +43,7 @@ object CTPercolatorSpec
   ): Expression = IsAcknowledged(UniformDistribution, idx, args)
 
   def project(cols: List[(String,String)], src: Operator): Operator =
-    Project(cols.map( { case (name,e) => ProjectArg(name, expr(e))}), src) 
+    Project(cols.map( { case (name,e) => ProjectArg(ID(name), expr(e))}), src) 
 
   def percolite(x:Operator) = 
     CTPercolator.percolateLite(x, modelLookup(_))
@@ -57,8 +56,8 @@ object CTPercolatorSpec
       ) must be equalTo ((
         table("R"),
         Map( 
-          ("A", expr("true")),
-          ("B", expr("true"))
+          ID("A") -> expr("true"),
+          ID("B") -> expr("true")
         ),
         expr("true")
       ))
@@ -72,7 +71,7 @@ object CTPercolatorSpec
         table("R")
           .project("A"),
         Map( 
-          ("A", expr("true"))
+          ID("A") -> expr("true")
         ),
         expr("true")
       ))
@@ -82,18 +81,18 @@ object CTPercolatorSpec
       percolite(
         table("R")
           .map( 
-            "A" -> Var("A"), 
-            "B" -> VGTerm("X", 1, Seq(RowIdVar()), Seq())
+            "A" -> Var(ID("A")), 
+            "B" -> VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq())
           )
       ) must be equalTo ((
         table("R")
           .map( 
-            "A" -> Var("A"), 
-            "B" -> VGTerm("X", 1, Seq(RowIdVar()), Seq())
+            "A" -> Var(ID("A")), 
+            "B" -> VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq())
           ),
         Map( 
-          ("A", expr("true")),
-          ("B", ack())
+          ID("A") -> expr("true"),
+          ID("B") -> ack()
         ),
         expr("true")
       ))
@@ -102,20 +101,20 @@ object CTPercolatorSpec
       percolite(
         table("R")
           .map(
-            "A" -> Var("A"),
-            "B" -> Conditional(IsNullExpression(Var("B")), VGTerm("X", 1, Seq(RowIdVar()), Seq()), Var("B"))
+            "A" -> Var(ID("A")),
+            "B" -> Conditional(IsNullExpression(Var(ID("B"))), VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()), Var(ID("B")))
           )
       ) must be equalTo ((
         table("R")
           .map(
-            "A" -> Var("A"),
-            "B" -> Conditional(IsNullExpression(Var("B")), VGTerm("X", 1, Seq(RowIdVar()), Seq()), Var("B")),
+            "A" -> Var(ID("A")),
+            "B" -> Conditional(IsNullExpression(Var(ID("B"))), VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()), Var(ID("B"))),
             "MIMIR_COL_DET_B"
-                -> Conditional(IsNullExpression(Var("B")), ack(), BoolPrimitive(true))
+                -> Conditional(IsNullExpression(Var(ID("B"))), ack(), BoolPrimitive(true))
           ),
         Map( 
-          ("A", expr("true")),
-          ("B", expr("MIMIR_COL_DET_B"))
+          ID("A") -> expr("true"),
+          ID("B") -> expr("MIMIR_COL_DET_B")
         ),
         expr("true")
       ))
@@ -128,8 +127,8 @@ object CTPercolatorSpec
         table("R")
           .filterParsed("{{X_1[ROWID]}} = 3"),
         Map( 
-          ("A", expr("true")),
-          ("B", expr("true"))
+          ID("A") -> expr("true"),
+          ID("B") -> expr("true")
         ),
         ack()
       ))
@@ -148,7 +147,7 @@ object CTPercolatorSpec
             "A" -> expr("A"),
             "B" -> expr("IF B IS NULL THEN {{X_1[ROWID]}} ELSE B END"),
             "MIMIR_COL_DET_B"
-                -> Var("B").isNull.thenElse(ack()) (BoolPrimitive(true))
+                -> Var(ID("B")).isNull.thenElse(ack()) (BoolPrimitive(true))
           )
           .filterParsed("B = 3")
           .mapParsed(
@@ -158,8 +157,8 @@ object CTPercolatorSpec
             "MIMIR_ROW_DET" -> "MIMIR_COL_DET_B"
           ),
         Map( 
-          ("A", expr("true")),
-          ("B", expr("MIMIR_COL_DET_B"))
+          ID("A") -> expr("true"),
+          ID("B") -> expr("MIMIR_COL_DET_B")
         ),
         expr("MIMIR_ROW_DET")
       ))
@@ -170,10 +169,10 @@ object CTPercolatorSpec
       ) must be equalTo ((
         table("R").join(table("S")),
         Map( 
-          ("A", expr("true")),
-          ("B", expr("true")),
-          ("C", expr("true")),
-          ("D", expr("true"))
+          ID("A") -> expr("true"),
+          ID("B") -> expr("true"),
+          ID("C") -> expr("true"),
+          ID("D") -> expr("true")
         ),
         expr("true")
       ))
@@ -187,13 +186,13 @@ object CTPercolatorSpec
         table("R")
           .map( 
             "A" -> expr("{{X_1[ROWID,A]}}"),
-            "MIMIR_COL_DET_A" -> ack( args = Seq(RowIdVar(), Var("A")) )
+            "MIMIR_COL_DET_A" -> ack( args = Seq(RowIdVar(), Var(ID("A"))) )
           )
           .join(table("S")),
         Map( 
-          ("A", Var("MIMIR_COL_DET_A")),
-          ("C", expr("true")),
-          ("D", expr("true"))
+          ID("A") -> Var(ID("MIMIR_COL_DET_A")),
+          ID("C") -> expr("true"),
+          ID("D") -> expr("true")
         ),
         expr("true")
       ))
@@ -210,11 +209,11 @@ object CTPercolatorSpec
         table("R")
           .filterParsed("B < IF A < 3 THEN {{X_1[A]}} ELSE 3 END")
           .map(
-            "A" -> Var("A"),
-            "B" -> Var("B"), 
+            "A" -> Var(ID("A")),
+            "B" -> Var(ID("B")), 
             "MIMIR_ROW_DET" 
-                -> Var("A").lt(3).thenElse( 
-                                    ack( idx = 1, args = Seq(Var("A")) ) 
+                -> Var(ID("A")).lt(3).thenElse( 
+                                    ack( idx = 1, args = Seq(Var(ID("A"))) ) 
                                   ) ( 
                                     BoolPrimitive(true)
                                   )
@@ -228,11 +227,11 @@ object CTPercolatorSpec
             table("S")
               .filterParsed("C < IF D > 5 THEN {{X_2[D]}} ELSE 5 END")
               .map(
-                "C" -> Var("C"),
-                "D" -> Var("D"), 
+                "C" -> Var(ID("C")),
+                "D" -> Var(ID("D")), 
                 "MIMIR_ROW_DET" 
-                    -> Var("D").gt(5).thenElse( 
-                                        ack( idx = 2, args = Seq(Var("D")) )
+                    -> Var(ID("D")).gt(5).thenElse( 
+                                        ack( idx = 2, args = Seq(Var(ID("D"))) )
                                       ) ( 
                                         BoolPrimitive(true)
                                       )
@@ -245,10 +244,10 @@ object CTPercolatorSpec
               )
           ),
         Map( 
-          ("A", expr("true")),
-          ("B", expr("true")),
-          ("C", expr("true")),
-          ("D", expr("true"))
+          ID("A") -> expr("true"),
+          ID("B") -> expr("true"),
+          ID("C") -> expr("true"),
+          ID("D") -> expr("true")
         ),
         expr("MIMIR_ROW_DET_LEFT AND MIMIR_ROW_DET_RIGHT")
       ))
@@ -262,21 +261,21 @@ object CTPercolatorSpec
         table("R")
           .filterParsed("IF A < 5 THEN {{X_1[A]}} ELSE A END > 5")
           .map( 
-            "A" -> Var("A"), 
-            "B" -> Var("B"),
+            "A" -> Var(ID("A")), 
+            "B" -> Var(ID("B")),
             "MIMIR_ROW_DET" ->
-              Var("A")
+              Var(ID("A"))
                 .lt(5)
                 .thenElse( 
-                  ack( args = Seq(Var("A")) ) 
+                  ack( args = Seq(Var(ID("A"))) ) 
                 )(
                   BoolPrimitive(true)
                 )
           )
           .projectNoInline("A", "B", "MIMIR_ROW_DET"), 
         Map(
-          ("A", expr("true")),
-          ("B", expr("true"))
+          ID("A") -> expr("true"),
+          ID("B") -> expr("true")
         ),
         expr("MIMIR_ROW_DET")
       ))
@@ -285,39 +284,39 @@ object CTPercolatorSpec
       CTPercolator.percolateLite(
         Project(
           List(
-            ProjectArg("COMPANY", Var("PRODUCT_INVENTORY_COMPANY")),
-            ProjectArg("SUM_2", Var("MIMIR_AGG_SUM_2"))
+            ProjectArg(ID("COMPANY"), Var(ID("PRODUCT_INVENTORY_COMPANY"))),
+            ProjectArg(ID("SUM_2"), Var(ID("MIMIR_AGG_SUM_2")))
           ),
           Aggregate(
-            List(Var("PRODUCT_INVENTORY_COMPANY")), 
-            List(AggFunction("SUM", false, List(Var("PRODUCT_INVENTORY_QUANTITY")), "MIMIR_AGG_SUM_2")),
-            Table("PRODUCT_INVENTORY","PRODUCT_INVENTORY", List( 
-                ("PRODUCT_INVENTORY_ID", TString()), 
-                ("PRODUCT_INVENTORY_COMPANY", TString()), 
-                ("PRODUCT_INVENTORY_QUANTITY", TInt()), 
-                ("PRODUCT_INVENTORY_PRICE", TFloat()) 
+            List(Var(ID("PRODUCT_INVENTORY_COMPANY"))), 
+            List(AggFunction(ID("sum"), false, List(Var(ID("PRODUCT_INVENTORY_QUANTITY"))), ID("MIMIR_AGG_SUM_2"))),
+            Table(ID("PRODUCT_INVENTORY"),ID("PRODUCT_INVENTORY"), List( 
+                (ID("PRODUCT_INVENTORY_ID"), TString()), 
+                (ID("PRODUCT_INVENTORY_COMPANY"), TString()), 
+                (ID("PRODUCT_INVENTORY_QUANTITY"), TInt()), 
+                (ID("PRODUCT_INVENTORY_PRICE"), TFloat()) 
               ), List())
         )),
         modelLookup(_)
       ) must be equalTo( (
         Project(
           List(
-            ProjectArg("COMPANY", Var("PRODUCT_INVENTORY_COMPANY")),
-            ProjectArg("SUM_2", Var("MIMIR_AGG_SUM_2"))
+            ProjectArg(ID("COMPANY"), Var(ID("PRODUCT_INVENTORY_COMPANY"))),
+            ProjectArg(ID("SUM_2"), Var(ID("MIMIR_AGG_SUM_2")))
           ),
           Aggregate(
-            List(Var("PRODUCT_INVENTORY_COMPANY")), 
-            List(AggFunction("SUM", false, List(Var("PRODUCT_INVENTORY_QUANTITY")), "MIMIR_AGG_SUM_2")),
-            Table("PRODUCT_INVENTORY","PRODUCT_INVENTORY", List( 
-                ("PRODUCT_INVENTORY_ID", TString()), 
-                ("PRODUCT_INVENTORY_COMPANY", TString()), 
-                ("PRODUCT_INVENTORY_QUANTITY", TInt()), 
-                ("PRODUCT_INVENTORY_PRICE", TFloat()) 
+            List(Var(ID("PRODUCT_INVENTORY_COMPANY"))), 
+            List(AggFunction(ID("sum"), false, List(Var(ID("PRODUCT_INVENTORY_QUANTITY"))), ID("MIMIR_AGG_SUM_2"))),
+            Table(ID("PRODUCT_INVENTORY"),ID("PRODUCT_INVENTORY"), List( 
+                (ID("PRODUCT_INVENTORY_ID"), TString()), 
+                (ID("PRODUCT_INVENTORY_COMPANY"), TString()), 
+                (ID("PRODUCT_INVENTORY_QUANTITY"), TInt()), 
+                (ID("PRODUCT_INVENTORY_PRICE"), TFloat()) 
               ), List())
         )),
         Map(
-          "COMPANY" -> expr("true"),
-          "SUM_2" -> expr("true")
+          ID("COMPANY") -> expr("true"),
+          ID("SUM_2") -> expr("true")
         ),
         expr("true")
       ))

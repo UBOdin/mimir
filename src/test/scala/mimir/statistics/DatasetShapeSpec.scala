@@ -3,7 +3,7 @@ package mimir.statistics
 import org.specs2.mutable._
 import org.specs2.specification._
 import java.io.File
-import mimir.algebra.{Var, StringPrimitive}
+import mimir.algebra.{Var, StringPrimitive, ID}
 import mimir.test._
 
 object DatasetShapeSpec
@@ -12,20 +12,8 @@ object DatasetShapeSpec
 {
 
   def beforeAll = {
-    db.loadTable("Z", new File("test/r_test/z.csv"), 
-        true, 
-        None,
-        true,
-        true,
-        Map("DELIMITER" -> ",", "datasourceErrors" -> "true"),
-        "csv")
-    db.loadTable("Z_BAD", new File("test/r_test/z_bad.csv"), 
-        true, 
-        None,
-        true,
-        true,
-        Map("DELIMITER" -> ",", "datasourceErrors" -> "true"),
-        "csv")
+    db.loadTable(targetTable = Some(ID("Z")), sourceFile = "test/r_test/z.csv")
+    db.loadTable(targetTable = Some(ID("Z_BAD")), sourceFile = "test/r_test/z_bad.csv")
   }
 
   "The Dataset Shape Detector" should 
@@ -38,11 +26,11 @@ object DatasetShapeSpec
     
     "Detect and test the basics with Adaptive Schema and work with DataSource Errors" >> {
       //good data
-      db.adaptiveSchemas.create( "Z_SW", "SHAPE_WATCHER", db.table("Z"), Seq(StringPrimitive("MIMIR_SHAPE_Z")))
+      db.adaptiveSchemas.create( ID("Z_SW"), ID("SHAPE_WATCHER"), db.table("Z"), Seq(StringPrimitive("MIMIR_SHAPE_Z")))
       //bad data
-      db.adaptiveSchemas.create( "Z_BAD_SW", "SHAPE_WATCHER", db.table("Z_BAD"), Seq(Var("MIMIR_SHAPE_Z")))
+      db.adaptiveSchemas.create( ID("Z_BAD_SW"), ID("SHAPE_WATCHER"), db.table("Z_BAD"), Seq(Var(ID("MIMIR_SHAPE_Z"))))
       
-      db.views.create("Z_BAD_S", db.adaptiveSchemas.viewFor("Z_BAD_SW", "Z_BAD_SW").get)
+      db.views.create(ID("Z_BAD_S"), db.adaptiveSchemas.viewFor(ID("Z_BAD_SW"), ID("Z_BAD_SW")).get)
       
       val resultSets = db.explainer.explainEverything(db.table("Z_BAD_S"))
       resultSets.map(_.all(db).map(_.toJSON)).flatten must contain(eachOf(

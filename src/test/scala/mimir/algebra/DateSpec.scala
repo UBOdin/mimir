@@ -1,5 +1,6 @@
 package mimir.algebra
 
+import java.io.File
 import org.specs2.mutable._
 import org.specs2.specification._
 import mimir.parser._
@@ -23,9 +24,9 @@ object DateSpec
     "Not be messed up by order-by" >> {
 
       val noOrderBy = 
-        db.query("SELECT DOB FROM DetectSeriesTest2 WHERE Rank = 1;") { _.tuples }
+      db.query(db.sqlToRA(MimirSQL.Select("SELECT DOB FROM DetectSeriesTest2 WHERE Rank = 1;"))) { _.tuples }
       val withOrderBy = 
-        db.query("SELECT DOB FROM DetectSeriesTest2 WHERE Rank = 1 ORDER BY DOB;") { _.tuples }
+        db.query(db.sqlToRA(MimirSQL.Select("SELECT DOB FROM DetectSeriesTest2 WHERE Rank = 1 ORDER BY DOB;"))) { _.tuples }
 
       withOrderBy must be equalTo(noOrderBy)
     }

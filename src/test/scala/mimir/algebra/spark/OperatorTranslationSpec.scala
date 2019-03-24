@@ -11,6 +11,7 @@ import mimir.algebra.TInt
 import java.io.File
 import mimir.algebra.Function
 import mimir.algebra.AggFunction
+import mimir.algebra.ID
 import mimir.util.LoadJDBC
 import mimir.algebra.BoolPrimitive
 import mimir.test.TestTimer
@@ -29,7 +30,11 @@ object OperatorTranslationSpec
   "Spark" should {
     sequential
     "Do ROWIDs" >> {
-      val result = db.query(db.table("R").addColumn(("ROWID", RowIdVar())).project("ROWID"))(_.toList.map(_.tuple))
+      val result = db.query(
+        db.table("R")
+          .addColumns( "ROWID" -> RowIdVar() )
+          .project("ROWID")
+        )(_.toList.map(_.tuple))
       
       result must be equalTo List(
        List(RowIdPrimitive("1")), 
@@ -66,8 +71,14 @@ object OperatorTranslationSpec
     }
     
     "Be able to do Aggregates" >> {
-      loadCSV("U",Seq(("A","int"),("B","int"),("C","int")), new File("test/r_test/r.csv"))
-      val aggQuery = db.table("U").aggregate(AggFunction("JSON_GROUP_ARRAY", false, Seq(Var("A")), "F"))
+      loadCSV("U",Seq(("A","int"),("B","int"),("C","int")), "test/r_test/r.csv")
+      val aggQuery = 
+        db.table("U")
+          .aggregate(AggFunction(
+            ID("json_group_array"), 
+            false, 
+            Seq(Var(ID("A"))), ID("F"))
+          )
       val result = db.query(aggQuery){ _.map { row => 
           row.tuple(0)
         
@@ -76,7 +87,7 @@ object OperatorTranslationSpec
     }
     
     "Be Able to do RepairKey" >> {
-      loadCSV("S",Seq(("A","int"),("B","int"),("C","int")), new File("test/r_test/r.csv"))
+      loadCSV("S",Seq(("A","int"),("B","int"),("C","int")), "test/r_test/r.csv")
       update("""
         CREATE LENS S_UNIQUE_A 
           AS SELECT * FROM S
@@ -86,12 +97,12 @@ object OperatorTranslationSpec
       val result = query("""
         SELECT A, B, C FROM S_UNIQUE_A
       """){ _.map { row => 
-        row("A").asInt -> (
-          row("B").asInt, 
-          row("C").asInt, 
-          row.isColDeterministic("A"),
-          row.isColDeterministic("B"),
-          row.isColDeterministic("C"),
+        row(ID("A")).asInt -> (
+          row(ID("B")).asInt, 
+          row(ID("C")).asInt, 
+          row.isColDeterministic(ID("A")),
+          row.isColDeterministic(ID("B")),
+          row.isColDeterministic(ID("C")),
           row.isDeterministic()
         )
       }.toMap[Int, (Int,Int, Boolean, Boolean, Boolean, Boolean)] }

@@ -69,6 +69,8 @@ class RAToSql(db: Database)
   }
 
   def apply(oper: Operator) = convert(oper)
+  def apply(expr: Expression) = convert(expr)
+  def apply(expr: Expression, sources: Seq[(Name,Seq[Name])]) = convert(expr, sources)
 
   /**
    * [use case] Convert an operator tree into JSQLParser's SelectBody type.
@@ -492,7 +494,7 @@ class RAToSql(db: Database)
   }
 
   def convert(e: Expression): sparsity.expression.Expression = {
-    convert(e, List())
+    convert(e, Seq())
   }
 
   def convert(

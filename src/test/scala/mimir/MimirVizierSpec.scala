@@ -7,7 +7,8 @@ import scala.sys.process.Process
 import org.specs2.mutable._
 import org.specs2.specification._
 
-import mimir.sql._
+import mimir.algebra.ID
+import mimir.backend._
 
 class MimirVizierSpec 
   extends Specification
@@ -27,18 +28,19 @@ class MimirVizierSpec
     MimirVizier.db = new Database(sback, new JDBCMetadataBackend(Mimir.conf.backend(), Mimir.conf.dbname()))
     MimirVizier.db.metadataBackend.open()
     MimirVizier.db.backend.open()
-    val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^","|","OR")
-    sback.registerSparkFunctions(MimirVizier.db.functions.functionPrototypes.map(el => el._1).toSeq ++ otherExcludeFuncs , MimirVizier.db.functions)
+    val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^","|","OR").map { ID(_) }
+    sback.registerSparkFunctions(
+      MimirVizier.db.functions.functionPrototypes.map(el => el._1).toSeq ++ otherExcludeFuncs , MimirVizier.db.functions)
     sback.registerSparkAggregates(MimirVizier.db.aggregates.prototypes.map(el => el._1).toSeq, MimirVizier.db.aggregates)
     MimirVizier.vizierdb.sparkSession = sback.sparkSql.sparkSession
     MimirVizier.db.initializeDBForMimir()
 
     if(!MimirVizier.db.tableExists("CPUSPEED")){
       MimirVizier.db.loadTable(
-        "CPUSPEED",
-        new File("test/data/CPUSpeed.csv"), 
+        "test/data/CPUSpeed.csv", 
+        Some(ID("CPUSPEED")),
         force = true,
-        format = ("CSV", Seq())
+        format = ID("csv")
       )
     }
   }
@@ -56,7 +58,7 @@ class MimirVizierSpec
 
     "create missing value lenses properly" >> { 
       if(MimirVizier.db.tableExists("CPUSPEED_MISSING")){
-        MimirVizier.db.lenses.drop("CPUSPEED_MISSING")
+        MimirVizier.db.lenses.drop(ID("CPUSPEED_MISSING"))
       }
       MimirVizier.db.tableExists("CPUSPEED_MISSING") must beFalse
       val response = MimirVizier.createLens(

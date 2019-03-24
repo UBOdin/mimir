@@ -1,6 +1,5 @@
 package mimir.parser
 
-import java.io.File
 import sparsity._
 import sparsity.statement._
 import sparsity.expression._
@@ -17,19 +16,19 @@ case class SlashCommand(
 ) extends MimirStatement
 
 case class Analyze(
-  target: Select,
+  target: SelectBody,
   column: Option[Name],
   rowid: Option[StringPrimitive],
   withAssignments: Boolean
 ) extends MimirStatement
 
 case class AnalyzeFeatures(
-  target: Select
+  target: SelectBody
 ) extends MimirStatement
 
 case class Compare(
-  target: Select,
-  expected: Select
+  target: SelectBody,
+  expected: SelectBody
 ) extends MimirStatement
 
 case class CreateAdaptiveSchema(
@@ -66,10 +65,10 @@ case class Feedback(
 ) extends MimirStatement
 
 case class Load(
-  file: File,
+  file: String,
   table: Option[Name],
   format: Option[Name],
-  args: Seq[(String, String)]
+  args: Seq[(String, sparsity.expression.PrimitiveValue)]
 ) extends MimirStatement
 
 case class DropLens(

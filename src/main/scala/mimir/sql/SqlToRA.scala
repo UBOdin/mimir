@@ -72,6 +72,11 @@ class SqlToRA(db: Database)
   type ReverseBindings       = Map[MimirAttribute, SparsityAttribute]
   type SourceSchema          = Seq[(TableName, Seq[MimirAttribute])]
   
+  def apply(v: sparsity.statement.Statement): Operator = 
+    v match { 
+      case sel: sparsity.statement.Select => convertSelect(sel)._1
+      case _ => throw new SQLException(s"Not a Query: $v")
+    }
   def apply(v: sparsity.statement.Select): Operator = convertSelect(v)._1
   def apply(v: sparsity.select.SelectBody): Operator = convertSelectBody(v)._1
   def apply(v: sparsity.expression.PrimitiveValue): PrimitiveValue = convertPrimitive(v)

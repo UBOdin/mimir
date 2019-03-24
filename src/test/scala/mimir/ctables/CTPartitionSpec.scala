@@ -2,7 +2,6 @@ package mimir.ctables;
 
 import java.io.{StringReader,FileReader}
 
-import mimir.parser.{MimirJSqlParser}
 import org.specs2.mutable._
 
 import mimir._
@@ -18,19 +17,19 @@ object CTPartitionSpec
   with RASimplify
 {
   
-  val schema = Map[String,Seq[(String,Type)]](
+  val schema = Map[String,Seq[(ID,Type)]](
     ("R", Seq( 
-      ("A", TInt()),
-      ("B", TInt())
+      ID("A") -> TInt(),
+      ID("B") -> TInt()
     )),
     ("S", Seq( 
-      ("C", TInt()),
-      ("D", TInt())
+      ID("C") -> TInt(),
+      ID("D") -> TInt()
     ))
   )
 
   def table(name: String, meta: Seq[(String, Expression, Type)] = Seq()): Operator =
-    Table(name, name, schema(name), meta)
+    Table(ID(name), ID(name), schema(name), meta.map { case (a, v, t) => (ID(a), v, t) })
 
   val withRowId = Seq(("ROWID", RowIdVar(), TRowId()))
 
@@ -86,7 +85,7 @@ object CTPartitionSpec
     "Handle Conditional Non-Determinstic Projection" in {
       partition(
         Project(List(
-            ProjectArg("A", expr("A")),
+            ProjectArg(ID("A"), expr("A")),
             ProjectArg(CTables.conditionColumn, 
               Comparison(Cmp.Gt,
                 Conditional(expr("A IS NULL"), expr("{{Q_1[ROWID]}}"), expr("A")),
@@ -99,7 +98,7 @@ object CTPartitionSpec
       ) must be equalTo (
         Union(
           Project(List(
-              ProjectArg("A", expr("A")),
+              ProjectArg(ID("A"), expr("A")),
               ProjectArg(CTables.conditionColumn, expr("{{Q_1[ROWID]}} > 4"))
             ),
             table("R").filterParsed("A IS NULL")
@@ -108,7 +107,7 @@ object CTPartitionSpec
             .filterParsed("A IS NOT NULL")
             .mapParsed(
               "A" -> "A",
-              CTables.conditionColumn -> "A > 4"
+              CTables.conditionColumn.id -> "A > 4"
             )
         )
       )

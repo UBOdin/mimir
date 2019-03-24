@@ -329,12 +329,12 @@ object MimirVizier extends LazyLogging {
       val csvFile = if(saferFile.startsWith(vizierFSPath) && useS3Volume){
         //hack for loading file from s3 - because it is already there for production version
         val vizierDataS3Bucket = System.getenv("S3_BUCKET_NAME")
-        new File(saferFile.replace(vizierFSPath, s"s3n://$vizierDataS3Bucket/"))
+        saferFile.replace(vizierFSPath, s"s3n://$vizierDataS3Bucket/")
       }
       else{
-        new File(saferFile)
+        saferFile
       }
-      val fileName = csvFile.getName().split("\\.")(0)
+      val fileName = new File(csvFile).getName().split("\\.")(0)
       val tableName = sanitizeTableName(fileName)
       if(db.getAllTables().contains(tableName)){
         logger.debug("loadDataSource: From Vistrails: Table Already Exists: " + tableName)
@@ -727,7 +727,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   
     
   def explainSubsetWithoutSchema(query: String, rows:Seq[String], cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
-    val oper = db.sqlToRA(MimirSQL.select(query))
+    val oper = db.sqlToRA(MimirSQL.Select(query))
     explainSubsetWithoutSchema(oper, rows, cols)  
   } 
   def explainSubsetWithoutSchema(oper: Operator, rows:Seq[String], cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
@@ -748,7 +748,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   }  
 
   def explainSchema(query: String, cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
-    val oper = db.sqlToRA(MimirSQL.select(query))
+    val oper = db.sqlToRA(MimirSQL.Select(query))
     explainSchema(oper, cols)
   }  
   
@@ -770,7 +770,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   def explainCellJson(query: String, col:String, row:String) : String = {
     try{
       logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
-      val oper = totallyOptimize(db.sqlToRA(MimirSQL.select(query)))
+      val oper = totallyOptimize(db.sqlToRA(MimirSQL.Select(query)))
       JSONBuilder.list(explainCell(oper, ID(col), RowIdPrimitive(row)).map(_.toJSON))
     } catch {
       case t: Throwable => {
@@ -784,7 +784,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     val timeRes = logTime("getSchema") {
       try{
         logger.debug("getSchema: From Vistrails: [" + query + "]"  ) ;
-        val oper = totallyOptimize(db.sqlToRA(MimirSQL.select(query)))
+        val oper = totallyOptimize(db.sqlToRA(MimirSQL.Select(query)))
         JSONBuilder.list( db.typechecker.schemaOf(oper).map( schel =>  Map( "name" -> schel._1, "type" -> schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())))
       } catch {
         case t: Throwable => {
@@ -799,7 +799,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   def explainCell(query: String, col:ID, row:String) : Seq[mimir.ctables.Reason] = {
     try{
     logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
-    val oper = totallyOptimize(db.sqlToRA(MimirSQL.select(query)))
+    val oper = totallyOptimize(db.sqlToRA(MimirSQL.Select(query)))
     explainCell(oper, col, RowIdPrimitive(row))
     } catch {
       case t: Throwable => {
@@ -812,7 +812,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   def explainCell(query: String, col:Int, row:String) : Seq[mimir.ctables.Reason] = {
     try{
     logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
-    val oper = totallyOptimize(db.sqlToRA(MimirSQL.select(query)))
+    val oper = totallyOptimize(db.sqlToRA(MimirSQL.Select(query)))
     explainCell(oper, col, row)
     } catch {
       case t: Throwable => {
@@ -864,7 +864,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   def explainRow(query: String, row:String) : Seq[mimir.ctables.Reason] = {
     try{
     logger.debug("explainRow: From Vistrails: [ "+ row +" ] [" + query + "]"  ) ;
-    val oper = totallyOptimize(db.sqlToRA(MimirSQL.select(query)))
+    val oper = totallyOptimize(db.sqlToRA(MimirSQL.Select(query)))
     explainRow(oper, row)  
     } catch {
       case t: Throwable => {
@@ -896,7 +896,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   def explainSubset(query: String, rows:Seq[String], cols:Seq[ID]) : Seq[mimir.ctables.ReasonSet] = {
     try{
     logger.debug("explainSubset: From Vistrails: [ "+ rows +" ] [" + query + "]"  ) ;
-    val oper = db.sqlToRA(MimirSQL.select(query))
+    val oper = db.sqlToRA(MimirSQL.Select(query))
     explainSubset(oper, rows, cols)  
     } catch {
       case t: Throwable => {
@@ -933,7 +933,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   def explainEverythingAllJson(query: String) : String = {
     try{
       logger.debug("explainCell: From Vistrails: [" + query + "]"  ) ;
-      val oper = totallyOptimize(db.sqlToRA(MimirSQL.select(query)))
+      val oper = totallyOptimize(db.sqlToRA(MimirSQL.Select(query)))
       JSONBuilder.list(explainEverything(oper).map(_.all(db).toList).flatten.map(_.toJSON))
     } catch {
       case t: Throwable => {
@@ -947,7 +947,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   def explainEverythingJson(query: String) : String = {
     try{
       logger.debug("explainCell: From Vistrails: [" + query + "]"  ) ;
-      val oper = totallyOptimize(db.sqlToRA(MimirSQL.select(query)))
+      val oper = totallyOptimize(db.sqlToRA(MimirSQL.Select(query)))
       JSONBuilder.list(explainEverything(oper).map(rset => {
         val subReasons = rset.take(db, 4).toSeq
   			if(subReasons.size > 3){
@@ -970,7 +970,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   def explainEverything(query: String) : Seq[mimir.ctables.ReasonSet] = {
     try{
     logger.debug("explainEverything: From Vistrails: [" + query + "]"  ) ;
-    val oper = db.sqlToRA(MimirSQL.select(query))
+    val oper = db.sqlToRA(MimirSQL.Select(query))
     explainEverything(oper)   
     } catch {
       case t: Throwable => {
@@ -1022,7 +1022,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
           if(!reason.args.isEmpty){
             " (" + reason.args.mkString(",") + ")"
           } else { "" }
-      val update = if(ack) { reason.guess } else { db.sqlToRA(MimirSQL.expression(repairStr)) }
+      val update = if(ack) { reason.guess } else { db.sqlToRA(MimirSQL.Expression(repairStr)) }
 
       db.models.feedback(
         reason.model.name,
@@ -1047,7 +1047,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
       val modelInst = db.models.get(ID(model))
       val splitIndex = modelInst.argTypes(idx).length
       val (args, hints) = argsHints.map(arg => ExpressionParser.expr(arg.toString()).asInstanceOf[PrimitiveValue]).splitAt(splitIndex)
-      val update = if(ack) { modelInst.bestGuess(idx, args, hints) } else { db.sqlToRA(MimirSQL.expression(repairStr)) }
+      val update = if(ack) { modelInst.bestGuess(idx, args, hints) } else { db.sqlToRA(MimirSQL.Expression(repairStr)) }
 
       db.models.feedback(
         modelInst,
@@ -1143,7 +1143,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   }
   
   def parseQuery(query:String) : Operator = {
-    db.sqlToRA(MimirSQL.select(query))
+    db.sqlToRA(MimirSQL.Select(query))
   }
   
   def operCSVResults(oper : mimir.algebra.Operator) : PythonCSVContainer =  {
