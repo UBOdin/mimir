@@ -507,13 +507,13 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
     val realTargetTable = targetTable.getOrElse(fileToTableName(sourceFile))
 
     // If the backend is configured to support it, specialize data loading to support data warnings
-    val datasourceErrors = loadOptions.get("datasourceErrors").getOrElse("false").equals("true")
+    val datasourceErrors = loadOptions.getOrElse("datasourceErrors", "false").equals("true")
     val realFormat:ID = 
       if(datasourceErrors && format.equals(CSV)) {
         ErrorAwareCSV
       } else { format }
 
-    val options = defaultLoadOptions.get(realFormat, Map()) ++ loadOptions
+    val options = defaultLoadOptions.getOrElse(realFormat, Map()) ++ loadOptions
 
     val targetRaw = realTargetTable.withSuffix("_RAW")
     if(tableExists(targetRaw) && !force){
@@ -535,7 +535,7 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
         adaptiveSchemas.create(dseSchemaName, ID("DATASOURCE_ERRORS"), oper, Seq())
         oper = adaptiveSchemas.viewFor(dseSchemaName, ID("DATA")).get
       }
-      if(detectHeaders.getOrElse(true)) {
+      if(detectHeaders.getOrElse(targetSchema.isEmpty)) {
         val dhSchemaName = realTargetTable.withSuffix("_DH")
         adaptiveSchemas.create(dhSchemaName, ID("DETECT_HEADER"), oper, Seq())
         oper = adaptiveSchemas.viewFor(dhSchemaName, ID("DATA")).get

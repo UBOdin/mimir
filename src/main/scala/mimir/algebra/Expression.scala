@@ -248,7 +248,7 @@ case class Comparison(op: Cmp.Op, lhs: Expression,
 case class Function(op: ID, params: Seq[Expression]) extends Expression 
 {
   override def toString() = 
-    op.id ++ params.map { _.toString }.mkString(", ")
+    op.id +"("+ params.map { _.toString }.mkString(", ")+")"
   def children = params
   def rebuild(c: Seq[Expression]) = Function(op, c)
 }
@@ -291,7 +291,7 @@ case class Var(name: ID) extends LeafExpression {
 @SerialVersionUID(100L)
 case class RowIdVar() extends LeafExpression
 {
-  override def toString = "ROWID";
+  override def toString = "@ROWID";
 }
 
 /**

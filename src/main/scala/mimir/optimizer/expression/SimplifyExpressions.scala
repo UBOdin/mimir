@@ -86,7 +86,7 @@ class SimplifyExpressions(interpreter: Eval, functionRegistry: FunctionRegistry)
 
       // A few function patterns are effectively no-ops and can be trivially removed
       case Function(ID("mimir_make_rowid"), Seq(x))            => x
-      case Function(ID("cast"), Seq(x, TypePrimitive(TAny()))) => x
+
 
       // Even if args aren't present, we might still be able to unfold the function
       case Function(name, args) => 
@@ -97,6 +97,9 @@ class SimplifyExpressions(interpreter: Eval, functionRegistry: FunctionRegistry)
           case None => return originalExpression
         }
 
+      case CastExpression(x, TAny())                           => x
+      case CastExpression(_, _)                                => originalExpression
+      
       // Procs behave like functions.  Evaluate them if possible...
       case p:Proc if p.args.forall { _.isInstanceOf[PrimitiveValue]} =>
         p.get( p.args.map { _.asInstanceOf[PrimitiveValue] } )

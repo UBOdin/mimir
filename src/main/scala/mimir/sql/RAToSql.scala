@@ -57,6 +57,7 @@ class RAToSql(db: Database)
         )
         val metadata = tgtMetadata.map( { 
           case (out, Var(in), t) => ((in, Var(in), t), ProjectArg(out, Var(in))) 
+          case (out, RowIdVar(), t) => ((ID("ROWID"), RowIdVar(), t), ProjectArg(out, Var(ID("ROWID")))) 
           case (o, i, t) => throw new SQLException(s"Unsupported Metadata: $o <- $i:$t")
         })
         Project(
@@ -396,11 +397,10 @@ class RAToSql(db: Database)
             zip(tgtSch.map(_._1)).        // Align with names from the target schema
             forall( { case (real,tgt) => real.equals(tgt) } )
                                           // Ensure that both are equivalent.
-          && metadata.map(_._1).          // And make sure only standardized metadata are preserved
-                forall({
-                  case ID("ROWID") => true
-                  case _ => false
-                })
+          && metadata.forall {            // And make sure only standardized metadata are preserved
+                case (ID("ROWID"), RowIdVar(), _) => true
+                case _ => false
+              }
         ){ 
           // If they are equivalent, then...
           (

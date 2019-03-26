@@ -7,8 +7,10 @@ import mimir.algebra._
 import mimir.statistics.SystemCatalog
 import mimir.serialization._
 import mimir.util._
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 class AdaptiveSchemaManager(db: Database)
+  extends LazyLogging
 {
   val dataTable = ID("MIMIR_ADAPTIVE_SCHEMAS")
 
@@ -177,7 +179,7 @@ class AdaptiveSchemaManager(db: Database)
   def viewFor(schema: ID, table: ID): Option[Operator] =
   {
     get(schema) match {
-      case None => None
+      case None => logger.warn(s"Invalid schema $schema"); None
       case Some((lens, config)) => {
         lens.viewFor(db, config, table) match {
           case None => None

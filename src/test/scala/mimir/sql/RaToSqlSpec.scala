@@ -50,14 +50,14 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
       convert(
         table("R")()
       ) must be equalTo 
-        "SELECT * FROM R AS R"
+        "SELECT * FROM `R`"
     }
 
     "Produce Flat Queries for Tables with Aliased Variables" >> {
       convert(
         table("R")("P", "Q")
       ) must be equalTo 
-        "SELECT * FROM (SELECT R.A AS P, R.B AS Q FROM R AS R) SUBQ_P"
+        "SELECT * FROM (SELECT `R`.`A` AS `P`, `R`.`B` AS `Q` FROM `R`) AS `SUBQ_P`"
     }
 
     "Produce Flat Queries for Projections" >> {
@@ -65,7 +65,7 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
         table("R")()
           .mapParsed( ("Z", "A+B") )
       ) must be equalTo 
-        "SELECT (R.A + R.B) AS Z FROM R AS R"
+        "SELECT `R`.`A` + `R`.`B` AS `Z` FROM `R`"
     }
 
     "Produce Flat Queries for Projections with Aliased Variables" >> {
@@ -73,7 +73,7 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
         table("R")("P", "Q")
           mapParsed( ("Z", "P+Q") )
       ) must be equalTo 
-        "SELECT (SUBQ_P.P + SUBQ_P.Q) AS Z FROM (SELECT R.A AS P, R.B AS Q FROM R AS R) SUBQ_P"
+        "SELECT `SUBQ_P`.`P` + `SUBQ_P`.`Q` AS `Z` FROM (SELECT `R`.`A` AS `P`, `R`.`B` AS `Q` FROM `R`) AS `SUBQ_P`"
     }
 
     "Produce Flat Queries for Project-Selections" >> {
@@ -82,7 +82,7 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
           .filterParsed( "A > B" )
           .mapParsed( ("Z", "A+B") )
       ) must be equalTo 
-        "SELECT (R.A + R.B) AS Z FROM R AS R WHERE (R.A > R.B)"
+        "SELECT `R`.`A` + `R`.`B` AS `Z` FROM `R` WHERE `R`.`A` > `R`.`B`"
     }
 
     "Produce Flat Queries for Project-Selections with Aliased Variables" >> {
@@ -91,7 +91,7 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
           .filterParsed( "P > Q" )
           mapParsed( ("Z", "P+Q") )
       ) must be equalTo 
-        "SELECT (SUBQ_P.P + SUBQ_P.Q) AS Z FROM (SELECT R.A AS P, R.B AS Q FROM R AS R) SUBQ_P WHERE (SUBQ_P.P > SUBQ_P.Q)"
+        "SELECT `SUBQ_P`.`P` + `SUBQ_P`.`Q` AS `Z` FROM (SELECT `R`.`A` AS `P`, `R`.`B` AS `Q` FROM `R`) AS `SUBQ_P` WHERE `SUBQ_P`.`P` > `SUBQ_P`.`Q`"
     }
 
   }
@@ -102,13 +102,13 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
       convert(
         Conditional(expr("R_A = 1"), str("A"), str("B"))
       ) must be equalTo
-        "CASE WHEN (R.R_A = 1) THEN 'A' ELSE 'B' END"
+        "CASE WHEN (R.`R_A` = 1) THEN 'A' ELSE 'B' END"
 
       convert(
         Conditional(expr("R_A = 1"), str("A"), 
           Conditional(expr("R_A = 2"), str("B"), str("C")))
       ).toString must be equalTo
-        "CASE WHEN (R.R_A = 1) THEN 'A' WHEN (R.R_A = 2) THEN 'B' ELSE 'C' END"
+        "CASE WHEN (R.`R_A` = 1) THEN 'A' WHEN (R.`R_A` = 2) THEN 'B' ELSE 'C' END"
       
     }
 
@@ -118,7 +118,7 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
         sparsity.expression.Arithmetic.And,
         sparsity.expression.Column(Name("R_B"))
       ).toString must be equalTo
-        "(R_A AND R_B)"
+        "R_A AND R_B"
 
       convert(
         ExpressionUtils.makeOr(
@@ -132,7 +132,7 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
           )
         )
       ).toString must be equalTo
-        "(((R.R_A = 1) AND (R.R_B = 2)) OR ((R.R_A = 3) AND (R.R_B = 4)))"
+        "((R.`R_A` = 1) AND (R.`R_B` = 2)) OR ((R.`R_A` = 3) AND (R.`R_B` = 4))"
     }
   }
 

@@ -31,7 +31,14 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
     }
 
     "Load CSV files with headers given an existing schema" >> {
-      loadCSV("RATINGS2", Seq(("PID","string"), ("EVALUATION","float"), ("NUM_RATINGS","float")), "test/data/ratings2.csv")
+      loadCSV("RATINGS2", 
+        Seq(
+          ("PID","string"), 
+          ("EVALUATION","float"), 
+          ("NUM_RATINGS","float")
+        ), 
+        "test/data/ratings2.csv"
+      )
       queryOneColumn(s"SELECT PID FROM RATINGS2"){ 
         _.toSeq must contain(
           str("P125"), str("P34234"), str("P34235")

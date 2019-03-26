@@ -245,7 +245,7 @@ case class Union(left: Operator, right: Operator) extends Operator
  *   input:  An expression to extract the implicit attribute
  *   type:   The type of the implicit attribute.
  * For example: 
- *   ("MIMIR_ROWID", Var("ROWID"), Type.TRowId())
+ *   ("MIMIR_ROWID", RowIdVar(), Type.TRowId())
  * will extract SQL's implicit ROWID attribute into the new column "MIMIR_ROWID" 
  * with the rowid type.
  */

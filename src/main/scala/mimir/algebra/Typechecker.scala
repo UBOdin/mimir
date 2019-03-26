@@ -129,7 +129,7 @@ class Typechecker(
 				returnTypeOfFunction(name, args.map { recur(_) })
 
 			case CastExpression(expr, t) => {
-				typeOf(expr) // recur as a sanity check, but ignore the return value
+				recur(expr) // recur as a sanity check, but ignore the return value
 				return t
 			}
 

@@ -66,7 +66,7 @@ object CheckHeader
   
   def viewFor(db: Database, config: MultilensConfig, table: ID): Option[Operator] =
   {
-    if(table.equals("DATA")){
+    if(table.equals(ID("DATA"))){
       val model = db.models.get(ID("MIMIR_CH_",config.schema)).asInstanceOf[DetectHeaderModel]
       Some(
           Project( model.columns.zipWithIndex.map( col => 
@@ -75,6 +75,9 @@ object CheckHeader
             case proj if model.headerDetected => proj.limit(-1, 1)
             case proj => proj
           })
-    } else { None }
+    } else { 
+      logger.warn(s"Getting invalid table $table from Detect Headers adaptive schema")
+      None 
+    }
   }
 }

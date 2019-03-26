@@ -127,7 +127,7 @@ object SqlUtils {
   /**
    * Extract source schemas from a FromItem
    */
-  def getSchemas(source: FromElement, db: Database): Seq[(Name, Seq[Name])] =
+  def getSchemas(source: FromElement, db: Database, implicitCols: Seq[Name] = Seq(Name("ROWID", true))): Seq[(Name, Seq[Name])] =
   {
     source match {
       case FromSelect(query, alias) =>
@@ -141,7 +141,7 @@ object SqlUtils {
                 case Some(tblSch) => tblSch
                 case None => throw new mimir.algebra.RAException(s"Table doesn't exist: ${table}")
               }
-            }).map(_._1.quoted:Name).toSeq ++ Seq(Name("ROWID", true)))
+            }).map(_._1.quoted:Name).toSeq ++ implicitCols)
           )
       case join: FromJoin =>
         val subSchemas = getSchemas(join.lhs, db) ++

@@ -118,7 +118,7 @@ object TypeInference
         
   def viewFor(db: Database, config: MultilensConfig, table: ID): Option[Operator] =
   {
-    if(table.equals("DATA")){
+    if(table.equals(ID("DATA"))){
       val model = db.models.get(ID("MIMIR_TI_ATTR_",config.schema)).asInstanceOf[TypeInferenceModel]
       val columnIndexes = model.columns.zipWithIndex.toMap
       Some(Project(
@@ -126,7 +126,7 @@ object TypeInference
           ProjectArg(colName, 
             if(columnIndexes contains colName){ 
               val bestGuessType = model.bestGuess(0, Seq(IntPrimitive(columnIndexes(colName))), Seq())
-              val castExpression = Function("CAST", Var(colName), bestGuessType)
+              val castExpression = CastExpression(Var(colName), bestGuessType.asInstanceOf[TypePrimitive].t)
               Conditional(
                 IsNullExpression(Var(colName)),
                 NullPrimitive(),
