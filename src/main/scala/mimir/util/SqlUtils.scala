@@ -23,18 +23,18 @@ import sparsity.select.{
 
 import scala.collection.JavaConversions._
 import mimir.Database
-import mimir.Mimir.db
 import mimir.algebra.{Operator, ID}
+import mimir.algebra.function.AggregateRegistry
 
 object SqlUtils {
 
-  def expressionContainsAggregate(tgt: SparsityExpression): Boolean =
+  def expressionContainsAggregate(tgt: SparsityExpression, aggs: AggregateRegistry): Boolean =
   {
     val allReferencedFunctions = 
       getFunctions(tgt)
         .map { _.name }
         .map { ID.lower(_) }
-    allReferencedFunctions.exists { db.aggregates.isAggregate(_) }
+    allReferencedFunctions.exists { aggs.isAggregate(_) }
   }
   
   def getAlias(expr : SparsityExpression): Name = 

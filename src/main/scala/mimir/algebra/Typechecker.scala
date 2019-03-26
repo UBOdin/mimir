@@ -128,6 +128,12 @@ class Typechecker(
 			case Function(name, args) => 
 				returnTypeOfFunction(name, args.map { recur(_) })
 
+			case CastExpression(expr, t) => {
+				typeOf(expr) // recur as a sanity check, but ignore the return value
+				return t
+			}
+
+
 			case Conditional(condition, thenClause, elseClause) => 
 				assert(condition, TBool(), scope, context, "WHEN")
 				Typechecker.assertLeastUpperBound(

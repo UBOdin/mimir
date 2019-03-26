@@ -11,10 +11,6 @@ case class SQLStatement(
   body: sparsity.statement.Statement
 ) extends MimirStatement;
 
-case class SlashCommand(
-  body: String
-) extends MimirStatement
-
 case class Analyze(
   target: SelectBody,
   column: Option[Name],
@@ -59,7 +55,7 @@ case class DrawPlot(
 
 case class Feedback(
   model: Name,
-  index: Int,
+  index: Long,
   args: Seq[PrimitiveValue],
   value: PrimitiveValue
 ) extends MimirStatement

@@ -108,8 +108,8 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
   //// Parsing & Reference
   val sqlToRA         = new mimir.sql.SqlToRA(this)
   val raToSQL         = new mimir.sql.RAToSql(this)
-  val functions       = new mimir.algebra.function.FunctionRegistry
-  val aggregates      = new mimir.algebra.function.AggregateRegistry
+  val functions       = new mimir.algebra.function.FunctionRegistry()
+  val aggregates      = new mimir.algebra.function.AggregateRegistry()
 
   //// Logic
   val compiler        = new mimir.exec.Compiler(this)
@@ -235,7 +235,7 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
     if(name.quoted) { table(ID(name.name), alias) }
     else { table(name.name, alias) }
   def table(tableName: String) : Operator = 
-    table(resolveCaseInsensitiveTable(tableName))
+    table(resolveCaseInsensitiveTable(tableName), ID(tableName))
   def table(tableName: String, alias:ID) : Operator = 
     table(resolveCaseInsensitiveTable(tableName), alias)
   def table(tableName: ID) : Operator = 
@@ -345,7 +345,6 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
                           => throw new SQLException("Can't evaluate SELECT as an update")
       case SQLStatement(_:sparsity.statement.Explain)
                           => throw new SQLException("Can't evaluate EXPLAIN as an update")
-      case _:SlashCommand => throw new SQLException("Can't evaluate PRAGMA as an update")
       case _:Analyze      => throw new SQLException("Can't evaluate ANALYZE as an update")
       case _:AnalyzeFeatures => throw new SQLException("Can't evaluate ANALYZE as an update")
       case _:Compare      => throw new SQLException("Can't evaluate COMPARE as an update")
@@ -358,11 +357,11 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
           feedback.args
             .map { case p:sparsity.expression.PrimitiveValue => sqlToRA(p)
                    case v => throw new SQLException(s"Invalid Feedback Argument '$v'") }
-            .zip( model.argTypes(feedback.index) )
+            .zip( model.argTypes(feedback.index.toInt) )
             .map { case (v, t) => Cast(t, v) }
         val v = sqlToRA(feedback.value)
 
-        model.feedback(feedback.index, args, v)
+        model.feedback(feedback.index.toInt, args, v)
         models.persist(model)
       }
 

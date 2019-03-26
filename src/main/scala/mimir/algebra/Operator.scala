@@ -257,7 +257,10 @@ case class Table(name: ID,
   extends Operator
 {
   def toString(prefix: String) =
-    prefix + name + "(" + (
+    prefix + name + (
+      if(alias.equals(name)) { "" }
+      else { "@" + alias }
+    ) + "(" + (
       sch.map( { case (v,t) => v.toString+":"+t } ).mkString(", ") +
       ( if(metadata.size > 0)
              { " // "+metadata.map( { case (v,e,t) => v.toString+":"+t+" <- "+e } ).mkString(", ") }

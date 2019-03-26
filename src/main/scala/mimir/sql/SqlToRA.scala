@@ -268,7 +268,7 @@ class SqlToRA(db: Database)
     //   ... any target column references an aggregate function
     //   ... there is a group by clause
     //   ... there is a having clause
-    val containsAggregates = targets.map { _._3 }.exists { SqlUtils.expressionContainsAggregate(_) }
+    val containsAggregates = targets.map { _._3 }.exists { SqlUtils.expressionContainsAggregate(_, db.aggregates) }
     val hasGroupByRefs     = select.groupBy != None
     val hasHavingClause    = select.having != None
     val isAggSelect = hasGroupByRefs || hasHavingClause || containsAggregates
@@ -369,7 +369,7 @@ class SqlToRA(db: Database)
             // had a version of expressionContainsAggregate that worked
             // on SQL Expressions.
             try {
-              if(SqlUtils.expressionContainsAggregate(having)){ None }
+              if(SqlUtils.expressionContainsAggregate(having, db.aggregates)){ None }
               else { Some(convertExpression(having, postAggregateBindings.toMap)) }
             } catch { case e: SQLException => None }
 
@@ -393,9 +393,14 @@ class SqlToRA(db: Database)
                   AggFunction(aggName, distinct, args.map { convertExpression(_, bindings) }, alias)
                 })
 
+              val havingBindings: Bindings = (
+                declaredGBVars.map { gb => reverseBindings(gb.name) -> gb.name } ++
+                allAggFunctions.map { fn => fn.alias.quoted -> fn.alias }
+              ).toMap
+
               // And then the PostExpression is what we want to use in the
               // Select() that gets attached to the query.
-              /* return */ (convertExpression(havingPostExpression, bindings), false)
+              /* return */ (convertExpression(havingPostExpression, havingBindings), false)
             }
           }
 
@@ -409,7 +414,7 @@ class SqlToRA(db: Database)
       }
 
       val interAggregateBindings = (
-        declaredGBVars.map { gb => gb.name.quoted -> gb.name } ++
+        declaredGBVars.map { gb => reverseBindings(gb.name) -> gb.name } ++
         allAggFunctions.map { fn => fn.alias.quoted -> fn.alias }
       ).toMap
 
@@ -508,7 +513,8 @@ class SqlToRA(db: Database)
         val bindings = 
           tableOp.columnNames.map { col => sparsity.Name(col.id) -> ID(ID.upper(alias), "_", col) }
         val rewrites =
-          bindings.map { case (_, id) => ID(ID.upper(alias), "_", id) -> Var(id) }
+          tableOp.columnNames.map { col => ID(ID.upper(alias), "_", col) -> Var(col) }
+        logger.trace(s"From Table: $table( $rewrites )")
         (
           tableOp.mapByID( rewrites:_* ),
           Seq(alias -> bindings.toMap)

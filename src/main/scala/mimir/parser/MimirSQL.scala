@@ -12,7 +12,6 @@ import sparsity.expression.{Expression,StringPrimitive}
 import sparsity.Name
 import java.sql.SQLException
 import java.io.Reader
-import fastparse.Parsed
 
 object MimirSQL
 {
@@ -28,12 +27,13 @@ object MimirSQL
   def Select(input: String): Select =
     apply(input) match {
       case Parsed.Success(SQLStatement(select: Select), _) => select
-      case _ => throw new SQLException(s"Invalid query $input")
+      case Parsed.Success(_, _) => throw new SQLException(s"Invalid query (not a select) $input")
+      case Parsed.Failure(msg, idx, extra) => throw new SQLException(s"Invalid query (failure @ $idx: ${extra.trace().longMsg}) $input")
     }
   def Get(input: String): MimirStatement =
     apply(input) match {
       case Parsed.Success(stmt, _) => stmt
-      case _ => throw new SQLException(s"Invalid statement $input")
+      case Parsed.Failure(msg, idx, extra) => throw new SQLException(s"Invalid query (failure @ $idx: ${extra.trace().longMsg}) $input")
     }
   def Get(input: Reader): Iterator[MimirStatement] =
     apply(input).map {
@@ -44,33 +44,21 @@ object MimirSQL
   def Expression(input: String): sparsity.expression.Expression =
     sparsity.parser.Expression(input)
 
-  
-  def directive[_:P]: P[MimirStatement] = P(
-    Components.slashCommand | statement
-  )
-
   def statement[_:P]: P[MimirStatement] = P(
     Pass()~ // Strip off leading whitespace
     (
-      (&(StringInIgnoreCase("ANALYZE") ~ StringInIgnoreCase("FEATURES")) ~
-       analyzeFeatures)
+      analyzeFeatures // must come before 'analyze'
     | analyze
     | compare
-    | (&(StringInIgnoreCase("CREATE")) ~/ (
-          (&(StringInIgnoreCase("ADAPTIVE")) ~/ createAdaptive)
-        | (&(StringInIgnoreCase("LENS")) ~/ createLens)
-        | basicStatement
-      ))
-    | (&(StringInIgnoreCase("DROP")) ~/ (
-          (&(StringInIgnoreCase("ADAPTIVE")) ~/ dropAdaptive)
-        | (&(StringInIgnoreCase("LENS")) ~/ dropLens)
-        | basicStatement
-      ))
+    | createAdaptive // must come before 'basicStatement'
+    | createLens     // must come before 'basicStatement'
+    | dropAdaptive   // must come before 'basicStatement'
+    | dropLens       // must come before 'basicStatement'
     | drawPlot
     | load
     | feedback
     | basicStatement
-    ) ~ ";"
+    ) 
   )
 
   def argument[_:P] = P(
@@ -225,6 +213,23 @@ object MimirSQL
         Load(file, target, None, Seq())
     }
   )
-  def feedback[_:P] = ???
+  def feedback[_:P] = P(
+    (
+      StringInIgnoreCase("FEEDBACK") ~/
+      (
+        Sparsity.quotedIdentifier | 
+        Sparsity.rawIdentifier.rep( sep = ":" ).map { _.fold(Name(""))( _ + Name(":") + _ ) }
+      ) ~
+      Sparsity.integer ~
+      ( "(" ~/ 
+        ExprParser.primitive.rep( sep = "," ) ~ 
+        ")" 
+      ).?.map { _.getOrElse(Seq()) } ~
+      StringInIgnoreCase("IS") ~/
+      ExprParser.primitive
+    ).map { case (model, index, args, value) =>
+      Feedback(model, index, args, value)
+    }
+  )
 
 }

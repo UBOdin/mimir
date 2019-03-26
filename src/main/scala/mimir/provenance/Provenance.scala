@@ -114,7 +114,7 @@ object Provenance extends LazyLogging {
 
       case Table(name, alias, schema, meta) =>
         (
-          Table(name, alias, schema, meta ++ List((rowidColnameBase, Var(ID("ROWID")), TRowId()))),
+          Table(name, alias, schema, meta ++ List((rowidColnameBase, RowIdVar(), TRowId()))),
           List(rowidColnameBase)
         )
 

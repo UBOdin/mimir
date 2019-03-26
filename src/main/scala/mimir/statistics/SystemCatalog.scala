@@ -49,12 +49,14 @@ class SystemCatalog(db: Database)
     return attrView
   }
 
-  private val hardcodedTables = Map[ID, Operator](
-    ID("SYS_TABLES")       -> tableView,
-    ID("SYS_ATTRS")        -> attrView
+  // The tables themselves need to be defined lazily, since 
+  // we want them read out at access time
+  private val hardcodedTables = Map[ID, () => Operator](
+    ID("SYS_TABLES")       -> tableView _,
+    ID("SYS_ATTRS")        -> attrView _
   )
 
-  def apply(name: ID): Option[Operator] = hardcodedTables.get(name)
+  def apply(name: ID): Option[Operator] = hardcodedTables.get(name).map { _() }
 
   def list():Seq[ID] = hardcodedTables.keys.toSeq
 }

@@ -155,14 +155,17 @@ object Mimir extends LazyLogging {
 
   def eventLoop(source: Reader, prompt: (() => Unit)): Unit =
   {
-    var parser = MimirSQL(source);
+    var parser = MimirCommand(source);
     var done = false;
 
     prompt()
     while(parser.hasNext){
       try {
         parser.next() match {
-          case Parsed.Success(stmt, _) => 
+          case Parsed.Success(cmd:SlashCommand, _) => 
+            handleSlashCommand(cmd)
+
+          case Parsed.Success(SQLCommand(stmt), _) =>
             stmt match {
               case SQLStatement(sel:  sparsity.statement.Select) => 
                 handleSelect(sel)
@@ -201,7 +204,7 @@ object Mimir extends LazyLogging {
           // The parser pops the input stream back onto the queue, so
           // the next call to Statement() will throw the same exact 
           // Exception.  To prevent this from happening, reset the parser:
-          parser = MimirSQL(source);
+          parser = MimirCommand(source);
         }
       }
     }

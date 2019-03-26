@@ -9,7 +9,8 @@ import mimir.optimizer.OperatorOptimization
 
 object InlineProjections extends OperatorOptimization with LazyLogging {
 
-	def apply(o: Operator): Operator = 
+	def apply(o: Operator): Operator = {
+		logger.trace(s"Attempting to inline: \n$o");
 		o.recur(apply(_)) match {
 			// If we have a Project[*](X), we can replace it with just X
 			case Project(cols, src) if (cols.forall( _ match {
@@ -117,6 +118,7 @@ object InlineProjections extends OperatorOptimization with LazyLogging {
 			// If it's anything else, this optimization doesn't care 
 			// (recursion is handled bottom-up at the start of this function)
 			case anythingElse => anythingElse
+		}
 	}
 
 	def canInlineProjectAggregate(
