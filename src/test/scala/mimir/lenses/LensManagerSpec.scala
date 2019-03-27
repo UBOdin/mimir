@@ -37,7 +37,7 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
       resolved1 must beAnInstanceOf[Project]
       resolved1.children.head must beAnInstanceOf[Limit]
       val resolved2 = resolved1.asInstanceOf[Project]
-      val coresColumnId = db.table("CPUSPEED").columnNames.indexOf("CORES")
+      val coresColumnId = db.table("CPUSPEED").columnNames.indexOf(ID("CORES"))
       val coresModel = db.models.get(ID("MIMIR_TI_ATTR_CPUSPEED_TI"))
 
       // Make sure the model name is right.
@@ -56,13 +56,18 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
                 IsNullExpression(castExpr), 
                 DataWarning(ID("MIMIR_TI_WARNING_CPUSPEED_TI"), 
                     NullPrimitive(), 
-                    Function(ID("concat"), 
-                      List(
-                          StringPrimitive("Couldn't Cast [ "), 
-                          Var(ID("_c7")), 
-                          StringPrimitive(" ] to int on row "),
-                          RowIdVar())), 
-                    Seq(StringPrimitive("CORES"), Var(ID("_c7")), StringPrimitive("int")) ), 
+                    Function(ID("concat"), Seq(
+                        StringPrimitive("Couldn't Cast [ "), 
+                        Var(ID("_c7")), 
+                        StringPrimitive(" ] to int on row "),
+                        RowIdVar()
+                    )), 
+                    Seq(
+                      StringPrimitive("CORES"), 
+                      Var(ID("_c7")), 
+                      StringPrimitive("int"), 
+                      RowIdVar()
+                    ) ), 
                 castExpr ) )//VGTerm(coresModel.name, coresColumnId, List(), List())))
       ))
 

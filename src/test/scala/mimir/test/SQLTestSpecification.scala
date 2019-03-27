@@ -44,15 +44,21 @@ object DBTestInstances
           }
           val oldDBExists = dbFile.exists();
           // println("Exists: "+oldDBExists)
-          val backend = new JDBCMetadataBackend(jdbcBackendMode, tempDBName+".db")
-          val sback = new SparkBackend(tempDBName)
-          val tmpDB = new Database(sback, backend);
+          val metadata = new JDBCMetadataBackend(jdbcBackendMode, tempDBName+".db")
+          val backend:QueryBackend = 
+            config.getOrElse("backend", "spark") match {
+              case "spark" => new SparkBackend(tempDBName); 
+            }
+          val tmpDB = new Database(backend, metadata);
           if(shouldCleanupDB){    
             dbFile.deleteOnExit();
           }
           tmpDB.metadataBackend.open()
           tmpDB.backend.open();
-          SparkML(sback.sparkSql)
+          backend match {
+            case sback:SparkBackend => SparkML(sback.sparkSql)
+            case _ => ???
+          }
           OperatorTranslation.db = tmpDB
           if(shouldResetDB || !oldDBExists){
             config.get("initial_db") match {
@@ -62,7 +68,7 @@ object DBTestInstances
           }
           tmpDB.initializeDBForMimir();
           if(shouldEnableInlining){
-            backend.enableInlining(tmpDB)
+            metadata.enableInlining(tmpDB)
           }
           databases.put(tempDBName, tmpDB)
           tmpDB

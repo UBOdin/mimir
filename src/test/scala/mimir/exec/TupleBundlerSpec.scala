@@ -99,7 +99,7 @@ object TupleBundleSpec
           SELECT A FROM R_CLASSIC WHERE B = 2
         """))._1
 
-      q1.columnNames must beEqualTo(Seq("A", "MIMIR_WORLD_BITS"))
+      q1.columnNames must beEqualTo(Seq(ID("A"), ID("MIMIR_WORLD_BITS")))
 
       val r1 =
         db.query(q1) { _.map { row => 
@@ -128,7 +128,7 @@ object TupleBundleSpec
         """))._1
 
       // This test assumes that compileFlat just adds a WORLDS_BITS column
-      q1.columnNames must beEqualTo(Seq("A", "MIMIR_WORLD_BITS"))
+      q1.columnNames must beEqualTo(Seq(ID("A"), ID("MIMIR_WORLD_BITS")))
 
       val r1 =
         db.query(q1){ _.map { row =>
@@ -152,7 +152,7 @@ object TupleBundleSpec
       // This test assumes that compileFlat just splits 'B' into samples and 
       // adds a world bits column.
       q1.columnNames must beEqualTo(
-        columnNames(ID("B")).toSeq ++ Seq("MIMIR_WORLD_BITS")
+        columnNames(ID("B")).toSeq ++ Seq(ID("MIMIR_WORLD_BITS"))
       )
 
       // Extract into (Seq(B values), worldBits)
@@ -179,7 +179,7 @@ object TupleBundleSpec
 
       // This test assumes that compileFlat just adds a WORLDS_BITS column
       q1.columnNames must beEqualTo(
-        Seq("A")++ columnNames(ID("B")) ++ Seq("MIMIR_WORLD_BITS")
+        Seq(ID("A"))++ columnNames(ID("B")) ++ Seq(ID("MIMIR_WORLD_BITS"))
       )
 
       val r1:Map[Int, (Seq[Int], Long)] =
@@ -212,7 +212,7 @@ object TupleBundleSpec
         """))._1
 
       q1.columnNames must beEqualTo(
-        Seq("B")++columnNames(ID("A"))++Seq("MIMIR_WORLD_BITS")
+        Seq(ID("B"))++columnNames(ID("A"))++Seq(ID("MIMIR_WORLD_BITS"))
       )
 
       val r1: Map[Int, (Set[Int], Set[Int])] =

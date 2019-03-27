@@ -2,6 +2,8 @@ package mimir.algebra;
 
 import java.io._
 import org.specs2.mutable._
+import org.specs2.specification.core.{Fragment,Fragments}
+import org.specs2.specification._
 
 import mimir.util._
 import mimir.test._
@@ -18,18 +20,9 @@ object SqlFilesOnly extends FileFilter {
 }
 
 
-object SerializationSpec extends SQLTestSpecification("SerializationTest") {
+object SerializationSpec extends SQLTestSpecification("SerializationTest") with BeforeAll {
 
-  def reset() =
-  {
-    db.getAllMatadataTables()
-      .filter( !_.id.startsWith("MIMIR_") )
-      .filter( !_.id.equals("SQLITE_MASTER") )
-      .foreach( (x) => db.metadataBackend.update(s"DROP TABLE $x;") );
-    Seq("R", "S", "T").map(table => {
-      if(db.tableExists(table)) 
-        db.backend.dropTable(ID(table))
-    })
+  def beforeAll = {
     LoadCSV.handleLoadTableRaw(
       db, 
       ID("R"), 
@@ -66,12 +59,11 @@ object SerializationSpec extends SQLTestSpecification("SerializationTest") {
     val testDirectory = new File("test/sanity/simple")
 
     "Pass Simple Tests" >> {
-      testDirectory.
-        listFiles(SqlFilesOnly).
-        map((file:File) => {
-          reset()
-
-          val testName = file.getName().split("\\.").head
+      Fragments.foreach(
+        testDirectory.
+          listFiles(SqlFilesOnly)
+      ) { case (file:File) =>
+        file.getName().split("\\.").head in {
           var i = 0 
           stmts(file).map({
             case SQLStatement(s:sparsity.statement.Select) => {
@@ -83,10 +75,10 @@ object SerializationSpec extends SQLTestSpecification("SerializationTest") {
               Some(deserialized must be equalTo query)
             }
 
-            case x => db.metadataBackend.update(x.toString); None
+            case stmt => throw new Exception("Simple test cases shouldn't have updates ($stmt)")
           }).flatten
-        })
-      true
+        }
+      }
     }
   }
 

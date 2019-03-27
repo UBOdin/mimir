@@ -18,7 +18,7 @@ object MimirSQL
   
   def apply(input: Reader): Iterator[Parsed[MimirStatement]] = 
     new StreamParser[MimirStatement](
-      parse(_:Iterator[String], statement(_)), 
+      parse(_:Iterator[String], terminatedStatement(_), verboseFailures = true), 
       input
     )
   def apply(input: String): Parsed[MimirStatement] = 
@@ -38,11 +38,15 @@ object MimirSQL
   def Get(input: Reader): Iterator[MimirStatement] =
     apply(input).map {
       case Parsed.Success(stmt, _) => stmt
-      case _ => throw new SQLException(s"Invalid statement $input")
+      case f@Parsed.Failure(msg, idx, extra) => throw new SQLException(s"Invalid query (failure @ $idx: ${f.longMsg})")
     }
 
   def Expression(input: String): sparsity.expression.Expression =
     sparsity.parser.Expression(input)
+
+  def terminatedStatement[_:P]: P[MimirStatement] = P(
+    statement ~ ";"
+  )
 
   def statement[_:P]: P[MimirStatement] = P(
     Pass()~ // Strip off leading whitespace

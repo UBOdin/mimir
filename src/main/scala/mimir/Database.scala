@@ -8,6 +8,7 @@ import java.net.URL
 
 import sparsity.Name
 import sparsity.statement._
+import sparsity.alter._
 import sparsity.expression.Expression
 
 import mimir.algebra._
@@ -383,11 +384,20 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
       case SQLStatement(view: CreateView) => {
         val baseQuery = sqlToRA(view.query)
         val optQuery = compiler.optimize(baseQuery)
+        val viewID = ID.upper(view.name)
 
-        views.create(
-          ID.upper(view.name),
-          optQuery
-        )
+        views.create(viewID, optQuery)
+        if(view.materialized) { views.materialize(viewID) }
+      }
+
+      /********** ALTER VIEW STATEMENTS **********/
+      case SQLStatement(AlterView(name, op)) => {
+        val viewID = ID.upper(name)
+
+        op match {
+          case Materialize(true)  => views.materialize(viewID)
+          case Materialize(false) => views.dematerialize(viewID)
+        }
       }
 
       /********** CREATE ADAPTIVE SCHEMA **********/

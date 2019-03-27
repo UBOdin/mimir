@@ -41,7 +41,7 @@ object TypeInferenceSpec
           db.table("DETECTSERIESTEST1")
         ).toMap
 
-      sch must contain ("TRAN_TS" -> TTimestamp())
+      sch must contain (ID("TRAN_TS") -> TTimestamp())
 
     }
 

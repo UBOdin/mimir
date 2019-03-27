@@ -129,9 +129,13 @@ class TypeInferenceModel(name: ID, val columns: IndexedSeq[ID], defaultFrac: Dou
     })) else votesidx._1)
   }
 
-  def voteList(idx:Int) =  (Type.id(TString()) -> ((defaultFrac * totalVotes(idx)).toLong, defaultFrac)) :: (trainingData(idx)._2.map(votedType => (votedType._1 -> (votedType._2._1, votedType._2._2)))).toList 
+  def voteList(idx:Int) =  
+    (Type.id(TString()) -> ((defaultFrac * totalVotes(idx)).toLong, defaultFrac)) :: 
+      (trainingData(idx)._2.map { votedType => 
+        (votedType._1 -> (votedType._2._1, votedType._2._2))
+      }).toList 
     
-  def totalVotes(idx:Int) = trainingData(idx)._1
+  def totalVotes(idx:Int) = trainingData(idx)._1 
      
   private final def rankFn(x:(Type, Double)) =
     (x._2, TypeInferenceModel.priority(x._1) )
@@ -162,6 +166,7 @@ class TypeInferenceModel(name: ID, val columns: IndexedSeq[ID], defaultFrac: Dou
 
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = {
     val column = args(0).asInt
+    TypeInferenceModel.logger.trace(s"Get Reason $args <- Training Data: $trainingData")
     getFeedback(idx, args) match {
       case None => {
         val (guess, guessFrac) = voteList(column).map(tp => (Type.toSQLiteType(tp._1), tp._2._2)).maxBy( rankFn _ )
