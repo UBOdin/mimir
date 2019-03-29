@@ -3,6 +3,7 @@ package mimir.parser
 import fastparse.{ Parsed, parse }
 import scala.collection.mutable.Queue
 import java.io.{ Reader, BufferedReader, File, FileReader }
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 sealed abstract class EndlessParserResult
 case class EndlessParserCommand(command: MimirCommand) extends EndlessParserResult
@@ -11,28 +12,41 @@ case class EndlessParserNeedMoreData() extends EndlessParserResult
 
 class EndlessParser(
   clearOnError: Boolean = true
-){
+) 
+  extends LazyLogging
+{
 
   var buffer = new Queue[String]();
 
   def fullBuffer = buffer.fold(""){ _ + _ }
   def charsRemaining = buffer.map { _.size }.sum
+  def isEmpty = buffer.isEmpty
 
   def next(
     verbose:Boolean = false
-  ): EndlessParserResult =  
+  ): EndlessParserResult =  {
+    logger.trace { s"Parsing Buffer: $fullBuffer" } 
     parse(
       buffer.iterator, 
       MimirCommand.command(_), 
       verboseFailures = verbose
     ) match {
-      case Parsed.Success(command, idx)           => dropChars(idx); 
-                                                    return EndlessParserCommand(command)
-      case Parsed.Failure(msg, idx, extras) if idx >= charsRemaining 
-                                                  => return EndlessParserNeedMoreData()
-      case f@Parsed.Failure(_, idx, _) if verbose => return EndlessParserParseError(SyntaxError(lineOfIndex(idx), idx, f.longMsg))
-      case _:Parsed.Failure                       => return next(verbose = true)
+      case Parsed.Success(command, idx) => { 
+        dropChars(idx); 
+        return EndlessParserCommand(command)
+      }
+      case Parsed.Failure(msg, idx, extras) if (idx >= charsRemaining) => {
+        return EndlessParserNeedMoreData()
+      }
+      case f@Parsed.Failure(_, idx, _) if verbose => {
+        if(clearOnError) { clear() }
+        return EndlessParserParseError(SyntaxError(lineOfIndex(idx), idx, f.longMsg))
+      }
+      case _:Parsed.Failure => { 
+        return next(verbose = true)
+      }
     }
+  }
 
   def load(line: String) { buffer.enqueue(line) }
   def load(source: Reader) 
@@ -50,6 +64,8 @@ class EndlessParser(
   }
   def load(file: File) { load(new FileReader(file)) }
 
+  def clear() { buffer.clear() }
+
   private def lineOfIndex(n: Int): String =
   {
     var totalCharsSeen = 0
@@ -62,16 +78,21 @@ class EndlessParser(
 
   private def dropChars(n: Int)
   {
+    logger.trace(s"Dropping $n chars")
     var totalDropped = 0;
     while(totalDropped < n && !buffer.isEmpty){
+      logger.trace(s"$n dropped; next string: ${buffer.head}; length = ${buffer.head.length}")
       val stillRemainingToDrop = n - totalDropped
-      if(buffer.head.length >= stillRemainingToDrop){
+      if(buffer.head.length <= stillRemainingToDrop){
+        logger.trace("Dropping head")
         totalDropped += buffer.dequeue.length
       } else {
         buffer.update(0, buffer.head.substring(stillRemainingToDrop))
-        totalDropped = 0
+        logger.trace("Trimming head: New Length = ${buffer.head.length}")
+        return
       }
     }
+    logger.trace(s"Done dropping")
   }
 
 }

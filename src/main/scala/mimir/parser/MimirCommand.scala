@@ -26,6 +26,7 @@ object MimirCommand
     parse(input, command(_))
   
   def command[_:P]: P[MimirCommand] = P(
+
       slashCommand 
     | ( MimirSQL.statement.map { SQLCommand(_) } ~ ";" )
   )
@@ -34,6 +35,9 @@ object MimirCommand
     "\\" ~
     CharsWhile( 
       c => (c != '\n') && (c != '\r') 
-    ).!.map { SlashCommand(_) }
+    ).!.map { SlashCommand(_) } ~
+    CharsWhile( 
+      c => (c == '\n') || (c == '\r') 
+    )
   )
 }

@@ -54,6 +54,9 @@
   <logger name="mimir.optimizer.operator.InlineProjections$"       level="WARN"/>
   <logger name="mimir.optimizer.operator.PullUpUnions"             level="WARN"/>
 
+  <!--+++++++++++++++++++++  Parser  ++++++++++++++++++++++-->
+  <logger name="mimir.parser.EndlessParser"                        level="DEBUG"/>
+
   <!--+++++++++++++++++++++++  PLOT  ++++++++++++++++++++++++++-->
   <logger name="mimir.plot.Plot$"                                  level="WARN"/>
 
