@@ -42,6 +42,22 @@ import mimir.ctables.CTExplainer
 import mimir.parser.ExpressionParser
 import mimir.ctables.MultiReason
 
+import org.eclipse.jetty.util.ssl.SslContextFactory
+import org.eclipse.jetty.server.Server
+import org.eclipse.jetty.server.SecureRequestCustomizer
+import org.eclipse.jetty.server.SslConnectionFactory
+import org.eclipse.jetty.server.HttpConfiguration
+import org.eclipse.jetty.server.ServerConnector
+import org.eclipse.jetty.http.HttpVersion
+import org.eclipse.jetty.server.HttpConnectionFactory
+import org.eclipse.jetty.servlet.ServletHolder
+import org.eclipse.jetty.servlet.ServletContextHandler
+import org.eclipse.jetty.server.handler.ResourceHandler
+import org.eclipse.jetty.server.handler.ContextHandler
+import org.eclipse.jetty.server.handler.DefaultHandler
+import org.eclipse.jetty.server.handler.HandlerCollection
+import org.eclipse.jetty.server.Handler
+import org.eclipse.jetty.webapp.WebAppContext
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -208,6 +224,59 @@ object MimirVizier extends LazyLogging {
      server.shutdown()
     
   }
+  
+  
+  def runAPIServerForViztrails() : Unit = {
+    mainThread = Thread.currentThread()
+    val server = new Server(8089)
+    val http_config = new HttpConfiguration();
+    server.addConnector(new ServerConnector( server,  new HttpConnectionFactory(http_config)) );
+    
+    val resource_handler = new ResourceHandler()
+		resource_handler.setDirectoriesListed(true)
+	  //println(s"${new java.io.File("./client/target/scala-2.12/scalajs-bundler").getAbsolutePath()}")
+		resource_handler.setResourceBase("./client/target/scala-2.12/scalajs-bundler/main")
+		val contextHandler = new ContextHandler("/app");
+    contextHandler.setResourceBase("./client/target/scala-2.12/scalajs-bundler/main");
+    contextHandler.setHandler(resource_handler);
+    //val contextHandler2 = buildSwaggerUI()
+    
+    val resource_handler2 = new ResourceHandler()
+		resource_handler2.setDirectoriesListed(true)
+	  //println(s"${new java.io.File("./client/target/scala-2.12/scalajs-bundler").getAbsolutePath()}")
+		resource_handler2.setResourceBase("./client/src")
+		val contextHandler3 = new ContextHandler("/src");
+    contextHandler3.setResourceBase("./client/src");
+    contextHandler3.setHandler(resource_handler2);
+     
+    val servletContextHandler = new ServletContextHandler(ServletContextHandler.SESSIONS);
+    servletContextHandler.setContextPath("/");
+    val holder = new ServletHolder(theServlet);
+    servletContextHandler.addServlet(holder, "/*");
+	  
+	
+    val handlerList = new HandlerCollection();
+    handlerList.setHandlers( Array[Handler](contextHandler, /*contextHandler2,*/ contextHandler3, createAPIRestService(), servletContextHandler, new DefaultHandler()));
+    
+    server.setHandler(handlerList);
+     server.start()
+     
+     while(isPythonGatewayRunning()){
+       Thread.sleep(90000)
+       if(pythonCallThread != null){
+         //logger.debug("Python Call Thread Stack Trace: ---------v ")
+         //pythonCallThread.getStackTrace.foreach(ste => logger.debug(ste.toString()))
+       }
+       pythonMimirCallListeners.foreach(listener => {
+       
+          //logger.debug(listener.callToPython("knock knock, jvm here"))
+         })
+     }
+     Thread.sleep(1000)
+     server.shutdown()
+    
+  }
+  
 
   object Eval {
   
