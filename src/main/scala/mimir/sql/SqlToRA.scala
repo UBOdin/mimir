@@ -47,8 +47,6 @@ import scala.collection.{immutable, mutable}
 import scala.collection.mutable.ListBuffer
 import mimir.provenance.Provenance
 
-;
-
 class SqlToRA(db: Database) 
   extends LazyLogging
 {
@@ -68,8 +66,8 @@ class SqlToRA(db: Database)
   type TableName             = sparsity.Name
   type SparsityAttribute     = sparsity.Name
   type MimirAttribute        = ID
-  type Bindings              = Map[SparsityAttribute, MimirAttribute]
-  type ReverseBindings       = Map[MimirAttribute, SparsityAttribute]
+  type Bindings              = NameLookup[MimirAttribute]
+  type TableBindings         = NameLookup[Bindings]
   type SourceSchema          = Seq[(TableName, Seq[MimirAttribute])]
   
   def apply(v: sparsity.statement.Statement): Operator = 
@@ -80,11 +78,11 @@ class SqlToRA(db: Database)
   def apply(v: sparsity.statement.Select): Operator = convertSelect(v)._1
   def apply(v: sparsity.select.SelectBody): Operator = convertSelectBody(v)._1
   def apply(v: sparsity.expression.PrimitiveValue): PrimitiveValue = convertPrimitive(v)
-  def apply(v: sparsity.expression.Expression): Expression = convertExpression(v)
+  def apply(v: sparsity.expression.Expression): Expression = convertExpression(v, Map())
   def apply(v: sparsity.expression.Expression,
-            bindings: (SparsityAttribute => MimirAttribute)): Expression = convertExpression(v, bindings)
+            bindings: (Column => MimirAttribute)): Expression = convertExpression(v, bindings)
 
-  def literalBindings(x:SparsityAttribute) = ID.upper(x)
+  def literalBindings(x:Column) = ID.upper(x.column)
 
   def convertSelect(
     s : sparsity.statement.Select, 
@@ -129,21 +127,15 @@ class SqlToRA(db: Database)
     // 
     // Bindings: A map from the base name to the extended name (or an arbitrary
     //           name, if there are multiple source tables with the same variable)
-    val bindings:Bindings = 
-      fromSchemas.flatMap { _._2 }
-                 .toMap
+    val bindings = lookupColumn(_:Column, NameLookup(fromSchemas))
 
-    // ReverseBindings: A map from the extended name back to the base name of the
-    //                  variable (useful for inferring aliases)
-    val reverseBindings:ReverseBindings = 
-      fromSchemas.flatMap { _._2 }
-                 .map { case (sparsityA, mimirA) => mimirA -> sparsityA }
-                 .toMap
-
-      scala.collection.mutable.Map[String, String]()
-    // Sources: A map from table name to the matching set of *extended* variable names
-    val sources: Seq[(TableName, Seq[MimirAttribute])] = 
-      fromSchemas.map { case (table, cols) => table -> cols.map { _._2 }.toSeq }
+    val tableForColumn = 
+      fromSchemas.toSeq
+                 .flatMap { case (table, bindings) => 
+                    bindings.keySet
+                            .toSeq
+                            .map { _ -> table } 
+                 }.toMap
 
     //////////////////////// CONVERT WHERE CLAUSE /////////////////////////////
 
@@ -152,7 +144,7 @@ class SqlToRA(db: Database)
     select.where match {
       case Some(where) => 
         ret = Select(
-          convertExpression(where, bindings.toMap),
+          convertExpression(where, bindings),
           ret
         )
       case None => ()
@@ -180,7 +172,7 @@ class SqlToRA(db: Database)
       if(!select.orderBy.isEmpty){
         ret = Sort(
           select.orderBy.map { ob => SortColumn(
-            convertExpression(ob.expression, bindings.toMap), 
+            convertExpression(ob.expression, bindings), 
             ob.ascending
           )},
           ret
@@ -208,13 +200,11 @@ class SqlToRA(db: Database)
     //   SELECT A AS B FROM R
     //     -> ("B", Var("A"))
     val defaultTargetsForTable:(TableName => Seq[(SparsityAttribute, sparsity.expression.Expression)]) = 
-      (name: TableName) => {
-        sources.find { _._1.equals(name) }
-               .get._2
-               .map { x => (
-                  reverseBindings(x), 
-                  sparsity.expression.Column(reverseBindings(x), Some(name))
-                ) }
+      (table: TableName) => {
+        fromSchemas.find { _._1.equals(table) }
+                   .get._2
+                   .toSeq
+                   .map { case (name, id) => (name, sparsity.expression.Column(name, Some(table)):sparsity.expression.Expression) }
       }
 
     // Start by converting to Mimir expressions and expanding clauses
@@ -230,7 +220,9 @@ class SqlToRA(db: Database)
         }
 
         case SelectAll() => 
-          sources.map(_._1).flatMap { defaultTargetsForTable(_) }
+          fromSchemas.flatMap { case (table, attrs) => attrs.toSeq.map { 
+            case (name, id) => (name, sparsity.expression.Column(name, Some(table)):sparsity.expression.Expression) 
+          }}
 
         case SelectTable(table) =>
           defaultTargetsForTable(table)
@@ -286,7 +278,7 @@ class SqlToRA(db: Database)
             case (baseName, extendedName, inputExpr) =>
               ProjectArg(
                 extendedName, 
-                convertExpression(inputExpr, bindings.toMap)
+                convertExpression(inputExpr, bindings)
               )
           }),
           ret
@@ -324,15 +316,28 @@ class SqlToRA(db: Database)
 
       // And pull out the list of group by variables that the user has declared for
       // this expression
-      val declaredGBVars: Seq[Var] = 
+      val declaredGBColumns: Seq[(TableName, SparsityAttribute)] =
         select.groupBy
               .toSeq
               .flatten
-              .map { convertExpression(_, bindings.toMap )}
               .map { 
-                case v: Var => v
-                case _ => unhandled("GroupBy[NonVar]")
+                case Column(name, Some(table)) => (table, name)
+                case Column(name, None) => 
+                  ( tableForColumn.get(name) match {
+                      case Some(t) => t
+                      case None => throw new SQLException("Invalid group-by column $name")
+                    },
+                    name
+                  )
+                case _ => unhandled("GroupBy[Expression]")
               }
+
+      val groupByColumnSchema:Map[TableName, Bindings] = 
+        declaredGBColumns.groupBy { _._1 }
+                         .mapValues { _.map { case (table, col) => 
+                                        col -> bindings(Column(col, Some(table))) 
+                                      } }
+                         .mapValues { NameLookup(_) }
 
       // Column names in the output schema
       val targetNames = targets.map( _._2 )
@@ -352,25 +357,26 @@ class SqlToRA(db: Database)
           // in the HAVING clause, we assume it uses the pre-aggregate schema.
           // Otherwise it's the post-aggregate schema.
 
-          val postAggregateBindings =
-            targetNames.map( tgt => (tgt, tgt) ) ++
-            declaredGBVars.map { v => (
-              reverseBindings(v.name),
-              v.name
-            )}
+
+          val postAggregateSchema:TableBindings = 
+            NameLookup(Map(
+              sparsity.Name("__AGGREGATE") -> NameLookup(targets.map { case (sparsity, mimir, _) => (sparsity, mimir) })
+            ) ++ groupByColumnSchema)
+
+          val postAggregateBindings = lookupColumn(_:Column, postAggregateSchema)
 
           // Our first attempt at conversion: A post-aggregate
           val postAggregateHavingExpr: Option[Expression] =
-            // Notably... the conversion could also fail due to missing
-            // bindings.  This is our backup signal to fail over.
-            ///
-            // TODO: It might be useful if we had a function to do the 
-            // AggFunction test prior to conversion.  That is, if we
-            // had a version of expressionContainsAggregate that worked
-            // on SQL Expressions.
+            // Either the expression contains an aggregate, in which case we
+            // fail over to the post-aggregate case.  Alternatively the conversion could 
+            // also fail due to missing bindings.  In this case, we also try to
+            // parse the expression pre-aggregate style before giving up.
+            // 
+            // TODO: A cleaner version of this code would be to first check to
+            // see if any post-aggregate variables are used.
             try {
               if(SqlUtils.expressionContainsAggregate(having, db.aggregates)){ None }
-              else { Some(convertExpression(having, postAggregateBindings.toMap)) }
+              else { Some(convertExpression(having, postAggregateBindings)) }
             } catch { case e: SQLException => None }
 
           // At this point, if `postAggregateHavingExpr` has something, then
@@ -393,10 +399,10 @@ class SqlToRA(db: Database)
                   AggFunction(aggName, distinct, args.map { convertExpression(_, bindings) }, alias)
                 })
 
-              val havingBindings: Bindings = (
-                declaredGBVars.map { gb => reverseBindings(gb.name) -> gb.name } ++
-                allAggFunctions.map { fn => fn.alias.quoted -> fn.alias }
-              ).toMap
+              val havingSchema:TableBindings = NameLookup(Map(
+                sparsity.Name("__HAVING") -> NameLookup(havingAggExprs.map { case (_, _, _, alias) => alias.quoted -> alias })
+              ) ++ groupByColumnSchema)
+              val havingBindings = lookupColumn(_:Column, havingSchema)
 
               // And then the PostExpression is what we want to use in the
               // Select() that gets attached to the query.
@@ -407,16 +413,18 @@ class SqlToRA(db: Database)
 
         } 
 
+      val declaredGBVars = declaredGBColumns.map { case (table, col) => Var(bindings(Column(col, Some(table)))) }
       // Sanity Check: We should not be referencing a variable that's not in the GB list.
       val referencedNonGBVars = referencedGBVars -- declaredGBVars
       if(!referencedNonGBVars.isEmpty){
         throw new SQLException(s"Variables $referencedNonGBVars not in group by list")
       }
 
-      val interAggregateBindings = (
-        declaredGBVars.map { gb => reverseBindings(gb.name) -> gb.name } ++
-        allAggFunctions.map { fn => fn.alias.quoted -> fn.alias }
-      ).toMap
+      val interAggregateSchema:TableBindings = NameLookup(Map(
+        sparsity.Name("__AGGREGATE") -> 
+          NameLookup(allAggFunctions.map { fn => fn.alias.quoted -> fn.alias })
+      ) ++ groupByColumnSchema)
+      val interAggregateBindings = lookupColumn(_:Column, interAggregateSchema)
 
       // Assemble the Aggregate
       ret = Aggregate(declaredGBVars, allAggFunctions, ret)
@@ -492,7 +500,7 @@ class SqlToRA(db: Database)
         val (ret, bindings) = convertSelectBody(query, Some(alias))
         (
           ret, 
-          Seq(alias -> bindings.toMap)
+          Seq(alias -> NameLookup(bindings))
         )
       }
       case FromTable(schemaMaybe, table, aliasMaybe) => {
@@ -510,21 +518,23 @@ class SqlToRA(db: Database)
             case Some(schema) =>
               db.adaptiveSchemas.viewFor(ID.upper(schema), ID.upper(table)).get
           }
-        val bindings = 
+        val bindings = NameLookup(
           tableOp.columnNames.map { col => sparsity.Name(col.id) -> ID(ID.upper(alias), "_", col) }
+        )
         val rewrites =
           tableOp.columnNames.map { col => ID(ID.upper(alias), "_", col) -> Var(col) }
         logger.trace(s"From Table: $table( $rewrites )")
         (
           tableOp.mapByID( rewrites:_* ),
-          Seq(alias -> bindings.toMap)
+          Seq(alias -> bindings)
         )
       }
       case FromJoin(lhsFrom, rhsFrom, t, onClause, aliasMaybe) => {
-        val (lhs, lhsAliasedBindings) = convertFromElement(lhsFrom)
-        val (rhs, rhsAliasedBindings) = convertFromElement(rhsFrom)
-        val bindings = (lhsAliasedBindings++rhsAliasedBindings).flatMap { _._2 }
-        val onExpr = convertExpression(onClause, bindings.toMap)
+        val (lhs, lhsSchema) = convertFromElement(lhsFrom)
+        val (rhs, rhsSchema) = convertFromElement(rhsFrom)
+        val columnBindings = (lhsSchema++rhsSchema).map { _._2 }
+                                                   .flatMap { _.toSeq }
+        val onExpr = convertExpression(onClause, lookupColumn(_:Column, NameLookup(lhsSchema ++ rhsSchema)))
         val joinOp = 
           t match {
             case SparsityJoin.Inner => 
@@ -535,22 +545,39 @@ class SqlToRA(db: Database)
               LeftOuterJoin(rhs, lhs, onExpr)
             case SparsityJoin.FullOuter =>
               unhandled("FromElement[FullOuterJoin]")
+            case SparsityJoin.Natural => {
+              val lhsAttrs = lhsSchema
+                                .map { _._2 }
+                                .fold(NameLookup())( _ ++ _ )
+              val rhsAttrs = rhsSchema
+                                .map { _._2 }
+                                .fold(NameLookup())( _ ++ _ )
+              val joinAttrs = lhsAttrs.keySet & rhsAttrs.keySet
+              val joinExpression = ExpressionUtils.makeAnd(
+                joinAttrs.map { attr =>
+                  val lhsVar = Var(lhsAttrs(attr).get)
+                  val rhsVar = Var(rhsAttrs(attr).get)
+                  lhsVar.eq(rhsVar)
+                } + onExpr
+              )
+              lhs.join(rhs).filter(joinExpression)
+            }
           }
 
         aliasMaybe match { 
           case None =>
             (
               joinOp,
-              lhsAliasedBindings ++ rhsAliasedBindings
+              lhsSchema ++ rhsSchema
             )
           case Some(alias) => {
             val newBindings = 
               joinOp.columnNames.map { col => sparsity.Name(col.id) -> ID(ID.upper(alias), "_", col) }
             val rewrites =
-              bindings.map { case (_, id) => ID(ID.upper(alias), "_", id) -> Var(id) }
+              columnBindings.map { case (_, id) => ID(ID.upper(alias), "_", id) -> Var(id) }
             (
               joinOp.mapByID( rewrites:_* ),
-              Seq(alias -> bindings.toMap)
+              Seq(alias -> NameLookup(newBindings))
             )
           }
         }
@@ -572,7 +599,7 @@ class SqlToRA(db: Database)
 
   def convertExpression(
     e : sparsity.expression.Expression, 
-    bindings: (SparsityAttribute => MimirAttribute) = Map()
+    bindings: (Column => MimirAttribute)
   ) : Expression = {
     e match {
       case prim: SparsityPrimitive => convertPrimitive(prim)
@@ -585,7 +612,7 @@ class SqlToRA(db: Database)
         Arithmetic(op, convertExpression(lhs, bindings), 
                        convertExpression(rhs, bindings))
       
-      case col:Column => return convertColumn(col, bindings)
+      case col:Column => Var(bindings(col))
 
       case SparsityFunction(rawName, Some(args), false) => 
         // Special-case some function conversions
@@ -655,20 +682,40 @@ class SqlToRA(db: Database)
     }
   }
 
-  def convertColumn(c: Column, bindings: (SparsityAttribute => MimirAttribute)): Var =
+  def lookupColumnInTableBindings(
+    c: Column,
+    bindings: Bindings
+  ): MimirAttribute =
+  {
+    bindings(c.column) match {
+      case Some(columnBinding) => columnBinding
+      case None => {
+        val tableColumns = bindings.keys.map { col => Column(col, c.table) }
+        throw new SQLException(s"No such column ${c.column} (out of ${tableColumns.mkString(", ")}")
+      }
+    }
+  }
+
+  def lookupColumn(
+    c: Column, 
+    bindings: TableBindings
+  ): MimirAttribute =
   {
     c.table match {
-      case None => 
-        val binding = 
-          try {
-            bindings(c.column);
-          } catch {
-            case _:NoSuchElementException => 
-              throw new SQLException(s"Unknown Variable: ${c.column} in ${bindings}")
-          }
-        return Var(binding)
-      case Some(table) => 
-        return Var(ID(ID.upper(table), "_", ID.upper(c.column)))
+      case Some(table) => {
+        bindings(table) match {
+          case Some(tableBindings) => 
+            lookupColumnInTableBindings(c, tableBindings)
+          case None => 
+            throw new SQLException(s"No such table $table (out of ${bindings.keys.mkString(", ")})")
+        }
+      }
+      case None => {
+        lookupColumnInTableBindings(
+          c, 
+          NameLookup.merge(bindings.values)
+        )
+      }
     }
   }
 
@@ -700,7 +747,7 @@ class SqlToRA(db: Database)
   def fragmentAggregateExpression(
     expr: sparsity.expression.Expression, 
     alias: MimirAttribute,
-    bindings: (SparsityAttribute => MimirAttribute)
+    bindings: (Column => MimirAttribute)
   ): (
     SparsityExpression,                                      // The wrapper expression
     Set[Var],                                                // Referenced Group-By Variables
@@ -727,7 +774,7 @@ class SqlToRA(db: Database)
       case c:Column => 
         (
           c, 
-          Set(convertColumn(c, bindings)), 
+          Set(Var(bindings(c))), 
           List()
         )
 

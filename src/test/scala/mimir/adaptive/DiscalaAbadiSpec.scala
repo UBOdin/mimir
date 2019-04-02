@@ -152,7 +152,7 @@ object DiscalaAbadiSpec
         // "mimir.exec.Compiler"
       ) {
         queryMetadata("""
-          SELECT TABLE_NAME, SCHEMA_NAME FROM MIMIR_SYS_TABLES
+          SELECT TABLE_NAME, SCHEMA_NAME FROM SYS_TABLES
         """){ results =>
           val tables = results.map { row => (row(ID("TABLE_NAME")).asString, row(ID("SCHEMA_NAME")).asString) }.toSeq 
 
@@ -165,7 +165,7 @@ object DiscalaAbadiSpec
 
       
       queryMetadata("""
-        SELECT TABLE_NAME, ATTR_NAME FROM MIMIR_SYS_ATTRS
+        SELECT TABLE_NAME, ATTR_NAME FROM SYS_ATTRS
       """) { results =>
         val attrs = results.map { row => (row(ID("TABLE_NAME")).asString, row(ID("ATTR_NAME")).asString) }.toSeq 
         attrs must contain( ("ROOT", "MONTH") )
@@ -177,7 +177,7 @@ object DiscalaAbadiSpec
         // "mimir.exec.mode.BestGuess$"
       ) {
         queryMetadata("""
-          SELECT ATTR_NAME FROM MIMIR_SYS_ATTRS
+          SELECT ATTR_NAME FROM SYS_ATTRS
           WHERE SCHEMA_NAME = 'SHIPPING'
             AND TABLE_NAME = 'ROOT'
         """) { results =>
@@ -191,7 +191,7 @@ object DiscalaAbadiSpec
 
     "Be introspectable" >> {
       val baseQuery = """
-          SELECT ATTR_NAME, ROWID() AS ID FROM MIMIR_SYS_ATTRS
+          SELECT ATTR_NAME, ROWID() AS ID FROM SYS_ATTRS
           WHERE SCHEMA_NAME = 'SHIPPING'
             AND TABLE_NAME = 'BILL_OF_LADING_NBR'
         """

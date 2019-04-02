@@ -550,9 +550,6 @@ object OperatorTranslation
       case Var(name) if name.equals("ROWID") => {
         org.apache.spark.sql.catalyst.expressions.Cast(Alias(Add(MonotonicallyIncreasingID(), Literal(1)),"ROWID")(),getSparkType(db.backend.rowIdType),None)
       }
-      /*case Var(name@Provenance.rowidColnameBase) => {
-        org.apache.spark.sql.catalyst.expressions.Cast(Alias(Add(MonotonicallyIncreasingID(), Literal(1)),name)(),getSparkType(db.backend.rowIdType),None)
-      }*/
       case Var(v) => {
         UnresolvedAttribute.quoted(v.id)
       }
@@ -562,6 +559,9 @@ object OperatorTranslation
       }
       case func@Function(_,_) => {
         mimirFunctionToSparkFunction(oper, func)
+      }
+      case CastExpression(expr, t) => {
+        org.apache.spark.sql.catalyst.expressions.Cast(mimirExprToSparkExpr(oper,expr), getSparkType(t), None)
       }
       case BestGuess(model, idx, args, hints) => {
         val name = model.name
@@ -699,12 +699,6 @@ object OperatorTranslation
   def mimirFunctionToSparkFunction(oper:Operator, func:Function) : org.apache.spark.sql.catalyst.expressions.Expression = {
     val vgtBGFunc = VGTermFunctions.bestGuessVGTermFn
     func.op match {
-      case ID("cast") => {
-        org.apache.spark.sql.catalyst.expressions.Cast(mimirExprToSparkExpr(oper,func.params.head), getSparkType(func.params.tail.head.asInstanceOf[TypePrimitive].t), None)
-      }
-      case ID("mimir_cast") => {
-        throw new Exception(s"Function Translation not implemented MIMIR_CAST${func.params.mkString(",")}")
-      }
       case ID("random") => {
         Randn(1L)
       }

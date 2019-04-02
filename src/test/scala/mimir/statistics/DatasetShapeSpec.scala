@@ -5,6 +5,7 @@ import org.specs2.specification._
 import java.io.File
 import mimir.algebra.{Var, StringPrimitive, ID}
 import mimir.test._
+import mimir.util._
 
 object DatasetShapeSpec
   extends SQLTestSpecification("DatasetShapeSpec")
@@ -12,8 +13,20 @@ object DatasetShapeSpec
 {
 
   def beforeAll = {
-    db.loadTable(targetTable = Some(ID("Z")), sourceFile = "test/r_test/z.csv")
-    db.loadTable(targetTable = Some(ID("Z_BAD")), sourceFile = "test/r_test/z_bad.csv")
+    db.loadTable(
+      targetTable = Some(ID("Z")), 
+      sourceFile = "test/r_test/z.csv",
+      loadOptions = Map(
+        "datasourceErrors" -> "true"
+      )
+    )
+    db.loadTable(
+      targetTable = Some(ID("Z_BAD")), 
+      sourceFile = "test/r_test/z_bad.csv",
+      loadOptions = Map(
+        "datasourceErrors" -> "true"
+      )
+    )
   }
 
   "The Dataset Shape Detector" should 
@@ -32,7 +45,12 @@ object DatasetShapeSpec
       
       db.views.create(ID("Z_BAD_S"), db.adaptiveSchemas.viewFor(ID("Z_BAD_SW"), ID("Z_BAD_SW")).get)
       
-      val resultSets = db.explainer.explainEverything(db.table("Z_BAD_S"))
+      val resultSets = 
+        LoggerUtils.debug(
+          // "mimir.ctables.CTExplainer"
+        ) {
+          db.explainer.explainEverything(db.table("Z_BAD_S"))
+        }
       resultSets.map(_.all(db).map(_.toJSON)).flatten must contain(eachOf(
           """{"rowidarg":-1,"source":"MIMIR_SHAPE_Z","confirmed":false,"varid":0,"english":"Missing expected column 'B'","repair":{"selector":"warning"},"args":[0,"'Missing expected column 'B''"]}""",
           """{"rowidarg":-1,"source":"MIMIR_SHAPE_Z","confirmed":false,"varid":0,"english":"A had no nulls before, but now has 2","repair":{"selector":"warning"},"args":[3,"'A had no nulls before, but now has 2'"]}""",

@@ -203,7 +203,7 @@ object DetectSeries
                           .agg(sum("error").alias("error_sum"), sum("actual").alias("actual_sum"))               
                           .withColumn("result", (col("error_sum") / col("actual_sum")))
                           .select("result")
-                          .withColumn("sname", lit(seriesColumnName))
+                          .withColumn("sname", lit(seriesColumnName.id))
           init.union( outDfi.na.drop.map(row => (ID(row.getString(1)), row.getDouble(0)))(Encoders.product[(ID,Double)]))  
         }
         else init

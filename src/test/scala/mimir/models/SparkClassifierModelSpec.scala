@@ -65,7 +65,7 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
       models = models ++ SparkClassifierModel.train(db, ID("CPUSPEEDREPAIR"), List(
         ID("BUSSPEEDINMHZ")
       ), db.table("CPUSPEED"))
-      models.keys must contain("BUSSPEEDINMHZ")
+      models.keys must contain(ID("BUSSPEEDINMHZ"))
     }
 
     "Not choke when training multiple columns" >> {
@@ -73,7 +73,7 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
         ID("CORES"),
         ID("TECHINMICRONS")
       ), db.table("CPUSPEED"))
-      models.keys must contain("CORES", "TECHINMICRONS")
+      models.keys must contain(eachOf(ID("CORES"), ID("TECHINMICRONS")))
     }
 
     "Make reasonable predictions" >> {

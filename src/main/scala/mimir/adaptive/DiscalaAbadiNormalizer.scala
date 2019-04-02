@@ -142,23 +142,25 @@ object DiscalaAbadiNormalizer
     query: Operator
   ): Operator = 
   {
-    Project(
-      query.columnNames.map { col => 
-        if(col.equals(nodeCol)){ 
-          ProjectArg(labelCol, Var(ID("ATTR_NAME"))) 
-        } else { 
-          ProjectArg(col, Var(col))
-        } 
-      } ++ typeCol.map { col =>
-        ProjectArg(col, Var(ID("ATTR_TYPE")))
-      },
-      Select(Comparison(Cmp.Eq, Var(nodeCol), Var(ID("ATTR_NODE"))),
-        Join(      
-          db.metadataTable(ID("MIMIR_DA_SCH_", config.schema)),
-          query
-        )
-      )
-    )
+
+    val keepColumns = 
+      query.columnNames
+        .filter { !_.equals(nodeCol) }
+        .map { col => col -> Var(col) } ++
+        Seq( labelCol -> Var(ID("ATTR_NAME")) ) ++
+        typeCol.map { col => col -> Var(ID("ATTR_TYPE")) }
+
+    val ret = 
+      query.join(db.metadataTable(ID("MIMIR_DA_SCH_", config.schema)))
+           .filter( Var(nodeCol).eq(Var(ID("ATTR_NODE"))) )
+           .mapByID(keepColumns:_*)
+    //sanity check: 
+    try {
+      db.typechecker.schemaOf(ret)
+    } catch {
+      case e:MissingVariable => throw new Exception(e.getMessage + "\n" + ret)
+    }
+    return ret
   }
 
 
@@ -186,7 +188,7 @@ object DiscalaAbadiNormalizer
     //   - The non-leaf node itself
     //   - All of the non-leaf node's children
 
-    // First compute all of teh non-leaf node's children.
+    // First compute all of the non-leaf node's children.
     // We start with the spanning tree, which is given in terms of Parent/Child NodeIDs
     //  - All of the children define the attribute name
     //  - All of the parents define the table that the attribute belongs to
@@ -208,7 +210,12 @@ object DiscalaAbadiNormalizer
             .distinct
             .filter( Comparison(Cmp.Gt, Arithmetic(Arith.Add, Var(ID("TABLE_NODE")), IntPrimitive(1)), IntPrimitive(0)) )
         )
-        .project("TABLE_NAME", "ATTR_NAME", "ATTR_TYPE", "IS_KEY")
+        .map(
+          "TABLE_NAME" -> Var(ID("TABLE_NAME")), 
+          "ATTR_NAME" -> Var(ID("TABLE_NAME")), 
+          "ATTR_TYPE" -> Var(ID("ATTR_TYPE")),
+          "IS_KEY" -> BoolPrimitive(false)
+        )
       
 
     val jointQuery =

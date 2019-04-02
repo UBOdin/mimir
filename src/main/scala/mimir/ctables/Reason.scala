@@ -91,7 +91,7 @@ class DataWarningReason(
 )
   extends Reason
 {
-  override def toString = s" {{ $model[${key.mkString(", ")}] }}"
+  override def toString = s"$message {{ $model[${key.mkString(", ")}] }}"
 
   def idx: Int = 0
   def args: Seq[PrimitiveValue] = key

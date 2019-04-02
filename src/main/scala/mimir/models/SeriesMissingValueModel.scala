@@ -119,7 +119,7 @@ class SimpleSeriesModel(name: ID, val seriesCols:Seq[ID], val querySchema: Seq[(
       row match {
         case null => NullPrimitive()
         case _ => SparkUtils.convertField(
-          querySchema.toMap.get(colName) match {
+          querySchema.toMap.get(ID(colName)).get match {
             case TDate() => TInt()
             case TTimestamp() => TInt()
             case x => x
@@ -141,7 +141,7 @@ class SimpleSeriesModel(name: ID, val seriesCols:Seq[ID], val querySchema: Seq[(
     val rowIdVar = col(colNames.last.id)//(monotonically_increasing_id()+1).alias(RowIdVar().toString()).cast(OperatorTranslation.getSparkType(rowIdType))
     val rowDF = queryDf.filter(rowIdVar === sprowid )
     val key = sp2m(series.id,rowDF.select(series.id).limit(1).collect().headOption.getOrElse(null))
-    val nkey = querySchema.toMap.get(series.id) match {
+    val nkey = querySchema.toMap.get(series).get match {
       case TDate() => SparkUtils.convertDate(key.asLong)
       case TTimestamp() => SparkUtils.convertTimestamp(key.asLong)
       case _ => key
@@ -154,7 +154,7 @@ class SimpleSeriesModel(name: ID, val seriesCols:Seq[ID], val querySchema: Seq[(
           .sort(desc(series.id))
           .limit(1)
           .select(series.id, colName.id).collect().map( row => {
-            (querySchema.toMap.get(series.id) match {
+            (querySchema.toMap.get(series).get match {
               case TDate() => SparkUtils.convertDate(sp2m(series.id,row).asLong)
               case TTimestamp() => SparkUtils.convertTimestamp(sp2m(series.id,row).asLong)
               case _ => sp2m(series.id,row)
@@ -170,7 +170,7 @@ class SimpleSeriesModel(name: ID, val seriesCols:Seq[ID], val querySchema: Seq[(
           .sort(asc(series.id))
           .limit(1)
           .select(series.id, colName.id).collect().map( row => {
-            (querySchema.toMap.get(series.id) match {
+            (querySchema.toMap.get(series).get match {
               case TDate() => SparkUtils.convertDate(sp2m(series.id,row).asLong)
               case TTimestamp() => SparkUtils.convertTimestamp(sp2m(series.id,row).asLong)
               case _ => sp2m(series.id,row)

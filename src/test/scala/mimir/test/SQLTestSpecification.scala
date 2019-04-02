@@ -39,6 +39,7 @@ object DBTestInstances
           val shouldEnableInlining = config.getOrElse("inline", "YES") match { 
             case "NO" => false; case "YES" => true
           }
+          // println("Preexists: "+dbFile.exists())
           if(shouldResetDB){
             if(dbFile.exists()){ dbFile.delete(); }
           }
@@ -153,17 +154,29 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     val query = resolveViews(select(s))
     db.explainer.explainAdaptiveSchema(query, query.columnNames.toSet, true)
   }  
+  def dropTable(t: String) =
+    db.update(SQLStatement(sparsity.statement.DropTable(sparsity.Name(t), true)))
   def update(s: MimirStatement) = 
     db.update(s)
   def update(s: String) = 
     db.update(stmt(s))
+  def loadCSV(file: String) : Unit =
+    db.loadTable(
+      sourceFile = file,
+      force = true
+    )
   def loadCSV(table: String, file: String) : Unit =
-    LoadCSV.handleLoadTable(db, ID(table), file)
+    db.loadTable(
+      targetTable = Some(ID(table)), 
+      sourceFile = file,
+      force = true
+    )
   def loadCSV(table: String, schema:Seq[(String,String)], file: String) : Unit =
     db.loadTable(
       targetTable = Some(ID(table)), 
       targetSchema = Some(schema.map { x => (ID.upper(x._1), Type.fromString(x._2)) }), 
-      sourceFile = file 
+      sourceFile = file,
+      force = true
     ) 
   def loadCSV(table: String, file: String, inferTypes:Boolean, detectHeaders:Boolean) : Unit =
     db.loadTable(

@@ -42,7 +42,7 @@ object OperatorOptimizerRegressions
       val (rename, replaced) = OperatorUtils.makeColumnNameUnique(ID("CUSTKEY"), tree.columnNames.toSet, tree)
       replaced must beAnInstanceOf[Aggregate]
       val child = replaced.asInstanceOf[Aggregate].source
-      child.columnNames must contain("CUSTKEY")
+      child.columnNames must contain(ID("CUSTKEY"))
       child.columnNames must not contain(rename)
       replaced.expressions.flatMap { ExpressionUtils.getColumns(_) }.toSet must not contain(rename)
     }
@@ -135,7 +135,7 @@ object OperatorOptimizerRegressions
           ID("C") -> TInt()
         ), 
         Seq( 
-          (ID("MIMIR_ROWID"), Var(ID("ROWID")), TRowId())
+          (ID("MIMIR_ROWID"), RowIdVar(), TRowId())
         )
       )
 

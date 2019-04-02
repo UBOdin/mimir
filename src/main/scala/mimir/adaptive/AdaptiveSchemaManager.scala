@@ -35,6 +35,8 @@ class AdaptiveSchemaManager(db: Database)
     val config = MultilensConfig(schema, query, args);
     val models = constructor.initSchema(db, config);
     
+    logger.trace(s"Creating view $schema <- $mlensType(${args.mkString(", ")}")
+
     db.metadataBackend.update(s"""
       INSERT INTO $dataTable(NAME, MLENS, QUERY, ARGS) VALUES (?,?,?,?)
     """, Seq(
@@ -80,7 +82,7 @@ class AdaptiveSchemaManager(db: Database)
   {
     db.queryMetadata(
       db.metadataTable(dataTable)
-        .filter { Var(ID("MLENS")).eq(mlensType) }
+        .filter { Var(ID("MLENS")).eq(StringPrimitive(mlensType.id)) }
         .project("NAME", "MLENS", "QUERY", "ARGS")
     ){ _.map { row => 
       val name = row(0).asString

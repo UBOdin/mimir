@@ -228,8 +228,8 @@ class CTExplainer(db: Database) extends LazyLogging {
 			val avg = Eval.applyArith(Arith.Div, tot, FloatPrimitive(realCount.toDouble))
 			val stddev =
 				db.interpreter.eval(
-					Function("SQRT", 					
-						Function("ABSOLUTE", 
+					Function("sqrt", 					
+						Function("absolute", 
 							Arithmetic(Arith.Sub, 
 								Arithmetic(Arith.Div, totSq, FloatPrimitive(realCount.toDouble)),
 								Arithmetic(Arith.Mult, avg, avg)
@@ -483,7 +483,7 @@ class CTExplainer(db: Database) extends LazyLogging {
   				// Source 2: There might be uncertainty on the table.  Use SYS_TABLES to dig these annotations up.
   				logger.debug(s"Explain Adaptive View Source 2: $model.$name")
   				val tableReasons = explainSubsetWithoutOptimizing(
-  					multilens.tableCatalogFor(db, config).filter( Var(ID("TABLE_NAME")).eq(name) ), wantCol, wantRow, wantSort, wantSchema
+  					multilens.tableCatalogFor(db, config).filter( Var(ID("TABLE_NAME")).eq(StringPrimitive(name.id)) ), wantCol, wantRow, wantSort, wantSchema
   				)
   				// alternative: Use SYS_TABLES directly
   				//    db.table("SYS_TABLES").where( Var("SCHEMA").eq(StringPrimitive(model)).and( Var("TABLE").eq(StringPrimitive(name)) ) )
@@ -492,7 +492,7 @@ class CTExplainer(db: Database) extends LazyLogging {
   				logger.debug(s"Explain Adaptive View Source 3: $model.$name attributes")
   				val attrReasons = explainEverything(
   					multilens.attrCatalogFor(db, config)
-  									 .filter { Var(ID("TABLE_NAME")).eq(name)
+  									 .filter { Var(ID("TABLE_NAME")).eq(StringPrimitive(name.id))
   									 						.and { Var(ID("ATTR_NAME")).in( 
   									 											wantCol.toSeq
   									 														 .map { _.id }

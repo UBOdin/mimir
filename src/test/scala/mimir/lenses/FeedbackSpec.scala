@@ -9,6 +9,7 @@ import mimir.test._
 import mimir.models.FeedbackSource
 import mimir.models.FeedbackSourceIdentifier
 import mimir.statistics.FeedbackStats
+import mimir.util.LoggerUtils
 
 object FeedbackSpec 
   extends SQLTestSpecification("FeedbackTests")
@@ -17,16 +18,23 @@ object FeedbackSpec
 
   def beforeAll = 
   {
-    loadCSV("R", Seq(("A","string"),("B","int"),("C","int")), "test/r_test/r.csv")
-    update("CREATE ADAPTIVE SCHEMA MATCH AS SELECT * FROM R WITH SCHEMA_MATCHING('B int', 'CX int')")
-    db.adaptiveSchemas.create(
-      ID("R_TI"), 
-      ID("TYPE_INFERENCE"), 
-      db.table("R"), 
-      Seq(FloatPrimitive(.5))
-    ) 
-		update("CREATE LENS MV AS SELECT * FROM R WITH MISSING_VALUE('B', 'C')")
+    LoggerUtils.trace(
+      // "mimir.adaptive.AdaptiveSchemaManager"
+    ) {
+      loadCSV("R", Seq(("A","string"),("B","int"),("C","int")), "test/r_test/r.csv", false, false)
+      update("CREATE ADAPTIVE SCHEMA MATCH AS SELECT * FROM R WITH SCHEMA_MATCHING('B int', 'CX int')")
+      db.adaptiveSchemas.create(
+        ID("R_TI"), 
+        ID("TYPE_INFERENCE"), 
+        db.table("R"), 
+        Seq(FloatPrimitive(.5))
+      ) 
+  		update("CREATE LENS MV AS SELECT * FROM R WITH MISSING_VALUE(B, C)")
+      print(db.models.list)
+    }
   }
+
+  sequential
 
   "The Edit Distance Match Model" should {
 
@@ -64,12 +72,12 @@ object FeedbackSpec
       // below should be updated accordingly
       model.bestGuess(0, List(IntPrimitive(0)), List()) must be equalTo(TypePrimitive(TInt()))
       db.typechecker.schemaOf(db.adaptiveSchemas.viewFor(ID("R_TI"), ID("DATA")).get).
-        find(_._1.equals("A")).get._2 must be equalTo(TInt())
+        find(_._1.equals(ID("A"))).get._2 must be equalTo(TInt())
 
       model.feedback(0, List(IntPrimitive(0)), TypePrimitive(TFloat()))
       model.bestGuess(0, List(IntPrimitive(0)), List()) must be equalTo(TypePrimitive(TFloat()))
       db.typechecker.schemaOf(db.adaptiveSchemas.viewFor(ID("R_TI"), ID("DATA")).get).
-        find(_._1.equals("A")).get._2 must be equalTo(TFloat())
+        find(_._1.equals(ID("A"))).get._2 must be equalTo(TFloat())
     }
   }
 

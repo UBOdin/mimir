@@ -113,7 +113,7 @@ class EditDistanceMatchModel(
   def validateChoice(idx: Int, v: PrimitiveValue): Boolean =
   { 
     EditDistanceMatchModel.logger.debug(s"Validate Edit Distance $name -> $v")
-    sourceCandidates.contains(v.asString)
+    sourceCandidates.contains(ID(v.asString))
   }
 
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = {

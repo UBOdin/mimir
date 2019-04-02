@@ -35,7 +35,7 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
 			models = models ++ SeriesMissingValueModel.train(db, ID("SERIESREPAIR"), List(
 			ID("AGE")
 		  ), db.table("DETECTSERIESTEST3"))
-		  models.keys must contain("AGE")
+		  models.keys must contain(ID("AGE"))
 		}
 
 		"Not choke when training multiple columns" >> {
@@ -45,14 +45,14 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
 		  models = models ++ SeriesMissingValueModel.train(db, ID("SERIESREPAIR"), List(
 			ID("MARKETVAL"), ID("GAMESPLAYED")
 			), db.table("DETECTSERIESTEST3"))
-			models.keys must contain("MARKETVAL", "GAMESPLAYED")
+			models.keys must contain(ID("MARKETVAL"), ID("GAMESPLAYED"))
 			}
 		}
 
 		"Make reasonable predictions" >> {
 		   mimir.util.LoggerUtils.trace(
 				 //"mimir.sql.SparkBackend",
-		     //"mimir.models.SeriesMissingValueModel"  
+		     // "mimir.models.SeriesMissingValueModel"  
 			) {
 		  queryOneColumn("SELECT ROWID() FROM DETECTSERIESTEST3 WHERE AGE IS NULL"){ result =>
   			val rowids = result.toIndexedSeq

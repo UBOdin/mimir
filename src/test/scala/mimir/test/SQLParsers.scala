@@ -8,8 +8,14 @@ trait SQLParsers {
 
   def stmts(f: String): Seq[MimirStatement] = 
     stmts(new File(f))
-  def stmts(f: File): Seq[MimirStatement] =
-    MimirSQL.Get(new FileReader(f)).toSeq
+  def stmts(f: File): Seq[MimirStatement] = {
+    val p = new EndlessParser()
+    p.load(f);
+    p.iterator.map { 
+      case SQLCommand(cmd) => cmd
+      case cmd => throw new Exception(s"invalid statement: $cmd")
+    }.toSeq
+  }
   def stmt(s: String) =
     MimirSQL.Get(s)
 

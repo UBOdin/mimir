@@ -221,17 +221,18 @@ class RAToSql(db: Database)
 
     // Sanity check...
     val extractedSchema = schemas.flatMap(_._2).toSet
-    val expectedSchema = preRenderTarget match { 
+    val expectedSchema:Set[Name] = preRenderTarget match { 
       //case AnnotateTarget(invisScm) => head.columnNames.union(invisScm.map(invisCol => ExpressionUtils.getColumns(invisCol._1.expression))).toSet
       case ProjectTarget(cols) => 
           cols.flatMap { col => ExpressionUtils.getColumns(col.expression) }
               .map { col => col.quoted }
               .toSet
       case AggregateTarget(gbCols, aggCols) => 
-          gbCols.map { col => Name(col.name.id, true) }
+          gbCols.map { col => col.name.quoted }
                 .toSet ++ 
           aggCols.flatMap { agg => agg.args
                                       .flatMap { arg => ExpressionUtils.getColumns(arg) } }
+                                      .map { col => col.quoted }
                  .toSet
       case AllTarget() => head.columnNames
                               .map { col => col.quoted }
@@ -297,7 +298,7 @@ class RAToSql(db: Database)
 
         (
           (gbTargets ++ aggTargets),
-          Some(gbConverted)
+          (if(gbConverted.isEmpty) { None } else { Some(gbConverted) })
         )
       }
 
@@ -436,7 +437,11 @@ class RAToSql(db: Database)
               target = schema.map { case (col, _) => 
                         sparsity.select.SelectExpression(sparsity.expression.NullPrimitive(), Some(col.quoted))
               },
-              where = Some(sparsity.expression.BooleanPrimitive(false))
+              where = Some(sparsity.expression.Comparison(
+                sparsity.expression.LongPrimitive(1),
+                sparsity.expression.Comparison.Neq,
+                sparsity.expression.LongPrimitive(1)
+              ))
             )
         }
 

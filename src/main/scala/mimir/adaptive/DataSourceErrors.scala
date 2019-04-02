@@ -80,7 +80,7 @@ object DataSourceErrors
   def viewFor(db: Database, config: MultilensConfig, table: ID): Option[Operator] =
   {
     val dataCols = config.query.columnNames.filterNot(col => col.equals(mimirDataSourceErrorColumn) || col.equals(mimirDataSourceErrorRowColumn))
-    if(table.equals("DATA")){
+    if(table.equals(ID("DATA"))){
      Some(Project(
         dataCols.map { colName => {
           ProjectArg(colName, 

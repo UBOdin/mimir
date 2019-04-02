@@ -222,7 +222,10 @@ object MimirSQL
       StringInIgnoreCase("FEEDBACK") ~/
       (
         Sparsity.quotedIdentifier | 
-        Sparsity.rawIdentifier.rep( sep = ":" ).map { _.fold(Name(""))( _ + Name(":") + _ ) }
+        Sparsity.rawIdentifier.rep( sep = ":" ).map { 
+          case elems if elems.isEmpty => Name("")
+          case elems => elems.tail.fold(elems.head) {_ + Name(":") + _ }
+        }
       ) ~
       Sparsity.integer ~
       ( "(" ~/ 

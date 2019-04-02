@@ -124,11 +124,16 @@ class ModelManager(db:Database)
     return cache.get(name)
   }
   
-  def getAllModels() : Seq[Model] =
+  def list() : Seq[ID] =
   {
     db.metadataBackend.resultRows(s"""
       SELECT name FROM $modelTable
-    """).map { row => get(ID(row(0).asString)) }
+    """).map { row => ID(row(0).asString) }
+  }
+  
+  def getAllModels() : Seq[Model] =
+  {
+    list.map { get(_) }
   }
 
   /**

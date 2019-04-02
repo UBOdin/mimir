@@ -23,35 +23,26 @@ object SqlFilesOnly extends FileFilter {
 object SerializationSpec extends SQLTestSpecification("SerializationTest") with BeforeAll {
 
   def beforeAll = {
-    LoadCSV.handleLoadTableRaw(
-      db, 
-      ID("R"), 
-      "test/data/serial_r.csv", 
-      Some(Seq(
-        ID("A") -> TInt(), 
-        ID("B") -> TInt()
-      )), 
-      Map() 
+    loadCSV("R", 
+      Seq(
+        "A" -> "int", 
+        "B" -> "int"
+      ), 
+      "test/data/serial_r.csv"
     )
-    LoadCSV.handleLoadTableRaw(
-      db, 
-      ID("S"), 
-      "test/data/serial_s.csv", 
-      Some(Seq(
-        ID("B") -> TInt(), 
-        ID("C") -> TInt()
-      )), 
-      Map() 
+    loadCSV("S", 
+      Seq(
+        "B" -> "int",
+        "C" -> "int"
+      ), 
+      "test/data/serial_s.csv"
     )
-    LoadCSV.handleLoadTableRaw(
-      db, 
-      ID("T"), 
-      "test/data/serial_t.csv", 
-      Some(Seq(
-        ID("C") -> TInt(), 
-        ID("D") -> TInt()
-      )), 
-      Map() 
+    loadCSV("T", 
+      Seq(
+        "C" -> "int", 
+        "D" -> "int"
+      ), 
+      "test/data/serial_t.csv"
     )
   }
 
@@ -68,9 +59,13 @@ object SerializationSpec extends SQLTestSpecification("SerializationTest") with 
           stmts(file).map({
             case SQLStatement(s:sparsity.statement.Select) => {
               i = i + 1;
+              // println(s"$file -> parsed: $s")
               val query = db.sqlToRA(s)
+              // println(s"converted: $query")
               val serialized = Json.ofOperator(query)
+              // println(s"serialized: $serialized")
               val deserialized = Json.toOperator(serialized)
+              // println(s"deserialized: $deserialized")
 
               Some(deserialized must be equalTo query)
             }

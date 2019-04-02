@@ -112,7 +112,20 @@ object SparkDataSourcesSpec
         val gschema = db.typechecker.schemaOf(db.table("G")) 
         
         gschema must contain( 
-            ("JOBTITLE",TString()), ("ENDYEAR",TFloat()), ("STARTYEAR",TFloat()), ("YEARSEXPERIENCE",TFloat()), ("EMPLOYMENTTYPE",TString()), ("TIMESTAMP",TString()), ("ENDWAGE",TFloat()), ("STARTWAGE",TFloat()), ("WAGEPERIOD",TString()), ("STATE",TString()), ("GENDER",TString()), ("NEARESTLARGECITY",TString()), ("COMPANYSIZE",TFloat()))
+            (ID("JOBTITLE"),TString()), 
+            (ID("ENDYEAR"),TFloat()), 
+            (ID("STARTYEAR"),TFloat()), 
+            (ID("YEARSEXPERIENCE"),TFloat()), 
+            (ID("EMPLOYMENTTYPE"),TString()), 
+            (ID("TIMESTAMP"),TString()), 
+            (ID("ENDWAGE"),TFloat()), 
+            (ID("STARTWAGE"),TFloat()), 
+            (ID("WAGEPERIOD"),TString()), 
+            (ID("STATE"),TString()), 
+            (ID("GENDER"),TString()), 
+            (ID("NEARESTLARGECITY"),TString()), 
+            (ID("COMPANYSIZE"),TFloat())
+          )
         					
         
         result.length must be equalTo 213
@@ -303,26 +316,26 @@ object SparkDataSourcesSpec
         
       }
       
-      
       "Be able to query from a csv source already in s3" >> {
-        db.loadTable(
-          sourceFile = "s3n://mimir-test-data/test/r_test/r.csv",
-          targetTable = Some(ID("S3CSV"))
-        )
+        skipped("Needs to be rewritten to not require hostname hacks"); ko
+        // db.loadTable(
+        //   sourceFile = "s3n://mimir-test-data/test/r_test/r.csv",
+        //   targetTable = Some(ID("S3CSV"))
+        // )
         
-        val result = query("""
-          SELECT * FROM S3CSV
-        """)(_.toList.map(_.tuple.toList)).toList
+        // val result = query("""
+        //   SELECT * FROM S3CSV
+        // """)(_.toList.map(_.tuple.toList)).toList
         
-        result must be equalTo List(
-         List(i(1), i(2), i(3)), 
-         List(i(1), i(3), i(1)), 
-         List(i(2), NullPrimitive(), i(1)), 
-         List(i(1), i(2), NullPrimitive()), 
-         List(i(1), i(4), i(2)), 
-         List(i(2), i(2), i(1)), 
-         List(i(4), i(2), i(4))   
-        )
+        // result must be equalTo List(
+        //  List(i(1), i(2), i(3)), 
+        //  List(i(1), i(3), i(1)), 
+        //  List(i(2), NullPrimitive(), i(1)), 
+        //  List(i(1), i(2), NullPrimitive()), 
+        //  List(i(1), i(4), i(2)), 
+        //  List(i(2), i(2), i(1)), 
+        //  List(i(4), i(2), i(4))   
+        // )
         
       }
     }

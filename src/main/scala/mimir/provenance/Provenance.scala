@@ -285,7 +285,7 @@ object Provenance extends LazyLogging {
         doFilterForToken(query, rowIdsByColumn, db)
 
       case Table(_,_, _, meta) =>
-        meta.find( _._2.equals(Var(ID("ROWID"))) ) match {
+        meta.find( _._2.equals(RowIdVar()) ) match {
           case Some( (colName, _, _) ) =>
             var rowIdForTable = rowIdsByColumn.get(colName) match {
               case Some(s) => s

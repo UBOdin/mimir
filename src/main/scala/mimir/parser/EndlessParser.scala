@@ -25,6 +25,7 @@ class EndlessParser(
   def next(
     verbose:Boolean = false
   ): EndlessParserResult =  {
+    dropLeadingWhitespace
     logger.trace { s"Parsing Buffer: $fullBuffer" } 
     parse(
       buffer.iterator, 
@@ -39,14 +40,17 @@ class EndlessParser(
         return EndlessParserNeedMoreData()
       }
       case f@Parsed.Failure(_, idx, _) if verbose => {
+        val (line, lineIdx, lineNo) = lineOfIndex(idx)
         if(clearOnError) { clear() }
-        return EndlessParserParseError(SyntaxError(lineOfIndex(idx), idx, f.longMsg))
+        return EndlessParserParseError(SyntaxError(line, lineIdx, lineNo, f.longMsg))
       }
       case _:Parsed.Failure => { 
         return next(verbose = true)
       }
     }
   }
+
+  def iterator = new EndlessParserIterator(this)
 
   def load(line: String) { buffer.enqueue(line) }
   def load(source: Reader) 
@@ -59,21 +63,48 @@ class EndlessParser(
     while( notDone ){
       val line = bufferedSource.readLine()
       if(line == null){ notDone = false }
-      else { load(line) }
+      else { load(line+"\n") }
     }
   }
   def load(file: File) { load(new FileReader(file)) }
 
   def clear() { buffer.clear() }
 
-  private def lineOfIndex(n: Int): String =
+  val TrailingWhitespace = "\\s+$".r.unanchored
+
+  private def lineOfIndex(n: Int): (String, Int, Int) =
   {
     var totalCharsSeen = 0
+    var lineNo = 0
+    logger.trace(s"Looking for char $n")
     for(line <- buffer){
+      logger.trace(s"... at char $totalCharsSeen -> $line")
+      if(totalCharsSeen + line.length > n) { 
+        return (
+          TrailingWhitespace.replaceFirstIn(line, ""), 
+          n-totalCharsSeen, 
+          lineNo
+        ); }
       totalCharsSeen += line.length
-      if(totalCharsSeen > n) { return line; }
+      lineNo += 1
     }
-    return ""
+    return ("", 0, lineNo)
+  }
+
+  val LeadingWhitespace = "^\\s+".r.unanchored
+
+  private def dropLeadingWhitespace
+  {
+    var done = false
+    while(!buffer.isEmpty && !done){ 
+      buffer.update(0, 
+        LeadingWhitespace.replaceFirstIn(buffer.head, "")
+      )
+      if(!buffer.head.equals("")){ done = true }
+      while(!buffer.isEmpty && buffer.head.equals("")){
+        buffer.dequeue
+      }
+    }
   }
 
   private def dropChars(n: Int)
@@ -93,6 +124,33 @@ class EndlessParser(
       }
     }
     logger.trace(s"Done dropping")
+  }
+
+}
+
+class EndlessParserIterator(parser: EndlessParser)
+  extends Iterator[MimirCommand]
+{
+  var buffer: Option[MimirCommand] = None
+
+  def load: Boolean =
+  {
+    buffer match {
+      case None => parser.next() match {
+        case EndlessParserCommand(cmd)      => buffer = Some(cmd); return true
+        case _:EndlessParserNeedMoreData    => return false
+        case EndlessParserParseError(error) => throw new Exception(error.toString)
+      }
+      case Some(_) => return true
+    }
+  }
+
+  def hasNext() = load
+  def next(): MimirCommand = { 
+    load; 
+    val ret = buffer.getOrElse(null); 
+    buffer = None; 
+    return ret 
   }
 
 }

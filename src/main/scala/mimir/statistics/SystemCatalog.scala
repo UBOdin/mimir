@@ -12,19 +12,18 @@ class SystemCatalog(db: Database)
   def tableView: Operator =
   {
     val tableView =
-      Project(
-        SystemCatalog.tableCatalogSchema.map(_._1).map { col =>
-          ProjectArg(col, Var(col))
-        },
-        OperatorUtils.makeUnion(
-          Seq(
-            db.backend.listTablesQuery
-              .addColumns( "SCHEMA_NAME" -> StringPrimitive("BACKEND") ),
-            db.views.listViewsQuery
-              .addColumns( "SCHEMA_NAME" -> StringPrimitive("MIMIR") )
-          )++db.adaptiveSchemas.tableCatalogs
-        )
-      )
+      OperatorUtils.makeUnion(
+        Seq(
+          db.backend.listTablesQuery
+            .addColumns( "SCHEMA_NAME" -> StringPrimitive("BACKEND") ),
+          db.views.listViewsQuery
+            .addColumns( "SCHEMA_NAME" -> StringPrimitive("MIMIR") )
+        )++db.adaptiveSchemas.tableCatalogs
+      ).
+      projectByID( SystemCatalog.tableCatalogSchema.map { _._1 }:_* )
+    // sanity check:
+    db.typechecker.schemaOf()
+
     logger.debug(s"Table View: \n$tableView")
     return tableView
   }

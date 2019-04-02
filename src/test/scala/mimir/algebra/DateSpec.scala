@@ -16,7 +16,7 @@ object DateSpec
 {
 
   def beforeAll() {
-    db.loadTable("test/data/DetectSeriesTest2.csv")
+    loadCSV("test/data/DetectSeriesTest2.csv")
   }
 
   "Dates on SQLite" should {

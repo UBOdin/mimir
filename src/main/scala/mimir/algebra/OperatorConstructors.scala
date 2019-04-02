@@ -7,7 +7,9 @@ trait OperatorConstructors
   def toOperator: Operator
 
   private def resolve(col: String):Var = 
-    Var(toOperator.resolveCaseInsensitiveColumn(col).get)
+    Var(toOperator.resolveCaseInsensitiveColumn(col)
+                  .getOrElse { throw new Exception(s"Column does not exist $col (out of ${toOperator.columnNames.mkString(", ")})\n$toOperator") }
+        )
 
   def union(other: Operator): Operator =
     Union(toOperator, other)
@@ -95,7 +97,7 @@ trait OperatorConstructors
   }
 
   def addColumns(newCols: (String, Expression)*): Operator =
-    addColumnsByID(newCols.map { case (col, expr) => resolve(col).name -> expr }:_*)
+    addColumnsByID(newCols.map { case (col, expr) => ID(col) -> expr }:_*)
   def addColumnsByID(newCols: (ID, Expression)*): Operator =
   {
     val (cols, src) = OperatorUtils.extractProjections(toOperator)
@@ -142,7 +144,7 @@ trait OperatorConstructors
   {
     Aggregate(
       Seq(), 
-      Seq(AggFunction(ID("COUNT"), distinct, Seq(), ID(alias))), 
+      Seq(AggFunction(ID("count"), distinct, Seq(), ID(alias))), 
       toOperator
     )
   }
@@ -169,7 +171,7 @@ trait OperatorConstructors
       Seq(),
       Seq(
         AggFunction(
-          ID("AVG"), 
+          ID("avg"), 
           false, 
           Seq(condition.thenElse { FloatPrimitive(1) } { FloatPrimitive(0) }),
           ID(alias)
