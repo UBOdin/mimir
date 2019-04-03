@@ -131,7 +131,7 @@ libraryDependencies ++= Seq(
   "org.rogach"                    %%  "scallop"                  % "0.9.5",
   "org.jline"                     %   "jline"                    % "3.2.0",
   "info.mimirdb"                  %%  "sparsity"                 % "0.1-SNAPSHOT",
-  "com.lihaoyi"                   %% "fastparse"                 % "2.1.0",
+  "com.lihaoyi"                   %%  "fastparse"                % "2.1.0",
 
   ////////////////////// Dev Tools -- Logging, Testing, etc... //////////////////////
   "com.typesafe.scala-logging"    %%  "scala-logging-slf4j"      % "2.1.2",

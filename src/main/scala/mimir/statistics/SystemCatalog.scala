@@ -22,7 +22,7 @@ class SystemCatalog(db: Database)
       ).
       projectByID( SystemCatalog.tableCatalogSchema.map { _._1 }:_* )
     // sanity check:
-    db.typechecker.schemaOf()
+    db.typechecker.schemaOf(tableView)
 
     logger.debug(s"Table View: \n$tableView")
     return tableView
