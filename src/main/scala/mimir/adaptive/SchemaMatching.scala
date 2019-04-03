@@ -179,7 +179,7 @@ object SchemaMatching
         
   def viewFor(db: Database, config: MultilensConfig, table: ID): Option[Operator] =
   {
-    if(table.equals("DATA")){
+    if(table.equalsIgnoreCase("DATA")){
       val targetSchema =
       config.args.
         map(field => {
@@ -193,8 +193,8 @@ object SchemaMatching
         }).toList
       Some(Project(
         targetSchema.map { case (colName, colType)  => { 
-          val metaModel = db.models.get(ID(config.schema,":META:$colName"))
-          val model = db.models.get(config.schema+ID(metaModel
+          val metaModel = db.models.get(ID(config.schema,s":META:$colName"))
+          val model = db.models.get(config.schema+ID(":")+ID(metaModel
             .bestGuess(0, Seq(), Seq()).asString+":")+colName)
           ProjectArg(colName,  model.bestGuess(0, Seq(), Seq()) match {
             case np@NullPrimitive() => np
