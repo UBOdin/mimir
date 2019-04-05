@@ -71,10 +71,11 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
   val remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
   def open(): Unit = {
     logger.warn(s"Open SparkBackend: dataDir: $dataDir sparkHost:$sparkHost, sparkPort:$sparkPort, hdfsPort:$hdfsPort, useHDFSHostnames:$useHDFSHostnames, overwriteStagedFiles:$overwriteStagedFiles, overwriteJars:$overwriteJars, numPartitions:$numPartitions, dataStagingType:$dataStagingType")
+    System.setProperty("derby.system.home", dataDir)
+          
     sparkSql = sparkSql match {
       case null => {
         val conf = if(remoteSpark){
-          System.setProperty("derby.system.home", dataDir)
           new SparkConf().setMaster(s"spark://$sparkHost:$sparkPort")
             .set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
             .set("spark.submit.deployMode","client")
@@ -101,6 +102,8 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
             .setAppName("Mimir")
             .set("spark.sql.catalogImplementation", "hive")
             .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+            .set("spark.driver.extraJavaOptions", s"-Dderby.system.home=$dataDir")
+            .set("spark.sql.warehouse.dir", s"${new File(dataDir).getAbsolutePath}/spark-warehouse")
             .registerKryoClasses(SparkUtils.getSparkKryoClasses())
             
         }

@@ -230,14 +230,14 @@ object DiscalaAbadiSpec
 
     "Create queriable relations" >> {
       queryOneColumn("""
-        SELECT QUANTITY FROM SHIPPING.BILL_OF_LADING_NBR"""
+        SELECT QUANTITY FROM `SHIPPING`.`BILL_OF_LADING_NBR`"""
       ){ _.toSeq must contain(StringPrimitive("1")) }
     }
 
     "Generate legitimate explanations on query results" >> {
       db.explainer.explainEverything(db.sqlToRA(stmt("""
         SELECT QUANTITY FROM SHIPPING.BILL_OF_LADING_NBR
-      """).asInstanceOf[sparsity.statement.Select])).flatMap(_.all(db)).map(_.reason) must contain(
+      """).asInstanceOf[mimir.parser.SQLStatement].body)).flatMap(_.all(db)).map(_.reason) must contain(
         "QUANTITY could be organized under any of BILL_OF_LADING_NBR (19), ROOT (-1); I chose BILL_OF_LADING_NBR"
       )
     }

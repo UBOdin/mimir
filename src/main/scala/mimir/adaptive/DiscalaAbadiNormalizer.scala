@@ -143,7 +143,7 @@ object DiscalaAbadiNormalizer
   ): Operator = 
   {
 
-    val keepColumns = 
+    val keepColumns: Seq[(ID, Var)] = 
       query.columnNames
         .filter { !_.equals(nodeCol) }
         .map { col => col -> Var(col) } ++

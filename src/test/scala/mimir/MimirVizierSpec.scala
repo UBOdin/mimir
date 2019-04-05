@@ -13,14 +13,25 @@ import mimir.backend._
 class MimirVizierSpec 
   extends Specification
   with BeforeAll
+  with AfterAll
 {
-
+  val dataDirectoryPath = "MimirVizierSpec"
+  val dataDirectory = new File (dataDirectoryPath)
+  
+  def afterAll = {
+    mimir.util.BackupUtils.deleteFile(dataDirectory)
+  }
+  
   def beforeAll = {
-    val dbFileName = "MimirVizierSpec.db"
+    if(!dataDirectory.exists())
+      dataDirectory.mkdir()
+    
+    val dbFileName = dataDirectoryPath+"/MimirVizierSpec.db"
     val dbFile = new File (dbFileName)
     dbFile.deleteOnExit();
+    
     val args = Seq(
-      "--db", dbFileName
+      "--dataDirectory", dataDirectoryPath, "--db", dbFileName
     )
     Mimir.conf = new MimirConfig(args);
     val database = Mimir.conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
@@ -46,14 +57,14 @@ class MimirVizierSpec
   }
 
   "MimirVizier" should {
-
+    
     "be set up properly" >> { 
       MimirVizier.db.tableExists("CPUSPEED") must beTrue
       MimirVizier.db.tableExists("NOT_A_TABLE") must beFalse
 
       val schema = MimirVizier.db.tableSchema("CPUSPEED") 
       schema must not be(None) 
-      schema.get.map { _._1 } must contain("BUS_SPEED_MHZ")
+      schema.get.map { _._1 } must contain(ID("BUS_SPEED_MHZ"))
     }
 
     "create missing value lenses properly" >> { 

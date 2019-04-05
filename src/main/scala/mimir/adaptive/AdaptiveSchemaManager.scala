@@ -103,7 +103,7 @@ class AdaptiveSchemaManager(db: Database)
     all.map { case(mlens, config) => 
 
       val tableBaseSchemaColumns =
-        SystemCatalog.tableCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 )
+        SystemCatalog.tableCatalogSchema.filter(_._1 != ID("SCHEMA_NAME")).map( _._1 )
 
       mlens.tableCatalogFor(db, config)
         .projectByID( tableBaseSchemaColumns:_* )
@@ -117,7 +117,7 @@ class AdaptiveSchemaManager(db: Database)
     some(mlensType).map { case(mlens, config) => 
 
       val tableBaseSchemaColumns =
-        SystemCatalog.tableCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 )
+        SystemCatalog.tableCatalogSchema.filter(_._1 != ID("SCHEMA_NAME")).map( _._1 )
 
       mlens.tableCatalogFor(db, config)
         .projectByID( tableBaseSchemaColumns:_* )
@@ -131,7 +131,7 @@ class AdaptiveSchemaManager(db: Database)
     all.map { case(mlens, config) => 
 
       val attrBaseSchemaColumns =
-        SystemCatalog.attrCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 )
+        SystemCatalog.attrCatalogSchema.filter(_._1 != ID("SCHEMA_NAME")).map( _._1 )
 
       mlens.attrCatalogFor(db, config)         
         .projectByID( attrBaseSchemaColumns:_* )
@@ -145,7 +145,7 @@ class AdaptiveSchemaManager(db: Database)
     some(mlensType).map { case(mlens, config) => 
 
       val attrBaseSchemaColumns =
-        SystemCatalog.attrCatalogSchema.filter(_._1 != "SCHEMA_NAME").map( _._1 )
+        SystemCatalog.attrCatalogSchema.filter(_._1 != ID("SCHEMA_NAME")).map( _._1 )
 
       mlens.attrCatalogFor(db, config)         
         .projectByID( attrBaseSchemaColumns:_* )

@@ -183,7 +183,7 @@ object SparkUtils {
   def getDataFrameWithProvFromQuery(db:mimir.Database, query:Operator) : (Seq[(ID, Type)], DataFrame) = {
     val prov = Provenance.compile(query)
     val oper           = prov._1
-    val provenanceCols = prov._2
+    val provenanceCols:Seq[ID] = prov._2
     val operWProv = Project(query.columnNames.map { name => ProjectArg(name, Var(name)) } :+
         ProjectArg(Provenance.rowidColnameBase, 
             Function(Provenance.mergeRowIdFunction, provenanceCols.map( Var(_) ) )), oper )
@@ -196,7 +196,16 @@ object SparkUtils {
       case _ => el
     }), dfOut)
   }
+  
+  def getDataFrameFromQuery(db:mimir.Database, query:Operator) : (Seq[(ID, Type)], DataFrame) = {
+    val dfPreOut = db.backend.execute(query)
+    val dfOutDt = dfPreOut.schema.fields.filter(col => Seq(DateType).contains(col.dataType)).foldLeft(dfPreOut)((init, cur) => init.withColumn(cur.name,unix_timestamp(init(cur.name)).cast(LongType)*1000))
+    val dfOut = dfOutDt.schema.fields.filter(col => Seq(TimestampType).contains(col.dataType)).foldLeft(dfOutDt)((init, cur) => init.withColumn(cur.name,init(cur.name).cast(LongType)*1000) )
+    (db.typechecker.schemaOf(query), dfOut)
+  }
 }
+
+
 
 class SparkDataFrameIterable(results: Iterator[Row], schema: Seq[Type]) 
   extends Iterator[Seq[PrimitiveValue]]

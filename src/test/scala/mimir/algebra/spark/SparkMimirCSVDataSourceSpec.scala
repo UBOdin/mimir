@@ -107,7 +107,7 @@ object SparkMimirCSVDataSourceSpec
         "Explain the errors" >> {
           val resultSets = db.explainer.explainEverything(table("CORRUPT"))
           val results = resultSets.flatMap(_.all(db)).map { _.toString }
-
+          
           results must contain(
             "The value [ NULL ] is uncertain because there is an error(s) in the data source on row 4. The raw value of the row in the data source is [ ------- ] {{ MIMIR_DSE_WARNING_corrupt_DSE['4', '_c1', NULL, '-------'] }}"
           )

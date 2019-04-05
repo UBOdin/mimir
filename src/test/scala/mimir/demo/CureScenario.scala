@@ -53,12 +53,9 @@ object CureScenario
           update(s"ALTER VIEW $basename MATERIALIZE;")
         }
         db.explainer.explainEverything(
-          db.sqlToRA(stmt(s"SELECT * FROM $basename")
-            .asInstanceOf[sparsity.statement.Select])) must not beEmpty;
+          db.table(basename)) must not beEmpty;
         //this still blows up - something with getColumns on vgterm during lookup query 
-        /*db.explainer.explainEverything(
-          db.sql.convert(stmt(s"SELECT * FROM $basename")
-            .asInstanceOf[net.sf.jsqlparser.statement.select.Select]))
+        /*db.explainer.explainEverything(db.table(basename))
               .flatMap( rs => rs.all(db)) must not beEmpty;*/
         
         db.tableExists(basename) must beTrue
