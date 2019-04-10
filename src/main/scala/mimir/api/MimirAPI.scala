@@ -1,0 +1,153 @@
+package mimir.api
+
+import org.eclipse.jetty.util.ssl.SslContextFactory
+import org.eclipse.jetty.server.Server
+import org.eclipse.jetty.server.SecureRequestCustomizer
+import org.eclipse.jetty.server.SslConnectionFactory
+import org.eclipse.jetty.server.HttpConfiguration
+import org.eclipse.jetty.server.ServerConnector
+import org.eclipse.jetty.http.HttpVersion
+import org.eclipse.jetty.server.HttpConnectionFactory
+import org.eclipse.jetty.servlet.ServletHolder
+import org.eclipse.jetty.servlet.ServletContextHandler
+import org.eclipse.jetty.server.handler.ResourceHandler
+import org.eclipse.jetty.server.handler.ContextHandler
+import org.eclipse.jetty.server.handler.DefaultHandler
+import org.eclipse.jetty.server.handler.HandlerCollection
+import org.eclipse.jetty.server.Handler
+import org.eclipse.jetty.webapp.WebAppContext
+
+import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
+import play.api.libs.json._
+
+object MimirAPI {
+  
+  var isRunning = true
+  
+  def runAPIServerForViztrails() : Unit = {
+    val server = new Server(8089)
+    val http_config = new HttpConfiguration();
+    server.addConnector(new ServerConnector( server,  new HttpConnectionFactory(http_config)) );
+    
+    val contextHandler = buildSwaggerUI()
+    
+    val resource_handler2 = new ResourceHandler()
+		resource_handler2.setDirectoriesListed(true)
+	  //println(s"${new java.io.File("./client/target/scala-2.12/scalajs-bundler").getAbsolutePath()}")
+		resource_handler2.setResourceBase("./src")
+		val contextHandler2 = new ContextHandler("/src");
+    contextHandler2.setResourceBase("./src");
+    contextHandler2.setHandler(resource_handler2);
+     
+    val servletContextHandler = new ServletContextHandler(ServletContextHandler.SESSIONS);
+    servletContextHandler.setContextPath("/");
+    val holder = new ServletHolder(new MimirVizierServlet());
+    servletContextHandler.addServlet(holder, "/*");
+	  
+    val handlerList = new HandlerCollection();
+    handlerList.setHandlers( Array[Handler](contextHandler, contextHandler2, servletContextHandler, new DefaultHandler()));
+    
+    server.setHandler(handlerList);
+    server.start()
+     
+    println("Mimir API Server Started...")
+     while(isRunning){
+       Thread.sleep(90000)
+       
+     }
+     Thread.sleep(1000)
+     server.stop();
+    
+  }
+  
+  def buildSwaggerUI(): ContextHandler = {
+    val rh = new ResourceHandler()
+		rh.setDirectoriesListed(true)
+		rh.setResourceBase("./src/main/resources/api-docs")
+    val context = new ContextHandler("/api-docs");
+    context.setResourceBase("./src/main/resources/api-docs");
+    context.setHandler(rh);
+    context
+  }
+}
+
+class MimirVizierServlet() extends HttpServlet {
+    override def doPost(req : HttpServletRequest, resp : HttpServletResponse) = {
+        val text = scala.io.Source.fromInputStream(req.getInputStream).mkString 
+        println(s"MimirAPI POST ${req.getPathInfo}\n$text")
+        val routePattern = "\\/api\\/v2(\\/[a-zA-Z\\/]+)".r
+        req.getPathInfo match {
+          case routePattern(route) => {
+            try{
+              val os = resp.getOutputStream()
+              resp.setHeader("Content-type", "text/json");
+              route match {
+                case "/eval/scala" => {
+                  Json.parse(text).as[ScalaEvalRequest].handle(os)
+                }
+                case "/dataSource/load" => {
+                  Json.parse(text).as[LoadRequest].handle(os)
+                }
+                case "/dataSource/unload" => {
+                  Json.parse(text).as[UnloadRequest].handle(os)
+                }
+                case "/lens/create" => {
+                  Json.parse(text).as[CreateLensRequest].handle(os)
+                }
+                case "/view/create" => {
+                  Json.parse(text).as[CreateViewRequest].handle(os)
+                }
+                case "/adaptive/create" => {
+                  Json.parse(text).as[CreateAdaptiveSchemaRequest].handle(os)
+                }
+                case "/annotations/noschema" => {}
+                case "/annotations/schema" => {}
+                case "/annotations/cell" => {}
+                case "/annotations/subset" => {}
+                case "/annotations/all" => {}
+                case "/annotations/summary" => {}
+                case "/annotations/repair" => {}
+                case "/annotations/feedback" => {}
+                case "/query/data" => {}
+              }
+              os.flush()
+              os.close() 
+            } catch {
+              case t: Throwable => {
+                t.printStackTrace() 
+                throw t
+              }
+            }
+          }
+          case _ => throw new Exception("request Not handled: " + req.getPathInfo)
+        }  
+    }
+    override def doGet(req : HttpServletRequest, resp : HttpServletResponse) = {
+      println(s"MimirAPI GET ${req.getPathInfo}")
+        
+      val routePattern = "\\/api\\/v2\\/([a-zA-Z\\/]+)".r
+        req.getPathInfo match {
+          case routePattern(route) => {
+            try{
+              val os = resp.getOutputStream()
+              resp.setHeader("Content-type", "text/json");
+              route match {
+                case "/lens" => {
+                  os.write(Json.stringify(Json.toJson(LensList(mimir.MimirVizier.getAvailableLenses()))).getBytes )
+                }
+                case "/adaptive" => {}
+                case "/schema" => {}
+              }
+              os.flush()
+              os.close() 
+            } catch {
+              case t: Throwable => {
+                t.printStackTrace() 
+                throw t
+              }
+            }
+          }
+          case _ => throw new Exception("request Not handled: " + req.getPathInfo)
+        }  
+    }
+  }
