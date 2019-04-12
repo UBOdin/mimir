@@ -119,78 +119,137 @@ object CreateAdaptiveSchemaRequest {
 }
 
 
+case class ExplainSubsetWithoutSchemaRequest (
+            /* query to explain */
+                  query: String,
+                  rows: Seq[String],
+                  cols: Seq[String]
+) extends Request {
+  def handle(os:OutputStream) = {
+    os.write(Json.stringify(Json.toJson(ExplainResponse(MimirVizier.explainSubsetWithoutSchema(query, rows, cols).map(rsn => 
+      ReasonSet(rsn.model.name.toString, rsn.idx, rsn.argLookup match {
+        case Some((query, args, hints)) => "[" + args.mkString(", ") + "][" + hints.mkString(", ") + "] <- \n" + query.toString("   ")
+        case None => ""
+      })
+    )))).getBytes )
+  }
+}
+
+object ExplainSubsetWithoutSchemaRequest {
+  implicit val format: Format[ExplainSubsetWithoutSchemaRequest] = Json.format
+}
+
+
+case class ExplainSchemaRequest (
+            /* query to explain */
+                  query: String,
+                  cols: Seq[String]
+) extends Request {
+  def handle(os:OutputStream) = {
+    os.write(Json.stringify(Json.toJson(ExplainResponse(MimirVizier.explainSchema(query, cols).map(rsn => 
+      ReasonSet(rsn.model.name.toString, rsn.idx, rsn.argLookup match {
+        case Some((query, args, hints)) => "[" + args.mkString(", ") + "][" + hints.mkString(", ") + "] <- \n" + query.toString("   ")
+        case None => ""
+      })
+    )))).getBytes )
+  }
+}
+
+object ExplainSchemaRequest {
+  implicit val format: Format[ExplainSchemaRequest] = Json.format
+}
+
+
 case class ExplainCellSchemaRequest (
             /* query to explain */
                   query: String,
             /* rowid of cell */
                   row: String,
             /* column of cell */
-                  col: String
-)
+                  col: Int
+) extends Request {
+  def handle(os:OutputStream) = {
+    os.write(Json.stringify(Json.toJson(ExplainReasonsResponse(MimirVizier.explainCell(query, col, row).map(rsn => 
+      Reason(rsn.reason, rsn.model.name.toString, rsn.idx, rsn.args.map(_.toString()), mimir.api.Repair(rsn.repair.toJSON), rsn.repair.exampleString)
+    )))).getBytes )
+  }
+}
 
 object ExplainCellSchemaRequest {
   implicit val format: Format[ExplainCellSchemaRequest] = Json.format
 }
 
-case class ExplainEverythingAllRequest (
-            /* query to explain */
-                  query: String
-)
-
-object ExplainEverythingAllRequest {
-  implicit val format: Format[ExplainEverythingAllRequest] = Json.format
-}
-
-case class ExplainEverythingRequest (
-            /* query to explain */
-                  query: Option[String]
-)
-
-object ExplainEverythingRequest {
-  implicit val format: Format[ExplainEverythingRequest] = Json.format
-}
-
-case class ExplainSchemaRequest (
-            /* query to explain */
-                  query: String,
-                  cols: Seq[String]
-)
-
-object ExplainSchemaRequest {
-  implicit val format: Format[ExplainSchemaRequest] = Json.format
-}
 
 case class ExplainSubsetRequest (
             /* query to explain */
                   query: String,
                   rows: Seq[String],
                   cols: Seq[String]
-)
+) extends Request {
+  def handle(os:OutputStream) = {
+    os.write(Json.stringify(Json.toJson(ExplainResponse(MimirVizier.explainSubset(query, rows, cols.map(mimir.algebra.ID(_))).map(rsn => 
+      ReasonSet(rsn.model.name.toString, rsn.idx, rsn.argLookup match {
+        case Some((query, args, hints)) => "[" + args.mkString(", ") + "][" + hints.mkString(", ") + "] <- \n" + query.toString("   ")
+        case None => ""
+      })
+    )))).getBytes )
+  }
+}
 
 object ExplainSubsetRequest {
   implicit val format: Format[ExplainSubsetRequest] = Json.format
 }
 
-case class ExplainSubsetWithoutSchemaRequest (
-            /* query to explain */
-                  query: String,
-                  rows: Seq[String],
-                  cols: Seq[String]
-)
 
-object ExplainSubsetWithoutSchemaRequest {
-  implicit val format: Format[ExplainSubsetWithoutSchemaRequest] = Json.format
+case class ExplainEverythingAllRequest (
+            /* query to explain */
+                  query: String
+) extends Request {
+  def handle(os:OutputStream) = {
+    os.write(Json.stringify(Json.toJson(ExplainReasonsResponse(MimirVizier.explainEverythingAll(query).map(rsn => 
+      Reason(rsn.reason, rsn.model.name.toString, rsn.idx, rsn.args.map(_.toString()), mimir.api.Repair(rsn.repair.toJSON), rsn.repair.exampleString)
+    )))).getBytes )
+  }
 }
 
+object ExplainEverythingAllRequest {
+  implicit val format: Format[ExplainEverythingAllRequest] = Json.format
+}
+
+
+case class ExplainEverythingRequest (
+            /* query to explain */
+                  query: String
+) extends Request {
+  def handle(os:OutputStream) = {
+    os.write(Json.stringify(Json.toJson(ExplainResponse(MimirVizier.explainEverything(query).map(rsn => 
+      ReasonSet(rsn.model.name.toString, rsn.idx, rsn.argLookup match {
+        case Some((query, args, hints)) => "[" + args.mkString(", ") + "][" + hints.mkString(", ") + "] <- \n" + query.toString("   ")
+        case None => ""
+      })
+    )))).getBytes )
+  }
+}
+
+object ExplainEverythingRequest {
+  implicit val format: Format[ExplainEverythingRequest] = Json.format
+}
+
+
 case class FeedbackForReasonRequest (
-                  reasons: Seq[Reason],
+                  reason: Reason,
             /* idx */
-                  idx: Long,
+                  idx: Int,
             /* acknowledge guess */
                   ack: Boolean,
             /* repair string */
                   repairStr: String
-)
+) extends Request {
+  def handle(os:OutputStream) = {
+    val (model, argsHints) = (reason.source, reason.args)
+    MimirVizier.feedback(model, idx, argsHints, ack, repairStr)
+  }
+}
 
 object FeedbackForReasonRequest {
   implicit val format: Format[FeedbackForReasonRequest] = Json.format
@@ -205,22 +264,28 @@ case class QueryMimirRequest (
             /* include taint in response */
                   includeUncertainty: Boolean,
             /* include reasons in response */
-                  includeReasons: Boolean,
-            /* options for spark datasource api */
-                  backendOption: Seq[Tuple]
-)
+                  includeReasons: Boolean
+) extends Request {
+  def handle(os:OutputStream) = {
+    os.write(Json.stringify(Json.toJson(MimirVizier.vistrailsQueryMimir(input, query, includeUncertainty, includeReasons) )).getBytes )
+  }
+}
 
 object QueryMimirRequest {
   implicit val format: Format[QueryMimirRequest] = Json.format
 }
 
-case class RepairFromReasonRequest (
-                  reasons: Seq[Reason],
-            /* idx */
-                  idx: Long
-)
 
-object RepairFromReasonRequest {
-  implicit val format: Format[RepairFromReasonRequest] = Json.format
+case class SchemaForQueryRequest (
+            /* query string to get schema for - sql */
+                  query: String
+) extends Request {
+  def handle(os:OutputStream) = {
+    os.write(Json.stringify(Json.toJson(SchemaList(MimirVizier.getSchema(query)))).getBytes )
+  }
+}
+
+object SchemaForQueryRequest {
+implicit val format: Format[SchemaForQueryRequest] = Json.format
 }
 

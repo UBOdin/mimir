@@ -26,6 +26,17 @@ object Schema {
   implicit val format: Format[Schema] = Json.format
 }
 
+
+case class Repair (
+            /* name of selector */
+                  selector: String
+)
+
+object Repair {
+  implicit val format: Format[Repair] = Json.format
+}
+
+
 case class Reason (
                   english: String,
                   source: String,

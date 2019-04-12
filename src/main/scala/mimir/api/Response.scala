@@ -47,7 +47,7 @@ object CreateLensResponse {
 
 case class CreateViewResponse (
             /* name of resulting view */
-                  lensName: String
+                  viewName: String
 ) extends Response
 
 object CreateViewResponse {
@@ -55,25 +55,32 @@ object CreateViewResponse {
 }
 
 
-case class AdaptiveSchemaList (
-    adaptiveSchemaTypes: Seq[String]
-)
-
-object AdaptiveSchemaList {
-  implicit val format: Format[AdaptiveSchemaList] = Json.format
-}
-
-
 case class CreateAdaptiveSchemaResponse (
             /* name of resulting adaptive schema */
                   adaptiveSchemaName: String
-)
+) extends Response
 
 object CreateAdaptiveSchemaResponse {
   implicit val format: Format[CreateAdaptiveSchemaResponse] = Json.format
 }
 
 
+case class ExplainResponse (
+                  reasons: Seq[ReasonSet]
+) extends Response
+
+object ExplainResponse {
+  implicit val format: Format[ExplainResponse] = Json.format
+}
+
+
+case class ExplainReasonsResponse (
+                  reasons: Seq[Reason]
+) extends Response
+
+object ExplainReasonsResponse {
+  implicit val format: Format[ExplainReasonsResponse] = Json.format
+}
 
 
 case class CSVContainer (
@@ -83,54 +90,34 @@ case class CSVContainer (
                   colTaint: Seq[Seq[Boolean]],
                   rowTaint: Seq[Boolean],
                   reasons: Seq[Seq[Reason]]
-)
+) extends Response
 
 object CSVContainer {
   implicit val format: Format[CSVContainer] = Json.format
 }
 
 
-case class ExplainReasonsResponse (
-                  reasons: Seq[Reason]
-)
-
-object ExplainReasonsResponse {
-  implicit val format: Format[ExplainReasonsResponse] = Json.format
-}
-
-
-case class ExplainResponse (
-                  reasons: Seq[ReasonSet]
-)
-
-object ExplainResponse {
-  implicit val format: Format[ExplainResponse] = Json.format
-}
-
-
 case class LensList (
     lensTypes: Seq[String]
-)
+) extends Response
 
 object LensList {
   implicit val format: Format[LensList] = Json.format
 }
 
 
+case class AdaptiveSchemaList (
+    adaptiveSchemaTypes: Seq[String]
+) extends Response
 
-case class Repair (
-            /* name of selector */
-                  selector: String
-)
-
-object Repair {
-  implicit val format: Format[Repair] = Json.format
+object AdaptiveSchemaList {
+  implicit val format: Format[AdaptiveSchemaList] = Json.format
 }
 
 
 case class SchemaList (
     schema: Seq[Schema]
-)
+) extends Response
 
 object SchemaList {
   implicit val format: Format[SchemaList] = Json.format

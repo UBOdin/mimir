@@ -50,6 +50,7 @@
     }
   ],
   "schemes": [
+    "https",
     "http"
   ],
   "paths": {
@@ -364,20 +365,35 @@
       }
     },
     "/schema": {
-      "get": {
+      "post": {
         "tags": [
           "schema"
         ],
         "summary": "schema for query",
         "description": "get a list of columns and types for a query",
         "operationId": "getSchema",
+        "consumes": [
+          "application/json",
+          "application/xml"
+        ],
         "produces": [
           "application/xml",
           "application/json"
         ],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "query",
+            "description": "get schema for query request",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SchemaForQueryRequest"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "adaptive schema type names",
+            "description": "query schema",
             "schema": {
               "$ref": "#/definitions/SchemaList"
             }
@@ -580,38 +596,6 @@
         }
       }
     },
-    "/annotations/repair": {
-      "post": {
-        "tags": [
-          "annotations"
-        ],
-        "summary": "repair from reason",
-        "description": "get repair from mimir for reason",
-        "operationId": "repairReason",
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "description": "repair from reason request",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/RepairFromReasonRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "repair from reason response",
-            "schema": {
-              "$ref": "#/definitions/Repair"
-            }
-          },
-          "400": {
-            "description": "error getting repair for reason"
-          }
-        }
-      }
-    },
     "/annotations/feedback": {
       "post": {
         "tags": [
@@ -806,6 +790,21 @@
         "name": "ScalaEvalResponse"
       }
     },
+    "SchemaForQueryRequest": {
+      "type": "object",
+      "required": [
+        "query"
+      ],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "query string to get schema for - sql"
+        }
+      },
+      "xml": {
+        "name": "SchemaForQueryRequest"
+      }
+    },
     "QueryMimirRequest": {
       "type": "object",
       "required": [
@@ -842,8 +841,8 @@
         "schema",
         "data",
         "prov",
-        "col_taint",
-        "row_taint",
+        "colTaint",
+        "rowTaint",
         "reasons"
       ],
       "properties": {
@@ -884,7 +883,7 @@
             "type": "string"
           }
         },
-        "col_taint": {
+        "colTaint": {
           "type": "array",
           "xml": {
             "name": "col_taint",
@@ -901,7 +900,7 @@
             }
           }
         },
-        "row_taint": {
+        "rowTaint": {
           "type": "array",
           "xml": {
             "name": "row_taint",
@@ -928,6 +927,9 @@
     },
     "LoadResponse": {
       "type": "object",
+      "required": [
+        "name"
+      ],
       "properties": {
         "name": {
           "type": "string",
@@ -1099,10 +1101,10 @@
     "CreateViewResponse": {
       "type": "object",
       "required": [
-        "lensName"
+        "viewName"
       ],
       "properties": {
-        "lensName": {
+        "viewName": {
           "type": "string",
           "description": "name of resulting view"
         }
@@ -1137,10 +1139,6 @@
         "type": {
           "type": "string",
           "description": "type name of adaptive schema"
-        },
-        "materialize": {
-          "type": "boolean",
-          "description": "materialize input before creating adaptive schema"
         }
       },
       "xml": {
@@ -1288,7 +1286,8 @@
           "description": "rowid of cell"
         },
         "col": {
-          "type": "string",
+          "type": "integer",
+          "format": "int32",
           "description": "column of cell"
         }
       },
@@ -1368,6 +1367,9 @@
     },
     "ExplainEverythingRequest": {
       "type": "object",
+      "required": [
+        "query"
+      ],
       "properties": {
         "query": {
           "type": "string",
@@ -1375,55 +1377,21 @@
         }
       }
     },
-    "RepairFromReasonRequest": {
-      "type": "object",
-      "required": [
-        "reasons",
-        "idx"
-      ],
-      "properties": {
-        "reasons": {
-          "type": "array",
-          "xml": {
-            "name": "reasons",
-            "wrapped": true
-          },
-          "items": {
-            "$ref": "#/definitions/Reason"
-          }
-        },
-        "idx": {
-          "type": "integer",
-          "format": "int64",
-          "description": "idx"
-        }
-      },
-      "xml": {
-        "name": "RepairFromReasonRequest"
-      }
-    },
     "FeedbackForReasonRequest": {
       "type": "object",
       "required": [
-        "reasons",
+        "reason",
         "idx",
         "ack",
         "repairStr"
       ],
       "properties": {
-        "reasons": {
-          "type": "array",
-          "xml": {
-            "name": "reasons",
-            "wrapped": true
-          },
-          "items": {
-            "$ref": "#/definitions/Reason"
-          }
+        "reason": {
+          "$ref": "#/definitions/Reason"
         },
         "idx": {
           "type": "integer",
-          "format": "int64",
+          "format": "int32",
           "description": "idx"
         },
         "ack": {

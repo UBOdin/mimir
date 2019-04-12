@@ -15,7 +15,6 @@ import mimir.exec.result.Row
 import mimir.backend._
 import mimir.util.ExperimentalOptions
 //import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
-import py4j.GatewayServer
 import mimir.exec.Compiler
 import mimir.ctables.Reason
 import org.slf4j.{LoggerFactory}
@@ -26,7 +25,6 @@ import mimir.util.LoggerUtils
 import mimir.ml.spark.SparkML
 import mimir.util.JSONBuilder
 import java.util.UUID
-import py4j.GatewayServer.GatewayServerBuilder
 import java.net.InetAddress
 import scala.collection.convert.Wrappers.JMapWrapper
 import mimir.algebra.spark.function.SparkFunctions
@@ -61,8 +59,7 @@ object MimirVizier extends LazyLogging {
 
   var db: Database = null;
   var usePrompt = true;
-  var pythonMimirCallListeners = Seq[PythonMimirCallInterface]()
-
+  
   def main(args: Array[String]) {
     Mimir.conf = new MimirConfig(args);
     ExperimentalOptions.enable(Mimir.conf.experimental())
@@ -131,7 +128,6 @@ object MimirVizier extends LazyLogging {
     
     
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
-      //runServerForViztrails()
       MimirAPI.runAPIServerForViztrails()
       db.backend.close()
       if(!Mimir.conf.quiet()) { logger.debug("\n\nDone.  Exiting."); }
@@ -139,81 +135,7 @@ object MimirVizier extends LazyLogging {
     
     
   }
-  
-  private var mainThread : Thread = null
-  private var pythonGatewayRunning : Boolean = true 
-  def shutdown() : Unit = {
-    this.synchronized{
-      pythonGatewayRunning = false
-      pythonCallThread = null
-      mainThread.interrupt()
-      mainThread = null
-    }
-  }
-  
-  def isPythonGatewayRunning() : Boolean = {
-    this.synchronized{
-      pythonGatewayRunning
-    }
-  }
-  
-  def runServerForViztrails() : Unit = {
-     mainThread = Thread.currentThread()
-     val server = new GatewayServerBuilder().entryPoint(this).javaPort(33388).javaAddress( InetAddress.getByName("0.0.0.0")).build()
-     server.addListener(new py4j.GatewayServerListener(){
-        def connectionError(connExept : java.lang.Exception) = {
-          logger.debug("Python GatewayServer connectionError: " + connExept)
-        }
-  
-        def connectionStarted(conn : py4j.Py4JServerConnection) = {
-          logger.debug("Python GatewayServer connectionStarted: " + conn)
-        }
-        
-        def connectionStopped(conn : py4j.Py4JServerConnection) = {
-          logger.debug("Python GatewayServer connectionStopped: " + conn)
-        }
-        
-        def serverError(except: java.lang.Exception) = {
-          logger.debug("Python GatewayServer serverError")
-        }
-        
-        def serverPostShutdown() = {
-           logger.debug("Python GatewayServer serverPostShutdown")
-        }
-        
-        def serverPreShutdown() = {
-           logger.debug("Python GatewayServer serverPreShutdown")
-        }
-        
-        def serverStarted() = {
-           logger.debug("Python GatewayServer serverStarted")
-        }
-        
-        def serverStopped() = {
-           logger.debug("Python GatewayServer serverStopped")
-        }
-     })
-     server.start()
-     
-     while(isPythonGatewayRunning()){
-       Thread.sleep(90000)
-       if(pythonCallThread != null){
-         //logger.debug("Python Call Thread Stack Trace: ---------v ")
-         //pythonCallThread.getStackTrace.foreach(ste => logger.debug(ste.toString()))
-       }
-       pythonMimirCallListeners.foreach(listener => {
-       
-          //logger.debug(listener.callToPython("knock knock, jvm here"))
-         })
-     }
-     Thread.sleep(1000)
-     server.shutdown()
-    
-  }
-  
-  
-  
-  
+ 
 
   object Eval {
   
@@ -255,9 +177,9 @@ object MimirVizier extends LazyLogging {
   }
   
   //-------------------------------------------------
-  //Python package defs
+  //Mimir API impls
   ///////////////////////////////////////////////
-  var pythonCallThread : Thread = null
+  var apiCallThread : Thread = null
   def evalScala(source : String) : ScalaEvalResponse = {
     try {
       val timeRes = logTime("evalScala") {
@@ -313,7 +235,7 @@ object MimirVizier extends LazyLogging {
   }
   def loadDataSource(file : String, format:String, inferTypes:Boolean, detectHeaders:Boolean, backendOptions:Seq[Any]) : String = {
     try{
-      pythonCallThread = Thread.currentThread()
+      apiCallThread = Thread.currentThread()
       val timeRes = logTime("loadDataSource") {
       logger.debug(s"loadDataSource: From Vistrails: [ $file ] inferTypes: $inferTypes detectHeaders: $detectHeaders format: ${format} -> [ ${backendOptions.mkString(",")} ]") ;
       val bkOpts = backendOptions.map{
@@ -417,7 +339,7 @@ object MimirVizier extends LazyLogging {
   
   def createLens(input : Any, params : Seq[String], _type : String, make_input_certain:Boolean, materialize:Boolean) : CreateLensResponse = {
     try{
-    pythonCallThread = Thread.currentThread()
+    apiCallThread = Thread.currentThread()
     val timeRes = logTime("createLens") {
       logger.debug("createLens: From Vistrails: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]"  ) ;
       val parsedParams = 
@@ -499,7 +421,7 @@ object MimirVizier extends LazyLogging {
   
   def createView(input : Any, query : String) : String = {
     try{
-    pythonCallThread = Thread.currentThread()
+    apiCallThread = Thread.currentThread()
     val timeRes = logTime("createLens") {
       logger.debug("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
       val (viewNameSuffix, inputSubstitutionQuery) = input match {
@@ -523,7 +445,7 @@ object MimirVizier extends LazyLogging {
         case None => {
           val viewQuery = SQL(inputSubstitutionQuery) match {
             case fastparse.Parsed.Success(sparsity.statement.Select(body, _), _) => body
-            case _ => throw new Exception("Invalid view query : $inputSubstitutionQuery")
+            case x => throw new Exception(s"Invalid view query : $inputSubstitutionQuery \n $x")
           }
           logger.debug("createView: query: " + viewQuery)
           db.update(SQLStatement(CreateView(Name(viewName, true), false, viewQuery)))
@@ -546,7 +468,7 @@ object MimirVizier extends LazyLogging {
   
   def createAdaptiveSchema(input : Any, params : Seq[String], _type : String) : String = {
     try {
-    pythonCallThread = Thread.currentThread()
+    apiCallThread = Thread.currentThread()
     val timeRes = logTime("createAdaptiveSchema") {
       logger.debug("createAdaptiveSchema: From Vistrails: [" + input + "] [" + params.mkString(",") + "]"  ) ;
       val paramExprs = params.map(param => 
@@ -785,12 +707,12 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }
   }
   
-  def getSchema(query:String) : String = {
+  def getSchema(query:String) : Seq[Schema] = {
     val timeRes = logTime("getSchema") {
       try{
         logger.debug("getSchema: From Vistrails: [" + query + "]"  ) ;
         val oper = totallyOptimize(db.sqlToRA(MimirSQL.Select(query)))
-        JSONBuilder.list( db.typechecker.schemaOf(oper).map( schel =>  Map( "name" -> schel._1, "type" -> schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())))
+        db.typechecker.schemaOf(oper).map( schel =>  Schema( schel._1.toString(), schel._2.toString(), Type.rootType(schel._2).toString()))
       } catch {
         case t: Throwable => {
           logger.error("Error Getting Schema: [" + query + "]", t)
@@ -971,6 +893,18 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }
   }
   
+  def explainEverythingAll(query: String) : Seq[mimir.ctables.Reason] = {
+    try{
+    logger.debug("explainEverything: From Vistrails: [" + query + "]"  ) ;
+    val oper = db.sqlToRA(MimirSQL.Select(query))
+    explainEverything(oper).map(_.all(db).toList).flatten   
+    } catch {
+      case t: Throwable => {
+        logger.error("Error Explaining Everything: [" + query + "]", t)
+        throw t
+      }
+    }  
+  }
   
   def explainEverything(query: String) : Seq[mimir.ctables.ReasonSet] = {
     try{
@@ -1068,11 +1002,6 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
         throw t
       }
     }    
-  }
-  
-  def registerPythonMimirCallListener(listener : PythonMimirCallInterface) = {
-    logger.debug("registerPythonMimirCallListener: From Vistrails: ") ;
-    pythonMimirCallListeners = pythonMimirCallListeners.union(Seq(listener))
   }
   
   def getAvailableLenses() : Seq[String] = {
@@ -1356,10 +1285,4 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
  
 }
 
-
-//----------------------------------------------------------
-
-trait PythonMimirCallInterface {
-	def callToPython(callStr : String) : String
-}
 

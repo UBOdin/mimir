@@ -201,7 +201,6 @@ libraryDependencies ++= Seq(
   
   ///////////////////// Viztrails Integration ///////////////////
   
-  "net.sf.py4j" 				  %	   "py4j" 				  % "0.10.4",
   "org.eclipse.jetty"			  %    "jetty-http" 		  % "9.4.10.v20180503",
   "org.eclipse.jetty" 			  %    "jetty-io" 			  % "9.4.10.v20180503",
   "org.eclipse.jetty" 			  %    "jetty-security" 	  % "9.4.10.v20180503",

@@ -100,15 +100,33 @@ class MimirVizierServlet() extends HttpServlet {
                 case "/adaptive/create" => {
                   Json.parse(text).as[CreateAdaptiveSchemaRequest].handle(os)
                 }
-                case "/annotations/noschema" => {}
-                case "/annotations/schema" => {}
-                case "/annotations/cell" => {}
-                case "/annotations/subset" => {}
-                case "/annotations/all" => {}
-                case "/annotations/summary" => {}
-                case "/annotations/repair" => {}
-                case "/annotations/feedback" => {}
-                case "/query/data" => {}
+                case "/annotations/noschema" => {
+                  Json.parse(text).as[ExplainSubsetWithoutSchemaRequest].handle(os)
+                }
+                case "/annotations/schema" => {
+                  Json.parse(text).as[ExplainSchemaRequest].handle(os)
+                }
+                case "/annotations/cell" => {
+                  Json.parse(text).as[ExplainCellSchemaRequest].handle(os)
+                }
+                case "/annotations/subset" => {
+                  Json.parse(text).as[ExplainSubsetRequest].handle(os)
+                }
+                case "/annotations/all" => {
+                  Json.parse(text).as[ExplainEverythingAllRequest].handle(os)
+                }
+                case "/annotations/summary" => {
+                  Json.parse(text).as[ExplainEverythingRequest].handle(os)
+                }
+                case "/annotations/feedback" => {
+                  Json.parse(text).as[FeedbackForReasonRequest].handle(os)
+                }
+                case "/query/data" => {
+                  Json.parse(text).as[QueryMimirRequest].handle(os)
+                }
+                case "/schema" => {
+                  Json.parse(text).as[SchemaForQueryRequest].handle(os)
+                }
               }
               os.flush()
               os.close() 
@@ -125,7 +143,7 @@ class MimirVizierServlet() extends HttpServlet {
     override def doGet(req : HttpServletRequest, resp : HttpServletResponse) = {
       println(s"MimirAPI GET ${req.getPathInfo}")
         
-      val routePattern = "\\/api\\/v2\\/([a-zA-Z\\/]+)".r
+      val routePattern = "\\/api\\/v2(\\/[a-zA-Z\\/]+)".r
         req.getPathInfo match {
           case routePattern(route) => {
             try{
@@ -135,8 +153,9 @@ class MimirVizierServlet() extends HttpServlet {
                 case "/lens" => {
                   os.write(Json.stringify(Json.toJson(LensList(mimir.MimirVizier.getAvailableLenses()))).getBytes )
                 }
-                case "/adaptive" => {}
-                case "/schema" => {}
+                case "/adaptive" => {
+                  os.write(Json.stringify(Json.toJson(AdaptiveSchemaList(mimir.MimirVizier.getAvailableAdaptiveSchemas()))).getBytes )
+                }
               }
               os.flush()
               os.close() 
