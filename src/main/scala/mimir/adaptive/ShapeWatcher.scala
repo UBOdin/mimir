@@ -16,7 +16,7 @@ object ShapeWatcher
         }
     val model = config.args match {
       case Seq() => {
-        createWarningModel(db, config, ID("MIMIR_SHAPE_", config.schema))
+        warningModel(ID("MIMIR_SHAPE_", config.schema))
       }
       case Seq(StringPrimitive(modelName)) => warningModel(ID(modelName))
       case Seq(Var(modelName)) =>  warningModel(modelName)
