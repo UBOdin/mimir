@@ -57,6 +57,7 @@ import mimir.api.MimirAPI
  */
 object MimirVizier extends LazyLogging {
 
+  val VIZIER_DATA_PATH = "/usr/local/source/web-api/.vizierdb/"
   var db: Database = null;
   var usePrompt = true;
   
@@ -105,18 +106,17 @@ object MimirVizier extends LazyLogging {
         else if(ExperimentalOptions.isEnabled("LOGO")) Level.OFF
         else Level.DEBUG
        
-      LoggerFactory.getLogger("mimir.sql.SparkBackend") match {
+      val mimirVizierLoggers = Seq("mimir.sql.SparkBackend", this.getClass.getName, 
+          "mimir.api.MimirAPI", "mimir.api.MimirVizierServlet")
+      mimirVizierLoggers.map( mvLogger => {
+        LoggerFactory.getLogger(mvLogger) match {
           case logger: Logger => {
             logger.setLevel(logLevel)
-            logger.debug("mimir.sql.SparkBackend logger set to level: " + logLevel); 
+            logger.debug(s"$mvLogger logger set to level: " + logLevel); 
           }
         }
-      LoggerFactory.getLogger(this.getClass.getName) match {
-          case logger: Logger => {
-            logger.setLevel(logLevel)
-            logger.debug(this.getClass.getName +" logger set to level: " + logLevel); 
-          }
-        }
+      })
+      
       LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) match {
           case logger : Logger if(!ExperimentalOptions.isEnabled("LOGM")) => {
             logger.setLevel(logLevel)
@@ -246,17 +246,17 @@ object MimirVizier extends LazyLogging {
         }
         case _ => throw new Exception("loadDataSource: bad options type")
       }
-      val vizierFSPath = "/usr/local/source/web-api/.vizierdb/"
+      
       val saferFile = URLDecoder.decode(file, "utf-8")
       val useS3Volume = System.getenv("USE_S3_VOLUME") match {
         case null => false
         case "true" => true
         case x => false
       }
-      val csvFile = if(saferFile.startsWith(vizierFSPath) && useS3Volume){
+      val csvFile = if(saferFile.startsWith(VIZIER_DATA_PATH) && useS3Volume){
         //hack for loading file from s3 - because it is already there for production version
         val vizierDataS3Bucket = System.getenv("S3_BUCKET_NAME")
-        saferFile.replace(vizierFSPath, s"s3n://$vizierDataS3Bucket/")
+        saferFile.replace(VIZIER_DATA_PATH, s"s3n://$vizierDataS3Bucket/")
       }
       else{
         saferFile
@@ -1261,7 +1261,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
    val anonFuncRet = anonFunc  
    val tEnd = System.nanoTime()
    if(ExperimentalOptions.isEnabled("LOGM")){
-     val logFile =  new File("/usr/local/source/web-api/.vizierdb/logs/timing.log")
+     val logFile =  new File(s"$VIZIER_DATA_PATH/logs/timing.log")
      if(!logFile.exists()){
        logFile.getParentFile().mkdirs()
        logFile.createNewFile()

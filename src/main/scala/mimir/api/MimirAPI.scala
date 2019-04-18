@@ -17,10 +17,12 @@ import org.eclipse.jetty.server.handler.HandlerCollection
 import org.eclipse.jetty.server.Handler
 import org.eclipse.jetty.webapp.WebAppContext
 
+import com.typesafe.scalalogging.slf4j.LazyLogging
+
 import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
 import play.api.libs.json._
 
-object MimirAPI {
+object MimirAPI extends LazyLogging {
   
   var isRunning = true
   
@@ -71,7 +73,7 @@ object MimirAPI {
   }
 }
 
-class MimirVizierServlet() extends HttpServlet {
+class MimirVizierServlet() extends HttpServlet with LazyLogging {
     override def doPost(req : HttpServletRequest, resp : HttpServletResponse) = {
         val text = scala.io.Source.fromInputStream(req.getInputStream).mkString 
         println(s"MimirAPI POST ${req.getPathInfo}\n$text")
@@ -132,12 +134,15 @@ class MimirVizierServlet() extends HttpServlet {
               os.close() 
             } catch {
               case t: Throwable => {
-                t.printStackTrace() 
+                logger.error("MimirAPI POST ERROR: ", t)
                 throw t
               }
             }
           }
-          case _ => throw new Exception("request Not handled: " + req.getPathInfo)
+          case _ => {
+            logger.error(s"MimirAPI POST Not Handled: ${req.getPathInfo}")
+            throw new Exception("request Not handled: " + req.getPathInfo)
+          }
         }  
     }
     override def doGet(req : HttpServletRequest, resp : HttpServletResponse) = {
@@ -161,12 +166,15 @@ class MimirVizierServlet() extends HttpServlet {
               os.close() 
             } catch {
               case t: Throwable => {
-                t.printStackTrace() 
+                logger.error("MimirAPI GET ERROR: ", t)
                 throw t
               }
             }
           }
-          case _ => throw new Exception("request Not handled: " + req.getPathInfo)
+          case _ => {
+            logger.error(s"MimirAPI GET Not Handled: ${req.getPathInfo}")
+            throw new Exception("request Not handled: " + req.getPathInfo)
+          }
         }  
     }
   }
