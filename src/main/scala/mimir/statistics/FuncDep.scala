@@ -26,7 +26,6 @@ import org.apache.commons.collections15.Transformer
 
 import com.jgraph.layout.tree.JGraphTreeLayout
 import edu.uci.ics.jung.visualization.renderers.Renderer.VertexLabel.Position
-import org.javacc.parser.OutputFile
 import scala.collection.JavaConverters._
 
 import mimir.algebra._

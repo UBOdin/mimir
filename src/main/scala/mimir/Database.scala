@@ -222,9 +222,20 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
    * name.
    */
   def resolveCaseInsensitiveTable(name: String, extras: Set[ID] = Set()): ID = 
-    (extras ++ getAllTables)
-       .find { _.id.equalsIgnoreCase(name) }
-       .getOrElse { ID(name.toUpperCase) }
+    // Need to resolve these in order (or else a materialized view could overwrite
+    // the view itself).
+    // Using lambdas to lazily evaluate this list (e.g., don't call backend.getAllTables
+    // until after confirming that there's no view match)
+    Seq(
+      () => extras,
+      () => transientViews.keys,
+      () => views.list(),
+      () => catalog.list(),
+      () => backend.getAllTables()
+    ).foldLeft(None:Option[ID]) { 
+      case (None, tables) => tables().find { _.id.equalsIgnoreCase(name) }
+      case (Some(s), _) => Some(s)
+    }.getOrElse( ID(name.toUpperCase) )
 
   /**
    * Build a Table operator for the table with the provided name.
@@ -468,7 +479,9 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
   def getView(name: String): Option[(Operator)] =
     getView(resolveCaseInsensitiveTable(name))
   def getView(name: ID): Option[(Operator)] =
-    catalog(name).orElse(
+    // Check the hardcoded system catalog "views" first.
+    catalog(name).orElse(  
+      // Then check the view manager
       views.get(name).map(_.operator)
     )
 

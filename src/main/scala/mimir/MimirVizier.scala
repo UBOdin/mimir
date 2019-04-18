@@ -17,7 +17,6 @@ import mimir.util.ExperimentalOptions
 //import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
 import py4j.GatewayServer
 import mimir.exec.Compiler
-import org.gprom.jdbc.jna.GProMWrapper
 import mimir.ctables.Reason
 import org.slf4j.{LoggerFactory}
 import ch.qos.logback.classic.{Level, Logger}

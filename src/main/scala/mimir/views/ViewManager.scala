@@ -106,6 +106,7 @@ class ViewManager(db:Database) extends LazyLogging {
       db.metadataBackend.resultRows(s"SELECT QUERY, METADATA FROM $viewTable WHERE name = ?", 
         Seq(StringPrimitive(name.id))
       )
+    logger.trace(s"Get View $name: ${results.size}")
     results.take(1).headOption.map(_.toSeq).map( 
       { 
         case Seq(StringPrimitive(s), IntPrimitive(meta)) => {
