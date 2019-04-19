@@ -19,7 +19,8 @@ import mimir.exec.mode.{CompileMode, BestGuess}
 import mimir.exec.result.{ResultIterator,SampleResultIterator,Row}
 import mimir.lenses.{LensManager}
 import mimir.sql.{SqlToRA,RAToSql}
-import mimir.backend.{QueryBackend,MetadataBackend}
+import mimir.backend.QueryBackend
+import mimir.metadata.MetadataBackend
 import mimir.parser.{
     MimirStatement,
     SQLStatement,
@@ -96,7 +97,7 @@ import mimir.util.LoadData
   * * mimir.explainer.CTExplainer (explainer)
   *    Responsible for creating explanation objects.
   */
-case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
+case class Database(backend: QueryBackend, metadata: MetadataBackend)
   extends LazyLogging
 {
   //// Persistence
@@ -266,81 +267,6 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
         ) 
       }
     }
-  }
-  
-  
-  /**
-   * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
-   * and rewrites the query to properly account for Virtual Tables.
-   */
-  final def queryMetadata[T, R <:ResultIterator](oper: Operator, mode: CompileMode[R])(handler: R => T): T =
-  {
-    val iterator = mode(this, oper, compiler.metadataBackendRootIterator)
-    try {
-      val ret = handler(iterator)
-      if(ret.isInstanceOf[Iterator[_]]){
-        logger.warn("Returning a sequence from Database.query may lead to the Scala compiler's optimizations closing the ResultIterator before it's fully drained")
-      }
-      return ret
-    } finally {
-      iterator.close()
-    }
-  }
-  
-  /**
-   * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
-   * and rewrites the query to properly account for Virtual Tables.
-   */
-  final def queryMetadata[T](oper: Operator)(handler: ResultIterator => T): T = {
-    queryMetadata(oper, BestGuess)(handler)
-  }
-    
-  /**
-   * get all metadata tables
-   */
-  def getAllMatadataTables(): Set[ID] =
-  {
-    (
-      metadataBackend.getAllTables() ++ views.list()
-    ).toSet[ID];
-  }
-
-  /**
-   * Determine whether the specified table exists
-   */
-  def metadataTableExists(name: ID): Boolean =
-  {
-    metadataTableSchema(name) != None
-  }
-
-  /**
-   * Look up the schema for the table with the provided name.
-   */
-  def metadataTableSchema(name: ID): Option[Seq[(ID,Type)]] = 
-  {
-    logger.debug(s"Table schema for $name")
-    views.get(name) match { 
-      case Some(viewDefinition) => Some(viewDefinition.schema)
-      case None => metadataBackend.getTableSchema(name)
-    }
-  }
-
-  /**
-   * Build a Table operator for the table with the provided name.
-   */
-  def metadataTable(tableName: ID) : Operator = metadataTable(tableName, tableName)
-  def metadataTable(tableName: ID, alias: ID): Operator = 
-  {
-    getView(tableName).getOrElse(
-      Table(
-        tableName, alias,
-        metadataBackend.getTableSchema(tableName) match {
-          case Some(x) => x
-          case None => throw new SQLException(s"No such table or view '$tableName'")
-        },
-        Nil
-      ) 
-    )
   }
 
   /**
