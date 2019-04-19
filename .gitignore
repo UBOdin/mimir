@@ -60,3 +60,5 @@ tpch-dbgen
 
 # Spark
 metastore_db/
+/bin/coursier
+/bin/mimir
