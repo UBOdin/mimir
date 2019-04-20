@@ -11,18 +11,17 @@ import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-class JDBCMetadataBackend(val backend: String, val filename: String)
+class JDBCMetadataBackend(val scheme: String, val filename: String)
   extends MetadataBackend
   with LazyLogging
-  with InlinableBackend
 {
   var conn: Connection = null
   var openConnections = 0
   var inliningAvailable = false;
 
-  def driver() = backend
+  def driver() = scheme
 
-  val tableSchemas: scala.collection.mutable.Map[ID, Seq[(ID, Type)]] = mutable.Map()
+  val tableSchemas: scala.collection.mutable.Map[ID, Seq[Type]] = mutable.Map()
 
   def open() = 
   {
@@ -47,18 +46,6 @@ class JDBCMetadataBackend(val backend: String, val filename: String)
     })
   }
 
-  def invalidateCache() = 
-    tableSchemas.clear()
-
-  def enableInlining(db: Database): Unit =
-  {
-    backend match {
-      case "sqlite" => 
-        sqlite.VGTermFunctions.register(db, conn)
-        inliningAvailable = true
-    }
-  }
-
   def close(): Unit = {
     this.synchronized({
       if (openConnections > 0) {
@@ -73,6 +60,41 @@ class JDBCMetadataBackend(val backend: String, val filename: String)
       if (openConnections == 0) assert(conn == null)
     })
   }
+
+  def register(category: ID, fields: Seq[(String, Type)])
+  {
+    // Assert that the backend schema lines up with the target
+    // This should trigger a migration in the future, but at least 
+    // inject a sanity check for now.
+    backend match {
+      case "sqlite" => {
+        // SQLite doesn't recognize anything more than the simplest possible types.
+        // Type information is persisted but not interpreted, so conn.getMetaData() 
+        // is useless for getting schema information.  Instead, we need to use a
+        // SQLite-specific PRAGMA operation.
+        val existing: Seq[Type] = SQLiteCompat.getTableSchema(conn, table).map { _._2 }
+
+        assert(existing.length == fields.length)
+        for(val (e, f) <- existing.zip(fields)){
+          assert(e == f) }
+        }
+      }
+    }
+
+
+
+
+          
+    tableSchemas.put(category, fields)
+          cols match { case None => (); case Some(s) => tableSchemas += table -> s }
+          cols
+
+  }
+  def all(category: ID): Seq[(ID, Seq[PrimitiveValue])]
+  def get(category: ID, resource: ID): Seq[PrimitiveValue]
+  def put(category: ID, resource: ID, values: Seq[PrimitiveValue])
+
+
 
   def execute(sel: String): ResultSet = 
   {
@@ -202,18 +224,7 @@ class JDBCMetadataBackend(val backend: String, val filename: String)
           val tables = this.getAllTables()
           if(!tables.contains(table)) return None
 
-          val cols: Option[Seq[(ID, Type)]] = backend match {
-            case "sqlite" => {
-              // SQLite doesn't recognize anything more than the simplest possible types.
-              // Type information is persisted but not interpreted, so conn.getMetaData() 
-              // is useless for getting schema information.  Instead, we need to use a
-              // SQLite-specific PRAGMA operation.
-              SQLiteCompat.getTableSchema(conn, table)
-            }
-          }
-          
-          cols match { case None => (); case Some(s) => tableSchemas += table -> s }
-          cols
+          val cols: Option[Seq[(ID, Type)]] = 
       }
     })
   }
