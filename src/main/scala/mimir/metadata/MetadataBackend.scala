@@ -24,6 +24,7 @@ abstract class MetadataBackend {
   def getFromMap(category: ID, resource: ID): Option[Metadata.Resource]
   def putToMap(category: ID, resource: Metadata.Resource): Unit
   def rmFromMap(category: ID, resource: ID): Unit
+  def updateMap(category: ID, body:Map[ID, PrimitiveValue]): Unit
 
   def addToManyMany(category: ID, lhs:ID, rhs: ID): Unit
   def getManyManyByLHS(category: ID, lhs:ID): Seq[ID]
@@ -35,12 +36,13 @@ abstract class MetadataBackend {
 
 class MetadataMap(backend: MetadataBackend, category: ID)
 {
-  def keys: Seq[ID]                               = backend.keysForMap(category)
-  def all: Seq[Metadata.Resource]                 = backend.allForMap(category)
-  def get(resource:ID): Option[Metadata.Resource] = backend.getFromMap(category, resource)
-  def put(resource: Metadata.Resource)            = backend.putToMap(category, resource)
-  def put(id: ID, body: Seq[PrimitiveValue])      = backend.putToMap(category, (id, body))
-  def rm(resource: ID)                            = backend.rmFromMap(category, resource)
+  def keys: Seq[ID]                                 = backend.keysForMap(category)
+  def all: Seq[Metadata.Resource]                   = backend.allForMap(category)
+  def get(resource:ID): Option[Metadata.Resource]   = backend.getFromMap(category, resource)
+  def put(resource: Metadata.Resource)              = backend.putToMap(category, resource)
+  def put(id: ID, body: Seq[PrimitiveValue])        = backend.putToMap(category, (id, body))
+  def update(id: ID, body: Map[ID, PrimitiveValue]) = backend.updateMap(category, body)
+  def rm(resource: ID)                              = backend.rmFromMap(category, resource)
 }
 
 class MetadataManyMany(backend: MetadataBackend, category: ID)

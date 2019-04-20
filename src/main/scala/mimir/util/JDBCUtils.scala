@@ -160,7 +160,7 @@ object JDBCUtils {
     new JDBCResultSetIterable(results, schema)
   }
 
-  def setArgs(stmt: PreparedStatement, args: Seq[PrimitiveValue]): Unit =
+  def setArgs(stmt: PreparedStatement, args: Seq[PrimitiveValue], protocol: String = "sqlite"): Unit =
   {
     args.zipWithIndex.foreach(a => {
       val i = a._2+1
@@ -170,22 +170,22 @@ object JDBCUtils {
         case p:FloatPrimitive     => stmt.setDouble(i, p.v)
         case _:NullPrimitive      => stmt.setNull(i, Types.VARCHAR)
         case d:DatePrimitive      => 
-          backend match {
+          protocol match {
             case "sqlite" => 
               stmt.setString(i, d.asString )
             case _ =>
               stmt.setDate(i, JDBCUtils.convertDate(d))
           }
         case t:TimestampPrimitive      => 
-          backend match {
+          protocol match {
             case "sqlite" => 
               stmt.setString(i, t.asString )
             case _ =>
               stmt.setTimestamp(i, JDBCUtils.convertTimestamp(t))
           }
         case t:IntervalPrimitive  => 
-          backend match {
-            case _ => throw new SQLException(s"$backend does not support intervals in prepared statements")
+          protocol match {
+            case _ => throw new SQLException(s"$protocol does not support intervals in prepared statements")
           }
         case r:RowIdPrimitive     => stmt.setString(i,r.v)
         case t:TypePrimitive      => stmt.setString(i, t.t.toString) 
