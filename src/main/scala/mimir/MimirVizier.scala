@@ -12,7 +12,8 @@ import fastparse.Parsed
 
 import mimir.algebra._
 import mimir.exec.result.Row
-import mimir.backend._
+import mimir.backend.SparkBackend
+import mimir.metadata.JDBCMetadataBackend
 import mimir.util.ExperimentalOptions
 //import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
 import py4j.GatewayServer
@@ -69,24 +70,7 @@ object MimirVizier extends LazyLogging {
     val database = Mimir.conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
     val sback = new SparkBackend(database)
     db = new Database(sback, new JDBCMetadataBackend(Mimir.conf.backend(), Mimir.conf.dbname()))
-    db.metadataBackend.open()
-    db.backend.open()
-    val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^","|","OR")
-    sback.registerSparkFunctions(
-      db.functions.functionPrototypes.map { _._1 }.toSeq
-        ++ otherExcludeFuncs.map { ID(_) }, 
-      db.functions
-    )
-    sback.registerSparkAggregates(
-      db.aggregates.prototypes.map { _._1 }.toSeq,
-      db.aggregates
-    )
     vizierdb.sparkSession = sback.sparkSql.sparkSession
-    db.initializeDBForMimir();
-    
-    if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
-        db.metadataBackend.asInstanceOf[InlinableBackend].enableInlining(db)
-    }
     
    if(ExperimentalOptions.isEnabled("WEB-LOG")){
       LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) match {
@@ -379,7 +363,7 @@ object MimirVizier extends LazyLogging {
           case None => ID(input)
         }
         val df = db.backend.execute(db.table(viewName))
-        db.backend.asInstanceOf[QueryBackend].writeDataSink(
+        db.backend.writeDataSink(
             df, 
             format, 
             bkOpts.toMap, 

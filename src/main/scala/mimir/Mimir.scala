@@ -17,13 +17,13 @@ import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
 import mimir.backend._
+import mimir.metadata._
 import mimir.util.{Timer,ExperimentalOptions,LineReaderInputSource,PythonProcess,SqlUtils}
 import mimir.algebra._
 import mimir.algebra.spark.OperatorTranslation
 import mimir.statistics.{DetectSeries,DatasetShape}
 import mimir.plot.Plot
 import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
-import mimir.exec.result.JDBCResultIterator
 
 /**
  * The primary interface to Mimir.  Responsible for:
@@ -59,19 +59,7 @@ object Mimir extends LazyLogging {
     if(!conf.quiet()){
       output.print("Connecting to " + conf.backend() + "://" + conf.dbname() + "...")
     }
-    db.metadataBackend.open()
-    db.backend.open()
-    OperatorTranslation.db = db
-    sback.registerSparkFunctions(
-      db.functions.functionPrototypes.map { _._1 }.toSeq,
-      db.functions
-    )
-    sback.registerSparkAggregates(
-      db.aggregates.prototypes.map { _._1 }.toSeq,
-      db.aggregates
-    )
-      
-    db.initializeDBForMimir();
+    db.open()
 
     // Check for one-off commands
     if(conf.loadTable.get != None){
@@ -83,9 +71,6 @@ object Mimir extends LazyLogging {
         db.models.prefetchForOwner(ID.upper(table))
       }))
 
-      if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
-        db.metadataBackend.asInstanceOf[InlinableBackend].enableInlining(db)
-      }
       if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
         output = new PrettyOutputFormat(terminal)
       }
@@ -258,14 +243,19 @@ object Mimir extends LazyLogging {
       case e:Throwable =>
         output.print("Unavailable: "+e.getMessage())
     }
-    output.print("\n------- Spark -------")
-    try {
-      output.print(
-        mimir.algebra.spark.OperatorTranslation.mimirOpToSparkOp(optimized).toString
-      )
-    } catch {
-      case e:Throwable =>
-        output.print("Unavailable: "+e.getMessage())
+    db.backend match { 
+      case sback: SparkBackend => {
+        output.print("\n------- Spark -------")
+        try {
+          output.print(
+            sback.operatorTranslation.mimirOpToSparkOp(optimized).toString
+          )
+        } catch {
+          case e:Throwable =>
+            output.print("Unavailable: "+e.getMessage())
+        }
+      }
+      case _ => {}
     }
   }
 

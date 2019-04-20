@@ -43,6 +43,7 @@ import org.apache.spark.sql.execution.command.{
   CreateDatabaseCommand,
   DropDatabaseCommand
 }
+import mimir.Database
 import mimir.algebra.spark.OperatorTranslation
 import mimir.algebra.spark.function.SparkFunctions
 import mimir.algebra._
@@ -57,6 +58,8 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
   with LazyLogging
 {
   
+  var operatorTranslation: OperatorTranslation = null;
+
   var sparkSql : SQLContext = null
   var sheetCred: String = null
   //ExperimentalOptions.enable("remoteSpark")
@@ -69,7 +72,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
     case x => (x.dataDirectory(), x.mimirHost(), x.sparkHost(), x.sparkPort(), x.hdfsPort(), x.useHDFSHostnames(), x.overwriteStagedFiles(), x.overwriteJars(), x.numPartitions(), if(!envHasS3Keys) "hdfs" else x.dataStagingType(), x.sparkDriverMem(), x.sparkExecutorMem())
   }
   val remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
-  def open(): Unit = {
+  def open(db: Database): Unit = {
     logger.warn(s"Open SparkBackend: dataDir: $dataDir sparkHost:$sparkHost, sparkPort:$sparkPort, hdfsPort:$hdfsPort, useHDFSHostnames:$useHDFSHostnames, overwriteStagedFiles:$overwriteStagedFiles, overwriteJars:$overwriteJars, numPartitions:$numPartitions, dataStagingType:$dataStagingType")
     System.setProperty("derby.system.home", dataDir)
           
@@ -207,7 +210,19 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
       sparkSql.sparkSession.catalog.listTables(sdb.name).show()
     })*/
     mimir.ml.spark.SparkML(sparkSql)
-    
+
+    // Finally link Mimir fully into Spark
+    operatorTranslation = new OperatorTranslation(db)
+    val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^","|","OR")
+    registerSparkFunctions(
+      db.functions.functionPrototypes.map { _._1 }.toSeq
+        ++ otherExcludeFuncs.map { ID(_) }, 
+      db.functions
+    )
+    registerSparkAggregates(
+      db.aggregates.prototypes.map { _._1 }.toSeq,
+      db.aggregates
+    )
   }
 
   def registerSparkFunctions(excludedFunctions:Seq[ID], fr:FunctionRegistry) = {
@@ -218,8 +233,8 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
           if(!fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
             logger.debug("registering spark function: " + fidentifier.funcName.toUpperCase())
             SparkFunctions.addSparkFunction(fidentifier.funcName.toUpperCase(), (inputs) => {
-              val sparkInputs = inputs.map(inp => Literal(OperatorTranslation.mimirPrimitiveToSparkExternalInlineFuncParam(inp)))
-              val sparkInternal = inputs.map(inp => OperatorTranslation.mimirPrimitiveToSparkInternalInlineFuncParam(inp))
+              val sparkInputs = inputs.map(inp => Literal(operatorTranslation.mimirPrimitiveToSparkExternalInlineFuncParam(inp)))
+              val sparkInternal = inputs.map(inp => operatorTranslation.mimirPrimitiveToSparkInternalInlineFuncParam(inp))
               val sparkRow = InternalRow(sparkInternal:_*)
               val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
               val sparkFunc = Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
@@ -294,7 +309,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
       logger.trace(s"$compiledOp")
       logger.trace("------------------------------------------------------------")
       if(sparkSql == null) throw new Exception("There is no spark context")
-      sparkOper = OperatorTranslation.mimirOpToSparkOp(compiledOp)
+      sparkOper = operatorTranslation.mimirOpToSparkOp(compiledOp)
       logger.trace("------------------------ spark op --------------------------")
       logger.trace(s"$sparkOper")
       logger.trace("------------------------------------------------------------")
@@ -523,9 +538,6 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
   def canHandleVGTerms: Boolean = true
   def rowIdType: Type = TString()
   def dateType: Type = TDate()
-  def specializeQuery(q: Operator, db: mimir.Database): Operator = {
-    q
-  }
 
   def listTablesQuery: Operator = {
     HardTable(Seq(ID("TABLE_NAME") -> TString()),
