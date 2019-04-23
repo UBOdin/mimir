@@ -28,6 +28,17 @@ import org.apache.spark.sql.types.{
   BooleanType,
   TimestampType
 }
+import org.apache.spark.sql.functions.{
+  monotonically_increasing_id,
+  spark_partition_id,
+  col,
+  lit,
+  first,
+  count,
+  sum,
+  udf
+}
+import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.catalyst.{ TableIdentifier, InternalRow }
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.expressions.Literal
@@ -297,6 +308,26 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
         throw t
       }
     }
+  }
+  
+  def zipWithIndex(df: DataFrame, offset: Long = 1, indexName: String = "index"): DataFrame = {
+    val dfWithPartitionId = df.withColumn("partition_id", spark_partition_id()).withColumn("inc_id", monotonically_increasing_id())
+
+    val partitionOffsets = dfWithPartitionId
+        .groupBy("partition_id")
+        .agg(count(lit(1)) as "cnt", first("inc_id") as "inc_id")
+        .orderBy("partition_id")
+        .select(sum("cnt").over(Window.orderBy("partition_id")) - col("cnt") - col("inc_id") + lit(offset) as "cnt" )
+        .collect()
+        .map(_.getLong(0))
+        .toArray
+
+     val theUdf = udf((partitionId: Int) => partitionOffsets(partitionId), LongType)
+     
+     dfWithPartitionId
+        .withColumn("partition_offset", theUdf(col("partition_id")))
+        .withColumn(indexName, col("partition_offset") + col("inc_id"))
+        .drop("partition_id", "partition_offset", "inc_id")
   }
   
   def dropTable(table:ID): Unit = {

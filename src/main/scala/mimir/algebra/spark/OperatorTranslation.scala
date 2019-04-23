@@ -36,7 +36,12 @@ import org.apache.spark.sql.catalyst.expressions.{
   If,
   ScalaUDF,
   Rand,
-  Randn
+  Randn,
+  SparkPartitionID,
+  WindowSpec,
+  WindowSpecDefinition,
+  WindowExpression,
+  UnspecifiedFrame
 }
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.analysis.UnresolvedFunction
@@ -878,6 +883,45 @@ object OperatorTranslation
         options = Map("url" -> "jdbc:sqlite:debug.db") ).resolveRelation())*/
   }*/
   
+}
+
+class RowIndexPlan(lp:LogicalPlan,  offset: Long = 1, indexName: String = "index") {
+  
+  val partOp = org.apache.spark.sql.catalyst.plans.logical.Project(
+      Seq(Alias(SparkPartitionID(),"partition_id")(), 
+          Alias(MonotonicallyIncreasingID(),"inc_id")()), lp)
+  
+  val fop =  OperatorTranslation.dataset(org.apache.spark.sql.catalyst.plans.logical.Filter(
+      Alias(Add(Subtract(Subtract(WindowExpression(Sum(UnresolvedAttribute("cnt")),WindowSpecDefinition(Seq(), Seq(), UnspecifiedFrame)), 
+                  UnresolvedAttribute("cnt")),UnresolvedAttribute("inc_id")),Literal(offset)),"cnt")(), 
+      org.apache.spark.sql.catalyst.plans.logical.Sort(Seq(SortOrder(UnresolvedAttribute("partition_id"), Ascending)), true,   
+       org.apache.spark.sql.catalyst.plans.logical.Aggregate(
+          Seq(UnresolvedAttribute("partition_id")),
+          Seq(Alias(Literal(1),"cnt")(), Alias(First(UnresolvedAttribute("inc_id"),Literal(false)),"inc_id")()),
+          partOp))
+      )).collect().map(_.getLong(0))      
+  
+  val inFunc = (partitionId:Int) => {
+   fop(partitionId)
+  }
+      
+  def getPlan() = {
+    org.apache.spark.sql.catalyst.plans.logical.Project(
+      lp.schema.fields.map(fld => UnresolvedAttribute(fld.name)) :+ UnresolvedAttribute("indexName"), 
+      org.apache.spark.sql.catalyst.plans.logical.Project(
+          Seq(Alias(getUDF(),"partition_offset")(), Alias(Add(UnresolvedAttribute("partition_offset"), 
+              UnresolvedAttribute("inc_id")),indexName)()), partOp))
+  }
+
+  private def getUDF() = {
+    ScalaUDF(
+      inFunc,
+      LongType,
+      Seq(UnresolvedAttribute("partition_id")),
+      Seq(false),
+      Seq(IntegerType),
+      Some("mimir_row_index"),true, true)
+  }
 }
 
 class MimirUDF {
