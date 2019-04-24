@@ -1082,8 +1082,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   
   def operCSVResults(oper : mimir.algebra.Operator) : CSVContainer =  {
     db.query(oper) { results => 
-      val cols = results.schema.map(f => f._1.toString())
-      val resCSV = scala.collection.mutable.Buffer[Seq[String]]() += cols 
+      val resCSV = scala.collection.mutable.Buffer[Seq[String]]() 
       val prov = scala.collection.mutable.Buffer[String]()
       while(results.hasNext){
         val row = results.next()
