@@ -100,7 +100,7 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
             case "NO" => false; case "YES" => true
           }) db.backend.dropDB()
       db.backend.close()
-      db.backend.open()
+      //db.backend.open()
     }catch {
       case t: Throwable => {}
     }

@@ -198,7 +198,7 @@ object SparkUtils {
   }
   
   def getDataFrameFromQuery(db:mimir.Database, query:Operator) : (Seq[(ID, Type)], DataFrame) = {
-    val dfPreOut = db.backend.execute(query)
+    val dfPreOut = db.backend.execute(db.compileBestGuess(query))
     val dfOutDt = dfPreOut.schema.fields.filter(col => Seq(DateType).contains(col.dataType)).foldLeft(dfPreOut)((init, cur) => init.withColumn(cur.name,unix_timestamp(init(cur.name)).cast(LongType)*1000))
     val dfOut = dfOutDt.schema.fields.filter(col => Seq(TimestampType).contains(col.dataType)).foldLeft(dfOutDt)((init, cur) => init.withColumn(cur.name,init(cur.name).cast(LongType)*1000) )
     (db.typechecker.schemaOf(query), dfOut)

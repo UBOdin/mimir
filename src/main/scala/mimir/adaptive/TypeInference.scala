@@ -43,13 +43,14 @@ object TypeInference
         case _ => None
       }).toIndexedSeq
 
+    
     val attributeTypeModel = 
       new TypeInferenceModel(
         viewName.withPrefix("MIMIR_TI_ATTR_"),
         modelColumns,
         stringDefaultScore,
         db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(),
-        Some(db.backend.execute(config.query.limit(TypeInferenceModel.sampleLimit, 0)))
+        Some(db.backend.execute(db.compileBestGuess(config.query.limit(TypeInferenceModel.sampleLimit, 0))))
       )
 
     val warningModel = 

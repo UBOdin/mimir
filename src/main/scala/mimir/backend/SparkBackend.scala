@@ -26,7 +26,8 @@ import org.apache.spark.sql.types.{
   ShortType,
   DateType,
   BooleanType,
-  TimestampType
+  TimestampType,
+  StringType
 }
 import org.apache.spark.sql.functions.{
   monotonically_increasing_id,
@@ -298,7 +299,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
       logger.trace("------------------------------------------------------------")
       val qe = sparkSql.sparkSession.sessionState.executePlan(sparkOper)
       qe.assertAnalyzed()
-      new Dataset[Row](sparkSql.sparkSession, sparkOper, RowEncoder(qe.analyzed.schema))
+      new Dataset[Row](sparkSql.sparkSession, qe.optimizedPlan, RowEncoder(qe.analyzed.schema))
     } catch {
       case t: Throwable => {
         logger.error("-------------------------> Exception Executing Spark Op: " + t.toString() + "\n" + t.getStackTrace.mkString("\n"))
@@ -310,7 +311,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
     }
   }
   
-  def zipWithIndex(df: DataFrame, offset: Long = 1, indexName: String = "index"): DataFrame = {
+  def zipWithIndex(df: DataFrame, offset: Long = 1, indexName: String = "ROWIDX", indexType:DataType = LongType): DataFrame = {
     val dfWithPartitionId = df.withColumn("partition_id", spark_partition_id()).withColumn("inc_id", monotonically_increasing_id())
 
     val partitionOffsets = dfWithPartitionId
@@ -326,7 +327,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
      
      dfWithPartitionId
         .withColumn("partition_offset", theUdf(col("partition_id")))
-        .withColumn(indexName, col("partition_offset") + col("inc_id"))
+        .withColumn(indexName, (col("partition_offset") + col("inc_id")).cast(indexType))
         .drop("partition_id", "partition_offset", "inc_id")
   }
   

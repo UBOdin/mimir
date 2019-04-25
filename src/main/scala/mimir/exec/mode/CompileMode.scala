@@ -32,24 +32,11 @@ abstract class CompileMode[IteratorT <: ResultIterator]
 
   def apply(db: Database, oper: Operator, rootIteratorGen:(Operator)=>(Seq[(ID,Type)],ResultIterator)): IteratorT =
   {
-    oper match {
-      //TODO: This is a hack to work around an issue with limits over unions not working correctly on spark (prov compiling incorrectly)
-      case Project(args, Limit(l,o,sop)) => {
-          val (rewritten, relevantColumnNames, meta) =
-            rewrite(db, Project(args, sop))
-          val limRewritten = Limit(l,o,rewritten)
-          val results = 
-            db.compiler.deploy(limRewritten, relevantColumnNames, rootIteratorGen)
-          wrap(db, results, limRewritten, meta)
-        }
-        case x => {
-          val (rewritten, relevantColumnNames, meta) =
-            rewrite(db, oper)
-      
-          val results = 
-            db.compiler.deploy(rewritten, relevantColumnNames, rootIteratorGen)
-          wrap(db, results, rewritten, meta)
-        }
-      }
+    val (rewritten, relevantColumnNames, meta) =
+      rewrite(db, oper)
+
+    val results = 
+      db.compiler.deploy(rewritten, relevantColumnNames, rootIteratorGen)
+    wrap(db, results, rewritten, meta)
   }
 }

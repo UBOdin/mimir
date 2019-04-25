@@ -177,8 +177,12 @@ object OperatorTranslation
           CatalogStorageFormat.empty,
           StructType(sch.map(col => StructField(col._1, getSparkType(col._2), true))) )*/
 			  val tableId = TableIdentifier(name.id)
-        val plan = UnresolvedRelation(tableId)
-        val baseRelation  = if (!alias.equals(name)) {
+        //we can do this to compute the rowid inline
+			  val realSchema = db.backend.getTableSchema(name).getOrElse(throw new Exception(s"Cannot get schema for table: $name" ))
+			  val plan = RowIndexPlan(UnresolvedRelation(tableId), realSchema).getPlan()
+        //or we can do it in SparkBackend on loadDatasource
+			  //val plan = UnresolvedRelation(tableId)
+			  val baseRelation  = if (!alias.equals(name)) {
           SubqueryAlias(alias.id, plan)
         } else {
           plan
@@ -187,7 +191,6 @@ object OperatorTranslation
 			  //here we check if the real table schema matches the table op schema 
 			  // because the table op schema may have been rewritten by deepRenameColumn
 			  // - like when there is a join with conflicts
-			  val realSchema = db.backend.getTableSchema(name).getOrElse(throw new Exception(s"Cannot get schema for table: $name" ))
 			  val requireProjection = 
 			  sch.zip(realSchema).flatMap {
 			    case (tableSchEl, realSchEl) => {
@@ -553,14 +556,13 @@ object OperatorTranslation
         mimirConditionalToSparkConditional(oper, cnd)
       }
       case Var(name) if name.equals("ROWID") => {
-        org.apache.spark.sql.catalyst.expressions.Cast(Alias(Add(MonotonicallyIncreasingID(), Literal(1)),"ROWID")(),getSparkType(db.backend.rowIdType),None)
+        UnresolvedAttribute.quoted(name.id)
       }
       case Var(v) => {
         UnresolvedAttribute.quoted(v.id)
       }
       case rid@RowIdVar() => {
-        //UnresolvedAttribute("ROWID")
-        org.apache.spark.sql.catalyst.expressions.Cast(Alias(Add(MonotonicallyIncreasingID(), Literal(1)),RowIdVar().toString())(),getSparkType(db.backend.rowIdType),None)
+        UnresolvedAttribute("ROWID")
       }
       case func@Function(_,_) => {
         mimirFunctionToSparkFunction(oper, func)
@@ -885,19 +887,20 @@ object OperatorTranslation
   
 }
 
-class RowIndexPlan(lp:LogicalPlan,  offset: Long = 1, indexName: String = "index") {
+case class RowIndexPlan(val lp:LogicalPlan,  val schema:Seq[(ID,Type)], val offset: Long = 1, val indexName: String = "ROWID") {
   
   val partOp = org.apache.spark.sql.catalyst.plans.logical.Project(
+      schema.map(fld => UnresolvedAttribute(fld._1.id)) ++
       Seq(Alias(SparkPartitionID(),"partition_id")(), 
           Alias(MonotonicallyIncreasingID(),"inc_id")()), lp)
   
-  val fop =  OperatorTranslation.dataset(org.apache.spark.sql.catalyst.plans.logical.Filter(
-      Alias(Add(Subtract(Subtract(WindowExpression(Sum(UnresolvedAttribute("cnt")),WindowSpecDefinition(Seq(), Seq(), UnspecifiedFrame)), 
-                  UnresolvedAttribute("cnt")),UnresolvedAttribute("inc_id")),Literal(offset)),"cnt")(), 
+  val fop =  OperatorTranslation.dataset(org.apache.spark.sql.catalyst.plans.logical.Project(
+      Seq(Alias(Add(Subtract(Subtract(WindowExpression(AggregateExpression(Sum(UnresolvedAttribute("cnt")),Complete,false),WindowSpecDefinition(Seq(), Seq(), UnspecifiedFrame)), 
+                  UnresolvedAttribute("cnt")),UnresolvedAttribute("inc_id")),Literal(offset)),"cnt")()), 
       org.apache.spark.sql.catalyst.plans.logical.Sort(Seq(SortOrder(UnresolvedAttribute("partition_id"), Ascending)), true,   
        org.apache.spark.sql.catalyst.plans.logical.Aggregate(
           Seq(UnresolvedAttribute("partition_id")),
-          Seq(Alias(Literal(1),"cnt")(), Alias(First(UnresolvedAttribute("inc_id"),Literal(false)),"inc_id")()),
+          Seq(Alias(Literal(1),"cnt")(), Alias(AggregateExpression(First(UnresolvedAttribute("inc_id"),Literal(false)),Complete,false),"inc_id")()),
           partOp))
       )).collect().map(_.getLong(0))      
   
@@ -907,10 +910,14 @@ class RowIndexPlan(lp:LogicalPlan,  offset: Long = 1, indexName: String = "index
       
   def getPlan() = {
     org.apache.spark.sql.catalyst.plans.logical.Project(
-      lp.schema.fields.map(fld => UnresolvedAttribute(fld.name)) :+ UnresolvedAttribute("indexName"), 
+      schema.map(fld => UnresolvedAttribute(fld._1.id)) :+ UnresolvedAttribute(indexName), 
       org.apache.spark.sql.catalyst.plans.logical.Project(
-          Seq(Alias(getUDF(),"partition_offset")(), Alias(Add(UnresolvedAttribute("partition_offset"), 
-              UnresolvedAttribute("inc_id")),indexName)()), partOp))
+        schema.map(fld => UnresolvedAttribute(fld._1.id)) :+
+        Alias(org.apache.spark.sql.catalyst.expressions.Cast(
+            Add(UnresolvedAttribute("partition_offset"), UnresolvedAttribute("inc_id")),StringType),indexName)(),
+        org.apache.spark.sql.catalyst.plans.logical.Project(
+          schema.map(fld => UnresolvedAttribute(fld._1.id)) ++
+          Seq(Alias(getUDF(),"partition_offset")(), UnresolvedAttribute("inc_id")), partOp)))
   }
 
   private def getUDF() = {

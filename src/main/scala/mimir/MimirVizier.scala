@@ -306,7 +306,7 @@ object MimirVizier extends LazyLogging {
           case Some(mimirName) => mimirName
           case None => ID(input)
         }
-        val df = db.backend.execute(db.table(viewName))
+        val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
         db.backend.asInstanceOf[QueryBackend].writeDataSink(
             df, 
             format, 
