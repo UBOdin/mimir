@@ -451,7 +451,6 @@ object MimirVizier extends LazyLogging {
             case fastparse.Parsed.Success(sparsity.statement.Select(body, _), _) => body
             case x => throw new Exception(s"Invalid view query : $inputSubstitutionQuery \n $x")
           }
-          viewQuery.from.map(el => FromElement())
           logger.debug("createView: query: " + viewQuery)
           db.update(SQLStatement(CreateView(Name(viewName, true), false, viewQuery)))
         }
