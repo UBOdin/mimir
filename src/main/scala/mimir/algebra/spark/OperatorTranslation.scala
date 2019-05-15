@@ -902,7 +902,7 @@ case class RowIndexPlan(val lp:LogicalPlan,  val schema:Seq[(ID,Type)], val offs
           Seq(UnresolvedAttribute("partition_id")),
           Seq(Alias(Literal(1),"cnt")(), Alias(AggregateExpression(First(UnresolvedAttribute("inc_id"),Literal(false)),Complete,false),"inc_id")()),
           partOp))
-      )).collect().map(_.getLong(0))      
+      )).cache().collect().map(_.getLong(0))      
   
   val inFunc = (partitionId:Int) => {
    fop(partitionId)

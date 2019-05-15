@@ -88,7 +88,7 @@ object CreateLensRequest {
 
 case class CreateViewRequest (
             /* input for view */
-                  input: String,
+                  input: Map[String,String],
             /* query for view */
                   query: String
 )  extends Request {
@@ -99,6 +99,21 @@ case class CreateViewRequest (
 
 object CreateViewRequest {
   implicit val format: Format[CreateViewRequest] = Json.format
+}
+
+case class CreateViewSRequest (
+            /* input for view */
+                  input: String,
+            /* query for view */
+                  query: String
+)  extends Request {
+  def handle(os:OutputStream) = {
+    os.write(Json.stringify(Json.toJson(CreateViewResponse(MimirVizier.createView(input, query)))).getBytes )
+  }
+}
+
+object CreateViewSRequest {
+  implicit val format: Format[CreateViewSRequest] = Json.format
 }
 
 

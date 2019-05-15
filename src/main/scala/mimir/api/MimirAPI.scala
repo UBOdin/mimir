@@ -97,7 +97,11 @@ class MimirVizierServlet() extends HttpServlet with LazyLogging {
                   Json.parse(text).as[CreateLensRequest].handle(os)
                 }
                 case "/view/create" => {
-                  Json.parse(text).as[CreateViewRequest].handle(os)
+                  val cvJson = Json.parse(text)
+                  if(cvJson.\("input").get.isInstanceOf[JsString])
+                    cvJson.as[CreateViewSRequest].handle(os)
+                  else
+                    cvJson.as[CreateViewRequest].handle(os)
                 }
                 case "/adaptive/create" => {
                   Json.parse(text).as[CreateAdaptiveSchemaRequest].handle(os)

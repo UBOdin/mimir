@@ -503,7 +503,11 @@ class SqlToRA(db: Database)
           Seq(alias -> NameLookup(bindings))
         )
       }
-      case FromTable(schemaMaybe, table, aliasMaybe) => {
+      case FromTable(schemaMaybe, tablev, aliasMaybe) => {
+        val table = vizierNameMap.get(tablev.name) match { 
+              case Some(mimirID) => sparsity.Name(mimirID.id)
+              case None => tablev 
+            } 
         val alias = aliasMaybe.getOrElse(table)
         val tableOp:Operator = 
           schemaMaybe match { 

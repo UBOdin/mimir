@@ -393,8 +393,8 @@ object MimirVizier extends LazyLogging {
         }
       }
       val lensOp = db.table(lensName).limit(200)
-      val lensAnnotations = db.explainer.explainSubsetWithoutOptimizing(lensOp, lensOp.columnNames.toSet, false, false, false, Some(ID(lensName)))
-      val lensReasons = lensAnnotations.map(_.size(db)).sum//.toString//JSONBuilder.list(lensAnnotations.map(_.all(db).toList).flatten.map(_.toJSON))
+      //val lensAnnotations = db.explainer.explainSubsetWithoutOptimizing(lensOp, lensOp.columnNames.toSet, false, false, false, Some(ID(lensName)))
+      val lensReasons = 0//lensAnnotations.map(_.size(db)).sum//.toString//JSONBuilder.list(lensAnnotations.map(_.all(db).toList).flatten.map(_.toJSON))
       logger.debug(s"createLens reasons for first 200 rows: ${lensReasons}")
       CreateLensResponse(lensName.toString, lensReasons)
     }
@@ -425,6 +425,10 @@ object MimirVizier extends LazyLogging {
     val timeRes = logTime("createLens") {
       logger.debug("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
       val (viewNameSuffix, inputSubstitutionQuery) = input match {
+        case aliases:Map[String,String] => {
+          aliases.map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(vizierName.toUpperCase(), ID(mimirName)) } 
+          (aliases.toSeq.unzip._2.mkString(""), query)
+        }
         case aliases:JMapWrapper[_,_] => {
           aliases.asInstanceOf[JMapWrapper[String,String]].map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(vizierName.toUpperCase(), ID(mimirName)) } 
           (aliases.asInstanceOf[JMapWrapper[String,String]].unzip._2.mkString(""), query)
@@ -447,6 +451,7 @@ object MimirVizier extends LazyLogging {
             case fastparse.Parsed.Success(sparsity.statement.Select(body, _), _) => body
             case x => throw new Exception(s"Invalid view query : $inputSubstitutionQuery \n $x")
           }
+          viewQuery.from.map(el => FromElement())
           logger.debug("createView: query: " + viewQuery)
           db.update(SQLStatement(CreateView(Name(viewName, true), false, viewQuery)))
         }
