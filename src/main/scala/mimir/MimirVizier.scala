@@ -7,7 +7,8 @@ import org.rogach.scallop._
 
 import sparsity.Name
 import sparsity.statement.CreateView
-import sparsity.parser.SQL
+import sparsity.parser.{SQL,Expression} 
+
 import fastparse.Parsed
 
 import mimir.algebra._
@@ -158,7 +159,7 @@ object MimirVizier extends LazyLogging {
     var sparkSession:SparkSession = null;
     
     def withDataset[T](dsname:String, handler: ResultIterator => T ) : T = {
-     val mimirName:ID = db.sqlToRA.getVizierNameMapping(dsname.toUpperCase()) match {
+     val mimirName:ID = db.sqlToRA.getVizierNameMapping(ID(dsname)) match {
        case Some(mname) => mname
        case None => throw new Exception(s"No such table or view '$dsname'")
      }
@@ -167,7 +168,7 @@ object MimirVizier extends LazyLogging {
     }
         
     def outputAnnotations(dsname:String) : String = {
-      val mimirName:ID = db.sqlToRA.getVizierNameMapping(dsname.toUpperCase()) match {
+      val mimirName:ID = db.sqlToRA.getVizierNameMapping(ID(dsname)) match {
        case Some(mname) => mname
        case None => throw new Exception(s"No such table or view '$dsname'")
      }
@@ -302,7 +303,7 @@ object MimirVizier extends LazyLogging {
           }
           case _ => throw new Exception("unloadDataSource: bad options type")
         }
-        val viewName =  db.sqlToRA.getVizierNameMapping(input) match {
+        val viewName =  db.sqlToRA.getVizierNameMapping(ID(input)) match {
           case Some(mimirName) => mimirName
           case None => ID(input)
         }
@@ -342,12 +343,10 @@ object MimirVizier extends LazyLogging {
     apiCallThread = Thread.currentThread()
     val timeRes = logTime("createLens") {
       logger.debug("createLens: From Vistrails: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]"  ) ;
-      val parsedParams = 
-                  // Start by replacing "{{input}}" with the name of the input table.
-            params.map { _.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) }
-                  // Then parse
-                  .map { ExpressionParser.expr(_) }
-
+      
+      val parsedParams =  // Start by replacing "{{input}}" with the name of the input table.
+            params.map(param => 
+              mimir.parser.ExpressionParser.expr( param.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString)) )
       val lensNameBase = (input.toString() + _type + parsedParams.mkString(",") + make_input_certain + materialize).hashCode()
       val inputQuery = s"SELECT * FROM ${input}"
 
@@ -363,7 +362,6 @@ object MimirVizier extends LazyLogging {
 
         // query is a var because we might need to rewrite it below.
         var query:Operator = db.table(input.toString)
-
         // "Make Certain" is implemented by dumping the lens contents into a temporary table
         if(make_input_certain){
           val materializedInput = ID("MATERIALIZED_"+input)
@@ -410,7 +408,7 @@ object MimirVizier extends LazyLogging {
   
   def registerNameMappings(nameMappings:JMapWrapper[String,String]) : Unit = {
     try{
-      nameMappings.map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(vizierName.toUpperCase(), ID(mimirName)) }
+      nameMappings.map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(ID(vizierName), ID(mimirName)) }
      } catch {
       case t: Throwable => {
         logger.error("Failed To Register Name Mappings: [" + nameMappings.mkString(",") + "]", t)
@@ -426,11 +424,11 @@ object MimirVizier extends LazyLogging {
       logger.debug("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
       val (viewNameSuffix, inputSubstitutionQuery) = input match {
         case aliases:Map[String,String] => {
-          aliases.map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(vizierName.toUpperCase(), ID(mimirName)) } 
+          aliases.map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(ID(vizierName), ID(mimirName)) } 
           (aliases.toSeq.unzip._2.mkString(""), query)
         }
         case aliases:JMapWrapper[_,_] => {
-          aliases.asInstanceOf[JMapWrapper[String,String]].map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(vizierName.toUpperCase(), ID(mimirName)) } 
+          aliases.asInstanceOf[JMapWrapper[String,String]].map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(ID(vizierName), ID(mimirName)) } 
           (aliases.asInstanceOf[JMapWrapper[String,String]].unzip._2.mkString(""), query)
         }
         case inputs:Seq[_] => {
@@ -521,12 +519,11 @@ object MimirVizier extends LazyLogging {
       stmt match {
         case SQLStatement(select:sparsity.statement.Select) => {
           val oper = db.sqlToRA(select)
-          if(includeUncertainty && includeReasons)
-            operCSVResultsDeterminismAndExplanation(oper)
-          else if(includeUncertainty)
-            operCSVResultsDeterminism(oper)
-          else 
-            operCSVResults(oper)
+          (includeUncertainty, includeReasons) match {
+            case (true, true) => operCSVResultsDeterminismAndExplanation(oper)
+            case (true, false) => operCSVResultsDeterminism(oper)
+            case _ => operCSVResults(oper)
+          }
         }
         case SQLStatement(update:sparsity.statement.Update) => {
           //db.backend.update(query)
@@ -552,7 +549,7 @@ object MimirVizier extends LazyLogging {
 def vistrailsQueryMimirJson(input:Any, query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
     val inputSubstitutionQuery = input match {
         case aliases:JMapWrapper[_,_] => {
-          aliases.asInstanceOf[JMapWrapper[String,String]].map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(vizierName.toUpperCase(), ID(mimirName)) } 
+          aliases.asInstanceOf[JMapWrapper[String,String]].map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(ID(vizierName), ID(mimirName)) } 
           query
         }
         case inputs:Seq[_] => {

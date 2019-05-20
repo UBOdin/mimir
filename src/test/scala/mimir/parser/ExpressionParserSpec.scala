@@ -32,7 +32,10 @@ class ExpressionParserSpec extends Specification
         ExpressionParser.expr("(A) AND (B) AND (C)") 
       ) must contain(allOf[Expression](Var(ID("A")), Var(ID("B")), Var(ID("C"))))
     }
-
+    "Handle escaped quotes" >> {
+      ExpressionParser.expr("'fun n'' games'")  must 
+       be equalTo StringPrimitive("fun n' games")
+    }
   }
 
 }

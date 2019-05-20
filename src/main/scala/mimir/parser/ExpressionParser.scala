@@ -95,9 +95,9 @@ object ExpressionParser extends RegexParsers {
 		| "FALSE" ^^ { _ => BoolPrimitive(false) }
 	)
 
-	def stringLeaf = """'(([^']|\\')*?)'""".r ^^ {
+	def stringLeaf = """'(((''|\\')|[^'])*)'""".r ^^ {
 		(x:String) => 
-			StringPrimitive(x.substring(1,x.length-1)) 
+			StringPrimitive(x.substring(1,x.length-1).replaceAll("''", "'")) 
 	}
 	def varLeaf = 
 		id ^^ { case "ROWID" => RowIdVar()
