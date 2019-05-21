@@ -9,9 +9,9 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 object SparkFunctions 
  extends LazyLogging {
   
-  val sparkFunctions = scala.collection.mutable.Map[String, (Seq[PrimitiveValue] => PrimitiveValue, Seq[Type] => Type)]()
+  val sparkFunctions = scala.collection.mutable.Map[ID, (Seq[PrimitiveValue] => PrimitiveValue, Seq[Type] => Type)]()
   
-  def addSparkFunction(fname:String,eval:Seq[PrimitiveValue] => PrimitiveValue, typechecker: Seq[Type] => Type) : Unit = {
+  def addSparkFunction(fname:ID,eval:Seq[PrimitiveValue] => PrimitiveValue, typechecker: Seq[Type] => Type) : Unit = {
     sparkFunctions.put(fname, (eval, typechecker))
   }
   
@@ -19,7 +19,7 @@ object SparkFunctions
   {
     sparkFunctions.foreach(sfunc => {
       logger.debug("registering spark func: " + sfunc._1)
-      fr.registerPassthrough(ID(sfunc._1), sfunc._2._1, sfunc._2._2)
+      fr.registerPassthrough(sfunc._1, sfunc._2._1, sfunc._2._2)
     })
   }
   

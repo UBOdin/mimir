@@ -17,7 +17,7 @@ object SparkBackendSpec
 {
  
   "SparkBackend" should {
-    "Be able to zipWithIndex" >> {
+     "Be able to zipWithIndex" >> {
       db.loadTable(
         sourceFile = "test/data/JSONOUTPUTWIDE.csv", 
         targetTable = Some(ID("D")), 
@@ -47,6 +47,25 @@ object SparkBackendSpec
       idxs.head must be equalTo 1
       idxs.last must be equalTo 70714
       
+    }
+    "Be able to use spark sql functions" >> {
+      db.loadTable(
+        sourceFile = "test/data/geo.csv", 
+        targetTable = Some(ID("geo")), 
+        force = true, 
+        targetSchema = None,
+        inferTypes = Some(true),
+        detectHeaders = Some(true),
+        format = ID("csv"),
+        loadOptions = Map(
+          "DELIMITER" -> ",", 
+          "datasourceErrors" -> "true"
+        )
+      )
+      val funcres = query("Select subsrting(CITY, 0, 1) AS D FROM geo;")( results => {
+        results.toList.map( el => el.tuple.toList)
+      })
+      funcres must be equalTo List(List(str("B")),List(str("S")),List(str("B")),List(str("B")),List(str("B")),List(str("B")),List(str("B")))
     }
   }
 }

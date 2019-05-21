@@ -221,7 +221,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
           val fClassName = sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
           if(!fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
             logger.debug("registering spark function: " + fidentifier.funcName.toUpperCase())
-            SparkFunctions.addSparkFunction(fidentifier.funcName.toUpperCase(), (inputs) => {
+            SparkFunctions.addSparkFunction(ID(fidentifier.funcName), (inputs) => {
               val sparkInputs = inputs.map(inp => Literal(OperatorTranslation.mimirPrimitiveToSparkExternalInlineFuncParam(inp)))
               val sparkInternal = inputs.map(inp => OperatorTranslation.mimirPrimitiveToSparkInternalInlineFuncParam(inp))
               val sparkRow = InternalRow(sparkInternal:_*)
@@ -263,7 +263,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
     sparkFunctions.filterNot(fid => excludedFunctions.contains(fid._1.funcName.toUpperCase())).flatMap{ case (fidentifier, fname) => {
           val fClassName = sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
           if(fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
-            Some((fidentifier.funcName.toUpperCase(), 
+            Some((fidentifier.funcName, 
             (inputTypes:Seq[Type]) => {
               val inputs = inputTypes.map(inp => Literal(OperatorTranslation.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
               val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
