@@ -62,7 +62,6 @@ import mimir.util.{ HadoopUtils, SparkUtils, ExperimentalOptions, S3Utils }
 import mimir.Mimir
 import mimir.algebra.function.{ FunctionRegistry, AggregateRegistry }
 
-
 class SparkBackend(override val database:String, maintenance:Boolean = false) 
   extends QueryBackend(database) 
   with BackendWithSparkContext
@@ -217,10 +216,10 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
   def registerSparkFunctions(excludedFunctions:Seq[ID], fr:FunctionRegistry) = {
     val sparkFunctions = sparkSql.sparkSession.sessionState.catalog
         .listFunctions(database, "*")
-    sparkFunctions.filterNot(fid => excludedFunctions.contains(fid._1.funcName.toUpperCase())).foreach{ case (fidentifier, fname) => {
+    sparkFunctions.filterNot(fid => excludedFunctions.contains(ID(fid._1.funcName.toLowerCase()))).foreach{ case (fidentifier, fname) => {
           val fClassName = sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
           if(!fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
-            logger.debug("registering spark function: " + fidentifier.funcName.toUpperCase())
+            logger.debug("registering spark function: " + fidentifier.funcName)
             SparkFunctions.addSparkFunction(ID(fidentifier.funcName), (inputs) => {
               val sparkInputs = inputs.map(inp => Literal(OperatorTranslation.mimirPrimitiveToSparkExternalInlineFuncParam(inp)))
               val sparkInternal = inputs.map(inp => OperatorTranslation.mimirPrimitiveToSparkInternalInlineFuncParam(inp))
@@ -260,7 +259,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
   def registerSparkAggregates(excludedFunctions:Seq[ID], ar:AggregateRegistry) = {
     val sparkFunctions = sparkSql.sparkSession.sessionState.catalog
         .listFunctions(database, "*")
-    sparkFunctions.filterNot(fid => excludedFunctions.contains(fid._1.funcName.toUpperCase())).flatMap{ case (fidentifier, fname) => {
+    sparkFunctions.filterNot(fid => excludedFunctions.contains(ID(fid._1.funcName.toLowerCase()))).flatMap{ case (fidentifier, fname) => {
           val fClassName = sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
           if(fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
             Some((fidentifier.funcName, 

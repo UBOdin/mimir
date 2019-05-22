@@ -17,7 +17,7 @@ object SparkBackendSpec
 {
  
   "SparkBackend" should {
-     "Be able to zipWithIndex" >> {
+    "Be able to zipWithIndex" >> {
       db.loadTable(
         sourceFile = "test/data/JSONOUTPUTWIDE.csv", 
         targetTable = Some(ID("D")), 
@@ -62,10 +62,15 @@ object SparkBackendSpec
           "datasourceErrors" -> "true"
         )
       )
-      val funcres = query("Select subsrting(CITY, 0, 1) AS D FROM geo;")( results => {
+      val funcres = query("Select substring(CITY, 0, 1) AS D FROM geo;")( results => {
+        results.toList.map( el => el.tuple.toList)
+      })
+      //and not use aggregates that are registered already by mimir
+      val aggres = query("Select COUNT(CITY) AS CC FROM geo;")( results => {
         results.toList.map( el => el.tuple.toList)
       })
       funcres must be equalTo List(List(str("B")),List(str("S")),List(str("B")),List(str("B")),List(str("B")),List(str("B")),List(str("B")))
+      aggres must be equalTo List(List(i(7)))
     }
   }
 }
