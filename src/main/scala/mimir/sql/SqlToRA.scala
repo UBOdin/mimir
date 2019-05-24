@@ -50,13 +50,13 @@ import mimir.provenance.Provenance
 class SqlToRA(db: Database) 
   extends LazyLogging
 {
-  private val vizierNameMap = scala.collection.mutable.Map[String, ID]()
+  private val vizierNameMap = scala.collection.mutable.Map[ID, ID]()
   
-  def registerVizierNameMapping(vizierName:String,mimirName:ID) : Unit = {
+  def registerVizierNameMapping(vizierName:ID,mimirName:ID) : Unit = {
     vizierNameMap.put(vizierName, mimirName)
   }
   
-  def getVizierNameMapping(vizierName:String) : Option[ID] =  vizierNameMap.get(vizierName)
+  def getVizierNameMapping(vizierName:ID) : Option[ID] =  vizierNameMap.get(vizierName)
 
   def unhandled(feature : String) = {
     println("ERROR: Unhandled Feature: " + feature)
@@ -503,7 +503,11 @@ class SqlToRA(db: Database)
           Seq(alias -> NameLookup(bindings))
         )
       }
-      case FromTable(schemaMaybe, table, aliasMaybe) => {
+      case FromTable(schemaMaybe, tablev, aliasMaybe) => {
+        val table = vizierNameMap.get(ID(tablev.name)) match { 
+              case Some(mimirID) => sparsity.Name(mimirID.id)
+              case None => tablev 
+            } 
         val alias = aliasMaybe.getOrElse(table)
         val tableOp:Operator = 
           schemaMaybe match { 

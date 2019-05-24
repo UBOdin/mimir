@@ -161,7 +161,16 @@ case class Database(backend: QueryBackend, metadata: MetadataBackend)
    */
   final def query[T](oper: Operator)(handler: ResultIterator => T): T =
     query(oper, BestGuess)(handler)
-
+    
+  /**
+   * Optimize and compiles the specified query.  Applies all Mimir-specific optimizations
+   * and rewrites the query to properly account for Virtual Tables.
+   */
+  def compileBestGuess(oper:Operator): Operator = {
+    val (compiledOp, outputCols, metadata) = mimir.exec.mode.BestGuess.rewrite(this, views.rebuildAdaptiveViews(oper))
+     mimir.optimizer.Optimizer.optimize(compiledOp.project(outputCols.map(_.id):_*), compiler.operatorOptimizations) 
+  }
+    
   /**
    * Get all availale table names 
    */

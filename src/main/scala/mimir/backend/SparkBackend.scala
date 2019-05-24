@@ -26,8 +26,20 @@ import org.apache.spark.sql.types.{
   ShortType,
   DateType,
   BooleanType,
-  TimestampType
+  TimestampType,
+  StringType
 }
+import org.apache.spark.sql.functions.{
+  monotonically_increasing_id,
+  spark_partition_id,
+  col,
+  lit,
+  first,
+  count,
+  sum,
+  udf
+}
+import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.catalyst.{ TableIdentifier, InternalRow }
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.expressions.Literal
@@ -50,7 +62,6 @@ import mimir.algebra._
 import mimir.util.{ HadoopUtils, SparkUtils, ExperimentalOptions, S3Utils } 
 import mimir.Mimir
 import mimir.algebra.function.{ FunctionRegistry, AggregateRegistry }
-
 
 class SparkBackend(override val database:String, maintenance:Boolean = false) 
   extends QueryBackend(database) 
@@ -134,18 +145,13 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
           HadoopUtils.writeToHDFS(sparkCtx, "scala-logging-api_2.11-2.1.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.scala-logging/scala-logging-slf4j_2.11/jars/scala-logging-slf4j_2.11-2.1.2.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, "play-json_2.11-2.5.0-M2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.play/play-json_2.11/jars/play-json_2.11-2.5.0-M2.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, "jsr-275-0.9.1.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/javax.measure/jsr-275/jars/jsr-275-0.9.1.jar"), overwriteJars)
-          HadoopUtils.writeToHDFS(sparkCtx, "GeographicLib-Java-1.44.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/net.sf.geographiclib/GeographicLib-Java/jars/GeographicLib-Java-1.44.jar"), overwriteJars)
-          HadoopUtils.writeToHDFS(sparkCtx, "jai_core-1.1.3.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/javax.media/jai_core/jars/jai_core-1.1.3.jar"), overwriteJars)
-          HadoopUtils.writeToHDFS(sparkCtx, "gt-opengis-16.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.geotools/gt-opengis/jars/gt-opengis-16.2.jar"), overwriteJars)
-          HadoopUtils.writeToHDFS(sparkCtx, "gt-metadata-16.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.geotools/gt-metadata/jars/gt-metadata-16.2.jar"), overwriteJars)
-          HadoopUtils.writeToHDFS(sparkCtx, "gt-referencing-16.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.geotools/gt-referencing/jars/gt-referencing-16.2.jar"), overwriteJars)
-          HadoopUtils.writeToHDFS(sparkCtx, "gt-referencing-16.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.geotools/gt-referencing/jars/gt-referencing-16.2.jar"), overwriteJars)
-          HadoopUtils.writeToHDFS(sparkCtx, "mysql-connector-java-5.1.6.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/mysql/mysql-connector-java/jars/mysql-connector-java-5.1.6.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, "postgresql-9.4-1201-jdbc41.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.postgresql/postgresql/jars/postgresql-9.4-1201-jdbc41.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, "sqlite-jdbc-3.16.1.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.xerial/sqlite-jdbc/jars/sqlite-jdbc-3.16.1.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, "spark-xml_2.11-0.5.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.databricks/spark-xml_2.11/jars/spark-xml_2.11-0.5.0.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, "spark-excel_2.11-0.11.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.crealytics/spark-excel_2.11/jars/spark-excel_2.11-0.11.0.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, "spark-google-spreadsheets_2.11-0.6.1.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.github.potix2/spark-google-spreadsheets_2.11/jars/spark-google-spreadsheets_2.11-0.6.1.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, "sparsity_2.11-1.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/info.mimirdb/sparsity_2.11/jars/sparsity_2.11-1.0.jar"), overwriteJars)
+          HadoopUtils.writeToHDFS(sparkCtx, "fastparse_2.11-2.1.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.lihaoyi/fastparse_2.11/jars/fastparse_2.11-2.1.0.jar"), overwriteJars)
           HadoopUtils.writeToHDFS(sparkCtx, s"$credname",new File(s"test/data/$credname"), overwriteJars)
           //HadoopUtils.writeToHDFS(sparkCtx, "aws-java-sdk-s3-1.11.355.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.amazonaws/aws-java-sdk-s3/jars/aws-java-sdk-s3-1.11.355.jar"), overwriteJars)
           //HadoopUtils.writeToHDFS(sparkCtx, "hadoop-aws-2.7.6.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.apache.hadoop/hadoop-aws/jars/hadoop-aws-2.7.6.jar"), overwriteJars)
@@ -156,18 +162,15 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
           sparkCtx.addJar(s"$hdfsHome/scala-logging-api_2.11-2.1.2.jar")       
           sparkCtx.addJar(s"$hdfsHome/play-json_2.11-2.5.0-M2.jar")  
           sparkCtx.addJar(s"$hdfsHome/jsr-275-0.9.1.jar")                                     
-          sparkCtx.addJar(s"$hdfsHome/jai_core-1.1.3.jar")
-          sparkCtx.addJar(s"$hdfsHome/GeographicLib-Java-1.44.jar")
-          sparkCtx.addJar(s"$hdfsHome/gt-opengis-16.2.jar")
-          sparkCtx.addJar(s"$hdfsHome/gt-metadata-16.2.jar")
-          sparkCtx.addJar(s"$hdfsHome/gt-referencing-16.2.jar")
-          sparkCtx.addJar(s"$hdfsHome/mysql-connector-java-5.1.6.jar")
           sparkCtx.addJar(s"$hdfsHome/postgresql-9.4-1201-jdbc41.jar")
           sparkCtx.addJar(s"$hdfsHome/sqlite-jdbc-3.16.1.jar")
           sparkCtx.addJar(s"$hdfsHome/spark-xml_2.11-0.5.0.jar")
           sparkCtx.addJar(s"$hdfsHome/spark-excel_2.11-0.11.0.jar")
           sparkCtx.addJar(s"$hdfsHome/spark-google-spreadsheets_2.11-0.6.1.jar")
+          sparkCtx.addJar(s"$hdfsHome/sparsity_2.11-1.0.jar")
+          sparkCtx.addJar(s"$hdfsHome/fastparse_2.11-2.1.0.jar")
           sparkCtx.addFile(s"$hdfsHome/$credname")
+          
           //sparkCtx.addJar(s"$hdfsHome/aws-java-sdk-s3-1.11.355.jar")
           //sparkCtx.addJar(s"$hdfsHome/hadoop-aws-2.7.6.jar")
           
@@ -228,13 +231,13 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
   def registerSparkFunctions(excludedFunctions:Seq[ID], fr:FunctionRegistry) = {
     val sparkFunctions = sparkSql.sparkSession.sessionState.catalog
         .listFunctions(database, "*")
-    sparkFunctions.filterNot(fid => excludedFunctions.contains(fid._1.funcName.toUpperCase())).foreach{ case (fidentifier, fname) => {
+    sparkFunctions.filterNot(fid => excludedFunctions.contains(ID(fid._1.funcName.toLowerCase()))).foreach{ case (fidentifier, fname) => {
           val fClassName = sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
           if(!fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
-            logger.debug("registering spark function: " + fidentifier.funcName.toUpperCase())
-            SparkFunctions.addSparkFunction(fidentifier.funcName.toUpperCase(), (inputs) => {
-              val sparkInputs = inputs.map(inp => Literal(operatorTranslation.mimirPrimitiveToSparkExternalInlineFuncParam(inp)))
-              val sparkInternal = inputs.map(inp => operatorTranslation.mimirPrimitiveToSparkInternalInlineFuncParam(inp))
+            logger.debug("registering spark function: " + fidentifier.funcName)
+            SparkFunctions.addSparkFunction(ID(fidentifier.funcName), (inputs) => {
+              val sparkInputs = inputs.map(inp => Literal(OperatorTranslation.mimirPrimitiveToSparkExternalInlineFuncParam(inp)))
+              val sparkInternal = inputs.map(inp => OperatorTranslation.mimirPrimitiveToSparkInternalInlineFuncParam(inp))
               val sparkRow = InternalRow(sparkInternal:_*)
               val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
               val sparkFunc = Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
@@ -271,10 +274,10 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
   def registerSparkAggregates(excludedFunctions:Seq[ID], ar:AggregateRegistry) = {
     val sparkFunctions = sparkSql.sparkSession.sessionState.catalog
         .listFunctions(database, "*")
-    sparkFunctions.filterNot(fid => excludedFunctions.contains(fid._1.funcName.toUpperCase())).flatMap{ case (fidentifier, fname) => {
+    sparkFunctions.filterNot(fid => excludedFunctions.contains(ID(fid._1.funcName.toLowerCase()))).flatMap{ case (fidentifier, fname) => {
           val fClassName = sparkSql.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
           if(fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
-            Some((fidentifier.funcName.toUpperCase(), 
+            Some((fidentifier.funcName, 
             (inputTypes:Seq[Type]) => {
               val inputs = inputTypes.map(inp => Literal(OperatorTranslation.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
               val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
@@ -315,7 +318,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
       logger.trace("------------------------------------------------------------")
       val qe = sparkSql.sparkSession.sessionState.executePlan(sparkOper)
       qe.assertAnalyzed()
-      new Dataset[Row](sparkSql.sparkSession, sparkOper, RowEncoder(qe.analyzed.schema))
+      new Dataset[Row](sparkSql.sparkSession, qe.optimizedPlan, RowEncoder(qe.analyzed.schema))
     } catch {
       case t: Throwable => {
         logger.error("-------------------------> Exception Executing Spark Op: " + t.toString() + "\n" + t.getStackTrace.mkString("\n"))
@@ -325,6 +328,26 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
         throw t
       }
     }
+  }
+  
+  def zipWithIndex(df: DataFrame, offset: Long = 1, indexName: String = "ROWIDX", indexType:DataType = LongType): DataFrame = {
+    val dfWithPartitionId = df.withColumn("partition_id", spark_partition_id()).withColumn("inc_id", monotonically_increasing_id())
+
+    val partitionOffsets = dfWithPartitionId
+        .groupBy("partition_id")
+        .agg(count(lit(1)) as "cnt", first("inc_id") as "inc_id")
+        .orderBy("partition_id")
+        .select(sum("cnt").over(Window.orderBy("partition_id")) - col("cnt") - col("inc_id") + lit(offset) as "cnt" )
+        .collect()
+        .map(_.getLong(0))
+        .toArray
+
+     val theUdf = udf((partitionId: Int) => partitionOffsets(partitionId), LongType)
+     
+     dfWithPartitionId
+        .withColumn("partition_offset", theUdf(col("partition_id")))
+        .withColumn(indexName, (col("partition_offset") + col("inc_id")).cast(indexType))
+        .drop("partition_id", "partition_offset", "inc_id")
   }
   
   def dropTable(table:ID): Unit = {

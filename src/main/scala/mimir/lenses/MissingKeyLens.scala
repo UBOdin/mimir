@@ -94,11 +94,9 @@ object MissingKeyLens {
           Var(rght(keys.head._1)).eq(Var(keys.head._1))
         )
       )
-    val df = db.backend.execute(missingKeysLookup).rdd.toLocalIterator
-    var htData = Seq[Seq[PrimitiveValue]]()
-    while(df.hasNext){
-      htData = htData :+ keys.zipWithIndex.map(col => IntPrimitive(df.next.getInt(col._2+1))) 
-    }
+    val htData = db.query(missingKeysLookup)(_.toList.map( row =>
+      keys.zipWithIndex.map(col => row(col._2+1))) 
+    )
     
     val missingKeys = HardTable(keys, htData)
     

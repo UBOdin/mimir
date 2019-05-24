@@ -57,7 +57,19 @@ object DBTestInstances
           tmpDB.metadataBackend.open()
           tmpDB.backend.open();
           backend match {
-            case sback:SparkBackend => SparkML(sback.sparkSql)
+            case sback:SparkBackend =>{
+              SparkML(sback.sparkSql)
+              val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^","|","OR")
+                sback.registerSparkFunctions(
+                  tmpDB.functions.functionPrototypes.map { _._1 }.toSeq
+                    ++ otherExcludeFuncs.map { ID(_) }, 
+                  tmpDB.functions
+                )
+                sback.registerSparkAggregates(
+                  tmpDB.aggregates.prototypes.map { _._1 }.toSeq,
+                  tmpDB.aggregates
+                )
+            }
             case _ => ???
           }
           OperatorTranslation.db = tmpDB
@@ -100,7 +112,7 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
             case "NO" => false; case "YES" => true
           }) db.backend.dropDB()
       db.backend.close()
-      db.backend.open()
+      //db.backend.open()
     }catch {
       case t: Throwable => {}
     }

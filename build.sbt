@@ -130,7 +130,7 @@ libraryDependencies ++= Seq(
   ////////////////////// Command-Line Interface Utilities //////////////////////
   "org.rogach"                    %%  "scallop"                  % "0.9.5",
   "org.jline"                     %   "jline"                    % "3.2.0",
-  "info.mimirdb"                  %%  "sparsity"                 % "0.1-SNAPSHOT",
+  "info.mimirdb"                  %%  "sparsity"                 % "1.0",
   "com.lihaoyi"                   %%  "fastparse"                % "2.1.0",
 
   ////////////////////// Dev Tools -- Logging, Testing, etc... //////////////////////
@@ -201,8 +201,15 @@ libraryDependencies ++= Seq(
   
   ///////////////////// Viztrails Integration ///////////////////
   
-  "net.sf.py4j" 				     %	   "py4j" 				  % "0.10.4",
-  
+  "org.eclipse.jetty"			  %    "jetty-http" 		  % "9.4.10.v20180503",
+  "org.eclipse.jetty" 			  %    "jetty-io" 			  % "9.4.10.v20180503",
+  "org.eclipse.jetty" 			  %    "jetty-security" 	  % "9.4.10.v20180503",
+  "org.eclipse.jetty" 			  %    "jetty-server" 		  % "9.4.10.v20180503",
+  "org.eclipse.jetty" 			  %    "jetty-servlet" 		  % "9.4.10.v20180503" ,
+  "org.eclipse.jetty" 			  %    "jetty-servlets" 	  % "9.4.10.v20180503" ,
+  "org.eclipse.jetty" 			  %    "jetty-util" 		  % "9.4.10.v20180503" ,
+  "org.eclipse.jetty"        	  %    "jetty-webapp"         % "9.4.10.v20180503" ,
+			
   //////////////////////// Visualization //////////////////////
   // For now, all of this happens in python with matplotlib
   // and so we don't need any external dependencies.
