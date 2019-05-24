@@ -232,7 +232,6 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
 
   def registerSparkFunctions(excludedFunctions:Seq[ID], db: Database) = {
     val fr = db.functions
-    val ot = new OperatorTranslation(db)
     val sparkFunctions = sparkSql.sparkSession.sessionState.catalog
         .listFunctions(database, "*")
     sparkFunctions.filterNot(fid => excludedFunctions.contains(ID(fid._1.funcName.toLowerCase()))).foreach{ case (fidentifier, fname) => {
@@ -240,8 +239,8 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
           if(!fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
             logger.debug("registering spark function: " + fidentifier.funcName)
             SparkFunctions.addSparkFunction(ID(fidentifier.funcName), (inputs) => {
-              val sparkInputs = inputs.map(inp => Literal(ot.mimirPrimitiveToSparkExternalInlineFuncParam(inp)))
-              val sparkInternal = inputs.map(inp => ot.mimirPrimitiveToSparkInternalInlineFuncParam(inp))
+              val sparkInputs = inputs.map(inp => Literal(OperatorTranslation.mimirPrimitiveToSparkExternalInlineFuncParam(inp)))
+              val sparkInternal = inputs.map(inp => OperatorTranslation.mimirPrimitiveToSparkInternalInlineFuncParam(inp))
               val sparkRow = InternalRow(sparkInternal:_*)
               val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
               val sparkFunc = Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)

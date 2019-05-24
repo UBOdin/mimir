@@ -26,8 +26,8 @@ object Regression extends SparkML {
     applyModelDB(model, query, db)
   }
   
-  def regress( model : PipelineModel, cols:Seq[(ID, Type)], testData : List[Seq[PrimitiveValue]]): DataFrame = {
-    applyModel(model, cols, testData)
+  def regress( model : PipelineModel, cols:Seq[(ID, Type)], testData : List[Seq[PrimitiveValue]], db: Database): DataFrame = {
+    applyModel(model, cols, testData, db)
   }
   
   override def extractPredictions(model : PipelineModel, predictions:DataFrame, maxPredictions:Int = 5) : Seq[(String, (String, Double))] = {

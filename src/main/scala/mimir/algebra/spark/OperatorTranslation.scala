@@ -257,7 +257,7 @@ class OperatorTranslation(db: mimir.Database)
         /*LocalRelation(mimirSchemaToStructType(schema).map(f => AttributeReference(f.name, f.dataType, f.nullable, f.metadata)()), 
             data.map(row => InternalRow(row.map(mimirPrimitiveToSparkInternalRowValue(_)):_*)))*/
         LocalRelation.fromExternalRows(OperatorTranslation.mimirSchemaToStructType(schema).map(f => AttributeReference(f.name, f.dataType, f.nullable, f.metadata)()), 
-            data.map(row => Row(row.map(mimirPrimitiveToSparkExternalRowValue(_)):_*)))     
+            data.map(row => Row(row.map(OperatorTranslation.mimirPrimitiveToSparkExternalRowValue(_)):_*)))     
       }
 			case Sort(sortCols, src) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Sort(
@@ -539,7 +539,7 @@ class OperatorTranslation(db: mimir.Database)
   def mimirExprToSparkExpr(oper:Operator, expr:Expression) : org.apache.spark.sql.catalyst.expressions.Expression = {
     expr match {
       case primitive : PrimitiveValue => {
-        mimirPrimitiveToSparkPrimitive(primitive)
+        OperatorTranslation.mimirPrimitiveToSparkPrimitive(primitive)
       }
       case cmp@Comparison(op,lhs,rhs) => {
         mimirComparisonToSparkComparison(oper, cmp)
@@ -598,63 +598,6 @@ UnresolvedAttribute("ROWID")
       case (JDBCVar(_) | _:Proc) => {
         throw new RAException("Spark doesn't support: "+expr)
       }
-    }
-  }
-  
-  def mimirPrimitiveToSparkPrimitive(primitive : PrimitiveValue) : Literal = {
-    primitive match {
-      case NullPrimitive() => Literal(null)
-      case RowIdPrimitive(s) => Literal(s)
-      case StringPrimitive(s) => Literal(s)
-      case IntPrimitive(i) => Literal(i)
-      case FloatPrimitive(f) => Literal(f)
-      case BoolPrimitive(b) => Literal(b)
-      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => Literal.create(SparkUtils.convertTimestamp(ts), TimestampType)
-      case dt@DatePrimitive(y,m,d) => Literal.create(SparkUtils.convertDate(dt), DateType)
-      case x =>  Literal(x.asString)
-    }
-  }
-  
-  def mimirPrimitiveToSparkInternalRowValue(primitive : PrimitiveValue) : Any = {
-    primitive match {
-      case NullPrimitive() => null
-      case RowIdPrimitive(s) => UTF8String.fromString(s)
-      case StringPrimitive(s) => UTF8String.fromString(s)
-      case IntPrimitive(i) => i
-      case FloatPrimitive(f) => f
-      case BoolPrimitive(b) => b
-      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)//DateTimeUtils.fromJavaTimestamp(SparkUtils.convertTimestamp(ts))
-      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)//DateTimeUtils.fromJavaDate(SparkUtils.convertDate(dt))
-      case x =>  UTF8String.fromString(x.asString)
-    }
-  }
-  
-  def mimirPrimitiveToSparkExternalRowValue(primitive : PrimitiveValue) : Any = {
-    primitive match {
-      case null => null
-      case NullPrimitive() => null
-      case RowIdPrimitive(s) => s
-      case StringPrimitive(s) => s
-      case IntPrimitive(i) => i
-      case FloatPrimitive(f) => f
-      case BoolPrimitive(b) => b
-      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
-      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
-      case x =>  x.asString
-    }
-  }
-  
-  def mimirPrimitiveToSparkInternalInlineFuncParam(primitive : PrimitiveValue) : Any = {
-    primitive match {
-      case IntPrimitive(i) => i.toInt
-      case x =>  mimirPrimitiveToSparkInternalRowValue(x)
-    }
-  }
-  
-  def mimirPrimitiveToSparkExternalInlineFuncParam(primitive : PrimitiveValue) : Any = {
-    primitive match {
-      case IntPrimitive(i) => i.toInt
-      case x =>  mimirPrimitiveToSparkExternalRowValue(x)
     }
   }
   
@@ -883,6 +826,63 @@ object OperatorTranslation {
         className = "jdbc",
         options = Map("url" -> "jdbc:sqlite:debug.db") ).resolveRelation())*/
   }*/
+  
+  def mimirPrimitiveToSparkPrimitive(primitive : PrimitiveValue) : Literal = {
+    primitive match {
+      case NullPrimitive() => Literal(null)
+      case RowIdPrimitive(s) => Literal(s)
+      case StringPrimitive(s) => Literal(s)
+      case IntPrimitive(i) => Literal(i)
+      case FloatPrimitive(f) => Literal(f)
+      case BoolPrimitive(b) => Literal(b)
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => Literal.create(SparkUtils.convertTimestamp(ts), TimestampType)
+      case dt@DatePrimitive(y,m,d) => Literal.create(SparkUtils.convertDate(dt), DateType)
+      case x =>  Literal(x.asString)
+    }
+  }
+  
+  def mimirPrimitiveToSparkInternalRowValue(primitive : PrimitiveValue) : Any = {
+    primitive match {
+      case NullPrimitive() => null
+      case RowIdPrimitive(s) => UTF8String.fromString(s)
+      case StringPrimitive(s) => UTF8String.fromString(s)
+      case IntPrimitive(i) => i
+      case FloatPrimitive(f) => f
+      case BoolPrimitive(b) => b
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)//DateTimeUtils.fromJavaTimestamp(SparkUtils.convertTimestamp(ts))
+      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)//DateTimeUtils.fromJavaDate(SparkUtils.convertDate(dt))
+      case x =>  UTF8String.fromString(x.asString)
+    }
+  }
+  
+  def mimirPrimitiveToSparkExternalRowValue(primitive : PrimitiveValue) : Any = {
+    primitive match {
+      case null => null
+      case NullPrimitive() => null
+      case RowIdPrimitive(s) => s
+      case StringPrimitive(s) => s
+      case IntPrimitive(i) => i
+      case FloatPrimitive(f) => f
+      case BoolPrimitive(b) => b
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
+      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
+      case x =>  x.asString
+    }
+  }
+  
+  def mimirPrimitiveToSparkInternalInlineFuncParam(primitive : PrimitiveValue) : Any = {
+    primitive match {
+      case IntPrimitive(i) => i.toInt
+      case x =>  mimirPrimitiveToSparkInternalRowValue(x)
+    }
+  }
+  
+  def mimirPrimitiveToSparkExternalInlineFuncParam(primitive : PrimitiveValue) : Any = {
+    primitive match {
+      case IntPrimitive(i) => i.toInt
+      case x =>  mimirPrimitiveToSparkExternalRowValue(x)
+    }
+  }
   
 }
 

@@ -97,17 +97,18 @@ abstract class SparkML {
           .schemaOf(query)
           .filterNot { _._1.equals(ID("rowid")) },
       data, 
+      db,
       dfTransformer
     )
   }
   
-  def applyModel( model : PipelineModel, cols:Seq[(ID, Type)], testData : List[Seq[PrimitiveValue]], dfTransformer:Option[DataFrameTransformer] = None): DataFrame = {
+  def applyModel( model : PipelineModel, cols:Seq[(ID, Type)], testData : List[Seq[PrimitiveValue]], db: Database, dfTransformer:Option[DataFrameTransformer] = None): DataFrame = {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._
     val modDF = dfTransformer.getOrElse((df:DataFrame) => df)
     model.transform(modDF(sqlContext.createDataFrame(
       getSparkSession().parallelize(testData.map( row => {
-        Row(row.zip(cols).map(value => OperatorTranslation.mimirExprToSparkExpr(null, value._1)):_*)
+        Row(row.zip(cols).map(value => new OperatorTranslation(db).mimirExprToSparkExpr(null, value._1)):_*)
       })), StructType(cols.toList.map(col => StructField(col._1.id, OperatorTranslation.getSparkType(col._2), true))))))
   }
   
