@@ -6,7 +6,6 @@ object MultilensRegistry
 {
 
   val multilenses = Map[ID,Multilens](
-    ID("DISCALA_ABADI")     -> DiscalaAbadiNormalizer,
     ID("DETECT_HEADER")     -> CheckHeader,
     ID("TYPE_INFERENCE")    -> TypeInference,
     ID("SCHEMA_MATCHING")   -> SchemaMatching,

@@ -6,8 +6,8 @@ import mimir.algebra._
 
 object Metadata
 {
-  type CategorySchema = Seq[(ID, Type)]
-  type Resource = (ID, Seq[PrimitiveValue])
+  type MapSchema = Seq[(ID, Type)]
+  type MapResource = (ID, Seq[PrimitiveValue])
 }
 
 abstract class MetadataBackend {
@@ -16,15 +16,15 @@ abstract class MetadataBackend {
   def open(): Unit
   def close(): Unit
 
-  def registerMap(category: ID, schema: Metadata.CategorySchema): MetadataMap
+  def registerMap(category: ID, schema: Metadata.MapSchema): MetadataMap
   def registerManyMany(category: ID): MetadataManyMany
 
   def keysForMap(category: ID): Seq[ID]
-  def allForMap(category: ID): Seq[Metadata.Resource]
-  def getFromMap(category: ID, resource: ID): Option[Metadata.Resource]
-  def putToMap(category: ID, resource: Metadata.Resource): Unit
+  def allForMap(category: ID): Seq[Metadata.MapResource]
+  def getFromMap(category: ID, resource: ID): Option[Metadata.MapResource]
+  def putToMap(category: ID, resource: Metadata.MapResource): Unit
   def rmFromMap(category: ID, resource: ID): Unit
-  def updateMap(category: ID, body:Map[ID, PrimitiveValue]): Unit
+  def updateMap(category: ID, resource: ID, body:Map[ID, PrimitiveValue]): Unit
 
   def addToManyMany(category: ID, lhs:ID, rhs: ID): Unit
   def getManyManyByLHS(category: ID, lhs:ID): Seq[ID]
@@ -36,13 +36,13 @@ abstract class MetadataBackend {
 
 class MetadataMap(backend: MetadataBackend, category: ID)
 {
-  def keys: Seq[ID]                                 = backend.keysForMap(category)
-  def all: Seq[Metadata.Resource]                   = backend.allForMap(category)
-  def get(resource:ID): Option[Metadata.Resource]   = backend.getFromMap(category, resource)
-  def put(resource: Metadata.Resource)              = backend.putToMap(category, resource)
-  def put(id: ID, body: Seq[PrimitiveValue])        = backend.putToMap(category, (id, body))
-  def update(id: ID, body: Map[ID, PrimitiveValue]) = backend.updateMap(category, body)
-  def rm(resource: ID)                              = backend.rmFromMap(category, resource)
+  def keys: Seq[ID]                                  = backend.keysForMap(category)
+  def all: Seq[Metadata.MapResource]                 = backend.allForMap(category)
+  def get(resource:ID): Option[Metadata.MapResource] = backend.getFromMap(category, resource)
+  def put(resource: Metadata.MapResource)            = backend.putToMap(category, resource)
+  def put(id: ID, body: Seq[PrimitiveValue])         = backend.putToMap(category, (id, body))
+  def update(id: ID, body: Map[ID, PrimitiveValue])  = backend.updateMap(category, id, body)
+  def rm(resource: ID)                               = backend.rmFromMap(category, resource)
 }
 
 class MetadataManyMany(backend: MetadataBackend, category: ID)

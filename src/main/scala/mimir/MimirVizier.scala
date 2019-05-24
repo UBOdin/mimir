@@ -407,8 +407,8 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
     val timeRes = logTime("createLens") {
       logger.debug("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
       val (viewNameSuffix, inputSubstitutionQuery) = input match {
-        case aliases:Map[String,String] => {
-          aliases.map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(ID(vizierName), ID(mimirName)) } 
+        case aliases:Map[_,_] => {
+          aliases.map{ case (vizierName:String, mimirName:String) => db.sqlToRA.registerVizierNameMapping(ID(vizierName), ID(mimirName)) } 
           (aliases.toSeq.unzip._2.mkString(""), query)
         }
         case aliases:JMapWrapper[_,_] => {

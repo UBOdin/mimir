@@ -174,7 +174,7 @@ class OperatorTranslation(db: mimir.Database)
 			  val tableId = TableIdentifier(name.id)
         //we can do this to compute the rowid inline
 			  val realSchema = db.backend.getTableSchema(name).getOrElse(throw new Exception(s"Cannot get schema for table: $name" ))
-			  val plan = RowIndexPlan(UnresolvedRelation(tableId), realSchema).getPlan()
+			  val plan = RowIndexPlan(UnresolvedRelation(tableId), realSchema, db).getPlan()
         //or we can do it in SparkBackend on loadDatasource
 			  //val plan = UnresolvedRelation(tableId)
 			  val baseRelation  = if (!alias.equals(name)) {
@@ -886,14 +886,14 @@ object OperatorTranslation {
   
 }
 
-case class RowIndexPlan(val lp:LogicalPlan,  val schema:Seq[(ID,Type)], val offset: Long = 1, val indexName: String = "ROWID") {
+case class RowIndexPlan(val lp:LogicalPlan,  val schema:Seq[(ID,Type)], db: Database, val offset: Long = 1, val indexName: String = "ROWID") {
   
   val partOp = org.apache.spark.sql.catalyst.plans.logical.Project(
       schema.map(fld => UnresolvedAttribute(fld._1.id)) ++
       Seq(Alias(SparkPartitionID(),"partition_id")(), 
           Alias(MonotonicallyIncreasingID(),"inc_id")()), lp)
   
-  val fop =  OperatorTranslation.dataset(org.apache.spark.sql.catalyst.plans.logical.Project(
+  val fop =  new OperatorTranslation(db).dataset(org.apache.spark.sql.catalyst.plans.logical.Project(
       Seq(Alias(Add(Subtract(Subtract(WindowExpression(AggregateExpression(Sum(UnresolvedAttribute("cnt")),Complete,false),WindowSpecDefinition(Seq(), Seq(), UnspecifiedFrame)), 
                   UnresolvedAttribute("cnt")),UnresolvedAttribute("inc_id")),Literal(offset)),"cnt")()), 
       org.apache.spark.sql.catalyst.plans.logical.Sort(Seq(SortOrder(UnresolvedAttribute("partition_id"), Ascending)), true,   

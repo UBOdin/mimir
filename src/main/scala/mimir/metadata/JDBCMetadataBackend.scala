@@ -22,6 +22,7 @@ class JDBCMetadataBackend(val protocol: String, val filename: String)
   def driver() = protocol
 
   val tableSchemas: scala.collection.mutable.Map[ID, Seq[(ID, Type)]] = mutable.Map()
+  val manyManys = mutable.Set[ID]()
 
   def open() = 
   {
@@ -61,9 +62,44 @@ class JDBCMetadataBackend(val protocol: String, val filename: String)
     })
   }
 
+  def query(
+    query: String, 
+    schema: Seq[Type],
+    args: Seq[PrimitiveValue] = Seq()
+  ): Seq[Seq[PrimitiveValue]] =
+  {
+    val stmt = conn.prepareStatement(query)
+    if(args.size > 0){
+      JDBCUtils.setArgs(stmt, args)
+    }
+    val results = stmt.executeQuery(query)
+    var ret = List[Seq[PrimitiveValue]]()
+    val extractRow = () => {
+      schema.zipWithIndex.map { case (t, i) => JDBCUtils.convertField(t, results, i) }
+    }
+    while(results.next){ 
+      ret = extractRow() :: ret
+    }
+    results.close()
+    return ret.reverse
+  }
+
+  def update(
+    update: String,
+    args: Seq[PrimitiveValue] = Seq()
+  ) {
+    val stmt = conn.prepareStatement(update)
+    if(args.size > 0){
+      JDBCUtils.setArgs(stmt, args)
+    }
+    stmt.execute()
+    stmt.close()
+  }
+
+
   val ID_COLUMN = "MIMIR_ID"
 
-  def register(category: ID, fields: Seq[(ID, Type)])
+  def registerMap(category: ID, schema: Metadata.MapSchema): MetadataMap =
   {
     // Assert that the backend schema lines up with the target
     // This should trigger a migration in the future, but at least 
@@ -76,8 +112,8 @@ class JDBCMetadataBackend(val protocol: String, val filename: String)
         // SQLite-specific PRAGMA operation.
         SQLiteCompat.getTableSchema(conn, category) match {
           case Some(existing) => {
-            assert(existing.length == fields.length)
-            for(((_, e), f) <- existing.zip(fields)) {
+            assert(existing.length == schema.length)
+            for(((_, e), f) <- existing.zip(schema)) {
               assert(Type.rootType(e) == f) 
             }
           }
@@ -85,7 +121,7 @@ class JDBCMetadataBackend(val protocol: String, val filename: String)
             val create = s"CREATE TABLE ${category.quoted}("+
               (  
                 Seq(s"${ID_COLUMN} string PRIMARY KEY NOT NULL")++
-                fields.map { case (name, t) => s"${name.quoted} ${Type.rootType(t)}"}
+                schema.map { case (name, t) => s"${name.quoted} ${Type.rootType(t)}"}
               ).mkString(",")+
             ")"
             val stmt = conn.createStatement()
@@ -96,75 +132,146 @@ class JDBCMetadataBackend(val protocol: String, val filename: String)
 
       }
     }
-    tableSchemas.put(category, fields)
+    tableSchemas.put(category, schema)
+    return new MetadataMap(this, category)
   }
 
-  def keys(category: ID): Seq[ID] = 
+  def keysForMap(category: ID): Seq[ID] = 
   {
-    val select = s"SELECT ${ID_COLUMN} FROM ${category.quoted}"
-    val stmt = conn.createStatement()
-    val results = stmt.executeQuery(select)
-    var keys:List[ID] = Nil 
-    while(results.next){
-      keys = ID(JDBCUtils.convertField(TString(), results, 1).asString) :: keys
-    }
-    results.close()
-    return keys.reverse
+    query(
+      s"SELECT ${ID_COLUMN} FROM ${category.quoted}", 
+      Seq(TString())
+    ) .map { _(0).asString }
+      .map { ID(_) }
   }
-  def all(category: ID): Seq[(ID, Seq[PrimitiveValue])] = 
+  def allForMap(category: ID): Seq[(ID, Seq[PrimitiveValue])] = 
   {
     val fields = tableSchemas.get(category).get
-    val select = "SELECT "+
-      (Seq(ID_COLUMN)++fields.map { _._1.quoted }).mkString(",")+
-      " FROM "+category.quoted;
-    val stmt = conn.createStatement()
-    val results = stmt.executeQuery(select)
-    var resources:List[(ID, Seq[PrimitiveValue])] = Nil 
-    while(results.next){
-      val resource = (
-        ID(JDBCUtils.convertField(TString(), results, 1).asString),
-        fields.zipWithIndex.map {
-          case ((_, t), idx) => JDBCUtils.convertField(t, results, 2+idx)
+    query(
+      "SELECT "+
+        (Seq(ID_COLUMN)++fields.map { _._1.quoted }).mkString(",")+
+        " FROM "+category.quoted,
+      TString() +: fields.map { _._2 }
+    ) .map { row => (ID(row.head.asString), row.tail) }
+  }
+  def getFromMap(category: ID, resource: ID): Option[Metadata.MapResource] =
+  {
+    val fields = tableSchemas.get(category).get
+    query(
+      "SELECT "+
+        fields.map { _._1.quoted }.mkString(",")+
+        " FROM "+category.quoted +
+        " WHERE "+ID_COLUMN+" = ?",
+      fields.map { _._2 },
+      Seq(StringPrimitive(resource.id))
+    ) .headOption
+      .map { (resource, _) }
+  }
+  def putToMap(category: ID, resource: Metadata.MapResource)
+  {
+    val fields = tableSchemas.get(category).get
+    update(
+      s"INSERT OR REPLACE INTO ${category.quoted}("+
+          ( 
+            Seq(ID_COLUMN) ++ fields.map { _._1.quoted }
+          ).mkString(",")+
+        ") VALUES ("+( 0 until (fields.length+1) ).map { _ => "?" }.mkString(",")+")",
+      StringPrimitive(resource._1.id) +: resource._2
+    )
+  }
+  def rmFromMap(category: ID, resource: ID)
+  {
+    update(
+      s"DELETE FROM ${category.quoted} WHERE ${ID_COLUMN} = ?",
+      Seq(StringPrimitive(resource.id))
+    )
+  }
+  def updateMap(category: ID, resource: ID, fields: Map[ID, PrimitiveValue])
+  {
+    val fieldSeq:Seq[(ID, PrimitiveValue)] = fields.toSeq
+    update(
+      s"UPDATE ${category.quoted} SET ${fieldSeq.map { _._1.quoted + " = ?" }.mkString(", ")} WHERE ${ID_COLUMN} = ?",
+      fieldSeq.map { _._2 } :+ StringPrimitive(resource.id)
+    )
+  }
+
+  def registerManyMany(category: ID): MetadataManyMany = 
+  {
+    // Assert that the backend schema lines up with the target
+    // This should trigger a migration in the future, but at least 
+    // inject a sanity check for now.
+    protocol match {
+      case "sqlite" => {
+        // SQLite doesn't recognize anything more than the simplest possible types.
+        // Type information is persisted but not interpreted, so conn.getMetaData() 
+        // is useless for getting schema information.  Instead, we need to use a
+        // SQLite-specific PRAGMA operation.
+        SQLiteCompat.getTableSchema(conn, category) match {
+          case Some(existing) => {
+            assert(existing.length == 2)
+            assert(existing(0)._1.equals(ID("LHS")))
+            assert(existing(0)._2.equals(TString()))
+            assert(existing(1)._1.equals(ID("RHS")))
+            assert(existing(1)._2.equals(TString()))
+          }
+          case None => {
+            val create = s"CREATE TABLE ${category.quoted}(LHS string, RHS string, PRIMARY KEY (LHS, RHS));"
+            val stmt = conn.createStatement()
+            stmt.executeUpdate(create)
+            stmt.close()
+          }
         }
-      )
-      resources = resource :: resources
+
+      }
     }
-    results.close()
-    return resources.reverse
+    manyManys.add(category)
+    return new MetadataManyMany(this, category)
+
   }
-  def get(category: ID, resource: ID): Option[Seq[PrimitiveValue]] =
+  def addToManyMany(category: ID,lhs: ID,rhs: ID)
   {
-    val fields = tableSchemas.get(category).get
-    val select = "SELECT "+
-      fields.map { _._1.quoted }.mkString(",")+
-      " FROM "+category.quoted +
-      " WHERE "+ID_COLUMN+" = "+StringPrimitive(resource.id);
-    val stmt = conn.createStatement()
-    val results = stmt.executeQuery(select)
-    if(results.next){
-      val ret = 
-        fields.zipWithIndex.map {
-          case ((_, t), idx) => JDBCUtils.convertField(t, results, 2+idx)
-        }
-      results.close()
-      return Some(ret)
-    } else {
-      results.close()
-      return None
-    }
+    update(
+      s"INSERT INTO ${category.quoted}(LHS, RHS) VALUES (?, ?)",
+      Seq(StringPrimitive(lhs.id), StringPrimitive(rhs.id))
+    )
   }
-  def put(category: ID, resource: ID, values: Seq[PrimitiveValue])
+  def getManyManyByLHS(category: ID,lhs: ID): Seq[ID] =
+  {    
+    query(
+      s"SELECT RHS FROM ${category} WHERE LHS = ?",
+      Seq(TString()),
+      Seq(StringPrimitive(lhs.id))
+    ) .map { _(0).asString }
+      .map { ID(_) }
+  }
+  def getManyManyByRHS(category: ID,rhs: ID): Seq[ID] = 
   {
-    val fields = tableSchemas.get(category).get
-    val upsert = s"INSERT OR REPLACE INTO ${category.quoted}("+
-      ( 
-        Seq(ID_COLUMN) ++ fields.map { _._1.quoted }
-      ).mkString(",")+
-    ") VALUES ("+( 0 until (fields.length+1) ).map { _ => "?" }.mkString(",")+")"
-    val stmt = conn.prepareStatement(upsert)
-    JDBCUtils.setArgs(stmt, Seq(StringPrimitive(resource.id))++values)
-    stmt.execute()
-    stmt.close()
+    query(
+      s"SELECT LHS FROM ${category} WHERE RHS = ?",
+      Seq(TString()),
+      Seq(StringPrimitive(rhs.id))
+    ) .map { _(0).asString }
+      .map { ID(_) }
   }
-  
+  def rmByLHSFromManyMany(category: ID,lhs: ID)
+  {
+    update(
+      s"DELETE FROM ${category.quoted} WHERE LHS = ?",
+      Seq(StringPrimitive(lhs.id))
+    )
+  }
+  def rmByRHSFromManyMany(category: ID,rhs: ID)
+  {
+    update(
+      s"DELETE FROM ${category.quoted} WHERE RHS = ?",
+      Seq(StringPrimitive(rhs.id))
+    )
+  }
+  def rmFromManyMany(category: ID,lhs: ID,rhs: ID): Unit = 
+  {
+    update(
+      s"DELETE FROM ${category.quoted} WHERE LHS = ? AND RHS = ?",
+      Seq(StringPrimitive(lhs.id), StringPrimitive(rhs.id))
+    )
+  }
 }
