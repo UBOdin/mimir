@@ -25,7 +25,6 @@ class ViewManager(db:Database) extends LazyLogging {
   def init(): Unit = 
   {
     viewTable = db.metadata.registerMap(ID("MIMIR_VIEWS"), Seq(
-        ID("NAME") -> TString(),
         ID("QUERY") -> TString(),
         ID("METADATA") -> TInt()
       )

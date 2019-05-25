@@ -64,18 +64,15 @@ class JDBCMetadataBackend(val protocol: String, val filename: String)
 
   def query(
     query: String, 
-    schema: Seq[Type],
-    args: Seq[PrimitiveValue] = Seq()
+    schema: Seq[Type]
   ): Seq[Seq[PrimitiveValue]] =
   {
-    val stmt = conn.prepareStatement(query)
-    if(args.size > 0){
-      JDBCUtils.setArgs(stmt, args)
-    }
+    logger.trace(query)
+    val stmt = conn.createStatement()
     val results = stmt.executeQuery(query)
     var ret = List[Seq[PrimitiveValue]]()
     val extractRow = () => {
-      schema.zipWithIndex.map { case (t, i) => JDBCUtils.convertField(t, results, i) }
+      schema.zipWithIndex.map { case (t, i) => JDBCUtils.convertField(t, results, i+1) }
     }
     while(results.next){ 
       ret = extractRow() :: ret
@@ -88,6 +85,7 @@ class JDBCMetadataBackend(val protocol: String, val filename: String)
     update: String,
     args: Seq[PrimitiveValue] = Seq()
   ) {
+    logger.trace(update)
     val stmt = conn.prepareStatement(update)
     if(args.size > 0){
       JDBCUtils.setArgs(stmt, args)
@@ -161,9 +159,8 @@ class JDBCMetadataBackend(val protocol: String, val filename: String)
       "SELECT "+
         fields.map { _._1.quoted }.mkString(",")+
         " FROM "+category.quoted +
-        " WHERE "+ID_COLUMN+" = ?",
-      fields.map { _._2 },
-      Seq(StringPrimitive(resource.id))
+        " WHERE "+ID_COLUMN+" = "+StringPrimitive(resource.id),
+      fields.map { _._2 }
     ) .headOption
       .map { (resource, _) }
   }
@@ -188,9 +185,10 @@ class JDBCMetadataBackend(val protocol: String, val filename: String)
   }
   def updateMap(category: ID, resource: ID, fields: Map[ID, PrimitiveValue])
   {
+    if(fields.isEmpty){ logger.warn(s"Updating ${category}.${resource} with no fields."); return; }
     val fieldSeq:Seq[(ID, PrimitiveValue)] = fields.toSeq
     update(
-      s"UPDATE ${category.quoted} SET ${fieldSeq.map { _._1.quoted + " = ?" }.mkString(", ")} WHERE ${ID_COLUMN} = ?",
+      s"UPDATE ${category.quoted} SET ${fieldSeq.map { _._1.quoted.toString + " = ?" }.mkString(", ")} WHERE ${ID_COLUMN} = ?",
       fieldSeq.map { _._2 } :+ StringPrimitive(resource.id)
     )
   }
@@ -238,18 +236,16 @@ class JDBCMetadataBackend(val protocol: String, val filename: String)
   def getManyManyByLHS(category: ID,lhs: ID): Seq[ID] =
   {    
     query(
-      s"SELECT RHS FROM ${category} WHERE LHS = ?",
-      Seq(TString()),
-      Seq(StringPrimitive(lhs.id))
+      s"SELECT RHS FROM ${category} WHERE LHS = ${StringPrimitive(lhs.id)}",
+      Seq(TString())
     ) .map { _(0).asString }
       .map { ID(_) }
   }
   def getManyManyByRHS(category: ID,rhs: ID): Seq[ID] = 
   {
     query(
-      s"SELECT LHS FROM ${category} WHERE RHS = ?",
-      Seq(TString()),
-      Seq(StringPrimitive(rhs.id))
+      s"SELECT LHS FROM ${category} WHERE RHS = ${StringPrimitive(rhs.id)}",
+      Seq(TString())
     ) .map { _(0).asString }
       .map { ID(_) }
   }

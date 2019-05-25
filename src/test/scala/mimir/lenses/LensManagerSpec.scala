@@ -84,30 +84,13 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
 
     "Clean up after a DROP LENS" >> {
 
-      queryOneColumnMetadata(s"""
-        SELECT model FROM ${db.models.ownerTable}
-        WHERE owner = 'LENS:SANER'
-      """){ _.toSeq must not beEmpty }
-
       val modelNames = db.models.associatedModels(ID("LENS:SANER"))
       modelNames must not beEmpty
 
       update("DROP LENS SANER");
       table("SANER") must throwA[Exception]
 
-      queryOneColumnMetadata(s"""
-        SELECT model FROM ${db.models.ownerTable}
-        WHERE owner = 'LENS:SANER'
-      """){ _.toSeq must beEmpty }
-
-      for(model <- modelNames){
-        val modelDefn = 
-          queryOneColumnMetadata(s"""
-            SELECT * FROM ${db.models.modelTable} WHERE name = '$model'
-          """){ _.toSeq }
-        modelDefn must beEmpty;
-      }
-      ok
+      modelNames must beEmpty
     }
 
   }  

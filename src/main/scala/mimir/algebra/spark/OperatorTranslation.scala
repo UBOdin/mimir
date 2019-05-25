@@ -1,6 +1,6 @@
 package mimir.algebra.spark
 
-import org.apache.spark.sql.{SQLContext, DataFrame, Row}
+import org.apache.spark.sql.{SQLContext, DataFrame, Row, SparkSession}
 import org.apache.spark.sql.Dataset
 import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.sql.types.{ArrayType, Metadata, DataType, DoubleType, LongType, FloatType, BooleanType, IntegerType, StringType, StructField, StructType}
@@ -174,7 +174,7 @@ class OperatorTranslation(db: mimir.Database)
 			  val tableId = TableIdentifier(name.id)
         //we can do this to compute the rowid inline
 			  val realSchema = db.backend.getTableSchema(name).getOrElse(throw new Exception(s"Cannot get schema for table: $name" ))
-			  val plan = RowIndexPlan(UnresolvedRelation(tableId), realSchema, db).getPlan()
+			  val plan = RowIndexPlan(UnresolvedRelation(tableId), realSchema).getPlan(db)
         //or we can do it in SparkBackend on loadDatasource
 			  //val plan = UnresolvedRelation(tableId)
 			  val baseRelation  = if (!alias.equals(name)) {
@@ -278,16 +278,6 @@ class OperatorTranslation(db: mimir.Database)
    }
   }
   
-  def dataset(plan:LogicalPlan) = {
-    val qe = queryExecution(plan)
-    qe.assertAnalyzed()
-    val sparkSession = db.backend match {
-     case sparkBackend:SparkBackend => sparkBackend.sparkSql.sparkSession 
-     case x => throw new Exception("Cant get Dataset From backend of type: " + x.getClass.getName) 
-   }
-    new Dataset[Row](sparkSession, plan, RowEncoder(qe.analyzed.schema)) 
-  }
-  
   def makeInitSparkJoin(left: LogicalPlan, right: LogicalPlan, usingColumns: Seq[String], joinType: JoinType): LogicalPlan = {
     // Analyze the self join. The assumption is that the analyzer will disambiguate left vs right
     // by creating a new instance for one of the branch.
@@ -301,6 +291,14 @@ class OperatorTranslation(db: mimir.Database)
         UsingJoin(joinType, usingColumns),
         None)
     
+  }
+
+
+  def dataset(plan:LogicalPlan) = {
+    val qe = queryExecution(plan)
+    qe.assertAnalyzed()
+    val sparkSession = OperatorTranslation.getSparkSession(db)
+    new Dataset[Row](sparkSession, plan, RowEncoder(qe.analyzed.schema)) 
   }
   
   def makeSparkJoin(lhs:Operator, rhs:Operator, condition:Option[org.apache.spark.sql.catalyst.expressions.Expression], joinType:JoinType): LogicalPlan = {
@@ -711,6 +709,14 @@ object OperatorTranslation {
     schema.fields.map(col => (col.name, getMimirType(col.dataType)))  
   }
   
+  def getSparkSession(db:Database): SparkSession =
+  {
+    db.backend match {
+     case sparkBackend:SparkBackend => sparkBackend.sparkSql.sparkSession 
+     case x => throw new Exception("Cant get Dataset From backend of type: " + x.getClass.getName) 
+   }
+ }
+
   def getSparkType(t:Type) : DataType = {
     t match {
       case TInt() => LongType
@@ -886,14 +892,14 @@ object OperatorTranslation {
   
 }
 
-case class RowIndexPlan(val lp:LogicalPlan,  val schema:Seq[(ID,Type)], db: Database, val offset: Long = 1, val indexName: String = "ROWID") {
+case class RowIndexPlan(val lp:LogicalPlan,  val schema:Seq[(ID,Type)], val offset: Long = 1, val indexName: String = "ROWID") {
   
   val partOp = org.apache.spark.sql.catalyst.plans.logical.Project(
       schema.map(fld => UnresolvedAttribute(fld._1.id)) ++
       Seq(Alias(SparkPartitionID(),"partition_id")(), 
           Alias(MonotonicallyIncreasingID(),"inc_id")()), lp)
   
-  val fop =  new OperatorTranslation(db).dataset(org.apache.spark.sql.catalyst.plans.logical.Project(
+  def fop(db:Database) =  new OperatorTranslation(db).dataset(org.apache.spark.sql.catalyst.plans.logical.Project(
       Seq(Alias(Add(Subtract(Subtract(WindowExpression(AggregateExpression(Sum(UnresolvedAttribute("cnt")),Complete,false),WindowSpecDefinition(Seq(), Seq(), UnspecifiedFrame)), 
                   UnresolvedAttribute("cnt")),UnresolvedAttribute("inc_id")),Literal(offset)),"cnt")()), 
       org.apache.spark.sql.catalyst.plans.logical.Sort(Seq(SortOrder(UnresolvedAttribute("partition_id"), Ascending)), true,   
@@ -903,11 +909,15 @@ case class RowIndexPlan(val lp:LogicalPlan,  val schema:Seq[(ID,Type)], db: Data
           partOp))
       )).cache().collect().map(_.getLong(0))      
   
-  val inFunc = (partitionId:Int) => {
-   fop(partitionId)
-  }
+  def inFunc(db:Database) = {
+    val fopForSession = fop(db)
+
+    (partitionId:Int) => {
+     fopForSession(partitionId)
+    }
+  } 
       
-  def getPlan() = {
+  def getPlan(db:Database) = {
     org.apache.spark.sql.catalyst.plans.logical.Project(
       schema.map(fld => UnresolvedAttribute(fld._1.id)) :+ UnresolvedAttribute(indexName), 
       org.apache.spark.sql.catalyst.plans.logical.Project(
@@ -916,12 +926,12 @@ case class RowIndexPlan(val lp:LogicalPlan,  val schema:Seq[(ID,Type)], db: Data
             Add(UnresolvedAttribute("partition_offset"), UnresolvedAttribute("inc_id")),StringType),indexName)(),
         org.apache.spark.sql.catalyst.plans.logical.Project(
           schema.map(fld => UnresolvedAttribute(fld._1.id)) ++
-          Seq(Alias(getUDF(),"partition_offset")(), UnresolvedAttribute("inc_id")), partOp)))
+          Seq(Alias(getUDF(db),"partition_offset")(), UnresolvedAttribute("inc_id")), partOp)))
   }
 
-  private def getUDF() = {
+  private def getUDF(db:Database) = {
     ScalaUDF(
-      inFunc,
+      inFunc(db),
       LongType,
       Seq(UnresolvedAttribute("partition_id")),
       Seq(false),

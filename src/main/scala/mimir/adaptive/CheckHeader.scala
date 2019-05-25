@@ -23,7 +23,13 @@ object CheckHeader
   {
     val viewName = config.schema
     val modelName = ID("MIMIR_CH_", viewName)
-    val detectmodel = new DetectHeaderModel(modelName, viewName, config.query.columnNames, db.query(Limit(0,Some(6),config.query))(_.toList.map(_.tuple)).toSeq)
+    val detectmodel = 
+      new DetectHeaderModel(
+        modelName, 
+        viewName, 
+        config.query.columnNames, 
+        db.query(Limit(0,Some(6),config.query))(_.toList.map(_.tuple)).toSeq
+      )
     detectmodel.detect_header()
     Seq(detectmodel)
   }

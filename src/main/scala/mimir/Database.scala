@@ -390,9 +390,11 @@ case class Database(backend: QueryBackend, metadata: MetadataBackend)
   /**
    * Prepare a database for use with Mimir.
    */
-  def open(): Unit = {
-    backend.open(this)
-    metadata.open()
+  def open(skipBackend: Boolean = false): Unit = {
+    if(!skipBackend){
+      backend.open(this)
+      metadata.open()
+    }
     models.init()
     views.init()
     lenses.init()
