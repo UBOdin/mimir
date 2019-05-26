@@ -34,7 +34,7 @@ trait Row
   }
   
   def isDeterministic(): Boolean = 
-    annotation(CTPercolator.mimirRowDeterministicColumnName) match {
+    annotation(OperatorDeterminism.mimirRowDeterministicColumnName) match {
       case NullPrimitive() => false
       case BoolPrimitive(t) => t
       case IntPrimitive(i) => i match {
@@ -46,7 +46,7 @@ trait Row
       case _ => throw new RAException("Error getting determinism")
     }
   def isColDeterministic(col: ID): Boolean = 
-    annotation(CTPercolator.mimirColDeterministicColumn(col)) match {
+    annotation(OperatorDeterminism.mimirColDeterministicColumn(col)) match {
       case NullPrimitive() => false
       case BoolPrimitive(t) => t
       case IntPrimitive(i) => i match {

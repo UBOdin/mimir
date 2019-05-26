@@ -133,22 +133,22 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   def explainRow(s: String, t: String) = 
   {
     val query = resolveViews(select(s))
-    db.explainer.explainRow(query, RowIdPrimitive(t))
+    db.uncertainty.explainRow(query, RowIdPrimitive(t))
   }
   def explainCell(s: String, t: String, a:String) = 
   {
     val query = resolveViews(select(s))
-    db.explainer.explainCell(query, RowIdPrimitive(t), ID(a))
+    db.uncertainty.explainCell(query, RowIdPrimitive(t), ID(a))
   }
   def explainEverything(s: String) = 
   {
     val query = resolveViews(select(s))
-    db.explainer.explainEverything(query)
+    db.uncertainty.explainEverything(query)
   }
   def explainAdaptiveSchema(s: String) =
   {
     val query = resolveViews(select(s))
-    db.explainer.explainAdaptiveSchema(query, query.columnNames.toSet, true)
+    db.uncertainty.explainAdaptiveSchema(query, query.columnNames.toSet, true)
   }  
   def dropTable(t: String) =
     db.update(SQLStatement(sparsity.statement.DropTable(sparsity.Name(t), true)))

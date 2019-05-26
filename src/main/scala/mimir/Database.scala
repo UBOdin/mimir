@@ -12,7 +12,7 @@ import sparsity.alter._
 import sparsity.expression.Expression
 
 import mimir.algebra._
-import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, RowExplanation, InlineVGTerms}
+import mimir.ctables.{AnalyzeUncertainty, OperatorDeterminism, CellExplanation, RowExplanation, InlineVGTerms}
 import mimir.models.Model
 import mimir.exec.Compiler
 import mimir.exec.mode.{CompileMode, BestGuess}
@@ -114,7 +114,7 @@ case class Database(backend: QueryBackend, metadata: MetadataBackend)
 
   //// Logic
   val compiler        = new mimir.exec.Compiler(this)
-  val explainer       = new mimir.ctables.CTExplainer(this)
+  val uncertainty     = new mimir.ctables.AnalyzeUncertainty(this)
   val catalog         = new mimir.statistics.SystemCatalog(this)
   val typechecker     = new mimir.algebra.Typechecker(
                                   functions = Some(functions), 

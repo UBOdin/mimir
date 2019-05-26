@@ -84,13 +84,14 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
 
     "Clean up after a DROP LENS" >> {
 
-      val modelNames = db.models.associatedModels(ID("LENS:SANER"))
-      modelNames must not beEmpty
+      val modelNamesBefore = db.models.associatedModels(ID("LENS:SANER"))
+      modelNamesBefore must not beEmpty
 
       update("DROP LENS SANER");
       table("SANER") must throwA[Exception]
 
-      modelNames must beEmpty
+      val modelNamesAfter = db.models.associatedModels(ID("LENS:SANER"))
+      modelNamesAfter must beEmpty
     }
 
   }  

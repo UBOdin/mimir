@@ -37,7 +37,7 @@ import sparsity.select.{
 
 import mimir.Database
 import mimir.algebra._
-import mimir.ctables.CTPercolator
+import mimir.ctables.OperatorDeterminism
 import mimir.util._
 import org.joda.time.LocalDate
 import com.typesafe.scalalogging.slf4j.LazyLogging

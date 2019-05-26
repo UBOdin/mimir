@@ -105,7 +105,7 @@ object SparkMimirCSVDataSourceSpec
         }
         
         "Explain the errors" >> {
-          val resultSets = db.explainer.explainEverything(table("CORRUPT"))
+          val resultSets = db.uncertainty.explainEverything(table("CORRUPT"))
           val results = resultSets.flatMap(_.all(db)).map { _.toString }
           
           results must contain(

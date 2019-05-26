@@ -170,7 +170,7 @@ object SimpleDemoScript
 			    val oper = select("""
 							SELECT * FROM RATINGS2FINAL WHERE RATING > 3
 						""")
-					db.explainer.explainEverything( oper).flatMap(_.all(db))
+					db.uncertainty.explainEverything( oper).flatMap(_.all(db))
 				}
 			expl.toString must contain("I assumed that NUM_RATINGS maps to RATING")		
 		}
@@ -301,7 +301,7 @@ object SimpleDemoScript
 							SELECT * FROM RATINGS2FINAL
 						) r, Product p
 						Where ROWID() = '3|1|4'""")
-					db.explainer.explainEverything(oper).flatMap(_.all(db))
+					db.uncertainty.explainEverything(oper).flatMap(_.all(db))
 				}
 			explain0.map(_.model.name.id.replaceAll(":.*", "")) must contain(eachOf(
 				"RATINGS2FINAL_SM"//,

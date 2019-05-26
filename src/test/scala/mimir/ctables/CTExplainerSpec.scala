@@ -36,7 +36,7 @@ object CTExplainerSpec
 
     "Explain everything" >> {
 
-      val resultSets = db.explainer.explainEverything(table("MV"))
+      val resultSets = db.uncertainty.explainEverything(table("MV"))
       
       resultSets.map( _.model.name.id ) must contain(eachOf(
          "MV:SPARKML:B", "MV:SPARKML:C", "MIMIR_TI_ATTR_R_TI"

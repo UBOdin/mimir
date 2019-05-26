@@ -6,7 +6,7 @@ import mimir.models._
 import mimir.ctables.vgterm._
 import mimir.Database
 
-object CTAnalyzer {
+object ExpressionDeterminism {
 
   /**
    * Construct a boolean expression that evaluates whether the input 

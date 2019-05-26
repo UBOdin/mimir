@@ -10,7 +10,7 @@ import mimir.models.{Model, ModelManager}
 import Arith.{Add, Sub, Mult, Div, And, Or, BitAnd, BitOr, ShiftLeft, ShiftRight}
 import Cmp.{Gt, Lt, Lte, Gte, Eq, Neq, Like, NotLike}
 
-class TypecheckError(msg: String, e: Throwable, context: Option[Operator] = None)
+class TypecheckError(msg: String, e: Throwable, val context: Option[Operator] = None)
 	extends Exception(msg, e)
 {
 	def errorTypeString =
@@ -57,7 +57,7 @@ class Typechecker(
 ) extends LazyLogging {
 	/* Assert that the expressions claimed type is its type */
 	def assert(e: Expression, t: Type, scope: (ID => Type), context: Option[Operator] = None, msg: String = "Typechecker"): Unit = {
-		val eType = typeOf(e, scope);
+		val eType = typeOf(e, scope, context);
 		if(!Typechecker.canCoerce(eType, t)){
 			logger.trace(s"LUB: ${Typechecker.leastUpperBound(eType, t)}")
 			throw new TypeException(eType, t, msg, Some(e))

@@ -165,8 +165,8 @@ object ProjectRedundantColumns extends OperatorOptimization {
         val childDependencies = 
           ExpressionUtils.getColumns( condition ) ++ dependencies
 
-        val lhsDeps = lhs.columnNames.toSet & dependencies
-        val rhsDeps = rhs.columnNames.toSet & dependencies
+        val lhsDeps = lhs.columnNames.toSet & childDependencies
+        val rhsDeps = rhs.columnNames.toSet & childDependencies
 
         LeftOuterJoin(
           apply(lhs, lhsDeps),

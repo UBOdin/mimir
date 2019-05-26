@@ -38,7 +38,7 @@ import scala.tools.reflect.ToolBox
 import java.io.File
 import mimir.exec.result.ResultIterator
 import org.apache.spark.sql.SparkSession
-import mimir.ctables.CTExplainer
+import mimir.ctables.AnalyzeUncertainty
 import mimir.parser.ExpressionParser
 import mimir.ctables.MultiReason
 import mimir.api.{ScalaEvalResponse, CreateLensResponse, CSVContainer, Schema}
@@ -650,8 +650,8 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
         case _ => cols.map { ID(_) }
       }
       rows.map(row => {
-        db.explainer.explainSubsetWithoutOptimizing(
-          db.explainer.filterByProvenance(db.compiler.optimize(oper),RowIdPrimitive(row)), 
+        db.uncertainty.explainSubsetWithoutOptimizing(
+          db.uncertainty.filterByProvenance(db.compiler.optimize(oper),RowIdPrimitive(row)), 
           explCols.toSet, true, false, false)
       }).flatten
     }
@@ -671,7 +671,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
         case Seq() => oper.columnNames
         case _ => cols.map { ID(_) }
       }
-      db.explainer.explainAdaptiveSchema(
+      db.uncertainty.explainAdaptiveSchema(
           db.compiler.optimize(oper), 
           explCols.toSet, true)
     }
@@ -751,11 +751,11 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     val timeRes = logTime("explainCell") {
       try {
       logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + oper + "]"  ) ;
-      val provFilteredOper = db.explainer.filterByProvenance(oper,row)
-      val subsetReasons = db.explainer.explainSubset(
+      val provFilteredOper = db.uncertainty.filterByProvenance(oper,row)
+      val subsetReasons = db.uncertainty.explainSubset(
               provFilteredOper, 
               Seq(col).toSet, false, false)
-      db.explainer.getFocusedReasons(subsetReasons)
+      db.uncertainty.getFocusedReasons(subsetReasons)
       } catch {
           case t: Throwable => {
             t.printStackTrace() // TODO: handle error
@@ -791,8 +791,8 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     val timeRes = logTime("explainRow") {
       logger.debug("explainRow: From Vistrails: [ "+ row +" ] [" + oper + "]"  ) ;
       val cols = oper.columnNames
-      db.explainer.getFocusedReasons(db.explainer.explainSubset(
-              db.explainer.filterByProvenance(oper,RowIdPrimitive(row)), 
+      db.uncertainty.getFocusedReasons(db.uncertainty.explainSubset(
+              db.uncertainty.filterByProvenance(oper,RowIdPrimitive(row)), 
               Seq().toSet, true, false))
     }
     logger.debug(s"explainRow Took: ${timeRes._2}")
@@ -827,8 +827,8 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
         case _ => cols
       }
       rows.map(row => {
-        db.explainer.explainSubset(
-          db.explainer.filterByProvenance(oper,RowIdPrimitive(row)), 
+        db.uncertainty.explainSubset(
+          db.uncertainty.filterByProvenance(oper,RowIdPrimitive(row)), 
           explCols.toSet, true, false)
       }).flatten
     }
@@ -909,7 +909,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     val timeRes = logTime("explainEverything") {
       logger.debug("explainEverything: From Vistrails: [" + oper + "]"  ) ;
       val cols = oper.columnNames
-      db.explainer.explainEverything( oper)
+      db.uncertainty.explainEverything( oper)
     }
     logger.debug(s"explainEverything Took: ${timeRes._2}")
     timeRes._1

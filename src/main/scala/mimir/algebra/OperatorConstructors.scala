@@ -108,6 +108,17 @@ trait OperatorConstructors
     )
   }
 
+  def alterColumns(modCols: (String, Expression)*): Operator =
+    alterColumnsByID(modCols.map { case (col, expr) => ID(col) -> expr }:_*)
+  def alterColumnsByID(modCols: (ID, Expression)*): Operator =
+  {
+    val rewrites = modCols.toMap
+    mapImpl(toOperator.columnNames.map { 
+      case name if rewrites contains name => (name, rewrites(name))
+      case name => (name, Var(name))
+    })
+  }
+
   def distinct: Operator =
   {
     val base = toOperator

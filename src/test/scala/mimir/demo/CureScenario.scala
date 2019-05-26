@@ -8,7 +8,7 @@ import mimir.test._
 import mimir.util._
 import LoggerUtils.trace
 import mimir.ctables._
-import mimir.algebra.NullPrimitive
+import mimir.algebra.{NullPrimitive,MissingVariable}
 
 object CureScenario
   extends SQLTestSpecification("CureScenario",  Map("reset" -> "YES"))
@@ -52,7 +52,7 @@ object CureScenario
         time(s"Materialize '$basename'"){
           update(s"ALTER VIEW $basename MATERIALIZE;")
         }
-        db.explainer.explainEverything(
+        db.uncertainty.explainEverything(
           db.table(basename)) must not beEmpty;
         //this still blows up - something with getColumns on vgterm during lookup query 
         /*db.explainer.explainEverything(db.table(basename))
@@ -117,11 +117,19 @@ object CureScenario
     
      "Run the CURE Query" >> {
        LoggerUtils.trace(
-					"mimir.sql.SparkBackend"
+					// "mimir.backend.SparkBackend",
+          // "mimir.algebra.Typechecker"
 				){ 
-         time("CURE Query"){
-           val qr = query(cureQuery){ _.toList.map { row => {1} } }.length
-         }
+          try {
+            time("CURE Query"){
+              val qr = query(cureQuery){ _.toList.map { row => {1} } }.length
+            }
+          } catch {
+            case mv: MissingVariable => 
+              mv.printStackTrace()
+              println(mv.context)
+              ko
+          }
   //         failed type detection --> run type inferencing
   //         --> repair with repairing tool
        }

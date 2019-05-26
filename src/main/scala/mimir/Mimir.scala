@@ -277,7 +277,7 @@ object Mimir extends LazyLogging {
       case None => {
         output.print("==== Analyze Table ====")
         logger.debug("Starting to Analyze Table")
-        val reasonSets = db.explainer.explainEverything(query)
+        val reasonSets = db.uncertainty.explainEverything(query)
         logger.debug("Done Analyzing Table")
         for(reasonSet <- reasonSets){
           logger.debug(s"Expanding $reasonSet")
@@ -304,7 +304,7 @@ object Mimir extends LazyLogging {
           case None => { 
             output.print("==== Analyze Row ====")
             val explanation = 
-              db.explainer.explainRow(query, token)
+              db.uncertainty.explainRow(query, token)
             printReasons(explanation.reasons)
             output.print("--------")
             output.print("Row Probability: "+explanation.probability)
@@ -315,7 +315,7 @@ object Mimir extends LazyLogging {
           case Some(column) => {
             output.print("==== Analyze Cell ====")
             val explanation = 
-              db.explainer.explainCell(query, token, ID.upper(column))
+              db.uncertainty.explainCell(query, token, ID.upper(column))
             printReasons(explanation.reasons)
             output.print("--------")
             output.print("Examples: "+explanation.examples.map(_.toString).mkString(", "))
