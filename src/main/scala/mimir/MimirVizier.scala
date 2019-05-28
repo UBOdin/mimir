@@ -408,13 +408,28 @@ object MimirVizier extends LazyLogging {
   
   def registerNameMappings(nameMappings:JMapWrapper[String,String]) : Unit = {
     try{
-      nameMappings.map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(ID(vizierName), ID(mimirName)) }
+      nameMappings.map{ case (vizierName, mimirName) => registerNameMapping(vizierName, mimirName) }
      } catch {
       case t: Throwable => {
         logger.error("Failed To Register Name Mappings: [" + nameMappings.mkString(",") + "]", t)
         throw t
       }
     }
+  }
+  
+  private def registerNameMappings(nameMappings:Map[String,String]) : Unit = {
+    try{
+      nameMappings.map{ case (vizierName, mimirName) => registerNameMapping(vizierName, mimirName) }
+     } catch {
+      case t: Throwable => {
+        logger.error("Failed To Register Name Mappings: [" + nameMappings.mkString(",") + "]", t)
+        throw t
+      }
+    }
+  }
+  
+  private def registerNameMapping(vizierName:String, mimirName:String) : Unit = {
+    db.sqlToRA.registerVizierNameMapping(Name(vizierName), ID(mimirName))
   }
   
   def createView(input : Any, query : String) : String = {
@@ -424,11 +439,11 @@ object MimirVizier extends LazyLogging {
       logger.debug("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
       val (viewNameSuffix, inputSubstitutionQuery) = input match {
         case aliases:Map[String,String] => {
-          aliases.map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(ID(vizierName), ID(mimirName)) } 
+          registerNameMappings(aliases) 
           (aliases.toSeq.unzip._2.mkString(""), query)
         }
-        case aliases:JMapWrapper[_,_] => {
-          aliases.asInstanceOf[JMapWrapper[String,String]].map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(ID(vizierName), ID(mimirName)) } 
+        case aliases:JMapWrapper[String,String] => {
+          registerNameMappings(aliases) 
           (aliases.asInstanceOf[JMapWrapper[String,String]].unzip._2.mkString(""), query)
         }
         case inputs:Seq[_] => {
@@ -548,8 +563,8 @@ object MimirVizier extends LazyLogging {
   
 def vistrailsQueryMimirJson(input:Any, query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
     val inputSubstitutionQuery = input match {
-        case aliases:JMapWrapper[_,_] => {
-          aliases.asInstanceOf[JMapWrapper[String,String]].map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(ID(vizierName), ID(mimirName)) } 
+        case aliases:JMapWrapper[String,String] => {
+          registerNameMappings(aliases)  
           query
         }
         case inputs:Seq[_] => {
