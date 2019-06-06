@@ -913,7 +913,15 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     try{
     logger.debug("explainEverything: From Vistrails: [" + query + "]"  ) ;
     val oper = db.sqlToRA(MimirSQL.Select(query))
-    explainEverything(oper).map(_.all(db).toList).flatten   
+    explainEverything(oper).map(/*_.all(db).toList*/rset => {
+        val subReasons = rset.take(db, 4).toSeq
+  			if(subReasons.size > 3){
+  				logger.trace("   -> Too many explanations to fit in one group")
+  				Seq(new MultiReason(db, rset))
+  			} else {
+  				logger.trace(s"   -> Only ${subReasons.size} explanations")
+  				subReasons
+  			}}).flatten   
     } catch {
       case t: Throwable => {
         logger.error("Error Explaining Everything: [" + query + "]", t)
