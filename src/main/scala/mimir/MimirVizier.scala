@@ -70,6 +70,7 @@ object MimirVizier extends LazyLogging {
     val database = Mimir.conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
     val sback = new SparkBackend(database)
     db = new Database(sback, new JDBCMetadataBackend(Mimir.conf.backend(), Mimir.conf.dbname()))
+    db.open()
     vizierdb.sparkSession = sback.sparkSql.sparkSession
     
    if(ExperimentalOptions.isEnabled("WEB-LOG")){

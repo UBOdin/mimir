@@ -110,9 +110,15 @@ class JDBCMetadataBackend(val protocol: String, val filename: String)
         // SQLite-specific PRAGMA operation.
         SQLiteCompat.getTableSchema(conn, category) match {
           case Some(existing) => {
-            assert(existing.length == schema.length)
-            for(((_, e), f) <- existing.zip(schema)) {
-              assert(Type.rootType(e) == f) 
+            try {
+              assert(existing.length == schema.length+1)
+              for(((_, e), (_, f)) <- existing.zip((ID(ID_COLUMN), TString()) +: schema)) {
+                assert(Type.rootType(e) == f) 
+              }
+            } catch {
+              case e:AssertionError => 
+                throw new RuntimeException(s"Incompatible map $category (Existing: $existing; Expected: $schema)", e);
+
             }
           }
           case None => {

@@ -248,6 +248,8 @@ bootstrap := {
     println("... done")
   }
 
+  println("Coursier available.  Generating Repository List")
+
   val resolverArgs = resolvers.value.map { 
     case r: MavenRepository => Seq("-r", r.root)
   }.flatten
@@ -255,15 +257,35 @@ bootstrap := {
   val (art, file) = packagedArtifact.in(Compile, packageBin).value
   val qualified_artifact_name = file.name.replace(".jar", "").replaceFirst("-([0-9.]+)$", "")
   val full_artifact_name = s"${organization.value}:${qualified_artifact_name}:${version.value}"
-  // println(full_artifact_name)
+  println("Rendering bootstraps for "+full_artifact_name)
+  for(resolver <- resolverArgs){
+    println("  "+resolver)
+  }
+  println
+  println("Generating Mimir binary")
+
   Process(List(
-    coursier_bin
-    // "echo"
-    , "bootstrap",
+    coursier_bin,
+    "bootstrap",
     full_artifact_name,
     "-f",
     "-o", "bin/mimir",
     "-r", "central"
+  )++resolverArgs) ! logger match {
+      case 0 => 
+      case n => sys.error(s"Bootstrap failed")
+  }
+  
+
+  println("Generating Mimir-API Server binary")
+  Process(List(
+    coursier_bin,
+    "bootstrap",
+    full_artifact_name,
+    "-f",
+    "-o", "bin/mimir-api",
+    "-r", "central",
+    "-M", "mimir.MimirVizier"
   )++resolverArgs) ! logger match {
       case 0 => 
       case n => sys.error(s"Bootstrap failed")
