@@ -153,15 +153,15 @@ object ViewsSpec
       val (query, rowidCols) = Provenance.compile(db.views(ID("MATTEST")).operator)
 
       db.compiler.optimize(
-        db.views.resolve(CTPercolator.percolateLite(query, db.models.get(_))._1) 
+        db.views.resolve(OperatorDeterminism.compile(query, db.models.get(_))) 
       ) must be equalTo(
         Project(Seq(
             ProjectArg(ID("A"), Var(ID("A"))),
             ProjectArg(ID("B"), Var(ID("B"))),
-            ProjectArg(CTPercolator.mimirColDeterministicColumn(ID("A")), Comparison(Cmp.Eq, Arithmetic(Arith.BitAnd, Var(ViewAnnotation.taintBitVectorColumn), IntPrimitive(2)), IntPrimitive(2))),
-            ProjectArg(CTPercolator.mimirColDeterministicColumn(ID("B")), Comparison(Cmp.Eq, Arithmetic(Arith.BitAnd, Var(ViewAnnotation.taintBitVectorColumn), IntPrimitive(4)), IntPrimitive(4))),
-            ProjectArg(CTPercolator.mimirColDeterministicColumn(ID("MIMIR_ROWID_0")), Comparison(Cmp.Eq, Arithmetic(Arith.BitAnd, Var(ViewAnnotation.taintBitVectorColumn), IntPrimitive(8)), IntPrimitive(8))),
-            ProjectArg(CTPercolator.mimirRowDeterministicColumnName, Comparison(Cmp.Eq, Arithmetic(Arith.BitAnd, Var(ViewAnnotation.taintBitVectorColumn), IntPrimitive(1)), IntPrimitive(1)))
+            ProjectArg(OperatorDeterminism.mimirColDeterministicColumn(ID("A")), Comparison(Cmp.Eq, Arithmetic(Arith.BitAnd, Var(ViewAnnotation.taintBitVectorColumn), IntPrimitive(2)), IntPrimitive(2))),
+            ProjectArg(OperatorDeterminism.mimirColDeterministicColumn(ID("B")), Comparison(Cmp.Eq, Arithmetic(Arith.BitAnd, Var(ViewAnnotation.taintBitVectorColumn), IntPrimitive(4)), IntPrimitive(4))),
+            ProjectArg(OperatorDeterminism.mimirColDeterministicColumn(ID("MIMIR_ROWID_0")), Comparison(Cmp.Eq, Arithmetic(Arith.BitAnd, Var(ViewAnnotation.taintBitVectorColumn), IntPrimitive(8)), IntPrimitive(8))),
+            ProjectArg(OperatorDeterminism.mimirRowDeterministicColumnName, Comparison(Cmp.Eq, Arithmetic(Arith.BitAnd, Var(ViewAnnotation.taintBitVectorColumn), IntPrimitive(1)), IntPrimitive(1)))
           ) ++ rowidCols.map { col => ProjectArg(col, Var(col)) },
           Table(ID("MATTEST"),ID("MATTEST"), db.views(ID("MATTEST")).materializedSchema, Seq())
         )

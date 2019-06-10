@@ -89,7 +89,7 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
             map { x => (x -> Var(TupleBundle.colNameInSample(x, i)) ) }.
             toMap
         expressions.map { expression => 
-          CTAnalyzer.compileSample(
+          ExpressionDeterminism.compileSample(
             Eval.inline(expression, inputInstancesInThisSample),
             IntPrimitive(seed), 
             models

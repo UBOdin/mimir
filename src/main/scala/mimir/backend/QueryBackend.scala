@@ -5,7 +5,7 @@ import org.apache.spark.sql.DataFrame
 import mimir.Database
 
 abstract class QueryBackend(val database:String) {
-  def open(): Unit
+  def open(db: Database): Unit
 
   def materializeView(name: ID): Unit
   def createTable(tableName: ID, oper:Operator): Unit
@@ -45,7 +45,6 @@ abstract class QueryBackend(val database:String) {
   def canHandleVGTerms: Boolean
   def rowIdType: Type
   def dateType: Type
-  def specializeQuery(q: Operator, db: Database): Operator
 
   def listTablesQuery: Operator
   def listAttrsQuery: Operator

@@ -9,6 +9,7 @@ import org.specs2.specification._
 
 import mimir.algebra.ID
 import mimir.backend._
+import mimir.metadata._
 
 class MimirVizierSpec 
   extends Specification
@@ -37,14 +38,15 @@ class MimirVizierSpec
     val database = Mimir.conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
     val sback = new SparkBackend(database)
     MimirVizier.db = new Database(sback, new JDBCMetadataBackend(Mimir.conf.backend(), Mimir.conf.dbname()))
-    MimirVizier.db.metadataBackend.open()
-    MimirVizier.db.backend.open()
+    MimirVizier.db.open()
+    // MimirVizier.db.metadata.open()
+    // MimirVizier.db.backend.open(MimirVizier.db)
     val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^","|","OR").map { ID(_) }
     sback.registerSparkFunctions(
-      MimirVizier.db.functions.functionPrototypes.map(el => el._1).toSeq ++ otherExcludeFuncs , MimirVizier.db.functions)
+      MimirVizier.db.functions.functionPrototypes.map(el => el._1).toSeq ++ otherExcludeFuncs , MimirVizier.db)
     sback.registerSparkAggregates(MimirVizier.db.aggregates.prototypes.map(el => el._1).toSeq, MimirVizier.db.aggregates)
     MimirVizier.vizierdb.sparkSession = sback.sparkSql.sparkSession
-    MimirVizier.db.initializeDBForMimir()
+    // MimirVizier.db.open(skipBackend = true)
 
     if(!MimirVizier.db.tableExists("CPUSPEED")){
       MimirVizier.db.loadTable(

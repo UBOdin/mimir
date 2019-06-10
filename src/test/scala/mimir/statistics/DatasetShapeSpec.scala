@@ -49,7 +49,7 @@ object DatasetShapeSpec
         LoggerUtils.debug(
           // "mimir.ctables.CTExplainer"
         ) {
-          db.explainer.explainEverything(db.table("Z_BAD_S"))
+          db.uncertainty.explainEverything(db.table("Z_BAD_S"))
         }
       resultSets.map(_.all(db).map(_.toJSON)).flatten must contain(eachOf(
           """{"rowidarg":-1,"source":"MIMIR_SHAPE_Z","confirmed":false,"varid":0,"english":"Missing expected column 'B'","repair":{"selector":"warning"},"args":[0,"'Missing expected column 'B''"]}""",

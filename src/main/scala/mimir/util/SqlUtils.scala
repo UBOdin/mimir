@@ -135,12 +135,9 @@ object SqlUtils {
 
       case FromTable(_, table, alias) =>
         Seq( alias.getOrElse(table) -> 
-            ((db.metadataTableSchema(ID.upper(table)) match {
-              case Some(tblSchmd) => tblSchmd
-              case None => db.tableSchema(table) match {
-                case Some(tblSch) => tblSch
-                case None => throw new mimir.algebra.RAException(s"Table doesn't exist: ${table}")
-              }
+            ((db.tableSchema(table) match {
+              case Some(tblSch) => tblSch
+              case None => throw new mimir.algebra.RAException(s"Table doesn't exist: ${table}")
             }).map(_._1.quoted:Name).toSeq ++ implicitCols)
           )
       case join: FromJoin =>

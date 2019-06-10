@@ -62,7 +62,7 @@ object BackupUtils {
     ExperimentalOptions.enable(Mimir.conf.experimental())
     val database = Mimir.conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
     sback = new SparkBackend(database, true)
-    sback.open()
+    sback.open(null)
    
     println(config.summary)
     println(Mimir.conf.summary)

@@ -2,7 +2,9 @@ package mimir.optimizer.operator
 
 import mimir.Database
 import mimir.algebra._
+import mimir.algebra.function._
 import mimir.optimizer.OperatorOptimization
+import mimir.optimizer.expression._
 
 class OptimizeExpressions(optimize: Expression => Expression)
   extends OperatorOptimization
@@ -13,3 +15,13 @@ class OptimizeExpressions(optimize: Expression => Expression)
         .recur(apply(_))
   }
 }
+
+object SimpleOptimizeExpressions 
+  extends OptimizeExpressions(
+    Seq(
+      PullUpBranches,
+      PushDownNots,
+      RemoveRedundantCasts,
+      new SimplifyExpressions(null, new FunctionRegistry())
+    ).foldLeft(_) { case (expr, optimization) => optimization(expr) }
+  )

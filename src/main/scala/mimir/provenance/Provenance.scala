@@ -149,8 +149,13 @@ object Provenance extends LazyLogging {
         (Limit(offset, count, rewritten), cols)
       }
 
-      case _:LeftOuterJoin => 
-        throw new RAException("Provenance can't handle left outer joins")
+      case LeftOuterJoin(lhs, rhs, cond) => {
+        val (rewritten, cols) = compile(lhs)
+        (
+          LeftOuterJoin(rewritten, rhs, cond),
+          cols
+        )
+      }
 
     }
   }
