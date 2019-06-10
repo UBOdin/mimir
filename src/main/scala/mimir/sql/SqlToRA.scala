@@ -34,6 +34,7 @@ import sparsity.select.{
   FromJoin,
   Join => SparsityJoin
 }
+import sparsity.Name
 
 import mimir.Database
 import mimir.algebra._
@@ -50,13 +51,15 @@ import mimir.provenance.Provenance
 class SqlToRA(db: Database) 
   extends LazyLogging
 {
-  private val vizierNameMap = scala.collection.mutable.Map[ID, ID]()
+  private val vizierNameMap = scala.collection.mutable.Map[Name, ID]()
   
-  def registerVizierNameMapping(vizierName:ID,mimirName:ID) : Unit = {
+  def registerVizierNameMapping(vizierName:Name,mimirName:ID) : Unit = {
     vizierNameMap.put(vizierName, mimirName)
   }
   
-  def getVizierNameMapping(vizierName:ID) : Option[ID] =  vizierNameMap.get(vizierName)
+  def getVizierNameMapping(vizierName:String) : Option[ID] =  getVizierNameMapping(Name(vizierName))
+  def getVizierNameMapping(vizierName:ID) : Option[ID] =  getVizierNameMapping(Name(vizierName.id))
+  def getVizierNameMapping(vizierName:Name) : Option[ID] =  vizierNameMap.get(vizierName)
 
   def unhandled(feature : String) = {
     println("ERROR: Unhandled Feature: " + feature)
@@ -504,7 +507,7 @@ class SqlToRA(db: Database)
         )
       }
       case FromTable(schemaMaybe, tablev, aliasMaybe) => {
-        val table = vizierNameMap.get(ID(tablev.name)) match { 
+        val table = getVizierNameMapping(tablev) match { 
               case Some(mimirID) => sparsity.Name(mimirID.id)
               case None => tablev 
             } 

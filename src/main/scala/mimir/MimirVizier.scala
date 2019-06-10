@@ -393,7 +393,7 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
   
   def registerNameMappings(nameMappings:JMapWrapper[String,String]) : Unit = {
     try{
-      nameMappings.map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(ID(vizierName), ID(mimirName)) }
+      nameMappings.map{ case (vizierName, mimirName) => registerNameMapping(vizierName, mimirName) }
      } catch {
       case t: Throwable => {
         logger.error("Failed To Register Name Mappings: [" + nameMappings.mkString(",") + "]", t)
@@ -402,18 +402,33 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
     }
   }
   
+  private def registerNameMappings(nameMappings:Map[String,String]) : Unit = {
+    try{
+      nameMappings.map{ case (vizierName, mimirName) => registerNameMapping(vizierName, mimirName) }
+     } catch {
+      case t: Throwable => {
+        logger.error("Failed To Register Name Mappings: [" + nameMappings.mkString(",") + "]", t)
+        throw t
+      }
+    }
+  }
+  
+  private def registerNameMapping(vizierName:String, mimirName:String) : Unit = {
+    db.sqlToRA.registerVizierNameMapping(Name(vizierName), ID(mimirName))
+  }
+  
   def createView(input : Any, query : String) : String = {
     try{
     apiCallThread = Thread.currentThread()
     val timeRes = logTime("createLens") {
       logger.debug("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
       val (viewNameSuffix, inputSubstitutionQuery) = input match {
-        case aliases:Map[_,_] => {
-          aliases.map{ case (vizierName:String, mimirName:String) => db.sqlToRA.registerVizierNameMapping(ID(vizierName), ID(mimirName)) } 
+        case aliases:Map[String,String] => {
+          registerNameMappings(aliases) 
           (aliases.toSeq.unzip._2.mkString(""), query)
         }
-        case aliases:JMapWrapper[_,_] => {
-          aliases.asInstanceOf[JMapWrapper[String,String]].map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(ID(vizierName), ID(mimirName)) } 
+        case aliases:JMapWrapper[String,String] => {
+          registerNameMappings(aliases) 
           (aliases.asInstanceOf[JMapWrapper[String,String]].unzip._2.mkString(""), query)
         }
         case inputs:Seq[_] => {
@@ -533,8 +548,8 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
   
 def vistrailsQueryMimirJson(input:Any, query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
     val inputSubstitutionQuery = input match {
-        case aliases:JMapWrapper[_,_] => {
-          aliases.asInstanceOf[JMapWrapper[String,String]].map{ case (vizierName, mimirName) => db.sqlToRA.registerVizierNameMapping(ID(vizierName), ID(mimirName)) } 
+        case aliases:JMapWrapper[String,String] => {
+          registerNameMappings(aliases)  
           query
         }
         case inputs:Seq[_] => {
@@ -883,7 +898,15 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     try{
     logger.debug("explainEverything: From Vistrails: [" + query + "]"  ) ;
     val oper = db.sqlToRA(MimirSQL.Select(query))
-    explainEverything(oper).map(_.all(db).toList).flatten   
+    explainEverything(oper).map(/*_.all(db).toList*/rset => {
+        val subReasons = rset.take(db, 4).toSeq
+  			if(subReasons.size > 3){
+  				logger.trace("   -> Too many explanations to fit in one group")
+  				Seq(new MultiReason(db, rset))
+  			} else {
+  				logger.trace(s"   -> Only ${subReasons.size} explanations")
+  				subReasons
+  			}}).flatten   
     } catch {
       case t: Throwable => {
         logger.error("Error Explaining Everything: [" + query + "]", t)
