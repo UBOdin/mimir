@@ -12,7 +12,7 @@ import mimir.util.ExperimentalOptions
 
 class LensManager(db: Database) {
 
-  val lensTypes = Map[ID,((Database,ID,Operator,Seq[Expression]) => 
+  val lensTypes = Map[ID,((Database,ID,String,Operator,Seq[Expression]) => 
                               (Operator,TraversableOnce[Model]))](
     ID("MISSING_VALUE")     -> MissingValueLens.create _,
     ID("DOMAIN")            -> MissingValueLens.create _,
@@ -33,7 +33,8 @@ class LensManager(db: Database) {
     t: ID, 
     name: ID, 
     query: Operator, 
-    args: Seq[Expression]
+    args: Seq[Expression],
+    humanReadableName: Option[String] = None
   ): Unit =
   {
     val constructor =
@@ -43,7 +44,7 @@ class LensManager(db: Database) {
       }
 
     // Construct the appropriate lens
-    val (view, models) = constructor(db, name, query, args)
+    val (view, models) = constructor(db, name, humanReadableName.getOrElse(name.id), query, args)
 
     // Create a lens query
     db.views.create(name, view)

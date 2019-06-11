@@ -33,11 +33,11 @@ object SeriesMissingValueModel
 {
   val logger = Logger(org.slf4j.LoggerFactory.getLogger("mimir.models.SeriesMissingValueModel"))
 
-  def train(db: Database, name: ID, columns: Seq[ID], query:Operator): Map[ID,(Model,Int,Seq[Expression])] = 
+  def train(db: Database, name: ID, columns: Seq[ID], query:Operator, humanReadableName:String): Map[ID,(Model,Int,Seq[Expression])] = 
   {
     logger.debug(s"Train on: $query")
     val (schemaWProv, modelHT) = SparkUtils.getDataFrameWithProvFromQuery(db, query)
-    val model = new SimpleSeriesModel(name, columns, schemaWProv, db.backend.rowIdType, db.backend.dateType, modelHT)
+    val model = new SimpleSeriesModel(name, columns, schemaWProv, db.backend.rowIdType, db.backend.dateType, modelHT, humanReadableName)
     val usefulColumns = trainModel( modelHT, columns, schemaWProv, model)
     columns.zip(usefulColumns)
       .zipWithIndex
@@ -75,7 +75,7 @@ case class SeriesColumnItem(columnName: ID, reason: String, score: Double)
  *  */
 
 @SerialVersionUID(1000L)
-class SimpleSeriesModel(name: ID, val seriesCols:Seq[ID], val querySchema: Seq[(ID, Type)], rowIdType:Type, dateType:Type, queryDf: DataFrame) 
+class SimpleSeriesModel(name: ID, val seriesCols:Seq[ID], val querySchema: Seq[(ID, Type)], rowIdType:Type, dateType:Type, queryDf: DataFrame, humanReadableName:String) 
   extends Model(name) 
   with SourcedFeedback
   with ModelCache
@@ -256,10 +256,10 @@ class SimpleSeriesModel(name: ID, val seriesCols:Seq[ID], val querySchema: Seq[(
         val bestSeries = bestSequence(idx)
         getCache(idx, args, Seq(StringPrimitive(bestSeries.id))) match {
           case Some(value) => 
-            s"I interpolated $name.${seriesCols(idx)}, ordered by $name.${bestSequence(idx)} to get $value for row ${args(0)}"
+            s"I interpolated $humanReadableName.${seriesCols(idx)}, ordered by $name.${bestSequence(idx)} to get $value for row ${args(0)}"
           case None =>{
             //s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSequence(idx)} row ${args(0)}"
-            s"I interpolated $name.${seriesCols(idx)}, ordered by $name.${bestSeries} to get ${interpolate(idx, args, bestSeries)} for row ${args(0)}"
+            s"I interpolated $humanReadableName.${seriesCols(idx)}, ordered by $name.${bestSeries} to get ${interpolate(idx, args, bestSeries)} for row ${args(0)}"
           }
         }
       }

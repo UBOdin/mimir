@@ -12,6 +12,7 @@ object CommentLens {
   def create(
     db: Database, 
     name: ID, 
+    humanReadableName: String,
     query: Operator, 
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
