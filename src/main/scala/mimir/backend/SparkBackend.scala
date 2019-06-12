@@ -99,7 +99,7 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
             .set("spark.driver.memory",sparkDriverMem)
             .set("spark.executor.memory",sparkExecutorMem)
             .set("spark.sql.catalogImplementation", "hive")
-            .set("spark.sql.shuffle.partitions", s"$numPartitions")
+            //.set("spark.sql.shuffle.partitions", s"$numPartitions")
             .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
             .set("spark.kryoserializer.buffer.max", "1536m")
             .set("spark.driver.port","7001")
@@ -340,10 +340,10 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
         .groupBy("partition_id")
         .agg(count(lit(1)) as "cnt", first("inc_id") as "inc_id")
         .orderBy("partition_id")
-        .select(sum("cnt").over(Window.orderBy("partition_id")) - col("cnt") - col("inc_id") + lit(offset) as "cnt" )
+        .select(col("partition_id"), sum("cnt").over(Window.orderBy("partition_id")) - col("cnt") - col("inc_id") + lit(offset) as "cnt" )
         .collect()
-        .map(_.getLong(0))
-        .toArray
+        .map(row => (row.getInt(0), row.getLong(1)))
+        .toMap
 
      val theUdf = udf((partitionId: Int) => partitionOffsets(partitionId), LongType)
      

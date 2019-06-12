@@ -900,14 +900,14 @@ case class RowIndexPlan(val lp:LogicalPlan,  val schema:Seq[(ID,Type)], val offs
           Alias(MonotonicallyIncreasingID(),"inc_id")()), lp)
   
   def fop(db:Database) =  new OperatorTranslation(db).dataset(org.apache.spark.sql.catalyst.plans.logical.Project(
-      Seq(Alias(Add(Subtract(Subtract(WindowExpression(AggregateExpression(Sum(UnresolvedAttribute("cnt")),Complete,false),WindowSpecDefinition(Seq(), Seq(), UnspecifiedFrame)), 
+      Seq(UnresolvedAttribute("partition_id"), Alias(Add(Subtract(Subtract(WindowExpression(AggregateExpression(Sum(UnresolvedAttribute("cnt")),Complete,false),WindowSpecDefinition(Seq(), Seq(SortOrder(UnresolvedAttribute("partition_id"), Ascending)), UnspecifiedFrame)), 
                   UnresolvedAttribute("cnt")),UnresolvedAttribute("inc_id")),Literal(offset)),"cnt")()), 
       org.apache.spark.sql.catalyst.plans.logical.Sort(Seq(SortOrder(UnresolvedAttribute("partition_id"), Ascending)), true,   
        org.apache.spark.sql.catalyst.plans.logical.Aggregate(
           Seq(UnresolvedAttribute("partition_id")),
-          Seq(Alias(Literal(1),"cnt")(), Alias(AggregateExpression(First(UnresolvedAttribute("inc_id"),Literal(false)),Complete,false),"inc_id")()),
+          Seq(UnresolvedAttribute("partition_id"), Alias(AggregateExpression(Count(Seq(Literal(1))),Complete,false),"cnt")(), Alias(AggregateExpression(First(UnresolvedAttribute("inc_id"),Literal(false)),Complete,false),"inc_id")()),
           partOp))
-      )).cache().collect().map(_.getLong(0))      
+      )).cache().collect().map(row => (row.getInt(0), row.getLong(1))).toMap      
   
   def inFunc(db:Database) = {
     val fopForSession = fop(db)
@@ -926,17 +926,22 @@ case class RowIndexPlan(val lp:LogicalPlan,  val schema:Seq[(ID,Type)], val offs
             Add(UnresolvedAttribute("partition_offset"), UnresolvedAttribute("inc_id")),StringType),indexName)(),
         org.apache.spark.sql.catalyst.plans.logical.Project(
           schema.map(fld => UnresolvedAttribute(fld._1.id)) ++
-          Seq(Alias(getUDF(db),"partition_offset")(), UnresolvedAttribute("inc_id")), partOp)))
+          Seq(Alias(getUDF(db),"partition_offset")(), UnresolvedAttribute("inc_id")), partOp)))    
   }
 
   private def getUDF(db:Database) = {
-    ScalaUDF(
-      inFunc(db),
-      LongType,
-      Seq(UnresolvedAttribute("partition_id")),
-      Seq(false),
-      Seq(IntegerType),
-      Some("mimir_row_index"),true, true)
+    If(
+      IsNull(UnresolvedAttribute("partition_id")), 
+      Literal(null), 
+      ScalaUDF(
+        inFunc(db),
+        LongType,
+        Seq(UnresolvedAttribute("partition_id")),
+        Seq(false),
+        Seq(IntegerType),
+        Some("mimir_row_index"),true, true
+      )
+    )
   }
 }
 
