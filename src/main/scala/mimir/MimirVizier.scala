@@ -1095,7 +1095,9 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
       val prov = scala.collection.mutable.Buffer[String]()
       while(results.hasNext){
         val row = results.next()
-        resCSV += row.tuple.map(_.toString) 
+        resCSV += row.tuple.map( x => x match {
+         case NullPrimitive() => null
+         case x => x.asString }) 
         prov += row.provenance.asString
       }
       
@@ -1115,7 +1117,9 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
      val schstuf = resIter.schema.zipWithIndex.map(f => 
        (Schema(f._1._1.toString, f._1._2.toString(), Type.rootType(f._1._2).toString()), f._1._1.toString, f._2)).unzip3
      ((schstuf._1, schstuf._2, schstuf._3), resIter.toList.map( row => {
-       (row.tuple.map(_.toString()), 
+       (row.tuple.map( x => x match {
+         case NullPrimitive() => null
+         case x => x.asString }), 
         schstuf._3.map(i => row.isColDeterministic(i)), 
         (row.isDeterministic(), row.provenance.asString))
      }).toSeq.unzip3)
@@ -1137,7 +1141,9 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
      val schstuf = resIter.schema.zipWithIndex.map(f => 
        (Schema(f._1._1.toString, f._1._2.toString(), Type.rootType(f._1._2).toString()), f._1._1.toString(), f._2)).unzip3
      ((schstuf._1, schstuf._2, schstuf._3), resIter.toList.map( row => {
-       (row.tuple.map(_.toString()), 
+       (row.tuple.map( x => x match {
+         case NullPrimitive() => null
+         case x => x.asString }), 
         schstuf._3.map(i => { if(row.isColDeterministic(i)){ (true, Seq()) } else { (false, explainCell(oper, ID(schstuf._2(i)), row.provenance)) } }).unzip, 
         (row.isDeterministic(), row.provenance.asString))
      }).toSeq.unzip3)
