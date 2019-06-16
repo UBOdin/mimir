@@ -84,7 +84,7 @@ object ExplainReasonsResponse {
 }
 
 
-case class CSVContainer (
+case class DataContainer (
                   schema: Seq[Schema],
                   data: Seq[Seq[PrimitiveValue]],
                   prov: Seq[String],
@@ -93,8 +93,8 @@ case class CSVContainer (
                   reasons: Seq[Seq[Reason]]
 ) extends Response
 
-object CSVContainer {
-  implicit val format: Format[CSVContainer] = Json.format
+object DataContainer {
+  implicit val format: Format[DataContainer] = Json.format
 }
 
 

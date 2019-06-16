@@ -41,7 +41,7 @@ import org.apache.spark.sql.SparkSession
 import mimir.ctables.AnalyzeUncertainty
 import mimir.parser.ExpressionParser
 import mimir.ctables.MultiReason
-import mimir.api.{ScalaEvalResponse, CreateLensResponse, CSVContainer, Schema}
+import mimir.api.{ScalaEvalResponse, CreateLensResponse, DataContainer, Schema}
 import mimir.api.MimirAPI
 
 /**
@@ -503,12 +503,12 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
     }
   }
   
-  def vistrailsQueryMimir(input:Any, query : String, includeUncertainty:Boolean, includeReasons:Boolean) : CSVContainer = {
+  def vistrailsQueryMimir(input:Any, query : String, includeUncertainty:Boolean, includeReasons:Boolean) : DataContainer = {
     val inputSubstitutionQuery = query.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString) 
     vistrailsQueryMimir(inputSubstitutionQuery, includeUncertainty, includeReasons)
   }
   
-  def vistrailsQueryMimir(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : CSVContainer = {
+  def vistrailsQueryMimir(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : DataContainer = {
     try{
     val timeRes = logTime("vistrailsQueryMimir") {
       logger.debug("vistrailsQueryMimir: " + query)
@@ -527,11 +527,11 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
         }
         case SQLStatement(update:sparsity.statement.Update) => {
           //db.backend.update(query)
-          CSVContainer(Seq(), Seq(Seq(StringPrimitive("SUCCESS")),Seq(IntPrimitive(1))), Seq(), Seq(), Seq(), Seq())
+          DataContainer(Seq(), Seq(Seq(StringPrimitive("SUCCESS")),Seq(IntPrimitive(1))), Seq(), Seq(), Seq(), Seq())
         }
         case _ => {
           db.update(stmt)
-          CSVContainer(Seq(), Seq(Seq(StringPrimitive("SUCCESS")),Seq(IntPrimitive(1))), Seq(), Seq(), Seq(), Seq())
+          DataContainer(Seq(), Seq(Seq(StringPrimitive("SUCCESS")),Seq(IntPrimitive(1))), Seq(), Seq(), Seq(), Seq())
         }
       }
       
@@ -1089,7 +1089,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     db.sqlToRA(MimirSQL.Select(query))
   }
   
-  def operCSVResults(oper : mimir.algebra.Operator) : CSVContainer =  {
+  def operCSVResults(oper : mimir.algebra.Operator) : DataContainer =  {
     db.query(oper) { results => 
       val resCSV = scala.collection.mutable.Buffer[Seq[PrimitiveValue]]() 
       val prov = scala.collection.mutable.Buffer[String]()
@@ -1099,7 +1099,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
         prov += row.provenance.asString
       }
       
-      CSVContainer(
+      DataContainer(
         results.schema.map { f => Schema(f._1.toString, f._2.toString(), Type.rootType(f._2).toString()) },
         resCSV.toSeq, 
         prov.toSeq,
@@ -1110,7 +1110,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }
   }
   
- def operCSVResultsDeterminism(oper : mimir.algebra.Operator) : CSVContainer =  {
+ def operCSVResultsDeterminism(oper : mimir.algebra.Operator) : DataContainer =  {
    val ((schViz, cols, colsIndexes), (resCSV, colTaint, rowTaintProv)) = db.query(oper)( resIter => {
      val schstuf = resIter.schema.zipWithIndex.map(f => 
        (Schema(f._1._1.toString, f._1._2.toString(), Type.rootType(f._1._2).toString()), f._1._1.toString, f._2)).unzip3
@@ -1122,7 +1122,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
    })
    val (rowTaint, prov) = rowTaintProv.unzip
    
-   CSVContainer(
+   DataContainer(
       schViz,
       resCSV, 
       prov,
@@ -1132,7 +1132,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     )     
  }
  
- def operCSVResultsDeterminismAndExplanation(oper : mimir.algebra.Operator) : CSVContainer =  {
+ def operCSVResultsDeterminismAndExplanation(oper : mimir.algebra.Operator) : DataContainer =  {
    val ((schViz, cols, colsIndexes), (resCSV, colTaintReasons, rowTaintProv)) = db.query(oper)( resIter => {
      val schstuf = resIter.schema.zipWithIndex.map(f => 
        (Schema(f._1._1.toString, f._1._2.toString(), Type.rootType(f._1._2).toString()), f._1._1.toString(), f._2)).unzip3
@@ -1145,7 +1145,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
    val (colTaint, reasons) = colTaintReasons.unzip
    val (rowTaint, prov) = rowTaintProv.unzip
    
-   CSVContainer(
+   DataContainer(
       schViz,
       resCSV, 
       prov,
