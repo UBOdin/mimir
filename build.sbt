@@ -153,7 +153,7 @@ libraryDependencies ++= Seq(
   "org.apache.commons"            %   "commons-csv"              % "1.4",
   "commons-io"                    %   "commons-io"               % "2.5",
   "com.github.wnameless"          %   "json-flattener"           % "0.2.2",
-  "com.typesafe.play"             %%  "play-json"                % "2.6.0",
+  "com.typesafe.play"             %%  "play-json"                % "2.5.0-M2",
 
   //////////////////////// Lens Libraries //////////////////////
   // WEKA - General-purpose Classifier Training/Deployment Library
