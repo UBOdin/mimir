@@ -423,12 +423,12 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
     val timeRes = logTime("createLens") {
       logger.debug("createView: From Vistrails: [" + input + "] [" + query + "]"  ) ;
       val (viewNameSuffix, inputSubstitutionQuery) = input match {
-        case aliases:Map[String,String] => {
-          registerNameMappings(aliases) 
+        case aliases:Map[_,_] => {
+          registerNameMappings(aliases.asInstanceOf[Map[String,String]]) 
           (aliases.toSeq.unzip._2.mkString(""), query)
         }
-        case aliases:JMapWrapper[String,String] => {
-          registerNameMappings(aliases) 
+        case aliases:JMapWrapper[_,_] => {
+          registerNameMappings(aliases.asInstanceOf[Map[String,String]]) 
           (aliases.asInstanceOf[JMapWrapper[String,String]].unzip._2.mkString(""), query)
         }
         case inputs:Seq[_] => {
@@ -527,11 +527,11 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
         }
         case SQLStatement(update:sparsity.statement.Update) => {
           //db.backend.update(query)
-          CSVContainer(Seq(), Seq(Seq("SUCCESS"),Seq("1")), Seq(), Seq(), Seq(), Seq())
+          CSVContainer(Seq(), Seq(Seq(StringPrimitive("SUCCESS")),Seq(IntPrimitive(1))), Seq(), Seq(), Seq(), Seq())
         }
         case _ => {
           db.update(stmt)
-          CSVContainer(Seq(), Seq(Seq("SUCCESS"),Seq("1")), Seq(), Seq(), Seq(), Seq())
+          CSVContainer(Seq(), Seq(Seq(StringPrimitive("SUCCESS")),Seq(IntPrimitive(1))), Seq(), Seq(), Seq(), Seq())
         }
       }
       
@@ -548,8 +548,8 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
   
 def vistrailsQueryMimirJson(input:Any, query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
     val inputSubstitutionQuery = input match {
-        case aliases:JMapWrapper[String,String] => {
-          registerNameMappings(aliases)  
+        case aliases:JMapWrapper[_,_] => {
+          registerNameMappings(aliases.asInstanceOf[JMapWrapper[String,String]])  
           query
         }
         case inputs:Seq[_] => {
@@ -1091,13 +1091,11 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   
   def operCSVResults(oper : mimir.algebra.Operator) : CSVContainer =  {
     db.query(oper) { results => 
-      val resCSV = scala.collection.mutable.Buffer[Seq[String]]() 
+      val resCSV = scala.collection.mutable.Buffer[Seq[PrimitiveValue]]() 
       val prov = scala.collection.mutable.Buffer[String]()
       while(results.hasNext){
         val row = results.next()
-        resCSV += row.tuple.map( x => x match {
-         case NullPrimitive() => null
-         case x => x.asString }) 
+        resCSV += row.tuple 
         prov += row.provenance.asString
       }
       
@@ -1117,9 +1115,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
      val schstuf = resIter.schema.zipWithIndex.map(f => 
        (Schema(f._1._1.toString, f._1._2.toString(), Type.rootType(f._1._2).toString()), f._1._1.toString, f._2)).unzip3
      ((schstuf._1, schstuf._2, schstuf._3), resIter.toList.map( row => {
-       (row.tuple.map( x => x match {
-         case NullPrimitive() => null
-         case x => x.asString }), 
+       (row.tuple, 
         schstuf._3.map(i => row.isColDeterministic(i)), 
         (row.isDeterministic(), row.provenance.asString))
      }).toSeq.unzip3)
@@ -1141,9 +1137,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
      val schstuf = resIter.schema.zipWithIndex.map(f => 
        (Schema(f._1._1.toString, f._1._2.toString(), Type.rootType(f._1._2).toString()), f._1._1.toString(), f._2)).unzip3
      ((schstuf._1, schstuf._2, schstuf._3), resIter.toList.map( row => {
-       (row.tuple.map( x => x match {
-         case NullPrimitive() => null
-         case x => x.asString }), 
+       (row.tuple, 
         schstuf._3.map(i => { if(row.isColDeterministic(i)){ (true, Seq()) } else { (false, explainCell(oper, ID(schstuf._2(i)), row.provenance)) } }).unzip, 
         (row.isDeterministic(), row.provenance.asString))
      }).toSeq.unzip3)

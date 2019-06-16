@@ -1,7 +1,8 @@
 package mimir.api
 
 import play.api.libs.json._
-
+import mimir.serialization.PrimitiveValueJSON._
+import mimir.algebra.PrimitiveValue
 
 sealed abstract class Response {
   
@@ -85,7 +86,7 @@ object ExplainReasonsResponse {
 
 case class CSVContainer (
                   schema: Seq[Schema],
-                  data: Seq[Seq[String]],
+                  data: Seq[Seq[PrimitiveValue]],
                   prov: Seq[String],
                   colTaint: Seq[Seq[Boolean]],
                   rowTaint: Seq[Boolean],
