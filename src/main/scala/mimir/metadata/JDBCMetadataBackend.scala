@@ -97,8 +97,9 @@ class JDBCMetadataBackend(val protocol: String, val filename: String)
 
   val ID_COLUMN = "MIMIR_ID"
 
-  def registerMap(category: ID, schema: Metadata.MapSchema): MetadataMap =
+  def registerMap(category: ID, migrations: Seq[MapMigration]): MetadataMap =
   {
+    val schema = Metadata.foldMapMigrations(migrations)
     // Assert that the backend schema lines up with the target
     // This should trigger a migration in the future, but at least 
     // inject a sanity check for now.
@@ -110,6 +111,29 @@ class JDBCMetadataBackend(val protocol: String, val filename: String)
         // SQLite-specific PRAGMA operation.
         SQLiteCompat.getTableSchema(conn, category) match {
           case Some(existing) => {
+
+            val existingMapCols = mutable.Set(existing.map(_._1):_*)
+            lazy val stmt = conn.createStatement()
+            var stmtNeedsClose = false
+            // Checking each migration individually is a bit cumbersome.
+            // it might be appropriate to create a "Schema versions" table
+            // to streamline the process
+            for(step <- migrations) {
+              step match {
+                case InitMap(schema) => 
+                case AddColumnToMap(column, t, default) => 
+                  existingMapCols.add(column)
+                  if( !(existingMapCols contains column) ){
+                    val addColumn = 
+                      s"ALTER TABLE ${category.quoted} ADD COLUMN ${column.quoted} ${Type.rootType(t)} DEFAULT ${default};"
+                    stmt.executeUpdate(addColumn)
+                    stmtNeedsClose = true
+                  }
+
+              }
+            }
+            if(stmtNeedsClose){ stmt.close() }
+
             try {
               assert(existing.length == schema.length+1)
               for(((_, e), (_, f)) <- existing.zip((ID(ID_COLUMN), TString()) +: schema)) {

@@ -11,7 +11,7 @@ import mimir.exec._
 import mimir.exec.mode._
 import mimir.serialization._
 import com.typesafe.scalalogging.slf4j.LazyLogging
-import mimir.metadata.MetadataMap
+import mimir.metadata._
 
 
 class ViewManager(db:Database) extends LazyLogging {
@@ -24,11 +24,11 @@ class ViewManager(db:Database) extends LazyLogging {
    */
   def init(): Unit = 
   {
-    viewTable = db.metadata.registerMap(ID("MIMIR_VIEWS"), Seq(
+    viewTable = db.metadata.registerMap(ID("MIMIR_VIEWS"), Seq(InitMap(Seq(
         ID("QUERY") -> TString(),
         ID("METADATA") -> TInt()
       )
-    )
+    )))
   }
 
   /**

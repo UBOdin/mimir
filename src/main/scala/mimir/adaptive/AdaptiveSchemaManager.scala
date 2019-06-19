@@ -7,7 +7,7 @@ import mimir.algebra._
 import mimir.statistics.SystemCatalog
 import mimir.serialization._
 import mimir.util._
-import mimir.metadata.MetadataMap
+import mimir.metadata._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 class AdaptiveSchemaManager(db: Database)
@@ -18,11 +18,11 @@ class AdaptiveSchemaManager(db: Database)
   def init(): Unit = 
   {
     adaptiveSchemas = db.metadata.registerMap(
-      ID("MIMIR_ADAPTIVE_SCHEMAS"), Seq(
+      ID("MIMIR_ADAPTIVE_SCHEMAS"), Seq(InitMap(Seq(
         ID("MLENS") -> TString(),
         ID("QUERY") -> TString(),
         ID("ARGS")  -> TString()
-    ))
+    ))))
   }
 
   def create(schema: ID, mlensType: ID, query: Operator, args: Seq[Expression]) = 
