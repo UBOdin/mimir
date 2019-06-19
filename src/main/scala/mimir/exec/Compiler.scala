@@ -161,42 +161,6 @@ class Compiler(db: Database) extends LazyLogging {
         ))
   }
   
-  def metadataBackendRootIterator(oper:Operator) : (Seq[(ID, Type)], ResultIterator) = {
-    val (sql, sqlSchema) = sqlForBackend(oper)
-    (sqlSchema, new JDBCResultIterator(
-          sqlSchema,
-          sql, db.metadataBackend,
-          db.backend.dateType
-        ))
-  }
-
-  def sqlForBackend(
-    oper: Operator
-  ): 
-    (SelectBody, Seq[(ID,Type)]) =
-  {
-    val optimized = optimize(oper)
-    //val optimized =  Compiler.optimize(oper, opts)
-
-    logger.debug(s"PRE-SPECIALIZED: $oper")
-
-    // The final stage is to apply any database-specific rewrites to adapt
-    // the query to the quirks of each specific target database.  Each
-    // backend defines a specializeQuery method that handles this
-    val specialized = db.metadataBackend.specializeQuery(optimized, db)
-
-    logger.info(s"SPECIALIZED: $specialized")
-
-    logger.info(s"SCHEMA: ${oper.columnNames.mkString(", ")} -> ${optimized.columnNames.mkString(", ")}")
-    
-    // Generate the SQL
-    val sql = db.raToSQL(specialized)
-
-    logger.info(s"SQL: $sql")
-
-    return (sql, db.typechecker.schemaOf(optimized))
-  }
-  
   // case class VirtualizedQuery(
   //   query: Operator,
   //   visibleSchema: Seq[(String, Type)],

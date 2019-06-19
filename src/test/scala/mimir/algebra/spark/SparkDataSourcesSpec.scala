@@ -144,7 +144,7 @@ object SparkDataSourcesSpec
                       .findSpreadsheet("1-9fKx9f1OV-J2P2LtOM33jKfc5tQt4DJExSU3xaXDwU")
         gsheet.deleteWorksheet("Sheet2")
         val outputFilename = "1-9fKx9f1OV-J2P2LtOM33jKfc5tQt4DJExSU3xaXDwU/Sheet2"   
-        val result = db.backend.execute(db.table("G_MV"))
+        val result = db.backend.execute(db.compileBestGuess(db.table("G_MV")))
         db.backend.writeDataSink(result, "com.github.potix2.spark.google.spreadsheets", 
             Map("serviceAccountId" -> "vizier@api-project-378720062738.iam.gserviceaccount.com",
                 "credentialPath" -> db.backend.asInstanceOf[mimir.backend.SparkBackend].sheetCred), Some(outputFilename))

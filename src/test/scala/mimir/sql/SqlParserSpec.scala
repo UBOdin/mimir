@@ -17,6 +17,7 @@ import mimir.parser._
 import mimir.algebra._
 import mimir.sql._
 import mimir.backend._
+import mimir.metadata._
 import mimir.util._
 import mimir.test._
 import mimir.ctables._
@@ -62,12 +63,7 @@ class SqlParserSpec
 			val sback = new SparkBackend(if(tempDB == null){ "testdb" } else { tempDB.toString.split("[\\\\/]").last.replaceAll("\\..*", "") })
 			val d = new Database(sback, j)
 	    try {
-	      d.metadataBackend.open()
-		    d.backend.open();
-	      SparkML(sback.sparkSql)
-        OperatorTranslation.db = d
-				j.enableInlining(d)
-				d.initializeDBForMimir();
+	    	d.open()
 			} catch {
 				case e:Exception => e.printStackTrace()
 

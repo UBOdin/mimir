@@ -902,23 +902,6 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
     frame.setVisible(true)
   }
 
-  def serialize(): Array[Byte] = 
-  {
-    val byteBucket = new ByteArrayOutputStream()
-    val out = new ObjectOutputStream(byteBucket);
-    out.writeObject(this)
-    byteBucket.toByteArray
-  }
-
-  def serializeTo(db: mimir.Database, name: String): Unit =
-  {
-    FuncDep.initBackstore(db)
-    db.metadataBackend.update(
-      "INSERT OR REPLACE INTO "+FuncDep.BACKSTORE_TABLE_NAME+"(name, data) VALUES (?,?)", 
-      List(StringPrimitive(name), StringPrimitive(SerializationUtils.b64encode(serialize())))
-    )
-  }
-
   def depth(node:Integer,score:Integer): Integer ={
     val pList = fdGraph.getPredecessors(node)
     var highestScore = 0
@@ -994,47 +977,6 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
       }
     })
     writer.close()
-  }
-
-}
-
-
-object FuncDep {
-
-  val BACKSTORE_TABLE_NAME = ID("MIMIR_FUNCDEP_BLOBS")
-
-  def initBackstore(db: mimir.Database)
-  {
-    if(!db.metadataTableExists(FuncDep.BACKSTORE_TABLE_NAME)){
-      db.metadataBackend.update(
-        CreateTable(
-          FuncDep.BACKSTORE_TABLE_NAME.quoted,
-          false, 
-          Seq(
-            ColumnDefinition(Name("name"), Name("varchar(40)"), Seq()),
-            ColumnDefinition(Name("data"), Name("blob"), Seq())
-          ),
-          Seq(
-            TablePrimaryKey(Seq(Name("name")))
-          )
-        )
-      )
-    }
-  }
-  def deserialize(data: Array[Byte]): FuncDep = 
-  {
-    val in = new ObjectInputStream(new ByteArrayInputStream(data))
-    val obj = in.readObject()
-    obj.asInstanceOf[FuncDep]
-  }
-  def deserialize(db: mimir.Database, name: String): FuncDep =
-  {
-    val blob = 
-      db.metadataBackend.resultValue(
-        "SELECT data FROM "+BACKSTORE_TABLE_NAME+" WHERE name=?", 
-        List(StringPrimitive(name))
-      ).asString
-    deserialize(SerializationUtils.b64decode(blob))
   }
 
 }

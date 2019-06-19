@@ -2,7 +2,7 @@ package mimir.views
 
 import mimir.Database
 import mimir.algebra._
-import mimir.ctables.CTPercolator
+import mimir.ctables.OperatorDeterminism
 import mimir.provenance.Provenance
 
 class ViewMetadata(
@@ -23,7 +23,7 @@ class ViewMetadata(
       schema.map { case (col, _) => ProjectArg(col, Var(col)) } ++ 
       schemaWith(Set(ViewAnnotation.PROVENANCE)).zipWithIndex.map { case ((col, _), idx) => 
         ProjectArg(
-          CTPercolator.mimirColDeterministicColumn(col),
+          OperatorDeterminism.mimirColDeterministicColumn(col),
           Comparison(Cmp.Eq,
             Arithmetic(Arith.BitAnd,
               Var(ViewAnnotation.taintBitVectorColumn),
@@ -36,7 +36,7 @@ class ViewMetadata(
       (if(annotations(ViewAnnotation.TAINT)){
         Seq(
           ProjectArg(
-            CTPercolator.mimirRowDeterministicColumnName,
+            OperatorDeterminism.mimirRowDeterministicColumnName,
             Comparison(Cmp.Eq,
               Arithmetic(Arith.BitAnd,
                 Var(ViewAnnotation.taintBitVectorColumn),
@@ -76,9 +76,9 @@ class ViewMetadata(
     sch ++ (
       if(requiredAnnotations(ViewAnnotation.TAINT)) {
         (sch++prov).map { col => 
-          (CTPercolator.mimirColDeterministicColumn(col._1), TBool())
+          (OperatorDeterminism.mimirColDeterministicColumn(col._1), TBool())
         }++
-        Seq((CTPercolator.mimirRowDeterministicColumnName, TBool()))
+        Seq((OperatorDeterminism.mimirRowDeterministicColumnName, TBool()))
       } else { None }
     ) ++ (
       if(requiredAnnotations(ViewAnnotation.TAINT_BITS)){

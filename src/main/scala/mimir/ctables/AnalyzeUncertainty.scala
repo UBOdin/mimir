@@ -85,7 +85,7 @@ case class NumericCellExplanation (
 }
 
 
-class CTExplainer(db: Database) extends LazyLogging {
+class AnalyzeUncertainty(db: Database) extends LazyLogging {
 
 	val NUM_SAMPLES = 1000
 	val NUM_EXAMPLE_TRIALS = 20
@@ -184,7 +184,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 		init: A, accum: ((A, PrimitiveValue) => A)
 	): A = 
 	{
-		val sampleExpr = CTAnalyzer.compileSample(expr, Var(CTables.SEED_EXP), db.models.get(_))
+		val sampleExpr = ExpressionDeterminism.compileSample(expr, Var(CTables.SEED_EXP), db.models.get(_))
         (0 until count).
         	map( (i) => 
         		try {
@@ -443,7 +443,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 
   private def compileCausalityForLens(lensName:ID)(expr: Expression): Seq[(Expression, UncertaintyCausingExpression)] = {
     val lensModels = db.models.associatedModels(lensName)
-    CTAnalyzer.compileCausality(expr).filter(p => lensModels.contains(p._2.name))
+    ExpressionDeterminism.compileCausality(expr).filter(p => lensModels.contains(p._2.name))
   }
 		
 	def explainSubsetWithoutOptimizing(
@@ -456,7 +456,7 @@ class CTExplainer(db: Database) extends LazyLogging {
 	): Seq[ReasonSet] =
 	{
 	  val compileCausality = forLens match {
-	    case None => CTAnalyzer.compileCausality _
+	    case None => ExpressionDeterminism.compileCausality _
 	    case Some(lensName) =>  compileCausalityForLens(lensName) _
 	  }
 		logger.trace(s"Explain Subset (${wantCol.mkString(", ")}; $wantRow; $wantSort): \n$oper")

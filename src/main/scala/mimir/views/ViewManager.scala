@@ -11,11 +11,12 @@ import mimir.exec._
 import mimir.exec.mode._
 import mimir.serialization._
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import mimir.metadata.MetadataMap
 
 
 class ViewManager(db:Database) extends LazyLogging {
   
-  val viewTable = ID("MIMIR_VIEWS")
+  var viewTable: MetadataMap = null
 
   /**
    * Initialize the view manager: 
@@ -23,12 +24,10 @@ class ViewManager(db:Database) extends LazyLogging {
    */
   def init(): Unit = 
   {
-    db.requireMetadataTable(viewTable, Seq(
-        ID("NAME") -> TString(),
+    viewTable = db.metadata.registerMap(ID("MIMIR_VIEWS"), Seq(
         ID("QUERY") -> TString(),
         ID("METADATA") -> TInt()
-      ), 
-      primaryKey = Some(ID("NAME"))
+      )
     )
   }
 
@@ -44,11 +43,10 @@ class ViewManager(db:Database) extends LazyLogging {
     if(db.tableExists(name)){
       throw new SQLException(s"View '$name' already exists")
     }
-    db.metadataBackend.update(s"INSERT INTO $viewTable(NAME, QUERY, METADATA) VALUES (?,?,0)", 
-      Seq(
-        StringPrimitive(name.id), 
-        StringPrimitive(Json.ofOperator(query).toString)
-      ))
+    viewTable.put(name, Seq(
+      StringPrimitive(Json.ofOperator(query).toString),
+      IntPrimitive(0)
+    ))
     // updateMaterialization(name)
   }
 
@@ -61,13 +59,10 @@ class ViewManager(db:Database) extends LazyLogging {
   def alter(name: ID, query: Operator): Unit =
   {
     val properties = apply(name)
-    db.metadataBackend.update(s"UPDATE $viewTable SET QUERY=? WHERE NAME=?", 
-      Seq(
-        StringPrimitive(Json.ofOperator(query).toString),
-        StringPrimitive(name.id)
-      )) 
+    viewTable.update(name, Map(
+      ID("QUERY") -> StringPrimitive(Json.ofOperator(query).toString)
+    )) 
     if(properties.isMaterialized){
-      db.metadataBackend.update("DROP TABLE ${name}")
       materialize(name)
     }
   }
@@ -85,13 +80,8 @@ class ViewManager(db:Database) extends LazyLogging {
         case None => if(ifExists){ return }
                      else { throw new SQLException(s"Unknown View '$name'") }
       }
-
-    db.metadataBackend.update(s"DELETE FROM $viewTable WHERE NAME=?", 
-      Seq(StringPrimitive(name.id))
-    )
-    if(properties.isMaterialized){
-      db.metadataBackend.update("DROP TABLE ${name}")
-    }
+    viewTable.rm(name)
+    if(properties.isMaterialized){ db.backend.dropTable(name) }
   }
 
   /**
@@ -103,11 +93,8 @@ class ViewManager(db:Database) extends LazyLogging {
   def get(name: ID): Option[ViewMetadata] = 
   {
     val results = 
-      db.metadataBackend.resultRows(s"SELECT QUERY, METADATA FROM $viewTable WHERE name = ?", 
-        Seq(StringPrimitive(name.id))
-      )
-    logger.trace(s"Get View $name: ${results.size}")
-    results.take(1).headOption.map(_.toSeq).map( 
+    logger.trace(s"Getting View $name")
+    viewTable.get(name).map(_._2.toSeq).map( 
       { 
         case Seq(StringPrimitive(s), IntPrimitive(meta)) => {
           val query = Json.toOperator(Json.parse(s))
@@ -184,11 +171,7 @@ class ViewManager(db:Database) extends LazyLogging {
     db.backend.createTable(name, completeQuery)
     db.backend.materializeView(name)
 
-    db.metadataBackend.update(s"""
-      UPDATE $viewTable SET METADATA = 1 WHERE NAME = ?
-    """, Seq(
-      StringPrimitive(name.id)
-    ))
+    viewTable.update(name, Map(ID("METADATA") -> IntPrimitive(1)))
   }
 
   /**
@@ -199,14 +182,8 @@ class ViewManager(db:Database) extends LazyLogging {
     if(db.backend.getTableSchema(name) == None){
       throw new SQLException(s"View '$name' is not materialized")
     }
-    db.metadataBackend.update(s"""
-      DROP TABLE $name
-    """)
-    db.metadataBackend.update(s"""
-      UPDATE $viewTable SET METADATA = 0 WHERE NAME = ?
-    """, Seq(
-      StringPrimitive(name.id)
-    ))
+    db.backend.dropTable(name)
+    viewTable.update(name, Map(ID("METADATA") -> IntPrimitive(0)))
     db.backend.invalidateCache
   }
 
@@ -215,13 +192,7 @@ class ViewManager(db:Database) extends LazyLogging {
    * @return     A list of all view names
    */
   def list(): Seq[ID] =
-  {
-    db.metadataBackend.
-      resultRows(s"SELECT name FROM $viewTable").
-      flatten.
-      map { v => ID(v.asString) }.
-      toSeq
-  }
+    viewTable.keys
 
   /**
    * Return a query that can be used to list all views known to Mimir.

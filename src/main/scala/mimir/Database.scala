@@ -12,14 +12,15 @@ import sparsity.alter._
 import sparsity.expression.Expression
 
 import mimir.algebra._
-import mimir.ctables.{CTExplainer, CTPercolator, CellExplanation, RowExplanation, InlineVGTerms}
+import mimir.ctables.{AnalyzeUncertainty, OperatorDeterminism, CellExplanation, RowExplanation, InlineVGTerms}
 import mimir.models.Model
 import mimir.exec.Compiler
 import mimir.exec.mode.{CompileMode, BestGuess}
 import mimir.exec.result.{ResultIterator,SampleResultIterator,Row}
 import mimir.lenses.{LensManager}
 import mimir.sql.{SqlToRA,RAToSql}
-import mimir.backend.{QueryBackend,MetadataBackend}
+import mimir.backend.QueryBackend
+import mimir.metadata.MetadataBackend
 import mimir.parser.{
     MimirStatement,
     SQLStatement,
@@ -45,7 +46,6 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
-import mimir.exec.result.JDBCResultIterator
 import mimir.util.LoadData
 
 
@@ -96,7 +96,7 @@ import mimir.util.LoadData
   * * mimir.explainer.CTExplainer (explainer)
   *    Responsible for creating explanation objects.
   */
-case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
+case class Database(backend: QueryBackend, metadata: MetadataBackend)
   extends LazyLogging
 {
   //// Persistence
@@ -114,7 +114,7 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
 
   //// Logic
   val compiler        = new mimir.exec.Compiler(this)
-  val explainer       = new mimir.ctables.CTExplainer(this)
+  val uncertainty     = new mimir.ctables.AnalyzeUncertainty(this)
   val catalog         = new mimir.statistics.SystemCatalog(this)
   val typechecker     = new mimir.algebra.Typechecker(
                                   functions = Some(functions), 
@@ -124,14 +124,7 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
   val interpreter     = new mimir.algebra.Eval(
                                   functions = Some(functions)
                                 )  
-  val metadataTables = Seq(
-    "MIMIR_ADAPTIVE_SCHEMAS", 
-    "MIMIR_MODEL_OWNERS",
-    "MIMIR_MODELS", 
-    "MIMIR_VIEWS", 
-    "MIMIR_SYS_TABLES", 
-    "MIMIR_SYS_ATTRS"
-  ).map { ID(_) }
+
   /**
    * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
    * and rewrites the query to properly account for Virtual Tables.
@@ -276,81 +269,6 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
       }
     }
   }
-  
-  
-  /**
-   * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
-   * and rewrites the query to properly account for Virtual Tables.
-   */
-  final def queryMetadata[T, R <:ResultIterator](oper: Operator, mode: CompileMode[R])(handler: R => T): T =
-  {
-    val iterator = mode(this, oper, compiler.metadataBackendRootIterator)
-    try {
-      val ret = handler(iterator)
-      if(ret.isInstanceOf[Iterator[_]]){
-        logger.warn("Returning a sequence from Database.query may lead to the Scala compiler's optimizations closing the ResultIterator before it's fully drained")
-      }
-      return ret
-    } finally {
-      iterator.close()
-    }
-  }
-  
-  /**
-   * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
-   * and rewrites the query to properly account for Virtual Tables.
-   */
-  final def queryMetadata[T](oper: Operator)(handler: ResultIterator => T): T = {
-    queryMetadata(oper, BestGuess)(handler)
-  }
-    
-  /**
-   * get all metadata tables
-   */
-  def getAllMatadataTables(): Set[ID] =
-  {
-    (
-      metadataBackend.getAllTables() ++ views.list()
-    ).toSet[ID];
-  }
-
-  /**
-   * Determine whether the specified table exists
-   */
-  def metadataTableExists(name: ID): Boolean =
-  {
-    metadataTableSchema(name) != None
-  }
-
-  /**
-   * Look up the schema for the table with the provided name.
-   */
-  def metadataTableSchema(name: ID): Option[Seq[(ID,Type)]] = 
-  {
-    logger.debug(s"Table schema for $name")
-    views.get(name) match { 
-      case Some(viewDefinition) => Some(viewDefinition.schema)
-      case None => metadataBackend.getTableSchema(name)
-    }
-  }
-
-  /**
-   * Build a Table operator for the table with the provided name.
-   */
-  def metadataTable(tableName: ID) : Operator = metadataTable(tableName, tableName)
-  def metadataTable(tableName: ID, alias: ID): Operator = 
-  {
-    getView(tableName).getOrElse(
-      Table(
-        tableName, alias,
-        metadataBackend.getTableSchema(tableName) match {
-          case Some(x) => x
-          case None => throw new SQLException(s"No such table or view '$tableName'")
-        },
-        Nil
-      ) 
-    )
-  }
 
   /**
    * Evaluate a statement that does not produce results.
@@ -449,16 +367,15 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
       }
 
       /********** DROP STATEMENTS **********/
-      case SQLStatement(drop:DropTable) => {
-        metadataBackend.update(drop.toString())
-        metadataBackend.invalidateCache()
-      }
 
       case SQLStatement(DropView(name, ifExists)) => views.drop(ID.upper(name), ifExists)
       case DropLens(name, ifExists)               => lenses.drop(ID.upper(name), ifExists)
       case DropAdaptiveSchema(name, ifExists)     => adaptiveSchemas.drop(ID.upper(name), ifExists)
 
       /********** Update Metadata **********/
+      case SQLStatement(drop:DropTable) => 
+        throw new SQLException("DROP not supported")
+
       case SQLStatement(update: Update) => 
         throw new SQLException("UPDATE not supported")
 
@@ -473,13 +390,22 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
   /**
    * Prepare a database for use with Mimir.
    */
-  def initializeDBForMimir(): Unit = {
+  def open(skipBackend: Boolean = false): Unit = {
+    if(!skipBackend){
+      backend.open(this)
+      metadata.open()
+    }
     models.init()
     views.init()
     lenses.init()
     adaptiveSchemas.init()
-    mimir.algebra.spark.OperatorTranslation(this)
   }
+
+  def close(): Unit = {
+    metadata.close()
+    backend.close()
+  }
+
 
   /**
    * Retrieve the query corresponding to the Lens or Virtual View with the specified
@@ -601,45 +527,5 @@ case class Database(backend: QueryBackend, metadataBackend: MetadataBackend)
     */
   def selectInto(targetTable: ID, sourceQuery: Operator){
     backend.createTable(targetTable, sourceQuery)
-  }
-
-  /**
-   * Utility for modules to ensure that a table with the specified schema exists.
-   *
-   * If the table doesn't exist, it will be created.
-   * If the table does exist, non-existant columns will be created.
-   * If the table does exist and a column has a different type, an error will be thrown.
-   */
-  def requireMetadataTable(name: ID, schema: Seq[(ID, Type)], primaryKey: Option[ID] = None)
-  {
-    val typeMap = schema.toMap
-    metadataBackend.getTableSchema(name) match {
-      case None => {
-        val schemaElements = 
-          schema.map { case (name, t) => s"$name $t" } ++ 
-          (if(primaryKey.isEmpty) { Seq() } else {
-            Seq(s"PRIMARY KEY (${primaryKey.get})")
-          })
-        val createCmd = s"""
-          CREATE TABLE $name(
-            ${schemaElements.mkString(",\n            ")}
-          )
-        """
-        logger.debug(s"CREATE: $createCmd")
-        metadataBackend.update(createCmd);
-      }
-      case Some(oldSch) => {
-        val currentColumns = oldSch.map { _._1 }.toSet
-        for(column <- (typeMap.keySet ++ currentColumns)){
-          if(typeMap contains column){
-            if(!(currentColumns contains column)){
-              logger.debug("Need to add $column to $name(${typemap.keys.mkString(", ")})")
-              metadataBackend.update(s"ALTER TABLE $name ADD COLUMN $column ${typeMap(column)}")
-            }
-          }
-        }
-      }
-
-    }
   }
 }

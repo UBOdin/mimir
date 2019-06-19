@@ -61,10 +61,8 @@ object DumpDomain
 
 
     // Tag rows/columns with provenance metadata
-    val tagging =  CTPercolator.percolateLite(oper, db.models.get(_)) 
-    oper               = tagging._1
-    val colDeterminism = tagging._2.filter( col => rawColumns(col._1) )
-    val rowDeterminism = tagging._3
+    oper = OperatorDeterminism.compile(oper, db.models.get(_)) 
+    val colDeterminism = rawColumns.toSeq.map { OperatorDeterminism.mimirColDeterministicColumn(_) }
 
     logger.debug(s"PERCOLATED: $oper")
 
@@ -75,7 +73,10 @@ object DumpDomain
     val minimalSchema: Set[ID] = 
       operRaw.columnNames.toSet ++ 
       provenanceCols.toSet ++
-      (colDeterminism.map(_._2) ++ Seq(rowDeterminism)).flatMap( ExpressionUtils.getColumns(_) ).toSet
+      ( colDeterminism :+ 
+        OperatorDeterminism.mimirRowDeterministicColumnName
+      ).toSet
+
 
     oper = ProjectRedundantColumns(oper, minimalSchema)
 
@@ -100,8 +101,8 @@ object DumpDomain
     return (
       oper, 
       outputSchema,
-      colDeterminism,
-      rowDeterminism,
+      rawColumns.toSeq.map { col => col -> Var(OperatorDeterminism.mimirColDeterministicColumn(col)) }.toMap,
+      Var(OperatorDeterminism.mimirRowDeterministicColumnName),
       provenanceCols
     )
   }
@@ -116,9 +117,9 @@ object DumpDomain
       Project(
         operRaw.columnNames.map { name => ProjectArg(name, Var(name)) } ++
         colDeterminism.map { case (name, expression) => 
-          ProjectArg(ID(CTPercolator.mimirColDeterministicColumnPrefix, name), expression) 
+          ProjectArg(ID(OperatorDeterminism.mimirColDeterministicColumnPrefix, name), expression) 
         } ++ Seq(
-          ProjectArg(CTPercolator.mimirRowDeterministicColumnName, rowDeterminism),
+          ProjectArg(OperatorDeterminism.mimirRowDeterministicColumnName, rowDeterminism),
           ProjectArg(Provenance.rowidColnameBase, Function(Provenance.mergeRowIdFunction, provenanceCols.map( Var(_) ) ))
         ),// ++ provenanceCols.map(pc => ProjectArg(pc,Var(pc))),
         oper

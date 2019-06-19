@@ -159,6 +159,41 @@ object JDBCUtils {
   {
     new JDBCResultSetIterable(results, schema)
   }
+
+  def setArgs(stmt: PreparedStatement, args: Seq[PrimitiveValue], protocol: String = "sqlite"): Unit =
+  {
+    args.zipWithIndex.foreach(a => {
+      val i = a._2+1
+      a._1 match {
+        case p:StringPrimitive    => stmt.setString(i, p.v)
+        case p:IntPrimitive       => stmt.setLong(i, p.v)
+        case p:FloatPrimitive     => stmt.setDouble(i, p.v)
+        case _:NullPrimitive      => stmt.setNull(i, Types.VARCHAR)
+        case d:DatePrimitive      => 
+          protocol match {
+            case "sqlite" => 
+              stmt.setString(i, d.asString )
+            case _ =>
+              stmt.setDate(i, JDBCUtils.convertDate(d))
+          }
+        case t:TimestampPrimitive      => 
+          protocol match {
+            case "sqlite" => 
+              stmt.setString(i, t.asString )
+            case _ =>
+              stmt.setTimestamp(i, JDBCUtils.convertTimestamp(t))
+          }
+        case t:IntervalPrimitive  => 
+          protocol match {
+            case _ => throw new SQLException(s"$protocol does not support intervals in prepared statements")
+          }
+        case r:RowIdPrimitive     => stmt.setString(i,r.v)
+        case t:TypePrimitive      => stmt.setString(i, t.t.toString) 
+        case BoolPrimitive(true)  => stmt.setInt(i, 1)
+        case BoolPrimitive(false) => stmt.setInt(i, 0)
+      }
+    })
+  }
 }
 
 class JDBCResultSetIterable(results: ResultSet, schema: Seq[Type]) 

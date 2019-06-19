@@ -38,7 +38,7 @@ import sparsity.Name
 
 import mimir.Database
 import mimir.algebra._
-import mimir.ctables.CTPercolator
+import mimir.ctables.OperatorDeterminism
 import mimir.util._
 import org.joda.time.LocalDate
 import com.typesafe.scalalogging.slf4j.LazyLogging
@@ -515,12 +515,8 @@ class SqlToRA(db: Database)
         val tableOp:Operator = 
           schemaMaybe match { 
             case None => 
-              if(db.metadataTables.contains(ID.upper(table.name))) {
-                db.metadataTable(ID.upper(table.name), ID.upper(alias))
-              } else {
-                if(table.quoted) { db.table(ID(table.name), ID.upper(alias)) }
-                else             { db.table(table.name,     ID.upper(alias)) }
-              }
+              if(table.quoted) { db.table(ID(table.name), ID.upper(alias)) }
+              else             { db.table(table.name,     ID.upper(alias)) }
 
             case Some(schema) =>
               db.adaptiveSchemas.viewFor(ID.upper(schema), ID.upper(table)).get

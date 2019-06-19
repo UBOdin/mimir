@@ -9,6 +9,7 @@ import mimir._
 import mimir.parser._
 import mimir.sql._
 import mimir.backend._
+import mimir.metadata._
 import mimir.algebra._
 import mimir.util._
 import mimir.exec._
@@ -54,16 +55,14 @@ object DBTestInstances
           if(shouldCleanupDB){    
             dbFile.deleteOnExit();
           }
-          tmpDB.metadataBackend.open()
-          tmpDB.backend.open();
+          tmpDB.open()
           backend match {
             case sback:SparkBackend =>{
-              SparkML(sback.sparkSql)
               val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^","|","OR")
                 sback.registerSparkFunctions(
                   tmpDB.functions.functionPrototypes.map { _._1 }.toSeq
                     ++ otherExcludeFuncs.map { ID(_) }, 
-                  tmpDB.functions
+                  tmpDB
                 )
                 sback.registerSparkAggregates(
                   tmpDB.aggregates.prototypes.map { _._1 }.toSeq,
@@ -72,16 +71,11 @@ object DBTestInstances
             }
             case _ => ???
           }
-          OperatorTranslation.db = tmpDB
           if(shouldResetDB || !oldDBExists){
             config.get("initial_db") match {
               case None => ()
               case Some(path) => Runtime.getRuntime().exec(s"cp $path $dbFile")
             }
-          }
-          tmpDB.initializeDBForMimir();
-          if(shouldEnableInlining){
-            metadata.enableInlining(tmpDB)
           }
           databases.put(tempDBName, tmpDB)
           tmpDB
@@ -134,37 +128,27 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     query(s){ _.next }
   def table(t: String) =
     db.table(t)
-  def queryMetadata[T](s: String)(handler: ResultIterator => T): T =
-    db.queryMetadata(select(s))(handler)
-  def queryOneColumnMetadata[T](s: String)(handler: Iterator[PrimitiveValue] => T): T = 
-    queryMetadata(s){ result => handler(result.map(_(0))) }
-  def querySingletonMetadata(s: String): PrimitiveValue =
-    queryOneColumnMetadata(s){ _.next }
-  def queryOneRowMetadata(s: String): Row =
-    queryMetadata(s){ _.next }
-  def metadataTable(t: String) =
-    db.metadataTable(ID(t))
   def resolveViews(q: Operator) =
     db.views.resolve(q)
   def explainRow(s: String, t: String) = 
   {
     val query = resolveViews(select(s))
-    db.explainer.explainRow(query, RowIdPrimitive(t))
+    db.uncertainty.explainRow(query, RowIdPrimitive(t))
   }
   def explainCell(s: String, t: String, a:String) = 
   {
     val query = resolveViews(select(s))
-    db.explainer.explainCell(query, RowIdPrimitive(t), ID(a))
+    db.uncertainty.explainCell(query, RowIdPrimitive(t), ID(a))
   }
   def explainEverything(s: String) = 
   {
     val query = resolveViews(select(s))
-    db.explainer.explainEverything(query)
+    db.uncertainty.explainEverything(query)
   }
   def explainAdaptiveSchema(s: String) =
   {
     val query = resolveViews(select(s))
-    db.explainer.explainAdaptiveSchema(query, query.columnNames.toSet, true)
+    db.uncertainty.explainAdaptiveSchema(query, query.columnNames.toSet, true)
   }  
   def dropTable(t: String) =
     db.update(SQLStatement(sparsity.statement.DropTable(sparsity.Name(t), true)))

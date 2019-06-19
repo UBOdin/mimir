@@ -87,7 +87,7 @@ class SampleRows(
   def compileForWorld(query: Operator, seed: Long, models:(ID => Model)): Operator =
   {
     (
-      query.recurExpressions{ expr:Expression => CTAnalyzer.compileSample(expr, IntPrimitive(seed), models) }.
+      query.recurExpressions{ expr:Expression => ExpressionDeterminism.compileSample(expr, IntPrimitive(seed), models) }.
             recur(compileForWorld(_, seed, models))
     ) match {
 

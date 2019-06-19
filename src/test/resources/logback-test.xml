@@ -57,6 +57,7 @@
   <logger name="mimir.optimizer.operator.PartitionUncertainJoins$" level="WARN"/>
   <logger name="mimir.optimizer.operator.InlineProjections$"       level="WARN"/>
   <logger name="mimir.optimizer.operator.PullUpUnions"             level="WARN"/>
+  <logger name="mimir.optimizer.operator.PullUpConstants"          level="WARN"/>
 
   <!--+++++++++++++++++++++  Parser  ++++++++++++++++++++++-->
   <logger name="mimir.parser.EndlessParser"                        level="DEBUG"/>

@@ -14,9 +14,9 @@ object InlineProjections extends OperatorOptimization with LazyLogging {
 		o.recur(apply(_)) match {
 			// If we have a Project[*](X), we can replace it with just X
 			case Project(cols, src) if (cols.forall( _ match {
-					case ProjectArg(colName, Var(varName)) => colName.equals(varName)
+					case ProjectArg(colName, Var(varName)) => colName.id.equals(varName.id)
 					case _ => false
-				}) && (src.columnNames.toSet &~ cols.map(_.name).toSet).isEmpty)
+				}) && (src.columnNames.map { _.id }.toSet &~ cols.map(_.name.id).toSet).isEmpty)
 				 => src
 
 			// Project[...](Project[...](X)) can be composed into a single Project[...](X)

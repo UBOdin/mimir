@@ -221,29 +221,74 @@ libraryDependencies ++= Seq(
   "com.github.vagmcs"       %% "optimus-solver-oj"      % "2.0.0"
 )
 
-lazy val parser = taskKey[Unit]("Builds the SQL Parser")
-parser := {
-  val logger = streams.value.log
-  Process(List(
-    "rm", "-f",
-    "src/main/java/mimir/parser/MimirJSqlParser.java",
-    "src/main/java/mimir/parser/MimirJSqlParserConstants.java",
-    "src/main/java/mimir/parser/MimirJSqlParserTokenManager.java",
-    "src/main/java/mimir/parser/ParseException.java",
-    "src/main/java/mimir/parser/SimpleCharStream.java",
-    "src/main/java/mimir/parser/Token.java",
-    "src/main/java/mimir/parser/TokenMgrError.java"
-  )) ! logger match {
-    case 0 => // Success
-    case n => sys.error(s"Could not clean up after old SQL Parser: $n")
+
+////// Generate a Coursier Bootstrap Jar
+// See https://get-coursier.io/docs
+// 
+lazy val bootstrap = taskKey[Unit]("Generate Bootstrap Jar")
+bootstrap := {
+  val logger = ProcessLogger(println(_), println(_))
+  val coursier_bin = "bin/coursier"
+  val coursier_url = "https://git.io/coursier-cli"
+  val mimir_bin = "bin/mimir"
+  if(!java.nio.file.Files.exists(java.nio.file.Paths.get("bin/coursier"))){
+
+    println("Downloading Coursier...")
+    Process(List(
+      "curl", "-L",
+      "-o", coursier_bin,
+      coursier_url
+    )) ! logger match {
+      case 0 => 
+      case n => sys.error(s"Could not download Coursier")
+    }
+    Process(List(
+      "chmod", "+x", coursier_bin
+    )) ! logger
+    println("... done")
   }
+
+  println("Coursier available.  Generating Repository List")
+
+  val resolverArgs = resolvers.value.map { 
+    case r: MavenRepository => Seq("-r", r.root)
+  }.flatten
+
+  val (art, file) = packagedArtifact.in(Compile, packageBin).value
+  val qualified_artifact_name = file.name.replace(".jar", "").replaceFirst("-([0-9.]+)$", "")
+  val full_artifact_name = s"${organization.value}:${qualified_artifact_name}:${version.value}"
+  println("Rendering bootstraps for "+full_artifact_name)
+  for(resolver <- resolverArgs){
+    println("  "+resolver)
+  }
+  println
+  println("Generating Mimir binary")
+
   Process(List(
-    "java -cp lib/javacc.jar javacc",
-    "-OUTPUT_DIRECTORY=src/main/java/mimir/parser",
-    "src/main/java/mimir/parser/JSqlParserCC.jj"
-  ).mkString(" ")) ! logger match {
-    case 0 => // Success
-    case n => sys.error(s"Could not build SQL Parser: $n")
+    coursier_bin,
+    "bootstrap",
+    full_artifact_name,
+    "-f",
+    "-o", "bin/mimir",
+    "-r", "central"
+  )++resolverArgs) ! logger match {
+      case 0 => 
+      case n => sys.error(s"Bootstrap failed")
+  }
+  
+
+  println("Generating Mimir-API Server binary")
+  Process(List(
+    coursier_bin,
+    "bootstrap",
+    full_artifact_name,
+    "-f",
+    "-o", "bin/mimir-api",
+    "-r", "central",
+    "-M", "mimir.MimirVizier"
+  )++resolverArgs) ! logger match {
+      case 0 => 
+      case n => sys.error(s"Bootstrap failed")
   }
 }
 
