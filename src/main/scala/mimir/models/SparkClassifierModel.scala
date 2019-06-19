@@ -43,7 +43,7 @@ object SparkClassifierModel
   
   def availableSparkModels = Map("Classification" -> (Classification, Classification.NaiveBayesMulticlassModel _), "Regression" -> (Regression, Regression.GeneralizedLinearRegressorModel _))
   
-  def train(db: Database, name: ID, cols: Seq[ID], query:Operator): Map[ID,(Model,Int,Seq[Expression])] = 
+  def train(db: Database, name: ID, cols: Seq[ID], query:Operator, humanReadableName: String): Map[ID,(Model,Int,Seq[Expression])] = 
   {
     val (schemaWProv, modelHT) = SparkUtils.getDataFrameWithProvFromQuery(db, query)
     cols.map( (col) => {
@@ -52,7 +52,7 @@ object SparkClassifierModel
         db.models.getOption(modelName) match {
           case Some(model) => model
           case None => {
-            val model = new SimpleSparkClassifierModel(modelName, col, schemaWProv)
+            val model = new SimpleSparkClassifierModel(modelName, col, schemaWProv, humanReadableName)
             trainModel(db, query, model, modelHT)
             model
           }
@@ -99,7 +99,7 @@ object SparkClassifierModel
 }
 
 @SerialVersionUID(1001L)
-class SimpleSparkClassifierModel(name: ID, val colName:ID, val schema:Seq[(ID, Type)])
+class SimpleSparkClassifierModel(name: ID, val colName:ID, val schema:Seq[(ID, Type)], humanReadableName: String)
   extends Model(name) 
   with SourcedFeedback
   with ModelCache
@@ -205,11 +205,11 @@ class SimpleSparkClassifierModel(name: ID, val colName:ID, val schema:Seq[(ID, T
     val rowid = RowIdPrimitive(rowidstr)
     getFeedback(idx, args) match {
       case Some(v) =>
-        s"${getReasonWho(idx,args)} told me that $name.$colName = $v on row $rowid"
+        s"${getReasonWho(idx,args)} told me that $humanReadableName.$colName = $v on row $rowid"
       case None => 
         getCache(idx, args, hints) match {
-          case None => s"The classifier isn't able to make a guess about $name.$colName, so I'm defaulting to ${classToPrimitive("0")}"
-          case Some(elem) => s"I used a classifier to guess that ${name.id.split(":")(0)}.$colName = $elem on row $rowid"
+          case None => s"I defaulted to fixing $humanReadableName.$colName by replacing ${hints(colIdx)} with ${classToPrimitive("0")} on row $rowid"
+          case Some(elem) => s"I used a classifier to fix $humanReadableName.$colName by replacing ${hints(colIdx)} with $elem on row $rowid"
         }
     }
     } catch {

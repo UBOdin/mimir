@@ -48,6 +48,7 @@ object MissingValueLens {
   def create(
     db: Database, 
     name: ID, 
+    humanReadableName: String,
     query: Operator, 
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
@@ -102,7 +103,8 @@ object MissingValueLens {
               db, 
               ID(name, ":", modelCategory), 
               targetColumnsAndTests.keySet.toSeq, 
-              noErroneousValuesQuery
+              noErroneousValuesQuery,
+              humanReadableName
             ).toSeq
           
           (modelCategory, modelsByTypeAndColumn)

@@ -25,6 +25,7 @@ object ModelRegistry
    *    String          -> The name prefix for the model
    *    List[String]    -> A list of column names to impute on
    *    Operator        -> The relation to impute on
+   *    String          -> The human-readable name to use to describe fixes
    * Outputs:
    *    Map[...]        -> A map from column name to a Model/Idx pair,
    *                       along with a sequence of "hint" expressions,
@@ -51,7 +52,7 @@ object ModelRegistry
    * operator: Select[ROWID = rowid](oper)
    */
   type ImputationConstructor = 
-    ((Database, ID, Seq[ID], Operator) => Map[ID, (Model,Int,Seq[Expression])])
+    ((Database, ID, Seq[ID], Operator,String) => Map[ID, (Model,Int,Seq[Expression])])
 
   /**
    * Factory method type for SchemaMatch model constructors

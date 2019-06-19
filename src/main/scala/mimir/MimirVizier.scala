@@ -368,7 +368,16 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
         //            AS $query 
         //          WITH ${_type}( ${params.mkString(",")} )
         // Skip the parser and do what Mimir does internally
-        db.lenses.create(ID(lensType), ID(lensName), query, parsedParams)
+        db.lenses.create(
+          ID(lensType), 
+          ID(lensName),
+          query, 
+          parsedParams, 
+          // Vizier uses funky custom table names internally.
+          // Use the source table as a name for human-visible 
+          // outputs like uncertainty explanations.
+          humanReadableName = Some(input.toString)
+        )
       }
       if(materialize){
         if(!db.views(ID(lensName)).isMaterialized){
