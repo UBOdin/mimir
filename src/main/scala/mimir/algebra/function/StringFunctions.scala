@@ -7,12 +7,12 @@ object StringFunctions
 
   def register(fr: FunctionRegistry)
   {
-    fr.register("CONCAT", 
+    fr.register(ID("concat"), 
       (params: Seq[PrimitiveValue]) => StringPrimitive(params.map( _.asString ).mkString),
       (x: Seq[Type]) => TString()
     )
 
-    fr.register("PRINTF", 
+    fr.register(ID("printf"), 
       (params: Seq[PrimitiveValue]) => ???,
       (x: Seq[Type]) => TString()
     )

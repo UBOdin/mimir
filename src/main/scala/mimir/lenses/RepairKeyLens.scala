@@ -11,7 +11,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 object RepairKeyLens extends LazyLogging {
   def create(
     db: Database, 
-    name: String, 
+    name: ID, 
     query: Operator, 
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
@@ -19,25 +19,25 @@ object RepairKeyLens extends LazyLogging {
 
     var schema = db.typechecker.schemaOf(query)
     val schemaMap = schema.toMap
-    var scoreCol:Option[String] = None
-    var fastPath:Option[String] = None
+    var scoreCol:Option[ID] = None
+    var fastPath:Option[ID] = None
 
     //////////  Parse Arguments  //////////
-    val keys: Seq[String] = args.flatMap {
+    val keys: Seq[ID] = args.flatMap {
       case Var(col) => {
         if(schemaMap contains col){ Some(col) }
         else {
           throw new SQLException(s"Invalid column: $col in RepairKeyLens $name")
         }
       }
-      case Function("SCORE_BY", Seq(Var(col))) => {
-        scoreCol = Some(col.toUpperCase)
+      case Function(ID("score_by"), Seq(Var(col))) => {
+        scoreCol = Some(col)
         None
       }
-      case Function("ENABLE", opts) => {
+      case Function(ID("enable"), opts) => {
         opts.foreach { 
-          case Var("FAST_PATH") => 
-            fastPath = Some("MIMIR_FASTPATH_"+name)
+          case Var(ID("FAST_PATH")) => 
+            fastPath = Some(ID("MIMIR_FASTPATH_", name))
           case x => 
             throw new SQLException(s"Invalid Key-Repair option: $x")
         }
@@ -47,20 +47,19 @@ object RepairKeyLens extends LazyLogging {
     }
 
     //////////  Assemble Models  //////////
-    val values: Seq[(String, Model)] = 
+    val values: Seq[(ID, Model)] = 
       schema.
       filterNot( (keys ++ scoreCol) contains _._1 ).
       map { case (col, t) => 
         val model =
           new RepairKeyModel(
-            s"$name:$col", 
-            name, 
+            ID(name,":", col), 
+            name.id, 
             query, 
             keys.map { k => (k, schemaMap(k)) }, 
             col, t,
             scoreCol
           )
-        model.trainDomain(db)//.reconnectToDatabase(db)
         ( col, model )
       }
 
@@ -82,7 +81,7 @@ object RepairKeyLens extends LazyLogging {
     val lensQuery = 
       fastPath match {
         case None => 
-          assembleView(db, query, keys, values, scoreCol, "MIMIR_KR_SOURCE_"+name)
+          assembleView(db, query, keys, values, scoreCol, ID("MIMIR_KR_SOURCE_",name))
         case Some(fastPathTable) => 
           assembleFastPath(db, query, keys, values, scoreCol, fastPathTable)
       }
@@ -93,15 +92,15 @@ object RepairKeyLens extends LazyLogging {
   def buildFastPathCache(
     db: Database,
     query: Operator,
-    keys: Seq[(String, Type)], 
-    values: Seq[String], 
-    table: String
+    keys: Seq[(ID, Type)], 
+    values: Seq[ID], 
+    table: ID
   ): Unit =
   {
     db.selectInto(table, 
       Aggregate(
         keys.map( k => Var(k._1)),
-        Seq(AggFunction("COUNT", false, Seq(), "NUM_INSTANCES")),
+        Seq(AggFunction(ID("count"), false, Seq(), ID("NUM_INSTANCES"))),
         query
       )
     )
@@ -109,9 +108,9 @@ object RepairKeyLens extends LazyLogging {
 
   def assemble(
     query: Operator,
-    keys: Seq[String],
-    values: Seq[(String, Model)],
-    scoreCol: Option[String],
+    keys: Seq[ID],
+    values: Seq[(ID, Model)],
+    scoreCol: Option[ID],
     forceGuess: Boolean = false
   ): Operator =
   {
@@ -123,9 +122,9 @@ object RepairKeyLens extends LazyLogging {
         val vgTerm = 
           VGTerm(model.name, 0, keys.map(Var(_)), 
             Seq(
-              Var(s"MIMIR_KR_HINT_COL_$col"),
+              Var(ID("MIMIR_KR_HINT_COL_",col)),
               scoreCol.
-                map { _ => Var("MIMIR_KR_HINT_SCORE") }.
+                map { _ => Var(ID("MIMIR_KR_HINT_SCORE")) }.
                 getOrElse( NullPrimitive() )
             )
           )
@@ -134,7 +133,7 @@ object RepairKeyLens extends LazyLogging {
           if(forceGuess){ vgTerm } 
           else {
             Conditional(
-              Comparison(Cmp.Lte, Var(s"MIMIR_KR_COUNT_$col"), IntPrimitive(1)),
+              Comparison(Cmp.Lte, Var(ID("MIMIR_KR_COUNT_",col)), IntPrimitive(1)),
               Var(col), vgTerm
             )
           }
@@ -144,12 +143,12 @@ object RepairKeyLens extends LazyLogging {
         keys.map(Var(_)),
         values.flatMap { case (col, _) => 
           List(
-            AggFunction("FIRST", false, List(Var(col)), col),
-            AggFunction("COUNT", true, List(Var(col)), s"MIMIR_KR_COUNT_$col"),
-            AggFunction("JSON_GROUP_ARRAY", false, List(Var(col)), s"MIMIR_KR_HINT_COL_$col")
+            AggFunction(ID("first"), false, List(Var(col)), col),
+            AggFunction(ID("count"), true, List(Var(col)), ID("MIMIR_KR_COUNT_",col)),
+            AggFunction(ID("json_group_array"), false, List(Var(col)), ID("MIMIR_KR_HINT_COL_",col))
           )
         } ++ scoreCol.map { col => 
-            AggFunction("JSON_GROUP_ARRAY", false, List(Var(col)), "MIMIR_KR_HINT_SCORE")
+            AggFunction(ID("json_group_array"), false, List(Var(col)), ID("MIMIR_KR_HINT_SCORE"))
           },
         query
       )
@@ -159,10 +158,10 @@ object RepairKeyLens extends LazyLogging {
   def assembleView(
     db: Database,
     query: Operator,
-    keys: Seq[String],
-    values: Seq[(String, Model)],
-    scoreCol: Option[String],
-    view: String,
+    keys: Seq[ID],
+    values: Seq[(ID, Model)],
+    scoreCol: Option[ID],
+    view: ID,
     forceGuess: Boolean = false,
     useUnions: Boolean = false
   ): Operator =
@@ -174,12 +173,12 @@ object RepairKeyLens extends LazyLogging {
         keys.map(Var(_)),
         values.flatMap { case (col, _) => 
           List(
-            AggFunction("FIRST", false, List(Var(col)), col),
-            AggFunction("COUNT", true, List(Var(col)), s"MIMIR_KR_COUNT_$col"),
-            AggFunction("JSON_GROUP_ARRAY", false, List(Var(col)), s"MIMIR_KR_HINT_COL_$col")
+            AggFunction(ID("first"), false, List(Var(col)), col),
+            AggFunction(ID("count"), true, List(Var(col)), ID("MIMIR_KR_COUNT_",col)),
+            AggFunction(ID("json_group_array"), false, List(Var(col)), ID("MIMIR_KR_HINT_COL_",col))
           )
         } ++ scoreCol.map { col => 
-            AggFunction("JSON_GROUP_ARRAY", false, List(Var(col)), "MIMIR_KR_HINT_SCORE")
+            AggFunction(ID("json_group_array"), false, List(Var(col)), ID("MIMIR_KR_HINT_SCORE"))
           },
         query
       )
@@ -192,9 +191,9 @@ object RepairKeyLens extends LazyLogging {
           val vgTerm = 
             VGTerm(model.name, 0, keys.map(Var(_)), 
               Seq(
-                Var(s"MIMIR_KR_HINT_COL_$col"),
+                Var(ID("MIMIR_KR_HINT_COL_",col)),
                 scoreCol.
-                  map { _ => Var("MIMIR_KR_HINT_SCORE") }.
+                  map { _ => Var(ID("MIMIR_KR_HINT_SCORE")) }.
                   getOrElse( NullPrimitive() )
               )
             )
@@ -203,7 +202,7 @@ object RepairKeyLens extends LazyLogging {
             if(forceGuess){ vgTerm } 
             else {
               Conditional(
-                Comparison(Cmp.Lte, Var(s"MIMIR_KR_COUNT_$col"), IntPrimitive(1)),
+                Comparison(Cmp.Lte, Var(ID("MIMIR_KR_COUNT_",col)), IntPrimitive(1)),
                 Var(col), vgTerm
               )
             }
@@ -215,7 +214,7 @@ object RepairKeyLens extends LazyLogging {
           Select(
             ExpressionUtils.makeOr(
               values.map { v => 
-                Comparison(Cmp.Gt, Var(s"MIMIR_KR_COUNT_${v._1}"), IntPrimitive(1))
+                Comparison(Cmp.Gt, Var(ID("MIMIR_KR_COUNT_",v._1)), IntPrimitive(1))
               }
             ),
             db.views.get(view).get.operator
@@ -231,7 +230,7 @@ object RepairKeyLens extends LazyLogging {
           Select(
             ExpressionUtils.makeAnd(
               values.map { v => 
-                Comparison(Cmp.Lte, Var(s"MIMIR_KR_COUNT_${v._1}"), IntPrimitive(1))
+                Comparison(Cmp.Lte, Var(ID("MIMIR_KR_COUNT_",v._1)), IntPrimitive(1))
               }
             ), 
             db.views.get(view).get.operator
@@ -245,36 +244,33 @@ object RepairKeyLens extends LazyLogging {
   def assembleFastPath(
     db: Database,
     query: Operator,
-    keys: Seq[String],
-    values: Seq[(String, Model)],
-    scoreCol: Option[String], 
-    fastPathTable: String
+    keys: Seq[ID],
+    values: Seq[(ID, Model)],
+    scoreCol: Option[ID], 
+    fastPathTable: ID
   ): Operator =
   {
     logger.debug(s"Assembling KR Lens FastPath $fastPathTable")
     val rowsWhere = (cond:Expression) => {
-      OperatorUtils.projectColumns(
-        keys ++ values.map(_._1),
-        Select(
+      db.table(fastPathTable)
+        .filter(cond)
+        .mapByID( keys.map { k => ID("MIMIR_KR_",k) -> Var(k)}:_* )
+        .join(query)
+        .filter { 
           ExpressionUtils.makeAnd(keys.map { k => 
-            Comparison(Cmp.Eq, Var(s"MIMIR_KR_$k"), Var(k))
-          }),
-          Join(
-            Project(
-              keys.map { k => ProjectArg(s"MIMIR_KR_$k", Var(k)) },
-              Select(cond, db.table(fastPathTable))
-            ),
-            query
-          )
-        )
-      )}
+            ID("MIMIR_KR_",k).eq(k)
+          })
+        }
+        .projectByID( (keys++values.map(_._1)):_* )
+    }
+
     val rowsWithDuplicates =
       rowsWhere(
-        Comparison(Cmp.Neq, Var("NUM_INSTANCES"), IntPrimitive(1))
+        ID("NUM_INSTANCES").neq(1)
       )
     val rowsWithoutDuplicates =
       rowsWhere(
-        Comparison(Cmp.Eq, Var("NUM_INSTANCES"), IntPrimitive(1))
+        ID("NUM_INSTANCES").eq(1)
       )
     Union(
       rowsWithoutDuplicates,

@@ -20,20 +20,18 @@ import org.apache.spark.sql.Encoders
  */
 @SerialVersionUID(1002L)
 class RepairKeyModel(
-  name: String, 
+  name: ID, 
   context: String, 
   source: Operator, 
-  keys: Seq[(String, Type)], 
-  target: String,
+  keys: Seq[(ID, Type)], 
+  target: ID,
   targetType: Type,
-  scoreCol: Option[String]
+  scoreCol: Option[ID]
 ) 
   extends Model(name)
   with FiniteDiscreteDomain 
   with SourcedFeedbackT[List[PrimitiveValue]]
 {
-  
-  var domainCache: Dataset[(PrimitiveValue, Double)] = null
   
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) : List[PrimitiveValue] = args.toList
   
@@ -66,61 +64,34 @@ class RepairKeyModel(
     setFeedback(idx, args, v)
   def isAcknowledged(idx: Int, args: Seq[PrimitiveValue]): Boolean =
     hasFeedback(idx, args)
-
-  def trainDomain(db:Database) = {
-    val mop = OperatorUtils.projectColumns(List(target) ++ scoreCol, 
-          Select(
-            ExpressionUtils.makeAnd(
-              keys.map(col => (col._1,Var(col._1))).map { 
-                case (k,v) => Comparison(Cmp.Eq, Var(k), v)
-              }
-            ),
-            source
-          )
-        )
-     val mopSchema = db.typechecker.schemaOf(mop)
-    domainCache = db.backend.execute(mop).map( row => {
-          ( SparkUtils.convertField(mopSchema(0)._2, row, 0, TString()), 
-            scoreCol match { 
-              case None => 1.0; 
-              case Some(_) => row.getDouble(1)
-            }
-          )
-        })(org.apache.spark.sql.Encoders.kryo[(PrimitiveValue,Double)])
-  }
     
   final def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
   {
-    if(hints.isEmpty){
-      domainCache.collect().toIndexedSeq
-    } else {
-      val possibilities = 
-        Json.parse(hints(0).asString) match {
-          case JsArray(values) => values.map { Json.toPrimitive(targetType, _)  }
-          case _ => throw ModelException(s"Invalid Value Hint in Repair Model $name: ${hints(0).asString}")
-        }
-      
-      val possibilitiesWithProbabilities =
-        if(hints.size > 1 && !hints(1).isInstanceOf[NullPrimitive]){
-          possibilities.zip(
-            Json.parse(hints(1).asString) match {
-              case JsArray(values) => values.map( v => Json.toPrimitive(TFloat(), v).asDouble )
-              case _ => throw ModelException(s"Invalid Score Hint in Repair Model $name: ${hints(1).asString}")
-            }
-          )
-        } else {
-          possibilities.map( (_, 1.0) )
-        }
-
-      val goodPossibilities =
-        possibilitiesWithProbabilities.filter(!_._1.isInstanceOf[NullPrimitive])
-
-      if(goodPossibilities.isEmpty){
-        Seq((NullPrimitive(), 1.0))
+    val possibilities = 
+      Json.parse(hints(0).asString) match {
+        case JsArray(values) => values.map { Json.toPrimitive(targetType, _)  }
+        case _ => throw ModelException(s"Invalid Value Hint in Repair Model $name: ${hints(0).asString}")
+      }
+    
+    val possibilitiesWithProbabilities =
+      if(hints.size > 1 && !hints(1).isInstanceOf[NullPrimitive]){
+        possibilities.zip(
+          Json.parse(hints(1).asString) match {
+            case JsArray(values) => values.map( v => Json.toPrimitive(TFloat(), v).asDouble )
+            case _ => throw ModelException(s"Invalid Score Hint in Repair Model $name: ${hints(1).asString}")
+          }
+        )
       } else {
-        goodPossibilities
+        possibilities.map( (_, 1.0) )
       }
 
+    val goodPossibilities =
+      possibilitiesWithProbabilities.filter(!_._1.isInstanceOf[NullPrimitive])
+
+    if(goodPossibilities.isEmpty){
+      Seq((NullPrimitive(), 1.0))
+    } else {
+      goodPossibilities
     }
   }
   

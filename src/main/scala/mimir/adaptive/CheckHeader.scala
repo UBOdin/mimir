@@ -6,7 +6,6 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
 import mimir.Database
-import net.sf.jsqlparser.statement.Statement
 import mimir.parser._
 import mimir.algebra._
 import mimir.lenses._
@@ -23,8 +22,14 @@ object CheckHeader
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model] =
   {
     val viewName = config.schema
-    val modelName = "MIMIR_CH_" + viewName
-    val detectmodel = new DetectHeaderModel(modelName, viewName, config.query.columnNames, db.query(Limit(0,Some(6),config.query))(_.toList.map(_.tuple)).toSeq)
+    val modelName = ID("MIMIR_CH_", viewName)
+    val detectmodel = 
+      new DetectHeaderModel(
+        modelName, 
+        viewName, 
+        config.query.columnNames, 
+        db.query(Limit(0,Some(6),config.query))(_.toList.map(_.tuple)).toSeq
+      )
     detectmodel.detect_header()
     Seq(detectmodel)
   }
@@ -33,7 +38,7 @@ object CheckHeader
   {
     HardTable(
       Seq(
-        ("TABLE_NAME",TString())
+        (ID("TABLE_NAME"),TString())
       ),
       Seq(
         Seq(
@@ -47,10 +52,10 @@ object CheckHeader
   {
     HardTable(
       Seq(
-        ("TABLE_NAME" , TString()), 
-        ("ATTR_TYPE", TType()),
-        ("IS_KEY", TBool()),
-        ("COLUMN_ID", TInt())
+        (ID("TABLE_NAME") -> TString()), 
+        (ID("ATTR_TYPE")  -> TType()),
+        (ID("IS_KEY")     -> TBool()),
+        (ID("COLUMN_ID")  -> TInt())
       ),
       (0 until config.query.columnNames.size).map { col =>
         Seq(
@@ -60,22 +65,25 @@ object CheckHeader
           IntPrimitive(col)
         )
       }
-    ).addColumn(
-      "ATTR_NAME" -> VGTerm("MIMIR_CH_" + config.schema, 0, Seq(Var("COLUMN_ID")), Seq())
-    ).removeColumn("COLUMN_ID")
+    ).addColumns(
+      "ATTR_NAME" -> VGTerm(config.schema.withPrefix("MIMIR_CH_"), 0, Seq(Var(ID("COLUMN_ID"))), Seq())
+    ).removeColumns("COLUMN_ID")
   }
   
-  def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
+  def viewFor(db: Database, config: MultilensConfig, table: ID): Option[Operator] =
   {
-    if(table.equals("DATA")){
-      val model = db.models.get("MIMIR_CH_" + config.schema).asInstanceOf[DetectHeaderModel]
+    if(table.equals(ID("DATA"))){
+      val model = db.models.get(ID("MIMIR_CH_",config.schema)).asInstanceOf[DetectHeaderModel]
       Some(
           Project( model.columns.zipWithIndex.map( col => 
-            ProjectArg(model.bestGuess(0, Seq(IntPrimitive(col._2)), Seq()).asString,Var(col._1)) )
+            ProjectArg(ID(model.bestGuess(0, Seq(IntPrimitive(col._2)), Seq()).asString),Var(col._1)) )
             , config.query) match {
             case proj if model.headerDetected => proj.limit(-1, 1)
             case proj => proj
           })
-    } else { None }
+    } else { 
+      logger.warn(s"Getting invalid table $table from Detect Headers adaptive schema")
+      None 
+    }
   }
 }

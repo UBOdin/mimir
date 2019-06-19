@@ -9,19 +9,23 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
 {
   sequential
 
-  var models = Map[String,(Model,Int,Seq[Expression])]()
+  var models = Map[ID,(Model,Int,Seq[Expression])]()
 
-  def predict(col:String, row:String): PrimitiveValue = {
+  def predict(col:ID, row:String): PrimitiveValue = {
     val (model, idx, hints) = models(col)
     model.bestGuess(idx, List(RowIdPrimitive(row)), List())
   }
-  def explain(col:String, row:String): String = {
+  def explain(col:ID, row:String): String = {
     val (model, idx, hints) = models(col)
     model.reason(idx, List(RowIdPrimitive(row)), List())
   }
-  def trueValue(col:String, row:String): PrimitiveValue = {
+  def trueValue(col:ID, row:String): PrimitiveValue = {
     val t = db.tableSchema("CPUSPEED").get.find(_._1.equals(col)).get._2
-    db.query(db.table("CPUSPEED").addColumn(("ROWID", RowIdVar())).project(col, "ROWID").filter(Var("ROWID").eq(mimir.algebra.Cast(TRowId(), StringPrimitive(row)))))(
+    db.query(
+      db.table("CPUSPEED")
+        .addColumns( "ROWID" -> RowIdVar())
+        .projectByID(col, ID("ROWID"))
+        .filter(Var(ID("ROWID")).eq(mimir.algebra.Cast(TRowId(), StringPrimitive(row)))))(
       result => result.toList.head(0)
     )
   }
@@ -37,34 +41,39 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
           ("L3_CACHE_SIZE_MB","L3CACHEINMB"))*/
     
     "Be trainable" >> {
-      loadCSV("CPUSPEED",  
-      Seq(("PROCESSORID", "string"),
-          ("FAMILY", "string"),
-          ("TECHINMICRONS", "float"),
-          ("CPUSPEEDINGHZ", "float"),
-          ("BUSSPEEDINMHZ", "string"),
-          ("L2CACHEINKB", "int"),
-          ("L3CACHEINMB", "float"),
-          ("CORES", "int"),
-          ("EM64T", "string"),
-          ("HT", "string"),
-          ("VT", "string"),
-          ("XD", "string"),
-          ("SS", "string"),
-          ("NOTES", "string")), new File("test/data/CPUSpeed.csv"))
+      loadCSV(
+        "CPUSPEED",  
+        Seq(
+          "PROCESSORID" -> "string",
+          "FAMILY" -> "string",
+          "TECHINMICRONS" -> "float",
+          "CPUSPEEDINGHZ" -> "float",
+          "BUSSPEEDINMHZ" -> "string",
+          "L2CACHEINKB" -> "int",
+          "L3CACHEINMB" -> "float",
+          "CORES" -> "int",
+          "EM64T" -> "string",
+          "HT" -> "string",
+          "VT" -> "string",
+          "XD" -> "string",
+          "SS" -> "string",
+          "NOTES" -> "string"
+        ),
+        "test/data/CPUSpeed.csv"
+      )
      
-      models = models ++ SparkClassifierModel.train(db, "CPUSPEEDREPAIR", List(
-        "BUSSPEEDINMHZ"
+      models = models ++ SparkClassifierModel.train(db, ID("CPUSPEEDREPAIR"), List(
+        ID("BUSSPEEDINMHZ")
       ), db.table("CPUSPEED"))
-      models.keys must contain("BUSSPEEDINMHZ")
+      models.keys must contain(ID("BUSSPEEDINMHZ"))
     }
 
     "Not choke when training multiple columns" >> {
-      models = models ++ SparkClassifierModel.train(db, "CPUSPEEDREPAIR", List(
-        "CORES",
-        "TECHINMICRONS"
+      models = models ++ SparkClassifierModel.train(db, ID("CPUSPEEDREPAIR"), List(
+        ID("CORES"),
+        ID("TECHINMICRONS")
       ), db.table("CPUSPEED"))
-      models.keys must contain("CORES", "TECHINMICRONS")
+      models.keys must contain(eachOf(ID("CORES"), ID("TECHINMICRONS")))
     }
 
     "Make reasonable predictions" >> {
@@ -73,8 +82,8 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
         val predictions = 
           rowids.map {
             rowid => (
-              predict("CORES", rowid.asString),
-              trueValue("CORES", rowid.asString)
+              predict(ID("CORES"), rowid.asString),
+              trueValue(ID("CORES"), rowid.asString)
             )
           }
         //println(predictions.toList)
@@ -87,21 +96,21 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
     }
 
     "Produce reasonable explanations" >> {
-      explain("BUSSPEEDINMHZ", "3") must not contain("The classifier isn't willing to make a guess")
-      explain("TECHINMICRONS", "22") must not contain("The classifier isn't willing to make a guess")
-      explain("CORES", "20") must not contain("The classifier isn't willing to make a guess")
+      explain(ID("BUSSPEEDINMHZ"), "3") must not contain("The classifier isn't willing to make a guess")
+      explain(ID("TECHINMICRONS"), "22") must not contain("The classifier isn't willing to make a guess")
+      explain(ID("CORES"), "20") must not contain("The classifier isn't willing to make a guess")
 
     }
   }
 
   "When combined with a TI Lens, the SparkClassifier Model" should {
     "Be trainable" >> {
-      db.loadTable("RATINGS1", new File("test/data/ratings1.csv"))
+      db.loadTable(targetTable = Some(ID("RATINGS1")), sourceFile = "test/data/ratings1.csv")
       val (model, idx, hints) = SparkClassifierModel.train(db,
-        "RATINGS1REPAIRED", 
-        List("RATING"), 
+        ID("RATINGS1REPAIRED"), 
+        List(ID("RATING")), 
         db.table("RATINGS1")
-      )("RATING")
+      )(ID("RATING"))
       val nullRow = querySingleton("SELECT ROWID() FROM RATINGS1 WHERE RATING IS NULL")
       //println(nullRow)
       val guess = model.bestGuess(idx, List(nullRow), List()) 

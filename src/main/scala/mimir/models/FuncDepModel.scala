@@ -25,10 +25,10 @@ object FuncDepModel
 {
   val logger = Logger(org.slf4j.LoggerFactory.getLogger(getClass.getName))
 
-  def train(db: Database, name: String, cols: Seq[String], query:Operator): Map[String,(Model,Int,Seq[Expression])] =
+  def train(db: Database, name: ID, cols: Seq[ID], query:Operator): Map[ID,(Model,Int,Seq[Expression])] =
   {
     cols.map( (col) => {
-      val modelName = s"$name:$col"
+      val modelName = ID(name,":",col)
       var sourceCol = 0
       val model =
         db.models.getOption(modelName) match {
@@ -42,11 +42,11 @@ object FuncDepModel
         }
         val sourceColName=query.columnNames(sourceCol)
         val tableName = QueryNamer(query)
-      col -> (
-        model,                         // The model for the column
-        0,                             // The model index of the column's replacement variable
-        db.query(query.project(sourceColName)){_.tuples}.flatten  // 'Hints' for the model -- The dependent column values
-      )
+      (col, (
+              model,                         // The model for the column
+              0,                             // The model index of the column's replacement variable
+              db.query(query.projectByID(sourceColName)){_.tuples}.flatten  // 'Hints' for the model -- The dependent column values
+            ))
     }).toMap
   }
   
@@ -69,10 +69,27 @@ object FuncDepModel
         inEdge = a
       }
     }
-    val columns = model.schema.map{_._1}
+    val columns:Seq[ID] = model.schema.map{_._1}
     model.inEdgeCol = columns(inEdge)
-    val results = db.query(Aggregate(Seq(Var(model.inEdgeCol),Var(model.colName)),Seq(AggFunction("COUNT", false, Seq(), "count1")),query).project(model.inEdgeCol,model.colName,"count1")){_.tuples}
-                      .filterNot(row => row(1).isInstanceOf[NullPrimitive]).sortBy(_(2).asInt)
+    val results = 
+      db.query(
+        Aggregate(
+          Seq(
+            Var(model.inEdgeCol),
+            Var(model.colName)
+          ),
+          Seq(
+            AggFunction(ID("count"), false, Seq(), ID("COUNT1"))
+          ),
+          query
+        )
+        .projectByID(
+          model.inEdgeCol,
+          model.colName,
+          ID("COUNT1")
+        )
+      ){_.tuples}
+      .filterNot(row => row(1).isInstanceOf[NullPrimitive]).sortBy(_(2).asInt)
     model.dependencyMap = results.map(arr => arr(0) -> arr(1)).toMap
     model.weightedList = results.map(row => (row(1),row(2).asDouble))
     inEdge
@@ -81,12 +98,12 @@ object FuncDepModel
 }
 
 @SerialVersionUID(1001L)
-class SimpleFuncDepModel(name: String, val tableName:String, val colName: String, val schema:Seq[(String,Type)])
+class SimpleFuncDepModel(name: ID, val tableName:ID, val colName: ID, val schema:Seq[(ID,Type)])
   extends Model(name)
 {
   val colIdx:Int = schema.map{_._1}.indexOf(colName)
   val feedback = scala.collection.mutable.Map[String,PrimitiveValue]()
-  var inEdgeCol = ""
+  var inEdgeCol = ID("")
   var maxStrength = 0.0
   var dependencyMap = scala.collection.immutable.Map[PrimitiveValue,PrimitiveValue]() //inEdge->col
   var weightedList = IndexedSeq[(PrimitiveValue,Double)]()

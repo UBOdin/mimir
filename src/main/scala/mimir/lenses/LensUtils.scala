@@ -9,45 +9,59 @@ import mimir.ctables._
 object LensUtils {
 
   def extractModelsByColumn(
-    modelMap: Seq[(String, Seq[(String, (Model, Int, Seq[Expression]))])]
-  ): (Map[String,Seq[(String,Int,Seq[Expression],String)]], Seq[Model]) =
+    modelMap: Seq[
+      ( ID,                   // Model Group
+        Seq[                  
+          ( ID,               // Column
+            ( Model,          // Model Name
+              Int,            // Model Index
+              Seq[Expression] // Hint Expressions
+            )
+          )
+        ])
+    ]
+  ): (Map[ID,Seq[(ID,Int,Seq[Expression],ID)]], Seq[Model]) =
   {
-    val candidateModels =
+    val modelsByColumn: Seq[(ID, (ID, Int, Seq[Expression], ID))] =
       modelMap.
         flatMap {
           case (modelGroup, perColumnImplementations) =>
             perColumnImplementations.map {
-              case (col, (model, idx, hints)) => 
+              case (col:ID, (model, idx, hints)) => 
                 (col, (model.name, idx, hints, modelGroup))
             }
-        }.
-        groupBy(_._1).            // Group candidates by target column
-        map( x => (x._1, x._2.map(_._2)) )   // Convert to Column -> List[(Model, Idx, Category)]
+        }
+    val candidateModels:Map[ID, Seq[(ID, Int, Seq[Expression], ID)]] =
+      modelsByColumn
+        .groupBy { _._1 }            // Group candidates by target column
+        .mapValues { _.map(_._2) }   // Convert to Column -> List[(Model, Idx, Category)]
 
-    val modelEntities =
-      modelMap.                // Start with the models
-        flatMap { _._2.map { _._2._1 } }.
-                               // We only care about the models themselves
-        groupBy( _.name ).     // Organize by model name
-        map( _._2.head ).      // We only need one copy of each model
-        toSeq
+    val allModels: Seq[Model] =
+      modelMap                 // Start with the models
+        .flatMap { _._2.map { _._2._1 } }
+
+    val modelEntities: Seq[Model] =
+      allModels                // We only care about the models themselves
+        .groupBy( _.name )     // Organize by model name
+        .toSeq
+        .map { (_:(ID, Seq[Model]))._2.head }     // We only need one copy of each model
 
     (candidateModels, modelEntities)
   }
  
   def buildMetaModel(
-    metaModel: String, 
+    metaModel: ID, 
     metaModelIdx: Int,
     metaModelArgs: Seq[Expression],
     metaModelHints: Seq[Expression],
-    inputModels: Seq[(String,Int,Seq[Expression],String)], 
+    inputModels: Seq[(ID,Int,Seq[Expression],ID)], 
     inputArgs: Seq[Expression]
   ): Expression =
   {
     val inputVGTerms =
       inputModels.
         map({case (model, idx, hints, cat) => (
-          StringPrimitive(cat), 
+          StringPrimitive(cat.id), 
           VGTerm(model, idx, inputArgs, hints)
         )})
 

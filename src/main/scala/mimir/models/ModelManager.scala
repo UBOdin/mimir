@@ -5,7 +5,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.Database
 import mimir.algebra._
 import mimir.util._
-
+import mimir.metadata.{MetadataMap, MetadataManyMany}
 /**
  * The ModelManager handles model persistence.  
  *
@@ -28,47 +28,30 @@ class ModelManager(db:Database)
   val decoders = Map[String,((Database, Array[Byte]) => Model)](
     "JAVA"          -> decodeSerializable _
   )
-  val cache = scala.collection.mutable.Map[String,Model]()
-  val modelTable = "MIMIR_MODELS"
-  val ownerTable = "MIMIR_MODEL_OWNERS"
+  val cache = scala.collection.mutable.Map[ID,Model]()
+  var modelTable: MetadataMap = null
+  var ownerTable: MetadataManyMany = null 
 
   /**
    * Prepare the backend database for use with the ModelManager
    */
   def init(): Unit =
   {
-    if(db.metadataBackend.getTableSchema(modelTable).isEmpty){
-      db.metadataBackend.update(s"""
-        CREATE TABLE $modelTable(
-          name varchar(100), 
-          encoded text,
-          decoder varchar(30),
-          PRIMARY KEY (name)
-        )
-      """)
-    }
-    if(db.metadataBackend.getTableSchema(ownerTable).isEmpty){
-      db.metadataBackend.update(s"""
-        CREATE TABLE $ownerTable(
-          model varchar(100), 
-          owner varchar(100)
-        )
-      """)
-    }
+    modelTable = db.metadata.registerMap(ID("MIMIR_MODELS"), Seq(
+      ID("ENCODED") -> TString(),
+      ID("DECODER") -> TString()
+    ))
+    ownerTable = db.metadata.registerManyMany(ID("MIMIR_MODEL_OWNERS"))
   }
 
   /**
    * Declare (and cache) a new Name -> Model association
    */
-  def persist(model:Model): Unit =
+  def persist(model: Model): Unit =
   {
     val (serialized,decoder) = model.serialize
 
-    db.metadataBackend.update(s"""
-      INSERT OR REPLACE INTO $modelTable(name, encoded, decoder)
-             VALUES (?, ?, ?)
-    """, List(
-      StringPrimitive(model.name),
+    modelTable.put(model.name, Seq(
       StringPrimitive(SerializationUtils.b64encode(serialized)),
       StringPrimitive(decoder.toUpperCase)
     ))
@@ -78,18 +61,16 @@ class ModelManager(db:Database)
   /**
    * Remove an existing Name -> Model association if it exists
    */
-  def drop(name:String): Unit =
+  def drop(name: ID): Unit =
   {
-    db.metadataBackend.update(s"""
-      DELETE FROM $modelTable WHERE name = ?
-    """,List(StringPrimitive(name)))
+    modelTable.rm(name)
     cache.remove(name)
   }
 
   /**
    * Retrieve a model by its name
    */
-  def get(name:String): Model =
+  def get(name: ID): Model =
   {
     getOption(name) match {
       case Some(model) => return model
@@ -98,26 +79,43 @@ class ModelManager(db:Database)
   }
 
   /**
+   * Provide model feedback
+   */
+  def feedback(name: ID, idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue)
+  {
+    val model = get(name)
+    feedback(model, idx, args, v)
+  }
+
+  /**
+   * Provide model feedback
+   */
+  def feedback(model: Model, idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue)
+  {
+    model.feedback(idx, args, v)
+    persist(model)
+  }
+
+  /**
    * Retreive a model by its name when it may not be present
    */
-  def getOption(name: String): Option[Model] =
+  def getOption(name: ID): Option[Model] =
   {
     if(!cache.contains(name)){ prefetch(name) }
     return cache.get(name)
   }
   
+  def list() : Seq[ID] =
+    modelTable.keys
+  
   def getAllModels() : Seq[Model] =
-  {
-    db.metadataBackend.resultRows(s"""
-      SELECT name FROM $modelTable
-    """).map( row => get(row(0).asString))
-  }
+    list.map { get(_) }
 
   /**
    * Declare (and cache) a new Name -> Model association, and 
    * assign the model to an owner entity.
    */
-  def persist(model:Model, owner:String): Unit =
+  def persist(model:Model, owner:ID): Unit =
   {
     persist(model);
     associate(model.name, owner);
@@ -126,28 +124,16 @@ class ModelManager(db:Database)
   /**
    * Assign a model to an owner entity
    */
-  def associate(model:String, owner:String): Unit =
-  {
-    db.metadataBackend.update(s"""
-      INSERT INTO $ownerTable(model, owner) VALUES (?,?)
-    """, List(
-      StringPrimitive(model),
-      StringPrimitive(owner)
-    ))
-  }
+  def associate(model:ID, owner:ID): Unit =
+    ownerTable.add(model, owner)
 
   /**
    * Disassociate a model from an owner entity and cascade the delete
    * to the model if this is the last owner
    */
-  def disassociate(model:String, owner:String): Unit =
+  def disassociate(model:ID, owner:ID): Unit =
   {
-    db.metadataBackend.update(s"""
-      DELETE FROM $ownerTable WHERE model = ? AND owner = ?
-    """, List(
-      StringPrimitive(model),
-      StringPrimitive(owner)
-    ))
+    ownerTable.rm(model, owner)
     garbageCollectIfNeeded(model)
   }
 
@@ -155,108 +141,62 @@ class ModelManager(db:Database)
    * Drop an owner cascade the delete to any models owned by the
    * owner entity
    */
-  def dropOwner(owner:String): Unit =
+  def dropOwner(owner:ID): Unit =
   {
     logger.debug(s"Drop Owner: $owner")
     val models = associatedModels(owner)
     logger.debug("Associated: $models")
-    db.metadataBackend.update(s"""
-      DELETE FROM $ownerTable WHERE owner = ?
-    """, List(
-      StringPrimitive(owner)
-    ))
-    for(model <- models) {
-      logger.trace(s"Garbage Collect: $model")
-      garbageCollectIfNeeded(model)
-    }
+    for(model <- models) { disassociate(model, owner) }
   }
 
   /**
    * A list of all models presently associated with a given owner.
    */
-  def associatedModels(owner: String): Seq[String] =
+  def associatedModels(owner: ID): Seq[ID] =
   {
-    db.metadataBackend.resultRows(s"""
-      SELECT model FROM $ownerTable WHERE owner = ?
-    """, List(
-      StringPrimitive(owner)
-    )).map(_(0).asString)
+    ownerTable.getByRHS(owner)
   }
   
   /**
    * A get owner presently associated with a given model.
    */
-  def modelOwner(model: String): Option[String] =
+  def modelOwner(model: ID): Option[ID] =
   {
-    db.metadataBackend.resultRows(s"""
-      SELECT owner FROM $ownerTable WHERE model = ?
-    """, List(
-      StringPrimitive(model)
-    )).map(_(0).asString) match {
-      case Seq() => None
-      case seq:Seq[String] => Some(seq.head)
-    }
+    ownerTable.getByLHS(model)
+      .headOption
   }
 
   /**
    * Prefetch a given model
    */
-  def prefetch(model: String): Unit =
+  def prefetch(model: ID): Unit =
   {
-    prefetchWithRows(
-      db.metadataBackend.resultRows(s"""
-        SELECT decoder, encoded FROM $modelTable WHERE name = ?
-      """, List(
-        StringPrimitive(model)
-      ))
-    )
+    modelTable.get(model) match {
+      case Some( (_, encoded) ) => {
+        val decoderImpl:(Array[Byte] => Model) = 
+          decoders.get(encoded(1).asString) match {
+            case None => throw new RAException("Unknown Model Decoder '"+encoded(1).asString+"'")
+            case Some(impl) => impl(db, _)
+          }
+
+        val model = decoderImpl( SerializationUtils.b64decode(encoded(0).asString) )
+        cache.put(model.name, model)
+      }
+      case None => {}
+    }
   }
 
   /**
    * Prefetch models for a given owner
    */
-  def prefetchForOwner(owner:String): Unit =
+  def prefetchForOwner(owner: ID): Unit =
   {
-    prefetchWithRows(
-      db.metadataBackend.resultRows(s"""
-        SELECT m.decoder, m.encoded 
-        FROM $modelTable m, $ownerTable o
-        WHERE m.name = o.name 
-          AND o.owner = ?
-      """, List(
-        StringPrimitive(owner)
-      ))
-    )
+    for(model <- ownerTable.getByRHS(owner)){ prefetch(model) }
   }
 
-  private def prefetchWithRows(rows:TraversableOnce[Seq[PrimitiveValue]]): Unit =
+  private def garbageCollectIfNeeded(model: ID): Unit =
   {
-    rows.foreach({
-      case List(decoder, encoded) => {
-        val decoderImpl:(Array[Byte] => Model) = 
-          decoders.get(decoder.asString) match {
-            case None => throw new RAException("Unknown Model Decoder '"+decoder+"'")
-            case Some(impl) => impl(db, _)
-          }
-
-        val model = decoderImpl( SerializationUtils.b64decode(encoded.asString) )
-        cache.put(model.name, model)
-      }
-
-      case _ => 
-        throw new SQLException("Error on backend: Expecting only 2 fields in result")
-    })
-  }
-
-  private def garbageCollectIfNeeded(model: String): Unit =
-  {
-    val otherOwners = 
-      db.metadataBackend.resultRows(s"""
-        SELECT * FROM $ownerTable WHERE model = ?
-      """, List(
-        StringPrimitive(model)
-      ))
-    if(otherOwners.isEmpty){ drop(model) }
+    if(ownerTable.getByLHS(model).isEmpty) { drop(model) }
   }
 
   private def decodeSerializable(db: Database, data: Array[Byte]): Model =

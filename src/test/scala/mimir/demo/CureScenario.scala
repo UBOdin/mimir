@@ -8,7 +8,7 @@ import mimir.test._
 import mimir.util._
 import LoggerUtils.trace
 import mimir.ctables._
-import mimir.algebra.NullPrimitive
+import mimir.algebra.{NullPrimitive,MissingVariable}
 
 object CureScenario
   extends SQLTestSpecification("CureScenario",  Map("reset" -> "YES"))
@@ -16,9 +16,9 @@ object CureScenario
   //args(skipAll = true)
   
   val dataFiles = List(
-    new File("test/data/cureSource.csv"),
-    new File("test/data/cureLocations.csv"),
-    new File("test/data/curePorts.csv")
+    "test/data/cureSource.csv",
+    "test/data/cureLocations.csv",
+    "test/data/curePorts.csv"
   )
 
   val cureQuery = """
@@ -43,7 +43,7 @@ object CureScenario
 
   "The CURE Scenario" should {
     Fragment.foreach(dataFiles){ table => {
-      val basename = table.getName().replace(".csv", "").toUpperCase
+      val basename = new File(table).getName().replace(".csv", "").toUpperCase
       s"Load '$table'" >> {
         time(s"Load '$table'") {
           //update(s"LOAD '$table';") 
@@ -52,13 +52,10 @@ object CureScenario
         time(s"Materialize '$basename'"){
           update(s"ALTER VIEW $basename MATERIALIZE;")
         }
-        db.explainer.explainEverything(
-          db.sql.convert(stmt(s"SELECT * FROM $basename")
-            .asInstanceOf[net.sf.jsqlparser.statement.select.Select])) must not beEmpty;
+        db.uncertainty.explainEverything(
+          db.table(basename)) must not beEmpty;
         //this still blows up - something with getColumns on vgterm during lookup query 
-        /*db.explainer.explainEverything(
-          db.sql.convert(stmt(s"SELECT * FROM $basename")
-            .asInstanceOf[net.sf.jsqlparser.statement.select.Select]))
+        /*db.explainer.explainEverything(db.table(basename))
               .flatMap( rs => rs.all(db)) must not beEmpty;*/
         
         db.tableExists(basename) must beTrue
@@ -120,11 +117,19 @@ object CureScenario
     
      "Run the CURE Query" >> {
        LoggerUtils.trace(
-					"mimir.sql.SparkBackend"
+					// "mimir.backend.SparkBackend",
+          // "mimir.algebra.Typechecker"
 				){ 
-         time("CURE Query"){
-           val qr = query(cureQuery){ _.toList.map { row => {1} } }.length
-         }
+          try {
+            time("CURE Query"){
+              val qr = query(cureQuery){ _.toList.map { row => {1} } }.length
+            }
+          } catch {
+            case mv: MissingVariable => 
+              mv.printStackTrace()
+              println(mv.context)
+              ko
+          }
   //         failed type detection --> run type inferencing
   //         --> repair with repairing tool
        }

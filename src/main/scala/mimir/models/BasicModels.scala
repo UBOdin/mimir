@@ -4,7 +4,7 @@ import mimir.algebra._
 
 import scala.util._
 
-object UniformDistribution extends Model("UNIFORM") with Serializable {
+object UniformDistribution extends Model(ID("UNIFORM")) with Serializable {
   def argTypes(idx: Int) = List(TFloat(), TFloat())
   def hintTypes(idx: Int) = Seq()
   def varType(idx: Int, argTypes: Seq[Type]) = TFloat()
@@ -45,7 +45,7 @@ object UniformDistribution extends Model("UNIFORM") with Serializable {
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Double = 0.5
 }
 
-case class NoOpModel(override val name: String, reasonText:String) 
+case class NoOpModel(override val name: ID, reasonText:String) 
   extends Model(name) 
   with Serializable 
 {
@@ -62,7 +62,7 @@ case class NoOpModel(override val name: String, reasonText:String)
   def confidence(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Double = 0.5 // Random, so...
 }
 
-case class WarningModel(override val name: String, keyTypes: Seq[Type])
+case class WarningModel(override val name: ID, keyTypes: Seq[Type])
   extends Model(name)
   with Serializable
   with SourcedFeedback
@@ -79,5 +79,5 @@ case class WarningModel(override val name: String, keyTypes: Seq[Type])
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = setFeedback(0, args, v)
   def isAcknowledged (idx: Int, args: Seq[PrimitiveValue]): Boolean = hasFeedback(0, args)
   def confidence(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Double = 0.0
-  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) = args.map { _.toString }.mkString(":::")
+  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) = ID(args.map { _.toString }.mkString(":::"))
 }

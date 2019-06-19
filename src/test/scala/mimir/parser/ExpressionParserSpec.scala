@@ -11,12 +11,12 @@ class ExpressionParserSpec extends Specification
   {
     "Extract from sequences of ORs" >> {
       ExpressionUtils.getDisjuncts(
-        Var("A").or(
-          Var("B").or(
-            Var("C")
+        Var(ID("A")).or(
+          Var(ID("B")).or(
+            Var(ID("C"))
           )
         )
-      ) must contain(allOf[Expression](Var("A"), Var("B"), Var("C")))
+      ) must contain(allOf[Expression](Var(ID("A")), Var(ID("B")), Var(ID("C"))))
     }
   }
 
@@ -25,14 +25,17 @@ class ExpressionParserSpec extends Specification
     "Handle sequences of ORs" >> {
       ExpressionUtils.getDisjuncts(
         ExpressionParser.expr("(A) OR (B) OR (C)") 
-      ) must contain(allOf[Expression](Var("A"), Var("B"), Var("C")))
+      ) must contain(allOf[Expression](Var(ID("A")), Var(ID("B")), Var(ID("C"))))
     }
     "Handle sequences of ANDs" >> {
       ExpressionUtils.getConjuncts(
         ExpressionParser.expr("(A) AND (B) AND (C)") 
-      ) must contain(allOf[Expression](Var("A"), Var("B"), Var("C")))
+      ) must contain(allOf[Expression](Var(ID("A")), Var(ID("B")), Var(ID("C"))))
     }
-
+    "Handle escaped quotes" >> {
+      ExpressionParser.expr("'fun n'' games'")  must 
+       be equalTo StringPrimitive("fun n' games")
+    }
   }
 
 }

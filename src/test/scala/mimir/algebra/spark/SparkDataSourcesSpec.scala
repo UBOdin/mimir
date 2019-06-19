@@ -15,7 +15,7 @@ import mimir.algebra.AggFunction
 import mimir.util.LoadJDBC
 import mimir.algebra.BoolPrimitive
 import mimir.test.TestTimer
-import mimir.sql.RABackend
+import mimir.backend.QueryBackend
 import mimir.util.BackupUtils
 import com.github.potix2.spark.google.spreadsheets.SparkSpreadsheetService
 
@@ -53,7 +53,16 @@ object SparkDataSourcesSpec
     
     "For JSON data source" should {
       sequential
-      db.loadTable("J", new File("test/data/jsonsample.txt"), true, None, true, false, Map(), "json" )   
+      db.loadTable(
+        sourceFile = "test/data/jsonsample.txt", 
+        targetTable = Some(ID("J")), 
+        force = true, 
+        targetSchema = None, 
+        inferTypes = Some(true), 
+        detectHeaders = Some(false), 
+        format = ID("json"),
+        loadOptions = Map()
+      )   
       
       "Be able to query from a json source" >> {
             
@@ -70,7 +79,7 @@ object SparkDataSourcesSpec
       "Be able to output to json" >> {
         val outputFilename = "jsonsampleout"   
         val result = db.backend.execute(db.table("J"))
-        db.backend.asInstanceOf[RABackend].writeDataSink(result, "json", Map(), Some(outputFilename))
+        db.backend.writeDataSink(result, "json", Map(), Some(outputFilename))
         val outfile = new File(outputFilename + "/_SUCCESS")
         val outputSuccess = outfile.exists() 
         BackupUtils.deleteFile(new File(outputFilename))
@@ -81,10 +90,19 @@ object SparkDataSourcesSpec
     
     "For Google Sheet data source" should { 
       sequential
-      db.loadTable("G", new File("1-9fKx9f1OV-J2P2LtOM33jKfc5tQt4DJExSU3xaXDwU/Sheet1"), true, None, true, false,
-            Map("serviceAccountId" -> "vizier@api-project-378720062738.iam.gserviceaccount.com",
-                          "credentialPath" -> db.backend.asInstanceOf[mimir.sql.SparkBackend].sheetCred),
-                      "com.github.potix2.spark.google.spreadsheets" ) 
+      db.loadTable(
+        sourceFile = "1-9fKx9f1OV-J2P2LtOM33jKfc5tQt4DJExSU3xaXDwU/Sheet1", 
+        targetTable = Some(ID("G")), 
+        force = true, 
+        targetSchema = None, 
+        inferTypes = Some(true), 
+        detectHeaders = Some(false),
+        format = ID("com.github.potix2.spark.google.spreadsheets"),
+        loadOptions = Map(
+          "serviceAccountId" -> "vizier@api-project-378720062738.iam.gserviceaccount.com",
+          "credentialPath" -> db.backend.asInstanceOf[mimir.backend.SparkBackend].sheetCred
+        )
+      ) 
      
       "Be able to query from a google sheet source" >> {
         val result = query("""
@@ -94,7 +112,20 @@ object SparkDataSourcesSpec
         val gschema = db.typechecker.schemaOf(db.table("G")) 
         
         gschema must contain( 
-            ("JOBTITLE",TString()), ("ENDYEAR",TFloat()), ("STARTYEAR",TFloat()), ("YEARSEXPERIENCE",TFloat()), ("EMPLOYMENTTYPE",TString()), ("TIMESTAMP",TString()), ("ENDWAGE",TFloat()), ("STARTWAGE",TFloat()), ("WAGEPERIOD",TString()), ("STATE",TString()), ("GENDER",TString()), ("NEARESTLARGECITY",TString()), ("COMPANYSIZE",TFloat()))
+            (ID("JOBTITLE"),TString()), 
+            (ID("ENDYEAR"),TFloat()), 
+            (ID("STARTYEAR"),TFloat()), 
+            (ID("YEARSEXPERIENCE"),TFloat()), 
+            (ID("EMPLOYMENTTYPE"),TString()), 
+            (ID("TIMESTAMP"),TString()), 
+            (ID("ENDWAGE"),TFloat()), 
+            (ID("STARTWAGE"),TFloat()), 
+            (ID("WAGEPERIOD"),TString()), 
+            (ID("STATE"),TString()), 
+            (ID("GENDER"),TString()), 
+            (ID("NEARESTLARGECITY"),TString()), 
+            (ID("COMPANYSIZE"),TFloat())
+          )
         					
         
         result.length must be equalTo 213
@@ -109,14 +140,14 @@ object SparkDataSourcesSpec
   			""")
         
         val gsheet = SparkSpreadsheetService("vizier@api-project-378720062738.iam.gserviceaccount.com", 
-                    new File(db.backend.asInstanceOf[mimir.sql.SparkBackend].sheetCred))
+                    new File(db.backend.asInstanceOf[mimir.backend.SparkBackend].sheetCred))
                       .findSpreadsheet("1-9fKx9f1OV-J2P2LtOM33jKfc5tQt4DJExSU3xaXDwU")
         gsheet.deleteWorksheet("Sheet2")
         val outputFilename = "1-9fKx9f1OV-J2P2LtOM33jKfc5tQt4DJExSU3xaXDwU/Sheet2"   
-        val result = db.backend.execute(db.table("G_MV"))
-        db.backend.asInstanceOf[RABackend].writeDataSink(result, "com.github.potix2.spark.google.spreadsheets", 
+        val result = db.backend.execute(db.compileBestGuess(db.table("G_MV")))
+        db.backend.writeDataSink(result, "com.github.potix2.spark.google.spreadsheets", 
             Map("serviceAccountId" -> "vizier@api-project-378720062738.iam.gserviceaccount.com",
-                "credentialPath" -> db.backend.asInstanceOf[mimir.sql.SparkBackend].sheetCred), Some(outputFilename))
+                "credentialPath" -> db.backend.asInstanceOf[mimir.backend.SparkBackend].sheetCred), Some(outputFilename))
         
         val outputSuccess = true
         outputSuccess must be equalTo true 
@@ -126,7 +157,16 @@ object SparkDataSourcesSpec
     
     "For XML data source" should { 
       sequential
-      db.loadTable("X", new File("test/data/xmlsample.xml"), true, None, false, false, Map("rowTag" ->	"book"), "xml" ) 
+      db.loadTable(
+        sourceFile = "test/data/xmlsample.xml", 
+        targetTable = Some(ID("X")), 
+        force = true, 
+        targetSchema = None, 
+        inferTypes = Some(false), 
+        detectHeaders = Some(false),
+        format = ID("xml"),
+        loadOptions = Map("rowTag" -> "book")
+      ) 
       
       "Be able to query from a xml source" >> {
             
@@ -142,7 +182,7 @@ object SparkDataSourcesSpec
       "Be able to output to xml" >> {
         val outputFilename = "xmlsampleout"   
         val result = db.backend.execute(db.table("X"))
-        db.backend.asInstanceOf[RABackend].writeDataSink(result, "xml", Map(), Some(outputFilename))
+        db.backend.writeDataSink(result, "xml", Map(), Some(outputFilename))
         val outfile = new File(outputFilename + "/_SUCCESS")
         val outputSuccess = outfile.exists() 
         BackupUtils.deleteFile(new File(outputFilename))
@@ -153,8 +193,15 @@ object SparkDataSourcesSpec
     
     "For Excel data source" should { 
       sequential
-      db.loadTable("E", new File("test/data/excel.xlsx"), true, None, true, true, 
-                      Map("sheetName" -> "SalesOrders", // Required
+      db.loadTable(
+        sourceFile = "test/data/excel.xlsx",
+        targetTable = Some(ID("E")), 
+        force = true, 
+        targetSchema = None, 
+        inferTypes = Some(true), 
+        detectHeaders = Some(true), 
+        format = ID("com.crealytics.spark.excel"),
+        loadOptions = Map("sheetName" -> "SalesOrders", // Required
                           "dataAddress" -> "'SalesOrders'!A1",
                           "useHeader" -> "false", // Required
                           "treatEmptyValuesAsNulls" -> "true", // Optional, default: true
@@ -165,8 +212,9 @@ object SparkDataSourcesSpec
                           "dateFormat" -> "M/d/yyyy", // Optional, default: yyyy-mm-dd
                           "timestampFormat" -> "MM-dd-yyyy hh:mm:ss", // Optional, default: yyyy-mm-dd hh:mm:ss[.fffffffff]
                           //"maxRowsInMemory" -> "20", // Optional, default None. If set, uses a streaming reader which can help with big files
-                          //"excerptSize" -> "10"*/), // Optional, default: 10. If set and if schema inferred, number of rows to infer schema from
-                      "com.crealytics.spark.excel" ) 
+                          //"excerptSize" -> "10"*/ // Optional, default: 10. If set and if schema inferred, number of rows to infer schema from
+        )
+      ) 
            
       
       "Be able to query from a excel source" >> {
@@ -175,8 +223,15 @@ object SparkDataSourcesSpec
         """)(_.toList.map(_.tuple.toList)).toList
         
         db.typechecker.schemaOf(db.table("E")) must be equalTo 
-         Seq(("ORDERDATE",TString()), ("REGION",TString()), ("REP",TString()), 
-             ("ITEM",TString()), ("UNITS",TInt()), ("UNIT_COST",TFloat()), ("TOTAL",TFloat()))
+         Seq(
+          ID("ORDERDATE") -> TString(), 
+          ID("REGION") -> TString(), 
+          ID("REP") -> TString(), 
+          ID("ITEM") -> TString(), 
+          ID("UNITS") -> TInt(), 
+          ID("UNIT_COST") -> TFloat(), 
+          ID("TOTAL") -> TFloat()
+        )
         
         result.length must be equalTo 43
         result.head.length must be equalTo 7
@@ -185,7 +240,7 @@ object SparkDataSourcesSpec
       "Be able to output to excel" >> {
         val outputFilename = "xmlsampleout.xlsx"   
         val result = db.backend.execute(db.table("E"))
-        db.backend.asInstanceOf[RABackend].writeDataSink(result, "com.crealytics.spark.excel", 
+        db.backend.writeDataSink(result, "com.crealytics.spark.excel", 
             Map("dataAddress" -> "'SalesOrders'!A1", "useHeader" -> "true"), Some(outputFilename))
         val outfile = new File(outputFilename)
         val outputSuccess = outfile.exists() 
@@ -240,7 +295,10 @@ object SparkDataSourcesSpec
     "For data sources in S3" should {  
       sequential
       "Be able to stage a csv file to s3 and query from it" >> {
-        db.loadTable("STAGETOS3CSV", "test/r_test/r.csv")
+        db.loadTable(
+          sourceFile = "test/r_test/r.csv",
+          targetTable = Some(ID("STAGETOS3CSV"))
+        )
         
         val result = query("""
           SELECT * FROM STAGETOS3CSV
@@ -258,23 +316,26 @@ object SparkDataSourcesSpec
         
       }
       
-      
       "Be able to query from a csv source already in s3" >> {
-        db.loadTable("S3CSV", "s3n://mimir-test-data/test/r_test/r.csv")
+        skipped("Needs to be rewritten to not require hostname hacks"); ko
+        // db.loadTable(
+        //   sourceFile = "s3n://mimir-test-data/test/r_test/r.csv",
+        //   targetTable = Some(ID("S3CSV"))
+        // )
         
-        val result = query("""
-          SELECT * FROM S3CSV
-        """)(_.toList.map(_.tuple.toList)).toList
+        // val result = query("""
+        //   SELECT * FROM S3CSV
+        // """)(_.toList.map(_.tuple.toList)).toList
         
-        result must be equalTo List(
-         List(i(1), i(2), i(3)), 
-         List(i(1), i(3), i(1)), 
-         List(i(2), NullPrimitive(), i(1)), 
-         List(i(1), i(2), NullPrimitive()), 
-         List(i(1), i(4), i(2)), 
-         List(i(2), i(2), i(1)), 
-         List(i(4), i(2), i(4))   
-        )
+        // result must be equalTo List(
+        //  List(i(1), i(2), i(3)), 
+        //  List(i(1), i(3), i(1)), 
+        //  List(i(2), NullPrimitive(), i(1)), 
+        //  List(i(1), i(2), NullPrimitive()), 
+        //  List(i(1), i(4), i(2)), 
+        //  List(i(2), i(2), i(1)), 
+        //  List(i(4), i(2), i(4))   
+        // )
         
       }
     }

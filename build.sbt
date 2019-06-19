@@ -130,7 +130,8 @@ libraryDependencies ++= Seq(
   ////////////////////// Command-Line Interface Utilities //////////////////////
   "org.rogach"                    %%  "scallop"                  % "0.9.5",
   "org.jline"                     %   "jline"                    % "3.2.0",
-  "info.mimirdb"                  %   "jsqlparser"               % "1.0.3",
+  "info.mimirdb"                  %%  "sparsity"                 % "1.0",
+  "com.lihaoyi"                   %%  "fastparse"                % "2.1.0",
 
   ////////////////////// Dev Tools -- Logging, Testing, etc... //////////////////////
   "com.typesafe.scala-logging"    %%  "scala-logging-slf4j"      % "2.1.2",
@@ -138,10 +139,10 @@ libraryDependencies ++= Seq(
   "org.specs2"                    %%  "specs2-core"              % "3.8.4" % "test",
   "org.specs2"                    %%  "specs2-matcher-extra"     % "3.8.4" % "test",
   "org.specs2"                    %%  "specs2-junit"             % "3.8.4" % "test",
-  "org.clapper"                   %%  "classutil" 				 % "1.4.0",
-  "com.amazonaws" 				  %   "aws-java-sdk-s3" 		 % "1.11.234",
-  "ch.cern.sparkmeasure" 		  %%  "spark-measure" 			 % "0.13",
-  "org.scala-lang" 				  %   "scala-compiler" 			 % scalaVersion.value,
+  "org.clapper"                   %%  "classutil"                % "1.4.0",
+  "com.amazonaws"                 %   "aws-java-sdk-s3"          % "1.11.234",
+  "ch.cern.sparkmeasure"          %%  "spark-measure"            % "0.13",
+  "org.scala-lang"                %   "scala-compiler"           % scalaVersion.value,
   
   //////////////////////// Data Munging Tools //////////////////////
   "com.github.nscala-time"        %%  "nscala-time"              % "1.2.0",
@@ -165,43 +166,50 @@ libraryDependencies ++= Seq(
   //   exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
     
   //spark ml
-  "org.apache.spark" 			  %   "spark-sql_2.11" 		 	  % "2.4.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
-  "org.apache.spark" 			  %   "spark-mllib_2.11" 	  	  % "2.4.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
-  "org.apache.spark" 			  %   "spark-hive_2.11" 	 	  % "2.4.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
-  "com.databricks" 				  %   "spark-xml_2.11" 	  	 	  % "0.5.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
-  "com.crealytics" 				  %%  "spark-excel" 		 	  % "0.11.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
-  "com.github.potix2"			  %%  "spark-google-spreadsheets" % "0.6.1",
-  "org.apache.hadoop" 			  %   "hadoop-client" 		 	  % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
-  "org.apache.hadoop" 			  %   "hadoop-aws" 			  	  % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
-  "net.java.dev.jets3t"           %   "jets3t" 				  	  % "0.9.4",
+  "org.apache.spark"         %   "spark-sql_2.11"          % "2.4.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "org.apache.spark"         %   "spark-mllib_2.11"         % "2.4.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "org.apache.spark"         %   "spark-hive_2.11"        % "2.4.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "com.databricks"           %   "spark-xml_2.11"            % "0.5.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "com.crealytics"           %%  "spark-excel"          % "0.11.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "com.github.potix2"        %%  "spark-google-spreadsheets" % "0.6.1",
+  "org.apache.hadoop"        %   "hadoop-client"          % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
+  "org.apache.hadoop"        %   "hadoop-aws"             % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
+  "net.java.dev.jets3t"      %   "jets3t"               % "0.9.4",
  
   //////////////////////// Jung ////////////////////////
   // General purpose graph manipulation library
   // Used to detect and analyze Functional Dependencies
-  "net.sf.jung"                   %   "jung-graph-impl"          % "2.0.1",
-  "net.sf.jung"                   %   "jung-algorithms"          % "2.0.1",
-  "net.sf.jung"                   %   "jung-visualization"       % "2.0.1",
-  "jgraph"                        %   "jgraph"                   % "5.13.0.0",
-  "javax.measure" 				  %   "jsr-275" 				 % "0.9.1",
+  "net.sf.jung"              %   "jung-graph-impl"          % "2.0.1",
+  "net.sf.jung"              %   "jung-algorithms"          % "2.0.1",
+  "net.sf.jung"              %   "jung-visualization"       % "2.0.1",
+  "jgraph"                   %   "jgraph"                   % "5.13.0.0",
+  "javax.measure"            %   "jsr-275"          % "0.9.1",
 
 
   //////////////////////// JDBC Backends //////////////////////
-  "org.xerial"                    %   "sqlite-jdbc"              % "3.16.1",
-  "org.postgresql" 				  %   "postgresql" 				 % "9.4-1201-jdbc41",
+  "org.xerial"               %   "sqlite-jdbc"              % "3.16.1",
+  "org.postgresql"           %   "postgresql" 				 % "9.4-1201-jdbc41",
   /// Explicitly not including MySQL, since it's GPL-licensed.  If you want 
   /// to use MySQL, you're free to compile your own version of Mimir.
 
   ///////////////////  GProM/Native Integration //////////////
-  "net.java.dev.jna"              %    "jna"                     % "4.2.2",
-  "net.java.dev.jna"              %    "jna-platform"            % "4.2.2",
-  "org.apache.logging.log4j" 	  %    "log4j-api" 				 % "2.8.2",
-  "org.apache.logging.log4j" 	  %    "log4j-core" 			 % "2.8.2",
-  "org.apache.logging.log4j" 	  %%   "log4j-api-scala"         % "2.8.2",
+  "net.java.dev.jna"         %    "jna"                     % "4.2.2",
+  "net.java.dev.jna"         %    "jna-platform"            % "4.2.2",
+  "org.apache.logging.log4j" %    "log4j-api" 				 % "2.8.2",
+  "org.apache.logging.log4j" %    "log4j-core" 			 % "2.8.2",
+  "org.apache.logging.log4j" %%   "log4j-api-scala"         % "2.8.2",
   
   ///////////////////// Viztrails Integration ///////////////////
   
-  "net.sf.py4j" 				  %	   "py4j" 				  % "0.10.4",
-  
+  "org.eclipse.jetty"			  %    "jetty-http" 		  % "9.4.10.v20180503",
+  "org.eclipse.jetty" 			  %    "jetty-io" 			  % "9.4.10.v20180503",
+  "org.eclipse.jetty" 			  %    "jetty-security" 	  % "9.4.10.v20180503",
+  "org.eclipse.jetty" 			  %    "jetty-server" 		  % "9.4.10.v20180503",
+  "org.eclipse.jetty" 			  %    "jetty-servlet" 		  % "9.4.10.v20180503" ,
+  "org.eclipse.jetty" 			  %    "jetty-servlets" 	  % "9.4.10.v20180503" ,
+  "org.eclipse.jetty" 			  %    "jetty-util" 		  % "9.4.10.v20180503" ,
+  "org.eclipse.jetty"        	  %    "jetty-webapp"         % "9.4.10.v20180503" ,
+			
   //////////////////////// Visualization //////////////////////
   // For now, all of this happens in python with matplotlib
   // and so we don't need any external dependencies.
@@ -209,33 +217,78 @@ libraryDependencies ++= Seq(
   //"org.sameersingh.scalaplot"     % "scalaplot"               % "0.0.4",
 
   //////////////////////// Linear Solver /////////////////////////
-  "com.github.vagmcs"             %% "optimus"                % "2.0.0",
-  "com.github.vagmcs"             %% "optimus-solver-oj"      % "2.0.0"
+  "com.github.vagmcs"       %% "optimus"                % "2.0.0",
+  "com.github.vagmcs"       %% "optimus-solver-oj"      % "2.0.0"
 )
 
-lazy val parser = taskKey[Unit]("Builds the SQL Parser")
-parser := {
-  val logger = streams.value.log
-  Process(List(
-    "rm", "-f",
-    "src/main/java/mimir/parser/MimirJSqlParser.java",
-    "src/main/java/mimir/parser/MimirJSqlParserConstants.java",
-    "src/main/java/mimir/parser/MimirJSqlParserTokenManager.java",
-    "src/main/java/mimir/parser/ParseException.java",
-    "src/main/java/mimir/parser/SimpleCharStream.java",
-    "src/main/java/mimir/parser/Token.java",
-    "src/main/java/mimir/parser/TokenMgrError.java"
-  )) ! logger match {
-    case 0 => // Success
-    case n => sys.error(s"Could not clean up after old SQL Parser: $n")
+
+////// Generate a Coursier Bootstrap Jar
+// See https://get-coursier.io/docs
+// 
+lazy val bootstrap = taskKey[Unit]("Generate Bootstrap Jar")
+bootstrap := {
+  val logger = ProcessLogger(println(_), println(_))
+  val coursier_bin = "bin/coursier"
+  val coursier_url = "https://git.io/coursier-cli"
+  val mimir_bin = "bin/mimir"
+  if(!java.nio.file.Files.exists(java.nio.file.Paths.get("bin/coursier"))){
+
+    println("Downloading Coursier...")
+    Process(List(
+      "curl", "-L",
+      "-o", coursier_bin,
+      coursier_url
+    )) ! logger match {
+      case 0 => 
+      case n => sys.error(s"Could not download Coursier")
+    }
+    Process(List(
+      "chmod", "+x", coursier_bin
+    )) ! logger
+    println("... done")
   }
+
+  println("Coursier available.  Generating Repository List")
+
+  val resolverArgs = resolvers.value.map { 
+    case r: MavenRepository => Seq("-r", r.root)
+  }.flatten
+
+  val (art, file) = packagedArtifact.in(Compile, packageBin).value
+  val qualified_artifact_name = file.name.replace(".jar", "").replaceFirst("-([0-9.]+)$", "")
+  val full_artifact_name = s"${organization.value}:${qualified_artifact_name}:${version.value}"
+  println("Rendering bootstraps for "+full_artifact_name)
+  for(resolver <- resolverArgs){
+    println("  "+resolver)
+  }
+  println
+  println("Generating Mimir binary")
+
   Process(List(
-    "java -cp lib/javacc.jar javacc",
-    "-OUTPUT_DIRECTORY=src/main/java/mimir/parser",
-    "src/main/java/mimir/parser/JSqlParserCC.jj"
-  ).mkString(" ")) ! logger match {
-    case 0 => // Success
-    case n => sys.error(s"Could not build SQL Parser: $n")
+    coursier_bin,
+    "bootstrap",
+    full_artifact_name,
+    "-f",
+    "-o", "bin/mimir",
+    "-r", "central"
+  )++resolverArgs) ! logger match {
+      case 0 => 
+      case n => sys.error(s"Bootstrap failed")
+  }
+  
+
+  println("Generating Mimir-API Server binary")
+  Process(List(
+    coursier_bin,
+    "bootstrap",
+    full_artifact_name,
+    "-f",
+    "-o", "bin/mimir-api",
+    "-r", "central",
+    "-M", "mimir.MimirVizier"
+  )++resolverArgs) ! logger match {
+      case 0 => 
+      case n => sys.error(s"Bootstrap failed")
   }
 }
 

@@ -6,9 +6,6 @@ import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
 import mimir.util._
-import net.sf.jsqlparser.statement.Statement
-import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody} 
-import net.sf.jsqlparser.statement.drop.Drop
 import org.joda.time.{DateTime, Seconds, Days, Period, Duration}
 
 import scala.collection.mutable.ArrayBuffer
@@ -37,7 +34,7 @@ import org.apache.spark.sql.functions.{desc, asc, col}
  */
 object DetectSeries
 { 
-  def seriesOf(queryDf:DataFrame, querySchema:Seq[(String, Type)], threshold: Double): Dataset[SeriesColumnItem] = {
+  def seriesOf(queryDf:DataFrame, querySchema:Seq[(ID, Type)], threshold: Double): Dataset[SeriesColumnItem] = {
 
     
     // Date columns are automatically series
@@ -52,13 +49,13 @@ object DetectSeries
     // Numeric columns *might* be series
     // Currently test for the case where the inter-query spacing is (mostly) constant.
     // i.e., 1, 2, 3, 4, 5.1, 5.9, ...
-    val seriesColumnNumeric: Seq[(String, Type)] = querySchema.filter(tup => Seq(TInt(),TFloat()).contains(tup._2)).toSeq
+    val seriesColumnNumeric: Seq[(ID, Type)] = querySchema.filter(tup => Seq(TInt(),TFloat()).contains(tup._2)).toSeq
     
     val scnf = seriesColumnNumeric.map(tup => (tup._1, tup._2.toString()))
     val thresh = threshold
     
     val dataframes = seriesColumnNumeric
-      .map { x => queryDf.sort(asc(x._1)).select(x._1) }
+      .map { x => queryDf.sort(asc(x._1.id)).select(x._1.id) }
       
       (dataframes.zipWithIndex.foldLeft(queryDf.sparkSession.createDataset(seriesColumnDate.toSeq)(org.apache.spark.sql.Encoders.kryo[SeriesColumnItem]))( (init, curr) => {
         val (dataframe, idx) = curr
@@ -142,26 +139,32 @@ object DetectSeries
   
   //def bestMatchSeriesColumn(colName: String, colType: Type, queryDf:DataFrame, querySchema:Seq[(String, Type)]): Dataset[(String,Double)] = 
   //  bestMatchSeriesColumn(colName, colType, queryDf, querySchema, seriesOf(queryDf, querySchema, 0.2))
-  def bestMatchSeriesColumn(colName: String, colType: Type, queryDf:DataFrame, querySchema:Seq[(String, Type)], threshold:Double = 0.2): Dataset[(String,Double)] = {
+  def bestMatchSeriesColumn(
+    colName: ID, 
+    colType: Type, 
+    queryDf:DataFrame, 
+    querySchema:Seq[(ID, Type)], 
+    threshold:Double = 0.2
+  ): Dataset[(ID,Double)] = {
     //bestMatchSeriesColumn(db, colName, colType, query, seriesOf(db, query, 0.2))
       
     // Date columns are automatically series
-    val seriesColudmnDate : Seq[(String, Type)] = querySchema.filter(tup => Seq(TDate(),TTimestamp()).contains(tup._2) && !tup._1.equals(colName)).toSeq
+    val seriesColudmnDate : Seq[(ID, Type)] = querySchema.filter(tup => Seq(TDate(),TTimestamp()).contains(tup._2) && !tup._1.equals(colName)).toSeq
 
     
     // Numeric columns *might* be series
     // Currently test for the case where the inter-query spacing is (mostly) constant.
     // i.e., 1, 2, 3, 4, 5.1, 5.9, ...
-    val seriesColumnNumeric: Seq[(String, Type)] = querySchema.filter(tup => Seq(TInt(),TFloat()).contains(tup._2) && !tup._1.equals(colName)).toSeq
+    val seriesColumnNumeric: Seq[(ID, Type)] = querySchema.filter(tup => Seq(TInt(),TFloat()).contains(tup._2) && !tup._1.equals(colName)).toSeq
     
     val scnf = (seriesColumnNumeric ++ seriesColudmnDate).map(tup => (tup._1, tup._2.toString()))
     val dataframes = 
-      seriesColumnNumeric.map { x => queryDf.sort(asc(x._1)).select(x._1) }  ++ 
-      seriesColudmnDate.map { x => queryDf.sort(asc(x._1)).select(x._1) }
+      seriesColumnNumeric.map { x => queryDf.sort(asc(x._1.id)).select(x._1.id) }  ++ 
+      seriesColudmnDate.map { x => queryDf.sort(asc(x._1.id)).select(x._1.id) }
       
       dataframes.foreach(df => df.cache())
       
-      (dataframes.zipWithIndex.foldLeft(queryDf.sparkSession.createDataset(Seq())(Encoders.product[(String,Double)]))( (init, curr) => {
+      (dataframes.zipWithIndex.foldLeft(queryDf.sparkSession.createDataset(Seq())(Encoders.product[(ID,Double)]))( (init, curr) => {
         val (dataframe, idx) = curr
         val seriesColumnName = scnf(idx)._1
         val curTypes = (querySchema.toMap.getOrElse(seriesColumnName,TInt()), colType)
@@ -175,18 +178,18 @@ object DetectSeries
           if(dfrow.isNullAt(relStdDevIdx)) Double.MaxValue else dfrow.getDouble(relStdDevIdx)
         } else 0.0
         if(relativeStdDev < threshold  ) {
-          val rowWindowSpeci = Window.partitionBy(lit(0)).orderBy(queryDf.col(seriesColumnName))  
-          val rowWindowDfi = queryDf.sort(desc(seriesColumnName)).filter(not(isnull(col(seriesColumnName)))).select(col(seriesColumnName), col(colName))
-                              .withColumn("prev0", lag(col(seriesColumnName), 1).over(rowWindowSpeci))
-                              .withColumn("next0", lead(col(seriesColumnName), 1).over(rowWindowSpeci))
-                              .withColumn("prev1", lag(col(colName), 1).over(rowWindowSpeci))
-                              .withColumn("next1", lead(col(colName), 1).over(rowWindowSpeci))
+          val rowWindowSpeci = Window.partitionBy(lit(0)).orderBy(queryDf.col(seriesColumnName.id))  
+          val rowWindowDfi = queryDf.sort(desc(seriesColumnName.id)).filter(not(isnull(col(seriesColumnName.id)))).select(col(seriesColumnName.id), col(colName.id))
+                              .withColumn("prev0", lag(col(seriesColumnName.id), 1).over(rowWindowSpeci))
+                              .withColumn("next0", lead(col(seriesColumnName.id), 1).over(rowWindowSpeci))
+                              .withColumn("prev1", lag(col(colName.id), 1).over(rowWindowSpeci))
+                              .withColumn("next1", lead(col(colName.id), 1).over(rowWindowSpeci))
           val scaleDf = curTypes match {
             //case (TDate(), _) => rowWindowDfi.na.drop.withColumn("ratio", datediff(col("prev0"), col(seriesColumnName)) / datediff(col("prev0"), col("next0")))
             case (TDate() | TTimestamp(),_) => {
-              rowWindowDfi.na.drop.withColumn("ratio", ( col("prev0") - col(seriesColumnName)) / (col("prev0")- col("next0")))
+              rowWindowDfi.na.drop.withColumn("ratio", ( col("prev0") - col(seriesColumnName.id)) / (col("prev0")- col("next0")))
             }
-            case _ => rowWindowDfi.na.drop.withColumn("ratio", (col(seriesColumnName) - col("prev0")) / (col("next0") - col("prev0")))
+            case _ => rowWindowDfi.na.drop.withColumn("ratio", (col(seriesColumnName.id) - col("prev0")) / (col("next0") - col("prev0")))
           } 
           val predictedDf = curTypes match {
             //case (_, TDate() | TTimestamp()) => scaleDf.withColumn("interpolate", datediff(col("prev1"), col("next1")) / (lit(1.0)/col("ratio")))
@@ -195,13 +198,13 @@ object DetectSeries
             }
             case _ => scaleDf.withColumn("interpolate", (col("next1") - col("prev1")) * col("ratio") + col("prev1"))                     
           }
-          val outDfi = predictedDf.withColumn("actual", col(colName))
-                          .withColumn("error", abs((col(colName) - col("interpolate"))))
+          val outDfi = predictedDf.withColumn("actual", col(colName.id))
+                          .withColumn("error", abs((col(colName.id) - col("interpolate"))))
                           .agg(sum("error").alias("error_sum"), sum("actual").alias("actual_sum"))               
                           .withColumn("result", (col("error_sum") / col("actual_sum")))
                           .select("result")
-                          .withColumn("sname", lit(seriesColumnName))
-          init.union( outDfi.na.drop.map(row => (row.getString(1), row.getDouble(0)))(Encoders.product[(String,Double)]))  
+                          .withColumn("sname", lit(seriesColumnName.id))
+          init.union( outDfi.na.drop.map(row => (ID(row.getString(1)), row.getDouble(0)))(Encoders.product[(ID,Double)]))  
         }
         else init
       }))    

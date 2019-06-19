@@ -14,7 +14,7 @@ import mimir.util.LoadCSV
 
 object DetectHeader {
   val logger = Logger(org.slf4j.LoggerFactory.getLogger(getClass.getName))
-  def isHeader(header:Seq[String]) = {
+  def isHeader(header:Seq[String]): Seq[Int] = {
     val headerRegex =  """[0-9]*[a-zA-Z_ :\/\\-]+[0-9]*[a-zA-Z0-9_ :\/\\-]*""".r
     header.zipWithIndex.flatMap(el => {
       el._1  match {
@@ -27,28 +27,29 @@ object DetectHeader {
 }
 
 @SerialVersionUID(1002L)
-class DetectHeaderModel(override val name: String, val targetName:String, val columns:Seq[String], val trainingData:Seq[Seq[PrimitiveValue]])
+class DetectHeaderModel(override val name: ID, val targetName: ID, val columns:Seq[ID], val trainingData:Seq[Seq[PrimitiveValue]])
 extends Model(name)
 with Serializable
 with SourcedFeedback
 {
   var headerDetected = false
-  var initialHeaders: Map[Int, String] = Map()
+  var initialHeaders: Map[Int, ID] = Map()
   
-  private def sanitizeColumnName(name: String): String =
+  private def sanitizeColumnName(name: String): ID =
   {
-    name.
-      replaceAll("[^a-zA-Z0-9]+", "_").    // Replace sequences of non-alphanumeric characters with underscores
-      replaceAll("_+$", "").               // Strip trailing underscores
-      replaceAll("^_+", "").               // Strip leading underscores
-      toUpperCase                          // Capitalize
+    ID.upper(
+      name
+        .replaceAll("[^a-zA-Z0-9]+", "_")    // Replace sequences of non-alphanumeric characters with underscores
+        .replaceAll("_+$", "")               // Strip trailing underscores
+        .replaceAll("^_+", "")               // Strip leading underscores
+    )
   }
   
-  def detect_header(): (Boolean, Map[Int, String]) = {
+  def detect_header(): (Boolean, Map[Int, ID]) = {
     if(trainingData.isEmpty){
       headerDetected = false
       initialHeaders = columns.zipWithIndex.map(el => (el._2 , el._1)).toMap
-      (headerDetected,initialHeaders)
+      (headerDetected, initialHeaders)
     }
     else
     {
@@ -80,7 +81,7 @@ with SourcedFeedback
       })
       val dups = collection.mutable.Map( (header.groupBy(identity).collect { case (x, Seq(_,_,_*)) => (x -> 1) }).toSeq: _*)
       val conflictOrNullCols = columns.zipWithIndex.unzip._2.toSet -- topRecordsAnalysis.keySet 
-      val goodHeaderCols = DetectHeader.isHeader(header) 
+      val goodHeaderCols = DetectHeader.isHeader(header.map { _.id }) 
       val badHeaderCols = (top6.head.zipWithIndex.unzip._2.toSet -- goodHeaderCols.toSet).toSeq  
       DetectHeader.logger.debug(s"header: ${header.mkString(",")}\nheader dups: ${dups.mkString("[",",","]")}\nconflicts: ${conflictOrNullCols.mkString("[",",","]")}\ngood: ${goodHeaderCols.mkString("[",",","]")}\nbad: ${badHeaderCols.mkString("[",",","]")}")
       val detectResult = badHeaderCols.flatMap(badCol => {
@@ -95,21 +96,21 @@ with SourcedFeedback
             DetectHeader.logger.warn(s"There are some type conflicts or nulls in cols: ${conflictOrNullCols.map(columns(_))}") 
           }
           (true, top6.head.zipWithIndex.map(colIdx => (colIdx._2, colIdx._1 match {
-            case NullPrimitive() =>  s"COLUMN_${colIdx._2}"
-            case StringPrimitive("") => s"COLUMN_${colIdx._2}"
+            case NullPrimitive() =>  ID(s"COLUMN_${colIdx._2}")
+            case StringPrimitive("") => ID(s"COLUMN_${colIdx._2}")
             case x => {
               val head = sanitizeColumnName(x.asString.toUpperCase())
               dups.get(head) match {
                 case Some(dupCnt) => {
                   dups(head) = dupCnt+1
-                  s"${head}_${dupCnt}"
+                  ID(s"${head}_${dupCnt}")
                 }
                 case None => head
               }
             }
           })).toMap)
         }
-        case x => (false, header.zipWithIndex.map { x => (x._2, s"COLUMN_${x._2}") }.toMap)
+        case x => (false, header.zipWithIndex.map { x => (x._2, ID("COLUMN_"+x._2)) }.toMap)
       }
       headerDetected = detectResult._1
       initialHeaders = detectResult._2
@@ -125,7 +126,7 @@ with SourcedFeedback
     TString()
   }
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]  ) = {
-    getFeedback(idx, args).getOrElse(StringPrimitive(initialHeaders(args(0).asInt)))
+    getFeedback(idx, args).getOrElse(StringPrimitive(initialHeaders(args(0).asInt).id))
   }
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]) = {
     bestGuess(idx, args, hints)
@@ -150,7 +151,7 @@ with SourcedFeedback
     Seq()
   }
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) = {
-    s"${args(0).asInt}"
+    ID(s"${args(0).asInt}")
   }
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = {
     getFeedback(idx, args) match {

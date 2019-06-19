@@ -3,21 +3,21 @@ package mimir.exec.result
 import org.apache.spark.sql.DataFrame
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
-import mimir.sql.RABackend
+import mimir.backend.QueryBackend
 import mimir.util.SparkUtils
 import mimir.util.Timer
 
 class SparkResultIterator(
-  inputSchema: Seq[(String,Type)],
+  inputSchema: Seq[(ID,Type)],
   query: Operator,
-  backend: RABackend,
+  backend: QueryBackend,
   dateType: (Type)
 ) 
   extends ResultIterator
   with LazyLogging 
 {
-  def tupleSchema: Seq[(String, Type)] = inputSchema
-  def annotationSchema: Seq[(String, Type)] = Seq()
+  def tupleSchema: Seq[(ID, Type)] = inputSchema
+  def annotationSchema: Seq[(ID, Type)] = Seq()
   
   val extractInputs: org.apache.spark.sql.Row => Seq[() => PrimitiveValue] = 
     row => inputSchema.

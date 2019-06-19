@@ -24,17 +24,41 @@ object PickerModel
 {
   val TRAINING_LIMIT = 10000
   
-  def availableSparkModels(trainingDataq:DataFrame) = Map("Classification" -> (Classification, Classification.DecisionTreeMulticlassModel(trainingDataq)), "Regression" -> (Regression, Regression.GeneralizedLinearRegressorModel(trainingDataq)))
+  def availableSparkModels(trainingDataq:DataFrame) = Map(
+    ID("Classification") -> 
+      ( Classification, 
+        Classification.DecisionTreeMulticlassModel(trainingDataq)
+      ), 
+    ID("Regression") -> 
+      ( Regression, 
+        Regression.GeneralizedLinearRegressorModel(trainingDataq)
+      )
+  )
   
-  def train(db:Database, name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[Type], useClassifier:Option[String], classifyUpFrontAndCache:Boolean, query: Operator ) : SimplePickerModel = {
+  def train(
+    db:Database, 
+    name: ID, 
+    resultColumn:ID, 
+    pickFromCols:Seq[ID], 
+    colTypes:Seq[Type], 
+    useClassifier:Option[ID], 
+    classifyUpFrontAndCache:Boolean, 
+    query: Operator 
+  ) : SimplePickerModel = {
     val pickerModel = new SimplePickerModel(name, resultColumn, pickFromCols, colTypes, useClassifier, classifyUpFrontAndCache, query) 
-    val trainingQuery = Limit(0, Some(TRAINING_LIMIT), Sort(Seq(SortColumn(Function("random", Seq()), true)), Project(pickFromCols.map(col => ProjectArg(col, Var(col))), query.filter(Not(IsNullExpression(Var(pickFromCols.head)))) )))
+    val trainingQuery = Limit(0, Some(TRAINING_LIMIT), Sort(Seq(SortColumn(Function(ID("random"), Seq()), true)), Project(pickFromCols.map(col => ProjectArg(col, Var(col))), query.filter(Not(IsNullExpression(Var(pickFromCols.head)))) )))
     val (schemao, trainingDatao) = SparkUtils.getDataFrameWithProvFromQuery(db, trainingQuery)
     pickerModel.schema = schemao
     pickerModel.trainingData = trainingDatao
     val (sparkMLInst, modelGen) = useClassifier match { //use result of case expression
       case None => (Classification, Classification.DecisionTreeMulticlassModel(pickerModel.trainingData))
-      case Some(sparkModelType) => availableSparkModels(pickerModel.trainingData).getOrElse(sparkModelType, (Classification, Classification.DecisionTreeMulticlassModel(pickerModel.trainingData)))
+      case Some(sparkModelType) => 
+        availableSparkModels(pickerModel.trainingData)
+          .getOrElse(sparkModelType, 
+            ( Classification, 
+              Classification.DecisionTreeMulticlassModel(pickerModel.trainingData)
+            )
+          )
     }
     pickerModel.classifierModel = Some(modelGen(ModelParams(db, pickFromCols.head, "skip")))
     pickerModel.classifyAll(sparkMLInst)
@@ -51,7 +75,7 @@ object PickerModel
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1002L)
-class SimplePickerModel(override val name: String, resultColumn:String, pickFromCols:Seq[String], colTypes:Seq[Type], useClassifier:Option[String], classifyUpFrontAndCache:Boolean, source: Operator) 
+class SimplePickerModel(override val name: ID, resultColumn:ID, pickFromCols:Seq[ID], colTypes:Seq[Type], useClassifier:Option[ID], classifyUpFrontAndCache:Boolean, source: Operator) 
   extends Model(name) 
   with Serializable
   with FiniteDiscreteDomain
@@ -61,12 +85,12 @@ class SimplePickerModel(override val name: String, resultColumn:String, pickFrom
   
   var classifierModel: Option[PipelineModel] = None
   var classifyAllPredictions:Option[Map[String, Seq[(String, Double)]]] = None 
-  var schema:Seq[(String, Type)] = null  
+  var schema:Seq[(ID, Type)] = null  
   var trainingData:DataFrame = null
   
   
-  def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : String = args(0).asString
-  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = args(0).asString
+  def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : ID = ID(args(0).asString)
+  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : ID = ID(args(0).asString)
  
   private def classToPrimitive(value:String): PrimitiveValue = {
     try {
@@ -125,6 +149,7 @@ class SimplePickerModel(override val name: String, resultColumn:String, pickFrom
         val arg1 = args(1)
         val arg2 = args(2)
         useClassifier match { //use result of case expression
+          case None if hints.isEmpty => arg1
           case None => hints(0)
           case Some(sparkModelType) =>
             getCache(idx, args, hints) match {

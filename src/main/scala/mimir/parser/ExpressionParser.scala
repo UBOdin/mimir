@@ -95,20 +95,20 @@ object ExpressionParser extends RegexParsers {
 		| "FALSE" ^^ { _ => BoolPrimitive(false) }
 	)
 
-	def stringLeaf = """'(([^']|\\')*?)'""".r ^^ {
+	def stringLeaf = """'(((''|\\')|[^'])*)'""".r ^^ {
 		(x:String) => 
-			StringPrimitive(x.substring(1,x.length-1)) 
+			StringPrimitive(x.substring(1,x.length-1).replaceAll("''", "'")) 
 	}
 	def varLeaf = 
 		id ^^ { case "ROWID" => RowIdVar()
-		        case x => Var(x) }
+		        case x => Var(ID(x)) }
 
 	def arithSym = Arith.matchRegex ^^ { Arith.fromString(_) }
 
 	def functionClause: Parser[Expression] = id ~ ("(" ~> opt(exprList) <~ ")") ^^ { 
 		case "NOT" ~ Some(List(arg)) => Not(arg)
 		case fname ~ args => 
-			Function(fname, args.getOrElse(List()))
+			Function(ID(fname.toLowerCase), args.getOrElse(List()))
 	}
 
 	def exprListBase: Parser[List[Expression]] =
@@ -136,7 +136,7 @@ object ExpressionParser extends RegexParsers {
 				}
 
 			val fields = v.split("_")
-			VGTerm(fields(0), fields(1).toInt, args, hints)
+			VGTerm(ID(fields(0)), fields(1).toInt, args, hints)
 		}
 	}
 

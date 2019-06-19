@@ -6,6 +6,7 @@ import org.specs2.specification.core.{Fragment,Fragments}
 
 import mimir.test._
 import mimir.util._
+import mimir.algebra.ID
 
 object TimeSeqScenarios
   extends SQLTestSpecification("TimeSeq")
@@ -26,10 +27,10 @@ object TimeSeqScenarios
 
     "run order-by limit queries" >> {
       query("select T, A, B from seq order by t limit 20"){ 
-        _.toSeq.reverse.head("T").asLong must beEqualTo(20)
+        _.toSeq.reverse.head(ID("T")).asLong must beEqualTo(20)
       }
       query("select T, A, B from seq order by t desc limit 20"){
-        _.toSeq.reverse.head("T").asLong must beEqualTo(9980)
+        _.toSeq.reverse.head(ID("T")).asLong must beEqualTo(9980)
       }
     }
 

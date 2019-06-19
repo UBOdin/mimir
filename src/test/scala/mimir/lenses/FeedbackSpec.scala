@@ -9,6 +9,7 @@ import mimir.test._
 import mimir.models.FeedbackSource
 import mimir.models.FeedbackSourceIdentifier
 import mimir.statistics.FeedbackStats
+import mimir.util.LoggerUtils
 
 object FeedbackSpec 
   extends SQLTestSpecification("FeedbackTests")
@@ -17,16 +18,28 @@ object FeedbackSpec
 
   def beforeAll = 
   {
-    loadCSV("R", Seq(("A","string"),("B","int"),("C","int")), new File("test/r_test/r.csv"))
-    update("CREATE ADAPTIVE SCHEMA MATCH AS SELECT * FROM R WITH SCHEMA_MATCHING('B int', 'CX int')")
-    db.adaptiveSchemas.create("R_TI", "TYPE_INFERENCE", db.table("R"), Seq(FloatPrimitive(.5))) 
-		update("CREATE LENS MV AS SELECT * FROM R WITH MISSING_VALUE('B', 'C')")
+    LoggerUtils.trace(
+      // "mimir.adaptive.AdaptiveSchemaManager"
+    ) {
+      loadCSV("R", Seq(("A","string"),("B","int"),("C","int")), "test/r_test/r.csv", false, false)
+      update("CREATE ADAPTIVE SCHEMA MATCH AS SELECT * FROM R WITH SCHEMA_MATCHING('B int', 'CX int')")
+      db.adaptiveSchemas.create(
+        ID("R_TI"), 
+        ID("TYPE_INFERENCE"), 
+        db.table("R"), 
+        Seq(FloatPrimitive(.5))
+      ) 
+  		update("CREATE LENS MV AS SELECT * FROM R WITH MISSING_VALUE(B, C)")
+      print(db.models.list)
+    }
   }
+
+  sequential
 
   "The Edit Distance Match Model" should {
 
     "Support direct feedback" >> {
-      val model = db.models.get("MATCH:EDITDISTANCE:B")
+      val model = db.models.get(ID("MATCH:EDITDISTANCE:B"))
 
       // Base assumptions.  These may change, but the feedback tests 
       // below should be updated accordingly
@@ -37,7 +50,7 @@ object FeedbackSpec
     }
 
     "Support SQL Feedback" >> {
-      val model = db.models.get("MATCH:EDITDISTANCE:CX")
+      val model = db.models.get(ID("MATCH:EDITDISTANCE:CX"))
 
       // Base assumptions.  These may change, but the feedback tests 
       // below should be updated accordingly
@@ -53,25 +66,25 @@ object FeedbackSpec
   "The Type Inference Model" should {
 
     "Support direct feedback" >> {
-      val model = db.models.get("MIMIR_TI_ATTR_R_TI")
+      val model = db.models.get(ID("MIMIR_TI_ATTR_R_TI"))
 
       // Base assumptions.  These may change, but the feedback tests 
       // below should be updated accordingly
       model.bestGuess(0, List(IntPrimitive(0)), List()) must be equalTo(TypePrimitive(TInt()))
-      db.typechecker.schemaOf(db.adaptiveSchemas.viewFor("R_TI", "DATA").get).
-        find(_._1.equals("A")).get._2 must be equalTo(TInt())
+      db.typechecker.schemaOf(db.adaptiveSchemas.viewFor(ID("R_TI"), ID("DATA")).get).
+        find(_._1.equals(ID("A"))).get._2 must be equalTo(TInt())
 
       model.feedback(0, List(IntPrimitive(0)), TypePrimitive(TFloat()))
       model.bestGuess(0, List(IntPrimitive(0)), List()) must be equalTo(TypePrimitive(TFloat()))
-      db.typechecker.schemaOf(db.adaptiveSchemas.viewFor("R_TI", "DATA").get).
-        find(_._1.equals("A")).get._2 must be equalTo(TFloat())
+      db.typechecker.schemaOf(db.adaptiveSchemas.viewFor(ID("R_TI"), ID("DATA")).get).
+        find(_._1.equals(ID("A"))).get._2 must be equalTo(TFloat())
     }
   }
 
   "The SparkML Model" should {
 
     "Support direct feedback" >> {
-      val model = db.models.get("MV:SPARKML:B")
+      val model = db.models.get(ID("MV:SPARKML:B"))
       val nullRow = querySingleton("SELECT ROWID() FROM R WHERE B IS NULL")
 
       model.bestGuess(0, List(nullRow), List()) must not be equalTo(50)
@@ -81,7 +94,7 @@ object FeedbackSpec
     }
 
     "Support SQL feedback" >> {
-      val model = db.models.get("MV:SPARKML:C")
+      val model = db.models.get(ID("MV:SPARKML:C"))
       val nullRow = querySingleton("SELECT ROWID() FROM R WHERE C IS NULL")
 
       val originalGuess = model.bestGuess(0, List(nullRow), List()).asLong
@@ -102,7 +115,7 @@ object FeedbackSpec
   
   "Feedback Stats" should {
     "Compute feedback source confidence" >> {
-      val model = db.models.get("MV:SPARKML:B")
+      val model = db.models.get(ID("MV:SPARKML:B"))
       val nullRow = querySingleton("SELECT ROWID() FROM R WHERE B IS NULL")
       val feedbackConfidence = ((for(i <- 0 to 4) yield {
         val fbSource = FeedbackSourceIdentifier(i.toString(), s"source$i")

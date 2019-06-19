@@ -14,18 +14,18 @@ import mimir.models._
 
 object ProvenanceSpec extends Specification {
 
-  val schema = Map[String,Seq[(String,Type)]](
+  val schema = Map[String,Seq[(ID,Type)]](
     ("R", Seq( 
-      ("A", TInt()),
-      ("B", TInt())
+      ID("A") -> TInt(),
+      ID("B") -> TInt()
     )),
     ("S", Seq( 
-      ("C", TInt()),
-      ("D", TFloat())
+      ID("C") -> TInt(),
+      ID("D") -> TFloat()
     ))
   )
   def table(name: String): Operator =
-    Table(name, name, schema(name), Seq())
+    Table(ID(name), ID(name), schema(name), Seq())
 
   def typechecker = new Typechecker
   def expr = ExpressionParser.expr _
@@ -33,7 +33,7 @@ object ProvenanceSpec extends Specification {
   def prov(x: Operator) = Provenance.compile(x)
 
   def checkProv(expectedColCount: Integer, oper:Operator) = {
-    val (provOper:Operator, provCols:List[String]) = prov(oper);
+    val (provOper:Operator, provCols:List[ID]) = prov(oper);
     val provSchema = typechecker.schemaOf(provOper).toMap
     val initial = (if(expectedColCount > 0) {
       provCols must have size expectedColCount

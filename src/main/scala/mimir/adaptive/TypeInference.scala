@@ -6,8 +6,8 @@ import mimir.algebra._
 import mimir.lenses._
 import mimir.models._
 import mimir.util.SqlUtils
-import mimir.sql.SparkBackend
-import mimir.sql.BackendWithSparkContext
+import mimir.backend.SparkBackend
+import mimir.backend.BackendWithSparkContext
 
 object TypeInference
   extends Multilens
@@ -43,18 +43,19 @@ object TypeInference
         case _ => None
       }).toIndexedSeq
 
+    
     val attributeTypeModel = 
       new TypeInferenceModel(
-        s"MIMIR_TI_ATTR_${viewName}",
+        viewName.withPrefix("MIMIR_TI_ATTR_"),
         modelColumns,
         stringDefaultScore,
         db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(),
-        Some(db.backend.execute(config.query.limit(TypeInferenceModel.sampleLimit, 0)))
+        Some(db.backend.execute(db.compileBestGuess(config.query.limit(TypeInferenceModel.sampleLimit, 0))))
       )
 
     val warningModel = 
       new WarningModel(
-        s"MIMIR_TI_WARNING_${viewName}",
+        ID("MIMIR_TI_WARNING_",viewName),
         Seq(TString(), TString(), TString(), TRowId())
       )
 
@@ -71,7 +72,7 @@ object TypeInference
   {
     HardTable(
       Seq(
-        ("TABLE_NAME",TString())
+        ID("TABLE_NAME") -> TString()
       ),
       Seq(
         Seq(
@@ -83,68 +84,65 @@ object TypeInference
   
   def attrCatalogFor(db: Database, config: MultilensConfig): Operator =
   {
-    val model = db.models.get(s"MIMIR_TI_ATTR_${config.schema}").asInstanceOf[TypeInferenceModel]
+    val model = db.models.get(ID("MIMIR_TI_ATTR_",config.schema)).asInstanceOf[TypeInferenceModel]
     val columnIndexes = model.columns.zipWithIndex.toMap
     lazy val qSchema = db.typechecker.schemaOf(config.query).toMap
     HardTable(
       Seq(
-        ("TABLE_NAME" , TString()), 
-        ("ATTR_NAME" , TString()),
-        ("IS_KEY", TBool()), 
-        ("IDX", TInt()),
-        ("HARD_TYPE", TType())
+        ID("TABLE_NAME") -> TString(), 
+        ID("ATTR_NAME")  -> TString(),
+        ID("IS_KEY")     -> TBool(), 
+        ID("IDX")        -> TInt(),
+        ID("HARD_TYPE")  -> TType()
       ),
       config.query.columnNames.map(col => 
         Seq(
           StringPrimitive("DATA"), 
-          StringPrimitive(col), 
+          StringPrimitive(col.id), 
           BoolPrimitive(false),
           IntPrimitive(columnIndexes.getOrElse(col, -1).toLong),
           if(columnIndexes contains col){ NullPrimitive() } 
             else { TypePrimitive(qSchema(col)) }
         )
       )
-    ).addColumn(
+    ).addColumns(
       "ATTR_TYPE" -> 
-        Var("HARD_TYPE")
+        Var(ID("HARD_TYPE"))
           .isNull
           .thenElse {
-            VGTerm(s"MIMIR_TI_ATTR_${config.schema}", 0, Seq(Var("IDX")), Seq())
+            VGTerm(config.schema.withPrefix("MIMIR_TI_ATTR_"), 0, Seq(Var(ID("IDX"))), Seq())
           } {
-            Var("HARD_TYPE")
+            Var(ID("HARD_TYPE"))
           }
     ).removeColumns("IDX", "HARD_TYPE")
   }
         
-  def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
+  def viewFor(db: Database, config: MultilensConfig, table: ID): Option[Operator] =
   {
-    if(table.equals("DATA")){
-      val model = db.models.get(s"MIMIR_TI_ATTR_${config.schema}").asInstanceOf[TypeInferenceModel]
+    if(table.equals(ID("DATA"))){
+      val model = db.models.get(ID("MIMIR_TI_ATTR_",config.schema)).asInstanceOf[TypeInferenceModel]
       val columnIndexes = model.columns.zipWithIndex.toMap
       Some(Project(
         config.query.columnNames.map { colName => {
           ProjectArg(colName, 
             if(columnIndexes contains colName){ 
               val bestGuessType = model.bestGuess(0, Seq(IntPrimitive(columnIndexes(colName))), Seq())
-              val castExpression = Function("CAST", Seq(
-                  Var(colName),
-                  bestGuessType
-                ))
+              val castExpression = CastExpression(Var(colName), bestGuessType.asInstanceOf[TypePrimitive].t)
               Conditional(
                 IsNullExpression(Var(colName)),
                 NullPrimitive(),
                 Conditional(
                   IsNullExpression(castExpression),
                   DataWarning(
-                    s"MIMIR_TI_WARNING_${config.schema}",
+                    config.schema.withPrefix("MIMIR_TI_WARNING_"),
                     NullPrimitive(),
-                    Function("CONCAT", Seq(
+                    Function("CONCAT", 
                       StringPrimitive("Couldn't Cast [ "),
                       Var(colName),
                       StringPrimitive(" ] to "+bestGuessType+" on row "),
                       RowIdVar()
-                    )),
-                    Seq(StringPrimitive(colName), Var(colName), StringPrimitive(bestGuessType.toString), RowIdVar())
+                    ),
+                    Seq(StringPrimitive(colName.id), Var(colName), StringPrimitive(bestGuessType.toString), RowIdVar())
                   ),
                   castExpression
                 )

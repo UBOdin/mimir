@@ -23,11 +23,10 @@ object SchemaMatching
       config.args.
         map(field => {
           val split = db.interpreter.evalString(field).split(" +")
-          val varName  = split(0).toUpperCase
+          val varName  = ID(split(0))
           val typeName = split(1)
           (
-            varName.toString.toUpperCase -> 
-              Type.fromString(typeName.toString)
+            varName -> Type.fromString(typeName.toString)
           )
         }).
         toList
@@ -35,13 +34,13 @@ object SchemaMatching
     val modelsByType = 
       ModelRegistry.schemamatchers.toSeq.map {
         case (
-          modelCategory:String, 
+          modelCategory:ID, 
           constructor:ModelRegistry.SchemaMatchConstructor
         ) => {
           val modelsByColAndType =
             constructor(
               db, 
-              s"$viewName:$modelCategory", 
+              ID(viewName, ":", modelCategory),
               Left(config.query), 
               Right(targetSchema)
             ).toSeq.map {
@@ -53,7 +52,7 @@ object SchemaMatching
       }
 
     val (
-      candidateModels: Map[String,Seq[(String,Int,Seq[Expression],String)]],
+      candidateModels: Map[ID,Seq[(ID,Int,Seq[Expression],ID)]],
       modelEntities: Seq[Model]
     ) = 
       LensUtils.extractModelsByColumn(modelsByType)
@@ -66,7 +65,7 @@ object SchemaMatching
     })
     
     val (
-      schemaChoice:List[(String,Expression)], 
+      schemaChoice:List[(ID,Expression)], 
       metaModels:List[Model]
     ) =
       candidateModels.
@@ -75,7 +74,7 @@ object SchemaMatching
           case (column, models) => {
             //TODO: Replace Default Model
             val metaModel = new DefaultMetaModel(
-                s"$viewName:META:$column", 
+                ID(viewName,":META:", column), 
                 s"picking a source for column '$column'",
                 models.map(_._4)
               )
@@ -97,7 +96,7 @@ object SchemaMatching
   {
     HardTable(
       Seq(
-        ("TABLE_NAME",TString())
+        ID("TABLE_NAME") -> TString()
       ),
       Seq(
         Seq(
@@ -121,52 +120,85 @@ object SchemaMatching
               Type.fromString(typeName.toString)
           )
         }).toList
+    val schemaModel = db.models.get(config.schema.withSuffix(":META:"+targetSchema.head._1))
+    val schemaGuess = schemaModel.bestGuess(0, Seq(), Seq())
+    val nameMatchModelName = config.schema.withSuffix(s":${schemaGuess.asString}:${targetSchema.head._1}")
     targetSchema.tail.foldLeft(
-      Select(Comparison(Cmp.Eq, VGTerm(s"${config.schema}:${db.models.get(s"${config.schema}:META:${targetSchema.head._1}")
-          .bestGuess(0, Seq(), Seq()).asString}:${targetSchema.head._1}", 0, Seq(), Seq()), Var("SRC_ATTR_NAME")),
+      Select(Comparison(Cmp.Eq, 
+          VGTerm(nameMatchModelName, 0, Seq(), Seq()), 
+          Var(ID("SRC_ATTR_NAME"))
+        ),
         Join(
-          HardTable( Seq(("ATTR_NAME" , TString()), ("ATTR_TYPE", TType())), 
-              Seq(Seq( StringPrimitive(targetSchema.head._1), TypePrimitive(targetSchema.head._2)))),
-          HardTable( Seq(("SRC_ATTR_NAME" , TString()), ("SRC_ATTR_TYPE", TType())), 
-              sourceSchema.map(scol => Seq( StringPrimitive(scol._1), TypePrimitive(scol._2))))
+          HardTable( Seq(
+              ID("ATTR_NAME") -> TString(), 
+              ID("ATTR_TYPE") -> TType()
+            ), 
+            Seq( 
+              Seq( StringPrimitive(targetSchema.head._1), TypePrimitive(targetSchema.head._2))
+            )
+          ),
+          HardTable( Seq(
+              ID("SRC_ATTR_NAME") -> TString(), 
+              ID("SRC_ATTR_TYPE") -> TType()
+            ), 
+            sourceSchema.map(scol => 
+              Seq( StringPrimitive(scol._1.id), TypePrimitive(scol._2) )
+            )
+          )
         )
       ):Operator)((init, col) => {
+        val schemaModel = db.models.get(config.schema.withSuffix(s":META:${col._1}"))
+        val schemaModelGuess = schemaModel.bestGuess(0, Seq(), Seq())
+        val cmpModelName = config.schema.withSuffix(s":${schemaModelGuess.asString}:${col._1}")
         Union(init, 
-          Select(Comparison(Cmp.Eq, VGTerm(s"${config.schema}:${db.models.get(s"${config.schema}:META:${col._1}")
-            .bestGuess(0, Seq(), Seq()).asString}:${col._1}", 0, Seq(), Seq()), Var("SRC_ATTR_NAME")),
+          Select(Comparison(Cmp.Eq, 
+              VGTerm(cmpModelName, 0, Seq(), Seq()), 
+              Var(ID("SRC_ATTR_NAME"))
+            ),
             Join(
-              HardTable( Seq(("ATTR_NAME" , TString()), ("ATTR_TYPE", TType())), 
-                  Seq(Seq( StringPrimitive(col._1), TypePrimitive(col._2)))),
-              HardTable( Seq(("SRC_ATTR_NAME" , TString()), ("SRC_ATTR_TYPE", TType())), 
-                  sourceSchema.map(scol => Seq( StringPrimitive(scol._1), TypePrimitive(scol._2))))
+              HardTable( Seq(
+                  ID("ATTR_NAME") ->  TString(), 
+                  ID("ATTR_TYPE") ->  TType()
+                ), 
+                Seq(Seq( StringPrimitive(col._1), TypePrimitive(col._2)))
+              ),
+              HardTable( Seq(
+                  ID("SRC_ATTR_NAME") -> TString(), 
+                  ID("SRC_ATTR_TYPE") -> TType()
+                ), 
+                sourceSchema.map(scol => 
+                  Seq( StringPrimitive(scol._1.id), TypePrimitive(scol._2))
+                )
+              )
             )
         ))
-    }).addColumn("TABLE_NAME" -> StringPrimitive("DATA")).addColumn("IS_KEY" -> BoolPrimitive(false))
-    .removeColumns("SRC_ATTR_NAME", "SRC_ATTR_TYPE")
+    }).addColumns("TABLE_NAME" -> StringPrimitive("DATA"))
+      .addColumns("IS_KEY" -> BoolPrimitive(false))
+      .removeColumns("SRC_ATTR_NAME", "SRC_ATTR_TYPE")
   }
         
-  def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator] =
+  def viewFor(db: Database, config: MultilensConfig, table: ID): Option[Operator] =
   {
-    if(table.equals("DATA")){
+    if(table.equalsIgnoreCase("DATA")){
       val targetSchema =
       config.args.
         map(field => {
           val split = db.interpreter.evalString(field).split(" +")
-          val varName  = split(0).toUpperCase
-          val typeName = split(1)
+          val varName  = ID(split(0))
+          val typeName = ID(split(1))
           (
-            varName.toString.toUpperCase -> 
+            varName -> 
               Type.fromString(typeName.toString)
           )
         }).toList
       Some(Project(
         targetSchema.map { case (colName, colType)  => { 
-          val metaModel = db.models.get(s"${config.schema}:META:$colName")
-          val model = db.models.get(s"${config.schema}:${metaModel
-            .bestGuess(0, Seq(), Seq()).asString}:$colName")
+          val metaModel = db.models.get(ID(config.schema,s":META:$colName"))
+          val model = db.models.get(config.schema+ID(":")+ID(metaModel
+            .bestGuess(0, Seq(), Seq()).asString+":")+colName)
           ProjectArg(colName,  model.bestGuess(0, Seq(), Seq()) match {
             case np@NullPrimitive() => np
-            case x => Var(x.asString)
+            case x => Var(ID(x.asString))
           } )  
         }}, config.query
       ))  

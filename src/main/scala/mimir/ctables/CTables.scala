@@ -8,17 +8,16 @@ import scala.util._
 object CTables 
 {
 
-  val FN_BEST_GUESS = "VGTERM_BEST_GUESS"
-  val FN_SAMPLE = "VGTERM_SAMPLE"
-  val FN_IS_ACKED = "VGTERM_IS_ACKNOWLEDGED"
-  val FN_TEMP_ENCODED = "MIMIR_ENCODED_VGTERM"
-
-  val SEED_EXP = "__SEED"
+  val FN_BEST_GUESS   = ID("VGTERM_BEST_GUESS")
+  val FN_SAMPLE       = ID("VGTERM_SAMPLE")
+  val FN_IS_ACKED     = ID("VGTERM_IS_ACKNOWLEDGED")
+  val FN_TEMP_ENCODED = ID("MIMIR_ENCODED_VGTERM")
+  val SEED_EXP        = ID("__SEED")
 
   /**
    * Default name for a condition column
    */
-  def conditionColumn = "__MIMIR_CONDITION"
+  def conditionColumn = ID("__MIMIR_CONDITION")
 
   /**
    * Could the provided Expression be probabilistic?

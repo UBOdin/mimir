@@ -51,7 +51,7 @@ object ModelRegistry
    * operator: Select[ROWID = rowid](oper)
    */
   type ImputationConstructor = 
-    ((Database, String, Seq[String], Operator) => Map[String, (Model,Int,Seq[Expression])])
+    ((Database, ID, Seq[ID], Operator) => Map[ID, (Model,Int,Seq[Expression])])
 
   /**
    * Factory method type for SchemaMatch model constructors
@@ -84,10 +84,10 @@ object ModelRegistry
    */
   type SchemaMatchConstructor =
     ((Database, 
-      String, 
-      Either[Operator,Seq[(String,Type)]],
-      Either[Operator,Seq[(String,Type)]]) => 
-        Map[String,(Model,Int)])
+      ID, 
+      Either[Operator,Seq[(ID,Type)]],
+      Either[Operator,Seq[(ID,Type)]]) => 
+        Map[ID,(Model,Int)])
 
   /////////////////// PREDEFINED CONSTRUCTORS ///////////////////
 
@@ -97,9 +97,9 @@ object ModelRegistry
    * Eventually, it would be nice to allow external components and plugins
    * to add new models here.
    */
-  val imputations = Map[String,ImputationConstructor](
-    ("SPARKML" -> (SparkClassifierModel.train _)),
-    ("INTERPOLATE" -> (SeriesMissingValueModel.train _))
+  val imputations = Map[ID,ImputationConstructor](
+    (ID("SPARKML") -> (SparkClassifierModel.train _)),
+    (ID("INTERPOLATE") -> (SeriesMissingValueModel.train _))
     //("FUNCDEP" -> (FuncDepModel.train _))
   )
 
@@ -109,7 +109,7 @@ object ModelRegistry
    * Eventually, it would be nice to allow external components and plugins
    * to add new models here.
   */
-  val schemamatchers = Map[String,SchemaMatchConstructor](
-    "EDITDISTANCE" -> (EditDistanceMatchModel.train _)
+  val schemamatchers = Map[ID,SchemaMatchConstructor](
+    ID("EDITDISTANCE") -> (EditDistanceMatchModel.train _)
   )
 }

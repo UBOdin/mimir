@@ -16,7 +16,7 @@ import play.api.libs.json.JsArray
  * The return value is an integer identifying the ordinal position of the selected value, starting with 0.
  */
 @SerialVersionUID(1002L)
-class GeocodingModel(override val name: String, addrCols:Seq[Expression], geocoder:String, apiKey:String, source: Operator) 
+class GeocodingModel(override val name: ID, addrCols:Seq[Expression], geocoder:ID, apiKey:String, source: Operator) 
   extends Model(name) 
   with Serializable
   with NeedsReconnectToDatabase
@@ -27,17 +27,30 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], geocod
   
   
   val latlonLabel = Seq("Latitude", "Longitude")
-  val (bestGuessResultPathLat, bestGuessResultPathLon) = Map("GOOGLE" -> (".results[0].geometry.location.lat", ".results[0].geometry.location.lng"), "OSM" -> ("[0].lat", "[0].lon")).get(geocoder).get
-  val geogoderLabel = Map("GOOGLE" -> "Google", "OSM" -> "Open Streets")
+  val (bestGuessResultPathLat, bestGuessResultPathLon) = 
+    Map(
+      ID("GOOGLE") -> (
+        ".results[0].geometry.location.lat", 
+        ".results[0].geometry.location.lng"
+      ), 
+      ID("OSM") -> (
+        "[0].lat", 
+        "[0].lon"
+      )
+    ).get(geocoder).get
+  val geogoderLabel = Map(
+      ID("GOOGLE") -> "Google", 
+      ID("OSM") -> "Open Streets"
+    ).get(geocoder).get
   
   @transient var db: Database = null
   
-  def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : String = {
-    args(0).asString
+  def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : ID = {
+    ID(args(0).asString)
   }
   
-   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : String = {
-     s"${idx}_${args(0).asString}"
+   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : ID = {
+     ID(s"${idx}_${args(0).asString}")
    }
   
   def argTypes(idx: Int) = {
@@ -78,10 +91,10 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], geocod
         getCache(idx, args, hints) match {
           case Some(StringPrimitive(jsonStr)) => {
             val v = jsonToPrimitiveValue(idx, jsonStr)
-            s"I used a geocoder (${geogoderLabel(geocoder)}) to determine that $houseNumber $streetName, $city, $state has ${latlonLabel(idx)} = ${v.asInstanceOf[PrimitiveValue]} on row $rowid "
+            s"I used a geocoder (${geogoderLabel}) to determine that $houseNumber $streetName, $city, $state has ${latlonLabel(idx)} = ${v.asInstanceOf[PrimitiveValue]} on row $rowid "
           }
           case x =>
-            s"The location of (${geogoderLabel(geocoder)}) to determine that $houseNumber $streetName, $city, $state is unknown"
+            s"The location of (${geogoderLabel}) to determine that $houseNumber $streetName, $city, $state is unknown"
         }
       }
   }
@@ -103,13 +116,13 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], geocod
       case Some(jsonStr) => {
         val geoJson = play.api.libs.json.Json.parse(jsonStr)
         geocoder match {
-          case "GOOGLE" => {
+          case ID("GOOGLE") => {
             val jsonresults = geoJson.as[JsObject].value("results").as[JsArray]
             jsonresults.value.map(geoEntry => (
                 FloatPrimitive(JsonUtils.seekPath( geoEntry, ".geometry.location."+(if(idx==0)"lat"else"lng")).toString().replaceAll("\"", "").toDouble), 
                 1.0) )
           }
-          case "OSM" => {
+          case ID("OSM") => {
             val jsonresults = geoJson.as[JsArray]
             jsonresults.value.map(geoEntry => (
                 FloatPrimitive(JsonUtils.seekPath( geoEntry, if(idx==0)".lat"else".lon").toString().replaceAll("\"", "").toDouble), 
@@ -142,8 +155,8 @@ class GeocodingModel(override val name: String, addrCols:Seq[Expression], geocod
     val city = args(3).asString
     val state = args(4).asString
     val url = geocoder match {
-      case "GOOGLE" => (s"https://maps.googleapis.com/maps/api/geocode/json?address=${s"$houseNumber+${streetName.replaceAll(" ", "+")},+${city.replaceAll(" ", "+")},+$state".replaceAll("\\+\\+", "+")}&key=$apiKey")
-      case "OSM" | _ => (s"http://52.0.26.255/?format=json&street=$houseNumber%20$streetName&city=$city&state=$state")
+      case ID("GOOGLE") => (s"https://maps.googleapis.com/maps/api/geocode/json?address=${s"$houseNumber+${streetName.replaceAll(" ", "+")},+${city.replaceAll(" ", "+")},+$state".replaceAll("\\+\\+", "+")}&key=$apiKey")
+      case ID("OSM") | _ => (s"http://52.0.26.255/?format=json&street=$houseNumber%20$streetName&city=$city&state=$state")
     }
     try {
       val geoRes = HTTPUtils.get(url) 

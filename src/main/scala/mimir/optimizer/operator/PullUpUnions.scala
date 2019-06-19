@@ -8,8 +8,8 @@ class PullUpUnions(typechecker: Typechecker) extends OperatorOptimization with L
 {
   def decomposeAggregate(agg: AggFunction): Option[DecomposedAggregate] =
   {
-    agg.function match {
-      case "SUM" | "GROUP_AND" | "GROUP_OR" =>  
+    agg.function.id match {
+      case "sum" | "group_and" | "group_or" =>  
       {
         Some(DecomposedAggregate(
           ProjectArg(agg.alias, Var(agg.alias)),

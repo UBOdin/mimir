@@ -14,7 +14,19 @@ object CTExplainerSpec
   def beforeAll = 
   {
     //db.loadTable("R", Seq(("A","string"),("B","int"),("C","int")),new File("test/r_test/r.csv"))
-    db.loadTable("R", new File("test/r_test/r.csv"), true, ("CSV", Seq(StringPrimitive(","),BoolPrimitive(true),BoolPrimitive(false))), Some(Seq(("A",TString()),("B",TInt()),("C",TInt()))))
+    db.loadTable(
+      sourceFile = "test/r_test/r.csv", 
+      targetTable = Some(ID("R")), 
+      force = true, 
+      targetSchema = Some(Seq(
+        ID("A") -> TString(),
+        ID("B") -> TInt(),
+        ID("C") -> TInt()
+      )),
+      format = ID("csv"), 
+      inferTypes = Some(true),
+      detectHeaders = Some(false)
+    )
     //db.adaptiveSchemas.create("R_TI", "TYPE_INFERENCE", db.table("R"), Seq(FloatPrimitive(.5))) 
 		//db.views.create("TI", db.adaptiveSchemas.viewFor("R_TI", "DATA").get)
     update("CREATE LENS MV AS SELECT * FROM R WITH MISSING_VALUE('B', 'C')")
@@ -24,14 +36,14 @@ object CTExplainerSpec
 
     "Explain everything" >> {
 
-      val resultSets = db.explainer.explainEverything(table("MV"))
+      val resultSets = db.uncertainty.explainEverything(table("MV"))
       
-      resultSets.map( _.model.name ) must contain(eachOf(
+      resultSets.map( _.model.name.id ) must contain(eachOf(
          "MV:SPARKML:B", "MV:SPARKML:C", "MIMIR_TI_ATTR_R_TI"
       ))
 
       resultSets.map {
-        set => (set.model.name -> set.size(db)) 
+        set => (set.model.name.id -> set.size(db)) 
       }.toMap must contain(eachOf(
         ("MV:SPARKML:B" -> 1l),
         ("MV:SPARKML:C" -> 1l),
@@ -39,7 +51,7 @@ object CTExplainerSpec
       ))
 
       resultSets.map { 
-        set => (set.model.name -> set.allArgs(db).map(_._1.toList).toList)
+        set => (set.model.name.id -> set.allArgs(db).map(_._1.toList).toList)
       }.toMap must contain(eachOf(
         ("MV:SPARKML:B" -> List(List[PrimitiveValue](RowIdPrimitive("3")))),
         ("MV:SPARKML:C" -> List(List[PrimitiveValue](RowIdPrimitive("4")))),

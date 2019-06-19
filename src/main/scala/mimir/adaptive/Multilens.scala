@@ -4,7 +4,7 @@ import mimir.Database
 import mimir.algebra._
 import mimir.models._
 
-case class MultilensConfig(schema: String, query: Operator, args: Seq[Expression])
+case class MultilensConfig(schema: ID, query: Operator, args: Seq[Expression])
 {
   override def toString: String =
     s"CONFIG FOR $schema(${args.mkString(", ")})"
@@ -35,6 +35,6 @@ trait Multilens
    * Return the view operator for the specified table.  This operator should have a
    * schema consistent with the best-guess for attrCatalogFor.
    */
-  def viewFor(db: Database, config: MultilensConfig, table: String): Option[Operator]
+  def viewFor(db: Database, config: MultilensConfig, table: ID): Option[Operator]
 }
 

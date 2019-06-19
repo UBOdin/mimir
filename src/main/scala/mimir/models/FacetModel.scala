@@ -5,7 +5,7 @@ import mimir.statistics.facet.Facet
 
 
 @SerialVersionUID(100L)
-class FacetModel(name: String, facet: Facet) 
+class FacetModel(name: ID, facet: Facet) 
   extends Model(name)
   with NoArgModel
 {

@@ -15,7 +15,7 @@ object FeedbackSource {
 }
 
 trait DataIndependentFeedback extends SourcedFeedbackT[Int] {
-  val name: String
+  val name: ID
   def validateChoice(idx: Int, v: PrimitiveValue): Boolean
   def choices(idx:Int) : Option[PrimitiveValue] = getFeedback(idx, null)
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]) : Int = idx 
@@ -26,7 +26,7 @@ trait DataIndependentFeedback extends SourcedFeedbackT[Int] {
     hasFeedback(idx, args)
 }
 
-trait SourcedFeedback extends SourcedFeedbackT[String] 
+trait SourcedFeedback extends SourcedFeedbackT[ID] 
 
 trait SourcedFeedbackT[T] {
   val feedbackSources = scala.collection.mutable.Set[FeedbackSourceIdentifier]()

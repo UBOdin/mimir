@@ -3,103 +3,55 @@ package mimir.util;
 import java.io.{FileReader, Reader, StringReader}
 import java.sql._
 
-import net.sf.jsqlparser.statement.select._
-import net.sf.jsqlparser.schema._
-import net.sf.jsqlparser.expression._
-import net.sf.jsqlparser.expression.operators.conditional._
-import net.sf.jsqlparser.expression.operators.relational._
+import sparsity.Name
+import sparsity.expression.{
+  Expression => SparsityExpression,
+  Function   => SparsityFunction,
+  Column
+}
+import sparsity.select.{
+  SelectTarget,
+  SelectExpression,
+  SelectTable,
+  SelectAll,
+  SelectBody,
+  FromElement,
+  FromSelect,
+  FromTable,
+  FromJoin
+}
 
 import scala.collection.JavaConversions._
-import mimir.context._
 import mimir.Database
-import mimir.Mimir.db
-import mimir.algebra.Operator
-import mimir.parser.MimirJSqlParser
-import net.sf.jsqlparser.statement.Statement
+import mimir.algebra.{Operator, ID}
+import mimir.algebra.function.AggregateRegistry
 
 object SqlUtils {
 
-  // Converts a string that is plainSelect
-  def plainSelectStringtoOperator(db:Database, s:String): Operator = {
-    val source: Reader = new StringReader(s)
-    var parser = new MimirJSqlParser(source);
-    val stmt: Statement = parser.Statement();
-
-    var sel:Select = null
-    stmt match {
-      case s:  Select     => sel = s
-      case _ => throw new Exception("Not of type PlainSelect")
-    }
-
-    db.sql.convert(sel)
-  }
-
-  def canonicalizeIdentifier(id: String): String =
+  def expressionContainsAggregate(tgt: SparsityExpression, aggs: AggregateRegistry): Boolean =
   {
-    if(id(0) == '`'){
-      if(id(id.length - 1) == '`'){
-        return id.substring(1, id.length-1);
-      } else {
-        throw new SQLException(s"Malformed Identifier: '$id'")
-      }
-    } else if(id(0) == '"') {
-      if(id(id.length - 1) == '`'){
-        return id.substring(1, id.length-1);
-      } else {
-        throw new SQLException(s"Malformed Identifier: '$id'")
-      }
-    } else {
-      id.toUpperCase
-    }
+    val allReferencedFunctions = 
+      getFunctions(tgt)
+        .map { _.name }
+        .map { ID.lower(_) }
+    allReferencedFunctions.exists { aggs.isAggregate(_) }
   }
   
-  def aggPartition(selectItems : List[SelectItem]) = 
-  {
-    var normal = List[SelectItem]();
-    var agg = List[SelectItem]();
-    
-    selectItems foreach ((tgt) => {
-        if(ScanForFunctions.hasAggregate(
-          tgt.asInstanceOf[SelectExpressionItem].getExpression())
-        ){
-          agg = tgt :: agg;
-        } else {
-          normal = tgt :: normal;
-        }
-      }
-    )
-    
-    (normal, agg)
-  }
-  
-  def mkSelectItem(expr : Expression, alias: String): SelectExpressionItem = 
-  {
-    val item = new SelectExpressionItem();
-    item.setExpression(expr);
-    item.setAlias(alias);
-    item;
-  }
-  
-  def binOp(exp: BinaryExpression, l: Expression, r: Expression) = 
-  {
-    exp.setLeftExpression(l);
-    exp.setRightExpression(r);
-    exp
-  }
-  
-  def getAlias(expr : Expression): String = 
+  def getAlias(expr : SparsityExpression): Name = 
   {
     expr match {
-      case c: Column   => canonicalizeIdentifier(c.getColumnName)
-      case f: Function => f.getName.toUpperCase
-      case _           => "EXPR"
+      case c: Column           => c.column
+      case f: SparsityFunction => f.name
+      case _                   => Name("EXPR")
     }
   }
   
-  def getAlias(item : SelectExpressionItem): String = 
+  def getAlias(item : SelectExpression): Name = 
   {
-    if(item.getAlias() != null) { return item.getAlias() }
-    getAlias(item.getExpression())
+    item.alias match {
+      case Some(alias) => alias
+      case None => getAlias(item.expression)
+    }
   }
 
   /**
@@ -110,27 +62,26 @@ object SqlUtils {
    * - Names that are already unique are untouched (unless they overlap 
    *   with a newly created _N name)
    */
-  def makeAliasesUnique(items: Seq[String]): Seq[String] =
+  def makeAliasesUnique(aliases: Seq[Name]): Seq[Name] =
   {
-    val dupAliases = items.
-      map(_.toUpperCase).     // Ensure Consistency
-      groupBy(x=>x).          // Aggregate by name
-      filter(_._2.size > 1).  // Find aliases that occur more than once
-      map(_._1).              // Retain only the name
+    val dupAliases = aliases.
+      groupBy { x=>x }.          // Aggregate by name
+      filter { _._2.size > 1 }.  // Find aliases that occur more than once
+      map { _._1 }.              // Retain only the name
       toSet
 
-    if(dupAliases.isEmpty){ items } 
+    if(dupAliases.isEmpty){ aliases } 
     else {
-      var usedNames = scala.collection.mutable.Set[String]()
-      items.map( alias => {
+      var usedNames = scala.collection.mutable.Set[Name]()
+      aliases.map( alias => {
         val renamedAlias = 
           if(dupAliases.contains(alias) || usedNames.contains(alias)){
             // Somewhere in the list, there is a potential duplicate
             var ctr = 1
             // Loop until we have a name that (so far) is unique
-            while(usedNames.contains(alias+"_"+ctr)){ ctr += 1 }
+            while(usedNames.contains(alias.withSuffix("_"+ctr))) { ctr += 1 }
             // Assemble the name
-            alias + "_" + ctr
+            alias.withSuffix("_" + ctr)
 
             // Otherwise... just return the name as written
           } else { alias }
@@ -144,79 +95,62 @@ object SqlUtils {
     }
   }
   
-  def changeColumnSources(e: Expression, newSource: String): Expression = 
+  def changeColumnSources(e: SparsityExpression, newSource: Name): SparsityExpression = 
   {
-    val ret = new ReSourceColumns(newSource);
-    e.accept(ret);
-    ret.get()
+    e match {
+      case Column(col, _) => Column(col, Some(newSource))
+      case _ => e.rebuild( e.children.map { changeColumnSources(_, newSource) })
+    }
   }
   
-  def changeColumnSources(s: SelectItem, newSource: String): SelectExpressionItem = 
-  {
-    mkSelectItem(
-      changeColumnSources(s.asInstanceOf[SelectExpressionItem].getExpression(),
-                          newSource),
-      s.asInstanceOf[SelectExpressionItem].getAlias()
-    )
-  }
+  def changeColumnSources(s: SelectExpression, newSource: Name): SelectExpression = 
+    SelectExpression(changeColumnSources(s.expression, newSource), s.alias)
 
-  def getSchema(source: SelectBody, db: Database): List[String] =
+  def getSchema(source: SelectBody, db: Database): Seq[Name] =
   {
-    source match {
-      case plainselect: PlainSelect => 
-        plainselect.getSelectItems().flatMap({
-          case sei:SelectExpressionItem =>
-            List(sei.getAlias())
-          case _:AllColumns => {
-            val fromSchemas = getSchemas(plainselect.getFromItem, db).flatMap(_._2)
-            val joinSchemas = 
-              if(plainselect.getJoins != null){
-                plainselect.getJoins.asInstanceOf[java.util.List[Join]].flatMap( (join:Join) => 
-                  getSchemas(join.getRightItem(), db).flatMap(_._2)
-                )
-              } else {
-                List()
-              }
-            fromSchemas ++ joinSchemas
-          }
-        }).toList
-      case union: net.sf.jsqlparser.statement.select.Union =>
-        getSchema(union.getPlainSelects().get(0), db)
-    }
+    val fromSchemas: Map[Name, Seq[Name]] = 
+      source.from.flatMap { getSchemas(_, db) }.toMap
+    
+    makeAliasesUnique(source.target.flatMap { 
+      case expr:SelectExpression => Seq(getAlias(expr))
+      case SelectTable(table)    => fromSchemas(table)
+      case SelectAll()           => fromSchemas.flatMap { _._2 }
+    })
   } 
+
+  def getFunctions(expr: SparsityExpression): Seq[SparsityFunction] =
+    (expr match {
+      case f:SparsityFunction => Seq(f)
+      case _ => Seq()
+    }) ++ expr.children.flatMap { getFunctions(_) }
 
   /**
    * Extract source schemas from a FromItem
    */
-  def getSchemas(source: FromItem, db: Database): List[(String, List[String])] =
+  def getSchemas(source: FromElement, db: Database, implicitCols: Seq[Name] = Seq(Name("ROWID", true))): Seq[(Name, Seq[Name])] =
   {
     source match {
-      case subselect: SubSelect =>
-        List((subselect.getAlias(), getSchema(subselect.getSelectBody(), db) ))
-      case table: net.sf.jsqlparser.schema.Table =>
-        List(
-          ( table.getAlias(), 
-            (db.metadataBackend.getTableSchema(table.getName()) match {
-            case Some(tblSchmd) => tblSchmd
-            case None => db.backend.getTableSchema(table.getName()) match {
+      case FromSelect(query, alias) =>
+        Seq( alias -> getSchema(query, db) )
+
+      case FromTable(_, table, alias) =>
+        Seq( alias.getOrElse(table) -> 
+            ((db.tableSchema(table) match {
               case Some(tblSch) => tblSch
-              case None => throw new mimir.algebra.RAException(s"Table doesn't exist: ${table.getName()}")
-            }
-          }).map(_._1).toList++List("ROWID")
+              case None => throw new mimir.algebra.RAException(s"Table doesn't exist: ${table}")
+            }).map(_._1.quoted:Name).toSeq ++ implicitCols)
           )
-        )
-      case join: SubJoin =>
-        getSchemas(join.getLeft(), db) ++
-          getSchemas(join.getJoin().getRightItem(), db)
+      case join: FromJoin =>
+        val subSchemas = getSchemas(join.lhs, db) ++
+                            getSchemas(join.rhs, db)
+        val mySchema = join.alias match { 
+          case None => Seq()
+          case Some(alias) =>
+            Seq(alias -> subSchemas.flatMap { case (_, attrs) => attrs })
+        }
+        mySchema ++ subSchemas
     }
   }   
   
   
-}
-
-
-class ReSourceColumns(s: String) extends ExpressionRewrite {
-  override def visit(col: Column): Unit = {
-    ret(new Column(new Table(null, s), col.getColumnName()));
-  }
 }

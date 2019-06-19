@@ -67,10 +67,10 @@ object EvalSpec extends Specification with RASimplify {
     "Properly expand DISTANCE" >> {
       simplify("DISTANCE(3, 4)") must be equalTo(FloatPrimitive(5))
       simplify("DISTANCE(Q, R)") must be equalTo(
-        Function("SQRT", List(
+        Function(ID("sqrt"), List(
           Arithmetic(Arith.Add,
-            Arithmetic(Arith.Mult, Var("Q"), Var("Q")),
-            Arithmetic(Arith.Mult, Var("R"), Var("R"))
+            Arithmetic(Arith.Mult, Var(ID("Q")), Var(ID("Q"))),
+            Arithmetic(Arith.Mult, Var(ID("R")), Var(ID("R")))
           )
       ))
       )

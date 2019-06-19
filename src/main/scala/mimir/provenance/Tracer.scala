@@ -7,8 +7,8 @@ class TracerInvalidPath() extends Exception {}
 
 object Tracer {
 
-  def trace(oper: Operator, targetRowId: Map[String, RowIdPrimitive]): 
-      (Operator, Map[String,Expression], Expression) =
+  def trace(oper: Operator, targetRowId: Map[ID, RowIdPrimitive]): 
+      (Operator, Map[ID,Expression], Expression) =
   {
     oper match {
       case p @ Project(args, src) => {
@@ -63,19 +63,19 @@ object Tracer {
           val lhsSafeSchema = lhsSchema -- overlappingSchema
           val rhsSafeSchema = rhsSchema -- overlappingSchema
           val lhsReplacements = 
-            overlappingSchema.map( x => (x, Var(x+"_left"))).toMap
+            overlappingSchema.map( x => (x, Var(ID(x,"_left")))).toMap
           val rhsReplacements = 
-            overlappingSchema.map( x => (x, Var(x+"_right"))).toMap
+            overlappingSchema.map( x => (x, Var(ID(x,"_right")))).toMap
           (
             Join(
               Project(
                 lhsSafeSchema.map( x => ProjectArg(x, Var(x))).toList++
-                  overlappingSchema.map( x => ProjectArg(x+"_left", Var(x))),
+                  overlappingSchema.map( x => ProjectArg(ID(x,"_left"), Var(x))),
                 lhsRetOper
               ),
               Project(
                 rhsSafeSchema.map( x => ProjectArg(x, Var(x))).toList++
-                  overlappingSchema.map( x => ProjectArg(x+"_right", Var(x))),
+                  overlappingSchema.map( x => ProjectArg(ID(x,"_right"), Var(x))),
                 rhsRetOper
               )
             ),
@@ -161,8 +161,6 @@ object Tracer {
 
       case _:Aggregate => 
         throw new RAException("Tracer can't handle aggregates")
-
-       case (Annotate(_, _) | ProvenanceOf(_) | Recover(_, _)) => ???
     }
   }
 }

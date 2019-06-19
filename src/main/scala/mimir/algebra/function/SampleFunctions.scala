@@ -10,7 +10,7 @@ object SampleFunctions
   def register(fr: FunctionRegistry)
   {
 
-    fr.register("BEST_SAMPLE", 
+    fr.register(ID("best_sample"), 
       (args: Seq[PrimitiveValue]) => {
         TupleBundle.mostLikelyValue(
           args.head.asLong,
@@ -22,7 +22,7 @@ object SampleFunctions
         }
       },
       (types: Seq[Type]) => {
-        val debugExpr = Function("BEST_SAMPLE", types.map(TypePrimitive(_)))
+        val debugExpr = Function("best_sample", types.map(TypePrimitive(_)):_*)
 
         Typechecker.assertNumeric(types.head, debugExpr)
         Typechecker.assertLeastUpperBound(
@@ -37,27 +37,27 @@ object SampleFunctions
       }
     )
 
-    fr.register("SAMPLE_CONFIDENCE",
+    fr.register(ID("sample_confidence"),
       (args: Seq[PrimitiveValue]) => 
         FloatPrimitive(
           WorldBits.confidence(args(0).asLong, args(0).asLong.toInt)
         ),
       (types: Seq[Type]) => {
         Typechecker.assertNumeric(types(0), 
-          Function("SAMPLE_CONFIDENCE", types.map(TypePrimitive(_))))
+          Function("sample_confidence", types.map(TypePrimitive(_)):_*))
         Typechecker.assertNumeric(types(1),
-          Function("SAMPLE_CONFIDENCE", types.map(TypePrimitive(_))))
+          Function("sample_confidence", types.map(TypePrimitive(_)):_*))
         TFloat()
       }
     )
     
-    fr.register("POSSION", 
+    fr.register(ID("possion"), 
       {
 	      case Seq(IntPrimitive(m))   => {
-          IntPrimitive(mimir.sql.sqlite.Possion.poisson_helper(m))
+          IntPrimitive(mimir.backend.sqlite.Possion.poisson_helper(m))
 	      }
         case Seq(FloatPrimitive(m))   => {
-          IntPrimitive(mimir.sql.sqlite.Possion.poisson_helper(m))
+          IntPrimitive(mimir.backend.sqlite.Possion.poisson_helper(m))
 	      }
         case Seq(NullPrimitive())   => NullPrimitive()
 	      case x => throw new SQLException("Non-numeric parameter to possion: '"+x+"'")
@@ -65,10 +65,10 @@ object SampleFunctions
       ((args: Seq[Type]) => TInt())
 		)
 		
-		fr.register("GAMMA", 
+		fr.register(ID("gamma"), 
       {
 	      case Seq(FloatPrimitive(k), FloatPrimitive(theta))   => {
-          FloatPrimitive(mimir.sql.sqlite.Gamma.sampleGamma(k, theta))
+          FloatPrimitive(mimir.backend.sqlite.Gamma.sampleGamma(k, theta))
 	      }
         case Seq(NullPrimitive(), FloatPrimitive(r))   => NullPrimitive()
         case Seq(FloatPrimitive(r), NullPrimitive())   => NullPrimitive()

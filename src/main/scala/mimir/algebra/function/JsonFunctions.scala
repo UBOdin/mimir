@@ -35,11 +35,11 @@ object JsonFunctions
 
   def register(fr: FunctionRegistry)
   {
-    fr.register("JSON_EXTRACT", extractAny(_), (_) => TString())
-    fr.register("JSON_EXTRACT_INT", extract(_, TInt()), (_) => TInt())
-    fr.register("JSON_EXTRACT_FLOAT", extract(_, TFloat()), (_) => TFloat())
-    fr.register("JSON_EXTRACT_STR", extract(_, TString()), (_) => TString())
-    fr.register("JSON_ARRAY",
+    fr.register(ID("json_extract"), extractAny(_), (_) => TString())
+    fr.register(ID("json_extract_int"), extract(_, TInt()), (_) => TInt())
+    fr.register(ID("json_extract_float"), extract(_, TFloat()), (_) => TFloat())
+    fr.register(ID("json_extract_str"), extract(_, TString()), (_) => TString())
+    fr.register(ID("json_array"),
       (params: Seq[PrimitiveValue]) => 
         StringPrimitive(
           JsArray(
@@ -48,7 +48,7 @@ object JsonFunctions
         ),
       (_) => TString()
     )
-    fr.register("JSON_OBJECT", 
+    fr.register(ID("json_object"), 
       (params: Seq[PrimitiveValue]) => {
         StringPrimitive(
           JsObject(
@@ -60,7 +60,7 @@ object JsonFunctions
       },
       (_) => TString()
     )
-    fr.register("JSON_ARRAY_LENGTH",
+    fr.register(ID("json_array_length"),
       _ match {
         case Seq(text) => {
           Json.parse(text.asString) match {

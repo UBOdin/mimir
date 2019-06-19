@@ -17,21 +17,21 @@ import scala.util._
 
 object MissingValueLens {
 
-  def getConstraint(arg: Expression): Seq[(String, Expression)] =
+  def getConstraint(arg: Expression): Seq[(ID, Expression)] =
   {
     arg match {
-      case Var(v) => Seq( (v.toUpperCase, Var(v.toUpperCase).isNull.not) )
+      case Var(v) => Seq( (v, Var(v).isNull.not) )
       case StringPrimitive(exprString) => {
         getConstraint(ExpressionParser.expr(exprString.replaceAll("''", "'")))
       }
-      case e if Typechecker.trivialTypechecker.typeOf(e, (_:String) => TAny() ).equals(TBool()) => {
+      case e if Typechecker.trivialTypechecker.typeOf(e, (_:ID) => TAny() ).equals(TBool()) => {
         ExpressionUtils.getColumns(arg).toSeq match {
           case Seq(v) => 
             Seq( 
               (
-                v.toUpperCase, 
-                Var(v.toUpperCase).isNull.not.and(
-                  Eval.inline(arg) { x => Var(x.toUpperCase) }
+                v, 
+                Var(v).isNull.not.and(
+                  Eval.inline(arg) { x => Var(x) }
                 )
               )
             )
@@ -47,7 +47,7 @@ object MissingValueLens {
 
   def create(
     db: Database, 
-    name: String, 
+    name: ID, 
     query: Operator, 
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
@@ -63,7 +63,7 @@ object MissingValueLens {
     // - REQUIRE(column, column > ...) is similar, but allows you to define constraints
     //   over multiple columns
 
-    val targetColumnsAndTests:Map[String, Expression] = args.flatMap { getConstraint(_) }.toMap
+    val targetColumnsAndTests:Map[ID, Expression] = args.flatMap { getConstraint(_) }.toMap
 
     // Sanity check.  Require that all columns that we fix and all columns referenced in the 
     // constraints are defined in the original query.
@@ -80,7 +80,7 @@ object MissingValueLens {
     // Create a query where all values that dont satisfy their constraints are removed
     // (used for training the models)
     val noErroneousValuesQuery =
-      query.map(
+      query.mapByID(
         schema.
           map { col => 
             targetColumnsAndTests.get(col) match {
@@ -91,16 +91,16 @@ object MissingValueLens {
           }:_*
       )
 
-    val modelsByType: Seq[(String, Seq[(String, (Model, Int, Seq[Expression]))])] =
+    val modelsByType: Seq[(ID, Seq[(ID, (Model, Int, Seq[Expression]))])] =
       ModelRegistry.imputations.toSeq.map {
         case ( 
-          modelCategory: String, 
+          modelCategory: ID, 
           constructor: ModelRegistry.ImputationConstructor
         ) => {
-          val modelsByTypeAndColumn: Seq[(String, (Model, Int, Seq[Expression]))] = 
+          val modelsByTypeAndColumn: Seq[(ID, (Model, Int, Seq[Expression]))] = 
             constructor(
               db, 
-              s"$name:$modelCategory", 
+              ID(name, ":", modelCategory), 
               targetColumnsAndTests.keySet.toSeq, 
               noErroneousValuesQuery
             ).toSeq
@@ -110,7 +110,7 @@ object MissingValueLens {
       }
 
     val (
-      candidateModels: Map[String,Seq[(String,Int,Seq[Expression],String)]],
+      candidateModels: Map[ID,Seq[(ID,Int,Seq[Expression],ID)]],
       modelEntities: Seq[Model]
     ) = 
       LensUtils.extractModelsByColumn(modelsByType)
@@ -123,7 +123,7 @@ object MissingValueLens {
     })
 
     val (
-      replacementExprsList: Seq[(String,Expression)], 
+      replacementExprsList: Seq[(ID,Expression)], 
       metaModels: Seq[Model]
     ) =
       candidateModels.
@@ -131,7 +131,7 @@ object MissingValueLens {
           case (column, models) => {
             //TODO: Replace Default Model
             val metaModel = new DefaultMetaModel(
-                s"$name:META:$column", 
+                ID(name, ":META:", column), 
                 s"picking values for $name.$column",
                 models.map(_._4)
               )

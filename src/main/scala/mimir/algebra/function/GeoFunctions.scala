@@ -1,5 +1,6 @@
 package mimir.algebra.function;
 
+import sparsity.Name
 import org.joda.time.DateTime
 import mimir.algebra._
 import mimir.util.GeoUtils
@@ -9,15 +10,15 @@ object GeoFunctions
 
   def register(fr: FunctionRegistry)
   {
-    fr.registerExpr("DISTANCE", List("A", "B"), 
-      Function("SQRT", List(
+    fr.registerExpr(ID("distance"), Seq(ID("A"), ID("B")), 
+      Function("sqrt", 
         Arithmetic(Arith.Add,
-          Arithmetic(Arith.Mult, Var("A"), Var("A")),
-          Arithmetic(Arith.Mult, Var("B"), Var("B"))
-      ))))
+          Arithmetic(Arith.Mult, Var(ID("A")), Var(ID("A"))),
+          Arithmetic(Arith.Mult, Var(ID("B")), Var(ID("B")))
+      )):Expression)
 
     fr.register(
-      "DST",
+      ID("dst"),
       (args) => {
         FloatPrimitive(GeoUtils.calculateDistanceInKilometer(
           args(0).asDouble, //lon1
@@ -27,12 +28,12 @@ object GeoFunctions
         ))
       },
       (args) => {
-        (0 until 4).foreach { i => Typechecker.assertNumeric(args(i), Function("DST", List())) }; 
+        (0 until 4).foreach { i => Typechecker.assertNumeric(args(i), Function("dst")) }; 
         TFloat()
       }
     )
     fr.register(
-      "SPEED",
+      ID("speed"),
       (args) => {
         val distance: Double = args(0).asDouble
         val startingDate: DateTime = args(1).asDateTime
@@ -48,7 +49,7 @@ object GeoFunctions
       },
       (_) => TFloat()
     )
-    fr.register("WEBGEOCODEDISTANCE", 
+    fr.register(ID("webgeocodedistance"), 
       {  
         case Seq(lat:PrimitiveValue, lon:PrimitiveValue,StringPrimitive(houseNumber), StringPrimitive(streetName),StringPrimitive(city),StringPrimitive(state),StringPrimitive(geocoder)) => {
           val (url, latPath, lonPath) = geocoder match {
@@ -70,19 +71,19 @@ object GeoFunctions
       },
       (x: Seq[Type]) => TFloat()
     )
-    fr.register("METOLOCDST", 
+    fr.register(ID("metolocdst"), 
       {  
         (args) => {
           FloatPrimitive(GeoUtils.calculateDistanceInKilometer(
-            mimir.sql.sqlite.MeToLocationDistance.myLon.get, //lon1
-            mimir.sql.sqlite.MeToLocationDistance.myLat.get, //lat1
+            mimir.backend.sqlite.MeToLocationDistance.myLon.get, //lon1
+            mimir.backend.sqlite.MeToLocationDistance.myLat.get, //lat1
             args(1).asDouble, //lon2
             args(0).asDouble  //lat2
           ))
         }
       },
       (args) => {
-        (0 until 2).foreach { i => Typechecker.assertNumeric(args(i), Function("METOLOCDST", List())) }; 
+        (0 until 2).foreach { i => Typechecker.assertNumeric(args(i), Function("metolocdst")) }; 
         TFloat()
       }
     )

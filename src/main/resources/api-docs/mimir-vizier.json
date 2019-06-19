@@ -1,0 +1,1411 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "description": "API for access to mimir functionality from vizier",
+    "version": "1.0.0",
+    "title": "MimirVizier API",
+    "termsOfService": "http://vizierdb.info",
+    "contact": {
+      "email": "info@vizierdb.info"
+    },
+    "license": {
+      "name": "Apache 2.0",
+      "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+    }
+  },
+  "host": "localhost:8089",
+  "basePath": "/api/v2",
+  "tags": [
+    {
+      "name": "eval",
+      "description": "eval code"
+    },
+    {
+      "name": "data",
+      "description": "Operations about data sources"
+    },
+    {
+      "name": "lens",
+      "description": "Operations about mimir lenses"
+    },
+    {
+      "name": "view",
+      "description": "Operations about mimir views"
+    },
+    {
+      "name": "adaptive",
+      "description": "Operations about mimir adaptive schemas"
+    },
+    {
+      "name": "annotations",
+      "description": "Operations about mimir annotations"
+    },
+    {
+      "name": "query",
+      "description": "query data from mimir"
+    },
+    {
+      "name": "schema",
+      "description": "Operations about mimir schemas"
+    }
+  ],
+  "schemes": [
+    "https",
+    "http"
+  ],
+  "paths": {
+    "/eval/scala": {
+      "post": {
+        "tags": [
+          "eval"
+        ],
+        "summary": "evaluate scala code",
+        "description": "Evaluates scala code and returns the result",
+        "operationId": "evalScala",
+        "consumes": [
+          "application/json",
+          "application/xml"
+        ],
+        "produces": [
+          "application/xml",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "source",
+            "in": "body",
+            "description": "scala source code to evaluate",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ScalaEvalRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "schema": {
+              "$ref": "#/definitions/ScalaEvalResponse"
+            }
+          },
+          "400": {
+            "description": "Error evaluating scala"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/dataSource/load": {
+      "post": {
+        "tags": [
+          "data"
+        ],
+        "summary": "load datasource",
+        "description": "Loads the datasource",
+        "operationId": "loadDataSource",
+        "consumes": [
+          "application/json",
+          "application/xml"
+        ],
+        "produces": [
+          "application/xml",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "Load datasource request",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/LoadRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "schema": {
+              "$ref": "#/definitions/LoadResponse"
+            }
+          },
+          "400": {
+            "description": "Error loading datasource"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/dataSource/unload": {
+      "post": {
+        "tags": [
+          "data"
+        ],
+        "summary": "unload datasource",
+        "description": "unloads the datasource",
+        "operationId": "unloadDataSource",
+        "consumes": [
+          "application/json",
+          "application/xml"
+        ],
+        "produces": [
+          "application/xml",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "unload datasource request",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/UnloadRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation"
+          },
+          "400": {
+            "description": "Error loading datasource"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/lens": {
+      "get": {
+        "tags": [
+          "lens"
+        ],
+        "summary": "list lens types",
+        "description": "get a list of available lens types",
+        "operationId": "getAvailableLenses",
+        "produces": [
+          "application/xml",
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "lens type names",
+            "schema": {
+              "$ref": "#/definitions/LensList"
+            }
+          },
+          "400": {
+            "description": "crash"
+          }
+        }
+      }
+    },
+    "/lens/create": {
+      "post": {
+        "tags": [
+          "lens"
+        ],
+        "summary": "create lens",
+        "description": "create a mimir lens with the given params and return the name of it",
+        "operationId": "createLens",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "create lens request",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CreateLensRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "create lens response",
+            "schema": {
+              "$ref": "#/definitions/CreateLensResponse"
+            }
+          },
+          "400": {
+            "description": "error creating lens"
+          }
+        }
+      }
+    },
+    "/view/create": {
+      "post": {
+        "tags": [
+          "view"
+        ],
+        "summary": "create view",
+        "description": "create a mimir view with the given input and query and return the name of it",
+        "operationId": "createView",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "create view request",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CreateViewRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "create view response",
+            "schema": {
+              "$ref": "#/definitions/CreateViewResponse"
+            }
+          },
+          "400": {
+            "description": "error creating view"
+          }
+        }
+      }
+    },
+    "/adaptive": {
+      "get": {
+        "tags": [
+          "adaptive"
+        ],
+        "summary": "list adaptive schema types",
+        "description": "get a list of available adaptive schema types",
+        "operationId": "getAvailableAdaptiveSchemas",
+        "produces": [
+          "application/xml",
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "adaptive schema type names",
+            "schema": {
+              "$ref": "#/definitions/AdaptiveSchemaList"
+            }
+          },
+          "400": {
+            "description": "crash"
+          }
+        }
+      }
+    },
+    "/adaptive/create": {
+      "post": {
+        "tags": [
+          "adaptive"
+        ],
+        "summary": "create adaptive schema",
+        "description": "create a mimir adaptive schema with the given params and return the name of it",
+        "operationId": "createAdaptiveSchema",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "create adaptive schema request",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CreateAdaptiveSchemaRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "create adaptive schema response",
+            "schema": {
+              "$ref": "#/definitions/CreateAdaptiveSchemaResponse"
+            }
+          },
+          "400": {
+            "description": "error creating adaptive schema"
+          }
+        }
+      }
+    },
+    "/query/data": {
+      "post": {
+        "tags": [
+          "query"
+        ],
+        "summary": "query mimir",
+        "description": "query mimir given the input and query and return the results optionally with taint and reasons",
+        "operationId": "vistrailsQueryMimir",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "query mimir request",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/QueryMimirRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "query mimir response",
+            "schema": {
+              "$ref": "#/definitions/CSVContainer"
+            }
+          },
+          "400": {
+            "description": "error creating adaptive schema"
+          }
+        }
+      }
+    },
+    "/schema": {
+      "post": {
+        "tags": [
+          "schema"
+        ],
+        "summary": "schema for query",
+        "description": "get a list of columns and types for a query",
+        "operationId": "getSchema",
+        "consumes": [
+          "application/json",
+          "application/xml"
+        ],
+        "produces": [
+          "application/xml",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "query",
+            "description": "get schema for query request",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SchemaForQueryRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "query schema",
+            "schema": {
+              "$ref": "#/definitions/SchemaList"
+            }
+          },
+          "400": {
+            "description": "crash"
+          }
+        }
+      }
+    },
+    "/annotations/noschema": {
+      "post": {
+        "tags": [
+          "annotations"
+        ],
+        "summary": "annotations without adaptive schema",
+        "description": "get annotations from mimir ignoring those for which an adaptive schema is the source",
+        "operationId": "explainSubsetWithoutSchema",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "explain subset request",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ExplainSubsetWithoutSchemaRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "explain subset response",
+            "schema": {
+              "$ref": "#/definitions/ExplainResponse"
+            }
+          },
+          "400": {
+            "description": "error explaining subset"
+          }
+        }
+      }
+    },
+    "/annotations/schema": {
+      "post": {
+        "tags": [
+          "annotations"
+        ],
+        "summary": "annotations from adaptive schemas",
+        "description": "get annotations from mimir for which an adaptive schema is the source",
+        "operationId": "explainSchema",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "explain subset request",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ExplainSchemaRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "explain schema response",
+            "schema": {
+              "$ref": "#/definitions/ExplainResponse"
+            }
+          },
+          "400": {
+            "description": "error explaining schema"
+          }
+        }
+      }
+    },
+    "/annotations/cell": {
+      "post": {
+        "tags": [
+          "annotations"
+        ],
+        "summary": "annotations for cell",
+        "description": "get annotations from mimir for a specific cell - rowid by col",
+        "operationId": "explainCellJson",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "explain cell request",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ExplainCellSchemaRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "explain cell response",
+            "schema": {
+              "$ref": "#/definitions/ExplainReasonsResponse"
+            }
+          },
+          "400": {
+            "description": "error explaining cell"
+          }
+        }
+      }
+    },
+    "/annotations/subset": {
+      "post": {
+        "tags": [
+          "annotations"
+        ],
+        "summary": "annotations for query",
+        "description": "get annotations from mimir for query",
+        "operationId": "explainSubset",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "explain subset request",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ExplainSubsetRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "explain subset response",
+            "schema": {
+              "$ref": "#/definitions/ExplainResponse"
+            }
+          },
+          "400": {
+            "description": "error explaining subset"
+          }
+        }
+      }
+    },
+    "/annotations/all": {
+      "post": {
+        "tags": [
+          "annotations"
+        ],
+        "summary": "all annotations",
+        "description": "get all annotations from mimir for query",
+        "operationId": "explainEverythingAllJson",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "explain everything all request",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ExplainEverythingAllRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "explain everything all response",
+            "schema": {
+              "$ref": "#/definitions/ExplainReasonsResponse"
+            }
+          },
+          "400": {
+            "description": "error explaining everyting all"
+          }
+        }
+      }
+    },
+    "/annotations/summary": {
+      "post": {
+        "tags": [
+          "annotations"
+        ],
+        "summary": "annotations summary",
+        "description": "get summarized annotations from mimir for query",
+        "operationId": "explainEverythingJson",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "explain everything summary request",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ExplainEverythingRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "explain everything summary response",
+            "schema": {
+              "$ref": "#/definitions/ExplainReasonsResponse"
+            }
+          },
+          "400": {
+            "description": "error explaining everyting summary"
+          }
+        }
+      }
+    },
+    "/annotations/feedback": {
+      "post": {
+        "tags": [
+          "annotations"
+        ],
+        "summary": "feedback for reason",
+        "description": "feedback for reason",
+        "operationId": "feedback",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "feedback for reason request",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/FeedbackForReasonRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "feedback for reason response"
+          },
+          "400": {
+            "description": "error giving feedback for reason"
+          }
+        }
+      }
+    }
+  },
+  "securityDefinitions": {
+    "mimir_auth": {
+      "type": "oauth2",
+      "authorizationUrl": "http://auth.vizierdb.info/oauth/dialog",
+      "flow": "implicit",
+      "scopes": {
+        "write:mimir": "auth to write to mimir",
+        "read:mimir": "auth to read from mimir"
+      }
+    },
+    "api_key": {
+      "type": "apiKey",
+      "name": "api_key",
+      "in": "header"
+    }
+  },
+  "definitions": {
+    "Tuple": {
+      "type": "object",
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "name"
+        },
+        "value": {
+          "type": "string",
+          "description": "value"
+        }
+      },
+      "xml": {
+        "name": "Tuple"
+      }
+    },
+    "Schema": {
+      "type": "object",
+      "required": [
+        "name",
+        "type",
+        "baseType"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "name of the element"
+        },
+        "type": {
+          "type": "string",
+          "description": "type name of the element"
+        },
+        "baseType": {
+          "type": "string",
+          "description": "base type name of the element"
+        }
+      },
+      "xml": {
+        "name": "Schema"
+      }
+    },
+    "SchemaList": {
+      "type": "array",
+      "xml": {
+        "name": "SchemaList",
+        "wrapped": true
+      },
+      "items": {
+        "$ref": "#/definitions/Schema"
+      }
+    },
+    "Repair": {
+      "type": "object",
+      "required": [
+        "selector"
+      ],
+      "properties": {
+        "selector": {
+          "type": "string",
+          "description": "name of selector"
+        }
+      },
+      "xml": {
+        "name": "Repair"
+      }
+    },
+    "Reason": {
+      "type": "object",
+      "required": [
+        "english",
+        "source",
+        "varid",
+        "args",
+        "repair",
+        "feedback"
+      ],
+      "properties": {
+        "english": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "varid": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "args": {
+          "type": "array",
+          "xml": {
+            "name": "args",
+            "wrapped": true
+          },
+          "items": {
+            "type": "string"
+          }
+        },
+        "repair": {
+          "$ref": "#/definitions/Repair"
+        },
+        "feedback": {
+          "type": "string"
+        }
+      },
+      "xml": {
+        "name": "Reason"
+      }
+    },
+    "ScalaEvalRequest": {
+      "type": "object",
+      "required": [
+        "source"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "scala source code to evaluate"
+        }
+      },
+      "xml": {
+        "name": "ScalaEvalRequest"
+      }
+    },
+    "ScalaEvalResponse": {
+      "type": "object",
+      "required": [
+        "stdout",
+        "stderr"
+      ],
+      "properties": {
+        "stdout": {
+          "type": "string",
+          "description": "stdout from evaluation of scala code"
+        },
+        "stderr": {
+          "type": "string",
+          "description": "stderr from evaluation of scala code"
+        }
+      },
+      "xml": {
+        "name": "ScalaEvalResponse"
+      }
+    },
+    "SchemaForQueryRequest": {
+      "type": "object",
+      "required": [
+        "query"
+      ],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "query string to get schema for - sql"
+        }
+      },
+      "xml": {
+        "name": "SchemaForQueryRequest"
+      }
+    },
+    "QueryMimirRequest": {
+      "type": "object",
+      "required": [
+        "input",
+        "query",
+        "includeUncertainty",
+        "includeReasons"
+      ],
+      "properties": {
+        "input": {
+          "type": "string",
+          "description": "input for query"
+        },
+        "query": {
+          "type": "string",
+          "description": "query string - sql"
+        },
+        "includeUncertainty": {
+          "description": "include taint in response",
+          "type": "boolean"
+        },
+        "includeReasons": {
+          "description": "include reasons in response",
+          "type": "boolean"
+        }
+      },
+      "xml": {
+        "name": "QueryMimirRequest"
+      }
+    },
+    "CSVContainer": {
+      "type": "object",
+      "required": [
+        "schema",
+        "data",
+        "prov",
+        "colTaint",
+        "rowTaint",
+        "reasons"
+      ],
+      "properties": {
+        "schema": {
+          "type": "array",
+          "xml": {
+            "name": "schema",
+            "wrapped": true
+          },
+          "items": {
+            "$ref": "#/definitions/Schema"
+          }
+        },
+        "data": {
+          "type": "array",
+          "xml": {
+            "name": "data",
+            "wrapped": true
+          },
+          "items": {
+            "type": "array",
+            "xml": {
+              "name": "data",
+              "wrapped": true
+            },
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "prov": {
+          "type": "array",
+          "xml": {
+            "name": "prov",
+            "wrapped": true
+          },
+          "items": {
+            "type": "string"
+          }
+        },
+        "colTaint": {
+          "type": "array",
+          "xml": {
+            "name": "col_taint",
+            "wrapped": true
+          },
+          "items": {
+            "type": "array",
+            "xml": {
+              "name": "col_taint",
+              "wrapped": true
+            },
+            "items": {
+              "type": "boolean"
+            }
+          }
+        },
+        "rowTaint": {
+          "type": "array",
+          "xml": {
+            "name": "row_taint",
+            "wrapped": true
+          },
+          "items": {
+            "type": "boolean"
+          }
+        },
+        "reasons": {
+          "type": "array",
+          "xml": {
+            "name": "reasons",
+            "wrapped": true
+          },
+          "items": {
+            "$ref": "#/definitions/Reason"
+          }
+        }
+      },
+      "xml": {
+        "name": "CSVContainer"
+      }
+    },
+    "LoadResponse": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "name of resulting table"
+        }
+      },
+      "xml": {
+        "name": "LoadResponse"
+      }
+    },
+    "LoadRequest": {
+      "type": "object",
+      "required": [
+        "file",
+        "format",
+        "inferTypes",
+        "detectHeaders",
+        "backendOption"
+      ],
+      "properties": {
+        "file": {
+          "description": "file url of datasorce to load",
+          "type": "string"
+        },
+        "format": {
+          "description": "format of file for spark",
+          "type": "string"
+        },
+        "inferTypes": {
+          "description": "infer types in data source",
+          "type": "boolean"
+        },
+        "detectHeaders": {
+          "description": "detect headers in datasource",
+          "type": "boolean"
+        },
+        "backendOption": {
+          "description": "options for spark datasource api",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Tuple"
+          }
+        }
+      },
+      "xml": {
+        "name": "LoadRequest"
+      }
+    },
+    "UnloadRequest": {
+      "type": "object",
+      "required": [
+        "input",
+        "file",
+        "format",
+        "backendOption"
+      ],
+      "properties": {
+        "input": {
+          "description": "table or view to unload",
+          "type": "string"
+        },
+        "file": {
+          "description": "file url of datasorce to unload",
+          "type": "string"
+        },
+        "format": {
+          "description": "format of file for spark",
+          "type": "string"
+        },
+        "backendOption": {
+          "description": "options for spark datasource api",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Tuple"
+          }
+        }
+      },
+      "xml": {
+        "name": "UnloadRequest"
+      }
+    },
+    "LensList": {
+      "type": "array",
+      "xml": {
+        "name": "LensList",
+        "wrapped": true
+      },
+      "items": {
+        "type": "string"
+      }
+    },
+    "CreateLensRequest": {
+      "type": "object",
+      "required": [
+        "input",
+        "params",
+        "type",
+        "materialize"
+      ],
+      "properties": {
+        "input": {
+          "type": "string",
+          "description": "input for lens"
+        },
+        "params": {
+          "type": "array",
+          "xml": {
+            "name": "params",
+            "wrapped": true
+          },
+          "items": {
+            "type": "string"
+          }
+        },
+        "type": {
+          "type": "string",
+          "description": "type name of lens"
+        },
+        "materialize": {
+          "type": "boolean",
+          "description": "materialize input before creating lens"
+        }
+      },
+      "xml": {
+        "name": "CreateLensRequest"
+      }
+    },
+    "CreateLensResponse": {
+      "type": "object",
+      "required": [
+        "lensName",
+        "annotations"
+      ],
+      "properties": {
+        "lensName": {
+          "type": "string",
+          "description": "name of resulting lens"
+        },
+        "annotations": {
+          "type": "integer",
+          "format": "int64",
+          "description": "count of annotations from lens"
+        }
+      },
+      "xml": {
+        "name": "CreateLensResponse"
+      }
+    },
+    "CreateViewRequest": {
+      "type": "object",
+      "required": [
+        "input",
+        "query"
+      ],
+      "properties": {
+        "input": {
+          "type": "string",
+          "description": "input for view"
+        },
+        "query": {
+          "type": "string",
+          "description": "query for view"
+        }
+      },
+      "xml": {
+        "name": "CreateViewRequest"
+      }
+    },
+    "CreateViewResponse": {
+      "type": "object",
+      "required": [
+        "viewName"
+      ],
+      "properties": {
+        "viewName": {
+          "type": "string",
+          "description": "name of resulting view"
+        }
+      },
+      "xml": {
+        "name": "CreateViewResponse"
+      }
+    },
+    "CreateAdaptiveSchemaRequest": {
+      "type": "object",
+      "required": [
+        "input",
+        "params",
+        "type",
+        "materialize"
+      ],
+      "properties": {
+        "input": {
+          "type": "string",
+          "description": "input for adaptive schema"
+        },
+        "params": {
+          "type": "array",
+          "xml": {
+            "name": "params",
+            "wrapped": true
+          },
+          "items": {
+            "type": "string"
+          }
+        },
+        "type": {
+          "type": "string",
+          "description": "type name of adaptive schema"
+        }
+      },
+      "xml": {
+        "name": "CreateAdaptiveSchemaRequest"
+      }
+    },
+    "CreateAdaptiveSchemaResponse": {
+      "type": "object",
+      "required": [
+        "adaptiveSchemaName"
+      ],
+      "properties": {
+        "adaptiveSchemaName": {
+          "type": "string",
+          "description": "name of resulting adaptive schema"
+        }
+      },
+      "xml": {
+        "name": "CreateAdaptiveSchemaResponse"
+      }
+    },
+    "AdaptiveSchemaList": {
+      "type": "array",
+      "xml": {
+        "name": "AdaptiveSchemaList",
+        "wrapped": true
+      },
+      "items": {
+        "type": "string"
+      }
+    },
+    "ExplainSubsetWithoutSchemaRequest": {
+      "type": "object",
+      "required": [
+        "query",
+        "rows",
+        "cols"
+      ],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "query to explain"
+        },
+        "rows": {
+          "type": "array",
+          "xml": {
+            "name": "rows",
+            "wrapped": true
+          },
+          "items": {
+            "type": "string"
+          }
+        },
+        "cols": {
+          "type": "array",
+          "xml": {
+            "name": "cols",
+            "wrapped": true
+          },
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "xml": {
+        "name": "ExplainSubsetWithoutSchemaRequest"
+      }
+    },
+    "ReasonSet": {
+      "type": "object",
+      "required": [
+        "model",
+        "idx",
+        "lookup"
+      ],
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "model name"
+        },
+        "idx": {
+          "type": "integer",
+          "format": "int64",
+          "description": "idx for vgterm"
+        },
+        "lookup": {
+          "type": "string",
+          "description": "lookup string for args and hints"
+        }
+      },
+      "xml": {
+        "name": "ReasonSet"
+      }
+    },
+    "ExplainResponse": {
+      "type": "array",
+      "xml": {
+        "name": "ExplainResponse",
+        "wrapped": true
+      },
+      "items": {
+        "$ref": "#/definitions/ReasonSet"
+      }
+    },
+    "ExplainSchemaRequest": {
+      "type": "object",
+      "required": [
+        "query",
+        "cols"
+      ],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "query to explain"
+        },
+        "cols": {
+          "type": "array",
+          "xml": {
+            "name": "cols",
+            "wrapped": true
+          },
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "xml": {
+        "name": "ExplainSchemaRequest"
+      }
+    },
+    "ExplainCellSchemaRequest": {
+      "type": "object",
+      "required": [
+        "query",
+        "row",
+        "col"
+      ],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "query to explain"
+        },
+        "row": {
+          "type": "string",
+          "description": "rowid of cell"
+        },
+        "col": {
+          "type": "integer",
+          "format": "int32",
+          "description": "column of cell"
+        }
+      },
+      "xml": {
+        "name": "ExplainCellSchemaRequest"
+      }
+    },
+    "ExplainReasonsResponse": {
+      "type": "object",
+      "required": [
+        "reasons"
+      ],
+      "properties": {
+        "reasons": {
+          "type": "array",
+          "xml": {
+            "name": "ExplainResponse",
+            "wrapped": true
+          },
+          "items": {
+            "$ref": "#/definitions/Reason"
+          }
+        }
+      },
+      "xml": {
+        "name": "ExplainReasonsResponse"
+      }
+    },
+    "ExplainSubsetRequest": {
+      "type": "object",
+      "required": [
+        "query",
+        "rows",
+        "cols"
+      ],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "query to explain"
+        },
+        "rows": {
+          "type": "array",
+          "xml": {
+            "name": "rows",
+            "wrapped": true
+          },
+          "items": {
+            "type": "string"
+          }
+        },
+        "cols": {
+          "type": "array",
+          "xml": {
+            "name": "cols",
+            "wrapped": true
+          },
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "xml": {
+        "name": "ExplainSubsetRequest"
+      }
+    },
+    "ExplainEverythingAllRequest": {
+      "type": "object",
+      "required": [
+        "query"
+      ],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "query to explain"
+        }
+      }
+    },
+    "ExplainEverythingRequest": {
+      "type": "object",
+      "required": [
+        "query"
+      ],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "query to explain"
+        }
+      }
+    },
+    "FeedbackForReasonRequest": {
+      "type": "object",
+      "required": [
+        "reason",
+        "idx",
+        "ack",
+        "repairStr"
+      ],
+      "properties": {
+        "reason": {
+          "$ref": "#/definitions/Reason"
+        },
+        "idx": {
+          "type": "integer",
+          "format": "int32",
+          "description": "idx"
+        },
+        "ack": {
+          "type": "boolean",
+          "description": "acknowledge guess"
+        },
+        "repairStr": {
+          "type": "string",
+          "description": "repair string"
+        }
+      },
+      "xml": {
+        "name": "FeedbackForReasonRequest"
+      }
+    }
+  }
+}

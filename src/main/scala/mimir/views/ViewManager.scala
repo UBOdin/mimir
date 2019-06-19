@@ -1,8 +1,7 @@
-package mimir.views;
+package mimir.views
 
-import java.sql.SQLException;
-
-import net.sf.jsqlparser.statement.select.SelectBody
+import java.sql.SQLException
+import sparsity.Name
 
 import mimir._
 import mimir.algebra._
@@ -12,11 +11,12 @@ import mimir.exec._
 import mimir.exec.mode._
 import mimir.serialization._
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import mimir.metadata.MetadataMap
 
 
 class ViewManager(db:Database) extends LazyLogging {
   
-  val viewTable = "MIMIR_VIEWS"
+  var viewTable: MetadataMap = null
 
   /**
    * Initialize the view manager: 
@@ -24,12 +24,10 @@ class ViewManager(db:Database) extends LazyLogging {
    */
   def init(): Unit = 
   {
-    db.requireMetadataTable(viewTable, Seq(
-        ("NAME", TString()),
-        ("QUERY", TString()),
-        ("METADATA", TInt())
-      ), 
-      primaryKey = Some("NAME")
+    viewTable = db.metadata.registerMap(ID("MIMIR_VIEWS"), Seq(
+        ID("QUERY") -> TString(),
+        ID("METADATA") -> TInt()
+      )
     )
   }
 
@@ -39,17 +37,16 @@ class ViewManager(db:Database) extends LazyLogging {
    * @param  query          The query to back the view with
    * @throws SQLException   If a view or table with the same name already exists
    */
-  def create(name: String, query: Operator): Unit =
+  def create(name: ID, query: Operator): Unit =
   {
     logger.debug(s"CREATE VIEW $name AS $query")
     if(db.tableExists(name)){
       throw new SQLException(s"View '$name' already exists")
     }
-    db.metadataBackend.update(s"INSERT INTO $viewTable(NAME, QUERY, METADATA) VALUES (?,?,0)", 
-      Seq(
-        StringPrimitive(name), 
-        StringPrimitive(Json.ofOperator(query).toString)
-      ))
+    viewTable.put(name, Seq(
+      StringPrimitive(Json.ofOperator(query).toString),
+      IntPrimitive(0)
+    ))
     // updateMaterialization(name)
   }
 
@@ -59,16 +56,13 @@ class ViewManager(db:Database) extends LazyLogging {
    * @param  query          The new query to back the view with
    * @throws SQLException   If a view or table with the same name already exists
    */
-  def alter(name: String, query: Operator): Unit =
+  def alter(name: ID, query: Operator): Unit =
   {
     val properties = apply(name)
-    db.metadataBackend.update(s"UPDATE $viewTable SET QUERY=? WHERE NAME=?", 
-      Seq(
-        StringPrimitive(Json.ofOperator(query).toString),
-        StringPrimitive(name)
-      )) 
+    viewTable.update(name, Map(
+      ID("QUERY") -> StringPrimitive(Json.ofOperator(query).toString)
+    )) 
     if(properties.isMaterialized){
-      db.metadataBackend.update("DROP TABLE ${name}")
       materialize(name)
     }
   }
@@ -78,15 +72,16 @@ class ViewManager(db:Database) extends LazyLogging {
    * @param  name           The name of the view to alter
    * @throws SQLException   If a view or table with the same name already exists
    */
-  def drop(name: String): Unit =
+  def drop(name: ID, ifExists: Boolean = false): Unit =
   {
-    val properties = apply(name)
-    db.metadataBackend.update(s"DELETE FROM $viewTable WHERE NAME=?", 
-      Seq(StringPrimitive(name))
-    )
-    if(properties.isMaterialized){
-      db.metadataBackend.update("DROP TABLE ${name}")
-    }
+    val properties = 
+      get(name) match {
+        case Some(properties) => properties
+        case None => if(ifExists){ return }
+                     else { throw new SQLException(s"Unknown View '$name'") }
+      }
+    viewTable.rm(name)
+    if(properties.isMaterialized){ db.backend.dropTable(name) }
   }
 
   /**
@@ -94,13 +89,12 @@ class ViewManager(db:Database) extends LazyLogging {
    * @param name    The name of the view to look up
    * @return        Properties for the specified query or None if the view doesn't exist
    */
-  def get(name: String): Option[ViewMetadata] =
+  def get(name: Name): Option[ViewMetadata] = get(ID.upper(name))
+  def get(name: ID): Option[ViewMetadata] = 
   {
     val results = 
-      db.metadataBackend.resultRows(s"SELECT QUERY, METADATA FROM $viewTable WHERE name = ?", 
-        Seq(StringPrimitive(name))
-      )
-    results.take(1).headOption.map(_.toSeq).map( 
+    logger.trace(s"Getting View $name")
+    viewTable.get(name).map(_._2.toSeq).map( 
       { 
         case Seq(StringPrimitive(s), IntPrimitive(meta)) => {
           val query = Json.toOperator(Json.parse(s))
@@ -119,7 +113,8 @@ class ViewManager(db:Database) extends LazyLogging {
    * @return                Properties for the specified query
    * @throws SQLException   If the specified view does not exist
    */
-  def apply(name: String): ViewMetadata =
+  def apply(name: Name): ViewMetadata = apply(ID.upper(name))
+  def apply(name: ID): ViewMetadata = 
   {
     get(name) match {
       case None => 
@@ -133,7 +128,7 @@ class ViewManager(db:Database) extends LazyLogging {
    * Materialize the specified view
    * @param  name        The name of the view to materialize
    */
-  def materialize(name: String): Unit =
+  def materialize(name: ID): Unit =
   {
     if(db.backend.getTableSchema(name) != None){
       throw new SQLException(s"View '$name' is already materialized")
@@ -147,7 +142,7 @@ class ViewManager(db:Database) extends LazyLogging {
       provenance
     ) = BestGuess.rewriteRaw(db, properties.query)
 
-    val columns:Seq[String] = baseSchema.map(_._1)
+    val columns:Seq[ID] = baseSchema.map(_._1)
     logger.debug(s"SCHEMA: $columns; $rowTaint; $columnTaint; $provenance")
 
     val completeQuery = 
@@ -176,29 +171,19 @@ class ViewManager(db:Database) extends LazyLogging {
     db.backend.createTable(name, completeQuery)
     db.backend.materializeView(name)
 
-    db.metadataBackend.update(s"""
-      UPDATE $viewTable SET METADATA = 1 WHERE NAME = ?
-    """, Seq(
-      StringPrimitive(name)
-    ))
+    viewTable.update(name, Map(ID("METADATA") -> IntPrimitive(1)))
   }
 
   /**
    * Remove the materialization for the specified view
    * @param  name        The name of the view to dematerialize
    */
-  def dematerialize(name: String): Unit = {
+  def dematerialize(name: ID): Unit = {
     if(db.backend.getTableSchema(name) == None){
       throw new SQLException(s"View '$name' is not materialized")
     }
-    db.metadataBackend.update(s"""
-      DROP TABLE $name
-    """)
-    db.metadataBackend.update(s"""
-      UPDATE $viewTable SET METADATA = 0 WHERE NAME = ?
-    """, Seq(
-      StringPrimitive(name)
-    ))
+    db.backend.dropTable(name)
+    viewTable.update(name, Map(ID("METADATA") -> IntPrimitive(0)))
     db.backend.invalidateCache
   }
 
@@ -206,14 +191,8 @@ class ViewManager(db:Database) extends LazyLogging {
    * List all views known to the view manager
    * @return     A list of all view names
    */
-  def list(): Seq[String] =
-  {
-    db.metadataBackend.
-      resultRows(s"SELECT name FROM $viewTable").
-      flatten.
-      map( _.asString ).
-      toSeq
-  }
+  def list(): Seq[ID] =
+    viewTable.keys
 
   /**
    * Return a query that can be used to list all views known to Mimir.
@@ -223,8 +202,8 @@ class ViewManager(db:Database) extends LazyLogging {
   def listViewsQuery: Operator = 
   {
     HardTable(
-      Seq( ("TABLE_NAME", TString()) ),
-      list().map { StringPrimitive(_) }.map { Seq(_) }
+      Seq( ID("TABLE_NAME") -> TString() ),
+      list.map { col => StringPrimitive(col.id) }.map { Seq(_) }
     )
   }
 
@@ -237,16 +216,16 @@ class ViewManager(db:Database) extends LazyLogging {
   {
     logger.warn("Constructing lens attribute list not implemented yet")
     HardTable(Seq(
-        ("TABLE_NAME", TString()), 
-        ("ATTR_NAME", TString()),
-        ("ATTR_TYPE", TString()),
-        ("IS_KEY", TBool())
+        ID("TABLE_NAME") -> TString(), 
+        ID("ATTR_NAME")  -> TString(),
+        ID("ATTR_TYPE")  -> TString(),
+        ID("IS_KEY")     -> TBool()
       ),
       list().flatMap { view => 
         db.typechecker.schemaOf(get(view).get.query).map { case (col, t) =>
           Seq(
-            StringPrimitive(view),
-            StringPrimitive(col),
+            StringPrimitive(view.id),
+            StringPrimitive(col.id),
             TypePrimitive(t),
             BoolPrimitive(false)
           )

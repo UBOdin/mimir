@@ -1,7 +1,6 @@
-package mimir.algebra;
+package mimir.algebra
 
-import java.sql._;
-
+import java.sql._
 import mimir.Database
 import mimir.algebra.function._
 import mimir.provenance.Provenance
@@ -35,12 +34,12 @@ class Eval(
   /**
    * Evaluate the specified expression and cast the result to a Boolean
    */
-  def evalBool(e: Expression, bindings: Map[String, PrimitiveValue] = Map[String, PrimitiveValue]()): Boolean =
+  def evalBool(e: Expression, bindings: Map[ID, PrimitiveValue] = Map[ID, PrimitiveValue]()): Boolean =
     evalBool(e, bindings.get(_))
   /**
    * Evaluate the specified expression and cast the result to a Boolean
    */
-  def evalBool(e: Expression, bindings: (String => Option[PrimitiveValue])): Boolean =
+  def evalBool(e: Expression, bindings: (ID => Option[PrimitiveValue])): Boolean =
     eval(e, bindings) match {
       case BoolPrimitive(v) => v
 
@@ -55,14 +54,14 @@ class Eval(
    * Evaluate the specified expression and return the primitive value
    */
   def eval(e: Expression): PrimitiveValue = 
-    eval(e, Map[String, PrimitiveValue]())
+    eval(e, Map[ID, PrimitiveValue]())
 
   /**
    * Evaluate the specified expression given a set of Var/Value bindings
    * and return the primitive value of the result
    */
   def eval(e: Expression, 
-           bindings: Map[String, PrimitiveValue]
+           bindings: Map[ID, PrimitiveValue]
   ): PrimitiveValue = 
     eval(e, bindings.get(_))
 
@@ -71,7 +70,7 @@ class Eval(
    * and return the primitive value of the result
    */
   def eval(e: Expression, 
-           bindings: (String => Option[PrimitiveValue])
+           bindings: (ID => Option[PrimitiveValue])
   ): PrimitiveValue = 
   {
     e match {
@@ -131,12 +130,14 @@ class Eval(
           isInstanceOf[NullPrimitive];
         return BoolPrimitive(isNull);
       }
+      case CastExpression(expr, t) =>
+        Cast(t, eval(expr, bindings))
       case Function(name, args) => 
-        applyFunction(name.toUpperCase, args.map { eval(_, bindings) })
+        applyFunction(name, args.map { eval(_, bindings) })
     }
   }
 
-  def applyFunction(name: String, args: Seq[PrimitiveValue]): PrimitiveValue =
+  def applyFunction(name: ID, args: Seq[PrimitiveValue]): PrimitiveValue =
   {
     functions.flatMap { _.getOption(name) } match {
       case Some(NativeFunction(_, op, _, _)) => 
@@ -145,7 +146,7 @@ class Eval(
         eval(expr, argNames.zip(args).toMap)
       case Some(FoldFunction(_, expr)) =>
         args.tail.foldLeft[PrimitiveValue](args.head) { case (curr, next) =>
-          eval(expr, Map("CURR" -> curr, "NEXT" -> next))
+          eval(expr, Map(ID("CURR") -> curr, ID("NEXT") -> next))
         }
       case None => 
         throw new RAException(s"Function $name(${args.mkString(",")}) is undefined")
@@ -156,7 +157,7 @@ class Eval(
     var sum  = 0.0
     val samples = collection.mutable.Map[Double, Int]()
     for( i <- 0 until SAMPLE_COUNT) {
-      val bindings = Map[String, IntPrimitive]("__SEED" -> IntPrimitive(i+1))
+      val bindings = Map[ID, IntPrimitive](ID("__SEED") -> IntPrimitive(i+1))
       val sample =
         try {
           eval(exp, bindings).asDouble
@@ -183,7 +184,7 @@ object Eval
    * thoroughly inline it, recursively applying simplify() at all levels,
    * to all subtrees of the expression
    */
-  def inline(e: Expression, bindings: Map[String, Expression]):
+  def inline(e: Expression, bindings: Map[ID, Expression]):
     Expression = 
   {
     e match {
@@ -197,7 +198,7 @@ object Eval
    * thoroughly inline it, recursively applying simplify() at all levels,
    * to all subtrees of the expression
    */
-  def inline(e: Expression)(bindings: (String => Expression)):
+  def inline(e: Expression)(bindings: (ID => Expression)):
     Expression = 
   {
     e match {

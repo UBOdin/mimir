@@ -5,9 +5,9 @@ import mimir.algebra._
 sealed abstract class Statistic
 
 abstract class ColumnStatistic(
-  input: String, 
-  aggName: String, 
-  output: String, 
+  input: ID, 
+  aggName: ID, 
+  output: ID, 
   distinct: Boolean = false
 ) 
   extends Statistic
@@ -18,13 +18,13 @@ abstract class ColumnStatistic(
     Seq( ProjectArg(output, Var(output)) )
 }
 
-case class Expectation(inputColumn: String, outputColumn: String) 
-  extends ColumnStatistic(inputColumn, "AVG", outputColumn)
+case class Expectation(inputColumn: ID, outputColumn: ID) 
+  extends ColumnStatistic(inputColumn, ID("avg"), outputColumn)
 
-case class StdDev(inputColumn: String, outputColumn: String) 
-  extends ColumnStatistic(inputColumn, "STDDEV", outputColumn)
+case class StdDev(inputColumn: ID, outputColumn: ID) 
+  extends ColumnStatistic(inputColumn, ID("stddev"), outputColumn)
 
-case class AnyValue(inputColumn: String, outputColumn: String) 
-  extends ColumnStatistic(inputColumn, "FIRST", outputColumn)
+case class AnyValue(inputColumn: ID, outputColumn: ID) 
+  extends ColumnStatistic(inputColumn, ID("first"), outputColumn)
 
-case class Confidence(output: String) extends Statistic
+case class Confidence(output: ID) extends Statistic

@@ -12,7 +12,7 @@ import mimir.util._
  * in the list.
  */
 @SerialVersionUID(1001L)
-class DefaultMetaModel(name: String, context: String, models: Seq[String]) 
+class DefaultMetaModel(name: ID, context: String, models: Seq[ID]) 
   extends Model(name) 
   with DataIndependentFeedback 
   with NoArgModel
@@ -20,9 +20,9 @@ class DefaultMetaModel(name: String, context: String, models: Seq[String])
 {
   def varType(idx: Int, args: Seq[Type]): Type = TString()
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
-    choices(idx).getOrElse( StringPrimitive(models.head))
+    choices(idx).getOrElse( StringPrimitive(models.head.id) )
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
-    StringPrimitive(RandUtils.pickFromList(randomness, models))
+    StringPrimitive(RandUtils.pickFromList(randomness, models).id)
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String =
   {
     choices(idx) match {
@@ -38,7 +38,7 @@ class DefaultMetaModel(name: String, context: String, models: Seq[String])
   def validateChoice(idx: Int, v: PrimitiveValue) = models.contains(v.asString)
 
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
-    models.map( x => (StringPrimitive(x), 0.0) )
+    models.map( x => (StringPrimitive(x.id), 0.0) )
 
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]) : Double = 1.0/models.size
 

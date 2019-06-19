@@ -18,7 +18,7 @@ object GeocodingSpec
 {
 
   def beforeAll = {
-    loadCSV("ADDR", new File("test/data/geo.csv"), false, true)
+    loadCSV("ADDR", "test/data/geo.csv", false, true)
   }
   
   "The Geocoding Lens" should {
@@ -30,7 +30,7 @@ object GeocodingSpec
         SELECT WEBJSON('http://api.geonames.org/timezoneJSON?lat=42.80&lng=-78.89&username=ubodintestcase', '.time') AS NOW_TIME FROM ADDR
       """){ _.map { row => 
         
-         row("NOW_TIME").asString
+         row(ID("NOW_TIME")).asString
         
       }.toList }.toList
       result(0).replaceAll("\"", "").substring(0, 10) must be equalTo new DateTime().toString("YYYY-MM-dd", Locale.US)
@@ -48,10 +48,10 @@ object GeocodingSpec
         SELECT LATITUDE, LONGITUDE FROM GEO_LENS_GOOGLE
       """)(results => results.toList.map( row =>  { 
         (
-          row("LATITUDE"), 
-          row("LONGITUDE"), 
-          row.isColDeterministic("LATITUDE"),
-          row.isColDeterministic("LONGITUDE"),
+          row(ID("LATITUDE")), 
+          row(ID("LONGITUDE")), 
+          row.isColDeterministic(ID("LATITUDE")),
+          row.isColDeterministic(ID("LONGITUDE")),
           row.isDeterministic()
         )
        }))
@@ -85,10 +85,10 @@ object GeocodingSpec
         SELECT LATITUDE, LONGITUDE FROM GEO_LENS_OSM
       """){ _.map { row => 
         (
-          row("LATITUDE"), 
-          row("LONGITUDE"), 
-          row.isColDeterministic("LATITUDE"),
-          row.isColDeterministic("LONGITUDE"),
+          row(ID("LATITUDE")), 
+          row(ID("LONGITUDE")), 
+          row.isColDeterministic(ID("LATITUDE")),
+          row.isColDeterministic(ID("LONGITUDE")),
           row.isDeterministic()
         )
       }.toList }.toList
@@ -119,8 +119,8 @@ object GeocodingSpec
       val result = db.query(select("SELECT json_extract(LATITUDE,'$.values') AS DOMAIN_LAT, json_extract(LONGITUDE,'$.values') AS DOMAIN_LON FROM GEO_LENS_DOMAIN_DUMP_OSM"), 
           DumpDomain){ _.map { row => 
         (
-          row("DOMAIN_LAT"), 
-          row("DOMAIN_LON")
+          row(ID("DOMAIN_LAT")), 
+          row(ID("DOMAIN_LON"))
         )
       }.toList }.toList
       
@@ -146,8 +146,8 @@ object GeocodingSpec
       val result = db.query(select("SELECT json_extract(LATITUDE,'$.values') AS DOMAIN_LAT, json_extract(LONGITUDE,'$.values') AS DOMAIN_LON FROM GEO_LENS_DOMAIN_DUMP_GOOGLE"), 
           DumpDomain){ _.map { row => 
         (
-          row("DOMAIN_LAT"), 
-          row("DOMAIN_LON")
+          row(ID("DOMAIN_LAT")), 
+          row(ID("DOMAIN_LON"))
         )
       }.toList }.toList
       

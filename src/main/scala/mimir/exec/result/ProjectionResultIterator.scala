@@ -10,7 +10,7 @@ import mimir.Database
 class ProjectionResultIterator(
   tupleDefinition: Seq[ProjectArg],
   annotationDefinition: Seq[ProjectArg],
-  inputSchema: Seq[(String,Type)],
+  inputSchema: Seq[(ID,Type)],
   source: ResultIterator,
   db: Database
 )
@@ -24,9 +24,9 @@ class ProjectionResultIterator(
   private val inputSchemaLookup = inputSchema.toMap
   private val typeOf = db.typechecker.typeOf(_:Expression, inputSchemaLookup)
 
-  val tupleSchema: Seq[(String,Type)] = 
+  val tupleSchema: Seq[(ID,Type)] = 
     tupleDefinition.map { case ProjectArg(name, expr) => (name, typeOf(expr)) }
-  val annotationSchema: Seq[(String,Type)] = 
+  val annotationSchema: Seq[(ID,Type)] = 
     annotationDefinition.map { case ProjectArg(name, expr) => (name, typeOf(expr)) }
 
   //
@@ -39,7 +39,7 @@ class ProjectionResultIterator(
   // and the result is the columnOutput, annotationOutput 
   // elements defined below.
   // 
-  private val evalScope: Map[String,(Type, Row => PrimitiveValue)] =
+  private val evalScope: Map[ID,(Type, Row => PrimitiveValue)] =
     inputSchema.zipWithIndex.map { 
       case ((name, t), idx) => (name, (t, (_:Row)(idx))) 
     }.toMap
@@ -49,7 +49,7 @@ class ProjectionResultIterator(
     tupleDefinition.map { _.expression }.map { eval.compile(_) }
   val annotationOutputs: Seq[Row => PrimitiveValue] = 
     annotationDefinition.map { _.expression }.map { eval.compile(_) }
-  val annotationIndexes: Map[String,Int] =
+  val annotationIndexes: Map[ID,Int] =
     annotationDefinition.map { _.name }.zipWithIndex.toMap
 
   val makeRow =

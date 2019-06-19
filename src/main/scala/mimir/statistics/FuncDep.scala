@@ -10,6 +10,9 @@ import javax.swing.{JFrame, JPanel, JScrollPane, WindowConstants}
 import java.awt.{BasicStroke, Color, Dimension, Paint, Rectangle, Stroke}
 import java.sql.ResultSet
 
+import sparsity.Name
+import sparsity.statement.{CreateTable, ColumnDefinition, TablePrimaryKey}
+
 import scala.collection.mutable
 
 import com.typesafe.scalalogging.slf4j.Logger
@@ -23,7 +26,6 @@ import org.apache.commons.collections15.Transformer
 
 import com.jgraph.layout.tree.JGraphTreeLayout
 import edu.uci.ics.jung.visualization.renderers.Renderer.VertexLabel.Position
-import org.javacc.parser.OutputFile
 import scala.collection.JavaConverters._
 
 import mimir.algebra._
@@ -102,8 +104,8 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
     config.getOrElse("THRESHOLD", FloatPrimitive(0.05)).asDouble
 
   // tables containing data for computations
-  var sch:Seq[(String, Type)] = null // the schema, is a lookup for the type and name
-  var tableName : String = null
+  var sch:Seq[(ID, Type)] = null // the schema, is a lookup for the type and name
+  var tableName : ID = null
   var table:mutable.IndexedSeq[mutable.Buffer[PrimitiveValue]] = null // This table contains the input table
   var countTable:mutable.IndexedSeq[mutable.Map[PrimitiveValue,Long]] = null // contains a count of every occurrence of every value in the column
   var densityTable:mutable.IndexedSeq[Long] = null // gives the density for column, that is percentage of non-null values
@@ -127,7 +129,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
 
   // buildEntities calls all the functions required for ER creation, optionally each function could be called if only part of the computation is required
 
-  def buildEntities(db: Database, query: Operator, tableName : String): Unit = {
+  def buildEntities(db: Database, query: Operator, tableName : ID): Unit = {
     initializeTables(db.typechecker.schemaOf(query), tableName)
     preprocessFDG(db, query)
     constructFDG()
@@ -135,7 +137,7 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
     // mergeEntities()
   }
 
-  def initializeTables(schema: Seq[(String, Type)],tName : String): Unit =
+  def initializeTables(schema: Seq[(ID, Type)],tName : ID): Unit =
   {
     blackList = mutable.Set[Int]()
     tableName = tName
@@ -900,23 +902,6 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
     frame.setVisible(true)
   }
 
-  def serialize(): Array[Byte] = 
-  {
-    val byteBucket = new ByteArrayOutputStream()
-    val out = new ObjectOutputStream(byteBucket);
-    out.writeObject(this)
-    byteBucket.toByteArray
-  }
-
-  def serializeTo(db: mimir.Database, name: String): Unit =
-  {
-    FuncDep.initBackstore(db)
-    db.metadataBackend.update(
-      "INSERT OR REPLACE INTO "+FuncDep.BACKSTORE_TABLE_NAME+"(name, data) VALUES (?,?)", 
-      List(StringPrimitive(name), StringPrimitive(SerializationUtils.b64encode(serialize())))
-    )
-  }
-
   def depth(node:Integer,score:Integer): Integer ={
     val pList = fdGraph.getPredecessors(node)
     var highestScore = 0
@@ -992,37 +977,6 @@ class FuncDep(config: Map[String,PrimitiveValue] = Map())
       }
     })
     writer.close()
-  }
-
-}
-
-
-object FuncDep {
-
-  val BACKSTORE_TABLE_NAME = "MIMIR_FUNCDEP_BLOBS"
-
-  def initBackstore(db: mimir.Database)
-  {
-    if(!db.metadataTableExists(FuncDep.BACKSTORE_TABLE_NAME)){
-      db.metadataBackend.update(
-        "CREATE TABLE "+FuncDep.BACKSTORE_TABLE_NAME+"(name varchar(40), data blob, PRIMARY KEY(name))"
-      )
-    }
-  }
-  def deserialize(data: Array[Byte]): FuncDep = 
-  {
-    val in = new ObjectInputStream(new ByteArrayInputStream(data))
-    val obj = in.readObject()
-    obj.asInstanceOf[FuncDep]
-  }
-  def deserialize(db: mimir.Database, name: String): FuncDep =
-  {
-    val blob = 
-      db.metadataBackend.resultValue(
-        "SELECT data FROM "+BACKSTORE_TABLE_NAME+" WHERE name=?", 
-        List(StringPrimitive(name))
-      ).asString
-    deserialize(SerializationUtils.b64decode(blob))
   }
 
 }

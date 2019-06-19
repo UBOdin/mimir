@@ -2,6 +2,7 @@ package mimir;
 
 import java.io._
 import java.sql.SQLException
+import java.net.URL
 
 import org.jline.terminal.{Terminal,TerminalBuilder}
 import org.slf4j.{LoggerFactory}
@@ -9,19 +10,20 @@ import org.rogach.scallop._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import scala.collection.JavaConverters._
 
+import sparsity._
+import fastparse.Parsed
+
 import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
+import mimir.backend._
+import mimir.metadata._
 import mimir.util.{Timer,ExperimentalOptions,LineReaderInputSource,PythonProcess,SqlUtils}
 import mimir.algebra._
 import mimir.algebra.spark.OperatorTranslation
 import mimir.statistics.{DetectSeries,DatasetShape}
 import mimir.plot.Plot
 import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
-import mimir.exec.result.JDBCResultIterator
-import net.sf.jsqlparser.statement.Statement
-import net.sf.jsqlparser.statement.select.{FromItem, PlainSelect, Select, SelectBody} 
-import net.sf.jsqlparser.statement.drop.Drop
 
 /**
  * The primary interface to Mimir.  Responsible for:
@@ -57,27 +59,18 @@ object Mimir extends LazyLogging {
     if(!conf.quiet()){
       output.print("Connecting to " + conf.backend() + "://" + conf.dbname() + "...")
     }
-    db.metadataBackend.open()
-    db.backend.open()
-    OperatorTranslation.db = db
-    sback.registerSparkFunctions(db.functions.functionPrototypes.map(el => el._1).toSeq, db.functions)
-    sback.registerSparkAggregates(db.aggregates.prototypes.map(el => el._1).toSeq, db.aggregates)
-      
-    db.initializeDBForMimir();
+    db.open()
 
     // Check for one-off commands
     if(conf.loadTable.get != None){
-      db.loadTable(conf.loadTable(), conf.loadTable()+".csv");
+      db.loadTable(conf.loadTable());
     } else {
 
       conf.precache.foreach( (opt) => opt.split(",").foreach( (table) => { 
         output.print(s"Precaching... $table")
-        db.models.prefetchForOwner(table.toUpperCase)
+        db.models.prefetchForOwner(ID.upper(table))
       }))
 
-      if(!ExperimentalOptions.isEnabled("NO-INLINE-VG")){
-        db.metadataBackend.asInstanceOf[InlinableBackend].enableInlining(db)
-      }
       if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
         output = new PrettyOutputFormat(terminal)
       }
@@ -110,11 +103,7 @@ object Mimir extends LazyLogging {
                   }
                 case "csv" => {
                     output.print("Loading "+file+"...")
-                    db.loadTable(
-                      new File(file).getName().replaceAll("\\..*", "").toUpperCase,
-                      new File(file),
-                      false
-                    )
+                    db.loadTable(file)
                   }
                 case _ => {
                   throw new RuntimeException("Error: Unknown file format '"+extension+"' of "+file)
@@ -151,23 +140,34 @@ object Mimir extends LazyLogging {
 
   def eventLoop(source: Reader, prompt: (() => Unit)): Unit =
   {
-    var parser = new MimirJSqlParser(source);
+    var parser = MimirCommand(source);
     var done = false;
-    do {
-      try {
-        prompt()
-        val stmt: Statement = parser.Statement();
 
-        stmt match {
-          case null             => done = true
-          case sel:  Select     => handleSelect(sel)
-          case expl: Explain    => handleExplain(expl)
-          case pragma: Pragma   => handlePragma(pragma)
-          case analyze: Analyze => handleAnalyze(analyze)
-          case plot: DrawPlot   => Plot.plot(plot, db, output)
-          case dir: DirectQuery => handleDirectQuery(dir)
-          case compare: Compare => handleCompare(compare)
-          case _                => db.update(stmt)
+    prompt()
+    while(parser.hasNext){
+      try {
+        parser.next() match {
+          case Parsed.Success(cmd:SlashCommand, _) => 
+            handleSlashCommand(cmd)
+
+          case Parsed.Success(SQLCommand(stmt), _) =>
+            stmt match {
+              case SQLStatement(sel:  sparsity.statement.Select) => 
+                handleSelect(sel)
+              case SQLStatement(expl: sparsity.statement.Explain)    => 
+                handleExplain(expl)
+              case analyze: Analyze => 
+                handleAnalyze(analyze)
+              case plot: DrawPlot   => 
+                Plot.plot(plot, db, output)
+              case compare: Compare => 
+                handleCompare(compare)
+              case _                => 
+                db.update(stmt)
+            }
+
+          case f: Parsed.Failure => 
+            output.print(s"Parse Error: ${f.msg}")
         }
 
       } catch {
@@ -189,15 +189,15 @@ object Mimir extends LazyLogging {
           // The parser pops the input stream back onto the queue, so
           // the next call to Statement() will throw the same exact 
           // Exception.  To prevent this from happening, reset the parser:
-          parser = new MimirJSqlParser(source);
+          parser = MimirCommand(source);
         }
       }
-    } while(!done)
+    }
   }
 
-  def handleSelect(sel: Select): Unit = 
+  def handleSelect(sel: sparsity.statement.Select): Unit = 
   {
-    val raw = db.sql.convert(sel)
+    val raw = db.sqlToRA(sel)
     handleQuery(raw)
   }
 
@@ -210,8 +210,8 @@ object Mimir extends LazyLogging {
 
   def handleCompare(comparison: Compare): Unit =
   {
-    val target = db.sql.convert(comparison.getTarget)
-    val expected = db.sql.convert(comparison.getExpected)
+    val target = db.sqlToRA(comparison.target)
+    val expected = db.sqlToRA(comparison.expected)
 
     val facets = DatasetShape.detect(db, expected)
     output.print("---- Comparison Dataset Features ----")
@@ -226,28 +226,9 @@ object Mimir extends LazyLogging {
     }
   }
 
-  def handleDirectQuery(direct: DirectQuery) =
+  def handleExplain(explain: sparsity.statement.Explain): Unit = 
   {
-    /*direct.getStatement match {
-      case sel: Select => {
-        val iter = new JDBCResultIterator(
-          SqlUtils.getSchema(sel.getSelectBody, db).map { (_, TString()) },
-          sel.getSelectBody,
-          db.backend,
-          TString()
-        )
-        output.print(iter)
-        iter.close()
-      }
-      case update => {
-        db.backend.update(update.toString);
-      }
-    }*/
-  }
-
-  def handleExplain(explain: Explain): Unit = 
-  {
-    val raw = db.sql.convert(explain.getSelectBody())
+    val raw = db.sqlToRA(explain.query)
     output.print("------ Raw Query ------")
     output.print(raw.toString)
     db.typechecker.schemaOf(raw)        // <- discard results, just make sure it typechecks
@@ -257,81 +238,92 @@ object Mimir extends LazyLogging {
     db.typechecker.schemaOf(optimized)  // <- discard results, just make sure it typechecks
     output.print("\n-------- SQL --------")
     try {
-      output.print(db.ra.convert(optimized).toString)
+      output.print(db.raToSQL(optimized).toString)
     } catch {
       case e:Throwable =>
         output.print("Unavailable: "+e.getMessage())
     }
-    output.print("\n------- Spark -------")
-    try {
-      output.print(
-        mimir.algebra.spark.OperatorTranslation.mimirOpToSparkOp(optimized).toString
-      )
-    } catch {
-      case e:Throwable =>
-        output.print("Unavailable: "+e.getMessage())
+    db.backend match { 
+      case sback: SparkBackend => {
+        output.print("\n------- Spark -------")
+        try {
+          output.print(
+            sback.operatorTranslation.mimirOpToSparkOp(optimized).toString
+          )
+        } catch {
+          case e:Throwable =>
+            output.print("Unavailable: "+e.getMessage())
+        }
+      }
+      case _ => {}
+    }
+  }
+
+  def handleAnalyzeFeatures(analyze: AnalyzeFeatures)
+  {
+    val query = db.sqlToRA(analyze.target)
+    output.print("==== Analyze Features ====")
+    for(facet <- DatasetShape.detect(db, query)) {
+      output.print(s"  > ${facet.description}")
     }
   }
 
   def handleAnalyze(analyze: Analyze)
   {
-    val rowId = analyze.getRowId()        // The rowid of the row to analyze, or null if table scan
-    val column = analyze.getColumn()      // The column of the cell to analyze, or null if full row or table scan
-    val assign = analyze.getAssign()      // True if the prioritizer should generate task allocations
-    val features = analyze.getFeatures()  // True if this is an ANALYZE FEATURES query
-    val query = db.sql.convert(analyze.getSelectBody())
+    val column = analyze.column      // The column of the cell to analyze, or null if full row or table scan
+    val query = db.sqlToRA(analyze.target)
 
-    if(features){
-      output.print("==== Analyze Features ====")
-      for(facet <- DatasetShape.detect(db, query)) {
-        output.print(s"  > ${facet.description}")
-      }
-      output.print("NOT IMPLEMENTED YET!")
-    } else if(rowId == null){
-      output.print("==== Analyze Table ====")
-      logger.debug("Starting to Analyze Table")
-      val reasonSets = db.explainer.explainEverything(query)
-      logger.debug("Done Analyzing Table")
-      for(reasonSet <- reasonSets){
-        logger.debug(s"Expanding $reasonSet")
-        // Workaround for a bug: SQLite crashes if a UDA is run on an empty input
-        if(!reasonSet.isEmpty(db)){
-          logger.debug(s"Not Empty: \n${reasonSet.argLookup}")
-          val count = reasonSet.size(db);
-          logger.debug(s"Size = $count")
-          val reasons = reasonSet.take(db, 5);
-          logger.debug(s"Got ${reasons.size} reasons")
-          printReasons(reasons);
-          if(count > reasons.size){
-            output.print(s"... and ${count - reasons.size} more like the last")
+    analyze.rowid match {
+      case None => {
+        output.print("==== Analyze Table ====")
+        logger.debug("Starting to Analyze Table")
+        val reasonSets = db.uncertainty.explainEverything(query)
+        logger.debug("Done Analyzing Table")
+        for(reasonSet <- reasonSets){
+          logger.debug(s"Expanding $reasonSet")
+          // Workaround for a bug: SQLite crashes if a UDA is run on an empty input
+          if(!reasonSet.isEmpty(db)){
+            logger.debug(s"Not Empty: \n${reasonSet.argLookup}")
+            val count = reasonSet.size(db);
+            logger.debug(s"Size = $count")
+            val reasons = reasonSet.take(db, 5);
+            logger.debug(s"Got ${reasons.size} reasons")
+            printReasons(reasons);
+            if(count > reasons.size){
+              output.print(s"... and ${count - reasons.size} more like the last")
+            }
           }
         }
-      }
-      if(assign == true) {
-        CTPrioritizer.prioritize(reasonSets.flatMap(x=>x.all(db)))
-      }
-    } else {
-      val token = RowIdPrimitive(db.sql.convert(rowId).asString)
-      if(column == null){ 
-        output.print("==== Analyze Row ====")
-        val explanation = 
-          db.explainer.explainRow(query, token)
-        printReasons(explanation.reasons)
-        output.print("--------")
-        output.print("Row Probability: "+explanation.probability)
-        if(assign == true) {
-          CTPrioritizer.prioritize(explanation.reasons)
+        if(analyze.withAssignments) {
+          CTPrioritizer.prioritize(reasonSets.flatMap(x=>x.all(db)))
         }
-      } else {
-      output.print("==== Analyze Cell ====")
-        val explanation = 
-          db.explainer.explainCell(query, token, column) 
-        printReasons(explanation.reasons)
-        output.print("--------")
-        output.print("Examples: "+explanation.examples.map(_.toString).mkString(", "))
-        if(assign == true) {
-          CTPrioritizer.prioritize(explanation.reasons)
-        }
+      }
+      case Some(rowid) => {
+        val token = RowIdPrimitive(db.sqlToRA(rowid).asString)
+        analyze.column match {
+          case None => { 
+            output.print("==== Analyze Row ====")
+            val explanation = 
+              db.uncertainty.explainRow(query, token)
+            printReasons(explanation.reasons)
+            output.print("--------")
+            output.print("Row Probability: "+explanation.probability)
+            if(analyze.withAssignments) {
+              CTPrioritizer.prioritize(explanation.reasons)
+            }
+          }
+          case Some(column) => {
+            output.print("==== Analyze Cell ====")
+            val explanation = 
+              db.uncertainty.explainCell(query, token, ID.upper(column))
+            printReasons(explanation.reasons)
+            output.print("--------")
+            output.print("Examples: "+explanation.examples.map(_.toString).mkString(", "))
+            if(analyze.withAssignments) {
+              CTPrioritizer.prioritize(explanation.reasons)
+            }
+          }
+        } 
       }
     }
   }
@@ -361,14 +353,13 @@ object Mimir extends LazyLogging {
     }
   }
 
-  def handlePragma(pragma: Pragma): Unit = 
+  def handleSlashCommand(cmd: SlashCommand): Unit = 
   {
-    db.sql.convert(pragma.getExpression, (x:String) => x) match {
-
-      case Function("SHOW", Seq(Var("TABLES"))) => 
-        for(table <- db.getAllTables()){ output.print(table.toUpperCase); }
-      case Function("SHOW", Seq(Var(name))) => 
-        db.tableSchema(name) match {
+    cmd.body.split(" +").toSeq match { 
+      case Seq("show", "tables") => 
+        for(table <- db.getAllTables()){ output.print(table.toString); }
+      case Seq("show", name) => 
+        db.tableSchema(ID.upper(name)) match {
           case None => 
             output.print(s"'$name' is not a table")
           case Some(schema) => 
@@ -376,23 +367,11 @@ object Mimir extends LazyLogging {
               schema.map { col => "  "+col._1+" "+col._2 }.mkString(",\n")
             +"\n);")
         }
-      case Function("SHOW", _) => 
-        output.print("Syntax: SHOW(TABLES) | SHOW(tableName)")
-
-      case Function("LOG", Seq(StringPrimitive(loggerName))) => 
+      case Seq("log", loggerName) => 
         setLogLevel(loggerName)
-
-      case Function("LOG", Seq(StringPrimitive(loggerName), Var(level))) => 
+      case Seq("log", loggerName, level) =>
         setLogLevel(loggerName, level)
-      case Function("LOG", _) =>
-        output.print("Syntax: LOG('logger') | LOG('logger', TRACE|DEBUG|INFO|WARN|ERROR)");
-
-      case Function("TEST_PYTHON", args) =>
-        val p = PythonProcess(s"test ${args.map { _.toString }.mkString(" ")}")
-        output.print(s"Python Exited: ${p.exitValue()}")
-
     }
-
   }
 
   def setLogLevel(loggerName: String, levelString: String = "DEBUG")

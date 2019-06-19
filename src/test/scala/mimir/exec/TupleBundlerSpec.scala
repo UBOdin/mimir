@@ -22,7 +22,7 @@ object TupleBundleSpec
   {
     //update("CREATE TABLE R(A int, B int, C int)")
     //loadCSV("R", new File("test/r_test/r.csv"))
-    loadCSV("R", Seq(("A","int"),("B","int"),("C","int")), new File("test/r_test/r.csv"))
+    loadCSV("R", Seq(("A","int"),("B","int"),("C","int")), "test/r_test/r.csv")
     update("CREATE LENS R_CLASSIC AS SELECT * FROM R WITH KEY_REPAIR(A)")
     // update("CREATE LENS R_FASTPATH AS SELECT * FROM R WITH KEY_REPAIR(A, ENABLE(FAST_PATH))")
   }
@@ -32,7 +32,7 @@ object TupleBundleSpec
   val bundler = new TupleBundle((0 until numSamples).map { _ => rand.nextLong })
   def compileFlat(query: Operator) = bundler.compileFlat(query, db.models.get(_))
   val allWorlds = WorldBits.fullBitVector(numSamples)
-  val columnNames = TupleBundle.columnNames(_:String, numSamples)
+  val columnNames = TupleBundle.columnNames(_:ID, numSamples)
 
   def conf(bv: Long): Double = WorldBits.confidence(bv, numSamples)
 
@@ -63,10 +63,10 @@ object TupleBundleSpec
           """))._1
         // )
       q1.columnNames must contain(eachOf(
-        "A", 
-        "MIMIR_SAMPLE_0_B", 
-        "MIMIR_SAMPLE_2_C", 
-        "MIMIR_WORLD_BITS"
+        ID("A"), 
+        ID("MIMIR_SAMPLE_0_B"), 
+        ID("MIMIR_SAMPLE_2_C"), 
+        ID("MIMIR_WORLD_BITS")
       ))
     }
 
@@ -79,8 +79,8 @@ object TupleBundleSpec
       val r1 =
         db.query(q1){ _.map { row => 
           (
-            row("A").asLong.toInt, 
-            columnNames("B").map { row(_).asLong.toInt }.toSet
+            row(ID("A")).asLong.toInt, 
+            columnNames(ID("B")).map { row(_).asLong.toInt }.toSet
           ) 
         }.toMap }
 
@@ -99,11 +99,11 @@ object TupleBundleSpec
           SELECT A FROM R_CLASSIC WHERE B = 2
         """))._1
 
-      q1.columnNames must beEqualTo(Seq("A", "MIMIR_WORLD_BITS"))
+      q1.columnNames must beEqualTo(Seq(ID("A"), ID("MIMIR_WORLD_BITS")))
 
       val r1 =
         db.query(q1) { _.map { row => 
-            (row("A").asInt, row("MIMIR_WORLD_BITS").asLong)
+            (row(ID("A")).asInt, row(ID("MIMIR_WORLD_BITS")).asLong)
           }.toMap 
         }
 
@@ -128,11 +128,11 @@ object TupleBundleSpec
         """))._1
 
       // This test assumes that compileFlat just adds a WORLDS_BITS column
-      q1.columnNames must beEqualTo(Seq("A", "MIMIR_WORLD_BITS"))
+      q1.columnNames must beEqualTo(Seq(ID("A"), ID("MIMIR_WORLD_BITS")))
 
       val r1 =
         db.query(q1){ _.map { row =>
-            (row("A").asInt, row("MIMIR_WORLD_BITS").asLong)
+            (row(ID("A")).asInt, row(ID("MIMIR_WORLD_BITS")).asLong)
           }.toIndexedSeq
         }
 
@@ -152,13 +152,13 @@ object TupleBundleSpec
       // This test assumes that compileFlat just splits 'B' into samples and 
       // adds a world bits column.
       q1.columnNames must beEqualTo(
-        columnNames("B").toSeq ++ Seq("MIMIR_WORLD_BITS")
+        columnNames(ID("B")).toSeq ++ Seq(ID("MIMIR_WORLD_BITS"))
       )
 
       // Extract into (Seq(B values), worldBits)
       val r1 =
         db.query(q1) { _.map { row => 
-          ( columnNames("B").map { row(_).asInt }.toSeq, row("MIMIR_WORLD_BITS").asLong )
+          ( columnNames(ID("B")).map { row(_).asInt }.toSeq, row(ID("MIMIR_WORLD_BITS")).asLong )
         }.toIndexedSeq }
 
       // This particular result *row* should be deterministic
@@ -179,14 +179,14 @@ object TupleBundleSpec
 
       // This test assumes that compileFlat just adds a WORLDS_BITS column
       q1.columnNames must beEqualTo(
-        Seq("A")++ columnNames("B") ++ Seq("MIMIR_WORLD_BITS")
+        Seq(ID("A"))++ columnNames(ID("B")) ++ Seq(ID("MIMIR_WORLD_BITS"))
       )
 
       val r1:Map[Int, (Seq[Int], Long)] =
         db.query(q1){ _.map { row => 
-          ( row("A").asInt -> 
-            ( columnNames("B").map { row(_).asInt }.toSeq, 
-              row("MIMIR_WORLD_BITS").asLong
+          ( row(ID("A")).asInt -> 
+            ( columnNames(ID("B")).map { row(_).asInt }.toSeq, 
+              row(ID("MIMIR_WORLD_BITS")).asLong
             )
           )
         }.toMap }
@@ -212,14 +212,14 @@ object TupleBundleSpec
         """))._1
 
       q1.columnNames must beEqualTo(
-        Seq("B")++columnNames("A")++Seq("MIMIR_WORLD_BITS")
+        Seq(ID("B"))++columnNames(ID("A"))++Seq(ID("MIMIR_WORLD_BITS"))
       )
 
       val r1: Map[Int, (Set[Int], Set[Int])] =
         db.query(q1){ _.map { row => 
-          val bv = row("MIMIR_WORLD_BITS").asLong
-          ( row("B").asInt -> (
-              TupleBundle.possibleValues(bv, columnNames("A").map { row(_) }).keySet.map { _.asInt },
+          val bv = row(ID("MIMIR_WORLD_BITS")).asLong
+          ( row(ID("B")).asInt -> (
+              TupleBundle.possibleValues(bv, columnNames(ID("A")).map { row(_) }).keySet.map { _.asInt },
               WorldBits.worlds(bv, numSamples)
             )
           )

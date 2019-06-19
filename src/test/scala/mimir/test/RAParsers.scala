@@ -9,7 +9,7 @@ trait RAParsers {
 
   def expr(
     raw: String, 
-    inlineExpression: Map[String,Expression] = Map()
+    inlineExpression: Map[ID,Expression] = Map()
   ): Expression =
   {
     val parsed = ExpressionParser.expr(raw)

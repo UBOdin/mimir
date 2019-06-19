@@ -10,12 +10,12 @@ object UnannotatedBestGuess
   extends CompileMode[ResultIterator]
   with LazyLogging
 {
-  type MetadataT = Seq[String]
+  type MetadataT = Seq[ID]
 
   /**
    * Rewrite the specified operator
    */
-  def rewrite(db: Database, oper: Operator): (Operator, Seq[String], MetadataT) =
+  def rewrite(db: Database, oper: Operator): (Operator, Seq[ID], MetadataT) =
   {
     (
       BestGuess.bestGuessQuery(db, oper),

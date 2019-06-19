@@ -22,7 +22,7 @@ abstract class Reason
   def toJSON: String =
     JSONBuilder.dict(Map(
       "english" -> JSONBuilder.string(reason),
-      "source"  -> JSONBuilder.string(model.name),
+      "source"  -> JSONBuilder.string(model.name.id),
       "varid"   -> JSONBuilder.int(idx),
       "args"    -> JSONBuilder.list( args.map( x => JSONBuilder.string(x.toString)).toList ),
       "repair"  -> repair.toJSON,
@@ -91,7 +91,7 @@ class DataWarningReason(
 )
   extends Reason
 {
-  override def toString = s" {{ $model[${key.mkString(", ")}] }}"
+  override def toString = s"$message {{ $model[${key.mkString(", ")}] }}"
 
   def idx: Int = 0
   def args: Seq[PrimitiveValue] = key

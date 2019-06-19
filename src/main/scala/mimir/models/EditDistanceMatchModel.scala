@@ -17,10 +17,10 @@ object EditDistanceMatchModel
   /**
    * Available choices of distance metric, from Apache Lucene.
    */
-  val metrics = Map[String,StringDistance](
-    "NGRAM"       -> new NGramDistance(),
-    "LEVENSTEIN"  -> new LevensteinDistance(),
-    "JAROWINKLER" -> new JaroWinklerDistance()
+  val metrics = Map[ID,StringDistance](
+    ID("NGRAM")       -> new NGramDistance(),
+    ID("LEVENSTEIN")  -> new LevensteinDistance(),
+    ID("JAROWINKLER") -> new JaroWinklerDistance()
   )
   /**
    * Default choice of the distance metric
@@ -29,23 +29,23 @@ object EditDistanceMatchModel
 
   def train(
     db: Database, 
-    name: String,
-    source: Either[Operator,Seq[(String,Type)]], 
-    target: Either[Operator,Seq[(String,Type)]]
-  ): Map[String,(Model,Int)] = 
+    name: ID,
+    source: Either[Operator,Seq[(ID,Type)]], 
+    target: Either[Operator,Seq[(ID,Type)]]
+  ): Map[ID,(Model,Int)] = 
   {
-    val sourceSch: Seq[(String,Type)] = source match {
+    val sourceSch: Seq[(ID,Type)] = source match {
         case Left(oper) => db.typechecker.schemaOf(oper)
         case Right(sch) => sch }
-    val targetSch: Seq[(String,Type)] = target match {
+    val targetSch: Seq[(ID,Type)] = target match {
         case Left(oper) => db.typechecker.schemaOf(oper)
         case Right(sch) => sch }
 
     targetSch.map({ case (targetCol,targetType) =>
       ( targetCol,
         (new EditDistanceMatchModel(
-          s"$name:$targetCol",
-          defaultMetric,
+          ID(name,":",targetCol),
+          ID(defaultMetric),
           (targetCol, targetType),
           sourceSch.
             filter((x) => isTypeCompatible(targetType, x._2)).
@@ -70,10 +70,10 @@ object EditDistanceMatchModel
 
 @SerialVersionUID(1001L)
 class EditDistanceMatchModel(
-  name: String,
-  metricName: String,
-  target: (String, Type), 
-  sourceCandidates: Seq[String]
+  name: ID,
+  metricName: ID,
+  target: (ID, Type), 
+  sourceCandidates: Seq[ID]
 ) 
   extends Model(name) 
   with DataIndependentFeedback
@@ -88,13 +88,13 @@ class EditDistanceMatchModel(
    * In other words, distance is a bit of a misnomer.  It's more of a score, which
    * in turn allows us to use it as-is.
    */
-  var colMapping:IndexedSeq[(String,Double)] = 
+  var colMapping:IndexedSeq[(ID,Double)] = 
   {
     val metric = EditDistanceMatchModel.metrics(metricName)
     var cumSum = 0.0
     // calculate distance
     sourceCandidates.map( sourceColumn => {
-      val dist = metric.getDistance(sourceColumn, target._1)
+      val dist = metric.getDistance(sourceColumn.id.toUpperCase, target._1.id.toUpperCase)
       EditDistanceMatchModel.logger.debug(s"Building mapping for $sourceColumn -> $target:  $dist")
       (sourceColumn, dist)
     }).
@@ -106,14 +106,14 @@ class EditDistanceMatchModel(
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = 
   {
     StringPrimitive(
-      RandUtils.pickFromWeightedList(randomness, colMapping)
+      RandUtils.pickFromWeightedList(randomness, colMapping).id
     )
   }
 
   def validateChoice(idx: Int, v: PrimitiveValue): Boolean =
   { 
     EditDistanceMatchModel.logger.debug(s"Validate Edit Distance $name -> $v")
-    sourceCandidates.contains(v.asString)
+    sourceCandidates.contains(ID(v.asString))
   }
 
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = {
@@ -147,7 +147,7 @@ class EditDistanceMatchModel(
         } else {
           val guess = colMapping.maxBy(_._2)._1
           EditDistanceMatchModel.logger.trace(s"Guesssing ($name) $target <- $guess")
-          StringPrimitive(guess)
+          StringPrimitive(guess.id)
         }
       }
       case Some(s) => s
@@ -155,7 +155,7 @@ class EditDistanceMatchModel(
   }
 
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] =
-    List((NullPrimitive(), 0.0)) ++ colMapping.map( x => (StringPrimitive(x._1), x._2))
+    List((NullPrimitive(), 0.0)) ++ colMapping.map( x => (StringPrimitive(x._1.id), x._2))
 
   def confidence (idx: Int, args: Seq[PrimitiveValue], hints:Seq[PrimitiveValue]): Double  = {
     choices(idx) match {

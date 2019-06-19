@@ -9,13 +9,14 @@ import mimir.optimizer.OperatorOptimization
 
 object InlineProjections extends OperatorOptimization with LazyLogging {
 
-	def apply(o: Operator): Operator = 
+	def apply(o: Operator): Operator = {
+		logger.trace(s"Attempting to inline: \n$o");
 		o.recur(apply(_)) match {
 			// If we have a Project[*](X), we can replace it with just X
 			case Project(cols, src) if (cols.forall( _ match {
-					case ProjectArg(colName, Var(varName)) => colName.equals(varName)
+					case ProjectArg(colName, Var(varName)) => colName.id.equals(varName.id)
 					case _ => false
-				}) && (src.columnNames.toSet &~ cols.map(_.name).toSet).isEmpty)
+				}) && (src.columnNames.map { _.id }.toSet &~ cols.map(_.name.id).toSet).isEmpty)
 				 => src
 
 			// Project[...](Project[...](X)) can be composed into a single Project[...](X)
@@ -117,13 +118,14 @@ object InlineProjections extends OperatorOptimization with LazyLogging {
 			// If it's anything else, this optimization doesn't care 
 			// (recursion is handled bottom-up at the start of this function)
 			case anythingElse => anythingElse
+		}
 	}
 
 	def canInlineProjectAggregate(
 			cols: Seq[ProjectArg], 
 			gb: Seq[Var], 
 			aggs: Seq[AggFunction]
-	): Option[Map[String, String]] =
+	): Option[Map[ID, ID]] =
 	{
 		// We're allowed to inline Project(Aggregate(...)) if all of the following hold
 		//  1) The project is a renaming (i.e., all Project expressions are vars)
@@ -164,7 +166,7 @@ object InlineProjections extends OperatorOptimization with LazyLogging {
 
 	}
 
-	def extractRenaming(cols: Seq[ProjectArg]): Option[Seq[(String, String)]] =
+	def extractRenaming(cols: Seq[ProjectArg]): Option[Seq[(ID, ID)]] =
 	{
 		Some(cols.map({
 			case ProjectArg(out, Var(in)) => (in, out)

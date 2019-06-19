@@ -6,8 +6,8 @@ class UnionResultIterator(src: Iterator[ResultIterator]) extends ResultIterator
 {
   var curr = src.next;
 
-  def tupleSchema: Seq[(String, Type)] = curr.tupleSchema
-  def annotationSchema: Seq[(String, Type)] = curr.annotationSchema
+  def tupleSchema: Seq[(ID, Type)] = curr.tupleSchema
+  def annotationSchema: Seq[(ID, Type)] = curr.annotationSchema
 
   def close(): Unit =
   {

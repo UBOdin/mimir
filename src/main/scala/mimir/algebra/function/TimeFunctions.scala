@@ -9,7 +9,7 @@ object TimeFunctions
   {
 
 
-    fr.register("YEAR_PART", 
+    fr.register(ID("year_part"), 
       { 
         case Seq(TimestampPrimitive(y, _, _, _, _, _, _)) => IntPrimitive(y)
         case Seq(DatePrimitive(y, _, _)) => IntPrimitive(y)
@@ -20,7 +20,7 @@ object TimeFunctions
       },
       { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
     )
-    fr.register("MONTH_PART", 
+    fr.register(ID("month_part"), 
       { 
         case Seq(TimestampPrimitive(_, m, _, _, _, _, _)) => IntPrimitive(m)
         case Seq(DatePrimitive(_, m, _)) => IntPrimitive( m)
@@ -31,7 +31,7 @@ object TimeFunctions
       },
       { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
     )
-    fr.register("WEEK_PART", 
+    fr.register(ID("week_part"), 
       { 
         case Seq(IntervalPrimitive(p)) => IntPrimitive(p.toStandardWeeks().getWeeks())
         case Seq(x) => throw new Exception(s"Invalid Time Primitive '$x'")
@@ -40,7 +40,7 @@ object TimeFunctions
       },
       { case Seq(TInterval()) => TInt() }
     )
-    fr.register("DAY_PART", 
+    fr.register(ID("day_part"), 
       { 
         case Seq(TimestampPrimitive(_, _, d, _, _, _, _)) => IntPrimitive(d)
         case Seq(DatePrimitive(_, _, d)) => IntPrimitive(d)
@@ -51,7 +51,7 @@ object TimeFunctions
       },
       { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
     )
-    fr.register("HOUR_PART", 
+    fr.register(ID("hour_part"), 
       { 
         case Seq(TimestampPrimitive(_, _, _, hh, _, _, _)) => IntPrimitive(hh)
         case Seq(DatePrimitive(_, _, _)) => IntPrimitive(0)
@@ -62,7 +62,7 @@ object TimeFunctions
       },
       { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
     )
-    fr.register("MINUTE_PART", 
+    fr.register(ID("minute_part"), 
       { 
         case Seq(TimestampPrimitive(_, _, _, _, mm, _, _)) => IntPrimitive(mm)
         case Seq(DatePrimitive(_, _, _)) => IntPrimitive(0)
@@ -73,7 +73,7 @@ object TimeFunctions
       },
       { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
     )
-    fr.register("SECOND_PART", 
+    fr.register(ID("second_part"), 
       { 
         case Seq(TimestampPrimitive(_, _, _, _, _, ss, _)) => IntPrimitive(ss)
         case Seq(DatePrimitive(_, _, _)) => IntPrimitive(0)
@@ -84,7 +84,7 @@ object TimeFunctions
       },
       { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
     )
-    fr.register("MILLISECOND_PART", 
+    fr.register(ID("millisecond_part"), 
       { 
         case Seq(TimestampPrimitive(_, _, _, _, _, _, ms)) => IntPrimitive(ms)
         case Seq(DatePrimitive(_, _, _)) => IntPrimitive(0)
@@ -95,7 +95,7 @@ object TimeFunctions
       },
       { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
     )
-    fr.register("SECOND", 
+    fr.register(ID("second"), 
       { 
         case Seq(TimestampPrimitive(_, _, _, _, _, ss, _)) => ???
         case Seq(DatePrimitive(_, _, _)) => ???
@@ -106,7 +106,7 @@ object TimeFunctions
       },
       { case Seq(TTimestamp() | TDate() | TInterval()) => TInt() }
     )
-    fr.register("YEAR", 
+    fr.register(ID("year"), 
       { 
         case Seq(TimestampPrimitive(_, _, _, _, _, ss, _)) => ???
         case Seq(DatePrimitive(_, _, _)) => ???

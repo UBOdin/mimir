@@ -13,22 +13,31 @@ object TypeInferenceAdaptiveSpec
 
     "Be able to create and query type inference adaptive schemas" >> {
  
-      db.loadTable("CPUSPEED", new File("test/data/CPUSpeed.csv"), true, ("CSV", Seq(StringPrimitive(","), BoolPrimitive(false))))
+      db.loadTable(
+        "test/data/CPUSpeed.csv", 
+        targetTable = Some(ID("CPUSPEED")), 
+        force = true, 
+        format = ID("csv"),
+        inferTypes = Some(false)
+      )
 
-      db.adaptiveSchemas.create( "CPUSPEED_TI", "TYPE_INFERENCE", db.table("CPUSPEED"), Seq())
+      db.adaptiveSchemas.create( 
+        ID("CPUSPEED_TI"), 
+        ID("TYPE_INFERENCE"), 
+        db.table("CPUSPEED"), 
+        Seq()
+      )
       
       val baseTypes = db.typechecker.schemaOf(db.table("CPUSPEED_RAW")).toMap
-      baseTypes.keys must contain(eachOf("_c7", "_c1", "_c2"))
-      baseTypes must contain("_c7" -> TString())
-      baseTypes must contain("_c1" -> TString())
-      baseTypes must contain("_c2" -> TString())
+      baseTypes must contain(ID("_c7") -> TString())
+      baseTypes must contain(ID("_c1") -> TString())
+      baseTypes must contain(ID("_c2") -> TString())
 
 
-      val lensTypes = db.typechecker.schemaOf( db.adaptiveSchemas.viewFor("CPUSPEED_TI", "DATA").get).toMap
-      lensTypes.keys must contain(eachOf("CORES", "FAMILY", "TECH_MICRON"))
-      lensTypes must contain("CORES" -> TInt())
-      lensTypes must contain("FAMILY" -> TString())
-      lensTypes must contain("TECH_MICRON" -> TFloat())
+      val lensTypes = db.typechecker.schemaOf( db.adaptiveSchemas.viewFor(ID("CPUSPEED_TI"), ID("DATA")).get).toMap
+      lensTypes must contain(ID("CORES") -> TInt())
+      lensTypes must contain(ID("FAMILY") -> TString())
+      lensTypes must contain(ID("TECH_MICRON") -> TFloat())
 
     }
 

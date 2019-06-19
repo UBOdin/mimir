@@ -96,7 +96,7 @@ case class VoteList()
 
 
 @SerialVersionUID(1002L)
-class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultFrac: Double, sparkSql:SQLContext, query:Option[DataFrame] )
+class TypeInferenceModel(name: ID, val columns: IndexedSeq[ID], defaultFrac: Double, sparkSql:SQLContext, query:Option[DataFrame] )
   extends Model(name)
   with SourcedFeedback
   with FiniteDiscreteDomain
@@ -109,7 +109,7 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
   private def train(df:DataFrame) =
   {
     import sparkSql.implicits._
-    df.limit(TypeInferenceModel.sampleLimit).select(columns.map(col(_)):_*)
+    df.limit(TypeInferenceModel.sampleLimit).select(columns.map{_.id}.map{col(_)}:_*)
       .agg(new VoteList().toColumn)
       .head()
       .asInstanceOf[Row].toSeq(0).asInstanceOf[Seq[Row]]
@@ -129,9 +129,13 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
     })) else votesidx._1)
   }
 
-  def voteList(idx:Int) =  (Type.id(TString()) -> ((defaultFrac * totalVotes(idx)).toLong, defaultFrac)) :: (trainingData(idx)._2.map(votedType => (votedType._1 -> (votedType._2._1, votedType._2._2)))).toList 
+  def voteList(idx:Int) =  
+    (Type.id(TString()) -> ((defaultFrac * totalVotes(idx)).toLong, defaultFrac)) :: 
+      (trainingData(idx)._2.map { votedType => 
+        (votedType._1 -> (votedType._2._1, votedType._2._2))
+      }).toList 
     
-  def totalVotes(idx:Int) = trainingData(idx)._1
+  def totalVotes(idx:Int) = trainingData(idx)._1 
      
   private final def rankFn(x:(Type, Double)) =
     (x._2, TypeInferenceModel.priority(x._1) )
@@ -162,6 +166,7 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
 
   def reason(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): String = {
     val column = args(0).asInt
+    TypeInferenceModel.logger.trace(s"Get Reason $args <- Training Data: $trainingData")
     getFeedback(idx, args) match {
       case None => {
         val (guess, guessFrac) = voteList(column).map(tp => (Type.toSQLiteType(tp._1), tp._2._2)).maxBy( rankFn _ )
@@ -204,8 +209,8 @@ class TypeInferenceModel(name: String, val columns: IndexedSeq[String], defaultF
     isPerfectGuess(args(0).asInt) || (getFeedback(idx, args) != None)
   def isPerfectGuess(column: Int): Boolean =
     voteList(column).map( _._2._1 ).max >= totalVotes(column).toDouble
-  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]): String = 
-    args(0).asString
+  def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue]): ID = 
+    ID(args(0).asString)
   def argTypes(idx: Int): Seq[Type] = 
     Seq(TInt())
   def hintTypes(idx: Int): Seq[Type] = 

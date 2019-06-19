@@ -18,31 +18,31 @@ object OperatorOptimizerRegressions
     "Correctly rename aggregates" >> {
       val tree =
         Aggregate(
-          Seq(Var("TID_4")),
+          Seq(Var(ID("TID_4"))),
           Seq(
-            AggFunction("FIRST", false, Seq(Var("CUSTKEY")), "CUSTKEY"),
-            AggFunction("COUNT", true, Seq(Var("CUSTKEY")), "MIMIR_KR_COUNT_CUSTKEY"),
-            AggFunction("JSON_GROUP_ARRAY", false, Seq(Var("CUSTKEY")), "MIMIR_KR_HINT_COL_CUSTKEY")
+            AggFunction(ID("first"), false, Seq(Var(ID("CUSTKEY"))), ID("CUSTKEY")),
+            AggFunction(ID("count"), true, Seq(Var(ID("CUSTKEY"))), ID("MIMIR_KR_COUNT_CUSTKEY")),
+            AggFunction(ID("json_group_array"), false, Seq(Var(ID("CUSTKEY"))), ID("MIMIR_KR_HINT_COL_CUSTKEY"))
           ),
           Table(
-            "ORDERS_O_CUSTKEY",
-            "ORDERS_O_CUSTKEY",
+            ID("ORDERS_O_CUSTKEY"),
+            ID("ORDERS_O_CUSTKEY"),
             Seq(
-              ("VAR_ID", TInt()), 
-              ("WORLD_ID", TInt()), 
-              ("TID_4", TInt()), 
-              ("CUSTKEY", TInt()) 
+              ID("VAR_ID") -> TInt(), 
+              ID("WORLD_ID") -> TInt(), 
+              ID("TID_4") -> TInt(), 
+              ID("CUSTKEY") -> TInt() 
             ),
             Seq(
-              ("MIMIR_ROWID", Var("ROWID"), TRowId())
+              (ID("MIMIR_ROWID"), Var(ID("ROWID")), TRowId())
             )
           )
         )
 
-      val (rename, replaced) = OperatorUtils.makeColumnNameUnique("CUSTKEY", tree.columnNames.toSet, tree)
+      val (rename, replaced) = OperatorUtils.makeColumnNameUnique(ID("CUSTKEY"), tree.columnNames.toSet, tree)
       replaced must beAnInstanceOf[Aggregate]
       val child = replaced.asInstanceOf[Aggregate].source
-      child.columnNames must contain("CUSTKEY")
+      child.columnNames must contain(ID("CUSTKEY"))
       child.columnNames must not contain(rename)
       replaced.expressions.flatMap { ExpressionUtils.getColumns(_) }.toSet must not contain(rename)
     }
@@ -64,19 +64,19 @@ object OperatorOptimizerRegressions
         Select(expr("CUSTKEY_0=CUSTKEY"),
           Join(
             Select(expr("MKTSEGMENT = 'BUILDING'"),
-              Table("CUSTOMER_RUN_1","CUSTOMER_RUN_1",
+              Table(ID("CUSTOMER_RUN_1"),ID("CUSTOMER_RUN_1"),
                 Seq(
-                  ("CUSTKEY", TInt()),
-                  ("MKTSEGMENT", TString())
+                  ID("CUSTKEY") -> TInt(),
+                  ID("MKTSEGMENT") -> TString()
                 ), Seq()
               )
             ),
             Select(expr("ORDERDATE<DATE('1995-03-15')"),
-              Table("ORDERS_RUN_1","ORDERS_RUN_1",
+              Table(ID("ORDERS_RUN_1"),ID("ORDERS_RUN_1"),
                 Seq(
-                  ("ORDERKEY", TInt()),
-                  ("CUSTKEY_0", TInt()),
-                  ("ORDERDATE", TDate())
+                  ID("ORDERKEY") -> TInt(),
+                  ID("CUSTKEY_0") -> TInt(),
+                  ID("ORDERDATE") -> TDate()
                 ), Seq()
               )
             )
@@ -104,34 +104,45 @@ object OperatorOptimizerRegressions
     "Propagate IsNull" >> {
       val problemExpr = 
         Arithmetic(Arith.Or,
-          Var("C"),
+          Var(ID("C")),
           Arithmetic(Arith.And,
-            Not(IsNullExpression(Var("REGIONKEY_0"))),
+            Not(IsNullExpression(Var(ID("REGIONKEY_0")))),
             Conditional(
-              IsNullExpression(Var("REGIONKEY_0")),
-              Var("A"),
-              Var("B")
+              IsNullExpression(Var(ID("REGIONKEY_0"))),
+              Var(ID("A")),
+              Var(ID("B"))
             )
           )
         )
       simplify(PropagateConditions(problemExpr)) must be equalTo(
         Arithmetic(Arith.Or,
-          Var("C"),
+          Var(ID("C")),
           Arithmetic(Arith.And,
-            Not(IsNullExpression(Var("REGIONKEY_0"))),
-            Var("B")
+            Not(IsNullExpression(Var(ID("REGIONKEY_0")))),
+            Var(ID("B"))
           )
         )
       )
     }
 
     "Propagate IsNull deep into expressions" >> {
-      val r = Table("R", "R", Seq("A" -> TString(), "B" -> TInt(), "C" -> TInt()), Seq( ("MIMIR_ROWID", Var("ROWID"), TRowId())))
+      val r = Table(
+        ID("R"), 
+        ID("R"), 
+        Seq(
+          ID("A") -> TString(), 
+          ID("B") -> TInt(), 
+          ID("C") -> TInt()
+        ), 
+        Seq( 
+          (ID("MIMIR_ROWID"), RowIdVar(), TRowId())
+        )
+      )
 
       val problemExpr =
-        r .filter(  ( Var("MIMIR_ROWID").eq(RowIdPrimitive("3")) ) and ( Var("C").isNull ) )
+        r .filter(  ( Var(ID("MIMIR_ROWID")).eq(RowIdPrimitive("3")) ) and ( Var(ID("C")).isNull ) )
           .project( "A", "B", "C", "MIMIR_ROWID" )
-          .addColumn( "MIMIR_ROW_DET" -> Var("MIMIR_ROWID").neq(RowIdPrimitive("3")).or ( Not(Var("C").isNull) ) )
+          .addColumns( "MIMIR_ROW_DET" -> Var(ID("MIMIR_ROWID")).neq(RowIdPrimitive("3")).or ( Not(Var(ID("C")).isNull) ) )
           .limit(4)
           .project( "A", "MIMIR_ROW_DET", "MIMIR_ROWID", "B", "C" )
 

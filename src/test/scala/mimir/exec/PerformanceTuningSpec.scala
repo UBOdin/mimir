@@ -7,6 +7,7 @@ import mimir.test._
 import mimir.algebra.HardTable
 import mimir.algebra.TInt
 import mimir.algebra.IntPrimitive
+import mimir.algebra.ID
 
 object PerformanceTuningSpec 
   extends SQLTestSpecification("PerformanceTuningSpec")
@@ -26,7 +27,7 @@ object PerformanceTuningSpec
       val queryStartTime = getTime
       db.query(
         HardTable(
-          Seq(("value",TInt())), 
+          Seq(ID("VALUE") -> TInt()), 
           Seq((1 to inputSize toSeq).map(IntPrimitive(_)))
         )
       ) { results =>

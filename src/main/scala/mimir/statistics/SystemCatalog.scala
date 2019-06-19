@@ -12,19 +12,18 @@ class SystemCatalog(db: Database)
   def tableView: Operator =
   {
     val tableView =
-      Project(
-        SystemCatalog.tableCatalogSchema.map(_._1).map { col =>
-          ProjectArg(col, Var(col))
-        },
-        OperatorUtils.makeUnion(
-          Seq(
-            db.backend.listTablesQuery
-              .addColumn( "SCHEMA_NAME" -> StringPrimitive("BACKEND") ),
-            db.views.listViewsQuery
-              .addColumn( "SCHEMA_NAME" -> StringPrimitive("MIMIR") )
-          )++db.adaptiveSchemas.tableCatalogs
-        )
-      )
+      OperatorUtils.makeUnion(
+        Seq(
+          db.backend.listTablesQuery
+            .addColumns( "SCHEMA_NAME" -> StringPrimitive("BACKEND") ),
+          db.views.listViewsQuery
+            .addColumns( "SCHEMA_NAME" -> StringPrimitive("MIMIR") )
+        )++db.adaptiveSchemas.tableCatalogs
+      ).
+      projectByID( SystemCatalog.tableCatalogSchema.map { _._1 }:_* )
+    // sanity check:
+    db.typechecker.schemaOf(tableView)
+
     logger.debug(s"Table View: \n$tableView")
     return tableView
   }
@@ -39,9 +38,9 @@ class SystemCatalog(db: Database)
         OperatorUtils.makeUnion(
           Seq(
             db.backend.listAttrsQuery
-              .addColumn( "SCHEMA_NAME" -> StringPrimitive("BACKEND") ),
+              .addColumns( "SCHEMA_NAME" -> StringPrimitive("BACKEND") ),
             db.views.listAttrsQuery
-              .addColumn( "SCHEMA_NAME" -> StringPrimitive("MIMIR") )
+              .addColumns( "SCHEMA_NAME" -> StringPrimitive("MIMIR") )
           )++db.adaptiveSchemas.attrCatalogs
         )
       )
@@ -49,31 +48,31 @@ class SystemCatalog(db: Database)
     return attrView
   }
 
-  def apply(name: String): Option[Operator] =
-  {
-    name match {
-      case ("MIMIR_SYS_TABLES" | "SYS_TABLES") => Some(tableView)
-      case ("MIMIR_SYS_ATTRS"  | "SYS_ATTRS" ) => Some(attrView)
-      case _ => None
-    }
-  }
+  // The tables themselves need to be defined lazily, since 
+  // we want them read out at access time
+  private val hardcodedTables = Map[ID, () => Operator](
+    ID("SYS_TABLES")       -> tableView _,
+    ID("SYS_ATTRS")        -> attrView _
+  )
 
+  def apply(name: ID): Option[Operator] = hardcodedTables.get(name).map { _() }
 
+  def list():Seq[ID] = hardcodedTables.keys.toSeq
 }
 
 object SystemCatalog 
 {
   val tableCatalogSchema = 
     Seq( 
-      ("SCHEMA_NAME", TString()),
-      ("TABLE_NAME", TString())
+      ID("SCHEMA_NAME") -> TString(),
+      ID("TABLE_NAME")  -> TString()
     )
   val attrCatalogSchema =
     Seq( 
-      ("SCHEMA_NAME", TString()),
-      ("TABLE_NAME", TString()), 
-      ("ATTR_NAME", TString()),
-      ("ATTR_TYPE", TString()),
-      ("IS_KEY", TBool())
+      ID("SCHEMA_NAME") -> TString(),
+      ID("TABLE_NAME")  -> TString(), 
+      ID("ATTR_NAME")   -> TString(),
+      ID("ATTR_TYPE")   -> TString(),
+      ID("IS_KEY")      -> TBool()
     )
 }

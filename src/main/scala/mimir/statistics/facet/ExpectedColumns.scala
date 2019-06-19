@@ -4,7 +4,7 @@ import play.api.libs.json._
 import mimir.Database
 import mimir.algebra._
 
-class ExpectedColumns(expected: Seq[String])
+class ExpectedColumns(expected: Seq[ID])
   extends Facet
 {
   def description = s"The dataset includes columns: ${expected.mkString(", ")}"
@@ -37,7 +37,7 @@ class ExpectedColumns(expected: Seq[String])
   def toJson: JsValue = JsObject(Map[String,JsValue](
     "facet" -> JsString("ExpectedColumns"),
     "data"  -> JsArray(
-      expected.map { JsString(_) }
+      expected.map { _.id }.map { JsString(_) }
     )
   ))
 }
@@ -56,6 +56,7 @@ object ExpectedColumns
                   .asInstanceOf[JsArray]
                   .value
                   .map { _.asInstanceOf[JsString].value }
+                  .map { ID(_) }
           )
         )
       case _ => None

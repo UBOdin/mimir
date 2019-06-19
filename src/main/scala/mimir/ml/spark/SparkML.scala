@@ -24,7 +24,7 @@ import org.apache.spark.sql.types.TimestampType
 
 object SparkML {
   type SparkModel = PipelineModel
-  case class SparkModelGeneratorParams(db:Database, predictionCol:String, handleInvalid:String /*keep, skip, error*/) 
+  case class SparkModelGeneratorParams(db:Database, predictionCol:ID, handleInvalid:String /*keep, skip, error*/) 
   type SparkModelGenerator = SparkModelGeneratorParams => PipelineModel
   var sc: Option[SparkContext] = None
   var sqlCtx : Option[SQLContext] = None
@@ -90,17 +90,26 @@ abstract class SparkML {
     val data = db.query(query)(results => {
       results.toList.map(row => row.provenance +: row.tupleSchema.zip(row.tuple).filterNot(_._1._1.equalsIgnoreCase("rowid")).unzip._2)
     })
-    applyModel(model, ("rowid", TString()) +:db.typechecker.schemaOf(query).filterNot(_._1.equalsIgnoreCase("rowid")), data, dfTransformer)
+    applyModel(
+      model, 
+      (ID("rowid"), TString()) +:
+        db.typechecker
+          .schemaOf(query)
+          .filterNot { _._1.equals(ID("rowid")) },
+      data, 
+      db,
+      dfTransformer
+    )
   }
   
-  def applyModel( model : PipelineModel, cols:Seq[(String, Type)], testData : List[Seq[PrimitiveValue]], dfTransformer:Option[DataFrameTransformer] = None): DataFrame = {
+  def applyModel( model : PipelineModel, cols:Seq[(ID, Type)], testData : List[Seq[PrimitiveValue]], db: Database, dfTransformer:Option[DataFrameTransformer] = None): DataFrame = {
     val sqlContext = getSparkSqlContext()
     import sqlContext.implicits._
     val modDF = dfTransformer.getOrElse((df:DataFrame) => df)
     model.transform(modDF(sqlContext.createDataFrame(
       getSparkSession().parallelize(testData.map( row => {
-        Row(row.zip(cols).map(value => OperatorTranslation.mimirExprToSparkExpr(null, value._1)):_*)
-      })), StructType(cols.toList.map(col => StructField(col._1, OperatorTranslation.getSparkType(col._2), true))))))
+        Row(row.zip(cols).map(value => new OperatorTranslation(db).mimirExprToSparkExpr(null, value._1)):_*)
+      })), StructType(cols.toList.map(col => StructField(col._1.id, OperatorTranslation.getSparkType(col._2), true))))))
   }
   
   def applyModel( model : PipelineModel, inputDF:DataFrame): DataFrame = {//inputPlan:LogicalPlan): DataFrame = {

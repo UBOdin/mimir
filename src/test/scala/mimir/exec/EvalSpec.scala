@@ -14,12 +14,27 @@ object EvalSpec
   with BeforeAll
 {
 
-  val inventoryDataFile = new File("test/data/Product_Inventory.csv")
+  val inventoryDataFile = "test/data/Product_Inventory.csv"
 
   def beforeAll = {
-    LoadCSV.handleLoadTableRaw(db, "PRODUCT_INVENTORY",
-				    Some(Seq(("ID",TString()),("COMPANY",TString()),("QUANTITY",TInt()),("PRICE",TFloat()))), 
-				    inventoryDataFile, Map("ignoreLeadingWhiteSpace"->"true","ignoreTrailingWhiteSpace"->"true","DELIMITER" -> ",", "mode" ->"DROPMALFORMED", "header" -> "false"))
+    LoadCSV.handleLoadTableRaw(
+      db, 
+      ID("PRODUCT_INVENTORY"),
+      inventoryDataFile, 
+			Some(Seq(
+        ID("ID") -> TString(),
+        ID("COMPANY") -> TString(),
+        ID("QUANTITY") -> TInt(),
+        ID("PRICE") -> TFloat()
+      )), 
+      Map(
+        "ignoreLeadingWhiteSpace"->"true",
+        "ignoreTrailingWhiteSpace"->"true",
+        "DELIMITER" -> ",", 
+        "mode" ->"DROPMALFORMED", 
+        "header" -> "false"
+      )
+    )
   }
 
   "The query evaluator" should {
@@ -39,7 +54,7 @@ object EvalSpec
         GROUP BY COMPANY;
       """){ result =>
         val q1 = result.map { row => 
-          (row("COMPANY").asString, row("QTY").asLong) 
+          (row(ID("COMPANY")).asString, row(ID("QTY")).asLong) 
         }.toSeq
         q1 must have size(3)
         q1 must contain(
@@ -56,7 +71,7 @@ object EvalSpec
         GROUP BY COMPANY;
       """) { result => 
         val q2 = result.map { row => 
-          (row("COMPANY").asString, row("MP").asDouble) 
+          (row(ID("COMPANY")).asString, row(ID("MP")).asDouble) 
         }.toSeq
         q2 must have size(3)
         q2 must contain( 
@@ -72,7 +87,7 @@ object EvalSpec
         GROUP BY COMPANY;
       """) { result =>
         val q3 = result.map { row => 
-          (row("COMPANY").asString, row("AP").asDouble) 
+          (row(ID("COMPANY")).asString, row(ID("AP")).asDouble) 
         }.toSeq
         q3 must have size(3)
         q3 must contain( 
@@ -88,7 +103,7 @@ object EvalSpec
         FROM PRODUCT_INVENTORY 
         GROUP BY COMPANY;
       """){ result =>
-        val q4 = result.toSeq.map { row => (row("COMPANY").asString, row("MQ").asLong) } 
+        val q4 = result.toSeq.map { row => (row(ID("COMPANY")).asString, row(ID("MQ")).asLong) } 
         q4 must have size(3)
         q4 must contain( 
           ("Apple", 4), 
@@ -127,9 +142,9 @@ object EvalSpec
         WHERE subq.COMPANY = P.COMPANY AND subq.COST = P.PRICE;
       """){ result => 
         val q8 = result.toSeq.map { row => (
-          row("COMPANY").asString, 
-          row("QUANTITY").asLong, 
-          row("PRICE").asDouble
+          row(ID("COMPANY")).asString, 
+          row(ID("QUANTITY")).asLong, 
+          row(ID("PRICE")).asDouble
         )} 
         q8 must have size(3)
         q8 must contain( 
@@ -145,8 +160,8 @@ object EvalSpec
         WHERE PRICE > subq.A;
       """) { result =>
         val q9 = result.toSeq.map { row => (
-          row("COMPANY").asString,
-          row("PRICE").asDouble
+          row(ID("COMPANY")).asString,
+          row(ID("PRICE")).asDouble
         )}
         q9 must have size(2)
         q9 must contain( 

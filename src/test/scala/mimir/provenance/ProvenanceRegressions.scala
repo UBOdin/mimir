@@ -13,8 +13,8 @@ object ProvenanceRegressions
 
   def beforeAll
   {
-    loadCSV("R", Seq(("A", "int"), ("B", "int"), ("C", "int")), new File("test/r_test/r.csv"))
-    loadCSV("S", Seq(("B", "int"), ("D", "int")), new File("test/r_test/s.csv"))
+    loadCSV("R", Seq(("A", "int"), ("B", "int"), ("C", "int")), "test/r_test/r.csv")
+    loadCSV("S", Seq(("B", "int"), ("D", "int")), "test/r_test/s.csv")
   }
 
   "Multiple Rowid Columns" should {

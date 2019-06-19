@@ -2,16 +2,16 @@ package mimir.algebra.spark.function
 
 import mimir.algebra.function.FunctionRegistry
 import mimir.algebra.PrimitiveValue
-import mimir.algebra.Type
+import mimir.algebra.{Type,ID}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 
 object SparkFunctions 
  extends LazyLogging {
   
-  val sparkFunctions = scala.collection.mutable.Map[String, (Seq[PrimitiveValue] => PrimitiveValue, Seq[Type] => Type)]()
+  val sparkFunctions = scala.collection.mutable.Map[ID, (Seq[PrimitiveValue] => PrimitiveValue, Seq[Type] => Type)]()
   
-  def addSparkFunction(fname:String,eval:Seq[PrimitiveValue] => PrimitiveValue, typechecker: Seq[Type] => Type) : Unit = {
+  def addSparkFunction(fname:ID,eval:Seq[PrimitiveValue] => PrimitiveValue, typechecker: Seq[Type] => Type) : Unit = {
     sparkFunctions.put(fname, (eval, typechecker))
   }
   

@@ -24,7 +24,7 @@ object PropagateConditions extends OperatorOptimization with LazyLogging {
 			assertion match {
 				case Comparison(Cmp.Eq, Var(v1), Var(v2)) =>
 					// For variable replacements, and for sanity's sake give preference to the shorter name
-					if(v1.length <= v2.length){
+					if(v1.id.length <= v2.id.length){
 						logger.trace(s"Fastpath case 1: Replacing $v2 with $v1")
 						return Eval.inline(target, Map(v2 -> Var(v1)))
 					} else {

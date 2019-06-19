@@ -7,9 +7,9 @@ import mimir.algebra._
 object EditDistanceMatchModelSpec extends Specification
 {
   
-  def train(src: Map[String,Type], tgt: Map[String,Type]): Map[String,(Model,Int)] =
+  def train(src: Map[ID,Type], tgt: Map[ID,Type]): Map[ID,(Model,Int)] =
   {
-    EditDistanceMatchModel.train(null, "TEMP",
+    EditDistanceMatchModel.train(null, ID("TEMP"),
       Right(src.toList), Right(tgt.toList)
     )
   }
@@ -28,20 +28,20 @@ object EditDistanceMatchModelSpec extends Specification
 
       val models1 = 
         train(Map(
-            "PID" -> TString(),
-            "EVALUATION" -> TInt(),
-            "NUM_RATINGS" -> TInt()
+            ID("PID") -> TString(),
+            ID("EVALUATION") -> TInt(),
+            ID("NUM_RATINGS") -> TInt()
           ),Map(
-            "PID" -> TString(),
-            "RATING" -> TInt(),
-            "REVIEW_CT" -> TInt()
+            ID("PID") -> TString(),
+            ID("RATING") -> TInt(),
+            ID("REVIEW_CT") -> TInt()
           )
         )
 
-      guess(models1("PID")) must be equalTo("PID")
-      guess(models1("RATING")) must be equalTo("NUM_RATINGS")
+      guess(models1(ID("PID"))) must be equalTo("PID")
+      guess(models1(ID("RATING"))) must be equalTo("NUM_RATINGS")
 
-      sample(models1("RATING"), 1000) should contain ("NUM_RATINGS", "EVALUATION")
+      sample(models1(ID("RATING")), 1000) should contain ("NUM_RATINGS", "EVALUATION")
     }
 
   }

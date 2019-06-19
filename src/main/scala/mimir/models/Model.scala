@@ -47,7 +47,7 @@ import mimir.util._
  * they are constructed.
  */
 @SerialVersionUID(1001L)
-abstract class Model(val name: String) extends Serializable {
+abstract class Model(val name: ID) extends Serializable {
   /**
    * The list of expected arg types (may be TAny)
    */
@@ -140,5 +140,5 @@ abstract class Model(val name: String) extends Serializable {
   /**
    * A string representation of this model
    */
-  override def toString: String = name
+  override def toString: String = name.id
 }

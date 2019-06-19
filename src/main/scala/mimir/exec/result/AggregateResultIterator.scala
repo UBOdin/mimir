@@ -101,17 +101,17 @@ class FirstAggregate(arg: Row => PrimitiveValue) extends AggregateValue
 class AggregateResultIterator(
   groupByColumns: Seq[Var],
   aggregates: Seq[AggFunction],
-  inputSchema: Seq[(String,Type)],
+  inputSchema: Seq[(ID,Type)],
   src: ResultIterator,
   db: Database
 ) 
   extends ResultIterator
   with LazyLogging
 {
-  private val typeOfInputColumn: Map[String, Type] = inputSchema.toMap
+  private val typeOfInputColumn: Map[ID, Type] = inputSchema.toMap
   private val typeOf = db.typechecker.typeOf(_:Expression, scope = typeOfInputColumn)
 
-  val tupleSchema: Seq[(String,Type)] = 
+  val tupleSchema: Seq[(ID,Type)] = 
     groupByColumns.map { col => (col.name, typeOfInputColumn(col.name)) } ++ 
     aggregates.map { fn => 
       (
@@ -119,14 +119,14 @@ class AggregateResultIterator(
         db.aggregates.typecheck(fn.function, fn.args.map { typeOf(_) })
       ) 
     }
-  val annotationSchema: Seq[(String,Type)] = Seq()
+  val annotationSchema: Seq[(ID,Type)] = Seq()
 
   val aggNames =
     aggregates.map { _.alias }
   val aggTypes =
     aggregates.map { agg => (agg, agg.args.map { typeOf(_) }) }
 
-  private val aggEvalScope: Map[String,(Type, Row => PrimitiveValue)] =
+  private val aggEvalScope: Map[ID,(Type, Row => PrimitiveValue)] =
     inputSchema.zipWithIndex.map { 
       case ((name, t), idx) => 
         logger.debug(s"For $name ($t) using idx = $idx")
@@ -138,42 +138,42 @@ class AggregateResultIterator(
     aggTypes.map { agg =>
       logger.debug(s"Compiling: $agg")
       agg match {
-        case (AggFunction("SUM", false, Seq(input), _), Seq(TInt())) => {
+        case (AggFunction(ID("sum"), false, Seq(input), _), Seq(TInt())) => {
           val i = aggEval.compileForLong(input);
           { () => new LongSumAggregate(i) }
         }
-        case (AggFunction("SUM", false, Seq(input), _), Seq(TFloat())) => {
+        case (AggFunction(ID("sum"), false, Seq(input), _), Seq(TFloat())) => {
           val i = aggEval.compileForDouble(input);
           { () => new DoubleSumAggregate(i) }
         }
-        case (AggFunction("AVG", false, Seq(input), _), Seq(TInt())) => {
+        case (AggFunction(ID("avg"), false, Seq(input), _), Seq(TInt())) => {
           val i = aggEval.compileForLong(input);
           { () => new LongAvgAggregate(i) }
         }
-        case (AggFunction("AVG", false, Seq(input), _), Seq(TFloat())) => {
+        case (AggFunction(ID("avg"), false, Seq(input), _), Seq(TFloat())) => {
           val i = aggEval.compileForDouble(input);
           { () => new DoubleAvgAggregate(i) }
         }
-        case (AggFunction("STDDEV", false, Seq(input), _), Seq(TInt())) => {
+        case (AggFunction(ID("stddev"), false, Seq(input), _), Seq(TInt())) => {
           val i = aggEval.compileForLong(input);
           { () => new LongStdDevAggregate(i) }
         }
-        case (AggFunction("STDDEV", false, Seq(input), _), Seq(TFloat())) => {
+        case (AggFunction(ID("stddev"), false, Seq(input), _), Seq(TFloat())) => {
           val i = aggEval.compileForDouble(input);
           { () => new DoubleStdDevAggregate(i) }
         }
-        case (AggFunction("COUNT", false, Seq(), _), Seq()) => {
+        case (AggFunction(ID("count"), false, Seq(), _), Seq()) => {
           { () => new CountAggregate() }
         }
-        case (AggFunction("GROUP_AND", false, Seq(input), _), Seq(TBool())) => {
+        case (AggFunction(ID("group_and"), false, Seq(input), _), Seq(TBool())) => {
           val i = aggEval.compileForBool(input);
           { () => new GroupAndAggregate(i) }        
         }
-        case (AggFunction("GROUP_OR", false, Seq(input), _), Seq(TBool())) => {
+        case (AggFunction(ID("group_or"), false, Seq(input), _), Seq(TBool())) => {
           val i = aggEval.compileForBool(input);
           { () => new GroupOrAggregate(i) }        
         }
-        case (AggFunction("FIRST", false, Seq(input), _), _) => {
+        case (AggFunction(ID("first"), false, Seq(input), _), _) => {
           val i = aggEval.compile(input);
           { () => new FirstAggregate(i) }        
         }

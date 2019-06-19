@@ -5,7 +5,7 @@ import java.io.PrintWriter
 import org.rogach.scallop.ScallopConf
 import mimir.Mimir
 import mimir.MimirConfig
-import mimir.sql.SparkBackend
+import mimir.backend.SparkBackend
 import java.io.ByteArrayInputStream
 import org.apache.spark.SparkContext
 import java.io.File
@@ -62,7 +62,7 @@ object BackupUtils {
     ExperimentalOptions.enable(Mimir.conf.experimental())
     val database = Mimir.conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
     sback = new SparkBackend(database, true)
-    sback.open()
+    sback.open(null)
    
     println(config.summary)
     println(Mimir.conf.summary)
@@ -236,7 +236,7 @@ class BackupConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   val s3BackupDir = opt[String]("s3BackupDir", descr = "The path in s3 to store backup",
     default = Some("backup"))
   val dataDir = opt[String]("dataDir", descr = "The path of the vizier/mimir data",
-    default = Some("/usr/local/source/web-api/.vizierdb/"))
+    default = Some(mimir.MimirVizier.VIZIER_DATA_PATH))
   val backup = toggle("backup", default = Some(false),
       descrYes = "backup data for mimir to s3",
       descrNo = "backup data for mimir to s3")
