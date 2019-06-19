@@ -64,7 +64,7 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
      
       models = models ++ SparkClassifierModel.train(db, ID("CPUSPEEDREPAIR"), List(
         ID("BUSSPEEDINMHZ")
-      ), db.table("CPUSPEED"))
+      ), db.table("CPUSPEED"), "CPUSPEEDREPAIR_BUS")
       models.keys must contain(ID("BUSSPEEDINMHZ"))
     }
 
@@ -72,7 +72,7 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
       models = models ++ SparkClassifierModel.train(db, ID("CPUSPEEDREPAIR"), List(
         ID("CORES"),
         ID("TECHINMICRONS")
-      ), db.table("CPUSPEED"))
+      ), db.table("CPUSPEED"),"CPUSPEEDREPAIR_CORES")
       models.keys must contain(eachOf(ID("CORES"), ID("TECHINMICRONS")))
     }
 
@@ -109,7 +109,8 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
       val (model, idx, hints) = SparkClassifierModel.train(db,
         ID("RATINGS1REPAIRED"), 
         List(ID("RATING")), 
-        db.table("RATINGS1")
+        db.table("RATINGS1"),
+        "RATINGS1REPAIRED_RATING"
       )(ID("RATING"))
       val nullRow = querySingleton("SELECT ROWID() FROM RATINGS1 WHERE RATING IS NULL")
       //println(nullRow)

@@ -34,7 +34,7 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
 			db.loadTable("test/data/ORG_DetectSeriesTest3.csv")
 			models = models ++ SeriesMissingValueModel.train(db, ID("SERIESREPAIR"), List(
 			ID("AGE")
-		  ), db.table("DETECTSERIESTEST3"))
+		  ), db.table("DETECTSERIESTEST3"), "DetectSeriesTest3")
 		  models.keys must contain(ID("AGE"))
 		}
 
@@ -44,7 +44,7 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
 			){
 		  models = models ++ SeriesMissingValueModel.train(db, ID("SERIESREPAIR"), List(
 			ID("MARKETVAL"), ID("GAMESPLAYED")
-			), db.table("DETECTSERIESTEST3"))
+			), db.table("DETECTSERIESTEST3"), "DetectSeriesTest3")
 			models.keys must contain(ID("MARKETVAL"), ID("GAMESPLAYED"))
 			}
 		}
