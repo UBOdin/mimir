@@ -1,7 +1,8 @@
 package mimir.api
 
 import play.api.libs.json._
-
+import mimir.serialization.PrimitiveValueJSON._
+import mimir.algebra.PrimitiveValue
 
 sealed abstract class Response {
   
@@ -83,17 +84,17 @@ object ExplainReasonsResponse {
 }
 
 
-case class CSVContainer (
+case class DataContainer (
                   schema: Seq[Schema],
-                  data: Seq[Seq[String]],
+                  data: Seq[Seq[PrimitiveValue]],
                   prov: Seq[String],
                   colTaint: Seq[Seq[Boolean]],
                   rowTaint: Seq[Boolean],
                   reasons: Seq[Seq[Reason]]
 ) extends Response
 
-object CSVContainer {
-  implicit val format: Format[CSVContainer] = Json.format
+object DataContainer {
+  implicit val format: Format[DataContainer] = Json.format
 }
 
 
