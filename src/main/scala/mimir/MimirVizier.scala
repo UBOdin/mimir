@@ -59,7 +59,10 @@ import mimir.api.MimirAPI
  */
 object MimirVizier extends LazyLogging {
 
-  val VIZIER_DATA_PATH = "/usr/local/source/web-api/.vizierdb/"
+  val VIZIER_DATA_PATH = Option(System.getenv("VIZIER_DATA_PATH")) match {
+    case Some(vizierDataPath) => vizierDataPath
+    case _ => "/usr/local/source/web-api/vizier/.vizierdb/"
+  }
   var db: Database = null;
   var usePrompt = true;
   
@@ -92,7 +95,7 @@ object MimirVizier extends LazyLogging {
         else if(ExperimentalOptions.isEnabled("LOGO")) Level.OFF
         else Level.DEBUG
        
-      val mimirVizierLoggers = Seq("mimir.sql.SparkBackend", this.getClass.getName, 
+      val mimirVizierLoggers = Seq("mimir.backend.SparkBackend", this.getClass.getName, 
           "mimir.api.MimirAPI", "mimir.api.MimirVizierServlet")
       mimirVizierLoggers.map( mvLogger => {
         LoggerFactory.getLogger(mvLogger) match {
@@ -266,7 +269,7 @@ object MimirVizier extends LazyLogging {
       }
       tableName 
     }
-    logger.debug(s"loadDataSource Took: ${timeRes._2}")
+    logger.debug(s"loadDataSource ${timeRes._1.toString} Took: ${timeRes._2}")
     timeRes._1.toString
     } catch {
       case t: Throwable => {
@@ -467,7 +470,7 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
       }
       viewName
     }
-    logger.debug(s"createView Took: ${timeRes._2}")
+    logger.debug(s"createView ${timeRes._1.toString} Took: ${timeRes._2}")
     timeRes._1.toString
     } catch {
       case t: Throwable => {
@@ -502,7 +505,7 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
       }
       asViewName
     }
-    logger.debug(s"createView Took: ${timeRes._2}")
+    logger.debug(s"createView ${timeRes._1.toString} Took: ${timeRes._2}")
     timeRes._1.toString
     } catch {
       case t: Throwable => {
@@ -1271,9 +1274,9 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }  
  
  def logTime[F](name:String)(anonFunc: => F): (F, Long) = {
-   val tStart = System.nanoTime()
+   val tStart = System.currentTimeMillis()
    val anonFuncRet = anonFunc  
-   val tEnd = System.nanoTime()
+   val tEnd = System.currentTimeMillis()
    if(ExperimentalOptions.isEnabled("LOGM")){
      val logFile =  new File(s"$VIZIER_DATA_PATH/logs/timing.log")
      if(!logFile.exists()){
@@ -1281,7 +1284,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
        logFile.createNewFile()
      }
      val fw = new FileWriter(logFile, true) ; 
-     fw.write(s"mimir, ${name}, ${UUID.randomUUID().toString}, duration, ${(tEnd-tStart)/1000000.0}\n") ; 
+     fw.write(s"mimir, ${name}, ${UUID.randomUUID().toString}, duration, ${(tEnd-tStart)/1000.0}\n") ; 
      fw.close()
    }
    (anonFuncRet, tEnd-tStart)   

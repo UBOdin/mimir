@@ -396,7 +396,8 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
       case None => dsSchema.load
       case Some(ldf) => {
         if(remoteSpark){
-          val fileName = ldf.split(File.separator).last
+          val fileNameParts = ldf.split(File.separator)
+          val fileName = fileNameParts.last
           if(ldf.startsWith("s3n:/") || ldf.startsWith("s3a:/")){
             sparkSql.sparkSession.sharedState.cacheManager.recacheByPath(sparkSql.sparkSession, ldf)
             dsSchema.load(ldf)
@@ -407,12 +408,13 @@ class SparkBackend(override val database:String, maintenance:Boolean = false)
             }
             else{
               val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkSql.sparkSession.sparkContext)
-              logger.debug("Copy File To HDFS: " +hdfsHome+File.separator+fileName)
+              val uniqueFile = fileNameParts(fileNameParts.length-2) +"_" + fileNameParts.last 
+              logger.debug("Copy File To HDFS: " +hdfsHome+File.separator+uniqueFile)
               //if(!HadoopUtils.fileExistsHDFS(sparkSql.sparkSession.sparkContext, fileName))
-              HadoopUtils.writeToHDFS(sparkSql.sparkSession.sparkContext, fileName, new File(ldf), overwriteStagedFiles)
+              HadoopUtils.writeToHDFS(sparkSql.sparkSession.sparkContext, uniqueFile, new File(ldf), overwriteStagedFiles)
               logger.debug("... done\n")
-              pathIfCSV = s"""(path "$hdfsHome/$fileName", """
-              dsSchema.load(s"$hdfsHome/$fileName")
+              pathIfCSV = s"""(path "$hdfsHome/$uniqueFile", """
+              dsSchema.load(s"$hdfsHome/$uniqueFile")
             }
           }
         }
