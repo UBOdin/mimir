@@ -115,6 +115,7 @@ class JDBCMetadataBackend(val protocol: String, val filename: String)
             val existingMapCols = mutable.Set(existing.map(_._1):_*)
             lazy val stmt = conn.createStatement()
             var stmtNeedsClose = false
+            var existingAfterMods = existing
             // Checking each migration individually is a bit cumbersome.
             // it might be appropriate to create a "Schema versions" table
             // to streamline the process
@@ -122,8 +123,9 @@ class JDBCMetadataBackend(val protocol: String, val filename: String)
               step match {
                 case InitMap(schema) => 
                 case AddColumnToMap(column, t, default) => 
-                  existingMapCols.add(column)
                   if( !(existingMapCols contains column) ){
+                    existingMapCols.add(column)
+                    existingAfterMods = existingAfterMods :+ (column -> t)
                     val addColumn = 
                       s"ALTER TABLE ${category.quoted} ADD COLUMN ${column.quoted} ${Type.rootType(t)} DEFAULT ${default};"
                     stmt.executeUpdate(addColumn)
@@ -135,13 +137,13 @@ class JDBCMetadataBackend(val protocol: String, val filename: String)
             if(stmtNeedsClose){ stmt.close() }
 
             try {
-              assert(existing.length == schema.length+1)
-              for(((_, e), (_, f)) <- existing.zip((ID(ID_COLUMN), TString()) +: schema)) {
+              assert(existingAfterMods.length == schema.length+1)
+              for(((_, e), (_, f)) <- existingAfterMods.zip((ID(ID_COLUMN), TString()) +: schema)) {
                 assert(Type.rootType(e) == f) 
               }
             } catch {
               case e:AssertionError => 
-                throw new RuntimeException(s"Incompatible map $category (Existing: $existing; Expected: $schema)", e);
+                throw new RuntimeException(s"Incompatible map $category (Existing: ${existingAfterMods.tail.mkString(", ")}; Expected: ${schema.mkString(", ")})", e);
 
             }
           }
