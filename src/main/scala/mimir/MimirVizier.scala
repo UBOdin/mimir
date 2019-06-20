@@ -480,7 +480,7 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
       val asViewName = ID("VIEW_"+adaptiveSchemaName)
       db.getView(adaptiveSchemaName) match {
         case None => {
-          db.adaptiveSchemas.create(adaptiveSchemaName, ID(_type), db.table(ID(input.toString)), paramExprs)
+          db.adaptiveSchemas.create(adaptiveSchemaName, ID(_type), db.table(ID(input.toString)), paramExprs, input.toString)
           val asTable = _type match {
             case "SHAPE_WATCHER" => adaptiveSchemaName
             case _ => ID("DATA")

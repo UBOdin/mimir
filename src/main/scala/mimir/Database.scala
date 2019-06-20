@@ -344,7 +344,8 @@ case class Database(backend: QueryBackend, metadata: MetadataBackend)
           ID.upper(create.name),
           ID.upper(create.schemaType),
           sqlToRA(create.body),
-          create.args.map( sqlToRA(_, sqlToRA.literalBindings(_)) )
+          create.args.map( sqlToRA(_, sqlToRA.literalBindings(_)) ),
+          create.humanReadableName
         )
       }
 
@@ -490,18 +491,18 @@ case class Database(backend: QueryBackend, metadata: MetadataBackend)
       //detect headers 
       if(datasourceErrors) {
         val dseSchemaName = realTargetTable.withSuffix("_DSE")
-        adaptiveSchemas.create(dseSchemaName, ID("DATASOURCE_ERRORS"), oper, Seq())
+        adaptiveSchemas.create(dseSchemaName, ID("DATASOURCE_ERRORS"), oper, Seq(), realTargetTable.id)
         oper = adaptiveSchemas.viewFor(dseSchemaName, ID("DATA")).get
       }
       if(detectHeaders.getOrElse(targetSchema.isEmpty)) {
         val dhSchemaName = realTargetTable.withSuffix("_DH")
-        adaptiveSchemas.create(dhSchemaName, ID("DETECT_HEADER"), oper, Seq())
+        adaptiveSchemas.create(dhSchemaName, ID("DETECT_HEADER"), oper, Seq(), realTargetTable.id)
         oper = adaptiveSchemas.viewFor(dhSchemaName, ID("DATA")).get
       }
       //type inference
       if(inferTypes.getOrElse(true)){
         val tiSchemaName = realTargetTable.withSuffix("_TI")
-        adaptiveSchemas.create(tiSchemaName, ID("TYPE_INFERENCE"), oper, Seq(FloatPrimitive(.5))) 
+        adaptiveSchemas.create(tiSchemaName, ID("TYPE_INFERENCE"), oper, Seq(FloatPrimitive(.5)), realTargetTable.id) 
         oper = adaptiveSchemas.viewFor(tiSchemaName, ID("DATA")).get
       }
       //finally create a view for the data

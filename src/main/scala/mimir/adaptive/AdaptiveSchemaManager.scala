@@ -18,14 +18,17 @@ class AdaptiveSchemaManager(db: Database)
   def init(): Unit = 
   {
     adaptiveSchemas = db.metadata.registerMap(
-      ID("MIMIR_ADAPTIVE_SCHEMAS"), Seq(InitMap(Seq(
-        ID("MLENS") -> TString(),
-        ID("QUERY") -> TString(),
-        ID("ARGS")  -> TString()
-    ))))
+      ID("MIMIR_ADAPTIVE_SCHEMAS"), Seq(
+        InitMap(Seq(
+          ID("MLENS") -> TString(),
+          ID("QUERY") -> TString(),
+          ID("ARGS")  -> TString()
+        )),
+        AddColumnToMap(ID("FRIENDLY_NAME"), TString(), None)
+    ))
   }
 
-  def create(schema: ID, mlensType: ID, query: Operator, args: Seq[Expression]) = 
+  def create(schema: ID, mlensType: ID, query: Operator, args: Seq[Expression], humanReadableName: String) = 
   {
     val constructor:Multilens = MultilensRegistry.multilenses(mlensType)
     val config = MultilensConfig(schema, query, args);
@@ -36,7 +39,8 @@ class AdaptiveSchemaManager(db: Database)
     adaptiveSchemas.put(schema, Seq(
       StringPrimitive(mlensType.id),
       StringPrimitive(Json.ofOperator(query).toString),
-      StringPrimitive(Json.ofExpressionList(args).toString)
+      StringPrimitive(Json.ofExpressionList(args).toString),
+      StringPrimitive(humanReadableName)
     ))
 
     // Persist the associated models
