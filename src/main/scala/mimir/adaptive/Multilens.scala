@@ -4,7 +4,7 @@ import mimir.Database
 import mimir.algebra._
 import mimir.models._
 
-case class MultilensConfig(schema: ID, query: Operator, args: Seq[Expression])
+case class MultilensConfig(schema: ID, query: Operator, args: Seq[Expression], humanReadableName: String)
 {
   override def toString: String =
     s"CONFIG FOR $schema(${args.mkString(", ")})"

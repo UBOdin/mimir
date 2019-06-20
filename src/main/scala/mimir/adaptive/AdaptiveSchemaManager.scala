@@ -31,7 +31,7 @@ class AdaptiveSchemaManager(db: Database)
   def create(schema: ID, mlensType: ID, query: Operator, args: Seq[Expression], humanReadableName: String) = 
   {
     val constructor:Multilens = MultilensRegistry.multilenses(mlensType)
-    val config = MultilensConfig(schema, query, args);
+    val config = MultilensConfig(schema, query, args, humanReadableName);
     val models = constructor.initSchema(db, config);
     
     logger.trace(s"Creating view $schema <- $mlensType(${args.mkString(", ")}")
@@ -57,18 +57,19 @@ class AdaptiveSchemaManager(db: Database)
   }
 
   def lensForRecord(record: (ID, Seq[PrimitiveValue])) =
-    record match {
-      case (name, content) => 
-        val mlensType = content(0).asString
-        val query = Json.toOperator(Json.parse(content(1).asString))
-        val args:Seq[Expression] = 
-          Json.toExpressionList(Json.parse(content(2).asString))
-   
-        ( 
-          MultilensRegistry.multilenses(ID(mlensType)), 
-          MultilensConfig(ID(name.asString), query, args)
-        )
-    }
+  {
+    val (name, content) = record
+    val mlensType = content(0).asString
+    val query = Json.toOperator(Json.parse(content(1).asString))
+    val args:Seq[Expression] = 
+      Json.toExpressionList(Json.parse(content(2).asString))
+    val humanReadableName = content(3).asString
+
+    ( 
+      MultilensRegistry.multilenses(ID(mlensType)), 
+      MultilensConfig(ID(name.asString), query, args, humanReadableName)
+    )
+  }
 
   def all: TraversableOnce[(Multilens, MultilensConfig)] =
   {

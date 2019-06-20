@@ -47,6 +47,7 @@ object TypeInference
     val attributeTypeModel = 
       new TypeInferenceModel(
         viewName.withPrefix("MIMIR_TI_ATTR_"),
+        config.humanReadableName,
         modelColumns,
         stringDefaultScore,
         db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(),

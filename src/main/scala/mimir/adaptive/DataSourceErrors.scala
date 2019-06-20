@@ -94,7 +94,7 @@ object DataSourceErrors
                   Conditional(IsNullExpression(Var(colName)),StringPrimitive("NULL"),Var(colName)),
                   StringPrimitive(" ] is uncertain because there is an error(s) in the data source on row "),
                   RowIdVar(),
-                  StringPrimitive(". The raw value of the row in the data source is [ "),
+                  StringPrimitive(" of ${config.humanReadableName}. The raw value of the row in the data source is [ "),
                   Var(mimirDataSourceErrorRowColumn),
                   StringPrimitive(" ]")
                 ),
