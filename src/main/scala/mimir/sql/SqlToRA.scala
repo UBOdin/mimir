@@ -328,7 +328,7 @@ class SqlToRA(db: Database)
                 case Column(name, None) => 
                   ( tableForColumn.get(name) match {
                       case Some(t) => t
-                      case None => throw new SQLException("Invalid group-by column $name")
+                      case None => throw new SQLException(s"Invalid group-by column $name")
                     },
                     name
                   )
