@@ -27,7 +27,12 @@ fork := true
 outputStrategy in run := Some(StdoutOutput)
 connectInput in run := true
 cancelable in Global := true
-javaOptions ++= Seq("-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK")
+javaOptions ++= Seq(
+  "-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", 
+  "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", 
+  "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK"
+  // ,"-agentlib:jdwp=transport=dt_shmem,address=jdbconn,server=y,suspend=n"
+)
 scalacOptions in Test ++= Seq("-Yrangepos")
 parallelExecution in Test := false
 testOptions in Test ++= Seq( Tests.Argument("junitxml"), Tests.Argument("console") )

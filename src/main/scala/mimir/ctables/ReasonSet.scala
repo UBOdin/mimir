@@ -29,7 +29,8 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
           query
             .map( argExprs.zipWithIndex.map { arg => ("ARG_"+arg._2 -> arg._1) }:_* )
             .distinct
-            .count( alias = "COUNT" )
+            .count( alias = "COUNT" ),
+          UnannotatedBestGuess
         ) { _.next.tuple(0).asLong }
       case None => 
         1
@@ -60,7 +61,9 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
         val projectedQuery =
           Project(argCols ++ hintCols, limitedQuery)
 
-        db.query(projectedQuery) { _.toIndexedSeq.map { _.tuple.splitAt(argExprs.size) } }
+        db.query(projectedQuery, UnannotatedBestGuess) { 
+          _.toIndexedSeq.map { _.tuple.splitAt(argExprs.size) } 
+        }
       }
     }
   }

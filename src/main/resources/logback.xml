@@ -14,6 +14,13 @@
   <logger name="mimir.util.PythonProcess$" level="ERROR"/>
   <logger name="mimir.plot.Plot$" level="ERROR"/>
   <logger name="mimir.models.SeriesMissingValueModel$" level="ERROR"/>
+  
+  <logger name="mimir.ctables.AnalyzeUncertainty" level="ERROR"/>
+  <logger name="mimir.MimirVizier$" level="ERROR"/>
+  <logger name="mimir.exec.Compiler" level="ERROR"/>
+  <logger name="mimir.exec.mode.BestGuess$" level="ERROR"/>
+  <logger name="mimir.exec.mode.UnannotatedBestGuess$" level="ERROR"/>
+  <logger name="mimir.optimizer.Optimizer$" level="ERROR"/>
 
   <logger name="org.apache.hadoop.util.Shell" level="OFF"/>
 
