@@ -112,14 +112,14 @@ object ReasonSet
           (args, hints) => new ModelReason(model, idx, args, hints)
         )
       }
-      case DataWarning(name, valueExpr, messageExpr, keyExprs) => {
+      case DataWarning(name, valueExpr, messageExpr, keyExprs, idx) => {
         logger.debug(s"Make ReasonSet for Warning $name from\n$input")
         val model = db.models.get(name)
         return new ReasonSet(
           model,
-          0,
+          idx,
           Some(input, keyExprs, Seq(valueExpr, messageExpr)),
-          (keys, valueAndMessage) => new DataWarningReason(model, valueAndMessage(0), valueAndMessage(1).asString, keys)
+          (keys, valueAndMessage) => new DataWarningReason(model, idx, valueAndMessage(0), valueAndMessage(1).asString, keys)
         )
       }
 

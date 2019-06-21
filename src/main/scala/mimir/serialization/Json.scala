@@ -340,13 +340,14 @@ object Json
           "hints" -> ofExpressionList(hints)
         ))
 
-      case DataWarning(name, v, message, key) =>
+      case DataWarning(name, v, message, key, idx) =>
         JsObject(Map[String, JsValue](
           "type" -> JsString("data_warning"),
           "name" -> JsString(name.id),
           "value" -> ofExpression(v),
           "message" -> ofExpression(message),
-          "key" -> ofExpressionList(key)
+          "key" -> ofExpressionList(key),
+          "idx" -> JsNumber(idx)
         ))
 
       case CastExpression(expr, t) =>
@@ -424,7 +425,10 @@ object Json
           ID(fields("name").asInstanceOf[JsString].value),
           toExpression(fields("value")),
           toExpression(fields("message")),
-          toExpressionList(fields("key"))
+          toExpressionList(fields("key")),
+          fields.get("idx")
+                .map { _.asInstanceOf[JsNumber].value.toLong.toInt }
+                .getOrElse(0)
         )
 
       // fall back to treating it as a primitive type

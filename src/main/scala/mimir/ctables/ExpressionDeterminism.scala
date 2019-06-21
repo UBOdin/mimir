@@ -197,7 +197,7 @@ object ExpressionDeterminism {
           u match { 
             case VGTerm(name, idx, args, hints) => 
               Sampler(models(name), idx, args, hints, seed)
-            case DataWarning(_, v, _, _) => 
+            case DataWarning(_, v, _, _, _) => 
               v.recur(compileSample(_, seed, models))
           }
         case _ => expr

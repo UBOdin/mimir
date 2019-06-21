@@ -277,9 +277,10 @@ class AnalyzeUncertainty(db: Database) extends LazyLogging {
 				)
 			)
 
-			case DataWarning(name, value, message, key) => Map(name -> 
+			case DataWarning(name, value, message, key, idx) => Map(name -> 
 				new DataWarningReason(
 					db.models.get(name),
+					idx,
 					db.interpreter.eval(InlineVGTerms(value, db), tuple),
 					db.interpreter.eval(InlineVGTerms(value, db), tuple) match {
 						case NullPrimitive() => s"Error reading warning ($name(${key.mkString(",")}))"

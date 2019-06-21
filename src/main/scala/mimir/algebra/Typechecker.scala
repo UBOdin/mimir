@@ -152,7 +152,7 @@ class Typechecker(
 						registry.get(model).varType(idx, args.map(recur(_)))
 					case None => throw new RAException("Need Model Manager to typecheck expressions with VGTerms")
 				}
-			case DataWarning(_, v, _, _) => recur(v)
+			case DataWarning(_, v, _, _, _) => recur(v)
     }
   }
 

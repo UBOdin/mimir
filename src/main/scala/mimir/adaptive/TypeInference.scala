@@ -124,7 +124,7 @@ object TypeInference
       val model = db.models.get(ID("MIMIR_TI_ATTR_",config.schema)).asInstanceOf[TypeInferenceModel]
       val columnIndexes = model.columns.zipWithIndex.toMap
       Some(Project(
-        config.query.columnNames.map { colName => {
+        config.query.columnNames.zipWithIndex.map { case (colName, colIdx) => {
           ProjectArg(colName, 
             if(columnIndexes contains colName){ 
               val bestGuessType = model.bestGuess(0, Seq(IntPrimitive(columnIndexes(colName))), Seq())
@@ -141,9 +141,11 @@ object TypeInference
                       StringPrimitive("Couldn't Cast [ "),
                       Var(colName),
                       StringPrimitive(" ] to "+bestGuessType+" on row "),
-                      RowIdVar()
+                      RowIdVar(),
+                      StringPrimitive(s" of ${config.humanReadableName}.")
                     ),
-                    Seq(StringPrimitive(colName.id), Var(colName), StringPrimitive(bestGuessType.toString), RowIdVar())
+                    Seq(StringPrimitive(colName.id), Var(colName), StringPrimitive(bestGuessType.toString), RowIdVar()),
+                    colIdx
                   ),
                   castExpression
                 )

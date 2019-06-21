@@ -124,7 +124,7 @@ object MimirSQL
       Sparsity.identifier ~
       "(" ~ ExprParser.expressionList ~ ")"
     ).map { case (name, query, lensType, args) =>
-      CreateAdaptiveSchema(name, query, lensType, args)
+      CreateAdaptiveSchema(name, query, lensType, args, name.toString)
     }
   )
   def createLens[_:P] = P(

@@ -85,6 +85,7 @@ class ModelReason(
 
 class DataWarningReason(
   val model: Model,
+  val idx: Int,
   val value: PrimitiveValue,
   val message: String,
   val key: Seq[PrimitiveValue]
@@ -93,7 +94,6 @@ class DataWarningReason(
 {
   override def toString = s"$message {{ $model[${key.mkString(", ")}] }}"
 
-  def idx: Int = 0
   def args: Seq[PrimitiveValue] = key
   def hints: Seq[PrimitiveValue] = Seq()
 
