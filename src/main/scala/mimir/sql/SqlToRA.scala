@@ -706,7 +706,10 @@ class SqlToRA(db: Database)
   {
     c.table match {
       case Some(table) => {
-        bindings(table) match {
+        bindings( getVizierNameMapping(table) match { 
+              case Some(mimirID) => sparsity.Name(mimirID.id)
+              case None => table 
+            } ) match {
           case Some(tableBindings) => 
             lookupColumnInTableBindings(c, tableBindings)
           case None => 
