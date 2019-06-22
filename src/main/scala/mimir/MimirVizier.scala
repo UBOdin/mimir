@@ -15,7 +15,7 @@ import mimir.algebra._
 import mimir.exec.result.Row
 import mimir.backend.SparkBackend
 import mimir.metadata.JDBCMetadataBackend
-import mimir.util.ExperimentalOptions
+import mimir.util.{ExperimentalOptions,Timer}
 //import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
 import mimir.exec.Compiler
 import mimir.ctables.Reason
@@ -217,12 +217,27 @@ object MimirVizier extends LazyLogging {
   def loadCSV(file : String, delimeter:String, detectHeaders:Boolean, inferTypes:Boolean) : String = 
     loadDataSource(file, "csv", Seq(("delimeter",delimeter),("mimir_detect_headers",detectHeaders.toString()),("mimir_infer_types",inferTypes.toString())))
   def loadDataSource(file : String, format:String, options:Seq[(String, String)]) : String = {
-    val detectHeaders = options.filter(_._1.equalsIgnoreCase("mimir_detect_headers")).foldLeft(true)( (init,cur) => init && (!cur._2.equalsIgnoreCase("false")))
-    val inferTypes = options.filter(_._1.equalsIgnoreCase("mimir_infer_types")).foldLeft(true)( (init,cur) => init && (!cur._2.equalsIgnoreCase("false")))
-    val backendOptions = options.filterNot(_._1.equalsIgnoreCase("mimir_detect_headers")).filterNot(_._1.equalsIgnoreCase("mimir_infer_types"))
-    loadDataSource(file, format, inferTypes, detectHeaders, backendOptions)
+    val detectHeaders     = options.filter { _._1.equalsIgnoreCase("mimir_detect_headers") }
+                                   .headOption
+                                   .map { _._2.equalsIgnoreCase("false") }
+                                   .getOrElse(true)
+    val inferTypes        = options.filter { _._1.equalsIgnoreCase("mimir_infer_types") }
+                                   .headOption
+                                   .map { _._2.equalsIgnoreCase("false") }
+                                   .getOrElse(true)
+    val humanReadableName = options.filter { _._1.equalsIgnoreCase("mimir_human_readable_name") }
+                                   .headOption
+                                   .map { _._2 }
+
+    val backendOptions = 
+      options.filterNot { x => 
+        x._1.equalsIgnoreCase("mimir_detect_headers") || 
+        x._1.equalsIgnoreCase("mimir_infer_types") || 
+        x._1.equalsIgnoreCase("mimir_human_readable_name")
+      }
+    loadDataSource(file, format, inferTypes, detectHeaders, humanReadableName, backendOptions)
   }
-  def loadDataSource(file : String, format:String, inferTypes:Boolean, detectHeaders:Boolean, backendOptions:Seq[Any]) : String = {
+  def loadDataSource(file : String, format:String, inferTypes:Boolean, detectHeaders:Boolean, humanReadableName:Option[String], backendOptions:Seq[Any]) : String = {
     try{
       apiCallThread = Thread.currentThread()
       val timeRes = logTime("loadDataSource") {
@@ -264,7 +279,8 @@ object MimirVizier extends LazyLogging {
           inferTypes = Some(inferTypes), 
           detectHeaders = Some(detectHeaders), 
           loadOptions = bkOpts.toMap, 
-          format = ID(format)
+          format = ID(format),
+          humanReadableName = Some(csvFile)
         )
       }
       tableName 
@@ -910,16 +926,18 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     try{
     logger.debug("explainEverything: From Vistrails: [" + query + "]"  ) ;
     val oper = db.sqlToRA(MimirSQL.Select(query))
-    explainEverything(oper).map(/*_.all(db).toList*/rset => {
-        logger.trace(s"Explaining everything for $rset")
-        val subReasons = rset.take(db, 4).toSeq
-  			if(subReasons.size > 3){
-  				logger.trace("   -> Too many explanations to fit in one group")
-  				Seq(new MultiReason(db, rset))
-  			} else {
-  				logger.trace(s"   -> Only ${subReasons.size} explanations")
-  				subReasons
-  			}}).flatten   
+    explainEverything(oper).par.map(/*_.all(db).toList*/rset => {
+        Timer.monitor(s"Explaining everything for $rset", logger.trace(_)) {
+          val subReasons = rset.take(db, 4).toSeq
+    			if(subReasons.size > 3){
+    				logger.trace("   -> Too many explanations to fit in one group")
+    				Seq(new MultiReason(db, rset))
+    			} else {
+    				logger.trace(s"   -> Only ${subReasons.size} explanations")
+    				subReasons
+    			}
+        }
+      }).seq.flatten   
     } catch {
       case t: Throwable => {
         logger.error("Error Explaining Everything: [" + query + "]", t)

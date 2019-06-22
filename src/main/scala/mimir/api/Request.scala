@@ -34,11 +34,13 @@ case class LoadRequest (
                   inferTypes: Boolean,
             /* detect headers in datasource */
                   detectHeaders: Boolean,
+            /* optionally provide a name */
+                  humanReadableName: Option[String],
             /* options for spark datasource api */
                   backendOption: Seq[Tuple]
 ) extends Request {
   def handle(os:OutputStream) = {
-    os.write(Json.stringify(Json.toJson(LoadResponse(MimirVizier.loadDataSource(file, format, inferTypes, detectHeaders, backendOption.map(tup => tup.name -> tup.value))))).getBytes )
+    os.write(Json.stringify(Json.toJson(LoadResponse(MimirVizier.loadDataSource(file, format, inferTypes, detectHeaders, humanReadableName, backendOption.map(tup => tup.name -> tup.value))))).getBytes )
   }
 }
 

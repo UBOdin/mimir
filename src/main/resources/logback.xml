@@ -16,7 +16,7 @@
   <logger name="mimir.models.SeriesMissingValueModel$" level="ERROR"/>
   
   <logger name="mimir.ctables.AnalyzeUncertainty" level="ERROR"/>
-  <logger name="mimir.MimirVizier$" level="ERROR"/>
+  <logger name="mimir.MimirVizier$" level="TRACE"/>
   <logger name="mimir.exec.Compiler" level="ERROR"/>
   <logger name="mimir.exec.mode.BestGuess$" level="ERROR"/>
   <logger name="mimir.exec.mode.UnannotatedBestGuess$" level="ERROR"/>
