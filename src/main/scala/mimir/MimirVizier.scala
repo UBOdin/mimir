@@ -280,7 +280,7 @@ object MimirVizier extends LazyLogging {
           detectHeaders = Some(detectHeaders), 
           loadOptions = bkOpts.toMap, 
           format = ID(format),
-          humanReadableName = Some(csvFile)
+          humanReadableName = humanReadableName
         )
       }
       tableName 
