@@ -27,7 +27,8 @@ object FeedbackSpec
         ID("R_TI"), 
         ID("TYPE_INFERENCE"), 
         db.table("R"), 
-        Seq(FloatPrimitive(.5))
+        Seq(FloatPrimitive(.5)),
+        "R_TYPE_INFERENCE"
       ) 
   		update("CREATE LENS MV AS SELECT * FROM R WITH MISSING_VALUE(B, C)")
       print(db.models.list)

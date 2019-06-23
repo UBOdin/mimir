@@ -14,7 +14,7 @@ object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
 
   def train(elems: List[String]): TypeInferenceModel = 
   {
-    val model = new TypeInferenceModel(ID("TEST_MODEL"), Array(ID("TEST_COLUMN")), 0.5, db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(),None)
+    val model = new TypeInferenceModel(ID("TEST_MODEL"), "TEST", Array(ID("TEST_COLUMN")), 0.5, db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(),None)
     elems.foreach( model.learn(0, _) )
     return model
   }
@@ -60,7 +60,7 @@ object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
       LoggerUtils.debug(
         "mimir.models.TypeInferenceModel"
       ){
-        val model = new TypeInferenceModel(ID("CPUSPEED:CORES"), Array(ID("CORES")), 0.5, db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(), Some(db.backend.execute(table("CPUSPEED"))))
+        val model = new TypeInferenceModel(ID("CPUSPEED:CORES"), "CPUSPEED_CORES", Array(ID("CORES")), 0.5, db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(), Some(db.backend.execute(table("CPUSPEED"))))
         //model.train(db.backend.execute(table("CPUSPEED")))
         guess(model) must be equalTo(TInt())
       }

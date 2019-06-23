@@ -25,7 +25,8 @@ object TypeInferenceAdaptiveSpec
         ID("CPUSPEED_TI"), 
         ID("TYPE_INFERENCE"), 
         db.table("CPUSPEED"), 
-        Seq()
+        Seq(),
+        "CPUSPEED"
       )
       
       val baseTypes = db.typechecker.schemaOf(db.table("CPUSPEED_RAW")).toMap

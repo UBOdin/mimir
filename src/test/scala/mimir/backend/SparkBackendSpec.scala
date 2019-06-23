@@ -17,6 +17,7 @@ object SparkBackendSpec
 {
  
   "SparkBackend" should {
+    
     "Be able to zipWithIndex and RowIndexPlan on multi-partition datasets" >> {
       db.loadTable(
         sourceFile = "test/data/JSONOUTPUTWIDE.csv", 

@@ -39,9 +39,9 @@ object DatasetShapeSpec
     
     "Detect and test the basics with Adaptive Schema and work with DataSource Errors" >> {
       //good data
-      db.adaptiveSchemas.create( ID("Z_SW"), ID("SHAPE_WATCHER"), db.table("Z"), Seq(StringPrimitive("MIMIR_SHAPE_Z")))
+      db.adaptiveSchemas.create( ID("Z_SW"), ID("SHAPE_WATCHER"), db.table("Z"), Seq(StringPrimitive("MIMIR_SHAPE_Z")), "Z_SHAPE")
       //bad data
-      db.adaptiveSchemas.create( ID("Z_BAD_SW"), ID("SHAPE_WATCHER"), db.table("Z_BAD"), Seq(Var(ID("MIMIR_SHAPE_Z"))))
+      db.adaptiveSchemas.create( ID("Z_BAD_SW"), ID("SHAPE_WATCHER"), db.table("Z_BAD"), Seq(Var(ID("MIMIR_SHAPE_Z"))), "Z_BAD_SHAPE")
       
       db.views.create(ID("Z_BAD_S"), db.adaptiveSchemas.viewFor(ID("Z_BAD_SW"), ID("Z_BAD_SW")).get)
       
