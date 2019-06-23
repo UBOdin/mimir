@@ -25,9 +25,10 @@ import play.api.libs.json._
 object MimirAPI extends LazyLogging {
   
   var isRunning = true
+  val DEFAULT_API_PORT = 8089
   
-  def runAPIServerForViztrails() : Unit = {
-    val server = new Server(8089)
+  def runAPIServerForViztrails(port: Int = DEFAULT_API_PORT) : Unit = {
+    val server = new Server(port)
     val http_config = new HttpConfiguration();
     server.addConnector(new ServerConnector( server,  new HttpConnectionFactory(http_config)) );
     
@@ -52,7 +53,7 @@ object MimirAPI extends LazyLogging {
     server.setHandler(handlerList);
     server.start()
      
-    println("Mimir API Server Started...")
+    println(s"Mimir API Server Started on http://localhost:$port/...")
      while(isRunning){
        Thread.sleep(90000)
        

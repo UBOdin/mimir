@@ -5,7 +5,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.Database
 import mimir.algebra._
 import mimir.util._
-import mimir.metadata.{MetadataMap, MetadataManyMany}
+import mimir.metadata._
 /**
  * The ModelManager handles model persistence.  
  *
@@ -37,10 +37,10 @@ class ModelManager(db:Database)
    */
   def init(): Unit =
   {
-    modelTable = db.metadata.registerMap(ID("MIMIR_MODELS"), Seq(
+    modelTable = db.metadata.registerMap(ID("MIMIR_MODELS"), Seq(InitMap(Seq(
       ID("ENCODED") -> TString(),
       ID("DECODER") -> TString()
-    ))
+    ))))
     ownerTable = db.metadata.registerManyMany(ID("MIMIR_MODEL_OWNERS"))
   }
 

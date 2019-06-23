@@ -4,19 +4,16 @@ import java.sql._
 import mimir.Database
 import mimir.algebra._
 
-object Metadata
-{
-  type MapSchema = Seq[(ID, Type)]
-  type MapResource = (ID, Seq[PrimitiveValue])
-}
-
 abstract class MetadataBackend {
 
 
   def open(): Unit
   def close(): Unit
 
-  def registerMap(category: ID, schema: Metadata.MapSchema): MetadataMap
+  def registerMap(
+    category: ID, 
+    migrations: Seq[MapMigration]
+  ): MetadataMap
   def registerManyMany(category: ID): MetadataManyMany
 
   def keysForMap(category: ID): Seq[ID]

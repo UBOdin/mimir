@@ -31,7 +31,8 @@ case class CreateAdaptiveSchema(
   name: Name,
   body: SelectBody,
   schemaType: Name,
-  args: Seq[Expression]
+  args: Seq[Expression],
+  humanReadableName: String
 ) extends MimirStatement
 
 case class CreateLens(

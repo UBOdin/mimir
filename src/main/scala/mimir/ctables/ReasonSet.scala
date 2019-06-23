@@ -29,7 +29,8 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
           query
             .map( argExprs.zipWithIndex.map { arg => ("ARG_"+arg._2 -> arg._1) }:_* )
             .distinct
-            .count( alias = "COUNT" )
+            .count( alias = "COUNT" ),
+          UnannotatedBestGuess
         ) { _.next.tuple(0).asLong }
       case None => 
         1
@@ -60,7 +61,9 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
         val projectedQuery =
           Project(argCols ++ hintCols, limitedQuery)
 
-        db.query(projectedQuery) { _.toIndexedSeq.map { _.tuple.splitAt(argExprs.size) } }
+        db.query(projectedQuery, UnannotatedBestGuess) { 
+          _.toIndexedSeq.map { _.tuple.splitAt(argExprs.size) } 
+        }
       }
     }
   }
@@ -109,14 +112,14 @@ object ReasonSet
           (args, hints) => new ModelReason(model, idx, args, hints)
         )
       }
-      case DataWarning(name, valueExpr, messageExpr, keyExprs) => {
-        logger.debug(s"Make ReasonSet for Warning $name from\n$input")
+      case DataWarning(name, valueExpr, messageExpr, keyExprs, idx) => {
+        logger.debug(s"Make ReasonSet for Warning $name:$idx from\n$input")
         val model = db.models.get(name)
         return new ReasonSet(
           model,
-          0,
+          idx,
           Some(input, keyExprs, Seq(valueExpr, messageExpr)),
-          (keys, valueAndMessage) => new DataWarningReason(model, valueAndMessage(0), valueAndMessage(1).asString, keys)
+          (keys, valueAndMessage) => new DataWarningReason(model, idx, valueAndMessage(0), valueAndMessage(1).asString, keys)
         )
       }
 

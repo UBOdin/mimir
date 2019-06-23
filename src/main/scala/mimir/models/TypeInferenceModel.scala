@@ -96,7 +96,7 @@ case class VoteList()
 
 
 @SerialVersionUID(1002L)
-class TypeInferenceModel(name: ID, val columns: IndexedSeq[ID], defaultFrac: Double, sparkSql:SQLContext, query:Option[DataFrame] )
+class TypeInferenceModel(name: ID, val descriptiveName: String, val columns: IndexedSeq[ID], defaultFrac: Double, sparkSql:SQLContext, query:Option[DataFrame] )
   extends Model(name)
   with SourcedFeedback
   with FiniteDiscreteDomain
@@ -182,11 +182,11 @@ class TypeInferenceModel(name: ID, val columns: IndexedSeq[ID], defaultFrac: Dou
             case _ => 
               s"around $guessPct% of the data fit"
           }
-        s"I guessed that $name.${columns(column)} was of type $typeStr because $reason"
+        s"I guessed that $descriptiveName.${columns(column)} was of type $typeStr because $reason"
       }
       case Some(t) =>
         val typeStr = Cast(TType(), t).toString.toUpperCase
-        s"${getReasonWho(column,args)} told me that $name.${columns(column)} was of type $typeStr"
+        s"${getReasonWho(column,args)} told me that $descriptiveName.${columns(column)} was of type $typeStr"
     }
   }
 
@@ -201,7 +201,8 @@ class TypeInferenceModel(name: ID, val columns: IndexedSeq[ID], defaultFrac: Dou
     if(v.isInstanceOf[TypePrimitive]){
       setFeedback(idx, args, v)
     } else {
-      throw new ModelException(s"Invalid choice for $name: $v")
+      val column = args(0).asInt
+      throw new ModelException(s"Invalid choice for a value in $descriptiveName.${columns(column)}: $v")
     }
   }
 

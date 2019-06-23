@@ -584,7 +584,7 @@ UnresolvedAttribute("ROWID")
         BestGuessUDF(oper, model, idx, args.map(arg => mimirExprToSparkExpr(oper,arg)), hints.map(hint => mimirExprToSparkExpr(oper,hint))).getUDF
         //UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ++ hints.map(mimirExprToSparkExpr(oper,_))), true )
       }
-      case DataWarning(_, v, _, _) => {
+      case DataWarning(_, v, _, _, _) => {
         mimirExprToSparkExpr(oper, v)
       }
       case IsNullExpression(iexpr) => {

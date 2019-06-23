@@ -27,7 +27,7 @@ object DetectHeader {
 }
 
 @SerialVersionUID(1002L)
-class DetectHeaderModel(override val name: ID, val targetName: ID, val columns:Seq[ID], val trainingData:Seq[Seq[PrimitiveValue]])
+class DetectHeaderModel(override val name: ID, val descriptiveName: String, val columns:Seq[ID], val trainingData:Seq[Seq[PrimitiveValue]])
 extends Model(name)
 with Serializable
 with SourcedFeedback
@@ -134,11 +134,11 @@ with SourcedFeedback
   def reason(idx: Int, args: Seq[PrimitiveValue],hints: Seq[PrimitiveValue]): String = {
     getFeedback(idx, args) match {
       case Some(colName) => 
-        s"${getReasonWho(idx, args)} told me that $targetName.$colName is a valid column name for column number ${args(0)}"
+        s"${getReasonWho(idx, args)} told me that $descriptiveName.$colName is a valid column name for column number ${args(0)}"
       case None if headerDetected => 
-        s"I analyzed the first several rows of $targetName and there appear to be column headers in the first row.  For column with index: ${args(0)}, the detected header is ${initialHeaders(args(0).asInt)}"
+        s"I analyzed the first several rows of $descriptiveName and there appear to be column headers in the first row.  For column with index: ${args(0)}, the detected header is ${initialHeaders(args(0).asInt)}"
       case None =>
-        s"I analyzed the first several rows of $targetName and there do NOT appear to be column headers in the first row.  For the column with index: ${args(0)}, I used the default value of ${initialHeaders(args(0).asInt)}"
+        s"I analyzed the first several rows of $descriptiveName and there do NOT appear to be column headers in the first row.  For the column with index: ${args(0)}, I used the default value of ${initialHeaders(args(0).asInt)}"
     }
   }
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit = {

@@ -150,10 +150,10 @@ class GeocodingModel(override val name: ID, addrCols:Seq[Expression], geocoder:I
   }
   
   private def makeGeocodeRequest(args: Seq[PrimitiveValue]) : Option[String] = {
-    val houseNumber = args(1).asString
-    val streetName = args(2).asString
-    val city = args(3).asString
-    val state = args(4).asString
+    val houseNumber = args(1) match { case NullPrimitive() => "" ; case x => x.asString }
+    val streetName = args(2) match { case NullPrimitive() => "" ; case x => x.asString }
+    val city = args(3) match { case NullPrimitive() => "" ; case x => x.asString }
+    val state = args(4) match { case NullPrimitive() => "" ; case x => x.asString }
     val url = geocoder match {
       case ID("GOOGLE") => (s"https://maps.googleapis.com/maps/api/geocode/json?address=${s"$houseNumber+${streetName.replaceAll(" ", "+")},+${city.replaceAll(" ", "+")},+$state".replaceAll("\\+\\+", "+")}&key=$apiKey")
       case ID("OSM") | _ => (s"http://52.0.26.255/?format=json&street=$houseNumber%20$streetName&city=$city&state=$state")

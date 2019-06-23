@@ -7,7 +7,7 @@ import mimir.algebra._
 import mimir.statistics.SystemCatalog
 import mimir.serialization._
 import mimir.util._
-import mimir.metadata.MetadataMap
+import mimir.metadata._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 class AdaptiveSchemaManager(db: Database)
@@ -19,16 +19,19 @@ class AdaptiveSchemaManager(db: Database)
   {
     adaptiveSchemas = db.metadata.registerMap(
       ID("MIMIR_ADAPTIVE_SCHEMAS"), Seq(
-        ID("MLENS") -> TString(),
-        ID("QUERY") -> TString(),
-        ID("ARGS")  -> TString()
+        InitMap(Seq(
+          ID("MLENS") -> TString(),
+          ID("QUERY") -> TString(),
+          ID("ARGS")  -> TString()
+        )),
+        AddColumnToMap(ID("FRIENDLY_NAME"), TString(), None)
     ))
   }
 
-  def create(schema: ID, mlensType: ID, query: Operator, args: Seq[Expression]) = 
+  def create(schema: ID, mlensType: ID, query: Operator, args: Seq[Expression], humanReadableName: String) = 
   {
     val constructor:Multilens = MultilensRegistry.multilenses(mlensType)
-    val config = MultilensConfig(schema, query, args);
+    val config = MultilensConfig(schema, query, args, humanReadableName);
     val models = constructor.initSchema(db, config);
     
     logger.trace(s"Creating view $schema <- $mlensType(${args.mkString(", ")}")
@@ -36,7 +39,8 @@ class AdaptiveSchemaManager(db: Database)
     adaptiveSchemas.put(schema, Seq(
       StringPrimitive(mlensType.id),
       StringPrimitive(Json.ofOperator(query).toString),
-      StringPrimitive(Json.ofExpressionList(args).toString)
+      StringPrimitive(Json.ofExpressionList(args).toString),
+      StringPrimitive(humanReadableName)
     ))
 
     // Persist the associated models
@@ -53,18 +57,19 @@ class AdaptiveSchemaManager(db: Database)
   }
 
   def lensForRecord(record: (ID, Seq[PrimitiveValue])) =
-    record match {
-      case (name, content) => 
-        val mlensType = content(0).asString
-        val query = Json.toOperator(Json.parse(content(1).asString))
-        val args:Seq[Expression] = 
-          Json.toExpressionList(Json.parse(content(2).asString))
-   
-        ( 
-          MultilensRegistry.multilenses(ID(mlensType)), 
-          MultilensConfig(ID(name.asString), query, args)
-        )
-    }
+  {
+    val (name, content) = record
+    val mlensType = content(0).asString
+    val query = Json.toOperator(Json.parse(content(1).asString))
+    val args:Seq[Expression] = 
+      Json.toExpressionList(Json.parse(content(2).asString))
+    val humanReadableName = content(3).asString
+
+    ( 
+      MultilensRegistry.multilenses(ID(mlensType)), 
+      MultilensConfig(ID(name.asString), query, args, humanReadableName)
+    )
+  }
 
   def all: TraversableOnce[(Multilens, MultilensConfig)] =
   {

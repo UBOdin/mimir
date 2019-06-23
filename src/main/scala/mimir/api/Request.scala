@@ -34,11 +34,13 @@ case class LoadRequest (
                   inferTypes: Boolean,
             /* detect headers in datasource */
                   detectHeaders: Boolean,
+            /* optionally provide a name */
+                  humanReadableName: Option[String],
             /* options for spark datasource api */
                   backendOption: Seq[Tuple]
 ) extends Request {
   def handle(os:OutputStream) = {
-    os.write(Json.stringify(Json.toJson(LoadResponse(MimirVizier.loadDataSource(file, format, inferTypes, detectHeaders, backendOption.map(tup => tup.name -> tup.value))))).getBytes )
+    os.write(Json.stringify(Json.toJson(LoadResponse(MimirVizier.loadDataSource(file, format, inferTypes, detectHeaders, humanReadableName, backendOption.map(tup => tup.name -> tup.value))))).getBytes )
   }
 }
 
@@ -221,9 +223,21 @@ case class ExplainEverythingAllRequest (
                   query: String
 ) extends Request {
   def handle(os:OutputStream) = {
-    os.write(Json.stringify(Json.toJson(ExplainReasonsResponse(MimirVizier.explainEverythingAll(query).map(rsn => 
-      Reason(rsn.reason, rsn.model.name.toString, rsn.idx, rsn.args.map(_.toString()), mimir.api.Repair(rsn.repair.toJSON), rsn.repair.exampleString)
-    )))).getBytes )
+    os.write(Json.stringify(Json.toJson(
+      ExplainReasonsResponse(
+        MimirVizier.explainEverythingAll(query).map { 
+          rsn => 
+            Reason(
+              rsn.reason, 
+              rsn.model.name.toString, 
+              rsn.idx, 
+              rsn.args.map(_.toString()), 
+              mimir.api.Repair(rsn.repair.toJSON), 
+              rsn.repair.exampleString
+            )
+        }
+      )
+    )).getBytes )
   }
 }
 
@@ -237,12 +251,21 @@ case class ExplainEverythingRequest (
                   query: String
 ) extends Request {
   def handle(os:OutputStream) = {
-    os.write(Json.stringify(Json.toJson(ExplainResponse(MimirVizier.explainEverything(query).map(rsn => 
-      ReasonSet(rsn.model.name.toString, rsn.idx, rsn.argLookup match {
-        case Some((query, args, hints)) => "[" + args.mkString(", ") + "][" + hints.mkString(", ") + "] <- \n" + query.toString("   ")
-        case None => ""
-      })
-    )))).getBytes )
+    os.write(Json.stringify(Json.toJson(
+      ExplainResponse(
+        MimirVizier.explainEverything(query).map { 
+          rsn => 
+            ReasonSet(
+              rsn.model.name.toString, 
+              rsn.idx, 
+              rsn.argLookup match {
+                case Some((query, args, hints)) => "[" + args.mkString(", ") + "][" + hints.mkString(", ") + "] <- \n" + query.toString("   ")
+                case None => ""
+              }
+            )
+        }
+      )
+    )).getBytes )
   }
 }
 

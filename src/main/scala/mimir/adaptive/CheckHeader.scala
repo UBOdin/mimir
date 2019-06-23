@@ -26,7 +26,7 @@ object CheckHeader
     val detectmodel = 
       new DetectHeaderModel(
         modelName, 
-        viewName, 
+        config.humanReadableName, 
         config.query.columnNames, 
         db.query(Limit(0,Some(6),config.query))(_.toList.map(_.tuple)).toSeq
       )
