@@ -142,7 +142,7 @@ object TypeInference
                       Var(colName),
                       StringPrimitive(" ] to "+bestGuessType+" on row "),
                       RowIdVar(),
-                      StringPrimitive(s" of ${config.humanReadableName}.")
+                      StringPrimitive(s" of ${config.humanReadableName}.${colName}")
                     ),
                     Seq(StringPrimitive(colName.id), Var(colName), StringPrimitive(bestGuessType.toString), RowIdVar()),
                     colPosition
