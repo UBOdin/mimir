@@ -40,7 +40,16 @@ case class LoadRequest (
                   backendOption: Seq[Tuple]
 ) extends Request {
   def handle(os:OutputStream) = {
-    os.write(Json.stringify(Json.toJson(LoadResponse(MimirVizier.loadDataSource(file, format, inferTypes, detectHeaders, humanReadableName, backendOption.map(tup => tup.name -> tup.value))))).getBytes )
+    os.write(Json.stringify(Json.toJson(LoadResponse(
+      MimirVizier.loadDataSource(
+        file, 
+        format, 
+        inferTypes, 
+        detectHeaders, 
+        humanReadableName, 
+        backendOption.map(tup => tup.name -> tup.value)
+      )
+    ))).getBytes )
   }
 }
 
@@ -60,7 +69,12 @@ case class UnloadRequest (
                   backendOption: Seq[Tuple]
 ) extends Request {
   def handle(os:OutputStream) = {
-    MimirVizier.unloadDataSource(input, file, format, backendOption.map(tup => tup.name -> tup.value))
+    MimirVizier.unloadDataSource(
+      input, 
+      file, 
+      format, 
+      backendOption.map(tup => tup.name -> tup.value)
+    )
   }
 }
 
@@ -76,10 +90,20 @@ case class CreateLensRequest (
             /* type name of lens */
                   `type`: String,
             /* materialize input before creating lens */
-                  materialize: Boolean
+                  materialize: Boolean,
+                  humanReadableName: Option[String]
 ) extends Request {
   def handle(os:OutputStream) = {
-    os.write(Json.stringify(Json.toJson(MimirVizier.createLens(input, params, `type`, false, materialize))).getBytes )
+    os.write(Json.stringify(Json.toJson(
+      MimirVizier.createLens(
+        input, 
+        params, 
+        `type`, 
+        false, 
+        materialize, 
+        humanReadableName = humanReadableName
+      )
+    )).getBytes )
   }
 }
 

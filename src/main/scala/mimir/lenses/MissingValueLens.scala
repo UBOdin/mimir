@@ -13,9 +13,10 @@ import mimir.parser.ExpressionParser
 
 import scala.collection.JavaConversions._
 import scala.util._
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 
-object MissingValueLens {
+object MissingValueLens extends LazyLogging {
 
   def getConstraint(arg: Expression): Seq[(ID, Expression)] =
   {
@@ -53,6 +54,7 @@ object MissingValueLens {
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
   {
+    logger.error(s"Human readable name: ${humanReadableName}")
 
     // Preprocess the lens arguments...
     // Semantics are as follows:
@@ -134,7 +136,7 @@ object MissingValueLens {
             //TODO: Replace Default Model
             val metaModel = new DefaultMetaModel(
                 ID(name, ":META:", column), 
-                s"picking values for $name.$column",
+                s"picking values for ${humanReadableName}.$column",
                 models.map(_._4)
               )
             val metaExpr = LensUtils.buildMetaModel(
