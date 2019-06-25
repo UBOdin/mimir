@@ -18,6 +18,39 @@ object SparkBackendSpec
  
   "SparkBackend" should {
     
+    "Be able to zipWithIndex and RowIndexPlan with DetectHeaders " >> {
+      db.loadTable(
+        sourceFile = "test/data/causes.csv", 
+        targetTable = Some(ID("C")), 
+        force = true, 
+        targetSchema = None,
+        inferTypes = Some(true),
+        detectHeaders = Some(true), //detect headers is breaking row ordering
+        format = ID("csv"),
+        loadOptions = Map(
+          "DELIMITER" -> ",", 
+          "datasourceErrors" -> "false"
+        )
+      )
+      
+      val tableOp = db.table(ID("C"))
+      val tabledf = db.backend.execute(tableOp)
+      val idxdf = db.backend.asInstanceOf[SparkBackend].zipWithIndex(tabledf, 2, "index", LongType)
+      val cols = idxdf.schema.fields.map(_.name).toSeq
+      val idxs = idxdf.collect().map(row => (row.getLong(row.fieldIndex("index")), Option(row.get(1)).getOrElse("null").toString())).toSeq
+      
+      cols must contain("index")
+      idxs.head must be equalTo (2, "All Other Causes")
+      idxs.last must be equalTo (1381, "All Other Causes")
+      LoggerUtils.trace(
+				//"mimir.backend.SparkBackend"
+			){
+        val rids = query("Select C.* FROM C;")(_.toList).map(row => (row.provenance.asLong, row(1).toString))
+        rids.head must be equalTo (2, "'All Other Causes'")
+        rids.last must be equalTo (1381, "'All Other Causes'")
+      }
+    }
+    
     "Be able to zipWithIndex and RowIndexPlan on multi-partition datasets" >> {
       db.loadTable(
         sourceFile = "test/data/JSONOUTPUTWIDE.csv", 
@@ -55,25 +88,25 @@ object SparkBackendSpec
         force = true, 
         targetSchema = None,
         inferTypes = Some(true),
-        detectHeaders = Some(false),
+        detectHeaders = Some(true),
         format = ID("csv"),
         loadOptions = Map(
           "DELIMITER" -> ",", 
-          "datasourceErrors" -> "true"
+          "datasourceErrors" -> "false"
         )
       )
       
       val tableOp = db.table(ID("P"))
       val tabledf = db.backend.execute(tableOp)
-      val idxdf = db.backend.asInstanceOf[SparkBackend].zipWithIndex(tabledf, 1, "index", LongType)
+      val idxdf = db.backend.asInstanceOf[SparkBackend].zipWithIndex(tabledf, 2, "index", LongType)
       val cols = idxdf.schema.fields.map(_.name).toSeq
-      val idxs = idxdf.collect().map(row => (row.getLong(row.fieldIndex("index")), Option(row.get(0)).getOrElse("null").toString())).toSeq.drop(1)
+      val idxs = idxdf.collect().map(row => (row.getLong(row.fieldIndex("index")), Option(row.get(0)).getOrElse("null").toString())).toSeq
       
       cols must contain("index")
       idxs.head must be equalTo (2, "1")
       idxs.last must be equalTo (5,"5")
       
-      val rids = query("select * from P;")(_.toList).map(row => (row.provenance.asLong, row(0).toString)).drop(1)
+      val rids = query("select * from P;")(_.toList).map(row => (row.provenance.asLong, row(0).toString))
       rids.head must be equalTo (2, "1")
       rids.last must be equalTo (5,"5")
     }
@@ -89,7 +122,7 @@ object SparkBackendSpec
         format = ID("csv"),
         loadOptions = Map(
           "DELIMITER" -> ",", 
-          "datasourceErrors" -> "true"
+          "datasourceErrors" -> "false"
         )
       )
       val funcres = query("Select substring(CITY, 0, 1) AS D FROM geo;")( results => {
@@ -99,7 +132,7 @@ object SparkBackendSpec
       val aggres = query("Select COUNT(CITY) AS CC FROM geo;")( results => {
         results.toList.map( el => el.tuple.toList)
       })
-      funcres must be equalTo List(List(str("B")),List(str("S")),List(str("B")),List(str("B")),List(str("B")),List(str("B")),List(str("B")))
+      funcres must be equalTo List(List(str("B")),List(str("B")),List(str("B")),List(str("B")),List(str("B")),List(str("B")),List(str("S")))
       aggres must be equalTo List(List(i(7)))
     }
   }

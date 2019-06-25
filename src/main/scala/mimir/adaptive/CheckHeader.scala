@@ -78,7 +78,7 @@ object CheckHeader
           Project( model.columns.zipWithIndex.map( col => 
             ProjectArg(ID(model.bestGuess(0, Seq(IntPrimitive(col._2)), Seq()).asString),Var(col._1)) )
             , config.query) match {
-            case proj if model.headerDetected => proj.limit(-1, 1)
+            case proj if model.headerDetected => proj.filter(Not(Comparison(Cmp.Eq, RowIdVar(), RowIdPrimitive("1"))))
             case proj => proj
           })
     } else { 
