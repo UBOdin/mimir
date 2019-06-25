@@ -56,6 +56,14 @@ class MimirVizierSpec
         format = ID("csv")
       )
     }
+    if(!MimirVizier.db.tableExists("PICK")){
+      MimirVizier.db.loadTable(
+        "test/data/pick.csv", 
+        Some(ID("PICK")),
+        force = true,
+        format = ID("csv")
+      )
+    }
   }
 
   "MimirVizier" should {
@@ -79,11 +87,30 @@ class MimirVizierSpec
         Seq("BUS_SPEED_MHZ"),
         "MISSING_VALUE",
         false,
-        false
+        false,
+        Some("MISSING_CPUSPEED_BUS_SPEED_MHZ")
       )
       MimirVizier.db.query(
         MimirVizier.db.table(response.lensName).limit(1)
       ) { response => response.toSeq } must not beEmpty
+      
+      if(MimirVizier.db.tableExists("PICK_MISSING")){
+        MimirVizier.db.lenses.drop(ID("PICK_MISSING"))
+      }
+      MimirVizier.db.tableExists("PICK_MISSING") must beFalse
+      val presponse = MimirVizier.createLens(
+        "PICK",
+        Seq("B"),
+        "MISSING_VALUE",
+        false,
+        false,
+        Some("MISSING_PICK_B")
+      )
+      MimirVizier.vistrailsQueryMimir(s"SELECT * FROM ${presponse.lensName}", true, false).colTaint must be equalTo Seq(
+          Seq(true,true,false),
+          Seq(true,true,true),
+          Seq(true,true,true),
+          Seq(true,true,true))
     }
 
   }

@@ -51,12 +51,9 @@ object S3Utils {
         
     (endpoint match {
       case None => { 
-        val cb = AmazonS3ClientBuilder.standard()
+        AmazonS3ClientBuilder.standard()
         .withCredentials(new AWSStaticCredentialsProvider(credentials)) //new ProfileCredentialsProvider())
         .withRegion(clientRegion)
-        val endpointConfiguration = new EndpointConfiguration("s3.amazonaws.com", clientRegion);
-        cb.setEndpointConfiguration(endpointConfiguration)
-        cb
       }
       case Some(ep) => {
         val cb = AmazonS3ClientBuilder.standard()
