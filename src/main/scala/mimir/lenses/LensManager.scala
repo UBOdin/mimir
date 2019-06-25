@@ -9,8 +9,9 @@ import mimir.sql._
 import mimir.models._
 import mimir.util.JDBCUtils
 import mimir.util.ExperimentalOptions
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
-class LensManager(db: Database) {
+class LensManager(db: Database) extends LazyLogging {
 
   val lensTypes = Map[ID,((Database,ID,String,Operator,Seq[Expression]) => 
                               (Operator,TraversableOnce[Model]))](
@@ -37,6 +38,7 @@ class LensManager(db: Database) {
     humanReadableName: Option[String] = None
   ): Unit =
   {
+    logger.error(s"Create Lens: $name ($humanReadableName)")
     val constructor =
       lensTypes.get(t) match {
         case Some(impl) => impl

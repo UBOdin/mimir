@@ -338,15 +338,37 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
     )
   }
   
-  def createLens(input : Any, params : java.util.ArrayList[String], _type : String, make_input_certain:Boolean, materialize:Boolean) : CreateLensResponse = {
-    createLens(input, params.toArray[String](Array[String]()).toSeq, _type, make_input_certain, materialize)
+  def createLens(
+    input : Any, 
+    params : java.util.ArrayList[String], 
+    _type : String, 
+    make_input_certain:Boolean, 
+    materialize:Boolean, 
+    humanReadableName: Option[String]
+  ) : CreateLensResponse = {
+    createLens(
+      input              = input, 
+      params             = params.toArray[String](Array[String]()).toSeq, 
+      _type              = _type, 
+      make_input_certain = make_input_certain, 
+      materialize        = materialize,
+      humanReadableName  = humanReadableName
+    )
   }
   
-  def createLens(input : Any, params : Seq[String], _type : String, make_input_certain:Boolean, materialize:Boolean) : CreateLensResponse = {
+  def createLens(
+    input : Any, 
+    params : Seq[String], 
+    _type : String, 
+    make_input_certain:Boolean, 
+    materialize:Boolean, 
+    humanReadableName: Option[String]
+  ) : CreateLensResponse = {
     try{
     apiCallThread = Thread.currentThread()
     val timeRes = logTime("createLens") {
-      logger.debug("createLens: From Vistrails: [" + input + "] [" + params.mkString(",") + "] [" + _type + "]"  ) ;
+      logger.debug("createLens: From Vistrails: [" + input + "] [" + 
+                    params.mkString(",") + "] [" + _type + "]"  ) ;
       
       val parsedParams =  // Start by replacing "{{input}}" with the name of the input table.
             params.map(param => 
@@ -357,10 +379,15 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
       val lensName = "LENS_" + _type + (lensNameBase.toString().replace("-", ""))
       val lensType = _type.toUpperCase()
 
-      if(db.tableExists(lensName)) {
-        logger.debug("createLens: From Vistrails: Lens (or Table) already exists: " + lensName)
+      if(ExperimentalOptions.isEnabled("FORCE-LENS-REBUILD") && db.tableExists(lensName)) {
+        db.lenses.drop(ID(lensName))
+      }
+      if(db.tableExists(lensName)){
+        logger.debug("createLens: From Vistrails: Lens (or Table) already exists: " + 
+                     lensName)
         // (Should be) safe to fall through since we might still be getting asked to materialize 
         // the table.
+        db.lenses.drop(ID(lensName))
       } else {
         // Need to create the lens if it doesn't already exist.
 
@@ -372,7 +399,8 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
           val querySchema = db.typechecker.schemaOf(query)
 
           if(db.tableExists(materializedInput)){
-            logger.debug("createLens: From Vistrails: Materialized Input Already Exists: " + materializedInput)
+            logger.debug("createLens: From Vistrails: Materialized Input Already Exists: " + 
+                         materializedInput)
           } else {
             // Dump the query into a table if necessary 
             db.backend.createTable(materializedInput, query)
@@ -395,7 +423,7 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
           // Vizier uses funky custom table names internally.
           // Use the source table as a name for human-visible 
           // outputs like uncertainty explanations.
-          humanReadableName = Some(input.toString)
+          humanReadableName = humanReadableName
         )
       }
       if(materialize){

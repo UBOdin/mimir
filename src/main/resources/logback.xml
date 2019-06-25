@@ -6,23 +6,32 @@
       <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
     </encoder>
   </appender>
-
-  <logger name="mimir.sql.SparkBackend" level="WARN"/>
-  <logger name="mimir.views.ViewManager" level="ERROR"/>
+  
   <logger name="mimir.Mimir$" level="ERROR"/>
-  
-  <logger name="mimir.util.PythonProcess$" level="ERROR"/>
-  <logger name="mimir.plot.Plot$" level="ERROR"/>
-  <logger name="mimir.models.SeriesMissingValueModel$" level="ERROR"/>
-  
-  <logger name="mimir.ctables.AnalyzeUncertainty" level="ERROR"/>
   <logger name="mimir.MimirVizier$" level="TRACE"/>
+
+  <logger name="mimir.ctables.AnalyzeUncertainty" level="ERROR"/>
+  <logger name="mimir.ctables.ReasonSet$" level="ERROR"/>>
+  
   <logger name="mimir.exec.Compiler" level="ERROR"/>
   <logger name="mimir.exec.mode.BestGuess$" level="ERROR"/>
   <logger name="mimir.exec.mode.UnannotatedBestGuess$" level="ERROR"/>
+  
   <logger name="mimir.optimizer.Optimizer$" level="ERROR"/>
-  <logger name="mimir.ctables.ReasonSet$" level="ERROR"/>
+  
+  <logger name="mimir.lenses.MissingValueLens$" level="ERROR"/>
+  <logger name="mimir.lenses.LensManager" level="ERROR"/>
 
+  <logger name="mimir.models.SeriesMissingValueModel$" level="ERROR"/>
+  
+  <logger name="mimir.plot.Plot$" level="ERROR"/>
+  
+  <logger name="mimir.sql.SparkBackend" level="WARN"/>
+  
+  <logger name="mimir.util.PythonProcess$" level="ERROR"/>
+
+  <logger name="mimir.views.ViewManager" level="ERROR"/>
+  
   <logger name="org.apache.hadoop.util.Shell" level="OFF"/>
 
   <root level="ERROR">
