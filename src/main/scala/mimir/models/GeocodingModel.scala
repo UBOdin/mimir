@@ -7,6 +7,7 @@ import mimir.util._
 import mimir.Database
 import play.api.libs.json.JsObject
 import play.api.libs.json.JsArray
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 /**
  * A model representing a key-repair choice.
@@ -23,6 +24,7 @@ class GeocodingModel(override val name: ID, addrCols:Seq[Expression], geocoder:I
   with ModelCache
   with SourcedFeedback
   with FiniteDiscreteDomain
+  with LazyLogging
 {
   
   
@@ -164,8 +166,7 @@ class GeocodingModel(override val name: ID, addrCols:Seq[Expression], geocoder:I
       Some(geoRes)
     } catch {
         case ioe: Throwable =>  {
-          println(ioe.toString())
-          ioe.printStackTrace()
+          logger.error(s"Exception with Geocoding Request: $url", ioe)
           None
         }
     }       
