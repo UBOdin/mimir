@@ -19,7 +19,6 @@ import sparsity.expression.{
   Cast             => SparsityCast,
   IsNull           => SparsityIsNull,
   Column,
-  IsBetween,
   InExpression,
   CaseWhenElse
 } 
@@ -640,17 +639,6 @@ class SqlToRA(db: Database)
           convertExpression(target, bindings), 
           Type.fromString(t.lower)
         )
-
-      case IsBetween(lhsRaw, lowRaw, highRaw) => {
-        val lhs  = convertExpression(lhsRaw, bindings)
-        val low  = convertExpression(lowRaw, bindings)
-        val high = convertExpression(highRaw, bindings)
-        Arithmetic(
-          Arith.And,
-          Comparison(Cmp.Lte, low, lhs),
-          Comparison(Cmp.Lte, lhs, high)
-        )
-      }
 
       case InExpression(targetRaw, Left(options)) => 
         val target = convertExpression(targetRaw, bindings)

@@ -132,7 +132,7 @@ class EvalInlined[T](scope: Map[ID, (Type, (T => PrimitiveValue))], db: Database
       }
       case Conditional(c, t, e) => compileConditional(c, t, e, compileForLong)
       case CastExpression(expr, intable) if Type.rootType(intable).isInstanceOf[TInt] 
-        => val l = compile(expr); { l(_).asLong }
+        => val l = compile(expr); { t:T => Cast(TInt(), l(t)).asLong }
       case _ => throw new RAException(s"Invalid Expression on Int: $e")
     }
   }
@@ -159,7 +159,7 @@ class EvalInlined[T](scope: Map[ID, (Type, (T => PrimitiveValue))], db: Database
       }
       case Conditional(c, t, e) => compileConditional(c, t, e, compileForDouble)
       case CastExpression(expr, floatable) if Type.rootType(floatable).isInstanceOf[TFloat] 
-        => val l = compile(expr); { l(_).asDouble }
+        => val l = compile(expr); { t:T => Cast(TFloat(), l(t)).asDouble }
       case _ => throw new RAException(s"Invalid Expression on Float: $e")
     }
   }
@@ -195,7 +195,7 @@ class EvalInlined[T](scope: Map[ID, (Type, (T => PrimitiveValue))], db: Database
         }
       }
       case CastExpression(expr, boolable) if Type.rootType(boolable).isInstanceOf[TBool] 
-        => val l = compile(expr); { l(_).asBool }
+        => val l = compile(expr); { t:T => Cast(TBool(), l(t)).asBool }
       case Comparison(op, lhs, rhs)     => {
         (op, Type.rootType(typeOf(lhs)), Type.rootType(typeOf(rhs))) match {
           case (_, TAny(), _) => throw new RAException(s"Invalid comparison on TAny: $e")
