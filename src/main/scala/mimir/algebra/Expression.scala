@@ -559,7 +559,7 @@ case class NullPrimitive()
   override def toString() = "NULL"
   def asLong: Long = throw new NullTypeException(TAny(), TInt(), "Hard Cast Null");
   def asDouble: Double = throw new NullTypeException(TAny(), TFloat(), "Hard Cast Null");
-  def asString: String = throw new NullTypeException(TAny(), TString(), "Hard Cast Null");
+  def asString: String = null //throw new NullTypeException(TAny(), TString(), "Hard Cast Null");
   def asBool: Boolean = throw new NullTypeException(TAny(), TBool(), "Hard Cast Null")
   def asDateTime: DateTime = throw new NullTypeException(TAny(), TDate(), "Hard Cast")
   def asInterval: Period = throw new TypeException(TAny(), TInterval(), "Hard Cast")
