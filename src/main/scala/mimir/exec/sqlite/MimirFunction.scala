@@ -1,4 +1,4 @@
-package mimir.backend.sqlite;
+package mimir.exec.sqlite;
 
 import java.sql.SQLException
 

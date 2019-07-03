@@ -172,5 +172,47 @@ class Compiler(db: Database) extends LazyLogging {
   def optimize(query: Operator) = Optimizer.optimize(query, operatorOptimizations)
 
   def optimize(e: Expression): Expression = Optimizer.optimize(e, expressionOptimizations)
+
+  val sparkCompiler = OperatorTranslation(db)
+
+  def compileToSpark(compiledOp: Operator): DataFrame = {
+    var sparkOper:LogicalPlan = null
+    try {
+      logger.trace("------------------------ mimir op --------------------------")
+      logger.trace(s"$compiledOp")
+      logger.trace("------------------------------------------------------------")
+      if(sparkSql == null) throw new Exception("There is no spark context")
+      sparkOper = sparkCompiler.mimirOpToSparkOp(compiledOp)
+      logger.trace("------------------------ spark op --------------------------")
+      logger.trace(s"$sparkOper")
+      logger.trace("------------------------------------------------------------")
+      val qe = sparkSql.sparkSession.sessionState.executePlan(sparkOper)
+      qe.assertAnalyzed()
+      new Dataset[Row](sparkSql.sparkSession, qe.optimizedPlan, RowEncoder(qe.analyzed.schema))
+    } catch {
+      case t: Throwable => {
+        logger.error("-------------------------> Exception Executing Spark Op: " + t.toString() + "\n" + t.getStackTrace.mkString("\n"))
+        logger.error("------------------------ spark op --------------------------")
+        logger.error(s"$sparkOper")
+        logger.error("------------------------------------------------------------")
+        throw t
+      }
+    }
+  }
+  
+  def executeOnWorkers(compiledOp:Operator, dfRowFunc:(Iterator[org.apache.spark.sql.Row]) => Unit):Unit = {
+    val df = execute(compiledOp)
+    df.foreachPartition(dfRowFunc)                                                                                                  
+  }
+  
+  def mapDatasetToNew(compiledOp:Operator, newDSName:String, mapFunc:(Iterator[org.apache.spark.sql.Row]) => Iterator[org.apache.spark.sql.Row], encoder:org.apache.spark.sql.Encoder[Row]): Unit  = {
+    import org.apache.spark.sql.functions.sum
+    val df = execute(compiledOp)
+    val newDF = df.mapPartitions(mapFunc)(encoder).toDF()
+    newDF.persist().createOrReplaceTempView(newDSName) 
+    newDF.write.mode(SaveMode.ErrorIfExists).saveAsTable(newDSName)
+  }   
 }
+
+
 

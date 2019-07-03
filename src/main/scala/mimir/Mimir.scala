@@ -451,6 +451,8 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
     default = Some("hdfs"))
   val dataDirectory = opt[String]("dataDirectory", descr = "The directory to place data files",
     default = Some("."))
+  val googleSheetsCredentialPath = opt[String]("sheetCred", descr = "Credential file for google sheets",
+    default = Some("test/data/api-project-378720062738-5923e0b6125f"))
   def dbname : ScallopOption[String] = { 
     opt[String]("db", descr = "Connect to the database with the specified name",
     default = Some(dataDirectory() + "/debug.db"))
