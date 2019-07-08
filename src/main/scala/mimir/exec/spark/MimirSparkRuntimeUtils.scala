@@ -1,5 +1,18 @@
 package mimir.exec.spark
 
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.types.{ DataType, LongType }
+import org.apache.spark.sql.expressions.Window
+import org.apache.spark.sql.functions.{
+  spark_partition_id,
+  monotonically_increasing_id,
+  count,
+  sum,
+  first,
+  lit,
+  col
+}
+
 object MimirSparkRuntimeUtils
 {
   def zipWithIndex(df: DataFrame, offset: Long = 1, indexName: String = "ROWIDX", indexType:DataType = LongType): DataFrame = {
@@ -14,7 +27,10 @@ object MimirSparkRuntimeUtils
         .map(row => (row.getInt(0), row.getLong(1)))
         .toMap
 
-     val theUdf = udf((partitionId: Int) => partitionOffsets(partitionId), LongType)
+     val theUdf = org.apache.spark.sql.functions.udf(
+       (partitionId: Int) => partitionOffsets(partitionId), 
+       LongType
+     )
      
      dfWithPartitionId
         .withColumn("partition_offset", theUdf(col("partition_id")))
@@ -23,7 +39,6 @@ object MimirSparkRuntimeUtils
   }
 
   def writeDataSink(dataframe:DataFrame, format:String, options:Map[String, String], save:Option[String]) = {
-    if(sparkSql == null) throw new Exception("There is no spark context")
     val dsFormat = dataframe.write.format(format) 
     val dsOptions = options.toSeq.foldLeft(dsFormat)( (ds, opt) => ds.option(opt._1, opt._2))
     save match {

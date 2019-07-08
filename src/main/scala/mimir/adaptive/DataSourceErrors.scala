@@ -6,8 +6,6 @@ import mimir.algebra._
 import mimir.lenses._
 import mimir.models._
 import mimir.util.SqlUtils
-import mimir.backend.SparkBackend
-import mimir.backend.BackendWithSparkContext
 
 object DataSourceErrors
   extends Multilens

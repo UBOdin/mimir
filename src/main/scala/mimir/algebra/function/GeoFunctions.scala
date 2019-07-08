@@ -75,8 +75,8 @@ object GeoFunctions
       {  
         (args) => {
           FloatPrimitive(GeoUtils.calculateDistanceInKilometer(
-            mimir.backend.sqlite.MeToLocationDistance.myLon.get, //lon1
-            mimir.backend.sqlite.MeToLocationDistance.myLat.get, //lat1
+            mimir.exec.sqlite.MeToLocationDistance.myLon.get, //lon1
+            mimir.exec.sqlite.MeToLocationDistance.myLat.get, //lat1
             args(1).asDouble, //lon2
             args(0).asDouble  //lat2
           ))

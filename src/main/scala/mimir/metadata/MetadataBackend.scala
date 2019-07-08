@@ -19,6 +19,7 @@ abstract class MetadataBackend {
   def keysForMap(category: ID): Seq[ID]
   def allForMap(category: ID): Seq[Metadata.MapResource]
   def getFromMap(category: ID, resource: ID): Option[Metadata.MapResource]
+  def existsInMap(category: ID, resource: ID): Boolean = getFromMap(category, resource) != None
   def putToMap(category: ID, resource: Metadata.MapResource): Unit
   def rmFromMap(category: ID, resource: ID): Unit
   def updateMap(category: ID, resource: ID, body:Map[ID, PrimitiveValue]): Unit
@@ -36,6 +37,7 @@ class MetadataMap(backend: MetadataBackend, category: ID)
   def keys: Seq[ID]                                  = backend.keysForMap(category)
   def all: Seq[Metadata.MapResource]                 = backend.allForMap(category)
   def get(resource:ID): Option[Metadata.MapResource] = backend.getFromMap(category, resource)
+  def exists(resource: ID): Boolean                  = backend.existsInMap(category, resource)
   def put(resource: Metadata.MapResource)            = backend.putToMap(category, resource)
   def put(id: ID, body: Seq[PrimitiveValue])         = backend.putToMap(category, (id, body))
   def update(id: ID, body: Map[ID, PrimitiveValue])  = backend.updateMap(category, id, body)

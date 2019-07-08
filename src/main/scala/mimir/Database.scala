@@ -19,7 +19,7 @@ import mimir.exec.mode.{CompileMode, BestGuess}
 import mimir.exec.result.{ResultIterator,SampleResultIterator,Row}
 import mimir.lenses.{LensManager}
 import mimir.sql.{SqlToRA,RAToSql}
-import mimir.backend.QueryBackend
+import mimir.data.LoadedTables
 import mimir.metadata.MetadataBackend
 import mimir.parser.{
     MimirStatement,
@@ -96,26 +96,30 @@ import mimir.util.LoadData
   * * mimir.explainer.CTExplainer (explainer)
   *    Responsible for creating explanation objects.
   */
-case class Database(backend: QueryBackend, metadata: MetadataBackend)
+case class Database(metadata: MetadataBackend)
   extends LazyLogging
 {
-  //// Persistence
+  //// Data Sources
   val lenses          = new mimir.lenses.LensManager(this)
   val models          = new mimir.models.ModelManager(this)
+  val loader          = new mimir.data.LoadedTables(this)
   val views           = new mimir.views.ViewManager(this)
-  val transientViews  = scala.collection.mutable.Map[ID, Operator]()
+  val transientViews  = new mimir.views.TransientViews(this)
   val adaptiveSchemas = new mimir.adaptive.AdaptiveSchemaManager(this)
+  val catalog         = new mimir.metadata.SystemCatalog(this)
 
-  //// Parsing & Reference
+  //// Parsing & Translation
   val sqlToRA         = new mimir.sql.SqlToRA(this)
   val raToSQL         = new mimir.sql.RAToSql(this)
+  val raToSpark       = new mimir.exec.spark.RAToSpark(this)
+
+  // User-defined functionality
   val functions       = new mimir.algebra.function.FunctionRegistry()
   val aggregates      = new mimir.algebra.function.AggregateRegistry()
 
   //// Logic
   val compiler        = new mimir.exec.Compiler(this)
   val uncertainty     = new mimir.ctables.AnalyzeUncertainty(this)
-  val catalog         = new mimir.statistics.SystemCatalog(this)
   val typechecker     = new mimir.algebra.Typechecker(
                                   functions = Some(functions), 
                                   aggregates = Some(aggregates),
@@ -161,114 +165,7 @@ case class Database(backend: QueryBackend, metadata: MetadataBackend)
    */
   final def query[T](oper: Operator)(handler: ResultIterator => T): T =
     query(oper, BestGuess)(handler)
-    
-  /**
-   * Optimize and compiles the specified query.  Applies all Mimir-specific optimizations
-   * and rewrites the query to properly account for Virtual Tables.
-   */
-  def compileBestGuess(oper:Operator): Operator = {
-    val (compiledOp, outputCols, metadata) = mimir.exec.mode.BestGuess.rewrite(this, views.rebuildAdaptiveViews(oper))
-     mimir.optimizer.Optimizer.optimize(compiledOp.project(outputCols.map(_.id):_*), compiler.operatorOptimizations) 
-  }
-    
-  /**
-   * Get all availale table names 
-   */
-  def getAllTables(): Set[ID] =
-  {
-    (
-      catalog.list()
-      ++ transientViews.keys
-      ++ views.list()
-      ++ backend.getAllTables()
-    ).toSet[ID];
-  }
 
-  /**
-   * Determine whether the specified table exists
-   */
-  def tableExists(name: Name): Boolean =
-    if(name.quoted) { tableExists(ID(name.name)) }
-    else { tableExists(name.name) }
-  def tableExists(name: String): Boolean =
-    tableSchema(name) != None
-  def tableExists(name: ID): Boolean =
-    tableSchema(name) != None
-
-  /**
-   * Look up the schema for the table with the provided name.
-   */
-  def tableSchema(name: Name): Option[Seq[(ID,Type)]] = 
-    if(name.quoted) { tableSchema(ID(name.name)) }
-    else { tableSchema(name.name) }
-  def tableSchema(name: String): Option[Seq[(ID,Type)]] = 
-    tableSchema(resolveCaseInsensitiveTable(name))
-  def tableSchema(name: ID): Option[Seq[(ID,Type)]] = {
-    logger.debug(s"Table schema for $name")
-    transientViews.get(name) match {
-      case Some(viewQuery) => return Some(typechecker.schemaOf(viewQuery))
-      case None => ()
-    }
-    views.get(name) match {
-      case Some(view) => return Some(view.schema)
-      case None => ()
-    }
-    return backend.getTableSchema(name)
-  }
-
-  /** 
-   * Finds the appropriate capitalization for a case-insensitive
-   * table name.  If the table/view/etc... exists, return a 
-   * case-sensitive reference to the table.  If it does not exist,
-   * fall through to returning an upper-case version of the
-   * name.
-   */
-  def resolveCaseInsensitiveTable(name: String, extras: Set[ID] = Set()): ID = 
-    // Need to resolve these in order (or else a materialized view could overwrite
-    // the view itself).
-    // Using lambdas to lazily evaluate this list (e.g., don't call backend.getAllTables
-    // until after confirming that there's no view match)
-    Seq(
-      () => extras,
-      () => transientViews.keys,
-      () => views.list(),
-      () => catalog.list(),
-      () => backend.getAllTables()
-    ).foldLeft(None:Option[ID]) { 
-      case (None, tables) => tables().find { _.id.equalsIgnoreCase(name) }
-      case (Some(s), _) => Some(s)
-    }.getOrElse( ID(name.toUpperCase) )
-
-  /**
-   * Build a Table operator for the table with the provided name.
-   */
-  def table(name: Name) : Operator = 
-    if(name.quoted) { table(ID(name.name)) }
-    else { table(name.name) }
-  def table(name: Name, alias:ID) : Operator = 
-    if(name.quoted) { table(ID(name.name), alias) }
-    else { table(name.name, alias) }
-  def table(tableName: String) : Operator = 
-    table(resolveCaseInsensitiveTable(tableName), ID(tableName))
-  def table(tableName: String, alias:ID) : Operator = 
-    table(resolveCaseInsensitiveTable(tableName), alias)
-  def table(tableName: ID) : Operator = 
-    table(tableName, tableName)
-  def table(tableName: ID, alias: ID): Operator =
-  {
-    transientViews.get(tableName).getOrElse {
-      getView(tableName).getOrElse {
-        Table(
-          tableName, alias,
-          backend.getTableSchema(tableName) match {
-            case Some(x) => x
-            case None => throw new SQLException(s"No such table or view '$tableName'")
-          },
-          Nil
-        ) 
-      }
-    }
-  }
 
   /**
    * Evaluate a statement that does not produce results.
@@ -355,11 +252,10 @@ case class Database(backend: QueryBackend, metadata: MetadataBackend)
         loadTable(
           load.file, 
           targetTable = load.table.map { ID.upper(_) },
-          force = (load.table != None),
-          format = ID.lower(
-                      load.format
-                          .getOrElse { sparsity.Name("csv") }
-                   ),
+          // force = (load.table != None),
+          format = load.format
+                       .getOrElse { sparsity.Name("csv") }
+                       .lower,
           loadOptions = load.args
                             .toMap
                             .mapValues { sqlToRA(_) }
@@ -393,9 +289,10 @@ case class Database(backend: QueryBackend, metadata: MetadataBackend)
    */
   def open(skipBackend: Boolean = false): Unit = {
     if(!skipBackend){
-      backend.open(this)
       metadata.open()
     }
+    catalog.init()
+    loader.init()
     models.init()
     views.init()
     lenses.init()
@@ -404,22 +301,7 @@ case class Database(backend: QueryBackend, metadata: MetadataBackend)
 
   def close(): Unit = {
     metadata.close()
-    backend.close()
   }
-
-
-  /**
-   * Retrieve the query corresponding to the Lens or Virtual View with the specified
-   * name (or None if no such lens exists)
-   */
-  def getView(name: String): Option[(Operator)] =
-    getView(resolveCaseInsensitiveTable(name))
-  def getView(name: ID): Option[(Operator)] =
-    // Check the hardcoded system catalog "views" first.
-    catalog(name).orElse(  
-      // Then check the view manager
-      views.get(name).map(_.operator)
-    )
 
   /**
    * Load a CSV file into the database
@@ -439,27 +321,14 @@ case class Database(backend: QueryBackend, metadata: MetadataBackend)
   def fileToTableName(file: String): ID =
     ID(new File(file).getName.replaceAll("\\..*", ""))
   
-  private val defaultLoadCSVOptions = Map(
-    "ignoreLeadingWhiteSpace"-> "true",
-    "ignoreTrailingWhiteSpace"-> "true", 
-    "mode" -> "DROPMALFORMED", 
-    "header" -> "false"
-  )
-  private val CSV = ID("csv")
-  private val ErrorAwareCSV = ID("org.apache.spark.sql.execution.datasources.ubodin.csv")
-  private val defaultLoadOptions = Map[ID, Map[String,String]](
-    CSV           -> defaultLoadCSVOptions,
-    ErrorAwareCSV -> defaultLoadCSVOptions
-  )
 
   def loadTable(
     sourceFile: String, 
-    targetTable: Option[ID] = None, 
-    force:Boolean = false, 
-    targetSchema: Option[Seq[(ID, Type)]] = None,
+    targetTable: Option[ID] = None,
+    // targetSchema: Option[Seq[(ID, Type)]] = None,
     inferTypes: Option[Boolean] = None,
     detectHeaders: Option[Boolean] = None,
-    format: ID = ID("csv"),
+    format: String = LoadedTables.CSV,
     loadOptions: Map[String, String] = Map(),
     humanReadableName: Option[String] = None
   ){
@@ -468,66 +337,49 @@ case class Database(backend: QueryBackend, metadata: MetadataBackend)
 
     // If the backend is configured to support it, specialize data loading to support data warnings
     val datasourceErrors = loadOptions.getOrElse("datasourceErrors", "false").equals("true")
-    val realFormat:ID = 
-      if(datasourceErrors && format.equals(CSV)) {
-        ErrorAwareCSV
-      } else { format }
-
-    val options = defaultLoadOptions.getOrElse(realFormat, Map()) ++ loadOptions
+    val realFormat = 
+      format match {
+        case LoadedTables.CSV if datasourceErrors => 
+          LoadedTables.CSV_WITH_ERRORCHECKING
+        case _ => format
+      }
 
     val targetRaw = realTargetTable.withSuffix("_RAW")
-    if(tableExists(targetRaw) && !force){
-      throw new SQLException(s"Target table $realTargetTable already exists; Use `LOAD 'file' INTO tableName`; to append to existing data.")
+    if(catalog.tableExists(targetRaw)){
+      throw new SQLException(s"Target table $realTargetTable already exists")
     }
-    if(!tableExists(realTargetTable)){
-      LoadData.handleLoadTableRaw(
-        this, 
-        targetTable = targetRaw, 
-        sourceFile = sourceFile,
-        targetSchema = targetSchema, 
-        options = options, 
-        format = realFormat
-      )
-      var oper = table(targetRaw)
-      //detect headers 
-      if(datasourceErrors) {
-        val dseSchemaName = realTargetTable.withSuffix("_DSE")
-        adaptiveSchemas.create(dseSchemaName, ID("DATASOURCE_ERRORS"), oper, Seq(), humanReadableName.getOrElse(realTargetTable.id))
-        oper = adaptiveSchemas.viewFor(dseSchemaName, ID("DATA")).get
-      }
-      if(detectHeaders.getOrElse(targetSchema.isEmpty)) {
-        val dhSchemaName = realTargetTable.withSuffix("_DH")
-        adaptiveSchemas.create(dhSchemaName, ID("DETECT_HEADER"), oper, Seq(), humanReadableName.getOrElse(realTargetTable.id))
-        oper = adaptiveSchemas.viewFor(dhSchemaName, ID("DATA")).get
-      }
-      //type inference
-      if(inferTypes.getOrElse(true)){
-        val tiSchemaName = realTargetTable.withSuffix("_TI")
-        adaptiveSchemas.create(tiSchemaName, ID("TYPE_INFERENCE"), oper, Seq(FloatPrimitive(.5)), humanReadableName.getOrElse(realTargetTable.id)) 
-        oper = adaptiveSchemas.viewFor(tiSchemaName, ID("DATA")).get
-      }
-      //finally create a view for the data
-      views.create(realTargetTable, oper)
-    } else {
-      val schema = targetSchema match {
-        case None => tableSchema(realTargetTable)
-        case _ => targetSchema
-      }
-      LoadData.handleLoadTableRaw(
-        this, 
-        targetTable = realTargetTable, 
-        sourceFile = sourceFile, 
-        targetSchema = schema, 
-        options = options, 
-        format = realFormat
-      )
+    loader.linkTable(
+      url = sourceFile,
+      format = realFormat,
+      tableName = targetRaw,
+      sparkOptions = loadOptions
+    )
+    var oper = loader.tableOperator(targetRaw, targetRaw)
+    //detect headers 
+    if(datasourceErrors) {
+      val dseSchemaName = realTargetTable.withSuffix("_DSE")
+      adaptiveSchemas.create(dseSchemaName, ID("DATASOURCE_ERRORS"), oper, Seq(), humanReadableName.getOrElse(realTargetTable.id))
+      oper = adaptiveSchemas.viewFor(dseSchemaName, ID("DATA")).get
     }
+    if(detectHeaders.getOrElse(true)) {
+      val dhSchemaName = realTargetTable.withSuffix("_DH")
+      adaptiveSchemas.create(dhSchemaName, ID("DETECT_HEADER"), oper, Seq(), humanReadableName.getOrElse(realTargetTable.id))
+      oper = adaptiveSchemas.viewFor(dhSchemaName, ID("DATA")).get
+    }
+    //type inference
+    if(inferTypes.getOrElse(true)){
+      val tiSchemaName = realTargetTable.withSuffix("_TI")
+      adaptiveSchemas.create(tiSchemaName, ID("TYPE_INFERENCE"), oper, Seq(FloatPrimitive(.5)), humanReadableName.getOrElse(realTargetTable.id)) 
+      oper = adaptiveSchemas.viewFor(tiSchemaName, ID("DATA")).get
+    }
+    //finally create a view for the data
+    views.create(realTargetTable, oper)
   }
 
-  /**
-    * Materialize a view into the database
-    */
-  def selectInto(targetTable: ID, sourceQuery: Operator){
-    backend.createTable(targetTable, sourceQuery)
-  }
+  // /**
+  //   * Materialize a view into the database
+  //   */
+  // def selectInto(targetTable: ID, sourceQuery: Operator){
+  //   backend.createTable(targetTable, sourceQuery)
+  // }
 }

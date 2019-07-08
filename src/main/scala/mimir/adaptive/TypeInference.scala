@@ -6,8 +6,7 @@ import mimir.algebra._
 import mimir.lenses._
 import mimir.models._
 import mimir.util.SqlUtils
-import mimir.backend.SparkBackend
-import mimir.backend.BackendWithSparkContext
+import mimir.exec.spark.MimirSpark
 
 object TypeInference
   extends Multilens
@@ -50,8 +49,10 @@ object TypeInference
         config.humanReadableName,
         modelColumns,
         stringDefaultScore,
-        db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(),
-        Some(db.backend.execute(db.compileBestGuess(config.query.limit(TypeInferenceModel.sampleLimit, 0))))
+        MimirSpark.get,
+        Some(db.compiler.compileToSparkWithRewrites(
+            config.query.limit(TypeInferenceModel.sampleLimit, 0)
+        ))
       )
 
     val warningModel = 

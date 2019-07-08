@@ -21,7 +21,7 @@ import org.apache.spark.sql.functions.unix_timestamp
 object SparkUtils {
   //TODO:there are a bunch of hacks in this conversion function because type conversion in operator translator
   //  needs to be done correctly
-  def convertFunction(t: Type, field: Integer, dateType: Type = TDate()): (Row => PrimitiveValue) =
+  def convertFunction(t: Type, field: Integer): (Row => PrimitiveValue) =
   {
     val checkNull: ((Row, => PrimitiveValue) => PrimitiveValue) = {
       (r, call) => {
@@ -76,45 +76,25 @@ object SparkUtils {
           }
         } })
       case TType() =>       (r) => checkNull(r, { TypePrimitive(Type.fromString(r.getString(field))) })
-      case TDate() =>
-        dateType match {
-          case TDate() =>   (r) => { val d = r.getDate(field); if(d == null){ NullPrimitive() } else { convertDate(d) } }
-          case TString() => (r) => { 
-              val d = r.getString(field)
-              if(d == null){ NullPrimitive() } 
-              else { TextUtils.parseDate(d) }
-            }
-          case _ =>         throw new SQLException(s"Can't extract TDate as $dateType")
-        }
-      case TTimestamp() => 
-        dateType match {
-          case TDate() =>   (r) => { 
-              val t = r.getTimestamp(field); 
-              if(t == null){ NullPrimitive() } 
-              else { convertTimestamp(t) } 
-            }
-          case TString() => (r) => {
-              val t = r.getString(field)
-              if(t == null){ NullPrimitive() }
-              else { TextUtils.parseTimestamp(t) }
-            }
-          case _ =>         throw new SQLException(s"Can't extract TTimestamp as $dateType")
-
-        }
+      case TDate() =>       (r) => { val d = r.getDate(field); if(d == null){ NullPrimitive() } else { convertDate(d) } }
+      case TTimestamp() =>  (r) => { 
+                                val t = r.getTimestamp(field); 
+                                if(t == null){ NullPrimitive() } 
+                                else { convertTimestamp(t) } 
+                              }
       case TInterval() => (r) => { TextUtils.parseInterval(r.getString(field)) }
       case TUser(t) => convertFunction(TypeRegistry.baseType(t), field, dateType)
     }
   }
   
-  def convertField(t: Type, results: Row, field: Integer, dateType: Type = TString()): PrimitiveValue =
+  def convertField(t: Type, results: Row, field: Integer): PrimitiveValue =
   {
     convertFunction(
       t match {
         case TAny() => OperatorTranslation.getMimirType(results.schema.fields(field).dataType)
         case _ => t
       }, 
-      field, 
-      dateType
+      field
     )(results)
   }
   

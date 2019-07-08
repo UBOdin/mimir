@@ -6,6 +6,9 @@ import org.slf4j.{LoggerFactory}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import scala.util.Random
 import com.github.nscala_time.time.Imports._
+import org.apache.spark.sql.{Dataset, DataFrame, SaveMode}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
 
 import mimir.Database
 import mimir.algebra.Union
@@ -18,6 +21,7 @@ import mimir.provenance._
 import mimir.exec.result._
 import mimir.exec.mode._
 import mimir.exec.uncertainty._
+import mimir.exec.spark._
 import mimir.util._
 import sparsity.select.SelectBody
 
@@ -154,11 +158,7 @@ class Compiler(db: Database) extends LazyLogging {
   
   def sparkBackendRootIterator(oper:Operator) : (Seq[(ID, Type)], ResultIterator) = {
     val schema = db.typechecker.schemaOf(oper) 
-    (schema, new SparkResultIterator(
-          schema,
-          oper, db.backend,
-          db.backend.dateType
-        ))
+    (schema, new SparkResultIterator(schema, oper, db))
   }
   
   // case class VirtualizedQuery(
@@ -173,22 +173,20 @@ class Compiler(db: Database) extends LazyLogging {
 
   def optimize(e: Expression): Expression = Optimizer.optimize(e, expressionOptimizations)
 
-  val sparkCompiler = OperatorTranslation(db)
-
-  def compileToSpark(compiledOp: Operator): DataFrame = {
+  def compileToSparkWithoutRewrites(compiledOp: Operator): DataFrame = 
+  {
     var sparkOper:LogicalPlan = null
     try {
       logger.trace("------------------------ mimir op --------------------------")
       logger.trace(s"$compiledOp")
       logger.trace("------------------------------------------------------------")
-      if(sparkSql == null) throw new Exception("There is no spark context")
-      sparkOper = sparkCompiler.mimirOpToSparkOp(compiledOp)
+      sparkOper = db.raToSpark.mimirOpToSparkOp(compiledOp)
       logger.trace("------------------------ spark op --------------------------")
       logger.trace(s"$sparkOper")
       logger.trace("------------------------------------------------------------")
-      val qe = sparkSql.sparkSession.sessionState.executePlan(sparkOper)
+      val qe = MimirSpark.get.sparkSession.sessionState.executePlan(sparkOper)
       qe.assertAnalyzed()
-      new Dataset[Row](sparkSql.sparkSession, qe.optimizedPlan, RowEncoder(qe.analyzed.schema))
+      new Dataset[org.apache.spark.sql.Row](MimirSpark.get, qe.optimizedPlan, RowEncoder(qe.analyzed.schema))
     } catch {
       case t: Throwable => {
         logger.error("-------------------------> Exception Executing Spark Op: " + t.toString() + "\n" + t.getStackTrace.mkString("\n"))
@@ -199,15 +197,28 @@ class Compiler(db: Database) extends LazyLogging {
       }
     }
   }
+
+  def compileToSparkWithRewrites(op: Operator): DataFrame =
+  {
+    val (compiledOp, outputCols, metadata) = 
+      mimir.exec.mode.UnannotatedBestGuess.rewrite(db, 
+        db.views.rebuildAdaptiveViews(op)
+      )
+    val optimizedOp = mimir.optimizer.Optimizer.optimize(
+      compiledOp.project(outputCols.map(_.id):_*), 
+      operatorOptimizations
+    ) 
+    compileToSparkWithoutRewrites(optimizedOp)
+  }
   
   def executeOnWorkers(compiledOp:Operator, dfRowFunc:(Iterator[org.apache.spark.sql.Row]) => Unit):Unit = {
-    val df = execute(compiledOp)
+    val df = compileToSparkWithoutRewrites(compiledOp)
     df.foreachPartition(dfRowFunc)                                                                                                  
   }
   
-  def mapDatasetToNew(compiledOp:Operator, newDSName:String, mapFunc:(Iterator[org.apache.spark.sql.Row]) => Iterator[org.apache.spark.sql.Row], encoder:org.apache.spark.sql.Encoder[Row]): Unit  = {
+  def mapDatasetToNew(compiledOp:Operator, newDSName:String, mapFunc:(Iterator[org.apache.spark.sql.Row]) => Iterator[org.apache.spark.sql.Row], encoder:org.apache.spark.sql.Encoder[org.apache.spark.sql.Row]): Unit  = {
     import org.apache.spark.sql.functions.sum
-    val df = execute(compiledOp)
+    val df = compileToSparkWithoutRewrites(compiledOp)
     val newDF = df.mapPartitions(mapFunc)(encoder).toDF()
     newDF.persist().createOrReplaceTempView(newDSName) 
     newDF.write.mode(SaveMode.ErrorIfExists).saveAsTable(newDSName)

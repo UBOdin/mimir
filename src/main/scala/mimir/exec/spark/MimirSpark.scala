@@ -8,6 +8,37 @@ import org.apache.spark.sql.{
   SparkSession,
   SaveMode
 }
+import org.apache.spark.sql.execution.command.{
+  CreateViewCommand,
+  PersistedView,
+  SetDatabaseCommand,
+  CreateDatabaseCommand,
+  DropDatabaseCommand
+}
+import org.apache.spark.sql.types.{
+  DataType,
+  LongType,
+  IntegerType,
+  FloatType,
+  DoubleType,
+  ShortType,
+  DateType,
+  BooleanType,
+  TimestampType,
+  StringType
+}
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.{
+  Literal
+}
+import org.apache.spark.{SparkContext, SparkConf}
+import com.typesafe.scalalogging.slf4j.LazyLogging
+import java.io.File
+
+import mimir.algebra._
+import mimir.algebra.function.{SparkFunctions, AggregateRegistry}
+import mimir.{Database, MimirConfig}
+import mimir.util.{ExperimentalOptions, SparkUtils, HadoopUtils}
 
 object MimirSpark
   extends LazyLogging
@@ -19,13 +50,13 @@ object MimirSpark
   private lazy val s3AccessKey = Option(System.getenv("AWS_ACCESS_KEY_ID"))
   private lazy val s3SecretKey = Option(System.getenv("AWS_SECRET_ACCESS_KEY"))
   private lazy val s3AEndpoint  = Option(System.getenv("S3A_ENDPOINT"))
-  private lazy val envHasS3Keys == !s3AccessKey.isEmpty && !s3SecretKey.isEmpty
+  private lazy val envHasS3Keys = !s3AccessKey.isEmpty && !s3SecretKey.isEmpty
   def remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
   private var sheetCred: String = null
 
   def get: SQLContext = {
     if(sparkSql == null){ 
-      throw RuntimeException("Getting spark context before it is initialized")
+      throw new RuntimeException("Getting spark context before it is initialized")
     }
     return sparkSql
   }
@@ -33,7 +64,9 @@ object MimirSpark
   def init(config: MimirConfig){
     logger.info(s"Init Spark: dataDir: ${config.dataDirectory()} sparkHost:${config.sparkHost()}, sparkPort:${config.sparkPort()}, hdfsPort:${config.hdfsPort()}, useHDFSHostnames:${config.useHDFSHostnames()}, overwriteStagedFiles:${config.overwriteStagedFiles()}, overwriteJars:${config.overwriteJars()}, numPartitions:${config.numPartitions()}, dataStagingType:${config.dataStagingType()}")
 
-    sheetCred = config.googleSheetsCredentialPath
+    sheetCred = config.googleSheetsCredentialPath()
+    val sparkHost = config.sparkHost()
+    val sparkPort = config.sparkPort()
 
     val conf = if(remoteSpark){
       new SparkConf().setMaster(s"spark://$sparkHost:$sparkPort")
@@ -71,7 +104,8 @@ object MimirSpark
     val dmode = sparkCtx.deployMode
 
     if(remoteSpark){ 
-      val credentialName = File.basename(sheetCred)
+      val hdfsPort = config.hdfsPort()
+      val credentialName = new File(sheetCred).getName
       sparkCtx.hadoopConfiguration.set("dfs.client.use.datanode.hostname",  config.useHDFSHostnames.toString())
       sparkCtx.hadoopConfiguration.set("dfs.datanode.use.datanode.hostname",config.useHDFSHostnames.toString())
       sparkCtx.hadoopConfiguration.set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
@@ -115,17 +149,19 @@ object MimirSpark
     }
 
     logger.debug(s"apache spark: ${sparkCtx.version}  remote: $remoteSpark deployMode: $dmode")
-    s3AEndpoint.andThen { sparkCtx.hadoopConfiguration.set("fs.s3a.endpoint", _) }
+    for( endpoint <- s3AEndpoint) { 
+      sparkCtx.hadoopConfiguration.set("fs.s3a.endpoint", endpoint) 
+    }
     if(envHasS3Keys){
-      sparkCtx.hadoopConfiguration.set("fs.s3a.access.key",accessKeyId.get)
-      sparkCtx.hadoopConfiguration.set("fs.s3a.secret.key",secretAccessKey.get)
+      sparkCtx.hadoopConfiguration.set("fs.s3a.access.key",s3AccessKey.get)
+      sparkCtx.hadoopConfiguration.set("fs.s3a.secret.key",s3SecretKey.get)
       sparkCtx.hadoopConfiguration.set("fs.s3a.path.style.access","true")
       sparkCtx.hadoopConfiguration.set("fs.s3a.impl","org.apache.hadoop.fs.s3a.S3AFileSystem")
       sparkCtx.hadoopConfiguration.set("com.amazonaws.services.s3.disableGetObjectMD5Validation", "true")
       sparkCtx.hadoopConfiguration.set("com.amazonaws.services.s3.disablePutObjectMD5Validation", "true")
       sparkCtx.hadoopConfiguration.set("fs.s3a.connection.ssl.enabled", "true")
-      sparkCtx.hadoopConfiguration.set("fs.s3n.awsAccessKeyId", accessKeyId.get)
-      sparkCtx.hadoopConfiguration.set("fs.s3n.awsSecretAccessKey", secretAccessKey.get)
+      sparkCtx.hadoopConfiguration.set("fs.s3n.awsAccessKeyId", s3AccessKey.get)
+      sparkCtx.hadoopConfiguration.set("fs.s3n.awsSecretAccessKey", s3SecretKey.get)
       sparkCtx.hadoopConfiguration.set("fs.s3.impl", "org.apache.hadoop.fs.s3native.NativeS3FileSystem")
     } else {
       logger.debug("No S3 Access Key provided. Not configuring S3")
@@ -173,15 +209,18 @@ object MimirSpark
 
   def registerSparkFunctions(excludedFunctions:Seq[ID], db: Database) = {
     val fr = db.functions
-    val sparkFunctions = get.sparkSession.sessionState.catalog
-        .listFunctions(database, "*")
+    val sparkFunctions = 
+        get.sparkSession
+           .sessionState
+           .catalog
+           .listFunctions("*")
     sparkFunctions.filterNot(fid => excludedFunctions.contains(ID(fid._1.funcName.toLowerCase()))).foreach{ case (fidentifier, fname) => {
           val fClassName = get.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
           if(!fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
             logger.debug("registering spark function: " + fidentifier.funcName)
             SparkFunctions.addSparkFunction(ID(fidentifier.funcName), (inputs) => {
-              val sparkInputs = inputs.map(inp => Literal(OperatorTranslation.mimirPrimitiveToSparkExternalInlineFuncParam(inp)))
-              val sparkInternal = inputs.map(inp => OperatorTranslation.mimirPrimitiveToSparkInternalInlineFuncParam(inp))
+              val sparkInputs = inputs.map(inp => Literal(RAToSpark.mimirPrimitiveToSparkExternalInlineFuncParam(inp)))
+              val sparkInternal = inputs.map(inp => RAToSpark.mimirPrimitiveToSparkInternalInlineFuncParam(inp))
               val sparkRow = InternalRow(sparkInternal:_*)
               val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
               val sparkFunc = Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
@@ -205,9 +244,9 @@ object MimirSpark
                 } 
             }, 
             (inputTypes) => {
-              val inputs = inputTypes.map(inp => Literal(OperatorTranslation.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
+              val inputs = inputTypes.map(inp => Literal(RAToSpark.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
               val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
-              OperatorTranslation.getMimirType( Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(inputs:_*)
+              RAToSpark.getMimirType( Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(inputs:_*)
               .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression].dataType)
             })
           } 
@@ -216,16 +255,19 @@ object MimirSpark
   }
   
   def registerSparkAggregates(excludedFunctions:Seq[ID], ar:AggregateRegistry) = {
-    val sparkFunctions = name.sparkSession.sessionState.catalog
-        .listFunctions(database, "*")
+    val sparkFunctions = 
+        get.sparkSession
+           .sessionState
+           .catalog
+           .listFunctions("*")
     sparkFunctions.filterNot(fid => excludedFunctions.contains(ID(fid._1.funcName.toLowerCase()))).flatMap{ case (fidentifier, fname) => {
-          val fClassName = name.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
+          val fClassName = get.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
           if(fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
             Some((fidentifier.funcName, 
             (inputTypes:Seq[Type]) => {
-              val inputs = inputTypes.map(inp => Literal(OperatorTranslation.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
+              val inputs = inputTypes.map(inp => Literal(RAToSpark.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
               val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
-              val dt = OperatorTranslation.getMimirType( Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(inputs:_*)
+              val dt = RAToSpark.getMimirType( Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(inputs:_*)
               .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression].dataType)
               dt
             },

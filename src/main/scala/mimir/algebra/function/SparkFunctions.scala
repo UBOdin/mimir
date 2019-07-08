@@ -1,6 +1,5 @@
-package mimir.algebra.spark.function
+package mimir.algebra.function
 
-import mimir.algebra.function.FunctionRegistry
 import mimir.algebra.PrimitiveValue
 import mimir.algebra.{Type,ID}
 import com.typesafe.scalalogging.slf4j.LazyLogging

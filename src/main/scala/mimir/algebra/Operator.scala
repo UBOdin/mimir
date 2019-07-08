@@ -252,12 +252,13 @@ case class Union(left: Operator, right: Operator) extends Operator
 @SerialVersionUID(100L)
 case class Table(name: ID, 
                  alias: ID, 
+                 source: ID,
                  sch: Seq[(ID,Type)],
                  metadata: Seq[(ID,Expression,Type)])
   extends Operator
 {
   def toString(prefix: String) =
-    prefix + name + (
+    prefix + source + "." + name + (
       if(alias.equals(name)) { "" }
       else { "@" + alias }
     ) + "(" + (
@@ -268,7 +269,7 @@ case class Table(name: ID,
       )
     )+")" 
   def children: List[Operator] = List()
-  def rebuild(x: Seq[Operator]) = Table(name, alias, sch, metadata)
+  def rebuild(x: Seq[Operator]) = Table(name, alias, source, sch, metadata)
   def metadata_schema = metadata.map( x => (x._1, x._3) )
   def expressions = List()
   def rebuildExpressions(x: Seq[Expression]) = this

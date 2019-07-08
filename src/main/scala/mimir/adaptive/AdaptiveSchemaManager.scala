@@ -4,7 +4,7 @@ import scala.collection.mutable
 
 import mimir.Database
 import mimir.algebra._
-import mimir.statistics.SystemCatalog
+import mimir.metadata.SystemCatalog
 import mimir.serialization._
 import mimir.util._
 import mimir.metadata._
@@ -50,6 +50,9 @@ class AdaptiveSchemaManager(db: Database)
       db.models.persist(model, ID("MULTILENS:",schema))
     }
   }
+
+  def exists(schema: ID) = 
+    adaptiveSchemas.exists(schema)
 
   def drop(schema: ID, ifExists: Boolean = false)
   {

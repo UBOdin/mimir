@@ -16,14 +16,13 @@ import fastparse.Parsed
 import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
-import mimir.backend._
 import mimir.metadata._
 import mimir.util.{Timer,ExperimentalOptions,LineReaderInputSource,PythonProcess,SqlUtils}
 import mimir.algebra._
-import mimir.algebra.spark.OperatorTranslation
 import mimir.statistics.{DetectSeries,DatasetShape}
 import mimir.plot.Plot
 import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
+import mimir.exec.spark.MimirSpark
 
 /**
  * The primary interface to Mimir.  Responsible for:
@@ -39,25 +38,24 @@ import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
  */
 object Mimir extends LazyLogging {
 
-  var conf: MimirConfig = null;
   var db: Database = null;
   lazy val terminal: Terminal = TerminalBuilder.terminal()
   var output: OutputFormat = DefaultOutputFormat
 
   def main(args: Array[String]) = 
   {
-    conf = new MimirConfig(args);
+    val conf = new MimirConfig(args);
 
     // Prepare experiments
     ExperimentalOptions.enable(conf.experimental())
 
    
     // Set up the database connection(s)
+    MimirSpark.init(conf)
     val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
-    val sback = new SparkBackend(database)
-    db = new Database(sback, new JDBCMetadataBackend(conf.backend(), conf.dbname()))
+    db = new Database(new JDBCMetadataBackend(conf.metadataBackend(), conf.dbname()))
     if(!conf.quiet()){
-      output.print("Connecting to " + conf.backend() + "://" + conf.dbname() + "...")
+      output.print("Connecting to " + conf.metadataBackend() + "://" + conf.dbname() + "...")
     }
     db.open()
 
@@ -117,7 +115,7 @@ object Mimir extends LazyLogging {
       }
     }
 
-    db.backend.close()
+    db.close()
     if(!conf.quiet()) { output.print("\n\nDone.  Exiting."); }
   }
 
@@ -243,19 +241,14 @@ object Mimir extends LazyLogging {
       case e:Throwable =>
         output.print("Unavailable: "+e.getMessage())
     }
-    db.backend match { 
-      case sback: SparkBackend => {
-        output.print("\n------- Spark -------")
-        try {
-          output.print(
-            sback.operatorTranslation.mimirOpToSparkOp(optimized).toString
-          )
-        } catch {
-          case e:Throwable =>
-            output.print("Unavailable: "+e.getMessage())
-        }
-      }
-      case _ => {}
+    output.print("\n------- Spark -------")
+    try {
+      output.print(
+        db.raToSpark.mimirOpToSparkOp(optimized).toString
+      )
+    } catch {
+      case e:Throwable =>
+        output.print("Unavailable: "+e.getMessage())
     }
   }
 
@@ -357,12 +350,14 @@ object Mimir extends LazyLogging {
   {
     cmd.body.split(" +").toSeq match { 
       case Seq("show", "tables") => 
-        for(table <- db.getAllTables()){ output.print(table.toString); }
+        for(table <- db.catalog.getAllTables()){ 
+          output.print(table.toString); 
+        }
       case Seq("show", name) => 
-        db.tableSchema(ID.upper(name)) match {
+        db.catalog.tableSchema(Name(name)) match {
           case None => 
             output.print(s"'$name' is not a table")
-          case Some(schema) => 
+          case Some( schema ) => 
             output.print("CREATE TABLE "+name+" (\n"+
               schema.map { col => "  "+col._1+" "+col._2 }.mkString(",\n")
             +"\n);")
@@ -417,7 +412,7 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   //   val cleanSummary = toggle("summary-clean", default = Some(false))
   //   val sampleCount = opt[Int]("samples", noshort = true, default = None)
   val loadTable = opt[String]("loadTable", descr = "Don't do anything, just load a CSV file")
-  val backend = opt[String]("driver", descr = "Which backend database to use? ([sqlite],oracle)",
+  val metadataBackend = opt[String]("driver", descr = "Which metadata backend to use? ([sqlite])",
     default = Some("sqlite"))
   val precache = opt[String]("precache", descr = "Precache one or more lenses")
   val rebuildBestGuess = opt[String]("rebuild-bestguess")  
