@@ -40,7 +40,7 @@ class ViewManager(db:Database) extends LazyLogging {
   def create(name: ID, query: Operator): Unit =
   {
     logger.debug(s"CREATE VIEW $name AS $query")
-    if(db.tableExists(name)){
+    if(db.catalog.tableExists(name)){
       throw new SQLException(s"View '$name' already exists")
     }
     viewTable.put(name, Seq(
@@ -81,7 +81,7 @@ class ViewManager(db:Database) extends LazyLogging {
                      else { throw new SQLException(s"Unknown View '$name'") }
       }
     viewTable.rm(name)
-    if(properties.isMaterialized){ db.backend.dropTable(name) }
+    if(properties.isMaterialized){ ??? }
   }
 
   /**
@@ -130,7 +130,9 @@ class ViewManager(db:Database) extends LazyLogging {
    */
   def materialize(name: ID): Unit =
   {
-    if(db.backend.getTableSchema(name) != None){
+    ???
+
+    if(db.catalog.tableExists(name)){
       throw new SQLException(s"View '$name' is already materialized")
     }
     val properties = apply(name)
@@ -168,8 +170,8 @@ class ViewManager(db:Database) extends LazyLogging {
     //logger.debug(s"QUERY: $inlinedSQL")
 
     //db.metadataBackend.selectInto(name, inlinedSQL.toString)
-    db.backend.createTable(name, completeQuery)
-    db.backend.materializeView(name)
+    // db.backend.createTable(name, completeQuery)
+    // db.backend.materializeView(name)
 
     viewTable.update(name, Map(ID("METADATA") -> IntPrimitive(1)))
   }
@@ -178,14 +180,7 @@ class ViewManager(db:Database) extends LazyLogging {
    * Remove the materialization for the specified view
    * @param  name        The name of the view to dematerialize
    */
-  def dematerialize(name: ID): Unit = {
-    if(db.backend.getTableSchema(name) == None){
-      throw new SQLException(s"View '$name' is not materialized")
-    }
-    db.backend.dropTable(name)
-    viewTable.update(name, Map(ID("METADATA") -> IntPrimitive(0)))
-    db.backend.invalidateCache
-  }
+  def dematerialize(name: ID): Unit = { ??? }
 
   /**
    * List all views known to the view manager

@@ -5,7 +5,7 @@ import java.io.PrintWriter
 import org.rogach.scallop.ScallopConf
 import mimir.Mimir
 import mimir.MimirConfig
-import mimir.backend.SparkBackend
+import mimir.exec.spark.MimirSpark
 import java.io.ByteArrayInputStream
 import org.apache.spark.SparkContext
 import java.io.File
@@ -13,7 +13,6 @@ import org.apache.spark.sql.execution.command.SetDatabaseCommand
   
 
 object BackupUtils {
-  var sback:SparkBackend = null;
   def main(args: Array[String]) {
     val bakupParams = classOf[BackupConfig].getDeclaredFields.map("--"+_.getName).toSet
     val mimirParams = classOf[MimirConfig].getDeclaredFields.map("--"+_.getName).toSet 
@@ -57,19 +56,18 @@ object BackupUtils {
     
     val config = new BackupConfig(backupArgs)
     if(config.backup() && config.restore()) throw new Exception("CANNOT backup and restore at once")
-    Mimir.conf = new MimirConfig(mimirArgs);
+    val mimirConfig = new MimirConfig(mimirArgs);
 
-    ExperimentalOptions.enable(Mimir.conf.experimental())
-    val database = Mimir.conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
-    sback = new SparkBackend(database, true)
-    sback.open(null)
+    ExperimentalOptions.enable(mimirConfig.experimental())
+    val database = mimirConfig.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
+    MimirSpark.init(mimirConfig)
    
     println(config.summary)
-    println(Mimir.conf.summary)
+    println(mimirConfig.summary)
     if(config.backup())
-      doBackup(sback.getSparkContext().sparkSession.sparkContext, config.s3Bucket(), config.s3BackupDir(), config.dataDir())
+      doBackup(MimirSpark.get.sparkSession.sparkContext, config.s3Bucket(), config.s3BackupDir(), config.dataDir())
     else if(config.restore())
-      doRestore(sback.getSparkContext().sparkSession.sparkContext, config.s3Bucket(), config.s3BackupDir(), config.dataDir())
+      doRestore(MimirSpark.get.sparkSession.sparkContext, config.s3Bucket(), config.s3BackupDir(), config.dataDir())
   }
   
   def doBackup(sparkCtx:SparkContext, s3Bucket:String, backupDir:String, dataDir:String) = {
@@ -134,14 +132,14 @@ object BackupUtils {
   }
   
   def exportSparkTables(localPath:String, hdfsExportPath:String) = {
-    val dbs = sback.getSparkContext().sparkSession.catalog.listDatabases().collect()
+    val dbs = MimirSpark.get.sparkSession.catalog.listDatabases().collect()
     dbs.map(sdb => { 
-      SetDatabaseCommand(sdb.name).run(sback.getSparkContext().sparkSession)
-      val tables = sback.getSparkContext().sparkSession.catalog.listTables(sdb.name).collect()
+      SetDatabaseCommand(sdb.name).run(MimirSpark.get.sparkSession)
+      val tables = MimirSpark.get.sparkSession.catalog.listTables(sdb.name).collect()
       tables.map(table => {
         val hdfsFile = s"${hdfsExportPath}${table.name}"
-        sback.getSparkContext().sql(s"export table ${table.name} to '$hdfsFile'") 
-        HadoopUtils.readFromHDFS(sback.getSparkContext().sparkSession.sparkContext, hdfsFile, new File(s"$localPath/${table.name}"))
+        MimirSpark.get.sql(s"export table ${table.name} to '$hdfsFile'") 
+        HadoopUtils.readFromHDFS(MimirSpark.get.sparkSession.sparkContext, hdfsFile, new File(s"$localPath/${table.name}"))
       })
     })
   }
@@ -151,8 +149,8 @@ object BackupUtils {
     if (files != null && files.length > 0) {
       for (file <- files) {
         val hdfsFile = s"${hdfsImportPath}${file.getName()}"
-        HadoopUtils.writeToHDFS(sback.getSparkContext().sparkSession.sparkContext, hdfsFile, file, true)  
-        sback.getSparkContext().sql(s"import from '$hdfsFile'")
+        HadoopUtils.writeToHDFS(MimirSpark.get.sparkSession.sparkContext, hdfsFile, file, true)  
+        MimirSpark.get.sql(s"import from '$hdfsFile'")
       }
     }
   }

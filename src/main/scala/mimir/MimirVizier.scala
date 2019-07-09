@@ -147,21 +147,19 @@ object MimirVizier extends LazyLogging {
     var sparkSession:SparkSession = null;
     
     def withDataset[T](dsname:String, handler: ResultIterator => T ) : T = {
-     val mimirName:ID = db.sqlToRA.getVizierNameMapping(ID(dsname)) match {
-       case Some(mname) => mname
-       case None => throw new Exception(s"No such table or view '$dsname'")
-     }
-     val oper = db.catalog.tableOperator(mimirName, mimirName)
-     db.query(oper)(handler)
+      val oper = db.transientViews.get(ID(dsname)) match {
+        case Some(viewQuery) => viewQuery
+        case None => throw new Exception(s"No such table or view '$dsname'")
+      }
+      db.query(oper)(handler)
     }
         
     def outputAnnotations(dsname:String) : String = {
-      val mimirName:ID = db.sqlToRA.getVizierNameMapping(ID(dsname)) match {
-       case Some(mname) => mname
-       case None => throw new Exception(s"No such table or view '$dsname'")
-     }
-     val oper = db.catalog.tableOperator(mimirName, mimirName)
-     explainEverything(oper).mkString("<br><br>")
+      val oper = db.transientViews.get(ID(dsname)) match {
+        case Some(viewQuery) => viewQuery
+        case None => throw new Exception(s"No such table or view '$dsname'")
+      }
+      explainEverything(oper).mkString("<br><br>")
     }
   }
   
@@ -306,12 +304,9 @@ object MimirVizier extends LazyLogging {
           }
           case _ => throw new Exception("unloadDataSource: bad options type")
         }
-        val viewName =  db.sqlToRA.getVizierNameMapping(ID(input)) match {
-          case Some(mimirName) => mimirName
-          case None => ID(input)
-        }
         val df = db.compiler.compileToSparkWithRewrites(
-            db.catalog.tableOperator(viewName, viewName))
+            db.catalog.tableOperator(Name(input))
+          )
 
         MimirSparkRuntimeUtils.writeDataSink(
             df, 
@@ -480,7 +475,10 @@ object MimirVizier extends LazyLogging {
   }
   
   private def registerNameMapping(vizierName:String, mimirName:String) : Unit = {
-    db.sqlToRA.registerVizierNameMapping(Name(vizierName), ID(mimirName))
+    db.transientViews.put(
+      ID(vizierName), 
+      db.catalog.tableOperator(Name(mimirName))
+    )
   }
   
   def createView(input : Any, query : String) : String = {

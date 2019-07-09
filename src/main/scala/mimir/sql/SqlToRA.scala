@@ -50,15 +50,6 @@ import mimir.provenance.Provenance
 class SqlToRA(db: Database) 
   extends LazyLogging
 {
-  private val vizierNameMap = scala.collection.mutable.Map[Name, ID]()
-  
-  def registerVizierNameMapping(vizierName:Name,mimirName:ID) : Unit = {
-    vizierNameMap.put(vizierName, mimirName)
-  }
-  
-  def getVizierNameMapping(vizierName:String) : Option[ID] =  getVizierNameMapping(Name(vizierName))
-  def getVizierNameMapping(vizierName:ID) : Option[ID] =  getVizierNameMapping(Name(vizierName.id))
-  def getVizierNameMapping(vizierName:Name) : Option[ID] =  vizierNameMap.get(vizierName)
 
   def unhandled(feature : String) = {
     println("ERROR: Unhandled Feature: " + feature)
@@ -505,26 +496,22 @@ class SqlToRA(db: Database)
           Seq(alias -> NameLookup(bindings))
         )
       }
-      case FromTable(schemaMaybe, tablev, aliasMaybe) => {
-        val table = getVizierNameMapping(tablev) match { 
-              case Some(mimirID) => sparsity.Name(mimirID.id)
-              case None => tablev 
-            } 
+      case FromTable(schemaMaybe, table, aliasMaybe) => {
         val alias = aliasMaybe.getOrElse(table)
         val tableOp:Operator = 
           schemaMaybe match { 
-            case None => 
-              if(table.quoted) { db.table(ID(table.name), ID.upper(alias)) }
-              else             { db.table(table.name,     ID.upper(alias)) }
-
-            case Some(schema) =>
-              db.adaptiveSchemas.viewFor(ID.upper(schema), ID.upper(table)).get
+            case None => db.catalog.tableOperator(table)
+            case Some(source) => db.catalog.tableOperator(source, table)
           }
         val bindings = NameLookup(
-          tableOp.columnNames.map { col => sparsity.Name(col.id) -> ID(ID.upper(alias), "_", col) }
+          tableOp.columnNames.map { col => 
+            sparsity.Name(col.id) -> ID(ID.upper(alias), "_", col) 
+          }
         )
         val rewrites =
-          tableOp.columnNames.map { col => ID(ID.upper(alias), "_", col) -> Var(col) }
+          tableOp.columnNames.map { col => 
+            ID(ID.upper(alias), "_", col) -> Var(col) 
+          }
         logger.trace(s"From Table: $table( $rewrites )")
         (
           tableOp.mapByID( rewrites:_* ),
@@ -694,10 +681,7 @@ class SqlToRA(db: Database)
   {
     c.table match {
       case Some(table) => {
-        bindings( getVizierNameMapping(table) match { 
-              case Some(mimirID) => sparsity.Name(mimirID.id)
-              case None => table 
-            } ) match {
+        bindings( table ) match {
           case Some(tableBindings) => 
             lookupColumnInTableBindings(c, tableBindings)
           case None => 

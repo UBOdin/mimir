@@ -1,7 +1,11 @@
 package mimir.views
 
+import mimir.Database
+import mimir.algebra._
+import mimir.metadata.SchemaProvider
+
 class TransientViews(db: Database)
-  extends scala.collection.mutable.Map[ID, Operator]
+  extends scala.collection.mutable.LinkedHashMap[ID, Operator]
   with SchemaProvider
 {
   def listTables: Iterable[ID] = keys

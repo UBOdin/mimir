@@ -37,7 +37,7 @@ import mimir.parser.{
     DropAdaptiveSchema
   }
 import mimir.optimizer.operator.OptimizeExpressions
-import mimir.util.{LoadCSV,ExperimentalOptions}
+import mimir.util.ExperimentalOptions
 import mimir.parser.MimirSQL
 import mimir.statistics.FuncDep
 
@@ -46,7 +46,6 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
-import mimir.util.LoadData
 
 
  /**

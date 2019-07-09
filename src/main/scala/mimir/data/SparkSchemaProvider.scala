@@ -11,7 +11,7 @@ import mimir.Database
 import mimir.algebra._
 import mimir.exec.spark.{MimirSpark, RAToSpark, RowIndexPlan}
 
-class SparkSchemaProvider(sparkDBName: String)
+class SparkSchemaProvider(sparkDBName: String, db: Database)
   extends SchemaProvider
   with LazyLogging
 {
@@ -44,7 +44,7 @@ class SparkSchemaProvider(sparkDBName: String)
     } else { None }
   }
 
-  def dataframe(table: ID, db: Database): Option[LogicalPlan] =
+  def logicalplan(table: ID): Option[LogicalPlan] =
   {
     tableSchema(table)
       .map { realSchema => 
@@ -54,7 +54,7 @@ class SparkSchemaProvider(sparkDBName: String)
       }
   }
 
-  def view(table: ID, db: Database): Option[Operator] = None
+  def view(table: ID): Option[Operator] = None
 }
 
 

@@ -178,12 +178,10 @@ class RAToSpark(db: mimir.Database)
         provider.logicalplan(name) match {
           case Some(plan) => {
     			  val realSchema = provider.tableSchema(name).get
-            val relationWithRowIDs =
-              RowIndexPlan(plan, realSchema).getPlan(db)
     			  val baseRelation  = 
               if (!alias.equals(name)) {
-                SubqueryAlias(alias.id, relationWithRowIDs)
-              } else { relationWithRowIDs }
+                SubqueryAlias(alias.id, plan)
+              } else { plan }
 
               //here we check if the real table schema matches the table op schema 
               // because the table op schema may have been rewritten by deepRenameColumn

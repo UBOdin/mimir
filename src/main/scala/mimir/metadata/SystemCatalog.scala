@@ -151,8 +151,8 @@ class SystemCatalog(db: Database)
   def resolveTable(providerName: Name, table: Name): Option[(ID, ID, SchemaProvider)] =
   {
     val (providerID, provider) = (
-      if(provider.quoted) { resolveProviderCaseSensitive(providerName.name) }
-      else { return resolveProviderCaseInsensitive(providerName.name) }
+      if(providerName.quoted) { resolveProviderCaseSensitive(providerName.name) }
+      else { resolveProviderCaseInsensitive(providerName.name) }
     ).getOrElse { return None }
     provider.resolveTableByName(table)
             .map { (providerID, _, provider)}
@@ -164,8 +164,9 @@ class SystemCatalog(db: Database)
       resolveProviderCaseSensitive(providerID.id)
         .getOrElse { return None }
 
-    provider.resolveTableByName(table)
-            .map { (providerID, _, provider)} 
+    if(provider.tableExists(table)){
+      return Some( (providerID, table, provider) )
+    } else { return None }
   }
 
 
