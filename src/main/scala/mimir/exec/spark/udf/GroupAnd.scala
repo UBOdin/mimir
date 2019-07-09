@@ -1,6 +1,10 @@
 package mimir.exec.spark.udf
 
 import org.apache.spark.sql.catalyst.expressions.aggregate.DeclarativeAggregate
+import org.apache.spark.sql.catalyst.analysis.TypeCheckResult
+import org.apache.spark.sql.catalyst.util.TypeUtils
+import org.apache.spark.sql.types.{ DataType, BooleanType }
+import org.apache.spark.sql.catalyst.expressions.{ AttributeReference, Literal, And }
 
 case class GroupAnd(child: org.apache.spark.sql.catalyst.expressions.Expression) extends DeclarativeAggregate {
   override def children: Seq[org.apache.spark.sql.catalyst.expressions.Expression] = child :: Nil

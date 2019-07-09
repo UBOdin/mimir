@@ -112,9 +112,9 @@ object Provenance extends LazyLogging {
         val (newQuery, rowIds) = compile(query)
         ( AdaptiveView(model, name, newQuery, meta + ViewAnnotation.PROVENANCE), rowIds)
 
-      case Table(name, alias, schema, meta) =>
+      case Table(name, alias, source, schema, meta) =>
         (
-          Table(name, alias, schema, meta ++ List((rowidColnameBase, RowIdVar(), TRowId()))),
+          Table(name, alias, source, schema, meta ++ List((rowidColnameBase, RowIdVar(), TRowId()))),
           List(rowidColnameBase)
         )
 
@@ -289,7 +289,7 @@ object Provenance extends LazyLogging {
       case AdaptiveView(_, _, query, _) => 
         doFilterForToken(query, rowIdsByColumn, db)
 
-      case Table(_,_, _, meta) =>
+      case Table(_,_, _, _, meta) =>
         meta.find( _._2.equals(RowIdVar()) ) match {
           case Some( (colName, _, _) ) =>
             var rowIdForTable = rowIdsByColumn.get(colName) match {

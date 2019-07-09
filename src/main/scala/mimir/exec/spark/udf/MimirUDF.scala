@@ -1,5 +1,12 @@
 package mimir.exec.spark.udf
 
+import java.sql.{ Timestamp, Date }
+
+import org.apache.spark.sql.types.{ DataType, StructType, StructField }
+
+import mimir.algebra._
+import mimir.exec.spark._
+import mimir.util.SparkUtils
 
 class MimirUDF {
   def getPrimitive(t:Type, value:Any) = value match {
@@ -33,6 +40,6 @@ class MimirUDF {
       case x =>  x.asString
     }
   def getStructType(datatypes:Seq[DataType]): StructType = {
-    StructType(datatypes.map(dti => StructField("", OperatorTranslation.getInternalSparkType(dti), true)))
+    StructType(datatypes.map(dti => StructField("", RAToSpark.getInternalSparkType(dti), true)))
   }
 }

@@ -6,6 +6,7 @@ import mimir.algebra._
 import mimir.exec._
 import mimir.exec.result._
 import mimir.provenance._
+import mimir.ctables._
 
 object UnannotatedBestGuess
   extends CompileMode[ResultIterator]
@@ -39,7 +40,7 @@ object UnannotatedBestGuess
     logger.debug(s"INLINED: $oper")
 
     // Replace VG-Terms with their "Best Guess values"
-    oper = BestGuess.bestGuessQuery(db, oper)
+    oper = InlineVGTerms(oper, db)
 
     logger.debug(s"GUESSED: $oper")
 

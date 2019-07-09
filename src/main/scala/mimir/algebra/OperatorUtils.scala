@@ -224,7 +224,7 @@ object OperatorUtils extends LazyLogging {
         findRenamingConflicts(name, lhs) ++ findRenamingConflicts(name, rhs)
       case Join(lhs, rhs) => 
         findRenamingConflicts(name, lhs) ++ findRenamingConflicts(name, rhs)
-      case Table(_,_,_,_) | View(_,_,_) | AdaptiveView(_,_,_,_) | HardTable(_,_) => 
+      case Table(_,_,_,_,_) | View(_,_,_) | AdaptiveView(_,_,_,_) | HardTable(_,_) => 
         oper.columnNames.toSet
       case Sort(_, src) =>
         findRenamingConflicts(name, src)
@@ -296,8 +296,8 @@ object OperatorUtils extends LazyLogging {
           LeftOuterJoin(lhs, deepRenameColumn(target, replacement, rhs), rewrite(cond))
         }
       }
-      case Table(name, alias, sch, meta) => {
-        Table(name, alias, 
+      case Table(name, alias, source, sch, meta) => {
+        Table(name, alias, source, 
           sch.map { col => if(col._1.equals(target)) { (replacement, col._2) } else { col } },
           meta.map { col => if(col._1.equals(target)) { (replacement, col._2, col._3) } else { col } }
         )

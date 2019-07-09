@@ -79,6 +79,9 @@ class AdaptiveSchemaManager(db: Database)
     adaptiveSchemas.all
       .map { lensForRecord(_) }
   }
+
+  def allNames: TraversableOnce[ID] =
+    adaptiveSchemas.keys
   
   def ofType(mlensType:ID): TraversableOnce[(Multilens, MultilensConfig)] =
   {

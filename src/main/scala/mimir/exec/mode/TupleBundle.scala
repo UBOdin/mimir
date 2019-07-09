@@ -157,7 +157,7 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
       )
     }
     query match {
-      case (Table(_,_,_,_) | HardTable(_,_)) => 
+      case (Table(_,_,_,_,_) | HardTable(_,_)) => 
         (
           query.addColumnsByID(
             WorldBits.columnName -> IntPrimitive(WorldBits.fullBitVector(seeds.size))

@@ -48,7 +48,7 @@ object Plot
       case q:sparsity.select.FromSelect =>
         db.sqlToRA(q.body)
       case sparsity.select.FromTable(schema, table, _) => 
-        db.table(ID.upper(table))
+        db.catalog.tableOperator(table)
       case q:sparsity.select.FromJoin => ???
     }
     var globalSettings = convertConfig(spec.args)

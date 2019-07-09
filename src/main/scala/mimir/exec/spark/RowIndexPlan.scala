@@ -2,7 +2,7 @@ package mimir.exec.spark
 
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.types.{ StringType, LongType, IntegerType }
 import org.apache.spark.sql.catalyst.expressions.{
   Add,
   Subtract,
@@ -14,7 +14,10 @@ import org.apache.spark.sql.catalyst.expressions.{
   SortOrder,
   Ascending,
   UnspecifiedFrame,
-  Literal
+  Literal,
+  If,
+  IsNull,
+  ScalaUDF
 }
 import org.apache.spark.sql.catalyst.expressions.aggregate.{
   AggregateExpression,

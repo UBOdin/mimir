@@ -7,7 +7,7 @@ object QueryNamer
 	def nameQuery(op: Operator): ID = 
 	{
 		op match { 
-			case Table(name,alias, _, _) => name
+			case Table(name,alias, _, _, _) => name
 			case View(name, _, _) => name
 			case AdaptiveView(model, name, _, _) => model+ID("_")+name
 			case Project(cols, src) => 
@@ -79,7 +79,7 @@ object QueryNamer
 	def getRelationNames(q: Operator): Seq[ID] =
 	{
 		q match {
-			case Table(tn, ta, _, _) => Seq(tn)
+			case Table(tn, ta, _, _, _) => Seq(tn)
 			case _ => q.children.map( getRelationNames(_) ).flatten
 		}
 	}

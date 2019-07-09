@@ -1,10 +1,17 @@
 package mimir.exec.spark.udf
 
+import org.apache.spark.sql.catalyst.expressions.{ ScalaUDF, CreateStruct }
+
+import mimir.algebra._
+import mimir.algebra.function._
+import mimir.models._
+import mimir.exec.spark._
+
 case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, params:Seq[org.apache.spark.sql.catalyst.expressions.Expression], argTypes:Seq[Type]) extends MimirUDF {
   val sparkArgs = params.toList.toSeq
-  val sparkArgTypes = argTypes.map(argT => OperatorTranslation.getSparkType(argT)).toList.toSeq
+  val sparkArgTypes = argTypes.map(argT => RAToSpark.getSparkType(argT)).toList.toSeq
   val dataType = function match { 
-    case NativeFunction(_, _, tc, _) => OperatorTranslation.getSparkType(tc(argTypes)) 
+    case NativeFunction(_, _, tc, _) => RAToSpark.getSparkType(tc(argTypes)) 
     case (_:ExpressionFunction | _:FoldFunction) => 
       throw new Exception(s"Unsupported function for Spark UDF: ${function}")
   }

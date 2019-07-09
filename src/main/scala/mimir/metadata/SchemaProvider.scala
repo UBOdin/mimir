@@ -1,9 +1,11 @@
 package mimir.metadata
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
-
-import mimir.algebra.{ID, Type, Operator}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import java.sql.SQLException
+import sparsity.Name
+
+import mimir.algebra._
 
 
 /**
@@ -29,7 +31,7 @@ trait SchemaProvider extends LazyLogging {
    * @param table   The identity of a table
    * @return        True if the table exists
    */
-  def tableExists(table: ID): Boolean = (tableSchema != None)
+  def tableExists(table: ID): Boolean = (tableSchema(table) != None)
 
   // The following three methods are optional, but at least 
   // one must return a non-None value **/
@@ -67,6 +69,19 @@ trait SchemaProvider extends LazyLogging {
   //
   // These come for free but may be overridden
   //
+
+  def resolveTableCaseInsensitive(table: String): Option[ID] = 
+    listTables.find { _.id.equalsIgnoreCase(table) } 
+  def resolveTableByName(table: Name): Option[ID] = 
+  {
+    if(table.quoted){ 
+      val id = ID(table.name)
+      if(tableExists(id)) { return Some(id) } else { return None }
+    } else { 
+      resolveTableCaseInsensitive(table.name)
+    }
+  }
+
   /**
    * A query to retrieve the tables defined by this provider
    * @return        A query to retrieve the tables defined by this provider
@@ -78,12 +93,13 @@ trait SchemaProvider extends LazyLogging {
    */
   def listTablesQuery: Operator =
     HardTable(
-      Seq(ID("TABLE_NAME"), TString()), 
+      Seq( ID("TABLE_NAME") -> TString() ), 
       listTables.map { _.id }
                 .map { StringPrimitive(_) }
                 .map { Seq(_) }
                 .toSeq
     )
+
   /**
    * A query to retrieve the schema of all tables defined by this provider
    * @return        A query to retrieve the schema of all
@@ -103,7 +119,7 @@ trait SchemaProvider extends LazyLogging {
       ),
       listTables.flatMap { table => 
         tableSchema(table)
-          .flatten
+          .toSeq.flatten
           .map { case (attr, t) =>
             Seq(
               StringPrimitive(table.id), 
@@ -112,7 +128,7 @@ trait SchemaProvider extends LazyLogging {
               BoolPrimitive(false)
             )
           }
-      }
+      }.toSeq
     )
 
   /**

@@ -1,8 +1,15 @@
 package mimir.exec.spark.udf
 
+import org.apache.spark.sql.types.BooleanType
+import org.apache.spark.sql.catalyst.expressions.{ ScalaUDF, CreateStruct }
+
+import mimir.algebra._
+import mimir.models._
+import mimir.exec.spark._
+
 case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[org.apache.spark.sql.catalyst.expressions.Expression]) extends MimirUDF {
   val sparkArgs = args.toList.toSeq
-  val sparkArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg))).toList.toSeq
+  val sparkArgTypes = (model.argTypes(idx).map(arg => RAToSpark.getSparkType(arg))).toList.toSeq
   def extractArgs(args:Seq[Any]) : Seq[PrimitiveValue] = {
     try{
       model.argTypes(idx).

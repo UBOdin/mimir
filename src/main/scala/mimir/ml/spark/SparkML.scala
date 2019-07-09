@@ -9,7 +9,7 @@ import org.apache.spark.ml.PipelineModel
 import org.apache.spark.sql.types.{DataType, DoubleType, LongType, FloatType, BooleanType, IntegerType, StringType, StructField, StructType}
 import org.apache.spark.ml.feature.Imputer
 import mimir.util.ExperimentalOptions
-import mimir.algebra.spark.OperatorTranslation
+import mimir.exec.spark.RAToSpark
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
@@ -108,8 +108,8 @@ abstract class SparkML {
     val modDF = dfTransformer.getOrElse((df:DataFrame) => df)
     model.transform(modDF(sqlContext.createDataFrame(
       getSparkSession().parallelize(testData.map( row => {
-        Row(row.zip(cols).map(value => new OperatorTranslation(db).mimirExprToSparkExpr(null, value._1)):_*)
-      })), StructType(cols.toList.map(col => StructField(col._1.id, OperatorTranslation.getSparkType(col._2), true))))))
+        Row(row.zip(cols).map(value => new RAToSpark(db).mimirExprToSparkExpr(null, value._1)):_*)
+      })), StructType(cols.toList.map(col => StructField(col._1.id, RAToSpark.getSparkType(col._2), true))))))
   }
   
   def applyModel( model : PipelineModel, inputDF:DataFrame): DataFrame = {//inputPlan:LogicalPlan): DataFrame = {
@@ -125,13 +125,13 @@ abstract class SparkML {
       case NullPrimitive() => t match {
         case TInt() => 0L
         case TFloat() => new java.lang.Double(0.0)
-        case TDate() => OperatorTranslation.defaultDate
+        case TDate() => RAToSpark.defaultDate
         case TString() => ""
         case TBool() => new java.lang.Boolean(false)
         case TRowId() => ""
         case TType() => ""
         case TAny() => ""
-        case TTimestamp() => OperatorTranslation.defaultTimestamp
+        case TTimestamp() => RAToSpark.defaultTimestamp
         case TInterval() => ""
         case TUser(name) => getNative(value, mimir.algebra.TypeRegistry.registeredTypes(name)._2)
         case x => ""

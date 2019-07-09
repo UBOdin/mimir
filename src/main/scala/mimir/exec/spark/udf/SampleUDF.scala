@@ -1,10 +1,15 @@
 package mimir.exec.spark.udf
 
+import org.apache.spark.sql.catalyst.expressions.{ ScalaUDF, CreateStruct }
+
+import mimir.algebra._
+import mimir.models._
+import mimir.exec.spark._
 
 case class SampleUDF(oper:Operator, model:Model, idx:Int, seed:Expression, args:Seq[org.apache.spark.sql.catalyst.expressions.Expression], hints:Seq[org.apache.spark.sql.catalyst.expressions.Expression]) extends MimirUDF {
-  val sparkVarType = OperatorTranslation.getSparkType(model.varType(idx, model.argTypes(idx)))
+  val sparkVarType = RAToSpark.getSparkType(model.varType(idx, model.argTypes(idx)))
   val sparkArgs = (args ++ hints).toList.toSeq
-  val sparkArgTypes = (model.argTypes(idx).map(arg => OperatorTranslation.getSparkType(arg)) ++ model.hintTypes(idx).map(hint => OperatorTranslation.getSparkType(hint))).toList.toSeq
+  val sparkArgTypes = (model.argTypes(idx).map(arg => RAToSpark.getSparkType(arg)) ++ model.hintTypes(idx).map(hint => RAToSpark.getSparkType(hint))).toList.toSeq
   
   def extractArgsAndHintsSeed(args:Seq[Any]) : (Long, Seq[PrimitiveValue],Seq[PrimitiveValue]) ={
     try{
