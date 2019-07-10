@@ -292,3 +292,10 @@ class ViewManager(db:Database) extends LazyLogging {
   }
 
 }
+
+
+object ViewManager 
+{
+  val SCHEMA_NAME = ID("VIEWS")
+  val MATERIALIZED_VIEW_SCHEMA_NAME = ID("MATERIALIZED_VIEWS")
+}

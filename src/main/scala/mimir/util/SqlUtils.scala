@@ -158,7 +158,5 @@ object SqlUtils {
         }
         mySchema ++ subSchemas
     }
-  }   
-  
-  
+  } 
 }

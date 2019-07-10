@@ -57,62 +57,55 @@ object Mimir extends LazyLogging {
     if(!conf.quiet()){
       output.print("Connecting to " + conf.metadataBackend() + "://" + conf.dbname() + "...")
     }
+    logger.debug("Opening Database")
     db.open()
 
-    // Check for one-off commands
-    if(conf.loadTable.get != None){
-      db.loadTable(conf.loadTable());
-    } else {
+    if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
+      output = new PrettyOutputFormat(terminal)
+    }
+    if(!conf.quiet()){
+      output.print("   ... ready")
+    }
 
-      conf.precache.foreach( (opt) => opt.split(",").foreach( (table) => { 
-        output.print(s"Precaching... $table")
-        db.models.prefetchForOwner(ID.upper(table))
-      }))
+    var finishByReadingFromConsole = true
 
-      if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
-        output = new PrettyOutputFormat(terminal)
-      }
-      if(!conf.quiet()){
-        output.print("   ... ready")
-      }
-
-      var finishByReadingFromConsole = true
-
-      conf.files.get match {
-        case None => {}
-        case Some(files) => 
-          for(file <- files){
-            if(file == "-"){
-              interactiveEventLoop()
-              finishByReadingFromConsole = false
-            } else {
-              val extensionRegexp = "([^.]+)$".r
-              val extension:String = extensionRegexp.findFirstIn(file) match {
-                case Some(e) => e
-                case None => {
-                  throw new RuntimeException("Error: Unable to determine file format of "+file)
-                }
+    conf.files.get match {
+      case None => {}
+      case Some(files) => 
+        for(file <- files){
+          logger.debug(s"Processing file '$file'")
+          if(file == "-"){
+            interactiveEventLoop()
+            finishByReadingFromConsole = false
+          } else {
+            val extensionRegexp = "([^.]+)$".r
+            val extension:String = extensionRegexp.findFirstIn(file) match {
+              case Some(e) => e
+              case None => {
+                throw new RuntimeException("Error: Unable to determine file format of "+file)
               }
+            }
 
-              extension.toLowerCase match {
-                case "sql" => {
-                    eventLoop(new FileReader(file), { () =>  })
-                    finishByReadingFromConsole = false
-                  }
-                case "csv" => {
-                    output.print("Loading "+file+"...")
-                    db.loadTable(file)
-                  }
-                case _ => {
-                  throw new RuntimeException("Error: Unknown file format '"+extension+"' of "+file)
+            extension.toLowerCase match {
+              case "sql" => {
+                  eventLoop(new FileReader(file), { () =>  })
+                  finishByReadingFromConsole = false
                 }
+              case "csv" => {
+                  output.print("Loading "+file+"...")
+                  db.loadTable(file)
+                }
+              case _ => {
+                throw new RuntimeException("Error: Unknown file format '"+extension+"' of "+file)
               }
             }
           }
-      }
-      if(finishByReadingFromConsole){
-        interactiveEventLoop()
-      }
+        }
+    }
+    logger.debug("Checking if console needed")
+    if(finishByReadingFromConsole){
+      logger.debug("Starting interactive mode")
+      interactiveEventLoop()
     }
 
     db.close()
@@ -133,16 +126,24 @@ object Mimir extends LazyLogging {
           () => { System.out.print("\nmimir> "); System.out.flush(); }
         )
       }
-    eventLoop(source, prompt)
+    eventLoop(source, prompt, true)
   }
 
-  def eventLoop(source: Reader, prompt: (() => Unit)): Unit =
+  def eventLoop(source: Reader, prompt: (() => Unit), interactive:Boolean = false): Unit =
   {
     var parser = MimirCommand(source);
     var done = false;
 
+    logger.debug("Event Loop")
     prompt()
-    while(parser.hasNext){
+    while(interactive || parser.hasNext){
+      if(interactive){
+        while(!parser.hasNext){ 
+          parser.loadBlocking 
+          logger.debug("line")
+        }
+      }
+      logger.debug("next command!")
       try {
         parser.next() match {
           case Parsed.Success(cmd:SlashCommand, _) => 
@@ -169,6 +170,9 @@ object Mimir extends LazyLogging {
         }
 
       } catch {
+        case e: EOFException => 
+          return
+
         case e: FileNotFoundException =>
           output.print(e.getMessage)
 
@@ -411,7 +415,6 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   //   val summarize = toggle("summary-create", default = Some(false))
   //   val cleanSummary = toggle("summary-clean", default = Some(false))
   //   val sampleCount = opt[Int]("samples", noshort = true, default = None)
-  val loadTable = opt[String]("loadTable", descr = "Don't do anything, just load a CSV file")
   val metadataBackend = opt[String]("driver", descr = "Which metadata backend to use? ([sqlite])",
     default = Some("sqlite"))
   val precache = opt[String]("precache", descr = "Precache one or more lenses")

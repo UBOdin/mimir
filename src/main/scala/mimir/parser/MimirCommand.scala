@@ -17,7 +17,7 @@ case class SQLCommand(
 
 object MimirCommand
 {
-  def apply(input: Reader): Iterator[Parsed[MimirCommand]] = 
+  def apply(input: Reader): StreamParser[MimirCommand] = 
     new StreamParser[MimirCommand](
       parse(_:Iterator[String], command(_)), 
       input

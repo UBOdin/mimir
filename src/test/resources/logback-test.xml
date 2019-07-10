@@ -61,6 +61,7 @@
 
   <!--+++++++++++++++++++++  Parser  ++++++++++++++++++++++-->
   <logger name="mimir.parser.EndlessParser"                        level="DEBUG"/>
+  <logger name="sparsity.parser.StreamParser"                      level="TRACE"/>
 
   <!--+++++++++++++++++++++++  PLOT  ++++++++++++++++++++++++++-->
   <logger name="mimir.plot.Plot$"                                  level="WARN"/>
@@ -83,7 +84,7 @@
   <!--+++++++++++++++++++++++  Util  ++++++++++++++++++++++++++-->
   <logger name="mimir.util.LoadCSV$"                               level="INFO"/> <!-- Use INFO to track stats -->
   <logger name="mimir.util.NonStrictCSVParser"                     level="INFO"/> <!-- Use INFO to track stats -->
-  <logger name="mimir.util.LineReaderInputSource"                  level="WARN"/>
+  <logger name="mimir.util.LineReaderInputSource"                  level="TRACE"/>
   <logger name="mimir.util.PythonProcess$"                         level="WARN"/>
   <logger name="mimir.util.TextUtils$"                             level="WARN"/>
 

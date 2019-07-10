@@ -5,13 +5,13 @@ import org.jline.terminal.{Terminal,TerminalBuilder}
 import org.jline.reader.{LineReader,LineReaderBuilder,EndOfFileException,UserInterruptException}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-class LineReaderInputSource(
+class LineReaderParser(
   terminal: Terminal, 
   historyFile: String = LineReaderInputSource.defaultHistoryFile,
-  prompt: String = "mimir> "
+  headPrompt: String = "mimir> ",
+  restPrompt: String = "     > "
 )
-  extends Reader
-  with LazyLogging
+  extends LazyLogging
 {
   val input: LineReader = 
     LineReaderBuilder.
@@ -19,6 +19,39 @@ class LineReaderInputSource(
       terminal(terminal).
       variable(LineReader.HISTORY_FILE, historyFile).
       build()
+
+  val buffer = Buffer[String]()
+
+
+  def load()
+  {
+    val prompt = if(buffer.isEmpty) { headPrompt } else { restPrompt }
+    buffer += input.readLine(prompt).replace("\\n", " ")
+  }
+
+  def next(): Parsed[MimirCommand] =
+  {
+    while(true){ 
+      parser(buffer.iterator) match {
+        case r@Parsed.Success(result, index) => 
+          logger.info(s"Parsed(index = $index): $result")
+          skipBytes(index)
+          return r
+        case f:Parsed.Failure => 
+          buffer.clear()
+          return f
+      }
+
+    }
+  }
+          curr = input.readLine("mimir> ")
+
+
+  {
+
+  }
+
+
   var pos: Int = 1;
   var curr: String = "";
 
@@ -31,7 +64,7 @@ class LineReaderInputSource(
       while(i < len){
         while(pos >= curr.length){
           if(i > 0){ logger.debug(s"returning $i characters"); return i; }
-          curr = input.readLine(prompt)
+          curr = input.readLine("mimir> ")
           if(curr == null){ logger.debug("Reached end"); return -1; }
           logger.debug(s"Read: '$curr'")
           pos = 0;
@@ -48,9 +81,4 @@ class LineReaderInputSource(
   }
 
 
-}
-
-object LineReaderInputSource
-{
-  val defaultHistoryFile = System.getProperty("user.home") + File.separator + ".mimir_history"
 }

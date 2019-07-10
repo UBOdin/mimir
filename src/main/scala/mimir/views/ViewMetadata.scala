@@ -50,13 +50,13 @@ class ViewMetadata(
       (if(annotations(ViewAnnotation.PROVENANCE)){
         provenanceCols.map { col => ProjectArg(col, Var(col)) }
       } else { None }),
-      Table(name, name, materializedSchema, Seq())
+      Table(name, name, ViewManager.MATERIALIZED_VIEW_SCHEMA_NAME, materializedSchema, Seq())
     )
   }
   
   def materializedOperator: Operator =  {
     Project(materializedSchema.map {col => ProjectArg(col._1, Var(col._1))},  
-        Table(name, name, materializedSchema, Seq()))
+        Table(name, name, ViewManager.MATERIALIZED_VIEW_SCHEMA_NAME, materializedSchema, Seq()))
   }
 
   def provenanceCols: Seq[ID] = 
