@@ -19,7 +19,7 @@ class TypecheckError(msg: String, e: Throwable, val context: Option[Operator] = 
 	override def toString =
 		context match {
 			case None => s"$errorTypeString : $msg"
-			case Some(oper) => s"$errorTypeString : $msg\n$oper"
+			case Some(oper) => s"$errorTypeString : $msg\n--- in ---\n$oper\n------"
 		}
 
 

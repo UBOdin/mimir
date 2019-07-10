@@ -9,7 +9,7 @@
   
   <!--+++++++++++++++++++++  Mimir Root  ++++++++++++++++++++++-->
   <logger name="mimir.Database"                                    level="WARN"/>
-  <logger name="mimir.Mimir$"                                      level="TRACE"/>
+  <logger name="mimir.Mimir$"                                      level="WARN"/>
 
   <!--++++++++++++++++++  Adaptive Schemas  +++++++++++++++++++-->
   <logger name="mimir.adaptive.DiscalaAbadiNormalizer$"            level="WARN"/>
@@ -60,8 +60,9 @@
   <logger name="mimir.optimizer.operator.PullUpConstants"          level="WARN"/>
 
   <!--+++++++++++++++++++++  Parser  ++++++++++++++++++++++-->
-  <logger name="mimir.parser.EndlessParser"                        level="DEBUG"/>
-  <logger name="sparsity.parser.StreamParser"                      level="TRACE"/>
+  <logger name="mimir.parser.EndlessParser"                        level="WARN"/>
+  <logger name="mimir.parser.LineReaderParser"                     level="WARN"/>
+  <logger name="sparsity.parser.StreamParser"                      level="WARN"/>
 
   <!--+++++++++++++++++++++++  PLOT  ++++++++++++++++++++++++++-->
   <logger name="mimir.plot.Plot$"                                  level="WARN"/>
@@ -84,7 +85,7 @@
   <!--+++++++++++++++++++++++  Util  ++++++++++++++++++++++++++-->
   <logger name="mimir.util.LoadCSV$"                               level="INFO"/> <!-- Use INFO to track stats -->
   <logger name="mimir.util.NonStrictCSVParser"                     level="INFO"/> <!-- Use INFO to track stats -->
-  <logger name="mimir.util.LineReaderInputSource"                  level="TRACE"/>
+  <logger name="mimir.util.LineReaderInputSource"                  level="WARN"/>
   <logger name="mimir.util.PythonProcess$"                         level="WARN"/>
   <logger name="mimir.util.TextUtils$"                             level="WARN"/>
 

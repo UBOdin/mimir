@@ -62,7 +62,7 @@ class SystemCatalog(db: Database)
     val attrView =
       OperatorUtils.makeUnion(
         allSchemaProviders.map { case (name, provider) => 
-          provider.listTablesQuery
+          provider.listAttributesQuery
                   .addColumns( "SCHEMA_NAME" -> StringPrimitive(name.id) )
         }.toSeq
           ++ db.adaptiveSchemas.attrCatalogs
@@ -76,11 +76,11 @@ class SystemCatalog(db: Database)
   // The tables themselves need to be defined lazily, since 
   // we want them read out at access time
   private val hardcodedTables = Map[ID, (Seq[(ID, Type)], () => Operator)](
-    ID("SYS_TABLES")       -> ((
+    ID("TABLES")       -> ((
       SystemCatalog.tableCatalogSchema, 
       tableView _
     )),
-    ID("SYS_ATTRS")        -> ((
+    ID("ATTRIBUTES")   -> ((
       SystemCatalog.attrCatalogSchema, 
       attrView _
     ))
@@ -206,12 +206,26 @@ class SystemCatalog(db: Database)
       }
   def tableOperator(tableName: ID): Operator =
     tableOperator(tableName, tableName)
-  def tableOperator(tableName: ID, tableAlias: ID = null): Operator =
+  def tableOperator(tableName: ID, tableAlias: ID): Operator =
     resolveTable(tableName)
       .map { tableOperator(_, tableAlias) }
       .getOrElse { 
         throw new SQLException(s"No such table or view '$tableName'")
       }
+  def tableOperatorByProvider(providerName: Name, tableName: Name): Operator =
+    tableOperatorByProvider(providerName, tableName, tableName)
+  def tableOperatorByProvider(providerName: Name, tableName: Name, alias: Name): Operator =
+    tableOperator(
+      resolveTable(providerName, tableName).getOrElse {
+        throw new SQLException(s"No such table or view '$providerName.$tableName'")
+      }, ID.upper(alias) )
+  def tableOperatorByProvider(providerName: ID, tableName: ID): Operator =
+    tableOperatorByProvider(providerName, tableName, tableName)
+  def tableOperatorByProvider(providerName: ID, tableName: ID, alias: ID): Operator =
+    tableOperator(
+      resolveTable(providerName, tableName).getOrElse {
+        throw new SQLException(s"No such table or view '$providerName.$tableName'")
+      }, alias )
 
   /**
    * Get all availale table names 
@@ -251,5 +265,5 @@ object SystemCatalog
       ID("IS_KEY")      -> TBool()
     )
 
-  val SCHEMA_NAME = ID("SYSTEM_CATALOG")
+  val SCHEMA_NAME = ID("SYS")
 }

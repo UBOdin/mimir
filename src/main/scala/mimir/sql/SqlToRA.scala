@@ -501,7 +501,7 @@ class SqlToRA(db: Database)
         val tableOp:Operator = 
           schemaMaybe match { 
             case None => db.catalog.tableOperator(table)
-            case Some(source) => db.catalog.tableOperator(source, table)
+            case Some(source) => db.catalog.tableOperatorByProvider(source, table)
           }
         val bindings = NameLookup(
           tableOp.columnNames.map { col => 

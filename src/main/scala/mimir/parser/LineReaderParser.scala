@@ -1,9 +1,12 @@
-package mimir.util
+package mimir.parser
 
 import java.io.{Reader,File}
+import scala.collection.mutable.Buffer
 import org.jline.terminal.{Terminal,TerminalBuilder}
 import org.jline.reader.{LineReader,LineReaderBuilder,EndOfFileException,UserInterruptException}
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import fastparse.Parsed
+import mimir.util.LineReaderInputSource
 
 class LineReaderParser(
   terminal: Terminal, 
@@ -11,74 +14,108 @@ class LineReaderParser(
   headPrompt: String = "mimir> ",
   restPrompt: String = "     > "
 )
-  extends LazyLogging
+  extends Iterator[Parsed[MimirCommand]]
+  with LazyLogging
 {
-  val input: LineReader = 
+
+  private val input: LineReader = 
     LineReaderBuilder.
       builder().
       terminal(terminal).
       variable(LineReader.HISTORY_FILE, historyFile).
       build()
+  private val inputBuffer = Buffer[String]()
+  private var pos = 0
+  private var eof = false
 
-  val buffer = Buffer[String]()
+  private def prompt =  if(inputBuffer.isEmpty) { headPrompt } else { restPrompt }
 
-
-  def load()
+  private def loadInputBuffer()
   {
-    val prompt = if(buffer.isEmpty) { headPrompt } else { restPrompt }
-    buffer += input.readLine(prompt).replace("\\n", " ")
+    if(eof){ return; }
+    try {
+      while(inputBuffer.size <= pos){ 
+        val lineRead = input.readLine(prompt).replace("\\n", " ") 
+        logger.trace(s"Got: $lineRead")
+        inputBuffer += lineRead
+      }
+    } catch {
+      case _ : EndOfFileException => eof = true;
+    }
   }
+
+  def hasNext(): Boolean =
+    { pos = 0; loadInputBuffer(); !inputBuffer.isEmpty }
+
+  def parse(): Parsed[MimirCommand] =
+    fastparse.parse(inputBufferIterator:Iterator[String], MimirCommand.command(_)) 
 
   def next(): Parsed[MimirCommand] =
   {
-    while(true){ 
-      parser(buffer.iterator) match {
+    pos = 0; loadInputBuffer()
+    if(!inputBuffer.isEmpty) {
+      parse() match {
         case r@Parsed.Success(result, index) => 
           logger.info(s"Parsed(index = $index): $result")
           skipBytes(index)
           return r
         case f:Parsed.Failure => 
-          buffer.clear()
+          inputBuffer.clear()
           return f
       }
-
+    } else {
+      throw new IndexOutOfBoundsException("reading from an empty iterator")
     }
   }
-          curr = input.readLine("mimir> ")
 
-
+  def flush()
   {
-
+    inputBuffer.clear()
   }
 
-
-  var pos: Int = 1;
-  var curr: String = "";
-
-  def close() = input.getTerminal.close
-  def read(cbuf: Array[Char], offset: Int, len: Int): Int =
+  def skipBytes(offset: Int)
   {
-    try { 
-      var i:Int = 0;
-      logger.debug(s"being asked for $len characters")
-      while(i < len){
-        while(pos >= curr.length){
-          if(i > 0){ logger.debug(s"returning $i characters"); return i; }
-          curr = input.readLine("mimir> ")
-          if(curr == null){ logger.debug("Reached end"); return -1; }
-          logger.debug(s"Read: '$curr'")
-          pos = 0;
-        }
-        cbuf(i+offset) = curr.charAt(pos);
-        i += 1; pos += 1;
+    var dropped = 0
+    while(offset > dropped && !inputBuffer.isEmpty){
+      logger.debug(s"Checking for drop: $dropped / $offset: Next unit: ${inputBuffer.head.length}")
+      if(inputBuffer.head.length < (offset - dropped)){ 
+        dropped = dropped + inputBuffer.head.length
+        logger.debug(s"Dropping '${inputBuffer.head}' ($dropped / $offset dropped so far)")
+        inputBuffer.remove(0)
+      } else {
+        logger.debug(s"Trimming '${inputBuffer.head}' (by ${offset - dropped}) and done")
+        var firstLine = inputBuffer.head
+        // trim off the remaining characters
+        firstLine = firstLine.substring(offset - dropped)
+        // trim off any leading whitespace
+        firstLine = firstLine.replaceFirst("^\\s+", "")
+
+        // if that polished off all of the remaining characters, 
+        // just drop the first line.
+        if(firstLine.equals("")){ inputBuffer.remove(0) }
+
+        // otherwise replace the string
+        else { inputBuffer.update(0, firstLine) }
+
+        return
       }
-      logger.debug(s"Full!  Returning $i characters")
-      return i;
-    } catch {
-      case _ : EndOfFileException => return -1;
-      case _ : UserInterruptException => System.exit(0); return -1;
     }
   }
 
-
+  private object inputBufferIterator 
+    extends Iterator[String]
+  {
+    def hasNext():Boolean = 
+      { loadInputBuffer(); return inputBuffer.size > pos }
+    def next():String = { 
+      loadInputBuffer()
+      if(inputBuffer.size <= pos){ 
+        throw new IndexOutOfBoundsException("reading from an empty iterator")
+      } else { 
+        val ret = inputBuffer(pos)
+        pos += 1
+        return ret
+      }
+    }
+  }
 }

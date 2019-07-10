@@ -88,7 +88,7 @@ object Mimir extends LazyLogging {
 
             extension.toLowerCase match {
               case "sql" => {
-                  eventLoop(new FileReader(file), { () =>  })
+                  noninteractiveEventLoop(new FileReader(file))
                   finishByReadingFromConsole = false
                 }
               case "csv" => {
@@ -114,35 +114,26 @@ object Mimir extends LazyLogging {
 
   def interactiveEventLoop(): Unit =
   {
-    val (source, prompt) = 
-      if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
-        (
-          new LineReaderInputSource(terminal),
-          { () =>  }
-        )
-      } else {
-        (
-          new InputStreamReader(System.in),
-          () => { System.out.print("\nmimir> "); System.out.flush(); }
-        )
-      }
-    eventLoop(source, prompt, true)
+    eventLoop(
+      new LineReaderParser(terminal), 
+      (parser: LineReaderParser) => {parser.flush(); parser}
+    )
   }
 
-  def eventLoop(source: Reader, prompt: (() => Unit), interactive:Boolean = false): Unit =
+  def noninteractiveEventLoop(source: Reader): Unit =
   {
-    var parser = MimirCommand(source);
-    var done = false;
+    eventLoop(
+      MimirCommand(source), 
+      (_:Any)=>MimirCommand(source)
+    )
+  }
+
+  def eventLoop[I <: Iterator[Parsed[MimirCommand]]](initialParser: I, reset: (I => I)): Unit =
+  {
+    var parser = initialParser
 
     logger.debug("Event Loop")
-    prompt()
-    while(interactive || parser.hasNext){
-      if(interactive){
-        while(!parser.hasNext){ 
-          parser.loadBlocking 
-          logger.debug("line")
-        }
-      }
+    while(parser.hasNext){
       logger.debug("next command!")
       try {
         parser.next() match {
@@ -191,7 +182,7 @@ object Mimir extends LazyLogging {
           // The parser pops the input stream back onto the queue, so
           // the next call to Statement() will throw the same exact 
           // Exception.  To prevent this from happening, reset the parser:
-          parser = MimirCommand(source);
+          parser = reset(parser)
         }
       }
     }
