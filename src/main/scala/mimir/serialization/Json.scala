@@ -224,7 +224,7 @@ object Json
           ID(elems("table").asInstanceOf[JsString].value), 
           ID(elems("alias").asInstanceOf[JsString].value),
           elems.get("source") match {
-            case None => mimir.data.LoadedTables.SCHEMA_NAME // Most tables are now sourced to LoadedTables
+            case None => mimir.data.LoadedTables.SCHEMA // Most tables are now sourced to LoadedTables
             case Some(source) => ID(source.asInstanceOf[JsString].value)
           },
           toSchema(elems("schema")),

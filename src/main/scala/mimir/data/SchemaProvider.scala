@@ -1,4 +1,4 @@
-package mimir.metadata
+package mimir.data
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
@@ -69,6 +69,8 @@ trait SchemaProvider extends LazyLogging {
   //
   // These come for free but may be overridden
   //
+
+  def isVisible: Boolean = true
 
   def resolveTableCaseInsensitive(table: String): Option[ID] = 
     listTables.find { _.id.equalsIgnoreCase(table) } 

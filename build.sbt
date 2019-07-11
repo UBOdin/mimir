@@ -135,7 +135,7 @@ libraryDependencies ++= Seq(
   ////////////////////// Command-Line Interface Utilities //////////////////////
   "org.rogach"                    %%  "scallop"                  % "0.9.5",
   "org.jline"                     %   "jline"                    % "3.2.0",
-  "info.mimirdb"                  %%  "sparsity"                 % "1.1",
+  "info.mimirdb"                  %%  "sparsity"                 % "1.3",
   "com.lihaoyi"                   %%  "fastparse"                % "2.1.0",
 
   ////////////////////// Dev Tools -- Logging, Testing, etc... //////////////////////

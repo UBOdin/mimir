@@ -183,7 +183,7 @@ class LoadedTables(db: Database)
   }
 
   def tableOperator(tableName: ID, alias: ID): Operator = 
-    tableOperator(LoadedTables.SCHEMA_NAME, tableName, alias)
+    tableOperator(LoadedTables.SCHEMA, tableName, alias)
 
 
 }
@@ -194,7 +194,7 @@ object LoadedTables {
   val GOOGLE_SHEETS          = "com.github.potix2.spark.google.spreadsheets"
   val CSV_WITH_ERRORCHECKING = "org.apache.spark.sql.execution.datasources.ubodin.csv"
 
-  val SCHEMA_NAME = ID("LOADED_TABLES")
+  val SCHEMA = ID("DATA")
 
   private val defaultLoadCSVOptions = Map(
     "ignoreLeadingWhiteSpace"-> "true",

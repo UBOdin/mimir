@@ -4,7 +4,7 @@ import scala.collection.mutable
 
 import mimir.Database
 import mimir.algebra._
-import mimir.metadata.SystemCatalog
+import mimir.data.SystemCatalog
 import mimir.serialization._
 import mimir.util._
 import mimir.metadata._

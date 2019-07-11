@@ -103,9 +103,9 @@ case class Database(metadata: MetadataBackend)
   val models          = new mimir.models.ModelManager(this)
   val loader          = new mimir.data.LoadedTables(this)
   val views           = new mimir.views.ViewManager(this)
-  val transientViews  = new mimir.views.TransientViews(this)
+  val tempViews       = new mimir.views.TemporaryViewManager(this)
   val adaptiveSchemas = new mimir.adaptive.AdaptiveSchemaManager(this)
-  val catalog         = new mimir.metadata.SystemCatalog(this)
+  val catalog         = new mimir.data.SystemCatalog(this)
 
   //// Parsing & Translation
   val sqlToRA         = new mimir.sql.SqlToRA(this)
@@ -126,7 +126,7 @@ case class Database(metadata: MetadataBackend)
                                 )
   val interpreter     = new mimir.algebra.Eval(
                                   functions = Some(functions)
-                                )  
+                                )
 
   /**
    * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
@@ -201,8 +201,27 @@ case class Database(metadata: MetadataBackend)
       }
 
       /********** CREATE TABLE STATEMENTS **********/
-      case SQLStatement(_:sparsity.statement.CreateTable)
-                          => throw new SQLException("CREATE TABLE not presently supported")
+      case SQLStatement(create: CreateTable) => {
+        // Test for now, create a blank empty table
+        catalog.bulkStorageProvider().createStoredTableAs(
+          HardTable(
+            create.columns.map { col => (
+              ID.lower(col.name), 
+              Type.fromString(col.t.lower)
+            )},
+            Seq()
+          ),
+          ID.lower(create.name),
+          this
+        )
+      }
+      case SQLStatement(create: CreateTableAs) => {
+        catalog.bulkStorageProvider().createStoredTableAs(
+          sqlToRA(create.query),
+          ID.lower(create.name),
+          this
+        )
+      }
 
       /********** CREATE LENS STATEMENTS **********/
       case lens: CreateLens => {
@@ -220,8 +239,12 @@ case class Database(metadata: MetadataBackend)
         val optQuery = compiler.optimize(baseQuery)
         val viewID = ID.upper(view.name)
 
-        views.create(viewID, optQuery)
-        if(view.materialized) { views.materialize(viewID) }
+        if(view.temporary) {
+          tempViews.put(viewID, optQuery)
+        } else {
+          views.create(viewID, optQuery)
+          if(view.materialized) { views.materialize(viewID) }
+        }
       }
 
       /********** ALTER VIEW STATEMENTS **********/
@@ -295,10 +318,8 @@ case class Database(metadata: MetadataBackend)
   /**
    * Prepare a database for use with Mimir.
    */
-  def open(skipBackend: Boolean = false): Unit = {
-    if(!skipBackend){
-      metadata.open()
-    }
+  def open(): Unit = {
+    metadata.open()
     catalog.init()
     loader.init()
     models.init()

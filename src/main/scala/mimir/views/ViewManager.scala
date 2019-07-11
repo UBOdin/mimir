@@ -12,6 +12,7 @@ import mimir.exec.mode._
 import mimir.serialization._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.metadata._
+import mimir.data.SchemaProvider
 
 
 class ViewManager(db:Database) 
@@ -306,6 +307,6 @@ class ViewManager(db:Database)
 
 object ViewManager 
 {
-  val SCHEMA_NAME = ID("VIEWS")
-  val MATERIALIZED_VIEW_SCHEMA_NAME = ID("MATERIALIZED_VIEWS")
+  val SCHEMA = ID("VIEW")
+  val MATERIALIZED_VIEW_SCHEMA = ID("MATERIALIZED_VIEW")
 }

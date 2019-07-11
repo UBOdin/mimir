@@ -1,0 +1,7 @@
+- [x] Finish and test SparkSchemaProvider
+- [x] BulkStorageProvider
+- [ ] BulkStorageProvider support for LoadedTables
+- [ ] Materialized Views
+- [ ] Hide supporting views created by LOAD TABLE
+- [ ] Make DROP TABLE drop supporting views as well
+- [ ] Updates?

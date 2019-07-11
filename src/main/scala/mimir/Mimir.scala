@@ -53,16 +53,16 @@ object Mimir extends LazyLogging {
     // Set up the database connection(s)
     MimirSpark.init(conf)
     val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
-    db = new Database(new JDBCMetadataBackend(conf.metadataBackend(), conf.dbname()))
     if(!conf.quiet()){
-      output.print("Connecting to " + conf.metadataBackend() + "://" + conf.dbname() + "...")
+      output.print("Connecting to metadata provider [" + conf.metadataBackend() + "://" + conf.dbname() + "]...")
     }
+    db = new Database(new JDBCMetadataBackend(conf.metadataBackend(), conf.dbname()))
     logger.debug("Opening Database")
     db.open()
-
     if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
       output = new PrettyOutputFormat(terminal)
     }
+    
     if(!conf.quiet()){
       output.print("   ... ready")
     }

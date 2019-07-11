@@ -38,11 +38,14 @@ class LineReaderParser(
         try {
           val lineRead = input.readLine(prompt).replace("\\n", " ") 
           logger.trace(s"Got: $lineRead")
-          inputBuffer += lineRead
+          if( ! lineRead.trim().equals("") ){ 
+            // ignore blank lines
+            inputBuffer += lineRead
+          }
         } catch {
           // if there's anything in the input buffer clear it and reset.  Otherwise
           // pass the exception out.
-          case _ : UserInterruptException if !inputBuffer.isEmpty => pos = 0; inputBuffer.clear()
+          case _ : UserInterruptException if !inputBuffer.isEmpty => flush()
         }
       }
     } catch {
@@ -66,7 +69,7 @@ class LineReaderParser(
           skipBytes(index)
           return r
         case f:Parsed.Failure => 
-          inputBuffer.clear()
+          flush()
           return f
       }
     } else {
@@ -76,7 +79,7 @@ class LineReaderParser(
 
   def flush()
   {
-    inputBuffer.clear()
+    pos = 0; inputBuffer.clear()
   }
 
   def skipBytes(offset: Int)

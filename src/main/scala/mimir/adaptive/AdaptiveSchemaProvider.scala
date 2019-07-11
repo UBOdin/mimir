@@ -2,7 +2,7 @@ package mimir.adaptive
 
 import mimir.Database
 import mimir.algebra.{ ID, Operator, Type, AdaptiveView }
-import mimir.metadata.SchemaProvider
+import mimir.data.SchemaProvider
 import mimir.exec.mode.UnannotatedBestGuess
 
 class AdaptiveSchemaProvider(lens:Multilens, config:MultilensConfig, db: Database)

@@ -1,4 +1,4 @@
-package mimir.metadata
+package mimir.data
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import java.sql.SQLException
@@ -7,8 +7,9 @@ import sparsity.Name
 import mimir.Database
 import mimir.algebra._
 import mimir.data._
-import mimir.views.ViewManager
-
+import mimir.views.{ ViewManager, TemporaryViewManager }
+import mimir.util.ExperimentalOptions
+import mimir.exec.spark.MimirSpark
 
 class SystemCatalog(db: Database)
   extends LazyLogging
@@ -16,13 +17,19 @@ class SystemCatalog(db: Database)
 
   // Note, we use String in this map instead of ID, since ID 
   private val simpleSchemaProviders = scala.collection.mutable.LinkedHashMap[ID, SchemaProvider]()
+  private var preferredBulkSchemaProvider: ID = null
 
   def init()
   {
-    // schemaProviders.put("TEMPORARY_VIEWS", db.transientViews)
-    registerSchemaProvider(ViewManager.SCHEMA_NAME, db.views)
-    registerSchemaProvider(LoadedTables.SCHEMA_NAME, db.loader)
-    registerSchemaProvider(SystemCatalog.SCHEMA_NAME, this.CatalogSchemaProvider)
+    // The order in which the schema providers are registered is the order
+    // in which they're used to resolve table names.
+    registerSchemaProvider(TemporaryViewManager.SCHEMA, db.tempViews)
+    registerSchemaProvider(ViewManager.SCHEMA, db.views)
+    if(ExperimentalOptions.isEnabled("USE-DERBY") || MimirSpark.remoteSpark){
+      registerSchemaProvider(ID("SPARK"), new SparkSchemaProvider(db))
+    }
+    registerSchemaProvider(LoadedTables.SCHEMA, db.loader)
+    registerSchemaProvider(SystemCatalog.SCHEMA, this.CatalogSchemaProvider)
   }
 
   def registerSchemaProvider(name: ID, provider: SchemaProvider)
@@ -47,10 +54,12 @@ class SystemCatalog(db: Database)
   {
     val tableView =
       OperatorUtils.makeUnion(
-        allSchemaProviders.map { case (name, provider) => 
-          provider.listTablesQuery
-                  .addColumns( "SCHEMA_NAME" -> StringPrimitive(name.id) )
-        }.toSeq
+        allSchemaProviders
+          .filter { _._2.isVisible }
+          .map { case (name, provider) => 
+            provider.listTablesQuery
+                    .addColumns( "SCHEMA_NAME" -> StringPrimitive(name.id) )
+          }.toSeq
       )
       .projectByID( SystemCatalog.tableCatalogSchema.map { _._1 }:_* )
     // sanity check:
@@ -64,10 +73,12 @@ class SystemCatalog(db: Database)
   {
     val attrView =
       OperatorUtils.makeUnion(
-        allSchemaProviders.map { case (name, provider) => 
-          provider.listAttributesQuery
-                  .addColumns( "SCHEMA_NAME" -> StringPrimitive(name.id) )
-        }.toSeq
+        allSchemaProviders
+          .filter { _._2.isVisible }
+          .map { case (name, provider) => 
+            provider.listAttributesQuery
+                    .addColumns( "SCHEMA_NAME" -> StringPrimitive(name.id) )
+          }.toSeq
       )
       .projectByID( SystemCatalog.attrCatalogSchema.map { _._1 }:_* )
 
@@ -97,7 +108,9 @@ class SystemCatalog(db: Database)
    */
   def resolveTableCaseInsensitive(table: String): Option[(ID, ID, SchemaProvider)] =
   {
+    logger.debug(s"Resolve table (Case INsensitive): $table")
     for( (schema, provider) <- allSchemaProviders ) {
+      logger.trace(s"Trying for $table in $schema")
       provider.resolveTableCaseInsensitive(table) match {
         case None => {}
         case Some(table) => return Some((schema, table, provider))
@@ -115,7 +128,9 @@ class SystemCatalog(db: Database)
    */
   def resolveTableCaseSensitive(table: String): Option[(ID, ID, SchemaProvider)] =
   {
+    logger.debug(s"Resolve table (Case Sensitive): $table")
     for( (schema, provider) <- allSchemaProviders ) {
+      logger.trace(s"Trying for $table in $schema")
       if(provider.tableExists(ID(table))){ 
         return Some( (schema, ID(table), provider) ) 
       }
@@ -229,6 +244,28 @@ class SystemCatalog(db: Database)
         throw new SQLException(s"No such table or view '$providerName.$tableName'")
       }, alias )
 
+  def bulkStorageProvider(providerName: ID = null): SchemaProvider with BulkStorageProvider =
+  {
+    var targetProvider = providerName
+    if(targetProvider == null){ targetProvider = preferredBulkSchemaProvider }
+    if(targetProvider != null){
+      simpleSchemaProviders.get(targetProvider) match {
+        case None => throw new SQLException(s"'$targetProvider' is not a registered schema provider.")
+        case Some(s: SchemaProvider with BulkStorageProvider) => return s
+        case _ => throw new SQLException(s"'$targetProvider' is not a valid bulk storage provider.")
+      }
+    }
+    simpleSchemaProviders.foreach { 
+      case (validProviderName, provider: SchemaProvider with BulkStorageProvider) => {
+          preferredBulkSchemaProvider = validProviderName
+          return provider
+        }
+      case _ => ()
+    }
+    throw new SQLException("No registered schema providers support bulk storage.")
+  }
+
+
   /**
    * Get all availale table names 
    */
@@ -267,5 +304,5 @@ object SystemCatalog
       ID("IS_KEY")      -> TBool()
     )
 
-  val SCHEMA_NAME = ID("SYS")
+  val SCHEMA = ID("SYSTEM")
 }

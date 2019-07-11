@@ -29,6 +29,10 @@
   <logger name="mimir.ctables.CTExplainer"                         level="WARN"/>
   <logger name="mimir.ctables.ReasonSet$"                          level="WARN"/>
 
+  <!--+++++++++++++++++++++++  DAta  +++++++++++++++++++++++-->
+  <logger name="mimir.data.SparkSchemaProvider"                    level="WARN"/>
+  <logger name="mimir.data.SystemCatalog"                          level="WARN"/>
+
   <!--++++++++++++++++++++++++  Exec  +++++++++++++++++++++++++-->
   <logger name="mimir.exec.Compiler"                               level="WARN"/>
   <logger name="mimir.exec.mode.BestGuess$"                        level="WARN"/>

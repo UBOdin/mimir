@@ -59,6 +59,8 @@ tpch-dbgen
 .classpath
 
 # Spark
-metastore_db/
+/metastore_db/
+/spark-warehouse
+/derby.log
 /bin/coursier
 /bin/mimir

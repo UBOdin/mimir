@@ -69,6 +69,10 @@ object MimirVizier extends LazyLogging {
   def main(args: Array[String]) {
     val conf = new MimirConfig(args);
     ExperimentalOptions.enable(conf.experimental())
+
+    // For Vizier specifically, we want Derby/Hive support enabled
+    ExperimentalOptions.enable("USE-DERBY")
+    
     // Set up the database connection(s)
     val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
     MimirSpark.init(conf)
@@ -147,7 +151,7 @@ object MimirVizier extends LazyLogging {
     var sparkSession:SparkSession = null;
     
     def withDataset[T](dsname:String, handler: ResultIterator => T ) : T = {
-      val oper = db.transientViews.get(ID(dsname)) match {
+      val oper = db.tempViews.get(ID(dsname)) match {
         case Some(viewQuery) => viewQuery
         case None => throw new Exception(s"No such table or view '$dsname'")
       }
@@ -155,7 +159,7 @@ object MimirVizier extends LazyLogging {
     }
         
     def outputAnnotations(dsname:String) : String = {
-      val oper = db.transientViews.get(ID(dsname)) match {
+      val oper = db.tempViews.get(ID(dsname)) match {
         case Some(viewQuery) => viewQuery
         case None => throw new Exception(s"No such table or view '$dsname'")
       }
@@ -475,7 +479,7 @@ object MimirVizier extends LazyLogging {
   }
   
   private def registerNameMapping(vizierName:String, mimirName:String) : Unit = {
-    db.transientViews.put(
+    db.tempViews.put(
       ID(vizierName), 
       db.catalog.tableOperator(Name(mimirName))
     )
