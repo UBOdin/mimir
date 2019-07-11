@@ -264,13 +264,22 @@ case class Database(metadata: MetadataBackend)
 
       /********** DROP STATEMENTS **********/
 
-      case SQLStatement(DropView(name, ifExists)) => views.drop(ID.upper(name), ifExists)
-      case DropLens(name, ifExists)               => lenses.drop(ID.upper(name), ifExists)
-      case DropAdaptiveSchema(name, ifExists)     => adaptiveSchemas.drop(ID.upper(name), ifExists)
+      case SQLStatement(DropView(name, ifExists)) => 
+        views.drop(ID.upper(name), ifExists)
+      case DropLens(name, ifExists)               => 
+        lenses.drop(ID.upper(name), ifExists)
+      case DropAdaptiveSchema(name, ifExists)     => 
+        adaptiveSchemas.drop(ID.upper(name), ifExists)
+      case SQLStatement(drop:DropTable) => 
+        loader.resolveTableByName(drop.name) match {
+          case Some(dropTableID) => loader.drop(dropTableID)
+          case None => 
+            if(!drop.ifExists){
+              throw new SQLException(s"No such loaded table ${drop.name}.")
+            }
+        }
 
       /********** Update Metadata **********/
-      case SQLStatement(drop:DropTable) => 
-        throw new SQLException("DROP not supported")
 
       case SQLStatement(update: Update) => 
         throw new SQLException("UPDATE not supported")

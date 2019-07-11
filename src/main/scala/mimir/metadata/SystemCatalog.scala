@@ -6,6 +6,8 @@ import sparsity.Name
 
 import mimir.Database
 import mimir.algebra._
+import mimir.data._
+import mimir.views.ViewManager
 
 
 class SystemCatalog(db: Database)
@@ -18,9 +20,9 @@ class SystemCatalog(db: Database)
   def init()
   {
     // schemaProviders.put("TEMPORARY_VIEWS", db.transientViews)
-    // schemaProviders.put("VIEWS", db.views)
+    registerSchemaProvider(ViewManager.SCHEMA_NAME, db.views)
+    registerSchemaProvider(LoadedTables.SCHEMA_NAME, db.loader)
     registerSchemaProvider(SystemCatalog.SCHEMA_NAME, this.CatalogSchemaProvider)
-    // schemaProviders.put("LOADED_TABLES", db.loader)
   }
 
   def registerSchemaProvider(name: ID, provider: SchemaProvider)
@@ -29,14 +31,16 @@ class SystemCatalog(db: Database)
   }
   def getSchemaProvider(name: ID): SchemaProvider =
   {
-    logger.warn("System Catalog does not support adaptive schemas yet")
     simpleSchemaProviders
       .get(name)
-      .getOrElse { throw new SQLException(s"Invalid schema $name")}
+      .getOrElse { 
+        db.adaptiveSchemas
+          .getProvider(name)
+          .getOrElse { throw new SQLException(s"Invalid schema $name") }
+      }
   }
-  def allSchemaProviders = {
-    logger.warn("System Catalog does not support adaptive schemas yet")
-    simpleSchemaProviders //TODO: ++ db.adaptiveSchemas.all
+  def allSchemaProviders: Seq[(ID, SchemaProvider)] = {
+    simpleSchemaProviders.toSeq ++ db.adaptiveSchemas.allProviders
   }
   
   def tableView: Operator =
@@ -47,7 +51,6 @@ class SystemCatalog(db: Database)
           provider.listTablesQuery
                   .addColumns( "SCHEMA_NAME" -> StringPrimitive(name.id) )
         }.toSeq
-          ++ db.adaptiveSchemas.tableCatalogs
       )
       .projectByID( SystemCatalog.tableCatalogSchema.map { _._1 }:_* )
     // sanity check:
@@ -65,7 +68,6 @@ class SystemCatalog(db: Database)
           provider.listAttributesQuery
                   .addColumns( "SCHEMA_NAME" -> StringPrimitive(name.id) )
         }.toSeq
-          ++ db.adaptiveSchemas.attrCatalogs
       )
       .projectByID( SystemCatalog.attrCatalogSchema.map { _._1 }:_* )
 
@@ -122,9 +124,9 @@ class SystemCatalog(db: Database)
   } 
 
   def resolveProviderCaseSensitive(providerName: String): Option[(ID, SchemaProvider)] = {
-    logger.warn("System Catalog does not support adaptive schemas yet")
     simpleSchemaProviders
       .get(ID(providerName))
+      .orElse { db.adaptiveSchemas.getProvider(ID(providerName)) }
       .map { ( ID(providerName), _) }
   }
 

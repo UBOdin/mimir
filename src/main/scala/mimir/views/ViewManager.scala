@@ -14,7 +14,10 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.metadata._
 
 
-class ViewManager(db:Database) extends LazyLogging {
+class ViewManager(db:Database) 
+  extends SchemaProvider
+  with LazyLogging
+{
   
   var viewTable: MetadataMap = null
 
@@ -290,6 +293,13 @@ class ViewManager(db:Database) extends LazyLogging {
         op.recur(resolve(_))
     }
   }
+
+  def listTables() = list()
+  def tableSchema(table: ID) = 
+    get(table).map { view => db.typechecker.schemaOf(view.query) }
+
+  def logicalplan(table: ID) = None
+  def view(table: ID) = Some(get(table).get.operator)
 
 }
 

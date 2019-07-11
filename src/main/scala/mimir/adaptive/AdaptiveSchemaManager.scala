@@ -70,7 +70,7 @@ class AdaptiveSchemaManager(db: Database)
 
     ( 
       MultilensRegistry.multilenses(ID(mlensType)), 
-      MultilensConfig(ID(name.asString), query, args, humanReadableName)
+      MultilensConfig(name, query, args, humanReadableName)
     )
   }
 
@@ -78,6 +78,10 @@ class AdaptiveSchemaManager(db: Database)
   {
     adaptiveSchemas.all
       .map { lensForRecord(_) }
+  }
+  def allProviders: TraversableOnce[(ID, AdaptiveSchemaProvider)] =
+  {
+    all.map { lens => (lens._2.schema, AdaptiveSchemaProvider(lens, db)) }
   }
 
   def allNames: TraversableOnce[ID] =
@@ -121,6 +125,11 @@ class AdaptiveSchemaManager(db: Database)
   def get(schema: ID): Option[(Multilens, MultilensConfig)] =
   {
     adaptiveSchemas.get(schema).map { lensForRecord(_) }
+  }
+
+  def getProvider(schema: ID): Option[AdaptiveSchemaProvider] =
+  {
+    get(schema).map { AdaptiveSchemaProvider(_, db) }
   }
 
   def viewFor(schema: ID, table: ID): Option[Operator] =

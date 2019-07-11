@@ -444,7 +444,7 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
     default = Some("test/data/api-project-378720062738-5923e0b6125f"))
   def dbname : ScallopOption[String] = { 
     opt[String]("db", descr = "Connect to the database with the specified name",
-    default = Some(dataDirectory() + "/debug.db"))
+    default = Some(dataDirectory() + "/mimir.db"))
   }
 
 }
