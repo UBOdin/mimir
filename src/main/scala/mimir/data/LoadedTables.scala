@@ -1,5 +1,7 @@
 package mimir.data
 
+import java.io.File
+import java.sql.SQLException
 import play.api.libs.json._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import org.apache.spark.sql.DataFrame
@@ -14,10 +16,13 @@ import mimir.exec.spark.{MimirSpark,RAToSpark,RowIndexPlan}
 
 class LoadedTables(db: Database)
   extends SchemaProvider
+  with BulkStorageProvider
   with LazyLogging
 {
   val cache = scala.collection.mutable.Map[String, DataFrame]()
   var store: MetadataMap = null
+  var bulkStorageDirectory = new File(".")
+  var bulkStorageFormat = "parquet"
 
   /** 
    * Prepare LoadedTables for use with a given Mimir database.
@@ -185,6 +190,32 @@ class LoadedTables(db: Database)
   def tableOperator(tableName: ID, alias: ID): Operator = 
     tableOperator(LoadedTables.SCHEMA, tableName, alias)
 
+  def createStoredTableAs(data: DataFrame, tableName: ID)
+  {
+    if(tableExists(tableName)){ 
+      throw new SQLException(s"Table `$tableName` already exists.")
+    }
+    val targetFile = new File(bulkStorageDirectory, s"$tableName.$bulkStorageFormat").toString
+    data.write
+        .format(bulkStorageFormat)
+        .save(targetFile)
+    linkTable(
+      targetFile, 
+      bulkStorageFormat,
+      tableName
+    )
+  }
+
+  def dropStoredTable(tableName: ID)
+  {
+    val file = 
+      store.get(tableName)
+           .getOrElse { throw new SQLException(s"Table `$tableName` does not exist.") }
+           ._2(0) // get the 0th field of the data record (url)
+           .asString
+    drop(tableName)
+    (new File(file)).delete()
+  }
 
 }
 
