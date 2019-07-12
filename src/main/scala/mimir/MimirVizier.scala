@@ -392,7 +392,7 @@ object MimirVizier extends LazyLogging {
         // Need to create the lens if it doesn't already exist.
 
         // query is a var because we might need to rewrite it below.
-        var query:Operator = db.catalog.tableOperator(Name(input.toString), Name(input.toString))
+        var query:Operator = db.catalog.tableOperator(Name(input.toString))
 
 
         // "Make Certain" was previously implemented by dumping the lens 
@@ -440,7 +440,7 @@ object MimirVizier extends LazyLogging {
           db.views.materialize(ID(lensName))
         }
       }
-      val lensOp = db.catalog.tableOperator(Name(lensName), Name(lensName)).limit(200)
+      val lensOp = db.catalog.tableOperator(Name(lensName)).limit(200)
       //val lensAnnotations = db.explainer.explainSubsetWithoutOptimizing(lensOp, lensOp.columnNames.toSet, false, false, false, Some(ID(lensName)))
       val lensReasons = 0//lensAnnotations.map(_.size(db)).sum//.toString//JSONBuilder.list(lensAnnotations.map(_.all(db).toList).flatten.map(_.toJSON))
       logger.debug(s"createLens reasons for first 200 rows: ${lensReasons}")
@@ -550,7 +550,7 @@ object MimirVizier extends LazyLogging {
         db.adaptiveSchemas.create(
           adaptiveSchemaName, 
           ID(_type), 
-          db.catalog.tableOperator(Name(input.toString), Name(input.toString)), 
+          db.catalog.tableOperator(Name(input.toString)), 
           paramExprs, 
           input.toString
         )
@@ -1103,7 +1103,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     var userIDs = Seq[String]()
     try{
       val ret = db.query(
-        db.catalog.tableOperator(Name("USERS"), Name("USERS"))
+        db.catalog.tableOperator(Name("USERS"))
           .project("USER_ID", "FIRST_NAME", "LAST_NAME")
       ) { results => 
         while(results.hasNext) {
@@ -1123,7 +1123,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     var types = Seq[String]("GIS", "DATA","INTERACTIVE")
     try {
       val ret = db.query(
-        db.catalog.tableOperator(Name("CLEANING_JOBS"), Name("CLEANING_JOBS"))
+        db.catalog.tableOperator(Name("CLEANING_JOBS"))
                   .project("TYPE")
       ) { results => 
         while(results.hasNext) {

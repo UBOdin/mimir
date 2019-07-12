@@ -400,7 +400,7 @@ object OperatorDeterminism
   
   def columnNames(oper:Operator) : Seq[ID] = {
     oper match {
-      case Table(_,_,_,sch,_) => sch.map(_._1)
+      case Table(_,_,sch,_) => sch.map(_._1)
       case _ => oper.columnNames
     }
   }

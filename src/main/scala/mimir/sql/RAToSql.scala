@@ -44,7 +44,7 @@ class RAToSql(db: Database)
   def standardizeTables(oper: Operator): Operator = 
   {
     oper match {
-      case Table(name, alias, source, tgtSch, tgtMetadata) => {
+      case Table(name, source, tgtSch, tgtMetadata) => {
         val realSch = db.catalog.tableSchemaByProvider(source, name) match {
             case Some(realSch) => realSch
             case None => throw new SQLException(s"Unknown Table '$source.$name'");
@@ -59,7 +59,7 @@ class RAToSql(db: Database)
         })
         Project(
           schMap ++ metadata.map(_._2),
-          Table(name, alias, source, realSch, metadata.map(_._1))
+          Table(name, source, realSch, metadata.map(_._1))
         )
       }
       case _ => oper.rebuild(oper.children.map(standardizeTables(_)))
@@ -378,7 +378,7 @@ class RAToSql(db: Database)
           Seq(joinItem)
         )
 
-      case Table(name, alias, source, tgtSch, metadata) =>
+      case Table(name, source, tgtSch, metadata) =>
         val realSch = db.catalog.tableSchemaByProvider(source, name) match {
             case Some(realSch) => realSch
             case None => throw new SQLException("Unknown Table '"+name+"'");

@@ -142,12 +142,11 @@ trait SchemaProvider extends LazyLogging {
    * This function generalizes the [view] method to return a [Table] if 
    * the requested table can not be represented as a view.
    */ 
-  def tableOperator(providerName: ID, tableName: ID, tableAlias: ID): Operator =
+  def tableOperator(providerName: ID, tableName: ID): Operator =
     view(tableName)
       .getOrElse { 
         Table(
           tableName, 
-          tableAlias, 
           providerName, 
           tableSchema(tableName)
             .getOrElse { 

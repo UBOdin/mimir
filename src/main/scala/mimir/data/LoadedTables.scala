@@ -187,8 +187,8 @@ class LoadedTables(db: Database)
     store.rm(tableName)
   }
 
-  def tableOperator(tableName: ID, alias: ID): Operator = 
-    tableOperator(LoadedTables.SCHEMA, tableName, alias)
+  def tableOperator(tableName: ID): Operator = 
+    tableOperator(LoadedTables.SCHEMA, tableName)
 
   def createStoredTableAs(data: DataFrame, tableName: ID)
   {

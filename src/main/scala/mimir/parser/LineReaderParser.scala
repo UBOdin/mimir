@@ -8,6 +8,9 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import fastparse.Parsed
 import mimir.util.LineReaderInputSource
 
+/**
+ * Intermediary between JLine and FastParse
+ */
 class LineReaderParser(
   terminal: Terminal, 
   historyFile: String = LineReaderInputSource.defaultHistoryFile,
@@ -25,64 +28,131 @@ class LineReaderParser(
       variable(LineReader.HISTORY_FILE, historyFile).
       build()
   private val inputBuffer = Buffer[String]()
-  private var pos = 0
+  private var commandBuffer: Option[Parsed[MimirCommand]] = None
+  // private var pos = 0
   private var eof = false
 
   private def prompt =  if(inputBuffer.isEmpty) { headPrompt } else { restPrompt }
 
-  private def loadInputBuffer()
+  /**
+   * Read a line from JLine into the input buffer
+   */
+  private def readLine()
   {
-    if(eof){ return; }
-    try {
-      while(inputBuffer.size <= pos){ 
-        try {
-          val lineRead = input.readLine(prompt).replace("\\n", " ") 
-          logger.trace(s"Got: $lineRead")
-          if( ! lineRead.trim().equals("") ){ 
-            // ignore blank lines
-            inputBuffer += lineRead
+    while(!eof){ 
+      try {
+        val lineRead = input.readLine(prompt).replace("\\n", " ") 
+        logger.trace(s"Got: $lineRead")
+        if( ! lineRead.trim().equals("") ){ 
+          // ignore blank lines
+          inputBuffer += lineRead
+          return
+        }
+      } catch {
+        // if there's anything in the input buffer clear it and reset.  Otherwise
+        // pass the exception out.
+        case _ : UserInterruptException if !inputBuffer.isEmpty => inputBuffer.clear()
+        case _ : EndOfFileException => eof = true;
+      }
+    }
+  }
+
+  /**
+   * Attempt to parse the current input buffer 
+   * @return    A parse result (on success or failure) or None if more data is needed
+   * 
+   * This implementation is a nasty hack built as a result of butting up against
+   * a FastParse limitation.  FastParse gives no indication that a failure
+   * is a result of an EOF or a legitimate parsing glitch.  As a result, we need
+   * to get Clever about how to detect the EOF.  
+   *
+   * inputBufferIterator mimics inputBuffer.iterator, but includes an 
+   * additional *two* "sentinel" lines at the end consisting of nothing but
+   * whitespace.  If *both* lines are consumed by the parser, we take that
+   * to mean that more data might change the result.  If at least one of
+   * the sentinels survives, we treat it as a legitimate failure.
+   */
+  private def tryParse(): Option[Parsed[MimirCommand]] =
+  {
+    inputBufferIterator.reset()
+    fastparse.parse(
+      inputBufferIterator,
+      MimirCommand.command(_),
+      verboseFailures = true
+    ) match { 
+      case r@Parsed.Success(result, index) => Some(r)
+      case f:Parsed.Failure if inputBufferIterator.hasNext => Some(f)
+      case f:Parsed.Failure => None
+    }
+  }
+
+  /**
+   * Buffer the next parser response from JLine
+   * @return    A parsed command, parser error, or None if the stream is over
+   * 
+   * If a parser response has already been buffered, this function 
+   * returns immediately.  Otherwise, lines will be read from JLine
+   * until either a legitimate (i.e., non-EOF) parser failure occurs, or
+   * the parser gets a command.
+   *
+   * A legitimate parser failure will cause the input to be flushed.
+   */
+  private def tryReadNext(): Option[Parsed[MimirCommand]] =
+  {
+    while(!eof && commandBuffer == None){
+      readLine()
+      if(!inputBuffer.isEmpty) {
+        commandBuffer = tryParse()
+        commandBuffer match {
+          case Some(r@Parsed.Success(result, index)) => {
+            logger.info(s"Parsed(index = $index): $result")
+            skipBytes(index)
           }
-        } catch {
-          // if there's anything in the input buffer clear it and reset.  Otherwise
-          // pass the exception out.
-          case _ : UserInterruptException if !inputBuffer.isEmpty => flush()
+          case Some(f@Parsed.Failure(token, index, extra)) => {
+            inputBuffer.clear()
+          }
+          case None => {}
         }
       }
-    } catch {
-      case _ : EndOfFileException => eof = true;
     }
+    return commandBuffer
   }
 
-  def hasNext(): Boolean =
-    { pos = 0; loadInputBuffer(); !inputBuffer.isEmpty }
+  /**
+   * Reset the state of the parser to pristine
+   */
+  def flush() { inputBuffer.clear(); commandBuffer = None }
 
-  def parse(): Parsed[MimirCommand] =
-    fastparse.parse(inputBufferIterator:Iterator[String], MimirCommand.command(_)) 
+  /**
+   * Return true if the iterator has another parser response.
+   *
+   * This method blocks until a parser response becomes available or 
+   * the terminal session ends.
+   */
+  def hasNext(): Boolean = { tryReadNext() != None }
 
-  def next(): Parsed[MimirCommand] =
+  /**
+   * Return the next parser response.
+   *
+   * This method blocks until a parser response becomes available or 
+   * the terminal session ends.
+   */
+  def next(): Parsed[MimirCommand] = 
   {
-    pos = 0; loadInputBuffer()
-    if(!inputBuffer.isEmpty) {
-      parse() match {
-        case r@Parsed.Success(result, index) => 
-          logger.info(s"Parsed(index = $index): $result")
-          skipBytes(index)
-          return r
-        case f:Parsed.Failure => 
-          flush()
-          return f
+    tryReadNext() match { 
+      case None => 
+        throw new IndexOutOfBoundsException("reading from an empty iterator")
+      case Some(command) => {
+        commandBuffer = None
+        return command
       }
-    } else {
-      throw new IndexOutOfBoundsException("reading from an empty iterator")
     }
   }
 
-  def flush()
-  {
-    pos = 0; inputBuffer.clear()
-  }
-
-  def skipBytes(offset: Int)
+  /**
+   * Advance the inputBuffer by a fixed number of bytes (e.g., after a successful parse).
+   */
+  private def skipBytes(offset: Int)
   {
     var dropped = 0
     while(offset > dropped && !inputBuffer.isEmpty){
@@ -111,19 +181,35 @@ class LineReaderParser(
     }
   }
 
+  /**
+   * An iterator for InputBuffer + two extra sentinel lines
+   *
+   * See tryParse() above.  The short of it is that this 
+   * iterator produces the same result as inputBuffer.iterator
+   * but with two extra trailing "sentinel" lines of whitespace.
+   */
   private object inputBufferIterator 
     extends Iterator[String]
   {
+    var pos = 0
+
+    def reset() { pos = 0 }
     def hasNext():Boolean = 
-      { loadInputBuffer(); return inputBuffer.size > pos }
+      { pos < inputBuffer.size + 2 }
     def next():String = { 
-      loadInputBuffer()
-      if(inputBuffer.size <= pos){ 
-        throw new IndexOutOfBoundsException("reading from an empty iterator")
-      } else { 
+      if(pos < inputBuffer.size){
+        // Normal line
         val ret = inputBuffer(pos)
         pos += 1
-        return ret
+        return ret        
+      } else {
+        // Sentinel line
+        pos += 1
+        // need to make sure that each sentinel line is bigger 
+        // the fastparse read buffer (about 10 characters by
+        // default), or else both sentinel lines could be read in
+        // as part of a normal error.
+        return "                      "
       }
     }
   }

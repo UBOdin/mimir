@@ -243,7 +243,7 @@ class Typechecker(
 				}
 				lSchema
 
-			case Table(_, _, _, sch, meta) => (sch ++ meta.map( x => (x._1, x._3) ))
+			case Table(_, _, sch, meta) => (sch ++ meta.map( x => (x._1, x._3) ))
 
 			case View(_, query, _) => schemaOf(query)
 			case AdaptiveView(_, _, query, _) => schemaOf(query)

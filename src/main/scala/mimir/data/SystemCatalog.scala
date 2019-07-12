@@ -203,46 +203,35 @@ class SystemCatalog(db: Database)
 
 
   def tableOperator(defn: (ID, ID, SchemaProvider)): Operator =
-    tableOperator(defn, defn._2)
-  def tableOperator(defn: (ID, ID, SchemaProvider), tableAlias: ID): Operator =
   {
     val (providerName, tableName, provider) = defn
     provider.tableOperator(
       providerName, 
-      tableName, 
-      tableAlias
+      tableName
     )
   }
   def tableOperator(tableName: Name): Operator =
-    tableOperator(tableName, tableName)
-  def tableOperator(tableName: Name, tableAlias: Name): Operator =
     resolveTable(tableName)
-      .map { tableOperator(_:(ID, ID, SchemaProvider), ID.upper(tableAlias)) }
+      .map { tableOperator(_:(ID, ID, SchemaProvider)) }
       .getOrElse { 
         throw new SQLException(s"No such table or view '$tableName'")
       }
   def tableOperator(tableName: ID): Operator =
-    tableOperator(tableName, tableName)
-  def tableOperator(tableName: ID, tableAlias: ID): Operator =
     resolveTable(tableName)
-      .map { tableOperator(_, tableAlias) }
+      .map { tableOperator(_) }
       .getOrElse { 
         throw new SQLException(s"No such table or view '$tableName'")
       }
   def tableOperatorByProvider(providerName: Name, tableName: Name): Operator =
-    tableOperatorByProvider(providerName, tableName, tableName)
-  def tableOperatorByProvider(providerName: Name, tableName: Name, alias: Name): Operator =
     tableOperator(
       resolveTable(providerName, tableName).getOrElse {
         throw new SQLException(s"No such table or view '$providerName.$tableName'")
-      }, ID.upper(alias) )
+      })
   def tableOperatorByProvider(providerName: ID, tableName: ID): Operator =
-    tableOperatorByProvider(providerName, tableName, tableName)
-  def tableOperatorByProvider(providerName: ID, tableName: ID, alias: ID): Operator =
     tableOperator(
       resolveTable(providerName, tableName).getOrElse {
         throw new SQLException(s"No such table or view '$providerName.$tableName'")
-      }, alias )
+      } )
 
   def bulkStorageProvider(providerName: ID = null): SchemaProvider with BulkStorageProvider =
   {

@@ -164,7 +164,7 @@ class RAToSpark(db: mimir.Database)
 			    case _ => offsetOp
 			  }
 			}
-			case Table(name, alias, source, sch, meta) => {
+			case Table(name, source, sch, meta) => {
 			  /*val table = CatalogTable(
           TableIdentifier(name),
           CatalogTableType.EXTERNAL,
@@ -178,10 +178,6 @@ class RAToSpark(db: mimir.Database)
         provider.logicalplan(name) match {
           case Some(plan) => {
     			  val realSchema = provider.tableSchema(name).get
-    			  val baseRelation  = 
-              if (!alias.equals(name)) {
-                SubqueryAlias(alias.id, plan)
-              } else { plan }
 
               //here we check if the real table schema matches the table op schema 
               // because the table op schema may have been rewritten by deepRenameColumn
@@ -198,11 +194,11 @@ class RAToSpark(db: mimir.Database)
 
               if(attributesNeedingProjection.isEmpty) {
                 meta match {
-                  case Seq() => baseRelation
+                  case Seq() => plan
                   case _ => {
                     org.apache.spark.sql.catalyst.plans.logical.Project(sch.map(col => {
                       mimirExprToSparkNamedExpr(oper, col._1, Var(col._1))
-                    }) ++ meta.filterNot(el => sch.unzip._1.contains(el._1)).distinct.map(metaEl => mimirExprToSparkNamedExpr(oper, metaEl._1, metaEl._2)) ,baseRelation)
+                    }) ++ meta.filterNot(el => sch.unzip._1.contains(el._1)).distinct.map(metaEl => mimirExprToSparkNamedExpr(oper, metaEl._1, metaEl._2)), plan)
                   }
                 }
               } else {
@@ -214,7 +210,7 @@ class RAToSpark(db: mimir.Database)
                       case None => mimirExprToSparkNamedExpr(oper, col, Var(col)) 
                       }
                   } ++ meta.filterNot(el => sch.unzip._1.contains(el._1)).filterNot(el => realSchema.unzip._1.contains(el._1)).distinct.map(metaEl => mimirExprToSparkNamedExpr(oper, metaEl._1, metaEl._2)),
-                  baseRelation
+                  plan
                 )
               }
 
@@ -787,7 +783,7 @@ object RAToSpark {
   def extractTables(oper: Operator): Seq[String] = 
   {
     oper match {
-      case Table(name, alias, source, tgtSch, tgtMetadata) => Seq(name.id)
+      case Table(name, source, tgtSch, tgtMetadata) => Seq(name.id)
       case _ => oper.children.map(extractTables(_)).flatten
     }
   }
