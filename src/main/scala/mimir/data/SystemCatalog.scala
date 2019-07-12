@@ -253,6 +253,12 @@ class SystemCatalog(db: Database)
     }
     throw new SQLException("No registered schema providers support bulk storage.")
   }
+  def bulkStorageProviderID: ID =
+  {
+    if(preferredBulkSchemaProvider != null) { return preferredBulkSchemaProvider }
+    bulkStorageProvider()
+    return preferredBulkSchemaProvider;
+  }
 
 
   /**

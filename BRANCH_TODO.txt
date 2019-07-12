@@ -1,7 +1,7 @@
 - [x] Finish and test SparkSchemaProvider
 - [x] BulkStorageProvider
 - [x] BulkStorageProvider support for LoadedTables
-- [ ] Materialized Views
+- [x] Materialized Views
 - [ ] Hide supporting views created by LOAD TABLE
 - [ ] Make DROP TABLE drop supporting views as well
 - [ ] Ensure test cases pass

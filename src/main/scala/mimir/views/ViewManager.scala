@@ -85,7 +85,9 @@ class ViewManager(db:Database)
                      else { throw new SQLException(s"Unknown View '$name'") }
       }
     viewTable.rm(name)
-    if(properties.isMaterialized){ ??? }
+    if(properties.isMaterialized){ 
+      db.catalog.bulkStorageProvider().dropStoredTable(properties.materializedName)
+    }
   }
 
   /**
@@ -134,12 +136,11 @@ class ViewManager(db:Database)
    */
   def materialize(name: ID): Unit =
   {
-    ???
-
-    if(db.catalog.tableExists(name)){
+    val properties = apply(name)
+    val bulkStorage = db.catalog.bulkStorageProvider()
+    if(bulkStorage.tableExists(properties.materializedName)){
       throw new SQLException(s"View '$name' is already materialized")
     }
-    val properties = apply(name)
     val (
       query, 
       baseSchema,
@@ -169,13 +170,7 @@ class ViewManager(db:Database)
     logger.debug(s"RAW: $completeQuery")
     logger.debug(s"MATERIALIZE: $name(${completeQuery.columnNames.mkString(",")})")
 
-    //val (inlinedSQL:SelectBody, _) = db.compiler.sqlForBackend(completeQuery)
-        
-    //logger.debug(s"QUERY: $inlinedSQL")
-
-    //db.metadataBackend.selectInto(name, inlinedSQL.toString)
-    // db.backend.createTable(name, completeQuery)
-    // db.backend.materializeView(name)
+    bulkStorage.createStoredTableAs(completeQuery, properties.materializedName, db)
 
     viewTable.update(name, Map(ID("METADATA") -> IntPrimitive(1)))
   }
@@ -184,7 +179,15 @@ class ViewManager(db:Database)
    * Remove the materialization for the specified view
    * @param  name        The name of the view to dematerialize
    */
-  def dematerialize(name: ID): Unit = { ??? }
+  def dematerialize(name: ID): Unit = { 
+    val metadata = apply(name)
+    if(metadata.isMaterialized){
+      db.catalog.bulkStorageProvider().dropStoredTable(metadata.materializedName)
+      viewTable.update(name, Map(ID("METADATA") -> IntPrimitive(0)))
+    } else { 
+      throw new SQLException(s"$name is already materialized")
+    }
+  }
 
   /**
    * List all views known to the view manager
@@ -277,13 +280,13 @@ class ViewManager(db:Database)
           return resolve(query)
         }
 
-        logger.debug(s"Using materialized view: Materialized '$name' with { ${wantAnnotations.mkString(", ")} } <- ${metadata.table}")
+        logger.debug(s"Using materialized view: Materialized '$name' with { ${wantAnnotations.mkString(", ")} } <- ${metadata.materializedName}")
 
         Project(
           metadata.schemaWith(wantAnnotations).map { col => 
             ProjectArg(col._1, Var(col._1))
           },
-          metadata.table
+          materializedTableOperator(metadata)
         )
       }
       case AdaptiveView(schema, name, query, wantAnnotations) => {
@@ -300,7 +303,57 @@ class ViewManager(db:Database)
     get(table).map { view => db.typechecker.schemaOf(view.query) }
 
   def logicalplan(table: ID) = None
-  def view(table: ID) = Some(get(table).get.operator)
+  def view(table: ID) = Some(apply(table).operator)
+
+  def materializedTableOperator(table: ID): Operator =
+    materializedTableOperator(apply(table:ID))
+  def materializedTableOperator(metadata: ViewMetadata): Operator =
+  {
+    // retain the base columns
+    var projectedColumns = 
+      metadata.schema.map { case (col, _) => ProjectArg(col, Var(col)) } 
+
+    // if we want the taint columns, decode them
+    if(metadata.annotations(ViewAnnotation.TAINT)){
+      projectedColumns ++= 
+        metadata.schemaWith(Set(ViewAnnotation.PROVENANCE)).zipWithIndex.map { case ((col, _), idx) => 
+          ProjectArg(
+            OperatorDeterminism.mimirColDeterministicColumn(col),
+            Comparison(Cmp.Eq,
+              Arithmetic(Arith.BitAnd,
+                Var(ViewAnnotation.taintBitVectorColumn),
+                IntPrimitive(1l << (idx+1))
+              ),
+              IntPrimitive(1l << (idx+1))
+            )
+          )
+        } :+ 
+          ProjectArg(
+            OperatorDeterminism.mimirRowDeterministicColumnName,
+            Comparison(Cmp.Eq,
+              Arithmetic(Arith.BitAnd,
+                Var(ViewAnnotation.taintBitVectorColumn),
+                IntPrimitive(1l)
+              ),
+              IntPrimitive(1l)
+            )
+          )
+    }
+
+    if(metadata.annotations(ViewAnnotation.PROVENANCE)){
+      projectedColumns ++= 
+        metadata.provenanceCols.map { col => ProjectArg(col, Var(col)) }
+    }
+
+    return Project(projectedColumns, 
+      Table(
+        metadata.materializedName, 
+        db.catalog.bulkStorageProviderID,
+        metadata.materializedSchema,
+        Seq()
+      )
+    )
+  }
 
 }
 

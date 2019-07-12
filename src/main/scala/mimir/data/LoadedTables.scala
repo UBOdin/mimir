@@ -206,6 +206,16 @@ class LoadedTables(db: Database)
     )
   }
 
+  def deleteStoredTableFiles(target: File, tableName: String):Unit =
+  {
+    if(target.isDirectory){
+      target.listFiles.foreach { deleteStoredTableFiles(_, tableName) }
+    }
+    if(!target.delete()){
+      throw new SQLException(s"Could not delete stored file for $tableName ($target)")
+    }
+  }
+
   def dropStoredTable(tableName: ID)
   {
     val file = 
@@ -214,7 +224,7 @@ class LoadedTables(db: Database)
            ._2(0) // get the 0th field of the data record (url)
            .asString
     drop(tableName)
-    (new File(file)).delete()
+    deleteStoredTableFiles(new File(file), tableName.id)
   }
 
 }
