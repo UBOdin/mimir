@@ -64,7 +64,6 @@
   <logger name="mimir.optimizer.operator.PullUpConstants"          level="WARN"/>
 
   <!--+++++++++++++++++++++  Parser  ++++++++++++++++++++++-->
-  <logger name="mimir.parser.EndlessParser"                        level="WARN"/>
   <logger name="mimir.parser.LineReaderParser"                     level="WARN"/>
   <logger name="sparsity.parser.StreamParser"                      level="WARN"/>
 

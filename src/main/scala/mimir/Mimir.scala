@@ -341,26 +341,66 @@ object Mimir extends LazyLogging {
     }
   }
 
+  val slashCommands: Map[String, SlashCommandDefinition] = Map(
+    MakeSlashCommand(
+      "help",
+      "",
+      "Show this help message",
+      { case _ => {
+        val cmdWidth = slashCommands.values.map { _.name.length }.max+1
+        val argWidth = slashCommands.values.map { _.args.length }.max
+        output.print("")
+        for(cmd <- slashCommands.values){
+          output.print(
+            String.format(s" %${cmdWidth}s %-${argWidth}s   %s",
+              "/"+cmd.name, cmd.args, cmd.description
+            )
+          )
+        }
+        output.print("")
+      }}
+    ),
+    MakeSlashCommand(
+      "tables",
+      "",
+      "List all available tables",
+      { case _ => handleQuery(db.catalog.tableView) }
+    ),
+    MakeSlashCommand(
+      "show",
+      "table_name",
+      "Show the schema for a specified table",
+      { case Seq(name) => 
+          db.catalog.tableSchema(Name(name)) match {
+            case None => 
+              output.print(s"'$name' is not a table")
+            case Some( schema ) => 
+              output.print("CREATE TABLE "+name+" (\n"+
+                schema.map { col => "  "+col._1+" "+col._2 }.mkString(",\n")
+              +"\n);")
+          }
+      }
+    ),
+    MakeSlashCommand(
+      "log",
+      "unit [level]",
+      "Set the logging level for the specified unit (e.g., DEBUG)",
+      { case Seq(loggerName) => setLogLevel(loggerName)
+        case Seq(loggerName, level) => setLogLevel(loggerName, level)
+      }
+    )
+  )
+
   def handleSlashCommand(cmd: SlashCommand): Unit = 
   {
     cmd.body.split(" +").toSeq match { 
-      case Seq("show", "tables") => 
-        for(table <- db.catalog.getAllTables()){ 
-          output.print(table.toString); 
+      case Seq() => 
+        output.print("Empty command")
+      case cmd => 
+        slashCommands.get(cmd.head) match {
+          case None => s"Unknown command: /${cmd.head} (try /help)"
+          case Some(implementation) => implementation(cmd.tail, output)
         }
-      case Seq("show", name) => 
-        db.catalog.tableSchema(Name(name)) match {
-          case None => 
-            output.print(s"'$name' is not a table")
-          case Some( schema ) => 
-            output.print("CREATE TABLE "+name+" (\n"+
-              schema.map { col => "  "+col._1+" "+col._2 }.mkString(",\n")
-            +"\n);")
-        }
-      case Seq("log", loggerName) => 
-        setLogLevel(loggerName)
-      case Seq("log", loggerName, level) =>
-        setLogLevel(loggerName, level)
     }
   }
 
@@ -393,8 +433,6 @@ object Mimir extends LazyLogging {
       case _ => throw new SQLException(s"Don't know how to handle logger ${logger.getClass().toString}")
     }
   }
-
-
 }
 
 class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
@@ -447,4 +485,25 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
     default = Some(dataDirectory() + "/mimir.db"))
   }
 
+}
+
+class SlashCommandDefinition(
+  val name: String,
+  val args: String,
+  val description: String,
+  val implementation: PartialFunction[Seq[String], Unit]
+){
+  def apply(args: Seq[String], output: OutputFormat): Unit = 
+    if(implementation.isDefinedAt(args)){ implementation(args) }
+    else { output.print(s"usage: $usage")}
+  def usage: String = s"/$name $args"
+}
+object MakeSlashCommand
+{
+  def apply(
+    name: String,
+    args: String,
+    description: String,
+    implementation: PartialFunction[Seq[String], Unit]
+  ) = { (name, new SlashCommandDefinition(name, args, description, implementation)) }
 }

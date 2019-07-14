@@ -41,7 +41,7 @@ class LineReaderParser(
   {
     while(!eof){ 
       try {
-        val lineRead = input.readLine(prompt).replace("\\n", " ") 
+        val lineRead = input.readLine(prompt)//.replace("\\n", " ") 
         logger.trace(s"Got: $lineRead")
         if( ! lineRead.trim().equals("") ){ 
           // ignore blank lines
@@ -74,6 +74,7 @@ class LineReaderParser(
    */
   private def tryParse(): Option[Parsed[MimirCommand]] =
   {
+    logger.trace(s"Trying to parse (${inputBuffer.size} lines)")
     inputBufferIterator.reset()
     fastparse.parse(
       inputBufferIterator,
@@ -82,7 +83,7 @@ class LineReaderParser(
     ) match { 
       case r@Parsed.Success(result, index) => Some(r)
       case f:Parsed.Failure if inputBufferIterator.hasNext => Some(f)
-      case f:Parsed.Failure => None
+      case f:Parsed.Failure => logger.trace(s"Need more input ($f)"); None
     }
   }
 

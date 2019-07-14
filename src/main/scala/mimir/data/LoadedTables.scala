@@ -14,6 +14,32 @@ import mimir.exec.spark.{MimirSpark,RAToSpark,RowIndexPlan}
 
 // https://spark.apache.org/docs/latest/sql-data-sources-load-save-functions.html#run-sql-on-files-directly
 
+/**
+ * Lazy data ingest for Mimir
+ * 
+ * Spark provides a Hive/Derby data storage framework that
+ * you can use to ingest and locally store data.  However, 
+ * using this feature has several major drawbacks:
+ *   - It pollutes the local working directory unless you're
+ *     connected to a HDFS cluster or have S3 set up.
+ *     https://github.com/UBOdin/mimir/issues/321
+ *   - It forces all data access to go through Spark, even
+ *     if it might be more efficient to do so locally
+ *     https://github.com/UBOdin/mimir/issues/322
+ *   - It makes processing multi-table files / URLs much
+ *     harder by forcing all access to go through the
+ *     Dataset API.  
+ *   - It makes provenance tracking harder, since we lose
+ *     track of exactly where tables came from, as well as
+ *     which tables are ingested/managed by Mimir.  We also
+ *     lose the original data / URL.
+ *    
+ * This class allows Mimir to provide lower-overhead 
+ * data source management than Derby. Schema information
+ * is stored in Mimir's metadata store, and LoadedTables
+ * dynamically creates DataFrames whenever the table is 
+ * queried.
+ */
 class LoadedTables(db: Database)
   extends SchemaProvider
   with BulkStorageProvider
@@ -22,7 +48,7 @@ class LoadedTables(db: Database)
   val cache = scala.collection.mutable.Map[String, DataFrame]()
   var store: MetadataMap = null
   var bulkStorageDirectory = new File(".")
-  var bulkStorageFormat = "parquet"
+  var bulkStorageFormat = LoadedTables.Format.PARQUET
 
   /** 
    * Prepare LoadedTables for use with a given Mimir database.
@@ -48,7 +74,7 @@ class LoadedTables(db: Database)
     url: String, 
     format: String, 
     sparkOptions: Map[String, String], 
-    mimirOptions: Map[String, String]
+    mimirOptions: JsObject
   ): DataFrame = 
   {
     var parser = MimirSpark.get.sparkSession.read.format(format)
@@ -69,7 +95,7 @@ class LoadedTables(db: Database)
              url = tableDefinition._2(0).asString,
              format = tableDefinition._2(1).asString,
              sparkOptions = Json.parse(tableDefinition._2(2).asString).as[Map[String, String]],
-             mimirOptions = Json.parse(tableDefinition._2(3).asString).as[Map[String, String]]
+             mimirOptions = Json.parse(tableDefinition._2(3).asString).as[JsObject]
            )
          }
          // and persist it in cache
@@ -122,11 +148,11 @@ class LoadedTables(db: Database)
    * @param mimirOptions   Optional: Any data loading parameters for Mimir itself (currently unused)
    */
   def linkTable(
-    url: String, 
+    source: String, 
     format: String, 
     tableName: ID, 
     sparkOptions: Map[String,String] = Map(), 
-    mimirOptions: Map[String,String] = Map()
+    mimirOptions: JsObject = new JsObject(Map())
   ) {
     if(tableExists(tableName)){
       throw new RAException(s"Can't LOAD ${tableName} because it already exists.")
@@ -134,16 +160,16 @@ class LoadedTables(db: Database)
 
     // Some data loaders expect non-intuitive inputs.  First, do a little pre-processing to
     // make the interface more friendly.
-    val finalURL = 
+    val url = 
       format match {
 
         // The Google Sheets loader expects to see only the last two path components of 
         // the sheet URL.  Rewrite full URLs if the user wants.
-        case LoadedTables.GOOGLE_SHEETS => 
-          url.split("/").reverse.take(2).reverse.mkString("/")
+        case LoadedTables.Format.GOOGLE_SHEETS => 
+          source.split("/").reverse.take(2).reverse.mkString("/")
         
         // For everything else use the URL unchanged
-        case _ => url
+        case _ => source
       }
 
     // Set required defaults
@@ -162,7 +188,7 @@ class LoadedTables(db: Database)
 
     // Try to create the dataframe to make sure everything (parameters, etc...) are ok
     val df = makeDataFrame(
-      url = finalURL,
+      url = url,
       format = format,
       sparkOptions = finalSparkOptions,
       mimirOptions = mimirOptions
@@ -176,16 +202,70 @@ class LoadedTables(db: Database)
         StringPrimitive(url),
         StringPrimitive(format),
         StringPrimitive(Json.stringify(Json.toJson(sparkOptions))),
-        StringPrimitive(Json.stringify(Json.toJson(mimirOptions)))
+        StringPrimitive(Json.stringify(mimirOptions))
       )
     )
   }
 
-  def drop(tableName: ID)
+  def drop(tableName: ID, ifExists: Boolean = false)
   {
-    cache.remove(tableName.id)
-    store.rm(tableName)
+    store.get(tableName) match {
+      case None if ifExists => {}
+      case None => throw new SQLException(s"Loaded table $tableName does not exist")
+      case Some((_, config)) => {
+        val cascadingDrops = parseMimirOptions(config)
+                                .getOrElse("cascadingDrops", { new JsArray(Seq()) })
+                                .as[Seq[Map[String, String]]]
+        for(objectToDrop <- cascadingDrops) {
+          objectToDrop("type") match {
+            case "adaptive" => db.adaptiveSchemas.drop(ID(objectToDrop("id")))
+            case "view" => db.views.drop(ID(objectToDrop("id")))
+            case "lens" => db.lenses.drop(ID(objectToDrop("id")))
+          }
+        }
+        cache.remove(tableName.id)
+        store.rm(tableName)
+      }
+    }
   }
+
+  private def parseMimirOptions(config: Seq[PrimitiveValue]): Map[String, JsValue] =
+    Json.parse(config(3).asString).as[Map[String, JsValue]]
+
+  private def updateMimirOptions(tableName: ID)(update: (Map[String, JsValue] => Map[String, JsValue])): Unit =
+  {
+    store.get(tableName) match {
+      case None => throw new SQLException(s"Loaded table $tableName does not exist")
+      case Some((_, config)) => {
+        store.update(tableName, Map(
+          ID("MIMIR_OPTIONS") -> 
+            StringPrimitive(
+              Json.stringify(
+                Json.toJson(
+                  update(parseMimirOptions(config)))))
+        ))
+      }
+    }
+  }
+
+  private def cascadeDrop(tableName: ID, viewName: ID, t: String): Unit =
+    updateMimirOptions(tableName){ 
+      oldOptions => 
+        oldOptions ++ Map("cascadingDrops" -> 
+          Json.toJson(
+            oldOptions.get("cascadingDrops")
+              .map { _.as[Seq[Map[String,String]]] }
+              .getOrElse { Seq() } ++
+              Seq( Map("type" -> t, "id" -> viewName.id) )
+          )
+        ):Map[String, JsValue]
+    }
+  def cascadeDropView(tableName: ID, viewName: ID): Unit = 
+    cascadeDrop(tableName, viewName, "view")
+  def cascadeDropLens(tableName: ID, viewName: ID): Unit = 
+    cascadeDrop(tableName, viewName, "lens")
+  def cascadeDropAdaptive(tableName: ID, adaptiveName: ID): Unit = 
+    cascadeDrop(tableName, adaptiveName , "adaptive")
 
   def tableOperator(tableName: ID): Operator = 
     tableOperator(LoadedTables.SCHEMA, tableName)
@@ -230,12 +310,20 @@ class LoadedTables(db: Database)
 }
 
 object LoadedTables {
-  val CSV                    = "csv"
-  val JSON                   = "json"
-  val GOOGLE_SHEETS          = "com.github.potix2.spark.google.spreadsheets"
-  val CSV_WITH_ERRORCHECKING = "org.apache.spark.sql.execution.datasources.ubodin.csv"
+  object Format {
+    val CSV                    = "csv"
+    val JSON                   = "json"
+    val XML                    = "com.databricks.spark.xml"
+    val EXCEL                  = "com.crealytics.spark.excel"
+    val JDBC                   = "jdbc"
+    val TEXT                   = "text"
+    val PARQUET                = "parquet"
+    val ORC                    = "orc"
+    val GOOGLE_SHEETS          = "com.github.potix2.spark.google.spreadsheets"
+    val CSV_WITH_ERRORCHECKING = "org.apache.spark.sql.execution.datasources.ubodin.csv"
+  }
 
-  val SCHEMA = ID("DATA")
+  val SCHEMA = ID("IMPORTED")
 
   private val defaultLoadCSVOptions = Map(
     "ignoreLeadingWhiteSpace"-> "true",
@@ -244,8 +332,8 @@ object LoadedTables {
     "header" -> "false"
   )
   val defaultLoadOptions = Map[String, Map[String,String]](
-    CSV                    -> defaultLoadCSVOptions,
-    CSV_WITH_ERRORCHECKING -> defaultLoadCSVOptions
+    Format.CSV                    -> defaultLoadCSVOptions,
+    Format.CSV_WITH_ERRORCHECKING -> defaultLoadCSVOptions
   )
 
 }

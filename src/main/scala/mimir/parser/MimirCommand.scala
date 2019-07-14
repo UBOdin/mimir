@@ -32,12 +32,12 @@ object MimirCommand
   )
 
   def slashCommand[_:P] = P(
-    "\\" ~
+    "/" ~/
     CharsWhile( 
       c => (c != '\n') && (c != '\r') 
-    ).!.map { SlashCommand(_) } ~
+    ).!.map { SlashCommand(_) } ~/
     CharsWhile( 
       c => (c == '\n') || (c == '\r') 
-    )
+    ).?
   )
 }

@@ -1,6 +1,8 @@
 package mimir.adaptive
 
+import java.sql.SQLException
 import scala.collection.mutable
+import sparsity.Name
 
 import mimir.Database
 import mimir.algebra._
@@ -56,7 +58,27 @@ class AdaptiveSchemaManager(db: Database)
 
   def drop(schema: ID, ifExists: Boolean = false)
   {
-    ???
+    get(schema) match {
+      case None if ifExists => {}
+      case None => throw new SQLException(s"Adaptive schema $schema does not exist")
+      case Some((mlens, config)) => {
+        adaptiveSchemas.rm(schema)
+        db.models.dropOwner(ID("MULTILENS:", schema))
+      }
+
+    }
+  }
+  def dropByName(schema: Name, ifExists: Boolean = false): Unit =
+  {
+    if(schema.quoted){ drop(ID(schema.name), ifExists) }
+    else {
+      for(comparison <- adaptiveSchemas.keys) {
+        if(comparison.id.equalsIgnoreCase(schema.name)){ 
+          drop(comparison, ifExists); return;
+        }
+      }
+      if(!ifExists){ throw new SQLException(s"No such adaptive schema $schema") }
+    }
   }
 
   def lensForRecord(record: (ID, Seq[PrimitiveValue])) =

@@ -39,12 +39,13 @@ class ViewManager(db:Database)
    * Instantiate a new view
    * @param  name           The name of the view to create
    * @param  query          The query to back the view with
+   * @param  force          Force creation even if a table already exists
    * @throws SQLException   If a view or table with the same name already exists
    */
-  def create(name: ID, query: Operator): Unit =
+  def create(name: ID, query: Operator, force: Boolean = false): Unit =
   {
     logger.debug(s"CREATE VIEW $name AS $query")
-    if(db.catalog.tableExists(name)){
+    if(!force && db.catalog.tableExists(name)){
       throw new SQLException(s"View '$name' already exists")
     }
     viewTable.put(name, Seq(

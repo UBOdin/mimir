@@ -62,5 +62,4 @@ class LensManager(db: Database) extends LazyLogging {
     db.views.drop(name, ifExists)
     db.models.dropOwner(ID("LENS:",name))
   }
-
 }

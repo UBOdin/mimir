@@ -287,12 +287,23 @@ case class Database(metadata: MetadataBackend)
 
       /********** DROP STATEMENTS **********/
 
+        // Lenses show up as views, and the lens manager does a 
+        // little extra cleanup that's harmless if applied to a
+        // view.  Do the same thing for both
       case SQLStatement(DropView(name, ifExists)) => 
-        views.drop(ID.upper(name), ifExists)
+        views.resolveTableByName(name) match {
+          case None if ifExists => {}
+          case None => throw new SQLException(s"No such view $name")
+          case Some(id) => lenses.drop(id)
+        }
       case DropLens(name, ifExists)               => 
-        lenses.drop(ID.upper(name), ifExists)
+        views.resolveTableByName(name) match {
+          case None if ifExists => {}
+          case None => throw new SQLException(s"No such view $name")
+          case Some(id) => lenses.drop(id)
+        }
       case DropAdaptiveSchema(name, ifExists)     => 
-        adaptiveSchemas.drop(ID.upper(name), ifExists)
+        adaptiveSchemas.dropByName(name, ifExists)
       case SQLStatement(drop:DropTable) => 
         loader.resolveTableByName(drop.name) match {
           case Some(dropTableID) => loader.drop(dropTableID)
@@ -357,7 +368,7 @@ case class Database(metadata: MetadataBackend)
     // targetSchema: Option[Seq[(ID, Type)]] = None,
     inferTypes: Option[Boolean] = None,
     detectHeaders: Option[Boolean] = None,
-    format: String = LoadedTables.CSV,
+    format: String = LoadedTables.Format.CSV,
     loadOptions: Map[String, String] = Map(),
     humanReadableName: Option[String] = None
   ){
@@ -368,41 +379,45 @@ case class Database(metadata: MetadataBackend)
     val datasourceErrors = loadOptions.getOrElse("datasourceErrors", "false").equals("true")
     val realFormat = 
       format match {
-        case LoadedTables.CSV if datasourceErrors => 
-          LoadedTables.CSV_WITH_ERRORCHECKING
+        case LoadedTables.Format.CSV if datasourceErrors => 
+          LoadedTables.Format.CSV_WITH_ERRORCHECKING
         case _ => format
       }
 
-    val targetRaw = realTargetTable.withSuffix("_RAW")
+    val targetRaw = realTargetTable//.withSuffix("_RAW")
     if(catalog.tableExists(targetRaw)){
       throw new SQLException(s"Target table $realTargetTable already exists")
     }
     loader.linkTable(
-      url = sourceFile,
+      source = sourceFile,
       format = realFormat,
       tableName = targetRaw,
       sparkOptions = loadOptions
     )
-    var oper = loader.tableOperator(targetRaw, targetRaw)
+    var oper = loader.tableOperator(targetRaw)
     //detect headers 
     if(datasourceErrors) {
       val dseSchemaName = realTargetTable.withSuffix("_DSE")
       adaptiveSchemas.create(dseSchemaName, ID("DATASOURCE_ERRORS"), oper, Seq(), humanReadableName.getOrElse(realTargetTable.id))
       oper = adaptiveSchemas.viewFor(dseSchemaName, ID("DATA")).get
+      loader.cascadeDropAdaptive(targetRaw, dseSchemaName)
     }
     if(detectHeaders.getOrElse(true)) {
       val dhSchemaName = realTargetTable.withSuffix("_DH")
       adaptiveSchemas.create(dhSchemaName, ID("DETECT_HEADER"), oper, Seq(), humanReadableName.getOrElse(realTargetTable.id))
       oper = adaptiveSchemas.viewFor(dhSchemaName, ID("DATA")).get
+      loader.cascadeDropAdaptive(targetRaw, dhSchemaName)
     }
     //type inference
     if(inferTypes.getOrElse(true)){
       val tiSchemaName = realTargetTable.withSuffix("_TI")
       adaptiveSchemas.create(tiSchemaName, ID("TYPE_INFERENCE"), oper, Seq(FloatPrimitive(.5)), humanReadableName.getOrElse(realTargetTable.id)) 
       oper = adaptiveSchemas.viewFor(tiSchemaName, ID("DATA")).get
+      loader.cascadeDropAdaptive(targetRaw, tiSchemaName)
     }
     //finally create a view for the data
-    views.create(realTargetTable, oper)
+    views.create(realTargetTable, oper, force = true)
+    loader.cascadeDropView(targetRaw, realTargetTable)
   }
 
   // /**

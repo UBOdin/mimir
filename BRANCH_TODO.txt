@@ -2,8 +2,7 @@
 - [x] BulkStorageProvider
 - [x] BulkStorageProvider support for LoadedTables
 - [x] Materialized Views
-- [ ] Hide supporting views created by LOAD TABLE
-- [ ] Make DROP TABLE drop supporting views as well
+- [x] Make DROP TABLE drop supporting views as well
 - [ ] Add staging option to LOAD TABLE command
 - [ ] Ensure test cases pass
 - [ ] Documentation
