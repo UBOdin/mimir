@@ -12,13 +12,12 @@ import mimir.algebra.TInt
 import java.io.File
 import mimir.algebra.Function
 import mimir.algebra.AggFunction
-import mimir.util.LoadJDBC
 import mimir.algebra.BoolPrimitive
 import mimir.test.TestTimer
-import mimir.backend.QueryBackend
 import mimir.util.BackupUtils
 import mimir.util.LoggerUtils
 import mimir.ctables.DataWarningReason
+import mimir.data.FileFormat
 
 object SparkMimirCSVDataSourceSpec 
   extends SQLTestSpecification("SparkMimirCSVDataSourceSpec")
@@ -30,18 +29,16 @@ object SparkMimirCSVDataSourceSpec
  
   "MimirCSVDataSource" should {
     "Be able to load and query from a CSV source" >> {
-      db.loadTable(
+      db.loader.loadTable(
         sourceFile = "test/r_test/r.csv", 
         targetTable = Some(ID("R")), 
-        force = true, 
-        targetSchema = None,
         inferTypes = Some(true),
         detectHeaders = Some(true),
-        format = ID("csv"),
-        loadOptions = Map(
-          "DELIMITER" -> ",", 
-          "datasourceErrors" -> "true"
-        )
+        format = FileFormat.CSV,
+        sparkOptions = Map(
+          "DELIMITER" -> ","
+        ),
+        datasourceErrors = true
       )
       val result = query("""
         SELECT * FROM R
@@ -59,15 +56,13 @@ object SparkMimirCSVDataSourceSpec
     }
     
     "Be able to load and query from a CSV source that contains errors and" >> {
-      db.loadTable(
+      db.loader.loadTable(
         sourceFile = "test/data/corrupt.csv", 
         targetTable = Some(ID("corrupt")), 
-        force = true, 
-        targetSchema = None,
         inferTypes = Some(true),
         detectHeaders = Some(true),
         format = ID("csv"),
-        loadOptions = Map(
+        sparkOptions = Map(
           "DELIMITER"        -> ",", 
           "datasourceErrors" -> "true"
         )

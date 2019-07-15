@@ -43,22 +43,22 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
     "Be trainable" >> {
       loadCSV(
         "CPUSPEED",  
-        Seq(
-          "PROCESSORID" -> "string",
-          "FAMILY" -> "string",
-          "TECHINMICRONS" -> "float",
-          "CPUSPEEDINGHZ" -> "float",
-          "BUSSPEEDINMHZ" -> "string",
-          "L2CACHEINKB" -> "int",
-          "L3CACHEINMB" -> "float",
-          "CORES" -> "int",
-          "EM64T" -> "string",
-          "HT" -> "string",
-          "VT" -> "string",
-          "XD" -> "string",
-          "SS" -> "string",
-          "NOTES" -> "string"
-        ),
+        // Seq(
+        //   "PROCESSORID" -> "string",
+        //   "FAMILY" -> "string",
+        //   "TECHINMICRONS" -> "float",
+        //   "CPUSPEEDINGHZ" -> "float",
+        //   "BUSSPEEDINMHZ" -> "string",
+        //   "L2CACHEINKB" -> "int",
+        //   "L3CACHEINMB" -> "float",
+        //   "CORES" -> "int",
+        //   "EM64T" -> "string",
+        //   "HT" -> "string",
+        //   "VT" -> "string",
+        //   "XD" -> "string",
+        //   "SS" -> "string",
+        //   "NOTES" -> "string"
+        // ),
         "test/data/CPUSpeed.csv"
       )
      
@@ -105,7 +105,10 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
 
   "When combined with a TI Lens, the SparkClassifier Model" should {
     "Be trainable" >> {
-      db.loadTable(targetTable = Some(ID("RATINGS1")), sourceFile = "test/data/ratings1.csv")
+      db.loader.loadTable(
+        targetTable = Some(ID("RATINGS1")), 
+        sourceFile = "test/data/ratings1.csv"
+      )
       val (model, idx, hints) = SparkClassifierModel.train(db,
         ID("RATINGS1REPAIRED"), 
         List(ID("RATING")), 

@@ -9,8 +9,8 @@ import mimir.algebra._
 import mimir.sql._
 import mimir.test._
 import java.io.File
-import mimir.util.LoadCSV
 import sparsity.Name
+import mimir.data.FileFormat
 
 object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
 
@@ -31,15 +31,11 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
 
   def beforeAll =
   {
-    LoadCSV.handleLoadTableRaw(
-      db, 
-      ID("R"), 
-      "test/data/serial_r.csv",
-      Some(Seq(
-        (ID("A"),TInt()),
-        (ID("B"),TInt())
-      )), 
-      Map("DELIMITER" -> ",", "mode" -> "DROPMALFORMED", "header" -> "false") 
+    db.loader.linkTable(
+      source = "test/data/serial_r.csv",
+      format = FileFormat.CSV,
+      tableName = ID("R"), 
+      sparkOptions = Map("DELIMITER" -> ",", "mode" -> "DROPMALFORMED", "header" -> "false") 
     )
   }
   sequential

@@ -3,16 +3,16 @@ package mimir.test
 import java.io._
 import mimir.parser._
 import sparsity.statement.Statement
+import fastparse.Parsed
 
 trait SQLParsers {
 
   def stmts(f: String): Seq[MimirStatement] = 
     stmts(new File(f))
   def stmts(f: File): Seq[MimirStatement] = {
-    val p = new EndlessParser()
-    p.load(f);
-    p.iterator.map { 
-      case SQLCommand(cmd) => cmd
+    val p = MimirCommand(new FileReader(f))
+    p.map { 
+      case Parsed.Success(SQLCommand(cmd), _) => cmd
       case cmd => throw new Exception(s"invalid statement: $cmd")
     }.toSeq
   }

@@ -14,15 +14,9 @@ object CTExplainerSpec
   def beforeAll = 
   {
     //db.loadTable("R", Seq(("A","string"),("B","int"),("C","int")),new File("test/r_test/r.csv"))
-    db.loadTable(
+    db.loader.loadTable(
       sourceFile = "test/r_test/r.csv", 
       targetTable = Some(ID("R")), 
-      force = true, 
-      targetSchema = Some(Seq(
-        ID("A") -> TString(),
-        ID("B") -> TInt(),
-        ID("C") -> TInt()
-      )),
       format = ID("csv"), 
       inferTypes = Some(true),
       detectHeaders = Some(false)

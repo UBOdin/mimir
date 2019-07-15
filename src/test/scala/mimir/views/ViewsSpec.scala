@@ -9,6 +9,7 @@ import mimir.ctables._
 import mimir.provenance._
 import java.io.File
 import org.apache.spark.sql.Encoders
+import mimir.data.FileFormat
 
 object ViewsSpec 
   extends SQLTestSpecification("ViewsTest")
@@ -17,15 +18,16 @@ object ViewsSpec
 
   def beforeAll = {
     //loadCSV("R",Seq(("A", "int"), ("B", "int"), ("C", "int")), new File("test/data/views_r.csv"))
-    LoadCSV.handleLoadTableRaw(db, 
-      ID("R"), 
+    db.loader.linkTable( 
       "test/data/views_r.csv",  
-      Some(Seq(
-        ID("A") -> TInt(), 
-        ID("B") -> TInt(), 
-        ID("C") -> TInt()
-      )), 
-      Map(
+      FileFormat.CSV,
+      ID("R"), 
+      // Some(Seq(
+      //   ID("A") -> TInt(), 
+      //   ID("B") -> TInt(), 
+      //   ID("C") -> TInt()
+      // )), 
+      sparkOptions = Map(
         "DELIMITER" -> ",",
         "ignoreLeadingWhiteSpace"->"true",
         "ignoreTrailingWhiteSpace"->"true", 
@@ -40,14 +42,11 @@ object ViewsSpec
   "The View Manager" should {
     "Not interfere with CSV Imports" >> {
       //loadCSV("S",Seq(("C", "int"), ("D", "int")), new File("test/data/views_s.csv"))
-      LoadCSV.handleLoadTableRaw(db, 
-        ID("S"), 
+      db.loader.linkTable( 
         "test/data/views_s.csv",  
-        Some(Seq(
-          ID("C") -> TInt(),
-          ID("D") -> TInt()
-        )), 
-        Map(
+        FileFormat.CSV,
+        ID("S"), 
+        sparkOptions = Map(
           "DELIMITER" -> ",",
           "ignoreLeadingWhiteSpace"->"true",
           "ignoreTrailingWhiteSpace"->"true",
@@ -101,7 +100,7 @@ object ViewsSpec
       //could also do this
       //val sparkOp = db.backend.execute(db.views.get("MATTEST").get.materializedOperator)
       //instead of
-      val sparkOp = db.backend.execute(Table(ID("MATTEST"), ID("MATTEST"), Seq(
+      val sparkOp = db.compiler.compileToSparkWithRewrites(Table(ID("MATTEST"), ID("MATTEST"), Seq(
         ID("A") -> TInt(), 
         ID("B") -> TInt(), 
         ViewAnnotation.taintBitVectorColumn -> TInt(), 

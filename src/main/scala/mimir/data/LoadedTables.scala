@@ -47,7 +47,7 @@ class LoadedTables(val db: Database)
   val cache = scala.collection.mutable.Map[String, DataFrame]()
   var store: MetadataMap = null
   var bulkStorageDirectory = new File(".")
-  var bulkStorageFormat = LoadedTables.Format.PARQUET
+  var bulkStorageFormat = FileFormat.PARQUET
 
   /** 
    * Prepare LoadedTables for use with a given Mimir database.
@@ -71,11 +71,11 @@ class LoadedTables(val db: Database)
 
   def makeDataFrame(
     url: String, 
-    format: String, 
+    format: ID, 
     sparkOptions: Map[String, String]
   ): DataFrame = 
   {
-    var parser = MimirSpark.get.sparkSession.read.format(format)
+    var parser = MimirSpark.get.sparkSession.read.format(format.id)
     for((option, value) <- sparkOptions){
       parser = parser.option(option, value)
     }
@@ -91,7 +91,7 @@ class LoadedTables(val db: Database)
          .map { tableDefinition => 
            makeDataFrame(
              url = tableDefinition._2(0).asString,
-             format = tableDefinition._2(1).asString,
+             format = ID(tableDefinition._2(1).asString),
              sparkOptions = Json.parse(tableDefinition._2(2).asString).as[Map[String, String]]
            )
          }
@@ -126,9 +126,9 @@ class LoadedTables(val db: Database)
   def stage(
     url: String, 
     sparkOptions: Map[String,String], 
-    format: String, 
+    format: ID, 
     tableName: ID
-  ): (String, Map[String,String], String) =
+  ): (String, Map[String,String], ID) =
   {
     if(LoadedTables.safeForRawStaging(format)){
       ( 
@@ -162,7 +162,7 @@ class LoadedTables(val db: Database)
    */
   def linkTable(
     source: String, 
-    format: String, 
+    format: ID, 
     tableName: ID, 
     sparkOptions: Map[String,String] = Map(), 
     stageSourceURL: Boolean = false
@@ -186,7 +186,7 @@ class LoadedTables(val db: Database)
 
       // The Google Sheets loader expects to see only the last two path components of 
       // the sheet URL.  Rewrite full URLs if the user wants.
-      case LoadedTables.Format.GOOGLE_SHEETS => {
+      case FileFormat.GOOGLE_SHEETS => {
         url = source.split("/").reverse.take(2).reverse.mkString("/")
       }
       
@@ -198,7 +198,7 @@ class LoadedTables(val db: Database)
       // Preserve the original URL and configurations in the mimirOptions
       mimirOptions("preStagedUrl") = JsString(url)
       mimirOptions("preStagedSparkOptions") = Json.toJson(finalSparkOptions)
-      mimirOptions("preStagedFormat") = JsString(storageFormat)
+      mimirOptions("preStagedFormat") = JsString(storageFormat.id)
       val stagedConfig  = stage(url, finalSparkOptions, storageFormat, tableName)
       url               = stagedConfig._1
       finalSparkOptions = stagedConfig._2
@@ -227,7 +227,7 @@ class LoadedTables(val db: Database)
     store.put(
       tableName, Seq(
         StringPrimitive(url),
-        StringPrimitive(format),
+        StringPrimitive(format.id),
         StringPrimitive(Json.stringify(Json.toJson(sparkOptions))),
         StringPrimitive(Json.stringify(new JsObject(mimirOptions)))
       )
@@ -369,7 +369,7 @@ class LoadedTables(val db: Database)
     // targetSchema: Option[Seq[(ID, Type)]] = None,
     inferTypes: Option[Boolean] = None,
     detectHeaders: Option[Boolean] = None,
-    format: String = LoadedTables.Format.CSV,
+    format: ID = FileFormat.CSV,
     sparkOptions: Map[String, String] = Map(),
     humanReadableName: Option[String] = None,
     datasourceErrors: Boolean = true,
@@ -381,8 +381,8 @@ class LoadedTables(val db: Database)
     // If the backend is configured to support it, specialize data loading to support data warnings
     val realFormat = 
       format match {
-        case LoadedTables.Format.CSV if datasourceErrors => 
-          LoadedTables.Format.CSV_WITH_ERRORCHECKING
+        case FileFormat.CSV if datasourceErrors => 
+          FileFormat.CSV_WITH_ERRORCHECKING
         case _ => format
       }
 
@@ -438,13 +438,13 @@ class LoadedTables(val db: Database)
         val stagedConfig  = stage(
           url.as[String], 
           sparkOptions.as[Map[String,String]], 
-          format.as[String],
+          ID(format.as[String]),
           table
         )
         store.put((table, 
           Seq(
             StringPrimitive(stagedConfig._1), // url
-            StringPrimitive(stagedConfig._3),
+            StringPrimitive(stagedConfig._3.id),
             StringPrimitive(Json.stringify(Json.toJson(stagedConfig._2))), // sparkOptions
             StringPrimitive(Json.stringify(new JsObject(mimirOptions)))
           )
@@ -462,29 +462,15 @@ class LoadedTables(val db: Database)
 }
 
 object LoadedTables {
-  object Format {
-    val CSV                    = "csv"
-    val JSON                   = "json"
-    val XML                    = "com.databricks.spark.xml"
-    val EXCEL                  = "com.crealytics.spark.excel"
-    val JDBC                   = "jdbc"
-    val TEXT                   = "text"
-    val PARQUET                = "parquet"
-    val ORC                    = "orc"
-    val GOOGLE_SHEETS          = "com.github.potix2.spark.google.spreadsheets"
-    val CSV_WITH_ERRORCHECKING = "org.apache.spark.sql.execution.datasources.ubodin.csv"
-  }
-
-
   val SCHEMA = ID("IMPORTED")
   
   val safeForRawStaging = Set(
-    Format.CSV ,
-    Format.CSV_WITH_ERRORCHECKING,
-    Format.JSON,
-    Format.EXCEL,
-    Format.XML,
-    Format.TEXT
+    FileFormat.CSV ,
+    FileFormat.CSV_WITH_ERRORCHECKING,
+    FileFormat.JSON,
+    FileFormat.EXCEL,
+    FileFormat.XML,
+    FileFormat.TEXT
   )
 
   private val defaultLoadCSVOptions = Map(
@@ -493,9 +479,9 @@ object LoadedTables {
     "mode" -> "DROPMALFORMED", 
     "header" -> "false"
   )
-  val defaultLoadOptions = Map[String, Map[String,String]](
-    Format.CSV                    -> defaultLoadCSVOptions,
-    Format.CSV_WITH_ERRORCHECKING -> defaultLoadCSVOptions
+  val defaultLoadOptions = Map[ID, Map[String,String]](
+    FileFormat.CSV                    -> defaultLoadCSVOptions,
+    FileFormat.CSV_WITH_ERRORCHECKING -> defaultLoadCSVOptions
   )
 
 }

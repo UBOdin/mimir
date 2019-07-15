@@ -30,8 +30,8 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
     "The SeriesMissingValue Model" should {
 
 		"Be trainable" >> {
-			db.loadTable("test/data/DetectSeriesTest3.csv")
-			db.loadTable("test/data/ORG_DetectSeriesTest3.csv")
+			loadCSV("test/data/DetectSeriesTest3.csv")
+			loadCSV("test/data/ORG_DetectSeriesTest3.csv")
 			models = models ++ SeriesMissingValueModel.train(db, ID("SERIESREPAIR"), List(
 			ID("AGE")
 		  ), db.table("DETECTSERIESTEST3"), "DetectSeriesTest3")

@@ -18,6 +18,7 @@ import mimir.data.staging.{ RawFileProvider, LocalFSRawFileProvider }
 import mimir.exec.Compiler
 import mimir.exec.mode.{CompileMode, BestGuess}
 import mimir.exec.result.{ResultIterator,SampleResultIterator,Row}
+import mimir.exec.spark.MimirSpark
 import mimir.lenses.{LensManager}
 import mimir.metadata.MetadataBackend
 import mimir.models.Model
@@ -108,7 +109,7 @@ case class Database(metadata: MetadataBackend)
   val tempViews       = new mimir.views.TemporaryViewManager(this)
   val adaptiveSchemas = new mimir.adaptive.AdaptiveSchemaManager(this)
   val catalog         = new mimir.data.SystemCatalog(this)
-  val staging         = selectRawFileProvider()
+  val staging: mimir.data.staging.RawFileProvider = selectRawFileProvider()
 
   //// Parsing & Translation
   val sqlToRA         = new mimir.sql.SqlToRA(this)
@@ -278,9 +279,8 @@ case class Database(metadata: MetadataBackend)
           load.file, 
           targetTable = load.table.map { ID.upper(_) },
           // force = (load.table != None),
-          format = load.format
-                       .getOrElse { sparsity.Name("csv") }
-                       .lower,
+          format = ID.lower(load.format
+                                .getOrElse { sparsity.Name("csv") }),
           sparkOptions = load.args
                             .toMap
                             .mapValues { sqlToRA(_) }
@@ -341,6 +341,7 @@ case class Database(metadata: MetadataBackend)
    * Prepare a database for use with Mimir.
    */
   def open(): Unit = {
+    MimirSpark.linkDBToSpark(this)
     metadata.open()
     catalog.init()
     loader.init()
@@ -356,4 +357,39 @@ case class Database(metadata: MetadataBackend)
 
   def selectRawFileProvider(): RawFileProvider =
     new LocalFSRawFileProvider(new java.io.File("."))
+
+
+  def table(caseInsensitiveName: String): Operator = 
+    table(Name(caseInsensitiveName))
+  def table(name: Name): Operator = 
+    catalog.tableOperator(name)
+  def table(id: ID): Operator = 
+    catalog.tableOperator(id)
+  def table(caseInsensitiveProvider: String, caseInsensitiveName: String): Operator = 
+    table(Name(caseInsensitiveProvider), Name(caseInsensitiveName))
+  def table(provider: Name, name: Name): Operator = 
+    catalog.tableOperator(provider, name)
+  def table(provider: ID, id: ID): Operator = 
+    catalog.tableOperator(provider, id)
+
+  def tableExists(caseInsensitiveName: String): Boolean = 
+    tableExists(Name(caseInsensitiveName))
+  def tableExists(name: Name): Boolean = 
+    catalog.tableExists(name)
+  def tableExists(id: ID): Boolean = 
+    catalog.tableExists(id)
+
+  def tableSchema(caseInsensitiveName: String): Option[Seq[(ID, Type)]] = 
+    tableSchema(Name(caseInsensitiveName))
+  def tableSchema(name: Name): Option[Seq[(ID, Type)]] = 
+    catalog.tableSchema(name)
+  def tableSchema(id: ID): Option[Seq[(ID, Type)]] = 
+    catalog.tableSchema(id)
+  def tableSchema(caseInsensitiveProvider: String, caseInsensitiveName: String): Option[Seq[(ID, Type)]] = 
+    tableSchema(Name(caseInsensitiveProvider), Name(caseInsensitiveName))
+  def tableSchema(provider: Name, name: Name): Option[Seq[(ID, Type)]] = 
+    catalog.tableSchema(provider, name)
+  def tableSchema(provider: ID, id: ID): Option[Seq[(ID, Type)]] = 
+    catalog.tableSchema(provider, id)
+
 }

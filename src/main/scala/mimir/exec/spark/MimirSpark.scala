@@ -52,7 +52,7 @@ object MimirSpark
   private lazy val s3AEndpoint  = Option(System.getenv("S3A_ENDPOINT"))
   private lazy val envHasS3Keys = !s3AccessKey.isEmpty && !s3SecretKey.isEmpty
   def remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
-  private var sheetCred: String = null
+  var sheetCred: String = null
 
   def get: SQLContext = {
     if(sparkSql == null){ 
@@ -195,6 +195,7 @@ object MimirSpark
 
   def linkDBToSpark(db: Database)
   {
+    createDatabase("mimir")
     val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^","|","OR")
     registerSparkFunctions(
       db.functions.functionPrototypes.map { _._1 }.toSeq
@@ -213,7 +214,7 @@ object MimirSpark
         get.sparkSession
            .sessionState
            .catalog
-           .listFunctions("*")
+           .listFunctions("mimir")
     sparkFunctions.filterNot(fid => excludedFunctions.contains(ID(fid._1.funcName.toLowerCase()))).foreach{ case (fidentifier, fname) => {
           val fClassName = get.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
           if(!fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
@@ -259,7 +260,7 @@ object MimirSpark
         get.sparkSession
            .sessionState
            .catalog
-           .listFunctions("*")
+           .listFunctions("mimir")
     sparkFunctions.filterNot(fid => excludedFunctions.contains(ID(fid._1.funcName.toLowerCase()))).flatMap{ case (fidentifier, fname) => {
           val fClassName = get.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
           if(fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){

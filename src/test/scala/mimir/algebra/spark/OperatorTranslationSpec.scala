@@ -12,7 +12,6 @@ import java.io.File
 import mimir.algebra.Function
 import mimir.algebra.AggFunction
 import mimir.algebra.ID
-import mimir.util.LoadJDBC
 import mimir.algebra.BoolPrimitive
 import mimir.test.TestTimer
 
@@ -24,7 +23,7 @@ object OperatorTranslationSpec
 
   def beforeAll = 
   {
-    db.loadTable("test/r_test/r.csv")
+    db.loader.loadTable("test/r_test/r.csv")
   }
   
   "Spark" should {
@@ -71,7 +70,7 @@ object OperatorTranslationSpec
     }
     
     "Be able to do Aggregates" >> {
-      loadCSV("U",Seq(("A","int"),("B","int"),("C","int")), "test/r_test/r.csv")
+      loadCSV("U", "test/r_test/r.csv")
       val aggQuery = 
         db.table("U")
           .aggregate(AggFunction(
@@ -87,7 +86,7 @@ object OperatorTranslationSpec
     }
     
     "Be Able to do RepairKey" >> {
-      loadCSV("S",Seq(("A","int"),("B","int"),("C","int")), "test/r_test/r.csv")
+      loadCSV("S", "test/r_test/r.csv")
       update("""
         CREATE LENS S_UNIQUE_A 
           AS SELECT * FROM S

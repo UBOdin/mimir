@@ -21,7 +21,7 @@ object FeedbackSpec
     LoggerUtils.trace(
       // "mimir.adaptive.AdaptiveSchemaManager"
     ) {
-      loadCSV("R", Seq(("A","string"),("B","int"),("C","int")), "test/r_test/r.csv", false, false)
+      loadCSV("R", "test/r_test/r.csv", false, false)
       update("CREATE ADAPTIVE SCHEMA MATCH AS SELECT * FROM R WITH SCHEMA_MATCHING('B int', 'CX int')")
       db.adaptiveSchemas.create(
         ID("R_TI"), 

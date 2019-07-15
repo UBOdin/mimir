@@ -1,23 +1,25 @@
 package mimir.algebra.spark
 
-import mimir.algebra._
+import java.io.File
 import org.specs2.specification.BeforeAll
-import mimir.test.SQLTestSpecification
+import com.github.potix2.spark.google.spreadsheets.SparkSpreadsheetService
+
+import mimir.algebra._
 import mimir.algebra.NullPrimitive
 import mimir.algebra.RowIdVar
 import mimir.algebra.RowIdPrimitive
 import mimir.algebra.Var
 import mimir.algebra.StringPrimitive
 import mimir.algebra.TInt
-import java.io.File
 import mimir.algebra.Function
 import mimir.algebra.AggFunction
-import mimir.util.LoadJDBC
 import mimir.algebra.BoolPrimitive
+import mimir.data.FileFormat
+import mimir.exec.spark.MimirSpark
+import mimir.exec.spark.MimirSparkRuntimeUtils
+import mimir.test.SQLTestSpecification
 import mimir.test.TestTimer
-import mimir.backend.QueryBackend
 import mimir.util.BackupUtils
-import com.github.potix2.spark.google.spreadsheets.SparkSpreadsheetService
 
 object SparkDataSourcesSpec 
   extends SQLTestSpecification("SparkDataSourcesSpec")
@@ -27,7 +29,7 @@ object SparkDataSourcesSpec
 
   def beforeAll = 
   {
-    db.loadTable("test/r_test/r.csv")
+    db.loader.loadTable("test/r_test/r.csv")
   }
   
  
@@ -53,15 +55,12 @@ object SparkDataSourcesSpec
     
     "For JSON data source" should {
       sequential
-      db.loadTable(
+      db.loader.loadTable(
         sourceFile = "test/data/jsonsample.txt", 
         targetTable = Some(ID("J")), 
-        force = true, 
-        targetSchema = None, 
         inferTypes = Some(true), 
         detectHeaders = Some(false), 
-        format = ID("json"),
-        loadOptions = Map()
+        format = FileFormat.JSON
       )   
       
       "Be able to query from a json source" >> {
@@ -78,8 +77,8 @@ object SparkDataSourcesSpec
       }
       "Be able to output to json" >> {
         val outputFilename = "jsonsampleout"   
-        val result = db.backend.execute(db.table("J"))
-        db.backend.writeDataSink(result, "json", Map(), Some(outputFilename))
+        val result = db.compiler.compileToSparkWithRewrites(db.table("J"))
+        MimirSparkRuntimeUtils.writeDataSink(result, "json", Map(), Some(outputFilename))
         val outfile = new File(outputFilename + "/_SUCCESS")
         val outputSuccess = outfile.exists() 
         BackupUtils.deleteFile(new File(outputFilename))
@@ -90,17 +89,15 @@ object SparkDataSourcesSpec
     
     "For Google Sheet data source" should { 
       sequential
-      db.loadTable(
+      db.loader.loadTable(
         sourceFile = "1-9fKx9f1OV-J2P2LtOM33jKfc5tQt4DJExSU3xaXDwU/Sheet1", 
         targetTable = Some(ID("G")), 
-        force = true, 
-        targetSchema = None, 
         inferTypes = Some(true), 
         detectHeaders = Some(false),
-        format = ID("com.github.potix2.spark.google.spreadsheets"),
-        loadOptions = Map(
+        format = FileFormat.GOOGLE_SHEETS,
+        sparkOptions = Map(
           "serviceAccountId" -> "vizier@api-project-378720062738.iam.gserviceaccount.com",
-          "credentialPath" -> db.backend.asInstanceOf[mimir.backend.SparkBackend].sheetCred
+          "credentialPath" -> MimirSpark.sheetCred
         )
       ) 
      
@@ -140,14 +137,18 @@ object SparkDataSourcesSpec
   			""")
         
         val gsheet = SparkSpreadsheetService("vizier@api-project-378720062738.iam.gserviceaccount.com", 
-                    new File(db.backend.asInstanceOf[mimir.backend.SparkBackend].sheetCred))
+                    new File(MimirSpark.sheetCred))
                       .findSpreadsheet("1-9fKx9f1OV-J2P2LtOM33jKfc5tQt4DJExSU3xaXDwU")
         gsheet.deleteWorksheet("Sheet2")
         val outputFilename = "1-9fKx9f1OV-J2P2LtOM33jKfc5tQt4DJExSU3xaXDwU/Sheet2"   
-        val result = db.backend.execute(db.compileBestGuess(db.table("G_MV")))
-        db.backend.writeDataSink(result, "com.github.potix2.spark.google.spreadsheets", 
+        val result = db.compiler.compileToSparkWithRewrites(db.table("G_MV"))
+        MimirSparkRuntimeUtils.writeDataSink(
+            result, 
+            "com.github.potix2.spark.google.spreadsheets", 
             Map("serviceAccountId" -> "vizier@api-project-378720062738.iam.gserviceaccount.com",
-                "credentialPath" -> db.backend.asInstanceOf[mimir.backend.SparkBackend].sheetCred), Some(outputFilename))
+                "credentialPath" -> MimirSpark.sheetCred), 
+            Some(outputFilename)
+          )
         
         val outputSuccess = true
         outputSuccess must be equalTo true 
@@ -157,15 +158,13 @@ object SparkDataSourcesSpec
     
     "For XML data source" should { 
       sequential
-      db.loadTable(
+      db.loader.loadTable(
         sourceFile = "test/data/xmlsample.xml", 
         targetTable = Some(ID("X")), 
-        force = true, 
-        targetSchema = None, 
         inferTypes = Some(false), 
         detectHeaders = Some(false),
-        format = ID("xml"),
-        loadOptions = Map("rowTag" -> "book")
+        format = FileFormat.XML,
+        sparkOptions = Map("rowTag" -> "book")
       ) 
       
       "Be able to query from a xml source" >> {
@@ -181,8 +180,8 @@ object SparkDataSourcesSpec
       
       "Be able to output to xml" >> {
         val outputFilename = "xmlsampleout"   
-        val result = db.backend.execute(db.table("X"))
-        db.backend.writeDataSink(result, "xml", Map(), Some(outputFilename))
+        val result = db.compiler.compileToSparkWithRewrites(db.table("X"))
+        MimirSparkRuntimeUtils.writeDataSink(result, "xml", Map(), Some(outputFilename))
         val outfile = new File(outputFilename + "/_SUCCESS")
         val outputSuccess = outfile.exists() 
         BackupUtils.deleteFile(new File(outputFilename))
@@ -193,15 +192,13 @@ object SparkDataSourcesSpec
     
     "For Excel data source" should { 
       sequential
-      db.loadTable(
+      db.loader.loadTable(
         sourceFile = "test/data/excel.xlsx",
         targetTable = Some(ID("E")), 
-        force = true, 
-        targetSchema = None, 
         inferTypes = Some(true), 
         detectHeaders = Some(true), 
         format = ID("com.crealytics.spark.excel"),
-        loadOptions = Map("sheetName" -> "SalesOrders", // Required
+        sparkOptions = Map("sheetName" -> "SalesOrders", // Required
                           "dataAddress" -> "'SalesOrders'!A1",
                           "useHeader" -> "false", // Required
                           "treatEmptyValuesAsNulls" -> "true", // Optional, default: true
@@ -239,8 +236,8 @@ object SparkDataSourcesSpec
       
       "Be able to output to excel" >> {
         val outputFilename = "xmlsampleout.xlsx"   
-        val result = db.backend.execute(db.table("E"))
-        db.backend.writeDataSink(result, "com.crealytics.spark.excel", 
+        val result = db.compiler.compileToSparkWithRewrites(db.table("E"))
+        MimirSparkRuntimeUtils.writeDataSink(result, "com.crealytics.spark.excel", 
             Map("dataAddress" -> "'SalesOrders'!A1", "useHeader" -> "true"), Some(outputFilename))
         val outfile = new File(outputFilename)
         val outputSuccess = outfile.exists() 
@@ -295,9 +292,10 @@ object SparkDataSourcesSpec
     "For data sources in S3" should {  
       sequential
       "Be able to stage a csv file to s3 and query from it" >> {
-        db.loadTable(
+        db.loader.loadTable(
           sourceFile = "test/r_test/r.csv",
-          targetTable = Some(ID("STAGETOS3CSV"))
+          targetTable = Some(ID("STAGETOS3CSV")),
+          stageSourceURL = true
         )
         
         val result = query("""

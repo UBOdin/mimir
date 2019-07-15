@@ -22,7 +22,7 @@ import mimir.util._
 import mimir.test._
 import mimir.ctables._
 import mimir.ml.spark.SparkML
-import mimir.algebra.spark.OperatorTranslation
+import mimir.data.FileFormat
 
 class SqlParserSpec 
 	extends Specification 
@@ -60,8 +60,7 @@ class SqlParserSpec
 			val j = new JDBCMetadataBackend("sqlite",
 									if(tempDB == null){ "testdb" } else { tempDB.toString }
 							)
-			val sback = new SparkBackend(if(tempDB == null){ "testdb" } else { tempDB.toString.split("[\\\\/]").last.replaceAll("\\..*", "") })
-			val d = new Database(sback, j)
+			val d = new Database(j)
 	    try {
 	    	d.open()
 			} catch {
@@ -69,13 +68,12 @@ class SqlParserSpec
 
 			}
 			testData.foreach ( _ match { case ( tableName, tableData, tableCols ) => 
-				d.backend.dropTable(ID(tableName))
-			  LoadCSV.handleLoadTableRaw(d, 
-			  	targetTable = ID(tableName), 
-			  	sourceFile = tableData,
-			  	targetSchema = Some(tableCols.map(el => (ID(el._1), Type.fromString(el._2)))),
-			  	options = Map()
-			  )
+				d.loader.drop(ID(tableName))
+				d.loader.linkTable(
+					source = tableData,
+					format = FileFormat.CSV,
+					tableName = ID(tableName)
+				)
 			})
 			d
 		} catch {
@@ -345,17 +343,11 @@ class SqlParserSpec
 		}
 
 		"Get the types right in aggregates" >> {
-			db.backend.dropTable(ID("PRODUCT_INVENTORY"))
-			LoadCSV.handleLoadTableRaw(db, 
-				ID("PRODUCT_INVENTORY"),
+			db.loader.drop(ID("PRODUCT_INVENTORY"))
+			db.loader.linkTable( 
 				"test/data/Product_Inventory.csv",
-				Some(Seq(
-					ID("ID") -> TString(),
-					ID("COMPANY") -> TString(),
-					ID("QUANTITY") -> TInt(),
-					ID("PRICE") -> TFloat()
-				)), 
-				Map()
+				FileFormat.CSV,
+				ID("PRODUCT_INVENTORY")
 			)
 			
 			val q = db.compiler.optimize(db.sqlToRA(selectStmt("""
@@ -440,7 +432,7 @@ class SqlParserSpec
 		 	db.update(stmt(
 		 		"CREATE LENS SaneR AS SELECT * FROM R WITH MISSING_VALUE('B');"
 		 	).asInstanceOf[CreateLens]);
-		 	db.getAllTables() must contain(ID("SANER"))
+		 	db.tableExists("SANER") must beTrue
 		 	db.compiler.optimize(
 		 		convert("SELECT * FROM SaneR")
 		 	) must be equalTo 

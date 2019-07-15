@@ -6,15 +6,21 @@ import org.specs2.mutable._
 import mimir.algebra._
 import mimir.util._
 import mimir.test._
-import mimir.backend.SparkBackend
-import mimir.backend.BackendWithSparkContext
+import mimir.exec.spark.MimirSpark
 
 object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
 {
 
   def train(elems: List[String]): TypeInferenceModel = 
   {
-    val model = new TypeInferenceModel(ID("TEST_MODEL"), "TEST", Array(ID("TEST_COLUMN")), 0.5, db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(),None)
+    val model = new TypeInferenceModel(
+          ID("TEST_MODEL"), 
+          "TEST", 
+          Array(ID("TEST_COLUMN")), 
+          0.5, 
+          MimirSpark.get,
+          None
+        )
     elems.foreach( model.learn(0, _) )
     return model
   }
@@ -49,10 +55,9 @@ object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
     }
 
     "Recognize CPU Cores" >> {
-      db.loadTable(
+      db.loader.loadTable(
         targetTable = Some(ID("CPUSPEED")), 
         sourceFile = "test/data/CPUSpeed.csv", 
-        force = true, 
         inferTypes = Some(false),
         format = ID("csv")
         //loadCSV("CPUSPEED", new File("test/data/CPUSpeed.csv"))
@@ -60,7 +65,14 @@ object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
       LoggerUtils.debug(
         "mimir.models.TypeInferenceModel"
       ){
-        val model = new TypeInferenceModel(ID("CPUSPEED:CORES"), "CPUSPEED_CORES", Array(ID("CORES")), 0.5, db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext(), Some(db.backend.execute(table("CPUSPEED"))))
+        val model = new TypeInferenceModel(
+            ID("CPUSPEED:CORES"),
+            "CPUSPEED_CORES", 
+            Array(ID("CORES")), 
+            0.5, 
+            MimirSpark.get, 
+            Some(db.compiler.compileToSparkWithRewrites(db.table("CPUSPEED")))
+          )
         //model.train(db.backend.execute(table("CPUSPEED")))
         guess(model) must be equalTo(TInt())
       }

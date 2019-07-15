@@ -8,6 +8,7 @@ import org.specs2.specification._
 import mimir.util._
 import mimir.algebra._
 import mimir.test._
+import mimir.data.FileFormat
 
 object EvalSpec 
   extends SQLTestSpecification("EvalSpec")
@@ -17,16 +18,10 @@ object EvalSpec
   val inventoryDataFile = "test/data/Product_Inventory.csv"
 
   def beforeAll = {
-    LoadCSV.handleLoadTableRaw(
-      db, 
-      ID("PRODUCT_INVENTORY"),
+    db.loader.linkTable(
       inventoryDataFile, 
-			Some(Seq(
-        ID("ID") -> TString(),
-        ID("COMPANY") -> TString(),
-        ID("QUANTITY") -> TInt(),
-        ID("PRICE") -> TFloat()
-      )), 
+      FileFormat.CSV,
+      ID("PRODUCT_INVENTORY"),
       Map(
         "ignoreLeadingWhiteSpace"->"true",
         "ignoreTrailingWhiteSpace"->"true",

@@ -32,11 +32,11 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
 
     "Load CSV files with headers given an existing schema" >> {
       loadCSV("RATINGS2", 
-        Seq(
-          ("PID","string"), 
-          ("EVALUATION","float"), 
-          ("NUM_RATINGS","float")
-        ), 
+        // Seq(
+        //   ("PID","string"), 
+        //   ("EVALUATION","float"), 
+        //   ("NUM_RATINGS","float")
+        // ), 
         "test/data/ratings2.csv"
       )
       queryOneColumn(s"SELECT PID FROM RATINGS2"){ 
@@ -52,7 +52,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
     }
 
     "Load CSV files without headers given an existing schema" >> {
-      loadCSV( "U2", Seq(("A","int"), ("B","int"), ("C","int")), "test/r_test/u.csv")
+      loadCSV( "U2", "test/r_test/u.csv")
       val col1: String = db.tableSchema("U2").get.head._1.id
       queryOneColumn(s"SELECT $col1 FROM U2"){
         _.toList must contain(
@@ -64,7 +64,11 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
     "Load CSV files that have type errors" >> {
       // Disable warnings for type errors
       LoggerUtils.error("mimir.util.LoadCSV$"){
-        loadCSV( "RATINGS1WITHTYPES", Seq(("PID","string"),("RATING","float"),("REVIEW_CT","float")), "test/data/ratings1.csv")
+        loadCSV( 
+          "RATINGS1WITHTYPES", 
+          // Seq(("PID","string"),("RATING","float"),("REVIEW_CT","float")), 
+          "test/data/ratings1.csv"
+        )
       }
       //This differes in spark with mode => "DROPMALFORMED" : when a schema is 
       // provided, any rows that have values that dont conform to the schema 
@@ -90,7 +94,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
     }
 
     "Load CSV files with missing values" >> {
-      db.loadTable( targetTable = Some(ID("R")), sourceFile = "test/r_test/r.csv")
+      db.loader.loadTable( targetTable = Some(ID("R")), sourceFile = "test/r_test/r.csv")
       val colNames: Seq[String] = db.tableSchema("R").get.map(_._1.id)
       val b = colNames(1)
       val c = colNames(2)
@@ -100,7 +104,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
 
     "Load CSV files with garbled data" >> {
       LoggerUtils.error("mimir.util.NonStrictCSVParser") {
-        db.loadTable( targetTable = Some(ID("GARBLED")), sourceFile = "test/data/garbledRatings.csv")
+        db.loader.loadTable( targetTable = Some(ID("GARBLED")), sourceFile = "test/data/garbledRatings.csv")
       }
       queryOneColumn("SELECT PID FROM GARBLED"){
         _.toSeq must contain(
@@ -115,7 +119,11 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
     //TODO: translate dates correctly in spark operator translator
     "Load Dates Properly" >> {
       LoggerUtils.error("mimir.util.NonStrictCSVParser") {
-       loadCSV( "EMPLOYEE", Seq(("Name","string"),("Age","int"),("JOINDATE","date"),("Salary","float"),("Married","bool")), "test/data/Employee1.csv")
+        loadCSV( 
+          "EMPLOYEE", 
+          // Seq(("Name","string"),("Age","int"),("JOINDATE","date"),("Salary","float"),("Married","bool")), 
+          "test/data/Employee1.csv"
+        )
       }
       
       db.query(db.sqlToRA(MimirSQL.Select("""

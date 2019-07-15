@@ -13,19 +13,15 @@ object DatasetShapeSpec
 {
 
   def beforeAll = {
-    db.loadTable(
+    db.loader.loadTable(
       targetTable = Some(ID("Z")), 
       sourceFile = "test/r_test/z.csv",
-      loadOptions = Map(
-        "datasourceErrors" -> "true"
-      )
+      datasourceErrors = true
     )
-    db.loadTable(
+    db.loader.loadTable(
       targetTable = Some(ID("Z_BAD")), 
       sourceFile = "test/r_test/z_bad.csv",
-      loadOptions = Map(
-        "datasourceErrors" -> "true"
-      )
+      datasourceErrors = true
     )
   }
 

@@ -15,17 +15,23 @@ import mimir.util._
 import mimir.exec._
 import mimir.exec.result._
 import mimir.optimizer._
-import mimir.algebra.spark.OperatorTranslation
 import mimir.ml.spark.SparkML
 import org.specs2.specification.AfterAll
+import mimir.exec.spark.MimirSpark
 
 object DBTestInstances
 {
   private var databases = scala.collection.mutable.Map[String, Database]()
+  private var sparkInitialized = false
 
   def get(tempDBName: String, config: Map[String,String]): Database =
   {
     this.synchronized { 
+      if(!sparkInitialized){
+        MimirSpark.init(new MimirConfig(Seq()))
+        sparkInitialized = true
+      }
+
       databases.get(tempDBName) match { 
         case Some(db) => db
         case None => {
@@ -47,30 +53,11 @@ object DBTestInstances
           val oldDBExists = dbFile.exists();
           // println("Exists: "+oldDBExists)
           val metadata = new JDBCMetadataBackend(jdbcBackendMode, tempDBName+".db")
-          val backend:QueryBackend = 
-            config.getOrElse("backend", "spark") match {
-              case "spark" => new SparkBackend(tempDBName); 
-            }
-          val tmpDB = new Database(backend, metadata);
+          val tmpDB = new Database(metadata);
           if(shouldCleanupDB){    
             dbFile.deleteOnExit();
           }
           tmpDB.open()
-          backend match {
-            case sback:SparkBackend =>{
-              val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^","|","OR")
-                sback.registerSparkFunctions(
-                  tmpDB.functions.functionPrototypes.map { _._1 }.toSeq
-                    ++ otherExcludeFuncs.map { ID(_) }, 
-                  tmpDB
-                )
-                sback.registerSparkAggregates(
-                  tmpDB.aggregates.prototypes.map { _._1 }.toSeq,
-                  tmpDB.aggregates
-                )
-            }
-            case _ => ???
-          }
           if(shouldResetDB || !oldDBExists){
             config.get("initial_db") match {
               case None => ()
@@ -104,8 +91,11 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     try{
       if(config.getOrElse("cleanup", config.getOrElse("reset", "YES")) match { 
             case "NO" => false; case "YES" => true
-          }) db.backend.dropDB()
-      db.backend.close()
+          }) 
+      {
+        for(table <- db.loader.listTables){ db.loader.drop(table) }
+      }
+      db.close()
       //db.backend.open()
     }catch {
       case t: Throwable => {}
@@ -157,37 +147,18 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   def update(s: String) = 
     db.update(stmt(s))
   def loadCSV(file: String) : Unit =
-    db.loadTable(
-      sourceFile = file,
-      force = true
+    db.loader.loadTable(
+      sourceFile = file
     )
   def loadCSV(table: String, file: String) : Unit =
-    db.loadTable(
+    db.loader.loadTable(
       targetTable = Some(ID(table)), 
-      sourceFile = file,
-      force = true
+      sourceFile = file
     )
-  def loadCSV(table: String, schema:Seq[(String,String)], file: String) : Unit =
-    db.loadTable(
-      targetTable = Some(ID(table)), 
-      targetSchema = Some(schema.map { x => (ID.upper(x._1), Type.fromString(x._2)) }), 
-      sourceFile = file,
-      force = true
-    ) 
   def loadCSV(table: String, file: String, inferTypes:Boolean, detectHeaders:Boolean) : Unit =
-    db.loadTable(
+    db.loader.loadTable(
       targetTable = Some(ID(table)), 
       sourceFile = file,
-      force = true,
-      inferTypes = Some(inferTypes),
-      detectHeaders = Some(detectHeaders)
-    )
-  def loadCSV(table: String, schema:Seq[(String,String)], file: String, inferTypes:Boolean, detectHeaders:Boolean) : Unit =
-    db.loadTable(
-      targetTable = Some(ID(table)), 
-      sourceFile = file,
-      targetSchema = Some(schema.map { x => (ID.upper(x._1), Type.fromString(x._2)) }), 
-      force = true,
       inferTypes = Some(inferTypes),
       detectHeaders = Some(detectHeaders)
     )

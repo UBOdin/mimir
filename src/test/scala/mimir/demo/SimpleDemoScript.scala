@@ -2,6 +2,7 @@ package mimir.demo
 
 import java.io.{BufferedReader, File, FileReader, StringReader}
 import java.sql.SQLException
+import sparsity.Name
 
 import scala.collection.JavaConversions._
 import org.specs2.mutable._
@@ -40,7 +41,9 @@ object SimpleDemoScript
 		}
 
 		"Run the Load Product Data Script" >> {
-		  loadCSV("PRODUCT", Seq(("ID", "string"), ("NAME", "string"), ("BRAND", "string"), ("CATEGORY", "string")), "test/data/product.csv")
+		  loadCSV("PRODUCT", 
+		  	//Seq(("ID", "string"), ("NAME", "string"), ("BRAND", "string"), ("CATEGORY", "string")), 
+		  	"test/data/product.csv")
 			//println(db.query("SELECT * FROM PRODUCT;")(result => { result.toList.map(row => row.tuple.map(_.toString()).mkString(",")).mkString("\n")} ))
 			db.query(
 				db.sqlToRA(
@@ -50,9 +53,12 @@ object SimpleDemoScript
 		}
 
 		"Load CSV Files" >> {
-			reviewDataFiles.foreach( db.loadTable(_) )
+			reviewDataFiles.foreach( loadCSV(_) )
 			query("SELECT * FROM RATINGS1;") { _.toSeq must have size(4) }
-			db.query(db.adaptiveSchemas.viewFor(db.resolveCaseInsensitiveTable("RATINGS1").withSuffix("_DH"), ID("DATA")).get.project("RATING")) { 
+			db.query(
+				db.table(Name("RATINGS1_DH"), Name("DATA"))
+					.project("RATING")
+			) { 
 				_.map { _(0) }.toSeq must contain( str("4.5"), str("A3"), str("4.0"), str("6.4") )
 			}
 			query("SELECT * FROM RATINGS1;") { _.toSeq.map { _(1) } must contain( f(4.5), NullPrimitive(), f(4.0), f(6.4) ) }

@@ -13,7 +13,10 @@ object TypeInferenceSpec
 
     "Be able to create and query type inference adaptive schemas" >> {
  
-      db.loadTable(targetTable = Some(ID("CPUSPEED")), sourceFile = "test/data/CPUSpeed.csv")
+      db.loader.loadTable(
+        targetTable = Some(ID("CPUSPEED")), 
+        sourceFile = "test/data/CPUSpeed.csv"
+      )
 
       val baseTypes = db.typechecker.schemaOf(db.table("CPUSPEED_RAW")).toMap
       baseTypes must contain(ID("_c7") -> TString())
@@ -34,7 +37,10 @@ object TypeInferenceSpec
       Type.matches(TTimestamp(), "2013-10-07 08:23:19.120") must beTrue
 
 
-      db.loadTable(targetTable = Some(ID("DETECTSERIESTEST1")), sourceFile = "test/data/DetectSeriesTest1.csv")
+      db.loader.loadTable(
+        targetTable = Some(ID("DETECTSERIESTEST1")), 
+        sourceFile = "test/data/DetectSeriesTest1.csv"
+      )
 
       val sch = 
         db.typechecker.schemaOf(

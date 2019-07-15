@@ -2,6 +2,7 @@ package mimir.data.staging
 
 import java.io.InputStream
 import org.apache.spark.sql.DataFrame
+import mimir.algebra.ID
 
 /**
  * Implementations of this trait provide the ability to "stage" files either
@@ -48,7 +49,7 @@ trait RawFileProvider {
    * @param nameHint   A small string to include in the staged URL (for debugging) 
    * @return           The local URL of the staged file
    */ 
-  def stage(input: DataFrame, format: String, nameHint: Option[String]): String
+  def stage(input: DataFrame, format: ID, nameHint: Option[String]): String
 
   /**
    * Delete a locally staged file

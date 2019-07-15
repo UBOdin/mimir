@@ -6,6 +6,7 @@ import java.sql.SQLException
 import scala.util.Random
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import org.apache.spark.sql.DataFrame
+import mimir.algebra.ID
 
 /**
  * RawFileProvider backed by the local filesystem.
@@ -72,11 +73,11 @@ class LocalFSRawFileProvider(
       else { "data" } // default to generic 'data' if there's no extension
     stage(url.openStream(), extension, nameHint)
   }
-  def stage(input: DataFrame, format: String, nameHint:Option[String]): String =
+  def stage(input: DataFrame, format: ID, nameHint:Option[String]): String =
   {
-    val targetFile = makeName(format, nameHint).toString
+    val targetFile = makeName(format.id, nameHint).toString
     input.write
-         .format(format)
+         .format(format.id)
          .save(targetFile)
     return targetFile
   }

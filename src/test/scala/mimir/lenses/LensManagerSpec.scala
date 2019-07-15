@@ -19,11 +19,6 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
     "Be able to create and query missing value lenses" >> {
       loadCSV(
         "R", 
-        Seq(
-          ("A", "int"), 
-          ("B", "int"), 
-          ("C", "int")
-        ), 
         "test/r_test/r.csv"
       )
       queryOneColumn("SELECT B FROM R"){ _.toSeq should contain(NullPrimitive()) }
@@ -32,7 +27,7 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
     }
 
     "Produce reasonable views" >> {
-      db.loadTable(targetTable = Some(ID("CPUSPEED")), sourceFile = "test/data/CPUSpeed.csv")
+      db.loader.loadTable(targetTable = Some(ID("CPUSPEED")), sourceFile = "test/data/CPUSpeed.csv")
       val resolved1 = InlineProjections(db.views.resolve(db.table("CPUSPEED")))
       resolved1 must beAnInstanceOf[Project]
       resolved1.children.head must beAnInstanceOf[Limit]

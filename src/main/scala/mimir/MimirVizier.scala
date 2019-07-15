@@ -281,7 +281,7 @@ object MimirVizier extends LazyLogging {
           inferTypes = Some(inferTypes), 
           detectHeaders = Some(detectHeaders), 
           sparkOptions = loadOptions, 
-          format = format,
+          format = ID(format),
           humanReadableName = humanReadableName,
           datasourceErrors = loadOptions.getOrElse("datasourceErrors", "false").equals("true"),
           stageSourceURL = false

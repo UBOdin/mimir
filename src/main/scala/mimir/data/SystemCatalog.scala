@@ -209,15 +209,24 @@ class SystemCatalog(db: Database)
     resolveTable(name) != None
   def tableExists(name: ID): Boolean   = 
     resolveTable(name) != None
+  def tableExists(providerName: Name, name: Name): Boolean   = 
+    provider(providerName)
+      .getOrElse { return false }
+      ._2
+      .resolveTableByName(name) != None
+  def tableExists(providerName: ID, name: ID): Boolean   = 
+    getSchemaProvider(providerName).tableExists(name)
+
   def tableSchema(name: Name): Option[Seq[(ID, Type)]] = 
     resolveTable(name).flatMap { case (_, table, provider) => provider.tableSchema(table) }
   def tableSchema(name: ID): Option[Seq[(ID, Type)]]   = 
     resolveTable(name).flatMap { case (_, table, provider) => provider.tableSchema(table) }
-
-  def tableExists(providerName: ID, name: ID): Boolean   = 
-    getSchemaProvider(providerName).tableExists(name)
+  def tableSchema(providerName: Name, name: Name): Option[Seq[(ID, Type)]] = 
+    provider(providerName).flatMap { case (_, providerImpl) => 
+      providerImpl.resolveTableByName(name).flatMap { providerImpl.tableSchema(_)} }
   def tableSchema(providerName: ID, name: ID): Option[Seq[(ID, Type)]]   = 
-    getSchemaProvider(providerName).tableSchema(name)
+    provider(providerName).flatMap { _._2.tableSchema(name) }
+
 
 
 
