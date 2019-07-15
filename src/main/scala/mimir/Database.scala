@@ -33,6 +33,7 @@ import mimir.parser.{
     DrawPlot,
     Feedback,
     Load,
+    Reload,
     DropLens,
     DropAdaptiveSchema,
     MimirSQL
@@ -280,10 +281,18 @@ case class Database(metadata: MetadataBackend)
           format = load.format
                        .getOrElse { sparsity.Name("csv") }
                        .lower,
-          loadOptions = load.args
+          sparkOptions = load.args
                             .toMap
                             .mapValues { sqlToRA(_) }
-                            .mapValues { _.asString }
+                            .mapValues { _.asString },
+          stageSourceURL = load.withStaging
+        )
+      }
+
+      case Reload(table) => {
+        loader.reloadTable(
+          loader.resolveTableByName(table)
+                .getOrElse { throw new SQLException(s"No such table $table")}
         )
       }
 

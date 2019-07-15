@@ -273,15 +273,18 @@ object MimirVizier extends LazyLogging {
         logger.debug("loadDataSource: From Vistrails: Table Already Exists: " + tableName)
       }
       else{
+        val loadOptions = bkOpts.toMap
         db.loader.loadTable(
           sourceFile = csvFile,
           targetTable = Some(tableName), 
           // targetSchema = None, 
           inferTypes = Some(inferTypes), 
           detectHeaders = Some(detectHeaders), 
-          loadOptions = bkOpts.toMap, 
+          sparkOptions = loadOptions, 
           format = format,
-          humanReadableName = humanReadableName
+          humanReadableName = humanReadableName,
+          datasourceErrors = loadOptions.getOrElse("datasourceErrors", "false").equals("true"),
+          stageSourceURL = false
         )
       }
       tableName 

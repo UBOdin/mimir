@@ -123,7 +123,31 @@ class LoadedTables(val db: Database)
             .map { RAToSpark.structTypeToMimirSchema(_) }
   }
 
-  def view(table: ID): Option[Operator] = None
+  def stage(
+    url: String, 
+    sparkOptions: Map[String,String], 
+    format: String, 
+    tableName: ID
+  ): (String, Map[String,String], String) =
+  {
+    if(LoadedTables.safeForRawStaging(format)){
+      ( 
+        db.staging.stage(url, Some(tableName.id)),
+        sparkOptions,
+        format
+      )
+    } else {
+      (
+        db.staging.stage(
+          makeDataFrame(url, format, sparkOptions),
+          bulkStorageFormat,
+          Some(tableName.id)
+        ),
+        Map(),
+        bulkStorageFormat
+      )
+    }
+  }
 
   /**
    * Connect the specified URL to Mimir as a table.
@@ -141,7 +165,7 @@ class LoadedTables(val db: Database)
     format: String, 
     tableName: ID, 
     sparkOptions: Map[String,String] = Map(), 
-    stageLocal: Boolean = false
+    stageSourceURL: Boolean = false
   ) {
     if(tableExists(tableName)){
       throw new RAException(s"Can't LOAD ${tableName} because it already exists.")
@@ -149,6 +173,9 @@ class LoadedTables(val db: Database)
     // Some parameters may change during the loading process.  Var-ify them
     var url = source
     var storageFormat = format
+    var finalSparkOptions = 
+      LoadedTables.defaultLoadOptions
+                  .getOrElse(format, Map()) ++ sparkOptions
 
     // Build a preliminary configuration of Mimir-specific metadata
     val mimirOptions = scala.collection.mutable.Map[String, JsValue]()
@@ -167,21 +194,15 @@ class LoadedTables(val db: Database)
       case _ => {}
     }
 
-    // Set required defaults
-    val finalSparkOptions = 
-      LoadedTables.defaultLoadOptions
-                  .getOrElse(format, Map()) ++ sparkOptions
-
-
-    if(stageLocal) {
-      // If we're being asked to stage the file locally...
-      val stageRaw = LoadedTables.safeForRawStaging(format)
-
+    if(stageSourceURL) {
       // Preserve the original URL and configurations in the mimirOptions
       mimirOptions("preStagedUrl") = JsString(url)
-      mimirOptions("preStagedFormat") = JsString(format)
-      mimirOptions("preStagedRaw") = JsBoolean(stageRaw)
-
+      mimirOptions("preStagedSparkOptions") = Json.toJson(finalSparkOptions)
+      mimirOptions("preStagedFormat") = JsString(storageFormat)
+      val stagedConfig  = stage(url, finalSparkOptions, storageFormat, tableName)
+      url               = stagedConfig._1
+      finalSparkOptions = stagedConfig._2
+      storageFormat     = stagedConfig._3
     }
 
     // Not sure when exactly cache invalidation is needed within Spark.  It was in the old 
@@ -313,7 +334,19 @@ class LoadedTables(val db: Database)
   }
 
   def fileToTableName(file: String): ID =
-    ID(new File(file).getName.replaceAll("\\..*", ""))
+    ID(
+      new File(file)
+        .getName
+        .replaceAll("\\s", "")             // strip out whitespace
+        .replaceAll("\\..*", "")           // strip off the file extension
+        .replaceAll("[^a-zA-Z0-9]+", "_")  // replace nonalphanums with '_'
+        .replaceFirst("^[0-9_]+", "")      // strip off leading numerics
+        .toUpperCase                       // Upcase
+          match {                          // make sure that the name is not empty
+            case "" => "MY_DATA"
+            case something => something
+          }
+    )
 
   /**
    * Load a CSV file into the database
@@ -337,14 +370,15 @@ class LoadedTables(val db: Database)
     inferTypes: Option[Boolean] = None,
     detectHeaders: Option[Boolean] = None,
     format: String = LoadedTables.Format.CSV,
-    loadOptions: Map[String, String] = Map(),
-    humanReadableName: Option[String] = None
+    sparkOptions: Map[String, String] = Map(),
+    humanReadableName: Option[String] = None,
+    datasourceErrors: Boolean = true,
+    stageSourceURL: Boolean = false
   ){
     // Pick a sane table name if necessary
     val realTargetTable = targetTable.getOrElse(fileToTableName(sourceFile))
 
     // If the backend is configured to support it, specialize data loading to support data warnings
-    val datasourceErrors = loadOptions.getOrElse("datasourceErrors", "false").equals("true")
     val realFormat = 
       format match {
         case LoadedTables.Format.CSV if datasourceErrors => 
@@ -360,7 +394,8 @@ class LoadedTables(val db: Database)
       source = sourceFile,
       format = realFormat,
       tableName = targetRaw,
-      sparkOptions = loadOptions
+      sparkOptions = sparkOptions,
+      stageSourceURL = stageSourceURL
     )
     var oper = tableOperator(targetRaw)
     //detect headers 
@@ -386,6 +421,42 @@ class LoadedTables(val db: Database)
     //finally create a view for the data
     db.views.create(realTargetTable, oper, force = true)
     cascadeDropView(targetRaw, realTargetTable)
+  }
+
+  def reloadTable(table:ID): Unit =
+  {
+    val config = store.get(table)
+                      .getOrElse { throw new SQLException(s"Undefined table $table") }
+    val mimirOptions = parseMimirOptions(config._2)
+
+    (
+      mimirOptions.get("preStagedUrl"),
+      mimirOptions.get("preStagedSparkOptions"),
+      mimirOptions.get("preStagedFormat")
+    ) match { 
+      case (Some(url), Some(sparkOptions), Some(format)) => {
+        val stagedConfig  = stage(
+          url.as[String], 
+          sparkOptions.as[Map[String,String]], 
+          format.as[String],
+          table
+        )
+        store.put((table, 
+          Seq(
+            StringPrimitive(stagedConfig._1), // url
+            StringPrimitive(stagedConfig._3),
+            StringPrimitive(Json.stringify(Json.toJson(stagedConfig._2))), // sparkOptions
+            StringPrimitive(Json.stringify(new JsObject(mimirOptions)))
+          )
+        ))
+      }
+      case _ => {} // not a staged table, don't need to refresh
+    }
+
+    MimirSpark.get.sparkSession.sharedState.cacheManager.recacheByPath(
+       MimirSpark.get.sparkSession, 
+       config._2(0).asString
+    )
   }
 
 }
