@@ -1,11 +1,48 @@
 package mimir.exec.spark
 
-import org.apache.spark.sql.{SQLContext, DataFrame, Row, SparkSession}
-import org.apache.spark.sql.Dataset
 import org.apache.spark.{SparkContext, SparkConf}
-import org.apache.spark.sql.types.{ArrayType, Metadata, DataType, DoubleType, LongType, FloatType, BooleanType, IntegerType, StringType, StructField, StructType}
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
-import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.{
+  Dataset,
+  SQLContext, 
+  DataFrame, 
+  Row, 
+  SparkSession,
+  Column
+}
+import org.apache.spark.sql.expressions.Window
+import org.apache.spark.sql.types.{
+  ArrayType, 
+  Metadata, 
+  DataType, 
+  DoubleType, 
+  LongType, 
+  FloatType, 
+  BooleanType, 
+  IntegerType, 
+  StringType, 
+  StructField, 
+  StructType,
+  DateType,
+  TimestampType,
+  ShortType,
+  BinaryType,
+  ByteType,
+  CalendarIntervalType,
+  NullType
+}
+import org.apache.spark.sql.catalyst.{
+  TableIdentifier,
+  InternalRow,
+  FunctionIdentifier
+}
+import org.apache.spark.sql.catalyst.analysis.{
+  UnresolvedRelation, 
+  UnresolvedInlineTable, 
+  UnresolvedAttribute,
+  UnresolvedFunction,
+  TypeCheckResult,
+  UnresolvedStar
+}
 import org.apache.spark.sql.catalyst.expressions.{
   RowNumber,
   MonotonicallyIncreasingID,
@@ -41,65 +78,85 @@ import org.apache.spark.sql.catalyst.expressions.{
   WindowSpec,
   WindowSpecDefinition,
   WindowExpression,
-  UnspecifiedFrame
+  UnspecifiedFrame,
+  Concat,
+  Substring,
+  SubstringIndex,
+  StringTrim,
+  StringTrimLeft,
+  StartsWith,
+  Contains,
+  CreateStruct,
+  GetStructField,
+  ConcatWs,
+  CreateArray
 }
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
-import org.apache.spark.sql.catalyst.analysis.UnresolvedFunction
-import org.apache.spark.sql.catalyst.{TableIdentifier}
-import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, CatalogStorageFormat}
-import org.apache.spark.sql.catalyst.analysis.{UnresolvedRelation, UnresolvedInlineTable, UnresolvedAttribute}
-import org.apache.spark.sql.catalyst.plans.{JoinType, Inner,LeftOuter, Cross}
-import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression,AggregateFunction,AggregateMode,Complete,Count,Average,Sum,First,Max,Min}
-
-import org.apache.spark.sql.execution.datasources.{DataSource, FailureSafeParser}
-import scala.language.existentials
-import java.sql.SQLException
-
-import mimir.algebra._
-import mimir.Database
-import org.apache.spark.sql.types._
-import mimir.provenance.Provenance
-import org.apache.spark.sql.expressions.Window
-import com.typesafe.scalalogging.slf4j.LazyLogging
-import org.apache.spark.sql.catalyst.expressions.aggregate.DeclarativeAggregate
-import org.apache.spark.sql.catalyst.util.TypeUtils
-import org.apache.spark.sql.catalyst.analysis.TypeCheckResult
-import org.apache.spark.sql.catalyst.plans.logical.LocalRelation
-import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.aggregate.{
+  DeclarativeAggregate,
+  AggregateExpression,
+  AggregateFunction,
+  AggregateMode,
+  Complete,
+  Count,
+  Average,
+  Sum,
+  First,
+  Max,
+  Min,
+  CollectList,
+  StddevSamp
+}
+import org.apache.spark.sql.catalyst.encoders.{
+  RowEncoder,
+  ExpressionEncoder
+}
+import org.apache.spark.sql.catalyst.plans.{
+  UsingJoin,
+  JoinType, 
+  Inner,
+  LeftOuter, 
+  Cross
+}
+import org.apache.spark.sql.catalyst.plans.logical.{
+  LogicalPlan, 
+  SubqueryAlias,
+  LocalRelation
+}
+import org.apache.spark.sql.types.TypeCollection
+import org.apache.spark.sql.catalyst.util.{
+  TypeUtils,
+  DateTimeUtils
+}
+import org.apache.spark.sql.catalyst.catalog.{
+  CatalogTable, 
+  CatalogTableType, 
+  CatalogStorageFormat
+}
+import org.apache.spark.sql.execution.datasources.{
+  LogicalRelation,
+  DataSource, 
+  FailureSafeParser
+}
 import org.apache.spark.unsafe.types.UTF8String
-import mimir.ctables.vgterm.BestGuess
-import mimir.ctables.vgterm.IsAcknowledged
-import org.apache.spark.sql.catalyst.expressions.Concat
-import mimir.models.Model
-import org.apache.spark.sql.catalyst.expressions.Substring
-import org.apache.spark.sql.catalyst.expressions.SubstringIndex
-import org.apache.spark.sql.catalyst.expressions.StringTrim
-import org.apache.spark.sql.catalyst.expressions.StringTrimLeft
-import org.apache.spark.sql.catalyst.expressions.StartsWith
-import org.apache.spark.sql.catalyst.expressions.Contains
-import mimir.algebra.function.FunctionRegistry
-import mimir.algebra.function.{NativeFunction,ExpressionFunction,FoldFunction}
 
-import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
-import org.apache.spark.sql.Column
-import org.apache.spark.sql.catalyst.expressions.CreateStruct
-import org.apache.spark.sql.catalyst.expressions.GetStructField
-import org.apache.spark.sql.catalyst.plans.UsingJoin
-import mimir.algebra.function.RegisteredFunction
-import org.apache.spark.sql.catalyst.expressions.ConcatWs
-import org.apache.spark.sql.catalyst.expressions.aggregate.CollectList
-import mimir.ctables.vgterm.Sampler
-import java.sql.Date
-import java.sql.Timestamp
-import mimir.util.SparkUtils
+import scala.language.existentials
+import java.sql.{
+  SQLException,
+  Date,
+  Timestamp
+}
+import com.typesafe.scalalogging.slf4j.LazyLogging
+
+import mimir.Database
+import mimir.algebra._
+import mimir.ctables.vgterm._
+import mimir.data._
 import mimir.exec.spark.udf._
 import mimir.exec.sqlite.VGTermFunctions
-import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.catalyst.analysis.UnresolvedStar
-import org.apache.spark.sql.catalyst.expressions.aggregate.StddevSamp
-import org.apache.spark.sql.catalyst.FunctionIdentifier
-import org.apache.spark.sql.catalyst.expressions.CreateArray
-import org.apache.spark.sql.types.TypeCollection
+import mimir.models.Model
+import mimir.provenance.Provenance
+import mimir.util.SparkUtils
+
 
 class RAToSpark(db: mimir.Database)
   extends LazyLogging
@@ -175,8 +232,9 @@ class RAToSpark(db: mimir.Database)
 
         val provider = db.catalog.getSchemaProvider(source)
 
-        provider.logicalplan(name) match {
-          case Some(plan) => {
+        provider match {
+          case logicalProvider:LogicalPlanSchemaProvider => {
+            val plan = logicalProvider.logicalplan(name)
     			  val realSchema = provider.tableSchema(name).get
 
               //here we check if the real table schema matches the table op schema 
@@ -220,12 +278,8 @@ class RAToSpark(db: mimir.Database)
           // instead uses a view. In principle, all views should have gotten 
           // expanded by now, but we can still handle this case by expanding 
           // out recursively.
-          case None => 
-            provider.view(name) match {
-              case Some(view) => mimirOpToSparkOp(view)
-              case None => 
-                throw new SQLException(s"Invalid table: $source.$name")
-            }
+          case viewProvider:ViewSchemaProvider => 
+            mimirOpToSparkOp(viewProvider.view(name))
 
         }
 

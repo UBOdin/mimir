@@ -45,7 +45,7 @@ class RAToSql(db: Database)
   {
     oper match {
       case Table(name, source, tgtSch, tgtMetadata) => {
-        val realSch = db.catalog.tableSchemaByProvider(source, name) match {
+        val realSch = db.catalog.tableSchema(source, name) match {
             case Some(realSch) => realSch
             case None => throw new SQLException(s"Unknown Table '$source.$name'");
           }
@@ -379,7 +379,7 @@ class RAToSql(db: Database)
         )
 
       case Table(name, source, tgtSch, metadata) =>
-        val realSch = db.catalog.tableSchemaByProvider(source, name) match {
+        val realSch = db.catalog.tableSchema(source, name) match {
             case Some(realSch) => realSch
             case None => throw new SQLException("Unknown Table '"+name+"'");
           }

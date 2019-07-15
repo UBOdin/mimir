@@ -1,19 +1,27 @@
 package mimir.data
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import java.sql.SQLException
 import sparsity.Name
 
+import mimir.Database
 import mimir.algebra._
+import mimir.exec.spark.RowIndexPlan
 
 
 /**
  * A connector bridging Mimir to a source of tables like an
  * external JDBC database or Hive.  Also used internally
  * by Mimir to represent tables it provides internally.
+ *
+ * SchemaProvider should not be extended directly.  Rather
+ * you should use one of:
+ *   - ViewSchemaProvider
+ *   - LogicalPlanSchemaProvider
  */
-trait SchemaProvider extends LazyLogging {
+sealed trait SchemaProvider extends LazyLogging {
   // Implementations must define these...
 
   /** 
@@ -32,39 +40,6 @@ trait SchemaProvider extends LazyLogging {
    * @return        True if the table exists
    */
   def tableExists(table: ID): Boolean = (tableSchema(table) != None)
-
-  // The following three methods are optional, but at least 
-  // one must return a non-None value **/
-
-  /**
-   * Retrieve a table as a data frame if it is possible to do so natively
-   * @param table   The identity of a table
-   * @return        A dataframe instance of this table or None
-   * 
-   * One of the methods [dataframe] or [view] must be implemented.  In general,
-   * it should not be necessary to implement more than one of these.  In other
-   * words, the implementation of this method should not materialize the table
-   * as a data frame if it is not natively representable as such.
-   *
-   * NOTE: 
-   *   In addition to the explicitly defined attributes (ie., as returned
-   *   by [tableSchema]), the following attributes MUST be defined in the 
-   *   schema of the logical plan: 
-   *    - ROWID (Integer): A unique, stable identifier for each row
-   */
-  def logicalplan(table: ID): Option[LogicalPlan]
-
-  /**
-   * Retrieve a table as a view if it is defined as such
-   * @param table   The identity of a table
-   * @return        The view defining this table or None
-   * 
-   * One of the methods [dataframe] or [view] must be implemented.  In general,
-   * it should not be necessary to implement more than one of these.  In other
-   * words, the implementation of this method should not materialize the table
-   * as a data frame if it is not natively representable as such.
-   */
-  def view(table: ID): Option[Operator]
 
   //
   // These come for free but may be overridden
@@ -143,8 +118,9 @@ trait SchemaProvider extends LazyLogging {
    * the requested table can not be represented as a view.
    */ 
   def tableOperator(providerName: ID, tableName: ID): Operator =
-    view(tableName)
-      .getOrElse { 
+    this match {
+      case v: ViewSchemaProvider => v.view(tableName)
+      case lp: LogicalPlanSchemaProvider => {
         Table(
           tableName, 
           providerName, 
@@ -155,5 +131,61 @@ trait SchemaProvider extends LazyLogging {
           Nil
         )
       }
+    }
+
+}
+
+trait ViewSchemaProvider
+  extends SchemaProvider
+{
+
+  /**
+   * Retrieve a table as a view if it is defined as such
+   * @param table   The identity of a table
+   * @return        The view defining this table
+   * 
+   * Throws SQLException if the table is not defined.
+   */
+  def view(table: ID): Operator
+}
+
+trait LogicalPlanSchemaProvider
+  extends SchemaProvider
+{
+  /**
+   * Retrieve a table as a data frame if it is possible to do so natively
+   * @param table   The identity of a table
+   * @return        A logical plan instance of this table
+   *
+   * NOTE: 
+   *   In addition to the explicitly defined attributes (ie., as returned
+   *   by [tableSchema]), the following attributes MUST be defined in the 
+   *   schema of the logical plan: 
+   *    - ROWID (Integer): A unique, stable identifier for each row
+   *
+   * Throws SQLException if the table is not defined
+   */
+  def logicalplan(table: ID): LogicalPlan
+}
+
+trait DataFrameSchemaProvider
+  extends LogicalPlanSchemaProvider
+{
+  val db: Database
+
+  /**
+   * Retrieve a table as a data frame if it is possible to do so natively
+   * @param table   The identity of a table
+   * @return        A logical plan instance of this table
+   *
+   * Throws SQLException if the table is not defined
+   */
+  def dataframe(table: ID): DataFrame
+
+  def logicalplan(table: ID): LogicalPlan =
+    RowIndexPlan(
+      dataframe(table).queryExecution.logical,
+      tableSchema(table).get
+    ).getPlan(db)
 
 }

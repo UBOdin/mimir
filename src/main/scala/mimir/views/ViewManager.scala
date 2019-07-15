@@ -12,11 +12,11 @@ import mimir.exec.mode._
 import mimir.serialization._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.metadata._
-import mimir.data.SchemaProvider
+import mimir.data.ViewSchemaProvider
 
 
 class ViewManager(db:Database) 
-  extends SchemaProvider
+  extends ViewSchemaProvider
   with LazyLogging
 {
   
@@ -87,7 +87,7 @@ class ViewManager(db:Database)
       }
     viewTable.rm(name)
     if(properties.isMaterialized){ 
-      db.catalog.bulkStorageProvider().dropStoredTable(properties.materializedName)
+      db.catalog.materializedTableProvider().dropStoredTable(properties.materializedName)
     }
   }
 
@@ -138,7 +138,7 @@ class ViewManager(db:Database)
   def materialize(name: ID): Unit =
   {
     val properties = apply(name)
-    val bulkStorage = db.catalog.bulkStorageProvider()
+    val bulkStorage = db.catalog.materializedTableProvider()
     if(bulkStorage.tableExists(properties.materializedName)){
       throw new SQLException(s"View '$name' is already materialized")
     }
@@ -183,7 +183,7 @@ class ViewManager(db:Database)
   def dematerialize(name: ID): Unit = { 
     val metadata = apply(name)
     if(metadata.isMaterialized){
-      db.catalog.bulkStorageProvider().dropStoredTable(metadata.materializedName)
+      db.catalog.materializedTableProvider().dropStoredTable(metadata.materializedName)
       viewTable.update(name, Map(ID("METADATA") -> IntPrimitive(0)))
     } else { 
       throw new SQLException(s"$name is already materialized")
@@ -303,8 +303,7 @@ class ViewManager(db:Database)
   def tableSchema(table: ID) = 
     get(table).map { view => db.typechecker.schemaOf(view.query) }
 
-  def logicalplan(table: ID) = None
-  def view(table: ID) = Some(apply(table).operator)
+  def view(table: ID) = apply(table).operator
 
   def materializedTableOperator(table: ID): Operator =
     materializedTableOperator(apply(table:ID))
@@ -349,7 +348,7 @@ class ViewManager(db:Database)
     return Project(projectedColumns, 
       Table(
         metadata.materializedName, 
-        db.catalog.bulkStorageProviderID,
+        db.catalog.materializedTableProviderID,
         metadata.materializedSchema,
         Seq()
       )

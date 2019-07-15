@@ -273,7 +273,7 @@ object MimirVizier extends LazyLogging {
         logger.debug("loadDataSource: From Vistrails: Table Already Exists: " + tableName)
       }
       else{
-        db.loadTable(
+        db.loader.loadTable(
           sourceFile = csvFile,
           targetTable = Some(tableName), 
           // targetSchema = None, 

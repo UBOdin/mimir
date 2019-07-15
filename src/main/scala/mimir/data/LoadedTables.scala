@@ -5,7 +5,6 @@ import java.sql.SQLException
 import play.api.libs.json._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 
 import mimir.Database
 import mimir.algebra._
@@ -40,9 +39,9 @@ import mimir.exec.spark.{MimirSpark,RAToSpark,RowIndexPlan}
  * dynamically creates DataFrames whenever the table is 
  * queried.
  */
-class LoadedTables(db: Database)
-  extends SchemaProvider
-  with BulkStorageProvider
+class LoadedTables(val db: Database)
+  extends DataFrameSchemaProvider
+  with MaterializedTableProvider
   with LazyLogging
 {
   val cache = scala.collection.mutable.Map[String, DataFrame]()
@@ -73,8 +72,7 @@ class LoadedTables(db: Database)
   def makeDataFrame(
     url: String, 
     format: String, 
-    sparkOptions: Map[String, String], 
-    mimirOptions: JsObject
+    sparkOptions: Map[String, String]
   ): DataFrame = 
   {
     var parser = MimirSpark.get.sparkSession.read.format(format)
@@ -94,8 +92,7 @@ class LoadedTables(db: Database)
            makeDataFrame(
              url = tableDefinition._2(0).asString,
              format = tableDefinition._2(1).asString,
-             sparkOptions = Json.parse(tableDefinition._2(2).asString).as[Map[String, String]],
-             mimirOptions = Json.parse(tableDefinition._2(3).asString).as[JsObject]
+             sparkOptions = Json.parse(tableDefinition._2(2).asString).as[Map[String, String]]
            )
          }
          // and persist it in cache
@@ -126,14 +123,6 @@ class LoadedTables(db: Database)
             .map { RAToSpark.structTypeToMimirSchema(_) }
   }
 
-  def logicalplan(table: ID): Option[LogicalPlan] = 
-    Some(
-      RowIndexPlan(
-        dataframe(table).queryExecution.logical,
-        tableSchema(table).get
-      ).getPlan(db)
-    )
-  
   def view(table: ID): Option[Operator] = None
 
   /**
@@ -152,30 +141,48 @@ class LoadedTables(db: Database)
     format: String, 
     tableName: ID, 
     sparkOptions: Map[String,String] = Map(), 
-    mimirOptions: JsObject = new JsObject(Map())
+    stageLocal: Boolean = false
   ) {
     if(tableExists(tableName)){
       throw new RAException(s"Can't LOAD ${tableName} because it already exists.")
     }
+    // Some parameters may change during the loading process.  Var-ify them
+    var url = source
+    var storageFormat = format
 
-    // Some data loaders expect non-intuitive inputs.  First, do a little pre-processing to
-    // make the interface more friendly.
-    val url = 
-      format match {
+    // Build a preliminary configuration of Mimir-specific metadata
+    val mimirOptions = scala.collection.mutable.Map[String, JsValue]()
 
-        // The Google Sheets loader expects to see only the last two path components of 
-        // the sheet URL.  Rewrite full URLs if the user wants.
-        case LoadedTables.Format.GOOGLE_SHEETS => 
-          source.split("/").reverse.take(2).reverse.mkString("/")
-        
-        // For everything else use the URL unchanged
-        case _ => source
+    // Do some pre-processing / default configuration for specific formats
+    //  to make the API a little friendlier.
+    storageFormat match {
+
+      // The Google Sheets loader expects to see only the last two path components of 
+      // the sheet URL.  Rewrite full URLs if the user wants.
+      case LoadedTables.Format.GOOGLE_SHEETS => {
+        url = source.split("/").reverse.take(2).reverse.mkString("/")
       }
+      
+      // For everything else do nothing
+      case _ => {}
+    }
 
     // Set required defaults
     val finalSparkOptions = 
       LoadedTables.defaultLoadOptions
                   .getOrElse(format, Map()) ++ sparkOptions
+
+
+    if(stageLocal) {
+      // If we're being asked to stage the file locally...
+      val stageRaw = LoadedTables.safeForRawStaging(format)
+
+      // Preserve the original URL and configurations in the mimirOptions
+      mimirOptions("preStagedUrl") = JsString(url)
+      mimirOptions("preStagedFormat") = JsString(format)
+      mimirOptions("preStagedRaw") = JsBoolean(stageRaw)
+
+    }
 
     // Not sure when exactly cache invalidation is needed within Spark.  It was in the old 
     // data loader, but it would only get called when the URL needed to be staged.  Since 
@@ -189,9 +196,8 @@ class LoadedTables(db: Database)
     // Try to create the dataframe to make sure everything (parameters, etc...) are ok
     val df = makeDataFrame(
       url = url,
-      format = format,
-      sparkOptions = finalSparkOptions,
-      mimirOptions = mimirOptions
+      format = storageFormat,
+      sparkOptions = finalSparkOptions
     )
     // Cache the result
     cache.put(tableName.id, df)
@@ -202,7 +208,7 @@ class LoadedTables(db: Database)
         StringPrimitive(url),
         StringPrimitive(format),
         StringPrimitive(Json.stringify(Json.toJson(sparkOptions))),
-        StringPrimitive(Json.stringify(mimirOptions))
+        StringPrimitive(Json.stringify(new JsObject(mimirOptions)))
       )
     )
   }
@@ -275,10 +281,9 @@ class LoadedTables(db: Database)
     if(tableExists(tableName)){ 
       throw new SQLException(s"Table `$tableName` already exists.")
     }
-    val targetFile = new File(bulkStorageDirectory, s"$tableName.$bulkStorageFormat").toString
-    data.write
-        .format(bulkStorageFormat)
-        .save(targetFile)
+
+    val targetFile = db.staging.stage(data, bulkStorageFormat, Some(tableName.id))
+
     linkTable(
       targetFile, 
       bulkStorageFormat,
@@ -307,6 +312,82 @@ class LoadedTables(db: Database)
     deleteStoredTableFiles(new File(file), tableName.id)
   }
 
+  def fileToTableName(file: String): ID =
+    ID(new File(file).getName.replaceAll("\\..*", ""))
+
+  /**
+   * Load a CSV file into the database
+   *
+   * The CSV file can either have a header or not
+   *  - If the file has a header, the first line will be skipped
+   *    during the insert process
+   *
+   *  - If the file does not have a header, the table must exist
+   *    in the database, created through a CREATE TABLE statement
+   *    Otherwise, a SQLException will be thrown
+   *
+   * Right now, the detection logic for whether a CSV file has a
+   * header or not is unimplemented. So its assumed every CSV file
+   * supplies an appropriate header.
+   */
+  def loadTable(
+    sourceFile: String, 
+    targetTable: Option[ID] = None,
+    // targetSchema: Option[Seq[(ID, Type)]] = None,
+    inferTypes: Option[Boolean] = None,
+    detectHeaders: Option[Boolean] = None,
+    format: String = LoadedTables.Format.CSV,
+    loadOptions: Map[String, String] = Map(),
+    humanReadableName: Option[String] = None
+  ){
+    // Pick a sane table name if necessary
+    val realTargetTable = targetTable.getOrElse(fileToTableName(sourceFile))
+
+    // If the backend is configured to support it, specialize data loading to support data warnings
+    val datasourceErrors = loadOptions.getOrElse("datasourceErrors", "false").equals("true")
+    val realFormat = 
+      format match {
+        case LoadedTables.Format.CSV if datasourceErrors => 
+          LoadedTables.Format.CSV_WITH_ERRORCHECKING
+        case _ => format
+      }
+
+    val targetRaw = realTargetTable//.withSuffix("_RAW")
+    if(db.catalog.tableExists(targetRaw)){
+      throw new SQLException(s"Target table $realTargetTable already exists")
+    }
+    linkTable(
+      source = sourceFile,
+      format = realFormat,
+      tableName = targetRaw,
+      sparkOptions = loadOptions
+    )
+    var oper = tableOperator(targetRaw)
+    //detect headers 
+    if(datasourceErrors) {
+      val dseSchemaName = realTargetTable.withSuffix("_DSE")
+      db.adaptiveSchemas.create(dseSchemaName, ID("DATASOURCE_ERRORS"), oper, Seq(), humanReadableName.getOrElse(realTargetTable.id))
+      oper = db.adaptiveSchemas.viewFor(dseSchemaName, ID("DATA")).get
+      cascadeDropAdaptive(targetRaw, dseSchemaName)
+    }
+    if(detectHeaders.getOrElse(true)) {
+      val dhSchemaName = realTargetTable.withSuffix("_DH")
+      db.adaptiveSchemas.create(dhSchemaName, ID("DETECT_HEADER"), oper, Seq(), humanReadableName.getOrElse(realTargetTable.id))
+      oper = db.adaptiveSchemas.viewFor(dhSchemaName, ID("DATA")).get
+      cascadeDropAdaptive(targetRaw, dhSchemaName)
+    }
+    //type inference
+    if(inferTypes.getOrElse(true)){
+      val tiSchemaName = realTargetTable.withSuffix("_TI")
+      db.adaptiveSchemas.create(tiSchemaName, ID("TYPE_INFERENCE"), oper, Seq(FloatPrimitive(.5)), humanReadableName.getOrElse(realTargetTable.id)) 
+      oper = db.adaptiveSchemas.viewFor(tiSchemaName, ID("DATA")).get
+      cascadeDropAdaptive(targetRaw, tiSchemaName)
+    }
+    //finally create a view for the data
+    db.views.create(realTargetTable, oper, force = true)
+    cascadeDropView(targetRaw, realTargetTable)
+  }
+
 }
 
 object LoadedTables {
@@ -323,7 +404,17 @@ object LoadedTables {
     val CSV_WITH_ERRORCHECKING = "org.apache.spark.sql.execution.datasources.ubodin.csv"
   }
 
+
   val SCHEMA = ID("IMPORTED")
+  
+  val safeForRawStaging = Set(
+    Format.CSV ,
+    Format.CSV_WITH_ERRORCHECKING,
+    Format.JSON,
+    Format.EXCEL,
+    Format.XML,
+    Format.TEXT
+  )
 
   private val defaultLoadCSVOptions = Map(
     "ignoreLeadingWhiteSpace"-> "true",

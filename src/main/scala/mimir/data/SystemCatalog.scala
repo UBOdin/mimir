@@ -17,12 +17,30 @@ class SystemCatalog(db: Database)
 
   // Note, we use String in this map instead of ID, since ID 
   private val simpleSchemaProviders = scala.collection.mutable.LinkedHashMap[ID, SchemaProvider]()
-  private var preferredBulkSchemaProvider: ID = null
+  private var preferredMaterializedTableProvider: ID = null
 
   def init()
   {
     // The order in which the schema providers are registered is the order
     // in which they're used to resolve table names.
+
+    // Existing restrictions / assumptions on this order include:
+    // 
+    // --- ViewManager must come BEFORE LoadedTables --- 
+    //   db.loader.loadTable creates both a LoadedTable and a View with the
+    //   same name so that users can access both the actual data, as well as
+    //   the post-processed view.  Generally, we want users to see the 
+    //   post-processed version by default.
+    // 
+    // --- SparkSchemaProvider must come BEFORE LoadedTables ---
+    //   This is necessary for Spark to take priority over LoadedTables
+    //   for the preferredBulkSchemaProvider.
+    //
+    // --- CatalogSchemaProvider *should* come LAST ---
+    //   Not strictly necessary, but the two tables defined by this
+    //   provider use relatively common names.  Really it shouldn't
+    //   even be part of the normal search path, but eh?
+    // 
     registerSchemaProvider(TemporaryViewManager.SCHEMA, db.tempViews)
     registerSchemaProvider(ViewManager.SCHEMA, db.views)
     if(ExperimentalOptions.isEnabled("USE-DERBY") || MimirSpark.remoteSpark){
@@ -196,10 +214,11 @@ class SystemCatalog(db: Database)
   def tableSchema(name: ID): Option[Seq[(ID, Type)]]   = 
     resolveTable(name).flatMap { case (_, table, provider) => provider.tableSchema(table) }
 
-  def tableExistsByProvider(providerName: ID, name: ID): Boolean   = 
+  def tableExists(providerName: ID, name: ID): Boolean   = 
     getSchemaProvider(providerName).tableExists(name)
-  def tableSchemaByProvider(providerName: ID, name: ID): Option[Seq[(ID, Type)]]   = 
+  def tableSchema(providerName: ID, name: ID): Option[Seq[(ID, Type)]]   = 
     getSchemaProvider(providerName).tableSchema(name)
+
 
 
   def tableOperator(defn: (ID, ID, SchemaProvider)): Operator =
@@ -222,42 +241,48 @@ class SystemCatalog(db: Database)
       .getOrElse { 
         throw new SQLException(s"No such table or view '$tableName'")
       }
-  def tableOperatorByProvider(providerName: Name, tableName: Name): Operator =
+  def tableOperator(providerName: Name, tableName: Name): Operator =
     tableOperator(
       resolveTable(providerName, tableName).getOrElse {
         throw new SQLException(s"No such table or view '$providerName.$tableName'")
       })
-  def tableOperatorByProvider(providerName: ID, tableName: ID): Operator =
+  def tableOperator(providerName: ID, tableName: ID): Operator =
     tableOperator(
       resolveTable(providerName, tableName).getOrElse {
         throw new SQLException(s"No such table or view '$providerName.$tableName'")
       } )
 
-  def bulkStorageProvider(providerName: ID = null): SchemaProvider with BulkStorageProvider =
+  def provider(providerName: Name): Option[(ID, SchemaProvider)] =
+    if(providerName.quoted){ resolveProviderCaseSensitive(providerName.name) }
+    else { resolveProviderCaseInsensitive(providerName.name) }
+  def provider(providerName: ID): Option[(ID, SchemaProvider)] =
+    resolveProviderCaseSensitive(providerName.id)
+
+  def materializedTableProvider(providerName: ID = null): SchemaProvider with MaterializedTableProvider =
   {
     var targetProvider = providerName
-    if(targetProvider == null){ targetProvider = preferredBulkSchemaProvider }
+    if(targetProvider == null){ targetProvider = preferredMaterializedTableProvider }
     if(targetProvider != null){
       simpleSchemaProviders.get(targetProvider) match {
         case None => throw new SQLException(s"'$targetProvider' is not a registered schema provider.")
-        case Some(s: SchemaProvider with BulkStorageProvider) => return s
+        case Some(s: SchemaProvider with MaterializedTableProvider) => return s
         case _ => throw new SQLException(s"'$targetProvider' is not a valid bulk storage provider.")
       }
     }
     simpleSchemaProviders.foreach { 
-      case (validProviderName, provider: SchemaProvider with BulkStorageProvider) => {
-          preferredBulkSchemaProvider = validProviderName
+      case (validProviderName, provider: SchemaProvider with MaterializedTableProvider) => {
+          preferredMaterializedTableProvider = validProviderName
           return provider
         }
       case _ => ()
     }
     throw new SQLException("No registered schema providers support bulk storage.")
   }
-  def bulkStorageProviderID: ID =
+  def materializedTableProviderID: ID =
   {
-    if(preferredBulkSchemaProvider != null) { return preferredBulkSchemaProvider }
-    bulkStorageProvider()
-    return preferredBulkSchemaProvider;
+    if(preferredMaterializedTableProvider != null) { return preferredMaterializedTableProvider }
+    materializedTableProvider()
+    return preferredMaterializedTableProvider;
   }
 
 
@@ -271,15 +296,14 @@ class SystemCatalog(db: Database)
   }
 
   object CatalogSchemaProvider 
-    extends SchemaProvider 
+    extends ViewSchemaProvider 
   {
       def listTables = 
         hardcodedTables.keys
       def tableSchema(table: ID): Option[Seq[(ID, Type)]] = 
         hardcodedTables.get(table).map { _._1 }
-      def logicalplan(table: ID) = None
       def view(table: ID) = 
-        Some(hardcodedTables(table)._2())
+        hardcodedTables(table)._2()
   }
 }
 

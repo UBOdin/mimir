@@ -5,7 +5,7 @@ import org.apache.spark.sql.DataFrame
 import mimir.Database
 import mimir.algebra.{ ID, Operator }
 
-trait BulkStorageProvider
+trait MaterializedTableProvider
 {
   def createStoredTableAs(data: DataFrame, name: ID): Unit
   def createStoredTableAs(query: Operator, name: ID, db: Database): Unit = 

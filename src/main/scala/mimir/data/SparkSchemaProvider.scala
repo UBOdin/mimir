@@ -12,8 +12,8 @@ import mimir.algebra._
 import mimir.exec.spark.{MimirSpark, RAToSpark, RowIndexPlan}
 
 class SparkSchemaProvider(db: Database)
-  extends SchemaProvider
-  with BulkStorageProvider
+  extends LogicalPlanSchemaProvider
+  with MaterializedTableProvider
   with LazyLogging
 {
 
@@ -68,16 +68,13 @@ class SparkSchemaProvider(db: Database)
     }
   }
 
-  def logicalplan(table: ID): Option[LogicalPlan] =
+  def logicalplan(table: ID): LogicalPlan =
   {
-    tableSchema(table)
-      .map { realSchema => 
-        RowIndexPlan(
-          UnresolvedRelation(TableIdentifier(table.id)), realSchema
-        ).getPlan(db)
-      }
+    RowIndexPlan(
+      UnresolvedRelation(TableIdentifier(table.id)), 
+      tableSchema(table).get
+    ).getPlan(db)
   }
-  def view(table: ID): Option[Operator] = None
 
   def createStoredTableAs(data: DataFrame, name: ID)
   {

@@ -13,14 +13,14 @@ import sparsity.expression.Expression
 
 import mimir.algebra._
 import mimir.ctables.{AnalyzeUncertainty, OperatorDeterminism, CellExplanation, RowExplanation, InlineVGTerms}
-import mimir.models.Model
+import mimir.data.LoadedTables
+import mimir.data.staging.{ RawFileProvider, LocalFSRawFileProvider }
 import mimir.exec.Compiler
 import mimir.exec.mode.{CompileMode, BestGuess}
 import mimir.exec.result.{ResultIterator,SampleResultIterator,Row}
 import mimir.lenses.{LensManager}
-import mimir.sql.{SqlToRA,RAToSql}
-import mimir.data.LoadedTables
 import mimir.metadata.MetadataBackend
+import mimir.models.Model
 import mimir.parser.{
     MimirStatement,
     SQLStatement,
@@ -34,12 +34,13 @@ import mimir.parser.{
     Feedback,
     Load,
     DropLens,
-    DropAdaptiveSchema
+    DropAdaptiveSchema,
+    MimirSQL
   }
 import mimir.optimizer.operator.OptimizeExpressions
-import mimir.util.ExperimentalOptions
-import mimir.parser.MimirSQL
+import mimir.sql.{SqlToRA,RAToSql}
 import mimir.statistics.FuncDep
+import mimir.util.ExperimentalOptions
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
@@ -106,6 +107,7 @@ case class Database(metadata: MetadataBackend)
   val tempViews       = new mimir.views.TemporaryViewManager(this)
   val adaptiveSchemas = new mimir.adaptive.AdaptiveSchemaManager(this)
   val catalog         = new mimir.data.SystemCatalog(this)
+  val staging         = selectRawFileProvider()
 
   //// Parsing & Translation
   val sqlToRA         = new mimir.sql.SqlToRA(this)
@@ -203,7 +205,7 @@ case class Database(metadata: MetadataBackend)
       /********** CREATE TABLE STATEMENTS **********/
       case SQLStatement(create: CreateTable) => {
         // Test for now, create a blank empty table
-        catalog.bulkStorageProvider().createStoredTableAs(
+        catalog.materializedTableProvider().createStoredTableAs(
           HardTable(
             create.columns.map { col => (
               ID.lower(col.name), 
@@ -216,7 +218,7 @@ case class Database(metadata: MetadataBackend)
         )
       }
       case SQLStatement(create: CreateTableAs) => {
-        catalog.bulkStorageProvider().createStoredTableAs(
+        catalog.materializedTableProvider().createStoredTableAs(
           sqlToRA(create.query),
           ID.lower(create.name),
           this
@@ -271,7 +273,7 @@ case class Database(metadata: MetadataBackend)
       /********** LOAD STATEMENTS **********/
       case load: Load => {
         // Assign a default table name if needed
-        loadTable(
+        loader.loadTable(
           load.file, 
           targetTable = load.table.map { ID.upper(_) },
           // force = (load.table != None),
@@ -343,87 +345,6 @@ case class Database(metadata: MetadataBackend)
     metadata.close()
   }
 
-  /**
-   * Load a CSV file into the database
-   *
-   * The CSV file can either have a header or not
-   *  - If the file has a header, the first line will be skipped
-   *    during the insert process
-   *
-   *  - If the file does not have a header, the table must exist
-   *    in the database, created through a CREATE TABLE statement
-   *    Otherwise, a SQLException will be thrown
-   *
-   * Right now, the detection logic for whether a CSV file has a
-   * header or not is unimplemented. So its assumed every CSV file
-   * supplies an appropriate header.
-   */
-  def fileToTableName(file: String): ID =
-    ID(new File(file).getName.replaceAll("\\..*", ""))
-  
-
-  def loadTable(
-    sourceFile: String, 
-    targetTable: Option[ID] = None,
-    // targetSchema: Option[Seq[(ID, Type)]] = None,
-    inferTypes: Option[Boolean] = None,
-    detectHeaders: Option[Boolean] = None,
-    format: String = LoadedTables.Format.CSV,
-    loadOptions: Map[String, String] = Map(),
-    humanReadableName: Option[String] = None
-  ){
-    // Pick a sane table name if necessary
-    val realTargetTable = targetTable.getOrElse(fileToTableName(sourceFile))
-
-    // If the backend is configured to support it, specialize data loading to support data warnings
-    val datasourceErrors = loadOptions.getOrElse("datasourceErrors", "false").equals("true")
-    val realFormat = 
-      format match {
-        case LoadedTables.Format.CSV if datasourceErrors => 
-          LoadedTables.Format.CSV_WITH_ERRORCHECKING
-        case _ => format
-      }
-
-    val targetRaw = realTargetTable//.withSuffix("_RAW")
-    if(catalog.tableExists(targetRaw)){
-      throw new SQLException(s"Target table $realTargetTable already exists")
-    }
-    loader.linkTable(
-      source = sourceFile,
-      format = realFormat,
-      tableName = targetRaw,
-      sparkOptions = loadOptions
-    )
-    var oper = loader.tableOperator(targetRaw)
-    //detect headers 
-    if(datasourceErrors) {
-      val dseSchemaName = realTargetTable.withSuffix("_DSE")
-      adaptiveSchemas.create(dseSchemaName, ID("DATASOURCE_ERRORS"), oper, Seq(), humanReadableName.getOrElse(realTargetTable.id))
-      oper = adaptiveSchemas.viewFor(dseSchemaName, ID("DATA")).get
-      loader.cascadeDropAdaptive(targetRaw, dseSchemaName)
-    }
-    if(detectHeaders.getOrElse(true)) {
-      val dhSchemaName = realTargetTable.withSuffix("_DH")
-      adaptiveSchemas.create(dhSchemaName, ID("DETECT_HEADER"), oper, Seq(), humanReadableName.getOrElse(realTargetTable.id))
-      oper = adaptiveSchemas.viewFor(dhSchemaName, ID("DATA")).get
-      loader.cascadeDropAdaptive(targetRaw, dhSchemaName)
-    }
-    //type inference
-    if(inferTypes.getOrElse(true)){
-      val tiSchemaName = realTargetTable.withSuffix("_TI")
-      adaptiveSchemas.create(tiSchemaName, ID("TYPE_INFERENCE"), oper, Seq(FloatPrimitive(.5)), humanReadableName.getOrElse(realTargetTable.id)) 
-      oper = adaptiveSchemas.viewFor(tiSchemaName, ID("DATA")).get
-      loader.cascadeDropAdaptive(targetRaw, tiSchemaName)
-    }
-    //finally create a view for the data
-    views.create(realTargetTable, oper, force = true)
-    loader.cascadeDropView(targetRaw, realTargetTable)
-  }
-
-  // /**
-  //   * Materialize a view into the database
-  //   */
-  // def selectInto(targetTable: ID, sourceQuery: Operator){
-  //   backend.createTable(targetTable, sourceQuery)
-  // }
+  def selectRawFileProvider(): RawFileProvider =
+    new LocalFSRawFileProvider(new java.io.File("."))
 }

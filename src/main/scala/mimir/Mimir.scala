@@ -93,7 +93,7 @@ object Mimir extends LazyLogging {
                 }
               case "csv" => {
                   output.print("Loading "+file+"...")
-                  db.loadTable(file)
+                  db.loader.loadTable(file)
                 }
               case _ => {
                 throw new RuntimeException("Error: Unknown file format '"+extension+"' of "+file)

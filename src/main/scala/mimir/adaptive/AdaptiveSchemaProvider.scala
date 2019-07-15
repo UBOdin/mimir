@@ -2,11 +2,11 @@ package mimir.adaptive
 
 import mimir.Database
 import mimir.algebra.{ ID, Operator, Type, AdaptiveView }
-import mimir.data.SchemaProvider
+import mimir.data.ViewSchemaProvider
 import mimir.exec.mode.UnannotatedBestGuess
 
 class AdaptiveSchemaProvider(lens:Multilens, config:MultilensConfig, db: Database)
-  extends SchemaProvider
+  extends ViewSchemaProvider
 {
   def listTables: Seq[ID] = 
   { 
@@ -26,15 +26,12 @@ class AdaptiveSchemaProvider(lens:Multilens, config:MultilensConfig, db: Databas
         .map { db.typechecker.schemaOf(_) }
   }
 
-  def logicalplan(table: ID) = None
   def view(table: ID) =
-  {
-    Some(AdaptiveView(
+    AdaptiveView(
       config.schema,
       table, 
       lens.viewFor(db, config, table).get
-    ))
-  }
+    )
 
   override def listTablesQuery: Operator =
     lens.tableCatalogFor(db, config)
