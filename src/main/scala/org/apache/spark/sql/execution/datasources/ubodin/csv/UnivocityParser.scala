@@ -25,13 +25,15 @@ import scala.util.control.NonFatal
 
 import com.univocity.parsers.csv.CsvParser
 
-import org.apache.spark.internal.Logging
+import com.typesafe.scalalogging.slf4j.LazyLogging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.catalyst.util.{BadRecordException, DateTimeUtils}
 import org.apache.spark.sql.execution.datasources.FailureSafeParser
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
+
+import mimir.adaptive.DataSourceErrors
 
 
 /**
@@ -46,9 +48,24 @@ import org.apache.spark.unsafe.types.UTF8String
 class UnivocityParser(
     dataSchemaWithMeta: StructType,
     requiredSchemaWithMeta: StructType,
-    val options: CSVOptions) extends Logging {
-  
-  val requiredSchema = StructType(requiredSchemaWithMeta.fields.take(requiredSchemaWithMeta.length-2))
+    val options: CSVOptions
+) 
+  extends LazyLogging 
+{
+  val metaFields = Set(
+    DataSourceErrors.mimirDataSourceErrorColumn.id, 
+    DataSourceErrors.mimirDataSourceErrorRowColumn.id
+  )
+
+  val (requiredSchema, requiredMeta) =
+  { 
+    val (meta, sch) =
+      requiredSchemaWithMeta
+        .fields
+        .partition { field => metaFields.contains( field.name )  }
+
+    ( StructType(sch), meta.map { _.name }.toSet )
+  }
   val dataSchema = StructType(dataSchemaWithMeta.fields.take(dataSchemaWithMeta.length-2))
   require(requiredSchema.toSet.subsetOf(dataSchema.toSet),
     s"requiredSchema (${requiredSchema.catalogString}) should be the subset of " +
@@ -227,6 +244,9 @@ class UnivocityParser(
   }
 
   private def convert(tokens: Array[String]): InternalRow = {
+    logger.trace(s"PRE-CONVERT")
+    logger.trace(s"CONVERT: $tokens")
+
     if (tokens == null) {
       /*throw BadRecordException(
         () => getCurrentInput,
@@ -237,9 +257,13 @@ class UnivocityParser(
           row(i) = null
           i += 1
       }
-      row(i) = true
-      row(i+1) = getCurrentInput
-      log.debug( "---> null row: " + row.toString())
+      if(requiredMeta.contains(DataSourceErrors.mimirDataSourceErrorColumn.id)){
+        row(i) = true
+      }
+      if(requiredMeta.contains(DataSourceErrors.mimirDataSourceErrorRowColumn.id)){
+        row(i+1) = getCurrentInput
+      }
+      logger.debug( "---> null row: " + row.toString())
       row
     } else if (tokens.length != parsedSchema.length) {
       // If the number of tokens doesn't match the schema, we should treat it as a malformed record.
@@ -277,9 +301,13 @@ class UnivocityParser(
           row(i) = partRow.get(i, requiredSchema(i).dataType)
           i += 1
       }
-      row(i) = true
-      row(i+1) = getCurrentInput
-      log.debug( "---> partial row: " + row.toString())
+      if(requiredMeta.contains(DataSourceErrors.mimirDataSourceErrorColumn.id)){
+        row(i) = true
+      }
+      if(requiredMeta.contains(DataSourceErrors.mimirDataSourceErrorRowColumn.id)){
+        row(i+1) = getCurrentInput
+      }
+      logger.debug( "---> partial row: " + row.toString())
       row
     } else {
       try {
@@ -290,9 +318,13 @@ class UnivocityParser(
           row(i) = valueConverters(i).apply(getToken(tokens, i))
           i += 1
         }
-        row(i) = false
-        row(i+1) = null
-        log.debug( "---> good row: " + row.toString())
+        if(requiredMeta.contains(DataSourceErrors.mimirDataSourceErrorColumn.id)){
+          row(i) = false
+        }
+        if(requiredMeta.contains(DataSourceErrors.mimirDataSourceErrorRowColumn.id)){
+          row(i+1) = null
+        }
+        logger.debug( "---> good row: " + row.toString())
         row
       } catch {
         case NonFatal(e) => {
@@ -303,7 +335,7 @@ class UnivocityParser(
             val i = requiredSchema.length
             row(i) = true
             row(i+1) = getCurrentInput
-            log.debug( "---> non fatal row: " + row.toString())
+            logger.debug( "---> non fatal row: " + row.toString())
             row
           }
       }
@@ -386,6 +418,7 @@ private[csv] object UnivocityParser {
       parser.options.parseMode,
       schema,
       parser.options.columnNameOfCorruptRecord, true)
+
     filteredLines.flatMap(safeParser.parse)
   }
 }

@@ -4,6 +4,8 @@ import java.io._
 import mimir._
 import mimir.algebra._
 import mimir.test._
+import mimir.data.LoadedTables
+import mimir.parser.MimirSQL
 
 object TypeInferenceSpec 
   extends SQLTestSpecification("TypeInferenceTest") 
@@ -18,7 +20,7 @@ object TypeInferenceSpec
         sourceFile = "test/data/CPUSpeed.csv"
       )
 
-      val baseTypes = db.typechecker.schemaOf(db.table("CPUSPEED_RAW")).toMap
+      val baseTypes = db.typechecker.schemaOf(db.table(LoadedTables.SCHEMA, ID("CPUSPEED"))).toMap
       baseTypes must contain(ID("_c7") -> TString())
       baseTypes must contain(ID("_c1") -> TString())
       baseTypes must contain(ID("_c2") -> TString())
@@ -48,6 +50,21 @@ object TypeInferenceSpec
         ).toMap
 
       sch must contain (ID("TRAN_TS") -> TTimestamp())
+
+    }
+
+    "Should load the PRODUCTs table" >> {
+      loadCSV(
+        "PRODUCTS",
+        "test/data/product.csv",
+        detectHeaders = false,
+        inferTypes = true
+      )
+      db.query(
+        db.sqlToRA(
+          MimirSQL.Select(s"SELECT * FROM ${LoadedTables.SCHEMA}.PRODUCTS;")
+        )
+      ) { _.toList } must have size(6) 
 
     }
 

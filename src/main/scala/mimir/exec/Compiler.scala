@@ -177,12 +177,10 @@ class Compiler(db: Database) extends LazyLogging {
   {
     var sparkOper:LogicalPlan = null
     try {
-      logger.trace("------------------------ mimir op --------------------------")
-      logger.trace(s"$compiledOp")
+      logger.trace(s"------------------------ mimir op --------------------------\n$compiledOp")
       logger.trace("------------------------------------------------------------")
       sparkOper = db.raToSpark.mimirOpToSparkOp(compiledOp)
-      logger.trace("------------------------ spark op --------------------------")
-      logger.trace(s"$sparkOper")
+      logger.trace(s"------------------------ spark op --------------------------\n$sparkOper")
       logger.trace("------------------------------------------------------------")
       val qe = MimirSpark.get.sparkSession.sessionState.executePlan(sparkOper)
       qe.assertAnalyzed()
@@ -190,8 +188,7 @@ class Compiler(db: Database) extends LazyLogging {
     } catch {
       case t: Throwable => {
         logger.error("-------------------------> Exception Executing Spark Op: " + t.toString() + "\n" + t.getStackTrace.mkString("\n"))
-        logger.error("------------------------ spark op --------------------------")
-        logger.error(s"$sparkOper")
+        logger.error(s"------------------------ spark op --------------------------\n$sparkOper")
         logger.error("------------------------------------------------------------")
         throw t
       }

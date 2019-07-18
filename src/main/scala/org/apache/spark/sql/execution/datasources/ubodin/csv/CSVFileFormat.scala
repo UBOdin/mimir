@@ -39,7 +39,7 @@ class DefaultSource extends CSVFileFormat
  */
 class CSVFileFormat extends TextBasedFileFormat with DataSourceRegister {
 
-  override def shortName(): String = "csv"
+  override def shortName(): String = "error-annotated-csv"
 
   override def isSplitable(
       sparkSession: SparkSession,
@@ -152,7 +152,7 @@ class CSVFileFormat extends TextBasedFileFormat with DataSourceRegister {
     }
   }
 
-  override def toString: String = "CSV"
+  override def toString: String = "Error-Annotated-CSV"
 
   override def hashCode(): Int = getClass.hashCode()
 

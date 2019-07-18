@@ -12,7 +12,7 @@
   <logger name="mimir.Mimir$"                                      level="WARN"/>
 
   <!--++++++++++++++++++  Adaptive Schemas  +++++++++++++++++++-->
-  <logger name="mimir.adaptive.DiscalaAbadiNormalizer$"            level="WARN"/>
+  <logger name="mimir.adaptive.TypeInference$"                     level="WARN"/>
 
   <!--+++++++++++++++++++++++  Algebra  +++++++++++++++++++++++-->
   <logger name="mimir.algebra.ExpressionChecker"                   level="WARN"/>
@@ -32,6 +32,7 @@
   <!--+++++++++++++++++++++++  DAta  +++++++++++++++++++++++-->
   <logger name="mimir.data.SparkSchemaProvider"                    level="WARN"/>
   <logger name="mimir.data.SystemCatalog"                          level="WARN"/>
+  <logger name="mimir.data.LoadedTables"                           level="WARN"/>
 
   <!--++++++++++++++++++++++++  Exec  +++++++++++++++++++++++++-->
   <logger name="mimir.exec.Compiler"                               level="WARN"/>
@@ -94,6 +95,10 @@
 
   <!--+++++++++++++++++++++++  Views  +++++++++++++++++++++++++-->
   <logger name="mimir.views.ViewManager"                           level="WARN"/>
+
+  <!--+++++++++++++++++++++  CSVLoader ++++++++++++++++++++++++-->
+  <logger name="org.apache.spark.sql.execution.datasources.ubodin.csv.UnivocityParser" 
+                                                                   level="WARN"/>
 
   <!--+++++++++++++++++++++++  Spark  +++++++++++++++++++++++++-->
   <logger name="log4j.logger.org.apache.spark"                     level="ERROR"/>

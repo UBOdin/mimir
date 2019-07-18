@@ -109,7 +109,8 @@ class TypeInferenceModel(name: ID, val descriptiveName: String, val columns: Ind
   private def train(df:DataFrame) =
   {
     import sparkSql.implicits._
-    df.limit(TypeInferenceModel.sampleLimit).select(columns.map{_.id}.map{col(_)}:_*)
+    df.limit(TypeInferenceModel.sampleLimit)
+      .select(columns.map{_.id}.map{col(_)}:_*)
       .agg(new VoteList().toColumn)
       .head()
       .asInstanceOf[Row].toSeq(0).asInstanceOf[Seq[Row]]

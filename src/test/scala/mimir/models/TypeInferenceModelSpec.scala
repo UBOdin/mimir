@@ -3,12 +3,13 @@ package mimir.models
 import java.io._
 
 import org.specs2.mutable._
+import org.specs2.specification._
 import mimir.algebra._
 import mimir.util._
 import mimir.test._
 import mimir.exec.spark.MimirSpark
 
-object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
+object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests") with BeforeAll
 {
 
   def train(elems: List[String]): TypeInferenceModel = 
@@ -36,6 +37,12 @@ object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
     }
   }
 
+  def beforeAll
+  {
+    DBTestInstances.initSpark
+  }
+
+  sequential
 
   "The Type Inference Model" should {
 

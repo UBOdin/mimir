@@ -196,6 +196,7 @@ object TextInputCSVDataSource extends MimirCSVDataSource {
       dataSchema: StructType,
       caseSensitive: Boolean,
       columnPruning: Boolean): Iterator[InternalRow] = {
+
     val lines = {
       val linesReader = new HadoopFileLinesReader(file, conf)
       Option(TaskContext.get()).foreach(_.addTaskCompletionListener[Unit](_ => linesReader.close()))

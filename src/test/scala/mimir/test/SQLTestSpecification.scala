@@ -17,20 +17,25 @@ import mimir.exec.result._
 import mimir.optimizer._
 import mimir.ml.spark.SparkML
 import org.specs2.specification.AfterAll
-import mimir.exec.spark.MimirSpark
+import mimir.exec.spark._
 
 object DBTestInstances
 {
   private var databases = scala.collection.mutable.Map[String, Database]()
   private var sparkInitialized = false
 
+  def initSpark
+  {
+    if(!sparkInitialized){
+      MimirSpark.init(new MimirConfig(Seq()))
+      sparkInitialized = true
+    }
+  }
+
   def get(tempDBName: String, config: Map[String,String]): Database =
   {
     this.synchronized { 
-      if(!sparkInitialized){
-        MimirSpark.init(new MimirConfig(Seq()))
-        sparkInitialized = true
-      }
+      this.initSpark
 
       databases.get(tempDBName) match { 
         case Some(db) => db

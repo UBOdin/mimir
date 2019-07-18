@@ -79,12 +79,14 @@ class LoadedTables(val db: Database)
     for((option, value) <- sparkOptions){
       parser = parser.option(option, value)
     }
+    logger.trace(s"Creating dataframe for $format file from $url")
     // parser = parser.schema(RAToSpark.mimirSchemaToStructType(customSchema))
     return parser.load(url)
   }
 
   def loadDataframe(table: ID): Option[DataFrame] =
   {
+    logger.trace(s"Loading $table")
          // If we have a record of the table (Some(tableDefinition))
     store.get(table)
          // Then load the dataframe normally
@@ -390,6 +392,7 @@ class LoadedTables(val db: Database)
     if(db.catalog.tableExists(targetRaw)){
       throw new SQLException(s"Target table $realTargetTable already exists")
     }
+    logger.trace("LOAD TABLE $realTargetTable <- $format($sourceFile);")
     linkTable(
       source = sourceFile,
       format = realFormat,
@@ -398,14 +401,17 @@ class LoadedTables(val db: Database)
       stageSourceURL = stageSourceURL
     )
     var oper = tableOperator(targetRaw)
+    logger.trace("Operator: $oper")
     //detect headers 
     if(datasourceErrors) {
+      logger.trace(s"LOAD TABLE $realTargetTable: Adding datasourceErrors")
       val dseSchemaName = realTargetTable.withSuffix("_DSE")
       db.adaptiveSchemas.create(dseSchemaName, ID("DATASOURCE_ERRORS"), oper, Seq(), humanReadableName.getOrElse(realTargetTable.id))
       oper = db.adaptiveSchemas.viewFor(dseSchemaName, ID("DATA")).get
       cascadeDropAdaptive(targetRaw, dseSchemaName)
     }
     if(detectHeaders.getOrElse(true)) {
+      logger.trace(s"LOAD TABLE $realTargetTable: Adding detectHeaders")
       val dhSchemaName = realTargetTable.withSuffix("_DH")
       db.adaptiveSchemas.create(dhSchemaName, ID("DETECT_HEADER"), oper, Seq(), humanReadableName.getOrElse(realTargetTable.id))
       oper = db.adaptiveSchemas.viewFor(dhSchemaName, ID("DATA")).get
@@ -413,14 +419,18 @@ class LoadedTables(val db: Database)
     }
     //type inference
     if(inferTypes.getOrElse(true)){
+      logger.trace(s"LOAD TABLE $realTargetTable: Adding inferTypes")
       val tiSchemaName = realTargetTable.withSuffix("_TI")
       db.adaptiveSchemas.create(tiSchemaName, ID("TYPE_INFERENCE"), oper, Seq(FloatPrimitive(.5)), humanReadableName.getOrElse(realTargetTable.id)) 
       oper = db.adaptiveSchemas.viewFor(tiSchemaName, ID("DATA")).get
       cascadeDropAdaptive(targetRaw, tiSchemaName)
     }
     //finally create a view for the data
+    logger.trace(s"LOAD TABLE $realTargetTable: Creating wrapper view")
     db.views.create(realTargetTable, oper, force = true)
     cascadeDropView(targetRaw, realTargetTable)
+    logger.trace(s"LOAD TABLE $realTargetTable: Done!")
+
   }
 
   def reloadTable(table:ID): Unit =
