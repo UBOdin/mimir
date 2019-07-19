@@ -1,57 +1,54 @@
 package mimir.ml.spark
 
-import mimir.algebra._
-import mimir.Database
 
-import org.apache.spark.sql.{SQLContext, DataFrame, Row, Dataset}
-import org.apache.spark.{SparkContext, SparkConf}
-import org.apache.spark.ml.PipelineModel
-import org.apache.spark.sql.types.{DataType, DoubleType, LongType, FloatType, BooleanType, IntegerType, StringType, StructField, StructType}
-import org.apache.spark.ml.feature.Imputer
-import mimir.util.ExperimentalOptions
-import mimir.exec.spark.RAToSpark
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import java.sql.Timestamp
 import java.sql.Date
-import mimir.util.SparkUtils
+
+import org.apache.spark.{SparkContext, SparkConf}
+import org.apache.spark.ml.PipelineModel
+import org.apache.spark.ml.feature.Imputer
+import org.apache.spark.sql.{SparkSession, SQLContext, DataFrame, Row, Dataset}
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import org.apache.spark.sql.types.{
+  DataType, 
+  DoubleType, 
+  LongType, 
+  FloatType, 
+  BooleanType, 
+  IntegerType, 
+  StringType, 
+  StructField, 
+  StructType,
+  ShortType,
+  DateType,
+  TimestampType
+}
+
+import mimir.Database
+import mimir.algebra._
+import mimir.exec.spark.RAToSpark
+import mimir.exec.spark.MimirSpark
 import mimir.provenance.Provenance
-import org.apache.spark.sql.types.ShortType
-import org.apache.spark.sql.types.DateType
-import org.apache.spark.sql.types.TimestampType
+import mimir.util.SparkUtils
+import mimir.util.ExperimentalOptions
+
 
 object SparkML {
   type SparkModel = PipelineModel
   case class SparkModelGeneratorParams(db:Database, predictionCol:ID, handleInvalid:String /*keep, skip, error*/) 
   type SparkModelGenerator = SparkModelGeneratorParams => PipelineModel
-  var sc: Option[SparkContext] = None
-  var sqlCtx : Option[SQLContext] = None
-  def apply(spark:SQLContext) = {
-    sc = Some(spark.sparkSession.sparkContext)
-    sqlCtx = Some(spark)
-  }
   
 }
 
 abstract class SparkML {
   def getSparkSession() : SparkContext = {
-      SparkML.sc match {
-        case None => {
-          throw new Exception("No Spark Context")
-        }
-        case Some(session) => session
-      }
+    MimirSpark.get.sparkSession.sparkContext
   }
   
   def getSparkSqlContext() : SQLContext = {
-    SparkML.sqlCtx match {
-      case None => {
-        throw new Exception("No Spark Context")
-      }
-      case Some(ctx) => ctx
-    }
+    MimirSpark.get
   }
   
   type DataFrameTransformer = (DataFrame) => DataFrame

@@ -32,9 +32,9 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
   def beforeAll =
   {
     db.loader.linkTable(
-      source = "test/data/serial_r.csv",
+      sourceFile = "test/data/serial_r.csv",
       format = FileFormat.CSV,
-      tableName = ID("R"), 
+      targetTable = ID("R"), 
       sparkOptions = Map("DELIMITER" -> ",", "mode" -> "DROPMALFORMED", "header" -> "false") 
     )
   }

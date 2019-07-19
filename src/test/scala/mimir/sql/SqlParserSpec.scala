@@ -70,9 +70,9 @@ class SqlParserSpec
 			testData.foreach ( _ match { case ( tableName, tableData, tableCols ) => 
 				d.loader.drop(ID(tableName))
 				d.loader.linkTable(
-					source = tableData,
+					sourceFile = tableData,
 					format = FileFormat.CSV,
-					tableName = ID(tableName)
+					targetTable = ID(tableName)
 				)
 			})
 			d

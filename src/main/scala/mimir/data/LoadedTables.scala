@@ -163,17 +163,17 @@ class LoadedTables(val db: Database)
    * @param mimirOptions   Optional: Any data loading parameters for Mimir itself (currently unused)
    */
   def linkTable(
-    source: String, 
+    sourceFile: String, 
     format: ID, 
-    tableName: ID, 
+    targetTable: ID, 
     sparkOptions: Map[String,String] = Map(), 
     stageSourceURL: Boolean = false
   ) {
-    if(tableExists(tableName)){
-      throw new RAException(s"Can't LOAD ${tableName} because it already exists.")
+    if(tableExists(targetTable)){
+      throw new RAException(s"Can't LOAD ${targetTable} because it already exists.")
     }
     // Some parameters may change during the loading process.  Var-ify them
-    var url = source
+    var url = sourceFile
     var storageFormat = format
     var finalSparkOptions = 
       LoadedTables.defaultLoadOptions
@@ -189,7 +189,7 @@ class LoadedTables(val db: Database)
       // The Google Sheets loader expects to see only the last two path components of 
       // the sheet URL.  Rewrite full URLs if the user wants.
       case FileFormat.GOOGLE_SHEETS => {
-        url = source.split("/").reverse.take(2).reverse.mkString("/")
+        url = url.split("/").reverse.take(2).reverse.mkString("/")
       }
       
       // For everything else do nothing
@@ -201,7 +201,7 @@ class LoadedTables(val db: Database)
       mimirOptions("preStagedUrl") = JsString(url)
       mimirOptions("preStagedSparkOptions") = Json.toJson(finalSparkOptions)
       mimirOptions("preStagedFormat") = JsString(storageFormat.id)
-      val stagedConfig  = stage(url, finalSparkOptions, storageFormat, tableName)
+      val stagedConfig  = stage(url, finalSparkOptions, storageFormat, targetTable)
       url               = stagedConfig._1
       finalSparkOptions = stagedConfig._2
       storageFormat     = stagedConfig._3
@@ -223,11 +223,11 @@ class LoadedTables(val db: Database)
       sparkOptions = finalSparkOptions
     )
     // Cache the result
-    cache.put(tableName.id, df)
+    cache.put(targetTable.id, df)
 
     // Save the parameters
     store.put(
-      tableName, Seq(
+      targetTable, Seq(
         StringPrimitive(url),
         StringPrimitive(format.id),
         StringPrimitive(Json.stringify(Json.toJson(sparkOptions))),
@@ -375,7 +375,8 @@ class LoadedTables(val db: Database)
     sparkOptions: Map[String, String] = Map(),
     humanReadableName: Option[String] = None,
     datasourceErrors: Boolean = true,
-    stageSourceURL: Boolean = false
+    stageSourceURL: Boolean = false,
+    targetSchema: Option[Seq[ID]] = None
   ){
     // Pick a sane table name if necessary
     val realTargetTable = targetTable.getOrElse(fileToTableName(sourceFile))
@@ -394,13 +395,14 @@ class LoadedTables(val db: Database)
     }
     logger.trace("LOAD TABLE $realTargetTable <- $format($sourceFile);")
     linkTable(
-      source = sourceFile,
+      sourceFile = sourceFile,
       format = realFormat,
-      tableName = targetRaw,
+      targetTable = targetRaw,
       sparkOptions = sparkOptions,
       stageSourceURL = stageSourceURL
     )
     var oper = tableOperator(targetRaw)
+    var needView = false
     logger.trace("Operator: $oper")
     //detect headers 
     if(datasourceErrors) {
@@ -409,6 +411,7 @@ class LoadedTables(val db: Database)
       db.adaptiveSchemas.create(dseSchemaName, ID("DATASOURCE_ERRORS"), oper, Seq(), humanReadableName.getOrElse(realTargetTable.id))
       oper = db.adaptiveSchemas.viewFor(dseSchemaName, ID("DATA")).get
       cascadeDropAdaptive(targetRaw, dseSchemaName)
+      needView = true
     }
     if(detectHeaders.getOrElse(true)) {
       logger.trace(s"LOAD TABLE $realTargetTable: Adding detectHeaders")
@@ -416,6 +419,7 @@ class LoadedTables(val db: Database)
       db.adaptiveSchemas.create(dhSchemaName, ID("DETECT_HEADER"), oper, Seq(), humanReadableName.getOrElse(realTargetTable.id))
       oper = db.adaptiveSchemas.viewFor(dhSchemaName, ID("DATA")).get
       cascadeDropAdaptive(targetRaw, dhSchemaName)
+      needView = true
     }
     //type inference
     if(inferTypes.getOrElse(true)){
@@ -424,11 +428,21 @@ class LoadedTables(val db: Database)
       db.adaptiveSchemas.create(tiSchemaName, ID("TYPE_INFERENCE"), oper, Seq(FloatPrimitive(.5)), humanReadableName.getOrElse(realTargetTable.id)) 
       oper = db.adaptiveSchemas.viewFor(tiSchemaName, ID("DATA")).get
       cascadeDropAdaptive(targetRaw, tiSchemaName)
+      needView = true
     }
-    //finally create a view for the data
-    logger.trace(s"LOAD TABLE $realTargetTable: Creating wrapper view")
-    db.views.create(realTargetTable, oper, force = true)
-    cascadeDropView(targetRaw, realTargetTable)
+    for(schema <- targetSchema){
+      logger.trace(s"LOAD TABLE $realTargetTable: Wrapping with target schema")
+      oper = oper.renameByID(
+        oper.columnNames.zip(schema):_*
+      )
+      needView = true
+    }
+    if(needView){
+      //finally create a view for the data
+      logger.trace(s"LOAD TABLE $realTargetTable: Creating wrapper view")
+      db.views.create(realTargetTable, oper, force = true)
+      cascadeDropView(targetRaw, realTargetTable)
+    }
     logger.trace(s"LOAD TABLE $realTargetTable: Done!")
 
   }

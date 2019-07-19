@@ -156,21 +156,19 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     db.update(s)
   def update(s: String) = 
     db.update(stmt(s))
-  def loadCSV(file: String) : Unit =
+  def loadCSV(
+    file: String, 
+    table: String = null, 
+    inferTypes:Boolean = true, 
+    detectHeaders:Boolean = true, 
+    targetSchema: Seq[String] = null
+  ) : Unit =
     db.loader.loadTable(
-      sourceFile = file
-    )
-  def loadCSV(table: String, file: String) : Unit =
-    db.loader.loadTable(
-      targetTable = Some(ID(table)), 
-      sourceFile = file
-    )
-  def loadCSV(table: String, file: String, inferTypes:Boolean, detectHeaders:Boolean) : Unit =
-    db.loader.loadTable(
-      targetTable = Some(ID(table)), 
       sourceFile = file,
+      targetTable = Option(table).map { ID(_) },
       inferTypes = Some(inferTypes),
-      detectHeaders = Some(detectHeaders)
+      detectHeaders = Some(detectHeaders),
+      targetSchema = Option(targetSchema).map { _.map { ID(_) } }
     )
     
   def modelLookup(model: String) = db.models.get(ID(model))
