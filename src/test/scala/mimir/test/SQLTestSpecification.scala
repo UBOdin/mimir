@@ -98,7 +98,12 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
             case "NO" => false; case "YES" => true
           }) 
       {
-        for(table <- db.loader.listTables){ db.loader.drop(table) }
+        for(view <- db.views.listTables){ 
+          if(db.views(view).isMaterialized){ db.views.dematerialize(view) }
+        }
+        for(table <- db.loader.listTables){ 
+          db.loader.drop(table) 
+        }
       }
       db.close()
       //db.backend.open()

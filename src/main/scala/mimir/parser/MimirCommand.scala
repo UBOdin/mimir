@@ -19,7 +19,7 @@ object MimirCommand
 {
   def apply(input: Reader): StreamParser[MimirCommand] = 
     new StreamParser[MimirCommand](
-      parse(_:Iterator[String], command(_)), 
+      parse(_:Iterator[String], command(_), verboseFailures = true), 
       input
     )
   def apply(input: String): Parsed[MimirCommand] = 

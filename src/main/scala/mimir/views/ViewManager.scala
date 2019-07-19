@@ -347,9 +347,7 @@ class ViewManager(db:Database)
 
     return Project(projectedColumns, metadata.materializedOperator)
   }
-
 }
-
 
 object ViewManager 
 {

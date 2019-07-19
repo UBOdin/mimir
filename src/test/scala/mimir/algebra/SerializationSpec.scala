@@ -57,7 +57,7 @@ object SerializationSpec extends SQLTestSpecification("SerializationTest") with 
 
               Some(deserialized must be equalTo query)
             }
-
+ 
             case stmt => throw new Exception("Simple test cases shouldn't have updates ($stmt)")
           }).flatten
         }
