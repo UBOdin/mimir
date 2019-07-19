@@ -122,18 +122,24 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
         loadCSV( 
           "EMPLOYEE", 
           // Seq(("Name","string"),("Age","int"),("JOINDATE","date"),("Salary","float"),("Married","bool")), 
-          "test/data/Employee1.csv"
+          "test/data/Employee1.csv",
+          inferTypes = true,
+          detectHeaders = false
         )
       }
       
       db.query(db.sqlToRA(MimirSQL.Select("""
-        SELECT JOINDATE FROM EMPLOYEE
-      """)))(result => result.toList.map(_.tuple)).map{ _(0).asString } must contain(
-        "2011-08-01",
-        "2014-06-19",
-        "2007-11-11",
-        "2005-01-11"
-      )
+        SELECT `_c2` FROM EMPLOYEE
+      """))) { result => 
+        ( result.toIndexedSeq
+                .map { row => println(row.toString); row(0).asString }
+          ) must contain(
+              "2011-08-01",
+              "2014-06-19",
+              "2007-11-11",
+              "2005-01-11"
+            )
+      }
     }
 
   }
