@@ -345,14 +345,7 @@ class ViewManager(db:Database)
         metadata.provenanceCols.map { col => ProjectArg(col, Var(col)) }
     }
 
-    return Project(projectedColumns, 
-      Table(
-        metadata.materializedName, 
-        db.catalog.materializedTableProviderID,
-        metadata.materializedSchema,
-        Seq()
-      )
-    )
+    return Project(projectedColumns, metadata.materializedOperator)
   }
 
 }

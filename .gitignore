@@ -64,3 +64,4 @@ tpch-dbgen
 /derby.log
 /bin/coursier
 /bin/mimir
+*.parquet

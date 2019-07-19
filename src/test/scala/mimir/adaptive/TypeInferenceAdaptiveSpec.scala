@@ -29,7 +29,7 @@ object TypeInferenceAdaptiveSpec
         "CPUSPEED"
       )
       
-      val baseTypes = db.typechecker.schemaOf(db.table("CPUSPEED_RAW")).toMap
+      val baseTypes = db.typechecker.schemaOf(db.table(LoadedTables.SCHEMA, ID("CPUSPEED"))).toMap
       baseTypes must contain(ID("_c7") -> TString())
       baseTypes must contain(ID("_c1") -> TString())
       baseTypes must contain(ID("_c2") -> TString())

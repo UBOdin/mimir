@@ -56,6 +56,14 @@ class ViewMetadata(
   def materializedSchema =
     schemaWith(annotations.map { case ViewAnnotation.TAINT => ViewAnnotation.TAINT_BITS; case x => x })
 
+  def materializedOperator =
+    Table(
+      materializedName,
+      db.catalog.materializedTableProviderID,
+      materializedSchema,
+      Seq()
+    )
+
   def fullSchema =
     schemaWith( annotations )
       
