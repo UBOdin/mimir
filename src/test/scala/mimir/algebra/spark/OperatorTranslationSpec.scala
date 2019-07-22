@@ -23,7 +23,11 @@ object OperatorTranslationSpec
 
   def beforeAll = 
   {
-    db.loader.loadTable("test/r_test/r.csv")
+    loadCSV(
+      sourceFile = "test/r_test/r.csv",
+      detectHeaders = false,
+      targetSchema = Seq("COLUMN_0", "COLUMN_1", "COLUMN_2")
+    )
   }
   
   "Spark" should {
@@ -70,7 +74,11 @@ object OperatorTranslationSpec
     }
     
     "Be able to do Aggregates" >> {
-      loadCSV(targetTable = "U", sourceFile = "test/r_test/r.csv")
+      loadCSV(
+        targetTable = "U", 
+        sourceFile = "test/r_test/r.csv",
+        targetSchema = Seq("A", "B", "C")
+      )
       val aggQuery = 
         db.table("U")
           .aggregate(AggFunction(
@@ -86,7 +94,11 @@ object OperatorTranslationSpec
     }
     
     "Be Able to do RepairKey" >> {
-      loadCSV(targetTable = "S", sourceFile = "test/r_test/r.csv")
+      loadCSV(
+        targetTable = "S", 
+        sourceFile = "test/r_test/r.csv",
+        targetSchema = Seq("A", "B", "C")
+      )
       update("""
         CREATE LENS S_UNIQUE_A 
           AS SELECT * FROM S

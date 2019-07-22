@@ -65,7 +65,7 @@ case class VoteList()
        }  
      )
     acc match {
-      case Seq() | Seq(0 Seq()) => newacc
+      case Seq() | Seq( (0L, Seq()) )=> newacc
       case _ => {
         acc.zip(newacc).map(oldNew => {
           (oldNew._1._1+oldNew._2._1, oldNew._1._2++oldNew._2._2)
@@ -74,9 +74,9 @@ case class VoteList()
     } 
   }
   def merge(acc1: Seq[(Long, Seq[(Int, Long)])], acc2: Seq[(Long, Seq[(Int, Long)])]) = acc1 match {
-      case Seq() | Seq(0 Seq()) => acc2
+      case Seq() | Seq( (0L, Seq()) ) => acc2
       case x => acc2 match {
-        case Seq() | Seq(0 Seq()) => acc1
+        case Seq() | Seq( (0L, Seq()) ) => acc1
         case x => {
           acc1.zip(acc2).map(oldNew => {
             (oldNew._1._1+oldNew._2._1, oldNew._1._2++oldNew._2._2)
