@@ -18,8 +18,8 @@ object LensManagerSpec extends SQLTestSpecification("LensTests") {
 
     "Be able to create and query missing value lenses" >> {
       loadCSV(
-        "R", 
-        "test/r_test/r.csv"
+        targetTable = "R", 
+        sourceFile = "test/r_test/r.csv"
       )
       queryOneColumn("SELECT B FROM R"){ _.toSeq should contain(NullPrimitive()) }
       update("CREATE LENS SANER AS SELECT * FROM R WITH MISSING_VALUE('B')")

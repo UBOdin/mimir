@@ -9,8 +9,7 @@ import org.specs2.specification._
 import org.joda.time.DateTime
 import java.util.Locale
 import mimir.exec.mode.DumpDomain
-import play.api.libs.json.JsArray
-import play.api.libs.json.JsObject
+import play.api.libs.json. { JsArray, JsValue, JsObject }
 
 import sparsity.Name
 import sparsity.statement.CreateView
@@ -22,7 +21,12 @@ object GeocodingSpec
 {
 
   def beforeAll = {
-    loadCSV("ADDR", "test/data/geo.csv", false, true)
+    loadCSV(
+      targetTable = "ADDR",
+      sourceFile = "test/data/geo.csv", 
+      inferTypes = false, 
+      detectHeaders =true
+    )
   }
   
   "The Geocoding Lens" should {
@@ -240,14 +244,23 @@ object GeocodingSpec
       }.toList }.toList
       
       val jsonLat = play.api.libs.json.Json.parse(result(1)._1.asString)
-      val domainLatForRow = jsonLat.asInstanceOf[JsArray].value.map(jsVal => (jsVal.asInstanceOf[JsObject].value("choice").toString(), jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble))
-      
+      val domainLatForRow = jsonLat.as[Seq[JsValue]]
+                                   .map { jsVal => (
+                                      jsVal.asInstanceOf[JsObject].value("choice").toString().toDouble, 
+                                      jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble
+                                    )}
       val jsonLon = play.api.libs.json.Json.parse(result(1)._2.asString)
-      val domainLonForRow = jsonLon.asInstanceOf[JsArray].value.map(jsVal => (jsVal.asInstanceOf[JsObject].value("choice").toString(), jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble))
+      val domainLonForRow = jsonLon.as[Seq[JsValue]]
+                                   .map { jsVal => (
+                                      jsVal.asInstanceOf[JsObject].value("choice").toString().toDouble, 
+                                      jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble
+                                    )}
       
       domainLatForRow.length must be equalTo domainLonForRow.length
-      domainLatForRow must contain(("42.9088720526316",0.321))
-      domainLonForRow must contain(("-78.8807727368421", 0.321))
+      domainLatForRow.head._1 must beCloseTo(42.9088720526316 within 2.significantFigures)
+      domainLatForRow.head._2 must beEqualTo(0.321)
+      domainLonForRow.head._1 must beCloseTo(-78.8807727368421 within 2.significantFigures)
+      domainLonForRow.head._2 must beEqualTo(0.321)
       
     }
     
@@ -267,14 +280,26 @@ object GeocodingSpec
       }.toList }.toList
       
       val jsonLat = play.api.libs.json.Json.parse(result(1)._1.asString)
-      val domainLatForRow = jsonLat.asInstanceOf[JsArray].value.map(jsVal => (jsVal.asInstanceOf[JsObject].value("choice").toString(), jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble))
+      val domainLatForRow = jsonLat.as[Seq[JsValue]]
+                                   .map { jsVal => (
+                                      jsVal.asInstanceOf[JsObject].value("choice").toString().toDouble, 
+                                      jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble
+                                    )}
+      // val domainLatForRow = jsonLat.asInstanceOf[JsArray].value.map(jsVal => (jsVal.asInstanceOf[JsObject].value("choice").toString(), jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble))
       
       val jsonLon = play.api.libs.json.Json.parse(result(1)._2.asString)
-      val domainLonForRow = jsonLon.asInstanceOf[JsArray].value.map(jsVal => (jsVal.asInstanceOf[JsObject].value("choice").toString(), jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble))
+      val domainLonForRow = jsonLon.as[Seq[JsValue]]
+                                   .map { jsVal => (
+                                      jsVal.asInstanceOf[JsObject].value("choice").toString().toDouble, 
+                                      jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble
+                                    )}
+      // val domainLonForRow = jsonLon.asInstanceOf[JsArray].value.map(jsVal => (jsVal.asInstanceOf[JsObject].value("choice").toString(), jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble))
       
       domainLatForRow.length must be equalTo domainLonForRow.length
-      domainLatForRow must contain(("42.908687",1.0))
-      domainLonForRow must contain(("-78.88065",1.0))
+      domainLatForRow.head._1 must beCloseTo(42.908687 within 2.significantFigures)
+      domainLatForRow.head._2 must beEqualTo(1.0)
+      domainLonForRow.head._1 must beCloseTo(-78.88065 within 2.significantFigures)
+      domainLonForRow.head._2 must beEqualTo(1.0)
       
     }
 

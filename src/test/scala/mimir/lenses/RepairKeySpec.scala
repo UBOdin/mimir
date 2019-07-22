@@ -21,11 +21,30 @@ object RepairKeySpec
 
   def beforeAll = 
   {
-    loadCSV("R", "test/r_test/r.csv")
-    loadCSV("U", "test/r_test/u.csv")
-    loadCSV("FD_DAG", "test/repair_key/fd_dag.csv")
-    loadCSV("twitter100Cols10kRowsWithScore", "test/r_test/twitter100Cols10kRowsWithScore.csv")
-    loadCSV("cureSourceWithScore", "test/r_test/cureSourceWithScore.csv")
+    loadCSV(
+      targetTable = "R", 
+      sourceFile = "test/r_test/r.csv",
+      targetSchema = Seq("A", "B", "C"),
+      detectHeaders = false
+    )
+    loadCSV(
+      targetTable = "U", 
+      sourceFile = "test/r_test/u.csv",
+      targetSchema = Seq("A", "B", "C"),
+      detectHeaders = false
+    )
+    loadCSV(
+      targetTable = "FD_DAG", 
+      sourceFile = "test/repair_key/fd_dag.csv"
+    )
+    loadCSV(
+      targetTable = "twitter100Cols10kRowsWithScore", 
+      sourceFile = "test/r_test/twitter100Cols10kRowsWithScore.csv"
+    )
+    loadCSV(
+      targetTable = "cureSourceWithScore", 
+      sourceFile = "test/r_test/cureSourceWithScore.csv"
+    )
   }
 
   "The Key Repair Lens" should {

@@ -45,8 +45,8 @@ object SimpleDemoScript
 			//// THIS NEEDS TO HAVE HEADERS ATTACHED
 
 		  loadCSV(
-		  	"test/data/product.csv", 
-		  	"PRODUCT", 
+		  	sourceFile = "test/data/product.csv", 
+		  	targetTable = "PRODUCT", 
 		  	inferTypes = true,
 		  	detectHeaders = false,
 		  	targetSchema = Seq("ID", "NAME", "BRAND", "CATEGORY")

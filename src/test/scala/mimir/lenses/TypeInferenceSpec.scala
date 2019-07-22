@@ -55,8 +55,8 @@ object TypeInferenceSpec
 
     "Should load the PRODUCTs table" >> {
       loadCSV(
-        "PRODUCTS",
-        "test/data/product.csv",
+        targetTable = "PRODUCTS",
+        sourceFile = "test/data/product.csv",
         detectHeaders = false,
         inferTypes = true
       )

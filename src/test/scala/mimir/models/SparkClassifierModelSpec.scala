@@ -42,7 +42,7 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
     
     "Be trainable" >> {
       loadCSV(
-        "CPUSPEED",  
+        targetTable = "CPUSPEED",  
         // Seq(
         //   "PROCESSORID" -> "string",
         //   "FAMILY" -> "string",
@@ -59,7 +59,7 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
         //   "SS" -> "string",
         //   "NOTES" -> "string"
         // ),
-        "test/data/CPUSpeed.csv"
+        sourceFile = "test/data/CPUSpeed.csv"
       )
      
       models = models ++ SparkClassifierModel.train(db, ID("CPUSPEEDREPAIR"), List(

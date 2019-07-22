@@ -19,7 +19,7 @@ object DateSpec
     loadCSV("test/data/DetectSeriesTest2.csv")
   }
 
-  "Dates on SQLite" should {
+  "Dates on the query backend" should {
 
     "Not be messed up by order-by" >> {
 

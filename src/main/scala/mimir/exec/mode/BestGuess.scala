@@ -37,6 +37,7 @@ object BestGuess
   ) =
   {
     var oper = operRaw
+    logger.debug(s"ORIGINAL: $oper")
     val rawColumns = operRaw.columnNames.toSet
 
     // We'll need the pristine pre-manipulation schema down the line

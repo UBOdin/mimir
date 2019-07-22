@@ -121,7 +121,7 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   def query[T](s: String)(handler: ResultIterator => T): T =
     db.query(select(s))(handler)
   def queryOneColumn[T](s: String)(handler: Iterator[PrimitiveValue] => T): T = 
-    query(s){ result => handler(result.map(_(0))) }
+    query(s){ result => handler(result.map { row => row(0) }) }
   def querySingleton(s: String): PrimitiveValue =
     queryOneColumn(s){ _.next }
   def queryOneRow(s: String): Row =
@@ -157,15 +157,15 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   def update(s: String) = 
     db.update(stmt(s))
   def loadCSV(
-    file: String, 
-    table: String = null, 
+    sourceFile: String, 
+    targetTable: String = null, 
     inferTypes:Boolean = true, 
     detectHeaders:Boolean = true, 
     targetSchema: Seq[String] = null
   ) : Unit =
     db.loader.loadTable(
-      sourceFile = file,
-      targetTable = Option(table).map { ID(_) },
+      sourceFile = sourceFile,
+      targetTable = Option(targetTable).map { ID(_) },
       inferTypes = Some(inferTypes),
       detectHeaders = Some(detectHeaders),
       targetSchema = Option(targetSchema).map { _.map { ID(_) } }

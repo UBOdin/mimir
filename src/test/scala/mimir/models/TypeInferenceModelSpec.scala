@@ -62,12 +62,10 @@ object TypeInferenceModelSpec extends SQLTestSpecification("TypeInferenceTests")
     }
 
     "Recognize CPU Cores" >> {
-      db.loader.loadTable(
-        targetTable = Some(ID("CPUSPEED")), 
+      loadCSV(
+        targetTable = "CPUSPEED", 
         sourceFile = "test/data/CPUSpeed.csv", 
-        inferTypes = Some(false),
-        format = ID("csv")
-        //loadCSV("CPUSPEED", new File("test/data/CPUSpeed.csv"))
+        inferTypes = false
       )
       LoggerUtils.debug(
         "mimir.models.TypeInferenceModel"

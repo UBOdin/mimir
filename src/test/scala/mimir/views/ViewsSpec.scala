@@ -17,10 +17,9 @@ object ViewsSpec
 {
 
   def beforeAll = {
-    //loadCSV("R",Seq(("A", "int"), ("B", "int"), ("C", "int")), new File("test/data/views_r.csv"))
-    db.loader.loadTable( 
+    loadCSV(
       sourceFile = "test/data/views_r.csv",  
-      targetTable = Some(ID("R"))
+      targetTable = "R"
     )
   }
 
@@ -28,10 +27,9 @@ object ViewsSpec
 
   "The View Manager" should {
     "Not interfere with CSV Imports" >> {
-      //loadCSV("S",Seq(("C", "int"), ("D", "int")), new File("test/data/views_s.csv"))
-      db.loader.loadTable( 
+      loadCSV( 
         sourceFile = "test/data/views_s.csv",  
-        targetTable = Some(ID("S"))
+        targetTable = "S"
       )
       ok
     }

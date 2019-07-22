@@ -70,7 +70,7 @@ object OperatorTranslationSpec
     }
     
     "Be able to do Aggregates" >> {
-      loadCSV("U", "test/r_test/r.csv")
+      loadCSV(targetTable = "U", sourceFile = "test/r_test/r.csv")
       val aggQuery = 
         db.table("U")
           .aggregate(AggFunction(
@@ -86,7 +86,7 @@ object OperatorTranslationSpec
     }
     
     "Be Able to do RepairKey" >> {
-      loadCSV("S", "test/r_test/r.csv")
+      loadCSV(targetTable = "S", sourceFile = "test/r_test/r.csv")
       update("""
         CREATE LENS S_UNIQUE_A 
           AS SELECT * FROM S

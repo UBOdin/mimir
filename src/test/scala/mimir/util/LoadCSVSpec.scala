@@ -12,7 +12,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
   
   "LoadCSV" should {
     "Load CSV files with headers" >> {
-      loadCSV("RATINGS1", "test/data/ratings1.csv")
+      loadCSV(targetTable = "RATINGS1", sourceFile = "test/data/ratings1.csv")
       queryOneColumn("SELECT PID FROM RATINGS1"){
         _.toSeq must contain(
           str("P123"), str("P2345"), str("P124"), str("P325")
@@ -21,23 +21,23 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
     }
 
     "Load CSV files without headers" >> {
-      loadCSV( "U", "test/r_test/u.csv" )
+      loadCSV(targetTable = "U", sourceFile = "test/r_test/u.csv" )
       val col1: String = db.tableSchema("U").get.head._1.id
-      queryOneColumn(s"SELECT $col1 FROM U"){
-        _.toSeq must contain(
+      queryOneColumn(s"SELECT `$col1` FROM U"){
+        _.toIndexedSeq must contain(
           i(1), i(2), i(3), i(4), i(5)
         )
       }
     }
 
     "Load CSV files with headers given an existing schema" >> {
-      loadCSV("RATINGS2", 
+      loadCSV(targetTable = "RATINGS2", 
         // Seq(
         //   ("PID","string"), 
         //   ("EVALUATION","float"), 
         //   ("NUM_RATINGS","float")
         // ), 
-        "test/data/ratings2.csv"
+        sourceFile = "test/data/ratings2.csv"
       )
       queryOneColumn(s"SELECT PID FROM RATINGS2"){ 
         _.toSeq must contain(
@@ -52,9 +52,12 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
     }
 
     "Load CSV files without headers given an existing schema" >> {
-      loadCSV( "U2", "test/r_test/u.csv")
-      val col1: String = db.tableSchema("U2").get.head._1.id
-      queryOneColumn(s"SELECT $col1 FROM U2"){
+      loadCSV( 
+        targetTable = "U2", 
+        sourceFile = "test/r_test/u.csv",
+        targetSchema = Seq("Alice", "Bob", "Carol")
+      )
+      queryOneColumn(s"SELECT Alice FROM U2"){
         _.toList must contain(
           i(1), i(2), i(3), i(4), i(5)
         )
@@ -65,9 +68,9 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
       // Disable warnings for type errors
       LoggerUtils.error("mimir.util.LoadCSV$"){
         loadCSV( 
-          "RATINGS1WITHTYPES", 
+          targetTable = "RATINGS1WITHTYPES", 
           // Seq(("PID","string"),("RATING","float"),("REVIEW_CT","float")), 
-          "test/data/ratings1.csv"
+          sourceFile = "test/data/ratings1.csv"
         )
       }
       //This differes in spark with mode => "DROPMALFORMED" : when a schema is 
@@ -80,11 +83,11 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
       }
       //with spark if "PERMISSIVE" mode is used when a schema is provided the
       // NULL will be there otherwise it is dropped
-      /*queryOneColumn("SELECT RATING FROM RATINGS1WITHTYPES"){
+      queryOneColumn("SELECT RATING FROM RATINGS1WITHTYPES"){
         _.toSeq must contain(
           NullPrimitive()
         )
-      }*/
+      }
       //Same deal here with 245.0 : spark "DROPMALFORMED" mode 
       queryOneColumn("SELECT REVIEW_CT FROM RATINGS1WITHTYPES"){
         _.toSeq must contain(
@@ -98,8 +101,8 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
       val colNames: Seq[String] = db.tableSchema("R").get.map(_._1.id)
       val b = colNames(1)
       val c = colNames(2)
-      queryOneColumn(s"SELECT $b FROM R"){ _.toSeq must contain(NullPrimitive()) }
-      queryOneColumn(s"SELECT $c FROM R"){ _.toSeq must contain(NullPrimitive()) }
+      queryOneColumn(s"SELECT `$b` FROM R"){ _.toSeq must contain(NullPrimitive()) }
+      queryOneColumn(s"SELECT `$c` FROM R"){ _.toSeq must contain(NullPrimitive()) }
     }
 
     "Load CSV files with garbled data" >> {
@@ -120,9 +123,9 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
     "Load Dates Properly" >> {
       LoggerUtils.error("mimir.util.NonStrictCSVParser") {
         loadCSV( 
-          "EMPLOYEE", 
+          targetTable = "EMPLOYEE", 
           // Seq(("Name","string"),("Age","int"),("JOINDATE","date"),("Salary","float"),("Married","bool")), 
-          "test/data/Employee1.csv",
+          sourceFile = "test/data/Employee1.csv",
           inferTypes = true,
           detectHeaders = false
         )
@@ -132,7 +135,7 @@ object LoadCSVSpec extends SQLTestSpecification("LoadCSV")
         SELECT `_c2` FROM EMPLOYEE
       """))) { result => 
         ( result.toIndexedSeq
-                .map { row => println(row.toString); row(0).asString }
+                .map { row => row(0).asString }
           ) must contain(
               "2011-08-01",
               "2014-06-19",

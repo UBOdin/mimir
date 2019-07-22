@@ -23,14 +23,14 @@ object SqlFilesOnly extends FileFilter {
 object SerializationSpec extends SQLTestSpecification("SerializationTest") with BeforeAll {
 
   def beforeAll = {
-    loadCSV("R", 
-      "test/data/serial_r.csv"
+    loadCSV(targetTable = "R", 
+      sourceFile = "test/data/serial_r.csv"
     )
-    loadCSV("S", 
-      "test/data/serial_s.csv"
+    loadCSV(targetTable = "S", 
+      sourceFile = "test/data/serial_s.csv"
     )
-    loadCSV("T", 
-      "test/data/serial_t.csv"
+    loadCSV(targetTable = "T", 
+      sourceFile = "test/data/serial_t.csv"
     )
   }
 

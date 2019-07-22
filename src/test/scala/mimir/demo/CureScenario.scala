@@ -47,7 +47,7 @@ object CureScenario
       s"Load '$table'" >> {
         time(s"Load '$table'") {
           //update(s"LOAD '$table';") 
-          loadCSV(basename, table)
+          loadCSV(table)
         }
         time(s"Materialize '$basename'"){
           update(s"ALTER VIEW $basename MATERIALIZE;")

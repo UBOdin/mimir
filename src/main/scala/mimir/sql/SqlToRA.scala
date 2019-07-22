@@ -96,6 +96,8 @@ class SqlToRA(db: Database)
     // built up over the course of this function
     var ret:Operator = HardTable(Seq(),Seq())
 
+    logger.debug(s"Converting query: $select")
+
     //////////////////////// CONVERT FROM CLAUSE /////////////////////////////
     val fromClauses   = select.from.map { convertFromElement(_) }
     val fromOperators = fromClauses.map { _._1 }
@@ -108,6 +110,8 @@ class SqlToRA(db: Database)
               .tail
               .fold(fromOperators.head) 
                    { Join(_, _) }
+    } else {
+      logger.trace("No FROM items.  Using an empty table")
     }
 
     // Unlike SQL, Mimir's relational algebra does not use range variables.  Rather,

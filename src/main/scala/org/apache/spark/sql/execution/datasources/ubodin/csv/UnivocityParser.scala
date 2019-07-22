@@ -246,6 +246,8 @@ class UnivocityParser(
   private def convert(tokens: Array[String]): InternalRow = {
     logger.trace(s"PRE-CONVERT")
     logger.trace(s"CONVERT: $tokens")
+    logger.trace(s"Required Schema: $requiredSchema")
+    logger.trace(s"Data Schema: $dataSchema")
 
     if (tokens == null) {
       /*throw BadRecordException(

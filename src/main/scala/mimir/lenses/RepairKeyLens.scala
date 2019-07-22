@@ -27,7 +27,7 @@ object RepairKeyLens extends LazyLogging {
       case Var(col) => {
         if(schemaMap contains col){ Some(col) }
         else {
-          throw new SQLException(s"Invalid column: $col in RepairKeyLens $name")
+          throw new SQLException(s"Invalid column: $col in RepairKeyLens $name (available columns: ${schemaMap.keys.mkString(", ")}")
         }
       }
       case Function(ID("score_by"), Seq(Var(col))) => {
