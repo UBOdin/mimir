@@ -1,6 +1,7 @@
 package mimir.algebra.spark
 
 import java.io.File
+import java.nio.file.Paths
 import org.specs2.specification.BeforeAll
 import com.github.potix2.spark.google.spreadsheets.SparkSpreadsheetService
 
@@ -32,7 +33,8 @@ object SparkDataSourcesSpec
     db.loader.loadTable("test/r_test/r.csv")
   }
   
- 
+  sequential
+
   "Data Sources for SparkBackend" should {
     "For CSV data source" should {
       "Be able to query from a CSV source" >> {
@@ -54,17 +56,19 @@ object SparkDataSourcesSpec
     
     
     "For JSON data source" should {
-      sequential
-      db.loader.loadTable(
-        sourceFile = "test/data/jsonsample.txt", 
-        targetTable = Some(ID("J")), 
-        inferTypes = Some(true), 
-        detectHeaders = Some(false), 
-        format = FileFormat.JSON
-      )   
+
+      "Be able to load a JSON data source" >> {
+        db.loader.loadTable(
+          sourceFile = "test/data/jsonsample.txt", 
+          targetTable = Some(ID("J")), 
+          inferTypes = Some(true), 
+          detectHeaders = Some(false), 
+          format = FileFormat.JSON
+        )   
+        ok
+      }
       
       "Be able to query from a json source" >> {
-            
         val result = query("""
           SELECT * FROM J
         """)(_.toList.map(_.tuple.toList)).toList
@@ -88,18 +92,21 @@ object SparkDataSourcesSpec
     
     
     "For Google Sheet data source" should { 
-      sequential
-      db.loader.loadTable(
-        sourceFile = "1-9fKx9f1OV-J2P2LtOM33jKfc5tQt4DJExSU3xaXDwU/Sheet1", 
-        targetTable = Some(ID("G")), 
-        inferTypes = Some(true), 
-        detectHeaders = Some(false),
-        format = FileFormat.GOOGLE_SHEETS,
-        sparkOptions = Map(
-          "serviceAccountId" -> "vizier@api-project-378720062738.iam.gserviceaccount.com",
-          "credentialPath" -> MimirSpark.sheetCred
-        )
-      ) 
+
+      "Be able to load a Google Sheets  data source" >> {
+        db.loader.loadTable(
+          sourceFile = "1-9fKx9f1OV-J2P2LtOM33jKfc5tQt4DJExSU3xaXDwU/Sheet1", 
+          targetTable = Some(ID("G")), 
+          inferTypes = Some(true), 
+          detectHeaders = Some(false),
+          format = FileFormat.GOOGLE_SHEETS,
+          sparkOptions = Map(
+            "serviceAccountId" -> "vizier@api-project-378720062738.iam.gserviceaccount.com",
+            "credentialPath" -> MimirSpark.sheetCred
+          )
+        ) 
+        ok
+      }
      
       "Be able to query from a google sheet source" >> {
         val result = query("""
@@ -157,15 +164,18 @@ object SparkDataSourcesSpec
     
     
     "For XML data source" should { 
-      sequential
-      db.loader.loadTable(
-        sourceFile = "test/data/xmlsample.xml", 
-        targetTable = Some(ID("X")), 
-        inferTypes = Some(false), 
-        detectHeaders = Some(false),
-        format = FileFormat.XML,
-        sparkOptions = Map("rowTag" -> "book")
-      ) 
+
+      "Be able to load an XML data source" >> {
+        db.loader.loadTable(
+          sourceFile = "test/data/xmlsample.xml", 
+          targetTable = Some(ID("X")), 
+          inferTypes = Some(false), 
+          detectHeaders = Some(false),
+          format = FileFormat.XML,
+          sparkOptions = Map("rowTag" -> "book")
+        ) 
+        ok
+      }
       
       "Be able to query from a xml source" >> {
             
@@ -192,26 +202,30 @@ object SparkDataSourcesSpec
     
     "For Excel data source" should { 
       sequential
-      db.loader.loadTable(
-        sourceFile = "test/data/excel.xlsx",
-        targetTable = Some(ID("E")), 
-        inferTypes = Some(true), 
-        detectHeaders = Some(true), 
-        format = ID("com.crealytics.spark.excel"),
-        sparkOptions = Map("sheetName" -> "SalesOrders", // Required
-                          "dataAddress" -> "'SalesOrders'!A1",
-                          "useHeader" -> "false", // Required
-                          "treatEmptyValuesAsNulls" -> "true", // Optional, default: true
-                          //"inferSchema" -> "true", // Optional, default: false
-                          //"addColorColumns" -> "true", // Optional, default: false
-                          "startColumn" -> "0", // Optional, default: 0
-                          "endColumn" -> "6"/*, // Optional, default: Int.MaxValue
-                          "dateFormat" -> "M/d/yyyy", // Optional, default: yyyy-mm-dd
-                          "timestampFormat" -> "MM-dd-yyyy hh:mm:ss", // Optional, default: yyyy-mm-dd hh:mm:ss[.fffffffff]
-                          //"maxRowsInMemory" -> "20", // Optional, default None. If set, uses a streaming reader which can help with big files
-                          //"excerptSize" -> "10"*/ // Optional, default: 10. If set and if schema inferred, number of rows to infer schema from
-        )
-      ) 
+
+      "Be able to load an Excel spreadsheet data source" >> {
+        db.loader.loadTable(
+          sourceFile = "test/data/excel.xlsx",
+          targetTable = Some(ID("E")), 
+          inferTypes = Some(true), 
+          detectHeaders = Some(true), 
+          format = ID("com.crealytics.spark.excel"),
+          sparkOptions = Map("sheetName" -> "SalesOrders", // Required
+                            "dataAddress" -> "'SalesOrders'!A1",
+                            "useHeader" -> "false", // Required
+                            "treatEmptyValuesAsNulls" -> "true", // Optional, default: true
+                            //"inferSchema" -> "true", // Optional, default: false
+                            //"addColorColumns" -> "true", // Optional, default: false
+                            "startColumn" -> "0", // Optional, default: 0
+                            "endColumn" -> "6"/*, // Optional, default: Int.MaxValue
+                            "dateFormat" -> "M/d/yyyy", // Optional, default: yyyy-mm-dd
+                            "timestampFormat" -> "MM-dd-yyyy hh:mm:ss", // Optional, default: yyyy-mm-dd hh:mm:ss[.fffffffff]
+                            //"maxRowsInMemory" -> "20", // Optional, default None. If set, uses a streaming reader which can help with big files
+                            //"excerptSize" -> "10"*/ // Optional, default: 10. If set and if schema inferred, number of rows to infer schema from
+          )
+        ) 
+        ok
+      }
            
       
       "Be able to query from a excel source" >> {
@@ -247,53 +261,12 @@ object SparkDataSourcesSpec
       }
     }
     
-    //this won't work unless you add the gpl mysql connector dependency
-    /*"For mysql data source" should { 
-      "Be able to query from a mysql source" >> {
-        db.loadTable("M", new File("jdbc:mysql://mysql-rfam-public.ebi.ac.uk/Rfam"), true, None, true, false, 
-                      Map("url" -> "jdbc:mysql://mysql-rfam-public.ebi.ac.uk:4497/Rfam", 
-                                "driver" -> "com.mysql.jdbc.Driver", 
-                                "dbtable" -> "family", 
-                                "user" -> "rfamro"/*, 
-                                "password" -> ""*/), "jdbc")
-        
-        val result = query("""
-          SELECT * FROM M
-        """)(_.toList.map(_.tuple.toList)).toList
-        
-         
-        result.length must be greaterThan 0
-        result.head.length must be greaterThan 0
-      }
-    }*/
-    
-    /*"For postgres data source" should { 
-      "Be able to query from a postgres source" >> {
-        LoadJDBC.handleLoadTableRaw(db, "P", 
-          Map("url" -> "jdbc:postgresql://128.205.71.102:5432/mimirdb", 
-            "driver" -> "org.postgresql.Driver", 
-            "dbtable" -> "mimir_spark", 
-            "user" -> "mimir", 
-            "password" -> "mimir01"))
-            
-        val result = query("""
-          SELECT * FROM P
-        """)(_.toList.map(_.tuple.toList)).toList
-        
-        result must be equalTo List(
-            List(i(1), NullPrimitive(), i(100)), 
-            List(i(2), i(4), i(104)), 
-            List(i(3), i(4), i(118)), 
-            List(i(4), i(5), NullPrimitive()), 
-            List(i(5), i(4), i(50)))
-      }
-    }*/
    
     "For data sources in S3" should {  
       sequential
-      "Be able to stage a csv file to s3 and query from it" >> {
+      "Be able to stage a csv file and query from it" >> {
         db.loader.loadTable(
-          sourceFile = "test/r_test/r.csv",
+          sourceFile = s"file://${Paths.get(".").toAbsolutePath()}/test/r_test/r.csv",
           targetTable = Some(ID("STAGETOS3CSV")),
           stageSourceURL = true
         )

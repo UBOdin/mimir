@@ -405,7 +405,7 @@ class LoadedTables(val db: Database)
     var needView = false
     logger.trace("Operator: $oper")
     //detect headers 
-    if(datasourceErrors) {
+    if(LoadedTables.usesDatasourceErrors(realFormat)) {
       logger.trace(s"LOAD TABLE $realTargetTable: Adding datasourceErrors")
       val dseSchemaName = realTargetTable.withSuffix("_DSE")
       db.adaptiveSchemas.create(dseSchemaName, ID("DATASOURCE_ERRORS"), oper, Seq(), humanReadableName.getOrElse(realTargetTable.id))
@@ -506,6 +506,10 @@ object LoadedTables {
   val defaultLoadOptions = Map[ID, Map[String,String]](
     FileFormat.CSV                    -> defaultLoadCSVOptions,
     FileFormat.CSV_WITH_ERRORCHECKING -> defaultLoadCSVOptions
+  )
+
+  val usesDatasourceErrors = Set(
+    FileFormat.CSV_WITH_ERRORCHECKING
   )
 
 }
