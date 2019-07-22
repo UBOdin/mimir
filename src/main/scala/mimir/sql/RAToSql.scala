@@ -381,7 +381,7 @@ class RAToSql(db: Database)
       case Table(name, source, tgtSch, metadata) =>
         val realSch = db.catalog.tableSchema(source, name) match {
             case Some(realSch) => realSch
-            case None => throw new SQLException("Unknown Table '"+name+"'");
+            case None => throw new SQLException(s"Unknown Table `$source`.`$name`");
           }
         // Since Mimir's RA tree structure has no real notion of aliasing,
         // it's only really safe to inline tables directly into a query

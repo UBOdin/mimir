@@ -8,6 +8,7 @@ import mimir.parser._
 import mimir.algebra._
 import mimir.sql._
 import mimir.test._
+import mimir.data.LoadedTables
 import java.io.File
 import sparsity.Name
 import mimir.data.FileFormat
@@ -18,10 +19,10 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
   {
     if(cols.isEmpty){
       name match {
-        case "R" => Table(ID(name), ID(name), Seq(ID("A") -> TInt(), ID("B") -> TInt()), Seq())
+        case "R" => Table(ID(name), LoadedTables.SCHEMA, Seq(ID("_c0") -> TInt(), ID("_c1") -> TInt()), Seq())
       }
     } else {
-      Table(ID(name), ID(name), cols.map { ID.upper(_) }.map { (_, TInt()) }, Seq())      
+      Table(ID(name), LoadedTables.SCHEMA, cols.map { ID.upper(_) }.map { (_, TInt()) }, Seq())      
     }
   }
 
@@ -53,15 +54,15 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
       convert(
         table("R")("P", "Q")
       ) must be equalTo 
-        "SELECT * FROM (SELECT `R`.`A` AS `P`, `R`.`B` AS `Q` FROM `R`) AS `SUBQ_P`"
+        "SELECT * FROM (SELECT `R`.`_c0` AS `P`, `R`.`_c1` AS `Q` FROM `R`) AS `SUBQ_P`"
     }
 
     "Produce Flat Queries for Projections" >> {
       convert(
         table("R")()
-          .mapParsed( ("Z", "A+B") )
+          .mapParsed( ("Z", "`_c0`+`_c1`") )
       ) must be equalTo 
-        "SELECT `R`.`A` + `R`.`B` AS `Z` FROM `R`"
+        "SELECT `R`.`_c0` + `R`.`_c1` AS `Z` FROM `R`"
     }
 
     "Produce Flat Queries for Projections with Aliased Variables" >> {
@@ -69,7 +70,7 @@ object RaToSqlSpec extends SQLTestSpecification("RAToSQL") with BeforeAll {
         table("R")("P", "Q")
           mapParsed( ("Z", "P+Q") )
       ) must be equalTo 
-        "SELECT `SUBQ_P`.`P` + `SUBQ_P`.`Q` AS `Z` FROM (SELECT `R`.`A` AS `P`, `R`.`B` AS `Q` FROM `R`) AS `SUBQ_P`"
+        "SELECT `SUBQ_P`.`P` + `SUBQ_P`.`Q` AS `Z` FROM (SELECT `R`.`_c0` AS `P`, `R`.`_c1` AS `Q` FROM `R`) AS `SUBQ_P`"
     }
 
     "Produce Flat Queries for Project-Selections" >> {

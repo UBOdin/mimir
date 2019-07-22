@@ -16,6 +16,7 @@ import mimir.exec.result._
 import mimir.util._
 import mimir.util.JsonUtils.primitiveValueWrites
 import mimir.parser.DrawPlot
+import mimir.sql.SqlToRA
 
 object Plot
   extends LazyLogging
@@ -70,7 +71,7 @@ object Plot
 
           val convertExpression:(sparsity.expression.Expression => ID) = 
             (raw: sparsity.expression.Expression) => {
-            db.sqlToRA(raw, db.sqlToRA.literalBindings) match {
+            db.sqlToRA(raw, SqlToRA.literalBindings) match {
               case Var(vn) => vn
               case expr => {
                 extraColumnCounter += 1

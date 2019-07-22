@@ -233,7 +233,7 @@ case class Database(metadata: MetadataBackend)
           ID.upper(lens.lensType),
           ID.upper(lens.name),
           sqlToRA(lens.body),
-          lens.args.map { sqlToRA(_, sqlToRA.literalBindings(_)) }
+          lens.args.map { sqlToRA(_, SqlToRA.literalBindings(_)) }
         )
       }
 
@@ -267,7 +267,7 @@ case class Database(metadata: MetadataBackend)
           ID.upper(create.name),
           ID.upper(create.schemaType),
           sqlToRA(create.body),
-          create.args.map( sqlToRA(_, sqlToRA.literalBindings(_)) ),
+          create.args.map( sqlToRA(_, SqlToRA.literalBindings(_)) ),
           create.humanReadableName
         )
       }
