@@ -197,13 +197,6 @@ libraryDependencies ++= Seq(
   /// Explicitly not including MySQL, since it's GPL-licensed.  If you want 
   /// to use MySQL, you're free to compile your own version of Mimir.
 
-  ///////////////////  GProM/Native Integration //////////////
-  "net.java.dev.jna"         %    "jna"                     % "4.2.2",
-  "net.java.dev.jna"         %    "jna-platform"            % "4.2.2",
-  "org.apache.logging.log4j" %    "log4j-api" 				 % "2.8.2",
-  "org.apache.logging.log4j" %    "log4j-core" 			 % "2.8.2",
-  "org.apache.logging.log4j" %%   "log4j-api-scala"         % "2.8.2",
-  
   ///////////////////// Viztrails Integration ///////////////////
   
   "org.eclipse.jetty"			  %    "jetty-http" 		  % "9.4.10.v20180503",
