@@ -25,9 +25,10 @@ object FeedbackSpec
         targetTable = "R", 
         sourceFile = "test/r_test/r.csv", 
         detectHeaders = false, 
-        inferTypes = false
+        inferTypes = false,
+        targetSchema = Seq("A", "B", "C")
       )
-      update("CREATE ADAPTIVE SCHEMA MATCH AS SELECT * FROM R WITH SCHEMA_MATCHING('B int', 'CX int')")
+      update("CREATE ADAPTIVE SCHEMA MATCH AS SELECT * FROM R WITH SCHEMA_MATCHING('B string', 'CX string')")
       db.adaptiveSchemas.create(
         ID("R_TI"), 
         ID("TYPE_INFERENCE"), 
@@ -106,13 +107,13 @@ object FeedbackSpec
       val originalGuess = model.bestGuess(0, List(nullRow), List()).asLong
       querySingleton(s"""
         SELECT C FROM MV WHERE ROWID() = ROWID($nullRow)
-      """) must be equalTo(IntPrimitive(originalGuess))
+      """).asString must be equalTo(s"$originalGuess")
       originalGuess must not be equalTo(800)
 
       update(s"FEEDBACK MV:SPARKML:C 0 ($nullRow) IS 800")
       querySingleton(s"""
         SELECT C FROM MV WHERE ROWID() = ROWID($nullRow)
-      """) must be equalTo(IntPrimitive(800))
+      """).asString must be equalTo("800")
 
 
 
