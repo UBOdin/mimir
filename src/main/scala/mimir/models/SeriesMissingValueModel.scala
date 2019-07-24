@@ -255,10 +255,10 @@ class SimpleSeriesModel(name: ID, val seriesCols:Seq[ID], val querySchema: Seq[(
         val bestSeries = bestSequence(idx)
         getCache(idx, args, Seq(StringPrimitive(bestSeries.id))) match {
           case Some(value) => 
-            s"I interpolated $humanReadableName.${seriesCols(idx)}, ordered by $name.${bestSequence(idx)} to get $value for row ${args(0)}"
+            s"I interpolated $humanReadableName.${seriesCols(idx)}, ordered by $humanReadableName.${bestSequence(idx)} to get $value for row ${args(0)}"
           case None =>{
             //s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSequence(idx)} row ${args(0)}"
-            s"I interpolated $humanReadableName.${seriesCols(idx)}, ordered by $name.${bestSeries} to get ${interpolate(idx, args, bestSeries)} for row ${args(0)}"
+            s"I interpolated $humanReadableName.${seriesCols(idx)}, ordered by $humanReadableName.${bestSeries} to get ${interpolate(idx, args, bestSeries)} for row ${args(0)}"
           }
         }
       }

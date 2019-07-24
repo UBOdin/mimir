@@ -150,11 +150,35 @@ object Provenance extends LazyLogging {
       }
 
       case LeftOuterJoin(lhs, rhs, cond) => {
-        val (rewritten, cols) = compile(lhs)
-        (
-          LeftOuterJoin(rewritten, rhs, cond),
-          cols
-        )
+        val (newLhs, lhsRowids) = compile(lhs)
+        val (newRhs, rhsRowids) = compile(rhs)
+
+        logger.trace(s"OUTER JOIN: $lhsRowids || $rhsRowids in\n$oper")
+
+        val (newLhsRowids, lhsIdProjections) = 
+          makeRowIDProjectArgs(lhsRowids, 0, 0)
+        val (newRhsRowids, rhsIdProjections) = 
+          makeRowIDProjectArgs(rhsRowids, lhsRowids.size, 0)
+        val lhsProjectArgs =
+          lhs.columnNames.map(x => ProjectArg(x, Var(x))) ++ lhsIdProjections
+        val rhsProjectArgs = 
+          rhs.columnNames.map(x => ProjectArg(x, Var(x))) ++ rhsIdProjections
+
+        val newOuterJoin =           
+          LeftOuterJoin(
+            Project(lhsProjectArgs, newLhs),
+            Project(rhsProjectArgs, newRhs),
+            cond
+          )
+
+        val outerJoinWithSafeRHS =
+          newOuterJoin.alterColumnsByID(
+            newRhsRowids.map { id =>
+              id -> Var(id).isNull.thenElse { RowIdPrimitive("-") } { Var(id) }
+            }:_*
+          )
+
+        ( outerJoinWithSafeRHS, newLhsRowids ++ newRhsRowids )
       }
 
     }

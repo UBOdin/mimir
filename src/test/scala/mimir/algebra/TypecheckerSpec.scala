@@ -13,10 +13,10 @@ object TypecheckerSpec extends Specification {
 
   "The Typechecker" should {
   	"Infer Conditional Types Correctly" >> {
-  		check("IF TRUE THEN 1 ELSE 2 END") must be equalTo TInt()
-  		check("IF TRUE THEN TRUE ELSE FALSE END") must be equalTo TBool()
-  		checkWeak("IF TRUE THEN B = 1 ELSE C = 1 END") must be equalTo TBool()
-  		checkWeak("IF A = 1 THEN B = 1 ELSE C = 1 END") must be equalTo TBool()
+  		check("CASE WHEN TRUE THEN 1 ELSE 2 END") must be equalTo TInt()
+  		check("CASE WHEN TRUE THEN TRUE ELSE FALSE END") must be equalTo TBool()
+  		checkWeak("CASE WHEN TRUE THEN B = 1 ELSE C = 1 END") must be equalTo TBool()
+  		checkWeak("CASE WHEN A = 1 THEN B = 1 ELSE C = 1 END") must be equalTo TBool()
   	}
   }
 

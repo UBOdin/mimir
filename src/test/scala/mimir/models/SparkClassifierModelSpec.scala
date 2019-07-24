@@ -43,23 +43,23 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
     "Be trainable" >> {
       loadCSV(
         targetTable = "CPUSPEED",  
-        // Seq(
-        //   "PROCESSORID" -> "string",
-        //   "FAMILY" -> "string",
-        //   "TECHINMICRONS" -> "float",
-        //   "CPUSPEEDINGHZ" -> "float",
-        //   "BUSSPEEDINMHZ" -> "string",
-        //   "L2CACHEINKB" -> "int",
-        //   "L3CACHEINMB" -> "float",
-        //   "CORES" -> "int",
-        //   "EM64T" -> "string",
-        //   "HT" -> "string",
-        //   "VT" -> "string",
-        //   "XD" -> "string",
-        //   "SS" -> "string",
-        //   "NOTES" -> "string"
-        // ),
-        sourceFile = "test/data/CPUSpeed.csv"
+        sourceFile = "test/data/CPUSpeed.csv",
+        targetSchema = Seq(
+          "PROCESSORID",
+          "FAMILY",
+          "TECHINMICRONS",
+          "CPUSPEEDINGHZ",
+          "BUSSPEEDINMHZ",
+          "L2CACHEINKB",
+          "L3CACHEINMB",
+          "CORES",
+          "EM64T",
+          "HT",
+          "VT",
+          "XD",
+          "SS",
+          "NOTES"
+        )
       )
      
       models = models ++ SparkClassifierModel.train(db, ID("CPUSPEEDREPAIR"), List(
@@ -93,13 +93,6 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
             fold(0)( _+_ )
         successes must be >=(rowids.size / 3)
       }
-    }
-
-    "Produce reasonable explanations" >> {
-      explain(ID("BUSSPEEDINMHZ"), "3") must not contain("The classifier isn't willing to make a guess")
-      explain(ID("TECHINMICRONS"), "22") must not contain("The classifier isn't willing to make a guess")
-      explain(ID("CORES"), "20") must not contain("The classifier isn't willing to make a guess")
-
     }
   }
 

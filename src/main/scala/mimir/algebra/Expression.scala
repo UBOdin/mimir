@@ -278,6 +278,10 @@ case class Var(name: ID) extends LeafExpression {
   override def toString = "`"+name.id+"`";
   def id = name.id
 }
+object Var 
+{
+  def apply(name: String): Var = Var(ID(name))
+}
 
 /**
  * Representation of a Provenance Token / Row Identifier.  RowId has a special

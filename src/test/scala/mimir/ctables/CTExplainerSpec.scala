@@ -14,12 +14,12 @@ object CTExplainerSpec
   def beforeAll = 
   {
     //db.loadTable("R", Seq(("A","string"),("B","int"),("C","int")),new File("test/r_test/r.csv"))
-    db.loader.loadTable(
+    loadCSV(
       sourceFile = "test/r_test/r.csv", 
-      targetTable = Some(ID("R")), 
-      format = ID("csv"), 
-      inferTypes = Some(true),
-      detectHeaders = Some(false)
+      targetTable = "R",
+      targetSchema = Seq("A", "B", "C"), 
+      inferTypes = true,
+      detectHeaders = false
     )
     //db.adaptiveSchemas.create("R_TI", "TYPE_INFERENCE", db.table("R"), Seq(FloatPrimitive(.5))) 
 		//db.views.create("TI", db.adaptiveSchemas.viewFor("R_TI", "DATA").get)
@@ -41,15 +41,16 @@ object CTExplainerSpec
       }.toMap must contain(eachOf(
         ("MV:SPARKML:B" -> 1l),
         ("MV:SPARKML:C" -> 1l),
-        ("MIMIR_TI_ATTR_R_TI" -> 1l)
+        ("MIMIR_TI_ATTR_R_TI" -> 3l)
       ))
 
-      resultSets.map { 
+      val explanations = resultSets.map { 
         set => (set.model.name.id -> set.allArgs(db).map(_._1.toList).toList)
-      }.toMap must contain(eachOf(
+      }.toMap 
+      explanations must contain(eachOf(
         ("MV:SPARKML:B" -> List(List[PrimitiveValue](RowIdPrimitive("3")))),
         ("MV:SPARKML:C" -> List(List[PrimitiveValue](RowIdPrimitive("4")))),
-        ("MIMIR_TI_ATTR_R_TI",List(List(IntPrimitive(0))))
+        ("MIMIR_TI_ATTR_R_TI" -> List(0, 1, 2).map { i => List(IntPrimitive(i)) })
       ))
     }
 
@@ -59,7 +60,7 @@ object CTExplainerSpec
           SELECT * FROM MV
         """, "3", "B"
         ).reasons.map(_.reason).mkString("\n")
-      reasons must contain("I used a classifier to guess that MV.B")
+      reasons must contain("I used a classifier to fix MV.B")
     }
 
     "Explain rows" >> {
@@ -69,7 +70,7 @@ object CTExplainerSpec
           WHERE C > 1
         """, "4"
         ).reasons.map(_.reason).mkString("\n")
-      reasons must contain("I used a classifier to guess that MV.C")
+      reasons must contain("I used a classifier to fix MV.C")
 
     }
 

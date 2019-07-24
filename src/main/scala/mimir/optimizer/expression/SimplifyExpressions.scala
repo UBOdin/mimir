@@ -61,6 +61,13 @@ class SimplifyExpressions(interpreter: Eval, functionRegistry: FunctionRegistry)
       case Comparison(Cmp.Neq, a, b) if a.equals(b) => 
         BoolPrimitive(false)
 
+      // Comparisons with NULLs
+      case Comparison(_, NullPrimitive(), _) => 
+        NullPrimitive()
+      case Comparison(_, _, NullPrimitive()) => 
+        NullPrimitive()
+
+
       // All other forms of comparison fall through
       case Comparison(_,_,_) => return originalExpression
 
@@ -98,6 +105,7 @@ class SimplifyExpressions(interpreter: Eval, functionRegistry: FunctionRegistry)
         }
 
       case CastExpression(x, TAny())                           => x
+      case CastExpression(x:PrimitiveValue, t)                 => Cast(t, x)
       case CastExpression(_, _)                                => originalExpression
       
       // Procs behave like functions.  Evaluate them if possible...

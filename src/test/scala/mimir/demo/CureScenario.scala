@@ -13,7 +13,9 @@ import mimir.algebra.{NullPrimitive,MissingVariable}
 object CureScenario
   extends SQLTestSpecification("CureScenario",  Map("reset" -> "YES"))
 {
-  //args(skipAll = true)
+  // This test case should be checked at least once per major version
+  // but is reeeeeally slow and memory intensive.  Skip it in general
+  args(skipAll = true)
   
   val dataFiles = List(
     "test/data/cureSource.csv",
@@ -49,23 +51,28 @@ object CureScenario
           //update(s"LOAD '$table';") 
           loadCSV(table)
         }
-        time(s"Materialize '$basename'"){
-          update(s"ALTER VIEW $basename MATERIALIZE;")
-        }
+        // time(s"Materialize '$basename'"){
+        //   update(s"ALTER VIEW $basename MATERIALIZE;")
+        // }
         db.uncertainty.explainEverything(
           db.table(basename)) must not beEmpty;
-        //this still blows up - something with getColumns on vgterm during lookup query 
-        /*db.explainer.explainEverything(db.table(basename))
-              .flatMap( rs => rs.all(db)) must not beEmpty;*/
-        
         db.tableExists(basename) must beTrue
       }
     }}
 
     "Select from the source table" >> {
-      time("Type Inference Query"){ 
+      time("Source Query"){ 
       query("""
           SELECT * FROM cureSource;
+        """){ _.foreach { row => { }}}
+      }
+      ok
+    }
+
+    "Select from the ports table" >> {
+      time("Ports Query"){ 
+      query("""
+          SELECT * FROM curePorts;
         """){ _.foreach { row => { }}}
       }
       ok
@@ -93,23 +100,6 @@ object CureScenario
       ok
     }
 
-//    time("Materalize MV1", () => {db.selectInto("MAT_MV1","MV1")})
-//    time("Materalize MV2", () => {db.selectInto("MAT_MV2","MV2")})
-
-/*
-    time("CURE Query Materalized",
-      () => {
-        query("""
-             SELECT *
-             FROM   MAT_MV1 AS source
-               JOIN MAT_MV2 AS locations
-                       ON source.IMO_CODE = locations.IMO_CODE;
-              """).foreachRow((x) => {})
-      }
-    )
-*/
-
-//    true
     "Explain the CURE Query" >> {
       db.typechecker.schemaOf(select(cureQuery))
       ok
@@ -130,134 +120,8 @@ object CureScenario
               println(mv.context)
               ko
           }
-  //         failed type detection --> run type inferencing
-  //         --> repair with repairing tool
        }
        ok
      }
-
-     /*"Test Prioritizer" >> {
-
-
-       update("CREATE TABLE R(A string, B int, C int)")
-       loadCSV("R", new File("test/r_test/r.csv"))
-       update("CREATE LENS TI AS SELECT * FROM R WITH TYPE_INFERENCE(0.5)")
-       update("CREATE LENS MV AS SELECT * FROM TI WITH MISSING_VALUE('B', 'C')")
-       val reasonsets1 = explainEverything("SELECT * FROM MV").flatMap(x=>x.all(db))
-
-       reasonsets1 must not beEmpty;
-
-       //CTPrioritizer.prioritize(reasonsets1)
-
-       val reasonsets2 = explainEverything("""
-         SELECT
-                 BILL_OF_LADING_NBR,
-                 SRC.IMO_CODE           AS "SRC_IMO",
-                 LOC.LAT                AS "VESSEL_LAT",
-                 LOC.LON                AS "VESSEL_LON",
-                 PORTS.LAT              AS "PORT_LAT",
-                 PORTS.LON              AS "PORT_LON",
-                 DATE(SRC.DATE)          AS "SRC_DATE",
-                 DST(LOC.LON, LOC.LAT, PORTS.LON, PORTS.LAT) AS "DISTANCE",  SPEED(DST(LOC.LON, LOC.LAT, PORTS.LON, PORTS.LAT), SRC.DATE, NULL) AS "SPEED"
-               FROM CURESOURCE AS SRC
-                JOIN CURELOCATIONS AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
-                 LEFT OUTER JOIN CUREPORTS AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
-                 WHERE SPEED(DST(LOC.LON, LOC.LAT, PORTS.LON, PORTS.LAT),SRC.DATE, NULL) > 100;
-       """).flatMap(x=>x.all(db))
-
-       reasonsets2 must not beEmpty;
-
-       CTPrioritizer.prioritize(reasonsets2)
-       ok
-     }*/
-
-    /*
-SELECT
-  BILL_OF_LADING_NBR,
-  SRC.IMO_CODE           AS "SRC_IMO",
-  LOC.LAT                AS "VESSEL_LAT",
-  LOC.LON                AS "VESSEL_LON",
-  PORTS.LAT              AS "PORT_LAT",
-  PORTS.LON              AS "PORT_LON",
-  DATE('now')            AS "NOW",
-  SRC.DATE,
-  DATE(SRC.DATE)          AS "SRC_DATE",
-  (julianday(DATE('now'))-julianday(DATE(SRC.DATE)))      AS "TIME_DIFF",
-  ABS(LOC.LAT - PORTS.LAT)                  AS "DISTANCE"
-FROM CURESOURCE_RAW AS SRC
-  JOIN CURELOCATIONS_RAW AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
-  LEFT OUTER JOIN CUREPORTS_RAW AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
-LIMIT 1;
-
-
-SELECT
-  BILL_OF_LADING_NBR,
-  SRC.IMO_CODE           AS "SRC_IMO",
-  LOC.LAT                AS "VESSEL_LAT",
-  LOC.LON                AS "VESSEL_LON",
-  PORTS.LAT              AS "PORT_LAT",
-  PORTS.LON              AS "PORT_LON",
-  DATE('now')            AS "NOW",
-  SRC.DATE,
-  DATE(SRC.DATE)          AS "SRC_DATE",
-  (julianday(DATE('now'))-julianday(DATE(SRC.DATE)))      AS "TIME_DIFF",
-  ABS(LOC.LAT - PORTS.LAT)                  AS "DISTANCE"
-FROM CURESOURCE_RAW AS SRC
-  JOIN CURELOCATIONS_RAW AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
-  LEFT OUTER JOIN CUREPORTS_RAW AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
-LIMIT 1;
-
-
-SELECT
-  BILL_OF_LADING_NBR,
-  SRC.IMO_CODE           AS "SRC_IMO",
-  LOC.LAT                AS "VESSEL_LAT",
-  LOC.LON                AS "VESSEL_LON",
-  PORTS.LAT              AS "PORT_LAT",
-  PORTS.LON              AS "PORT_LON",
-  DATE('now')            AS "NOW",
-  SRC.DATE,
-  DATE(SRC.DATE)          AS "SRC_DATE",
-  MINUS(julianday(DATE('now')), julianday(DATE(SRC.DATE)))      AS "TIME_DIFF",
-  MINUS(LOC.LAT, PORTS.LAT)                  AS "DISTANCE"
-FROM CURESOURCE_RAW AS SRC
-  JOIN CURELOCATIONS_RAW AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
-  LEFT OUTER JOIN CUREPORTS_RAW AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
-LIMIT 1;
-
-
-SELECT
-  BILL_OF_LADING_NBR,
-  SRC.IMO_CODE           AS "SRC_IMO",
-  LOC.LAT                AS "VESSEL_LAT",
-  LOC.LON                AS "VESSEL_LON",
-  PORTS.LAT              AS "PORT_LAT",
-  PORTS.LON              AS "PORT_LON",
-  DATE('now')            AS "NOW",
-  SRC.DATE,
-  DATE(SRC.DATE)          AS "SRC_DATE",
-  MINUS(DATE('now'), DATE(SRC.DATE))      AS "TIME_DIFF",
-  MINUS(LOC.LAT, PORTS.LAT)                  AS "DISTANCE"
-FROM CURESOURCE_RAW AS SRC
-  JOIN CURELOCATIONS_RAW AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
-  LEFT OUTER JOIN CUREPORTS_RAW AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
-LIMIT 1;
-
-
-
-SELECT DISTINCT
-  BILL_OF_LADING_NBR,
-  SRC.IMO_CODE           AS "SRC_IMO",
-  LOC.LAT                AS "VESSEL_LAT",
-  LOC.LON                AS "VESSEL_LON",
-  PORTS.LAT              AS "PORT_LAT",
-  PORTS.LON              AS "PORT_LON",
-  DATE(SRC.DATE)          AS "SRC_DATE",
-  DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON) AS "DISTANCE",  SPEED(DST(LOC.LAT, LOC.LON, PORTS.LAT, PORTS.LON), SRC.DATE, NULL) AS "SPEED"
-FROM CURESOURCE_RAW AS SRC
-  JOIN CURELOCATIONS_RAW AS LOC ON SRC.IMO_CODE = LOC.IMO_CODE
-  LEFT OUTER JOIN CUREPORTS_RAW AS PORTS ON SRC.PORT_OF_ARRIVAL = PORTS.PORT
-LIMIT 100;
-     */
   }
 }

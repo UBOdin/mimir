@@ -73,8 +73,8 @@ object OperatorDeterminismSpec
         table("R")
       ) must be equalTo (
         table("R").mapByID(
-          ID("A") -> Var(ID("A")),
-          ID("B") -> Var(ID("B")),
+          ID("A") -> Var("A"),
+          ID("B") -> Var("B"),
           ucol("A") -> TRUE,
           ucol("B") -> TRUE,
           urow -> TRUE
@@ -89,7 +89,7 @@ object OperatorDeterminismSpec
       ) must be equalTo (
         table("R").
           mapByID(
-            ID("A") -> Var(ID("A")),
+            ID("A") -> Var("A"),
             ucol("A") -> TRUE,
             urow -> TRUE
           )
@@ -100,13 +100,13 @@ object OperatorDeterminismSpec
       percolite(
         table("R")
           .map( 
-            "A" -> Var(ID("A")), 
+            "A" -> Var("A"), 
             "B" -> VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq())
           )
       ) must be equalTo (
         table("R")
           .mapByID( 
-            ID("A") -> Var(ID("A")), 
+            ID("A") -> Var("A"), 
             ID("B") -> VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()),
             ucol("A") -> TRUE,
             ucol("B") -> ack(),
@@ -118,16 +118,16 @@ object OperatorDeterminismSpec
       percolite(
         table("R")
           .map(
-            "A" -> Var(ID("A")),
-            "B" -> Conditional(IsNullExpression(Var(ID("B"))), VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()), Var(ID("B")))
+            "A" -> Var("A"),
+            "B" -> Conditional(IsNullExpression(Var("B")), VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()), Var("B"))
           )
       ) must be equalTo (
         table("R")
           .mapByID(
-            ID("A") -> Var(ID("A")),
-            ID("B") -> Conditional(IsNullExpression(Var(ID("B"))), VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()), Var(ID("B"))),
+            ID("A") -> Var("A"),
+            ID("B") -> Conditional(IsNullExpression(Var("B")), VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()), Var("B")),
             ucol("A") -> TRUE,
-            ucol("B") -> Conditional(IsNullExpression(Var(ID("B"))), ack(), BoolPrimitive(true)),
+            ucol("B") -> Conditional(IsNullExpression(Var("B")), ack(), BoolPrimitive(true)),
             urow -> TRUE
           )
       )
@@ -135,13 +135,13 @@ object OperatorDeterminismSpec
     "Handle Data-Independent Non-Deterministic Inline Selection" in {
       percolite(
         table("R")
-          .filterParsed("{{X_1[ROWID]}} = 3")
+          .filter(VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()).eq(IntPrimitive(3)))
       ) must be equalTo (
         table("R")
-          .filterParsed("{{X_1[ROWID]}} = 3")
+          .filter(VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()).eq(IntPrimitive(3)))
           .mapByID(
-            ID("A") -> Var(ID("A")),
-            ID("B") -> Var(ID("B")),
+            ID("A") -> Var("A"),
+            ID("B") -> Var("B"),
             ucol("A") -> TRUE,
             ucol("B") -> TRUE,
             urow -> ack()
@@ -153,20 +153,24 @@ object OperatorDeterminismSpec
         table("R")
           .map(
             "A" -> expr("A"),
-            "B" -> expr("IF B IS NULL THEN {{X_1[ROWID]}} ELSE B END")
+            "B" -> Var("B").isNull
+                               .thenElse { VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()) }
+                                         { Var("B") }
           )
           .filterParsed("B = 3")
       ) must be equalTo (
         table("R")
           .mapByID(
             ID("A") -> expr("A"),
-            ID("B") -> expr("IF B IS NULL THEN {{X_1[ROWID]}} ELSE B END"),
-            ucol("B") -> Var(ID("B")).isNull.thenElse(ack()) (BoolPrimitive(true))
+            ID("B") -> Var("B").isNull
+                                   .thenElse { VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()) }
+                                             { Var("B") },
+            ucol("B") -> Var("B").isNull.thenElse(ack()) (BoolPrimitive(true))
           )
           .filterParsed("B = 3")
           .mapByID(
-            ID("A") -> Var(ID("A")),
-            ID("B") -> Var(ID("B")),
+            ID("A") -> Var("A"),
+            ID("B") -> Var("B"),
             ucol("A") -> TRUE,
             ucol("B") -> Var(ucol("B")),
             urow -> Var(ucol("B"))
@@ -180,12 +184,12 @@ object OperatorDeterminismSpec
         table("R")
           .join(table("S"))
           .mapByID(
-            ID("A") -> Var(ID("A")),
-            ID("B") -> Var(ID("B")),
+            ID("A") -> Var("A"),
+            ID("B") -> Var("B"),
             ucol("A") -> TRUE,
             ucol("B") -> TRUE,
-            ID("C") -> Var(ID("C")),
-            ID("D") -> Var(ID("D")),
+            ID("C") -> Var("C"),
+            ID("D") -> Var("D"),
             ucol("C") -> TRUE,
             ucol("D") -> TRUE,
             urow -> TRUE
@@ -195,16 +199,16 @@ object OperatorDeterminismSpec
     "Handle Non-Deterministic Joins" in {
       percolite(
         table("R")
-          .mapParsed( "A" -> "{{X_1[ROWID,A]}}" )
+          .map( "A" -> VGTerm(ID("X"), 1, Seq(RowIdVar(), Var("A")), Seq()) )
           .join(table("S"))
       ) must be equalTo (
         table("R")
           .join(table("S"))
           .mapByID(
-            ID("A") -> expr("{{X_1[ROWID,A]}}"),
-            ucol("A") -> ack( args = Seq(RowIdVar(), Var(ID("A"))) ),
-            ID("C") -> Var(ID("C")),
-            ID("D") -> Var(ID("D")),
+            ID("A") -> VGTerm(ID("X"), 1, Seq(RowIdVar(), Var("A")), Seq()),
+            ucol("A") -> ack( args = Seq(RowIdVar(), Var("A")) ),
+            ID("C") -> Var("C"),
+            ID("D") -> Var("D"),
             ucol("C") -> TRUE,
             ucol("D") -> TRUE,
             urow -> TRUE
@@ -214,36 +218,62 @@ object OperatorDeterminismSpec
     "Handle Non-Deterministic Joins With Row Non-Determinism" in {
       percolite(
         table("R")
-          .filterParsed("B < IF A < 3 THEN {{X_1[A]}} ELSE 3 END")
+          .filter(
+            Var("B").lt { 
+              Var("A").lt(3)
+                      .thenElse { VGTerm(ID("X"), 1, Seq(Var("A")), Seq())}
+                                { IntPrimitive(3) }
+            }
+          )
           .join(
             table("S")
-              .filterParsed("C < IF D > 5 THEN {{X_2[D]}} ELSE 5 END")
+              .filter(
+                Var("C").lt { 
+                  Var("D").gt(5)
+                          .thenElse { VGTerm(ID("X"), 2, Seq(Var("D")), Seq())}
+                                    { IntPrimitive(5) }
+                }
+              )
           )
       ) must be equalTo (
         table("R")
-          .filterParsed("IF A < 3 THEN B < {{X_1[A]}} ELSE B < 3 END")
+          .filter(
+            Var("A").lt(3)
+                    .thenElse { 
+                      Var("B").lt { 
+                        VGTerm(ID("X"), 1, Seq(Var("A")), Seq())
+                      } 
+                    } { Var("B").lt(3) }
+          )
           .join(
             table("S")
-              .filterParsed("IF D > 5 THEN C < {{X_2[D]}} ELSE C < 5 END")
+              .filter(
+                Var("D").gt(5)
+                        .thenElse { 
+                          Var("C").lt { 
+                            VGTerm(ID("X"), 2, Seq(Var("D")), Seq())
+                          } 
+                        } { Var("C").lt(5) }
+              )
           )
           .mapByID(
-            ID("A") -> Var(ID("A")),
-            ID("B") -> Var(ID("B")),
+            ID("A") -> Var("A"),
+            ID("B") -> Var("B"),
             ucol("A") -> TRUE,
             ucol("B") -> TRUE,
-            ID("C") -> Var(ID("C")),
-            ID("D") -> Var(ID("D")),
+            ID("C") -> Var("C"),
+            ID("D") -> Var("D"),
             ucol("C") -> TRUE,
             ucol("D") -> TRUE,
             urow -> 
               ExpressionUtils.makeAnd(
-                Var(ID("A")).lt(3).thenElse( 
-                                ack( idx = 1, args = Seq(Var(ID("A"))) ) 
+                Var("A").lt(3).thenElse( 
+                                ack( idx = 1, args = Seq(Var("A")) ) 
                               ) ( 
                                 BoolPrimitive(true)
                               ),
-                Var(ID("D")).gt(5).thenElse( 
-                                ack( idx = 2, args = Seq(Var(ID("D"))) )
+                Var("D").gt(5).thenElse( 
+                                ack( idx = 2, args = Seq(Var("D")) )
                               ) ( 
                                 BoolPrimitive(true)
                               )
@@ -254,21 +284,30 @@ object OperatorDeterminismSpec
     "Percolate projections over non-deterministic rows" >> {
       percolite(
         table("R")
-          .filterParsed("IF A < 5 THEN {{X_1[A]}} ELSE A END > 5")
+          .filter(
+            Var("A").lt(5)
+                    .thenElse { VGTerm(ID("X"), 1, Seq(Var("A")), Seq()) }
+                              { Var("A") }
+                    .gt(5)
+          )
           .project("A", "B")
       ) must be equalTo (
         table("R")
-          .filterParsed("IF A < 5 THEN {{X_1[A]}} > 5 ELSE A > 5 END")
+          .filter(
+            Var("A").lt(5)
+                    .thenElse { VGTerm(ID("X"), 1, Seq(Var("A")), Seq()).gt(5) }
+                              { Var("A").gt(5) }
+          )
           .mapByID( 
-            ID("A") -> Var(ID("A")), 
-            ID("B") -> Var(ID("B")),
+            ID("A") -> Var("A"), 
+            ID("B") -> Var("B"),
             ucol("A") -> TRUE,
             ucol("B") -> TRUE,
             urow ->
-              Var(ID("A"))
+              Var("A")
                 .lt(5)
                 .thenElse( 
-                  ack( args = Seq(Var(ID("A"))) ) 
+                  ack( args = Seq(Var("A")) ) 
                 )(
                   BoolPrimitive(true)
                 )
@@ -279,12 +318,12 @@ object OperatorDeterminismSpec
       percolite(
         Project(
           Seq(
-            ProjectArg(ID("COMPANY"), Var(ID("PRODUCT_INVENTORY_COMPANY"))),
-            ProjectArg(ID("SUM_2"), Var(ID("MIMIR_AGG_SUM_2")))
+            ProjectArg(ID("COMPANY"), Var("PRODUCT_INVENTORY_COMPANY")),
+            ProjectArg(ID("SUM_2"), Var("MIMIR_AGG_SUM_2"))
           ),
           Aggregate(
-            Seq(Var(ID("PRODUCT_INVENTORY_COMPANY"))), 
-            Seq(AggFunction(ID("sum"), false, Seq(Var(ID("PRODUCT_INVENTORY_QUANTITY"))), ID("MIMIR_AGG_SUM_2"))),
+            Seq(Var("PRODUCT_INVENTORY_COMPANY")), 
+            Seq(AggFunction(ID("sum"), false, Seq(Var("PRODUCT_INVENTORY_QUANTITY")), ID("MIMIR_AGG_SUM_2"))),
             Table(ID("PRODUCT_INVENTORY"),ID("PRODUCT_INVENTORY"), Seq( 
                 (ID("PRODUCT_INVENTORY_ID"), TString()), 
                 (ID("PRODUCT_INVENTORY_COMPANY"), TString()), 
@@ -295,15 +334,15 @@ object OperatorDeterminismSpec
       ) must be equalTo(
         Project(
           Seq(
-            ProjectArg(ID("COMPANY"), Var(ID("PRODUCT_INVENTORY_COMPANY"))),
-            ProjectArg(ID("SUM_2"), Var(ID("MIMIR_AGG_SUM_2"))),
+            ProjectArg(ID("COMPANY"), Var("PRODUCT_INVENTORY_COMPANY")),
+            ProjectArg(ID("SUM_2"), Var("MIMIR_AGG_SUM_2")),
             ProjectArg(ucol("COMPANY"), TRUE),
             ProjectArg(ucol("SUM_2"), TRUE),
             ProjectArg(urow, TRUE)
           ),
           Aggregate(
-            Seq(Var(ID("PRODUCT_INVENTORY_COMPANY"))), 
-            Seq(AggFunction(ID("sum"), false, Seq(Var(ID("PRODUCT_INVENTORY_QUANTITY"))), ID("MIMIR_AGG_SUM_2"))),
+            Seq(Var("PRODUCT_INVENTORY_COMPANY")), 
+            Seq(AggFunction(ID("sum"), false, Seq(Var("PRODUCT_INVENTORY_QUANTITY")), ID("MIMIR_AGG_SUM_2"))),
             Table(ID("PRODUCT_INVENTORY"),ID("PRODUCT_INVENTORY"), Seq( 
                 (ID("PRODUCT_INVENTORY_ID"), TString()), 
                 (ID("PRODUCT_INVENTORY_COMPANY"), TString()), 

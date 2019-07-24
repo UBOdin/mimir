@@ -575,7 +575,7 @@ class SqlToRA(db: Database)
       case Some(columnBinding) => columnBinding
       case None => {
         val tableColumns = bindings.keys.map { col => Column(col, c.table) }
-        throw new SQLException(s"No such column ${c.column} (out of ${tableColumns.mkString(", ")}")
+        throw new SQLException(s"No such column ${c.column} (out of ${tableColumns.mkString(", ")})")
       }
     }
   }
@@ -742,6 +742,17 @@ object SqlToRA
             RowIdVar()
           case (ID("rowid"), Seq(x:SparsityPrimitive)) => 
             RowIdPrimitive(convertPrimitive(x).asString)
+          case (ID("mimir_vgterm"), args) => {
+            args.take(2) match {
+              case Seq(model:Column, idx:SparsityPrimitive) => 
+                VGTerm(
+                  ID(model.column.name), 
+                  convertPrimitive(idx).asLong.toInt,
+                  args.tail.tail.map { convertExpression(_, bindings) },
+                  Seq()
+                )
+            }
+          }
           case (name, _) => 
             Function(name, 
               args.map { 

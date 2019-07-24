@@ -65,14 +65,14 @@ class Typechecker(
 	}
 
 	def weakTypeOf(e: Expression) =
-		typeOf(e, (_) => TAny())
+		typeOf(e, scope = { (_) => TAny() })
 
 	def typeOf(e: Expression, o: Operator): Type =
 		typeOf(e, scope = schemaOf(o).toMap, context = Some(o))
 
 	def typeOf(
 		e: Expression, 
-		scope: (ID => Type) = { (_:ID) => throw new RAException("Need a scope to typecheck expressions with variables") }, 
+		scope: (ID => Type) = { (v:ID) => throw new RAException(s"Need a scope to typecheck expressions with variables ($v)") }, 
 		context: Option[Operator] = None
 	): Type = {
 		val recur = typeOf(_:Expression, scope, context)
