@@ -171,13 +171,76 @@ object SparkUtils {
   }
   
   def getSparkKryoClasses() = { 
-    val finder = ClassFinder(List(new File(".")))
+    /*val finder = ClassFinder(List(new File(".")))
     val classes = finder.getClasses  // classes is an Iterator[ClassInfo]
     val classMap = ClassFinder.classInfoMap(classes) // runs iterator out, once
     val models = ClassFinder.concreteSubclasses("mimir.models.Model", classMap).map(clazz => Class.forName(clazz.name)).toSeq
     val operators = ClassFinder.concreteSubclasses("mimir.algebra.Operator", classMap).map(clazz => Class.forName(clazz.name)).toSeq
     val expressions = ClassFinder.concreteSubclasses("mimir.algebra.Expression", classMap).map(clazz => Class.forName(clazz.name)).toSeq
-    (models ++ operators ++ expressions).toArray
+    println((models ++ operators ++ expressions).map(_.getName).mkString("\", \""))
+    (models ++ operators ++ expressions).toArray*/
+    // INFO: 
+    // Mike @ 7/20/2019
+    // We use the Kryo serializer because it performs better, but it requires registration of a list of classes that will be serialized.
+    // The above code uses classfinder to generate that list of classes, but there is a ASM conflict (3.1 and 6) in dependencies
+    // that breaks when using assembly or corsier, so, for now, just hardcode the class names here and add a test case that will alert us 
+    // if this list gets out of sync with reality.
+    Seq( "mimir.models.SimplePickerModel",
+         "mimir.models.UniformDistribution$",
+         "mimir.models.CommentModel",
+         "mimir.models.SimpleSparkClassifierModel",
+         "mimir.models.WarningModel",
+         "mimir.models.SimpleFuncDepModel",
+         "mimir.models.EditDistanceMatchModel",
+         "mimir.models.RepairKeyModel",
+         "mimir.models.TypeInferenceModel",
+         "mimir.models.NoOpModel",
+         "mimir.models.FacetModel",
+         "mimir.models.DefaultMetaModel",
+         "mimir.models.DetectHeaderModel",
+         "mimir.models.SimpleSeriesModel",
+         "mimir.models.GeocodingModel",
+         "mimir.models.MissingKeyModel",
+         "mimir.algebra.Limit",
+         "mimir.algebra.Union",
+         "mimir.algebra.HardTable",
+         "mimir.algebra.Join",
+         "mimir.algebra.Table",
+         "mimir.algebra.AdaptiveView",
+         "mimir.algebra.LeftOuterJoin",
+         "mimir.algebra.Sort",
+         "mimir.algebra.Select",
+         "mimir.algebra.Aggregate",
+         "mimir.exec.mode.StatsQuery",
+         "mimir.algebra.View",
+         "mimir.algebra.Project",
+         "mimir.algebra.TypePrimitive",
+         "mimir.algebra.RowIdVar",
+         "mimir.algebra.NullPrimitive",
+         "mimir.algebra.FloatPrimitive",
+         "mimir.algebra.BoolPrimitive",
+         "mimir.algebra.Conditional",
+         "mimir.ctables.vgterm.BestGuess",
+         "mimir.algebra.Not",
+         "mimir.algebra.JDBCVar",
+         "mimir.ctables.vgterm.IsAcknowledged",
+         "mimir.algebra.DatePrimitive",
+         "mimir.algebra.IsNullExpression",
+         "mimir.algebra.VGTerm",
+         "mimir.algebra.Var",
+         "mimir.algebra.TimestampPrimitive",
+         "mimir.algebra.IntPrimitive",
+         "mimir.algebra.IntervalPrimitive",
+         "mimir.algebra.Arithmetic",
+         "mimir.ctables.vgterm.DomainDumper",
+         "mimir.algebra.DataWarning",
+         "mimir.ctables.vgterm.Sampler",
+         "mimir.algebra.Comparison",
+         "mimir.algebra.RowIdPrimitive",
+         "mimir.algebra.StringPrimitive",
+         "mimir.algebra.Function",
+         "mimir.algebra.CastExpression").map( className => 
+       Class.forName(className)).toArray
   }
   
   def getDataFrameWithProvFromQuery(db:mimir.Database, query:Operator) : (Seq[(ID, Type)], DataFrame) = {
