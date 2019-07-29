@@ -13,19 +13,15 @@ object DatasetShapeSpec
 {
 
   def beforeAll = {
-    db.loadTable(
+    db.loader.loadTable(
       targetTable = Some(ID("Z")), 
       sourceFile = "test/r_test/z.csv",
-      loadOptions = Map(
-        "datasourceErrors" -> "true"
-      )
+      datasourceErrors = true
     )
-    db.loadTable(
+    db.loader.loadTable(
       targetTable = Some(ID("Z_BAD")), 
       sourceFile = "test/r_test/z_bad.csv",
-      loadOptions = Map(
-        "datasourceErrors" -> "true"
-      )
+      datasourceErrors = true
     )
   }
 
@@ -39,9 +35,21 @@ object DatasetShapeSpec
     
     "Detect and test the basics with Adaptive Schema and work with DataSource Errors" >> {
       //good data
-      db.adaptiveSchemas.create( ID("Z_SW"), ID("SHAPE_WATCHER"), db.table("Z"), Seq(StringPrimitive("MIMIR_SHAPE_Z")), "Z_SHAPE")
+      db.adaptiveSchemas.create( 
+        ID("Z_SW"), 
+        ID("SHAPE_WATCHER"),
+        db.table("Z"), 
+        Seq(StringPrimitive("MIMIR_SHAPE_Z")), 
+        "Z_SHAPE"
+      )
       //bad data
-      db.adaptiveSchemas.create( ID("Z_BAD_SW"), ID("SHAPE_WATCHER"), db.table("Z_BAD"), Seq(Var(ID("MIMIR_SHAPE_Z"))), "Z_BAD_SHAPE")
+      db.adaptiveSchemas.create( 
+        ID("Z_BAD_SW"), 
+        ID("SHAPE_WATCHER"), 
+        db.table("Z_BAD"), 
+        Seq(Var(ID("MIMIR_SHAPE_Z"))), 
+        "Z_BAD_SHAPE"
+      )
       
       db.views.create(ID("Z_BAD_S"), db.adaptiveSchemas.viewFor(ID("Z_BAD_SW"), ID("Z_BAD_SW")).get)
       
@@ -55,10 +63,10 @@ object DatasetShapeSpec
           """{"rowidarg":-1,"source":"MIMIR_SHAPE_Z","confirmed":false,"varid":0,"english":"Missing expected column 'B'","repair":{"selector":"warning"},"args":[0,"'Missing expected column 'B''"]}""",
           """{"rowidarg":-1,"source":"MIMIR_SHAPE_Z","confirmed":false,"varid":0,"english":"A had no nulls before, but now has 2","repair":{"selector":"warning"},"args":[3,"'A had no nulls before, but now has 2'"]}""",
           """{"rowidarg":-1,"source":"MIMIR_SHAPE_Z","confirmed":false,"varid":0,"english":"Unexpected column 'B_0'","repair":{"selector":"warning"},"args":[0,"'Unexpected column 'B_0''"]}""",
-          """{"rowidarg":0,"source":"MIMIR_DSE_WARNING_Z_BAD_DSE","confirmed":false,"varid":0,"english":"The value [ NULL ] is uncertain because there is an error(s) in the data source on row 5. The raw value of the row in the data source is [ ,,, ]","repair":{"selector":"warning"},"args":["'5'","'_c0'","NULL","',,,'"]}""",
-          """{"rowidarg":0,"source":"MIMIR_DSE_WARNING_Z_BAD_DSE","confirmed":false,"varid":0,"english":"The value [ NULL ] is uncertain because there is an error(s) in the data source on row 5. The raw value of the row in the data source is [ ,,, ]","repair":{"selector":"warning"},"args":["'5'","'_c1'","NULL","',,,'"]}""",
-          """{"rowidarg":0,"source":"MIMIR_DSE_WARNING_Z_BAD_DSE","confirmed":false,"varid":0,"english":"The value [ NULL ] is uncertain because there is an error(s) in the data source on row 6. The raw value of the row in the data source is [ ---- ]","repair":{"selector":"warning"},"args":["'6'","'_c1'","NULL","'----'"]}""",
-          """{"rowidarg":0,"source":"MIMIR_DSE_WARNING_Z_BAD_DSE","confirmed":false,"varid":0,"english":"The value [ ---- ] is uncertain because there is an error(s) in the data source on row 6. The raw value of the row in the data source is [ ---- ]","repair":{"selector":"warning"},"args":["'6'","'_c0'","'----'","'----'"]}"""))
+          """{"rowidarg":0,"source":"MIMIR_DSE_WARNING_Z_BAD_DSE","confirmed":false,"varid":0,"english":"The value [ NULL ] is uncertain because there is an error(s) in the data source on row 5 of Z_BAD. The raw value of the row in the data source is [ ,,, ]","repair":{"selector":"warning"},"args":["'5'","'_c0'","NULL","',,,'"]}""",
+          """{"rowidarg":0,"source":"MIMIR_DSE_WARNING_Z_BAD_DSE","confirmed":false,"varid":0,"english":"The value [ NULL ] is uncertain because there is an error(s) in the data source on row 5 of Z_BAD. The raw value of the row in the data source is [ ,,, ]","repair":{"selector":"warning"},"args":["'5'","'_c1'","NULL","',,,'"]}""",
+          """{"rowidarg":0,"source":"MIMIR_DSE_WARNING_Z_BAD_DSE","confirmed":false,"varid":0,"english":"The value [ NULL ] is uncertain because there is an error(s) in the data source on row 6 of Z_BAD. The raw value of the row in the data source is [ ---- ]","repair":{"selector":"warning"},"args":["'6'","'_c1'","NULL","'----'"]}""",
+          """{"rowidarg":0,"source":"MIMIR_DSE_WARNING_Z_BAD_DSE","confirmed":false,"varid":0,"english":"The value [ ---- ] is uncertain because there is an error(s) in the data source on row 6 of Z_BAD. The raw value of the row in the data source is [ ---- ]","repair":{"selector":"warning"},"args":["'6'","'_c0'","'----'","'----'"]}"""))
       
       val result = query("""
         SELECT * FROM Z_BAD_S

@@ -17,9 +17,9 @@ case class SQLCommand(
 
 object MimirCommand
 {
-  def apply(input: Reader): Iterator[Parsed[MimirCommand]] = 
+  def apply(input: Reader): StreamParser[MimirCommand] = 
     new StreamParser[MimirCommand](
-      parse(_:Iterator[String], command(_)), 
+      parse(_:Iterator[String], command(_), verboseFailures = true), 
       input
     )
   def apply(input: String): Parsed[MimirCommand] = 
@@ -32,12 +32,12 @@ object MimirCommand
   )
 
   def slashCommand[_:P] = P(
-    "\\" ~
+    "/" ~/
     CharsWhile( 
       c => (c != '\n') && (c != '\r') 
-    ).!.map { SlashCommand(_) } ~
+    ).!.map { SlashCommand(_) } ~/
     CharsWhile( 
       c => (c == '\n') || (c == '\r') 
-    )
+    ).?
   )
 }

@@ -21,14 +21,13 @@ object RepairKeyLens extends LazyLogging {
     var schema = db.typechecker.schemaOf(query)
     val schemaMap = schema.toMap
     var scoreCol:Option[ID] = None
-    var fastPath:Option[ID] = None
 
     //////////  Parse Arguments  //////////
     val keys: Seq[ID] = args.flatMap {
       case Var(col) => {
         if(schemaMap contains col){ Some(col) }
         else {
-          throw new SQLException(s"Invalid column: $col in RepairKeyLens $name")
+          throw new SQLException(s"Invalid column: $col in RepairKeyLens $name (available columns: ${schemaMap.keys.mkString(", ")}")
         }
       }
       case Function(ID("score_by"), Seq(Var(col))) => {
@@ -37,8 +36,6 @@ object RepairKeyLens extends LazyLogging {
       }
       case Function(ID("enable"), opts) => {
         opts.foreach { 
-          case Var(ID("FAST_PATH")) => 
-            fastPath = Some(ID("MIMIR_FASTPATH_", name))
           case x => 
             throw new SQLException(s"Invalid Key-Repair option: $x")
         }
@@ -64,47 +61,11 @@ object RepairKeyLens extends LazyLogging {
         ( col, model )
       }
 
-    //////////  Build Fastpath Lookup Cache If Needed  //////////
-    fastPath match { 
-      case None => ()
-      case Some(fastPathTable) => {
-        buildFastPathCache(
-          db, 
-          query, 
-          keys.map( k => (k, schemaMap(k))), 
-          values.map(_._1), 
-          fastPathTable
-        )
-      }
-    }
-
     //////////  Assemble the query  //////////
     val lensQuery = 
-      fastPath match {
-        case None => 
-          assembleView(db, query, keys, values, scoreCol, ID("MIMIR_KR_SOURCE_",name))
-        case Some(fastPathTable) => 
-          assembleFastPath(db, query, keys, values, scoreCol, fastPathTable)
-      }
+      assembleView(db, query, keys, values, scoreCol, ID("MIMIR_KR_SOURCE_",name))
 
     ( lensQuery, values.map(_._2) )
-  }
-
-  def buildFastPathCache(
-    db: Database,
-    query: Operator,
-    keys: Seq[(ID, Type)], 
-    values: Seq[ID], 
-    table: ID
-  ): Unit =
-  {
-    db.selectInto(table, 
-      Aggregate(
-        keys.map( k => Var(k._1)),
-        Seq(AggFunction(ID("count"), false, Seq(), ID("NUM_INSTANCES"))),
-        query
-      )
-    )
   }
 
   def assemble(
@@ -240,48 +201,5 @@ object RepairKeyLens extends LazyLogging {
 
       Union(certainRows, uncertainRows)
     }
-  }
-
-  def assembleFastPath(
-    db: Database,
-    query: Operator,
-    keys: Seq[ID],
-    values: Seq[(ID, Model)],
-    scoreCol: Option[ID], 
-    fastPathTable: ID
-  ): Operator =
-  {
-    logger.debug(s"Assembling KR Lens FastPath $fastPathTable")
-    val rowsWhere = (cond:Expression) => {
-      db.table(fastPathTable)
-        .filter(cond)
-        .mapByID( keys.map { k => ID("MIMIR_KR_",k) -> Var(k)}:_* )
-        .join(query)
-        .filter { 
-          ExpressionUtils.makeAnd(keys.map { k => 
-            ID("MIMIR_KR_",k).eq(k)
-          })
-        }
-        .projectByID( (keys++values.map(_._1)):_* )
-    }
-
-    val rowsWithDuplicates =
-      rowsWhere(
-        ID("NUM_INSTANCES").neq(1)
-      )
-    val rowsWithoutDuplicates =
-      rowsWhere(
-        ID("NUM_INSTANCES").eq(1)
-      )
-    Union(
-      rowsWithoutDuplicates,
-      assemble(
-        rowsWithDuplicates,
-        keys,
-        values,
-        scoreCol,
-        forceGuess = true
-      )
-    )
   }
 }

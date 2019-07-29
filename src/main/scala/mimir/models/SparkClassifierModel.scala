@@ -25,7 +25,7 @@ import org.apache.spark.sql.catalyst.expressions.EqualTo
 import org.apache.spark.sql.catalyst.expressions.Alias
 import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.DataFrame
-import mimir.algebra.spark.OperatorTranslation
+import mimir.exec.spark.RAToSpark
 import mimir.provenance.Provenance
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.StructType
@@ -73,7 +73,7 @@ object SparkClassifierModel
   {
     model.sparkMLInstanceType = model.guessSparkModelType(model.guessInputType) 
     val trainingQuery = Limit(0, Some(SparkClassifierModel.TRAINING_LIMIT), query.filter(Not(IsNullExpression(Var(model.colName)))))
-    val trainingDataF = db.backend.execute(db.compileBestGuess(trainingQuery))
+    val trainingDataF = db.compiler.compileToSparkWithRewrites(trainingQuery)
     val trainingData = trainingDataF.schema.fields.filter(col => Seq(DateType, TimestampType).contains(col.dataType)).foldLeft(trainingDataF)((init, cur) => init.withColumn(cur.name,init(cur.name).cast(LongType)) )
     val (sparkMLInstance, sparkMLModelGenerator) = availableSparkModels.getOrElse(model.sparkMLInstanceType, (Classification, Classification.NaiveBayesMulticlassModel _))
     Timer.monitor(s"Train ${model.name}.${model.colName}", SparkClassifierModel.logger.info(_)){

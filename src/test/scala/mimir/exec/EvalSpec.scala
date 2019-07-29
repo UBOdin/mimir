@@ -8,32 +8,17 @@ import org.specs2.specification._
 import mimir.util._
 import mimir.algebra._
 import mimir.test._
+import mimir.data.FileFormat
 
 object EvalSpec 
   extends SQLTestSpecification("EvalSpec")
   with BeforeAll
 {
-
-  val inventoryDataFile = "test/data/Product_Inventory.csv"
-
   def beforeAll = {
-    LoadCSV.handleLoadTableRaw(
-      db, 
-      ID("PRODUCT_INVENTORY"),
-      inventoryDataFile, 
-			Some(Seq(
-        ID("ID") -> TString(),
-        ID("COMPANY") -> TString(),
-        ID("QUANTITY") -> TInt(),
-        ID("PRICE") -> TFloat()
-      )), 
-      Map(
-        "ignoreLeadingWhiteSpace"->"true",
-        "ignoreTrailingWhiteSpace"->"true",
-        "DELIMITER" -> ",", 
-        "mode" ->"DROPMALFORMED", 
-        "header" -> "false"
-      )
+    loadCSV(
+      sourceFile = "test/data/Product_Inventory.csv",
+      targetTable = "PRODUCT_INVENTORY",
+      targetSchema = Seq("PID", "COMPANY", "QUANTITY", "PRICE")
     )
   }
 
@@ -134,11 +119,13 @@ object EvalSpec
         WHERE COMPANY = 'Apple';
       """).asLong must beEqualTo(1l)
 
-      query("""
+      LoggerUtils.debug(
+        // "mimir.optimizer.Optimizer$"
+      ) {query("""
         SELECT P.COMPANY, P.QUANTITY, P.PRICE
         FROM (SELECT COMPANY, MAX(PRICE) AS COST
           FROM PRODUCT_INVENTORY
-          GROUP BY COMPANY)subq, PRODUCT_INVENTORY P
+          GROUP BY COMPANY) subq, PRODUCT_INVENTORY P
         WHERE subq.COMPANY = P.COMPANY AND subq.COST = P.PRICE;
       """){ result => 
         val q8 = result.toSeq.map { row => (
@@ -152,7 +139,7 @@ object EvalSpec
           ("HP", 37, 102.74), 
           ("Sony", 14, 38.74) 
         )
-      }
+      }}
 
       query("""
         SELECT P.COMPANY, P.PRICE

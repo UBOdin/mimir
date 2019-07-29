@@ -296,8 +296,8 @@ object OperatorUtils extends LazyLogging {
           LeftOuterJoin(lhs, deepRenameColumn(target, replacement, rhs), rewrite(cond))
         }
       }
-      case Table(name, alias, sch, meta) => {
-        Table(name, alias, 
+      case Table(name, source, sch, meta) => {
+        Table(name, source, 
           sch.map { col => if(col._1.equals(target)) { (replacement, col._2) } else { col } },
           meta.map { col => if(col._1.equals(target)) { (replacement, col._2, col._3) } else { col } }
         )

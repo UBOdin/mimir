@@ -42,24 +42,24 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
     
     "Be trainable" >> {
       loadCSV(
-        "CPUSPEED",  
-        Seq(
-          "PROCESSORID" -> "string",
-          "FAMILY" -> "string",
-          "TECHINMICRONS" -> "float",
-          "CPUSPEEDINGHZ" -> "float",
-          "BUSSPEEDINMHZ" -> "string",
-          "L2CACHEINKB" -> "int",
-          "L3CACHEINMB" -> "float",
-          "CORES" -> "int",
-          "EM64T" -> "string",
-          "HT" -> "string",
-          "VT" -> "string",
-          "XD" -> "string",
-          "SS" -> "string",
-          "NOTES" -> "string"
-        ),
-        "test/data/CPUSpeed.csv"
+        targetTable = "CPUSPEED",  
+        sourceFile = "test/data/CPUSpeed.csv",
+        targetSchema = Seq(
+          "PROCESSORID",
+          "FAMILY",
+          "TECHINMICRONS",
+          "CPUSPEEDINGHZ",
+          "BUSSPEEDINMHZ",
+          "L2CACHEINKB",
+          "L3CACHEINMB",
+          "CORES",
+          "EM64T",
+          "HT",
+          "VT",
+          "XD",
+          "SS",
+          "NOTES"
+        )
       )
      
       models = models ++ SparkClassifierModel.train(db, ID("CPUSPEEDREPAIR"), List(
@@ -94,18 +94,14 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
         successes must be >=(rowids.size / 3)
       }
     }
-
-    "Produce reasonable explanations" >> {
-      explain(ID("BUSSPEEDINMHZ"), "3") must not contain("The classifier isn't willing to make a guess")
-      explain(ID("TECHINMICRONS"), "22") must not contain("The classifier isn't willing to make a guess")
-      explain(ID("CORES"), "20") must not contain("The classifier isn't willing to make a guess")
-
-    }
   }
 
   "When combined with a TI Lens, the SparkClassifier Model" should {
     "Be trainable" >> {
-      db.loadTable(targetTable = Some(ID("RATINGS1")), sourceFile = "test/data/ratings1.csv")
+      db.loader.loadTable(
+        targetTable = Some(ID("RATINGS1")), 
+        sourceFile = "test/data/ratings1.csv"
+      )
       val (model, idx, hints) = SparkClassifierModel.train(db,
         ID("RATINGS1REPAIRED"), 
         List(ID("RATING")), 

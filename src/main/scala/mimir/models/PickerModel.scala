@@ -12,7 +12,7 @@ import mimir.ml.spark.SparkML.{SparkModelGeneratorParams => ModelParams }
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.types.StructField
-import mimir.algebra.spark.OperatorTranslation
+import mimir.exec.spark.RAToSpark
 import mimir.provenance.Provenance
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.types.{IntegerType, DoubleType, FloatType, StringType, DateType, TimestampType, BooleanType, LongType, ShortType}

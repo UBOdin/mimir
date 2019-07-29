@@ -10,7 +10,6 @@ import mimir.algebra._
 import mimir.lenses._
 import mimir.models._
 import mimir.views._
-import mimir.util.LoadCSV
 
 object DetectHeader {
   val logger = Logger(org.slf4j.LoggerFactory.getLogger(getClass.getName))

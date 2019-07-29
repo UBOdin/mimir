@@ -16,7 +16,7 @@ import mimir.util.SparkUtils
 import org.apache.spark.sql.types.TimestampType
 import org.apache.spark.sql.types.DateType
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import mimir.algebra.spark.OperatorTranslation
+import mimir.exec.spark.RAToSpark
 import mimir.provenance.Provenance
 
 

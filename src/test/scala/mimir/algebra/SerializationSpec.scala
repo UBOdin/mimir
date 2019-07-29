@@ -23,26 +23,14 @@ object SqlFilesOnly extends FileFilter {
 object SerializationSpec extends SQLTestSpecification("SerializationTest") with BeforeAll {
 
   def beforeAll = {
-    loadCSV("R", 
-      Seq(
-        "A" -> "int", 
-        "B" -> "int"
-      ), 
-      "test/data/serial_r.csv"
+    loadCSV(targetTable = "R", 
+      sourceFile = "test/data/serial_r.csv"
     )
-    loadCSV("S", 
-      Seq(
-        "B" -> "int",
-        "C" -> "int"
-      ), 
-      "test/data/serial_s.csv"
+    loadCSV(targetTable = "S", 
+      sourceFile = "test/data/serial_s.csv"
     )
-    loadCSV("T", 
-      Seq(
-        "C" -> "int", 
-        "D" -> "int"
-      ), 
-      "test/data/serial_t.csv"
+    loadCSV(targetTable = "T", 
+      sourceFile = "test/data/serial_t.csv"
     )
   }
 
@@ -69,7 +57,7 @@ object SerializationSpec extends SQLTestSpecification("SerializationTest") with 
 
               Some(deserialized must be equalTo query)
             }
-
+ 
             case stmt => throw new Exception("Simple test cases shouldn't have updates ($stmt)")
           }).flatten
         }

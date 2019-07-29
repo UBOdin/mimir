@@ -9,10 +9,10 @@
   
   <!--+++++++++++++++++++++  Mimir Root  ++++++++++++++++++++++-->
   <logger name="mimir.Database"                                    level="WARN"/>
-  <logger name="mimir.Mimir$"                                      level="TRACE"/>
+  <logger name="mimir.Mimir$"                                      level="WARN"/>
 
   <!--++++++++++++++++++  Adaptive Schemas  +++++++++++++++++++-->
-  <logger name="mimir.adaptive.DiscalaAbadiNormalizer$"            level="WARN"/>
+  <logger name="mimir.adaptive.TypeInference$"                     level="WARN"/>
 
   <!--+++++++++++++++++++++++  Algebra  +++++++++++++++++++++++-->
   <logger name="mimir.algebra.ExpressionChecker"                   level="WARN"/>
@@ -28,6 +28,11 @@
   <logger name="mimir.ctables.CTPercolator"                        level="WARN"/>
   <logger name="mimir.ctables.CTExplainer"                         level="WARN"/>
   <logger name="mimir.ctables.ReasonSet$"                          level="WARN"/>
+
+  <!--+++++++++++++++++++++++  DAta  +++++++++++++++++++++++-->
+  <logger name="mimir.data.SparkSchemaProvider"                    level="WARN"/>
+  <logger name="mimir.data.SystemCatalog"                          level="WARN"/>
+  <logger name="mimir.data.LoadedTables"                           level="WARN"/>
 
   <!--++++++++++++++++++++++++  Exec  +++++++++++++++++++++++++-->
   <logger name="mimir.exec.Compiler"                               level="WARN"/>
@@ -60,7 +65,8 @@
   <logger name="mimir.optimizer.operator.PullUpConstants"          level="WARN"/>
 
   <!--+++++++++++++++++++++  Parser  ++++++++++++++++++++++-->
-  <logger name="mimir.parser.EndlessParser"                        level="DEBUG"/>
+  <logger name="mimir.parser.LineReaderParser"                     level="WARN"/>
+  <logger name="sparsity.parser.StreamParser"                      level="WARN"/>
 
   <!--+++++++++++++++++++++++  PLOT  ++++++++++++++++++++++++++-->
   <logger name="mimir.plot.Plot$"                                  level="WARN"/>
@@ -89,6 +95,10 @@
 
   <!--+++++++++++++++++++++++  Views  +++++++++++++++++++++++++-->
   <logger name="mimir.views.ViewManager"                           level="WARN"/>
+
+  <!--+++++++++++++++++++++  CSVLoader ++++++++++++++++++++++++-->
+  <logger name="org.apache.spark.sql.execution.datasources.ubodin.csv.UnivocityParser" 
+                                                                   level="WARN"/>
 
   <!--+++++++++++++++++++++++  Spark  +++++++++++++++++++++++++-->
   <logger name="log4j.logger.org.apache.spark"                     level="ERROR"/>

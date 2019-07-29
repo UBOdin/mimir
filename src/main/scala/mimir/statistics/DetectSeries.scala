@@ -11,7 +11,7 @@ import org.joda.time.{DateTime, Seconds, Days, Period, Duration}
 import scala.collection.mutable.ArrayBuffer
 import scala.collection._
 import org.apache.spark.sql.expressions.Window
-import mimir.algebra.spark.OperatorTranslation
+import mimir.exec.spark.RAToSpark
 import org.apache.spark.sql.functions.{sum, mean, stddev, col, lead, lag, abs, lit, isnull, not, desc, unix_timestamp, datediff, floor}       
 import org.apache.spark.sql.Encoders
 import mimir.models.SeriesColumnItem

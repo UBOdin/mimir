@@ -8,11 +8,11 @@ object UtilityFunctions
   def register(fr: FunctionRegistry)
   {
     fr.registerFold(ID("seq_min"), """
-      IF CURR < NEXT THEN CURR ELSE NEXT END
+      CASE WHEN CURR < NEXT THEN CURR ELSE NEXT END
     """)
 
     fr.registerFold(ID("seq_max"), """
-      IF CURR > NEXT THEN CURR ELSE NEXT END
+      CASE WHEN CURR > NEXT THEN CURR ELSE NEXT END
     """)
 
     fr.register(

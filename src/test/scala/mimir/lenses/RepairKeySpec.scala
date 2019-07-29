@@ -21,11 +21,30 @@ object RepairKeySpec
 
   def beforeAll = 
   {
-    loadCSV("R",Seq(("A","int"),("B","int"),("C","int")), "test/r_test/r.csv")
-    loadCSV("U",Seq(("A","int"),("B","int"),("C","int")), "test/r_test/u.csv")
-    loadCSV("FD_DAG", "test/repair_key/fd_dag.csv")
-    loadCSV("twitter100Cols10kRowsWithScore", "test/r_test/twitter100Cols10kRowsWithScore.csv")
-    loadCSV("cureSourceWithScore", "test/r_test/cureSourceWithScore.csv")
+    loadCSV(
+      targetTable = "R", 
+      sourceFile = "test/r_test/r.csv",
+      targetSchema = Seq("A", "B", "C"),
+      detectHeaders = false
+    )
+    loadCSV(
+      targetTable = "U", 
+      sourceFile = "test/r_test/u.csv",
+      targetSchema = Seq("A", "B", "C"),
+      detectHeaders = false
+    )
+    loadCSV(
+      targetTable = "FD_DAG", 
+      sourceFile = "test/repair_key/fd_dag.csv"
+    )
+    loadCSV(
+      targetTable = "twitter100Cols10kRowsWithScore", 
+      sourceFile = "test/r_test/twitter100Cols10kRowsWithScore.csv"
+    )
+    loadCSV(
+      targetTable = "cureSourceWithScore", 
+      sourceFile = "test/r_test/cureSourceWithScore.csv"
+    )
   }
 
   "The Key Repair Lens" should {
@@ -177,129 +196,6 @@ object RepairKeySpec
       })
 */
       true
-    }
-  }
-
-  "RepairKey-FastPath" should {
-    "Load Customer Account Balances" >> {
-      if(PDBench.isDownloaded){
-        LoadCSV.handleLoadTableRaw(db, 
-          ID("CUST_ACCTBAL_WITHDUPS"),
-          "test/pdbench/cust_c_acctbal.tbl",  
-          Some(Seq(
-            ID("TUPLE_ID") ->  TInt(), 
-            ID("WORLD_ID") ->  TInt(), 
-            ID("VAR_ID") ->  TInt(), 
-            ID("ACCTBAL") -> TFloat()
-          )), 
-          Map(
-            "DELIMITER" -> "|",
-            "ignoreLeadingWhiteSpace"->"true",
-            "ignoreTrailingWhiteSpace"->"true", 
-            "mode" -> "DROPMALFORMED", 
-            "header" -> "false"
-          ) 
-        )
-        
-        update("""
-          CREATE LENS CUST_ACCTBAL_CLASSIC
-          AS SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_WITHDUPS
-          WITH KEY_REPAIR(TUPLE_ID)
-        """)
-        Timer.monitor("CREATE_FASTPATH") {
-          update("""
-            CREATE LENS CUST_ACCTBAL_FASTPATH
-            AS SELECT TUPLE_ID, acctbal FROM CUST_ACCTBAL_WITHDUPS
-            WITH KEY_REPAIR(TUPLE_ID, ENABLE(FAST_PATH))
-          """)
-        }
-        ok
-      } else {
-        skipped("Skipping FastPath tests (Run `sbt datasets` to download required data)"); ko
-      }
-    }
-
-    "Create a fast-path cache table" >> {
-      if(PDBench.isDownloaded){
-        querySingleton("""
-          SELECT COUNT(*)
-          FROM (
-            SELECT TUPLE_ID, COUNT(DISTINCT WORLD_ID) AS CT
-            FROM CUST_ACCTBAL_WITHDUPS
-            GROUP BY TUPLE_ID
-          ) C
-          WHERE CT > 1
-        """).asLong must be equalTo(1506l)
-
-        query("""
-          SELECT TUPLE_ID
-          FROM MIMIR_FASTPATH_CUST_ACCTBAL_FASTPATH
-          WHERE num_instances > 1
-        """){ _.toSeq must not beEmpty }
-
-        querySingleton("""
-          SELECT COUNT(*)
-          FROM MIMIR_FASTPATH_CUST_ACCTBAL_FASTPATH
-          WHERE num_instances > 1
-        """).asLong must be equalTo(1506l)
-
-        querySingleton("""
-          SELECT COUNT(*)
-          FROM MIMIR_FASTPATH_CUST_ACCTBAL_FASTPATH
-          WHERE num_instances = 1
-        """).asLong must be equalTo(148494l)
-
-        db.query(db.sqlToRA(MimirSQL.Select("""
-          SELECT COUNT(*) FROM CUST_ACCTBAL_WITHDUPS
-          WHERE WORLD_ID = 1
-        """)))( result => result.toList.head(0).asLong) must be equalTo(150000l)
-      } else {
-        skipped("Skipping FastPath tests (Run `sbt datasets` to download required data)"); ko
-      }
-    }
-
-    "Produce the same results" >> {
-      if(PDBench.isDownloaded){
-        val classic = 
-          Timer.monitor("QUERY_CLASSIC"){
-            query("""
-              SELECT TUPLE_ID, ACCTBAL FROM CUST_ACCTBAL_CLASSIC
-            """){ _.map { row => (row(ID("TUPLE_ID")).asLong, row(ID("ACCTBAL")).asDouble) }.toIndexedSeq }
-          }
-        val fastpath =
-          Timer.monitor("QUERY_FASTPATH"){
-            query("""
-              SELECT TUPLE_ID, ACCTBAL FROM CUST_ACCTBAL_FASTPATH
-            """){ _.map { row => (row(ID("TUPLE_ID")).asLong, row(ID("ACCTBAL")).asDouble) }.toIndexedSeq }
-          }
-        classic.size must be equalTo(150000)
-        fastpath.size must be equalTo(150000)
-      } else {
-        skipped("Skipping FastPath tests (Run `sbt datasets` to download required data)"); ko
-      }
-    }
-
-    "Produce the same results under selection" >> {
-      if(PDBench.isDownloaded){
-        db.query(db.sqlToRA(MimirSQL.Select("""
-          SELECT COUNT(*) FROM CUST_ACCTBAL_WITHDUPS
-          WHERE WORLD_ID = 1 and acctbal < 0
-        """)))( result => result.toList.head(0).asLong) must be equalTo(13721l)
-
-        Timer.monitor("QUERY_FASTPATH"){
-          queryOneColumn("""
-            SELECT TUPLE_ID FROM CUST_ACCTBAL_FASTPATH WHERE acctbal < 0
-          """){ _.toSeq.size must be between(13721, 13721+579) }
-        }  
-
-        Timer.monitor("QUERY_CLASSIC"){
-          queryOneColumn("""
-            SELECT TUPLE_ID FROM CUST_ACCTBAL_CLASSIC WHERE acctbal < 0
-          """){ _.toSeq.size must be between(13721, 13721+579) }
-        }
-      } else {
-        skipped("Skipping FastPath tests (Run `sbt datasets` to download required data)"); ko
-      } 
     }
   }
 

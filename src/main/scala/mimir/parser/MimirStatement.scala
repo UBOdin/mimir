@@ -65,7 +65,12 @@ case class Load(
   file: String,
   table: Option[Name],
   format: Option[Name],
-  args: Seq[(String, sparsity.expression.PrimitiveValue)]
+  args: Seq[(String, sparsity.expression.PrimitiveValue)],
+  withStaging: Boolean
+) extends MimirStatement
+
+case class Reload(
+  table: Name
 ) extends MimirStatement
 
 case class DropLens(

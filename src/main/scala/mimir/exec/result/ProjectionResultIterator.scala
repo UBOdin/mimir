@@ -46,9 +46,21 @@ class ProjectionResultIterator(
   private val eval = new EvalInlined[Row](evalScope, db)
 
   val columnOutputs: Seq[Row => PrimitiveValue] = 
-    tupleDefinition.map { _.expression }.map { eval.compile(_) }
+    tupleDefinition.map { _.expression }.map { expr => 
+      try {
+        eval.compile(expr) 
+      } catch { 
+        case e:RAException => throw new RAException(s"Error while compiling $expr", None, e)
+      }
+    }
   val annotationOutputs: Seq[Row => PrimitiveValue] = 
-    annotationDefinition.map { _.expression }.map { eval.compile(_) }
+    annotationDefinition.map { _.expression }.map { expr => 
+      try {
+        eval.compile(expr) 
+      } catch { 
+        case e:RAException => throw new RAException(s"Error while compiling $expr", None, e)
+      }
+    }
   val annotationIndexes: Map[ID,Int] =
     annotationDefinition.map { _.name }.zipWithIndex.toMap
 

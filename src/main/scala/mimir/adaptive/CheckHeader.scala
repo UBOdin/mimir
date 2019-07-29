@@ -74,16 +74,32 @@ object CheckHeader
   {
     if(table.equals(ID("DATA"))){
       val model = db.models.get(ID("MIMIR_CH_",config.schema)).asInstanceOf[DetectHeaderModel]
-      Some(
-          Project( model.columns.zipWithIndex.map( col => 
-            ProjectArg(ID(model.bestGuess(0, Seq(IntPrimitive(col._2)), Seq()).asString),Var(col._1)) )
-            , config.query) match {
-            case proj if model.headerDetected => proj.filter(Not(Comparison(Cmp.Eq, RowIdVar(), RowIdPrimitive("1"))))
-            case proj => proj
-          })
+
+      var oper = config.query
+
+      // If we have a header... 
+      if(model.headerDetected) { 
+        // Strip off row #1 
+        oper = oper.filter { RowIdVar().neq(RowIdPrimitive("1")) } 
+        
+        // And then rename columns accordingly
+        oper = oper.renameByID(
+          model.columns
+               .zipWithIndex
+               .map { case (col, idx) => 
+                  // the model takes the column index and returns a string
+                  val guessedColumnName = model.bestGuess(0, Seq(IntPrimitive(idx)), Seq())
+
+                  // map from the existing name to the new one
+                  col -> ID(guessedColumnName.asString)
+               } :_*
+        )
+      }
+
+      return Some(oper)
     } else { 
       logger.warn(s"Getting invalid table $table from Detect Headers adaptive schema")
-      None 
+      return None 
     }
   }
 }

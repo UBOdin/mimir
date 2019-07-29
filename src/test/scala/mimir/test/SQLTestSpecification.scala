@@ -15,17 +15,28 @@ import mimir.util._
 import mimir.exec._
 import mimir.exec.result._
 import mimir.optimizer._
-import mimir.algebra.spark.OperatorTranslation
 import mimir.ml.spark.SparkML
 import org.specs2.specification.AfterAll
+import mimir.exec.spark._
 
 object DBTestInstances
 {
   private var databases = scala.collection.mutable.Map[String, Database]()
+  private var sparkInitialized = false
+
+  def initSpark
+  {
+    if(!sparkInitialized){
+      MimirSpark.init(new MimirConfig(Seq()))
+      sparkInitialized = true
+    }
+  }
 
   def get(tempDBName: String, config: Map[String,String]): Database =
   {
     this.synchronized { 
+      this.initSpark
+
       databases.get(tempDBName) match { 
         case Some(db) => db
         case None => {
@@ -47,30 +58,11 @@ object DBTestInstances
           val oldDBExists = dbFile.exists();
           // println("Exists: "+oldDBExists)
           val metadata = new JDBCMetadataBackend(jdbcBackendMode, tempDBName+".db")
-          val backend:QueryBackend = 
-            config.getOrElse("backend", "spark") match {
-              case "spark" => new SparkBackend(tempDBName); 
-            }
-          val tmpDB = new Database(backend, metadata);
+          val tmpDB = new Database(metadata);
           if(shouldCleanupDB){    
             dbFile.deleteOnExit();
           }
           tmpDB.open()
-          backend match {
-            case sback:SparkBackend =>{
-              val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^","|","OR")
-                sback.registerSparkFunctions(
-                  tmpDB.functions.functionPrototypes.map { _._1 }.toSeq
-                    ++ otherExcludeFuncs.map { ID(_) }, 
-                  tmpDB
-                )
-                sback.registerSparkAggregates(
-                  tmpDB.aggregates.prototypes.map { _._1 }.toSeq,
-                  tmpDB.aggregates
-                )
-            }
-            case _ => ???
-          }
           if(shouldResetDB || !oldDBExists){
             config.get("initial_db") match {
               case None => ()
@@ -104,8 +96,16 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     try{
       if(config.getOrElse("cleanup", config.getOrElse("reset", "YES")) match { 
             case "NO" => false; case "YES" => true
-          }) db.backend.dropDB()
-      db.backend.close()
+          }) 
+      {
+        for(view <- db.views.listTables){ 
+          if(db.views(view).isMaterialized){ db.views.dematerialize(view) }
+        }
+        for(table <- db.loader.listTables){ 
+          db.loader.drop(table) 
+        }
+      }
+      db.close()
       //db.backend.open()
     }catch {
       case t: Throwable => {}
@@ -121,7 +121,7 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
   def query[T](s: String)(handler: ResultIterator => T): T =
     db.query(select(s))(handler)
   def queryOneColumn[T](s: String)(handler: Iterator[PrimitiveValue] => T): T = 
-    query(s){ result => handler(result.map(_(0))) }
+    query(s){ result => handler(result.map { row => row(0) }) }
   def querySingleton(s: String): PrimitiveValue =
     queryOneColumn(s){ _.next }
   def queryOneRow(s: String): Row =
@@ -156,40 +156,19 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     db.update(s)
   def update(s: String) = 
     db.update(stmt(s))
-  def loadCSV(file: String) : Unit =
-    db.loadTable(
-      sourceFile = file,
-      force = true
-    )
-  def loadCSV(table: String, file: String) : Unit =
-    db.loadTable(
-      targetTable = Some(ID(table)), 
-      sourceFile = file,
-      force = true
-    )
-  def loadCSV(table: String, schema:Seq[(String,String)], file: String) : Unit =
-    db.loadTable(
-      targetTable = Some(ID(table)), 
-      targetSchema = Some(schema.map { x => (ID.upper(x._1), Type.fromString(x._2)) }), 
-      sourceFile = file,
-      force = true
-    ) 
-  def loadCSV(table: String, file: String, inferTypes:Boolean, detectHeaders:Boolean) : Unit =
-    db.loadTable(
-      targetTable = Some(ID(table)), 
-      sourceFile = file,
-      force = true,
+  def loadCSV(
+    sourceFile: String, 
+    targetTable: String = null, 
+    inferTypes:Boolean = true, 
+    detectHeaders:Boolean = true, 
+    targetSchema: Seq[String] = null
+  ) : Unit =
+    db.loader.loadTable(
+      sourceFile = sourceFile,
+      targetTable = Option(targetTable).map { ID(_) },
       inferTypes = Some(inferTypes),
-      detectHeaders = Some(detectHeaders)
-    )
-  def loadCSV(table: String, schema:Seq[(String,String)], file: String, inferTypes:Boolean, detectHeaders:Boolean) : Unit =
-    db.loadTable(
-      targetTable = Some(ID(table)), 
-      sourceFile = file,
-      targetSchema = Some(schema.map { x => (ID.upper(x._1), Type.fromString(x._2)) }), 
-      force = true,
-      inferTypes = Some(inferTypes),
-      detectHeaders = Some(detectHeaders)
+      detectHeaders = Some(detectHeaders),
+      targetSchema = Option(targetSchema).map { _.map { ID(_) } }
     )
     
   def modelLookup(model: String) = db.models.get(ID(model))

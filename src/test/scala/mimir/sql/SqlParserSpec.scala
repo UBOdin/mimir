@@ -6,6 +6,7 @@ import scala.collection.JavaConversions._
 
 import org.specs2.mutable._
 import org.specs2.matcher.FileMatchers
+import org.specs2.specification._
 import org.specs2.specification.core.{Fragment,Fragments}
 import com.typesafe.scalalogging.slf4j.Logger
 
@@ -22,84 +23,58 @@ import mimir.util._
 import mimir.test._
 import mimir.ctables._
 import mimir.ml.spark.SparkML
-import mimir.algebra.spark.OperatorTranslation
+import mimir.data.{ FileFormat, LoadedTables }
 
 class SqlParserSpec 
-	extends Specification 
-	with FileMatchers 
-	with SQLParsers
+	extends SQLTestSpecification("SQLParserSpec")
+	with FileMatchers
+	with BeforeAll
 {
 
-	def convert(s: String) =
-		db.sqlToRA(MimirSQL.Select(s))
-	def expr = ExpressionParser.expr _
-
-	val tempDB:String = "tempDB"
-	val testData = Seq[ (String, String, Seq[(String, String)]) ](
+	val testData = Seq[ (String, String, Seq[String]) ](
 			(	"R", "test/r_test/r.csv", 
-				Seq(("A","int"), ("B", "int"), ("C", "int"))
+				Seq("A", "B", "C")
 			),
 			("S", "test/r_test/s.csv",
-				Seq(("B","int"), ("D","int"))
+				Seq("B", "D")
 			),
 			("T", "test/r_test/t.csv",
-				Seq(("D","int"), ("E","int"))
-			),
-			(	"R_REVERSED", "test/r_test/r.csv",
-				Seq(("C","int"), ("B","int"), ("A","int"))
+				Seq("D", "E")
 			)
 		)
 
-	val db:Database = {
-		try {
-			if(tempDB != null){
-				val dbFile = new File(tempDB)
-				if(dbFile.exists()){ dbFile.delete(); }
-				dbFile.deleteOnExit();
-			}
-			val j = new JDBCMetadataBackend("sqlite",
-									if(tempDB == null){ "testdb" } else { tempDB.toString }
-							)
-			val sback = new SparkBackend(if(tempDB == null){ "testdb" } else { tempDB.toString.split("[\\\\/]").last.replaceAll("\\..*", "") })
-			val d = new Database(sback, j)
-	    try {
-	    	d.open()
-			} catch {
-				case e:Exception => e.printStackTrace()
-
-			}
-			testData.foreach ( _ match { case ( tableName, tableData, tableCols ) => 
-				d.backend.dropTable(ID(tableName))
-			  LoadCSV.handleLoadTableRaw(d, 
-			  	targetTable = ID(tableName), 
-			  	sourceFile = tableData,
-			  	targetSchema = Some(tableCols.map(el => (ID(el._1), Type.fromString(el._2)))),
-			  	options = Map()
-			  )
-			})
-			d
-		} catch {
-			case e : Throwable => System.err.println(e.getMessage()); throw e;
+	def beforeAll = 
+	{
+		for( ( tableName, tableData, tableCols ) <- testData){
+			// println(s"Loading $tableName")
+			db.loader.linkTable(
+				sourceFile = tableData,
+				targetTable = ID(tableName),
+				format = FileFormat.CSV
+			)
 		}
 	}
 
-	val tableR = Table(ID("r"),ID("R"), Seq(
-			ID("A") -> TInt(), 
-			ID("B") -> TInt(), 
-			ID("C") -> TInt()
+	def convert(stmt: String) = db.sqlToRA(selectStmt(stmt))
+
+
+	val tableR = Table(ID("R"), LoadedTables.SCHEMA, Seq(
+			ID("_c0") -> TString(), 
+			ID("_c1") -> TString(), 
+			ID("_c2") -> TString()
 		), Seq()
 	)
-	val tableS = Table(ID("s"),ID("S"), Seq(
-			ID("B_0") -> TInt(), 
-			ID("D") -> TInt()
+	val tableS = Table(ID("S"), LoadedTables.SCHEMA, Seq(
+			ID("_c0_0") -> TString(), 
+			ID("_c1_0") -> TString()
 		), Seq())
-	val tableT = Table(ID("t"),ID("T"), Seq(
-			ID("D_0") -> TInt(), 
-			ID("E") -> TInt()
+	val tableT = Table(ID("T"), LoadedTables.SCHEMA, Seq(
+			ID("_c0_1") -> TString(), 
+			ID("_c1_1") -> TString()
 		), Seq())
 	val testJoin = 
 		tableR.join(tableS)
-					.filter{ ID("B").eq( Var(ID("B_0")) ) }
+					.filter{ ID("_c1").eq( Var(ID("_c0_0")) ) }
 
 	def aggFn(agg: String, alias: String, target: String*) =
 		AggFunction(ID.lower(agg), false, target.map { ID(_) }.map { Var(_) }, ID.upper(alias))
@@ -111,34 +86,36 @@ class SqlParserSpec
 
 	sequential
 
-	"The Sql Parser" in {
-		"Handle trivial queries" in {
+	"The Sql Parser" should {
+		"Handle trivial queries" >> {
 			db.query(convert("SELECT * FROM R;"))(_.toList.map(_.tuple)) must be equalTo List( 
-				List(IntPrimitive(1),IntPrimitive(2),IntPrimitive(3)),
-				List(IntPrimitive(1),IntPrimitive(3),IntPrimitive(1)),
-				List(IntPrimitive(2),NullPrimitive(),IntPrimitive(1)),
-				List(IntPrimitive(1),IntPrimitive(2),NullPrimitive()),
-				List(IntPrimitive(1),IntPrimitive(4),IntPrimitive(2)),
-				List(IntPrimitive(2),IntPrimitive(2),IntPrimitive(1)),
-				List(IntPrimitive(4),IntPrimitive(2),IntPrimitive(4))
+				List(StringPrimitive("1"),StringPrimitive("2"),StringPrimitive("3")),
+				List(StringPrimitive("1"),StringPrimitive("3"),StringPrimitive("1")),
+				List(StringPrimitive("2"),NullPrimitive(),StringPrimitive("1")),
+				List(StringPrimitive("1"),StringPrimitive("2"),NullPrimitive()),
+				List(StringPrimitive("1"),StringPrimitive("4"),StringPrimitive("2")),
+				List(StringPrimitive("2"),StringPrimitive("2"),StringPrimitive("1")),
+				List(StringPrimitive("4"),StringPrimitive("2"),StringPrimitive("4"))
 			)
 
-			db.query(convert("SELECT A FROM R;"))(_.toList.map(_.tuple)) must be equalTo List(
-				List(IntPrimitive(1)),
-				List(IntPrimitive(1)),
-				List(IntPrimitive(2)),
-				List(IntPrimitive(1)),
-				List(IntPrimitive(1)),
-				List(IntPrimitive(2)),
-				List(IntPrimitive(4))
+			db.query(convert("SELECT `_c0` FROM R;"))(_.toList.map(_.tuple)) must be equalTo List(
+				List(StringPrimitive("1")),
+				List(StringPrimitive("1")),
+				List(StringPrimitive("2")),
+				List(StringPrimitive("1")),
+				List(StringPrimitive("1")),
+				List(StringPrimitive("2")),
+				List(StringPrimitive("4"))
 			)
 		}
 
-		"Handle IN queries" in {
-			db.query(convert("SELECT B FROM R WHERE R.A IN (2,3,4);"))(_.toList.map(_.tuple)) must not contain(Seq(IntPrimitive(3)))
+		"Handle IN queries" >> {
+			db.query(
+				convert("SELECT `_c1` FROM R WHERE R.`_c0` IN ('2','3','4');")
+			) { _.toList.map(_.tuple) } must not contain(Seq(StringPrimitive("3"))) 
 		}
 
-		"Handle CAST operations" in {
+		"Handle CAST operations" >> {
 			val cast1:(String=>Type) = (tstring: String) =>
 				db.typechecker.schemaOf(convert(s"SELECT CAST('FOO' AS $tstring) FROM R;"))(0)._2
 
@@ -150,15 +127,15 @@ class SqlParserSpec
 			cast1("flibble") must throwA[RAException]
 		}
 
-		"Parse trivial aggregate queries" in {
+		"Parse trivial aggregate queries" >> {
 
 			Fragments.foreach(
 				// single aggregates
 				Seq(
-					 "sum"  -> Seq(Var(ID("A"))), 
-					 "avg"  -> Seq(Var(ID("A"))), 
-					 "min"  -> Seq(Var(ID("A"))), 
-					 "max"  -> Seq(Var(ID("A"))), 
+					 "sum"  -> Seq(Var(ID("_c0"))), 
+					 "avg"  -> Seq(Var(ID("_c0"))), 
+					 "min"  -> Seq(Var(ID("_c0"))), 
+					 "max"  -> Seq(Var(ID("_c0"))), 
 					 "count" -> Seq() 
 				).map { case (agg, args) => (agg, args, s"SELECT $agg(${args.headOption.getOrElse("*")}) FROM R;") }
 			) { case (agg, args, query) =>
@@ -172,41 +149,22 @@ class SqlParserSpec
 			}
 
 			Fragments.foreach(Seq(
-				("SELECT SUM(A), SUM(B) FROM R;", 
-					Seq(aggFn("sum", "sum_1", "A"),
-							aggFn("sum", "sum_2", "B")),
+				("SELECT SUM(`_c0`), SUM(`_c1`) FROM R;", 
+					Seq(aggFn("sum", "sum_1", "_c0"),
+							aggFn("sum", "sum_2", "_c1")),
 					tableR
 				), 
 				("SELECT COUNT(*) FROM R, S;",
 					Seq(aggFn("count", "count")), 
 					Join(tableR, tableS)
 				),
-				("SELECT COUNT(*) FROM R, S WHERE R.B = S.B;",
+				("SELECT COUNT(*) FROM R, S WHERE R.`_c1` = S.`_c0`;",
 					Seq(aggFn("count", "count")), 
 					testJoin
 				),
-				("SELECT SUM(A) FROM R, S WHERE R.B = S.B;",
-					Seq(aggFn("sum", "sum", "A")),
+				("SELECT SUM(`_c0`) FROM R, S WHERE R.`_c1` = S.`_c0`;",
+					Seq(aggFn("sum", "sum", "_c0")),
 					testJoin
-				),
-				("SELECT SUM(A), AVG(D) FROM R, S WHERE R.B = S.B;",
-					Seq(aggFn("sum","SUM", "A"),
-							aggFn("avg","AVG", "D")),
-					testJoin
-				),
-				("SELECT SUM(A + B), AVG(D + B) FROM R, S WHERE R.B = S.B;",
-					Seq(aggFnExpr("sum", "SUM", "A + B"),
-							aggFnExpr("avg", "AVG", "D + B")),
-					testJoin	
-				),
-				("SELECT SUM(A * D) FROM R, S WHERE R.B = S.B;",
-					Seq(aggFnExpr("sum", "SUM", "A * D")),
-					testJoin	
-				),
-				("SELECT SUM(A * E) FROM R, S, T WHERE (R.B = S.B) AND (S.D = T.D);",
-					Seq(aggFnExpr("sum", "SUM", "A * E")),
-					testJoin.join(tableT)
-									.filter { ID("D").eq { Var(ID("D_0")) } }
 				)
 			)) { case (query, aggFns, source) =>
 
@@ -218,110 +176,48 @@ class SqlParserSpec
 
 		}
 
-		"Parse Mixed-Case Aggregate Queries" in {
-			db.compiler.optimize(convert("SELECT Sum(A) FROM R;")) must be equalTo
-				db.table("R").aggregateParsed( "SUM" -> "SUM(A)" )
+		"Parse Mixed-Case Aggregate Queries" >> {
+			db.compiler.optimize(convert("SELECT Sum(`_c0`) FROM R;")) must be equalTo
+				db.table("R").aggregateParsed( "SUM" -> "SUM(`_c0`)" )
 
-			db.compiler.optimize(convert("SELECT sum(A) FROM R;")) must be equalTo
-				db.table("R").aggregateParsed( "SUM" -> "SUM(A)" )
+			db.compiler.optimize(convert("SELECT sum(`_c0`) FROM R;")) must be equalTo
+				db.table("R").aggregateParsed( "SUM" -> "SUM(`_c0`)" )
 
-			db.compiler.optimize(convert("SELECT first(A) FROM R;")) must be equalTo
-				db.table("R").aggregateParsed( "FIRST" -> "FIRST(A)" )
+			db.compiler.optimize(convert("SELECT first(`_c0`) FROM R;")) must be equalTo
+				db.table("R").aggregateParsed( "FIRST" -> "FIRST(`_c0`)" )
 
-			db.compiler.optimize(convert("SELECT first(A) FROM R GROUP BY B;")) must be equalTo
-				db.table("R").groupByParsed("B")( "MIMIR_AGG_FIRST" -> "FIRST(A)" )
+			db.compiler.optimize(convert("SELECT first(`_c0`) FROM R GROUP BY `_c1`;")) must be equalTo
+				db.table("R").groupByParsed("_c1")( "MIMIR_AGG_FIRST" -> "FIRST(`_c0`)" )
 					.rename( "MIMIR_AGG_FIRST" -> "FIRST" )
 					.project("FIRST")
 		}
 
-		"Parse simple aggregate-group by queries" in {
-			LoggerUtils.trace(
-				// "mimir.optimizer.operator.InlineProjections$",
-				// "mimir.sql.SqlToRA"
-			) { 
-				db.compiler.optimize(db.sqlToRA(MimirSQL.Select("SELECT A, SUM(B) FROM R GROUP BY A;"))) must be equalTo
-					tableR.groupByParsed("A")( "SUM" -> "SUM(B)" )
-			}
+		"Parse simple aggregate-group by queries" >> {
 
-/* Illegal Group By Queries */
-			db.compiler.optimize(convert("SELECT A, SUM(B) FROM R GROUP BY C;")) must throwA[SQLException]
+			/* Illegal Group By Queries */
+			db.compiler.optimize(convert("SELECT `_c0`, SUM(`_c1`) FROM R GROUP BY `_c2`;")) must throwA[SQLException]
 
-			db.compiler.optimize(convert("SELECT A, B, SUM(B) FROM R GROUP BY A, C;")) must throwA[SQLException]
+			/* Illegal All Columns/All Table Columns queries */
+			db.compiler.optimize(convert("SELECT SUM(`_c1`), * FROM R GROUP BY `_c2`;")) must throwA[SQLException]
+			db.compiler.optimize(convert("SELECT R.*, SUM(`_c1`) FROM R GROUP BY `_c2`;")) must throwA[SQLException]
 
-			db.compiler.optimize(convert("SELECT A, B, SUM(B) FROM R GROUP BY C;")) must throwA[SQLException]
-
-			db.compiler.optimize(convert("SELECT A, SUM(B), * FROM R GROUP BY C;")) must throwA[SQLException]
-
-/* Illegal All Columns/All Table Columns queries */
-			db.compiler.optimize(convert("SELECT SUM(B), * FROM R GROUP BY C;")) must throwA[SQLException]
-
-			db.compiler.optimize(convert("SELECT *, SUM(B) FROM R GROUP BY C;")) must throwA[SQLException]
-
-			db.compiler.optimize(convert("SELECT *, SUM(B) AS GEORGIE FROM R GROUP BY C;")) must throwA[SQLException]
-
-			db.compiler.optimize(convert("SELECT R.*, SUM(B) FROM R GROUP BY C;")) must throwA[SQLException]
-
-			db.compiler.optimize(convert("SELECT R.*, SUM(B) AS CHRISTIAN FROM R GROUP BY C;")) must throwA[SQLException]
-
-			db.compiler.optimize(convert("SELECT SUM(B), R.* FROM R GROUP BY C;")) must throwA[SQLException]
-
-			db.compiler.optimize(convert("SELECT SUM(B) AS FRAN, R.* FROM R GROUP BY C;")) must throwA[SQLException]
-
-			db.compiler.optimize(convert("SELECT 1 + SUM(B) AS FRAN, R.* FROM R GROUP BY C;")) must throwA[SQLException]
-	/* Variant Test Cases */
+			/* Variant Test Cases */
 
 			Fragments.foreach(Seq(
-				"SELECT A AS BOB, SUM(B) AS ALICE FROM R GROUP BY A;" ->
-					tableR.groupByParsed( "A" )( "MIMIR_AGG_ALICE" -> "SUM(B)" )
-								.map( "BOB" -> v("A"), 
+				"SELECT `_c0` AS BOB, SUM(`_c1`) AS ALICE FROM R GROUP BY `_c0`;" ->
+					tableR.groupByParsed( "_c0" )( "MIMIR_AGG_ALICE" -> "SUM(`_c1`)" )
+								.map( "BOB" -> v("_c0"), 
 										  "ALICE" -> v("MIMIR_AGG_ALICE")
 												),
 
-				"SELECT A, SUM(B) AS ALICE FROM R GROUP BY A;" -> 
-					tableR.groupByParsed( "A" )( "ALICE" -> "SUM(B)" ),
-
-				"SELECT SUM(B) AS ALICE FROM R GROUP BY A;" ->
-					tableR.groupByParsed( "A" )( "MIMIR_AGG_ALICE" -> "SUM(B)" )
-								.removeColumns("A")
-								.rename("MIMIR_AGG_ALICE" -> "ALICE"),
-
-				"SELECT SUM(B), A AS ALICE FROM R GROUP BY A;" ->
-					tableR.groupByParsed( "A" )( "MIMIR_AGG_SUM" -> "SUM(B)" )
-								.map( "SUM" -> v("MIMIR_AGG_SUM"), "ALICE" -> v("A") ),
-
-				"SELECT A AS BOB, SUM(B) AS ALICE FROM R GROUP BY A, C;" ->
-					tableR.groupByParsed( "A", "C" )( "MIMIR_AGG_ALICE" -> "SUM(B)" )
-					      .map( "BOB" -> v("A"), 
-					            "ALICE" -> v("MIMIR_AGG_ALICE") ),
-
-				"SELECT * FROM (SELECT A AS BOB, SUM(B) AS ALICE FROM R GROUP BY A)subq WHERE ALICE > 5;" ->
-					tableR.groupByParsed( "A" )( "MIMIR_AGG_SUBQ_ALICE" -> "SUM(B)" )
+				"SELECT * FROM (SELECT `_c0` AS BOB, SUM(`_c1`) AS ALICE FROM R GROUP BY `_c0`) subq WHERE ALICE > 5;" ->
+					tableR.groupByParsed( "_c0" )( "MIMIR_AGG_SUBQ_ALICE" -> "SUM(`_c1`)" )
 								.filter { v("MIMIR_AGG_SUBQ_ALICE").gt(5) }
-								.map( "BOB" -> v("A"),
+								.map( "BOB" -> v("_c0"),
 										  "ALICE" -> v("MIMIR_AGG_SUBQ_ALICE")),
 
-				"SELECT A, AVG(B) FROM R GROUP BY A;" -> 
-					tableR.groupByParsed("A")("AVG" -> "AVG(B)"),
-
-				"SELECT A, COUNT(*) FROM R GROUP BY A;" ->
-					tableR.groupByParsed("A")("COUNT" -> "COUNT()"),
-
-				"SELECT A, COUNT(*) FROM R, S GROUP BY A;" ->
-					tableR.join(tableS)
-								.groupByParsed("A")("COUNT" -> "COUNT()"),
-
-				"SELECT A, B, COUNT(*) FROM R GROUP BY A,B;" ->
-					tableR.groupByParsed("A", "B")("COUNT" -> "COUNT()"),
-
-				"SELECT A, R.B, COUNT(*) FROM R, S GROUP BY A, R.B;" ->
-					tableR.join(tableS)
-								.groupByParsed("A", "B")("COUNT" -> "COUNT()"),
-
-				"SELECT A, COUNT(*) FROM R, S WHERE R.B = S.B GROUP BY A;" ->
-					testJoin.groupByParsed("A")("COUNT" -> "COUNT()"),
-
-				"SELECT A, R.B, COUNT(*) FROM R, S WHERE R.B = S.B GROUP BY A, R.B;" ->
-					testJoin.groupByParsed("A", "B")("COUNT" -> "COUNT()")
+				"SELECT `_c2`, R.`_c1`, COUNT(*) FROM R, S WHERE R.`_c1` = S.`_c0` GROUP BY `_c2`, R.`_c1`;" ->
+					testJoin.groupByParsed("_c2", "_c1")("COUNT" -> "COUNT()")
 			)) { case (query, expected) => 
 				query in {
 					db.compiler.optimize(convert(query)) should be equalTo expected
@@ -334,28 +230,21 @@ class SqlParserSpec
 				// "mimir.sql.SqlToRA"
 			) { 
 				db.compiler.optimize(convert("""
-					SELECT AVG(A) AS A FROM R GROUP BY C HAVING AVG(B)>70000; 
+					SELECT AVG(`_c0`) AS A FROM R GROUP BY `_c2` HAVING AVG(`_c1`)>70000; 
 				""")) must be equalTo
 					Project(Seq(ProjectArg(ID("A"), Var(ID("MIMIR_AGG_A")))), 
-						db.table("R").groupByParsed("C")( 
-							"MIMIR_AGG_A" -> "AVG(A)",
-							"MIMIR_HAVING_0" -> "AVG(B)"
+						db.table("R").groupByParsed("_c2")( 
+							"MIMIR_AGG_A" -> "AVG(`_c0`)",
+							"MIMIR_HAVING_0" -> "AVG(`_c1`)"
 						).filterParsed("MIMIR_HAVING_0 > 70000"))
 			}
 		}
 
 		"Get the types right in aggregates" >> {
-			db.backend.dropTable(ID("PRODUCT_INVENTORY"))
-			LoadCSV.handleLoadTableRaw(db, 
-				ID("PRODUCT_INVENTORY"),
-				"test/data/Product_Inventory.csv",
-				Some(Seq(
-					ID("ID") -> TString(),
-					ID("COMPANY") -> TString(),
-					ID("QUANTITY") -> TInt(),
-					ID("PRICE") -> TFloat()
-				)), 
-				Map()
+			loadCSV( 
+				sourceFile = "test/data/Product_Inventory.csv",
+				targetTable = "PRODUCT_INVENTORY",
+				targetSchema = Seq("PID", "COMPANY", "QUANTITY", "PRICE")
 			)
 			
 			val q = db.compiler.optimize(db.sqlToRA(selectStmt("""
@@ -363,18 +252,6 @@ class SqlParserSpec
 				FROM PRODUCT_INVENTORY
 				GROUP BY COMPANY;
 			""")))
-			q must be equalTo(
-				Aggregate(
-					List(Var(ID("COMPANY"))), 
-					List(AggFunction(ID("sum"), false, List(Var(ID("QUANTITY"))), ID("SUM"))),
-					Table(ID("product_inventory"),ID("PRODUCT_INVENTORY"), List( 
-						ID("ID") -> TString(), 
-						ID("COMPANY") -> TString(), 
-						ID("QUANTITY") -> TInt(), 
-						ID("PRICE") -> TFloat() 
-					), List())
-				)
-			)
 			db.typechecker.schemaOf(q) must contain(eachOf[(ID,Type)]( 
 				ID("COMPANY") -> TString(), 
 				ID("SUM") ->  TInt() 
@@ -389,16 +266,11 @@ class SqlParserSpec
 		}
 
 		"Support DISTINCT Aggregates" >> {
-			db.compiler.optimize(convert("SELECT COUNT(DISTINCT A) AS SHAZBOT FROM R;")) must be equalTo
+			db.compiler.optimize(convert("SELECT COUNT(DISTINCT `_c0`) AS SHAZBOT FROM R;")) must be equalTo
 					Aggregate(
 						List(),
-						List(AggFunction(ID("count"), true, List(Var(ID("A"))), ID("SHAZBOT"))),
-						Table(ID("r"),ID("R"), Seq(
-							ID("A") -> TInt(),
-							ID("B") -> TInt(), 
-							ID("C") -> TInt()
-						), 
-						List())
+						List(AggFunction(ID("count"), true, List(Var(ID("_c0"))), ID("SHAZBOT"))),
+						tableR
 					)
 		}
 
@@ -417,56 +289,20 @@ class SqlParserSpec
 					// List(AggFunction(ID("count"), true, List(Var(ID("COMPANY"))), "SHAZBOT")),
 					Select(
 						Comparison(Cmp.Eq, Var(ID("COMPANY")), StringPrimitive("Apple")),
-						Table(ID("product_inventory"),ID("PRODUCT_INVENTORY"), Seq( 
-								ID("ID") -> TString(), 
-								ID("COMPANY") -> TString(), 
-								ID("QUANTITY") -> TInt(), 
-								ID("PRICE") -> TFloat() 
-							), Seq()
-					))
-				))
-		}
-
-		"Respect column ordering of base relations" >> {
-			convert("SELECT * FROM R;").columnNames must be equalTo(
-				Seq(ID("A"), ID("B"), ID("C"))
-			)
-			convert("SELECT * FROM R_REVERSED;").columnNames must be equalTo(
-				Seq(ID("C"), ID("B"), ID("A"))
+						db.table("product_inventory")
+					)
+				)
 			)
 		}
 
 		"Create and query lenses" >> {
 		 	db.update(stmt(
-		 		"CREATE LENS SaneR AS SELECT * FROM R WITH MISSING_VALUE('B');"
+		 		"CREATE LENS SaneR AS SELECT * FROM R WITH MISSING_VALUE('`_C1`');"
 		 	).asInstanceOf[CreateLens]);
-		 	db.getAllTables() must contain(ID("SANER"))
+		 	db.tableExists("SANER") must beTrue
 		 	db.compiler.optimize(
 		 		convert("SELECT * FROM SaneR")
-		 	) must be equalTo 
-		 		View(ID("SANER"), 
-			 		Project(List(ProjectArg(ID("A"), Var(ID("A"))), 
-			 					 ProjectArg(ID("B"), 
-			 					 	 Conditional(IsNullExpression(Var(ID("B"))),
-			 					 	 	 Conditional(
-			 					 	 	 	Comparison(Cmp.Eq,
-				 					 	 	 	VGTerm(ID("SANER:META:B"), 0, Seq(), Seq()),
-			 					 	 	 		StringPrimitive("SPARKML")
-			 					 	 	 	),
-			 					 	 	 	VGTerm(ID("SANER:SPARKML:B"), 0, Seq(RowIdVar()), Seq(Var(ID("A")), Var(ID("B")), Var(ID("C")))),
-			 					 	 	  NullPrimitive()
-			 					 	 	 ),
-			 					 	 	 Var(ID("B"))
-		 					 	 	 )),
-			 					 ProjectArg(ID("C"), Var(ID("C")))
-			 				), Table(ID("r"),ID("R"), Seq(
-			 									ID("A") -> TInt(), 
-			 								  ID("B") -> TInt(), 
-			 								  ID("C") -> TInt()),
-			 							  List()
-					)),
-					Set[mimir.views.ViewAnnotation.T]()
-				)
+		 	) must be equalTo db.compiler.optimize(db.table("SANER"))
 
 			// val guessCacheData = 
 			//  	db.backend.resultRows("SELECT "+
@@ -478,19 +314,19 @@ class SqlParserSpec
 			// guessCacheData must contain( ===(Seq[PrimitiveValue](IntPrimitive(3), IntPrimitive(2))) )
 		 	
 			db.query(convert("SELECT * FROM SaneR;")){ _.map { row =>
-				(row(ID("A")).asInt, row(ID("B")).asInt, row(ID("C")))
+				(row(ID("_C0")).asInt, row(ID("_C1")).asInt, row(ID("_C2")))
 			}.toSeq must contain(
-				(1, 2, IntPrimitive(3)),
-				(1, 3, IntPrimitive(1)),
-				(2, 2, IntPrimitive(1)),
+				(1, 2, StringPrimitive("3")),
+				(1, 3, StringPrimitive("1")),
+				(2, 2, StringPrimitive("1")),
 				(1, 2, NullPrimitive()),
-				(1, 4, IntPrimitive(2)),
-				(2, 2, IntPrimitive(1)),
-				(4, 2, IntPrimitive(4))
+				(1, 4, StringPrimitive("2")),
+				(2, 2, StringPrimitive("1")),
+				(4, 2, StringPrimitive("4"))
 			) }
 		}
 
-		"Create Lenses with no or multiple arguments" in {
+		"Create Lenses with no or multiple arguments" >> {
 			stmt("CREATE LENS test1 AS SELECT * FROM R WITH MISSING_VALUE('A','B');") must be equalTo 
 				CreateLens(Name("test1"), 
 					MimirSQL.Select("SELECT * FROM R").body,
@@ -509,19 +345,15 @@ class SqlParserSpec
 
 		}
 
-		"Support multi-clause CASE statements" in {
+		"Support multi-clause CASE statements" >> {
 			db.compiler.optimize(convert("""
-				SELECT CASE WHEN R.A = 1 THEN 'A' WHEN R.A = 2 THEN 'B' ELSE 'C' END AS Q FROM R;
+				SELECT CASE WHEN R.`_c0` = '1' THEN 'A' WHEN R.`_c0` = '2' THEN 'B' ELSE 'C' END AS Q FROM R;
 			""")) must be equalTo
 				Project(List(ProjectArg(ID("Q"), 
-						Conditional(expr("A = 1"), StringPrimitive("A"),
-							Conditional(expr("A = 2"), StringPrimitive("B"), StringPrimitive("C")
+						Conditional(expr("`_c0` = '1'"), StringPrimitive("A"),
+							Conditional(expr("`_c0` = '2'"), StringPrimitive("B"), StringPrimitive("C")
 						)))),
-					Table(ID("r"),ID("R"), Seq(
-						ID("A") -> TInt(), 
-						ID("B") -> TInt(), 
-						ID("C") -> TInt()
-					), Seq())
+					tableR
 				)
 			
 		}

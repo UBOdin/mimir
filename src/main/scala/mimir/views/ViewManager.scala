@@ -12,9 +12,13 @@ import mimir.exec.mode._
 import mimir.serialization._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.metadata._
+import mimir.data.ViewSchemaProvider
 
 
-class ViewManager(db:Database) extends LazyLogging {
+class ViewManager(db:Database) 
+  extends ViewSchemaProvider
+  with LazyLogging
+{
   
   var viewTable: MetadataMap = null
 
@@ -35,12 +39,13 @@ class ViewManager(db:Database) extends LazyLogging {
    * Instantiate a new view
    * @param  name           The name of the view to create
    * @param  query          The query to back the view with
+   * @param  force          Force creation even if a table already exists
    * @throws SQLException   If a view or table with the same name already exists
    */
-  def create(name: ID, query: Operator): Unit =
+  def create(name: ID, query: Operator, force: Boolean = false): Unit =
   {
     logger.debug(s"CREATE VIEW $name AS $query")
-    if(db.tableExists(name)){
+    if(!force && db.catalog.tableExists(name)){
       throw new SQLException(s"View '$name' already exists")
     }
     viewTable.put(name, Seq(
@@ -81,7 +86,9 @@ class ViewManager(db:Database) extends LazyLogging {
                      else { throw new SQLException(s"Unknown View '$name'") }
       }
     viewTable.rm(name)
-    if(properties.isMaterialized){ db.backend.dropTable(name) }
+    if(properties.isMaterialized){ 
+      db.catalog.materializedTableProvider().dropStoredTable(properties.materializedName)
+    }
   }
 
   /**
@@ -130,10 +137,11 @@ class ViewManager(db:Database) extends LazyLogging {
    */
   def materialize(name: ID): Unit =
   {
-    if(db.backend.getTableSchema(name) != None){
+    val properties = apply(name)
+    val bulkStorage = db.catalog.materializedTableProvider()
+    if(bulkStorage.tableExists(properties.materializedName)){
       throw new SQLException(s"View '$name' is already materialized")
     }
-    val properties = apply(name)
     val (
       query, 
       baseSchema,
@@ -163,13 +171,7 @@ class ViewManager(db:Database) extends LazyLogging {
     logger.debug(s"RAW: $completeQuery")
     logger.debug(s"MATERIALIZE: $name(${completeQuery.columnNames.mkString(",")})")
 
-    //val (inlinedSQL:SelectBody, _) = db.compiler.sqlForBackend(completeQuery)
-        
-    //logger.debug(s"QUERY: $inlinedSQL")
-
-    //db.metadataBackend.selectInto(name, inlinedSQL.toString)
-    db.backend.createTable(name, completeQuery)
-    db.backend.materializeView(name)
+    bulkStorage.createStoredTableAs(completeQuery, properties.materializedName, db)
 
     viewTable.update(name, Map(ID("METADATA") -> IntPrimitive(1)))
   }
@@ -178,13 +180,14 @@ class ViewManager(db:Database) extends LazyLogging {
    * Remove the materialization for the specified view
    * @param  name        The name of the view to dematerialize
    */
-  def dematerialize(name: ID): Unit = {
-    if(db.backend.getTableSchema(name) == None){
-      throw new SQLException(s"View '$name' is not materialized")
+  def dematerialize(name: ID): Unit = { 
+    val metadata = apply(name)
+    if(metadata.isMaterialized){
+      db.catalog.materializedTableProvider().dropStoredTable(metadata.materializedName)
+      viewTable.update(name, Map(ID("METADATA") -> IntPrimitive(0)))
+    } else { 
+      throw new SQLException(s"$name is already materialized")
     }
-    db.backend.dropTable(name)
-    viewTable.update(name, Map(ID("METADATA") -> IntPrimitive(0)))
-    db.backend.invalidateCache
   }
 
   /**
@@ -278,13 +281,13 @@ class ViewManager(db:Database) extends LazyLogging {
           return resolve(query)
         }
 
-        logger.debug(s"Using materialized view: Materialized '$name' with { ${wantAnnotations.mkString(", ")} } <- ${metadata.table}")
+        logger.debug(s"Using materialized view: Materialized '$name' with { ${wantAnnotations.mkString(", ")} } <- ${metadata.materializedName}")
 
         Project(
           metadata.schemaWith(wantAnnotations).map { col => 
             ProjectArg(col._1, Var(col._1))
           },
-          metadata.table
+          materializedTableOperator(metadata)
         )
       }
       case AdaptiveView(schema, name, query, wantAnnotations) => {
@@ -296,4 +299,58 @@ class ViewManager(db:Database) extends LazyLogging {
     }
   }
 
+  def listTables() = list()
+  def tableSchema(table: ID) = 
+    get(table).map { view => db.typechecker.schemaOf(view.query) }
+
+  def view(table: ID) = apply(table).operator
+
+  def materializedTableOperator(table: ID): Operator =
+    materializedTableOperator(apply(table:ID))
+  def materializedTableOperator(metadata: ViewMetadata): Operator =
+  {
+    // retain the base columns
+    var projectedColumns = 
+      metadata.schema.map { case (col, _) => ProjectArg(col, Var(col)) } 
+
+    // if we want the taint columns, decode them
+    if(metadata.annotations(ViewAnnotation.TAINT)){
+      projectedColumns ++= 
+        metadata.schemaWith(Set(ViewAnnotation.PROVENANCE)).zipWithIndex.map { case ((col, _), idx) => 
+          ProjectArg(
+            OperatorDeterminism.mimirColDeterministicColumn(col),
+            Comparison(Cmp.Eq,
+              Arithmetic(Arith.BitAnd,
+                Var(ViewAnnotation.taintBitVectorColumn),
+                IntPrimitive(1l << (idx+1))
+              ),
+              IntPrimitive(1l << (idx+1))
+            )
+          )
+        } :+ 
+          ProjectArg(
+            OperatorDeterminism.mimirRowDeterministicColumnName,
+            Comparison(Cmp.Eq,
+              Arithmetic(Arith.BitAnd,
+                Var(ViewAnnotation.taintBitVectorColumn),
+                IntPrimitive(1l)
+              ),
+              IntPrimitive(1l)
+            )
+          )
+    }
+
+    if(metadata.annotations(ViewAnnotation.PROVENANCE)){
+      projectedColumns ++= 
+        metadata.provenanceCols.map { col => ProjectArg(col, Var(col)) }
+    }
+
+    return Project(projectedColumns, metadata.materializedOperator)
+  }
+}
+
+object ViewManager 
+{
+  val SCHEMA = ID("VIEW")
+  val MATERIALIZED_VIEW_SCHEMA = ID("MATERIALIZED_VIEW")
 }

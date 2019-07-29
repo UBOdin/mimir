@@ -5,4 +5,8 @@ SCALA_VERSION=2.11
 CLASSES=$ME/src/test/resources:$ME/src/main/resources:`cat $ME/.classpath`
 CMD="java -cp $CLASSES mimir.Mimir"
 
+if [ $TERM = 'xterm-kitty' ] ; then
+    TERM=xterm-color
+fi
+
 $CMD $*

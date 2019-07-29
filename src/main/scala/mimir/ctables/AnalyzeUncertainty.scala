@@ -348,7 +348,7 @@ class AnalyzeUncertainty(db: Database) extends LazyLogging {
 		logger.debug(s"EXPRS: $columnExprs")
 		logger.debug(s"ROW: $rowCondition")
 
-		val inlinedQuery = BestGuess.bestGuessQuery(db, tracedQuery)
+		val inlinedQuery = InlineVGTerms(tracedQuery, db)
 
 		logger.debug(s"INLINE: $inlinedQuery")
 
@@ -360,7 +360,7 @@ class AnalyzeUncertainty(db: Database) extends LazyLogging {
 
 		//logger.debug(s"SQL: $sqlQuery")
 
-		val results = db.backend.execute(optQuery)//sqlQuery)
+		val results = db.compiler.compileToSparkWithRewrites(optQuery)//sqlQuery)
 
 		val baseData = 
 			SparkUtils.extractAllRows(results, finalSchema.map(_._2)).flush

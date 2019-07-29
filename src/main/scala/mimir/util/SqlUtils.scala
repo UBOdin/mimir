@@ -133,13 +133,21 @@ object SqlUtils {
       case FromSelect(query, alias) =>
         Seq( alias -> getSchema(query, db) )
 
-      case FromTable(_, table, alias) =>
+      case FromTable(source, table, alias) =>
+        val (_, trueTableName, provider) = (source match { 
+                  case None => db.catalog.resolveTable(table)
+                  case Some(source) => db.catalog.resolveTable(source, table)
+                }
+          ).getOrElse { 
+            throw new mimir.algebra.RAException(s"Table doesn't exist: $source.$table")
+          }
+
         Seq( alias.getOrElse(table) -> 
-            ((db.tableSchema(table) match {
-              case Some(tblSch) => tblSch
-              case None => throw new mimir.algebra.RAException(s"Table doesn't exist: ${table}")
-            }).map(_._1.quoted:Name).toSeq ++ implicitCols)
-          )
+              ((provider.tableSchema(trueTableName)
+                        .get
+                        .map(_._1.quoted:Name).toSeq
+              ) ++ implicitCols)
+        )
       case join: FromJoin =>
         val subSchemas = getSchemas(join.lhs, db) ++
                             getSchemas(join.rhs, db)
@@ -150,7 +158,5 @@ object SqlUtils {
         }
         mySchema ++ subSchemas
     }
-  }   
-  
-  
+  } 
 }

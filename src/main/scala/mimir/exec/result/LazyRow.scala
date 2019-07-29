@@ -1,7 +1,7 @@
 package mimir.exec.result
 
+import java.sql.SQLException
 import mimir.algebra._
-
 
 case class LazyRow(
   input: Row, 
@@ -15,11 +15,14 @@ case class LazyRow(
   def apply(idx: Int): PrimitiveValue = 
   {
     try { tupleDefinition(idx)(input) }
-    catch { case e:Throwable => 
-      throw new RuntimeException(
-        s"Error Decoding ${tupleSchema(idx)._1} (${tupleSchema(idx)._2})",
-        e
-      )
+    catch { 
+      case _:IndexOutOfBoundsException => 
+        throw new SQLException(s"$tuple does not have a column $idx")
+      case e:Throwable => 
+        throw new RuntimeException(
+          s"Error Decoding ${tupleSchema(idx)._1} (${tupleSchema(idx)._2})",
+          e
+        )
     }
   }
   def annotation(name: ID): PrimitiveValue = 

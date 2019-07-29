@@ -53,7 +53,7 @@ object ShapeWatcher
       Seq( ID("TABLE_NAME") -> TString()),
       Seq(Seq(StringPrimitive(config.schema.id)))
     )
-    db.query(db.table(facetTable)) { result =>
+    db.query(db.catalog.tableOperator(facetTable)) { result =>
       for(row <- result){ 
         val facet = DatasetShape.parse(row(ID("FACET")).asString)
 

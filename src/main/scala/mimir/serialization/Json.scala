@@ -70,11 +70,11 @@ object Json
           "source" -> ofOperator(source)
         ))
 
-      case Table(table, alias, schema, meta) => 
+      case Table(table, source, schema, meta) => 
         JsObject(Map[String, JsValue](
           "type" -> JsString("table_normal"),
           "table" -> JsString(table.id),
-          "alias" -> JsString(alias.id),
+          "source" -> JsString(source.id),
           "schema" -> ofSchema(schema),
           "metadata" -> 
             JsArray(meta.map { elem => 
@@ -221,7 +221,10 @@ object Json
       case "table_normal" =>
         Table(
           ID(elems("table").asInstanceOf[JsString].value), 
-          ID(elems("alias").asInstanceOf[JsString].value),
+          elems.get("source") match {
+            case None => mimir.data.LoadedTables.SCHEMA // Most tables are now sourced to LoadedTables
+            case Some(source) => ID(source.asInstanceOf[JsString].value)
+          },
           toSchema(elems("schema")),
           elems("metadata").asInstanceOf[JsArray].value.map { metaJson =>
             val meta = metaJson.asInstanceOf[JsObject].value

@@ -5,11 +5,14 @@ import org.jline.terminal.{Terminal,TerminalBuilder}
 import org.jline.reader.{LineReader,LineReaderBuilder,EndOfFileException,UserInterruptException}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-class LineReaderInputSource(terminal: Terminal)
+class LineReaderInputSource(
+  terminal: Terminal, 
+  historyFile: String = LineReaderInputSource.defaultHistoryFile,
+  prompt: String = "mimir> "
+)
   extends Reader
   with LazyLogging
 {
-  private val historyFile = System.getProperty("user.home") + File.separator + ".mimir_history"
   val input: LineReader = 
     LineReaderBuilder.
       builder().
@@ -28,7 +31,7 @@ class LineReaderInputSource(terminal: Terminal)
       while(i < len){
         while(pos >= curr.length){
           if(i > 0){ logger.debug(s"returning $i characters"); return i; }
-          curr = input.readLine("mimir> ")
+          curr = input.readLine(prompt)
           if(curr == null){ logger.debug("Reached end"); return -1; }
           logger.debug(s"Read: '$curr'")
           pos = 0;
@@ -45,4 +48,9 @@ class LineReaderInputSource(terminal: Terminal)
   }
 
 
+}
+
+object LineReaderInputSource
+{
+  val defaultHistoryFile = System.getProperty("user.home") + File.separator + ".mimir_history"
 }

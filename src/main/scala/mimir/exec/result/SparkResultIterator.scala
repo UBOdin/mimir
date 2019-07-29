@@ -2,16 +2,16 @@ package mimir.exec.result
 
 import org.apache.spark.sql.DataFrame
 import com.typesafe.scalalogging.slf4j.LazyLogging
+
+import mimir.Database
 import mimir.algebra._
-import mimir.backend.QueryBackend
 import mimir.util.SparkUtils
 import mimir.util.Timer
 
 class SparkResultIterator(
   inputSchema: Seq[(ID,Type)],
   query: Operator,
-  backend: QueryBackend,
-  dateType: (Type)
+  db: Database
 ) 
   extends ResultIterator
   with LazyLogging 
@@ -24,7 +24,7 @@ class SparkResultIterator(
       zipWithIndex.
       map { case ((name, t), idx) => 
         logger.debug(s"Extracting Raw: $name (@$idx) -> $t")
-        val fn = SparkUtils.convertFunction(t, idx, dateType = dateType)
+        val fn = SparkUtils.convertFunction(t, idx)
         () => { fn(row) }
       }
 
@@ -33,7 +33,10 @@ class SparkResultIterator(
   {
     // Deploy to the backend
     Timer.monitor(s"EXECUTE", logger.info(_)){
-      backend.execute(query).cache().collect().toIterator
+      db.compiler.compileToSparkWithoutRewrites(query)
+                 .cache()
+                 .collect()
+                 .toIterator
     }
   }
   

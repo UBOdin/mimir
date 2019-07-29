@@ -60,6 +60,7 @@ object MimirSQL
     | dropLens       // must come before 'basicStatement'
     | drawPlot
     | load
+    | reload
     | feedback
     | basicStatement
     ) 
@@ -209,13 +210,21 @@ object MimirSQL
       (
         StringInIgnoreCase("INTO") ~/
         Sparsity.identifier
+      ).? ~
+      ( 
+        StringInIgnoreCase("WITH") ~/
+        StringInIgnoreCase("STAGING").!.map { _.toUpperCase }
       ).?
     ).map { 
-      case (file, Some((format, args)), target) =>
-        Load(file, target, Some(format), args)
-      case (file, None, target) =>
-        Load(file, target, None, Seq())
+      case (file, Some((format, args)), target, staging) =>
+        Load(file, target, Some(format), args, staging != None)
+      case (file, None, target, staging) =>
+        Load(file, target, None, Seq(), staging != None)
     }
+  )
+  def reload[_:P] = P(
+    StringInIgnoreCase("RELOAD") ~/
+    Sparsity.identifier.map { Reload(_) }
   )
   def feedback[_:P] = P(
     (

@@ -13,7 +13,7 @@ object PickerSpec
 {
 
   def beforeAll = {
-    loadCSV("R", "test/data/pick.csv")
+    loadCSV(targetTable = "R", sourceFile = "test/data/pick.csv")
   }
   
   "The Picker Lens" should {

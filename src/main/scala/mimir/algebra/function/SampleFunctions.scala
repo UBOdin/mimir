@@ -54,10 +54,10 @@ object SampleFunctions
     fr.register(ID("possion"), 
       {
 	      case Seq(IntPrimitive(m))   => {
-          IntPrimitive(mimir.backend.sqlite.Possion.poisson_helper(m))
+          IntPrimitive(mimir.exec.sqlite.Possion.poisson_helper(m))
 	      }
         case Seq(FloatPrimitive(m))   => {
-          IntPrimitive(mimir.backend.sqlite.Possion.poisson_helper(m))
+          IntPrimitive(mimir.exec.sqlite.Possion.poisson_helper(m))
 	      }
         case Seq(NullPrimitive())   => NullPrimitive()
 	      case x => throw new SQLException("Non-numeric parameter to possion: '"+x+"'")
@@ -68,7 +68,7 @@ object SampleFunctions
 		fr.register(ID("gamma"), 
       {
 	      case Seq(FloatPrimitive(k), FloatPrimitive(theta))   => {
-          FloatPrimitive(mimir.backend.sqlite.Gamma.sampleGamma(k, theta))
+          FloatPrimitive(mimir.exec.sqlite.Gamma.sampleGamma(k, theta))
 	      }
         case Seq(NullPrimitive(), FloatPrimitive(r))   => NullPrimitive()
         case Seq(FloatPrimitive(r), NullPrimitive())   => NullPrimitive()

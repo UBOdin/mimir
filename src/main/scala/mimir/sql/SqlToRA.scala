@@ -47,30 +47,11 @@ import scala.collection.{immutable, mutable}
 import scala.collection.mutable.ListBuffer
 import mimir.provenance.Provenance
 
+
 class SqlToRA(db: Database) 
   extends LazyLogging
 {
-  private val vizierNameMap = scala.collection.mutable.Map[Name, ID]()
-  
-  def registerVizierNameMapping(vizierName:Name,mimirName:ID) : Unit = {
-    vizierNameMap.put(vizierName, mimirName)
-  }
-  
-  def getVizierNameMapping(vizierName:String) : Option[ID] =  getVizierNameMapping(Name(vizierName))
-  def getVizierNameMapping(vizierName:ID) : Option[ID] =  getVizierNameMapping(Name(vizierName.id))
-  def getVizierNameMapping(vizierName:Name) : Option[ID] =  vizierNameMap.get(vizierName)
-
-  def unhandled(feature : String) = {
-    println("ERROR: Unhandled Feature: " + feature)
-    throw new SQLException("Unhandled Feature: "+feature)
-  }
-
-  type TableName             = sparsity.Name
-  type SparsityAttribute     = sparsity.Name
-  type MimirAttribute        = ID
-  type Bindings              = NameLookup[MimirAttribute]
-  type TableBindings         = NameLookup[Bindings]
-  type SourceSchema          = Seq[(TableName, Seq[MimirAttribute])]
+  import SqlToRA._
   
   def apply(v: sparsity.statement.Statement): Operator = 
     v match { 
@@ -79,12 +60,10 @@ class SqlToRA(db: Database)
     }
   def apply(v: sparsity.statement.Select): Operator = convertSelect(v)._1
   def apply(v: sparsity.select.SelectBody): Operator = convertSelectBody(v)._1
-  def apply(v: sparsity.expression.PrimitiveValue): PrimitiveValue = convertPrimitive(v)
-  def apply(v: sparsity.expression.Expression): Expression = convertExpression(v, Map())
+  def apply(v: sparsity.expression.PrimitiveValue): PrimitiveValue = SqlToRA(v)
+  def apply(v: sparsity.expression.Expression): Expression = SqlToRA(v)
   def apply(v: sparsity.expression.Expression,
-            bindings: (Column => MimirAttribute)): Expression = convertExpression(v, bindings)
-
-  def literalBindings(x:Column) = ID.upper(x.column)
+            bindings: (Column => MimirAttribute)): Expression = SqlToRA(v, bindings)
 
   def convertSelect(
     s : sparsity.statement.Select, 
@@ -105,6 +84,8 @@ class SqlToRA(db: Database)
     // built up over the course of this function
     var ret:Operator = HardTable(Seq(),Seq())
 
+    logger.debug(s"Converting query: $select")
+
     //////////////////////// CONVERT FROM CLAUSE /////////////////////////////
     val fromClauses   = select.from.map { convertFromElement(_) }
     val fromOperators = fromClauses.map { _._1 }
@@ -117,6 +98,8 @@ class SqlToRA(db: Database)
               .tail
               .fold(fromOperators.head) 
                    { Join(_, _) }
+    } else {
+      logger.trace("No FROM items.  Using an empty table")
     }
 
     // Unlike SQL, Mimir's relational algebra does not use range variables.  Rather,
@@ -505,26 +488,22 @@ class SqlToRA(db: Database)
           Seq(alias -> NameLookup(bindings))
         )
       }
-      case FromTable(schemaMaybe, tablev, aliasMaybe) => {
-        val table = getVizierNameMapping(tablev) match { 
-              case Some(mimirID) => sparsity.Name(mimirID.id)
-              case None => tablev 
-            } 
+      case FromTable(schemaMaybe, table, aliasMaybe) => {
         val alias = aliasMaybe.getOrElse(table)
         val tableOp:Operator = 
           schemaMaybe match { 
-            case None => 
-              if(table.quoted) { db.table(ID(table.name), ID.upper(alias)) }
-              else             { db.table(table.name,     ID.upper(alias)) }
-
-            case Some(schema) =>
-              db.adaptiveSchemas.viewFor(ID.upper(schema), ID.upper(table)).get
+            case None => db.catalog.tableOperator(table)
+            case Some(source) => db.catalog.tableOperator(source, table)
           }
         val bindings = NameLookup(
-          tableOp.columnNames.map { col => sparsity.Name(col.id) -> ID(ID.upper(alias), "_", col) }
+          tableOp.columnNames.map { col => 
+            sparsity.Name(col.id) -> ID(ID.upper(alias), "_", col) 
+          }
         )
         val rewrites =
-          tableOp.columnNames.map { col => ID(ID.upper(alias), "_", col) -> Var(col) }
+          tableOp.columnNames.map { col => 
+            ID(ID.upper(alias), "_", col) -> Var(col) 
+          }
         logger.trace(s"From Table: $table( $rewrites )")
         (
           tableOp.mapByID( rewrites:_* ),
@@ -587,92 +566,6 @@ class SqlToRA(db: Database)
 
     }
   
-  // 
-  def convertPrimitive(e: SparsityPrimitive) : PrimitiveValue =
-  {
-    e match { 
-      case SparsityLong(v)   => return IntPrimitive(v)
-      case SparsityDouble(v) => return FloatPrimitive(v)
-      case SparsityString(v) => return StringPrimitive(v)
-      case SparsityBool(v)   => return BoolPrimitive(v)
-      case SparsityNull()    => return NullPrimitive()
-    }    
-  }
-
-  def convertExpression(
-    e : sparsity.expression.Expression, 
-    bindings: (Column => MimirAttribute)
-  ) : Expression = {
-    e match {
-      case prim: SparsityPrimitive => convertPrimitive(prim)
-      case SparsityNot(child) => 
-        return Not(convertExpression(child, bindings))
-      case SparsityComparison(lhs, op, rhs) => 
-        Comparison(op, convertExpression(lhs, bindings), 
-                       convertExpression(rhs, bindings))
-      case SparsityArithmetic(lhs, op, rhs) => 
-        Arithmetic(op, convertExpression(lhs, bindings), 
-                       convertExpression(rhs, bindings))
-      
-      case col:Column => Var(bindings(col))
-
-      case SparsityFunction(rawName, Some(args), false) => 
-        // Special-case some function conversions
-        (ID.lower(rawName), args) match {
-          case (ID("rowid"), Seq()) => 
-            RowIdVar()
-          case (ID("rowid"), Seq(x:SparsityPrimitive)) => 
-            RowIdPrimitive(convertPrimitive(x).asString)
-          case (name, _) => 
-            Function(name, 
-              args.map { 
-                convertExpression(_, bindings)
-              } 
-            )
-        }
-
-      case SparsityFunction(_, _, _) =>
-        throw new SQLException("Error: Can't interpret aggregate function in normal expression")
-
-      case SparsityCast(target, t) =>
-        CastExpression(
-          convertExpression(target, bindings), 
-          Type.fromString(t.lower)
-        )
-
-      case InExpression(targetRaw, Left(options)) => 
-        val target = convertExpression(targetRaw, bindings)
-        ExpressionUtils.makeOr(
-          options.map { convertExpression(_, bindings) }
-                 .map { Comparison(Cmp.Eq, target, _) }
-        )
-
-      case InExpression(targetRaw, Right(query)) =>
-        unhandled("InExpression[Query]")
-
-      case CaseWhenElse(targetRaw, whenClauses, elseClause) => {
-        val inlineSwitch: Expression => Expression = 
-          targetRaw match { 
-            case None => (x => x)
-            case Some(target) => Comparison(Cmp.Eq, convertExpression(target, bindings), _)
-          }
-        return ExpressionUtils.makeCaseExpression(
-          whenClauses.map { case (condition, thenClause) => 
-            ( 
-              inlineSwitch(convertExpression(condition, bindings)),
-              convertExpression(thenClause, bindings)
-            )
-          },
-          convertExpression(elseClause, bindings)
-        )
-      }
-
-      case SparsityIsNull(target) => 
-        IsNullExpression( convertExpression(target, bindings) )
-
-    }
-  }
-
   def lookupColumnInTableBindings(
     c: Column,
     bindings: Bindings
@@ -682,7 +575,7 @@ class SqlToRA(db: Database)
       case Some(columnBinding) => columnBinding
       case None => {
         val tableColumns = bindings.keys.map { col => Column(col, c.table) }
-        throw new SQLException(s"No such column ${c.column} (out of ${tableColumns.mkString(", ")}")
+        throw new SQLException(s"No such column ${c.column} (out of ${tableColumns.mkString(", ")})")
       }
     }
   }
@@ -694,10 +587,7 @@ class SqlToRA(db: Database)
   {
     c.table match {
       case Some(table) => {
-        bindings( getVizierNameMapping(table) match { 
-              case Some(mimirID) => sparsity.Name(mimirID.id)
-              case None => table 
-            } ) match {
+        bindings( table ) match {
           case Some(tableBindings) => 
             lookupColumnInTableBindings(c, tableBindings)
           case None => 
@@ -787,6 +677,129 @@ class SqlToRA(db: Database)
         )
 
       case _ => recur()
+    }
+  }
+
+}
+
+object SqlToRA
+  extends LazyLogging
+{
+
+  type TableName             = sparsity.Name
+  type SparsityAttribute     = sparsity.Name
+  type MimirAttribute        = ID
+  type Bindings              = NameLookup[MimirAttribute]
+  type TableBindings         = NameLookup[Bindings]
+  type SourceSchema          = Seq[(TableName, Seq[MimirAttribute])]
+
+  def apply(v: sparsity.expression.PrimitiveValue): PrimitiveValue = convertPrimitive(v)
+  def apply(v: sparsity.expression.Expression): Expression = convertExpression(v, Map())
+  def apply(v: sparsity.expression.Expression,
+            bindings: (Column => MimirAttribute)): Expression = convertExpression(v, bindings)
+
+
+  def unhandled(feature : String) = {
+    println("ERROR: Unhandled Feature: " + feature)
+    throw new SQLException("Unhandled Feature: "+feature)
+  }
+
+  def literalBindings(x:Column) = ID.upper(x.column)
+
+  // 
+  def convertPrimitive(e: SparsityPrimitive) : PrimitiveValue =
+  {
+    e match { 
+      case SparsityLong(v)   => return IntPrimitive(v)
+      case SparsityDouble(v) => return FloatPrimitive(v)
+      case SparsityString(v) => return StringPrimitive(v)
+      case SparsityBool(v)   => return BoolPrimitive(v)
+      case SparsityNull()    => return NullPrimitive()
+    }    
+  }
+
+  def convertExpression(
+    e : sparsity.expression.Expression, 
+    bindings: (Column => MimirAttribute)
+  ) : Expression = {
+    e match {
+      case prim: SparsityPrimitive => convertPrimitive(prim)
+      case SparsityNot(child) => 
+        return Not(convertExpression(child, bindings))
+      case SparsityComparison(lhs, op, rhs) => 
+        Comparison(op, convertExpression(lhs, bindings), 
+                       convertExpression(rhs, bindings))
+      case SparsityArithmetic(lhs, op, rhs) => 
+        Arithmetic(op, convertExpression(lhs, bindings), 
+                       convertExpression(rhs, bindings))
+      
+      case col:Column => Var(bindings(col))
+
+      case SparsityFunction(rawName, Some(args), false) => 
+        // Special-case some function conversions
+        (ID.lower(rawName), args) match {
+          case (ID("rowid"), Seq()) => 
+            RowIdVar()
+          case (ID("rowid"), Seq(x:SparsityPrimitive)) => 
+            RowIdPrimitive(convertPrimitive(x).asString)
+          case (ID("mimir_vgterm"), args) => {
+            args.take(2) match {
+              case Seq(model:Column, idx:SparsityPrimitive) => 
+                VGTerm(
+                  ID(model.column.name), 
+                  convertPrimitive(idx).asLong.toInt,
+                  args.tail.tail.map { convertExpression(_, bindings) },
+                  Seq()
+                )
+            }
+          }
+          case (name, _) => 
+            Function(name, 
+              args.map { 
+                convertExpression(_, bindings)
+              } 
+            )
+        }
+
+      case SparsityFunction(_, _, _) =>
+        throw new SQLException("Error: Can't interpret aggregate function in normal expression")
+
+      case SparsityCast(target, t) =>
+        CastExpression(
+          convertExpression(target, bindings), 
+          Type.fromString(t.lower)
+        )
+
+      case InExpression(targetRaw, Left(options)) => 
+        val target = convertExpression(targetRaw, bindings)
+        ExpressionUtils.makeOr(
+          options.map { convertExpression(_, bindings) }
+                 .map { Comparison(Cmp.Eq, target, _) }
+        )
+
+      case InExpression(targetRaw, Right(query)) =>
+        unhandled("InExpression[Query]")
+
+      case CaseWhenElse(targetRaw, whenClauses, elseClause) => {
+        val inlineSwitch: Expression => Expression = 
+          targetRaw match { 
+            case None => (x => x)
+            case Some(target) => Comparison(Cmp.Eq, convertExpression(target, bindings), _)
+          }
+        return ExpressionUtils.makeCaseExpression(
+          whenClauses.map { case (condition, thenClause) => 
+            ( 
+              inlineSwitch(convertExpression(condition, bindings)),
+              convertExpression(thenClause, bindings)
+            )
+          },
+          convertExpression(elseClause, bindings)
+        )
+      }
+
+      case SparsityIsNull(target) => 
+        IsNullExpression( convertExpression(target, bindings) )
+
     }
   }
 

@@ -8,7 +8,7 @@ import java.util.Calendar
 import java.sql.Date
 import java.sql.Timestamp
 import org.apache.spark.sql.DataFrame
-import mimir.algebra.spark.OperatorTranslation
+import mimir.exec.spark.RAToSpark
 import scala.reflect.runtime.universe.{ runtimeMirror}
 import org.spark_project.guava.reflect.ClassPath
 import org.clapper.classutil.ClassFinder
@@ -21,7 +21,7 @@ import org.apache.spark.sql.functions.unix_timestamp
 object SparkUtils {
   //TODO:there are a bunch of hacks in this conversion function because type conversion in operator translator
   //  needs to be done correctly
-  def convertFunction(t: Type, field: Integer, dateType: Type = TDate()): (Row => PrimitiveValue) =
+  def convertFunction(t: Type, field: Integer): (Row => PrimitiveValue) =
   {
     val checkNull: ((Row, => PrimitiveValue) => PrimitiveValue) = {
       (r, call) => {
@@ -76,45 +76,25 @@ object SparkUtils {
           }
         } })
       case TType() =>       (r) => checkNull(r, { TypePrimitive(Type.fromString(r.getString(field))) })
-      case TDate() =>
-        dateType match {
-          case TDate() =>   (r) => { val d = r.getDate(field); if(d == null){ NullPrimitive() } else { convertDate(d) } }
-          case TString() => (r) => { 
-              val d = r.getString(field)
-              if(d == null){ NullPrimitive() } 
-              else { TextUtils.parseDate(d) }
-            }
-          case _ =>         throw new SQLException(s"Can't extract TDate as $dateType")
-        }
-      case TTimestamp() => 
-        dateType match {
-          case TDate() =>   (r) => { 
-              val t = r.getTimestamp(field); 
-              if(t == null){ NullPrimitive() } 
-              else { convertTimestamp(t) } 
-            }
-          case TString() => (r) => {
-              val t = r.getString(field)
-              if(t == null){ NullPrimitive() }
-              else { TextUtils.parseTimestamp(t) }
-            }
-          case _ =>         throw new SQLException(s"Can't extract TTimestamp as $dateType")
-
-        }
+      case TDate() =>       (r) => { val d = r.getDate(field); if(d == null){ NullPrimitive() } else { convertDate(d) } }
+      case TTimestamp() =>  (r) => { 
+                                val t = r.getTimestamp(field); 
+                                if(t == null){ NullPrimitive() } 
+                                else { convertTimestamp(t) } 
+                              }
       case TInterval() => (r) => { TextUtils.parseInterval(r.getString(field)) }
-      case TUser(t) => convertFunction(TypeRegistry.baseType(t), field, dateType)
+      case TUser(t) => convertFunction(TypeRegistry.baseType(t), field)
     }
   }
   
-  def convertField(t: Type, results: Row, field: Integer, dateType: Type = TString()): PrimitiveValue =
+  def convertField(t: Type, results: Row, field: Integer): PrimitiveValue =
   {
     convertFunction(
       t match {
-        case TAny() => OperatorTranslation.getMimirType(results.schema.fields(field).dataType)
+        case TAny() => RAToSpark.getMimirType(results.schema.fields(field).dataType)
         case _ => t
       }, 
-      field, 
-      dateType
+      field
     )(results)
   }
   
@@ -162,7 +142,7 @@ object SparkUtils {
   }
 
   def extractAllRows(results: DataFrame): SparkDataFrameIterable =
-    extractAllRows(results, OperatorTranslation.structTypeToMimirSchema(results.schema).map(_._2))    
+    extractAllRows(results, RAToSpark.structTypeToMimirSchema(results.schema).map(_._2))    
   
 
   def extractAllRows(results: DataFrame, schema: Seq[Type]): SparkDataFrameIterable =
@@ -250,7 +230,7 @@ object SparkUtils {
     val operWProv = Project(query.columnNames.map { name => ProjectArg(name, Var(name)) } :+
         ProjectArg(Provenance.rowidColnameBase, 
             Function(Provenance.mergeRowIdFunction, provenanceCols.map( Var(_) ) )), oper )
-    val dfPreOut = db.backend.execute(operWProv)
+    val dfPreOut = db.compiler.compileToSparkWithoutRewrites(operWProv)
     val dfOutDt = dfPreOut.schema.fields.filter(col => Seq(DateType).contains(col.dataType)).foldLeft(dfPreOut)((init, cur) => init.withColumn(cur.name,unix_timestamp(init(cur.name)).cast(LongType)*1000))
     val dfOut = dfOutDt.schema.fields.filter(col => Seq(TimestampType).contains(col.dataType)).foldLeft(dfOutDt)((init, cur) => init.withColumn(cur.name,init(cur.name).cast(LongType)*1000) )
     (db.typechecker.schemaOf(operWProv).map(el => el._2 match {
@@ -261,7 +241,7 @@ object SparkUtils {
   }
   
   def getDataFrameFromQuery(db:mimir.Database, query:Operator) : (Seq[(ID, Type)], DataFrame) = {
-    val dfPreOut = db.backend.execute(db.compileBestGuess(query))
+    val dfPreOut = db.compiler.compileToSparkWithRewrites(query)
     val dfOutDt = dfPreOut.schema.fields.filter(col => Seq(DateType).contains(col.dataType)).foldLeft(dfPreOut)((init, cur) => init.withColumn(cur.name,unix_timestamp(init(cur.name)).cast(LongType)*1000))
     val dfOut = dfOutDt.schema.fields.filter(col => Seq(TimestampType).contains(col.dataType)).foldLeft(dfOutDt)((init, cur) => init.withColumn(cur.name,init(cur.name).cast(LongType)*1000) )
     (db.typechecker.schemaOf(query), dfOut)

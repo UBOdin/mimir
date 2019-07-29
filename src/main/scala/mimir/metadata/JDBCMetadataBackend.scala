@@ -5,7 +5,7 @@ import java.sql._
 import mimir.Database
 import mimir.algebra._
 import mimir.util.JDBCUtils
-import mimir.backend.sqlite._
+import mimir.exec.sqlite._
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer

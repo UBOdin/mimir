@@ -54,7 +54,7 @@ object MissingValueLens extends LazyLogging {
     args:Seq[Expression]
   ): (Operator, Seq[Model]) =
   {
-    logger.error(s"Human readable name: ${humanReadableName}")
+    logger.trace(s"Human readable name: ${humanReadableName}")
 
     // Preprocess the lens arguments...
     // Semantics are as follows:

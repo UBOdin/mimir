@@ -13,11 +13,11 @@ import fastparse.Parsed
 
 import mimir.algebra._
 import mimir.exec.result.Row
-import mimir.backend.SparkBackend
 import mimir.metadata.JDBCMetadataBackend
 import mimir.util.{ExperimentalOptions,Timer}
 //import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
 import mimir.exec.Compiler
+import mimir.exec.spark.{MimirSpark, MimirSparkRuntimeUtils}
 import mimir.ctables.Reason
 import org.slf4j.{LoggerFactory}
 import ch.qos.logback.classic.{Level, Logger}
@@ -29,7 +29,7 @@ import mimir.util.JSONBuilder
 import java.util.UUID
 import java.net.InetAddress
 import scala.collection.convert.Wrappers.JMapWrapper
-import mimir.algebra.spark.function.SparkFunctions
+import mimir.algebra.function.SparkFunctions
 import java.net.URLDecoder
 import mimir.parser._
 
@@ -67,14 +67,18 @@ object MimirVizier extends LazyLogging {
   var usePrompt = true;
   
   def main(args: Array[String]) {
-    Mimir.conf = new MimirConfig(args);
-    ExperimentalOptions.enable(Mimir.conf.experimental())
+    val conf = new MimirConfig(args);
+    ExperimentalOptions.enable(conf.experimental())
+
+    // For Vizier specifically, we want Derby/Hive support enabled
+    ExperimentalOptions.enable("USE-DERBY")
+    
     // Set up the database connection(s)
-    val database = Mimir.conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
-    val sback = new SparkBackend(database)
-    db = new Database(sback, new JDBCMetadataBackend(Mimir.conf.backend(), Mimir.conf.dbname()))
+    val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
+    MimirSpark.init(conf)
+    db = new Database(new JDBCMetadataBackend(conf.metadataBackend(), conf.dbname()))
     db.open()
-    vizierdb.sparkSession = sback.sparkSql.sparkSession
+    VizierDB.sparkSession = MimirSpark.get.sparkSession
     
    if(ExperimentalOptions.isEnabled("WEB-LOG")){
       LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) match {
@@ -118,8 +122,8 @@ object MimirVizier extends LazyLogging {
     
     if(!ExperimentalOptions.isEnabled("NO-VISTRAILS")){
       MimirAPI.runAPIServerForViztrails()
-      db.backend.close()
-      if(!Mimir.conf.quiet()) { logger.debug("\n\nDone.  Exiting."); }
+      db.close()
+      if(!conf.quiet()) { logger.debug("\n\nDone.  Exiting."); }
     }
     
     
@@ -142,26 +146,24 @@ object MimirVizier extends LazyLogging {
   
   }
   
-  object vizierdb {
+  object VizierDB {
     
     var sparkSession:SparkSession = null;
     
     def withDataset[T](dsname:String, handler: ResultIterator => T ) : T = {
-     val mimirName:ID = db.sqlToRA.getVizierNameMapping(ID(dsname)) match {
-       case Some(mname) => mname
-       case None => throw new Exception(s"No such table or view '$dsname'")
-     }
-     val oper = db.table(mimirName)
-     db.query(oper)(handler)
+      val oper = db.tempViews.get(ID(dsname)) match {
+        case Some(viewQuery) => viewQuery
+        case None => throw new Exception(s"No such table or view '$dsname'")
+      }
+      db.query(oper)(handler)
     }
         
     def outputAnnotations(dsname:String) : String = {
-      val mimirName:ID = db.sqlToRA.getVizierNameMapping(ID(dsname)) match {
-       case Some(mname) => mname
-       case None => throw new Exception(s"No such table or view '$dsname'")
-     }
-     val oper = db.table(mimirName)
-     explainEverything(oper).mkString("<br><br>")
+      val oper = db.tempViews.get(ID(dsname)) match {
+        case Some(viewQuery) => viewQuery
+        case None => throw new Exception(s"No such table or view '$dsname'")
+      }
+      explainEverything(oper).mkString("<br><br>")
     }
   }
   
@@ -185,7 +187,7 @@ object MimirVizier extends LazyLogging {
   }
   
   def setSparkWorkers(count:Int):Unit = {
-    db.backend.asInstanceOf[mimir.backend.SparkBackend].sparkSql.setConf("spark.sql.shuffle.partitions", count.toString())
+    MimirSpark.get.setConf("spark.sql.shuffle.partitions", count.toString())
   }
   
   def executeOnWorkers(oper:Operator, col:String):Unit = {
@@ -194,14 +196,14 @@ object MimirVizier extends LazyLogging {
     val dfRowFunc: (Iterator[org.apache.spark.sql.Row]) => Unit = (rows) => {
       rows.map(row => row.get(colidx))                                     
     }                                  
-    db.backend.asInstanceOf[mimir.backend.SparkBackend].executeOnWorkers(compiledOp, dfRowFunc)                                                                                             
+    db.compiler.executeOnWorkers(compiledOp, dfRowFunc)                                                                                             
   }      
   
   def executeOnWorkersReturn(oper:Operator, col:String):Int = {
     import org.apache.spark.sql.functions.sum
     val (compiledOp, cols, metadata) = mimir.exec.mode.BestGuess.rewrite(db, oper)
     val colidx = cols.indexOf(col)
-    val df = db.backend.asInstanceOf[mimir.backend.SparkBackend].execute(compiledOp)
+    val df = db.compiler.compileToSparkWithoutRewrites(compiledOp)
     val mapFunc: (Iterator[org.apache.spark.sql.Row]) => Iterator[Int] = (rows) => {
       rows.map(row => {
           row.get(colidx)
@@ -267,20 +269,22 @@ object MimirVizier extends LazyLogging {
       }
       val fileName = new File(csvFile).getName().split("\\.")(0)
       val tableName = sanitizeTableName(fileName)
-      if(db.getAllTables().contains(tableName)){
+      if(db.catalog.tableExists(tableName)){
         logger.debug("loadDataSource: From Vistrails: Table Already Exists: " + tableName)
       }
       else{
-        db.loadTable(
-          csvFile,
+        val loadOptions = bkOpts.toMap
+        db.loader.loadTable(
+          sourceFile = csvFile,
           targetTable = Some(tableName), 
-          force = true, 
-          targetSchema = None, 
+          // targetSchema = None, 
           inferTypes = Some(inferTypes), 
           detectHeaders = Some(detectHeaders), 
-          loadOptions = bkOpts.toMap, 
+          sparkOptions = loadOptions, 
           format = ID(format),
-          humanReadableName = humanReadableName
+          humanReadableName = humanReadableName,
+          datasourceErrors = loadOptions.getOrElse("datasourceErrors", "false").equals("true"),
+          stageSourceURL = false
         )
       }
       tableName 
@@ -307,12 +311,11 @@ object MimirVizier extends LazyLogging {
           }
           case _ => throw new Exception("unloadDataSource: bad options type")
         }
-        val viewName =  db.sqlToRA.getVizierNameMapping(ID(input)) match {
-          case Some(mimirName) => mimirName
-          case None => ID(input)
-        }
-val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
-        db.backend.writeDataSink(
+        val df = db.compiler.compileToSparkWithRewrites(
+            db.catalog.tableOperator(Name(input))
+          )
+
+        MimirSparkRuntimeUtils.writeDataSink(
             df, 
             format, 
             bkOpts.toMap, 
@@ -379,10 +382,10 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
       val lensName = "LENS_" + _type + (lensNameBase.toString().replace("-", ""))
       val lensType = _type.toUpperCase()
 
-      if(ExperimentalOptions.isEnabled("FORCE-LENS-REBUILD") && db.tableExists(lensName)) {
+      if(ExperimentalOptions.isEnabled("FORCE-LENS-REBUILD") && db.catalog.tableExists(Name(lensName))) {
         db.lenses.drop(ID(lensName))
       }
-      if(db.tableExists(lensName)){
+      if(db.catalog.tableExists(Name(lensName))){
         logger.debug("createLens: From Vistrails: Lens (or Table) already exists: " + 
                      lensName)
         // (Should be) safe to fall through since we might still be getting asked to materialize 
@@ -392,23 +395,32 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
         // Need to create the lens if it doesn't already exist.
 
         // query is a var because we might need to rewrite it below.
-        var query:Operator = db.table(input.toString)
-        // "Make Certain" is implemented by dumping the lens contents into a temporary table
-        if(make_input_certain){
-          val materializedInput = ID("MATERIALIZED_"+input)
-          val querySchema = db.typechecker.schemaOf(query)
+        var query:Operator = db.catalog.tableOperator(Name(input.toString))
 
-          if(db.tableExists(materializedInput)){
-            logger.debug("createLens: From Vistrails: Materialized Input Already Exists: " + 
-                         materializedInput)
-          } else {
-            // Dump the query into a table if necessary 
-            db.backend.createTable(materializedInput, query)
-          }
 
-          // And override the default lens input with the table.
-          query = db.table(materializedInput)
-        }
+        // "Make Certain" was previously implemented by dumping the lens 
+        // contents into a temporary table.  This is... messy.  
+
+        // Oliver @ June 7, 2019: Disabling Make Certain until 
+        // https://github.com/UBOdin/mimir/issues/331 is resolved
+        // and/or we get support for updates back into Mimir.
+
+        // if(make_input_certain){ 
+        //   val materializedInput = ID("MATERIALIZED_"+input)
+        //   val querySchema = db.typechecker.schemaOf(query)
+
+        //   if(db.catalog.tableExists(materializedInput)){
+        //     logger.debug("createLens: From Vistrails: Materialized Input Already Exists: " + 
+        //                  materializedInput)
+        //   } else { 
+        //     // TODO: R
+        //     // Dump the query into a table if necessary 
+        //     db.backend.createTable(materializedInput, query)
+        //   }
+
+        //   // And override the default lens input with the table.
+        //   query = db.table(materializedInput)
+        // }
 
         // Regardless of where we're reading from, next we need to run: 
         //   CREATE LENS ${lensName} 
@@ -431,7 +443,7 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
           db.views.materialize(ID(lensName))
         }
       }
-      val lensOp = db.table(lensName).limit(200)
+      val lensOp = db.catalog.tableOperator(Name(lensName)).limit(200)
       //val lensAnnotations = db.explainer.explainSubsetWithoutOptimizing(lensOp, lensOp.columnNames.toSet, false, false, false, Some(ID(lensName)))
       val lensReasons = 0//lensAnnotations.map(_.size(db)).sum//.toString//JSONBuilder.list(lensAnnotations.map(_.all(db).toList).flatten.map(_.toJSON))
       logger.debug(s"createLens reasons for first 200 rows: ${lensReasons}")
@@ -470,7 +482,10 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
   }
   
   private def registerNameMapping(vizierName:String, mimirName:String) : Unit = {
-    db.sqlToRA.registerVizierNameMapping(Name(vizierName), ID(mimirName))
+    db.tempViews.put(
+      ID(vizierName), 
+      db.catalog.tableOperator(Name(mimirName))
+    )
   }
   
   def createView(input : Any, query : String) : String = {
@@ -499,18 +514,16 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
       }
       
       val viewName = "VIEW_" + ((viewNameSuffix + query).hashCode().toString().replace("-", "") )
-      db.getView(viewName) match {
-        case None => {
-          val viewQuery = SQL(inputSubstitutionQuery) match {
-            case fastparse.Parsed.Success(sparsity.statement.Select(body, _), _) => body
-            case x => throw new Exception(s"Invalid view query : $inputSubstitutionQuery \n $x")
-          }
-          logger.debug("createView: query: " + viewQuery)
-          db.update(SQLStatement(CreateView(Name(viewName, true), false, viewQuery)))
+      // db.getView(viewName) match {
+      if(db.catalog.tableExists(Name(viewName))){
+        logger.warn("createView: From Vistrails: View already exists: " + viewName)
+      } else {
+        val viewQuery = SQL(inputSubstitutionQuery) match {
+          case fastparse.Parsed.Success(sparsity.statement.Select(body, _), _) => body
+          case x => throw new Exception(s"Invalid view query : $inputSubstitutionQuery \n $x")
         }
-        case Some(_) => {
-          logger.warn("createView: From Vistrails: View already exists: " + viewName)
-        }
+        logger.debug("createView: query: " + viewQuery)
+        db.update(SQLStatement(CreateView(Name(viewName, true), false, viewQuery)))
       }
       viewName
     }
@@ -534,18 +547,21 @@ val df = db.backend.execute(db.compileBestGuess(db.table(viewName)))
       val paramsStr = paramExprs.mkString(",")
       val adaptiveSchemaName = ID("ADAPTIVE_SCHEMA_" + _type + ((input.toString() + _type + paramsStr).hashCode().toString().replace("-", "") ))
       val asViewName = ID("VIEW_"+adaptiveSchemaName)
-      db.getView(adaptiveSchemaName) match {
-        case None => {
-          db.adaptiveSchemas.create(adaptiveSchemaName, ID(_type), db.table(ID(input.toString)), paramExprs, input.toString)
-          val asTable = _type match {
-            case "SHAPE_WATCHER" => adaptiveSchemaName
-            case _ => ID("DATA")
-          }
-          db.views.create(asViewName, db.adaptiveSchemas.viewFor(adaptiveSchemaName, asTable).get)
+      if(db.catalog.tableExists(adaptiveSchemaName)){
+        logger.debug("createAdaptiveSchema: From Vistrails: Adaptive Schema already exists: " + adaptiveSchemaName)
+      } else {
+        db.adaptiveSchemas.create(
+          adaptiveSchemaName, 
+          ID(_type), 
+          db.catalog.tableOperator(Name(input.toString)), 
+          paramExprs, 
+          input.toString
+        )
+        val asTable = _type match {
+          case "SHAPE_WATCHER" => adaptiveSchemaName
+          case _ => ID("DATA")
         }
-        case Some(_) => {
-          logger.debug("createAdaptiveSchema: From Vistrails: Adaptive Schema already exists: " + adaptiveSchemaName)
-        }
+        db.views.create(asViewName, db.adaptiveSchemas.viewFor(adaptiveSchemaName, asTable).get)
       }
       asViewName
     }
@@ -1090,7 +1106,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     var userIDs = Seq[String]()
     try{
       val ret = db.query(
-        db.table("USERS")
+        db.catalog.tableOperator(Name("USERS"))
           .project("USER_ID", "FIRST_NAME", "LAST_NAME")
       ) { results => 
         while(results.hasNext) {
@@ -1110,8 +1126,8 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     var types = Seq[String]("GIS", "DATA","INTERACTIVE")
     try {
       val ret = db.query(
-        db.table("CLEANING_JOBS")
-          .project("TYPE")
+        db.catalog.tableOperator(Name("CLEANING_JOBS"))
+                  .project("TYPE")
       ) { results => 
         while(results.hasNext) {
           val row = results.next()

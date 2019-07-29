@@ -3,12 +3,13 @@ package mimir
 import java.io._
 import scala.sys.process.Process
 
-
+import sparsity.Name
 import org.specs2.mutable._
 import org.specs2.specification._
 
 import mimir.algebra.ID
 import mimir.backend._
+import mimir.data._
 import mimir.metadata._
 
 class MimirVizierSpec 
@@ -34,34 +35,31 @@ class MimirVizierSpec
     val args = Seq(
       "--dataDirectory", dataDirectoryPath, "--db", dbFileName
     )
-    Mimir.conf = new MimirConfig(args);
-    val database = Mimir.conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
-    val sback = new SparkBackend(database)
-    MimirVizier.db = new Database(sback, new JDBCMetadataBackend(Mimir.conf.backend(), Mimir.conf.dbname()))
+    val conf = new MimirConfig(args);
+    val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
+    MimirVizier.db = new Database(new JDBCMetadataBackend(conf.metadataBackend(), conf.dbname()))
     MimirVizier.db.open()
     // MimirVizier.db.metadata.open()
     // MimirVizier.db.backend.open(MimirVizier.db)
-    val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^","|","OR").map { ID(_) }
-    sback.registerSparkFunctions(
-      MimirVizier.db.functions.functionPrototypes.map(el => el._1).toSeq ++ otherExcludeFuncs , MimirVizier.db)
-    sback.registerSparkAggregates(MimirVizier.db.aggregates.prototypes.map(el => el._1).toSeq, MimirVizier.db.aggregates)
-    MimirVizier.vizierdb.sparkSession = sback.sparkSql.sparkSession
+    // val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^","|","OR").map { ID(_) }
+    // sback.registerSparkFunctions(
+    //   MimirVizier.db.functions.functionPrototypes.map(el => el._1).toSeq ++ otherExcludeFuncs , MimirVizier.db)
+    // sback.registerSparkAggregates(MimirVizier.db.aggregates.prototypes.map(el => el._1).toSeq, MimirVizier.db.aggregates)
+    // MimirVizier.vizierdb.sparkSession = sback.sparkSql.sparkSession
     // MimirVizier.db.open(skipBackend = true)
 
-    if(!MimirVizier.db.tableExists("CPUSPEED")){
-      MimirVizier.db.loadTable(
+    if(!MimirVizier.db.catalog.tableExists(Name("CPUSPEED"))){
+      MimirVizier.db.loader.loadTable(
         "test/data/CPUSpeed.csv", 
         Some(ID("CPUSPEED")),
-        force = true,
-        format = ID("csv")
+        format = FileFormat.CSV
       )
     }
-    if(!MimirVizier.db.tableExists("PICK")){
-      MimirVizier.db.loadTable(
+    if(!MimirVizier.db.catalog.tableExists(Name("PICK"))){
+      MimirVizier.db.loader.loadTable(
         "test/data/pick.csv", 
         Some(ID("PICK")),
-        force = true,
-        format = ID("csv")
+        format = FileFormat.CSV
       )
     }
   }
@@ -69,10 +67,10 @@ class MimirVizierSpec
   "MimirVizier" should {
     
     "be set up properly" >> { 
-      MimirVizier.db.tableExists("CPUSPEED") must beTrue
-      MimirVizier.db.tableExists("NOT_A_TABLE") must beFalse
+      MimirVizier.db.catalog.tableExists(Name("CPUSPEED")) must beTrue
+      MimirVizier.db.catalog.tableExists(Name("NOT_A_TABLE")) must beFalse
 
-      val schema = MimirVizier.db.tableSchema("CPUSPEED") 
+      val schema = MimirVizier.db.catalog.tableSchema(Name("CPUSPEED"))
       schema must not be(None) 
       schema.get.map { _._1 } must contain(ID("BUS_SPEED_MHZ"))
     }

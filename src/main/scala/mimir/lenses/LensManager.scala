@@ -38,7 +38,7 @@ class LensManager(db: Database) extends LazyLogging {
     humanReadableName: Option[String] = None
   ): Unit =
   {
-    logger.error(s"Create Lens: $name ($humanReadableName)")
+    logger.debug(s"Create Lens: $name ($humanReadableName)")
     val constructor =
       lensTypes.get(t) match {
         case Some(impl) => impl
@@ -62,5 +62,4 @@ class LensManager(db: Database) extends LazyLogging {
     db.views.drop(name, ifExists)
     db.models.dropOwner(ID("LENS:",name))
   }
-
 }

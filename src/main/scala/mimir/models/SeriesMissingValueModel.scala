@@ -23,7 +23,7 @@ import org.apache.spark.sql.Dataset
 
 import org.apache.spark.sql.functions.{col, monotonically_increasing_id, lit, not, isnull,asc,desc}  
 import org.apache.spark.sql.DataFrame
-import mimir.algebra.spark.OperatorTranslation
+import mimir.exec.spark.RAToSpark
 import org.apache.spark.sql.Column
 import org.apache.spark.sql.Row
 
@@ -37,7 +37,7 @@ object SeriesMissingValueModel
   {
     logger.debug(s"Train on: $query")
     val (schemaWProv, modelHT) = SparkUtils.getDataFrameWithProvFromQuery(db, query)
-    val model = new SimpleSeriesModel(name, columns, schemaWProv, db.backend.rowIdType, db.backend.dateType, modelHT, humanReadableName)
+    val model = new SimpleSeriesModel(name, columns, schemaWProv, modelHT, humanReadableName)
     val usefulColumns = trainModel( modelHT, columns, schemaWProv, model)
     columns.zip(usefulColumns)
       .zipWithIndex
@@ -75,7 +75,7 @@ case class SeriesColumnItem(columnName: ID, reason: String, score: Double)
  *  */
 
 @SerialVersionUID(1000L)
-class SimpleSeriesModel(name: ID, val seriesCols:Seq[ID], val querySchema: Seq[(ID, Type)], rowIdType:Type, dateType:Type, queryDf: DataFrame, humanReadableName:String) 
+class SimpleSeriesModel(name: ID, val seriesCols:Seq[ID], val querySchema: Seq[(ID, Type)], queryDf: DataFrame, humanReadableName:String) 
   extends Model(name) 
   with SourcedFeedback
   with ModelCache
@@ -125,8 +125,7 @@ class SimpleSeriesModel(name: ID, val seriesCols:Seq[ID], val querySchema: Seq[(
             case x => x
           },
           row, 
-          row.fieldIndex(colName), 
-          dateType) /*match {
+          row.fieldIndex(colName)) /*match {
             case np@NullPrimitive() => np
             case x => querySchema.toMap.get(colName).get match {
               case TDate() => SparkUtils.convertDate(x.asLong)
@@ -136,7 +135,7 @@ class SimpleSeriesModel(name: ID, val seriesCols:Seq[ID], val querySchema: Seq[(
           }*/
       }
     }
-    val m2sp : PrimitiveValue => Any = prim => OperatorTranslation.mimirPrimitiveToSparkExternalRowValue(prim)
+    val m2sp : PrimitiveValue => Any = prim => RAToSpark.mimirPrimitiveToSparkExternalRowValue(prim)
     val sprowid = m2sp(rowid)
     val rowIdVar = col(colNames.last.id)//(monotonically_increasing_id()+1).alias(RowIdVar().toString()).cast(OperatorTranslation.getSparkType(rowIdType))
     val rowDF = queryDf.filter(rowIdVar === sprowid )
@@ -256,10 +255,10 @@ class SimpleSeriesModel(name: ID, val seriesCols:Seq[ID], val querySchema: Seq[(
         val bestSeries = bestSequence(idx)
         getCache(idx, args, Seq(StringPrimitive(bestSeries.id))) match {
           case Some(value) => 
-            s"I interpolated $humanReadableName.${seriesCols(idx)}, ordered by $name.${bestSequence(idx)} to get $value for row ${args(0)}"
+            s"I interpolated $humanReadableName.${seriesCols(idx)}, ordered by $humanReadableName.${bestSequence(idx)} to get $value for row ${args(0)}"
           case None =>{
             //s"I interpolated $name.${colNames(idx)}, ordered by $name.${bestSequence(idx)} row ${args(0)}"
-            s"I interpolated $humanReadableName.${seriesCols(idx)}, ordered by $name.${bestSeries} to get ${interpolate(idx, args, bestSeries)} for row ${args(0)}"
+            s"I interpolated $humanReadableName.${seriesCols(idx)}, ordered by $humanReadableName.${bestSeries} to get ${interpolate(idx, args, bestSeries)} for row ${args(0)}"
           }
         }
       }

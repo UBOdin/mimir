@@ -88,7 +88,7 @@ object DumpDomain
 
 
     // Replace VG-Terms with their "Best Guess values"
-    oper = dumpDomainQuery(db, oper)
+    oper = DomainInlineVGTerms(oper, db)
 
     logger.debug(s"GUESSED: $oper")
 
@@ -130,28 +130,6 @@ object DumpDomain
       operRaw.columnNames,
       provenanceCols
     )
-  }
-
-  /**
-   * Remove all VGTerms in the query and replace them with the 
-   * equivalent best guess values
-   */
-  def dumpDomainQuery(db: Database, oper: Operator): Operator =
-  {
-    // Remove any VG Terms for which static best-guesses are possible
-    // In other words, best guesses that don't depend on which row we're
-    // looking at (like the Type Inference or Schema Matching lenses)
-    val mostlyDeterministicOper =
-      DomainInlineVGTerms(oper, db)
-
-    // Deal with the remaining VG-Terms.  
-    if(db.backend.canHandleVGTerms){
-      // The best way to do this would be a database-specific "DomainDump" 
-      // UDF if it's available.
-      return mostlyDeterministicOper
-    } else {
-      throw new RAException("Error, Best Guess Cache Doesn't Work")
-    }
   }
 
   def wrap(db: Database, results: ResultIterator, query: Operator, meta: MetadataT): ResultIterator =

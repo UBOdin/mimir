@@ -182,7 +182,7 @@ class GeocodingModel(override val name: ID, addrCols:Seq[Expression], geocoder:I
       })
     }catch {
         case ioe: Throwable =>  {
-          println(ioe.toString())
+          // println(ioe.toString())
           NullPrimitive()
         }
     }

@@ -4,7 +4,6 @@ import java.sql.SQLException
 import mimir.parser.ExpressionParser
 import mimir.algebra._
 import mimir.Database
-import mimir.algebra.spark.function.SparkFunctions
 
 sealed abstract class RegisteredFunction { val name: ID }
 

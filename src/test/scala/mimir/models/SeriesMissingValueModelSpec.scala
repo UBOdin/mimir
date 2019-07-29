@@ -27,14 +27,14 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
   	}
   }
 
-    "The SeriesMissingValue Model" should {
+  "The SeriesMissingValue Model" should {
 
 		"Be trainable" >> {
-			db.loadTable("test/data/DetectSeriesTest3.csv")
-			db.loadTable("test/data/ORG_DetectSeriesTest3.csv")
+			loadCSV("test/data/DetectSeriesTest3.csv")
+			loadCSV("test/data/ORG_DetectSeriesTest3.csv")
 			models = models ++ SeriesMissingValueModel.train(db, ID("SERIESREPAIR"), List(
 			ID("AGE")
-		  ), db.table("DETECTSERIESTEST3"), "DetectSeriesTest3")
+		  ), db.table("DETECTSERIESTEST3"), "MyTestCaseDataset")
 		  models.keys must contain(ID("AGE"))
 		}
 
@@ -44,7 +44,7 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
 			){
 		  models = models ++ SeriesMissingValueModel.train(db, ID("SERIESREPAIR"), List(
 			ID("MARKETVAL"), ID("GAMESPLAYED")
-			), db.table("DETECTSERIESTEST3"), "DetectSeriesTest3")
+			), db.table("DETECTSERIESTEST3"), "MyTestCaseDataset")
 			models.keys must contain(ID("MARKETVAL"), ID("GAMESPLAYED"))
 			}
 		}
@@ -72,7 +72,7 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
     "Produce reasonable explanations" >> {
 
       // explain("AGE", "1") must contain("I'm not able to guess based on weighted mean SERIESREPAIR:AGE.AGE, so defaulting using the upper and lower bound values")
-      explain(ID("AGE"), "4") must contain("I interpolated SERIESREPAIR.AGE, ordered by SERIESREPAIR.DOB to get 23 for row '4'")
+      explain(ID("AGE"), "4") must contain("I interpolated MyTestCaseDataset.AGE, ordered by MyTestCaseDataset.DOB to get 23 for row '4'")
     }
   }
 }	

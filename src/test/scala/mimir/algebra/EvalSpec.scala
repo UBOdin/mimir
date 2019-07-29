@@ -16,17 +16,17 @@ object EvalSpec extends Specification with RASimplify {
 
     "evaluate comparisons properly" >> {
       simplify("20.0>3") must be equalTo expr("TRUE")
-      simplify("CAST('20', real)>3") must be equalTo expr("TRUE")
+      simplify(CastExpression(StringPrimitive("20"), TFloat()).gt(3)) must be equalTo expr("TRUE")
     }
 
     "not insert spurious nulls" >> {
       simplify("NOT ( (TRUE=TRUE) ) AND  (NULL>3)") must be equalTo expr("FALSE")
       simplify("""
-        NOT( (FALSE=TRUE) ) AND  ( (TRUE=TRUE)  AND  (CAST('20', real)>3) )
+        (NOT( (FALSE=TRUE) )) AND  ( (TRUE=TRUE)  AND  (CAST('20' AS real)>3) )
       """) must be equalTo expr("TRUE")
       simplify("""
-        NOT( (FALSE=TRUE) ) AND  ( (TRUE=TRUE)  AND  (CAST(RATINGS2_NUM_RATINGS, real)>3) )
-      """) must be equalTo expr("CAST(RATINGS2_NUM_RATINGS, real)>3")
+        (NOT( (FALSE=TRUE) ) AND  ( (TRUE=TRUE)  AND  (CAST(RATINGS2_NUM_RATINGS AS real)>3) ))
+      """) must be equalTo expr("CAST(RATINGS2_NUM_RATINGS AS real)>3")
       simplify(
         Arithmetic(Arith.And,
           Not(expr("TRUE=TRUE")),
@@ -39,7 +39,7 @@ object EvalSpec extends Specification with RASimplify {
           Arithmetic(Arith.Or,
             Arithmetic(Arith.And,
               expr("TRUE=TRUE"),
-              expr("CAST(RATINGS2_NUM_RATINGS, real)>3")
+              expr("CAST(RATINGS2_NUM_RATINGS AS real)>3")
             ),
             Arithmetic(Arith.And,
               Not(expr("TRUE=TRUE")),
@@ -47,7 +47,7 @@ object EvalSpec extends Specification with RASimplify {
             )
           )
         )
-      ) must be equalTo expr("CAST(RATINGS2_NUM_RATINGS, real)>3")
+      ) must be equalTo expr("CAST(RATINGS2_NUM_RATINGS AS real)>3")
     }
 
     "support date comparisons" >> {

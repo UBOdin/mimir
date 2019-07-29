@@ -1,10 +1,12 @@
 package mimir.adaptive
 
+import java.sql.SQLException
 import scala.collection.mutable
+import sparsity.Name
 
 import mimir.Database
 import mimir.algebra._
-import mimir.statistics.SystemCatalog
+import mimir.data.SystemCatalog
 import mimir.serialization._
 import mimir.util._
 import mimir.metadata._
@@ -51,9 +53,32 @@ class AdaptiveSchemaManager(db: Database)
     }
   }
 
+  def exists(schema: ID) = 
+    adaptiveSchemas.exists(schema)
+
   def drop(schema: ID, ifExists: Boolean = false)
   {
-    ???
+    get(schema) match {
+      case None if ifExists => {}
+      case None => throw new SQLException(s"Adaptive schema $schema does not exist")
+      case Some((mlens, config)) => {
+        adaptiveSchemas.rm(schema)
+        db.models.dropOwner(ID("MULTILENS:", schema))
+      }
+
+    }
+  }
+  def dropByName(schema: Name, ifExists: Boolean = false): Unit =
+  {
+    if(schema.quoted){ drop(ID(schema.name), ifExists) }
+    else {
+      for(comparison <- adaptiveSchemas.keys) {
+        if(comparison.id.equalsIgnoreCase(schema.name)){ 
+          drop(comparison, ifExists); return;
+        }
+      }
+      if(!ifExists){ throw new SQLException(s"No such adaptive schema $schema") }
+    }
   }
 
   def lensForRecord(record: (ID, Seq[PrimitiveValue])) =
@@ -67,7 +92,7 @@ class AdaptiveSchemaManager(db: Database)
 
     ( 
       MultilensRegistry.multilenses(ID(mlensType)), 
-      MultilensConfig(ID(name.asString), query, args, humanReadableName)
+      MultilensConfig(name, query, args, humanReadableName)
     )
   }
 
@@ -76,6 +101,13 @@ class AdaptiveSchemaManager(db: Database)
     adaptiveSchemas.all
       .map { lensForRecord(_) }
   }
+  def allProviders: TraversableOnce[(ID, AdaptiveSchemaProvider)] =
+  {
+    all.map { lens => (lens._2.schema, AdaptiveSchemaProvider(lens, db)) }
+  }
+
+  def allNames: TraversableOnce[ID] =
+    adaptiveSchemas.keys
   
   def ofType(mlensType:ID): TraversableOnce[(Multilens, MultilensConfig)] =
   {
@@ -115,6 +147,11 @@ class AdaptiveSchemaManager(db: Database)
   def get(schema: ID): Option[(Multilens, MultilensConfig)] =
   {
     adaptiveSchemas.get(schema).map { lensForRecord(_) }
+  }
+
+  def getProvider(schema: ID): Option[AdaptiveSchemaProvider] =
+  {
+    get(schema).map { AdaptiveSchemaProvider(_, db) }
   }
 
   def viewFor(schema: ID, table: ID): Option[Operator] =

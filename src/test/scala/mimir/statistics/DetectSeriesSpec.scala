@@ -31,7 +31,7 @@ object DetectSeriesSpec
 	"The DetectSeriesSpec" should {
 
 		"Be able to load DetectSeriesTest1" >> {
-			db.loadTable("test/data/DetectSeriesTest1.csv"); ok
+			db.loader.loadTable("test/data/DetectSeriesTest1.csv"); ok
 		}
 		
 		"Be able to detect Date and Timestamp type" >> {
@@ -43,10 +43,15 @@ object DetectSeriesSpec
 		}
 
 		"Be able to create a new schema and detect Date and Timestamp type" >> {
-			db.backend.createTable(ID("DetectSeriesTest3"), HardTable(Seq(
-				ID("JN_DT") -> TDate(), 
-				ID("JN_TS") -> TTimestamp()
-			), Seq() ))
+			db.catalog.materializedTableProvider().createStoredTableAs(
+					HardTable(Seq(
+						ID("JN_DT") -> TDate(), 
+						ID("JN_TS") -> TTimestamp()
+					), Seq()),
+					ID("DetectSeriesTest3"),
+					db
+        )
+
 			val queryOper = select("SELECT * FROM DetectSeriesTest3")
 			val colSeq: Seq[String] = testDetectSeriesof(queryOper).map{_.columnName.toString}
 			
@@ -55,7 +60,7 @@ object DetectSeriesSpec
 		}
 
 		"Be able to load DetectSeriesTest2" >> {
-			db.loadTable("test/data/DetectSeriesTest2.csv"); ok
+			db.loader.loadTable("test/data/DetectSeriesTest2.csv"); ok
 		}
 
 		"Be able to detect Date, Timestamp and increasing-decreasing Numeric type" >> {

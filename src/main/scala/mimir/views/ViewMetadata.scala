@@ -18,47 +18,6 @@ class ViewMetadata(
   def operator: Operator =
     View(name, query, Set())
 
-  def table: Operator = {
-    Project(
-      schema.map { case (col, _) => ProjectArg(col, Var(col)) } ++ 
-      schemaWith(Set(ViewAnnotation.PROVENANCE)).zipWithIndex.map { case ((col, _), idx) => 
-        ProjectArg(
-          OperatorDeterminism.mimirColDeterministicColumn(col),
-          Comparison(Cmp.Eq,
-            Arithmetic(Arith.BitAnd,
-              Var(ViewAnnotation.taintBitVectorColumn),
-              IntPrimitive(1l << (idx+1))
-            ),
-            IntPrimitive(1l << (idx+1))
-          )
-        )
-      }++ 
-      (if(annotations(ViewAnnotation.TAINT)){
-        Seq(
-          ProjectArg(
-            OperatorDeterminism.mimirRowDeterministicColumnName,
-            Comparison(Cmp.Eq,
-              Arithmetic(Arith.BitAnd,
-                Var(ViewAnnotation.taintBitVectorColumn),
-                IntPrimitive(1l)
-              ),
-              IntPrimitive(1l)
-            )
-          )
-        )
-      } else { None })++
-      (if(annotations(ViewAnnotation.PROVENANCE)){
-        provenanceCols.map { col => ProjectArg(col, Var(col)) }
-      } else { None }),
-      Table(name, name, materializedSchema, Seq())
-    )
-  }
-  
-  def materializedOperator: Operator =  {
-    Project(materializedSchema.map {col => ProjectArg(col._1, Var(col._1))},  
-        Table(name, name, materializedSchema, Seq()))
-  }
-
   def provenanceCols: Seq[ID] = 
     Provenance.compile(query)._2
 
@@ -91,8 +50,19 @@ class ViewMetadata(
     )
   }
 
+  def materializedName = 
+    ID(name, "_MATERIALIZED")
+
   def materializedSchema =
     schemaWith(annotations.map { case ViewAnnotation.TAINT => ViewAnnotation.TAINT_BITS; case x => x })
+
+  def materializedOperator =
+    Table(
+      materializedName,
+      db.catalog.materializedTableProviderID,
+      materializedSchema,
+      Seq()
+    )
 
   def fullSchema =
     schemaWith( annotations )

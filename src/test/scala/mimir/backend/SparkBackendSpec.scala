@@ -10,6 +10,7 @@ import mimir.test.SQLTestSpecification
 import mimir.test.TestTimer
 import mimir.util.LoggerUtils
 import org.apache.spark.sql.types.LongType
+import mimir.exec.spark.MimirSparkRuntimeUtils
 
 object SparkBackendSpec 
   extends SQLTestSpecification("SparkBackendSpec")
@@ -19,23 +20,21 @@ object SparkBackendSpec
   "SparkBackend" should {
     
     "Be able to zipWithIndex and RowIndexPlan with DetectHeaders " >> {
-      db.loadTable(
+      db.loader.loadTable(
         sourceFile = "test/data/causes.csv", 
         targetTable = Some(ID("C")), 
-        force = true, 
-        targetSchema = None,
         inferTypes = Some(true),
         detectHeaders = Some(true), //detect headers is breaking row ordering
         format = ID("csv"),
-        loadOptions = Map(
-          "DELIMITER" -> ",", 
-          "datasourceErrors" -> "false"
-        )
+        sparkOptions = Map(
+          "DELIMITER" -> ","
+        ), 
+        datasourceErrors = false
       )
       
       val tableOp = db.table(ID("C"))
-      val tabledf = db.backend.execute(tableOp)
-      val idxdf = db.backend.asInstanceOf[SparkBackend].zipWithIndex(tabledf, 2, "index", LongType)
+      val tabledf = db.compiler.compileToSparkWithRewrites(tableOp)
+      val idxdf = MimirSparkRuntimeUtils.zipWithIndex(tabledf, 2, "index", LongType)
       val cols = idxdf.schema.fields.map(_.name).toSeq
       val idxs = idxdf.collect().map(row => (row.getLong(row.fieldIndex("index")), Option(row.get(1)).getOrElse("null").toString())).toSeq
       
@@ -52,23 +51,21 @@ object SparkBackendSpec
     }
     
     "Be able to zipWithIndex and RowIndexPlan on multi-partition datasets" >> {
-      db.loadTable(
+      db.loader.loadTable(
         sourceFile = "test/data/JSONOUTPUTWIDE.csv", 
         targetTable = Some(ID("D")), 
-        force = true, 
-        targetSchema = None,
         inferTypes = Some(true),
         detectHeaders = Some(false), //detect headers is breaking row ordering
         format = ID("csv"),
-        loadOptions = Map(
-          "DELIMITER" -> ",", 
-          "datasourceErrors" -> "true"
-        )
+        sparkOptions = Map(
+          "DELIMITER" -> ","
+        ),
+        datasourceErrors = true
       )
       
       val tableOp = db.table(ID("D"))
-      val tabledf = db.backend.execute(tableOp)
-      val idxdf = db.backend.asInstanceOf[SparkBackend].zipWithIndex(tabledf, 1, "index", LongType)
+      val tabledf = db.compiler.compileToSparkWithRewrites(tableOp)
+      val idxdf = MimirSparkRuntimeUtils.zipWithIndex(tabledf, 1, "index", LongType)
       val cols = idxdf.schema.fields.map(_.name).toSeq
       val idxs = idxdf.collect().map(row => (row.getLong(row.fieldIndex("index")), Option(row.get(1)).getOrElse("null").toString())).toSeq.drop(1)
       
@@ -82,23 +79,21 @@ object SparkBackendSpec
     }
     
     "Be able to zipWithIndex and RowIndexPlan on single-partition datasets" >> {
-      db.loadTable(
+      db.loader.loadTable(
         sourceFile = "test/data/pick.csv", 
         targetTable = Some(ID("P")), 
-        force = true, 
-        targetSchema = None,
         inferTypes = Some(true),
         detectHeaders = Some(true),
         format = ID("csv"),
-        loadOptions = Map(
-          "DELIMITER" -> ",", 
-          "datasourceErrors" -> "false"
-        )
+        sparkOptions = Map(
+          "DELIMITER" -> ","
+        ),
+        datasourceErrors = false
       )
       
       val tableOp = db.table(ID("P"))
-      val tabledf = db.backend.execute(tableOp)
-      val idxdf = db.backend.asInstanceOf[SparkBackend].zipWithIndex(tabledf, 2, "index", LongType)
+      val tabledf = db.compiler.compileToSparkWithoutRewrites(tableOp)
+      val idxdf = MimirSparkRuntimeUtils.zipWithIndex(tabledf, 2, "index", LongType)
       val cols = idxdf.schema.fields.map(_.name).toSeq
       val idxs = idxdf.collect().map(row => (row.getLong(row.fieldIndex("index")), Option(row.get(0)).getOrElse("null").toString())).toSeq
       
@@ -112,18 +107,16 @@ object SparkBackendSpec
     }
     
     "Be able to use spark sql functions" >> {
-      db.loadTable(
+      db.loader.loadTable(
         sourceFile = "test/data/geo.csv", 
         targetTable = Some(ID("geo")), 
-        force = true, 
-        targetSchema = None,
         inferTypes = Some(true),
         detectHeaders = Some(true),
         format = ID("csv"),
-        loadOptions = Map(
-          "DELIMITER" -> ",", 
-          "datasourceErrors" -> "false"
-        )
+        sparkOptions = Map(
+          "DELIMITER" -> ","
+        ),
+        datasourceErrors = false
       )
       val funcres = query("Select substring(CITY, 0, 1) AS D FROM geo;")( results => {
         results.toList.map( el => el.tuple.toList)

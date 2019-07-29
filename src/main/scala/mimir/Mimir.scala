@@ -16,14 +16,13 @@ import fastparse.Parsed
 import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
-import mimir.backend._
 import mimir.metadata._
 import mimir.util.{Timer,ExperimentalOptions,LineReaderInputSource,PythonProcess,SqlUtils}
 import mimir.algebra._
-import mimir.algebra.spark.OperatorTranslation
 import mimir.statistics.{DetectSeries,DatasetShape}
 import mimir.plot.Plot
 import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
+import mimir.exec.spark.MimirSpark
 
 /**
  * The primary interface to Mimir.  Responsible for:
@@ -39,112 +38,102 @@ import mimir.exec.{OutputFormat,DefaultOutputFormat,PrettyOutputFormat}
  */
 object Mimir extends LazyLogging {
 
-  var conf: MimirConfig = null;
   var db: Database = null;
   lazy val terminal: Terminal = TerminalBuilder.terminal()
   var output: OutputFormat = DefaultOutputFormat
 
   def main(args: Array[String]) = 
   {
-    conf = new MimirConfig(args);
+    val conf = new MimirConfig(args);
 
     // Prepare experiments
     ExperimentalOptions.enable(conf.experimental())
 
    
     // Set up the database connection(s)
-    val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
-    val sback = new SparkBackend(database)
-    db = new Database(sback, new JDBCMetadataBackend(conf.backend(), conf.dbname()))
+    MimirSpark.init(conf)
     if(!conf.quiet()){
-      output.print("Connecting to " + conf.backend() + "://" + conf.dbname() + "...")
+      output.print("Connecting to metadata provider [" + conf.metadataBackend() + "://" + conf.dbname() + "]...")
     }
+    db = new Database(new JDBCMetadataBackend(conf.metadataBackend(), conf.dbname()))
+    logger.debug("Opening Database")
     db.open()
+    if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
+      output = new PrettyOutputFormat(terminal)
+    }
+    
+    if(!conf.quiet()){
+      output.print("   ... ready")
+    }
 
-    // Check for one-off commands
-    if(conf.loadTable.get != None){
-      db.loadTable(conf.loadTable());
-    } else {
+    var finishByReadingFromConsole = true
 
-      conf.precache.foreach( (opt) => opt.split(",").foreach( (table) => { 
-        output.print(s"Precaching... $table")
-        db.models.prefetchForOwner(ID.upper(table))
-      }))
-
-      if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
-        output = new PrettyOutputFormat(terminal)
-      }
-      if(!conf.quiet()){
-        output.print("   ... ready")
-      }
-
-      var finishByReadingFromConsole = true
-
-      conf.files.get match {
-        case None => {}
-        case Some(files) => 
-          for(file <- files){
-            if(file == "-"){
-              interactiveEventLoop()
-              finishByReadingFromConsole = false
-            } else {
-              val extensionRegexp = "([^.]+)$".r
-              val extension:String = extensionRegexp.findFirstIn(file) match {
-                case Some(e) => e
-                case None => {
-                  throw new RuntimeException("Error: Unable to determine file format of "+file)
-                }
+    conf.files.get match {
+      case None => {}
+      case Some(files) => 
+        for(file <- files){
+          logger.debug(s"Processing file '$file'")
+          if(file == "-"){
+            interactiveEventLoop()
+            finishByReadingFromConsole = false
+          } else {
+            val extensionRegexp = "([^.]+)$".r
+            val extension:String = extensionRegexp.findFirstIn(file) match {
+              case Some(e) => e
+              case None => {
+                throw new RuntimeException("Error: Unable to determine file format of "+file)
               }
+            }
 
-              extension.toLowerCase match {
-                case "sql" => {
-                    eventLoop(new FileReader(file), { () =>  })
-                    finishByReadingFromConsole = false
-                  }
-                case "csv" => {
-                    output.print("Loading "+file+"...")
-                    db.loadTable(file)
-                  }
-                case _ => {
-                  throw new RuntimeException("Error: Unknown file format '"+extension+"' of "+file)
+            extension.toLowerCase match {
+              case "sql" => {
+                  noninteractiveEventLoop(new FileReader(file))
+                  finishByReadingFromConsole = false
                 }
+              case "csv" => {
+                  output.print("Loading "+file+"...")
+                  db.loader.loadTable(file)
+                }
+              case _ => {
+                throw new RuntimeException("Error: Unknown file format '"+extension+"' of "+file)
               }
             }
           }
-      }
-      if(finishByReadingFromConsole){
-        interactiveEventLoop()
-      }
+        }
+    }
+    logger.debug("Checking if console needed")
+    if(finishByReadingFromConsole){
+      logger.debug("Starting interactive mode")
+      interactiveEventLoop()
     }
 
-    db.backend.close()
+    db.close()
     if(!conf.quiet()) { output.print("\n\nDone.  Exiting."); }
   }
 
   def interactiveEventLoop(): Unit =
   {
-    val (source, prompt) = 
-      if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
-        (
-          new LineReaderInputSource(terminal),
-          { () =>  }
-        )
-      } else {
-        (
-          new InputStreamReader(System.in),
-          () => { System.out.print("\nmimir> "); System.out.flush(); }
-        )
-      }
-    eventLoop(source, prompt)
+    eventLoop(
+      new LineReaderParser(terminal), 
+      (parser: LineReaderParser) => {parser.flush(); parser}
+    )
   }
 
-  def eventLoop(source: Reader, prompt: (() => Unit)): Unit =
+  def noninteractiveEventLoop(source: Reader): Unit =
   {
-    var parser = MimirCommand(source);
-    var done = false;
+    eventLoop(
+      MimirCommand(source), 
+      (_:Any)=>MimirCommand(source)
+    )
+  }
 
-    prompt()
+  def eventLoop[I <: Iterator[Parsed[MimirCommand]]](initialParser: I, reset: (I => I)): Unit =
+  {
+    var parser = initialParser
+
+    logger.debug("Event Loop")
     while(parser.hasNext){
+      logger.debug("next command!")
       try {
         parser.next() match {
           case Parsed.Success(cmd:SlashCommand, _) => 
@@ -171,6 +160,9 @@ object Mimir extends LazyLogging {
         }
 
       } catch {
+        case e: EOFException => 
+          return
+
         case e: FileNotFoundException =>
           output.print(e.getMessage)
 
@@ -189,7 +181,7 @@ object Mimir extends LazyLogging {
           // The parser pops the input stream back onto the queue, so
           // the next call to Statement() will throw the same exact 
           // Exception.  To prevent this from happening, reset the parser:
-          parser = MimirCommand(source);
+          parser = reset(parser)
         }
       }
     }
@@ -243,19 +235,14 @@ object Mimir extends LazyLogging {
       case e:Throwable =>
         output.print("Unavailable: "+e.getMessage())
     }
-    db.backend match { 
-      case sback: SparkBackend => {
-        output.print("\n------- Spark -------")
-        try {
-          output.print(
-            sback.operatorTranslation.mimirOpToSparkOp(optimized).toString
-          )
-        } catch {
-          case e:Throwable =>
-            output.print("Unavailable: "+e.getMessage())
-        }
-      }
-      case _ => {}
+    output.print("\n------- Spark -------")
+    try {
+      output.print(
+        db.raToSpark.mimirOpToSparkOp(optimized).toString
+      )
+    } catch {
+      case e:Throwable =>
+        output.print("Unavailable: "+e.getMessage())
     }
   }
 
@@ -353,24 +340,66 @@ object Mimir extends LazyLogging {
     }
   }
 
+  val slashCommands: Map[String, SlashCommandDefinition] = Map(
+    MakeSlashCommand(
+      "help",
+      "",
+      "Show this help message",
+      { case _ => {
+        val cmdWidth = slashCommands.values.map { _.name.length }.max+1
+        val argWidth = slashCommands.values.map { _.args.length }.max
+        output.print("")
+        for(cmd <- slashCommands.values){
+          output.print(
+            String.format(s" %${cmdWidth}s %-${argWidth}s   %s",
+              "/"+cmd.name, cmd.args, cmd.description
+            )
+          )
+        }
+        output.print("")
+      }}
+    ),
+    MakeSlashCommand(
+      "tables",
+      "",
+      "List all available tables",
+      { case _ => handleQuery(db.catalog.tableView) }
+    ),
+    MakeSlashCommand(
+      "show",
+      "table_name",
+      "Show the schema for a specified table",
+      { case Seq(name) => 
+          db.catalog.tableSchema(Name(name)) match {
+            case None => 
+              output.print(s"'$name' is not a table")
+            case Some( schema ) => 
+              output.print("CREATE TABLE "+name+" (\n"+
+                schema.map { col => "  "+col._1+" "+col._2 }.mkString(",\n")
+              +"\n);")
+          }
+      }
+    ),
+    MakeSlashCommand(
+      "log",
+      "unit [level]",
+      "Set the logging level for the specified unit (e.g., DEBUG)",
+      { case Seq(loggerName) => setLogLevel(loggerName)
+        case Seq(loggerName, level) => setLogLevel(loggerName, level)
+      }
+    )
+  )
+
   def handleSlashCommand(cmd: SlashCommand): Unit = 
   {
     cmd.body.split(" +").toSeq match { 
-      case Seq("show", "tables") => 
-        for(table <- db.getAllTables()){ output.print(table.toString); }
-      case Seq("show", name) => 
-        db.tableSchema(ID.upper(name)) match {
-          case None => 
-            output.print(s"'$name' is not a table")
-          case Some(schema) => 
-            output.print("CREATE TABLE "+name+" (\n"+
-              schema.map { col => "  "+col._1+" "+col._2 }.mkString(",\n")
-            +"\n);")
+      case Seq() => 
+        output.print("Empty command")
+      case cmd => 
+        slashCommands.get(cmd.head) match {
+          case None => s"Unknown command: /${cmd.head} (try /help)"
+          case Some(implementation) => implementation(cmd.tail, output)
         }
-      case Seq("log", loggerName) => 
-        setLogLevel(loggerName)
-      case Seq("log", loggerName, level) =>
-        setLogLevel(loggerName, level)
     }
   }
 
@@ -403,8 +432,6 @@ object Mimir extends LazyLogging {
       case _ => throw new SQLException(s"Don't know how to handle logger ${logger.getClass().toString}")
     }
   }
-
-
 }
 
 class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
@@ -416,8 +443,7 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   //   val summarize = toggle("summary-create", default = Some(false))
   //   val cleanSummary = toggle("summary-clean", default = Some(false))
   //   val sampleCount = opt[Int]("samples", noshort = true, default = None)
-  val loadTable = opt[String]("loadTable", descr = "Don't do anything, just load a CSV file")
-  val backend = opt[String]("driver", descr = "Which backend database to use? ([sqlite],oracle)",
+  val metadataBackend = opt[String]("driver", descr = "Which metadata backend to use? ([sqlite])",
     default = Some("sqlite"))
   val precache = opt[String]("precache", descr = "Precache one or more lenses")
   val rebuildBestGuess = opt[String]("rebuild-bestguess")  
@@ -451,9 +477,32 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
     default = Some("hdfs"))
   val dataDirectory = opt[String]("dataDirectory", descr = "The directory to place data files",
     default = Some("."))
+  val googleSheetsCredentialPath = opt[String]("sheetCred", descr = "Credential file for google sheets",
+    default = Some("test/data/api-project-378720062738-5923e0b6125f"))
   def dbname : ScallopOption[String] = { 
     opt[String]("db", descr = "Connect to the database with the specified name",
-    default = Some(dataDirectory() + "/debug.db"))
+    default = Some(dataDirectory() + "/mimir.db"))
   }
 
+}
+
+class SlashCommandDefinition(
+  val name: String,
+  val args: String,
+  val description: String,
+  val implementation: PartialFunction[Seq[String], Unit]
+){
+  def apply(args: Seq[String], output: OutputFormat): Unit = 
+    if(implementation.isDefinedAt(args)){ implementation(args) }
+    else { output.print(s"usage: $usage")}
+  def usage: String = s"/$name $args"
+}
+object MakeSlashCommand
+{
+  def apply(
+    name: String,
+    args: String,
+    description: String,
+    implementation: PartialFunction[Seq[String], Unit]
+  ) = { (name, new SlashCommandDefinition(name, args, description, implementation)) }
 }
