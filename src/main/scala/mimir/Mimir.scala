@@ -18,6 +18,7 @@ import mimir.parser._
 import mimir.sql._
 import mimir.metadata._
 import mimir.util.{Timer,ExperimentalOptions,LineReaderInputSource,PythonProcess,SqlUtils}
+import mimir.data.staging.{ RawFileProvider, LocalFSRawFileProvider }
 import mimir.algebra._
 import mimir.statistics.{DetectSeries,DatasetShape}
 import mimir.plot.Plot
@@ -50,12 +51,16 @@ object Mimir extends LazyLogging {
     ExperimentalOptions.enable(conf.experimental())
 
    
+    val staging = new LocalFSRawFileProvider(new java.io.File(conf.dataDirectory()))
+
     // Set up the database connection(s)
     MimirSpark.init(conf)
     if(!conf.quiet()){
       output.print("Connecting to metadata provider [" + conf.metadataBackend() + "://" + conf.dbname() + "]...")
     }
-    db = new Database(new JDBCMetadataBackend(conf.metadataBackend(), conf.dbname()))
+    val metadata = new JDBCMetadataBackend(conf.metadataBackend(), conf.dbname())
+
+    db = new Database(metadata, staging)
     logger.debug("Opening Database")
     db.open()
     if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){

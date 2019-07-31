@@ -32,6 +32,7 @@ import scala.collection.convert.Wrappers.JMapWrapper
 import mimir.algebra.function.SparkFunctions
 import java.net.URLDecoder
 import mimir.parser._
+import mimir.data.staging.{ RawFileProvider, LocalFSRawFileProvider }
 
 import scala.reflect.runtime.currentMirror
 import scala.tools.reflect.ToolBox
@@ -76,7 +77,10 @@ object MimirVizier extends LazyLogging {
     // Set up the database connection(s)
     val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
     MimirSpark.init(conf)
-    db = new Database(new JDBCMetadataBackend(conf.metadataBackend(), conf.dbname()))
+    val metadata = new JDBCMetadataBackend(conf.metadataBackend(), conf.dbname())
+    val staging = new LocalFSRawFileProvider(new java.io.File(conf.dataDirectory()))
+
+    db = new Database(metadata, staging)
     db.open()
     VizierDB.sparkSession = MimirSpark.get.sparkSession
     
@@ -284,7 +288,7 @@ object MimirVizier extends LazyLogging {
           format = ID(format),
           humanReadableName = humanReadableName,
           datasourceErrors = loadOptions.getOrElse("datasourceErrors", "false").equals("true"),
-          stageSourceURL = false
+          stageSourceURL = true
         )
       }
       tableName 

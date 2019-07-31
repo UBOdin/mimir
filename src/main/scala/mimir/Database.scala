@@ -98,7 +98,10 @@ import scala.collection.mutable.ListBuffer
   * * mimir.explainer.CTExplainer (explainer)
   *    Responsible for creating explanation objects.
   */
-case class Database(metadata: MetadataBackend)
+case class Database(
+  metadata: mimir.metadata.MetadataBackend, 
+  staging: mimir.data.staging.RawFileProvider = new LocalFSRawFileProvider(new java.io.File("."))
+)
   extends LazyLogging
 {
   //// Data Sources
@@ -109,7 +112,6 @@ case class Database(metadata: MetadataBackend)
   val tempViews       = new mimir.views.TemporaryViewManager(this)
   val adaptiveSchemas = new mimir.adaptive.AdaptiveSchemaManager(this)
   val catalog         = new mimir.data.SystemCatalog(this)
-  val staging: mimir.data.staging.RawFileProvider = selectRawFileProvider()
 
   //// Parsing & Translation
   val sqlToRA         = new mimir.sql.SqlToRA(this)
@@ -354,9 +356,6 @@ case class Database(metadata: MetadataBackend)
   def close(): Unit = {
     metadata.close()
   }
-
-  def selectRawFileProvider(): RawFileProvider =
-    new LocalFSRawFileProvider(new java.io.File("."))
 
 
   def table(caseInsensitiveName: String): Operator = 

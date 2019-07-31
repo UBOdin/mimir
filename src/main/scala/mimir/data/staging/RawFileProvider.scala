@@ -26,7 +26,13 @@ trait RawFileProvider {
    * @return          The local URL of the staged file
    */ 
   def stage(url: String, nameHint: Option[String]): String =
-    stage(new java.net.URL(url), nameHint)
+  {
+    var finalURL = url
+    if((finalURL.length > 0) && (finalURL.charAt(0) == '/')){
+      finalURL = "file://"+finalURL
+    }
+    stage(new java.net.URL(finalURL), nameHint)
+  }
   /**
    * Stage a file by URL.
    * @param url       The URL to stage locally
