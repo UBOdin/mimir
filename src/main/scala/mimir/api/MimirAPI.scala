@@ -16,11 +16,15 @@ import org.eclipse.jetty.server.handler.DefaultHandler
 import org.eclipse.jetty.server.handler.HandlerCollection
 import org.eclipse.jetty.server.Handler
 import org.eclipse.jetty.webapp.WebAppContext
+import java.sql.SQLException
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
 import play.api.libs.json._
+import mimir.algebra.RAException
+import java.io.FileNotFoundException
+import java.io.EOFException
 
 object MimirAPI extends LazyLogging {
   
@@ -79,11 +83,11 @@ class MimirVizierServlet() extends HttpServlet with LazyLogging {
         val text = scala.io.Source.fromInputStream(req.getInputStream).mkString 
         println(s"MimirAPI POST ${req.getPathInfo}\n$text")
         val routePattern = "\\/api\\/v2(\\/[a-zA-Z\\/]+)".r
+        val os = resp.getOutputStream()
+        resp.setHeader("Content-type", "text/json");
         req.getPathInfo match {
           case routePattern(route) => {
             try{
-              val os = resp.getOutputStream()
-              resp.setHeader("Content-type", "text/json");
               route match {
                 case "/eval/scala" => {
                   Json.parse(text).as[ScalaEvalRequest].handle(os)
@@ -135,20 +139,40 @@ class MimirVizierServlet() extends HttpServlet with LazyLogging {
                   Json.parse(text).as[SchemaForQueryRequest].handle(os)
                 }
               }
-              os.flush()
-              os.close() 
             } catch {
-              case t: Throwable => {
-                logger.error("MimirAPI POST ERROR: ", t)
-                throw t
+              case e: EOFException => 
+                os.write(Json.stringify(Json.toJson(
+                    ErrorResponse(e.getClass.getCanonicalName(),e.getMessage()))).getBytes)
+      
+              case e: FileNotFoundException =>
+                os.write(Json.stringify(Json.toJson(
+                    ErrorResponse(e.getClass.getCanonicalName(),e.getMessage()))).getBytes)
+      
+              case e: SQLException =>
+                os.write(Json.stringify(Json.toJson(
+                    ErrorResponse(e.getClass.getCanonicalName(),e.getMessage()))).getBytes)
+                logger.debug(e.getMessage + "\n" + e.getStackTrace.map(_.toString).mkString("\n"))
+      
+              case e: RAException =>
+                os.write(Json.stringify(Json.toJson(
+                    ErrorResponse(e.getClass.getCanonicalName(),e.getMessage()))).getBytes)
+                logger.debug(e.getMessage + "\n" + e.getStackTrace.map(_.toString).mkString("\n"))
+      
+              case e: Throwable => {
+                os.write(Json.stringify(Json.toJson(
+                    ErrorResponse(e.getClass.getCanonicalName(),"An unknown error occurred..."))).getBytes)
+                logger.error("MimirAPI POST ERROR: ", e)
               }
-            }
+            }  
           }
           case _ => {
+            os.write(Json.stringify(Json.toJson(
+                    ErrorResponse("MimirAPI POST Not Handled","Unknown Request:"+ req.getPathInfo))).getBytes)
             logger.error(s"MimirAPI POST Not Handled: ${req.getPathInfo}")
-            throw new Exception("request Not handled: " + req.getPathInfo)
           }
-        }  
+        } 
+        os.flush()
+        os.close() 
     }
     override def doGet(req : HttpServletRequest, resp : HttpServletResponse) = {
       println(s"MimirAPI GET ${req.getPathInfo}")

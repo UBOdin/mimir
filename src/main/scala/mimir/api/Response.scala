@@ -12,6 +12,17 @@ object Response {
   
 }
 
+case class ErrorResponse (
+            /* throwable class name */
+                  errorType: String,
+            /* throwable message */
+                  errorMessage: String
+) extends Response
+
+object ErrorResponse {
+  implicit val format: Format[ErrorResponse] = Json.format
+}
+
 case class ScalaEvalResponse (
             /* stdout from evaluation of scala code */
                   stdout: String,
