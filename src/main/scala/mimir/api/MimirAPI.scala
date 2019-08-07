@@ -142,32 +142,38 @@ class MimirVizierServlet() extends HttpServlet with LazyLogging {
             } catch {
               case e: EOFException => 
                 os.write(Json.stringify(Json.toJson(
-                    ErrorResponse(e.getClass.getCanonicalName(),e.getMessage()))).getBytes)
+                    ErrorResponse(e.getClass.getCanonicalName(),e.getMessage(), 
+                        e.getStackTrace.map(_.toString).mkString("\n")))).getBytes)
       
               case e: FileNotFoundException =>
                 os.write(Json.stringify(Json.toJson(
-                    ErrorResponse(e.getClass.getCanonicalName(),e.getMessage()))).getBytes)
+                    ErrorResponse(e.getClass.getCanonicalName(),e.getMessage(), 
+                        e.getStackTrace.map(_.toString).mkString("\n")))).getBytes)
       
               case e: SQLException =>
                 os.write(Json.stringify(Json.toJson(
-                    ErrorResponse(e.getClass.getCanonicalName(),e.getMessage()))).getBytes)
+                    ErrorResponse(e.getClass.getCanonicalName(),e.getMessage(), 
+                        e.getStackTrace.map(_.toString).mkString("\n")))).getBytes)
                 logger.debug(e.getMessage + "\n" + e.getStackTrace.map(_.toString).mkString("\n"))
       
               case e: RAException =>
                 os.write(Json.stringify(Json.toJson(
-                    ErrorResponse(e.getClass.getCanonicalName(),e.getMessage()))).getBytes)
+                    ErrorResponse(e.getClass.getCanonicalName(),e.getMessage(), 
+                        e.getStackTrace.map(_.toString).mkString("\n")))).getBytes)
                 logger.debug(e.getMessage + "\n" + e.getStackTrace.map(_.toString).mkString("\n"))
       
               case e: Throwable => {
                 os.write(Json.stringify(Json.toJson(
-                    ErrorResponse(e.getClass.getCanonicalName(),"An unknown error occurred..."))).getBytes)
+                    ErrorResponse(e.getClass.getCanonicalName(),"An unknown error occurred...", 
+                        e.getStackTrace.map(_.toString).mkString("\n")))).getBytes)
                 logger.error("MimirAPI POST ERROR: ", e)
               }
             }  
           }
           case _ => {
             os.write(Json.stringify(Json.toJson(
-                    ErrorResponse("MimirAPI POST Not Handled","Unknown Request:"+ req.getPathInfo))).getBytes)
+                    ErrorResponse("MimirAPI POST Not Handled","Unknown Request:"+ req.getPathInfo, 
+                        Thread.currentThread().getStackTrace.map(_.toString).mkString("\n") ))).getBytes)
             logger.error(s"MimirAPI POST Not Handled: ${req.getPathInfo}")
           }
         } 

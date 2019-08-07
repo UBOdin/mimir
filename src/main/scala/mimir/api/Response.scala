@@ -16,7 +16,9 @@ case class ErrorResponse (
             /* throwable class name */
                   errorType: String,
             /* throwable message */
-                  errorMessage: String
+                  errorMessage: String,
+            /* throwable stack trace */
+                  stackTrace: String
 ) extends Response
 
 object ErrorResponse {
