@@ -45,8 +45,8 @@ object SparkBackendSpec
 				//"mimir.backend.SparkBackend"
 			){
         val rids = query("Select C.* FROM C;")(_.toList).map(row => (row.provenance.asLong, row(1).toString))
-        rids.head must be equalTo (2, "'All Other Causes'")
-        rids.last must be equalTo (1381, "'All Other Causes'")
+        rids.head must be equalTo (-1929017717, "'All Other Causes'")
+        rids.last must be equalTo (-196590230, "'All Other Causes'")
       }
     }
     
@@ -74,8 +74,8 @@ object SparkBackendSpec
       idxs.last must be equalTo (70715, "null")
       
       val rids = query("Select * FROM D;")(_.toList).map(row => (row.provenance.asLong, row(1).toString)).drop(1)
-      rids.head must be equalTo (2, "748365939771641856")
-      rids.last must be equalTo (70715, "NULL")
+      rids.head must be equalTo (774558468, "748365939771641856")
+      rids.last must be equalTo (551929072, "NULL")
     }
     
     "Be able to zipWithIndex and RowIndexPlan on single-partition datasets" >> {
@@ -102,8 +102,8 @@ object SparkBackendSpec
       idxs.last must be equalTo (5,"5")
       
       val rids = query("select * from P;")(_.toList).map(row => (row.provenance.asLong, row(0).toString))
-      rids.head must be equalTo (2, "1")
-      rids.last must be equalTo (5,"5")
+      rids.head must be equalTo (-706855295, "1")
+      rids.last must be equalTo (-1708392797,"5")
     }
     
     "Be able to use spark sql functions" >> {

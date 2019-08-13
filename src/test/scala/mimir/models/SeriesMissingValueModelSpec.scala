@@ -10,22 +10,29 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
   sequential
 
   var models = Map[ID,(Model,Int,Seq[Expression])]()
-
+  val rowidMap = 
+    Map("-737200991"->"384450702",
+        "1538020126"->"-1330496373",
+        "196110172"->"1034334144",
+        "1067514362"->"59129355")
+        
   def predict(col:ID, row:String): PrimitiveValue = {
     val (model, idx, hints) = models(col)
-    model.bestGuess(idx, List(RowIdPrimitive(row)), List())
+    model.bestGuess(idx, List(RowIdPrimitive(rowidMap(row))), List())
   }
   def explain(col:ID, row:String): String = {
     val (model, idx, hints) = models(col)
-    model.reason(idx, List(RowIdPrimitive(row)), List())
+    model.reason(idx, List(RowIdPrimitive(rowidMap(row))), List())
   }
 
   def trueValue(col:ID, row:String): PrimitiveValue = {
-	  val queryOper = select(s"SELECT $col FROM ORG_DETECTSERIESTEST3 WHERE ROWID=$row")
+	  val queryOper = select(s"SELECT $col FROM ORG_DETECTSERIESTEST3 WHERE ROWID=${rowidMap(row)}")
   	db.query(queryOper){ result =>
   		result.next.tuple(0)
   	}
   }
+  
+  
 
   "The SeriesMissingValue Model" should {
 
@@ -63,7 +70,6 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
     				//println(s"${rowid.asString}->$a,$b")
     				( (rowid -> a), (rowid -> b) )
   			  }.unzip
-			
   			predicted.toMap must be equalTo(correct.toMap)
       }
 		   }

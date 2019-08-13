@@ -9,7 +9,7 @@ import org.apache.spark.sql.DataFrame
 import mimir.Database
 import mimir.algebra._
 import mimir.metadata._
-import mimir.exec.spark.{MimirSpark,RAToSpark,RowIndexPlan}
+import mimir.exec.spark.{MimirSpark,RAToSpark}
 
 // https://spark.apache.org/docs/latest/sql-data-sources-load-save-functions.html#run-sql-on-files-directly
 

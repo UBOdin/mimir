@@ -17,7 +17,9 @@ import org.apache.spark.sql.catalyst.expressions.{
   Literal,
   If,
   IsNull,
-  ScalaUDF
+  ScalaUDF,
+  HashExpression,
+  Murmur3Hash
 }
 import org.apache.spark.sql.catalyst.expressions.aggregate.{
   AggregateExpression,
@@ -30,12 +32,16 @@ import org.apache.spark.sql.catalyst.expressions.aggregate.{
 import mimir.Database
 import mimir.algebra._
 
+
 /**
  * Representation of a ROWID-annotated plan.
  * 
  * Calling getPlan() returns a Spark LogicalPlan annotated with SQLite-style ROWIDs
  */
-case class RowIndexPlan(val lp:LogicalPlan,  val schema:Seq[(ID,Type)], val offset: Long = 1, val indexName: String = "ROWID") {
+case class RowIndexPlan(val lp:LogicalPlan,  val schema:Seq[(ID,Type)], val offset: Long = 1, val indexName: String = "ROWID") 
+ {
+  
+  val unresolvedAttributes = schema.map(fld => UnresolvedAttribute(fld._1.id))
   
   /**
    * Partition-specific identifier assignment. (Spark LogicalPlan) 
@@ -52,10 +58,15 @@ case class RowIndexPlan(val lp:LogicalPlan,  val schema:Seq[(ID,Type)], val offs
    *   - inc_id : The intra-worker unique ID.
    */
   val partOp = org.apache.spark.sql.catalyst.plans.logical.Project(
-      schema.map(fld => UnresolvedAttribute(fld._1.id)) ++
+      unresolvedAttributes ++
       Seq(Alias(SparkPartitionID(),"partition_id")(), 
-          Alias(MonotonicallyIncreasingID(),"inc_id")()), lp)
+          Alias(MonotonicallyIncreasingID(),"inc_id")(),
+          Alias(hashExpression(),"row_hash")()), lp)
   
+          
+  def hashExpression(): HashExpression[Int] = {
+    new Murmur3Hash(unresolvedAttributes)
+  }
   /** 
    * id offset for input rows for a given session (Seq of Integers) 
    * 
@@ -147,14 +158,16 @@ case class RowIndexPlan(val lp:LogicalPlan,  val schema:Seq[(ID,Type)], val offs
    */
   def getPlan(db:Database) = {
     org.apache.spark.sql.catalyst.plans.logical.Project(
-      schema.map(fld => UnresolvedAttribute(fld._1.id)) :+ UnresolvedAttribute(indexName), 
+      unresolvedAttributes :+ UnresolvedAttribute(indexName), 
       org.apache.spark.sql.catalyst.plans.logical.Project(
-        schema.map(fld => UnresolvedAttribute(fld._1.id)) :+
+        unresolvedAttributes :+
         Alias(org.apache.spark.sql.catalyst.expressions.Cast(
-            Add(UnresolvedAttribute("partition_offset"), UnresolvedAttribute("inc_id")),StringType),indexName)(),
+            Add(UnresolvedAttribute("partition_offset"), 
+                Add(UnresolvedAttribute("inc_id"),UnresolvedAttribute("row_hash")))
+                ,StringType),indexName)(),
         org.apache.spark.sql.catalyst.plans.logical.Project(
-          schema.map(fld => UnresolvedAttribute(fld._1.id)) ++
-          Seq(Alias(getUDF(db),"partition_offset")(), UnresolvedAttribute("inc_id")), partOp)))    
+          unresolvedAttributes ++
+          Seq(Alias(getUDF(db),"partition_offset")(), UnresolvedAttribute("inc_id"), UnresolvedAttribute("row_hash")), partOp)))    
   }
 
   /**

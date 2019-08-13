@@ -104,22 +104,22 @@ object SparkMimirCSVDataSourceSpec
           val results = resultSets.flatMap(_.all(db)).map { _.toString }
           
           results must contain(
-            "The value [ NULL ] is uncertain because there is an error(s) in the data source on row 4 of corrupt. The raw value of the row in the data source is [ ------- ] {{ MIMIR_DSE_WARNING_corrupt_DSE['4', '_c1', NULL, '-------'] }}"
-          )
-          results must contain(
-            "The value [ NULL ] is uncertain because there is an error(s) in the data source on row 4 of corrupt. The raw value of the row in the data source is [ ------- ] {{ MIMIR_DSE_WARNING_corrupt_DSE['4', '_c2', NULL, '-------'] }}"
+            "The value [ NULL ] is uncertain because there is an error(s) in the data source on row -735214268 of corrupt. The raw value of the row in the data source is [ ------- ] {{ MIMIR_DSE_WARNING_corrupt_DSE['-735214268', '_c1', NULL, '-------'] }}"
             )
           results must contain(
-              "The value [ klj8 ] is uncertain because there is an error(s) in the data source on row 6 of corrupt. The raw value of the row in the data source is [ 2,klj8,lmlkjh8,jij9,1 ] {{ MIMIR_DSE_WARNING_corrupt_DSE['6', '_c1', 'klj8', '2,klj8,lmlkjh8,jij9,1'] }}"
+            "The value [ NULL ] is uncertain because there is an error(s) in the data source on row -735214268 of corrupt. The raw value of the row in the data source is [ ------- ] {{ MIMIR_DSE_WARNING_corrupt_DSE['-735214268', '_c2', NULL, '-------'] }}"
             )
           results must contain(
-            "The value [ ------- ] is uncertain because there is an error(s) in the data source on row 4 of corrupt. The raw value of the row in the data source is [ ------- ] {{ MIMIR_DSE_WARNING_corrupt_DSE['4', '_c0', '-------', '-------'] }}"
+            "The value [ klj8 ] is uncertain because there is an error(s) in the data source on row 1268020403 of corrupt. The raw value of the row in the data source is [ 2,klj8,lmlkjh8,jij9,1 ] {{ MIMIR_DSE_WARNING_corrupt_DSE['1268020403', '_c1', 'klj8', '2,klj8,lmlkjh8,jij9,1'] }}"
             )
           results must contain(
-              "The value [ lmlkjh8 ] is uncertain because there is an error(s) in the data source on row 6 of corrupt. The raw value of the row in the data source is [ 2,klj8,lmlkjh8,jij9,1 ] {{ MIMIR_DSE_WARNING_corrupt_DSE['6', '_c2', 'lmlkjh8', '2,klj8,lmlkjh8,jij9,1'] }}"
+            "The value [ ------- ] is uncertain because there is an error(s) in the data source on row -735214268 of corrupt. The raw value of the row in the data source is [ ------- ] {{ MIMIR_DSE_WARNING_corrupt_DSE['-735214268', '_c0', '-------', '-------'] }}"
             )
           results must contain(
-              "The value [ 2 ] is uncertain because there is an error(s) in the data source on row 6 of corrupt. The raw value of the row in the data source is [ 2,klj8,lmlkjh8,jij9,1 ] {{ MIMIR_DSE_WARNING_corrupt_DSE['6', '_c0', '2', '2,klj8,lmlkjh8,jij9,1'] }}"
+            "The value [ lmlkjh8 ] is uncertain because there is an error(s) in the data source on row 1268020403 of corrupt. The raw value of the row in the data source is [ 2,klj8,lmlkjh8,jij9,1 ] {{ MIMIR_DSE_WARNING_corrupt_DSE['1268020403', '_c2', 'lmlkjh8', '2,klj8,lmlkjh8,jij9,1'] }}"
+            )
+          results must contain(
+              "The value [ 2 ] is uncertain because there is an error(s) in the data source on row 1268020403 of corrupt. The raw value of the row in the data source is [ 2,klj8,lmlkjh8,jij9,1 ] {{ MIMIR_DSE_WARNING_corrupt_DSE['1268020403', '_c0', '2', '2,klj8,lmlkjh8,jij9,1'] }}"
             )
         }
     }

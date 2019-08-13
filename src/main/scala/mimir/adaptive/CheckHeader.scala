@@ -80,7 +80,14 @@ object CheckHeader
       // If we have a header... 
       if(model.headerDetected) { 
         // Strip off row #1 
-        oper = oper.filter { RowIdVar().neq(RowIdPrimitive("1")) } 
+        val firstRowID = db.query(oper.limit(1))(res => { 
+          val resList = res.toList
+          if(resList.isEmpty)
+            RowIdPrimitive("0")
+          else
+            resList.head.provenance
+        })
+        oper = oper.filter { RowIdVar().neq(firstRowID) } 
         
         // And then rename columns accordingly
         oper = oper.renameByID(

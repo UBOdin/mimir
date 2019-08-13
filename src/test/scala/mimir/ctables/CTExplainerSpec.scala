@@ -48,8 +48,8 @@ object CTExplainerSpec
         set => (set.model.name.id -> set.allArgs(db).map(_._1.toList).toList)
       }.toMap 
       explanations must contain(eachOf(
-        ("MV:SPARKML:B" -> List(List[PrimitiveValue](RowIdPrimitive("3")))),
-        ("MV:SPARKML:C" -> List(List[PrimitiveValue](RowIdPrimitive("4")))),
+        ("MV:SPARKML:B" -> List(List[PrimitiveValue](RowIdPrimitive("2066842439")))),
+        ("MV:SPARKML:C" -> List(List[PrimitiveValue](RowIdPrimitive("586364262")))),
         ("MIMIR_TI_ATTR_R_TI" -> List(0, 1, 2).map { i => List(IntPrimitive(i)) })
       ))
     }
@@ -58,7 +58,7 @@ object CTExplainerSpec
       val reasons = 
         explainCell("""
           SELECT * FROM MV
-        """, "3", "B"
+        """, "2066842439", "B"
         ).reasons.map(_.reason).mkString("\n")
       reasons must contain("I used a classifier to fix MV.B")
     }
@@ -68,7 +68,7 @@ object CTExplainerSpec
         explainRow("""
           SELECT * FROM MV
           WHERE C > 1
-        """, "4"
+        """, "586364262"
         ).reasons.map(_.reason).mkString("\n")
       reasons must contain("I used a classifier to fix MV.C")
 
