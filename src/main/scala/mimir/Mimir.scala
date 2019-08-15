@@ -488,7 +488,10 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
     opt[String]("db", descr = "Connect to the database with the specified name",
     default = Some(dataDirectory() + "/mimir.db"))
   }
-
+  def sparkJars : ScallopOption[String] = { 
+    opt[String]("sparkJars", descr = "Folder with additional jars for spark to load",
+    default = Some(dataDirectory() + "/sparkJars"))
+  }
 }
 
 class SlashCommandDefinition(

@@ -34,6 +34,7 @@ import org.apache.spark.sql.catalyst.expressions.{
 import org.apache.spark.{SparkContext, SparkConf}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import java.io.File
+import mimir.util.FileUtils
 
 import mimir.algebra._
 import mimir.algebra.function.{SparkFunctions, AggregateRegistry}
@@ -62,7 +63,7 @@ object MimirSpark
   }
 
   def init(config: MimirConfig){
-    logger.info(s"Init Spark: dataDir: ${config.dataDirectory()} sparkHost:${config.sparkHost()}, sparkPort:${config.sparkPort()}, hdfsPort:${config.hdfsPort()}, useHDFSHostnames:${config.useHDFSHostnames()}, overwriteStagedFiles:${config.overwriteStagedFiles()}, overwriteJars:${config.overwriteJars()}, numPartitions:${config.numPartitions()}, dataStagingType:${config.dataStagingType()}")
+    logger.info(s"Init Spark: dataDir: ${config.dataDirectory()} sparkHost:${config.sparkHost()}, sparkPort:${config.sparkPort()}, hdfsPort:${config.hdfsPort()}, useHDFSHostnames:${config.useHDFSHostnames()}, overwriteStagedFiles:${config.overwriteStagedFiles()}, overwriteJars:${config.overwriteJars()}, numPartitions:${config.numPartitions()}, dataStagingType:${config.dataStagingType()}, sparkJars:${config.sparkJars()}")
 
     sheetCred = config.googleSheetsCredentialPath()
     val sparkHost = config.sparkHost()
@@ -146,6 +147,21 @@ object MimirSpark
       sparkCtx.addJar(s"$hdfsHome/sparsity_2.11-1.0.jar")
       sparkCtx.addJar(s"$hdfsHome/fastparse_2.11-2.1.0.jar")
       sparkCtx.addFile(s"$hdfsHome/$credentialName")
+      
+      FileUtils.getListOfFiles(config.sparkJars()).map(file => {
+        if(file.getName.endsWith(".jar")){
+          HadoopUtils.writeToHDFS(sparkCtx, file.getName, file, overwriteJars)
+          sparkCtx.addJar(s"$hdfsHome/${file.getName}")
+        }
+      })
+    }
+    else {
+      FileUtils.getListOfFiles(config.sparkJars()).map(file => {
+        if(file.getName.endsWith(".jar")){
+          FileUtils.addJarToClasspath(file)
+          sparkCtx.addJar(file.getAbsolutePath)
+        }
+      })
     }
 
     logger.debug(s"apache spark: ${sparkCtx.version}  remote: $remoteSpark deployMode: $dmode")

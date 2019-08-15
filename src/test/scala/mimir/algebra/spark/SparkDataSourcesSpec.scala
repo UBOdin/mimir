@@ -312,6 +312,58 @@ object SparkDataSourcesSpec
     }
     
     
+    /*"For jdbc data sources" should {
+        "Be able to query from a mysql source" >> {
+        db.loader.loadTable(
+           sourceFile = "jdbc:mysql://mysql-rfam-public.ebi.ac.uk:4497/Rfam",
+           targetTable = Some(ID("M")), 
+           inferTypes = Some(true), 
+           detectHeaders = Some(true), 
+           format = ID("jdbc"),
+           sparkOptions = Map("url" -> "jdbc:mysql://mysql-rfam-public.ebi.ac.uk:4497/Rfam", 
+            "driver" -> "com.mysql.jdbc.Driver", 
+            "dbtable" -> "family", 
+            "user" -> "rfamro", 
+            "password" -> ""))
+            
+        val result = query("""
+          SELECT * FROM M
+        """)(_.toList.map(_.tuple.toList)).toList
+        
+        result.length must be equalTo 3016
+        
+        update("""
+  				CREATE LENS MV_M
+  				  AS SELECT * FROM M
+  				  WITH MISSING_VALUE('TYPE')
+   			""")
+   			val querymv = db.table("MV_M")
+        val resultmv = db.query(querymv)(_.toList.map(_.tuple.toList)).toList
+        
+        resultmv.length must be equalTo 3016
+      }
+      
+      "Be able to query from a postgres source" >> {
+        LoadJDBC.handleLoadTableRaw(db, "P", 
+          Map("url" -> "jdbc:postgresql://128.205.71.102:5432/mimirdb", 
+            "driver" -> "org.postgresql.Driver", 
+            "dbtable" -> "mimir_spark", 
+            "user" -> "mimir", 
+            "password" -> "mimir01"))
+            
+        val result = query("""
+          SELECT * FROM P
+        """)(_.toList.map(_.tuple.toList)).toList
+        
+        result must be equalTo List(
+            List(i(1), NullPrimitive(), i(100)), 
+            List(i(2), i(4), i(104)), 
+            List(i(3), i(4), i(118)), 
+            List(i(4), i(5), NullPrimitive()), 
+         List(i(5), i(4), i(50)))
+      }
+    }*/
+    
     
   }
 }

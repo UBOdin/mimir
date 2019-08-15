@@ -37,16 +37,16 @@ object OperatorTranslationSpec
         db.table("R")
           .addColumns( "ROWID" -> RowIdVar() )
           .project("ROWID")
-        )(_.toList.map(_.tuple))
+        )(_.toList.map(_.tuple.toList))
       
       result must be equalTo List(
-       List(RowIdPrimitive("1")), 
-       List(RowIdPrimitive("2")), 
-       List(RowIdPrimitive("3")), 
-       List(RowIdPrimitive("4")), 
-       List(RowIdPrimitive("5")), 
-       List(RowIdPrimitive("6")),
-       List(RowIdPrimitive("7"))
+        List(RowIdPrimitive("1661579272")),
+        List(RowIdPrimitive("2133525038")),
+        List(RowIdPrimitive("2066842439")),
+        List(RowIdPrimitive("586364262")),
+        List(RowIdPrimitive("1386748855")),
+        List(RowIdPrimitive("109250532")),
+        List(RowIdPrimitive("420079580"))
       )
     }
     

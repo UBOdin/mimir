@@ -192,19 +192,19 @@ object SimpleDemoScript
 		"Obtain Cell Explanations for Simple Queries" >> {
 		  val expl1 = explainCell("""
 					SELECT * FROM RATINGS1FINAL
-				""", "3", "RATING")
+				""", "-1083566332", "RATING")
 			expl1.toString must contain("I used a classifier to fix RATINGS1FINAL.RATING")		
 		}
 		"Obtain Cell Explanations for Queries with WHERE clauses" >> {
 			val expl1 = explainCell("""
 					SELECT * FROM RATINGS1FINAL WHERE RATING > 0
-				""", "3", "RATING")
+				""", "-1083566332", "RATING")
 			expl1.toString must contain("I used a classifier to fix RATINGS1FINAL.RATING")		
 		}
 		"Guard Data-Dependent Explanations for Simple Queries" >> {
 			val expl2 = explainCell("""
 					SELECT * FROM RATINGS1FINAL
-				""", "2", "RATING")
+				""", "1839481200", "RATING")
 			expl2.toString must not contain("I used a classifier to fix RATINGS1FINAL.RATING")		
 		}
 
@@ -292,12 +292,12 @@ object SimpleDemoScript
 				WHERE r.pid = p.id;
 			"""){ 
 				_.toSeq.map { _.provenance.asString } must contain(
-					"4|1|6",
-					"3|1|5",
-					"3|0|4",
-					"2|1|3",
-					"4|0|2",
-					"2|0|1"
+					"1839481200|0|-773368559",
+					"-1716389153|0|781141538",
+					"-1083566332|0|-2092512653",
+					"1979409512|1|526127760",
+					"-500087735|1|824872164",
+					"710149138|1|-1629199915" 
 				)
 			}
 			

@@ -10,7 +10,23 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
   sequential
 
   var models = Map[ID,(Model,Int,Seq[Expression])]()
-
+  //now that we are using hash + position for rowid
+  //we need to map rowids from DETECTSERIESTEST3
+  //to ORG_DETECTSERIESTEST3 instead of assuming 
+  //positional equivalent rows based on rowid
+  val rowidMap = 
+    Map("-737200991"->"'384450702'",
+        "1538020126"->"'-1330496373'",
+        "196110172"->"'1034334144'",
+        "1067514362"->"'59129355'")
+  //one could also use the following map and use 
+  //the ROWID column of ORG_DETECTSERIESTEST3
+  //in the where clause in trueValue below
+  /*Map("-737200991"->"4",
+        "1538020126"->"14",
+        "196110172"->"8",
+        "1067514362"->"24") */     
+        
   def predict(col:ID, row:String): PrimitiveValue = {
     val (model, idx, hints) = models(col)
     model.bestGuess(idx, List(RowIdPrimitive(row)), List())
@@ -21,11 +37,13 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
   }
 
   def trueValue(col:ID, row:String): PrimitiveValue = {
-	  val queryOper = select(s"SELECT $col FROM ORG_DETECTSERIESTEST3 WHERE ROWID=$row")
+	  val queryOper = select(s"SELECT $col FROM ORG_DETECTSERIESTEST3 WHERE ROWID()=${rowidMap(row)}")
   	db.query(queryOper){ result =>
   		result.next.tuple(0)
   	}
   }
+  
+  
 
   "The SeriesMissingValue Model" should {
 
@@ -63,7 +81,6 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
     				//println(s"${rowid.asString}->$a,$b")
     				( (rowid -> a), (rowid -> b) )
   			  }.unzip
-			
   			predicted.toMap must be equalTo(correct.toMap)
       }
 		   }
@@ -72,7 +89,7 @@ object SeriesMissingValueModelSpec extends SQLTestSpecification("SeriesTest")
     "Produce reasonable explanations" >> {
 
       // explain("AGE", "1") must contain("I'm not able to guess based on weighted mean SERIESREPAIR:AGE.AGE, so defaulting using the upper and lower bound values")
-      explain(ID("AGE"), "4") must contain("I interpolated MyTestCaseDataset.AGE, ordered by MyTestCaseDataset.DOB to get 23 for row '4'")
+      explain(ID("AGE"), "-737200991") must contain("I interpolated MyTestCaseDataset.AGE, ordered by MyTestCaseDataset.DOB to get 23 for row '-737200991'")
     }
   }
 }	
