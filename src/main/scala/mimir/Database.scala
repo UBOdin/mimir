@@ -12,7 +12,14 @@ import sparsity.alter._
 import sparsity.expression.Expression
 
 import mimir.algebra._
-import mimir.ctables.{AnalyzeUncertainty, OperatorDeterminism, CellExplanation, RowExplanation, InlineVGTerms}
+import mimir.ctables.{
+  AnalyzeUncertainty, 
+  OperatorDeterminism, 
+  CellExplanation, 
+  RowExplanation, 
+  InlineVGTerms, 
+  CoarseDependency
+}
 import mimir.data.LoadedTables
 import mimir.data.staging.{ RawFileProvider, LocalFSRawFileProvider }
 import mimir.exec.Compiler
@@ -28,6 +35,7 @@ import mimir.parser.{
     SlashCommand,
     Analyze,
     AnalyzeFeatures,
+    AlterTable,
     Compare,
     CreateAdaptiveSchema,
     CreateLens,
@@ -37,7 +45,9 @@ import mimir.parser.{
     Reload,
     DropLens,
     DropAdaptiveSchema,
-    MimirSQL
+    MimirSQL,
+    CreateDependency,
+    DropDependency
   }
 import mimir.optimizer.operator.OptimizeExpressions
 import mimir.sql.{SqlToRA,RAToSql}
@@ -263,6 +273,30 @@ case class Database(
         }
       }
 
+      /********** ALTER TABLE STATEMENTS **********/
+      case AlterTable(targetSchema, target, op) => {
+        val (realTargetSchema, realTarget, _) = 
+            catalog.resolveTable(targetSchema, target)
+                   .getOrElse { throw new SQLException(s"Unknown table ${(targetSchema.toSeq :+ target).mkString(".")}")}
+
+        val targetTable = (realTargetSchema, realTarget)
+
+        op match {
+          case CreateDependency(sourceSchema, source) => {
+            val (realSourceSchema, realSource, _) = 
+              catalog.resolveTable(sourceSchema, source)
+                     .getOrElse { throw new SQLException(s"Unknown table ${(sourceSchema.toSeq :+ source).mkString(".")}") }
+            catalog.createDependency(targetTable, CoarseDependency(realSourceSchema, realSource))
+          }
+          case DropDependency(sourceSchema, source) => {
+            val (realSourceSchema, realSource, _) = 
+              catalog.resolveTable(sourceSchema, source)
+                     .getOrElse { throw new SQLException(s"Unknown table ${(sourceSchema.toSeq :+ source).mkString(".")}") }
+            catalog.dropDependency(targetTable, CoarseDependency(realSourceSchema, realSource))
+          }
+        }
+      }
+
       /********** CREATE ADAPTIVE SCHEMA **********/
       case create: CreateAdaptiveSchema => {
         adaptiveSchemas.create(
@@ -277,18 +311,32 @@ case class Database(
       /********** LOAD STATEMENTS **********/
       case load: Load => {
         // Assign a default table name if needed
-        loader.loadTable(
-          load.file, 
-          targetTable = load.table.map { ID.upper(_) },
-          // force = (load.table != None),
-          format = ID.lower(load.format
-                                .getOrElse { sparsity.Name("csv") }),
-          sparkOptions = load.args
-                            .toMap
-                            .mapValues { sqlToRA(_) }
-                            .mapValues { _.asString },
-          stageSourceURL = load.withStaging
-        )
+        val sourceFile = load.file
+        val format = ID.lower(load.formatOrElse("csv"))
+        val targetTable = load.table.map { ID.upper(_) }
+        val sparkOptions = load.args
+                              .toMap
+                              .mapValues { sqlToRA(_) }
+                              .mapValues { _.asString }
+        val stageSourceURL = load.withStaging
+
+        if(load.linkOnly){
+          loader.linkTable(
+            sourceFile = sourceFile,
+            format = format,
+            targetTable = targetTable.getOrElse(loader.fileToTableName(sourceFile)),
+            sparkOptions = sparkOptions,
+            stageSourceURL = stageSourceURL
+          )
+        } else {
+          loader.loadTable(
+            sourceFile = sourceFile,
+            format = format,
+            targetTable = targetTable,
+            sparkOptions = sparkOptions,
+            stageSourceURL = stageSourceURL
+          )
+        }
       }
 
       case Reload(table) => {

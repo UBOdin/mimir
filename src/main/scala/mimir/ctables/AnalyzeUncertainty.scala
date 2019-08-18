@@ -11,6 +11,7 @@ import mimir.exec.mode._
 import mimir.util._
 import mimir.optimizer.operator._
 import mimir.models._
+import mimir.views.ViewManager
 
 case class InvalidProvenance(msg: String, token: RowIdPrimitive) 
 	extends Exception("Invalid Provenance Token ["+msg+"]: "+token);
@@ -446,6 +447,15 @@ class AnalyzeUncertainty(db: Database) extends LazyLogging {
     val lensModels = db.models.associatedModels(lensName)
     ExpressionDeterminism.compileCausality(expr).filter(p => lensModels.contains(p._2.name))
   }
+
+  def explainTableCoarseGrained(schema: ID, table: ID): Seq[ReasonSet] =
+  {
+  	db.catalog.getDependencies((schema, table))
+  		.flatMap { 
+  			case CoarseDependency(sourceSchema, source) => 
+  				explainEverything(db.catalog.tableOperator(sourceSchema, source))
+  		}
+  }
 		
 	def explainSubsetWithoutOptimizing(
 		oper: Operator, 
@@ -462,9 +472,11 @@ class AnalyzeUncertainty(db: Database) extends LazyLogging {
 	  }
 		logger.trace(s"Explain Subset (${wantCol.mkString(", ")}; $wantRow; $wantSort): \n$oper")
 		oper match {
-			case Table(_,_,_,_) => Seq()
+			case Table(name,schema,_,_) => 
+				explainTableCoarseGrained(schema, name)
 			case HardTable(_,_) => Seq()
-			case View(_,query,_) => 
+			case View(name,query,_) => 
+				explainTableCoarseGrained(ViewManager.SCHEMA, name) ++
 				explainSubsetWithoutOptimizing(query, wantCol, wantRow, wantSort, wantSchema)
 
 			case AdaptiveView(model, name, query, _) => {
@@ -506,7 +518,8 @@ class AnalyzeUncertainty(db: Database) extends LazyLogging {
 				logger.debug(s"Explain Adaptive View Done: $model.$name")
 				// alternative: Use SYS_ATTRS directly
 				//    db.table("SYS_TABLES").where( Var("SCHEMA").eq(StringPrimitive(model)).and( Var("TABLE").eq(StringPrimitive(name)) ).and( Var("ATTR").in(wantCol.map(StringPrimitive(_))) ) )
-				sourceReasons ++ tableReasons ++ attrReasons
+				sourceReasons ++ tableReasons ++ attrReasons ++
+					explainTableCoarseGrained(model, name)
 			}
 
 

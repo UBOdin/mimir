@@ -10,6 +10,7 @@ import mimir.Database
 import mimir.algebra._
 import mimir.metadata._
 import mimir.exec.spark.{MimirSpark,RAToSpark}
+import mimir.ctables.CoarseDependency
 
 // https://spark.apache.org/docs/latest/sql-data-sources-load-save-functions.html#run-sql-on-files-directly
 
@@ -182,6 +183,10 @@ class LoadedTables(val db: Database)
     // Build a preliminary configuration of Mimir-specific metadata
     val mimirOptions = scala.collection.mutable.Map[String, JsValue]()
 
+    val stagingIsMandatory = (
+         sourceFile.startsWith("http://")
+      || sourceFile.startsWith("https://")
+    )
     // Do some pre-processing / default configuration for specific formats
     //  to make the API a little friendlier.
     storageFormat match {
@@ -196,7 +201,7 @@ class LoadedTables(val db: Database)
       case _ => {}
     }
 
-    if(stageSourceURL) {
+    if(stageSourceURL || stagingIsMandatory) {
       // Preserve the original URL and configurations in the mimirOptions
       mimirOptions("preStagedUrl") = JsString(url)
       mimirOptions("preStagedSparkOptions") = Json.toJson(finalSparkOptions)
