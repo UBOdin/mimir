@@ -108,19 +108,12 @@ class SqlToRA(db: Database)
     // track of the variable's "base" name (without alias) and a mapping back to the
     // variable's real name.  
     //
-    // The following variables facilitate this conversion
+    // The following variable facilitates this conversion
     // 
     // Bindings: A map from the base name to the extended name (or an arbitrary
     //           name, if there are multiple source tables with the same variable)
-    val bindings = lookupColumn(_:Column, NameLookup(fromSchemas))
-
-    val tableForColumn = 
-      fromSchemas.toSeq
-                 .flatMap { case (table, bindings) => 
-                    bindings.keySet
-                            .toSeq
-                            .map { _ -> table } 
-                 }.toMap
+    val fromSchemaLookup = NameLookup(fromSchemas)
+    val bindings = lookupColumn(_:Column, fromSchemaLookup)
 
     //////////////////////// CONVERT WHERE CLAUSE /////////////////////////////
 
@@ -301,26 +294,22 @@ class SqlToRA(db: Database)
 
       // And pull out the list of group by variables that the user has declared for
       // this expression
-      val declaredGBColumns: Seq[(TableName, SparsityAttribute)] =
+      val declaredGBColumns: Seq[(TableName, Column)] =
         select.groupBy
               .toSeq
               .flatten
               .map { 
-                case Column(name, Some(table)) => (table, name)
-                case Column(name, None) => 
-                  ( tableForColumn.get(name) match {
-                      case Some(t) => t
-                      case None => throw new SQLException(s"Invalid group-by column $name")
-                    },
-                    name
-                  )
+                case col:Column => {
+                  val completedColumn = populateColumnTable(col, fromSchemaLookup)
+                  (completedColumn.table.get, completedColumn)
+                }
                 case _ => unhandled("GroupBy[Expression]")
               }
 
       val groupByColumnSchema:Map[TableName, Bindings] = 
         declaredGBColumns.groupBy { _._1 }
                          .mapValues { _.map { case (table, col) => 
-                                        col -> bindings(Column(col, Some(table))) 
+                                        col.column -> bindings(col) 
                                       } }
                          .mapValues { NameLookup(_) }
 
@@ -398,7 +387,7 @@ class SqlToRA(db: Database)
 
         } 
 
-      val declaredGBVars = declaredGBColumns.map { case (table, col) => Var(bindings(Column(col, Some(table)))) }
+      val declaredGBVars = declaredGBColumns.map { case (_, col) => Var(bindings(col)) }
       // Sanity Check: We should not be referencing a variable that's not in the GB list.
       val referencedNonGBVars = referencedGBVars -- declaredGBVars
       if(!referencedNonGBVars.isEmpty){
@@ -576,6 +565,25 @@ class SqlToRA(db: Database)
       case None => {
         val tableColumns = bindings.keys.map { col => Column(col, c.table) }
         throw new SQLException(s"No such column ${c.column} (out of ${tableColumns.mkString(", ")})")
+      }
+    }
+  }
+
+  def populateColumnTable(
+    c: Column,
+    bindings: TableBindings
+  ): Column =
+  {
+    c.table match { 
+      case Some(_) => return c
+      case None => {
+        for( (table, tableBindings) <- bindings.all ){
+          if(tableBindings.hasKey(c.column)){ 
+            return Column(c.column, Some(table))
+          }
+        }
+        val allColumns = NameLookup.merge(bindings.values).keys.map { col => Column(col, c.table) }
+        throw new SQLException(s"No such column ${c.column} (out of ${allColumns.mkString(", ")})")
       }
     }
   }
