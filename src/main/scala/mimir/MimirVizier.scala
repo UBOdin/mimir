@@ -2,48 +2,49 @@ package mimir;
 
 import java.io._
 import java.util.Vector
+import java.util.UUID
+import java.net.InetAddress
+import java.net.URLDecoder
+
+import scala.collection.convert.Wrappers.JMapWrapper
+import scala.tools.reflect.ToolBox
+import scala.reflect.runtime.currentMirror
 
 import org.rogach.scallop._
+import org.slf4j.{LoggerFactory}
+import ch.qos.logback.classic.{Level, Logger}
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import sparsity.Name
 import sparsity.statement.CreateView
 import sparsity.parser.{SQL,Expression} 
-
 import fastparse.Parsed
 
-import mimir.algebra._
-import mimir.exec.result.Row
-import mimir.metadata.JDBCMetadataBackend
-import mimir.util.{ExperimentalOptions,Timer}
-//import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
-import mimir.exec.Compiler
-import mimir.exec.spark.{MimirSpark, MimirSparkRuntimeUtils}
-import mimir.ctables.Reason
-import org.slf4j.{LoggerFactory}
-import ch.qos.logback.classic.{Level, Logger}
-import com.typesafe.scalalogging.slf4j.LazyLogging
-import mimir.serialization.Json
-import mimir.util.LoggerUtils
-import mimir.ml.spark.SparkML
-import mimir.util.JSONBuilder
-import java.util.UUID
-import java.net.InetAddress
-import scala.collection.convert.Wrappers.JMapWrapper
-import mimir.algebra.function.SparkFunctions
-import java.net.URLDecoder
-import mimir.parser._
-import mimir.data.staging.{ RawFileProvider, LocalFSRawFileProvider }
-
-import scala.reflect.runtime.currentMirror
-import scala.tools.reflect.ToolBox
-import java.io.File
-import mimir.exec.result.ResultIterator
 import org.apache.spark.sql.SparkSession
-import mimir.ctables.AnalyzeUncertainty
-import mimir.parser.ExpressionParser
-import mimir.ctables.MultiReason
-import mimir.api.{ScalaEvalResponse, CreateLensResponse, DataContainer, Schema}
+
+import mimir.algebra._
+import mimir.algebra.function.SparkFunctions
 import mimir.api.MimirAPI
+import mimir.api.{ScalaEvalResponse, CreateLensResponse, DataContainer, Schema}
+import mimir.ctables.AnalyzeUncertainty
+import mimir.ctables.MultiReason
+import mimir.ctables.Reason
+import mimir.data.staging.{ RawFileProvider, LocalFSRawFileProvider }
+import mimir.exec.Compiler
+import mimir.exec.result.{ ResultIterator, Row }
+import mimir.exec.mode.{ UnannotatedBestGuess }
+import mimir.exec.spark.{MimirSpark, MimirSparkRuntimeUtils}
+import mimir.metadata.JDBCMetadataBackend
+import mimir.ml.spark.SparkML
+import mimir.parser._
+import mimir.parser.ExpressionParser
+import mimir.serialization.Json
+import mimir.util.{
+  JSONBuilder,
+  LoggerUtils,
+  ExperimentalOptions,
+  Timer
+}
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -1236,7 +1237,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
 
 
   def operCSVResultsJson(oper : mimir.algebra.Operator) : String =  {
-    db.query(oper)(results => {
+    db.query(oper, UnannotatedBestGuess)(results => {
       val resultList = results.toList
       val (resultsStrs, prov) = resultList.map(row => (row.tuple.map(cell => cell), row.provenance.asString)).unzip
       JSONBuilder.dict(Map(
