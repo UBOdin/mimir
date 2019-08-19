@@ -38,21 +38,23 @@ import org.apache.spark.sql.types.{IntegerType, DoubleType, FloatType, StringTyp
 object SparkClassifierModel
 {
   val logger = Logger(org.slf4j.LoggerFactory.getLogger(getClass.getName))
-  val TRAINING_LIMIT = 10000
+  val TRAINING_LIMIT = 1000
   val TOKEN_LIMIT = 100
   
   def availableSparkModels = Map("Classification" -> (Classification, Classification.NaiveBayesMulticlassModel _), "Regression" -> (Regression, Regression.GeneralizedLinearRegressorModel _))
   
   def train(db: Database, name: ID, cols: Seq[ID], query:Operator, humanReadableName: String): Map[ID,(Model,Int,Seq[Expression])] = 
   {
-    val (schemaWProv, modelHT) = SparkUtils.getDataFrameWithProvFromQuery(db, query)
+    val modelHT = db.compiler.compileToSparkWithRewrites(query)
+    // val (schemaWProv, modelHT) = SparkUtils.getDataFrameWithProvFromQuery(db, query)
     cols.map( (col) => {
+      logger.trace(s"Trying: $col")
       val modelName = ID(name,":",col)
       val model = 
         db.models.getOption(modelName) match {
           case Some(model) => model
           case None => {
-            val model = new SimpleSparkClassifierModel(modelName, col, schemaWProv, humanReadableName)
+            val model = new SimpleSparkClassifierModel(modelName, col, db.typechecker.schemaOf(query), humanReadableName)
             trainModel(db, query, model, modelHT)
             model
           }
@@ -71,6 +73,7 @@ object SparkClassifierModel
    */
   def trainModel(db:Database, query:Operator, model:SimpleSparkClassifierModel, dfwProv:DataFrame)
   {
+    logger.trace(s"Query: \n$query")
     model.sparkMLInstanceType = model.guessSparkModelType(model.guessInputType) 
     val trainingQuery = Limit(0, Some(SparkClassifierModel.TRAINING_LIMIT), query.filter(Not(IsNullExpression(Var(model.colName)))))
     val trainingDataF = db.compiler.compileToSparkWithRewrites(trainingQuery)
