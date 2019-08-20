@@ -43,6 +43,7 @@ class Compiler(db: Database) extends LazyLogging {
   def expressionOptimizations: Seq[ExpressionOptimizerRule] =
     Seq(
       PullUpBranches,
+      PushDownConditionalConstraints,
       new FlattenTrivialBooleanConditionals(db.typechecker),
       // FlattenBooleanConditionals,
       RemoveRedundantCasts,

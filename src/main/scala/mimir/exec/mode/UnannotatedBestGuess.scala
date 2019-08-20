@@ -44,6 +44,18 @@ object UnannotatedBestGuess
 
     logger.debug(s"GUESSED: $oper")
 
+    // Tack on a single ROWID column
+    val jointProvenanceExpression = 
+      Function(Provenance.mergeRowIdFunction, provenanceCols.map( Var(_) ) )
+    oper = oper.mapByID(
+              (
+                operRaw.columnNames.map { col => col -> Var(col) }
+                  :+ (
+                    Provenance.rowidColnameBase -> jointProvenanceExpression
+                  )
+              ):_*
+            )
+
     // Clean things up a little... make the query prettier, tighter, and 
     // faster
     oper = db.compiler.optimize(oper)
