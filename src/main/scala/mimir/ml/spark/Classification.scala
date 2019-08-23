@@ -129,7 +129,7 @@ object Classification extends SparkML {
         case _ => None
       }
     }).unzip
-    val assmblerCols = cols.flatMap(col => {
+    val assmblerCols = cols.filterNot(_.name.equals(params.predictionCol.id)).flatMap(col => {
       col.dataType match {
         case StringType => Some(s"${col.name}_features")
         case IntegerType | LongType | DoubleType => Some(col.name)

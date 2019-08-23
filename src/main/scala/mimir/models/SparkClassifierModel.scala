@@ -24,6 +24,7 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.expressions.EqualTo
 import org.apache.spark.sql.catalyst.expressions.Alias
 import org.apache.spark.sql.catalyst.expressions.Literal
+import org.apache.spark.sql.functions.{ col, isnull }
 import org.apache.spark.sql.DataFrame
 import mimir.exec.spark.RAToSpark
 import mimir.provenance.Provenance
@@ -34,6 +35,9 @@ import org.apache.spark.ml.PipelineModel
 import mimir.exec.mode.BestGuess
 import mimir.util.ExperimentalOptions
 import org.apache.spark.sql.types.{IntegerType, DoubleType, FloatType, StringType, DateType, TimestampType, BooleanType, LongType, ShortType}
+
+import mimir.exec.spark.RAToSpark
+import org.apache.spark.sql.execution.SparkPlan
 
 object SparkClassifierModel
 {
@@ -47,20 +51,20 @@ object SparkClassifierModel
   {
     val modelHT = db.compiler.compileToSparkWithRewrites(query)
     // val (schemaWProv, modelHT) = SparkUtils.getDataFrameWithProvFromQuery(db, query)
-    cols.map( (col) => {
-      logger.trace(s"Trying: $col")
-      val modelName = ID(name,":",col)
+    cols.map( (column) => {
+      logger.trace(s"Trying: $column")
+      val modelName = ID(name,":",column)
       val model = 
         db.models.getOption(modelName) match {
           case Some(model) => model
           case None => {
-            val model = new SimpleSparkClassifierModel(modelName, col, db.typechecker.schemaOf(query), humanReadableName)
-            trainModel(db, query, model, modelHT)
+            val model = new SimpleSparkClassifierModel(modelName, column, db.typechecker.schemaOf(query), humanReadableName)
+            trainModel(db, query, model, modelHT.filter(isnull(col(column.id))))
             model
           }
         }
 
-      col -> (
+      column -> (
         model,                         // The model for the column
         0,                             // The model index of the column's replacement variable
         query.columnNames.map(Var(_))  // 'Hints' for the model -- All of the remaining column values
@@ -87,7 +91,10 @@ object SparkClassifierModel
       val classifyAllQuery = dfwProv.transform(sparkMLInstance.fillNullValues)
       val predictions = sparkMLInstance.applyModel(classifier, classifyAllQuery)
       
-      //predictions.show()
+      val predLabs = predictions.select("predictedLabel").collect.map(row => Seq((row.get(0).toString, 1.0))).toSeq
+      val rowids = db.query(query.filter(IsNullExpression(Var(model.colName))))(_.toList.map(_.provenance.asString)).toSeq
+      model.setClassifyCache(rowids.zip(predLabs).toMap)
+      
       
       //evaluate acuracy
       /*val evaluator = new MulticlassClassificationEvaluator()
@@ -97,8 +104,8 @@ object SparkClassifierModel
       val accuracy = evaluator.evaluate(predictions)
       println("Test set accuracy = " + accuracy)*/
     
-      val predictionsExt = sparkMLInstance.extractPredictions(classifier, predictions)
-      model.classifyAll(predictionsExt)
+      /*val predictionsExt = sparkMLInstance.extractPredictions(classifier, predictions)
+      model.classifyAll(predictionsExt)*/
     }
   }
 }
@@ -122,7 +129,6 @@ class SimpleSparkClassifierModel(name: ID, val colName:ID, val schema:Seq[(ID, T
   def getCacheKey(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue] ) : ID = ID(args(0).asString)
   def getFeedbackKey(idx: Int, args: Seq[PrimitiveValue] ) : ID = ID(args(0).asString)
 
-  
  
   def guessSparkModelType(t:Type) : String = {
     t match {
@@ -150,6 +156,13 @@ class SimpleSparkClassifierModel(name: ID, val colName:ID, val schema:Seq[(ID, T
       setCache(0,Seq(RowIdPrimitive(mapEntry._1)), null, classToPrimitive( mapEntry._2(0)._1))
     }) 
   }
+  
+  def setClassifyCache(preds:Map[String, Seq[(String, Double)]]) : Unit = {
+    classifyAllPredictions = Some(preds)
+    preds.map(mapEntry => {
+      setCache(0,Seq(RowIdPrimitive(mapEntry._1)), null, classToPrimitive( mapEntry._2(0)._1))
+    }) 
+  }
 
   private def classToPrimitive(value:String): PrimitiveValue = 
   {
@@ -171,9 +184,10 @@ class SimpleSparkClassifierModel(name: ID, val colName:ID, val schema:Seq[(ID, T
   
   def bestGuess(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue =
   {
-    /*println(s"-----------------------Spark Classifier Model bestGuess(idx:$idx, args:${args.mkString("(",",",")")}, hints:${hints.mkString("(",",",")")})")
-    Thread.currentThread().getStackTrace.foreach(ste => println(ste.toString()))
+    //println(s"-----------------------Spark Classifier Model bestGuess(idx:$idx, args:${args.mkString("(",",",")")}, hints:${hints.mkString("(",",",")")})")
+    /*Thread.currentThread().getStackTrace.foreach(ste => println(ste.toString()))
     println("^---------------------------------- stackTrace ------------------------------------^")*/
+    
     val rowidstr = args(0).asString
     val rowid = RowIdPrimitive(rowidstr)
     getFeedback(idx, args) match {

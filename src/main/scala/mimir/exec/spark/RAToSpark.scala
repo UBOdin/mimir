@@ -908,6 +908,28 @@ object RAToSpark {
     }
   }
   
+  def sparkInternalRowValueToMimirPrimitive(sparkInternal :Any) : PrimitiveValue = {
+    sparkInternal match {
+      case null => NullPrimitive()
+      case s:UTF8String => StringPrimitive(s.toString())
+      case i:Long => IntPrimitive(i)
+      case f:Float => FloatPrimitive(f) 
+      case b:Boolean => BoolPrimitive(b) 
+      case x => StringPrimitive(x.toString())
+    }
+  }
+  
+  def sparkExternalRowValueToMimirPrimitive(sparkExternal :Any) : PrimitiveValue = {
+    sparkExternal match {
+      case null => NullPrimitive()
+      case s:String => StringPrimitive(s.toString())
+      case i:Long => IntPrimitive(i)
+      case f:Float => FloatPrimitive(f) 
+      case b:Boolean => BoolPrimitive(b) 
+      case x => StringPrimitive(x.toString())
+    }
+  }
+  
   def mimirPrimitiveToSparkExternalRowValue(primitive : PrimitiveValue) : Any = {
     primitive match {
       case null => null
@@ -935,6 +957,32 @@ object RAToSpark {
       case IntPrimitive(i) => i.toInt
       case x =>  mimirPrimitiveToSparkExternalRowValue(x)
     }
+  }
+  
+  def mimirPrimitivesToSparkExternalRow(schema:Seq[(ID, Type)], primitives : Seq[PrimitiveValue]) : Dataset[Row] = {
+    MimirSpark.get.sparkSession.sqlContext.createDataset(
+      Seq(Row(primitives.zip(schema).map(prim => {
+          val native = getNative(prim._1,prim._2._2)
+          println(s"native for ${prim._2._1}: $native")
+          native
+        }):_*)))(RowEncoder(mimirSchemaToStructType(schema)))
+    
+  }
+  
+  def fillNullValues(df:DataFrame) : DataFrame = {
+    df.schema.fields.foldLeft(df)((init, curr) => {
+      curr.dataType match {
+        case LongType => init.na.fill(0L, Seq(curr.name))
+        case IntegerType => init.na.fill(0L, Seq(curr.name))
+        case FloatType => init.na.fill(0.0, Seq(curr.name))
+        case DoubleType => init.na.fill(0.0, Seq(curr.name))
+        case ShortType => init.na.fill(0.0, Seq(curr.name))
+        case DateType => init.na.fill(0, Seq(curr.name))
+        case BooleanType => init.na.fill(0, Seq(curr.name))
+        case TimestampType => init.na.fill(0L, Seq(curr.name))
+        case x => init.na.fill("", Seq(curr.name))
+      }
+    })
   }
   
 }
