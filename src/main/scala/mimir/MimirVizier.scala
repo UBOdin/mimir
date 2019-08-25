@@ -9,6 +9,7 @@ import java.net.URLDecoder
 import scala.collection.convert.Wrappers.JMapWrapper
 import scala.tools.reflect.ToolBox
 import scala.reflect.runtime.currentMirror
+import play.api.libs.json._
 
 import org.rogach.scallop._
 import org.slf4j.{LoggerFactory}
@@ -38,7 +39,7 @@ import mimir.metadata.JDBCMetadataBackend
 import mimir.ml.spark.SparkML
 import mimir.parser._
 import mimir.parser.ExpressionParser
-import mimir.serialization.Json
+import mimir.serialization.AlgebraJson
 import mimir.util.{
   JSONBuilder,
   LoggerUtils,
@@ -82,7 +83,6 @@ object MimirVizier extends LazyLogging {
     val staging = new LocalFSRawFileProvider(new java.io.File(conf.dataDirectory()))
 
     db = new Database(metadata, staging)
-    db.open()
     VizierDB.sparkSession = MimirSpark.get.sparkSession
     
    if(ExperimentalOptions.isEnabled("WEB-LOG")){
@@ -348,7 +348,7 @@ object MimirVizier extends LazyLogging {
   
   def createLens(
     input : Any, 
-    params : java.util.ArrayList[String], 
+    params : JsValue, 
     _type : String, 
     make_input_certain:Boolean, 
     materialize:Boolean, 
@@ -356,7 +356,7 @@ object MimirVizier extends LazyLogging {
   ) : CreateLensResponse = {
     createLens(
       input              = input, 
-      params             = params.toArray[String](Array[String]()).toSeq, 
+      params             = params,
       _type              = _type, 
       make_input_certain = make_input_certain, 
       materialize        = materialize,
@@ -366,7 +366,7 @@ object MimirVizier extends LazyLogging {
   
   def createLens(
     input : Any, 
-    params : Seq[String], 
+    params : String, 
     _type : String, 
     make_input_certain:Boolean, 
     materialize:Boolean, 
@@ -378,10 +378,8 @@ object MimirVizier extends LazyLogging {
       logger.debug("createLens: From Vistrails: [" + input + "] [" + 
                     params.mkString(",") + "] [" + _type + "]"  ) ;
       
-      val parsedParams =  // Start by replacing "{{input}}" with the name of the input table.
-            params.map(param => 
-              mimir.parser.ExpressionParser.expr( param.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString)) )
-      val lensNameBase = (input.toString() + _type + parsedParams.mkString(",") + make_input_certain + materialize).hashCode()
+      val parsedParams = Json.parse(params)
+      val lensNameBase = (input.toString() + _type + params + make_input_certain + materialize).hashCode()
       val inputQuery = s"SELECT * FROM ${input}"
 
       val lensName = "LENS_" + _type + (lensNameBase.toString().replace("-", ""))
@@ -440,7 +438,7 @@ object MimirVizier extends LazyLogging {
           // Vizier uses funky custom table names internally.
           // Use the source table as a name for human-visible 
           // outputs like uncertainty explanations.
-          humanReadableName = humanReadableName
+          friendlyName = humanReadableName
         )
       }
       if(materialize){

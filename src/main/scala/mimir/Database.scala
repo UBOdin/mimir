@@ -114,6 +114,10 @@ case class Database(
 )
   extends LazyLogging
 {
+  {
+    metadata.open()
+  }
+
   //// Data Sources
   val lenses          = new mimir.lenses.LensManager(this)
   val models          = new mimir.models.ModelManager(this)
@@ -143,6 +147,10 @@ case class Database(
   val interpreter     = new mimir.algebra.Eval(
                                   functions = Some(functions)
                                 )
+
+  {
+    MimirSpark.linkDBToSpark(this)
+  }
 
   /**
    * Optimize and evaluate the specified query.  Applies all Mimir-specific optimizations
@@ -245,7 +253,7 @@ case class Database(
           ID.upper(lens.lensType),
           ID.upper(lens.name),
           sqlToRA(lens.body),
-          lens.args.map { sqlToRA(_, SqlToRA.literalBindings(_)) }
+          lens.args
         )
       }
 
@@ -388,19 +396,8 @@ case class Database(
   }
   
   /**
-   * Prepare a database for use with Mimir.
+   * Clean Mimir up after itself
    */
-  def open(): Unit = {
-    MimirSpark.linkDBToSpark(this)
-    metadata.open()
-    catalog.init()
-    loader.init()
-    models.init()
-    views.init()
-    lenses.init()
-    adaptiveSchemas.init()
-  }
-
   def close(): Unit = {
     metadata.close()
   }

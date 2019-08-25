@@ -118,8 +118,18 @@ object ReasonSet
         return new ReasonSet(
           model,
           idx,
-          Some(input, keyExprs, Seq(valueExpr, messageExpr)),
+          Some( (input, keyExprs, Seq(valueExpr, messageExpr)) ),
           (keys, valueAndMessage) => new DataWarningReason(model, idx, valueAndMessage(0), valueAndMessage(1).asString, keys)
+        )
+      }
+      case Caveat(name, valueExpr, keyExprs, messageExpr) => {
+        logger.debug(s"Make ReasonSet for Caveat $name from\n$input")
+        val model = db.models.get(name)
+        return new ReasonSet(
+          model,
+          0,
+          Some( (input, keyExprs, Seq(valueExpr, messageExpr)) ),
+          (keys, valueAndMessage) => new DataWarningReason(model, 0, valueAndMessage(0), valueAndMessage(1).asString, keys)
         )
       }
 

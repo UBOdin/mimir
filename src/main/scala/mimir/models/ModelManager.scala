@@ -29,20 +29,11 @@ class ModelManager(db:Database)
     "JAVA"          -> decodeSerializable _
   )
   val cache = scala.collection.mutable.Map[ID,Model]()
-  var modelTable: MetadataMap = null
-  var ownerTable: MetadataManyMany = null 
-
-  /**
-   * Prepare the backend database for use with the ModelManager
-   */
-  def init(): Unit =
-  {
-    modelTable = db.metadata.registerMap(ID("MIMIR_MODELS"), Seq(InitMap(Seq(
+  var modelTable = db.metadata.registerMap(ID("MIMIR_MODELS"), Seq(InitMap(Seq(
       ID("ENCODED") -> TString(),
       ID("DECODER") -> TString()
     ))))
-    ownerTable = db.metadata.registerManyMany(ID("MIMIR_MODEL_OWNERS"))
-  }
+  var ownerTable = db.metadata.registerManyMany(ID("MIMIR_MODEL_OWNERS"))
 
   /**
    * Declare (and cache) a new Name -> Model association

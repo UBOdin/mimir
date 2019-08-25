@@ -162,7 +162,7 @@ object MimirSQL
       Sparsity.identifier ~
       "(" ~ ExprParser.expressionList ~ ")"
     ).map { case (name, query, lensType, args) => 
-      CreateLens(name, query, lensType, args)
+      CreateLens(name, query, lensType, ???)
     }
   )
 

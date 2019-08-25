@@ -13,6 +13,7 @@ import mimir.util.ExperimentalOptions
 import mimir.exec.spark.MimirSpark
 import mimir.metadata.MetadataManyMany
 import mimir.ctables.CoarseDependency
+import mimir.lenses.LensManager
 
 class SystemCatalog(db: Database)
   extends LazyLogging
@@ -21,9 +22,10 @@ class SystemCatalog(db: Database)
   // Note, we use String in this map instead of ID, since ID 
   private val simpleSchemaProviders = scala.collection.mutable.LinkedHashMap[ID, SchemaProvider]()
   private var preferredMaterializedTableProvider: ID = null
-  var coarseDependencies: MetadataManyMany = null
+  val coarseDependencies = db.metadata.registerManyMany(
+                              ID("MIMIR_COARSE_DEPENDENCIES")
+                            )
 
-  def init()
   {
     // The order in which the schema providers are registered is the order
     // in which they're used to resolve table names.
@@ -47,15 +49,12 @@ class SystemCatalog(db: Database)
     // 
     registerSchemaProvider(TemporaryViewManager.SCHEMA, db.tempViews)
     registerSchemaProvider(ViewManager.SCHEMA, db.views)
+    registerSchemaProvider(LensManager.SCHEMA, db.lenses)
     if(ExperimentalOptions.isEnabled("USE-DERBY") || MimirSpark.remoteSpark){
       registerSchemaProvider(ID("SPARK"), new SparkSchemaProvider(db))
     }
     registerSchemaProvider(LoadedTables.SCHEMA, db.loader)
     registerSchemaProvider(SystemCatalog.SCHEMA, this.CatalogSchemaProvider)
-
-    coarseDependencies = db.metadata.registerManyMany(
-      ID("MIMIR_COARSE_DEPENDENCIES")
-    )
   }
 
   def registerSchemaProvider(name: ID, provider: SchemaProvider)

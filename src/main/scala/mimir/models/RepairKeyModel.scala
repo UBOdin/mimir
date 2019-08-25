@@ -6,10 +6,10 @@ import play.api.libs.json._
 
 import mimir.algebra._
 import mimir.util._
-import mimir.serialization.Json
 import mimir.Database
 import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.Encoders
+import mimir.serialization.AlgebraJson._
 
 /**
  * A model representing a key-repair choice.
@@ -69,7 +69,7 @@ class RepairKeyModel(
   {
     val possibilities = 
       Json.parse(hints(0).asString) match {
-        case JsArray(values) => values.map { Json.toPrimitive(targetType, _)  }
+        case JsArray(values) => values.map { castJsonToPrimitive(targetType, _)  }
         case _ => throw ModelException(s"Invalid Value Hint in Repair Model $name: ${hints(0).asString}")
       }
     
@@ -77,7 +77,7 @@ class RepairKeyModel(
       if(hints.size > 1 && !hints(1).isInstanceOf[NullPrimitive]){
         possibilities.zip(
           Json.parse(hints(1).asString) match {
-            case JsArray(values) => values.map( v => Json.toPrimitive(TFloat(), v).asDouble )
+            case JsArray(values) => values.map( v => castJsonToPrimitive(TFloat(), v).asDouble )
             case _ => throw ModelException(s"Invalid Score Hint in Repair Model $name: ${hints(1).asString}")
           }
         )

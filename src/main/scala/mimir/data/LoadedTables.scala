@@ -46,19 +46,7 @@ class LoadedTables(val db: Database)
   with LazyLogging
 {
   val cache = scala.collection.mutable.Map[String, DataFrame]()
-  var store: MetadataMap = null
-  var bulkStorageDirectory = new File(".")
-  var bulkStorageFormat = FileFormat.PARQUET
-
-  /** 
-   * Prepare LoadedTables for use with a given Mimir database.
-   * 
-   * This function registers LoadedTables metadata requirements
-   * with a Mimir instance.
-   */
-  def init()
-  {
-    store = db.metadata.registerMap(
+  var store: MetadataMap = db.metadata.registerMap(
       ID("MIMIR_LOADED_TABLES"), 
       Seq(
         InitMap(Seq(
@@ -68,7 +56,8 @@ class LoadedTables(val db: Database)
           ID("MIMIR_OPTIONS") -> TString()
         ))
     ))
-  }
+  var bulkStorageDirectory = new File(".")
+  var bulkStorageFormat = FileFormat.PARQUET
 
   def makeDataFrame(
     url: String, 

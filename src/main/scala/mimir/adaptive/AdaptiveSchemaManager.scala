@@ -2,12 +2,13 @@ package mimir.adaptive
 
 import java.sql.SQLException
 import scala.collection.mutable
+import play.api.libs.json._
 import sparsity.Name
 
 import mimir.Database
 import mimir.algebra._
 import mimir.data.SystemCatalog
-import mimir.serialization._
+import mimir.serialization.AlgebraJson._
 import mimir.util._
 import mimir.metadata._
 import com.typesafe.scalalogging.slf4j.LazyLogging
@@ -15,11 +16,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 class AdaptiveSchemaManager(db: Database)
   extends LazyLogging
 {
-  var adaptiveSchemas: MetadataMap = null
-
-  def init(): Unit = 
-  {
-    adaptiveSchemas = db.metadata.registerMap(
+  var adaptiveSchemas = db.metadata.registerMap(
       ID("MIMIR_ADAPTIVE_SCHEMAS"), Seq(
         InitMap(Seq(
           ID("MLENS") -> TString(),
@@ -28,7 +25,6 @@ class AdaptiveSchemaManager(db: Database)
         )),
         AddColumnToMap(ID("FRIENDLY_NAME"), TString(), None)
     ))
-  }
 
   def create(schema: ID, mlensType: ID, query: Operator, args: Seq[Expression], humanReadableName: String) = 
   {
@@ -40,8 +36,8 @@ class AdaptiveSchemaManager(db: Database)
 
     adaptiveSchemas.put(schema, Seq(
       StringPrimitive(mlensType.id),
-      StringPrimitive(Json.ofOperator(query).toString),
-      StringPrimitive(Json.ofExpressionList(args).toString),
+      StringPrimitive(Json.toJson(query).toString),
+      StringPrimitive(Json.toJson(args).toString),
       StringPrimitive(humanReadableName)
     ))
 
@@ -85,9 +81,9 @@ class AdaptiveSchemaManager(db: Database)
   {
     val (name, content) = record
     val mlensType = content(0).asString
-    val query = Json.toOperator(Json.parse(content(1).asString))
+    val query = Json.parse(content(1).asString).as[Operator]
     val args:Seq[Expression] = 
-      Json.toExpressionList(Json.parse(content(2).asString))
+      Json.parse(content(2).asString).as[Seq[Expression]]
     val humanReadableName = content(3).asString
 
     ( 

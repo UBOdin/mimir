@@ -62,7 +62,6 @@ object Mimir extends LazyLogging {
 
     db = new Database(metadata, staging)
     logger.debug("Opening Database")
-    db.open()
     if(!ExperimentalOptions.isEnabled("SIMPLE-TERM")){
       output = new PrettyOutputFormat(terminal)
     }

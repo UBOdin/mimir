@@ -677,3 +677,16 @@ case class DataWarning(
     DataWarning(name, x(0), x(1), x.tail.tail, index)
   }
 }
+
+case class Caveat(
+  name: ID,
+  value: Expression,
+  key: Seq[Expression],
+  message: Expression
+) extends UncertaintyCausingExpression {
+  override def toString() = s"($name(${(key :+ message).mkString(", ")}))@($value)"
+  override def children: Seq[Expression] = Seq(value, message) ++ key
+  override def rebuild(x: Seq[Expression]) = {
+    DataWarning(name, x(0), x(1), x.tail.tail)
+  }
+}

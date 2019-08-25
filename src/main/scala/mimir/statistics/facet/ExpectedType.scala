@@ -4,7 +4,7 @@ import play.api.libs.json._
 import mimir.Database
 import mimir.algebra._
 import mimir.util.StringUtils
-import mimir.serialization.Json
+import mimir.serialization.AlgebraJson._
 
 class ExpectedType(column: ID, tExpected: Type)
   extends Facet
@@ -26,7 +26,7 @@ class ExpectedType(column: ID, tExpected: Type)
     "facet" -> JsString("ExpectedType"),
     "data"  -> JsObject(Map[String,JsValue](
       "column" -> JsString(column.id),
-      "expected" -> Json.ofType(tExpected)
+      "expected" -> Json.toJson(tExpected)
     ))
   ))
 }
@@ -45,7 +45,7 @@ object ExpectedType
         Some(
           new ExpectedType(
             ID(data("column").asInstanceOf[JsString].value),
-            Json.toType(data("expected"))
+            data("expected").as[Type]
           )
         )
       }

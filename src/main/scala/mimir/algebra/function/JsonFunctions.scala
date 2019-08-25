@@ -2,7 +2,7 @@ package mimir.algebra.function;
 
 import play.api.libs.json._
 import mimir.algebra._
-import mimir.serialization.Json
+import mimir.serialization.AlgebraJson._
 import mimir.util._
 
 object JsonFunctions
@@ -16,7 +16,7 @@ object JsonFunctions
 
   def extract(args: Seq[PrimitiveValue], t: Type): PrimitiveValue =
   {
-    Json.toPrimitive(t, extract(args))
+    castJsonToPrimitive(t, extract(args))
   }
 
   def extractAny(args: Seq[PrimitiveValue]): PrimitiveValue =
@@ -43,7 +43,7 @@ object JsonFunctions
       (params: Seq[PrimitiveValue]) => 
         StringPrimitive(
           JsArray(
-            params.map( Json.ofPrimitive(_) )
+            params.map( Json.toJson(_) )
           ).toString
         ),
       (_) => TString()
@@ -53,7 +53,7 @@ object JsonFunctions
         StringPrimitive(
           JsObject(
             params.grouped(2).map {
-              case Seq(k, v) => (k.asString -> Json.ofPrimitive(v))
+              case Seq(k, v) => (k.asString -> Json.toJson(v))
             }.toMap
           ).toString
         )

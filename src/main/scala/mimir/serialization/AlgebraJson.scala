@@ -6,10 +6,12 @@ import mimir.Database
 import mimir.algebra._
 import mimir.util._
 import mimir.views.ViewAnnotation
+import play.api.libs.json.Reads._ // Custom validation helpers
+import play.api.libs.functional.syntax._ // Combinator syntax
 
 class JsonParseException(msg: String, json: String) extends RAException(msg)
 
-object Json
+object AlgebraJsonCodecs
 {
   def ofOperator(o: Operator): JsObject =
   {
@@ -214,7 +216,7 @@ object Json
         HardTable(
           schema,
           elems("data").as[JsArray].value.map { rowJS =>
-            rowJS.as[JsArray].value.zipWithIndex.map { vJS => toPrimitive(schema(vJS._2)._2, vJS._1) }
+            rowJS.as[JsArray].value.zipWithIndex.map { vJS => AlgebraJson.castJsonToPrimitive(schema(vJS._2)._2, vJS._1) }
           }
         )
         
@@ -353,6 +355,16 @@ object Json
           "idx" -> JsNumber(idx)
         ))
 
+      case Caveat(name, v, key, message) => 
+        JsObject(Map[String, JsValue](
+          "type" -> JsString("caveat"),
+          "name" -> JsString(name.id),
+          "value" -> ofExpression(v),
+          "message" -> ofExpression(message),
+          "key" -> ofExpressionList(key)
+        ))
+
+
       case CastExpression(expr, t) =>
         JsObject(Map[String, JsValue](
           "type"   -> JsString("cast"),
@@ -434,9 +446,17 @@ object Json
                 .getOrElse(0)
         )
 
+      case "caveat" => 
+        Caveat(
+          ID(fields("name").asInstanceOf[JsString].value),
+          toExpression(fields("value")),
+          toExpressionList(fields("key")),
+          toExpression(fields("message"))
+        )
+
       // fall back to treating it as a primitive type
       case t => 
-        toPrimitive(Type.fromString(t), fields("value"))
+        AlgebraJson.castJsonToPrimitive(Type.fromString(t), fields("value"))
 
     }
   }
@@ -487,7 +507,81 @@ object Json
     }
   }
 
-  def toPrimitive(t: Type, json: JsValue): PrimitiveValue =
+ }
+
+object AlgebraJson {
+  implicit val readsExpression: Reads[Expression] = 
+    JsPath.read[JsObject].map { AlgebraJsonCodecs.toExpression(_) }
+  implicit val writesExpression = 
+    new Writes[Expression]{ def writes(e:Expression) = AlgebraJsonCodecs.ofExpression(e) }
+  implicit val readsOperator: Reads[Operator] = 
+    JsPath.read[JsObject].map { AlgebraJsonCodecs.toOperator(_) }
+  implicit val writesOperator = 
+    new Writes[Operator]{ def writes(o:Operator) = AlgebraJsonCodecs.ofOperator(o) }
+  implicit val readsType: Reads[Type] = 
+    JsPath.read[JsObject].map { AlgebraJsonCodecs.toType(_) }
+  implicit val writesType = 
+    new Writes[Type]{ def writes(t:Type) = AlgebraJsonCodecs.ofType(t) }
+
+  implicit val intPrimitiveReads   : Reads[IntPrimitive   ] = JsPath.read[Long]  .map { IntPrimitive(_) }
+  implicit val floatPrimitiveReads : Reads[FloatPrimitive ] = JsPath.read[Double].map { FloatPrimitive(_) }
+  implicit val stringPrimitiveReads: Reads[StringPrimitive] = JsPath.read[String].map { StringPrimitive(_) }
+  implicit val typePrimitiveReads  : Reads[TypePrimitive  ] = JsPath.read[String].map { Type.fromString(_) }.map { TypePrimitive(_) }
+  implicit val rowidPrimitiveReads : Reads[RowIdPrimitive ] = JsPath.read[String].map { RowIdPrimitive(_) }
+  implicit val boolPrimitiveReads  : Reads[BoolPrimitive] = (
+    JsPath.read[Boolean] or
+    JsPath.read[String].map { _.toLowerCase }.map { 
+      case "yes" | "true" => true
+      case "no" | "false" => false
+    }
+  ).map { BoolPrimitive(_) }
+  implicit val datePrimitiveReads  : Reads[DatePrimitive] = (
+    (JsPath \ "year").read[Int] and
+    (JsPath \ "month").read[Int] and
+    (JsPath \ "date").read[Int]
+  )( DatePrimitive.apply _ )
+  implicit val timePrimitiveReads  : Reads[TimestampPrimitive] = (
+    (JsPath \ "year").read[Int] and
+    (JsPath \ "month").read[Int] and
+    (JsPath \ "date").read[Int] and
+    (JsPath \ "hour").readNullable[Int].map { _.getOrElse(0) } and
+    (JsPath \ "min").readNullable[Int].map { _.getOrElse(0) } and
+    (JsPath \ "sec").readNullable[Int].map { _.getOrElse(0) } and
+    (JsPath \ "msec").readNullable[Int].map { _.getOrElse(0) }
+  )( TimestampPrimitive.apply _ )
+  implicit val primitiveValueReads : Reads[PrimitiveValue] = (
+    JsPath.read[FloatPrimitive].map { _.asInstanceOf[PrimitiveValue] } or 
+    JsPath.read[Boolean].map { BoolPrimitive(_).asInstanceOf[PrimitiveValue] } or 
+    JsPath.read[TimestampPrimitive].map { _.asInstanceOf[PrimitiveValue] } or
+    JsPath.read[StringPrimitive].map { _.asInstanceOf[PrimitiveValue] }
+  )
+
+  implicit val primitiveValueWrites = new Writes[PrimitiveValue] { def writes(p:PrimitiveValue) = p match {
+    case _:NullPrimitive => JsNull
+    case x:IntPrimitive => JsNumber(x.v)
+    case x:FloatPrimitive => JsNumber(x.v)
+    case x:StringPrimitive => JsString(x.v)
+    case x:TypePrimitive => JsString(x.t.toString)
+    case x:RowIdPrimitive => JsString(x.v)
+    case x:BoolPrimitive => JsBoolean(x.v)
+    case DatePrimitive(y, m, d) => JsObject(Map[String,JsValue](
+      "year" -> JsNumber(y),
+      "month" -> JsNumber(m),
+      "date" -> JsNumber(d)
+    ))
+    case TimestampPrimitive(y, m, d, hh, mm, ss, ms) => JsObject(Map[String,JsValue](
+      "year"  -> JsNumber(y),
+      "month" -> JsNumber(m),
+      "date"  -> JsNumber(d),
+      "hour"  -> JsNumber(hh),
+      "min"   -> JsNumber(mm),
+      "sec"   -> JsNumber(ss),
+      "msec"  -> JsNumber(ms)
+    ))
+    case x:IntervalPrimitive => JsString(x.toString)
+  }}
+
+  def castJsonToPrimitive(t: Type, json: JsValue): PrimitiveValue =
   {
     (json,t) match {
       case (JsNull, _)              => NullPrimitive()
@@ -506,6 +600,4 @@ object Json
       case (JsObject(_), _)         => throw new IllegalArgumentException(s"Invalid JSON ($json) for Type $t")
     }
   }
-
-  def parse(json: String): JsValue = play.api.libs.json.Json.parse(json)
 }

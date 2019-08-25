@@ -4,6 +4,8 @@ import sparsity._
 import sparsity.statement._
 import sparsity.expression._
 import sparsity.select._
+import play.api.libs.json._
+
 
 sealed abstract class MimirStatement
 
@@ -39,7 +41,7 @@ case class CreateLens(
   name: Name,
   body: SelectBody,
   lensType: Name,
-  args: Seq[Expression]
+  args: JsValue
 ) extends MimirStatement
 
 case class PlotLine(

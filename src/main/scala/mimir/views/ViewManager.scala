@@ -2,6 +2,7 @@ package mimir.views
 
 import java.sql.SQLException
 import sparsity.Name
+import play.api.libs.json._
 
 import mimir._
 import mimir.algebra._
@@ -9,7 +10,7 @@ import mimir.provenance._
 import mimir.ctables._
 import mimir.exec._
 import mimir.exec.mode._
-import mimir.serialization._
+import mimir.serialization.AlgebraJson._
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.metadata._
 import mimir.data.ViewSchemaProvider
@@ -20,20 +21,11 @@ class ViewManager(db:Database)
   with LazyLogging
 {
   
-  var viewTable: MetadataMap = null
-
-  /**
-   * Initialize the view manager: 
-   *   - Create a system catalog table to store information about views
-   */
-  def init(): Unit = 
-  {
-    viewTable = db.metadata.registerMap(ID("MIMIR_VIEWS"), Seq(InitMap(Seq(
+  var viewTable = db.metadata.registerMap(ID("MIMIR_VIEWS"), Seq(InitMap(Seq(
         ID("QUERY") -> TString(),
         ID("METADATA") -> TInt()
       )
     )))
-  }
 
   /**
    * Instantiate a new view
@@ -49,7 +41,7 @@ class ViewManager(db:Database)
       throw new SQLException(s"View '$name' already exists")
     }
     viewTable.put(name, Seq(
-      StringPrimitive(Json.ofOperator(query).toString),
+      StringPrimitive(Json.toJson(query).toString),
       IntPrimitive(0)
     ))
     // updateMaterialization(name)
@@ -65,7 +57,7 @@ class ViewManager(db:Database)
   {
     val properties = apply(name)
     viewTable.update(name, Map(
-      ID("QUERY") -> StringPrimitive(Json.ofOperator(query).toString)
+      ID("QUERY") -> StringPrimitive(Json.toJson(query).toString)
     )) 
     if(properties.isMaterialized){
       materialize(name)
@@ -104,7 +96,7 @@ class ViewManager(db:Database)
     viewTable.get(name).map(_._2.toSeq).map( 
       { 
         case Seq(StringPrimitive(s), IntPrimitive(meta)) => {
-          val query = Json.toOperator(Json.parse(s))
+          val query = Json.parse(s).as[Operator]
           val isMaterialized = 
             meta != 0
           

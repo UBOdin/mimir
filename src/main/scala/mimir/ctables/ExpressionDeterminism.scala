@@ -99,6 +99,8 @@ object ExpressionDeterminism {
             } else {
               IsAcknowledged(models(w.name), 0, w.key)
             }
+
+          case c: Caveat => BoolPrimitive(false)
         }        
       }
       
@@ -199,6 +201,7 @@ object ExpressionDeterminism {
               Sampler(models(name), idx, args, hints, seed)
             case DataWarning(_, v, _, _, _) => 
               v.recur(compileSample(_, seed, models))
+            case Caveat(_, _, _, _) => ???
           }
         case _ => expr
       }

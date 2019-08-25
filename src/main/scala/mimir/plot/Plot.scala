@@ -14,7 +14,7 @@ import mimir.algebra._
 import mimir.exec._
 import mimir.exec.result._
 import mimir.util._
-import mimir.util.JsonUtils.primitiveValueWrites
+import mimir.serialization.AlgebraJson._
 import mimir.parser.DrawPlot
 import mimir.sql.SqlToRA
 

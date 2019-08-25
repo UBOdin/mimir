@@ -1,6 +1,7 @@
 package mimir.util
 
 import sparsity.Name
+import mimir.algebra.ID
 
 class NameLookup[T](private val elems: Seq[(Name, T)])
 {
@@ -19,4 +20,5 @@ object NameLookup
   def apply[T](elems: Iterable[(Name, T)]) = new NameLookup[T](elems.toSeq)
   def apply[T]() = new NameLookup[T](Seq())
   def merge[T](elems: Iterable[NameLookup[T]]) = new NameLookup[T](elems.flatMap{ _.elems }.toSeq)
+  def fromID(elems: Iterable[ID]) = new NameLookup[ID](elems.map { col => Name(col.id) -> col }.toSeq)
 }

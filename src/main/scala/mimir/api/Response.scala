@@ -1,8 +1,8 @@
 package mimir.api
 
 import play.api.libs.json._
-import mimir.serialization.PrimitiveValueJSON._
 import mimir.algebra.PrimitiveValue
+import mimir.serialization.AlgebraJson._
 
 sealed abstract class Response {
   

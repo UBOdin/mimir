@@ -86,7 +86,7 @@ object UnloadRequest {
 case class CreateLensRequest (
             /* input for lens */
                   input: String,
-                  params: Seq[String],
+                  params: JsValue,
             /* type name of lens */
                   `type`: String,
             /* materialize input before creating lens */
