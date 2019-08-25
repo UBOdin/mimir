@@ -160,9 +160,9 @@ object MimirSQL
       SQL.select ~
       MimirKeyword("WITH") ~/
       Sparsity.identifier ~
-      "(" ~ ExprParser.expressionList ~ ")"
+      "(" ~ JsonParser.jsonExpr ~ ")"
     ).map { case (name, query, lensType, args) => 
-      CreateLens(name, query, lensType, ???)
+      CreateLens(name, query, lensType, args)
     }
   )
 

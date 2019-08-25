@@ -92,6 +92,7 @@ object ExpressionDeterminism {
             }
 
           case w: DataWarning => 
+            println(s"$w")
             if(w.key.isEmpty){
               BoolPrimitive(
                 models(w.name).isAcknowledged(0, Seq())

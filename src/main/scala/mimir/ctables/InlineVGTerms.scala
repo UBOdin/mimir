@@ -38,6 +38,8 @@ object InlineVGTerms {
 
 			case DataWarning(_, v, _, _, _) => v.recur(inline(_, db))
 
+			case Caveat(_, v, _, _) => v.recur(inline(_, db))
+
 			case _ => e.recur(inline(_, db))
 		}
 	}

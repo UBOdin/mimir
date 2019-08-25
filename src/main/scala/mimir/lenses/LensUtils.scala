@@ -5,8 +5,24 @@ import java.sql.SQLException
 import mimir.algebra._
 import mimir.models._
 import mimir.ctables._
+import mimir.util.NameLookup
+import sparsity.Name
 
 object LensUtils {
+
+  def columnLookupFunction(query: Operator) =
+  {
+    val columnLookup = NameLookup.fromID(query.columnNames)
+    val queryColumns = query.columnNames
+
+    (col: String) => {
+      columnLookup(Name(col)).getOrElse {
+        throw new SQLException(s"Invalid target column: $col; Available columns are ${queryColumns.mkString(", ")}")
+
+
+      }
+    }
+  }
 
   def extractModelsByColumn(
     modelMap: Seq[

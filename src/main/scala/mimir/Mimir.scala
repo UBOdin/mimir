@@ -160,7 +160,7 @@ object Mimir extends LazyLogging {
             }
 
           case f: Parsed.Failure => 
-            output.print(s"Parse Error: ${f.msg}")
+            output.print(s"Parse Error: ${f.longMsg}")
         }
 
       } catch {
@@ -381,6 +381,16 @@ object Mimir extends LazyLogging {
               output.print("CREATE TABLE "+name+" (\n"+
                 schema.map { col => "  "+col._1+" "+col._2 }.mkString(",\n")
               +"\n);")
+          }
+      }
+    ),
+    MakeSlashCommand(
+      "listFunctions",
+      "",
+      "List all available functions",
+      { case Seq() =>
+          for((fn, _) <- db.functions.functionPrototypes.toSeq.sortBy { _._1.id }){
+            output.print(fn.id)
           }
       }
     ),

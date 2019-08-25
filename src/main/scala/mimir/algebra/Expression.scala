@@ -684,9 +684,9 @@ case class Caveat(
   key: Seq[Expression],
   message: Expression
 ) extends UncertaintyCausingExpression {
-  override def toString() = s"($name(${(key :+ message).mkString(", ")}))@($value)"
+  override def toString() = s"CAVEAT([${key.mkString(",")}], $value, $message)"
   override def children: Seq[Expression] = Seq(value, message) ++ key
   override def rebuild(x: Seq[Expression]) = {
-    DataWarning(name, x(0), x(1), x.tail.tail)
+    Caveat(name, x(0), x.tail.tail, x(1))
   }
 }

@@ -153,6 +153,7 @@ class Typechecker(
 					case None => throw new RAException("Need Model Manager to typecheck expressions with VGTerms")
 				}
 			case DataWarning(_, v, _, _, _) => recur(v)
+			case Caveat(_, v, _, _) => recur(v)
     }
   }
 

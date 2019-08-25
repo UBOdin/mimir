@@ -23,7 +23,7 @@ class LensManager(db: Database)
 
   val lensTypes = Map[ID,Lens](
     // ID("MISSING_VALUE")     -> MissingValueLens.create _,
-    // ID("DOMAIN")            -> MissingValueLens.create _,
+    ID("DOMAIN")            -> DomainLens,
     // ID("KEY_REPAIR")        -> RepairKeyLens.create _,
     // ID("REPAIR_KEY")        -> RepairKeyLens.create _,
     ID("COMMENT")           -> CommentLens

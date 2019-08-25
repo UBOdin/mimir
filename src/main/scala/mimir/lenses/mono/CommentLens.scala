@@ -49,23 +49,14 @@ object CommentLens extends MonoLens
     // Use this opportunity to validate the config
     val config = configJson.as[CommentLensConfig]
 
-    val columnLookup = NameLookup.fromID(query.columnNames)
+    val columnLookup = LensUtils.columnLookupFunction(query)
 
-    val newTarget = 
-      config.targetColumn
-            .map { col => 
-              columnLookup(Name(col.id)).getOrElse {
-                throw new SQLException(s"Invalid target column: $col; Available columns are ${query.columnNames.mkString(", ")}")
-              }
-            }
+    val newTarget = config.targetColumn.map { col => columnLookup(col.id) }
 
     val newMessage = 
       config.message match {
         case Left(message) => Left(message)
-        case Right(col) => 
-              columnLookup(Name(col.id)).getOrElse {
-                throw new SQLException(s"Invalid target column: $col; Available columns are ${query.columnNames.mkString(", ")}")
-              }
+        case Right(col) => columnLookup(col.id)
       }
 
     Json.toJson(config)
