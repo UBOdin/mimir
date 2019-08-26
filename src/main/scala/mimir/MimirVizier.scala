@@ -39,6 +39,7 @@ import mimir.ml.spark.SparkML
 import mimir.parser._
 import mimir.parser.ExpressionParser
 import mimir.serialization.Json
+import mimir.data.staging.HDFSRawFileProvider
 import mimir.util.{
   JSONBuilder,
   LoggerUtils,
@@ -79,7 +80,10 @@ object MimirVizier extends LazyLogging {
     val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
     MimirSpark.init(conf)
     val metadata = new JDBCMetadataBackend(conf.metadataBackend(), conf.dbname())
-    val staging = new LocalFSRawFileProvider(new java.io.File(conf.dataDirectory()))
+    val staging = if(conf.dataStagingType().equalsIgnoreCase("hdfs"))
+      new HDFSRawFileProvider()
+    else 
+      new LocalFSRawFileProvider(new java.io.File(conf.dataDirectory()))
 
     db = new Database(metadata, staging)
     db.open()
