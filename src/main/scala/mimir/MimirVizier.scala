@@ -1180,7 +1180,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
       while(results.hasNext){
         val row = results.next()
         resCSV += row.tuple 
-        prov += row.provenance.asString
+        prov += ""//row.provenance.asString
       }
       
       DataContainer(
