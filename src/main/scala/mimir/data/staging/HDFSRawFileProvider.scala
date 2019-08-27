@@ -50,9 +50,9 @@ class HDFSRawFileProvider(
     val file = makeName(fileExtension, nameHint)
     logger.debug("Stage File To HDFS: " +hdfsHome+File.separator+file.toString)
     //if(!HadoopUtils.fileExistsHDFS(sparkSql.sparkSession.sparkContext, fileName))
-    HadoopUtils.writeToHDFS(MimirSpark.get.sparkSession.sparkContext, file.toString, input, true)
+    HadoopUtils.writeToHDFS(MimirSpark.get.sparkSession.sparkContext, file.getName, input, true)
     logger.debug("... done\n")
-    return s"$hdfsHome/${file.toString}"
+    return s"$hdfsHome/${file.getName}"
   }
   def stage(url: URL, nameHint: Option[String]): String =
   {
