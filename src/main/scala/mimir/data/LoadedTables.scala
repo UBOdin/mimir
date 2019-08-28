@@ -241,7 +241,7 @@ class LoadedTables(val db: Database)
                                 .as[Seq[Map[String, String]]]
         for(objectToDrop <- cascadingDrops) {
           objectToDrop("type") match {
-            case "adaptive" => db.adaptiveSchemas.drop(ID(objectToDrop("id")))
+            // case "adaptive" => db.adaptiveSchemas.drop(ID(objectToDrop("id")))
             case "view" => db.views.drop(ID(objectToDrop("id")))
             case "lens" => db.lenses.drop(ID(objectToDrop("id")))
           }
@@ -402,26 +402,44 @@ class LoadedTables(val db: Database)
     if(LoadedTables.usesDatasourceErrors(realFormat)) {
       logger.trace(s"LOAD TABLE $realTargetTable: Adding datasourceErrors")
       val dseSchemaName = realTargetTable.withSuffix("_DSE")
-      db.adaptiveSchemas.create(dseSchemaName, ID("DATASOURCE_ERRORS"), oper, Seq(), humanReadableName.getOrElse(realTargetTable.id))
-      oper = db.adaptiveSchemas.viewFor(dseSchemaName, ID("DATA")).get
-      cascadeDropAdaptive(targetRaw, dseSchemaName)
+      db.lenses.create(
+        ID("DATASOURCE_ERRORS"),
+        dseSchemaName,
+        oper, 
+        JsNull,
+        humanReadableName
+      )
+      oper = db.lenses.view(dseSchemaName)
+      cascadeDropLens(targetRaw, dseSchemaName)
       needView = true
     }
     if(detectHeaders.getOrElse(true)) {
       logger.trace(s"LOAD TABLE $realTargetTable: Adding detectHeaders")
       val dhSchemaName = realTargetTable.withSuffix("_DH")
-      db.adaptiveSchemas.create(dhSchemaName, ID("DETECT_HEADER"), oper, Seq(), humanReadableName.getOrElse(realTargetTable.id))
-      oper = db.adaptiveSchemas.viewFor(dhSchemaName, ID("DATA")).get
-      cascadeDropAdaptive(targetRaw, dhSchemaName)
+      db.lenses.create(
+        ID("DETECT_HEADER"),
+        dhSchemaName, 
+        oper, 
+        JsNull, 
+        humanReadableName
+      )
+      oper = db.lenses.view(dhSchemaName)
+      cascadeDropLens(targetRaw, dhSchemaName)
       needView = true
     }
     //type inference
     if(inferTypes.getOrElse(true)){
       logger.trace(s"LOAD TABLE $realTargetTable: Adding inferTypes")
       val tiSchemaName = realTargetTable.withSuffix("_TI")
-      db.adaptiveSchemas.create(tiSchemaName, ID("TYPE_INFERENCE"), oper, Seq(FloatPrimitive(.5)), humanReadableName.getOrElse(realTargetTable.id)) 
-      oper = db.adaptiveSchemas.viewFor(tiSchemaName, ID("DATA")).get
-      cascadeDropAdaptive(targetRaw, tiSchemaName)
+      db.lenses.create(
+        ID("TYPE_INFERENCE"), 
+        tiSchemaName, 
+        oper, 
+        JsNull,
+        humanReadableName
+      ) 
+      oper = db.lenses.view(tiSchemaName)
+      cascadeDropLens(targetRaw, tiSchemaName)
       needView = true
     }
     for(schema <- targetSchema){

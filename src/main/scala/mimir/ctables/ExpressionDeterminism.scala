@@ -23,10 +23,10 @@ object ExpressionDeterminism {
    * Everything else (other than CASE) is an AND of whether the 
    * child subexpressions are deterministic
    */
-  def compileDeterministic(expr: Expression, models: (ID  => Model), 
+  def compileDeterministic(expr: Expression, 
                            varMap: Map[ID,Expression] = Map()): Expression =
   {
-    val recur = (x:Expression) => compileDeterministic(x, models, varMap)
+    val recur = (x:Expression) => compileDeterministic(x, varMap)
     expr match { 
       
       case Conditional(condition, thenClause, elseClause) => {
@@ -82,26 +82,11 @@ object ExpressionDeterminism {
 
       case u : UncertaintyCausingExpression => {
         u match {
-          case v: VGTerm =>
-            if(v.args.isEmpty){
-              BoolPrimitive(
-                models(v.name).isAcknowledged(v.idx, Seq())
-              )
-            } else {
-              IsAcknowledged(models(v.name), v.idx, v.args)
-            }
-
-          case w: DataWarning => 
-            println(s"$w")
-            if(w.key.isEmpty){
-              BoolPrimitive(
-                models(w.name).isAcknowledged(0, Seq())
-              )
-            } else {
-              IsAcknowledged(models(w.name), 0, w.key)
-            }
-
-          case c: Caveat => BoolPrimitive(false)
+          case Caveat(lens, value, key, _) => 
+                  ExpressionUtils.makeAnd(
+                    IsAcknowledged(lens, key),
+                    recur(value)
+                  )
         }        
       }
       
@@ -190,24 +175,5 @@ object ExpressionDeterminism {
       case _ => expr.children.flatMap(compileCausality(_, inputCondition))
 
     }
-  }
-
-  def compileSample(expr: Expression, seed: Expression, models: (ID => Model)): Expression =
-  {
-    val replacement =
-      expr match {
-        case u: UncertaintyCausingExpression => 
-          u match { 
-            case VGTerm(name, idx, args, hints) => 
-              Sampler(models(name), idx, args, hints, seed)
-            case DataWarning(_, v, _, _, _) => 
-              v.recur(compileSample(_, seed, models))
-            case Caveat(_, _, _, _) => ???
-          }
-        case _ => expr
-      }
-
-    return replacement.recur(compileSample(_, seed, models))
-
   }
 }

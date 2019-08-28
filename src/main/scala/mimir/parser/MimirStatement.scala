@@ -29,14 +29,6 @@ case class Compare(
   expected: SelectBody
 ) extends MimirStatement
 
-case class CreateAdaptiveSchema(
-  name: Name,
-  body: SelectBody,
-  schemaType: Name,
-  args: Seq[Expression],
-  humanReadableName: String
-) extends MimirStatement
-
 case class CreateLens(
   name: Name,
   body: SelectBody,
@@ -81,11 +73,6 @@ case class Reload(
 
 case class DropLens(
   lens: Name,
-  ifExists: Boolean = false
-) extends MimirStatement
-
-case class DropAdaptiveSchema(
-  schema: Name,
   ifExists: Boolean = false
 ) extends MimirStatement
 

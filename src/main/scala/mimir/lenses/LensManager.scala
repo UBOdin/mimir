@@ -36,6 +36,10 @@ class LensManager(db: Database)
     lensTypes.collect { case (t, _:MonoLens) => t }
              .toSet
 
+  val multiLensTypes = 
+    lensTypes.collect { case (t, _:MultiLens) => t }
+             .toSet
+
 
   val lenses = db.metadata.registerMap(
     ID("MIMIR_LENSES"), Seq(
@@ -43,23 +47,23 @@ class LensManager(db: Database)
         ID("TYPE")          -> TString(),
         ID("QUERY")         -> TString(),
         ID("ARGS")          -> TString(),
-        ID("FRIENDLY_NAME") -> TString()
+        ID("FRIENDLY_lens") -> TString()
       ))
     ))
 
   def create(
     t: ID, 
-    name: ID, 
+    lensName: ID, 
     query: Operator, 
     config: JsValue,
     friendlyName: Option[String] = None,
     orReplace: Boolean = false
   )
   {
-    logger.debug(s"Create Lens: $name ${friendlyName.map { "("+_+")"}.getOrElse("") }")
+    logger.debug(s"Create Lens: $lens ${friendlyName.map { "("+_+")"}.getOrElse("") }")
 
-    if(lenses.exists(name) && !orReplace){
-      throw new SQLException(s"Lens $name already exists")
+    if(lenses.exists(lensName) && !orReplace){
+      throw new SQLException(s"Lens $lens already exists")
     }
 
     val lens =
@@ -69,13 +73,13 @@ class LensManager(db: Database)
       }
 
     val trainedConfig = 
-      lens.train(db, name, query, config)
+      lens.train(db, lensName, query, config)
 
-    lenses.put(name, Seq(
+    lenses.put(lensName, Seq(
       StringPrimitive(t.id),
       StringPrimitive(Json.toJson(query).toString),
       StringPrimitive(trainedConfig.toString),
-      StringPrimitive(friendlyName.getOrElse(name.id))
+      StringPrimitive(friendlyName.getOrElse(lensName.id))
     ))
   }
 
@@ -88,79 +92,139 @@ class LensManager(db: Database)
   private def configForDetails(details: Seq[PrimitiveValue]): JsValue =
     Json.parse(details(2).asString)
 
-  def retrain(name: ID)
+  def retrain(lens: ID)
   {
-    val (_, details) = lenses.get(name)
-                             .getOrElse { throw new SQLException(s"Invalid lens $name") }
+    val (_, details) = lenses.get(lens)
+                             .getOrElse { throw new SQLException(s"Invalid lens $lens") }
     val retrainedConfig = 
       lensForDetails(details).train(
         db, 
-        name, 
+        lens, 
         queryForDetails(details), 
         configForDetails(details)
       )
-    lenses.update(name, Map( 
+    lenses.update(lens, Map( 
       ID("ARGS") -> StringPrimitive(retrainedConfig.toString)
     ))
   }
 
-  def drop(name: ID, ifExists: Boolean = false)
+  def drop(lens: ID, ifExists: Boolean = false)
   {
     val details = 
-      lenses.get(name) match {
+      lenses.get(lens) match {
         case Some((_, details)) => details
         case None if ifExists => return
-        case None => throw new SQLException(s"Invalid lens $name")
+        case None => throw new SQLException(s"Invalid lens $lens")
       }
 
     lensForDetails(details) match {
       case cleanup:LensNeedsCleanup => 
         cleanup.drop(
           db, 
-          name, 
+          lens, 
           configForDetails(details)
         )
       case _ => ()
     }
-    lenses.rm(name)
+    lenses.rm(lens)
   }
+
+  def acknowledge(lens: ID, key: Seq[PrimitiveValue])
+  {
+    ???
+  }
+
+  def acknowledgeAll(lens: ID)
+  {
+    ???
+  }
+
+  def isAcknowledged(lens: ID, key: Seq[PrimitiveValue]): Boolean =
+  {
+    ???
+  }
+
+  def areAllAcknowledged(lens: ID): Boolean =
+  {
+    ???
+  }
+
+  def acknowledgedKeys(lens: ID): Seq[Seq[PrimitiveValue]] = 
+  {
+    ???
+  }
+
 
   def listTables: Seq[ID] =
   {
     lenses.all
-          .filter { case (name, detail) => monoLensTypes contains ID(detail(0).asString) }
+          .filter { case (lens, detail) => monoLensTypes contains ID(detail(0).asString) }
           .map { _._1 }
   }
 
-  def tableSchema(name: ID): Option[Seq[(ID, Type)]] =
+  def tableSchema(lens: ID): Option[Seq[(ID, Type)]] =
   {
-    val (_,details) = lenses.get(name).getOrElse { return None }
+    val (_,details) = lenses.get(lens).getOrElse { return None }
     lensForDetails(details) match {
       case monoLens:MonoLens => 
         Some(monoLens.schema(
           db, 
-          name, 
+          lens, 
           queryForDetails(details), 
           configForDetails(details),
           details(3).asString
         ))
+      case _:MultiLens => return None
     }
   }
 
-  def view(name: ID): Operator =
+  def view(lens: ID): Operator =
   {
-    val (_,details) = lenses.get(name).getOrElse { throw new SQLException(s"Invalid lens $name") }
+    val (_,details) = lenses.get(lens).getOrElse { throw new SQLException(s"Invalid lens $lens") }
     lensForDetails(details) match {
       case monoLens:MonoLens => 
-        monoLens.view(
-          db, 
-          name, 
-          queryForDetails(details), 
-          configForDetails(details),
-          details(3).asString
+        LensView(
+          None,
+          lens,
+          monoLens.view(
+            db, 
+            lens, 
+            queryForDetails(details), 
+            configForDetails(details),
+            details(3).asString
+          )
         )
+      case multiLens:MultiLens =>
+        throw new SQLException(s"Invalid lens $lens")
     }    
   }
+
+  private def allMultiLenses: Seq[(ID, Seq[PrimitiveValue])] =
+  {
+    lenses.all
+          .filter { case (lens, details) => multiLensTypes contains ID(details(0).asString) }
+  }
+  def schemaProviderFor(lens: ID): Option[MultiLensSchemaProvider] =
+    lenses.get(lens).map { case (_, details) => assembleSchemaProvider(lens, details) }
+
+  private def assembleSchemaProvider(
+    lens: ID, 
+    details: Seq[PrimitiveValue]
+  ): MultiLensSchemaProvider =
+    MultiLensSchemaProvider(
+      lensForDetails(details).asInstanceOf[MultiLens],
+      db,
+      lens, 
+      queryForDetails(details),
+      configForDetails(details),
+      details(3).asString
+    )
+  
+  def allSchemaProviders: Seq[(ID, MultiLensSchemaProvider)] =
+    allMultiLenses.map { case (lens, details) => 
+      lens -> assembleSchemaProvider(lens, details)
+    }
+
 }
 
 object LensManager

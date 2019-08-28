@@ -633,60 +633,37 @@ abstract class Proc(val args: Seq[Expression]) extends Expression
 
 sealed abstract class UncertaintyCausingExpression extends Expression
 { 
-  def name: ID
+  def lens: ID
 }
 
 /**
- * VGTerms are the building block of incomplete data in Mimir.  A VGTerm
- * is linked to a specific model, which defines its behavior.
- * 
- * Each distinct value of { name x idx x args } identifies *one* variable.
+ * The simplest form of an uncertainty-causing expression
+ * A caveat marks a value and associated it with an error message.  
+ *
+ * @field lens     The lens instance responsible for this caveat
+ * @field value    The value that the Caveat is being attached to
+ * @field key      A unique identifier for this caveat instance (used to acknowledge)
+ * @field message  A string message describing the caveat
  */
-case class VGTerm(
-  name: ID, 
-  idx: Int,
-  args: Seq[Expression],
-  hints: Seq[Expression]
-) extends UncertaintyCausingExpression {
-  override def toString() = "{{ "+name+";"+idx+"["+args.mkString(", ")+"]["+hints.mkString(", ")+"] }}"
-  override def children: Seq[Expression] = args ++ hints
-  override def rebuild(x: Seq[Expression]) = {
-    val (a, h) = x.splitAt(args.length)
-    VGTerm(name, idx, a, h)
-  }
-  def isDataDependent: Boolean = args.size > 0
-}
-
-/**
- * Warnings are a "light" form of VGTerms.  Like VGTerms warnings "flag" 
- * their output in a way that propagates along with dependencies, but 
- * unlike VGTerms, a warning has no alternative values associated with it.
- * It doesn't signify a random decision, but rather uncertainty that the
- * value that gets passed through is in fact correct.
- */
-case class DataWarning(
-  name: ID,
-  value: Expression,
-  message: Expression, 
-  key: Seq[Expression],
-  index: Int = 0
-) extends UncertaintyCausingExpression {
-  override def toString() = s"($name(${(key :+ message).mkString(", ")}))@($value)"
-  override def children: Seq[Expression] = Seq(value, message) ++ key
-  override def rebuild(x: Seq[Expression]) = {
-    DataWarning(name, x(0), x(1), x.tail.tail, index)
-  }
-}
 
 case class Caveat(
-  name: ID,
+  lens: ID,
   value: Expression,
   key: Seq[Expression],
   message: Expression
 ) extends UncertaintyCausingExpression {
-  override def toString() = s"CAVEAT([${key.mkString(",")}], $value, $message)"
+  override def toString() = s"CAVEAT([$lens;${key.mkString(",")}], $value, $message)"
   override def children: Seq[Expression] = Seq(value, message) ++ key
   override def rebuild(x: Seq[Expression]) = {
-    Caveat(name, x(0), x.tail.tail, x(1))
+    Caveat(lens, x(0), x.tail.tail, x(1))
   }
 }
+
+/**
+ * An acknowledgement of Caveat.  Should get compiled out by InlineVGTerms and replaced by a call
+ * out to LensManager.isAcknowledged
+ */
+case class IsAcknowledged(
+  lens: ID,
+  key: Seq[Expression]
+) extends Expression

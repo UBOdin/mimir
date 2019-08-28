@@ -402,23 +402,28 @@ case class View(name: ID, query: Operator, annotations: Set[ViewAnnotation.T] = 
 }
 
 /**
- * A view defined by an adaptive schema
+ * A view defined by a lens schema
  *
  * When initialized by RAToSql, the query field will contain the raw unmodified 
  * query that the view was instantiated with.  As the view goes through compilation,
  * the nested query will be modified; The metadata field tracks which forms of 
  * compilation have been applied to it, so that the system can decide whether it has
  * an appropriate materialized form of the view ready.
+ *
+ * @field  schema      If this view belongs to a multilens, the lens name is here
+ * @field  name        The name of the lens for a monolens or the table in a multilens
+ * @field  query       The query implementing the lens view
+ * @field  annotations The implicit fields that have been matierialized into the query
  */
 @SerialVersionUID(100L)
-case class AdaptiveView(schema: ID, name: ID, query: Operator, annotations: Set[ViewAnnotation.T] = Set())
+case class LensView(schema: Option[ID], name: ID, query: Operator, annotations: Set[ViewAnnotation.T] = Set())
   extends Operator
 {
   def children: Seq[Operator] = Seq(query)
   def expressions: Seq[Expression] = Seq()
-  def rebuild(c: Seq[Operator]): Operator = AdaptiveView(schema, name, c(0), annotations)
+  def rebuild(c: Seq[Operator]): Operator = LensView(schema, name, c(0), annotations)
   def rebuildExpressions(x: Seq[Expression]): Operator = this
   def toString(prefix: String): String = 
-    s"$prefix$schema.$name[${annotations.mkString(", ")}] := (\n${query.toString(prefix+"   ")}\n$prefix)"
+    s"$prefix${schema.map{_+"."}.getOrElse{""}}$name[${annotations.mkString(", ")}] := (\n${query.toString(prefix+"   ")}\n$prefix)"
   def columnNames = query.columnNames
 }

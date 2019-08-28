@@ -239,9 +239,12 @@ class ViewManager(db:Database)
    * @param op    The operator to rebuild adaptive views in
    * @return      A version of the tree for `op` with refreshed View nodes.
    */
-   def rebuildAdaptiveViews(op:Operator): Operator = op match {
-     case AdaptiveView(schema, name, oper, anno) => db.adaptiveSchemas.viewFor(schema, name).get
-     case _ => op.recur(rebuildAdaptiveViews(_))
+  def rebuildAdaptiveViews(op:Operator): Operator = op match {
+    case LensView(Some(schema), name, oper, anno) =>
+      db.lenses.schemaProviderFor(schema).get.view(name)
+    case LensView(None, name, oper, anno) =>
+      db.lenses.view(name)
+    case _ => op.recur(rebuildAdaptiveViews(_))
    }
   
   /**
@@ -282,7 +285,7 @@ class ViewManager(db:Database)
           materializedTableOperator(metadata)
         )
       }
-      case AdaptiveView(schema, name, query, wantAnnotations) => {
+      case LensView(schema, name, query, wantAnnotations) => {
         return resolve(query)
       }
 

@@ -43,6 +43,11 @@ object MimirSQL
 
   def Expression(input: String): sparsity.expression.Expression =
     sparsity.parser.Expression(input)
+  def ExpressionList(input: String): Seq[sparsity.expression.Expression] =
+    parse(input, sparsity.parser.Expression.expressionList(_)) match { 
+      case Parsed.Success(exprList, index) => exprList
+      case f:Parsed.Failure => throw new sparsity.parser.ParseException(f)
+    }
 
   def terminatedStatement[_:P]: P[MimirStatement] = P(
     statement ~ ";"
@@ -55,9 +60,7 @@ object MimirSQL
     | analyze
     | alterTable
     | compare
-    | createAdaptive // must come before 'basicStatement'
     | createLens     // must come before 'basicStatement'
-    | dropAdaptive   // must come before 'basicStatement'
     | dropLens       // must come before 'basicStatement'
     | drawPlot
     | load
@@ -136,21 +139,6 @@ object MimirSQL
     }
   )
 
-  def createAdaptive[_:P] = P(
-    (
-      MimirKeyword("CREATE") ~
-      MimirKeyword("ADAPTIVE") ~/
-      MimirKeyword("SCHEMA") ~/
-      Sparsity.identifier ~
-      MimirKeyword("AS") ~/
-      SQL.select ~
-      MimirKeyword("WITH") ~/
-      Sparsity.identifier ~
-      "(" ~ ExprParser.expressionList ~ ")"
-    ).map { case (name, query, lensType, args) =>
-      CreateAdaptiveSchema(name, query, lensType, args, name.toString)
-    }
-  )
   def createLens[_:P] = P(
     (
       MimirKeyword("CREATE") ~
@@ -165,19 +153,6 @@ object MimirSQL
       CreateLens(name, query, lensType, args)
     }
   )
-
-  def dropAdaptive[_:P] = P(
-    (
-      MimirKeyword("DROP") ~
-      MimirKeyword("ADAPTIVE") ~/
-      MimirKeyword("SCHEMA") ~/
-      SQL.ifExists ~
-      Sparsity.identifier
-    ).map { case (ifExists, name) =>
-      DropAdaptiveSchema(name, ifExists)
-    }
-  )
-
   def dropLens[_:P] = P(
     (
       MimirKeyword("DROP") ~

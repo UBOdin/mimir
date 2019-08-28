@@ -7,24 +7,40 @@ import mimir.algebra._
 import mimir.models._
 import mimir.exec.mode.UnannotatedBestGuess
 
-class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator, Seq[Expression], Seq[Expression])], val toReason: ((Seq[PrimitiveValue], Seq[PrimitiveValue]) => Reason))
+sealed trait ArgLookup
+
+case class MultipleArgLookup(
+  val query: Operator,
+  val key: Seq[Expression],
+  val message: Expression
+) extends ArgLookup
+case class SingleArgLookup(
+  val message: Seq[String]
+) extends ArgLookup
+
+
+class ReasonSet(
+  val lens: ID,
+  val argLookup: ArgLookup,
+  val toReason: ((Seq[PrimitiveValue], String) => Reason)
+)
 {
   def isEmpty(db: Database): Boolean =
   {
     argLookup match {
-      case Some((query, argExprs, hintExprs)) => 
+      case MultipleArgLookup(query, argExprs, hintExprs) => 
         db.query(
           query.count( alias = "COUNT" ), 
           UnannotatedBestGuess
         ) { _.next.tuple(0).asLong <= 0 }
-      case None => 
-        false
+      case SingleArgLookup(Seq()) => true
+      case SingleArgLookup(_) => false
     }    
   }
   def size(db: Database): Long =
   {
     argLookup match {
-      case Some((query, argExprs, hintExprs)) => 
+      case MultipleArgLookup(query, argExprs, hintExprs) => 
         db.query(
           query
             .map( argExprs.zipWithIndex.map { arg => ("ARG_"+arg._2 -> arg._1) }:_* )
@@ -32,16 +48,15 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
             .count( alias = "COUNT" ),
           UnannotatedBestGuess
         ) { _.next.tuple(0).asLong }
-      case None => 
-        1
+      case SingleArgLookup(messages) => messages.length
     }
   }
-  def allArgs(db: Database, limit: Option[Int] ): Iterable[(Seq[PrimitiveValue], Seq[PrimitiveValue])] = allArgs(db, limit, None)
-  def allArgs(db: Database, limit: Option[Int], offset: Option[Int]): Iterable[(Seq[PrimitiveValue], Seq[PrimitiveValue])] =
+  def allArgs(db: Database, limit: Option[Int] ): Iterable[(Seq[PrimitiveValue], String)] = allArgs(db, limit, None)
+  def allArgs(db: Database, limit: Option[Int], offset: Option[Int]): Iterable[(Seq[PrimitiveValue], String)] =
   {
     argLookup match {
-      case None => Seq((Seq[PrimitiveValue](), Seq[PrimitiveValue]()))
-      case Some((baseQuery, argExprs, hintExprs)) => {
+      case SingleArgLookup(messages) => messages.map { (Seq(), _) }
+      case MultipleArgLookup(baseQuery, argExprs, messageExpr) => {
 
         val limitedQuery = 
           limit match {
@@ -56,41 +71,41 @@ class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator,
           }
 
         val argCols = argExprs.zipWithIndex.map   { case (arg,idx) => ProjectArg(ID("ARG_"+idx), arg) }
-        val hintCols = hintExprs.zipWithIndex.map { case (arg,idx) => ProjectArg(ID("HINT_"+idx), arg) }
+        val messageCol = ProjectArg(ID("MESSAGE"), messageExpr)
 
         val projectedQuery =
-          Project(argCols ++ hintCols, limitedQuery)
+          Project(messageCol +: argCols, limitedQuery)
 
         db.query(projectedQuery, UnannotatedBestGuess) { 
-          _.toIndexedSeq.map { _.tuple.splitAt(argExprs.size) } 
+          _.toIndexedSeq.map { row => (row.tuple.tail, row(0).asString) } 
         }
       }
     }
   }
 
-  def allArgs(db: Database): Iterable[(Seq[PrimitiveValue], Seq[PrimitiveValue])] =
+  def allArgs(db: Database): Iterable[(Seq[PrimitiveValue], String)] =
     allArgs(db, None)
-  def takeArgs(db: Database, count: Int): Iterable[(Seq[PrimitiveValue], Seq[PrimitiveValue])] = 
+  def takeArgs(db: Database, count: Int): Iterable[(Seq[PrimitiveValue], String)] = 
     allArgs(db, Some(count))
-  def takeArgs(db: Database, count: Int, offset: Int): Iterable[(Seq[PrimitiveValue], Seq[PrimitiveValue])] = 
+  def takeArgs(db: Database, count: Int, offset: Int): Iterable[(Seq[PrimitiveValue], String)] = 
     allArgs(db, Some(count), Some(offset))
 
   def all(db: Database): Iterable[Reason] = 
-    allArgs(db).map { case (args, hints) => toReason(args, hints) }
+    allArgs(db).map { case (args, message) => toReason(args, message) }
   def take(db: Database, count: Int): Iterable[Reason] = 
-    takeArgs(db, count).map { case (args, hints) => toReason(args, hints) }
+    takeArgs(db, count).map { case (args, message) => toReason(args, message) }
   def take(db: Database, count: Int, offset:Int): Iterable[Reason] = 
-    takeArgs(db, count, offset).map { case (args, hints) => toReason(args, hints) }
+    takeArgs(db, count, offset).map { case (args, message) => toReason(args, message) }
 
   
   override def toString: String =
   {
     val lookupString =
       argLookup match {
-        case Some((query, args, hints)) => "[" + args.mkString(", ") + "][" + hints.mkString(", ") + "] <- \n" + query.toString("   ")
-        case None => ""
+        case MultipleArgLookup(query, args, message) => "[" + args.mkString(", ") + "][" + message.toString + "] <- \n" + query.toString("   ")
+        case SingleArgLookup(messages) => messages.map { "["+_+"]" }.mkString(", ")
       }
-    s"${model.name};${idx}${lookupString}"
+    s"$lens${lookupString}"
   }
 }
 
@@ -100,36 +115,12 @@ object ReasonSet
   def make(uncertain: UncertaintyCausingExpression, db: Database, input: Operator): ReasonSet =
   {
     uncertain match {
-      case VGTerm(name, idx, argExprs, hintExprs) => {
-        logger.debug(s"Make ReasonSet for VGTerm $name from\n$input")
-        val model = db.models.get(name)
+      case Caveat(lens, valueExpr, keyExprs, messageExpr) => {
+        logger.debug(s"Make ReasonSet for Caveat $lens from\n$input")
         return new ReasonSet(
-          model,
-          idx,
-          ( if(argExprs.isEmpty) { None }
-            else { Some(input, argExprs, hintExprs) } 
-          ),
-          (args, hints) => new ModelReason(model, idx, args, hints)
-        )
-      }
-      case DataWarning(name, valueExpr, messageExpr, keyExprs, idx) => {
-        logger.debug(s"Make ReasonSet for Warning $name:$idx from\n$input")
-        val model = db.models.get(name)
-        return new ReasonSet(
-          model,
-          idx,
-          Some( (input, keyExprs, Seq(valueExpr, messageExpr)) ),
-          (keys, valueAndMessage) => new DataWarningReason(model, idx, valueAndMessage(0), valueAndMessage(1).asString, keys)
-        )
-      }
-      case Caveat(name, valueExpr, keyExprs, messageExpr) => {
-        logger.debug(s"Make ReasonSet for Caveat $name from\n$input")
-        val model = db.models.get(name)
-        return new ReasonSet(
-          model,
-          0,
-          Some( (input, keyExprs, Seq(valueExpr, messageExpr)) ),
-          (keys, valueAndMessage) => new DataWarningReason(model, 0, valueAndMessage(0), valueAndMessage(1).asString, keys)
+          lens,
+          Some( ArgLookup(input, keyExprs, messageExpr) ),
+          (keys, message) => new SimpleCaveatReason(model, 0, message, keys)
         )
       }
 

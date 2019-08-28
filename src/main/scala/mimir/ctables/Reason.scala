@@ -1,129 +1,103 @@
 package mimir.ctables
 
+import java.sql.SQLException
+import play.api.libs.json._
+
 import mimir.Database
 import mimir.algebra._
 import mimir.models._
 import mimir.util.JSONBuilder
+import mimir.serialization.AlgebraJson._
+
+case class AffectedRow(schema: ID, table: ID, row: RowIdPrimitive)
+
+object AffectedRow
+{
+  implicit val format: Format[AffectedRow] = Json.format
+}
+
 
 abstract class Reason
 {
   def toString: String
 
-  def model: Model
-  def idx: Int
-  def args: Seq[PrimitiveValue]
-  def hints: Seq[PrimitiveValue]
+  def lens: ID
+  def key: Seq[PrimitiveValue]
 
-  def reason: String
+  def message: String
   def repair: Repair
-  def guess: PrimitiveValue = model.bestGuess(idx, args, hints)
-  def confirmed: Boolean = model.isAcknowledged(idx, args)
+  def acknowledged: Boolean
+  def affectedRows: Seq[AffectedRow]
+
+  def acknowledge(db: Database)
+  {
+    if(key.isEmpty) { 
+      db.lenses.acknowledgeAll(lens)
+    } else {
+      db.lenses.acknowledge(lens, key)
+    }
+  }
 
   def toJSON: String =
     JSONBuilder.dict(Map(
-      "english" -> JSONBuilder.string(reason),
-      "source"  -> JSONBuilder.string(model.name.id),
-      "varid"   -> JSONBuilder.int(idx),
-      "args"    -> JSONBuilder.list( args.map( x => JSONBuilder.string(x.toString)).toList ),
+      "english" -> JSONBuilder.string(message),
+      "source"  -> JSONBuilder.string(lens.id),
+      "args"    -> JSONBuilder.list( key.map( x => JSONBuilder.string(x.toString)).toSeq ),
       "repair"  -> repair.toJSON,
       //TODO:  this is a hack to check if the args
-      "rowidarg"-> JSONBuilder.int(model.argTypes(idx).zipWithIndex.foldLeft(-1)((init, curr) => curr._1 match {
-        case TRowId() => curr._2
-        case _ => init
-      })),
-      "confirmed" -> JSONBuilder.boolean(confirmed) 
+      "affected"-> Json.toJson(affectedRows),
+      "confirmed" -> JSONBuilder.boolean(acknowledged) 
     ))
-    
-  def toJSONWithFeedback : String = {
-      val argString = 
-          if(!this.args.isEmpty){
-            " (" + this.args.mkString(",") + ")"
-          } else { "" }
-      val feedback =  if(!this.confirmed){
-          Map(("repair_with", s"`FEEDBACK ${this.model.name} ${this.idx}$argString IS ${ this.repair.exampleString }`"),
-          ("confirm_with", s"`FEEDBACK ${this.model.name} ${this.idx}$argString IS ${ this.guess }`"))
-        } else {
-          Map(("ammend_with", s"`FEEDBACK ${this.model.name} ${this.idx}$argString IS ${ this.repair.exampleString }`"))
-        } 
-      JSONBuilder.dict(Map(
-        "english" -> reason,
-        "source"  -> model.name,
-        "varid"   -> idx,
-        "args"    -> args,
-        "repair"  -> repair.toJSON,
-        "feedback"-> feedback
-      ))
-    }
 }
 
-
-class ModelReason(
-  val model: Model,
-  val idx: Int,
-  val args: Seq[PrimitiveValue],
-  val hints: Seq[PrimitiveValue]
-)
-  extends Reason
-{
-  override def toString: String = 
-    reason+" {{"+model+";"+idx+"["+args.mkString(", ")+"]}}"
-
-  def reason: String =
-    model.reason(idx, args, hints)
-
-  def repair: Repair = 
-    Repair.makeRepair(model, idx, args, hints)
-
-  def equals(r: Reason): Boolean = 
-    model.name.equals(r.model.name) && 
-      (idx == r.idx) && 
-      (args.equals(r.args))
-
-  override def hashCode: Int = 
-    model.hashCode * idx * args.map(_.hashCode).sum
-}
-
-class DataWarningReason(
-  val model: Model,
-  val idx: Int,
-  val value: PrimitiveValue,
+class SimpleCaveatReason(
+  val lens: ID,
+  val key: Seq[PrimitiveValue],
   val message: String,
-  val key: Seq[PrimitiveValue]
+  affectedRow: Option[AffectedRow],
+  val acknowledged: Boolean
 )
   extends Reason
 {
-  override def toString = s"$message {{ $model[${key.mkString(", ")}] }}"
+  override def toString = s"$message {{ $lens[${key.mkString(", ")}] }}"
 
-  def args: Seq[PrimitiveValue] = key
-  def hints: Seq[PrimitiveValue] = Seq()
-
-  def reason: String = message
-  def repair: Repair = DataWarningRepair
-  override def guess: PrimitiveValue = value
+  def repair: Repair = SimpleCaveatRepair
+  def affectedRows = affectedRow.toSeq
 }
 
-class MultiReason(db: Database, reasons: ReasonSet)
+class MultiReason(
+  db: Database, 
+  reasons: ReasonSet
+)
   extends Reason
 {
-  var ackedOffset = getAckedOffset() 
-  def getAckedOffset() : Int = {
-    for(i <- 0 to (reasons.size(db).toInt - 1)){
-      val taken = reasons.take(db, 1, i).head
-      if(!taken.model.isAcknowledged(taken.idx, taken.args))
-        return i
-    }
-    0
-  }
-  def model = reasons.model
-  def idx: Int = reasons.idx
-  def args = 
-    reasons.takeArgs(db, 1, ackedOffset).head._1
-  def hints = 
-    reasons.takeArgs(db, 1, ackedOffset).head._2
+  var (firstUnackedReason, unackedOffset) = 
+    reasons.all(db)
+           .zipWithIndex
+           .find { !_._1.acknowledged }
+           .getOrElse { 
+             reasons.take(db, 1)
+                    .headOption
+                    .map { (_, 0) }
+                    .getOrElse { throw new SQLException("Creating MultiReason without causes") }
+           }
 
-  override def toString: String = reason//reasons.toString
-  def reason: String =
-    s"${reasons.size(db)} reasons like ${ackedOffset + 1}: ${reasons.take(db, 1, ackedOffset).head.reason}"
+  def key: Seq[PrimitiveValue] = 
+    Option(firstUnackedReason).map { _.key }.getOrElse { Seq() }
+
+  def affectedRows = 
+    reasons.take(db, 10)
+           .flatMap(_.affectedRows)
+           .toSeq
+  def lens = firstUnackedReason.lens
+
+  override def toString: String = message//reasons.toString
+  def message: String =
+    s"${reasons.size(db)} reasons like ${unackedOffset + 1}: ${firstUnackedReason.message}"
   def repair: Repair =
-    reasons.take(db, 1, ackedOffset).head.repair
+    Option(firstUnackedReason)
+      .map { _.repair }
+      .getOrElse { EmptyReasonSetRepair }
+  def acknowledged = 
+    firstUnackedReason.acknowledged
 }

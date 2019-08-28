@@ -1,0 +1,5 @@
+Caveat.rowidarg -> Affected ROWID
+Move all getEnv calls to a DatabaseConfig
+Rework API to use MimirStatements instead
+Change ROWIDARG to use the new origin semantics in Reason
+---- or better still, discuss the right way to pull that off

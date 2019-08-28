@@ -540,31 +540,24 @@ object MimirVizier extends LazyLogging {
     }
   }
   
-  def createAdaptiveSchema(input : Any, params : Seq[String], _type : String) : String = {
+  def createAdaptiveSchema(input : Any, params : JsValue, _type : String) : String = {
+    val paramsStr = params.toString()
     try {
-    apiCallThread = Thread.currentThread()
-    val timeRes = logTime("createAdaptiveSchema") {
-      logger.debug("createAdaptiveSchema: From Vistrails: [" + input + "] [" + params.mkString(",") + "]"  ) ;
-      val paramExprs = params.map(param => 
-        mimir.parser.ExpressionParser.expr( param.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString)) )
-      val paramsStr = paramExprs.mkString(",")
+      apiCallThread = Thread.currentThread()
+      val timeRes = logTime("createAdaptiveSchema") {
+      logger.debug("createAdaptiveSchema: From Vistrails: [" + input + "] [" + paramsStr + "]"  ) ;
       val adaptiveSchemaName = ID("ADAPTIVE_SCHEMA_" + _type + ((input.toString() + _type + paramsStr).hashCode().toString().replace("-", "") ))
       val asViewName = ID("VIEW_"+adaptiveSchemaName)
       if(db.catalog.tableExists(adaptiveSchemaName)){
         logger.debug("createAdaptiveSchema: From Vistrails: Adaptive Schema already exists: " + adaptiveSchemaName)
       } else {
-        db.adaptiveSchemas.create(
-          adaptiveSchemaName, 
+        db.lenses.create(
           ID(_type), 
+          adaptiveSchemaName, 
           db.catalog.tableOperator(Name(input.toString)), 
-          paramExprs, 
-          input.toString
+          params, 
+          Some(input.toString)
         )
-        val asTable = _type match {
-          case "SHAPE_WATCHER" => adaptiveSchemaName
-          case _ => ID("DATA")
-        }
-        db.views.create(asViewName, db.adaptiveSchemas.viewFor(adaptiveSchemaName, asTable).get)
       }
       asViewName
     }
@@ -572,7 +565,7 @@ object MimirVizier extends LazyLogging {
     timeRes._1.toString
     } catch {
       case t: Throwable => {
-        logger.error("Error Creating Adaptive Schema: [" + input + "] [" + params.mkString(",") + "]", t)
+        logger.error("Error Creating Adaptive Schema: [" + input + "] [" + paramsStr + "]", t)
         throw t
       }
     }
@@ -594,10 +587,10 @@ object MimirVizier extends LazyLogging {
       stmt match {
         case SQLStatement(select:sparsity.statement.Select) => {
           val oper = db.sqlToRA(select)
-          (includeUncertainty, includeReasons) match {
-            case (true, true) => operCSVResultsDeterminismAndExplanation(oper)
-            case (true, false) => operCSVResultsDeterminism(oper)
-            case _ => operCSVResults(oper)
+          if(includeUncertainty){
+            operCSVResultsDeterminism(oper)
+          } else {
+            operCSVResults(oper)
           }
         }
         case SQLStatement(update:sparsity.statement.Update) => {
@@ -621,8 +614,8 @@ object MimirVizier extends LazyLogging {
     }
   }
   
-def vistrailsQueryMimirJson(input:Any, query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
-    val inputSubstitutionQuery = input match {
+  def vistrailsQueryMimirJson(input:Any, query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
+    val inputSubstitutionQuery = (input match {
         case aliases:JMapWrapper[_,_] => {
           registerNameMappings(aliases.asInstanceOf[JMapWrapper[String,String]])  
           query
@@ -636,11 +629,11 @@ def vistrailsQueryMimirJson(input:Any, query : String, includeUncertainty:Boolea
           query.replaceAll("\\{\\{\\s*input[_0]*\\s*\\}\\}", input.toString)
         }
         case x => throw new Exception(s"Parameter type ${x.getClass()} is invalid for vistrailsQueryMimirJson input" )
-      }
+    })
     vistrailsQueryMimirJson(inputSubstitutionQuery, includeUncertainty, includeReasons)
   }
 
-def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
+  def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeReasons:Boolean) : String = {
     try{
       val timeRes = logTime("vistrailsQueryMimirJson") {
         logger.debug("vistrailsQueryMimirJson: " + query)
@@ -651,9 +644,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
         stmt match {
           case SQLStatement(select:sparsity.statement.Select) => {
             val oper = db.sqlToRA(select)
-            if(includeUncertainty && includeReasons)
-              operCSVResultsDeterminismAndExplanationJson(oper)
-            else if(includeUncertainty)
+            if(includeUncertainty)
               operCSVResultsDeterminismJson(oper)
             else 
               operCSVResultsJson(oper)
@@ -755,6 +746,10 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     explainSchema(oper, cols)
   }  
   
+
+  // Aug 2019 by OK: 
+  //   Why do we need a specialized function for explaining adaptive schemas.  Shouldn't
+  //   just regular view explanations be enough?
   def explainSchema(oper: Operator, cols:Seq[String]) : Seq[mimir.ctables.ReasonSet] = {
     val timeRes = logTime("explainSchema") {
       logger.debug("explainSchema: From Vistrails: [ "+ cols.mkString(",") +" ] [" + oper + "]"  ) ;
@@ -762,9 +757,13 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
         case Seq() => oper.columnNames
         case _ => cols.map { ID(_) }
       }
-      db.uncertainty.explainAdaptiveSchema(
-          db.compiler.optimize(oper), 
-          explCols.toSet, true)
+      db.uncertainty.explainSubset(
+        oper = oper, 
+        wantCol = explCols.toSet, 
+        wantRow = false,
+        wantSort = false,
+        wantSchema = true
+      )
     }
     logger.debug(s"explainSchema Took: ${timeRes._2}")
     timeRes._1
@@ -1040,24 +1039,18 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   }
   
   def feedback(reasons: Seq[mimir.ctables.Reason], idx:Int, ack: Boolean, repairStr: String) : Unit = {
-    try{
-    val timeRes = logTime("feedback") {
-      logger.debug("feedback: From Vistrails: [" + idx + "] [ " + reasons(idx) + " ] [ " + ack + " ] [ " +repairStr+" ]" ) ;
-      val reason = reasons(idx) 
-      val argString = 
-          if(!reason.args.isEmpty){
-            " (" + reason.args.mkString(",") + ")"
-          } else { "" }
-      val update = if(ack) { reason.guess } else { db.sqlToRA(MimirSQL.Expression(repairStr)) }
-
-      db.models.feedback(
-        reason.model.name,
-        reason.idx, 
-        reason.args, 
-        db.interpreter(update)
-      )
-    }
-    logger.debug(s"feedback Took: ${timeRes._2}")
+    try {
+      val timeRes = logTime("feedback") {
+        logger.debug("feedback: From Vistrails: [" + idx + "] [ " + reasons(idx) + " ] [ " + ack + " ] [ " +repairStr+" ]" ) ;
+        val reason = reasons(idx) 
+        if(ack) { reason.acknowledge(db) }
+        else { 
+          val fix = MimirSQL.ExpressionList(repairStr)
+                            .map { db.sqlToRA(_) }
+          reason.repair(db, fix)
+        }
+      }
+      logger.debug(s"feedback Took: ${timeRes._2}")
     } catch {
       case t: Throwable => {
         logger.error("Error with Feedback: [" + idx + "] [ " + reasons(idx) + " ] [ " + ack + " ] [ " +repairStr+" ]", t)
@@ -1091,19 +1084,11 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     }    
   }
   
-  def getAvailableLenses() : Seq[String] = {
-    val distinctLenseIdxs = db.lenses.lensTypes.toSeq.map(_._2).zipWithIndex.distinct.unzip._2
-    val distinctLenses = db.lenses.lensTypes.toSeq.zipWithIndex.filter(el => distinctLenseIdxs.contains(el._2)).unzip._1.toMap
-    val ret = distinctLenses.keySet.toSeq
-    logger.debug(s"getAvailableLenses: From Viztrails: $ret")
-    ret.map(_.toString())
-  }
+  def getAvailableLenses() : Seq[String] = 
+    db.lenses.monoLensTypes.map { _.id }.toSet.toSeq
   
-  def getAvailableAdaptiveSchemas() : Seq[String] = {
-    val ret = mimir.adaptive.MultilensRegistry.multilenses.keySet.toSeq
-    logger.debug(s"getAvailableAdaptiveSchemas: From Viztrails: $ret")
-    ret.map(_.toString())
-  }
+  def getAvailableAdaptiveSchemas() : Seq[String] = 
+    db.lenses.multiLensTypes.map { _.id }.toSet.toSeq
   
   def getAvailableViztoolUsers() : String = {
     var userIDs = Seq[String]()
@@ -1209,29 +1194,6 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
       Seq() 
     )     
  }
- 
- def operCSVResultsDeterminismAndExplanation(oper : mimir.algebra.Operator) : DataContainer =  {
-   val ((schViz, cols, colsIndexes), (resCSV, colTaintReasons, rowTaintProv)) = db.query(oper)( resIter => {
-     val schstuf = resIter.schema.zipWithIndex.map(f => 
-       (Schema(f._1._1.toString, f._1._2.toString(), Type.rootType(f._1._2).toString()), f._1._1.toString(), f._2)).unzip3
-     ((schstuf._1, schstuf._2, schstuf._3), resIter.toList.map( row => {
-       (row.tuple, 
-        schstuf._3.map(i => { if(row.isColDeterministic(i)){ (true, Seq()) } else { (false, explainCell(oper, ID(schstuf._2(i)), row.provenance)) } }).unzip, 
-        (row.isDeterministic(), row.provenance.asString))
-     }).toSeq.unzip3)
-   })
-   val (colTaint, reasons) = colTaintReasons.unzip
-   val (rowTaint, prov) = rowTaintProv.unzip
-   
-   DataContainer(
-      schViz,
-      resCSV, 
-      prov,
-      colTaint, 
-      rowTaint, 
-      reasons.map(_.flatten.map(rsn => mimir.api.Reason(rsn.reason, rsn.model.name.toString(), rsn.idx, rsn.args.map(_.toString()), mimir.api.Repair(rsn.repair.toJSON), rsn.repair.exampleString) )) 
-    )        
- }
 
 
   def operCSVResultsJson(oper : mimir.algebra.Operator) : String =  {
@@ -1246,7 +1208,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     })
   }
   
- def operCSVResultsDeterminismJson(oper : mimir.algebra.Operator) : String =  {
+  def operCSVResultsDeterminismJson(oper : mimir.algebra.Operator) : String =  {
     db.query(oper)(results => {
       val colsIndexes = results.schema.zipWithIndex.map( _._2)
       val resultList = results.toList 
@@ -1261,77 +1223,8 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
         "row_taint" -> rowTaint
       ))
     }) 
- }
- 
- def operCSVResultsDeterminismAndExplanationJson(oper : mimir.algebra.Operator) : String =  {
-     db.query(oper)(results => {
-      val colsIndexes = results.schema.zipWithIndex.map( _._2)
-      val resultList = results.toList 
-      val (resultsStrsColTaint, provRowTaint) = resultList.map(row => ((row.tuple.map(cell => cell), colsIndexes.map(idx => row.isColDeterministic(idx).toString())), (row.provenance.asString, row.isDeterministic().toString()))).unzip
-      val (resultsStrs, colTaint) = resultsStrsColTaint.unzip
-      val (prov, rowTaint) = provRowTaint.unzip
-      val reasons = explainEverything(oper).map(reasonSet => reasonSet.all(db).toSeq.map(_.toJSONWithFeedback))
-      JSONBuilder.dict(Map(
-        "schema" -> results.schema.map( schel =>  Map( "name" -> schel._1, "type" ->schel._2.toString(), "base_type" -> Type.rootType(schel._2).toString())),
-        "data" -> resultsStrs,
-        "prov" -> prov,
-        "col_taint" -> colTaint,
-        "row_taint" -> rowTaint,
-        "reasons" -> reasons
-      ))
-    }) 
+  }
     
- } 
-
- /*def isWorkflowDeployed(hash:String) : Boolean = {
-   db.query(Project(Seq(ProjectArg("CLEANING_JOB_ID",Var("CLEANING_JOB_ID"))) , mimir.algebra.Select( Comparison(Cmp.Eq, Var("HASH"), StringPrimitive(hash)), db.table("CLEANING_JOBS"))))( resIter => resIter.hasNext())
- }
-                                                                                              //by default we'll start now and end when the galaxy class Enterprise launches
- def deployWorkflowToViztool(hash:String, input:String, query : String, name:String, dataType:String, users:Seq[String], latlonFields:Seq[String] = Seq("LATITUDE","LONGITUDE"), addrFields: Seq[String] = Seq("STRNUMBER", "STRNAME", "CITY", "STATE"), startTime:String = "2017-08-13 00:00:00", endTime:String = "2363-01-01 00:00:00") : Unit = {
-   val backend = db.backend.asInstanceOf[InsertReturnKeyBackend]
-   val jobID = backend.insertAndReturnKey(
-       "INSERT INTO CLEANING_JOBS ( CLEANING_JOB_NAME, TYPE, IMAGE, HASH) VALUES ( ?, ?, ?, ? )", 
-       Seq(StringPrimitive(name),StringPrimitive(dataType),StringPrimitive(s"app/images/$dataType.png"),StringPrimitive(hash))  
-     )
-   val dataID = backend.insertAndReturnKey(
-       "INSERT INTO CLEANING_JOB_DATA ( CLEANING_JOB_ID, NAME, [QUERY] ) VALUES ( ?, ?, ? )",
-       Seq(IntPrimitive(jobID),StringPrimitive(name),StringPrimitive(Json.ofOperator(parseQuery(query)).toString()))  
-     )
-   val datetimeprim = mimir.util.TextUtils.parseTimestamp(_)
-   users.map(userID => {
-     val schedID = backend.insertAndReturnKey(
-         "INSERT INTO SCHEDULE_CLEANING_JOBS ( CLEANING_JOB_ID, START_TIME, END_TIME ) VALUES ( ?, ?, ? )",
-         Seq(IntPrimitive(jobID),datetimeprim(startTime),datetimeprim(endTime))  
-     )
-     backend.insertAndReturnKey(
-       "INSERT INTO SCHEDULE_USERS ( USER_ID, SCHEDULE_CLEANING_JOBS_ID, START_TIME, END_TIME ) VALUES ( ?, ?, ?, ? )",
-       Seq(IntPrimitive(userID.split("-")(0).toLong),IntPrimitive(schedID),datetimeprim(startTime),datetimeprim(endTime))  
-     )
-   })
-   dataType match {
-     case "GIS" => {
-       backend.insertAndReturnKey(
-         "INSERT INTO CLEANING_JOB_SETTINGS_OPTIONS ( CLEANING_JOB_DATA_ID, TYPE, NAME, ID, OPTION ) VALUES ( ?, ?, ?, ?, ?)",
-         Seq(IntPrimitive(dataID),StringPrimitive("GIS_LAT_LON_COLS"),StringPrimitive("Lat and Lon Columns"),StringPrimitive("LATLON"),StringPrimitive(s"""{"latCol":"${latlonFields(0)}", "lonCol":"${latlonFields(1)}" }"""))  
-       )
-       backend.insertAndReturnKey(
-         "INSERT INTO CLEANING_JOB_SETTINGS_OPTIONS ( CLEANING_JOB_DATA_ID, TYPE, NAME, ID, OPTION ) VALUES ( ?, ?, ?, ?, ?)",
-         Seq(IntPrimitive(dataID),StringPrimitive("GIS_ADDR_COLS"),StringPrimitive("Address Columns"),StringPrimitive("ADDR"),StringPrimitive(s"""{"houseNumber":"${addrFields(0)}", "street":"${addrFields(1)}", "city":"${addrFields(2)}", "state":"${addrFields(3)}" }"""))  
-       )
-       backend.insertAndReturnKey(
-         "INSERT INTO CLEANING_JOB_SETTINGS_OPTIONS ( CLEANING_JOB_DATA_ID, TYPE, NAME, ID, OPTION ) VALUES ( ?, ?, ?, ?, ?)",
-         Seq(IntPrimitive(dataID),StringPrimitive("LOCATION_FILTER"),StringPrimitive("Near Me"),StringPrimitive("NEAR_ME"),StringPrimitive(s"""{"distance":804.67,"latCol":"$input.${latlonFields(0)}","lonCol":"$input.${latlonFields(1)}"}"""))  
-       )
-       backend.insertAndReturnKey(
-         "INSERT INTO CLEANING_JOB_SETTINGS_OPTIONS ( CLEANING_JOB_DATA_ID, TYPE, NAME, ID, OPTION ) VALUES ( ?, ?, ?, ?, ?)",
-         Seq(IntPrimitive(dataID),StringPrimitive("MAP_CLUSTERER"),StringPrimitive("Cluster Markers"),StringPrimitive("CLUSTER"),StringPrimitive("{}"))  
-       )
-     }
-     case "DATA" => {}
-     case x => {}
-   }
- }*/
- 
  def time[F](anonFunc: => F): (F, Long) = {  
       val tStart = System.nanoTime()
       val anonFuncRet = anonFunc  

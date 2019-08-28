@@ -66,13 +66,13 @@ class SystemCatalog(db: Database)
     simpleSchemaProviders
       .get(name)
       .getOrElse { 
-        db.adaptiveSchemas
-          .getProvider(name)
+        db.lenses
+          .schemaProviderFor(name)
           .getOrElse { throw new SQLException(s"Invalid schema $name") }
       }
   }
   def allSchemaProviders: Seq[(ID, SchemaProvider)] = {
-    simpleSchemaProviders.toSeq ++ db.adaptiveSchemas.allProviders
+    simpleSchemaProviders.toSeq ++ db.lenses.allSchemaProviders
   }
   
   def tableView: Operator =
@@ -166,7 +166,7 @@ class SystemCatalog(db: Database)
   def resolveProviderCaseSensitive(providerName: String): Option[(ID, SchemaProvider)] = {
     simpleSchemaProviders
       .get(ID(providerName))
-      .orElse { db.adaptiveSchemas.getProvider(ID(providerName)) }
+      .orElse { db.lenses.schemaProviderFor(ID(providerName)) }
       .map { ( ID(providerName), _) }
   }
 

@@ -35,6 +35,7 @@ object TypeInferenceModel
     case TAny()       => -10
   }
 
+
   def detectType(v: String): Iterable[Type] = {
     Type.tests.flatMap({ case (t, regexp) =>
       regexp.findFirstMatchIn(v).map(_ => t)
@@ -58,7 +59,7 @@ case class VoteList()
          case (_, idx) => {
            if(!x.isNullAt(idx)){
              val cellVal = x.getString(idx)
-             (1L, TypeInferenceModel.detectType(cellVal).toSeq.map(el => (Type.id(el), 1L)))
+             (1L, TypeInferenceModel.detectType(cellVal).toSeq.map(el => (Type.toIndex(el), 1L)))
            }
            else (0L, Seq[(Int, Long)]())
          }
@@ -120,7 +121,7 @@ class TypeInferenceModel(name: ID, val descriptiveName: String, val columns: Ind
 
   final def learn(idx: Int, v: String):Unit =
   {
-    val newtypes = TypeInferenceModel.detectType(v).toSeq.map(tp => (Type.id(tp), 1L))
+    val newtypes = TypeInferenceModel.detectType(v).toSeq.map(tp => (Type.toIndex(tp), 1L))
     val oldAcc = trainingData(idx)
     val (oldTotal, oldTypes) =  (oldAcc._1, oldAcc._2.toSeq.map(el => (el._1, el._2._1)))
     val newTotalVotes = (1+ oldTotal).toLong
@@ -131,7 +132,7 @@ class TypeInferenceModel(name: ID, val descriptiveName: String, val columns: Ind
   }
 
   def voteList(idx:Int) =  
-    (Type.id(TString()) -> ((defaultFrac * totalVotes(idx)).toLong, defaultFrac)) :: 
+    (Type.toIndex(TString()) -> ((defaultFrac * totalVotes(idx)).toLong, defaultFrac)) :: 
       (trainingData(idx)._2.map { votedType => 
         (votedType._1 -> (votedType._2._1, votedType._2._2))
       }).toList 
@@ -145,7 +146,7 @@ class TypeInferenceModel(name: ID, val descriptiveName: String, val columns: Ind
   def sample(idx: Int, randomness: Random, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): PrimitiveValue = {
     val column = args(0).asInt
     TypePrimitive(
-      Type.toSQLiteType(RandUtils.pickFromWeightedList(randomness, voteList(column).map(el => (el._1, el._2._1.toDouble)).toSeq))
+      Type.fromIndex(RandUtils.pickFromWeightedList(randomness, voteList(column).map(el => (el._1, el._2._1.toDouble)).toSeq))
     )
   }
 
@@ -154,7 +155,7 @@ class TypeInferenceModel(name: ID, val descriptiveName: String, val columns: Ind
     val column = args(0).asInt
     getFeedback(idx, args) match {
       case None => {
-        val guess =  voteList(column).map(tp => (Type.toSQLiteType(tp._1), tp._2._2)).maxBy( rankFn _ )._1
+        val guess =  voteList(column).map(tp => (Type.fromIndex(tp._1), tp._2._2)).maxBy( rankFn _ )._1
         //println(s"bestGuess(idx: $idx, args: ${args.mkString(",")}, hints:${hints.mkString(",")}) => $guess")
         TypePrimitive(guess)
       }
@@ -170,7 +171,7 @@ class TypeInferenceModel(name: ID, val descriptiveName: String, val columns: Ind
     TypeInferenceModel.logger.trace(s"Get Reason $args <- Training Data: $trainingData")
     getFeedback(idx, args) match {
       case None => {
-        val (guess, guessFrac) = voteList(column).map(tp => (Type.toSQLiteType(tp._1), tp._2._2)).maxBy( rankFn _ )
+        val (guess, guessFrac) = voteList(column).map(tp => (Type.fromIndex(tp._1), tp._2._2)).maxBy( rankFn _ )
         val defaultPct = (defaultFrac * 100).toInt
         val guessPct = (guessFrac*100).toInt
         val typeStr = Type.toString(guess).toUpperCase
@@ -194,7 +195,7 @@ class TypeInferenceModel(name: ID, val descriptiveName: String, val columns: Ind
   def getDomain(idx: Int, args: Seq[PrimitiveValue], hints: Seq[PrimitiveValue]): Seq[(PrimitiveValue,Double)] = 
   {
     val column = args(0).asInt
-    trainingData(idx)._2.map( x => (TypePrimitive(Type.toSQLiteType(x._1)), x._2._2)).toSeq ++ Seq( (TypePrimitive(TString()), defaultFrac) )
+    trainingData(idx)._2.map( x => (TypePrimitive(Type.fromIndex(x._1)), x._2._2)).toSeq ++ Seq( (TypePrimitive(TString()), defaultFrac) )
   }
 
   def feedback(idx: Int, args: Seq[PrimitiveValue], v: PrimitiveValue): Unit =
@@ -223,7 +224,7 @@ class TypeInferenceModel(name: ID, val descriptiveName: String, val columns: Ind
     val column = args(0).asInt
     getFeedback(idx, args) match {
       case None => {
-        val (guess, guessFrac) = voteList(column).map(tp => (Type.toSQLiteType(tp._1), tp._2._2)).maxBy( rankFn _ )
+        val (guess, guessFrac) = voteList(column).map(tp => (Type.fromIndex(tp._1), tp._2._2)).maxBy( rankFn _ )
         val defaultPct = (defaultFrac * 100).toInt
         val guessPct = (guessFrac*100).toInt
         val typeStr = Type.toString(guess).toUpperCase

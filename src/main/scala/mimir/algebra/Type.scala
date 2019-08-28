@@ -56,7 +56,7 @@ object Type {
     case _ => 
       throw new RAException("Invalid Type '" + t + "'");
   }
-  def toSQLiteType(i:Int) = i match {
+  def fromIndex(i:Int) = i match {
     case 0 => TInt()
     case 1 => TFloat()
     case 2 => TDate()
@@ -72,7 +72,7 @@ object Type {
       TUser(TypeRegistry.idxType(i-10))
     }
   }
-  def id(t:Type) = t match {
+  def toIndex(t:Type) = t match {
     case TInt() => 0
     case TFloat() => 1
     case TDate() => 2

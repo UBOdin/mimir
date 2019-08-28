@@ -15,8 +15,6 @@ import mimir.algebra._
 import mimir.ctables.{
   AnalyzeUncertainty, 
   OperatorDeterminism, 
-  CellExplanation, 
-  RowExplanation, 
   InlineVGTerms, 
   CoarseDependency
 }
@@ -37,14 +35,12 @@ import mimir.parser.{
     AnalyzeFeatures,
     AlterTable,
     Compare,
-    CreateAdaptiveSchema,
     CreateLens,
     DrawPlot,
     Feedback,
     Load,
     Reload,
     DropLens,
-    DropAdaptiveSchema,
     MimirSQL,
     CreateDependency,
     DropDependency
@@ -124,7 +120,6 @@ case class Database(
   val loader          = new mimir.data.LoadedTables(this)
   val views           = new mimir.views.ViewManager(this)
   val tempViews       = new mimir.views.TemporaryViewManager(this)
-  val adaptiveSchemas = new mimir.adaptive.AdaptiveSchemaManager(this)
   val catalog         = new mimir.data.SystemCatalog(this)
 
   //// Parsing & Translation
@@ -306,15 +301,15 @@ case class Database(
       }
 
       /********** CREATE ADAPTIVE SCHEMA **********/
-      case create: CreateAdaptiveSchema => {
-        adaptiveSchemas.create(
-          ID.upper(create.name),
-          ID.upper(create.schemaType),
-          sqlToRA(create.body),
-          create.args.map( sqlToRA(_, SqlToRA.literalBindings(_)) ),
-          create.humanReadableName
-        )
-      }
+      // case create: CreateAdaptiveSchema => {
+      //   adaptiveSchemas.create(
+      //     ID.upper(create.name),
+      //     ID.upper(create.schemaType),
+      //     sqlToRA(create.body),
+      //     create.args.map( sqlToRA(_, SqlToRA.literalBindings(_)) ),
+      //     create.humanReadableName
+      //   )
+      // }
 
       /********** LOAD STATEMENTS **********/
       case load: Load => {
@@ -371,8 +366,8 @@ case class Database(
           case None => throw new SQLException(s"No such view $name")
           case Some(id) => lenses.drop(id)
         }
-      case DropAdaptiveSchema(name, ifExists)     => 
-        adaptiveSchemas.dropByName(name, ifExists)
+      // case DropAdaptiveSchema(name, ifExists)     => 
+      //   adaptiveSchemas.dropByName(name, ifExists)
       case SQLStatement(drop:DropTable) => 
         loader.resolveTableByName(drop.name) match {
           case Some(dropTableID) => loader.drop(dropTableID)
