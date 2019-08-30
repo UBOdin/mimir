@@ -47,7 +47,7 @@ runMimirVizier := {
   val classpath = (fullClasspath in Compile).value
   val classpathString = Path.makeString(classpath map { _.data })
   val debugTestJVMArgs = Seq()//Seq("-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005")
-  val jvmArgs = debugTestJVMArgs ++ Seq("-Xmx4g", "-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK")
+  val jvmArgs = debugTestJVMArgs ++ Seq("-Xmx48g", "-Dcom.github.fommil.netlib.BLAS=com.github.fommil.netlib.F2jBLAS", "-Dcom.github.fommil.netlib.LAPACK=com.github.fommil.netlib.F2jLAPACK", "-Dcom.github.fommil.netlib.ARPACK=com.github.fommil.netlib.F2jARPACK")
   val (jh, os, bj, bd, jo, ci, ev) = (javaHome.value, outputStrategy.value, Vector[java.io.File](), 
 		Some(baseDirectory.value), (jvmArgs ++ Seq("-classpath", classpathString)).toVector, connectInput.value, sys.props.get("os.name") match {
 	  	//case Some(osname) if osname.startsWith("Mac OS X") =>  Map(("DYLD_INSERT_LIBRARIES",System.getProperty("java.home")+"/lib/libjsig.dylib"))
@@ -159,6 +159,7 @@ libraryDependencies ++= Seq(
   "commons-io"                    %   "commons-io"               % "2.5",
   "com.github.wnameless"          %   "json-flattener"           % "0.2.2",
   "com.typesafe.play"             %%  "play-json"                % "2.5.0-M2",
+  "technology.tabula" 			  %	  "tabula" 					 % "1.0.3",
 
   //////////////////////// Lens Libraries //////////////////////
   // WEKA - General-purpose Classifier Training/Deployment Library

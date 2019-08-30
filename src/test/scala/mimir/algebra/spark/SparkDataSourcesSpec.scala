@@ -36,7 +36,7 @@ object SparkDataSourcesSpec
   sequential
 
   "Data Sources for SparkBackend" should {
-    "For CSV data source" should {
+    /*"For CSV data source" should {
       "Be able to query from a CSV source" >> {
         val result = query("""
           SELECT * FROM R
@@ -309,7 +309,7 @@ object SparkDataSourcesSpec
         // )
         
       }
-    }
+    }*/
     
     
     /*"For jdbc data sources" should {
@@ -364,6 +364,34 @@ object SparkDataSourcesSpec
       }
     }*/
     
+    
+    "For PDF data source" should {
+
+      "Be able to load a PDF data source" >> {
+        db.loader.loadTable(
+          sourceFile = "test/data/bank.pdf", 
+          targetTable = Some(ID("P")), 
+          inferTypes = Some(true), 
+          detectHeaders = Some(false), 
+          format = FileFormat.PDF,
+          sparkOptions = Map( "pages" -> "3", "gridLines" -> "true")
+        )   
+        ok
+      }
+      
+      "Be able to query from a PDF source" >> {
+        val result = query("""
+          SELECT * FROM P
+        """)(_.toList.map(_.tuple.toList)).toList
+        
+         
+        result must be equalTo List(
+            List(BoolPrimitive(true), str(""), f(1.0005), i(1)), 
+            List(BoolPrimitive(true), str(""), f(1.0005), i(1)),
+            List(BoolPrimitive(true), str(""), f(1.0005), i(1))
+            )
+      }
+    }
     
   }
 }
