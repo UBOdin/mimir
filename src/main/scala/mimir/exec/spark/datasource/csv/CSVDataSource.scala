@@ -22,6 +22,11 @@ import java.io.ObjectInputStream
 import org.apache.spark.util.Utils
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import mimir.exec.spark.MimirSpark
+import com.univocity.parsers.csv.CsvParserSettings
+import com.univocity.parsers.csv.CsvParser
+import java.io.Reader
+import java.io.InputStreamReader
+import java.io.FileReader
 
 class DefaultSource extends DataSourceV2 with ReadSupport {
 
@@ -51,17 +56,6 @@ class CSVDataSourceReader(path: String, options: Map[String,String]) extends Dat
 
 }
 
-class SerializableConfiguration(@transient var value: Configuration) extends Serializable {
-  private def writeObject(out: ObjectOutputStream): Unit = {
-    out.defaultWriteObject()
-    value.write(out)
-  }
-
-  private def readObject(in: ObjectInputStream): Unit =  {  
-    value = new Configuration(false)
-    value.readFields(in)
-  }
-}
 
 class CSVDataSourceReaderFactory(partitionNumber: Int, filePath: String, options: Map[String,String], hasHeader: Boolean = true) 
 extends InputPartition[InternalRow] 
@@ -69,50 +63,25 @@ with InputPartitionReader[InternalRow] {
 
   def createPartitionReader:InputPartitionReader[InternalRow] = new CSVDataSourceReaderFactory(partitionNumber, filePath, options, hasHeader)
 
-  var iterator: Iterator[InternalRow] = null
-
+  var row: Array[String] = null
+  var parser: CsvParser = null
+  
   @transient
   def next = {
-    if (iterator == null) {
-      val sparkSession = MimirSpark.get.sparkSession//SparkSession.builder.getOrCreate()
-      val sparkContext = sparkSession.sparkContext
-      val broadcastedHadoopConf =
-      sparkSession.sparkContext.broadcast( new SerializableConfiguration(sparkContext.hadoopConfiguration))
-      val parsedOptions = new CSVOptions(
-      options,
-      sparkSession.sessionState.conf.csvColumnPruning,
-      sparkSession.sessionState.conf.sessionLocalTimeZone,
-      sparkSession.sessionState.conf.columnNameOfCorruptRecord)
-      val caseSensitive = sparkSession.sessionState.conf.caseSensitiveAnalysis
-      val columnPruning = sparkSession.sessionState.conf.csvColumnPruning
-      val conf = broadcastedHadoopConf.value.value
-      val requiredSchema = StructType(Seq())
-      val fileS = new FileStatus()
-      fileS.setPath(new Path(Paths.get(filePath).toFile().toURI()))
-      val mCsvParser = MimirCSVDataSource(parsedOptions)
-      val dataSchema = mCsvParser.inferSchema(sparkSession, Seq(fileS), parsedOptions).getOrElse(StructType(Seq()))
-      val parser = new UnivocityParser(
-        StructType(dataSchema.filterNot(_.name == parsedOptions.columnNameOfCorruptRecord)),
-        StructType(requiredSchema.filterNot(_.name == parsedOptions.columnNameOfCorruptRecord)),
-        parsedOptions)
-      
-      iterator = mCsvParser.readFile(
-        conf,
-        PartitionedFile(InternalRow.fromSeq(Seq(partitionNumber)),
-          filePath,
-          0,
-          100),
-        parser,
-        requiredSchema,
-        dataSchema,
-        caseSensitive,
-        columnPruning)
+    if (parser == null) {
+      val sparkContext = SparkSession.builder.getOrCreate().sparkContext
+      val out = new StringBuilder()
+      val settings = new CsvParserSettings()
+      settings.getFormat.setLineSeparator("\n")
+      parser = new CsvParser(settings)
+      parser.beginParsing(new FileReader(filePath))
     }
-    iterator.hasNext
+    row = parser.parseNext()
+    row != null
   }
 
   def get = {
-    iterator.next()
+    InternalRow.fromSeq(row.toSeq.map(rte => UTF8String.fromString(rte)))
   }
-  def close() = Unit
+  def close() = parser.stopParsing()
 }
