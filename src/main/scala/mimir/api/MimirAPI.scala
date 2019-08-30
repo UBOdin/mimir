@@ -109,7 +109,7 @@ class MimirVizierServlet() extends HttpServlet with LazyLogging {
                     cvJson.as[CreateViewRequest].handle(os)
                 }
                 case "/adaptive/create" => {
-                  Json.parse(text).as[CreateAdaptiveSchemaRequest].handle(os)
+                  throw new RuntimeException("Adaptive Schemas No Longer Exist")
                 }
                 case "/annotations/noschema" => {
                   Json.parse(text).as[ExplainSubsetWithoutSchemaRequest].handle(os)

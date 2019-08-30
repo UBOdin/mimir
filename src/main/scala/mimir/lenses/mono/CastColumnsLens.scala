@@ -1,6 +1,7 @@
 package mimir.lenses.mono
 
 import java.sql.SQLException
+import play.api.libs.json._
 
 import org.apache.spark.sql.expressions.Aggregator
 import org.apache.spark.sql.{DataFrame, Row, Encoders, Encoder,  Dataset}
@@ -18,6 +19,7 @@ import mimir.util.NameLookup
 import mimir.serialization.AlgebraJson._
 
 object CastColumnsLens 
+  extends MonoLens
 {
   var sampleLimit = 1000
   
@@ -45,7 +47,20 @@ object CastColumnsLens
       })
   }
 
+  def train(
+    db: Database,
+    name: ID,
+    query: Operator,
+    config: JsValue
+  ): JsValue = ???
 
+  def view(
+    db: Database,
+    name: ID,
+    query: Operator,
+    config: JsValue,
+    friendlyName: String
+  ): Operator = ???
 
 }
 

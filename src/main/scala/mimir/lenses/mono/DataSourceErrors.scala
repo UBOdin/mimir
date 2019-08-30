@@ -1,3 +1,56 @@
+package mimir.lenses.mono
+
+import java.sql.SQLException
+import play.api.libs.json._
+
+import mimir.Database
+import mimir.algebra._
+import mimir.lenses._
+
+
+/**
+ * A simple wrapper for CommentLens designed specifically to target CSVWithErrors
+ */
+object DataSourceErrors extends MonoLens
+{
+  val DATASOURCE_ERROR_COLUMN     = ID("_mimir_datasource_is_error")
+  val DATASOURCE_ERROR_ROW_COLUMN = ID("_mimir_datasource_error_row")
+
+  def train(
+    db: Database, 
+    name: ID, 
+    query: Operator,
+    configJson: JsValue 
+  ): JsValue =
+  {
+    val columns = query.columnNames
+    if(
+      columns.contains(DATASOURCE_ERROR_COLUMN)
+      || columns.contains(DATASOURCE_ERROR_ROW_COLUMN)
+    ){ 
+      throw new SQLException(s"Invalid DATA_SOURCE_ERRORS: Missing error definition columns: ${columns}")
+    }
+    Json.toJson(CommentLensConfig(
+      None,
+      Function(ID("concat"), Seq(
+        StringPrimitive("Error parsing row ["),
+        CastExpression(RowIdVar(), TString()),
+        StringPrimitive("]: "),
+        Var(DATASOURCE_ERROR_ROW_COLUMN)
+      ))
+    ))
+  }
+
+  def view(
+    db: Database, 
+    name: ID, 
+    query: Operator, 
+    configJson: JsValue, 
+    friendlyName: String
+  ): Operator = 
+    CommentLens.view(db, name, query, configJson, friendlyName)
+}
+
 // package mimir.adaptive
 
 // import com.typesafe.scalalogging.slf4j.LazyLogging

@@ -3,6 +3,7 @@ package mimir.api
 import play.api.libs.json._
 import mimir.algebra.PrimitiveValue
 import mimir.serialization.AlgebraJson._
+import mimir.ctables.{ReasonSet, Reason}
 
 sealed abstract class Response {
   

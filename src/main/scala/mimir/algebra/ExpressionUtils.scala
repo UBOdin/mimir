@@ -1,5 +1,7 @@
 package mimir.algebra;
 
+import sparsity.Name
+
 /**
  * Utility methods for manipulating expressions
  */
@@ -289,5 +291,13 @@ object ExpressionUtils {
         )
       }
     )
+  }
+
+  def rebindCaseInsensitive(e: Expression, lookup: (Name => ID)): Expression =
+  {
+    e match {
+      case Var(ID(v)) => Var(lookup(Name(v)))
+      case _ => e.recur { rebindCaseInsensitive(_, lookup) }
+    }
   }
 }

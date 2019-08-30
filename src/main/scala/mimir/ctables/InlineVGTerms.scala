@@ -5,38 +5,30 @@ import java.sql._
 import mimir.Database
 import mimir.algebra._
 import mimir.ctables._
-import mimir.ctables.vgterm._
 
 object InlineVGTerms {
+
+	private def assembleMultiFragmentKey(key: Seq[Expression]) =
+		key match {
+			case Seq() => IntPrimitive(1) 
+			case Seq(loneKey) => loneKey
+			case multiKey => Function(ID("concat"), multiKey.map { CastExpression(_, TString()) })
+		}
 
 	def inline(e: Expression, db: Database): Expression =
 	{
 
 		e match {
-			case v @ VGTerm(model, idx, args, hints) => {
-				val simplifiedChildren = v.children.map(apply(_, db))
-				val ret = v.rebuild(simplifiedChildren)
-
-				if(
-					ret.args.forall(_.isInstanceOf[PrimitiveValue])
-					&& ret.hints.forall(_.isInstanceOf[PrimitiveValue])
-				) { 
-					val model = db.models.get(v.name)
-					val args = ret.args.map { _.asInstanceOf[PrimitiveValue] }
-					val hints = ret.args.map { _.asInstanceOf[PrimitiveValue] }
-
-					model.bestGuess(v.idx, args, hints)
-				} else { 
-					BestGuess(
-						db.models.get(ret.name),
-						ret.idx,
-						ret.args,
-						ret.hints
+			case IsAcknowledged(lens, key) => 
+				if(db.lenses.areAllAcknowledged(lens)){ BoolPrimitive(true) }
+				else {
+					ExpressionUtils.makeInTest(
+						assembleMultiFragmentKey(key),
+						db.lenses.acknowledgedKeys(lens).map { 
+							assembleMultiFragmentKey(_)
+						}
 					)
 				}
-			}
-
-			case DataWarning(_, v, _, _, _) => v.recur(inline(_, db))
 
 			case Caveat(_, v, _, _) => v.recur(inline(_, db))
 

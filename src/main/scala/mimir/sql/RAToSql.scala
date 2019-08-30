@@ -443,11 +443,11 @@ class RAToSql(db: Database)
         (BoolPrimitive(true), Seq(sparsity.select.FromSelect(query, Name("SINGLETON"))))
       }
 
-      case View(name, query, annotations) => 
+      case View(_, query, _) => 
         logger.warn("Inlined view when constructing SQL: RAToSQL will not use materialized views")
         extractSelectsAndJoins(query)
 
-      case AdaptiveView(schema, name, query, annotations) => 
+      case LensView(_, _, query, _) => 
         logger.warn("Inlined view when constructing SQL: RAToSQL will not use materialized views")
         extractSelectsAndJoins(query)
 

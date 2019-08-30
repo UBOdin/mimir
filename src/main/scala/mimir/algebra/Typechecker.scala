@@ -118,8 +118,8 @@ class Typechecker(
 				fargs(1) match {
 					case TypePrimitive(t) => t
 					case p:PrimitiveValue => { p match {
-              case StringPrimitive(s) => Type.toSQLiteType(Integer.parseInt(s))
-              case IntPrimitive(i)  =>  Type.toSQLiteType(i.toInt)
+              case StringPrimitive(s) => Type.fromIndex(Integer.parseInt(s))
+              case IntPrimitive(i)  =>  Type.fromIndex(i.toInt)
       	      case _ => throw new RAException("Invalid CAST to '"+p+"' of type: "+recur(p))
             }
 					}
@@ -146,14 +146,11 @@ class Typechecker(
 				recur(child);
 				TBool()
 			case RowIdVar() => TRowId()
-			case VGTerm(model, idx, args, hints) => 
-				models match {
-					case Some(registry) =>
-						registry.get(model).varType(idx, args.map(recur(_)))
-					case None => throw new RAException("Need Model Manager to typecheck expressions with VGTerms")
-				}
-			case DataWarning(_, v, _, _, _) => recur(v)
-			case Caveat(_, v, _, _) => recur(v)
+			case Caveat(_, v, keys, message) => {
+				for(k <- keys) { recur(k) }
+				recur(message)
+				recur(v)
+			}
     }
   }
 
@@ -247,7 +244,7 @@ class Typechecker(
 			case Table(_, _, sch, meta) => (sch ++ meta.map( x => (x._1, x._3) ))
 
 			case View(_, query, _) => schemaOf(query)
-			case AdaptiveView(_, _, query, _) => schemaOf(query)
+			case LensView(_, _, query, _) => schemaOf(query)
 
 			case HardTable(sch,_) => sch
 

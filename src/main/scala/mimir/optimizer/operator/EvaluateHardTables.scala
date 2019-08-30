@@ -12,7 +12,7 @@ class EvaluateHardTables(typechecker: Typechecker, interpreter: Eval)
   def safeToEval(expr: Expression): Boolean =
   {
     expr match {
-      case _:VGTerm => false
+      case _:UncertaintyCausingExpression => false
       case _        => expr.children.map { safeToEval(_) }.fold(true) { _ && _ }
     }
   }

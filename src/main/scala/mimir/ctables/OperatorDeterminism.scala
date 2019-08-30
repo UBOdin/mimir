@@ -17,23 +17,6 @@ object OperatorDeterminism
   val mimirColDeterministicColumnPrefix = "MIMIR_COL_DET_"
   def mimirColDeterministicColumn(col:ID):ID = ID(mimirColDeterministicColumnPrefix,col)
 
-  private def extractMissingValueVar(expr: Expression): Var = {
-    expr match {
-      case Conditional(IsNullExpression(v1: Var), vg: VGTerm, v2: Var) =>
-        if(v1 == v2) v1 else throw new SQLException("Unexpected clause to extractMisingValueVar")
-
-      case _ => throw new SQLException("Unexpected clause to extractMisingValueVar")
-    }
-  }
-
-  private def isMissingValueExpression(expr: Expression): Boolean = {
-    expr match {
-      case Conditional(IsNullExpression(var1: Var), vg: VGTerm, var2: Var) =>
-        var1 == var2
-      case _ => false
-    }
-  }
-
   def splitArith(expr: Expression): List[Expression] = {
     expr match {
       case Arithmetic(op, lhs, rhs) => splitArith(lhs) ++ splitArith(rhs)
@@ -55,93 +38,93 @@ object OperatorDeterminism
     }
   }
 
-  def partition(oper: Project): Operator = {
-    val cond = oper.get(CTables.conditionColumn).get
-    var otherClausesOp: Operator = null
-    var missingValueClausesOp: Operator = null
-    var detExpr: List[Expression] = List()
-    var nonDeterExpr: List[Expression] = List()
+  // def partition(oper: Project): Operator = {
+  //   val cond = oper.get(CTables.conditionColumn).get
+  //   var otherClausesOp: Operator = null
+  //   var missingValueClausesOp: Operator = null
+  //   var detExpr: List[Expression] = List()
+  //   var nonDeterExpr: List[Expression] = List()
 
 
-    val (missingValueClauses, otherClauses) =
-      splitArith(cond).partition { (p) =>
-        p match {
-          case Comparison(_, lhs, rhs) => isMissingValueExpression(lhs) || isMissingValueExpression(rhs)
-          case _ => false
-        }
-      }
+  //   val (missingValueClauses, otherClauses) =
+  //     splitArith(cond).partition { (p) =>
+  //       p match {
+  //         case Comparison(_, lhs, rhs) => isMissingValueExpression(lhs) || isMissingValueExpression(rhs)
+  //         case _ => false
+  //       }
+  //     }
 
-    missingValueClauses.foreach{ (e) =>
-      e match {
-        case Comparison(op, lhs, rhs) =>
-          var lhsExpr = lhs
-          var rhsExpr = rhs
+  //   missingValueClauses.foreach{ (e) =>
+  //     e match {
+  //       case Comparison(op, lhs, rhs) =>
+  //         var lhsExpr = lhs
+  //         var rhsExpr = rhs
 
-          if (isMissingValueExpression(lhs)) {
-            val lhsVar = extractMissingValueVar(lhs)
-            lhsExpr = lhsVar
-            detExpr ++= List(Not(IsNullExpression(lhsVar)))
-            nonDeterExpr ++= List(IsNullExpression(lhsVar))
-          }
-          if (isMissingValueExpression(rhs)) {
-            val rhsVar = extractMissingValueVar(rhs)
-            rhsExpr = rhsVar
-            detExpr ++= List(Not(IsNullExpression(rhsVar)))
-            nonDeterExpr ++= List(IsNullExpression(rhsVar))
-          }
+  //         if (isMissingValueExpression(lhs)) {
+  //           val lhsVar = extractMissingValueVar(lhs)
+  //           lhsExpr = lhsVar
+  //           detExpr ++= List(Not(IsNullExpression(lhsVar)))
+  //           nonDeterExpr ++= List(IsNullExpression(lhsVar))
+  //         }
+  //         if (isMissingValueExpression(rhs)) {
+  //           val rhsVar = extractMissingValueVar(rhs)
+  //           rhsExpr = rhsVar
+  //           detExpr ++= List(Not(IsNullExpression(rhsVar)))
+  //           nonDeterExpr ++= List(IsNullExpression(rhsVar))
+  //         }
 
-          detExpr ++= List(Comparison(op, lhsExpr, rhsExpr))
+  //         detExpr ++= List(Comparison(op, lhsExpr, rhsExpr))
 
-        case _ => throw new SQLException("Missing Value Clauses must be Comparison expressions")
-      }
-    }
+  //       case _ => throw new SQLException("Missing Value Clauses must be Comparison expressions")
+  //     }
+  //   }
 
-    missingValueClausesOp = Union(
-      removeConstraintColumn(oper).rebuild(List(Select(detExpr.distinct.reduce(ExpressionUtils.makeAnd(_, _)), oper.children().head))),
-      oper.rebuild(List(Select(nonDeterExpr.distinct.reduce(ExpressionUtils.makeOr(_, _)), oper.children().head)))
-    )
+  //   missingValueClausesOp = Union(
+  //     removeConstraintColumn(oper).rebuild(List(Select(detExpr.distinct.reduce(ExpressionUtils.makeAnd(_, _)), oper.children().head))),
+  //     oper.rebuild(List(Select(nonDeterExpr.distinct.reduce(ExpressionUtils.makeOr(_, _)), oper.children().head)))
+  //   )
 
-    if(otherClauses.nonEmpty)
-      otherClausesOp = Project(
-        oper.columns.filterNot { 
-          p => p.name.equals(CTables.conditionColumn)
-        } ++ List(
-          ProjectArg(
-            CTables.conditionColumn, 
-            otherClauses.reduce(
-              ExpressionUtils.makeAnd(_, _)
-            )
-          )
-        ),
-        oper.source
-      )
+  //   if(otherClauses.nonEmpty)
+  //     otherClausesOp = Project(
+  //       oper.columns.filterNot { 
+  //         p => p.name.equals(CTables.conditionColumn)
+  //       } ++ List(
+  //         ProjectArg(
+  //           CTables.conditionColumn, 
+  //           otherClauses.reduce(
+  //             ExpressionUtils.makeAnd(_, _)
+  //           )
+  //         )
+  //       ),
+  //       oper.source
+  //     )
 
-    (otherClausesOp, missingValueClausesOp) match {
-      case (null, null) => throw new SQLException("Both partitions null")
+  //   (otherClausesOp, missingValueClausesOp) match {
+  //     case (null, null) => throw new SQLException("Both partitions null")
 
-      case (null, y) => y
+  //     case (null, y) => y
 
-      case (x, null) => x
+  //     case (x, null) => x
 
-      case (x, y) => Union(x, y)
-    }
-  }
+  //     case (x, y) => Union(x, y)
+  //   }
+  // }
 
   /**
    * Break up the conditions in the constraint column
    * into deterministic and non-deterministic fragments
    * ACCORDING to the data
    */
-  def partitionConstraints(oper: Operator): Operator = {
-    oper match {
-      case proj@Project(cols, src) 
-            if cols.exists { _.name.equals(CTables.conditionColumn) }
-          => partition(proj)
+  // def partitionConstraints(oper: Operator): Operator = {
+  //   oper match {
+  //     case proj@Project(cols, src) 
+  //           if cols.exists { _.name.equals(CTables.conditionColumn) }
+  //         => partition(proj)
 
-      case _ =>
-        oper
-    }
-  }
+  //     case _ =>
+  //       oper
+  //   }
+  // }
 
   /**
    * Rewrite the input operator to evaluate a 'provenance lite'
@@ -172,7 +155,7 @@ object OperatorDeterminism
         val outputColDeterminism = 
           columns.map( _ match { case ProjectArg(col, expr) => {
             val isDeterministic = 
-              ExpressionDeterminism.compileDeterministic(expr, models, inputColDeterminism)
+              ExpressionDeterminism.compileDeterministic(expr, inputColDeterminism)
             
             ProjectArg(mimirColDeterministicColumn(col), isDeterministic)
           }})
@@ -207,7 +190,7 @@ object OperatorDeterminism
         val aggArgDeterminism: Seq[(ID, Expression)] =
           aggregates.map  { agg => 
             val argDeterminism =
-              agg.args.map { ExpressionDeterminism.compileDeterministic(_, models, inputColDeterminism) }
+              agg.args.map { ExpressionDeterminism.compileDeterministic(_, inputColDeterminism) }
 
             (agg.alias, ExpressionUtils.makeAnd(argDeterminism))
           }
@@ -279,7 +262,7 @@ object OperatorDeterminism
 
         // Compute the determinism of the selection predicate
         val condDeterminism = 
-          ExpressionDeterminism.compileDeterministic(cond, models, inputColDeterminism)
+          ExpressionDeterminism.compileDeterministic(cond, inputColDeterminism)
 
 
         Select(cond, rewritten)
@@ -332,7 +315,7 @@ object OperatorDeterminism
           metadata + ViewAnnotation.TAINT
         )
       }
-      case AdaptiveView(model, name, query, metadata) => { 
+      case LensView(lens, name, query, metadata) => { 
         // Oliver:
         //   I'm on the fence about whether we want to treat this case as being different from default views.
         //   In principle, we want to decide whether any of the attributes or the table itself are NonDet and
@@ -345,8 +328,8 @@ object OperatorDeterminism
         //   For now, I'm just going to leave adaptive views to operate like they would otherwise operate.
         //   As soon as it becomes appropriate to start tagging things... then see 
         //   CTExplainer.explainSubsetWithoutOptimizing for an idea of how to implement this correctly.
-        AdaptiveView(
-          model, 
+        LensView(
+          lens, 
           name, 
           compile(query, models), 
           metadata + ViewAnnotation.TAINT
@@ -381,7 +364,7 @@ object OperatorDeterminism
 
         // Compute the determinism of the selection predicate
         val condDeterminism = 
-          ExpressionDeterminism.compileDeterministic(cond, models, inputColDeterminism)
+          ExpressionDeterminism.compileDeterministic(cond, inputColDeterminism)
 
         LeftOuterJoin(
           rewrittenLeft.renameByID( mimirRowDeterministicColumnName -> leftCol ),

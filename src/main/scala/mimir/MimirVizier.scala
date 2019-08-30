@@ -28,7 +28,6 @@ import mimir.algebra.function.SparkFunctions
 import mimir.api.MimirAPI
 import mimir.api.{ScalaEvalResponse, CreateLensResponse, DataContainer, Schema}
 import mimir.ctables.AnalyzeUncertainty
-import mimir.ctables.MultiReason
 import mimir.ctables.Reason
 import mimir.data.staging.{ RawFileProvider, LocalFSRawFileProvider }
 import mimir.exec.Compiler
@@ -773,7 +772,7 @@ object MimirVizier extends LazyLogging {
     try{
       logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
       val oper = totallyOptimize(db.sqlToRA(MimirSQL.Select(query)))
-      JSONBuilder.list(explainCell(oper, ID(col), RowIdPrimitive(row)).map(_.toJSON))
+      JSONBuilder.list(explainCell(oper, ID(col), RowIdPrimitive(row)).map(Json.toJson(_)))
     } catch {
       case t: Throwable => {
         logger.error("Error Explaining Cell: [" + col + "] [ "+ row +" ] [" + query + "]", t)
@@ -842,10 +841,10 @@ object MimirVizier extends LazyLogging {
       try {
       logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + oper + "]"  ) ;
       val provFilteredOper = db.uncertainty.filterByProvenance(oper,row)
-      val subsetReasons = db.uncertainty.explainSubset(
-              provFilteredOper, 
-              Seq(col).toSet, false, false)
-      db.uncertainty.getFocusedReasons(subsetReasons)
+      db.uncertainty.explainSubset(
+          provFilteredOper, 
+          Seq(col).toSet, false, false
+        ).flatMap { _.summarize(db) }
       } catch {
           case t: Throwable => {
             t.printStackTrace() // TODO: handle error
@@ -863,7 +862,7 @@ object MimirVizier extends LazyLogging {
     }
   }
   
-  def explainRow(query: String, row:String) : Seq[mimir.ctables.Reason] = {
+  def explainRow(query: String, row:String) : Seq[Reason] = {
     try{
     logger.debug("explainRow: From Vistrails: [ "+ row +" ] [" + query + "]"  ) ;
     val oper = totallyOptimize(db.sqlToRA(MimirSQL.Select(query)))
@@ -876,14 +875,15 @@ object MimirVizier extends LazyLogging {
     }
   }
   
-  def explainRow(oper: Operator, row:String) : Seq[mimir.ctables.Reason] = {
+  def explainRow(oper: Operator, row:String) : Seq[Reason] = {
     try{
     val timeRes = logTime("explainRow") {
       logger.debug("explainRow: From Vistrails: [ "+ row +" ] [" + oper + "]"  ) ;
       val cols = oper.columnNames
-      db.uncertainty.getFocusedReasons(db.uncertainty.explainSubset(
-              db.uncertainty.filterByProvenance(oper,RowIdPrimitive(row)), 
-              Seq().toSet, true, false))
+      db.uncertainty.explainSubset(
+          db.uncertainty.filterByProvenance(oper,RowIdPrimitive(row)), 
+          Seq().toSet, true, false)
+        .flatMap { _.summarize(db) }
     }
     logger.debug(s"explainRow Took: ${timeRes._2}")
     timeRes._1.distinct
@@ -936,7 +936,7 @@ object MimirVizier extends LazyLogging {
     try{
       logger.debug("explainCell: From Vistrails: [" + query + "]"  ) ;
       val oper = totallyOptimize(db.sqlToRA(MimirSQL.Select(query)))
-      JSONBuilder.list(explainEverything(oper).map(_.all(db).toList).flatten.map(_.toJSON))
+      JSONBuilder.list(explainEverything(oper).map(_.all(db).toList).flatten.map(Json.toJson(_)))
     } catch {
       case t: Throwable => {
         logger.error("Error Explaining Cell: [" + query + "]", t)
@@ -950,16 +950,10 @@ object MimirVizier extends LazyLogging {
     try{
       logger.debug("explainCell: From Vistrails: [" + query + "]"  ) ;
       val oper = totallyOptimize(db.sqlToRA(MimirSQL.Select(query)))
-      JSONBuilder.list(explainEverything(oper).map(rset => {
-        val subReasons = rset.take(db, 4).toSeq
-  			if(subReasons.size > 3){
-  				logger.trace("   -> Too many explanations to fit in one group")
-  				Seq(new MultiReason(db, rset))
-  			} else {
-  				logger.trace(s"   -> Only ${subReasons.size} explanations")
-  				subReasons
-  			}
-        }).flatten.map(_.toJSON))
+      Json.toJson(
+        explainEverything(oper)
+            .flatMap { _.summarize(db) }
+      ).toString
     } catch {
       case t: Throwable => {
         logger.error("Error Explaining Cell: [" + query + "]", t)
@@ -968,22 +962,18 @@ object MimirVizier extends LazyLogging {
     }
   }
   
-  def explainEverythingAll(query: String) : Seq[mimir.ctables.Reason] = {
+  def explainEverythingAll(query: String) : Seq[Reason] = {
     try{
-    logger.debug("explainEverything: From Vistrails: [" + query + "]"  ) ;
-    val oper = db.sqlToRA(MimirSQL.Select(query))
-    explainEverything(oper).par.map(/*_.all(db).toList*/rset => {
-        Timer.monitor(s"Explaining everything for $rset", logger.trace(_)) {
-          val subReasons = rset.take(db, 4).toSeq
-    			if(subReasons.size > 3){
-    				logger.trace("   -> Too many explanations to fit in one group")
-    				Seq(new MultiReason(db, rset))
-    			} else {
-    				logger.trace(s"   -> Only ${subReasons.size} explanations")
-    				subReasons
-    			}
-        }
-      }).seq.flatten   
+      logger.debug("explainEverything: From Vistrails: [" + query + "]"  ) ;
+      val oper = db.sqlToRA(MimirSQL.Select(query))
+      explainEverything(oper)
+          .par
+          .flatMap { rset => 
+            Timer.monitor(s"Explaining everything for $rset", logger.trace(_)) {
+              rset.summarize(db)
+            }
+          }
+          .seq
     } catch {
       case t: Throwable => {
         logger.error("Error Explaining Everything: [" + query + "]", t)
@@ -1022,63 +1012,32 @@ object MimirVizier extends LazyLogging {
     }    
   }
   
-  def repairReason(reasons: Seq[mimir.ctables.Reason], idx:Int) : mimir.ctables.Repair = {
+  def repairReason(reason: Reason) : Unit = {
     try{
     val timeRes = logTime("repairReason") {
-      logger.debug("repairReason: From Vistrails: [" + idx + "] [ " + reasons(idx) + " ]" ) ;
-      reasons(idx).repair
+      logger.debug("repairReason: From Vistrails: [ " + reason + " ]" ) ;
+      reason.acknowledge(db)
     }
     logger.debug(s"repairReason Took: ${timeRes._2}")
     timeRes._1
     } catch {
       case t: Throwable => {
-        logger.error("Error Repairing: [" + idx + "] [ " + reasons(idx) + " ]", t)
+        logger.error("Error Repairing: [" + reason + " ]", t)
         throw t
       }
     }  
   }
   
-  def feedback(reasons: Seq[mimir.ctables.Reason], idx:Int, ack: Boolean, repairStr: String) : Unit = {
+  def feedback(reason: mimir.ctables.Reason) : Unit = {
     try {
       val timeRes = logTime("feedback") {
-        logger.debug("feedback: From Vistrails: [" + idx + "] [ " + reasons(idx) + " ] [ " + ack + " ] [ " +repairStr+" ]" ) ;
-        val reason = reasons(idx) 
-        if(ack) { reason.acknowledge(db) }
-        else { 
-          val fix = MimirSQL.ExpressionList(repairStr)
-                            .map { db.sqlToRA(_) }
-          reason.repair(db, fix)
-        }
+        logger.debug("feedback: From Vistrails: [ " + reason + " ]") ;
+        reason.acknowledge(db)
       }
       logger.debug(s"feedback Took: ${timeRes._2}")
     } catch {
       case t: Throwable => {
-        logger.error("Error with Feedback: [" + idx + "] [ " + reasons(idx) + " ] [ " + ack + " ] [ " +repairStr+" ]", t)
-        throw t
-      }
-    }    
-  }
-  
-  def feedback(model:String, idx:Int, argsHints:Seq[Any], ack: Boolean, repairStr: String) : Unit = {
-    try{
-    val timeRes = logTime("feedback") {
-      logger.debug("feedback: From Vistrails: [" + idx + "] [ " + model + " ] [ " + argsHints.mkString(",") + " ] [ " + ack + " ] [ " +repairStr+" ]" ) ;
-      val modelInst = db.models.get(ID(model))
-      val splitIndex = modelInst.argTypes(idx).length
-      val (args, hints) = argsHints.map(arg => ExpressionParser.expr(arg.toString()).asInstanceOf[PrimitiveValue]).splitAt(splitIndex)
-      val update = if(ack) { modelInst.bestGuess(idx, args, hints) } else { db.sqlToRA(MimirSQL.Expression(repairStr)) }
-
-      db.models.feedback(
-        modelInst,
-        idx, 
-        args, 
-        db.interpreter(update)
-      )
-    }
-    logger.debug(s"feedback Took: ${timeRes._2}")
-    } catch {
-      case t: Throwable => {
-        logger.error("Error with Feedback: [" + idx + "] [ " + model + " ] [ " + argsHints.mkString(",") + " ]  [ " + ack + " ] [ " +repairStr+" ]", t)
+        logger.error("Error with Feedback: [" + reason + " ]", t)
         throw t
       }
     }    

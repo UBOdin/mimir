@@ -1,11 +1,14 @@
 package mimir.ctables
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import play.api.libs.json._
+import play.api.libs.functional.syntax._
 
 import mimir.Database
 import mimir.algebra._
 import mimir.models._
 import mimir.exec.mode.UnannotatedBestGuess
+import mimir.serialization.AlgebraJson._
 
 sealed trait ArgLookup
 
@@ -18,12 +21,33 @@ case class SingleArgLookup(
   val message: Seq[String]
 ) extends ArgLookup
 
+object ArgLookup
+{
+  implicit val multipleFormat: Format[MultipleArgLookup] = Json.format
+  implicit val simgleFormat: Format[SingleArgLookup] = Json.format
 
-class ReasonSet(
+  implicit val format = Format[ArgLookup](
+    (
+      JsPath.read[MultipleArgLookup].asInstanceOf[Reads[ArgLookup]] or 
+      JsPath.read[SingleArgLookup].asInstanceOf[Reads[ArgLookup]]
+    ),(
+      new Writes[ArgLookup]{ def writes(a: ArgLookup) = 
+        a match {
+          case single: SingleArgLookup => Json.toJson(single)
+          case multiple: MultipleArgLookup => Json.toJson(multiple)
+        }
+      }
+    )
+  )
+
+}
+
+
+case class ReasonSet(
   val lens: ID,
-  val argLookup: ArgLookup,
-  val toReason: ((Seq[PrimitiveValue], String) => Reason)
+  val argLookup: ArgLookup
 )
+  extends LazyLogging
 {
   def isEmpty(db: Database): Boolean =
   {
@@ -83,6 +107,14 @@ class ReasonSet(
     }
   }
 
+  def toReason(db: Database, key: Seq[PrimitiveValue], message: String): Reason =
+    Reason(
+      lens,
+      key,
+      message,
+      db.lenses.isAcknowledged(lens, key)
+    )
+
   def allArgs(db: Database): Iterable[(Seq[PrimitiveValue], String)] =
     allArgs(db, None)
   def takeArgs(db: Database, count: Int): Iterable[(Seq[PrimitiveValue], String)] = 
@@ -91,21 +123,43 @@ class ReasonSet(
     allArgs(db, Some(count), Some(offset))
 
   def all(db: Database): Iterable[Reason] = 
-    allArgs(db).map { case (args, message) => toReason(args, message) }
+    allArgs(db).map { case (key, message) => toReason(db, key, message) }
   def take(db: Database, count: Int): Iterable[Reason] = 
-    takeArgs(db, count).map { case (args, message) => toReason(args, message) }
+    takeArgs(db, count).map { case (key, message) => toReason(db, key, message) }
   def take(db: Database, count: Int, offset:Int): Iterable[Reason] = 
-    takeArgs(db, count, offset).map { case (args, message) => toReason(args, message) }
+    takeArgs(db, count, offset).map { case (key, message) => toReason(db, key, message) }
 
   
   override def toString: String =
   {
     val lookupString =
       argLookup match {
-        case MultipleArgLookup(query, args, message) => "[" + args.mkString(", ") + "][" + message.toString + "] <- \n" + query.toString("   ")
+        case MultipleArgLookup(query, key, message) => "[" + key.mkString(", ") + "][" + message.toString + "] <- \n" + query.toString("   ")
         case SingleArgLookup(messages) => messages.map { "["+_+"]" }.mkString(", ")
       }
     s"$lens${lookupString}"
+  }
+
+  def summarize(
+    db: Database,
+    maxSize: Int = 3
+  ): Seq[Reason] =
+  {
+    val sample = take(db, maxSize+1).toSeq
+    if(sample.size > maxSize){
+      logger.trace("   -> Too many explanations to fit in one group")
+      Seq(
+        Reason(
+          sample.head.lens, 
+          sample.head.key, 
+          s"${size(db)} reasons like ${sample.head.message}",
+          false
+        )
+      )
+    } else {
+      logger.trace(s"   -> Only ${sample.size} explanations")
+      sample
+    }    
   }
 }
 
@@ -119,11 +173,15 @@ object ReasonSet
         logger.debug(s"Make ReasonSet for Caveat $lens from\n$input")
         return new ReasonSet(
           lens,
-          Some( ArgLookup(input, keyExprs, messageExpr) ),
-          (keys, message) => new SimpleCaveatReason(model, 0, message, keys)
+          if(keyExprs.isEmpty 
+              && ExpressionUtils.getColumns(messageExpr).isEmpty)
+                { SingleArgLookup(Seq(db.interpreter.evalString(messageExpr))) }
+          else  { MultipleArgLookup(input, keyExprs, messageExpr) }
         )
       }
 
     }
   }
+
+  implicit val format: Format[ReasonSet] = Json.format
 }

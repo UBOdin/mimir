@@ -82,8 +82,12 @@ trait ExpressionConstructors
     IsNullExpression(toExpression)
 
   def thenElse(thenClause: Expression)(elseClause: Expression): Expression =
-    Conditional(toExpression, thenClause, elseClause)
-
+    toExpression match {
+      case BoolPrimitive(true) => thenClause
+      case BoolPrimitive(false) => elseClause
+      case condition => Conditional(condition, thenClause, elseClause)
+    }
+  
   def not: Expression =
     ExpressionUtils.makeNot(toExpression)
 }

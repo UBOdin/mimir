@@ -6,9 +6,9 @@ import mimir.ctables._
 import mimir.models._
 import mimir.algebra._
 
-class Oracle(time : Double, trcmap : collection.mutable.LinkedHashMap[(Model,Int,Seq[PrimitiveValue]),(Double,Double,Double)]) {
+class Oracle(time : Double, trcmap : collection.mutable.LinkedHashMap[(ID,Seq[PrimitiveValue]),(Double,Double,Double)]) {
 	var T: Double = time
-	var trc: collection.mutable.LinkedHashMap[(Model,Int,Seq[PrimitiveValue]),(Double,Double,Double)] = trcmap
+	var trc: collection.mutable.LinkedHashMap[(ID,Seq[PrimitiveValue]),(Double,Double,Double)] = trcmap
 }
 
 object CTPrioritizer {
@@ -18,7 +18,7 @@ object CTPrioritizer {
 		implicit val problem = MIProblem(SolverLib.ojalgo)
 
 		if(reasons.size != 0) {
-			val trcmap = collection.mutable.LinkedHashMap[(Model,Int,Seq[PrimitiveValue]),(Double,Double,Double)]()
+			val trcmap = collection.mutable.LinkedHashMap[(ID,Seq[PrimitiveValue]),(Double,Double,Double)]()
 			var i = 0
 			var j = 0.0
 			var k = 0.0
@@ -33,8 +33,8 @@ object CTPrioritizer {
 				j += 0.5
 				k += 2
 				//trcmap += ("{{"+reason.model+";"+reason.idx+"["+reason.args.mkString(", ")+"]}}" -> (i,j,k))
-				trcmap += ((reason.model,reason.idx,reason.args) -> (i,j,k))
-				q(i-1) = reason.model.confidence(reason.idx,reason.args,reason.hints)
+				trcmap += ((reason.lens,reason.key) -> (i,j,k))
+				q(i-1) = 0.5 // TODO: Figure out if the lens supports a confidence measure
 			}
 			val oracle = new Oracle(10,trcmap)
 			// println(reasons)

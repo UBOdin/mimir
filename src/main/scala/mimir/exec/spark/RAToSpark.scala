@@ -149,10 +149,8 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir.Database
 import mimir.algebra._
-import mimir.ctables.vgterm._
 import mimir.data._
 import mimir.exec.spark.udf._
-import mimir.exec.sqlite.VGTermFunctions
 import mimir.models.Model
 import mimir.provenance.Provenance
 import mimir.util.SparkUtils
@@ -297,8 +295,8 @@ class RAToSpark(db: mimir.Database)
           }),
           mimirOpToSparkOp(query))
 			}
-      case av@AdaptiveView(schemaName, name, query, annotations) => {
-        val schema = db.typechecker.schemaOf(av)
+      case LensView(lens, name, query, annotations) => {
+        val schema = db.typechecker.schemaOf(query)
         val table = CatalogTable(
           TableIdentifier(name.id),
           CatalogTableType.VIEW,
@@ -618,28 +616,11 @@ class RAToSpark(db: mimir.Database)
       case CastExpression(expr, t) => {
         org.apache.spark.sql.catalyst.expressions.Cast(mimirExprToSparkExpr(oper,expr), RAToSpark.getSparkType(t), None)
       }
-      case BestGuess(model, idx, args, hints) => {
-        val name = model.name
-        //logger.debug(s"-------------------Translate BestGuess VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
-       BestGuessUDF(oper, model, idx, args.map(arg => mimirExprToSparkExpr(oper,arg)), hints.map(hint => mimirExprToSparkExpr(oper,hint))).getUDF
-        //UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ++ hints.map(mimirExprToSparkExpr(oper,_))), true )
+      case IsAcknowledged(lens, keys) => {
+        throw new RAException("Spark expects IsAcknowledged to be compiled out already")
       }
-      case IsAcknowledged(model, idx, args) => {
-        val name = model.name
-        //logger.debug(s"-------------------Translate IsAcknoledged VGTerm($name, $idx, (${args.mkString(",")}))")
-        AckedUDF(oper, model, idx, args.map(arg => mimirExprToSparkExpr(oper,arg))).getUDF
-        //UnresolvedFunction(mimir.ctables.CTables.FN_IS_ACKED, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ), true )
-      }
-      case Sampler(model, idx, args, hints, seed) => {
-        SampleUDF(oper, model, idx, seed, args.map(arg => mimirExprToSparkExpr(oper,arg)), hints.map(hint => mimirExprToSparkExpr(oper,hint))).getUDF
-      }
-      case VGTerm(name, idx, args, hints) => { //default to best guess
-        //logger.debug(s"-------------------Translate VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
-        val model = db.models.get(name)
-        BestGuessUDF(oper, model, idx, args.map(arg => mimirExprToSparkExpr(oper,arg)), hints.map(hint => mimirExprToSparkExpr(oper,hint))).getUDF
-        //UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ++ hints.map(mimirExprToSparkExpr(oper,_))), true )
-      }
-      case DataWarning(_, v, _, _, _) => {
+      case Caveat(_, v, _, _) => {
+        throw new RAException("Spark expects Caveat to be compiled out already")
         mimirExprToSparkExpr(oper, v)
       }
       case IsNullExpression(iexpr) => {
@@ -693,7 +674,6 @@ class RAToSpark(db: mimir.Database)
   }
   
   def mimirFunctionToSparkFunction(oper:Operator, func:Function) : org.apache.spark.sql.catalyst.expressions.Expression = {
-    val vgtBGFunc = VGTermFunctions.bestGuessVGTermFn
     func.op match {
       case ID("random") => {
         Randn(1L)
@@ -703,9 +683,6 @@ class RAToSpark(db: mimir.Database)
       }
       case ID("second") => {
         org.apache.spark.sql.catalyst.expressions.Second(mimirExprToSparkExpr(oper,func.params.head))
-      }
-      case `vgtBGFunc` => {
-        throw new Exception(s"Function Translation not implemented $vgtBGFunc(${func.params.mkString(",")})")
       }
       case ID(name) => {
         FunctionUDF(oper, name, db.functions.get(func.op), func.params.map(arg => mimirExprToSparkExpr(oper,arg)), func.params.map(arg => db.typechecker.typeOf(arg, oper))).getUDF

@@ -108,9 +108,9 @@ object Provenance extends LazyLogging {
       case View(name, query, meta) => val (newQuery, rowIds) = compile(query)
         ( View(name, newQuery, meta + ViewAnnotation.PROVENANCE), rowIds)
       
-      case AdaptiveView(model, name, query, meta) => 
+      case LensView(lens, table, query, meta) => 
         val (newQuery, rowIds) = compile(query)
-        ( AdaptiveView(model, name, newQuery, meta + ViewAnnotation.PROVENANCE), rowIds)
+        ( LensView(lens, table, newQuery, meta + ViewAnnotation.PROVENANCE), rowIds)
 
       case Table(name, source, schema, meta) =>
         (
@@ -310,7 +310,7 @@ object Provenance extends LazyLogging {
       // for now... drop the view and focus on the query itself.
       case View(_, query, _) => 
         doFilterForToken(query, rowIdsByColumn, db)
-      case AdaptiveView(_, _, query, _) => 
+      case LensView(_, _, query, _) => 
         doFilterForToken(query, rowIdsByColumn, db)
 
       case Table(_, _, _, meta) =>

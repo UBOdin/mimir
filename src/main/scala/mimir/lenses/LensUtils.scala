@@ -10,20 +10,6 @@ import sparsity.Name
 
 object LensUtils {
 
-  def columnLookupFunction(query: Operator) =
-  {
-    val columnLookup = NameLookup.fromID(query.columnNames)
-    val queryColumns = query.columnNames
-
-    (col: String) => {
-      columnLookup(Name(col)).getOrElse {
-        throw new SQLException(s"Invalid target column: $col; Available columns are ${queryColumns.mkString(", ")}")
-
-
-      }
-    }
-  }
-
   def extractModelsByColumn(
     modelMap: Seq[
       ( ID,                   // Model Group
@@ -63,34 +49,5 @@ object LensUtils {
         .map { (_:(ID, Seq[Model]))._2.head }     // We only need one copy of each model
 
     (candidateModels, modelEntities)
-  }
- 
-  def buildMetaModel(
-    metaModel: ID, 
-    metaModelIdx: Int,
-    metaModelArgs: Seq[Expression],
-    metaModelHints: Seq[Expression],
-    inputModels: Seq[(ID,Int,Seq[Expression],ID)], 
-    inputArgs: Seq[Expression]
-  ): Expression =
-  {
-    val inputVGTerms =
-      inputModels.
-        map({case (model, idx, hints, cat) => (
-          StringPrimitive(cat.id), 
-          VGTerm(model, idx, inputArgs, hints)
-        )})
-
-    inputVGTerms match {
-      case Nil => 
-        throw new SQLException("No valid models to be wrapped")
-      case List((_, term)) => term
-      case _ => 
-        ExpressionUtils.makeCaseExpression(
-          VGTerm(metaModel, metaModelIdx, metaModelArgs, metaModelHints),
-          inputVGTerms,
-          NullPrimitive()
-        )
-    }
   }
 }

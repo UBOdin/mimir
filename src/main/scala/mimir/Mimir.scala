@@ -264,83 +264,79 @@ object Mimir extends LazyLogging {
     val column = analyze.column      // The column of the cell to analyze, or null if full row or table scan
     val query = db.sqlToRA(analyze.target)
 
-    analyze.rowid match {
-      case None => {
-        output.print("==== Analyze Table ====")
-        logger.debug("Starting to Analyze Table")
-        val reasonSets = db.uncertainty.explainEverything(query)
-        logger.debug("Done Analyzing Table")
-        for(reasonSet <- reasonSets){
-          logger.debug(s"Expanding $reasonSet")
-          // Workaround for a bug: SQLite crashes if a UDA is run on an empty input
-          if(!reasonSet.isEmpty(db)){
-            logger.debug(s"Not Empty: \n${reasonSet.argLookup}")
-            val count = reasonSet.size(db);
-            logger.debug(s"Size = $count")
-            val reasons = reasonSet.take(db, 5);
-            logger.debug(s"Got ${reasons.size} reasons")
-            printReasons(reasons);
-            if(count > reasons.size){
-              output.print(s"... and ${count - reasons.size} more like the last")
+    logger.debug("Starting to Analyze Table")
+    val reasonSets = 
+      analyze.rowid match {
+        case None => {
+          output.print("==== Analyze Table ====")
+          db.uncertainty.explainEverything(query)
+        }
+        case Some(rowid) => {
+          val token = RowIdPrimitive(db.sqlToRA(rowid).asString)
+          analyze.column match {
+            case None => { 
+              output.print("==== Analyze Row ====")
+              db.uncertainty.explainSubset(
+                oper = query, 
+                wantCol = query.columnNames.toSet, 
+                wantRow = true, 
+                wantSort = false,
+                wantSchema = true
+              )
+            }
+            case Some(column) => {
+              output.print("==== Analyze Cell ====")
+              db.uncertainty.explainSubset(
+                oper = query, 
+                wantCol = Set(OperatorUtils.columnLookupFunction(query)(column)), 
+                wantRow = true, 
+                wantSort = false,
+                wantSchema = true
+              )
             }
           }
-        }
-        if(analyze.withAssignments) {
-          CTPrioritizer.prioritize(reasonSets.flatMap(x=>x.all(db)))
         }
       }
-      case Some(rowid) => {
-        val token = RowIdPrimitive(db.sqlToRA(rowid).asString)
-        analyze.column match {
-          case None => { 
-            output.print("==== Analyze Row ====")
-            val explanation = 
-              db.uncertainty.explainRow(query, token)
-            printReasons(explanation.reasons)
-            output.print("--------")
-            output.print("Row Probability: "+explanation.probability)
-            if(analyze.withAssignments) {
-              CTPrioritizer.prioritize(explanation.reasons)
-            }
-          }
-          case Some(column) => {
-            output.print("==== Analyze Cell ====")
-            val explanation = 
-              db.uncertainty.explainCell(query, token, ID.upper(column))
-            printReasons(explanation.reasons)
-            output.print("--------")
-            output.print("Examples: "+explanation.examples.map(_.toString).mkString(", "))
-            if(analyze.withAssignments) {
-              CTPrioritizer.prioritize(explanation.reasons)
-            }
-          }
-        } 
+    for(reasonSet <- reasonSets){
+      logger.debug(s"Expanding $reasonSet")
+      // Workaround for a bug: SQLite crashes if a UDA is run on an empty input
+      if(!reasonSet.isEmpty(db)){
+        logger.debug(s"Not Empty: \n${reasonSet.argLookup}")
+        val count = reasonSet.size(db);
+        logger.debug(s"Size = $count")
+        val reasons = reasonSet.take(db, 5);
+        logger.debug(s"Got ${reasons.size} reasons")
+        printReasons(reasons);
+        if(count > reasons.size){
+          output.print(s"... and ${count - reasons.size} more like the last")
+        }
       }
     }
+    logger.debug("Done Analyzing Table")
   }
 
   def printReasons(reasons: Iterable[Reason])
   {
-    for(reason <- reasons.toSeq.sortBy( r => if(r.confirmed){ 1 } else { 0 } )){
+    for(reason <- reasons.toSeq.sortBy( r => if(r.acknowledged){ 1 } else { 0 } )){
       val argString = 
-        if(!reason.args.isEmpty){
-          " (" + reason.args.mkString(",") + ")"
+        if(!reason.key.isEmpty){
+          " (" + reason.key.mkString(",") + ")"
         } else { "" }
-      output.print(reason.reason)
-      reason match {
-        case _:DataWarningReason => 
-          if(!reason.confirmed) { 
-            output.print(s"    ... acknowledge with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${reason.repair.exampleString}`")
-          }
-        case _ => 
-          if(!reason.confirmed){
-            output.print(s"   ... repair with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.repair.exampleString }`");
-            output.print(s"   ... confirm with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.guess }`");
-          } else {
-            output.print(s"   ... ammend with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.repair.exampleString }`");
-          }
-      }
-      output.print("")
+      output.print(reason.message)
+      // reason match {
+      //   case _:SimpleCaveatReason => 
+      //     if(!reason.acknowledged) { 
+      //       output.print(s"    ... acknowledge with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${reason.repair.exampleString}`")
+      //     }
+      //   case _ => 
+      //     if(!reason.confirmed){
+      //       output.print(s"   ... repair with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.repair.exampleString }`");
+      //       output.print(s"   ... confirm with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.guess }`");
+      //     } else {
+      //       output.print(s"   ... ammend with `FEEDBACK ${reason.model.name} ${reason.idx}$argString IS ${ reason.repair.exampleString }`");
+      //     }
+      // }
+      // output.print("")
     }
   }
 

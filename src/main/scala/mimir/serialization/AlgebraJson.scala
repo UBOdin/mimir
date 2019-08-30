@@ -103,10 +103,10 @@ object AlgebraJsonCodecs
           "annotations" -> JsArray(annotations.toSeq.map { _.toString }.map { JsString(_) })
         ))
 
-      case AdaptiveView(model, name, query, annotations) => 
+      case LensView(lens, name, query, annotations) => 
         JsObject(Map[String,JsValue](
           "type" -> JsString("table_adaptive"),
-          "model" -> JsString(model.id),
+          "lens" -> (lens match { case Some(multi) => JsString(multi.id); case None => JsNull }),
           "name" -> JsString(name.id),
           "query" -> ofOperator(query),
           "annotations" -> JsArray(annotations.toSeq.map { _.toString }.map { JsString(_) })
@@ -247,8 +247,9 @@ object AlgebraJsonCodecs
           }.toSet
         )
       case "table_adaptive" =>
-        AdaptiveView(
-          ID(elems("model").asInstanceOf[JsString].value),
+        LensView(
+          elems.get("lens")
+               .map { _.as[ID] },
           ID(elems("name").asInstanceOf[JsString].value),
           toOperator(elems("query")),
           elems("annotations").asInstanceOf[JsArray].value.map { annot =>
@@ -336,31 +337,19 @@ object AlgebraJsonCodecs
           "type" -> JsString("rowid_var")
         ))
 
-      case VGTerm(model, idx, args, hints) =>
-        JsObject(Map[String, JsValue](
-          "type" -> JsString("vgterm"),
-          "model" -> JsString(model.id),
-          "var_index" -> JsNumber(idx),
-          "arguments" -> ofExpressionList(args),
-          "hints" -> ofExpressionList(hints)
-        ))
-
-      case DataWarning(name, v, message, key, idx) =>
-        JsObject(Map[String, JsValue](
-          "type" -> JsString("data_warning"),
-          "name" -> JsString(name.id),
-          "value" -> ofExpression(v),
-          "message" -> ofExpression(message),
-          "key" -> ofExpressionList(key),
-          "idx" -> JsNumber(idx)
-        ))
-
       case Caveat(name, v, key, message) => 
         JsObject(Map[String, JsValue](
           "type" -> JsString("caveat"),
           "name" -> JsString(name.id),
           "value" -> ofExpression(v),
           "message" -> ofExpression(message),
+          "key" -> ofExpressionList(key)
+        ))
+
+      case IsAcknowledged(lens, key) => 
+        JsObject(Map[String, JsValue](
+          "type" -> JsString("is_acknowledged"),
+          "name" -> JsString(lens.id),
           "key" -> ofExpressionList(key)
         ))
 
@@ -427,31 +416,18 @@ object AlgebraJsonCodecs
       case "rowid_var" =>
         RowIdVar()
 
-      case "vgterm" =>
-        VGTerm(
-          ID(fields("model").asInstanceOf[JsString].value),
-          fields("var_index").asInstanceOf[JsNumber].value.toLong.toInt,
-          toExpressionList(fields("arguments")),
-          toExpressionList(fields("hints"))
-        )
-
-      case "data_warning" => 
-        DataWarning(
-          ID(fields("name").asInstanceOf[JsString].value),
-          toExpression(fields("value")),
-          toExpression(fields("message")),
-          toExpressionList(fields("key")),
-          fields.get("idx")
-                .map { _.asInstanceOf[JsNumber].value.toLong.toInt }
-                .getOrElse(0)
-        )
-
       case "caveat" => 
         Caveat(
           ID(fields("name").asInstanceOf[JsString].value),
           toExpression(fields("value")),
           toExpressionList(fields("key")),
           toExpression(fields("message"))
+        )
+
+      case "is_acknowledged" =>
+        IsAcknowledged(
+          fields("name").as[ID],
+          toExpressionList(fields("key"))
         )
 
       // fall back to treating it as a primitive type

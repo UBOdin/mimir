@@ -144,7 +144,7 @@ object ProjectRedundantColumns extends OperatorOptimization {
       }
 
       case view: View => view
-      case view: AdaptiveView => view
+      case view: LensView => view
       case table: Table => table
       case HardTable(sch,data) => 
       {

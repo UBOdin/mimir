@@ -299,7 +299,7 @@ object MimirCast extends org.sqlite.Function with LazyLogging {
     def xFunc(): Unit = { 
       if (args != 2) { throw new java.sql.SQLDataException("NOT THE RIGHT NUMBER OF ARGS FOR MIMIRCAST, EXPECTED 2 IN FORM OF MIMIRCAST(COLUMN,TYPE)") }
       try {
-        val t = Type.toSQLiteType(value_int(1))
+        val t = Type.fromIndex(value_int(1))
         val v = value_text(0)
         logger.trace(s"Casting $v as $t")
         t match {

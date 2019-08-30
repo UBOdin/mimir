@@ -21,20 +21,20 @@ case class InvalidProvenance(msg: String, token: RowIdPrimitive)
 
 class AnalyzeUncertainty(db: Database) extends LazyLogging {
 
-	def getFocusedReasons(reasonSets: Seq[ReasonSet]): Seq[Reason] =
-	{
-		reasonSets.flatMap { reasonSet => 
-			logger.trace(s"Trying to Expand: $reasonSet")
-			val subReasons = reasonSet.take(db, 4).toSeq
-			if(subReasons.size > 3){
-				logger.trace("   -> Too many explanations to fit in one group")
-				Seq(new MultiReason(db, reasonSet))
-			} else {
-				logger.trace(s"   -> Only ${subReasons.size} explanations")
-				subReasons
-			}
-		}
-	}
+	// def getFocusedReasons(reasonSets: Seq[ReasonSet]): Seq[Reason] =
+	// {
+	// 	reasonSets.flatMap { reasonSet => 
+	// 		logger.trace(s"Trying to Expand: $reasonSet")
+	// 		val subReasons = reasonSet.take(db, 4).toSeq
+	// 		if(subReasons.size > 3){
+	// 			logger.trace("   -> Too many explanations to fit in one group")
+	// 			Seq(new MultiReason(db, reasonSet))
+	// 		} else {
+	// 			logger.trace(s"   -> Only ${subReasons.size} explanations")
+	// 			subReasons
+	// 		}
+	// 	}
+	// }
 
 	def filterByProvenance(rawOper: Operator, token: RowIdPrimitive): Operator =
 	{
@@ -159,14 +159,12 @@ class AnalyzeUncertainty(db: Database) extends LazyLogging {
 								jointQuery, 
 								(0 until argSize).map { i => Var(ID("ARG_"+i)) },
 								Var(ID("MESSAGE"))
-							),
-							multipleReasons.head.toReason
+							)
 						)
 					} else { // only SingleReasonArgs
 						new ReasonSet(
 							multipleReasons.head.lens,
-							SingleArgLookup(allSingleReasonLookups),
-							multipleReasons.head.toReason
+							SingleArgLookup(allSingleReasonLookups)
 						)
 					}
 				}

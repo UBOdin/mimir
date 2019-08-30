@@ -3,7 +3,6 @@ package mimir.ctables
 import mimir.algebra._
 import scala.util._
 import mimir.models._
-import mimir.ctables.vgterm._
 import mimir.Database
 
 object ExpressionDeterminism {

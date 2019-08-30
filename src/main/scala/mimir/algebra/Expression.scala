@@ -667,3 +667,8 @@ case class IsAcknowledged(
   lens: ID,
   key: Seq[Expression]
 ) extends Expression
+{
+  override def toString() = s"$lens(${key.mkString(", ")} IS ACKNOWLEDGED"
+  def children = key
+  def rebuild(x: Seq[Expression]) = IsAcknowledged(lens, x)
+}

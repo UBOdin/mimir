@@ -14,6 +14,7 @@ import mimir.data.ViewSchemaProvider
 import mimir.util.JDBCUtils
 import mimir.util.ExperimentalOptions
 import mimir.lenses.mono._
+// import mimir.lenses.multi._
 import mimir.serialization.AlgebraJson._
 
 class LensManager(db: Database) 
@@ -22,14 +23,17 @@ class LensManager(db: Database)
 {
 
   val lensTypes = Map[ID,Lens](
-    // ID("MISSING_VALUE")     -> MissingValueLens.create _,
+    ID("TYPE_INFERENCE")    -> CastColumnsLens,
+    ID("CAST")              -> CastColumnsLens,
+    ID("MISSING_VALUE")     -> DomainLens,
     ID("DOMAIN")            -> DomainLens,
-    // ID("KEY_REPAIR")        -> RepairKeyLens.create _,
-    // ID("REPAIR_KEY")        -> RepairKeyLens.create _,
-    ID("COMMENT")           -> CommentLens
-    // ID("MISSING_KEY")       -> MissingKeyLens.create _,
-    // ID("PICKER")            -> PickerLens.create _,
-    // ID("GEOCODE")           -> GeocodingLens.create _
+    ID("KEY_REPAIR")        -> RepairKeyLens,
+    ID("REPAIR_KEY")        -> RepairKeyLens,
+    ID("COMMENT")           -> CommentLens,
+    ID("MISSING_KEY")       -> MissingKeyLens,
+    ID("PICKER")            -> MergeColumnLens,
+    ID("MERGE_COLUMNS")     -> MergeColumnLens,
+    ID("GEOCODE")           -> GeocodingLens
   )
 
   val monoLensTypes = 
@@ -47,7 +51,7 @@ class LensManager(db: Database)
         ID("TYPE")          -> TString(),
         ID("QUERY")         -> TString(),
         ID("ARGS")          -> TString(),
-        ID("FRIENDLY_lens") -> TString()
+        ID("FRIENDLY_NAME") -> TString()
       ))
     ))
 
@@ -60,10 +64,10 @@ class LensManager(db: Database)
     orReplace: Boolean = false
   )
   {
-    logger.debug(s"Create Lens: $lens ${friendlyName.map { "("+_+")"}.getOrElse("") }")
+    logger.debug(s"Create Lens: $lensName ${friendlyName.map { "("+_+")"}.getOrElse("") }")
 
     if(lenses.exists(lensName) && !orReplace){
-      throw new SQLException(s"Lens $lens already exists")
+      throw new SQLException(s"Lens $lensName already exists")
     }
 
     val lens =
@@ -152,6 +156,17 @@ class LensManager(db: Database)
   def acknowledgedKeys(lens: ID): Seq[Seq[PrimitiveValue]] = 
   {
     ???
+  }
+
+  def get(lens: ID): (Lens, Operator, JsValue) =
+  {
+    val (_, details) = lenses.get(lens)
+                             .getOrElse { throw new SQLException(s"Invalid lens $lens") }
+    (
+      lensForDetails(details), 
+      queryForDetails(details),
+      configForDetails(details)
+    )
   }
 
 

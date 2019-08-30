@@ -9,7 +9,8 @@ object QueryNamer
 		op match { 
 			case Table(name, _, _, _) => name
 			case View(name, _, _) => name
-			case AdaptiveView(model, name, _, _) => model+ID("_")+name
+			case LensView(Some(lens), name, _, _) => lens+ID("_")+name
+			case LensView(None, name, _, _) => name
 			case Project(cols, src) => 
 				cols.length match {
 					case 1 => cols(0).name+ID("_FROM_")+nameQuery(src)

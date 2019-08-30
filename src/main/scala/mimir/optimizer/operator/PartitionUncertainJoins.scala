@@ -9,7 +9,8 @@ object PartitionUncertainJoins extends OperatorOptimization with LazyLogging
 {
   def containsDataDependentVGTerm(e: Expression): Boolean =
   {
-    CTables.getVGTerms(e).exists { _.isDataDependent }
+    CTables.getUncertainty(e)
+           .exists { ExpressionUtils.isDataDependent(_) }
   }
 
   def isGoodJoin(cond: Expression, lSrc: Operator, rSrc: Operator): Boolean =

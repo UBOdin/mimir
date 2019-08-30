@@ -35,30 +35,3 @@ case class Repair (
 object Repair {
   implicit val format: Format[Repair] = Json.format
 }
-
-
-case class Reason (
-                  english: String,
-                  source: String,
-                  varid: Int,
-                  args: Seq[String],
-                  repair: Repair,
-                  feedback: String
-)
-
-object Reason {
-  implicit val format: Format[Reason] = Json.format
-}
-
-case class ReasonSet (
-            /* model name */
-                  model: String,
-            /* idx for vgterm */
-                  idx: Long,
-            /* lookup string for args and hints */
-                  lookup: String
-)
-
-object ReasonSet {
-  implicit val format: Format[ReasonSet] = Json.format
-}

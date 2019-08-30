@@ -26,7 +26,7 @@ object CTables
    */
   def isProbabilistic(expr: Expression): Boolean = 
   expr match {
-    case VGTerm(_, _, _, _) => true
+    case _:UncertaintyCausingExpression => true
     case _ => expr.children.exists( isProbabilistic(_) )
   }
 
@@ -67,18 +67,22 @@ object CTables
     }
   }
 
-  def getVGTerms(e: Expression): Set[VGTerm] =
-    getVGTerms(e: Expression, Map[String, PrimitiveValue]())
+  def getUncertainty(e: Expression): Set[UncertaintyCausingExpression] =
+    getUncertainty(e: Expression, Map[String, PrimitiveValue]())
 
-  def getVGTerms(e: Expression, bindings: Map[String, PrimitiveValue]): Set[VGTerm] =
+  def getUncertainty(
+    e: Expression, 
+    bindings: Map[String, PrimitiveValue]
+  ): Set[UncertaintyCausingExpression] =
   {
-    val children: Set[VGTerm] = e.children.flatMap( getVGTerms(_) ).toSet
+    val children: Set[UncertaintyCausingExpression] = 
+      e.children.flatMap( getUncertainty(_) ).toSet
     e match {
-      case v : VGTerm => children + v
+      case v : UncertaintyCausingExpression => children + v
       case _ => children
     }
   }
-  def getVGTerms(oper: Operator): Set[VGTerm] = 
-    (oper.expressions.flatMap(getVGTerms(_)) ++ 
-          oper.children.flatMap(getVGTerms(_))).toSet
+  def getUncertainty(oper: Operator): Set[UncertaintyCausingExpression] = 
+    (oper.expressions.flatMap(getUncertainty(_)) ++ 
+          oper.children.flatMap(getUncertainty(_))).toSet
 }

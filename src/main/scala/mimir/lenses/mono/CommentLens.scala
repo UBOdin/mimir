@@ -7,33 +7,16 @@ import mimir.Database
 import mimir.algebra._
 import mimir.lenses._
 import mimir.util.NameLookup
+import mimir.serialization.AlgebraJson._
 
 case class CommentLensConfig(
   targetColumn: Option[ID],
-  message: Either[String, ID]
+  message: Expression,
+  condition: Expression = BoolPrimitive(true)
 )
 object CommentLensConfig
 {
-  implicit val writes = new Writes[CommentLensConfig] { def writes(config: CommentLensConfig) =
-    JsObject(Map(
-      "target" -> Json.toJson(config.targetColumn)
-    ) ++ (
-      config.message match { 
-        case Left(msg) => Map("message" -> JsString(msg))
-        case Right(col) => Map("column" -> Json.toJson(col))
-      }
-    ))
-  }
-  implicit val reads: Reads[CommentLensConfig] =
-    JsPath.read[Map[String, String]].map { json => 
-      CommentLensConfig(
-        json.get("target").map { ID(_) },
-        json.get("message").map { Left(_) }
-          .getOrElse { 
-            json.get("column").map { col => Right(ID(col)) }
-                .getOrElse { throw new SQLException(s"Invalid Comment Lens Config: $json")} }
-      )
-    }
+  implicit val format:Format[CommentLensConfig] = Json.format
 }
 
 object CommentLens extends MonoLens
@@ -49,17 +32,13 @@ object CommentLens extends MonoLens
     // Use this opportunity to validate the config
     val config = configJson.as[CommentLensConfig]
 
-    val columnLookup = LensUtils.columnLookupFunction(query)
+    val columnLookup = OperatorUtils.columnLookupFunction(query)
 
-    val newTarget = config.targetColumn.map { col => columnLookup(col.id) }
-
-    val newMessage = 
-      config.message match {
-        case Left(message) => Left(message)
-        case Right(col) => columnLookup(col.id)
-      }
-
-    Json.toJson(config)
+    Json.toJson(CommentLensConfig(
+      config.targetColumn.map { col => columnLookup(Name(col.id)) },
+      ExpressionUtils.rebindCaseInsensitive(config.message, columnLookup),
+      ExpressionUtils.rebindCaseInsensitive(config.condition, columnLookup)
+    ))
   }
 
   def view(
@@ -73,15 +52,15 @@ object CommentLens extends MonoLens
     val config = configJson.as[CommentLensConfig]
 
     def applyWarning(e:Expression) =
-      Caveat(
-        name,
-        e,
-        Seq(RowIdVar()),
-        config.message match {
-          case Left(message) => StringPrimitive(message)
-          case Right(col) => Var(col)
-        }
-      )
+      config.condition
+            .thenElse { 
+                Caveat(
+                  name,
+                  e,
+                  Seq(RowIdVar()),
+                  config.message
+                )
+            } { e }
 
     config.targetColumn match {
       case None => 

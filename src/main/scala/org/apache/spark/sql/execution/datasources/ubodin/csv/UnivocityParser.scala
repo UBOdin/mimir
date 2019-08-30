@@ -33,7 +33,7 @@ import org.apache.spark.sql.execution.datasources.FailureSafeParser
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
-import mimir.adaptive.DataSourceErrors
+import mimir.lenses.mono.DataSourceErrors
 
 
 /**
@@ -53,8 +53,8 @@ class UnivocityParser(
   extends LazyLogging 
 {
   val metaFields = Set(
-    DataSourceErrors.mimirDataSourceErrorColumn.id, 
-    DataSourceErrors.mimirDataSourceErrorRowColumn.id
+    DataSourceErrors.DATASOURCE_ERROR_COLUMN.id, 
+    DataSourceErrors.DATASOURCE_ERROR_ROW_COLUMN.id
   )
 
   val (requiredSchema, requiredMeta) =
@@ -259,10 +259,10 @@ class UnivocityParser(
           row(i) = null
           i += 1
       }
-      if(requiredMeta.contains(DataSourceErrors.mimirDataSourceErrorColumn.id)){
+      if(requiredMeta.contains(DataSourceErrors.DATASOURCE_ERROR_COLUMN.id)){
         row(i) = true
       }
-      if(requiredMeta.contains(DataSourceErrors.mimirDataSourceErrorRowColumn.id)){
+      if(requiredMeta.contains(DataSourceErrors.DATASOURCE_ERROR_ROW_COLUMN.id)){
         row(i+1) = getCurrentInput
       }
       logger.debug( "---> null row: " + row.toString())
@@ -303,10 +303,10 @@ class UnivocityParser(
           row(i) = partRow.get(i, requiredSchema(i).dataType)
           i += 1
       }
-      if(requiredMeta.contains(DataSourceErrors.mimirDataSourceErrorColumn.id)){
+      if(requiredMeta.contains(DataSourceErrors.DATASOURCE_ERROR_COLUMN.id)){
         row(i) = true
       }
-      if(requiredMeta.contains(DataSourceErrors.mimirDataSourceErrorRowColumn.id)){
+      if(requiredMeta.contains(DataSourceErrors.DATASOURCE_ERROR_ROW_COLUMN.id)){
         row(i+1) = getCurrentInput
       }
       logger.debug( "---> partial row: " + row.toString())
@@ -320,10 +320,10 @@ class UnivocityParser(
           row(i) = valueConverters(i).apply(getToken(tokens, i))
           i += 1
         }
-        if(requiredMeta.contains(DataSourceErrors.mimirDataSourceErrorColumn.id)){
+        if(requiredMeta.contains(DataSourceErrors.DATASOURCE_ERROR_COLUMN.id)){
           row(i) = false
         }
-        if(requiredMeta.contains(DataSourceErrors.mimirDataSourceErrorRowColumn.id)){
+        if(requiredMeta.contains(DataSourceErrors.DATASOURCE_ERROR_ROW_COLUMN.id)){
           row(i+1) = null
         }
         logger.debug( "---> good row: " + row.toString())

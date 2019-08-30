@@ -750,14 +750,14 @@ object SqlToRA
             RowIdVar()
           case (ID("rowid"), Seq(x:SparsityPrimitive)) => 
             RowIdPrimitive(convertPrimitive(x).asString)
-          case (ID("mimir_vgterm"), args) => {
-            args.take(2) match {
-              case Seq(model:Column, idx:SparsityPrimitive) => 
-                VGTerm(
-                  ID(model.column.name), 
-                  convertPrimitive(idx).asLong.toInt,
-                  args.tail.tail.map { convertExpression(_, bindings) },
-                  Seq()
+          case (ID("caveat"), args) => {
+            args.take(3) match {
+              case Seq(Column(lens:Name, None), v, message) => 
+                Caveat(
+                  ID.upper(lens),
+                  convertExpression(v, bindings),
+                  args.tail.tail.tail.map { convertExpression(_, bindings) },
+                  convertExpression(message, bindings)
                 )
             }
           }

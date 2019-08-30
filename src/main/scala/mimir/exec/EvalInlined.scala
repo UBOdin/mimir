@@ -410,10 +410,10 @@ class EvalInlined[T](scope: Map[ID, (Type, (T => PrimitiveValue))], db: Database
         throw new RAException("JDBCVars not supported")
       case _:RowIdVar => 
         throw new RAException("Error: ROWIDVars should have been compiled out")
-      case _:VGTerm => 
-        throw new RAException("Error: VGTerms should have been compiled out")
-      case _:DataWarning => 
-        throw new RAException("Error: Warnings should have been compiled out")
+      case _:Caveat => 
+        throw new RAException("Error: Caveat should have been compiled out")
+      case _:IsAcknowledged => 
+        throw new RAException("Error: IsAcknowledged should have been compiled out")
     }
   }
   

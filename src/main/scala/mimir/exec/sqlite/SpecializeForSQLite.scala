@@ -13,7 +13,7 @@ object SpecializeForSQLite {
   {
     (e match {
       case Function(ID("cast"), Seq(target, TypePrimitive(t))) => 
-        Function("mimircast", target, IntPrimitive(Type.id(t)))
+        Function("mimircast", target, IntPrimitive(Type.toIndex(t)))
 
       case Function(ID("cast"), _) =>
         throw new SQLException("Invalid CAST: "+e)

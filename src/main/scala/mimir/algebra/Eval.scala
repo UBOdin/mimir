@@ -81,8 +81,8 @@ class Eval(
       }
       case RowIdVar() => throw new RAException("Evaluating RowIds in the Interpreter Unsupported")
       case JDBCVar(t) => throw new RAException("Evaluating JDBCVars in the Interpreter Unsupported")
-      case v:VGTerm => throw new RAException(s"Evaluating VGTerms ($v) in the Interpreter Unsupported")
-      case v:DataWarning => throw new RAException(s"Evaluating Warnings ($v) in the Interpreter Unsupported")
+      case v:Caveat => throw new RAException(s"Evaluating Warnings ($v) in the Interpreter Unsupported")
+      case IsAcknowledged(lens, key) => throw new RAException(s"Evaluating IsAcknowledged ($lens($key)) in the Interpreter Unsupported")
       // Special case And/Or arithmetic to enable shortcutting
       case Arithmetic(Arith.And, lhs, rhs) =>
         eval(lhs, bindings) match {

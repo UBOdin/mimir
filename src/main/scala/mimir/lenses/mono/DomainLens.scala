@@ -30,12 +30,12 @@ object DomainLens extends MonoLens
     config: JsValue
   ): JsValue = 
   {
-    val columnLookup = LensUtils.columnLookupFunction(query)
+    val columnLookup = OperatorUtils.columnLookupFunction(query)
 
     val newConfig:Map[String, DomainLensColumnConfig] = 
       config.as[Map[String,Map[String, JsValue]]]
             .map { case (col, spec) =>
-              val caseSensitiveCol = columnLookup(col)
+              val caseSensitiveCol = columnLookup(Name(col))
 
               val constraint = spec.get("constraint") match {
                 case Some(JsString(expr)) => ExpressionParser.apply(expr)

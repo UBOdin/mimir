@@ -2,7 +2,8 @@ package mimir.algebra
 
 import java.sql._
 
-import mimir.util.RandUtils
+import sparsity.Name
+import mimir.util.{ RandUtils, NameLookup }
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 object OperatorUtils extends LazyLogging {
@@ -224,7 +225,7 @@ object OperatorUtils extends LazyLogging {
         findRenamingConflicts(name, lhs) ++ findRenamingConflicts(name, rhs)
       case Join(lhs, rhs) => 
         findRenamingConflicts(name, lhs) ++ findRenamingConflicts(name, rhs)
-      case Table(_,_,_,_) | View(_,_,_) | AdaptiveView(_,_,_,_) | HardTable(_,_) => 
+      case Table(_,_,_,_) | View(_,_,_) | LensView(_,_,_,_) | HardTable(_,_) => 
         oper.columnNames.toSet
       case Sort(_, src) =>
         findRenamingConflicts(name, src)
@@ -309,7 +310,7 @@ object OperatorUtils extends LazyLogging {
           }, data
         )
       }
-      case View(_, _, _) | AdaptiveView(_, _, _, _) => {
+      case View(_, _, _) | LensView(_, _, _, _) => {
         Project(
           oper.columnNames.map { col =>
             if(col.equals(target)){ ProjectArg(replacement, Var(target)) }
@@ -322,6 +323,20 @@ object OperatorUtils extends LazyLogging {
         oper.
           recurExpressions(rewrite(_)).
           recur(deepRenameColumn(target, replacement, _))
+    }
+  }
+
+  def columnLookupFunction(query: Operator) =
+  {
+    val columnLookup = NameLookup.fromID(query.columnNames)
+    val queryColumns = query.columnNames
+
+    (col: Name) => {
+      columnLookup(col).getOrElse {
+        throw new SQLException(s"Invalid target column: $col; Available columns are ${queryColumns.mkString(", ")}")
+
+
+      }
     }
   }
 }

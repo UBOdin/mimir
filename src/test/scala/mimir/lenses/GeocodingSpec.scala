@@ -235,32 +235,21 @@ object GeocodingSpec
         WITH GEOCODE(HOUSE_NUMBER(STRNUMBER),STREET(STRNAME),CITY(CITY),STATE(STATE),GEOCODER(OSM))
       """);
       
-      val result = db.query(select("SELECT json_extract(LATITUDE,'$.values') AS DOMAIN_LAT, json_extract(LONGITUDE,'$.values') AS DOMAIN_LON FROM GEO_LENS_DOMAIN_DUMP_OSM"), 
-          DumpDomain){ _.map { row => 
-        (
-          row(ID("DOMAIN_LAT")), 
-          row(ID("DOMAIN_LON"))
-        )
-      }.toList }.toList
+      val result = 
+        db.query(select("""
+          SELECT json_extract(LATITUDE,'$.values') AS DOMAIN_LAT, 
+                 json_extract(LONGITUDE,'$.values') AS DOMAIN_LON 
+          FROM GEO_LENS_DOMAIN_DUMP_OSM"""
+        )){ _.map { row => 
+            (
+              row(ID("DOMAIN_LAT")), 
+              row(ID("DOMAIN_LON"))
+            )
+          }.toIndexedSeq
+        }
       
-      val jsonLat = play.api.libs.json.Json.parse(result(1)._1.asString)
-      val domainLatForRow = jsonLat.as[Seq[JsValue]]
-                                   .map { jsVal => (
-                                      jsVal.asInstanceOf[JsObject].value("choice").toString().toDouble, 
-                                      jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble
-                                    )}
-      val jsonLon = play.api.libs.json.Json.parse(result(1)._2.asString)
-      val domainLonForRow = jsonLon.as[Seq[JsValue]]
-                                   .map { jsVal => (
-                                      jsVal.asInstanceOf[JsObject].value("choice").toString().toDouble, 
-                                      jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble
-                                    )}
-      
-      domainLatForRow.length must be equalTo domainLonForRow.length
-      domainLatForRow.head._1 must beCloseTo(42.9088720526316 within 2.significantFigures)
-      domainLatForRow.head._2 must beEqualTo(0.321)
-      domainLonForRow.head._1 must beCloseTo(-78.8807727368421 within 2.significantFigures)
-      domainLonForRow.head._2 must beEqualTo(0.321)
+      result(1)._1.asDouble must beCloseTo(42.9088720526316 within 2.significantFigures)
+      result(1)._2.asDouble must beCloseTo(-78.8807727368421 within 2.significantFigures)
       
     }
     

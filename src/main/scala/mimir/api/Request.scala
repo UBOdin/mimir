@@ -2,6 +2,7 @@ package mimir.api
 import play.api.libs.json._
 import mimir.MimirVizier
 import java.io.OutputStream
+import mimir.ctables.{Reason, ReasonSet}
 
 sealed abstract class Request {
   def handle(os:OutputStream) : Unit
@@ -143,23 +144,6 @@ object CreateViewSRequest {
 }
 
 
-case class CreateAdaptiveSchemaRequest (
-            /* input for adaptive schema */
-                  input: String,
-                  params: Seq[String],
-            /* type name of adaptive schema */
-                  `type`: String
-) extends Request {
-  def handle(os:OutputStream) = {
-    os.write(Json.stringify(Json.toJson(CreateAdaptiveSchemaResponse(MimirVizier.createAdaptiveSchema(input, params, `type`)))).getBytes )
-  }
-}
-
-object CreateAdaptiveSchemaRequest {
-  implicit val format: Format[CreateAdaptiveSchemaRequest] = Json.format
-}
-
-
 case class ExplainSubsetWithoutSchemaRequest (
             /* query to explain */
                   query: String,
@@ -167,12 +151,7 @@ case class ExplainSubsetWithoutSchemaRequest (
                   cols: Seq[String]
 ) extends Request {
   def handle(os:OutputStream) = {
-    os.write(Json.stringify(Json.toJson(ExplainResponse(MimirVizier.explainSubsetWithoutSchema(query, rows, cols).map(rsn => 
-      ReasonSet(rsn.model.name.toString, rsn.idx, rsn.argLookup match {
-        case Some((query, args, hints)) => "[" + args.mkString(", ") + "][" + hints.mkString(", ") + "] <- \n" + query.toString("   ")
-        case None => ""
-      })
-    )))).getBytes )
+    os.write(Json.stringify(Json.toJson(ExplainResponse(MimirVizier.explainSubsetWithoutSchema(query, rows, cols)))).getBytes )
   }
 }
 
@@ -187,12 +166,7 @@ case class ExplainSchemaRequest (
                   cols: Seq[String]
 ) extends Request {
   def handle(os:OutputStream) = {
-    os.write(Json.stringify(Json.toJson(ExplainResponse(MimirVizier.explainSchema(query, cols).map(rsn => 
-      ReasonSet(rsn.model.name.toString, rsn.idx, rsn.argLookup match {
-        case Some((query, args, hints)) => "[" + args.mkString(", ") + "][" + hints.mkString(", ") + "] <- \n" + query.toString("   ")
-        case None => ""
-      })
-    )))).getBytes )
+    os.write(Json.stringify(Json.toJson(ExplainResponse(MimirVizier.explainSchema(query, cols)))).getBytes )
   }
 }
 
@@ -210,9 +184,7 @@ case class ExplainCellSchemaRequest (
                   col: Int
 ) extends Request {
   def handle(os:OutputStream) = {
-    os.write(Json.stringify(Json.toJson(ExplainReasonsResponse(MimirVizier.explainCell(query, col, row).map(rsn => 
-      Reason(rsn.reason, rsn.model.name.toString, rsn.idx, rsn.args.map(_.toString()), mimir.api.Repair(rsn.repair.toJSON), rsn.repair.exampleString)
-    )))).getBytes )
+    os.write(Json.stringify(Json.toJson(ExplainReasonsResponse(MimirVizier.explainCell(query, col, row)))).getBytes )
   }
 }
 
@@ -228,12 +200,7 @@ case class ExplainSubsetRequest (
                   cols: Seq[String]
 ) extends Request {
   def handle(os:OutputStream) = {
-    os.write(Json.stringify(Json.toJson(ExplainResponse(MimirVizier.explainSubset(query, rows, cols.map(mimir.algebra.ID(_))).map(rsn => 
-      ReasonSet(rsn.model.name.toString, rsn.idx, rsn.argLookup match {
-        case Some((query, args, hints)) => "[" + args.mkString(", ") + "][" + hints.mkString(", ") + "] <- \n" + query.toString("   ")
-        case None => ""
-      })
-    )))).getBytes )
+    os.write(Json.stringify(Json.toJson(ExplainResponse(MimirVizier.explainSubset(query, rows, cols.map(mimir.algebra.ID(_)))))).getBytes )
   }
 }
 
@@ -249,17 +216,7 @@ case class ExplainEverythingAllRequest (
   def handle(os:OutputStream) = {
     os.write(Json.stringify(Json.toJson(
       ExplainReasonsResponse(
-        MimirVizier.explainEverythingAll(query).map { 
-          rsn => 
-            Reason(
-              rsn.reason, 
-              rsn.model.name.toString, 
-              rsn.idx, 
-              rsn.args.map(_.toString()), 
-              mimir.api.Repair(rsn.repair.toJSON), 
-              rsn.repair.exampleString
-            )
-        }
+        MimirVizier.explainEverythingAll(query)
       )
     )).getBytes )
   }
@@ -277,17 +234,7 @@ case class ExplainEverythingRequest (
   def handle(os:OutputStream) = {
     os.write(Json.stringify(Json.toJson(
       ExplainResponse(
-        MimirVizier.explainEverything(query).map { 
-          rsn => 
-            ReasonSet(
-              rsn.model.name.toString, 
-              rsn.idx, 
-              rsn.argLookup match {
-                case Some((query, args, hints)) => "[" + args.mkString(", ") + "][" + hints.mkString(", ") + "] <- \n" + query.toString("   ")
-                case None => ""
-              }
-            )
-        }
+        MimirVizier.explainEverything(query)
       )
     )).getBytes )
   }
@@ -299,17 +246,10 @@ object ExplainEverythingRequest {
 
 
 case class FeedbackForReasonRequest (
-                  reason: Reason,
-            /* idx */
-                  idx: Int,
-            /* acknowledge guess */
-                  ack: Boolean,
-            /* repair string */
-                  repairStr: String
+                  reason: Reason
 ) extends Request {
   def handle(os:OutputStream) = {
-    val (model, argsHints) = (reason.source, reason.args)
-    MimirVizier.feedback(model, idx, argsHints, ack, repairStr)
+    MimirVizier.feedback(reason)
   }
 }
 

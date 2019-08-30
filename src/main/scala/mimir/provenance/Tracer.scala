@@ -109,7 +109,7 @@ object Tracer {
 
       case View(_, query, _) => 
         trace(query, targetRowId)
-      case AdaptiveView(_, _, query, _) => 
+      case LensView(_, _, query, _) => 
         trace(query, targetRowId)
 
       case Table(name, source, schema, meta) =>
