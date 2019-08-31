@@ -1,3 +1,29 @@
+package mimir.lens.mono
+
+import play.api.libs.json._
+
+import mimir.algebra._
+import mimir.Database
+import mimir.lenses._
+
+object ShapeWatcherLens extends MonoLens
+{
+  def train(
+    db: Database,
+    name: ID,
+    query: Operator,
+    config: JsValue
+  ): JsValue = ???
+
+  def view(
+    db: Database,
+    name: ID,
+    query: Operator,
+    config: JsValue,
+    friendlyName: String
+  ): Operator = ???
+}
+
 // package mimir.adaptive
 
 // import mimir.Database
